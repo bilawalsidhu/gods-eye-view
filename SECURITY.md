@@ -21,19 +21,19 @@ The golden rule: **secret-bearing API keys stay on the server side.** The dev/pr
 | ChatGPT sign-in through Codex (optional, experimental) | Codex's own `auth.json` (`CODEX_HOME`, default `~/.codex`); GEV reads it server-side and never writes or refreshes it | Only after **USE CHATGPT OAUTH** is selected in Provider Settings: the server mints the same ephemeral Realtime token with the ChatGPT access token, for loopback clients only |
 | `AISSTREAM_API_KEY` | Server only | Server holds the AISStream websocket; browser polls the same-origin `/api/vessels` cache |
 | OpenSky OAuth (`OPENSKY_CLIENT_ID/SECRET`) | Server only | Server mints + refreshes the token behind `/api/flights` |
-| `GOOGLE_MAPS_SERVER_API_KEY` (optional, #33) | Server only | Server calls Places (`/api/google/nearby-places`, `/api/google/text-search`) and the Street View fallback with this key; falls back to `GOOGLE_MAPS_API_KEY` when unset |
+| `GOOGLE_MAPS_SERVER_API_KEY` (optional, #33) | Server only | Server calls Places (`/api/google/nearby-places`, `/api/google/text-search`), Geocoding (`/api/google/geocode`, `/api/google/reverse-geocode`) and the Street View fallback with this key; falls back to `GOOGLE_MAPS_API_KEY` when unset |
 
 ### Three deliberately client-side keys — restrict them
 
 These are designed to be used directly in the browser (like a Mapbox public token). They are injected into the client bundle via Vite's `define`, so they **will** be visible in browser devtools. Scope and restrict them rather than trying to hide them:
 
-1. **Google Maps API key** — loads Photorealistic 3D Tiles directly and powers GEV place search and Street View (Maps JavaScript API; add it to the key's API restrictions). **Restrict it** (HTTP referrer + API restriction to the required Google APIs) in the Google Cloud Console. An unrestricted key in a public deployment can be abused and billed to you.
+1. **Google Maps API key** — loads Photorealistic 3D Tiles directly and powers Street View (Maps JavaScript API; add it to the key's API restrictions). **Restrict it** (HTTP referrer + API restriction to the required Google APIs) in the Google Cloud Console. An unrestricted key in a public deployment can be abused and billed to you. Restrict it to the **Map Tiles API and Maps JavaScript API only**: a referrer restriction applies to the Maps JavaScript API and the client SDKs, not to the web services, so a key carrying Geocoding under one is refused with `API keys with referer restrictions cannot be used with this API`. Search does not need it — geocoding goes through the server proxies above (#363).
 2. **Cesium ion token** (`CESIUM_ION_TOKEN`, optional — for ion-hosted Google Photorealistic 3D Tiles, Bing world imagery, and world terrain) — used as `Cesium.Ion.defaultAccessToken` client-side. Use a public **`assets:read`** token with **URL restrictions** for any hosted deployment. The Community plan has eligibility and usage limits; a public token is not a secret, but it can still consume the account's quota.
 3. **Mapillary client token** (`MAPILLARY_CLIENT_TOKEN`, optional, Street Level) — used by the MapillaryJS viewer and Graph API lookups in the browser, and by the server's coverage-tile proxy. Mapillary client tokens are meant for browser use.
 
 > The explicit browser `define` block in `build/vite.js` controls exactly what reaches the client: only these three keys. Everything else stays server-side.
 
-**Places and Street View never needed to be on that list** (#33): they're called from the server-side proxies in the table above, which use `GOOGLE_MAPS_SERVER_API_KEY` when it's set. Splitting it from the browser-exposed key lets each key's Google Cloud restriction actually match what it does — the browser key referrer-restricted to the APIs the client loads, the server key IP-restricted (never a referrer, since it never leaves your server) to Places + Street View Static — instead of one key that has to be either over-permissioned or broken for one of its two jobs. A single shared `GOOGLE_MAPS_API_KEY` still works if you don't split them; it just has to cover every API both sides use.
+**Places, Geocoding and the Street View Static fallback never needed to be on that list** (#33, #363): they're called from the server-side proxies in the table above, which use `GOOGLE_MAPS_SERVER_API_KEY` when it's set. Splitting it from the browser-exposed key lets each key's Google Cloud restriction actually match what it does — the browser key referrer-restricted to Map Tiles + Maps JavaScript API, the server key IP-restricted (never a referrer, since it never leaves your server) to Places + Geocoding + Street View Static — instead of one key that has to be either over-permissioned or broken for one of its jobs. A single shared `GOOGLE_MAPS_API_KEY` still works if you don't split them, but then it cannot carry a referrer restriction at all: the web services refuse one, and search would be the half that breaks.
 
 Never commit real keys. `.env` is gitignored; only `.env.example` (placeholder names) is tracked. On macOS `dev-fresh.sh` can read keys from the Keychain; plain Vite uses env vars or a local `.env`, and Pinokio uses its ignored app `ENVIRONMENT` file.
 
@@ -87,6 +87,17 @@ The dev server is a **key broker**: every server-side key above is spendable by 
 - **Local-only by default.** `./scripts/dev-fresh.sh` (and the Vite config itself) bind to `localhost`, so only your machine can reach the server — and only local names are accepted (`allowedHosts` stays restricted, which also blunts DNS-rebinding tricks). Binding to all interfaces keeps that restriction: IP addresses and `localhost` work, and LAN hostnames must be listed in `GEV_ALLOWED_HOSTS` (for example `GEV_ALLOWED_HOSTS=globe.lan`); suffix and wildcard entries are ignored.
 - **LAN exposure is an explicit opt-in**: `HOST=0.0.0.0 ./scripts/dev-fresh.sh`. The launcher prints a prominent warning plus your LAN URL. Understand what opting in means: **every device on that network can drive the proxies and spend your OpenAI / Google / OpenSky / AISStream / TomTom / FIRMS quota** for as long as the server runs. Do this only on networks you trust.
 - **App-level throttles (on by default):** `GEV_RATELIMIT_OPENAI_PER_MIN` (default `30`) and `GEV_RATELIMIT_GOOGLE_PER_MIN` (default `120`) — the values the Pinokio build already ships — cap the cost-bearing endpoints per client IP per minute (over-limit requests receive a sanitized `429`). Both defaults sit well above what the app itself generates; set either to exactly `0` to run unthrottled. They are **per-IP, process-local, in-memory guards** — they reset on restart, a caller with several addresses gets a bucket per address, and they are **not billing caps**.
+- **Docker trusts one address, and only because the port is on loopback.**
+  Docker delivers the host's own browser to the container from the container
+  network's gateway, never from `127.0.0.1`, so a loopback-only Provider
+  Settings refuses the machine running it. `scripts/docker-start.mjs` therefore
+  sets `GEV_KEY_SETUP_TRUSTED_PEERS` to exactly that gateway address. The list
+  takes exact addresses only (no wildcards, prefixes or hostnames), is unset
+  under every other launcher, and relaxes none of the sharing, Host, Origin,
+  Content-Type or proxy-header checks. It is safe precisely because
+  `compose.yaml` publishes on `127.0.0.1`: **widen that mapping and every LAN
+  client arrives from the same gateway address, which hands them Provider
+  Settings too.** Treat publishing beyond loopback as the LAN opt-in above.
 - **Provider-side budgets are the real backstop.** For hard spend protection, configure limits where the money is: OpenAI platform usage limits, Google Cloud budget alerts + per-API quotas, and equivalent controls for any other keyed provider.
 - **Pinokio LAN and Cloudflare sharing are refused.** The current supported
   Pinokio release re-reads sharing state when an app registers its Open URL and

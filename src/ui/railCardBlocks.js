@@ -30,6 +30,7 @@ export function createRailCardBlocks({ container, cardId, onParams }) {
   };
   const dispose = (block) => {
     block.removeClick?.();
+    block.removeInput?.();
     block.children?.destroy();
     block.root.remove();
   };
@@ -74,6 +75,66 @@ export function createRailCardBlocks({ container, cardId, onParams }) {
             );
             block.chips = make('div', 'rail-card-chips', root);
             block.chips.setAttribute('role', 'group');
+            block.rangeRow = make('div', 'rail-card-setting-range-row', root);
+            block.rangeLabel = make(
+              'span',
+              'rail-card-setting-range-label',
+              block.rangeRow,
+            );
+            block.rangeInput = make(
+              'input',
+              'rail-card-setting-range',
+              block.rangeRow,
+            );
+            block.rangeInput.type = 'range';
+            block.rangeValue = make(
+              'span',
+              'rail-card-setting-range-value',
+              block.rangeRow,
+            );
+            const rangeParams = () => {
+              const range = block.props.range;
+              const value = Number(block.rangeInput.value);
+              if (
+                !range?.param ||
+                range.disabled ||
+                !Number.isFinite(value) ||
+                value < Number(range.min) ||
+                value > Number(range.max)
+              )
+                return null;
+              return { params: { [range.param]: value } };
+            };
+            const onInput = () => {
+              const range = block.props.range;
+              const value = Number(block.rangeInput.value);
+              const params = rangeParams();
+              if (!params) return;
+              if (range.commitOnChange) block.rangeDraft = { range, value };
+              set(
+                block.rangeValue,
+                'textContent',
+                `${value}${range.unit || ''}`,
+              );
+              attribute(
+                block.rangeInput,
+                'aria-valuetext',
+                `${value}${range.unit || ''}`,
+              );
+              if (!range.commitOnChange) dispatch(params);
+            };
+            const onChange = () => {
+              if (!block.props.range?.commitOnChange) return;
+              const params = rangeParams();
+              block.rangeDraft = null;
+              if (params) dispatch(params);
+            };
+            block.rangeInput.addEventListener('input', onInput);
+            block.rangeInput.addEventListener('change', onChange);
+            block.removeInput = () => {
+              block.rangeInput.removeEventListener('input', onInput);
+              block.rangeInput.removeEventListener('change', onChange);
+            };
             bind((event) => {
               const button = event.target?.closest?.('[data-chip-id]');
               dispatch(
@@ -124,17 +185,59 @@ export function createRailCardBlocks({ container, cardId, onParams }) {
           blocks.set(props.id, block);
         }
         block.props = props;
-        if (props.type === 'settings')
+        if (props.type === 'settings') {
           block.children.update(
             (props.settings || []).map((setting) => ({
               ...setting,
               type: 'setting',
             })),
           );
-        else if (props.type === 'setting') {
+        } else if (props.type === 'setting') {
           set(block.label, 'textContent', props.label);
           attribute(block.chips, 'aria-label', props.label);
           syncChipGroup(block.chips, props.chips);
+          const range = props.range;
+          set(block.rangeRow, 'hidden', !range);
+          const draft = block.rangeDraft;
+          if (
+            draft &&
+            (!range ||
+              range.disabled ||
+              !range.commitOnChange ||
+              ['id', 'param', 'min', 'max', 'step', 'value'].some(
+                (key) => range[key] !== draft.range[key],
+              ))
+          )
+            block.rangeDraft = null;
+          if (range) {
+            const min = Number(range.min);
+            const max = Number(range.max);
+            const step = Number(range.step);
+            const candidate = Number(block.rangeDraft?.value ?? range.value);
+            const value = Math.min(
+              max,
+              Math.max(min, Number.isFinite(candidate) ? candidate : min),
+            );
+            set(block.rangeLabel, 'textContent', range.label || '');
+            set(block.rangeLabel, 'hidden', !range.label);
+            set(block.rangeInput.dataset, 'rangeId', range.id || props.id);
+            set(block.rangeInput, 'min', String(min));
+            set(block.rangeInput, 'max', String(max));
+            set(block.rangeInput, 'step', String(step));
+            set(block.rangeInput, 'value', String(value));
+            set(block.rangeInput, 'disabled', Boolean(range.disabled));
+            attribute(
+              block.rangeInput,
+              'aria-label',
+              range.ariaLabel || props.label,
+            );
+            attribute(
+              block.rangeInput,
+              'aria-valuetext',
+              `${value}${range.unit || ''}`,
+            );
+            set(block.rangeValue, 'textContent', `${value}${range.unit || ''}`);
+          }
         } else if (props.type === 'list') syncRowList(block.root, props.list);
         else if (props.type === 'result') {
           set(block.label, 'textContent', props.label);
