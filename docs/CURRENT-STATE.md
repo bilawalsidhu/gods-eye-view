@@ -16,6 +16,13 @@ is retained as source data; the global country basemap is unchanged. Retrieved
 when an outline resolves. Rebuild: `scripts/build-argentina-admin.mjs`; browser
 gate: `scripts/qa-admin-outlines.mjs` (now includes Argentina).
 
+The outline gate uses the native GPU with `--headful` and SwiftShader for
+Linux headless runs. Its 1,500 ms drawing budget and zero-error checks remain
+enforced; console errors include a redacted source URL. Standalone dev and
+preview servers answer optional `GET /api/google/tiles-token` discovery with
+HTTP 200 and JSON `null` when no earlier provider offers a token. This preserves
+ion/keyless fallback without a startup 404; unknown API routes remain 404.
+
 Vessel sources can report healthy empty coverage using a current, complete
 snapshot with zero raw rows, a healthy transport and a positive last-message
 time. This clears obsolete contacts and settles startup without manufacturing

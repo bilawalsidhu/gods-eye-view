@@ -29,6 +29,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import puppeteer from 'puppeteer';
 import sharp from 'sharp';
+import { redact } from './qa-browserEvidence.mjs';
 
 const args = process.argv.slice(2);
 if (args.includes('--help')) {
@@ -69,7 +70,9 @@ const browser = await puppeteer.launch({
   args: [
     '--no-sandbox',
     '--use-gl=angle',
-    ...(process.platform === 'linux' ? ['--use-angle=swiftshader'] : []),
+    ...(process.platform === 'linux' && !args.includes('--headful')
+      ? ['--use-angle=swiftshader']
+      : []),
     '--disable-dev-shm-usage',
     '--disable-background-timer-throttling',
     '--disable-renderer-backgrounding',
@@ -125,7 +128,11 @@ try {
   );
   page.on('console', (message) => {
     if (message.type() === 'error')
-      result.consoleErrors.push({ step: marker, message: message.text() });
+      result.consoleErrors.push({
+        step: marker,
+        message: redact(message.text()),
+        url: redact(message.location().url),
+      });
   });
 
   client.on('Page.screencastFrame', async ({ data, metadata, sessionId }) => {
