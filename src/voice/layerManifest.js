@@ -313,6 +313,25 @@ const layers = [
     },
   },
   {
+    id: 'speed-cameras',
+    aliases: [
+      'speed cameras',
+      'speed camera',
+      'speed enforcement',
+      'road cameras',
+    ],
+    context: true,
+    query: {
+      fields: {
+        maxspeedKph: ['n'],
+        directionDeg: ['n', 'deg'],
+        operator: ['t'],
+        enforcement: ['t'],
+        ref: ['t'],
+      },
+    },
+  },
+  {
     id: 'radio',
     aliases: ['internet radio', 'radio stations'],
     context: false,

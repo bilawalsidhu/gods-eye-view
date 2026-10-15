@@ -41,6 +41,7 @@ const PANEL_GROUPS = [
     label: 'Infrastructure',
     ids: [
       'alpr-cameras',
+      'speed-cameras',
       'military-installations',
       'local-datacenters',
       'telegeography-submarine-cables',
@@ -84,6 +85,7 @@ const PANEL_LABELS = {
   cctv: 'Cameras',
   'street-level': 'Street Level',
   'alpr-cameras': 'Mapped ALPR Cameras',
+  'speed-cameras': 'Speed Cameras',
   'local-datacenters': 'Data Centers',
   'local-firms': 'Active Fires',
 };

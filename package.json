@@ -162,6 +162,8 @@
     "./aircraft": "./src/layers/aircraft/index.js",
     "./layers/vessels": "./src/layers/vessels/index.js",
     "./layers/earthquakes": "./src/layers/earthquakes/index.js",
+    "./layers/speed-cameras": "./src/layers/speedCameras/index.js",
+    "./layers/speed-cameras/source": "./src/layers/speedCameras/source.js",
     "./layers/recent-imagery": "./src/layers/recentImagery/index.js",
     "./layers/recent-imagery/source": "./src/layers/recentImagery/source.js",
     "./layers/perimeters": "./src/layers/perimeters/index.js",

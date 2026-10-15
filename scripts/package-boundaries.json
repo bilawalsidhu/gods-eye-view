@@ -2267,7 +2267,14 @@
       "src/app/embed.js",
       "src/data/cameraFraming.js",
       "src/data/geoImportPins.js",
-      "src/data/geoImportImages.js"
+      "src/data/geoImportImages.js",
+      "src/app/layers/speedCameras.js",
+      "src/data/speedCameras.js",
+      "src/layers/speedCameras/index.js",
+      "src/layers/speedCameras/model.js",
+      "src/layers/speedCameras/policy.js",
+      "src/layers/speedCameras/source.js",
+      "src/layers/speedCameras/records.js"
     ],
     "external": [
       "hls.js",
@@ -2817,7 +2824,14 @@
       "src/layers/installations/namedMarkers.js",
       "src/data/infrastructureOverlayEntry.js",
       "src/sources/infrastructureData.js",
-      "src/data/cameraFraming.js"
+      "src/data/cameraFraming.js",
+      "src/app/layers/speedCameras.js",
+      "src/data/speedCameras.js",
+      "src/layers/speedCameras/index.js",
+      "src/layers/speedCameras/model.js",
+      "src/layers/speedCameras/policy.js",
+      "src/layers/speedCameras/source.js",
+      "src/layers/speedCameras/records.js"
     ],
     "external": [
       "hls.js",
@@ -3579,6 +3593,26 @@
       "src/data/idSwitches.js",
       "src/data/layerState.js",
       "src/data/layerStateTokenReservations.json"
+    ],
+    "external": []
+  },
+  "speed-cameras-layer": {
+    "exports": ["./layers/speed-cameras"],
+    "modules": [
+      "src/layers/speedCameras/index.js",
+      "src/layers/speedCameras/model.js",
+      "src/layers/speedCameras/policy.js",
+      "src/layers/speedCameras/source.js",
+      "src/layers/speedCameras/records.js"
+    ],
+    "external": ["cesium"]
+  },
+  "speed-cameras-source": {
+    "exports": ["./layers/speed-cameras/source"],
+    "modules": [
+      "src/layers/speedCameras/policy.js",
+      "src/layers/speedCameras/records.js",
+      "src/layers/speedCameras/source.js"
     ],
     "external": []
   }
