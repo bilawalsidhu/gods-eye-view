@@ -185,6 +185,19 @@
 
 ## [Unreleased]
 
+- Add a keyless Air quality layer to the Weather group, with Environment and
+  Climate Change Canada's AQHI as the first registered provider. Readings carry
+  `{ provider, scale, value, band }` so another network can be added without
+  inventing a shared numeric meaning across indices that do not share one; the
+  row and readout both state that coverage is Canada only. The WEATHER card
+  shows the band legend and the highest readings currently in view. AQHI is
+  reported as an integer from 1 with an open-ended "10+", so readings round to
+  that published form rather than the decimal precision the API returns.
+  Readings older than six hours are dropped, and the layer reports `stale`
+  through `getStats()` (also when every observation was dropped) so feed
+  provenance cannot describe an aged feed as live. Voice can switch it on and
+  query readings by value, band, station and observation time.
+
 - Bound six upstream body reads (FIRMS CSV, CelesTrak TLE groups, adsb.lol
   `/v2/mil`, TomTom flow tiles, OpenSky `states/all` and adsbdb lookups) with
   streaming size caps that cancel the body at the cap or the route's deadline;
