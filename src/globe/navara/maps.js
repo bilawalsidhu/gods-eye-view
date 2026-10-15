@@ -1,0 +1,187 @@
+// Map sources on a Navara view. Sources are maps/registry.js entries
+// ({ descriptor, credit } for imagery, { id } for terrain) or plain
+// descriptions ({ kind, accessToken?, googleApiKey? }); this module builds
+// Navara sources and layers from them. The URLs and credits repeat those of
+// src/maps/imagery.js and src/maps/terrain.js, which import Cesium.
+//
+// - imagery: OSM and Esri as `raster-tile` layers; Cesium ion imagery (Bing)
+//   has no Navara path yet and rejects.
+// - terrain: the keyless Re:Earth quantized mesh, Cesium World Terrain through
+//   the ion endpoint with an explicit token (Navara sends it as a Bearer
+//   token), or none (the ellipsoid). Navara 0.2.1 panics on a quantized-mesh
+//   URL without the {z}/{x}/{y}.terrain template (S2), so URLs always carry it.
+// - photoreal: Google 3D tiles with a browser key only in this phase (the
+//   server proxy of S3 comes later), with Google's logo kept on screen and the
+//   tiles' own copyright lines (creditLayerId). Showing them removes the base
+//   imagery, as MapSourceController does; clearing them does not restore it.
+
+const OSM_URL = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
+const OSM_CREDIT = {
+  attribution: '© OpenStreetMap contributors',
+  attributionUrl: 'https://www.openstreetmap.org/copyright',
+};
+const ESRI_URL =
+  'https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}';
+const ESRI_CREDIT = {
+  attributionHtml:
+    '<a href="https://www.esri.com" target="_blank" rel="noopener">Powered by Esri</a>',
+};
+const KEYLESS_TERRAIN_URL =
+  'https://terrain.reearth.land/cesium-mesh/ellipsoid/{z}/{x}/{y}.terrain';
+const KEYLESS_TERRAIN_MAX_ZOOM = 14;
+const ION_WORLD_TERRAIN_ENDPOINT =
+  'https://api.cesium.com/v1/assets/1/endpoint?access_token=';
+const GOOGLE_TILES_ROOT = 'https://tile.googleapis.com/v1/3dtiles/root.json';
+// The mark Cesium shows for Google tiles (GoogleMaps.getDefaultCredit).
+const GOOGLE_LOGO = 'https://assets.ion.cesium.com/google-credit.png';
+// Cesium3DTileset's default maximumScreenSpaceError, as the S1–S5 benches use.
+const PHOTOREAL_MAX_SSE = 16;
+
+const kindOf = (source) => (source?.descriptor ?? source)?.kind;
+
+function imageryFor(source) {
+  const kind = kindOf(source);
+  const credit =
+    source?.credit != null ? { attributionHtml: String(source.credit) } : null;
+  switch (kind) {
+    case 'osm':
+      return { url: OSM_URL, credit: credit ?? OSM_CREDIT };
+    case 'esri-imagery':
+      return { url: ESRI_URL, credit: credit ?? ESRI_CREDIT };
+    case 'ion':
+      throw new Error('Cesium ion imagery is not available on Navara yet');
+    default:
+      throw new TypeError(`Unknown imagery source: ${kind}`);
+  }
+}
+
+/**
+ * @param {object} view A Navara ThreeView (addSource, addLayer, attribution, forceUpdate).
+ * @param {{ fetch?: typeof fetch }} [options]
+ * @returns {{ maps: object, destroy: () => void }}
+ */
+export function createNavaraMaps(
+  view,
+  { fetch: fetchJson = globalThis.fetch } = {},
+) {
+  const slots = { imagery: null, terrain: null, photoreal: null };
+  const generations = { imagery: 0, terrain: 0, photoreal: 0 };
+  let destroyed = false;
+
+  function clear(name) {
+    const slot = slots[name];
+    if (!slot) return;
+    slots[name] = null;
+    slot.layer.delete();
+    slot.source.delete();
+    if (slot.credits.length) view.attribution?.remove(slot.credits);
+  }
+
+  function show(name, key, sourceDesc, layerDesc, credits = []) {
+    clear(name);
+    const source = view.addSource(sourceDesc);
+    const layer = view.addLayer({ ...layerDesc, source });
+    const shown = credits.map((credit) =>
+      typeof credit === 'function' ? credit(layer) : credit,
+    );
+    if (shown.length) view.attribution?.add(shown);
+    slots[name] = { key, source, layer, credits: shown };
+    view.forceUpdate();
+  }
+
+  async function terrainFor(source) {
+    const kind = source?.kind ?? source?.id;
+    switch (kind) {
+      case 'ellipsoid':
+        return null;
+      case 'keyless':
+        return {
+          type: 'quantized-mesh',
+          url: KEYLESS_TERRAIN_URL,
+          maxZoom: KEYLESS_TERRAIN_MAX_ZOOM,
+        };
+      case 'world': {
+        const token = String(source.accessToken || '').trim();
+        if (!token)
+          throw new Error('World terrain requires an explicit ion token');
+        const response = await fetchJson(
+          `${ION_WORLD_TERRAIN_ENDPOINT}${encodeURIComponent(token)}`,
+        );
+        if (!response.ok)
+          throw new Error(`Cesium ion answered ${response.status}`);
+        const endpoint = await response.json();
+        return {
+          type: 'quantized-mesh',
+          url: `${endpoint.url}{z}/{x}/{y}.terrain?v=1.2.0`,
+          token: endpoint.accessToken,
+        };
+      }
+      default:
+        throw new TypeError(`Unknown terrain source: ${kind}`);
+    }
+  }
+
+  const maps = {
+    async setBaseImagery(source) {
+      const generation = ++generations.imagery;
+      const { url, credit } = imageryFor(source);
+      if (destroyed || generation !== generations.imagery) return;
+      if (slots.imagery?.key === url) return;
+      show('imagery', url, { type: 'raster-tile', url }, { type: 'raster' }, [
+        credit,
+      ]);
+    },
+    async setTerrain(source) {
+      const generation = ++generations.terrain;
+      const description = await terrainFor(source);
+      if (destroyed || generation !== generations.terrain) return;
+      if (!description) {
+        clear('terrain');
+        view.forceUpdate();
+        return;
+      }
+      if (slots.terrain?.key === description.url) return;
+      show('terrain', description.url, description, { type: 'terrain' });
+    },
+    async setPhotorealTiles(source) {
+      const generation = ++generations.photoreal;
+      if (source == null) {
+        clear('photoreal');
+        view.forceUpdate();
+        return;
+      }
+      const key = String(source.googleApiKey || '').trim();
+      if (!key)
+        throw new Error(
+          'Google 3D tiles on Navara need a browser key (googleApiKey)',
+        );
+      if (destroyed || generation !== generations.photoreal) return;
+      const url = `${GOOGLE_TILES_ROOT}?key=${encodeURIComponent(key)}`;
+      clear('imagery');
+      if (slots.photoreal?.key === url) return;
+      show(
+        'photoreal',
+        url,
+        { type: '3d-tiles', url },
+        { type: '3d-tiles', model: { maxSse: PHOTOREAL_MAX_SSE } },
+        [
+          (layer) => ({
+            attribution: 'Google',
+            logo: GOOGLE_LOGO,
+            creditLayerId: layer.id,
+          }),
+        ],
+      );
+    },
+    photorealActive: () => slots.photoreal != null,
+  };
+
+  return {
+    maps,
+    destroy() {
+      if (destroyed) return;
+      destroyed = true;
+      for (const name of Object.keys(slots)) clear(name);
+    },
+  };
+}

@@ -1,14 +1,15 @@
 #!/usr/bin/env node
 /**
  * Runs src/globe/testing/contractSuite.mjs against a real globe engine in
- * headless Chrome. Starts this checkout's Vite dev server on a free port,
- * waits for the app to boot and runs every contract check, plus
- * engine-specific checks, on the app's own engine (window.__godsEyeView.engine;
- * built in the page from the viewer when the app has none). A throwaway engine
- * checks that creating and destroying one leaves the scene as it was. Exits 1
- * on any failure.
+ * headless Chrome. Starts this checkout's Vite dev server on a free port and
+ * runs every contract check, plus engine-specific checks. Cesium: waits for
+ * the app to boot and checks the app's own engine (window.__godsEyeView.engine;
+ * built in the page from the viewer when the app has none); a throwaway engine
+ * checks that creating and destroying one leaves the scene as it was.
+ * Navara: the engine on the dev-only harness page scripts/qa/navara-contract.html
+ * (Google 3D tiles use the dev server's browser key). Exits 1 on any failure.
  *
- *   node scripts/qa-globe-contract.mjs [--engine=cesium] [--base-url=URL]
+ *   node scripts/qa-globe-contract.mjs [--engine=cesium|navara] [--base-url=URL]
  *
  * --base-url reuses a running server instead of starting one. Browsers are
  * always headless. Provider keys are never printed: server output is not
@@ -31,8 +32,10 @@ const argument = (name) =>
     ?.slice(name.length + 3);
 
 /**
- * Engine factories by flag: the module the page imports, its export, and the
- * engine-specific checks. Add Navara here when it exists.
+ * Engines by flag. Cesium: the module the app page imports, its export, and
+ * the engine-specific checks. Navara: the dev-only harness page that builds
+ * the engine (scripts/qa/navara-contract.html), until the app has a Navara
+ * mode.
  */
 const ENGINES = {
   cesium: {
@@ -40,6 +43,7 @@ const ENGINES = {
     factory: 'createCesiumEngine',
     extraChecks: 'cesium',
   },
+  navara: { page: '/scripts/qa/navara-contract.html' },
 };
 const engineName = argument('engine') ?? 'cesium';
 const engineSpec = ENGINES[engineName];
@@ -122,33 +126,9 @@ const executablePath =
 if (!executablePath || !fs.existsSync(executablePath))
   throw new Error('Puppeteer Chrome for Testing is unavailable');
 
-const server = argument('base-url')
-  ? { url: argument('base-url'), stop: () => {} }
-  : await startServer();
-let browser;
-let exitCode = 1;
-try {
-  browser = await puppeteer.launch({
-    headless: 'new',
-    executablePath,
-    args: [
-      ...(process.platform === 'darwin'
-        ? ['--use-angle=metal', '--enable-gpu']
-        : ['--use-gl=angle', '--use-angle=swiftshader']),
-      '--no-sandbox',
-      '--window-size=1280,800',
-    ],
-    defaultViewport: { width: 1280, height: 800 },
-  });
-  const page = await browser.newPage();
-  const consoleErrors = [];
-  page.on('console', (message) => {
-    if (message.type() === 'error') consoleErrors.push(redact(message.text()));
-  });
-  page.on('pageerror', (error) => consoleErrors.push(redact(error.message)));
-
-  console.log(`[qa-globe-contract] engine=${engineName} app=${server.url}`);
-  await page.goto(server.url, { waitUntil: 'domcontentloaded' });
+/** The app's Cesium engine, after the boot flight has come to rest. */
+async function runCesium(page, url) {
+  await page.goto(url, { waitUntil: 'domcontentloaded' });
   await page.waitForFunction(() => Boolean(window.__godsEyeView?.viewer), {
     timeout: BOOT_TIMEOUT_MS,
   });
@@ -176,7 +156,7 @@ try {
     throw new Error('the camera never came to rest after boot');
   });
 
-  const report = await page.evaluate(
+  return page.evaluate(
     async ({ spec, kind }) => {
       const debug = window.__godsEyeView;
       const { viewer } = debug;
@@ -502,6 +482,272 @@ try {
     },
     { spec: engineSpec, kind: engineName },
   );
+}
+
+/**
+ * The Navara engine on the dev-only harness page (scripts/qa/navara-contract.html),
+ * until the app has its own Navara mode. Besides the contract suite it checks
+ * that Navara draws the engine's camera, render on demand, the canvas capture,
+ * and live map sources (Google 3D tiles with the dev server's browser key).
+ */
+async function runNavara(page, url) {
+  await page.goto(new URL(engineSpec.page, url).href, {
+    waitUntil: 'domcontentloaded',
+  });
+  // Vite may reload the page once while it optimizes dependencies it found.
+  const deadline = Date.now() + BOOT_TIMEOUT_MS;
+  for (;;) {
+    try {
+      await page.waitForFunction(() => window.__globeQa?.ready === true, {
+        timeout: Math.max(1000, deadline - Date.now()),
+      });
+      break;
+    } catch (error) {
+      if (Date.now() >= deadline || !/destroyed|navigat/i.test(error.message))
+        throw error;
+    }
+  }
+  const failure = await page.evaluate(() => window.__globeQa.error);
+  if (failure) throw new Error(`the Navara globe did not start: ${failure}`);
+
+  return page.evaluate(async () => {
+    const qa = window.__globeQa;
+    const { engine, view } = qa;
+    const { runContractSuite } =
+      await import('/src/globe/testing/contractSuite.mjs');
+    const geo = await import('/src/geo/index.js');
+    const { cartesian2, cartesian3, cartographic } = geo;
+
+    // Resolves after `count` rendered frames; a stalled renderer fails.
+    const waitFrames = (count) =>
+      new Promise((resolve, reject) => {
+        let seen = 0;
+        const timer = setTimeout(() => {
+          remove();
+          reject(new Error(`no frame within 5 s (${seen}/${count})`));
+        }, 5000);
+        const remove = engine.frames.postRender.addEventListener(() => {
+          if (++seen < count) return;
+          clearTimeout(timer);
+          remove();
+          resolve();
+        });
+        engine.render.request();
+      });
+    const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+    const settle = async (count = 3) => {
+      for (let index = 0; index < count; index++) await waitFrames(1);
+    };
+
+    const results = (await runContractSuite(engine, { waitFrames })).map(
+      ({ name, ok, error }) => ({ name, ok, error: error?.message }),
+    );
+
+    const extra = [];
+    const check = async (name, run) => {
+      try {
+        await run();
+        extra.push({ name, ok: true });
+      } catch (error) {
+        extra.push({ name, ok: false, error: error.message });
+      }
+    };
+    const ensure = (condition, message) => {
+      if (!condition) throw new Error(message);
+    };
+
+    await check('app: the engine is a Navara engine', async () => {
+      ensure(engine.kind === 'navara', `engine kind ${engine.kind}`);
+    });
+
+    await check(
+      'navara: Navara draws the engine camera (pose and fov)',
+      async () => {
+        engine.camera.setView({
+          destination: cartesian3.fromDegrees(20, 10, 30000),
+          orientation: { heading: 0.6, pitch: -0.5, roll: 0.1 },
+        });
+        await settle();
+        const raw = view.camera.raw;
+        raw.updateMatrixWorld();
+        const { width, height } = engine.host.size();
+        const Vector = raw.position.constructor;
+        let compared = 0;
+        for (const [x, y] of [
+          [width / 2, height / 2],
+          [width * 0.1, height * 0.2],
+          [width * 0.9, height * 0.85],
+        ]) {
+          const ray = engine.camera.pickRay(cartesian2.create(x, y));
+          const point = cartesian3.add(
+            ray.origin,
+            cartesian3.multiplyByScalar(
+              ray.direction,
+              20000,
+              cartesian3.create(),
+            ),
+            cartesian3.create(),
+          );
+          const ndc = new Vector(point.x, point.y, point.z).project(raw);
+          const drawn = [((ndc.x + 1) / 2) * width, ((1 - ndc.y) / 2) * height];
+          ensure(
+            Math.abs(drawn[0] - x) < 0.5 && Math.abs(drawn[1] - y) < 0.5,
+            `(${x}, ${y}) is drawn at (${drawn.map((v) => v.toFixed(2))})`,
+          );
+          compared++;
+        }
+        ensure(compared === 3, 'not every point compared');
+      },
+    );
+
+    await check(
+      'navara: render on demand draws nothing while idle (S5)',
+      async () => {
+        engine.render.setContinuous(false);
+        engine.camera.setView({
+          destination: cartesian3.fromDegrees(20, 10, 2e7),
+        });
+        await settle();
+        let frames = 0;
+        const remove = engine.frames.postRender.addEventListener(
+          () => frames++,
+        );
+        try {
+          // Let loading finish, then count frames nobody asked for.
+          for (let waited = 0; waited < 15000; waited += 500) {
+            frames = 0;
+            await sleep(1500);
+            if (frames === 0) break;
+          }
+          ensure(frames === 0, `${frames} frames in 1.5 s of idle`);
+          await waitFrames(1);
+          ensure(frames >= 1, 'a requested frame was not drawn');
+          engine.render.setContinuous(true);
+          frames = 0;
+          await sleep(500);
+          ensure(frames > 5, `only ${frames} frames in 0.5 s continuous`);
+        } finally {
+          engine.render.setContinuous(false);
+          remove();
+        }
+      },
+    );
+
+    await check(
+      'navara: maps — OSM, keyless terrain, Google 3D tiles; surface height at JFK (S2)',
+      async () => {
+        ensure(qa.googleApiKey, 'the dev server has no Google browser key');
+        // JFK runway 13R/31L, looked at straight down from 800 m (S2).
+        const lon = -73.7941;
+        const lat = 40.6381;
+        const place = cartographic.fromDegrees(lon, lat, 0);
+        const untilLoaded = async () => {
+          let loadedSince = null;
+          const started = performance.now();
+          while (performance.now() - started < 60000) {
+            await waitFrames(1);
+            await sleep(100);
+            if (!engine.surface.tilesLoaded()) loadedSince = null;
+            else if (loadedSince === null) loadedSince = performance.now();
+            else if (performance.now() - loadedSince > 1500) return;
+          }
+        };
+        await engine.maps.setBaseImagery({ kind: 'osm' });
+        await engine.maps.setTerrain({ kind: 'keyless' });
+        engine.camera.setView({
+          destination: cartesian3.fromDegrees(lon, lat, 800),
+        });
+        await untilLoaded();
+        // Re:Earth terrain there: −29.66 m (S2).
+        const terrain = engine.surface.terrainHeight(place);
+        ensure(
+          Number.isFinite(terrain) && Math.abs(terrain + 29.66) < 1,
+          `terrainHeight ${terrain} is not within 1 m of −29.66`,
+        );
+        await engine.maps.setPhotorealTiles({ googleApiKey: qa.googleApiKey });
+        ensure(engine.maps.photorealActive(), 'photoreal is not active');
+        await untilLoaded();
+        const height = engine.surface.sampleHeight(place);
+        // Cesium's sampleHeightMostDetailed there: −29.85 m (S2).
+        ensure(
+          Number.isFinite(height) && Math.abs(height + 29.85) < 2,
+          `sampleHeight ${height} is not within 2 m of −29.85`,
+        );
+        const clamped = engine.surface.clampToHeight(
+          cartesian3.fromDegrees(lon, lat, 500),
+        );
+        ensure(
+          Math.abs(cartographic.fromCartesian(clamped).height - height) < 1e-6,
+          'clampToHeight disagrees with sampleHeight',
+        );
+        const { width, height: tall } = engine.host.size();
+        const picked = engine.picker.pickPosition(
+          cartesian2.create(width / 2, tall / 2),
+        );
+        ensure(picked, 'pickPosition missed the tiles');
+        const pickedHeight = cartographic.fromCartesian(picked).height;
+        ensure(
+          Math.abs(pickedHeight - height) < 3,
+          `pickPosition height ${pickedHeight} is far from ${height}`,
+        );
+        ensure(
+          document.querySelector('img[src*="google-credit"]'),
+          'the Google logo is not on screen',
+        );
+        // The canvas keeps its drawing buffer, so captures work any time (S4).
+        const probe = document.createElement('canvas');
+        probe.width = 64;
+        probe.height = 40;
+        const context = probe.getContext('2d');
+        context.drawImage(engine.host.canvas, 0, 0, 64, 40);
+        const pixels = context.getImageData(0, 0, 64, 40).data;
+        const colours = new Set();
+        for (let index = 0; index < pixels.length; index += 4)
+          colours.add(pixels.slice(index, index + 3).join());
+        ensure(colours.size > 50, `the capture has ${colours.size} colours`);
+        await engine.maps.setPhotorealTiles(null);
+        await settle();
+        ensure(!engine.maps.photorealActive(), 'photoreal is still active');
+        ensure(
+          !document.querySelector('img[src*="google-credit"]'),
+          'the Google logo stayed after the tiles went',
+        );
+      },
+    );
+    return { results, extra };
+  });
+}
+
+const server = argument('base-url')
+  ? { url: argument('base-url'), stop: () => {} }
+  : await startServer();
+let browser;
+let exitCode = 1;
+try {
+  browser = await puppeteer.launch({
+    headless: 'new',
+    executablePath,
+    args: [
+      ...(process.platform === 'darwin'
+        ? ['--use-angle=metal', '--enable-gpu']
+        : ['--use-gl=angle', '--use-angle=swiftshader']),
+      '--no-sandbox',
+      '--window-size=1280,800',
+    ],
+    defaultViewport: { width: 1280, height: 800 },
+  });
+  const page = await browser.newPage();
+  const consoleErrors = [];
+  page.on('console', (message) => {
+    if (message.type() === 'error') consoleErrors.push(redact(message.text()));
+  });
+  page.on('pageerror', (error) => consoleErrors.push(redact(error.message)));
+
+  console.log(`[qa-globe-contract] engine=${engineName} app=${server.url}`);
+  const report =
+    engineName === 'navara'
+      ? await runNavara(page, server.url)
+      : await runCesium(page, server.url);
 
   const all = [...report.results, ...report.extra];
   for (const { name, ok, error } of all)

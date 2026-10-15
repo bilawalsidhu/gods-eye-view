@@ -1,0 +1,143 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { createNavaraInput } from './input.js';
+
+function fakeCanvas() {
+  const canvas = new EventTarget();
+  canvas.getBoundingClientRect = () => ({ left: 100, top: 50 });
+  canvas.listenerCount = 0;
+  const add = canvas.addEventListener.bind(canvas);
+  const remove = canvas.removeEventListener.bind(canvas);
+  canvas.addEventListener = (...args) => {
+    canvas.listenerCount++;
+    add(...args);
+  };
+  canvas.removeEventListener = (...args) => {
+    canvas.listenerCount--;
+    remove(...args);
+  };
+  return canvas;
+}
+
+const pointer = (type, x, y, extra = {}) =>
+  Object.assign(new Event(type), {
+    clientX: x,
+    clientY: y,
+    button: 0,
+    shiftKey: false,
+    ctrlKey: false,
+    altKey: false,
+    ...extra,
+  });
+
+function setup() {
+  const canvas = fakeCanvas();
+  const cameraOptions = [];
+  const cameraInputs = [];
+  const view = {
+    canvas,
+    camera: {
+      set options(value) {
+        cameraOptions.push(value);
+      },
+    },
+  };
+  const { input, destroy } = createNavaraInput(view, {
+    onCameraInput: (type) => cameraInputs.push(type),
+  });
+  return { canvas, input, destroy, cameraOptions, cameraInputs };
+}
+
+test('down, up and click carry canvas-relative positions', () => {
+  const { canvas, input } = setup();
+  const seen = [];
+  for (const type of ['down', 'up', 'click'])
+    input.on(type, (event) => seen.push([type, event.position]));
+  canvas.dispatchEvent(pointer('pointerdown', 110, 60));
+  canvas.dispatchEvent(pointer('pointerup', 113, 61));
+  assert.deepEqual(seen, [
+    ['down', { x: 10, y: 10 }],
+    ['up', { x: 13, y: 11 }],
+    ['click', { x: 13, y: 11 }],
+  ]);
+});
+
+test('a drag beyond the 5 px click tolerance is not a click; other buttons are ignored', () => {
+  const { canvas, input } = setup();
+  let clicks = 0;
+  input.on('click', () => clicks++);
+  canvas.dispatchEvent(pointer('pointerdown', 110, 60));
+  canvas.dispatchEvent(pointer('pointerup', 120, 60));
+  canvas.dispatchEvent(pointer('pointerdown', 110, 60, { button: 2 }));
+  canvas.dispatchEvent(pointer('pointerup', 110, 60, { button: 2 }));
+  assert.equal(clicks, 0);
+});
+
+test('move reports start and end positions; doubleClick a position', () => {
+  const { canvas, input } = setup();
+  const seen = [];
+  input.on('move', (event) => seen.push(event));
+  input.on('doubleClick', (event) => seen.push(event));
+  canvas.dispatchEvent(pointer('pointermove', 110, 60));
+  canvas.dispatchEvent(pointer('pointermove', 115, 70));
+  canvas.dispatchEvent(pointer('dblclick', 115, 70));
+  assert.deepEqual(seen, [
+    { startPosition: { x: 10, y: 10 }, endPosition: { x: 10, y: 10 } },
+    { startPosition: { x: 10, y: 10 }, endPosition: { x: 15, y: 20 } },
+    { position: { x: 15, y: 20 } },
+  ]);
+});
+
+test('modifiers: a listener fires only for its own key, an unmodified one only without keys', () => {
+  const { canvas, input } = setup();
+  const seen = [];
+  input.on('down', () => seen.push('none'));
+  input.on('down', () => seen.push('shift'), { modifier: 'shift' });
+  input.on('down', () => seen.push('ctrl'), { modifier: 'ctrl' });
+  canvas.dispatchEvent(pointer('pointerdown', 1, 1));
+  canvas.dispatchEvent(pointer('pointerdown', 1, 1, { shiftKey: true }));
+  canvas.dispatchEvent(pointer('pointerdown', 1, 1, { ctrlKey: true }));
+  // Cesium takes shift over ctrl over alt.
+  canvas.dispatchEvent(
+    pointer('pointerdown', 1, 1, { ctrlKey: true, shiftKey: true }),
+  );
+  assert.deepEqual(seen, ['none', 'shift', 'ctrl', 'shift']);
+});
+
+test('on validates its arguments and returns an idempotent remover', () => {
+  const { canvas, input } = setup();
+  assert.throws(() => input.on('wheel', () => {}), TypeError);
+  assert.throws(() => input.on('click', () => {}, { modifier: 'meta' }), TypeError);
+  let count = 0;
+  const off = input.on('down', () => count++);
+  off();
+  off();
+  canvas.dispatchEvent(pointer('pointerdown', 1, 1));
+  assert.equal(count, 0);
+});
+
+test('setCameraInputs toggles Navara camera control and user input cancels flights only while enabled', () => {
+  const { canvas, input, cameraOptions, cameraInputs } = setup();
+  canvas.dispatchEvent(pointer('pointerdown', 1, 1));
+  canvas.dispatchEvent(new Event('wheel'));
+  assert.deepEqual(cameraInputs, ['pointerdown', 'wheel']);
+  input.setCameraInputs(false);
+  canvas.dispatchEvent(pointer('pointerdown', 1, 1));
+  assert.deepEqual(cameraInputs, ['pointerdown', 'wheel']);
+  input.setCameraInputs(true);
+  assert.deepEqual(cameraOptions, [
+    { enableSpin: false, enableZoom: false, enableTilt: false },
+    { enableSpin: true, enableZoom: true, enableTilt: true },
+  ]);
+});
+
+test('destroy removes every DOM listener and later subscriptions are inert', () => {
+  const { canvas, input, destroy } = setup();
+  input.on('click', () => {});
+  input.on('move', () => {});
+  destroy();
+  assert.equal(canvas.listenerCount, 0);
+  const off = input.on('click', () => {});
+  assert.equal(typeof off, 'function');
+  assert.equal(canvas.listenerCount, 0);
+});
