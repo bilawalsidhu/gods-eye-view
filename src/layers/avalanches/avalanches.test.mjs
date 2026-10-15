@@ -69,6 +69,7 @@ test('Varsom keeps rated (type A) regions with their days in order', () => {
   assert.deepEqual(regions, [
     {
       id: 'NO-3010',
+      provider: 'varsom',
       name: 'Lyngen',
       days: [
         { date: '2026-03-07', level: 3, text: 'Big one.' },
@@ -571,4 +572,126 @@ test('the panel draws the window, marks forecasts, and offers replay off-season'
   assert.equal(notice.hidden, true);
   panel.destroy();
   assert.equal(container.children.length, 0);
+});
+
+test('SLF bulletins rate each region at its worst level, with SLF refinement and summary', async () => {
+  const { normalizeSlfForecast, normalizeSlfRegions, slfDayRatings } =
+    await import('./records.js');
+  const day = slfDayRatings({
+    bulletins: [
+      {
+        regions: [
+          { regionID: 'CH-7222', name: 'Lower Val Poschiavo' },
+          { regionID: 'AT-07', name: 'not ours' },
+        ],
+        dangerRatings: [
+          { mainValue: 'moderate', validTimePeriod: 'earlier' },
+          {
+            mainValue: 'considerable',
+            validTimePeriod: 'later',
+            customData: { CH: { subdivision: 'plus' } },
+          },
+        ],
+        avalancheProblems: [
+          {
+            dangerRatingValue: 'moderate',
+            customData: { CH: { coreZoneText: 'Morning.' } },
+          },
+          {
+            dangerRatingValue: 'considerable',
+            customData: { CH: { coreZoneText: 'Wet snow below 2400m.' } },
+          },
+        ],
+      },
+      {
+        regions: [{ regionID: 'CH-1111' }],
+        dangerRatings: [{ mainValue: 'no_snow' }],
+      },
+    ],
+  });
+  assert.deepEqual(day.get('CH-7222'), {
+    name: 'Lower Val Poschiavo',
+    level: 3,
+    sub: '+',
+    text: 'Wet snow below 2400m.',
+  });
+  assert.equal(day.get('CH-1111').level, 0);
+  assert.equal(
+    day.get('CH-1111').text,
+    null,
+    'an unrated region carries no summary',
+  );
+  assert.equal(day.has('AT-07'), false);
+  assert.throws(() => slfDayRatings({}), /invalid_bulletin/);
+
+  const regions = normalizeSlfForecast([
+    { date: '2026-03-06', payload: { bulletins: [] } },
+    {
+      date: '2026-03-05',
+      payload: {
+        bulletins: [
+          {
+            regions: [{ regionID: 'CH-7222', name: 'Lower Val Poschiavo' }],
+            dangerRatings: [{ mainValue: 'high' }],
+          },
+        ],
+      },
+    },
+  ]);
+  assert.deepEqual(regions, [
+    {
+      id: 'CH-7222',
+      provider: 'slf',
+      name: 'Lower Val Poschiavo',
+      days: [{ date: '2026-03-05', level: 4, text: null, sub: null }],
+    },
+  ]);
+  const outlines = normalizeSlfRegions({
+    features: [
+      {
+        properties: {
+          sector_id: '1111',
+          sector_name: 'Préalpes vaudoises',
+          sector_names: { en: 'Vaud Prealps' },
+        },
+        geometry: {
+          type: 'Polygon',
+          coordinates: [
+            [
+              [7, 46],
+              [7.1, 46],
+              [7.1, 46.1],
+              [7, 46],
+            ],
+          ],
+        },
+      },
+      {
+        properties: { sector_id: 'x' },
+        geometry: { type: 'Polygon', coordinates: [] },
+      },
+    ],
+  });
+  assert.deepEqual(
+    outlines.map(({ id, provider, name }) => [id, provider, name]),
+    [['CH-1111', 'slf', 'Vaud Prealps']],
+  );
+});
+
+test('a Swiss card keeps the SLF refinement and credits SLF', () => {
+  const days = windowDays('2026-03-08');
+  const ratings = [0, 0, 0, 0, 0, 0, 0, 3, 3, 0];
+  const card = regionCard(
+    {
+      provider: 'slf',
+      name: 'Vaud Prealps',
+      days: [{ date: '2026-03-08', level: 3, sub: '−', text: 'Above 2200m.' }],
+    },
+    ratings,
+    days,
+    7,
+  );
+  assert.match(card.details[0], /3− Considerable$/);
+  assert.equal(card.details.at(-1), 'SLF · slf.ch');
+  assert.ok(card.details.includes('Above 2200m.'));
 });

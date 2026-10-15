@@ -176,6 +176,12 @@ export const DATA_CREDITS = [
       '<a href="https://www.regobs.no/" target="_blank" rel="noopener">regObs</a> (NLOD), observers credited per report' +
       ' · Regions: <a href="https://regions.avalanches.org/" target="_blank" rel="noopener">EAWS</a> (CC0)',
   },
+  {
+    key: 'slf-avalanche-bulletin',
+    html:
+      'Swiss avalanche bulletin and warning regions: ' +
+      '<a href="https://www.slf.ch/en/" target="_blank" rel="noopener">WSL Institute for Snow and Avalanche Research SLF</a> (CC BY 4.0)',
+  },
   OSM_CREDIT,
   OPENMAPTILES_CREDIT,
   {

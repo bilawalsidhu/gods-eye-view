@@ -846,6 +846,8 @@
   "src/layers/avalanches/state.js",
   "src/app/layers/avalanches.js",
   "server/providers/avalanches.js",
+  "server/providers/avalanches/norway.js",
+  "server/providers/avalanches/switzerland.js",
   "src/data/avalanchesProxy.test.mjs",
   "src/ui/styles/avalanches.css",
   "src/layers/cyclones/index.js",

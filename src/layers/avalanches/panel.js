@@ -42,7 +42,7 @@ export function createAvalanchePanel({
   root.setAttribute('aria-label', 'Avalanche timeline');
 
   const kicker = element('div', 'avalanche-panel-kicker');
-  const kickerText = element('span', '', 'Avalanches · Norway');
+  const kickerText = element('span', '', 'Avalanches · Norway · Switzerland');
   const mode = element('span', 'avalanche-panel-mode');
   kicker.append(kickerText, mode);
 
@@ -216,7 +216,7 @@ export function createAvalanchePanel({
       notice.hidden = !(view.quiet && view.mode === 'live');
       if (!notice.hidden) {
         noticeText.textContent =
-          'Out of season — Varsom forecasts run 1 December to 31 May, and few avalanches are reported now.';
+          'Out of season — daily avalanche forecasts resume in winter, and few avalanches are reported now.';
         replay.textContent = view.seasonNumber
           ? `Replay ${seasonLabel(view.seasonNumber)}`
           : 'Replay last season';
@@ -226,7 +226,7 @@ export function createAvalanchePanel({
       seasonBlock.hidden = view.mode !== 'replay';
       if (!seasonBlock.hidden) {
         seasonTitle.textContent = view.season
-          ? `Season ${seasonLabel(view.season.season)} · avalanches reported per week`
+          ? `Season ${seasonLabel(view.season.season)} · avalanches reported in Norway per week`
           : 'Loading season…';
         syncWeeks(view.season, view.weekFrom);
       }

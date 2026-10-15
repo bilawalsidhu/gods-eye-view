@@ -1,34 +1,11 @@
-import {
-  daySpan,
-  isIsoDate,
-  normalizeEawsRegions,
-  normalizeRegobsObservations,
-  normalizeVarsomRegions,
-} from '../../src/layers/avalanches/records.js';
+import { daySpan, isIsoDate } from '../../src/layers/avalanches/records.js';
 import { coalesceProxyRequest, readResponseJsonCapped } from './common/http.js';
 import { makeRateLimiter, clientKey } from './common/rate-limit.js';
+import { createNorwayAvalancheProvider } from './avalanches/norway.js';
+import { createSwitzerlandAvalancheProvider } from './avalanches/switzerland.js';
 
-// Varsom / NVE regional avalanche forecasts (NLOD). Language key 2 = English.
-const VARSOM_URL =
-  'https://api01.nve.no/hydrology/forecast/avalanche/v6.3.0/api/RegionSummary/Simple/2';
-// regObs public observation search (NLOD; credit regObs and the observer).
-const REGOBS_SEARCH_URL = 'https://api.regobs.no/v5/Search';
-const REGOBS_COUNT_URL = 'https://api.regobs.no/v5/Search/Count';
-// EAWS micro-region outlines (CC0); ids match the Varsom region ids.
-const EAWS_NO_URL =
-  'https://regions.avalanches.org/micro-regions/NO_micro-regions.geojson.json';
-
-const MIB = 1024 * 1024;
 /** Widest date window one request may ask for. */
 export const AVALANCHE_MAX_SPAN_DAYS = 14;
-/** regObs geo-hazard id for snow, and registration type for avalanche observations. */
-const REGOBS_SNOW = 10;
-const REGOBS_AVALANCHE_OBS = 26;
-/** One regObs page; a peak week is ~200 avalanche observations. */
-const REGOBS_PAGE = 300;
-const REGOBS_MAX_PAGES = 3;
-/** Season weeks counted in parallel against regObs. */
-const COUNT_CONCURRENCY = 4;
 /** Distinct cached windows retained. */
 const CACHE_MAX = 96;
 
@@ -72,17 +49,31 @@ export function seasonWeeks(startYear) {
   return weeks;
 }
 
-const regobsQuery = (from, to, extra = {}) =>
-  JSON.stringify({
-    SelectedGeoHazards: [REGOBS_SNOW],
-    SelectedRegistrationTypes: [{ Id: REGOBS_AVALANCHE_OBS }],
-    FromDtObsTime: `${from}T00:00:00`,
-    ToDtObsTime: `${to}T23:59:59`,
-    LangKey: 2,
-    ...extra,
+/**
+ * Run one operation across providers and merge what answered. One country
+ * being down must not blank the others, so a partial answer is still an
+ * answer; it names who is missing, and only a total failure is an error.
+ * @param {Array<object>} providers Providers that implement `operation`.
+ * @param {(provider:object) => Promise<Array>} operation Provider call.
+ * @returns {Promise<{items:Array, unavailable:Array<string>}>}
+ */
+export async function mergeProviders(providers, operation) {
+  const settled = await Promise.allSettled(providers.map(operation));
+  const items = [];
+  const unavailable = [];
+  settled.forEach((result, index) => {
+    if (result.status === 'fulfilled') items.push(...result.value);
+    else unavailable.push(providers[index].id);
   });
+  if (unavailable.length === providers.length)
+    throw new Error('upstream_unavailable');
+  return { items, unavailable };
+}
 
-/** Bounded, cached Varsom + regObs + EAWS routes for dev and preview. */
+/**
+ * Bounded, cached avalanche routes for dev and preview: Norway (Varsom,
+ * regObs, EAWS outlines) and Switzerland (SLF).
+ */
 export function avalancheProxy({
   fetchImpl = (...args) => globalThis.fetch(...args),
   now = () => Date.now(),
@@ -106,80 +97,46 @@ export function avalancheProxy({
     return readResponseJsonCapped(response, cap, signal);
   }
 
-  const post = (body) => ({
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body,
-  });
+  const norway = createNorwayAvalancheProvider({ upstream });
+  const switzerland = createSwitzerlandAvalancheProvider({ upstream });
+  /** Danger forecasts and region outlines, by country. */
+  const forecasters = [norway, switzerland];
 
-  async function fetchForecast({ from, to }) {
-    const payload = await upstream(
-      `${VARSOM_URL}/${from}/${to}`,
-      8 * MIB,
-      20_000,
+  async function fetchForecast(window) {
+    const { items, unavailable } = await mergeProviders(forecasters, (p) =>
+      p.forecast(window),
     );
-    return { from, to, regions: normalizeVarsomRegions(payload) };
+    return { ...window, regions: items, unavailable };
   }
 
-  async function fetchObservations({ from, to }) {
-    const rows = [];
-    for (let page = 0; page < REGOBS_MAX_PAGES; page++) {
-      const batch = await upstream(
-        REGOBS_SEARCH_URL,
-        24 * MIB,
-        30_000,
-        post(
-          regobsQuery(from, to, {
-            NumberOfRecords: REGOBS_PAGE,
-            Offset: page * REGOBS_PAGE,
-          }),
-        ),
-      );
-      if (!Array.isArray(batch)) throw new Error('invalid_observations');
-      rows.push(...batch);
-      if (batch.length < REGOBS_PAGE) break;
-    }
-    return { from, to, observations: normalizeRegobsObservations(rows) };
+  async function fetchRegions() {
+    const { items, unavailable } = await mergeProviders(forecasters, (p) =>
+      p.regions(),
+    );
+    return { regions: items, unavailable };
+  }
+
+  async function fetchObservations(window) {
+    // Only regObs publishes public observations; other countries add none.
+    return { ...window, observations: await norway.observations(window) };
   }
 
   async function fetchSeason(startYear) {
     const weeks = seasonWeeks(startYear).filter(
       (week) => week.from <= today(now()),
     );
-    const counted = [];
-    for (let start = 0; start < weeks.length; start += COUNT_CONCURRENCY) {
-      const batch = weeks.slice(start, start + COUNT_CONCURRENCY);
-      const totals = await Promise.all(
-        batch.map((week) =>
-          upstream(
-            REGOBS_COUNT_URL,
-            64 * 1024,
-            20_000,
-            post(regobsQuery(week.from, week.to)),
-          ),
-        ),
-      );
-      batch.forEach((week, index) => {
-        const count = Number(totals[index]?.TotalMatches);
-        counted.push({ ...week, count: Number.isFinite(count) ? count : 0 });
-      });
-    }
-    return { season: startYear, weeks: counted };
-  }
-
-  async function fetchRegions() {
-    return {
-      regions: normalizeEawsRegions(
-        await upstream(EAWS_NO_URL, 8 * MIB, 30_000),
-      ),
-    };
+    return { season: startYear, weeks: await norway.weekCounts(weeks) };
   }
 
   /** Cached value, refreshed once per TTL and served stale when upstream fails. */
   async function acquire(key, ttl, load) {
     const previous = cache.get(key);
-    if (previous && now() - previous.savedAt < ttl)
-      return { ...previous, stale: false };
+    // A partial answer is kept briefly, so a country that was down returns soon.
+    const fresh =
+      previous &&
+      now() - previous.savedAt <
+        (previous.value.unavailable?.length ? LIVE_TTL_MS : ttl);
+    if (fresh) return { ...previous, stale: false };
     if (!inFlight.has(key) && inFlight.size >= 32)
       throw Object.assign(new Error('busy'), { status: 429 });
     try {

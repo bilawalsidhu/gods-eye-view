@@ -1,10 +1,15 @@
 # God's Eye View Current State
 
-Avalanches is a keyless layer for Norway that plays Varsom danger forecasts and
-regObs observed avalanches over a ten-day window: seven observed days, the
-anchor day and Varsom's two forecast days. `/api/avalanches` trims and caches
-four upstreams (forecast windows, observation windows, weekly season counts and
-EAWS region outlines, whose ids match Varsom's). The playhead is continuous and
+Avalanches is a keyless layer for Norway and Switzerland that plays Varsom and
+SLF danger forecasts and regObs observed avalanches over a ten-day window: seven
+observed days, the anchor day and two forecast days. `/api/avalanches` routes
+each operation through one provider module per country
+(`server/providers/avalanches/{norway,switzerland}.js`) and merges what answers:
+a country that fails is named in `unavailable` and kept only briefly in cache,
+and only a total failure is an error. Norway supplies forecasts, observations,
+weekly season counts and EAWS outlines (ids match Varsom's); Switzerland
+supplies SLF bulletins, read one day at a time at midday UTC, and SLF warning
+regions. Only openly licensed services are used. The playhead is continuous and
 animation-frame driven; region fills hold each day's rating and blend into the
 next, and an avalanche appears at its reported time, a front runs from release
 to runout over part of a day, and the path fades with age to a floor. Geometry is

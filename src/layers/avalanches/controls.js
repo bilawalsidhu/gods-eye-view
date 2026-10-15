@@ -26,7 +26,7 @@ export function createControls({ state: layerState, parts }) {
 
     icon: '❄',
 
-    source: 'Varsom forecasts · regObs observations (Norway)',
+    source: 'Varsom and SLF forecasts · regObs observations',
 
     /** One window per enable; nothing to poll while it plays. */
     updateInterval: 0,

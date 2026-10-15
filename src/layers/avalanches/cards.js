@@ -34,10 +34,17 @@ export function wrapLines(text, width = LINE_CHARS, max = MAX_TEXT_LINES) {
 
 const TREND = { '-1': ' ↓', 0: '', 1: ' ↑' };
 
+/** Who issued a region's forecast, as the card credits them. */
+export const PROVIDER_CREDITS = Object.freeze({
+  varsom: 'Varsom · NVE',
+  slf: 'SLF · slf.ch',
+});
+
 /**
  * A region's card: its rating for the day on screen and the days after it,
- * marked as forecasts where they are, then the forecaster's summary.
- * @param {{id:string, name:string, days:Array<object>}} region Forecast region.
+ * marked as forecasts where they are, then the forecaster's summary and who
+ * issued it. SLF refines a level into thirds (3−, 3=, 3+); the card keeps that.
+ * @param {{id:string, provider?:string, name:string, days:Array<object>}} region Forecast region.
  * @param {Array<number>} ratings Rating per window day.
  * @param {Array<{date:string, forecast:boolean}>} days Window days.
  * @param {number} day Window day on screen.
@@ -45,21 +52,24 @@ const TREND = { '-1': ' ↓', 0: '', 1: ' ↑' };
  */
 export function regionCard(region, ratings, days, day) {
   const details = [];
+  const byDate = new Map(region.days.map((entry) => [entry.date, entry]));
   for (let index = day; index < Math.min(days.length, day + 3); index++) {
     const level = ratings[index];
     const scale = dangerLevel(level);
-    const rating = level ? `${level} ${scale.label}` : 'No rating';
+    const sub = byDate.get(days[index].date)?.sub ?? '';
+    const rating = level ? `${level}${sub} ${scale.label}` : 'No rating';
     const trend = TREND[dangerTrend(ratings, index)];
     const when = days[index].forecast ? ' (forecast)' : '';
     details.push(
       `${dayLabel(days[index].date).padEnd(11)}${rating}${trend}${when}`,
     );
   }
-  const summary = region.days.find(
-    (entry) => entry.date === days[day].date,
-  )?.text;
+  const summary = byDate.get(days[day].date)?.text;
   if (summary) details.push('', ...wrapLines(summary));
-  details.push('', 'Varsom · NVE');
+  details.push(
+    '',
+    PROVIDER_CREDITS[region.provider] ?? PROVIDER_CREDITS.varsom,
+  );
   return {
     title: region.name,
     details,

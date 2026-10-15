@@ -15,8 +15,9 @@ const SOURCE_METHODS = [
 ];
 
 /**
- * Construct the avalanche layer: Varsom danger forecasts and regObs observed
- * avalanches played over a ten-day window, with off-season replay.
+ * Construct the avalanche layer: Varsom (Norway) and SLF (Switzerland) danger
+ * forecasts and regObs observed avalanches played over a ten-day window, with
+ * off-season replay.
  * @param {{source:object, services:object}} options Frame source and application services.
  */
 export function createAvalancheLayer({ services, source }) {

@@ -4,10 +4,12 @@
  * shape the layer draws. Shared by the server proxy (which trims the payloads)
  * and the browser (which re-validates them), so it imports nothing.
  *
- * - Varsom / NVE forecast regions: danger level per region per day.
+ * - Varsom / NVE forecast regions (Norway): danger level per region per day.
+ * - SLF bulletins (Switzerland): danger level per warning region per day.
  * - regObs avalanche observations: release and runout points, time, size,
  *   trigger and elevations.
- * - EAWS micro-regions: forecast region polygons.
+ * - EAWS micro-regions (Norway) and SLF warning regions (Switzerland):
+ *   forecast region polygons.
  */
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
@@ -82,6 +84,7 @@ export function normalizeVarsomRegions(payload) {
     days.sort((a, b) => a.date.localeCompare(b.date));
     regions.push({
       id: `NO-${id}`,
+      provider: 'varsom',
       name: text(region.Name, 80) || `NO-${id}`,
       days,
     });
@@ -182,7 +185,134 @@ export function normalizeEawsRegions(geojson) {
     const polygons = parts
       .map((rings) => rings.map(roundRing).filter((ring) => ring.length >= 4))
       .filter((rings) => rings.length);
-    if (polygons.length) regions.push({ id, polygons });
+    if (polygons.length) regions.push({ id, provider: 'varsom', polygons });
+  }
+  return regions;
+}
+
+const polygonsOf = (geometry) => {
+  const parts =
+    geometry?.type === 'Polygon'
+      ? [geometry.coordinates]
+      : geometry?.type === 'MultiPolygon'
+        ? geometry.coordinates
+        : [];
+  return parts
+    .map((rings) => rings.map(roundRing).filter((ring) => ring.length >= 4))
+    .filter((rings) => rings.length);
+};
+
+/** SLF danger words to the shared 1–5 scale; `no_rating` and `no_snow` are 0. */
+const SLF_LEVELS = Object.freeze({
+  low: 1,
+  moderate: 2,
+  considerable: 3,
+  high: 4,
+  very_high: 5,
+});
+
+/** SLF refines a level into lower, middle and upper thirds. */
+const SLF_SUBDIVISION = Object.freeze({ minus: '−', neutral: '=', plus: '+' });
+
+/**
+ * One day's SLF bulletins as a rating per warning region.
+ *
+ * A bulletin can rate by elevation or by morning and afternoon; the region
+ * takes its highest rating, the one a traveller has to plan for. The summary
+ * is the SLF's own one-line core-zone text for the bulletin's worst problem.
+ * @param {{bulletins:Array<object>}} payload CAAMLv6 JSON for one instant.
+ * @returns {Map<string, {name:?string, level:number, sub:?string, text:?string}>}
+ */
+export function slfDayRatings(payload) {
+  if (!Array.isArray(payload?.bulletins))
+    throw new TypeError('invalid_bulletin');
+  const ratings = new Map();
+  for (const bulletin of payload.bulletins) {
+    let best = null;
+    for (const rating of bulletin?.dangerRatings ?? []) {
+      const level = SLF_LEVELS[rating?.mainValue] ?? 0;
+      if (!best || level > best.level) best = { level, rating };
+    }
+    const level = best?.level ?? 0;
+    const sub =
+      SLF_SUBDIVISION[best?.rating?.customData?.CH?.subdivision] ?? null;
+    const problems = [...(bulletin?.avalancheProblems ?? [])].sort(
+      (a, b) =>
+        (SLF_LEVELS[b?.dangerRatingValue] ?? 0) -
+        (SLF_LEVELS[a?.dangerRatingValue] ?? 0),
+    );
+    const summary = text(problems[0]?.customData?.CH?.coreZoneText);
+    for (const region of bulletin?.regions ?? []) {
+      const id = region?.regionID;
+      if (typeof id !== 'string' || !/^CH-\d+$/.test(id)) continue;
+      const previous = ratings.get(id);
+      if (previous && previous.level >= level) continue;
+      ratings.set(id, {
+        name: text(region.name, 80),
+        level,
+        sub: level ? sub : null,
+        text: level ? summary : null,
+      });
+    }
+  }
+  return ratings;
+}
+
+/**
+ * SLF bulletins for a run of days, as forecast regions with their days.
+ * @param {Array<{date:string, payload:object}>} days One CAAMLv6 payload per date.
+ * @returns {Array<{id:string, provider:string, name:string, days:Array<object>}>}
+ */
+export function normalizeSlfForecast(days) {
+  const regions = new Map();
+  for (const { date, payload } of days) {
+    if (!isIsoDate(date)) continue;
+    for (const [id, rating] of slfDayRatings(payload)) {
+      const region = regions.get(id) ?? {
+        id,
+        provider: 'slf',
+        name: rating.name || id,
+        days: [],
+      };
+      region.days.push({
+        date,
+        level: rating.level,
+        text: rating.text,
+        sub: rating.sub,
+      });
+      regions.set(id, region);
+    }
+  }
+  return [...regions.values()]
+    .map((region) => ({
+      ...region,
+      days: region.days.sort((a, b) => a.date.localeCompare(b.date)),
+    }))
+    .sort((a, b) => a.id.localeCompare(b.id));
+}
+
+/**
+ * SLF warning-region polygons, keyed the way its bulletins name them.
+ * @param {object} geojson Current warning-region definition.
+ * @returns {Array<{id:string, provider:string, name:?string, polygons:Array}>}
+ */
+export function normalizeSlfRegions(geojson) {
+  if (!Array.isArray(geojson?.features)) throw new TypeError('invalid_regions');
+  const regions = [];
+  for (const feature of geojson.features) {
+    const sector = String(feature?.properties?.sector_id ?? '');
+    if (!/^\d+$/.test(sector)) continue;
+    const polygons = polygonsOf(feature.geometry);
+    if (!polygons.length) continue;
+    regions.push({
+      id: `CH-${sector}`,
+      provider: 'slf',
+      name: text(
+        feature.properties.sector_names?.en ?? feature.properties.sector_name,
+        80,
+      ),
+      polygons,
+    });
   }
   return regions;
 }
