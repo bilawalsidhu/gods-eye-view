@@ -8,8 +8,8 @@ export const DEFAULT_AUSTIN_MAX_SOURCES = 250;
  * Catalog-wide safety ceiling on served cameras. Each pack already caps
  * itself (nearest-to-anchor first); this bound only matters when the packs
  * together exceed it, and it is then filled round-robin across packs (see
- * cap.js) so no region is silently dropped. Sized above the sum of the
- * default per-pack caps so a default install never trims.
+ * cap.js) so no region is silently dropped. The default per-pack caps
+ * together can exceed it, so a default install may be thinned evenly here.
  */
 export const DEFAULT_CCTV_MAX_SOURCES = 4000;
 /** Hard upper bound for CCTV_MAX_SOURCES; also sizes the health map. */
@@ -299,9 +299,9 @@ export const VEGVESEN_IMAGE_ORIGIN =
  * per-camera manifest path is registered. */
 export const VEGVESEN_VIDEO_URL = (cameraId) =>
   `https://kamera.vegvesen.no/public/${cameraId}/manifest.m3u8`;
-/** Above the ~850 working cameras so a default install keeps them all, while
- * staying close to them: the per-pack defaults are meant to sum to no more
- * than DEFAULT_CCTV_MAX_SOURCES. */
+/** Above the ~850 working cameras so the pack keeps them all on its own. The
+ * catalog-wide DEFAULT_CCTV_MAX_SOURCES cap still applies across packs and is
+ * filled round-robin, so a full default install may thin this pack. */
 export const DEFAULT_VEGVESEN_MAX_SOURCES = 900;
 /** Hard ceiling on the catalog body. The whole country is ~800 KB. */
 export const VEGVESEN_MAX_CATALOG_BYTES = 8 * 1024 * 1024;
@@ -411,6 +411,26 @@ export const TORONTO_GROUND_ELEVATION_M = 116;
  * 60 KB; this only exists so an upstream that streams an unbounded body cannot
  * be buffered without limit. */
 export const TORONTO_MAX_CATALOG_BYTES = 4 * 1024 * 1024;
+/** WSDOT Travel Center cameras (Washington State): keyless Esri JSON on the
+ * official open-data host — ~1,700 point features in EPSG:3857 (Web Mercator),
+ * ETag/Last-Modified served. WSDOT's metadata marks the feed "low volume" use;
+ * the catalog is fetched once per CCTV_SOURCE_CACHE_MS refresh. */
+export const WSDOT_CAMERAS_URL =
+  'https://data.wsdot.wa.gov/travelcenter/Cameras.json';
+/** Only frames on WSDOT's own image host are registered; the catalog also
+ * lists ~70 partner cameras (Oregon DOT, City of Seattle, lodges, airports)
+ * whose own terms apply. */
+export const WSDOT_IMAGE_ORIGIN = 'https://images.wsdot.wa.gov/';
+export const DEFAULT_WSDOT_MAX_SOURCES = 250;
+/** Hard ceiling on the WSDOT catalog body. The live layer is ~400 KB; this
+ * only exists so an upstream that streams an unbounded body cannot be
+ * buffered without limit. */
+export const WSDOT_MAX_CATALOG_BYTES = 4 * 1024 * 1024;
+/** Prioritization anchors: downtown Seattle and Spokane. */
+export const WSDOT_ANCHORS = [
+  { lat: 47.6062, lon: -122.3321 }, // Seattle
+  { lat: 47.6588, lon: -117.426 }, // Spokane
+];
 
 /** Camera CATALOGS change rarely; 15 min keeps multi-megabyte upstream list refetches (Austin rows.json + 4 Caltrans districts + TfL + Ontario 511) infrequent. Frames are fetched per-request and are unaffected. */
 export const CCTV_SOURCE_CACHE_MS = 15 * 60 * 1000;

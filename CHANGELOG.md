@@ -1,16 +1,14 @@
 # Changelog
 
-- Add four public cameras in Paraguay to the existing CCTV layer: Encarnación's
-  Sambódromo / Costanera municipal player, Atacado Connect's rotating bridge
-  view in Ciudad del Este, and two Grupo Ibarra feeds in Presidente Franco.
-  Encarnación retains the original RTSP.me player, which unloads when hidden
-  or deselected and has no frame proxy, coverage or calibration. The other
-  three use native HLS. Disable them independently with
-  `CCTV_ENCARNACION_ENABLED=0` or `CCTV_ALTO_PARANA_ENABLED=0`.
-  All locations are approximate; operator attribution is retained. The relay
-  accepts bounded 1 MiB DVR playlists and 12 MiB HD segments while retaining
-  its 24 MiB per-session cache. Optional Google tiles-token discovery returns
-  JSON `null` without a startup 404 when no token provider is configured.
+- Add WSDOT highway cameras (Washington State) as a keyless CCTV source pack:
+  WSDOT's official Travel Center camera layer, with frames registered only on
+  WSDOT's own image host (partner-hosted cameras such as Oregon DOT and City of
+  Seattle are skipped). Cameras with a single cardinal `CompassDirection` get
+  a high-confidence heading; `B` (both directions), `O`, and unset directions
+  use the shared id-hash fallback at low confidence. By default the 250
+  cameras nearest Seattle and Spokane load; `CCTV_WSDOT_MAX_SOURCES` sets the
+  cap (8–1,200) and `CCTV_WSDOT_ENABLED=0` turns the pack off (bassem chagra,
+  #644).
 
 - Refuse still-image cameras on the CCTV media relay. `/api/cctv/media` is the
   live-feed route, but it also relayed any registered still camera through an
@@ -80,6 +78,18 @@
 
 - Overpass and military-installation disk caches no longer serve answers from a
   previously configured `OVERPASS_UPSTREAMS` instance after it is repointed.
+
+- Add four public cameras in Paraguay to the existing CCTV layer: Encarnación's
+  Sambódromo / Costanera municipal player, Atacado Connect's rotating bridge
+  view in Ciudad del Este, and two Grupo Ibarra feeds in Presidente Franco.
+  Encarnación retains the original RTSP.me player, which unloads when hidden
+  or deselected and has no frame proxy, coverage or calibration. The other
+  three use native HLS. Disable them independently with
+  `CCTV_ENCARNACION_ENABLED=0` or `CCTV_ALTO_PARANA_ENABLED=0`.
+  All locations are approximate; operator attribution is retained. The relay
+  accepts bounded 1 MiB DVR playlists and 12 MiB HD segments while retaining
+  its 24 MiB per-session cache. Optional Google tiles-token discovery returns
+  JSON `null` without a startup 404 when no token provider is configured.
 
 - A Radio Browser mirror answering 204, 205 or 304, or a status outside
   200–599, no longer crashes the local dev/preview server. Null-body statuses

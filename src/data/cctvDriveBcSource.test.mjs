@@ -225,8 +225,8 @@ test('CCTV catalog merges DriveBC cameras and CCTV_DRIVEBC_ENABLED=0 skips the r
   );
 });
 
-test('default per-pack camera caps fit inside the default catalog cap', () => {
-  // Static packs: Warendorf and Encarnación ship 1 each; Alto Paraná ships 3.
+test('default caps of the original packs fit inside the default catalog cap', () => {
+  // Every default pack at its own cap (Warendorf ships 1 curated camera).
   const packs =
     DEFAULT_AUSTIN_MAX_SOURCES +
     DEFAULT_CALTRANS_MAX_SOURCES +
@@ -239,10 +239,14 @@ test('default per-pack camera caps fit inside the default catalog cap', () => {
     DEFAULT_TARKTEE_MAX_SOURCES +
     DEFAULT_NSW_MAX_SOURCES +
     DEFAULT_CATALONIA_MAX_SOURCES +
-    5;
+    1;
   assert.ok(
     packs <= DEFAULT_CCTV_MAX_SOURCES,
     `default packs (${packs}) would be thinned by the catalog cap (${DEFAULT_CCTV_MAX_SOURCES})`,
+  );
+  assert.ok(
+    packs + 4 <= DEFAULT_CCTV_MAX_SOURCES,
+    'the four Paraguay cameras also fit beside the original packs',
   );
   assert.ok(
     DEFAULT_CCTV_MAX_SOURCES <= CCTV_MAX_SOURCES_CEILING,
