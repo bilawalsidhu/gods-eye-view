@@ -394,6 +394,20 @@ export function createCameraModel({
      * for the user's own gestures, which are not a new camera owner.
      */
     stopFlight: () => cancelCurrentFlight(),
+    /**
+     * Whether nothing else drives the camera: no flight and no lookAt target
+     * (identity transform). The engine's ground floor acts only then.
+     */
+    isFree: () =>
+      flight == null &&
+      transform.every((value, index) => value === matrix4.IDENTITY[index]),
+    /**
+     * Moves the camera to `position`, keeping its direction and up, without
+     * camera.commanded: a correction (the ground floor), not a new owner.
+     */
+    lift(position) {
+      place({ ...state, position: copy3(position) });
+    },
     /** The current camera for projections: pose, vertical fov and CSS size. */
     view,
     worldToWindow: (position, result) =>

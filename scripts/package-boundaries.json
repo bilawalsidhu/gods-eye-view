@@ -1764,6 +1764,7 @@
       "src/globe/navara/cameraModel.js",
       "src/globe/navara/createNavaraEngine.js",
       "src/globe/navara/credits.js",
+      "src/globe/navara/groundFloor.js",
       "src/globe/navara/index.js",
       "src/globe/navara/input.js",
       "src/globe/navara/internals.js",
