@@ -46,8 +46,13 @@ export function monthPlayhead(dates, position) {
  * The month is the one fact a moving heat map cannot convey by itself, so it
  * sits on the map rather than in the layer row. Every year and month is a
  * button: a year loads that year, a month glides to it.
+ *
+ * The panel can be minimized to a pill — play/pause and the month — so it
+ * stops covering the map while the year plays. The choice holds for the
+ * session.
  * @param {{container:HTMLElement, onYear:Function, onMonth:Function, onToggle:Function}} options
- * @returns {{render:Function, hide:Function, destroy:Function}}
+ * @returns {{render:Function, hide:Function, destroy:Function,
+ *   setCollapsed:Function, isCollapsed:Function}}
  */
 export function createMonthIndicator({ container, onYear, onMonth, onToggle }) {
   const document = container.ownerDocument;
@@ -71,7 +76,9 @@ export function createMonthIndicator({ container, onYear, onMonth, onToggle }) {
   const month = element('div', 'temperature-timeline-month');
   month.setAttribute('aria-live', 'polite');
   const status = element('div', 'temperature-timeline-status');
-  head.append(toggle, month, status);
+  const collapse = element('button', 'temperature-timeline-collapse');
+  collapse.type = 'button';
+  head.append(toggle, month, status, collapse);
 
   // NASA's colour scale, as one bar: the key to every frame, placed between
   // the month it describes and the scales that choose it.
@@ -115,7 +122,21 @@ export function createMonthIndicator({ container, onYear, onMonth, onToggle }) {
   root.append(kicker, head, scale, yearTrack, monthTrack);
   container.appendChild(root);
 
+  let collapsed = false;
+  function applyCollapsed() {
+    root.classList.toggle('is-collapsed', collapsed);
+    const label = collapsed ? 'Expand timeline' : 'Minimize timeline';
+    collapse.title = label;
+    collapse.setAttribute('aria-label', label);
+    collapse.setAttribute('aria-expanded', String(!collapsed));
+  }
+  applyCollapsed();
+
   toggle.addEventListener('click', () => onToggle());
+  collapse.addEventListener('click', () => {
+    collapsed = !collapsed;
+    applyCollapsed();
+  });
   yearTrack.addEventListener('click', (event) => {
     const tick = event.target?.closest?.('.temperature-timeline-tick');
     if (tick && !tick.disabled) onYear(Number(tick.dataset.year));
@@ -222,6 +243,14 @@ export function createMonthIndicator({ container, onYear, onMonth, onToggle }) {
     hide() {
       root.hidden = true;
     },
+
+    /** @param {boolean} next Whether the panel shows as a minimized pill. */
+    setCollapsed(next) {
+      collapsed = Boolean(next);
+      applyCollapsed();
+    },
+
+    isCollapsed: () => collapsed,
 
     destroy() {
       root.remove();
