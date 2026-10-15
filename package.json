@@ -58,13 +58,17 @@
     "@jtarrio/webrtlsdr": "^3.0.6",
     "@mapbox/vector-tile": "^3.0.0",
     "@meri-imperiumi/eccodes-wasm": "^2.48.2",
+    "@navaramap/three": "0.2.1",
+    "@navaramap/three-default-plugin": "0.2.1",
     "cesium": "^1.124.0",
     "egm96-universal": "^1.1.1",
     "hls.js": "^1.7.3",
     "mapillary-js": "^4.1.2",
     "mgrs": "^2.1.0",
     "pbf": "^5.1.2",
-    "satellite.js": "^6.0.2"
+    "postprocessing": "6.39.4",
+    "satellite.js": "^6.0.2",
+    "three": "0.185.1"
   },
   "devDependencies": {
     "prettier": "3.9.6",

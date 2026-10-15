@@ -85,6 +85,18 @@ export function createBrowserViteConfig({
         // Loaded on demand when the first street-level image opens.
         'mapillary-js',
       ],
+      // Navara's wasm-bindgen glue loads new URL('x_bg.wasm', import.meta.url)
+      // and its workers by URL; both must resolve next to the package's own
+      // files, not inside .vite/deps. Dev server only: the experimental
+      // Navara engine is a dynamic import outside the Cesium-mode bundle.
+      exclude: [
+        '@navaramap/three',
+        '@navaramap/three-default-plugin',
+        '@navaramap/engine',
+        '@navaramap/engine-api',
+        '@navaramap/engine-worker',
+        '@navaramap/engine-font-worker',
+      ],
     },
     server: {
       host: host || 'localhost',
