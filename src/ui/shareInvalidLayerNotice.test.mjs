@@ -121,8 +121,7 @@ test('share-follow notices ignore superseded tracking results', async (t) => {
   const priorGetComputedStyle = globalThis.getComputedStyle;
   globalThis.getComputedStyle = () => ({ visibility: 'visible' });
   t.after(() => {
-    if (priorGetComputedStyle === undefined)
-      delete globalThis.getComputedStyle;
+    if (priorGetComputedStyle === undefined) delete globalThis.getComputedStyle;
     else globalThis.getComputedStyle = priorGetComputedStyle;
   });
 

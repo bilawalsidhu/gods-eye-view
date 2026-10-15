@@ -120,12 +120,6 @@ export async function formatAdoptedFiles(root, mode) {
   }
 
   const changed = files.filter(({ source, formatted }) => source !== formatted);
-  const diagnostic = files.find(
-    ({ name }) => name === 'src/ui/shareInvalidLayerNotice.test.mjs',
-  );
-  if (mode === '--check' && diagnostic && diagnostic.source !== diagnostic.formatted) {
-    console.error('GEV_FORMAT_PROBE_BASE64=' + Buffer.from(diagnostic.formatted).toString('base64'));
-  }
   if (mode === '--write') {
     for (const { file, formatted } of changed) await writeFile(file, formatted);
   }
