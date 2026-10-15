@@ -56,6 +56,8 @@ async function handleHudSummary(req, res) {
     const context = JSON.parse(body || '{}');
     const response = await fetch('https://api.openai.com/v1/responses', {
       method: 'POST',
+      // A five-word summary; past this the HUD has moved on anyway.
+      signal: AbortSignal.timeout(15_000),
       headers: {
         Authorization: `Bearer ${apiKey}`,
         'Content-Type': 'application/json',
