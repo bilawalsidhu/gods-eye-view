@@ -34,8 +34,9 @@ test('the canvas context keeps its drawing buffer, with the attributes Navara as
   });
 });
 
-test('effects=minimal is the default look: sky, stars and sun light, no post effects (S5)', () => {
-  assert.deepEqual(navaraScenePlan(), {
+test('effects=photoreal is the default look; minimal is sky, stars and sun light, no post effects (S5)', () => {
+  assert.equal(navaraScenePlan().pluginDefault, true);
+  assert.deepEqual(navaraScenePlan('minimal'), {
     pluginDefault: false,
     meshes: ['sky', 'stars'],
     lights: ['skyLightProbe', 'sun'],
