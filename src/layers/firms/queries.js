@@ -26,7 +26,10 @@ export function createQueries({
           : null,
         observedAt:
           Number.isFinite(fire.acqMs) && fire.acqMs > 0 ? fire.acqMs : null,
-        source: fire.provider === 'conae-goes' ? 'CONAE GOES' : (fire.sensor || fire.satellite || null),
+        source:
+          fire.provider === 'conae-goes'
+            ? 'CONAE GOES'
+            : fire.sensor || fire.satellite || null,
       };
     },
 

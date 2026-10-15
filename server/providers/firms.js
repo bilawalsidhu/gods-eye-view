@@ -2,6 +2,7 @@ import path from 'node:path';
 import { promises as fsp } from 'node:fs';
 
 import { filterTrailing24h, parseFirmsCsv } from '../../src/data/firmsCsv.js';
+import { createConaeGoesSource } from './conae-goes.js';
 
 /**
  * NASA FIRMS live active-fire proxy with a memory + disk cache.
@@ -21,8 +22,9 @@ import { filterTrailing24h, parseFirmsCsv } from '../../src/data/firmsCsv.js';
  *   GET /api/firms        → {fetchedAt, stale, ttlMs, sources, count, fires}
  *   GET /api/firms/status → {hasKey, lastFetch, count, stale, ttlMs, transactions}
  *
- * Keyless (no FIRMS_MAP_KEY): /api/firms → 503 {error:'no_key'}; status →
- * {hasKey:false}. Upstream is never touched without a key.
+ * CONAE_GOES_ENABLED=1 optionally adds CONAE GOES via an independent cache.
+ * Without a FIRMS key and without that opt-in, /api/firms returns no_key.
+ * NASA upstream is never touched without a key; status.hasKey refers to NASA.
  *
  * @returns {import('vite').Plugin}
  */
@@ -49,6 +51,8 @@ export function firmsProxy() {
   let statusInflight = null;
 
   const mapKey = () => String(process.env.FIRMS_MAP_KEY || '').trim();
+  const conaeEnabled = () => process.env.CONAE_GOES_ENABLED === '1';
+  const conae = createConaeGoesSource();
 
   async function readDiskOnce() {
     if (diskChecked) return;
@@ -128,6 +132,7 @@ export function firmsProxy() {
     const fires = filterTrailing24h(entry.fires, Date.now());
     return {
       fetchedAt: entry.at,
+      sourceLabel: 'NASA FIRMS',
       stale,
       ttlMs: TTL_MS,
       sources: entry.sources,
@@ -173,6 +178,36 @@ export function firmsProxy() {
     return statusInflight;
   }
 
+  /** Read FIRMS through its existing quota-protecting memory/disk cache. */
+  async function getFirmsSnapshot(key) {
+    const entry = mem;
+    if (entry && Date.now() - entry.at < TTL_MS) {
+      return buildPayload(entry, false);
+    }
+    if (!inflight) {
+      inflight = refreshUpstream(key)
+        .then(async (fresh) => {
+          mem = fresh;
+          await writeDisk(fresh);
+          return fresh;
+        })
+        .catch((err) => {
+          console.warn(
+            `[firms-proxy] refresh failed (${err?.message || err}) — serving cache if any`,
+          );
+          return null;
+        })
+        .finally(() => {
+          inflight = null;
+        });
+    }
+    const pending = inflight;
+    const fresh = await pending;
+    if (fresh) return buildPayload(fresh, false);
+    if (entry) return buildPayload(entry, true);
+    throw new Error('firms fetch failed and no cache available');
+  }
+
   const installMiddleware = (server) => {
     server.middlewares.use('/api/firms', async (req, res) => {
       const sendJson = (status, obj) => {
@@ -192,6 +227,7 @@ export function firmsProxy() {
           if (!key) {
             sendJson(200, {
               hasKey: false,
+              ...(conaeEnabled() ? { conae: conae.getStatus() } : {}),
               lastFetch: null,
               count: null,
               stale: false,
@@ -203,6 +239,7 @@ export function firmsProxy() {
           const transactions = await getTransactions(key);
           sendJson(200, {
             hasKey: true,
+            ...(conaeEnabled() ? { conae: conae.getStatus() } : {}),
             lastFetch: mem ? mem.at : null,
             count: mem ? mem.fires.length : null,
             stale: mem ? Date.now() - mem.at >= TTL_MS : false,
@@ -212,47 +249,43 @@ export function firmsProxy() {
           return;
         }
 
-        if (!key) {
+        if (!key && !conaeEnabled()) {
           sendJson(503, { error: 'no_key' });
           return;
         }
 
-        const entry = mem;
-        if (entry && Date.now() - entry.at < TTL_MS) {
-          sendJson(200, buildPayload(entry, false));
+        const providers = [];
+        if (key) providers.push({ name: 'NASA FIRMS', load: () => getFirmsSnapshot(key) });
+        if (conaeEnabled()) providers.push({ name: 'CONAE GOES', load: () => conae.getSnapshot() });
+        const results = await Promise.allSettled(providers.map((p) => p.load()));
+        const snapshots = [];
+        const sources = [];
+        for (let i = 0; i < results.length; i++) {
+          const result = results[i];
+          if (result.status === 'fulfilled') {
+            snapshots.push(result.value);
+            sources.push(...result.value.sources);
+          } else {
+            sources.push({ source: providers[i].name, count: 0, ok: false });
+          }
+        }
+        if (!snapshots.length) {
+          sendJson(502, { error: 'active fire sources unavailable', sources });
           return;
         }
-        // Stale or missing → refresh, single-flight (concurrent requests
-        // share one upstream pass). Capture the promise locally BEFORE
-        // awaiting: the .finally() nulls `inflight` the moment it settles.
-        if (!inflight) {
-          inflight = refreshUpstream(key)
-            .then(async (fresh) => {
-              mem = fresh;
-              await writeDisk(fresh);
-              return fresh;
-            })
-            .catch((err) => {
-              console.warn(
-                `[firms-proxy] refresh failed (${err?.message || err}) — serving cache if any`,
-              );
-              return null;
-            })
-            .finally(() => {
-              inflight = null;
-            });
+        const fires = [];
+        for (const snapshot of snapshots) {
+          for (const fire of snapshot.fires) fires.push(fire);
         }
-        const pending = inflight;
-        const fresh = await pending;
-        if (fresh) {
-          sendJson(200, buildPayload(fresh, false));
-        } else if (entry) {
-          sendJson(200, buildPayload(entry, true)); // upstream down — stale beats empty
-        } else {
-          sendJson(502, {
-            error: 'firms fetch failed and no cache available',
-          });
-        }
+        sendJson(200, {
+          fetchedAt: Math.min(...snapshots.map((s) => s.fetchedAt)),
+          sourceLabel: snapshots.map((s) => s.sourceLabel).join(' + '),
+          stale: snapshots.some((s) => s.stale),
+          ttlMs: Math.min(...snapshots.map((s) => s.ttlMs)),
+          sources,
+          count: fires.length,
+          fires,
+        });
       } catch (err) {
         console.warn('[firms-proxy] error:', err?.message || err);
         sendJson(500, { error: 'firms proxy error' });

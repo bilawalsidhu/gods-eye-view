@@ -326,6 +326,13 @@ export const DATA_CREDITS = [
     html: 'Dams: Open Infrastructure Map',
   },
   {
+    key: 'conae-goes',
+    html:
+      'Thermal detections: CONAE GOES — ' +
+      '<a href="https://catalogos.conae.gov.ar/catalogo/catalogoGeoServiciosOGC.html" target="_blank" rel="noopener">CONAE public OGC services</a>. ' +
+      'Thermal anomalies are not confirmed wildfires. Data remains subject to the provider’s terms.',
+  },
+  {
     key: 'firms',
     html:
       'Active fires: NASA FIRMS — we acknowledge the use of data and/or imagery ' +

@@ -9,9 +9,15 @@ import { createSelection } from './selection.js';
 
 const NOW = Date.UTC(2026, 9, 15, 4);
 const raw = {
-  lat: -27.4, lon: -55.9, provider: 'conae-goes',
-  frp: 12.5, brightness: null, confidence: null,
-  instrument: 'GOES', satellite: 'GOES-19', acqMs: NOW - 60_000,
+  lat: -27.4,
+  lon: -55.9,
+  provider: 'conae-goes',
+  frp: 12.5,
+  brightness: null,
+  confidence: null,
+  instrument: 'GOES',
+  satellite: 'GOES-19',
+  acqMs: NOW - 60_000,
 };
 const services = { anchors: { fireAnchorHeight: () => 0 } };
 const model = createModel({ layerState: {}, services });
@@ -39,16 +45,32 @@ test('GOES keeps unknown measurements and source identity through cards and anal
 });
 
 test('GOES acquisition and provider identities do not collapse into FIRMS or other satellites', () => {
-  assert.notEqual(fireDetectionKey(fire), fireDetectionKey({ ...fire, provider: 'firms' }));
-  assert.notEqual(fireDetectionKey(fire), fireDetectionKey({ ...fire, satellite: 'GOES-16' }));
-  assert.notEqual(fireDetectionKey(fire), fireDetectionKey({ ...fire, acqMs: fire.acqMs + 600_000 }));
-  assert.equal(fireDetectionKey(fire), fireDetectionKey({ ...fire, index: 99 }));
+  assert.notEqual(
+    fireDetectionKey(fire),
+    fireDetectionKey({ ...fire, provider: 'firms' }),
+  );
+  assert.notEqual(
+    fireDetectionKey(fire),
+    fireDetectionKey({ ...fire, satellite: 'GOES-16' }),
+  );
+  assert.notEqual(
+    fireDetectionKey(fire),
+    fireDetectionKey({ ...fire, acqMs: fire.acqMs + 600_000 }),
+  );
+  assert.equal(
+    fireDetectionKey(fire),
+    fireDetectionKey({ ...fire, index: 99 }),
+  );
 });
 
 test('mixed cells count observations and do not invent an FRP measurement', () => {
-  const card = model.buildCellCard({
-    cell: { count: 2, maxFrp: null, hasConae: true }, position: {},
-  }, NOW);
+  const card = model.buildCellCard(
+    {
+      cell: { count: 2, maxFrp: null, hasConae: true },
+      position: {},
+    },
+    NOW,
+  );
   assert.equal(card.title, '2 DETECTIONS');
   assert.equal(card.details[0], 'FRP n/a');
 });
@@ -59,25 +81,57 @@ test('keyless CONAE ingestion exposes partial provider failures and correct sele
     { source: 'CONAE GOES', ok: true, count: 1 },
   ];
   const state = {
-    _dataSource: {}, _enabled: true, _fires: [], _cellCacheByGrid: new Map(),
-    _contextIds: new Set(), _selectedFire: null,
+    _dataSource: {},
+    _enabled: true,
+    _fires: [],
+    _cellCacheByGrid: new Map(),
+    _contextIds: new Set(),
+    _selectedFire: null,
   };
   let context;
   const svc = {
-    ...services, picking: {}, focus: {},
+    ...services,
+    picking: {},
+    focus: {},
     context: {
       clearSelectedEntityContextForLayer() {},
-      registerEntityContext(entity, record) { context = record; },
+      registerEntityContext(entity, record) {
+        context = record;
+      },
     },
   };
-  const components = { model, rendering: { renderCurrentLod() {} }, selection: {} };
-  const config = { id: 'local-firms', name: 'Active Fires', source: 'NASA FIRMS' };
-  const feed = { getSnapshot: async () => ({
-    fires: [raw], fetchedAt: NOW, stale: false,
-    sourceLabel: 'CONAE GOES', sources,
-  }) };
-  await createIngestion({ layerState: state, services: svc, components, config, feed }).loadHeatmap();
-  const query = createQueries({ layerState: state, services: svc, components, config }).methods;
+  const components = {
+    model,
+    rendering: { renderCurrentLod() {} },
+    selection: {},
+  };
+  const config = {
+    id: 'local-firms',
+    name: 'Active Fires',
+    source: 'NASA FIRMS',
+  };
+  const feed = {
+    getSnapshot: async () => ({
+      fires: [raw],
+      fetchedAt: NOW,
+      stale: false,
+      sourceLabel: 'CONAE GOES',
+      sources,
+    }),
+  };
+  await createIngestion({
+    layerState: state,
+    services: svc,
+    components,
+    config,
+    feed,
+  }).loadHeatmap();
+  const query = createQueries({
+    layerState: state,
+    services: svc,
+    components,
+    config,
+  }).methods;
   assert.equal(query.getStats().keyRequired, false);
   assert.equal(query.getStats().count, 1);
   assert.match(query.getStats().error, /PARTIAL.*NASA FIRMS/);
@@ -85,7 +139,12 @@ test('keyless CONAE ingestion exposes partial provider failures and correct sele
   state._selectedFire = state._fires[0];
   assert.equal(query.getSelectedInfo().confidencePct, null);
   assert.equal(query.getSelectedInfo().source, 'CONAE GOES');
-  createSelection({ layerState: state, services: svc, components, config }).registerFireContext(state._selectedFire);
+  createSelection({
+    layerState: state,
+    services: svc,
+    components,
+    config,
+  }).registerFireContext(state._selectedFire);
   assert.equal(context.source, 'CONAE GOES');
   assert.equal(context.properties.confidence, 'not published');
   assert.match(context.label, /Thermal detection/);

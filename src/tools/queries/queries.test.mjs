@@ -200,3 +200,21 @@ test('every core tool is a read-only query with a unique name', () => {
     assert.ok(tool.requires.length > 0, tool.name);
   }
 });
+
+test('CONAE fire queries retain UTC acquisition, provider and absent confidence without a NASA key', async () => {
+  const catalog = composeCatalog({
+    tools: coreTools,
+    services: { fires: fires({
+      fires: [{
+        lat: -30, lon: -60, frp: 12, confidence: null,
+        provider: 'conae-goes', acqMs: Date.parse('2026-10-15T00:20:00Z'),
+        satellite: 'GOES-19', daynight: '',
+      }],
+    }) },
+  });
+  const result = await catalog.call('get_active_fires', { area: { bbox: [-61, -31, -59, -29] } });
+  assert.equal(result.data.rows[0].acquired, '2026-10-15T00:20:00.000Z');
+  assert.equal(result.data.rows[0].source, 'CONAE GOES');
+  assert.equal(result.data.rows[0].confidence, null);
+  assert.equal(result.data.rows[0].day_night, null);
+});

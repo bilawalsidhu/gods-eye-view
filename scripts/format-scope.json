@@ -1003,5 +1003,14 @@
   "src/sources/gbfsStations.test.mjs",
   "scripts/qa-gbfs-names.mjs",
   "src/layers/firms/conae.test.mjs",
-  "src/data/firmsHeatmap.test.mjs"
+  "src/data/firmsHeatmap.test.mjs",
+  "server/providers/conae-goes.js",
+  "server/providers/conae-goes/parse.js",
+  "server/providers/conae-goes.test.mjs",
+  "server/providers/conae-goes/parse.test.mjs",
+  "server/providers/firms-conae.test.mjs",
+  "docs/CONAE-GOES.md",
+  "scripts/check-conae-goes.mjs",
+  "scripts/qa-firms.mjs",
+  "src/tools/queries/hazards.js"
 ]

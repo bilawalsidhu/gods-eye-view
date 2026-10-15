@@ -35,7 +35,9 @@ export function createIngestion({
         return;
       }
       layerState._keyRequired = false;
-      layerState._sources = Array.isArray(payload.sources) ? payload.sources : [];
+      layerState._sources = Array.isArray(payload.sources)
+        ? payload.sources
+        : [];
       const failed = layerState._sources.filter((s) => s.ok === false);
       layerState._error = failed.length
         ? `PARTIAL · ${failed.map((s) => s.source).join(', ')} unavailable`

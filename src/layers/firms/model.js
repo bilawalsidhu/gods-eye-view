@@ -330,9 +330,11 @@ export function createModel({
    */
 
   function buildSelectedFireCard(fire, nowMs) {
-    const meta = [Number.isFinite(fire.confidence)
-      ? `${confidenceBucket(fire.confidence)} conf`
-      : 'confidence not published'];
+    const meta = [
+      Number.isFinite(fire.confidence)
+        ? `${confidenceBucket(fire.confidence)} conf`
+        : 'confidence not published',
+    ];
     if (fire.acqMs > 0) {
       const age = formatAge(nowMs - fire.acqMs);
       if (age) meta.push(`${age} ago`);
@@ -353,7 +355,9 @@ export function createModel({
       details: [
         meta.join(' · '),
         formatLatLon(fire.lat, fire.lon) + (fire.night ? ' · NIGHT' : ''),
-        ...(fire.provider === 'conae-goes' ? ['CONAE GOES · thermal anomaly, not a confirmed wildfire'] : []),
+        ...(fire.provider === 'conae-goes'
+          ? ['CONAE GOES · thermal anomaly, not a confirmed wildfire']
+          : []),
       ],
       selected: true,
       priority: Number.MAX_SAFE_INTEGER,
@@ -372,9 +376,11 @@ export function createModel({
 
   function buildFireCard(candidate, nowMs) {
     const fire = candidate.fire;
-    const meta = [Number.isFinite(fire.confidence)
-      ? confidenceBucket(fire.confidence)
-      : 'confidence n/a'];
+    const meta = [
+      Number.isFinite(fire.confidence)
+        ? confidenceBucket(fire.confidence)
+        : 'confidence n/a',
+    ];
     if (fire.acqMs > 0) {
       const age = formatAge(nowMs - fire.acqMs);
       if (age) meta.push(age);
@@ -408,9 +414,15 @@ export function createModel({
   function buildCellCard(candidate, nowMs) {
     const cell = candidate.cell;
     const noun = cell.hasConae
-      ? (cell.count === 1 ? 'DETECTION' : 'DETECTIONS')
-      : (cell.count === 1 ? 'FIRE' : 'FIRES');
-    const parts = [Number.isFinite(cell.maxFrp) ? `max ${frpLabel(cell.maxFrp)}` : 'FRP n/a'];
+      ? cell.count === 1
+        ? 'DETECTION'
+        : 'DETECTIONS'
+      : cell.count === 1
+        ? 'FIRE'
+        : 'FIRES';
+    const parts = [
+      Number.isFinite(cell.maxFrp) ? `max ${frpLabel(cell.maxFrp)}` : 'FRP n/a',
+    ];
     if (cell.newestAcqMs > 0) {
       const age = formatAge(nowMs - cell.newestAcqMs);
       if (age) parts.push(`new ${age}`);

@@ -96,7 +96,8 @@ export function createRendering({
         };
         existing.count += 1;
         existing.intensity += intensity;
-        if (Number.isFinite(fire.frp)) existing.maxFrp = Math.max(existing.maxFrp ?? 0, fire.frp);
+        if (Number.isFinite(fire.frp))
+          existing.maxFrp = Math.max(existing.maxFrp ?? 0, fire.frp);
         existing.hasConae ||= fire.provider === 'conae-goes';
         existing.newestAcqMs = Math.max(existing.newestAcqMs, fire.acqMs);
         if (fire.night) existing.night += 1;

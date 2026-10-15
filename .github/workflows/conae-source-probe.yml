@@ -43,13 +43,25 @@ jobs:
           fi
       - name: Build
         run: npm run build
-      - name: Track regression
-        run: npm run test:track
-      - name: Fires browser fixtures
+      - name: Start the app
+        id: dev
         run: |
-          npm run dev -- --host 127.0.0.1 --port 4420 > /tmp/gev-dev.log 2>&1 &
+          npm run dev -- --host 127.0.0.1 --port 4173 > /tmp/gev-dev.log 2>&1 &
           for attempt in $(seq 1 30); do
-            if curl --silent --fail http://127.0.0.1:4420/ > /dev/null; then break; fi
+            if curl --silent --fail http://127.0.0.1:4173/ > /dev/null; then exit 0; fi
             sleep 1
           done
-          node scripts/qa-firms.mjs --url http://127.0.0.1:4420 --fixtures
+          cat /tmp/gev-dev.log
+          exit 1
+      - name: Fires browser fixtures
+        run: node scripts/qa-firms.mjs --url http://127.0.0.1:4173 --fixtures
+      - name: Track regression
+        if: always() && steps.dev.outcome == 'success'
+        run: npm run test:track -- --url http://127.0.0.1:4173 --offline-imagery
+      - name: Upload browser evidence
+        if: always() && steps.dev.outcome == 'success'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: conae-browser-evidence
+          path: qa-shots/
+          if-no-files-found: ignore

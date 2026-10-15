@@ -221,7 +221,19 @@ function freshFixturePayload() {
     lon: -97.9 + Math.floor(i / 40) * 0.008,
     frp: 5 + (i % 137),
   }));
-  return { ...template, fetchedAt: Date.now(), stale: false, count: fires.length, fires };
+  return { ...template, fetchedAt: Date.now(), stale: false, sources: [{ source: 'VIIRS_NOAA20_NRT', ok: true, count: fires.length }], count: fires.length, fires };
+}
+
+function conaeFixturePayload() {
+  return {
+    fetchedAt: Date.now(), sourceLabel: 'CONAE GOES', stale: false, count: 1,
+    sources: [{ source: 'CONAE GOES', ok: true, count: 1 }],
+    fires: [{
+      provider: 'conae-goes', lat: -30, lon: -60, frp: 48,
+      acqMs: Date.now() - 600_000, confidence: null, brightness: null,
+      instrument: 'GOES', satellite: 'GOES-19', daynight: '',
+    }],
+  };
 }
 
 async function main() {
@@ -266,13 +278,14 @@ async function main() {
     await page.setRequestInterception(true);
     let interceptMode = FIXTURES ? 'fixture' : 'live';
     const stableStalePayload = stalePayload();
+    const stableConaePayload = conaeFixturePayload();
     page.on('request', (req) => {
       const url = req.url();
       if (interceptMode === 'live') { req.continue(); return; }
       if (url.includes('/api/firms/status')) {
         req.respond({
           status: 200, contentType: 'application/json',
-          body: JSON.stringify(interceptMode === 'keyless'
+          body: JSON.stringify(interceptMode === 'keyless' || interceptMode === 'conae'
             ? { hasKey: false }
             : { hasKey: true, lastFetch: Date.now() - 7200000, count: 3, stale: true, ttlMs: 1800000, transactions: null }),
         });
@@ -282,7 +295,7 @@ async function main() {
         if (interceptMode === 'keyless') {
           req.respond({ status: 503, contentType: 'application/json', body: JSON.stringify({ error: 'no_key' }) });
         } else {
-          req.respond({ status: 200, contentType: 'application/json', body: JSON.stringify(interceptMode === 'fixture' ? freshFixturePayload() : stableStalePayload) });
+          req.respond({ status: 200, contentType: 'application/json', body: JSON.stringify(interceptMode === 'conae' ? stableConaePayload : interceptMode === 'fixture' ? freshFixturePayload() : stableStalePayload) });
         }
         return;
       }
@@ -506,6 +519,32 @@ async function main() {
         await page.screenshot({ path: path.join(SHOTS_DIR, 'firms-synthetic-fire-action.png') });
       }
     }
+    console.log('\n(vi) CONAE — keyless GOES source and unknown confidence...');
+    interceptMode = 'conae';
+    const conaeStats = await bootAndEnable(page, { timeoutS: 20 });
+    await setView(page, -60, -30, 60000);
+    const conaeInk = await waitForCardCanvasInk(page);
+    const conaeProof = await page.evaluate(() => {
+      const mod = window.__godsEyeView.dataManager.layers.get('local-firms').module;
+      const button = [...document.querySelectorAll('#world-overlay-action-list button[data-overlay-action-key]')]
+        .find((b) => String(b.dataset.overlayActionKey || '').startsWith('firms\u0000'));
+      button?.click();
+      return {
+        clicked: Boolean(button), source: mod.source,
+        selected: mod.getSelectedInfo(), analyst: mod.getAnalystRecords(1)[0],
+      };
+    });
+    const conaeOk = conaeStats.count === 1 && !conaeStats.keyRequired && !conaeStats.error
+      && conaeInk.painted > 0 && conaeProof.clicked
+      && conaeProof.source === 'CONAE GOES'
+      && conaeProof.selected?.source === 'CONAE GOES'
+      && conaeProof.selected?.confidencePct === null
+      && conaeProof.analyst?.source === 'CONAE GOES'
+      && conaeProof.analyst?.confidence === null;
+    record('CONAE: renders and selects with source attribution and absent confidence', conaeOk,
+      JSON.stringify({ stats: conaeStats, proof: conaeProof }));
+    if (!conaeOk) exitCode = 1;
+    await page.screenshot({ path: path.join(SHOTS_DIR, 'firms-conae.png') });
   } catch (e) {
     console.error('\x1b[31mHarness error:\x1b[0m', e);
     exitCode = 3;
