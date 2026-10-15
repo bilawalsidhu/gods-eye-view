@@ -5236,8 +5236,21 @@ frame. hls.js is imported only when an HLS camera starts. Two live sessions may
 coexist with at most eight independent consumer leases each; no-access lease
 expiry is 15 seconds. Closing one consumer leaves other consumers running. Lease
 ids use `crypto.randomUUID` where the page is a secure context and an equivalent
-v4 id from `crypto.getRandomValues` on plain-HTTP LAN pages. Encrypted/fMP4/byte-range playlists fail
-closed. Performance and live agency reliability require recorded validation.
+v4 id from `crypto.getRandomValues` on plain-HTTP LAN pages. Clear whole-file
+fMP4 playlists are supported with same-origin `EXT-X-MAP` initialization files,
+local MP4 routes and shared init bytes counted in the 24 MiB session budget.
+Encrypted, byte-range and mixed-container playlists fail closed. HEVC decoding
+remains browser/device-dependent. Performance and live agency reliability
+require recorded validation.
+
+The Misiones source pack is opt-in (`CCTV_MISIONES_ENABLED=1`) and additionally
+requires `CCTV_MISIONES_LOCATIONS_FILE` with verified installation positions and
+provenance. The eight-camera research report confirms no physical installations:
+place references and unconfirmed candidates are never promoted to camera points.
+Without a valid configured position, the pack makes no Misiones upstream request.
+Only the pinned cam01–cam08 HLS paths are accepted, with no covers or external
+players. Reuse authorization and live Node/browser playback remain unverified;
+see [CCTV-MISIONES.md](CCTV-MISIONES.md).
 
 ## Wind forecast models
 

@@ -1,3 +1,4 @@
+import { loadMisionesSources } from './misiones.js';
 import fs from 'node:fs';
 import path from 'node:path';
 import { DEFAULT_CCTV_SOURCE_FILE, CCTV_SOURCE_CACHE_MS } from './constants.js';
@@ -29,7 +30,7 @@ const envEnabled = (name) => String(process.env[name] || '1').trim() !== '0';
 const envOptIn = (name) => String(process.env[name] || '').trim() === '1';
 
 /**
- * Live open-data packs, in merge order. Adding a region is one entry here
+ * Live camera source packs, in merge order. Adding a region is one entry here
  * plus its loader in sources.js; the catalog cap is shared across entries
  * round-robin (cap.js), so a new pack never silently evicts an older one.
  * Each pack fails independently (allSettled) and is gated by its own env
@@ -108,6 +109,11 @@ const LIVE_PACKS = [
     name: 'nyc',
     enabled: () => envOptIn('CCTV_NYC_ENABLED'),
     load: loadNycSourcesFromOpenData,
+  },
+  {
+    name: 'misiones',
+    enabled: () => envOptIn('CCTV_MISIONES_ENABLED'),
+    load: loadMisionesSources,
   },
 ];
 /**

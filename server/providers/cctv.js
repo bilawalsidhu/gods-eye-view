@@ -202,9 +202,10 @@ export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
         }
 
         if (url.pathname.startsWith('/media/')) {
-          const match = /^\/media\/([^/]+)(?:\/(seg_(\d+)\.ts))?$/.exec(
-            url.pathname,
-          );
+          const match =
+            /^\/media\/([^/]+)(?:\/((?:seg_\d+\.(?:ts|mp4)|init_\d+\.mp4)))?$/.exec(
+              url.pathname,
+            );
           if (!match) {
             res.writeHead(404);
             res.end();
@@ -246,17 +247,17 @@ export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
               return;
             }
             if (match[2]) {
-              const body = puller.getSegment(
+              const asset = puller.getAsset(
                 cameraId,
                 url.searchParams.get('session'),
-                Number(match[3]),
+                match[2],
                 leaseId,
               );
-              res.writeHead(body ? 200 : 404, {
-                'Content-Type': 'video/mp2t',
+              res.writeHead(asset ? 200 : 404, {
+                'Content-Type': asset?.contentType || 'application/octet-stream',
                 'Cache-Control': 'no-store',
               });
-              res.end(body || undefined);
+              res.end(asset?.body);
               return;
             }
             const downstream = watchDownstreamClose(res);

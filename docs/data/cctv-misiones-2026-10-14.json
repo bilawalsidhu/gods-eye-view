@@ -1,0 +1,188 @@
+{
+  "checked_date_local": "2026-10-14",
+  "timezone": "America/Argentina/Cordoba",
+  "live_frame_local_time_range": "21:36:23–21:36:49",
+  "catalog_url": "https://feeder.camarasdemisiones.com/streams",
+  "catalog_has_geographic_fields": false,
+  "method": "Inspección de los ocho fotogramas en vivo y las ocho portadas, consulta cartográfica de OpenStreetMap, contraste de imágenes satelitales de Esri y referencias oficiales de ATM. No se contó con navegador conectado ni inventario GPS del operador.",
+  "important": "No hay ninguna posición física de cámara confirmada. No convertir reference_point ni candidate_camera_position en coordenadas verificadas de instalación. Los decimales cartográficos no representan una precisión medida de la cámara.",
+  "map_data_attribution": "© OpenStreetMap contributors, ODbL 1.0, https://www.openstreetmap.org/copyright",
+  "cameras": [
+    {
+      "camera_id": "cam01",
+      "published_title": "Domo - Misiones - Posadas - Parque Cantera Puente",
+      "stream_url": "https://stream.camarasdemisiones.com/cam01/index.m3u8",
+      "place": "Parque La Cantera, Posadas",
+      "verified_camera_position": null,
+      "reference_point": {
+        "latitude": -27.3829833,
+        "longitude": -55.8873199,
+        "kind": "park_reference",
+        "crs": "WGS84"
+      },
+      "candidate_camera_position": null,
+      "assessment": "El título, el fotograma y la portada son compatibles con el sector de La Cantera y el puente. La coordenada es una referencia del parque, no de la instalación.",
+      "sources": [
+        "https://www.openstreetmap.org/relation/5362443",
+        "https://agenda.turismoposadas.tur.ar/evento/expo-posadas-ciudad-universitaria/"
+      ],
+      "evidence": {
+        "live_frame": "evidencia/cam01-live.png",
+        "site_cover": "evidencia/cam01-cover.jpg"
+      }
+    },
+    {
+      "camera_id": "cam02",
+      "published_title": "Domo - Misiones - Posadas - Arco - Acceso",
+      "stream_url": "https://stream.camarasdemisiones.com/cam02/index.m3u8",
+      "place": "Puesto de Control Fiscal El Arco, RN 12 km 1326",
+      "verified_camera_position": null,
+      "reference_point": {
+        "latitude": -27.4514,
+        "longitude": -56.0433,
+        "kind": "checkpoint_reference",
+        "crs": "WGS84"
+      },
+      "candidate_camera_position": null,
+      "assessment": "La ATM confirma el puesto y la ruta. La coordenada se aproxima al techo de uno de sus controles cartografiados; no identifica el mástil de la cámara.",
+      "sources": [
+        "https://atmisiones.gob.ar/atencion-al-publico/",
+        "https://www.openstreetmap.org/way/332766554"
+      ],
+      "evidence": {
+        "live_frame": "evidencia/cam02-live.png",
+        "site_cover": "evidencia/cam02-cover.jpg"
+      }
+    },
+    {
+      "camera_id": "cam03",
+      "published_title": "Domo - Misiones - San José - Centinela - Acceso",
+      "stream_url": "https://stream.camarasdemisiones.com/cam03/index.m3u8",
+      "place": "Puesto de Control Fiscal Centinela, RN 14 km 785, San José",
+      "verified_camera_position": null,
+      "reference_point": {
+        "latitude": -27.7828,
+        "longitude": -55.8184,
+        "kind": "checkpoint_reference",
+        "crs": "WGS84"
+      },
+      "candidate_camera_position": null,
+      "assessment": "Coincidencia del título y de la distribución visible de los controles con la imagen satelital. La coordenada representa un techo del puesto; no la instalación de la cámara.",
+      "sources": [
+        "https://atmisiones.gob.ar/atencion-al-publico/",
+        "https://www.openstreetmap.org/way/332767937",
+        "https://mapcarta.com/es/W332767937"
+      ],
+      "evidence": {
+        "live_frame": "evidencia/cam03-live.png",
+        "site_cover": "evidencia/cam03-cover.jpg"
+      }
+    },
+    {
+      "camera_id": "cam04",
+      "published_title": "Domo - Misiones - Posadas - Costanera",
+      "stream_url": "https://stream.camarasdemisiones.com/cam04/index.m3u8",
+      "place": "Costanera / Avenida Obispo Kemerer, sector Pedernera",
+      "verified_camera_position": null,
+      "reference_point": null,
+      "candidate_camera_position": {
+        "latitude": -27.3584956,
+        "longitude": -55.8906028,
+        "kind": "unconfirmed_camera_candidate",
+        "crs": "WGS84"
+      },
+      "assessment": "OpenStreetMap registra un domo en este punto. El cruce y la curva costera son compatibles con el encuadre. La asociación del nodo con cam04 es una inferencia, no está confirmada por el operador.",
+      "sources": [
+        "https://www.openstreetmap.org/node/3913260213"
+      ],
+      "evidence": {
+        "live_frame": "evidencia/cam04-live.png",
+        "site_cover": "evidencia/cam04-cover.jpg"
+      }
+    },
+    {
+      "camera_id": "cam05",
+      "published_title": "Domo - Misiones - Posadas - Brete",
+      "stream_url": "https://stream.camarasdemisiones.com/cam05/index.m3u8",
+      "place": "Balneario El Brete, Posadas",
+      "verified_camera_position": null,
+      "reference_point": {
+        "latitude": -27.3548008,
+        "longitude": -55.9035563,
+        "kind": "beach_reference",
+        "crs": "WGS84"
+      },
+      "candidate_camera_position": null,
+      "assessment": "El fotograma y la portada son compatibles con El Brete. La coordenada corresponde a la playa, no al poste de la cámara.",
+      "sources": [
+        "https://www.openstreetmap.org/way/202014677"
+      ],
+      "evidence": {
+        "live_frame": "evidencia/cam05-live.png",
+        "site_cover": "evidencia/cam05-cover.jpg"
+      }
+    },
+    {
+      "camera_id": "cam06",
+      "published_title": "Domo - Misiones - Posadas - Punta acceso Puente",
+      "stream_url": "https://stream.camarasdemisiones.com/cam06/index.m3u8",
+      "place": "Rotonda costera frente al Puente Internacional San Roque González de Santa Cruz",
+      "verified_camera_position": null,
+      "reference_point": null,
+      "candidate_camera_position": {
+        "latitude": -27.374856,
+        "longitude": -55.8806145,
+        "kind": "unconfirmed_camera_candidate",
+        "crs": "WGS84"
+      },
+      "assessment": "OpenStreetMap registra un domo junto a la rotonda que aparece en el fotograma. La asociación del nodo con cam06 es una inferencia, no está confirmada por el operador.",
+      "sources": [
+        "https://www.openstreetmap.org/node/6885586760"
+      ],
+      "evidence": {
+        "live_frame": "evidencia/cam06-live.png",
+        "site_cover": "evidencia/cam06-cover.jpg"
+      }
+    },
+    {
+      "camera_id": "cam07",
+      "published_title": "Domo - Misiones - Posadas - Zaiman - Puente",
+      "stream_url": "https://stream.camarasdemisiones.com/cam07/index.m3u8",
+      "place": "Zaimán / Puente, según el catálogo",
+      "verified_camera_position": null,
+      "reference_point": null,
+      "candidate_camera_position": null,
+      "assessment": "Pendiente de geolocalización fiable: el fotograma actual está desenfocado. Hay varios cruces sobre el Zaimán. La portada muestra una vía costera, pero no se pudo establecer con suficiente certeza qué puente ni el punto de instalación.",
+      "sources": [
+        "https://feeder.camarasdemisiones.com/streams"
+      ],
+      "evidence": {
+        "live_frame": "evidencia/cam07-live.png",
+        "site_cover": "evidencia/cam07-cover.jpg"
+      }
+    },
+    {
+      "camera_id": "cam08",
+      "published_title": "Domo - Posadas - Andresito",
+      "stream_url": "https://stream.camarasdemisiones.com/cam08/index.m3u8",
+      "place": "Monumento Andrés Guacurarí, Costanera de Posadas",
+      "verified_camera_position": null,
+      "reference_point": {
+        "latitude": -27.3602202,
+        "longitude": -55.8875574,
+        "kind": "observed_landmark",
+        "crs": "WGS84"
+      },
+      "candidate_camera_position": null,
+      "assessment": "El monumento es reconocible en el video. La toma viene de un punto elevado y distante. La coordenada es del monumento observado, no del edificio o poste que aloja la cámara.",
+      "sources": [
+        "https://www.openstreetmap.org/node/2432380514",
+        "https://commons.wikimedia.org/wiki/File:Monumento_Andresito_Posadas_Misiones.jpg"
+      ],
+      "evidence": {
+        "live_frame": "evidencia/cam08-live.png",
+        "site_cover": "evidencia/cam08-cover.jpg"
+      }
+    }
+  ]
+}
