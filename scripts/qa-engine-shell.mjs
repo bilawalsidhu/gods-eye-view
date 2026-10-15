@@ -29,7 +29,7 @@
  *   node scripts/qa-engine-shell.mjs [--engine=cesium|navara|both]
  *     [--base-url=URL] [--out=DIR]
  *
- * Starts this checkout's Vite dev server on a free port (never 4185) unless
+ * Starts this checkout's Vite dev server on a free port (never 4185 or 4186) unless
  * --base-url names a running server (a `vite preview` of a build works too).
  * --out keeps a screenshot per engine. Browsers are always headless. Provider
  * keys are never printed: console text is redacted, and the map sources the
@@ -63,7 +63,7 @@ for (const engine of ENGINES) {
 }
 const outDir = argument('out');
 const BOOT_TIMEOUT_MS = Number(process.env.QA_BOOT_TIMEOUT_MS || 180000);
-const RESERVED_PORTS = new Set([4185]);
+const RESERVED_PORTS = new Set([4185, 4186]);
 const SEARCH = { query: 'Paris', lat: 48.8566, lon: 2.3522, withinKm: 60 };
 const SHARE_TOLERANCE = 1e-6;
 const TOKYO = { query: 'Tokyo', lat: 35.6762, lon: 139.6503, withinKm: 60 };

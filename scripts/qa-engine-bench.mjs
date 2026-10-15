@@ -12,13 +12,15 @@
  *
  *   node scripts/qa-engine-bench.mjs [--engine=cesium|navara|both]
  *     [--server=dev|preview] [--base-url=URL] [--runs=3] [--out=FILE.json]
+ *     [--navara-look=cinematic|photoreal|minimal]
  *
  * --server=dev (the default) starts this checkout's Vite dev server and
  * --server=preview a `vite preview` of dist/ (run `npm run build` first),
- * each on a free port (never 4185), unless --base-url names a running server.
+ * each on a free port (never 4185 or 4186), unless --base-url names a running server.
  * Each engine gets one discarded warm-up run (the dev server transforms
  * modules on first request), then --runs measured runs, each in a fresh
- * browser context. Reports every run and the medians. Headless numbers are
+ * browser context. --navara-look picks Navara's look (`?look=`; the app's
+ * default, cinematic, when omitted). Reports every run and the medians. Headless numbers are
  * indicative: no display, no vsync, a software-composited headless window.
  * Provider keys are never printed. Exits 1 when a run fails.
  */
@@ -54,7 +56,14 @@ if (!['dev', 'preview'].includes(serverKind)) {
 }
 const RUNS = Math.max(1, Number(argument('runs') ?? 3));
 const outFile = argument('out');
-const RESERVED_PORTS = new Set([4185]);
+const navaraLook = argument('navara-look');
+if (navaraLook && !['cinematic', 'photoreal', 'minimal'].includes(navaraLook)) {
+  console.error(
+    `Unknown Navara look "${navaraLook}"; known: cinematic, photoreal, minimal`,
+  );
+  process.exit(2);
+}
+const RESERVED_PORTS = new Set([4185, 4186]);
 const BOOT_TIMEOUT_MS = 180000;
 const FLIGHT = {
   from: { lat: 30.2672, lon: -97.7431, height: 20000 },
@@ -289,7 +298,10 @@ async function runOnce(browser, baseUrl, engine) {
   });
   await page.evaluateOnNewDocument(installInitialViewProbe);
   try {
-    const query = engine === 'cesium' ? '' : `?engine=${engine}`;
+    const query =
+      engine === 'cesium'
+        ? ''
+        : `?engine=${engine}${navaraLook ? `&look=${navaraLook}` : ''}`;
     await page.goto(`${baseUrl}${query}`, { waitUntil: 'domcontentloaded' });
     await page.waitForFunction(() => Boolean(window.__qaInitialView?.done), {
       timeout: BOOT_TIMEOUT_MS,
@@ -356,6 +368,7 @@ const browser = await puppeteer.launch({
 });
 const report = {
   server: argument('base-url') ? 'base-url' : serverKind,
+  navaraLook: navaraLook ?? 'default',
   runs: RUNS,
   flight: FLIGHT,
   engines: {},

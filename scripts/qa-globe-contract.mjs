@@ -54,7 +54,7 @@ if (!engineSpec) {
   process.exit(2);
 }
 const BOOT_TIMEOUT_MS = Number(process.env.QA_BOOT_TIMEOUT_MS || 180000);
-const RESERVED_PORTS = new Set([4185]);
+const RESERVED_PORTS = new Set([4185, 4186]);
 
 const redact = (text) =>
   String(text)
