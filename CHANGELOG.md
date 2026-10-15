@@ -29,11 +29,19 @@
   the five borough cores load and `CCTV_NYC_MAX_SOURCES` changes the cap. The catalog-wide ceiling is
   unchanged; extra cameras share it round-robin with the other packs.
 
+- Street Level counts unique tiles before ranking so overlapping dateline halves
+  in polar views do not waste slots in the 16-tile overview budget.
+
+- Directions no longer shows a truncation notice for a route with exactly 200
+  turns, and a roundabout at the 200th turn keeps its exit distance.
+
 - Weather records keep missing conditions unknown and refuse summaries without a measured temperature.
 
 - Tool string length validation counts Unicode characters correctly, including characters outside the basic multilingual plane.
 
 - Director timeline seeks cross the dateline along the short longitude arc.
+
+- Recent Imagery thumbnails require explicit presence evidence before reporting available pixels.
 
 - Treat explicitly current, complete empty vessel coverage as a successful update,
   clearing obsolete contacts while retaining stale or incomplete snapshots.
@@ -130,6 +138,16 @@
 
 ## [Unreleased]
 
+- Flights and Military Flights highlight emergency transponder broadcasts in
+  fleet billboards, 3D models and Cockpit contacts. Colors update when a status
+  starts or clears. Emergency squawks outrank ADS-B priority statuses; GEV
+  reports minimum fuel and lifeguard without red tint. Cockpit names the code
+  or ADS-B status, and analyst/voice results retain broadcast provenance and
+  the latest known contact time. One omitted ADS-B status poll during a source
+  switch may retain the previous status if the squawk is unchanged; an explicit
+  clear takes effect immediately. Broadcasts are not confirmed incidents.
+  Contributed by [Leo Pechnicki](https://github.com/leopechnicki) (#856).
+
 - Street Level: KartaView is the third provider, keyless. Light its chip
   (purple; off by default, one provider at a time) and zoom in below about
   6 km: the lines are the streets KartaView has photos of (z13–14 tiles from
@@ -212,6 +230,26 @@
   the pack, `CCTV_VEGVESEN_MAX_SOURCES` caps it (keeping cameras nearest the
   largest cities) and `CCTV_VEGVESEN_VIDEO=0` keeps stills only. Attributed
   under NLOD 2.0.
+
+- Import your own GeoJSON, KML, KMZ and GPX files from DISPLAY or by dropping
+  them onto the app. Show, hide, fly to or remove each file for the session.
+  GeoJSON/GPX draw on the ground; KML retains its styles and explicit heights.
+  Large repeated-style exports use shared local pins, while recorded track
+  vertices and segment gaps stay intact. Imports respect newer camera gestures,
+  leave the shared clock alone, and report malformed or oversized files.
+  File bytes stay on the device; rendered overlays may appear in shared map
+  screenshots. Thanks to [Chase Mills](https://github.com/kapturner) (#925).
+
+- GNSS Integrity (Events, voice-addressable, share token `3`) draws navigation
+  accuracy scores from a keyless regional adsb.lol sample; aircraft-level analyst
+  queries are unavailable for these aggregate cells. Cells do not intercept
+  map clicks. Pan/zoom refreshes automatically; feed failures retain the display
+  and explain the next retry. Aircraft-reported quality includes MLAT-positioned
+  contacts after GPS loss, excludes TIS-B/MLAT-derived quality, and locates GPS-loss
+  evidence at the last good GNSS position when available. Scores discount one
+  bad aircraft per cell and retain 30 minutes of visited-view evidence; they
+  do not confirm jamming. See [method and limits](DATA_SOURCES.md#gnss-integrity).
+  Contributed by [Leo Pechnicki](https://github.com/leopechnicki) (#855).
 
 - Live HLS cameras play on a page opened over plain HTTP from another machine
   (`HOST=0.0.0.0`). The client lease id came from `crypto.randomUUID`, which
