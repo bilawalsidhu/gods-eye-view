@@ -243,6 +243,7 @@ export function createFlightSnapshotRenderer({
       if (currentIcaos.has(icao24)) continue;
       const absence = records.absence(icao24, {
         complete: snapshot.complete,
+        retainIds: snapshot.retainIds,
         likelyLanded: queries._likelyLanded(icao24),
       });
       if (absence === 'retain') continue;

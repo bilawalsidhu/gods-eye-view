@@ -67,6 +67,50 @@ test('mixed-invalid and duplicate admissions are explicitly incomplete; all-inva
   assert.equal(openSkySnapshot({ states: [] }).complete, true);
 });
 
+test('position-less OpenSky rows are seen, not missing; malformed rows stay incomplete', () => {
+  // OpenSky's spec allows null longitude/latitude; every live /states/all
+  // carries such rows.
+  const unpositioned = ['DEF456', ...aircraft.slice(1)];
+  unpositioned[5] = null;
+  unpositioned[6] = null;
+  const snapshot = openSkySnapshot({ states: [aircraft, unpositioned] });
+  assert.equal(snapshot.records.length, 1);
+  assert.equal(snapshot.complete, true);
+  assert.deepEqual([...snapshot.retainIds], ['def456']);
+  assert.equal(snapshot.rejectedCount, 1);
+  const malformed = [...aircraft];
+  malformed[5] = 181;
+  const garbled = openSkySnapshot({
+    states: [aircraft, unpositioned, malformed],
+  });
+  assert.equal(garbled.complete, false);
+  assert.deepEqual([...garbled.retainIds], ['def456']);
+  // No usable id, only half a position, a truncated row, or no row at all.
+  for (const row of [
+    [' ', ...unpositioned.slice(1)],
+    Object.assign([...unpositioned], { 5: -97 }),
+    ['DEF456'],
+    null,
+  ])
+    assert.equal(openSkySnapshot({ states: [aircraft, row] }).complete, false);
+  // Repeated position-less rows stay complete.
+  const repeated = openSkySnapshot({
+    states: [aircraft, unpositioned, unpositioned],
+  });
+  assert.equal(repeated.complete, true);
+  // A feed with no positions at all still cannot prove absence.
+  assert.throws(() => openSkySnapshot({ states: [unpositioned] }), {
+    code: 'malformed',
+  });
+  // Military readsb admission keeps its existing semantics.
+  const military = readsbSnapshot(
+    { ac: [{ hex: 'abc123', lat: 30, lon: -97 }, { hex: 'def456' }] },
+    { observedAtMs: null },
+  );
+  assert.equal(military.complete, false);
+  assert.equal(military.retainIds.size, 0);
+});
+
 test('readsb units and position/contact ages are normalized once against the source epoch', () => {
   const row = normalizeReadsbAircraft(
     {

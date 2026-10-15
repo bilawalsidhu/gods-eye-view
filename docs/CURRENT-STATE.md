@@ -879,7 +879,13 @@ addition to the locally accumulated trail, never a promise of complete coverage.
 
 Snapshot coverage, completeness and freshness are separate fields. A partially
 admitted aircraft snapshot retains absent contacts for up to five minutes before
-the usual missed-poll eviction. Unknown snapshot times remain unknown in stats. An invalid nonempty
+the usual missed-poll eviction. An OpenSky row with an ICAO24 address but null
+longitude and latitude is a contact without a position, not a malformed row: it
+leaves the snapshot complete and is listed in `retainIds`, so civil flights
+retain that aircraft under the same five-minute bound, unless it is likely
+landed, while other absent aircraft fade and leave on the missed-poll limits. A
+nonempty snapshot with no positioned rows is still malformed. Military readsb
+admission is unchanged. Unknown snapshot times remain unknown in stats. An invalid nonempty
 snapshot retains the previous display. Empty vessel refreshes retain the existing
 first-connect grace and warm-data behavior. Known source failures have bounded
 messages; arbitrary HTTP response bodies are not surfaced as diagnostics.
