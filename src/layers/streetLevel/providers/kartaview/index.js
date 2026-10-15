@@ -1,4 +1,7 @@
 import { createLineCoverage } from '../../lineCoverage.js';
+import { createLru, createTileCache } from '../../tileCache.js';
+
+export { createTileCache } from '../../tileCache.js';
 import { createSequenceCones, thinImages } from '../../sequenceCones.js';
 import { metresBetween } from '../../view.js';
 import {
@@ -41,9 +44,6 @@ import {
 const PHOTO_CACHE_SIZE = 4000;
 /** Sequence pages kept in memory. */
 const PAGE_CACHE_SIZE = 12;
-/** Decoded coverage tiles kept, and for how long (masks too). */
-const TILE_CACHE_SIZE = 24;
-const TILE_CACHE_TTL_MS = 10 * 60_000;
 
 /** z14 near the street, z13 a little higher, nothing above. */
 export function kartaViewZoomFor(heightM) {
@@ -51,54 +51,6 @@ export function kartaViewZoomFor(heightM) {
   return {
     zoom: heightM > COVERAGE_STREET_ZOOM_BELOW_M ? 13 : 14,
     kind: 'sequence',
-  };
-}
-
-/** Least-recently-used map: reading an entry renews it. */
-function createLru(limit) {
-  const map = new Map();
-  return {
-    get(key) {
-      if (!map.has(key)) return undefined;
-      const value = map.get(key);
-      map.delete(key);
-      map.set(key, value);
-      return value;
-    },
-    set(key, value) {
-      map.delete(key);
-      map.set(key, value);
-      while (map.size > limit) map.delete(map.keys().next().value);
-    },
-    delete: (key) => map.delete(key),
-    clear: () => map.clear(),
-  };
-}
-
-/**
- * Loaded coverage tiles by `z/x/y`, at most `size`, each for `ttlMs`. KartaView
- * sends tiles uncompressed and uncacheable (hundreds of kB, seconds each), so
- * a pan back or a zoom across z13/z14 would fetch them all again.
- */
-export function createTileCache({
-  load,
-  size = TILE_CACHE_SIZE,
-  ttlMs = TILE_CACHE_TTL_MS,
-  now = Date.now,
-  keyOf = (tile) => `${tile.z}/${tile.x}/${tile.y}`,
-}) {
-  const kept = createLru(size);
-  return {
-    async get(tile, options) {
-      const key = keyOf(tile);
-      const entry = kept.get(key);
-      if (entry && now() - entry.at < ttlMs) return entry.tile;
-      const loaded = await load(tile, options);
-      kept.set(key, { at: now(), tile: loaded });
-      return loaded;
-    },
-    /** Drop every tile (the provider was switched off). */
-    clear: () => kept.clear(),
   };
 }
 
@@ -494,6 +446,13 @@ export function createKartaViewProvider({
                 error?.message || 'The KartaView photo could not be loaded',
               ),
             ),
+        // Esc in the viewer clears the selected drive, as the panel says.
+        onEscape: () => {
+          if (!state.sequence.selectedId) return false;
+          cones.clearSelection();
+          drawnPage = null;
+          return true;
+        },
         render: context.services?.render,
         ...viewerOptions,
       });

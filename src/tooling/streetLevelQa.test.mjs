@@ -750,6 +750,115 @@ test('KartaView fixtures draw the drive, answer nearest first, and refuse the st
   );
 });
 
+test('Panoramax fixtures: two sequences on one street, searches honour sequence and filters, unknown calls are flagged', async () => {
+  const {
+    answerPanoramaxRequest,
+    describePanoramaxCall,
+    PNX_LINE,
+    PNX_SEQUENCES,
+    panoramaxHdDownloads,
+    panoramaxPictures,
+    panoramaxTile,
+    resetPanoramaxFixture,
+  } = await import('../../scripts/fixtures/street-level/panoramax.mjs');
+  const { decodeCoverageTile, decodePictures } =
+    await import('../layers/streetLevel/providers/panoramax/decode.js');
+  const { normalizeItem } =
+    await import('../layers/streetLevel/providers/panoramax/policy.js');
+  resetPanoramaxFixture();
+  const pictures = panoramaxPictures();
+  assert.deepEqual(
+    [...new Set(pictures.map((p) => p.sequenceId))],
+    [...PNX_SEQUENCES],
+  );
+  assert.ok(pictures.some((p) => p.isPano));
+  // Coverage: both lines in a z14 tile on the street; cones in z15.
+  const z = 14;
+  const x = lonToTileX((PNX_LINE.west + PNX_LINE.east) / 2, z);
+  const y = latToTileY(PNX_LINE.lat, z);
+  const lines = decodeCoverageTile(panoramaxTile(z, x, y), { x, y, z });
+  assert.deepEqual(
+    lines.sequences.map((s) => s.id).sort(),
+    [...PNX_SEQUENCES].sort(),
+  );
+  const t15 = {
+    x: lonToTileX(pictures[20].lon, 15),
+    y: latToTileY(PNX_LINE.lat, 15),
+    z: 15,
+  };
+  assert.ok(
+    decodePictures(panoramaxTile(15, t15.x, t15.y), t15, PNX_SEQUENCES[0])
+      .length > 0,
+  );
+  // A search for one sequence near the street gives only its pictures, nearest first.
+  const at = pictures[30];
+  const ask = (query) =>
+    JSON.parse(
+      answerPanoramaxRequest({
+        method: 'GET',
+        url: `https://api.panoramax.xyz/api/search?${query}`,
+      }).body,
+    ).features.map(normalizeItem);
+  const own = ask(
+    `place_position=${at.lon},${at.lat}&place_distance=0-50&limit=5&collections=${PNX_SEQUENCES[1]}`,
+  );
+  assert.ok(own.length > 0);
+  assert.ok(own.every((p) => p.sequenceId === PNX_SEQUENCES[1]));
+  assert.equal(own[0].nextId && typeof own[0].nextId, 'string');
+  const panos = ask(
+    `place_position=${at.lon},${at.lat}&place_distance=0-200&limit=50&filter=field_of_view%3D360`,
+  );
+  assert.ok(panos.length > 0 && panos.every((p) => p.isPano));
+  assert.deepEqual(
+    ask(
+      `place_position=${at.lon},${at.lat}&place_distance=0-200&limit=50&datetime=2024-01-01T00:00:00.000Z/..`,
+    ).every((p) => p.sequenceId === PNX_SEQUENCES[0]),
+    true,
+    'the second sequence is older',
+  );
+  // A box has every picture in it, those looking away included; a place
+  // search leaves out pictures the point is behind (all look east).
+  const d = 0.0002;
+  const boxed = ask(
+    `bbox=${at.lon - d},${at.lat - d},${at.lon + d},${at.lat + d}&limit=100`,
+  );
+  assert.ok(
+    boxed.some((p) => p.lon < at.lon) && boxed.some((p) => p.lon > at.lon),
+  );
+  const placed = ask(
+    `place_position=${at.lon},${at.lat}&place_distance=0-30&limit=50`,
+  );
+  assert.ok(placed.length > 0);
+  assert.ok(
+    placed.every((p) => p.lon <= at.lon + 1e-7),
+    'none it is behind',
+  );
+  const one = ask(`ids=${at.id}&limit=1`);
+  assert.equal(one[0].id, at.id);
+  // Its pictures, and only those, are served; HD downloads are counted.
+  const file = (name) =>
+    answerPanoramaxRequest({
+      method: 'GET',
+      url: `https://panoramax.openstreetmap.fr/derivates/${name}`,
+    });
+  assert.equal(file(`${at.id}/sd.jpg`).status, 200);
+  assert.equal(file(`${at.id}/hd.jpg`).status, 200);
+  assert.equal(panoramaxHdDownloads(), 1);
+  assert.equal(file('nope/sd.jpg').known, false);
+  const unknown = answerPanoramaxRequest({
+    method: 'GET',
+    url: 'https://api.panoramax.xyz/api/collections/x/items',
+  });
+  assert.equal(unknown.known, false);
+  assert.equal(
+    describePanoramaxCall(
+      'GET',
+      new URL('https://api.panoramax.xyz/api/map/14/1/2.mvt'),
+    ),
+    'GET api.panoramax.xyz/api/map/{z}/{x}/{y}.mvt',
+  );
+});
+
 /** The alpha of a fixture PNG (8-bit RGBA, unfiltered rows, as it writes them). */
 function fixturePngAlpha(bytes) {
   const width = bytes.readUInt32BE(16);
