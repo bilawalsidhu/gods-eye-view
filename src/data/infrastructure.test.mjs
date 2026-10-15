@@ -66,6 +66,7 @@ test('infrastructure factory preserves identity and creates independent state wi
     [
       { id: 'local-datacenters', name: 'Datacenters', source: 'Local' },
       { id: 'local-dams', name: 'Dams', source: 'USACE' },
+      { id: 'local-power-plants', name: 'Power Plants', source: 'WRI / OSM' },
     ],
   );
   first.forEach((layer, index) => {
@@ -84,6 +85,7 @@ test('dataset URLs still name the complete bundled sources', () => {
   for (const [file, count] of [
     ['datacenters', 4351],
     ['dams', 704],
+    ['power_plants', 147],
   ]) {
     const lines = readFileSync(
       new URL(`./local_data/${file}/${file}.geojsonl`, import.meta.url),

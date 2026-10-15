@@ -322,6 +322,10 @@ export const DATA_CREDITS = [
   },
   // ── Bundled snapshots ───────────────────────────────────────────
   {
+    key: 'power-plants',
+    html: 'Power Plants: World Resources Institute (WRI) Global Power Plant Database / OpenStreetMap',
+  },
+  {
     key: 'dams',
     html: 'Dams: Open Infrastructure Map',
   },
