@@ -95,8 +95,10 @@
  * @property {(screen: Cartesian2) => (Cartesian3 | undefined)} pickEllipsoid
  * @property {(screen: Cartesian2) => { origin: Cartesian3, direction: Cartesian3 }} pickRay
  * @property {EngineEvent} changed Listener receives the change fraction.
- * @property {EngineEvent} moveStart
- * @property {EngineEvent} moveEnd
+ * @property {EngineEvent} moveStart Fires when the camera starts moving from rest.
+ * @property {EngineEvent} moveEnd Fires once the camera has been still for a
+ *   while (Cesium: scene.cameraEventWaitTime, 500 ms), so a move that follows
+ *   within that time continues the same movement and raises no new moveStart.
  * @property {number} percentageChanged
  *
  * @typedef {'click'|'doubleClick'|'move'|'down'|'up'} InputType

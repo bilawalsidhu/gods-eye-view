@@ -1,0 +1,481 @@
+#!/usr/bin/env node
+/**
+ * Runs src/globe/testing/contractSuite.mjs against a real globe engine in
+ * headless Chrome. Starts this checkout's Vite dev server on a free port,
+ * waits for the app to boot, builds the engine in the page from
+ * window.__godsEyeView (the app does not construct one yet) and runs every
+ * contract check, plus engine-specific checks. Exits 1 on any failure.
+ *
+ *   node scripts/qa-globe-contract.mjs [--engine=cesium] [--base-url=URL]
+ *
+ * --base-url reuses a running server instead of starting one. Browsers are
+ * always headless. Provider keys are never printed: server output is not
+ * echoed and console text is redacted.
+ */
+import { spawn } from 'node:child_process';
+import fs from 'node:fs';
+import net from 'node:net';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import puppeteer from 'puppeteer';
+
+const repoRoot = path.resolve(
+  path.dirname(fileURLToPath(import.meta.url)),
+  '..',
+);
+const argument = (name) =>
+  process.argv
+    .find((value) => value.startsWith(`--${name}=`))
+    ?.slice(name.length + 3);
+
+/**
+ * Engine factories by flag: the module the page imports, its export, and the
+ * engine-specific checks. Add Navara here when it exists.
+ */
+const ENGINES = {
+  cesium: {
+    module: '/src/globe/cesium/createCesiumEngine.js',
+    factory: 'createCesiumEngine',
+    extraChecks: 'cesium',
+  },
+};
+const engineName = argument('engine') ?? 'cesium';
+const engineSpec = ENGINES[engineName];
+if (!engineSpec) {
+  console.error(
+    `Unknown engine "${engineName}"; known: ${Object.keys(ENGINES)}`,
+  );
+  process.exit(2);
+}
+const BOOT_TIMEOUT_MS = Number(process.env.QA_BOOT_TIMEOUT_MS || 180000);
+const RESERVED_PORTS = new Set([4185]);
+
+const redact = (text) =>
+  String(text)
+    .replace(/([?&](?:key|token|access_token|apiKey)=)[^&\s"')]+/gi, '$1…')
+    .replace(/AIza[0-9A-Za-z_-]{20,}/g, 'AIza…')
+    .replace(/eyJ[0-9A-Za-z_.-]{20,}/g, 'eyJ…');
+
+function freePort() {
+  return new Promise((resolve, reject) => {
+    const server = net.createServer();
+    server.unref();
+    server.on('error', reject);
+    server.listen(0, '127.0.0.1', () => {
+      const { port } = server.address();
+      server.close(() =>
+        RESERVED_PORTS.has(port) ? resolve(freePort()) : resolve(port),
+      );
+    });
+  });
+}
+
+async function waitForHttp(url, child, timeoutMs) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    if (child?.exitCode != null)
+      throw new Error(`dev server exited with ${child.exitCode}`);
+    try {
+      const response = await fetch(url);
+      if (response.ok) return;
+    } catch {
+      /* not listening yet */
+    }
+    await new Promise((resolve) => setTimeout(resolve, 250));
+  }
+  throw new Error(`dev server did not answer ${url}`);
+}
+
+async function startServer() {
+  const port = await freePort();
+  const child = spawn(
+    process.execPath,
+    [
+      path.join(repoRoot, 'node_modules/vite/bin/vite.js'),
+      '--port',
+      String(port),
+      '--strictPort',
+      '--host',
+      'localhost',
+    ],
+    { cwd: repoRoot, stdio: ['ignore', 'ignore', 'pipe'] },
+  );
+  let stderr = '';
+  child.stderr.on('data', (chunk) => {
+    stderr = (stderr + chunk).slice(-4000);
+  });
+  const url = `http://localhost:${port}/`;
+  try {
+    await waitForHttp(url, child, 60000);
+  } catch (error) {
+    child.kill('SIGTERM');
+    throw new Error(`${error.message}\n${redact(stderr)}`);
+  }
+  return { url, stop: () => child.kill('SIGTERM') };
+}
+
+const executablePath =
+  process.env.PUPPETEER_EXECUTABLE_PATH ||
+  (await puppeteer.executablePath().catch(() => null));
+if (!executablePath || !fs.existsSync(executablePath))
+  throw new Error('Puppeteer Chrome for Testing is unavailable');
+
+const server = argument('base-url')
+  ? { url: argument('base-url'), stop: () => {} }
+  : await startServer();
+let browser;
+let exitCode = 1;
+try {
+  browser = await puppeteer.launch({
+    headless: 'new',
+    executablePath,
+    args: [
+      ...(process.platform === 'darwin'
+        ? ['--use-angle=metal', '--enable-gpu']
+        : ['--use-gl=angle', '--use-angle=swiftshader']),
+      '--no-sandbox',
+      '--window-size=1280,800',
+    ],
+    defaultViewport: { width: 1280, height: 800 },
+  });
+  const page = await browser.newPage();
+  const consoleErrors = [];
+  page.on('console', (message) => {
+    if (message.type() === 'error') consoleErrors.push(redact(message.text()));
+  });
+  page.on('pageerror', (error) => consoleErrors.push(redact(error.message)));
+
+  console.log(`[qa-globe-contract] engine=${engineName} app=${server.url}`);
+  await page.goto(server.url, { waitUntil: 'domcontentloaded' });
+  await page.waitForFunction(() => Boolean(window.__godsEyeView?.viewer), {
+    timeout: BOOT_TIMEOUT_MS,
+  });
+
+  // The app opens with a 0.5 s pause and a 4 s fly-in (src/camera.js
+  // flyToAustin). Checks start once the camera has been still for 1.5 s, so
+  // the boot flight cannot keep moving the camera under them.
+  await page.evaluate(async () => {
+    const { camera } = window.__godsEyeView.viewer;
+    const pose = () => [
+      ...Object.values(camera.positionWC),
+      ...Object.values(camera.directionWC),
+    ];
+    let last = pose();
+    let stillSince = performance.now();
+    const deadline = performance.now() + 60000;
+    while (performance.now() < deadline) {
+      await new Promise((resolve) => setTimeout(resolve, 250));
+      const now = pose();
+      if (now.some((value, index) => Math.abs(value - last[index]) > 1e-6)) {
+        stillSince = performance.now();
+        last = now;
+      } else if (performance.now() - stillSince >= 1500) return;
+    }
+    throw new Error('the camera never came to rest after boot');
+  });
+
+  const report = await page.evaluate(
+    async ({ spec }) => {
+      const debug = window.__godsEyeView;
+      const { viewer } = debug;
+      // The page cannot resolve the bare 'cesium' specifier; take the
+      // optimized-dependency URL Vite gave the app's own modules, so the
+      // checks see the same Cesium instance.
+      const transformed = await (
+        await fetch('/src/globe/cesium/convert.js')
+      ).text();
+      const cesiumUrl = transformed.match(
+        /from\s+["']([^"']*\/cesium\.js[^"']*)["']/,
+      )?.[1];
+      if (!cesiumUrl) throw new Error('cannot find the Cesium module URL');
+      const Cesium = await import(cesiumUrl);
+      const factories = await import(spec.module);
+      const { runContractSuite } =
+        await import('/src/globe/testing/contractSuite.mjs');
+      const geo = await import('/src/geo/index.js');
+
+      const { scene } = viewer;
+      const sceneState = () => ({
+        requestRenderMode: scene.requestRenderMode,
+        maximumRenderTimeChange: scene.maximumRenderTimeChange,
+        globeShow: scene.globe.show,
+        enableInputs: scene.screenSpaceCameraController.enableInputs,
+        percentageChanged: scene.camera.percentageChanged,
+        imageryLayers: viewer.imageryLayers.length,
+        primitives: scene.primitives.length,
+        listeners: [
+          scene.camera.changed,
+          scene.camera.moveStart,
+          scene.camera.moveEnd,
+          scene.preUpdate,
+          scene.preRender,
+          scene.postRender,
+        ].map((event) => event.numberOfListeners),
+      });
+      const before = JSON.stringify(sceneState());
+      const engine = factories[spec.factory](viewer, {
+        tilesetRef: () => debug.tileset ?? null,
+        requestRender: debug.requestRender,
+      });
+      const after = JSON.stringify(sceneState());
+
+      // Resolves after `count` rendered frames; a stalled renderer fails.
+      const waitFrames = (count) =>
+        new Promise((resolve, reject) => {
+          let seen = 0;
+          const timer = setTimeout(() => {
+            remove();
+            reject(new Error(`no frame within 5 s (${seen}/${count})`));
+          }, 5000);
+          const remove = scene.postRender.addEventListener(() => {
+            if (++seen < count) return;
+            clearTimeout(timer);
+            remove();
+            resolve();
+          });
+          scene.requestRender();
+        });
+
+      const results = (await runContractSuite(engine, { waitFrames })).map(
+        ({ name, ok, error }) => ({ name, ok, error: error?.message }),
+      );
+
+      const extra = [];
+      const check = async (name, run) => {
+        try {
+          await run();
+          extra.push({ name, ok: true });
+        } catch (error) {
+          extra.push({ name, ok: false, error: error.message });
+        }
+      };
+      const ensure = (condition, message) => {
+        if (!condition) throw new Error(message);
+      };
+      const settle = async () => {
+        for (let index = 0; index < 2; index++) {
+          engine.render.request();
+          await waitFrames(1);
+        }
+      };
+
+      if (spec.extraChecks === 'cesium') {
+        await check('cesium: creating the engine changed nothing', async () => {
+          ensure(before === after, `scene state ${before} became ${after}`);
+        });
+        await check('cesium: no Cesium instance leaks out', async () => {
+          const pose = engine.camera.pose();
+          const centre = geo.cartesian2.create(
+            engine.host.size().width / 2,
+            engine.host.size().height / 2,
+          );
+          const values = {
+            position: pose.position,
+            cartographic: pose.cartographic,
+            direction: pose.direction,
+            up: pose.up,
+            right: pose.right,
+            pickEllipsoid: engine.camera.pickEllipsoid(centre),
+            pickRayOrigin: engine.camera.pickRay(centre)?.origin,
+            worldToWindow: engine.projector.worldToWindow(
+              geo.cartesian3.add(
+                pose.position,
+                geo.cartesian3.multiplyByScalar(
+                  pose.direction,
+                  1000,
+                  geo.cartesian3.create(),
+                ),
+                geo.cartesian3.create(),
+              ),
+            ),
+            transform: engine.camera.transform(),
+            viewProjection: engine.projector.viewProjection(),
+            viewRectangle: engine.camera.viewRectangle(),
+          };
+          const cesiumTypes = [
+            Cesium.Cartesian2,
+            Cesium.Cartesian3,
+            Cesium.Cartographic,
+            Cesium.Matrix4,
+            Cesium.Rectangle,
+          ];
+          for (const [name, value] of Object.entries(values))
+            if (value != null)
+              ensure(
+                !cesiumTypes.some((type) => value instanceof type),
+                `${name} is a Cesium instance`,
+              );
+        });
+        await check(
+          "cesium: viewProjection matches Cesium's x/y/w rows after a render",
+          async () => {
+            engine.camera.setView({
+              destination: geo.cartesian3.fromDegrees(20, 10, 30000),
+              orientation: { heading: 0.6, pitch: -0.5, roll: 0.1 },
+            });
+            await settle();
+            const matrix = engine.projector.viewProjection();
+            const own = Cesium.Matrix4.multiply(
+              scene.camera.frustum.projectionMatrix,
+              scene.camera.viewMatrix,
+              new Cesium.Matrix4(),
+            );
+            // The renderer's last-frustum matrix differs only in near/far (z row).
+            const rendered = scene.context.uniformState.viewProjection;
+            for (let column = 0; column < 4; column++)
+              for (const row of [0, 1, 3]) {
+                const index = column * 4 + row;
+                ensure(
+                  matrix[index] === own[index],
+                  `[${index}] ${matrix[index]} != frustum×view ${own[index]}`,
+                );
+                const scale = Math.max(1, Math.abs(rendered[index]));
+                ensure(
+                  Math.abs(matrix[index] - rendered[index]) <= 1e-9 * scale,
+                  `[${index}] ${matrix[index]} != rendered ${rendered[index]}`,
+                );
+              }
+          },
+        );
+        await check(
+          'cesium: lookAtTransform/transform round-trip, including a non-ENU frame',
+          async () => {
+            const target = geo.cartesian3.fromDegrees(-0.12, 51.5, 0);
+            const enu = geo.transforms.eastNorthUpToFixedFrame(
+              target,
+              geo.ellipsoid.WGS84,
+            );
+            engine.camera.lookAtTransform(enu, {
+              heading: 0.4,
+              pitch: -0.7,
+              range: 2000,
+            });
+            await settle();
+            const held = engine.camera.transform();
+            const cesiumHeld = Cesium.Matrix4.toArray(scene.camera.transform);
+            for (let index = 0; index < 16; index++) {
+              ensure(
+                Math.abs(held[index] - enu[index]) <= 1e-6,
+                `transform[${index}] ${held[index]} != ${enu[index]}`,
+              );
+              ensure(
+                held[index] === cesiumHeld[index],
+                `transform[${index}] differs from Cesium's`,
+              );
+            }
+            // A frame rotated 30° about its own +Z with a Cartesian offset.
+            const angle = Math.PI / 6;
+            const rotation = geo.matrix4.fromRotationTranslation(
+              geo.matrix3.fromRotationZ(angle),
+              geo.cartesian3.create(),
+            );
+            const frame = geo.matrix4.multiply(
+              enu,
+              rotation,
+              geo.matrix4.create(),
+            );
+            const offset = geo.cartesian3.create(300, -400, 500);
+            engine.camera.lookAtTransform(frame, offset);
+            await settle();
+            const pose = engine.camera.pose();
+            const expected = geo.matrix4.multiplyByPoint(
+              frame,
+              offset,
+              geo.cartesian3.create(),
+            );
+            ensure(
+              geo.cartesian3.distance(pose.position, expected) < 1e-3,
+              'camera is not at frame × offset',
+            );
+            const toOrigin = geo.cartesian3.normalize(
+              geo.cartesian3.subtract(
+                target,
+                pose.position,
+                geo.cartesian3.create(),
+              ),
+              geo.cartesian3.create(),
+            );
+            ensure(
+              geo.cartesian3.dot(toOrigin, pose.direction) > 1 - 1e-9,
+              'camera does not look at the frame origin',
+            );
+            const frameUp = geo.cartesian3.create(
+              frame[8],
+              frame[9],
+              frame[10],
+            );
+            ensure(
+              geo.cartesian3.dot(pose.up, frameUp) > 0,
+              'up does not follow the frame +Z',
+            );
+            const again = engine.camera.transform();
+            for (let index = 0; index < 16; index++)
+              ensure(
+                Math.abs(again[index] - frame[index]) <= 1e-6,
+                `rotated transform[${index}] ${again[index]} != ${frame[index]}`,
+              );
+            engine.camera.release();
+            await settle();
+            const released = engine.camera.transform();
+            ensure(
+              released.every(
+                (value, index) => value === Cesium.Matrix4.IDENTITY[index],
+              ),
+              'release did not restore the identity',
+            );
+            ensure(
+              geo.cartesian3.distance(
+                engine.camera.pose().position,
+                pose.position,
+              ) < 0.01,
+              'release moved the camera',
+            );
+          },
+        );
+        await check(
+          'cesium: destroy leaves the scene as it found it',
+          async () => {
+            engine.destroy();
+            const state = sceneState();
+            const listeners = JSON.stringify(state.listeners);
+            const original = JSON.stringify(JSON.parse(before).listeners);
+            ensure(
+              listeners === original,
+              `listener counts ${original} became ${listeners}`,
+            );
+          },
+        );
+      } else {
+        engine.destroy();
+      }
+      return { results, extra };
+    },
+    { spec: engineSpec },
+  );
+
+  const all = [...report.results, ...report.extra];
+  for (const { name, ok, error } of all)
+    console.log(
+      `  [${ok ? 'PASS' : 'FAIL'}] ${name}${ok ? '' : ` — ${error}`}`,
+    );
+  const failed = all.filter(({ ok }) => !ok);
+  console.log(
+    `[qa-globe-contract] ${all.length - failed.length}/${all.length} passed` +
+      ` (${report.results.length} contract, ${report.extra.length} engine)`,
+  );
+  if (consoleErrors.length) {
+    console.log(
+      `[qa-globe-contract] ${consoleErrors.length} console error(s):`,
+    );
+    for (const text of consoleErrors.slice(0, 20))
+      console.log(`  ${text.slice(0, 300)}`);
+  }
+  exitCode = failed.length ? 1 : 0;
+} catch (error) {
+  console.error(`[qa-globe-contract] ${redact(error?.stack || error)}`);
+  exitCode = 1;
+} finally {
+  await browser?.close();
+  server.stop();
+}
+process.exit(exitCode);

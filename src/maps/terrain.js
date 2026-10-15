@@ -62,3 +62,22 @@ export async function createKeylessTerrain() {
     return { provider: new Cesium.EllipsoidTerrainProvider() };
   }
 }
+
+/**
+ * The terrain source for a session: Cesium World Terrain with an ion token,
+ * otherwise the keyless Re:Earth mesh.
+ * @param {string} [ionToken]
+ * @returns {{ id: 'world' | 'keyless', create: Function }}
+ */
+export function terrainSourceFor(ionToken = '') {
+  const token = String(ionToken || '').trim();
+  return token
+    ? { id: 'world', create: (request) => createWorldTerrain(token, request) }
+    : { id: 'keyless', create: createKeylessTerrain };
+}
+
+/** Install a terrain factory result (`{ terrain }` or `{ provider }`) on a viewer. */
+export function applyTerrain(viewer, result) {
+  if (result.terrain) viewer.scene.setTerrain(result.terrain);
+  else viewer.terrainProvider = result.provider;
+}
