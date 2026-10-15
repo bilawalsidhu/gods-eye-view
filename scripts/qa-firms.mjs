@@ -184,15 +184,16 @@ async function firmsActionSnapshot(page) {
   });
 }
 
-/** Wait until the accessible mirror reflects the requested FIRMS action count. */
+/** Wait for the accessible mirror, including selection after camera motion. */
 async function waitForFirmsActionCount(
   page,
   expected,
-  { timeoutMs = 12000 } = {},
+  { timeoutMs = 12000, selected = false } = {},
 ) {
   const deadline = Date.now() + timeoutMs;
   let snapshot = await firmsActionSnapshot(page);
-  while (Date.now() < deadline && snapshot.count !== expected) {
+  const count = () => selected ? snapshot.selectedCount : snapshot.count;
+  while (Date.now() < deadline && count() !== expected) {
     await page.evaluate(() =>
       window.__godsEyeView?.viewer?.scene?.requestRender?.(),
     );
@@ -652,7 +653,9 @@ async function main() {
           if (settled) break;
           await sleep(100);
         }
-        await sleep(250);
+        // The selected action can disappear during the focus flight. Wait for
+        // its rendered mirror instead of sampling an arbitrary 250 ms frame.
+        await waitForFirmsActionCount(page, 1, { selected: true });
 
         const proof = await page.evaluate(() => {
           const gev = window.__godsEyeView;
