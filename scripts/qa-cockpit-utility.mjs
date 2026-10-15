@@ -1567,6 +1567,47 @@ try {
     manager._setCockpitDisclosure('radio', false);
   });
 
+  const smnLocalInfo = await page.evaluate(() => {
+    const cockpit = window.__godsEyeView.styleManager.cockpitView;
+    const previous = cockpit.regionalBrief;
+    const previousPage = cockpit.briefPageIndex;
+    const info = { latitude: -27.37, longitude: -55.9 };
+    const text = (id) => document.getElementById(id)?.textContent || '';
+    const fixture = {
+      status: 'partial', articles: [], place: { label: 'SMN QA' },
+      weather: {
+        source: 'smn', temperatureC: 18.5, conditionText: 'Cubierto',
+        reportedAt: '2026-10-15T03:00',
+        station: { id: '87178', name: 'POSADAS AERO', distanceKm: 6.747 },
+      },
+    };
+    try {
+      cockpit.regionalBrief = fixture;
+      cockpit.renderRegionalBrief(fixture, info);
+      cockpit.showBriefPage(2);
+      const station = document.getElementById('cockpit-local-weather-station');
+      const observed = station && !station.hidden
+        && station.textContent.includes('POSADAS AERO · 6.7 KM FROM QUERY')
+        && station.href === 'https://www.smn.gob.ar/descarga-de-datos'
+        && text('cockpit-local-weather-time').includes('TIME ZONE UNSPECIFIED')
+        && !text('cockpit-local-weather-time').includes('UTC')
+        && text('cockpit-local-precipitation') === '—'
+        && text('cockpit-brief-source').includes('SMN STATION OBSERVATION');
+      cockpit.renderRegionalBrief({ ...fixture, weather: { temperatureC: 20, weatherCode: 0 } }, info);
+      const fallback = station.hidden && !station.textContent
+        && text('cockpit-local-weather-source') === 'OPEN-METEO';
+      cockpit.renderRegionalBriefStatus('loading', info);
+      return { observed, fallback, cleared: text('cockpit-local-temperature') === '—' };
+    } finally {
+      cockpit.regionalBrief = previous;
+      if (previous) cockpit.renderRegionalBrief(previous, previous.coordinates || info);
+      else cockpit.renderRegionalBriefStatus('loading', info);
+      cockpit.showBriefPage(previousPage);
+    }
+  });
+  check('Local Info shows SMN provenance and clears it on fallback/subject change',
+    smnLocalInfo.observed && smnLocalInfo.fallback && smnLocalInfo.cleared, smnLocalInfo);
+
   const visionCycle = await page.evaluate(async () => {
     const manager = window.__godsEyeView.styleManager;
     const cockpit = manager.cockpitView;

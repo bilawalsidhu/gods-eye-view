@@ -1,5 +1,10 @@
 # Changelog
 
+- Local Info and regional briefs prefer nearby SMN ground-station observations
+  around Argentina, with station, distance, source-clock time and attribution.
+  Missing, expired or distant observations fall back to Open-Meteo. No new layer
+  is added; atmospheric effects retain their existing Open-Meteo provider.
+
 - Snow flakes sway within a fixed range instead of drifting sideways faster the
   longer the app runs; the Wind setting still scales the sway.
 

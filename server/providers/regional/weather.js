@@ -1,5 +1,6 @@
 import { fetchRegionalJson } from './http.js';
 import { normalizeRegionalWeather } from '../../../src/data/regionalModel.js';
+import { createSmnWeatherProvider } from './smn.js';
 
 const WEATHER_EFFECTS_MAX_RESPONSE_BYTES = 512 * 1024;
 
@@ -24,4 +25,29 @@ async function fetchRegionalWeather(point) {
   }
 }
 
-export { fetchRegionalWeather };
+/** Local Info prefers nearby station observations; effects keep Open-Meteo. */
+function createRegionalBriefWeatherProvider({
+  smnProvider = createSmnWeatherProvider(),
+  modelProvider = fetchRegionalWeather,
+} = {}) {
+  return async (point) => {
+    try {
+      const observation = await smnProvider(point);
+      if (observation) return observation;
+    } catch {
+      // An optional observation source must not take down the model fallback.
+    }
+    const weather = await modelProvider(point);
+    return weather
+      ? {
+          ...weather,
+          source: 'open-meteo',
+          sourceUrl: 'https://open-meteo.com/',
+          kind: 'model',
+          timeZone: 'UTC',
+        }
+      : null;
+  };
+}
+
+export { fetchRegionalWeather, createRegionalBriefWeatherProvider };

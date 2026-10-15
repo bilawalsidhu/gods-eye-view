@@ -185,6 +185,13 @@ export const DATA_CREDITS = [
       '(CC BY 4.0)',
   },
   {
+    key: 'smn-observations',
+    html:
+      'Nearby ground observations: <a href="https://www.smn.gob.ar/descarga-de-datos" target="_blank" rel="noopener">Servicio Meteorológico Nacional (Argentina)</a>. ' +
+      '<a href="https://monitoreo.datos.gob.ar/catalog/smn/data.json" target="_blank" rel="noopener">SMN catalog</a> declares ODbL 1.0; ' +
+      '<a href="http://www3.smn.gob.ar/dpd/PAD_legales.pdf" target="_blank" rel="noopener">source terms</a>.',
+  },
+  {
     key: 'google-news-rss',
     html:
       'Cockpit regional headlines: ' +

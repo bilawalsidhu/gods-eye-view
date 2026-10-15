@@ -1837,6 +1837,13 @@ body.cockpit-mode #view-switcher button {
   letter-spacing: 0.07em;
 }
 
+.cockpit-weather-provenance > :not([hidden]) {
+  display: block;
+  margin-top: 5px;
+  color: rgba(182, 226, 241, 0.72);
+  font: 600 7px/1.3 var(--font-mono);
+  overflow-wrap: anywhere;
+}
 .cockpit-weather-credit {
   display: inline-block;
   margin-top: 7px;

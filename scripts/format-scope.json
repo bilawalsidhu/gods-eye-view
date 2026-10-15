@@ -1001,5 +1001,7 @@
   "src/tools/globePanel.test.mjs",
   "src/costEndpointThrottle.test.mjs",
   "src/sources/gbfsStations.test.mjs",
-  "scripts/qa-gbfs-names.mjs"
+  "scripts/qa-gbfs-names.mjs",
+  "server/providers/regional/smn.test.mjs",
+  "src/ui/cockpitSmnWeather.test.mjs"
 ]

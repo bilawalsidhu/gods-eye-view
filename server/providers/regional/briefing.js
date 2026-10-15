@@ -1,6 +1,8 @@
 import { makeRateLimiter, clientKey } from '../common/rate-limit.js';
 import { fetchRegionalPlace } from './place.js';
-import { fetchRegionalWeather } from './weather.js';
+import { createRegionalBriefWeatherProvider } from './weather.js';
+import { smnWeatherAtPoint } from './smn-model.js';
+import { isSmnCoveragePoint } from './smn.js';
 import { fetchRegionalNews } from './news.js';
 import { validRegionalPoint } from './query.js';
 import { coalesceProxyRequest } from '../common/http.js';
@@ -19,7 +21,10 @@ function regionalBriefHasAnySource({ place, weather, news } = {}) {
   return Boolean(place || weather || (news && news.status !== 'unavailable'));
 }
 
-function regionalBriefProxy({ placeProvider = fetchRegionalPlace } = {}) {
+function regionalBriefProxy({
+  placeProvider = fetchRegionalPlace,
+  weatherProvider = createRegionalBriefWeatherProvider(),
+} = {}) {
   const _regionalBriefCache = new Map();
 
   const _regionalBriefInFlight = new Map();
@@ -41,7 +46,7 @@ function regionalBriefProxy({ placeProvider = fetchRegionalPlace } = {}) {
   async function refresh(point, key) {
     const [placeResult, weatherResult] = await Promise.allSettled([
       placeProvider(point),
-      fetchRegionalWeather(point),
+      weatherProvider(point),
     ]);
     const place = placeResult.status === 'fulfilled' ? placeResult.value : null;
     const weather =
@@ -95,16 +100,38 @@ function regionalBriefProxy({ placeProvider = fetchRegionalPlace } = {}) {
         );
         return;
       }
-      const key = `${(Math.round(point.latitude * 10) / 10).toFixed(1)},${(Math.round(point.longitude * 10) / 10).toFixed(1)}`;
+      // Station choice can change within a 0.1° cell. Use the exact query in
+      // SMN coverage, while the provider shares its bulk downloads globally.
+      const key = isSmnCoveragePoint(point)
+        ? `smn:${point.latitude},${point.longitude}`
+        : `${(Math.round(point.latitude * 10) / 10).toFixed(1)},${(Math.round(point.longitude * 10) / 10).toFixed(1)}`;
       const now = Date.now();
       const cached = _regionalBriefCache.get(key);
-      if (cached && now - cached.cachedAt <= REGIONAL_BRIEF_CACHE_MS) {
+      // A cached observation can expire before the regional cache itself.
+      const cachedWeather =
+        cached?.payload.weather?.source === 'smn'
+          ? smnWeatherAtPoint(cached.payload.weather, point, now)
+          : cached?.payload.weather;
+      const usableCache =
+        cached?.payload.weather?.source !== 'smn' || cachedWeather;
+      if (
+        cached &&
+        usableCache &&
+        now - cached.cachedAt <= REGIONAL_BRIEF_CACHE_MS
+      ) {
         res.writeHead(200, {
           'Content-Type': 'application/json',
           'Cache-Control': 'public, max-age=60',
           'X-Regional-Brief': 'HIT',
         });
-        res.end(JSON.stringify({ ...cached.payload, status: 'cached' }));
+        res.end(
+          JSON.stringify({
+            ...cached.payload,
+            coordinates: point,
+            weather: cachedWeather,
+            status: 'cached',
+          }),
+        );
         return;
       }
       const request = coalesceProxyRequest(_regionalBriefInFlight, key, () =>
@@ -120,12 +147,24 @@ function regionalBriefProxy({ placeProvider = fetchRegionalPlace } = {}) {
         res.end(JSON.stringify(payload));
       } catch {
         if (cached && now - cached.cachedAt <= REGIONAL_BRIEF_STALE_MS) {
+          const staleWeather =
+            cached.payload.weather?.source === 'smn'
+              ? smnWeatherAtPoint(cached.payload.weather, point)
+              : cachedWeather;
           res.writeHead(200, {
             'Content-Type': 'application/json',
             'Cache-Control': 'no-store',
             'X-Regional-Brief': 'STALE',
           });
-          res.end(JSON.stringify({ ...cached.payload, status: 'stale' }));
+          res.end(
+            JSON.stringify({
+              ...cached.payload,
+              coordinates: point,
+              weather: staleWeather,
+              weatherStatus: staleWeather ? 'ready' : 'unavailable',
+              status: 'stale',
+            }),
+          );
           return;
         }
         res.writeHead(503, {

@@ -260,12 +260,16 @@
             <small id="cockpit-local-coordinates">--</small>
           </div>
           <div class="cockpit-local-grid">
-            <div><span>TEMP</span><strong id="cockpit-local-temperature">—</strong><small>OPEN-METEO</small></div>
+            <div><span>TEMP</span><strong id="cockpit-local-temperature">—</strong><small id="cockpit-local-weather-source">UNAVAILABLE</small></div>
             <div><span>WIND</span><strong id="cockpit-local-wind">—</strong><small id="cockpit-local-wind-direction">—</small></div>
             <div><span>SKY</span><strong id="cockpit-local-condition">UNKNOWN</strong><small id="cockpit-local-cloud">—</small></div>
             <div><span>PRECIP</span><strong id="cockpit-local-precipitation">—</strong><small>MM</small></div>
           </div>
-          <a class="cockpit-weather-credit" href="https://open-meteo.com/" target="_blank" rel="noopener">Weather data by Open-Meteo.com</a>
+          <div class="cockpit-weather-provenance">
+            <a id="cockpit-local-weather-station" href="https://www.smn.gob.ar/descarga-de-datos" target="_blank" rel="noopener noreferrer" hidden></a>
+            <small id="cockpit-local-weather-time" hidden></small>
+          </div>
+          <a id="cockpit-weather-credit" class="cockpit-weather-credit" href="https://open-meteo.com/" target="_blank" rel="noopener">Weather data by Open-Meteo.com</a>
         </section>
       </div>
       <footer class="cockpit-signal-footer">

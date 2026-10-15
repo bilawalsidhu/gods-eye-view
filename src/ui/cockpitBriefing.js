@@ -10,6 +10,14 @@ import {
   formatCockpitWindDirection,
 } from './cockpitPresentation.js';
 
+function localWeatherFooter(weather) {
+  return weather?.source === 'smn'
+    ? 'NATURAL EARTH · SMN STATION OBSERVATION'
+    : weather
+      ? 'NATURAL EARTH · OPEN-METEO · UTC'
+      : 'NATURAL EARTH · WEATHER UNAVAILABLE';
+}
+
 export function showBriefPage(index, { manual = false } = {}) {
   if (this.destroyed) return;
   const count = COCKPIT_BRIEF_PAGES.length;
@@ -34,7 +42,11 @@ export function showBriefPage(index, { manual = false } = {}) {
   if (this.briefSubtitle) this.briefSubtitle.textContent = page.subtitle;
   if (this.briefPosition)
     this.briefPosition.textContent = `${this.briefPageIndex + 1} / ${count}`;
-  if (this.briefSource) this.briefSource.textContent = page.source;
+  if (this.briefSource)
+    this.briefSource.textContent =
+      page.id === 'local'
+        ? localWeatherFooter(this.regionalBrief?.weather)
+        : page.source;
   if (this.signalStream) this.signalStream.dataset.briefPage = page.id;
   if (manual && this.briefAutoRotateEnabled)
     this.startBriefRotation({ reset: true });
@@ -170,6 +182,8 @@ export function maybeRefreshRegionalBrief(info) {
 }
 
 export function renderRegionalBriefStatus(status, info) {
+  this.regionalBrief = null;
+  renderLocalWeather.call(this, null);
   if (this.newsStatus) {
     this.newsStatus.hidden = false;
     this.newsStatus.dataset.state = status;
@@ -184,6 +198,7 @@ export function renderRegionalBriefStatus(status, info) {
   if (this.localPlace && status === 'unavailable')
     this.localPlace.textContent = 'REGION UNAVAILABLE';
   this.updateLocalPosition(info);
+  this.scheduleContextLayout();
 }
 
 export function renderRegionalBrief(payload, info) {
@@ -219,7 +234,16 @@ export function renderRegionalBrief(payload, info) {
     payload?.place?.label || payload?.place?.country || 'REGION UNAVAILABLE';
   if (this.localPlace) this.localPlace.textContent = placeLabel.toUpperCase();
   this.updateLocalPosition(info);
-  const weather = payload?.weather;
+  renderLocalWeather.call(this, payload?.weather);
+  if (this.signalStream)
+    this.signalStream.dataset.regionalStatus = payload?.status || 'partial';
+  if (this.briefPageIndex === 1 && this.briefSource) {
+    this.briefSource.textContent = `${String(payload?.newsSource || 'REGIONAL NEWS').toUpperCase()} · LOCATION QUERY`;
+  }
+  this.scheduleContextLayout();
+}
+
+function renderLocalWeather(weather) {
   if (this.localTemperature) {
     this.localTemperature.textContent = Number.isFinite(weather?.temperatureC)
       ? `${Math.round(weather.temperatureC)}°C`
@@ -236,9 +260,9 @@ export function renderRegionalBrief(payload, info) {
     );
   }
   if (this.localCondition)
-    this.localCondition.textContent = this.services.weatherCodeLabel(
-      weather?.weatherCode,
-    );
+    this.localCondition.textContent =
+      weather?.conditionText ||
+      this.services.weatherCodeLabel(weather?.weatherCode);
   if (this.localCloud) {
     this.localCloud.textContent = Number.isFinite(weather?.cloudCoverPct)
       ? `CLOUD ${Math.round(weather.cloudCoverPct)}%`
@@ -251,10 +275,38 @@ export function renderRegionalBrief(payload, info) {
       ? weather.precipitationMm.toFixed(1)
       : '—';
   }
-  if (this.signalStream)
-    this.signalStream.dataset.regionalStatus = payload?.status || 'partial';
-  if (this.briefPageIndex === 1 && this.briefSource) {
-    this.briefSource.textContent = `${String(payload?.newsSource || 'REGIONAL NEWS').toUpperCase()} · LOCATION QUERY`;
+  const isSmn = weather?.source === 'smn';
+  if (this.localWeatherSource)
+    this.localWeatherSource.textContent = isSmn
+      ? 'SMN OBS'
+      : weather
+        ? 'OPEN-METEO'
+        : 'UNAVAILABLE';
+  if (this.localWeatherStation) {
+    this.localWeatherStation.hidden = !isSmn;
+    const station = weather?.station;
+    const distance = Number.isFinite(station?.distanceKm)
+      ? `${station.distanceKm.toFixed(1)} KM FROM QUERY`
+      : 'DISTANCE UNKNOWN';
+    this.localWeatherStation.textContent = isSmn
+      ? `SMN · ${station?.name || 'UNKNOWN STATION'} · ${distance}`
+      : '';
+    this.localWeatherStation.title = isSmn
+      ? `Ground station ${station?.id || ''}; conditions may differ at the selected position and flight altitude.`
+      : '';
   }
-  this.scheduleContextLayout();
+  if (this.localWeatherTime) {
+    this.localWeatherTime.hidden = !weather;
+    this.localWeatherTime.textContent = isSmn
+      ? `REPORTED ${weather.reportedAt?.replace('T', ' ') || 'UNKNOWN'} · TIME ZONE UNSPECIFIED`
+      : weather?.observedAt
+        ? `MODEL ${weather.observedAt.replace('T', ' ').replace(/:00(?:\.000)?Z$/, '')} UTC`
+        : 'TIME UNKNOWN';
+  }
+  if (this.localWeatherCredit)
+    this.localWeatherCredit.textContent = isSmn
+      ? 'Atmospheric model by Open-Meteo.com'
+      : 'Weather data by Open-Meteo.com';
+  if (this.briefPageIndex === 2 && this.briefSource)
+    this.briefSource.textContent = localWeatherFooter(weather);
 }
