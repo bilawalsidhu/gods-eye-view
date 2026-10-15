@@ -1020,6 +1020,9 @@ Unit coverage: `src/sources/youtube.test.mjs`, `cctvEmbed.test.mjs`,
 Bhote Koshi tests. Browser gate: `node scripts/qa-cctv-v2.mjs --url
 http://localhost:4173`; real YouTube playback and provider restrictions require
 an additional browser check, as do Twitch, Angelcam and Roundshot.
+Confirm decoded dimensions and advancing playback time; Angelcam's connecting
+animation is not camera video. For Roundshot, verify the panorama's capture date
+instead of treating periodically captured imagery as continuous video.
 
 ## NYC DOT TMC CCTV source pack
 
