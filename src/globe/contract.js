@@ -46,7 +46,9 @@
  *
  * @typedef {object} FlightOptions
  * @property {Cartesian3} destination
- * @property {Orientation} [orientation] Missing angles keep the current ones.
+ * @property {Orientation} [orientation] As in Cesium's setView and flyTo,
+ *   missing angles default to heading 0, pitch −π/2 and roll 0 (they do not
+ *   keep the current ones).
  * @property {number} [duration] Seconds. 0 (or less) sets the view and calls
  *   `complete` synchronously, before flyTo returns, as Cesium does.
  * @property {'cubicInOut'|'sinusoidalInOut'|'linear'} [easing]
@@ -70,6 +72,7 @@
  * @typedef {object} GlobeCamera
  * @property {() => CameraPose} pose Fresh values on every call.
  * @property {(view: { destination: Cartesian3, orientation?: Orientation }) => void} setView
+ *   Missing angles default to heading 0, pitch −π/2, roll 0.
  * @property {(options: FlightOptions) => void} flyTo Cancels a running flight first.
  * @property {(sphere: { center: Cartesian3, radius: number }, options?: SphereFlightOptions) => void} flyToSphere
  *   Ends unlocked (identity transform).
