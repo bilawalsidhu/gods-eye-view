@@ -100,9 +100,6 @@ export const SEQUENCE_PAGE_EDGE = 12;
 
 /** Equirectangular panorama sizes: a quick preview, then the sharp one. */
 export const PANO_PREVIEW_SIZE = Object.freeze([1024, 512]);
-/** Enough for a docked viewer; an expanded one gets the full size. */
-export const PANO_MID_SIZE = Object.freeze([2048, 1024]);
-export const PANO_FULL_SIZE = Object.freeze([4096, 2048]);
 /** A flat photo's first version, then its sharp one. */
 export const FLAT_VIEW_SIZE = Object.freeze([1280, 1280]);
 export const FLAT_FULL_SIZE = Object.freeze([2560, 2560]);
