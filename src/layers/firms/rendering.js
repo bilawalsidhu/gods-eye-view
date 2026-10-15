@@ -89,13 +89,15 @@ export function createRendering({
           lonCell,
           count: 0,
           intensity: 0,
-          maxFrp: 0,
+          maxFrp: null,
+          hasConae: false,
           night: 0,
           newestAcqMs: 0,
         };
         existing.count += 1;
         existing.intensity += intensity;
-        existing.maxFrp = Math.max(existing.maxFrp, fire.frp);
+        if (Number.isFinite(fire.frp)) existing.maxFrp = Math.max(existing.maxFrp ?? 0, fire.frp);
+        existing.hasConae ||= fire.provider === 'conae-goes';
         existing.newestAcqMs = Math.max(existing.newestAcqMs, fire.acqMs);
         if (fire.night) existing.night += 1;
         cells.set(key, existing);

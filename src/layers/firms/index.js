@@ -28,12 +28,17 @@ export function createFirmsHeatmapLayer({ services, feed, ...config }) {
   components.viewport = createViewport(context);
   components.lifecycle = createLifecycle(context);
   components.queries = createQueries(context);
-  return Object.assign(
+  const layer = Object.assign(
     {},
     components.queries.methods,
     components.lifecycle.methods,
     components.ingestion.methods,
   );
+  Object.defineProperty(layer, 'source', {
+    enumerable: true,
+    get: () => layerState._sourceLabel,
+  });
+  return layer;
 }
 
 export { createFirmsSource } from './source.js';

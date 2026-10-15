@@ -1,17 +1,55 @@
-name: CONAE source probe
+name: CONAE branch verification
 on:
   push:
     branches: [contrib/argentina-conae-goes]
 permissions:
   contents: read
 jobs:
-  probe:
+  verify:
     runs-on: ubuntu-latest
-    timeout-minutes: 3
+    timeout-minutes: 20
     steps:
       - name: Check out this branch
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           persist-credentials: false
-      - name: Inspect the public CONAE source
-        run: node scripts/check-conae-goes.mjs
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '24.14.0'
+          cache: npm
+      - name: Install
+        run: npm ci
+      - name: Format adopted files
+        run: npm run format
+      - name: Report formatting changes
+        run: |
+          node --input-type=module <<'JS'
+          import {execFileSync} from 'node:child_process';
+          import {readFileSync} from 'node:fs';
+          const paths = execFileSync('git', ['diff', '--name-only'], {encoding:'utf8'}).trim().split('\n').filter(Boolean);
+          for (const path of paths) console.log('FORMATTED ' + JSON.stringify({path,content:readFileSync(path,'utf8')}));
+          JS
+      - name: Check formatting and boundaries
+        run: |
+          npm run format:check
+          npm run check:boundaries
+      - name: Unit tests
+        run: |
+          if npm test > /tmp/gev-unit.log 2>&1; then
+            tail -n 25 /tmp/gev-unit.log
+          else
+            grep -n -A 25 -B 5 -E 'not ok|error:|Error:|fail' /tmp/gev-unit.log | tail -n 240
+            exit 1
+          fi
+      - name: Build
+        run: npm run build
+      - name: Track regression
+        run: npm run test:track
+      - name: Fires browser fixtures
+        run: |
+          npm run dev -- --host 127.0.0.1 --port 4420 > /tmp/gev-dev.log 2>&1 &
+          for attempt in $(seq 1 30); do
+            if curl --silent --fail http://127.0.0.1:4420/ > /dev/null; then break; fi
+            sleep 1
+          done
+          node scripts/qa-firms.mjs --url http://127.0.0.1:4420 --fixtures

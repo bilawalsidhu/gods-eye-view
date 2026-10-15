@@ -30,7 +30,7 @@ export function createModel({
    * @param {Object|null|undefined} fire - Internal fire record.
    * @returns {{id: string, lat: number|null, lon: number|null, frp: number|null,
    *   confidence: number|null, satellite: string|null, sensor: string|null,
-   *   acqTime: number|null}}
+   *   acqTime: number|null, source: string}}
    */
 
   function mapAnalystRecord(fire) {
@@ -46,7 +46,8 @@ export function createModel({
       frp: num(fire?.frp),
       confidence: num(fire?.confidence), // normalized 0..1 (firmsAdapt.normalizeConfidence)
       satellite: text(fire?.satellite) || text(fire?.sensor),
-      sensor: text(fire?.sensor), // VIIRS or MODIS
+      sensor: text(fire?.sensor), // VIIRS, MODIS or GOES
+      source: fireSource(fire),
       acqTime:
         Number.isFinite(fire?.acqMs) && fire.acqMs > 0 ? fire.acqMs : null, // epoch ms; 0 = unparseable → null
     };
@@ -329,7 +330,9 @@ export function createModel({
    */
 
   function buildSelectedFireCard(fire, nowMs) {
-    const meta = [`${confidenceBucket(fire.confidence)} conf`];
+    const meta = [Number.isFinite(fire.confidence)
+      ? `${confidenceBucket(fire.confidence)} conf`
+      : 'confidence not published'];
     if (fire.acqMs > 0) {
       const age = formatAge(nowMs - fire.acqMs);
       if (age) meta.push(`${age} ago`);
@@ -346,10 +349,11 @@ export function createModel({
       cullPosition: fireCullPosition(fire),
       gapPx: frpPixelSize(fire.frp),
       accent: accentForSeverity(detectionColorStop(fire).name),
-      title: `FIRE · ${formatFrp(fire.frp)} MW`,
+      title: `${fire.provider === 'conae-goes' ? 'THERMAL DETECTION' : 'FIRE'} · ${frpLabel(fire.frp)}`,
       details: [
         meta.join(' · '),
         formatLatLon(fire.lat, fire.lon) + (fire.night ? ' · NIGHT' : ''),
+        ...(fire.provider === 'conae-goes' ? ['CONAE GOES · thermal anomaly, not a confirmed wildfire'] : []),
       ],
       selected: true,
       priority: Number.MAX_SAFE_INTEGER,
@@ -368,13 +372,16 @@ export function createModel({
 
   function buildFireCard(candidate, nowMs) {
     const fire = candidate.fire;
-    const meta = [confidenceBucket(fire.confidence)];
+    const meta = [Number.isFinite(fire.confidence)
+      ? confidenceBucket(fire.confidence)
+      : 'confidence n/a'];
     if (fire.acqMs > 0) {
       const age = formatAge(nowMs - fire.acqMs);
       if (age) meta.push(age);
     }
     const sat = satelliteShortName(fire.satellite) || fire.sensor;
     if (sat) meta.push(sat);
+    if (fire.provider === 'conae-goes') meta.push('CONAE');
     return {
       id: `fire:${fireDetectionKey(fire)}`,
       actionable: true,
@@ -382,7 +389,7 @@ export function createModel({
       cullPosition: candidate.cullPosition || candidate.position,
       gapPx: frpPixelSize(fire.frp),
       accent: accentForSeverity(detectionColorStop(fire).name),
-      title: `▲ ${formatFrp(fire.frp)} MW`,
+      title: `▲ ${frpLabel(fire.frp)}`,
       details: [meta.join(' · ')],
       selected: false,
       priority: Number(fire.frp) || 0,
@@ -400,8 +407,10 @@ export function createModel({
 
   function buildCellCard(candidate, nowMs) {
     const cell = candidate.cell;
-    const noun = cell.count === 1 ? 'FIRE' : 'FIRES';
-    const parts = [`max ${formatFrp(cell.maxFrp)} MW`];
+    const noun = cell.hasConae
+      ? (cell.count === 1 ? 'DETECTION' : 'DETECTIONS')
+      : (cell.count === 1 ? 'FIRE' : 'FIRES');
+    const parts = [Number.isFinite(cell.maxFrp) ? `max ${frpLabel(cell.maxFrp)}` : 'FRP n/a'];
     if (cell.newestAcqMs > 0) {
       const age = formatAge(nowMs - cell.newestAcqMs);
       if (age) parts.push(`new ${age}`);
@@ -474,7 +483,21 @@ export function createModel({
   }
 
   function formatFrp(frp) {
+    if (!Number.isFinite(frp)) return 'n/a';
     return frp >= 10 ? frp.toFixed(0) : frp.toFixed(1);
+  }
+
+  function frpLabel(frp) {
+    return Number.isFinite(frp) ? `${formatFrp(frp)} MW` : 'FRP n/a';
+  }
+
+  function fireSource(fire) {
+    return fire?.provider === 'conae-goes' ? 'CONAE GOES' : 'NASA FIRMS';
+  }
+
+  function detectionLabel(fire) {
+    const noun = fire.provider === 'conae-goes' ? 'Thermal detection' : 'Fire';
+    return `${noun} · ${Number.isFinite(fire.frp) ? 'FRP ' : ''}${frpLabel(fire.frp)}`;
   }
 
   /** Millisecond delta → "<1h" / "Xh" / "Xd", or '' for invalid input. */
@@ -500,12 +523,15 @@ export function createModel({
   /** Normalized 0..1 confidence → low/nominal/high display bucket. */
 
   function confidenceBucket(confidence) {
+    if (!Number.isFinite(confidence)) return 'not published';
     if (confidence >= 0.75) return 'high';
     if (confidence >= 0.45) return 'nominal';
     return 'low';
   }
   return {
     mapAnalystRecord,
+    fireSource,
+    detectionLabel,
     paddedDegreeBounds,
     boundsContainPoint,
     cellIntersectsBounds,

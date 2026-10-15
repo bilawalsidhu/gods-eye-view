@@ -26,6 +26,7 @@ test('firms analyst record: full record maps every contract field', () => {
     confidence: 0.9,
     satellite: 'N21',
     sensor: 'VIIRS',
+    source: 'NASA FIRMS',
     acqTime: 1_753_600_000_000,
   });
 });

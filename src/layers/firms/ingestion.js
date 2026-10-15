@@ -35,7 +35,12 @@ export function createIngestion({
         return;
       }
       layerState._keyRequired = false;
-      layerState._error = null;
+      layerState._sources = Array.isArray(payload.sources) ? payload.sources : [];
+      const failed = layerState._sources.filter((s) => s.ok === false);
+      layerState._error = failed.length
+        ? `PARTIAL · ${failed.map((s) => s.source).join(', ')} unavailable`
+        : null;
+      layerState._sourceLabel = payload.sourceLabel || config.source;
       layerState._stale = Boolean(payload?.stale);
       const previousSelection = layerState._selectedFire;
       layerState._selectedFire = null;

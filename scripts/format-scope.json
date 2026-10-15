@@ -1001,5 +1001,7 @@
   "src/tools/globePanel.test.mjs",
   "src/costEndpointThrottle.test.mjs",
   "src/sources/gbfsStations.test.mjs",
-  "scripts/qa-gbfs-names.mjs"
+  "scripts/qa-gbfs-names.mjs",
+  "src/layers/firms/conae.test.mjs",
+  "src/data/firmsHeatmap.test.mjs"
 ]

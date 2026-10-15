@@ -34,11 +34,14 @@ export function adaptFirmsRecords(records) {
       index: fires.length,
       lat,
       lon,
-      frp: finiteNumber(record.frp),
-      confidence: normalizeConfidence(record.confidence),
-      brightness: finiteNumber(record.brightness),
+      provider: record.provider === 'conae-goes' ? 'conae-goes' : 'firms',
+      frp: record.provider === 'conae-goes' ? optionalNumber(record.frp) : finiteNumber(record.frp),
+      confidence: record.provider === 'conae-goes' ? null : normalizeConfidence(record.confidence),
+      brightness: record.provider === 'conae-goes' ? optionalNumber(record.brightness) : finiteNumber(record.brightness),
       night: record.daynight === 'N',
-      acqMs: parseAcquisitionMs(record.acqDate, record.acqTime, acqCache),
+      acqMs: record.provider === 'conae-goes'
+        ? (Number.isFinite(record.acqMs) ? record.acqMs : 0)
+        : parseAcquisitionMs(record.acqDate, record.acqTime, acqCache),
       sensor: normalizeSensor(record.instrument),
       satellite: typeof record.satellite === 'string' ? record.satellite : '',
       contextEntity: null,
@@ -125,4 +128,10 @@ function hasCoordinateValue(value) {
     typeof value === 'number' ||
     (typeof value === 'string' && value.trim() !== '')
   );
+}
+
+function optionalNumber(value) {
+  if (value === null || value === undefined || value === '') return null;
+  const number = Number(value);
+  return Number.isFinite(number) ? number : null;
 }
