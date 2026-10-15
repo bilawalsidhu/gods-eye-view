@@ -12,6 +12,8 @@ import { densifyLine, MESH_DENSIFY_DEG } from './groundCast.js';
 import { MESH_SAMPLE_RADIUS_M } from './meshSampler.js';
 import { tileBounds, tilesForBbox } from './tileMath.js';
 
+/** A tile's shared point cap must move by this much to redraw it. */
+const SHARE_HYSTERESIS = 0.1;
 /** Draped lines stay at most this long while a tile's cast lines build. */
 export const SWAP_MAX_WAIT_MS = 4000;
 /** Tiles touched by new mesh samples are redrawn at most this often. */
@@ -72,6 +74,8 @@ export function meshBoxInRange(box, centre) {
  * @property {number} viewRangeMinM       Street-zoom coverage reaches at least this far…
  * @property {number} viewRangePerHeight  …or camera height times this.
  * @property {number} viewNearM           Ground always covered around a tilted camera.
+ * @property {boolean} [keepOrder]        Cap a tile's lines in the order decoded (default: newest first).
+ * @property {number} [maxPoints]         Line points drawn at once, over every tile (default: no limit).
  */
 
 /**
@@ -94,6 +98,7 @@ export function meshBoxInRange(box, centre) {
  * @param {LineCoverageTuning} options.tuning
  * @param {{keyRejected?: string, rateLimited: string, tooHigh?: string}} options.messages
  * @param {(sequence: object, filter: object) => boolean} [options.passes]  Whether the imagery filter keeps a line or point.
+ * @param {(point: object) => number} [options.overviewPointSize]  An overview point's size in pixels (default `tuning.overviewPointPx`).
  */
 export function createLineCoverage({
   state,
@@ -105,9 +110,13 @@ export function createLineCoverage({
   tuning,
   messages,
   passes = passesImageryFilter,
+  overviewPointSize = null,
 }) {
   const { render } = state.services;
   const perTileSequenceCap = Math.floor(tuning.maxSequences / tuning.maxTiles);
+  const perTilePointCap = tuning.maxPoints
+    ? Math.floor(tuning.maxPoints / tuning.maxTiles)
+    : Infinity;
 
   /** Colour for a line: the provider's, GEV cyan while selected. */
   function sequenceColor({ selected = false } = {}) {
@@ -143,16 +152,112 @@ export function createLineCoverage({
 
   /**
    * A tile's sequences, filtered then capped: capping first could leave a
-   * dense tile of newer flat captures with no 360° lines at all.
+   * dense tile of newer flat captures with no 360° lines at all. `measure`
+   * only records what the lines need, for a draw that follows.
    */
-  function drawnSequences(entry) {
+  function drawnSequences(entry, { measure = false } = {}) {
     const drawn = [];
     const current = filter();
+    const selectedId = state.sequence.selectedId ?? null;
+    const cap = entry.pointCap ?? perTilePointCap;
+    let points = 0;
+    let demand = 0;
     for (const sequence of entry.sequenceList) {
-      if (drawn.length >= perTileSequenceCap) break;
-      if (passes(sequence, current)) drawn.push(sequence);
+      if (!passes(sequence, current)) continue;
+      const size = pointsOf(sequence);
+      demand += size;
+      // The selected sequence is always drawn: its highlight is the answer
+      // to a click, whatever the caps leave out. It is outside the cap, so
+      // it is not counted against it.
+      if (sequence.id === selectedId) {
+        drawn.push(sequence);
+        continue;
+      }
+      if (drawn.length >= perTileSequenceCap) continue;
+      // A line past the point budget is skipped; a shorter one may still fit.
+      if (points + size > cap) continue;
+      points += size;
+      drawn.push(sequence);
+    }
+    // What every passing line would take: the budget is shared by it.
+    entry.pointDemand = demand;
+    if (!measure) {
+      entry.pointsDrawn = points;
+      // The cap this draw used: a share is judged against it, not against
+      // later shares that redrew nothing (small steps add up).
+      entry.drawnCap = cap;
     }
     return drawn;
+  }
+
+  /**
+   * Share the point budget across the tiles in view (water-filling): a
+   * sparse tile keeps what it needs and the rest goes to the dense ones,
+   * so a city centre is not drawn thinner than its suburbs. Sets each
+   * tile's cap; returns the tiles whose cap changes what they draw.
+   */
+  function shareCaps() {
+    const changed = [];
+    if (!tuning.maxPoints) return changed;
+    const entries = [...state.coverage.tiles.values()].filter(
+      (entry) => entry.kind === 'sequence',
+    );
+    const byDemand = [...entries].sort(
+      (a, b) => (a.pointDemand || 0) - (b.pointDemand || 0),
+    );
+    let left = tuning.maxPoints;
+    byDemand.forEach((entry, i) => {
+      const share = left / (byDemand.length - i);
+      const cap = Math.floor(Math.min(entry.pointDemand || 0, share));
+      left -= cap;
+      const before = entry.drawnCap ?? perTilePointCap;
+      entry.pointCap = cap;
+      // Only a change that alters what is drawn, by enough to be worth a
+      // rebuild: more room for a tile that had lines left out, or well
+      // under what it draws now (a small overshoot stays until the next
+      // natural redraw).
+      const grows =
+        cap > before * (1 + SHARE_HYSTERESIS) &&
+        entry.pointsDrawn < entry.pointDemand;
+      const shrinks = cap < entry.pointsDrawn * (1 - SHARE_HYSTERESIS);
+      if (grows || shrinks) changed.push(entry);
+    });
+    return changed;
+  }
+
+  /**
+   * Once loading settles: redraw the tiles the shared budget changes,
+   * keeping their old lines until the new ones are ready (no blink).
+   */
+  function shareBudget() {
+    const changed = shareCaps();
+    for (const entry of changed) redrawEntry(entry, { swap: true });
+    if (changed.length) {
+      requestRender();
+      notify();
+    }
+  }
+
+  /**
+   * Draw one tile again from its decoded lines (filter, caps or selection
+   * changed). With `swap`, its old lines stay until the new ones are ready.
+   */
+  function redrawEntry(entry, { swap = false } = {}) {
+    cancelCast(entry);
+    entry.castRequested = false;
+    entry.meshParts = null;
+    if (swap && entry.kind === 'sequence' && entry.primitives?.length) {
+      redrawTile(entry);
+      return;
+    }
+    detachPrimitive(entry);
+    attachPrimitive(entry);
+  }
+
+  function pointsOf(sequence) {
+    let count = 0;
+    for (const part of sequence.parts) count += part.length;
+    return count;
   }
 
   /**
@@ -267,7 +372,22 @@ export function createLineCoverage({
 
   /** Rebuild a tile's lines; the old ones stay up until the new are ready. */
   function redrawTile(entry) {
-    const previous = entry.primitives;
+    let previous = entry.primitives;
+    if (entry.swap) {
+      // A swap still building: what is on screen is its old lines and
+      // whichever new ones are ready. Those stay; the rest never showed.
+      const shown = [...entry.swap.old];
+      const building = [];
+      for (const record of previous)
+        (record.primitive.ready && !record.primitive.isDestroyed?.()
+          ? shown
+          : building
+        ).push(record);
+      entry.swap.stop();
+      entry.swap = null;
+      removePrimitives(building);
+      previous = shown;
+    }
     entry.primitives = [];
     attachPrimitive(entry);
     removeWhenReady(entry, previous);
@@ -426,7 +546,7 @@ export function createLineCoverage({
         collection.add({
           position: Cesium.Cartesian3.fromDegrees(point.lon, point.lat),
           color: tint,
-          pixelSize: tuning.overviewPointPx,
+          pixelSize: overviewPointSize?.(point) ?? tuning.overviewPointPx,
           // Google 3D terrain and clouds must not hide the near side's dots;
           // the horizon cull hides the far side's, which this lets through.
           disableDepthTestDistance: Number.POSITIVE_INFINITY,
@@ -559,10 +679,13 @@ export function createLineCoverage({
         north: bounds.north + pad,
       };
       if (kind === 'sequence') {
-        // Newest first; the per-tile cap applies to what passes the filter.
-        entry.sequenceList = decoded.sequences.sort(
-          (a, b) => (b.capturedAt || 0) - (a.capturedAt || 0),
-        );
+        // Newest first, unless the provider ordered them itself; the
+        // per-tile cap applies to what passes the filter.
+        entry.sequenceList = tuning.keepOrder
+          ? decoded.sequences
+          : decoded.sequences.sort(
+              (a, b) => (b.capturedAt || 0) - (a.capturedAt || 0),
+            );
         entry.sequences = new Map();
         entry.total = decoded.sequences.length;
       } else {
@@ -594,7 +717,10 @@ export function createLineCoverage({
       // must not drop a newer request's entry (which is what counts as loading).
       if (state.coverage.pending.get(key) === controller) {
         state.coverage.pending.delete(key);
-        if (!state.coverage.pending.size) purgeStale();
+        if (!state.coverage.pending.size) {
+          purgeStale();
+          shareBudget();
+        }
       }
       notify();
     }
@@ -734,7 +860,10 @@ export function createLineCoverage({
         state.coverage.pending.delete(key);
       }
     for (const tile of tiles) loadTile(tile, kind);
-    if (!state.coverage.pending.size) purgeStale();
+    if (!state.coverage.pending.size) {
+      purgeStale();
+      shareBudget();
+    }
     // The camera moved: cells that were out of the sampler's range may not be,
     // and lines left draped by a failed, partial or dropped cast get another try.
     if (terrainMode())
@@ -787,13 +916,12 @@ export function createLineCoverage({
   /** Rebuild every loaded tile from its decoded cache (after a filter change). */
   function rebuild() {
     purgeStale();
-    for (const entry of state.coverage.tiles.values()) {
-      cancelCast(entry);
-      entry.castRequested = false;
-      entry.meshParts = null;
-      detachPrimitive(entry);
-      attachPrimitive(entry);
-    }
+    // What each tile's lines need under the new filter, then the shares,
+    // then one redraw each.
+    for (const entry of state.coverage.tiles.values())
+      if (entry.kind === 'sequence') drawnSequences(entry, { measure: true });
+    shareCaps();
+    for (const entry of state.coverage.tiles.values()) redrawEntry(entry);
     requestRender();
     notify();
   }
@@ -847,6 +975,17 @@ export function createLineCoverage({
 
   /** Recolour one sequence, every part of it, in place (selection highlight). */
   function recolorSequence(id, selected) {
+    // Selected but left out by a cap: draw it (it is always admitted).
+    if (selected && (tuning.maxPoints || 0) > 0)
+      for (const entry of state.coverage.tiles.values())
+        if (
+          entry.kind === 'sequence' &&
+          !entry.sequences.has(id) &&
+          entry.sequenceList.some(
+            (sequence) => sequence.id === id && passes(sequence, filter()),
+          )
+        )
+          redrawEntry(entry, { swap: true });
     for (const entry of drawnEntries()) {
       const sequence = entry.sequences.get(id);
       if (!sequence) continue;

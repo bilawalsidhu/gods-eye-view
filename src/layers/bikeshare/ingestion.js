@@ -171,30 +171,34 @@ export function createIngestion({
 
       const generation = layerState._proximityGeneration;
       const cityIds = Array.from(layerState._activeCityIds);
+      const isCurrent = (cityId) =>
+        layerState._enabled &&
+        layerState._activeCityIds.has(cityId) &&
+        generation === layerState._proximityGeneration;
+      let refreshed = false;
       await Promise.all(
         cityIds.map(async (cityId) => {
           try {
             const statusMap = await loadCityStationStatus(cityId, generation);
-            if (
-              !layerState._enabled ||
-              !layerState._activeCityIds.has(cityId) ||
-              generation !== layerState._proximityGeneration
-            )
-              return;
+            if (!isCurrent(cityId)) return;
             parts.rendering.applyStatusToPoints(cityId, statusMap);
+            layerState._failedCityIds.delete(cityId);
+            refreshed = true;
           } catch (error) {
-            if (error?.name === 'AbortError') return;
+            if (error?.name === 'AbortError' || !isCurrent(cityId)) return;
             console.warn(
               `[Data:Bikeshare] ${cityId} status update error:`,
               error,
             );
-            layerState._error = 'GBFS status update failed';
+            layerState._failedCityIds.add(cityId);
           }
         }),
       );
 
       layerState._count = layerState._stationRenderMap.size;
-      if (layerState._count > 0) layerState._lastUpdate = Date.now();
+      // Freshness advances only on a poll that actually refreshed a city.
+      if (refreshed && layerState._count > 0)
+        layerState._lastUpdate = Date.now();
     },
   };
 

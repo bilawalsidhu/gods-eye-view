@@ -23,6 +23,47 @@ function bcycleEntry({
     ...buildBcycleUrls(systemId),
   };
 }
+function urbanSharingEntry({
+  id,
+  city,
+  centerLat,
+  centerLon,
+  systemId,
+  provider,
+  loadRadiusKm = 100,
+}) {
+  return {
+    id,
+    city,
+    centerLat,
+    centerLon,
+    loadRadiusKm,
+    provider,
+    stationInformationUrl: `https://gbfs.urbansharing.com/${systemId}/station_information.json`,
+    stationStatusUrl: `https://gbfs.urbansharing.com/${systemId}/station_status.json`,
+  };
+}
+function enturEntry({
+  id,
+  city,
+  centerLat,
+  centerLon,
+  systemId,
+  provider,
+  loadRadiusKm = 100,
+}) {
+  const base = `https://api.entur.io/mobility/v2/gbfs/v2/${systemId}`;
+  return {
+    id,
+    city,
+    centerLat,
+    centerLon,
+    loadRadiusKm,
+    provider,
+    stationInformationUrl: `${base}/station_information`,
+    stationStatusUrl: `${base}/station_status`,
+  };
+}
 const RAW_GBFS_CITY_REGISTRY = [
   {
     id: 'nyc-citibike',
@@ -194,18 +235,6 @@ const RAW_GBFS_CITY_REGISTRY = [
     provider: 'Biki',
   },
   {
-    id: 'columbus-cogo',
-    city: 'Columbus, OH',
-    centerLat: 39.9612,
-    centerLon: -82.9988,
-    loadRadiusKm: 90,
-    stationInformationUrl:
-      'https://gbfs.cogobikeshare.com/gbfs/2.3/en/station_information.json',
-    stationStatusUrl:
-      'https://gbfs.cogobikeshare.com/gbfs/2.3/en/station_status.json',
-    provider: 'CoGo',
-  },
-  {
     id: 'chattanooga-bikechatt',
     city: 'Chattanooga, TN',
     centerLat: 35.0456,
@@ -216,6 +245,18 @@ const RAW_GBFS_CITY_REGISTRY = [
     stationStatusUrl:
       'https://chat.publicbikesystem.net/customer/gbfs/v2/en/station_status.json',
     provider: 'Bike Chattanooga',
+  },
+  {
+    id: 'toronto-bike-share',
+    city: 'Toronto, ON',
+    centerLat: 43.6532,
+    centerLon: -79.3832,
+    loadRadiusKm: 90,
+    stationInformationUrl:
+      'https://toronto.publicbikesystem.net/customer/gbfs/v2/en/station_information.json',
+    stationStatusUrl:
+      'https://toronto.publicbikesystem.net/customer/gbfs/v2/en/station_status.json',
+    provider: 'Bike Share Toronto',
   },
   bcycleEntry({
     id: 'boulder-bcycle',
@@ -285,14 +326,6 @@ const RAW_GBFS_CITY_REGISTRY = [
     provider: 'Pacers Bikeshare',
   }),
   bcycleEntry({
-    id: 'fort-lauderdale-broward',
-    city: 'Fort Lauderdale, FL',
-    centerLat: 26.1224,
-    centerLon: -80.1373,
-    systemId: 'bcycle_broward',
-    provider: 'Broward B-cycle',
-  }),
-  bcycleEntry({
     id: 'memphis-bcycle',
     city: 'Memphis, TN',
     centerLat: 35.1495,
@@ -306,22 +339,32 @@ const RAW_GBFS_CITY_REGISTRY = [
     centerLon: -93.625,
     systemId: 'bcycle_desmoines',
   }),
-  bcycleEntry({
+  {
+    // Tugo moved off BCycle to PBSC; the bcycle_tugo feed is gone (404).
     id: 'tucson-tugo',
     city: 'Tucson, AZ',
     centerLat: 32.2226,
     centerLon: -110.9747,
-    systemId: 'bcycle_tugo',
+    loadRadiusKm: 100,
+    stationInformationUrl:
+      'https://tucson.publicbikesystem.net/customer/gbfs/v2/en/station_information.json',
+    stationStatusUrl:
+      'https://tucson.publicbikesystem.net/customer/gbfs/v2/en/station_status.json',
     provider: 'Tugo',
-  }),
-  bcycleEntry({
+  },
+  {
+    // Trinity Metro moved off BCycle to PBSC; the bcycle_fortworth feed is gone.
     id: 'fort-worth-trinity',
     city: 'Fort Worth, TX',
     centerLat: 32.7555,
     centerLon: -97.3308,
-    systemId: 'bcycle_fortworth',
+    loadRadiusKm: 100,
+    stationInformationUrl:
+      'https://fortworth.publicbikesystem.net/customer/gbfs/v2/en/station_information.json',
+    stationStatusUrl:
+      'https://fortworth.publicbikesystem.net/customer/gbfs/v2/en/station_status.json',
     provider: 'Trinity Metro',
-  }),
+  },
   bcycleEntry({
     id: 'omaha-heartland',
     city: 'Omaha, NE',
@@ -345,14 +388,20 @@ const RAW_GBFS_CITY_REGISTRY = [
     centerLon: -82.394,
     systemId: 'bcycle_greenville',
   }),
-  bcycleEntry({
+  {
+    // Reddy left BCycle for Social Bicycles; the bcycle_reddy feed is gone
+    // (404). This is the endpoint the MobilityData GBFS registry lists.
     id: 'buffalo-reddy',
     city: 'Buffalo, NY',
     centerLat: 42.8864,
     centerLon: -78.8784,
-    systemId: 'bcycle_reddy',
+    loadRadiusKm: 100,
+    stationInformationUrl:
+      'https://reddybikeshare.socialbicycles.com/opendata/station_information.json',
+    stationStatusUrl:
+      'https://reddybikeshare.socialbicycles.com/opendata/station_status.json',
     provider: 'Reddy Bikeshare',
-  }),
+  },
   bcycleEntry({
     id: 'las-vegas-rtc-bike-share',
     city: 'Las Vegas, NV',
@@ -368,6 +417,59 @@ const RAW_GBFS_CITY_REGISTRY = [
     centerLon: -119.6982,
     systemId: 'bcycle_santabarbara',
   }),
+  urbanSharingEntry({
+    id: 'oslo-bysykkel',
+    city: 'Oslo, Norway',
+    centerLat: 59.9139,
+    centerLon: 10.7522,
+    systemId: 'oslobysykkel.no',
+    provider: 'Oslo Bysykkel',
+  }),
+  urbanSharingEntry({
+    id: 'bergen-bysykkel',
+    city: 'Bergen, Norway',
+    centerLat: 60.3913,
+    centerLon: 5.3221,
+    systemId: 'bergenbysykkel.no',
+    provider: 'Bergen Bysykkel',
+  }),
+  urbanSharingEntry({
+    id: 'trondheim-bysykkel',
+    city: 'Trondheim, Norway',
+    centerLat: 63.4305,
+    centerLon: 10.3951,
+    systemId: 'trondheimbysykkel.no',
+    provider: 'Trondheim Bysykkel',
+  }),
+  enturEntry({
+    id: 'stavanger-kolumbus',
+    city: 'Stavanger, Norway',
+    centerLat: 58.9,
+    centerLon: 5.72,
+    systemId: 'kolumbusbysykkel',
+    provider: 'Kolumbus Bysykkel',
+  }),
+  enturEntry({
+    id: 'skien-farte',
+    city: 'Skien/Porsgrunn, Norway',
+    centerLat: 59.16,
+    centerLon: 9.64,
+    systemId: 'fartebysykkel',
+    provider: 'Farte Bysykkel',
+    loadRadiusKm: 40,
+  }),
+  {
+    id: 'lillestrom-bysykkel',
+    city: 'Lillestrøm, Norway',
+    centerLat: 59.9556,
+    centerLon: 11.0492,
+    loadRadiusKm: 40,
+    stationInformationUrl:
+      'https://api.cyclocity.fr/contracts/lillestrom/gbfs/station_information.json',
+    stationStatusUrl:
+      'https://api.cyclocity.fr/contracts/lillestrom/gbfs/station_status.json',
+    provider: 'Bysykkel Lillestrøm',
+  },
 ];
 function normalizeRegistryEntry(entry) {
   const id = String(entry?.id || '')
@@ -396,11 +498,13 @@ function normalizeRegistryEntry(entry) {
   ) {
     throw new Error(`GBFS entry "${id}" must use https URLs`);
   }
-  // Validate that URLs end with expected GBFS endpoint filenames
-  if (!/\/station_information\.json$/i.test(stationInformationUrl.pathname)) {
+  // Validate that URLs end with expected GBFS endpoint names (Entur omits .json)
+  if (
+    !/\/station_information(\.json)?$/i.test(stationInformationUrl.pathname)
+  ) {
     throw new Error(`GBFS entry "${id}" station_information URL is invalid`);
   }
-  if (!/\/station_status\.json$/i.test(stationStatusUrl.pathname)) {
+  if (!/\/station_status(\.json)?$/i.test(stationStatusUrl.pathname)) {
     throw new Error(`GBFS entry "${id}" station_status URL is invalid`);
   }
 

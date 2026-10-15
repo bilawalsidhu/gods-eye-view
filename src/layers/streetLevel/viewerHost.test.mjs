@@ -673,3 +673,15 @@ test('an adapter that can frame but says this image has no frame offers no FIT /
   await host.open('mapillary', 'flat-1');
   assert.equal(state.street.renderModes, true, 'a flat image can be framed');
 });
+
+test('a pose’s licence reaches the caption state, and a closed viewer forgets it', async () => {
+  const { state, host, google } = twoProviders();
+  await host.open('google', 'g-1');
+  google.emitPose('g-1', { providerId: 'google', license: 'CC BY-SA 4.0' });
+  assert.equal(state.street.license, 'CC BY-SA 4.0');
+  google.emitPose('g-1', { providerId: 'google' });
+  assert.equal(state.street.license, null, 'none given: none shown');
+  google.emitPose('g-1', { providerId: 'google', license: 'CC0' });
+  host.close();
+  assert.equal(state.street.license, null);
+});
