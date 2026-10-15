@@ -2,9 +2,11 @@
 /**
  * Runs src/globe/testing/contractSuite.mjs against a real globe engine in
  * headless Chrome. Starts this checkout's Vite dev server on a free port,
- * waits for the app to boot, builds the engine in the page from
- * window.__godsEyeView (the app does not construct one yet) and runs every
- * contract check, plus engine-specific checks. Exits 1 on any failure.
+ * waits for the app to boot and runs every contract check, plus
+ * engine-specific checks, on the app's own engine (window.__godsEyeView.engine;
+ * built in the page from the viewer when the app has none). A throwaway engine
+ * checks that creating and destroying one leaves the scene as it was. Exits 1
+ * on any failure.
  *
  *   node scripts/qa-globe-contract.mjs [--engine=cesium] [--base-url=URL]
  *
@@ -175,7 +177,7 @@ try {
   });
 
   const report = await page.evaluate(
-    async ({ spec }) => {
+    async ({ spec, kind }) => {
       const debug = window.__godsEyeView;
       const { viewer } = debug;
       // The page cannot resolve the bare 'cesium' specifier; take the
@@ -212,12 +214,28 @@ try {
           scene.postRender,
         ].map((event) => event.numberOfListeners),
       });
+      const build = () =>
+        factories[spec.factory](viewer, {
+          tilesetRef: () => debug.tileset ?? null,
+          requestRender: debug.requestRender,
+        });
+      const appEngine = debug.engine ?? null;
+      // A throwaway engine: creating it must change nothing, and destroying
+      // it after subscribing must remove every Cesium listener it added. It
+      // takes no render hold, so the app's engine stays the one that does.
       const before = JSON.stringify(sceneState());
-      const engine = factories[spec.factory](viewer, {
-        tilesetRef: () => debug.tileset ?? null,
-        requestRender: debug.requestRender,
-      });
+      const probe = build();
       const after = JSON.stringify(sceneState());
+      const noop = () => {};
+      probe.camera.changed.addEventListener(noop);
+      probe.camera.moveEnd.addEventListener(noop);
+      probe.frames.preRender.addEventListener(noop);
+      probe.frames.postRender.addEventListener(noop);
+      probe.input.on('click', noop);
+      const subscribed = JSON.stringify(sceneState().listeners);
+      probe.destroy();
+      const probeDestroyed = JSON.stringify(sceneState().listeners);
+      const engine = appEngine ?? build();
 
       // Resolves after `count` rendered frames; a stalled renderer fails.
       const waitFrames = (count) =>
@@ -258,6 +276,22 @@ try {
           await waitFrames(1);
         }
       };
+
+      await check(
+        'app: window.__godsEyeView.engine is the engine',
+        async () => {
+          ensure(appEngine, 'the app exposes no engine');
+          ensure(
+            appEngine.kind === kind,
+            `engine kind ${appEngine.kind} != ${kind}`,
+          );
+        },
+      );
+      await check('the contract suite left no scene listeners', async () => {
+        const now = JSON.stringify(sceneState().listeners);
+        const original = JSON.stringify(JSON.parse(before).listeners);
+        ensure(now === original, `listener counts ${original} became ${now}`);
+      });
 
       if (spec.extraChecks === 'cesium') {
         await check('cesium: creating the engine changed nothing', async () => {
@@ -435,22 +469,23 @@ try {
         await check(
           'cesium: destroy leaves the scene as it found it',
           async () => {
-            engine.destroy();
-            const state = sceneState();
-            const listeners = JSON.stringify(state.listeners);
             const original = JSON.stringify(JSON.parse(before).listeners);
             ensure(
-              listeners === original,
-              `listener counts ${original} became ${listeners}`,
+              subscribed !== original,
+              `subscribing added no Cesium listener (${subscribed})`,
+            );
+            ensure(
+              probeDestroyed === original,
+              `listener counts ${original} became ${probeDestroyed}`,
             );
           },
         );
-      } else {
-        engine.destroy();
       }
+      // The app owns its engine; only a self-built one is destroyed here.
+      if (!appEngine) engine.destroy();
       return { results, extra };
     },
-    { spec: engineSpec },
+    { spec: engineSpec, kind: engineName },
   );
 
   const all = [...report.results, ...report.extra];

@@ -83,6 +83,32 @@ test('startup shares one promise and teardown keeps data alive for controls', as
   await assert.rejects(app.start(), /destroyed/);
 });
 
+test('later components receive the scene engine beside its viewer', async () => {
+  const viewer = { name: 'viewer' };
+  const engine = { kind: 'cesium' };
+  const seen = [];
+  const receive =
+    (phase) =>
+    ({ scene }) => {
+      seen.push([phase, scene.viewer, scene.engine]);
+      return { name: phase };
+    };
+  const { app } = fixture({
+    createScene: () => ({ viewer, engine }),
+    createControls: receive('Controls'),
+    createData: receive('Data'),
+    createTools: receive('Tools'),
+  });
+  const components = await app.start();
+  assert.equal(components.scene.engine, engine);
+  assert.deepEqual(seen, [
+    ['Controls', viewer, engine],
+    ['Data', viewer, engine],
+    ['Tools', viewer, engine],
+  ]);
+  await app.destroy();
+});
+
 for (const phase of phases) {
   test(`failure during ${phase} releases partially acquired resources`, async () => {
     const { app, events } = fixture({

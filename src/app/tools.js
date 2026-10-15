@@ -28,7 +28,7 @@ export function createApplicationTools({
   signal,
   defer,
 }) {
-  const { viewer, tileset, mapStackController, operations } = scene;
+  const { viewer, engine, tileset, mapStackController, operations } = scene;
   const { styleManager, weatherEffects, cockpitCloudEffects } = controls;
   const { dataManager } = data;
   const sceneDirector = new SceneDirector(viewer, styleManager, dataManager, {
@@ -144,6 +144,7 @@ export function createApplicationTools({
 
   window.__godsEyeView = {
     viewer,
+    engine,
     styleManager,
     tileset,
     dataManager,
