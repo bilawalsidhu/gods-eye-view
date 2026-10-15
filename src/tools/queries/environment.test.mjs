@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { normalizeInfonaPerimeterSnapshot } from '../../layers/perimeters/records.js';
 import {
   catalogForSurface,
   composeCatalog,
@@ -232,6 +233,61 @@ test('fire perimeters are placed by their outline and sorted by size', async () 
     lat: 35.25,
     lon: -118.45,
   });
+});
+
+test('INFONA analyst results preserve estimate provenance and incomplete coverage', async () => {
+  const rows = normalizeInfonaPerimeterSnapshot({
+    features: [
+      {
+        properties: {
+          id: 'qa-infona',
+          date: Date.UTC(2026, 9, 15),
+          sup_ha: 7.36,
+          dist_desc: 'QA DISTRICT',
+          dpto_desc: 'QA DEPARTMENT',
+        },
+        geometry: {
+          type: 'Polygon',
+          coordinates: [
+            [
+              [-57.5, -25],
+              [-57.4, -25],
+              [-57.4, -24.9],
+              [-57.5, -25],
+            ],
+          ],
+        },
+      },
+    ],
+  });
+  const sources = {
+    infona: { status: 'ok' },
+    wfigs: { status: 'unavailable' },
+  };
+  const result = await catalogWith({
+    perimeters: {
+      getSnapshot: async () => rows,
+      getStatus: () => sources,
+    },
+  }).call('get_fire_perimeters', { area: { bbox: [-58, -26, -57, -24] } });
+  assert.equal(result.summary, '1 mapped fire area in the requested box.');
+  assert.deepEqual(result.data.sources, sources);
+  const [estimate] = result.data.rows;
+  assert.equal(estimate.source, 'INFONA');
+  assert.equal(estimate.geometry_kind, 'estimated-active-fire-area');
+  assert.equal(estimate.country_code, 'PY');
+  assert.equal(estimate.hectares, 7.36);
+  assert.equal(estimate.department, 'QA DEPARTMENT');
+  assert.equal(estimate.district, 'QA DISTRICT');
+  assert.equal(estimate.report_date, '2026-10-15T00:00:00.000Z');
+  for (const key of [
+    'contained_pct',
+    'discovered',
+    'updated',
+    'cause',
+    'personnel',
+  ])
+    assert.equal(estimate[key], null);
 });
 
 test('terrain heights are returned in request order', async () => {

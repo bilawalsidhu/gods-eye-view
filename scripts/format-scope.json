@@ -37,6 +37,7 @@
   "src/data/adminBoundaries.test.mjs",
   "scripts/build-admin-packs.mjs",
   "scripts/qa-admin-outlines.mjs",
+  "scripts/qa-fire-perimeters.mjs",
   "src/data/inputOwnership.test.mjs",
   "docs/CODE-BOUNDARIES.md",
   "src/main.js",

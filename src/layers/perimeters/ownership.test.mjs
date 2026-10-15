@@ -585,3 +585,32 @@ test('INFONA estimates stay selectable, separate from containment counts, with p
   assert.match(h.layer.getStats().error, /WFIGS: unavailable/);
   h.layer.destroy();
 });
+
+test('INFONA geometry refreshes when its report date and area stay unchanged', async () => {
+  let estimate = {
+    ...row,
+    stableId: 'infona-same-day',
+    source: 'INFONA',
+    geometryKind: 'estimated-active-fire-area',
+    reportTime: Date.UTC(2026, 9, 15),
+    updatedTime: null,
+    hectares: 7.36,
+  };
+  const h = harness({ getSnapshot: async () => [estimate] });
+  await h.layer.update();
+  const original = h.sources[0].entities.values[0];
+  const before = h.layer.getAnalystRecords()[0];
+  await h.layer.update();
+  assert.equal(h.sources[0].entities.values[0], original);
+
+  estimate = {
+    ...estimate,
+    polygons: [[ring.map(([lon, lat]) => [lon + 0.01, lat])]],
+  };
+  await h.layer.update();
+  assert.notEqual(h.sources[0].entities.values[0], original);
+  assert.ok(
+    Math.abs(h.layer.getAnalystRecords()[0].lon - before.lon - 0.01) < 1e-8,
+  );
+  h.layer.destroy();
+});

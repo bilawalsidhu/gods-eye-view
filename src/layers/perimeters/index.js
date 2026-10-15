@@ -301,11 +301,9 @@ export function createFirePerimetersLayer({
             )
             .join('; ') || null;
 
-        // Incident facts may change independently of the polygon's source clock.
+        // Geometry can change without a new report date or incident facts.
         const signature = JSON.stringify(
-          rows
-            .map(({ polygons, ...facts }) => facts)
-            .sort((a, b) => a.stableId.localeCompare(b.stableId)),
+          [...rows].sort((a, b) => a.stableId.localeCompare(b.stableId)),
         );
         if (signature === _snapshotSignature) {
           if (_selectedId) publishSelectedCard();

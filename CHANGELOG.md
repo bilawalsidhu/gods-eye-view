@@ -1,6 +1,8 @@
 # Changelog
 
 - Add Paraguay INFONA daily estimated fire areas to the existing Fire Perimeters layer, with hectares, source dates, distinct styling and independent bounded source caching.
+- Refresh fire perimeter geometry even when its report date and area are unchanged. Add a browser gate for INFONA/WFIGS polygon selection and painted cards using the native GPU in headful mode. Standalone keyless startup no longer emits a 404 while probing optional Google tile tokens.
+- Calibrate the tracking gate's frame-counted arrival phase to 30 FPS so its four-frame window includes the existing 80 ms aircraft update cadence on native GPUs; restore the app's frame rate afterward.
 
 - Snow flakes sway within a fixed range instead of drifting sideways faster the
   longer the app runs; the Wind setting still scales the sway.
