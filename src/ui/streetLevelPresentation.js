@@ -133,6 +133,7 @@ function presentViewer(state) {
   const left = [];
   if (street.title) left.push(street.title);
   if (street.creator) left.push(`Image by ${street.creator}`);
+  if (street.license) left.push(street.license);
   return {
     open: street.open === true,
     loading: street.loading === true && !street.imageId,
