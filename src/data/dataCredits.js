@@ -214,9 +214,7 @@ export const DATA_CREDITS = [
     key: 'monte-hermoso-cctv',
     html:
       'Webcam (Monte Hermoso, Argentina): Montevisión, published by ' +
-      '<a href="https://www.noticiasmontehermoso.com.ar/camara-de-monte-hermoso-en-vivo/" target="_blank" rel="noopener">Noticias Monte Hermoso</a>. ' +
-      'Approximate map reference: ' +
-      '<a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">© OpenStreetMap contributors (ODbL)</a>.',
+      '<a href="https://www.noticiasmontehermoso.com.ar/camara-de-monte-hermoso-en-vivo/" target="_blank" rel="noopener">Noticias Monte Hermoso</a>.',
   },
   {
     key: 'deldot-cctv',
