@@ -10,7 +10,18 @@ import { acquireImageryComparison } from './imageryComparison.js';
  */
 const AUTOMATIC = Symbol('automatic switch');
 
-/** Coordinate source lifetimes and scene changes; the registry owns provider choices. */
+/**
+ * Coordinate source lifetimes and scene changes; the registry owns provider
+ * choices.
+ *
+ * With `engine` (the page's globe engine) every scene change goes through
+ * `engine.maps`: the controller keeps resolving, caching and watching
+ * providers and tilesets, and hands the engine ready sources. Supplied
+ * tilesets must then be ones the engine knows (its startup tileset) or has
+ * shown. On destroy the engine keeps what it shows; owned tilesets are
+ * released and disposed. Without an engine the controller applies sources
+ * to the viewer itself (standalone use and tests).
+ */
 export class MapSourceController {
   constructor(
     viewer,
@@ -19,7 +30,10 @@ export class MapSourceController {
       initialStack,
       onChange = null,
       onError = null,
-      requestRender = () => viewer?.scene?.requestRender?.(),
+      engine = null,
+      requestRender = engine
+        ? () => engine.render.request('map-stack')
+        : () => viewer?.scene?.requestRender?.(),
       createImageryLayer = (provider) => new Cesium.ImageryLayer(provider),
     },
   ) {
@@ -32,7 +46,12 @@ export class MapSourceController {
     this._onChange = onChange;
     this._onError = onError;
     this._requestRender = requestRender;
-    this._scene = createMapScene(viewer, { createImageryLayer });
+    this._engine = engine;
+    this._scene = engine
+      ? null
+      : createMapScene(viewer, { createImageryLayer });
+    /** Engine mode: the provider last handed to engine.maps as base imagery. */
+    this._baseProvider = null;
     this._abort = new AbortController();
     this._imageryProviders = new Map();
     this._terrainProviders = new Map();
@@ -236,6 +255,16 @@ export class MapSourceController {
       );
     }
     if (gen !== this._switchGen) return;
+    if (this._engine) {
+      // The engine adds an owned tileset to the scene when it shows it.
+      if (!source.tileset) this._ownedTilesets.add(tileset);
+      this._removeImageryLayer();
+      await this._engine.maps.setPhotorealTiles({
+        tileset,
+        credit: source.credit ?? null,
+      });
+      return;
+    }
     if (!source.tileset && !this._ownedTilesets.has(tileset)) {
       tileset.show = false;
       this.viewer.scene.primitives.add(tileset);
@@ -258,6 +287,7 @@ export class MapSourceController {
   async _activateGlobeStack(stack, gen) {
     const resolution = await this._getImageryProvider(stack);
     if (gen !== this._switchGen) return;
+    if (this._engine) return this._activateEngineGlobeStack(resolution, gen);
     // Scene shots reapply their map stack at every handoff; the map scene
     // keeps the live layer when the resolved provider is unchanged.
     if (this._scene.baseProvider !== resolution.provider) {
@@ -286,6 +316,44 @@ export class MapSourceController {
       this._terrainMode = terrain.id;
     }
     return resolution;
+  }
+
+  // engine.maps in the order the viewer path applies them: base imagery and
+  // its credit, no photoreal tiles (the globe shows), then terrain.
+  async _activateEngineGlobeStack(resolution, gen) {
+    const { maps } = this._engine;
+    const source = this._sources.get(resolution.effectiveStackId);
+    this._removeImageryErrorListener?.();
+    this._removeImageryErrorListener = null;
+    await maps.setBaseImagery({
+      descriptor: source?.descriptor,
+      provider: resolution.provider,
+      credit: source?.credit ?? null,
+    });
+    if (gen !== this._switchGen) return;
+    this._baseProvider = resolution.provider;
+    this._watchProvider(resolution, gen);
+    await maps.setPhotorealTiles(null);
+    if (gen !== this._switchGen) return;
+    this._activeId = resolution.effectiveStackId;
+    if (source?.terrain && source.terrain.id !== this._terrainMode) {
+      const terrain = source.terrain;
+      const result = await this._cached(
+        this._terrainProviders,
+        terrain.id,
+        () => terrain.create({ signal: this._abort.signal }),
+      );
+      if (gen !== this._switchGen) return;
+      await maps.setTerrain({ id: terrain.id, create: () => result });
+      if (gen !== this._switchGen) return;
+      this._terrainMode = terrain.id;
+    }
+    return resolution;
+  }
+
+  /** The live base imagery provider, or null. */
+  _liveBaseProvider() {
+    return this._engine ? this._baseProvider : this._scene.baseProvider;
   }
 
   _cached(cache, id, create) {
@@ -337,7 +405,7 @@ export class MapSourceController {
     this._removeImageryErrorListener = errorEvent.addEventListener((error) => {
       if (
         gen !== this._switchGen ||
-        this._scene.baseProvider !== resolution.provider
+        this._liveBaseProvider() !== resolution.provider
       )
         return;
       const retryCount = Number(error?.timesRetried);
@@ -372,7 +440,9 @@ export class MapSourceController {
   _removeImageryLayer() {
     this._removeImageryErrorListener?.();
     this._removeImageryErrorListener = null;
-    this._scene.removeBaseImagery();
+    // Engine mode: engine.maps drops the base layer when tiles replace it.
+    if (this._engine) this._baseProvider = null;
+    else this._scene.removeBaseImagery();
   }
   _dispose(value) {
     if (!value || this._disposed.has(value)) return;
@@ -388,7 +458,7 @@ export class MapSourceController {
     this._abort.abort();
     this._isSwitching = false;
     this._removeImageryLayer();
-    this._scene.destroy();
+    this._scene?.destroy();
     for (const promise of this._imageryProviders.values())
       void Promise.resolve(promise).then(
         (value) => this._dispose(value.provider),
@@ -400,7 +470,8 @@ export class MapSourceController {
         () => {},
       );
     for (const tileset of this._ownedTilesets) {
-      this.viewer.scene.primitives.remove(tileset);
+      if (this._engine) this._engine.maps.releasePhotorealTiles({ tileset });
+      else this.viewer.scene.primitives.remove(tileset);
       this._dispose(tileset);
     }
     for (const promise of this._tilesets.values())

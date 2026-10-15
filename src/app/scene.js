@@ -105,6 +105,8 @@ export async function createApplicationScene({
 
   const mapStackController = new MapController(viewer, {
     requestRender: governorRequestRender,
+    // Map sources reach the scene through the globe engine's maps.
+    engine,
     ...mapOptions,
     googleTileset: tileset,
     cesiumToken,
