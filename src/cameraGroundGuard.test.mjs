@@ -11,6 +11,9 @@ import {
   groundClearanceDeficitM,
   guardCameraAboveGround,
 } from './cameraGroundGuard.js';
+import { createCesiumEngine } from './globe/cesium/createCesiumEngine.js';
+import { registerViewerEngine } from './globe/cesium/engineFromViewer.js';
+import { createFakeEngine } from './globe/testing/fakeEngine.js';
 
 test('a buried camera is lifted clear of the surface', () => {
   // Framed near sea level, arriving over ground at ~1,609 m (Denver).
@@ -47,24 +50,32 @@ test('the clearance frames a subject without turning into an overflight', () => 
   assert.ok(MIN_EYE_CLEARANCE_M <= 250);
 });
 
-function fakeViewer({ cameraHeightM, surfaceM }) {
+// A viewer double under the real Cesium engine, registered as the app does,
+// so the guard runs the shell's engine path against Cesium-shaped calls.
+function fakeViewer({ cameraHeightM, surfaceM, canvas = null }) {
   const flights = [];
   const position = Cesium.Cartographic.fromDegrees(-97.7603, 30.3141, cameraHeightM);
-  return {
+  const viewer = {
     flights,
     scene: {
-      canvas: null,
+      canvas,
+      sampleHeightSupported: true,
       sampleHeight: (carto) =>
         typeof surfaceM === 'function' ? surfaceM(carto) : surfaceM,
     },
     camera: {
       positionCartographic: position,
+      positionWC: Cesium.Cartographic.toCartesian(position),
+      frustum: { fovy: 1, aspectRatio: 1.5 },
       heading: 0.5,
       pitch: -0.55,
       roll: 0,
       flyTo: (options) => flights.push(options),
     },
   };
+  viewer.engine = createCesiumEngine(viewer);
+  registerViewerEngine(viewer, viewer.engine);
+  return viewer;
 }
 
 test('the guard lifts a buried arrival once the surface answers', async () => {
@@ -116,9 +127,9 @@ import { LayerLifecycle } from './data/lifecycle.js';
 
 function handoffFixture(t) {
   t.mock.timers.enable({ apis: ['setTimeout'] });
-  const viewer = fakeViewer({ cameraHeightM: 172, surfaceM: 171 });
-  viewer.scene.canvas = new EventTarget();
-  viewer.scene.canvas.ownerDocument = new EventTarget();
+  const canvas = new EventTarget();
+  canvas.ownerDocument = new EventTarget();
+  const viewer = fakeViewer({ cameraHeightM: 172, surfaceM: 171, canvas });
   viewer.trackedEntityChanged = new Cesium.Event();
   viewer.camera.cancelFlight = () => {};
   viewer.camera.lookAtTransform = () => {};
@@ -127,6 +138,7 @@ function handoffFixture(t) {
   const originalFly = viewer.camera.flyTo;
   const navigation = new NavigationController({
     viewer,
+    engine: viewer.engine,
     tracking: Object.fromEntries(['flightsLayer', 'militaryFlightsLayer',
       'satellitesLayer', 'aisLiveVesselsLayer', 'militaryAwarenessLayer',
       'rocketLaunchesLayer'].map((key) => [key, {}])),
@@ -144,7 +156,7 @@ for (const handoff of ['Director', 'tracking', 'follow', 'keyboard', 'UI',
     const { viewer, navigation, originalFly } = handoffFixture(t);
     if (handoff === 'Director') {
       SceneDirector.prototype._claimCameraOwnership.call({
-        viewer, styleManager: { runImmediateNavigation: (noun, fn) =>
+        viewer, engine: viewer.engine, styleManager: { runImmediateNavigation: (noun, fn) =>
           navigation._runExplicitNavigation(noun, fn) },
       });
     } else if (handoff === 'tracking') {
@@ -169,3 +181,35 @@ for (const handoff of ['Director', 'tracking', 'follow', 'keyboard', 'UI',
     navigation.destroy();
   });
 }
+
+test('the guard runs on a globe engine alone and yields to its next camera command', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const engine = createFakeEngine();
+  engine.fake.setPose({
+    position: Cesium.Cartesian3.fromDegrees(-97.7603, 30.3141, 172),
+    heading: 0.5,
+    pitch: -0.55,
+    roll: 0,
+  });
+  engine.fake.script('sampleHeight', 171);
+  const lifts = [];
+  guardCameraAboveGround(engine, { lat: 30.3125, lon: -97.765 }, {
+    onLift: (m) => lifts.push(m),
+  });
+  t.mock.timers.tick(600);
+  const [flight] = engine.fake.callsOf('camera.flyTo')[0].args;
+  const lifted = Cesium.Cartographic.fromCartesian(flight.destination);
+  assert.ok(Math.abs(lifted.height - (171 + MIN_EYE_CLEARANCE_M)) < 0.5);
+  assert.ok(Math.abs(flight.orientation.heading - 0.5) < 1e-9);
+  assert.equal(flight.easing, 'cubicInOut');
+  assert.equal(lifts.length, 1);
+  assert.equal(engine.camera.commanded.numberOfListeners, 0);
+
+  // A camera command before the first probe ends the guard.
+  engine.fake.setPose({ position: Cesium.Cartesian3.fromDegrees(-97.7603, 30.3141, 172) });
+  guardCameraAboveGround(engine, { lat: 30.3125, lon: -97.765 });
+  engine.camera.cancelFlight();
+  t.mock.timers.tick(10000);
+  assert.equal(engine.fake.callsOf('camera.flyTo').length, 1);
+  assert.equal(engine.camera.commanded.numberOfListeners, 0);
+});

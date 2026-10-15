@@ -1,16 +1,26 @@
-/** Arrival corrections belong to one viewer and yield to its next camera owner. */
+import { engineFromViewer } from '../globe/cesium/engineFromViewer.js';
+
+/**
+ * Arrival corrections belong to one globe engine and yield to its next camera
+ * owner. Callers may name the engine or (layers until phase 1c) the viewer it
+ * is registered for; both reach the same correction.
+ */
 const arrivals = new WeakMap();
 
+const ownerOf = (engineOrViewer) =>
+  engineFromViewer(engineOrViewer) ?? engineOrViewer;
+
 /** Cancel an outstanding arrival correction before navigation or teardown. */
-export function cancelCameraArrival(viewer) {
-  if (viewer) arrivals.get(viewer)?.();
+export function cancelCameraArrival(engineOrViewer) {
+  if (engineOrViewer) arrivals.get(ownerOf(engineOrViewer))?.();
 }
 
 /** Register a correction and return an idempotent ownership release. */
-export function ownCameraArrival(viewer, cancel) {
-  cancelCameraArrival(viewer);
-  arrivals.set(viewer, cancel);
+export function ownCameraArrival(engineOrViewer, cancel) {
+  const owner = ownerOf(engineOrViewer);
+  cancelCameraArrival(owner);
+  arrivals.set(owner, cancel);
   return () => {
-    if (arrivals.get(viewer) === cancel) arrivals.delete(viewer);
+    if (arrivals.get(owner) === cancel) arrivals.delete(owner);
   };
 }

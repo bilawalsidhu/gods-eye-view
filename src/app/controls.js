@@ -44,7 +44,7 @@ export function createApplicationControls({
   // If no share link state, do default fly-to Austin
   if (!styleManager.hasShareState) {
     loaderStatus.textContent = 'Flying to Austin, TX...';
-    defer(flyToAustin(viewer));
+    defer(flyToAustin(engine));
   } else {
     loaderStatus.textContent = 'Restoring shared view...';
   }

@@ -28,6 +28,7 @@ import {
 } from '../data/dataCredits.js';
 import { unavailablePlaceSearch } from '../search/placeSearch.js';
 import { isPickedWorldPosition } from '../data/scenePick.js';
+import { isGlobeEngine } from '../globe/contract.js';
 
 /** Ms the analyst region lookup waits on geocode + admin boundary. */
 export const REGION_FALLBACK_BUDGET_MS = 3_000;
@@ -1834,7 +1835,10 @@ export function createAnnotationResolver({
    */
   function viewportProximity(viewer) {
     try {
-      const carto = viewer?.camera?.positionCartographic;
+      // A globe engine (search) or a Cesium viewer (annotations until 1c).
+      const carto = isGlobeEngine(viewer)
+        ? viewer.camera.pose().cartographic
+        : viewer?.camera?.positionCartographic;
       if (!carto) return null;
       const lat = geo.math.toDegrees(carto.latitude);
       const lon = geo.math.toDegrees(carto.longitude);
@@ -1849,7 +1853,9 @@ export function createAnnotationResolver({
   /** Exported for searchAndFlyTo (src/locations.js), which shares this bias. */
   function viewportBias(viewer) {
     try {
-      const rect = viewer?.camera?.computeViewRectangle?.();
+      const rect = isGlobeEngine(viewer)
+        ? viewer.camera.viewRectangle()
+        : viewer?.camera?.computeViewRectangle?.();
       if (!rect) return null;
       const swLat = geo.math.toDegrees(rect.south).toFixed(4);
       const swLng = geo.math.toDegrees(rect.west).toFixed(4);
@@ -1899,6 +1905,46 @@ export function createAnnotationResolver({
     return hit && hit.distanceM <= PLACES_MAX_DISTANCE_M ? hit : null;
   }
 
+  /** World lon/lat/height from a picked Cartesian, or null for a missed pick. */
+  function pickedPlace(cart) {
+    if (!isPickedWorldPosition(cart)) return null;
+    const carto = geo.cartographic.fromCartesian(cart);
+    if (!carto) return null;
+    return {
+      lat: geo.math.toDegrees(carto.latitude),
+      lon: geo.math.toDegrees(carto.longitude),
+      height: Number.isFinite(carto.height) ? carto.height : 0,
+    };
+  }
+
+  /** pickWorldFromScreen through a globe engine: the same cascade. */
+  function enginePickWorldFromScreen(engine, nx, ny) {
+    const { width: w, height: h } = engine.host.size();
+    if (!w || !h) return null;
+    const screen = {
+      x: Math.max(0, Math.min(1, nx)) * w,
+      y: Math.max(0, Math.min(1, ny)) * h,
+    };
+    const stages = [
+      () =>
+        engine.picker.pickPositionSupported
+          ? engine.picker.pickPosition(screen)
+          : undefined,
+      () => engine.camera.pickEllipsoid(screen),
+      () => engine.picker.pickGlobe(screen),
+    ];
+    for (const stage of stages) {
+      let cart = null;
+      try {
+        cart = stage();
+      } catch {
+        cart = null;
+      }
+      if (isPickedWorldPosition(cart)) return pickedPlace(cart);
+    }
+    return null;
+  }
+
   /**
    * Convert a NORMALIZED screen point (x,y in [0,1] of the current viewport) into
    * a world lon/lat using the depth-aware pick cascade — the inverse of the
@@ -1907,6 +1953,7 @@ export function createAnnotationResolver({
    * name the place, and we anchor the mark to the actual world point under it.
    */
   function pickWorldFromScreen(viewer, nx, ny) {
+    if (isGlobeEngine(viewer)) return enginePickWorldFromScreen(viewer, nx, ny);
     const scene = viewer?.scene;
     if (!scene) return null;
     const canvas = scene.canvas;

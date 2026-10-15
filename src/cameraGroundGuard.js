@@ -14,9 +14,9 @@
  * lifts the eye if it sits below a usable clearance. Heading and pitch are
  * held, so the correction reads as the shot settling.
  */
-import * as Cesium from 'cesium';
 import * as geo from './geo/index.js';
 import { ownCameraArrival } from './data/cameraArrival.js';
+import { engineFromViewer } from './globe/cesium/engineFromViewer.js';
 
 /** Minimum eye height above the rendered surface for a usable view. */
 export const MIN_EYE_CLEARANCE_M = 120;
@@ -31,17 +31,16 @@ const probeScratch = geo.cartographic.create();
 /**
  * Highest rendered surface across a few cells, with how many cells answered.
  * A cell whose tiles are not streamed yet contributes nothing.
- * @param {Cesium.Scene} scene Live scene.
+ * @param {import('./globe/contract.js').GlobeSurface} surface Live surface.
  * @param {Array<{lat: number, lon: number}>} cells Cells to probe.
  * @returns {{heightM: number, sampled: number}} Reading.
  */
-function sampleSurfaceM(scene, cells) {
+function sampleSurfaceM(surface, cells) {
   let heightM = Number.NaN;
   let sampled = 0;
-  if (typeof scene?.sampleHeight !== 'function') return { heightM, sampled };
   for (const cell of cells) {
     try {
-      const height = scene.sampleHeight(
+      const height = surface.sampleHeight(
         geo.cartographic.fromDegrees(cell.lon, cell.lat, 0, probeScratch),
       );
       if (!Number.isFinite(height)) continue;
@@ -77,15 +76,18 @@ export function groundClearanceDeficitM(
  * Watch an arrival and lift the camera once the real surface can be measured.
  *
  * Stops quietly on a clear view, exhausted attempts, the user taking the
- * controls (pointer or wheel on the canvas), or `isStale()` reporting that a
- * newer arrival owns the camera.
- * @param {Cesium.Viewer} viewer Live viewer.
+ * controls (pointer or wheel on the canvas, a key), any camera command
+ * (`camera.commanded`: a flight, setView, lookAt, cancelFlight or, on
+ * Cesium, a new tracked entity), or `isStale()` reporting that a newer
+ * arrival owns the camera.
+ * @param {import('./globe/contract.js').GlobeEngine | object} target The
+ *   globe engine, or a viewer registered for one.
  * @param {{lat: number, lon: number}} at Destination being framed.
  * @param {{clearanceM?: number, attempts?: number, intervalMs?: number,
  *   isStale?: () => boolean, onLift?: (liftM: number) => void}} [options]
  * @returns {() => void} Cancel function.
  */
-export function guardCameraAboveGround(viewer, at, options = {}) {
+export function guardCameraAboveGround(target, at, options = {}) {
   const {
     clearanceM = MIN_EYE_CLEARANCE_M,
     attempts = GUARD_ATTEMPTS,
@@ -93,12 +95,13 @@ export function guardCameraAboveGround(viewer, at, options = {}) {
     isStale = () => false,
     onLift = null,
   } = options;
-  if (!viewer?.scene || !Number.isFinite(at?.lat) || !Number.isFinite(at?.lon))
+  const engine = engineFromViewer(target);
+  if (!engine || !Number.isFinite(at?.lat) || !Number.isFinite(at?.lon))
     return () => {};
 
   let timer = null;
   let done = false;
-  const canvas = viewer.scene.canvas;
+  const canvas = engine.host.canvas;
   const documentRef = canvas?.ownerDocument;
   const removers = [];
   let release = () => {};
@@ -112,33 +115,11 @@ export function guardCameraAboveGround(viewer, at, options = {}) {
     for (const remove of removers) remove();
     release();
   };
-  release = ownCameraArrival(viewer, stop);
-  // Direct camera API callers (including duration-zero flights) must yield
-  // before moving the eye. Restore the exact method ownership on completion.
-  for (const name of [
-    'flyTo',
-    'flyToBoundingSphere',
-    'setView',
-    'lookAt',
-    'cancelFlight',
-  ]) {
-    const camera = viewer.camera;
-    const original = camera[name];
-    if (typeof original !== 'function') continue;
-    const descriptor = Object.getOwnPropertyDescriptor(camera, name);
-    const wrapped = function (...args) {
-      stop();
-      return original.apply(this, args);
-    };
-    camera[name] = wrapped;
-    removers.push(() => {
-      if (camera[name] !== wrapped) return;
-      if (descriptor) Object.defineProperty(camera, name, descriptor);
-      else delete camera[name];
-    });
-  }
-  const removeTracking = viewer.trackedEntityChanged?.addEventListener(stop);
-  if (removeTracking) removers.push(removeTracking);
+  release = ownCameraArrival(engine, stop);
+  // Any new camera owner (including duration-zero flights and, on Cesium,
+  // direct viewer-camera calls and tracking) yields the guard before it moves
+  // the eye.
+  removers.push(engine.camera.commanded.addEventListener(stop));
   documentRef?.addEventListener?.('keydown', stop, true);
   // A manual gesture ends the guard, as it interrupts camera motion elsewhere.
   for (const type of ['pointerdown', 'wheel'])
@@ -147,16 +128,17 @@ export function guardCameraAboveGround(viewer, at, options = {}) {
   let remaining = attempts;
   const attempt = () => {
     if (done) return;
-    if (isStale() || viewer.isDestroyed?.()) return stop();
+    if (isStale() || engine.isDestroyed()) return stop();
     remaining -= 1;
-    const camera = viewer.camera;
-    const carto = camera.positionCartographic;
+    const { camera } = engine;
+    const pose = camera.pose();
+    const carto = pose.cartographic;
     // The eye must clear both the framed target and the ground beneath it.
     const below = {
       lat: geo.math.toDegrees(carto.latitude),
       lon: geo.math.toDegrees(carto.longitude),
     };
-    const { heightM, sampled } = sampleSurfaceM(viewer.scene, [
+    const { heightM, sampled } = sampleSurfaceM(engine.surface, [
       { lat: at.lat, lon: at.lon },
       below,
     ]);
@@ -175,12 +157,12 @@ export function guardCameraAboveGround(viewer, at, options = {}) {
             carto.height + deficit,
           ),
           orientation: {
-            heading: camera.heading,
-            pitch: camera.pitch,
-            roll: camera.roll,
+            heading: pose.heading,
+            pitch: pose.pitch,
+            roll: pose.roll,
           },
           duration: 0.9,
-          easingFunction: Cesium.EasingFunction.CUBIC_IN_OUT,
+          easing: 'cubicInOut',
         });
         try {
           onLift?.(deficit);
