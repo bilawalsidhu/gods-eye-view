@@ -170,6 +170,13 @@ export const DATA_CREDITS = [
   OSM_CREDIT,
   OPENMAPTILES_CREDIT,
   {
+    key: 'eccc-aqhi',
+    html:
+      'Air quality (AQHI): Environment and Climate Change Canada — MSC GeoMet ' +
+      '(<a href="https://eccc-msc.github.io/open-data/" target="_blank" rel="noopener">eccc-msc.github.io/open-data</a>) ' +
+      '· <a href="https://eccc-msc.github.io/open-data/licence/readme_en/" target="_blank" rel="noopener">ECCC Data Servers End-use Licence</a>',
+  },
+  {
     key: 'overture-military-names',
     html: 'Military area names: <a href="https://overturemaps.org" target="_blank" rel="noopener">Overture Maps Foundation</a> (ODbL)',
   },
@@ -270,8 +277,38 @@ export const DATA_CREDITS = [
       'Approximate venue location; original public player, no open video license asserted.',
   },
   {
+    key: 'alto-parana-cctv',
+    html:
+      'Public cameras in Alto Paraná (Paraguay): ' +
+      '<a href="https://atacadoconnect.com/camera-da-ponte-da-amizade-ao-vivo" target="_blank" rel="noopener">Atacado Connect</a> · ' +
+      '<a href="https://www.gibarra.com.py/" target="_blank" rel="noopener">Grupo Ibarra</a>. ' +
+      'Approximate area locations; operator credits and watermarks retained, no open video license asserted.',
+  },
+  {
     key: 'gbfs',
-    html: 'Bikeshare availability: GBFS operator feeds (e.g. Austin BCycle)',
+    html:
+      'Bikeshare availability: GBFS operator feeds ' +
+      '(e.g. Austin BCycle; Bike Share Toronto, operated by the Toronto Parking Authority)',
+  },
+  {
+    key: 'urbansharing-gbfs',
+    html:
+      'City bikes (Norway): contains data under the ' +
+      '<a href="https://data.norge.no/nlod/en/2.0" target="_blank" rel="noopener">Norwegian licence for Open Government data (NLOD)</a> ' +
+      'made available by Oslo Bysykkel, Bergen Bysykkel and Trondheim Bysykkel',
+  },
+  {
+    key: 'entur-mobility-gbfs',
+    html:
+      'City bikes (Stavanger, Skien/Porsgrunn): contains data under the ' +
+      '<a href="https://data.norge.no/nlod/en/2.0" target="_blank" rel="noopener">Norwegian licence for Open Government data (NLOD)</a> ' +
+      'made available by Entur (Kolumbus Bysykkel, Farte Bysykkel)',
+  },
+  {
+    key: 'jcdecaux-gbfs',
+    html:
+      'City bikes (Lillestrøm): Bysykkel Lillestrøm, JCDecaux — ' +
+      '<a href="https://developer.jcdecaux.com/files/Open-Licence-fr.pdf" target="_blank" rel="noopener">Licence Ouverte</a>',
   },
   {
     key: 'osrm-routing',

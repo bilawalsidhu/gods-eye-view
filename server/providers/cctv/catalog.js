@@ -5,6 +5,7 @@ import { allocateSourceCap, resolveCatalogCap } from './cap.js';
 import { loadGroundHeights, joinGroundHeights } from './groundHeights.js';
 import { cameraRegion, normalizeSourceItem } from './normalize.js';
 import { loadEncarnacionSources } from './encarnacion.js';
+import { loadAltoParanaSources } from './altoParana.js';
 import {
   loadAustinSourcesFromOpenData,
   loadCaltransSourcesFromOpenData,
@@ -114,6 +115,11 @@ const LIVE_PACKS = [
     name: 'encarnacion',
     enabled: () => envEnabled('CCTV_ENCARNACION_ENABLED'),
     load: loadEncarnacionSources,
+  },
+  {
+    name: 'alto-parana',
+    enabled: () => envEnabled('CCTV_ALTO_PARANA_ENABLED'),
+    load: loadAltoParanaSources,
   },
 ];
 /**

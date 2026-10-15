@@ -4,8 +4,9 @@ import { randomUUID } from 'node:crypto';
 export const HLS_LIMITS = Object.freeze({
   sessions: 2,
   leasesPerSession: 8,
-  playlistBytes: 256 * 1024,
-  segmentBytes: 4 * 1024 * 1024,
+  // Ibarra publishes a ~700 KiB DVR list; Atacado TS segments exceed 6 MiB.
+  playlistBytes: 1024 * 1024,
+  segmentBytes: 12 * 1024 * 1024,
   sessionBytes: 24 * 1024 * 1024,
   segments: 12,
   pollMs: 2000,

@@ -10,6 +10,63 @@ const playlist =
   '#EXTM3U\n#EXT-X-MEDIA-SEQUENCE:12\n#EXTINF:2,\na.ts\n#EXTINF:2,\nb.ts\n#EXTINF:2,\nc.ts\n';
 const base = 'https://camera.example/live/list.m3u8';
 
+test('a 48-hour DVR playlist downloads only its live tail and keeps the cache bounded', async (t) => {
+  const count = 17280;
+  const dvr =
+    '#EXTM3U\n#EXT-X-MEDIA-SEQUENCE:100\n' +
+    Array.from(
+      { length: count },
+      (_, i) => `#EXTINF:10.000000,\nseg_${String(i).padStart(14, '0')}.ts\n`,
+    ).join('');
+  assert.ok(Buffer.byteLength(dvr) > 256 * 1024);
+  const requested = [];
+  const manager = createHlsPuller({
+    fetchImpl: async (url) => {
+      requested.push(url);
+      return new Response(url === base ? dvr : 'segment');
+    },
+  });
+  t.after(() => manager.shutdown());
+  const entry = await manager.ensure('dvr', base);
+  await entry.polling;
+  assert.deepEqual(
+    requested.slice(1),
+    Array.from(
+      { length: HLS_LIMITS.segments },
+      (_, i) =>
+        new URL(
+          `seg_${String(count - HLS_LIMITS.segments + i).padStart(14, '0')}.ts`,
+          base,
+        ).href,
+    ),
+  );
+  assert.equal(entry.segments.size, HLS_LIMITS.segments);
+  assert.ok(manager.stats().bytes <= HLS_LIMITS.sessionBytes);
+  await assert.rejects(
+    fetchHlsBytes(base, {
+      maxBytes: HLS_LIMITS.playlistBytes,
+      fetchImpl: async () =>
+        new Response('', {
+          headers: { 'content-length': String(HLS_LIMITS.playlistBytes + 1) },
+        }),
+    }),
+    /too large/,
+  );
+});
+
+test('public HD segments over 6 MiB fit without increasing the session cache budget', async (t) => {
+  const body = new Uint8Array(6 * 1024 * 1024 + 1024);
+  const manager = createHlsPuller({
+    fetchImpl: async (url) => new Response(url === base ? playlist : body),
+  });
+  t.after(() => manager.shutdown());
+  const entry = await manager.ensure('hd', base);
+  await entry.polling;
+  assert.equal(entry.segments.size, 3);
+  assert.equal(manager.stats().bytes, 3 * body.length);
+  assert.ok(manager.stats().bytes <= HLS_LIMITS.sessionBytes);
+});
+
 test('playlist parser uses sequence, refuses escaping and unsupported references', () => {
   assert.deepEqual(
     parseHlsMedia(playlist, base).map((s) => s.seq),

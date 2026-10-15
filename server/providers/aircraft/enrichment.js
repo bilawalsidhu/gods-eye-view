@@ -1,5 +1,9 @@
 import path from 'node:path';
 import { promises as fsp } from 'node:fs';
+import { readResponseJsonCapped } from '../common/http.js';
+
+/** Route and aircraft lookups are a few hundred bytes; 1 MiB is a hard bound. */
+const ADSBDB_MAX_RESPONSE_BYTES = 1024 * 1024;
 /**
  * adsbdb.com enrichment proxy: callsign → route (airline + origin/destination
  * airports) and hex → aircraft type/registration. Free community API — cached
@@ -80,12 +84,16 @@ export function adsbdbProxy() {
               kind === 'route'
                 ? `https://api.adsbdb.com/v0/callsign/${encodeURIComponent(key)}`
                 : `https://api.adsbdb.com/v0/aircraft/${encodeURIComponent(key)}`;
-            const res = await fetch(url, { signal: AbortSignal.timeout(8000) });
+            const signal = AbortSignal.timeout(8000);
+            const res = await fetch(url, { signal });
             if (res.ok) {
+              const payload = await readResponseJsonCapped(
+                res,
+                ADSBDB_MAX_RESPONSE_BYTES,
+                signal,
+              );
               const data =
-                kind === 'route'
-                  ? parseRoute(await res.json())
-                  : parseAircraft(await res.json());
+                kind === 'route' ? parseRoute(payload) : parseAircraft(payload);
               store[key] = { at: Date.now(), data }; // data may be null — negative cache
               dirty = true;
               return data;

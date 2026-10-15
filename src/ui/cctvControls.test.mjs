@@ -47,6 +47,32 @@ function fixture(t) {
   return { controls, requests };
 }
 
+test('the panel shows location uncertainty for native feeds instead of inferred heading numbers', (t) => {
+  const { controls } = fixture(t);
+  controls.actions.setPanelCollapsed = () => {};
+  controls._cctvMeta = element();
+  const camera = {
+    id: 'paraguay-ibarra-cam1',
+    city: 'Presidente Franco',
+    provider: 'Grupo Ibarra',
+    feedType: 'hls',
+    isVideo: true,
+    locationNote: 'Approximate area anchor; mounts and facing unverified.',
+    headingDeg: 123,
+  };
+  controls._renderCctvState({
+    enabled: true,
+    activeCameraId: camera.id,
+    activeCamera: camera,
+    cameras: [camera],
+  });
+  assert.match(
+    controls._cctvMeta.textContent,
+    /Grupo Ibarra.*Approximate.*unverified/,
+  );
+  assert.doesNotMatch(controls._cctvMeta.textContent, /HDG 123/);
+});
+
 test('a late image completion cannot replace a newer camera preview', (t) => {
   const { controls, requests } = fixture(t);
   controls._queueCctvFrame('first.jpg', 'a', true);

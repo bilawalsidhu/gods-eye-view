@@ -166,7 +166,7 @@ export function _renderCctvState(state) {
         : '';
       const projLabel = state?.showProjection !== false ? 'MONITOR' : 'OFF';
       this._cctvMeta.textContent = `${activeCamera.city} · HDG ${Math.round(activeCamera.headingDeg)}° · FOV ${Math.round(activeCamera.fovDeg)}° · RANGE ${Math.round(activeCamera.rangeM)}m · ${projLabel}${calBadge ? ` · ${calBadge}` : ''} · ${provider}${credit}${statusMsg}`;
-      if (embedded)
+      if (embedded || activeCamera.locationNote)
         this._cctvMeta.textContent = `${activeCamera.city} · ${provider}${credit} · ${activeCamera.locationNote || 'Approximate location; coverage not calibrated.'}`;
     } else if (cameras.length > 0) {
       this._cctvMeta.textContent = enabled
