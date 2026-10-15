@@ -44,14 +44,22 @@
  * @typedef {{ heading: number, pitch: number, roll: number }
  *   | { direction: Cartesian3, up: Cartesian3 }} Orientation
  *
+ * @typedef {{ west: number, south: number, east: number, north: number }} Rectangle
+ *   Radians; west > east across the antimeridian. As a destination, the
+ *   camera is placed so the rectangle fills the view (Cesium's
+ *   getRectangleCameraCoordinates).
+ *
  * @typedef {object} FlightOptions
- * @property {Cartesian3} destination
+ * @property {Cartesian3 | Rectangle} destination
  * @property {Orientation} [orientation] As in Cesium's setView and flyTo,
  *   missing angles default to heading 0, pitch −π/2 and roll 0 (they do not
  *   keep the current ones).
  * @property {number} [duration] Seconds. 0 (or less) sets the view and calls
  *   `complete` synchronously, before flyTo returns, as Cesium does.
- * @property {'cubicInOut'|'sinusoidalInOut'|'linear'} [easing]
+ * @property {'cubicInOut'|'sinusoidalInOut'|'linear'} [easing] Omitted: the
+ *   engine's own flight easing (Cesium picks one from the flight's heights).
+ * @property {Matrix4} [endTransform] The camera transform once the flight
+ *   lands; IDENTITY releases a lookAt lock.
  * @property {() => void} [complete]
  * @property {() => void} [cancel] Called by cancelFlight or a newer flight.
  *
@@ -61,17 +69,21 @@
  *
  * @typedef {object} SphereFlightOptions
  *   Defaults are Cesium's: heading 0, pitch −π/4 and, when range is missing or
- *   0, range = max(r / tan(fovx/2), r / tan(fovy/2)), never below 100 m.
+ *   0, range = 100 m for a sphere of radius 0, otherwise
+ *   max(r / tan(fovx/2), r / tan(fovy/2)) clamped to the camera controller's
+ *   zoom distances (Cesium: minimumZoomDistance 1 m to maximumZoomDistance ∞
+ *   by default).
  * @property {number} [heading]
  * @property {number} [pitch]
  * @property {number} [range]
  * @property {number} [duration]
+ * @property {'cubicInOut'|'sinusoidalInOut'|'linear'} [easing] As in FlightOptions.
  * @property {() => void} [complete]
  * @property {() => void} [cancel]
  *
  * @typedef {object} GlobeCamera
  * @property {() => CameraPose} pose Fresh values on every call.
- * @property {(view: { destination: Cartesian3, orientation?: Orientation }) => void} setView
+ * @property {(view: { destination: Cartesian3 | Rectangle, orientation?: Orientation }) => void} setView
  *   Missing angles default to heading 0, pitch −π/2, roll 0.
  * @property {(options: FlightOptions) => void} flyTo Cancels a running flight first.
  * @property {(sphere: { center: Cartesian3, radius: number }, options?: SphereFlightOptions) => void} flyToSphere
@@ -135,11 +147,18 @@
  *   (Cesium: requestRenderMode and maximumRenderTimeChange = Infinity).
  * @property {() => boolean} isContinuous
  *
+ * @typedef {object} PickResult
+ * @property {any} id The picked entity or object id; undefined for map tiles.
+ * @property {any} primitive
+ * @property {any} [content] 3D tile content when map tiles were picked (what
+ *   a surface-pick check reads), else undefined.
+ * @property {any} [object] The engine's own pick result, for engine-specific code.
+ *
  * @typedef {object} GlobeEngine
  * @property {'cesium'|'navara'} kind
  * @property {{ container: object, canvas: object, size: () => { width: number, height: number } }} host
  * @property {GlobeCamera} camera
- * @property {{ pick: (screen: Cartesian2, width?: number, height?: number) => ({ id: any, primitive: any } | undefined), drillPick: (screen: Cartesian2, limit?: number) => any[], pickPosition: (screen: Cartesian2) => (Cartesian3 | undefined), pickPositionSupported: boolean }} picker
+ * @property {{ pick: (screen: Cartesian2, width?: number, height?: number) => (PickResult | undefined), drillPick: (screen: Cartesian2, limit?: number, width?: number, height?: number) => PickResult[], pickPosition: (screen: Cartesian2) => (Cartesian3 | undefined), pickPositionSupported: boolean }} picker
  * @property {GlobeProjector} projector
  * @property {{ preUpdate: EngineEvent, preRender: EngineEvent, postRender: EngineEvent }} frames Listeners receive a timestamp in ms.
  * @property {GlobeRender} render
@@ -148,8 +167,10 @@
  *   As in Cesium, a listener with a modifier fires only while that key is
  *   held and one without fires only while no modifier is held.
  * @property {{ addStatic: (html: string, options?: { onScreen?: boolean }) => () => void }} credits
- * @property {{ setBaseImagery: (source: object) => void, setTerrain: (source: object) => void, setPhotorealTiles: (source: object | null) => void, photorealActive: () => boolean }} maps
- *   Sources are maps/registry.js descriptions; the engine builds its own providers.
+ * @property {{ setBaseImagery: (source: object) => Promise<void>, setTerrain: (source: object) => Promise<void>, setPhotorealTiles: (source: object | null) => Promise<void>, photorealActive: () => boolean }} maps
+ *   Sources are maps/registry.js descriptions; the engine builds its own
+ *   providers. Each setter settles once the source is on screen and rejects
+ *   when it cannot be built (the current source then stays).
  * @property {() => void} destroy
  */
 

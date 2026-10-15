@@ -7,7 +7,6 @@ import { bridgeEvent } from './events.js';
 import { toCesium2, toCesium3, toGeo3 } from './convert.js';
 
 const { math } = geo;
-const MINIMUM_SPHERE_RANGE = 100; // Cesium's MINIMUM_ZOOM for flyToBoundingSphere
 const EASINGS = {
   cubicInOut: Cesium.EasingFunction.CUBIC_IN_OUT,
   sinusoidalInOut: Cesium.EasingFunction.SINUSOIDAL_IN_OUT,
@@ -30,6 +29,19 @@ function cesiumOrientation(orientation) {
   const { heading, pitch, roll } = orientation;
   return { heading, pitch, roll };
 }
+
+// A Cartesian3, or a {west, south, east, north} rectangle in radians.
+const cesiumDestination = (destination) =>
+  'west' in destination
+    ? new Cesium.Rectangle(
+        destination.west,
+        destination.south,
+        destination.east,
+        destination.north,
+      )
+    : toCesium3(destination);
+
+const cesiumEasing = (easing) => (easing ? EASINGS[easing] : undefined);
 
 // A HeadingPitchRange or a Cartesian offset, as Cesium's lookAt takes them.
 const cesiumOffset = (offset) =>
@@ -102,7 +114,7 @@ export function createCesiumCamera(viewer) {
       if (!view?.destination)
         throw new TypeError('setView needs a destination');
       cesium.setView({
-        destination: toCesium3(view.destination),
+        destination: cesiumDestination(view.destination),
         orientation: cesiumOrientation(view.orientation),
       });
     },
@@ -111,27 +123,21 @@ export function createCesiumCamera(viewer) {
         throw new TypeError('flyTo needs a destination');
       startFlight(options, ({ complete, cancel }) =>
         cesium.flyTo({
-          destination: toCesium3(options.destination),
+          destination: cesiumDestination(options.destination),
           orientation: cesiumOrientation(options.orientation),
           duration: options.duration,
-          easingFunction: options.easing ? EASINGS[options.easing] : undefined,
+          easingFunction: cesiumEasing(options.easing),
+          endTransform: options.endTransform
+            ? Cesium.Matrix4.fromArray(options.endTransform)
+            : undefined,
           complete,
           cancel,
         }),
       );
     },
     flyToSphere(sphere, options = {}) {
-      let range = options.range;
-      if (!range) {
-        const { fovy, aspectRatio } = cesium.frustum;
-        const tanPhi = Math.tan(fovy / 2);
-        const tanTheta = aspectRatio * tanPhi;
-        range = Math.max(
-          MINIMUM_SPHERE_RANGE,
-          sphere.radius / tanTheta,
-          sphere.radius / tanPhi,
-        );
-      }
+      // A missing or 0 range is Cesium's own: it fits the sphere in view and
+      // clamps to the camera controller's zoom distances.
       startFlight(options, ({ complete, cancel }) =>
         cesium.flyToBoundingSphere(
           new Cesium.BoundingSphere(toCesium3(sphere.center), sphere.radius),
@@ -139,9 +145,10 @@ export function createCesiumCamera(viewer) {
             offset: new Cesium.HeadingPitchRange(
               options.heading ?? 0,
               options.pitch ?? -Math.PI / 4,
-              range,
+              options.range ?? 0,
             ),
             duration: options.duration,
+            easingFunction: cesiumEasing(options.easing),
             complete,
             cancel,
           },

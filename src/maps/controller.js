@@ -1,6 +1,6 @@
 import { indexMapSources } from './registry.js';
 import * as Cesium from 'cesium';
-import { createMapCredits } from './credits.js';
+import { createMapScene } from './sceneApply.js';
 import { applyTerrain } from './terrain.js';
 import { acquireImageryComparison } from './imageryComparison.js';
 
@@ -32,8 +32,7 @@ export class MapSourceController {
     this._onChange = onChange;
     this._onError = onError;
     this._requestRender = requestRender;
-    this._createImageryLayer = createImageryLayer;
-    this._credits = createMapCredits(viewer);
+    this._scene = createMapScene(viewer, { createImageryLayer });
     this._abort = new AbortController();
     this._imageryProviders = new Map();
     this._terrainProviders = new Map();
@@ -45,8 +44,6 @@ export class MapSourceController {
     this._switchOrigin = 'manual';
     this._isSwitching = false;
     this._lastError = null;
-    this._imageryLayer = null;
-    this._activeImageryProvider = null;
     this._removeImageryErrorListener = null;
     this._terrainMode = null;
     this._subscribers = new Set();
@@ -245,43 +242,37 @@ export class MapSourceController {
       this._ownedTilesets.add(tileset);
     }
     this._removeImageryLayer();
-    this._credits.show(source.credit || null);
+    this._scene.showCredit(source.credit);
     this._showTileset(tileset);
-    this.viewer.scene.globe.show = false;
+    this._scene.showGlobe(false);
     // Terrain is intentionally untouched while the globe is hidden.
   }
 
   _showTileset(active) {
+    const tilesets = [];
     for (const source of this._sources.values())
-      if (source.tileset) source.tileset.show = source.tileset === active;
-    for (const tileset of this._ownedTilesets)
-      tileset.show = tileset === active;
+      if (source.tileset) tilesets.push(source.tileset);
+    this._scene.showTileset(active, [...tilesets, ...this._ownedTilesets]);
   }
 
   async _activateGlobeStack(stack, gen) {
     const resolution = await this._getImageryProvider(stack);
     if (gen !== this._switchGen) return;
-    // Scene shots reapply their map stack at every handoff. Keep the live
-    // layer (and its loaded tiles) when the resolved provider is unchanged;
-    // rebuilding it exposes the bare globe while imagery loads again.
-    if (
-      !this._imageryLayer ||
-      this._activeImageryProvider !== resolution.provider
-    ) {
+    // Scene shots reapply their map stack at every handoff; the map scene
+    // keeps the live layer when the resolved provider is unchanged.
+    if (this._scene.baseProvider !== resolution.provider) {
       this._removeImageryLayer();
-      this._imageryLayer = this._createImageryLayer(resolution.provider);
-      this._activeImageryProvider = resolution.provider;
-      this.viewer.imageryLayers.add(this._imageryLayer, 0);
+      this._scene.showBaseImagery(resolution.provider);
     }
     const source = this._sources.get(resolution.effectiveStackId);
-    this._credits.show(source?.credit || null);
+    this._scene.showCredit(source?.credit);
     // A repeated request still owns a new switch generation. Rebind its
     // failure listener so fallback remains live without accumulating listeners.
     this._removeImageryErrorListener?.();
     this._removeImageryErrorListener = null;
     this._watchProvider(resolution, gen);
     this._showTileset(null);
-    this.viewer.scene.globe.show = true;
+    this._scene.showGlobe(true);
     this._activeId = resolution.effectiveStackId;
     if (source?.terrain && source.terrain.id !== this._terrainMode) {
       const terrain = source.terrain;
@@ -346,7 +337,7 @@ export class MapSourceController {
     this._removeImageryErrorListener = errorEvent.addEventListener((error) => {
       if (
         gen !== this._switchGen ||
-        this._activeImageryProvider !== resolution.provider
+        this._scene.baseProvider !== resolution.provider
       )
         return;
       const retryCount = Number(error?.timesRetried);
@@ -381,10 +372,7 @@ export class MapSourceController {
   _removeImageryLayer() {
     this._removeImageryErrorListener?.();
     this._removeImageryErrorListener = null;
-    if (this._imageryLayer)
-      this.viewer.imageryLayers.remove(this._imageryLayer, true);
-    this._imageryLayer = null;
-    this._activeImageryProvider = null;
+    this._scene.removeBaseImagery();
   }
   _dispose(value) {
     if (!value || this._disposed.has(value)) return;
@@ -400,7 +388,7 @@ export class MapSourceController {
     this._abort.abort();
     this._isSwitching = false;
     this._removeImageryLayer();
-    this._credits.destroy();
+    this._scene.destroy();
     for (const promise of this._imageryProviders.values())
       void Promise.resolve(promise).then(
         (value) => this._dispose(value.provider),

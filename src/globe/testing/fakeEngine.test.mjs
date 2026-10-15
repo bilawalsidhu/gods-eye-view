@@ -278,3 +278,78 @@ test('fake terrain height and clamp results default to the bare ellipsoid and ca
   assert.equal(engine.surface.terrainHeightSupported, true);
   assert.equal(engine.surface.clampToHeightSupported, true);
 });
+
+test('fake flights honour endTransform when they land', () => {
+  const engine = createFakeEngine();
+  const target = geo.cartesian3.fromDegrees(10, 20, 0);
+  engine.camera.lookAt(target, { heading: 0, pitch: -0.5, range: 1000 });
+  engine.camera.flyTo({
+    destination: geo.cartesian3.fromDegrees(10, 20, 5000),
+    duration: 0.1,
+    endTransform: geo.matrix4.IDENTITY,
+  });
+  assert.notDeepEqual(engine.camera.transform(), [...geo.matrix4.IDENTITY]);
+  engine.fake.frames(10, 16);
+  assert.deepEqual(engine.camera.transform(), [...geo.matrix4.IDENTITY]);
+});
+
+test('a fake rectangle destination looks down on the rectangle centre', () => {
+  const engine = createFakeEngine();
+  const rectangle = {
+    west: geo.math.toRadians(2.2),
+    south: geo.math.toRadians(48.8),
+    east: geo.math.toRadians(2.5),
+    north: geo.math.toRadians(48.9),
+  };
+  engine.camera.flyTo({ destination: rectangle, duration: 0 });
+  const pose = engine.camera.pose();
+  close(pose.pitch, -Math.PI / 2, 1e-9, 'pitch');
+  close(pose.cartographic.longitude, geo.math.toRadians(2.35), 1e-9, 'lon');
+  const { width, height } = engine.host.size();
+  for (const [lon, lat] of [
+    [rectangle.west, rectangle.south],
+    [rectangle.east, rectangle.north],
+  ]) {
+    const corner = engine.projector.worldToWindow(
+      geo.cartesian3.fromRadians(lon, lat, 0),
+    );
+    assert.ok(corner.x >= -1 && corner.x <= width + 1, `x ${corner.x}`);
+    assert.ok(corner.y >= -1 && corner.y <= height + 1, `y ${corner.y}`);
+  }
+});
+
+test('fake sphere range follows Cesium: 100 m only for radius 0, no floor otherwise', () => {
+  const engine = createFakeEngine({ width: 1000, height: 500 });
+  const center = geo.cartesian3.fromDegrees(0, 0, 0);
+  engine.camera.flyToSphere({ center, radius: 10 }, { duration: 0 });
+  const tanPhi = Math.tan(engine.camera.pose().fovy / 2);
+  close(
+    geo.cartesian3.distance(engine.camera.pose().position, center),
+    Math.max(10 / (2 * tanPhi), 10 / tanPhi),
+    1e-6,
+    'range (m)',
+  );
+  engine.camera.flyToSphere({ center, radius: 0 }, { duration: 0 });
+  close(
+    geo.cartesian3.distance(engine.camera.pose().position, center),
+    100,
+    1e-6,
+  );
+});
+
+test('fake drillPick records width and height; maps return promises', async () => {
+  const engine = createFakeEngine();
+  engine.picker.drillPick(geo.cartesian2.create(1, 2), 3, 4, 5);
+  assert.deepEqual(
+    engine.fake.callsOf('picker.drillPick')[0].args.slice(1),
+    [3, 4, 5],
+  );
+  for (const call of [
+    engine.maps.setBaseImagery({ kind: 'osm' }),
+    engine.maps.setTerrain({ kind: 'ellipsoid' }),
+    engine.maps.setPhotorealTiles(null),
+  ]) {
+    assert.ok(call instanceof Promise);
+    await call;
+  }
+});
