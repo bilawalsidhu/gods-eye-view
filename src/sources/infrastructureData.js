@@ -1,5 +1,5 @@
 /**
- * Bundled OpenStreetMap infrastructure layers (datacenters and dams): their
+ * Bundled infrastructure layers (OpenStreetMap and IGN Argentina): their
  * data files, line-delimited GeoJSON parsing and analyst records.
  */
 
@@ -17,6 +17,36 @@ export const INFRASTRUCTURE_DATA_URLS = Object.freeze({
       .href;
   },
 });
+
+/** Independently attributed supplements, consumed by the same existing layer. */
+export const INFRASTRUCTURE_SUPPLEMENT_URLS = Object.freeze({
+  get 'local-dams'() {
+    return [
+      new URL(
+        '../data/local_data/argentina_dams/dams.geojsonl',
+        import.meta.url,
+      ).href,
+    ];
+  },
+});
+
+/** Load a layer's GeoJSONL files together; failed/aborted loads are not cached. */
+export async function loadInfrastructureFeatures(
+  urls,
+  { fetchImpl = (...args) => globalThis.fetch(...args), signal } = {},
+) {
+  signal?.throwIfAborted();
+  const batches = await Promise.all(
+    urls.map(async (url) => {
+      const response = await fetchImpl(url, { signal });
+      if (!response.ok) throw new Error(`HTTP ${response.status ?? '?'}`);
+      const text = await response.text();
+      signal?.throwIfAborted();
+      return parseGeojsonLines(text);
+    }),
+  );
+  return batches.flat();
+}
 
 /** Parse GeoJSON Lines: one Feature per non-empty line. */
 export function parseGeojsonLines(text) {
@@ -138,26 +168,25 @@ export function createInfrastructureSource({
       const url = INFRASTRUCTURE_DATA_URLS[layerId];
       if (!url) throw new TypeError(`Unknown infrastructure layer: ${layerId}`);
       if (!cache.has(layerId)) {
-        signal?.throwIfAborted();
-        const response = await fetchImpl(url, { signal });
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
-        const records = parseGeojsonLines(await response.text()).flatMap(
-          (feature) => {
-            const point = featurePoint(feature);
-            return point
-              ? [
-                  mapAnalystRecord(
-                    {
-                      id: feature.properties?.osm_id ?? feature.id,
-                      ...point,
-                      properties: feature.properties,
-                    },
-                    layerId,
-                  ),
-                ]
-              : [];
-          },
+        const features = await loadInfrastructureFeatures(
+          [url, ...(INFRASTRUCTURE_SUPPLEMENT_URLS[layerId] || [])],
+          { fetchImpl, signal },
         );
+        const records = features.flatMap((feature) => {
+          const point = featurePoint(feature);
+          return point
+            ? [
+                mapAnalystRecord(
+                  {
+                    id: feature.properties?.osm_id ?? feature.id,
+                    ...point,
+                    properties: feature.properties,
+                  },
+                  layerId,
+                ),
+              ]
+            : [];
+        });
         cache.set(layerId, records);
       }
       return cache.get(layerId);

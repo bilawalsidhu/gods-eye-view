@@ -1,4 +1,4 @@
-/** Bundled OpenStreetMap infrastructure: datacenters and dams. */
+/** Bundled infrastructure: OpenStreetMap and IGN Argentina. */
 
 import { suggestView } from '../views.js';
 import { defineTool } from '../catalog.js';
@@ -17,7 +17,7 @@ const KINDS = {
 };
 const ATTRIBUTION = {
   datacenters: '© OpenStreetMap contributors (ODbL 1.0)',
-  dams: '© OpenStreetMap contributors (ODbL 1.0), via Open Infrastructure Map',
+  dams: '© OpenStreetMap contributors (ODbL 1.0), via Open Infrastructure Map; FUENTE: Instituto Geográfico Nacional de la República Argentina (Dique snapshot retrieved 2026-10-15; source update date not supplied; IGN reuse terms)',
 };
 
 const round = (value, digits) =>
@@ -28,7 +28,7 @@ export const findInfrastructure = defineTool({
   title: 'Datacenters and dams',
   description:
     'Datacenters (with operator and capacity) or dams (with river and power ' +
-    'output) mapped in OpenStreetMap within an area, nearest the center first.',
+    'output) from OpenStreetMap and IGN Argentina within an area, nearest the center first.',
   inputSchema: {
     type: 'object',
     properties: {

@@ -326,6 +326,10 @@ export const DATA_CREDITS = [
     html: 'Dams: Open Infrastructure Map',
   },
   {
+    key: 'argentina-dams-ign',
+    html: 'Argentina dams: FUENTE: <a href="https://www.ign.gob.ar/" target="_blank" rel="noopener">Instituto Geográfico Nacional de la República Argentina</a>. Dique snapshot retrieved 2026-10-15; source update date not supplied. <a href="https://www.ign.gob.ar/descargas/tyc1.html" target="_blank" rel="noopener">IGN reuse terms</a>. Normalized and deduplicated for display; no IGN endorsement.',
+  },
+  {
     key: 'firms',
     html:
       'Active fires: NASA FIRMS — we acknowledge the use of data and/or imagery ' +

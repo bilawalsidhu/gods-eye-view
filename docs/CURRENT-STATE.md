@@ -1,5 +1,16 @@
 # God's Eye View Current State
 
+Dams retains layer ID `local-dams` and loads the original 704 OSM/OpenInfraMap
+features plus 123 IGN Argentina Dique points (827 input features). The separate
+IGN pack is loaded lazily with the existing dataset by both the renderer and
+`find_infrastructure`; incomplete or aborted loads are not cached. The two
+overlapping OSM/IGN records are excluded during the reproducible offline build
+(`scripts/build-argentina-dams.mjs`), with a checked-in audit trail. IGN records
+retain compilation metadata, stable IDs and per-feature source attribution;
+retrieved 2026-10-15, underlying source update date unspecified. These are static
+structure locations. Existing toggles, layer tokens, LOD and card layout remain
+the same. Provenance and terms: `local_data/argentina_dams/README.md`.
+
 Vessel sources can report healthy empty coverage using a current, complete
 snapshot with zero raw rows, a healthy transport and a positive last-message
 time. This clears obsolete contacts and settles startup without manufacturing

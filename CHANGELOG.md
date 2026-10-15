@@ -1,5 +1,9 @@
 # Changelog
 
+- Add 123 IGN Argentina dam points to the existing Dams layer and infrastructure
+  queries. Keep the OSM dataset intact, suppress two overlapping records, and
+  preserve IGN attribution, provenance and reuse terms in a separate data pack.
+
 - Snow flakes sway within a fixed range instead of drifting sideways faster the
   longer the app runs; the Wind setting still scales the sway.
 

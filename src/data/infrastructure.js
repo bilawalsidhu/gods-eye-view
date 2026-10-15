@@ -1,5 +1,8 @@
 import { createLocalGeoJsonLayer } from './localGeojsonCore.js';
-import { INFRASTRUCTURE_DATA_URLS } from '../sources/infrastructureData.js';
+import {
+  INFRASTRUCTURE_DATA_URLS,
+  INFRASTRUCTURE_SUPPLEMENT_URLS,
+} from '../sources/infrastructureData.js';
 
 /**
  * Create fresh datacenter and dam layers without starting or loading them.
@@ -29,10 +32,11 @@ export function createInfrastructureLayers(services) {
     {
       id: 'local-dams',
       url: damsUrl,
+      supplementUrls: INFRASTRUCTURE_SUPPLEMENT_URLS['local-dams'],
       name: 'Dams',
       color: '#0088ff', // Blue
       icon: '▰',
-      source: 'USACE',
+      source: 'OpenStreetMap / OpenInfraMap · IGN Argentina',
       osmDerived: true,
       labels: true,
       labelMax: 900,

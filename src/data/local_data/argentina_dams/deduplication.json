@@ -1,0 +1,21 @@
+{
+  "inputCount": 125,
+  "outputCount": 123,
+  "existingCount": 704,
+  "omitted": [
+    {
+      "id": "ign-ar-dique-2092",
+      "name": "Dique El Tigre",
+      "retainedId": 110183925,
+      "retainedName": "Dique El Tigre",
+      "reason": "inside-existing-dam-polygon"
+    },
+    {
+      "id": "ign-ar-dique-2503",
+      "name": "Los Quiroga",
+      "retainedId": 220340687,
+      "retainedName": "Central Hidroeléctrica Los Quiroga",
+      "reason": "inside-existing-dam-polygon"
+    }
+  ]
+}

@@ -2,7 +2,7 @@
 
 `gods-eye-view/infrastructure` exports `createInfrastructureLayers(services)`.
 It returns fresh datacenter and dam layers in that order, with the existing IDs,
-appearance, label budgets and bundled public datasets. Importing the module or
+appearance, label budgets and bundled public datasets, including the separately attributed IGN Argentina dam supplement. Importing the module or
 calling the factory does not load data, create a viewer, or start the application.
 The asset URLs resolve relative to the module; Vite rewrites them for production
 base paths. This browser source export expects a Vite-compatible asset build.
@@ -58,6 +58,7 @@ factory and supplies its existing functions. Other consumers should use the pack
 exports, which do not import standalone application globals.
 
 Dataset files and source/license notices remain under `src/data/local_data/`.
-Their input counts are 4,351 datacenter features and 704 dam features. Cesium may
+Their input counts are 4,351 datacenter features and 827 dam features
+(704 OSM/OpenInfraMap plus 123 IGN Argentina points). Cesium may
 expand multipart geometries into multiple entities; entity and stem counts are
-different measurements. This change does not refresh or relicense the datasets.
+different measurements. The IGN supplement retains its own reuse terms; the original datasets are not relicensed.
