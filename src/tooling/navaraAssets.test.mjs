@@ -1,0 +1,56 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { navaraWorkerAssets } from '../../build/navaraAssets.js';
+import { createBrowserViteConfig } from '../../build/vite.js';
+
+test('the build copies the wasm files Navara workers load by name next to them', (t) => {
+  const dir = mkdtempSync(path.join(os.tmpdir(), 'gev-navara-assets-'));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  writeFileSync(path.join(dir, 'draco_decoder-AAAA.wasm'), 'draco');
+  writeFileSync(path.join(dir, 'navara_wasm_worker_bg-BBBB.wasm'), 'worker');
+  writeFileSync(path.join(dir, 'fontWorker-CCCC.js'), 'not wasm');
+  const plugin = navaraWorkerAssets({ assetsDir: dir });
+  const emitted = [];
+  const bundle = {
+    // Rollup already emitted this one under the same name.
+    'assets/navara_wasm_worker_bg-BBBB.wasm': { type: 'asset' },
+    // A Navara worker chunk shows the build includes Navara.
+    'assets/index-DDDD.js': { type: 'chunk', code: 'navara_wasm_worker_bg' },
+  };
+  plugin.generateBundle.call(
+    { emitFile: (file) => emitted.push(file) },
+    {},
+    bundle,
+  );
+  assert.deepEqual(
+    emitted.map(({ fileName, type }) => [fileName, type]),
+    [['assets/draco_decoder-AAAA.wasm', 'asset']],
+  );
+  assert.equal(String(emitted[0].source), 'draco');
+});
+
+test('a build without Navara gets no Navara wasm', (t) => {
+  const dir = mkdtempSync(path.join(os.tmpdir(), 'gev-navara-assets-'));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  writeFileSync(path.join(dir, 'draco_decoder-AAAA.wasm'), 'draco');
+  const plugin = navaraWorkerAssets({ assetsDir: dir });
+  const emitted = [];
+  plugin.generateBundle.call(
+    { emitFile: (file) => emitted.push(file) },
+    {},
+    { 'assets/index-EEEE.js': { type: 'chunk', code: 'cesium only' } },
+  );
+  assert.deepEqual(emitted, []);
+});
+
+test('the browser build runs the Navara asset copy as a Rollup plugin', () => {
+  const { build } = createBrowserViteConfig({});
+  assert.deepEqual(
+    build.rollupOptions.plugins.map(({ name }) => name),
+    ['navara-worker-assets'],
+  );
+  assert.equal(build.chunkSizeWarningLimit, 1500);
+});
