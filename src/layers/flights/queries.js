@@ -810,6 +810,52 @@ export function createQueries({
     },
 
     /**
+     * What this layer draws, as plain data (QA: the engine-neutral probe,
+     * window.__godsEyeView.layers.drawn): per contact its glyph (image,
+     * scale, shown, screen rotation, alpha, position) and its 3D model, read
+     * from the renderer's handles — the same on every engine.
+     * @returns {Array<object>}
+     */
+    qaDrawn() {
+      const out = [];
+      for (const [id, sprite] of flightState._billboards) {
+        const model = flightState._models.get(id);
+        out.push({
+          id,
+          tracked: id === flightState._trackedIcao,
+          image: sprite.image,
+          scale: sprite.scale,
+          width: sprite.width,
+          show: sprite.show,
+          rotation: sprite.rotation,
+          alpha: sprite.color?.alpha ?? null,
+          position: sprite.position
+            ? {
+                x: sprite.position.x,
+                y: sprite.position.y,
+                z: sprite.position.z,
+              }
+            : null,
+          model: model
+            ? { scale: model.scale, show: model.show, ready: model.ready }
+            : null,
+        });
+      }
+      const tracked = flightState._trackedModel;
+      if (flightState._trackedIcao && tracked)
+        out.push({
+          id: flightState._trackedIcao,
+          trackedModel: true,
+          model: {
+            scale: tracked.scale,
+            show: tracked.show,
+            ready: tracked.ready,
+          },
+        });
+      return out;
+    },
+
+    /**
      * Stop tracking the currently followed aircraft (no-op if none).
      * @returns {boolean} Always true.
      */

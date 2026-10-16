@@ -66,9 +66,14 @@ const getOpt = (name, dflt) => {
   return i >= 0 && argv[i + 1] ? argv[i + 1] : dflt;
 };
 
-const APP_URL = getOpt('--url', 'http://localhost:4173');
+const BASE_URL = getOpt('--url', 'http://localhost:4173');
+// --engine=cesium|navara (phase 3): Navara reads the layer through the QA
+// probe (window.__godsEyeView.layers.drawn) and moves the engine camera.
+const ENGINE = (argv.find((arg) => arg.startsWith('--engine=')) ?? '--engine=cesium').slice(9);
+const APP_URL =
+  ENGINE === 'cesium' ? BASE_URL : `${BASE_URL.replace(/\/$/, '')}/?engine=${ENGINE}`;
 const HEADFUL = getFlag('--headful');
-const SHOT_DIR = path.resolve('qa-shots/enrich-ambient');
+const SHOT_DIR = path.resolve(ENGINE === 'cesium' ? 'qa-shots/enrich-ambient' : `qa-shots/enrich-ambient-${ENGINE}`);
 
 // Client-side bounds under test (flights.js constants):
 const MAX_INFLIGHT = 4;        // ENRICH_MAX_INFLIGHT
@@ -289,7 +294,7 @@ async function main() {
     console.log('Loading app...');
     await page.goto(APP_URL, { waitUntil: 'domcontentloaded', timeout: 60000 });
     await page.waitForFunction(
-      () => window.__godsEyeView && window.__godsEyeView.viewer && window.__godsEyeView.dataManager,
+      () => window.__godsEyeView && window.__godsEyeView.engine && window.__godsEyeView.dataManager && window.__godsEyeView.layers,
       { timeout: 60000, polling: 200 }
     );
     console.log('  App globals ready.');
@@ -298,6 +303,12 @@ async function main() {
     await page.evaluate(() => {
       window.__collectBillboards = function () {
         const v = window.__godsEyeView.viewer;
+        // Without a viewer (Navara): what the flights layer draws, through
+        // the engine-neutral probe.
+        if (!v)
+          return (window.__godsEyeView.layers.drawn('flights') ?? [])
+            .filter((row) => !row.trackedModel)
+            .map(({ id, image, scale, show }) => ({ id, image, scale, show }));
         const out = [];
         const walk = (coll) => {
           const n = coll.length;
@@ -321,12 +332,12 @@ async function main() {
     // framing the fleet when the layer polls — otherwise the frustum test
     // (correctly) skips off-screen planes.
     const centerLon = ROW_LON0 + ((SPEC.planes.length - 1) / 2) * ROW_STEP_DEG;
-    await page.evaluate(({ lat, lon, height }) => {
-      const v = window.__godsEyeView.viewer;
-      v.camera.cancelFlight(); // the boot fly-to-Austin otherwise stomps setView
-      const C3 = v.camera.position.constructor;
-      v.camera.setView({
-        destination: C3.fromDegrees(lon, lat, height),
+    await page.evaluate(async ({ lat, lon, height }) => {
+      const camera = window.__godsEyeView.engine.camera;
+      camera.cancelFlight(); // the boot fly-to-Austin otherwise stomps setView
+      const geo = await import('/src/geo/index.js');
+      camera.setView({
+        destination: geo.cartesian3.fromDegrees(lon, lat, height),
         orientation: { heading: 0, pitch: -Math.PI / 2, roll: 0 },
       });
     }, { lat: ROW_LAT, lon: centerLon, height: 20000 });
@@ -334,7 +345,7 @@ async function main() {
     console.log('Priming straight-flight history through the render delay (30 s)...');
     const primed = await page.evaluate(async () => {
       const dm = window.__godsEyeView.dataManager;
-      const v = window.__godsEyeView.viewer;
+      const v = window.__godsEyeView.viewer ?? null;
       window.__ENR.timeOffsetSec = -32;
       await dm.setEnabled('flights', true);
       const fl = dm.layers.get('flights').module;
@@ -456,7 +467,7 @@ async function main() {
     console.log('\nE8 — next poll after enrichment');
     await page.evaluate(async () => {
       const dm = window.__godsEyeView.dataManager;
-      const v = window.__godsEyeView.viewer;
+      const v = window.__godsEyeView.viewer ?? null;
       await dm.layers.get('flights').module.update(v);
     });
     await sleep(500);
@@ -493,7 +504,7 @@ async function main() {
     const startsBeforeBatch = await page.evaluate(() => window.__ENRICH_LOG.starts.length);
     await page.evaluate(async ({ hexes, rowLat, rowLon0, stepDeg }) => {
       const dm = window.__godsEyeView.dataManager;
-      const v = window.__godsEyeView.viewer;
+      const v = window.__godsEyeView.viewer ?? null;
       // Two fresh rows just north of the original one — still inside the
       // top-down 20 km frame, so the sweep's frustum test keeps them.
       // STATIONARY (speed 0): moving planes drift north out of the frustum at
@@ -522,7 +533,7 @@ async function main() {
     // One more poll while exhausted — still nothing new.
     await page.evaluate(async () => {
       const dm = window.__godsEyeView.dataManager;
-      await dm.layers.get('flights').module.update(window.__godsEyeView.viewer);
+      await dm.layers.get('flights').module.update(window.__godsEyeView.viewer ?? null);
     });
     await sleep(1000);
     const exhausted = await page.evaluate(() => ({
@@ -544,7 +555,7 @@ async function main() {
     await sleep(RESUME_WINDOW_MS + 200); // a full (shortened) refill window elapses
     await page.evaluate(async () => {
       const dm = window.__godsEyeView.dataManager;
-      await dm.layers.get('flights').module.update(window.__godsEyeView.viewer);
+      await dm.layers.get('flights').module.update(window.__godsEyeView.viewer ?? null);
     });
     const expectedTotal = startsBeforeBatch + BATCH_COUNT; // every batch plane eventually requested
     const resumed = await page.waitForFunction(

@@ -291,6 +291,10 @@ test('the flights logic draws and follows on the Navara renderer (fake engine)',
       'abc123',
       'def456',
     ]);
+    // What it draws, as the QA probe reads it (the same on every engine).
+    const drawn = layer.qaDrawn();
+    assert.deepEqual(drawn.map((row) => row.id).sort(), ['abc123', 'def456']);
+    assert.ok(drawn.every((row) => row.show && row.image.startsWith('data:')));
     // A click on a contact selects it; the engine follows with its label.
     engine.fake.script('pick', () => ({ id: 'def456' }));
     engine.fake.script('drillPick', () => [{ id: 'def456' }]);
