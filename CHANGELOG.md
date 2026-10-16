@@ -1,8 +1,5 @@
 # Changelog
 
-- CCTV adds the public Peatonal Dufaur webcam in Monte Hermoso, Argentina,
-  using the existing HLS relay with attribution and an approximate map location.
-
 - Local FM seek finds stations after wrapping around 87.5–108 MHz, covers both
   band edges, skips the starting station and rejects spectra from an earlier
   tune (Aditya, @Rohilalala, #1174).

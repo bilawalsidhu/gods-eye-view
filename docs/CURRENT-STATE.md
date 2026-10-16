@@ -590,7 +590,9 @@ pinning, first-position grace, source time and sea-surface placement are unchang
 
 Military flights also separate portable records and source acquisition from
 Cesium snapshot application. The metadata owner retains aviation feet, source
-fix times, sticky fields and partial-feed retention. Rendering retains ground
+fix times, sticky fields and partial-feed retention. A row without track or
+speed holds the last known value, as civil records do; a grounded row without
+speed reads 0. Rendering retains ground
 model ownership, motion history, military registration and tracking cleanup.
 
 Civil flights separate source acquisition, portable record reconciliation and
