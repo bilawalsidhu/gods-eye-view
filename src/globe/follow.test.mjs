@@ -199,3 +199,25 @@ test('a still target and offset request no renders', () => {
   for (let i = 0; i < 5; i++) h.frame();
   assert.equal(h.renders(), settled, 'idle while nothing moves');
 });
+
+test('a dolly moves along the offset as Cesium zoom3D, never inside the floor', async () => {
+  const { dollyOffset } = await import('./follow.js');
+  const offset = cartesian3.create(0, -1000, 0);
+  // Five times the window ratio of the distance above the floor (closing).
+  const closer = dollyOffset(offset, 0.05, 150);
+  assert.ok(
+    Math.abs(cartesian3.magnitude(closer) - (1000 - 5 * 850 * 0.05)) < 1e-9,
+  );
+  const away = dollyOffset(offset, -0.05, 150);
+  assert.ok(
+    Math.abs(cartesian3.magnitude(away) - (1000 + 5 * 1000 * 0.05)) < 1e-9,
+  );
+  // At most a tenth per move, and never through the floor.
+  const capped = dollyOffset(offset, 0.5, 150);
+  assert.ok(
+    Math.abs(cartesian3.magnitude(capped) - (1000 - 5 * 850 * 0.1)) < 1e-9,
+  );
+  let near = cartesian3.create(0, -160, 0);
+  for (let i = 0; i < 20; i++) near = dollyOffset(near, 0.1, 150);
+  assert.ok(cartesian3.magnitude(near) >= 150);
+});

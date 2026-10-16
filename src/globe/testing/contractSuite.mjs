@@ -2605,6 +2605,62 @@ export function createContractSuite(
               `a drag changed the range ${before.toFixed(0)} → ${range().toFixed(0)} m`,
             );
             ensure(offCentre() <= 3, 'the target left the centre after a drag');
+            // A 240 px drag right turns the heading clockwise as Cesium's
+            // tracked camera: 1.77 × 240 / width × 360° (±15 %).
+            // Cesium's gesture inertia carries a turn on for a while: the
+            // heading is read once it has been still for 5 frames.
+            const headingAtRest = async () => {
+              let last = camera.pose().heading;
+              let still = 0;
+              await until(() => {
+                const now = camera.pose().heading;
+                still =
+                  Math.abs(math.negativePiToPi(now - last)) < 1e-4
+                    ? still + 1
+                    : 0;
+                last = now;
+                return still >= 5;
+              }, 'the heading at rest');
+              return last;
+            };
+            const headingBefore = await headingAtRest();
+            await pointer.drag(
+              width / 2 - 120,
+              height / 2,
+              width / 2 + 120,
+              height / 2,
+            );
+            const headingAfter = await headingAtRest();
+            const turned =
+              (math.negativePiToPi(headingAfter - headingBefore) * 180) /
+              Math.PI;
+            const expected = (1.77 * 240 * 360) / width;
+            // Clockwise, at Cesium's rate (the harness holds the pointer
+            // still before releasing it: no inertia).
+            ensure(
+              Math.abs(turned - expected) <= 0.15 * expected,
+              `a 240 px drag right turned the heading ${turned.toFixed(1)}°, Cesium turns ${expected.toFixed(1)}°`,
+            );
+            ensure(offCentre() <= 3, 'the target left the centre after a turn');
+            // A right drag down closes in (Cesium zoom3D), above the floor.
+            if (pointer.dragRight) {
+              const far = range();
+              await pointer.dragRight(
+                width / 2,
+                height / 2 - 100,
+                width / 2,
+                height / 2 + 100,
+              );
+              await headingAtRest();
+              ensure(
+                range() < 0.8 * far && range() >= 149,
+                `a right drag down moved the range ${far.toFixed(0)} → ${range().toFixed(0)} m`,
+              );
+              ensure(
+                offCentre() <= 3,
+                'the target left the centre after a dolly',
+              );
+            }
             // The wheel zooms toward the target down to the floor, never below.
             let lowest = Infinity;
             for (let notch = 0; notch < 40; notch++) {
