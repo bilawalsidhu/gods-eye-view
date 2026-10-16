@@ -1,7 +1,6 @@
 import {
   bakeWindStreamlines,
   groupWindPaths,
-  WIND_DISPLAY_HEIGHT_METERS,
   WIND_PATH_LIMIT,
   WIND_NARROW_PATH_LIMIT,
 } from './streamlines.js';
@@ -185,7 +184,7 @@ export function createWindGpuRendering({
         let cellVertexCount = 0;
         const instances = group.paths.map((path) => {
           const positions = path.coordinates.map(([lon, lat]) =>
-            C.Cartesian3.fromDegrees(lon, lat, WIND_DISPLAY_HEIGHT_METERS),
+            C.Cartesian3.fromDegrees(lon, lat, spec.displayHeightMeters),
           );
           // Pass the native description to Cesium's worker. Per-instance seed
           // attributes avoid touching the expanded vertex buffer on the UI thread.
@@ -265,8 +264,8 @@ export function createWindGpuRendering({
       0,
       Math.min(
         1,
-        (height - WIND_FADE_LOW_METERS) /
-          (WIND_FADE_HIGH_METERS - WIND_FADE_LOW_METERS),
+        (height - spec.fadeLowMeters) /
+          (spec.fadeHighMeters - spec.fadeLowMeters),
       ),
     );
     diagnostics.heightFade = heightFade;
@@ -318,7 +317,7 @@ export function createWindGpuRendering({
       ...diagnostics,
       ready: cells.length > 0 && cells.every((cell) => cell.primitive.ready),
       mode: 'gpu-streamlines',
-      displayHeightMeters: WIND_DISPLAY_HEIGHT_METERS,
+      displayHeightMeters: spec.displayHeightMeters,
     }),
   };
 }

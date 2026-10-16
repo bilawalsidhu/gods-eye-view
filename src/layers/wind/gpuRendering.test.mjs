@@ -484,3 +484,46 @@ test('ocean spec scales the step by (E1), colours paths by speed and seeds insid
   }
   owner.destroy();
 });
+
+test('display height and height-fade thresholds come from the field spec', async () => {
+  const { OCEAN_FIELD_SPEC, WIND_FIELD_SPEC } = await import('./fieldSpec.js');
+  assert.equal(WIND_FIELD_SPEC.displayHeightMeters, 12000);
+  assert.equal(WIND_FIELD_SPEC.fadeLowMeters, 15000);
+  assert.equal(WIND_FIELD_SPEC.fadeHighMeters, 60000);
+  assert.equal(OCEAN_FIELD_SPEC.displayHeightMeters, 100);
+  assert.equal(OCEAN_FIELD_SPEC.fadeLowMeters, 300);
+  assert.equal(OCEAN_FIELD_SPEC.fadeHighMeters, 1200);
+  const h = harness();
+  const owner = createWindGpuRendering({
+    cesium: h.C,
+    getViewer: () => ({ scene: h.scene }),
+    spec: OCEAN_FIELD_SPEC,
+  });
+  const ocean = {
+    nx: 10,
+    ny: 10,
+    lo1: -75,
+    la1: 39,
+    dx: 1,
+    dy: 1,
+    u: new Float32Array(100).fill(0.4),
+    v: new Float32Array(100),
+    periodic: false,
+    noData: -9999,
+    bbox: { latMin: 30, latMax: 39, lonMin: -75, lonMax: -66 },
+    speed: { medianMs: 0.4, p95Ms: 0.8 },
+  };
+  assert.equal(owner.setField(ocean), true);
+  assert.equal(owner.getDiagnostics().displayHeightMeters, 100);
+  for (const instance of [...h.members].flatMap((p) => p.geometryInstances)) {
+    for (const position of instance.geometry.positions) {
+      const carto = Ellipsoid.WGS84.cartesianToCartographic(position);
+      assert.ok(Math.abs(carto.height - 100) < 1e-3, `height ${carto.height}`);
+    }
+  }
+  // Fade thresholds: 1000 m up is (1000 - 300) / 900 of the way from low to high.
+  const camera = { ...h.scene.camera, positionCartographic: { height: 1000 } };
+  owner.updateVisibility(camera);
+  assert.ok(Math.abs(owner.getDiagnostics().heightFade - 700 / 900) < 1e-9);
+  owner.destroy();
+});

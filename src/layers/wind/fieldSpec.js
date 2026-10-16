@@ -18,6 +18,11 @@ export function createFieldSpec(overrides = {}) {
     rampMaxMs: () => 30,
     ramp: Object.freeze([WHITE, WHITE, WHITE, WHITE, WHITE]),
     rampGamma: 1,
+    // GPU streamlines are lifted off the surface for visibility and faded out
+    // when the camera gets close enough for that lift to read as parallax.
+    displayHeightMeters: 12000,
+    fadeLowMeters: 15000,
+    fadeHighMeters: 60000,
     ...overrides,
     ...(overrides.ramp ? { ramp: Object.freeze([...overrides.ramp]) } : {}),
   });
@@ -35,6 +40,11 @@ export const OCEAN_FIELD_SPEC = createFieldSpec({
   // Teal to amber, luminance increasing, hue falling monotonically.
   ramp: ['#267c92', '#2e9ea8', '#60c496', '#bed664', '#ffc950'],
   rampGamma: 0.55,
+  // Coastal views sit at 50 to 100 km: a 12 km lift would shift the field by
+  // a tenth of its width onto land. Currents hug the sea surface instead.
+  displayHeightMeters: 100,
+  fadeLowMeters: 300,
+  fadeHighMeters: 1200,
 });
 
 /** Speed at which the ramp saturates for this field. */
