@@ -84,3 +84,44 @@ test('tilesLoaded follows the first visible tileset, else the shown globe', () =
   tileset.tilesLoaded = true;
   assert.equal(surface.tilesLoaded(), true);
 });
+
+test('sampleHeightDetailed: tiles from sampleHeight, else terrain; no tile size', () => {
+  const { surface, scene } = setup();
+  const place = geo.cartographic.fromDegrees(20, 10, 0);
+  assert.deepEqual(surface.sampleHeightDetailed(place), {
+    height: 42,
+    source: 'tiles',
+  });
+  scene.sampleHeight = () => undefined;
+  assert.deepEqual(surface.sampleHeightDetailed(place, { lod: 'finest' }), {
+    height: 12.5,
+    source: 'terrain',
+  });
+  assert.throws(
+    () => surface.sampleHeightDetailed(place, { lod: 2 }),
+    TypeError,
+  );
+});
+
+test('an engine mover set in exclude is hidden for the sample, native objects pass', () => {
+  const viewer = createFakeViewer();
+  const collection = { show: true };
+  const set = { id: 'flights' };
+  const { surface } = createCesiumSurface(viewer, {
+    engineExclude: (entry) => (entry === set ? collection : null),
+  });
+  const shownDuring = [];
+  viewer.scene.sampleHeight = (position, excluded) => {
+    shownDuring.push(collection.show, excluded);
+    return 30;
+  };
+  const native = { primitive: 1 };
+  const place = geo.cartographic.fromDegrees(20, 10, 0);
+  assert.equal(surface.sampleHeight(place, [set, native]), 30);
+  assert.deepEqual(shownDuring, [false, [native]]);
+  assert.equal(collection.show, true, 'shown again after the sample');
+  shownDuring.length = 0;
+  surface.sampleHeightDetailed(place, { exclude: [set] });
+  assert.deepEqual(shownDuring, [false, []]);
+  assert.equal(collection.show, true);
+});

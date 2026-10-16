@@ -215,3 +215,43 @@ test('among hidden tiles the finest tile wins by its extent, not by a small mesh
     'the fine tile',
   );
 });
+
+test('sampleHeightDetailed names the source and the size of the answering tile', () => {
+  // A shown coarse tile (600 m wide, 3 m high) over a hidden fine one.
+  const fine = tileAt(10, 45, 40);
+  const coarse = tileAt(10, 45, 43, 300);
+  fine.tile.visible = false;
+  const { surface } = setup({
+    tiles: [coarse.tile, fine.tile],
+    terrain: () => 7,
+  });
+  const place = cartographic.fromDegrees(10, 45, 0);
+  const shown = surface.sampleHeightDetailed(place);
+  assert.equal(shown.source, 'tiles');
+  near(shown.height, 43, 0.05, 'the shown tile');
+  near(shown.tileSizeM, 600 * Math.SQRT2, 1, 'its size');
+  const finest = surface.sampleHeightDetailed(place, { lod: 'finest' });
+  near(finest.height, 40, 0.05, 'the finest loaded tile');
+  near(finest.tileSizeM, 200 * Math.SQRT2, 1, 'its size');
+  assert.deepEqual(
+    surface.sampleHeightDetailed(place, { exclude: [coarse.tile, fine.tile] }),
+    { height: 7, source: 'terrain' },
+  );
+  assert.throws(
+    () => surface.sampleHeightDetailed(place, { lod: 'best' }),
+    TypeError,
+  );
+  const bare = setup({ tiles: [] }).surface;
+  assert.equal(bare.sampleHeightDetailed(place), undefined);
+});
+
+test('a hidden tile answer carries its size too', () => {
+  const fine = tileAt(10, 45, 40);
+  fine.tile.visible = false;
+  const { surface } = setup({ tiles: [fine.tile] });
+  const detail = surface.sampleHeightDetailed(
+    cartographic.fromDegrees(10, 45, 0),
+  );
+  near(detail.height, 40, 0.05, 'hidden fine');
+  near(detail.tileSizeM, 200 * Math.SQRT2, 1, 'size');
+});

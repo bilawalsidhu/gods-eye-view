@@ -23,9 +23,9 @@ test('on a globe engine a snap samples engine.surface once and caches it', () =>
   };
   assert.equal(snap.heightFor(engine, 'a1', KAUS, exclude), 138.5);
   assert.equal(snap.heightFor(engine, 'a1', KAUS, exclude), 138.5);
-  const calls = engine.fake.callsOf('surface.sampleHeight');
+  const calls = engine.fake.callsOf('surface.sampleHeightDetailed');
   assert.equal(calls.length, 1, 'one sample, then the cache');
-  assert.deepEqual(calls[0].args[1], ['own-model']);
+  assert.deepEqual(calls[0].args[1].exclude, ['own-model']);
   assert.equal(exclusions, 1);
   assert.ok(
     Math.abs(geo.math.toDegrees(calls[0].args[0].latitude) - 30.19) < 1e-9,
@@ -39,15 +39,46 @@ test('on a globe engine loading tiles or a miss return null without a sample cac
   engine.fake.script('tilesLoaded', false);
   engine.fake.script('sampleHeight', () => 10);
   assert.equal(snap.heightFor(engine, 'b1', KAUS), null);
-  assert.equal(engine.fake.callsOf('surface.sampleHeight').length, 0);
+  assert.equal(engine.fake.callsOf('surface.sampleHeightDetailed').length, 0);
   engine.fake.script('tilesLoaded', true);
   engine.fake.script('sampleHeight', () => undefined);
   assert.equal(snap.heightFor(engine, 'c1', KAUS), null);
-  assert.equal(engine.fake.callsOf('surface.sampleHeight').length, 1);
+  assert.equal(engine.fake.callsOf('surface.sampleHeightDetailed').length, 1);
   assert.equal(
     snap.heightFor(engine, 'c1', KAUS),
     null,
     'backoff after a miss',
   );
-  assert.equal(engine.fake.callsOf('surface.sampleHeight').length, 1);
+  assert.equal(engine.fake.callsOf('surface.sampleHeightDetailed').length, 1);
+});
+
+test('a coarse tile answer or only terrain is a miss; a viewer reaches its engine', async () => {
+  const { registerViewerEngine } =
+    await import('../globe/cesium/engineFromViewer.js');
+  const snap = createGroundSnap({ groundFloor: groundFloor() });
+  const engine = createFakeEngine();
+  engine.fake.script('sampleHeightDetailed', () => ({
+    height: 143.2,
+    source: 'tiles',
+    tileSizeM: 27_914,
+  }));
+  assert.equal(snap.heightFor(engine, 'd1', KAUS), null, 'coarse');
+  engine.fake.script('sampleHeightDetailed', () => ({
+    height: 121,
+    source: 'terrain',
+  }));
+  assert.equal(snap.heightFor(engine, 'd2', KAUS), null, 'terrain');
+  engine.fake.script('sampleHeightDetailed', () => ({
+    height: 122.5,
+    source: 'tiles',
+    tileSizeM: 1_797,
+  }));
+  const viewer = {};
+  const unregister = registerViewerEngine(viewer, engine);
+  try {
+    assert.equal(snap.heightFor(viewer, 'd3', KAUS), 122.5);
+  } finally {
+    unregister();
+  }
+  assert.equal(snap.heightFor({}, 'd4', KAUS), null, 'no engine: no sample');
 });

@@ -307,6 +307,7 @@ export function createCesiumMovers(
     ordered.splice(at, 0, { order: options.order, primitive });
     rootCollection().add(primitive, at);
     return {
+      primitive,
       commit: () => part.commit(store.dirty()),
       destroy() {
         part.destroy();
@@ -321,6 +322,11 @@ export function createCesiumMovers(
   });
   return {
     movers: registry.movers,
+    /** The primitive drawing a live mover set of this engine, or null. */
+    primitiveOf(set) {
+      const entry = set?.id ? registry.sets.get(set.id) : null;
+      return entry && entry.set === set ? entry.part.primitive : null;
+    },
     /** The set and instance a Cesium pick result belongs to, or null. */
     identify(picked) {
       const known = picked?.primitive ? owners.get(picked.primitive) : null;

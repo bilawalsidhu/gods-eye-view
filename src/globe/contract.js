@@ -183,6 +183,12 @@
  * @typedef {object} GlobeSurface
  * @property {(cartographic: Cartographic, exclude?: any[]) => (number | undefined)} sampleHeight
  *   Height of the rendered scene (tiles, models) under a point.
+ * @property {(cartographic: Cartographic, options?: { exclude?: any[], lod?: 'visible' | 'finest' }) => (SurfaceHeight | undefined)} sampleHeightDetailed
+ *   sampleHeight with the answer's quality (src/globe/surfaceDetail.js):
+ *   lod 'visible' (default) answers from the tiles drawn now, 'finest' from
+ *   the finest loaded ones (Navara; Cesium samples what it has loaded).
+ *   Where no tile answers, the terrain. `exclude` takes this engine's mover
+ *   sets as well as engine objects.
  * @property {boolean} supported Whether sampleHeight works.
  * @property {(cartographic: Cartographic) => (number | undefined)} terrainHeight
  *   Height of the terrain/globe surface only (Cesium's globe.getHeight).
@@ -191,6 +197,12 @@
  *   The position moved onto the rendered scene along the geodetic normal.
  * @property {boolean} clampToHeightSupported
  * @property {() => boolean} tilesLoaded
+ *
+ * @typedef {object} SurfaceHeight
+ * @property {number} height Metres above the ellipsoid.
+ * @property {'tiles' | 'terrain'} source
+ * @property {number} [tileSizeM] The size of the tile that answered
+ *   (Navara): the quality signal; Cesium does not say.
  *
  * @typedef {object} GlobeRender
  * @property {(reason?: string) => void} request Renders a frame soon in
@@ -585,6 +597,7 @@ const SHAPE = {
   },
   surface: {
     sampleHeight: isFunction,
+    sampleHeightDetailed: isFunction,
     supported: isBoolean,
     terrainHeight: isFunction,
     terrainHeightSupported: isBoolean,

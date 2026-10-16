@@ -1089,5 +1089,8 @@
   "src/globe/follow.js",
   "src/globe/follow.test.mjs",
   "src/globe/cesium/follow.js",
-  "src/globe/cesium/follow.test.mjs"
+  "src/globe/cesium/follow.test.mjs",
+  "src/globe/surfaceDetail.js",
+  "src/globe/surfaceDetail.test.mjs",
+  "scripts/qa-surface-heights.mjs"
 ]

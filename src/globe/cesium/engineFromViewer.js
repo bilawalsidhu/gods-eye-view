@@ -13,11 +13,15 @@ const engines = new WeakMap();
  * @returns {() => void} Unregister (only while it is still the registered one).
  */
 export function registerViewerEngine(viewer, engine) {
-  // The viewer's Cesium camera names the same engine, so callers that hold
-  // only viewer.camera (camera sensitivity claims) reach the engine camera.
-  const keys = [viewer, viewer?.camera, viewer?.scene?.camera].filter(
-    (key, index, all) => key != null && all.indexOf(key) === index,
-  );
+  // The viewer's scene and Cesium camera name the same engine, so callers
+  // that hold only viewer.scene (surface samplers) or viewer.camera (camera
+  // sensitivity claims) reach the engine.
+  const keys = [
+    viewer,
+    viewer?.scene,
+    viewer?.camera,
+    viewer?.scene?.camera,
+  ].filter((key, index, all) => key != null && all.indexOf(key) === index);
   for (const key of keys) engines.set(key, engine);
   return () => {
     for (const key of keys)
@@ -26,8 +30,8 @@ export function registerViewerEngine(viewer, engine) {
 }
 
 /**
- * @param {object | null | undefined} viewer A Cesium viewer or its camera,
- *   or an engine (returned as is).
+ * @param {object | null | undefined} viewer A Cesium viewer, its scene or
+ *   camera, or an engine (returned as is).
  * @returns {import('../contract.js').GlobeEngine | null} The registered
  *   engine, or null.
  */

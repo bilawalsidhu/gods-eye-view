@@ -31,6 +31,7 @@ import { createLineRegistry } from '../lines.js';
 import { createMoverRegistry } from '../movers.js';
 import { createCpuPicker } from '../cpuPicks.js';
 import { createFollowController } from '../follow.js';
+import { normalizeSurfaceOptions } from '../surfaceDetail.js';
 
 const { cartesian2, cartesian3, cartographic, ellipsoid, math, matrix4 } = geo;
 const WGS84 = ellipsoid.WGS84;
@@ -55,6 +56,7 @@ const SCRIPTABLE = new Set([
   'pickEllipsoid',
   'viewRectangle',
   'sampleHeight',
+  'sampleHeightDetailed',
   'terrainHeight',
   'clampToHeight',
   'tilesLoaded',
@@ -926,6 +928,28 @@ export function createFakeEngine(options = {}) {
       sampleHeight(position, exclude) {
         record('surface.sampleHeight', [position, exclude]);
         return scripted('sampleHeight', [position, exclude], () => undefined);
+      },
+      // Scripted as 'sampleHeightDetailed', else from the scripted
+      // sampleHeight (tiles, no size) and terrainHeight.
+      sampleHeightDetailed(position, surfaceOptions) {
+        const { exclude, lod } = normalizeSurfaceOptions(surfaceOptions);
+        record('surface.sampleHeightDetailed', [position, { exclude, lod }]);
+        return scripted(
+          'sampleHeightDetailed',
+          [position, { exclude, lod }],
+          () => {
+            const height = scripted(
+              'sampleHeight',
+              [position, exclude],
+              () => undefined,
+            );
+            if (Number.isFinite(height)) return { height, source: 'tiles' };
+            const terrain = scripted('terrainHeight', [position], () => 0);
+            return Number.isFinite(terrain)
+              ? { height: terrain, source: 'terrain' }
+              : undefined;
+          },
+        );
       },
       supported: true,
       terrainHeight(position) {
