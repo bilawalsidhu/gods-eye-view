@@ -2592,7 +2592,9 @@
       "src/layers/aircraft/render/cesium.js",
       "src/layers/flights/render/cesium.js",
       "src/data/selectionDispatcher.js",
-      "src/layers/shared/color.js"
+      "src/layers/shared/color.js",
+      "src/layers/aircraft/render/navara.js",
+      "src/layers/flights/render/navara.js"
     ],
     "external": [
       "hls.js",

@@ -467,6 +467,9 @@ export function createRendering({
         url: resolveAsset(spec.url),
         minimumPixelSize: MODEL_MIN_PX,
         scale: spec.scale,
+        // Bounding radius per scale unit (an engine that keeps
+        // minimumPixelSize on the CPU reports the drawn scale with it).
+        radiusM: spec.nativeRadiusM,
         color: flightState._irBoost ? WHITE : _modelColor(icao24),
         // Launch presentation keeps the code-side tint dominant for every approved
         // model; IR boost removes the remaining diffuse hint with flat UNLIT white.
@@ -635,6 +638,7 @@ export function createRendering({
           url: resolveAsset(trackedSpec.url),
           minimumPixelSize: TRACKED_MODEL_MIN_PX,
           scale: trackedSpec.scale,
+          radiusM: trackedSpec.nativeRadiusM,
           color: flightState._irBoost ? WHITE : CYAN,
           // The tracked aircraft uses the same dominant light tint as the fleet;
           // IR boost removes the remaining diffuse hint with flat UNLIT white.
