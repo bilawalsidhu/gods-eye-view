@@ -150,6 +150,8 @@
  * @typedef {object} FollowHandle
  * @property {() => void} stop
  * @property {(next: Partial<FollowOptions>) => void} retarget
+ * @property {() => (Cartesian3 | undefined)} target Where the followed
+ *   target is now (what the follow centres).
  * @property {any} [native]
  * @property {object} [label] FollowOptions.label.
  *
