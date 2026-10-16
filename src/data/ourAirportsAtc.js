@@ -13,6 +13,7 @@
 //
 // The pack is loaded lazily and once: nothing is read until a caller asks.
 
+import { loadBundledJson } from './bundledJson.js';
 import { createRetryableLoader } from './retryableLoad.js';
 import { greatCircleKm } from './routePlausible.js';
 
@@ -43,15 +44,16 @@ export const CLASS_LABELS = Object.freeze({
   AFIS: 'AFIS',
 });
 
+const PACK_URL = new URL(
+  './local_data/ourairports_atc/frequencies.json',
+  import.meta.url,
+);
+
 const loadPack = createRetryableLoader(async () => {
-  // Vite bundles this JSON as a module; the import attribute is what Node needs
-  // to load the same file under node:test (same pattern as
-  // naturalEarthRegions.js / neighborhoodPolygons.js). One path, so no node:
-  // import reaches the browser.
-  const mod = await import('./local_data/ourairports_atc/frequencies.json', {
-    with: { type: 'json' },
-  });
-  const pack = mod.default || mod;
+  // Fetched as a shipped asset in the browser and read from disk under
+  // node:test, the same path as the other bundled packs (see bundledJson.js);
+  // never imported as a module, so the build emits the pack once.
+  const pack = await loadBundledJson(PACK_URL);
   const types = pack.types || [];
   // Decode by the column map the pack publishes, not by hand-spelled indices:
   // the rows are bare arrays for byte reasons, and a bare array is exactly the
