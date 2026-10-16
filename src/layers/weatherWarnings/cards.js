@@ -1,4 +1,5 @@
 /** Card model for one selected weather warning. Pure — no Cesium types. */
+import { formatDate, msg, t } from '../../i18n/index.js';
 
 export const WARNING_OVERLAY_SOURCE_ID = 'weather-warnings';
 
@@ -50,14 +51,23 @@ export function warningAnchorDegrees(polygons) {
   return { lon: lon / count, lat: lat / count };
 }
 
-const MONTHS = 'Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec'.split(' ');
 const pad2 = (value) => String(value).padStart(2, '0');
+const UTC_DAY = Object.freeze({
+  month: 'short',
+  day: 'numeric',
+  timeZone: 'UTC',
+});
+const LEVEL_FACTS = Object.freeze({
+  yellow: msg('yellow level'),
+  orange: msg('orange level'),
+  red: msg('red level'),
+});
 
-/** `Oct 11 12:00Z` for epoch milliseconds; null when not finite. */
+/** `Oct 11 12:00Z` in English for epoch milliseconds; null when not finite. */
 function utcStamp(ms) {
   if (!Number.isFinite(ms)) return null;
   const date = new Date(ms);
-  return `${MONTHS[date.getUTCMonth()]} ${date.getUTCDate()} ${pad2(date.getUTCHours())}:${pad2(date.getUTCMinutes())}Z`;
+  return `${formatDate(date, UTC_DAY)} ${pad2(date.getUTCHours())}:${pad2(date.getUTCMinutes())}Z`;
 }
 
 /** Validity line: "in effect until …" once started, else "from … to …". */
@@ -65,8 +75,10 @@ function validity(row, nowMs) {
   const onset = utcStamp(row.onset);
   const expires = utcStamp(row.expires);
   if (Number.isFinite(row.onset) && row.onset > nowMs && onset)
-    return expires ? `from ${onset} to ${expires}` : `from ${onset}`;
-  return expires ? `in effect until ${expires}` : null;
+    return expires
+      ? t('from {start} to {end}', { start: onset, end: expires })
+      : t('from {start}', { start: onset });
+  return expires ? t('in effect until {end}', { end: expires }) : null;
 }
 
 /** Keep card lines short; MET descriptions can run to several sentences. */
@@ -83,9 +95,15 @@ function clip(value, max = 90) {
  * @returns {object} World-overlay entry without `position`.
  */
 export function buildWarningCard(row, nowMs) {
-  const facts = [`${row.level} level`];
+  const facts = [
+    LEVEL_FACTS[row.level] ? t(LEVEL_FACTS[row.level]) : row.level,
+  ];
   if (row.area) facts.push(row.area);
-  facts.push(row.domain === 'marine' ? 'sea' : 'land');
+  facts.push(
+    row.domain === 'marine'
+      ? t('sea', { context: 'warning area' })
+      : t('land', { context: 'warning area' }),
+  );
   const details = [facts.join(' · ')];
   const when = validity(row, nowMs);
   if (when) details.push(when);
@@ -94,14 +112,22 @@ export function buildWarningCard(row, nowMs) {
   const instruction = clip(row.instruction);
   if (instruction) details.push(instruction);
   const publisher = (row.source ?? 'met') === 'met' ? 'MET Norway' : 'Varsom';
-  if (row.web) details.push(`${publisher} ↗ · click card to open`);
-  const title = `WARNING · ${row.eventName || row.event || 'Weather'}`;
+  if (row.web)
+    details.push(t('{publisher} ↗ · click card to open', { publisher }));
+  const title = t('WARNING · {event}', {
+    event: row.eventName || row.event || t('Weather'),
+  });
   return {
     id: `weather-warning-card:${row.stableId}`,
     selected: true,
     interactive: Boolean(row.web),
     ...(row.web
-      ? { accessibilityLabel: `Open ${title} on ${publisher}` }
+      ? {
+          accessibilityLabel: t('Open {title} on {publisher}', {
+            title,
+            publisher,
+          }),
+        }
       : undefined),
     title,
     details,

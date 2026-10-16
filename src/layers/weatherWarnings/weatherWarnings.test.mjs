@@ -12,6 +12,7 @@ import {
   parseVarsomRing,
 } from './nveRecords.js';
 import { weatherWarningsProxy } from '../../../server/providers/weatherWarnings.js';
+import { setLocale } from '../../i18n/index.js';
 
 const ring = [
   [5.0, 60.0],
@@ -103,6 +104,20 @@ test('the warning card summarizes level, area, validity and advice', () => {
   ]);
   const upcoming = buildWarningCard(row, Date.parse('2026-10-09T12:00:00Z'));
   assert.equal(upcoming.details[1], 'from Oct 9 20:00Z to Oct 11 12:00Z');
+});
+
+test('the warning card follows the UI language', () => {
+  const [row] = normalizeWeatherWarningSnapshot({ features: [feature()] });
+  try {
+    setLocale('es');
+    const card = buildWarningCard(row, Date.parse('2026-10-10T12:00:00Z'));
+    assert.equal(card.title, 'AVISO · Gale');
+    assert.equal(card.details[0], 'nivel amarillo · Frøya - Rørvik · mar');
+    assert.match(card.details[1], /^vigente hasta 11 oct\.? 12:00Z$/);
+    assert.equal(card.accessibilityLabel, 'Abrir AVISO · Gale en MET Norway');
+  } finally {
+    setLocale('en');
+  }
 });
 
 test('the card anchor sits on the largest polygon', () => {

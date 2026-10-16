@@ -6,6 +6,7 @@ import {
   warningAccent,
 } from './cards.js';
 import { WARNING_LEVELS } from './records.js';
+import { msg, t } from '../../i18n/index.js';
 export {
   normalizeWeatherWarningSnapshot,
   warningLevel,
@@ -25,16 +26,28 @@ const CARD_HOST_OPTIONS = Object.freeze({
   moving: false,
 });
 const LEVEL_LABELS = Object.freeze({
-  yellow: 'Yellow · moderate',
-  orange: 'Orange · severe',
-  red: 'Red · extreme',
+  yellow: msg('Yellow · moderate'),
+  orange: msg('Orange · severe'),
+  red: msg('Red · extreme'),
 });
 /** Warning families, each switchable from the layer row. */
 const SOURCES = Object.freeze([
-  { id: 'met', label: 'Weather', title: 'MET Norway weather warnings' },
-  { id: 'flood', label: 'Flood', title: 'NVE flood warnings' },
-  { id: 'landslide', label: 'Landslide', title: 'NVE landslide warnings' },
-  { id: 'avalanche', label: 'Avalanche', title: 'Varsom avalanche danger' },
+  {
+    id: 'met',
+    label: msg('Weather'),
+    title: msg('MET Norway weather warnings'),
+  },
+  { id: 'flood', label: msg('Flood'), title: msg('NVE flood warnings') },
+  {
+    id: 'landslide',
+    label: msg('Landslide'),
+    title: msg('NVE landslide warnings'),
+  },
+  {
+    id: 'avalanche',
+    label: msg('Avalanche'),
+    title: msg('Varsom avalanche danger'),
+  },
 ]);
 const sourceOf = (row) => row.source ?? 'met';
 
@@ -308,7 +321,7 @@ export function createWeatherWarningsLayer({
         if (request.signal.aborted || _request !== request || !_enabled)
           return false;
         console.warn('[Data:WeatherWarnings] Fetch error:', e);
-        _lastError = e?.message || 'Weather warning source unavailable';
+        _lastError = e?.message || msg('Weather warning source unavailable');
         return false;
       } finally {
         if (_request === request) _request = null;
@@ -361,20 +374,23 @@ export function createWeatherWarningsLayer({
           const count = all.filter((row) => sourceOf(row) === id).length;
           return {
             id: `source-${id}`,
-            label: count ? `${label} ${count}` : label,
-            title: `${_hiddenSources.has(id) ? 'Show' : 'Hide'} ${title}`,
+            label: count ? `${t(label)} ${count}` : t(label),
+            title: _hiddenSources.has(id)
+              ? t('Show {name}', { name: t(title) })
+              : t('Hide {name}', { name: t(title) }),
             active: !_hiddenSources.has(id),
             onClick: () => toggleSource(id),
           };
         }),
         legend: WARNING_LEVELS.map((level, index) => ({
-          label: LEVEL_LABELS[level],
+          label: t(LEVEL_LABELS[level]),
           color: warningAccent(level),
           count: rows.filter((row) => row.level === level).length,
           ...(index === 0
             ? {
-                blurb:
+                blurb: t(
                   'Official warnings in effect now, yellow and above: MET Norway weather (land and sea), NVE flood and landslide (by municipality) and Varsom avalanche danger (by region). Norway only.',
+                ),
               }
             : {}),
         })),
