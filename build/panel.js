@@ -26,6 +26,12 @@ export function panelBuildConfig(config) {
       cssCodeSplit: false,
       rollupOptions: {
         ...config.build?.rollupOptions,
+        // The panel inlines every dynamic import into its one script, the
+        // experimental Navara mode included, so the guard that keeps Navara
+        // out of the app's initial chunks does not apply here.
+        plugins: (config.build?.rollupOptions?.plugins ?? []).filter(
+          (plugin) => plugin?.name !== 'gev-initial-chunk-guard',
+        ),
         output: { inlineDynamicImports: true },
       },
     },
