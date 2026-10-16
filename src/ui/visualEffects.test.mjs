@@ -5,10 +5,10 @@ import {
   GLOBAL_POST_DEFAULTS,
   STYLE_PRESET_DEFAULTS,
   MILITARY_DETECTION_PRESET,
-  NAVARA_SHARPEN_INTENSITY_DEFAULT,
-  SHARPEN_INTENSITY_DEFAULT,
+  ENGINE_SHARPEN_DEFAULT,
+  SHARPEN_INTENSITY_DEFAULTS,
+  presetSharpenIntensity,
   sharpenAmount,
-  sharpenIntensityForEngine,
 } from './visualPresets.js';
 
 function fixture(engine = null) {
@@ -234,15 +234,26 @@ test('with a viewer the Cesium stage sharpens and the engine is left alone', () 
   f.effects.destroy();
 });
 
-test('Navara reads the Cesium sharpen default as 80 %, other values stay', () => {
-  assert.equal(SHARPEN_INTENSITY_DEFAULT, 49);
-  assert.equal(NAVARA_SHARPEN_INTENSITY_DEFAULT, 80);
-  assert.equal(sharpenIntensityForEngine(49, 'navara'), 80);
-  assert.equal(sharpenIntensityForEngine(49, 'cesium'), 49);
-  assert.equal(sharpenIntensityForEngine(65, 'navara'), 65);
-  assert.equal(sharpenIntensityForEngine(0, 'navara'), 0);
-  for (const preset of Object.values(STYLE_PRESET_DEFAULTS))
-    assert.equal(preset.sharpen.intensity, SHARPEN_INTENSITY_DEFAULT);
+test('presets and the baseline take the engine default sharpen: Cesium 49 %, Navara 80 %', () => {
+  assert.deepEqual(SHARPEN_INTENSITY_DEFAULTS, { cesium: 49, navara: 80 });
+  for (const preset of [
+    GLOBAL_POST_DEFAULTS,
+    ...Object.values(STYLE_PRESET_DEFAULTS),
+  ]) {
+    assert.equal(preset.sharpen.intensity, ENGINE_SHARPEN_DEFAULT);
+    assert.equal(
+      presetSharpenIntensity(preset.sharpen.intensity, 'cesium'),
+      49,
+    );
+    assert.equal(
+      presetSharpenIntensity(preset.sharpen.intensity, 'navara'),
+      80,
+    );
+  }
+  assert.equal(presetSharpenIntensity(ENGINE_SHARPEN_DEFAULT, undefined), 49);
+  // An explicit value is never remapped: 49 stays 49 on Navara.
+  assert.equal(presetSharpenIntensity(49, 'navara'), 49);
+  assert.equal(presetSharpenIntensity(65, 'cesium'), 65);
 });
 
 test('stop revokes pending work immediately but retains stages until final destruction', () => {
@@ -292,7 +303,10 @@ test('destroying one instance does not remove another pipeline or clock', () => 
 test('existing baseline and military presets keep one detection default', () => {
   assert.equal(GLOBAL_POST_DEFAULTS.detectionMode, 'DENSE');
   assert.equal(GLOBAL_POST_DEFAULTS.detectionDensity, 75);
-  assert.equal(GLOBAL_POST_DEFAULTS.sharpen.intensity, 49);
+  assert.equal(
+    presetSharpenIntensity(GLOBAL_POST_DEFAULTS.sharpen.intensity, 'cesium'),
+    49,
+  );
   assert.equal(GLOBAL_POST_DEFAULTS.detectionFadePct, 7);
   assert.equal(GLOBAL_POST_DEFAULTS.detectionOutsideOpacityPct, 1);
   for (const name of ['retro', 'surveillance', 'thermal']) {

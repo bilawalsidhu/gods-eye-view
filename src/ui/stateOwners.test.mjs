@@ -182,6 +182,7 @@ test('on Navara, presets set the Sharpen slider to 80 % and the engine draws it'
       governorRequestRender() {},
       holdContinuousRender() {},
       releaseContinuousRender() {},
+      setKeyholeFadeTuning() {},
     },
     readHud: () => ({ getVariant: () => 'tactical', setMode() {} }),
   });
@@ -195,5 +196,9 @@ test('on Navara, presets set the Sharpen slider to 80 % and the engine draws it'
     { enabled: true },
     { amount: 1.7000000000000002 },
   ]);
+  // A share link carries an explicit value: 49 stays 49 on Navara.
+  await owner.restoreShareState({ sharpenIntensity: 49, sharpen: true });
+  assert.equal(elements._sharpenSlider.value, '49');
+  assert.deepEqual(sharpen.at(-1), { amount: 1.08 });
   owner.destroy();
 });
