@@ -1,7 +1,7 @@
 // CPU picks of movers and lines for every engine that needs them (Navara's
 // hover, drill and synchronous pick, the fake engine): projected positions
-// within the drawn size (+3 px, Navara's PICK_RADIUS), lines within half
-// their width (+3 px), hidden behind the globe excluded, nearest to the
+// within the drawn size (+3 px, Navara's PICK_RADIUS), lines within 8 px
+// (or half their width + 3 px when wider), hidden behind the globe excluded, nearest to the
 // camera first. Pure: src/geo and the engine's projector only.
 
 import * as geo from '../geo/index.js';
@@ -12,6 +12,8 @@ const scratchScreen = { x: 0, y: 0 };
 const scratchScreenB = { x: 0, y: 0 };
 
 export const PICK_RADIUS_PX = 3;
+/** A line is picked within 8 px of its drawn segments (thin trails too). */
+export const LINE_PICK_PX = 8;
 
 /** Distance from point p to segment ab (2D). */
 export function distanceToSegment(p, a, b) {
@@ -102,7 +104,10 @@ export function createCpuPicker({ projector, camera, movers, lines }) {
   function lineHits(at, hits) {
     for (const { options, flat, modelMatrix } of lines()) {
       if (options.pickId === undefined) continue;
-      const limit = options.widthPx / 2 + PICK_RADIUS_PX;
+      const limit = Math.max(
+        LINE_PICK_PX,
+        options.widthPx / 2 + PICK_RADIUS_PX,
+      );
       let best = null;
       for (let index = 0; index + 1 < flat.length / 3; index++) {
         const a = transformed(modelMatrix, flat, index, scratch);
