@@ -13,6 +13,20 @@ import {
 import { transitModeTier } from '../../data/transitPresetStyle.js';
 
 /**
+ * The registry entry behind a vehicle. Live feeds answer first so a feed the
+ * session disabled stops supplying vocabulary; the registry is the fallback,
+ * because a vehicle can outlive the poll that brought it.
+ * @param {object} state Layer state.
+ * @param {object} entry Vehicle entry.
+ * @returns {object|null}
+ */
+function feedForEntry(state, entry) {
+  const id = entry?.feedId;
+  if (!id) return null;
+  return state._activeFeeds.get(id) || getRegisteredTransitFeed(id) || null;
+}
+
+/**
  * The layer row's answer to "what is on screen and is it honest?".
  * @param {object} context
  * @returns {object}
@@ -101,6 +115,7 @@ export function createQueries({ state, parts }) {
           contact._entry,
           contact._entry.mode,
           now,
+          feedForEntry(state, contact._entry),
         );
       return;
     }
@@ -128,14 +143,17 @@ export function createQueries({ state, parts }) {
       // Route and operator text change with the record and the mode, both of
       // which arrive on polls — the same events that rebuild this list.
       if (!entry.labelId || entry.labelRecord !== entry.record) {
-        entry.labelId = transitDetectionId(entry.record);
+        entry.labelId = transitDetectionId(
+          entry.record,
+          feedForEntry(state, entry),
+        );
         entry.labelRecord = entry.record;
       }
       if (!entry.labelClass || entry.labelMode !== entry.mode) {
-        const feed =
-          state._activeFeeds.get(entry.feedId) ||
-          getRegisteredTransitFeed(entry.feedId);
-        entry.labelClass = transitDetectionClass(entry.mode, feed);
+        entry.labelClass = transitDetectionClass(
+          entry.mode,
+          feedForEntry(state, entry),
+        );
         entry.labelMode = entry.mode;
       }
       const contact = {
@@ -146,7 +164,12 @@ export function createQueries({ state, parts }) {
         id: entry.labelId,
         type: 'VEH',
         klass: entry.labelClass,
-        metric: transitDetectionMetric(entry, entry.mode, now),
+        metric: transitDetectionMetric(
+          entry,
+          entry.mode,
+          now,
+          feedForEntry(state, entry),
+        ),
         // The bracket carries the mode colour in every preset: the detection
         // canvas sits above the post-FX chain, where the sprites' own colour
         // is lost under NVG and FLIR. Keyless too — the feeds are keyless.
