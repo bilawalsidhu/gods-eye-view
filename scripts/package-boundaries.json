@@ -2564,7 +2564,8 @@
       "src/globe/navara/movers/pack.js",
       "src/globe/navara/movers/modelMover.js",
       "src/globe/navara/movers/index.js",
-      "src/globe/surfaceDetail.js"
+      "src/globe/surfaceDetail.js",
+      "src/globe/navara/followGestures.js"
     ],
     "external": [
       "hls.js",

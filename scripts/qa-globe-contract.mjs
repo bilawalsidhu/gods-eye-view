@@ -57,7 +57,7 @@ if (!engineSpec) {
   process.exit(2);
 }
 const BOOT_TIMEOUT_MS = Number(process.env.QA_BOOT_TIMEOUT_MS || 180000);
-const RESERVED_PORTS = new Set([4185, 4186]);
+const RESERVED_PORTS = new Set([4185, 4186, 4187, 4188]);
 
 const redact = (text) =>
   String(text)
@@ -130,13 +130,31 @@ if (!executablePath || !fs.existsSync(executablePath))
   throw new Error('Puppeteer Chrome for Testing is unavailable');
 
 /** The app's Cesium engine, after the boot flight has come to rest. */
+// Real input at page coordinates for the contract's `pointer`: a left
+// click, a move, a left drag in steps, or one wheel notch.
+async function qaPointer(page, kind, x, y, ...rest) {
+  if (kind === 'click') return page.mouse.click(x, y);
+  if (kind === 'move') return page.mouse.move(x, y);
+  if (kind === 'drag') {
+    const [x1, y1] = rest;
+    await page.mouse.move(x, y);
+    await page.mouse.down();
+    await page.mouse.move(x1, y1, { steps: 12 });
+    return page.mouse.up();
+  }
+  if (kind === 'wheel') {
+    await page.mouse.move(x, y);
+    return page.mouse.wheel({ deltaY: rest[0] });
+  }
+  throw new Error(`unknown pointer kind ${kind}`);
+}
+
 async function runCesium(page, url) {
   // Real pointer input for the pick checks (contractSuite `pointer`); the
   // first-run mission card would cover the canvas, so it stays closed.
-  await page.exposeFunction('__qaPointer', async (kind, x, y) => {
-    if (kind === 'click') await page.mouse.click(x, y);
-    else await page.mouse.move(x, y);
-  });
+  await page.exposeFunction('__qaPointer', (...args) =>
+    qaPointer(page, ...args),
+  );
   await page.evaluateOnNewDocument(() => {
     try {
       localStorage.setItem('gev:first-run-mission:v1', 'suppressed');
@@ -293,6 +311,25 @@ async function runCesium(page, url) {
         move: async (x, y) => {
           const rect = engine.host.canvas.getBoundingClientRect();
           await window.__qaPointer('move', rect.left + x, rect.top + y);
+        },
+        drag: async (x0, y0, x1, y1) => {
+          const rect = engine.host.canvas.getBoundingClientRect();
+          await window.__qaPointer(
+            'drag',
+            rect.left + x0,
+            rect.top + y0,
+            rect.left + x1,
+            rect.top + y1,
+          );
+        },
+        wheel: async (x, y, deltaY) => {
+          const rect = engine.host.canvas.getBoundingClientRect();
+          await window.__qaPointer(
+            'wheel',
+            rect.left + x,
+            rect.top + y,
+            deltaY,
+          );
         },
       };
       const results = (
@@ -550,10 +587,9 @@ async function runCesium(page, url) {
  */
 async function runNavara(page, url, consoleErrors) {
   // Real pointer input for the pick checks (contractSuite `pointer`).
-  await page.exposeFunction('__qaPointer', async (kind, x, y) => {
-    if (kind === 'click') await page.mouse.click(x, y);
-    else await page.mouse.move(x, y);
-  });
+  await page.exposeFunction('__qaPointer', (...args) =>
+    qaPointer(page, ...args),
+  );
   await page.goto(new URL(engineSpec.page, url).href, {
     waitUntil: 'domcontentloaded',
   });
@@ -649,6 +685,20 @@ async function runNavara(page, url, consoleErrors) {
       move: async (x, y) => {
         const rect = engine.host.canvas.getBoundingClientRect();
         await window.__qaPointer('move', rect.left + x, rect.top + y);
+      },
+      drag: async (x0, y0, x1, y1) => {
+        const rect = engine.host.canvas.getBoundingClientRect();
+        await window.__qaPointer(
+          'drag',
+          rect.left + x0,
+          rect.top + y0,
+          rect.left + x1,
+          rect.top + y1,
+        );
+      },
+      wheel: async (x, y, deltaY) => {
+        const rect = engine.host.canvas.getBoundingClientRect();
+        await window.__qaPointer('wheel', rect.left + x, rect.top + y, deltaY);
       },
     };
     const results = (

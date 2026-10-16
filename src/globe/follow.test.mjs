@@ -127,3 +127,75 @@ test('stop ends the follow; a new follow replaces the old one', () => {
     TypeError,
   );
 });
+
+test('with engine gestures, drag orbits at the same range and wheel stops at the floor', () => {
+  let pose = {
+    position: cartesian3.fromDegrees(0, 0, 1e7),
+    direction: cartesian3.create(-1, 0, 0),
+    up: cartesian3.create(0, 0, 1),
+  };
+  const commanded = createEngineEvent();
+  const frame = createEngineEvent();
+  let handlers = null;
+  let suspended = 0;
+  const controller = createFollowController({
+    camera: { pose: () => pose, commanded },
+    aim: (next) => {
+      pose = next;
+    },
+    frame,
+    requestRender: () => {},
+    gestures: (next) => {
+      handlers = next;
+      suspended++;
+      return () => {
+        handlers = null;
+        suspended--;
+      };
+    },
+  });
+  const handle = controller.follow({
+    position: () => target0,
+    viewFrom: cartesian3.create(0, -1000, 500),
+  });
+  assert.equal(suspended, 1, 'the engine gestures are taken');
+  frame.raiseEvent();
+  const range = () => cartesian3.distance(pose.position, target0);
+  const start = range();
+  handlers.orbit(0.8, 0.3);
+  frame.raiseEvent();
+  assert.ok(Math.abs(range() - start) < 1e-6 * start, 'orbit keeps the range');
+  const offset = enuOffset(target0, pose.position);
+  assert.ok(Math.abs(offset.x) > 100, 'the heading turned');
+  // A camera move nobody commanded (the engine's own controller) is not
+  // read back while the gestures are the follow's.
+  pose = { ...pose, position: cartesian3.fromDegrees(10, 10, 1e6) };
+  frame.raiseEvent();
+  assert.ok(Math.abs(range() - start) < 1e-6 * start);
+  for (let i = 0; i < 40; i++) {
+    handlers.zoom(0.5);
+    frame.raiseEvent();
+    assert.ok(range() >= MIN_FOLLOW_RANGE_M - 1e-6, `range ${range()}`);
+  }
+  assert.ok(Math.abs(range() - MIN_FOLLOW_RANGE_M) < 1e-6, 'at the floor');
+  // Pitch stays above the target's horizon and short of straight down.
+  handlers.orbit(0, 10);
+  frame.raiseEvent();
+  const up = enuOffset(target0, pose.position);
+  assert.ok(up.z > 0 && up.z < MIN_FOLLOW_RANGE_M, 'pitch clamped');
+  handle.stop();
+  assert.equal(suspended, 0, 'the gestures are given back');
+});
+
+test('a still target and offset request no renders', () => {
+  const h = harness();
+  h.controller.follow({
+    position: () => target0,
+    viewFrom: cartesian3.create(0, -1000, 500),
+  });
+  h.frame();
+  h.frame();
+  const settled = h.renders();
+  for (let i = 0; i < 5; i++) h.frame();
+  assert.equal(h.renders(), settled, 'idle while nothing moves');
+});
