@@ -14,9 +14,12 @@ import {
   resizedImageUrl,
 } from './policy.js';
 
+import { msg } from '../../../../i18n/index.js';
+
 export { panoSizeFor } from '../../photoViewer.js';
 
-const LOAD_FAILED = 'The KartaView photo could not be loaded';
+/** English data: the Street Level panel translates it (translateKnown). */
+const LOAD_FAILED = msg('The KartaView photo could not be loaded');
 
 /** Load a KartaView photo (see photoViewer.js `loadImage`). */
 export function loadImage(url, options = {}) {

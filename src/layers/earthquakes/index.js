@@ -16,6 +16,10 @@ export {
   emscQueryUrl,
 } from './source.js';
 
+// A portable package (no i18n): the error stays English data and the layer
+// panel shows it translated.
+const msg = (text) => text;
+
 /** Own one earthquake display and its refresh lifecycle. */
 export function createEarthquakesLayer({ source, overlayHost } = {}) {
   if (typeof source?.getSnapshot !== 'function')
@@ -162,7 +166,7 @@ export function createEarthquakesLayer({ source, overlayHost } = {}) {
         if (request.signal.aborted || _request !== request || !_enabled)
           return false;
         console.warn('[Data:Earthquakes] Fetch error:', e);
-        _lastError = e?.message || 'Earthquake source unavailable';
+        _lastError = e?.message || msg('Earthquake source unavailable');
         return false;
       } finally {
         if (_request === request) _request = null;

@@ -6,6 +6,7 @@ import { MAPILLARY_CREDIT_HTML } from './providers/mapillary/policy.js';
 import { createMapillaryProvider } from './providers/mapillary/index.js';
 import { createKartaViewProvider } from './providers/kartaview/index.js';
 import { fakeStreetLevelProvider as fakeProvider } from '../../testSupport/streetLevelFakes.mjs';
+import { setLocale } from '../../i18n/index.js';
 
 /**
  * A stand-in Cesium viewer the layer can be enabled on: a canvas for the
@@ -688,6 +689,24 @@ test('a lookup for the click-to-open providers asks only them and reports "that 
     layer.getUIState().street.error,
     'No street-level imagery within 50 m of that point',
   );
+});
+
+test('the nearest-image refusal is written in the language of the page', async (t) => {
+  const { layer } = await withStreetView(t, { nearest: () => null });
+  layer.setProviderEnabled('google', true);
+  await settle();
+  setLocale('es');
+  try {
+    await layer.openNearest(
+      { lat: 38.58, lon: -121.49 },
+      { providerIds: ['google'], frame: false },
+    );
+    const error = layer.getUIState().street.error;
+    assert.notEqual(error, 'No street-level imagery within 50 m of that point');
+    assert.match(error, /50/, 'keeps the radius');
+  } finally {
+    setLocale('en');
+  }
 });
 
 test('an image opened from a ground click leaves the camera where it is', async (t) => {
