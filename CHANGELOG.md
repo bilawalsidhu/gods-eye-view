@@ -1,5 +1,14 @@
 # Changelog
 
+- Add AlphaEarth Change (DATA ▸ Cameras): draw a box up to 100 km a side, pick
+  two years, and the map shows where the land changed between them, read from
+  the AlphaEarth Foundations annual satellite embeddings (Google and Google
+  DeepMind, CC BY 4.0) on the keyless Source Cooperative mirror. The server
+  reads the two years' embedding COGs with byte ranges and returns one
+  `1 − cosine` grid; the threshold, legend and changed share are computed in the
+  browser, so moving the slider makes no request. The box, years, detail and
+  threshold travel in share links (#814, #303).
+
 - Add nine Ontario transit feeds: TTC, MiWay, Hamilton HSR, Durham Region,
   YRT/Viva, Guelph, Burlington, Barrie and Kingston, each carrying its own
   licence quote and attribution. A feed can now name its own modes, so Toronto's

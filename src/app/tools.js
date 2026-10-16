@@ -4,6 +4,8 @@ import { initDrawTool } from '../annotations/drawTool.js';
 import { initGeoFileImport } from '../ui/geoFileImport.js';
 import { initImageryBoxTool } from '../ui/imageryBoxTool.js';
 import { createRecentImageryPanel } from '../ui/recentImagery.js';
+import { createAlphaEarthPanel } from '../ui/alphaEarth.js';
+import { validateAlphaEarthBox } from '../layers/alphaEarth/model.js';
 import { initGevVoiceCommands } from '../voice/gevRealtime.js';
 import { installViews, isEmbeddedInline } from './embed.js';
 import { installScopeMask, destroyScopeMask } from '../scopeMask.js';
@@ -102,6 +104,38 @@ export function createApplicationTools({
         delete window.__gevRecentImagery;
       data.presentation.attachRecentImagery(null);
       imageryBoxTool?.destroy();
+    });
+  }
+  // DATA ▸ AlphaEarth Change: the same box tool with the change endpoint's
+  // limits, and its readout on the right rail.
+  const alphaEarth = dataManager.layers.get('alpha-earth-change')?.module;
+  if (alphaEarth) {
+    alphaEarth.attachTileset(tileset);
+    const alphaEarthBoxTool = initImageryBoxTool({
+      viewer,
+      validate: validateAlphaEarthBox,
+      onBox: (box) => alphaEarth.setBox(box),
+      onCancel: (reason, message) => {
+        if (message) alphaEarth.reportBoxRefusal(message);
+      },
+      onActive: (active) => alphaEarth.setToolActive(active),
+    });
+    data.presentation.attachAlphaEarth((container) =>
+      createAlphaEarthPanel({
+        container,
+        viewer,
+        layer: alphaEarth,
+        tool: alphaEarthBoxTool,
+      }),
+    );
+    // The live gate's handle (scripts/qa-alpha-earth.mjs).
+    const alphaEarthHandle = { layer: alphaEarth, tool: alphaEarthBoxTool };
+    window.__gevAlphaEarth = alphaEarthHandle;
+    defer(() => {
+      if (window.__gevAlphaEarth === alphaEarthHandle)
+        delete window.__gevAlphaEarth;
+      data.presentation.attachAlphaEarth(null);
+      alphaEarthBoxTool?.destroy();
     });
   }
   if (startChrome)

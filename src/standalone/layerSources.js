@@ -1,5 +1,6 @@
 import { createDirectionsSource } from '../layers/directions/source.js';
 import { createRecentImagerySource } from '../layers/recentImagery/source.js';
+import { createAlphaEarthSource } from '../layers/alphaEarth/source.js';
 import { createOpenFreeMapSource } from '../sources/openFreeMap.js';
 import {
   createFlightSource,
@@ -32,6 +33,7 @@ export function createStandaloneLayerSources(overrides = {}) {
     ...createReferenceSources(),
     directions: createDirectionsSource(),
     'recent-imagery': createRecentImagerySource(),
+    'alpha-earth': createAlphaEarthSource(),
     flights: createFlightSource(),
     military: createMilitarySource(),
     vessels: createVesselSource({

@@ -426,6 +426,21 @@ const OPTION_GROUPS = Object.freeze({
     ),
     booleanOption('viirs', 'v', false),
   ]),
+  'alpha-earth-change': Object.freeze([
+    // Box edges in degrees × 10000; the server caps a side at 100 km.
+    boundedIntegerOption('west', 'w', null, { min: -1800000, max: 1800000 }),
+    boundedIntegerOption('south', 's', null, { min: -850000, max: 850000 }),
+    boundedIntegerOption('east', 'e', null, { min: -1800000, max: 1800000 }),
+    boundedIntegerOption('north', 'n', null, { min: -850000, max: 850000 }),
+    boundedIntegerOption('from', 'a', null, { min: 2017, max: 2100 }),
+    boundedIntegerOption('to', 'b', null, { min: 2017, max: 2100 }),
+    // Percent of `1 − cosine` at which a pixel counts as changed.
+    boundedIntegerOption('threshold', 't', 35, { min: 1, max: 100 }),
+    enumOption('detail', 'd', 'standard', ['standard', 'high'], {
+      standard: 's',
+      high: 'h',
+    }),
+  ]),
   'street-level': Object.freeze([
     // Preserve the published Mapillary token; custom switches use stable IDs.
     booleanOption('mapillary', 'm', true),
@@ -591,6 +606,12 @@ export const LAYER_STATE_REGISTRY = Object.freeze([
     id: 'ais-live-vessels',
     token: 'a',
     disposition: 'enabled-only',
+  }),
+  Object.freeze({
+    id: 'alpha-earth-change',
+    token: '5',
+    disposition: 'enabled+options',
+    optionOwner: 'alpha-earth-change',
   }),
   Object.freeze({
     id: 'alpr-cameras',

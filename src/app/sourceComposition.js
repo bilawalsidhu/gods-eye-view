@@ -11,6 +11,7 @@ export const CATALOG_SOURCE_CONTRACTS = Object.freeze({
     ['recent-imagery'],
     ['searchHls', 'getThumbnail', 'getTileTemplate'],
   ),
+  'alpha-earth': contract(['alpha-earth-change'], ['listYears', 'fetchChange']),
   flights: contract(['flights'], ['getSnapshot']),
   military: contract(['military'], ['getSnapshot']),
   vessels: contract(['ais-live-vessels'], ['getSnapshot']),
