@@ -3,7 +3,12 @@
  * Deterministic QA for the detection overlay's bounded two-lane label pipeline.
  *
  * Run:
- *   node scripts/qa-labels.mjs --url http://localhost:4173
+ *   node scripts/qa-labels.mjs --url http://localhost:4173 [--engine=cesium|navara]
+ *
+ * Engine-neutral: the camera and frames go through the globe engine and the
+ * layers through the QA probe (window.__godsEyeView.layers). On an engine
+ * without the flights, military and satellites layers (Navara today) the
+ * field checks are SKIPPED and the settings checks still run.
  *
  * The harness replaces only the three detection read APIs in the loaded page.
  * It does not enable their network pollers or mutate repository data. The field
@@ -22,7 +27,12 @@ const getOpt = (name, fallback) => {
   return index >= 0 && argv[index + 1] ? argv[index + 1] : fallback;
 };
 
-const APP_URL = getOpt('--url', 'http://localhost:4173');
+const ENGINE = argv.find((value) => value.startsWith('--engine='))?.slice(9) ?? 'cesium';
+const APP_URL = (() => {
+  const url = new URL(getOpt('--url', 'http://localhost:4173'));
+  url.searchParams.set('engine', ENGINE);
+  return url.href;
+})();
 const APP_ORIGIN = new URL(APP_URL).origin;
 const HEADFUL = getFlag('--headful');
 const SHOT_DIR = path.resolve('qa-shots/labels');
@@ -74,6 +84,8 @@ function findChromeExecutable() {
 }
 
 const results = [];
+let skippedChecks = 0;
+let skippedField = false;
 function record(name, ok, detail) {
   results.push({ name, ok, detail });
   const tag = ok ? '\x1b[32mPASS\x1b[0m' : '\x1b[31mFAIL\x1b[0m';
@@ -271,7 +283,7 @@ async function main() {
 
     await page.goto(APP_URL, { waitUntil: 'domcontentloaded', timeout: 60000 });
     await page.waitForFunction(
-      () => window.__godsEyeView?.viewer && window.__godsEyeView?.styleManager,
+      () => window.__godsEyeView?.layers && window.__godsEyeView?.styleManager,
       { timeout: 60000, polling: 100 },
     );
 
@@ -279,7 +291,7 @@ async function main() {
     // Let that callback start, then cancel it before establishing the global
     // measurement camera so startup motion cannot invalidate the sample.
     await new Promise((resolve) => setTimeout(resolve, 600));
-    await page.evaluate(() => window.__godsEyeView.viewer.camera.cancelFlight());
+    await page.evaluate(() => window.__godsEyeView.engine.camera.cancelFlight());
 
     const stateChecks = await page.evaluate((storageKey) => {
       const manager = window.__godsEyeView.styleManager;
@@ -305,10 +317,32 @@ async function main() {
       `OFF=${stateChecks.off.densityPct}%, restore=${stateChecks.restoredFromOff.detectionMode}/${stateChecks.restoredFromOff.densityPct}%`,
     );
 
-    const injected = await page.evaluate(({ fieldCounts, normalCounts }) => {
-      const { viewer, dataManager, styleManager } = window.__godsEyeView;
-      viewer.camera.cancelFlight();
-      const Cartesian3 = viewer.camera.position.constructor;
+    const fieldLayers = ['flights', 'military', 'satellites'];
+    const missingLayers = await page.evaluate(
+      (ids) => ids.filter((id) => !window.__godsEyeView.layers.available(id)),
+      fieldLayers,
+    );
+    if (missingLayers.length) {
+      console.log(`  [SKIP] the deterministic field checks — no ${missingLayers.join(', ')} on ${ENGINE}`);
+      skippedChecks += 1;
+      record(
+        'console remains clean',
+        consoleErrors.length === 0,
+        consoleErrors.slice(0, 3).join(' | ') || '0 errors',
+      );
+      skippedField = true;
+      return;
+    }
+    const injected = await page.evaluate(async ({ fieldCounts, normalCounts }) => {
+      const { engine, dataManager, styleManager } = window.__godsEyeView;
+      const geo = await import('/src/geo/index.js');
+      engine.camera.cancelFlight();
+      // A frame counter on the engine (the samples are one per drawn frame).
+      window.__LABEL_QA_FRAME = 0;
+      engine.frames.postRender.addEventListener(() => {
+        window.__LABEL_QA_FRAME += 1;
+      });
+      const Cartesian3 = { fromDegrees: (lon, lat, height) => geo.cartesian3.fromDegrees(lon, lat, height) };
       const field = { flights: [], military: [], satellites: [] };
       const layerIds = Object.keys(field);
       const goldenAngle = Math.PI * (3 - Math.sqrt(5));
@@ -339,10 +373,15 @@ async function main() {
         entry.module.getDetectableObjects = () => window.__LABEL_QA_FIELD[layerId];
       }
 
-      viewer.camera.setView({
-        destination: Cartesian3.fromDegrees(-97, 30, 25000000),
-        orientation: { heading: 0, pitch: -Math.PI / 2, roll: 0 },
-      });
+      // The global camera, orbiting west to east (the old rotateRight about
+      // the globe centre at 25 000 km).
+      let orbitLon = -97;
+      const placeCamera = () =>
+        engine.camera.setView({
+          destination: Cartesian3.fromDegrees(orbitLon, 30, 25000000),
+          orientation: { heading: 0, pitch: -Math.PI / 2, roll: 0 },
+        });
+      placeCamera();
       styleManager.setDetection({
         enabled: true,
         densityPct: 100,
@@ -359,13 +398,14 @@ async function main() {
       let lastOrbitAt = performance.now();
       window.__LABEL_QA_ORBIT = setInterval(() => {
         const now = performance.now();
-        viewer.camera.rotateRight((now - lastOrbitAt) * 0.0000012);
+        orbitLon -= ((now - lastOrbitAt) * 0.0000012 * 180) / Math.PI;
         lastOrbitAt = now;
-        viewer.scene.requestRender();
+        placeCamera();
+        engine.render.request('qa-labels');
       }, 100);
       const sample = () => {
         const diagnostics = styleManager.getDetectionDiagnostics();
-        const frameNumber = viewer.scene.frameState?.frameNumber ?? -1;
+        const frameNumber = window.__LABEL_QA_FRAME;
         if (diagnostics && frameNumber !== window.__LABEL_QA.lastFrameNumber) {
           window.__LABEL_QA.lastFrameNumber = frameNumber;
           window.__LABEL_QA.frames.push({
@@ -395,7 +435,7 @@ async function main() {
             observationCount: Number(dataset.observationCount),
             selectedCount: Number(dataset.selectedCount),
             fadingCount: Number(dataset.fadingCount),
-            cameraHeight: viewer.camera.positionCartographic.height,
+            cameraHeight: engine.camera.height(),
             demandByLayer: JSON.parse(dataset.demandByLayer || '{}'),
             cohortByLayer: JSON.parse(dataset.cohortByLayer || '{}'),
             entitlementByLayer: JSON.parse(dataset.entitlementByLayer || '{}'),
@@ -420,12 +460,11 @@ async function main() {
     // -samples gates supersede it — same fix, deterministic instead of timed.)
     await waitForSettledSyntheticField(page);
     await page.evaluate(() => {
-      const viewer = window.__godsEyeView.viewer;
       const revision = Number(document.querySelector('#world-overlay-canvas')?.dataset?.solveRevision || 0);
       window.__LABEL_QA.solve = [];
       window.__LABEL_QA.frames = [];
       window.__LABEL_QA.lastRevision = revision;
-      window.__LABEL_QA.lastFrameNumber = viewer.scene.frameState?.frameNumber ?? -1;
+      window.__LABEL_QA.lastFrameNumber = window.__LABEL_QA_FRAME;
       window.__LABEL_QA.startedAt = performance.now();
     });
     const syntheticSampling = await waitForConclusiveSamples(page, {
@@ -460,12 +499,11 @@ async function main() {
       { timeout: SAMPLE_TIMEOUT_MS, polling: 100 },
     );
     await page.evaluate(() => {
-      const viewer = window.__godsEyeView.viewer;
       const revision = Number(document.querySelector('#world-overlay-canvas')?.dataset?.solveRevision || 0);
       window.__LABEL_QA.solve = [];
       window.__LABEL_QA.frames = [];
       window.__LABEL_QA.lastRevision = revision;
-      window.__LABEL_QA.lastFrameNumber = viewer.scene.frameState?.frameNumber ?? -1;
+      window.__LABEL_QA.lastFrameNumber = window.__LABEL_QA_FRAME;
       window.__LABEL_QA.startedAt = performance.now();
     });
     const normalSampling = await waitForConclusiveSamples(page, {
@@ -587,10 +625,15 @@ async function main() {
     console.log(`  Synthetic solves: ${solveSamples.length}; normal frames: ${normalFieldFrames.length} (${normalFrames.length} non-solve)`);
   } finally {
     await browser.close();
+    if (skippedField) summarize();
   }
 
+  summarize();
+}
+
+function summarize() {
   const failures = results.filter((result) => !result.ok);
-  console.log(`\n${results.length - failures.length}/${results.length} checks passed.`);
+  console.log(`\n${results.length - failures.length}/${results.length} checks passed${skippedChecks ? `, ${skippedChecks} skipped` : ''} (engine ${ENGINE}).`);
   if (failures.length) process.exit(1);
 }
 
