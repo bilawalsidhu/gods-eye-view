@@ -12,6 +12,7 @@ import {
   DynamicDrawUsage,
   InstancedBufferAttribute,
   InstancedMesh,
+  LinearFilter,
   MeshBasicMaterial,
   PlaneGeometry,
   SRGBColorSpace,
@@ -147,15 +148,20 @@ export function patchMoverShader(shader, uniforms, { point = false } = {}) {
   return shader;
 }
 
+// Sampled as Cesium samples its billboard atlas: linear, no mipmaps (a
+// mipmapped atlas greys small glyphs that Cesium draws at full colour).
+function cesiumSampling(texture) {
+  texture.colorSpace = SRGBColorSpace;
+  texture.generateMipmaps = false;
+  texture.minFilter = LinearFilter;
+  texture.magFilter = LinearFilter;
+  return texture;
+}
+
 /** The atlas as a three texture (a canvas at once, a URL once loaded). */
 function atlasTexture(atlas, onLoad) {
-  if (atlas.canvas) {
-    const texture = new CanvasTexture(atlas.canvas);
-    texture.colorSpace = SRGBColorSpace;
-    return texture;
-  }
-  const texture = new Texture();
-  texture.colorSpace = SRGBColorSpace;
+  if (atlas.canvas) return cesiumSampling(new CanvasTexture(atlas.canvas));
+  const texture = cesiumSampling(new Texture());
   const image = new Image();
   image.crossOrigin = 'anonymous';
   image.onload = () => {
