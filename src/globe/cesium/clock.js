@@ -5,8 +5,15 @@
 // (including those the app added to the scene before the engine existed)
 // reads the same frame time. The viewer clock itself is never changed: the
 // app does not animate it (shouldAnimate stays false), and its time still
-// drives Cesium's own lighting as before. The tick subscription appears on
-// first use (a ticked listener or a frameTime read) and destroy removes it.
+// drives Cesium's own lighting as before.
+//
+// The latch is attached when the engine is created (the app creates it with
+// the scene, before cameraVerbs and the layers add their own onTick
+// listeners), so it runs first in each tick; an onTick listener added before
+// the engine existed would read the previous frame's time. destroy removes
+// it. A viewer without a clock (tests, a bare scene) latches on the scene's
+// preUpdate instead, attached on first use so creating the engine adds no
+// scene listener.
 
 import { createEngineEvent } from '../contract.js';
 import { appClock as pageClock } from '../../time/clock.js';
@@ -29,6 +36,7 @@ export function createCesiumClock(viewer, { appClock = pageClock } = {}) {
     if (!removeTick && !destroyed)
       removeTick = tickSource.addEventListener(onTick);
   };
+  if (viewer.clock?.onTick) attach();
   const add = ticked.addEventListener;
   ticked.addEventListener = (listener) => {
     const remove = add(listener);

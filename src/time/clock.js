@@ -22,7 +22,9 @@ function finite(value, label) {
  * @property {() => number} beginFrame Latches and returns the frame time; the
  *   globe engine calls it once at the start of each of its frames.
  * @property {(ms?: number) => void} freeze Holds the time at `ms` (default:
- *   the current time). QA and tests only.
+ *   the current time). QA and tests only. Like offset and rate, it changes
+ *   now() at once and frameTime() from the next beginFrame (the engine's
+ *   next frame); request a render after it in request-render mode.
  * @property {() => void} resume Runs on from the frozen time.
  * @property {(ms: number) => void} offset Sets the time to the wall clock
  *   plus `ms`, running on from it at the current rate (it ends a freeze).

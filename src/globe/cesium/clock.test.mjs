@@ -28,12 +28,19 @@ function cesiumFrame(viewer, { draw = true } = {}) {
   viewer.scene.postRender.raiseEvent(viewer.scene, time);
 }
 
-test('the clock reads the app clock and subscribes to nothing at creation', () => {
+test('the clock reads the app clock and latches on the viewer clock from creation', () => {
   const viewer = createFakeViewer();
   const wall = manualAppClock();
   const { clock } = createCesiumClock(viewer, { appClock: wall.appClock });
   assert.ok(isEngineEvent(clock.ticked));
-  assert.equal(viewer.clock.onTick.numberOfListeners, 0);
+  // Attached at creation, so it runs before onTick listeners added later
+  // (cameraVerbs installs its own after the engine exists).
+  assert.equal(viewer.clock.onTick.numberOfListeners, 1);
+  const order = [];
+  viewer.clock.onTick.addEventListener(() => order.push(clock.frameTime()));
+  wall.advance(9);
+  viewer.clock.onTick.raiseEvent(viewer.clock);
+  assert.deepEqual(order, [wall.appClock.now()]);
   assert.equal(clock.now(), wall.appClock.now());
   wall.advance(5);
   assert.equal(clock.now(), wall.appClock.now());
@@ -67,7 +74,7 @@ test('frameTime is latched on the viewer clock tick, before preUpdate', () => {
   ]);
 });
 
-test('frameTime alone starts the latch; destroy removes it', () => {
+test('frameTime reads the latch; destroy removes it', () => {
   const viewer = createFakeViewer();
   const wall = manualAppClock();
   const { clock, destroy } = createCesiumClock(viewer, {

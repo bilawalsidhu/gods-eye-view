@@ -214,8 +214,22 @@
  *   The app's own time (src/time/clock.js), in milliseconds since the Unix
  *   epoch: the one time source for layers and the engine's own time-driven
  *   drawing (Navara's sun). By default it is the wall clock (Date.now); QA
- *   and tests may freeze, offset or speed it up on the app clock. Cesium's
- *   viewer.clock is not driven by it (the app never animates that clock).
+ *   and tests may freeze, offset or speed it up on the app clock: now()
+ *   follows at once, frameTime() and ticked from the engine's next frame, and
+ *   in request-render mode nothing draws until a render is requested, so a
+ *   QA helper that moves the clock calls render.request() after it.
+ *   Not on this clock yet (each moves when its layer or code moves):
+ *   - Cesium's viewer.clock: the app never animates it (shouldAnimate false,
+ *     its time frozen at boot); Cesium's sun and lighting and every entity
+ *     property read at viewer.clock.currentTime stay on that time;
+ *   - launches: the replay timeline (replay.js, Date.now/performance.now),
+ *     the mission orbit's GMST frame (orbitRendering.js new Date()), launch
+ *     pad and panel throttles (phase 3 Task 15a);
+ *   - satellites: the point cloud's SGP4 propagation and orbit bake
+ *     (rendering.js new Date()/Date.now) (Task 14a); only the tracked
+ *     satellite reads the app clock;
+ *   - wall-clock throttles and feed receipt stamps everywhere (they measure
+ *     real elapsed time, not scene time).
  * @property {() => number} now The current app time.
  * @property {() => number} frameTime The app time latched at the start of the
  *   engine's current frame: every reader in one frame gets the same value; it
