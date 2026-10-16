@@ -1,5 +1,20 @@
 # Changelog
 
+- Weather Warnings also shows NVE flood and landslide warnings (yellow and
+  above, drawn over the warned municipalities using Kartverket outlines) and
+  Varsom avalanche danger levels 2–5 by forecast region, all in effect now.
+  Row chips switch Weather, Flood, Landslide and Avalanche on and off, and
+  cards link to Varsom. Each feed is cached separately in
+  `/api/weather-warnings`, so one failing provider leaves the others shown.
+
+- Add a Weather Warnings layer under Weather with MET Norway's official
+  yellow, orange and red warnings for Norwegian land and sea areas (gale,
+  wind, rain, snow, flooding and other MET events). Areas are drawn as
+  coloured polygons; selecting one opens a card with level, area, validity,
+  the warning text and advice, linking to MET Norway. Data is fetched keyless
+  through `/api/weather-warnings` with a 5-minute server cache and an
+  identifying User-Agent, as api.met.no requires. Voice and the analyst query
+  can address the layer, and share links carry it as token `5`.
 - Local FM seek finds stations after wrapping around 87.5–108 MHz, covers both
   band edges, skips the starting station and rejects spectra from an earlier
   tune (Aditya, @Rohilalala, #1174).

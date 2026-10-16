@@ -167,6 +167,22 @@ export const DATA_CREDITS = [
       ' · Incident information: ' +
       '<a href="https://inciweb.wildfire.gov/" target="_blank" rel="noopener">InciWeb</a>',
   },
+  {
+    key: 'met-norway-alerts',
+    html:
+      'Weather warnings: ' +
+      '<a href="https://api.met.no/" target="_blank" rel="noopener">MET Norway</a>' +
+      ' (<a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a>)',
+  },
+  {
+    key: 'nve-varsom',
+    html:
+      'Flood, landslide and avalanche warnings: ' +
+      '<a href="https://www.varsom.no/en/" target="_blank" rel="noopener">NVE / Varsom</a>' +
+      ' (<a href="https://data.norge.no/nlod/en/2.0" target="_blank" rel="noopener">NLOD 2.0</a>)' +
+      ' · Municipality outlines: ' +
+      '<a href="https://www.kartverket.no/" target="_blank" rel="noopener">Kartverket</a> (CC BY 4.0)',
+  },
   OSM_CREDIT,
   OPENMAPTILES_CREDIT,
   {
