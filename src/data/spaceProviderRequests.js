@@ -15,3 +15,20 @@ export function launchLibraryRecentUrl(end) {
   url.searchParams.set('mode', 'detailed');
   return url;
 }
+
+export function cneosFireballsUrl(options = {}) {
+  const url = new URL('https://ssd-api.jpl.nasa.gov/fireball.api');
+  url.searchParams.set('req-loc', 'true');
+  if (options.dateMin)
+    url.searchParams.set('date-min', String(options.dateMin));
+  if (options.dateMax)
+    url.searchParams.set('date-max', String(options.dateMax));
+  if (options.energyMin != null)
+    url.searchParams.set('energy-min', String(options.energyMin));
+  if (options.velMin != null)
+    url.searchParams.set('vel-min', String(options.velMin));
+  if (options.limit != null)
+    url.searchParams.set('limit', String(options.limit));
+  if (options.sort) url.searchParams.set('sort', String(options.sort));
+  return url;
+}
