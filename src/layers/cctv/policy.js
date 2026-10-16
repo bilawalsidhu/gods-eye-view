@@ -179,7 +179,7 @@ export const CAMERA_SEEDS = [
     id: 'nyc-midtown-w',
     cityId: 'nyc',
     poiIndex: 1,
-    label: 'Midtown West @ 34th',
+    label: 'Midtown West @ 34th', // i18n-ignore: camera name
     offsetNorthM: 120,
     offsetEastM: -70,
     headingDeg: 206,
@@ -191,7 +191,7 @@ export const CAMERA_SEEDS = [
     id: 'nyc-wtc-n',
     cityId: 'nyc',
     poiIndex: 2,
-    label: 'WTC North Plaza',
+    label: 'WTC North Plaza', // i18n-ignore: camera name
     offsetNorthM: 95,
     offsetEastM: 34,
     headingDeg: 164,
@@ -203,7 +203,7 @@ export const CAMERA_SEEDS = [
     id: 'nyc-times-square-ne',
     cityId: 'nyc',
     poiIndex: 1,
-    label: 'Times Sq Northeast',
+    label: 'Times Sq Northeast', // i18n-ignore: camera name
     offsetNorthM: 230,
     offsetEastM: 120,
     headingDeg: 218,
@@ -216,7 +216,7 @@ export const CAMERA_SEEDS = [
     id: 'sf-market-5th',
     cityId: 'sf',
     poiIndex: 2,
-    label: 'Market & 5th',
+    label: 'Market & 5th', // i18n-ignore: camera name
     offsetNorthM: -160,
     offsetEastM: 80,
     headingDeg: 320,
@@ -228,7 +228,7 @@ export const CAMERA_SEEDS = [
     id: 'sf-financial-district',
     cityId: 'sf',
     poiIndex: 1,
-    label: 'SF Financial Core',
+    label: 'SF Financial Core', // i18n-ignore: camera name
     offsetNorthM: 110,
     offsetEastM: 52,
     headingDeg: 205,
@@ -241,7 +241,7 @@ export const CAMERA_SEEDS = [
     id: 'tokyo-shibuya-scramble',
     cityId: 'tokyo',
     poiIndex: 4,
-    label: 'Shibuya Crossing',
+    label: 'Shibuya Crossing', // i18n-ignore: camera name
     offsetNorthM: 180,
     offsetEastM: 46,
     headingDeg: 18,
@@ -253,7 +253,7 @@ export const CAMERA_SEEDS = [
     id: 'tokyo-ginza-core',
     cityId: 'tokyo',
     poiIndex: 0,
-    label: 'Ginza Core',
+    label: 'Ginza Core', // i18n-ignore: camera name
     offsetNorthM: -180,
     offsetEastM: 150,
     headingDeg: 245,
@@ -265,7 +265,7 @@ export const CAMERA_SEEDS = [
     id: 'tokyo-asakusa-n',
     cityId: 'tokyo',
     poiIndex: 3,
-    label: 'Asakusa North Gate',
+    label: 'Asakusa North Gate', // i18n-ignore: camera name
     offsetNorthM: 110,
     offsetEastM: -65,
     headingDeg: 192,
@@ -278,7 +278,7 @@ export const CAMERA_SEEDS = [
     id: 'london-city-a1',
     cityId: 'london',
     poiIndex: 4,
-    label: 'City Cluster A1',
+    label: 'City Cluster A1', // i18n-ignore: camera name
     offsetNorthM: 80,
     offsetEastM: 65,
     headingDeg: 220,
@@ -290,7 +290,7 @@ export const CAMERA_SEEDS = [
     id: 'london-soho-core',
     cityId: 'london',
     poiIndex: 2,
-    label: 'Soho Core',
+    label: 'Soho Core', // i18n-ignore: camera name
     offsetNorthM: 210,
     offsetEastM: 120,
     headingDeg: 206,
@@ -303,7 +303,7 @@ export const CAMERA_SEEDS = [
     id: 'paris-rivoli',
     cityId: 'paris',
     poiIndex: 4,
-    label: 'Rue de Rivoli',
+    label: 'Rue de Rivoli', // i18n-ignore: camera name
     offsetNorthM: 55,
     offsetEastM: 85,
     headingDeg: 248,
@@ -315,7 +315,7 @@ export const CAMERA_SEEDS = [
     id: 'paris-champs-n',
     cityId: 'paris',
     poiIndex: 1,
-    label: 'Champs-Élysées North',
+    label: 'Champs-Élysées North', // i18n-ignore: camera name
     offsetNorthM: 130,
     offsetEastM: -38,
     headingDeg: 175,
@@ -328,7 +328,7 @@ export const CAMERA_SEEDS = [
     id: 'dc-mall-center',
     cityId: 'dc',
     poiIndex: 1,
-    label: 'National Mall Center',
+    label: 'National Mall Center', // i18n-ignore: camera name
     offsetNorthM: 120,
     offsetEastM: 20,
     headingDeg: 258,
@@ -340,7 +340,7 @@ export const CAMERA_SEEDS = [
     id: 'dc-pentagon-s',
     cityId: 'dc',
     poiIndex: 3,
-    label: 'Pentagon South',
+    label: 'Pentagon South', // i18n-ignore: camera name
     offsetNorthM: -100,
     offsetEastM: 92,
     headingDeg: 14,
@@ -353,7 +353,7 @@ export const CAMERA_SEEDS = [
     id: 'dubai-difc-loop',
     cityId: 'dubai',
     poiIndex: 4,
-    label: 'DIFC Loop',
+    label: 'DIFC Loop', // i18n-ignore: camera name
     offsetNorthM: 92,
     offsetEastM: -45,
     headingDeg: 196,
@@ -365,7 +365,7 @@ export const CAMERA_SEEDS = [
     id: 'dubai-downtown-east',
     cityId: 'dubai',
     poiIndex: 0,
-    label: 'Downtown East',
+    label: 'Downtown East', // i18n-ignore: camera name
     offsetNorthM: -130,
     offsetEastM: 190,
     headingDeg: 322,
@@ -378,7 +378,7 @@ export const CAMERA_SEEDS = [
     id: 'austin-congress-s',
     cityId: 'austin',
     poiIndex: 0,
-    label: 'Congress Southbound',
+    label: 'Congress Southbound', // i18n-ignore: camera name
     offsetNorthM: -165,
     offsetEastM: 40,
     headingDeg: 12,
@@ -390,7 +390,7 @@ export const CAMERA_SEEDS = [
     id: 'austin-downtown-west',
     cityId: 'austin',
     poiIndex: 1,
-    label: 'Downtown West',
+    label: 'Downtown West', // i18n-ignore: camera name
     offsetNorthM: -120,
     offsetEastM: -160,
     headingDeg: 120,

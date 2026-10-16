@@ -1,3 +1,5 @@
+import { msg } from '../i18n/index.js';
+
 /**
  * Snow Style — White overlay + Desaturation + Falling particles
  * Transforms the world into a winter wonderland
@@ -5,8 +7,8 @@
 export const snowShader = {
   name: 'snow',
   uniforms: {
-    density: { default: 0.6, min: 0, max: 1, label: 'Density' },
-    wind: { default: 0.5, min: 0, max: 1, label: 'Wind' },
+    density: { default: 0.6, min: 0, max: 1, label: msg('Density') },
+    wind: { default: 0.5, min: 0, max: 1, label: msg('Wind') },
   },
   fragmentShader: /* glsl */ `
     uniform sampler2D colorTexture;
