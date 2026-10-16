@@ -1613,8 +1613,28 @@ async function buildGlobalPayload({ globalField, box, requestedAtMs, deps, fallb
       u,
       v,
       finite,
-      provenance: {
-        tier: TIERS.global.id,
+      provenance: globalProvenance(globalField, {
+        coverage: coverage.coverage,
+        finite,
+        fallbackFrom,
+        caveats,
+      }),
+    }),
+  };
+}
+
+/**
+ * The provenance block for a response served by the global tier alone, shared
+ * by the own-axes regional response and the resampled global lattice so the
+ * two cannot drift apart.
+ *
+ * @param {Object} globalField - Field from {@link fetchGlobalField}.
+ * @param {{coverage: number, finite: number, fallbackFrom: ?string, caveats: string[]}} args
+ * @returns {Object} Provenance with `tier: 'global'`.
+ */
+function globalProvenance(globalField, { coverage, finite, fallbackFrom, caveats }) {
+  return {
+    tier: TIERS.global.id,
         tierLabel: TIERS.global.label,
         datasetId: globalField.datasetId,
         label: globalField.label,
@@ -1639,7 +1659,7 @@ async function buildGlobalPayload({ globalField, box, requestedAtMs, deps, fallb
         stale: globalField.stale,
         resolutionKm: globalField.resolutionKm,
         gridSpacingKm: globalField.spacing,
-        coverage: roundTo(coverage.coverage, 4),
+        coverage: roundTo(coverage, 4),
         observations: null, // a gridded analysis, not a set of point observations
         rejected: null,
         holdoutCount: 0,
@@ -1659,10 +1679,96 @@ async function buildGlobalPayload({ globalField, box, requestedAtMs, deps, fallb
           ? 'Global ocean forecast — a primitive-equation model carrying tides and wind drift, not a direct current measurement.'
           : 'Blended global surface currents — a derived model product, not a direct current measurement.',
         caveats,
-        sources: [globalSourceEntry(globalField, finite, 1)],
-      },
-    }),
+    sources: [globalSourceEntry(globalField, finite, 1)],
   };
+}
+
+/**
+ * @const {Object} The globe view's lattice: the wind layer's global shape at
+ * 1 deg, row 0 south like every payload lattice (`packField` flips it).
+ */
+export const GLOBAL_LATTICE = Object.freeze({
+  lat0: -90,
+  lon0: -180,
+  dLat: 1,
+  dLon: 1,
+  nLat: 181,
+  nLon: 360,
+  lats: Object.freeze(Array.from({ length: 181 }, (_, i) => -90 + i)),
+  lons: Object.freeze(Array.from({ length: 360 }, (_, j) => -180 + j)),
+});
+
+/**
+ * @const {number} Cell budget for the whole-globe HYCOM fetch behind the
+ * lattice: stride 20 on the 0.04 x 0.08 deg axes (about 0.8 x 1.6 deg,
+ * 47925 cells), served as two bodies across the prime meridian, each about
+ * 672 kB at the 28 B/cell design worst case. The CoastWatch fallback clamps
+ * it to its own 30000-cell ceiling.
+ */
+export const GLOBAL_TIER_TARGET_CELLS = 48000;
+
+const GLOBAL_BOX = Object.freeze({ latMin: -90, lonMin: -180, latMax: 90, lonMax: 180 });
+
+/**
+ * Serve the global tier for the globe view: one whole-globe fetch (HYCOM,
+ * CoastWatch on failure) bilinearly resampled onto {@link GLOBAL_LATTICE} and
+ * land-blanked there. Resampling is what makes the globe grid periodic and
+ * independent of the source's stride, so the client caches it per cycle.
+ *
+ * @param {Object} options - `{atMs, fetchImpl, deps}`; `deps` as in {@link buildFieldPayload}.
+ * @returns {Promise<Object>} A `gev-ocean-field` v1 payload on the global lattice.
+ */
+export async function buildGlobalLatticePayload({ atMs = Date.now(), fetchImpl, deps = {} } = {}) {
+  const requestedAtMs = Number.isFinite(atMs) ? atMs : Date.now();
+  const box = normalizeBox(GLOBAL_BOX);
+  const attempts = [];
+  let outcome;
+  try {
+    outcome = await fetchGlobalField({
+      box, targetCells: GLOBAL_TIER_TARGET_CELLS, requestedAtMs, fetchImpl, deps,
+    });
+  } catch (error) {
+    outcome = { field: null, reason: describeError(error) };
+  }
+  if (!outcome.field) {
+    attempts.push({ tier: TIERS.global.id, reason: outcome.reason });
+    return unavailablePayload({
+      box,
+      requestedAtMs,
+      attempts,
+      reason: `no global ocean-current source could serve the globe (${outcome.reason})`,
+    });
+  }
+  const field = outcome.field;
+  const resampled = resampleBilinearOntoGrid(field.grid, field.u, field.v, GLOBAL_LATTICE);
+  const water = await classifyWaterCellsFromBundle(GLOBAL_LATTICE, deps);
+  const finite = resampled.finite - blankLandCells(resampled.u, resampled.v, water);
+  if (finite === 0) {
+    attempts.push({ tier: TIERS.global.id, reason: 'global current field covers no water' });
+    return unavailablePayload({
+      box, requestedAtMs, attempts, reason: 'global current field covers no water',
+    });
+  }
+  const coverage = waterCoverage(resampled.u, water);
+  const caveats = [
+    ...field.caveats,
+    `Bilinearly resampled onto a 1 deg global lattice from the ${describeResolution(field.resolutionKm)} source grid for the globe view.`,
+  ];
+  if (field.fallbackFrom) {
+    caveats.push(`${field.fallbackFrom}. This field is geostrophic only - no wind drift, no tides.`);
+  }
+  return okPayload({
+    box,
+    requestedAtMs,
+    grid: GLOBAL_LATTICE,
+    u: resampled.u,
+    v: resampled.v,
+    finite,
+    attempts,
+    provenance: globalProvenance(field, {
+      coverage: coverage.coverage, finite, fallbackFrom: null, caveats,
+    }),
+  });
 }
 
 /* ------------------------------------------------------------------ *

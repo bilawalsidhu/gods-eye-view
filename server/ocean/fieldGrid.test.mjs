@@ -26,6 +26,9 @@ import {
   MIN_TARGET_CELLS,
   RESAMPLE_EDGE_CELLS,
   TIERS,
+  GLOBAL_LATTICE,
+  GLOBAL_TIER_TARGET_CELLS,
+  buildGlobalLatticePayload,
 } from './fieldGrid.js';
 
 // Every buildFieldPayload test injects all five dependencies, so this suite
@@ -1698,4 +1701,64 @@ test('a Float32 stitched longitude axis is accepted, not read as shape drift', a
   assert.equal(payload.status, 'ok', payload.reason);
   assert.equal(payload.grid.nLon, nLon);
   assert.ok(payload.grid.dLon > 0, 'the stitched axis must still yield a positive step');
+});
+
+/* ------------------------------------------------------------------ *
+ * Global lattice tier (the globe view of the wind-shaped manifest)
+ * ------------------------------------------------------------------ */
+
+function fakeGlobalFetcher({ calls }) {
+  // A 2 deg lat x 4 deg lon source over the whole globe, u = cos(lat), v = 0.
+  return async ({ box, targetCells }) => {
+    calls.push({ box, targetCells });
+    const lats = Float64Array.from({ length: 86 }, (_, i) => -80 + i * 2);
+    const lons = Float64Array.from({ length: 90 }, (_, j) => -180 + j * 4);
+    const u = new Float32Array(lats.length * lons.length);
+    const v = new Float32Array(u.length);
+    for (let i = 0; i < lats.length; i += 1) {
+      for (let j = 0; j < lons.length; j += 1) {
+        u[i * lons.length + j] = Math.cos((lats[i] * Math.PI) / 180);
+      }
+    }
+    return {
+      lats, lons, u, v, finite: u.length, total: u.length,
+      source: {
+        datasetId: 'test', label: 'Test field', validAtMs: 1_759_990_000_000, ageMs: 0,
+        resolutionDeg: 2, stride: 1, kind: 'modeled', method: 'test', attribution: 'x',
+        license: 'y', url: 'u',
+      },
+    };
+  };
+}
+
+test('buildGlobalLatticePayload resamples the whole-globe field onto the 1 deg lattice and blanks land', async () => {
+  const calls = [];
+  const payload = await buildGlobalLatticePayload({
+    atMs: 1_760_000_000_000,
+    fetchImpl: async () => { throw new Error('network must not be used'); },
+    deps: { fetchGlobalCurrents: fakeGlobalFetcher({ calls }), loadMask: async () => ALL_WATER_MASK },
+  });
+  assert.equal(calls.length, 1);
+  assert.deepEqual(calls[0].box, { latMin: -90, lonMin: -180, latMax: 90, lonMax: 180 });
+  assert.equal(calls[0].targetCells, GLOBAL_TIER_TARGET_CELLS);
+  assert.equal(payload.status, 'ok');
+  assert.deepEqual(payload.grid, { lat0: -90, lon0: -180, dLat: 1, dLon: 1, nLat: 181, nLon: 360 });
+  assert.equal(payload.provenance.tier, 'global');
+  assert.equal(payload.u.length, 181 * 360);
+  // South of the source axis (lat < -80 minus half a cell) is no-data, not zero.
+  assert.equal(payload.u[0], null);
+  assert.ok(Math.abs(payload.u[90 * 360 + 180] - 1) < 2e-3, 'equator cell is cos(0)');
+  assert.equal(payload.v[90 * 360 + 180], 0);
+  assert.ok(payload.provenance.caveats.some((line) => /1 deg/.test(line)));
+  assert.equal(GLOBAL_LATTICE.nLon * GLOBAL_LATTICE.dLon, 360);
+});
+
+test('buildGlobalLatticePayload reports unavailable when neither global source serves', async () => {
+  const payload = await buildGlobalLatticePayload({
+    atMs: 0,
+    fetchImpl: async () => null,
+    deps: { fetchGlobalCurrents: async () => null },
+  });
+  assert.equal(payload.status, 'unavailable');
+  assert.match(payload.reason, /global/);
 });
