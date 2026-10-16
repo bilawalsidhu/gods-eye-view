@@ -111,6 +111,15 @@ export function createNavaraInput(
       passive: true,
     });
 
+  let suspended = 0;
+  const sendCameraInputs = () => {
+    const enabled = cameraInputs && suspended === 0;
+    input.setCameraOptions({
+      enableSpin: enabled,
+      enableZoom: enabled,
+      enableTilt: enabled,
+    });
+  };
   const input = {
     on(type, listener, options = {}) {
       const { modifier, pick, drill } = normalizeInputOptions(type, options);
@@ -128,11 +137,23 @@ export function createNavaraInput(
     },
     setCameraInputs(enabled) {
       cameraInputs = Boolean(enabled);
-      input.setCameraOptions({
-        enableSpin: cameraInputs,
-        enableZoom: cameraInputs,
-        enableTilt: cameraInputs,
-      });
+      sendCameraInputs();
+    },
+    /**
+     * Navara-only: Navara's spin, zoom and tilt off until the returned
+     * release (the follow camera takes drag and wheel itself); the app's
+     * setCameraInputs choice comes back after the last release.
+     */
+    suspendCameraInputs() {
+      suspended++;
+      sendCameraInputs();
+      let released = false;
+      return () => {
+        if (released) return;
+        released = true;
+        suspended--;
+        sendCameraInputs();
+      };
     },
     /**
      * Navara-only extension: camera controller options (zoom distances,

@@ -11,7 +11,7 @@
 import * as geo from '../geo/index.js';
 import { createEngineEvent } from './contract.js';
 
-const { cartesian3, matrix4 } = geo;
+const { cartesian3, math, matrix4 } = geo;
 const WGS84 = geo.ellipsoid.WGS84;
 
 export const MIN_FOLLOW_RANGE_M = 150;
@@ -53,6 +53,7 @@ const scratchInverse = matrix4.create();
 const scratchOffset = cartesian3.create();
 const scratchWorld = cartesian3.create();
 const scratchUp = cartesian3.create();
+const scratchBefore = cartesian3.create();
 
 /**
  * One follow step: the camera pose that keeps `target` centred at `offset`
@@ -149,21 +150,78 @@ export function enuOffset(
   );
 }
 
+// Elevation of the camera above the target's horizon: kept between these
+// (radians), as Cesium's tracked camera stays above the ground plane.
+const MIN_ELEVATION = math.toRadians(2);
+const MAX_ELEVATION = math.toRadians(89);
+
+/** The ENU offset turned by `dHeading` and raised by `dPitch` (radians), same range. */
+export function orbitOffset(
+  offset,
+  dHeading,
+  dPitch,
+  result = cartesian3.create(),
+) {
+  const range = cartesian3.magnitude(offset);
+  if (!(range > 0)) return cartesian3.clone(offset, result);
+  const heading = Math.atan2(offset.x, offset.y) + dHeading;
+  const elevation = math.clamp(
+    Math.asin(math.clamp(offset.z / range, -1, 1)) + dPitch,
+    MIN_ELEVATION,
+    MAX_ELEVATION,
+  );
+  const horizontal = range * Math.cos(elevation);
+  return cartesian3.fromElements(
+    horizontal * Math.sin(heading),
+    horizontal * Math.cos(heading),
+    range * Math.sin(elevation),
+    result,
+  );
+}
+
+/** The ENU offset scaled by `factor`, never inside `minRange`. */
+export function zoomOffset(
+  offset,
+  factor,
+  minRange,
+  result = cartesian3.create(),
+) {
+  const range = cartesian3.magnitude(offset);
+  if (!(range > 0) || !(factor > 0)) return cartesian3.clone(offset, result);
+  const next = Math.max(minRange, range * factor);
+  return cartesian3.multiplyByScalar(offset, next / range, result);
+}
+
+const STILL_M = 1e-6;
+
 /**
  * @param {{
  *   camera: { pose: () => object, commanded: object },
  *   aim: (pose: { position, direction, up }) => void,
  *   frame: { addEventListener: Function },
  *   requestRender: () => void,
+ *   gestures?: (handlers: { orbit: (dHeading: number, dPitch: number) => void,
+ *     zoom: (factor: number) => void }) => () => void,
  * }} ports `aim` places the camera without camera.commanded; `frame` is
  *   the event the follow steps on (the engine's preRender, after it read
- *   the user's camera).
+ *   the user's camera). `gestures` (Navara): while following, the engine's
+ *   own drag and wheel handling is suspended and its drag and wheel turn
+ *   and scale the offset instead (as Cesium's EntityView orbits the
+ *   target); it returns the release. Without it the offset is re-read from
+ *   the camera each frame (the fake engine).
  */
-export function createFollowController({ camera, aim, frame, requestRender }) {
+export function createFollowController({
+  camera,
+  aim,
+  frame,
+  requestRender,
+  gestures = null,
+}) {
   const followChanged = createEngineEvent();
   let current = null;
   let removeFrame = null;
   let removeCommanded = null;
+  let releaseGestures = null;
   let aiming = false;
 
   const end = (handle) => {
@@ -171,9 +229,28 @@ export function createFollowController({ camera, aim, frame, requestRender }) {
     current = null;
     removeFrame?.();
     removeCommanded?.();
+    releaseGestures?.();
     removeFrame = null;
     removeCommanded = null;
+    releaseGestures = null;
     followChanged.raiseEvent(null);
+  };
+  // Drag and wheel (gestures port): applied at the next step.
+  const gestureHandlers = {
+    orbit(dHeading, dPitch) {
+      const handle = current;
+      if (!handle?.offset) return;
+      orbitOffset(handle.offset, dHeading, dPitch, handle.offset);
+      handle.moved = true;
+      requestRender();
+    },
+    zoom(factor) {
+      const handle = current;
+      if (!handle?.offset) return;
+      zoomOffset(handle.offset, factor, handle.options.minRange, handle.offset);
+      handle.moved = true;
+      requestRender();
+    },
   };
 
   const step = () => {
@@ -186,14 +263,24 @@ export function createFollowController({ camera, aim, frame, requestRender }) {
       target = null;
     }
     if (!isCartesian(target)) return;
+    let changed = handle.moved || !handle.previous;
+    handle.moved = false;
     if (!handle.offset) {
       const from = handle.options.viewFrom();
       if (!isCartesian(from)) return;
       handle.offset = cartesian3.clone(from);
-    } else if (handle.previous) {
+      changed = true;
+    } else if (handle.previous && !gestures) {
       // The user may have turned or zoomed the camera since the last step.
+      const before = cartesian3.clone(handle.offset, scratchBefore);
       enuOffset(handle.previous, camera.pose().position, handle.offset);
+      if (cartesian3.distance(before, handle.offset) > STILL_M) changed = true;
     }
+    if (
+      handle.previous &&
+      cartesian3.distance(handle.previous, target) > STILL_M
+    )
+      changed = true;
     const pose = followPose(target, handle.offset, handle.options.minRange);
     handle.previous = cartesian3.clone(target, handle.previous ?? undefined);
     // The offset in force (the minimum range applied).
@@ -204,8 +291,9 @@ export function createFollowController({ camera, aim, frame, requestRender }) {
     } finally {
       aiming = false;
     }
-    // A moving target needs the next frame.
-    requestRender();
+    // A moving target (or a gesture) needs the next frame; a still one
+    // lets the engine idle.
+    if (changed) requestRender();
   };
 
   return {
@@ -231,6 +319,8 @@ export function createFollowController({ camera, aim, frame, requestRender }) {
       };
       current = handle;
       removeFrame = frame.addEventListener(step);
+      if (gestures && !releaseGestures)
+        releaseGestures = gestures(gestureHandlers);
       removeCommanded = camera.commanded.addEventListener(() => {
         if (!aiming) end(handle);
       });

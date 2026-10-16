@@ -19,6 +19,7 @@ import { createNavaraCredits } from './credits.js';
 import { createNavaraInput } from './input.js';
 import { createNavaraPicking } from './picking.js';
 import { createFollowController } from '../follow.js';
+import { navaraFollowGestures } from './followGestures.js';
 import { createNavaraMaps } from './maps.js';
 import { createNavaraSurface } from './surface.js';
 import { createGroundFloor, GROUND_FLOOR } from './groundFloor.js';
@@ -153,6 +154,11 @@ export function createNavaraEngine(
     aim: (pose) => model.aim(pose),
     frame: followStep,
     requestRender: () => view.forceUpdate(),
+    // Drag orbits and wheel scales the follow's offset (followGestures.js).
+    gestures: (handlers) =>
+      navaraFollowGestures(view.canvas, () =>
+        input.input.suspendCameraInputs(),
+      )(handlers),
   });
   Object.assign(model.camera, {
     follow: (options) => follow.follow(options),

@@ -2588,6 +2588,43 @@ export function createContractSuite(
             `the target drifted ${worst.toFixed(2)} px off centre`,
           );
           ensure(step - firstStep >= 120, 'the target did not move');
+          if (pointer?.drag && pointer?.wheel) {
+            // A left drag orbits the target: same range (±5 %), centred.
+            const { width, height } = engine.host.size();
+            const before = range();
+            await pointer.drag(
+              width / 2,
+              height / 2,
+              width / 2 + 200,
+              height / 2 + 60,
+            );
+            await settle(4);
+            ensure(camera.following() === handle, 'a drag ended the follow');
+            ensure(
+              Math.abs(range() - before) <= 0.05 * before,
+              `a drag changed the range ${before.toFixed(0)} → ${range().toFixed(0)} m`,
+            );
+            ensure(offCentre() <= 3, 'the target left the centre after a drag');
+            // The wheel zooms toward the target down to the floor, never below.
+            let lowest = Infinity;
+            for (let notch = 0; notch < 40; notch++) {
+              await pointer.wheel(width / 2, height / 2, -100);
+              await settle(2);
+              lowest = Math.min(lowest, range());
+            }
+            await settle(4);
+            lowest = Math.min(lowest, range());
+            ensure(lowest >= 149, `the wheel reached ${lowest.toFixed(1)} m`);
+            ensure(
+              range() <= 150 * 1.05,
+              `40 wheel notches stopped at ${range().toFixed(1)} m, not the 150 m floor`,
+            );
+            ensure(
+              offCentre() <= 3,
+              'the target left the centre after the wheel',
+            );
+            ensure(camera.following() === handle, 'the wheel ended the follow');
+          }
           // A zoom through the target stops at the minimum range.
           camera.zoomIn(5000);
           await settle(4);
@@ -2599,12 +2636,26 @@ export function createContractSuite(
           ensure(camera.following() === null, 'following() after stop');
           ensure(changes.at(-1) === null, 'followChanged did not report null');
           camera.release();
-          await settle();
+          // Gesture inertia (Cesium) may carry the camera a few frames:
+          // wait for it to rest, then the target moves on without it.
+          let last = camera.pose().position;
+          let stillFrames = 0;
+          await until(() => {
+            const now = camera.pose().position;
+            stillFrames =
+              cartesian3.distance(now, last) < 1e-3 ? stillFrames + 1 : 0;
+            last = now;
+            return stillFrames >= 5;
+          }, 'the camera at rest after stop');
           const free = camera.pose().position;
           await settle(10);
           ensure(
             cartesian3.distance(camera.pose().position, free) < 1e-3,
-            'the camera still follows after stop',
+            `the camera still moves after stop (${cartesian3
+              .distance(camera.pose().position, free)
+              .toFixed(2)} m in 10 frames; following ${Boolean(
+              camera.following(),
+            )})`,
           );
           // A command that takes the camera ends the follow.
           camera.follow({
