@@ -204,12 +204,16 @@ export function createGroundFloor({ terrain, signal }) {
    * @returns {{lat: number, lon: number}} The cell to read.
    */
   function stickyFloorCell(lat, lon, previousCell) {
-    if (
-      previousCell &&
-      Math.abs(lat - previousCell.lat) <= 0.0005 + CELL_HYSTERESIS_DEG &&
-      Math.abs(lon - previousCell.lon) <= 0.0005 + CELL_HYSTERESIS_DEG
-    ) {
-      return previousCell;
+    if (previousCell) {
+      // The short way round, so a contact on the 180° seam keeps its cell.
+      let dLon = lon - previousCell.lon;
+      dLon -= 360 * Math.round(dLon / 360);
+      if (
+        Math.abs(lat - previousCell.lat) <= 0.0005 + CELL_HYSTERESIS_DEG &&
+        Math.abs(dLon) <= 0.0005 + CELL_HYSTERESIS_DEG
+      ) {
+        return previousCell;
+      }
     }
     return coarseFloorCoord(lat, lon);
   }
@@ -269,17 +273,20 @@ export function createGroundFloor({ terrain, signal }) {
       const a = points[s];
       const b = points[s + 1];
       if (![a?.lat, a?.lon, b?.lat, b?.lon].every(Number.isFinite)) continue;
+      // The short way round, so a segment across 180° walks across it.
+      let dLon = b.lon - a.lon;
+      dLon -= 360 * Math.round(dLon / 360);
       const steps = Math.ceil(
-        Math.max(Math.abs(b.lat - a.lat), Math.abs(b.lon - a.lon)) /
+        Math.max(Math.abs(b.lat - a.lat), Math.abs(dLon)) /
           CORRIDOR_WALK_STEP_DEG,
       );
       for (let i = 1; i <= steps; i++) {
         if (out.length >= prefixLimit) break walk;
         const t = i / steps;
-        const cell = coarseFloorCoord(
-          a.lat + (b.lat - a.lat) * t,
-          a.lon + (b.lon - a.lon) * t,
-        );
+        let lon = a.lon + dLon * t;
+        if (lon > 180) lon -= 360;
+        else if (lon < -180) lon += 360;
+        const cell = coarseFloorCoord(a.lat + (b.lat - a.lat) * t, lon);
         const key = `${cell.lat},${cell.lon}`;
         if (seen.has(key) || key === destKey) continue;
         seen.add(key);
