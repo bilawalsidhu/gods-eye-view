@@ -893,7 +893,9 @@
       "src/geo/check.js",
       "src/geo/debug.js",
       "src/geo/developerError.js",
-      "src/time/clock.js"
+      "src/time/clock.js",
+      "src/globe/contract.js",
+      "src/globe/cesium/engineFromViewer.js"
     ],
     "external": ["cesium"]
   },
@@ -947,7 +949,9 @@
       "src/geo/check.js",
       "src/geo/debug.js",
       "src/geo/developerError.js",
-      "src/time/clock.js"
+      "src/time/clock.js",
+      "src/globe/contract.js",
+      "src/globe/cesium/engineFromViewer.js"
     ],
     "external": ["cesium"]
   },
@@ -988,7 +992,9 @@
       "src/geo/scaleToGeodeticSurface.js",
       "src/geo/check.js",
       "src/geo/debug.js",
-      "src/geo/developerError.js"
+      "src/geo/developerError.js",
+      "src/globe/contract.js",
+      "src/globe/cesium/engineFromViewer.js"
     ],
     "external": ["cesium"]
   },
@@ -1028,7 +1034,9 @@
       "src/geo/scaleToGeodeticSurface.js",
       "src/geo/check.js",
       "src/geo/debug.js",
-      "src/geo/developerError.js"
+      "src/geo/developerError.js",
+      "src/globe/contract.js",
+      "src/globe/cesium/engineFromViewer.js"
     ],
     "external": ["cesium"]
   },
@@ -1088,7 +1096,9 @@
       "src/geo/scaleToGeodeticSurface.js",
       "src/geo/check.js",
       "src/geo/debug.js",
-      "src/geo/developerError.js"
+      "src/geo/developerError.js",
+      "src/globe/contract.js",
+      "src/globe/cesium/engineFromViewer.js"
     ],
     "external": ["cesium"]
   },
@@ -1171,7 +1181,9 @@
       "src/geo/check.js",
       "src/geo/debug.js",
       "src/geo/developerError.js",
-      "src/time/clock.js"
+      "src/time/clock.js",
+      "src/globe/contract.js",
+      "src/globe/cesium/engineFromViewer.js"
     ],
     "external": ["cesium"]
   },
@@ -1263,7 +1275,9 @@
       "src/geo/scaleToGeodeticSurface.js",
       "src/geo/check.js",
       "src/geo/debug.js",
-      "src/geo/developerError.js"
+      "src/geo/developerError.js",
+      "src/globe/contract.js",
+      "src/globe/cesium/engineFromViewer.js"
     ],
     "external": ["cesium"]
   },
@@ -1414,7 +1428,9 @@
       "src/geo/scaleToGeodeticSurface.js",
       "src/geo/check.js",
       "src/geo/debug.js",
-      "src/geo/developerError.js"
+      "src/geo/developerError.js",
+      "src/globe/contract.js",
+      "src/globe/cesium/engineFromViewer.js"
     ],
     "external": ["hls.js", "cesium"]
   },
@@ -1557,7 +1573,9 @@
       "src/geo/scaleToGeodeticSurface.js",
       "src/geo/check.js",
       "src/geo/debug.js",
-      "src/geo/developerError.js"
+      "src/geo/developerError.js",
+      "src/globe/contract.js",
+      "src/globe/cesium/engineFromViewer.js"
     ],
     "external": ["cesium"]
   },

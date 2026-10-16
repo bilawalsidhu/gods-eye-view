@@ -1,4 +1,3 @@
-import * as Cesium from 'cesium';
 import * as geo from '../geo/index.js';
 import { isGlobeEngine } from '../globe/contract.js';
 import {
@@ -416,7 +415,8 @@ export function paintLaneForOverlayEntry(entry = {}) {
  *   point) to the per-frame occluder.
  *
  * @param {object} entry - Raw source entry.
- * @returns {?Cesium.Cartesian3} Host-owned lifted anchor, or null.
+ * @returns {?{x: number, y: number, z: number}} Host-owned lifted anchor
+ *   (a geo Cartesian3), or null.
  */
 function snapshotCullPosition(entry) {
   let candidate;
@@ -429,8 +429,7 @@ function snapshotCullPosition(entry) {
   const { x, y, z } = candidate;
   if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(z))
     return null;
-  // Still the sources' own vector type until they move off Cesium (phase 1c).
-  return new Cesium.Cartesian3(x, y, z);
+  return geo.cartesian3.create(x, y, z);
 }
 
 export function normalizeOverlayEntry(sourceId, entry) {

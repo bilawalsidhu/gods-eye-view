@@ -313,3 +313,48 @@ test('cartographic heights of the math agree with src/geo', () => {
     'height',
   );
 });
+
+test("horizonVisible agrees with Cesium's EllipsoidalOccluder, also at the limb", async () => {
+  const Cesium = await import('cesium');
+  const occluder = new Cesium.EllipsoidalOccluder(Cesium.Ellipsoid.WGS84);
+  let seed = 7;
+  const random = () => {
+    seed = (seed * 16807) % 2147483647;
+    return seed / 2147483647;
+  };
+  let disagreements = 0;
+  let checked = 0;
+  for (let i = 0; i < 400; i++) {
+    const eye = cartesian3.fromDegrees(
+      random() * 360 - 180,
+      random() * 160 - 80,
+      [600, 15_000, 400_000, 20_000_000][i % 4],
+    );
+    occluder.cameraPosition = new Cesium.Cartesian3(eye.x, eye.y, eye.z);
+    for (let j = 0; j < 20; j++) {
+      // Points on the ground and above it, many near the horizon of the eye.
+      const point = cartesian3.fromDegrees(
+        random() * 360 - 180,
+        random() * 160 - 80,
+        [0, -40, 50, 10_000][j % 4],
+      );
+      checked++;
+      if (
+        horizonVisible(eye, point) !==
+        occluder.isPointVisible(
+          new Cesium.Cartesian3(point.x, point.y, point.z),
+        )
+      )
+        disagreements++;
+    }
+  }
+  assert.equal(disagreements, 0, `${disagreements}/${checked} disagree`);
+  // At the limb: a point 40 m under the ellipsoid just past the horizon is
+  // hidden, its cullPosition lifted 100 m is visible (worldOverlay's rule).
+  const eye = cartesian3.fromDegrees(0, 0, 10_000);
+  const horizonDeg = math.toDegrees(Math.acos(6378137 / (6378137 + 10_000)));
+  const buried = cartesian3.fromDegrees(horizonDeg + 0.02, 0, -40);
+  const lifted = cartesian3.fromDegrees(horizonDeg + 0.02, 0, 100);
+  assert.equal(horizonVisible(eye, buried), false);
+  assert.equal(horizonVisible(eye, lifted), true);
+});

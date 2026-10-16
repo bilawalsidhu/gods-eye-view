@@ -1,3 +1,4 @@
+import { engineFromViewer } from '../../globe/cesium/engineFromViewer.js';
 import * as Cesium from 'cesium';
 import {
   createCyberSonarSampler,
@@ -483,10 +484,16 @@ export function createOverlays({ state: layerState, services, parts, source }) {
       hideReplayVehicleOverlay();
       return null;
     }
-    const windowPosition = Cesium.SceneTransforms.worldToWindowCoordinates(
-      layerState._viewer.scene,
-      position,
-    );
+    // The engine's projector (engineFromViewer), as the world overlay.
+    const projector = engineFromViewer(layerState._viewer)?.projector;
+    const project = (point) =>
+      projector
+        ? projector.worldToWindow(point)
+        : Cesium.SceneTransforms.worldToWindowCoordinates(
+            layerState._viewer.scene,
+            point,
+          );
+    const windowPosition = project(position);
     if (!windowPosition) {
       hideReplayVehicleOverlay();
       return null;
@@ -548,10 +555,7 @@ export function createOverlays({ state: layerState, services, parts, source }) {
         useForward ? forwardProgress : backwardProgress,
       );
       const tangentWindowPosition = tangentPosition
-        ? Cesium.SceneTransforms.worldToWindowCoordinates(
-            layerState._viewer.scene,
-            tangentPosition,
-          )
+        ? project(tangentPosition)
         : null;
       if (tangentWindowPosition) {
         const screenDelta = Math.hypot(

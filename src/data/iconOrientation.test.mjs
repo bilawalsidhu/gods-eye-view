@@ -745,3 +745,27 @@ test('the perspective helper is continuous through the sub-pixel band, not a 23Â
       `exact alone at ${s.separation.toFixed(2)} px`,
     );
 });
+
+test('the exact projection asks the engine projector of a registered scene', async () => {
+  const geo = await import('../geo/index.js');
+  const { registerViewerEngine } = await import('../globe/cesium/engineFromViewer.js');
+  const { perspectiveProjectedRotation: rotation } = await import('./iconOrientation.js');
+  const scene = { camera: { rightWC: { x: 0, y: 1, z: 0 }, upWC: { x: 0, y: 0, z: 1 } } };
+  const asked = [];
+  const unregister = registerViewerEngine({ scene }, {
+    projector: {
+      // Screen-right for every point further east (the probe), so 90Â° on screen.
+      worldToWindow(position, result = geo.cartesian2.create()) {
+        asked.push(position);
+        return Object.assign(result, { x: asked.length === 1 ? 100 : 120, y: 100 });
+      },
+    },
+  });
+  try {
+    const value = rotation(scene, geo.cartesian3.fromDegrees(0, 0, 0), 90, null);
+    assert.equal(asked.length, 2, 'the anchor and the probe');
+    assert.ok(Math.abs(value - -Math.PI / 2) < 1e-9, `rotation ${value}`);
+  } finally {
+    unregister();
+  }
+});
