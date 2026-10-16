@@ -4,6 +4,7 @@ import { DEFAULT_ALLOWED_HOSTS, hostCheckPlugin } from './allowedHosts.js';
 import { embedFramingPlugin } from './embed-framing.js';
 import { panelBuildPlugin } from './panel.js';
 import { navaraChunkFileNames, navaraWorkerAssets } from './navaraAssets.js';
+import { initialChunkGuard } from './initialChunkGuard.js';
 
 /**
  * Content-Security-Policy for every document the dev/preview server serves.
@@ -132,7 +133,8 @@ export function createBrowserViteConfig({
       // engine is a separate chunk loaded on ?engine=navara).
       // The lazy chunk with the Navara engine is named navara-engine.
       rollupOptions: {
-        plugins: [navaraWorkerAssets()],
+        // initialChunkGuard: no three/Navara module in the initial chunks.
+        plugins: [navaraWorkerAssets(), initialChunkGuard()],
         output: { chunkFileNames: navaraChunkFileNames },
       },
     },
