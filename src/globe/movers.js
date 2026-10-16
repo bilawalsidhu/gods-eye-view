@@ -150,17 +150,18 @@ export function normalizeMoverSetOptions(options) {
 export function createMoverStore(options) {
   const { capacity, cellKeys, kind } = options;
   const cellIndex = new Map(cellKeys.map((key, index) => [key, index]));
-  const positions = new Float64Array(capacity * 3);
-  const orientations = new Float64Array(capacity * 4);
-  const colors = new Float32Array(capacity * 4).fill(1);
-  const rotations = new Float32Array(capacity);
-  const scales = new Float32Array(capacity).fill(1);
-  const cells = new Uint16Array(capacity);
-  const shows = new Uint8Array(capacity).fill(1);
-  const pickIds = new Array(capacity);
+  let positions = new Float64Array(capacity * 3);
+  let orientations = new Float64Array(capacity * 4);
+  let colors = new Float32Array(capacity * 4).fill(1);
+  let rotations = new Float32Array(capacity);
+  let scales = new Float32Array(capacity).fill(1);
+  let cells = new Uint16Array(capacity);
+  let shows = new Uint8Array(capacity).fill(1);
+  let pickIds = new Array(capacity);
   for (let index = 0; index < capacity; index++)
     orientations[index * 4 + 3] = 1;
   let count = 0;
+  const range = { from: 0, to: 0 };
   let dirtyFrom = Infinity;
   let dirtyTo = -Infinity;
   const touch = (from, to) => {
@@ -189,7 +190,10 @@ export function createMoverStore(options) {
       orientation !== undefined &&
       !(
         isObject(orientation) &&
-        ['x', 'y', 'z', 'w'].every((axis) => isFiniteNumber(orientation[axis]))
+        isFiniteNumber(orientation.x) &&
+        isFiniteNumber(orientation.y) &&
+        isFiniteNumber(orientation.z) &&
+        isFiniteNumber(orientation.w)
       )
     )
       throw new TypeError('Mover orientation must be a quaternion');
@@ -198,7 +202,10 @@ export function createMoverStore(options) {
       !(
         (Array.isArray(color) || ArrayBuffer.isView(color)) &&
         color.length === 4 &&
-        Array.prototype.every.call(color, isFiniteNumber)
+        isFiniteNumber(color[0]) &&
+        isFiniteNumber(color[1]) &&
+        isFiniteNumber(color[2]) &&
+        isFiniteNumber(color[3])
       )
     )
       throw new TypeError('Mover color must be [r, g, b, a]');
@@ -256,9 +263,40 @@ export function createMoverStore(options) {
       count = next;
     },
     positionsView: () => positions.subarray(0, count * 3),
+    /**
+     * Drops the instance arrays (a destroyed set): the count goes to 0 and
+     * the arrays to empty ones, so a set object still held keeps no memory.
+     */
+    release() {
+      count = 0;
+      positions = new Float64Array(0);
+      orientations = new Float64Array(0);
+      colors = new Float32Array(0);
+      rotations = new Float32Array(0);
+      scales = new Float32Array(0);
+      cells = new Uint16Array(0);
+      shows = new Uint8Array(0);
+      pickIds = [];
+      Object.assign(this, {
+        positions,
+        orientations,
+        colors,
+        rotations,
+        scales,
+        cells,
+        shows,
+        pickIds,
+      });
+      this.clean();
+    },
     /** Indices changed since clean(), as [from, to), or null. */
-    dirty: () =>
-      dirtyFrom === Infinity ? null : { from: dirtyFrom, to: dirtyTo },
+    /** The changed range (one object, reused: read it at once), or null. */
+    dirty() {
+      if (dirtyFrom === Infinity) return null;
+      range.from = dirtyFrom;
+      range.to = dirtyTo;
+      return range;
+    },
     clean() {
       dirtyFrom = Infinity;
       dirtyTo = -Infinity;
@@ -296,6 +334,7 @@ export function createMoverSet(store, { commit, destroy }) {
       if (destroyed) return;
       destroyed = true;
       destroy();
+      store.release?.();
     },
     isDestroyed: () => destroyed,
   };
