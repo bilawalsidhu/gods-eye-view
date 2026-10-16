@@ -54,7 +54,9 @@ export function oceanCurrentsProxy({
   deps = {},
   ttlMs = 600_000,
   staleMs = 6 * 3600_000,
-  timeoutMs = 40_000,
+  // Bounds a request's wait, not the build: a cold whole-globe HYCOM read
+  // can take most of its 60 s fetch timeout before the CoastWatch fallback.
+  timeoutMs = 90_000,
   maxCache = 12,
   rateLimiter = makeRateLimiter({ windowMs: 60_000, max: 12, globalMax: 30 }),
 } = {}) {
@@ -99,95 +101,106 @@ export function oceanCurrentsProxy({
     }
   }
 
+  /**
+   * One build per key. The build always runs to completion and fills the
+   * cache (a 10-minute cache fill is worth finishing even when every waiter
+   * has gone); the provider timeout only bounds how long a request waits for
+   * it, answering stale or unavailable meanwhile.
+   */
   function refresh(key, tier, box) {
-    const controller = new AbortController();
-    const operation = { controller, waiters: 0, promise: null };
-    loadings.set(key, operation);
     attempts.set(key, now());
-    operation.promise = (async () => {
-      const timer = setTimeout(() => controller.abort(), timeoutMs);
-      try {
-        const atMs = now();
-        const payload =
-          tier === 'global'
-            ? await buildGlobal({ atMs, fetchImpl, deps })
-            : await buildField({
-                box,
-                atMs,
-                targetCells: REGIONAL_TARGET_CELLS,
-                fetchImpl,
-                deps,
-              });
-        controller.signal.throwIfAborted();
-        // The retry backoff guards failures only; a served build may refresh
-        // again as soon as its TTL expires.
-        attempts.delete(key);
-        const fetchedAt = now();
-        if (payload.status !== 'ok') {
-          // A legitimate answer (open ocean with no source, upstream down):
-          // cached like any other so a dead region does not re-probe per move.
-          const state = {
-            manifest: unavailable(
-              payload.reason || 'Ocean current field unavailable',
-            ),
-            bytes: null,
-            fetchedAt,
-          };
-          remember(key, state, null);
-          return state;
-        }
-        const bbox = tier === 'global' ? GLOBAL_BBOX : box;
-        const { manifest, bytes } = packFieldManifest(payload, {
-          tier,
-          bbox,
+    const build = (async () => {
+      const atMs = now();
+      const payload =
+        tier === 'global'
+          ? await buildGlobal({ atMs, fetchImpl, deps })
+          : await buildField({
+              box,
+              atMs,
+              targetCells: REGIONAL_TARGET_CELLS,
+              fetchImpl,
+              deps,
+            });
+      const fetchedAt = now();
+      if (payload.status !== 'ok') {
+        // A legitimate answer (open ocean with no source, upstream down):
+        // cached like any other so a dead region does not re-probe per move.
+        const state = {
+          manifest: unavailable(
+            payload.reason || 'Ocean current field unavailable',
+          ),
+          bytes: null,
           fetchedAt,
-          gridUrl: '',
-        });
-        const id = gridId({
-          tier,
-          validIso: manifest.cycle.validIso,
-          key: tier === 'global' ? 'global' : bboxKey(box),
-          nx: manifest.grid.nx,
-          ny: manifest.grid.ny,
-        });
-        manifest.gridUrl = `/api/ocean/currents/grid/${id}.bin`;
-        const state = { manifest, bytes, fetchedAt };
-        remember(key, state, id);
+        };
+        remember(key, state, null);
         return state;
-      } catch {
-        if (controller.signal.aborted && operation.waiters === 0) {
-          attempts.delete(key);
+      }
+      const bbox = tier === 'global' ? GLOBAL_BBOX : box;
+      const { manifest, bytes } = packFieldManifest(payload, {
+        tier,
+        bbox,
+        fetchedAt,
+        gridUrl: '',
+      });
+      const id = gridId({
+        tier,
+        validIso: manifest.cycle.validIso,
+        key: tier === 'global' ? 'global' : bboxKey(box),
+        nx: manifest.grid.nx,
+        ny: manifest.grid.ny,
+      });
+      manifest.gridUrl = `/api/ocean/currents/grid/${id}.bin`;
+      const state = { manifest, bytes, fetchedAt };
+      remember(key, state, id);
+      // The retry backoff guards failures only; a served build may refresh
+      // again as soon as its TTL expires.
+      attempts.delete(key);
+      return state;
+    })();
+    const settled = build.then(
+      () => loadings.delete(key),
+      () => loadings.delete(key),
+    );
+    const operation = {
+      promise: (async () => {
+        let timer;
+        try {
+          return await Promise.race([
+            build,
+            new Promise((_, reject) => {
+              timer = setTimeout(
+                () => reject(new Error('Ocean current build timed out')),
+                timeoutMs,
+              );
+            }),
+          ]);
+        } catch {
+          const old = caches.get(key);
+          if (
+            old &&
+            !old.manifest.unavailable &&
+            now() - old.fetchedAt < staleMs
+          ) {
+            old.manifest = {
+              ...old.manifest,
+              stale: true,
+              reason: 'Ocean current upstream unavailable',
+            };
+            return old;
+          }
+          if (old) caches.delete(key);
           return {
             manifest: unavailable('Ocean current upstream unavailable'),
             bytes: null,
             fetchedAt: now(),
           };
+        } finally {
+          clearTimeout(timer);
         }
-        const old = caches.get(key);
-        if (
-          old &&
-          !old.manifest.unavailable &&
-          now() - old.fetchedAt < staleMs
-        ) {
-          old.manifest = {
-            ...old.manifest,
-            stale: true,
-            reason: 'Ocean current upstream unavailable',
-          };
-          return old;
-        }
-        caches.delete(key);
-        return {
-          manifest: unavailable('Ocean current upstream unavailable'),
-          bytes: null,
-          fetchedAt: now(),
-        };
-      } finally {
-        clearTimeout(timer);
-        controller.abort();
-        if (loadings.get(key) === operation) loadings.delete(key);
-      }
-    })();
+      })(),
+      settled,
+    };
+    loadings.set(key, operation);
     return operation;
   }
 
@@ -245,22 +258,7 @@ export function oceanCurrentsProxy({
       let operation = loadings.get(key);
       if (!operation && now() - (attempts.get(key) ?? -Infinity) >= RETRY_MS)
         operation = refresh(key, tier, quantized);
-      if (operation) {
-        let disconnected = false;
-        operation.waiters += 1;
-        const close = () => {
-          disconnected = true;
-          if (--operation.waiters === 0) operation.controller.abort();
-        };
-        res.once?.('close', close);
-        try {
-          state = await operation.promise;
-        } finally {
-          res.removeListener?.('close', close);
-          if (!disconnected) operation.waiters -= 1;
-        }
-        if (disconnected) return;
-      }
+      if (operation) state = await operation.promise;
     }
     const manifest =
       state?.manifest || unavailable('Ocean current upstream unavailable');

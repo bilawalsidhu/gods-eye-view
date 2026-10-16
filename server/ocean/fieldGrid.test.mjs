@@ -28,6 +28,7 @@ import {
   TIERS,
   GLOBAL_LATTICE,
   GLOBAL_TIER_TARGET_CELLS,
+  GLOBAL_TIER_TIMEOUT_MS,
   buildGlobalLatticePayload,
 } from './fieldGrid.js';
 
@@ -1709,8 +1710,8 @@ test('a Float32 stitched longitude axis is accepted, not read as shape drift', a
 
 function fakeGlobalFetcher({ calls }) {
   // A 2 deg lat x 4 deg lon source over the whole globe, u = cos(lat), v = 0.
-  return async ({ box, targetCells }) => {
-    calls.push({ box, targetCells });
+  return async ({ box, targetCells, timeoutMs }) => {
+    calls.push({ box, targetCells, timeoutMs });
     const lats = Float64Array.from({ length: 86 }, (_, i) => -80 + i * 2);
     const lons = Float64Array.from({ length: 90 }, (_, j) => -180 + j * 4);
     const u = new Float32Array(lats.length * lons.length);
@@ -1741,6 +1742,7 @@ test('buildGlobalLatticePayload resamples the whole-globe field onto the 1 deg l
   assert.equal(calls.length, 1);
   assert.deepEqual(calls[0].box, { latMin: -90, lonMin: -180, latMax: 90, lonMax: 180 });
   assert.equal(calls[0].targetCells, GLOBAL_TIER_TARGET_CELLS);
+  assert.equal(calls[0].timeoutMs, GLOBAL_TIER_TIMEOUT_MS, 'cold whole-globe reads exceed the 20 s default');
   assert.equal(payload.status, 'ok');
   assert.deepEqual(payload.grid, { lat0: -90, lon0: -180, dLat: 1, dLon: 1, nLat: 181, nLon: 360 });
   assert.equal(payload.provenance.tier, 'global');

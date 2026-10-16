@@ -228,3 +228,24 @@ test('antimeridian box is quantized and served as a regional tier', async () => 
   assert.equal(json.grid.lo1, 170);
   assert.equal(json.grid.nx, 21);
 });
+
+test('a build slower than the provider timeout answers unavailable now and fills the cache when it finishes', async () => {
+  let builds = 0;
+  const h = handlerFor({
+    timeoutMs: 30,
+    deps: {
+      buildFieldPayload: () =>
+        new Promise((resolve) => {
+          builds += 1;
+          setTimeout(() => resolve(okPayload(REGION)), 120);
+        }),
+    },
+  });
+  const first = await call(h, `/manifest${REGIONAL_QUERY}`);
+  assert.equal(first.json.unavailable, true);
+  await new Promise((resolve) => setTimeout(resolve, 200));
+  const second = await call(h, `/manifest${REGIONAL_QUERY}`);
+  assert.equal(second.json.unavailable, false);
+  assert.equal(second.json.tier, 'regional');
+  assert.equal(builds, 1, 'the finished build was cached, not rebuilt');
+});

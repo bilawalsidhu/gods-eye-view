@@ -1365,14 +1365,18 @@ function compositePayload({ box, grid, requestedAtMs, hfr, globalField, attempts
  * @param {Object} args - `{box, targetCells, requestedAtMs, fetchImpl, deps}`.
  * @returns {Promise<{field: ?Object, reason?: string}>} Field or failure reason.
  */
-async function fetchGlobalField({ box, targetCells, requestedAtMs, fetchImpl, deps }) {
+async function fetchGlobalField({ box, targetCells, requestedAtMs, fetchImpl, deps, timeoutMs }) {
   const fetchGlobalCurrents = await resolveDep('fetchGlobalCurrents', deps);
   // `nowMs` is the reference the fetcher measures its own `source.ageMs` against.
   // Leaving it to default to Date.now() would report an age against the wall
   // clock while this payload's `ageMs` is documented as requestedAtMs - validAtMs
   // — the same number only while the caller asks for "now".
   const fetched = await fetchGlobalCurrents({
-    box: plainBox(box), targetCells, fetchImpl, nowMs: requestedAtMs,
+    box: plainBox(box),
+    targetCells,
+    fetchImpl,
+    nowMs: requestedAtMs,
+    ...(Number.isFinite(timeoutMs) ? { timeoutMs } : {}),
   });
   if (!fetched) return { field: null, reason: 'global current field unavailable' };
 
@@ -1707,6 +1711,15 @@ export const GLOBAL_LATTICE = Object.freeze({
  */
 export const GLOBAL_TIER_TARGET_CELLS = 48000;
 
+/**
+ * @const {number} Per-request timeout for the whole-globe fetch. Measured
+ * 2026-10-16: a cold THREDDS read of the stride-20 globe timed out at the
+ * fetcher's 20 s default and the same read took 2.0 s once warm, so the globe
+ * gets three times the default rather than the CoastWatch fallback on every
+ * cold cache.
+ */
+export const GLOBAL_TIER_TIMEOUT_MS = 60_000;
+
 const GLOBAL_BOX = Object.freeze({ latMin: -90, lonMin: -180, latMax: 90, lonMax: 180 });
 
 /**
@@ -1725,7 +1738,12 @@ export async function buildGlobalLatticePayload({ atMs = Date.now(), fetchImpl, 
   let outcome;
   try {
     outcome = await fetchGlobalField({
-      box, targetCells: GLOBAL_TIER_TARGET_CELLS, requestedAtMs, fetchImpl, deps,
+      box,
+      targetCells: GLOBAL_TIER_TARGET_CELLS,
+      requestedAtMs,
+      fetchImpl,
+      deps,
+      timeoutMs: GLOBAL_TIER_TIMEOUT_MS,
     });
   } catch (error) {
     outcome = { field: null, reason: describeError(error) };
