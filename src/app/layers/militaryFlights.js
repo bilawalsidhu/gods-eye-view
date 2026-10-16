@@ -3,7 +3,8 @@ import * as picking from '../../data/pickRegistry.js';
 import * as sprites from '../../data/spriteOrder.js';
 import * as trails from '../../data/trailRenderer.js';
 import * as aircraftPresentation from '../../data/tr3bRegistry.js';
-import * as camera from '../../data/trackedCamera.js';
+import * as trackedCamera from '../../data/trackedCamera.js';
+import { applyTrackedCameraFrame } from '../../globe/cesium/follow.js';
 import * as labels from '../../data/detectionDraw.js';
 import * as geoid from '../../data/geoid.js';
 import * as focus from '../../data/focusDeemphasis.js';
@@ -29,7 +30,7 @@ export function createApplicationMilitary({
       sprites,
       trails,
       aircraftPresentation,
-      camera,
+      camera: { ...trackedCamera, applyTrackedCameraFrame },
       militaryRegistry,
       labels,
       groundFloor,

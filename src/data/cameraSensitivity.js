@@ -24,6 +24,8 @@
  * for, only that nobody's answer is taken away while they still need it.
  */
 
+import { engineFromViewer } from '../globe/cesium/engineFromViewer.js';
+
 /** @type {WeakMap<object, {base: number, claims: Map<string, number>}>} */
 const _cameras = new WeakMap();
 
@@ -31,10 +33,13 @@ const _cameras = new WeakMap();
 const DEFAULT_PERCENTAGE_CHANGED = 0.5;
 
 /**
- * A globe engine (or a viewer) claims through its camera; anything else is
- * the camera itself (a camera has no `camera` of its own).
+ * One key per camera: the engine's camera. A globe engine claims through its
+ * camera; a Cesium viewer or its camera through the engine registered for
+ * that viewer (engineFromViewer); anything else is the camera itself (a
+ * camera has no `camera` of its own).
  */
-const cameraOf = (target) => target?.camera ?? target;
+const cameraOf = (target) =>
+  engineFromViewer(target)?.camera ?? target?.camera ?? target;
 
 function ledgerFor(camera) {
   let ledger = _cameras.get(camera);
@@ -60,9 +65,8 @@ function applyLedger(camera, ledger) {
 /**
  * Ask for a camera-change sensitivity at least as fine as `value`.
  * @param {object|null|undefined} target A globe engine, its camera, or a
- *   Cesium camera (anything with `percentageChanged`). Layers still pass the
- *   viewer's Cesium camera until phase 1c; that is a separate claimant from
- *   the engine's camera, so one camera must not be claimed both ways.
+ *   Cesium viewer or camera (anything with `percentageChanged`). A viewer
+ *   with a registered engine, and its camera, claim on the engine camera.
  * @param {string} owner Stable claim name, usually the layer id.
  * @param {number} value Requested `percentageChanged`.
  * @returns {number|null} The value now in force, or null when there is no camera.

@@ -6,6 +6,7 @@ import * as geo from '../../geo/index.js';
 import { createEngineEvent } from '../contract.js';
 import { bridgeEvent } from './events.js';
 import { toCesium2, toCesium3, toGeo3 } from './convert.js';
+import { createCesiumFollow } from './follow.js';
 
 const { math } = geo;
 const EASINGS = {
@@ -143,6 +144,10 @@ export function createCesiumCamera(viewer) {
     moveEnd: bridgeEvent(cesium.moveEnd),
     commanded: commandedEvent(viewer, cesium),
   };
+  // camera.follow: the viewer's trackedEntity (follow.js).
+  const follow = createCesiumFollow(viewer, {
+    commanded: bridges.commanded.event,
+  });
 
   // The engine's own flight, so flightActive is exact even for flights that
   // completed synchronously (Cesium keeps no current flight for those).
@@ -287,6 +292,7 @@ export function createCesiumCamera(viewer) {
     moveStart: bridges.moveStart.event,
     moveEnd: bridges.moveEnd.event,
     commanded: bridges.commanded.event,
+    ...follow.camera,
     get percentageChanged() {
       return cesium.percentageChanged;
     },
@@ -298,6 +304,7 @@ export function createCesiumCamera(viewer) {
   return {
     camera,
     destroy() {
+      follow.destroy();
       if (flight) camera.cancelFlight();
       for (const bridge of Object.values(bridges)) bridge.detach();
     },

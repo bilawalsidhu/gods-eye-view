@@ -1085,5 +1085,9 @@
   "src/tooling/w1Feeds.test.mjs",
   "src/tooling/navaraDependencies.test.mjs",
   "build/navaraDependencies.js",
-  "build/initialChunkGuard.js"
+  "build/initialChunkGuard.js",
+  "src/globe/follow.js",
+  "src/globe/follow.test.mjs",
+  "src/globe/cesium/follow.js",
+  "src/globe/cesium/follow.test.mjs"
 ]

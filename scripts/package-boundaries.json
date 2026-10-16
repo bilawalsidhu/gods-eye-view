@@ -1220,7 +1220,9 @@
       "src/geo/scaleToGeodeticSurface.js",
       "src/geo/check.js",
       "src/geo/debug.js",
-      "src/geo/developerError.js"
+      "src/geo/developerError.js",
+      "src/globe/contract.js",
+      "src/globe/cesium/engineFromViewer.js"
     ],
     "external": ["cesium", "@mapbox/vector-tile", "pbf"]
   },
@@ -1316,7 +1318,9 @@
       "src/geo/scaleToGeodeticSurface.js",
       "src/geo/check.js",
       "src/geo/debug.js",
-      "src/geo/developerError.js"
+      "src/geo/developerError.js",
+      "src/globe/contract.js",
+      "src/globe/cesium/engineFromViewer.js"
     ],
     "external": ["cesium", "pbf", "@mapbox/vector-tile"]
   },
@@ -1353,7 +1357,9 @@
       "src/geo/scaleToGeodeticSurface.js",
       "src/geo/check.js",
       "src/geo/debug.js",
-      "src/geo/developerError.js"
+      "src/geo/developerError.js",
+      "src/globe/contract.js",
+      "src/globe/cesium/engineFromViewer.js"
     ],
     "external": ["cesium"]
   },
@@ -2542,10 +2548,12 @@
       "src/globe/pickDelivery.js",
       "src/globe/navara/clock.js",
       "src/globe/cesium/lines.js",
+      "src/globe/follow.js",
       "src/globe/lines.js",
       "src/globe/navara/movers/pickIds.js",
       "src/globe/cesium/movers.js",
       "src/globe/movers.js",
+      "src/globe/cesium/follow.js",
       "src/globe/cpuPicks.js",
       "src/globe/navara/picking.js",
       "src/globe/navara/lines/lineMesh.js",
@@ -3122,7 +3130,9 @@
       "src/geo/check.js",
       "src/geo/debug.js",
       "src/geo/developerError.js",
-      "src/time/clock.js"
+      "src/time/clock.js",
+      "src/globe/follow.js",
+      "src/globe/cesium/follow.js"
     ],
     "external": [
       "hls.js",
@@ -3735,7 +3745,9 @@
       "src/geo/scaleToGeodeticSurface.js",
       "src/geo/check.js",
       "src/geo/debug.js",
-      "src/geo/developerError.js"
+      "src/geo/developerError.js",
+      "src/globe/contract.js",
+      "src/globe/cesium/engineFromViewer.js"
     ],
     "external": ["cesium", "pbf"]
   },

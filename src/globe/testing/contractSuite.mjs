@@ -2357,6 +2357,115 @@ export function createContractSuite(
         ensure(raised === count, 'a removed listener was called');
       },
     ],
+    [
+      'camera.follow: holds a moving target centred, keeps the minimum range, ends on stop or a command',
+      async () => {
+        // An aircraft at 3 km over JFK flying east at 250 m/s, one step per
+        // drawn frame (the step after postRender: every stage of the next
+        // frame sees the same position, and the check reads the drawn one).
+        const start = cartographic.fromDegrees(-73.78, 40.64, 3000);
+        const stepRad = 250 / 60 / (6378137 * Math.cos(start.latitude));
+        let step = 0;
+        let drawn = 0;
+        const at = (index) =>
+          cartesian3.fromRadians(
+            start.longitude + index * stepRad,
+            start.latitude,
+            start.height,
+          );
+        const removeStep = engine.frames.postRender.addEventListener(() => {
+          drawn = step;
+          step++;
+        });
+        const changes = [];
+        const removeChanged = camera.followChanged.addEventListener((handle) =>
+          changes.push(handle),
+        );
+        const offCentre = () => {
+          const screen = engine.projector.worldToWindow(at(drawn));
+          if (!screen) return Infinity;
+          const middle = centre();
+          return Math.hypot(screen.x - middle.x, screen.y - middle.y);
+        };
+        const range = () =>
+          cartesian3.distance(camera.pose().position, at(drawn));
+        try {
+          camera.setView({
+            destination: cartesian3.fromDegrees(-73.8, 40.6, 8000),
+            orientation: { heading: 0, pitch: -0.6, roll: 0 },
+          });
+          await settle();
+          const handle = camera.follow({
+            position: () => at(step),
+            viewFrom: { x: 0, y: -1000, z: 400 },
+          });
+          ensure(
+            camera.following() === handle,
+            'following() is not the handle',
+          );
+          ensure(
+            changes.at(-1) === handle,
+            'followChanged did not report the handle',
+          );
+          await until(() => offCentre() <= 3, 'the follow centring its target');
+          near(range(), Math.hypot(1000, 400), 5, 'follow range at viewFrom');
+          // 2 s of motion (at least 120 frames), centred within 3 px.
+          const began = performance.now();
+          const firstStep = step;
+          let worst = 0;
+          for (
+            let frames = 0;
+            frames < 600 && (frames < 120 || performance.now() - began < 2000);
+            frames++
+          ) {
+            await settle(1);
+            worst = Math.max(worst, offCentre());
+          }
+          ensure(
+            worst <= 3,
+            `the target drifted ${worst.toFixed(2)} px off centre`,
+          );
+          ensure(step - firstStep >= 120, 'the target did not move');
+          // A zoom through the target stops at the minimum range.
+          camera.zoomIn(5000);
+          await settle(4);
+          ensure(camera.following() === handle, 'zoomIn ended the follow');
+          ensure(range() >= 149, `zoomIn reached ${range().toFixed(1)} m`);
+          ensure(offCentre() <= 3, 'the target left the centre after zoomIn');
+          // stop() frees the camera: the target moves on without it.
+          handle.stop();
+          ensure(camera.following() === null, 'following() after stop');
+          ensure(changes.at(-1) === null, 'followChanged did not report null');
+          camera.release();
+          await settle();
+          const free = camera.pose().position;
+          await settle(10);
+          ensure(
+            cartesian3.distance(camera.pose().position, free) < 1e-3,
+            'the camera still follows after stop',
+          );
+          // A command that takes the camera ends the follow.
+          camera.follow({
+            position: () => at(step),
+            viewFrom: { x: 0, y: -1000, z: 400 },
+          });
+          await settle(4);
+          camera.setView({
+            destination: cartesian3.fromDegrees(20, 10, 1e6),
+            orientation: { heading: 0, pitch: -math.PI_OVER_TWO, roll: 0 },
+          });
+          ensure(camera.following() === null, 'setView did not end the follow');
+          ensure(changes.at(-1) === null, 'followChanged missed the command');
+          await settle();
+          near(camera.height(), 1e6, 1, 'height after the command');
+        } finally {
+          camera.following()?.stop();
+          camera.release();
+          removeChanged();
+          removeStep();
+        }
+      },
+    ],
   ];
   if (mapSources?.photoreal && mapSources.imagery?.length >= 2)
     checks.push(...mapChecks(engine.maps, mapSources));

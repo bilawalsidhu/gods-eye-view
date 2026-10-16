@@ -30,6 +30,7 @@ import { createAppClock } from '../../time/clock.js';
 import { createLineRegistry } from '../lines.js';
 import { createMoverRegistry } from '../movers.js';
 import { createCpuPicker } from '../cpuPicks.js';
+import { createFollowController } from '../follow.js';
 
 const { cartesian2, cartesian3, cartographic, ellipsoid, math, matrix4 } = geo;
 const WGS84 = ellipsoid.WGS84;
@@ -260,6 +261,8 @@ export function createFakeEngine(options = {}) {
     'frames.preRender': createEngineEvent(),
     'frames.postRender': createEngineEvent(),
     'clock.ticked': createEngineEvent(),
+    // The follow steps here, before preRender (as on Navara).
+    followStep: createEngineEvent(),
   };
   let wallMs = options.nowMs ?? FAKE_EPOCH_MS;
   const appClock = options.appClock ?? createAppClock({ now: () => wallMs });
@@ -792,6 +795,11 @@ export function createFakeEngine(options = {}) {
     moveStart: events['camera.moveStart'],
     moveEnd: events['camera.moveEnd'],
     commanded: events['camera.commanded'],
+    follow: (options) => follow.follow(options),
+    following: () => follow.following(),
+    get followChanged() {
+      return follow.followChanged;
+    },
     get percentageChanged() {
       return percentageChanged;
     },
@@ -832,6 +840,18 @@ export function createFakeEngine(options = {}) {
           flat: state.positions,
           modelMatrix: state.modelMatrix,
         })),
+  });
+  // camera.follow on the fake's frames (src/globe/follow.js), as Navara.
+  const follow = createFollowController({
+    camera: {
+      pose: () => engine.camera.pose(),
+      commanded: events['camera.commanded'],
+    },
+    aim: (pose) => apply(pose),
+    frame: events.followStep,
+    requestRender: () => {
+      fake.renderRequests++;
+    },
   });
   const engine = {
     kind: options.kind ?? 'cesium',
@@ -1092,6 +1112,7 @@ export function createFakeEngine(options = {}) {
       events['clock.ticked'].raiseValue(appClock.beginFrame());
       events['frames.preUpdate'].raiseEvent(clock);
       advanceFlight(dt);
+      events.followStep.raiseEvent();
       events['frames.preRender'].raiseEvent(clock);
       cameraEvents();
       events['frames.postRender'].raiseEvent(clock);

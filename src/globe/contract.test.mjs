@@ -364,3 +364,15 @@ test('the contract carries dynamic lines', () => {
     /lines\.createLine.*lines\.list/,
   );
 });
+
+test('the contract carries the follow camera', () => {
+  for (const member of [
+    'camera.follow',
+    'camera.following',
+    'camera.followChanged',
+  ])
+    assert.ok(GLOBE_ENGINE_MEMBERS.includes(member), member);
+  const engine = createFakeEngine();
+  const broken = { ...engine, camera: { ...engine.camera, followChanged: {} } };
+  assert.throws(() => assertGlobeEngine(broken), /camera\.followChanged/);
+});
