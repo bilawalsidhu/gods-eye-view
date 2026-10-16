@@ -415,8 +415,9 @@ export class StyleManager extends ShellFacade {
 
     // Full-globe sun/moon ring. It is a crisp screen-space overlay above the
     // Cesium canvas but below the HUD/detection/readout z ladder.
-    // Viewer-bound modules (the ring, detection, tracked readout, cockpit)
-    // are not created without a viewer (the experimental Navara engine).
+    // Viewer-bound modules (the ring, cockpit) are not created without a
+    // viewer (the experimental Navara engine); detection and the tracked
+    // readout are the engine's.
     this.celestialRing = viewer
       ? new CelestialRing(viewer, {
           enabled: false,
@@ -482,10 +483,11 @@ export class StyleManager extends ShellFacade {
     initWorldOverlay(engine);
 
     // Initialize detection overlay BEFORE style stages so the composite
-    // stage is first in the post-process pipeline
-    if (viewer) {
+    // stage is first in the post-process pipeline. Both run on the engine
+    // (the Navara mode too: its layers arrive with Tasks 10a-13a).
+    {
       initDetection(
-        viewer,
+        engine,
         [
           trafficLayer,
           flightsLayer,
@@ -501,7 +503,7 @@ export class StyleManager extends ShellFacade {
           this._updateDetectionButton(modeLabel);
         },
       );
-      initTrackedReadout(viewer);
+      initTrackedReadout(engine);
     }
     setDetectionStyle(this.activeStyle);
     this._applyDetectionDensityFromUi();

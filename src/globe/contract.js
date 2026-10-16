@@ -143,11 +143,15 @@
  * @property {'enu'} [frame]
  * @property {any} [native] Cesium only (layers' render/cesium.js): the
  *   Entity to put on viewer.trackedEntity instead of a proxy.
+ * @property {{ id: string, model: object | (() => object), position: () => Cartesian3 }} [label]
+ *   The tracked readout's card (src/data/trackedReadout.js): its id, label
+ *   model ({ title, details, accent, ... }) and anchor, as plain data.
  *
  * @typedef {object} FollowHandle
  * @property {() => void} stop
  * @property {(next: Partial<FollowOptions>) => void} retarget
  * @property {any} [native]
+ * @property {object} [label] FollowOptions.label.
  *
  * @typedef {'click'|'doubleClick'|'move'|'down'|'up'} InputType
  * @typedef {'ctrl'|'shift'|'alt'} InputModifier

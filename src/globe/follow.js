@@ -40,11 +40,24 @@ export function normalizeFollowOptions(options) {
     throw new TypeError(`camera.follow minRange must be >= 0: ${minRange}`);
   if (options.frame !== undefined && options.frame !== 'enu')
     throw new TypeError("camera.follow frame must be 'enu'");
+  const { label } = options;
+  if (
+    label !== undefined &&
+    !(
+      label &&
+      typeof label.id === 'string' &&
+      typeof label.position === 'function'
+    )
+  )
+    throw new TypeError(
+      'camera.follow label needs { id, model, position: () => Cartesian3 }',
+    );
   return {
     position: options.position,
     viewFrom: viewFromOf,
     minRange,
     native: options.native,
+    label,
   };
 }
 
@@ -305,6 +318,7 @@ export function createFollowController({
       const handle = {
         options,
         native: options.native,
+        label: options.label,
         offset: null,
         previous: null,
         stop: () => end(handle),
@@ -312,6 +326,7 @@ export function createFollowController({
           const updated = normalizeFollowOptions({ ...options, ...next });
           handle.options = updated;
           handle.native = updated.native;
+          handle.label = updated.label;
           handle.offset = null;
           handle.previous = null;
           requestRender();

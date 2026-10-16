@@ -304,3 +304,41 @@ test('civilian and military trail heads use the lower-centre model anchor and we
       `${name} keeps diffuse texture contribution weak through code-side MIX`);
   }
 });
+
+test("on a globe engine the readout follows engine.camera.follow's plain-data label", async () => {
+  const { createFakeEngine } = await import('../globe/testing/fakeEngine.js');
+  const originalWindow = globalThis.window;
+  globalThis.window = new EventTarget();
+  const recorder = makeHostRecorder();
+  _setTrackedOverlayHostForTest(recorder.host);
+  const engine = createFakeEngine();
+  const anchor = { x: 6_378_137, y: 0, z: 1000 };
+  let model = { title: 'ISS (ZARYA)', details: ['408 km'], accent: '#ffd166' };
+  try {
+    initTrackedReadout(engine);
+    assert.equal(getActiveTrackedReadoutId(), null);
+    const handle = engine.camera.follow({
+      position: () => anchor,
+      viewFrom: { x: 0, y: -5000, z: 2000 },
+      label: { id: 'satellites:25544', model: () => model, position: () => anchor },
+    });
+    assert.equal(getActiveTrackedReadoutId(), 'satellites:25544');
+    const entry = recorder.calls.filter(({ op }) => op === 'set').at(-1).entries[0];
+    assert.equal(entry.title, 'ISS (ZARYA)');
+    assert.equal(entry.position(), anchor);
+    // A layer republishes its model through the follow handle.
+    model = { ...model, details: ['409 km'] };
+    refreshTrackedReadout(handle);
+    assert.deepEqual(
+      recorder.calls.filter(({ op }) => op === 'set').at(-1).entries[0].details,
+      ['409 km'],
+    );
+    handle.stop();
+    assert.equal(getActiveTrackedReadoutId(), null);
+  } finally {
+    destroyTrackedReadout();
+    _setTrackedOverlayHostForTest();
+    engine.destroy();
+    globalThis.window = originalWindow;
+  }
+});
