@@ -59,7 +59,7 @@ const SFO_ELLIPSOIDAL_M = -15;
  */
 function installHudEnvironment() {
   const elements = new Map(
-    ['hud-alt', 'hud-summary', 'hud-mgrs', 'hud-latlon', 'hud-bottom-line', 'hud-gsd', 'hud-coll', 'hud-ona', 'hud-mode']
+    ['hud-alt', 'hud-summary', 'hud-mgrs', 'hud-latlon', 'hud-bottom-line', 'hud-ona', 'hud-mode']
       .map((id) => [id, { textContent: '' }]),
   );
   const previousDocument = globalThis.document;
@@ -152,15 +152,27 @@ test('the summary ALT tag agrees with the corner readout', () => {
   );
 });
 
-test('the sensor model keeps the ellipsoidal height it was tuned against', () => {
-  // GSD/NIIRS and the STREET/CITY/METRO view band are camera-geometry math,
-  // not readouts. Re-datuming them would silently move their thresholds, so
-  // altM stays and altMslM is purely additive.
+test('the HUD labels its public-data context and omits fabricated sensor metadata', () => {
   assert.equal(
-    has(/const gsd = Math\.max\(0\.01, altM \* 0\.000375\);/),
+    has(/PUBLIC DATA \/\/ OPEN SOURCES/),
     true,
-    'GSD must keep reading the raw camera height',
+    'the HUD must identify the data context as public and open-source',
   );
+  assert.equal(
+    has(/TOP SECRET|NOFORN|KH11-|OPS-\$\{|ORB:|PASS: DESC-|REC\s+<span|GSD:|NIIRS:|COLL:|BAND: PAN|BITS: 11|LVL: 1A/),
+    false,
+    'the HUD must not present fictional classification, collection, orbit, or sensor readouts as real',
+  );
+  assert.equal(
+    has(/Math\.random\(\)/),
+    false,
+    'the HUD must not generate random operational identifiers',
+  );
+});
+
+test('the view band keeps the ellipsoidal height it was tuned against', () => {
+  // The STREET/CITY/METRO view band is camera-geometry math. Re-datuming it
+  // would silently move its thresholds, so altM stays and altMslM is additive.
   assert.equal(
     has(/const band = this\._viewBand\(m\.altM\);/),
     true,
