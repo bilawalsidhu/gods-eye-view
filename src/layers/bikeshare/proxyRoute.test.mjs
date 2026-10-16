@@ -17,6 +17,7 @@ import { createModel } from './model.js';
 import { CITY_BY_ID } from './registry.js';
 
 const AUSTIN = CITY_BY_ID.get('austin-capmetro');
+const OSLO = CITY_BY_ID.get('oslo-bysykkel');
 
 const STATION_INFORMATION = {
   data: {
@@ -202,6 +203,101 @@ test('the proxy relays its cache policy and upstream host through the mounted ro
       );
     },
   );
+});
+
+test('the Norwegian city-bike systems are served through the mounted route', async () => {
+  for (const [id, systemId] of [
+    ['oslo-bysykkel', 'oslobysykkel.no'],
+    ['bergen-bysykkel', 'bergenbysykkel.no'],
+    ['trondheim-bysykkel', 'trondheimbysykkel.no'],
+  ]) {
+    const system = CITY_BY_ID.get(id);
+    assert.ok(system, `${id} is registered`);
+    assert.deepEqual(system.hosts, ['gbfs.urbansharing.com']);
+    assert.equal(
+      system.stationStatusUrl,
+      `https://gbfs.urbansharing.com/${systemId}/station_status.json`,
+    );
+  }
+
+  await withUpstream(
+    {
+      [OSLO.stationInformationUrl]: STATION_INFORMATION,
+      [OSLO.stationStatusUrl]: STATION_STATUS,
+    },
+    async (requested) => {
+      const source = createBikeshareSource({ fetchImpl: mountGbfsProxy() });
+      const info = await source.getStations(OSLO.stationInformationUrl);
+      const status = await source.getStations(OSLO.stationStatusUrl);
+      assert.deepEqual(requested, [
+        OSLO.stationInformationUrl,
+        OSLO.stationStatusUrl,
+      ]);
+      assert.equal(info.data.stations.length, 1);
+      assert.equal(status.data.stations.length, 1);
+
+      const response = await mountGbfsProxy()(
+        '/api/gbfs/' + encodeURIComponent(OSLO.stationStatusUrl),
+      );
+      assert.equal(response.status, 200);
+      assert.equal(
+        response.headers.get('x-gbfs-upstream'),
+        'gbfs.urbansharing.com',
+      );
+    },
+  );
+});
+
+test('every Norwegian city-bike system is registered and reachable through the mounted route', async () => {
+  const expected = {
+    'stavanger-kolumbus':
+      'https://api.entur.io/mobility/v2/gbfs/v2/kolumbusbysykkel/station_status',
+    'skien-farte':
+      'https://api.entur.io/mobility/v2/gbfs/v2/fartebysykkel/station_status',
+    'lillestrom-bysykkel':
+      'https://api.cyclocity.fr/contracts/lillestrom/gbfs/station_status.json',
+  };
+  const upstream = {};
+  for (const [id, statusUrl] of Object.entries(expected)) {
+    const system = CITY_BY_ID.get(id);
+    assert.ok(system, `${id} is registered`);
+    assert.equal(system.stationStatusUrl, statusUrl);
+    upstream[system.stationInformationUrl] = STATION_INFORMATION;
+    upstream[system.stationStatusUrl] = STATION_STATUS;
+  }
+
+  await withUpstream(upstream, async (requested) => {
+    const source = createBikeshareSource({ fetchImpl: mountGbfsProxy() });
+    for (const id of Object.keys(expected)) {
+      const system = CITY_BY_ID.get(id);
+      const info = await source.getStations(system.stationInformationUrl);
+      const status = await source.getStations(system.stationStatusUrl);
+      assert.equal(info.data.stations.length, 1, `${id} information`);
+      assert.equal(status.data.stations.length, 1, `${id} status`);
+    }
+    assert.equal(requested.length, 6);
+
+    // Entur's extensionless station_information keeps its 5-minute cache.
+    const kolumbus = CITY_BY_ID.get('stavanger-kolumbus');
+    const response = await mountGbfsProxy()(
+      '/api/gbfs/' + encodeURIComponent(kolumbus.stationInformationUrl),
+    );
+    assert.equal(response.headers.get('cache-control'), 'public, max-age=300');
+  });
+});
+
+test('the mounted route keeps multi-API hosts to their GBFS tree', async () => {
+  await withUpstream({}, async (requested) => {
+    const mounted = mountGbfsProxy();
+    for (const target of [
+      'https://api.entur.io/journey-planner/v3/station_status',
+      'https://api.cyclocity.fr/other/station_status.json',
+    ]) {
+      const response = await mounted('/api/gbfs/' + encodeURIComponent(target));
+      assert.equal(response.status, 400, target);
+    }
+    assert.deepEqual(requested, []);
+  });
 });
 
 test('the query-string shape the client used to send is refused by the mounted route', async () => {

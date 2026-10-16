@@ -20,8 +20,9 @@ import { panelBuildPlugin } from './panel.js';
 export const BROWSER_CSP = [
   "default-src 'self'",
   // The Bhote Koshi event's embedded media: the YouTube player API, the
-  // Facebook video SDK and X's post widget (src/data/bhoteKoshiEmbeddedMedia.js).
-  "script-src 'self' 'unsafe-eval' blob: https://www.youtube.com https://connect.facebook.net https://platform.twitter.com",
+  // Facebook video SDK and X's post widget (src/data/bhoteKoshiEmbeddedMedia.js);
+  // and the Maps JavaScript API that Street Level's Google Street View runs on.
+  "script-src 'self' 'unsafe-eval' blob: https://www.youtube.com https://connect.facebook.net https://platform.twitter.com https://maps.googleapis.com",
   "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
   "font-src 'self' data: https://fonts.gstatic.com",
   "img-src 'self' data: blob: https:",
@@ -52,6 +53,7 @@ export function createBrowserViteConfig({
   publicDir,
   googleApiKey,
   cesiumToken,
+  mapillaryToken,
   host = 'localhost',
   port = 4173,
   allowedHosts = DEFAULT_ALLOWED_HOSTS,
@@ -80,6 +82,8 @@ export function createBrowserViteConfig({
         '@jtarrio/signals/demod/modes.js',
         '@jtarrio/webrtlsdr/rtlsdr.js',
         'egm96-universal',
+        // Loaded on demand when the first street-level image opens.
+        'mapillary-js',
       ],
     },
     server: {
@@ -104,6 +108,10 @@ export function createBrowserViteConfig({
     define: {
       'import.meta.env.GOOGLE_MAPS_API_KEY': JSON.stringify(googleApiKey),
       'import.meta.env.CESIUM_ION_TOKEN': JSON.stringify(cesiumToken),
+      // Mapillary client tokens are public by design (see SECURITY.md).
+      'import.meta.env.MAPILLARY_CLIENT_TOKEN': JSON.stringify(
+        mapillaryToken ?? '',
+      ),
     },
     build: { chunkSizeWarningLimit: 1500 },
   };

@@ -55,7 +55,9 @@ export async function readResponseJsonCapped(response, maxBytes, signal) {
 
 /**
  * Read a fetch() Response body as bytes with the same hard cap as
- * readResponseTextCapped — for protobuf upstreams (GTFS-Realtime).
+ * readResponseTextCapped — for protobuf and tile upstreams (GTFS-Realtime,
+ * TomTom flow). Same early Content-Length rejection, running cap while
+ * streaming and cancellation on abort, so callers can treat the two alike.
  * Throws { code:'RESPONSE_TOO_LARGE' }.
  */
 export async function readResponseBytesCapped(response, maxBytes, signal) {
