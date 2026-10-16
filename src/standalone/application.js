@@ -8,7 +8,6 @@ import { createStandaloneData } from './data.js';
 import { createStandaloneTools } from './tools.js';
 import { createGoogleTokenSource } from '../maps/googleTokens.js';
 import { resolveEngineKind } from '../app/engineChoice.js';
-import { createQaProbe } from '../app/qaProbe.js';
 
 // The existing controls and layer catalog contain page-scoped state.
 let constructed = false;
@@ -112,9 +111,12 @@ export function createStandaloneApplication({
         placeSearch,
         voice,
       });
-      // The engine-neutral QA probe on the debug handle (src/app/qaProbe.js).
+      // The engine-neutral QA probe on the debug handle (src/app/qaProbe.js),
+      // on the dev server only: import.meta.env.DEV at the import site, so
+      // production builds drop it.
       const debug = globalThis.window?.__godsEyeView;
-      if (debug) {
+      if (import.meta.env?.DEV && debug) {
+        const { createQaProbe } = await import('../app/qaProbe.js');
         const probe = createQaProbe({
           engine: context.scene.engine,
           dataManager: context.data.dataManager,
