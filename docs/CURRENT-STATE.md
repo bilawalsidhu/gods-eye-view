@@ -5483,9 +5483,10 @@ closed. Performance and live agency reliability require recorded validation.
 
 The relay accepts at most 12 MiB per incoming segment and retains at most
 24 MiB per session. A playlist may advertise already-expired segments: 404s
-older than its newest two entries are skipped and the next retained segment
-marks a discontinuity. A 404 in that newest pair, access failures, redirects,
-TLS errors and oversized responses retain the existing retry/failure behavior.
+older than its newest two entries are skipped once while advertised, and only
+the next retained segment marks that gap as a discontinuity. A 404 in that
+newest pair, access failures, redirects, TLS errors and oversized responses
+retain the existing retry/failure behavior.
 This accommodates Mendoza's expired live-window entries and Tandil's roughly
 8 MB 1080p segments without changing origin registration or storing recordings.
 

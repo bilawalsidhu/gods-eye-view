@@ -10,24 +10,46 @@ const playlist =
   '#EXTM3U\n#EXT-X-MEDIA-SEQUENCE:12\n#EXTINF:2,\na.ts\n#EXTINF:2,\nb.ts\n#EXTINF:2,\nc.ts\n';
 const base = 'https://camera.example/live/list.m3u8';
 
-test('an expired old segment does not block the current live pair', async (t) => {
+test('an expired old segment is skipped once as the live window advances', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  let current = playlist;
+  let expiredFetches = 0;
   const manager = createHlsPuller({
-    limits: { ...HLS_LIMITS, pollMs: 100000 },
-    fetchImpl: async (url) =>
-      url.endsWith('.m3u8')
-        ? new Response(playlist)
-        : url.endsWith('a.ts')
-          ? new Response('', { status: 404 })
-          : new Response('current'),
+    fetchImpl: async (url) => {
+      if (url.endsWith('.m3u8')) return new Response(current);
+      if (url.endsWith('a.ts')) {
+        expiredFetches++;
+        return new Response('', { status: 404 });
+      }
+      return new Response('current');
+    },
   });
   t.after(() => manager.shutdown());
   const entry = await manager.ensure('expired', base);
+  await entry.polling;
   assert.equal(await manager.waitReady(entry), true);
   assert.equal(entry.segments.size, 2);
   assert.equal(manager.stats().bytes, 14);
   const output = await manager.buildPlaylist(entry, 'expired');
   assert.match(output, /#EXT-X-DISCONTINUITY\n#EXTINF/);
-  assert.deepEqual([...entry.upstream.keys()], [13, 14]);
+
+  for (const next of ['', '#EXTINF:2,\nd.ts\n', '#EXTINF:2,\ne.ts\n']) {
+    current += next;
+    t.mock.timers.tick(HLS_LIMITS.pollMs);
+    await entry.polling;
+  }
+  assert.equal(expiredFetches, 1);
+  assert.deepEqual(
+    [...entry.segments.values()].map((segment) => segment.discontinuity),
+    [true, false, false, false],
+  );
+  assert.deepEqual([...entry.upstream.keys()], [12, 13, 14, 15, 16]);
+  assert.equal(
+    (await manager.buildPlaylist(entry, 'expired')).match(
+      /#EXT-X-DISCONTINUITY\n/g,
+    ).length,
+    1,
+  );
 });
 
 test('recent missing segments and access failures still exhaust the retry budget', async (t) => {

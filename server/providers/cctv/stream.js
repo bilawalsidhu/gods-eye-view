@@ -209,6 +209,7 @@ export function createHlsPuller({
         } catch (error) {
           // Some live windows advertise expired segments; keep the newest pair strict.
           if (error.status !== 404 || segment.seq >= newest - 1) throw error;
+          entry.upstream.set(segment.seq, segment.uri);
           entry.pendingDiscontinuity = true;
           continue;
         }
