@@ -800,6 +800,75 @@ export function createContractSuite(
       },
     ],
     [
+      'lines: pixel dashes are regular, in CSS pixels',
+      async () => {
+        if (!readRegion) return;
+        await nadirView(1e6);
+        const line = engine.lines.createLine({
+          id: 'contract-dashes',
+          widthPx: 6,
+          color: [1, 0, 1, 1],
+          dash: { lengthPx: 16, gapPx: 16 },
+        });
+        try {
+          const a = cartesian3.fromDegrees(19, 9, 20_000);
+          const b = cartesian3.fromDegrees(21, 9, 20_000);
+          line.setPositions([a, b]);
+          const sa = engine.projector.worldToWindow(a);
+          const sb = engine.projector.worldToWindow(b);
+          // On/off runs (CSS px) along the middle of the line.
+          const runs = () => {
+            const left = Math.round(Math.min(sa.x, sb.x)) + 4;
+            const width = Math.round(Math.abs(sb.x - sa.x)) - 8;
+            const y = Math.round((sa.y + sb.y) / 2);
+            const data = readRegion(left, y, width, 1);
+            const on = [];
+            const off = [];
+            let current = null;
+            let length = 0;
+            for (let x = 0; x < width; x++) {
+              const i = x * 4;
+              const lit =
+                Math.min(data[i], data[i + 2]) - data[i + 1] > 60 &&
+                data[i] > 150;
+              if (lit === current) length++;
+              else {
+                if (current !== null) (current ? on : off).push(length);
+                current = lit;
+                length = 1;
+              }
+            }
+            // The first and last runs are cut by the window.
+            return { on: on.slice(1), off: off.slice(1) };
+          };
+          const median = (values) =>
+            [...values].sort((x, y) => x - y)[Math.floor(values.length / 2)];
+          await until(() => runs().on.length >= 3, 'dashes drawn');
+          const { on, off } = runs();
+          const spread = (values) => Math.max(...values) - Math.min(...values);
+          // What each engine draws for 16/16, for the harness to compare
+          // across device pixel ratios (Cesium's PolylineDash is the
+          // reference; Navara's must not change with the ratio).
+          globalThis.__qaDashes = {
+            dash: median(on),
+            gap: median(off),
+            period: median(on) + median(off),
+          };
+          ensure(
+            on.length >= 3 && spread(on) <= 2 && spread(off) <= 2,
+            `irregular dashes: runs ${JSON.stringify(on)} / ${JSON.stringify(off)}`,
+          );
+          if (engine.kind === 'navara')
+            ensure(
+              Math.abs(median(on) - 16) <= 2 && Math.abs(median(off) - 16) <= 2,
+              `dash ${median(on)} px, gap ${median(off)} px (16/16 asked)`,
+            );
+        } finally {
+          line.destroy();
+        }
+      },
+    ],
+    [
       'render: continuous mode toggles',
       async () => {
         const previous = engine.render.isContinuous();

@@ -10,6 +10,7 @@
  * (Google 3D tiles use the dev server's browser key). Exits 1 on any failure.
  *
  *   node scripts/qa-globe-contract.mjs [--engine=cesium|navara] [--base-url=URL]
+ *     [--dpr=2]
  *
  * --base-url reuses a running server instead of starting one. Browsers are
  * always headless. Provider keys are never printed: server output is not
@@ -47,6 +48,7 @@ const ENGINES = {
   navara: { page: '/scripts/qa/navara-contract.html' },
 };
 const engineName = argument('engine') ?? 'cesium';
+const DPR = Number(argument('dpr') ?? 1);
 const engineSpec = ENGINES[engineName];
 if (!engineSpec) {
   console.error(
@@ -534,7 +536,7 @@ async function runCesium(page, url) {
       }
       // The app owns its engine; only a self-built one is destroyed here.
       if (!appEngine) engine.destroy();
-      return { results, extra };
+      return { results, extra, dashes: globalThis.__qaDashes ?? null };
     },
     { spec: engineSpec, kind: engineName },
   );
@@ -1306,7 +1308,7 @@ async function runNavara(page, url, consoleErrors) {
         );
       },
     );
-    return { results, extra };
+    return { results, extra, dashes: globalThis.__qaDashes ?? null };
   });
   const clickLatency = await page.evaluate(
     () => window.__qaClickLatency ?? null,
@@ -1424,7 +1426,8 @@ try {
       '--no-sandbox',
       '--window-size=1280,800',
     ],
-    defaultViewport: { width: 1280, height: 800 },
+    // --dpr=2: a high-DPI page (the pixel-size checks hold in CSS px).
+    defaultViewport: { width: 1280, height: 800, deviceScaleFactor: DPR },
   });
   const page = await browser.newPage();
   // OSM and keyless terrain tiles from a shared disk cache, with backoff on
@@ -1449,6 +1452,10 @@ try {
       ? await runNavara(page, server.url, consoleErrors)
       : await runCesium(page, server.url);
 
+  if (report.dashes)
+    console.log(
+      `[qa-globe-contract] 16/16 px dashes at DPR ${DPR}: ${JSON.stringify(report.dashes)}`,
+    );
   const all = [...report.results, ...report.extra];
   for (const { name, ok, error } of all)
     console.log(
