@@ -130,6 +130,11 @@ async function capture(browser, engineKind) {
           destination: geo.cartesian3.fromDegrees(lon, lat, height),
           orientation: { heading: rad(heading), pitch: rad(pitch), roll: 0 },
         });
+        // The page clock is frozen, so the layer's 12 Hz fleet tick runs only
+        // when a camera move ends (it resets the tick): end one, as a user's
+        // move would, so rotations are computed at this pose on both engines.
+        const { viewer } = window.__godsEyeView;
+        (viewer ? viewer.camera.moveEnd : engine.camera.moveEnd).raiseEvent();
         const started = performance.now();
         for (;;) {
           engine.render.request('qa-flights-engines');
@@ -156,7 +161,17 @@ async function capture(browser, engineKind) {
               screen.x <= width &&
               screen.y <= h,
           );
+        // The glyphs' screen rotations as the layer drew them (the probe).
+        const framed = new Set(inFrame.map(({ id }) => id));
+        const rotations = Object.fromEntries(
+          (layers.drawn('flights') ?? [])
+            .filter(
+              (row) => !row.trackedModel && row.show && framed.has(row.id),
+            )
+            .map((row) => [row.id, row.rotation]),
+        );
         return {
+          rotations,
           inFrame: inFrame.length,
           // Glyphs the canvas shows (no panel or card over them).
           known: inFrame
@@ -184,7 +199,12 @@ async function capture(browser, engineKind) {
       camera,
     );
     const png = await page.screenshot({ type: 'png' });
-    shots[pose] = { png, known: known.known, inFrame: known.inFrame };
+    shots[pose] = {
+      png,
+      known: known.known,
+      inFrame: known.inFrame,
+      rotations: known.rotations,
+    };
   }
   await context.close();
   return { shots, errors };
@@ -316,6 +336,36 @@ try {
         worstScreen <= 2,
         `worst ${worstScreen.toFixed(2)} px`,
       );
+    // Screen rotations of every glyph shown on both (the layer computes them
+    // from each engine's camera basis): within 0.5°.
+    let worstRotation = 0;
+    let compared = 0;
+    for (const [id, rotation] of Object.entries(left.rotations)) {
+      const other = right.rotations[id];
+      if (other === undefined) continue;
+      compared++;
+      const delta = Math.abs(
+        Math.atan2(Math.sin(rotation - other), Math.cos(rotation - other)),
+      );
+      worstRotation = Math.max(worstRotation, delta);
+    }
+    report.poses[pose].rotation = {
+      pairs: Object.entries(left.rotations)
+        .filter(([id]) => right.rotations[id] !== undefined)
+        .slice(0, 30)
+        .map(([id, r]) => [
+          id,
+          +((r * 180) / Math.PI).toFixed(2),
+          +((right.rotations[id] * 180) / Math.PI).toFixed(2),
+        ]),
+      compared,
+      worstDeg: (worstRotation * 180) / Math.PI,
+    };
+    check(
+      `${pose}: glyph screen rotations within 0.5°`,
+      compared > 0 && (worstRotation * 180) / Math.PI <= 0.5,
+      `${compared} glyphs, worst ${((worstRotation * 180) / Math.PI).toFixed(3)}°`,
+    );
     if (rows.length) {
       // Translucent glyphs (focus or limb fades: the fill below 250 on
       // Cesium) blend with each engine's own map imagery; they are reported,
