@@ -167,3 +167,33 @@ test('an image uploads as RGBA and its bitmap is released; closing hands the tex
   );
   assert.equal(renderer.hasImage(), false);
 });
+
+test('a power-of-two bitmap wraps in longitude even though it is closed once uploaded', (t) => {
+  const { gl, renderer } = stubPanorama(t);
+  const wraps = [];
+  gl.texParameteri = (target, name, value) => wraps.push([name, value]);
+  gl.TEXTURE_WRAP_S = 'WRAP_S';
+  gl.REPEAT = 'REPEAT';
+  gl.CLAMP_TO_EDGE = 'CLAMP';
+  const bitmap = {
+    width: 2048,
+    height: 1024,
+    // A closed ImageBitmap measures 0×0.
+    close() {
+      this.width = 0;
+      this.height = 0;
+    },
+  };
+  renderer.setImage(bitmap);
+  assert.deepEqual(
+    wraps.find(([name]) => name === 'WRAP_S'),
+    ['WRAP_S', 'REPEAT'],
+  );
+  wraps.length = 0;
+  renderer.setImage({ width: 2000, height: 1000 });
+  assert.deepEqual(
+    wraps.find(([name]) => name === 'WRAP_S'),
+    ['WRAP_S', 'CLAMP'],
+    'other sizes clamp (WebGL 1 repeats powers of two only)',
+  );
+});

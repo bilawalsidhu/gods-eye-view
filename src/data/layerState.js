@@ -296,6 +296,24 @@ function imageryPinOption(key, token) {
   });
 }
 
+function satelliteFilterOption() {
+  const percentage = boundedIntegerOption('infrared', 'i', 100, {
+    min: 0,
+    max: 100,
+  });
+  return Object.freeze({
+    ...percentage,
+    normalize: (value) =>
+      value === 'filtered'
+        ? 100
+        : value === 'full'
+          ? 0
+          : percentage.normalize(value),
+    decode: (value) =>
+      value === 'f' ? 100 : value === 'a' ? 0 : percentage.decode(value),
+  });
+}
+
 const OPTION_GROUPS = Object.freeze({
   traffic: Object.freeze([
     enumOption('roadMode', 'r', null, ['tomtom', 'osm', 'hybrid'], {
@@ -317,10 +335,7 @@ const OPTION_GROUPS = Object.freeze({
     }),
   ]),
   'weather-satellite': Object.freeze([
-    enumOption('infrared', 'i', 'filtered', ['filtered', 'full'], {
-      filtered: 'f',
-      full: 'a',
-    }),
+    satelliteFilterOption(),
     enumOption('opacity', 'o', 'strong', ['light', 'strong'], {
       light: 'l',
       strong: 's',
@@ -567,6 +582,11 @@ export const LAYER_STATE_TOKEN_RESERVATIONS =
  * owns stable URL ordering.
  */
 export const LAYER_STATE_REGISTRY = Object.freeze([
+  Object.freeze({
+    id: 'air-quality',
+    token: '4',
+    disposition: 'enabled-only',
+  }),
   Object.freeze({
     id: 'ais-live-vessels',
     token: 'a',

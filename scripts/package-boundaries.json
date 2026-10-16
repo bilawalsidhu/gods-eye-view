@@ -123,7 +123,12 @@
   "traffic-provider": {
     "runtime": "node",
     "exports": ["./server/providers/traffic"],
-    "modules": ["server/providers/traffic.js", "src/data/tomtomTiles.js"],
+    "modules": [
+      "server/providers/traffic.js",
+      "server/providers/common/http.js",
+      "src/sources/httpBody.js",
+      "src/data/tomtomTiles.js"
+    ],
     "external": []
   },
   "traffic-source": {
@@ -139,7 +144,12 @@
   "firms-provider": {
     "runtime": "node",
     "exports": ["./server/providers/firms"],
-    "modules": ["server/providers/firms.js", "src/data/firmsCsv.js"],
+    "modules": [
+      "server/providers/firms.js",
+      "server/providers/common/http.js",
+      "src/sources/httpBody.js",
+      "src/data/firmsCsv.js"
+    ],
     "external": []
   },
   "gbfs-provider": {
@@ -166,6 +176,7 @@
       "server/providers/cctv/cap.js",
       "server/providers/cctv/groundHeights.js",
       "server/providers/cctv/catalog.js",
+      "server/providers/cctv/lithuania.js",
       "server/providers/cctv/constants.js",
       "server/providers/cctv/media.js",
       "server/providers/cctv/normalize.js",
@@ -1237,7 +1248,16 @@
       "src/layers/streetLevel/providers/kartaview/source.js",
       "src/layers/streetLevel/providers/kartaview/decode.js",
       "src/layers/streetLevel/providers/kartaview/viewer.js",
-      "src/layers/streetLevel/providers/kartaview/panorama.js",
+      "src/layers/streetLevel/providers/panoramax/index.js",
+      "src/layers/streetLevel/providers/panoramax/policy.js",
+      "src/layers/streetLevel/providers/panoramax/source.js",
+      "src/layers/streetLevel/providers/panoramax/decode.js",
+      "src/layers/streetLevel/providers/panoramax/viewer.js",
+      "src/layers/streetLevel/photoViewer.js",
+      "src/layers/streetLevel/limiter.js",
+      "src/layers/streetLevel/imageSize.js",
+      "src/layers/streetLevel/tileCache.js",
+      "src/layers/streetLevel/panorama.js",
       "src/layers/streetLevel/lineCoverage.js",
       "src/layers/streetLevel/sequenceCones.js",
       "src/layers/streetLevel/providers/mapillary/source.js",
@@ -2213,7 +2233,16 @@
       "src/layers/streetLevel/providers/kartaview/source.js",
       "src/layers/streetLevel/providers/kartaview/decode.js",
       "src/layers/streetLevel/providers/kartaview/viewer.js",
-      "src/layers/streetLevel/providers/kartaview/panorama.js",
+      "src/layers/streetLevel/providers/panoramax/index.js",
+      "src/layers/streetLevel/providers/panoramax/policy.js",
+      "src/layers/streetLevel/providers/panoramax/source.js",
+      "src/layers/streetLevel/providers/panoramax/decode.js",
+      "src/layers/streetLevel/providers/panoramax/viewer.js",
+      "src/layers/streetLevel/photoViewer.js",
+      "src/layers/streetLevel/limiter.js",
+      "src/layers/streetLevel/imageSize.js",
+      "src/layers/streetLevel/tileCache.js",
+      "src/layers/streetLevel/panorama.js",
       "src/layers/streetLevel/lineCoverage.js",
       "src/layers/streetLevel/sequenceCones.js",
       "src/layers/streetLevel/providers/mapillary/source.js",
@@ -2239,7 +2268,11 @@
       "src/app/embed.js",
       "src/data/cameraFraming.js",
       "src/data/geoImportPins.js",
-      "src/data/geoImportImages.js"
+      "src/data/geoImportImages.js",
+      "src/app/layers/airQuality.js",
+      "src/layers/airQuality/index.js",
+      "src/layers/airQuality/model.js",
+      "src/layers/airQuality/source.js"
     ],
     "external": [
       "hls.js",
@@ -2760,7 +2793,16 @@
       "src/layers/streetLevel/providers/kartaview/source.js",
       "src/layers/streetLevel/providers/kartaview/decode.js",
       "src/layers/streetLevel/providers/kartaview/viewer.js",
-      "src/layers/streetLevel/providers/kartaview/panorama.js",
+      "src/layers/streetLevel/providers/panoramax/index.js",
+      "src/layers/streetLevel/providers/panoramax/policy.js",
+      "src/layers/streetLevel/providers/panoramax/source.js",
+      "src/layers/streetLevel/providers/panoramax/decode.js",
+      "src/layers/streetLevel/providers/panoramax/viewer.js",
+      "src/layers/streetLevel/photoViewer.js",
+      "src/layers/streetLevel/limiter.js",
+      "src/layers/streetLevel/imageSize.js",
+      "src/layers/streetLevel/tileCache.js",
+      "src/layers/streetLevel/panorama.js",
       "src/layers/streetLevel/lineCoverage.js",
       "src/layers/streetLevel/sequenceCones.js",
       "src/layers/streetLevel/providers/mapillary/source.js",
@@ -2780,7 +2822,11 @@
       "src/layers/installations/namedMarkers.js",
       "src/data/infrastructureOverlayEntry.js",
       "src/sources/infrastructureData.js",
-      "src/data/cameraFraming.js"
+      "src/data/cameraFraming.js",
+      "src/app/layers/airQuality.js",
+      "src/layers/airQuality/index.js",
+      "src/layers/airQuality/model.js",
+      "src/layers/airQuality/source.js"
     ],
     "external": [
       "hls.js",
@@ -3161,7 +3207,9 @@
       "src/layers/perimeters/source.js",
       "src/layers/perimeters/records.js",
       "src/layers/submarineCables/bundledSource.js",
-      "src/layers/gnss/source.js"
+      "src/layers/gnss/source.js",
+      "src/layers/airQuality/model.js",
+      "src/layers/airQuality/source.js"
     ],
     "external": []
   },
@@ -3542,6 +3590,25 @@
       "src/data/idSwitches.js",
       "src/data/layerState.js",
       "src/data/layerStateTokenReservations.json"
+    ],
+    "external": []
+  },
+  "air-quality": {
+    "exports": ["./layers/air-quality"],
+    "modules": [
+      "src/layers/airQuality/index.js",
+      "src/layers/airQuality/model.js",
+      "src/layers/airQuality/source.js",
+      "src/sources/httpBody.js"
+    ],
+    "external": ["cesium"]
+  },
+  "air-quality-source": {
+    "exports": ["./layers/air-quality/source"],
+    "modules": [
+      "src/layers/airQuality/model.js",
+      "src/layers/airQuality/source.js",
+      "src/sources/httpBody.js"
     ],
     "external": []
   }

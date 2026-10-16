@@ -162,6 +162,44 @@ test('malformed, duplicate, oversized, future and expired status is rejected rat
   assert.deepEqual(parseCycloneStatus({ activeStorms: [] }, NOW), []);
 });
 
+test('advisories published before their nominal time are accepted, far-future ones are not', () => {
+  // NHC wrote the 03:00Z advisory at 02:34Z.
+  const early = Date.UTC(2026, 8, 16, 2, 34);
+  assert.equal(parseCycloneStatus(status(), early)[0].issuedAt, TIME);
+  assert.throws(
+    () => parseCycloneStatus(status(), Date.UTC(2026, 8, 16, 1, 25)),
+    /invalid_cyclone_data/,
+  );
+});
+
+test('advisory and position times are bounded at 90 minutes ahead and 12 hours old', () => {
+  const MINUTE = 60_000;
+  const at = (offsetMs) => new Date(NOW + offsetMs).toISOString();
+  const fields = {
+    issuedAt: (value) =>
+      status({
+        forecastAdvisory: {
+          advNum: '010',
+          issuance: value,
+          url: 'https://www.nhc.noaa.gov/text/MIATCMEP5.shtml',
+        },
+      }),
+    positionAt: (value) => status({ lastUpdate: value }),
+  };
+  for (const [field, payload] of Object.entries(fields)) {
+    for (const offset of [90 * MINUTE, -12 * 60 * MINUTE]) {
+      const [storm] = parseCycloneStatus(payload(at(offset)), NOW);
+      assert.equal(storm[field], at(offset), `${field} ${offset}`);
+    }
+    for (const offset of [90 * MINUTE + 1, -12 * 60 * MINUTE - 1])
+      assert.throws(
+        () => parseCycloneStatus(payload(at(offset)), NOW),
+        /invalid_cyclone_data/,
+        `${field} ${offset}`,
+      );
+  }
+});
+
 test('coherent geometry is retained with holes/dateline while older advisory geometry is omitted', () => {
   const storms = parseCycloneStatus(status(), NOW);
   const parts = collections();

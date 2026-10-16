@@ -275,10 +275,12 @@ export class FlightRecords {
     return { icao24, prevMeta, meta, groundFlipped, fixEpochMs };
   }
 
-  absence(id, { complete, likelyLanded }) {
-    // Partial admissions do not prove absence, but retention remains bounded.
+  absence(id, { complete, retainIds, likelyLanded }) {
+    // Partial admissions and position-less rows do not prove absence, but
+    // retention remains bounded; a likely-landed position-less contact
+    // still takes the landed limit.
     if (
-      !complete &&
+      (!complete || (retainIds?.has(id) && !likelyLanded)) &&
       Date.now() - (this.data.get(id)?.observedReceiptMs ?? 0) < 300000
     )
       return 'retain';

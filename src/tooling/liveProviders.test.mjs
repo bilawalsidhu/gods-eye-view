@@ -37,6 +37,30 @@ function install(plugin, preview = false) {
   };
 }
 
+/** A response that streams 1 MiB chunks of `text` well past every cap, then ends. */
+function oversizedResponse(text, init = {}) {
+  const state = { pulled: 0, cancelled: false };
+  const chunk = new TextEncoder().encode(
+    text.repeat(Math.ceil((1 << 20) / text.length)),
+  );
+  const response = new Response(
+    new ReadableStream(
+      {
+        pull(controller) {
+          if (++state.pulled > 40) controller.close();
+          else controller.enqueue(chunk);
+        },
+        cancel() {
+          state.cancelled = true;
+        },
+      },
+      { highWaterMark: 0 },
+    ),
+    init,
+  );
+  return { response, state };
+}
+
 function environment(t, values) {
   for (const [key, value] of Object.entries(values)) {
     const original = process.env[key];
@@ -191,6 +215,130 @@ test('OpenSky global snapshot attempts are time-limited, retried once, then fall
   assert.equal(stalled.attempts.length, 2);
   assert.equal(stalled.response.statusCode, 200);
   assert.equal(stalled.response.headers['x-flight-source'], 'adsb.lol');
+});
+
+const openSkyAnonEnv = {
+  OPENSKY_CLIENT_ID: undefined,
+  OPENSKY_CLIENT_SECRET: undefined,
+  OPENSKY_AUTH_MODE: 'anon',
+  OPENSKY_USERNAME: undefined,
+  OPENSKY_PASSWORD: undefined,
+};
+const regionalFallback = () =>
+  Response.json({
+    now: Date.now() / 1000,
+    ac: [{ hex: 'abc123', lat: 30, lon: -97, alt_baro: 10000 }],
+  });
+
+test('OpenSky 429 starts the cooldown from headers and cancels the body unread', async (t) => {
+  environment(t, openSkyAnonEnv);
+  t.mock.method(console, 'warn', () => {});
+  t.mock.method(console, 'error', () => {});
+  let states = 0;
+  let limited;
+  t.mock.method(globalThis, 'fetch', async (url) => {
+    if (url.includes('/states/')) {
+      states++;
+      limited = oversizedResponse('x', {
+        status: 429,
+        headers: { 'x-rate-limit-retry-after-seconds': '600' },
+      });
+      return limited.response;
+    }
+    if (url.includes('/lat/')) return regionalFallback();
+    throw Error(`Unexpected URL: ${url}`);
+  });
+  const fresh = await import(
+    `../../server/providers/aircraft/opensky.js?ratelimit=${Math.random()}`
+  );
+  const request = install(fresh.openSkyProxy());
+  const first = await request('/api/flights', '?lat=30&lon=-97');
+  assert.equal(first.statusCode, 200);
+  assert.equal(first.headers['x-flight-source'], 'adsb.lol');
+  assert.equal(states, 1, 'a rate-limited snapshot is not retried');
+  assert.equal(limited.state.cancelled, true);
+  assert.ok(limited.state.pulled <= 1, 'the 429 body is not read');
+  const cooling = await request('/api/flights', '?lat=30&lon=-97');
+  assert.equal(cooling.statusCode, 200);
+  assert.equal(
+    cooling.headers['x-opensky-auth-reason'],
+    'opensky_cooldown_regional_fallback',
+  );
+  assert.equal(states, 1, 'the cooldown holds off the next upstream attempt');
+});
+
+test('OpenSky 429 without retry-after cools down for the 2 minute default', async (t) => {
+  environment(t, openSkyAnonEnv);
+  t.mock.method(console, 'warn', () => {});
+  t.mock.method(console, 'error', () => {});
+  const start = Date.now();
+  let now = start;
+  t.mock.method(Date, 'now', () => now);
+  let states = 0;
+  t.mock.method(globalThis, 'fetch', async (url) => {
+    if (url.includes('/states/')) {
+      states++;
+      return new Response('{}', { status: 429 });
+    }
+    if (url.includes('/lat/')) return regionalFallback();
+    throw Error(`Unexpected URL: ${url}`);
+  });
+  const fresh = await import(
+    `../../server/providers/aircraft/opensky.js?ratelimit-default=${Math.random()}`
+  );
+  const request = install(fresh.openSkyProxy());
+  await request('/api/flights', '?lat=30&lon=-97');
+  assert.equal(states, 1);
+  // Past the 30 s floor but inside the 2 minute default.
+  now = start + 90_000;
+  await request('/api/flights', '?lat=30&lon=-97');
+  assert.equal(states, 1, 'a missing header is not read as a zero wait');
+});
+
+test('OpenSky does not retry a snapshot body over the cap', async (t) => {
+  environment(t, openSkyAnonEnv);
+  t.mock.method(console, 'warn', () => {});
+  t.mock.method(console, 'error', () => {});
+  const bodies = [];
+  t.mock.method(globalThis, 'fetch', async (url) => {
+    if (url.includes('/states/')) {
+      const oversized = oversizedResponse(' ');
+      bodies.push(oversized.state);
+      return oversized.response;
+    }
+    if (url.includes('/lat/')) return regionalFallback();
+    throw Error(`Unexpected URL: ${url}`);
+  });
+  const fresh = await import(
+    `../../server/providers/aircraft/opensky.js?oversize=${Math.random()}`
+  );
+  const response = await install(fresh.openSkyProxy())(
+    '/api/flights',
+    '?lat=30&lon=-97',
+  );
+  assert.equal(response.statusCode, 200);
+  assert.equal(response.headers['x-flight-source'], 'adsb.lol');
+  assert.equal(bodies.length, 1, 'an oversized body is not fetched twice');
+  assert.equal(bodies[0].cancelled, true);
+  assert.ok(bodies[0].pulled <= 9, 'reading stops at the 8 MiB cap');
+});
+
+test('military aircraft route answers 502 to an oversized body without caching it', async (t) => {
+  t.mock.method(console, 'error', () => {});
+  const bodies = [];
+  t.mock.method(globalThis, 'fetch', async () => {
+    const oversized = oversizedResponse('{"ac":[]}');
+    bodies.push(oversized.state);
+    return oversized.response;
+  });
+  const request = install(providers.adsbLolProxy());
+  const first = await request('/api/military');
+  assert.equal(first.statusCode, 502);
+  assert.equal(bodies[0].cancelled, true);
+  assert.ok(bodies[0].pulled <= 9, 'reading stops at the 8 MiB cap');
+  const again = await request('/api/military');
+  assert.equal(again.statusCode, 502, 'nothing was cached');
+  assert.equal(bodies.length, 2);
 });
 
 test('military aircraft route preserves fresh cache and stale response after upstream failure', async (t) => {

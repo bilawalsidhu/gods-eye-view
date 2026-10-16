@@ -107,6 +107,30 @@ test('ground transitions preserve last render height while a surface cell is col
   assert.equal(next.meta.wasAirborne, true);
 });
 
+test('complete snapshots age out vanished aircraft and retain position-less ones unless landed', () => {
+  const store = records();
+  for (const id of ['abc123', 'def456', 'ghi789'])
+    store.receive(observation({ id, reference: id }), view());
+  // abc123 and ghi789 are still listed without a position; def456 vanished.
+  const absent = (id, likelyLanded = false) =>
+    store.absence(id, {
+      complete: true,
+      retainIds: new Set(['abc123', 'ghi789']),
+      likelyLanded,
+    });
+  assert.deepEqual(
+    [absent('def456'), absent('def456'), absent('def456')],
+    ['stale', 'stale', 'remove'],
+  );
+  assert.equal(absent('abc123'), 'retain');
+  assert.equal(store.missingPolls.has('abc123'), false);
+  // A landed contact that lost its position takes the landed fast-cull.
+  assert.equal(absent('ghi789', true), 'remove');
+  // Position-less retention stays bounded like partial admission.
+  store.data.get('abc123').observedReceiptMs = Date.now() - 300001;
+  assert.equal(absent('abc123'), 'stale');
+});
+
 test('civil emergency status follows the latest poll instead of sticking', () => {
   const store = records();
   const first = store.receive(observation({ squawk: '7700' }), view());
