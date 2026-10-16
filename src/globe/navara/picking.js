@@ -51,8 +51,11 @@ export function createNavaraPicking({
   // Navara 0.2.1 answers clicks in quick succession (within a frame or so)
   // with the first click's pick: a GPU answer whose instance is not drawn
   // near the click is stale, and the CPU pick answers instead.
-  const answerFrom = (info, at) => {
-    const hit = info ? resolveBatch(info.batchId) : null;
+  // `hit` is the batch id resolved when Navara answered (the pick's own
+  // frame): a set that changes its instances after it still names the
+  // instance that was under the pointer.
+  const resolveInfo = (info) => (info ? resolveBatch(info.batchId) : null);
+  const answerFrom = (hit, at) => {
     if (hit && !drillPick.near(hit.set, hit.instance, at)) {
       stats.stale++;
       return drillPick(at, 1)[0];
@@ -68,12 +71,12 @@ export function createNavaraPicking({
   const onFeatureClick = (info) => {
     const next = waiting.shift();
     if (!next) {
-      early = { info, at: now() };
+      early = { hit: resolveInfo(info), at: now() };
       return;
     }
     cancel(next.timer);
     answered(next, 'gpu');
-    next.resolve(answerFrom(info, next.at));
+    next.resolve(answerFrom(resolveInfo(info), next.at));
   };
   view.on('featureClick', onFeatureClick);
 
@@ -87,7 +90,7 @@ export function createNavaraPicking({
       if (gesture && now() - gesture.at <= EARLY_ANSWER_MS) {
         const entry = { startedAt: gesture.at };
         answered(entry, 'gpu');
-        return Promise.resolve(answerFrom(gesture.info, at));
+        return Promise.resolve(answerFrom(gesture.hit, at));
       }
       return new Promise((resolve) => {
         const entry = {

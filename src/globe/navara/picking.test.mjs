@@ -272,3 +272,27 @@ test('a thin line is picked within 8 px of its segments', () => {
   assert.equal(picking.pick({ x: 100, y: 57.5 })?.id, 'trail-1');
   assert.equal(picking.pick({ x: 100, y: 58.5 }), undefined);
 });
+
+test('the pick id is the one the instance had when Navara answered', async () => {
+  const view = fakeView();
+  const sets = [moverSet('flights', [[10, 10, 5, 'before']])];
+  let time = 0;
+  const picking = createNavaraPicking({
+    view,
+    projector,
+    camera,
+    movers: () => sets,
+    lines: () => [],
+    resolveBatch: (batchId) =>
+      batchId === 1
+        ? { set: 'flights', instance: 0, pickId: sets[0].store.pickIds[0] }
+        : null,
+    now: () => time,
+    ...timers(),
+  });
+  view.emit('featureClick', { batchId: 1 });
+  // The layer reuses the instance before the engine's click arrives.
+  sets[0].store.set(0, { pickId: 'after' });
+  time += 1;
+  assert.equal((await picking.clickPick({ x: 10, y: 10 })).id, 'before');
+});
