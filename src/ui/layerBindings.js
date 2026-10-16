@@ -130,9 +130,10 @@ export class LayerBindings {
     ]) {
       const layer = this._dataManager?.layers?.get(id)?.module;
       if (typeof layer?.attachShellServices !== 'function') continue;
+      const noun = id === 'weather-cyclones' ? 'cyclone' : 'weather';
       layer.attachShellServices({
         runNavigation: (navigate) =>
-          this.runImmediateNavigation('weather', navigate),
+          this.runImmediateNavigation(noun, navigate),
         imageryHost: this.services.imageryHost,
       });
       this._weatherShellModules.push(layer);
