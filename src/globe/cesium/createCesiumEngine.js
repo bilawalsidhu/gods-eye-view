@@ -64,7 +64,10 @@ export function createCesiumEngine(viewer, options = {}) {
       ...(options.moverFactories ? { factories: options.moverFactories } : {}),
     })),
     render,
-    surface: createCesiumSurface(viewer),
+    // Mover sets in a surface `exclude` are hidden for the sample.
+    surface: createCesiumSurface(viewer, {
+      engineExclude: (entry) => movers?.primitiveOf(entry) ?? null,
+    }),
     input: createCesiumInput(viewer, { ...options, picker: picker.picker }),
     credits,
     maps: createCesiumMaps(viewer, {

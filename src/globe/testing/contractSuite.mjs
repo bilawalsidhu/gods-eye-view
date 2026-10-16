@@ -1476,6 +1476,70 @@ export function createContractSuite(
       },
     ],
     [
+      'surface.sampleHeightDetailed: source, tile size, lod and mover-set exclusion',
+      async () => {
+        const place = cartographic.fromDegrees(20, 10, 0);
+        const shape = (detail, label) => {
+          if (detail === undefined) return;
+          ensure(Number.isFinite(detail.height), `${label}: height`);
+          ensure(
+            detail.source === 'tiles' || detail.source === 'terrain',
+            `${label}: source ${detail.source}`,
+          );
+          ensure(
+            detail.tileSizeM === undefined ||
+              (detail.source === 'tiles' && detail.tileSizeM > 0),
+            `${label}: tileSizeM ${detail.tileSizeM}`,
+          );
+        };
+        const visible = engine.surface.sampleHeightDetailed(place);
+        shape(visible, 'visible');
+        shape(
+          engine.surface.sampleHeightDetailed(place, { lod: 'finest' }),
+          'finest',
+        );
+        if (visible?.source === 'tiles')
+          near(
+            engine.surface.sampleHeight(place),
+            visible.height,
+            1e-6,
+            'sampleHeight and the detailed tiles answer',
+          );
+        let rejected = null;
+        try {
+          engine.surface.sampleHeightDetailed(place, { lod: 'best' });
+        } catch (error) {
+          rejected = error;
+        }
+        ensure(rejected instanceof TypeError, 'an unknown lod was accepted');
+        // A mover set in exclude: the sample works and the set stays.
+        const set = engine.movers.createSet({
+          id: 'contract-surface-exclude',
+          kind: 'point',
+          capacity: 1,
+          point: { sizePx: 8 },
+        });
+        try {
+          set.set(0, { position: cartesian3.fromDegrees(20, 10, 50) });
+          set.setCount(1);
+          set.commit();
+          shape(
+            engine.surface.sampleHeightDetailed(place, { exclude: [set] }),
+            'excluding a set',
+          );
+          ensure(set.id === 'contract-surface-exclude', 'the set has no id');
+          ensure(
+            engine.movers
+              .list()
+              .some(({ id }) => id === 'contract-surface-exclude'),
+            'the excluded set is gone',
+          );
+        } finally {
+          set.destroy();
+        }
+      },
+    ],
+    [
       'surface: flags, tilesLoaded, sampleHeight, terrainHeight and clampToHeight shapes',
       async () => {
         for (const flag of ['terrainHeightSupported', 'clampToHeightSupported'])

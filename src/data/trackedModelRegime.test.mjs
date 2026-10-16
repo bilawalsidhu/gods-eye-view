@@ -26,6 +26,7 @@ import {
   FLEET_MODEL_ALT_CEIL_M,
   TRACKED_MODEL_EXIT_RATIO,
 } from './trackedModelRegime.js';
+import { registerViewerEngine } from '../globe/cesium/engineFromViewer.js';
 import * as Cesium from 'cesium';
 import flightsLayer, {
   _setTrackedFlightRefreshStateForTest,
@@ -155,7 +156,7 @@ if (typeof globalThis.window === 'undefined') {
 /** A viewer stub whose camera altitude the test can move between evaluations. */
 function viewerAtHeight(height, { tilesLoaded = true, sampleHeight = () => undefined } = {}) {
   const tileset = { show: true, tilesLoaded };
-  return {
+  const viewer = {
     camera: {
       positionCartographic: { height },
       positionWC: Cesium.Cartesian3.fromDegrees(-97.71, 30.21, 5000),
@@ -171,6 +172,19 @@ function viewerAtHeight(height, { tilesLoaded = true, sampleHeight = () => undef
     trackedEntity: undefined,
     entities: { remove() {} },
   };
+  // The ground snap samples through the viewer's engine (engineFromViewer):
+  // the engine surface over this stub's tileset and scene.sampleHeight.
+  registerViewerEngine(viewer, {
+    isDestroyed: () => false,
+    surface: {
+      tilesLoaded: () => viewer.tileset.tilesLoaded === true,
+      sampleHeightDetailed(place, { exclude } = {}) {
+        const h = viewer.scene.sampleHeight(place, exclude);
+        return Number.isFinite(h) ? { height: h, source: 'tiles' } : undefined;
+      },
+    },
+  });
+  return viewer;
 }
 
 /** A billboard with a real position, so the tracked-model driver has somewhere

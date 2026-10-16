@@ -47,7 +47,9 @@
  */
 
 import * as geo from '../geo/index.js';
-import { isGlobeEngine } from '../globe/contract.js';
+import { engineFromViewer } from '../globe/cesium/engineFromViewer.js';
+import { acceptedSurfaceHeight } from '../globe/surfaceDetail.js';
+import { MAX_FLOOR_TILE_SIZE_M } from './meshFloorSampler.js';
 
 /** Taxi threshold: a cached snap answers directly for moves up to this far from
  *  the sampled spot (m). Past it the value is demoted to a held last-known and a
@@ -130,24 +132,6 @@ const RETRY_MAX_MS = 30000;
 const SAMPLE_BUDGET_PER_WINDOW = 4;
 /** Budget window length (ms). */
 const SAMPLE_WINDOW_MS = 250;
-
-/**
- * True when the active photoreal tileset has finished streaming the tiles in
- * view (cctv.js's projectionTilesReady pattern: first Cesium3DTileset found in
- * scene.primitives, duck-typed via its boolean tilesLoaded). Sampling before
- * that both blows the frame budget on forced synchronous loads and produces
- * misses that would burn retry backoff for nothing. With NO tileset present
- * (OSM fallback) this returns true so the sample path is not permanently
- * blocked — the sample just misses and backs off.
- * @param {Cesium.Viewer} viewer
- * @returns {boolean}
- */
-function _tilesReady(viewer) {
-  const prims = viewer?.scene?.primitives;
-  if (!prims) return false;
-  const tileset = firstVisibleTileset(prims);
-  return tileset ? tileset.tilesLoaded === true : true;
-}
 
 /**
  * The first shown primitive that reports a boolean `tilesLoaded` (a 3D
@@ -282,21 +266,21 @@ export function createGroundSnap({ groundFloor }) {
    * A contact that HAS resolved once keeps that answer through a resample outage;
    * see `heldSnapM`.
    *
-   * @param {object} target - The globe engine (`engine.surface`: sampleHeight
-   *   and tilesLoaded), or a live Cesium viewer from callers that still hold
-   *   one (scene.sampleHeight and the first visible tileset's tilesLoaded).
+   * @param {object} target - The globe engine (`engine.surface`:
+   *   sampleHeightDetailed and tilesLoaded), or a viewer whose engine is
+   *   registered (engineFromViewer); without one, no sample.
    * @param {string} icao - Cache key (per-layer icao space).
    * @param {Cesium.Cartesian3} pos - Current display position. Cache movement
    *   is measured after projecting this input to the WGS84 ellipsoid, so a
    *   poll-time altitude/datum change cannot invalidate a stationary snap.
    * @param {(() => Array<unknown>)|undefined} getExclusions - Lazily builds the
-   *   scene.sampleHeight objectsToExclude list (own billboards/models/entities —
-   *   the vertical pick ray at a plane's OWN lat/lon lands on its icon/model
-   *   otherwise). Only invoked when a sample actually fires.
+   *   surface `exclude` list (the layer's mover sets, or its own Cesium
+   *   billboards/models/entities — the vertical ray at a plane's OWN lat/lon
+   *   lands on its icon/model otherwise). Only invoked when a sample fires.
    * @returns {number|null}
    */
   function heightFor(target, icao, pos, getExclusions) {
-    const engine = isGlobeEngine(target) ? target : null;
+    const engine = engineFromViewer(target);
     const surfacePos = geo.ellipsoid.WGS84.scaleToGeodeticSurface(
       pos,
       scratchSurfacePos,
@@ -348,7 +332,7 @@ export function createGroundSnap({ groundFloor }) {
       entries.set(icao, next);
       return heldSnapM(next, surfacePos);
     };
-    if (!(engine ? engine.surface.tilesLoaded() : _tilesReady(target)))
+    if (!engine || engine.isDestroyed?.() || !engine.surface.tilesLoaded())
       return miss();
     windowCount += 1;
     let sampled;
@@ -360,9 +344,11 @@ export function createGroundSnap({ groundFloor }) {
       );
       // sampleHeight throws when unsupported (no depth textures) — that's a miss.
       const exclusions = getExclusions ? getExclusions() : undefined;
-      sampled = engine
-        ? engine.surface.sampleHeight(carto, exclusions)
-        : target.scene.sampleHeight(carto, exclusions);
+      // A coarse tile's answer, or only terrain, is a miss.
+      sampled = acceptedSurfaceHeight(
+        engine.surface.sampleHeightDetailed(carto, { exclude: exclusions }),
+        { maxTileSizeM: MAX_FLOOR_TILE_SIZE_M },
+      );
     } catch {
       sampled = undefined;
     }

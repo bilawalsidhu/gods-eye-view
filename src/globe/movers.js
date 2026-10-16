@@ -309,12 +309,14 @@ export function createMoverStore(options) {
  * destroy. commit() hands the engine the changed range and cleans the store;
  * a destroyed set refuses every call but destroy().
  */
-export function createMoverSet(store, { commit, destroy }) {
+export function createMoverSet(store, { id, commit, destroy }) {
   let destroyed = false;
   const alive = () => {
     if (destroyed) throw new Error('Mover set was destroyed');
   };
   return {
+    // The set's id (createSet's `id`): surface exclusion and picks name it.
+    id,
     set(index, fields) {
       alive();
       store.set(index, fields);
@@ -359,6 +361,7 @@ export function createMoverRegistry(build) {
       const part = build(options, store);
       const entry = { options, store, part, set: null };
       entry.set = createMoverSet(store, {
+        id: options.id,
         commit: () => part.commit(),
         destroy: () => {
           sets.delete(options.id);

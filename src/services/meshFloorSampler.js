@@ -1,6 +1,12 @@
-import * as Cesium from 'cesium';
 import * as geo from '../geo/index.js';
-import { isGlobeEngine } from '../globe/contract.js';
+import { engineFromViewer } from '../globe/cesium/engineFromViewer.js';
+import { acceptedSurfaceHeight } from '../globe/surfaceDetail.js';
+
+/** Answers from tiles larger than this are too coarse to latch (m): on
+ *  Navara at Austin a 1.8 km tile read the ground (122.5 m) and the 28 km
+ *  tile shown while streaming read 143.2 m. Cesium does not size its
+ *  answers, so its gates are the camera height and tilesLoaded below. */
+export const MAX_FLOOR_TILE_SIZE_M = 4000;
 
 /** Construct an instance-owned meshFloorSampler service with explicit dependencies. */
 export function createMeshFloorSampler({
@@ -50,8 +56,6 @@ export function createMeshFloorSampler({
    *  streamed LOD under a high camera is coarse everywhere, so every probe
    *  would latch junk. */
   const MAX_CAMERA_HEIGHT_M = 25_000;
-  /** @type {Cesium.Cartographic} Scratch for probe coordinates. */
-  const _scratchProbe = new Cesium.Cartographic();
   const _scratchEngineProbe = geo.cartographic.create();
 
   // Regime tracking: mesh cells only apply while the photoreal (google-3d)
@@ -59,28 +63,6 @@ export function createMeshFloorSampler({
   // CustomEvent; the boot default is photoreal, matching groundFloor's initial
   // preference. Module-scope listener: the module only loads in the browser
   // bundle, and the subscription is idempotent for the app's lifetime.
-
-  /**
-   * True when a VISIBLE 3D tileset in the scene reports its streaming queue
-   * drained (tilesLoaded) — the mirror of cctv.js's projectionTilesReady.
-   * Walks top-level primitives only (a handful; once per poll).
-   * @param {Cesium.Scene} scene
-   * @returns {boolean}
-   */
-  function _visibleTilesetLoaded(scene) {
-    try {
-      const prims = scene.primitives;
-      for (let i = 0; i < prims.length; i++) {
-        const p = prims.get(i);
-        if (p instanceof Cesium.Cesium3DTileset && p.show) {
-          return !!p.tilesLoaded;
-        }
-      }
-    } catch {
-      /* mid-teardown */
-    }
-    return false;
-  }
 
   /**
    * Equirectangular distance (km) — same approximation the flights clamp uses.
@@ -99,13 +81,13 @@ export function createMeshFloorSampler({
    * sampleHeight is a CPU-side query against loaded tiles.
    *
    * @param {object|undefined} target - The globe engine (engine.surface,
-   *   camera.height, maps.photorealActive), or the Cesium scene from callers
-   *   that still hold one (skipped when absent/torn down).
+   *   camera.height, maps.photorealActive), or a viewer or scene whose
+   *   engine is registered (engineFromViewer); without one, nothing.
    * @param {Array<{lat: number, lon: number}>} points - Contact/waypoint coords.
    * @param {object} [options]
-   * @param {Array<object>} [options.excludeObjects] - Own billboards/models to
-   *   exclude from the probe (Cesium matches instances/.primitive/.id — pass
-   *   Billboard and Model instances, NOT collections).
+   * @param {Array<object>} [options.excludeObjects] - What the probe passes
+   *   through: the layer's engine mover sets, or (Cesium layers) its own
+   *   Billboard and Model instances.
    * @param {number} [options.viewerLat] @param {number} [options.viewerLon]
    *   Viewer subpoint (computed once by the caller's poll).
    */
@@ -115,25 +97,17 @@ export function createMeshFloorSampler({
     { excludeObjects = [], viewerLat, viewerLon } = {},
   ) {
     if (!meshFloorPreferred()) return;
-    const engine = isGlobeEngine(target) ? target : null;
-    const scene = engine ? null : target;
-    if (engine ? !engine.surface.supported : !scene) return;
-    if (!engine && typeof scene.sampleHeight !== 'function') return;
+    const engine = engineFromViewer(target);
+    if (!engine || engine.isDestroyed?.() || !engine.surface.supported) return;
     if (!Array.isArray(points) || !points.length) return;
     // Round-5 hardening (the CCTV projectionTilesReady lesson, ported late):
     // while tiles are MID-STREAM a probe returns coarse-LOD heights — real
     // numbers, wildly wrong — and the one-shot latch made them permanent.
     // Only sample when the visible Google tileset reports tilesLoaded AND the
     // camera is low enough that the streamed LOD near it is fine-grained.
-    const camH = engine
-      ? engine.camera.height()
-      : scene.camera?.positionCartographic?.height;
+    const camH = engine.camera.height();
     if (!Number.isFinite(camH) || camH > MAX_CAMERA_HEIGHT_M) return;
-    if (
-      !(engine
-        ? engine.maps.photorealActive() && engine.surface.tilesLoaded()
-        : _visibleTilesetLoaded(scene))
-    )
+    if (!(engine.maps.photorealActive() && engine.surface.tilesLoaded()))
       return;
     let sampled = 0;
     const attempted = new Set();
@@ -154,23 +128,19 @@ export function createMeshFloorSampler({
       }
       let height;
       try {
-        if (engine) {
-          const carto = geo.cartographic.fromDegrees(
-            cell.lon,
-            cell.lat,
-            0,
-            _scratchEngineProbe,
-          );
-          height = engine.surface.sampleHeight(carto, excludeObjects);
-        } else {
-          const carto = Cesium.Cartographic.fromDegrees(
-            cell.lon,
-            cell.lat,
-            0,
-            _scratchProbe,
-          );
-          height = scene.sampleHeight(carto, excludeObjects);
-        }
+        const carto = geo.cartographic.fromDegrees(
+          cell.lon,
+          cell.lat,
+          0,
+          _scratchEngineProbe,
+        );
+        // A coarse tile's answer, or only terrain, is a miss (no latch).
+        height = acceptedSurfaceHeight(
+          engine.surface.sampleHeightDetailed(carto, {
+            exclude: excludeObjects,
+          }),
+          { maxTileSizeM: MAX_FLOOR_TILE_SIZE_M },
+        );
         sampled += 1;
       } catch {
         continue; // scene mid-teardown — try again next poll
@@ -223,6 +193,9 @@ export function createMeshFloorSampler({
   return {
     sampleMeshFloorCells,
     cachedGroundFloor,
-    visibleTilesetLoaded: _visibleTilesetLoaded,
+    /** Whether the engine of `target` (a scene or viewer) has its tiles
+     *  loaded (street level's mesh sampler gate). */
+    visibleTilesetLoaded: (target) =>
+      engineFromViewer(target)?.surface.tilesLoaded() ?? false,
   };
 }
