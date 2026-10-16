@@ -14,8 +14,9 @@
  * Sections (the checklist's numbers). Filled now: 1 view (object counts per
  * pose, screen points of 5 known objects), 8 idle (frames drawn in 2 s with
  * the layer on and the camera still), 9 errors (console errors; the layer
- * on/off 10 times leaves no mover sets behind). 2 click, 3 focus, 4 tracking,
- * 5 voice (window.__gevVoiceCommands.runner), 6 share link and 7 the layer's
+ * on/off 10 times leaves no mover sets behind), 5 voice in part (the runner's
+ * layer-neutral answers; a viewer-only action refuses off Cesium). 2 click,
+ * 3 focus, 4 tracking, the layer queries of 5, 6 share link and 7 the layer's
  * own qa:* scripts are filled by each layer's task (*b); until then they
  * report TODO. A layer the engine does not have is SKIPPED with its reason.
  *
@@ -52,7 +53,6 @@ const TODO_SECTIONS = {
   2: 'click',
   3: 'focus',
   4: 'tracking',
-  5: 'voice',
   6: 'share link',
   7: "the layer's own qa:* scripts",
 };
@@ -241,6 +241,59 @@ try {
       consoleErrors.length === 0,
       consoleErrors.slice(0, 3).join(' | ') || '0',
     );
+    // 5. voice: the runner's answers (window.__gevVoiceCommands.runner), kept
+    // in the JSON for --compare; the per-layer queries (track_entity,
+    // select_nearest_aircraft, analyst_query, next_*_pass…) are added by the
+    // layer tasks.
+    const voice = await page.evaluate(async (id) => {
+      const runner = window.__gevVoiceCommands?.runner;
+      if (!runner) return { available: false };
+      const ask = async (name, args) => {
+        try {
+          const answer = await runner(name, args);
+          return {
+            ok: answer?.ok !== false,
+            code: answer?.code ?? null,
+            error: answer?.ok === false ? String(answer.error ?? '') : null,
+          };
+        } catch (error) {
+          return { ok: false, thrown: String(error?.message ?? error) };
+        }
+      };
+      return {
+        available: true,
+        setVisibility: await ask('set_layer_visibility', {
+          layerId: id,
+          enabled: true,
+        }),
+        viewState: await ask('get_current_view_state', {}),
+        frameOverhead: await ask('frame_overhead', { target: id }),
+        cockpit: await ask('control_cockpit', { action: 'enter' }),
+      };
+    }, layer);
+    report.sections[5] = voice;
+    check('5 voice: the runner is there', voice.available === true);
+    if (voice.available) {
+      check(
+        '5 voice: set_layer_visibility',
+        voice.setVisibility.ok,
+        JSON.stringify(voice.setVisibility),
+      );
+      check(
+        '5 voice: get_current_view_state',
+        voice.viewState.ok,
+        JSON.stringify(voice.viewState),
+      );
+      console.log(
+        `  [INFO] 5 voice: frame_overhead ${JSON.stringify(voice.frameOverhead)}; control_cockpit ${JSON.stringify(voice.cockpit)}`,
+      );
+      if (engineKind !== 'cesium')
+        check(
+          '5 voice: a viewer-only action refuses (UNAVAILABLE_ON_ENGINE)',
+          voice.cockpit.code === 'UNAVAILABLE_ON_ENGINE',
+          JSON.stringify(voice.cockpit),
+        );
+    }
     for (const [number, name] of Object.entries(TODO_SECTIONS)) {
       report.sections[number] = 'TODO';
       console.log(
