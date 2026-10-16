@@ -592,6 +592,104 @@ export function createContractSuite(
       },
     ],
     [
+      'colours: mid-tone sprite, point and line colours draw as asked (within 3 per channel)',
+      async () => {
+        if (!readRegion || !makeCanvas) return;
+        await nadirView(1e6);
+        const at = (lon, lat, height = 20_000) =>
+          cartesian3.fromDegrees(lon, lat, height);
+        const GREY = [0.5, 0.5, 0.5, 1];
+        const ORANGE = [1, 0.6, 0.2, 1];
+        const atlasCanvas = makeCanvas(16, 16);
+        const context = atlasCanvas.getContext('2d');
+        context.fillStyle = '#ffffff';
+        context.fillRect(0, 0, 16, 16);
+        const sprites = engine.movers.createSet({
+          id: 'contract-colour-sprites',
+          kind: 'sprite',
+          capacity: 2,
+          order: 100,
+          depthTest: 'always',
+          sprite: {
+            atlas: { canvas: atlasCanvas, cells: { box: [0, 0, 1, 1] } },
+            sizePx: 32,
+          },
+        });
+        const points = engine.movers.createSet({
+          id: 'contract-colour-points',
+          kind: 'point',
+          capacity: 2,
+          order: 100,
+          depthTest: 'always',
+          point: { sizePx: 32 },
+        });
+        const lines = [GREY, ORANGE].map((color, index) =>
+          engine.lines.createLine({
+            id: `contract-colour-line-${index}`,
+            widthPx: 16,
+            color,
+          }),
+        );
+        // The centre 4×4 pixels' mean, as 0..255 per channel.
+        const centre = (position) => {
+          const screen = engine.projector.worldToWindow(position);
+          const data = readRegion(
+            Math.round(screen.x) - 2,
+            Math.round(screen.y) - 2,
+            4,
+            4,
+          );
+          const sum = [0, 0, 0];
+          for (let i = 0; i < data.length; i += 4)
+            for (let k = 0; k < 3; k++) sum[k] += data[i + k];
+          return sum.map((value) => value / (data.length / 4));
+        };
+        const cases = [
+          ['sprite', GREY, at(19.5, 10.5)],
+          ['sprite', ORANGE, at(20.5, 10.5)],
+          ['point', GREY, at(19.5, 9.5)],
+          ['point', ORANGE, at(20.5, 9.5)],
+          ['line', GREY, at(19.5, 10)],
+          ['line', ORANGE, at(20.5, 10)],
+        ];
+        try {
+          sprites.set(0, { position: cases[0][2], color: GREY, cell: 'box' });
+          sprites.set(1, { position: cases[1][2], color: ORANGE, cell: 'box' });
+          sprites.setCount(2);
+          sprites.commit();
+          points.set(0, { position: cases[2][2], color: GREY });
+          points.set(1, { position: cases[3][2], color: ORANGE });
+          points.setCount(2);
+          points.commit();
+          // Short vertical lines through their sample points.
+          lines[0].setPositions([at(19.5, 9.9), at(19.5, 10.1)]);
+          lines[1].setPositions([at(20.5, 9.9), at(20.5, 10.1)]);
+          const off = (seen, colour) =>
+            Math.max(
+              ...seen.map((value, k) => Math.abs(value - colour[k] * 255)),
+            );
+          await until(
+            () => cases.every(([, colour, p]) => off(centre(p), colour) <= 3),
+            'mid-tone colours within 3',
+          );
+        } catch (error) {
+          const seen = cases
+            .map(
+              ([kind, colour, p]) =>
+                `${kind} ${colour.slice(0, 3)} → ${centre(p)
+                  .map((v) => v.toFixed(0))
+                  .join('/')}`,
+            )
+            .join('; ');
+          throw new ContractError(`${error.message}: ${seen}`);
+        } finally {
+          sprites.destroy();
+          points.destroy();
+          for (const line of lines) line.destroy();
+        }
+      },
+    ],
+    [
       'lines: a line draws between its projections, turns with its model matrix and dims where hidden',
       async () => {
         await nadirView(1e6);
