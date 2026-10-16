@@ -811,3 +811,36 @@ test("north-up and tilt inside an engine's own follow keep following (Navara)", 
   handle.stop();
   engine.destroy();
 });
+
+test('a navigation releases the flights follow when military awareness has no controls (Navara)', () => {
+  const stopped = [];
+  const navigation = new NavigationController({
+    viewer: null,
+    engine: createFakeEngine(),
+    tracking: {
+      flightsLayer: {
+        stopTracking: ({ origin }) => stopped.push(`flights:${origin}`),
+      },
+      militaryFlightsLayer: {
+        stopTracking: ({ origin }) => stopped.push(`military:${origin}`),
+      },
+      satellitesLayer: {},
+      aisLiveVesselsLayer: { clearSelection: () => stopped.push('vessels') },
+      // A layer this engine leaves out: its module, without the controls.
+      militaryAwarenessLayer: {},
+      rocketLaunchesLayer: {},
+    },
+    isCockpitActive: () => false,
+    cancelOrientation() {},
+    clearLocation() {},
+    cancelShareSelection() {},
+    interruptCameraMotion() {},
+    stopOrbit() {},
+    showToast() {},
+  });
+  assert.equal(
+    navigation._releaseFollowCamera({ preserveVesselSelection: false }),
+    false,
+  );
+  assert.deepEqual(stopped, ['flights:tool', 'military:tool', 'vessels']);
+});

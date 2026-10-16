@@ -327,6 +327,10 @@ export class LocationNavigation {
     this._stopOrbit();
     this.cockpitView?.exit({ restoreTracking: false });
     try {
+      // A layer an engine leaves out (military awareness on Navara) has no
+      // controls: release the trackers it would release, below.
+      if (typeof militaryAwarenessLayer?.releaseCameraOwnership !== 'function')
+        throw new Error('no military awareness controls');
       militaryAwarenessLayer.releaseCameraOwnership?.({ origin: 'tool' });
     } catch {
       // Keep reset available if Context has not initialized completely.
