@@ -1,4 +1,5 @@
 import * as Cesium from 'cesium';
+import { appClock } from './time/clock.js';
 import { governorRequestRender } from './renderGovernor.js';
 
 /** Outer edge of the existing NVG/FLIR keyhole in normalized shader space. */
@@ -752,7 +753,9 @@ export class CelestialRing {
 
     if (!wasVisible) this._ephemerisDirty = true;
 
-    const time = Cesium.JulianDate.now();
+    // The sun and moon at the app clock's now (the wall clock unless QA
+    // moves it), as Navara's sun.
+    const time = Cesium.JulianDate.fromDate(new Date(appClock.now()));
     if (!this._updateEphemeris(time)) return;
     this._root.dataset.ephemerisUpdates = String(this._ephemerisUpdateCount);
     const camera = this.viewer.camera;

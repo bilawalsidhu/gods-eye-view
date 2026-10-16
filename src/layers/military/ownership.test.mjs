@@ -114,11 +114,9 @@ test('a normalized source can retain its stale reason without changing standalon
   assert.equal(layer.getStats().stale, true);
 });
 
-test('a newly seen military contact appears at its delayed position, not ahead of it', async () => {
-  // The military fleet renders RENDER_DELAY_SEC behind real time, so a fresh
-  // contact's first displayed position is its fix projected back to that
-  // delayed time. Creating the billboard at the raw fix drew it ahead until
-  // the next fleet tick jumped it back.
+// A fresh contact's first billboard, with the app clock `appClockLagMs`
+// behind the wall clock (0: the app's default, the wall clock itself).
+async function firstPlacement(appClockLagMs) {
   const Cesium = await import('cesium');
   const { RENDER_DELAY_SEC } = await import('./policy.js');
   // The application's own scene services, as src/app/layers/militaryFlights.js
@@ -146,6 +144,8 @@ test('a newly seen military contact appears at its delayed position, not ahead o
   const speedMps = 200;
   const fixAgeMs = 2_000;
   const nowMs = Date.now();
+  const { appClock } = await import('../../time/clock.js');
+  if (appClockLagMs) appClock.freeze(nowMs - appClockLagMs);
   const layer = createMilitaryFlightLayer({
     services: supplied,
     source: {
@@ -193,7 +193,11 @@ test('a newly seen military contact appears at its delayed position, not ahead o
     viewer: { camera: { positionCartographic: null }, scene: {} },
     tracked: false,
   });
-  await layer.update({ camera: { positionCartographic: null }, scene: {} });
+  try {
+    await layer.update({ camera: { positionCartographic: null }, scene: {} });
+  } finally {
+    appClock.reset();
+  }
   const billboard = added.find((entry) => entry.id === 'ae0001');
   assert.ok(billboard, 'the new contact gets a billboard');
   const shown = Cesium.Cartographic.fromCartesian(billboard.position);
@@ -201,11 +205,37 @@ test('a newly seen military contact appears at its delayed position, not ahead o
     Cesium.Cartesian3.fromRadians(shown.longitude, shown.latitude, 0),
     Cesium.Cartesian3.fromDegrees(fixLon, fixLat, 0),
   );
+  return {
+    behindM,
+    westOfFix: Cesium.Math.toDegrees(shown.longitude) < fixLon,
+    speedMps,
+    fixAgeMs,
+    RENDER_DELAY_SEC,
+  };
+}
+
+test('a newly seen military contact appears at its delayed position, not ahead of it', async () => {
+  // The military fleet renders RENDER_DELAY_SEC behind real time, so a fresh
+  // contact's first displayed position is its fix projected back to that
+  // delayed time. Creating the billboard at the raw fix drew it ahead until
+  // the next fleet tick jumped it back.
+  const { behindM, westOfFix, speedMps, fixAgeMs, RENDER_DELAY_SEC } =
+    await firstPlacement(0);
   const expectedM = speedMps * (RENDER_DELAY_SEC - fixAgeMs / 1000);
+  assert.ok(westOfFix, 'drawn behind the fix');
   assert.ok(
-    Cesium.Math.toDegrees(shown.longitude) < fixLon,
-    'drawn behind the fix',
+    Math.abs(behindM - expectedM) < speedMps * 3,
+    `expected about ${Math.round(expectedM)} m behind the fix, got ${Math.round(behindM)} m`,
   );
+});
+
+test('the delayed position is read from the app clock', async () => {
+  // With the app clock 10 s behind the wall clock, the render time moves 10 s
+  // further back from the fix.
+  const { behindM, westOfFix, speedMps, fixAgeMs, RENDER_DELAY_SEC } =
+    await firstPlacement(10_000);
+  const expectedM = speedMps * (RENDER_DELAY_SEC + 10 - fixAgeMs / 1000);
+  assert.ok(westOfFix, 'drawn behind the fix');
   assert.ok(
     Math.abs(behindM - expectedM) < speedMps * 3,
     `expected about ${Math.round(expectedM)} m behind the fix, got ${Math.round(behindM)} m`,

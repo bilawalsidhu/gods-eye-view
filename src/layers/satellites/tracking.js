@@ -1,4 +1,5 @@
 import * as Cesium from 'cesium';
+import { appClock } from '../../time/clock.js';
 import { satelliteClassLabel } from '../../data/satelliteClass.js';
 import {
   ISS_NORAD,
@@ -130,7 +131,7 @@ export function createTracking({ state: layerState, services, parts, source }) {
    * Get the tracked satellite's geodetic position, propagated at most once per
    * rendered frame (WS-D2). All tracked-satellite consumers (entity position
    * callback → camera, host model, point primitive, getTrackedInfo) share this
-   * single `new Date()` epoch per frame, so they can never diverge by the old
+   * single app-clock epoch per frame, so they can never diverge by the old
    * 200ms throttle. The matching ECEF position is left in
    * `_trackedFrameCartesian`. SGP4 for one satellite per frame is cheap.
    * @returns {{ longitude: number, latitude: number, altitude: number }|null}
@@ -150,9 +151,11 @@ export function createTracking({ state: layerState, services, parts, source }) {
     ) {
       const pos = parts.orbits.propagatePosition(
         sat.satrec,
-        layerState._trackedFrameNowForTest
-          ? new Date(layerState._trackedFrameNowForTest())
-          : new Date(),
+        new Date(
+          layerState._trackedFrameNowForTest
+            ? layerState._trackedFrameNowForTest()
+            : appClock.now(),
+        ),
       );
       if (!pos) return layerState._trackedFrameGeo; // propagation hiccup — keep last good sample
       layerState._trackedFrameGeo = pos;
@@ -422,7 +425,10 @@ export function createTracking({ state: layerState, services, parts, source }) {
     // Comfortable tracking landing: ~726 km back for LEO (user-validated
     // "slightly zoomed out" framing — no stutter, label reads cleanly), scaled
     // up for MEO/GEO so the camera doesn't land on top of a high-orbit dot.
-    const initialPos = parts.orbits.propagatePosition(sat.satrec, new Date());
+    const initialPos = parts.orbits.propagatePosition(
+      sat.satrec,
+      new Date(appClock.now()),
+    );
     const viewScale =
       initialPos && initialPos.altitude > HIGH_ORBIT_ALTITUDE_M
         ? TRACK_VIEW_FROM_HIGH_SCALE

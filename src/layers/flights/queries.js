@@ -1,6 +1,5 @@
 import { approxDistanceKm as _approxDistanceKm } from './recordPolicy.js';
 import { displayedKinematics } from '../../data/motionModel.js';
-import * as Cesium from 'cesium';
 import * as geo from '../../geo/index.js';
 import { isExplicitLayerStateOrigin } from '../../data/layerState.js';
 import { modelVisualAnchor } from '../../data/modelVisualAnchor.js';
@@ -550,7 +549,6 @@ export function createQueries({
       const maxRange =
         Number.isFinite(range) && range > 0 ? range : Number.POSITIVE_INFINITY;
 
-      const now = Cesium.JulianDate.now();
       const nearby = [];
 
       for (const [icao24, bb] of flightState._billboards) {

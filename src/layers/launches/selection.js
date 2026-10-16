@@ -1,4 +1,5 @@
 import * as Cesium from 'cesium';
+import { appClock } from '../../time/clock.js';
 import * as geo from '../../geo/index.js';
 import { MISSION_GLOBE_VIEW_RANGE_M, MISSION_FOCUS_RANGE_M } from './policy.js';
 
@@ -126,7 +127,7 @@ export function createSelection({
       `rocket-orbit:${launch.id}`,
     );
     const orbitPositions = orbitEntity?.polyline?.positions?.getValue(
-      Cesium.JulianDate.now(),
+      Cesium.JulianDate.fromDate(new Date(appClock.now())),
     );
     const launchPosition = geo.cartesian3.fromDegrees(launch.lon, launch.lat);
     let range = 18000000;

@@ -1,4 +1,5 @@
 import * as Cesium from 'cesium';
+import { appClock } from '../../time/clock.js';
 import { nextCockpitNearContacts } from '../../data/cockpitAirLod.js';
 import { aircraftIcon, TRACKED_ICON_PX } from '../../data/aircraftIcons.js';
 import { trackedModelZoomActive } from '../../data/trackedModelRegime.js';
@@ -497,13 +498,9 @@ export function createTracking({
     // Seed only fixes at/behind the DELAYED display time (now − RENDER_DELAY_SEC). The
     // newest ~RENDER_DELAY_SEC of fixes are AHEAD of the displayed icon; including them
     // would draw the trail in front of the plane. They join via _appendTrailFix as they age.
-    const seedRenderTime = Cesium.JulianDate.addSeconds(
-      Cesium.JulianDate.now(),
-      -RENDER_DELAY_SEC,
-      flightState._scratchWarmupTime,
-    );
+    const seedRenderTimeMs = appClock.now() - RENDER_DELAY_SEC * 1000;
     for (const fix of history) {
-      if (Cesium.JulianDate.lessThanOrEquals(fix.time, seedRenderTime)) {
+      if (fix.timeMs <= seedRenderTimeMs) {
         // Floor grounded-history seeds (round 2): a grounded contact's stored
         // fixes carry the pre-datum default height — the trail copy sits on
         // the surface instead (pure lift; airborne fixes pass through).
@@ -586,7 +583,7 @@ export function createTracking({
     _refreshTrailDisplay();
 
     const oldestFixEpochSec = history.length
-      ? Cesium.JulianDate.toDate(history[0].time).getTime() / 1000
+      ? history[0].timeMs / 1000
       : Infinity;
     _backfillTrail(icao24, flightState._trailBackfillToken, oldestFixEpochSec);
   }
