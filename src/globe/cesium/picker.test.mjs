@@ -113,3 +113,24 @@ test('pickGlobe asks the globe along the camera pick ray and returns geo', () =>
   scene.globe = undefined;
   assert.equal(picker.pickGlobe(geo.cartesian2.create(1, 1)), undefined);
 });
+
+test('picks of movers and lines name their owner and instance', () => {
+  const viewer = createFakeViewer();
+  const billboard = { id: 'ae01ce' };
+  viewer.scene.pick = () => ({ primitive: billboard, id: 'ae01ce' });
+  viewer.scene.drillPick = () => [
+    { primitive: billboard, id: 'ae01ce' },
+    { primitive: {}, id: 'other' },
+  ];
+  const { picker } = createCesiumPicker(viewer, {
+    identify: (raw) =>
+      raw.primitive === billboard ? { owner: 'flights', instance: 7 } : null,
+  });
+  const picked = picker.pick({ x: 1, y: 2 });
+  assert.equal(picked.id, 'ae01ce');
+  assert.equal(picked.owner, 'flights');
+  assert.equal(picked.instance, 7);
+  const drilled = picker.drillPick({ x: 1, y: 2 }, 5);
+  assert.equal(drilled[0].owner, 'flights');
+  assert.equal(drilled[1].owner, undefined);
+});

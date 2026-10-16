@@ -47,16 +47,24 @@ export function createNavaraLines(view) {
     registered.add(view);
   }
   const request = () => view.forceUpdate();
+  // What CPU picks need of each line: its drawn positions and matrix.
+  const drawn = new Map();
   const registry = createLineRegistry((options) => {
     const line = createLineMesh(options);
+    const state = {
+      options,
+      flat: new Float64Array(0),
+      modelMatrix: options.modelMatrix,
+      shown: true,
+    };
+    drawn.set(options.id, state);
     const canvas = view.canvas;
     if (canvas) line.update(canvas.clientWidth || 1, canvas.clientHeight || 1);
     const handle = view.addMesh({ lit: false, [DESC_NAME]: { line } });
     return {
       setPositions(flat) {
-        line.setPositions(
-          options.arc === 'geodesic' ? densifyGeodesic(flat) : flat,
-        );
+        state.flat = options.arc === 'geodesic' ? densifyGeodesic(flat) : flat;
+        line.setPositions(state.flat);
         request();
       },
       setColor(rgba) {
@@ -64,18 +72,29 @@ export function createNavaraLines(view) {
         request();
       },
       setModelMatrix(matrix) {
+        state.modelMatrix = matrix;
         line.setModelMatrix(matrix);
         request();
       },
       show(visible) {
+        state.shown = visible;
         line.show(visible);
         request();
       },
       destroy() {
+        drawn.delete(options.id);
         handle.delete();
         request();
       },
     };
   });
-  return { lines: registry.lines, destroy: () => registry.destroyAll() };
+  return {
+    lines: registry.lines,
+    /** Shown lines with a pickId: options, drawn positions, matrix. */
+    pickables: () =>
+      [...drawn.values()].filter(
+        (state) => state.shown && state.options.pickId !== undefined,
+      ),
+    destroy: () => registry.destroyAll(),
+  };
 }

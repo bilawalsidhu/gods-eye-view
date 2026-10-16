@@ -41,23 +41,31 @@ export function createCesiumEngine(viewer, options = {}) {
   const canvas = viewer.canvas ?? viewer.scene.canvas;
   const render = createCesiumRender(viewer, options);
   const credits = createCesiumCredits(viewer);
+  // Picks name the mover set or line they hit (movers and lines exist
+  // below; the picker asks them when it picks).
+  let lines = null;
+  let movers = null;
+  const picker = createCesiumPicker(viewer, {
+    identify: (picked) =>
+      movers?.identify(picked) ?? lines?.identify(picked) ?? null,
+  });
   const parts = {
     camera: createCesiumCamera(viewer),
-    picker: createCesiumPicker(viewer),
+    picker,
     projector: createCesiumProjector(viewer),
     frames: createCesiumFrames(viewer),
     clock: createCesiumClock(viewer, options),
-    lines: createCesiumLines(viewer, {
+    lines: (lines = createCesiumLines(viewer, {
       requestRender: (reason) => render.render.request(reason),
       ...(options.lineFactories ? { factories: options.lineFactories } : {}),
-    }),
-    movers: createCesiumMovers(viewer, {
+    })),
+    movers: (movers = createCesiumMovers(viewer, {
       requestRender: (reason) => render.render.request(reason),
       ...(options.moverFactories ? { factories: options.moverFactories } : {}),
-    }),
+    })),
     render,
     surface: createCesiumSurface(viewer),
-    input: createCesiumInput(viewer, options),
+    input: createCesiumInput(viewer, { ...options, picker: picker.picker }),
     credits,
     maps: createCesiumMaps(viewer, {
       ...options,

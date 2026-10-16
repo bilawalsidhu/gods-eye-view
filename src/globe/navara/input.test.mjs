@@ -165,3 +165,38 @@ test('setCameraInputs merges into the camera options set through the engine', ()
     enableTilt: false,
   });
 });
+
+test('clicks with pick wait for the click pick; moves with pick use the CPU pick once a frame', async () => {
+  const canvas = fakeCanvas();
+  const frames = [];
+  const calls = [];
+  const view = { canvas, camera: { set options(value) {} } };
+  const { input } = createNavaraInput(view, {
+    picker: {
+      clickPick: async (at) => (calls.push(['click', at]), { id: 'gpu' }),
+      pick: (at) => (calls.push(['cpu', at]), { id: 'cpu' }),
+      drillPick: (at, limit) => (
+        calls.push(['drill', limit]),
+        [{ id: 'a' }, { id: 'b' }]
+      ),
+    },
+    scheduleFrame: (run) => frames.push(run),
+  });
+  const seen = [];
+  input.on('click', (event) => seen.push(['click', event]), {
+    pick: true,
+    drill: 1,
+  });
+  input.on('move', (event) => seen.push(['move', event]), { pick: true });
+  canvas.dispatchEvent(pointer('pointerdown', 110, 60));
+  canvas.dispatchEvent(pointer('pointerup', 110, 60));
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.deepEqual(seen[0][1].picked, { id: 'gpu' });
+  assert.deepEqual(seen[0][1].drilled, [{ id: 'a' }]);
+  canvas.dispatchEvent(pointer('pointermove', 120, 70));
+  canvas.dispatchEvent(pointer('pointermove', 121, 71));
+  assert.equal(frames.length, 1);
+  frames[0]();
+  assert.deepEqual(seen.at(-1)[1].picked, { id: 'cpu' });
+  assert.deepEqual(calls.at(-1), ['cpu', { x: 21, y: 21 }]);
+});

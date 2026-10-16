@@ -497,3 +497,48 @@ test('fake lines keep their positions, colour, matrix and visibility', () => {
   line.destroy();
   assert.equal(engine.fake.line('trail'), undefined);
 });
+
+test('input listeners asking for picks get the pick and the drill in the payload', () => {
+  const engine = createFakeEngine();
+  engine.fake.script('pick', (screen) =>
+    screen.x === 10
+      ? { id: 'ae01ce', owner: 'flights', instance: 3 }
+      : undefined,
+  );
+  engine.fake.script('drillPick', (screen, limit) =>
+    [{ id: 'a' }, { id: 'b' }, { id: 'c' }].slice(0, limit),
+  );
+  const seen = [];
+  engine.input.on('click', (event) => seen.push(['plain', event]));
+  engine.input.on('click', (event) => seen.push(['pick', event]), {
+    pick: true,
+    drill: 2,
+  });
+  engine.input.on('move', (event) => seen.push(['hover', event]), {
+    pick: true,
+  });
+  engine.fake.input('click', { position: { x: 10, y: 5 } });
+  engine.fake.input('move', {
+    startPosition: { x: 0, y: 0 },
+    endPosition: { x: 10, y: 5 },
+  });
+  engine.fake.input('click', { position: { x: 99, y: 5 } });
+  assert.deepEqual(seen[0], ['plain', { position: { x: 10, y: 5 } }]);
+  assert.deepEqual(seen[1][1].picked, {
+    id: 'ae01ce',
+    owner: 'flights',
+    instance: 3,
+  });
+  assert.deepEqual(seen[1][1].drilled, [{ id: 'a' }, { id: 'b' }]);
+  assert.deepEqual(seen[2][1].picked.id, 'ae01ce');
+  assert.equal(seen[2][1].drilled, undefined, 'no drill unless asked');
+  assert.equal(seen[4][1].picked, undefined);
+  assert.throws(
+    () => engine.input.on('click', () => {}, { drill: -1 }),
+    TypeError,
+  );
+  assert.throws(
+    () => engine.input.on('down', () => {}, { pick: true }),
+    TypeError,
+  );
+});

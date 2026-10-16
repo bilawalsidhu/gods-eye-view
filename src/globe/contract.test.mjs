@@ -228,6 +228,15 @@ test('the fake engine passes the engine contract suite', async (t) => {
   const engine = createFakeEngine();
   const checks = createContractSuite(engine, {
     waitFrames: async (count) => engine.fake.frames(count),
+    // The fake's input, as a real pointer would drive it.
+    pointer: {
+      click: async (x, y) => engine.fake.input('click', { position: { x, y } }),
+      move: async (x, y) =>
+        engine.fake.input('move', {
+          startPosition: { x: x - 1, y },
+          endPosition: { x, y },
+        }),
+    },
     mapSources: {
       imagery: [{ kind: 'osm' }, { kind: 'esri-imagery' }],
       photoreal: { kind: 'photoreal' },
