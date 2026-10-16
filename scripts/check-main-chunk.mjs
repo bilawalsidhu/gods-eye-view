@@ -42,8 +42,28 @@ export function checkMainChunk(
   };
 }
 
-/** gzip-9 size of the largest dist/assets/index-*.js, with its name. */
-export function measureMainChunk(distDir) {
+/**
+ * gzip-9 size of the main chunk, with its name: the entry the built page
+ * loads (`entry`, or found from dist/index.html or the Vite manifest), else
+ * (phase 4's rule, for a dist without a page) the largest
+ * dist/assets/index-*.js.
+ */
+export function measureMainChunk(distDir, { entry = null } = {}) {
+  let file = entry;
+  if (!file) {
+    try {
+      file = findEntry(distDir).entry;
+    } catch {
+      file = null;
+    }
+  }
+  if (file) {
+    const bytes = fs.readFileSync(path.join(distDir, file));
+    return {
+      name: path.basename(file),
+      gzipBytes: gzipSync(bytes, { level: 9 }).length,
+    };
+  }
   const assets = path.join(distDir, 'assets');
   const candidates = fs
     .readdirSync(assets)
@@ -113,7 +133,7 @@ function main() {
   const baselinePath = path.join(ROOT, 'scripts/main-chunk-baseline.json');
   let budget = null;
   if (fs.existsSync(baselinePath)) {
-    const measured = measureMainChunk(dist);
+    const measured = measureMainChunk(dist, { entry: composition.entry });
     budget = {
       ...measured,
       ...checkMainChunk(

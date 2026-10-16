@@ -102,3 +102,20 @@ test('the script exports the gzip budget check (phase 4 shape) next to the compo
   assert.equal(measured.name, 'index-main.js');
   assert.ok(measured.gzipBytes > 0 && measured.gzipBytes < 5000);
 });
+
+test('the budget measures the entry the page loads, not the largest index chunk', async () => {
+  const { mkdirSync, mkdtempSync, writeFileSync } = await import('node:fs');
+  const { tmpdir } = await import('node:os');
+  const path = await import('node:path');
+  const { measureMainChunk } =
+    await import('../../scripts/check-main-chunk.mjs');
+  const dist = mkdtempSync(path.join(tmpdir(), 'gev-main-entry-'));
+  mkdirSync(path.join(dist, 'assets'));
+  writeFileSync(path.join(dist, 'assets/index-entry.js'), 'x'.repeat(100));
+  writeFileSync(path.join(dist, 'assets/index-lazy.js'), 'y'.repeat(50000));
+  writeFileSync(
+    path.join(dist, 'index.html'),
+    '<script type="module" src="/assets/index-entry.js"></script>',
+  );
+  assert.equal(measureMainChunk(dist).name, 'index-entry.js');
+});

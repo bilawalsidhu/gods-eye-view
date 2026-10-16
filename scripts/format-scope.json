@@ -1082,5 +1082,8 @@
   "src/globe/navara/picking.test.mjs",
   "src/data/selectionDispatcher.test.mjs",
   "src/globe/navara/cascadedLightCopy.test.mjs",
-  "src/tooling/w1Feeds.test.mjs"
+  "src/tooling/w1Feeds.test.mjs",
+  "src/tooling/navaraDependencies.test.mjs",
+  "build/navaraDependencies.js",
+  "build/initialChunkGuard.js"
 ]

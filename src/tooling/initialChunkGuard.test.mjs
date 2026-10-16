@@ -74,5 +74,5 @@ test('the plugin fails the build on a violation and passes a clean bundle', () =
   broken['assets/index-A.js'].moduleIds.push('/r/node_modules/three/a.js');
   plugin.generateBundle.call(context, {}, broken);
   assert.equal(errors.length, 1);
-  assert.match(errors[0], /three.*index-A\.js/s);
+  assert.match(errors[0], /Navara-only.*index-A\.js.*three/s);
 });
