@@ -26,6 +26,7 @@ export function freshStreet() {
     renderModes: true,
     sequenceId: null,
     creator: null,
+    license: null,
     externalUrl: null,
     loading: false,
     error: null,

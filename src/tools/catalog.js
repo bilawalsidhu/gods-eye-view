@@ -178,6 +178,7 @@ export function composeCatalog({
     return chain({ tool, args, signal, ...(parent ? { parent } : {}) });
   };
   const execute = async ({ tool, args, signal }) => {
+    signal?.throwIfAborted();
     const problems = validateValue(tool.inputSchema, args);
     if (problems.length)
       throw new ToolError('invalid_arguments', problems.join('; '));

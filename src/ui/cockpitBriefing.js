@@ -1,5 +1,6 @@
 /** Regional briefing requests, pages and rotation for the Cockpit controller. */
 import { isRecentDmhObservation } from '../data/regionalModel.js';
+import { formatDate, formatNumber, t, msg } from '../i18n/index.js';
 import {
   COCKPIT_BRIEF_ROTATE_MS,
   COCKPIT_BRIEF_CYCLE_OFF_HELP,
@@ -8,8 +9,26 @@ import {
   COCKPIT_REGIONAL_REFRESH_DISTANCE_M,
   COCKPIT_BRIEF_PAGES,
   formatCockpitBriefAge,
+  formatCockpitCoordinate,
   formatCockpitWindDirection,
 } from './cockpitPresentation.js';
+
+// regionalModel.weatherCodeLabel is shared with node code and returns
+// English; translate it here.
+const WEATHER_CONDITION_KEYS = Object.freeze({
+  'CONDITIONS UNKNOWN': msg('CONDITIONS UNKNOWN'),
+  CLEAR: msg('CLEAR'),
+  'PARTLY CLOUDY': msg('PARTLY CLOUDY'),
+  OVERCAST: msg('OVERCAST'),
+  FOG: msg('FOG'),
+  DRIZZLE: msg('DRIZZLE'),
+  RAIN: msg('RAIN'),
+  SNOW: msg('SNOW'),
+  'RAIN SHOWERS': msg('RAIN SHOWERS'),
+  'SNOW SHOWERS': msg('SNOW SHOWERS'),
+  THUNDERSTORM: msg('THUNDERSTORM'),
+  'MIXED CONDITIONS': msg('MIXED CONDITIONS'),
+});
 
 export function showBriefPage(index, { manual = false } = {}) {
   if (this.destroyed) return;
@@ -27,15 +46,18 @@ export function showBriefPage(index, { manual = false } = {}) {
   if (this.briefKicker) {
     const indicator = this.briefKicker.querySelector('i');
     this.briefKicker.replaceChildren(
-      ...[indicator, document.createTextNode(` ${page.kicker}`)].filter(
+      ...[indicator, document.createTextNode(` ${t(page.kickerKey)}`)].filter(
         Boolean,
       ),
     );
   }
-  if (this.briefSubtitle) this.briefSubtitle.textContent = page.subtitle;
+  if (this.briefSubtitle) this.briefSubtitle.textContent = t(page.subtitleKey);
   if (this.briefPosition)
     this.briefPosition.textContent = `${this.briefPageIndex + 1} / ${count}`;
-  if (this.briefSource) this.briefSource.textContent = page.source;
+  if (this.briefSource)
+    this.briefSource.textContent = page.sourceKey
+      ? t(page.sourceKey, { source: page.sourceName })
+      : page.source;
   if (this.signalStream) this.signalStream.dataset.briefPage = page.id;
   if (manual && this.briefAutoRotateEnabled)
     this.startBriefRotation({ reset: true });
@@ -57,6 +79,22 @@ export function setBriefAutoRotate(enabled) {
       : COCKPIT_BRIEF_CYCLE_OFF_HELP;
     this.briefAutoToggle.setAttribute('aria-label', label);
     this.briefAutoToggle.title = help;
+    // cockpitMarkup.test.mjs pins the English writes above; these translate
+    // them.
+    const labelKey = this.briefAutoRotateEnabled
+      ? msg('CYCLE ON')
+      : msg('CYCLE OFF');
+    this.briefAutoToggle.textContent = t(labelKey);
+    this.briefAutoToggle.setAttribute('aria-label', t(labelKey));
+    this.briefAutoToggle.title = t(
+      this.briefAutoRotateEnabled
+        ? msg(
+            'Stop automatic page cycling. Previous, Next, and the SIG/NEWS/LOCAL tabs stay available.',
+          )
+        : msg(
+            'Cycle briefing pages automatically every 9 seconds (Signals → News → Local). Pauses while you hover or focus the panel. Live signal data refreshes continuously either way.',
+          ),
+    );
   }
   if (this.briefAutoRotateEnabled) this.startBriefRotation({ reset: true });
   else this.stopBriefRotation();
@@ -95,11 +133,11 @@ export function stopBriefRotation() {
 export function updateLocalPosition(info) {
   if (!this.localCoordinates) return;
   if (!Number.isFinite(info.latitude) || !Number.isFinite(info.longitude)) {
-    this.localCoordinates.textContent = 'POSITION UNAVAILABLE';
+    this.localCoordinates.textContent = t('POSITION UNAVAILABLE');
     return;
   }
-  const lat = `${Math.abs(info.latitude).toFixed(3)}°${info.latitude >= 0 ? 'N' : 'S'}`;
-  const lon = `${Math.abs(info.longitude).toFixed(3)}°${info.longitude >= 0 ? 'E' : 'W'}`;
+  const lat = formatCockpitCoordinate(info.latitude, 'N', 'S');
+  const lon = formatCockpitCoordinate(info.longitude, 'E', 'W');
   this.localCoordinates.textContent = `${lat} · ${lon}`;
 }
 
@@ -180,14 +218,14 @@ export function renderRegionalBriefStatus(status, info) {
     this.newsStatus.dataset.state = status;
     this.newsStatus.textContent =
       status === 'loading'
-        ? 'ACQUIRING REGIONAL NEWS'
-        : 'REGIONAL NEWS UNAVAILABLE';
+        ? t('ACQUIRING REGIONAL NEWS')
+        : t('REGIONAL NEWS UNAVAILABLE');
   }
   if (status === 'unavailable') this.newsList?.replaceChildren();
   if (this.localPlace && status === 'loading')
-    this.localPlace.textContent = 'RESOLVING REGION';
+    this.localPlace.textContent = t('RESOLVING REGION');
   if (this.localPlace && status === 'unavailable')
-    this.localPlace.textContent = 'REGION UNAVAILABLE';
+    this.localPlace.textContent = t('REGION UNAVAILABLE');
   this.updateLocalPosition(info);
 }
 
@@ -198,8 +236,8 @@ export function renderRegionalBrief(payload, info) {
     this.newsStatus.dataset.state = payload?.newsStatus || 'unavailable';
     this.newsStatus.textContent =
       payload?.newsStatus === 'empty'
-        ? 'NO RECENT LOCATION MATCHES'
-        : 'REGIONAL NEWS UNAVAILABLE';
+        ? t('NO RECENT LOCATION MATCHES')
+        : t('REGIONAL NEWS UNAVAILABLE');
   }
   if (this.newsList) {
     this.newsList.replaceChildren(
@@ -212,7 +250,10 @@ export function renderRegionalBrief(payload, info) {
         const title = document.createElement('strong');
         title.textContent = article.title;
         const metadata = document.createElement('span');
-        metadata.textContent = `${article.domain || 'SOURCE'} · ${formatCockpitBriefAge(article.publishedAt)}`;
+        metadata.textContent = t('{domain} · {age}', {
+          domain: article.domain || t('SOURCE'),
+          age: formatCockpitBriefAge(article.publishedAt),
+        });
         link.append(title, metadata);
         entry.append(link);
         return entry;
@@ -221,7 +262,7 @@ export function renderRegionalBrief(payload, info) {
   }
 
   const placeLabel =
-    payload?.place?.label || payload?.place?.country || 'REGION UNAVAILABLE';
+    payload?.place?.label || payload?.place?.country || t('REGION UNAVAILABLE');
   if (this.localPlace) this.localPlace.textContent = placeLabel.toUpperCase();
   this.updateLocalPosition(info);
   const weather = payload?.weather;
@@ -234,15 +275,35 @@ export function renderRegionalBrief(payload, info) {
     this.localObservation.hidden = !usable;
     const values = [];
     if (Number.isFinite(observation?.temperatureC))
-      values.push(`${observation.temperatureC.toFixed(1)}°C`);
+      values.push(
+        `${formatNumber(observation.temperatureC, { minimumFractionDigits: 1, maximumFractionDigits: 1 })}°C`,
+      );
     if (Number.isFinite(observation?.humidityPct))
-      values.push(`RH ${Math.round(observation.humidityPct)}%`);
+      values.push(
+        t('RH {percent}%', {
+          percent: formatNumber(Math.round(observation.humidityPct)),
+        }),
+      );
     if (Number.isFinite(observation?.windKph))
       values.push(
-        `WIND ${Math.round(observation.windKph)} KM/H ${formatCockpitWindDirection(observation.windDirectionDeg)}`,
+        t('WIND {speed} KM/H {direction}', {
+          speed: formatNumber(Math.round(observation.windKph)),
+          direction: formatCockpitWindDirection(observation.windDirectionDeg),
+        }),
       );
     this.localObservation.textContent = usable
-      ? `DMH / DINAC · STATION OBSERVATION\n${observation.stationName} · ${(observation.distanceM / 1000).toFixed(1)} KM FROM LOCATION\n${values.join(' · ')}\n${new Date(observation.observedAt).toISOString().slice(0, 16).replace('T', ' ')} UTC · ${formatCockpitBriefAge(observation.observedAt)}`
+      ? [
+          t('DMH / DINAC · STATION OBSERVATION'),
+          t('{station} · {distance} KM FROM LOCATION', {
+            station: observation.stationName,
+            distance: formatNumber(observation.distanceM / 1000, {
+              minimumFractionDigits: 1,
+              maximumFractionDigits: 1,
+            }),
+          }),
+          values.join(' · '),
+          `${formatDate(new Date(observation.observedAt), { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'UTC' })} UTC · ${formatCockpitBriefAge(observation.observedAt)}`,
+        ].join('\n')
       : '';
   }
   if (this.localTemperature) {
@@ -252,7 +313,7 @@ export function renderRegionalBrief(payload, info) {
   }
   if (this.localWind) {
     this.localWind.textContent = Number.isFinite(weather?.windKph)
-      ? `${Math.round(weather.windKph)} KM/H`
+      ? t('{value} KM/H', { value: Math.round(weather.windKph) })
       : '—';
   }
   if (this.localWindDirection) {
@@ -260,26 +321,37 @@ export function renderRegionalBrief(payload, info) {
       weather?.windDirectionDeg,
     );
   }
-  if (this.localCondition)
-    this.localCondition.textContent = this.services.weatherCodeLabel(
-      weather?.weatherCode,
-    );
+  if (this.localCondition) {
+    const condition = this.services.weatherCodeLabel(weather?.weatherCode);
+    const conditionKey = WEATHER_CONDITION_KEYS[condition];
+    this.localCondition.textContent = conditionKey
+      ? t(conditionKey)
+      : condition;
+  }
   if (this.localCloud) {
     this.localCloud.textContent = Number.isFinite(weather?.cloudCoverPct)
-      ? `CLOUD ${Math.round(weather.cloudCoverPct)}%`
-      : 'CLOUD UNKNOWN';
+      ? t('CLOUD {pct}%', {
+          pct: Math.round(weather.cloudCoverPct),
+        })
+      : t('CLOUD UNKNOWN');
   }
   if (this.localPrecipitation) {
     this.localPrecipitation.textContent = Number.isFinite(
       weather?.precipitationMm,
     )
-      ? weather.precipitationMm.toFixed(1)
+      ? formatNumber(weather.precipitationMm, {
+          useGrouping: false,
+          minimumFractionDigits: 1,
+          maximumFractionDigits: 1,
+        })
       : '—';
   }
   if (this.signalStream)
     this.signalStream.dataset.regionalStatus = payload?.status || 'partial';
   if (this.briefPageIndex === 1 && this.briefSource) {
-    this.briefSource.textContent = `${String(payload?.newsSource || 'REGIONAL NEWS').toUpperCase()} · LOCATION QUERY`;
+    this.briefSource.textContent = t('{source} · LOCATION QUERY', {
+      source: String(payload?.newsSource || t('REGIONAL NEWS')).toUpperCase(),
+    });
   }
   this.scheduleContextLayout();
 }

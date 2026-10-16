@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { setLocale } from '../i18n/index.js';
 import {
   renderRegionalBrief,
   renderRegionalBriefStatus,
@@ -54,6 +55,23 @@ test('Local Info labels station observations separately from modeled weather and
   assert.equal(context.localTemperature.textContent, '24°C');
   assert.equal(context.localCondition.textContent, 'OVERCAST');
   assert.equal(context.localPrecipitation.textContent, '0.1');
+  for (const locale of ['es', 'ru']) {
+    setLocale(locale);
+    try {
+      renderRegionalBrief.call(context, payload, {});
+      assert.ok(
+        !context.localObservation.textContent.includes('STATION OBSERVATION'),
+      );
+      assert.ok(
+        !context.localObservation.textContent.includes('KM FROM LOCATION'),
+      );
+      assert.ok(
+        context.localObservation.textContent.includes('<Station & test>'),
+      );
+    } finally {
+      setLocale('en');
+    }
+  }
   payload.stationObservation.observedAt = new Date(
     Date.now() - 91 * 60000,
   ).toISOString();
