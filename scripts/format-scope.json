@@ -1053,5 +1053,8 @@
   "scripts/generate-icons.mjs",
   "src/tooling/webAppIcons.test.mjs",
   "src/ui/flyToDataSource.js",
-  "src/ui/flyToDataSource.test.mjs"
+  "src/ui/flyToDataSource.test.mjs",
+  "scripts/build-atc-frequencies.mjs",
+  "src/data/ourAirportsAtc.js",
+  "src/data/ourAirportsAtc.test.mjs"
 ]
