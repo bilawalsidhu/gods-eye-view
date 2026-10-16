@@ -310,16 +310,25 @@ one built from `6ebd3a63` once chunk hashes are masked, at 2,849,217 B.
   it, and golden hour and dusk keep their colours.
 
   The factors are uniforms of the takram materials, reached through each
-  handle's `ref.raw` ([`atmosphereLuminance.js`](../../src/globe/navara/atmosphereLuminance.js)
-  lists the paths, which are internals to re-check on a Navara upgrade).
-  Navara shares one vector per factor between the sky, aerial perspective,
-  clouds and stars, so the vector is scaled once, and a rebuilt material
-  (for example after a cloud quality change) is scaled when it first shows.
-- **Stars only at night or from space** (intensity 40 / 3 to undo the
-  shared scale, 2 px). They show above 100 km, or once the sun at the
-  camera is below −6°, and hide above 80 km with the sun above −4°
-  (`starsVisibleAt`). By day they no longer dot the sky; from space a
-  starfield still shows next to a sunlit Earth.
+  handle's `ref.raw`. `forEachLuminanceUniform` in
+  [`internals.js`](../../src/globe/navara/internals.js) holds the paths,
+  under the pinned-version guard; if a built object loses its path, it
+  throws in the dev server and warns once in a build. `look.js` sets each
+  factor to 3 × the base value recorded the first time it is seen, and
+  never multiplies in place. Navara shares one vector per factor between
+  the sky, aerial perspective, clouds and stars, and a rebuilt material may
+  copy an already scaled vector; neither can scale anything twice. The
+  stars keep the base value: when they share the sky's vector, they get
+  their own.
+- **Stars only at night or from space** (intensity 120, 2 px; the
+  default is 10 and 1 px). They show above 100 km, or once the sun at the
+  camera is below −6°. They hide below 80 km once the sun is above −4°
+  (`starsVisibleAt`). By day they no longer dot the sky. From 8,000 km a
+  sparse starfield shows beside a sunlit Earth. At intensity 40 it was
+  almost invisible in the gallery's half-size tiles.
+- **Clouds only while the sun is up at the camera.** They hide below 0°
+  and show again above 2° (`cloudsSunlitAt`). Unlit after sunset, they
+  read as dark puffs over the dusk sky (Manhattan at dusk).
 - **No sun shadow maps** (`castShadow: false`). The tiles carry baked
   light, so the maps would darken nothing.
 - **Lens flare and SMAA**, as in photoreal. A mobile-optimized view drops
@@ -406,12 +415,22 @@ the new look.
 - **The tiles keep their daylight at dusk and at night.** The sky darkens
   but the city stays lit (Manhattan at dusk). Relighting them is the
   rejected deferred lighting.
-- **Switching the night side on or off costs one frame of about 0.6–0.8 s**
-  (headless): the aerial-perspective shader recompiles. To keep this out
-  of flights, the lighting switches on only when the camera is at rest. A
-  flight from city to city through space (the bench flight peaks at
-  2,300 km) never switches. Coming down from space switches once, at
-  1,000 km.
+- **Switching the night side rebuilds the aerial-perspective shader.** An
+  earlier headless series measured a 0.6–0.8 s frame for a cold switch.
+  The look now compiles both variants on its first two frames, during
+  startup.
+
+  On a 6 s flight from 8,000 km to Manhattan, measured on the contract
+  page with 3 runs each:
+  - the frame that switches the night side off at 984 km took 42–43 ms
+    before the warm-up and 28–33 ms after;
+  - the longest frame of the flight was 84–200 ms before and 96–99 ms
+    after, both near the ground as tiles load.
+
+  The switch on, at rest at 8,000 km, measured 41–48 ms either way on this
+  machine, so the 0.6–0.8 s stall did not reproduce cold here. The switch
+  still happens only at rest, so a flight from city to city through space
+  (the bench flight peaks at 2,300 km) never switches.
 - **The clouds are procedural,** not weather data. They are a backdrop,
   not a forecast. At low quality they show a fine grain in still frames.
   Between two rests they keep the last ground decision, so a low flight
@@ -424,9 +443,14 @@ the new look.
   the tiles outside the frustum and the parents it refines. The ray only
   tried shown tiles, so it missed.
 
-  When the shown tiles miss, the ray now tries the loaded hidden ones and
-  takes the hit on the finest of them (bounding radius within twice the
-  smallest). Taking the top hit would pick a coarse parent instead: 143.2 m
+  When the shown tiles miss, the ray now tries the loaded hidden tiles. It
+  collects them only after that miss and allocates nothing per node on the
+  shown path. It takes the hit on the finest tiles: an extent within 1.5×
+  the finest tile hit, since a quadtree parent is about twice its child.
+  Navara 0.2.1 exposes no geometric error or level on a tile, so a tile's
+  extent (the bounding sphere around all its meshes, computed once) is the
+  level measure. Per-mesh radius would let a small mesh of a coarse tile
+  win. Taking the top hit would pick a coarse parent instead: 143.2 m
   against 121.9 m under the camera. Against Cesium at seven points from
   under the camera to the view centre, the deltas are 0.13–1.04 m
   (`qa-engine-shell`, tolerance 2 m). The cloud rule still reads depth,
@@ -454,7 +478,10 @@ with Sharpen on at 80 % (Cesium keeps 49 %).
 which the slider maps from 0–100 % to 0.1–2.1 (`sharpenAmount` in
 `visualPresets.js`, shared by both engines). Omitted fields keep their
 value, and bad values throw a `TypeError`. The Cesium engine only keeps
-the state: Cesium mode still sharpens with its own post stage, unchanged.
+the state: Cesium mode still sharpens with its own post stage, unchanged,
+and `VisualEffects` mirrors that stage's state into
+`engine.render.setSharpen`, so `render.sharpen()` reports what Cesium
+draws.
 The fake engine records the calls. The contract suite checks merging, the
 copy `sharpen()` returns, rejection and a drawn frame on all three engines.
 
@@ -479,7 +506,8 @@ sharpening is a custom `EffectDesc`, using public API only:
 - **The sky is left alone.** Navara's clouds are dithered at the `low`
   quality the look uses, and at 80 % the mask turned their grain into
   visible noise. A pixel whose scene depth (the MRT pass's packed depth
-  buffer, the one the S1 drape reads) is the far plane keeps its colour.
+  buffer, the one the S1 drape reads) is past 0.99999, the far plane less
+  the RGBA8 packing's rounding, keeps its colour.
   Facing the horizon, the top of the frame changes no more with the mask
   at amount 2.1 than between two frames without it (`qa-globe-contract`).
 - **Its own pass.** A convolution reads its pass's input, so merged into
@@ -599,6 +627,8 @@ heights under the camera):
   least 5 star pixels, which also proves the detector works;
 - the QA pages load OSM imagery and the keyless terrain through a shared
   disk cache with backoff on 429 ([`scripts/qa/tileCache.mjs`](../../scripts/qa/tileCache.mjs)).
+  On a miss, at most two fetches run at once and identical misses in
+  flight share one. The user agent names the repository as the contact.
   Only those two hosts are paused, through CDP `Fetch`: page-wide request
   interception also held the Navara workers' requests and failed the
   create → destroy → create check. Repeated runs now fetch only missing
@@ -609,19 +639,35 @@ heights under the camera):
   - `surface.sampleHeight` at seven points of the Austin startup pose,
     including the ground under the camera, is finite on both engines and
     agrees within 0.12–1.04 m (tolerance 2 m);
-  - the wheel-zoom check now reports the lowest frame and the clearance
-    before each frame draws.
+  - the wheel-zoom check now measures Navara's clearance against the
+    floor's own ground (`engine.groundFloor`, a Navara-only diagnostic),
+    with a threshold of 29 m. The floor keeps 30 m, and 1 m allows for
+    the camera moving within a frame. Against a fresh sample, the tiles
+    streaming in under a still camera moved the ground by about 8 m (79
+    to 88 m over Paris) and made the check flaky. Cesium keeps
+    `sampleHeight` ≥ −1 m.
 
-  The wheel-zoom floor over Paris measured a smallest clearance of
-  28.3–28.9 m. Two intermediate runs measured 21.6 and 22.8 m, while the
-  finest-tile window was still 2× (it let a parent tile's surface in) or
-  with floor tweaks since reverted. Under a camera at rest, the sampled
-  ground still moves by about 8 m as tile levels stream in (79 to 88 m),
-  so this check can come close to its 25 m threshold. It is the first
-  place to look if it fails. Each sample under the camera costs about
-  1.6 ms when the ground is outside the view (0.6 ms in view). The floor
-  samples at most every 250 ms or 20 m, below 20 km, while the camera is
-  free.
+  Each sample under the camera costs about 1.6 ms when the ground is
+  outside the view (0.6 ms in view). The floor samples below 20 km while
+  the camera is free: after 250 ms, or after a 20 m move once 100 ms have
+  passed (`MIN_RESAMPLE_MS`), so a pan does not sample every frame.
+
+After the review fixes (Cesium sharpen mirror, night-side warm-up,
+internals and base-value scaling, allocation-free look frames, lazy
+hidden tiles by tile extent, floor resample interval, sky mask margin,
+polite tile cache, floor-ground wheel check, clouds after sunset,
+brighter stars):
+
+- `npm test`: 6840 tests, 6839 pass, 1 skip;
+- `check:boundaries`, `format:check` (1,416 files) and `build`: clean. The
+  Cesium main chunk is 2,850,287 B;
+- `qa-globe-contract`: Cesium 64/64, Navara 69/69 (1,770 tiles from the
+  cache, 25 fetched, no 429). One run failed the lifecycle check with
+  "Execution context was destroyed": the dev server reloaded the page
+  because a source file was edited during the run. The rerun passed;
+- `qa-engine-shell --engine=both`: Cesium 23/23, Navara 25/25,
+  cross-engine 4/4. Navara's wheel floor held 30 m over its own ground on
+  every frame (threshold 29 m).
 
 What `qa-engine-shell` measured, on dev (preview gave the same verdicts):
 

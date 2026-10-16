@@ -32,12 +32,11 @@ export class VisualEffects {
     createStage = (options) => new PostProcessStage(options),
   }) {
     this.viewer = viewer;
-    // Cesium sharpens with its own post stage below; an engine without a
-    // viewer (Navara) sharpens in its render pipeline.
+    // Cesium sharpens with its own post stage below, and the engine's
+    // render.sharpen() mirrors that stage (the Cesium engine keeps the state
+    // only); an engine without a viewer (Navara) sharpens in its pipeline.
     this.engineRender =
-      !viewer && typeof engine?.render?.setSharpen === 'function'
-        ? engine.render
-        : null;
+      typeof engine?.render?.setSharpen === 'function' ? engine.render : null;
     this.requestRender = requestRender;
     this.holdRender = holdRender;
     this.releaseRender = releaseRender;
@@ -118,6 +117,7 @@ export class VisualEffects {
     });
     this.sharpenStage.enabled = false;
     this.viewer.scene.postProcessStages.add(this.sharpenStage);
+    this.engineRender?.setSharpen({ enabled: false });
     this.applySharpenIntensity(sharpenIntensity);
   }
 

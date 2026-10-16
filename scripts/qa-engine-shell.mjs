@@ -13,8 +13,9 @@
  * - search: a city typed into the location search flies near it, and after
  *   searching Tokyo the HUD's own lat/lon text reads Tokyo;
  * - navigation: north up, tilt, wheel zoom and reset to the globe; the wheel
- *   stops above the ground (the smallest clearance over the sampled surface
- *   on any frame: Cesium >= -1 m, Navara >= 25 m);
+ *   stops above the ground (the smallest clearance on any frame: Cesium
+ *   >= -1 m over the sampled surface, Navara >= 29 m over its ground floor's
+ *   own ground, which it keeps 30 m below the camera);
  * - orbit: frames keep coming while it runs and stop when it stops;
  * - the HUD readouts follow the camera;
  * - share links: the hash written for a pose restores that pose on reload
@@ -70,10 +71,10 @@ const RESERVED_PORTS = new Set([4185, 4186]);
 const SEARCH = { query: 'Paris', lat: 48.8566, lon: 2.3522, withinKm: 60 };
 const SHARE_TOLERANCE = 1e-6;
 const TOKYO = { query: 'Tokyo', lat: 35.6762, lon: 139.6503, withinKm: 60 };
-// Smallest clearance above the sampled surface during and after the wheel:
-// Cesium's own collision keeps the camera at about the surface; the Navara
-// engine keeps 30 m (src/globe/navara/groundFloor.js).
-const MIN_CLEARANCE = { cesium: -1, navara: 25 };
+// Smallest clearance (m) on any frame of the wheel zoom. Cesium stops at the
+// rendered surface (sampleHeight). Navara's floor keeps 30 m above the ground
+// it sampled itself; 1 m allows for the camera moving within a frame.
+const MIN_CLEARANCE = { cesium: -1, navara: 29 };
 // Cross-engine share links: the same hash on the other engine.
 const CROSS_TOLERANCE = { metres: 1, degrees: 0.1 };
 // Idle: no frames over this long once the tiles have loaded.
@@ -292,10 +293,19 @@ async function countFrames(ms) {
  */
 function startClearanceWatch() {
   const { engine } = window.__godsEyeView;
-  const watch = { min: null, sampled: 0, unsampled: 0 };
+  // Navara's floor keeps its margin above the ground it sampled itself
+  // (engine.groundFloor, diagnostics); a fresh sample would also measure the
+  // tiles streaming in under a still camera (about 8 m at Paris). Cesium
+  // stops at the rendered surface: a fresh sampleHeight.
+  const groundUnder = (pose) =>
+    engine.groundFloor
+      ? engine.groundFloor.ground()
+      : engine.surface.sampleHeight(pose.cartographic);
+  window.__qaGroundUnder = groundUnder;
+  const watch = { min: null, sampled: 0, unsampled: 0, lowest: null };
   watch.remove = engine.frames.postRender.addEventListener(() => {
     const pose = engine.camera.pose();
-    const ground = engine.surface.sampleHeight(pose.cartographic);
+    const ground = groundUnder(pose);
     if (!Number.isFinite(ground)) {
       watch.unsampled += 1;
       return;
@@ -313,18 +323,6 @@ function startClearanceWatch() {
       };
     }
   });
-  // The same before the frame draws (after the engine's ground floor):
-  // tells a dip the floor missed from one the camera made while drawing.
-  watch.minBefore = null;
-  watch.removeBefore = engine.frames.preRender.addEventListener(() => {
-    const pose = engine.camera.pose();
-    const ground = engine.surface.sampleHeight(pose.cartographic);
-    if (!Number.isFinite(ground)) return;
-    const clearance = pose.cartographic.height - ground;
-    if (watch.minBefore == null || clearance < watch.minBefore)
-      watch.minBefore = clearance;
-  });
-  watch.lowest = null;
   window.__qaClearanceWatch = watch;
 }
 
@@ -333,10 +331,10 @@ function stopClearanceWatch() {
   const { engine } = window.__godsEyeView;
   const watch = window.__qaClearanceWatch;
   watch.remove();
-  watch.removeBefore();
   delete window.__qaClearanceWatch;
   const pose = engine.camera.pose();
-  const sampled = engine.surface.sampleHeight(pose.cartographic);
+  const sampled = window.__qaGroundUnder(pose);
+  delete window.__qaGroundUnder;
   const ground = Number.isFinite(sampled) ? sampled : null;
   const clearance = ground == null ? null : pose.cartographic.height - ground;
   const minClearance =
@@ -350,7 +348,6 @@ function stopClearanceWatch() {
     ground,
     clearance,
     minClearance,
-    minBefore: watch.minBefore,
     lowest: watch.lowest,
     sampled: watch.sampled,
     unsampled: watch.unsampled,
@@ -817,10 +814,6 @@ async function runEngine(browser, baseUrl, engine) {
         floorState.minClearance == null
           ? null
           : Math.round(floorState.minClearance * 10) / 10,
-      minClearanceBeforeDraw:
-        floorState.minBefore == null
-          ? null
-          : Math.round(floorState.minBefore * 10) / 10,
       lowest: floorState.lowest,
       framesSampled: floorState.sampled,
       framesWithoutGround: floorState.unsampled,

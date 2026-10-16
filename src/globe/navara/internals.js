@@ -65,6 +65,71 @@ export function isIdle(view) {
   return view._isIdle === true;
 }
 
+/**
+ * The cinematic look's atmosphere scale (look.js createLuminanceScaler):
+ * the radiance-to-luminance factor uniforms of the takram materials behind
+ * the look's sky, stars, aerial perspective and clouds handles. Private:
+ * - sky, stars: handle.ref.raw (the three object) .material.uniforms;
+ * - aerial perspective: handle.ref.raw.rawEffect.uniforms (a Map);
+ * - clouds: handle.ref.raw.rawEffect.cloudsPass.currentMaterial.uniforms
+ *   (the clouds swap that material when their quality changes).
+ * Calls `visit(key, uniform, scaled)` for each, scaled false for the stars.
+ * A handle whose object is built but has lost a path fails loudly: it
+ * throws in the dev server and warns once in a build. Upstream ask: a sky
+ * luminance or atmosphere exposure that leaves unlit content alone.
+ */
+export const LUMINANCE_UNIFORMS = Object.freeze([
+  'SUN_SPECTRAL_RADIANCE_TO_LUMINANCE',
+  'SKY_SPECTRAL_RADIANCE_TO_LUMINANCE',
+]);
+const DEV = Boolean(import.meta.env?.DEV);
+const reported = new Set();
+
+function luminancePathLost(name) {
+  const message = `Navara ${NAVARA_INTERNALS_VERSION}: the ${name} luminance uniforms are not where internals.js expects them`;
+  if (DEV) throw new Error(message);
+  if (reported.has(name)) return;
+  reported.add(name);
+  console.warn(`[globe] ${message}; the atmosphere stays unscaled there`);
+}
+
+function visitLuminance(name, raw, uniforms, scaled, visit) {
+  if (!raw) return; // not built yet
+  const get = (key) =>
+    uniforms instanceof Map ? uniforms.get(key) : uniforms?.[key];
+  const sun = get(LUMINANCE_UNIFORMS[0]);
+  const sky = get(LUMINANCE_UNIFORMS[1]);
+  if (!sun?.value?.isVector3 || !sky?.value?.isVector3) {
+    luminancePathLost(name);
+    return;
+  }
+  visit(LUMINANCE_UNIFORMS[0], sun, scaled);
+  visit(LUMINANCE_UNIFORMS[1], sky, scaled);
+}
+
+export function forEachLuminanceUniform(handles, visit) {
+  const sky = handles.sky?.ref?.raw;
+  visitLuminance('sky', sky, sky?.material?.uniforms, true, visit);
+  const stars = handles.stars?.ref?.raw;
+  visitLuminance('stars', stars, stars?.material?.uniforms, false, visit);
+  const aerial = handles.aerialPerspective?.ref?.raw;
+  visitLuminance(
+    'aerial perspective',
+    aerial,
+    aerial?.rawEffect?.uniforms,
+    true,
+    visit,
+  );
+  const clouds = handles.clouds?.ref?.raw;
+  visitLuminance(
+    'clouds',
+    clouds,
+    clouds?.rawEffect?.cloudsPass?.currentMaterial?.uniforms,
+    true,
+    visit,
+  );
+}
+
 /** The hooks createNavaraEngine takes. */
 export const navaraHooks = (view) => ({
   retainTileGeometry,

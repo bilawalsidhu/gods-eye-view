@@ -1033,7 +1033,6 @@
   "src/globe/cesium/render.js",
   "src/globe/cesium/surface.js",
   "src/globe/contract.js",
-  "src/globe/navara/atmosphereLuminance.js",
   "src/globe/navara/cameraMath.js",
   "src/globe/navara/cameraMath.test.mjs",
   "src/globe/navara/cameraModel.js",

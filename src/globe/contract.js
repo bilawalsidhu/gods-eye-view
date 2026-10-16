@@ -167,7 +167,8 @@
  *   Sharpen slider sets in 0.1..2.1). Omitted fields keep their value; a
  *   non-boolean `enabled` or a negative or non-finite `amount` throws a
  *   TypeError. Off with amount 1 until set. The Cesium engine only keeps the
- *   state: in Cesium mode the app's own post stage sharpens.
+ *   state: in Cesium mode the app's own post stage sharpens and mirrors its
+ *   state here (src/ui/visualEffects.js).
  * @property {() => { enabled: boolean, amount: number }} sharpen
  *   The sharpening last set (a copy).
  *

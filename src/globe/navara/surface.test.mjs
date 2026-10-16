@@ -190,3 +190,28 @@ test('tilesLoaded follows Navara idle; a failed geometry patch means unsupported
   assert.equal(surface.supported, false);
   assert.equal(surface.clampToHeightSupported, false);
 });
+
+test('among hidden tiles the finest tile wins by its extent, not by a small mesh in a coarse tile', () => {
+  // A coarse hidden tile (800 m across) carries a small 20 m mesh 5 m above
+  // the fine hidden tile's ground: by mesh size the coarse tile's small mesh
+  // would win; by tile extent the fine tile does.
+  const fine = tileAt(10, 45, 40);
+  const coarse = tileAt(10, 45, 30, 400);
+  const coarseRoof = tileAt(10, 45, 45, 10);
+  // One coarse tile with two meshes, both relative to its own centre.
+  coarseRoof.tile.remove(coarseRoof.mesh);
+  coarseRoof.mesh.position
+    .copy(coarseRoof.tile.position)
+    .sub(coarse.tile.position);
+  coarse.tile.add(coarseRoof.mesh);
+  coarse.tile.updateMatrixWorld(true);
+  fine.tile.visible = false;
+  coarse.tile.visible = false;
+  const { surface } = setup({ tiles: [coarse.tile, fine.tile] });
+  near(
+    surface.sampleHeight(cartographic.fromDegrees(10, 45, 0)),
+    40,
+    0.05,
+    'the fine tile',
+  );
+});

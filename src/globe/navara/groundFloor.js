@@ -37,6 +37,11 @@ export const GROUND_FLOOR = Object.freeze({
   RESAMPLE_METRES: 20,
   /** Age (ms) after which the ground is sampled again. */
   RESAMPLE_MS: 250,
+  /**
+   * Age (ms) before a move resamples: a sample of the ground outside the
+   * view costs about 1.6 ms (surface.js), too much for every frame.
+   */
+  MIN_RESAMPLE_MS: 100,
 });
 
 /**
@@ -81,12 +86,19 @@ export function createGroundFloor({
       0,
       WGS84,
     );
-    if (
-      sample &&
-      at - sample.at < GROUND_FLOOR.RESAMPLE_MS &&
-      cartesian3.distance(point, sample.point) < GROUND_FLOOR.RESAMPLE_METRES
-    )
-      return sample.height;
+    // Again after RESAMPLE_MS, or after a RESAMPLE_METRES move once
+    // MIN_RESAMPLE_MS has passed (a pan does not sample every frame).
+    if (sample) {
+      const age = at - sample.at;
+      const moved =
+        cartesian3.distance(point, sample.point) >=
+        GROUND_FLOOR.RESAMPLE_METRES;
+      if (
+        age < GROUND_FLOOR.RESAMPLE_MS &&
+        !(moved && age >= GROUND_FLOOR.MIN_RESAMPLE_MS)
+      )
+        return sample.height;
+    }
     const height =
       surface.sampleHeight(place) ?? surface.terrainHeight?.(place) ?? 0;
     sample = { point, at, height };
