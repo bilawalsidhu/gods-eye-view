@@ -142,10 +142,11 @@ async function firmsActionSnapshot(page) {
 }
 
 /** Wait until the accessible mirror reflects the requested FIRMS action count. */
-async function waitForFirmsActionCount(page, expected, { timeoutMs = 12000 } = {}) {
+async function waitForFirmsActionCount(page, expected, { timeoutMs = 12000, selectedOnly = false } = {}) {
   const deadline = Date.now() + timeoutMs;
+  const countKey = selectedOnly ? 'selectedCount' : 'count';
   let snapshot = await firmsActionSnapshot(page);
-  while (Date.now() < deadline && snapshot.count !== expected) {
+  while (Date.now() < deadline && snapshot[countKey] !== expected) {
     await page.evaluate(() => window.__godsEyeView?.viewer?.scene?.requestRender?.());
     await sleep(175);
     snapshot = await firmsActionSnapshot(page);
@@ -439,7 +440,7 @@ async function main() {
           if (settled) break;
           await sleep(100);
         }
-        await sleep(250);
+        await waitForFirmsActionCount(page, 1, { selectedOnly: true });
 
         const proof = await page.evaluate(() => {
           const gev = window.__godsEyeView;
