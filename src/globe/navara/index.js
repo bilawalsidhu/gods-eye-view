@@ -6,7 +6,7 @@ import ThreeView from '@navaramap/three';
 import * as geo from '../../geo/index.js';
 import { DefaultPlugin } from '@navaramap/three-default-plugin';
 import { createNavaraEngine } from './createNavaraEngine.js';
-import { navaraHooks } from './internals.js';
+import { forEachLuminanceUniform, navaraHooks } from './internals.js';
 import { buildNavaraLook } from './look.js';
 import { createNavaraSharpen } from './sharpen.js';
 import {
@@ -33,28 +33,22 @@ function preservedCanvas(container) {
   return canvas;
 }
 
-/** The camera's place in degrees (for the sun's elevation), or null. */
-function cameraPlace(camera) {
-  try {
-    const place = camera.pose().cartographic;
-    return place
-      ? {
-          lat: geo.math.toDegrees(place.latitude),
-          lng: geo.math.toDegrees(place.longitude),
-        }
-      : null;
-  } catch {
-    return null;
-  }
-}
+// The camera's place for the look, refreshed in place each frame (no
+// allocation): degrees for the sun's elevation, and the height.
+const lookCarto = { longitude: 0, latitude: 0, height: 0 };
+const lookPlace = { lat: 0, lng: 0 };
 
-/** The camera height, or NaN while the camera has no position yet. */
-function cameraHeight(camera) {
-  try {
-    return camera.height();
-  } catch {
-    return Number.NaN;
-  }
+/** Fills lookPlace from the camera; false while it has no position yet. */
+function readCameraPlace(camera) {
+  const place = geo.cartographic.fromCartesian(
+    camera.livePosition,
+    geo.ellipsoid.WGS84,
+    lookCarto,
+  );
+  if (!place) return false;
+  lookPlace.lat = geo.math.toDegrees(place.latitude);
+  lookPlace.lng = geo.math.toDegrees(place.longitude);
+  return true;
 }
 
 // The height of the ground in view, for the look's cloud rule: the depth of
@@ -103,7 +97,9 @@ export async function createNavaraGlobe({
     const plan = navaraScenePlan(effects ?? resolveNavaraLook(search), {
       mobile: Boolean(view.isMobileOptimized?.()),
     });
-    const look = buildNavaraLook(view, plugin, plan);
+    const look = buildNavaraLook(view, plugin, plan, undefined, {
+      forEachLuminanceUniform,
+    });
     engine = createNavaraEngine(view, {
       hooks: navaraHooks(view),
       container,
@@ -133,8 +129,14 @@ export async function createNavaraGlobe({
       engine.frames.preRender.addEventListener(() => {
         if (!moving && !groundSettled && engine.surface.tilesLoaded())
           readGround();
+        const placed = readCameraPlace(camera);
         if (
-          look.frame(cameraHeight(camera), moving, ground, cameraPlace(camera))
+          look.frame(
+            placed ? lookCarto.height : Number.NaN,
+            moving,
+            ground,
+            placed ? lookPlace : null,
+          )
         )
           engine.render.request('navara-look');
       }),

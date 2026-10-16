@@ -22,6 +22,9 @@ import {
   STARS_SPACE_ENTER_M,
   STARS_SPACE_EXIT_M,
   starsVisibleAt,
+  CLOUDS_HIDE_SUN_BELOW_DEG,
+  CLOUDS_SHOW_SUN_ABOVE_DEG,
+  cloudsSunlitAt,
 } from './viewOptions.js';
 
 test('the product view renders on demand with MSAA 4 at the native pixel ratio', () => {
@@ -84,7 +87,7 @@ test('the cinematic look: photoreal plus clouds and ACES, no sun shadow maps, no
   assert.equal(plan.pluginDefault, false);
   assert.deepEqual(plan.meshes, [
     { sky: {} },
-    { stars: { intensity: 40 / ATMOSPHERE_LUMINANCE_SCALE, pointSize: 2 } },
+    { stars: { intensity: 120, pointSize: 2 } },
   ]);
   assert.deepEqual(plan.lights, [
     { skyLightProbe: {} },
@@ -213,4 +216,13 @@ test('stars show at night and from space, not in a daylit sky, with hysteresis',
   );
   assert.ok(STARS_SHOW_SUN_BELOW_DEG < STARS_HIDE_SUN_ABOVE_DEG);
   assert.ok(STARS_SPACE_EXIT_M < STARS_SPACE_ENTER_M);
+});
+
+test('the clouds hide once the sun sets at the camera, with hysteresis', () => {
+  assert.equal(cloudsSunlitAt(40, true), true);
+  assert.equal(cloudsSunlitAt(CLOUDS_HIDE_SUN_BELOW_DEG - 0.1, true), false);
+  assert.equal(cloudsSunlitAt(1, false), false, 'inside the gap');
+  assert.equal(cloudsSunlitAt(1, true), true, 'inside the gap');
+  assert.equal(cloudsSunlitAt(CLOUDS_SHOW_SUN_ABOVE_DEG + 0.1, false), true);
+  assert.equal(cloudsSunlitAt(Number.NaN, false), false, 'unknown keeps it');
 });
