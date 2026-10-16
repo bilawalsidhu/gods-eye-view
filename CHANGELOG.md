@@ -1,5 +1,13 @@
 # Changelog
 
+- Add MET Norway's weather-station webcams as a CCTV pack: about a dozen
+  stills from Haukeliseter, Snåsa, Andøya, Vesterålen, Finnmark, the Hurum
+  weather radar, Bjørnøya, Hopen and Jan Mayen, read keylessly from MET's
+  public webcam list and shown under the existing "Norway" category. Each
+  frame is pinned to the camera's own path on obs-view.met.no, and the
+  list's "mot øst"-style facing sets the heading. `CCTV_MET_ENABLED=0`
+  disables the pack. Data from MET Norway under NLOD 2.0 and CC BY 4.0.
+
 - Local FM seek finds stations after wrapping around 87.5–108 MHz, covers both
   band edges, skips the starting station and rejects spectra from an earlier
   tune (Aditya, @Rohilalala, #1174).
