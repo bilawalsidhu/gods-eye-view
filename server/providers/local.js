@@ -27,6 +27,7 @@ import { firePerimetersProxy } from './firePerimeters.js';
 import { gnssIntegrityProxy } from './gnssIntegrity.js';
 import { cycloneProxy } from './cyclones.js';
 import { windProxy } from './wind.js';
+import { oceanCurrentsProxy } from './oceanCurrents.js';
 
 /**
  * Construct the local provider plugins in their established order.
@@ -57,6 +58,7 @@ function localProviderPlugins({ realtime } = {}) {
     openAiRealtimeProxy({ realtime }),
     googlePlacesContextProxy(),
     windProxy(),
+    oceanCurrentsProxy(),
     weatherProxy(),
     cycloneProxy(),
     mapillaryProxy(),
