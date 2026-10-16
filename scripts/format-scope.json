@@ -45,6 +45,7 @@
   "scripts/qa-voice-auth.mjs",
   "scripts/qa-voice-auth-focus.mjs",
   "src/codexOauthRealtime.test.mjs",
+  "src/qaFirmsActions.test.mjs",
   "src/voice/cloudVoiceAuth.test.mjs",
   "scripts/qa-panel-resize.mjs",
   "scripts/qa-panelDrag.mjs",
