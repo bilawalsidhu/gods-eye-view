@@ -896,7 +896,8 @@
       "src/geo/developerError.js",
       "src/time/clock.js",
       "src/globe/contract.js",
-      "src/globe/cesium/engineFromViewer.js"
+      "src/globe/cesium/engineFromViewer.js",
+      "src/layers/shared/color.js"
     ],
     "external": ["cesium"]
   },
@@ -2587,7 +2588,11 @@
       "src/globe/surfaceDetail.js",
       "src/globe/navara/followGestures.js",
       "src/app/layers/directory.js",
-      "src/app/layers/renderers.js"
+      "src/app/layers/renderers.js",
+      "src/layers/aircraft/render/cesium.js",
+      "src/layers/flights/render/cesium.js",
+      "src/data/selectionDispatcher.js",
+      "src/layers/shared/color.js"
     ],
     "external": [
       "hls.js",
@@ -3158,7 +3163,11 @@
       "src/globe/follow.js",
       "src/globe/cesium/follow.js",
       "src/app/layers/directory.js",
-      "src/app/layers/renderers.js"
+      "src/app/layers/renderers.js",
+      "src/layers/aircraft/render/cesium.js",
+      "src/data/selectionDispatcher.js",
+      "src/layers/shared/color.js",
+      "src/layers/flights/render/cesium.js"
     ],
     "external": [
       "hls.js",

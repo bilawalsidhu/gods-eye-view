@@ -1,4 +1,3 @@
-import * as Cesium from 'cesium';
 import * as geo from '../../geo/index.js';
 import { cyberSonarBaseAlpha } from '../../cyberSonar.js';
 import {
@@ -8,8 +7,9 @@ import {
 } from '../../data/motionModel.js';
 import { aircraftIcon } from '../../data/aircraftIcons.js';
 import { POSITION_HISTORY_LIMIT } from './recordPolicy.js';
+import { CYAN } from '../shared/color.js';
 
-/** Apply reconciled aircraft records to Cesium resources and follow state. */
+/** Apply reconciled aircraft records to the renderer's fleet and follow state. */
 export function createFlightSnapshotRenderer({
   flightState,
   records,
@@ -32,7 +32,8 @@ export function createFlightSnapshotRenderer({
     // subpoint + collected floor cells for the viewer-proximate low-contact
     // clamp below — one carto read per poll, one batch warm after the loop.
     const viewerCarto =
-      (viewer || flightState._viewer)?.camera?.positionCartographic || null;
+      (viewer || flightState._renderer?.view)?.camera?.positionCartographic ||
+      null;
     const viewerLatDeg = viewerCarto
       ? geo.math.toDegrees(viewerCarto.latitude)
       : null;
@@ -55,7 +56,7 @@ export function createFlightSnapshotRenderer({
       if (isMil && tracking._militaryLayerSuppresses(icao24)) {
         const dupe = flightState._billboards.get(icao24);
         if (dupe) {
-          flightState._billboardCollection.remove(dupe);
+          flightState._renderer.fleet.remove(dupe);
           flightState._billboards.delete(icao24);
           rendering._releaseModel(icao24); // military-suppression: drop any 3D model too
           records.forget(icao24);
@@ -200,7 +201,7 @@ export function createFlightSnapshotRenderer({
               rendering._modelOwnsVisual(icao24),
             )) ||
           position;
-        const bb = flightState._billboardCollection.add({
+        const bb = flightState._renderer.fleet.add({
           position: displayed,
           image: aircraftIcon(rendering._iconKind(icao24, meta.klass)),
           width: isTracked ? 24 : 20,
@@ -209,9 +210,7 @@ export function createFlightSnapshotRenderer({
           // Screen-projected rotation lands on the next fleet tick.
           rotation: 0,
           alignedAxis: geo.cartesian3.ZERO,
-          color: isTracked
-            ? Cesium.Color.CYAN
-            : rendering._fleetBillboardColor(icao24),
+          color: isTracked ? CYAN : rendering._fleetBillboardColor(icao24),
           sizeInMeters: false,
           scaleByDistance: rendering._normalBillboardScaleByDistance(),
           // Grounded/near-surface planes sit at/below the photoreal tile
@@ -272,7 +271,7 @@ export function createFlightSnapshotRenderer({
         tracking._clearTracking(false, { evicted: true });
       }
 
-      flightState._billboardCollection.remove(bb);
+      flightState._renderer.fleet.remove(bb);
       flightState._billboards.delete(icao24);
       rendering._releaseModel(icao24); // aged-out aircraft: drop its 3D model (no orphan / cap leak)
       records.forget(icao24);
@@ -308,15 +307,22 @@ export function createFlightSnapshotRenderer({
     // cell, budget-capped, viewer-proximate, google-3d regime only). Own
     // billboards/models are excluded so a vertical probe can't land on an
     // aircraft instead of the pavement.
-    sampleMeshFloorCells(flightState._viewer?.scene, floorWarmPoints, {
-      excludeObjects: [
-        ...flightState._billboards.values(),
-        ...flightState._models.values(),
-        flightState._trackedModel,
-      ].filter(Boolean),
-      viewerLat: viewerLatDeg,
-      viewerLon: viewerLonDeg,
-    });
+    sampleMeshFloorCells(
+      flightState._renderer?.view.surfaceScene,
+      floorWarmPoints,
+      {
+        excludeObjects:
+          flightState._renderer?.surfaceExclusions({
+            sprites: flightState._billboards.values(),
+            models: [
+              ...flightState._models.values(),
+              flightState._trackedModel,
+            ],
+          }) ?? [],
+        viewerLat: viewerLatDeg,
+        viewerLon: viewerLonDeg,
+      },
+    );
 
     // Round 5: the grounded exact-key warm that used to live here is gone —
     // see the note where _warmGroundedAircraftSurfaceCache was removed. The

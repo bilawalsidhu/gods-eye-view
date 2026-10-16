@@ -7,8 +7,8 @@ import { createEnrichment } from './enrichment.js';
 function services() {
   const names = [
     'picking',
-    'sprites',
-    'trails',
+    'selection',
+    'renderer',
     'aircraftPresentation',
     'camera',
     'militaryRegistry',

@@ -1,6 +1,5 @@
 import { FlightRecords } from './records.js';
 import { createFlightFeed } from './ingestion.js';
-import * as Cesium from 'cesium';
 import * as geo from '../../geo/index.js';
 import { ENRICH_AMBIENT_BUDGET_CEIL } from './policy.js';
 
@@ -36,11 +35,14 @@ export function createFlightState({ source, services }) {
 
   flightState._scratchGroundPos = geo.cartesian3.create();
 
-  /** @type {Cesium.PrimitiveCollection|null} */
+  /** @type {import('../aircraft/render/contract.js').AircraftRenderer|null}
+   *  The engine's aircraft renderer for this lifecycle (render/cesium.js on
+   *  Cesium): the fleet sprites, the models and their collection, the
+   *  tracked visual, the trail, the follow camera and the view reads. */
 
-  flightState._modelCollection = null;
+  flightState._renderer = null;
 
-  /** @type {Map<string, Cesium.Model>} icao24 → model */
+  /** @type {Map<string, object>} icao24 → model handle */
 
   flightState._models = new Map();
 
@@ -79,33 +81,20 @@ export function createFlightState({ source, services }) {
 
   flightState._planeModelLoaded = false;
 
-  /** @type {Cesium.Model|null} retained preload that keeps the glTF cache warm */
+  /** @type {object|null} retained preload that keeps the glTF cache warm */
 
   flightState._preloadModel = null;
 
-  flightState._scratchModelHpr = new Cesium.HeadingPitchRoll(0, 0, 0);
-
-  flightState._scratchModelMtx = geo.matrix4.create();
-
-  flightState._scratchModelBS = new Cesium.BoundingSphere(
-    geo.cartesian3.create(),
-    1.0,
-  );
-  // frustum-visibility test
   /** Last limb taper per billboard, retained across class/ground/cockpit repaints. */
 
   flightState._billboardLimbScale = new WeakMap();
   // keep last N positions per aircraft
 
   // ---------------------------------------------------------------------------
-  // Module-level state: billboard collection and per-aircraft lookup maps
+  // Per-aircraft lookup maps (the fleet sprites live in the renderer)
   // ---------------------------------------------------------------------------
 
-  /** @type {Cesium.BillboardCollection|null} */
-
-  flightState._billboardCollection = null;
-
-  /** @type {Map<string, Cesium.Billboard>} icao24 -> billboard primitive */
+  /** @type {Map<string, object>} icao24 -> fleet sprite handle */
 
   flightState._billboards = new Map();
 
@@ -133,7 +122,7 @@ export function createFlightState({ source, services }) {
 
   flightState._trackingIntentGeneration = 0;
 
-  /** @type {Cesium.Entity|null} Entity used for camera tracking */
+  /** @type {object|null} The renderer's tracked handle (the follow target) */
 
   flightState._trackedEntity = null;
 
@@ -141,7 +130,7 @@ export function createFlightState({ source, services }) {
 
   flightState._trackedCameraFrameStop = null;
 
-  /** @type {Cesium.Model|null} Standalone 3D model for the tracked aircraft. Deliberately NOT a
+  /** @type {object|null} Standalone 3D model for the tracked aircraft. Deliberately NOT a
    *  graphic on _trackedEntity: viewer.trackedEntity derives the follow-camera from the entity's
    *  bounding sphere, and a model graphic reports PENDING until its glTF loads — which stalls (or, on
    *  3D-toggle, freezes) the centering. A pure-billboard entity always supplies a ready sphere; the
@@ -155,13 +144,10 @@ export function createFlightState({ source, services }) {
 
   flightState._trackedModelLoading = false;
 
-  /** @type {Cesium.ScreenSpaceEventHandler|null} Click handler on the scene canvas */
+  /** @type {(() => void)|null} Unregisters this layer from the engine's
+   *  selection dispatcher (clicks and Escape). */
 
-  flightState._clickHandler = null;
-
-  /** @type {Cesium.Viewer|null} Cached viewer reference */
-
-  flightState._viewer = null;
+  flightState._selectionRemove = null;
 
   /** Cockpit presentation switches ambient AIR contacts between near aircraft and far dots. */
 
@@ -183,7 +169,7 @@ export function createFlightState({ source, services }) {
 
   flightState._trail = null;
 
-  /** @type {Cesium.Entity|null} Cheap 2-point head segment bridging the last fix to the LIVE
+  /** @type {object|null} Cheap 2-point head segment bridging the last fix to the LIVE
    *  dead-reckoned icon, updated per frame via a CallbackProperty — so the trail head stays
    *  glued to the 12 Hz icon without rebuilding the 400-point trail primitive every frame. */
 
@@ -421,25 +407,14 @@ export function createFlightState({ source, services }) {
   /** IR hot-target mode (owner playtest 2026-08-16): the NVG/FLIR post-styles
    *  map LUMINANCE, so mid-gray textured models read cold and vanish into
    *  terrain. While a boost style is active every model renders flat white
-   *  (hottest); per-spec color/tint restores on style exit. Driven by ui.js
-   *  setStyle via the `irBoost` layer param. */
+   *  (hottest) and UNLIT (`unlit` in the model spec: a side-lit airframe under
+   *  a high sun otherwise rendered near-black in FLIR/NVG); per-spec
+   *  color/tint restores on style exit. Driven by ui.js setStyle via the
+   *  `irBoost` layer param. The shader is baked at creation (assigning it to
+   *  a ready Cesium model is a silent no-op), so the boost flips by
+   *  RELEASE-AND-RELOAD (see setParams). */
 
   flightState._irBoost = false;
-
-  /** Boosted models render UNLIT (owner cockpit-FLIR field rounds, 2026-08-16):
-   *  the white tint alone is applied to the MATERIAL, so Cesium still
-   *  sun-shades it — near-horizon viewing shows a plane's SIDE, ~90° to a high
-   *  sun, so it rendered near-BLACK in FLIR/NVG while sun-lit neighbors glowed.
-   *  LightingModel.UNLIT emits the flat white directly, orientation be damned.
-   *  CRITICAL (field-verified via scene.pick): assigning customShader to an
-   *  already-READY model is a silent no-op — the property sets but the shader
-   *  program never rebuilds. The boost therefore flips by RELEASE-AND-RELOAD
-   *  (see setParams), so every boosted model gets the shader AT CREATION.
-   *  One shared shader instance — stateless, safe across models. */
-
-  flightState._IR_UNLIT_SHADER = new Cesium.CustomShader({
-    lightingModel: Cesium.LightingModel.UNLIT,
-  });
 
   flightState._irReloadQueue = null;
   return flightState;

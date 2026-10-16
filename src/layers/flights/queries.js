@@ -26,7 +26,6 @@ export function createQueries({
   const { tr3bTypeLabel, tr3bAircraftClass } = services.aircraftPresentation;
   const { formatFlightLevel } = services.labels;
   const { isMilitaryIcao } = services.militaryRegistry;
-  const { applyTrackedCameraFrame } = services.camera;
   const {
     setFocusDeemphasisParams,
     getFocusDeemphasisParams,
@@ -303,7 +302,7 @@ export function createQueries({
           // Restore fleet billboards (the horizon-cull pass re-asserts next tick), but NEVER the
           // tracked plane's own fleet billboard — its tracked entity is the visual, so re-showing it
           // here would double-image the tracked plane when 3D is turned off mid-track.
-          if (flightState._billboardCollection)
+          if (flightState._renderer?.fleet.attached())
             for (const [icao, bb] of flightState._billboards) {
               if (icao !== flightState._trackedIcao) bb.show = true;
             }
@@ -389,11 +388,7 @@ export function createQueries({
      * @returns {Array<{position: Cesium.Cartesian3, id: string, type: string, skipLabel: boolean}>}
      */
     getDetectableObjects(options = {}) {
-      if (
-        !flightState._billboardCollection ||
-        !flightState._billboardCollection.show
-      )
-        return [];
+      if (!flightState._renderer?.fleet.visible()) return [];
       // Compute a stride that evenly samples the billboard map.
       // seed shifts the starting offset so successive calls can sample
       // different aircraft without shuffling the underlying Map order.
@@ -536,12 +531,7 @@ export function createQueries({
      * @returns {Array<{id: string, icao24: string, callsign: string|null, position: Cesium.Cartesian3, distance: number, aircraftClass: string|null, altitudeM: number|null, velocityMps: number|null, track: number|null}>}
      */
     getNearby(center, range, maxCount = 50, { includeHidden = false } = {}) {
-      if (
-        !center ||
-        !flightState._billboardCollection ||
-        !flightState._billboardCollection.show
-      )
-        return [];
+      if (!center || !flightState._renderer?.fleet.visible()) return [];
 
       const limit = Number.isFinite(maxCount)
         ? Math.max(1, Math.floor(maxCount))
@@ -625,8 +615,7 @@ export function createQueries({
      */
     hasContact(icao24) {
       if (
-        !flightState._billboardCollection ||
-        !flightState._billboardCollection.show ||
+        !flightState._renderer?.fleet.visible() ||
         flightState._billboards.size === 0
       )
         return null;
@@ -640,7 +629,7 @@ export function createQueries({
 
     getAllPositions(maxCount = 500) {
       if (
-        !flightState._billboardCollection ||
+        !flightState._renderer?.fleet.attached() ||
         flightState._billboards.size === 0
       )
         return [];
@@ -695,8 +684,7 @@ export function createQueries({
      */
     getAnalystRecords(maxCount = 2000) {
       if (
-        !flightState._billboardCollection ||
-        !flightState._billboardCollection.show ||
+        !flightState._renderer?.fleet.visible() ||
         flightState.records.data.size === 0
       )
         return [];
@@ -792,7 +780,7 @@ export function createQueries({
       if (
         !icao24 ||
         flightState._cockpitContactMode ||
-        !flightState._viewer ||
+        !flightState._renderer ||
         !flightState._trackedEntity
       )
         return false;
@@ -800,19 +788,13 @@ export function createQueries({
       if (!flightState._billboards.has(id)) id = id.toLowerCase();
       if (
         id !== flightState._trackedIcao ||
-        !flightState._viewer.entities?.contains?.(flightState._trackedEntity) ||
-        flightState._viewer.trackedEntity !== flightState._trackedEntity
+        !flightState._renderer.tracked.isLive(flightState._trackedEntity) ||
+        !flightState._renderer.follow.isFollowing(flightState._trackedEntity)
       )
         return false;
       flightState._trackedCameraFrameStop?.();
-      flightState._viewer.camera.cancelFlight();
-      flightState._viewer.trackedEntity = flightState._trackedEntity;
       flightState._trackedCameraFrameStop =
-        applyTrackedCameraFrame(
-          flightState._viewer,
-          flightState._trackedEntity,
-          flightState._trackedEntity.viewFrom,
-        ) || null;
+        flightState._renderer.follow.refocus(flightState._trackedEntity);
       parts.tracking._publishTrackedSelection(id, origin);
       return true;
     },
@@ -886,9 +868,10 @@ export function createQueries({
               };
             },
             takeFrameClock(startMs = 1_000_000_000) {
-              if (!flightState._viewer || !Number.isFinite(startMs))
+              const view = flightState._renderer?.view;
+              if (!view || !Number.isFinite(startMs))
                 return { ok: false, nowMs: null };
-              flightState._viewer.useDefaultRenderLoop = false;
+              view.holdFrames();
               setFocusEvidenceNowMs(startMs);
               flightState._lastFleetTickMs = startMs - FLEET_DR_INTERVAL_MS;
               // Cross a browser task boundary, then close Cesium's pending-loop
@@ -896,8 +879,7 @@ export function createQueries({
               // while manual evidence renders can begin without waiting on VSYNC.
               return new Promise((resolve) =>
                 setTimeout(() => {
-                  if (flightState._viewer?._cesiumWidget)
-                    flightState._viewer._cesiumWidget._renderLoopRunning = false;
+                  flightState._renderer?.view.closeFrameLatch();
                   resolve({ ok: true, nowMs: startMs });
                 }, 0),
               );
@@ -907,8 +889,7 @@ export function createQueries({
             },
             releaseFrameClock() {
               setFocusEvidenceNowMs(null);
-              if (flightState._viewer)
-                flightState._viewer.useDefaultRenderLoop = true;
+              flightState._renderer?.view.releaseFrames();
             },
           }),
         }

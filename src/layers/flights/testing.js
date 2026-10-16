@@ -1,5 +1,5 @@
-import * as Cesium from 'cesium';
 import { CYAN_TRANSPARENT } from './policy.js';
+import { CYAN } from '../shared/color.js';
 
 export function createTesting({
   flightState,
@@ -65,9 +65,11 @@ export function createTesting({
     models = [],
     modelCollection = null,
   }) {
-    flightState._viewer = viewer;
-    flightState._modelCollection = modelCollection;
-    flightState._billboardCollection = billboardCollection;
+    // The production renderer over the test's viewer and (fake) collections.
+    flightState._renderer = services.renderer.create({
+      viewer,
+      adopt: { billboardCollection, modelCollection },
+    });
     flightState._billboards = new Map([[icao24, billboard]]);
     flightState._cullPositions.clear();
     flightState._models.clear();
@@ -175,7 +177,7 @@ export function createTesting({
   function _trackedBillboardColorForTest() {
     return parts.rendering._modelOwnsVisual(flightState._trackedIcao)
       ? CYAN_TRANSPARENT
-      : Cesium.Color.CYAN;
+      : CYAN;
   }
 
   /** Drive the exact fleet billboard-to-model handoff used by `_fleetTick`. */

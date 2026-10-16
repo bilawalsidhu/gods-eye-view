@@ -30,6 +30,18 @@ const globeEngine = (file) => /^src\/globe\/(?:cesium|navara)\//.test(file);
 const cesiumPackage = /^(?:cesium(?:\/|$)|@cesium\/)/;
 // Navara renders through three.js and its postprocessing peer.
 const navaraPackage = /^(?:(?:three|postprocessing)(?:\/|$)|@navaramap\/)/;
+// Phase 3: the layers moved onto layer renderers (the *a tasks) keep each
+// engine in their renderers: cesium only in render/cesium*.js, three and
+// Navara only in render/navara*.js. The list grows with each moved layer.
+const RENDERED_LAYER_DIRS = [
+  'src/layers/flights/',
+  'src/layers/aircraft/',
+  'src/layers/shared/',
+];
+const renderedLayer = (file) =>
+  RENDERED_LAYER_DIRS.some((dir) => file.startsWith(dir));
+const cesiumLayerRenderer = (file) => /\/render\/cesium[^/]*\.js$/.test(file);
+const navaraLayerRenderer = (file) => /\/render\/navara[^/]*\.js$/.test(file);
 const renderer = (file) =>
   /^src\/(?:ui|app|standalone|overlays)\//.test(file) ||
   /^src\/layers\/[^/]+\/(?:index|rendering|snapshotRenderer|overlay|presentation|cards|controls)\.js$/.test(
@@ -123,6 +135,18 @@ export function checkImportDirections(root) {
         target = path.resolve(root, exported);
       } else {
         record.external.push(specifier);
+        if (renderedLayer(file) && !tests(file)) {
+          if (cesiumPackage.test(specifier) && !cesiumLayerRenderer(file))
+            report(
+              file,
+              `cesium only in the layer's render/cesium*.js: ${specifier}`,
+            );
+          if (navaraPackage.test(specifier) && !navaraLayerRenderer(file))
+            report(
+              file,
+              `three and Navara only in the layer's render/navara*.js: ${specifier}`,
+            );
+        }
         if (
           file.startsWith('src/') &&
           (builtins.has(specifier) || specifier.startsWith('node:'))
@@ -156,6 +180,20 @@ export function checkImportDirections(root) {
         report(
           file,
           `The Navara engine loads only through a dynamic import(): ${to}`,
+        );
+      // Like the engine, a layer's Navara renderer reaches the app only
+      // through the Navara mode's import() (src/app/navaraMode.js).
+      if (
+        navaraLayerRenderer(to) &&
+        !navaraLayerRenderer(file) &&
+        !(
+          file === 'src/app/navaraMode.js' &&
+          analysis.dynamicImports.includes(specifier)
+        )
+      )
+        report(
+          file,
+          `A Navara layer renderer loads only through the Navara mode's dynamic import(): ${to}`,
         );
       if (file.startsWith('src/') && to.startsWith('server/'))
         report(file, `Browser imports server: ${to}`);
