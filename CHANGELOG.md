@@ -461,6 +461,7 @@
   `ET-Client-Name: gods-eye-view-bikeshare` to Entur, as the operators ask,
   and accepts Entur's extensionless feed paths. Attributed under NLOD and
   Licence Ouverte. `get_bike_share` covers the six systems too.
+- Harden Vite's filesystem deny list for local-only artifacts: repo `dist/`, `.gev-logs/`, and `.gev-cache/` are denied without blocking dependency `dist/` directories, and checkout paths containing glob metacharacters are escaped before building the root-anchored pattern.
 
 - Add Norway's road cameras from Statens vegvesen as a CCTV pack. The camera
   list is one keyless GeoJSON request to the agency's OGC API view of its
