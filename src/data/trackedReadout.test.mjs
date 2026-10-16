@@ -333,6 +333,13 @@ test("on a globe engine the readout follows engine.camera.follow's plain-data la
       recorder.calls.filter(({ op }) => op === 'set').at(-1).entries[0].details,
       ['409 km'],
     );
+    // So does a layer's tracked visual that names its follow handle.
+    model = { ...model, details: ['410 km'] };
+    refreshTrackedReadout({ gevFollowHandle: handle });
+    assert.deepEqual(
+      recorder.calls.filter(({ op }) => op === 'set').at(-1).entries[0].details,
+      ['410 km'],
+    );
     handle.stop();
     assert.equal(getActiveTrackedReadoutId(), null);
   } finally {

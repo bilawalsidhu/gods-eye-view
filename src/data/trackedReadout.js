@@ -241,8 +241,13 @@ function syncActiveEntity() {
  * @param {Object} entity Entity whose model changed.
  */
 export function refreshTrackedReadout(entity) {
-  // A follow handle stands for its label subject.
-  const subject = _labelSubjects.get(entity) ?? entity;
+  // A follow handle stands for its label subject; so does a layer's tracked
+  // visual that names its follow handle (gevFollowHandle, an engine without
+  // tracked entities: the Navara aircraft renderer).
+  const subject =
+    _labelSubjects.get(entity) ??
+    _labelSubjects.get(entity?.gevFollowHandle) ??
+    entity;
   if (subject && subject === activeEntity()) publishEntity(subject);
 }
 
