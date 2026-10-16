@@ -1,3 +1,4 @@
+import { engineFromViewer } from '../globe/cesium/engineFromViewer.js';
 import { paintTransitBracket } from './detectionDraw.js';
 import * as geo from '../geo/index.js';
 import { governorRequestRender } from '../renderGovernor.js';
@@ -195,6 +196,14 @@ export function countFadingRenderEntries(renderEntries) {
 
 /** @type {Cesium.Viewer|null} */
 let _viewer = null;
+
+/** The camera height (m): the engine's, else a bare viewer's (tests). */
+function cameraHeight() {
+  const engine = engineFromViewer(_viewer);
+  return engine
+    ? engine.camera.height()
+    : _viewer?.camera?.positionCartographic?.height;
+}
 /** @type {number} Current mode index into MODE_LABELS */
 let _mode = MODE_OFF;
 /** @type {HTMLCanvasElement|null} Shared host canvas used for QA diagnostics. */
@@ -281,7 +290,8 @@ let _cockpitModeListener = null;
 /**
  * Initializes detection inside the shared world-overlay host and stores
  * references to data layers. The host owns the canvas and render listener.
- * @param {Cesium.Viewer} viewer - The active Cesium viewer instance.
+ * @param {object} viewer - The globe engine (or a Cesium viewer; only the
+ *   camera height is read, through the engine when one is registered).
  * @param {Array} layers - Data layer modules that may implement getDetectableObjects().
  * @param {Function} onModeChange - Callback invoked with the new mode label string on mode changes.
  */
@@ -1266,9 +1276,7 @@ function _drawOverlay(frame) {
       profile: MODE_LABELS[_mode],
       densityPct: _densityPct,
       allocationStrategy: _allocationStrategy,
-      viewScale: viewScaleForAltitude(
-        _viewer?.camera?.positionCartographic?.height,
-      ),
+      viewScale: viewScaleForAltitude(cameraHeight()),
       candidateCount: 0,
       observationCount: 0,
       visibleCount: 0,
@@ -1497,7 +1505,7 @@ function _drawOverlay(frame) {
     }
   }
 
-  const altitude = _viewer?.camera?.positionCartographic?.height ?? 1e9;
+  const altitude = cameraHeight() ?? 1e9;
   const collectiveBudget = labelBudgetFor(altitude, _densityPct);
   const ambientBudget = Math.max(
     0,

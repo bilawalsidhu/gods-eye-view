@@ -275,6 +275,7 @@ export function createCesiumFollow(viewer, { commanded }) {
     }
     state.entity = entity;
     state.handle.native = options.native;
+    state.handle.label = options.label;
     viewer.camera.cancelFlight();
     viewer.trackedEntity = entity;
     const viewFrom =

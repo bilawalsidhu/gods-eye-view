@@ -4,6 +4,7 @@ import {
   setOverlaySourceVisible,
 } from '../overlays/worldOverlay.js';
 import { WORLD_OVERLAY_STYLE } from '../overlays/worldOverlayTokens.js';
+import { engineFromViewer } from '../globe/cesium/engineFromViewer.js';
 
 /**
  * @module trackedReadout
@@ -34,6 +35,9 @@ const DEFAULT_TRACKED_OVERLAY_HOST = Object.freeze({
 });
 
 let _viewer = null;
+// The globe engine, when the readout was given one (or a viewer with a
+// registered engine): the followed target is engine.camera.following().
+let _engine = null;
 let _trackedEntityChangedRemove = null;
 let _selectedContext = null;
 let _contextSelectedHandler = null;
@@ -122,8 +126,35 @@ function entryIdFor(entity) {
   return fallback ? `entity:${fallback}` : null;
 }
 
+// A follow's plain-data label as the subject the readout reads (the shape a
+// Cesium layer's tracked Entity has): one subject per follow handle.
+const _labelSubjects = new WeakMap();
+function followSubject(handle) {
+  if (!handle) return null;
+  const { label } = handle;
+  if (!label) return handle.native ?? null;
+  let subject = _labelSubjects.get(handle);
+  if (!subject) {
+    subject = {
+      gevTrackedId: label.id,
+      get gevLabelModel() {
+        const { model } = handle.label ?? label;
+        return typeof model === 'function' ? model() : model;
+      },
+      gevDisplayPosition: () => (handle.label ?? label).position(),
+    };
+    _labelSubjects.set(handle, subject);
+  }
+  return subject;
+}
+
+function trackedSubject() {
+  if (_engine) return followSubject(_engine.camera.following());
+  return _viewer?.trackedEntity || null;
+}
+
 function activeEntity() {
-  return _viewer?.trackedEntity || _selectedContext?.entity || null;
+  return trackedSubject() || _selectedContext?.entity || null;
 }
 
 /**
@@ -210,7 +241,9 @@ function syncActiveEntity() {
  * @param {Object} entity Entity whose model changed.
  */
 export function refreshTrackedReadout(entity) {
-  if (entity && entity === activeEntity()) publishEntity(entity);
+  // A follow handle stands for its label subject.
+  const subject = _labelSubjects.get(entity) ?? entity;
+  if (subject && subject === activeEntity()) publishEntity(subject);
 }
 
 /** Current tracked host entry id, used to resolve its actual painted rectangle. */
@@ -224,16 +257,23 @@ const READOUT_CONTEXT_LAYERS = new Set(['alpr-cameras', 'local-adsb']);
 /**
  * Initialize the model bridge and selection listeners. No render listener is
  * installed; the already-initialized world-overlay host owns the frame lane.
- * @param {Object} viewer Active Cesium viewer.
+ * @param {Object} target The globe engine (or a viewer whose engine is
+ *   registered): the readout follows engine.camera.following(), its label
+ *   (plain data) or its Cesium entity. A bare viewer (tests) is read for
+ *   its trackedEntity.
  */
-export function initTrackedReadout(viewer) {
-  if (!viewer || _viewer === viewer) return;
+export function initTrackedReadout(target) {
+  if (!target || _viewer === target) return;
   if (_viewer) destroyTrackedReadout();
-  _viewer = viewer;
+  _viewer = target;
+  _engine = engineFromViewer(target);
   _overlayHost.setVisible(TRACKED_OVERLAY_SOURCE_ID, true);
+  const changed = _engine
+    ? _engine.camera.followChanged
+    : target.trackedEntityChanged;
   _trackedEntityChangedRemove =
-    viewer.trackedEntityChanged?.addEventListener?.(() => {
-      if (viewer.trackedEntity) _selectedContext = null;
+    changed?.addEventListener?.(() => {
+      if (trackedSubject()) _selectedContext = null;
       syncActiveEntity();
     }) || null;
   _contextSelectedHandler = (event) => {
@@ -259,7 +299,7 @@ export function initTrackedReadout(viewer) {
   };
   _aircraftSelectedHandler = () => {
     _selectedContext = null;
-    if (!_viewer?.trackedEntity) clearTrackedSource();
+    if (!trackedSubject()) clearTrackedSource();
   };
   window.addEventListener('gev:entity-selected', _contextSelectedHandler);
   window.addEventListener(
@@ -299,6 +339,7 @@ export function destroyTrackedReadout() {
   clearTrackedSource();
   _overlayHost.setVisible(TRACKED_OVERLAY_SOURCE_ID, false);
   _viewer = null;
+  _engine = null;
 }
 
 /** Inject a host recorder for focused lifecycle tests; null restores production. */
