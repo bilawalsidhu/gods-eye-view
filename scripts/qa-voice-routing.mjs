@@ -2182,7 +2182,7 @@ async function runBehaviorLayer() {
         ?.get('military-awareness')
         ?.module?.getContextSnapshot?.();
       const cohort = snap?.cohorts?.find((c) => c.id === 'flights');
-      return cohort ? cohort.count : null;
+      return Number.isFinite(cohort?.count) ? cohort.count : 'unknown';
     });
     const windowBlock = r?.contactsWindow || null;
     report(

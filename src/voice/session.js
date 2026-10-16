@@ -1,11 +1,18 @@
 /**
  * Protocol-independent voice lifetime and action dispatch.
- * An adapter receives { emit, runAction, signal } and supplies start, stop,
+ * An adapter receives { emit, runAction, signal, providerDropdown } and supplies start, stop,
  * sendText and sendMapEvent. It owns its microphone/connection and wire messages.
- * Events: state, transcript, action-call, progress, action-result, interruption,
- * completion, turn-metrics.
+ * Events: state, stop, transcript, action-call, progress, action-result,
+ * interruption, completion, turn-metrics. A stop event also
+ * covers teardown that preserves the adapter’s displayed status.
+ * providerDropdown() reads current trusted host capability for local refusals.
  */
-export function createVoiceSession({ createAdapter, runner, signal }) {
+export function createVoiceSession({
+  createAdapter,
+  runner,
+  signal,
+  providerDropdown = () => false,
+}) {
   if (typeof createAdapter !== 'function' || typeof runner !== 'function')
     throw new TypeError('Voice requires an adapter factory and action runner');
   const lifetime = new AbortController();
@@ -62,6 +69,14 @@ export function createVoiceSession({ createAdapter, runner, signal }) {
       !actionSignal.aborted &&
       epoch === generation &&
       (!options.isCurrent || options.isCurrent());
+    // Provider intent can revoke cooperative resources without erasing a
+    // result that committed before recognition. Session/turn revocation still
+    // owns the outer result and always suppresses stale completion.
+    const resourceSignal = options.providerPolicySignal
+      ? AbortSignal.any([actionSignal, options.providerPolicySignal])
+      : actionSignal;
+    const resourceIsCurrent = () =>
+      isCurrent() && !options.providerPolicySignal?.aborted;
     const callId = options.callId ?? null;
     try {
       if (!isCurrent()) throw abortError();
@@ -72,7 +87,7 @@ export function createVoiceSession({ createAdapter, runner, signal }) {
       // Step reports reach observers only while the action is current, so a
       // cancelled tool cannot update the plan or start narration.
       const progress = (update) => {
-        if (!isCurrent() || !update?.step) return;
+        if (!resourceIsCurrent() || !update?.step) return;
         emit({
           type: 'progress',
           name,
@@ -84,8 +99,9 @@ export function createVoiceSession({ createAdapter, runner, signal }) {
       };
       const result = await runner(name, args, {
         ...options,
-        signal: actionSignal,
-        isCurrent,
+        providerDropdown: providerDropdown() === true,
+        signal: resourceSignal,
+        isCurrent: resourceIsCurrent,
         progress,
       });
       if (!isCurrent()) throw abortError();
@@ -118,7 +134,12 @@ export function createVoiceSession({ createAdapter, runner, signal }) {
   }
   const abort = () => dispose();
   try {
-    adapter = createAdapter({ emit, runAction, signal: lifetime.signal });
+    adapter = createAdapter({
+      emit,
+      runAction,
+      signal: lifetime.signal,
+      providerDropdown: () => !disposed && providerDropdown() === true,
+    });
     for (const method of ['start', 'stop', 'sendText', 'sendMapEvent']) {
       if (typeof adapter?.[method] !== 'function')
         throw new TypeError('Voice adapter must implement ' + method);
@@ -169,8 +190,14 @@ export function createVoiceSession({ createAdapter, runner, signal }) {
       try {
         adapter.stop(options);
       } finally {
-        if (!options.preserveStatus)
-          emit({ type: 'state', state: 'idle', detail: 'Voice off' });
+        if (options.preserveStatus)
+          emit({ type: 'stop', preserveStatus: true });
+        else
+          emit({
+            type: 'state',
+            state: 'idle',
+            detail: 'Voice off',
+          });
       }
     },
     sendText: (text) => !disposed && adapter.sendText(text),

@@ -182,3 +182,9 @@ test('chip: "this" names an entity, "here" gives the ground coordinate', () => {
   assert.deepEqual(pointerChip(ground), { kind: 'here', label: '30.27, -97.74' });
   assert.equal(pointerChip(null), null);
 });
+
+test('a captured hold does not replace an active referent until explicit admission, including after release',()=>{
+ const h=harness();h.tracker.moveTo(300,200);const old=h.tracker.beginTurn('text');h.tracker.moveTo(600,250);const captured=h.tracker.hold('keydown');
+ assert.equal(h.tracker.activeSnapshot(),old);h.tracker.releaseHold();assert.equal(h.tracker.activeSnapshot(),old);
+ assert.equal(h.tracker.beginTurn('speech_start',{capturedSnapshot:captured}),captured);assert.equal(h.tracker.activeSnapshot(),captured);assert.notDeepEqual(captured.screenPx,old.screenPx);
+});

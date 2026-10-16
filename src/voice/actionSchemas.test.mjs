@@ -38,7 +38,8 @@ test('the complete Realtime tool payload pins the manifest-generated layer relea
     // requested radius and center authority in descriptions only.
     // Street Level and GNSS extend the manifest; tracked and analyst aircraft describe broadcasts.
     // Air quality (ECCC AQHI) extends the manifest.
-    '775ba323384b4c1b62fb8415bac52aecc3fc668e20bedcfa57e426dcd1da3969',
+    // Radio enable reveals the layer; only explicit playback requests start audio.
+    '3c0cf47305966f30e775831e7580cae9a3347f356cc95e448ada64048f656924',
   );
 });
 
@@ -181,5 +182,35 @@ test('the benchmark still rejects an empty track_entity although the model-facin
       args: { referent: 2 },
     }),
     [],
+  );
+});
+
+import { createGeminiLiveConfig } from '../../server/providers/gemini/config.js';
+test('Gemini uses the shared core catalog without follow-up actions', () => {
+  const setup = createGeminiLiveConfig();
+  const declarations = setup.tools.flatMap(
+    (tool) => tool.functionDeclarations || [],
+  );
+  assert.deepEqual(
+    declarations.map((tool) => tool.name),
+    GEV_REALTIME_TOOLS.map((tool) => tool.name),
+  );
+  for (const name of [
+    'set_voice_provider',
+    'set_voice_inactivity_timeout',
+    'set_voice_panel_order',
+    'set_voice_preview_enabled',
+    'set_street_level_options',
+  ]) {
+    assert.equal(
+      declarations.some((tool) => tool.name === name),
+      false,
+      name,
+    );
+  }
+  const camera = GEV_ACTION_SCHEMAS.find((tool) => tool.name === 'move_camera');
+  assert.equal(
+    camera.parameters.properties.motion.enum.includes('rotate_globe'),
+    false,
   );
 });

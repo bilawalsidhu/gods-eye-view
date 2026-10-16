@@ -67,6 +67,7 @@ export function createTuning({ state: layerState, services, parts, source }) {
     layerState._tuningStartStationId = layerState._selectedId;
     layerState._tuningPreviewId = layerState._selectedId;
     parts.tuningNoise.installTuningNoise();
+    parts.presentation.emitPlaybackControl('tune', 'user');
     parts.playback.pauseRadioPlayback({ origin: 'user' });
     parts.tuningNoise.syncTuningNoiseGain();
     parts.presentation.emitState();

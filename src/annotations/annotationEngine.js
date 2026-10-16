@@ -72,16 +72,20 @@ export async function resolveOutlineWithRetry(
     delaysMs = OUTLINE_RETRY_DELAYS_MS,
     isStale = () => false,
     waitFn = wait,
+    signal,
   } = {},
 ) {
   let retriedRateLimit = false;
   for (let attempt = 0; ; attempt += 1) {
+    if (signal?.aborted || isStale()) return undefined;
     let fp;
     try {
-      fp = await resolveOutline();
-    } catch {
+      fp = await abortable(resolveOutline(), signal);
+    } catch (error) {
+      if (signal?.aborted || error?.name === 'AbortError') return undefined;
       fp = null; // hard failure — definitive, keep the honest point
     }
+    if (signal?.aborted || isStale()) return undefined;
     if (isUnavailableCapability(fp)) return fp;
     if (isRateLimitedOutcome(fp)) {
       // A throttle gets one deliberately spaced retry. If that retry is throttled
@@ -90,14 +94,27 @@ export async function resolveOutlineWithRetry(
       const retryAfterMs = Number.isFinite(fp.retryAfterMs)
         ? fp.retryAfterMs
         : 0;
-      await waitFn(Math.max(retryAfterMs, delaysMs[attempt]));
+      try {
+        await abortable(
+          waitFn(Math.max(retryAfterMs, delaysMs[attempt]), signal),
+          signal,
+        );
+      } catch (error) {
+        if (signal?.aborted) return undefined;
+        throw error;
+      }
       if (isStale()) return undefined;
       retriedRateLimit = true;
       continue;
     }
     if (fp !== undefined) return fp;
     if (attempt >= delaysMs.length) return undefined; // transient budget exhausted
-    await waitFn(delaysMs[attempt]);
+    try {
+      await abortable(waitFn(delaysMs[attempt], signal), signal);
+    } catch (error) {
+      if (signal?.aborted) return undefined;
+      throw error;
+    }
     if (isStale()) return undefined; // board cleared/superseded mid-backoff
   }
 }
@@ -165,12 +182,30 @@ export function createAnnotationEngine({
     activeControllers.clear();
   }
 
-  function dropQueuedOutlineUpgrades() {
-    while (outlineQueue.length) {
-      const task = outlineQueue.shift();
-      if (task.anno._outlineTask === task) task.anno._outlineTask = null;
+  function dropQueuedOutlineUpgrades(controller = null) {
+    for (let i = outlineQueue.length - 1; i >= 0; i -= 1) {
+      const task = outlineQueue[i];
+      if (controller && task.controller !== controller) continue;
+      outlineQueue.splice(i, 1);
+      finishOutlineTask(task);
       releaseController(task.controller);
     }
+  }
+
+  function finishOutlineTask(task) {
+    if (task.anno._outlineTask !== task) return;
+    task.anno._outlineTask = null;
+    task.anno.pendingOutline = false;
+  }
+
+  function controllerIsStale(controller) {
+    if (
+      !controller.signal.aborted &&
+      typeof controller._isCurrent === 'function' &&
+      !controller._isCurrent()
+    )
+      controller.abort();
+    return controller.signal.aborted;
   }
 
   // A controller stays abortable (in activeControllers) while its annotate() call OR any
@@ -182,7 +217,10 @@ export function createAnnotationEngine({
   }
   function releaseController(c) {
     c._retain = (c._retain || 0) - 1;
-    if (c._retain <= 0) activeControllers.delete(c);
+    if (c._retain <= 0) {
+      activeControllers.delete(c);
+      c._cleanup?.();
+    }
   }
 
   // World annotations carry persistent per-frame scene animation (pulsing
@@ -258,6 +296,8 @@ export function createAnnotationEngine({
    * @param {boolean} [opts.clearPrevious]
    * @param {boolean} [opts.persist]  Keep until cleared (default true).
    * @param {boolean} [opts.flyTo]    Frame the first resolved annotation.
+   * @param {AbortSignal} [opts.signal] Cancel only this call's pending work.
+   * @param {Function} [opts.isCurrent] Guard commits and deferred upgrades.
    * @returns {Promise<{ok, drawn, failed, ids, results}>}
    */
   async function annotate(requests, opts = {}) {
@@ -270,15 +310,41 @@ export function createAnnotationEngine({
         results: [],
         error: 'destroyed',
       };
+    const cancelledResult = (results = [], ids = []) => ({
+      ok: false,
+      drawn: results.filter((r) => r.ok).length,
+      failed: results.filter((r) => !r.ok).length,
+      ids,
+      results,
+      aborted: true,
+      cancelled: true,
+    });
+    // Check authority BEFORE clearPrevious: an already-cancelled owner cannot
+    // erase a manual mark or invalidate a different owner's pending operation.
+    if (
+      opts.signal?.aborted ||
+      (typeof opts.isCurrent === 'function' && !opts.isCurrent())
+    )
+      return cancelledResult();
     const list = Array.isArray(requests) ? requests : [requests];
     if (opts.clearPrevious) clear(); // bumps generation + aborts older pending work
 
     const persist = opts.persist !== false;
-    // Per-call cancellation: bumped/aborted by any later clear() or destroy().
+    // The call owns this controller through its final deferred outline task.
     const controller = new AbortController();
+    controller._isCurrent = opts.isCurrent;
+    const cancel = () => {
+      controller.abort(opts.signal.reason);
+      dropQueuedOutlineUpgrades(controller);
+    };
+    controller._cleanup = () =>
+      opts.signal?.removeEventListener('abort', cancel);
+    opts.signal?.addEventListener('abort', cancel, { once: true });
     retainController(controller);
+    if (opts.signal?.aborted) cancel();
     const myGen = generation;
-    const superseded = () => myGen !== generation || controller.signal.aborted;
+    const superseded = () =>
+      myGen !== generation || controllerIsStale(controller);
 
     const results = [];
     const ids = [];
@@ -292,7 +358,13 @@ export function createAnnotationEngine({
     // order are all preserved exactly as the old serial loop had them.
     const settled = await Promise.allSettled(
       list.map((spec) =>
-        resolveSpec(spec, controller.signal, opts.flyTo === true),
+        abortable(
+          resolveSpec(spec, controller.signal, opts.flyTo === true, superseded),
+          controller.signal,
+        ).catch((error) => {
+          if (error?.name === 'AbortError') controller.abort(error);
+          throw error;
+        }),
       ),
     );
 
@@ -302,7 +374,13 @@ export function createAnnotationEngine({
         const outcome = settled[i];
         if (superseded()) break;
         try {
-          if (outcome.status === 'rejected') throw outcome.reason; // resolution threw → same path as before
+          if (outcome.status === 'rejected') {
+            if (outcome.reason?.name === 'AbortError') {
+              controller.abort(outcome.reason);
+              break;
+            }
+            throw outcome.reason;
+          }
           const resolved = outcome.value;
           if (!resolved) {
             results.push(failResult(spec, 'could not resolve location'));
@@ -449,23 +527,14 @@ export function createAnnotationEngine({
       releaseController(controller);
     }
 
-    // A clear/new-topic landed mid-flight: drop everything this call produced and
-    // do not touch the renderer or camera — the board now belongs to a newer call.
-    if (superseded()) {
-      return {
-        ok: false,
-        drawn: 0,
-        failed: results.length,
-        ids: [],
-        results,
-        aborted: true,
-      };
-    }
+    // Pending work is cancelled without removing any mark already committed.
+    if (superseded()) return cancelledResult(results, ids);
 
     if (ids.length) {
       renderer.sync(annotations);
       ensureTicking();
     }
+    if (superseded()) return cancelledResult(results, ids);
     if (opts.flyTo && firstAnchor) frameAnnotation(firstAnchor);
     else if (ids.length) ensureMarksVisible(ids);
 
@@ -480,7 +549,17 @@ export function createAnnotationEngine({
     };
   }
 
-  async function resolveSpec(spec, signal, allowDistant = false) {
+  async function resolveSpec(
+    spec,
+    signal,
+    allowDistant = false,
+    isStale = () => false,
+  ) {
+    const checkCurrent = () => {
+      isStale(); // invalid currentness aborts this call's controller
+      signal.throwIfAborted();
+    };
+    checkCurrent();
     const type = normalizeType(spec?.type);
     // MANUAL geometry (drawTool.js): the person clicked the vertices, so there is
     // nothing to resolve. Same record shapes as a resolved spec, source 'manual'.
@@ -505,6 +584,7 @@ export function createAnnotationEngine({
           allowDistant,
           signal,
         });
+        checkCurrent();
         if (r) resolvedPts.push(r);
         else failed.push(name || 'a waypoint');
       }
@@ -526,6 +606,7 @@ export function createAnnotationEngine({
         signal,
         placeSearch,
       );
+      checkCurrent();
       if (routed) {
         return {
           path: routed.geometry.map(([lon, lat]) => ({ lon, lat, height: 0 })),
@@ -563,6 +644,7 @@ export function createAnnotationEngine({
         allowDistant,
         signal,
       });
+      checkCurrent();
       const to = await resolveTarget({
         placeSearch,
         viewer,
@@ -575,6 +657,7 @@ export function createAnnotationEngine({
         allowDistant,
         signal,
       });
+      checkCurrent();
       if (!from || !to) {
         // Name the endpoint(s) that actually failed so the partial voice path can't
         // blame the wrong place (a valid origin → unresolved destination must report
@@ -647,10 +730,10 @@ export function createAnnotationEngine({
       const task = outlineQueue.shift();
       const stale =
         task.myGen !== generation ||
-        task.controller.signal.aborted ||
+        controllerIsStale(task.controller) ||
         !annotations.has(task.anno.id);
       if (stale) {
-        if (task.anno._outlineTask === task) task.anno._outlineTask = null;
+        finishOutlineTask(task);
         releaseController(task.controller);
         continue;
       }
@@ -670,10 +753,11 @@ export function createAnnotationEngine({
         delaysMs: outlineRetryDelaysMs,
         isStale: () =>
           myGen !== generation ||
-          controller.signal.aborted ||
+          controllerIsStale(controller) ||
           !annotations.has(anno.id),
+        signal: controller.signal,
       });
-      if (myGen !== generation || controller.signal.aborted) return; // board superseded
+      if (myGen !== generation || controllerIsStale(controller)) return; // board superseded
       if (!annotations.has(anno.id)) return; // mark replaced/removed while resolving
       anno.pendingOutline = false;
       anno.outlineUnavailable = isUnavailableCapability(fp);
@@ -742,7 +826,7 @@ export function createAnnotationEngine({
         ...(fp && anno.synthesized ? { approximate: true } : {}),
       });
     } finally {
-      if (anno._outlineTask === task) anno._outlineTask = null;
+      finishOutlineTask(task);
       releaseController(controller);
       activeOutlineUpgrades -= 1;
       drainOutlineQueue();
@@ -1291,8 +1375,46 @@ export function createAnnotationEngine({
   return engine;
 }
 
-function wait(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+// Race non-cooperative adapters too: cancellation must settle owned queues even
+// when an upstream promise never acknowledges AbortSignal. Late rejection is
+// consumed, and listeners are removed on either outcome.
+function abortable(promise, signal) {
+  if (!signal) return Promise.resolve(promise);
+  return new Promise((resolve, reject) => {
+    const cleanup = () => signal.removeEventListener('abort', cancel);
+    const cancel = () => {
+      cleanup();
+      reject(signal.reason);
+    };
+    if (signal.aborted) cancel();
+    else signal.addEventListener('abort', cancel, { once: true });
+    Promise.resolve(promise).then(
+      (value) => {
+        cleanup();
+        resolve(value);
+      },
+      (error) => {
+        cleanup();
+        reject(error);
+      },
+    );
+  });
+}
+
+function wait(ms, signal) {
+  return new Promise((resolve) => {
+    const cancel = () => {
+      clearTimeout(timer);
+      signal?.removeEventListener('abort', cancel);
+      resolve();
+    };
+    const timer = setTimeout(() => {
+      signal?.removeEventListener('abort', cancel);
+      resolve();
+    }, ms);
+    signal?.addEventListener('abort', cancel, { once: true });
+    if (signal?.aborted) cancel();
+  });
 }
 
 /** Exact per-vertex ring equality ([[lon,lat],…], ~1m epsilon) — the geometry-identity test. */

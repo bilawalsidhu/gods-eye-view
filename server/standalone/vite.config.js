@@ -17,7 +17,9 @@ export default defineConfig(({ command, mode }) => {
   }
   return createBrowserViteConfig({
     plugins: [
-      ...localProviderPlugins({ realtime: { tools: standaloneVoiceTools() } }),
+      ...localProviderPlugins({
+        realtime: { tools: standaloneVoiceTools(), providerDropdown: true },
+      }),
       localMcpPlugin(),
       apiNotFoundPlugin(),
     ],

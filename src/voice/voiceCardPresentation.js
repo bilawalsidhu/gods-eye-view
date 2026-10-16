@@ -30,6 +30,8 @@ export function initialVoiceCardState() {
     visible: false,
     dismissed: false,
     user: null,
+    userAdvisory: false,
+    recentSpeech: null,
     pointer: null,
     assistant: null,
     assistantResponse: null,
@@ -49,12 +51,19 @@ function caption(text) {
     : clean;
 }
 
-function newTurn(state) {
+function newTurn(state, preserveAdvisoryCaption = false) {
+  const recentSpeech = preserveAdvisoryCaption
+    ? [state.recentSpeech, state.userAdvisory && state.user]
+        .filter(Boolean)
+        .join(' · ')
+    : '';
   return {
     ...state,
     visible: true,
     dismissed: false,
     user: '',
+    userAdvisory: false,
+    recentSpeech: recentSpeech ? caption(recentSpeech) : null,
     pointer: null,
     assistant: null,
     assistantResponse: null,
@@ -105,7 +114,14 @@ export function reduceVoiceCard(state, event) {
         ? initialVoiceCardState()
         : state;
     case 'interruption':
-      return newTurn(state);
+      return newTurn(state, event.preserveAdvisoryCaption === true);
+    case 'user-caption-reset':
+      return {
+        ...state,
+        user: state.user === null ? null : '',
+        userAdvisory: false,
+        recentSpeech: null,
+      };
     case 'dismiss':
       return { ...state, visible: false, dismissed: true };
     case 'idle':
@@ -129,7 +145,26 @@ export function reduceVoiceCard(state, event) {
     case 'transcript': {
       const text = event.text || '';
       if (event.role === 'user') {
-        return text ? reveal({ ...state, user: caption(text) }) : state;
+        if (!text) return state;
+        if (event.delta === true && event.attribution === 'unverified') {
+          // These are display segments, not an identified command transcript.
+          // Keep raw spacing between fragments; normalize only when rendering.
+          const running = `${state.userAdvisory ? state.user || '' : ''}${text}`;
+          return reveal({
+            ...state,
+            userAdvisory: true,
+            user:
+              running.length > MAX_CAPTION
+                ? `…${running.slice(-(MAX_CAPTION - 1))}`
+                : running,
+          });
+        }
+        return reveal({
+          ...state,
+          user: caption(text),
+          userAdvisory: false,
+          recentSpeech: null,
+        });
       }
       if (event.role !== 'assistant' || !text) return state;
       const sameResponse =
@@ -270,7 +305,11 @@ export function voiceCardView(state) {
     phase: running ? 'WORKING' : state.steps.length ? 'DONE' : '',
     user: {
       visible: state.user !== null,
-      text: state.user || '…',
+      text: caption(state.user) || '…',
+    },
+    recentSpeech: {
+      visible: Boolean(state.recentSpeech),
+      text: caption(state.recentSpeech),
     },
     pointer: {
       visible: Boolean(state.pointer),

@@ -148,6 +148,12 @@ export function createPlayback({ state: layerState, services, parts, source }) {
     const generation = ++layerState._playGeneration;
     const ownedAttemptId =
       attemptId || `radio-play-${++layerState._playAttemptSequence}`;
+    if (origin === 'user')
+      parts.presentation.emitPlaybackControl(
+        'play-request',
+        origin,
+        ownedAttemptId,
+      );
     layerState._activePlaybackAttempt = {
       id: ownedAttemptId,
       origin,

@@ -330,10 +330,17 @@ export function createPointerTracker({
      * (open mic only when it moved recently: `recentMs`). The result becomes
      * the turn's referent (null when stale).
      */
-    beginTurn(at, { recentMs = POINTER_FRESH_MS } = {}) {
+    beginTurn(at, { recentMs = POINTER_FRESH_MS, capturedSnapshot } = {}) {
       const reuse =
         at !== 'text' && held && now() - held.heldAt <= POINTER_HOLD_MS;
-      const snapshot = reuse ? held.snapshot : capture(at, { recentMs });
+      // A delayed worklet admission may arrive after Space release. The
+      // provider owns this previously captured, local gesture snapshot.
+      const snapshot =
+        capturedSnapshot !== undefined
+          ? capturedSnapshot
+          : reuse
+            ? held.snapshot
+            : capture(at, { recentMs });
       if (!reuse && at !== 'text') held = null;
       active = snapshot?.fresh ? snapshot : null;
       return snapshot;

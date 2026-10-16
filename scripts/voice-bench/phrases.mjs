@@ -82,7 +82,7 @@ export const CORE_PHRASES = Object.freeze([
   { phrase: 'Show me the nearest traffic camera', expect: 'control_cctv', typedArgs: [where('control_cctv', (a) => a.action === 'nearest')] },
   { phrase: 'Turn on the camera viewsheds', expect: 'control_cctv', typedArgs: [where('control_cctv', (a) => a.action === 'viewshed' && a.enabled !== false)] },
   { phrase: 'Play a news radio station near Austin', expect: 'control_radio', args: { action: 'select', category: 'news', locationId: 'austin' }, typedArgs: [where('control_radio', (a) => a.action === 'select' && a.category === 'news' && a.locationId === 'austin')] },
-  { phrase: 'Turn on the radio', expect: 'control_radio', args: { action: 'play' }, typedArgs: [where('control_radio', (a) => a.action === 'play')] },
+  { phrase: 'Turn on the radio', expect: 'control_radio', args: { action: 'enable' }, typedArgs: [where('control_radio', (a) => a.action === 'enable')] },
   { phrase: 'Set the radio volume to thirty percent', expect: 'control_radio', args: { action: 'volume', volumePct: 30 } },
   { phrase: 'Pause the radio', expect: 'control_radio', args: { action: 'pause' }, typedArgs: [where('control_radio', (a) => a.action === 'pause')] },
   { phrase: 'Stop the radio', expect: 'control_radio', args: { action: 'stop' }, typedArgs: [where('control_radio', (a) => a.action === 'stop')] },
@@ -110,7 +110,7 @@ export const CORE_PHRASES = Object.freeze([
   {
     phrase: 'Go to full planet view and then turn on the radio',
     expect: ['zoom_to_globe', 'control_radio'],
-    argsByTool: { control_radio: { action: 'play' } },
+    argsByTool: { control_radio: { action: 'enable' } },
   },
 
   // — camera verbs (tools #23/#24) —
@@ -507,8 +507,8 @@ export const DIALOGUES = Object.freeze([
   {
     id: 'radio-then-volume',
     turns: ['Turn on the radio', 'Turn it down to twenty percent'],
-    results: { control_radio: [{ ok: true, prepared: true, action: 'play', station: 'KUT 90.5 Austin' }] },
-    first: { expect: 'control_radio', typedArgs: [where('control_radio', (a) => a.action === 'play')] },
+    results: { control_radio: [{ ok: true, enabled: true, action: 'enable', audioState: 'stopped' }] },
+    first: { expect: 'control_radio', typedArgs: [where('control_radio', (a) => a.action === 'enable')] },
     second: { expect: 'control_radio', typedArgs: [where('control_radio', (a) => a.action === 'volume' && a.volumePct === 20)] },
   },
   {

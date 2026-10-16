@@ -384,10 +384,17 @@
 
 /* ── Toast Notification ──────────────────────── */
 #toast {
+  --toast-safe-top: 74px;
   position: fixed;
   bottom: 100px;
-  left: 50%;
-  transform: translateX(-50%) translateY(20px);
+  left: 0;
+  right: 0;
+  margin-inline: auto;
+  width: max-content;
+  max-width: calc(100vw - 32px);
+  box-sizing: border-box;
+  overflow-wrap: anywhere;
+  transform: translateY(20px);
   z-index: 200;
   padding: 10px 24px;
   background: var(--glass-bg);
@@ -413,5 +420,41 @@
 #toast.visible {
   opacity: 1;
   visibility: visible;
-  transform: translateX(-50%) translateY(0);
+  transform: translateY(0);
+}
+
+/* Keep transient feedback clear of the raised voice chooser and bottom dock. */
+body:has(#gev-voice-control:hover) #toast,
+body:has(#gev-voice-control:focus-within) #toast,
+body:has(#command-dock.dock-has-pinned-tray) #toast {
+  top: calc(env(safe-area-inset-top, 0px) + var(--toast-safe-top));
+  bottom: auto;
+  transform: translateY(-20px);
+}
+
+body:has(#gev-voice-control:hover) #toast.visible,
+body:has(#gev-voice-control:focus-within) #toast.visible,
+body:has(#command-dock.dock-has-pinned-tray) #toast.visible {
+  transform: translateY(0);
+}
+
+@media (max-width: 900px), (max-height: 640px) {
+  #toast {
+    top: calc(env(safe-area-inset-top, 0px) + var(--toast-safe-top));
+    bottom: auto;
+    letter-spacing: 1px;
+    transform: translateY(-20px);
+  }
+
+  #toast.visible {
+    transform: translateY(0);
+  }
+}
+
+/* On a narrow portrait viewport the collapsed layer and scene headers occupy
+   the first two rows. Keep feedback below them, clear of the voice controls. */
+@media (max-width: 600px) and (orientation: portrait) {
+  #toast {
+    --toast-safe-top: 214px;
+  }
 }

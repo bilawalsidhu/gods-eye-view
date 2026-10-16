@@ -298,11 +298,11 @@ async function main() {
     );
     console.log('PASS: header drag lifts CCTV out of the rail');
 
-    // Park near the top: the voice dock would cover the south corners once
-    // the loop below has grown the window.
+    // Park high enough that the voice provider row cannot cover the southwest
+    // handle after the loop below has grown the window.
     {
       const header = await headerPoint();
-      await drag(header, 0, 120 - header.y);
+      await drag(header, 0, 40 - header.y);
     }
 
     const limits = {
@@ -345,6 +345,28 @@ async function main() {
     near(after.height, MIN_SIZE.height, 2, 'min height (nw)');
     assert.deepEqual(driftedEdges(before, after, 'nw', 2), []);
     console.log('PASS: minimum size holds from both corners');
+
+    // Minimum-size clamps do not move the window away from the top edge.
+    // Drag it down through the real header before proving north-edge growth.
+    {
+      const header = await headerPoint();
+      await drag(header, 0, 140 - header.y);
+    }
+    for (const dir of ['n', 'ne']) {
+      before = await readPanel();
+      const { dx, dy } = growthDelta(dir, 40);
+      const expected = resizeBox(before, dir, dx, dy, limits);
+      assert.ok(
+        expected.top <= before.top - 38,
+        `${dir} has room to grow north`,
+      );
+      await drag(handlePoint(before, dir), dx, dy);
+      after = await readPanel();
+      for (const key of ['left', 'top', 'width', 'height'])
+        near(after[key], expected[key], 2, `${dir} north ${key}`);
+      assert.deepEqual(driftedEdges(before, after, dir, 2), [], `${dir} pins`);
+    }
+    console.log('PASS: north edges grow from the minimum size');
 
     const saved = await readPanel();
     const record = JSON.parse(saved.stored);

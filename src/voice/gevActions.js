@@ -1,4 +1,13 @@
 import {
+  voiceRequestRestrictionResult,
+  readVoiceRequestRestriction,
+} from './providerIntent.js';
+import { voiceProviderGuidance } from './providerCapabilities.js';
+import {
+  readVoiceUserTurnProvenance,
+  subscribeVoiceUserTurn,
+} from './userTurnIntent.js';
+import {
   layerSnapshot,
   layerSnapshots,
   feedProvenanceEnvelope,
@@ -706,6 +715,21 @@ export function createGevActionRunner({
       return { ok: true, action: 'set_panel_open', panelId, open };
     }
 
+    if (name === 'set_voice_provider') {
+      const provider = String(args.provider || '')
+        .trim()
+        .toLowerCase();
+      return {
+        ok: false,
+        action: name,
+        provider: provider || null,
+        changed: false,
+        pending: false,
+        error: voiceProviderGuidance(runOptions),
+        say: voiceProviderGuidance(runOptions),
+      };
+    }
+
     if (name === 'set_context_mode') {
       if (!styleManager?.setContextMode) {
         return {
@@ -1152,6 +1176,21 @@ export function createGevActionRunner({
     }
 
     if (name === 'control_cctv') {
+      const action = String(args.action || '').toLowerCase();
+      if (
+        (action === 'enable' || action === 'disable') &&
+        dataManager.layers.get('cctv')?.module
+      ) {
+        const result = await runGevAction(
+          'set_layer_visibility',
+          {
+            layerId: 'cctv',
+            enabled: action === 'enable',
+          },
+          runOptions,
+        );
+        return { ...result, action: 'control_cctv' };
+      }
       return controlCctv(dataManager, args, styleManager);
     }
 
@@ -1177,7 +1216,7 @@ export function createGevActionRunner({
     }
 
     if (name === 'annotate_map') {
-      return annotateMap(annotations, args, reportProgress);
+      return annotateMap(annotations, args, reportProgress, runOptions);
     }
 
     if (name === 'clear_annotations') {
@@ -1190,6 +1229,7 @@ export function createGevActionRunner({
   // analyst's follow-up memory and any write still in flight — lives for one
   // voice session and is dropped by resetConversation().
   let conversation = 0;
+  let conversationAbort = new AbortController();
   let disposed = false;
   async function runVoiceAction(name, rawArgs = {}, callerOptions = {}) {
     if (disposed)
@@ -1199,50 +1239,92 @@ export function createGevActionRunner({
         cancelled: true,
         error: 'Voice ended.',
       };
+    const restriction = readVoiceRequestRestriction(callerOptions.userTurn);
+    if (restriction)
+      return voiceRequestRestrictionResult(name, restriction, callerOptions);
+    // Canonical speech can acquire protected intent while an async action is
+    // initializing. Revoke its real resource signal before a consumer commits.
+    const policyAbort = readVoiceUserTurnProvenance(callerOptions.userTurn)
+      ? new AbortController()
+      : null;
+    let policyRestriction = null;
+    const unsubscribe = subscribeVoiceUserTurn(callerOptions.userTurn, () => {
+      const next = readVoiceRequestRestriction(callerOptions.userTurn);
+      if (next && !policyRestriction) {
+        policyRestriction = next;
+        policyAbort?.abort(
+          new DOMException('Voice request is restricted', 'AbortError'),
+        );
+      }
+    });
     const epoch = conversation;
     const runOptions = {
       ...callerOptions,
+      signal: AbortSignal.any([
+        conversationAbort.signal,
+        ...(callerOptions.signal ? [callerOptions.signal] : []),
+        ...(policyAbort ? [policyAbort.signal] : []),
+      ]),
       isCurrent: () =>
         epoch === conversation &&
         !disposed &&
+        !readVoiceRequestRestriction(callerOptions.userTurn) &&
         (typeof callerOptions.isCurrent !== 'function' ||
           callerOptions.isCurrent()),
     };
-    const input = rawArgs && typeof rawArgs === 'object' ? rawArgs : {};
-    // Point-and-ask: 'pointer' and referent:n become real targets here, from
-    // the turn's pointer snapshot and the latest numbered result.
-    const deictic = resolveDeicticArgs(name, input, {
-      pointer: deixis?.pointer?.activeSnapshot?.() || null,
-      referents: deixis?.referents || null,
-      imageFrame: deixis?.imageFrame?.() || null,
-      cameraKey: deixis?.cameraKey?.() || null,
-    });
-    if (deictic.error) {
-      return attachVoiceResult(
-        name,
-        { ok: false, action: name, error: deictic.error },
-        input,
-        builders,
-      );
-    }
-    const referentGeneration = deixis?.referents?.generation?.();
-    let result = await runGevAction(name, deictic.args, runOptions);
-    if (deictic.used && result && typeof result === 'object')
-      result = { ...result, resolvedFrom: deictic.used };
-    const out = attachVoiceResult(name, result, deictic.args, builders);
-    // Only an accepted, still-current result may become "the last list": a
-    // cancelled turn or one finishing after the session ended must not
-    // repopulate a cleared registry.
-    const stillCurrent =
-      !runOptions.signal?.aborted &&
-      (typeof runOptions.isCurrent !== 'function' || runOptions.isCurrent());
-    if (stillCurrent)
-      deixis?.referents?.recordResult?.(name, out, {
-        since: referentGeneration,
+    try {
+      const input = rawArgs && typeof rawArgs === 'object' ? rawArgs : {};
+      // Point-and-ask: 'pointer' and referent:n become real targets here, from
+      // the turn's pointer snapshot and the latest numbered result.
+      const deictic = resolveDeicticArgs(name, input, {
+        pointer: deixis?.pointer?.activeSnapshot?.() || null,
+        referents: deixis?.referents || null,
+        imageFrame: deixis?.imageFrame?.() || null,
+        cameraKey: deixis?.cameraKey?.() || null,
       });
-    if (stillCurrent && deictic.used?.source === 'pointer')
-      deixis?.onPointerUsed?.();
-    return out;
+      if (deictic.error) {
+        return attachVoiceResult(
+          name,
+          { ok: false, action: name, error: deictic.error },
+          input,
+          builders,
+        );
+      }
+      const referentGeneration = deixis?.referents?.generation?.();
+      let result = await runGevAction(name, deictic.args, runOptions);
+      if (policyAbort?.signal.aborted && result?.ok !== true)
+        return voiceRequestRestrictionResult(
+          name,
+          policyRestriction,
+          callerOptions,
+        );
+      if (deictic.used && result && typeof result === 'object')
+        result = { ...result, resolvedFrom: deictic.used };
+      const out = attachVoiceResult(name, result, deictic.args, builders);
+      // Only an accepted, still-current result may become "the last list": a
+      // cancelled turn or one finishing after the session ended must not
+      // repopulate a cleared registry.
+      const stillCurrent =
+        !runOptions.signal?.aborted &&
+        (typeof runOptions.isCurrent !== 'function' || runOptions.isCurrent());
+      if (stillCurrent)
+        deixis?.referents?.recordResult?.(name, out, {
+          since: referentGeneration,
+        });
+      if (stillCurrent && deictic.used?.source === 'pointer')
+        deixis?.onPointerUsed?.();
+      return out;
+    } catch (error) {
+      if (policyAbort?.signal.aborted)
+        return voiceRequestRestrictionResult(
+          name,
+          policyRestriction,
+          callerOptions,
+        );
+      throw error;
+    } finally {
+      unsubscribe();
+    }
   }
   /**
    * A voice session ended: invalidate every write still in flight, then
@@ -1250,6 +1332,8 @@ export function createGevActionRunner({
    */
   runVoiceAction.resetConversation = () => {
     conversation++;
+    conversationAbort.abort();
+    conversationAbort = new AbortController();
     analystEngine?.reset();
   };
   /** Voice was removed: nothing may run or write again. */
@@ -1314,7 +1398,12 @@ function sanitizeAnnotationSpec(spec) {
  * talking about. Place names are resolved to real-world coordinates (and OSM
  * footprints) by the annotation engine, so the agent never has to guess pixels.
  */
-async function annotateMap(annotations, args = {}, reportProgress = () => {}) {
+async function annotateMap(
+  annotations,
+  args = {},
+  reportProgress = () => {},
+  runOptions = {},
+) {
   if (!annotations || typeof annotations.annotate !== 'function') {
     return {
       ok: false,
@@ -1348,16 +1437,19 @@ async function annotateMap(annotations, args = {}, reportProgress = () => {}) {
     clearPrevious: false,
     persist: args.persist !== false,
     flyTo: Boolean(args.flyTo),
+    signal: runOptions.signal,
+    isCurrent: runOptions.isCurrent,
   });
   // Honesty: surface partial failure explicitly so the agent can tell the user
   // which place(s) it couldn't mark instead of implying everything appeared.
+  const cancelled = Boolean(result.aborted || result.cancelled);
   const drewSome = result.drawn > 0;
   const someFailed = result.failed > 0;
   const failedLabels = [];
   const pendingOutline = (result.results || []).find(
     (r) => r.ok && r.outlinePending,
   );
-  if (pendingOutline)
+  if (pendingOutline && !cancelled)
     reportProgress('outline', pendingOutline.label || pendingOutline.target);
   for (const r of result.results || []) {
     if (r.ok) continue;
@@ -1368,8 +1460,9 @@ async function annotateMap(annotations, args = {}, reportProgress = () => {}) {
     else failedLabels.push(r.target || r.label || 'an unnamed place'); // target (the place) before caption
   }
   return {
-    ok: drewSome,
+    ok: drewSome && !cancelled,
     action: 'annotate_map',
+    ...(cancelled ? { cancelled: true, aborted: true } : {}),
     drawn: result.drawn,
     failed: result.failed,
     partial: drewSome && someFailed,
@@ -1388,7 +1481,11 @@ async function annotateMap(annotations, args = {}, reportProgress = () => {}) {
     // result never reads as a clean success — but keep it STATIC (no raw place text);
     // the actual names live only in the structured failedLabels DATA field, so the
     // model-facing prose can't carry injected instructions from a place name.
-    error: someFailed ? 'Could not place one or more annotations' : null,
+    error: cancelled
+      ? 'Annotation cancelled'
+      : someFailed
+        ? 'Could not place one or more annotations'
+        : null,
   };
 }
 

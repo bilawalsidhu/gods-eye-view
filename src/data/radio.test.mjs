@@ -603,6 +603,12 @@ test('late media errors after replacement or Pause cannot mutate the active stat
     assert.equal(radioLayer.getUIState().audioState, 'loading');
     assert.equal(radioLayer.stopPlayback({ origin: 'user' }), true);
     assert.deepEqual(controlEvents[1], {
+      action: 'play-request',
+      observedAudioState: 'paused',
+      observedStationId: stationRows[1].id,
+      cleanupResult: false,
+    }, 'manual playback announces replacement before the new attempt owns media');
+    assert.deepEqual(controlEvents[2], {
       action: 'stop',
       observedAudioState: 'stopped',
       observedStationId: null,

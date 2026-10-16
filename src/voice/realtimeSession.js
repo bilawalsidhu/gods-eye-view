@@ -14,8 +14,14 @@ export function createRealtimeSession({
   });
   return {
     controller,
-    capabilities: { costControls: true, pushToTalk: true },
+    capabilities: {
+      costControls: true,
+      pushToTalk: true,
+      advisoryLimit:
+        'OpenAI voice sessions have a time limit. When a session expires, start voice again for a new conversation.',
+    },
     start: (settings) => controller.start(settings),
+    getStartOptions: () => ({ pushToTalk: Boolean(controller.pushToTalkMode) }),
     stop: (settings) => controller.stop(settings),
     sendText: (text) => controller.sendTextCommand(text),
     sendMapEvent: (event) => controller.notifyMapEvent(event),

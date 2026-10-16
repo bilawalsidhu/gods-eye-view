@@ -105,7 +105,10 @@ test('push-to-talk: the held gesture sends the target once, with the chip after 
     { pushToTalk: true },
   );
   controller.beginPointerTurn('keydown');
-  await event({ type: 'input_audio_buffer.speech_started' });
+  await event({
+    type: 'input_audio_buffer.speech_started',
+    item_id: 'ptt-held-pointer',
+  });
   assert.deepEqual(
     pointer.calls.map(([at]) => at),
     ['keydown', 'speech_start'],
@@ -145,7 +148,10 @@ test('push-to-talk: a speech start after the release keeps the gesture referent'
   });
   controller.beginPointerTurn('keydown');
   pointer.releaseHold();
-  await event({ type: 'input_audio_buffer.speech_started' });
+  await event({
+    type: 'input_audio_buffer.speech_started',
+    item_id: 'ptt-released-pointer',
+  });
   assert.equal(
     pointer.calls.length,
     1,
@@ -158,7 +164,10 @@ test('push-to-talk: a speech start after the release keeps the gesture referent'
 test('open mic: only a recent pointer counts, and the model learns only that one exists', async () => {
   const pointer = fakePointer([aircraftSnapshot]);
   const { events, event, items } = controllerFixture(pointer);
-  await event({ type: 'input_audio_buffer.speech_started' });
+  await event({
+    type: 'input_audio_buffer.speech_started',
+    item_id: 'open-mic-recent-pointer',
+  });
   assert.equal(
     pointer.calls[0][1],
     POINTER_OPEN_MIC_RECENT_MS,
@@ -179,7 +188,10 @@ test('open mic: only a recent pointer counts, and the model learns only that one
 test('open mic: the chip and reticle appear when a tool resolves the pointer, once', async () => {
   const pointer = fakePointer([aircraftSnapshot]);
   const { controller, events, event } = controllerFixture(pointer);
-  await event({ type: 'input_audio_buffer.speech_started' });
+  await event({
+    type: 'input_audio_buffer.speech_started',
+    item_id: 'open-mic-resolved-pointer',
+  });
   assert.equal(controller.announcePointer(), true);
   assert.equal(controller.announcePointer(), false);
   assert.equal(
@@ -346,14 +358,16 @@ test('deixis prompt lint: one short rule, and every sentinel it names exists in 
   // Budget: the whole Realtime prompt (instructions + tools), measured in
   // characters. It was 56,308 after the area/imagery/OSM merge; stating each
   // policy once (WHERE precedence, AREAS routing, AFTER TOOLS speech) brought
-  // it to 51,646. A new tool or rule has to fit under this ceiling.
+  // it to 51,646. Core provider guidance and bounded Radio resume policy fit within
+  // the 53,000-character ceiling; the shared action catalog is unchanged.
   const size = instructions.length + JSON.stringify(GEV_REALTIME_TOOLS).length;
-  assert.ok(size <= 52000, `prompt size ${size}`);
+  assert.ok(size <= 53000, `prompt size ${size}`);
 });
 
-
 test('after-tool speech allows returned items to answer requested lists and rankings', () => {
-  const rule = realtimeInstructions().split('\n').find(line => line.startsWith('AFTER TOOLS:'));
+  const rule = realtimeInstructions()
+    .split('\n')
+    .find((line) => line.startsWith('AFTER TOOLS:'));
   assert.match(rule, /requested analyst list or ranking/);
   assert.match(rule, /returned items.*returned values/);
   assert.match(rule, /keep their order/);

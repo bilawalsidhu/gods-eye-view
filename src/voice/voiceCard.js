@@ -13,6 +13,8 @@ const ELEMENT_IDS = Object.freeze({
   dismiss: 'gev-voice-card-dismiss',
   user: 'gev-voice-card-user',
   userText: 'gev-voice-card-user-text',
+  recentSpeech: 'gev-voice-card-recent-speech',
+  recentSpeechText: 'gev-voice-card-recent-speech-text',
   pointer: 'gev-voice-card-pointer',
   pointerKind: 'gev-voice-card-pointer-kind',
   pointerText: 'gev-voice-card-pointer-text',
@@ -135,6 +137,8 @@ export class VoiceCardControls {
     setText(el.phase, view.phase);
     setHidden(el.user, !view.user.visible);
     setText(el.userText, view.user.text);
+    setHidden(el.recentSpeech, !view.recentSpeech.visible);
+    setText(el.recentSpeechText, view.recentSpeech.text);
     setHidden(el.pointer, !view.pointer.visible);
     setText(el.pointerKind, view.pointer.kind);
     setText(el.pointerText, view.pointer.text);

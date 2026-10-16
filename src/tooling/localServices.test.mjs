@@ -1180,3 +1180,33 @@ test('the voice instructions send vessels, however heard, to the ships layer', (
   assert.match(text, /"vessels" is easily heard as "visuals"/);
   assert.match(text, /set_layer_visibility\{layerId:"ais-live-vessels"\}/);
 });
+
+test('built-in token endpoint only advertises a provider dropdown when its host opts in', async (t) => {
+  env(t, 'GEV_RATELIMIT_OPENAI_PER_MIN', '0');
+  env(t, 'GEV_OPENAI_AUTH', undefined);
+  const sent = [];
+  for (const providerDropdown of [false, true]) {
+    const realtime = {
+      providerDropdown,
+      resolveApiKey: () => 'fixture-key',
+      fetchImpl: async (_url, options) => {
+        sent.push(JSON.parse(options.body));
+        return Response.json({ value: 'fixture-secret' });
+      },
+    };
+    const response = await request(
+      install(openAiRealtimeProxy({ realtime })).get('/api/realtime/token'),
+    );
+    assert.equal(response.status, 200);
+    if (providerDropdown)
+      assert.match(
+        sent.at(-1).session.instructions,
+        /Hover over the Voice panel and use the provider dropdown/,
+      );
+    else
+      assert.doesNotMatch(
+        sent.at(-1).session.instructions,
+        /Hover over the Voice panel|provider dropdown/,
+      );
+  }
+});

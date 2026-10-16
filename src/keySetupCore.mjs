@@ -17,7 +17,7 @@ import { hasProxySignals } from './localRequestGate.mjs';
 /** Longest accepted key/token value. Real provider keys are all far shorter. */
 export const KEY_SETUP_VALUE_LIMIT = 512;
 
-/** Most env vars accepted in one save. The registry defines ten. */
+/** Most env vars accepted in one save; enough for the complete registry. */
 export const KEY_SETUP_UPDATE_LIMIT = 16;
 
 /** Header line written above keys the panel appends to a .env file. */
@@ -59,6 +59,14 @@ export const KEY_SETUP_KEYS = Object.freeze([
     getUrl: 'https://platform.openai.com/api-keys',
     envVars: Object.freeze(['OPENAI_API_KEY']),
     tier: 'metered',
+  }),
+  Object.freeze({
+    id: 'gemini',
+    title: 'GEMINI VOICE',
+    unlocks: 'Voice control — free tier depends on model and project quotas',
+    getUrl: 'https://aistudio.google.com/apikey',
+    envVars: Object.freeze(['GEMINI_API_KEY']),
+    tier: 'free',
   }),
   Object.freeze({
     id: 'aisstream',

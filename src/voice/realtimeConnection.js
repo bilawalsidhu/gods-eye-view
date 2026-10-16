@@ -101,6 +101,7 @@ export class RealtimeConnection {
       // cap be overrun. Unrecognised ids bill at worst-case rates.
       const costState = this.cost.bindServedModel(minted.model);
       this.cost.bindTranscriptionModel?.(minted.transcribeModel);
+      this.bindTranscriptionModel?.(minted.transcribeModel);
       if (!costState.ratesRecognized) {
         console.warn(
           `[GEV voice] unrecognised Realtime model "${costState.modelId}" — ` +
@@ -318,19 +319,26 @@ export class RealtimeConnection {
     }
   }
 
-  sendRealtimeEvent(message, logEventName = 'client.event') {
-    if (!this.dc || this.dc.readyState !== 'open') return false;
+  sendRealtimeEvent(
+    message,
+    logEventName = 'client.event',
+    { isCurrent = () => true } = {},
+  ) {
+    const channel = this.dc;
+    if (!channel || channel.readyState !== 'open' || !isCurrent()) return false;
     this.debugLog(logEventName, {
       type: message?.type || null,
       message,
     });
+    if (this.dc !== channel || channel.readyState !== 'open' || !isCurrent())
+      return false;
     // A dc.send() that exceeds the SCTP send-buffer / max message size throws.
     // If that throw escaped it would abort handleRealtimeEvent BEFORE
     // queueResponseCreate + setStatus('listening'), stranding the turn at
     // EXECUTING. Swallow it and signal failure so callers can fall through
     // without the offending payload (M13).
     try {
-      this.dc.send(JSON.stringify(message));
+      channel.send(JSON.stringify(message));
       return true;
     } catch (error) {
       this.debugLog('client.send.failed', {

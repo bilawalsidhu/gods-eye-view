@@ -730,3 +730,227 @@ test('only an explicit navigation request permits resolving distant annotation t
   assert.deepEqual(received.map(options => options.allowDistant), [false, true]);
   engine.destroy();
 });
+
+// Call ownership is narrower than the board's explicit clear/destroy generation.
+function deferredAnnotation() {
+  let resolve;
+  const promise = new Promise((done) => { resolve = done; });
+  return { promise, resolve };
+}
+
+const cancellationAnchor = { lon: 10, lat: 20, height: 0, source: 'test' };
+
+test('cancelled admission cannot clear existing marks or abort another owner', async (t) => {
+  installAnimationFrameStubs(t);
+  const { renderer, calls } = fakeRenderer();
+  const pending = deferredAnnotation();
+  let siblingSignal;
+  const engine = createAnnotationEngine({ viewer: {}, renderer, resolveTarget: ({ signal }) => {
+    siblingSignal = signal;
+    return pending.promise;
+  } });
+  t.after(() => engine.clear());
+  await engine.annotate([{ type: 'pin', manual: true, longitude: 1, latitude: 2, label: 'Manual' }]);
+  const sibling = engine.annotate([{ target: 'Sibling' }]);
+  const cancelled = new AbortController();
+  cancelled.abort();
+  for (const opts of [{ signal: cancelled.signal }, { isCurrent: () => false }, { isCurrent: () => undefined }]) {
+    const result = await engine.annotate([{ target: 'Stale' }], { ...opts, clearPrevious: true });
+    assert.equal(result.cancelled, true);
+    assert.equal(result.ok, false);
+    assert.equal(result.failed, 0, 'cancellation is not a missing location');
+    assert.equal(siblingSignal.aborted, false);
+    assert.equal(engine.count(), 1);
+    assert.equal(calls.remove, 0);
+  }
+  pending.resolve(cancellationAnchor);
+  assert.equal((await sibling).ok, true);
+  assert.equal(engine.count(), 2);
+});
+
+test('owner abort settles a non-cooperative lookup while another owner may still commit', async (t) => {
+  installAnimationFrameStubs(t);
+  const { renderer, calls } = fakeRenderer();
+  const late = deferredAnnotation();
+  const sibling = deferredAnnotation();
+  const signals = new Map();
+  const engine = createAnnotationEngine({ viewer: {}, renderer, resolveTarget: ({ target, signal }) => {
+    signals.set(target, signal);
+    return (target === 'Late' ? late : sibling).promise;
+  } });
+  t.after(() => engine.clear());
+  const owner = new AbortController();
+  const a = engine.annotate([{ target: 'Late' }], { signal: owner.signal, flyTo: true });
+  const b = engine.annotate([{ target: 'Sibling' }]);
+  owner.abort();
+  const cancelled = await a;
+  assert.equal(cancelled.cancelled, true);
+  assert.equal(cancelled.drawn, 0);
+  assert.equal(signals.get('Late').aborted, true);
+  assert.equal(signals.get('Sibling').aborted, false);
+  sibling.resolve(cancellationAnchor);
+  assert.equal((await b).ok, true);
+  late.resolve({ ...cancellationAnchor, lon: 40 });
+  await flushMicrotasks();
+  assert.equal(engine.count(), 1);
+  assert.equal(calls.add, 1);
+});
+
+test('currentness is rechecked before mutation and AbortError is cancellation, not resolution failure', async (t) => {
+  installAnimationFrameStubs(t);
+  const { renderer, calls } = fakeRenderer();
+  const late = deferredAnnotation();
+  let current = true;
+  let signal;
+  const engine = createAnnotationEngine({ viewer: {}, renderer, resolveTarget: (options) => {
+    signal = options.signal;
+    return late.promise;
+  } });
+  const pending = engine.annotate([{ target: 'Late' }], { isCurrent: () => current });
+  current = false;
+  late.resolve(cancellationAnchor);
+  assert.equal((await pending).cancelled, true);
+  assert.equal(signal.aborted, true);
+  assert.equal(calls.add, 0);
+  const errorEngine = createAnnotationEngine({ viewer: {}, renderer, resolveTarget: async () => {
+    throw new DOMException('Cancelled lookup', 'AbortError');
+  } });
+  const result = await errorEngine.annotate([{ target: 'Aborted lookup' }]);
+  assert.equal(result.cancelled, true);
+  assert.equal(result.failed, 0);
+  assert.deepEqual(result.results, []);
+});
+
+test('outline cancellation frees the queue, preserves committed marks and permits a later duplicate retry', async (t) => {
+  installAnimationFrameStubs(t);
+  const { renderer, calls } = fakeRenderer();
+  const late = deferredAnnotation();
+  const started = [];
+  const signals = new Map();
+  let retries = 0;
+  const engine = createAnnotationEngine({ viewer: {}, renderer, resolveTarget: async ({ target, signal }) => {
+    signals.set(target, signal);
+    const i = Number(target.slice(-1));
+    return {
+      ...cancellationAnchor, lon: 10 + i,
+      resolveOutline: () => {
+        started.push(target);
+        if (target === 'Other9' || retries) return Promise.resolve(null);
+        return late.promise;
+      },
+    };
+  } });
+  t.after(() => engine.clear());
+  const owner = new AbortController();
+  await engine.annotate([0, 1, 2, 3].map((i) => ({ type: 'area', target: `Owned${i}` })), { signal: owner.signal });
+  const other = await engine.annotate([{ type: 'area', target: 'Other9' }]);
+  assert.equal(other.ok, true);
+  assert.deepEqual(started, ['Owned0', 'Owned1']);
+  owner.abort();
+  await flushMicrotasks();
+  assert.deepEqual(started, ['Owned0', 'Owned1', 'Other9'], 'cancelled queued outlines never start; sibling is unblocked');
+  assert.equal(signals.get('Owned0').aborted, true);
+  assert.equal(signals.get('Other9').aborted, false);
+  assert.equal(engine.count(), 5);
+  assert.equal(engine.list().some((mark) => mark.pendingOutline), false);
+  const updates = calls.update;
+  late.resolve(FP);
+  await flushMicrotasks();
+  assert.equal(calls.update, updates, 'non-cooperative late outline cannot update or deduplicate marks');
+  retries++;
+  const retry = await engine.annotate([{ type: 'area', target: 'Owned0' }]);
+  await flushMicrotasks();
+  assert.equal(retry.results[0].duplicate, true);
+  assert.equal(engine.count(), 5);
+  assert.equal(started.at(-1), 'Owned0');
+});
+
+test('caller abort listeners detach after resolution, cancellation and final deferred outline', async (t) => {
+  const { getEventListeners } = await import('node:events');
+  installAnimationFrameStubs(t);
+  const { renderer } = fakeRenderer();
+  const late = deferredAnnotation();
+  const engine = createAnnotationEngine({ viewer: {}, renderer, resolveTarget: async ({ target }) => ({
+    ...cancellationAnchor,
+    ...(target === 'Outline' ? { resolveOutline: () => late.promise } : {}),
+  }) });
+  t.after(() => engine.clear());
+  for (const target of ['Plain', 'Outline']) {
+    const owner = new AbortController();
+    await engine.annotate([{ type: 'area', target }], { signal: owner.signal });
+    assert.equal(getEventListeners(owner.signal, 'abort').length, target === 'Plain' ? 0 : 1);
+    if (target === 'Outline') {
+      late.resolve(null);
+      await flushMicrotasks();
+      assert.equal(getEventListeners(owner.signal, 'abort').length, 0);
+    }
+  }
+  const unresolved = deferredAnnotation();
+  const cancelledEngine = createAnnotationEngine({ viewer: {}, renderer, resolveTarget: () => unresolved.promise });
+  const owner = new AbortController();
+  const work = cancelledEngine.annotate([{ target: 'Never settles' }], { signal: owner.signal });
+  owner.abort();
+  await work;
+  assert.equal(getEventListeners(owner.signal, 'abort').length, 0);
+});
+
+test('cancelled arrow and route do not begin the next lookup after a non-cooperative late anchor', async (t) => {
+  installAnimationFrameStubs(t);
+  for (const spec of [
+    { type: 'arrow', target: 'From', toTarget: 'To' },
+    { type: 'route', points: [{ target: 'From' }, { target: 'To' }] },
+  ]) {
+    const { renderer, calls } = fakeRenderer();
+    const late = deferredAnnotation();
+    const targets = [];
+    const engine = createAnnotationEngine({ viewer: {}, renderer, resolveTarget: ({ target }) => {
+      targets.push(target);
+      return late.promise;
+    } });
+    const owner = new AbortController();
+    const pending = engine.annotate([spec], { signal: owner.signal });
+    owner.abort();
+    assert.equal((await pending).cancelled, true);
+    late.resolve(cancellationAnchor);
+    await flushMicrotasks();
+    assert.deepEqual(targets, ['From']);
+    assert.equal(calls.add, 0);
+  }
+});
+
+test('aborting deferred outline backoff settles without another resolver attempt', async () => {
+  const owner = new AbortController();
+  const waiting = deferredAnnotation();
+  const entered = deferredAnnotation();
+  let attempts = 0;
+  const pending = resolveOutlineWithRetry(async () => { attempts++; return undefined; }, {
+    delaysMs: [8000],
+    signal: owner.signal,
+    waitFn(ms, signal) {
+      assert.equal(ms, 8000);
+      assert.equal(signal, owner.signal);
+      entered.resolve();
+      return waiting.promise;
+    },
+  });
+  await entered.promise;
+  owner.abort();
+  assert.equal(await pending, undefined);
+  waiting.resolve();
+  await flushMicrotasks();
+  assert.equal(attempts, 1);
+});
+
+test('AbortError in one batch item promptly settles its non-cooperative sibling', async (t) => {
+  installAnimationFrameStubs(t);
+  const { renderer, calls } = fakeRenderer();
+  const never = deferredAnnotation();
+  const engine = createAnnotationEngine({ viewer: {}, renderer, resolveTarget: async ({ target }) => {
+    if (target === 'Abort') throw new DOMException('Cancelled lookup', 'AbortError');
+    return never.promise;
+  } });
+  const result = await engine.annotate([{ target: 'Abort' }, { target: 'Never' }]);
+  assert.equal(result.cancelled, true);
+  assert.equal(result.failed, 0);
+  assert.equal(calls.add, 0);
+});

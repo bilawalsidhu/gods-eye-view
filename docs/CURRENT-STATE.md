@@ -1,5 +1,98 @@
 # God's Eye View Current State
 
+Authoritative typed input and OpenAI speech longer than 500 characters after
+policy normalization are unverified: tool dispatch asks for a shorter command.
+Later authoritative input can cancel cooperative preparation and the same input's
+deferred Radio playback; completed layer changes or station selection remain
+reported truthfully. This limit refusal does not infer a provider request or
+change providers.
+
+OpenAI admits each nonempty provider speech-input ID once per owned connection
+lifetime, before input, tool, narration or response-queue effects. Stop/reset
+clears that exact admission history; storage grows with admitted inputs and ID
+bytes. A newer local input or Stop from an observer prevents the older onset
+from overwriting it. An admitted onset superseded before becoming current is
+remembered only as retired for its later real commit: it grants no authority
+and reserves no response early. Existing input-record and response-queue limits
+are unchanged.
+
+OpenAI explicitly requested typed and tool-follow-up responses carry a client
+request ID in response metadata. Their returned IDs select only that original
+request; untagged automatic responses use speech-commit slots and cannot borrow
+typed authority. Unknown or malformed client IDs fail stale. Deferred requests
+retain their input identity, and Stop or newer input invalidates old captures.
+A tool follow-up retains the requesting response's record rather than borrowing
+another current input. Gemini keeps its separate existing response binding.
+OpenAI response-creation IDs are also admitted once per owned lifetime, before
+binding, narration, metrics or response bookkeeping. Other distinct events for
+the response continue normally. This exact history grows with response count
+and ID bytes and is cleared on Stop/reset. Rejection cleanup completes before
+callbacks that may submit newer input, preserving that input without retrying
+the rejected request.
+
+Voice retains authentic user-turn identity when OpenAI input transcription is
+explicitly disabled or fails. Gemini native tool calls use current socket,
+session, local-turn and call ownership; unordered input captions are advisory
+and cannot grant or revoke tool authority. First-party typed input remains
+authoritative through deferred delivery and same-turn continuation until new
+input or Stop supersedes it. An accepted fresh `set_voice_provider` call refuses
+tools that have not started in that local turn without undoing completed work.
+Provider selection remains manual. Built-in embed instructions default to
+host-neutral guidance; standalone opts into its chooser. Hosts with fewer than
+two distinct usable provider options hide the chooser and retain neutral guidance.
+Failed tool output retains bounded, redacted reason data with static follow-up
+instructions. Gemini boundary waits use its injected clock.
+Native Gemini call IDs must be nonempty protocol strings of at most 1,024
+characters, without control characters. Their exact identities stay retired for
+the socket lifetime. At the 256-identity budget, another new identity ends the
+session with a visible restart instruction before any batch action is queued;
+old identities are never evicted to admit replays.
+
+Gemini sentence-level voice activity does not by itself prove a reply is being
+generated. Local activity bookkeeping keeps an expiring session open for a
+possible reply; it does not identify server generations or authorize tools.
+An older retired completion preserves newer submitted input. A native terminal
+completion also settles a silent user turn, while tools and queued audio still
+delay presentation completion. Noise-only activity can wait until the native
+expiry deadline with the microphone muted; no shorter recovery timer is added.
+See [voice ownership](VOICE-OWNERSHIP.md) for deferred-input and protocol limits.
+
+Gemini push-to-talk suppresses empty and near-silent captures before submitting
+context, activity markers or audio. Sustained input energy admits bounded
+pre-roll and the rest of that hold; release still flushes its tail. Physical
+Space holds silence local playback and revoke pending Radio handoff. Only
+admitted speech retires the current provider/tool turn; a silent hold does not
+create a provider reply or a native-boundary wait. This is an energy floor, not speech recognition or a
+guarantee against loud background noise. Open-mic behavior is unchanged.
+On narrow or short screens, transient toast notices are positioned above the
+bottom voice controls rather than covering the provider selector.
+
+Gemini retires old replies before forwarding deferred input. Output refreshes
+the five-second retirement inactivity bound; deferred-input deadlines remain
+absolute. New input, Stop and provider replacement revoke older work. Existing
+map-stack work lacks caller cancellation. Pending annotation lookups and deferred
+outlines now share the voice call's cancellation signal; committed marks and
+unrelated annotation work survive. Stronger Gemini Radio controls start without
+waiting for an older pending selection; successful controls cancel covered work
+without treating siblings as a new turn or erasing committed selection. “Turn
+Radio on” enables its layer without starting audio; playback requires an explicit
+play, listen or resume request. Radio playback suspends active voice; pausing or
+disabling Radio resumes that same session preference only when Radio interrupted
+it. Manual playback follows the same rule, without a playback-duration limit.
+Provider replacement and explicit voice Stop cancel automatic resume; manual
+voice startup pauses Radio. A toast explains when Radio playback stops voice.
+A previously inactive voice session stays off when Radio stops. Local regression checks
+do not establish provider startup or browser/audio acceptance.
+
+OpenAI ends an owned session after more than 16 unmatched response reservations
+with a visible restart-required error. It preserves ordered correlation and
+requires explicit restart rather than dropping old provenance or reconnecting.
+OpenAI provider text arriving after a synchronous action committed cannot
+retroactively prevent that change; later tools remain blocked.
+Provider classification recognizes sentence punctuation at finalized segment
+boundaries while retaining quoted, negated, compound and non-voice-provider
+exclusions.
+
 Vessel sources can report healthy empty coverage using a current, complete
 snapshot with zero raw rows, a healthy transport and a positive last-message
 time. This clears obsolete contacts and settles startup without manufacturing
@@ -5661,3 +5754,32 @@ datacenters, dams and the Nepal locator retain that shared credit while displaye
 
 Military fragments stitch by source identity. Different mapped parcels merge only
 when their footprints touch or contain one another, never across a seam tolerance gap.
+
+### Gemini Live provider integration
+
+OpenAI admits each nonempty provider speech item ID once per connection lifetime,
+so duplicate or previously admitted starts cannot retire current input, abort its
+tools, restart narration or drop a queued typed request. The exact ID history is
+retained until Stop/reset rather than evicting older IDs; memory grows with the
+number and total size of admitted IDs in that lifetime. New unseen input still
+supersedes earlier work. Observer-triggered Stop, replacement or newer typed
+input cannot be overwritten when the earlier onset callback resumes.
+
+Typed input keeps its own request identity across an interruption acknowledgment
+for a locally known, unobserved Gemini automatic activity. This single-use
+predecessor record does not treat captions as authority or make VAD alone wait
+for a generated reply. It expires on successor output, completion or newer input;
+later unattributed interruption markers retain the existing interruption policy.
+A genuine new automatic speech onset also revokes typed input when it arrives
+separately during that predecessor wait, without adding another retirement wait.
+On OpenAI, a newer speech onset discards a typed response still waiting to be sent;
+a deferred typed response with no newer input still answers once. The discarded
+request may go unanswered if the superseding speech is noise or gets no response.
+
+Standalone voice supports OpenAI and Gemini; embedded hosts default to OpenAI and opt into Gemini through `voice.supportedProviders`. The provider dropdown uses the existing microphone control and result card. Manual selection reconnects an active session in its prior input mode; push-to-talk stays muted until a fresh Space hold. Voice that was off stays off.
+
+Gemini uses a separate server-side `GEMINI_API_KEY` and one-session ephemeral credentials from `/api/gemini/token`. Device-rate microphone capture is resampled to 16 kHz; playback uses a separate 24 kHz context. Microphone permission precedes token minting. Bounded control queues, retired replies and pending tool actions are invalidated on interruption, Stop, replacement and teardown; input capture identities follow the physical microphone gate and end on Stop, replacement and teardown rather than on every interruption. `goAway` stops new turns and drains the current reply until completion or its supplied deadline, then requires an explicit restart.
+
+Both providers use the shared action schemas, tool-result policy, pointer context and Radio ownership. Successful Radio playback, voice-requested or manual, suspends active voice and shows a toast; pausing, stopping or disabling that Radio resumes the prior voice mode once, with no time limit. Radio-only station, tuner and volume changes keep the lease; a tuner drag that ends paused without a new station also resumes voice. Explicit voice Stop, starting voice, provider replacement and teardown revoke it.
+
+Clear standalone provider-switch requests receive the fixed spoken dropdown guidance; neither provider can change the selected provider through a tool. Ambiguous, quoted, negated, conditional and compound text remains ordinary conversation. The separate API-key setup entry remains available; the core provider does not add a Voice Settings panel or voice actions for opening key setup.

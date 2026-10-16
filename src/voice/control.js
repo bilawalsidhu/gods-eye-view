@@ -11,6 +11,13 @@ export function createVoiceControl({ reset = false } = {}) {
     root.dataset.status = 'idle';
     root.dataset.speaker = 'idle';
     root.innerHTML = `
+      <label id="gev-voice-provider-field" class="gev-voice-provider-field" hidden>
+        <span>VOICE PROVIDER</span>
+        <select id="gev-voice-provider" aria-label="Voice provider" title="Changing provider reconnects voice if it is on">
+          <option value="openai">OpenAI</option>
+          <option value="gemini">Gemini</option>
+        </select>
+      </label>
       <div class="gev-voice-heading">
         <div class="gev-voice-kicker">AI AGENT</div>
         <div id="gev-voice-status">OFF</div>
@@ -40,6 +47,7 @@ export function createVoiceControl({ reset = false } = {}) {
           <button id="gev-voice-card-dismiss" class="gev-voice-card-dismiss" type="button" aria-label="Dismiss voice card">×</button>
         </div>
         <p id="gev-voice-card-user" class="gev-voice-card-caption" data-role="user" hidden><span class="gev-voice-card-who">YOU</span><span id="gev-voice-card-user-text" class="gev-voice-card-text"></span></p>
+        <p id="gev-voice-card-recent-speech" class="gev-voice-card-caption" data-role="user" hidden aria-label="Recent speech, unverified"><span class="gev-voice-card-kicker">RECENT SPEECH</span><span id="gev-voice-card-recent-speech-text" class="gev-voice-card-text"></span></p>
         <p id="gev-voice-card-pointer" class="gev-voice-card-pointer" hidden><span id="gev-voice-card-pointer-kind" class="gev-voice-card-who">THIS</span><span class="gev-voice-card-sr">: </span><span id="gev-voice-card-pointer-text" class="gev-voice-card-pointer-label"></span></p>
         <p id="gev-voice-card-assistant" class="gev-voice-card-caption" data-role="assistant" hidden><span class="gev-voice-card-who">GEV</span><span id="gev-voice-card-assistant-text" class="gev-voice-card-text"></span></p>
         <ol id="gev-voice-card-plan" class="gev-voice-card-plan" aria-label="Plan" hidden></ol>
@@ -82,6 +90,9 @@ export function createVoiceControl({ reset = false } = {}) {
   }
   return {
     root,
+    providerField: root.querySelector('#gev-voice-provider-field'),
+    providerSelect: root.querySelector('#gev-voice-provider'),
+    errorHint: root.querySelector('.gev-voice-error-hint'),
     button: root.querySelector('#gev-voice-button'),
     buttonLabel: root.querySelector('.gev-mic-label'),
     status: root.querySelector('#gev-voice-status'),

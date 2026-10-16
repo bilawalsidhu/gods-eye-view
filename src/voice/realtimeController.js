@@ -121,6 +121,12 @@ export class GevRealtimeController extends RealtimeFacade {
         abortTools: () => this._turns.abortTools(),
         isActive: (...args) => this.isActive(...args),
         stop: (...args) => this.stop(...args),
+        readVoiceResumeSettings: () => ({
+          pushToTalk: Boolean(this.pushToTalkMode),
+        }),
+        resumeVoice: (settings) => this.start(settings),
+        notifyVoiceSuspended: ({ reason }) =>
+          this.emitSessionEvent({ type: 'voice-suspended', reason }),
         setStatus: (...args) => this.setStatus(...args),
         queueResponseCreate: (...args) => this.queueResponseCreate(...args),
         debugLog: (...args) => this.debugLog(...args),
@@ -135,6 +141,10 @@ export class GevRealtimeController extends RealtimeFacade {
         setStatus: (...args) => this.setStatus(...args),
         debugLog: (...args) => this.debugLog(...args),
         stop: (...args) => this.stop(...args),
+        readVoiceResumeSettings: () => ({
+          pushToTalk: Boolean(this.pushToTalkMode),
+        }),
+        resumeVoice: (settings) => this.start(settings),
       },
     });
     this._input = new RealtimeInput({
@@ -201,6 +211,10 @@ export class GevRealtimeController extends RealtimeFacade {
         startPendingRadioHandoff: (...args) =>
           this.startPendingRadioHandoff(...args),
         stop: (...args) => this.stop(...args),
+        readVoiceResumeSettings: () => ({
+          pushToTalk: Boolean(this.pushToTalkMode),
+        }),
+        resumeVoice: (settings) => this.start(settings),
       },
     });
     // Progress narration: spoken lines go out of band through the turns
@@ -224,9 +238,15 @@ export class GevRealtimeController extends RealtimeFacade {
       input: this._input,
       cost: this._cost,
       operations: {
+        bindTranscriptionModel: (model) =>
+          this._turns.bindTranscriptionModel(model),
         isActive: (...args) => this.isActive(...args),
         pauseRadioForVoice: (...args) => this.pauseRadioForVoice(...args),
         stop: (...args) => this.stop(...args),
+        readVoiceResumeSettings: () => ({
+          pushToTalk: Boolean(this.pushToTalkMode),
+        }),
+        resumeVoice: (settings) => this.start(settings),
         syncCostUi: (...args) => this.syncCostUi(...args),
         setStatus: (...args) => this.setStatus(...args),
         debugLog: (...args) => this.debugLog(...args),
@@ -261,8 +281,8 @@ export class GevRealtimeController extends RealtimeFacade {
    * repeated.
    * @param {'keydown'|'speech_start'|'text'} at
    */
-  beginPointerTurn(at) {
-    if (!this.pointer) return null;
+  beginPointerTurn(at, { isCurrent = () => true } = {}) {
+    if (!this.pointer || !isCurrent()) return null;
     this._viewport.beginTurn();
     // A speech start after the Space release belongs to the gesture that
     // just ended; it must not re-read a pointer that has since moved.
@@ -283,6 +303,7 @@ export class GevRealtimeController extends RealtimeFacade {
     } catch {
       snapshot = null;
     }
+    if (!isCurrent()) return null;
     const chip = pointerChip(snapshot);
     this.pointerAnnounced = gesture && chip ? snapshot : null;
     this.emitSessionEvent({
@@ -290,6 +311,7 @@ export class GevRealtimeController extends RealtimeFacade {
       pointer:
         gesture && chip ? { ...chip, screenPx: snapshot.screenPx } : null,
     });
+    if (!isCurrent()) return null;
     const item = !chip
       ? this.pointerSentKey && this.pointerSentKey !== POINTER_NONE_KEY
         ? { type: 'pointer_context', at, target: 'none' }
@@ -306,7 +328,7 @@ export class GevRealtimeController extends RealtimeFacade {
     const { at: _at, ...content } = item;
     const key = chip ? JSON.stringify(content) : POINTER_NONE_KEY;
     if (key === this.pointerSentKey) return snapshot;
-    if (this._turns.notifyMapEvent(item)) {
+    if (this._turns.notifyMapEvent(item, { isCurrent }) && isCurrent()) {
       this.pointerSentKey = key;
       this.debugLog('pointer.context', {
         at,

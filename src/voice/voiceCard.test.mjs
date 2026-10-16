@@ -231,3 +231,92 @@ test('presentation: stale and unmatched events never reopen the card', () => {
   const both = reduceVoiceCard(first, { type: 'outline', id: 'anno-2', status: 'failed' });
   assert.equal(voiceCardView(both).steps[0].detail, 'Outline unavailable');
 });
+
+test('presentation: only explicit unverified user deltas append, preserving fragment spacing', () => {
+  const delta = (text) => ({
+    type: 'transcript',
+    role: 'user',
+    text,
+    delta: true,
+    attribution: 'unverified',
+    final: false,
+  });
+  let state = fold([
+    { type: 'interruption' },
+    delta('Zoom '),
+    delta('in '),
+    delta('a little.'),
+  ]);
+  assert.equal(voiceCardView(state).user.text, 'Zoom in a little.');
+  state = reduceVoiceCard(state, {
+    type: 'transcript',
+    role: 'user',
+    text: 'An ordinary full snapshot',
+    final: true,
+  });
+  assert.equal(voiceCardView(state).user.text, 'An ordinary full snapshot');
+  state = reduceVoiceCard(state, {
+    type: 'transcript',
+    role: 'user',
+    text: 'A replacement',
+    delta: true,
+  });
+  assert.equal(
+    voiceCardView(state).user.text,
+    'A replacement',
+    "a delta flag alone cannot change another provider's snapshot contract",
+  );
+  state = reduceVoiceCard(state, { type: 'interruption' });
+  state = reduceVoiceCard(state, delta('A new '));
+  state = reduceVoiceCard(state, delta('request'));
+  assert.equal(voiceCardView(state).user.text, 'A new request');
+  state = reduceVoiceCard(state, delta(' x'.repeat(300)));
+  assert.ok(state.user.length <= 220);
+  assert.ok(voiceCardView(state).user.text.startsWith('…'));
+});
+
+test('presentation: native server acknowledgment keeps advisory pieces separate from the current preview', () => {
+  const delta = (text) => ({
+    type: 'transcript', role: 'user', text,
+    delta: true, attribution: 'unverified', final: false,
+  });
+  const acknowledgment = { type: 'interruption', preserveAdvisoryCaption: true };
+  let state = fold([{ type: 'interruption' }, delta('Zoom '), acknowledgment]);
+  assert.equal(voiceCardView(state).recentSpeech.text, 'Zoom');
+  state = reduceVoiceCard(state, acknowledgment);
+  assert.equal(voiceCardView(state).recentSpeech.text, 'Zoom', 'empty duplicate acknowledgments do not duplicate history');
+  state = reduceVoiceCard(state, delta('in a little.'));
+  assert.equal(voiceCardView(state).user.text, 'in a little.');
+  assert.equal(voiceCardView(state).recentSpeech.text, 'Zoom', 'earlier pieces stay inspectable without being joined to a new command');
+  state = reduceVoiceCard(state, { type: 'user-caption-reset' });
+  assert.equal(voiceCardView(state).recentSpeech.visible, false);
+  assert.equal(voiceCardView(state).user.text, '…');
+  state = reduceVoiceCard(state, {
+    type: 'transcript', role: 'user', text: 'An ordinary full snapshot', final: true,
+  });
+  state = reduceVoiceCard(state, acknowledgment);
+  assert.equal(voiceCardView(state).recentSpeech.visible, false,
+    'ordinary OpenAI or typed snapshots never become unverified recent speech');
+  state = reduceVoiceCard(state, {
+    type: 'transcript', role: 'user', text: 'An ordinary full snapshot', final: true,
+  });
+  state = reduceVoiceCard(state, delta('Zoom '));
+  state = reduceVoiceCard(state, acknowledgment);
+  assert.equal(voiceCardView(state).recentSpeech.text, 'Zoom',
+    'a later advisory delta cannot carry an ordinary snapshot into recent speech');
+
+  const { root, nodes } = fakeRoot();
+  const card = new VoiceCardControls({ root });
+  card.handle({ type: 'interruption' });
+  card.handle(delta('Zoom '));
+  card.handle(acknowledgment);
+  card.handle(delta('in a little.'));
+  assert.equal(nodes.get('gev-voice-card-recent-speech').hidden, false);
+  assert.equal(nodes.get('gev-voice-card-recent-speech-text').textContent, 'Zoom');
+  assert.equal(nodes.get('gev-voice-card-user-text').textContent, 'in a little.');
+  card.handle({ type: 'state', state: 'idle' });
+  assert.equal(nodes.get('gev-voice-card-recent-speech').hidden, true);
+  card.destroy();
+  assert.match(controlSource, /id="gev-voice-card-recent-speech"[^>]*aria-label="Recent speech, unverified"/);
+  assert.match(controlSource, /RECENT SPEECH/);
+});

@@ -754,6 +754,7 @@ test('generic layer visibility forwards cancellation and reports semantic failur
   let lifecycle = { enabled: false, lifecycleState: 'disabled', uncertain: false };
   let releaseEnable;
   let receivedSignal = null;
+  let receivedAborts = 0;
   const pendingEnable = new Promise((resolve) => { releaseEnable = resolve; });
   const dataManager = {
     layers: new Map([['radio', { module: {} }]]),
@@ -762,6 +763,7 @@ test('generic layer visibility forwards cancellation and reports semantic failur
     getAll: () => [{ id: 'radio', name: 'Radio' }],
     async setEnabled(_id, value, options) {
       receivedSignal = options.signal;
+      options.signal.addEventListener('abort', () => { receivedAborts++; }, { once: true });
       await pendingEnable;
       if (!options.signal?.aborted) enabled = value;
       return !options.signal?.aborted;
@@ -773,10 +775,14 @@ test('generic layer visibility forwards cancellation and reports semantic failur
     signal: controller.signal,
     isCurrent: () => !controller.signal.aborted,
   });
+  assert.ok(receivedSignal instanceof AbortSignal);
+  assert.equal(receivedSignal.aborted, false);
   controller.abort();
+  assert.equal(receivedSignal.aborted, true, 'caller abort reaches the resource signal immediately');
+  assert.equal(receivedSignal.reason, controller.signal.reason);
+  assert.equal(receivedAborts, 1);
   releaseEnable();
   const cancelled = await work;
-  assert.equal(receivedSignal, controller.signal);
   assert.equal(cancelled.ok, false);
   assert.equal(cancelled.cancelled, true);
   assert.equal(cancelled.enabled, false);
@@ -1109,11 +1115,16 @@ test('generic voice visibility maps Space Missions to the explicit mission layer
   });
   const result = await runner('set_layer_visibility', { layerId: 'space missions', enabled: true });
   assert.equal(result.ok, true);
+  const resourceSignal = calls[0][2].signal;
+  assert.ok(resourceSignal instanceof AbortSignal);
+  assert.equal(resourceSignal.aborted, false);
   assert.deepEqual(calls, [
-    ['rocket-launches', true, { origin: 'voice' }],
+    ['rocket-launches', true, { origin: 'voice', signal: resourceSignal }],
     ['context-settled'],
   ]);
   assert.equal(contextSettled, true);
+  runner.resetConversation();
+  assert.equal(resourceSignal.aborted, true, 'a call without a caller signal still belongs to the conversation');
 });
 
 test('voice CCTV focus reports tracking ownership separately from no active camera', () => {
@@ -1520,6 +1531,9 @@ test('set_context_mode forwards cancellation authority and reports a stale turn'
     setPanelCollapsed() {},
     async setContextMode(_mode, options) {
       receivedOptions = options;
+      assert.ok(options.signal instanceof AbortSignal);
+      assert.equal(options.signal.aborted, false);
+      assert.equal(options.isCurrent(), true);
       controller.abort();
       return { ok: false, mode: null };
     },
@@ -1538,7 +1552,9 @@ test('set_context_mode forwards cancellation authority and reports a stale turn'
     signal: controller.signal,
     isCurrent: () => !controller.signal.aborted,
   });
-  assert.equal(receivedOptions.signal, controller.signal);
+  assert.equal(receivedOptions.signal.aborted, true);
+  assert.equal(receivedOptions.signal.reason, controller.signal.reason);
+  assert.equal(receivedOptions.isCurrent(), false);
   assert.equal(result.ok, false);
   assert.equal(result.cancelled, true);
   // State output speaks the tools' own vocabulary: no context reads as 'off',
@@ -1548,6 +1564,70 @@ test('set_context_mode forwards cancellation authority and reports a stale turn'
   assert.equal(result.active, false);
   assert.equal(result.changing, false);
 });
+
+for (const lifetimeEnd of ['resetConversation', 'dispose']) {
+  test(`runner ${lifetimeEnd} aborts a pending Context resource and retires its currentness`, async () => {
+    const { viewer } = createVoiceNavigationHarness();
+    const caller = new AbortController();
+    let callerCurrent = true;
+    const resources = [];
+    const styleManager = {
+      getContextModeState: () => ({ mode: null, active: false, changing: false }),
+      setPanelCollapsed() {},
+      setContextMode(mode, options) {
+        const resource = { mode, options, aborts: 0 };
+        resources.push(resource);
+        if (resources.length > 1) return { ok: true, mode, active: true, changing: false };
+        return new Promise((resolve) => options.signal.addEventListener('abort', () => {
+          resource.aborts++;
+          resolve({ ok: false, mode: null });
+        }, { once: true }));
+      },
+    };
+    const runner = createGevActionRunner({
+      viewer, styleManager, dataManager: { layers: new Map(), getAll: () => [] },
+    });
+    const options = { signal: caller.signal, isCurrent: () => callerCurrent };
+    const pending = runner('set_context_mode', { mode: 'contacts' }, options);
+    const resource = resources[0];
+    assert.equal(resource.options.signal.aborted, false);
+    assert.equal(resource.options.isCurrent(), true);
+    callerCurrent = false;
+    assert.equal(resource.options.isCurrent(), false, 'caller currentness still limits the combined owner');
+    callerCurrent = true;
+    assert.equal(resource.options.isCurrent(), true);
+    runner[lifetimeEnd]();
+    assert.equal(resource.options.signal.aborted, true, 'conversation lifetime reaches the actual resource signal');
+    assert.equal(resource.options.signal.reason.name, 'AbortError');
+    assert.equal(resource.aborts, 1);
+    assert.equal(resource.options.isCurrent(), false);
+    assert.equal(caller.signal.aborted, false, 'retiring the conversation does not abort the caller controller');
+    const cancelled = await pending;
+    assert.equal(cancelled.ok, false);
+    assert.equal(cancelled.cancelled, true);
+    assert.equal(cancelled.mode, 'off');
+    assert.equal(cancelled.modeInternal, null);
+    assert.equal(cancelled.active, false);
+    assert.equal(cancelled.changing, false);
+
+    const successor = await runner('set_context_mode', { mode: 'contacts' }, options);
+    if (lifetimeEnd === 'dispose') {
+      assert.equal(successor.ok, false);
+      assert.equal(successor.cancelled, true);
+      assert.equal(resources.length, 1, 'dispose prevents another resource from starting');
+    } else {
+      assert.equal(successor.ok, true);
+      assert.equal(resources.length, 2);
+      assert.equal(resources[1].options.signal.aborted, false);
+      assert.equal(resources[1].options.isCurrent(), true);
+      assert.equal(resource.options.isCurrent(), false, 'successor creation cannot revive retired currentness');
+      caller.abort();
+      assert.equal(resources[1].options.signal.aborted, true, 'the successor still receives caller abort');
+      runner.dispose();
+      assert.equal(resources[1].options.isCurrent(), false);
+    }
+  });
+}
 
 test('opening Contacts expands Context before activation and returns its settled aircraft window', async () => {
   globalThis.window = globalThis.window || { clearTimeout, setTimeout, requestIdleCallback: null };
@@ -3928,4 +4008,308 @@ test('analyst-only lookup distinguishes duplicate names and uses canonical aircr
   const plane = await runner('fly_to_location', { referent: 1 });
   assert.equal(plane.ok, true);
   assert.equal(plane.latitude, 36, 'canonical ID resolves the current position, not old coordinates');
+});
+
+import { createVoiceUserTurnTracker } from './userTurnIntent.js';
+
+test('voice provider selection is refused because only the manual dropdown has authority', async () => {
+  const calls = [];
+  const { viewer, styleManager } = createVoiceNavigationHarness();
+  const runner = createActionRunner({
+    viewer,
+    styleManager,
+    readVoiceCommands: () => ({
+      provider: 'openai',
+      requestProviderChange(provider) {
+        calls.push(provider);
+        return {
+          ok: true,
+          changed: true,
+          pending: true,
+          previousProvider: 'openai',
+        };
+      },
+    }),
+  });
+
+  assert.deepEqual(
+    await runner(
+      'set_voice_provider',
+      { provider: 'gemini' },
+      { providerDropdown: true },
+    ),
+    {
+      ok: false,
+      action: 'set_voice_provider',
+      provider: 'gemini',
+      changed: false,
+      pending: false,
+      error:
+        'I can’t switch voice providers directly. Hover over the Voice panel and use the provider dropdown.',
+      say: 'I can’t switch voice providers directly. Hover over the Voice panel and use the provider dropdown.',
+    },
+  );
+  assert.deepEqual(calls, []);
+});
+
+test('an authenticated provider request blocks attempted app actions', async () => {
+  const applied = [];
+  const { viewer, styleManager } = createVoiceNavigationHarness();
+  styleManager.setPanelCollapsed = (...args) => applied.push(args);
+  const runner = createActionRunner({ viewer, styleManager });
+  const tracker = createVoiceUserTurnTracker();
+  tracker.text('Switch to Gemini');
+  tracker.expectResponse();
+  tracker.bindResponse('provider-request');
+  const blocked = await runner(
+    'set_panel_open',
+    { panelId: 'radio-panel', open: true },
+    {
+      userTurn: tracker.forResponse('provider-request'),
+      providerDropdown: true,
+    },
+  );
+  assert.equal(blocked.ok, false);
+  assert.equal(blocked.providerRequestBlocked, true);
+  assert.equal(blocked.changed, false);
+  assert.match(blocked.say, /use the provider dropdown/);
+  assert.deepEqual(applied, []);
+  tracker.text('Open Radio');
+  tracker.expectResponse();
+  tracker.bindResponse('ordinary-request');
+  assert.equal(
+    (
+      await runner(
+        'set_panel_open',
+        { panelId: 'radio-panel', open: true },
+        { userTurn: tracker.forResponse('ordinary-request') },
+      )
+    ).ok,
+    true,
+  );
+  assert.deepEqual(applied, [['radio-panel', false, { explicit: true }]]);
+});
+
+test('removed voice panel routes reject before changing panel state', async () => {
+  const { viewer, styleManager } = createVoiceNavigationHarness();
+  const changed = [];
+  styleManager.setPanelCollapsed = (...args) => changed.push(args);
+  const runner = createActionRunner({ viewer, styleManager });
+  for (const panelId of [
+    'voice-settings',
+    'voice-preview',
+    'provider-settings',
+  ]) {
+    await assert.rejects(
+      runner('set_panel_open', { panelId, open: true }),
+      /Unknown panel/,
+    );
+  }
+  assert.deepEqual(changed, []);
+});
+
+test('benign voice settings do not quarantine unrelated app actions through the actual runner', async () => {
+  const applied = [];
+  const { viewer, styleManager } = createVoiceNavigationHarness();
+  styleManager.setPanelCollapsed = (...args) => applied.push(args);
+  const runner = createActionRunner({ viewer, styleManager });
+  for (const text of [
+    'set the voice volume to 50',
+    'set the voice speed to fast',
+    'set provider to bing maps',
+    'change the voice to a british accent',
+    'switch the provider to google maps',
+    'set provider to bing',
+  ]) {
+    const tracker = createVoiceUserTurnTracker();
+    tracker.text(text);
+    tracker.expectResponse();
+    tracker.bindResponse('ordinary');
+    const result = await runner(
+      'set_panel_open',
+      { panelId: 'radio-panel', open: true },
+      { userTurn: tracker.forResponse('ordinary') },
+    );
+    assert.equal(result.ok, true, text);
+    assert.equal(result.providerRequestBlocked, undefined, text);
+  }
+  assert.equal(applied.length, 6);
+});
+
+test('embedded runner gives neutral provider guidance and never opens unavailable settings', async () => {
+  const applied = [];
+  const { viewer, styleManager } = createVoiceNavigationHarness();
+  styleManager.setPanelCollapsed = (...args) => applied.push(args);
+  const runner = createActionRunner({ viewer, styleManager });
+  const tracker = createVoiceUserTurnTracker();
+  tracker.text('switch to Gemini');
+  tracker.expectResponse();
+  tracker.bindResponse('embed');
+  const result = await runner(
+    'set_panel_open',
+    { panelId: 'radio-panel', open: true },
+    { userTurn: tracker.forResponse('embed') },
+  );
+  assert.equal(result.providerRequestBlocked, true);
+  assert.doesNotMatch(result.say, /dropdown|Settings|Hover/);
+  assert.deepEqual(applied, []);
+});
+
+test('a late provider fragment aborts real manager initialization before visibility commits', async () => {
+  for (const [name, layerId, args] of [
+    [
+      'set_layer_visibility',
+      'earthquakes',
+      { layerId: 'earthquakes', enabled: true },
+    ],
+    ['control_cctv', 'cctv', { action: 'enable' }],
+  ]) {
+    const { viewer, styleManager } = createVoiceNavigationHarness();
+    const manager = new DataLayerManager(viewer);
+    let releaseInit;
+    let enteredInit;
+    const started = new Promise((resolve) => {
+      enteredInit = resolve;
+    });
+    const pending = new Promise((resolve) => {
+      releaseInit = resolve;
+    });
+    const calls = [];
+    manager.register({
+      id: layerId,
+      name: 'Earthquakes',
+      updateInterval: -1,
+      async init() {
+        enteredInit();
+        await pending;
+      },
+      async enable() {
+        calls.push('enable');
+      },
+      async disable() {
+        calls.push('disable');
+      },
+      async update() {},
+      getStats: () => ({ count: 0 }),
+    });
+    const events = [];
+    manager.subscribe((event) => events.push(event));
+    const run = createActionRunner({
+      viewer,
+      styleManager,
+      dataManager: manager,
+    });
+    const tracker = createVoiceUserTurnTracker();
+    tracker.speechStarted('speech');
+    tracker.appendSpeechSegment('speech', 'switch voice');
+    tracker.commitSpeech('speech');
+    tracker.bindResponse('reply');
+    const userTurn = tracker.forResponse('reply');
+    const result = run(name, args, { userTurn });
+    await started;
+    tracker.appendSpeechSegment('speech', 'provider to Gemini');
+    releaseInit();
+    const blocked = await result;
+    assert.equal(manager.isEnabled(layerId), false);
+    assert.equal(
+      events.some((event) => event.type === 'visibility' && event.enabled),
+      false,
+    );
+    assert.equal(calls.includes('enable'), false);
+    assert.equal(blocked.ok, false);
+    assert.equal(blocked.providerRequestBlocked, true);
+    assert.equal(
+      (await run(name, args, { userTurn })).providerRequestBlocked,
+      true,
+    );
+    tracker.text('show earthquakes');
+    tracker.expectResponse();
+    tracker.bindResponse('fresh');
+    assert.equal(
+      (await run(name, args, { userTurn: tracker.forResponse('fresh') })).ok,
+      true,
+    );
+    assert.equal(manager.isEnabled(layerId), true);
+    await manager.setEnabled(layerId, false);
+  }
+});
+
+test('provider fragments after a visibility commit preserve its truthful result and block siblings', async () => {
+  const { viewer } = createVoiceNavigationHarness();
+  const manager = new DataLayerManager(viewer);
+  manager.register({
+    id: 'rocket-launches',
+    name: 'Missions',
+    updateInterval: -1,
+    async init() {},
+    async enable() {},
+    async disable() {},
+    async update() {},
+    getStats: () => ({ count: 0 }),
+  });
+  let committed;
+  const commit = new Promise((resolve) => {
+    committed = resolve;
+  });
+  manager.subscribe((event) => {
+    if (event.type === 'visibility' && event.enabled) committed();
+  });
+  let release;
+  const settlement = new Promise((resolve) => {
+    release = resolve;
+  });
+  const run = createActionRunner({
+    viewer,
+    dataManager: manager,
+    styleManager: { _waitForContextLayerSettlement: () => settlement },
+  });
+  const tracker = createVoiceUserTurnTracker();
+  tracker.speechStarted('speech');
+  tracker.appendSpeechSegment('speech', 'switch voice');
+  tracker.commitSpeech('speech');
+  tracker.bindResponse('reply');
+  const userTurn = tracker.forResponse('reply');
+  const pending = run(
+    'set_layer_visibility',
+    { layerId: 'rocket-launches', enabled: true },
+    { userTurn },
+  );
+  await commit;
+  tracker.appendSpeechSegment('speech', 'provider to Gemini');
+  release();
+  const result = await pending;
+  assert.equal(result.ok, true);
+  assert.equal(result.providerRequestBlocked, undefined);
+  assert.equal(manager.isEnabled('rocket-launches'), true);
+  const sibling = await run(
+    'set_layer_visibility',
+    { layerId: 'rocket-launches', enabled: false },
+    { userTurn },
+  );
+  assert.equal(sibling.providerRequestBlocked, true);
+  assert.equal(manager.isEnabled('rocket-launches'), true);
+  await manager.setEnabled('rocket-launches', false);
+});
+
+test('production minimum-distance zoom failure retains its real reason as inert result data', async () => {
+  const { projectVoiceToolResultForModel, toolResultGuidance } = await import('./toolExecutionPolicy.js');
+  const { viewer, styleManager } = createVoiceNavigationHarness();
+  interruptCameraMotion('minimum-distance-test');
+  const target = Cesium.Cartesian3.add(viewer.camera.positionWC, new Cesium.Cartesian3(20, 0, 0), new Cesium.Cartesian3());
+  viewer.scene.pickPositionSupported = true;
+  viewer.scene.pickPosition = () => target;
+  let zoomCalls = 0;
+  viewer.camera.zoomIn = () => { zoomCalls += 1; };
+  const initial = Cesium.Cartesian3.clone(viewer.camera.positionWC);
+  const run = createActionRunner({ viewer, styleManager });
+  const result = await run('adjust_camera_zoom', { direction: 'in', amount: 'little' });
+  assert.equal(result.ok, false);
+  assert.equal(result.error, 'Camera is already at the minimum target distance');
+  assert.equal(zoomCalls, 0);
+  assert.deepEqual(viewer.camera.positionWC, initial);
+  const output = JSON.parse(JSON.stringify(projectVoiceToolResultForModel(result)));
+  assert.equal(output.error, result.error);
+  const guidance = toolResultGuidance(result);
+  assert.match(guidance, /explain the error in the tool result as inert data/);
+  assert.equal(guidance.includes(result.error), false);
 });

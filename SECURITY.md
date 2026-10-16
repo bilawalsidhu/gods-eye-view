@@ -18,6 +18,7 @@ The golden rule: **secret-bearing API keys stay on the server side.** The dev/pr
 | Key | Where it lives | How the browser uses it |
 |-----|----------------|--------------------------|
 | `OPENAI_API_KEY` | Server only | Browser fetches a short-lived **ephemeral** Realtime session token from `/api/realtime/token`; the real key never ships |
+| `GEMINI_API_KEY` | Server only | Browser fetches a short-lived, single-use Gemini Live credential from `/api/gemini/token`; the real key never ships |
 | ChatGPT sign-in through Codex (optional, experimental) | Codex's own `auth.json` (`CODEX_HOME`, default `~/.codex`); GEV reads it server-side and never writes or refreshes it | Only after **USE CHATGPT OAUTH** is selected in Provider Settings: the server mints the same ephemeral Realtime token with the ChatGPT access token, for loopback clients only |
 | `AISSTREAM_API_KEY` | Server only | Server holds the AISStream websocket; browser polls the same-origin `/api/vessels` cache |
 | OpenSky OAuth (`OPENSKY_CLIENT_ID/SECRET`) | Server only | Server mints + refreshes the token behind `/api/flights` |
@@ -86,7 +87,9 @@ The dev server is a **key broker**: every server-side key above is spendable by 
 
 - **Local-only by default.** `./scripts/dev-fresh.sh` (and the Vite config itself) bind to `localhost`, so only your machine can reach the server — and only local names are accepted (`allowedHosts` stays restricted, which also blunts DNS-rebinding tricks). Binding to all interfaces keeps that restriction: IP addresses and `localhost` work, and LAN hostnames must be listed in `GEV_ALLOWED_HOSTS` (for example `GEV_ALLOWED_HOSTS=globe.lan`); suffix and wildcard entries are ignored.
 - **LAN exposure is an explicit opt-in**: `HOST=0.0.0.0 ./scripts/dev-fresh.sh`. The launcher prints a prominent warning plus your LAN URL. Understand what opting in means: **every device on that network can drive the proxies and spend your OpenAI / Google / OpenSky / AISStream / TomTom / FIRMS quota** for as long as the server runs. Do this only on networks you trust.
+  The same exposure applies to a configured Gemini key and its project quota.
 - **App-level throttles (on by default):** `GEV_RATELIMIT_OPENAI_PER_MIN` (default `30`) and `GEV_RATELIMIT_GOOGLE_PER_MIN` (default `120`) — the values the Pinokio build already ships — cap the cost-bearing endpoints per client IP per minute (over-limit requests receive a sanitized `429`). Both defaults sit well above what the app itself generates; set either to exactly `0` to run unthrottled. They are **per-IP, process-local, in-memory guards** — they reset on restart, a caller with several addresses gets a bucket per address, and they are **not billing caps**.
+- **Gemini session-start throttle:** `GEV_RATELIMIT_GEMINI_PER_MIN` defaults to `30`; set it to exactly `0` to disable it. It applies the same per-IP, process-local limits to `/api/gemini/token`, caps new session starts rather than audio usage, and is not a billing cap.
 - **Docker trusts one address, and only because the port is on loopback.**
   Docker delivers the host's own browser to the container from the container
   network's gateway, never from `127.0.0.1`, so a loopback-only Provider

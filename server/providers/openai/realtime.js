@@ -129,6 +129,7 @@ function createRealtimeOAuthLoginHandler({
 
 function createRealtimeTokenHandler({
   annotationGuidance,
+  providerDropdown = false,
   endpoint = 'https://api.openai.com/v1/realtime/client_secrets',
   fetchImpl = (...args) => fetch(...args),
   resolveApiKey = () => process.env.OPENAI_API_KEY,
@@ -298,7 +299,9 @@ function createRealtimeTokenHandler({
           },
           output: { voice },
         },
-        instructions: realtimeInstructions(annotationGuidance),
+        instructions: realtimeInstructions(annotationGuidance, {
+          providerDropdown,
+        }),
         tools,
         tool_choice: 'auto',
       },

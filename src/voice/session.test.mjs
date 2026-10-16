@@ -8,6 +8,7 @@ import {
 import { createVoiceSession } from './session.js';
 import { realtimeSessionEvent } from './realtimeEvents.js';
 import { createVoiceCommands } from './sessionCommands.js';
+import { VoiceCardControls } from './voiceCard.js';
 
 function deferred() {
   let resolve;
@@ -431,5 +432,125 @@ test('a late rejection cannot settle a newer turn card', async () => {
     events.some((event) => event.type === 'action-result'),
     false,
   );
+  f.session.destroy();
+});
+
+test('a supplied adapter retains cost controls without a provider selector', () => {
+  const previous = globalThis.window;
+  globalThis.window = new EventTarget();
+  const button = new EventTarget();
+  button.setAttribute = () => {};
+  const ui = {
+    root: { dataset: {}, remove() {} },
+    button,
+    status: {},
+    detail: {},
+    providerField: { hidden: true, remove() {} },
+    providerSelect: new EventTarget(),
+    tierButton: { hidden: true },
+    costValue: { hidden: true },
+  };
+  let controls;
+  try {
+    controls = createVoiceCommands({
+      runner: async () => ({ ok: true }),
+      createControl: () => ui,
+      createSession: () => ({
+        capabilities: { costControls: true, pushToTalk: true },
+        start() {},
+        stop() {},
+        sendText() {},
+        sendMapEvent() {},
+      }),
+    });
+    assert.equal(ui.providerField.hidden, true);
+    assert.equal(ui.tierButton.hidden, false);
+    assert.equal(ui.costValue.hidden, false);
+  } finally {
+    controls?.session.destroy();
+    globalThis.window = previous;
+  }
+});
+
+test('session stamps host controls instead of accepting a tool caller capability claim', async () => {
+  for (const available of [false, true]) {
+    let hooks;
+    let received;
+    const session = createVoiceSession({
+      providerDropdown: () => available,
+      runner: async (_name, _args, options) => {
+        received = options;
+        return { ok: true };
+      },
+      createAdapter(value) {
+        hooks = value;
+        return {
+          start() {
+            hooks.emit({ type: 'state', state: 'listening' });
+          },
+          stop() {},
+          sendText() {},
+          sendMapEvent() {},
+        };
+      },
+    });
+    await session.start();
+    await hooks.runAction(
+      'get_current_view_state',
+      {},
+      { providerDropdown: !available },
+    );
+    assert.equal(received.providerDropdown, available);
+    session.destroy();
+  }
+});
+
+test('provider policy revokes resources while preserving committed results and suppressing progress', async () => {
+  const gate = deferred();
+  const policy = new AbortController();
+  let received;
+  const events = [];
+  const f = fixture(async (_name, _args, options) => {
+    received = options;
+    await gate.promise;
+    options.progress({ step: 'late', label: 'late' });
+    return { ok: true, changed: true, action: 'committed' };
+  });
+  f.session.subscribe((event) => events.push(event));
+  await f.session.start();
+  const pending = f.hooks.runAction(
+    'committed',
+    {},
+    { providerPolicySignal: policy.signal },
+  );
+  policy.abort();
+  assert.equal(received.signal.aborted, true);
+  assert.equal(received.isCurrent(), false);
+  gate.resolve();
+  assert.equal((await pending).changed, true);
+  assert.equal(
+    events.some((e) => e.type === 'progress'),
+    false,
+  );
+  f.session.destroy();
+});
+
+test('Stop still revokes a committed result while provider policy signal exists', async () => {
+  const gate = deferred();
+  const policy = new AbortController();
+  const f = fixture(async () => {
+    await gate.promise;
+    return { ok: true, changed: true };
+  });
+  await f.session.start();
+  const pending = f.hooks.runAction(
+    'committed',
+    {},
+    { providerPolicySignal: policy.signal },
+  );
+  policy.abort();
+  f.session.stop();
+  gate.resolve();
+  await assert.rejects(pending, { name: 'AbortError' });
   f.session.destroy();
 });

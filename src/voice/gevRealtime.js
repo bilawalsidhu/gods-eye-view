@@ -5,6 +5,10 @@ import { createVoiceCommands } from './commands.js';
 import { cameraPoseKey, createPointerTracker } from './pointerContext.js';
 import { createPointerPicker } from './pointerPick.js';
 import { createReferentRegistry } from './referents.js';
+import {
+  voiceRequestRestrictionResult,
+  readVoiceRequestRestriction,
+} from './providerIntent.js';
 export * from './realtimeController.js';
 
 const ACTION_NAMES = new Set(GEV_ACTION_SCHEMAS.map((schema) => schema.name));
@@ -16,12 +20,27 @@ const ACTION_NAMES = new Set(GEV_ACTION_SCHEMAS.map((schema) => schema.name));
 export function withToolCatalog(runner, loadCatalog) {
   if (typeof loadCatalog !== 'function') return runner;
   const runGevTool = async function runGevTool(name, args, options = {}) {
+    const restriction = readVoiceRequestRestriction(options.userTurn);
+    if (restriction)
+      return voiceRequestRestrictionResult(name, restriction, options);
     if (ACTION_NAMES.has(name)) return runner(name, args, options);
+    const checkCurrent = () => {
+      options.signal?.throwIfAborted();
+      if (options.isCurrent && !options.isCurrent())
+        throw new DOMException('Voice query cancelled', 'AbortError');
+    };
+    checkCurrent();
     const catalog = await loadCatalog();
+    checkCurrent();
+    // Transcript segments can settle while a lazy catalog loads.
+    const loadedRestriction = readVoiceRequestRestriction(options.userTurn);
+    if (loadedRestriction)
+      return voiceRequestRestrictionResult(name, loadedRestriction, options);
     if (!catalog?.get(name)) return runner(name, args, options);
     const result = await catalog.call(name, args ?? {}, {
       signal: options.signal,
     });
+    checkCurrent();
     return toFunctionOutput(name, result);
   };
   runGevTool.resetConversation = (...args) =>
@@ -61,10 +80,11 @@ export function initGevVoiceCommands(options) {
   });
   deixis.imageFrame = () => commands.retainedImageFrame?.() || null;
   deixis.onPointerUsed = () => commands.announcePointer?.();
-  commands.session?.signal?.addEventListener(
-    'abort',
-    () => pointer?.destroy(),
-    { once: true },
-  );
+  const lifetime = commands.signal ?? commands.session?.signal;
+  if (lifetime?.aborted) pointer?.destroy();
+  else
+    lifetime?.addEventListener('abort', () => pointer?.destroy(), {
+      once: true,
+    });
   return commands;
 }

@@ -7,11 +7,36 @@
   continents (São Paulo, Madrid) as in service; stations outside a city's load
   radius are now dropped instead of drawn as live docks.
 
+- Preserve newer typed input submitted during rejected-response cleanup, and
+  reject repeated OpenAI response creation IDs before they can consume a newer
+  speech turn or alter response state. Release exact ID history on Stop/reset.
+
+- Correlate OpenAI typed and tool-follow-up responses with client-authored
+  request metadata instead of automatic speech-response arrival order. Keep
+  deferred responses tied to their original input through send callbacks.
+
+- Ignore duplicate or previously admitted OpenAI speech-start events before
+  retiring input, cancelling tools or dropping queued typed responses. Retain
+  input IDs until session Stop/reset, and prevent observer-triggered Stop or
+  newer input from being overwritten by the interrupted admission callback.
+  An onset superseded inside a notification retains only a retired identity
+  for its later commit, keeping its response separate from newer typed input.
+
+- Preserve typed command ownership when an unobserved Gemini automatic activity
+  receives its interruption boundary; a separate new speech onset still revokes
+  that typed request during the wait. A newer OpenAI speech turn drops an unsent
+  typed response instead of binding that response to the speech transcript.
+
 - Add Barcelona's bike share to the GBFS registry: Bicing (543 stations, the
   city's PBSC system) and AMBici (237 e-bike stations across the metropolitan
   area, run by nextbike). Both are keyless GBFS 2.3 feeds listed in
   MobilityData's systems catalogue; AMBici's is CC0. `gbfs.nextbike.net` joins
   the proxy allowlist. These are the layer's first stations in Spain.
+
+- Suppress empty and near-silent Gemini push-to-talk submissions without
+  losing buffered speech onset or release tails. Space holds silence local
+  playback; only admitted speech retires the current provider/tool turn. Keep narrow-screen toast notices clear of
+  the voice provider selector and bottom dock.
 
 - Add nine Ontario transit feeds: TTC, MiWay, Hamilton HSR, Durham Region,
   YRT/Viva, Guelph, Burlington, Barrie and Kingston, each carrying its own
@@ -136,6 +161,56 @@
   200–599, no longer crashes the local dev/preview server. Null-body statuses
   get an empty body; anything else that cannot become a response fails that
   mirror so the next one is tried.
+
+- Cancel pending voice-owned annotation lookups and deferred outlines on Stop,
+  interruption or replacement without clearing committed or unrelated marks.
+  Let stronger Gemini Radio controls start without waiting for older station
+  lookups; successful controls cancel covered pending work while preserving
+  committed selection and unrelated sibling calls. “Turn Radio on” enables the
+  layer without audio; playback requires an explicit play, listen or resume request.
+  Resume voice after Radio pause/off only when playback interrupted active voice;
+  manual playback follows the same rule. Provider changes and explicit voice
+  Stop cancel automatic resume, and manual voice startup pauses Radio.
+  Show a toast when Radio playback stops active voice. A tuner drag that ends
+  paused without a new station also resumes the voice Radio interrupted. An
+  older queued Gemini Radio request cannot start after a later successful
+  Stop, and deferred annotation outlines outlive their tool call for both
+  providers until the next input or session boundary.
+
+- Keep Gemini sentence-level voice activity separate from observed reply
+  generation, so a pause before the first answer does not retire that answer.
+  Preserve newer submitted input across an older reply's completion and finish
+  silent native replies without inventing audio or captions. Expiry activity
+  bookkeeping does not identify server generations or authorize tools.
+
+- Reject malformed Gemini tool-call identities before they can affect turn
+  policy. Retain accepted and cancelled identities for the socket lifetime;
+  require an explicit restart before a new batch exceeds the 256-identity budget.
+
+- Refuse voice tool dispatch when authoritative typed input or OpenAI speech
+  exceeds the normalized 500-character policy limit. Ask for a shorter command
+  without inferring a provider change; cancel cooperative preparation and withhold
+  deferred Radio playback while preserving changes that already completed.
+
+- Preserve OpenAI speech-command identity with disabled or failed optional
+  transcription. Gemini native tool calls use current socket, session, local-turn
+  and call ownership; unordered input captions are advisory. First-party typed
+  input retains its authority through deferred delivery and same-turn
+  continuation until new input or Stop supersedes it. An accepted fresh
+  `set_voice_provider` call refuses tools that have not started in that local
+  turn; provider selection remains manual. Narrow provider interception, make
+  chooser guidance host-aware, hide single-option choosers, preserve useful
+  bounded failure reasons, and use injected Gemini boundary timers.
+  Later authoritative input can cancel cooperative generic/CCTV preparation;
+  committed changes and non-cooperative map-stack work are not undone.
+
+- End OpenAI sessions with an explicit restart message when unmatched response
+  reservations overflow. Preserve FIFO ownership and reject stale callbacks;
+  recovery never reconnects automatically or guesses a response's user item.
+
+- Recognize direct voice-provider requests whose finalized input segments carry
+  sentence punctuation between command and target, such as "Switch to. Gemini."
+  Provider selection remains manual.
 
 - Snow flakes sway within a fixed range instead of drifting sideways faster the
   longer the app runs; the Wind setting still scales the sway.
@@ -378,6 +453,14 @@
   are all 360°, so the IMAGERY and SINCE filters and the legend apply to
   Mapillary only and hide while GOOGLE STREET VIEW is lit; its globe marker
   is a Google-blue view cone.
+
+- Add Gemini Live as an alternative voice provider using a separate server-side
+  API key and short-lived browser credentials. It shares the existing microphone,
+  push-to-talk, result card, map tools and Radio handoff with OpenAI. The manual
+  provider dropdown reconnects active voice in its prior input mode; spoken or
+  typed provider-switch requests give fixed dropdown guidance. Gemini owns
+  device-rate capture, 16 kHz resampling, 24 kHz playback, bounded queues,
+  interruption cleanup and explicit restart after its connection expires.
 
 - Add an experimental ChatGPT/Codex OAuth option for cloud voice in Provider
   Settings. API-key voice remains the default. Local sign-in can start from

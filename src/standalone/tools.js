@@ -17,6 +17,10 @@ export function createStandaloneTools(options) {
       },
     },
     ...options,
-    voice: { toolCatalog: loadToolCatalog, ...options?.voice },
+    voice: {
+      toolCatalog: loadToolCatalog,
+      supportedProviders: ['openai', 'gemini'],
+      ...options?.voice,
+    },
   });
 }

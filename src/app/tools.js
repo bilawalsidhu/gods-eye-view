@@ -183,6 +183,14 @@ export function createApplicationTools({
     dataManager,
     sceneDirector,
     annotations,
+    onSessionEvent: (event) => {
+      voice.onSessionEvent?.(event);
+      // Radio playback stops voice so both never share the speaker.
+      if (event?.type === 'voice-suspended' && event.reason === 'radio')
+        styleManager._showToast?.(
+          'Voice stopped for Radio. Pause or stop Radio to resume voice.',
+        );
+    },
   });
   defer(() => {
     voiceCommands.stop({ removeUi: true });

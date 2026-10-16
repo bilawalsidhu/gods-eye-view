@@ -314,13 +314,13 @@ export const ACTION_DESCRIPTIONS = {
   },
   control_radio: {
     description:
-      'Control Internet Radio playback without moving the map. Use select whenever the request includes a station category, name, country, coordinates, or nearby place—even when the user says play. Use play only for an unqualified "turn on/start the radio" request so the current or nearest station begins. Enable only reveals the Radio layer/markers without audio. Also supports disable, resume, pause, stop, next/previous, volume, and status.',
+      'Control Internet Radio without moving the map. "Turn on/start the radio" means enable: reveal the Radio layer/markers without starting audio or selecting a station. Playback requires an explicit play, listen, or resume request. Use select for an explicit playback request qualified by category, station name, country, coordinates, or nearby place—even when the user says play. Use play for unqualified explicit playback. Also supports disable, resume, pause, stop, next/previous, volume, and status.',
     $position: 1,
     parameters: {
       properties: {
         action: {
           description:
-            'Use select for any request qualified by category, station, country, coordinates, or place. Use play only for an unqualified turn on/start/listen request. Use enable only when the user explicitly asks to show or enable the Radio layer or its markers without requesting audio.',
+            'Use enable for turn on/start/show/enable Radio or its markers without an explicit playback request. Enable never starts audio or selects a station. Use play for an explicit unqualified play/listen request, resume for explicit resume, and select for explicit playback qualified by category, station, country, coordinates, or place.',
           $position: 2,
         },
         volumePct: {
