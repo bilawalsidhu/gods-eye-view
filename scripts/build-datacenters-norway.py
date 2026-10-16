@@ -1,10 +1,13 @@
 #!/usr/bin/env python3
 """Maintainer-only Norway refresh of the bundled datacenter extract (osmium-tool).
 
-Downloads a pinned Geofabrik Norway extract, verifies its MD5, filters
+Downloads a dated Geofabrik Norway extract, verifies its MD5, filters
 telecom=data_center / building=data_center with osmium, and merges the result
 into datacenters.geojsonl: features inside the Geofabrik Norway boundary are
 added, updated or removed; every other line is kept byte-for-byte.
+
+Geofabrik keeps only its newest dated extract, so --extract defaults to the
+current one and a recorded extract can be re-verified only while it is listed.
 """
 import argparse
 import hashlib
@@ -16,17 +19,28 @@ import subprocess
 import urllib.request
 
 ROOT = Path(__file__).resolve().parent.parent
-EXTRACT = 'norway-261005'
 GEOFABRIK = 'https://download.geofabrik.de/europe/'
 DATASET = ROOT / 'src/data/local_data/datacenters/datacenters.geojsonl'
 CONTACT_TAGS = {'email', 'phone', 'fax', 'mobile', 'whatsapp', 'contact:email', 'contact:phone',
                 'contact:fax', 'contact:mobile', 'contact:whatsapp'}
 SAME_GEOMETRY_METERS = 0.05
+TIMEOUT_SECONDS = 60
+
+
+def latest_extract():
+    """Resolve norway-latest to the dated name Geofabrik redirects it to."""
+    request = urllib.request.Request(GEOFABRIK + 'norway-latest.osm.pbf', method='HEAD')
+    with urllib.request.urlopen(request, timeout=TIMEOUT_SECONDS) as response:
+        name = response.geturl().rsplit('/', 1)[-1]
+    if not name.startswith('norway-') or not name.endswith('.osm.pbf') or name == 'norway-latest.osm.pbf':
+        raise RuntimeError('Unexpected Geofabrik latest target: %s' % name)
+    return name[:-len('.osm.pbf')]
 
 
 def fetch(url, target):
     if not target.exists():
-        with urllib.request.urlopen(url) as response, open(str(target) + '.part', 'wb') as out:
+        with urllib.request.urlopen(url, timeout=TIMEOUT_SECONDS) as response, \
+                open(str(target) + '.part', 'wb') as out:
             shutil.copyfileobj(response, out)
         Path(str(target) + '.part').rename(target)
     return target
@@ -43,7 +57,7 @@ def md5(path):
 def read_poly(path):
     """Geofabrik .poly -> list of (ring, is_hole)."""
     rings, ring, hole = [], None, False
-    for raw in path.read_text().splitlines()[1:]:
+    for raw in path.read_text(encoding='utf-8').splitlines()[1:]:
         line = raw.strip()
         if ring is None:
             if line and line != 'END':
@@ -80,15 +94,15 @@ def osm_key(feature):
     return ('n' if feature['geometry']['type'] == 'Point' else 'w') + str(osm_id)
 
 
-def export(osmium, pbf, cache):
-    filtered = cache / (EXTRACT + '-datacenters.osm.pbf')
-    exported = cache / (EXTRACT + '-datacenters.geojsonseq')
+def export(osmium, pbf, cache, extract):
+    filtered = cache / (extract + '-datacenters.osm.pbf')
+    exported = cache / (extract + '-datacenters.geojsonseq')
     subprocess.run([osmium, 'tags-filter', '-O', '-o', str(filtered), str(pbf),
                     'nwr/telecom=data_center', 'nwr/building=data_center'], check=True)
     subprocess.run([osmium, 'export', '-O', '-f', 'geojsonseq', '--add-unique-id=type_id',
                     '-o', str(exported), str(filtered)], check=True)
     fresh = {}
-    for line in exported.read_text().splitlines():
+    for line in exported.read_text(encoding='utf-8').splitlines():
         line = line.lstrip('\x1e').strip()
         if not line:
             continue
@@ -169,26 +183,30 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--cache', type=Path, required=True)
     parser.add_argument('--osmium', default=shutil.which('osmium') or 'osmium')
+    parser.add_argument('--extract', default='latest',
+                        help="dated Geofabrik name such as norway-261005, or 'latest'")
     parser.add_argument('--verify', action='store_true')
     args = parser.parse_args()
     args.cache.mkdir(parents=True, exist_ok=True)
-    pbf = fetch(GEOFABRIK + EXTRACT + '.osm.pbf', args.cache / (EXTRACT + '.osm.pbf'))
-    expected = fetch(GEOFABRIK + EXTRACT + '.osm.pbf.md5',
-                     args.cache / (EXTRACT + '.osm.pbf.md5')).read_text().split()[0]
+    extract = latest_extract() if args.extract == 'latest' else args.extract
+    pbf = fetch(GEOFABRIK + extract + '.osm.pbf', args.cache / (extract + '.osm.pbf'))
+    expected = fetch(GEOFABRIK + extract + '.osm.pbf.md5',
+                     args.cache / (extract + '.osm.pbf.md5')).read_text(encoding='utf-8').split()[0]
     actual = md5(pbf)
     if actual != expected:
         raise RuntimeError('MD5 mismatch for %s: %s != %s' % (pbf.name, actual, expected))
     rings = read_poly(fetch(GEOFABRIK + 'norway.poly', args.cache / 'norway.poly'))
-    fresh = export(args.osmium, pbf, args.cache)
-    current = [line for line in DATASET.read_text().splitlines() if line.strip()]
+    fresh = export(args.osmium, pbf, args.cache, extract)
+    current = [line for line in DATASET.read_text(encoding='utf-8').splitlines() if line.strip()]
     merged, report = merge(current, fresh, rings)
     payload = '\n'.join(merged) + '\n'
     if args.verify:
-        if payload != DATASET.read_text():
-            raise SystemExit('datacenters.geojsonl is not the %s merge' % EXTRACT)
+        if payload != DATASET.read_text(encoding='utf-8'):
+            raise SystemExit('datacenters.geojsonl is not the %s merge' % extract)
     else:
-        DATASET.write_text(payload)
-    print(json.dumps({'extract': EXTRACT, 'md5': actual, 'norway': len(fresh),
+        with open(DATASET, 'w', encoding='utf-8', newline='\n') as handle:
+            handle.write(payload)
+    print(json.dumps({'extract': extract, 'md5': actual, 'norway': len(fresh),
                       'features': len(merged), **report}))
 
 
