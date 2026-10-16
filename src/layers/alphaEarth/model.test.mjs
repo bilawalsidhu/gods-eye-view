@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
+  changeSummary,
   changedFraction,
   clampThreshold,
   colorizeChange,
@@ -68,4 +69,15 @@ test('box params round-trip at 1e-4 degrees', () => {
   const back = dequantizeBox(quantizeBox(box));
   assert.equal(back.west, -97.64);
   assert.equal(dequantizeBox({ west: null, south: 1, east: 2, north: 3 }), null);
+});
+
+test('a quiet grid names its strongest change and the threshold for its top 1%', () => {
+  // 990 still pixels at 0.01, ten at 0.30 and one NoData.
+  const grid = new Uint8Array(1001).fill(3);
+  grid.fill(76, 990, 1000);
+  grid[1000] = 255;
+  assert.deepEqual(changeSummary(grid), { strongest: 0.3, revealThreshold: 0.29 });
+  assert.equal(changedFraction(grid, 0.29), 0.01);
+  assert.equal(changeSummary(new Uint8Array(4)).revealThreshold, 0.05, 'never below the slider');
+  assert.equal(changeSummary(Uint8Array.from([255])), null);
 });

@@ -4,7 +4,11 @@
  * DOM is built once and updated in place from layer snapshots, so a
  * notification never steals focus from a select or the slider.
  */
-import { LEGEND_GRADIENT } from '../layers/alphaEarth/model.js';
+import {
+  ALPHA_EARTH_FAINT_FRACTION,
+  ALPHA_EARTH_MIN_THRESHOLD,
+  LEGEND_GRADIENT,
+} from '../layers/alphaEarth/model.js';
 
 const PANEL_ID = 'alpha-earth-panel';
 // Remounting controls must not reopen a panel the user already collapsed.
@@ -13,6 +17,18 @@ const appearedDocuments = new WeakSet();
 const percent = (value) =>
   Number.isFinite(value) ? `${Math.round(value * 1000) / 10}%` : '—';
 const fixed = (value) => (Number.isFinite(value) ? value.toFixed(2) : '—');
+/** A result too quiet to see at this threshold, with a lower one that shows it. */
+function faintResult(snapshot) {
+  const result = snapshot.result;
+  if (!result || !(result.changedFraction < ALPHA_EARTH_FAINT_FRACTION))
+    return null;
+  const reveal =
+    result.revealThreshold != null &&
+    result.revealThreshold < snapshot.threshold
+      ? result.revealThreshold
+      : null;
+  return { strongest: result.strongest, reveal };
+}
 const set = (node, key, value) => {
   if (node[key] !== value) node[key] = value;
 };
@@ -108,6 +124,9 @@ export function createAlphaEarthPanel({
   status.setAttribute('role', 'status');
   const retry = el('button', 'data-toggle-chip ae-btn ae-retry', root, 'RETRY');
   retry.type = 'button';
+  const reveal = el('button', 'data-toggle-chip ae-btn ae-reveal', root);
+  reveal.type = 'button';
+  reveal.title = 'Lower the threshold to the strongest 1% of change in the box';
 
   const stats = el('dl', 'ae-stats', root);
   const stat = (label) => {
@@ -153,6 +172,11 @@ export function createAlphaEarthPanel({
       return snapshot.toolActive
         ? 'Drag a box on the map'
         : 'Select a box to compare';
+    const faint = faintResult(snapshot);
+    if (faint && faint.strongest < ALPHA_EARTH_MIN_THRESHOLD)
+      return `This place barely changed · strongest change ${fixed(faint.strongest)}`;
+    if (faint)
+      return `Almost nothing reaches ${snapshot.threshold.toFixed(2)} here · strongest change ${fixed(faint.strongest)}`;
     if (snapshot.result)
       return `${snapshot.result.from} → ${snapshot.result.to} · annual embeddings, not single-day events`;
     return '';
@@ -209,6 +233,14 @@ export function createAlphaEarthPanel({
       'hidden',
       !(snapshot.status === 'error' || snapshot.yearsError) || busy,
     );
+    const faint = faintResult(snapshot);
+    set(reveal, 'hidden', !faint?.reveal || busy);
+    if (faint?.reveal)
+      set(
+        reveal,
+        'textContent',
+        `SHOW STRONGEST 1% · ≥ ${faint.reveal.toFixed(2)}`,
+      );
     const result = snapshot.result;
     set(stats, 'hidden', !result);
     set(legend, 'hidden', !result);
@@ -233,6 +265,10 @@ export function createAlphaEarthPanel({
   listen(useView, 'click', () => layer.useCurrentView(viewer));
   listen(clear, 'click', () => layer.clear());
   listen(retry, 'click', () => layer.retry());
+  listen(reveal, 'click', () => {
+    const next = faintResult(layer.getSnapshot())?.reveal;
+    if (next != null) layer.setThreshold(next);
+  });
   const onYears = () => {
     if (!layer.setYears(Number(fromSelect.value), Number(toSelect.value)))
       render();

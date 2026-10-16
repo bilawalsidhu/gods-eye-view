@@ -125,6 +125,42 @@ export function changedFraction(grid, threshold) {
   return valid ? Math.round((changed / valid) * 1000) / 1000 : null;
 }
 
+/** A changed share below this reads as an empty map at any zoom. */
+export const ALPHA_EARTH_FAINT_FRACTION = 0.002;
+/** The slider's floor; a reveal never suggests less. */
+export const ALPHA_EARTH_MIN_THRESHOLD = 0.05;
+const REVEAL_SHARE = 0.01;
+
+/**
+ * The strongest change in a grid and the threshold that shows its top 1%, so
+ * a quiet place can still show where it moved. Null without valid pixels.
+ * @param {Uint8Array} grid
+ * @returns {{ strongest: number, revealThreshold: number } | null}
+ */
+export function changeSummary(grid) {
+  const counts = new Uint32Array(GRID_SCALE + 1);
+  let valid = 0;
+  for (let i = 0; i < grid.length; i += 1) {
+    const v = grid[i];
+    if (v === GRID_NODATA) continue;
+    counts[v] += 1;
+    valid += 1;
+  }
+  if (!valid) return null;
+  let max = GRID_SCALE;
+  while (max > 0 && !counts[max]) max -= 1;
+  let level = max;
+  for (let seen = counts[max]; level > 0 && seen < valid * REVEAL_SHARE;) {
+    level -= 1;
+    seen += counts[level];
+  }
+  const floor2 = (v) => Math.floor((v / GRID_SCALE) * 100) / 100;
+  return {
+    strongest: Math.round((max / GRID_SCALE) * 100) / 100,
+    revealThreshold: Math.max(ALPHA_EARTH_MIN_THRESHOLD, floor2(level)),
+  };
+}
+
 /** Palette stops from the threshold (amber) to total change (magenta). */
 const LOW = [255, 196, 0];
 const HIGH = [255, 0, 128];

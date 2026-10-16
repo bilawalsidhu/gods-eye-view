@@ -10,6 +10,7 @@ import {
   ALPHA_EARTH_ATTRIBUTION,
   ALPHA_EARTH_DEFAULT_THRESHOLD,
   ALPHA_EARTH_DETAILS,
+  changeSummary,
   changedFraction,
   clampThreshold,
   decodeGrid,
@@ -180,6 +181,7 @@ export function createAlphaEarthLayer({
       _result = {
         ...body,
         grid,
+        summary: changeSummary(grid),
         box: {
           west: body.west,
           south: body.south,
@@ -426,6 +428,8 @@ export function createAlphaEarthLayer({
               computedAt: _result.computedAt,
               stats: stats ? { ...stats } : null,
               changedFraction: changedFraction(_result.grid, _threshold),
+              strongest: _result.summary?.strongest ?? null,
+              revealThreshold: _result.summary?.revealThreshold ?? null,
             }
           : null,
         attribution: ALPHA_EARTH_ATTRIBUTION,

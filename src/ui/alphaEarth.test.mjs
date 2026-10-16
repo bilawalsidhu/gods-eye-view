@@ -225,3 +225,30 @@ test('destroy removes the readout and every listener', () => {
   assert.equal(panel.hidden, true);
   assert.ok(controls.every((node) => node.listenerCount() === 0));
 });
+
+test('a quiet result says so and offers the threshold that shows it', async () => {
+  const { layer, source, ui, byLabel } = fixture();
+  layer.enable({});
+  await tick();
+  layer.setBox(BOX);
+  // 1,000 still pixels but one strong change and nine moderate ones.
+  const grid = new Uint8Array(1000).fill(3);
+  grid.fill(51, 990, 999);
+  grid[999] = 122;
+  source.requests[0].resolve({
+    ...changePayload({ width: 40, height: 25 }),
+    grid: Buffer.from(grid).toString('base64'),
+  });
+  await tick();
+  const status = ui.root.find((node) => node.getAttribute('role') === 'status');
+  assert.match(status.textContent, /Almost nothing reaches 0\.35 here · strongest change 0\.48/);
+  const reveal = ui.root.find((node) => node.className.includes('ae-reveal'));
+  assert.equal(reveal.hidden, false);
+  assert.equal(reveal.textContent, 'SHOW STRONGEST 1% · ≥ 0.20');
+  reveal.click();
+  assert.equal(layer.getSnapshot().threshold, 0.2);
+  assert.equal(byLabel('Change threshold').value, '20');
+  assert.equal(reveal.hidden, true);
+  assert.match(status.textContent, /annual embeddings/);
+  assert.equal(source.requests.length, 1, 'revealing never re-requests');
+});

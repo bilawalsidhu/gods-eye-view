@@ -7,7 +7,9 @@
   reads the two years' embedding COGs with byte ranges and returns one
   `1 − cosine` grid; the threshold, legend and changed share are computed in the
   browser, so moving the slider makes no request. The box, years, detail and
-  threshold travel in share links (#814, #303).
+  threshold travel in share links. A box where almost nothing reaches the
+  threshold says so, names the strongest change found and offers one click to
+  show the strongest 1% (#814, #303).
 
 - Add nine Ontario transit feeds: TTC, MiWay, Hamilton HSR, Durham Region,
   YRT/Viva, Guelph, Burlington, Barrie and Kingston, each carrying its own

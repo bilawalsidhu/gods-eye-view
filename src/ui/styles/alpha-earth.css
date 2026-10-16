@@ -152,6 +152,10 @@
   align-self: flex-start;
   width: 33%;
 }
+.ae-reveal {
+  align-self: stretch;
+  color: var(--accent, #ffc400);
+}
 .ae-stats {
   display: grid;
   grid-template-columns: auto 1fr;

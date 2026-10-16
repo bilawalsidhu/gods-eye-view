@@ -169,6 +169,13 @@ try {
   await setView({ lon: -97.62, lat: 30.225, height: 12_000 });
 
   // ── enable: the panel in the rail and the year list ───────────────────
+  // Open DISPLAY first: the rail shows one expanded panel, so the layer's
+  // panel must take it instead of being collapsed out of sight.
+  await page.evaluate(() => {
+    const display = document.getElementById('pp-toggles');
+    if (display?.classList.contains('collapsed'))
+      display.querySelector('[data-collapse-target="pp-toggles"]')?.click();
+  });
   check(
     'the data panel carries an AlphaEarth Change toggle',
     await click('[data-layer-id="alpha-earth-change"] .data-toggle-btn'),
@@ -184,6 +191,17 @@ try {
     await until(
       () => document.getElementById('alpha-earth-panel')?.hidden === false,
     ),
+  );
+  check(
+    'the panel takes the rail from an open DISPLAY',
+    await until(() => {
+      const panel = document.getElementById('alpha-earth-panel');
+      return (
+        !panel.classList.contains('collapsed') &&
+        getComputedStyle(panel).display !== 'none' &&
+        document.getElementById('pp-toggles')?.classList.contains('collapsed')
+      );
+    }),
   );
   const listed = await until(
     () => window.__gevAlphaEarth.layer.getSnapshot().years.length >= 2,
