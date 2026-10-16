@@ -1,6 +1,6 @@
 import {
   STYLE_STATUS_LABELS,
-  sharpenIntensityForEngine,
+  presetSharpenIntensity,
 } from './visualPresets.js';
 import { UiLifetime } from './uiLifetime.js';
 import {
@@ -95,15 +95,7 @@ export class VisualSettings {
       this._setBloomIntensity(intensity, { syncShare: false });
     }
     if (typeof sharpenIntensity === 'number' && this._sharpenSlider) {
-      const pct = Math.max(
-        0,
-        Math.min(
-          100,
-          Math.round(
-            sharpenIntensityForEngine(sharpenIntensity, this._engineKind),
-          ),
-        ),
-      );
+      const pct = Math.max(0, Math.min(100, Math.round(sharpenIntensity)));
       this._sharpenSlider.value = String(pct);
       this._sharpenSliderValue.textContent = `${pct}%`;
       this._applySharpenIntensity(pct / 100);
@@ -201,8 +193,8 @@ export class VisualSettings {
       readDisplayPortalActive,
     });
     this._lifetime = new UiLifetime();
-    // Defaults, presets and share links read Cesium's sharpen default as the
-    // engine's own (sharpenIntensityForEngine).
+    // The baseline and the style presets take this engine's default sharpen
+    // (presetSharpenIntensity); share links restore their explicit value.
     this._engineKind = engine?.kind ?? 'cesium';
     this._visualEffects = new VisualEffects({
       viewer,
@@ -759,16 +751,12 @@ export class VisualSettings {
     }
 
     const sharpenInput = preset.sharpen || {};
-    if (typeof sharpenInput.intensity === 'number' && this._sharpenSlider) {
-      const sharpenPct = Math.max(
-        0,
-        Math.min(
-          100,
-          Math.round(
-            sharpenIntensityForEngine(sharpenInput.intensity, this._engineKind),
-          ),
-        ),
-      );
+    const presetSharpen = presetSharpenIntensity(
+      sharpenInput.intensity,
+      this._engineKind,
+    );
+    if (typeof presetSharpen === 'number' && this._sharpenSlider) {
+      const sharpenPct = Math.max(0, Math.min(100, Math.round(presetSharpen)));
       this._sharpenSlider.value = String(sharpenPct);
       this._sharpenSliderValue.textContent = `${sharpenPct}%`;
       this._applySharpenIntensity(sharpenPct / 100);
@@ -819,22 +807,12 @@ export class VisualSettings {
       this._setBloomEnabled(defaults.bloom.enabled);
     }
 
-    if (
-      typeof defaults.sharpen?.intensity === 'number' &&
-      this._sharpenSlider
-    ) {
-      const sharpenPct = Math.max(
-        0,
-        Math.min(
-          100,
-          Math.round(
-            sharpenIntensityForEngine(
-              defaults.sharpen.intensity,
-              this._engineKind,
-            ),
-          ),
-        ),
-      );
+    const defaultSharpen = presetSharpenIntensity(
+      defaults.sharpen?.intensity,
+      this._engineKind,
+    );
+    if (typeof defaultSharpen === 'number' && this._sharpenSlider) {
+      const sharpenPct = Math.max(0, Math.min(100, Math.round(defaultSharpen)));
       this._sharpenSlider.value = String(sharpenPct);
       this._sharpenSliderValue.textContent = `${sharpenPct}%`;
       this._applySharpenIntensity(sharpenPct / 100);
