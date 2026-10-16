@@ -6,7 +6,13 @@
  * scene (docs/migration/navara-look/<scene>.jpg, each under 500 KB).
  *
  *   node scripts/qa-navara-look.mjs [--scene=name,...] [--base-url=URL]
- *     [--out=DIR]
+ *     [--out=DIR] [--sharpen=0,49,80]
+ *
+ * --sharpen compares the Sharpen slider instead: Navara's default look at
+ * each slider value (set through the shell's setSharpen, as the slider does),
+ * in one column each, at Lower Manhattan's pose and at the same place facing
+ * the horizon (SHARPEN_VIEWS), each frame scaled down above a 1:1 crop, into
+ * sharpen.jpg. --png-dir=DIR also keeps the frames as PNG.
  *
  * Starts this checkout's Vite dev server on a free port (never 4185 or 4186)
  * unless --base-url names a running server. Headless Chrome with
@@ -82,6 +88,32 @@ const TILE = { width: 640, height: 400 };
 const MAX_BYTES = 500 * 1024;
 const RESERVED_PORTS = new Set([4185, 4186]);
 
+const sharpenLevels = argument('sharpen')
+  ?.split(',')
+  .filter(Boolean)
+  .map(Number);
+if (
+  sharpenLevels &&
+  (!sharpenLevels.length ||
+    sharpenLevels.some((pct) => !(pct >= 0 && pct <= 100)))
+) {
+  console.error('--sharpen takes slider values from 0 to 100, e.g. 0,49,80');
+  process.exit(2);
+}
+// The sharpen comparison's views, each a frame (scaled) and a 1:1 crop of a
+// CROP-sized region at [x, y] of the 1280×800 frame: Lower Manhattan (the
+// gallery's pose, the city) and the same place looking at the horizon (sky
+// and clouds).
+const CROP = { width: 400, height: 250 };
+const SHARPEN_VIEWS = [
+  { label: 'the city', scene: 'manhattan', crop: [430, 430] },
+  {
+    label: 'sky and clouds',
+    scene: 'manhattan',
+    pose: { lat: 40.706, lon: -74.013, height: 900, heading: 30, pitch: -6 },
+    crop: [440, 120],
+  },
+];
 const sceneNames = (argument('scene') ?? Object.keys(SCENES).join(','))
   .split(',')
   .filter(Boolean);
@@ -261,6 +293,73 @@ async function compose({ images, labels, title, tile, maxBytes }) {
   throw new Error('the gallery does not fit the size budget');
 }
 
+/**
+ * The sharpen comparison: one column per slider value; per view, the frame
+ * scaled to the crop's size (the crop boxed in yellow), then the crop at
+ * 1:1. `images[level][view]`. Returns JPEG bytes (base64).
+ */
+async function composeSharpen({
+  images,
+  labels,
+  title,
+  crop,
+  crops,
+  maxBytes,
+}) {
+  const header = 34;
+  const caption = 30;
+  const gap = 6;
+  const canvas = document.createElement('canvas');
+  canvas.width = crop.width * images.length + gap * (images.length - 1);
+  canvas.height = header + crops.length * 2 * (crop.height + gap) + caption;
+  const context = canvas.getContext('2d');
+  context.fillStyle = '#101214';
+  context.fillRect(0, 0, canvas.width, canvas.height);
+  context.font = '600 15px -apple-system, Helvetica, Arial, sans-serif';
+  context.textBaseline = 'middle';
+  for (const [column, views] of images.entries()) {
+    const x = column * (crop.width + gap);
+    for (const [row, source] of views.entries()) {
+      const image = new Image();
+      image.src = source;
+      await image.decode();
+      const [cx, cy] = crops[row];
+      const y = header + row * 2 * (crop.height + gap);
+      const scale = crop.width / image.width;
+      context.drawImage(image, x, y, crop.width, image.height * scale);
+      context.strokeStyle = 'rgba(255, 196, 0, 0.9)';
+      context.lineWidth = 1;
+      context.strokeRect(
+        x + cx * scale + 0.5,
+        y + cy * scale + 0.5,
+        crop.width * scale,
+        crop.height * scale,
+      );
+      context.drawImage(
+        image,
+        cx,
+        cy,
+        crop.width,
+        crop.height,
+        x,
+        y + crop.height + gap,
+        crop.width,
+        crop.height,
+      );
+    }
+    context.fillStyle = '#e8eaed';
+    context.fillText(labels[column], x + 10, header / 2);
+  }
+  context.fillStyle = '#9aa0a6';
+  context.font = '14px -apple-system, Helvetica, Arial, sans-serif';
+  context.fillText(title, 10, canvas.height - caption / 2);
+  for (let quality = 0.92; quality >= 0.5; quality -= 0.02) {
+    const data = canvas.toDataURL('image/jpeg', quality).split(',')[1];
+    if ((data.length * 3) / 4 <= maxBytes) return data;
+  }
+  throw new Error('the comparison does not fit the size budget');
+}
+
 // --- Runner -----------------------------------------------------------------
 
 const executablePath =
@@ -276,13 +375,10 @@ const baseUrl = server.url.endsWith('/') ? server.url : `${server.url}/`;
 const browser = await puppeteer.launch({
   headless: true,
   executablePath,
-  args: [
-    '--use-angle=metal',
-    `--window-size=${SHOT.width},${SHOT.height}`,
-  ],
+  args: ['--use-angle=metal', `--window-size=${SHOT.width},${SHOT.height}`],
 });
 
-async function capture(scene, variant) {
+async function capture(scene, variant, sharpenPct = null) {
   const context = await browser.createBrowserContext();
   try {
     const page = await context.newPage();
@@ -299,6 +395,18 @@ async function capture(scene, variant) {
       timeout: 180000,
       polling: 250,
     });
+    if (sharpenPct !== null) {
+      const result = await page.evaluate(
+        (intensityPct) =>
+          window.__godsEyeView.styleManager.setSharpen({
+            enabled: true,
+            intensityPct,
+          }),
+        sharpenPct,
+      );
+      if (!result?.ok || result.sharpen.intensityPct !== sharpenPct)
+        throw new Error(`setSharpen(${sharpenPct}): ${JSON.stringify(result)}`);
+    }
     const image = await page.evaluate(settleAt, scene.pose);
     if (errors.length) throw new Error(errors.join('; '));
     return image;
@@ -308,9 +416,60 @@ async function capture(scene, variant) {
 }
 
 let failed = 0;
+async function sharpenComparison() {
+  const variant = VARIANTS.at(-1);
+  const pngDir = argument('png-dir');
+  if (pngDir) fs.mkdirSync(pngDir, { recursive: true });
+  const images = [];
+  for (const pct of sharpenLevels) {
+    const views = [];
+    for (const [index, view] of SHARPEN_VIEWS.entries()) {
+      const scene = SCENES[view.scene];
+      const image = await capture(
+        { ...scene, pose: view.pose ?? scene.pose },
+        variant,
+        pct,
+      );
+      views.push(image);
+      if (pngDir)
+        fs.writeFileSync(
+          path.join(pngDir, `sharpen-${pct}-${index}.png`),
+          Buffer.from(image.split(',')[1], 'base64'),
+        );
+    }
+    images.push(views);
+  }
+  const page = await browser.newPage();
+  const jpeg = await page.evaluate(composeSharpen, {
+    images,
+    labels: sharpenLevels.map(
+      (pct) =>
+        `Navara cinematic, Sharpen ${pct}% (amount ${(0.1 + (pct / 100) * 2).toFixed(2)})`,
+    ),
+    title: `${SCENES.manhattan.title}; then facing the horizon. Each frame above a 1:1 crop (yellow box).`,
+    crop: CROP,
+    crops: SHARPEN_VIEWS.map((view) => view.crop),
+    maxBytes: MAX_BYTES,
+  });
+  await page.close();
+  const file = path.join(outDir, 'sharpen.jpg');
+  fs.writeFileSync(file, Buffer.from(jpeg, 'base64'));
+  console.log(
+    `ok   sharpen: ${path.relative(repoRoot, file)} (${Math.round(fs.statSync(file).size / 1024)} KB)`,
+  );
+}
+
 try {
   fs.mkdirSync(outDir, { recursive: true });
-  for (const name of sceneNames) {
+  if (sharpenLevels) {
+    try {
+      await sharpenComparison();
+    } catch (error) {
+      failed += 1;
+      console.log(`FAIL sharpen: ${redact(error.stack || error.message)}`);
+    }
+  }
+  for (const name of sharpenLevels ? [] : sceneNames) {
     const scene = SCENES[name];
     try {
       const images = [];

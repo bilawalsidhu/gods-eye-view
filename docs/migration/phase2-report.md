@@ -73,8 +73,9 @@ Checked headless by `scripts/qa-engine-shell.mjs` on the dev server and on
   `googleApiKey`. A deployment that serves Google through the server token
   (`/api/google/tiles-token`, Cesium's route) has none in the browser, so
   Navara falls back to Esri imagery there until the S3 proxy (next steps).
-- **Visual styles, bloom and sharpen:** no post-process stages, so the
-  style buttons change nothing. The notice does not mention them.
+- **Visual styles and bloom:** no post-process stages, so the style
+  buttons and Bloom change nothing. The notice does not mention them.
+  Sharpen works (see "Sharpen on Navara").
 - **Not constructed:** the cockpit, the director (so no data packs and no
   shot interactions), annotations and the draw tool, voice, the imagery box,
   scope mask, tracked-entity hold, embedded views, the first-run welcome
@@ -90,7 +91,7 @@ semantics), `assertGlobeEngine()` and `GLOBE_ENGINE_MEMBERS`. Positions are
 The engine-neutral suite (`src/globe/testing/`) runs on the fake engine in
 Node and on both real engines in `scripts/qa-globe-contract.mjs`.
 
-The 58 required members:
+The 60 required members:
 
 | Capability | Members |
 |---|---|
@@ -100,7 +101,7 @@ The 58 required members:
 | `picker` | `pick`, `drillPick`, `pickPosition`, `pickPositionSupported`, `pickGlobe` |
 | `projector` | `worldToWindow`, `viewProjection`, `horizonVisible` |
 | `frames` | `preUpdate`, `preRender`, `postRender` |
-| `render` | `request`, `setContinuous`, `isContinuous` |
+| `render` | `request`, `setContinuous`, `isContinuous`, `setSharpen`, `sharpen` |
 | `surface` | `sampleHeight`, `supported`, `terrainHeight`, `terrainHeightSupported`, `clampToHeight`, `clampToHeightSupported`, `tilesLoaded` |
 | `input` | `on`, `setCameraInputs` |
 | `credits` | `addStatic` |
@@ -409,6 +410,105 @@ the new look.
   option;
 - a sun date that can follow the clock.
 
+## Sharpen on Navara
+
+The Sharpen toggle and slider now work in Navara mode, and Navara opens
+with Sharpen on at 80 % (Cesium keeps 49 %).
+
+**The contract.** `render.setSharpen({ enabled, amount })` and
+`render.sharpen()` (60 members). `amount` is the Cesium stage's uniform,
+which the slider maps from 0–100 % to 0.1–2.1 (`sharpenAmount` in
+`visualPresets.js`, shared by both engines). Omitted fields keep their
+value, and bad values throw a `TypeError`. The Cesium engine only keeps
+the state: Cesium mode still sharpens with its own post stage, unchanged.
+The fake engine records the calls. The contract suite checks merging, the
+copy `sharpen()` returns, rejection and a drawn frame on all three engines.
+
+**On Navara** ([`sharpen.js`](../../src/globe/navara/sharpen.js)) the
+sharpening is a custom `EffectDesc`, using public API only:
+
+- **The maths:** Cesium's unsharp mask, `center + (center − blur) × amount`
+  over a 3×3 box blur, clamped to [0, 1]. Cesium sharpens gamma-encoded
+  colours (its tone mapping ends in `czm_inverseGamma`), while Navara's
+  buffers stay linear until the final copy. The mask therefore encodes
+  with gamma 2.2 and decodes afterwards, so one amount sharpens the same
+  on both engines.
+- **Where it sits:** directly after `toneMapping`, before `smaa` (or
+  `fxaa` on mobile, or `final` in the minimal look). Navara's pass list
+  in the cinematic look reads `skyEnvMap`, `mrt`, `aerialPerspective`,
+  `clouds`, `lensFlare`, `transparent`, `toneMapping`, **`gevSharpen`**,
+  `smaa`, `final`. This is Cesium's order too: its custom
+  stages run after tone mapping and before FXAA. After tone mapping the
+  colours are in display range, so highlights do not blow up, and SMAA
+  then smooths the stair steps that sharpening brings out.
+  `qa-globe-contract` checks this order in Navara's pass list.
+- **The sky is left alone.** Navara's clouds are dithered at the `low`
+  quality the look uses, and at 80 % the mask turned their grain into
+  visible noise. A pixel whose scene depth (the MRT pass's packed depth
+  buffer, the one the S1 drape reads) is the far plane keeps its colour.
+  Facing the horizon, the top of the frame changes no more with the mask
+  at amount 2.1 than between two frames without it (`qa-globe-contract`).
+- **Its own pass.** A convolution reads its pass's input, so merged into
+  the tone-mapping pass it would blur colours that are not tone mapped
+  yet, and Navara 0.2.1 has no public way to merge passes anyway. The
+  pass is added the first time Sharpen is on. While Sharpen is off it is
+  disabled, which costs nothing.
+
+**The app.** Without a viewer, `VisualEffects` sends the slider and the
+toggle to `engine.render.setSharpen`. The global defaults, the style
+presets and share links go through `sharpenIntensityForEngine`: on Navara,
+Cesium's default of 49 (every preset's value) reads as Navara's 80, and
+any other value stays as given. What that means in Navara mode:
+
+- **First load:** the slider shows 80 % with Sharpen on.
+- **Switching style** (Normal, CRT, NVG, FLIR...): Sharpen goes back to on
+  at 80 %, as on Cesium it goes back to 49 %. Any change made by hand is
+  replaced, as on Cesium.
+- **Share links:** a Navara link carries `si=80` and restores 80. A link
+  written on Cesium with the default `si=49`, or a link without `si`,
+  opens at 80. Any other value (`si=65`) restores as written. One quirk: a
+  Navara user who sets exactly 49 % gets 80 % back from the link.
+- **Explicit calls** (`styleManager.setSharpen`, the voice action) set
+  exactly what they ask for.
+- **Scene shots:** the director is not built in Navara mode, so none apply.
+
+**Look** (`node scripts/qa-navara-look.mjs --sharpen=0,49,80`, headless
+`--use-angle=metal`, 1280×800, the slider set through the shell): Lower
+Manhattan at 900 m, then the same place facing the horizon. Each frame is
+shown above a 1:1 crop.
+
+![Sharpen 0 %, 49 % and 80 % on Navara](navara-look/sharpen.jpg)
+
+- **The city:** at 80 % facades, windows and street edges come out
+  clearly, with thin halos along high-contrast edges (dark roofs against
+  light walls). Far ground near the horizon gets crisper and busier.
+  49 % is the gentler choice.
+- **Sky and clouds:** unchanged at every level (the depth mask). Without
+  the mask, 80 % visibly amplified the cloud grain.
+
+**Cost.** Measured with `qa-engine-bench.mjs --engine=navara
+--server=preview --runs=3` (the flight from Austin to Paris at 20 km, 10 s,
+1280×800). Sharpen was on at 80 % (the default), then off with
+`--navara-sharpen=off`, then on again, with a 90 s cool-down between
+series:
+
+| Navara, cinematic | Flight p50 (ms) | p50 per run | Flight p95 (ms) | p95 per run | Frames per second |
+|---|---|---|---|---|---|
+| Sharpen on, 80 % | 8.0 | 7.9–8.0 | 14.2 | 13.1–14.7 | 128.3 |
+| Sharpen off | 7.1 | 7.0–7.2 | 12.5 | 12.4–12.8 | 142.3 |
+| Sharpen on, 80 % (again) | 7.7 | 7.7–8.0 | 14.0 | 13.9–14.0 | 132.3 |
+
+- **The cost:** about 0.6–0.9 ms at p50 and 1.5–1.7 ms at p95. That is the
+  ~0.8 ms fixed cost of a separate Navara pass (S1) plus nine
+  gamma-encoded reads per ground pixel. The flight stays within the
+  16.7 ms p95 budget, with less margin than before (14.0–14.2 ms against
+  12.5 ms).
+- **Sky pixels** cost one depth read and no blur.
+- **Cheaper options**, if the margin is needed back: merge the mask into
+  another pass (an upstream ask since S1), or drop the gamma round trip
+  and sharpen in linear space. The second would make the same `amount`
+  look a little different from Cesium.
+
 ## QA
 
 Final runs at the last commit, headless on free ports (never 4185):
@@ -432,6 +532,21 @@ After the Navara look (see that section):
 
 The Cesium contract run and the shell run on `vite preview` were not
 repeated.
+
+After Sharpen on Navara (see that section):
+
+- `npm test`: 6822 tests, 6821 pass, 1 skip;
+- `check:boundaries`, `format:check` and `build`: clean. The Cesium main
+  chunk grew by 324 B (2,849,820 to 2,850,144 B, against a build of
+  `17e4dfd5`): the contract members and the slider's routing. It carries
+  no Navara, three or postprocessing code; the mask is in the
+  `navara-engine` chunk;
+- `qa-globe-contract`: Cesium 64/64 (57 contract, 7 engine), Navara 68/68
+  (57 contract, 11 engine). The Navara run logged HTTP 429 from OSM's
+  tile server after several back-to-back runs;
+- `qa-engine-shell --engine=both` on the dev server: Cesium 22/22, Navara
+  24/24, cross-engine 3/3. One earlier run timed out booting Navara
+  (180 s); the rerun passed.
 
 What `qa-engine-shell` measured, on dev (preview gave the same verdicts):
 

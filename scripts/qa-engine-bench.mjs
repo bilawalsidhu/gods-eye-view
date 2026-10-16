@@ -12,7 +12,7 @@
  *
  *   node scripts/qa-engine-bench.mjs [--engine=cesium|navara|both]
  *     [--server=dev|preview] [--base-url=URL] [--runs=3] [--out=FILE.json]
- *     [--navara-look=cinematic|photoreal|minimal]
+ *     [--navara-look=cinematic|photoreal|minimal] [--navara-sharpen=off|0..100]
  *
  * --server=dev (the default) starts this checkout's Vite dev server and
  * --server=preview a `vite preview` of dist/ (run `npm run build` first),
@@ -20,7 +20,10 @@
  * Each engine gets one discarded warm-up run (the dev server transforms
  * modules on first request), then --runs measured runs, each in a fresh
  * browser context. --navara-look picks Navara's look (`?look=`; the app's
- * default, cinematic, when omitted). Reports every run and the medians. Headless numbers are
+ * default, cinematic, when omitted). --navara-sharpen sets Navara's Sharpen
+ * control before the flight, through the shell's setSharpen as the slider
+ * does: `off`, or on at a slider value (the app's default, on at 80 %, when
+ * omitted). Reports every run and the medians. Headless numbers are
  * indicative: no display, no vsync, a software-composited headless window.
  * Provider keys are never printed. Exits 1 when a run fails.
  */
@@ -60,6 +63,22 @@ const navaraLook = argument('navara-look');
 if (navaraLook && !['cinematic', 'photoreal', 'minimal'].includes(navaraLook)) {
   console.error(
     `Unknown Navara look "${navaraLook}"; known: cinematic, photoreal, minimal`,
+  );
+  process.exit(2);
+}
+const navaraSharpenArg = argument('navara-sharpen');
+const navaraSharpen =
+  navaraSharpenArg === undefined
+    ? null
+    : navaraSharpenArg === 'off'
+      ? { enabled: false }
+      : { enabled: true, intensityPct: Number(navaraSharpenArg) };
+if (
+  navaraSharpen?.intensityPct !== undefined &&
+  !(navaraSharpen.intensityPct >= 0 && navaraSharpen.intensityPct <= 100)
+) {
+  console.error(
+    `Unknown Navara sharpen "${navaraSharpenArg}"; known: off, 0..100`,
   );
   process.exit(2);
 }
@@ -314,6 +333,20 @@ async function runOnce(browser, baseUrl, engine) {
     }));
     if (initial.kind !== engine)
       throw new Error(`booted ${initial.kind}, not ${engine}`);
+    if (engine === 'navara' && navaraSharpen) {
+      const result = await page.evaluate(
+        (options) => window.__godsEyeView.styleManager.setSharpen(options),
+        navaraSharpen,
+      );
+      if (!result?.ok)
+        throw new Error(`setSharpen failed: ${JSON.stringify(result)}`);
+    }
+    const sharpen =
+      engine === 'navara'
+        ? await page.evaluate(() =>
+            window.__godsEyeView.engine.render.sharpen(),
+          )
+        : null;
     const flight = await page.evaluate(runFlight, FLIGHT);
     const deltas = flight.times
       .slice(1)
@@ -324,6 +357,7 @@ async function runOnce(browser, baseUrl, engine) {
       engineReadyMs: round(initial.engineAt, 0),
       initialViewMs: round(initial.initialViewMs, 0),
       startupHeight: round(initial.height, 0),
+      ...(sharpen ? { sharpen } : {}),
       flight: {
         ended: flight.ended,
         startTilesMs: round(flight.startTilesMs, 0),
@@ -369,6 +403,7 @@ const browser = await puppeteer.launch({
 const report = {
   server: argument('base-url') ? 'base-url' : serverKind,
   navaraLook: navaraLook ?? 'default',
+  navaraSharpen: navaraSharpenArg ?? 'default',
   runs: RUNS,
   flight: FLIGHT,
   engines: {},

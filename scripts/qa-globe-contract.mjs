@@ -745,6 +745,132 @@ async function runNavara(page, url, consoleErrors) {
     );
 
     await check(
+      'navara: setSharpen draws an unsharp mask after tone mapping, before anti-aliasing, not on the sky',
+      async () => {
+        engine.camera.setView({
+          destination: cartesian3.fromDegrees(-74.0, 40.71, 3000),
+          orientation: { heading: 0, pitch: -Math.PI / 2, roll: 0 },
+        });
+        await settle();
+        for (let i = 0; i < 200 && !engine.surface.tilesLoaded(); i++)
+          await sleep(100);
+        await settle();
+        // Mean absolute Laplacian of the luminance in the middle of the
+        // frame: what an unsharp mask raises.
+        const sharpness = async () => {
+          await settle(2);
+          const source = engine.host.canvas;
+          const width = 320;
+          const height = 200;
+          const copy = document.createElement('canvas');
+          copy.width = width;
+          copy.height = height;
+          const context = copy.getContext('2d');
+          context.drawImage(
+            source,
+            (source.width - width) / 2,
+            (source.height - height) / 2,
+            width,
+            height,
+            0,
+            0,
+            width,
+            height,
+          );
+          const { data } = context.getImageData(0, 0, width, height);
+          const luma = (x, y) => {
+            const i = 4 * (y * width + x);
+            return 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
+          };
+          let sum = 0;
+          for (let y = 1; y < height - 1; y++)
+            for (let x = 1; x < width - 1; x++)
+              sum += Math.abs(
+                4 * luma(x, y) -
+                  luma(x - 1, y) -
+                  luma(x + 1, y) -
+                  luma(x, y - 1) -
+                  luma(x, y + 1),
+              );
+          return sum / ((width - 2) * (height - 2));
+        };
+        const previous = engine.render.sharpen();
+        try {
+          engine.render.setSharpen({ enabled: false });
+          const off = await sharpness();
+          engine.render.setSharpen({ enabled: true, amount: 1.7 });
+          const on = await sharpness();
+          // QA only: Navara's pass order is private (ThreeView's
+          // renderPassOrchestrator).
+          const names = view.renderPassOrchestrator?.getPassNames?.();
+          ensure(Array.isArray(names), 'the pass order is unreadable');
+          const at = names.indexOf('gevSharpen');
+          const toneMapping = names.indexOf('toneMapping');
+          const antiAliasing = names.findIndex(
+            (name) => name === 'smaa' || name === 'fxaa',
+          );
+          ensure(
+            at >= 0 &&
+              toneMapping >= 0 &&
+              at === toneMapping + 1 &&
+              (antiAliasing < 0 || at < antiAliasing),
+            `the sharpening is not between tone mapping and anti-aliasing: ${names.join(', ')}`,
+          );
+          ensure(
+            on > off * 1.2,
+            `sharpness ${on.toFixed(2)} with the mask is not above ${off.toFixed(2)} without`,
+          );
+          engine.render.setSharpen({ enabled: false });
+          const offAgain = await sharpness();
+          ensure(
+            Math.abs(offAgain - off) <= off * 0.02,
+            `sharpness off ${offAgain.toFixed(2)} is not back to ${off.toFixed(2)}`,
+          );
+          // The sky (and the clouds in it) is left alone: facing the
+          // horizon, the top of the frame changes no more with the mask on
+          // than between two frames without it.
+          engine.camera.setView({
+            destination: cartesian3.fromDegrees(-74.013, 40.706, 900),
+            orientation: { heading: 0.52, pitch: -0.1, roll: 0 },
+          });
+          await settle();
+          for (let i = 0; i < 200 && !engine.surface.tilesLoaded(); i++)
+            await sleep(100);
+          const sky = async () => {
+            await settle(2);
+            const source = engine.host.canvas;
+            const width = source.width;
+            const height = Math.round(source.height * 0.12);
+            const copy = document.createElement('canvas');
+            copy.width = width;
+            copy.height = height;
+            const context = copy.getContext('2d');
+            context.drawImage(source, 0, 0, width, height, 0, 0, width, height);
+            return context.getImageData(0, 0, width, height).data;
+          };
+          const difference = (a, b) => {
+            let sum = 0;
+            for (let i = 0; i < a.length; i++) sum += Math.abs(a[i] - b[i]);
+            return sum / a.length;
+          };
+          const skyOff = await sky();
+          engine.render.setSharpen({ enabled: true, amount: 2.1 });
+          const skyOn = await sky();
+          engine.render.setSharpen({ enabled: false });
+          const skyOffAgain = await sky();
+          const masked = difference(skyOff, skyOn);
+          const noise = difference(skyOff, skyOffAgain);
+          ensure(
+            masked <= noise + 0.25,
+            `the sky changed by ${masked.toFixed(3)} with the mask (frame noise ${noise.toFixed(3)})`,
+          );
+        } finally {
+          engine.render.setSharpen(previous);
+        }
+      },
+    );
+
+    await check(
       'navara: render governor holds keep frames coming; releasing the last returns to idle',
       async () => {
         const governor = await import('/src/renderGovernor.js');
