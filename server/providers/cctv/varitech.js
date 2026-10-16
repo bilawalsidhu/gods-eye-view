@@ -100,9 +100,10 @@ export function loadVaritechSourcesFromCatalog({
         center.name +
         ' · 5-minute snapshots · approximate resort-area location',
       license:
-        'Varitech terms apply (https://varitech.ar/terminos). Informational ' +
-        'media use requires attribution; commercial reuse requires written ' +
-        'authorization. Map references: © OpenStreetMap contributors (ODbL).',
+        'Varitech terms §§6,8 (https://varitech.ar/terminos): attributed ' +
+        'informational media use; written permission for commercial reuse; ' +
+        'no unauthorized automated extraction; no surveillance or tracking of people. ' +
+        'Map references: © OpenStreetMap contributors (ODbL).',
     });
   }
   return cameras;

@@ -82,3 +82,61 @@
 .gev-voice-cost-value[hidden] {
   display: none;
 }
+
+/* The heading row is only as wide as the voice column: the cost cluster
+   keeps its size and a long state (ПОДКЛЮЧЕНИЕ, CONECTANDO) ends in an
+   ellipsis. Dropping the kicker returns its gap to the state label; the
+   negative margin reaches over the gutter beside the mic ring, which has
+   curved away at heading height. */
+html:not([lang='en']) #command-dock .gev-voice-heading {
+  gap: 0.2rem;
+  margin-left: -0.6rem;
+}
+
+html:not([lang='en']) #command-dock .gev-voice-heading > .gev-voice-kicker {
+  display: none;
+}
+
+html:not([lang='en']) #command-dock .gev-voice-heading > #gev-voice-status {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  letter-spacing: 0;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+html:not([lang='en']) #command-dock .gev-voice-cost {
+  gap: 0.16rem;
+  padding-left: 0.1rem;
+}
+
+html:not([lang='en']) #command-dock .gev-voice-tier-btn {
+  min-width: 0;
+  padding: 0 0.2rem;
+}
+
+html:not([lang='en']) #command-dock .gev-voice-cost-value {
+  letter-spacing: 0;
+}
+
+/* Live hints and the tier switch ("СТАНДАРТ — со следующей сессии") run
+   longer: a second line from the spare space under the readout, with no
+   tracking so the tier line does not need a third. */
+html:not([lang='en'])
+  #command-dock
+  #gev-voice-control:is(
+    [data-status='connecting'],
+    [data-status='listening'],
+    [data-status='executing']
+  )
+  #gev-voice-detail {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  line-height: 1.15;
+  letter-spacing: 0;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}

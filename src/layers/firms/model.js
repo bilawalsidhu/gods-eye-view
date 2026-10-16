@@ -1,4 +1,5 @@
 import * as Cesium from 'cesium';
+import { formatNumber, t } from '../../i18n/index.js';
 import {
   satelliteShortName,
   fireDetectionKey,
@@ -329,14 +330,18 @@ export function createModel({
    */
 
   function buildSelectedFireCard(fire, nowMs) {
-    const meta = [`${confidenceBucket(fire.confidence)} conf`];
+    const meta = [
+      t('{value} conf', {
+        value: confidenceLabel(confidenceBucket(fire.confidence)),
+      }),
+    ];
     if (fire.acqMs > 0) {
-      const age = formatAge(nowMs - fire.acqMs);
-      if (age) meta.push(`${age} ago`);
+      const age = formatAgeLabel(nowMs - fire.acqMs);
+      if (age) meta.push(t('{value} ago', { value: age }));
     }
     const sat = satelliteShortName(fire.satellite);
     meta.push(
-      sat ? `${fire.sensor || 'VIIRS'} ${sat}` : fire.sensor || 'sensor n/a',
+      sat ? `${fire.sensor || 'VIIRS'} ${sat}` : fire.sensor || t('sensor n/a'),
     );
     return {
       id: `selected-fire:${fireDetectionKey(fire)}`,
@@ -346,10 +351,11 @@ export function createModel({
       cullPosition: fireCullPosition(fire),
       gapPx: frpPixelSize(fire.frp),
       accent: accentForSeverity(detectionColorStop(fire).name),
-      title: `FIRE · ${formatFrp(fire.frp)} MW`,
+      title: t('FIRE · {frp} MW', { frp: formatFrpLabel(fire.frp) }),
       details: [
         meta.join(' · '),
-        formatLatLon(fire.lat, fire.lon) + (fire.night ? ' · NIGHT' : ''),
+        formatLatLonLabel(fire.lat, fire.lon) +
+          (fire.night ? ` · ${t('NIGHT')}` : ''),
       ],
       selected: true,
       priority: Number.MAX_SAFE_INTEGER,
@@ -368,9 +374,9 @@ export function createModel({
 
   function buildFireCard(candidate, nowMs) {
     const fire = candidate.fire;
-    const meta = [confidenceBucket(fire.confidence)];
+    const meta = [confidenceLabel(confidenceBucket(fire.confidence))];
     if (fire.acqMs > 0) {
-      const age = formatAge(nowMs - fire.acqMs);
+      const age = formatAgeLabel(nowMs - fire.acqMs);
       if (age) meta.push(age);
     }
     const sat = satelliteShortName(fire.satellite) || fire.sensor;
@@ -382,7 +388,7 @@ export function createModel({
       cullPosition: candidate.cullPosition || candidate.position,
       gapPx: frpPixelSize(fire.frp),
       accent: accentForSeverity(detectionColorStop(fire).name),
-      title: `▲ ${formatFrp(fire.frp)} MW`,
+      title: t('▲ {frp} MW', { frp: formatFrpLabel(fire.frp) }),
       details: [meta.join(' · ')],
       selected: false,
       priority: Number(fire.frp) || 0,
@@ -400,11 +406,11 @@ export function createModel({
 
   function buildCellCard(candidate, nowMs) {
     const cell = candidate.cell;
-    const noun = cell.count === 1 ? 'FIRE' : 'FIRES';
-    const parts = [`max ${formatFrp(cell.maxFrp)} MW`];
+    const noun = cell.count === 1 ? t('FIRE') : t('FIRES');
+    const parts = [t('max {value} MW', { value: formatFrpLabel(cell.maxFrp) })];
     if (cell.newestAcqMs > 0) {
-      const age = formatAge(nowMs - cell.newestAcqMs);
-      if (age) parts.push(`new ${age}`);
+      const age = formatAgeLabel(nowMs - cell.newestAcqMs);
+      if (age) parts.push(t('new {value}', { value: age }));
     }
     return {
       id: `cell:${cell.latCell ?? 'x'}:${cell.lonCell ?? 'x'}`,
@@ -477,6 +483,37 @@ export function createModel({
     return frp >= 10 ? frp.toFixed(0) : frp.toFixed(1);
   }
 
+  /** formatFrp for a card, with the locale's decimal separator ("4,9"). */
+
+  function formatFrpLabel(frp) {
+    const digits = frp >= 10 ? 0 : 1;
+    return formatNumber(frp, {
+      minimumFractionDigits: digits,
+      maximumFractionDigits: digits,
+      useGrouping: false,
+    });
+  }
+
+  /** formatLatLon for a card: "8,389° ю. ш. 44,162° з. д." in Russian. */
+
+  function formatLatLonLabel(lat, lon) {
+    const amount = (value) =>
+      formatNumber(Math.abs(value), {
+        minimumFractionDigits: 3,
+        maximumFractionDigits: 3,
+        useGrouping: false,
+      });
+    const latPart =
+      lat >= 0
+        ? t('{value}°N', { value: amount(lat) })
+        : t('{value}°S', { value: amount(lat) });
+    const lonPart =
+      lon >= 0
+        ? t('{value}°E', { value: amount(lon) })
+        : t('{value}°W', { value: amount(lon) });
+    return `${latPart} ${lonPart}`;
+  }
+
   /** Millisecond delta → "<1h" / "Xh" / "Xd", or '' for invalid input. */
 
   function formatAge(deltaMs) {
@@ -490,11 +527,37 @@ export function createModel({
   /** Millisecond delta → "<1m ago" / "Xm ago" / "Xh ago" (fresh-feed readout). */
 
   function formatAgoMinutes(deltaMs) {
-    if (!Number.isFinite(deltaMs) || deltaMs < 0) return 'just now';
+    if (!Number.isFinite(deltaMs) || deltaMs < 0) return t('just now');
     const minutes = Math.floor(deltaMs / 60000);
-    if (minutes < 1) return '<1m ago';
-    if (minutes < 90) return `${minutes}m ago`;
-    return `${Math.round(minutes / 60)}h ago`;
+    if (minutes < 1) return t('<1m ago');
+    if (minutes < 90) return t('{count}m ago', { count: minutes });
+    return t('{count}h ago', { count: Math.round(minutes / 60) });
+  }
+
+  /** A confidence bucket as a card shows it, in the UI language. */
+
+  function confidenceLabel(bucket) {
+    switch (bucket) {
+      case 'high':
+        return t('high', { context: 'fire confidence' });
+      case 'nominal':
+        return t('nominal', { context: 'fire confidence' });
+      case 'low':
+        return t('low', { context: 'fire confidence' });
+      default:
+        return bucket;
+    }
+  }
+
+  /** formatAge for a card: "<1h", "24h", "3d" in the UI language ("24 ч"). */
+
+  function formatAgeLabel(deltaMs) {
+    if (!Number.isFinite(deltaMs) || deltaMs < 0) return '';
+    const hours = deltaMs / 3600000;
+    if (hours < 1) return t('<1h', { context: 'age' });
+    if (hours < 48)
+      return t('{count}h', { context: 'age', count: Math.round(hours) });
+    return t('{count}d', { context: 'age', count: Math.round(hours / 24) });
   }
 
   /** Normalized 0..1 confidence → low/nominal/high display bucket. */

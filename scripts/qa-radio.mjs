@@ -167,6 +167,13 @@ async function main() {
     page.on('request', (request) => {
       const url = new URL(request.url());
 
+      // Radio QA uses keyless maps; an optional Google token is not offered.
+      if (request.method() === 'GET' && url.origin === APP_ORIGIN
+        && url.pathname === '/api/google/tiles-token') {
+        request.respond({ status: 200, contentType: 'application/json', body: '{}' });
+        return;
+      }
+
     // These scenarios exercise Context lifecycle and keyboard ownership, not
     // live orbit accuracy. Reuse the tracking suite's fixed element sets so
     // CelesTrak outages cannot invalidate an otherwise clean UI run.

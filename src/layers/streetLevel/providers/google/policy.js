@@ -1,10 +1,11 @@
 import { COLORS as SHARED_COLORS, PROVIDER_COLORS } from '../../policy.js';
+import { msg } from '../../../../i18n/index.js';
 
 export { NEAREST_RADIUS_M } from '../../policy.js';
 
 export const GOOGLE_PROVIDER_ID = 'google';
-export const GOOGLE_NAME = 'Google Street View';
-export const GOOGLE_LABEL = 'GOOGLE STREET VIEW';
+export const GOOGLE_NAME = msg('Google Street View');
+export const GOOGLE_LABEL = msg('GOOGLE STREET VIEW');
 /** The browser Maps key; Street View also needs the Maps JavaScript API on it. */
 export const GOOGLE_KEY_ID = 'google-maps';
 
@@ -19,8 +20,9 @@ export const GOOGLE_CREDIT_HTML =
   'Street View imagery © <a href="https://www.google.com/streetview/" target="_blank" rel="noopener">Google</a>';
 
 /** Shown when Google refuses the key (gm_authFailure). */
-export const KEY_REJECTED_MESSAGE =
-  'Google refused GOOGLE_MAPS_API_KEY for Street View — check that the Maps JavaScript API is enabled for it and this site is an allowed referrer';
+export const KEY_REJECTED_MESSAGE = msg(
+  'Google refused GOOGLE_MAPS_API_KEY for Street View — check that the Maps JavaScript API is enabled for it and this site is an allowed referrer',
+);
 
 /** Past these, a nearest lookup, an open or a details lookup has failed. */
 export const NEAREST_TIMEOUT_MS = 10_000;
@@ -29,10 +31,11 @@ export const DETAILS_TIMEOUT_MS = 10_000;
 /** Pause after a failed details lookup before a view event can retry. */
 export const DETAILS_RETRY_COOLDOWN_MS = 5_000;
 
-export const NO_ANSWER_MESSAGE =
-  'Street View did not answer — check the network, and that the Maps JavaScript API is enabled for GOOGLE_MAPS_API_KEY';
+export const NO_ANSWER_MESSAGE = msg(
+  'Street View did not answer — check the network, and that the Maps JavaScript API is enabled for GOOGLE_MAPS_API_KEY',
+);
 
-export const GROUND_CLICK_HINT = 'click a street to open Street View';
+export const GROUND_CLICK_HINT = msg('click a street to open Street View');
 
 /** Deep link to a panorama on Google Maps (Maps URLs). */
 export function streetViewUrl(panoId, { heading = 0, pitch = 0 } = {}) {

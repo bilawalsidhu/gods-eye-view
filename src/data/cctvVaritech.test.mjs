@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { createCctvCatalog } from '../../server/providers/cctv/catalog.js';
 import {
   createVaritechSnapshotFetcher,
   loadVaritechSourcesFromCatalog,
@@ -13,6 +14,42 @@ const jpeg = () =>
   new Response(Uint8Array.from([0xff, 0xd8, 0xff, 0xd9]), {
     headers: { 'Content-Type': 'image/jpeg' },
   });
+
+for (const flag of [undefined, '', '0', 'true', '1']) {
+  test(`Varitech catalog requires explicit opt-in (flag=${String(flag)})`, async (t) => {
+    const values = {
+      CCTV_VARITECH_ENABLED: flag,
+      CCTV_SOURCES_JSON: undefined,
+      CCTV_SOURCES_FILE: 'absent-varitech-test-catalog.json',
+      CCTV_FORCE_AUSTIN: undefined,
+      CCTV_MAX_SOURCES: '4000',
+    };
+    for (const [key, value] of Object.entries(values)) {
+      const saved = process.env[key];
+      t.after(() => {
+        if (saved === undefined) delete process.env[key];
+        else process.env[key] = saved;
+      });
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+    const requested = [];
+    t.mock.method(console, 'log', () => {});
+    t.mock.method(console, 'warn', () => {});
+    t.mock.method(globalThis, 'fetch', async (url) => {
+      requested.push(String(url));
+      return Response.json([]);
+    });
+    const sources = await createCctvCatalog()();
+    assert.equal(
+      sources.filter((source) => source.sourceKind === 'varitech-webcam')
+        .length,
+      flag === '1' ? 11 : 0,
+    );
+    assert.ok(requested.length > 0, 'other packs still refresh');
+    assert.ok(!requested.some((url) => url.includes('varitech.ar')));
+  });
+}
 
 test('Varitech labels resort references and estimated headings honestly', () => {
   const cameras = loadVaritechSourcesFromCatalog();
