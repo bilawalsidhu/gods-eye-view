@@ -46,11 +46,11 @@ test('a build without Navara gets no Navara wasm', (t) => {
   assert.deepEqual(emitted, []);
 });
 
-test('the browser build runs the Navara asset copy as a Rollup plugin', () => {
+test('the browser build runs the Navara asset copy and the initial-chunk guard as Rollup plugins', () => {
   const { build } = createBrowserViteConfig({});
   assert.deepEqual(
     build.rollupOptions.plugins.map(({ name }) => name),
-    ['navara-worker-assets'],
+    ['navara-worker-assets', 'gev-initial-chunk-guard'],
   );
   assert.equal(build.chunkSizeWarningLimit, 1500);
 });
