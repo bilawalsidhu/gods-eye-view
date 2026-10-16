@@ -402,9 +402,10 @@
   Vehicles GraphQL API (realtime v2) instead of the v1 GTFS-Realtime feed,
   which lacks Skyss, Vestfold og Telemark, Innlandet and other operators —
   roughly half again as many vehicles. Each vehicle's own reported mode
-  (bus, coach, tram, rail, ferry) sets its marker, and the coverage circle
-  now reaches from Kristiansand to Kirkenes while still leaving Helsinki to
-  HSL. Ruter does not publish to either open Entur feed.
+  (bus, coach, tram, rail, ferry) sets its marker. Three coverage circles
+  now reach from Lindesnes to Vardø and Grense Jakobselv, while Sweden,
+  Finland, Murmansk, the Faroes and Shetland stay out of range. Ruter does
+  not publish to either open Entur feed.
 
 - Street Level: a street-level imagery layer modelled on the iD editor's photo
   overlay, with Mapillary as its first provider (free client token, CC BY-SA 4.0

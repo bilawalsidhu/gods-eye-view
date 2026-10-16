@@ -164,17 +164,52 @@ test('a reported mode outranks the fleet and route hints', () => {
   assert.equal(transitModeResolved(feed, '36', '1', null), false);
 });
 
-test('Entur covers the whole country, from Kristiansand to Kirkenes', () => {
+test('Entur covers the whole country, from Lindesnes to Vardø', () => {
   for (const [city, lat, lon] of [
+    ['Lindesnes', 57.98, 7.05],
     ['Kristiansand', 58.15, 8.0],
     ['Stavanger', 58.97, 5.73],
+    ['Halden', 59.12, 11.39],
+    ['Trysil', 61.31, 12.26],
+    ['Røros', 62.57, 11.38],
     ['Bodø', 67.28, 14.4],
+    ['Narvik', 68.44, 17.43],
+    ['Kautokeino', 69.0, 23.04],
     ['Hammerfest', 70.66, 23.68],
     ['Kirkenes', 69.73, 30.05],
+    ['Vardø', 70.37, 31.11],
+    ['Grense Jakobselv', 69.79, 30.8],
   ]) {
     assert.ok(
       transitFeedsInRange(lat, lon).some((f) => f.id === 'entur-norway'),
       `${city} is covered by Entur`,
+    );
+  }
+});
+
+test('Entur is not polled from a neighbouring city, even past the range slack', () => {
+  // layers/transit/policy.js RANGE_SLACK_KM keeps an active feed this far out.
+  const slackKm = 40;
+  for (const [city, lat, lon] of [
+    ['Stockholm', 59.33, 18.07],
+    ['Gothenburg', 57.71, 11.97],
+    ['Karlstad', 59.38, 13.5],
+    ['Östersund', 63.18, 14.64],
+    ['Umeå', 63.83, 20.26],
+    ['Luleå', 65.58, 22.15],
+    ['Kiruna', 67.86, 20.23],
+    ['Oulu', 65.01, 25.47],
+    ['Rovaniemi', 66.5, 25.73],
+    ['Helsinki', 60.17, 24.94],
+    ['Murmansk', 68.97, 33.08],
+    ['Tórshavn', 62.01, -6.77],
+    ['Lerwick', 60.15, -1.15],
+  ]) {
+    assert.ok(
+      !transitFeedsInRange(lat, lon, slackKm).some(
+        (f) => f.id === 'entur-norway',
+      ),
+      `${city} does not poll Entur`,
     );
   }
 });

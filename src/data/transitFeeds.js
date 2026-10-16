@@ -394,9 +394,13 @@ function burlingtonRouteLabel(routeId) {
 /**
  * Registry of feeds. Order is presentation order in the stats/credit text.
  * `loadRadiusKm` is the distance from `center` inside which the feed is polled.
+ * A feed whose region no single circle fits lists `coverage` circles instead:
+ * it is polled inside any of them, and `center`/`loadRadiusKm` only describe
+ * its extent.
  * @type {ReadonlyArray<Readonly<{
  *   id: string, name: string, operator: string, region: string,
  *   center: {lat: number, lon: number}, loadRadiusKm: number,
+ *   coverage?: ReadonlyArray<{lat: number, lon: number, radiusKm: number}>,
  *   url: string, headers?: Record<string, string>,
  *   format?: 'entur-vehicles',
  *   request?: {method: string, contentType: string, body: string},
@@ -511,11 +515,18 @@ export const TRANSIT_FEED_REGISTRY = Object.freeze([
     name: 'Entur',
     operator: 'Entur AS (Norwegian national transit data)',
     region: 'Norway',
-    // Circle centred off the coast so it holds Kristiansand (≈985 km) and
-    // Kirkenes (≈985 km) while leaving Helsinki (≈1,160 km) out past the
-    // range slack — a national feed must not poll from next door.
     center: Object.freeze({ lat: 67.0, lon: 7.0 }),
     loadRadiusKm: 1000,
+    // No one circle holds Norway without Sweden, Finland or the islands to
+    // the west: these three reach from Lindesnes to Vardø and Grense
+    // Jakobselv, and every neighbouring city (Lerwick, Östersund, Kiruna,
+    // Karlstad, Uddevalla nearest) stays over 50 km out, past the range
+    // slack — a national feed must not poll from next door.
+    coverage: Object.freeze([
+      Object.freeze({ lat: 61.3, lon: 6.5, radiusKm: 380 }),
+      Object.freeze({ lat: 67.3, lon: 4.5, radiusKm: 600 }),
+      Object.freeze({ lat: 71.3, lon: 23.0, radiusKm: 340 }),
+    ]),
     // The v2 Vehicles API, not the v1 GTFS-RT feed: Skyss, Vestfold og
     // Telemark, Innlandet and others publish their positions only here.
     url: 'https://api.entur.io/realtime/v2/vehicles/graphql',
@@ -818,6 +829,19 @@ export function haversineKm(aLat, aLon, bLat, bLon) {
   return 2 * 6371 * Math.asin(Math.min(1, Math.sqrt(h)));
 }
 
+/** A feed's coverage circles: its `coverage`, else its one load circle. */
+function coverageCircles(feed) {
+  return (
+    feed.coverage ?? [
+      {
+        lat: feed.center.lat,
+        lon: feed.center.lon,
+        radiusKm: feed.loadRadiusKm,
+      },
+    ]
+  );
+}
+
 /**
  * Feeds whose coverage circle contains the point, nearest first.
  * @param {number} lat
@@ -828,11 +852,21 @@ export function haversineKm(aLat, aLon, bLat, bLon) {
  */
 export function transitFeedsInRange(lat, lon, slackKm = 0) {
   if (!Number.isFinite(lat) || !Number.isFinite(lon)) return [];
-  return TRANSIT_ENABLED_FEEDS.map((feed) => ({
-    feed,
-    km: haversineKm(lat, lon, feed.center.lat, feed.center.lon),
-  }))
-    .filter(({ feed, km }) => km <= feed.loadRadiusKm + Math.max(0, slackKm))
+  const slack = Math.max(0, slackKm);
+  return TRANSIT_ENABLED_FEEDS.map((feed) => {
+    // How far inside its nearest circle's edge the point is (negative: out).
+    let depth = -Infinity;
+    let km = Infinity;
+    for (const circle of coverageCircles(feed)) {
+      const distance = haversineKm(lat, lon, circle.lat, circle.lon);
+      if (circle.radiusKm - distance > depth) {
+        depth = circle.radiusKm - distance;
+        km = distance;
+      }
+    }
+    return { feed, km, depth };
+  })
+    .filter(({ depth }) => depth + slack >= 0)
     .sort((a, b) => a.km - b.km)
     .map(({ feed }) => feed);
 }
