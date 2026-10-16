@@ -1010,6 +1010,7 @@
   "scripts/qa/navaraContractPage.js",
   "scripts/qa/tileCache.mjs",
   "src/annotations/resolverEngine.test.mjs",
+  "src/voice/gevActionsEngine.test.mjs",
   "src/app/controls.test.mjs",
   "src/app/engineChoice.js",
   "src/app/engineChoice.test.mjs",

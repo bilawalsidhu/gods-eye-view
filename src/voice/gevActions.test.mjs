@@ -25,7 +25,8 @@ import { GEV_REALTIME_TOOLS } from '../../server/providers/openai/tools.js';
 import { presentResult } from './resultDisplay.js';
 import { attachVoiceResult } from './speech.js';
 import { createCesiumEngine } from '../globe/cesium/createCesiumEngine.js';
-import { registerViewerEngine } from '../globe/cesium/engineFromViewer.js';
+import { engineFromViewer, registerViewerEngine } from '../globe/cesium/engineFromViewer.js';
+import { createFakeEngine } from '../globe/testing/fakeEngine.js';
 
 test('every live basemap is reachable by its own id — no enum value without a voice alias', () => {
   // B1 regression: a stack added to MAP_STACKS (and the set_map_stack enum)
@@ -125,6 +126,9 @@ function createVoiceNavigationHarness({ cockpitActive = false } = {}) {
       positionCartographic: Cesium.Cartographic.fromCartesian(position),
       heading: Cesium.Math.toRadians(28),
       pitch: Cesium.Math.toRadians(-45),
+      // The rest of the pose the engine camera reads (camera.pose()).
+      roll: 0,
+      frustum: { fovy: 1, aspectRatio: 1.5 },
       cancelFlight() { order.push('cancel'); },
       flyToBoundingSphere() {
         order.push(`fly:${viewer.trackedEntity === undefined ? 'released' : 'owned'}`);
@@ -2582,6 +2586,9 @@ function createPrewarmHarness({ pickPosition, positionCartographic } = {}) {
     positionWC: position,
     heading: Cesium.Math.toRadians(28),
     pitch: Cesium.Math.toRadians(-45),
+    // The rest of the pose the engine camera reads (camera.pose()).
+    roll: 0,
+    frustum: { fovy: 1, aspectRatio: 1.5 },
     pickEllipsoid() { calls.pickEllipsoid += 1; return surface; },
     getPickRay() { calls.getPickRay += 1; return null; },
     cancelFlight() {},
@@ -3236,7 +3243,27 @@ test('voice Radio: the keyless path applies no country filter the keyed path wou
 });
 
 const testPlaceSearch = () => createStandalonePlaceSearch({ resolveApiKey: () => globalThis.window?.__GOOGLE_MAPS_API_KEY__ });
-function createGevActionRunner(options) { return createActionRunner({ placeSearch: testPlaceSearch(), ...options }); }
+function createGevActionRunner(options) {
+  registerTestEngine(options.viewer);
+  return createActionRunner({ placeSearch: testPlaceSearch(), ...options });
+}
+/**
+ * The runner drives the globe engine registered for its viewer, as the app's
+ * scene engine is (src/app/globeEngine.js): a test viewer gets the Cesium
+ * engine over it or, when its camera only states where it is
+ * (positionCartographic), a fake engine at that place.
+ */
+function registerTestEngine(viewer) {
+  if (!viewer || engineFromViewer(viewer)) return;
+  const camera = viewer.camera ?? {};
+  const place = Object.getOwnPropertyDescriptor(camera, 'positionCartographic')?.value;
+  registerViewerEngine(
+    viewer,
+    !camera.positionWC && place
+      ? createFakeEngine({ longitude: place.longitude, latitude: place.latitude, altitude: place.height })
+      : createCesiumEngine(viewer),
+  );
+}
 function controlRadio(viewer, manager, args, options) { return runControlRadio(viewer, manager, args, { placeSearch: testPlaceSearch(), ...options }); }
 
 test('ALPR common names toggle only the registered camera layer through the normal voice action', async () => {

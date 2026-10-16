@@ -43,6 +43,7 @@ import {
 } from '../cameraVerbs.js';
 import * as defaultFloorServices from '../data/groundFloor.js';
 import { isPickedWorldPosition } from '../data/scenePick.js';
+import { engineFromViewer } from '../globe/cesium/engineFromViewer.js';
 import { unavailablePlaceSearch } from '../search/placeSearch.js';
 import * as defaultAnnotationResolver from '../annotations/annotationResolver.js';
 import { normalizeRadioCountryInput } from '../data/radioCountry.js';
@@ -264,6 +265,38 @@ const FRAME_TARGETS = new Map([
   ['ships', 'ais-live-vessels'],
 ]);
 
+/**
+ * The tools that still need the Cesium viewer or a subsystem built on it:
+ * the scene director, annotations and routes over them, the camera verbs
+ * (orbit, pan, tilt), the cockpit, Contacts (the context mode), Radio and
+ * CCTV. Without a viewer (the Navara engine) each answers a structured
+ * refusal (UNAVAILABLE_ON_ENGINE) instead of running.
+ */
+export const VIEWER_ONLY_ACTIONS = Object.freeze([
+  'control_scene',
+  'annotate_map',
+  'clear_annotations',
+  'fly_route',
+  'move_camera',
+  'control_cockpit',
+  'set_context_mode',
+  'control_radio',
+  'control_cctv',
+]);
+/** The refusal code of a viewer-only tool on an engine without a viewer. */
+export const UNAVAILABLE_ON_ENGINE = 'UNAVAILABLE_ON_ENGINE';
+
+function unavailableOnEngine(name, engine) {
+  return {
+    ok: false,
+    action: name,
+    unavailable: true,
+    code: UNAVAILABLE_ON_ENGINE,
+    engine: engine?.kind ?? null,
+    error: 'Unavailable on this engine',
+  };
+}
+
 const serviceCaches = new WeakMap();
 function cachesFor(service) {
   service.signal?.throwIfAborted();
@@ -289,10 +322,21 @@ function cachesFor(service) {
 const VISIBLE_ENTITY_SHORTLIST = 64;
 const BASEMAP_CONTEXT_WAIT_MS = 1500;
 const viewTargetCache = new WeakMap();
+const prewarmedEngines = new WeakSet();
 
-/** Create application actions over the supplied scene and services. */
+/** The camera's place (radians, metres) from its live position. */
+const cameraCartographic = (engine) =>
+  geo.cartographic.fromCartesian(engine.camera.livePosition);
+
+/**
+ * Create application actions over the supplied scene and services. The
+ * actions drive the globe `engine` (by default the one registered for the
+ * viewer); `viewer` is null on an engine without one (Navara), where the
+ * VIEWER_ONLY_ACTIONS refuse.
+ */
 export function createGevActionRunner({
   viewer,
+  engine: givenEngine = null,
   styleManager,
   dataManager,
   sceneDirector = null,
@@ -310,20 +354,22 @@ export function createGevActionRunner({
   const builders = speechBuilders
     ? { ...SPEECH_BUILDERS, ...speechBuilders }
     : SPEECH_BUILDERS;
+  const engine = givenEngine ?? engineFromViewer(viewer);
   const _layerEnabledAt = new Map();
   let analystEngine;
   const resolveRegionRing = (name, signal) =>
     annotationResolver.resolveRegionRingForQuery(name, signal, placeSearch);
   const ensureAnalystEngine = () =>
     (analystEngine ||= createAnalystEngine(
-      analystProviders(viewer, dataManager, {
+      analystProviders(engine, dataManager, {
         placeSearch,
         resolveRegionRing,
         isWarming: (layerKey) => layerIsWarming(_layerEnabledAt, layerKey),
       }),
     ));
-  installViewTargetPrewarm(viewer);
-  initCameraVerbs(viewer, getViewTargetCartesian);
+  installViewTargetPrewarm(engine);
+  // The camera verbs (move_camera, fly_route) still run on the viewer.
+  if (viewer) initCameraVerbs(viewer, () => getViewTargetCartesian(engine));
   // Nested calls (select_nearest_aircraft composing layer + flight) use the
   // raw runner; only the outer call gets a voice envelope.
   const runGevAction = async function runGevAction(
@@ -343,6 +389,8 @@ export function createGevActionRunner({
         /* Progress is advisory. */
       }
     };
+    if (!viewer && VIEWER_ONLY_ACTIONS.includes(name))
+      return unavailableOnEngine(name, engine);
 
     // Navigation tools interrupt any continuous camera motion (spec §1.1) —
     // checked FIRST because each handler returns.
@@ -352,8 +400,8 @@ export function createGevActionRunner({
     // Explicit navigation while TRACKING supersedes the follow camera —
     // otherwise the tracker drags the view back and "I flew there but can't
     // do anything" (field finding). track_entity manages its own handoff.
-    if (name === 'zoom_to_globe' && viewer.trackedEntity) {
-      stopAllTracking(viewer, dataManager);
+    if (name === 'zoom_to_globe' && engine?.camera.following()) {
+      stopAllTracking(engine, dataManager);
     }
 
     // Zoom during an active orbit adjusts the orbit RADIUS (spiral in/out) —
@@ -587,7 +635,7 @@ export function createGevActionRunner({
           });
         } else if (typeof layerModule?.update === 'function') {
           refreshed =
-            (await layerModule.update(viewer, {
+            (await layerModule.update(viewer ?? engine, {
               signal: runOptions.signal,
             })) !== false;
         }
@@ -620,7 +668,7 @@ export function createGevActionRunner({
 
       reportProgress('nearest', location.label);
       const nearest = await createAnalystEngine(
-        analystProviders(viewer, dataManager, {
+        analystProviders(engine, dataManager, {
           recordLimitByLayer: { [layerId]: Number.MAX_SAFE_INTEGER },
           placeSearch,
           resolveRegionRing,
@@ -653,7 +701,7 @@ export function createGevActionRunner({
       }
 
       const stableAircraftId = aircraft.icao24 || aircraft.id;
-      const selection = await trackEntity(viewer, dataManager, styleManager, {
+      const selection = await trackEntity(engine, dataManager, styleManager, {
         query: stableAircraftId,
         layerId,
       });
@@ -950,7 +998,7 @@ export function createGevActionRunner({
           runOptions,
         );
       }
-      return flyToRequestedLocation(viewer, args, {
+      return flyToRequestedLocation(engine, args, {
         onProgress: reportProgress,
         placeSearch,
         searchNavigation,
@@ -975,20 +1023,20 @@ export function createGevActionRunner({
             return;
           }
           interruptCameraMotion('nav:fly_to_location');
-          if (viewer.trackedEntity) stopAllTracking(viewer, dataManager);
+          if (engine?.camera.following()) stopAllTracking(engine, dataManager);
         },
       });
     }
 
     if (name === 'adjust_camera_zoom') {
-      return adjustCameraZoom(viewer, args);
+      return adjustCameraZoom(engine, args);
     }
 
     if (name === 'zoom_to_globe') {
       if (typeof styleManager?.resetToGlobeView === 'function') {
         return styleManager.resetToGlobeView();
       }
-      const result = flyToGlobeView(viewer);
+      const result = flyToGlobeView(engine);
       return {
         ok: true,
         action: 'zoom_to_globe',
@@ -1001,11 +1049,11 @@ export function createGevActionRunner({
     }
 
     if (name === 'next_satellite_pass') {
-      return nextSatellitePass(viewer, dataManager, args);
+      return nextSatellitePass(engine, dataManager, args);
     }
 
     if (name === 'next_iss_pass') {
-      return nextIssPass(viewer, dataManager, args);
+      return nextIssPass(engine, dataManager, args);
     }
 
     if (name === 'analyst_query') {
@@ -1049,7 +1097,7 @@ export function createGevActionRunner({
 
     if (name === 'get_entity_context') {
       return getEntityContext(
-        viewer,
+        engine,
         dataManager,
         styleManager,
         args,
@@ -1059,7 +1107,7 @@ export function createGevActionRunner({
 
     if (name === 'get_current_view_state') {
       return getCurrentViewState(
-        viewer,
+        engine,
         styleManager,
         dataManager,
         sceneDirector,
@@ -1164,17 +1212,17 @@ export function createGevActionRunner({
     }
 
     if (name === 'track_entity') {
-      return trackEntity(viewer, dataManager, styleManager, args, {
+      return trackEntity(engine, dataManager, styleManager, args, {
         isCurrent: current,
       });
     }
 
     if (name === 'stop_tracking') {
-      return stopAllTracking(viewer, dataManager);
+      return stopAllTracking(engine, dataManager);
     }
 
     if (name === 'frame_overhead') {
-      return frameOverhead(viewer, dataManager, styleManager, args);
+      return frameOverhead(engine, dataManager, styleManager, args);
     }
 
     if (name === 'annotate_map') {
@@ -2187,7 +2235,7 @@ export function formatTrackedEntityLabel(found, query = '') {
 
 /** Finds and tracks/selects an entity by spoken query across layer families. */
 async function trackEntity(
-  viewer,
+  engine,
   dataManager,
   styleManager,
   args = {},
@@ -2240,7 +2288,7 @@ async function trackEntity(
       'fire',
       'track_entity',
       () => {
-        flyToLandmark(viewer, strongest.latitude, strongest.longitude, {
+        flyToLandmark(engine, strongest.latitude, strongest.longitude, {
           range: 14000,
           pitch: -50,
           heading: 0,
@@ -2300,7 +2348,7 @@ async function trackEntity(
         let trackedOk = false;
         if (family.kind === 'vessel') {
           trackedOk = !!module.selectById?.(found.mmsi);
-          flyToLandmark(viewer, found.latitude, found.longitude, {
+          flyToLandmark(engine, found.latitude, found.longitude, {
             range: 6000,
             pitch: -45,
             heading: 0,
@@ -2346,7 +2394,7 @@ async function trackEntity(
 }
 
 /** Releases tracking/selection on every entity layer family. */
-function stopAllTracking(viewer, dataManager) {
+function stopAllTracking(engine, dataManager) {
   const released = [];
   const failed = new Set();
   for (const family of TRACKABLE_FAMILIES) {
@@ -2397,7 +2445,7 @@ function stopAllTracking(viewer, dataManager) {
       failed.add(layerId);
     }
   }
-  if (viewer) viewer.trackedEntity = undefined;
+  engine?.camera.following()?.stop();
   if (failed.size) {
     const failedLayerIds = [...failed];
     return {
@@ -2418,7 +2466,7 @@ function stopAllTracking(viewer, dataManager) {
  * detection so the framed entities are labeled, and reports
  * detectionEnabled so the voice agent can mention labels are on.
  */
-async function frameOverhead(viewer, dataManager, styleManager, args = {}) {
+async function frameOverhead(engine, dataManager, styleManager, args = {}) {
   const targetRaw = String(args.target || 'flights').toLowerCase();
   const layerId =
     FRAME_TARGETS.get(targetRaw) || normalizeLayerId(targetRaw) || 'flights';
@@ -2445,7 +2493,9 @@ async function frameOverhead(viewer, dataManager, styleManager, args = {}) {
       ? 120
       : 150;
   const radiusKm = clampNumber(args.radiusKm, 10, 20000, defaultRadiusKm);
-  const center = getViewTargetCartesian(viewer) || viewer.camera.positionWC;
+  const center =
+    getViewTargetCartesian(engine) ||
+    geo.cartesian3.clone(engine.camera.livePosition);
 
   let entries = [];
   if (typeof module.getNearby === 'function') {
@@ -2472,23 +2522,25 @@ async function frameOverhead(viewer, dataManager, styleManager, args = {}) {
     };
   }
 
-  const sphere = Cesium.BoundingSphere.fromPoints(
+  // Cesium's bounding sphere (pure math, no viewer), flown by the engine.
+  const bounds = Cesium.BoundingSphere.fromPoints(
     entries.map((entry) => entry.position),
   );
-  sphere.radius = Math.max(sphere.radius * 1.25, 8000);
+  const sphere = {
+    center: geo.cartesian3.clone(bounds.center),
+    radius: Math.max(bounds.radius * 1.25, 8000),
+  };
   const pitch = geo.math.toRadians(isSatellites ? -35 : -62);
   return runManagedVoiceNavigation(
     styleManager,
     'frame',
     'frame_overhead',
     () => {
-      viewer.camera.flyToBoundingSphere(sphere, {
+      engine.camera.flyToSphere(sphere, {
         duration: 2.0,
-        offset: new Cesium.HeadingPitchRange(
-          viewer.camera.heading,
-          pitch,
-          sphere.radius * 2.4,
-        ),
+        heading: engine.camera.pose().heading,
+        pitch,
+        range: sphere.radius * 2.4,
       });
 
       let detectionEnabled = false;
@@ -2567,25 +2619,30 @@ function collectTrackedEntities(dataManager) {
   return tracked;
 }
 
+/**
+ * @param {object} target The globe engine, or a Cesium viewer with a
+ *   registered engine (the HUD).
+ */
 export async function getBasemapLabelContext(
-  viewer,
+  target,
   service = defaultGeospatial,
   { cachedOnly = false } = {},
 ) {
+  const engine = engineFromViewer(target);
   const { reverseGeocodeCache, nearbyPlacesCache } = cachesFor(service);
-  const samples = sampleViewportCartographics(viewer);
-  const cameraHeightM = viewer.camera.positionCartographic.height;
-  const target = getViewTargetCartographic(viewer);
-  if (!target) {
+  const viewTarget = engine ? getViewTargetCartographic(engine) : null;
+  if (!viewTarget) {
     return {
       placeLabels: [],
       streetLabels: [],
       nearbyPlaceLabels: [],
     };
   }
+  const samples = sampleViewportCartographics(engine);
+  const cameraHeightM = engine.camera.height();
 
-  const latitude = Number(geo.math.toDegrees(target.latitude).toFixed(6));
-  const longitude = Number(geo.math.toDegrees(target.longitude).toFixed(6));
+  const latitude = Number(geo.math.toDegrees(viewTarget.latitude).toFixed(6));
+  const longitude = Number(geo.math.toDegrees(viewTarget.longitude).toFixed(6));
   const cachedViewportPlaces = viewportPlacesFromCache(
     samples,
     cameraHeightM,
@@ -2646,12 +2703,12 @@ export async function getBasemapLabelContext(
   };
 }
 
-function installViewTargetPrewarm(viewer) {
-  if (viewer.__gevViewTargetPrewarmInstalled) return;
-  viewer.__gevViewTargetPrewarmInstalled = true;
+function installViewTargetPrewarm(engine) {
+  if (!engine || prewarmedEngines.has(engine)) return;
+  prewarmedEngines.add(engine);
   let timer = null;
   let reportedPrewarmFailure = false;
-  viewer.camera.moveEnd.addEventListener(() => {
+  engine.camera.moveEnd.addEventListener(() => {
     if (timer) window.clearTimeout(timer);
     timer = window.setTimeout(() => {
       timer = null;
@@ -2659,10 +2716,10 @@ function installViewTargetPrewarm(viewer) {
       // because an idle callback is an UNCAUGHT context — nothing above it can
       // handle a surprise from the scene graph, and a red console error on a
       // plain camera flight is worse than a cold cache. Reported once per
-      // viewer so a repeating cause cannot spam the console.
+      // engine so a repeating cause cannot spam the console.
       const warm = () => {
         try {
-          getViewTargetCartographic(viewer);
+          getViewTargetCartographic(engine);
         } catch (error) {
           if (reportedPrewarmFailure) return;
           reportedPrewarmFailure = true;
@@ -2681,7 +2738,7 @@ function installViewTargetPrewarm(viewer) {
   });
 }
 
-function adjustCameraZoom(viewer, args) {
+function adjustCameraZoom(engine, args) {
   const direction = String(args.direction || '').toLowerCase();
   if (direction !== 'in' && direction !== 'out') {
     throw new Error('adjust_camera_zoom direction must be "in" or "out"');
@@ -2695,10 +2752,10 @@ function adjustCameraZoom(viewer, args) {
   }[amount];
   if (!fraction) throw new Error(`Unknown zoom amount: ${args.amount}`);
 
-  const camera = viewer.camera;
-  const beforePosition = geo.cartesian3.clone(camera.positionWC);
-  const beforeHeightM = camera.positionCartographic.height;
-  const target = getViewTargetCartesian(viewer);
+  const camera = engine.camera;
+  const beforePosition = geo.cartesian3.clone(camera.livePosition);
+  const beforeHeightM = camera.height();
+  const target = getViewTargetCartesian(engine);
   const targetDistanceM = target
     ? geo.cartesian3.distance(beforePosition, target)
     : Math.max(100, beforeHeightM);
@@ -2724,11 +2781,11 @@ function adjustCameraZoom(viewer, args) {
     }
     camera.zoomIn(safeMovementM);
   }
-  viewer.scene.requestRender();
+  engine.render.request('voice-zoom');
 
-  const afterPosition = camera.positionWC;
+  const afterPosition = camera.livePosition;
   const movedM = geo.cartesian3.distance(beforePosition, afterPosition);
-  const afterHeightM = camera.positionCartographic.height;
+  const afterHeightM = camera.height();
   const moved = movedM >= 0.5;
   return {
     ok: moved,
@@ -2766,11 +2823,11 @@ function compassDir(azDeg) {
   return COMPASS_16[Math.round((((azDeg % 360) + 360) % 360) / 22.5) % 16];
 }
 
-function nextIssPass(viewer, dataManager, args) {
+function nextIssPass(engine, dataManager, args) {
   let latDeg = Number.isFinite(args.latitude) ? args.latitude : null;
   let lonDeg = Number.isFinite(args.longitude) ? args.longitude : null;
   if (latDeg == null || lonDeg == null) {
-    const carto = viewer?.camera?.positionCartographic;
+    const carto = engine ? cameraCartographic(engine) : null;
     if (!carto) throw new Error('Camera position unavailable');
     latDeg = geo.math.toDegrees(carto.latitude);
     lonDeg = geo.math.toDegrees(carto.longitude);
@@ -2816,7 +2873,7 @@ function nextIssPass(viewer, dataManager, args) {
   };
 }
 
-function nextSatellitePass(viewer, dataManager, args) {
+function nextSatellitePass(engine, dataManager, args) {
   const layer = dataManager?.layers?.get('satellites')?.module;
   const identity = layer?.resolveSatelliteForPass?.(args.target) || {
     status: 'not-found',
@@ -2849,7 +2906,7 @@ function nextSatellitePass(viewer, dataManager, args) {
       ],
     ]),
   };
-  const result = nextIssPass(viewer, adapter, args);
+  const result = nextIssPass(engine, adapter, args);
   if (result.error) {
     result.error = result.error.replace(
       /ISS/g,
@@ -3015,7 +3072,7 @@ function normalizeStyle(value) {
 }
 
 async function flyToRequestedLocation(
-  viewer,
+  engine,
   args,
   {
     placeSearch = unavailablePlaceSearch,
@@ -3067,7 +3124,7 @@ async function flyToRequestedLocation(
 
   if (locationId) {
     const result = immediate(() =>
-      flyToPresetLocation(viewer, locationId, {
+      flyToPresetLocation(engine, locationId, {
         ...(rangeM || args.viewMode === 'close'
           ? { range: rangeM || 250 }
           : { viewMode: 'overview' }),
@@ -3097,7 +3154,7 @@ async function flyToRequestedLocation(
   const longitude = Number(args.longitude);
   if (Number.isFinite(latitude) && Number.isFinite(longitude)) {
     const result = immediate(() =>
-      flyToLandmark(viewer, latitude, longitude, {
+      flyToLandmark(engine, latitude, longitude, {
         range: rangeM || 250,
         pitch: -35,
         heading: 0,
@@ -3129,7 +3186,7 @@ async function flyToRequestedLocation(
     const poiMatch = findPoiByName(query);
     if (poiMatch) {
       const result = immediate(() =>
-        flyToPOI(viewer, poiMatch.cityId, poiMatch.index, {
+        flyToPOI(engine, poiMatch.cityId, poiMatch.index, {
           duration: 2.2,
           onStart: immediateOnStart,
           ...arrivalHooks,
@@ -3154,7 +3211,7 @@ async function flyToRequestedLocation(
     if (generation === false) return cancelled(query);
     onProgress('search', query);
     const managedDeferred = typeof reassertDeferred === 'function';
-    const destination = await searchNavigation(viewer, query, {
+    const destination = await searchNavigation(engine, query, {
       placeSearch,
       signal,
       ...(rangeM ? { range: rangeM } : {}),
@@ -3195,12 +3252,12 @@ function normalizeLocationId(value) {
 }
 
 function getCurrentViewState(
-  viewer,
+  engine,
   styleManager,
   dataManager,
   sceneDirector = null,
 ) {
-  const cartographic = geo.cartographic.fromCartesian(viewer.camera.positionWC);
+  const cartographic = cameraCartographic(engine);
   return {
     ok: true,
     action: 'get_current_view_state',
@@ -3255,7 +3312,7 @@ function getCurrentViewState(
 }
 
 async function getEntityContext(
-  viewer,
+  engine,
   dataManager,
   styleManager,
   args = {},
@@ -3264,15 +3321,15 @@ async function getEntityContext(
   const startedAt = performance.now();
   const scope = String(args.scope || 'auto').toLowerCase();
   if (scope === 'target' && args.target) {
-    return getTargetContext(viewer, dataManager, styleManager, args, service);
+    return getTargetContext(engine, dataManager, styleManager, args, service);
   }
   const layerId = normalizeLayerId(args.layerId || args.layer);
   const limit = Math.round(clampNumber(args.limit, 1, 12, 5));
   const selected = selectedEntityContext(dataManager);
-  const cameraHeightM = viewer.camera.positionCartographic.height;
-  const viewTarget = getViewTargetCartographic(viewer);
+  const cameraHeightM = engine.camera.height();
+  const viewTarget = getViewTargetCartographic(engine);
   const scenePromise = getSceneContext(
-    viewer,
+    engine,
     styleManager,
     dataManager,
     viewTarget,
@@ -3282,7 +3339,7 @@ async function getEntityContext(
     selected && (scope === 'selected' || scope === 'auto');
   const visible =
     !selectedWillBeReturned && shouldScanVisibleEntities(cameraHeightM)
-      ? visibleEntityContexts(viewer, dataManager, {
+      ? visibleEntityContexts(engine, dataManager, {
           layerId,
           limit,
           target: viewTarget,
@@ -3420,7 +3477,7 @@ function describeTargetEntity(dataManager, target) {
 
 /** get_entity_context for a pointed/referenced target (scope 'target'). */
 async function getTargetContext(
-  viewer,
+  engine,
   dataManager,
   styleManager,
   args,
@@ -3440,10 +3497,10 @@ async function getTargetContext(
   const hasPosition = Number.isFinite(lat) && Number.isFinite(lon);
   const viewTarget = hasPosition
     ? geo.cartographic.fromDegrees(lon, lat)
-    : getViewTargetCartographic(viewer);
+    : getViewTargetCartographic(engine);
   const selected = describeTargetEntity(dataManager, target);
   const scene = await getSceneContext(
-    viewer,
+    engine,
     styleManager,
     dataManager,
     viewTarget,
@@ -3458,9 +3515,9 @@ async function getTargetContext(
       selected,
     };
   }
-  const cameraHeightM = viewer.camera.positionCartographic.height;
+  const cameraHeightM = engine.camera.height();
   const visible = shouldScanVisibleEntities(cameraHeightM)
-    ? visibleEntityContexts(viewer, dataManager, {
+    ? visibleEntityContexts(engine, dataManager, {
         layerId: normalizeLayerId(args.layerId || args.layer),
         limit: Math.round(clampNumber(args.limit, 1, 12, 5)),
         target: viewTarget,
@@ -3747,14 +3804,12 @@ function selectedEntityContext(dataManager) {
 }
 
 function visibleEntityContexts(
-  viewer,
+  engine,
   dataManager,
   { layerId = null, limit = 5, target = null } = {},
 ) {
   const nearbyRecords = [];
-  const canvas = viewer.scene.canvas;
-  const width = canvas.clientWidth || canvas.width || 0;
-  const height = canvas.clientHeight || canvas.height || 0;
+  const { width, height } = engine.host.size();
   const centerX = width / 2;
   const centerY = height / 2;
   const targetLat = target ? geo.math.toDegrees(target.latitude) : null;
@@ -3795,10 +3850,7 @@ function visibleEntityContexts(
   for (const { record } of nearbyRecords) {
     const position = record.entity?.__localBaseCartesian;
     if (!position) continue;
-    const screen = Cesium.SceneTransforms.worldToWindowCoordinates(
-      viewer.scene,
-      position,
-    );
+    const screen = engine.projector.worldToWindow(position);
     if (
       !screen ||
       screen.x < 0 ||
@@ -3843,14 +3895,14 @@ function insertNearestRecord(records, candidate, limit) {
 }
 
 async function getSceneContext(
-  viewer,
+  engine,
   styleManager,
   dataManager,
   viewTarget = null,
   service = defaultGeospatial,
 ) {
-  const cartographic = geo.cartographic.fromCartesian(viewer.camera.positionWC);
-  const basemap = await getBasemapContext(viewer, viewTarget, service);
+  const cartographic = cameraCartographic(engine);
+  const basemap = await getBasemapContext(engine, viewTarget, service);
   const enabledLayers = dataManager
     .getAll()
     .filter((layer) => layer.enabled)
@@ -3873,17 +3925,14 @@ async function getSceneContext(
 }
 
 async function getBasemapContext(
-  viewer,
+  engine,
   viewTarget = null,
   service = defaultGeospatial,
 ) {
   const { reverseGeocodeCache, nearbyPlacesCache } = cachesFor(service);
   const target = viewTarget;
-  const samples = sampleViewportCartographics(viewer);
-  const cameraCartographic = geo.cartographic.fromCartesian(
-    viewer.camera.positionWC,
-  );
-  const cameraHeightM = cameraCartographic.height;
+  const samples = sampleViewportCartographics(engine);
+  const cameraHeightM = cameraCartographic(engine).height;
   const viewScale = classifyViewScale(cameraHeightM);
   const cachedViewportPlaces = viewportPlacesFromCache(
     samples,
@@ -4076,23 +4125,23 @@ function coarseBasemapPlace(
   };
 }
 
-function getViewTargetCartographic(viewer) {
-  const signature = cameraViewSignature(viewer);
-  const cached = viewTargetCache.get(viewer);
+function getViewTargetCartographic(engine) {
+  const signature = cameraViewSignature(engine);
+  const cached = viewTargetCache.get(engine);
   if (
     cached?.signature === signature &&
     performance.now() - cached.cachedAt < 2500
   ) {
     return cached.target;
   }
-  const position = getViewTargetCartesian(viewer);
+  const position = getViewTargetCartesian(engine);
   // `fromCartesian` still returns undefined for a point too near the ellipsoid
   // center to project; normalize that to the same "no target" null the callers
   // already handle for a missed pick.
   const target = position
     ? geo.cartographic.fromCartesian(position) || null
     : null;
-  viewTargetCache.set(viewer, {
+  viewTargetCache.set(engine, {
     signature,
     target,
     cachedAt: performance.now(),
@@ -4100,15 +4149,16 @@ function getViewTargetCartographic(viewer) {
   return target;
 }
 
-function cameraViewSignature(viewer) {
-  const camera = viewer.camera;
-  const cartographic = camera.positionCartographic;
+function cameraViewSignature(engine) {
+  const cartographic = cameraCartographic(engine);
+  const height = engine.camera.height();
+  const { heading, pitch } = engine.camera.pose();
   return [
     geo.math.toDegrees(cartographic.latitude).toFixed(5),
     geo.math.toDegrees(cartographic.longitude).toFixed(5),
-    Math.round(cartographic.height / 2),
-    camera.heading.toFixed(3),
-    camera.pitch.toFixed(3),
+    Math.round(height / 2),
+    heading.toFixed(3),
+    pitch.toFixed(3),
   ].join(':');
 }
 
@@ -4120,55 +4170,32 @@ function cameraViewSignature(viewer) {
  * MISSED pick, so it falls through to the next stage rather than poisoning
  * every caller downstream.
  */
-function getViewTargetCartesian(viewer) {
-  const scene = viewer.scene;
-  const canvas = scene.canvas;
-  const width = canvas.clientWidth || canvas.width || 0;
-  const height = canvas.clientHeight || canvas.height || 0;
-  const center = new Cesium.Cartesian2(width / 2, height / 2);
-  let position = null;
-
-  if (scene.pickPositionSupported && typeof scene.pickPosition === 'function') {
+function getViewTargetCartesian(engine) {
+  if (!engine) return null;
+  const { width, height } = engine.host.size();
+  const center = geo.cartesian2.create(width / 2, height / 2);
+  const stages = [
+    () =>
+      engine.picker.pickPositionSupported
+        ? engine.picker.pickPosition(center)
+        : undefined,
+    () => engine.camera.pickEllipsoid(center),
+    () => engine.picker.pickGlobe(center),
+  ];
+  for (const stage of stages) {
+    let position = null;
     try {
-      position = scene.pickPosition(center);
+      position = stage();
     } catch {
       position = null;
     }
+    if (isPickedWorldPosition(position)) return position;
   }
-
-  if (
-    !isPickedWorldPosition(position) &&
-    viewer.camera &&
-    typeof viewer.camera.pickEllipsoid === 'function'
-  ) {
-    try {
-      position = viewer.camera.pickEllipsoid(center, Cesium.Ellipsoid.WGS84);
-    } catch {
-      position = null;
-    }
-  }
-
-  if (
-    !isPickedWorldPosition(position) &&
-    viewer.camera &&
-    typeof viewer.camera.getPickRay === 'function'
-  ) {
-    try {
-      const ray = viewer.camera.getPickRay(center);
-      position = scene.globe?.pick(ray, scene) || null;
-    } catch {
-      position = null;
-    }
-  }
-
-  return isPickedWorldPosition(position) ? position : null;
+  return null;
 }
 
-function sampleViewportCartographics(viewer) {
-  const scene = viewer.scene;
-  const canvas = scene.canvas;
-  const width = canvas.clientWidth || canvas.width || 0;
-  const height = canvas.clientHeight || canvas.height || 0;
+function sampleViewportCartographics(engine) {
+  const { width, height } = engine.host.size();
   if (!width || !height) return [];
 
   const points = [
@@ -4183,9 +4210,8 @@ function sampleViewportCartographics(viewer) {
 
   const samples = [];
   for (const [x, y] of points) {
-    const cartesian = viewer.camera.pickEllipsoid(
+    const cartesian = engine.camera.pickEllipsoid(
       geo.cartesian2.create(width * x, height * y),
-      Cesium.Ellipsoid.WGS84,
     );
     if (!isPickedWorldPosition(cartesian)) continue;
     const carto = geo.cartographic.fromCartesian(cartesian);
@@ -4664,7 +4690,7 @@ function layerIsWarming(enabledAt, layerKey) {
 }
 
 function analystProviders(
-  viewer,
+  engine,
   dataManager,
   {
     recordLimitByLayer = null,
@@ -4751,7 +4777,7 @@ function analystProviders(
       };
     },
     getViewContext() {
-      const carto = viewer.camera.positionCartographic;
+      const carto = cameraCartographic(engine);
       const altKm = carto.height / 1000;
       // View radius scales with altitude: street-level asks stay local,
       // country-level asks sweep wide. Clamped so "in view" is never absurd.
