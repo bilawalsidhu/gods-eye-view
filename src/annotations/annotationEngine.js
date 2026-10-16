@@ -1137,12 +1137,14 @@ export function createAnnotationEngine({
           {
             type: 'highlight',
             target: 'Palace of Fine Arts, San Francisco',
+            // i18n-ignore: dev demo of voice-agent labels (not translated)
             label: 'Palace of Fine Arts',
             color: 'amber',
           },
           {
             type: 'area',
             target: 'Presidio of San Francisco',
+            // i18n-ignore: dev demo of voice-agent labels (not translated)
             label: 'The Presidio (former Army base)',
             color: 'green',
             footprint: true,
@@ -1150,6 +1152,7 @@ export function createAnnotationEngine({
           {
             type: 'pin',
             target: 'Letterman Digital Arts Center, San Francisco',
+            // i18n-ignore: dev demo of voice-agent labels (not translated)
             label: 'ILM / Lucasfilm',
             color: 'cyan',
           },
@@ -1157,6 +1160,7 @@ export function createAnnotationEngine({
             type: 'arrow',
             target: 'Palace of Fine Arts, San Francisco',
             toTarget: 'Marina District, San Francisco',
+            // i18n-ignore: dev demo of voice-agent labels (not translated)
             label: 'next to the Marina',
           },
         ],
@@ -1186,6 +1190,7 @@ export function createAnnotationEngine({
           {
             type: 'highlight',
             target: 'Palace of Fine Arts, San Francisco',
+            // i18n-ignore: dev demo of voice-agent labels (not translated)
             label: 'Palace of Fine Arts',
             color: 'amber',
           },
@@ -1200,6 +1205,7 @@ export function createAnnotationEngine({
             type: 'arrow',
             target: 'Palace of Fine Arts, San Francisco',
             toTarget: 'Marina Green, San Francisco',
+            // i18n-ignore: dev demo of voice-agent labels (not translated)
             label: 'next to the Marina',
             color: 'cyan',
           },
@@ -1223,6 +1229,7 @@ export function createAnnotationEngine({
           {
             type: 'area',
             target: 'Presidio of San Francisco',
+            // i18n-ignore: dev demo of voice-agent labels (not translated)
             label: 'The Presidio — a former Army base',
             color: 'green',
             footprint: true,
@@ -1237,6 +1244,7 @@ export function createAnnotationEngine({
           {
             type: 'pin',
             target: 'Letterman Digital Arts Center, San Francisco',
+            // i18n-ignore: dev demo of voice-agent labels (not translated)
             label: 'ILM / Lucasfilm',
             color: 'red',
           },
@@ -1250,6 +1258,7 @@ export function createAnnotationEngine({
           {
             type: 'route',
             color: 'amber',
+            // i18n-ignore: dev demo of voice-agent labels (not translated)
             label: 'Crissy Field shoreline',
             points: [
               { target: 'Palace of Fine Arts, San Francisco' },

@@ -41,3 +41,23 @@ test('directional FM seek chooses the nearest rounded station in-band', () => {
     null,
   );
 });
+
+test('directional FM seek passes over the skipped channel to the next station', () => {
+  const sampleRate = 2_048_000;
+  const bins = new Float32Array(2_048).fill(-80);
+  // Carriers at 98.8 and 99.1 MHz in a frame centred on 98.5 MHz. A carrier
+  // 100 kHz away would sit inside the peak test's 150 kHz comparison window.
+  for (const offset of [300_000, 600_000]) {
+    const index = offset / (sampleRate / bins.length) + bins.length / 2;
+    for (let bin = index - 5; bin <= index + 5; bin += 1) bins[bin] = -10;
+  }
+  const seek = (skipFrequency) =>
+    findDirectionalFmPeak(bins, 98_500_000, sampleRate, 1, 98_500_000, {
+      skipFrequency,
+    })?.frequency;
+  assert.equal(seek(undefined), 98_800_000);
+  assert.equal(seek(98_800_000), 99_100_000);
+  // The skip covers channels up to and including 75 kHz away.
+  assert.equal(seek(98_725_000), 99_100_000);
+  assert.equal(seek(98_724_999), 98_800_000);
+});

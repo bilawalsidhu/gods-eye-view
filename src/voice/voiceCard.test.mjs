@@ -93,7 +93,7 @@ test('markup: the card nests inside the voice control with every element and a p
     assert.match(controlSource, new RegExp(`id="${id}"`), `${id} is missing`);
   }
   assert.match(controlSource, /id="gev-voice-card-live"[^>]*aria-live="polite"/);
-  assert.match(controlSource, /aria-label="Dismiss voice card"/);
+  assert.match(controlSource, /aria-label="\$\{t\('Dismiss voice card'\)\}"/);
   assert.match(css, /#gev-voice-control \.gev-voice-card \{/);
   assert.match(css, /body\.recording-mode #gev-voice-control/, 'recording mode hides the control, card included');
   assert.match(css, /body\.ui-clean-view #command-dock/, 'Clean-UI hides the dock, card included');

@@ -247,6 +247,114 @@ const RAW_GBFS_CITY_REGISTRY = [
     provider: 'Bike Chattanooga',
   },
   {
+    id: 'sao-paulo-bike-itau',
+    city: 'São Paulo, SP',
+    centerLat: -23.5505,
+    centerLon: -46.6333,
+    loadRadiusKm: 100,
+    stationInformationUrl:
+      'https://saopaulo.publicbikesystem.net/customer/gbfs/v2/en/station_information.json',
+    stationStatusUrl:
+      'https://saopaulo.publicbikesystem.net/customer/gbfs/v2/en/station_status.json',
+    provider: 'Bike Itaú',
+  },
+  {
+    id: 'rio-de-janeiro-bike-itau',
+    city: 'Rio de Janeiro, RJ',
+    centerLat: -22.9068,
+    centerLon: -43.1729,
+    loadRadiusKm: 100,
+    stationInformationUrl:
+      'https://riodejaneiro.publicbikesystem.net/customer/gbfs/v2/en/station_information.json',
+    stationStatusUrl:
+      'https://riodejaneiro.publicbikesystem.net/customer/gbfs/v2/en/station_status.json',
+    provider: 'Bike Itaú',
+  },
+  {
+    id: 'salvador-bike-itau',
+    city: 'Salvador, BA',
+    centerLat: -12.9777,
+    centerLon: -38.5016,
+    loadRadiusKm: 90,
+    stationInformationUrl:
+      'https://salvador.publicbikesystem.net/customer/gbfs/v2/en/station_information.json',
+    stationStatusUrl:
+      'https://salvador.publicbikesystem.net/customer/gbfs/v2/en/station_status.json',
+    provider: 'Bike Itaú',
+  },
+  {
+    id: 'recife-bike-itau',
+    city: 'Recife, PE',
+    centerLat: -8.0476,
+    centerLon: -34.877,
+    loadRadiusKm: 90,
+    stationInformationUrl:
+      'https://recife.publicbikesystem.net/customer/gbfs/v2/en/station_information.json',
+    stationStatusUrl:
+      'https://recife.publicbikesystem.net/customer/gbfs/v2/en/station_status.json',
+    provider: 'Bike Itaú',
+  },
+  {
+    id: 'porto-alegre-bike-itau',
+    city: 'Porto Alegre, RS',
+    centerLat: -30.0346,
+    centerLon: -51.2177,
+    loadRadiusKm: 90,
+    stationInformationUrl:
+      'https://portoalegre.publicbikesystem.net/customer/gbfs/v2/en/station_information.json',
+    stationStatusUrl:
+      'https://portoalegre.publicbikesystem.net/customer/gbfs/v2/en/station_status.json',
+    provider: 'Bike Itaú',
+  },
+  {
+    id: 'brasilia-bike-itau',
+    city: 'Brasília, DF',
+    centerLat: -15.7939,
+    centerLon: -47.8828,
+    loadRadiusKm: 90,
+    stationInformationUrl:
+      'https://brasilia.publicbikesystem.net/customer/gbfs/v2/en/station_information.json',
+    stationStatusUrl:
+      'https://brasilia.publicbikesystem.net/customer/gbfs/v2/en/station_status.json',
+    provider: 'Bike Itaú',
+  },
+  {
+    id: 'curitiba-bike-itau',
+    city: 'Curitiba, PR',
+    centerLat: -25.4284,
+    centerLon: -49.2733,
+    loadRadiusKm: 90,
+    stationInformationUrl:
+      'https://curitiba.publicbikesystem.net/customer/gbfs/v2/en/station_information.json',
+    stationStatusUrl:
+      'https://curitiba.publicbikesystem.net/customer/gbfs/v2/en/station_status.json',
+    provider: 'Bike Itaú',
+  },
+  {
+    id: 'bogota-tembici',
+    city: 'Bogotá, Colombia',
+    centerLat: 4.6533,
+    centerLon: -74.0836,
+    loadRadiusKm: 90,
+    stationInformationUrl:
+      'https://bogota.publicbikesystem.net/customer/gbfs/v2/en/station_information.json',
+    stationStatusUrl:
+      'https://bogota.publicbikesystem.net/customer/gbfs/v2/en/station_status.json',
+    provider: 'Tembici Bogotá',
+  },
+  {
+    id: 'santiago-bike-itau',
+    city: 'Santiago, Chile',
+    centerLat: -33.4372,
+    centerLon: -70.6506,
+    loadRadiusKm: 90,
+    stationInformationUrl:
+      'https://santiago.publicbikesystem.net/customer/gbfs/v2/en/station_information.json',
+    stationStatusUrl:
+      'https://santiago.publicbikesystem.net/customer/gbfs/v2/en/station_status.json',
+    provider: 'Bike Itaú Santiago',
+  },
+  {
     id: 'toronto-bike-share',
     city: 'Toronto, ON',
     centerLat: 43.6532,
@@ -469,6 +577,32 @@ const RAW_GBFS_CITY_REGISTRY = [
     stationStatusUrl:
       'https://api.cyclocity.fr/contracts/lillestrom/gbfs/station_status.json',
     provider: 'Bysykkel Lillestrøm',
+  },
+  {
+    id: 'barcelona-bicing',
+    city: 'Barcelona, Spain',
+    centerLat: 41.3926,
+    centerLon: 2.164,
+    loadRadiusKm: 40,
+    stationInformationUrl:
+      'https://barcelona.publicbikesystem.net/customer/gbfs/v2/en/station_information.json',
+    stationStatusUrl:
+      'https://barcelona.publicbikesystem.net/customer/gbfs/v2/en/station_status.json',
+    provider: 'Bicing',
+  },
+  // AMBici covers the metropolitan municipalities around Barcelona, from
+  // Castelldefels to Badalona, and overlaps Bicing only at the city edge.
+  {
+    id: 'barcelona-ambici',
+    city: 'Barcelona metropolitan area, Spain',
+    centerLat: 41.37,
+    centerLon: 2.07,
+    loadRadiusKm: 40,
+    stationInformationUrl:
+      'https://gbfs.nextbike.net/maps/gbfs/v2/nextbike_bs/en/station_information.json',
+    stationStatusUrl:
+      'https://gbfs.nextbike.net/maps/gbfs/v2/nextbike_bs/en/station_status.json',
+    provider: 'AMBici',
   },
 ];
 function normalizeRegistryEntry(entry) {
