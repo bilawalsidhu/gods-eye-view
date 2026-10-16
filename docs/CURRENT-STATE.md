@@ -842,6 +842,13 @@ use the supplied asset resolver, including the preload path. Enrichment receives
 an abort signal and cannot update a later lifecycle after destruction. Existing
 camera, terrain floor, trail, selection and measured model-size policies remain.
 
+The tracked-aircraft descriptor both flight layers hand to the cockpit carries
+`verticalRateMps` beside `velocityMps` and `track`. Civil records store the rate as
+`verticalRate` and military records as `verticalRateMps`; the query seam maps both to
+one name, so `resolveTrackedAircraftInfo` returns a single shape for either layer. The
+rate is reported, never derived: a blank poll keeps the last transmitted value and an
+absent rate stays null rather than reading as level flight.
+
 ## Transponder emergency highlighting
 
 `src/data/aircraftEmergency.js` derives one status per poll from the Mode A
