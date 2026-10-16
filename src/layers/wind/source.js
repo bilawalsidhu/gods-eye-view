@@ -1,5 +1,6 @@
 import { readWindBody } from '../../sources/windBody.js';
 import { SCALAR_UNAVAILABLE } from './fields.js';
+import { decodeFieldGrid } from './fieldDecode.js';
 
 // Imported by src/tools: no i18n here. The texts stay English data and the
 // wind layer and layer panel show them translated.
@@ -87,16 +88,12 @@ export function createWindSource({
         const bytes = await readWindBody(gridResponse, expectedBytes, active);
         if (bytes.byteLength !== expectedBytes)
           throw new Error(msg('Malformed wind grid'));
-        const values = new Float32Array(bytes.buffer);
-        if (!values.every(Number.isFinite))
-          throw new Error(msg('Malformed wind grid'));
+        const [u, v, scalarValues] = decodeFieldGrid(grid, bytes, scalar ? 3 : 2);
         return {
           ...manifest,
-          u: values.slice(0, count),
-          v: values.slice(count, count * 2),
-          ...(scalar
-            ? { scalar: { ...scalar, values: values.slice(count * 2) } }
-            : {}),
+          u,
+          v,
+          ...(scalar ? { scalar: { ...scalar, values: scalarValues } } : {}),
         };
       } finally {
         clearTimeout(timer);
