@@ -38,7 +38,11 @@ test('the shader patch sizes the quad in pixels and colours it per instance', ()
   );
   assert.match(shader.fragmentShader, /if \(gevOverlayHidden\(\)\) discard;/);
   assert.doesNotMatch(shader.vertexShader, /#include <project_vertex>/);
-  assert.match(shader.fragmentShader, /diffuseColor \*= vGevColor;/);
+  assert.match(
+    shader.fragmentShader,
+    /diffuseColor \*= sRGBTransferEOTF\(vGevColor\);/,
+    'sRGB instance colours are decoded',
+  );
   assert.doesNotMatch(shader.fragmentShader, /gevRadius > 1\.0\) discard/);
   const point = patchMoverShader(basicShader(), {}, { point: true });
   assert.match(point.fragmentShader, /if \(gevRadius > 1\.0\) discard;/);
