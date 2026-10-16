@@ -63,6 +63,67 @@ export function frozenClockScript(ms) {
 })();`;
 }
 
+/**
+ * The distinct feed requests one page made, and when the last new one came.
+ * qa-w1-baseline waits on it (feedsSettled) instead of a fixed sleep.
+ */
+export function createFeedActivity(now = () => Date.now()) {
+  const keys = new Set();
+  let lastNewAt = now();
+  return {
+    keys,
+    note(key) {
+      if (keys.has(key)) return;
+      keys.add(key);
+      lastNewAt = now();
+    },
+    /** Time since the last new request key. */
+    quietMs: () => now() - lastNewAt,
+    asked: (predicate) => [...keys].some(predicate),
+  };
+}
+
+/**
+ * Resolves true once `ready()` holds and no new request key arrived for
+ * `quietMs`; false after `maxMs` without that.
+ */
+export async function feedsSettled(
+  activity,
+  {
+    ready = () => true,
+    quietMs = 3000,
+    maxMs = 45000,
+    now = () => Date.now(),
+    wait = () => new Promise((resolve) => setTimeout(resolve, 250)),
+  } = {},
+) {
+  const start = now();
+  for (;;) {
+    if (ready() && activity.quietMs() >= quietMs) return true;
+    if (now() - start >= maxMs) return false;
+    await wait();
+  }
+}
+
+// Not feeds: the app's debug log. Terrain heights are asked in batches of
+// the points on screen, so their point lists depend on draw timing: they
+// are compared as asked or not.
+const DIAGNOSTIC_REQUESTS = new Set(['POST /api/realtime/debug-log']);
+const FOLDED_PATHS = ['/api/terrain/heights'];
+
+/** summary.json's `requests`: 'KEY → how answered', sorted, folded. */
+export function requestDigest(served) {
+  const lines = new Set();
+  for (const [key, how] of served ?? []) {
+    if (DIAGNOSTIC_REQUESTS.has(key)) continue;
+    const [method, target] = key.split(' ');
+    const path = target.split('?')[0];
+    const folded = FOLDED_PATHS.includes(path) && target.includes('?');
+    lines.add(`${method} ${folded ? `${path}?points=…` : target} → ${how}`);
+  }
+  return [...lines].sort();
+}
+
 /** Tolerances of compareBaselines. */
 export const BASELINE_TOLERANCE = Object.freeze({
   degrees: 1e-7, // ≈ 1 cm
@@ -101,6 +162,15 @@ export function compareBaselines(a, b, tolerance = BASELINE_TOLERANCE) {
     const asked = (run) => JSON.stringify(run.requests ?? null);
     if (asked(left) !== asked(right))
       add({ layer, what: 'requests', a: left.requests, b: right.requests });
+    const sharedAsked = (run) =>
+      JSON.stringify(run.tracking?.sharedRequests ?? null);
+    if (sharedAsked(left) !== sharedAsked(right))
+      add({
+        layer,
+        what: 'shared-link requests',
+        a: left.tracking?.sharedRequests,
+        b: right.tracking?.sharedRequests,
+      });
     if (left.fill?.count !== right.fill?.count)
       add({ layer, what: 'count', a: left.fill?.count, b: right.fill?.count });
     for (const pose of Object.keys(left.poses ?? {})) {

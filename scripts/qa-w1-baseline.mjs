@@ -29,7 +29,7 @@
  *     [--fill-ms=60000] [--out=qa-artifacts/w1-baseline]
  *     [--record=DIR | --replay=DIR] [--compare=A,B]
  *
- * Starts this checkout's Vite dev server on a free port (never 4185 or 4186)
+ * Starts this checkout's Vite dev server on a free port (never 4185–4188)
  * unless --base-url names one. Browsers are always headless. Provider keys are
  * never printed: server output is not echoed and URLs are redacted.
  */
@@ -44,8 +44,11 @@ import {
   compareBaselines,
   feedRequestKey,
   frozenClockScript,
+  createFeedActivity,
+  feedsSettled,
   isFeedRequest,
   replayEntry,
+  requestDigest,
 } from '../src/tooling/w1Baseline.js';
 import { syntheticRecordings } from '../src/tooling/w1Feeds.js';
 
@@ -87,7 +90,7 @@ if (RECORD_DIR && REPLAY_DIR) {
   process.exit(2);
 }
 const BOOT_TIMEOUT_MS = Number(process.env.QA_BOOT_TIMEOUT_MS || 180000);
-const RESERVED_PORTS = new Set([4185, 4186]);
+const RESERVED_PORTS = new Set([4185, 4186, 4187, 4188]);
 const VIEWPORT = { width: 1280, height: 800 };
 const KNOWN_OBJECTS = 5;
 const TRACK_SETTLE_MS = 2000;
@@ -192,17 +195,16 @@ function recordFeeds(page, feed) {
 }
 
 /** A page whose /api requests are answered from a recording, at its time. */
-async function replayFeeds(page, recording) {
+async function replayFeeds(page, recording, served) {
   await page.evaluateOnNewDocument(frozenClockScript(recording.frozenMs));
   await page.setRequestInterception(true);
   page.on('request', (request) => {
     const url = request.url();
     if (!isFeedRequest(url)) return request.continue();
     const entry = replayEntry(recording, request.method(), url);
-    // What the page asked and how it was answered, for --compare.
+    // What this page asked and how it was answered, for --compare.
     const key = feedRequestKey(request.method(), url);
-    recording.served ??= new Map();
-    recording.served.set(
+    served.set(
       key,
       !entry ? 'none' : entry.key === key ? 'exact' : `as ${entry.key}`,
     );
@@ -225,7 +227,15 @@ async function bootPage(browser, baseUrl, hash, feed = null) {
   const page = await context.newPage();
   await page.setViewport(VIEWPORT);
   if (feed?.mode === 'record') recordFeeds(page, feed.recording);
-  if (feed?.mode === 'replay') await replayFeeds(page, feed.recording);
+  // Per page: the shared-link page's requests are kept apart.
+  const served = new Map();
+  if (feed?.mode === 'replay') await replayFeeds(page, feed.recording, served);
+  // The feed requests this page makes: the waits below settle on them.
+  const activity = createFeedActivity();
+  page.on('request', (request) => {
+    if (isFeedRequest(request.url()))
+      activity.note(feedRequestKey(request.method(), request.url()));
+  });
   const errors = [];
   page.on('console', (message) => {
     if (message.type() === 'error') errors.push(redact(message.text()));
@@ -239,7 +249,7 @@ async function bootPage(browser, baseUrl, hash, feed = null) {
       window.__godsEyeView?.viewer,
     { timeout: BOOT_TIMEOUT_MS, polling: 250 },
   );
-  return { context, page, errors };
+  return { context, page, errors, activity, served };
 }
 
 /** Sets the view, then waits for rest and loaded tiles (bounded). */
@@ -464,6 +474,8 @@ async function runLayer(browser, baseUrl, name, outDir) {
     const reads = {};
     for (const name of ['city', 'global', 'orbit']) {
       const wait = await goToPose(page, W1_POSES[name]);
+      // The feeds this pose asks (viewport queries, terrain heights).
+      await feedsSettled(opened.activity, { quietMs: 3000, maxMs: 30000 });
       const read = await readLayer(page, layer);
       reads[name] = read;
       const file = `${result.layer}-${name}.jpg`;
@@ -497,6 +509,8 @@ async function runLayer(browser, baseUrl, name, outDir) {
         const pose = await page.evaluate(readPose);
         await sleep(1500); // the share hash is written on a debounce
         const hash = new URL(page.url()).hash;
+        // What tracking asks (track history, type enrichment), settled.
+        await feedsSettled(opened.activity, { quietMs: 3000, maxMs: 30000 });
         result.tracking = {
           id: trackId,
           ok: tracked.ok,
@@ -512,7 +526,29 @@ async function runLayer(browser, baseUrl, name, outDir) {
           feed?.mode === 'replay' ? feed : null,
         );
         try {
-          await sleep(15000);
+          // Event-based: the shared page has the layer on, has asked the
+          // layer's own feed, and asks nothing new for 3 s (bounded). The
+          // link carries no tracked object (src/sharelink.js has no field
+          // for one, also at 512c5d18), so tracking cannot be what it
+          // restores: sharedOpen.trackedEntity is false on every commit, a
+          // known gap recorded as `trackingInLink: false`.
+          await shared.page.waitForFunction(
+            (layer) => window.__godsEyeView.dataManager.isEnabled(layer),
+            { timeout: 60000, polling: 250 },
+            layer,
+          );
+          const ownPaths = new Set(
+            (feed?.recording?.entries ?? []).map((entry) => entry.path),
+          );
+          result.tracking.sharedSettled = await feedsSettled(shared.activity, {
+            ready: () =>
+              ownPaths.size === 0 ||
+              shared.activity.asked((key) =>
+                ownPaths.has(key.split(' ')[1].split('?')[0]),
+              ),
+            quietMs: 3000,
+            maxMs: 60000,
+          });
           result.tracking.sharedOpen = await shared.page.evaluate((layer) => {
             const { dataManager, viewer } = window.__godsEyeView;
             const module = dataManager.layers.get(layer)?.module;
@@ -526,6 +562,10 @@ async function runLayer(browser, baseUrl, name, outDir) {
             };
           }, layer);
           result.tracking.sharedOpen.errors = shared.errors.slice(0, 5);
+          result.tracking.sharedOpen.trackingInLink =
+            /[?&#](?:track|trk)=/.test(hash);
+          if (feed?.mode === 'replay')
+            result.tracking.sharedRequests = requestDigest(shared.served);
         } finally {
           await shared.context.close();
         }
@@ -535,10 +575,7 @@ async function runLayer(browser, baseUrl, name, outDir) {
     result.failure = redact(error.stack ?? error.message);
   } finally {
     result.errors = opened.errors.slice(0, 10);
-    if (feed?.mode === 'replay' && feed.recording.served)
-      result.requests = [...feed.recording.served]
-        .map(([key, how]) => `${key} → ${how}`)
-        .sort();
+    if (feed?.mode === 'replay') result.requests = requestDigest(opened.served);
     await opened.context.close();
   }
   return result;

@@ -2,6 +2,9 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import vm from 'node:vm';
 import {
+  createFeedActivity,
+  feedsSettled,
+  requestDigest,
   compareBaselines,
   feedRequestKey,
   frozenClockScript,
@@ -119,4 +122,83 @@ test('the feed requests a run made are compared too', () => {
     compareBaselines(asked, run({ requests: ['GET /api/flights → exact'] })).ok,
     true,
   );
+});
+
+test('feed activity settles once no new request key arrives for the quiet time', async () => {
+  let now = 0;
+  const activity = createFeedActivity(() => now);
+  activity.note('GET /api/flights?lat=1');
+  now = 1000;
+  activity.note('GET /api/flights?lat=1'); // a repeat is not new
+  assert.equal(activity.quietMs(), 1000);
+  assert.ok(activity.asked((key) => key.startsWith('GET /api/flights')));
+  assert.equal(
+    activity.asked((key) => key.includes('vessels')),
+    false,
+  );
+  // Ready only after the layer's own feed was asked, then 3 s quiet.
+  const later = createFeedActivity(() => now);
+  const steps = [];
+  const settled = feedsSettled(later, {
+    ready: () => later.asked((key) => key.includes('/api/flights')),
+    quietMs: 3000,
+    maxMs: 20000,
+    now: () => now,
+    wait: async () => {
+      now += 500;
+      steps.push(now);
+      if (now === 3000) later.note('GET /api/flights');
+      if (now === 4000) later.note('GET /api/terrain/heights?points=1');
+    },
+  });
+  assert.equal(await settled, true);
+  assert.equal(now, 7000, 'quiet for 3 s after the last new key');
+  // A run that never becomes ready gives up at maxMs.
+  now = 0;
+  const never = await feedsSettled(
+    createFeedActivity(() => now),
+    {
+      ready: () => false,
+      maxMs: 2000,
+      now: () => now,
+      wait: async () => {
+        now += 500;
+      },
+    },
+  );
+  assert.equal(never, false);
+});
+
+test('the request digest keeps feed keys and folds terrain point lists', () => {
+  const served = new Map([
+    ['GET /api/flights?lat=1', 'as GET /api/flights'],
+    ['GET /api/terrain/heights?points=1%2C2', 'none'],
+    ['GET /api/terrain/heights?points=3%2C4', 'none'],
+    ['POST /api/realtime/debug-log', 'none'],
+  ]);
+  assert.deepEqual(requestDigest(served), [
+    'GET /api/flights?lat=1 → as GET /api/flights',
+    'GET /api/terrain/heights?points=… → none',
+  ]);
+});
+
+test("the shared-link page's requests are compared on their own", () => {
+  const tracking = (sharedRequests) => ({
+    tracking: {
+      ok: true,
+      poseAfter2s: { x: 1, y: 2, z: 6_400_000, heading: 10, pitch: -30 },
+      sharedRequests,
+    },
+  });
+  const a = run(
+    tracking([
+      'GET /api/flights?lat=40.5912&lon=-73.8142 → as GET /api/flights',
+    ]),
+  );
+  const b = run(tracking([]));
+  assert.deepEqual(
+    compareBaselines(a, b).differences.map(({ what }) => what),
+    ['shared-link requests'],
+  );
+  assert.equal(compareBaselines(a, a).ok, true);
 });
