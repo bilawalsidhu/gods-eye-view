@@ -1,4 +1,16 @@
 import * as Cesium from 'cesium';
+import { engineFromViewer } from '../globe/cesium/engineFromViewer.js';
+
+// A window position through the engine's projector when `scene` has a
+// registered engine (a Cesium scene in the app, the Navara aircraft
+// renderer's scene adapter), else Cesium's SceneTransforms (bare scenes in
+// tests). The two agree on Cesium (the engine projector is SceneTransforms).
+function worldToWindow(scene, position, result) {
+  const projector = engineFromViewer(scene)?.projector;
+  return projector
+    ? projector.worldToWindow(position, result)
+    : Cesium.SceneTransforms.worldToWindowCoordinates(scene, position, result);
+}
 
 /**
  * Focus-aware sprite treatment shared by the live contact layers.
@@ -208,11 +220,7 @@ export function publishFocusTargetFromCachedPosition({
     clearFocusTarget(ownerLayer, id);
     return null;
   }
-  const screen = Cesium.SceneTransforms.worldToWindowCoordinates(
-    scene,
-    displayPosition,
-    _scratchScreen,
-  );
+  const screen = worldToWindow(scene, displayPosition, _scratchScreen);
   if (!screen || !Number.isFinite(screen.x) || !Number.isFinite(screen.y)) {
     clearFocusTarget(ownerLayer, id);
     return null;
@@ -480,13 +488,7 @@ export function advanceProjectedSpriteFocus(
     return _advanceResult;
   }
   const screen =
-    position && scene
-      ? Cesium.SceneTransforms.worldToWindowCoordinates(
-          scene,
-          position,
-          _scratchScreen,
-        )
-      : null;
+    position && scene ? worldToWindow(scene, position, _scratchScreen) : null;
   const cameraDistance =
     position && camera?.positionWC
       ? Cesium.Cartesian3.distance(camera.positionWC, position)
