@@ -249,3 +249,26 @@ test('a GPU answer naming an instance drawn far from the click is stale', async 
   assert.equal((await answer).id, 'drawn-here');
   assert.equal(picking.clickStats().stale, 1);
 });
+
+test('a thin line is picked within 8 px of its segments', () => {
+  const line = {
+    options: normalizeLineOptions({
+      id: 'trail',
+      widthPx: 1,
+      color: [1, 1, 1, 1],
+      pickId: 'trail-1',
+    }),
+    flat: new Float64Array([0, 50, 100, 200, 50, 100]),
+    modelMatrix: null,
+  };
+  const picking = createNavaraPicking({
+    view: fakeView(),
+    projector,
+    camera,
+    movers: () => [],
+    lines: () => [line],
+    resolveBatch: () => null,
+  });
+  assert.equal(picking.pick({ x: 100, y: 57.5 })?.id, 'trail-1');
+  assert.equal(picking.pick({ x: 100, y: 58.5 }), undefined);
+});
