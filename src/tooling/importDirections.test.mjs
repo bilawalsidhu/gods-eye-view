@@ -296,6 +296,43 @@ test('the app reaches the Navara engine only through a dynamic import', (t) => {
   );
 });
 
+test('layers moved onto renderers keep each engine in its render file', (t) => {
+  const { root, write } = fixture(t);
+  write('src/layers/flights/rendering.js', "import './render/cesium.js';");
+  write('src/layers/flights/render/cesium.js', "import 'cesium';");
+  write(
+    'src/layers/flights/render/navara.js',
+    "import 'three'; import '@navaramap/three';",
+  );
+  write('src/layers/aircraft/render/cesium.js', "import 'cesium';");
+  write('src/layers/flights/render/cesium.test.mjs', "import 'cesium';");
+  write(
+    'src/app/navaraMode.js',
+    "export const load = () => import('../layers/flights/render/navara.js');",
+  );
+  // A layer not moved yet still imports cesium anywhere (until its *a task).
+  write('src/layers/vessels/rendering.js', "import 'cesium';");
+  assert.doesNotThrow(() => checkImportDirections(root));
+
+  write('src/layers/flights/tracking.js', "import 'cesium';");
+  assert.throws(
+    () => checkImportDirections(root),
+    /src\/layers\/flights\/tracking\.js: cesium only in the layer's render\/cesium\*\.js: cesium/,
+  );
+  write('src/layers/flights/tracking.js', '');
+  write('src/layers/aircraft/render/cesium.js', "import 'three';");
+  assert.throws(
+    () => checkImportDirections(root),
+    /src\/layers\/aircraft\/render\/cesium\.js: three and Navara only in the layer's render\/navara\*\.js: three/,
+  );
+  write('src/layers/aircraft/render/cesium.js', '');
+  write('src/app/data.js', "import '../layers/flights/render/navara.js';");
+  assert.throws(
+    () => checkImportDirections(root),
+    /src\/app\/data\.js: A Navara layer renderer loads only through the Navara mode's dynamic import\(\): src\/layers\/flights\/render\/navara\.js/,
+  );
+});
+
 test('geo modules may import each other, and its tests may import cesium', (t) => {
   const { root, write } = fixture(t);
   write('src/geo/math.js', 'export const half = (value) => value / 2;');

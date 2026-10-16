@@ -371,7 +371,7 @@ function normalBillboardScaleByDistance(sourceFile) {
   const src = readLayerSource(path.join(ROOT, sourceFile));
   const fn = src.match(/function (?:parts\.\w+\.)?_normalBillboardScaleByDistance\(\) \{([\s\S]*?)\n\}/);
   assert.ok(fn, `${sourceFile}: _normalBillboardScaleByDistance not found`);
-  const scalar = fn[1].match(/NearFarScalar\((\d+), ([\d.]+), (\d+), ([\d.]+)\)/);
+  const scalar = fn[1].match(/(?:NearFarScalar|nearFarScale)\((\d+), ([\d.]+), (\d+), ([\d.]+)\)/);
   assert.ok(scalar, `${sourceFile}: billboard NearFarScalar not found`);
   return scalar.slice(1).map(Number);
 }

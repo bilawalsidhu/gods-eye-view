@@ -1366,8 +1366,9 @@ test('hasContact declines while a layer is disabled, whatever its maps still hol
   // disable() hides the collection but keeps the records, so a map lookup
   // alone would report a preserved subject as FRESH from hidden stale data.
   for (const [name, source, guard] of [
+    // Flights asks its renderer whether the fleet is shown (phase 3).
     ['flights', readLayerSource(new URL('./flights.js', import.meta.url)),
-      /hasContact\(\s*icao24,?\s*\)\s*\{\s*\n\s*if\s*\(\s*!(?:flightState\.)?_billboardCollection\s*\|\|\s*!(?:flightState\.)?_billboardCollection\.show\s*\|\|\s*(?:flightState\.)?_billboards\.size\s*===\s*0,?\s*\)\s*return\s*null;/],
+      /hasContact\(\s*icao24,?\s*\)\s*\{\s*\n\s*if\s*\(\s*!(?:flightState\.)?_renderer\?\.fleet\.visible\(\)\s*\|\|\s*(?:flightState\.)?_billboards\.size\s*===\s*0,?\s*\)\s*return\s*null;/],
     ['militaryFlights', readLayerSource(new URL('./militaryFlights.js', import.meta.url)),
       /hasContact\(\s*icao24,?\s*\)\s*\{\s*\n\s*if\s*\(\s*!(?:flightState\.)?_billboardCollection\s*\|\|\s*!(?:flightState\.)?_billboardCollection\.show\s*\|\|\s*(?:flightState\.)?_billboards\.size\s*===\s*0,?\s*\)\s*return\s*null;/],
     ['aisLiveVessels', readLayerSource(new URL('./aisLiveVessels.js', import.meta.url)),

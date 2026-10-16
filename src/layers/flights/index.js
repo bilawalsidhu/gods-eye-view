@@ -44,7 +44,7 @@ export function createCivilFlightLayer({
   parts.ingestion = createIngestion({
     feed: flightState.feed,
     getQuery: (viewer) =>
-      parts.controller._flightQuery(viewer || flightState._viewer),
+      parts.controller._flightQuery(viewer || flightState._renderer?.view),
     applySnapshot,
     setSourceLabel: (source) => {
       layer.source = source;

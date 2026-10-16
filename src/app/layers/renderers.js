@@ -24,6 +24,7 @@
 // provider (`{ engine, unavailable() }` is the part it reads).
 
 import { APPLICATION_LAYER_DIRECTORY } from './directory.js';
+import { createFlightsCesiumRenderer } from '../../layers/flights/render/cesium.js';
 
 const ENGINE_KINDS = new Set(['cesium', 'navara']);
 
@@ -81,11 +82,19 @@ export const rendererFor = (layerId, engine, options) =>
 export const layerAvailableOn = (layerId, engineKind) =>
   defaultRegistry.layerAvailableOn(layerId, engineKind);
 
-// Every application layer draws itself on Cesium today.
+/** Cesium renderers extracted from their layers (render/cesium.js). */
+export const CESIUM_LAYER_RENDERERS = Object.freeze({
+  flights: createFlightsCesiumRenderer,
+});
+
+// The other application layers still draw themselves on Cesium.
 registerLayerRenderers(
   'cesium',
   Object.fromEntries(
-    APPLICATION_LAYER_DIRECTORY.map(({ id }) => [id, CESIUM_BUILTIN]),
+    APPLICATION_LAYER_DIRECTORY.map(({ id }) => [
+      id,
+      CESIUM_LAYER_RENDERERS[id] ?? CESIUM_BUILTIN,
+    ]),
   ),
 );
 

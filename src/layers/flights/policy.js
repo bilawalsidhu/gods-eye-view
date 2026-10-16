@@ -6,13 +6,18 @@ export {
   MISSING_POLL_LIMIT,
   ERROR_BACKOFF_INTERVAL,
 } from './recordPolicy.js';
-import * as Cesium from 'cesium';
+import {
+  CYAN,
+  constantRgba,
+  nearFarScale,
+  rgbaFromCss,
+} from '../shared/color.js';
 
 export const FOCUS_EVIDENCE_DEV = import.meta.env?.DEV === true;
 
 /** Amber tint for known-military aircraft rendered by this layer (matches the military layer's icon color). */
 
-export const MIL_TINT = Cesium.Color.fromCssColorString('#FFB800');
+export const MIL_TINT = Object.freeze(rgbaFromCss('#FFB800'));
 
 // --- Ground traffic (owner reversal 2026-07-03: "absolutely we should see planes
 // taxiing and landing") -----------------------------------------------------------
@@ -107,18 +112,19 @@ export const MODEL_COLOR_BLEND_AMOUNT = 0.94;
 
 export const MODEL_BELLY_OFFSET_NATIVE = 6.719;
 
-export const CYAN_TRANSPARENT = Cesium.Color.CYAN.withAlpha(0);
+export const CYAN_TRANSPARENT = constantRgba(
+  CYAN.red,
+  CYAN.green,
+  CYAN.blue,
+  0,
+);
 
 export const COCKPIT_CONTACT_SIZE_PX = 6;
 
-export const COCKPIT_CIVILIAN_COLOR =
-  Cesium.Color.fromCssColorString('#DCEEFF');
+export const COCKPIT_CIVILIAN_COLOR = Object.freeze(rgbaFromCss('#DCEEFF'));
 
-export const TRACKED_BILLBOARD_SCALE_BY_DISTANCE = new Cesium.NearFarScalar(
-  1000,
-  3.0,
-  8000000,
-  0.5,
+export const TRACKED_BILLBOARD_SCALE_BY_DISTANCE = Object.freeze(
+  nearFarScale(1000, 3.0, 8000000, 0.5),
 );
 
 // ---------------------------------------------------------------------------

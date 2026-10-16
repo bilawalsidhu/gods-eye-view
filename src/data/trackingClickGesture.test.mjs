@@ -114,10 +114,18 @@ test('civilian and military click handlers apply duration only at the deselect b
     readLayerSource(new URL('./flights.js', import.meta.url)),
     readLayerSource(new URL('./militaryFlights.js', import.meta.url)),
   ];
-  for (const source of sources) {
-    assert.match(source, /isTrackingSelectionGesture\(gesture\)[\s\S]+scene\.pick/);
-    assert.match(source, /isTrackingClickGesture\(gesture\)[\s\S]+(?:parts\.\w+\.)?_clearTracking\([^)]*\{ origin: 'user' \}\)/);
-  }
+  // Military still owns its handler; flights moved to the selection
+  // dispatcher (phase 3), whose source applies the same two rules: the
+  // selection gesture before a select, the full click classifier before the
+  // empty-space deselect, which flights answers with a user-origin clear.
+  const military = sources[1];
+  assert.match(military, /isTrackingSelectionGesture\(gesture\)[\s\S]+scene\.pick/);
+  assert.match(military, /isTrackingClickGesture\(gesture\)[\s\S]+(?:parts\.\w+\.)?_clearTracking\([^)]*\{ origin: 'user' \}\)/);
+  const dispatcher = readFileSync(new URL('./selectionDispatcher.js', import.meta.url), 'utf8');
+  assert.match(dispatcher, /if \(!isTrackingSelectionGesture\(gesture\)\) return;[\s\S]+onSelect/);
+  assert.match(dispatcher, /if \(!isTrackingClickGesture\(gesture\)\) return;\s*for \(const owner of \[\.\.\.owners\.values\(\)\]\) owner\.onEmptyClick/);
+  assert.match(sources[0], /dispatcher\.register\('flights', \{[\s\S]+onEmptyClick: _onEmptyClick/);
+  assert.match(sources[0], /function _onEmptyClick\(\) \{[\s\S]+?_clearTracking\(false, \{ origin: 'user' \}\)/);
   assert.doesNotMatch(
     sources[0],
     /(?:flightState\.)?_trackedEntity = (?:flightState\.)?_viewer\.entities\.add\(\{\s*id:/,

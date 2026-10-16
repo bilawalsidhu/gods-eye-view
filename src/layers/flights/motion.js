@@ -297,8 +297,9 @@ export function createMotion({
   /** Resolve the selected aircraft's actual rendered square extent this frame. */
 
   function _trackedFocusSizePx(icao24, position) {
-    const camera = flightState._viewer?.camera;
-    const scene = flightState._viewer?.scene;
+    const view = flightState._renderer?.view;
+    const camera = view?.camera;
+    const scene = view?.scene;
     if (!camera?.positionWC || !position || !scene) return 28;
     const rangeM = geo.cartesian3.distance(camera.positionWC, position);
     if (parts.rendering._modelOwnsVisual(icao24)) {
@@ -309,12 +310,12 @@ export function createMotion({
         baseScale: spec.scale,
         nativeRadiusM: spec.nativeRadiusM,
         rangeM,
-        viewportHeightPx: scene.canvas.clientHeight,
+        viewportHeightPx: view.viewportHeightPx(),
         fovyRad: camera.frustum.fovy,
         maximumPixelSize: TRACKED_MODEL_MAX_PX,
       });
       const focalLengthPx =
-        scene.canvas.clientHeight / (2 * Math.tan(camera.frustum.fovy / 2));
+        view.viewportHeightPx() / (2 * Math.tan(camera.frustum.fovy / 2));
       const projectedDiameterPx =
         (2 * spec.nativeRadiusM * scale * focalLengthPx) / rangeM;
       return Math.max(
@@ -323,16 +324,16 @@ export function createMotion({
       );
     }
 
-    const billboard = flightState._trackedEntity?.billboard;
-    const time = flightState._viewer.clock.currentTime;
-    const width = billboard?.width?.getValue(time) ?? 28;
-    const height = billboard?.height?.getValue(time) ?? 28;
+    const billboard = flightState._renderer.tracked.billboardSize(
+      flightState._trackedEntity,
+    );
+    const width = billboard?.width ?? 28;
+    const height = billboard?.height ?? 28;
     const scale =
-      billboard?.scale?.getValue(time) ??
+      billboard?.scale ??
       (CLASS_SCALE_2D[flightState.records.data.get(icao24)?.klass] || 1);
     const scaleByDistance =
-      billboard?.scaleByDistance?.getValue(time) ??
-      TRACKED_BILLBOARD_SCALE_BY_DISTANCE;
+      billboard?.scaleByDistance ?? TRACKED_BILLBOARD_SCALE_BY_DISTANCE;
     const distanceScale = nearFarScalarValueAtDistance(scaleByDistance, rangeM);
     return Math.max(width, height) * scale * distanceScale;
   }
@@ -347,7 +348,7 @@ export function createMotion({
    */
 
   function _trackedDisplayPosition(icao24) {
-    const frame = flightState._viewer?.scene?.frameState?.frameNumber ?? -1;
+    const frame = flightState._renderer?.view.frameNumber() ?? -1;
     if (
       frame === flightState._cachedDRFrame &&
       icao24 === flightState._drReconcileIcao
@@ -434,8 +435,8 @@ export function createMotion({
     publishFocusTargetFromCachedPosition({
       ownerLayer: 'flights',
       id: icao24,
-      scene: flightState._viewer?.scene,
-      camera: flightState._viewer?.camera,
+      scene: flightState._renderer?.view.scene,
+      camera: flightState._renderer?.view.camera,
       displayPosition: flightState._cachedDRPosition,
       widthPx: focusSizePx,
       heightPx: focusSizePx,

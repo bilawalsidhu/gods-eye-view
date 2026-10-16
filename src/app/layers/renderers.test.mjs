@@ -2,6 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   CESIUM_BUILTIN,
+  CESIUM_LAYER_RENDERERS,
+  rendererFor,
   createLayerAvailability,
   createRendererRegistry,
   layerAvailableOn,
@@ -52,6 +54,15 @@ test('the default registry: every layer on Cesium, none yet on Navara', () => {
     assert.equal(layerAvailableOn(id, 'cesium'), true, id);
     assert.equal(layerAvailableOn(id, 'navara'), false, id);
   }
+});
+
+test('flights has an extracted Cesium renderer; the others still draw themselves', () => {
+  assert.deepEqual(Object.keys(CESIUM_LAYER_RENDERERS), ['flights']);
+  const viewer = { scene: {}, camera: {} };
+  const renderer = rendererFor('flights', { kind: 'cesium' }, { viewer });
+  assert.equal(renderer.kind, 'cesium');
+  assert.equal(renderer.viewer, viewer);
+  assert.equal(rendererFor('satellites', { kind: 'cesium' }), null);
 });
 
 test('the layer availability API: engine, isAvailable, available, unavailable', () => {

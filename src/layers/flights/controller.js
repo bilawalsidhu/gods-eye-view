@@ -13,8 +13,9 @@ export function createController({
     flightState.feed._activeUpdateControllers.clear();
   }
 
-  function _flightQuery(viewer) {
-    const cartographic = viewer?.camera?.positionCartographic;
+  /** The feed query around the camera of `view` (a viewer or the renderer's view). */
+  function _flightQuery(view) {
+    const cartographic = view?.camera?.positionCartographic;
     return cartographic
       ? {
           latitude: geo.math.toDegrees(cartographic.latitude),
