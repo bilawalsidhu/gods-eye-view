@@ -1,6 +1,9 @@
 import { LayerStateCoordinator } from '../data/layerStateCoordinator.js';
 import { APPLICATION_LAYER_DIRECTORY } from '../app/layers/directory.js';
 
+/** How long the "kept in the link" notice stays up (ms). */
+export const NOT_ON_THIS_ENGINE_DWELL_MS = 15_000;
+
 /** Names of the layers a link turned on that this engine does not have. */
 export function layersNotOnThisEngine(results) {
   return results
@@ -189,6 +192,9 @@ export class ShareRestoration {
     this.showStatus('NOT ON THIS ENGINE', {
       state: 'retry',
       detail: `Kept in the link: ${names.join(', ')}`,
+      // Long enough to read a list of layer names; the engine's own
+      // persistent notice comes back afterwards (ShellFeedback).
+      dwellMs: NOT_ON_THIS_ENGINE_DWELL_MS,
     });
   }
   cancelSelection() {

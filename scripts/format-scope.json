@@ -1109,5 +1109,6 @@
   "src/app/layers/qaSources.test.mjs",
   "scripts/qa-w1-layers.mjs",
   "src/bench/w1Feeds.js",
-  "scripts/qa-map-switch.mjs"
+  "scripts/qa-map-switch.mjs",
+  "scripts/qa-engine-notice.mjs"
 ]
