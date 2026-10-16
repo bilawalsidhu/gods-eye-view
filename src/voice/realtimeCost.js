@@ -4,10 +4,12 @@ import {
   writeStoredVoiceTier,
   writeStoredVoiceLimits,
 } from './realtimePreferences.js';
+import { readStoredCloudVoiceAuthMode } from './cloudVoiceAuth.js';
 import {
   createVoiceCostTracker,
   resolveVoiceModel,
   formatCostUsd,
+  estimateTranscriptionCostUsd,
 } from './voiceCost.js';
 
 /** Own next-session preferences and the immutable-model session cost meter. */
@@ -16,6 +18,10 @@ export class RealtimeCost {
     Object.assign(this, { readUi, readStatus }, operations);
     this.voiceTier = readStoredVoiceTier();
     this.voiceLimits = readStoredVoiceLimits();
+    this.cloudVoiceAuth = readStoredCloudVoiceAuthMode();
+    this.sessionCloudVoiceAuth = null;
+    this.oauthUsage = { responses: 0, input: 0, output: 0, captions: 0 };
+    this.transcribeModel = null;
     this.costTracker = createVoiceCostTracker({
       tier: this.voiceTier,
       limits: this.voiceLimits,
@@ -56,6 +62,21 @@ export class RealtimeCost {
             }; applies next session`;
     }
     if (this.ui?.costValue) {
+      const liveAuth = this.sessionCloudVoiceAuth || this.cloudVoiceAuth;
+      if (liveAuth === 'oauth') {
+        const { responses, input, output, captions } = this.oauthUsage;
+        this.ui.costValue.hidden = false;
+        this.ui.costValue.textContent = 'COST UNKNOWN';
+        this.ui.costValue.dataset.level = 'unknown';
+        this.ui.costValue.title =
+          `ChatGPT OAuth session: ${responses} response(s), ${input} input and ${output} output tokens, ${captions} caption transcription(s) reported. ` +
+          'USD cost and the API spend cap are unavailable for this auth mode.' +
+          (state.incomplete
+            ? ' Usage is incomplete because a response was still in flight when the session ended.'
+            : '');
+        return;
+      }
+      this.ui.costValue.hidden = false;
       this.ui.costValue.textContent = state.display;
       this.ui.costValue.dataset.level = state.level;
       this.ui.costValue.title =
@@ -136,7 +157,44 @@ export class RealtimeCost {
    */
   recordUsage(usage) {
     if (!usage) return null;
-    const state = this.costTracker.record(usage);
+    if (this.sessionCloudVoiceAuth === 'oauth') {
+      const count = (value) =>
+        Number.isFinite(value) && value > 0 ? value : 0;
+      this.oauthUsage.responses += 1;
+      this.oauthUsage.input += count(usage.input_tokens);
+      this.oauthUsage.output += count(usage.output_tokens);
+      this.syncCostUi();
+      return { ...this.oauthUsage, costKnown: false };
+    }
+    return this.applyCost(this.costTracker.record(usage));
+  }
+
+  /**
+   * Meter one input transcription (voice-card captions). It is billed apart
+   * from responses, so it is priced with the transcription model the server
+   * reported and folded into the same total, warning and cap.
+   */
+  recordTranscriptionUsage(usage) {
+    if (!usage) return null;
+    // An OAuth session has no API-dollar meter, so captions are counted
+    // rather than priced into the API-key warning and cap.
+    if (this.sessionCloudVoiceAuth === 'oauth') {
+      this.oauthUsage.captions += 1;
+      this.syncCostUi();
+      return { ...this.oauthUsage, costKnown: false };
+    }
+    return this.applyCost(
+      this.costTracker.recordUsd(
+        estimateTranscriptionCostUsd(usage, this.transcribeModel),
+      ),
+    );
+  }
+
+  bindTranscriptionModel(model) {
+    this.transcribeModel = model && model !== 'off' ? model : null;
+  }
+
+  applyCost(state) {
     this.syncCostUi();
     if (state.warnCrossed) {
       // Exactly one line — the latch in the tracker guarantees it.
@@ -190,6 +248,9 @@ export class RealtimeCost {
   prepareSession() {
     this.voiceTier = readStoredVoiceTier();
     this.voiceLimits = readStoredVoiceLimits();
+    this.cloudVoiceAuth = readStoredCloudVoiceAuthMode();
+    this.sessionCloudVoiceAuth = this.cloudVoiceAuth;
+    this.oauthUsage = { responses: 0, input: 0, output: 0, captions: 0 };
     this.costCapStopped = false;
     // Provisional meter (tier-priced) so the readout shows $0.00 while
     // connecting. It is REPLACED below with one bound to the model the server

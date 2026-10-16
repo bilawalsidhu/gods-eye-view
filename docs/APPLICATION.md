@@ -158,7 +158,7 @@ routing and regional caches. Request parameters cannot override these endpoints.
 Voice controls accept an action runner and a controller factory through
 `createVoiceCommands` (`./voice/commands`). The default Realtime controller owns
 microphone tracks, playback, push-to-talk, tool cancellation and radio handoff.
-Its backend supplies `requestToken({ tier, signal })` and
+Its backend supplies `requestToken({ tier, authMode, signal })` and
 `negotiate({ offerSdp, credential, signal })`. The Realtime-compatible adapter
 (`./voice/realtime-backend`) accepts separate token and connection transports
 and endpoints. Only the short-lived client secret reaches the SDP endpoint.

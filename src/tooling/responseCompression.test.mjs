@@ -10,7 +10,7 @@ import {
 /** A request shaped like the one Node hands a middleware. */
 function request(acceptEncoding) {
   return {
-    url: '/api/opensky',
+    url: '/api/flights',
     method: 'GET',
     headers:
       acceptEncoding === undefined ? {} : { 'accept-encoding': acceptEncoding },
