@@ -260,7 +260,7 @@ historyProbe.clear();
 await mkdir(SHOTS, { recursive: true });
 
 const browser = await puppeteer.launch({
-  headless: false,
+  headless: process.env.QA_HEADFUL === '1' ? false : true,
   protocolTimeout: 150000,
   executablePath:
     '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',

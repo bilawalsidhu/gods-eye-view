@@ -7,7 +7,7 @@ const base = process.env.QA_BASE_URL || 'http://localhost:4305';
 const shots = process.env.QA_SHOTS || 'qa-shots/transit-recovery';
 await mkdir(shots, { recursive: true });
 const browser = await puppeteer.launch({
-  headless: false,
+  headless: process.env.QA_HEADFUL === '1' ? false : true,
   executablePath:
     '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
   args: [

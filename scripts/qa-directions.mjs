@@ -34,7 +34,7 @@ const check = (name, passed, detail = '') => {
 };
 
 const browser = await puppeteer.launch({
-  headless: false,
+  headless: process.env.QA_HEADFUL === '1' ? false : true,
   executablePath:
     '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
   args: [
