@@ -188,6 +188,8 @@ export function createCesiumFollow(viewer, { commanded }) {
     if (!handle) {
       handle = {
         native: entity,
+        target: () =>
+          displayPosition(entity, viewer.clock.currentTime, undefined),
         stop() {
           if (viewer.trackedEntity === entity) viewer.trackedEntity = undefined;
         },
@@ -306,6 +308,13 @@ export function createCesiumFollow(viewer, { commanded }) {
     const state = { entity: null, proxy: null, options, handle: null };
     state.handle = {
       native: options.native,
+      target() {
+        try {
+          return state.options.position();
+        } catch {
+          return undefined;
+        }
+      },
       stop() {
         if (own !== state) return;
         if (viewer.trackedEntity === state.entity)

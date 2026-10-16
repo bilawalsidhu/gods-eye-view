@@ -350,6 +350,13 @@ export function createFollowController({
         label: options.label,
         offset: null,
         previous: null,
+        target() {
+          try {
+            return handle.options.position();
+          } catch {
+            return undefined;
+          }
+        },
         stop: () => end(handle),
         retarget(next) {
           const updated = normalizeFollowOptions({ ...options, ...next });

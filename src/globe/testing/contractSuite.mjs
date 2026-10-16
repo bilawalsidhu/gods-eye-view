@@ -1209,8 +1209,10 @@ export function createContractSuite(
                 count++;
             return count;
           };
+          // ready() turns true once the glTF has loaded (the magenta point
+          // and sprites above can already fill the region before then).
+          await until(() => models.ready(), 'the model set ready()');
           await until(() => modelPixels() > 150, 'the model drawn');
-          ensure(models.ready(), 'a drawn model set is not ready()');
         } finally {
           for (const set of sets) set.destroy();
         }
@@ -2572,6 +2574,11 @@ export function createContractSuite(
           );
           await until(() => offCentre() <= 3, 'the follow centring its target');
           near(range(), Math.hypot(1000, 400), 5, 'follow range at viewFrom');
+          // target(): where the followed target is now.
+          ensure(
+            cartesian3.distance(handle.target(), at(step)) < 1,
+            'following().target() is not the target',
+          );
           // 2 s of motion (at least 120 frames), centred within 3 px.
           const began = performance.now();
           const firstStep = step;
