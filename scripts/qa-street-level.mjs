@@ -1687,6 +1687,13 @@ async function main() {
       await step(
         'the header ON/OFF pill switches the layer off and on',
         async () => {
+          // Tiles requested while the credit painted can flip the pill back
+          // to LOADING, so let coverage settle before reading it.
+          await waitForCoverage(page);
+          await settle(
+            page,
+            () => document.getElementById('sl-status').textContent === 'ON',
+          );
           assert.equal(
             await page.$eval('#sl-status', (node) =>
               [

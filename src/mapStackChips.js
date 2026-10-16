@@ -10,7 +10,8 @@
 // state is re-synced from controller state (never optimistically), so a failed
 // or superseded switch still leaves the truly-active stack lit.
 
-import { keySetupRequirement } from './keySetupCore.mjs';
+import { keySetupRequirementEnvVars } from './keySetupCore.mjs';
+import { t } from './i18n/index.js';
 
 export const MAP_STACK_CHIP_CLASS = 'map-stack-chip';
 export const PRESENTED_MAP_STACK_IDS = Object.freeze([
@@ -37,9 +38,14 @@ export function mapStackChipModel(stack, activeId) {
   const available = stack?.available !== false;
   const label = String(stack?.label ?? stack?.id ?? '');
   const requiresIon = stack?.requiresIon === true;
+  // Stack labels are provider names and stay English; the sentence translates.
   const fallbackReason = requiresIon
-    ? keySetupRequirement('cesium-ion')
-    : `${label || 'This map stack'} is unavailable`;
+    ? t('Needs {envVars} — add it in Provider Settings', {
+        envVars: keySetupRequirementEnvVars('cesium-ion'),
+      })
+    : t('{label} is unavailable', {
+        label: label || t('This map stack'),
+      });
   const unavailableHint = available
     ? ''
     : String(stack?.unavailableReason || fallbackReason);
@@ -119,7 +125,10 @@ export function renderMapStackChips(
     if (!model.available) {
       chip.setAttribute(
         'aria-label',
-        `${model.label} unavailable: ${model.unavailableHint}`,
+        t('{label} unavailable: {hint}', {
+          label: model.label,
+          hint: model.unavailableHint,
+        }),
       );
     }
 

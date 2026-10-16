@@ -495,7 +495,7 @@ test('the Visual Presets tray owns Map Source and the retired left panel is abse
   );
   assert.match(
     html,
-    /<section class="map-source-section"[\s\S]*?<div id="map-stack-chips" class="map-stack-chip-row" role="group" aria-label="Map source"><\/div>/,
+    /<section class="map-source-section"[\s\S]*?<div id="map-stack-chips" class="map-stack-chip-row" role="group" aria-label="Map source" data-i18n-aria-label><\/div>/,
   );
   assert.doesNotMatch(
     html,
