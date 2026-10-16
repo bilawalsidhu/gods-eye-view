@@ -2,12 +2,34 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { normalizeSourceItem } from '../../server/providers/cctv/normalize.js';
+import { allocateSourceCap } from '../../server/providers/cctv/cap.js';
 
 const read = (path) =>
   JSON.parse(readFileSync(new URL(path, import.meta.url), 'utf8'));
 const catalog = read('../../config/cctv_sources.argentina.json');
 const survey = read('../../docs/data/cctv-argentina-survey-2026-10-15.json');
 const mediaUrl = (camera) => camera.embedUrl || camera.url;
+
+test('Peatonal Dufaur overrides the dedicated pack instead of duplicating its stream', () => {
+  const dedicated = {
+    id: 'monte-hermoso-peatonal-dufaur',
+    url: 'https://encoder-1b.montevision.com.ar/live/monte2.m3u8',
+    lat: -38.988,
+    lon: -61.2865,
+  };
+  const { sources } = allocateSourceCap(
+    [
+      { name: 'monte-hermoso', sources: [dedicated] },
+      { name: 'file', sources: catalog },
+    ],
+    1000,
+  );
+  const matches = sources.filter((camera) => camera.url === dedicated.url);
+  assert.equal(matches.length, 1);
+  assert.equal(matches[0].id, dedicated.id);
+  assert.equal(matches[0].lat, dedicated.lat);
+  assert.equal(matches[0].lon, dedicated.lon);
+});
 
 test('Varitech stays in its separate opt-in pack, with historical receipts preserved', () => {
   const pack = survey.separatePacks.find(

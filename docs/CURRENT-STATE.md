@@ -584,7 +584,9 @@ pinning, first-position grace, source time and sea-surface placement are unchang
 
 Military flights also separate portable records and source acquisition from
 Cesium snapshot application. The metadata owner retains aviation feet, source
-fix times, sticky fields and partial-feed retention. Rendering retains ground
+fix times, sticky fields and partial-feed retention. A row without track or
+speed holds the last known value, as civil records do; a grounded row without
+speed reads 0. Rendering retains ground
 model ownership, motion history, military registration and tracking cleanup.
 
 Civil flights separate source acquisition, portable record reconciliation and
@@ -986,7 +988,9 @@ area anchors; none asserts a calibrated pose. Offline integrity tests cover
 provenance, receipt coverage and disposition references; live checks are
 recorded separately in the survey and catalog guide. Ten Varitech entries are
 excluded to avoid duplication with the separate opt-in pack in #1147; their
-historical receipts remain under `separatePacks`.
+historical receipts remain under `separatePacks`. The Monte Hermoso entry shares
+its stable ID and approximate area anchor with #1148, so loading both packs does
+not create two markers for the same feed.
 
 ## NYC DOT TMC CCTV source pack
 

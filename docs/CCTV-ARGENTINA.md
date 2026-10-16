@@ -26,7 +26,9 @@ Enable CCTV, then select a city and camera in the panel. A configured pack
 replaces the default camera packs unless `CCTV_FORCE_AUSTIN=1` is set. Leave that
 flag unset for an Argentina-only session. A custom `CCTV_MAX_SOURCES` below 64
 truncates this pack. Restart the server after editing the file, or wait for the
-normal source-cache refresh.
+normal source-cache refresh. Peatonal Dufaur shares its canonical ID and
+approximate area anchor with #1148, so forcing the general packs does not add
+a second marker for the same stream. This does not verify the physical mount.
 
 ## Included feeds
 

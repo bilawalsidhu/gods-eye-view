@@ -568,7 +568,8 @@
       }
     },
     {
-      "cameraId": "ar-multimedios-monte2",
+      "cameraId": "monte-hermoso-peatonal-dufaur",
+      "previousCameraId": "ar-multimedios-monte2",
       "method": "Public operator HLS decoded with FFmpeg; actual local app video decoded and advanced in Firefox",
       "checkedAt": "2026-10-15T20:04:52.952730+00:00",
       "httpStatus": 200,
@@ -2309,7 +2310,7 @@
       "cameraIds": [
         "ar-multimedios-pringles",
         "ar-multimedios-monte",
-        "ar-multimedios-monte2",
+        "monte-hermoso-peatonal-dufaur",
         "ar-multimedios-sierra"
       ]
     },

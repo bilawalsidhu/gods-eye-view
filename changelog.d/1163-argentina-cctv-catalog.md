@@ -6,4 +6,6 @@
   Ten Varitech entries are excluded in favor of the separate opt-in pack in
   #1147, with their historical receipts retained in the survey. Coordinates
   are approximate area anchors; no camera pose is calibrated.
+  Peatonal Dufaur shares its ID and approximate anchor with #1148 to avoid
+  duplicating the stream when general packs are forced.
   (radianx, #1163).
