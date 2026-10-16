@@ -19,10 +19,13 @@
  * - the HUD readouts follow the camera;
  * - share links: the hash written for a pose restores that pose on reload
  *   (Cesium within 1e-6; Navara's deltas are recorded);
- * - map stacks: base imagery and back to Google 3D.
+ * - map stacks: base imagery and back to Google 3D;
+ * - surface heights: surface.sampleHeight at points of the Austin startup
+ *   pose, the ground under the camera included, is finite.
  *
- * With both engines, then across them: the share hash written on each engine
- * opened on the other gives the same pose (<= 1 m, <= 0.1°), and both engines
+ * With both engines, then across them: those heights agree within 2 m, the
+ * share hash written on each engine opened on the other gives the same pose
+ * (<= 1 m, <= 0.1°), and both engines
  * at one fixed pose are photographed side by side (--out keeps
  * qa-engine-side-by-side.png and .jpg).
  *
@@ -75,6 +78,20 @@ const MIN_CLEARANCE = { cesium: -1, navara: 25 };
 const CROSS_TOLERANCE = { metres: 1, degrees: 0.1 };
 // Idle: no frames over this long once the tiles have loaded.
 const IDLE_MS = 2000;
+// surface.sampleHeight at the Austin startup pose (600 m, looking ahead):
+// the ground under the camera (outside the frustum) and points up to the
+// view centre, in degrees. Both engines agree within 2 m where their tiles
+// have loaded (S2).
+const SURFACE_POINTS = [
+  [30.2672, -97.7431],
+  [30.268, -97.7428],
+  [30.269, -97.7425],
+  [30.27, -97.742],
+  [30.2741, -97.741],
+  [30.265, -97.744],
+  [30.26, -97.746],
+];
+const SURFACE_TOLERANCE_M = 2;
 // The pose both engines are photographed at for the side-by-side picture.
 const SIDE_BY_SIDE_HASH =
   'v=2&lat=40.7060&lon=-74.0130&alt=900&heading=30&pitch=-25&roll=0';
@@ -285,8 +302,29 @@ function startClearanceWatch() {
     }
     const clearance = pose.cartographic.height - ground;
     watch.sampled += 1;
-    if (watch.min == null || clearance < watch.min) watch.min = clearance;
+    if (watch.min == null || clearance < watch.min) {
+      watch.min = clearance;
+      watch.lowest = {
+        height: pose.cartographic.height,
+        ground,
+        lat: (pose.cartographic.latitude * 180) / Math.PI,
+        lon: (pose.cartographic.longitude * 180) / Math.PI,
+        pitch: (pose.pitch * 180) / Math.PI,
+      };
+    }
   });
+  // The same before the frame draws (after the engine's ground floor):
+  // tells a dip the floor missed from one the camera made while drawing.
+  watch.minBefore = null;
+  watch.removeBefore = engine.frames.preRender.addEventListener(() => {
+    const pose = engine.camera.pose();
+    const ground = engine.surface.sampleHeight(pose.cartographic);
+    if (!Number.isFinite(ground)) return;
+    const clearance = pose.cartographic.height - ground;
+    if (watch.minBefore == null || clearance < watch.minBefore)
+      watch.minBefore = clearance;
+  });
+  watch.lowest = null;
   window.__qaClearanceWatch = watch;
 }
 
@@ -295,6 +333,7 @@ function stopClearanceWatch() {
   const { engine } = window.__godsEyeView;
   const watch = window.__qaClearanceWatch;
   watch.remove();
+  watch.removeBefore();
   delete window.__qaClearanceWatch;
   const pose = engine.camera.pose();
   const sampled = engine.surface.sampleHeight(pose.cartographic);
@@ -311,6 +350,8 @@ function stopClearanceWatch() {
     ground,
     clearance,
     minClearance,
+    minBefore: watch.minBefore,
+    lowest: watch.lowest,
     sampled: watch.sampled,
     unsampled: watch.unsampled,
   };
@@ -574,6 +615,27 @@ async function runEngine(browser, baseUrl, engine) {
       path: path.join(outDir, `qa-engine-shell-${engine}.png`),
     });
 
+  // The rendered surface's height at the startup pose (compared across
+  // engines in runCrossEngine).
+  const surfaceHeights = await page.evaluate((points) => {
+    const { engine } = window.__godsEyeView;
+    const radians = Math.PI / 180;
+    return points.map(([lat, lon]) => {
+      // A src/geo cartographic (radians), built here so a build works too.
+      const height = engine.surface.sampleHeight({
+        longitude: lon * radians,
+        latitude: lat * radians,
+        height: 0,
+      });
+      return Number.isFinite(height) ? Math.round(height * 100) / 100 : null;
+    });
+  }, SURFACE_POINTS);
+  record(
+    'surface.sampleHeight is finite at the startup pose, under the camera too',
+    surfaceHeights.every(Number.isFinite),
+    { heights: surfaceHeights },
+  );
+
   // Idle: once the tiles have loaded and the camera rests, nothing renders.
   const bootIdle = await page.evaluate(countFrames, IDLE_MS);
   record(`idle renders no frames for ${IDLE_MS} ms`, bootIdle.frames === 0, {
@@ -755,6 +817,11 @@ async function runEngine(browser, baseUrl, engine) {
         floorState.minClearance == null
           ? null
           : Math.round(floorState.minClearance * 10) / 10,
+      minClearanceBeforeDraw:
+        floorState.minBefore == null
+          ? null
+          : Math.round(floorState.minBefore * 10) / 10,
+      lowest: floorState.lowest,
       framesSampled: floorState.sampled,
       framesWithoutGround: floorState.unsampled,
       afterWheel: Math.round(floor.height),
@@ -865,7 +932,7 @@ async function runEngine(browser, baseUrl, engine) {
     ignored: [...new Set(ignored)],
   });
   await context.close();
-  return { results, share };
+  return { results, share, surfaceHeights };
 }
 
 /** Position distance in metres and the worst angle difference in degrees. */
@@ -913,8 +980,25 @@ async function openHash(
  * other, gives the pose it gave on its own engine (within 1 m and 0.1°).
  * Then both engines at one fixed pose, photographed side by side.
  */
-async function runCrossEngine(browser, baseUrl, shares) {
+async function runCrossEngine(browser, baseUrl, shares, heights = {}) {
   const { results, record } = createRecorder('cross');
+  if (heights.cesium && heights.navara) {
+    const deltas = SURFACE_POINTS.map((_, index) =>
+      Number.isFinite(heights.cesium[index]) &&
+      Number.isFinite(heights.navara[index])
+        ? Math.round(
+            Math.abs(heights.cesium[index] - heights.navara[index]) * 100,
+          ) / 100
+        : null,
+    );
+    record(
+      `surface.sampleHeight at the Austin startup pose agrees across engines (<= ${SURFACE_TOLERANCE_M} m)`,
+      deltas.every(
+        (delta) => Number.isFinite(delta) && delta <= SURFACE_TOLERANCE_M,
+      ),
+      { deltas, cesium: heights.cesium, navara: heights.navara },
+    );
+  }
   for (const [from, to] of [
     ['cesium', 'navara'],
     ['navara', 'cesium'],
@@ -1037,11 +1121,17 @@ const browser = await puppeteer.launch({
 });
 let failed = 0;
 const shares = {};
+const heights = {};
 try {
   for (const engine of ENGINES) {
     try {
-      const { results, share } = await runEngine(browser, baseUrl, engine);
+      const { results, share, surfaceHeights } = await runEngine(
+        browser,
+        baseUrl,
+        engine,
+      );
       shares[engine] = share;
+      heights[engine] = surfaceHeights;
       const bad = results.filter(({ ok }) => !ok);
       const gaps = results.filter(({ gap }) => gap);
       failed += bad.length;
@@ -1056,7 +1146,7 @@ try {
   }
   if (shares.cesium && shares.navara) {
     try {
-      const results = await runCrossEngine(browser, baseUrl, shares);
+      const results = await runCrossEngine(browser, baseUrl, shares, heights);
       const bad = results.filter(({ ok }) => !ok);
       failed += bad.length;
       console.log(

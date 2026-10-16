@@ -294,8 +294,32 @@ one built from `6ebd3a63` once chunk hashes are masked, at 2,849,217 B.
   the dusk glow and the dark hemisphere become visible, while Cesium and
   photoreal show a fully sunlit Earth. The lighting switches back off below
   1,000 km, before the tiles would show relit.
-- **Brighter stars** (intensity 40, 2 px), so a starfield shows next to a
-  sunlit Earth.
+- **A daylight sky.** Navara's sky, clouds and haze come from the
+  atmosphere model in physical radiance, scaled for an exposure near 10.
+  The Google tiles carry baked colours that need exposure 1. At exposure 1
+  the noon sky came out dark navy: sRGB about (39, 58, 90) facing the
+  horizon over Manhattan, with the stars showing through. Photoreal still
+  shows a dull grey-blue (Rio). Raising `view.toneMappingExposure` does
+  brighten the sky, but it washes the tiles out as well.
+
+  The cinematic look instead multiplies the atmosphere's
+  radiance-to-luminance factors by 3 (`ATMOSPHERE_LUMINANCE_SCALE`): the
+  sun and sky factors of the sky, the aerial perspective and the clouds.
+  The tiles are untouched. The noon sky now reads about (99, 127, 168), a
+  daylight blue near Cesium's. The haze over distant ground brightens with
+  it, and golden hour and dusk keep their colours.
+
+  The factors are uniforms of the takram materials, reached through each
+  handle's `ref.raw` ([`atmosphereLuminance.js`](../../src/globe/navara/atmosphereLuminance.js)
+  lists the paths, which are internals to re-check on a Navara upgrade).
+  Navara shares one vector per factor between the sky, aerial perspective,
+  clouds and stars, so the vector is scaled once, and a rebuilt material
+  (for example after a cloud quality change) is scaled when it first shows.
+- **Stars only at night or from space** (intensity 40 / 3 to undo the
+  shared scale, 2 px). They show above 100 km, or once the sun at the
+  camera is below −6°, and hide above 80 km with the sun above −4°
+  (`starsVisibleAt`). By day they no longer dot the sky; from space a
+  starfield still shows next to a sunlit Earth.
 - **No sun shadow maps** (`castShadow: false`). The tiles carry baked
   light, so the maps would darken nothing.
 - **Lens flare and SMAA**, as in photoreal. A mobile-optimized view drops
@@ -325,9 +349,10 @@ date once it is more than a minute off. An idle view stays idle.
   raw.githubusercontent.com (an outside host, blocked by gev's sources
   policy), and ACES already does the grading.
 - **Fog light.** It only matters with point lights, and gev has none.
-- **Exposure.** `view.toneMappingExposure` has no visible effect through
-  the postprocessing tone-mapping pass, so the night side cannot be dimmed
-  that way.
+- **Exposure.** `view.toneMappingExposure` does reach the tone-mapping
+  pass (exposure 4 turns the noon sky blue), contrary to an earlier note
+  here, but it scales the baked tiles too and washes them out. The
+  atmosphere scale above brightens only what the atmosphere draws.
 
 **Gallery** (`node scripts/qa-navara-look.mjs`, headless Chrome with
 `--use-angle=metal`, 1280×800, each engine's own canvas). Each row shows
@@ -391,13 +416,21 @@ the new look.
   not a forecast. At low quality they show a fine grain in still frames.
   Between two rests they keep the last ground decision, so a low flight
   from the coast into the mountains hides them only once it stops.
-- **`surface.sampleHeight` returned `undefined` in the app's Navara mode**
-  at the Austin startup view, with photoreal as well as cinematic, while
-  the contract page's JFK check passes. So the cloud rule reads depth
-  instead. The cause was not investigated. One lead is the "multiple
-  instances of Three.js" warning: the geometry-retaining patch may miss the
-  app's `ModelMesh`. If so, the ground floor is affected too. Worth a
-  follow-up.
+- **`surface.sampleHeight` under the camera (fixed).** At the Austin
+  startup view it returned `undefined`, on both looks, for the ground
+  under the camera. The geometry-retaining patch was fine: 699 of 699 tile
+  meshes kept their positions. At 600 m, looking 30° down, the ground under
+  the camera lies outside the frustum, and Navara hides (`visible = false`)
+  the tiles outside the frustum and the parents it refines. The ray only
+  tried shown tiles, so it missed.
+
+  When the shown tiles miss, the ray now tries the loaded hidden ones and
+  takes the hit on the finest of them (bounding radius within twice the
+  smallest). Taking the top hit would pick a coarse parent instead: 143.2 m
+  against 121.9 m under the camera. Against Cesium at seven points from
+  under the camera to the view centre, the deltas are 0.13–1.04 m
+  (`qa-engine-shell`, tolerance 2 m). The cloud rule still reads depth,
+  which is the ground in view rather than under the camera.
 - **Navara's G-buffer normals are zero for Google tiles and the globe,**
   which turns atmosphere lighting black. The look reconstructs normals
   from depth (`useNormalBuffer: false`).
@@ -405,7 +438,8 @@ the new look.
 **Upstream asks for Navara:**
 
 - G-buffer normals for 3D tiles;
-- an exposure that the tone-mapping pass honours;
+- a sky luminance or atmosphere exposure that leaves unlit content (the
+  baked tiles) alone, in place of the uniform scale;
 - a way to switch `irradiance` without recompiling, or a precompile
   option;
 - a sun date that can follow the clock.
@@ -455,19 +489,21 @@ sharpening is a custom `EffectDesc`, using public API only:
   disabled, which costs nothing.
 
 **The app.** Without a viewer, `VisualEffects` sends the slider and the
-toggle to `engine.render.setSharpen`. The global defaults, the style
-presets and share links go through `sharpenIntensityForEngine`: on Navara,
-Cesium's default of 49 (every preset's value) reads as Navara's 80, and
-any other value stays as given. What that means in Navara mode:
+toggle to `engine.render.setSharpen`. The defaults depend on the engine:
+the baseline (`GLOBAL_POST_DEFAULTS`) and every style preset set sharpen
+to `ENGINE_SHARPEN_DEFAULT`. `presetSharpenIntensity` resolves that to
+`SHARPEN_INTENSITY_DEFAULTS[engine]`, which is 49 on Cesium and 80 on
+Navara. Explicit values are never remapped. What that means in Navara
+mode:
 
 - **First load:** the slider shows 80 % with Sharpen on.
 - **Switching style** (Normal, CRT, NVG, FLIR...): Sharpen goes back to on
   at 80 %, as on Cesium it goes back to 49 %. Any change made by hand is
   replaced, as on Cesium.
-- **Share links:** a Navara link carries `si=80` and restores 80. A link
-  written on Cesium with the default `si=49`, or a link without `si`,
-  opens at 80. Any other value (`si=65`) restores as written. One quirk: a
-  Navara user who sets exactly 49 % gets 80 % back from the link.
+- **Share links** carry an explicit `si` and restore it unchanged: a
+  Navara link restores 80, and a Cesium link with `si=49` opens at 49 on
+  Navara too. A link without `si` falls back to 49, the link parser's
+  fallback (`sharelink.js`, left as it is for Cesium).
 - **Explicit calls** (`styleManager.setSharpen`, the voice action) set
   exactly what they ask for.
 - **Scene shots:** the director is not built in Navara mode, so none apply.
@@ -547,6 +583,45 @@ After Sharpen on Navara (see that section):
 - `qa-engine-shell --engine=both` on the dev server: Cesium 22/22, Navara
   24/24, cross-engine 3/3. One earlier run timed out booting Navara
   (180 s); the rerun passed.
+
+After the fix round (daylight sky, engine sharpen defaults, surface
+heights under the camera):
+
+- `npm test`: 6833 tests, 6832 pass, 1 skip;
+- `check:boundaries`, `format:check` (1,417 files) and `build`: clean. The
+  Cesium main chunk is 2,850,229 B, 85 B more than the Sharpen commit,
+  for the engine-default presets;
+- `qa-globe-contract`: Cesium 64/64, Navara 69/69. The new Navara check
+  pins the look's clock to noon and to midnight at Manhattan, facing the
+  horizon. At noon the top of the frame must be daylight blue (mean
+  luminance ≥ 95, blue ≥ 140 and ≥ red + 30) with no star pixels (a pixel
+  25 brighter than every pixel two away). At midnight it must show at
+  least 5 star pixels, which also proves the detector works;
+- the QA pages load OSM imagery and the keyless terrain through a shared
+  disk cache with backoff on 429 ([`scripts/qa/tileCache.mjs`](../../scripts/qa/tileCache.mjs)).
+  Only those two hosts are paused, through CDP `Fetch`: page-wide request
+  interception also held the Navara workers' requests and failed the
+  create → destroy → create check. Repeated runs now fetch only missing
+  tiles. The last Navara run served 1,402 tiles from the cache, fetched
+  260, and logged no 429;
+- `qa-engine-shell --engine=both` on the dev server: Cesium 23/23, Navara
+  25/25, cross-engine 4/4. The new checks:
+  - `surface.sampleHeight` at seven points of the Austin startup pose,
+    including the ground under the camera, is finite on both engines and
+    agrees within 0.12–1.04 m (tolerance 2 m);
+  - the wheel-zoom check now reports the lowest frame and the clearance
+    before each frame draws.
+
+  The wheel-zoom floor over Paris measured a smallest clearance of
+  28.3–28.9 m. Two intermediate runs measured 21.6 and 22.8 m, while the
+  finest-tile window was still 2× (it let a parent tile's surface in) or
+  with floor tweaks since reverted. Under a camera at rest, the sampled
+  ground still moves by about 8 m as tile levels stream in (79 to 88 m),
+  so this check can come close to its 25 m threshold. It is the first
+  place to look if it fails. Each sample under the camera costs about
+  1.6 ms when the ground is outside the view (0.6 ms in view). The floor
+  samples at most every 250 ms or 20 m, below 20 km, while the camera is
+  free.
 
 What `qa-engine-shell` measured, on dev (preview gave the same verdicts):
 

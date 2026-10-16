@@ -20,6 +20,7 @@ import fs from 'node:fs';
 import net from 'node:net';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { installTileCache } from './qa/tileCache.mjs';
 import puppeteer from 'puppeteer';
 
 const repoRoot = path.resolve(
@@ -871,6 +872,99 @@ async function runNavara(page, url, consoleErrors) {
     );
 
     await check(
+      'navara: the noon sky facing the horizon is daylight blue without stars; stars show at night',
+      async () => {
+        // The look follows the wall clock (Date.now): pinned here to noon
+        // and to midnight at Manhattan, then given back.
+        const realNow = Date.now;
+        const pinned = (iso) => {
+          const at = Date.parse(iso);
+          Date.now = () => at;
+        };
+        const skyBand = async () => {
+          // A few frames: the look switches stars on the frame after the sun
+          // moves, and the clouds settle.
+          engine.render.setContinuous(true);
+          await sleep(1200);
+          engine.render.setContinuous(false);
+          await settle(2);
+          const source = engine.host.canvas;
+          const width = source.width;
+          const height = Math.round(source.height * 0.12);
+          const copy = document.createElement('canvas');
+          copy.width = width;
+          copy.height = height;
+          const context = copy.getContext('2d');
+          context.drawImage(source, 0, 0, width, height, 0, 0, width, height);
+          const { data } = context.getImageData(0, 0, width, height);
+          const luma = new Float32Array(width * height);
+          let red = 0;
+          let blue = 0;
+          for (let i = 0; i < luma.length; i++) {
+            red += data[4 * i];
+            blue += data[4 * i + 2];
+            luma[i] =
+              0.299 * data[4 * i] +
+              0.587 * data[4 * i + 1] +
+              0.114 * data[4 * i + 2];
+          }
+          // A star: a pixel brighter by 25 than every pixel two away.
+          let stars = 0;
+          for (let y = 2; y < height - 2; y++)
+            for (let x = 2; x < width - 2; x++) {
+              const centre = luma[y * width + x];
+              let ring = 0;
+              for (const [dx, dy] of [
+                [-2, -2],
+                [0, -2],
+                [2, -2],
+                [-2, 0],
+                [2, 0],
+                [-2, 2],
+                [0, 2],
+                [2, 2],
+              ])
+                ring = Math.max(ring, luma[(y + dy) * width + x + dx]);
+              if (centre > ring + 25) stars++;
+            }
+          const pixels = luma.length;
+          return {
+            luminance: luma.reduce((sum, v) => sum + v, 0) / pixels,
+            red: red / pixels,
+            blue: blue / pixels,
+            stars,
+          };
+        };
+        engine.camera.setView({
+          destination: cartesian3.fromDegrees(-74.013, 40.706, 900),
+          orientation: { heading: 0.52, pitch: -0.1, roll: 0 },
+        });
+        try {
+          pinned('2026-10-15T16:00:00Z');
+          const noon = await skyBand();
+          pinned('2026-10-16T04:00:00Z');
+          const night = await skyBand();
+          const read = (band) =>
+            `luminance ${band.luminance.toFixed(1)}, red ${band.red.toFixed(1)}, blue ${band.blue.toFixed(1)}, ${band.stars} star pixels`;
+          ensure(
+            noon.luminance >= 95 &&
+              noon.blue >= 140 &&
+              noon.blue >= noon.red + 30,
+            `the noon sky is not daylight blue: ${read(noon)}`,
+          );
+          ensure(noon.stars === 0, `stars in the noon sky: ${read(noon)}`);
+          ensure(
+            night.stars >= 5,
+            `no stars at midnight (the detector or the look): ${read(night)}`,
+          );
+        } finally {
+          Date.now = realNow;
+          engine.render.request();
+        }
+      },
+    );
+
+    await check(
       'navara: render governor holds keep frames coming; releasing the last returns to idle',
       async () => {
         const governor = await import('/src/renderGovernor.js');
@@ -1148,7 +1242,17 @@ try {
     defaultViewport: { width: 1280, height: 800 },
   });
   const page = await browser.newPage();
+  // OSM and keyless terrain tiles from a shared disk cache, with backoff on
+  // 429 (qa/tileCache.mjs).
+  const tiles = await installTileCache(page);
   const consoleErrors = [];
+  // Hosts that answered 429, for the report (hosts only: never URLs/keys).
+  const rateLimited = new Map();
+  page.on('response', (response) => {
+    if (response.status() !== 429) return;
+    const host = new URL(response.url()).host;
+    rateLimited.set(host, (rateLimited.get(host) ?? 0) + 1);
+  });
   page.on('console', (message) => {
     if (message.type() === 'error') consoleErrors.push(redact(message.text()));
   });
@@ -1170,6 +1274,13 @@ try {
     `[qa-globe-contract] ${all.length - failed.length}/${all.length} passed` +
       ` (${report.results.length} contract, ${report.extra.length} engine)`,
   );
+  console.log(
+    `[qa-globe-contract] OSM and terrain tiles: ${tiles.hits} cached, ${tiles.fetched} fetched, ${tiles.cancelled} dropped by the page, ${tiles.failed} failed${tiles.failed ? ` ${JSON.stringify(tiles.errors)}` : ''}`,
+  );
+  if (rateLimited.size)
+    console.log(
+      `[qa-globe-contract] HTTP 429 from: ${[...rateLimited].map(([host, count]) => `${host} (${count})`).join(', ')}`,
+    );
   if (consoleErrors.length) {
     console.log(
       `[qa-globe-contract] ${consoleErrors.length} console error(s):`,
