@@ -116,7 +116,8 @@
     "{value} KM/S",
     "ΔE",
     "ΔN",
-    "▲ {frp} MW"
+    "▲ {frp} MW",
+    "Regional"
   ],
   "ru": [
     "AIS: --",

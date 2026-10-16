@@ -1,6 +1,10 @@
 import { readWindBody } from '../../sources/windBody.js';
 import { decodeFieldGrid } from '../wind/fieldDecode.js';
 
+// Imported by portable code: no i18n here. The texts stay English data and
+// the layer shows them translated.
+const msg = (text) => text;
+
 export const OCEAN_GRID_URL =
   /^\/api\/ocean\/currents\/grid\/currents-[\w.,-]+\.bin$/;
 const GLOBAL_BOX = { latMin: -90, latMax: 90, lonMin: -180, lonMax: 180 };
@@ -32,7 +36,8 @@ export function createOceanCurrentsSource({
       const abort = () => controller.abort(signal.reason);
       signal?.addEventListener('abort', abort, { once: true });
       const timer = setTimeout(
-        () => controller.abort(new Error('Ocean current request timed out')),
+        () =>
+          controller.abort(new Error(msg('Ocean current request timed out'))),
         timeoutMs,
       );
       const active = controller.signal;
@@ -76,7 +81,7 @@ export function createOceanCurrentsSource({
           ) ||
           !OCEAN_GRID_URL.test(manifest.gridUrl)
         )
-          throw new Error('Malformed ocean current manifest');
+          throw new Error(msg('Malformed ocean current manifest'));
         const expectedBytes = grid.nx * grid.ny * 8;
         const gridResponse = await fetchImpl(manifest.gridUrl, {
           signal: active,
@@ -86,7 +91,7 @@ export function createOceanCurrentsSource({
           throw new Error(`Ocean current HTTP ${gridResponse.status}`);
         const bytes = await readWindBody(gridResponse, expectedBytes, active);
         if (bytes.byteLength !== expectedBytes)
-          throw new Error('Malformed ocean current grid');
+          throw new Error(msg('Malformed ocean current grid'));
         const [u, v] = decodeFieldGrid(grid, bytes);
         return { ...manifest, u, v };
       } finally {

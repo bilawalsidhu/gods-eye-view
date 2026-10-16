@@ -3881,6 +3881,7 @@
       "src/layers/wind/source.js",
       "src/layers/oceanCurrents/source.js",
       "src/layers/wind/fieldDecode.js",
+      "src/layers/wind/fieldSpec.js",
       "src/sources/windBody.js",
       "src/layers/wind/fields.js",
       "src/layers/wind/model.js",

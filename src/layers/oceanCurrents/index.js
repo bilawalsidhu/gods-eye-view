@@ -2,6 +2,8 @@ import * as Cesium from 'cesium';
 import { createWindRendering } from '../wind/rendering.js';
 import { OCEAN_FIELD_SPEC, fieldRampMax } from '../wind/fieldSpec.js';
 import { formatWindValidTime } from '../wind/index.js';
+import { t, msg, translateKnown } from '../../i18n/index.js';
+import { unitLabel } from '../../ui/unitLabels.js';
 
 const BOX_STEP_DEG = 0.25;
 const DOT = '·';
@@ -53,11 +55,41 @@ function legendFor(snapshot) {
 }
 
 const KIND_LABEL = {
-  observed: 'Observed',
-  modeled: 'Modelled',
-  derived: 'Derived',
-  mixed: 'Observed + modelled',
+  observed: msg('Observed'),
+  modeled: msg('Modelled'),
+  derived: msg('Derived'),
+  mixed: msg('Observed + modelled'),
 };
+
+/*
+ * English that arrives in the manifest (server/ocean/fieldGrid.js tier labels,
+ * server/providers/oceanCurrents.js reasons). It stays English in data and is
+ * translated where it is shown; other server prose shows as sent.
+ */
+const SERVER_TEXT = new Set([
+  msg('Global surface currents'),
+  msg('HF radar surface currents'),
+  msg('HF radar over global surface currents'),
+  msg('Ocean current upstream unavailable'),
+  msg('Ocean current field unavailable'),
+]);
+const serverText = (text) =>
+  typeof text === 'string' && text
+    ? SERVER_TEXT.has(text)
+      ? t(text)
+      : translateKnown(text)
+    : null;
+
+/** A source problem in the UI language; the HTTP status rides a placeholder. */
+function presentProblem(problem) {
+  const http = /^Ocean current HTTP (\d+)$/.exec(problem);
+  if (http)
+    return t('{source} HTTP {status}', {
+      source: t('Ocean currents'),
+      status: http[1],
+    });
+  return t(problem);
+}
 
 /** Construct the ocean-currents layer: the wind renderer driven by the current field. */
 export function createOceanCurrentsLayer({
@@ -154,7 +186,7 @@ export function createOceanCurrentsLayer({
       return true;
     } catch (cause) {
       if (controller.signal.aborted || request !== controller) return false;
-      error = cause?.message || 'Ocean current source unavailable';
+      error = cause?.message || msg('Ocean current source unavailable');
       scheduleRetry();
       return true;
     } finally {
@@ -260,35 +292,42 @@ export function createOceanCurrentsLayer({
         diagnostic?.renderMode === 'gpu-streamlines' &&
         diagnostic.gpu?.pathCount > 0 &&
         !diagnostic.gpu?.ready;
-      const tierLabel =
-        provenance?.tierLabel ||
-        (manifest?.tier === 'global' ? 'Global surface currents' : null);
-      const kind = KIND_LABEL[provenance?.kind] || null;
+      const label =
+        serverText(provenance?.tierLabel) ||
+        (manifest?.tier === 'global'
+          ? t('Global surface currents')
+          : t('Surface currents'));
+      const kind = KIND_LABEL[provenance?.kind]
+        ? t(KIND_LABEL[provenance.kind])
+        : null;
+      const age = provenance?.ageLabel || t('age unknown');
       const status = loading
-        ? 'Loading currents'
+        ? t('Loading currents')
         : preparing
-          ? 'Preparing flow'
-          : error ||
-            manifest?.reason ||
-            (manifest?.stale ? `Cached field ${DOT} stale` : null);
+          ? t('Preparing flow')
+          : (error && presentProblem(error)) ||
+            serverText(manifest?.reason) ||
+            (manifest?.stale ? t('Cached field · stale') : null);
+      const rmse = Number.isFinite(provenance?.rmseMs)
+        ? t('Holdout RMSE {value} m/s', { value: provenance.rmseMs })
+        : null;
       const lines = [
-        ...(kind
-          ? [`${kind} ${DOT} ${provenance.ageLabel || 'age unknown'}`]
-          : []),
-        ...(Number.isFinite(provenance?.rmseMs)
-          ? [`Holdout RMSE ${provenance.rmseMs} m/s`]
-          : []),
+        ...(kind ? [`${kind} · ${age}`] : []),
+        ...(rmse ? [rmse] : []),
         ...(provenance?.caveats || []),
       ];
-      const label = tierLabel || 'Surface currents';
+      const time = valid || t('Unavailable');
       const controls = {
         readout: true,
         summary: {
-          label: 'Ocean currents',
+          label: t('Ocean currents'),
           coverage: label,
           validTime: manifest?.cycle?.validIso,
-          detail: `${label} ${DOT} ${valid || 'Unavailable'}`,
-          compact: `${manifest?.tier === 'global' ? 'Global' : 'Regional'} ${DOT} valid ${valid || 'Unavailable'}`,
+          detail: t('{label} · valid {time}', { label, time }),
+          compact: t('{scope} · valid {time}', {
+            scope: manifest?.tier === 'global' ? t('Global') : t('Regional'),
+            time,
+          }),
           status,
           units: 'm/s',
           lines: lines.map((text, i) => ({ id: `prov-${i}`, text })),
@@ -297,42 +336,43 @@ export function createOceanCurrentsLayer({
           {
             id: 'motion',
             label: diagnostic?.reducedMotion
-              ? 'Reduced motion'
+              ? t('Reduced motion')
               : paused
-                ? 'Resume'
-                : 'Pause',
+                ? t('Resume')
+                : t('Pause'),
             active: paused || Boolean(diagnostic?.reducedMotion),
             disabled: Boolean(diagnostic?.reducedMotion),
             params: { paused: !paused },
-            title: 'Pause visual flow; the field does not advance in time',
+            title: t('Pause visual flow; the field does not advance in time'),
           },
           ...['none', 'speed'].map((value) => ({
             id: `overlay-${value}`,
-            label: value === 'none' ? 'None' : 'Speed',
+            label: value === 'none' ? t('None') : t('Speed'),
             active: overlay === value,
             params: { overlay: value },
             title:
               value === 'none'
-                ? 'Current streamlines with no field shading'
-                : 'Surface current speed shading',
+                ? t('Current streamlines with no field shading')
+                : t('Surface current speed shading'),
           })),
         ],
         legend: manifest?.u ? legendFor(manifest) : [],
-        info: `${label} (m/s)\nValid: ${valid || 'Unavailable'}${loading ? ` ${DOT} loading` : preparing ? ` ${DOT} preparing` : ''}${manifest?.stale ? ` ${DOT} STALE` : ''}${kind ? `\n${kind}${provenance?.ageLabel ? ` ${DOT} ${provenance.ageLabel}` : ''}` : ''}${Number.isFinite(provenance?.rmseMs) ? `\nHoldout RMSE ${provenance.rmseMs} m/s` : ''}${error ? '\n' + error : ''}`,
-        infoTitle:
+        info: `${label} (${unitLabel('m/s')})\n${t('Valid: {time}', { time })}${loading ? ` · ${t('loading')}` : preparing ? ` · ${t('preparing')}` : ''}${manifest?.stale ? ` · ${t('STALE')}` : ''}${kind ? `\n${kind} · ${age}` : ''}${rmse ? `\n${rmse}` : ''}${error ? `\n${presentProblem(error)}` : ''}`,
+        infoTitle: t(
           'Surface ocean currents. Globe: HYCOM ESPC-D forecast on a 1 degree lattice (CoastWatch altimetry when HYCOM is down). Regional: HYCOM at its own resolution. Coastal: IOOS HF-radar analysis over the global field. Streamline colour follows speed; animation shows flow through one fixed field and does not advance time.',
+        ),
       };
       controls.summary.settings = [
         {
           id: 'field',
-          label: 'FIELD',
+          label: t('FIELD'),
           chips: controls.chips.filter((chip) =>
             chip.id.startsWith('overlay-'),
           ),
         },
         {
           id: 'motion',
-          label: 'MOTION',
+          label: t('MOTION'),
           chips: controls.chips.filter((chip) => chip.id === 'motion'),
         },
       ];
@@ -361,20 +401,20 @@ export function createOceanCurrentsLayer({
       const valid = Date.parse(manifest?.cycle?.validIso);
       return {
         count: manifest?.speed?.validCells ?? 0,
-        countLabel: 'Field',
+        countLabel: t('Field'),
         lastUpdate: Number.isFinite(valid) ? valid : null,
         loading: loading || Boolean(preparing),
         paused,
         overlay,
         tier: manifest?.tier ?? null,
         stale: Boolean(manifest?.stale),
-        source: manifest?.provenance?.tierLabel || 'Surface currents',
+        source: manifest?.provenance?.tierLabel || msg('Surface currents'),
         validTime:
-          formatWindValidTime(manifest?.cycle?.validIso) || 'Unavailable',
+          formatWindValidTime(manifest?.cycle?.validIso) || t('Unavailable'),
         error:
           error ||
           manifest?.reason ||
-          (manifest?.unavailable ? 'Ocean currents unavailable' : null),
+          (manifest?.unavailable ? msg('Ocean currents unavailable') : null),
       };
     },
     getDiagnostics() {
