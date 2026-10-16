@@ -7,6 +7,23 @@ import {
   GLOBAL_INFRARED_MAX_GAP_MS,
   LIGHTNING_MAX_GAP_MS,
 } from './clock.js';
+import { formatUtcDayMonth, t, msg } from '../../i18n/index.js';
+import { formatScaleLabel } from '../../ui/unitLabels.js';
+
+/**
+ * A stored (English) failure in the language. HTTP failures from source.js
+ * and infraredImage.js carry their status in the text, so they are matched
+ * back onto a placeholder; anything else is a plain catalog key.
+ */
+function presentWeatherProblem(problem) {
+  const http = /^Weather (image )?HTTP (\d+)$/.exec(problem);
+  if (http) {
+    return http[1]
+      ? t('Weather image HTTP {status}', { status: http[2] })
+      : t('Weather HTTP {status}', { status: http[2] });
+  }
+  return t(problem);
+}
 
 const STOPS = [
   [10, '#00ecec'],
@@ -29,7 +46,9 @@ const LIGHTNING_STOPS = [
   ['300+', '#00FF00'],
 ];
 const utc = (value) =>
-  value ? `${value.slice(5, 16).replace('T', ' ')} UTC` : 'Unavailable';
+  value
+    ? `${formatUtcDayMonth(value)} ${value.slice(11, 16)} UTC`
+    : t('Unavailable');
 
 /** A per-application observation layer, using the existing layer lifecycle and
  * row controls. History is transient: shared links always open latest imagery. */
@@ -227,12 +246,14 @@ export function createWeatherLayer({
         rendering.setHidden?.(false);
         void warmNext(time);
       }
-      error = ok ? null : 'Frame unavailable; previous observation retained';
+      error = ok
+        ? null
+        : msg('Frame unavailable; previous observation retained');
       if (!ok) stop();
       return ok;
     } catch {
       if (owner === generation && !controller.signal.aborted) {
-        error = 'Weather imagery unavailable';
+        error = msg('Weather imagery unavailable');
         stop();
       }
       return false;
@@ -338,7 +359,9 @@ export function createWeatherLayer({
         if (!enabled || controller.signal.aborted || request !== controller)
           return false;
         if (snapshot.unavailable) {
-          error = 'Weather source unavailable; previous observation retained';
+          error = msg(
+            'Weather source unavailable; previous observation retained',
+          );
           stop();
           return true;
         }
@@ -368,7 +391,7 @@ export function createWeatherLayer({
         return !controller.signal.aborted && request === controller && enabled;
       } catch (cause) {
         if (controller.signal.aborted || request !== controller) return false;
-        error = cause?.message || 'Weather unavailable';
+        error = cause?.message || msg('Weather unavailable');
         stop();
         return true;
       } finally {
@@ -496,15 +519,23 @@ export function createWeatherLayer({
         noFrame &&
         shared?.mode === 'history' &&
         shared.products.find((entry) => entry.id === id)?.selected === null
-          ? `No frame within ${maxGap() / 60_000 < 60 ? `${maxGap() / 60_000} min` : `${maxGap() / 3600_000} h`} of ${utc(shared.target)}`
+          ? maxGap() / 60_000 < 60
+            ? t('No frame within {gap} min of {time}', {
+                gap: maxGap() / 60_000,
+                time: utc(shared.target),
+              })
+            : t('No frame within {gap} h of {time}', {
+                gap: maxGap() / 3600_000,
+                time: utc(shared.target),
+              })
           : null;
       const time = shownTime();
       const relation =
         shared?.mode === 'history' && time
           ? Date.parse(time) === Date.parse(shared.target)
-            ? ' · synced'
+            ? 'synced'
             : Date.parse(time) < Date.parse(shared.target)
-              ? ' · nearest'
+              ? 'nearest'
               : ''
           : '';
       const times = manifest?.times || [];
@@ -517,9 +548,16 @@ export function createWeatherLayer({
         age === null
           ? ''
           : age >= 60
-            ? `${Math.floor(age / 60)}h ${age % 60}m ago`
-            : `${age}m ago`;
+            ? t('{hours}h {minutes}m ago', {
+                hours: Math.floor(age / 60),
+                minutes: age % 60,
+              })
+            : t('{minutes}m ago', { minutes: age });
       const diagnostic = rendering?.getDiagnostics();
+      // Errors are stored in English (stats, diagnostics); shown translated.
+      const problem = error || diagnostic?.error;
+      const shownProblem = problem ? presentWeatherProblem(problem) : null;
+      const shownHost = hostStatus ? t(hostStatus) : null;
       const b = manifest?.bounds;
       const canvas = viewer?.scene?.canvas;
       const point =
@@ -544,49 +582,94 @@ export function createWeatherLayer({
           lat < b.south ||
           lat > b.north ||
           (lightning && lon > 0 && lon < 110));
+      let detail = time
+        ? t('{state} · {time} · {lag}', {
+            state: followLatest ? t('Observed') : t('History'),
+            time: utc(time),
+            lag,
+          })
+        : missing
+          ? t('Observation unavailable')
+          : t('Waiting for observation');
+      if (relation === 'synced') detail = t('{detail} · synced', { detail });
+      else if (relation === 'nearest')
+        detail = t('{detail} · nearest', { detail });
+      const infoHeading = radar
+        ? t('RADAR REFLECTIVITY · dBZ')
+        : lightning
+          ? t('LIGHTNING DENSITY · 15 min accumulation')
+          : product === 'clouds'
+            ? t('GLOBAL INFRARED · hourly')
+            : t('GOES INFRARED · ~5 min');
+      const infoTime = time
+        ? `${t('{state}: {time}', {
+            state: followLatest ? t('Latest observation') : t('History'),
+            time: utc(time),
+          })}\n${[
+            lag,
+            current && !followLatest
+              ? t('frame {index}/{total}', {
+                  index: index + 1,
+                  total: times.length,
+                })
+              : '',
+            loading ? t('loading') : '',
+          ]
+            .filter(Boolean)
+            .join(' · ')}`
+        : [t('Observation: unavailable'), loading ? t('loading') : '']
+            .filter(Boolean)
+            .join(' · ');
+      const infoCoverage = radar
+        ? t('Contiguous US · gaps ≠ no rain')
+        : lightning
+          ? `${t('Americas + Pacific · not individual strikes')}\n${t('Color: strikes/km²/min ×10³')}`
+          : product === 'clouds'
+            ? t('60°S–60°N · typically 2–3 h delayed')
+            : t('North America · infrared imagery');
+      const infoMotion = motion?.matches
+        ? clock
+          ? t('Reduced motion · history playback unavailable')
+          : t('Reduced motion · manual history available')
+        : '';
       const controls = {
         readout: true,
         summary: {
           label: radar
-            ? 'Rain radar · US'
+            ? t('Rain radar · US')
             : lightning
-              ? 'Lightning density · 15 min'
-              : 'Satellite clouds',
+              ? t('Lightning density · 15 min')
+              : t('Satellite clouds'),
           coverage: radar
             ? 'CONUS'
             : lightning
-              ? 'Americas + Pacific'
+              ? t('Americas + Pacific')
               : product === 'clouds'
-                ? 'Global · 60°S–60°N'
-                : 'North America',
+                ? t('Global · 60°S–60°N')
+                : t('North America'),
           shownTime: time,
           maxGapMinutes: maxGap() / 60_000,
-          detail: time
-            ? `${followLatest ? 'Observed' : 'History'} · ${utc(time)} · ${lag}${relation}`
-            : missing
-              ? 'Observation unavailable'
-              : 'Waiting for observation',
+          detail,
           status:
             missing ||
-            hostStatus ||
-            error ||
-            diagnostic?.error ||
+            shownHost ||
+            shownProblem ||
             (observationDelayed()
-              ? 'Source observations delayed'
+              ? t('Source observations delayed')
               : manifest?.stale
-                ? 'Stale source'
+                ? t('Stale source')
                 : loading
-                  ? 'Loading next frame…'
+                  ? t('Loading next frame…')
                   : outside
-                    ? 'Map center outside coverage'
+                    ? t('Map center outside coverage')
                     : null),
-          units: radar ? 'dBZ' : lightning ? 'strikes/km²/min ×10³' : '',
+          units: radar ? 'dBZ' : lightning ? t('strikes/km²/min ×10³') : '',
         },
         chips: [
           ...(satellite
             ? [
-                ['clouds-regional', 'N. America'],
-                ['clouds', 'Global'],
+                ['clouds-regional', t('N. America')],
+                ['clouds', t('Global')],
               ].map(([value, label]) => ({
                 id: value,
                 label,
@@ -594,43 +677,46 @@ export function createWeatherLayer({
                 params: { product: value },
                 title:
                   value === 'clouds'
-                    ? 'Hourly global mosaic; usually 2–3 hours delayed'
-                    : 'GOES regional clouds; approximately 5-minute updates',
+                    ? t('Hourly global mosaic; usually 2–3 hours delayed')
+                    : t('GOES regional clouds; approximately 5-minute updates'),
               }))
             : []),
           ...(satellite
             ? [
                 {
                   id: 'filtered',
-                  label: 'Clouds only',
+                  label: t('Clouds only'),
                   active: infrared === 100,
                   params: { infrared: 100 },
-                  title:
+                  title: t(
                     'Apply the full cloud brightness key; 100% filter strength',
+                  ),
                 },
                 {
                   id: 'full',
-                  label: 'Full',
+                  label: t('Full'),
                   active: infrared === 0,
                   params: { infrared: 0 },
-                  title: 'Show the complete infrared image; 0% filter strength',
+                  title: t(
+                    'Show the complete infrared image; 0% filter strength',
+                  ),
                 },
               ]
             : []),
           ...['light', 'strong'].map((value) => ({
             id: `opacity-${value}`,
-            label: value === 'light' ? 'Soft' : 'Vivid',
+            label: value === 'light' ? t('Soft') : t('Vivid'),
             active: opacity === value,
             params: { opacity: value },
-            title: 'Image opacity; does not alter the observed values',
+            title: t('Image opacity; does not alter the observed values'),
           })),
           {
             id: 'coverage',
             label: radar
-              ? 'View US radar'
+              ? t('View US radar')
               : lightning
-                ? 'View Americas & Pacific'
-                : 'View coverage',
+                ? t('View Americas & Pacific')
+                : t('View coverage'),
             disabled: !manifest || !runNavigation,
             params: { focus: true },
           },
@@ -641,30 +727,40 @@ export function createWeatherLayer({
                 label: String(label),
                 color,
                 blurb: lightning
-                  ? `${label} strikes/km²/min ×10³ (15-minute density)`
-                  : `${label} dBZ radar reflectivity`,
+                  ? t('{value} strikes/km²/min ×10³ (15-minute density)', {
+                      value: formatScaleLabel(label),
+                    })
+                  : t('{value} dBZ radar reflectivity', {
+                      value: formatScaleLabel(label),
+                    }),
               }))
             : [],
         info: hostHidden
-          ? hostStatus
-          : `${radar ? 'RADAR REFLECTIVITY · dBZ' : lightning ? 'LIGHTNING DENSITY · 15 min accumulation' : product === 'clouds' ? 'GLOBAL INFRARED · hourly' : 'GOES INFRARED · ~5 min'}\n${time ? `${followLatest ? 'Latest observation' : 'History'}: ${utc(time)}\n${lag}${current && !followLatest ? ` · frame ${index + 1}/${times.length}` : ''}${loading ? ' · loading' : ''}` : `Observation: unavailable${loading ? ' · loading' : ''}`}${missing ? `\n${missing}` : ''}${manifest?.stale ? '\nSTALE · cached source metadata' : ''}${error || diagnostic?.error ? '\n' + (error || diagnostic.error) : ''}\n${radar ? 'Contiguous US · gaps ≠ no rain' : lightning ? 'Americas + Pacific · not individual strikes\nColor: strikes/km²/min ×10³' : product === 'clouds' ? '60°S–60°N · typically 2–3 h delayed' : 'North America · infrared imagery'}${outside ? '\nMap center is outside source coverage' : ''}${motion?.matches ? (clock ? '\nReduced motion · history playback unavailable' : '\nReduced motion · manual history available') : ''}`,
+          ? shownHost
+          : `${infoHeading}\n${infoTime}${missing ? `\n${missing}` : ''}${manifest?.stale ? `\n${t('STALE · cached source metadata')}` : ''}${shownProblem ? `\n${shownProblem}` : ''}\n${infoCoverage}${outside ? `\n${t('Map center is outside source coverage')}` : ''}${infoMotion ? `\n${infoMotion}` : ''}`,
         infoTitle: lightning
-          ? 'NOAA/NWS 15-minute lightning density derived from Vaisala NLDN/GLD360. Coverage 110°E across the Pacific/Americas to 0°, 25°S–80°N. Not a live strike count, global coverage or a safety warning.'
+          ? t(
+              'NOAA/NWS 15-minute lightning density derived from Vaisala NLDN/GLD360. Coverage 110°E across the Pacific/Americas to 0°, 25°S–80°N. Not a live strike count, global coverage or a safety warning.',
+            )
           : radar
-            ? 'NOAA MRMS radar echoes indicate precipitation patterns, not rain rate, a storm warning or a future forecast. Native source approximately 1 km; display is limited to level 6. Frames use exact advertised observation times.'
-            : 'GOES-19/18 longwave infrared Band 14 regional; NESDIS global longwave mosaic. Clouds only dims everything but bright, cold cloud tops; a brightness filter, not a cloud mask. Coverage and freshness differ by region.',
+            ? t(
+                'NOAA MRMS radar echoes indicate precipitation patterns, not rain rate, a storm warning or a future forecast. Native source approximately 1 km; display is limited to level 6. Frames use exact advertised observation times.',
+              )
+            : t(
+                'GOES-19/18 longwave infrared Band 14 regional; NESDIS global longwave mosaic. Clouds only dims everything but bright, cold cloud tops; a brightness filter, not a cloud mask. Coverage and freshness differ by region.',
+              ),
       };
       controls.summary.settings = [
         ...(satellite
           ? [
               {
                 id: 'region',
-                label: 'REGION',
+                label: t('REGION'),
                 chips: controls.chips.filter(({ params }) => params.product),
               },
               {
                 id: 'image',
-                label: 'IMAGE',
+                label: t('IMAGE'),
                 chips: controls.chips.filter(
                   ({ params }) => params.infrared !== undefined,
                 ),
@@ -675,9 +771,9 @@ export function createWeatherLayer({
                   max: 100,
                   step: 1,
                   value: infrared,
-                  label: 'FILTER',
+                  label: t('FILTER'),
                   unit: '%',
-                  ariaLabel: 'Cloud filter strength',
+                  ariaLabel: t('Cloud filter strength'),
                   commitOnChange: true,
                 },
               },
@@ -685,7 +781,7 @@ export function createWeatherLayer({
           : []),
         {
           id: 'opacity',
-          label: 'OPACITY',
+          label: t('OPACITY'),
           chips: controls.chips.filter(({ params }) => params.opacity),
         },
       ];
@@ -700,7 +796,7 @@ export function createWeatherLayer({
     getStats() {
       return {
         count: shownTime() ? 1 : 0,
-        countLabel: isLatest() ? 'Observed' : 'History',
+        countLabel: isLatest() ? t('Observed') : t('History'),
         lastUpdate: shownTime() ? Date.parse(shownTime()) : null,
         loading,
         error: error || rendering?.getDiagnostics().error || null,

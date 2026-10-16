@@ -3,25 +3,43 @@ import { syncRowList } from './rowList.js';
 import { layerFeedState } from '../data/feedState.js';
 export { layerFeedState } from '../data/feedState.js';
 import { GUIDANCE_STATUSES } from '../loadingFeedback.js';
+import { keyGuidanceText, keyRequirementText } from './keyGuidance.js';
 import {
-  keySetupRequirement,
-  keySetupWithAlternatives,
-} from '../keySetupCore.mjs';
+  LAYER_NAME_KEYS,
+  PANEL_LABEL_KEYS as PANEL_LABELS,
+  sourceLabel,
+} from './layerNames.js';
+export { localizeLayerName } from './layerNames.js';
 import { createWeatherPanel } from './weatherPanel.js';
-const FEED_STATE_LABELS = Object.freeze({
-  nominal: 'ON',
-  loading: 'LOADING',
-  degraded: 'DEGRADED',
-  stale: 'STALE',
-  partial: 'PARTIAL',
-  fallback: 'FALLBACK',
-  unavailable: 'UNAVAILABLE',
+import { translateFeedError, translateStatusLine } from './statusText.js';
+import {
+  formatNumber,
+  getLocale,
+  msg,
+  t,
+  translateKnown,
+} from '../i18n/index.js';
+
+// Feed-state values are machine ids (QA hooks, CSS feed-* classes); only the
+// label translates.
+const FEED_STATE_LABEL_KEYS = Object.freeze({
+  nominal: msg('ON'),
+  loading: msg('LOADING'),
+  degraded: msg('DEGRADED'),
+  stale: msg('STALE'),
+  partial: msg('PARTIAL'),
+  fallback: msg('FALLBACK'),
+  unavailable: msg('UNAVAILABLE'),
 });
+
+function lifecycleStateLabel(lifecycleState) {
+  return t(lifecycleState === 'enabling' ? msg('ENABLING') : msg('DISABLING'));
+}
 
 // Presentation order is independent of catalog registration and startup order.
 const PANEL_GROUPS = [
   {
-    label: 'Movement',
+    label: msg('Movement'),
     ids: [
       'satellites',
       'flights',
@@ -34,11 +52,11 @@ const PANEL_GROUPS = [
     ],
   },
   {
-    label: 'Cameras',
+    label: msg('Cameras'),
     ids: ['cctv', 'recent-imagery', 'street-level'],
   },
   {
-    label: 'Infrastructure',
+    label: msg('Infrastructure'),
     ids: [
       'alpr-cameras',
       'military-installations',
@@ -48,7 +66,7 @@ const PANEL_GROUPS = [
     ],
   },
   {
-    label: 'Events',
+    label: msg('Events'),
     ids: [
       'rocket-launches',
       'earthquakes',
@@ -58,7 +76,7 @@ const PANEL_GROUPS = [
     ],
   },
   {
-    label: 'Weather',
+    label: msg('Weather'),
     ids: [
       'air-quality',
       'wind',
@@ -70,7 +88,7 @@ const PANEL_GROUPS = [
     ],
   },
   {
-    label: 'Utilities',
+    label: msg('Utilities'),
     ids: ['directions', 'radio'],
   },
 ];
@@ -80,18 +98,16 @@ const PANEL_ORDER = PANEL_GROUPS.flatMap(({ label, ids }) =>
 const PANEL_POSITIONS = new Map(
   PANEL_ORDER.map(({ id }, index) => [id, index]),
 );
-const PANEL_LABELS = {
-  'ais-live-vessels': 'Live Vessels',
-  bikeshare: 'Bike Share',
-  cctv: 'Cameras',
-  'street-level': 'Street Level',
-  'alpr-cameras': 'Mapped ALPR Cameras',
-  'local-datacenters': 'Data Centers',
-  'local-firms': 'Active Fires',
-};
 
+function englishPanelLabel(layer) {
+  return PANEL_LABELS[layer.id] || LAYER_NAME_KEYS[layer.id] || layer.name;
+}
+
+// PANEL_LABELS win over layer-name keys; otherwise the module's own name.
 function panelLabel(layer) {
-  return PANEL_LABELS[layer.id] || layer.name;
+  if (PANEL_LABELS[layer.id]) return t(PANEL_LABELS[layer.id]);
+  const key = LAYER_NAME_KEYS[layer.id];
+  return key ? t(key) : layer.name;
 }
 
 /**
@@ -112,10 +128,69 @@ export function layerKeyRequirementTooltip(layer = {}) {
   if (layer?.stats?.keyRequired !== true) return '';
   const requiresKeyId = String(layer.requiresKeyId || '').trim();
   // A layer with several sources also names the ones it could use instead.
-  return keySetupWithAlternatives(
-    requiresKeyId ? keySetupRequirement(requiresKeyId) : '',
+  return keyGuidanceText(
+    requiresKeyId ? keyRequirementText(requiresKeyId) : '',
     layer.stats.keyAlternatives || [],
   );
+}
+
+const ROW_TEXT_SEPARATOR = ' · ';
+
+// A short Latin code joined by hyphens. Longer runs (a URL, a token in an
+// error) keep their break opportunities so they cannot overflow the rail.
+const HYPHENATED_CODE = /[A-Za-z0-9]+(?:-[A-Za-z0-9]+)+/g;
+const HYPHENATED_CODE_MAX = 16;
+
+/** A span for one run of row text; `keep` stops the browser breaking inside it. */
+function rowTextSpan(text, keep) {
+  const span = document.createElement('span');
+  if (keep) span.className = 'data-keep';
+  span.textContent = text;
+  return span;
+}
+
+/**
+ * Set a row's name, count or meta line so that a narrow column wraps it well
+ * in every language: a Latin code with hyphens (ADS-B, RTL-SDR, GTFS-RT) never
+ * splits at its hyphen, and a " · " separator stays at the end of the line it
+ * closes, so no line starts with "·". The element's textContent is still the
+ * plain string; text with neither feature is set directly.
+ *
+ * @param {HTMLElement} element
+ * @param {string} text
+ */
+export function setRowText(element, text) {
+  const value = String(text ?? '');
+  // Refreshes run every second; leave unchanged text (and its spans) alone.
+  if (element.textContent === value) return;
+  const codes = [...value.matchAll(HYPHENATED_CODE)].filter(
+    (match) => match[0].length <= HYPHENATED_CODE_MAX,
+  );
+  if (!codes.length && !value.includes(ROW_TEXT_SEPARATOR)) {
+    element.textContent = value;
+    return;
+  }
+  const spans = [];
+  const pushPlain = (from, to) => {
+    if (to <= from) return;
+    const pieces = value.slice(from, to).split(ROW_TEXT_SEPARATOR);
+    pieces.forEach((piece, index) => {
+      // The space before the dot belongs to a no-wrap span, so the only break
+      // opportunity around a separator is the space after it.
+      if (index > 0) spans.push(rowTextSpan(' ·', true));
+      const textPiece = index > 0 ? ` ${piece}` : piece;
+      if (textPiece) spans.push(rowTextSpan(textPiece, false));
+    });
+  };
+  let cursor = 0;
+  for (const match of codes) {
+    pushPlain(cursor, match.index);
+    spans.push(rowTextSpan(match[0], true));
+    cursor = match.index + match[0].length;
+  }
+  pushPlain(cursor, value.length);
+  element.textContent = '';
+  for (const span of spans) element.appendChild(span);
 }
 
 /** Layer row presentation over supplied state and actions; no layer imports. */
@@ -219,17 +294,20 @@ export class LayerPanel {
     for (const layer of layers) {
       if (!layer.showInTogglePanel) continue;
       const group =
-        PANEL_ORDER[PANEL_POSITIONS.get(layer.id)]?.label ?? 'Other layers';
+        PANEL_ORDER[PANEL_POSITIONS.get(layer.id)]?.label ??
+        msg('Other layers');
       if (group && group !== previousGroup) {
         const heading = document.createElement('h3');
         heading.className = 'data-layer-group-heading';
-        heading.textContent = group;
+        heading.textContent = t(group);
         this._toggleContainer.appendChild(heading);
       }
       previousGroup = group;
       const row = document.createElement('div');
       row.className = 'data-toggle-row';
       row.dataset.layerId = layer.id;
+      // English name for voice tools, which must not receive translated text.
+      row.dataset.layerName = englishPanelLabel(layer);
 
       const topRow = document.createElement('div');
       topRow.className = 'data-toggle-top';
@@ -242,7 +320,7 @@ export class LayerPanel {
       icon.textContent = layer.icon;
       const name = document.createElement('span');
       name.className = 'data-name';
-      name.textContent = panelLabel(layer);
+      setRowText(name, panelLabel(layer));
       left.appendChild(icon);
       left.appendChild(name);
 
@@ -251,7 +329,7 @@ export class LayerPanel {
 
       const count = document.createElement('span');
       count.className = 'data-count';
-      count.textContent = this._layerCountText(layer.stats);
+      this._syncCount(row, count, layer.stats);
 
       const toggle = document.createElement('button');
       toggle.type = 'button';
@@ -290,7 +368,7 @@ export class LayerPanel {
 
       const bottomRow = document.createElement('div');
       bottomRow.className = 'data-toggle-meta';
-      bottomRow.textContent = this._buildMetaText(layer);
+      setRowText(bottomRow, this._buildMetaText(layer));
 
       row.appendChild(topRow);
       row.appendChild(bottomRow);
@@ -392,6 +470,23 @@ export class LayerPanel {
           ...this._rowControlsFor(layer.id),
         })),
     );
+  }
+
+  /**
+   * Write a row's count. Outside English a count phrase ("24 nearby · 2 on
+   * screen") gets its own line, or it squeezes a longer translated name to a
+   * word per line. "—" is marked so a wide status chip can replace it
+   * (radio.css).
+   */
+  _syncCount(row, count, stats) {
+    const text = this._layerCountText(stats);
+    setRowText(count, text);
+    const phrase =
+      getLocale() !== 'en' &&
+      typeof stats.countLabel === 'string' &&
+      /\d/.test(stats.countLabel);
+    row.classList.toggle('data-toggle-row--count-line', phrase);
+    count.classList.toggle('data-count-empty', text === '—');
   }
 
   /** Qualify a loaded count when it does not mean items currently on screen. */
@@ -517,12 +612,12 @@ export class LayerPanel {
 
       const count = row.querySelector('.data-count');
       if (count) {
-        count.textContent = this._layerCountText(layer.stats);
+        this._syncCount(row, count, layer.stats);
       }
 
       const meta = row.querySelector('.data-toggle-meta');
       if (meta) {
-        meta.textContent = this._buildMetaText(layer);
+        setRowText(meta, this._buildMetaText(layer));
       }
 
       this._syncRowControls(
@@ -537,23 +632,39 @@ export class LayerPanel {
   _buildMetaText(layer) {
     const stats = layer.stats || {};
     const feedState = layerFeedState(stats);
-    const stateLabel = FEED_STATE_LABELS[feedState];
-    const source = stats.source || layer.source;
+    const stateLabel = t(FEED_STATE_LABEL_KEYS[feedState]);
+    const source = sourceLabel(stats.source || layer.source);
     const lifecycleState =
       layer.lifecycleState || (layer.enabled ? 'enabled' : 'disabled');
     if (lifecycleState === 'enabling' || lifecycleState === 'disabling') {
-      return `${lifecycleState.toUpperCase()} · ${source}`;
+      return t('{state} · {source}', {
+        state: lifecycleStateLabel(lifecycleState),
+        source,
+      });
     }
     if (layer.lifecycleUncertain) {
-      return `UNCERTAIN · ${source} · lifecycle state requires reconciliation`;
+      return t(
+        'UNCERTAIN · {source} · lifecycle state requires reconciliation',
+        { source },
+      );
     }
-    const presentedError =
-      stats.error || stats.lastError || stats.managerRefreshError;
+    const presentedError = translateFeedError(
+      stats.error || stats.lastError || stats.managerRefreshError,
+    );
     if (presentedError) {
       if (typeof stats.retryInSec === 'number' && stats.retryInSec > 0) {
-        return `${stateLabel} · ${source} · ${presentedError} · retry ${stats.retryInSec}s`;
+        return t('{state} · {source} · {detail} · retry {seconds}s', {
+          state: stateLabel,
+          source,
+          detail: presentedError,
+          seconds: stats.retryInSec,
+        });
       }
-      return `${stateLabel} · ${source} · ${presentedError}`;
+      return t('{state} · {source} · {detail}', {
+        state: stateLabel,
+        source,
+        detail: presentedError,
+      });
     }
     // A guidance status carries its prompt in `statusMessage`, not `error`, so
     // the row still tells the operator what to do without reporting a fault.
@@ -562,22 +673,26 @@ export class LayerPanel {
       typeof stats.statusMessage === 'string' &&
       stats.statusMessage.trim()
     ) {
-      return `${source} · ${stats.statusMessage.trim()}`;
+      return `${source} · ${translateKnown(stats.statusMessage.trim())}`;
     }
-    const ago = stats.lastUpdate ? this._timeAgo(stats.lastUpdate) : 'never';
+    const ago = stats.lastUpdate ? this._timeAgo(stats.lastUpdate) : t('never');
     if (stats.loading) {
       const loadingLabel =
         typeof stats.loadingLabel === 'string' && stats.loadingLabel.trim()
-          ? stats.loadingLabel.trim()
-          : 'loading...';
-      return `${source} · ${loadingLabel}`;
+          ? translateStatusLine(stats.loadingLabel.trim())
+          : t('loading...');
+      return t('{source} · {loadingLabel}', { source, loadingLabel });
     }
     if (feedState === 'fallback') {
       const detail =
         typeof stats.loadingLabel === 'string' && stats.loadingLabel.trim()
-          ? stats.loadingLabel.trim()
+          ? translateStatusLine(stats.loadingLabel.trim())
           : stats.coverage || ago;
-      return `${stateLabel} · ${source} · ${detail}`;
+      return t('{state} · {source} · {detail}', {
+        state: stateLabel,
+        source,
+        detail,
+      });
     }
     if (feedState === 'partial') {
       const { acceptedRowCount, rawRowCount } = stats;
@@ -586,21 +701,40 @@ export class LayerPanel {
         Number.isInteger(rawRowCount) &&
         acceptedRowCount >= 0 &&
         rawRowCount > acceptedRowCount
-          ? `${acceptedRowCount} of ${rawRowCount} records accepted`
-          : 'incomplete snapshot';
-      return `${stateLabel} · ${source} · ${detail} · ${ago}`;
+          ? t('{accepted} of {raw} records accepted', {
+              accepted: acceptedRowCount,
+              raw: rawRowCount,
+            })
+          : t('incomplete snapshot');
+      return t('{state} · {source} · {detail} · {ago}', {
+        state: stateLabel,
+        source,
+        detail,
+        ago,
+      });
     }
     if (feedState === 'stale') {
-      const retry =
-        typeof stats.retryInSec === 'number' && stats.retryInSec > 0
-          ? ` · retrying in ${stats.retryInSec}s`
-          : '';
-      return `${stateLabel} · ${source} · ${ago}${retry}`;
+      if (typeof stats.retryInSec === 'number' && stats.retryInSec > 0) {
+        return t('{state} · {source} · {ago} · retrying in {seconds}s', {
+          state: stateLabel,
+          source,
+          ago,
+          seconds: stats.retryInSec,
+        });
+      }
+      return t('{state} · {source} · {ago}', {
+        state: stateLabel,
+        source,
+        ago,
+      });
     }
     if (typeof stats.loadingLabel === 'string' && stats.loadingLabel.trim()) {
-      return `${source} · ${stats.loadingLabel.trim()}`;
+      return t('{source} · {loadingLabel}', {
+        source,
+        loadingLabel: translateStatusLine(stats.loadingLabel.trim()),
+      });
     }
-    return `${source} · ${ago}`;
+    return t('{source} · {ago}', { source, ago });
   }
 
   _syncToggleButton(button, layer) {
@@ -619,7 +753,7 @@ export class LayerPanel {
     button.classList.toggle('enabling', layer.lifecycleState === 'enabling');
     button.classList.toggle('disabling', layer.lifecycleState === 'disabling');
     button.classList.toggle('lifecycle-uncertain', uncertain);
-    for (const state of Object.keys(FEED_STATE_LABELS)) {
+    for (const state of Object.keys(FEED_STATE_LABEL_KEYS)) {
       button.classList.toggle(
         `feed-${state}`,
         (layer.enabled || unavailable) && !uncertain && feedState === state,
@@ -639,38 +773,55 @@ export class LayerPanel {
       String(transitioning || (unavailable && !layer.enabled)),
     );
     button.setAttribute('aria-busy', String(transitioning));
-    button.textContent = transitioning
-      ? layer.lifecycleState.toUpperCase()
+    const showsFeedState =
+      !transitioning && !uncertain && (layer.enabled || unavailable);
+    const stateText = transitioning
+      ? lifecycleStateLabel(layer.lifecycleState)
       : uncertain
-        ? 'UNCERTAIN'
-        : layer.enabled || unavailable
-          ? FEED_STATE_LABELS[feedState]
-          : 'OFF';
+        ? t('UNCERTAIN')
+        : showsFeedState
+          ? t(FEED_STATE_LABEL_KEYS[feedState])
+          : t('OFF');
+    // The chip may abbreviate where a language's word is wider than the
+    // status column; the meta line and the accessible name keep the full word.
+    button.textContent =
+      showsFeedState && feedState === 'unavailable'
+        ? t('UNAVAILABLE', { context: 'status chip' })
+        : stateText;
     const keyGuidance = unavailable
-      ? String(layer.stats.error || 'Data source unavailable')
+      ? String(
+          translateFeedError(layer.stats.error) || t('Data source unavailable'),
+        )
       : layerKeyRequirementTooltip(layer);
     // Name the missing key on the control itself: a row reading KEY REQUIRED
     // without saying WHICH key leaves a dead control and no next step. Empty
     // when the layer needs no key, or already has one.
     button.title = keyGuidance;
+    const ariaLabel = t('{name}: {state}', {
+      name: panelLabel(layer),
+      state: stateText,
+    });
     button.setAttribute(
       'aria-label',
-      keyGuidance
-        ? `${panelLabel(layer)}: ${button.textContent}. ${keyGuidance}`
-        : `${panelLabel(layer)}: ${button.textContent}`,
+      keyGuidance ? `${ariaLabel}. ${keyGuidance}` : ariaLabel,
     );
   }
 
   _formatCount(n) {
-    if (n >= 1000) return `${(n / 1000).toFixed(1)}K`;
+    if (n >= 1000)
+      return `${formatNumber(n / 1000, {
+        minimumFractionDigits: 1,
+        maximumFractionDigits: 1,
+        useGrouping: false,
+      })}K`;
     return String(n);
   }
 
   _timeAgo(timestamp) {
     const diff = Math.floor((Date.now() - timestamp) / 1000);
-    if (diff < 5) return 'just now';
-    if (diff < 60) return `${diff}s ago`;
-    if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
-    return `${Math.floor(diff / 3600)}h ago`;
+    if (diff < 5) return t('just now');
+    if (diff < 60) return t('{count}s ago', { count: diff });
+    if (diff < 3600) return t('{count}m ago', { count: Math.floor(diff / 60) });
+    return t('{count}h ago', { count: Math.floor(diff / 3600) });
   }
 }

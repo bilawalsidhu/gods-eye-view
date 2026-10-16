@@ -1371,10 +1371,12 @@
   padding: 2px 4px;
 }
 
-/* ALPR keeps its nearby count in the legend while a wider status chip is shown. */
+/* ALPR keeps its nearby count in the legend while a wider status chip
+   (including ENABLING / DISABLING) is shown. */
 .data-toggle-row[data-layer-id='alpr-cameras']
   .data-toggle-right:has(
     .data-toggle-btn:is(
+      .transitioning,
       .feed-loading,
       .feed-degraded,
       .feed-stale,

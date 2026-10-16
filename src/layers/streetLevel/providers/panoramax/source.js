@@ -1,4 +1,5 @@
 import { createLimiter } from '../../limiter.js';
+import { msg } from '../../../../i18n/index.js';
 import {
   API_CONCURRENCY,
   API_TIMEOUT_MS,
@@ -28,8 +29,10 @@ export class PanoramaxSourceError extends Error {
   }
 }
 
-const NO_ANSWER = 'Panoramax did not answer in time — try again';
-const UNREACHABLE = 'Panoramax could not be reached — check the connection';
+const NO_ANSWER = msg('Panoramax did not answer in time — try again');
+const UNREACHABLE = msg(
+  'Panoramax could not be reached — check the connection',
+);
 
 /**
  * Seconds from a Retry-After header (delay seconds or an HTTP date), or
@@ -56,7 +59,7 @@ export function retryAfterSeconds(response, now = Date.now()) {
  */
 async function readBounded(response, onChunk = () => {}) {
   const tooMuch = () =>
-    new PanoramaxSourceError('Panoramax sent too much data', {
+    new PanoramaxSourceError(msg('Panoramax sent too much data'), {
       status: response.status,
     });
   const length = Number(response.headers?.get?.('content-length'));
@@ -139,7 +142,7 @@ export function createPanoramaxSource({
             BUSY_BACKOFF_BASE_SEC * 2 ** Math.min(busyStreak, 8),
           );
         busyStreak++;
-        throw new PanoramaxSourceError('Panoramax is busy', {
+        throw new PanoramaxSourceError(msg('Panoramax is busy'), {
           status: response.status,
           retryAfterSec: wait,
         });
@@ -191,7 +194,9 @@ export function createPanoramaxSource({
     try {
       payload = JSON.parse(new TextDecoder().decode(bytes));
     } catch {
-      throw new PanoramaxSourceError('Panoramax sent an unreadable answer');
+      throw new PanoramaxSourceError(
+        msg('Panoramax sent an unreadable answer'),
+      );
     }
     return Array.isArray(payload?.features) ? payload.features : [];
   }

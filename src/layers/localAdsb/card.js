@@ -1,10 +1,6 @@
 import { AIRCRAFT_CLASS_LABELS } from '../../data/aircraftClass.js';
-import {
-  BAND_LABELS,
-  HEARD_BY_RECEIVER,
-  LOCAL_ADSB_COLOR,
-  SOURCE_LABELS,
-} from './policy.js';
+import { formatNumber, t, tn } from '../../i18n/index.js';
+import { BAND_LABELS, LOCAL_ADSB_COLOR, SOURCE_LABELS } from './policy.js';
 
 const DASH = '—';
 
@@ -14,7 +10,7 @@ function rounded(value, digits = 0) {
 }
 
 function grouped(value) {
-  return value === null ? DASH : value.toLocaleString('en-US');
+  return value === null ? DASH : formatNumber(value);
 }
 
 /**
@@ -55,15 +51,35 @@ export function localAdsbIsUat(record) {
  * @returns {string}
  */
 export function localAdsbReceiverLine(record) {
-  const bands = recordBands(record)
-    .map((band) => BAND_LABELS[band])
-    .filter(Boolean);
-  const sources = recordSources(record)
-    .map((source) => SOURCE_LABELS[source])
-    .filter(Boolean);
-  return [HEARD_BY_RECEIVER, bands.join(' + '), sources.join(' + ')]
+  const bands = recordBands(record).map(bandLabel).filter(Boolean);
+  const sources = recordSources(record).map(sourceLabel).filter(Boolean);
+  return [t('Heard by your receiver'), bands.join(' + '), sources.join(' + ')]
     .filter(Boolean)
     .join(' · ');
+}
+
+/** A receiver band (policy.js BAND_LABELS) in the UI language: "1090 МГц". */
+function bandLabel(band) {
+  switch (String(band)) {
+    case '1090':
+      return t('1090 MHz');
+    case '978':
+      return t('978 MHz UAT');
+    default:
+      return BAND_LABELS[band];
+  }
+}
+
+/** A receiver source (policy.js SOURCE_LABELS) in the UI language. */
+function sourceLabel(source) {
+  switch (source) {
+    case 'webusb':
+      return t('browser SDR');
+    case 'feed':
+      return t('decoder feed');
+    default:
+      return SOURCE_LABELS[source];
+  }
 }
 
 /**
@@ -74,9 +90,9 @@ export function localAdsbReceiverLine(record) {
 export function localAdsbSourceText(record) {
   const sources = recordSources(record);
   if (sources.includes('webusb') && sources.includes('feed'))
-    return 'Your RTL-SDR receiver and decoder feed';
-  if (sources.includes('feed')) return 'Your decoder feed';
-  return 'Your RTL-SDR receiver';
+    return t('Your RTL-SDR receiver and decoder feed');
+  if (sources.includes('feed')) return t('Your decoder feed');
+  return t('Your RTL-SDR receiver');
 }
 
 /**
@@ -89,7 +105,7 @@ export function localAdsbSourceText(record) {
 export function localAdsbClassLine(record, aircraftClass = {}) {
   if (!aircraftClass.evidence) return '';
   const label = AIRCRAFT_CLASS_LABELS[aircraftClass.klass];
-  return [label, record?.category].filter(Boolean).join(' · ');
+  return [label && t(label), record?.category].filter(Boolean).join(' · ');
 }
 
 /**
@@ -129,13 +145,26 @@ export function localAdsbCardModel(
   return {
     title: localAdsbTitle(record),
     details: [
-      `ICAO ${icao} · ${record?.callsign || 'NO CALLSIGN'}`,
+      `ICAO ${icao} · ${record?.callsign || t('NO CALLSIGN')}`,
       localAdsbClassLine(record, aircraftClass || {}),
       identity,
       routeLine,
-      `ALT ${grouped(altitude)} FT · GS ${speed === null ? DASH : speed} KT · TRK ${track === null ? DASH : `${track}°`}`,
-      `V/S ${vertical === null ? DASH : `${vertical > 0 ? '+' : ''}${grouped(vertical)} FPM`}`,
-      `POSITION ${ageS === null ? DASH : `${ageS} S AGO`} · ${messages} ${messages === 1 ? 'MSG' : 'MSGS'}`,
+      t('ALT {altitude} FT · GS {speed} KT · TRK {track}', {
+        altitude: grouped(altitude),
+        speed: speed === null ? DASH : speed,
+        track: track === null ? DASH : `${track}°`,
+      }),
+      vertical === null
+        ? t('V/S {rate}', { rate: DASH })
+        : t('V/S {rate} FPM', {
+            rate: `${vertical > 0 ? '+' : ''}${grouped(vertical)}`,
+          }),
+      [
+        ageS === null
+          ? t('POSITION {age}', { age: DASH })
+          : t('POSITION {seconds} S AGO', { seconds: ageS }),
+        tn(messages, '{count} MSG', '{count} MSGS'),
+      ].join(' · '),
       localAdsbReceiverLine(record),
     ].filter(Boolean),
     accent: LOCAL_ADSB_COLOR,
