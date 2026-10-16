@@ -138,3 +138,21 @@ test('the engine reads the Viewer aliases and builds on a minimal viewer', () =>
   assert.equal(renders, 1);
   engine.destroy();
 });
+
+test('the engine clock is the app clock given, latched on the viewer clock tick', async () => {
+  const { createAppClock } = await import('../../time/clock.js');
+  let wall = 1_000_000;
+  const appClock = createAppClock({ now: () => wall });
+  const viewer = createFakeViewer();
+  const engine = createCesiumEngine(viewer, { appClock });
+  assert.equal(engine.clock.now(), 1_000_000);
+  const seen = [];
+  engine.clock.ticked.addEventListener((time) => seen.push(time));
+  assert.equal(viewer.clock.onTick.numberOfListeners, 1);
+  wall += 16;
+  viewer.clock.onTick.raiseEvent(viewer.clock);
+  assert.deepEqual(seen, [1_000_016]);
+  assert.equal(engine.clock.frameTime(), 1_000_016);
+  engine.destroy();
+  assert.equal(viewer.clock.onTick.numberOfListeners, 0);
+});

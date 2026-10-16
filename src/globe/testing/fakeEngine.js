@@ -25,9 +25,12 @@ import {
   createEngineEvent,
   mergeSharpen,
 } from '../contract.js';
+import { createAppClock } from '../../time/clock.js';
 
 const { cartesian2, cartesian3, cartographic, ellipsoid, math, matrix4 } = geo;
 const WGS84 = ellipsoid.WGS84;
+// Where the fake wall clock starts: 2026-01-01T00:00:00Z.
+const FAKE_EPOCH_MS = Date.UTC(2026, 0, 1);
 const RADII = WGS84.radii;
 const MAXIMUM_RADIUS = Math.max(RADII.x, RADII.y, RADII.z);
 // The terrain kinds the engines build themselves (src/maps/registry.js).
@@ -220,10 +223,14 @@ function rectangleFromCartographics(points) {
 /**
  * @param {{ kind?: 'cesium'|'navara', width?: number, height?: number, fovy?: number,
  *   longitude?: number, latitude?: number, altitude?: number,
- *   container?: object, canvas?: object }} [options]
+ *   container?: object, canvas?: object, nowMs?: number,
+ *   appClock?: import('../../time/clock.js').AppClock }} [options]
  *   Canvas size in CSS px, angles in radians; `container`/`canvas` stand in
  *   for the host elements (DOM mocks for shell tests). The initial pose looks straight
- *   down from `altitude` metres (10 000 km).
+ *   down from `altitude` metres (10 000 km). The engine clock reads
+ *   `appClock`, by default an app clock on a fake wall clock that starts at
+ *   `nowMs` (2026-01-01T00:00Z) and moves only with `fake.frame(dt)` and
+ *   `fake.advanceTime(ms)` (a given appClock keeps its own wall clock).
  * @returns {import('../contract.js').GlobeEngine & { fake: object }}
  */
 export function createFakeEngine(options = {}) {
@@ -248,7 +255,11 @@ export function createFakeEngine(options = {}) {
     'frames.preUpdate': createEngineEvent(),
     'frames.preRender': createEngineEvent(),
     'frames.postRender': createEngineEvent(),
+    'clock.ticked': createEngineEvent(),
   };
+  let wallMs = options.nowMs ?? FAKE_EPOCH_MS;
+  const appClock = options.appClock ?? createAppClock({ now: () => wallMs });
+  const ownsWall = !options.appClock;
   const inputs = new Map(INPUT_TYPES.map((type) => [type, new Set()]));
   const livePosition = cartesian3.create();
   let lastBaseImagery = null;
@@ -782,6 +793,11 @@ export function createFakeEngine(options = {}) {
       viewProjection,
       horizonVisible,
     },
+    clock: {
+      now: () => appClock.now(),
+      frameTime: () => appClock.frameTime(),
+      ticked: events['clock.ticked'],
+    },
     frames: {
       preUpdate: events['frames.preUpdate'],
       preRender: events['frames.preRender'],
@@ -951,9 +967,17 @@ export function createFakeEngine(options = {}) {
       scripts.delete(name);
     },
     lookAtTarget: () => (lookAtTarget ? copy3(lookAtTarget) : undefined),
-    /** Runs one frame: preUpdate, flight progress, preRender, camera events, postRender. */
+    /** The app clock the engine clock reads (freeze/offset/rate for tests). */
+    appClock,
+    /** Moves the fake wall clock without a frame (own app clock only). */
+    advanceTime(ms) {
+      if (ownsWall) wallMs += ms;
+    },
+    /** Runs one frame: clock.ticked, preUpdate, flight progress, preRender, camera events, postRender. */
     frame(dt = 16) {
       clock += dt;
+      if (ownsWall) wallMs += dt;
+      events['clock.ticked'].raiseValue(appClock.beginFrame());
       events['frames.preUpdate'].raiseEvent(clock);
       advanceFlight(dt);
       events['frames.preRender'].raiseEvent(clock);

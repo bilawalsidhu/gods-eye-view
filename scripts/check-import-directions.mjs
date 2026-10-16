@@ -21,6 +21,8 @@ const source = (file) =>
   /^src\/layers\/[^/]+\/(?:source|bundledSource|flowSource)\.js$/.test(file);
 // Engine-neutral geometry ported from Cesium; every runtime file is a portable root.
 const geo = (file) => file.startsWith('src/geo/');
+// The app clock (src/time): plain numbers, no engine, no DOM.
+const time = (file) => file.startsWith('src/time/');
 // The engine-neutral globe contract and its test support; engines live below it.
 const globeContract = (file) =>
   /^src\/globe\/[^/]+$/.test(file) || file.startsWith('src/globe/testing/');
@@ -210,6 +212,7 @@ export function checkImportDirections(root) {
     browser(file);
   const roots = new Map(files.filter(source).map((file) => [file, 'source']));
   for (const file of files.filter(geo)) roots.set(file, 'geo');
+  for (const file of files.filter(time)) roots.set(file, 'time');
   for (const [key, value] of Object.entries(pkg.exports || {})) {
     if (portableExport(key) && typeof value === 'string')
       roots.set(value.replace(/^\.\//, ''), key);
@@ -237,7 +240,10 @@ export function checkImportDirections(root) {
           specifier.startsWith('node:') ||
           /^(?:cesium|vite)(?:\/|$)/.test(specifier) ||
           // Geo must not reach Cesium through its workspace packages either.
-          (label === 'geo' && /^@cesium\//.test(specifier))
+          (label === 'geo' && /^@cesium\//.test(specifier)) ||
+          // Neither engine reaches the app clock.
+          (label === 'time' &&
+            (cesiumPackage.test(specifier) || navaraPackage.test(specifier)))
         )
           report(
             file,

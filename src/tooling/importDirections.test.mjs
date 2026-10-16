@@ -101,6 +101,23 @@ for (const [name, files, pattern] of [
     /src\/data\/helper\.js: geo reaches platform\/rendering dependency: cesium/,
   ],
   [
+    'app clock imports cesium',
+    { 'src/time/clock.js': "import 'cesium';" },
+    /src\/time\/clock\.js: time reaches platform\/rendering dependency: cesium/,
+  ],
+  [
+    'app clock imports three',
+    { 'src/time/clock.js': "import * as THREE from 'three';" },
+    /src\/time\/clock\.js: time reaches platform\/rendering dependency: three/,
+  ],
+  [
+    'app clock reaches the DOM',
+    {
+      'src/time/clock.js': 'export const now = () => window.performance.now();',
+    },
+    /src\/time\/clock\.js: time reaches browser globals/,
+  ],
+  [
     'globe contract imports cesium',
     { 'src/globe/contract.js': "import 'cesium';" },
     /src\/globe\/contract\.js: globe contract reaches engine dependency: cesium/,

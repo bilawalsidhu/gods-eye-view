@@ -314,3 +314,21 @@ test('the contract carries the sharpening and checks its values', () => {
   ])
     assert.throws(() => mergeSharpen(on, bad), TypeError);
 });
+
+test('the contract carries the app clock', () => {
+  for (const member of ['clock.now', 'clock.frameTime', 'clock.ticked'])
+    assert.ok(GLOBE_ENGINE_MEMBERS.includes(member), member);
+  const engine = createFakeEngine();
+  assert.equal(assertGlobeEngine(engine), engine);
+  const broken = {
+    ...engine,
+    clock: { ...engine.clock, frameTime: 1, ticked: {} },
+  };
+  assert.throws(
+    () => assertGlobeEngine(broken),
+    /clock\.frameTime.*clock\.ticked/,
+  );
+  const missing = { ...engine };
+  delete missing.clock;
+  assert.throws(() => assertGlobeEngine(missing), /\bclock\b/);
+});

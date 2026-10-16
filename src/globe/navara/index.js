@@ -79,9 +79,12 @@ function groundInView(engine) {
  *   effects?: 'minimal' | 'photoreal' | 'cinematic',
  *   search?: string,
  *   pixelRatio?: number,
+ *   appClock?: import('../../time/clock.js').AppClock,
  * }} options `effects` names the look (cinematic by default); `search`, the
  *   page's query string, picks it from `?look=` instead (the app's way).
  *   `pixelRatio` only for measurements; the product uses the device's.
+ *   `appClock` (the page's by default) is the engine clock's time and so the
+ *   sun's: the look reads the engine clock's frame time.
  * @returns {Promise<{ view: object, engine: import('../contract.js').GlobeEngine, destroy: () => void }>}
  */
 export async function createNavaraGlobe({
@@ -89,6 +92,7 @@ export async function createNavaraGlobe({
   effects,
   search,
   pixelRatio,
+  appClock,
 }) {
   if (!container) throw new TypeError('createNavaraGlobe needs a container');
   const canvas = preservedCanvas(container);
@@ -103,10 +107,15 @@ export async function createNavaraGlobe({
     const plan = navaraScenePlan(effects ?? resolveNavaraLook(search), {
       mobile: Boolean(view.isMobileOptimized?.()),
     });
-    const look = buildNavaraLook(view, plugin, plan);
+    // The sun follows the engine clock (one time source for layers and the
+    // look); the look only runs in preRender, after the engine exists.
+    const look = buildNavaraLook(view, plugin, plan, () =>
+      engine.clock.frameTime(),
+    );
     engine = createNavaraEngine(view, {
       hooks: navaraHooks(view),
       container,
+      ...(appClock ? { appClock } : {}),
       sharpen: createNavaraSharpen(view),
     });
     const camera = engine.camera;

@@ -209,6 +209,25 @@
  *   The source objects on screen, as passed: the base imagery layer on the
  *   globe and the photoreal tiles shown (null for none).
  *
+ * @typedef {object} GlobeClock
+ *   The app's own time (src/time/clock.js), in milliseconds since the Unix
+ *   epoch: the one time source for layers and the engine's own time-driven
+ *   drawing (Navara's sun). By default it is the wall clock (Date.now); QA
+ *   and tests may freeze, offset or speed it up on the app clock. Cesium's
+ *   viewer.clock is not driven by it (the app never animates that clock).
+ * @property {() => number} now The current app time.
+ * @property {() => number} frameTime The app time latched at the start of the
+ *   engine's current frame: every reader in one frame gets the same value; it
+ *   does not decrease from frame to frame while the app clock runs forward.
+ *   Before the first frame, the current time.
+ * @property {EngineEvent} ticked Raised once per engine frame, with the
+ *   frame time, before that frame's preUpdate (and so before preRender). A
+ *   frame is one turn of the engine's update loop, also when it draws
+ *   nothing: Cesium raises it on the viewer clock's tick, right before
+ *   scene.render (which raises preUpdate on every animation frame, drawn or
+ *   not); Navara on the view's preUpdate, which it emits on every turn of
+ *   its loop.
+ *
  * @typedef {object} GlobeEngine
  * @property {'cesium'|'navara'} kind
  * @property {{ container: object, canvas: object, size: () => { width: number, height: number } }} host
@@ -228,6 +247,7 @@
  *   held and one without fires only while no modifier is held.
  * @property {{ addStatic: (html: string, options?: { onScreen?: boolean }) => () => void }} credits
  * @property {GlobeMaps} maps
+ * @property {GlobeClock} clock
  * @property {() => void} destroy
  * @property {() => boolean} isDestroyed True once destroy() has run.
  */
@@ -406,6 +426,7 @@ const SHAPE = {
   },
   input: { on: isFunction, setCameraInputs: isFunction },
   credits: { addStatic: isFunction },
+  clock: { now: isFunction, frameTime: isFunction, ticked: isEngineEvent },
   maps: {
     setBaseImagery: isFunction,
     setTerrain: isFunction,
