@@ -126,7 +126,11 @@ async function firstPlacement(appClockLagMs) {
     sprites: await import('../../data/spriteOrder.js'),
     trails: await import('../../data/trailRenderer.js'),
     aircraftPresentation: await import('../../data/tr3bRegistry.js'),
-    camera: await import('../../data/trackedCamera.js'),
+    camera: {
+      ...(await import('../../data/trackedCamera.js')),
+      applyTrackedCameraFrame: (await import('../../globe/cesium/follow.js'))
+        .applyTrackedCameraFrame,
+    },
     labels: await import('../../data/detectionDraw.js'),
     geoid: await import('../../data/geoid.js'),
     focus: await import('../../data/focusDeemphasis.js'),

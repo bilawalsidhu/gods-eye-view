@@ -14,6 +14,8 @@ export function createFakeViewer({ width = 1024, height = 768 } = {}) {
       return typeof value === 'function' ? value(...args) : value;
     };
   const primitiveList = [];
+  const entityList = [];
+  let trackedEntity;
   const imageryList = [];
   const staticCredits = [];
   const creditDisplay = {
@@ -28,6 +30,9 @@ export function createFakeViewer({ width = 1024, height = 768 } = {}) {
   const fovy = 2 * Math.atan(Math.tan(Math.PI / 6) * (height / width));
   const camera = {
     positionWC: new Cesium.Cartesian3(7e6, 1e5, 2e5),
+    // Position and direction in the camera's transform (identity: world).
+    position: new Cesium.Cartesian3(7e6, 1e5, 2e5),
+    direction: new Cesium.Cartesian3(-1, 0, 0),
     directionWC: new Cesium.Cartesian3(-1, 0, 0),
     upWC: new Cesium.Cartesian3(0, 0, 1),
     rightWC: new Cesium.Cartesian3(0, 1, 0),
@@ -81,9 +86,18 @@ export function createFakeViewer({ width = 1024, height = 768 } = {}) {
       flight.options.cancel?.();
     }),
     lookAt: record('camera.lookAt'),
-    lookAtTransform: record('camera.lookAtTransform', (transform) =>
-      Cesium.Matrix4.clone(transform, camera.transform),
-    ),
+    // With an offset (a Cartesian3), the camera sits there in the new frame
+    // looking at its origin.
+    lookAtTransform: record('camera.lookAtTransform', (transform, offset) => {
+      Cesium.Matrix4.clone(transform, camera.transform);
+      if (offset instanceof Cesium.Cartesian3) {
+        Cesium.Cartesian3.clone(offset, camera.position);
+        Cesium.Cartesian3.normalize(
+          Cesium.Cartesian3.negate(offset, camera.direction),
+          camera.direction,
+        );
+      }
+    }),
     zoomIn: record('camera.zoomIn'),
     zoomOut: record('camera.zoomOut'),
     computeViewRectangle: record(
@@ -165,9 +179,37 @@ export function createFakeViewer({ width = 1024, height = 768 } = {}) {
     staticCredits,
     primitiveList,
     trackedEntityChanged: new Cesium.Event(),
-    // The viewer clock: only its tick event (CesiumWidget ticks it right
-    // before scene.render on every animation frame).
-    clock: { onTick: new Cesium.Event() },
+    // Assigning raises trackedEntityChanged, as Cesium's Viewer does.
+    get trackedEntity() {
+      return trackedEntity;
+    },
+    set trackedEntity(value) {
+      if (value === trackedEntity) return;
+      trackedEntity = value;
+      calls.push({ name: 'trackedEntity', args: [value] });
+      viewer.trackedEntityChanged.raiseEvent(value);
+    },
+    entities: {
+      values: entityList,
+      add: record('entities.add', (options) => {
+        const entity = new Cesium.Entity(options);
+        entityList.push(entity);
+        return entity;
+      }),
+      remove: record('entities.remove', (entity) => {
+        const index = entityList.indexOf(entity);
+        if (index >= 0) entityList.splice(index, 1);
+        return index >= 0;
+      }),
+      contains: (entity) => entityList.includes(entity),
+    },
+    isDestroyed: () => false,
+    // The viewer clock: its tick event (CesiumWidget ticks it right before
+    // scene.render on every animation frame) and current time.
+    clock: {
+      onTick: new Cesium.Event(),
+      currentTime: Cesium.JulianDate.fromIso8601('2026-10-16T12:00:00Z'),
+    },
     imageryList,
     terrainProvider: undefined,
     imageryLayers: {

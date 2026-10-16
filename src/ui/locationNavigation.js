@@ -5,8 +5,9 @@ import { LocationControls } from './location.js';
 
 /**
  * Own destination selection, lookup, orbit and world-jump lifetime. The camera
- * is the globe `engine`'s; `viewer` is optional and only clears Cesium's
- * tracked entity (entity tracking moves to the engine in phase 1c).
+ * is the globe `engine`'s, and a world jump stops its follow
+ * (`engine.camera.following()`); `viewer` is optional and only clears a
+ * Cesium tracked entity that no registered engine reports.
  */
 export class LocationNavigation {
   constructor({
@@ -355,6 +356,7 @@ export class LocationNavigation {
     } catch {
       /* best-effort release */
     }
+    this.engine.camera.following()?.stop();
     if (this.viewer) this.viewer.trackedEntity = undefined;
     this.engine.camera.cancelFlight();
     this.engine.camera.release();

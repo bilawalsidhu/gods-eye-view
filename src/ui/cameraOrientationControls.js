@@ -3,10 +3,12 @@ import { isPickedWorldPosition } from '../data/scenePick.js';
 import { isGlobeEngine } from '../globe/contract.js';
 import { engineFromViewer } from '../globe/cesium/engineFromViewer.js';
 
-// The camera is the globe engine's. Entity tracking stays on the Cesium viewer
-// until phase 1c, so the viewer, when there is one, is only read for its
-// tracked entity: callers pass an engine and that viewer, or a viewer whose
-// engine is registered (engineFromViewer).
+// The camera is the globe engine's, and so is the follow: the followed
+// entity is engine.camera.following().native (on Cesium also an entity the
+// app put on viewer.trackedEntity). The viewer, when there is one, is read
+// only for its clock, and for its tracked entity when the engine reports no
+// follow: callers pass an engine and that viewer, or a viewer whose engine
+// is registered (engineFromViewer).
 const engineOf = (target) => engineFromViewer(target);
 const trackerOf = (target, tracker) =>
   tracker ?? (target && !isGlobeEngine(target) ? target : null);
@@ -17,13 +19,17 @@ function cubicInOut(amount) {
   return 0.5 * ((amount -= 2) * amount * amount + 2);
 }
 
-function trackedTarget(viewer) {
-  const entity = viewer.trackedEntity;
+function followedEntity(engine, viewer) {
+  const handle = engine?.camera.following?.();
+  return handle ? (handle.native ?? null) : (viewer?.trackedEntity ?? null);
+}
+
+function trackedTarget(entity, viewer) {
   // Read the visual's sample first; sampling a flight CallbackProperty twice
   // can advance dead reckoning ahead of the displayed aircraft.
   return (
     entity?.gevDisplayPosition?.() ||
-    entity?.position?.getValue(viewer.clock?.currentTime)
+    entity?.position?.getValue(viewer?.clock?.currentTime)
   );
 }
 
@@ -82,8 +88,9 @@ export function readCameraTargetFrame(target, tracker) {
   const engine = engineOf(target);
   if (!engine) return null;
   const viewer = trackerOf(target, tracker);
-  const center = viewer?.trackedEntity
-    ? trackedTarget(viewer)
+  const entity = followedEntity(engine, viewer);
+  const center = entity
+    ? trackedTarget(entity, viewer)
     : pickViewTarget(engine);
   const pose = engine.camera.pose();
   if (!center || !isPickedWorldPosition(pose.position)) return null;
@@ -127,7 +134,9 @@ export function setCameraTargetFrame(target, frame, tracker) {
   const viewer = trackerOf(target, tracker);
   const { camera } = engine;
   try {
-    const trackedTransform = viewer?.trackedEntity ? camera.transform() : null;
+    const trackedTransform = followedEntity(engine, viewer)
+      ? camera.transform()
+      : null;
     camera.lookAt(frame.target, {
       heading: normalizedHeading(frame.heading),
       pitch: frame.pitch,
@@ -217,20 +226,20 @@ export function createCameraOrientationAnimator(
     if (!engine) return false;
     if (duration <= 0)
       return setCameraTargetFrame(engine, { ...frame, ...destination }, viewer);
-    const entity = viewer?.trackedEntity;
+    const entity = followedEntity(engine, viewer);
     pending = destination;
     const start = now();
     const headingDelta = geo.math.negativePiToPi(
       destination.heading - frame.heading,
     );
     remove = engine.frames.preUpdate.addEventListener(() => {
-      if (engine.isDestroyed() || viewer?.trackedEntity !== entity) {
+      if (engine.isDestroyed() || followedEntity(engine, viewer) !== entity) {
         cancel();
         return;
       }
       const progress = geo.math.clamp((now() - start) / duration, 0, 1);
       const eased = cubicInOut(progress);
-      const center = entity ? trackedTarget(viewer) : frame.target;
+      const center = entity ? trackedTarget(entity, viewer) : frame.target;
       if (
         !isPickedWorldPosition(center) ||
         !setCameraTargetFrame(
@@ -397,6 +406,7 @@ export function bindCameraOrientationControls({
   // The exact tilt state is refreshed once per gesture, not once per frame —
   // moveEnd fires when the camera stops, which is where the pick is affordable.
   subscribe(engine?.camera.moveEnd, refreshTilt);
+  subscribe(engine?.camera.followChanged, animator.cancel);
   subscribe(viewer?.trackedEntityChanged, animator.cancel);
   for (const type of ['pointerdown', 'wheel']) {
     const canvas = engine?.host.canvas;

@@ -18,6 +18,7 @@ import { createNavaraClock } from './clock.js';
 import { createNavaraCredits } from './credits.js';
 import { createNavaraInput } from './input.js';
 import { createNavaraPicking } from './picking.js';
+import { createFollowController } from '../follow.js';
 import { createNavaraMaps } from './maps.js';
 import { createNavaraSurface } from './surface.js';
 import { createGroundFloor, GROUND_FLOOR } from './groundFloor.js';
@@ -143,6 +144,21 @@ export function createNavaraEngine(
     postRender: createEngineEvent(),
   };
   const engineClock = createNavaraClock(appClock ? { appClock } : {});
+  // camera.follow (src/globe/follow.js): Navara's own cameraFollow takes
+  // no user rotation or zoom (phase 3 Task 5 probe), so the engine steps
+  // its own follow each frame.
+  const followStep = createEngineEvent();
+  const follow = createFollowController({
+    camera: model.camera,
+    aim: (pose) => model.aim(pose),
+    frame: followStep,
+    requestRender: () => view.forceUpdate(),
+  });
+  Object.assign(model.camera, {
+    follow: (options) => follow.follow(options),
+    following: () => follow.following(),
+    followChanged: follow.followChanged,
+  });
   // Defined below, with the surface and input it needs.
   let groundFloor = null;
   const handlers = {
@@ -152,6 +168,8 @@ export function createNavaraEngine(
     },
     preRender: (time) => {
       model.sync();
+      // After the user's camera is read, before anything draws.
+      followStep.raiseEvent();
       groundFloor?.update();
       frames.preRender.raiseEvent(time);
     },
@@ -278,6 +296,7 @@ export function createNavaraEngine(
       destroyed = true;
       for (const [name, handler] of Object.entries(handlers))
         view.off(name, handler);
+      follow.destroy();
       model.destroy();
       input.destroy();
       picking.destroy();

@@ -124,7 +124,30 @@
  *   lookAt and cancelFlight. Cesium also raises it for those calls made on the
  *   viewer's own camera and when the viewer's tracked entity changes, so a
  *   pending correction yields to every new camera owner.
+ * @property {(options: FollowOptions) => FollowHandle} follow Keeps a moving
+ *   target in the centre (Cesium: trackedEntity; Navara and the fake engine:
+ *   src/globe/follow.js each frame). The user may turn and zoom around it;
+ *   a command that takes the camera (setView, flyTo, flyToSphere, lookAt,
+ *   cancelFlight) ends it. A new follow replaces the current one.
+ * @property {() => (FollowHandle | null)} following The current follow
+ *   (Cesium: also one the app started on viewer.trackedEntity itself).
+ * @property {EngineEvent} followChanged Listener receives the new handle or
+ *   null (Cesium: viewer.trackedEntityChanged).
  * @property {number} percentageChanged
+ *
+ * @typedef {object} FollowOptions
+ * @property {() => Cartesian3} position Where the target is (read each frame).
+ * @property {Cartesian3 | (() => Cartesian3)} viewFrom The camera's offset
+ *   from the target in its east-north-up frame, metres.
+ * @property {number} [minRange] Closest the camera comes (150 m).
+ * @property {'enu'} [frame]
+ * @property {any} [native] Cesium only (layers' render/cesium.js): the
+ *   Entity to put on viewer.trackedEntity instead of a proxy.
+ *
+ * @typedef {object} FollowHandle
+ * @property {() => void} stop
+ * @property {(next: Partial<FollowOptions>) => void} retarget
+ * @property {any} [native]
  *
  * @typedef {'click'|'doubleClick'|'move'|'down'|'up'} InputType
  * @typedef {'ctrl'|'shift'|'alt'} InputModifier
@@ -531,6 +554,9 @@ const SHAPE = {
     moveStart: isEngineEvent,
     moveEnd: isEngineEvent,
     commanded: isEngineEvent,
+    follow: isFunction,
+    following: isFunction,
+    followChanged: isEngineEvent,
     percentageChanged: isNumber,
   },
   picker: {

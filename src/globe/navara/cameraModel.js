@@ -408,6 +408,13 @@ export function createCameraModel({
     lift(position) {
       place({ ...state, position: copy3(position) });
     },
+    /**
+     * Places the camera at `pose` ({ position, direction, up }) without
+     * camera.commanded: the follow camera's own step, not a new owner.
+     */
+    aim(pose) {
+      place(pose);
+    },
     /** The current camera for projections: pose, vertical fov and CSS size. */
     view,
     worldToWindow: (position, result) =>

@@ -112,6 +112,7 @@ test('the viewer clock itself is left alone', () => {
   const viewer = createFakeViewer();
   viewer.clock.shouldAnimate = false;
   viewer.clock.multiplier = 1;
+  const currentTime = viewer.clock.currentTime.clone();
   const { clock } = createCesiumClock(viewer, {
     appClock: manualAppClock().appClock,
   });
@@ -119,5 +120,5 @@ test('the viewer clock itself is left alone', () => {
   cesiumFrame(viewer);
   assert.equal(viewer.clock.shouldAnimate, false);
   assert.equal(viewer.clock.multiplier, 1);
-  assert.equal(viewer.clock.currentTime, undefined);
+  assert.ok(viewer.clock.currentTime.equals(currentTime));
 });
