@@ -89,3 +89,87 @@ test('a settled key may load again', async () => {
   assert.equal(await lane.run('again', loader), 1);
   assert.equal(await lane.run('again', loader), 2);
 });
+
+test('the last abandoned waiter evicts keys even when a loader ignores abort', async () => {
+  const lane = createSingleflight();
+  for (let i = 0; i < 12; i += 1) {
+    const caller = new AbortController();
+    const pending = lane.run(
+      'stalled-' + i,
+      () => new Promise(() => {}),
+      { signal: caller.signal },
+    );
+    await Promise.resolve();
+    caller.abort();
+    await assert.rejects(pending, { name: 'AbortError' });
+    assert.equal(lane.getInFlightCount(), 0);
+  }
+});
+
+test('late abandoned transport cannot evict a replacement under the same key', async () => {
+  const lane = createSingleflight();
+  const caller = new AbortController();
+  const abandoned = deferred();
+  const first = lane.run('reused-key', () => abandoned.promise, {
+    signal: caller.signal,
+  });
+  await Promise.resolve();
+  caller.abort();
+  await assert.rejects(first, { name: 'AbortError' });
+  assert.equal(lane.getInFlightCount(), 0);
+
+  const replacement = deferred();
+  const second = lane.run('reused-key', () => replacement.promise);
+  await Promise.resolve();
+  assert.equal(lane.getInFlightCount(), 1);
+
+  abandoned.resolve('stale');
+  await Promise.resolve();
+  await Promise.resolve();
+  assert.equal(lane.getInFlightCount(), 1);
+
+  replacement.resolve('current');
+  assert.equal(await second, 'current');
+  assert.equal(lane.getInFlightCount(), 0);
+});
+
+test('immediate cancellation prevents a not-yet-started loader from running', async () => {
+  const lane = createSingleflight();
+  const caller = new AbortController();
+  let loaderCalls = 0;
+  const pending = lane.run(
+    'cancel-before-microtask',
+    () => {
+      loaderCalls += 1;
+      return 'unexpected work';
+    },
+    { signal: caller.signal },
+  );
+  caller.abort();
+  await assert.rejects(pending, { name: 'AbortError' });
+  await Promise.resolve();
+  assert.equal(loaderCalls, 0);
+  assert.equal(lane.getInFlightCount(), 0);
+});
+
+test('immediate abort of one caller retains a loader needed by a surviving caller', async () => {
+  const lane = createSingleflight();
+  const caller = new AbortController();
+  const gate = deferred();
+  let loaderCalls = 0;
+  const loader = () => {
+    loaderCalls += 1;
+    return gate.promise;
+  };
+  const discarded = lane.run('shared-before-microtask', loader, {
+    signal: caller.signal,
+  });
+  const retained = lane.run('shared-before-microtask', loader);
+  caller.abort();
+  await assert.rejects(discarded, { name: 'AbortError' });
+  assert.equal(loaderCalls, 1);
+  assert.equal(lane.getInFlightCount(), 1);
+  gate.resolve('retained');
+  assert.equal(await retained, 'retained');
+  assert.equal(lane.getInFlightCount(), 0);
+});
