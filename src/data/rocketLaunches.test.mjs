@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as Cesium from 'cesium';
 import { gstime } from 'satellite.js';
+import { createModel } from '../layers/launches/model.js';
 import rocketLaunchesLayer, {
   _setRocketMissionOverlayHostForTest,
   _setSelectedRocketMissionForTest,
@@ -726,6 +727,126 @@ test('normalizes detailed payload and stage recovery records', () => {
   assert.equal(launches[0].recoveryStages[0].downrangeKm, 610);
   assert.equal(launches[0].recoveryStages[0].lat, 30.1);
   assert.equal(launches[0].recoveryStages[0].lon, -76.2);
+});
+
+test('finiteCoordinate normalizes finite numbers and rejects non-numeric or non-finite inputs', () => {
+  const model = createModel({});
+  assert.equal(model.finiteCoordinate(42.5), 42.5);
+  assert.equal(model.finiteCoordinate('28.5619'), 28.5619);
+  assert.equal(model.finiteCoordinate('-80.5772'), -80.5772);
+  assert.equal(model.finiteCoordinate(0), 0);
+  assert.equal(model.finiteCoordinate('0'), 0);
+  assert.equal(model.finiteCoordinate(undefined), null);
+  assert.equal(model.finiteCoordinate('invalid'), null);
+  assert.equal(model.finiteCoordinate('TBD'), null);
+  assert.equal(model.finiteCoordinate(Number.NaN), null);
+  assert.equal(model.finiteCoordinate(Number.POSITIVE_INFINITY), null);
+  assert.equal(model.finiteCoordinate(Number.NEGATIVE_INFINITY), null);
+});
+
+test('normalizes recovery stage coordinates, downrange distance, and flight numbers with non-finite fallbacks', () => {
+  const launches = normalizeRocketLaunches(
+    {
+      results: [
+        {
+          id: 'recovery-fallbacks',
+          name: 'Falcon 9 | Edge Case Stage Normalization',
+          net: '2026-07-20T10:00:00Z',
+          pad: { latitude: '28.608', longitude: '-80.604' },
+          rocket: {
+            launcher_stage: [
+              {
+                id: 88,
+                type: { name: 'Booster' },
+                launcher_flight_number: 'invalid-flight',
+                landing: {
+                  attempt: true,
+                  success: false,
+                  downrange_distance: 'TBD',
+                  landing_location: {
+                    name: 'Ocean Impact',
+                    latitude: 'N/A',
+                    longitude: undefined,
+                  },
+                },
+              },
+              {
+                id: 89,
+                type: { name: 'Expended Stage' },
+                landing: {
+                  attempt: false,
+                  type: { name: 'Expendable' },
+                },
+              },
+            ],
+          },
+        },
+      ],
+    },
+    NOW,
+  );
+
+  assert.equal(launches[0].recoveryStages.length, 2);
+
+  const booster = launches[0].recoveryStages[0];
+  assert.equal(booster.status, 'LOST');
+  assert.equal(booster.success, false);
+  assert.equal(booster.attempted, true);
+  assert.equal(booster.flightNumber, null);
+  assert.equal(booster.downrangeKm, null);
+  assert.equal(booster.lat, null);
+  assert.equal(booster.lon, null);
+
+  const expendable = launches[0].recoveryStages[1];
+  assert.equal(expendable.status, 'EXPENDABLE');
+  assert.equal(expendable.attempted, false);
+  assert.equal(expendable.success, null);
+});
+
+test('normalizes payload amounts and fractional string masses', () => {
+  const launches = normalizeRocketLaunches(
+    {
+      results: [
+        {
+          id: 'payload-edge-cases',
+          name: 'Electron | Mixed Payloads',
+          net: '2026-07-20T10:00:00Z',
+          pad: { latitude: '-39.26', longitude: '177.86' },
+          rocket: {
+            payloads: [
+              {
+                id: 601,
+                amount: 'not-a-number',
+                payload: { id: 11, name: 'Unknown Amount Payload' },
+              },
+              {
+                id: 602,
+                amount: 3,
+                payload: { id: 12, name: 'Triple Payload' },
+              },
+              {
+                id: 603,
+                payload: {
+                  id: 13,
+                  name: 'Valid Fractional Mass Payload',
+                  mass: '12.75',
+                },
+              },
+            ],
+          },
+        },
+      ],
+    },
+    NOW,
+  );
+
+  // Blank, negative and non-numeric masses are pinned by "missing payload
+  // details stay unknown without inventing mass or classification".
+  const payloads = launches[0].payloads;
+  assert.equal(payloads.length, 3);
+  assert.equal(payloads[0].amount, 1);
+  assert.equal(payloads[1].amount, 3);
+  assert.equal(payloads[2].massKg, 12.75);
 });
 
 test('keeps payload and recovery collections empty when LL2 does not disclose them', () => {

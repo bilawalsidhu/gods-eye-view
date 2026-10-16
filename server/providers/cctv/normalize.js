@@ -39,11 +39,21 @@ export function escapeXml(text) {
 /**
  * Coerce a value to a finite number, returning fallback if NaN/Infinity.
  *
+ * Absent, blank and boolean values take the fallback too: `Number` reads
+ * null, '' and false as 0, which would turn a missing coordinate, heading or
+ * elevation into a real zero.
+ *
  * @param {*} value
  * @param {number} [fallback=NaN]
  * @returns {number}
  */
 export function toFiniteNumber(value, fallback = NaN) {
+  if (
+    value == null ||
+    typeof value === 'boolean' ||
+    (typeof value === 'string' && !value.trim())
+  )
+    return fallback;
   const num = Number(value);
   return Number.isFinite(num) ? num : fallback;
 }
