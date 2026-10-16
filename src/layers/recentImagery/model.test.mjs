@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
+  boxCloud,
   boxFromPin,
   boxFromRectangle,
   boxSideKm,
@@ -11,11 +12,13 @@ import {
   fitViewHeightM,
   formatCandidateReadout,
   gibsTemplate,
+  granulesOverBox,
   groupGranulesByDay,
   mergeCandidates,
   parseCandidateKey,
   quantizeBox,
   rankLatest,
+  scopeToBox,
   shortDay,
   thumbnailOrder,
   utcDay,
@@ -324,6 +327,106 @@ test('START HERE is the newest all-clear HLS day; unknown cloud is never clear',
   assert.equal(overview.candidate.key, 'VIIRS:2026-09-20');
   assert.equal(overview.reason, 'overview');
   assert.equal(rankLatest([]).candidate, null);
+});
+
+test('with no clear day, START HERE is the least cloudy, newer within 10 points', () => {
+  const full = (day, clouds) => hls('S30', day, clouds, { coverage: 'full' });
+  const pick = (list) => {
+    const { candidate, reason } = rankLatest(list);
+    return `${candidate?.day} ${reason}`;
+  };
+  // Bergen, October 2026: the newest day was 83% scene cloud, a clear-ish
+  // one six days earlier was 30%.
+  assert.equal(
+    pick([full('2026-10-08', [28, 83]), full('2026-10-02', [8, 30])]),
+    '2026-10-02 cloudy',
+  );
+  assert.equal(
+    pick([full('2026-10-08', [38]), full('2026-10-02', [30])]),
+    '2026-10-08 cloudy',
+    'a newer day within tolerance keeps recency',
+  );
+  assert.equal(
+    pick([full('2026-10-08', [null]), full('2026-10-02', [60])]),
+    '2026-10-02 cloudy',
+    'unknown cloud ranks behind any known cloud',
+  );
+  assert.equal(
+    pick([full('2026-10-08', [null]), full('2026-10-02', [null])]),
+    '2026-10-08 cloudy',
+  );
+});
+
+test('only granules over the box judge its cloud', () => {
+  const square = (west, south, side = 1) => [
+    [west, south],
+    [west + side, south],
+    [west + side, south + side],
+    [west, south + side],
+  ];
+  const day = (granules) => ({
+    ...groupGranulesByDay(
+      granules.map((g, i) => granule({ id: `g${i}`, ...g })),
+    )[0],
+    coverage: 'full',
+  });
+  // A clear tile over the box, a cloudy one CMR matched by touching its edge.
+  const edge = day([
+    { cloud: 5, footprint: square(-98.5, 29.5) },
+    { cloud: 90, footprint: square(-97.69, 30.29, 0.5) },
+  ]);
+  assert.deepEqual(
+    granulesOverBox(edge, BOX).map((g) => g.cloud),
+    [5],
+  );
+  assert.equal(boxCloud(edge, BOX), 5);
+  assert.equal(rankLatest([edge], { box: BOX }).reason, 'clear');
+  assert.equal(
+    rankLatest([edge]).reason,
+    'cloudy',
+    'without a box, every granule counts',
+  );
+  // A small tile wholly inside a large box still counts.
+  const big = { west: -99, south: 29, east: -96, north: 32 };
+  const inside = day([{ cloud: 70, footprint: square(-97.9, 30.1, 0.2) }]);
+  assert.equal(boxCloud(inside, big), 70);
+  // No footprints: nothing can be ruled out.
+  const blind = day([{ cloud: 5 }, { cloud: 60 }]);
+  assert.equal(boxCloud(blind, BOX), 60);
+  // A band across the box between the samples, no vertex inside it.
+  const band = day([
+    { cloud: 5, footprint: square(-98.5, 29.5) },
+    {
+      cloud: 80,
+      footprint: [
+        [-99, 30.27],
+        [-96, 30.27],
+        [-96, 30.29],
+        [-99, 30.29],
+      ],
+    },
+  ]);
+  assert.equal(boxCloud(band, BOX), 80);
+  // A long thin box and a cloudy tile crossing it north to south.
+  const thin = { west: -100, south: 30, east: -95, north: 30.4 };
+  const crossing = day([
+    { cloud: 5, footprint: square(-101, 29, 10) },
+    {
+      cloud: 90,
+      footprint: [
+        [-99, 29],
+        [-98, 29],
+        [-98, 31],
+        [-99, 31],
+      ],
+    },
+  ]);
+  assert.equal(boxCloud(crossing, thin), 90);
+  assert.equal(rankLatest([crossing], { box: thin }).reason, 'cloudy');
+  // The card shows the cloud of the granules that ranked the day.
+  assert.deepEqual(scopeToBox(edge, BOX).cloud, { min: 5, max: 5 });
+  assert.equal(scopeToBox(edge, BOX).granules.length, 2);
+  assert.equal(scopeToBox(edge, BOX).coverage, coverageFor(edge, BOX));
 });
 
 test('START HERE prefers a day that covers the whole box over a newer sliver', () => {
