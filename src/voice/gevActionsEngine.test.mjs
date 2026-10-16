@@ -10,6 +10,8 @@ import * as geo from '../geo/index.js';
 import { createFakeEngine } from '../globe/testing/fakeEngine.js';
 import { GEV_ACTION_SCHEMAS } from './actionSchemas.js';
 import {
+  CESIUM_LOOK_ACTIONS,
+  UNAVAILABLE_FEATURES,
   UNAVAILABLE_ON_ENGINE,
   VIEWER_ONLY_ACTIONS,
   createGevActionRunner,
@@ -121,7 +123,13 @@ test('without a viewer the viewer-only actions refuse with a structured result',
     assert.equal(result.unavailable, true, name);
     assert.equal(result.code, UNAVAILABLE_ON_ENGINE, name);
     assert.equal(result.engine, 'navara', name);
-    assert.equal(result.error, 'Unavailable on this engine', name);
+    assert.equal(result.feature, UNAVAILABLE_FEATURES[name], name);
+    assert.equal(result.suggestion, '?engine=cesium', name);
+    assert.equal(
+      result.error,
+      `${UNAVAILABLE_FEATURES[name]} is not available on the Navara engine yet. Switch to the Cesium engine (?engine=cesium) to use it.`,
+      name,
+    );
   }
   assert.deepEqual(touched, [], 'a refusal reaches no controller');
   assert.deepEqual(engine.fake.calls, [], 'a refusal moves no camera');
@@ -419,4 +427,80 @@ test('a fresh frame for capture comes from the engine render loop', async () => 
   } finally {
     globalThis.document = previous;
   }
+});
+
+test('every refused tool names its feature', () => {
+  for (const name of [...VIEWER_ONLY_ACTIONS, ...CESIUM_LOOK_ACTIONS])
+    assert.ok(UNAVAILABLE_FEATURES[name], `${name} has a feature name`);
+  assert.deepEqual(CESIUM_LOOK_ACTIONS, [
+    'set_visual_style',
+    'set_post_processing',
+  ]);
+});
+
+test('without a viewer the visual style and post-processing refuse and record nothing', async () => {
+  const engine = engineOverAustin({ kind: 'navara' });
+  const calls = [];
+  const styleManager = navigatingStyleManager({
+    setStyle: (...args) => calls.push(['setStyle', ...args]),
+    setBloom: (...args) => calls.push(['setBloom', ...args]) && {},
+    setSharpen: (...args) => calls.push(['setSharpen', ...args]) && {},
+  });
+  const runner = runnerOn(engine, { styleManager });
+  const style = await runner('set_visual_style', { style: 'thermal' });
+  assert.equal(style.ok, false);
+  assert.equal(style.code, UNAVAILABLE_ON_ENGINE);
+  assert.match(
+    style.error,
+    /visual style is not available on the Navara engine/,
+  );
+  const post = await runner('set_post_processing', {
+    bloom: { enabled: true },
+  });
+  assert.equal(post.ok, false);
+  assert.equal(post.code, UNAVAILABLE_ON_ENGINE);
+  assert.deepEqual(calls, [], 'no style is applied or recorded');
+});
+
+test('with a viewer the visual style still applies', async () => {
+  const calls = [];
+  const runner = createGevActionRunner({
+    viewer: {
+      clock: { onTick: { addEventListener: () => () => {} } },
+      scene: { canvas: { addEventListener() {}, removeEventListener() {} } },
+      camera: { moveEnd: { addEventListener() {} } },
+    },
+    engine: engineOverAustin(),
+    styleManager: navigatingStyleManager({
+      setStyle: (style) => calls.push(style),
+    }),
+    dataManager: dataManagerWith({}),
+  });
+  const result = await runner('set_visual_style', { style: 'thermal' });
+  assert.equal(result.ok, true);
+  assert.deepEqual(calls, ['thermal']);
+});
+
+test('without a viewer a layer the engine lacks refuses instead of throwing', async () => {
+  const engine = engineOverAustin({ kind: 'navara' });
+  const runner = runnerOn(engine, {
+    dataManager: dataManagerWith({ flights: {} }),
+  });
+  const result = await runner('set_layer_visibility', {
+    layerId: 'cctv',
+    enabled: true,
+  });
+  assert.equal(result.ok, false);
+  assert.equal(result.code, UNAVAILABLE_ON_ENGINE);
+  assert.equal(result.layerId, 'cctv');
+  assert.equal(result.suggestion, '?engine=cesium');
+  assert.match(
+    result.error,
+    /The cctv layer is not available on the Navara engine yet/,
+  );
+  await assert.rejects(
+    runner('set_layer_visibility', { layerId: 'no-such-layer', enabled: true }),
+    /Unknown data layer/,
+    'a name no engine knows is still an unknown layer',
+  );
 });
