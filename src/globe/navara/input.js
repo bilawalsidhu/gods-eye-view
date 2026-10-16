@@ -8,7 +8,8 @@
 // Navara 0.2.1 lets a flyTo run on under user input, where Cesium cancels it;
 // `onCameraInput` reports user camera input so the engine can do the same.
 
-import { INPUT_TYPES, MODIFIERS } from '../contract.js';
+import { INPUT_TYPES, normalizeInputOptions } from '../contract.js';
+import { createPickDelivery } from '../pickDelivery.js';
 
 const CLICK_PIXEL_TOLERANCE = 5; // Cesium's _clickPixelTolerance
 const SCREEN_EVENTS = ['pointerdown', 'pointerup', 'pointermove', 'dblclick'];
@@ -23,10 +24,21 @@ function modifierOf(event) {
 
 /**
  * @param {{ canvas: HTMLCanvasElement, camera: { options: object } }} view
- * @param {{ onCameraInput?: (type: string) => void }} [options]
+ * @param {{ onCameraInput?: (type: string) => void,
+ *   picker?: { clickPick: Function, pick: Function, drillPick: Function },
+ *   scheduleFrame?: (run: () => void) => void }} [options] `picker`
+ *   answers listeners with { pick, drill } (picking.js): clicks from the
+ *   GPU pick of the gesture, moves from the CPU pick once a frame.
  * @returns {{ input: object, destroy: () => void }}
  */
-export function createNavaraInput(view, { onCameraInput = () => {} } = {}) {
+export function createNavaraInput(
+  view,
+  {
+    onCameraInput = () => {},
+    picker = null,
+    scheduleFrame = (run) => requestAnimationFrame(run),
+  } = {},
+) {
   const { canvas } = view;
   const listeners = new Map(INPUT_TYPES.map((type) => [type, new Set()]));
   let attached = false;
@@ -36,15 +48,25 @@ export function createNavaraInput(view, { onCameraInput = () => {} } = {}) {
   let downAt = null;
   let last = null;
 
+  const delivery = createPickDelivery({
+    pick: (position, type) =>
+      type === 'move' ? picker?.pick(position) : picker?.clickPick(position),
+    drill: (position, limit) => picker?.drillPick(position, limit) ?? [],
+    schedule: (run) => scheduleFrame(() => !destroyed && run()),
+  });
   const positionOf = (event) => {
     const rect = canvas.getBoundingClientRect();
     return { x: event.clientX - rect.left, y: event.clientY - rect.top };
   };
   const emit = (type, event, payload) => {
     const modifier = modifierOf(event);
-    for (const entry of [...listeners.get(type)])
-      if (entry.modifier === modifier && listeners.get(type).has(entry))
-        entry.listener(payload);
+    const group = listeners.get(type);
+    delivery.deliver(
+      type,
+      payload,
+      [...group].filter((entry) => entry.modifier === modifier),
+      { isLive: (entry) => group.has(entry) },
+    );
   };
 
   const onScreenEvent = (event) => {
@@ -90,18 +112,15 @@ export function createNavaraInput(view, { onCameraInput = () => {} } = {}) {
     });
 
   const input = {
-    on(type, listener, { modifier } = {}) {
-      if (!INPUT_TYPES.includes(type))
-        throw new TypeError(`Unknown input type: ${type}`);
-      if (modifier !== undefined && !MODIFIERS.includes(modifier))
-        throw new TypeError(`Unknown input modifier: ${modifier}`);
+    on(type, listener, options = {}) {
+      const { modifier, pick, drill } = normalizeInputOptions(type, options);
       if (destroyed) return () => {};
       if (!attached) {
         attached = true;
         for (const name of SCREEN_EVENTS)
           canvas.addEventListener(name, onScreenEvent);
       }
-      const entry = { listener, modifier };
+      const entry = { listener, modifier, pick, drill };
       listeners.get(type).add(entry);
       return () => {
         listeners.get(type).delete(entry);

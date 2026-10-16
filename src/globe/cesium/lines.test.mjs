@@ -125,3 +125,21 @@ test('dash kinds pick their materials', () => {
   assert.equal(made[2].appearance.material.type, 'Color');
   assert.equal(made[2].depthFailAppearance, undefined);
 });
+
+test('a pick of a line primitive names the line', () => {
+  const viewer = createFakeViewer();
+  const { factories, made } = fakePrimitives();
+  const { lines, identify } = createCesiumLines(viewer, { factories });
+  lines
+    .createLine({
+      id: 'orbit-25544',
+      widthPx: 2,
+      color: [1, 1, 1, 1],
+      pickId: 'o',
+    })
+    .setPositions(points);
+  assert.deepEqual(identify({ primitive: made[0], id: 'o' }), {
+    owner: 'orbit-25544',
+  });
+  assert.equal(identify({ primitive: {}, id: 'o' }), null);
+});

@@ -2,7 +2,8 @@
 // one action per (type, modifier); the engine fans it out to its listeners.
 
 import * as Cesium from 'cesium';
-import { INPUT_TYPES, MODIFIERS } from '../contract.js';
+import { normalizeInputOptions } from '../contract.js';
+import { createPickDelivery } from '../pickDelivery.js';
 import { toGeo2 } from './convert.js';
 
 const TYPES = {
@@ -28,26 +29,34 @@ const toEvent = (event) => {
 
 /**
  * @param {Cesium.Viewer} viewer
- * @param {{ createEventHandler?: (canvas: HTMLCanvasElement) => Cesium.ScreenSpaceEventHandler }} [options]
+ * @param {{ createEventHandler?: (canvas: HTMLCanvasElement) => Cesium.ScreenSpaceEventHandler,
+ *   picker?: { pick: Function, drillPick: Function },
+ *   scheduleFrame?: (run: () => void) => void }} [options] `picker` answers
+ *   listeners with { pick, drill } (the engine's picker); moves with picks
+ *   wait for `scheduleFrame` (requestAnimationFrame).
  * @returns {{ input: object, destroy: () => void }}
  */
 export function createCesiumInput(
   viewer,
   {
     createEventHandler = (canvas) => new Cesium.ScreenSpaceEventHandler(canvas),
+    picker = null,
+    scheduleFrame = (run) => requestAnimationFrame(run),
   } = {},
 ) {
   const { scene } = viewer;
   let handler = null;
   let destroyed = false;
   const groups = new Map();
+  const delivery = createPickDelivery({
+    pick: (position) => picker?.pick(position),
+    drill: (position, limit) => picker?.drillPick(position, limit) ?? [],
+    schedule: (run) => scheduleFrame(() => !destroyed && run()),
+  });
 
   const input = {
-    on(type, listener, { modifier } = {}) {
-      if (!INPUT_TYPES.includes(type))
-        throw new TypeError(`Unknown input type: ${type}`);
-      if (modifier !== undefined && !MODIFIERS.includes(modifier))
-        throw new TypeError(`Unknown input modifier: ${modifier}`);
+    on(type, listener, options = {}) {
+      const { modifier, pick, drill } = normalizeInputOptions(type, options);
       if (destroyed) return () => {};
       handler ??= createEventHandler(scene.canvas);
       const key = `${type}:${modifier}`;
@@ -57,15 +66,15 @@ export function createCesiumInput(
         groups.set(key, listeners);
         handler.setInputAction(
           (event) => {
-            const converted = toEvent(event);
-            for (const entry of [...listeners])
-              if (listeners.has(entry)) entry.listener(converted);
+            delivery.deliver(type, toEvent(event), [...listeners], {
+              isLive: (entry) => listeners.has(entry),
+            });
           },
           TYPES[type],
           KEYS[modifier],
         );
       }
-      const entry = { listener };
+      const entry = { listener, pick, drill };
       listeners.add(entry);
       return () => {
         if (!listeners.delete(entry) || listeners.size) return;

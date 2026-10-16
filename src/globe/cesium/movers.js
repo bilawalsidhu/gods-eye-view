@@ -85,7 +85,7 @@ function readColor(store, index) {
   return scratchColor;
 }
 
-function spritePart(scene, options, store, factories, requestRender) {
+function spritePart(scene, options, store, factories, requestRender, owners) {
   const collection = factories.billboards(scene);
   const { sprite, depthTest, id } = options;
   const style = {
@@ -108,6 +108,7 @@ function spritePart(scene, options, store, factories, requestRender) {
       if (!billboard) {
         billboard = collection.add({ ...style });
         billboards[index] = billboard;
+        owners.set(billboard, { owner: id, instance: index });
         shownCell[index] = -1;
       }
       billboard.position = readPosition(store, index);
@@ -146,7 +147,7 @@ function spritePart(scene, options, store, factories, requestRender) {
   };
 }
 
-function pointPart(options, store, factories, requestRender) {
+function pointPart(options, store, factories, requestRender, owners) {
   const collection = factories.points();
   const { point, depthTest } = options;
   const style = {
@@ -169,6 +170,7 @@ function pointPart(options, store, factories, requestRender) {
           if (!item) {
             item = collection.add({ ...style });
             points[index] = item;
+            owners.set(item, { owner: options.id, instance: index });
           }
           item.position = readPosition(store, index);
           item.pixelSize = point.sizePx * store.scales[index];
@@ -182,7 +184,7 @@ function pointPart(options, store, factories, requestRender) {
   };
 }
 
-function modelPart(options, store, factories, requestRender) {
+function modelPart(options, store, factories, requestRender, owners) {
   const collection = factories.models();
   const { model } = options;
   const blendMode =
@@ -235,6 +237,7 @@ function modelPart(options, store, factories, requestRender) {
           return;
         }
         models[index] = item;
+        owners.set(item, { owner: options.id, instance: index });
         place(item, index);
         collection.add(item);
         requestRender('movers');
@@ -273,6 +276,8 @@ export function createCesiumMovers(
   const { scene } = viewer;
   let root = null;
   const ordered = [];
+  // Billboard, point or model → its set and instance, for picks.
+  const owners = new WeakMap();
   const rootCollection = () => {
     if (!root) {
       root = new Cesium.PrimitiveCollection({ destroyPrimitives: true });
@@ -283,10 +288,10 @@ export function createCesiumMovers(
   const registry = createMoverRegistry((options, store) => {
     const part =
       options.kind === 'sprite'
-        ? spritePart(scene, options, store, make, requestRender)
+        ? spritePart(scene, options, store, make, requestRender, owners)
         : options.kind === 'point'
-          ? pointPart(options, store, make, requestRender)
-          : modelPart(options, store, make, requestRender);
+          ? pointPart(options, store, make, requestRender, owners)
+          : modelPart(options, store, make, requestRender, owners);
     const { primitive } = part;
     primitive.gevMoverSet = options.id;
     // Later (higher) order draws later: after every set of lower or equal order.
@@ -308,6 +313,11 @@ export function createCesiumMovers(
   });
   return {
     movers: registry.movers,
+    /** The set and instance a Cesium pick result belongs to, or null. */
+    identify(picked) {
+      const known = picked?.primitive ? owners.get(picked.primitive) : null;
+      return known && registry.sets.has(known.owner) ? { ...known } : null;
+    },
     destroy() {
       registry.destroyAll();
       if (root) {

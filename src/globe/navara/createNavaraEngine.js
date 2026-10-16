@@ -17,6 +17,7 @@ import { createCameraModel } from './cameraModel.js';
 import { createNavaraClock } from './clock.js';
 import { createNavaraCredits } from './credits.js';
 import { createNavaraInput } from './input.js';
+import { createNavaraPicking } from './picking.js';
 import { createNavaraMaps } from './maps.js';
 import { createNavaraSurface } from './surface.js';
 import { createGroundFloor, GROUND_FLOOR } from './groundFloor.js';
@@ -163,9 +164,24 @@ export function createNavaraEngine(
   for (const [name, handler] of Object.entries(handlers))
     view.on(name, handler);
 
+  // Picks over the movers and lines (picking.js); the input answers
+  // listeners with { pick, drill } from it.
+  const picking = createNavaraPicking({
+    view,
+    projector: {
+      worldToWindow: (position, result) =>
+        model.worldToWindow(position, result),
+      horizonVisible: (position) => model.horizonVisible(position),
+    },
+    camera: model.camera,
+    movers: () => moversPort?.pickables?.() ?? [],
+    lines: () => linesPort?.pickables?.() ?? [],
+    resolveBatch: (batchId) => moversPort?.resolvePick?.(batchId) ?? null,
+  });
   const input = createNavaraInput(view, {
     // A gesture is the user, not a new camera owner: no camera.commanded.
     onCameraInput: () => model.stopFlight(),
+    picker: picking,
   });
   const credits = createNavaraCredits(view);
   const maps = createNavaraMaps(view, fetch ? { fetch } : {});
@@ -182,10 +198,12 @@ export function createNavaraEngine(
   });
 
   const picker = {
-    // Navara picks its own meshes only on click gestures (featureClick); there
-    // is no synchronous pick, and 3D tiles carry no ids. No layers yet.
-    pick: () => undefined,
-    drillPick: () => [],
+    // The CPU pick of movers and lines (picking.js); 3D tiles carry no ids.
+    // Clicks with { pick } get Navara's GPU pick of the gesture instead.
+    pick: (screen) => picking.pick(screen),
+    drillPick: (screen, limit) => picking.drillPick(screen, limit),
+    // Navara-only diagnostics: how clicks with { pick } were answered.
+    clickStats: () => picking.clickStats(),
     pickPosition(screen) {
       const rect = canvas.getBoundingClientRect();
       const hit = view.pickDepthPosition(
@@ -262,6 +280,7 @@ export function createNavaraEngine(
         view.off(name, handler);
       model.destroy();
       input.destroy();
+      picking.destroy();
       credits.destroy();
       maps.destroy();
       sharpenPort?.destroy();

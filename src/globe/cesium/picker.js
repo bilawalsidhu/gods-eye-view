@@ -4,21 +4,31 @@
 
 import { toCesium2, toGeo3 } from './convert.js';
 
-const normalise = (picked) =>
-  picked == null
-    ? undefined
-    : {
-        id: picked.id,
-        primitive: picked.primitive,
-        content: picked.content,
-        object: picked,
-      };
-
 /**
  * @param {Cesium.Viewer} viewer
+ * @param {{ identify?: (picked: object) => ({ owner: string, instance?: number } | null) }} [options]
+ *   `identify` names the mover set or line (and instance) a pick belongs to.
  * @returns {{ picker: object, destroy: () => void }}
  */
-export function createCesiumPicker(viewer) {
+export function createCesiumPicker(viewer, { identify = () => null } = {}) {
+  const normalise = (picked) => {
+    if (picked == null) return undefined;
+    const known = identify(picked);
+    return {
+      id: picked.id,
+      primitive: picked.primitive,
+      content: picked.content,
+      object: picked,
+      ...(known
+        ? {
+            owner: known.owner,
+            ...(known.instance !== undefined
+              ? { instance: known.instance }
+              : {}),
+          }
+        : {}),
+    };
+  };
   const { scene } = viewer;
   const picker = {
     pick(screen, width, height) {

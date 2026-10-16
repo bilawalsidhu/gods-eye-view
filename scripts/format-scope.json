@@ -1077,5 +1077,8 @@
   "src/bench/syntheticFlights.test.mjs",
   "src/globe/lines.test.mjs",
   "src/globe/cesium/lines.test.mjs",
-  "src/globe/navara/lines/lineMesh.test.mjs"
+  "src/globe/navara/lines/lineMesh.test.mjs",
+  "src/globe/pickDelivery.test.mjs",
+  "src/globe/navara/picking.test.mjs",
+  "src/data/selectionDispatcher.test.mjs"
 ]

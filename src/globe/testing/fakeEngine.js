@@ -21,6 +21,7 @@ import * as geo from '../../geo/index.js';
 import {
   INPUT_TYPES,
   MODIFIERS,
+  normalizeInputOptions,
   SHARPEN_INITIAL,
   createEngineEvent,
   mergeSharpen,
@@ -28,6 +29,7 @@ import {
 import { createAppClock } from '../../time/clock.js';
 import { createLineRegistry } from '../lines.js';
 import { createMoverRegistry } from '../movers.js';
+import { createCpuPicker } from '../cpuPicks.js';
 
 const { cartesian2, cartesian3, cartographic, ellipsoid, math, matrix4 } = geo;
 const WGS84 = ellipsoid.WGS84;
@@ -804,6 +806,33 @@ export function createFakeEngine(options = {}) {
     size: () => ({ width, height }),
   };
 
+  // Unscripted picks find the fake's own movers and lines, as Navara's CPU
+  // pick does (src/globe/cpuPicks.js).
+  const cpuPick = createCpuPicker({
+    projector: {
+      worldToWindow: (position, result) =>
+        engine.projector.worldToWindow(position, result),
+      horizonVisible: (position) => engine.projector.horizonVisible(position),
+    },
+    camera: {
+      get livePosition() {
+        return engine.camera.livePosition;
+      },
+    },
+    movers: () =>
+      [...moverRegistry.sets.values()].map(({ options, store }) => ({
+        options,
+        store,
+      })),
+    lines: () =>
+      [...fakeLines.values()]
+        .filter((state) => state.shown)
+        .map((state) => ({
+          options: state.options,
+          flat: state.positions,
+          modelMatrix: state.modelMatrix,
+        })),
+  });
   const engine = {
     kind: options.kind ?? 'cesium',
     host,
@@ -811,11 +840,13 @@ export function createFakeEngine(options = {}) {
     picker: {
       pick(screen, w, h) {
         record('picker.pick', [screen, w, h]);
-        return scripted('pick', [screen, w, h], () => undefined);
+        return scripted('pick', [screen, w, h], () => cpuPick(screen, 1)[0]);
       },
       drillPick(screen, limit, w, h) {
         record('picker.drillPick', [screen, limit, w, h]);
-        return scripted('drillPick', [screen, limit, w, h], () => []);
+        return scripted('drillPick', [screen, limit, w, h], () =>
+          cpuPick(screen, limit ?? Infinity),
+        );
       },
       pickPosition(screen) {
         record('picker.pickPosition', [screen]);
@@ -892,12 +923,12 @@ export function createFakeEngine(options = {}) {
     input: {
       on(type, listener, inputOptions = {}) {
         record('input.on', [type, inputOptions]);
+        const { modifier, pick, drill } = normalizeInputOptions(
+          type,
+          inputOptions,
+        );
         const listeners = inputs.get(type);
-        if (!listeners) throw new TypeError(`Unknown input type: ${type}`);
-        const modifier = inputOptions.modifier;
-        if (modifier !== undefined && !MODIFIERS.includes(modifier))
-          throw new TypeError(`Unknown input modifier: ${modifier}`);
-        const entry = { listener, modifier };
+        const entry = { listener, modifier, pick, drill };
         listeners.add(entry);
         return () => listeners.delete(entry);
       },
@@ -1008,8 +1039,22 @@ export function createFakeEngine(options = {}) {
     input(type, event, modifier) {
       const listeners = inputs.get(type);
       if (!listeners) throw new TypeError(`Unknown input type: ${type}`);
-      for (const entry of [...listeners])
-        if (entry.modifier === modifier) entry.listener(event);
+      for (const entry of [...listeners]) {
+        if (entry.modifier !== modifier) continue;
+        if (!entry.pick) {
+          entry.listener(event);
+          continue;
+        }
+        // As the engines: the pick under the position (a move's end).
+        const at = event.position ?? event.endPosition;
+        entry.listener({
+          ...event,
+          picked: engine.picker.pick(at),
+          ...(entry.drill
+            ? { drilled: engine.picker.drillPick(at, entry.drill) }
+            : {}),
+        });
+      }
     },
     /** Replaces a result with a value or a function of the call's arguments. */
     script(name, valueOrFunction) {

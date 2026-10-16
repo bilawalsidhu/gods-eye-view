@@ -128,7 +128,23 @@
  *
  * @typedef {'click'|'doubleClick'|'move'|'down'|'up'} InputType
  * @typedef {'ctrl'|'shift'|'alt'} InputModifier
- * @typedef {{ position?: Cartesian2, startPosition?: Cartesian2, endPosition?: Cartesian2 }} InputEvent
+ * @typedef {object} InputEvent
+ * @property {Cartesian2} [position] click, doubleClick, down, up.
+ * @property {Cartesian2} [startPosition] move.
+ * @property {Cartesian2} [endPosition] move.
+ * @property {PickResult} [picked] With `pick`: what is drawn under the
+ *   position (move: the end position), undefined for the map or nothing.
+ *   Cesium picks at once; Navara answers a click from its GPU pick of the
+ *   same gesture (a frame or two later; undefined after a timeout), a move
+ *   from a CPU pick of movers and lines, at most once per frame.
+ * @property {PickResult[]} [drilled] With `drill`: up to that many objects
+ *   under the position, nearest first.
+ *
+ * @typedef {object} InputOptions
+ * @property {InputModifier} [modifier]
+ * @property {boolean} [pick] click, doubleClick and move only. A move
+ *   listener with pick gets at most one payload per frame (the latest).
+ * @property {number} [drill] A positive integer (click and doubleClick).
  *
  * @typedef {object} GlobeProjector
  * @property {(position: Cartesian3, result?: Cartesian2) => (Cartesian2 | undefined)} worldToWindow
@@ -173,8 +189,11 @@
  *   The sharpening last set (a copy).
  *
  * @typedef {object} PickResult
- * @property {any} id The picked entity or object id; undefined for map tiles.
- * @property {any} primitive
+ * @property {any} id The picked entity or object id (a mover's or line's
+ *   pickId); undefined for map tiles.
+ * @property {string} [owner] The mover set or line the pick belongs to.
+ * @property {number} [instance] The mover instance index.
+ * @property {any} [primitive] Cesium only, for compatibility.
  * @property {any} [content] 3D tile content when map tiles were picked (what
  *   a surface-pick check reads), else undefined.
  * @property {any} [object] The engine's own pick result, for engine-specific code.
@@ -362,6 +381,28 @@ export const INPUT_TYPES = Object.freeze([
   'up',
 ]);
 export const MODIFIERS = Object.freeze(['ctrl', 'shift', 'alt']);
+/** Input types whose listeners may ask for picks. */
+export const PICK_INPUT_TYPES = Object.freeze(['click', 'doubleClick', 'move']);
+
+/**
+ * input.on options checked and defaulted: { modifier, pick, drill } (drill
+ * 0 when not asked), or a TypeError.
+ */
+export function normalizeInputOptions(type, options = {}) {
+  const { modifier, pick = false, drill = 0 } = options ?? {};
+  if (!INPUT_TYPES.includes(type))
+    throw new TypeError(`Unknown input type: ${type}`);
+  if (modifier !== undefined && !MODIFIERS.includes(modifier))
+    throw new TypeError(`Unknown input modifier: ${modifier}`);
+  if (typeof pick !== 'boolean')
+    throw new TypeError(`Input pick must be a boolean: ${pick}`);
+  if (!(Number.isInteger(drill) && drill >= 0))
+    throw new TypeError(`Input drill must be a whole number: ${drill}`);
+  if ((pick || drill) && !PICK_INPUT_TYPES.includes(type))
+    throw new TypeError(`Input ${type} cannot pick`);
+  if (drill && type === 'move') throw new TypeError('A move cannot drill');
+  return { modifier, pick: pick || drill > 0, drill };
+}
 export const FLIGHT_EASINGS = Object.freeze([
   'cubicInOut',
   'sinusoidalInOut',

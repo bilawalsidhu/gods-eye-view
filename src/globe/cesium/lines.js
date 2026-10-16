@@ -171,6 +171,7 @@ export function createCesiumLines(
           show: shown,
           asynchronous: false,
         });
+        primitive.gevLine = options.id;
         root.add(primitive);
         requestRender('lines');
       },
@@ -203,6 +204,11 @@ export function createCesiumLines(
   });
   return {
     lines: registry.lines,
+    /** The line a Cesium pick result belongs to, or null. */
+    identify(picked) {
+      const owner = picked?.primitive?.gevLine;
+      return owner !== undefined && registry.live.has(owner) ? { owner } : null;
+    },
     destroy() {
       registry.destroyAll();
       if (root) {

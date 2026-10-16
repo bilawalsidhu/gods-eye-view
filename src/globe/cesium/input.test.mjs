@@ -136,3 +136,61 @@ test('on() after destroy() creates no handler', () => {
   destroy();
   assert.equal(handlers.length, 0);
 });
+
+test('click listeners with pick and drill get the picker answers once per click', () => {
+  const viewer = createFakeViewer();
+  const handlers = createFakeEventHandlers();
+  const calls = [];
+  const picker = {
+    pick: (screen) => (
+      calls.push(['pick', screen]),
+      { id: 'p', owner: 'flights', instance: 2 }
+    ),
+    drillPick: (screen, limit) => (
+      calls.push(['drill', limit]),
+      [{ id: 'p' }, { id: 'q' }, { id: 'r' }].slice(0, limit)
+    ),
+  };
+  const frames = [];
+  const { input } = createCesiumInput(viewer, {
+    createEventHandler: handlers.create,
+    picker,
+    scheduleFrame: (run) => frames.push(run),
+  });
+  const seen = [];
+  input.on('click', (event) => seen.push(['plain', event]));
+  input.on('click', (event) => seen.push(['picked', event]), {
+    pick: true,
+    drill: 2,
+  });
+  input.on('move', (event) => seen.push(['hover', event]), { pick: true });
+  const [handler] = handlers.handlers;
+  handler.fire(Type.LEFT_CLICK, { position: new Cesium.Cartesian2(4, 5) });
+  assert.deepEqual(
+    calls.map(([name, value]) => [
+      name,
+      typeof value === 'object' ? { ...value } : value,
+    ]),
+    [
+      ['pick', { x: 4, y: 5 }],
+      ['drill', 2],
+    ],
+  );
+  assert.equal(seen[0][1].picked, undefined);
+  assert.deepEqual(seen[1][1].picked, {
+    id: 'p',
+    owner: 'flights',
+    instance: 2,
+  });
+  assert.deepEqual(seen[1][1].drilled, [{ id: 'p' }, { id: 'q' }]);
+  for (const x of [1, 2])
+    handler.fire(Type.MOUSE_MOVE, {
+      startPosition: new Cesium.Cartesian2(0, 0),
+      endPosition: new Cesium.Cartesian2(x, 0),
+    });
+  assert.equal(frames.length, 1, 'moves coalesce into one frame');
+  frames[0]();
+  const hovers = seen.filter(([name]) => name === 'hover');
+  assert.equal(hovers.length, 1);
+  assert.deepEqual({ ...calls.at(-1)[1] }, { x: 2, y: 0 });
+});

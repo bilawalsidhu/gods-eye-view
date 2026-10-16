@@ -138,6 +138,12 @@ export function createNavaraMovers(view) {
   return {
     movers: registry.movers,
     resolvePick: (batchId) => pickIndex.resolve(batchId),
+    /** The live sets' options and stores, for CPU picks. */
+    pickables: () =>
+      [...registry.sets.values()].map(({ options, store }) => ({
+        options,
+        store,
+      })),
     destroy: () => registry.destroyAll(),
   };
 }

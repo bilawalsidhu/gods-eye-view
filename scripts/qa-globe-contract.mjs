@@ -129,6 +129,19 @@ if (!executablePath || !fs.existsSync(executablePath))
 
 /** The app's Cesium engine, after the boot flight has come to rest. */
 async function runCesium(page, url) {
+  // Real pointer input for the pick checks (contractSuite `pointer`); the
+  // first-run mission card would cover the canvas, so it stays closed.
+  await page.exposeFunction('__qaPointer', async (kind, x, y) => {
+    if (kind === 'click') await page.mouse.click(x, y);
+    else await page.mouse.move(x, y);
+  });
+  await page.evaluateOnNewDocument(() => {
+    try {
+      localStorage.setItem('gev:first-run-mission:v1', 'suppressed');
+    } catch {
+      /* storage blocked */
+    }
+  });
   await page.goto(url, { waitUntil: 'domcontentloaded' });
   await page.waitForFunction(() => Boolean(window.__godsEyeView?.viewer), {
     timeout: BOOT_TIMEOUT_MS,
@@ -269,12 +282,24 @@ async function runCesium(page, url) {
       };
       const makeCanvas = (width, height) =>
         Object.assign(document.createElement('canvas'), { width, height });
+      // A real left click / pointer move at a canvas position (puppeteer).
+      const pointer = {
+        click: async (x, y) => {
+          const rect = engine.host.canvas.getBoundingClientRect();
+          await window.__qaPointer('click', rect.left + x, rect.top + y);
+        },
+        move: async (x, y) => {
+          const rect = engine.host.canvas.getBoundingClientRect();
+          await window.__qaPointer('move', rect.left + x, rect.top + y);
+        },
+      };
       const results = (
         await runContractSuite(engine, {
           waitFrames,
           mapSources,
           readRegion,
           makeCanvas,
+          pointer,
         })
       ).map(({ name, ok, error }) => ({ name, ok, error: error?.message }));
       // Reapplying the active stack sends its sources to the engine again.
@@ -522,6 +547,11 @@ async function runCesium(page, url) {
  * and live map sources (Google 3D tiles with the dev server's browser key).
  */
 async function runNavara(page, url, consoleErrors) {
+  // Real pointer input for the pick checks (contractSuite `pointer`).
+  await page.exposeFunction('__qaPointer', async (kind, x, y) => {
+    if (kind === 'click') await page.mouse.click(x, y);
+    else await page.mouse.move(x, y);
+  });
   await page.goto(new URL(engineSpec.page, url).href, {
     waitUntil: 'domcontentloaded',
   });
@@ -608,12 +638,24 @@ async function runNavara(page, url, consoleErrors) {
     };
     const makeCanvas = (width, height) =>
       Object.assign(document.createElement('canvas'), { width, height });
+    // A real left click / pointer move at a canvas position (puppeteer).
+    const pointer = {
+      click: async (x, y) => {
+        const rect = engine.host.canvas.getBoundingClientRect();
+        await window.__qaPointer('click', rect.left + x, rect.top + y);
+      },
+      move: async (x, y) => {
+        const rect = engine.host.canvas.getBoundingClientRect();
+        await window.__qaPointer('move', rect.left + x, rect.top + y);
+      },
+    };
     const results = (
       await runContractSuite(engine, {
         waitFrames,
         mapSources,
         readRegion,
         makeCanvas,
+        pointer,
       })
     ).map(({ name, ok, error }) => ({ name, ok, error: error?.message }));
 
@@ -633,6 +675,78 @@ async function runNavara(page, url, consoleErrors) {
     await check('app: the engine is a Navara engine', async () => {
       ensure(engine.kind === 'navara', `engine kind ${engine.kind}`);
     });
+
+    // Phase 3 Task 4: a click with { pick } on Navara waits for the GPU pick
+    // of its gesture. 20 clicks on one pickable sprite: every one picks it;
+    // the time from the click to the payload, and how it was answered.
+    await check(
+      'navara: click → pick payload latency (20 clicks)',
+      async () => {
+        engine.camera.setView({
+          destination: cartesian3.fromDegrees(20, 10, 1e6),
+          orientation: { heading: 0, pitch: -Math.PI / 2, roll: 0 },
+        });
+        await settle(3);
+        const atlas = makeCanvas(16, 16);
+        atlas.getContext('2d').fillRect(0, 0, 16, 16);
+        const set = engine.movers.createSet({
+          id: 'latency',
+          kind: 'sprite',
+          capacity: 1,
+          pickable: true,
+          depthTest: 'always',
+          sprite: {
+            atlas: { canvas: atlas, cells: { box: [0, 0, 1, 1] } },
+            sizePx: 24,
+          },
+        });
+        const position = cartesian3.fromDegrees(20, 10, 20000);
+        set.set(0, { position, pickId: 'target' });
+        set.setCount(1);
+        set.commit();
+        await settle(3);
+        const before = engine.picker.clickStats();
+        const latencies = [];
+        let wrong = 0;
+        let pending = null;
+        const remove = engine.input.on('click', (event) => pending?.(event), {
+          pick: true,
+        });
+        try {
+          const screen = engine.projector.worldToWindow(position);
+          for (let index = 0; index < 20; index++) {
+            const started = performance.now();
+            const payload = await new Promise((resolve) => {
+              pending = resolve;
+              pointer.click(screen.x, screen.y);
+            });
+            latencies.push(performance.now() - started);
+            if (payload.picked?.id !== 'target') wrong++;
+            await sleep(100);
+          }
+        } finally {
+          remove();
+          set.destroy();
+        }
+        const after = engine.picker.clickStats();
+        latencies.sort((a, b) => a - b);
+        const at = (q) =>
+          latencies[
+            Math.min(latencies.length - 1, Math.ceil(q * latencies.length) - 1)
+          ];
+        const detail = {
+          p50: Math.round(at(0.5) * 10) / 10,
+          p95: Math.round(at(0.95) * 10) / 10,
+          max: Math.round(latencies.at(-1) * 10) / 10,
+          gpu: after.gpu - before.gpu,
+          timeout: after.timeout - before.timeout,
+          stale: after.stale - before.stale,
+          wrong,
+        };
+        window.__qaClickLatency = detail;
+        ensure(wrong === 0, `clicks: ${JSON.stringify(detail)}`);
+      },
+    );
 
     // Whether Navara draws what the engine projects: points along the
     // engine's pick rays project through Navara's drawn three camera to the
@@ -1190,6 +1304,13 @@ async function runNavara(page, url, consoleErrors) {
     );
     return { results, extra };
   });
+  const clickLatency = await page.evaluate(
+    () => window.__qaClickLatency ?? null,
+  );
+  if (clickLatency)
+    console.log(
+      `[qa-globe-contract] navara click → pick payload (ms): ${JSON.stringify(clickLatency)}`,
+    );
   report.extra.push(await navaraLifecycleCheck(page, consoleErrors));
   return report;
 }

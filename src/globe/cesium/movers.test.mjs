@@ -221,3 +221,27 @@ test('models load per instance and follow position and orientation', async () =>
   set.destroy();
   assert.equal(models.destroyed, true);
 });
+
+test('a pick of a billboard or point names its set and instance', async () => {
+  const viewer = createFakeViewer();
+  const { factories, made } = fakeFactories();
+  const { movers, identify } = createCesiumMovers(viewer, { factories });
+  const set = movers.createSet({
+    id: 'sats',
+    kind: 'point',
+    capacity: 3,
+    point: { sizePx: 4 },
+  });
+  set.set(0, { position: at(1) });
+  set.set(1, { position: at(2), pickId: 25544 });
+  set.setCount(2);
+  set.commit();
+  const [, second] = made.find((c) => c.kind === 'points').items;
+  assert.deepEqual(identify({ primitive: second, id: 25544 }), {
+    owner: 'sats',
+    instance: 1,
+  });
+  assert.equal(identify({ primitive: {}, id: 'x' }), null);
+  set.destroy();
+  assert.equal(identify({ primitive: second, id: 25544 }), null);
+});
