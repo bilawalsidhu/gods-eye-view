@@ -26,6 +26,7 @@ import {
   mergeSharpen,
 } from '../contract.js';
 import { createAppClock } from '../../time/clock.js';
+import { createMoverRegistry } from '../movers.js';
 
 const { cartesian2, cartesian3, cartographic, ellipsoid, math, matrix4 } = geo;
 const WGS84 = ellipsoid.WGS84;
@@ -260,6 +261,18 @@ export function createFakeEngine(options = {}) {
   let wallMs = options.nowMs ?? FAKE_EPOCH_MS;
   const appClock = options.appClock ?? createAppClock({ now: () => wallMs });
   const ownsWall = !options.appClock;
+  // Movers keep their store for tests; commit counts as a render request.
+  const moverRegistry = createMoverRegistry(() => {
+    const part = {
+      commits: 0,
+      commit() {
+        part.commits++;
+        fake.renderRequests++;
+      },
+      destroy() {},
+    };
+    return part;
+  });
   const inputs = new Map(INPUT_TYPES.map((type) => [type, new Set()]));
   const livePosition = cartesian3.create();
   let lastBaseImagery = null;
@@ -793,6 +806,7 @@ export function createFakeEngine(options = {}) {
       viewProjection,
       horizonVisible,
     },
+    movers: moverRegistry.movers,
     clock: {
       now: () => appClock.now(),
       frameTime: () => appClock.frameTime(),
@@ -907,6 +921,7 @@ export function createFakeEngine(options = {}) {
     destroy() {
       record('destroy', []);
       cancelCurrentFlight();
+      moverRegistry.destroyAll();
       fake.destroyed = true;
     },
     isDestroyed: () => fake.destroyed,
@@ -967,6 +982,17 @@ export function createFakeEngine(options = {}) {
       scripts.delete(name);
     },
     lookAtTarget: () => (lookAtTarget ? copy3(lookAtTarget) : undefined),
+    /** A live mover set's options, store and commit count, by id. */
+    moverSet(id) {
+      const entry = moverRegistry.sets.get(id);
+      return entry
+        ? {
+            options: entry.options,
+            store: entry.store,
+            commits: entry.part.commits,
+          }
+        : undefined;
+    },
     /** The app clock the engine clock reads (freeze/offset/rate for tests). */
     appClock,
     /** Moves the fake wall clock without a frame (own app clock only). */

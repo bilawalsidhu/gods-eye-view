@@ -9,6 +9,7 @@ import { createNavaraEngine } from './createNavaraEngine.js';
 import { forEachLuminanceUniform, navaraHooks } from './internals.js';
 import { buildNavaraLook } from './look.js';
 import { createNavaraSharpen } from './sharpen.js';
+import { createNavaraMovers } from './movers/index.js';
 import {
   NAVARA_CONTEXT_ATTRIBUTES,
   navaraScenePlan,
@@ -115,6 +116,7 @@ export async function createNavaraGlobe({
       container,
       ...(appClock ? { appClock } : {}),
       sharpen: createNavaraSharpen(view),
+      movers: createNavaraMovers(view),
     });
     const camera = engine.camera;
     let ground = Number.NaN;

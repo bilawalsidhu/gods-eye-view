@@ -332,3 +332,14 @@ test('the contract carries the app clock', () => {
   delete missing.clock;
   assert.throws(() => assertGlobeEngine(missing), /\bclock\b/);
 });
+
+test('the contract carries instanced movers', () => {
+  for (const member of ['movers.createSet', 'movers.list'])
+    assert.ok(GLOBE_ENGINE_MEMBERS.includes(member), member);
+  const engine = createFakeEngine();
+  const broken = { ...engine, movers: { createSet: 1 } };
+  assert.throws(
+    () => assertGlobeEngine(broken),
+    /movers\.createSet.*movers\.list/,
+  );
+});
