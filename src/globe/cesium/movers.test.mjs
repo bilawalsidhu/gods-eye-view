@@ -240,6 +240,7 @@ test('a pick of a billboard or point names its set and instance', async () => {
   assert.deepEqual(identify({ primitive: second, id: 25544 }), {
     owner: 'sats',
     instance: 1,
+    pickable: false,
   });
   assert.equal(identify({ primitive: {}, id: 'x' }), null);
   set.destroy();

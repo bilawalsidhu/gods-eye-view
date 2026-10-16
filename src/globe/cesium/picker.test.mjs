@@ -134,3 +134,24 @@ test('picks of movers and lines name their owner and instance', () => {
   assert.equal(drilled[0].owner, 'flights');
   assert.equal(drilled[1].owner, undefined);
 });
+
+test('picks of a mover set made with pickable: false are dropped', () => {
+  const viewer = createFakeViewer();
+  const quiet = { id: 'q' };
+  viewer.scene.pick = () => ({ primitive: quiet, id: 'q' });
+  viewer.scene.drillPick = () => [
+    { primitive: quiet, id: 'q' },
+    { primitive: {}, id: 'other' },
+  ];
+  const { picker } = createCesiumPicker(viewer, {
+    identify: (raw) =>
+      raw.primitive === quiet
+        ? { owner: 'quiet', instance: 0, pickable: false }
+        : null,
+  });
+  assert.equal(picker.pick({ x: 1, y: 2 }), undefined);
+  assert.deepEqual(
+    picker.drillPick({ x: 1, y: 2 }, 5).map(({ id }) => id),
+    ['other'],
+  );
+});

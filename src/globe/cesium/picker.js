@@ -14,6 +14,9 @@ export function createCesiumPicker(viewer, { identify = () => null } = {}) {
   const normalise = (picked) => {
     if (picked == null) return undefined;
     const known = identify(picked);
+    // A mover set created with pickable: false is not picked (Cesium's GPU
+    // pick sees every primitive; Navara's only the pickable ones).
+    if (known?.pickable === false) return undefined;
     return {
       id: picked.id,
       primitive: picked.primitive,
@@ -37,7 +40,8 @@ export function createCesiumPicker(viewer, { identify = () => null } = {}) {
     drillPick(screen, limit, width, height) {
       return scene
         .drillPick(toCesium2(screen), limit, width, height)
-        .map(normalise);
+        .map(normalise)
+        .filter(Boolean);
     },
     pickPosition(screen) {
       if (!scene.pickPositionSupported) return undefined;

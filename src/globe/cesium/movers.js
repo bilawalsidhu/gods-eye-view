@@ -316,7 +316,8 @@ export function createCesiumMovers(
     /** The set and instance a Cesium pick result belongs to, or null. */
     identify(picked) {
       const known = picked?.primitive ? owners.get(picked.primitive) : null;
-      return known && registry.sets.has(known.owner) ? { ...known } : null;
+      const entry = known && registry.sets.get(known.owner);
+      return entry ? { ...known, pickable: entry.options.pickable } : null;
     },
     destroy() {
       registry.destroyAll();

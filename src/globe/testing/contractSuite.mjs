@@ -727,6 +727,17 @@ export function createContractSuite(
             sizePx: 24,
           },
         });
+        const quiet = engine.movers.createSet({
+          id: 'contract-quiet',
+          kind: 'sprite',
+          capacity: 1,
+          order: 100,
+          depthTest: 'always',
+          sprite: {
+            atlas: { canvas: atlasCanvas, cells: { box: [0, 0, 1, 1] } },
+            sizePx: 24,
+          },
+        });
         const line = engine.lines.createLine({
           id: 'contract-pick-line',
           widthPx: 8,
@@ -753,6 +764,10 @@ export function createContractSuite(
           set.setCount(3);
           set.commit();
           line.setPositions([at(19, 9), at(21, 9)]);
+          const unpickable = at(19.5, 11);
+          quiet.set(0, { position: unpickable, pickId: 'quiet' });
+          quiet.setCount(1);
+          quiet.commit();
           await settle(4);
           if (!pointer) return;
           const screen = (position) => engine.projector.worldToWindow(position);
@@ -780,6 +795,14 @@ export function createContractSuite(
             drilled.includes('b') && drilled.includes('c'),
             `two sprites in one place drilled ${JSON.stringify(drilled)}`,
           );
+          const onQuiet = await clickAt(unpickable);
+          ensure(
+            onQuiet.picked?.owner !== 'contract-quiet' &&
+              !(onQuiet.drilled ?? []).some(
+                ({ owner }) => owner === 'contract-quiet',
+              ),
+            `a pickable: false sprite was picked (${JSON.stringify(onQuiet.picked?.id)})`,
+          );
           const onLine = await clickAt(at(20, 9));
           ensure(
             onLine.picked?.id === 'line-1',
@@ -795,6 +818,7 @@ export function createContractSuite(
         } finally {
           for (const remove of removers) remove();
           set.destroy();
+          quiet.destroy();
           line.destroy();
         }
       },
@@ -865,6 +889,231 @@ export function createContractSuite(
             );
         } finally {
           line.destroy();
+        }
+      },
+    ],
+    [
+      'movers: depth tests, rotation, cells, scale, count, points and models',
+      async () => {
+        await nadirView(1e6);
+        const at = (lon, lat, height = 20_000) =>
+          cartesian3.fromDegrees(lon, lat, height);
+        // Atlas: 'red' a red square; 'up' white in its top half only.
+        const atlas = makeCanvas
+          ? makeCanvas(32, 16)
+          : { width: 32, height: 16 };
+        if (makeCanvas) {
+          const context = atlas.getContext('2d');
+          context.fillStyle = '#ff0000';
+          context.fillRect(0, 0, 16, 16);
+          context.fillStyle = '#ffffff';
+          context.fillRect(16, 0, 16, 8);
+        }
+        const cells = { red: [0, 0, 0.5, 1], up: [0.5, 0, 1, 1] };
+        const sprites = (id, extra = {}) =>
+          engine.movers.createSet({
+            id,
+            kind: 'sprite',
+            capacity: 3,
+            order: 100,
+            depthTest: 'always',
+            sprite: { atlas: { canvas: atlas, cells }, sizePx: 24 },
+            ...extra,
+          });
+        const sets = [];
+        const make = (set) => (sets.push(set), set);
+        const RED = [1, 0, 0];
+        const MAGENTA = [1, 0, 1];
+        // Pixels near a colour (within 60 per channel) in a box, and how
+        // many lie above / below the box's centre row.
+        const look = (position, colour, half = 40) => {
+          const screen = engine.projector.worldToWindow(position);
+          const x0 = Math.round(screen.x) - half;
+          const y0 = Math.round(screen.y) - half;
+          const data = readRegion(x0, y0, 2 * half, 2 * half);
+          let total = 0;
+          let above = 0;
+          for (let y = 0; y < 2 * half; y++)
+            for (let x = 0; x < 2 * half; x++) {
+              const i = (y * 2 * half + x) * 4;
+              if (
+                colour.every(
+                  (channel, k) => Math.abs(data[i + k] - channel * 255) <= 60,
+                )
+              ) {
+                total++;
+                if (y < half) above++;
+              }
+            }
+          return { total, above, below: total - above };
+        };
+        try {
+          const a = at(19.5, 10);
+          const base = make(sprites('contract-cells'));
+          base.set(0, { position: a, cell: 'red' });
+          base.set(1, { position: at(20.5, 10), cell: 'red' });
+          base.set(2, { position: at(20.5, 11), cell: 'red' });
+          base.setCount(3);
+          base.commit();
+          const far = make(
+            sprites('contract-far', {
+              sprite: {
+                atlas: { canvas: atlas, cells },
+                sizePx: 24,
+                // The camera is 1000 km away: past `far`, half size.
+                scaleByDistance: [1e3, 1, 1e5, 0.5],
+              },
+            }),
+          );
+          const b = at(19.5, 11);
+          far.set(0, { position: b, cell: 'red' });
+          far.setCount(1);
+          far.commit();
+          const deep = (lon) => at(lon, 9, -30_000);
+          const depth = {
+            normal: make(sprites('contract-normal', { depthTest: 'normal' })),
+            always: make(sprites('contract-always', { depthTest: 'always' })),
+            within: make(
+              sprites('contract-within', {
+                depthTest: { disableWithinM: 2e7 },
+              }),
+            ),
+            near: make(
+              sprites('contract-near', { depthTest: { disableWithinM: 10 } }),
+            ),
+          };
+          Object.values(depth).forEach((set, index) => {
+            set.set(0, { position: deep(19 + index * 0.7), cell: 'red' });
+            set.setCount(1);
+            set.commit();
+          });
+          const points = make(
+            engine.movers.createSet({
+              id: 'contract-points',
+              kind: 'point',
+              capacity: 1,
+              depthTest: 'always',
+              point: { sizePx: 20, outlinePx: 3 },
+            }),
+          );
+          const p = at(20.5, 9.5);
+          points.set(0, { position: p, color: [1, 0, 1, 1] });
+          points.setCount(1);
+          points.commit();
+          if (!readRegion) {
+            base.setCount(1);
+            base.commit();
+            ensure(base.count() === 1, 'setCount did not shrink the set');
+            return;
+          }
+          await until(() => look(a, RED).total > 300, 'the red cell drawn');
+          const unit = look(a, RED).total;
+          ensure(
+            look(at(20.5, 11), RED).total > 300,
+            'the third sprite is not drawn',
+          );
+          // Scale by distance: a quarter of the area.
+          const farArea = look(b, RED).total;
+          ensure(
+            farArea > unit * 0.12 && farArea < unit * 0.4,
+            `scaleByDistance drew ${farArea} px against ${unit} at full size`,
+          );
+          // Scale 2: four times the area.
+          base.set(0, { scale: 2 });
+          base.commit();
+          await until(
+            () => look(a, RED).total > unit * 3,
+            'the sprite drawn at scale 2',
+          );
+          ensure(
+            look(a, RED).total < unit * 5,
+            `scale 2 drew ${look(a, RED).total} px against ${unit}`,
+          );
+          // Cell switch: the 'up' cell is white in its top half (magenta
+          // times the instance colour), then turned upside down.
+          base.set(0, { scale: 1, cell: 'up', color: [1, 0, 1, 1] });
+          base.commit();
+          await until(() => look(a, MAGENTA).total > 100, 'the up cell drawn');
+          const upright = look(a, MAGENTA);
+          ensure(
+            upright.above > 10 * Math.max(1, upright.below) &&
+              look(a, RED).total < 10,
+            `the up cell: ${JSON.stringify(upright)}, red ${look(a, RED).total}`,
+          );
+          base.set(0, { rotation: Math.PI });
+          base.commit();
+          await until(
+            () => look(a, MAGENTA).below > 100,
+            'the rotated cell drawn',
+          );
+          const turned = look(a, MAGENTA);
+          ensure(
+            turned.below > 10 * Math.max(1, turned.above),
+            `rotation π: ${JSON.stringify(turned)}`,
+          );
+          // setCount shrinks: the others go.
+          base.setCount(1);
+          base.commit();
+          await until(
+            () => look(at(20.5, 11), RED).total < 10,
+            'the shrunk set drawn',
+          );
+          ensure(look(a, MAGENTA).total > 100, 'instance 0 went with them');
+          // Depth: under the ground only 'always' and a disableWithinM
+          // reaching past the camera draw.
+          const drawn = (index) =>
+            look(deep(19 + index * 0.7), RED).total > 100;
+          await until(() => drawn(1), "the 'always' sprite drawn");
+          ensure(drawn(2), 'disableWithinM past the camera is hidden');
+          // Cesium's billboards under the app's photoreal tiles (globe
+          // hidden) are not occluded by them, measured; Navara's overlay
+          // tests the scene depth. Occlusion is checked on Navara only.
+          if (engine.kind === 'navara') {
+            ensure(!drawn(0), "a 'normal' sprite under the ground is drawn");
+            ensure(!drawn(3), 'disableWithinM 10 m under the ground is drawn');
+          }
+          // Points: a magenta disc with a dark outline.
+          await until(() => look(p, MAGENTA, 16).total > 80, 'the point drawn');
+          const ring = look(p, [0, 0, 0], 16).total;
+          ensure(ring > 20, `no dark outline around the point (${ring} px)`);
+          // Models: an aircraft drawn in magenta (blended by replace), at
+          // least 80 px; lit and graded on Navara, so magenta-leaning.
+          const models = make(
+            engine.movers.createSet({
+              id: 'contract-models',
+              kind: 'model',
+              capacity: 1,
+              model: {
+                url: '/models/airplane.glb',
+                minimumPixelSize: 80,
+                colorBlend: { mode: 'replace', amount: 1 },
+              },
+            }),
+          );
+          const m = at(19.2, 9.6, 50_000);
+          models.set(0, { position: m, color: [1, 0, 1, 1] });
+          models.setCount(1);
+          models.commit();
+          const modelPixels = () => {
+            const screen = engine.projector.worldToWindow(m);
+            const data = readRegion(
+              Math.round(screen.x) - 50,
+              Math.round(screen.y) - 50,
+              100,
+              100,
+            );
+            let count = 0;
+            for (let i = 0; i < data.length; i += 4)
+              if (
+                Math.min(data[i], data[i + 2]) - data[i + 1] > 40 &&
+                data[i] > 60
+              )
+                count++;
+            return count;
+          };
+          await until(() => modelPixels() > 150, 'the model drawn');
+        } finally {
+          for (const set of sets) set.destroy();
         }
       },
     ],
