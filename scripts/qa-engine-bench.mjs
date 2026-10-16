@@ -36,6 +36,14 @@
  * every 10 s for --heap-seconds (60) and its slope in MB per minute. Cesium draws with the app's
  * default style (no post stages on) and without its 60 fps cap for the
  * measurement; Navara with --navara-look (pass minimal for the gate).
+ *
+ * --scenario=w1-fleet (phase 3 Task 10b) measures the flights layer whole
+ * instead: ?qaFeed=flights:synthetic:--count (10000), the layer on with its
+ * defaults (3D models in proximity), at each --scene; frame times over 10 s
+ * after the fleet has loaded and a 3 s warm-up, the engine rendering
+ * continuously (the layer holds it), Cesium uncapped; the fleet tick's CPU
+ * time (the layer's preRender pass, 12 Hz) and the longest frame; the
+ * post-GC heap slope as for movers. Same gate: p95 Navara / Cesium <= 1.1.
  */
 import { spawn } from 'node:child_process';
 import fs from 'node:fs';
@@ -70,8 +78,10 @@ if (!['dev', 'preview'].includes(serverKind)) {
 const RUNS = Math.max(1, Number(argument('runs') ?? 3));
 const outFile = argument('out');
 const scenario = argument('scenario') ?? 'flight';
-if (!['flight', 'movers'].includes(scenario)) {
-  console.error(`Unknown scenario "${scenario}"; known: flight, movers`);
+if (!['flight', 'movers', 'w1-fleet'].includes(scenario)) {
+  console.error(
+    `Unknown scenario "${scenario}"; known: flight, movers, w1-fleet`,
+  );
   process.exit(2);
 }
 const MOVER_COUNT = Number(argument('count') ?? 10000);
@@ -319,6 +329,106 @@ async function runFlight(flight) {
  * the scene, tiles loaded; then `count` aircraft as one sprite set, moved and
  * committed on every frame while the engine renders continuously.
  */
+/**
+ * In the page: the flights layer on its synthetic feed at one scene, frame
+ * times while the engine renders continuously.
+ */
+async function runFleet({ scene, warmMs, measureMs, hold }) {
+  const { engine, dataManager, viewer, layers } = window.__godsEyeView;
+  const geo = await import('/src/geo/index.js');
+  const targetFrameRate = viewer?.targetFrameRate;
+  if (viewer) viewer.targetFrameRate = undefined;
+  const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+  for (const [id] of dataManager?.layers ?? [])
+    if (id !== 'flights' && dataManager.isEnabled?.(id))
+      await dataManager.setEnabled(id, false);
+  const rad = geo.math.toRadians;
+  engine.camera.setView({
+    destination: geo.cartesian3.fromDegrees(scene.lon, scene.lat, scene.height),
+    orientation: { heading: 0, pitch: rad(scene.pitch), roll: 0 },
+  });
+  // The fleet tick's CPU time: the layer's preRender listener (installed on
+  // enable, so the layer is re-enabled under the wrapper), timed when it
+  // does work (the 12 Hz pass; other frames return at once).
+  if (dataManager.isEnabled?.('flights')) await layers.disable('flights');
+  window.__gevFleetTicks = null;
+  const timed = (event) => {
+    const add = event.addEventListener.bind(event);
+    event.addEventListener = (listener, ...rest) =>
+      add(
+        (...args) => {
+          const start = performance.now();
+          try {
+            return listener(...args);
+          } finally {
+            const spent = performance.now() - start;
+            if (window.__gevFleetTicks && spent > 0.1)
+              window.__gevFleetTicks.push(spent);
+          }
+        },
+        ...rest,
+      );
+    return () => {
+      event.addEventListener = add;
+    };
+  };
+  const untime = [
+    timed(engine.frames.preRender),
+    ...(viewer?.scene?.preRender ? [timed(viewer.scene.preRender)] : []),
+  ];
+  await layers.enable('flights');
+  for (const restore of untime) restore();
+  const flights = dataManager.layers.get('flights').module;
+  const waitStart = performance.now();
+  while (
+    flights.getAllPositions(1).length === 0 &&
+    performance.now() - waitStart < 60000
+  )
+    await sleep(100);
+  let loadedSince = null;
+  while (performance.now() - waitStart < 60000) {
+    await sleep(100);
+    if (!engine.surface.tilesLoaded()) loadedSince = null;
+    else if (loadedSince == null) loadedSince = performance.now();
+    else if (performance.now() - loadedSince >= 1500) break;
+  }
+  const times = [];
+  const removeFrame = engine.frames.postRender.addEventListener(() =>
+    times.push(performance.now()),
+  );
+  engine.render.setContinuous(true);
+  const stop = () => {
+    engine.render.setContinuous(false);
+    if (viewer) viewer.targetFrameRate = targetFrameRate;
+    removeFrame();
+    window.__gevFleetTicks = null;
+  };
+  let holding = false;
+  try {
+    await sleep(warmMs);
+    const from = performance.now();
+    window.__gevFleetTicks = [];
+    await sleep(measureMs);
+    const to = performance.now();
+    const result = {
+      startTilesMs: Math.round(loadedSince ? loadedSince - waitStart : -1),
+      wallMs: to - from,
+      times: times.filter((time) => time >= from && time <= to),
+      fleetTicksMs: [...(window.__gevFleetTicks ?? [])],
+      objects: flights.getAllPositions(1_000_000).length,
+    };
+    if (hold) {
+      holding = true;
+      removeFrame();
+      times.length = 0;
+      window.__benchStop = stop;
+    }
+    return result;
+  } finally {
+    if (!holding) stop();
+  }
+}
+
 async function runMovers({ scene, count, warmMs, measureMs, hold }) {
   const { engine, dataManager, viewer } = window.__godsEyeView;
   const geo = await import('/src/geo/index.js');
@@ -504,10 +614,12 @@ async function runOnce(browser, baseUrl, engine) {
   });
   await page.evaluateOnNewDocument(installInitialViewProbe);
   try {
-    const query =
-      engine === 'cesium'
-        ? ''
-        : `?engine=${engine}${navaraLook ? `&look=${navaraLook}` : ''}`;
+    const params = new URLSearchParams();
+    if (engine !== 'cesium') params.set('engine', engine);
+    if (engine !== 'cesium' && navaraLook) params.set('look', navaraLook);
+    if (scenario === 'w1-fleet')
+      params.set('qaFeed', `flights:synthetic:${MOVER_COUNT}`);
+    const query = params.size ? `?${params}` : '';
     await page.goto(`${baseUrl}${query}`, { waitUntil: 'domcontentloaded' });
     await page.waitForFunction(() => Boolean(window.__qaInitialView?.done), {
       timeout: BOOT_TIMEOUT_MS,
@@ -534,16 +646,24 @@ async function runOnce(browser, baseUrl, engine) {
             window.__godsEyeView.engine.render.sharpen(),
           )
         : null;
-    if (scenario === 'movers') {
+    if (scenario === 'movers' || scenario === 'w1-fleet') {
       const scenes = {};
       for (const name of MOVER_SCENES) {
-        const measured = await page.evaluate(runMovers, {
-          scene: SCENES[name],
-          count: MOVER_COUNT,
-          warmMs: 3000,
-          measureMs: 10000,
-          hold: HEAP_SECONDS > 0,
-        });
+        const measured =
+          scenario === 'movers'
+            ? await page.evaluate(runMovers, {
+                scene: SCENES[name],
+                count: MOVER_COUNT,
+                warmMs: 3000,
+                measureMs: 10000,
+                hold: HEAP_SECONDS > 0,
+              })
+            : await page.evaluate(runFleet, {
+                scene: SCENES[name],
+                warmMs: 3000,
+                measureMs: 10000,
+                hold: HEAP_SECONDS > 0,
+              });
         let heap = null;
         if (HEAP_SECONDS > 0) {
           try {
@@ -562,6 +682,27 @@ async function runOnce(browser, baseUrl, engine) {
           p50: round(quantile(deltas, 0.5), 2),
           p95: round(quantile(deltas, 0.95), 2),
           max: round(deltas.at(-1), 1),
+          ...(measured.fleetTicksMs?.length
+            ? {
+                fleetTickP50: round(
+                  quantile(
+                    [...measured.fleetTicksMs].sort((a, b) => a - b),
+                    0.5,
+                  ),
+                  2,
+                ),
+                fleetTickP95: round(
+                  quantile(
+                    [...measured.fleetTicksMs].sort((a, b) => a - b),
+                    0.95,
+                  ),
+                  2,
+                ),
+              }
+            : {}),
+          ...(measured.objects !== undefined
+            ? { objects: measured.objects }
+            : {}),
           ...(heap
             ? {
                 heapPostGcMB: heap.postGcMB,
@@ -637,7 +778,7 @@ const report = {
   navaraSharpen: navaraSharpenArg ?? 'default',
   runs: RUNS,
   scenario,
-  ...(scenario === 'movers'
+  ...(scenario === 'movers' || scenario === 'w1-fleet'
     ? { count: MOVER_COUNT, scenes: MOVER_SCENES }
     : {}),
   flight: FLIGHT,
@@ -673,7 +814,7 @@ try {
       }
     }
     const summary =
-      scenario === 'movers'
+      scenario === 'movers' || scenario === 'w1-fleet'
         ? Object.fromEntries(
             MOVER_SCENES.map((name) => {
               const of = (key) =>
@@ -687,6 +828,7 @@ try {
                   fps: of('fps'),
                   heapPostGcMB: of('heapPostGcMB'),
                   heapSlopeMBPerMin: of('heapSlopeMBPerMin'),
+                  fleetTickP95: of('fleetTickP95'),
                 },
               ];
             }),
@@ -697,7 +839,11 @@ try {
       `[${engine}] median of ${runs.length}: ${JSON.stringify(summary)}`,
     );
   }
-  if (scenario === 'movers' && report.engines.cesium && report.engines.navara) {
+  if (
+    (scenario === 'movers' || scenario === 'w1-fleet') &&
+    report.engines.cesium &&
+    report.engines.navara
+  ) {
     report.gate = Object.fromEntries(
       MOVER_SCENES.map((name) => {
         const cesium = report.engines.cesium.median[name]?.p95;
