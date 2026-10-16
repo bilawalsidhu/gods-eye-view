@@ -8,7 +8,8 @@ provenance and catalog retrieval time.
 This is an inventory, with no imagery, plate readings, direction of view or
 operating-status observations. A catalog retrieval timestamp does not establish
 when a device was installed, active or last observed. The official description
-excludes cameras enforcing exclusive traffic lanes; coverage is not all CCTV in
+excludes cameras enforcing exclusive public-transport lanes and entry into
+restricted areas; coverage is not all CCTV in
 Buenos Aires, the metropolitan area or Argentina.
 
 ## Source and attribution

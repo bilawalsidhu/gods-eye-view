@@ -1,10 +1,11 @@
 [
+  ["air-quality", "4"],
   ["ais-live-vessels", "a"],
   ["alpr-cameras", "p"],
   ["bhote-koshi-2026", "h"],
   ["bhote-koshi-locator", "z"],
   ["bikeshare", "b"],
-  ["caba-traffic-enforcement", "4"],
+  ["caba-traffic-enforcement", "5"],
   ["cctv", "c"],
   ["directions", "n"],
   ["earthquakes", "e"],

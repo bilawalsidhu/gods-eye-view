@@ -1,3 +1,4 @@
+import { msg } from '../../i18n/marker.js';
 import { readResponseJsonCapped } from '../../sources/httpBody.js';
 import { cabaTrafficFeatures } from './records.js';
 
@@ -12,7 +13,7 @@ export function createCabaTrafficSource({
       const response = await fetchImpl(apiUrl, { signal });
       if (!response.ok) {
         await response.body?.cancel();
-        throw new Error('CABA inventory unavailable');
+        throw new Error(msg('CABA inventory unavailable'));
       }
       const snapshot = await readResponseJsonCapped(
         response,

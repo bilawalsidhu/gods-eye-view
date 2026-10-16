@@ -27,6 +27,13 @@ import {
   createApplicationDirectionsLayer,
 } from './directions.js';
 import { GROUND_FLOOR_LIFT_M } from './groundFloor.js';
+import { instructionFor } from './routeSteps.js';
+import { setLocale } from '../i18n/index.js';
+import {
+  directionsInstruction,
+  routeDistanceText,
+  routeDurationText,
+} from '../layers/directions/index.js';
 import {
   claimPointer,
   isPointerFree,
@@ -222,10 +229,10 @@ test('stats guide the user, show progress, and summarize a route honestly', () =
     lastUpdate: 5,
   });
   assert.equal(ready.count, 3);
-  assert.equal(ready.coverage, '21 km · 25 min · Drive');
+  assert.equal(ready.coverage, '21\u00a0km · 25\u00a0min · Drive');
   assert.equal(
     ready.loadingLabel,
-    '21 km · 25 min · Drive',
+    '21\u00a0km · 25\u00a0min · Drive',
     'the summary is the row detail line',
   );
   assert.equal(ready.loading, undefined);
@@ -249,7 +256,7 @@ test('step cards name the maneuver, its leg, and what comes next', () => {
   const copy = directionsStepCopy(route.steps, 1);
   assert.equal(copy.title, 'Turn right onto Kansakoulukatu');
   assert.deepEqual(copy.details, [
-    'Step 2 of 3 · then 240 m · 39 s',
+    'Step 2 of 3 · then 240\u00a0m · 39\u00a0s',
     'Then: Arrive at your destination',
   ]);
   const last = directionsStepCopy(route.steps, 2);
@@ -354,7 +361,7 @@ test('the turn-by-turn list is ordered, labelled, and highlights the flown step'
   );
   assert.deepEqual(
     list.items.map((item) => item.lead),
-    ['8 m', '240 m', '0 m'],
+    ['8\u00a0m', '240\u00a0m', '0\u00a0m'],
   );
   assert.deepEqual(
     list.items.map((item) => item.params),
@@ -733,6 +740,11 @@ test('a refused arming names the tool holding the pointer and how to leave it', 
     pointerBlockedMessage('measure', 'a'),
     'measure is active — turn measure off, then set A',
   );
+  // A registered owner without an exit is named by its tool, not its id.
+  assert.equal(
+    pointerBlockedMessage('recent-imagery-box', 'a'),
+    'Recent imagery is active — turn Recent imagery off, then set A',
+  );
   // Nothing to say when nothing is in the way, or when we are the holder.
   assert.equal(pointerBlockedMessage(null, 'a'), null);
   assert.equal(pointerBlockedMessage('', 'a'), null);
@@ -772,4 +784,91 @@ test('the refusal reaches the app toast, and a successful arming says nothing', 
   directionsLayer.setParams({ arm: 'a' });
   assert.equal(toasts.length, 1, 'a successful arming is silent');
   assert.equal(pointerOwner(), DIRECTIONS_POINTER_OWNER);
+});
+
+test('maneuvers are phrased on the page, in English word for word as the proxy does', () => {
+  const types = [
+    'depart',
+    'arrive',
+    'turn',
+    'new name',
+    'continue',
+    'end of road',
+    'fork',
+    'merge',
+    'on ramp',
+    'off ramp',
+    'roundabout',
+    'rotary',
+    'roundabout turn',
+    'exit roundabout',
+    'exit rotary',
+    'use lane',
+    'notification',
+    'something new',
+  ];
+  const modifiers = [
+    null,
+    'left',
+    'right',
+    'slight left',
+    'slight right',
+    'sharp left',
+    'sharp right',
+    'straight',
+    'uturn',
+  ];
+  const roads = [
+    { name: '', ref: null },
+    { name: 'Congress Avenue', ref: null },
+    { name: 'Mannerheimintie', ref: 'E12' },
+    { name: '', ref: 'I 35' },
+  ];
+  for (const type of types)
+    for (const modifier of modifiers)
+      for (const road of roads)
+        for (const exit of [null, 1, 2, 3, 4, 11, 12, 13, 21, 22]) {
+          const step = { type, modifier, exit, ...road };
+          assert.equal(
+            directionsInstruction(step),
+            instructionFor(step),
+            JSON.stringify(step),
+          );
+        }
+  // An older payload without a maneuver type keeps the proxy's sentence.
+  assert.equal(
+    directionsInstruction({ instruction: 'Head out on Kaivokatu' }),
+    'Head out on Kaivokatu',
+  );
+});
+
+test('route numbers follow the page language and never break from their unit', (t) => {
+  t.after(() => setLocale('en'));
+  assert.equal(routeDistanceText(8.4), '8\u00a0m');
+  assert.equal(routeDistanceText(236), '240\u00a0m');
+  assert.equal(routeDistanceText(1500), '1.5\u00a0km');
+  assert.equal(routeDistanceText(2_345_000), '2345\u00a0km');
+  assert.equal(routeDurationText(39), '39\u00a0s');
+  assert.equal(routeDurationText(3900), '1\u00a0h\u00a05\u00a0min');
+  assert.equal(routeDurationText(7200), '2\u00a0h');
+  assert.equal(routeDistanceText(-1), '');
+  assert.equal(routeDurationText(Number.NaN), '');
+
+  setLocale('ru');
+  assert.equal(routeDistanceText(1500), '1,5\u00a0км');
+  assert.equal(routeDurationText(240), '4\u00a0мин');
+  assert.equal(
+    directionsInstruction({
+      type: 'turn',
+      modifier: 'right',
+      name: 'East 7th Street',
+    }),
+    'Поверните направо на East 7th Street',
+  );
+  assert.equal(
+    directionsInstruction({ type: 'roundabout', exit: 2, name: '' }),
+    'На кольце сверните на 2-й съезд',
+  );
+  const list = directionsStepList({ route });
+  assert.equal(list.items[1].lead, '240\u00a0м');
 });
