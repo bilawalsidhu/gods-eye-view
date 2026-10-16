@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { mergeEarthquakeSnapshots, normalizeEmscSnapshot } from './records.js';
 import {
+  EMSC_PAGE_SIZE,
   createEarthquakeSource,
   createEmscEarthquakeSource,
   emscQueryUrl,
@@ -111,6 +112,7 @@ test('EMSC events USGS already reports are dropped as duplicates', () => {
         unid: 'late-time',
         lon: 22.32,
         lat: 40.07,
+        mag: 4.4,
         time: new Date(usgs.time + 235_000).toISOString(),
       }),
     ],
@@ -144,6 +146,34 @@ test('EMSC events USGS already reports are dropped as duplicates', () => {
   );
 });
 
+test('an EMSC event of a clearly different magnitude is its own event', () => {
+  const time = Date.parse('2026-10-11T17:30:00Z');
+  const usgs = { stableId: 'us1', lon: -98, lat: 36, mag: 5, time };
+  const near = (unid, mag, km) =>
+    normalizeEmscSnapshot({
+      features: [
+        emscFeature({
+          unid,
+          mag,
+          lon: -98,
+          lat: 36 + km / 111.2,
+          time: new Date(time + 60_000).toISOString(),
+        }),
+      ],
+    })[0];
+  assert.deepEqual(
+    mergeEarthquakeSnapshots(
+      [usgs],
+      [
+        near('aftershock', 3, 50),
+        near('larger', 6.5, 100),
+        near('same', 4.6, 50),
+      ],
+    ).map((row) => row.stableId),
+    ['us1', 'emsc:aftershock', 'emsc:larger'],
+  );
+});
+
 test('the EMSC query asks for M2.5+ over the previous 24 hours', () => {
   const url = new URL(emscQueryUrl(Date.parse('2026-10-11T12:00:00Z')));
   assert.equal(url.origin, 'https://www.seismicportal.eu');
@@ -162,6 +192,54 @@ test('the EMSC source reads and validates its feed', async () => {
     fetchImpl: async () => new Response('down', { status: 503 }),
   });
   await assert.rejects(broken.getSnapshot(), /EMSC HTTP 503/);
+});
+
+test('the EMSC source reads further pages while a page is full', async () => {
+  const offsets = [];
+  const page = (count, from) =>
+    Array.from({ length: count }, (_, index) =>
+      emscFeature({ unid: `e${from + index}` }),
+    );
+  const source = createEmscEarthquakeSource({
+    now: () => Date.parse('2026-10-11T12:00:00Z'),
+    fetchImpl: async (url) => {
+      const offset = new URL(url).searchParams.get('offset');
+      offsets.push(offset);
+      // A new event arrived between the pages: e1999 repeats on page two.
+      return Response.json({
+        features: offset
+          ? page(3, EMSC_PAGE_SIZE - 1)
+          : page(EMSC_PAGE_SIZE, 0),
+      });
+    },
+  });
+  const rows = await source.getSnapshot();
+  assert.deepEqual(offsets, [null, String(EMSC_PAGE_SIZE + 1)]);
+  assert.equal(rows.length, EMSC_PAGE_SIZE + 2);
+});
+
+test('a stalled EMSC gives up and leaves the USGS snapshot', async () => {
+  const usgsRow = { stableId: 'us1', lon: 0, lat: 0, mag: 3, time: 0 };
+  const stalled = createEmscEarthquakeSource({
+    timeoutMs: 20,
+    fetchImpl: (url, { signal }) =>
+      new Promise((resolve, reject) =>
+        signal.addEventListener('abort', () => reject(signal.reason)),
+      ),
+  });
+  await assert.rejects(stalled.getSnapshot(), /EMSC request timed out/);
+  const source = createEarthquakeSource({
+    usgs: { getSnapshot: async () => [usgsRow] },
+    emsc: stalled,
+  });
+  assert.deepEqual(await source.getSnapshot(), [usgsRow]);
+  // The caller's own abort still wins over the timeout.
+  const controller = new AbortController();
+  controller.abort(new Error('replaced'));
+  await assert.rejects(
+    stalled.getSnapshot({ signal: controller.signal }),
+    /replaced/,
+  );
 });
 
 test('either catalog alone still yields a snapshot; both failing is an error', async () => {

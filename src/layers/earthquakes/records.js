@@ -133,6 +133,12 @@ export const DUPLICATE_WINDOWS = Object.freeze([
   Object.freeze({ seconds: 300, km: 25 }),
 ]);
 
+/**
+ * Two catalogs' magnitudes for one event differ by a few tenths (ML against
+ * Mw); an aftershock near a main shock differs by more and is its own event.
+ */
+export const DUPLICATE_MAX_MAGNITUDE_DIFFERENCE = 1;
+
 function distanceKm(a, b) {
   const rad = Math.PI / 180;
   const dLat = (b.lat - a.lat) * rad;
@@ -146,8 +152,9 @@ function distanceKm(a, b) {
 /**
  * USGS rows, then the EMSC rows USGS does not already report. Large events
  * appear in both catalogs with slightly different solutions; an EMSC event
- * within any of DUPLICATE_WINDOWS of a USGS event is the same event and is
- * dropped.
+ * within any of DUPLICATE_WINDOWS of a USGS event, and within
+ * DUPLICATE_MAX_MAGNITUDE_DIFFERENCE of its magnitude where both are known,
+ * is the same event and is dropped.
  * @param {Array<object>} usgsRows
  * @param {Array<object>} emscRows
  * @returns {Array<object>}
@@ -157,6 +164,12 @@ export function mergeEarthquakeSnapshots(usgsRows = [], emscRows = []) {
   for (const row of emscRows) {
     const duplicate = usgsRows.some((usgs) => {
       if (!Number.isFinite(usgs.time) || !Number.isFinite(row.time))
+        return false;
+      if (
+        Number.isFinite(usgs.mag) &&
+        Number.isFinite(row.mag) &&
+        Math.abs(usgs.mag - row.mag) > DUPLICATE_MAX_MAGNITUDE_DIFFERENCE
+      )
         return false;
       const seconds = Math.abs(usgs.time - row.time) / 1000;
       const km = distanceKm(usgs, row);
