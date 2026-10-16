@@ -317,7 +317,8 @@
  *   sizePx: number, scaleByDistance?: number[] }} [sprite] An image atlas
  *   whose cells are [u0, v0, u1, v1] in 0..1 (v down from the image top);
  *   each sprite is a square of sizePx CSS px times its scale, times the
- *   NearFarScalar [nearM, nearScale, farM, farScale] when given.
+ *   NearFarScalar [nearM, nearScale, farM, farScale] when given (Cesium's
+ *   interpolation: over the squared camera distance, eased by ^0.2).
  * @property {{ sizePx: number, outlinePx?: number, scaleByDistance?: number[] }} [point]
  *   A filled disc of sizePx CSS px diameter with a dark outline.
  * @property {{ url: string, minimumPixelSize?: number, maximumScale?: number,
@@ -348,6 +349,9 @@
  *   requests a render; nothing else draws a frame.
  * @property {() => Float64Array} positionsView x, y, z of the drawn
  *   instances (a view on the set's own array; read-only).
+ * @property {() => boolean} ready Whether what the set draws has loaded: a
+ *   model set's glTF (Cesium: every instance's model), a sprite set's atlas.
+ *   A layer keeps its fallback visual until then.
  * @property {() => void} destroy
  *
  * @typedef {object} GlobeMovers

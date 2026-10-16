@@ -176,6 +176,7 @@ export function createModelMover(options, store, { load, onLoad = () => {} }) {
   return {
     group,
     uniforms,
+    ready: () => loaded,
     origin: () => origin,
     commit(range) {
       if (!origin && store.count > 0)

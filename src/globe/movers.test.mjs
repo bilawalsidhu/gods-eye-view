@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   MOVER_KINDS,
+  createMoverRegistry,
   createMoverSet,
   createMoverStore,
   normalizeMoverSetOptions,
@@ -206,4 +207,32 @@ test('a destroyed set releases its instance arrays', () => {
   assert.equal(store.pickIds.length, 0);
   assert.equal(set.positionsView().length, 0);
   assert.equal(store.dirty(), null);
+});
+
+test('a set is ready() once what it draws has loaded, never once destroyed', () => {
+  let loaded = false;
+  const registry = createMoverRegistry(() => ({
+    commit() {},
+    destroy() {},
+    ready: () => loaded,
+  }));
+  const set = registry.movers.createSet({
+    id: 'r',
+    kind: 'point',
+    capacity: 1,
+    point: { sizePx: 4 },
+  });
+  assert.equal(set.ready(), false);
+  loaded = true;
+  assert.equal(set.ready(), true);
+  set.destroy();
+  assert.equal(set.ready(), false);
+  const plain = createMoverRegistry(() => ({ commit() {}, destroy() {} }));
+  assert.equal(
+    plain.movers
+      .createSet({ id: 'p', kind: 'point', capacity: 1, point: { sizePx: 4 } })
+      .ready(),
+    true,
+    'an engine part without ready() draws at once',
+  );
 });

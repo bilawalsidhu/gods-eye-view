@@ -46,8 +46,28 @@ test('the CPU pick radius follows scaleByDistance', () => {
   const shrink = [1_000, 1, 10_000, 0.25];
   assert.equal(pickAt(22, shrink), 0);
   assert.equal(pickAt(7, shrink), 1);
-  // Halfway between near and far: linear, as the Navara shader draws it.
+  // Halfway between near and far: Cesium's NearFarScalar (squared distance,
+  // eased by ^0.2): t = 0.25^0.2 = 0.758, scale 0.621, radius 12.4 + 3 px.
   const half = [0, 1, 20_000, 0.5];
-  assert.equal(pickAt(17, half), 1, '15 + 3 px');
-  assert.equal(pickAt(19, half), 0);
+  assert.equal(pickAt(15, half), 1, '12.4 + 3 px');
+  assert.equal(pickAt(16, half), 0);
+});
+
+test('distanceScale is Cesium.NearFarScalar interpolation', async () => {
+  const Cesium = await import('cesium');
+  const { distanceScale } = await import('./cpuPicks.js');
+  const scalar = [1000, 3.0, 8_000_000, 0.5];
+  // Cesium's czm_nearFarScalar on the CPU (focusDeemphasis ports it too).
+  const { nearFarScalarValueAtDistance } =
+    await import('../data/focusDeemphasis.js');
+  for (const distance of [0, 1000, 5000, 1e5, 2e6, 8e6, 2e7]) {
+    const expected = nearFarScalarValueAtDistance(
+      new Cesium.NearFarScalar(...scalar),
+      distance,
+    );
+    assert.ok(
+      Math.abs(distanceScale(scalar, distance) - expected) < 1e-12,
+      `${distance} m`,
+    );
+  }
 });

@@ -309,7 +309,10 @@ export function createMoverStore(options) {
  * destroy. commit() hands the engine the changed range and cleans the store;
  * a destroyed set refuses every call but destroy().
  */
-export function createMoverSet(store, { id, commit, destroy }) {
+export function createMoverSet(
+  store,
+  { id, commit, destroy, ready = () => true },
+) {
   let destroyed = false;
   const alive = () => {
     if (destroyed) throw new Error('Mover set was destroyed');
@@ -332,6 +335,8 @@ export function createMoverSet(store, { id, commit, destroy }) {
       store.clean();
     },
     positionsView: () => store.positionsView(),
+    // Whether what it draws has loaded (a model's glTF, an atlas image).
+    ready: () => !destroyed && ready() === true,
     destroy() {
       if (destroyed) return;
       destroyed = true;
@@ -367,6 +372,7 @@ export function createMoverRegistry(build) {
           sets.delete(options.id);
           part.destroy();
         },
+        ready: () => (part.ready ? part.ready() : true),
       });
       sets.set(options.id, entry);
       return entry.set;

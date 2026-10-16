@@ -129,6 +129,7 @@ export function createNavaraMovers(view, { overlay }) {
     }
     overlay.add(mover.mesh, () => updateMover(view, overlay.ctx, mover));
     return {
+      ready: mover.ready,
       commit() {
         mover.commit(store.dirty());
         request();
@@ -158,6 +159,7 @@ export function createNavaraMovers(view, { overlay }) {
       },
     });
     return {
+      ready: mover.ready,
       commit() {
         mover.commit(store.dirty());
         request();
