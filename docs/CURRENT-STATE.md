@@ -430,6 +430,8 @@ reference. Legacy projects retain their ordinary flights, content and edits.
 Seeking between ordinary camera poses uses the shortest longitude arc across the
 dateline while preserving both authored endpoint longitudes, and turns heading
 and roll the short way for any authored angles.
+A seek to a shot's start, as a shot action makes, selects that shot rather than
+the end of the previous one.
 See [camera directions](DIRECTOR-CAMERA.md).
 
 Realtime voice composes separate connection, response/tool, Radio handoff, input
