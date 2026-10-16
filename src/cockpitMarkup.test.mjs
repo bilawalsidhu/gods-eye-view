@@ -86,23 +86,47 @@ test('Cockpit heading tape leaves the bottom exit row unobstructed', () => {
   assert.doesNotMatch(css, /cockpit-compass-label/);
 });
 
-test('Cockpit vision cycle exposes exactly five real visual styles without NONE', () => {
-  assert.match(cycleVisionMode.toString(), /const modes = COCKPIT_VISION_MODES;/);
-  assert.match(setVisionMode.toString(), /const labels = \{\s*optical: inherited,\s*crt: 'CRT',\s*nvg: 'NVG',\s*thermal: 'FLIR',\s*noir: 'NOIR',?\s*\};/);
+test('Cockpit vision cycle exposes every map preset exactly once', () => {
+  assert.match(
+    cycleVisionMode.toString(),
+    /const modes = COCKPIT_VISION_MODES;/,
+  );
+  assert.match(
+    setVisionMode.toString(),
+    /const labels = \{\s*optical: 'NORMAL',\s*crt: 'CRT',\s*nvg: 'NVG',\s*thermal: 'FLIR',\s*anime: 'ANIME',\s*noir: 'NOIR',\s*snow: 'SNOW',?\s*\};/,
+  );
   assert.doesNotMatch(setVisionMode.toString(), /none: 'NONE'/);
-  assert.match(ui, /getInheritedVisionLabel: \(\) =>\s*\(?[\s\S]*?STYLE_STATUS_LABELS\[this\.activeStyle\]/);
+  assert.doesNotMatch(ui, /getInheritedVisionLabel/);
   assert.match(html, /id="cockpit-vision-current-label"[^>]*>NORMAL<\/strong>/);
-  assert.match(ui, /const target = applyCockpitVisionStageIntensities\(\s*this\.stages,\s*next,\s*this\._cockpitVisionRestore,?\s*\);/);
-  assert.match(ui, /this\._cockpitVisionRestore = captureCockpitVisionBaseline\(\s*this\.stages,\s*this\.transitions,?\s*\);/);
+  assert.match(
+    cockpitEnter.toString(),
+    /this\.setVisionMode\(this\.getInitialVisionMode\(\)\)/,
+    'Cockpit must enter on the mode matching the active map preset',
+  );
+  assert.match(
+    readRadioSource(
+      new URL('./ui/cockpitCoordinator.js', import.meta.url),
+      'utf8',
+    ),
+    /getInitialVisionMode:\s*\(\)\s*=>\s*cockpitVisionModeForStyle\(this\.activeStyle\)/,
+  );
   assert.match(
     ui,
-    /if \(next === 'optical'\) \{[\s\S]*?applyCockpitVisionStageIntensities\(\s*this\.stages,\s*next,\s*this\._cockpitVisionRestore,?\s*\);[\s\S]*?return;[\s\S]*?const target = applyCockpitVisionStageIntensities/,
-    'the inherited entry must restore the map shader while CRT, NVG, FLIR, and NOIR remain temporary Cockpit overrides',
+    /const target = applyCockpitVisionStageIntensities\(\s*this\.stages,\s*next,?\s*\);/,
+  );
+  assert.match(
+    ui,
+    /this\._cockpitVisionRestore = captureCockpitVisionBaseline\(\s*this\.stages,\s*this\.transitions,?\s*\);/,
+  );
+  assert.match(
+    ui,
+    /if \(next === 'optical'\) \{[\s\S]*?applyCockpitVisionStageIntensities\(\s*this\.stages,\s*next,?\s*\);[\s\S]*?this\._updateSliderPanel\(null,[\s\S]*?return;[\s\S]*?const target = applyCockpitVisionStageIntensities/,
+    'Normal must clear the inherited map shader while the other map presets remain temporary Cockpit overrides',
   );
   assert.match(
     ui,
     /_syncCockpitInheritedStyle\(\)[\s\S]*?name === this\.activeStyle \? 1 : 0[\s\S]*?this\.transitions\.delete\(name\)[\s\S]*?setVisionMode\(this\.cockpitView\.visionMode\)/,
-    'changing the map preset in Cockpit must refresh both the inherited label and restore baseline',
+    'changing the map preset in Cockpit must refresh the exit restore baseline without replacing Normal',
   );
   assert.match(ui, /setStyle\([\s\S]*?this\._syncCockpitInheritedStyle\(\);/);
 });

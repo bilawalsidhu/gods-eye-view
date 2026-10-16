@@ -327,6 +327,36 @@ body.recording-mode .gev-wind-inspection-marker {
 .rail-card-setting .rail-card-chips {
   margin-top: 0;
 }
+.rail-card-setting-range-row {
+  display: flex;
+  grid-column: 2;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+}
+.rail-card-setting-range-label {
+  flex: 0 0 6ch;
+  color: var(--text-dim);
+  font: 8px var(--font-mono);
+  white-space: nowrap;
+}
+.rail-card-setting-range {
+  width: 100%;
+  min-width: 0;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+.rail-card-setting-range:focus-visible {
+  outline: 2px solid var(--text-primary);
+  outline-offset: 3px;
+}
+.rail-card-setting-range-value {
+  flex: 0 0 4ch;
+  white-space: nowrap;
+  color: var(--text-primary);
+  font: 9px var(--font-mono);
+  text-align: right;
+}
 .rail-card-result {
   display: grid;
   gap: 4px;

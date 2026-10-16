@@ -194,7 +194,7 @@ export function enter() {
     `${trackLabel} · COURSE ${trackHeading}°`,
   );
   this.updateHud(info, performance.now(), true);
-  this.setVisionMode(this.visionMode);
+  this.setVisionMode(this.getInitialVisionMode());
   this.scheduleContextLayout();
   this.mapViewButton?.focus({ preventScroll: true });
   this.onEntered?.();

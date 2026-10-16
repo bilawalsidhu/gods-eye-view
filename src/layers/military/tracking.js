@@ -21,7 +21,6 @@ import {
   TRAIL_COLOR,
   BILLBOARD_SCALE,
   GROUND_SCALE,
-  MIL_ICON_COLOR,
   AMBER_TRANSPARENT,
   TRACKED_ICON_COLOR,
 } from './policy.js';
@@ -780,12 +779,16 @@ export function createTracking({
       bb.width = 20;
       bb.height = 20;
       // Ground-aware restore (a plane untracked while taxiing comes back at
-      // ground scale; tint is full amber on the ground and in the air).
+      // ground scale; the fleet tint is amber, or red while broadcasting an
+      // emergency, on the ground and in the air).
       bb.scale =
         BILLBOARD_SCALE *
         (CLASS_SCALE_2D[meta?.klass] || 1) *
         (meta?.onGround ? GROUND_SCALE : 1);
-      bb.color = MIL_ICON_COLOR;
+      bb.color = parts.rendering._fleetBillboardColor(
+        flightState._trackedIcao,
+        meta,
+      );
       bb.rotation = flightState._lastTrackedRotation;
     }
     flightState._lastCamPoseSig = ''; // force a fleet rotation pass on the next tick

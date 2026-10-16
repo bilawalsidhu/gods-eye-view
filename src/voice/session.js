@@ -2,7 +2,8 @@
  * Protocol-independent voice lifetime and action dispatch.
  * An adapter receives { emit, runAction, signal } and supplies start, stop,
  * sendText and sendMapEvent. It owns its microphone/connection and wire messages.
- * Events: state, transcript, action-call, action-result, interruption, completion.
+ * Events: state, transcript, action-call, progress, action-result, interruption,
+ * completion, turn-metrics.
  */
 export function createVoiceSession({ createAdapter, runner, signal }) {
   if (typeof createAdapter !== 'function' || typeof runner !== 'function')
@@ -61,18 +62,44 @@ export function createVoiceSession({ createAdapter, runner, signal }) {
       !actionSignal.aborted &&
       epoch === generation &&
       (!options.isCurrent || options.isCurrent());
+    const callId = options.callId ?? null;
     try {
       if (!isCurrent()) throw abortError();
-      emit({ type: 'action-call', name, arguments: args });
+      // Calls carry the adapter's call id so observers can match progress
+      // and results to the right call when a tool runs twice at once.
+      emit({ type: 'action-call', name, callId, arguments: args });
       if (!isCurrent()) throw abortError();
+      // Step reports reach observers only while the action is current, so a
+      // cancelled tool cannot update the plan or start narration.
+      const progress = (update) => {
+        if (!isCurrent() || !update?.step) return;
+        emit({
+          type: 'progress',
+          name,
+          callId,
+          step: update.step,
+          label: update.label,
+        });
+        options.progress?.(update);
+      };
       const result = await runner(name, args, {
         ...options,
         signal: actionSignal,
         isCurrent,
+        progress,
       });
       if (!isCurrent()) throw abortError();
-      emit({ type: 'action-result', name, result });
+      emit({ type: 'action-result', name, callId, result });
       return result;
+    } catch (error) {
+      if (isCurrent())
+        emit({
+          type: 'action-result',
+          name,
+          callId,
+          result: { ok: false, error: error?.message || String(error) },
+        });
+      throw error;
     } finally {
       actions.delete(action);
     }
