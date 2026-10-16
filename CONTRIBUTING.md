@@ -126,6 +126,7 @@ The highest-leverage places to jump in:
 - ES modules, **2-space indent, single quotes, semicolons.**
 - JSDoc on exported/public functions.
 - Match the surrounding code — comment density, naming, and idiom.
+- User-visible text goes through `t()`, `tn()` or `msg()`, or a `data-i18n*` attribute in markup, and `npm run i18n` must pass. See [docs/I18N.md](docs/I18N.md).
 - Prefer small, reviewable commits. Conventional-commit-style prefixes (`feat:`, `fix:`, `perf:`, `docs:`) are appreciated but not required.
 
 ## Formatting and reusable components

@@ -25,6 +25,7 @@ export function normalizeGbfsBool(value, fallback = true) {
  * @returns {number|null}
  */
 export function toNonNegativeInteger(value, fallback = null) {
+  if (value == null || value === '') return fallback;
   const n = Number(value);
   if (!Number.isFinite(n) || n < 0) return fallback;
   return Math.round(n);
