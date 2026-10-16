@@ -51,15 +51,25 @@ export function extractStationsArray(payload) {
   return [];
 }
 
+/**
+ * Station name text as a reader expects it. JCDecaux's Spanish contracts
+ * (Valenbisi, Sevici) prefix every name with "_" and Valenbisi joins words
+ * with it ("_PLAZA_MUSICO_LOPEZ_CHAVARRI"), so an underscore reads as a word
+ * break. Other spacing is the operator's own and stays as published.
+ */
+function tidyStationName(text) {
+  return text.replace(/\s*_+\s*/g, ' ').trim();
+}
+
 /** Read legacy text or a GBFS v3 Localized String, preferring usable English text. */
 function stationName(value) {
-  if (typeof value === 'string') return value.trim();
+  if (typeof value === 'string') return tidyStationName(value);
   if (!Array.isArray(value)) return '';
 
   let fallback = '';
   for (const translation of value) {
     if (typeof translation?.text !== 'string') continue;
-    const text = translation.text.trim();
+    const text = tidyStationName(translation.text);
     if (!text) continue;
     if (!fallback) fallback = text;
     if (

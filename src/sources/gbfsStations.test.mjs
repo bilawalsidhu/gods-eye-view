@@ -22,6 +22,42 @@ test('GBFS v2 station names remain trimmed strings', () => {
   );
 });
 
+test('underscores in station names read as word breaks', () => {
+  // As published by JCDecaux's Spanish contracts (checked 2026-10-17).
+  for (const [published, shown] of [
+    ['_PLAZA_MUSICO_LOPEZ_CHAVARRI', 'PLAZA MUSICO LOPEZ CHAVARRI'],
+    ['_GLORIETA OLIMPICA', 'GLORIETA OLIMPICA'],
+    ['_CAMPAMENTO_81', 'CAMPAMENTO 81'],
+    ['Plaza__Mayor_ ', 'Plaza Mayor'],
+  ]) {
+    assert.equal(parseName({ name: published }), shown);
+  }
+});
+
+test('spacing without underscores stays as the operator published it', () => {
+  assert.equal(parseName({ name: 'C/  NÀPOLS, 82' }), 'C/  NÀPOLS, 82');
+});
+
+test('a name of only underscores falls back to short_name, then to empty', () => {
+  assert.equal(parseName({ name: '_', short_name: '_S_1_' }), 'S 1');
+  assert.equal(parseName({ name: '__', short_name: '_' }), '');
+});
+
+test('underscores are read the same in GBFS v3 localized names', () => {
+  assert.equal(
+    parseName(
+      {
+        name: [
+          { language: 'es', text: '_' },
+          { language: 'en', text: '_COLON_I' },
+        ],
+      },
+      '3.0',
+    ),
+    'COLON I',
+  );
+});
+
 test('GBFS v3 station names prefer English over the first translation', () => {
   assert.equal(
     parseName(
