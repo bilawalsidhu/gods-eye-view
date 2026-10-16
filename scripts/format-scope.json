@@ -1066,5 +1066,6 @@
   "scripts/check-main-chunk.mjs",
   "src/tooling/mainChunkComposition.test.mjs",
   "scripts/qa-w1-baseline.mjs",
-  "src/tooling/initialChunkGuard.test.mjs"
+  "src/tooling/initialChunkGuard.test.mjs",
+  "src/tooling/w1Baseline.test.mjs"
 ]
