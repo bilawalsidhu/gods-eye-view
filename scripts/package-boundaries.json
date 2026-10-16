@@ -901,6 +901,7 @@
       "src/data/aircraftIcons.js",
       "src/data/aircraftMeta.js",
       "src/data/aircraftNearbyPolicy.js",
+      "src/data/approxDistance.js",
       "src/data/cockpitAirLod.js",
       "src/data/cockpitContactDot.js",
       "src/data/contactMatch.js",
@@ -1649,6 +1650,7 @@
       "src/ui/radioPanelPlacement.js",
       "src/cyberSonarGpu.js",
       "src/scenes/nepalEvidencePack.js",
+      "src/data/approxDistance.js",
       "src/data/bhoteKoshiEvent.js",
       "src/ui/imagerySplit.js",
       "src/data/bhoteKoshiEmbeddedMedia.js",
@@ -2500,6 +2502,7 @@
     "exports": ["./application/layers"],
     "modules": [
       "src/cyberSonar.js",
+      "src/data/approxDistance.js",
       "src/data/bhoteKoshiEvent.js",
       "src/ui/imagerySplit.js",
       "src/maps/imageryComparison.js",
@@ -3067,6 +3070,7 @@
       "src/app/operations.js",
       "src/sources/sourceSlot.js",
       "src/app/surfaceServices.js",
+      "src/data/approxDistance.js",
       "src/data/dataCredits.js",
       "src/data/geoid.js",
       "src/data/local_data/natural_earth/marine.json",
@@ -3226,6 +3230,7 @@
       "src/layers/flights/records.js",
       "src/layers/flights/recordPolicy.js",
       "src/data/aircraftMeta.js",
+      "src/data/approxDistance.js",
       "src/data/renderAltitude.js",
       "src/data/aircraftClass.js",
       "src/data/aircraftEmergency.js"
@@ -3236,7 +3241,8 @@
     "exports": ["./layers/flights/ingestion"],
     "modules": [
       "src/layers/flights/ingestion.js",
-      "src/layers/flights/recordPolicy.js"
+      "src/layers/flights/recordPolicy.js",
+      "src/data/approxDistance.js"
     ],
     "external": []
   },
@@ -3547,6 +3553,7 @@
       "src/cyberSonar.js",
       "src/app/sourceSlot.js",
       "src/celestialRing.js",
+      "src/data/approxDistance.js",
       "src/data/cameraSensitivity.js",
       "src/data/contactPlayback.js",
       "src/data/contactTrailRenderer.js",
