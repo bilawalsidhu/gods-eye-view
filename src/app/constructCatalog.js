@@ -3,6 +3,7 @@ import { createWeatherClock } from '../layers/weather/clock.js';
 import { createWeatherLayer } from '../layers/weather/index.js';
 import { createCyclonesLayer } from '../layers/cyclones/index.js';
 import { createWindLayer } from '../layers/wind/index.js';
+import { createOceanCurrentsLayer } from '../layers/oceanCurrents/index.js';
 import { createLayerCatalog } from './catalog.js';
 import { LAYER_STATE_REGISTRY } from '../data/layerState.js';
 import { createMilitaryRegistry } from '../layers/aircraft/classification.js';
@@ -150,6 +151,10 @@ export function createApplicationCatalog({
           installations,
         }),
         createWindLayer({ feed: sources.wind, clock: weatherClock }),
+        createOceanCurrentsLayer({
+          feed: sources.oceanCurrents,
+          clock: weatherClock,
+        }),
         createWeatherLayer({
           feed: sources.weather,
           id: 'weather-radar',

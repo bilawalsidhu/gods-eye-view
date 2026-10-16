@@ -251,6 +251,18 @@ const layers = [
     noQuery: 'map overlay; no countable records',
   },
   {
+    id: 'ocean-currents',
+    aliases: [
+      'ocean currents',
+      'currents',
+      'current field',
+      'surface currents',
+      'sea currents',
+    ],
+    context: false,
+    noQuery: 'map overlay; no countable records',
+  },
+  {
     id: 'air-quality',
     aliases: ['air quality', 'aqhi', 'smog', 'air pollution'],
     context: false,
