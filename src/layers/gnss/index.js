@@ -1,4 +1,6 @@
 import * as Cesium from 'cesium';
+import { formatNumber, msg, t } from '../../i18n/index.js';
+import { translateFeedError } from '../../ui/statusText.js';
 import {
   GNSS_LEVEL_COLORS,
   GNSS_MIN_AIRCRAFT,
@@ -25,9 +27,9 @@ class GnssGroundFill extends Cesium.GroundPrimitive {
 /** Low stays visible over land so coverage reads apart from no data. */
 const FILL_ALPHA = Object.freeze({ low: 0.3, medium: 0.42, high: 0.55 });
 const LEVEL_LABELS = Object.freeze({
-  low: 'Low-accuracy score < 2%',
-  medium: 'Low-accuracy score 2–10%',
-  high: 'Low-accuracy score > 10%',
+  low: msg('Low-accuracy score < 2%'),
+  medium: msg('Low-accuracy score 2–10%'),
+  high: msg('Low-accuracy score > 10%'),
 });
 
 /** Degrees at the centre of the current view, or null before the camera settles. */
@@ -320,7 +322,7 @@ export function createGnssIntegrityLayer({
         // Only acquisition failures are kept enabled for recovery.
         if (received) throw e;
         console.warn('[Data:GNSS] Fetch error:', e);
-        _lastError = e?.message || 'GNSS integrity source unavailable';
+        _lastError = e?.message || msg('GNSS integrity source unavailable');
         // Keep the last cells only while their evidence is inside the window.
         expire();
         if (e?.retryable === false) return false;
@@ -372,23 +374,34 @@ export function createGnssIntegrityLayer({
       return {
         chips: [],
         info:
-          'Regional sample · 250 nm radius · cells from visited views over 30 min' +
+          t(
+            'Regional sample · 250 nm radius · cells from visited views over 30 min',
+          ) +
           (_lastError && _retryAt
-            ? ` · ${_lastError} · Retrying automatically${
+            ? ` · ${translateFeedError(_lastError)} · ${
                 _retryAt <= 8640000000000000
-                  ? ` at ${new Date(_retryAt).toISOString().slice(11, 19)} UTC`
-                  : ' after provider cooldown'
+                  ? t('Retrying automatically at {time} UTC', {
+                      time: new Date(_retryAt).toISOString().slice(11, 19),
+                    })
+                  : t('Retrying automatically after provider cooldown')
               }`
             : ''),
-        infoTitle:
+        infoTitle: t(
           'Updates automatically after pan or zoom and once a minute. The public feed covers a 250-nautical-mile circle around the view centre; zooming out does not make it a worldwide snapshot. Blank cells are outside sampled coverage or have insufficient observations.',
+        ),
         legend: ['high', 'medium', 'low'].map((level, index) => ({
-          label: LEVEL_LABELS[level],
+          label: t(LEVEL_LABELS[level]),
           color: GNSS_LEVEL_COLORS[level],
           count: _cells.filter((cell) => cell.level === level).length,
           ...(index === 0
             ? {
-                blurb: `Low-accuracy score = 100 × max(0, bad − 1) / total: one aircraft is discounted, so this is not the raw share. Cells need ${GNSS_MIN_AIRCRAFT} aircraft over ${provenance.window.minutes} minutes. Navigation-integrity anomalies are not a detection of jamming or spoofing.`,
+                blurb: t(
+                  'Low-accuracy score = 100 × max(0, bad − 1) / total: one aircraft is discounted, so this is not the raw share. Cells need {aircraft} aircraft over {minutes} minutes. Navigation-integrity anomalies are not a detection of jamming or spoofing.',
+                  {
+                    aircraft: formatNumber(GNSS_MIN_AIRCRAFT),
+                    minutes: formatNumber(provenance.window.minutes),
+                  },
+                ),
               }
             : {}),
         })),

@@ -1,3 +1,5 @@
+import { msg } from '../i18n/index.js';
+
 /**
  * Anime / Studio Ghibli Style — Cel-shading + Saturation boost
  * Transforms the world into an animated film look
@@ -5,8 +7,8 @@
 export const animeShader = {
   name: 'anime',
   uniforms: {
-    saturation: { default: 1.0, min: 0, max: 2, label: 'Saturation' },
-    edgeThick: { default: 0.5, min: 0, max: 1, label: 'Edge Thickness' },
+    saturation: { default: 1.0, min: 0, max: 2, label: msg('Saturation') },
+    edgeThick: { default: 0.5, min: 0, max: 1, label: msg('Edge Thickness') },
   },
   fragmentShader: /* glsl */ `
     uniform sampler2D colorTexture;

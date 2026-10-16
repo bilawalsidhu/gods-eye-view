@@ -8,6 +8,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { initGeoFileImport, summarize } from './geoFileImport.js';
 import { GeoImportError, MAX_IMPORTED_FILES } from '../data/geoFileImport.js';
+import { describeUnsavedWork } from '../i18n/index.js';
 
 class FakeClassList {
   constructor() {
@@ -210,6 +211,19 @@ const file = (name, extra = {}) => ({ name, size: 10, ...extra });
 const rows = (els) => els['geo-import-list'].children;
 const action = (row, name) =>
   row.children.find((c) => c.dataset.action === name);
+
+// Runs first: tools left by later tests would answer the same registry.
+test('imported files make the language switch ask first', async () => {
+  const t = setup();
+  assert.deepEqual(describeUnsavedWork(), []);
+  await t.tool.importFiles([file('a.geojson')]);
+  assert.deepEqual(describeUnsavedWork(), ['imported map files']);
+  t.tool.remove(t.tool.list()[0].id);
+  assert.deepEqual(describeUnsavedWork(), [], 'nothing left to lose');
+  await t.tool.importFiles([file('b.kml')]);
+  t.tool.destroy();
+  assert.deepEqual(describeUnsavedWork(), [], 'destroy unregisters');
+});
 
 test('returns null without its markup or viewer', () => {
   const document = { getElementById: () => null };
@@ -697,4 +711,21 @@ test('KML and KMZ rows say they keep their own styles instead of showing a color
   assert.match(kml.children[1].title, /drawn with its own styles/);
   assert.ok(!gpx.children[0].classList.contains('own-styles'));
   assert.ok(gpx.children[0].style.background);
+});
+
+test('the map-object count in a row title keeps digit grouping', async () => {
+  const t = setup({
+    load: async (f) => ({
+      dataSource: {},
+      name: f.name,
+      format: 'geojson',
+      entityCount: 12345,
+      removed: 0,
+      revoke() {},
+    }),
+  });
+  await t.tool.importFiles([file('big.geojson')]);
+  const [row] = rows(t.els);
+  assert.match(row.children[1].title, /12,345 map objects/);
+  t.tool.destroy();
 });
