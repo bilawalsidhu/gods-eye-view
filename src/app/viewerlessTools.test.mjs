@@ -16,7 +16,7 @@ import {
 
 // The tools without a viewer (the experimental Navara engine); they load
 // from src/app/navaraMode.js.
-test('without a viewer the tools run the governor on the engine, show the notice and create no viewer tools', async (t) => {
+test('without a viewer the tools run the governor on the engine, show the notice, create no viewer tools and run voice on the engine', async (t) => {
   const saved = { window: globalThis.window, document: globalThis.document };
   const listeners = new Map();
   globalThis.window = {};
@@ -34,7 +34,9 @@ test('without a viewer the tools run the governor on the engine, show the notice
       else globalThis[name] = value;
     }
   });
-  const engine = createFakeEngine({ kind: 'navara' });
+  // The voice pointer listens on the engine's canvas.
+  const canvas = new EventTarget();
+  const engine = createFakeEngine({ kind: 'navara', canvas });
   const notices = [];
   const chrome = [];
   const cleanups = [];
@@ -43,7 +45,27 @@ test('without a viewer the tools run the governor on the engine, show the notice
     _showGlobalStatusNotice: (label, options) =>
       notices.push({ label, options }),
   };
-  const dataManager = { layers: new Map() };
+  const dataManager = { layers: new Map(), getAll: () => [] };
+  // Voice without DOM or provider: a control and session stand-in.
+  const button = new EventTarget();
+  button.setAttribute = () => {};
+  let uiRemoved = 0;
+  const voice = {
+    createControl: () => ({
+      button,
+      root: { dataset: {}, remove: () => uiRemoved++ },
+      status: {},
+      detail: {},
+    }),
+    createCard: () => null,
+    createSession: (hooks) => ({
+      runner: (voice.runner = hooks.runner),
+      async start() {},
+      stop() {},
+      sendText() {},
+      sendMapEvent() {},
+    }),
+  };
   const tools = await createApplicationTools({
     scene: {
       viewer: null,
@@ -52,6 +74,7 @@ test('without a viewer the tools run the governor on the engine, show the notice
       mapStackController: { kind: 'maps' },
       operations: { surface: { kind: 'surface' } },
     },
+    voice,
     controls: { styleManager, weatherEffects: null, cockpitCloudEffects: null },
     data: { dataManager, presentation: { flushVisible: () => flushed++ } },
     loadingScreen: { kind: 'loading' },
@@ -62,11 +85,18 @@ test('without a viewer the tools run the governor on the engine, show the notice
     signal: new AbortController().signal,
     defer: (dispose) => cleanups.push(dispose),
   });
-  assert.deepEqual(tools, {
-    sceneDirector: null,
-    annotations: null,
-    voiceCommands: null,
+  assert.equal(tools.sceneDirector, null);
+  assert.equal(tools.annotations, null);
+  assert.ok(tools.voiceCommands, 'voice runs on the engine');
+  assert.equal(window.__gevVoiceCommands, tools.voiceCommands);
+  // The W1 tools drive the engine; the viewer-only ones refuse.
+  const view = await voice.runner('get_current_view_state');
+  assert.equal(view.ok, true);
+  const scene = await voice.runner('control_scene', {
+    action: 'list',
   });
+  assert.equal(scene.ok, false);
+  assert.equal(scene.code, 'UNAVAILABLE_ON_ENGINE');
   assert.equal(chrome.length, 1);
   assert.equal(chrome[0].initializeWelcome, null, 'no first-run welcome');
   assert.equal(chrome[0].styleManager, styleManager);
@@ -103,9 +133,12 @@ test('without a viewer the tools run the governor on the engine, show the notice
   assert.equal(debug.engine, engine);
   assert.equal(debug.sceneDirector, null);
   assert.equal(debug.dataManager, dataManager);
+  assert.equal(debug.voiceCommands, tools.voiceCommands);
   listeners.get('visibilitychange')();
   assert.equal(flushed, 1);
   while (cleanups.length) await cleanups.pop()();
   assert.equal(window.__godsEyeView, undefined);
+  assert.equal(window.__gevVoiceCommands, undefined);
+  assert.equal(uiRemoved, 1, 'the voice control is removed');
   assert.equal(listeners.size, 0);
 });
