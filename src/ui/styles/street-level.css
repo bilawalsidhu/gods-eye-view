@@ -216,6 +216,19 @@ button.sl-status:focus-visible {
   display: none;
 }
 
+/* When the hint and the button do not both fit, the button takes its own line. */
+html:not([lang='en']) .sl-meta-row {
+  flex-wrap: wrap;
+}
+
+html:not([lang='en']) .sl-meta-row .sl-meta {
+  flex: 1 1 14em;
+}
+
+html:not([lang='en']) .sl-meta-row .sl-nearest-btn {
+  flex: 1 0 auto;
+}
+
 /* ── Errors ──────────────────────────────────────────────────────────────── */
 .sl-error {
   font-family: var(--font-sans);

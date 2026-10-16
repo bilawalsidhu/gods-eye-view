@@ -1,6 +1,10 @@
 import { readResponseJsonCapped } from '../../sources/httpBody.js';
 import { normalizeAqhiStations, normalizeAqhiObservations } from './model.js';
 
+// A portable export (package.json): no i18n here. Failures stay English data;
+// the Layers panel and the Weather card show them translated.
+const msg = (text) => text;
+
 const COLLECTIONS_ROOT = 'https://api.weather.gc.ca/collections';
 const STATIONS_URL = `${COLLECTIONS_ROOT}/aqhi-stations/items`;
 const OBSERVATIONS_URL = `${COLLECTIONS_ROOT}/aqhi-observations-realtime/items`;
@@ -47,7 +51,7 @@ export function createEcccAirQualitySource({
     const abort = () => controller.abort(signal.reason);
     signal?.addEventListener('abort', abort, { once: true });
     const timer = setTimeout(
-      () => controller.abort(new Error('ECCC request timed out')),
+      () => controller.abort(new Error(msg('ECCC request timed out'))),
       timeoutMs,
     );
     try {
@@ -82,14 +86,15 @@ export function createEcccAirQualitySource({
           signal,
         );
         const next = normalizeAqhiStations(payload);
-        if (!next) throw new Error('Malformed AQHI station response');
+        if (!next) throw new Error(msg('Malformed AQHI station response'));
         // An empty refresh must not wipe a good catalog.
         if (next.size > 0) {
           stations = next;
           stationsFetchedAt = clock;
         }
       }
-      if (stations.size === 0) throw new Error('No AQHI stations available');
+      if (stations.size === 0)
+        throw new Error(msg('No AQHI stations available'));
 
       const payload = await getJson(
         `${OBSERVATIONS_URL}?f=json&latest=true&limit=${OBSERVATION_LIMIT}`,
@@ -97,7 +102,8 @@ export function createEcccAirQualitySource({
         signal,
       );
       const readings = normalizeAqhiObservations(payload, stations, clock);
-      if (!readings) throw new Error('Malformed AQHI observation response');
+      if (!readings)
+        throw new Error(msg('Malformed AQHI observation response'));
       return readings;
     },
   };
