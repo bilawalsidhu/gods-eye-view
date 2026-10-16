@@ -96,10 +96,9 @@ test('invalid state fails closed to unknown instead of disappearing', () => {
   assert.equal(normalized.state, 'unknown');
   assert.equal(normalized.determination, 'declared');
   assert.equal(
-    evaluateDisasterRouteSupport(
-      { id: 'relief-a', segmentIds: ['a'] },
-      [normalized],
-    ).support,
+    evaluateDisasterRouteSupport({ id: 'relief-a', segmentIds: ['a'] }, [
+      normalized,
+    ]).support,
     'unknown',
   );
 });
