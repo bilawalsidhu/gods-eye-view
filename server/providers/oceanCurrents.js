@@ -84,7 +84,23 @@ export function oceanCurrentsProxy({
     res.end(JSON.stringify(value));
   };
 
+  /** Drop a key's manifest and its retained grid bodies together. */
+  function forget(key) {
+    caches.delete(key);
+    for (const old of gridKeys.get(key) || []) grids.delete(old);
+    gridKeys.delete(key);
+  }
+
+  /** Mark a key as most recently used; eviction takes the oldest entry. */
+  function touch(key) {
+    const state = caches.get(key);
+    if (!state) return;
+    caches.delete(key);
+    caches.set(key, state);
+  }
+
   function remember(key, state, id) {
+    caches.delete(key);
     caches.set(key, state);
     if (id) {
       const history = gridKeys.get(key) || [];
@@ -93,12 +109,7 @@ export function oceanCurrentsProxy({
       gridKeys.set(key, history);
       grids.set(id, state.bytes);
     }
-    while (caches.size > maxCache) {
-      const oldest = caches.keys().next().value;
-      caches.delete(oldest);
-      for (const old of gridKeys.get(oldest) || []) grids.delete(old);
-      gridKeys.delete(oldest);
-    }
+    while (caches.size > maxCache) forget(caches.keys().next().value);
   }
 
   /**
@@ -123,22 +134,26 @@ export function oceanCurrentsProxy({
             });
       const fetchedAt = now();
       if (payload.status !== 'ok') {
-        // A legitimate answer (open ocean with no source, upstream down):
-        // cached like any other so a dead region does not re-probe per move.
+        // A regional answer is a legitimate fact about the view (open ocean
+        // with no source) and keeps the TTL so a dead region does not re-probe
+        // per move; the globe always has a source, so an unavailable globe is
+        // an outage and expires with the retry backoff.
         const state = {
           manifest: unavailable(
             payload.reason || 'Ocean current field unavailable',
           ),
           bytes: null,
           fetchedAt,
+          expiresAt: fetchedAt + (tier === 'global' ? RETRY_MS : ttlMs),
         };
         remember(key, state, null);
         return state;
       }
-      const bbox = tier === 'global' ? GLOBAL_BBOX : box;
+      // The global lattice covers the globe; a regional grid is served on
+      // its own axes and packField derives its box from the grid extent.
       const { manifest, bytes } = packFieldManifest(payload, {
         tier,
-        bbox,
+        bbox: tier === 'global' ? GLOBAL_BBOX : null,
         fetchedAt,
         gridUrl: '',
       });
@@ -150,7 +165,12 @@ export function oceanCurrentsProxy({
         ny: manifest.grid.ny,
       });
       manifest.gridUrl = `/api/ocean/currents/grid/${id}.bin`;
-      const state = { manifest, bytes, fetchedAt };
+      const state = {
+        manifest,
+        bytes,
+        fetchedAt,
+        expiresAt: fetchedAt + ttlMs,
+      };
       remember(key, state, id);
       // The retry backoff guards failures only; a served build may refresh
       // again as soon as its TTL expires.
@@ -188,7 +208,7 @@ export function oceanCurrentsProxy({
             };
             return old;
           }
-          if (old) caches.delete(key);
+          if (old) forget(key);
           return {
             manifest: unavailable('Ocean current upstream unavailable'),
             bytes: null,
@@ -259,7 +279,8 @@ export function oceanCurrentsProxy({
           });
     const key = tier === 'global' ? 'global' : `regional:${bboxKey(quantized)}`;
     let state = caches.get(key);
-    if (!state || now() - state.fetchedAt >= ttlMs) {
+    if (state) touch(key);
+    if (!state || now() >= (state.expiresAt ?? state.fetchedAt + ttlMs)) {
       let operation = loadings.get(key);
       if (!operation && now() - (attempts.get(key) ?? -Infinity) >= RETRY_MS)
         operation = refresh(key, tier, quantized);

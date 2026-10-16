@@ -91,3 +91,28 @@ test('packFieldManifest refuses non-ok payloads and half-null cells', () => {
   half.v[1] = 0;
   assert.throws(() => packFieldManifest(half, options), /null together/);
 });
+
+test('packFieldManifest derives the bbox from the grid extent when none is given (regional own-axes grids)', () => {
+  // A strided HYCOM sub-grid whose node span exceeds the requested box.
+  const p = payload();
+  p.grid = { lat0: -37.52, lon0: 136.48, dLat: 0.08, dLon: 0.16, nLat: 126, nLon: 42 };
+  const n = 126 * 42;
+  p.u = new Array(n).fill(0.1);
+  p.v = new Array(n).fill(0);
+  const { manifest } = packFieldManifest(p, { tier: 'regional', fetchedAt: 5, gridUrl: '/api/ocean/currents/grid/x.bin' });
+  assert.deepEqual(manifest.bbox, {
+    latMin: -37.52,
+    latMax: -37.52 + 125 * 0.08,
+    lonMin: 136.48,
+    lonMax: 136.48 + 41 * 0.16,
+  });
+  // Across the antimeridian the eastern edge is normalized into [-180, 180).
+  p.grid = { lat0: 30, lon0: 170, dLat: 1, dLon: 1, nLat: 2, nLon: 21 };
+  p.u = new Array(42).fill(0.1);
+  p.v = new Array(42).fill(0);
+  const seam = packFieldManifest(p, { tier: 'regional', fetchedAt: 5, gridUrl: '/x.bin' });
+  assert.deepEqual(seam.manifest.bbox, { latMin: 30, latMax: 31, lonMin: 170, lonMax: -170 });
+  // An explicit bbox (the global lattice) is kept verbatim.
+  const global = packFieldManifest(payload(), options);
+  assert.deepEqual(global.manifest.bbox, options.bbox);
+});

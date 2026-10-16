@@ -1790,6 +1790,9 @@ function globalProvenance(
   return {
     tier: TIERS.global.id,
     tierLabel: TIERS.global.label,
+    // Which product served WITHIN the tier and why the preferred one did not:
+    // the legend must be able to say the field is altimetry, not HYCOM.
+    preferredSourceUnavailable: globalField.fallbackFrom ?? null,
     datasetId: globalField.datasetId,
     label: globalField.label,
     // Source-driven, not hardcoded: the global tier can be served by more

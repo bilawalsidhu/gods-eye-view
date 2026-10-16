@@ -9,14 +9,14 @@ export const OCEAN_GRID_URL =
   /^\/api\/ocean\/currents\/grid\/currents-[\w.,-]+\.bin$/;
 const GLOBAL_BOX = { latMin: -90, latMax: 90, lonMin: -180, lonMax: 180 };
 
-/** The grid must start within a cell of the box's west and north edges and span it. */
+/** The grid's node extent must match the box within one cell on every edge. */
 function consistent(grid, bbox) {
   const lonSpan = (((bbox.lonMax - bbox.lonMin) % 360) + 360) % 360 || 360;
   const lonStart = (((grid.lo1 - bbox.lonMin) % 360) + 360) % 360;
   return (
     Math.min(lonStart, 360 - lonStart) <= grid.dx + 1e-9 &&
     Math.abs(grid.la1 - bbox.latMax) <= grid.dy + 1e-9 &&
-    Math.abs(grid.nx * grid.dx - lonSpan) <= grid.dx + 1e-9 &&
+    Math.abs((grid.nx - 1) * grid.dx - lonSpan) <= grid.dx + 1e-9 &&
     Math.abs((grid.ny - 1) * grid.dy - (bbox.latMax - bbox.latMin)) <=
       grid.dy + 1e-9
   );

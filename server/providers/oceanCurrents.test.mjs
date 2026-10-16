@@ -249,3 +249,113 @@ test('a build slower than the provider timeout answers unavailable now and fills
   assert.equal(second.json.tier, 'regional');
   assert.equal(builds, 1, 'the finished build was cached, not rebuilt');
 });
+
+test('a regional manifest carries the served grid extent as its bbox and the client accepts it', async () => {
+  const { createOceanCurrentsSource } = await import('../../src/layers/oceanCurrents/source.js');
+  // A strided HYCOM sub-grid on its own axes: node span wider than the box.
+  const STRIDED = { lat0: -37.52, lon0: 136.48, dLat: 0.08, dLon: 0.16, nLat: 126, nLon: 42 };
+  const h = handlerFor({ deps: { buildFieldPayload: async () => okPayload(STRIDED) } });
+  const { json } = await call(h, '/manifest?latMin=-37.5&latMax=-27.5&lonMin=136.5&lonMax=143');
+  assert.deepEqual(json.bbox, {
+    latMin: -37.52,
+    latMax: -37.52 + 125 * 0.08,
+    lonMin: 136.48,
+    lonMax: 136.48 + 41 * 0.16,
+  });
+  const source = createOceanCurrentsSource({
+    fetchImpl: async (url) => {
+      const r = await call(h, url.replace('/api/ocean/currents', ''));
+      return new Response(r.json ? JSON.stringify(r.json) : r.body, { status: r.status });
+    },
+  });
+  const snapshot = await source.getSnapshot({ box: { latMin: -37.5, latMax: -27.5, lonMin: 136.5, lonMax: 143 } });
+  assert.equal(snapshot.tier, 'regional');
+  assert.equal(snapshot.u.length, 126 * 42);
+});
+
+test('cache eviction is least-recently-used and forgets grid bodies with their key', async () => {
+  const boxes = ['30,39,-75,-66', '40,49,-75,-66', '50,59,-75,-66'];
+  const query = (b) => { const [a, c, d, e] = b.split(','); return `?latMin=${a}&latMax=${c}&lonMin=${d}&lonMax=${e}`; };
+  let builds = 0;
+  const h = handlerFor({ maxCache: 2, deps: { buildFieldPayload: async () => { builds += 1; return okPayload(REGION); } } });
+  const first = (await call(h, `/manifest${query(boxes[0])}`)).json;
+  const second = (await call(h, `/manifest${query(boxes[1])}`)).json;
+  await call(h, `/manifest${query(boxes[0])}`); // touch the first: now most recent
+  await call(h, `/manifest${query(boxes[2])}`); // evicts the second, not the first
+  assert.equal(builds, 3);
+  await call(h, `/manifest${query(boxes[0])}`);
+  assert.equal(builds, 3, 'the recently used first box is still cached');
+  assert.equal((await call(h, second.gridUrl.replace('/api/ocean/currents', ''))).status, 404, 'an evicted key drops its grid body');
+  assert.equal((await call(h, first.gridUrl.replace('/api/ocean/currents', ''))).status, 200);
+});
+
+test('an upstream outage on the global tier is retried after the backoff, not cached for the TTL', async () => {
+  let clock = 1_760_000_000_000;
+  let builds = 0;
+  let down = true;
+  const h = handlerFor({
+    now: () => clock,
+    deps: {
+      buildGlobalLatticePayload: async () => {
+        builds += 1;
+        return down
+          ? { status: 'unavailable', reason: 'no global ocean-current source could serve the globe (fetch failed)', grid: null, u: null, v: null }
+          : okPayload(GLOBAL);
+      },
+    },
+  });
+  assert.equal((await call(h, `/manifest${GLOBAL_QUERY}`)).json.unavailable, true);
+  clock += 30_000;
+  assert.equal((await call(h, `/manifest${GLOBAL_QUERY}`)).json.unavailable, true);
+  assert.equal(builds, 1, 'inside the backoff the cached answer is served');
+  clock += 31_000;
+  down = false;
+  const served = await call(h, `/manifest${GLOBAL_QUERY}`);
+  assert.equal(builds, 2, 'after the backoff the globe is rebuilt');
+  assert.equal(served.json.unavailable, false);
+  assert.equal(served.json.tier, 'global');
+});
+
+test('every strided HYCOM sub-grid the regional tier can serve passes the client consistency check', async () => {
+  const { createOceanCurrentsSource } = await import('../../src/layers/oceanCurrents/source.js');
+  const { chooseHycomStride, HYCOM_AXES } = await import('../ocean/hycomCurrents.js');
+  // Deterministic LCG so a failing box is reproducible from its index.
+  let seed = 20261016;
+  const random = () => (seed = (seed * 1103515245 + 12345) % 2 ** 31) / 2 ** 31;
+  let regional = 0;
+  for (let i = 0; i < 300; i += 1) {
+    const latMin = -75 + random() * 140;
+    const lonMin = -180 + random() * 360;
+    const box = {
+      latMin,
+      latMax: Math.min(85, latMin + 2 + random() * 30),
+      lonMin,
+      lonMax: ((lonMin + 2 + random() * 40 + 180) % 360) - 180,
+    };
+    const q = quantizeBox(box);
+    const plan = chooseHycomStride(q, REGIONAL_TARGET_CELLS);
+    if (!plan || plan.segments.length !== 1) continue; // seam-split plans stitch past 180; covered by the antimeridian test
+    regional += 1;
+    const { latOrigin, latStep, lonStep } = HYCOM_AXES;
+    const seg = plan.segments[0];
+    const grid = {
+      lat0: latOrigin + seg.latStart * latStep,
+      lon0: ((seg.lonStart * lonStep + 180) % 360) - 180,
+      dLat: plan.latCellDeg,
+      dLon: plan.lonCellDeg,
+      nLat: seg.nLat,
+      nLon: seg.nLon,
+    };
+    const h = handlerFor({ deps: { buildFieldPayload: async () => okPayload(grid) } });
+    const source = createOceanCurrentsSource({
+      fetchImpl: async (url) => {
+        const r = await call(h, url.replace('/api/ocean/currents', ''));
+        return new Response(r.json ? JSON.stringify(r.json) : r.body, { status: r.status });
+      },
+    });
+    const snapshot = await source.getSnapshot({ box: q });
+    assert.equal(snapshot.unavailable, false, `box ${i} ${JSON.stringify(q)}`);
+    assert.equal(snapshot.u.length, grid.nLat * grid.nLon, `box ${i}`);
+  }
+  assert.ok(regional > 150, `sweep covered ${regional} regional boxes`);
+});

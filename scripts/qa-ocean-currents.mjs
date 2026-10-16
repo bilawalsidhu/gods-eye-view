@@ -48,6 +48,16 @@ const STOPS = [
     tier: 'regional',
   },
   {
+    // One of the regional boxes whose strided HYCOM grid is wider than the
+    // requested box (the client used to reject its manifest).
+    name: 'great-australian-bight',
+    lon: 139.75,
+    lat: -32.5,
+    height: 2_000_000,
+    box: { latMin: -37.5, latMax: -27.5, lonMin: 136.5, lonMax: 143 },
+    tier: 'regional',
+  },
+  {
     name: 'monterey-bay',
     lon: -122.1,
     lat: 36.8,

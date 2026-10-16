@@ -1764,3 +1764,32 @@ test('buildGlobalLatticePayload reports unavailable when neither global source s
   assert.equal(payload.status, 'unavailable');
   assert.match(payload.reason, /global/);
 });
+
+test('global tier falls back to CoastWatch: still tier global, substitution named, grid id changes with the served time', async () => {
+  const { gridId } = await import('../providers/oceanCurrents.js');
+  const fetcher = (validAtMs, fallbackFrom) => async () => {
+    const lats = Float64Array.from({ length: 86 }, (_, i) => -80 + i * 2);
+    const lons = Float64Array.from({ length: 90 }, (_, j) => -180 + j * 4);
+    const u = new Float32Array(lats.length * lons.length).fill(0.2);
+    const v = new Float32Array(u.length);
+    return {
+      lats, lons, u, v, finite: u.length, total: u.length,
+      source: {
+        datasetId: fallbackFrom ? 'noaacwBLENDEDNRTcurrentsDaily' : 'FMRC_ESPC-D-V02_uv3z_best',
+        label: fallbackFrom ? 'Blended altimetry' : 'HYCOM', validAtMs, ageMs: 0, resolutionDeg: 2, stride: 1,
+        kind: fallbackFrom ? 'derived' : 'modeled', method: 'x', attribution: 'x', license: 'y', url: 'u',
+        fallbackFrom,
+      },
+    };
+  };
+  const hycom = await buildGlobalLatticePayload({ atMs: 1, fetchImpl: async () => null, deps: { fetchGlobalCurrents: fetcher(1_759_990_000_000, null), loadMask: async () => ALL_WATER_MASK } });
+  const altimetry = await buildGlobalLatticePayload({ atMs: 1, fetchImpl: async () => null, deps: { fetchGlobalCurrents: fetcher(1_759_900_000_000, 'HYCOM unavailable: upstream timed out'), loadMask: async () => ALL_WATER_MASK } });
+  assert.equal(altimetry.status, 'ok');
+  assert.equal(altimetry.provenance.tier, 'global');
+  assert.equal(altimetry.provenance.kind, 'derived');
+  assert.equal(altimetry.provenance.preferredSourceUnavailable, 'HYCOM unavailable: upstream timed out');
+  assert.equal(hycom.provenance.preferredSourceUnavailable, null);
+  assert.ok(altimetry.provenance.caveats.some((line) => /geostrophic only/.test(line)));
+  const id = (payload) => gridId({ tier: 'global', validIso: new Date(payload.provenance.validAtMs).toISOString(), key: 'global', nx: 360, ny: 181 });
+  assert.notEqual(id(hycom), id(altimetry));
+});

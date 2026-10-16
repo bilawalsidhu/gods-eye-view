@@ -6,6 +6,11 @@
  * @module server/ocean/packField
  */
 
+/** Bring an eastern edge past the antimeridian back into [-180, 180) without touching values already there. */
+function wrapEast(lon) {
+  return lon >= 180 ? lon - 360 : lon < -180 ? lon + 360 : lon;
+}
+
 /** @const {number} Finite no-data sentinel written into BOTH components. */
 export const NO_DATA = -9999;
 
@@ -14,11 +19,24 @@ export const NO_DATA = -9999;
  * @param {{tier: string, bbox: Object, fetchedAt: number, gridUrl: string}} options
  * @returns {{manifest: Object, bytes: Uint8Array}}
  */
-export function packFieldManifest(payload, { tier, bbox, fetchedAt, gridUrl }) {
+export function packFieldManifest(
+  payload,
+  { tier, bbox = null, fetchedAt, gridUrl },
+) {
   if (!payload || payload.status !== 'ok' || !payload.grid)
     throw new Error(`cannot pack an ${payload?.status ?? 'absent'} payload`);
   const { lat0, lon0, dLat, dLon, nLat, nLon } = payload.grid;
   const count = nLat * nLon;
+  // A regional grid is served on its own axes, so its box is the node extent
+  // (the requested box can be narrower by up to two native cells); only the
+  // global lattice passes a box of its own. The eastern edge is normalized
+  // into [-180, 180) like every longitude the client sends.
+  const extent = bbox ?? {
+    latMin: lat0,
+    latMax: lat0 + (nLat - 1) * dLat,
+    lonMin: lon0,
+    lonMax: wrapEast(lon0 + (nLon - 1) * dLon),
+  };
   const values = new Float32Array(count * 2);
   const speeds = [];
   for (let row = 0; row < nLat; row += 1) {
@@ -76,10 +94,10 @@ export function packFieldManifest(payload, { tier, bbox, fetchedAt, gridUrl }) {
       dy: dLat,
     },
     bbox: {
-      latMin: bbox.latMin,
-      latMax: bbox.latMax,
-      lonMin: bbox.lonMin,
-      lonMax: bbox.lonMax,
+      latMin: extent.latMin,
+      latMax: extent.latMax,
+      lonMin: extent.lonMin,
+      lonMax: extent.lonMax,
     },
     noData: NO_DATA,
     speed,

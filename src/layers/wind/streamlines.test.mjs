@@ -215,3 +215,26 @@ test('the calm cutoff comes from the caller and long steps are honoured (E1 chec
     assert.ok(Math.abs(slow[i].speed - fast[i].speed / 10) < 1e-6);
   }
 });
+
+test('the wind bake is pinned to its pre-parameterization output (commit 02f6aa6b)', () => {
+  // Numbers captured from the renderer before the field spec existed, for the
+  // GPU test field (4x3, u = 15). A spec change that moves wind must fail here.
+  const wind = {
+    nx: 4, ny: 3, lo1: -180, la1: 90, dx: 90, dy: 90,
+    u: new Float32Array(12).fill(15), v: new Float32Array(12),
+  };
+  const paths = bakeWindStreamlines(wind);
+  assert.equal(paths.length, 7200);
+  const pin = (index, seed, coordinates) => {
+    assert.equal(paths[index].seed, seed);
+    assert.equal(paths[index].speed, 15);
+    assert.equal(paths[index].coordinates.length, 33);
+    coordinates.forEach(([lon, lat], i) => {
+      assert.ok(Math.abs(paths[index].coordinates[i][0] - lon) < 1e-12, `${index}[${i}] lon`);
+      assert.ok(Math.abs(paths[index].coordinates[i][1] - lat) < 1e-12, `${index}[${i}] lat`);
+    });
+  };
+  pin(0, 0, [[-12, -87.78380024676221], [-11.25, -87.78380024676221], [-10.5, -87.78380024676221]]);
+  pin(1234, 1234, [[119.43515253228179, -41.04739170276931], [119.75675785818316, -41.04739170276931], [120.07836318408454, -41.04739170276931]]);
+  pin(7199, 7199, [[-93.60660377750173, 87.78380024676221], [-92.85660377750173, 87.78380024676221], [-92.10660377750173, 87.78380024676221]]);
+});

@@ -111,3 +111,41 @@ test('ocean source timeout aborts the fetch', async () => {
   });
   await assert.rejects(source.getSnapshot({ box: null }), /timed out/);
 });
+
+test('ocean source accepts own-axes regional grids whose node span covers the box, and the global lattice', async () => {
+  // Reviewer reproduction: a strided HYCOM sub-grid served on its own axes.
+  const strided = {
+    ...manifest,
+    grid: { nx: 42, ny: 126, lo1: 136.48, la1: -27.52, dx: 0.16, dy: 0.08 },
+    bbox: { latMin: -27.52 - 125 * 0.08, latMax: -27.52, lonMin: 136.48, lonMax: 136.48 + 41 * 0.16 },
+    gridUrl: '/api/ocean/currents/grid/currents-regional-20261016T000000Z-x-42x126.bin',
+  };
+  const global = {
+    ...manifest,
+    tier: 'global',
+    grid: { nx: 360, ny: 181, lo1: -180, la1: 90, dx: 1, dy: 1 },
+    bbox: { latMin: -90, latMax: 90, lonMin: -180, lonMax: 180 },
+    gridUrl: '/api/ocean/currents/grid/currents-global-20261016T000000Z-global-360x181.bin',
+  };
+  for (const variant of [strided, global]) {
+    const count = variant.grid.nx * variant.grid.ny;
+    const source = createOceanCurrentsSource({
+      fetchImpl: async (url) =>
+        response(
+          url.includes('manifest')
+            ? variant
+            : new Uint8Array(new Float32Array(count * 2).fill(0.1).buffer),
+        ),
+    });
+    const snapshot = await source.getSnapshot({ box: null });
+    assert.equal(snapshot.u.length, count);
+  }
+  // A grid that stops a full cell short of the box, or starts a cell away, is still malformed.
+  for (const bad of [
+    { ...strided, bbox: { ...strided.bbox, lonMax: strided.bbox.lonMax + 0.5 } },
+    { ...strided, bbox: { ...strided.bbox, latMin: strided.bbox.latMin - 0.5 } },
+  ]) {
+    const source = createOceanCurrentsSource({ fetchImpl: async () => response(bad) });
+    await assert.rejects(source.getSnapshot({ box: null }), /Malformed/);
+  }
+});
