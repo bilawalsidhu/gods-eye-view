@@ -1,4 +1,5 @@
 import * as Cesium from 'cesium';
+import { formatNumber, t, tn } from '../../i18n/index.js';
 import {
   satelliteShortName,
   fireDetectionKey,
@@ -332,16 +333,18 @@ export function createModel({
   function buildSelectedFireCard(fire, nowMs) {
     const meta = [
       Number.isFinite(fire.confidence)
-        ? `${confidenceBucket(fire.confidence)} conf`
-        : 'confidence not published',
+        ? t('{value} conf', {
+            value: confidenceLabel(confidenceBucket(fire.confidence)),
+          })
+        : t('confidence not published'),
     ];
     if (fire.acqMs > 0) {
-      const age = formatAge(nowMs - fire.acqMs);
-      if (age) meta.push(`${age} ago`);
+      const age = formatAgeLabel(nowMs - fire.acqMs);
+      if (age) meta.push(t('{value} ago', { value: age }));
     }
     const sat = satelliteShortName(fire.satellite);
     meta.push(
-      sat ? `${fire.sensor || 'VIIRS'} ${sat}` : fire.sensor || 'sensor n/a',
+      sat ? `${fire.sensor || 'VIIRS'} ${sat}` : fire.sensor || t('sensor n/a'),
     );
     return {
       id: `selected-fire:${fireDetectionKey(fire)}`,
@@ -351,12 +354,16 @@ export function createModel({
       cullPosition: fireCullPosition(fire),
       gapPx: frpPixelSize(fire.frp),
       accent: accentForSeverity(detectionColorStop(fire).name),
-      title: `${fire.provider === 'conae-goes' ? 'THERMAL DETECTION' : 'FIRE'} · ${frpLabel(fire.frp)}`,
+      title:
+        fire.provider === 'conae-goes'
+          ? t('THERMAL DETECTION · {frp}', { frp: frpLabel(fire.frp) })
+          : t('FIRE · {frp}', { frp: frpLabel(fire.frp) }),
       details: [
         meta.join(' · '),
-        formatLatLon(fire.lat, fire.lon) + (fire.night ? ' · NIGHT' : ''),
+        formatLatLonLabel(fire.lat, fire.lon) +
+          (fire.night ? ` · ${t('NIGHT')}` : ''),
         ...(fire.provider === 'conae-goes'
-          ? ['CONAE GOES · thermal anomaly, not a confirmed wildfire']
+          ? [t('CONAE GOES · thermal anomaly, not a confirmed wildfire')]
           : []),
       ],
       selected: true,
@@ -378,11 +385,11 @@ export function createModel({
     const fire = candidate.fire;
     const meta = [
       Number.isFinite(fire.confidence)
-        ? confidenceBucket(fire.confidence)
-        : 'confidence n/a',
+        ? confidenceLabel(confidenceBucket(fire.confidence))
+        : t('confidence n/a'),
     ];
     if (fire.acqMs > 0) {
-      const age = formatAge(nowMs - fire.acqMs);
+      const age = formatAgeLabel(nowMs - fire.acqMs);
       if (age) meta.push(age);
     }
     const sat = satelliteShortName(fire.satellite) || fire.sensor;
@@ -395,7 +402,7 @@ export function createModel({
       cullPosition: candidate.cullPosition || candidate.position,
       gapPx: frpPixelSize(fire.frp),
       accent: accentForSeverity(detectionColorStop(fire).name),
-      title: `▲ ${frpLabel(fire.frp)}`,
+      title: t('▲ {frp}', { frp: frpLabel(fire.frp) }),
       details: [meta.join(' · ')],
       selected: false,
       priority: Number(fire.frp) || 0,
@@ -413,19 +420,19 @@ export function createModel({
 
   function buildCellCard(candidate, nowMs) {
     const cell = candidate.cell;
-    const noun = cell.hasConae
-      ? cell.count === 1
-        ? 'DETECTION'
-        : 'DETECTIONS'
-      : cell.count === 1
-        ? 'FIRE'
-        : 'FIRES';
+    const title = cell.hasConae
+      ? tn(cell.count, '{count} DETECTION', '{count} DETECTIONS', {
+          count: formatNumber(cell.count),
+        })
+      : `${formatNumber(cell.count)} ${cell.count === 1 ? t('FIRE') : t('FIRES')}`;
     const parts = [
-      Number.isFinite(cell.maxFrp) ? `max ${frpLabel(cell.maxFrp)}` : 'FRP n/a',
+      Number.isFinite(cell.maxFrp)
+        ? t('max {value} MW', { value: formatFrpLabel(cell.maxFrp) })
+        : t('FRP n/a'),
     ];
     if (cell.newestAcqMs > 0) {
-      const age = formatAge(nowMs - cell.newestAcqMs);
-      if (age) parts.push(`new ${age}`);
+      const age = formatAgeLabel(nowMs - cell.newestAcqMs);
+      if (age) parts.push(t('new {value}', { value: age }));
     }
     return {
       id: `cell:${cell.latCell ?? 'x'}:${cell.lonCell ?? 'x'}`,
@@ -433,7 +440,7 @@ export function createModel({
       cullPosition: candidate.cullPosition || candidate.position,
       gapPx: 10,
       accent: candidate.accent || accentForSeverity('yellow'),
-      title: `${cell.count} ${noun}`,
+      title,
       details: [parts.join(' · ')],
       selected: false,
       priority: Number(cell.maxFrp) || 0,
@@ -500,7 +507,9 @@ export function createModel({
   }
 
   function frpLabel(frp) {
-    return Number.isFinite(frp) ? `${formatFrp(frp)} MW` : 'FRP n/a';
+    return Number.isFinite(frp)
+      ? t('{value} MW', { value: formatFrpLabel(frp) })
+      : t('FRP n/a');
   }
 
   function fireSource(fire) {
@@ -508,8 +517,42 @@ export function createModel({
   }
 
   function detectionLabel(fire) {
-    const noun = fire.provider === 'conae-goes' ? 'Thermal detection' : 'Fire';
-    return `${noun} · ${Number.isFinite(fire.frp) ? 'FRP ' : ''}${frpLabel(fire.frp)}`;
+    const frp = Number.isFinite(fire.frp)
+      ? t('FRP {value}', { value: frpLabel(fire.frp) })
+      : frpLabel(fire.frp);
+    return fire.provider === 'conae-goes'
+      ? t('Thermal detection · {frp}', { frp })
+      : t('Fire · {frp}', { frp });
+  }
+  /** formatFrp for a card, with the locale's decimal separator ("4,9"). */
+
+  function formatFrpLabel(frp) {
+    const digits = frp >= 10 ? 0 : 1;
+    return formatNumber(frp, {
+      minimumFractionDigits: digits,
+      maximumFractionDigits: digits,
+      useGrouping: false,
+    });
+  }
+
+  /** formatLatLon for a card: "8,389° ю. ш. 44,162° з. д." in Russian. */
+
+  function formatLatLonLabel(lat, lon) {
+    const amount = (value) =>
+      formatNumber(Math.abs(value), {
+        minimumFractionDigits: 3,
+        maximumFractionDigits: 3,
+        useGrouping: false,
+      });
+    const latPart =
+      lat >= 0
+        ? t('{value}°N', { value: amount(lat) })
+        : t('{value}°S', { value: amount(lat) });
+    const lonPart =
+      lon >= 0
+        ? t('{value}°E', { value: amount(lon) })
+        : t('{value}°W', { value: amount(lon) });
+    return `${latPart} ${lonPart}`;
   }
 
   /** Millisecond delta → "<1h" / "Xh" / "Xd", or '' for invalid input. */
@@ -525,11 +568,39 @@ export function createModel({
   /** Millisecond delta → "<1m ago" / "Xm ago" / "Xh ago" (fresh-feed readout). */
 
   function formatAgoMinutes(deltaMs) {
-    if (!Number.isFinite(deltaMs) || deltaMs < 0) return 'just now';
+    if (!Number.isFinite(deltaMs) || deltaMs < 0) return t('just now');
     const minutes = Math.floor(deltaMs / 60000);
-    if (minutes < 1) return '<1m ago';
-    if (minutes < 90) return `${minutes}m ago`;
-    return `${Math.round(minutes / 60)}h ago`;
+    if (minutes < 1) return t('<1m ago');
+    if (minutes < 90) return t('{count}m ago', { count: minutes });
+    return t('{count}h ago', { count: Math.round(minutes / 60) });
+  }
+
+  /** A confidence bucket as a card shows it, in the UI language. */
+
+  function confidenceLabel(bucket) {
+    switch (bucket) {
+      case 'high':
+        return t('high', { context: 'fire confidence' });
+      case 'nominal':
+        return t('nominal', { context: 'fire confidence' });
+      case 'low':
+        return t('low', { context: 'fire confidence' });
+      case 'not published':
+        return t('confidence not published');
+      default:
+        return bucket;
+    }
+  }
+
+  /** formatAge for a card: "<1h", "24h", "3d" in the UI language ("24 ч"). */
+
+  function formatAgeLabel(deltaMs) {
+    if (!Number.isFinite(deltaMs) || deltaMs < 0) return '';
+    const hours = deltaMs / 3600000;
+    if (hours < 1) return t('<1h', { context: 'age' });
+    if (hours < 48)
+      return t('{count}h', { context: 'age', count: Math.round(hours) });
+    return t('{count}d', { context: 'age', count: Math.round(hours / 24) });
   }
 
   /** Normalized 0..1 confidence → low/nominal/high display bucket. */

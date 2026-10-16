@@ -8,6 +8,7 @@
  * GPU/MSDF renderer. The Canvas2D overlay (detection.js) imports these and
  * supplies the actual drawing surface.
  */
+import { formatNumber, t } from '../i18n/index.js';
 
 /** @constant {number} Max characters shown for a label's primary (id) line. */
 const MAX_PRIMARY = 18;
@@ -30,14 +31,15 @@ export function formatFlightLevel(altitudeMeters) {
 }
 
 /**
- * Formats a speed in knots as a short rounded label. Returns '' for
- * non-positive or non-finite speeds (declutters moored/unknown vessels).
+ * Formats a speed in knots as a short rounded label in the UI language.
+ * Returns '' for non-positive or non-finite speeds (declutters moored/unknown
+ * vessels).
  * @param {number} knots - Speed over ground in knots.
- * @returns {string} e.g. '14 kn', or '' when not applicable.
+ * @returns {string} e.g. '14 kn' (ru '14 уз'), or '' when not applicable.
  */
 export function formatKnots(knots) {
   if (!Number.isFinite(knots) || knots <= 0) return '';
-  return Math.round(knots) + ' kn';
+  return t('{speed} kn', { speed: formatNumber(Math.round(knots)) });
 }
 
 /**

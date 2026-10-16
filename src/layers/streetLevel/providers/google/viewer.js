@@ -9,6 +9,7 @@ import {
   imageDateMs,
   streetViewUrl,
 } from './policy.js';
+import { msg } from '../../../../i18n/index.js';
 
 const PANORAMA_OPTIONS = Object.freeze({
   visible: false,
@@ -204,7 +205,7 @@ export function createGoogleViewer({ loader, getService, render } = {}) {
         else if (status)
           finish(
             reject,
-            new Error('Street View has no imagery for this place'),
+            new Error(msg('Street View has no imagery for this place')),
           );
       };
       const onPosition = () => {

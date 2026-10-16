@@ -21,3 +21,6 @@ qa-artifacts/
 3d-models/
 pinokio/ENVIRONMENT
 pinokio/.installed
+
+# Transient: a release interrupted mid-assembly (npm run changelog recovers it)
+changelog.d/.assembling/

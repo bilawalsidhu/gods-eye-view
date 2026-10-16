@@ -1,4 +1,6 @@
 import test from 'node:test';
+import { setLocale } from '../../i18n/index.js';
+import { translateFeedError } from '../../ui/statusText.js';
 import assert from 'node:assert/strict';
 import { adaptFirmsRecords } from '../../data/firmsAdapt.js';
 import { fireDetectionKey } from '../../data/firmsLabels.js';
@@ -149,3 +151,30 @@ test('keyless CONAE ingestion exposes partial provider failures and correct sele
   assert.equal(context.properties.confidence, 'not published');
   assert.match(context.label, /Thermal detection/);
 });
+
+for (const locale of ['es', 'ru']) {
+  test(`${locale}: CONAE labels and unknown measurements follow the selected language`, () => {
+    setLocale(locale);
+    try {
+      const card = model.buildSelectedFireCard({ ...fire, frp: null }, NOW);
+      assert.ok(!card.title.includes('THERMAL DETECTION'));
+      assert.ok(!card.title.includes('FRP n/a'));
+      assert.ok(!card.details.join(' ').includes('confidence not published'));
+      assert.ok(
+        !translateFeedError('PARTIAL · NASA FIRMS unavailable').includes(
+          'unavailable',
+        ),
+      );
+      for (const count of [1, 2, 5]) {
+        const cell = model.buildCellCard(
+          { cell: { count, maxFrp: null, hasConae: true }, position: {} },
+          NOW,
+        );
+        assert.ok(!cell.title.includes('DETECTION'));
+      }
+      assert.equal(model.mapAnalystRecord(fire).source, 'CONAE GOES');
+    } finally {
+      setLocale('en');
+    }
+  });
+}
