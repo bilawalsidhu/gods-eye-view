@@ -34,11 +34,7 @@ test('missing access remains explicitly not assessed', () => {
 
 test('a fresh blocked segment invalidates an otherwise supported candidate', () => {
   const route = { id: 'relief-a', segmentIds: ['a', 'b', 'c'] };
-  const baseline = [
-    segment('a'),
-    segment('b'),
-    segment('c'),
-  ];
+  const baseline = [segment('a'), segment('b'), segment('c')];
 
   assert.equal(
     evaluateDisasterRouteSupport(route, baseline).support,
@@ -65,10 +61,7 @@ test('stale open evidence cannot support a current-open route claim', () => {
 });
 
 test('unknown, not-assessed and missing segments remain unknown', () => {
-  const access = [
-    segment('a', 'unknown'),
-    segment('b', 'not-assessed'),
-  ];
+  const access = [segment('a', 'unknown'), segment('b', 'not-assessed')];
   const result = evaluateDisasterRouteSupport(
     { id: 'relief-a', segmentIds: ['a', 'b', 'c'] },
     access,
