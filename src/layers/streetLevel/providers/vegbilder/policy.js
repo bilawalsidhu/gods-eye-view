@@ -1,5 +1,6 @@
 import { COLORS as SHARED_COLORS, PROVIDER_COLORS } from '../../policy.js';
 import { metresBetween } from '../../view.js';
+import { msg } from '../../../../i18n/index.js';
 
 export { NEAREST_RADIUS_M } from '../../policy.js';
 
@@ -67,14 +68,16 @@ export const COVERAGE_TUNING = Object.freeze({
 export const LINE_BREAK_M = 40;
 export const LINE_BREAK_MS = 10 * 60_000;
 
-export const TOO_HIGH_HINT = 'zoom in to see Vegbilder coverage';
-export const NO_COVERAGE_HINT = 'no Vegbilder photos in view';
-export const RATE_LIMITED_MESSAGE =
-  'Statens vegvesen is limiting requests — they resume on their own';
+export const TOO_HIGH_HINT = msg('zoom in to see Vegbilder coverage');
+export const NO_COVERAGE_HINT = msg('no Vegbilder photos in view');
+export const RATE_LIMITED_MESSAGE = msg(
+  'Statens vegvesen is limiting requests — they resume on their own',
+);
 export const COVERAGE_NOUN = 'road stretches';
 export const LINE_CLICK_HINT = 'click a road for its nearest photo';
-export const MISSING_FILE_MESSAGE =
-  'Statens vegvesen has no file for this photo';
+export const MISSING_FILE_MESSAGE = msg(
+  'Statens vegvesen has no file for this photo',
+);
 
 /** WFS requests at once (each is ~0.5 s); a tile's features are capped. */
 export const WFS_CONCURRENCY = 4;

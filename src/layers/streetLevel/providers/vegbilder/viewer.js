@@ -7,10 +7,12 @@ import {
   IMAGE_TIMEOUT_MS,
   MISSING_FILE_MESSAGE,
   PANO_TEXTURE_WIDTH,
+  VEGBILDER_NAME,
   VEGBILDER_PROVIDER_ID,
   roadName,
   vegbilderPhotoUrl,
 } from './policy.js';
+import { t } from '../../../../i18n/index.js';
 
 /** A flat photo in an <img> (no CORS needed to show it). */
 export function loadPicture(url, { timeoutMs = IMAGE_TIMEOUT_MS } = {}) {
@@ -371,11 +373,14 @@ export function createVegbilderViewer({
     root.setAttribute('role', 'group');
     root.setAttribute(
       'aria-label',
-      'Vegbilder road photo. ← and → step along the drive. On a 360° photo, drag or use Shift+← →, ↑ ↓ to look around, and + − to zoom',
+      t(
+        '{name} photo. ← and → step along the sequence. On a 360° photo, drag or use Shift+← →, ↑ ↓ to look around, and + − to zoom',
+        { name: VEGBILDER_NAME },
+      ),
     );
     picture = doc.createElement('img');
     picture.className = 'sl-photo-flat';
-    picture.alt = 'Statens vegvesen road photo';
+    picture.alt = t('{name} street-level photo', { name: VEGBILDER_NAME });
     picture.draggable = false;
     picture.hidden = true;
     canvas = makeCanvas(doc);
@@ -393,8 +398,8 @@ export function createVegbilderViewer({
       });
       return button;
     };
-    prevButton = nav('Previous photo of this drive (←)', '‹', -1);
-    nextButton = nav('Next photo of this drive (→)', '›', 1);
+    prevButton = nav(t('Previous photo in this sequence (←)'), '‹', -1);
+    nextButton = nav(t('Next photo in this sequence (→)'), '›', 1);
     root.append(picture, canvas, prevButton, nextButton);
     host.append(root);
     listen(root, 'keydown', onKeyDown);
