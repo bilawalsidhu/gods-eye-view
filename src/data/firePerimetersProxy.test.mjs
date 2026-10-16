@@ -129,12 +129,13 @@ test('a failed refresh serves the last good perimeter snapshot as stale', async 
     },
   });
   await request();
-  clock = 300_000;
+  clock = 31 * 60_000;
   const res = await request();
   assert.equal(res.status, 200);
   assert.equal(res.body.stale, true);
   assert.equal(res.body.fetchedAt, 0);
   assert.equal(res.body.rows[0].stableId, 'fire');
+  assert.equal(res.body.rows[0].source, 'WFIGS');
 });
 
 test('oversized streamed and declared bodies produce sanitized 502 responses', async () => {
@@ -521,4 +522,22 @@ test('INFONA empty collections are valid; malformed or paginated incomplete snap
   assert.equal(count, 5);
   assert.equal(incomplete.body.sources.infona.truncated, true);
   assert.equal(incomplete.body.partial, true);
+});
+
+test('WFIGS keeps its 16 MiB budget while INFONA remains bounded at 8 MiB', async () => {
+  const padding = ' '.repeat(9 * 1024 * 1024);
+  const request = install({
+    fetchImpl: async () =>
+      new Response(JSON.stringify({ features: [feature()], padding })),
+    infonaFetch: async () =>
+      new Response(JSON.stringify({ features: [infonaFeature()], padding })),
+  });
+  const res = await request();
+  assert.equal(res.status, 200);
+  assert.deepEqual(
+    res.body.rows.map((row) => row.source),
+    ['WFIGS'],
+  );
+  assert.equal(res.body.sources.wfigs.status, 'ok');
+  assert.equal(res.body.sources.infona.status, 'unavailable');
 });

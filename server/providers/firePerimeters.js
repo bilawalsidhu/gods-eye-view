@@ -93,13 +93,13 @@ export function firePerimetersProxy({
     return readResponseJsonCapped(response, cap, signal);
   }
 
-  async function fetchPerimeterSource(baseUrl, normalize) {
+  async function fetchPerimeterSource(baseUrl, normalize, cap) {
     const features = [];
     let truncated = false;
     for (let page = 0; page < MAX_PAGES; page++) {
       const url =
         page === 0 ? baseUrl : `${baseUrl}&resultOffset=${features.length}`;
-      const payload = await upstream(url, 8 * MIB, 30_000);
+      const payload = await upstream(url, cap, 30_000);
       if (!Array.isArray(payload?.features))
         throw new Error('invalid_snapshot');
       features.push(...payload.features);
@@ -115,9 +115,14 @@ export function firePerimetersProxy({
         acquire(
           id,
           300_000,
-          () => fetchPerimeterSource(url, normalize),
+          () =>
+            fetchPerimeterSource(
+              url,
+              normalize,
+              (id === 'wfigs' ? 16 : 8) * MIB,
+            ),
           cache,
-          1_800_000,
+          id === 'infona' ? 1_800_000 : Infinity,
         ),
       ),
     );

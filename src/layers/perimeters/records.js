@@ -64,6 +64,7 @@ export function normalizeFirePerimeterSnapshot(geojson) {
     ids.add(stableId);
     rows.push({
       stableId,
+      source: 'WFIGS',
       name:
         typeof properties.poly_IncidentName === 'string'
           ? properties.poly_IncidentName

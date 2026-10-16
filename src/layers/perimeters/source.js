@@ -1,6 +1,10 @@
 import { readResponseJsonCapped } from '../../sources/httpBody.js';
 
-/** Request a normalized snapshot through the bounded, same-origin perimeter proxy. */
+// A portable export (package.json): no i18n here. Failures stay English data;
+// the Layers panel shows them translated.
+const msg = (text) => text;
+
+/** Request a normalized snapshot through the bounded, same-origin WFIGS proxy. */
 export function createWfigsPerimeterSource({
   fetchImpl = (...args) => globalThis.fetch(...args),
 } = {}) {
@@ -18,7 +22,7 @@ export function createWfigsPerimeterSource({
       );
       signal?.throwIfAborted();
       if (!Array.isArray(payload?.rows))
-        throw new Error('Malformed perimeter snapshot');
+        throw new Error(msg('Malformed perimeter snapshot'));
       status = payload.sources ?? null;
       return payload.rows;
     },

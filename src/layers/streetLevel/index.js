@@ -18,6 +18,7 @@ import { cameraHeightAboveGround, viewCentre, whenIdle } from './view.js';
 import { createGroundClick, groundClickHeightOk } from './groundClick.js';
 import { createGroundCaster, nextSurfaceMode } from './groundCast.js';
 import { createMeshSampler } from './meshSampler.js';
+import { msg, t, translateKnown } from '../../i18n/index.js';
 
 /** Above this camera height the ground under the camera is not worth fetching. */
 const SURFACE_WARM_BELOW_M = 6000;
@@ -335,7 +336,9 @@ export function createStreetLevelLayer({
   }
 
   function unavailableReason(entry) {
-    return `${entry.def.name} needs the Google 3D map: choose it under MAP SOURCE`;
+    return t('{name} needs the Google 3D map: choose it under MAP SOURCE', {
+      name: translateKnown(entry.def.name),
+    });
   }
 
   /** One imagery source at a time: lighting a provider darkens the others. */
@@ -410,7 +413,9 @@ export function createStreetLevelLayer({
   /** The hint a ground-click provider shows, or the provider's own. */
   function hintFor(entry, stats) {
     if (entry.def.groundClick && stats.hint && !state.groundClickReady)
-      return `zoom in to a street to open ${entry.def.name}`;
+      return t('zoom in to a street to open {name}', {
+        name: translateKnown(entry.def.name),
+      });
     return stats.hint || '';
   }
 
@@ -578,10 +583,13 @@ export function createStreetLevelLayer({
       // The lifecycle polls this every second: summarise, don't snapshot.
       const snapshots = providerSnapshots();
       const coverage = summarizeCoverage(snapshots);
+      // English data: the layer panel translates these through translateKnown.
       let loadingLabel = '';
-      const keyLabel = coverage.keyRejected ? 'KEY REJECTED' : 'KEY REQUIRED';
+      const keyLabel = coverage.keyRejected
+        ? msg('KEY REJECTED')
+        : msg('KEY REQUIRED');
       if (coverage.keyRequired) loadingLabel = keyLabel;
-      else if (coverage.loading) loadingLabel = 'loading coverage...';
+      else if (coverage.loading) loadingLabel = msg('loading coverage...');
       else if (coverage.hint && state.enabled) loadingLabel = coverage.hint;
       return {
         source: layer.source,
@@ -732,10 +740,21 @@ export function createStreetLevelLayer({
       const stillOn = entries.some(
         (entry) => entry.on && providerAvailable(entry),
       );
+      // A provider's own refusal is English data that the panel translates;
+      // the core's refusal is built here, for the panel only, in the language.
       if (state.enabled && stillOn)
         state.street.error =
           lastError?.message ||
-          `No street-level imagery within ${NEAREST_RADIUS_M} m of ${point ? 'that point' : 'the view centre'}`;
+          (point
+            ? t('No street-level imagery within {radius} m of that point', {
+                radius: NEAREST_RADIUS_M,
+              })
+            : t(
+                'No street-level imagery within {radius} m of the view centre',
+                {
+                  radius: NEAREST_RADIUS_M,
+                },
+              ));
       state.street.loading = false;
       notify();
       return false;

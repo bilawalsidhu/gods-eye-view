@@ -11,6 +11,7 @@ import {
   inciwebNodeId,
   isCurrentPublication,
 } from './inciweb.js';
+import { msg, t } from '../../i18n/index.js';
 export { normalizeFirePerimeterSnapshot } from './records.js';
 export { createWfigsPerimeterSource } from './source.js';
 export * from './cards.js';
@@ -299,7 +300,7 @@ export function createFirePerimetersLayer({
               ([id, status]) =>
                 `${id.toUpperCase()}: ${status.status === 'ok' ? 'truncated' : status.status}`,
             )
-            .join('; ') || null;
+            .join(' · ') || null;
 
         // Geometry can change without a new report date or incident facts.
         const signature = JSON.stringify(
@@ -373,7 +374,7 @@ export function createFirePerimetersLayer({
         if (request.signal.aborted || _request !== request || !_enabled)
           return false;
         console.warn('[Data:FirePerimeters] Fetch error:', e);
-        _lastError = e?.message || 'Perimeter source unavailable';
+        _lastError = e?.message || msg('Perimeter source unavailable');
         return false;
       } finally {
         if (_request === request) _request = null;
@@ -423,11 +424,11 @@ export function createFirePerimetersLayer({
 
     getRowControls() {
       const bands = [
-        { label: 'Not contained or unknown', color: containmentAccent(0) },
-        { label: 'Under 50% contained', color: containmentAccent(1) },
-        { label: '50–99% contained', color: containmentAccent(50) },
-        { label: 'Fully contained', color: containmentAccent(100) },
-        { label: 'Estimated fire area (INFONA)', color: '#b388ff' },
+        { label: t('Not contained or unknown'), color: containmentAccent(0) },
+        { label: t('Under 50% contained'), color: containmentAccent(1) },
+        { label: t('50–99% contained'), color: containmentAccent(50) },
+        { label: t('Fully contained'), color: containmentAccent(100) },
+        { label: t('Estimated fire area (INFONA)'), color: '#b388ff' },
       ];
       return {
         chips: [],
@@ -438,8 +439,9 @@ export function createFirePerimetersLayer({
           ).length,
           ...(index === 0
             ? {
-                blurb:
+                blurb: t(
                   'US colours show reported containment. Purple: estimated areas from grouped thermal detections in Paraguay (INFONA), with no containment measurement. Boundaries are simplified to about 100 m.',
+                ),
               }
             : {}),
         })),

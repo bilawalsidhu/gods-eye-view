@@ -255,6 +255,6 @@ test('INFONA cards identify estimates and never expose containment or an InciWeb
   assert.equal(card.accent, '#b388ff');
   assert.equal(card.interactive, false);
   assert.ok(card.details.includes('7.36 ha estimated'));
-  assert.ok(card.details.includes('Report date: 2026-10-14'));
+  assert.ok(card.details.includes('Report date: Oct 14, 2026'));
   assert.doesNotMatch(card.details.join(' '), /contained|InciWeb|County/);
 });

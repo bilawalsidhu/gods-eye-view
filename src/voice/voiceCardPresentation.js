@@ -2,6 +2,7 @@ import { planStepLabel, progressStepLabel, spokenLabel } from './speech.js';
 import { presentResult } from './resultDisplay.js';
 import { MAX_DISPLAYED_REFERENTS, normalizeReferents } from './referents.js';
 
+import { getLocale, msg, t } from '../i18n/index.js';
 /**
  * Pure presentation of the voice card nested in the voice control: captions,
  * the current plan, the latest result and its numbered referents.
@@ -16,12 +17,20 @@ const MAX_STEPS = 6;
 const MAX_LINES = 6;
 const MAX_NOTES = 6;
 const MAX_CAPTION = 220;
+// Titles and lines wrap; the caps only stop runaway values. Translations run
+// longer (resultDisplay.js), so they cap at 120. Error lines are never cut.
+const MAX_TITLE = 64;
+const MAX_TRANSLATED_TITLE = 120;
+const MAX_LINE = 80;
+
+const titleMax = () =>
+  getLocale() === 'en' ? MAX_TITLE : MAX_TRANSLATED_TITLE;
 
 const STATUS_TEXT = Object.freeze({
-  running: 'in progress',
-  done: 'done',
-  failed: 'failed',
-  cancelled: 'cancelled',
+  running: msg('in progress'),
+  done: msg('done'),
+  failed: msg('failed'),
+  cancelled: msg('cancelled'),
 });
 
 /** An empty, hidden card. */
@@ -190,7 +199,7 @@ export function reduceVoiceCard(state, event) {
             : result.ok
               ? 'done'
               : 'failed',
-          detail: result.outlinePending ? 'Tracing outline' : '',
+          detail: result.outlinePending ? t('Tracing outline') : '',
           annotationIds: result.outlinePending ? annotationIds(result) : [],
         }),
       );
@@ -204,12 +213,14 @@ export function reduceVoiceCard(state, event) {
         ...next,
         result: {
           display: shown.display,
+          // A failed result's lines are its error: shown whole, wrapped.
+          wholeLines: result.ok === false,
           referents: normalizeReferents(
             shown.referents,
             MAX_DISPLAYED_REFERENTS,
           ),
         },
-        announce: spokenLabel(shown.display.title, 64),
+        announce: spokenLabel(shown.display.title, titleMax()),
       });
     }
     case 'outline': {
@@ -224,10 +235,10 @@ export function reduceVoiceCard(state, event) {
           ...step,
           annotationIds: remaining,
           detail: remaining.length
-            ? 'Tracing outline'
+            ? t('Tracing outline')
             : event.status === 'resolved'
-              ? 'Outline traced'
-              : 'Outline unavailable',
+              ? t('Outline traced')
+              : t('Outline unavailable'),
         };
         return reveal({ ...state, steps });
       }
@@ -244,7 +255,9 @@ export function voiceCardView(state) {
   const display = state.result?.display || null;
   const allNotes = [
     ...(display?.notes || []),
-    ...(display?.sources || []).map((source) => `Source: ${source.label}`),
+    ...(display?.sources || []).map((source) =>
+      t('Source: {label}', { label: source.label }),
+    ),
   ];
   // Analyst notes carry count/scope/provenance qualifications. Preserve their
   // full sanitized text in at most six existing rows, joining overflow into
@@ -267,14 +280,14 @@ export function voiceCardView(state) {
   return {
     visible: Boolean(state.visible),
     busy: running,
-    phase: running ? 'WORKING' : state.steps.length ? 'DONE' : '',
+    phase: running ? t('WORKING') : state.steps.length ? t('DONE') : '',
     user: {
       visible: state.user !== null,
       text: state.user || '…',
     },
     pointer: {
       visible: Boolean(state.pointer),
-      kind: state.pointer?.kind === 'here' ? 'HERE' : 'THIS',
+      kind: state.pointer?.kind === 'here' ? t('HERE') : t('THIS'),
       text: spokenLabel(state.pointer?.label || '', 32),
     },
     assistant: {
@@ -285,15 +298,17 @@ export function voiceCardView(state) {
       key: String(step.id),
       label: step.label,
       status: step.status,
-      statusText: STATUS_TEXT[step.status] || '',
+      statusText: STATUS_TEXT[step.status] ? t(STATUS_TEXT[step.status]) : '',
       detail: step.detail || '',
     })),
     result: {
       visible: Boolean(display?.title),
-      title: spokenLabel(display?.title || '', 64),
+      title: spokenLabel(display?.title || '', titleMax()),
       chips: (display?.chips || []).map((chip) => spokenLabel(chip.label, 24)),
       lines: (display?.lines || [])
-        .map((line) => spokenLabel(line, 80))
+        .map((line) =>
+          spokenLabel(line, state.result?.wholeLines ? Infinity : MAX_LINE),
+        )
         .slice(0, MAX_LINES),
       referents: (state.result?.referents || [])
         .slice(0, MAX_DISPLAYED_REFERENTS)

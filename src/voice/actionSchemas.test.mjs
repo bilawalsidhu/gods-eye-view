@@ -36,8 +36,9 @@ test('the complete Realtime tool payload pins the manifest-generated layer relea
     // consolidated tool wording (each policy stated once); model-facing tools
     // omit top-level anyOf (OpenAI rejects it). Contacts list routing preserves
     // requested radius and center authority in descriptions only.
-    // Street Level, GNSS and INFONA extend the manifest; tracked and analyst aircraft describe broadcasts.
-    'fd0f17e0eea4b7ca2b2b560bf06e4481b64fc2b36be2aa14fa05efdcb97b78b8',
+    // Street Level and GNSS extend the manifest; tracked and analyst aircraft describe broadcasts.
+    // Air quality and this PR deliberately extend the manifest.
+    '002099f398e2f4eecbac0665fca23472ece25cf95fad1564941bd754050c58a8',
   );
 });
 

@@ -55,6 +55,7 @@ test('a valid snapshot yields one row per incident with polygons preserved', () 
   assert.equal(rows.length, 2);
   assert.deepEqual(rows[0], {
     stableId: '2026-NMGNF-000123',
+    source: 'WFIGS',
     name: 'Fixture Fire',
     acres: 512.5,
     containedPct: 40,
