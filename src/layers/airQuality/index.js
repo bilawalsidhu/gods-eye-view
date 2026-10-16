@@ -1,4 +1,6 @@
 import * as Cesium from 'cesium';
+import { msg, t, tn } from '../../i18n/index.js';
+import { translateFeedError } from '../../ui/statusText.js';
 import {
   AIR_QUALITY_BANDS,
   AIR_QUALITY_OVERLAY_SOURCE_ID,
@@ -109,7 +111,7 @@ export function createAirQualityLayer({ source, overlayHost } = {}) {
         return true;
       } catch (error) {
         if (request.signal.aborted || _request !== request) return false;
-        _lastError = error?.message || 'Air quality request failed';
+        _lastError = error?.message || msg('Air quality request failed');
         console.warn('[Data:AirQuality] Refresh failed:', _lastError);
         notify();
         return false;
@@ -214,34 +216,41 @@ export function createAirQualityLayer({ source, overlayHost } = {}) {
         (max, reading) => Math.max(max, reading.observedMs || 0),
         0,
       );
+      // Readings and errors stay English data (analyst records, stats); the
+      // card translates them as the Layers panel row does. A provider's own
+      // error text has no catalog entry and shows as it came.
       return {
         readout: true,
         summary: {
-          label: provider.label,
-          coverage: provider.coverage,
+          label: t(provider.label),
+          coverage: t(provider.coverage),
           validTime: newest ? new Date(newest).toISOString() : undefined,
           detail: `${provider.network} · ${provider.scale}`,
           status: _lastError
-            ? _lastError
+            ? translateFeedError(_lastError)
             : _count === 0
               ? _lastUpdate === null
-                ? 'No readings available'
-                : 'No current readings'
-              : `${_count} stations reporting`,
+                ? t('No readings available')
+                : t('No current readings')
+              : tn(
+                  _count,
+                  '{count} station reporting',
+                  '{count} stations reporting',
+                ),
           units: provider.scale,
         },
         legend: AIR_QUALITY_BANDS.map((band) => ({
           color: band.color,
-          label: band.label,
+          label: t(band.label),
         })),
         legendCategorical: true,
         list: {
-          ariaLabel: 'Highest air-quality readings in view',
+          ariaLabel: t('Highest air-quality readings in view'),
           items: inView.map((reading, index) => ({
             id: reading.id,
             ordinal: index + 1,
             lead: `${reading.scale} ${reading.label}`,
-            text: `${reading.name} · ${reading.risk}`,
+            text: `${reading.name} · ${t(reading.risk)}`,
             accent: reading.color,
           })),
         },

@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { setLocale } from '../i18n/index.js';
 import { createWeatherPanel } from './weatherPanel.js';
 import { railFixture } from './railTestFixture.mjs';
 import { createAirQualityLayer } from '../layers/airQuality/index.js';
@@ -655,6 +656,37 @@ test('a change of open card scrolls its header into view once; refreshes never m
   assert.equal(writes.length, 4, 'refresh after a reveal leaves it alone');
   assert.deepEqual(intoView, [], 'ancestor scrollers are never moved');
   view.destroy();
+});
+test('history time keeps the hour whatever the length of the localized date', () => {
+  for (const locale of ['en', 'es', 'ru']) {
+    setLocale(locale);
+    try {
+      const f = fixture();
+      const view = createWeatherPanel(f);
+      view.update([wind, radar]);
+      const ends = f.find((n) => n.className === 'rail-timeline-endpoints');
+      assert.deepEqual(
+        ends.children.map((n) => n.textContent),
+        ['01:00 UTC', '01:05 UTC'],
+        locale,
+      );
+      f.state({ mode: 'history', target: ticks[1] });
+      assert.match(
+        line(f, radar.id, 'time').textContent,
+        /(^|[^\d:])01:05 UTC/,
+        locale,
+      );
+      f.state({ products: [{ id: radar.id, shown: null, selected: null }] });
+      assert.match(
+        line(f, radar.id, 'time').textContent,
+        /(^|[^\d:])01:05 UTC/,
+        locale,
+      );
+      view.destroy();
+    } finally {
+      setLocale('en');
+    }
+  }
 });
 
 test('air-quality readout renders its band legend, Canada coverage and worst-first list', async () => {

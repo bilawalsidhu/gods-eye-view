@@ -1,14 +1,18 @@
 # Paraguay public cameras
 
-Four cameras are included in the default CCTV catalog. Custom catalogs retain
+This branch builds on #1162 for the shared external-player implementation and
+#1165 for HLS recovery; merge those prerequisites first.
+
+Four cameras are available through explicit opt-in source packs. Neither pack
+loads by default; public availability does not establish reuse permission. Custom catalogs retain
 the existing `CCTV_SOURCES_FILE` / `CCTV_FORCE_AUSTIN` policy.
 
-| Camera | Operator source | Playback | Disable |
+| Camera | Operator source | Playback | Enable after checking operator terms |
 | --- | --- | --- | --- |
-| Sambódromo / Costanera, Encarnación | [Municipal live page](https://encarnacion.gov.py/en-vivo/) | Original RTSP.me public player | `CCTV_ENCARNACION_ENABLED=0` |
-| Puente de la Amistad / customs, Ciudad del Este | [Atacado Connect](https://atacadoconnect.com/camera-da-ponte-da-amizade-ao-vivo) | Native HLS, one PTZ feed rotating between views | `CCTV_ALTO_PARANA_ENABLED=0` |
-| San Lorenzo CAM1, Presidente Franco | [Grupo Ibarra](https://www.gibarra.com.py/) | Native HLS, published 1024×576 variant | `CCTV_ALTO_PARANA_ENABLED=0` |
-| San Lorenzo CAM2, Presidente Franco | [Grupo Ibarra](https://www.gibarra.com.py/) | Native HLS, published 1024×576 variant | `CCTV_ALTO_PARANA_ENABLED=0` |
+| Sambódromo / Costanera, Encarnación | [Municipal live page](https://encarnacion.gov.py/en-vivo/) | Original RTSP.me public player | `CCTV_ENCARNACION_ENABLED=1` |
+| Puente de la Amistad / customs, Ciudad del Este | [Atacado Connect](https://atacadoconnect.com/camera-da-ponte-da-amizade-ao-vivo) | Native HLS, one PTZ feed rotating between views | `CCTV_ALTO_PARANA_ENABLED=1` |
+| San Lorenzo CAM1, Presidente Franco | [Grupo Ibarra](https://www.gibarra.com.py/) | Native HLS, published 1024×576 variant | `CCTV_ALTO_PARANA_ENABLED=1` |
+| San Lorenzo CAM2, Presidente Franco | [Grupo Ibarra](https://www.gibarra.com.py/) | Native HLS, published 1024×576 variant | `CCTV_ALTO_PARANA_ENABLED=1` |
 
 ## Provenance and location
 
@@ -22,8 +26,8 @@ variants each. This pack selects `v1_1/cam.m3u8` and `v2_1/cam.m3u8` to keep
 bandwidth bounded. The same operator also publishes `cam1.jpg` and `cam2.jpg`
 with periodic refreshes; these are alternate formats of the same two cameras.
 Their roughly 700 KiB media lists contain 48 hours of history. The relay reads
-at most 1 MiB and downloads only its existing 12-segment live tail, never the
-archive. Atacado's observed HD segments exceed 6 MiB, so the per-segment cap is
+at most 1 MiB, starts with the newest two segments and grows its live buffer
+within the existing 12-segment limit, never downloading the archive. Atacado's observed HD segments exceed 6 MiB, so the per-segment cap is
 12 MiB. The cache remains capped at 24 MiB per session, with at most two sessions.
 
 All locations are **approximate anchors, not verified camera mounts**:
@@ -76,7 +80,7 @@ played at 1024×576 with advancing decoded frames. Atacado played at 2688×1520
 after an initial startup timeout and a fresh session; its availability is not
 continuous-uptime evidence. No player or relay recovery feature is added here.
 
-The regression tests cover catalog registration and independent disable switches,
+The regression tests cover catalog registration and independent opt-in switches,
 attribution and unverified poses, bounded DVR-tail ingestion, HD segment sizes,
 and the panel's uncertainty label. Availability can change; this catalog is not
 an exhaustive census or a guarantee of future operator access.

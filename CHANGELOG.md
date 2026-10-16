@@ -1,5 +1,62 @@
 # Changelog
 
+- Local FM seek finds stations after wrapping around 87.5–108 MHz, covers both
+  band edges, skips the starting station and rejects spectra from an earlier
+  tune (Aditya, @Rohilalala, #1174).
+- Local RTL-SDR keeps USB reads queued in order and bounds pending decoder
+  work. A stalled or overloaded decoder stops with an explicit error; stopping
+  terminates its worker and rejects late audio. FM playback buffers short
+  scheduling gaps, caps its audio queue at 256 ms, and reduces display updates
+  and spectrum calculations while listening.
+
+- Add Bogotá (Tembici, 250 stations) and Santiago de Chile (Bike Itaú, 200
+  stations) to the GBFS bikeshare registry, the layer's first stations in
+  Colombia and Chile. Both are PBSC feeds like the Brazilian Bike Itaú cities,
+  so no proxy change is needed. Both feeds also list depot stations on other
+  continents (São Paulo, Madrid) as in service; stations outside a city's load
+  radius are now dropped instead of drawn as live docks.
+
+- Add Barcelona's bike share to the GBFS registry: Bicing (543 stations, the
+  city's PBSC system) and AMBici (237 e-bike stations across the metropolitan
+  area, run by nextbike). Both are keyless GBFS 2.3 feeds listed in
+  MobilityData's systems catalogue; AMBici's is CC0. `gbfs.nextbike.net` joins
+  the proxy allowlist. These are the layer's first stations in Spain.
+
+- Add nine Ontario transit feeds: TTC, MiWay, Hamilton HSR, Durham Region,
+  YRT/Viva, Guelph, Burlington, Barrie and Kingston, each carrying its own
+  licence quote and attribution. A feed can now name its own modes, so Toronto's
+  trams read "Streetcar" while Helsinki's stay "Tram", and a feed whose route ids
+  are internal keys can translate them to the number a rider would say. TTC
+  vehicles take their mode from the fleet number first, so replacement buses on
+  streetcar routes read as buses and out-of-service streetcars stay streetcars.
+
+- CCTV cameras with identified hardware show the model's datasheet specs. When a
+  source names a camera model found in the vendored CCTV Camera Database records
+  (CC0), the HUD meta line adds its resolution, night vision and PTZ capability.
+  A fixed single-lens model's horizontal FOV fills in when the source states no
+  FOV and the pose is not curated (`FOV n° (DATASHEET)`); a PTZ or varifocal
+  range is what the lens can do, not its current zoom, so those cameras keep the
+  estimate and show `SPEC FOV min–max° (CAPABILITY)` beside it (bassem chagra,
+  #452).
+
+- Ship a web app manifest and raster home-screen icons, so adding the app to a
+  phone home screen or installing it on desktop uses the God's Eye View mark
+  instead of a blank tile. The icons are generated from `public/logo.svg` by
+  `node scripts/generate-icons.mjs` and committed, so a plain `vite build` needs
+  no image toolchain. The existing SVG favicon still serves the browser tab.
+  Manifest paths are relative to the manifest, so a build served under a path
+  prefix installs and launches inside that prefix.
+
+- Cyclone advisories no longer go dark while NHC publishes an advisory ahead
+  of its nominal time: advisory and position times up to 90 minutes ahead of
+  the server clock are accepted (previously 5 minutes), so the whole feed is
+  not rejected for about half an hour each advisory cycle.
+
+- Flights age out vanished aircraft again. OpenSky's routine position-less rows
+  no longer mark every snapshot partial, which had kept vanished and landed
+  aircraft at full opacity for up to five minutes; those rows retain only their
+  own aircraft, and a likely-landed one still leaves on the landed limit.
+
 - Add WSDOT highway cameras (Washington State) as a keyless CCTV source pack:
   WSDOT's official Travel Center camera layer, with frames registered only on
   WSDOT's own image host (partner-hosted cameras such as Oregon DOT and City of
@@ -64,6 +121,11 @@
   have wound down — CoGo's feed reports no stations and last moved a bike in
   March 2025. The three repointed feeds were verified live.
 
+- Add seven Brazilian Bike Itaú (Tembici) cities to the GBFS bikeshare registry:
+  São Paulo, Rio de Janeiro, Salvador, Recife, Porto Alegre, Brasília and
+  Curitiba (about 1,000 stations in total). These are the layer's first stations
+  in South America.
+
 - Add Bike Share Toronto (1,069 stations) to the bikeshare registry. The system
   publishes the same PBSC GBFS v2 feeds as the Austin, Honolulu and Chattanooga
   entries, so it needs no new plumbing; a registry test now holds every city's
@@ -78,18 +140,6 @@
 
 - Overpass and military-installation disk caches no longer serve answers from a
   previously configured `OVERPASS_UPSTREAMS` instance after it is repointed.
-
-- Add four public cameras in Paraguay to the existing CCTV layer: Encarnación's
-  Sambódromo / Costanera municipal player, Atacado Connect's rotating bridge
-  view in Ciudad del Este, and two Grupo Ibarra feeds in Presidente Franco.
-  Encarnación retains the original RTSP.me player, which unloads when hidden
-  or deselected and has no frame proxy, coverage or calibration. The other
-  three use native HLS. Disable them independently with
-  `CCTV_ENCARNACION_ENABLED=0` or `CCTV_ALTO_PARANA_ENABLED=0`.
-  All locations are approximate; operator attribution is retained. The relay
-  accepts bounded 1 MiB DVR playlists and 12 MiB HD segments while retaining
-  its 24 MiB per-session cache. Optional Google tiles-token discovery returns
-  JSON `null` without a startup 404 when no token provider is configured.
 
 - A Radio Browser mirror answering 204, 205 or 304, or a status outside
   200–599, no longer crashes the local dev/preview server. Null-body statuses
@@ -120,6 +170,18 @@
   the five borough cores load and `CCTV_NYC_MAX_SOURCES` changes the cap. The catalog-wide ceiling is
   unchanged; extra cameras share it round-robin with the other packs.
 
+- Spanish interface (`es`), translated by @meirm (#602) and reviewed against the
+  current English.
+
+- Interface localization, starting with Russian. UI text is marked with
+  `t()`, `tn()` (plurals) and `msg()` in code and `data-i18n*` in markup, keyed
+  by the English text itself; each language is one flat JSON catalog
+  (`src/i18n/locales/ru.json`). The language comes from `?lang=`, the language
+  picker (the globe button in the bottom-right corner), then the browser
+  language; English stays the default and the fallback. `npm run i18n`, also
+  run by `npm test`, fails on missing, unused or broken translations. Built on
+  the i18n foundation by @meirm (#601), with the Russian catalog started
+  from #312. It also fails on UI text that is not marked at all.
 - Street Level counts unique tiles before ranking so overlapping dateline halves
   in polar views do not waste slots in the 16-tile overview budget.
 
@@ -131,6 +193,9 @@
 - Tool string length validation counts Unicode characters correctly, including characters outside the basic multilingual plane.
 
 - Director timeline seeks cross the dateline along the short longitude arc.
+
+- Keep unknown GBFS availability counts neutral instead of turning null or empty
+  values into zero bikes.
 
 - Recent Imagery continues past malformed records in full catalog pages, respects the requested record limit, and reports results as truncated when that limit drops valid records.
 

@@ -53,14 +53,15 @@ test('player URLs refuse off-host, credential, script, token and path injection'
     assert.equal(normalizeCctvEmbedUrl(url), '', String(url));
 });
 
-for (const enabled of [true, false]) {
-  test(`the default catalog ${enabled ? 'includes' : 'can disable'} Encarnación without fetching its player`, async (t) => {
+for (const flag of [undefined, '0', '1']) {
+  const enabled = flag === '1';
+  test(`the default catalog ${enabled ? 'opts into' : `excludes with flag ${flag}`} Encarnación without fetching its player`, async (t) => {
     restoreEnv(t);
     delete process.env.CCTV_SOURCES_FILE;
     delete process.env.CCTV_SOURCES_JSON;
     process.env.CCTV_FORCE_AUSTIN = '1';
-    if (enabled) delete process.env.CCTV_ENCARNACION_ENABLED;
-    else process.env.CCTV_ENCARNACION_ENABLED = '0';
+    if (flag === undefined) delete process.env.CCTV_ENCARNACION_ENABLED;
+    else process.env.CCTV_ENCARNACION_ENABLED = flag;
     const requested = [];
     t.mock.method(console, 'log', () => {});
     t.mock.method(console, 'warn', () => {});

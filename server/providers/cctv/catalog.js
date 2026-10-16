@@ -136,12 +136,12 @@ const LIVE_PACKS = [
   },
   {
     name: 'encarnacion',
-    enabled: () => envEnabled('CCTV_ENCARNACION_ENABLED'),
+    enabled: () => envOptIn('CCTV_ENCARNACION_ENABLED'),
     load: loadEncarnacionSources,
   },
   {
     name: 'alto-parana',
-    enabled: () => envEnabled('CCTV_ALTO_PARANA_ENABLED'),
+    enabled: () => envOptIn('CCTV_ALTO_PARANA_ENABLED'),
     load: loadAltoParanaSources,
   },
   {

@@ -30,8 +30,9 @@ test('Alto Paraná has three distinct operator HLS feeds with uncertain location
   assert.equal(cameras[1].lon, cameras[2].lon);
 });
 
-for (const enabled of [true, false]) {
-  test(`the default catalog ${enabled ? 'includes' : 'can disable'} Alto Paraná independently of Encarnación`, async (t) => {
+for (const flag of [undefined, '0', '1']) {
+  const enabled = flag === '1';
+  test(`the default catalog ${enabled ? 'opts into' : `excludes with flag ${flag}`} Alto Paraná independently of Encarnación`, async (t) => {
     const saved = { ...process.env };
     t.after(() => {
       for (const key of Object.keys(process.env)) {
@@ -43,8 +44,8 @@ for (const enabled of [true, false]) {
     delete process.env.CCTV_SOURCES_JSON;
     process.env.CCTV_FORCE_AUSTIN = '1';
     process.env.CCTV_ENCARNACION_ENABLED = '1';
-    if (enabled) delete process.env.CCTV_ALTO_PARANA_ENABLED;
-    else process.env.CCTV_ALTO_PARANA_ENABLED = '0';
+    if (flag === undefined) delete process.env.CCTV_ALTO_PARANA_ENABLED;
+    else process.env.CCTV_ALTO_PARANA_ENABLED = flag;
     const requested = [];
     t.mock.method(console, 'log', () => {});
     t.mock.method(console, 'warn', () => {});
