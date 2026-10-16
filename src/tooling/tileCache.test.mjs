@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   backoffMs,
+  createMissLoader,
   fetchTile,
   tileCacheFile,
 } from '../../scripts/qa/tileCache.mjs';
@@ -68,4 +69,47 @@ test('a tile fetch retries 429s, stops after four retries, keeps Accept', async 
   });
   assert.equal(limited.status, 429);
   assert.equal(calls, 5);
+});
+
+test('misses: at most two fetches in flight, identical ones merged, a contact UA', async () => {
+  let inFlight = 0;
+  let most = 0;
+  const calls = [];
+  const releases = [];
+  const loader = createMissLoader({
+    fetchImpl: (url, init) => {
+      calls.push([url, init.headers['User-Agent']]);
+      inFlight++;
+      most = Math.max(most, inFlight);
+      return new Promise((resolve) =>
+        releases.push(() => {
+          inFlight--;
+          resolve(response(200, { 'content-type': 'image/png' }));
+        }),
+      );
+    },
+    wait: async () => {},
+  });
+  const loads = [
+    loader.load('a', null),
+    loader.load('a', null),
+    loader.load('b', null),
+    loader.load('c', null),
+    loader.load('a', 'image/webp'),
+  ];
+  for (let round = 0; round < 10 && releases.length; round++) {
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    releases.splice(0).forEach((release) => release());
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  }
+  const tiles = await Promise.all(loads);
+  assert.ok(tiles.every((tile) => tile.status === 200));
+  assert.equal(tiles[0], tiles[1], 'one fetch for two identical misses');
+  assert.equal(calls.length, 4, 'a, b, c and a with another Accept');
+  assert.ok(most <= 2, `${most} fetches in flight`);
+  assert.ok(
+    calls.every(([, agent]) =>
+      agent.includes('https://github.com/bilawalsidhu/gods-eye-view'),
+    ),
+  );
 });
