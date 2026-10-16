@@ -270,6 +270,8 @@ export function createCesiumFollow(viewer, { commanded }) {
         // one (an entity without graphics is framed once, then left).
         point: { pixelSize: 1, color: Cesium.Color.TRANSPARENT },
       });
+      // Picks skip it (picker.js).
+      entity.gevFollowProxy = true;
     }
     state.entity = entity;
     state.handle.native = options.native;

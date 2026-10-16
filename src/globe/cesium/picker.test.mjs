@@ -149,9 +149,62 @@ test('picks of a mover set made with pickable: false are dropped', () => {
         ? { owner: 'quiet', instance: 0, pickable: false }
         : null,
   });
-  assert.equal(picker.pick({ x: 1, y: 2 }), undefined);
+  // The pick falls through to what is under the quiet set.
+  assert.equal(picker.pick({ x: 1, y: 2 }).id, 'other');
   assert.deepEqual(
     picker.drillPick({ x: 1, y: 2 }, 5).map(({ id }) => id),
     ['other'],
   );
+});
+
+test('a filtered top pick falls through to the first pick under it with an id', () => {
+  const viewer = createFakeViewer();
+  const quiet = { primitive: 'quiet-billboard', id: 'q' };
+  const proxy = { primitive: 'proxy-point', id: { gevFollowProxy: true } };
+  const tile = { primitive: 'tileset', content: {} };
+  const flight = { primitive: 'flight-billboard', id: 'ae01ce' };
+  const { picker } = createCesiumPicker(viewer, {
+    identify: (picked) =>
+      picked === quiet
+        ? { owner: 'quiet', instance: 0, pickable: false }
+        : picked === flight
+          ? { owner: 'flights', instance: 3, pickable: true }
+          : null,
+  });
+  viewer.scene.pick = () => quiet;
+  viewer.scene.drillPick = () => [quiet, proxy, tile, flight];
+  const picked = picker.pick(geo.cartesian2.create(1, 1));
+  assert.equal(picked.id, 'ae01ce');
+  assert.equal(picked.owner, 'flights');
+  assert.deepEqual(
+    picker.drillPick(geo.cartesian2.create(1, 1)).map((p) => p.primitive),
+    ['tileset', 'flight-billboard'],
+    'the follow proxy and pickable: false sets are never picked',
+  );
+  // Nothing under it with an id: the first kept result (a tile).
+  viewer.scene.drillPick = () => [quiet, tile];
+  assert.equal(picker.pick(geo.cartesian2.create(1, 1)).primitive, 'tileset');
+  viewer.scene.pick = () => proxy;
+  viewer.scene.drillPick = () => [proxy];
+  assert.equal(picker.pick(geo.cartesian2.create(1, 1)), undefined);
+});
+
+test('drills leave out mover instances behind the horizon', () => {
+  const viewer = createFakeViewer();
+  const near = { primitive: 'near', id: 'n' };
+  const far = { primitive: 'far', id: 'f' };
+  const { picker } = createCesiumPicker(viewer, {
+    identify: (picked) => ({
+      owner: 'flights',
+      instance: picked === near ? 0 : 1,
+    }),
+    visible: (known) => known.instance === 0,
+  });
+  viewer.scene.drillPick = () => [far, near];
+  assert.deepEqual(
+    picker.drillPick(geo.cartesian2.create(1, 1)).map((p) => p.id),
+    ['n'],
+  );
+  viewer.scene.pick = () => far;
+  assert.equal(picker.pick(geo.cartesian2.create(1, 1)).id, 'n');
 });

@@ -45,14 +45,21 @@ export function createCesiumEngine(viewer, options = {}) {
   // below; the picker asks them when it picks).
   let lines = null;
   let movers = null;
+  let projectorPart = null;
   const picker = createCesiumPicker(viewer, {
     identify: (picked) =>
       movers?.identify(picked) ?? lines?.identify(picked) ?? null,
+    // A mover instance behind the globe is not picked (billboards drawn
+    // without a depth test reach Cesium's GPU pick through it).
+    visible: ({ owner, instance }) => {
+      const position = movers?.instancePosition(owner, instance);
+      return position ? projectorPart.projector.horizonVisible(position) : true;
+    },
   });
   const parts = {
     camera: createCesiumCamera(viewer),
     picker,
-    projector: createCesiumProjector(viewer),
+    projector: (projectorPart = createCesiumProjector(viewer)),
     frames: createCesiumFrames(viewer),
     clock: createCesiumClock(viewer, options),
     lines: (lines = createCesiumLines(viewer, {
