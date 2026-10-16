@@ -29,8 +29,8 @@ export function navaraModeNotice(availability) {
   return Object.freeze({
     label: 'Experimental Navara engine',
     detail: names.length
-      ? `Data layers: ${names.join(', ')}; the other layers, cockpit, director and voice are unavailable`
-      : 'No data layers on this engine yet; cockpit, director and voice are unavailable',
+      ? `Data layers: ${names.join(', ')}; the other layers, cockpit and director are unavailable`
+      : 'No data layers on this engine yet; cockpit and director are unavailable',
   });
 }
 

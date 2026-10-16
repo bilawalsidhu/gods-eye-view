@@ -113,14 +113,14 @@ test('without a viewer the tools run the governor on the engine, show the notice
   ]);
   assert.match(
     `${notice.label}: ${notice.detail}`,
-    /^Experimental Navara engine: no data layers on this engine yet; cockpit, director and voice are unavailable$/i,
+    /^Experimental Navara engine: no data layers on this engine yet; cockpit and director are unavailable$/i,
   );
   // With Navara renderers, the notice names the layers it shows.
   const registry = createRendererRegistry();
   registry.register('navara', { satellites: () => ({}), flights: () => ({}) });
   assert.equal(
     navaraModeNotice(createLayerAvailability('navara', { registry })).detail,
-    'Data layers: Live Flights, Satellites; the other layers, cockpit, director and voice are unavailable',
+    'Data layers: Live Flights, Satellites; the other layers, cockpit and director are unavailable',
   );
   // The governor drives the engine's continuous rendering.
   assert.equal(isRenderGovernorInstalled(engine), true);
