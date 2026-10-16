@@ -72,19 +72,27 @@ export function sceneSeekState(scene, progress, durationForShot, holdForShot) {
   let shotIndex = scene.shots.length - 1;
   for (let index = 0; index < scene.shots.length; index += 1) {
     const endElapsedSec = startElapsedSec + durations[index];
-    if (targetSec < endElapsedSec || index === scene.shots.length - 1) {
+    // Compare in progress units: a shot's startProgress (start / total)
+    // times total can round below its start and select the previous shot.
+    if (
+      normalized < endElapsedSec / totalSec ||
+      index === scene.shots.length - 1
+    ) {
       shotIndex = index;
       break;
     }
     startElapsedSec = endElapsedSec;
   }
+  // Keep the elapsed time inside the selected shot, so it agrees with
+  // shotIndex when targetSec rounded below the shot's start.
+  const elapsedSec = Math.max(targetSec, startElapsedSec);
   const shot = scene.shots[shotIndex];
   const flightDurationSec = shot.durationSec || DEFAULT_SHOT_DURATION_SEC;
   const holdDurationSec = holdForShot(scene, shot);
   const shotDurationSec = Math.max(0.001, flightDurationSec + holdDurationSec);
   const shotElapsedSec = Math.max(
     0,
-    Math.min(shotDurationSec, targetSec - startElapsedSec),
+    Math.min(shotDurationSec, elapsedSec - startElapsedSec),
   );
   const cameraProgress = clamp01(
     shotElapsedSec / Math.max(0.001, flightDurationSec),
@@ -99,8 +107,8 @@ export function sceneSeekState(scene, progress, durationForShot, holdForShot) {
   );
   const move = resolveCameraMove(scene, shot);
   return {
-    sceneProgress: totalSec > 0 ? targetSec / totalSec : 0,
-    sceneElapsedSec: targetSec,
+    sceneProgress: totalSec > 0 ? elapsedSec / totalSec : 0,
+    sceneElapsedSec: elapsedSec,
     sceneDurationSec: totalSec,
     shotIndex,
     shot,
