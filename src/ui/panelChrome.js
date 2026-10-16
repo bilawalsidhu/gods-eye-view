@@ -14,6 +14,7 @@ const SHARE_PANEL_STATE_SPECS = Object.freeze([
   { id: 'cctv-panel' },
   { id: 'weather-panel' },
   { id: 'recent-imagery-panel' },
+  { id: 'alpha-earth-panel' },
   { id: 'street-level-panel' },
   { id: 'radio-panel' },
   { id: 'scene-panel' },
@@ -27,6 +28,7 @@ const COCKPIT_ENTRY_COLLAPSE_PANEL_IDS = Object.freeze([
   'cctv-panel',
   'weather-panel',
   'recent-imagery-panel',
+  'alpha-earth-panel',
   'street-level-panel',
   'scene-panel',
   'pp-toggles',
@@ -292,6 +294,7 @@ export class PanelChrome {
       'cctv-panel',
       'weather-panel',
       'recent-imagery-panel',
+      'alpha-earth-panel',
       'street-level-panel',
       'global-context-panel',
     ].includes(panelEl?.id);

@@ -35,7 +35,7 @@ const PANEL_GROUPS = [
   },
   {
     label: 'Cameras',
-    ids: ['cctv', 'recent-imagery', 'street-level'],
+    ids: ['cctv', 'recent-imagery', 'alpha-earth-change', 'street-level'],
   },
   {
     label: 'Infrastructure',
@@ -145,6 +145,8 @@ export class LayerPanel {
     this._cancelRowControlsRefresh = null;
     this._recentImageryFactory = null;
     this._recentImageryPanel = null;
+    this._alphaEarthFactory = null;
+    this._alphaEarthPanel = null;
   }
   mount(container) {
     if (this._destroyed) return;
@@ -158,6 +160,7 @@ export class LayerPanel {
       setLayerParams: this.setLayerParams,
     });
     this._mountRecentImagery();
+    this._mountAlphaEarth();
     this._renderToggles();
   }
   /**
@@ -180,6 +183,21 @@ export class LayerPanel {
     if (container && this._recentImageryFactory)
       this._recentImageryPanel = this._recentImageryFactory(container) || null;
   }
+  /** Host the AlphaEarth Change readout in its rail body (see attachRecentImagery). */
+  attachAlphaEarth(factory) {
+    if (this._destroyed) return;
+    this._alphaEarthFactory = typeof factory === 'function' ? factory : null;
+    this._mountAlphaEarth();
+  }
+  _mountAlphaEarth() {
+    this._alphaEarthPanel?.destroy();
+    this._alphaEarthPanel = null;
+    const container = this._toggleContainer?.ownerDocument?.getElementById?.(
+      'alpha-earth-panel-body',
+    );
+    if (container && this._alphaEarthFactory)
+      this._alphaEarthPanel = this._alphaEarthFactory(container) || null;
+  }
   _bind(element, type, listener) {
     element.addEventListener(type, listener);
     this._removers.push(() => element.removeEventListener(type, listener));
@@ -199,6 +217,9 @@ export class LayerPanel {
     this._recentImageryPanel?.destroy();
     this._recentImageryPanel = null;
     this._recentImageryFactory = null;
+    this._alphaEarthPanel?.destroy();
+    this._alphaEarthPanel = null;
+    this._alphaEarthFactory = null;
     this._toggleContainer = null;
   }
   _renderToggles() {

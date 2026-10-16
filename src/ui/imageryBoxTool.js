@@ -19,9 +19,10 @@ export const IMAGERY_BOX_POINTER_OWNER = 'recent-imagery-box';
 
 /**
  * Wire the box tool.
- * @param {{ viewer: object, onBox: (box: object) => void, onCancel?: (reason: string, message?: string, box?: object) => void, onActive?: (active: boolean) => void, onEscape?: () => boolean, cesium?: object, pickWorld?: Function, documentRef?: object }} deps
+ * @param {{ viewer: object, onBox: (box: object) => void, onCancel?: (reason: string, message?: string, box?: object) => void, onActive?: (active: boolean) => void, onEscape?: () => boolean, validate?: (box: object) => { ok: boolean, box?: object, reason?: string, message?: string }, cesium?: object, pickWorld?: Function, documentRef?: object }} deps
  *   `onEscape` runs before the tool cancels on Escape; returning `true` claims
- *   the key (it is still consumed) and leaves the tool armed.
+ *   the key (it is still consumed) and leaves the tool armed. `validate`
+ *   replaces the Recent Imagery box rules for a layer with its own limits.
  * @returns {{ start: () => boolean, cancel: (reason?: string) => void, isActive: () => boolean, destroy: () => Promise<void> } | null}
  */
 export function initImageryBoxTool({
@@ -30,6 +31,7 @@ export function initImageryBoxTool({
   onCancel,
   onActive,
   onEscape,
+  validate = validateBox,
   cesium = Cesium,
   pickWorld = pickWorldFromScreen,
   documentRef = globalThis.document,
@@ -168,7 +170,7 @@ export function initImageryBoxTool({
     if (!anchor || destroyed) return;
     corner = worldAt(event.position) || corner;
     const box = dragBox();
-    const result = validateBox(box);
+    const result = validate(box);
     if (result.reason === 'degenerate') result.message = 'Drag to size the box';
     endDrag();
     setActive(false);

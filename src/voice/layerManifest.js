@@ -354,6 +354,18 @@ const layers = [
     noQuery: 'imagery tiles; no countable records',
   },
   {
+    id: 'alpha-earth-change',
+    aliases: [
+      'alphaearth',
+      'alpha earth',
+      'land change',
+      'embedding change',
+      'what changed',
+    ],
+    context: false,
+    noQuery: 'change heatmap; no countable records',
+  },
+  {
     id: 'directions',
     aliases: ['driving directions', 'directions panel'],
     context: false,

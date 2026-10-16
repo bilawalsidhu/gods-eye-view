@@ -76,6 +76,11 @@ export class LayerPresentation {
     if (factory) this.panel.attachRecentImagery(factory);
     else this._panel?.attachRecentImagery(null);
   }
+  /** Hand the AlphaEarth Change readout factory to the panel. */
+  attachAlphaEarth(factory) {
+    if (factory) this.panel.attachAlphaEarth(factory);
+    else this._panel?.attachAlphaEarth(null);
+  }
   refresh() {
     this._panel?._refreshTogglePanel();
   }

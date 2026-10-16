@@ -98,6 +98,28 @@ test('a sky press, a click without a drag and Escape each say why', async () => 
   await f.tool.destroy();
 });
 
+test('a layer with its own limits refuses a box the default rules accept', async () => {
+  const f = fixture({
+    validate: (box) =>
+      box.east - box.west > 0.01
+        ? {
+            ok: false,
+            reason: 'too-large',
+            message: 'Box is 5 km wide · limit 1 km',
+          }
+        : { ok: true, box },
+  });
+  f.tool.start();
+  f.fire('LEFT_DOWN', { position: { x: 250, y: 125 } });
+  f.fire('LEFT_UP', { position: { x: 500, y: 250 } });
+  assert.deepEqual(f.boxes, []);
+  assert.deepEqual(f.cancels.at(-1), [
+    'too-large',
+    'Box is 5 km wide · limit 1 km',
+  ]);
+  await f.tool.destroy();
+});
+
 test('an Escape interceptor that claims the key leaves the tool armed; the next Escape cancels', async () => {
   let claim = true;
   let asked = 0;

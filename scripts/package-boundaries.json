@@ -710,7 +710,8 @@
       "src/ui/styles/first-run.css",
       "src/ui/styles/provider-settings.css",
       "src/ui/styles/weather.css",
-      "src/ui/styles/recent-imagery.css"
+      "src/ui/styles/recent-imagery.css",
+      "src/ui/styles/alpha-earth.css"
     ],
     "external": []
   },
@@ -957,6 +958,17 @@
       "src/layers/recentImagery/catalog.js",
       "src/layers/recentImagery/rendering.js",
       "src/layers/recentImagery/thumbnails.js",
+      "src/maps/imageryHost.js"
+    ],
+    "external": ["cesium"]
+  },
+  "alpha-earth-change": {
+    "exports": ["./layers/alpha-earth"],
+    "modules": [
+      "src/layers/alphaEarth/index.js",
+      "src/layers/alphaEarth/source.js",
+      "src/layers/alphaEarth/model.js",
+      "src/layers/alphaEarth/rendering.js",
       "src/maps/imageryHost.js"
     ],
     "external": ["cesium"]
@@ -2189,6 +2201,12 @@
       "src/layers/recentImagery/catalog.js",
       "src/layers/recentImagery/rendering.js",
       "src/layers/recentImagery/thumbnails.js",
+      "src/app/layers/alphaEarth.js",
+      "src/layers/alphaEarth/index.js",
+      "src/layers/alphaEarth/source.js",
+      "src/layers/alphaEarth/model.js",
+      "src/layers/alphaEarth/rendering.js",
+      "src/ui/alphaEarth.js",
       "src/maps/imageryHost.js",
       "src/ui/recentImagery.js",
       "src/ui/imageryBoxTool.js",
@@ -2760,6 +2778,11 @@
       "src/layers/recentImagery/catalog.js",
       "src/layers/recentImagery/rendering.js",
       "src/layers/recentImagery/thumbnails.js",
+      "src/app/layers/alphaEarth.js",
+      "src/layers/alphaEarth/index.js",
+      "src/layers/alphaEarth/source.js",
+      "src/layers/alphaEarth/model.js",
+      "src/layers/alphaEarth/rendering.js",
       "src/maps/imageryHost.js",
       "src/layers/streetLevel/index.js",
       "src/layers/streetLevel/providers/mapillary/index.js",
@@ -3052,6 +3075,14 @@
       "src/layers/recentImagery/source.js",
       "src/layers/recentImagery/catalog.js",
       "src/layers/recentImagery/model.js"
+    ],
+    "external": []
+  },
+  "alpha-earth-source": {
+    "exports": ["./layers/alpha-earth/source"],
+    "modules": [
+      "src/layers/alphaEarth/source.js",
+      "src/layers/alphaEarth/model.js"
     ],
     "external": []
   },

@@ -160,6 +160,13 @@ export const DATA_CREDITS = [
       '<a href="https://lpdaac.usgs.gov/products/hlss30v002/" target="_blank" rel="noopener">HLS product page</a>',
   },
   {
+    key: 'alpha-earth',
+    html:
+      'AlphaEarth Change: The AlphaEarth Foundations Satellite Embedding dataset is produced by Google and Google DeepMind. ' +
+      '<a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a> · ' +
+      'mirror: <a href="https://source.coop/tge-labs/aef" target="_blank" rel="noopener">Source Cooperative</a>',
+  },
+  {
     key: 'wfigs',
     html:
       'Wildfire perimeters: ' +
