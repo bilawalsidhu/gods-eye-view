@@ -171,3 +171,33 @@ test('disable aborts in-flight work and clears; unavailable snapshots stop rende
   assert.equal(u.layer.getStats().error, null);
   u.layer.destroy();
 });
+
+test('an update superseded by a newer one resolves with the newer result instead of reporting a rejected refresh', async () => {
+  const pending = [];
+  const h = harness({
+    getSnapshot: (args) =>
+      new Promise((resolve, reject) => {
+        pending.push({ args, resolve });
+        args.signal.addEventListener('abort', () => reject(args.signal.reason), { once: true });
+      }),
+  });
+  // The manager's enable-time update is in flight when a camera move lands.
+  const managerCall = h.layer.update(h.viewer);
+  await Promise.resolve();
+  assert.equal(pending.length, 1);
+  const moveCall = h.layer.update(h.viewer);
+  await Promise.resolve();
+  assert.equal(pending.length, 2);
+  assert.equal(pending[0].args.signal.aborted, true, 'the older request is cancelled');
+  pending[1].resolve(snapshot('regional'));
+  assert.equal(await moveCall, true);
+  assert.equal(await managerCall, true, 'the manager sees the field that replaced its request');
+  assert.equal(h.layer.getStats().tier, 'regional');
+  // An external abort still reports cancellation.
+  const external = new AbortController();
+  const cancelled = h.layer.update(h.viewer, { signal: external.signal });
+  await Promise.resolve();
+  external.abort();
+  assert.equal(await cancelled, false);
+  h.layer.destroy();
+});

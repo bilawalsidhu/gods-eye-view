@@ -115,6 +115,58 @@ export function createOceanCurrentsLayer({
     }, retryMs);
   }
 
+  let sequence = 0;
+  let latestOutcome = Promise.resolve(false);
+
+  async function runUpdate(nextViewer, signal) {
+    if (!enabled) return false;
+    if (nextViewer) viewer = nextViewer;
+    rendering?.rehome?.();
+    request?.abort();
+    const controller = new AbortController();
+    if (signal?.aborted) controller.abort(signal.reason);
+    const abort = () => controller.abort(signal.reason);
+    signal?.addEventListener('abort', abort, { once: true });
+    request = controller;
+    loading = true;
+    notify();
+    const box = viewBox(viewer, cesium);
+    try {
+      signal?.throwIfAborted();
+      const snapshot = await feed.getSnapshot({
+        signal: controller.signal,
+        box,
+      });
+      if (!enabled || controller.signal.aborted || request !== controller)
+        return false;
+      manifest = snapshot;
+      error = null;
+      lastBox = box;
+      if (snapshot.unavailable) {
+        rendering.stop();
+        rendering.clear();
+        scheduleRetry();
+      } else {
+        rendering.setOptions?.({ overlay, paused });
+        rendering.setField(snapshot);
+        rendering.start();
+      }
+      return true;
+    } catch (cause) {
+      if (controller.signal.aborted || request !== controller) return false;
+      error = cause?.message || 'Ocean current source unavailable';
+      scheduleRetry();
+      return true;
+    } finally {
+      signal?.removeEventListener('abort', abort);
+      if (request === controller) {
+        request = null;
+        loading = false;
+        notify();
+      }
+    }
+  }
+
   const layer = {
     id: 'ocean-currents',
     name: 'Ocean Currents',
@@ -171,53 +223,24 @@ export function createOceanCurrentsLayer({
       rendering?.stop();
       rendering?.clear();
     },
-    async update(nextViewer, { signal } = {}) {
-      if (!enabled) return false;
-      if (nextViewer) viewer = nextViewer;
-      rendering?.rehome?.();
-      request?.abort();
-      const controller = new AbortController();
-      if (signal?.aborted) controller.abort(signal.reason);
-      const abort = () => controller.abort(signal.reason);
-      signal?.addEventListener('abort', abort, { once: true });
-      request = controller;
-      loading = true;
-      notify();
-      const box = viewBox(viewer, cesium);
-      try {
-        signal?.throwIfAborted();
-        const snapshot = await feed.getSnapshot({
-          signal: controller.signal,
-          box,
-        });
-        if (!enabled || controller.signal.aborted || request !== controller)
-          return false;
-        manifest = snapshot;
-        error = null;
-        lastBox = box;
-        if (snapshot.unavailable) {
-          rendering.stop();
-          rendering.clear();
-          scheduleRetry();
-        } else {
-          rendering.setOptions?.({ overlay, paused });
-          rendering.setField(snapshot);
-          rendering.start();
-        }
-        return true;
-      } catch (cause) {
-        if (controller.signal.aborted || request !== controller) return false;
-        error = cause?.message || 'Ocean current source unavailable';
-        scheduleRetry();
-        return true;
-      } finally {
-        signal?.removeEventListener('abort', abort);
-        if (request === controller) {
-          request = null;
-          loading = false;
-          notify();
-        }
-      }
+    update(nextViewer, { signal } = {}) {
+      const outcome = (async () => {
+        const mine = ++sequence;
+        const result = await runUpdate(nextViewer, signal);
+        // A camera move superseded this request: answer with what replaced
+        // it, so the manager never mistakes its own refresh for a rejection
+        // (a rejected enable-time update rolls the layer back to disabled).
+        if (
+          result === false &&
+          !signal?.aborted &&
+          enabled &&
+          sequence !== mine
+        )
+          return latestOutcome;
+        return result;
+      })();
+      latestOutcome = outcome;
+      return outcome;
     },
     setParams(params = {}) {
       if (typeof params.paused === 'boolean') paused = params.paused;
