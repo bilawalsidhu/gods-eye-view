@@ -295,3 +295,48 @@ test('releasePhotorealTiles forgets the source and takes its tiles away if shown
   assert.equal(maps.current().photoreal, null);
   assert.equal(layersOf(view, '3d-tiles').length, 0);
 });
+
+test('after a map change Navara keeps redrawing while tiles arrive, then stops', async () => {
+  const view = fakeView();
+  const timers = [];
+  let now = 0;
+  const { maps, destroy } = createNavaraMaps(view, {
+    setInterval: (fn, ms) => {
+      const timer = { fn, ms, cleared: false };
+      timers.push(timer);
+      return timer;
+    },
+    clearInterval: (timer) => {
+      if (timer) timer.cleared = true;
+    },
+    now: () => now,
+  });
+  const tick = (ms) => {
+    for (let t = 0; t < ms; t += 250) {
+      now += 250;
+      for (const timer of timers) if (!timer.cleared) timer.fn();
+    }
+  };
+  await maps.setBaseImagery({ kind: 'osm' });
+  const afterChange = view.frames;
+  tick(1000);
+  // Navara 0.2.1 can report idle and stop drawing before a raster tile it
+  // fetched arrives: the engine asks for frames for a while after a change.
+  assert.ok(view.frames >= afterChange + 4, `frames ${view.frames}`);
+  tick(10_000);
+  const settled = view.frames;
+  tick(5_000);
+  assert.equal(view.frames, settled, 'idle again once the window ends');
+  assert.ok(
+    timers.every((timer) => timer.cleared),
+    'no timer left running',
+  );
+  // Another change opens a new window; destroy ends it.
+  await maps.setBaseImagery({ kind: 'esri-imagery' });
+  tick(500);
+  assert.ok(view.frames > settled + 1);
+  destroy();
+  const atDestroy = view.frames;
+  tick(2000);
+  assert.equal(view.frames, atDestroy);
+});

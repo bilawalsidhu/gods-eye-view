@@ -57,15 +57,47 @@ function imageryFor(source) {
   }
 }
 
+// After a map change Navara 0.2.1 can report idle and stop drawing before a
+// raster tile it fetched arrives (measured at the whole-globe view: the
+// stack switch drew a stale picture until something else asked for a
+// frame). For a while after each change the engine asks for frames itself.
+const SETTLE_MS = 6000;
+const SETTLE_EVERY_MS = 250;
+
 /**
  * @param {object} view A Navara ThreeView (addSource, addLayer, attribution, forceUpdate).
- * @param {{ fetch?: typeof fetch }} [options]
+ * @param {{ fetch?: typeof fetch, setInterval?: Function,
+ *   clearInterval?: Function, now?: () => number }} [options] timers: test seams.
  * @returns {{ maps: object, destroy: () => void }}
  */
 export function createNavaraMaps(
   view,
-  { fetch: fetchJson = globalThis.fetch } = {},
+  {
+    fetch: fetchJson = globalThis.fetch,
+    setInterval: every = globalThis.setInterval,
+    clearInterval: stopEvery = globalThis.clearInterval,
+    now = () => performance.now(),
+  } = {},
 ) {
+  let settleTimer = null;
+  let settleUntil = 0;
+  const stopSettling = () => {
+    if (settleTimer !== null) stopEvery(settleTimer);
+    settleTimer = null;
+  };
+  // A frame now, and frames for SETTLE_MS while tiles arrive.
+  const changed = () => {
+    view.forceUpdate();
+    settleUntil = now() + SETTLE_MS;
+    if (settleTimer !== null || destroyed) return;
+    settleTimer = every(() => {
+      if (destroyed || now() >= settleUntil) {
+        stopSettling();
+        return;
+      }
+      view.forceUpdate();
+    }, SETTLE_EVERY_MS);
+  };
   const slots = { imagery: null, terrain: null, photoreal: null };
   // Base imagery and photoreal tiles share one switch order (display): the
   // call made last decides what shows.
@@ -105,7 +137,7 @@ export function createNavaraMaps(
       credits: shown,
       hidden: false,
     };
-    view.forceUpdate();
+    changed();
   }
 
   // Base imagery under photoreal is hidden rather than deleted (see show).
@@ -120,7 +152,7 @@ export function createNavaraMaps(
     });
     if (slot.credits.length)
       view.attribution?.[shown ? 'add' : 'remove'](slot.credits);
-    view.forceUpdate();
+    changed();
   }
 
   async function terrainFor(source) {
@@ -182,7 +214,7 @@ export function createNavaraMaps(
       if (destroyed || generation !== generations.terrain) return;
       if (!description) {
         clear('terrain');
-        view.forceUpdate();
+        changed();
         return;
       }
       if (slots.terrain?.key === description.url) return;
@@ -198,7 +230,7 @@ export function createNavaraMaps(
           setImageryShown(true);
           currentBase = baseSource;
         }
-        view.forceUpdate();
+        changed();
         return;
       }
       const key = String(source.googleApiKey || '').trim();
@@ -235,7 +267,7 @@ export function createNavaraMaps(
       if (tilesSource !== source) return;
       tilesSource = null;
       clear('photoreal');
-      view.forceUpdate();
+      changed();
     },
     photorealActive: () => slots.photoreal != null,
     current: () => ({ baseImagery: currentBase, photoreal: tilesSource }),
@@ -246,6 +278,7 @@ export function createNavaraMaps(
     destroy() {
       if (destroyed) return;
       destroyed = true;
+      stopSettling();
       for (const name of Object.keys(slots)) clear(name);
     },
   };
