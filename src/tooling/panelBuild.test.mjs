@@ -114,3 +114,15 @@ test("Cesium's workers get embedded files from memory and other requests from th
     globalThis.ProgressEvent = saved.ProgressEvent;
   }
 });
+
+test('the panel build leaves out the initial-chunk guard (it inlines Navara)', () => {
+  const kept = { name: 'kept' };
+  const config = panelBuildConfig({
+    build: {
+      rollupOptions: {
+        plugins: [kept, { name: 'gev-initial-chunk-guard' }],
+      },
+    },
+  });
+  assert.deepEqual(config.build.rollupOptions.plugins, [kept]);
+});
