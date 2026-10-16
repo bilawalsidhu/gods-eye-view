@@ -34,6 +34,7 @@ const fragmentShader = /* glsl */ `
 uniform float amount;
 uniform sampler2D tSceneDepth;
 uniform bool uSkipSky;
+const float SKY_DEPTH = 0.99999;
 
 vec3 encodeGamma(vec3 color) {
   return pow(max(color, vec3(0.0)), vec3(1.0 / 2.2));
@@ -44,7 +45,8 @@ vec3 sampleGamma(vec2 uv) {
 }
 
 void mainImage(const in vec4 inputColor, const in vec2 uv, out vec4 outputColor) {
-  if (uSkipSky && unpackRGBAToDepth(texture2D(tSceneDepth, uv)) >= 1.0) {
+  // The far plane, with a margin: packing to RGBA8 rounds near 1.0.
+  if (uSkipSky && unpackRGBAToDepth(texture2D(tSceneDepth, uv)) > SKY_DEPTH) {
     outputColor = inputColor;
     return;
   }
