@@ -18,6 +18,8 @@ const REPO_ROOT = fileURLToPath(new URL('..', import.meta.url))
   .replace(/\\/g, '/')
   .replace(/\/$/, '');
 
+const REPO_ROOT_GLOB = REPO_ROOT.replace(/[()[\]{}*?!+@|]/g, '\\$&');
+
 /**
  * Content-Security-Policy for every document the dev/preview server serves.
  * No inline script is permitted, and the only foreign script origins are the
