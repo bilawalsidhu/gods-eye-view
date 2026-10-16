@@ -2793,3 +2793,49 @@ test('explicit provider switches reach durable state without adopting unrelated 
     coordinator.destroy();
   }
 });
+
+test('a link through an engine without some layers keeps their state and activates nothing', async () => {
+  // The Navara catalog: only satellites registered.
+  const manager = new DataLayerManager({});
+  const enabled = [];
+  manager.register(
+    fakeLayer('satellites', { enable: () => (enabled.push('satellites'), true) }),
+  );
+  manager.finalizeRegistrations(
+    LAYER_STATE_REGISTRY.filter(({ id }) => id === 'satellites'),
+  );
+  const shared = normalizeLayerState({
+    enabledLayerIds: ['flights', 'ais-live-vessels', 'satellites'],
+  });
+  const sink = shareSink();
+  const coordinator = new LayerStateCoordinator(manager, sink, {
+    storage: memoryStorage(),
+  });
+  const results = await coordinator.start({
+    shareLayerState: shared,
+    shareCreatedAtMs: 1_000,
+  });
+  assert.deepEqual(enabled, ['satellites'], 'only the registered layer runs');
+  const missing = results
+    .filter(({ phase, targetEnabled }) => phase === 'missing' && targetEnabled)
+    .map(({ layerId }) => layerId)
+    .sort();
+  assert.deepEqual(missing, ['ais-live-vessels', 'flights']);
+  // Re-saved (the link the user copies on Navara): the state is all there.
+  assert.deepEqual(
+    sink.provider().enabledLayerIds,
+    ['ais-live-vessels', 'flights', 'satellites'],
+  );
+  // An explicit change of a layer that is here keeps the others too.
+  await manager.setEnabled('satellites', false, { origin: 'user' });
+  assert.deepEqual(sink.provider().enabledLayerIds, [
+    'ais-live-vessels',
+    'flights',
+  ]);
+  // And back on Cesium the link turns them on.
+  const decoded = decodeLayerStateParams(
+    new URLSearchParams(encode(sink.provider())),
+  );
+  assert.deepEqual(decoded.enabledLayerIds, ['ais-live-vessels', 'flights']);
+  coordinator.destroy();
+});

@@ -1,7 +1,4 @@
-import {
-  absentLayerControlServices,
-  catalogControlServices,
-} from './catalog.js';
+import { catalogControlServices } from './catalog.js';
 import { StyleManager } from '../ui/composition.js';
 import { flyToAustin } from '../camera.js';
 import { initCockpitCloudEffects } from '../cockpitCloudEffects.js';
@@ -24,10 +21,9 @@ export function createApplicationControls({
       searchAndFlyTo: operations.searchAndFlyTo,
       fetchRegionalBrief: (...args) =>
         operations.requests.regional.getBrief(...args),
-      // No viewer (the Navara engine): no data layers, empty stand-ins.
-      ...(viewer
-        ? catalogControlServices(catalog)
-        : absentLayerControlServices()),
+      // The catalog's layers; the ones this engine cannot show (Navara)
+      // are empty stand-ins.
+      ...catalogControlServices(catalog),
     },
     requestServices: operations.requests,
     // The page's globe engine: the shell's overlay host runs on it.

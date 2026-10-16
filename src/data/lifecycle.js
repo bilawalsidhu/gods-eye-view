@@ -1,3 +1,4 @@
+import { engineFromViewer } from '../globe/cesium/engineFromViewer.js';
 import { cancelCameraArrival } from './cameraArrival.js';
 
 function cloneLayerParams(value) {
@@ -74,12 +75,20 @@ function refreshFailureFromStats(stats, label) {
  * for real-time data overlays on the CesiumJS globe.
  */
 export class LayerLifecycle {
+  /**
+   * @param {object | null} viewer The Cesium viewer (null on Navara).
+   * @param {{ engine?: import('../globe/contract.js').GlobeEngine,
+   *   allowQaRegistration?: boolean, getSourceAvailability?: Function }} [options]
+   *   `engine` (default: the viewer's registered engine): every module call
+   *   gets `{ signal, engine }` as its second argument.
+   */
   constructor(
     viewer,
-    { allowQaRegistration = false, getSourceAvailability } = {},
+    { allowQaRegistration = false, getSourceAvailability, engine } = {},
   ) {
     this._catalogSourceAvailability = getSourceAvailability;
     this.viewer = viewer;
+    this.engine = engine ?? engineFromViewer(viewer) ?? null;
     this._activityListeners = new Set();
     this.layers = new Map(); // id → { module, enabled, initialized, intervalId, lifecycleState, lifecycleUncertain }
     this._listeners = new Set();
@@ -90,6 +99,11 @@ export class LayerLifecycle {
     this._registrationDispositions = null;
     this._allowQaRegistration = allowQaRegistration === true;
     this._qaLayerIds = new Set();
+  }
+
+  /** The second argument of every layer module call: `{ signal, engine }`. */
+  _moduleContext(signal = null) {
+    return { signal, engine: this.engine };
   }
 
   register(layerModule) {
@@ -292,7 +306,10 @@ export class LayerLifecycle {
     let result;
     let failure = null;
     try {
-      result = await entry.module.update(this.viewer, { signal });
+      result = await entry.module.update(
+        this.viewer,
+        this._moduleContext(signal),
+      );
       // Even a rejected/partial update may have changed the data exposed by
       // the layer. Publish before classifying its result so observers see it.
       this._publishActivity({ type: 'data-updated', layerId });
@@ -739,7 +756,9 @@ export class LayerLifecycle {
         let compensated = false;
         let compensationError = null;
         try {
-          compensated = (await entry.module.enable(this.viewer)) !== false;
+          compensated =
+            (await entry.module.enable(this.viewer, this._moduleContext())) !==
+            false;
           if (!compensated) {
             compensationError = lifecycleRejectedError(
               layerId,
@@ -757,7 +776,10 @@ export class LayerLifecycle {
         if (!compensated) {
           try {
             cleanupConfirmed =
-              (await entry.module.disable(this.viewer)) !== false;
+              (await entry.module.disable(
+                this.viewer,
+                this._moduleContext(),
+              )) !== false;
           } catch (error) {
             console.warn(
               `[Data] ${layerId} cancelled-disable final cleanup error:`,
@@ -805,7 +827,10 @@ export class LayerLifecycle {
         return false;
       };
       try {
-        const disabled = await entry.module.disable(this.viewer, { signal });
+        const disabled = await entry.module.disable(
+          this.viewer,
+          this._moduleContext(signal),
+        );
         if (disabled === false)
           throw lifecycleRejectedError(layerId, 'disable');
       } catch (e) {
@@ -854,7 +879,7 @@ export class LayerLifecycle {
         // where an asynchronous enable finishes after this callback.
         try {
           abortCleanup = Promise.resolve(
-            entry.module.disable(this.viewer),
+            entry.module.disable(this.viewer, this._moduleContext()),
           ).catch((error) => {
             console.warn(
               `[Data] ${layerId} cancelled-enable cleanup error:`,
@@ -883,7 +908,8 @@ export class LayerLifecycle {
         let cleanupConfirmed = false;
         try {
           cleanupConfirmed =
-            (await entry.module.disable(this.viewer)) !== false;
+            (await entry.module.disable(this.viewer, this._moduleContext())) !==
+            false;
         } catch (error) {
           console.warn(
             `[Data] ${layerId} cancelled-enable final cleanup error:`,
@@ -924,7 +950,8 @@ export class LayerLifecycle {
         let cleanupConfirmed = false;
         try {
           cleanupConfirmed =
-            (await entry.module.disable(this.viewer)) !== false;
+            (await entry.module.disable(this.viewer, this._moduleContext())) !==
+            false;
         } catch (cleanupError) {
           console.warn(
             `[Data] ${layerId} failed-enable cleanup error:`,
@@ -950,7 +977,10 @@ export class LayerLifecycle {
       if (!entry.initialized) {
         this._setVisibilityIntentPhase(entry, intentEpoch, 'init');
         try {
-          const initialized = await entry.module.init(this.viewer, { signal });
+          const initialized = await entry.module.init(
+            this.viewer,
+            this._moduleContext(signal),
+          );
           if (initialized === false)
             throw lifecycleRejectedError(layerId, 'init');
           entry.initialized = true;
@@ -990,7 +1020,10 @@ export class LayerLifecycle {
       entry.lifecycleUncertain = false;
       this._setVisibilityIntentPhase(entry, intentEpoch, 'enable');
       try {
-        const enabled = await entry.module.enable(this.viewer, { signal });
+        const enabled = await entry.module.enable(
+          this.viewer,
+          this._moduleContext(signal),
+        );
         if (enabled === false) throw lifecycleRejectedError(layerId, 'enable');
       } catch (e) {
         if (signal?.aborted || isAbortError(e)) {
@@ -1006,7 +1039,10 @@ export class LayerLifecycle {
       // First update immediately
       this._setVisibilityIntentPhase(entry, intentEpoch, 'update');
       try {
-        const updated = await entry.module.update(this.viewer, { signal });
+        const updated = await entry.module.update(
+          this.viewer,
+          this._moduleContext(signal),
+        );
         if (updated === false) throw lifecycleRejectedError(layerId, 'update');
       } catch (e) {
         if (signal?.aborted || isAbortError(e)) {
@@ -2146,7 +2182,10 @@ export class LayerLifecycle {
     entry.latestQueuedAbsoluteIntent = null;
     if (entry.enabled) {
       try {
-        const disabled = await entry.module.disable(this.viewer);
+        const disabled = await entry.module.disable(
+          this.viewer,
+          this._moduleContext(),
+        );
         if (disabled === false)
           throw lifecycleRejectedError(layerId, 'destroy-disable');
       } catch (e) {
@@ -2165,7 +2204,10 @@ export class LayerLifecycle {
     }
     if (typeof entry.module.destroy === 'function') {
       try {
-        const destroyed = await entry.module.destroy(this.viewer);
+        const destroyed = await entry.module.destroy(
+          this.viewer,
+          this._moduleContext(),
+        );
         if (destroyed === false)
           throw lifecycleRejectedError(layerId, 'destroy');
       } catch (e) {

@@ -1096,5 +1096,10 @@
   "src/globe/navara/followGestures.js",
   "src/globe/navara/followGestures.test.mjs",
   "src/globe/cpuPicks.test.mjs",
-  "scripts/qa-overlay-engines.mjs"
+  "scripts/qa-overlay-engines.mjs",
+  "src/app/layers/directory.js",
+  "src/app/layers/renderers.js",
+  "src/app/layers/renderers.test.mjs",
+  "src/data/lifecycleEngine.test.mjs",
+  "src/ui/shareRestorationEngine.test.mjs"
 ]

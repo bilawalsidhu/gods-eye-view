@@ -191,3 +191,54 @@ test('Mapillary can be omitted or replaced without changing catalog membership',
     /Mapillary source/,
   );
 });
+
+test('the catalog per engine: Cesium as before, Navara only what it can show', async (t) => {
+  const { APPLICATION_LAYER_DIRECTORY } = await import('./layers/directory.js');
+  const { createLayerAvailability, createRendererRegistry } =
+    await import('./layers/renderers.js');
+  const controller = new AbortController();
+  t.after(() => controller.abort());
+  const build = (options) =>
+    createApplicationCatalog({
+      sources: createStandaloneLayerSources(),
+      signal: controller.signal,
+      surface: fixtureSurface(controller.signal),
+      ...options,
+    });
+  const cesium = build({});
+  // The directory is the catalog Cesium builds: ids, names and order.
+  assert.deepEqual(
+    cesium.layers.map(({ id, name }) => ({ id, name })),
+    APPLICATION_LAYER_DIRECTORY.map(({ id, name }) => ({ id, name })),
+  );
+  assert.equal(cesium.engineKind, 'cesium');
+  assert.deepEqual(cesium.unavailableMetadata, []);
+  assert.equal(cesium.availability.unavailable().length, 0);
+
+  const navara = build({ engineKind: 'navara' });
+  assert.equal(navara.layers.length, 0, 'no Navara renderers yet');
+  assert.equal(navara.unavailableMetadata.length, cesium.metadata.length);
+  assert.equal(navara.availability.engine, 'navara');
+
+  // With Navara renderers for two layers, only those are constructed, in
+  // catalog order, with their metadata.
+  const registry = createRendererRegistry();
+  registry.register('navara', {
+    satellites: () => ({}),
+    flights: () => ({}),
+  });
+  const subset = build({
+    engineKind: 'navara',
+    availability: createLayerAvailability('navara', { registry }),
+  });
+  assert.deepEqual(
+    subset.layers.map(({ id }) => id),
+    ['flights', 'satellites'],
+  );
+  assert.deepEqual(
+    subset.metadata.map(({ id }) => id),
+    ['flights', 'satellites'],
+  );
+  assert.ok(subset.unavailableMetadata.some(({ id }) => id === 'military'));
+  assert.equal(subset.get('military'), undefined);
+});

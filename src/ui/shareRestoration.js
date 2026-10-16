@@ -1,4 +1,16 @@
 import { LayerStateCoordinator } from '../data/layerStateCoordinator.js';
+import { APPLICATION_LAYER_DIRECTORY } from '../app/layers/directory.js';
+
+/** Names of the layers a link turned on that this engine does not have. */
+export function layersNotOnThisEngine(results) {
+  return results
+    .filter(({ phase, targetEnabled }) => phase === 'missing' && targetEnabled)
+    .map(
+      ({ layerId }) =>
+        APPLICATION_LAYER_DIRECTORY.find(({ id }) => id === layerId)?.name ??
+        layerId,
+    );
+}
 import { stampInitialShareGesture } from '../navigationPolicy.js';
 import { canPresentDeferredStatusNotice } from '../loadingFeedback.js';
 import { UiLifetime } from './uiLifetime.js';
@@ -159,10 +171,25 @@ export class ShareRestoration {
           { clearSelection: true },
         );
       }
-      void this._layerStateRestorePromise.then(() => {
+      void this._layerStateRestorePromise.then((results) => {
         this.syncModels3d(this._layerStateCoordinator?.getDurableState());
+        this._noticeLayersNotOnThisEngine(results);
       });
     }
+  }
+  /**
+   * A link that turns on layers this engine's catalog leaves out (Navara):
+   * they stay off here, their state stays in the link, and the notice names
+   * them.
+   */
+  _noticeLayersNotOnThisEngine(results) {
+    if (this._disposed || !Array.isArray(results)) return;
+    const names = layersNotOnThisEngine(results);
+    if (!names.length) return;
+    this.showStatus('NOT ON THIS ENGINE', {
+      state: 'retry',
+      detail: `Kept in the link: ${names.join(', ')}`,
+    });
   }
   cancelSelection() {
     if (

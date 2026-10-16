@@ -5,6 +5,7 @@
 
 import { DATA_CREDITS, registerDataCredits } from '../data/dataCredits.js';
 import { isEmbeddedInline } from './embed.js';
+import { createLayerAvailability } from './layers/renderers.js';
 import {
   getRenderGovernorDiagnostics,
   governorRequestRender,
@@ -16,11 +17,21 @@ import {
 const loadNavaraGlobeModule = async () =>
   (await import('../globe/navara/index.js')).createNavaraGlobe;
 
-/** The shell's notice in the experimental Navara mode (label and detail). */
-export const NAVARA_MODE_NOTICE = Object.freeze({
-  label: 'Experimental Navara engine',
-  detail: 'Layers, cockpit, director and voice are unavailable',
-});
+/**
+ * The shell's notice in the experimental Navara mode (label and detail): the
+ * data layers this engine shows (its catalog, from the renderer registry)
+ * and what it does not have.
+ * @param {import('./layers/renderers.js').LayerAvailability} availability
+ */
+export function navaraModeNotice(availability) {
+  const names = availability.available().map(({ name }) => name);
+  return Object.freeze({
+    label: 'Experimental Navara engine',
+    detail: names.length
+      ? `Data layers: ${names.join(', ')}; the other layers, cockpit, director and voice are unavailable`
+      : 'No data layers on this engine yet; cockpit, director and voice are unavailable',
+  });
+}
 
 /**
  * Data credits for what the shell uses without data layers: place search,
@@ -131,9 +142,12 @@ export function createViewerlessTools({
   };
   document.addEventListener('visibilitychange', syncVisibility);
   defer(() => document.removeEventListener('visibilitychange', syncVisibility));
-  styleManager._showGlobalStatusNotice?.(NAVARA_MODE_NOTICE.label, {
+  const notice = navaraModeNotice(
+    data.catalog?.availability ?? createLayerAvailability('navara'),
+  );
+  styleManager._showGlobalStatusNotice?.(notice.label, {
     state: 'retry',
-    detail: NAVARA_MODE_NOTICE.detail,
+    detail: notice.detail,
     persistent: true,
   });
   window.__godsEyeView = {
