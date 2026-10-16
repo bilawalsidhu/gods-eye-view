@@ -403,6 +403,86 @@ function harness(
   };
 }
 
+test('RTD shares polling across Denver and Boulder and releases vehicles on disable', async (t) => {
+  const app = harness(t, { at: { lat: 39.7392, lon: -104.9903 } });
+  app.serve('rtd-denver', () => ({
+    status: 200,
+    body: snapshot(
+      'rtd-denver',
+      'RTD',
+      [
+        vehicle('bus', 40.015, -105.2705, reported(), { routeId: 'BOND' }),
+        vehicle('tram', 39.7392, -104.9903, reported(), { routeId: '101T' }),
+        vehicle('rail', 39.74, -104.99, reported(), { routeId: 'A' }),
+        vehicle('unassigned', 40.015, -105.27, reported(), { routeId: null }),
+        vehicle(
+          'expired',
+          40.016,
+          -105.27,
+          (Date.now() - VEHICLE_MAX_FIX_AGE_MS - 1_000) / 1000,
+          { routeId: 'FF1' },
+        ),
+      ],
+      { fetchedAt: Date.now(), feedTimestamp: Date.now() / 1000 },
+    ),
+  }));
+  app.layer.enable(app.viewer);
+  await app.layer.update();
+  assert.deepEqual(app.requested, ['/api/transit/vehicles/rtd-denver']);
+  assert.deepEqual(
+    app
+      .vehicles()
+      .map((entry) => [entry.record.id, entry.mode, entry.modeInferred]),
+    [
+      ['bus', 'bus', false],
+      ['tram', 'tram', false],
+      ['rail', 'rail', false],
+      ['unassigned', 'unknown', true],
+    ],
+  );
+  assert.ok(app.credits.includes('transit-rtd-denver'));
+  for (const [lat, lon] of [
+    [40.015, -105.2705],
+    [39.7392, -104.9903],
+  ]) {
+    app.viewer.camera.positionCartographic.latitude =
+      Cesium.Math.toRadians(lat);
+    app.viewer.camera.positionCartographic.longitude =
+      Cesium.Math.toRadians(lon);
+    app.lookAt({
+      west: lon - 0.1,
+      east: lon + 0.1,
+      south: lat - 0.1,
+      north: lat + 0.1,
+    });
+    app.advance(TRANSIT_POLL_MS);
+    const before = app.requested.length;
+    await app.layer.update();
+    assert.equal(
+      app.requested.length,
+      before + 1,
+      'one poll, not one per city',
+    );
+    assert.deepEqual([...app.state()._activeFeeds.keys()], ['rtd-denver']);
+    assert.equal(app.vehicles().length, 4);
+  }
+  assert.ok(
+    app.requested.every((url) => url === '/api/transit/vehicles/rtd-denver'),
+  );
+  app.layer.disable(app.viewer);
+  const before = app.requested.length;
+  app.advance(TRANSIT_POLL_MS * 2);
+  await app.layer.update();
+  assert.equal(app.requested.length, before);
+  assert.equal(app.vehicles().length, 0);
+  assert.equal(app.state()._inFlight.size, 0);
+  assert.equal(app.holds().includes('transit'), false);
+  app.layer.enable(app.viewer);
+  await app.layer.update();
+  assert.equal(app.requested.length, before + 1);
+  assert.equal(app.vehicles().length, 4);
+});
+
 test('a vehicle is played back a fixed lag behind its fixes, at 1x', async (t) => {
   const app = harness(t);
   const start = Date.now();

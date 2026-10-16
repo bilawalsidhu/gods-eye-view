@@ -16,7 +16,11 @@ import {
   transitResponseHeaders,
   transitUpstreamHeaders,
 } from './transitProxy.js';
-import { getTransitFeed } from './transitFeeds.js';
+import {
+  getTransitFeed,
+  transitModeFor,
+  transitModeResolved,
+} from './transitFeeds.js';
 
 test('route resolution admits only the catalog and registered feed ids', () => {
   assert.deepEqual(resolveTransitRoute('/feeds'), { route: 'feeds' });
@@ -134,6 +138,12 @@ function encodeFeed({
     const feedEntity = new PbfWriter();
     feedEntity.writeStringField(1, entity.id);
     const vehicle = new PbfWriter();
+    if (entity.routeId !== undefined) {
+      const trip = new PbfWriter();
+      trip.writeStringField(1, `trip-${entity.id}`);
+      trip.writeStringField(5, entity.routeId);
+      vehicle.writeBytesField(1, trip.finish());
+    }
     const position = new PbfWriter();
     position.writeFloatField(1, entity.lat);
     position.writeFloatField(2, entity.lon);
@@ -147,6 +157,188 @@ function encodeFeed({
   }
   return writer.finish();
 }
+
+test('MBTA binary snapshots retain default route trimming for mode classification', () => {
+  const feed = getTransitFeed('mbta');
+  const snapshot = buildTransitSnapshot(
+    feed,
+    encodeFeed({
+      entities: [{ id: 'v1', routeId: ' Green-B ', lat: 42.3, lon: -71.1 }],
+    }),
+    1_700_000_002_000,
+  );
+  assert.equal(snapshot.count, 1);
+  const [vehicle] = snapshot.vehicles;
+  assert.deepEqual(
+    [
+      vehicle.routeId,
+      transitModeFor(feed, vehicle.routeId),
+      transitModeResolved(feed, vehicle.routeId),
+    ],
+    ['Green-B', 'tram', true],
+  );
+});
+
+test('RTD binary snapshots preserve route identity, mode and individual fix ages', () => {
+  const feed = getTransitFeed('rtd-denver');
+  const timestamp = 1_700_000_000;
+  const entities = [
+    { id: 'bus', routeId: 'BOND', timestamp: timestamp - 540 },
+    { id: 'tram', routeId: '101T', timestamp: timestamp - 5 },
+    { id: 'rail', routeId: 'A', timestamp: timestamp - 7 },
+    { id: 'unknown', routeId: '101Z', timestamp: timestamp - 10 },
+    { id: 'unassigned' },
+  ].map((entity) => ({ lat: 40.015, lon: -105.2705, ...entity }));
+  const fetchedAt = (timestamp + 2) * 1000;
+  for (const incrementality of [0, null]) {
+    const snapshot = buildTransitSnapshot(
+      feed,
+      encodeFeed({ timestamp, incrementality, entities }),
+      fetchedAt,
+    );
+    assert.equal(snapshot.feedId, 'rtd-denver');
+    assert.equal(snapshot.name, 'RTD');
+    assert.equal(snapshot.version, '2.0');
+    assert.equal(snapshot.feedTimestamp, timestamp);
+    assert.equal(snapshot.fetchedAt, fetchedAt);
+    assert.equal(snapshot.count, 5);
+    assert.equal(snapshot.entityCount, 5);
+    assert.equal(snapshot.truncated, false);
+    assert.deepEqual(
+      snapshot.vehicles.map((vehicle) => [
+        vehicle.id,
+        vehicle.routeId,
+        transitModeFor(feed, vehicle.routeId),
+        transitModeResolved(feed, vehicle.routeId),
+        vehicle.timestamp,
+        vehicle.timestampSource,
+      ]),
+      [
+        ['bus', 'BOND', 'bus', true, timestamp - 540, 'vehicle'],
+        ['tram', '101T', 'tram', true, timestamp - 5, 'vehicle'],
+        ['rail', 'A', 'rail', true, timestamp - 7, 'vehicle'],
+        ['unknown', '101Z', 'unknown', false, timestamp - 10, 'vehicle'],
+        ['unassigned', null, 'unknown', false, timestamp, 'header'],
+      ],
+    );
+    assert.equal(snapshot.vehicles[0].tripId, 'trip-bus');
+    for (const vehicle of snapshot.vehicles) {
+      assert.ok(Math.abs(vehicle.lat - 40.015) < 0.00001);
+      assert.ok(Math.abs(vehicle.lon + 105.2705) < 0.00001);
+    }
+  }
+  const noTime = buildTransitSnapshot(
+    feed,
+    encodeFeed({ timestamp: null, entities: [entities[4]] }),
+    fetchedAt,
+  );
+  assert.equal(noTime.vehicles[0].timestamp, timestamp + 2);
+  assert.equal(noTime.vehicles[0].timestampSource, 'fetch');
+  assert.throws(
+    () =>
+      buildTransitSnapshot(
+        feed,
+        encodeFeed({ incrementality: 1, entities }),
+        fetchedAt,
+      ),
+    (error) =>
+      error instanceof TransitFeedShapeError &&
+      error.transitReason === 'differential',
+  );
+});
+
+for (const [feedId, routeId, expectedId, expectedMode, resolved] of [
+  ['mbta', 'Red', 'Red', 'subway', true],
+  ['mbta', '\tRed\n', 'Red', 'subway', true],
+  ['mbta', ' ', null, 'bus', false],
+  ['mbta', undefined, null, 'bus', false],
+  ['metrotransit-msp', ' 901 ', '901', 'tram', true],
+  ['metrotransit-msp', '\t\r\n', null, 'bus', false],
+  ['rtd-denver', 'NEW', 'NEW', 'unknown', false],
+  ['rtd-denver', ' NEW ', ' NEW ', 'unknown', false],
+  ['rtd-denver', 'bond', 'bond', 'unknown', false],
+]) {
+  test(`${feedId} binary snapshot classifies ${JSON.stringify(routeId)} with its own normalization policy`, () => {
+    const feed = getTransitFeed(feedId);
+    const snapshot = buildTransitSnapshot(
+      feed,
+      encodeFeed({
+        entities: [{ id: ' v1 ', routeId, lat: 40.015, lon: -105.2705 }],
+      }),
+      1_700_000_002_000,
+    );
+    assert.equal(snapshot.count, 1);
+    const [vehicle] = snapshot.vehicles;
+    assert.equal(vehicle.id, 'v1');
+    assert.deepEqual(
+      [
+        vehicle.routeId,
+        transitModeFor(feed, vehicle.routeId),
+        transitModeResolved(feed, vehicle.routeId),
+      ],
+      [expectedId, expectedMode, resolved],
+    );
+  });
+}
+
+for (const routeId of [' BOND ', ' 101T ', ' A ', '', ' ', '\t\r\n']) {
+  test(`RTD binary snapshot keeps non-exact route ${JSON.stringify(routeId)} unresolved`, () => {
+    const feed = getTransitFeed('rtd-denver');
+    const snapshot = buildTransitSnapshot(
+      feed,
+      encodeFeed({
+        entities: [{ id: 'v1', routeId, lat: 40.015, lon: -105.2705 }],
+      }),
+      1_700_000_002_000,
+    );
+    assert.equal(snapshot.count, 1);
+    const [vehicle] = snapshot.vehicles;
+    assert.deepEqual(
+      {
+        routeId: vehicle.routeId,
+        mode: transitModeFor(feed, vehicle.routeId),
+        resolved: transitModeResolved(feed, vehicle.routeId),
+      },
+      {
+        routeId: routeId.trim() ? routeId : null,
+        mode: 'unknown',
+        resolved: false,
+      },
+    );
+  });
+}
+
+test('binary snapshots preserve ordinary route IDs and modes for existing feeds', () => {
+  for (const [feedId, routeId, mode] of [
+    ['mbta', 'Red', 'subway'],
+    ['mbta', 'Green-B', 'tram'],
+    ['mbta', 'CR-Fitchburg', 'rail'],
+    ['mbta', 'Boat-F1', 'ferry'],
+    ['mbta', '66', 'bus'],
+    ['hsl-helsinki', '31M1', 'subway'],
+    ['hsl-helsinki', '1006', 'tram'],
+    ['hsl-helsinki', '9982', 'bus'],
+    ['metrotransit-msp', '901', 'tram'],
+    ['metrotransit-msp', '17', 'bus'],
+    ['entur-norway', 'VYG:Line:R10', 'rail'],
+    ['entur-norway', 'TRO:Line:1_310', 'bus'],
+  ]) {
+    const feed = getTransitFeed(feedId);
+    const snapshot = buildTransitSnapshot(
+      feed,
+      encodeFeed({
+        entities: [
+          { id: 'v1', routeId, lat: feed.center.lat, lon: feed.center.lon },
+        ],
+      }),
+      1_700_000_002_000,
+    );
+    assert.equal(snapshot.count, 1);
+    assert.equal(snapshot.vehicles[0].routeId, routeId, feedId);
+    assert.equal(transitModeFor(feed, snapshot.vehicles[0].routeId), mode);
+    assert.equal(transitModeResolved(feed, snapshot.vehicles[0].routeId), true);
+  }
+});
 
 test('a redirect is judged before it is followed, not after it has been answered', () => {
   const feed = { url: 'https://data.example.gov/download/feed.pb' };

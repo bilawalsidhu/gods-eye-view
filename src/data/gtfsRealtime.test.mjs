@@ -132,6 +132,105 @@ test('decodes header and every VehiclePosition field the layer renders', () => {
   assert.equal(v.occupancy, 'FEW_SEATS_AVAILABLE');
 });
 
+test('default decoder trims route IDs and unrelated identifiers', () => {
+  const routeIds = [' Green-B ', ' BOND ', ' NEW ', '', ' ', '\t\r\n', null];
+  const bytes = encodeFeed(
+    routeIds.map((routeId, index) => ({
+      entityId: ` entity-${index} `,
+      vehicleId: ` vehicle-${index} `,
+      routeId,
+      tripId: ' trip-1 ',
+      stopId: ' stop-1 ',
+      label: ' label-1 ',
+      lat: 42.3,
+      lon: -71.1,
+    })),
+  );
+  for (const options of [undefined, { preserveRouteId: false }]) {
+    const snapshot = decodeVehiclePositions(bytes, options);
+    assert.deepEqual(
+      snapshot.vehicles.map(({ id, routeId, tripId, stopId, label }) => ({
+        id,
+        routeId,
+        tripId,
+        stopId,
+        label,
+      })),
+      routeIds.map((routeId, index) => ({
+        id: `vehicle-${index}`,
+        routeId: routeId?.trim() || null,
+        tripId: 'trip-1',
+        stopId: 'stop-1',
+        label: 'label-1',
+      })),
+    );
+  }
+});
+
+test('exact-route opt-in retains nonblank wire strings without changing other string normalization', () => {
+  const routeIds = [
+    ' BOND ',
+    ' 101T ',
+    ' A ',
+    '\tRed\n',
+    '17',
+    '',
+    ' ',
+    '\t\r\n',
+    null,
+  ];
+  const snapshot = decodeVehiclePositions(
+    encodeFeed(
+      routeIds.map((routeId, index) => ({
+        entityId: ` entity-${index} `,
+        vehicleId: ` vehicle-${index} `,
+        routeId,
+        tripId: ' trip-1 ',
+        stopId: ' stop-1 ',
+        label: ' label-1 ',
+        lat: 42.3,
+        lon: -71.1,
+      })),
+    ),
+    { preserveRouteId: true },
+  );
+  assert.deepEqual(
+    snapshot.vehicles.map(({ id, routeId, tripId, stopId, label }) => ({
+      id,
+      routeId,
+      tripId,
+      stopId,
+      label,
+    })),
+    routeIds.map((routeId, index) => ({
+      id: `vehicle-${index}`,
+      routeId: routeId?.trim() ? routeId : null,
+      tripId: 'trip-1',
+      stopId: 'stop-1',
+      label: 'label-1',
+    })),
+  );
+});
+
+test('missing and non-string route IDs remain null with the existing entity ID fallback', () => {
+  for (const routeId of [undefined, null, 17, {}, []]) {
+    const vehicle = normalizeVehicleEntity({
+      id: ' entity-1 ',
+      vehicle: {
+        position: { latitude: 42.3, longitude: -71.1 },
+        trip: { routeId },
+        vehicle: { id: ' ', label: ' ' },
+        stopId: '\t',
+      },
+    });
+    assert.equal(vehicle.id, 'entity-1');
+    assert.equal(vehicle.routeId, null);
+    assert.equal(vehicle.tripId, null);
+    assert.equal(vehicle.stopId, null);
+    assert.equal(vehicle.label, null);
+  }
+});
+
 test('unknown and extension fields are skipped, not misread', () => {
   const bytes = encodeFeed([
     { entityId: 'x', lat: 51.3, lon: 5.33, extraUnknownFields: true },

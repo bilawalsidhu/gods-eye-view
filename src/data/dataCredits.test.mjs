@@ -1,6 +1,40 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { DATA_CREDITS, NYC_DOT_DISCLAIMER } from './dataCredits.js';
+import { readFileSync } from 'node:fs';
+import {
+  DATA_CREDITS,
+  NYC_DOT_DISCLAIMER,
+  transitFeedCredit,
+} from './dataCredits.js';
+import { getTransitFeed } from './transitFeeds.js';
+
+test('RTD has a text-only dynamic credit and documented license without endorsement', () => {
+  const feed = getTransitFeed('rtd-denver');
+  const credit = transitFeedCredit(feed);
+  assert.equal(credit.key, 'transit-rtd-denver');
+  assert.ok(credit.html.includes('Regional Transportation District (RTD)'));
+  assert.ok(credit.html.includes(`href="${feed.licenseUrl}"`));
+  assert.ok(credit.html.includes(feed.license));
+  assert.doesNotMatch(credit.html, /<img|<svg|endorsed by/i);
+  assert.equal(
+    DATA_CREDITS.some((entry) => entry.key === credit.key),
+    false,
+    'per-feed credit is dynamic, not duplicated at startup',
+  );
+  const sources = readFileSync(
+    new URL('../../DATA_SOURCES.md', import.meta.url),
+    'utf8',
+  );
+  const row = sources
+    .split('\n')
+    .find((line) =>
+      line.startsWith('| **Regional Transportation District (RTD)**'),
+    );
+  assert.ok(row, 'RTD must have a source and license row');
+  assert.ok(row.includes(feed.licenseUrl));
+  assert.ok(row.includes(feed.attribution));
+  assert.match(sources, /Unofficial; not affiliated with or endorsed by RTD/);
+});
 
 test('every credit carries a unique key and some markup to render', () => {
   const keys = DATA_CREDITS.map((entry) => entry.key);
