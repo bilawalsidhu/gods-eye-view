@@ -97,6 +97,8 @@ export function createGoogleViewer({ loader, getService, render } = {}) {
           service ||= getService
             ? await getService()
             : new (await ensureLibrary()).StreetViewService();
+          if (!current())
+            throw new Error('Street View details lookup was released');
           return service.getPanorama({ pano: panoId });
         })().then(resolve, reject);
       });
@@ -236,6 +238,7 @@ export function createGoogleViewer({ loader, getService, render } = {}) {
       const panoId = String(imageId);
       if (!host) throw new Error('Street View is not mounted');
       if (loader.authFailed()) throw new Error(KEY_REJECTED_MESSAGE);
+      cancelShown?.();
       pendingOpen = panoId;
       const instance = await ensurePanorama(host);
       if (pendingOpen !== panoId) return;
