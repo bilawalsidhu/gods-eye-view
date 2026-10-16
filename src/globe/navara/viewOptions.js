@@ -100,11 +100,10 @@ export function cloudsVisibleAt(height, ground, current = true) {
 // came out dark navy (sRGB about 39, 58, 90 at Manhattan facing the
 // horizon), and the stars showed through it. The cinematic look multiplies
 // the atmosphere's radiance-to-luminance factors (sky, clouds, aerial
-// perspective; Navara's stars share them) by this scale instead of raising
+// perspective; not the stars) by this scale instead of raising
 // the exposure, so the sky turns daylight blue and the tiles keep their
 // colours.
 export const ATMOSPHERE_LUMINANCE_SCALE = 3;
-const STAR_INTENSITY = 40;
 
 // Stars show from space or once the sun is well below the horizon at the
 // camera (civil twilight), and hide in a daylit sky. Gaps keep a camera
@@ -113,6 +112,19 @@ export const STARS_SHOW_SUN_BELOW_DEG = -6;
 export const STARS_HIDE_SUN_ABOVE_DEG = -4;
 export const STARS_SPACE_ENTER_M = 100_000;
 export const STARS_SPACE_EXIT_M = 80_000;
+
+// The cinematic clouds hide once the sun at the camera sets (below 0°):
+// unlit, they read as dark puffs over a dusk sky. They show again above 2°.
+export const CLOUDS_HIDE_SUN_BELOW_DEG = 0;
+export const CLOUDS_SHOW_SUN_ABOVE_DEG = 2;
+
+/** Whether the sun is up enough for the cinematic clouds; NaN keeps `current`. */
+export function cloudsSunlitAt(sunElevation, current = true) {
+  if (!Number.isFinite(sunElevation)) return current;
+  return current
+    ? sunElevation >= CLOUDS_HIDE_SUN_BELOW_DEG
+    : sunElevation > CLOUDS_SHOW_SUN_ABOVE_DEG;
+}
 
 /**
  * Whether the cinematic stars show for a camera at `height` (metres above
@@ -140,13 +152,13 @@ export function sunDateStale(atmosphereMs, nowMs, toleranceMs = 60_000) {
 const cinematic = (mobile) => ({
   pluginDefault: false,
   // Brighter, larger stars (defaults 10 and 1 px) so the night sky and the
-  // globe from space keep a visible starfield next to a sunlit Earth: 40,
-  // divided by the atmosphere scale the stars share.
+  // globe from space keep a visible starfield next to a sunlit Earth. The
+  // atmosphere scale leaves the stars at their base factor (look.js).
   meshes: [
     { sky: {} },
     {
       stars: {
-        intensity: STAR_INTENSITY / ATMOSPHERE_LUMINANCE_SCALE,
+        intensity: 120,
         pointSize: 2,
       },
     },

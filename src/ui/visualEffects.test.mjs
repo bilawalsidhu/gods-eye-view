@@ -223,14 +223,32 @@ test('without a viewer the engine sharpens with the same amount scale', () => {
   effects.destroy();
 });
 
-test('with a viewer the Cesium stage sharpens and the engine is left alone', () => {
-  let calls = 0;
-  const f = fixture({ render: { setSharpen: () => calls++ } });
+test('with a viewer the Cesium stage sharpens and the engine mirrors its state', () => {
+  let state = { enabled: false, amount: 1 };
+  const engine = {
+    render: {
+      setSharpen: (options) => {
+        state = { ...state, ...options };
+      },
+      sharpen: () => ({ ...state }),
+    },
+  };
+  const f = fixture(engine);
   f.effects.initPostProcess(0.49);
+  assert.deepEqual(engine.render.sharpen(), {
+    enabled: false,
+    amount: f.effects.sharpenStage.uniforms.amount,
+  });
   f.effects.applySharpenIntensity(0.8);
   f.effects.setSharpenEnabled(true);
-  assert.equal(calls, 0);
   assert.equal(f.effects.sharpenStage.uniforms.amount, sharpenAmount(0.8));
+  assert.equal(f.effects.sharpenStage.enabled, true);
+  assert.deepEqual(engine.render.sharpen(), {
+    enabled: true,
+    amount: sharpenAmount(0.8),
+  });
+  f.effects.setSharpenEnabled(false);
+  assert.equal(engine.render.sharpen().enabled, false);
   f.effects.destroy();
 });
 

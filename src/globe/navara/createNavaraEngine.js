@@ -19,7 +19,7 @@ import { createNavaraCredits } from './credits.js';
 import { createNavaraInput } from './input.js';
 import { createNavaraMaps } from './maps.js';
 import { createNavaraSurface } from './surface.js';
-import { createGroundFloor } from './groundFloor.js';
+import { createGroundFloor, GROUND_FLOOR } from './groundFloor.js';
 
 const { cartesian3, math } = geo;
 
@@ -246,5 +246,11 @@ export function createNavaraEngine(
       sharpenPort?.destroy();
     },
     isDestroyed: () => destroyed,
+    // Navara only, not contract: the ground the floor last sampled under
+    // the camera and the margin it keeps above it (QA measures against it).
+    groundFloor: {
+      ground: () => groundFloor.ground(),
+      margin: GROUND_FLOOR.MIN_ABOVE,
+    },
   };
 }
