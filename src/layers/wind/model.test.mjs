@@ -128,3 +128,13 @@ test('intersectBounds clips the view to the field box and reports an empty overl
   assert.equal(east.west, 170);
   assert.equal(east.east, 190);
 });
+
+test('a no-data corner with zero weight (point exactly on a node row) is not consulted', () => {
+  const southGap = {
+    ...regional,
+    u: Float32Array.from([1, 2, 3, -9999, -9999, -9999]),
+    v: Float32Array.from([0, 0, 0, -9999, -9999, -9999]),
+  };
+  assert.deepEqual(sampleWind(southGap, 172.5, 10), { u: 1.5, v: 0 });
+  assert.ok(Number.isNaN(sampleWind(southGap, 172.5, 9.9).u));
+});

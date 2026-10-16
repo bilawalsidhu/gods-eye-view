@@ -48,8 +48,8 @@ export function sampleWind(field, lon, lat, result = {}) {
   if (
     Number.isFinite(sentinel) &&
     (u[a] === sentinel ||
-      u[c] === sentinel ||
-      (tx > 0 && (u[b] === sentinel || u[d] === sentinel)))
+      (tx > 0 && u[b] === sentinel) ||
+      (ty > 0 && (u[c] === sentinel || (tx > 0 && u[d] === sentinel))))
   ) {
     result.u = NaN;
     result.v = NaN;
