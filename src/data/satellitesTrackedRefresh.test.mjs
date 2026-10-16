@@ -338,3 +338,33 @@ test('ISS overlay entry retains the native distance scale and source text', () =
   assert.equal(entry.edgeFade, 'keyhole');
   assert.equal(entry.horizonCull, true);
 });
+
+test('the tracked satellite is propagated at the app clock time', async () => {
+  const { appClock } = await import('../time/clock.js');
+  const entity = { gevLabelModel: { title: 'OLD', details: ['? km'] } };
+  const point = { position: new Cesium.Cartesian3() };
+  const viewer = {
+    camera: null,
+    scene: { frameState: { frameNumber: 1 } },
+  };
+  _setTrackedSatelliteRefreshStateForTest({
+    noradId: 25544,
+    name: 'ISS (ZARYA)',
+    satrec: twoline2satrec(L1, L2),
+    entity,
+    point,
+    viewer,
+    now: undefined,
+  });
+  try {
+    appClock.freeze(Date.UTC(2008, 8, 20, 12, 30));
+    _runSatellitePreRenderForTest();
+    assert.equal(entity.gevLabelModel.details[1], '353 km · NORAD 25544');
+    appClock.freeze(Date.UTC(2008, 8, 20, 13, 0));
+    viewer.scene.frameState.frameNumber = 2;
+    _runSatellitePreRenderForTest();
+    assert.equal(entity.gevLabelModel.details[1], '366 km · NORAD 25544');
+  } finally {
+    appClock.reset();
+  }
+});

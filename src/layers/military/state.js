@@ -109,7 +109,7 @@ export function createFlightState({ source, services }) {
 
   flightState._detectionObjects = new Map();
 
-  /** @type {Map<string, Array<{time: Cesium.JulianDate, position: Cesium.Cartesian3}>>} ICAO hex -> recent position samples for dead reckoning */
+  /** @type {Map<string, Array<{timeMs: number, epochMs: number, position: Cesium.Cartesian3}>>} ICAO hex -> recent position samples for dead reckoning (timeMs: whole ms since the epoch, the app clock's unit) */
 
   flightState._positionHistory = new Map();
 
@@ -224,15 +224,11 @@ export function createFlightState({ source, services }) {
 
   flightState._scratchArc = { east: 0, north: 0, endCourseDeg: 0 };
 
-  flightState._scratchRenderTime = new Cesium.JulianDate();
-
   flightState._scratchFleetPos = geo.cartesian3.create();
 
   flightState._scratchSonarScreen = geo.cartesian2.create();
 
   flightState._scratchDrRaw = geo.cartesian3.create();
-
-  flightState._scratchWarmupTime = new Cesium.JulianDate();
 
   flightState._trackedPosHolder = geo.cartesian3.create();
 

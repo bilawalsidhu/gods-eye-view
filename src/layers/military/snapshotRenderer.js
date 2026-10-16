@@ -1,4 +1,3 @@
-import * as Cesium from 'cesium';
 import * as geo from '../../geo/index.js';
 import { CLASS_SCALE_2D } from '../../data/aircraftClass.js';
 import {
@@ -72,18 +71,19 @@ export function createMilitarySnapshotRenderer({
       // report, so the fix epoch is receipt time minus that age. Only
       // append when the fix actually advances, so stale repeats don't
       // create zero-dt segments.
-      const fixTime = Cesium.JulianDate.fromDate(new Date(fixEpochMs));
+      // Milliseconds since the epoch, whole as a Date holds them.
+      const fixTimeMs = Math.trunc(fixEpochMs);
       if (!flightState._positionHistory.has(icao24)) {
         flightState._positionHistory.set(icao24, []);
       }
       const history = flightState._positionHistory.get(icao24);
       const newest = history[history.length - 1];
-      if (!newest || Cesium.JulianDate.greaterThan(fixTime, newest.time)) {
+      if (!newest || fixTimeMs > newest.timeMs) {
         // Per-fix kinematics: the fix's own velocity/track ride along so the
         // extrapolation paths use the values that BELONG to the fix they
         // extend, not whatever the latest poll reported.
         history.push({
-          time: fixTime,
+          timeMs: fixTimeMs,
           epochMs: fixEpochMs,
           position: geo.cartesian3.clone(position),
           velocity: meta.speedMps,

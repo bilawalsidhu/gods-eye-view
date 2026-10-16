@@ -1,4 +1,5 @@
 import * as Cesium from 'cesium';
+import { appClock } from '../../time/clock.js';
 import { nextCockpitNearContacts } from '../../data/cockpitAirLod.js';
 import { trackedModelZoomActive } from '../../data/trackedModelRegime.js';
 import {
@@ -378,13 +379,9 @@ export function createTracking({
     // newest ~RENDER_DELAY_SEC of fixes are AHEAD of the displayed icon; including them
     // would draw the trail in front of the plane. They join the trail via _appendTrailFix
     // as they age past the delay.
-    const seedRenderTime = Cesium.JulianDate.addSeconds(
-      Cesium.JulianDate.now(),
-      -RENDER_DELAY_SEC,
-      flightState._scratchWarmupTime,
-    );
+    const seedRenderTimeMs = appClock.now() - RENDER_DELAY_SEC * 1000;
     for (const fix of history) {
-      if (Cesium.JulianDate.lessThanOrEquals(fix.time, seedRenderTime)) {
+      if (fix.timeMs <= seedRenderTimeMs) {
         flightState._trailPositions.push(Cesium.Cartesian3.clone(fix.position));
       }
     }
@@ -458,7 +455,7 @@ export function createTracking({
     _refreshTrailDisplay();
 
     const oldestFixEpochSec = history.length
-      ? Cesium.JulianDate.toDate(history[0].time).getTime() / 1000
+      ? history[0].timeMs / 1000
       : Infinity;
     _backfillTrail(icao24, flightState._trailBackfillToken, oldestFixEpochSec);
   }

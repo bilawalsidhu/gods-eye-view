@@ -1,4 +1,5 @@
 import * as Cesium from 'cesium';
+import { appClock } from '../../time/clock.js';
 import {
   TRAJECTORY_STAGE_COLORS,
   REPLAY_ORBIT_DURATION_SEC,
@@ -32,7 +33,11 @@ export function createRendering({
       return;
     }
     parts.panel.updateMissionTelemetry();
-    const time = Cesium.JulianDate.now(layerState._declutterTime);
+    // The app clock's now, as the JulianDate Cesium's entity properties take.
+    const time = Cesium.JulianDate.fromDate(
+      new Date(appClock.now()),
+      layerState._declutterTime,
+    );
     layerState._declutterOccluder.cameraPosition =
       layerState._viewer.scene.camera.positionWC;
     parts.overlays.updateReplayVehicleOverlay(layerState._declutterOccluder);

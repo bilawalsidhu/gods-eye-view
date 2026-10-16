@@ -1,5 +1,5 @@
-import * as Cesium from 'cesium';
 import * as geo from '../../geo/index.js';
+import { appClock } from '../../time/clock.js';
 import {
   COURSE_HOLD_SPEED_MPS,
   lerpAngleDeg,
@@ -150,25 +150,15 @@ export function createMotion({
     const out = result || geo.cartesian3.create();
     // Render one poll interval behind real time so we interpolate between
     // two KNOWN fixes whenever possible (see RENDER_DELAY_SEC rationale).
-    const renderTime = Cesium.JulianDate.addSeconds(
-      Cesium.JulianDate.now(),
-      -RENDER_DELAY_SEC,
-      flightState._scratchRenderTime,
-    );
+    const renderTimeMs = appClock.now() - RENDER_DELAY_SEC * 1000;
 
     // Bracketing pair: interpolate — no extrapolation error, no snap-back.
     for (let i = history.length - 1; i >= 1; i--) {
       const a = history[i - 1];
       const b = history[i];
-      if (
-        Cesium.JulianDate.lessThanOrEquals(a.time, renderTime) &&
-        Cesium.JulianDate.lessThanOrEquals(renderTime, b.time)
-      ) {
-        const span = Cesium.JulianDate.secondsDifference(b.time, a.time);
-        const t =
-          span > 0
-            ? Cesium.JulianDate.secondsDifference(renderTime, a.time) / span
-            : 1.0;
+      if (a.timeMs <= renderTimeMs && renderTimeMs <= b.timeMs) {
+        const span = (b.timeMs - a.timeMs) / 1000;
+        const t = span > 0 ? (renderTimeMs - a.timeMs) / 1000 / span : 1.0;
         // Course of the DISPLAYED motion. The chord is only trustworthy when the
         // segment covers real ground (at hover its direction is GPS jitter; on a
         // slow tight turn it STEPS the whole per-segment turn at each boundary),
@@ -199,10 +189,7 @@ export function createMotion({
     }
 
     const newest = history[history.length - 1];
-    const elapsedSec = Cesium.JulianDate.secondsDifference(
-      renderTime,
-      newest.time,
-    );
+    const elapsedSec = (renderTimeMs - newest.timeMs) / 1000;
     if (elapsedSec <= 0) {
       // Warm-up: renderTime predates ALL history (freshly seen / just-started-tracking
       // aircraft, before RENDER_DELAY_SEC of history has accumulated, so no bracketing
@@ -213,10 +200,7 @@ export function createMotion({
       // the oldest fix froze the icon; extrapolating the NEWEST fix to wall-clock now made
       // the icon jump back ~one poll interval the instant interpolation took over.)
       const oldest = history[0];
-      const lookbackSec = Cesium.JulianDate.secondsDifference(
-        oldest.time,
-        renderTime,
-      ); // ≥ 0
+      const lookbackSec = (oldest.timeMs - renderTimeMs) / 1000; // ≥ 0
       return _extrapolateFix(
         oldest,
         info,
@@ -236,7 +220,7 @@ export function createMotion({
       // a Date per aircraft on every 12 Hz fleet tick.
       fixEpochMs: Number.isFinite(newest.epochMs)
         ? newest.epochMs
-        : Cesium.JulianDate.toDate(newest.time).getTime(),
+        : newest.timeMs,
       lastContactEpochMs: info?.lastContactEpochMs,
       // Permit one minute of contact grace but cap any cached-feed drift at
       // five minutes. Source backoff is exposed separately as a STALE cue.
@@ -307,12 +291,7 @@ export function createMotion({
     if (!flightState._trackedIcao) return false;
     const history = flightState._positionHistory.get(flightState._trackedIcao);
     if (!history || history.length === 0) return true;
-    const renderTime = Cesium.JulianDate.addSeconds(
-      Cesium.JulianDate.now(),
-      -RENDER_DELAY_SEC,
-      flightState._scratchWarmupTime,
-    );
-    return Cesium.JulianDate.lessThan(renderTime, history[0].time);
+    return appClock.now() - RENDER_DELAY_SEC * 1000 < history[0].timeMs;
   }
 
   /** Resolve the selected aircraft's actual rendered square extent this frame. */

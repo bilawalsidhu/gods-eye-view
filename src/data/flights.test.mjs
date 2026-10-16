@@ -479,7 +479,7 @@ test('real civil track path creates no native label and publishes every cached h
       tracked: false,
       history: [
         {
-          time: now,
+          timeMs: Cesium.JulianDate.toDate(now).getTime(),
           epochMs: Date.now(),
           position,
           velocity: 250,
