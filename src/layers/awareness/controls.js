@@ -76,6 +76,56 @@ export function createControls({ state: layerState, services, parts, source }) {
     },
 
     /**
+     * Return the exact retained aircraft cohorts behind the current Contacts
+     * panel snapshot. Voice reads this immutable copy instead of re-scanning
+     * live layers, so panel and spoken counts share one evaluation timestamp.
+     */
+    getAircraftQuerySnapshot() {
+      if (!layerState.enabled || !layerState.subject || !layerState.results)
+        return null;
+      // Build every public count from this exact results object before
+      // returning. A refresh may replace `layerState.results` as soon as the
+      // caller awaits, so consumers must not make a second read later and
+      // accidentally combine two evaluation timestamps.
+      const panelSnapshot = parts.model.buildAwarenessContextSnapshot(
+        layerState.results,
+        parts.model.navigationState(),
+        {
+          subjectPresent: !layerState.subjectMissing,
+        },
+      );
+      const cohorts = {};
+      for (const cohort of layerState.results.cohorts || []) {
+        if (!['flights', 'military'].includes(cohort?.id)) continue;
+        cohorts[cohort.id] = {
+          count: cohort.summary?.count ?? null,
+          complete:
+            Number.isFinite(cohort.summary?.count) &&
+            cohort.summary?.complete !== false,
+          truncated:
+            !Number.isFinite(cohort.summary?.count) ||
+            cohort.summary?.truncated === true,
+          // These records carry structured values such as Cartesian positions.
+          // A shallow spread would let a voice consumer mutate the retained
+          // Contacts cohort through the advertised read-only snapshot.
+          items: structuredClone(cohort.summary?.navigationNearest || []),
+          source: cohort.source || null,
+          provenance: cohort.provenance
+            ? structuredClone(cohort.provenance)
+            : null,
+          reason: cohort.summary?.reason || null,
+        };
+      }
+      return {
+        subject: structuredClone(layerState.results.subject),
+        evaluatedAt: layerState.results.evaluatedAt,
+        radiusM: layerState.results.radiusM,
+        cohorts,
+        contactsWindow: parts.model.contactsWindowFromSnapshot(panelSnapshot),
+      };
+    },
+
+    /**
      * Release Contact-owned camera tracking without discarding the selected
      * subject. Reset-to-globe uses this route so the normal Context FOCUS action
      * can explicitly return to the same contact, while delayed activation work

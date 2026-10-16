@@ -41,6 +41,22 @@ test('separate configured token and SDP transports preserve model metadata and c
   ]);
 });
 
+test('OAuth is an additive token query while API key stays the default', async () => {
+  const calls = [];
+  const backend = createRealtimeBackend({
+    tokenTransport: async (input) => {
+      calls.push(input);
+      return tokenReply();
+    },
+  });
+  await backend.requestToken();
+  await backend.requestToken({ authMode: 'oauth' });
+  assert.deepEqual(calls, [
+    '/api/realtime/token?tier=standard',
+    '/api/realtime/token?tier=standard&auth=oauth',
+  ]);
+});
+
 test('denied tokens never negotiate or retry; reconnect requests a fresh token', async () => {
   let requests = 0;
   const backend = createRealtimeBackend({

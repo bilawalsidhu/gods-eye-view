@@ -228,3 +228,61 @@ test('the Recent Imagery readout mounts in its rail body like the weather readou
     globalThis.document = previousDocument;
   }
 });
+
+test('an omitted source is visibly unavailable and cannot be toggled on', async () => {
+  const { LayerPanel } = await import('./layerPanel.js');
+  const attrs = new Map();
+  const button = {
+    classList: { toggle() {} },
+    dataset: {},
+    setAttribute: (key, value) => attrs.set(key, value),
+  };
+  const layer = {
+    id: 'flights',
+    name: 'Flights',
+    enabled: false,
+    stats: {
+      sourceUnavailable: true,
+      status: 'unavailable',
+      error: 'Data source not configured: flights',
+    },
+  };
+  LayerPanel.prototype._syncToggleButton(button, layer);
+  assert.equal(button.textContent, 'UNAVAILABLE');
+  assert.equal(attrs.get('aria-disabled'), 'true');
+  assert.match(button.title, /not configured/);
+  LayerPanel.prototype._syncToggleButton(button, { ...layer, enabled: true });
+  assert.equal(
+    attrs.get('aria-disabled'),
+    'false',
+    'an active layer can always be switched off',
+  );
+});
+
+test('the Weather readout receives enabled air-quality alongside weather layers', async () => {
+  const { LayerPanel } = await import('./layerPanel.js');
+  const layers = ['wind', 'air-quality', 'other'].map((id) => ({
+    id,
+    icon: '*',
+    enabled: true,
+  }));
+  layers.push({ id: 'weather-radar', icon: '*', enabled: false });
+  const panel = new LayerPanel({
+    getLayers: () => layers,
+    getRowControls: (id) => ({ readout: true, summary: { label: id } }),
+  });
+  let entries = null;
+  panel._weatherPanel = {
+    update: (next) => {
+      entries = next;
+    },
+  };
+  panel._refreshWeatherPanel();
+  assert.deepEqual(
+    entries.map(({ id, summary }) => [id, summary.label]),
+    [
+      ['wind', 'wind'],
+      ['air-quality', 'air-quality'],
+    ],
+  );
+});

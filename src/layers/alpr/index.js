@@ -392,6 +392,37 @@ export function createAlprCamerasLayer({ source, services } = {}) {
         ],
       };
     },
+    /**
+     * Snapshot loaded ALPR cameras (the nearby query box) as plain JSON-safe records for the analyst
+     * query engine. On demand only (once per spoken query); [] while the
+     * layer is off.
+     * @param {number} [maxCount=Infinity] Most records to return.
+     * @returns {Array<Object>} {id, lat, lon, operator, manufacturer, cameraType, directionDeg}.
+     */
+    getAnalystRecords(maxCount = Infinity) {
+      if (!state.enabled) return [];
+      const result = [];
+      for (const record of state.records || []) {
+        if (result.length >= maxCount) break;
+        if (
+          !Number.isFinite(record.latitude) ||
+          !Number.isFinite(record.longitude)
+        )
+          continue;
+        result.push({
+          id: record.id,
+          lat: record.latitude,
+          lon: record.longitude,
+          operator: record.operator ?? null,
+          manufacturer: record.manufacturer ?? null,
+          cameraType: record.cameraType ?? null,
+          directionDeg: Number.isFinite(record.directionDeg)
+            ? record.directionDeg
+            : null,
+        });
+      }
+      return result;
+    },
     getStats() {
       return {
         count: state.dataSource?.entities.values.length || 0,

@@ -1,0 +1,386 @@
+/* ------------------------------------------------------------------ *
+ * Voice card — captions, plan steps and the latest result, nested in
+ * #gev-voice-control beside its help and error trays. It shares their
+ * anchor and glass treatment, and it hides with the control in Clean-UI
+ * and recording mode because it lives inside it.
+ * ------------------------------------------------------------------ */
+#gev-voice-control .gev-voice-card {
+  position: absolute;
+  bottom: calc(100% + 0.7rem);
+  left: 50%;
+  z-index: 7;
+  display: flex;
+  flex-direction: column;
+  gap: 0.42rem;
+  box-sizing: border-box;
+  width: clamp(18rem, 26vw, 22rem);
+  max-height: min(24rem, 55vh);
+  overflow-y: auto;
+  padding: 0.62rem 0.72rem 0.7rem;
+  color: rgba(223, 245, 250, 0.92);
+  background: rgba(7, 22, 31, 0.96);
+  border: 1px solid rgba(54, 220, 255, 0.34);
+  border-radius: 0.38rem;
+  box-shadow:
+    0 0.85rem 2rem rgba(0, 0, 0, 0.58),
+    0 0 1.2rem rgba(0, 212, 255, 0.08);
+  backdrop-filter: blur(24px) saturate(1.3);
+  -webkit-backdrop-filter: blur(24px) saturate(1.3);
+  text-align: left;
+  transform: translateX(-50%);
+  transform-origin: bottom center;
+  animation: gev-voice-card-in 180ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+/* The visible card must clear the dock trays' parent stacking contexts. */
+#command-dock
+  > #gev-voice-control:not([data-status='error']):has(
+    .gev-voice-card:not([hidden])
+  ) {
+  z-index: 101;
+}
+
+#gev-voice-control .gev-voice-card[hidden],
+#gev-voice-control .gev-voice-card [hidden],
+#gev-voice-control[data-status='error'] .gev-voice-card {
+  display: none;
+}
+
+/* The card takes the tray slot; the hover hint yields to it. */
+#gev-voice-control:has(.gev-voice-card:not([hidden])) .gev-voice-help-tray {
+  display: none;
+}
+
+#command-dock.dock-has-pinned-tray .gev-voice-card {
+  bottom: calc(100% + 1.7rem + var(--dock-pinned-stack-height));
+}
+
+@keyframes gev-voice-card-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 0.45rem);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+}
+
+.gev-voice-card-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.gev-voice-card-kicker,
+.gev-voice-card-phase,
+.gev-voice-card-who,
+.gev-voice-card-notes summary {
+  font-family: var(--font-mono);
+  font-size: 0.46rem;
+  font-weight: 600;
+  letter-spacing: 0.1rem;
+}
+
+.gev-voice-card-kicker {
+  color: rgba(54, 220, 255, 0.72);
+}
+
+.gev-voice-card-phase {
+  color: var(--text-dim);
+}
+
+.gev-voice-card[data-busy='true'] .gev-voice-card-phase {
+  color: #ffc46b;
+}
+
+.gev-voice-card-dismiss {
+  margin-left: auto;
+  width: 1.1rem;
+  height: 1.1rem;
+  padding: 0;
+  color: var(--text-secondary);
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(54, 220, 255, 0.24);
+  border-radius: 0.2rem;
+  font-size: 0.72rem;
+  line-height: 1;
+  cursor: pointer;
+  transition:
+    color var(--transition-fast),
+    border-color var(--transition-fast);
+}
+
+.gev-voice-card-dismiss:hover,
+.gev-voice-card-dismiss:focus-visible {
+  color: var(--text-primary);
+  border-color: rgba(54, 220, 255, 0.6);
+}
+
+.gev-voice-card-caption {
+  display: flex;
+  gap: 0.45rem;
+  margin: 0;
+  font-family: var(--font-sans);
+  font-size: 0.72rem;
+  line-height: 1.38;
+}
+
+.gev-voice-card-who {
+  flex: 0 0 1.7rem;
+  padding-top: 0.14rem;
+  color: var(--text-dim);
+}
+
+.gev-voice-card-caption[data-role='assistant'] .gev-voice-card-who {
+  color: rgba(54, 220, 255, 0.72);
+}
+
+.gev-voice-card-caption[data-role='user'] .gev-voice-card-text {
+  color: var(--text-secondary);
+}
+
+/* What "this" / "here" resolved to at the start of the turn. */
+.gev-voice-card-pointer {
+  display: flex;
+  align-items: baseline;
+  gap: 0.45rem;
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 0.58rem;
+  letter-spacing: 0.03rem;
+}
+
+.gev-voice-card-pointer .gev-voice-card-who {
+  color: rgba(54, 220, 255, 0.72);
+}
+
+.gev-voice-card-pointer-label {
+  padding: 0.06rem 0.32rem;
+  color: var(--text-primary);
+  border: 1px solid rgba(54, 220, 255, 0.34);
+  border-radius: 0.18rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.gev-voice-card-plan,
+.gev-voice-card-lines,
+.gev-voice-card-referents {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.gev-voice-card-plan {
+  display: flex;
+  flex-direction: column;
+  gap: 0.22rem;
+  padding-top: 0.38rem;
+  border-top: 1px solid var(--glass-border);
+}
+
+.gev-voice-card-step {
+  display: grid;
+  grid-template-columns: 0.9rem 1fr;
+  column-gap: 0.3rem;
+  font-family: var(--font-mono);
+  font-size: 0.58rem;
+  line-height: 1.4;
+  letter-spacing: 0.02rem;
+}
+
+.gev-voice-card-step::before {
+  content: '◻';
+  color: var(--text-dim);
+}
+
+.gev-voice-card-step[data-status='running']::before {
+  content: '◌';
+  color: #ffc46b;
+}
+
+.gev-voice-card-step[data-status='done']::before {
+  content: '✓';
+  color: var(--accent);
+}
+
+.gev-voice-card-step[data-status='failed']::before,
+.gev-voice-card-step[data-status='cancelled']::before {
+  content: '✕';
+  color: #ff8f9d;
+}
+
+.gev-voice-card-step-detail {
+  grid-column: 2;
+  color: var(--text-dim);
+  font-size: 0.52rem;
+}
+
+.gev-voice-card-result {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  padding-top: 0.42rem;
+  border-top: 1px solid var(--glass-border);
+}
+
+.gev-voice-card-result-title {
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+.gev-voice-card-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+}
+
+.gev-voice-card-chip {
+  padding: 0.08rem 0.3rem;
+  color: var(--text-secondary);
+  border: 1px solid rgba(54, 220, 255, 0.3);
+  border-radius: 0.18rem;
+  font-family: var(--font-mono);
+  font-size: 0.44rem;
+  letter-spacing: 0.06rem;
+  text-transform: uppercase;
+}
+
+.gev-voice-card-chip:is(
+  [data-tone='stale'],
+  [data-tone='degraded'],
+  [data-tone='fallback'],
+  [data-tone='partial']
+) {
+  color: #ffc46b;
+  border-color: rgba(255, 196, 107, 0.45);
+}
+
+.gev-voice-card-chip[data-tone='unavailable'] {
+  color: #ff8f9d;
+  border-color: rgba(255, 143, 157, 0.45);
+}
+
+.gev-voice-card-lines li,
+.gev-voice-card-referents li {
+  font-family: var(--font-sans);
+  font-size: 0.66rem;
+  line-height: 1.4;
+  color: rgba(223, 245, 250, 0.82);
+}
+
+.gev-voice-card-referents {
+  counter-reset: gev-referent;
+}
+
+.gev-voice-card-referents li {
+  counter-increment: gev-referent;
+}
+
+.gev-voice-card-referents li::before {
+  content: counter(gev-referent);
+  display: inline-block;
+  min-width: 0.9rem;
+  margin-right: 0.3rem;
+  color: rgba(54, 220, 255, 0.72);
+  font-family: var(--font-mono);
+  font-size: 0.52rem;
+}
+
+.gev-voice-card-notes summary {
+  color: var(--text-dim);
+  cursor: pointer;
+}
+
+.gev-voice-card-notes[open] summary {
+  margin-bottom: 0.2rem;
+}
+
+.gev-voice-card-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* Point-and-ask reticle: a fixed overlay at the pointed pixel. */
+.gev-pointer-reticle {
+  position: fixed;
+  z-index: 6;
+  width: 1.9rem;
+  height: 1.9rem;
+  margin: -0.95rem 0 0 -0.95rem;
+  border: 1.5px solid rgba(120, 235, 255, 0.95);
+  border-radius: 50%;
+  box-shadow: 0 0 0.7rem rgba(0, 212, 255, 0.35);
+  pointer-events: none;
+  animation: gev-pointer-reticle-in 220ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.gev-pointer-reticle::before,
+.gev-pointer-reticle::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  background: rgba(54, 220, 255, 0.85);
+  transform: translate(-50%, -50%);
+}
+
+.gev-pointer-reticle::before {
+  width: 0.28rem;
+  height: 0.28rem;
+  border-radius: 50%;
+}
+
+.gev-pointer-reticle::after {
+  width: 2.6rem;
+  height: 2.6rem;
+  background: none;
+  border: 1px dashed rgba(54, 220, 255, 0.35);
+  border-radius: 50%;
+}
+
+.gev-pointer-reticle[data-target='ground'] {
+  border-color: rgba(255, 196, 107, 0.85);
+  box-shadow: 0 0 0.7rem rgba(255, 196, 107, 0.3);
+}
+
+.gev-pointer-reticle[data-target='ground']::before {
+  background: rgba(255, 196, 107, 0.9);
+}
+
+.gev-pointer-reticle[hidden],
+body.ui-clean-view .gev-pointer-reticle,
+body.recording-mode .gev-pointer-reticle {
+  display: none;
+}
+
+/* Scale only: a frame caught at the animation start still shows the mark. */
+@keyframes gev-pointer-reticle-in {
+  from {
+    transform: scale(1.6);
+  }
+  to {
+    transform: scale(1);
+  }
+}
+
+@media (max-width: 900px) {
+  #gev-voice-control .gev-voice-card {
+    width: min(22rem, calc(100vw - 1.5rem));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #gev-voice-control .gev-voice-card,
+  .gev-pointer-reticle {
+    animation: none;
+  }
+}

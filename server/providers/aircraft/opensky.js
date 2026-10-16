@@ -2,6 +2,7 @@ import { normalizeAdsbLolPointResponse } from '../../../src/data/adsbLolFallback
 import {
   coalesceProxyRequest,
   readResponseJsonCapped,
+  readResponseTextCapped,
 } from '../common/http.js';
 import { requiredFiniteQueryNumber } from '../common/query.js';
 // ---------------------------------------------------------------------------
@@ -29,11 +30,34 @@ const OPENSKY_CACHE_MS = 9000;
 const OPENSKY_ATTEMPT_TIMEOUT_MS = 10_000;
 const OPENSKY_STATES_URL =
   'https://opensky-network.org/api/states/all?extended=1';
+/** states/all?extended=1 measures ~0.8 MB anonymously; bounded, not budgeted. */
+const OPENSKY_STATES_MAX_RESPONSE_BYTES = 8 * 1024 * 1024;
+
+/**
+ * Credit-governor cooldown for a 429: OpenSky's retry-after bounded to
+ * 30 s … 30 min, or 2 min when the header is absent.
+ * @param {Response} upstream Rate-limited response.
+ * @returns {number} Cooldown (ms).
+ */
+function openSkyRateLimitCooldownMs(upstream) {
+  // headers.get() gives null when absent, and Number(null) is 0, not NaN.
+  const header = upstream.headers.get('x-rate-limit-retry-after-seconds');
+  const retryAfterSec =
+    header == null || header.trim() === '' ? NaN : Number(header);
+  return Math.min(
+    Math.max(
+      Number.isFinite(retryAfterSec) ? retryAfterSec * 1000 : 120_000,
+      30_000,
+    ),
+    30 * 60_000,
+  );
+}
 
 /**
  * Fetch and read the global snapshot, giving each attempt
  * OPENSKY_ATTEMPT_TIMEOUT_MS and retrying once when an attempt times out or
- * the connection fails. A second failure throws, which the proxy answers
+ * the connection fails. An oversized body is not retried: it would fail again
+ * and spend more credits. A second failure throws, which the proxy answers
  * from its stale cache or the regional fallback.
  * @param {Record<string, string>} headers Request headers.
  * @returns {Promise<{upstream: Response, body: string}>}
@@ -41,13 +65,27 @@ const OPENSKY_STATES_URL =
 async function fetchOpenSkyStates(headers) {
   for (let attempt = 1; ; attempt++) {
     try {
-      const upstream = await fetch(OPENSKY_STATES_URL, {
-        headers,
-        signal: AbortSignal.timeout(OPENSKY_ATTEMPT_TIMEOUT_MS),
-      });
-      return { upstream, body: await upstream.text() };
+      const signal = AbortSignal.timeout(OPENSKY_ATTEMPT_TIMEOUT_MS);
+      const upstream = await fetch(OPENSKY_STATES_URL, { headers, signal });
+      if (upstream.status === 429) {
+        // Start the cooldown from the headers and drop the rejected body
+        // unread, so a stalled or oversized 429 body cannot skip it.
+        _openskyCooldownUntil =
+          Date.now() + openSkyRateLimitCooldownMs(upstream);
+        void upstream.body?.cancel().catch(() => {});
+        return {
+          upstream,
+          body: JSON.stringify({ error: 'OpenSky rate limited.' }),
+        };
+      }
+      const body = await readResponseTextCapped(
+        upstream,
+        OPENSKY_STATES_MAX_RESPONSE_BYTES,
+        signal,
+      );
+      return { upstream, body };
     } catch (error) {
-      if (attempt >= 2) throw error;
+      if (attempt >= 2 || error?.code === 'RESPONSE_TOO_LARGE') throw error;
       console.warn(
         '[OpenSky] global snapshot attempt failed, retrying:',
         error?.message || error,
@@ -559,19 +597,9 @@ export function openSkyProxy() {
         }
         if (upstream.status === 429) {
           reason = 'rate_limited';
-          // Credit governor: honor OpenSky's retry-after (bounded 30 s … 30 min;
-          // 2 min when the header is absent) — no upstream attempts until then.
-          const retryAfterSec = Number(
-            upstream.headers.get('x-rate-limit-retry-after-seconds'),
-          );
-          const cooldownMs = Math.min(
-            Math.max(
-              Number.isFinite(retryAfterSec) ? retryAfterSec * 1000 : 120_000,
-              30_000,
-            ),
-            30 * 60_000,
-          );
-          _openskyCooldownUntil = now + cooldownMs;
+          // Credit governor: fetchOpenSkyStates already started the cooldown
+          // from OpenSky's retry-after — no upstream attempts until then.
+          const cooldownMs = openSkyRateLimitCooldownMs(upstream);
           // Serve the last-good body instead of the 429 when we have one —
           // the layer keeps rendering (STALE-cued) instead of dying.
           if (_openskyCacheBody && _openskyCacheStatus === 200) {

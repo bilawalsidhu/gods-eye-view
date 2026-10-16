@@ -79,8 +79,8 @@ if its layer is later removed.
 
 New layers first use the remaining unreserved single-character digits (`0`
 through `9`), then the two-character base-36 namespace (`00` through `zz`). On the
-current published ledger, `1` and `2` are already owned, so the next choices
-are `0`, `3` through `9`, then `00`. After rebasing onto the latest `main`, run
+current published ledger, `0`, `1`, `2` and `3` are already owned, so the next
+choices are `4` through `9`, then `00`. After rebasing onto the latest `main`, run
 `npm run layer-token:next -- <layer-id>`, add that result to both the permanent
 JSON reservation ledger and registry entry, and keep the exact registered-layer
 count assertion up to date. The token is assigned against the merge-time base, not
@@ -98,7 +98,7 @@ remove only your still-unpublished layer's registry entry and ledger row so the
 local registry is valid again, then rerun `npm run layer-token:next -- <layer-id>`.
 For example, if PR A publishes `0` while PR B still provisionally uses `0`,
 PR B removes only its own provisional entry, reruns the helper, and receives
-`3`. Put `3` on PR B's registry entry and ledger row, update its pinned count
+`4`. Put `4` on PR B's registry entry and ledger row, update its pinned count
 and token tests, then rerun `npm run layer-token:check -- --base-ref origin/main`.
 An invalid duplicate ledger can fail during module import before the helper
 prints anything; never fix that by renaming or deleting PR A's published token.

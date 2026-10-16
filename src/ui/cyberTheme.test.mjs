@@ -520,11 +520,11 @@ test('Cyber side panels share one width and one framed surface material', () => 
   );
   assert.match(
     cyberStyles,
-    /#right-context-rail\s+:is\(\s*\.cctv-panel-inner,\s*\.weather-panel-inner,\s*\.recent-imagery-panel-inner,\s*\.global-context-panel-inner\s*\) \{\s*padding-right: 8px;/,
+    /#right-context-rail\s+:is\(\s*\.cctv-panel-inner,\s*\.weather-panel-inner,\s*\.recent-imagery-panel-inner,\s*\.street-level-panel-inner,\s*\.global-context-panel-inner\s*\) \{\s*padding-right: 8px;/,
   );
   assert.match(
     cyberStyles,
-    /#right-context-rail[\s\S]*?:is\(\s*#cctv-panel,\s*#weather-panel,\s*#recent-imagery-panel,\s*#global-context-panel\s*\)\.collapsed[\s\S]*?> \.panel-header \{[\s\S]*?height: 48px;[\s\S]*?padding: 0 10px 0 14px;/,
+    /#right-context-rail[\s\S]*?:is\(\s*#cctv-panel,\s*#weather-panel,\s*#recent-imagery-panel,\s*#street-level-panel,\s*#global-context-panel\s*\)\.collapsed[\s\S]*?> \.panel-header \{[\s\S]*?height: 48px;[\s\S]*?padding: 0 10px 0 14px;/,
   );
   assert.doesNotMatch(
     cyberStyles,
@@ -712,7 +712,7 @@ test('the Display selector, voice schema and final stylesheet expose Cyber', () 
   );
   assert.match(
     rightRail,
-    /const leftStackTop = leftStack\?\.getBoundingClientRect\(\)\.top;[\s\S]*?const alignedTop = Number\.isFinite\(leftStackTop\)[\s\S]*?baseTop: alignedTop,/,
+    /const leftStackTop = settledLeftRailTop\([\s\S]*?const alignedTop = Number\.isFinite\(leftStackTop\)[\s\S]*?baseTop: alignedTop,/,
   );
   assert.match(
     cyberStyles,

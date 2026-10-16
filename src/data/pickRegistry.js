@@ -66,6 +66,23 @@ export function unregisterPickOwner(layerId) {
 }
 
 /**
+ * The registered layer that owns a picked id, or null.
+ * @param {string} pickedId - Canonical pick id from {@link resolvePickId}.
+ * @returns {string|null} Owning layer id.
+ */
+export function findPickOwner(pickedId) {
+  if (!pickedId) return null;
+  for (const [ownerId, predicate] of _owners) {
+    try {
+      if (predicate(pickedId)) return ownerId;
+    } catch {
+      // a broken predicate must never break picking
+    }
+  }
+  return null;
+}
+
+/**
  * True when some OTHER registered layer owns the picked id.
  * @param {string} layerId - The asking layer's id (excluded from the scan).
  * @param {string} pickedId - Picked primitive/entity id.

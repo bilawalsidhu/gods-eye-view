@@ -1,3 +1,4 @@
+import { normalizeIdSwitches, patchRequestedIdSwitches } from './idSwitches.js';
 import reservationRows from './layerStateTokenReservations.json' with { type: 'json' };
 
 const VALID_DISPOSITIONS = new Set([
@@ -295,6 +296,24 @@ function imageryPinOption(key, token) {
   });
 }
 
+function satelliteFilterOption() {
+  const percentage = boundedIntegerOption('infrared', 'i', 100, {
+    min: 0,
+    max: 100,
+  });
+  return Object.freeze({
+    ...percentage,
+    normalize: (value) =>
+      value === 'filtered'
+        ? 100
+        : value === 'full'
+          ? 0
+          : percentage.normalize(value),
+    decode: (value) =>
+      value === 'f' ? 100 : value === 'a' ? 0 : percentage.decode(value),
+  });
+}
+
 const OPTION_GROUPS = Object.freeze({
   traffic: Object.freeze([
     enumOption('roadMode', 'r', null, ['tomtom', 'osm', 'hybrid'], {
@@ -316,10 +335,7 @@ const OPTION_GROUPS = Object.freeze({
     }),
   ]),
   'weather-satellite': Object.freeze([
-    enumOption('infrared', 'i', 'filtered', ['filtered', 'full'], {
-      filtered: 'f',
-      full: 'a',
-    }),
+    satelliteFilterOption(),
     enumOption('opacity', 'o', 'strong', ['light', 'strong'], {
       light: 'l',
       strong: 's',
@@ -409,6 +425,27 @@ const OPTION_GROUPS = Object.freeze({
       boundedIntegerOption('split', 'p', 50, { min: 0, max: 100 }),
     ),
     booleanOption('viirs', 'v', false),
+  ]),
+  'street-level': Object.freeze([
+    // Preserve the published Mapillary token; custom switches use stable IDs.
+    booleanOption('mapillary', 'm', true),
+    Object.freeze({
+      key: 'providerSwitches',
+      patchRequested: patchRequestedIdSwitches,
+      token: 'r',
+      defaultValue: '',
+      normalize: (value) => normalizeIdSwitches(value, ['mapillary']),
+      encode: normalizeIdSwitches,
+      decode: (value) => normalizeIdSwitches(value, ['mapillary']),
+    }),
+    enumOption('pano', 'p', 'all', ['all', 'pano', 'flat'], {
+      all: 'a',
+      pano: 'p',
+      flat: 'f',
+    }),
+    // Relative days, so a link means the same next year. The max matches
+    // MAX_SINCE_DAYS in streetLevel/policy.js (pinned by layerState.test).
+    boundedIntegerOption('sinceDays', 's', 0, { min: 0, max: 36500 }),
   ]),
   radio: Object.freeze([
     Object.freeze({
@@ -546,6 +583,11 @@ export const LAYER_STATE_TOKEN_RESERVATIONS =
  */
 export const LAYER_STATE_REGISTRY = Object.freeze([
   Object.freeze({
+    id: 'air-quality',
+    token: '4',
+    disposition: 'enabled-only',
+  }),
+  Object.freeze({
     id: 'ais-live-vessels',
     token: 'a',
     disposition: 'enabled-only',
@@ -584,6 +626,11 @@ export const LAYER_STATE_REGISTRY = Object.freeze([
     token: 'f',
     disposition: 'enabled+options',
     optionOwner: 'flights',
+  }),
+  Object.freeze({
+    id: 'gnss-integrity',
+    token: '3',
+    disposition: 'enabled-only',
   }),
   Object.freeze({ id: 'local-dams', token: 'q', disposition: 'enabled-only' }),
   Object.freeze({
@@ -630,6 +677,12 @@ export const LAYER_STATE_REGISTRY = Object.freeze([
     token: 's',
     disposition: 'enabled+options',
     optionOwner: 'satellites',
+  }),
+  Object.freeze({
+    id: 'street-level',
+    token: '0',
+    disposition: 'enabled+options',
+    optionOwner: 'street-level',
   }),
   Object.freeze({
     id: 'telegeography-submarine-cables',
