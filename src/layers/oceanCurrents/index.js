@@ -249,7 +249,9 @@ export function createOceanCurrentsLayer({
             manifest?.reason ||
             (manifest?.stale ? `Cached field ${DOT} stale` : null);
       const lines = [
-        ...(kind ? [`${kind} ${DOT} ${provenance.ageLabel || 'age unknown'}`] : []),
+        ...(kind
+          ? [`${kind} ${DOT} ${provenance.ageLabel || 'age unknown'}`]
+          : []),
         ...(Number.isFinite(provenance?.rmseMs)
           ? [`Holdout RMSE ${provenance.rmseMs} m/s`]
           : []),
@@ -301,7 +303,9 @@ export function createOceanCurrentsLayer({
         {
           id: 'field',
           label: 'FIELD',
-          chips: controls.chips.filter((chip) => chip.id.startsWith('overlay-')),
+          chips: controls.chips.filter((chip) =>
+            chip.id.startsWith('overlay-'),
+          ),
         },
         {
           id: 'motion',
@@ -342,7 +346,8 @@ export function createOceanCurrentsLayer({
         tier: manifest?.tier ?? null,
         stale: Boolean(manifest?.stale),
         source: manifest?.provenance?.tierLabel || 'Surface currents',
-        validTime: formatWindValidTime(manifest?.cycle?.validIso) || 'Unavailable',
+        validTime:
+          formatWindValidTime(manifest?.cycle?.validIso) || 'Unavailable',
         error:
           error ||
           manifest?.reason ||

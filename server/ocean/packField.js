@@ -44,7 +44,9 @@ export function packFieldManifest(payload, { tier, bbox, fetchedAt, gridUrl }) {
   const n = speeds.length;
   const speed = {
     medianMs: n ? speeds[n >> 1] : 0,
-    p95Ms: n ? speeds[Math.min(n - 1, Math.max(0, Math.ceil(0.95 * n) - 1))] : 0,
+    p95Ms: n
+      ? speeds[Math.min(n - 1, Math.max(0, Math.ceil(0.95 * n) - 1))]
+      : 0,
     maxMs: n ? speeds[n - 1] : 0,
     validCells: n,
     totalCells: count,
@@ -107,7 +109,14 @@ export function unpackFieldManifest(manifest, bytes) {
     }
   }
   return {
-    grid: { lat0: la1 - (ny - 1) * dy, lon0: lo1, dLat: dy, dLon: dx, nLat: ny, nLon: nx },
+    grid: {
+      lat0: la1 - (ny - 1) * dy,
+      lon0: lo1,
+      dLat: dy,
+      dLon: dx,
+      nLat: ny,
+      nLon: nx,
+    },
     u,
     v,
   };

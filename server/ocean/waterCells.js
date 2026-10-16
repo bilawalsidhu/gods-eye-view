@@ -49,7 +49,7 @@ export function classifyWaterCells(grid, mask) {
     const lat = lat0 + i * dLat;
     for (let j = 0; j < nLon; j += 1) {
       // Wrap into [-180, 180) — the payload's lon axis may run past +180.
-      const lon = ((lon0 + j * dLon + 180) % 360 + 360) % 360 - 180;
+      const lon = ((((lon0 + j * dLon + 180) % 360) + 360) % 360) - 180;
       if (maskStateAt(mask, lat, lon) !== MASK_LAND) {
         eligible[i * nLon + j] = 1;
         eligibleCount += 1;
@@ -95,7 +95,10 @@ export async function classifyWaterCellsFromBundle(grid, deps = {}) {
  */
 export function waterCoverage(u, water) {
   if (!water || water.eligibleCount <= 0) {
-    const finite = u.reduce((count, value) => count + (value == null ? 0 : 1), 0);
+    const finite = u.reduce(
+      (count, value) => count + (value == null ? 0 : 1),
+      0,
+    );
     return {
       coverage: u.length > 0 ? finite / u.length : 0,
       waterRelative: false,

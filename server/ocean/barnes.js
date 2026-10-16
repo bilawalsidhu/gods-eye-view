@@ -160,11 +160,13 @@ const CUTOFF_L = 3;
  * @returns {boolean} True if the observation may enter a Gaussian sweep.
  */
 function admissible(o) {
-  return !!o
-    && Number.isFinite(o.x)
-    && Number.isFinite(o.y)
-    && Number.isFinite(o.quality)
-    && o.quality > 0;
+  return (
+    !!o &&
+    Number.isFinite(o.x) &&
+    Number.isFinite(o.y) &&
+    Number.isFinite(o.quality) &&
+    o.quality > 0
+  );
 }
 
 /**
@@ -180,15 +182,18 @@ function admissible(o) {
  */
 function toAxis(axis, name) {
   if (!axis || typeof axis.length !== 'number' || axis.length < 1) {
-    throw new TypeError(`${name} must be a non-empty array of coordinates in metres`);
+    throw new TypeError(
+      `${name} must be a non-empty array of coordinates in metres`,
+    );
   }
   const out = axis instanceof Float64Array ? axis : Float64Array.from(axis);
   for (let i = 0; i < out.length; i += 1) {
-    if (!Number.isFinite(out[i])) throw new RangeError(`${name}[${i}] is not finite`);
+    if (!Number.isFinite(out[i]))
+      throw new RangeError(`${name}[${i}] is not finite`);
     if (i > 0 && !(out[i] > out[i - 1])) {
       throw new RangeError(
-        `${name} must be strictly increasing (${name}[${i - 1}]=${out[i - 1]} >= ${name}[${i}]=${out[i]}); `
-        + 'barnes expects separable 1-D grid axes, not flattened per-cell coordinates',
+        `${name} must be strictly increasing (${name}[${i - 1}]=${out[i - 1]} >= ${name}[${i}]=${out[i]}); ` +
+          'barnes expects separable 1-D grid axes, not flattened per-cell coordinates',
       );
     }
   }
@@ -288,13 +293,25 @@ function sampleBilinear(field, xs, ys, x, y) {
   let sum = 0;
   let wsum = 0;
   const v00 = field[k00];
-  if (Number.isFinite(v00)) { sum += w00 * v00; wsum += w00; }
+  if (Number.isFinite(v00)) {
+    sum += w00 * v00;
+    wsum += w00;
+  }
   const v10 = field[k10];
-  if (Number.isFinite(v10)) { sum += w10 * v10; wsum += w10; }
+  if (Number.isFinite(v10)) {
+    sum += w10 * v10;
+    wsum += w10;
+  }
   const v01 = field[k01];
-  if (Number.isFinite(v01)) { sum += w01 * v01; wsum += w01; }
+  if (Number.isFinite(v01)) {
+    sum += w01 * v01;
+    wsum += w01;
+  }
   const v11 = field[k11];
-  if (Number.isFinite(v11)) { sum += w11 * v11; wsum += w11; }
+  if (Number.isFinite(v11)) {
+    sum += w11 * v11;
+    wsum += w11;
+  }
   return wsum > 0 ? sum / wsum : Number.NaN;
 }
 
@@ -309,10 +326,14 @@ function sampleBilinear(field, xs, ys, x, y) {
  */
 function analysisScales(L, wMin, gamma) {
   if (!Number.isFinite(L) || L <= 0) {
-    throw new RangeError(`length scale L must be a positive finite number of metres, received ${L}`);
+    throw new RangeError(
+      `length scale L must be a positive finite number of metres, received ${L}`,
+    );
   }
   if (!Number.isFinite(wMin) || wMin < 0) {
-    throw new RangeError(`wMin must be a finite non-negative weight, received ${wMin}`);
+    throw new RangeError(
+      `wMin must be a finite non-negative weight, received ${wMin}`,
+    );
   }
   // gamma > 1 would make pass 2 broader than pass 1 — a second smoothing rather
   // than a correction, which inverts the method.
@@ -358,7 +379,21 @@ function analysisScales(L, wMin, gamma) {
  *   `q` are finite (see {@link admissible}); the distance tests here are
  *   comparisons, which NaN would silently pass.
  */
-function accumulate(nums, values, den, xs, ys, ox, oy, q, invLL, cut, exScratch, dx2Scratch, gate) {
+function accumulate(
+  nums,
+  values,
+  den,
+  xs,
+  ys,
+  ox,
+  oy,
+  q,
+  invLL,
+  cut,
+  exScratch,
+  dx2Scratch,
+  gate,
+) {
   const nx = xs.length;
   const ny = ys.length;
   const cutSq = cut * cut;
@@ -422,7 +457,14 @@ function accumulate(nums, values, den, xs, ys, ox, oy, q, invLL, cut, exScratch,
  * @throws {RangeError} If an axis is not strictly increasing and finite, if L is
  *   not positive, or if gamma is outside (0, 1].
  */
-export function barnesScalar(obs, xs, ys, L, wMin = BARNES_WMIN, gamma = BARNES_GAMMA) {
+export function barnesScalar(
+  obs,
+  xs,
+  ys,
+  L,
+  wMin = BARNES_WMIN,
+  gamma = BARNES_GAMMA,
+) {
   const ax = toAxis(xs, 'xs');
   const ay = toAxis(ys, 'ys');
   const { invL2, invL22, cutP1, cutP2 } = analysisScales(L, wMin, gamma);
@@ -445,7 +487,21 @@ export function barnesScalar(obs, xs, ys, L, wMin = BARNES_WMIN, gamma = BARNES_
     const o = obs[k];
     if (!admissible(o) || !Number.isFinite(o.value)) continue;
     vals[0] = o.value;
-    accumulate(nums, vals, den, ax, ay, o.x, o.y, o.quality, invL2, cutP1, exScratch, dx2Scratch, null);
+    accumulate(
+      nums,
+      vals,
+      den,
+      ax,
+      ay,
+      o.x,
+      o.y,
+      o.quality,
+      invL2,
+      cutP1,
+      exScratch,
+      dx2Scratch,
+      null,
+    );
   }
   for (let c = 0; c < n; c += 1) {
     weight[c] = den[c];
@@ -463,7 +519,21 @@ export function barnesScalar(obs, xs, ys, L, wMin = BARNES_WMIN, gamma = BARNES_
     // sweep over the grid.
     if (!Number.isFinite(f1)) continue;
     vals[0] = o.value - f1;
-    accumulate(nums, vals, den, ax, ay, o.x, o.y, o.quality, invL22, cutP2, exScratch, dx2Scratch, field);
+    accumulate(
+      nums,
+      vals,
+      den,
+      ax,
+      ay,
+      o.x,
+      o.y,
+      o.quality,
+      invL22,
+      cutP2,
+      exScratch,
+      dx2Scratch,
+      field,
+    );
   }
   for (let c = 0; c < n; c += 1) {
     if (den[c] > 0 && field[c] === field[c]) field[c] += num[c] / den[c];
@@ -531,12 +601,29 @@ export function barnesVector(obs, xs, ys, L, opts = {}) {
 
   for (let k = 0; k < obs.length; k += 1) {
     const o = obs[k];
-    if (!admissible(o) || !Number.isFinite(o.u) || !Number.isFinite(o.v)) continue;
+    if (!admissible(o) || !Number.isFinite(o.u) || !Number.isFinite(o.v))
+      continue;
     vals[0] = o.u;
     vals[1] = o.v;
     // Count the sweep, not the loop iteration: an admissible observation more
     // than 3L outside the grid deposits nothing and did not inform the field.
-    if (accumulate(nums, vals, den, ax, ay, o.x, o.y, o.quality, invL2, cutP1, exScratch, dx2Scratch, null)) {
+    if (
+      accumulate(
+        nums,
+        vals,
+        den,
+        ax,
+        ay,
+        o.x,
+        o.y,
+        o.quality,
+        invL2,
+        cutP1,
+        exScratch,
+        dx2Scratch,
+        null,
+      )
+    ) {
       used += 1;
     }
   }
@@ -553,7 +640,8 @@ export function barnesVector(obs, xs, ys, L, opts = {}) {
   den.fill(0);
   for (let k = 0; k < obs.length; k += 1) {
     const o = obs[k];
-    if (!admissible(o) || !Number.isFinite(o.u) || !Number.isFinite(o.v)) continue;
+    if (!admissible(o) || !Number.isFinite(o.u) || !Number.isFinite(o.v))
+      continue;
     // u and v share a NaN mask, and sampleBilinear renormalises over exactly the
     // finite corners, so both samples draw on the same corner set: one
     // finiteness test provably covers both.
@@ -561,7 +649,21 @@ export function barnesVector(obs, xs, ys, L, opts = {}) {
     if (!Number.isFinite(u1)) continue;
     vals[0] = o.u - u1;
     vals[1] = o.v - sampleBilinear(v, ax, ay, o.x, o.y);
-    accumulate(nums, vals, den, ax, ay, o.x, o.y, o.quality, invL22, cutP2, exScratch, dx2Scratch, u);
+    accumulate(
+      nums,
+      vals,
+      den,
+      ax,
+      ay,
+      o.x,
+      o.y,
+      o.quality,
+      invL22,
+      cutP2,
+      exScratch,
+      dx2Scratch,
+      u,
+    );
   }
   for (let c = 0; c < n; c += 1) {
     if (den[c] > 0 && u[c] === u[c]) {
@@ -713,7 +815,8 @@ export function validateAnalysis(obs, xs, ys, L, opts = {}) {
     // one it would have rejected — a NaN position, a zero or infinite quality —
     // measures the field against data it deliberately refuses to trust, and
     // would make `holdoutCount` a different population from the training set.
-    if (!admissible(o) || !Number.isFinite(o.u) || !Number.isFinite(o.v)) continue;
+    if (!admissible(o) || !Number.isFinite(o.u) || !Number.isFinite(o.v))
+      continue;
     const uh = sampleBilinear(analysis.u, ax, ay, o.x, o.y);
     if (!Number.isFinite(uh)) continue;
     // Every corner of the masked weight that the sampler can reach passed wMin,

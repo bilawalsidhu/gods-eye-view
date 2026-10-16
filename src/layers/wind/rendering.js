@@ -45,7 +45,16 @@ function sameWind(previous, next, previousField, nextField) {
     if (previous[key] !== next[key]) return false;
   for (const key of ['runIso', 'validIso', 'forecastHour', 'date', 'hour'])
     if (previous.cycle?.[key] !== next.cycle?.[key]) return false;
-  for (const key of ['nx', 'ny', 'lo1', 'la1', 'dx', 'dy', 'noData', 'periodic'])
+  for (const key of [
+    'nx',
+    'ny',
+    'lo1',
+    'la1',
+    'dx',
+    'dy',
+    'noData',
+    'periodic',
+  ])
     if (previousField[key] !== nextField[key]) return false;
   for (const key of ['latMin', 'latMax', 'lonMin', 'lonMax'])
     if (previousField.bbox?.[key] !== nextField.bbox?.[key]) return false;
@@ -606,7 +615,8 @@ export function createWindRendering({
     context.lineCap = 'round';
     const cameraHeight = scene.camera?.positionCartographic?.height ?? 1e6;
     const advection = {
-      speedScale: Math.max(0.002, Math.min(4000, cameraHeight / 400)) * speedScale,
+      speedScale:
+        Math.max(0.002, Math.min(4000, cameraHeight / 400)) * speedScale,
     };
     // Stroke length is a display sample of the local field, not frame travel.
     // At low FPS capped advection still moves the head by dt, but a readable

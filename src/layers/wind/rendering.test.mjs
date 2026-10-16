@@ -1240,8 +1240,15 @@ test('ocean spec: canvas particles spawn inside the field box and the speed scal
   }
   const diagnostics = h.rendering.getDiagnostics();
   assert.equal(diagnostics.speedScale, 5.836 / 0.4);
-  assert.equal(diagnostics.imageryRectangle, null, 'no imagery without an overlay');
+  assert.equal(
+    diagnostics.imageryRectangle,
+    null,
+    'no imagery without an overlay',
+  );
   h.rendering.setOptions({ overlay: 'speed' });
-  assert.deepEqual(h.rendering.getDiagnostics().imageryRectangle, [-75, 30, -66, 39]);
+  assert.deepEqual(
+    h.rendering.getDiagnostics().imageryRectangle,
+    [-75, 30, -66, 39],
+  );
   h.rendering.destroy();
 });

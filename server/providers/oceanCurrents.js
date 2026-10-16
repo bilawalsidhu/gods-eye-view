@@ -216,7 +216,9 @@ export function oceanCurrentsProxy({
         'Content-Type': 'application/octet-stream',
         'Cache-Control': 'public, max-age=3600, immutable',
       });
-      return res.end(Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength));
+      return res.end(
+        Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength),
+      );
     }
     if (!['/manifest', '/status'].includes(url.pathname))
       return sendJson(res, { error: 'not_found' }, 404);
@@ -239,7 +241,10 @@ export function oceanCurrentsProxy({
     if (!box)
       return sendJson(
         res,
-        { error: 'Valid latMin/latMax/lonMin/lonMax are required', detail: error },
+        {
+          error: 'Valid latMin/latMax/lonMin/lonMax are required',
+          detail: error,
+        },
         400,
       );
     const tier = boxSpanKm(box).maxKm > GLOBAL_SPAN_KM ? 'global' : 'regional';

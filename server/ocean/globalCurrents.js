@@ -153,22 +153,23 @@ export const GLOBAL_CURRENTS_DATASET = Object.freeze({
   resolutionDeg: 0.25,
   /** `NC_GLOBAL.title`, degree sign repaired. */
   label:
-    'Sea Surface Currents (Geostrophic), Altimetry (S-3A/B,CryoSat2,Jason-2/3,SARAL), '
-    + 'Near Real-Time, Global 0.25°, 2017-present, Daily',
+    'Sea Surface Currents (Geostrophic), Altimetry (S-3A/B,CryoSat2,Jason-2/3,SARAL), ' +
+    'Near Real-Time, Global 0.25°, 2017-present, Daily',
   /** `NC_GLOBAL.license`, verbatim, line wraps collapsed to spaces. */
   license:
-    'Data courtesy of NOAA; Sentinel data courtesy of Copernicus Program; '
-    + 'Generated using AVISO+ products. The data may be used and redistributed for free '
-    + 'but is not intended for legal use, since it may contain inaccuracies. '
-    + 'Neither the data Contributor, ERD, NOAA, nor the United States Government, nor any '
-    + 'of their employees or contractors, makes any warranty, express or implied, '
-    + 'including warranties of merchantability and fitness for a particular purpose, '
-    + 'or assumes any legal liability for the accuracy, completeness, or usefulness, '
-    + 'of this information.',
+    'Data courtesy of NOAA; Sentinel data courtesy of Copernicus Program; ' +
+    'Generated using AVISO+ products. The data may be used and redistributed for free ' +
+    'but is not intended for legal use, since it may contain inaccuracies. ' +
+    'Neither the data Contributor, ERD, NOAA, nor the United States Government, nor any ' +
+    'of their employees or contractors, makes any warranty, express or implied, ' +
+    'including warranties of merchantability and fitness for a particular purpose, ' +
+    'or assumes any legal liability for the accuracy, completeness, or usefulness, ' +
+    'of this information.',
   /** `NC_GLOBAL.institution` — the string to put on a map credit. */
   attribution: 'NOAA NESDIS CoastWatch',
   /** Human-facing dataset page. */
-  infoUrl: 'https://coastwatch.noaa.gov/erddap/info/noaacwBLENDEDNRTcurrentsDaily/index.html',
+  infoUrl:
+    'https://coastwatch.noaa.gov/erddap/info/noaacwBLENDEDNRTcurrentsDaily/index.html',
   /** `_FillValue`/`missing_value` of both components; served as `NaN` in `.csv0`. */
   fillValue: -214748.3648,
   /**
@@ -266,12 +267,12 @@ function isoStamp(ms) {
  */
 export function wrapLon180(lon) {
   if (!Number.isFinite(lon)) return NaN;
-  return ((lon + 180) % 360 + 360) % 360 - 180;
+  return ((((lon + 180) % 360) + 360) % 360) - 180;
 }
 
 /** @param {number} x @param {number} lo @param {number} hi @returns {number} */
 function clamp(x, lo, hi) {
-  return x < lo ? lo : (x > hi ? hi : x);
+  return x < lo ? lo : x > hi ? hi : x;
 }
 
 /**
@@ -348,14 +349,20 @@ export function longitudeIndexRanges(box) {
   const { lonOrigin, lonStep, lonCount } = GLOBAL_CURRENTS_AXES;
 
   if (lonMax - lonMin >= 360) {
-    return { crossesDateline: false, ranges: [{ start: 0, end: lonCount - 1 }] };
+    return {
+      crossesDateline: false,
+      ranges: [{ start: 0, end: lonCount - 1 }],
+    };
   }
   const west = wrapLon180(lonMin);
   const east = wrapLon180(lonMax);
   const startIdx = coveringIndex(west, lonOrigin, lonStep, lonCount, false);
   const endIdx = coveringIndex(east, lonOrigin, lonStep, lonCount, true);
   if (east >= west) {
-    return { crossesDateline: false, ranges: [{ start: startIdx, end: endIdx }] };
+    return {
+      crossesDateline: false,
+      ranges: [{ start: startIdx, end: endIdx }],
+    };
   }
   return {
     crossesDateline: true,
@@ -378,7 +385,11 @@ function planLongitudeSegments(ranges, stride) {
   const out = [];
   const first = ranges[0];
   const nWest = Math.floor((first.end - first.start) / stride) + 1;
-  out.push({ start: first.start, end: first.start + (nWest - 1) * stride, count: nWest });
+  out.push({
+    start: first.start,
+    end: first.start + (nWest - 1) * stride,
+    count: nWest,
+  });
   if (ranges.length === 1) return out;
   // Continue the single arithmetic progression across the seam: the next index
   // after the last western one is first.start + stride*nWest, minus one full
@@ -391,7 +402,11 @@ function planLongitudeSegments(ranges, stride) {
     return out;
   }
   const nEast = Math.floor((second.end - eastStart) / stride) + 1;
-  out.push({ start: eastStart, end: eastStart + (nEast - 1) * stride, count: nEast });
+  out.push({
+    start: eastStart,
+    end: eastStart + (nEast - 1) * stride,
+    count: nEast,
+  });
   return out;
 }
 
@@ -430,13 +445,15 @@ function planLongitudeSegments(ranges, stride) {
 export function chooseStride(box, targetCells = DEFAULT_TARGET_CELLS) {
   const latMin = Number(box?.latMin);
   const latMax = Number(box?.latMax);
-  if (!Number.isFinite(latMin) || !Number.isFinite(latMax) || latMin > latMax) return null;
+  if (!Number.isFinite(latMin) || !Number.isFinite(latMax) || latMin > latMax)
+    return null;
   if (!Number.isFinite(targetCells) || targetCells < 1) return null;
   const lon = longitudeIndexRanges(box);
   if (!lon) return null;
 
   const budget = Math.min(Math.floor(targetCells), MAX_TARGET_CELLS);
-  const { latOrigin, latStep, latCount, lonOrigin, lonStep, lonCount } = GLOBAL_CURRENTS_AXES;
+  const { latOrigin, latStep, latCount, lonOrigin, lonStep, lonCount } =
+    GLOBAL_CURRENTS_AXES;
   const latStart = coveringIndex(latMin, latOrigin, latStep, latCount, false);
   const latEnd = coveringIndex(latMax, latOrigin, latStep, latCount, true);
   const latSpan = latEnd - latStart;
@@ -496,7 +513,14 @@ export function chooseStride(box, targetCells = DEFAULT_TARGET_CELLS) {
 }
 
 /** Extensions ERDDAP griddap serves that this module is willing to name. */
-const ALLOWED_EXTS = new Set(['csv0', 'csv', 'csvp', 'json', 'nc', 'htmlTable']);
+const ALLOWED_EXTS = new Set([
+  'csv0',
+  'csv',
+  'csvp',
+  'json',
+  'nc',
+  'htmlTable',
+]);
 
 /**
  * Build the griddap URL for ONE non-crossing segment. Pure.
@@ -522,34 +546,53 @@ const ALLOWED_EXTS = new Set(['csv0', 'csv', 'csvp', 'json', 'nc', 'htmlTable'])
  * @param {string} [options.ext='csv0'] - Response format.
  * @returns {string} Fully encoded URL.
  */
-export function buildGlobalCurrentsUrl({ box, timeIso, stride = 1, ext = 'csv0' } = {}) {
+export function buildGlobalCurrentsUrl({
+  box,
+  timeIso,
+  stride = 1,
+  ext = 'csv0',
+} = {}) {
   const latMin = Number(box?.latMin);
   const latMax = Number(box?.latMax);
   const lonMin = Number(box?.lonMin);
   const lonMax = Number(box?.lonMax);
-  for (const [name, value] of [['latMin', latMin], ['latMax', latMax], ['lonMin', lonMin], ['lonMax', lonMax]]) {
-    if (!Number.isFinite(value)) throw new Error(`globalCurrents: ${name} must be finite, got ${box?.[name]}`);
+  for (const [name, value] of [
+    ['latMin', latMin],
+    ['latMax', latMax],
+    ['lonMin', lonMin],
+    ['lonMax', lonMax],
+  ]) {
+    if (!Number.isFinite(value))
+      throw new Error(
+        `globalCurrents: ${name} must be finite, got ${box?.[name]}`,
+      );
   }
-  if (latMin > latMax) throw new Error(`globalCurrents: latMin ${latMin} > latMax ${latMax}`);
+  if (latMin > latMax)
+    throw new Error(`globalCurrents: latMin ${latMin} > latMax ${latMax}`);
   if (lonMin > lonMax) {
     throw new Error(
-      `globalCurrents: lonMin ${lonMin} > lonMax ${lonMax} — a dateline-crossing box must be split `
-      + 'into two segments by chooseStride() before building a URL',
+      `globalCurrents: lonMin ${lonMin} > lonMax ${lonMax} — a dateline-crossing box must be split ` +
+        'into two segments by chooseStride() before building a URL',
     );
   }
   if (!Number.isInteger(stride) || stride < 1) {
-    throw new Error(`globalCurrents: stride must be a positive integer, got ${stride}`);
+    throw new Error(
+      `globalCurrents: stride must be a positive integer, got ${stride}`,
+    );
   }
-  if (!ALLOWED_EXTS.has(ext)) throw new Error(`globalCurrents: unsupported ext "${ext}"`);
+  if (!ALLOWED_EXTS.has(ext))
+    throw new Error(`globalCurrents: unsupported ext "${ext}"`);
   const t = Date.parse(timeIso);
-  if (!Number.isFinite(t)) throw new Error(`globalCurrents: unparseable timeIso "${timeIso}"`);
+  if (!Number.isFinite(t))
+    throw new Error(`globalCurrents: unparseable timeIso "${timeIso}"`);
   const stamp = isoStamp(t);
 
   const { id, server, uVar, vVar } = GLOBAL_CURRENTS_DATASET;
   // Time is always a single step, so its stride is fixed at 1.
-  const dims = `[(${stamp}):1:(${stamp})]`
-    + `[(${formatCoord(latMin)}):${stride}:(${formatCoord(latMax)})]`
-    + `[(${formatCoord(lonMin)}):${stride}:(${formatCoord(lonMax)})]`;
+  const dims =
+    `[(${stamp}):1:(${stamp})]` +
+    `[(${formatCoord(latMin)}):${stride}:(${formatCoord(latMax)})]` +
+    `[(${formatCoord(lonMin)}):${stride}:(${formatCoord(lonMax)})]`;
   const query = `${uVar}${dims},${vVar}${dims}`;
   // Only the brackets need escaping; ERDDAP's own documented examples use raw
   // colons, parentheses and commas, and escaping them breaks the constraint parser.
@@ -642,7 +685,12 @@ export function parseGlobalCurrentsCsv0(text) {
     latSet.add(lat);
     lonSet.add(lon);
     times.add(parts[COL_TIME].trim());
-    rows.push({ lat, lon, u: parseValue(parts[COL_U]), v: parseValue(parts[COL_V]) });
+    rows.push({
+      lat,
+      lon,
+      u: parseValue(parts[COL_U]),
+      v: parseValue(parts[COL_V]),
+    });
   }
   if (rows.length === 0) return null;
 
@@ -718,10 +766,18 @@ export function stitchGlobalCurrents(west, east, stepDeg) {
   // must come back as null, not as a TypeError from `undefined.length` or a
   // RangeError from a short `set()`.
   for (const half of [west, east]) {
-    if (typeof half.lats?.length !== 'number' || typeof half.lons?.length !== 'number') return null;
+    if (
+      typeof half.lats?.length !== 'number' ||
+      typeof half.lons?.length !== 'number'
+    )
+      return null;
     // The payloads are copied row-by-row with subarray(), so they have to be
     // the typed arrays `parseGlobalCurrentsCsv0` produces, not plain arrays.
-    if (typeof half.u?.subarray !== 'function' || typeof half.v?.subarray !== 'function') return null;
+    if (
+      typeof half.u?.subarray !== 'function' ||
+      typeof half.v?.subarray !== 'function'
+    )
+      return null;
   }
   const nLat = west.lats.length;
   if (east.lats.length !== nLat) return null;
@@ -731,9 +787,11 @@ export function stitchGlobalCurrents(west, east, stepDeg) {
   const nWest = west.lons.length;
   const nEast = east.lons.length;
   if (nWest === 0 || nEast === 0) return null;
-  if (west.u.length !== nLat * nWest || west.v.length !== nLat * nWest) return null;
-  if (east.u.length !== nLat * nEast || east.v.length !== nLat * nEast) return null;
-  const seam = (east.lons[0] + 360) - west.lons[nWest - 1];
+  if (west.u.length !== nLat * nWest || west.v.length !== nLat * nWest)
+    return null;
+  if (east.u.length !== nLat * nEast || east.v.length !== nLat * nEast)
+    return null;
+  const seam = east.lons[0] + 360 - west.lons[nWest - 1];
   if (Math.abs(seam - stepDeg) > COORD_EPS) return null;
 
   const nLon = nWest + nEast;
@@ -771,7 +829,10 @@ export function stitchGlobalCurrents(west, east, stepDeg) {
 function abortAfter(signal, timeoutMs) {
   const controller = new AbortController();
   const timer = setTimeout(
-    () => controller.abort(new Error(`globalCurrents: upstream timed out after ${timeoutMs} ms`)),
+    () =>
+      controller.abort(
+        new Error(`globalCurrents: upstream timed out after ${timeoutMs} ms`),
+      ),
     timeoutMs,
   );
   const onAbort = () => controller.abort(signal.reason);
@@ -812,15 +873,27 @@ async function fetchText(url, fetchImpl, signal, timeoutMs) {
     // Success must be asserted, not assumed: an object with no `ok` field is a
     // broken fetch impl, and treating it as a 200 would hand `undefined` to the
     // parser and surface as "empty ocean" rather than as the wiring bug it is.
-    if (!response || typeof response.text !== 'function' || typeof response.ok !== 'boolean') {
-      throw new Error(`globalCurrents: fetchImpl returned no usable response for ${url}`);
+    if (
+      !response ||
+      typeof response.text !== 'function' ||
+      typeof response.ok !== 'boolean'
+    ) {
+      throw new Error(
+        `globalCurrents: fetchImpl returned no usable response for ${url}`,
+      );
     }
     if (!response.ok) {
-      throw new Error(`globalCurrents: HTTP ${response.status ?? 'unknown status'} from ${url}`);
+      throw new Error(
+        `globalCurrents: HTTP ${response.status ?? 'unknown status'} from ${url}`,
+      );
     }
     let text;
     try {
-      text = await readResponseTextCapped(response, RESPONSE_BYTE_CAP, gate.signal);
+      text = await readResponseTextCapped(
+        response,
+        RESPONSE_BYTE_CAP,
+        gate.signal,
+      );
     } catch (error) {
       if (error?.code === 'RESPONSE_TOO_LARGE') {
         throw new Error(
@@ -906,7 +979,7 @@ function axisStep(axis) {
   // future dataset whose axis is not.
   const tol = Math.max(Math.abs(step) * 1e-6, COORD_EPS);
   for (let i = 1; i < axis.length; i += 1) {
-    if (Math.abs((axis[i] - axis[i - 1]) - step) > tol) return null;
+    if (Math.abs(axis[i] - axis[i - 1] - step) > tol) return null;
   }
   return step;
 }
@@ -961,7 +1034,8 @@ export async function fetchGlobalCurrents({
   timeoutMs = DEFAULT_TIMEOUT_MS,
 } = {}) {
   const plan = chooseStride(box, targetCells);
-  if (!plan) throw new Error('globalCurrents: unusable view rectangle or cell budget');
+  if (!plan)
+    throw new Error('globalCurrents: unusable view rectangle or cell budget');
 
   let stamp = timeIso;
   let requestedAtMs = timeIso ? Date.parse(timeIso) : NaN;
@@ -972,24 +1046,35 @@ export async function fetchGlobalCurrents({
       // Re-throw the caller's own abort reason instead of reporting a dataset
       // outage: a camera move is not a CoastWatch problem, and the caller needs
       // to be able to tell the two apart.
-      if (signal?.aborted) throw signal.reason ?? new Error('globalCurrents: aborted');
-      throw new Error('globalCurrents: could not resolve the dataset\'s latest time step');
+      if (signal?.aborted)
+        throw signal.reason ?? new Error('globalCurrents: aborted');
+      throw new Error(
+        "globalCurrents: could not resolve the dataset's latest time step",
+      );
     }
     stamp = probe.timeIso;
     requestedAtMs = probe.validAtMs;
   }
-  if (!Number.isFinite(requestedAtMs)) throw new Error(`globalCurrents: unparseable timeIso "${timeIso}"`);
+  if (!Number.isFinite(requestedAtMs))
+    throw new Error(`globalCurrents: unparseable timeIso "${timeIso}"`);
 
-  const urls = plan.segments.map((segment) => buildGlobalCurrentsUrl({
-    box: segment,
-    timeIso: stamp,
-    stride: plan.stride,
-    ext: 'csv0',
-  }));
-  const bodies = await Promise.all(urls.map((url) => fetchText(url, fetchImpl, signal, timeoutMs)));
+  const urls = plan.segments.map((segment) =>
+    buildGlobalCurrentsUrl({
+      box: segment,
+      timeIso: stamp,
+      stride: plan.stride,
+      ext: 'csv0',
+    }),
+  );
+  const bodies = await Promise.all(
+    urls.map((url) => fetchText(url, fetchImpl, signal, timeoutMs)),
+  );
   const grids = bodies.map((text, i) => {
     const grid = parseGlobalCurrentsCsv0(text);
-    if (!grid) throw new Error(`globalCurrents: unparseable or shape-drifted response from ${urls[i]}`);
+    if (!grid)
+      throw new Error(
+        `globalCurrents: unparseable or shape-drifted response from ${urls[i]}`,
+      );
     return grid;
   });
 
@@ -998,7 +1083,10 @@ export async function fetchGlobalCurrents({
     [grid] = grids;
   } else {
     grid = stitchGlobalCurrents(grids[0], grids[1], plan.cellSizeDeg);
-    if (!grid) throw new Error('globalCurrents: dateline halves do not stitch into one grid');
+    if (!grid)
+      throw new Error(
+        'globalCurrents: dateline halves do not stitch into one grid',
+      );
   }
 
   // Report the time the server actually served. ERDDAP snaps `(t)` to its
@@ -1008,7 +1096,9 @@ export async function fetchGlobalCurrents({
   // stamp is shape drift, not licence to fall back on the request.
   const validAtMs = grid.timeIso ? Date.parse(grid.timeIso) : NaN;
   if (!Number.isFinite(validAtMs)) {
-    throw new Error('globalCurrents: response carries no single parseable time stamp');
+    throw new Error(
+      'globalCurrents: response carries no single parseable time stamp',
+    );
   }
   // Same rule for the resolution: measure the axis that came back rather than
   // repeating the stride we asked for. A non-uniform axis has no single
@@ -1016,14 +1106,20 @@ export async function fetchGlobalCurrents({
   const latStepDeg = axisStep(grid.lats);
   const lonStepDeg = axisStep(grid.lons);
   if (latStepDeg === null || lonStepDeg === null) {
-    throw new Error('globalCurrents: the served grid axes are not uniformly spaced');
+    throw new Error(
+      'globalCurrents: the served grid axes are not uniformly spaced',
+    );
   }
   // A degenerate 1-column or 1-row grid shows no spacing; fall back to the
   // other axis, then to the plan, which is the only thing left that knows one.
-  const servedResolutionDeg = Number.isFinite(lonStepDeg) ? lonStepDeg
-    : (Number.isFinite(latStepDeg) ? latStepDeg : plan.cellSizeDeg);
+  const servedResolutionDeg = Number.isFinite(lonStepDeg)
+    ? lonStepDeg
+    : Number.isFinite(latStepDeg)
+      ? latStepDeg
+      : plan.cellSizeDeg;
 
-  const { id, resolutionDeg, label, attribution, license } = GLOBAL_CURRENTS_DATASET;
+  const { id, resolutionDeg, label, attribution, license } =
+    GLOBAL_CURRENTS_DATASET;
   return {
     lats: grid.lats,
     lons: grid.lons,

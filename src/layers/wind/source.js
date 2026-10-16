@@ -88,7 +88,11 @@ export function createWindSource({
         const bytes = await readWindBody(gridResponse, expectedBytes, active);
         if (bytes.byteLength !== expectedBytes)
           throw new Error(msg('Malformed wind grid'));
-        const [u, v, scalarValues] = decodeFieldGrid(grid, bytes, scalar ? 3 : 2);
+        const [u, v, scalarValues] = decodeFieldGrid(
+          grid,
+          bytes,
+          scalar ? 3 : 2,
+        );
         return {
           ...manifest,
           u,

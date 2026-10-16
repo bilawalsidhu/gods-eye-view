@@ -171,7 +171,8 @@ export function createFieldRaster(
     return null;
   if (
     kind !== 'speed' &&
-    (snapshot.scalar?.kind !== kind || snapshot.scalar.units !== fieldSpec.units)
+    (snapshot.scalar?.kind !== kind ||
+      snapshot.scalar.units !== fieldSpec.units)
   )
     return null;
   const rgba = new Uint8ClampedArray(width * height * 4);

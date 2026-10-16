@@ -1,7 +1,8 @@
 import { readWindBody } from '../../sources/windBody.js';
 import { decodeFieldGrid } from '../wind/fieldDecode.js';
 
-export const OCEAN_GRID_URL = /^\/api\/ocean\/currents\/grid\/currents-[\w.,-]+\.bin$/;
+export const OCEAN_GRID_URL =
+  /^\/api\/ocean\/currents\/grid\/currents-[\w.,-]+\.bin$/;
 const GLOBAL_BOX = { latMin: -90, latMax: 90, lonMin: -180, lonMax: 180 };
 
 /** The grid must start within a cell of the box's west and north edges and span it. */

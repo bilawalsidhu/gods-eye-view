@@ -535,7 +535,7 @@ export const TIERS = Object.freeze({
 export function metresPerDegLat(lat) {
   const s = Math.sin(lat * DEG);
   const w = 1 - WGS84_E2 * s * s;
-  return (WGS84_A * (1 - WGS84_E2) / (w * Math.sqrt(w))) * DEG;
+  return ((WGS84_A * (1 - WGS84_E2)) / (w * Math.sqrt(w))) * DEG;
 }
 
 /**
@@ -547,7 +547,9 @@ export function metresPerDegLat(lat) {
  */
 export function metresPerDegLon(lat) {
   const s = Math.sin(lat * DEG);
-  return (WGS84_A / Math.sqrt(1 - WGS84_E2 * s * s)) * Math.cos(lat * DEG) * DEG;
+  return (
+    (WGS84_A / Math.sqrt(1 - WGS84_E2 * s * s)) * Math.cos(lat * DEG) * DEG
+  );
 }
 
 /**
@@ -582,12 +584,15 @@ export function normalizeBox(box) {
   const lonMin = box.lonMin + 0;
   const latMax = box.latMax + 0;
   const lonMax = box.lonMax + 0;
-  if (latMin < -90 || latMax > 90) throw new Error(`latitudes out of range: ${latMin}..${latMax}`);
-  if (!(latMax > latMin)) throw new Error(`latMax must exceed latMin (${latMin}..${latMax})`);
-  const rawSpan = ((lonMax - lonMin) % 360 + 360) % 360;
+  if (latMin < -90 || latMax > 90)
+    throw new Error(`latitudes out of range: ${latMin}..${latMax}`);
+  if (!(latMax > latMin))
+    throw new Error(`latMax must exceed latMin (${latMin}..${latMax})`);
+  const rawSpan = (((lonMax - lonMin) % 360) + 360) % 360;
   // A wrap to exactly 0 is either a zero-width box (refused) or a full 360.
   const lonSpanDeg = rawSpan === 0 ? (lonMax === lonMin ? 0 : 360) : rawSpan;
-  if (!(lonSpanDeg > 0)) throw new Error(`longitude span is zero (${lonMin}..${lonMax})`);
+  if (!(lonSpanDeg > 0))
+    throw new Error(`longitude span is zero (${lonMin}..${lonMax})`);
   return {
     latMin,
     lonMin,
@@ -613,8 +618,8 @@ export function normalizeBox(box) {
  */
 export function boxSpanKm(box) {
   const b = normalizeBox(box);
-  const latKm = b.latSpanDeg * metresPerDegLat(b.midLat) / 1000;
-  const lonKm = b.lonSpanDeg * metresPerDegLon(b.midLat) / 1000;
+  const latKm = (b.latSpanDeg * metresPerDegLat(b.midLat)) / 1000;
+  const lonKm = (b.lonSpanDeg * metresPerDegLon(b.midLat)) / 1000;
   return { latKm, lonKm, maxKm: Math.max(latKm, lonKm) };
 }
 
@@ -690,20 +695,29 @@ export function chooseTier(box, { allowHfr = true } = {}) {
 export function buildTargetGrid(box, targetCells = DEFAULT_TARGET_CELLS) {
   const b = normalizeBox(box);
   const budget = clamp(
-    Number.isFinite(targetCells) ? Math.round(targetCells) : DEFAULT_TARGET_CELLS,
+    Number.isFinite(targetCells)
+      ? Math.round(targetCells)
+      : DEFAULT_TARGET_CELLS,
     MIN_TARGET_CELLS,
     MAX_TARGET_CELLS,
   );
 
-  const latKm = b.latSpanDeg * metresPerDegLat(b.midLat) / 1000;
+  const latKm = (b.latSpanDeg * metresPerDegLat(b.midLat)) / 1000;
   // Near the poles metresPerDegLon -> 0; floor the ground width so the aspect
   // stays finite and the grid degrades to a tall sliver rather than dividing by 0.
-  const lonKm = Math.max(b.lonSpanDeg * metresPerDegLon(b.midLat) / 1000, 1e-6);
+  const lonKm = Math.max(
+    (b.lonSpanDeg * metresPerDegLon(b.midLat)) / 1000,
+    1e-6,
+  );
   const aspect = lonKm / Math.max(latKm, 1e-6);
 
   // nLon from the aspect-weighted budget, then nLat from what is left: this
   // keeps nLat*nLon within one row of the budget for any aspect.
-  const nLon = clamp(Math.round(Math.sqrt(budget * aspect)), MIN_GRID_AXIS, MAX_GRID_AXIS);
+  const nLon = clamp(
+    Math.round(Math.sqrt(budget * aspect)),
+    MIN_GRID_AXIS,
+    MAX_GRID_AXIS,
+  );
   const nLat = clamp(Math.round(budget / nLon), MIN_GRID_AXIS, MAX_GRID_AXIS);
 
   const dLat = b.latSpanDeg / (nLat - 1);
@@ -758,7 +772,7 @@ export function createTangentProjection(box) {
   const mPerDegLat = metresPerDegLat(lat0);
   const mPerDegLon = metresPerDegLon(lat0);
   const projectLat = (lat) => (lat - lat0) * mPerDegLat;
-  const projectLon = (lon) => ((((lon - lon0 + 540) % 360) - 180)) * mPerDegLon;
+  const projectLon = (lon) => (((lon - lon0 + 540) % 360) - 180) * mPerDegLon;
   return {
     lat0,
     lon0,
@@ -896,7 +910,13 @@ export async function buildFieldPayload({
   // Cost control, one: an analysis that already covers essentially all the water
   // leaves the global tier nothing to fill, so the round trip is not made.
   if (hfr && hfr.coverage >= HFR_SATURATION_COVERAGE) {
-    return hfrOnlyPayload({ box: normalized, requestedAtMs, hfr, attempts, globalReason: null });
+    return hfrOnlyPayload({
+      box: normalized,
+      requestedAtMs,
+      hfr,
+      attempts,
+      globalReason: null,
+    });
   }
 
   let globalOutcome;
@@ -926,7 +946,11 @@ export async function buildFieldPayload({
       });
     }
     return hfrOnlyPayload({
-      box: normalized, requestedAtMs, hfr, attempts, globalReason: globalOutcome.reason,
+      box: normalized,
+      requestedAtMs,
+      hfr,
+      attempts,
+      globalReason: globalOutcome.reason,
     });
   }
 
@@ -937,7 +961,9 @@ export async function buildFieldPayload({
       requestedAtMs,
       deps,
       fallbackFrom,
-      fallbackReason: attempts.length ? attempts[attempts.length - 1].reason : null,
+      fallbackReason: attempts.length
+        ? attempts[attempts.length - 1].reason
+        : null,
     });
     if (built.payload) {
       built.payload.attempts = attempts;
@@ -981,10 +1007,25 @@ export async function buildFieldPayload({
  *   already land-blanked, and `water` is the lattice's classification so a
  *   composite does not load the mask twice — or a demotion reason.
  */
-async function runHfrTier({ box, grid, requestedAtMs, fetchImpl, deps, holdoutFraction, seed, validate }) {
+async function runHfrTier({
+  box,
+  grid,
+  requestedAtMs,
+  fetchImpl,
+  deps,
+  holdoutFraction,
+  seed,
+  validate,
+}) {
   const fetchHfrField = await resolveDep('fetchHfrField', deps);
-  const fetched = await fetchHfrField({ box: plainBox(box), atMs: requestedAtMs, fetchImpl });
-  const observations = Array.isArray(fetched?.observations) ? fetched.observations : [];
+  const fetched = await fetchHfrField({
+    box: plainBox(box),
+    atMs: requestedAtMs,
+    fetchImpl,
+  });
+  const observations = Array.isArray(fetched?.observations)
+    ? fetched.observations
+    : [];
   if (!fetched || observations.length === 0) {
     return { component: null, reason: 'no HF-radar vectors in view' };
   }
@@ -998,7 +1039,10 @@ async function runHfrTier({ box, grid, requestedAtMs, fetchImpl, deps, holdoutFr
   if (!Number.isFinite(lengthScaleM) || lengthScaleM <= 0) {
     // The 2 km and 6 km products use L = 10 km and 18 km — ratios of 5 and 3 —
     // so there is no single defensible ratio to guess one from the other.
-    return { component: null, reason: 'HF-radar fetch reported no Barnes length scale' };
+    return {
+      component: null,
+      reason: 'HF-radar fetch reported no Barnes length scale',
+    };
   }
 
   const projection = createTangentProjection(box);
@@ -1020,9 +1064,11 @@ async function runHfrTier({ box, grid, requestedAtMs, fetchImpl, deps, holdoutFr
   // increasing in metres. barnesVector's row sweep requires exactly this.
   const nodeCount = grid.nLat * grid.nLon;
   const xs = new Float64Array(grid.nLon);
-  for (let j = 0; j < grid.nLon; j += 1) xs[j] = projection.projectLon(grid.lons[j]);
+  for (let j = 0; j < grid.nLon; j += 1)
+    xs[j] = projection.projectLon(grid.lons[j]);
   const ys = new Float64Array(grid.nLat);
-  for (let i = 0; i < grid.nLat; i += 1) ys[i] = projection.projectLat(grid.lats[i]);
+  for (let i = 0; i < grid.nLat; i += 1)
+    ys[i] = projection.projectLat(grid.lats[i]);
   // Check the precondition here rather than letting barnesVector's own RangeError
   // surface as the tier's public `reason`. Two ways to break it, both real: a
   // 360 deg-wide box (the projection's wrap puts the last column back on the
@@ -1047,7 +1093,9 @@ async function runHfrTier({ box, grid, requestedAtMs, fetchImpl, deps, holdoutFr
   const au = analysis?.u;
   const av = analysis?.v;
   if (!au || !av || au.length !== nodeCount || av.length !== nodeCount) {
-    throw new Error(`barnesVector returned ${au?.length ?? 'no'} u / ${av?.length ?? 'no'} v values for ${nodeCount} grid nodes`);
+    throw new Error(
+      `barnesVector returned ${au?.length ?? 'no'} u / ${av?.length ?? 'no'} v values for ${nodeCount} grid nodes`,
+    );
   }
 
   const packed = packField(au, av, nodeCount, FIELD_SANITY_MAX_MS);
@@ -1075,7 +1123,9 @@ async function runHfrTier({ box, grid, requestedAtMs, fetchImpl, deps, holdoutFr
     };
   }
   if (!waterRelative) {
-    caveats.push('Coverage is measured over the whole view: the land/sea mask was unavailable.');
+    caveats.push(
+      'Coverage is measured over the whole view: the land/sea mask was unavailable.',
+    );
   }
 
   // Cross-validation costs a second Barnes pass (validateAnalysis re-analyses
@@ -1094,11 +1144,16 @@ async function runHfrTier({ box, grid, requestedAtMs, fetchImpl, deps, holdoutFr
 
   const source = fetched.source ?? null;
   const validAtMs = firstFinite(fetched.validAtMs, source?.validAtMs);
-  const ageMs = resolveAgeMs(fetched.ageMs ?? source?.ageMs, validAtMs, requestedAtMs);
+  const ageMs = resolveAgeMs(
+    fetched.ageMs ?? source?.ageMs,
+    validAtMs,
+    requestedAtMs,
+  );
   const resolutionKm = firstFinite(fetched.resolutionKm, source?.resolutionKm);
   const spacing = gridSpacingKm(grid, box.midLat);
   const stale = Number.isFinite(ageMs) && ageMs > HFR_STALE_MS;
-  if (stale) caveats.push(`Newest HF-radar hour in view is ${formatAge(ageMs)}.`);
+  if (stale)
+    caveats.push(`Newest HF-radar hour in view is ${formatAge(ageMs)}.`);
 
   // `analysis.used` counts the vectors that actually deposited pass-1 weight into
   // a grid cell; `projected.length` counts the ones OFFERED to the kernel, which
@@ -1106,7 +1161,9 @@ async function runHfrTier({ box, grid, requestedAtMs, fetchImpl, deps, holdoutFr
   // different populations, so when the kernel does not report the first (the real
   // barnesVector always does; only an injected stand-in can omit it) the note
   // says "offered to" rather than passing the looser count off as the tighter one.
-  const used = Number.isFinite(analysis.used) ? analysis.used : projected.length;
+  const used = Number.isFinite(analysis.used)
+    ? analysis.used
+    : projected.length;
   const usedVerb = Number.isFinite(analysis.used) ? 'of' : 'offered to';
 
   return {
@@ -1219,13 +1276,14 @@ function hfrOnlyPayload({ box, requestedAtMs, hfr, attempts, globalReason }) {
     // The reason is quoted verbatim: it is a parenthetical, not a subordinate
     // clause, so lower-casing its first letter would mangle "ERDDAP 504".
     caveats.push(
-      `The blended global field that would have filled the rest of ${water} is unavailable `
-      + `(${globalReason}), so cells outside radar coverage are blank rather than modelled.`,
+      `The blended global field that would have filled the rest of ${water} is unavailable ` +
+        `(${globalReason}), so cells outside radar coverage are blank rather than modelled.`,
     );
   }
-  const note = `Two-pass Barnes objective analysis (L = ${(hfr.lengthScaleM / 1000).toFixed(1)} km) `
-    + `${hfr.usedVerb} ${hfr.used} quality-controlled HF-radar total vectors; `
-    + `${Math.round(hfr.coverage * 100)}% of ${water} has a vector.`;
+  const note =
+    `Two-pass Barnes objective analysis (L = ${(hfr.lengthScaleM / 1000).toFixed(1)} km) ` +
+    `${hfr.usedVerb} ${hfr.used} quality-controlled HF-radar total vectors; ` +
+    `${Math.round(hfr.coverage * 100)}% of ${water} has a vector.`;
   return okPayload({
     box,
     requestedAtMs,
@@ -1269,13 +1327,31 @@ function hfrOnlyPayload({ box, requestedAtMs, hfr, attempts, globalReason }) {
  * @param {Object} args - `{box, grid, requestedAtMs, hfr, globalField, attempts}`.
  * @returns {Object} A `gev-ocean-field` v1 payload.
  */
-function compositePayload({ box, grid, requestedAtMs, hfr, globalField, attempts }) {
+function compositePayload({
+  box,
+  grid,
+  requestedAtMs,
+  hfr,
+  globalField,
+  attempts,
+}) {
   // Resample in degrees onto the analysis lattice, then blank land ONCE, here:
   // masking the 0.25 deg source first would erase a whole source cell's worth of
   // legitimately wet target cells around every land-centred cell, and the GSHHG
   // mask is 1/8 deg — finer than the source it would be censoring.
-  const resampled = resampleBilinearOntoGrid(globalField.grid, globalField.u, globalField.v, grid);
-  const merged = mergeComponents(hfr.u, hfr.v, resampled.u, resampled.v, hfr.water);
+  const resampled = resampleBilinearOntoGrid(
+    globalField.grid,
+    globalField.u,
+    globalField.v,
+    grid,
+  );
+  const merged = mergeComponents(
+    hfr.u,
+    hfr.v,
+    resampled.u,
+    resampled.v,
+    hfr.water,
+  );
 
   if (merged.globalCells === 0) {
     return hfrOnlyPayload({
@@ -1283,7 +1359,8 @@ function compositePayload({ box, grid, requestedAtMs, hfr, globalField, attempts
       requestedAtMs,
       hfr,
       attempts,
-      globalReason: 'the blended global field has no data over the water this analysis leaves empty',
+      globalReason:
+        'the blended global field has no data over the water this analysis leaves empty',
     });
   }
 
@@ -1296,21 +1373,24 @@ function compositePayload({ box, grid, requestedAtMs, hfr, globalField, attempts
   const water = waterRelative ? 'the water in view' : 'the view';
 
   const caveats = [
-    `${percent(hfrShare)} of drawn cells are ${describeResolution(hfr.resolutionKm)} HF radar `
-    + `(${hfr.ageLabel}); the other ${percent(globalShare)} is `
-    + `${describeResolution(globalField.resolutionKm)} ${globalField.fillLabel} (${globalField.ageLabel}).`,
+    `${percent(hfrShare)} of drawn cells are ${describeResolution(hfr.resolutionKm)} HF radar ` +
+      `(${hfr.ageLabel}); the other ${percent(globalShare)} is ` +
+      `${describeResolution(globalField.resolutionKm)} ${globalField.fillLabel} (${globalField.ageLabel}).`,
     ...hfr.caveats,
-    ...globalField.caveats.map((caveat) => `Global fill — ${lowerFirst(caveat)}`),
+    ...globalField.caveats.map(
+      (caveat) => `Global fill — ${lowerFirst(caveat)}`,
+    ),
   ];
 
   // `fillLabel`, not a hardcoded product name: the fill can be HYCOM or the
   // altimetry fallback, and the split line above already uses it. Naming the
   // altimetry product here made a HYCOM-filled composite describe itself as a
   // blended analysis in the same payload that reported `kind: 'modeled'`.
-  const note = `Two-pass Barnes objective analysis (L = ${(hfr.lengthScaleM / 1000).toFixed(1)} km) `
-    + `${hfr.usedVerb} ${hfr.used} quality-controlled HF-radar total vectors over ${percent(hfrShare)} `
-    + `of the drawn cells, with the remaining ${percent(globalShare)} bilinearly resampled from the `
-    + `${globalField.fillLabel}; ${Math.round(coverage * 100)}% of ${water} has a vector.`;
+  const note =
+    `Two-pass Barnes objective analysis (L = ${(hfr.lengthScaleM / 1000).toFixed(1)} km) ` +
+    `${hfr.usedVerb} ${hfr.used} quality-controlled HF-radar total vectors over ${percent(hfrShare)} ` +
+    `of the drawn cells, with the remaining ${percent(globalShare)} bilinearly resampled from the ` +
+    `${globalField.fillLabel}; ${Math.round(coverage * 100)}% of ${water} has a vector.`;
 
   return okPayload({
     box,
@@ -1328,8 +1408,9 @@ function compositePayload({ box, grid, requestedAtMs, hfr, globalField, attempts
       // meaningful average of them with a gridded model product.
       ...hfrProvenanceFields(hfr),
       kind: 'mixed',
-      method: 'two-pass Barnes objective analysis of HF-radar total vectors, with the remaining '
-        + `water cells bilinearly resampled from the ${globalField.fillLabel} (one provenance per cell)`,
+      method:
+        'two-pass Barnes objective analysis of HF-radar total vectors, with the remaining ' +
+        `water cells bilinearly resampled from the ${globalField.fillLabel} (one provenance per cell)`,
       // Credit lines are the exception: both products are drawn, so both are
       // credited here as well as in `sources`.
       attribution: joinUnique([hfr.attribution, globalField.attribution]),
@@ -1365,7 +1446,14 @@ function compositePayload({ box, grid, requestedAtMs, hfr, globalField, attempts
  * @param {Object} args - `{box, targetCells, requestedAtMs, fetchImpl, deps}`.
  * @returns {Promise<{field: ?Object, reason?: string}>} Field or failure reason.
  */
-async function fetchGlobalField({ box, targetCells, requestedAtMs, fetchImpl, deps, timeoutMs }) {
+async function fetchGlobalField({
+  box,
+  targetCells,
+  requestedAtMs,
+  fetchImpl,
+  deps,
+  timeoutMs,
+}) {
   const fetchGlobalCurrents = await resolveDep('fetchGlobalCurrents', deps);
   // `nowMs` is the reference the fetcher measures its own `source.ageMs` against.
   // Leaving it to default to Date.now() would report an age against the wall
@@ -1378,7 +1466,8 @@ async function fetchGlobalField({ box, targetCells, requestedAtMs, fetchImpl, de
     nowMs: requestedAtMs,
     ...(Number.isFinite(timeoutMs) ? { timeoutMs } : {}),
   });
-  if (!fetched) return { field: null, reason: 'global current field unavailable' };
+  if (!fetched)
+    return { field: null, reason: 'global current field unavailable' };
 
   // Axes and fields arrive as typed arrays (Float64Array/Float32Array), so
   // every check here is ArrayLike, never Array.isArray.
@@ -1395,8 +1484,16 @@ async function fetchGlobalField({ box, targetCells, requestedAtMs, fetchImpl, de
   }
   const latAxis = uniformAxis(lats);
   const lonAxis = uniformAxis(lons);
-  if (!latAxis) return { field: null, reason: `global current field ${axisFault(lats, 'latitude')}` };
-  if (!lonAxis) return { field: null, reason: `global current field ${axisFault(lons, 'longitude')}` };
+  if (!latAxis)
+    return {
+      field: null,
+      reason: `global current field ${axisFault(lats, 'latitude')}`,
+    };
+  if (!lonAxis)
+    return {
+      field: null,
+      reason: `global current field ${axisFault(lons, 'longitude')}`,
+    };
 
   // Serve south-to-north, west-to-east regardless of the source's axis order,
   // so the client's sampler never has to branch on the sign of dLat/dLon.
@@ -1413,10 +1510,18 @@ async function fetchGlobalField({ box, targetCells, requestedAtMs, fetchImpl, de
     }
   }
 
-  const globalPacked = packField(oriented, orientedV, expected, GLOBAL_FIELD_SANITY_MAX_MS);
+  const globalPacked = packField(
+    oriented,
+    orientedV,
+    expected,
+    GLOBAL_FIELD_SANITY_MAX_MS,
+  );
   const { u, v, finite } = globalPacked;
   if (finite === 0) {
-    return { field: null, reason: 'global current field is entirely no-data over this view' };
+    return {
+      field: null,
+      reason: 'global current field is entirely no-data over this view',
+    };
   }
 
   const source = fetched.source ?? null;
@@ -1427,9 +1532,10 @@ async function fetchGlobalField({ box, targetCells, requestedAtMs, fetchImpl, de
   // and only falls back to its request plan for exactly this degenerate case) —
   // and refuse the tier when even that is absent, rather than shipping a zero
   // spacing or inventing a cell size around a single value.
-  const reportedStepDeg = Number.isFinite(source?.resolutionDeg) && source.resolutionDeg > 0
-    ? source.resolutionDeg
-    : Number.NaN;
+  const reportedStepDeg =
+    Number.isFinite(source?.resolutionDeg) && source.resolutionDeg > 0
+      ? source.resolutionDeg
+      : Number.NaN;
   const dLat = latAxis.step > 0 ? latAxis.step : reportedStepDeg;
   const dLon = lonAxis.step > 0 ? lonAxis.step : reportedStepDeg;
   if (!(dLat > 0) || !(dLon > 0)) {
@@ -1439,20 +1545,33 @@ async function fetchGlobalField({ box, targetCells, requestedAtMs, fetchImpl, de
     };
   }
 
-  const grid = { lat0: latAxis.first, lon0: lonAxis.first, dLat, dLon, nLat, nLon };
+  const grid = {
+    lat0: latAxis.first,
+    lon0: lonAxis.first,
+    dLat,
+    dLon,
+    nLat,
+    nLon,
+  };
   const validAtMs = firstFinite(fetched.validAtMs, source?.validAtMs);
-  const ageMs = resolveAgeMs(fetched.ageMs ?? source?.ageMs, validAtMs, requestedAtMs);
+  const ageMs = resolveAgeMs(
+    fetched.ageMs ?? source?.ageMs,
+    validAtMs,
+    requestedAtMs,
+  );
   // Evaluate the metric cell size at the SERVED grid's own centre latitude, not
   // the requested box's: ERDDAP snaps a constraint to its axis, so the two can
   // differ by up to a cell and the box centre is not a property of what is shipped.
-  const gridMidLat = grid.lat0 + (nLat - 1) * dLat / 2;
+  const gridMidLat = grid.lat0 + ((nLat - 1) * dLat) / 2;
   const spacing = gridSpacingKm(grid, gridMidLat);
   // One convention for `resolutionKm` on both branches: the cell's MERIDIONAL
   // height. The zonal width is reported separately as gridSpacingKm.lon and
   // collapses as cos(lat), so averaging the two would make a 0.25 deg product
   // read as "finer" at 60 N than TIERS.global.minResolutionKm claims is possible.
   const resolutionKm = firstFinite(
-    Number.isFinite(reportedStepDeg) ? reportedStepDeg * metresPerDegLat(gridMidLat) / 1000 : Number.NaN,
+    Number.isFinite(reportedStepDeg)
+      ? (reportedStepDeg * metresPerDegLat(gridMidLat)) / 1000
+      : Number.NaN,
     spacing.lat,
   );
   const stale = Number.isFinite(ageMs) && ageMs > GLOBAL_STALE_MS;
@@ -1470,21 +1589,32 @@ async function fetchGlobalField({ box, targetCells, requestedAtMs, fetchImpl, de
   // be false about the mechanism AND would omit the word the viewer needs.
   // The 60 s slack absorbs ordinary clock skew rather than flagging it.
   if (Number.isFinite(validAtMs) && validAtMs > requestedAtMs + 60_000) {
-    caveats.push(forecast.isForecast
-      ? 'This is a FORECAST step, not an analysis of the present: the field is valid '
-        + `${new Date(validAtMs).toISOString()}`
-        + `${Number.isFinite(forecast.forecastLeadMs) ? `, ${formatSpan(forecast.forecastLeadMs)} ahead of the requested time` : ''}.`
-      : 'Only the newest published step is available, so this is not the time that was requested: '
-        + `the field is valid ${new Date(validAtMs).toISOString()}.`);
+    caveats.push(
+      forecast.isForecast
+        ? 'This is a FORECAST step, not an analysis of the present: the field is valid ' +
+            `${new Date(validAtMs).toISOString()}` +
+            `${Number.isFinite(forecast.forecastLeadMs) ? `, ${formatSpan(forecast.forecastLeadMs)} ahead of the requested time` : ''}.`
+        : 'Only the newest published step is available, so this is not the time that was requested: ' +
+            `the field is valid ${new Date(validAtMs).toISOString()}.`,
+    );
   }
   if (Number.isFinite(ageMs) && ageMs >= 86400_000) {
-    caveats.push(`Published with a multi-day lag: this analysis is ${formatAge(ageMs)}.`);
+    caveats.push(
+      `Published with a multi-day lag: this analysis is ${formatAge(ageMs)}.`,
+    );
   }
-  if (stale) caveats.push('Beyond the usual publication lag — the upstream feed may be behind.');
+  if (stale)
+    caveats.push(
+      'Beyond the usual publication lag — the upstream feed may be behind.',
+    );
   // A strided request is a subsample, not the native field. Say so.
   if (Number.isFinite(source?.stride) && source.stride > 1) {
-    const native = Number.isFinite(source?.nativeResolutionDeg) ? `${source.nativeResolutionDeg} deg` : 'native';
-    caveats.push(`Subsampled every ${source.stride} cells from the ${native} grid to fit the view budget.`);
+    const native = Number.isFinite(source?.nativeResolutionDeg)
+      ? `${source.nativeResolutionDeg} deg`
+      : 'native';
+    caveats.push(
+      `Subsampled every ${source.stride} cells from the ${native} grid to fit the view budget.`,
+    );
   }
 
   return {
@@ -1509,9 +1639,10 @@ async function fetchGlobalField({ box, targetCells, requestedAtMs, fetchImpl, de
       // Short human name for the composite split line. HYCOM and the
       // altimetry fallback are different products; the caveat used to say
       // 'blended global currents' whichever served.
-      fillLabel: source?.kind === 'modeled'
-        ? 'HYCOM global forecast currents'
-        : 'blended altimetric geostrophic currents',
+      fillLabel:
+        source?.kind === 'modeled'
+          ? 'HYCOM global forecast currents'
+          : 'blended altimetric geostrophic currents',
       method: source?.method ?? null,
       fallbackFrom: source?.fallbackFrom ?? null,
       validAtMs: Number.isFinite(validAtMs) ? validAtMs : null,
@@ -1523,7 +1654,9 @@ async function fetchGlobalField({ box, targetCells, requestedAtMs, fetchImpl, de
       isForecast: forecast.isForecast,
       forecastLeadMs: forecast.forecastLeadMs,
       stale,
-      resolutionKm: Number.isFinite(resolutionKm) ? roundTo(resolutionKm, 2) : null,
+      resolutionKm: Number.isFinite(resolutionKm)
+        ? roundTo(resolutionKm, 2)
+        : null,
     },
   };
 }
@@ -1584,7 +1717,14 @@ function globalSourceEntry(field, cells, share) {
  * @param {Object} args - `{globalField, box, requestedAtMs, deps, fallbackFrom, fallbackReason}`.
  * @returns {Promise<{payload: ?Object, reason?: string}>} Payload or failure reason.
  */
-async function buildGlobalPayload({ globalField, box, requestedAtMs, deps, fallbackFrom, fallbackReason }) {
+async function buildGlobalPayload({
+  globalField,
+  box,
+  requestedAtMs,
+  deps,
+  fallbackFrom,
+  fallbackReason,
+}) {
   const { grid, u, v } = globalField;
   // 0.25° cells straddle coastlines, so the blended analysis carries values on
   // cells that are mostly land. Blank those and measure coverage over the water,
@@ -1593,20 +1733,27 @@ async function buildGlobalPayload({ globalField, box, requestedAtMs, deps, fallb
   const water = await classifyWaterCellsFromBundle(grid, deps);
   const finite = globalField.finite - blankLandCells(u, v, water);
   if (finite === 0) {
-    return { payload: null, reason: 'global current field covers no water in this view' };
+    return {
+      payload: null,
+      reason: 'global current field covers no water in this view',
+    };
   }
   const coverage = waterCoverage(u, water);
 
   const caveats = [...globalField.caveats];
   if (fallbackFrom && fallbackReason) {
-    caveats.push(`Shown instead of HF radar because ${lowerFirst(fallbackReason)}.`);
+    caveats.push(
+      `Shown instead of HF radar because ${lowerFirst(fallbackReason)}.`,
+    );
   }
   // A degradation WITHIN the tier changes the physics, not just the resolution:
   // the altimetry fallback carries no Ekman drift and no tides at all. That is
   // the kind of substitution this payload exists to announce, so it goes in the
   // legend rather than staying in a field nothing reads.
   if (globalField.fallbackFrom) {
-    caveats.push(`${globalField.fallbackFrom}. This field is geostrophic only — no wind drift, no tides.`);
+    caveats.push(
+      `${globalField.fallbackFrom}. This field is geostrophic only — no wind drift, no tides.`,
+    );
   }
 
   return {
@@ -1636,53 +1783,58 @@ async function buildGlobalPayload({ globalField, box, requestedAtMs, deps, fallb
  * @param {{coverage: number, finite: number, fallbackFrom: ?string, caveats: string[]}} args
  * @returns {Object} Provenance with `tier: 'global'`.
  */
-function globalProvenance(globalField, { coverage, finite, fallbackFrom, caveats }) {
+function globalProvenance(
+  globalField,
+  { coverage, finite, fallbackFrom, caveats },
+) {
   return {
     tier: TIERS.global.id,
-        tierLabel: TIERS.global.label,
-        datasetId: globalField.datasetId,
-        label: globalField.label,
-        // Source-driven, not hardcoded: the global tier can be served by more
-        // than one product (a primitive-equation model that carries tides and
-        // wind, or a purely geostrophic altimetric analysis that carries
-        // neither), and the legend must state which physics the user is looking
-        // at. A source that declares neither falls back to the altimetry
-        // description, which is what this tier used to be unconditionally.
-        kind: globalField.kind ?? 'derived',
-        method: globalField.method
-          ?? 'absolute geostrophic velocity from multi-mission altimetry (f-plane, beta-plane at the equator); NO Ekman or wind-driven component',
-        url: globalField.url,
-        attribution: globalField.attribution,
-        license: globalField.license,
-        sourceNote: globalField.sourceNote,
-        validAtMs: globalField.validAtMs,
-        ageMs: globalField.ageMs,
-        ageLabel: globalField.ageLabel,
-        isForecast: globalField.isForecast ?? false,
-        forecastLeadMs: globalField.forecastLeadMs ?? null,
-        stale: globalField.stale,
-        resolutionKm: globalField.resolutionKm,
-        gridSpacingKm: globalField.spacing,
-        coverage: roundTo(coverage, 4),
-        observations: null, // a gridded analysis, not a set of point observations
-        rejected: null,
-        holdoutCount: 0,
-        rmseMs: null,
-        maeMs: null,
-        biasUMs: null,
-        biasVMs: null,
-        meanSigmaMs: null,
-        lengthScaleM: null,
-        fallbackFrom: fallbackFrom ?? null,
-        // Derived the same way `fillLabel` is, for the same reason: this tier
-        // has two possible products and they are not the same thing. The note
-        // used to name the altimetry product unconditionally, so a HYCOM-served
-        // response shipped `kind: 'modeled'` beside a sentence calling it a
-        // blended derived analysis.
-        note: globalField.kind === 'modeled'
-          ? 'Global ocean forecast — a primitive-equation model carrying tides and wind drift, not a direct current measurement.'
-          : 'Blended global surface currents — a derived model product, not a direct current measurement.',
-        caveats,
+    tierLabel: TIERS.global.label,
+    datasetId: globalField.datasetId,
+    label: globalField.label,
+    // Source-driven, not hardcoded: the global tier can be served by more
+    // than one product (a primitive-equation model that carries tides and
+    // wind, or a purely geostrophic altimetric analysis that carries
+    // neither), and the legend must state which physics the user is looking
+    // at. A source that declares neither falls back to the altimetry
+    // description, which is what this tier used to be unconditionally.
+    kind: globalField.kind ?? 'derived',
+    method:
+      globalField.method ??
+      'absolute geostrophic velocity from multi-mission altimetry (f-plane, beta-plane at the equator); NO Ekman or wind-driven component',
+    url: globalField.url,
+    attribution: globalField.attribution,
+    license: globalField.license,
+    sourceNote: globalField.sourceNote,
+    validAtMs: globalField.validAtMs,
+    ageMs: globalField.ageMs,
+    ageLabel: globalField.ageLabel,
+    isForecast: globalField.isForecast ?? false,
+    forecastLeadMs: globalField.forecastLeadMs ?? null,
+    stale: globalField.stale,
+    resolutionKm: globalField.resolutionKm,
+    gridSpacingKm: globalField.spacing,
+    coverage: roundTo(coverage, 4),
+    observations: null, // a gridded analysis, not a set of point observations
+    rejected: null,
+    holdoutCount: 0,
+    rmseMs: null,
+    maeMs: null,
+    biasUMs: null,
+    biasVMs: null,
+    meanSigmaMs: null,
+    lengthScaleM: null,
+    fallbackFrom: fallbackFrom ?? null,
+    // Derived the same way `fillLabel` is, for the same reason: this tier
+    // has two possible products and they are not the same thing. The note
+    // used to name the altimetry product unconditionally, so a HYCOM-served
+    // response shipped `kind: 'modeled'` beside a sentence calling it a
+    // blended derived analysis.
+    note:
+      globalField.kind === 'modeled'
+        ? 'Global ocean forecast — a primitive-equation model carrying tides and wind drift, not a direct current measurement.'
+        : 'Blended global surface currents — a derived model product, not a direct current measurement.',
+    caveats,
     sources: [globalSourceEntry(globalField, finite, 1)],
   };
 }
@@ -1720,7 +1872,12 @@ export const GLOBAL_TIER_TARGET_CELLS = 48000;
  */
 export const GLOBAL_TIER_TIMEOUT_MS = 60_000;
 
-const GLOBAL_BOX = Object.freeze({ latMin: -90, lonMin: -180, latMax: 90, lonMax: 180 });
+const GLOBAL_BOX = Object.freeze({
+  latMin: -90,
+  lonMin: -180,
+  latMax: 90,
+  lonMax: 180,
+});
 
 /**
  * Serve the global tier for the globe view: one whole-globe fetch (HYCOM,
@@ -1731,7 +1888,11 @@ const GLOBAL_BOX = Object.freeze({ latMin: -90, lonMin: -180, latMax: 90, lonMax
  * @param {Object} options - `{atMs, fetchImpl, deps}`; `deps` as in {@link buildFieldPayload}.
  * @returns {Promise<Object>} A `gev-ocean-field` v1 payload on the global lattice.
  */
-export async function buildGlobalLatticePayload({ atMs = Date.now(), fetchImpl, deps = {} } = {}) {
+export async function buildGlobalLatticePayload({
+  atMs = Date.now(),
+  fetchImpl,
+  deps = {},
+} = {}) {
   const requestedAtMs = Number.isFinite(atMs) ? atMs : Date.now();
   const box = normalizeBox(GLOBAL_BOX);
   const attempts = [];
@@ -1758,13 +1919,25 @@ export async function buildGlobalLatticePayload({ atMs = Date.now(), fetchImpl, 
     });
   }
   const field = outcome.field;
-  const resampled = resampleBilinearOntoGrid(field.grid, field.u, field.v, GLOBAL_LATTICE);
+  const resampled = resampleBilinearOntoGrid(
+    field.grid,
+    field.u,
+    field.v,
+    GLOBAL_LATTICE,
+  );
   const water = await classifyWaterCellsFromBundle(GLOBAL_LATTICE, deps);
-  const finite = resampled.finite - blankLandCells(resampled.u, resampled.v, water);
+  const finite =
+    resampled.finite - blankLandCells(resampled.u, resampled.v, water);
   if (finite === 0) {
-    attempts.push({ tier: TIERS.global.id, reason: 'global current field covers no water' });
+    attempts.push({
+      tier: TIERS.global.id,
+      reason: 'global current field covers no water',
+    });
     return unavailablePayload({
-      box, requestedAtMs, attempts, reason: 'global current field covers no water',
+      box,
+      requestedAtMs,
+      attempts,
+      reason: 'global current field covers no water',
     });
   }
   const coverage = waterCoverage(resampled.u, water);
@@ -1773,7 +1946,9 @@ export async function buildGlobalLatticePayload({ atMs = Date.now(), fetchImpl, 
     `Bilinearly resampled onto a 1 deg global lattice from the ${describeResolution(field.resolutionKm)} source grid for the globe view.`,
   ];
   if (field.fallbackFrom) {
-    caveats.push(`${field.fallbackFrom}. This field is geostrophic only - no wind drift, no tides.`);
+    caveats.push(
+      `${field.fallbackFrom}. This field is geostrophic only - no wind drift, no tides.`,
+    );
   }
   return okPayload({
     box,
@@ -1784,7 +1959,10 @@ export async function buildGlobalLatticePayload({ atMs = Date.now(), fetchImpl, 
     finite,
     attempts,
     provenance: globalProvenance(field, {
-      coverage: coverage.coverage, finite, fallbackFrom: null, caveats,
+      coverage: coverage.coverage,
+      finite,
+      fallbackFrom: null,
+      caveats,
     }),
   });
 }
@@ -1849,12 +2027,20 @@ export function resampleBilinearOntoGrid(srcGrid, srcU, srcV, target) {
   // Column brackets do not depend on the row, so they are computed once.
   const columns = new Array(target.nLon);
   for (let j = 0; j < target.nLon; j += 1) {
-    const f = axisFraction(wrapEastward(target.lons[j] - srcGrid.lon0, lonSpanDeg), srcGrid.dLon, srcGrid.nLon);
+    const f = axisFraction(
+      wrapEastward(target.lons[j] - srcGrid.lon0, lonSpanDeg),
+      srcGrid.dLon,
+      srcGrid.nLon,
+    );
     columns[j] = Number.isFinite(f) ? bracketFraction(f, srcGrid.nLon) : null;
   }
 
   for (let i = 0; i < target.nLat; i += 1) {
-    const fy = axisFraction(target.lats[i] - srcGrid.lat0, srcGrid.dLat, srcGrid.nLat);
+    const fy = axisFraction(
+      target.lats[i] - srcGrid.lat0,
+      srcGrid.dLat,
+      srcGrid.nLat,
+    );
     if (!Number.isFinite(fy)) continue;
     const row = bracketFraction(fy, srcGrid.nLat);
     for (let j = 0; j < target.nLon; j += 1) {
@@ -1912,7 +2098,8 @@ function bilinearSample(field, nLon, row, col) {
  */
 function axisFraction(delta, step, n) {
   const f = delta / step;
-  if (!(f >= -RESAMPLE_EDGE_CELLS) || !(f <= n - 1 + RESAMPLE_EDGE_CELLS)) return Number.NaN;
+  if (!(f >= -RESAMPLE_EDGE_CELLS) || !(f <= n - 1 + RESAMPLE_EDGE_CELLS))
+    return Number.NaN;
   return Math.min(n - 1, Math.max(0, f));
 }
 
@@ -2003,7 +2190,16 @@ function mergeComponents(hfrU, hfrV, fillU, fillV, water) {
  *   `attempts` recorded before this response was assembled (default none).
  * @returns {Object} A `gev-ocean-field` v1 payload with `status: 'ok'`.
  */
-function okPayload({ box, requestedAtMs, grid, u, v, finite, provenance, attempts = [] }) {
+function okPayload({
+  box,
+  requestedAtMs,
+  grid,
+  u,
+  v,
+  finite,
+  provenance,
+  attempts = [],
+}) {
   const cells = u.length;
   return {
     status: 'ok',
@@ -2068,11 +2264,14 @@ function unavailablePayload({ box, requestedAtMs, attempts, reason }) {
  */
 function importDepModule(name) {
   switch (name) {
-    case 'fetchHfrField': return import('./hfradar.js');
+    case 'fetchHfrField':
+      return import('./hfradar.js');
     // The global tier is source-SELECTED (HYCOM preferred, altimetry fallback);
     // see server/ocean/globalTier for why those are different physics.
-    case 'fetchGlobalCurrents': return import('./globalTier.js');
-    default: return import('./barnes.js'); // barnesVector, validateAnalysis
+    case 'fetchGlobalCurrents':
+      return import('./globalTier.js');
+    default:
+      return import('./barnes.js'); // barnesVector, validateAnalysis
   }
 }
 
@@ -2090,7 +2289,8 @@ async function resolveDep(name, overrides) {
   if (typeof injected === 'function') return injected;
   const mod = await importDepModule(name);
   const fn = mod?.[name];
-  if (typeof fn !== 'function') throw new Error(`ocean tier dependency ${name}() is missing`);
+  if (typeof fn !== 'function')
+    throw new Error(`ocean tier dependency ${name}() is missing`);
   return fn;
 }
 
@@ -2184,7 +2384,10 @@ function observationQuality(observation) {
   if (Number.isFinite(observation.quality) && observation.quality > 0) {
     return Math.min(1, observation.quality);
   }
-  const hdop = Number.isFinite(observation.hdop) && observation.hdop > 0 ? observation.hdop : 0.4;
+  const hdop =
+    Number.isFinite(observation.hdop) && observation.hdop > 0
+      ? observation.hdop
+      : 0.4;
   return 1 / (1 + hdop);
 }
 
@@ -2209,8 +2412,12 @@ function packField(au, av, n, maxMs) {
   for (let k = 0; k < n; k += 1) {
     const a = au[k];
     const b = av[k];
-    if (!Number.isFinite(a) || !Number.isFinite(b)
-      || Math.abs(a) > maxMs || Math.abs(b) > maxMs) {
+    if (
+      !Number.isFinite(a) ||
+      !Number.isFinite(b) ||
+      Math.abs(a) > maxMs ||
+      Math.abs(b) > maxMs
+    ) {
       u[k] = null;
       v[k] = null;
       continue;
@@ -2239,9 +2446,16 @@ function speedStats(u, v) {
     speeds.push(s);
     sum += s;
   }
-  if (speeds.length === 0) return { speedMeanMs: null, speedP95Ms: null, speedMaxMs: null };
+  if (speeds.length === 0)
+    return { speedMeanMs: null, speedP95Ms: null, speedMaxMs: null };
   speeds.sort((a, b) => a - b);
-  const p95 = speeds[Math.min(speeds.length - 1, Math.max(0, Math.ceil(0.95 * speeds.length) - 1))];
+  const p95 =
+    speeds[
+      Math.min(
+        speeds.length - 1,
+        Math.max(0, Math.ceil(0.95 * speeds.length) - 1),
+      )
+    ];
   return {
     speedMeanMs: roundTo(sum / speeds.length, FIELD_DECIMALS),
     speedP95Ms: roundTo(p95, FIELD_DECIMALS),
@@ -2318,8 +2532,8 @@ function axisFault(axis, name) {
  */
 function gridSpacingKm(grid, midLat) {
   return {
-    lat: roundTo(grid.dLat * metresPerDegLat(midLat) / 1000, 3),
-    lon: roundTo(grid.dLon * metresPerDegLon(midLat) / 1000, 3),
+    lat: roundTo((grid.dLat * metresPerDegLat(midLat)) / 1000, 3),
+    lon: roundTo((grid.dLon * metresPerDegLon(midLat)) / 1000, 3),
   };
 }
 
@@ -2374,9 +2588,16 @@ function resolveAgeMs(reported, validAtMs, requestedAtMs) {
  * @returns {{isForecast: boolean, forecastLeadMs: ?number}}
  */
 function resolveForecast(source, ageMs) {
-  if (source?.isForecast !== true) return { isForecast: false, forecastLeadMs: null };
-  const lead = firstFinite(source?.forecastLeadMs, Number.isFinite(ageMs) ? -ageMs : Number.NaN);
-  return { isForecast: true, forecastLeadMs: Number.isFinite(lead) && lead > 0 ? lead : null };
+  if (source?.isForecast !== true)
+    return { isForecast: false, forecastLeadMs: null };
+  const lead = firstFinite(
+    source?.forecastLeadMs,
+    Number.isFinite(ageMs) ? -ageMs : Number.NaN,
+  );
+  return {
+    isForecast: true,
+    forecastLeadMs: Number.isFinite(lead) && lead > 0 ? lead : null,
+  };
 }
 
 /**
@@ -2392,7 +2613,12 @@ function resolveForecast(source, ageMs) {
 function plainBox(box) {
   if (!box || typeof box !== 'object') return null;
   const n = (value) => (Number.isFinite(value) ? value + 0 : null);
-  return { latMin: n(box.latMin), lonMin: n(box.lonMin), latMax: n(box.latMax), lonMax: n(box.lonMax) };
+  return {
+    latMin: n(box.latMin),
+    lonMin: n(box.lonMin),
+    latMax: n(box.latMax),
+    lonMax: n(box.lonMax),
+  };
 }
 
 /**
@@ -2427,7 +2653,11 @@ function toFiniteOrNaN(value) {
 
 /** @param {*} array @param {number} length @returns {boolean} True if indexable with exactly `length` entries. */
 function isIndexable(array, length) {
-  return Boolean(array) && typeof array.length === 'number' && array.length === length;
+  return (
+    Boolean(array) &&
+    typeof array.length === 'number' &&
+    array.length === length
+  );
 }
 
 /** @param {*} array @returns {boolean} True for a non-empty Array or TypedArray. */
@@ -2503,7 +2733,8 @@ function describeResolution(km) {
 function joinUnique(values) {
   const kept = [];
   for (const value of values) {
-    if (typeof value === 'string' && value.length > 0 && !kept.includes(value)) kept.push(value);
+    if (typeof value === 'string' && value.length > 0 && !kept.includes(value))
+      kept.push(value);
   }
   return kept.length > 0 ? kept.join('; ') : null;
 }

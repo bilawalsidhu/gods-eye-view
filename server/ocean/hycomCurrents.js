@@ -209,18 +209,19 @@ export const HYCOM_DATASET = Object.freeze({
   resolutionLonDeg: 0.08,
   /** Composed from `generating_model` and `grid_name`; the `.das` declares no title. */
   label:
-    'Sea Surface Currents (Full Dynamics incl. Tides and Wind Drift), '
-    + 'US Navy HYCOM ESPC-D V02 Global Ocean Forecast, glby0.08, 3-Hourly',
+    'Sea Surface Currents (Full Dynamics incl. Tides and Wind Drift), ' +
+    'US Navy HYCOM ESPC-D V02 Global Ocean Forecast, glby0.08, 3-Hourly',
   /** `NC_GLOBAL.distribution_statement`, verbatim. NOT a licence grant. */
   license: 'Approved for public release; distribution unlimited.',
   /** Why `license` is a release statement and not a licence. */
   licenseNote:
-    'The dataset declares no `license` attribute; this is '
-    + '`NC_GLOBAL.distribution_statement`, with `classification_level` empty. '
-    + 'A US Government public-release statement is not an explicit grant of '
-    + 'reuse terms, so no such grant is claimed here.',
+    'The dataset declares no `license` attribute; this is ' +
+    '`NC_GLOBAL.distribution_statement`, with `classification_level` empty. ' +
+    'A US Government public-release statement is not an explicit grant of ' +
+    'reuse terms, so no such grant is claimed here.',
   /** `NC_GLOBAL.institution` — the string to put on a map credit. */
-  attribution: 'US Navy Fleet Numerical Meteorology and Oceanography Center (FNMOC)',
+  attribution:
+    'US Navy Fleet Numerical Meteorology and Oceanography Center (FNMOC)',
   /** `NC_GLOBAL.generating_model`, verbatim. */
   generatingModel: 'ESPC-D V02: HYCOM 2.2.99, CICE 5.1.2, expt_03.1',
   /** `NC_GLOBAL.reference`, verbatim. */
@@ -359,7 +360,7 @@ const ALLOWED_EXTS = new Set(['ascii', 'dods', 'das', 'dds']);
  * @returns {number}
  */
 function clamp(x, lo, hi) {
-  return x < lo ? lo : (x > hi ? hi : x);
+  return x < lo ? lo : x > hi ? hi : x;
 }
 
 /**
@@ -384,7 +385,7 @@ export function norm360(lon) {
  */
 export function wrapLon180(lon) {
   if (!Number.isFinite(lon)) return NaN;
-  return ((lon + 180) % 360 + 360) % 360 - 180;
+  return ((((lon + 180) % 360) + 360) % 360) - 180;
 }
 
 /**
@@ -479,7 +480,7 @@ function eastwardSpanDeg(lonMin, lonMax) {
   const span = ((raw % 360) + 360) % 360;
   // A raw span that is a nonzero multiple of 360 (e.g. exactly -360) means a
   // full revolution, not a degenerate point.
-  return (span === 0 && raw !== 0) ? 360 : span;
+  return span === 0 && raw !== 0 ? 360 : span;
 }
 
 /**
@@ -523,12 +524,23 @@ export function hycomLonSegments(box, stride) {
   const nativeCount = clamp(end - start + 1, 1, lonCount);
   const nTotal = Math.floor((nativeCount - 1) / stride) + 1;
 
-  const nWest = Math.min(nTotal, Math.floor((lonCount - 1 - start) / stride) + 1);
+  const nWest = Math.min(
+    nTotal,
+    Math.floor((lonCount - 1 - start) / stride) + 1,
+  );
   const segments = [{ start, count: nWest }];
   if (nTotal > nWest) {
-    segments.push({ start: start + stride * nWest - lonCount, count: nTotal - nWest });
+    segments.push({
+      start: start + stride * nWest - lonCount,
+      count: nTotal - nWest,
+    });
   }
-  return { segments, nLon: nTotal, crossesSeam: segments.length > 1, nativeCount };
+  return {
+    segments,
+    nLon: nTotal,
+    crossesSeam: segments.length > 1,
+    nativeCount,
+  };
 }
 
 /**
@@ -560,16 +572,23 @@ export function hycomLonSegments(box, stride) {
 export function chooseHycomStride(box, targetCells = DEFAULT_TARGET_CELLS) {
   const latMin = Number(box?.latMin);
   const latMax = Number(box?.latMax);
-  if (!Number.isFinite(latMin) || !Number.isFinite(latMax) || latMin > latMax) return null;
+  if (!Number.isFinite(latMin) || !Number.isFinite(latMax) || latMin > latMax)
+    return null;
   if (!Number.isFinite(targetCells) || targetCells < 1) return null;
   if (!hycomLonSegments(box, 1)) return null;
 
   const budget = Math.min(Math.floor(targetCells), MAX_TARGET_CELLS);
-  const {
-    latOrigin, latStep, latCount, lonStep, lonCount,
-  } = HYCOM_AXES;
-  const latStart = clamp(coveringIndex((latMin - latOrigin) / latStep, false), 0, latCount - 1);
-  const latEnd = clamp(coveringIndex((latMax - latOrigin) / latStep, true), 0, latCount - 1);
+  const { latOrigin, latStep, latCount, lonStep, lonCount } = HYCOM_AXES;
+  const latStart = clamp(
+    coveringIndex((latMin - latOrigin) / latStep, false),
+    0,
+    latCount - 1,
+  );
+  const latEnd = clamp(
+    coveringIndex((latMax - latOrigin) / latStep, true),
+    0,
+    latCount - 1,
+  );
   const latSpan = latEnd - latStart;
 
   // Termination: at stride = max(latSpan, lonCount) the plan is one row by at
@@ -648,41 +667,59 @@ export function buildHycomUrl({
   depthIndex = HYCOM_DATASET.surfaceDepthIndex,
   ext = 'ascii',
 } = {}) {
-  if (!ALLOWED_EXTS.has(ext)) throw new Error(`hycomCurrents: unsupported ext "${ext}"`);
+  if (!ALLOWED_EXTS.has(ext))
+    throw new Error(`hycomCurrents: unsupported ext "${ext}"`);
   if (!Number.isInteger(stride) || stride < 1) {
-    throw new Error(`hycomCurrents: stride must be a positive integer, got ${stride}`);
+    throw new Error(
+      `hycomCurrents: stride must be a positive integer, got ${stride}`,
+    );
   }
   const { latCount, lonCount } = HYCOM_AXES;
-  for (const [name, value] of [['timeIndex', timeIndex], ['depthIndex', depthIndex],
-    ['latStart', latStart], ['nLat', nLat], ['lonStart', lonStart], ['nLon', nLon]]) {
+  for (const [name, value] of [
+    ['timeIndex', timeIndex],
+    ['depthIndex', depthIndex],
+    ['latStart', latStart],
+    ['nLat', nLat],
+    ['lonStart', lonStart],
+    ['nLon', nLon],
+  ]) {
     if (!Number.isInteger(value)) {
-      throw new Error(`hycomCurrents: ${name} must be an integer, got ${value}`);
+      throw new Error(
+        `hycomCurrents: ${name} must be an integer, got ${value}`,
+      );
     }
   }
   if (nLat < 1 || nLon < 1) {
-    throw new Error(`hycomCurrents: nLat/nLon must be >= 1, got ${nLat}x${nLon}`);
+    throw new Error(
+      `hycomCurrents: nLat/nLon must be >= 1, got ${nLat}x${nLon}`,
+    );
   }
-  if (timeIndex < 0) throw new Error(`hycomCurrents: timeIndex ${timeIndex} is negative`);
-  if (depthIndex < 0) throw new Error(`hycomCurrents: depthIndex ${depthIndex} is negative`);
+  if (timeIndex < 0)
+    throw new Error(`hycomCurrents: timeIndex ${timeIndex} is negative`);
+  if (depthIndex < 0)
+    throw new Error(`hycomCurrents: depthIndex ${depthIndex} is negative`);
   const latStop = latStart + (nLat - 1) * stride;
   const lonStop = lonStart + (nLon - 1) * stride;
   if (latStart < 0 || latStop > latCount - 1) {
-    throw new Error(`hycomCurrents: latitude slab ${latStart}:${stride}:${latStop} leaves the ${latCount}-row axis`);
+    throw new Error(
+      `hycomCurrents: latitude slab ${latStart}:${stride}:${latStop} leaves the ${latCount}-row axis`,
+    );
   }
   // The longitude axis is modulo, but a single OPeNDAP request is not: a
   // segment that runs past the end must have been split by `hycomLonSegments`.
   if (lonStart < 0 || lonStop > lonCount - 1) {
     throw new Error(
-      `hycomCurrents: longitude slab ${lonStart}:${stride}:${lonStop} crosses the 0-360 seam — `
-      + 'split it with hycomLonSegments() before building a URL',
+      `hycomCurrents: longitude slab ${lonStart}:${stride}:${lonStop} crosses the 0-360 seam — ` +
+        'split it with hycomLonSegments() before building a URL',
     );
   }
 
   const { base, uVar, vVar } = HYCOM_DATASET;
-  const slab = `[${timeIndex}:1:${timeIndex}]`
-    + `[${depthIndex}:1:${depthIndex}]`
-    + `[${latStart}:${stride}:${latStop}]`
-    + `[${lonStart}:${stride}:${lonStop}]`;
+  const slab =
+    `[${timeIndex}:1:${timeIndex}]` +
+    `[${depthIndex}:1:${depthIndex}]` +
+    `[${latStart}:${stride}:${latStop}]` +
+    `[${lonStart}:${stride}:${lonStop}]`;
   const query = `${uVar}${slab},${vVar}${slab}`;
   // Brackets are the only characters the TDS constraint parser needs escaped;
   // colons and commas are part of the documented hyperslab grammar and must
@@ -729,10 +766,20 @@ export function parseHycomTimeEpoch(dasText) {
   if (!parts) return null;
 
   const unitMs = {
-    hour: HOUR_MS, hours: HOUR_MS, hr: HOUR_MS, hrs: HOUR_MS,
-    day: 24 * HOUR_MS, days: 24 * HOUR_MS,
-    minute: 60000, minutes: 60000, min: 60000, mins: 60000,
-    second: 1000, seconds: 1000, sec: 1000, secs: 1000,
+    hour: HOUR_MS,
+    hours: HOUR_MS,
+    hr: HOUR_MS,
+    hrs: HOUR_MS,
+    day: 24 * HOUR_MS,
+    days: 24 * HOUR_MS,
+    minute: 60000,
+    minutes: 60000,
+    min: 60000,
+    mins: 60000,
+    second: 1000,
+    seconds: 1000,
+    sec: 1000,
+    secs: 1000,
   }[parts[1].toLowerCase()];
   // An unrecognized interval is a real change in the upstream contract, not
   // something to approximate with a guess at hours.
@@ -773,14 +820,21 @@ function parseDapAsciiBlocks(text) {
   const header = /^([A-Za-z_][\w.]*)((?:\[\d+\])+)\s*$/;
   while (i < lines.length) {
     const match = header.exec(lines[i]);
-    if (!match) { i += 1; continue; }
+    if (!match) {
+      i += 1;
+      continue;
+    }
     const dims = [...match[2].matchAll(/\[(\d+)\]/g)].map((d) => Number(d[1]));
     i += 1;
     const payload = [];
     // Payload runs to the next blank line or the next block header. DAP writes
     // a whole coordinate axis on one line (measured: 141 values, and 121 time
     // values, each on a single line), but accumulating handles a wrapped one.
-    while (i < lines.length && lines[i].trim() !== '' && !header.test(lines[i])) {
+    while (
+      i < lines.length &&
+      lines[i].trim() !== '' &&
+      !header.test(lines[i])
+    ) {
       payload.push(lines[i]);
       i += 1;
     }
@@ -799,7 +853,11 @@ function parseDapAsciiBlocks(text) {
  * @returns {?Float64Array}
  */
 function parseCoordList(lines, expected) {
-  const tokens = lines.join(',').split(',').map((t) => t.trim()).filter((t) => t !== '');
+  const tokens = lines
+    .join(',')
+    .split(',')
+    .map((t) => t.trim())
+    .filter((t) => t !== '');
   if (tokens.length !== expected) return null;
   const out = new Float64Array(expected);
   for (let i = 0; i < expected; i += 1) {
@@ -901,10 +959,17 @@ function readGridVariable(blocks, name) {
     if (prefix.length !== 3 || prefix[2] !== i) return null;
     const tokens = row[2].split(',');
     if (tokens.length !== nLon) return null;
-    for (let j = 0; j < nLon; j += 1) values[i * nLon + j] = parseValue(tokens[j]);
+    for (let j = 0; j < nLon; j += 1)
+      values[i * nLon + j] = parseValue(tokens[j]);
   }
   return {
-    values, nLat, nLon, lats, lons, timeValue: times[0], depthValue: depths[0],
+    values,
+    nLat,
+    nLon,
+    lats,
+    lons,
+    timeValue: times[0],
+    depthValue: depths[0],
   };
 }
 
@@ -962,7 +1027,8 @@ export function parseHycomAscii(text) {
 
   // The two components must describe the same cells at the same instant and
   // level, or they are not a vector field.
-  if (!Number.isFinite(uGrid.timeValue) || uGrid.timeValue !== vGrid.timeValue) return null;
+  if (!Number.isFinite(uGrid.timeValue) || uGrid.timeValue !== vGrid.timeValue)
+    return null;
   for (let i = 0; i < uGrid.nLat; i += 1) {
     if (Math.abs(uGrid.lats[i] - vGrid.lats[i]) > COORD_EPS) return null;
   }
@@ -972,14 +1038,19 @@ export function parseHycomAscii(text) {
   // Refuse a body served from any level but the surface. The depth axis has 40
   // levels and this module always pins index 0; if that ever stops meaning
   // 0.0 m, drawing level 1 as the surface would be a silent substitution.
-  if (!(Math.abs(uGrid.depthValue) <= COORD_EPS) || uGrid.depthValue !== vGrid.depthValue) return null;
+  if (
+    !(Math.abs(uGrid.depthValue) <= COORD_EPS) ||
+    uGrid.depthValue !== vGrid.depthValue
+  )
+    return null;
 
   const total = uGrid.nLat * uGrid.nLon;
   const u = new Float32Array(total);
   const v = new Float32Array(total);
   let finite = 0;
   for (let k = 0; k < total; k += 1) {
-    const usable = Number.isFinite(uGrid.values[k]) && Number.isFinite(vGrid.values[k]);
+    const usable =
+      Number.isFinite(uGrid.values[k]) && Number.isFinite(vGrid.values[k]);
     u[k] = usable ? uGrid.values[k] : NaN;
     v[k] = usable ? vGrid.values[k] : NaN;
     if (usable) finite += 1;
@@ -1034,8 +1105,16 @@ export function stitchHycomGrids(grids, lonStepDeg) {
   if (!Number.isFinite(lonStepDeg) || lonStepDeg <= 0) return null;
   for (const g of grids) {
     if (!g) return null;
-    if (typeof g.lats?.length !== 'number' || typeof g.lons?.length !== 'number') return null;
-    if (typeof g.u?.subarray !== 'function' || typeof g.v?.subarray !== 'function') return null;
+    if (
+      typeof g.lats?.length !== 'number' ||
+      typeof g.lons?.length !== 'number'
+    )
+      return null;
+    if (
+      typeof g.u?.subarray !== 'function' ||
+      typeof g.v?.subarray !== 'function'
+    )
+      return null;
     if (g.lats.length === 0 || g.lons.length === 0) return null;
     if (g.u.length !== g.lats.length * g.lons.length) return null;
     if (g.v.length !== g.lats.length * g.lons.length) return null;
@@ -1059,7 +1138,8 @@ export function stitchHycomGrids(grids, lonStepDeg) {
         // Unwrap onto the running axis. The loop runs at most once for a real
         // response (one seam crossing), but is written as a loop so a
         // pathological input terminates rather than emitting a descending axis.
-        while (value <= lons[at - 1] && value < lons[at - 1] + 360) value += 360;
+        while (value <= lons[at - 1] && value < lons[at - 1] + 360)
+          value += 360;
         const gap = value - lons[at - 1];
         if (Math.abs(gap - lonStepDeg) > COORD_EPS) return null;
       }
@@ -1118,7 +1198,8 @@ export function stitchHycomGrids(grids, lonStepDeg) {
  */
 export function chooseHycomTimeIndex(atMs, epoch, hours) {
   if (!Number.isFinite(atMs)) return null;
-  if (!Number.isFinite(epoch?.epochMs) || !Number.isFinite(epoch?.unitMs)) return null;
+  if (!Number.isFinite(epoch?.epochMs) || !Number.isFinite(epoch?.unitMs))
+    return null;
   const n = hours?.length ?? 0;
   if (!n) return null;
   let best = -1;
@@ -1126,7 +1207,10 @@ export function chooseHycomTimeIndex(atMs, epoch, hours) {
   for (let i = 0; i < n; i += 1) {
     if (!Number.isFinite(hours[i])) return null;
     const delta = Math.abs(epoch.epochMs + hours[i] * epoch.unitMs - atMs);
-    if (delta < bestDelta) { bestDelta = delta; best = i; }
+    if (delta < bestDelta) {
+      bestDelta = delta;
+      best = i;
+    }
   }
   if (best < 0) return null;
   return {
@@ -1147,7 +1231,10 @@ export function chooseHycomTimeIndex(atMs, epoch, hours) {
 function abortAfter(signal, timeoutMs) {
   const controller = new AbortController();
   const timer = setTimeout(
-    () => controller.abort(new Error(`hycomCurrents: upstream timed out after ${timeoutMs} ms`)),
+    () =>
+      controller.abort(
+        new Error(`hycomCurrents: upstream timed out after ${timeoutMs} ms`),
+      ),
     timeoutMs,
   );
   const onAbort = () => controller.abort(signal.reason);
@@ -1187,15 +1274,27 @@ async function fetchText(url, fetchImpl, signal, timeoutMs) {
     // Success must be asserted, not assumed: an object with no `ok` field is a
     // broken fetch impl, and treating it as a 200 would hand `undefined` to the
     // parser and surface as "empty ocean" rather than as the wiring bug it is.
-    if (!response || typeof response.text !== 'function' || typeof response.ok !== 'boolean') {
-      throw new Error(`hycomCurrents: fetchImpl returned no usable response for ${url}`);
+    if (
+      !response ||
+      typeof response.text !== 'function' ||
+      typeof response.ok !== 'boolean'
+    ) {
+      throw new Error(
+        `hycomCurrents: fetchImpl returned no usable response for ${url}`,
+      );
     }
     if (!response.ok) {
-      throw new Error(`hycomCurrents: HTTP ${response.status ?? 'unknown status'} from ${url}`);
+      throw new Error(
+        `hycomCurrents: HTTP ${response.status ?? 'unknown status'} from ${url}`,
+      );
     }
     let text;
     try {
-      text = await readResponseTextCapped(response, HYCOM_RESPONSE_BYTE_CAP, gate.signal);
+      text = await readResponseTextCapped(
+        response,
+        HYCOM_RESPONSE_BYTE_CAP,
+        gate.signal,
+      );
     } catch (error) {
       if (error?.code === 'RESPONSE_TOO_LARGE') {
         throw new Error(
@@ -1260,7 +1359,8 @@ export async function fetchHycomTimeAxis({
   }
   const epoch = parseHycomTimeEpoch(dasText);
   if (!epoch) return null;
-  const blocks = typeof axisText === 'string' ? parseDapAsciiBlocks(axisText) : null;
+  const blocks =
+    typeof axisText === 'string' ? parseDapAsciiBlocks(axisText) : null;
   const block = blocks?.get('time');
   if (!block || block.dims.length !== 1) return null;
   const hours = parseCoordList(block.lines, block.dims[0]);
@@ -1371,7 +1471,8 @@ export async function fetchHycomCurrents({
   timeoutMs = HYCOM_TIMEOUT_MS,
 } = {}) {
   const plan = chooseHycomStride(box, targetCells);
-  if (!plan) throw new Error('hycomCurrents: unusable view rectangle or cell budget');
+  if (!plan)
+    throw new Error('hycomCurrents: unusable view rectangle or cell budget');
 
   let axis = timeAxis;
   if (!axis) {
@@ -1381,31 +1482,44 @@ export async function fetchHycomCurrents({
       // included. Re-throw the caller's own abort reason instead of reporting a
       // dataset outage: a camera move is not a HYCOM problem, and the caller
       // needs to be able to tell the two apart.
-      if (signal?.aborted) throw signal.reason ?? new Error('hycomCurrents: aborted');
-      throw new Error('hycomCurrents: could not resolve the dataset\'s time axis');
+      if (signal?.aborted)
+        throw signal.reason ?? new Error('hycomCurrents: aborted');
+      throw new Error(
+        "hycomCurrents: could not resolve the dataset's time axis",
+      );
     }
   }
   const wantMs = Number.isFinite(atMs) ? atMs : nowMs;
   const step = chooseHycomTimeIndex(wantMs, axis, axis.hours);
   if (!step) throw new Error('hycomCurrents: could not choose a time step');
 
-  const urls = plan.segments.map((segment) => buildHycomUrl({
-    timeIndex: step.index,
-    latStart: segment.latStart,
-    nLat: segment.nLat,
-    lonStart: segment.lonStart,
-    nLon: segment.nLon,
-    stride: plan.stride,
-  }));
-  const bodies = await Promise.all(urls.map((url) => fetchText(url, fetchImpl, signal, timeoutMs)));
+  const urls = plan.segments.map((segment) =>
+    buildHycomUrl({
+      timeIndex: step.index,
+      latStart: segment.latStart,
+      nLat: segment.nLat,
+      lonStart: segment.lonStart,
+      nLon: segment.nLon,
+      stride: plan.stride,
+    }),
+  );
+  const bodies = await Promise.all(
+    urls.map((url) => fetchText(url, fetchImpl, signal, timeoutMs)),
+  );
   const grids = bodies.map((text, i) => {
     const grid = parseHycomAscii(text);
-    if (!grid) throw new Error(`hycomCurrents: unparseable or shape-drifted response from ${urls[i]}`);
+    if (!grid)
+      throw new Error(
+        `hycomCurrents: unparseable or shape-drifted response from ${urls[i]}`,
+      );
     return grid;
   });
 
   const grid = stitchHycomGrids(grids, plan.lonCellDeg);
-  if (!grid) throw new Error('hycomCurrents: fetched segments do not stitch into one grid');
+  if (!grid)
+    throw new Error(
+      'hycomCurrents: fetched segments do not stitch into one grid',
+    );
 
   // Report the instant the server actually served, computed from the echoed
   // time value rather than from the index that was asked for. A body carrying a
@@ -1421,16 +1535,28 @@ export async function fetchHycomCurrents({
   const latStepDeg = axisStep(grid.lats, plan.latCellDeg);
   const lonStepDeg = axisStep(grid.lons, plan.lonCellDeg);
   if (latStepDeg === null || lonStepDeg === null) {
-    throw new Error('hycomCurrents: the served grid axes are not uniformly spaced');
+    throw new Error(
+      'hycomCurrents: the served grid axes are not uniformly spaced',
+    );
   }
   // A degenerate single-row or single-column grid shows no spacing of its own;
   // fall back to the plan, which is the only thing left that knows one.
-  const servedLatDeg = Number.isFinite(latStepDeg) ? latStepDeg : plan.latCellDeg;
-  const servedLonDeg = Number.isFinite(lonStepDeg) ? lonStepDeg : plan.lonCellDeg;
+  const servedLatDeg = Number.isFinite(latStepDeg)
+    ? latStepDeg
+    : plan.latCellDeg;
+  const servedLonDeg = Number.isFinite(lonStepDeg)
+    ? lonStepDeg
+    : plan.lonCellDeg;
 
   const ageMs = nowMs - validAtMs;
   const {
-    id, label, attribution, license, licenseNote, resolutionDeg, generatingModel,
+    id,
+    label,
+    attribution,
+    license,
+    licenseNote,
+    resolutionDeg,
+    generatingModel,
   } = HYCOM_DATASET;
   return {
     lats: grid.lats,
@@ -1466,10 +1592,10 @@ export async function fetchHycomCurrents({
       license,
       licenseNote,
       note:
-        `${generatingModel}. Full primitive-equation model: unlike an altimetric `
-        + 'geostrophic product it carries tides and wind-driven (Ekman) flow. Surface '
-        + 'level (depth 0 m) of the 3-D field, 3-hourly. The axis runs about five days '
-        + 'ahead of now, so a step may be a FORECAST and ageMs may be negative.',
+        `${generatingModel}. Full primitive-equation model: unlike an altimetric ` +
+        'geostrophic product it carries tides and wind-driven (Ekman) flow. Surface ' +
+        'level (depth 0 m) of the 3-D field, 3-hourly. The axis runs about five days ' +
+        'ahead of now, so a step may be a FORECAST and ageMs may be negative.',
       crossesSeam: plan.crossesSeam,
       url: urls[0],
       urls,

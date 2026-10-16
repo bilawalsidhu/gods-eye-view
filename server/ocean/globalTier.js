@@ -62,7 +62,8 @@ let _timeAxisInFlight = null;
  */
 export async function cachedHycomTimeAxis({ fetchImpl, signal } = {}) {
   const now = Date.now();
-  if (_timeAxis && now - _timeAxis.cachedAt <= TIME_AXIS_TTL_MS) return _timeAxis.axis;
+  if (_timeAxis && now - _timeAxis.cachedAt <= TIME_AXIS_TTL_MS)
+    return _timeAxis.axis;
   if (_timeAxisInFlight) return _timeAxisInFlight;
   _timeAxisInFlight = (async () => {
     try {
@@ -94,13 +95,15 @@ export function _resetTimeAxisCache() {
 export const GLOBAL_TIER_PHYSICS = Object.freeze({
   hycom: Object.freeze({
     kind: 'modeled',
-    method: 'HYCOM ESPC-D-V02 primitive-equation ocean forecast: geostrophic and wind-driven flow '
-      + 'plus eight astronomically forced tidal constituents; surface layer (depth 0 m), 3-hourly',
+    method:
+      'HYCOM ESPC-D-V02 primitive-equation ocean forecast: geostrophic and wind-driven flow ' +
+      'plus eight astronomically forced tidal constituents; surface layer (depth 0 m), 3-hourly',
   }),
   altimetry: Object.freeze({
     kind: 'derived',
-    method: 'absolute geostrophic velocity from multi-mission altimetry (f-plane, beta-plane at the '
-      + 'equator); NO Ekman or wind-driven component and NO tides',
+    method:
+      'absolute geostrophic velocity from multi-mission altimetry (f-plane, beta-plane at the ' +
+      'equator); NO Ekman or wind-driven component and NO tides',
   }),
 });
 
@@ -133,9 +136,13 @@ export async function fetchGlobalCurrents({ deps = {}, ...options } = {}) {
   try {
     // Hand the memoized axis down so the common path is ONE round trip rather
     // than three. A null axis is fine — the fetcher resolves it itself.
-    const timeAxis = deps.timeAxis !== undefined
-      ? deps.timeAxis
-      : await cachedHycomTimeAxis({ fetchImpl: options.fetchImpl, signal: options.signal });
+    const timeAxis =
+      deps.timeAxis !== undefined
+        ? deps.timeAxis
+        : await cachedHycomTimeAxis({
+            fetchImpl: options.fetchImpl,
+            signal: options.signal,
+          });
     const field = await hycom(timeAxis ? { ...options, timeAxis } : options);
     if (field) return describe(field, 'hycom', null);
     hycomReason = 'HYCOM returned no field for this view';

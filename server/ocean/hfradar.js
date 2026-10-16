@@ -125,7 +125,8 @@
 /** @const {string} griddap root of the CoastWatch West Coast Node ERDDAP. */
 import { readResponseTextCapped } from '../providers/common/http.js';
 
-export const HFR_ERDDAP_BASE = 'https://coastwatch.pfeg.noaa.gov/erddap/griddap';
+export const HFR_ERDDAP_BASE =
+  'https://coastwatch.pfeg.noaa.gov/erddap/griddap';
 
 /** @const {string[]} Variables requested per cell, in griddap column order. */
 export const HFR_VARS = Object.freeze(['water_u', 'water_v', 'hdop']);
@@ -285,7 +286,10 @@ const BARNES_L_FLOOR_M = 2050;
  * @returns {number} Barnes length scale, metres.
  */
 function lengthScaleForResolution(resolutionKm) {
-  return Math.max(BARNES_L_FLOOR_M, Math.round(BARNES_L_PER_SPACING * resolutionKm * 1000));
+  return Math.max(
+    BARNES_L_FLOOR_M,
+    Math.round(BARNES_L_PER_SPACING * resolutionKm * 1000),
+  );
 }
 
 /**
@@ -302,7 +306,12 @@ export const HFR_DATASETS = Object.freeze([
     domain: 'us-west',
     resolutionKm: 0.5,
     lengthScaleM: lengthScaleForResolution(0.5),
-    bbox: Object.freeze({ latMin: 37.45549, latMax: 38.13873, lonMin: -122.5935, lonMax: -122.0469 }),
+    bbox: Object.freeze({
+      latMin: 37.45549,
+      latMax: 38.13873,
+      lonMin: -122.5935,
+      lonMax: -122.0469,
+    }),
     label: 'IOOS HF-radar US West Coast 500 m totals (ERDDAP ucsdHfrW500)',
   }),
   Object.freeze({
@@ -310,7 +319,12 @@ export const HFR_DATASETS = Object.freeze([
     domain: 'us-west',
     resolutionKm: 1,
     lengthScaleM: lengthScaleForResolution(1),
-    bbox: Object.freeze({ latMin: 30.25, latMax: 49.99204, lonMin: -130.36, lonMax: -115.8056 }),
+    bbox: Object.freeze({
+      latMin: 30.25,
+      latMax: 49.99204,
+      lonMin: -130.36,
+      lonMax: -115.8056,
+    }),
     label: 'IOOS HF-radar US West Coast 1 km totals (ERDDAP ucsdHfrW1)',
   }),
   Object.freeze({
@@ -318,7 +332,12 @@ export const HFR_DATASETS = Object.freeze([
     domain: 'us-west',
     resolutionKm: 2,
     lengthScaleM: lengthScaleForResolution(2),
-    bbox: Object.freeze({ latMin: 30.25, latMax: 49.99204, lonMin: -130.36, lonMax: -115.8056 }),
+    bbox: Object.freeze({
+      latMin: 30.25,
+      latMax: 49.99204,
+      lonMin: -130.36,
+      lonMax: -115.8056,
+    }),
     label: 'IOOS HF-radar US West Coast 2 km totals (ERDDAP ucsdHfrW2)',
   }),
   Object.freeze({
@@ -326,31 +345,54 @@ export const HFR_DATASETS = Object.freeze([
     domain: 'us-east-gulf',
     resolutionKm: 1,
     lengthScaleM: lengthScaleForResolution(1),
-    bbox: Object.freeze({ latMin: 21.7, latMax: 46.49442, lonMin: -97.88385, lonMax: -57.19249 }),
-    label: 'IOOS HF-radar US East Coast + Gulf of Mexico 1 km totals (ERDDAP ucsdHfrE1)',
+    bbox: Object.freeze({
+      latMin: 21.7,
+      latMax: 46.49442,
+      lonMin: -97.88385,
+      lonMax: -57.19249,
+    }),
+    label:
+      'IOOS HF-radar US East Coast + Gulf of Mexico 1 km totals (ERDDAP ucsdHfrE1)',
   }),
   Object.freeze({
     id: 'ucsdHfrE2',
     domain: 'us-east-gulf',
     resolutionKm: 2,
     lengthScaleM: lengthScaleForResolution(2),
-    bbox: Object.freeze({ latMin: 21.7, latMax: 46.49442, lonMin: -97.88385, lonMax: -57.19249 }),
-    label: 'IOOS HF-radar US East Coast + Gulf of Mexico 2 km totals (ERDDAP ucsdHfrE2)',
+    bbox: Object.freeze({
+      latMin: 21.7,
+      latMax: 46.49442,
+      lonMin: -97.88385,
+      lonMax: -57.19249,
+    }),
+    label:
+      'IOOS HF-radar US East Coast + Gulf of Mexico 2 km totals (ERDDAP ucsdHfrE2)',
   }),
   Object.freeze({
     id: 'ucsdHfrE6',
     domain: 'us-east-gulf',
     resolutionKm: 6,
     lengthScaleM: lengthScaleForResolution(6),
-    bbox: Object.freeze({ latMin: 21.73596, latMax: 46.49442, lonMin: -97.88385, lonMax: -57.23121 }),
-    label: 'IOOS HF-radar US East Coast + Gulf of Mexico 6 km totals (ERDDAP ucsdHfrE6)',
+    bbox: Object.freeze({
+      latMin: 21.73596,
+      latMax: 46.49442,
+      lonMin: -97.88385,
+      lonMax: -57.23121,
+    }),
+    label:
+      'IOOS HF-radar US East Coast + Gulf of Mexico 6 km totals (ERDDAP ucsdHfrE6)',
   }),
   Object.freeze({
     id: 'ucsdHfrH1',
     domain: 'hawaii',
     resolutionKm: 1,
     lengthScaleM: lengthScaleForResolution(1),
-    bbox: Object.freeze({ latMin: 16.2204, latMax: 24.91688, lonMin: -163.1444, lonMax: -151.9565 }),
+    bbox: Object.freeze({
+      latMin: 16.2204,
+      latMax: 24.91688,
+      lonMin: -163.1444,
+      lonMax: -151.9565,
+    }),
     label: "IOOS HF-radar US Hawai'i State 1 km totals (ERDDAP ucsdHfrH1)",
   }),
   Object.freeze({
@@ -358,7 +400,12 @@ export const HFR_DATASETS = Object.freeze([
     domain: 'puerto-rico',
     resolutionKm: 2,
     lengthScaleM: lengthScaleForResolution(2),
-    bbox: Object.freeze({ latMin: 14.5, latMax: 21.99766, lonMin: -70.5, lonMax: -61.00562 }),
+    bbox: Object.freeze({
+      latMin: 14.5,
+      latMax: 21.99766,
+      lonMin: -70.5,
+      lonMax: -61.00562,
+    }),
     label: 'IOOS HF-radar Puerto Rico + USVI 2 km totals (ERDDAP ucsdHfrP2)',
   }),
   Object.freeze({
@@ -366,7 +413,12 @@ export const HFR_DATASETS = Object.freeze([
     domain: 'puerto-rico',
     resolutionKm: 6,
     lengthScaleM: lengthScaleForResolution(6),
-    bbox: Object.freeze({ latMin: 14.5, latMax: 21.99766, lonMin: -70.5, lonMax: -61.0242 }),
+    bbox: Object.freeze({
+      latMin: 14.5,
+      latMax: 21.99766,
+      lonMin: -70.5,
+      lonMax: -61.0242,
+    }),
     label: 'IOOS HF-radar Puerto Rico + USVI 6 km totals (ERDDAP ucsdHfrP6)',
   }),
 ]);
@@ -386,7 +438,7 @@ export function wrapLon(lon) {
   // That drift would leak verbatim into griddap constraint strings, making
   // request URLs unreadable and irreproducible for the same viewport.
   if (lon >= -180 && lon < 180) return lon;
-  return (((lon + 180) % 360) + 360) % 360 - 180;
+  return ((((lon + 180) % 360) + 360) % 360) - 180;
 }
 
 /**
@@ -417,7 +469,10 @@ export function lonIntervals(lonMin, lonMax) {
   if (b === -180 && a > b) b = 180;
   // After wrapping, a > b means the span steps over the antimeridian.
   if (a <= b) return [[a, b]];
-  return [[a, 180], [-180, b]];
+  return [
+    [a, 180],
+    [-180, b],
+  ];
 }
 
 /**
@@ -432,8 +487,9 @@ export function boxIntersects(box, coverage) {
   const latMin = Math.min(box.latMin, box.latMax);
   const latMax = Math.max(box.latMin, box.latMax);
   if (latMax < coverage.latMin || latMin > coverage.latMax) return false;
-  return lonIntervals(box.lonMin, box.lonMax)
-    .some(([a, b]) => b >= coverage.lonMin && a <= coverage.lonMax);
+  return lonIntervals(box.lonMin, box.lonMax).some(
+    ([a, b]) => b >= coverage.lonMin && a <= coverage.lonMax,
+  );
 }
 
 /**
@@ -452,12 +508,15 @@ export function boxIntersects(box, coverage) {
  *   `resolutionKm`. Empty when the box is off-coverage or malformed.
  */
 export function selectHfrDatasets(box) {
-  if (!box || !Number.isFinite(box.latMin) || !Number.isFinite(box.latMax)) return [];
+  if (!box || !Number.isFinite(box.latMin) || !Number.isFinite(box.latMax))
+    return [];
   if (!Number.isFinite(box.lonMin) || !Number.isFinite(box.lonMax)) return [];
-  return HFR_DATASETS
-    .map((dataset, order) => ({ dataset, order }))
+  return HFR_DATASETS.map((dataset, order) => ({ dataset, order }))
     .filter(({ dataset }) => boxIntersects(box, dataset.bbox))
-    .sort((x, y) => (x.dataset.resolutionKm - y.dataset.resolutionKm) || (x.order - y.order))
+    .sort(
+      (x, y) =>
+        x.dataset.resolutionKm - y.dataset.resolutionKm || x.order - y.order,
+    )
     .map(({ dataset }) => dataset);
 }
 
@@ -482,8 +541,16 @@ export function selectHfrDatasets(box) {
  */
 export function clampBoxToDataset(box, coverage) {
   if (!box || !coverage) return null;
-  const edges = [box.latMin, box.latMax, box.lonMin, box.lonMax,
-    coverage.latMin, coverage.latMax, coverage.lonMin, coverage.lonMax];
+  const edges = [
+    box.latMin,
+    box.latMax,
+    box.lonMin,
+    box.lonMax,
+    coverage.latMin,
+    coverage.latMax,
+    coverage.lonMin,
+    coverage.lonMax,
+  ];
   if (!edges.every((edge) => Number.isFinite(edge))) return null;
   const latMin = Math.max(Math.min(box.latMin, box.latMax), coverage.latMin);
   const latMax = Math.min(Math.max(box.latMin, box.latMax), coverage.latMax);
@@ -493,9 +560,12 @@ export function clampBoxToDataset(box, coverage) {
     const lonMin = Math.max(a, coverage.lonMin);
     const lonMax = Math.min(b, coverage.lonMax);
     if (lonMin > lonMax) continue;
-    if (!best || lonMax - lonMin > best.lonMax - best.lonMin) best = { lonMin, lonMax };
+    if (!best || lonMax - lonMin > best.lonMax - best.lonMin)
+      best = { lonMin, lonMax };
   }
-  return best ? { latMin, latMax, lonMin: best.lonMin, lonMax: best.lonMax } : null;
+  return best
+    ? { latMin, latMax, lonMin: best.lonMin, lonMax: best.lonMax }
+    : null;
 }
 
 /** Percent-encode only the griddap subset delimiters, per the ERDDAP URL spec. */
@@ -532,7 +602,8 @@ function isoStamp(value) {
 }
 
 /** ERDDAP `.csv0` time stamps: `YYYY-MM-DDTHH:MM:SS[.sss][Z|+-HH:MM]`. */
-const ISO_STAMP = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:?\d{2})?$/;
+const ISO_STAMP =
+  /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:?\d{2})?$/;
 
 /**
  * Parse an ERDDAP timestamp to epoch ms, reading a designator-less stamp as UTC.
@@ -588,7 +659,15 @@ function parseIsoUtcMs(text) {
  *   is neither a non-empty string nor a finite number, a non-integer or
  *   non-positive `stride`, or a box with a non-finite or descending edge.
  */
-export function buildHfrUrl(datasetId, vars, t0, t1, box, stride = 1, base = HFR_ERDDAP_BASE) {
+export function buildHfrUrl(
+  datasetId,
+  vars,
+  t0,
+  t1,
+  box,
+  stride = 1,
+  base = HFR_ERDDAP_BASE,
+) {
   if (typeof datasetId !== 'string' || datasetId.length === 0) {
     throw new TypeError('buildHfrUrl: datasetId must be a non-empty string');
   }
@@ -598,25 +677,38 @@ export function buildHfrUrl(datasetId, vars, t0, t1, box, stride = 1, base = HFR
   // Unchecked, a non-finite epoch reaches `new Date(NaN).toISOString()`, whose
   // RangeError surfaces far from the caller that supplied it — and inside the
   // ladder's catch it would be indistinguishable from a dead rung.
-  for (const [name, value] of [['t0', t0], ['t1', t1]]) {
-    const ok = typeof value === 'string' ? value.trim().length > 0 : Number.isFinite(value);
+  for (const [name, value] of [
+    ['t0', t0],
+    ['t1', t1],
+  ]) {
+    const ok =
+      typeof value === 'string'
+        ? value.trim().length > 0
+        : Number.isFinite(value);
     if (!ok) {
-      throw new TypeError(`buildHfrUrl: ${name} must be a non-empty ISO-8601 string or finite epoch ms, got ${value}`);
+      throw new TypeError(
+        `buildHfrUrl: ${name} must be a non-empty ISO-8601 string or finite epoch ms, got ${value}`,
+      );
     }
   }
   if (!Number.isInteger(stride) || stride < 1) {
-    throw new TypeError(`buildHfrUrl: stride must be a positive integer, got ${stride}`);
+    throw new TypeError(
+      `buildHfrUrl: stride must be a positive integer, got ${stride}`,
+    );
   }
   const edges = [box?.latMin, box?.latMax, box?.lonMin, box?.lonMax];
   if (!edges.every((edge) => Number.isFinite(edge))) {
     throw new TypeError('buildHfrUrl: box edges must all be finite numbers');
   }
   if (box.latMin > box.latMax || box.lonMin > box.lonMax) {
-    throw new TypeError('buildHfrUrl: box edges must be ascending (latMin<=latMax, lonMin<=lonMax)');
+    throw new TypeError(
+      'buildHfrUrl: box edges must be ascending (latMin<=latMax, lonMin<=lonMax)',
+    );
   }
-  const dims = `[(${isoStamp(t0)}):1:(${isoStamp(t1)})]`
-    + `[(${box.latMin}):${stride}:(${box.latMax})]`
-    + `[(${box.lonMin}):${stride}:(${box.lonMax})]`;
+  const dims =
+    `[(${isoStamp(t0)}):1:(${isoStamp(t1)})]` +
+    `[(${box.latMin}):${stride}:(${box.latMax})]` +
+    `[(${box.lonMin}):${stride}:(${box.lonMax})]`;
   const query = vars.map((v) => `${v}${dims}`).join(',');
   return encodeErddap(`${base}/${datasetId}.csv0?${query}`);
 }
@@ -636,7 +728,9 @@ export function buildHfrUrl(datasetId, vars, t0, t1, box, stride = 1, base = HFR
  */
 export function buildHfrProbeUrl(datasetId, base = HFR_ERDDAP_BASE) {
   if (typeof datasetId !== 'string' || datasetId.length === 0) {
-    throw new TypeError('buildHfrProbeUrl: datasetId must be a non-empty string');
+    throw new TypeError(
+      'buildHfrProbeUrl: datasetId must be a non-empty string',
+    );
   }
   return encodeErddap(`${base}/${datasetId}.csv0?time[(last)]`);
 }
@@ -671,13 +765,19 @@ export function assertHfrCsv0(text) {
   const head = firstLine(text);
   if (head === '') throw new Error('HF-radar response was empty');
   if (/^Error\b/.test(head) || head.startsWith('{') || head.startsWith('[')) {
-    throw new Error(`HF-radar response was an ERDDAP error envelope, not CSV: ${head.slice(0, 160)}`);
+    throw new Error(
+      `HF-radar response was an ERDDAP error envelope, not CSV: ${head.slice(0, 160)}`,
+    );
   }
   if (head.startsWith('<')) {
-    throw new Error(`HF-radar response was markup, not CSV: ${head.slice(0, 160)}`);
+    throw new Error(
+      `HF-radar response was markup, not CSV: ${head.slice(0, 160)}`,
+    );
   }
   if (!DATA_ROW_HEAD.test(head)) {
-    throw new Error(`HF-radar response did not start with a griddap .csv0 data row: ${head.slice(0, 160)}`);
+    throw new Error(
+      `HF-radar response did not start with a griddap .csv0 data row: ${head.slice(0, 160)}`,
+    );
   }
 }
 
@@ -743,10 +843,14 @@ export function parseHfrCsv0(text, options = {}) {
     hdopReject = HDOP_REJECT,
   } = options;
   for (const [name, value] of [
-    ['defaultHdop', defaultHdop], ['maxCurrentMs', maxCurrentMs], ['hdopReject', hdopReject],
+    ['defaultHdop', defaultHdop],
+    ['maxCurrentMs', maxCurrentMs],
+    ['hdopReject', hdopReject],
   ]) {
     if (!Number.isFinite(value) || value < 0) {
-      throw new TypeError(`parseHfrCsv0: ${name} must be a finite number >= 0, got ${value}`);
+      throw new TypeError(
+        `parseHfrCsv0: ${name} must be a finite number >= 0, got ${value}`,
+      );
     }
   }
   assertHfrCsv0(text);
@@ -760,26 +864,43 @@ export function parseHfrCsv0(text, options = {}) {
     const row = line.trim();
     if (row.length === 0) continue;
     const parts = row.split(',');
-    if (parts.length !== expectedColumns) { rejected += 1; continue; }
+    if (parts.length !== expectedColumns) {
+      rejected += 1;
+      continue;
+    }
 
     const timeMs = parseIsoUtcMs(parts[0]);
     const lat = cell(parts[1]);
     const lon = cell(parts[2]);
-    if (!Number.isFinite(timeMs) || !Number.isFinite(lat) || !Number.isFinite(lon)) {
+    if (
+      !Number.isFinite(timeMs) ||
+      !Number.isFinite(lat) ||
+      !Number.isFinite(lon)
+    ) {
       rejected += 1;
       continue;
     }
 
     const u = cell(parts[3]);
     const v = cell(parts[4]);
-    if (!Number.isFinite(u) || !Number.isFinite(v)) { rejected += 1; continue; }
-    if (Math.abs(u) > maxCurrentMs || Math.abs(v) > maxCurrentMs) { rejected += 1; continue; }
+    if (!Number.isFinite(u) || !Number.isFinite(v)) {
+      rejected += 1;
+      continue;
+    }
+    if (Math.abs(u) > maxCurrentMs || Math.abs(v) > maxCurrentMs) {
+      rejected += 1;
+      continue;
+    }
 
     const rawHdop = hasHdop ? cell(parts[5]) : NaN;
-    if (Number.isFinite(rawHdop) && rawHdop > hdopReject) { rejected += 1; continue; }
+    if (Number.isFinite(rawHdop) && rawHdop > hdopReject) {
+      rejected += 1;
+      continue;
+    }
     // `>= 0` and not merely `Number.isFinite`: see the negative-hdop paragraph
     // above. This is the single line that keeps `quality` inside (0, 1].
-    const hdop = Number.isFinite(rawHdop) && rawHdop >= 0 ? rawHdop : defaultHdop;
+    const hdop =
+      Number.isFinite(rawHdop) && rawHdop >= 0 ? rawHdop : defaultHdop;
 
     const iso = isoStamp(timeMs);
     times.add(iso);
@@ -851,7 +972,10 @@ export const HFR_RESPONSE_BYTE_CAP = 8 * 1024 * 1024;
 function abortAfter(signal, timeoutMs) {
   const controller = new AbortController();
   const timer = setTimeout(
-    () => controller.abort(new Error(`HF-radar: upstream timed out after ${timeoutMs} ms`)),
+    () =>
+      controller.abort(
+        new Error(`HF-radar: upstream timed out after ${timeoutMs} ms`),
+      ),
     timeoutMs,
   );
   const onAbort = () => controller.abort(signal.reason);
@@ -878,15 +1002,23 @@ async function fetchText(fetchImpl, url, signal, timeoutMs = HFR_TIMEOUT_MS) {
   try {
     const response = await fetchImpl(url, { signal: bound.signal });
     if (!response || response.ok === false) {
-      throw new Error(`HF-radar HTTP ${response ? response.status : 'no response'} for ${url}`);
+      throw new Error(
+        `HF-radar HTTP ${response ? response.status : 'no response'} for ${url}`,
+      );
     }
     // Streamed under the cap: an oversized body is refused mid-read and the
     // stream cancelled rather than buffered and measured afterwards.
     try {
-      return await readResponseTextCapped(response, HFR_RESPONSE_BYTE_CAP, bound.signal);
+      return await readResponseTextCapped(
+        response,
+        HFR_RESPONSE_BYTE_CAP,
+        bound.signal,
+      );
     } catch (error) {
       if (error?.code === 'RESPONSE_TOO_LARGE') {
-        throw new Error(`HF-radar response exceeds the ${HFR_RESPONSE_BYTE_CAP} B cap for ${url}`);
+        throw new Error(
+          `HF-radar response exceeds the ${HFR_RESPONSE_BYTE_CAP} B cap for ${url}`,
+        );
       }
       throw error;
     }
@@ -916,14 +1048,21 @@ async function fetchText(fetchImpl, url, signal, timeoutMs = HFR_TIMEOUT_MS) {
  * @param {{targetMs: number, atMs: number, maxAgeMs: number, minVectors: number}} bounds
  * @returns {number|undefined} Epoch ms of the servable hour.
  */
-export function selectServableHour(observations, { targetMs, atMs, maxAgeMs, minVectors }) {
+export function selectServableHour(
+  observations,
+  { targetMs, atMs, maxAgeMs, minVectors },
+) {
   const counts = new Map();
-  for (const obs of observations) counts.set(obs.timeMs, (counts.get(obs.timeMs) ?? 0) + 1);
+  for (const obs of observations)
+    counts.set(obs.timeMs, (counts.get(obs.timeMs) ?? 0) + 1);
   return [...counts.keys()]
     .sort((a, b) => b - a)
-    .find((hourMs) => hourMs <= targetMs
-      && atMs - hourMs <= maxAgeMs
-      && counts.get(hourMs) >= minVectors);
+    .find(
+      (hourMs) =>
+        hourMs <= targetMs &&
+        atMs - hourMs <= maxAgeMs &&
+        counts.get(hourMs) >= minVectors,
+    );
 }
 
 /**
@@ -1008,19 +1147,29 @@ export async function fetchHfrField(options = {}) {
   // an unvalidated stride of 0 used to make every rung throw and the function
   // return a perfectly ordinary-looking `null`.
   if (!Number.isFinite(atMs)) {
-    throw new TypeError(`fetchHfrField: atMs must be a finite epoch-ms number, got ${atMs}`);
+    throw new TypeError(
+      `fetchHfrField: atMs must be a finite epoch-ms number, got ${atMs}`,
+    );
   }
   if (!Number.isInteger(stride) || stride < 1) {
-    throw new TypeError(`fetchHfrField: stride must be a positive integer, got ${stride}`);
+    throw new TypeError(
+      `fetchHfrField: stride must be a positive integer, got ${stride}`,
+    );
   }
   if (!Number.isFinite(windowHours) || windowHours < 0) {
-    throw new TypeError(`fetchHfrField: windowHours must be a finite number >= 0, got ${windowHours}`);
+    throw new TypeError(
+      `fetchHfrField: windowHours must be a finite number >= 0, got ${windowHours}`,
+    );
   }
   if (!Number.isFinite(maxAgeMs) || maxAgeMs < 0) {
-    throw new TypeError(`fetchHfrField: maxAgeMs must be a finite number >= 0, got ${maxAgeMs}`);
+    throw new TypeError(
+      `fetchHfrField: maxAgeMs must be a finite number >= 0, got ${maxAgeMs}`,
+    );
   }
   if (!Number.isFinite(minVectors) || minVectors < 0) {
-    throw new TypeError(`fetchHfrField: minVectors must be a finite number >= 0, got ${minVectors}`);
+    throw new TypeError(
+      `fetchHfrField: minVectors must be a finite number >= 0, got ${minVectors}`,
+    );
   }
 
   const candidates = datasets || selectHfrDatasets(box);
@@ -1058,13 +1207,24 @@ export async function fetchHfrField(options = {}) {
       let validAtMs;
       for (const hoursBack of attempts) {
         url = buildHfrUrl(
-          dataset.id, HFR_VARS, targetMs - hoursBack * 3600000, targetMs, clamped, stride, base,
+          dataset.id,
+          HFR_VARS,
+          targetMs - hoursBack * 3600000,
+          targetMs,
+          clamped,
+          stride,
+          base,
         );
         ({ observations, rejected } = parseHfrCsv0(
           await fetchText(fetchImpl, url, signal),
           { hasHdop: true },
         ));
-        validAtMs = selectServableHour(observations, { targetMs, atMs, maxAgeMs, minVectors });
+        validAtMs = selectServableHour(observations, {
+          targetMs,
+          atMs,
+          maxAgeMs,
+          minVectors,
+        });
         if (validAtMs !== undefined) break;
       }
       if (validAtMs === undefined) continue;
@@ -1096,8 +1256,9 @@ export async function fetchHfrField(options = {}) {
           fetchedAtMs: Date.now(),
           validAtMs,
           records: hourObs.length,
-          note: 'Hourly HFRNet radial least-squares total vectors, quality-controlled '
-            + `by speed (<= ${MAX_CURRENT_MS} m/s per component) and geometry (hdop <= ${HDOP_REJECT}).`,
+          note:
+            'Hourly HFRNet radial least-squares total vectors, quality-controlled ' +
+            `by speed (<= ${MAX_CURRENT_MS} m/s per component) and geometry (hdop <= ${HDOP_REJECT}).`,
         },
       };
     } catch (error) {
