@@ -1,6 +1,8 @@
 // GlobeSurface on Navara (S2): the height of the rendered scene is a CPU ray
 // straight down the ellipsoid normal against the 3D-tile meshes Navara shows.
-// Tile positions are float32 relative to the tile centre, which sits in the
+// Where the shown tiles do not reach (outside the frustum), the loaded
+// tiles Navara hides answer, the finest first. Tile positions are float32
+// relative to the tile centre, which sits in the
 // float64 matrixWorld with no rotation, so a ray taken into a mesh's local
 // frame gives Earth-fixed metres. Navara frees the CPU arrays after upload;
 // retainTileGeometry (internals.js) keeps positions and indices. Without a
@@ -56,18 +58,23 @@ const b = new Vector3();
 const c = new Vector3();
 const point = new Vector3();
 
-// Meshes with CPU positions under the shown tile roots, minus `exclude`.
+// Meshes with CPU positions under the tile roots, minus `exclude`: the
+// shown ones, and the loaded ones Navara hides (outside the frustum, or
+// parents of the tiles it shows), which still hold their geometry.
 function tileMeshes(roots, exclude) {
-  const meshes = [];
-  const stack = roots.filter((root) => root.visible && !exclude.has(root));
+  const shown = [];
+  const hidden = [];
+  const stack = roots
+    .filter((root) => !exclude.has(root))
+    .map((root) => [root, root.visible]);
   while (stack.length) {
-    const object = stack.pop();
+    const [object, visible] = stack.pop();
     if (object.isMesh && object.geometry?.attributes?.position?.array)
-      meshes.push(object);
+      (visible ? shown : hidden).push(object);
     for (const child of object.children)
-      if (child.visible && !exclude.has(child)) stack.push(child);
+      if (!exclude.has(child)) stack.push([child, visible && child.visible]);
   }
-  return meshes;
+  return { shown, hidden };
 }
 
 // Nearest hit along worldRay with one mesh, in metres. Not Mesh.raycast: that
@@ -130,6 +137,36 @@ function nearestHit(meshes, ray) {
   return nearest;
 }
 
+// Among hidden tiles several levels of detail overlap: the hit on the
+// finest tiles (bounding radius within 1.5 times the smallest hit: a
+// quadtree parent is about twice its child), the top one
+// among them. The tiles the ray passes are tried finest first, and coarser
+// ones stop being tried once a hit sets the limit, so the coarse parents'
+// triangles are never walked.
+function finestHit(meshes, ray) {
+  worldRay.origin.set(ray.origin.x, ray.origin.y, ray.origin.z);
+  worldRay.direction.set(ray.direction.x, ray.direction.y, ray.direction.z);
+  const candidates = [];
+  for (const mesh of meshes) {
+    const geometry = mesh.geometry;
+    if (!geometry.boundingSphere) geometry.computeBoundingSphere();
+    sphere.copy(geometry.boundingSphere).applyMatrix4(mesh.matrixWorld);
+    if (worldRay.intersectsSphere(sphere))
+      candidates.push([sphere.radius, mesh]);
+  }
+  candidates.sort((x, y) => x[0] - y[0]);
+  let limit = Infinity;
+  let nearest = Infinity;
+  for (const [radius, mesh] of candidates) {
+    if (radius > limit) break;
+    const distance = meshHitDistance(mesh, ray.far);
+    if (!Number.isFinite(distance)) continue;
+    if (limit === Infinity) limit = 1.5 * radius;
+    nearest = Math.min(nearest, distance);
+  }
+  return nearest;
+}
+
 /**
  * @param {{ sampleTerrainHeight: (place: { lat: number, lng: number }) => number | undefined }} view
  * @param {{
@@ -157,8 +194,15 @@ export function createNavaraSurface(view, hooks) {
   const sampleHeight = (place, exclude) => {
     if (!supported) return undefined;
     const ray = surfaceRay(place);
-    const meshes = tileMeshes(hooks.tileRoots(), new Set(exclude ?? []));
-    return heightAlongRay(ray, nearestHit(meshes, ray)) ?? terrainHeight(place);
+    const { shown, hidden } = tileMeshes(
+      hooks.tileRoots(),
+      new Set(exclude ?? []),
+    );
+    // The tiles on screen first; where they do not reach (the ground under
+    // a camera looking ahead is outside the frustum), the loaded hidden ones.
+    let distance = nearestHit(shown, ray);
+    if (!Number.isFinite(distance)) distance = finestHit(hidden, ray);
+    return heightAlongRay(ray, distance) ?? terrainHeight(place);
   };
   return {
     surface: {

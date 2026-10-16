@@ -108,7 +108,7 @@ test('sampleHeight hits the top of the loaded tiles and keeps tile geometry', ()
   );
 });
 
-test('excluded and hidden objects are skipped; terrain is the fallback', () => {
+test('excluded objects are skipped; terrain is the fallback', () => {
   const roof = tileAt(10, 45, 300, 20);
   const ground = tileAt(10, 45, 40);
   const { surface } = setup({
@@ -117,12 +117,45 @@ test('excluded and hidden objects are skipped; terrain is the fallback', () => {
   });
   const place = cartographic.fromDegrees(10, 45, 0);
   near(surface.sampleHeight(place, [roof.mesh]), 40, 0.05, 'excluded roof');
-  ground.tile.visible = false;
-  near(surface.sampleHeight(place, [roof.tile]), 7, 1e-9, 'terrain fallback');
+  near(
+    surface.sampleHeight(place, [roof.tile, ground.tile]),
+    7,
+    1e-9,
+    'terrain fallback',
+  );
   assert.equal(
     surface.sampleHeight(cartographic.fromDegrees(11, 46, 0)),
     undefined,
   );
+});
+
+test('outside the view, the loaded tiles Navara hides answer: the finest one', () => {
+  // Navara hides the tiles outside the frustum and the parents it refines
+  // (visible = false); a camera looking ahead does not see the ground under
+  // it. A fine tile in view elsewhere, a hidden fine tile and its hidden
+  // coarse parent (300 m wide, 3 m higher) under the camera.
+  const inView = tileAt(10.01, 45, 50);
+  const fine = tileAt(10, 45, 40);
+  const coarse = tileAt(10, 45, 43, 300);
+  fine.tile.visible = false;
+  coarse.tile.visible = false;
+  const { surface } = setup({
+    tiles: [inView.tile, coarse.tile, fine.tile],
+    terrain: () => 7,
+  });
+  const place = cartographic.fromDegrees(10, 45, 0);
+  near(surface.sampleHeight(place), 40, 0.05, 'the finest hidden tile');
+  near(
+    surface.sampleHeight(cartographic.fromDegrees(10.01, 45, 0)),
+    50,
+    0.05,
+    'a shown tile first',
+  );
+  // A shown tile wins over hidden ones at the same place.
+  fine.tile.visible = true;
+  coarse.tile.visible = true;
+  near(surface.sampleHeight(place), 43, 0.05, 'shown: the top surface');
+  near(surface.sampleHeight(place, [fine.tile, coarse.tile]), 7, 1e-9);
 });
 
 test('terrainHeight reads Navara terrain in degrees; clampToHeight moves along the normal', () => {
