@@ -156,3 +156,47 @@ test('the engine clock is the app clock given, latched on the viewer clock tick'
   engine.destroy();
   assert.equal(viewer.clock.onTick.numberOfListeners, 0);
 });
+
+test('picks leave out mover instances behind the horizon and the follow proxy', async () => {
+  const geo = await import('../../geo/index.js');
+  const viewer = createFakeViewer();
+  const engine = createCesiumEngine(viewer, { requestRender: () => {} });
+  try {
+    const set = engine.movers.createSet({
+      id: 'horizon-points',
+      pickable: true,
+      kind: 'point',
+      capacity: 2,
+      point: { sizePx: 8 },
+    });
+    // The fake camera is at x = 7e6 (over 0°, 0°): 0°E is in front, 180° behind.
+    set.set(0, { position: geo.cartesian3.fromDegrees(0, 1, 0) });
+    set.set(1, { position: geo.cartesian3.fromDegrees(180, 1, 0) });
+    set.setCount(2);
+    set.commit();
+    const [front, back] = viewer.primitiveList.flatMap((root) =>
+      collectPoints(root),
+    );
+    viewer.scene.drillPick = () => [
+      { primitive: back, id: 'back' },
+      { primitive: front, id: 'front' },
+    ];
+    assert.deepEqual(
+      engine.picker.drillPick({ x: 1, y: 1 }).map(({ id }) => id),
+      ['front'],
+    );
+  } finally {
+    engine.destroy();
+  }
+});
+
+// The PointPrimitives under a primitive collection tree.
+function collectPoints(collection) {
+  const out = [];
+  for (let i = 0; i < (collection.length ?? 0); i++) {
+    const item = collection.get(i);
+    if (item instanceof Cesium.PointPrimitive) out.push(item);
+    else if (item?.length !== undefined) out.push(...collectPoints(item));
+  }
+  return out;
+}

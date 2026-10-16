@@ -322,6 +322,14 @@ export function createCesiumMovers(
   });
   return {
     movers: registry.movers,
+    /** Where an instance of a set is (a geo Cartesian3), or null. */
+    instancePosition(owner, instance) {
+      const entry = registry.sets.get(owner);
+      if (!entry || !(instance < entry.store.count)) return null;
+      const view = entry.store.positionsView();
+      const at = 3 * instance;
+      return { x: view[at], y: view[at + 1], z: view[at + 2] };
+    },
     /** The primitive drawing a live mover set of this engine, or null. */
     primitiveOf(set) {
       const entry = set?.id ? registry.sets.get(set.id) : null;
