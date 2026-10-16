@@ -313,7 +313,9 @@ test('retry: a plain HTTP 500 still exhausts the existing 8s/25s transient ladde
   t.mock.timers.enable({ apis: ['setTimeout', 'Date'], now: 100_000 });
   globalThis.window = { setTimeout: globalThis.setTimeout, clearTimeout: globalThis.clearTimeout };
   const requestTimes = [];
-  globalThis.fetch = async () => {
+  globalThis.fetch = async (url) => {
+    if (String(url).endsWith('/status'))
+      return Response.json({ configured: true });
     requestTimes.push(Date.now());
     return httpFailure(500);
   };
@@ -402,7 +404,7 @@ test('outline upgrade updates the rendered element in place without remove/add',
   };
   let overpassCall = 0;
   globalThis.fetch = async (url) => {
-    if (String(url).startsWith('https://maps.googleapis.com/')) {
+    if (String(url).startsWith('/api/google/geocode')) {
       return { json: async () => ({
         status: 'OK',
         results: [{

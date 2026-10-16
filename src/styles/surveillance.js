@@ -1,3 +1,5 @@
+import { msg } from '../i18n/index.js';
+
 /**
  * Night Vision / NVG — PVS-14 Image Intensifier Emulation
  * P43 phosphor green, intensifier tube bloom, circular vignette,
@@ -12,10 +14,10 @@
 export const nightVisionShader = {
   name: 'surveillance',
   uniforms: {
-    gain: { default: 0.55, min: 0, max: 1, label: 'Gain' },
-    bloom: { default: 0.3, min: 0, max: 1, label: 'Bloom' },
-    scanlineStr: { default: 1.0, min: 0, max: 1, label: 'Scanlines' },
-    pixelation: { default: 2.5, min: 1, max: 6, label: 'Pixelation' },
+    gain: { default: 0.55, min: 0, max: 1, label: msg('Gain') },
+    bloom: { default: 0.3, min: 0, max: 1, label: msg('Bloom') },
+    scanlineStr: { default: 1.0, min: 0, max: 1, label: msg('Scanlines') },
+    pixelation: { default: 2.5, min: 1, max: 6, label: msg('Pixelation') },
   },
   fragmentShader: /* glsl */ `
     uniform sampler2D colorTexture;
@@ -244,7 +246,7 @@ export const nightVisionShader = {
         nvgColor += phosphor * lbl * 0.3 * intensity;
       }
 
-      // Gain indicator below label: "AUTO" marker
+      // Gain indicator below label: "AUTO" marker (i18n-ignore: shader comment, not UI)
       vec2 gainArea = (uv - vec2(0.03, 0.88)) / vec2(0.05, 0.025);
       if (gainArea.x >= 0.0 && gainArea.x <= 1.0 && gainArea.y >= 0.0 && gainArea.y <= 1.0) {
         float gLbl = step(0.1, gainArea.x) * step(gainArea.x, 0.9) *
