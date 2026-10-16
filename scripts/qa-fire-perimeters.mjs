@@ -217,7 +217,7 @@ try {
         'FIRE ESTIMATE · QA DISTRICT',
         '7.36 ha estimated',
         'INFONA · grouped thermal detections',
-        'Report date: 2026-10-15',
+        'Report date: Oct 15, 2026',
       ],
     ],
     [
