@@ -53,17 +53,30 @@ export function coordinates(latitude, longitude) {
   );
 }
 
-/** Admit a snapshot atomically; an all-invalid nonempty feed is unavailable. */
-export function admitRecords(rows, normalize, label) {
+/**
+ * Admit a snapshot atomically; an all-invalid nonempty feed is unavailable.
+ * `unpositionedId(row)` names a rejected row that is a valid contact without
+ * a position: it is returned in `retainIds` and does not make the snapshot
+ * incomplete.
+ */
+export function admitRecords(rows, normalize, label, unpositionedId) {
   if (!Array.isArray(rows))
     throw new LiveSourceError('malformed', `Malformed ${label} response`);
   const records = [];
   const ids = new Set();
+  const retainIds = new Set();
+  let unpositioned = 0;
   for (const row of rows) {
     const record = normalize(row);
     if (record && !ids.has(record.id)) {
       records.push(record);
       ids.add(record.id);
+    } else if (!record) {
+      const id = unpositionedId?.(row);
+      if (id) {
+        retainIds.add(id);
+        unpositioned += 1;
+      }
     }
   }
   if (rows.length && !records.length) {
@@ -71,7 +84,8 @@ export function admitRecords(rows, normalize, label) {
   }
   return {
     records,
-    complete: records.length === rows.length,
+    retainIds,
+    complete: records.length + unpositioned === rows.length,
     rejectedCount: rows.length - records.length,
   };
 }

@@ -2,6 +2,7 @@ import {
   resolveCameraPose,
   resolveCameraMove,
   sampleCameraMove,
+  normalizeCameraLongitude,
 } from './camera.js';
 
 const DEFAULT_SHOT_DURATION_SEC = 4;
@@ -40,12 +41,19 @@ export function cameraAtProgress(fromCamera, toCamera, progress) {
   const lerp = (from, to) => Number(from) + (Number(to) - Number(from)) * eased;
   const lerpAngle = (from, to) => {
     const start = Number(from) || 0;
-    const delta = ((Number(to) - start + 540) % 360) - 180;
+    // Double modulo keeps the delta in [-180, 180) for any authored angles,
+    // as sampleCameraMove does; a single % goes negative below -540.
+    const delta = ((((Number(to) - start + 540) % 360) + 360) % 360) - 180;
     return start + delta * eased;
   };
   return {
     lat: lerp(source.lat, target.lat),
-    lon: lerp(source.lon, target.lon),
+    lon:
+      t === 0
+        ? Number(source.lon)
+        : t === 1
+          ? Number(target.lon)
+          : normalizeCameraLongitude(lerpAngle(source.lon, target.lon)),
     alt: lerp(source.alt, target.alt),
     heading: lerpAngle(source.heading, target.heading),
     pitch: lerp(source.pitch, target.pitch),

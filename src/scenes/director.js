@@ -12,6 +12,7 @@
  * State is persisted to localStorage and can be exported/imported as JSON.
  */
 
+import { cancelCameraArrival } from '../data/cameraArrival.js';
 import { resolveCameraPose, resolveCameraMove } from '../director/camera.js';
 import { createCameraMotion } from './cameraMotion.js';
 import { createStateChannel } from '../app/stateChannel.js';
@@ -1551,6 +1552,7 @@ export class SceneDirector {
    * @returns {boolean} False when the camera is unavailable (Cockpit/disposed).
    */
   _claimCameraOwnership() {
+    cancelCameraArrival(this.viewer);
     // Older/headless style managers may predate the facade — proceed then.
     if (typeof this.styleManager?.runImmediateNavigation !== 'function')
       return true;

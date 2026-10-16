@@ -1,3 +1,50 @@
+import { militaryOsmKey } from '../../data/militaryNames.js';
+import { isUnavailableCapability } from '../../sources/capability.js';
+/** Keep named point coverage until its matching polygon takes over. */
+export function retainNamedHandoff(previous, records, box) {
+  const named = new Map(
+    previous.filter((r) => r.namedArea).map((r) => [r.id, r]),
+  );
+  const represented = new Set();
+  const next = records.map((record) => {
+    represented.add(record.id);
+    for (const id of record.aliasIds || []) represented.add(id);
+    for (const member of record.namedMembers || []) represented.add(member.id);
+    for (const source of record.sources || []) {
+      const key = militaryOsmKey(source.id);
+      if (key) represented.add(`osm:military:${key}`);
+    }
+    const prior =
+      named.get(record.id) ||
+      (record.aliasIds || [])
+        .map((id) => named.get(id))
+        .filter(Boolean)
+        .sort((a, b) => b.areaM2 - a.areaM2)[0];
+    return !record.namedArea && prior
+      ? {
+          ...record,
+          name: prior.name,
+          namedArea: true,
+          areaM2: prior.areaM2,
+          class: prior.class,
+        }
+      : record;
+  });
+  for (const record of previous) {
+    if (
+      record.pointOnly &&
+      record.namedArea &&
+      !represented.has(record.id) &&
+      record.longitude >= box.west &&
+      record.longitude <= box.east &&
+      record.latitude >= box.south &&
+      record.latitude <= box.north
+    )
+      next.push(record);
+  }
+  return next;
+}
+
 export function createIngestion({
   state: layerState,
   services,
@@ -26,7 +73,7 @@ export function createIngestion({
 
   async function loadInstallations() {
     if (!layerState.enabled || !layerState.viewer) return;
-    const box = parts.viewport.viewportBox(layerState.viewer);
+    const { box, coverage } = parts.viewport.loadArea(layerState.viewer);
     // Guidance, not a fault: the layer chose not to query because the view is
     // unbounded (a global view, or Cockpit looking at the horizon). Keep it out
     // of `error` — the manager derives refresh failures and the global status
@@ -43,6 +90,7 @@ export function createIngestion({
     }
     layerState.abort?.abort();
     const requestAbort = new AbortController();
+    const keyOwner = (layerState.cameraLoadOwner ??= {});
     layerState.abort = requestAbort;
     layerState.loading = true;
     parts.viewport.clearUnavailableRetry({ resetBackoff: false });
@@ -53,19 +101,34 @@ export function createIngestion({
         source.getMappedSites(box, { exact, signal: requestAbort.signal });
 
       let payload = await fetchInstallations(false);
+      // Map tiles carry military areas only at z9 and finer: a view too wide
+      // for that is guidance, exactly like an unbounded view, never an empty
+      // all-clear. Previously loaded sites stay on the map.
+      if (payload.zoomIn) {
+        if (
+          requestAbort.signal.aborted ||
+          layerState.abort !== requestAbort ||
+          !layerState.enabled
+        )
+          return;
+        parts.viewport.clearUnavailableRetry();
+        setInstallationStatus('zoom-in');
+        return;
+      }
       // A SATURATED snapped tile was truncated upstream, so features from the
       // snap's extra ring may have crowded out sites actually on screen. Re-ask
       // for the exact viewport (separately keyed and cached) before rendering.
       let saturated = payload.saturated === true;
-      if (saturated) {
+      if (saturated && !payload.tileSource) {
         payload = await fetchInstallations(true);
         saturated = payload.saturated === true;
       }
       // The proxy answers a bbox at least as large as the viewport; keep only what
       // was actually asked for so nothing off-screen reaches the map or the
       // "current viewport only" context claim.
-      const records = payload.records.filter((record) =>
-        parts.model.installationWithinViewport(record, box),
+      const records = payload.records.filter(
+        (record) =>
+          payload.wide || parts.model.installationWithinViewport(record, box),
       );
       let placesError = null;
       if (layerState.googleSearchRequested) {
@@ -139,43 +202,84 @@ export function createIngestion({
             'Google Places search unavailable; showing mapped sites';
         }
       }
-      await resolveGroundFloorCellsBounded(
-        records.map((record) => ({
-          lat: record.latitude,
-          lon: record.longitude,
-        })),
-      );
+      let floorTimer;
+      await Promise.race([
+        resolveGroundFloorCellsBounded(
+          records
+            .filter((record) => !record.pointOnly)
+            .map((record) => ({
+              lat: record.latitude,
+              lon: record.longitude,
+            })),
+        ),
+        new Promise((resolve) => {
+          floorTimer = setTimeout(resolve, 120);
+        }),
+      ]).finally(() => clearTimeout(floorTimer));
       if (
         requestAbort.signal.aborted ||
         layerState.abort !== requestAbort ||
         !layerState.enabled
       )
         return;
-      layerState.records = records;
-      layerState.recordById = new Map(
-        layerState.records.map((record) => [record.id, record]),
-      );
-      layerState.lastUpdate = Date.now();
-      layerState.stale = payload.status === 'stale';
-      // Even the exact-viewport retry can saturate in a dense area. Say so rather
-      // than implying the view is completely surveyed.
-      layerState.saturated = saturated;
-      layerState.failureReason = null;
-      parts.viewport.clearUnavailableRetry();
-      setInstallationStatus(
-        layerState.records.length
-          ? layerState.stale
-            ? 'stale'
-            : 'ready'
-          : 'empty',
-        payload.status === 'stale'
-          ? 'Serving cached mapped context'
-          : saturated
-            ? 'Too many mapped sites in view to list them all'
-            : placesError,
-      );
-      parts.rendering.renderRecords();
-      parts.rendering.warmInstallationFloors(layerState.records);
+      const publish = (payload, records) => {
+        if (
+          requestAbort.signal.aborted ||
+          layerState.abort !== requestAbort ||
+          !layerState.enabled
+        )
+          return;
+        if (!payload.wide)
+          records = retainNamedHandoff(layerState.records, records, box);
+        layerState.namedInView =
+          payload.namedInView ?? records.filter((r) => r.namedArea).length;
+        layerState.wide = Boolean(payload.wide);
+        layerState.records = records;
+        layerState.recordById = new Map(
+          layerState.records.map((record) => [record.id, record]),
+        );
+        layerState.lastUpdate = Date.now();
+        layerState.coverage = coverage;
+        layerState.stale = payload.status === 'stale';
+        // Even the exact-viewport retry can saturate in a dense area. Say so rather
+        // than implying the view is completely surveyed.
+        layerState.saturated = saturated;
+        layerState.failureReason = null;
+        parts.viewport.clearUnavailableRetry();
+        setInstallationStatus(
+          layerState.records.length
+            ? layerState.stale
+              ? 'stale'
+              : 'ready'
+            : 'empty',
+          payload.status === 'stale'
+            ? `Serving cached mapped context · ${payload.records[0]?.retrievedAt || 'date unknown'}`
+            : saturated
+              ? 'Too many mapped sites in view to list them all'
+              : placesError,
+        );
+        parts.rendering.renderRecords();
+        parts.rendering.warmInstallationFloors(
+          layerState.records.filter((r) => !r.pointOnly),
+        );
+      };
+      publish(payload, records);
+      payload.enrichment?.then((enriched) => {
+        if (
+          !enriched ||
+          requestAbort.signal.aborted ||
+          layerState.abort !== requestAbort ||
+          !layerState.enabled
+        )
+          return;
+        const named = enriched.records.filter((record) =>
+          parts.model.installationWithinViewport(record, box),
+        );
+        publish(enriched, [
+          ...named,
+          ...records.filter((record) => record.id.startsWith('google:')),
+        ]);
+      });
     } catch (error) {
       if (
         requestAbort.signal.aborted ||
@@ -189,11 +293,17 @@ export function createIngestion({
         'unavailable',
         error?.message || 'Installation context unavailable',
       );
-      parts.viewport.scheduleUnavailableRetry();
+      if (!isUnavailableCapability(error))
+        parts.viewport.scheduleUnavailableRetry(error?.retryAfterMs);
     } finally {
       // An older aborted request must not clear a newer request's busy state.
       if (layerState.abort === requestAbort) {
-        layerState.abort = null;
+        if (
+          requestAbort.signal.aborted &&
+          layerState.cameraLoadOwner === keyOwner
+        )
+          layerState.cameraLoadKey = null;
+        // Keep ownership until superseded so late names cannot enrich an old view.
         layerState.loading = false;
       }
     }

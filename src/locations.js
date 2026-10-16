@@ -1,3 +1,5 @@
+import { rangeForBoundingSphere } from './data/cameraFraming.js';
+import { isUnavailableCapability } from './sources/capability.js';
 import { createOverpassFeatureSource } from './sources/overpassFeatures.js';
 import { applicationServices } from './services/application.js';
 import * as Cesium from 'cesium';
@@ -6,6 +8,11 @@ import {
   placesNearViewRecovery,
 } from './annotations/annotationResolver.js';
 import { unavailablePlaceSearch } from './search/placeSearch.js';
+import { cancelCameraArrival } from './data/cameraArrival.js';
+import { guardCameraAboveGround } from './cameraGroundGuard.js';
+
+/** Newest landmark arrival; an older post-arrival ground guard yields to it. */
+let arrivalGeneration = 0;
 
 /**
  * Points of Interest per city.
@@ -587,9 +594,12 @@ export const LOCATIONS = Object.entries(CITY_POIS).map(([id, city]) => ({
  * @param {number} options.buildingHeight - Estimated landmark center height above ground (default 30)
  * @param {number} options.groundElevation - Fallback ground elevation when terrain isn't loaded (default 0)
  * @param {number} options.duration - Flight duration in seconds (default 3.0)
+ * @param {{cachedGroundFloor?: Function, warmGroundFloor?: Function}} [options.ground] -
+ *   Optional ground-floor service; its cached elevation outranks `groundElevation`
  * @returns {{ targetPosition: Cesium.Cartesian3 }} The computed target for orbit use
  */
 export function flyToLandmark(viewer, lat, lon, options = {}) {
+  cancelCameraArrival(viewer);
   const {
     range = 500,
     pitch = -30,
@@ -601,18 +611,32 @@ export function flyToLandmark(viewer, lat, lon, options = {}) {
     onComplete = null,
     onCancel = null,
     buildingBounds = null,
+    ground = null,
   } = options;
 
   // Sample terrain height (sync — uses loaded tiles; 0 if globe/terrain not ready)
   const targetCartographic = Cesium.Cartographic.fromDegrees(lon, lat);
   const sampledHeight = viewer.scene.globe?.getHeight(targetCartographic);
 
-  // Use sampled height if available, otherwise fall back to pre-baked city ground elevation.
-  // Google 3D Tiles don't populate globe terrain, so first fly-to always gets the fallback.
+  // Use sampled height if available, otherwise the cached ground-floor
+  // elevation (same ellipsoidal datum), then the pre-baked city elevation.
+  // Google 3D Tiles don't populate globe terrain, and the preset defaults to sea
+  // level, so without the ground-floor read an uncurated destination was framed
+  // as if it stood on the ocean and the eye landed underground.
+  const realGround = ground?.cachedGroundFloor?.(lat, lon);
   const terrainHeight =
     sampledHeight != null && sampledHeight > 0
       ? sampledHeight
-      : groundElevation;
+      : Number.isFinite(realGround)
+        ? realGround
+        : groundElevation;
+  // Warm the cell so the next nearby arrival is already correct.
+  try {
+    ground?.warmGroundFloor?.([{ lat, lon }]);
+  } catch {
+    /* best-effort prefetch */
+  }
+  const generation = ++arrivalGeneration;
 
   const bounds = normalizeBuildingBounds(buildingBounds);
   const targetHeight = bounds
@@ -650,6 +674,18 @@ export function flyToLandmark(viewer, lat, lon, options = {}) {
       complete: () => {
         viewer.camera.lookAt(targetPosition, hpr);
         viewer.camera.lookAtTransform(Cesium.Matrix4.IDENTITY);
+        // Framing used a predicted ground height. Once tiles stream in, measure
+        // the rendered surface and lift the eye if it is buried or pressed
+        // against it; a newer arrival or a manual gesture ends the check.
+        try {
+          guardCameraAboveGround(
+            viewer,
+            { lat, lon },
+            { isStale: () => generation !== arrivalGeneration },
+          );
+        } catch {
+          /* best-effort */
+        }
         if (typeof onComplete === 'function') {
           try {
             onComplete();
@@ -806,6 +842,7 @@ export async function searchAndFlyTo(viewer, query, options = {}) {
         query,
         result && !outcome.fallbackUsed ? { lat, lon: lng } : null,
         signal,
+        placeSearch,
       );
   signal?.throwIfAborted();
   if (recovered) {
@@ -842,6 +879,7 @@ export async function searchAndFlyTo(viewer, query, options = {}) {
         pitch: swath.pitchDeg,
         heading: swath.headingDeg,
         buildingHeight: 0,
+        ground: options.ground || null,
         duration,
         onStart: options.onStart,
         onComplete: options.onComplete,
@@ -906,23 +944,35 @@ export async function searchAndFlyTo(viewer, query, options = {}) {
       )
     : null;
   const range = requestedRange || defaultRangeForNavigationMode(navigationMode);
+  // Resolve the real ground height before framing, for the same reason as the
+  // coordinate branch: with no detailed outline, a searched place on elevated
+  // ground would otherwise be framed against sea level. Resolved before the
+  // mayFly() gate so a cancellation still wins the race.
+  const flyLat = buildingBounds?.lat ?? lat;
+  const flyLon = buildingBounds?.lon ?? lng;
+  const ground = options.ground || null;
+  await ground?.resolveGroundFloorCellsBounded?.([
+    { lat: flyLat, lon: flyLon },
+  ]);
+  const searchGroundElevation = ground?.cachedGroundFloor?.(flyLat, flyLon);
   if (!mayFly()) return CANCELLED_SEARCH;
-  const flight = flyToLandmark(
-    viewer,
-    buildingBounds?.lat ?? lat,
-    buildingBounds?.lon ?? lng,
-    {
-      range,
-      pitch: buildingPitch(buildingBounds),
-      heading: 30,
-      buildingHeight: 30,
-      buildingBounds,
-      duration,
-      onStart: options.onStart,
-      onComplete: options.onComplete,
-      onCancel: options.onCancel,
-    },
-  );
+  const flight = flyToLandmark(viewer, flyLat, flyLon, {
+    range,
+    pitch: buildingPitch(buildingBounds),
+    heading: 30,
+    buildingHeight: 30,
+    buildingBounds: isUnavailableCapability(buildingBounds)
+      ? null
+      : buildingBounds,
+    ...(Number.isFinite(searchGroundElevation)
+      ? { groundElevation: searchGroundElevation }
+      : {}),
+    ground,
+    duration,
+    onStart: options.onStart,
+    onComplete: options.onComplete,
+    onCancel: options.onCancel,
+  });
   return {
     label,
     navigationMode: requestedRange
@@ -931,6 +981,9 @@ export async function searchAndFlyTo(viewer, query, options = {}) {
         ? navigationMode.replace('-overview', '-close')
         : navigationMode,
     rangeM: Math.round(flight.range),
+    ...(isUnavailableCapability(buildingBounds)
+      ? { outlineUnavailable: true, message: 'Detailed outline unavailable' }
+      : {}),
   };
 }
 
@@ -1325,19 +1378,6 @@ function buildingBoundingRadius(bounds) {
   return Math.hypot(halfHeight, halfWidth, halfDepth) * 1.18;
 }
 
-function rangeForBoundingSphere(viewer, radius) {
-  const frustum = viewer.camera.frustum;
-  const verticalFov = Number(frustum?.fov) || Cesium.Math.toRadians(60);
-  const aspectRatio = Math.max(0.5, Number(frustum?.aspectRatio) || 1);
-  const horizontalFov = 2 * Math.atan(Math.tan(verticalFov / 2) * aspectRatio);
-  const limitingFov = Math.min(verticalFov, horizontalFov);
-  // Target 57% sphere occupancy so perspective still leaves at least 40%
-  // measured roof-to-base breathing room in ordinary oblique building views.
-  const occupiedViewportFraction = 0.57;
-  const desiredAngularRadius = (limitingFov * occupiedViewportFraction) / 2;
-  return (radius / Math.sin(desiredAngularRadius)) * 1.05;
-}
-
 function buildingPitch(bounds) {
   if (!bounds) return -25;
   const footprint = Math.max(bounds.width, bounds.depth);
@@ -1360,6 +1400,7 @@ async function resolveBuildingBounds(
       { lat, lon },
       { signal },
     );
+    if (isUnavailableCapability(candidates)) return candidates;
     return selectBuildingBounds(
       Array.isArray(candidates) ? candidates : [],
       lat,

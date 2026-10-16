@@ -4,6 +4,8 @@ export function installationFeedback(stats = {}, now = Date.now()) {
     rate_limited: 'Overpass rate-limited',
     timeout: 'Overpass timed out',
     query_failed: 'Overpass could not complete the query',
+    tiles_unavailable: 'Map tiles temporarily unavailable',
+    names_unavailable: 'Mapped names temporarily unavailable',
   };
   const reason =
     reasons[stats.failureReason] || 'Overpass temporarily unavailable';
@@ -18,5 +20,16 @@ export function installationFeedback(stats = {}, now = Date.now()) {
     return 'Zoom in to search mapped installations';
   if (stats.stale) return 'Showing cached mapped sites';
   if (stats.status === 'idle') return 'Mapped sites not loaded';
+  // With a count, say what was found and where; an empty area is not "loaded".
+  if (Number.isFinite(stats.count)) {
+    const km =
+      stats.coverage?.kind === 'subject' &&
+      Number.isFinite(stats.coverage.radiusM)
+        ? Math.round(stats.coverage.radiusM / 1000)
+        : null;
+    const where = km ? ` within ${km} km of the contact` : ' in view';
+    if (stats.count === 0) return `No mapped sites${where}`;
+    return `${stats.count} mapped site${stats.count === 1 ? '' : 's'}${where}`;
+  }
   return 'Mapped sites loaded';
 }

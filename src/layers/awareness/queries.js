@@ -35,7 +35,7 @@ export function createQueries({ state: layerState, services, parts, source }) {
     //     setInstallationStatus is only ever called with
     //     loading/zoom-in/ready/stale/empty/unavailable.
     //   - ais-live-vessels is what the predicate below is FOR. Its enable() and
-    //     update() both resolve as soon as the first /api/ais-live poll answers,
+    //     update() both resolve as soon as the first /api/vessels poll answers,
     //     so the lifecycle settles to `enabled` — but until the server-side socket
     //     delivers a position, firstConnectPhase is 'loading' and getStats()
     //     reports loading: true, lastUpdate: null, count 0, and an UNDEFINED
@@ -53,7 +53,12 @@ export function createQueries({ state: layerState, services, parts, source }) {
       neverAnswered ||
       ['unavailable', 'zoom-in'].includes(stats.status) ||
       Boolean(stats.error && stats.count === 0);
-    return { available: !unavailable, stale: Boolean(stats.stale), stats };
+    return {
+      available: !unavailable,
+      enabled,
+      stale: Boolean(stats.stale),
+      stats,
+    };
   }
 
   function collectSourceStates() {
@@ -94,14 +99,33 @@ export function createQueries({ state: layerState, services, parts, source }) {
    */
 
   function summarizeInstallationViewport(items, source) {
+    const coverage = source.stats?.coverage;
+    // getNearby measures these distances from the current subject, independent
+    // of the retained square used to fetch installation tiles.
+    const withinRadius =
+      coverage?.kind === 'subject' && Number.isFinite(coverage.radiusM)
+        ? items.filter(
+            (item) => (item.distanceM ?? item.distance) <= coverage.radiusM,
+          )
+        : items;
     const summary = parts.navigation.summarizeAwarenessCohortForNavigation(
-      items,
+      withinRadius,
       source,
     );
     if (summary.count === null)
       return source.stats?.statusMessage
         ? { ...summary, reason: source.stats.statusMessage }
         : summary;
+    // A subject window is its own bounded area: name it instead of the viewport.
+    if (coverage?.kind === 'subject' && Number.isFinite(coverage.radiusM)) {
+      const km = Math.round(coverage.radiusM / 1000);
+      return {
+        ...summary,
+        reason: summary.count
+          ? `mapped matches within ${km} km of the subject`
+          : `none mapped within ${km} km; not a complete 250 km survey`,
+      };
+    }
     return {
       ...summary,
       reason: summary.count
@@ -128,8 +152,10 @@ export function createQueries({ state: layerState, services, parts, source }) {
    * @param {object} [options]
    * @param {number} [options.radiusM=AWARENESS_RADIUS_M] Window radius.
    * @param {object|null} [options.subject=null] Contact at the centre, excluded.
-   * @returns {{flights: Array, military: Array, aircraft: number}|null} Cohorts
-   *   plus the combined aircraft count, or null without a position.
+   * @returns {{flights: Array, military: Array, aircraft: number,
+   *   completeByLayer: {flights: boolean, military: boolean}}|null} Cohorts,
+   *   their lower-bound completeness, and the combined aircraft count, or
+   *   null without a position.
    */
 
   function collectAircraftProximityWindow(
@@ -137,21 +163,35 @@ export function createQueries({ state: layerState, services, parts, source }) {
     { radiusM = AWARENESS_RADIUS_M, subject = null } = {},
   ) {
     if (!position) return null;
-    const flights = flightsLayer
-      .getNearby(position, radiusM, AWARENESS_QUERY_LIMIT, {
+    // Ask for one usable row beyond the retained limit so a capped cohort is
+    // reported as a lower bound instead of an exact count. The selected
+    // subject can consume one slot before exclusion, hence the extra two.
+    const sampleLimit = AWARENESS_QUERY_LIMIT + 2;
+    const flightSample = flightsLayer
+      .getNearby(position, radiusM, sampleLimit, {
         includeHidden: true,
       })
       .filter(
         (item) => !subject || !isSame(subject, item, 'flights', 'icao24'),
       );
-    const military = militaryFlightsLayer
-      .getNearby(position, radiusM, AWARENESS_QUERY_LIMIT, {
+    const militarySample = militaryFlightsLayer
+      .getNearby(position, radiusM, sampleLimit, {
         includeHidden: true,
       })
       .filter(
         (item) => !subject || !isSame(subject, item, 'military', 'icao24'),
       );
-    return { flights, military, aircraft: flights.length + military.length };
+    const flights = flightSample.slice(0, AWARENESS_QUERY_LIMIT);
+    const military = militarySample.slice(0, AWARENESS_QUERY_LIMIT);
+    return {
+      flights,
+      military,
+      aircraft: flights.length + military.length,
+      completeByLayer: {
+        flights: flightSample.length <= AWARENESS_QUERY_LIMIT,
+        military: militarySample.length <= AWARENESS_QUERY_LIMIT,
+      },
+    };
   }
   return {
     sourceState,

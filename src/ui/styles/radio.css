@@ -337,6 +337,15 @@
 #military-awareness-panel[hidden] {
   display: none;
 }
+.military-awareness-names {
+  margin: 6px 0;
+  color: var(--text-dim);
+}
+.military-awareness-names > div {
+  max-height: 160px;
+  overflow-y: auto;
+  padding: 6px 0;
+}
 .military-awareness-subject {
   margin: 0 0 7px;
   color: #fff;
