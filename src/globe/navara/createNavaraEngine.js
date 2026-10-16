@@ -30,6 +30,12 @@ const NO_MOVERS = Object.freeze({
   },
   list: () => [],
 });
+const NO_LINES = Object.freeze({
+  createLine() {
+    throw new Error("Navara lines need the view's three runtime (lines/)");
+  },
+  list: () => [],
+});
 
 // Navara's drawn camera (view.camera.raw, a three PerspectiveCamera in
 // Earth-fixed metres): matrixWorld columns are right, up, back, position.
@@ -84,7 +90,8 @@ function rayRaisedEllipsoid({ origin, direction }, height) {
  *   it the engine only keeps the state) and the engine destroys it;
  *   `appClock` (the engine clock's time) defaults to the page's app clock;
  *   `movers` is engine.movers on the view's three runtime (movers/index.js;
- *   without it createSet throws) and the engine destroys it;
+ *   without it createSet throws), `lines` engine.lines (lines/index.js;
+ *   likewise), both destroyed with the engine;
  *   `fetch` and `clock` (the camera model's timers) are test seams.
  * @returns {import('../contract.js').GlobeEngine}
  */
@@ -97,6 +104,7 @@ export function createNavaraEngine(
     clock,
     appClock,
     movers: moversPort = null,
+    lines: linesPort = null,
     sharpen: sharpenPort = null,
   } = {},
 ) {
@@ -246,6 +254,7 @@ export function createNavaraEngine(
     maps: maps.maps,
     clock: engineClock.clock,
     movers: moversPort?.movers ?? NO_MOVERS,
+    lines: linesPort?.lines ?? NO_LINES,
     destroy() {
       if (destroyed) return;
       destroyed = true;
@@ -257,6 +266,7 @@ export function createNavaraEngine(
       maps.destroy();
       sharpenPort?.destroy();
       moversPort?.destroy();
+      linesPort?.destroy();
     },
     isDestroyed: () => destroyed,
     // Navara only, not contract: the ground the floor last sampled under

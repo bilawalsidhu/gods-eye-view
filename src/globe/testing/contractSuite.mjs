@@ -592,6 +592,116 @@ export function createContractSuite(
       },
     ],
     [
+      'lines: a line draws between its projections, turns with its model matrix and dims where hidden',
+      async () => {
+        await nadirView(1e6);
+        // 20 km up: above any ground the scene draws.
+        const at = (lon, lat, height = 20_000) =>
+          cartesian3.fromDegrees(lon, lat, height);
+        const line = engine.lines.createLine({
+          id: 'contract-line',
+          widthPx: 8,
+          color: [1, 0, 1, 1],
+        });
+        const hidden = engine.lines.createLine({
+          id: 'contract-line-hidden',
+          widthPx: 10,
+          color: [1, 0, 1, 1],
+          depthFailAlpha: 0.6,
+        });
+        try {
+          line.setPositions([at(19, 9), at(20, 9), at(21, 9)]);
+          ensure(
+            engine.lines
+              .list()
+              .some(({ id, points }) => id === 'contract-line' && points === 3),
+            'lines.list() does not show the line',
+          );
+          if (!readRegion) return;
+          // Magenta-leaning pixels (red and blue over green; a dimmed copy
+          // over a light map stays above 30) near a point.
+          // The strongest magenta lean near a point (for dimmer-than).
+          const strength = (position) => {
+            const screen = engine.projector.worldToWindow(position);
+            const data = readRegion(
+              Math.round(screen.x) - 6,
+              Math.round(screen.y) - 6,
+              12,
+              12,
+            );
+            let best = -255;
+            for (let i = 0; i < data.length; i += 4)
+              best = Math.max(
+                best,
+                Math.min(data[i], data[i + 2]) - data[i + 1],
+              );
+            return best;
+          };
+          const magentaAt = (position) => {
+            const screen = engine.projector.worldToWindow(position);
+            if (!screen) return 0;
+            const data = readRegion(
+              Math.round(screen.x) - 6,
+              Math.round(screen.y) - 6,
+              12,
+              12,
+            );
+            let count = 0;
+            for (let i = 0; i < data.length; i += 4)
+              if (
+                Math.min(data[i], data[i + 2]) - data[i + 1] > 30 &&
+                data[i] > 120
+              )
+                count++;
+            return count;
+          };
+          await until(
+            () => magentaAt(at(19.5, 9)) > 10 && magentaAt(at(20.5, 9)) > 10,
+            'the line drawn along both segments',
+          );
+          ensure(magentaAt(at(19.5, 10.5)) === 0, 'line pixels off the line');
+          // Turned 1° about the Earth's axis: the line moves 1° east.
+          const turn = (radians) => {
+            const c = Math.cos(radians);
+            const s = Math.sin(radians);
+            return [c, s, 0, 0, -s, c, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1];
+          };
+          line.setModelMatrix(turn(math.toRadians(1)));
+          await until(
+            () => magentaAt(at(21.5, 9)) > 10 && magentaAt(at(19.25, 9)) === 0,
+            'the turned line drawn 1° east',
+          );
+          const shownStrength = strength(at(20.5, 9));
+          line.show(false);
+          await until(() => magentaAt(at(20.5, 9)) === 0, 'the line hidden');
+          // 30 km under the ground: only the depth-fail copy shows, dimmed.
+          const deep = (lon) => at(lon, 11, -30_000);
+          hidden.setPositions([deep(19), deep(21)]);
+          await until(
+            () => magentaAt(deep(20)) > 10,
+            'the hidden line drawn by its depth-fail copy',
+          );
+          const hiddenStrength = strength(deep(20));
+          ensure(
+            hiddenStrength < shownStrength,
+            `the depth-fail copy (${hiddenStrength}) is not dimmer than the line (${shownStrength})`,
+          );
+          hidden.destroy();
+          await until(
+            () => magentaAt(deep(20)) === 0,
+            'the destroyed line gone',
+          );
+        } finally {
+          line.destroy();
+          hidden.destroy();
+        }
+        ensure(
+          !engine.lines.list().some(({ id }) => id.startsWith('contract-line')),
+          'a destroyed line is still listed',
+        );
+      },
+    ],
+    [
       'render: continuous mode toggles',
       async () => {
         const previous = engine.render.isContinuous();

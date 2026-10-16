@@ -1074,5 +1074,8 @@
   "src/globe/navara/movers/pickIds.test.mjs",
   "src/globe/navara/movers/moverMesh.test.mjs",
   "src/globe/navara/movers/modelMover.test.mjs",
-  "src/bench/syntheticFlights.test.mjs"
+  "src/bench/syntheticFlights.test.mjs",
+  "src/globe/lines.test.mjs",
+  "src/globe/cesium/lines.test.mjs",
+  "src/globe/navara/lines/lineMesh.test.mjs"
 ]

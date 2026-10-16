@@ -1,0 +1,259 @@
+// The three side of a Navara line: a ribbon of one quad per segment whose
+// vertices are pushed apart in the vertex shader to the line's width in CSS
+// pixels (projected ends, the screen-space normal), so the width holds at any
+// distance. A second copy of the ribbon, drawn only where the scene hides it
+// (depthFunc GreaterDepth) with the alpha scaled, is depthFailAlpha. Dashes
+// in pixels are cut in the fragment shader along the segment's screen
+// direction (as Cesium's PolylineDash); the tactical dash is the launches'
+// pattern over the fraction along the whole line. Positions are relative to
+// the first point (the group sits there, in doubles), the model matrix
+// multiplies the group's transform (an orbit ring turned by GMST).
+
+import {
+  BufferAttribute,
+  BufferGeometry,
+  DoubleSide,
+  GreaterDepth,
+  Group,
+  LessEqualDepth,
+  Matrix4,
+  Mesh,
+  MeshBasicMaterial,
+} from 'three';
+
+const VERTEX_HEAD = /* glsl */ `
+attribute vec3 gevEnd;
+attribute vec2 gevSide;
+attribute float gevS;
+uniform vec2 uGevViewport;
+uniform float uGevWidthPx;
+varying float vGevS;
+varying float vGevT;
+varying vec2 vGevDirection;
+`;
+
+const VERTEX_PROJECT = /* glsl */ `
+vec4 gevA = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+vec4 gevB = projectionMatrix * modelViewMatrix * vec4(gevEnd, 1.0);
+// Ends behind the camera move along the segment to just in front of it.
+const float GEV_NEAR_W = 1e-3;
+if (gevA.w < GEV_NEAR_W) gevA = mix(gevA, gevB, (GEV_NEAR_W - gevA.w) / (gevB.w - gevA.w));
+if (gevB.w < GEV_NEAR_W) gevB = mix(gevB, gevA, (GEV_NEAR_W - gevB.w) / (gevA.w - gevB.w));
+vec2 gevScreenA = gevA.xy / gevA.w * 0.5 * uGevViewport;
+vec2 gevScreenB = gevB.xy / gevB.w * 0.5 * uGevViewport;
+vec2 gevDirection = gevScreenB - gevScreenA;
+gevDirection = length(gevDirection) > 1e-6 ? normalize(gevDirection) : vec2(1.0, 0.0);
+vec2 gevNormal = vec2(-gevDirection.y, gevDirection.x);
+gl_Position = gevSide.x < 0.5 ? gevA : gevB;
+gl_Position.xy += gevNormal * gevSide.y * uGevWidthPx / uGevViewport * gl_Position.w;
+vec4 mvPosition = modelViewMatrix * vec4(gevSide.x < 0.5 ? position : gevEnd, 1.0);
+vGevS = gevS;
+vGevT = gevSide.y * 0.5 + 0.5;
+vGevDirection = gevDirection;
+`;
+
+const FRAGMENT_HEAD = /* glsl */ `
+uniform vec4 uGevColor;
+uniform float uGevAlphaScale;
+uniform float uGevDash;
+uniform vec2 uGevDashPx;
+uniform vec2 uGevTactical;
+varying float vGevS;
+varying float vGevT;
+varying vec2 vGevDirection;
+float gevTactical() {
+  float groupPosition = fract(vGevS * uGevTactical.x);
+  float markPosition = groupPosition * (uGevTactical.y + 1.0);
+  float markIndex = floor(markPosition);
+  float localPosition = fract(markPosition);
+  float centerDistance = abs(localPosition - 0.5);
+  float edge = max(fwidth(localPosition) * 1.35, 0.012);
+  float dashAlong = 1.0 - smoothstep(0.27 - edge, 0.27 + edge, centerDistance);
+  float dashAcross = 1.0 - smoothstep(0.12, 0.24, abs(vGevT - 0.5));
+  float dotAlong = (localPosition - 0.5) / 0.32;
+  float dotAcross = (vGevT - 0.5) / 0.5;
+  float dot = 1.0 - smoothstep(0.78, 1.0, length(vec2(dotAlong, dotAcross)));
+  float isDot = 1.0 - step(0.5, markIndex);
+  return mix(dashAlong * dashAcross, dot, isDot) * mix(0.58, 1.0, isDot);
+}
+`;
+
+const FRAGMENT_COLOR = /* glsl */ `
+#include <color_fragment>
+diffuseColor = uGevColor;
+diffuseColor.a *= uGevAlphaScale;
+if (uGevDash > 1.5) {
+  diffuseColor.a *= gevTactical();
+} else if (uGevDash > 0.5) {
+  float gevAlong = dot(gl_FragCoord.xy, vGevDirection);
+  if (mod(gevAlong, uGevDashPx.x + uGevDashPx.y) > uGevDashPx.x) discard;
+}
+`;
+
+/** Patches three's MeshBasicMaterial shaders into the pixel-width ribbon. */
+export function patchLineShader(shader, uniforms) {
+  Object.assign(shader.uniforms, uniforms);
+  const replace = (source, from, to) => {
+    if (!source.includes(from))
+      throw new Error(`Line shader: three has no ${from}`);
+    return source.replace(from, to);
+  };
+  shader.vertexShader = replace(
+    replace(
+      shader.vertexShader,
+      'void main() {',
+      `${VERTEX_HEAD}\nvoid main() {`,
+    ),
+    '#include <project_vertex>',
+    VERTEX_PROJECT,
+  );
+  shader.fragmentShader = replace(
+    replace(
+      shader.fragmentShader,
+      'void main() {',
+      `${FRAGMENT_HEAD}\nvoid main() {`,
+    ),
+    '#include <color_fragment>',
+    FRAGMENT_COLOR,
+  );
+  return shader;
+}
+
+/**
+ * The ribbon geometry of a flat position list, relative to `origin`: per
+ * segment 4 vertices (start/end × side) and 2 triangles; `gevS` is the
+ * fraction of the line's length at the vertex's end.
+ */
+export function buildRibbon(flat, origin) {
+  const points = flat.length / 3;
+  const segments = Math.max(0, points - 1);
+  const start = new Float32Array(segments * 12);
+  const end = new Float32Array(segments * 12);
+  const side = new Float32Array(segments * 8);
+  const along = new Float32Array(segments * 4);
+  const index = new Uint32Array(segments * 6);
+  const cumulative = new Float64Array(points);
+  for (let p = 1; p < points; p++)
+    cumulative[p] =
+      cumulative[p - 1] +
+      Math.hypot(
+        flat[p * 3] - flat[p * 3 - 3],
+        flat[p * 3 + 1] - flat[p * 3 - 2],
+        flat[p * 3 + 2] - flat[p * 3 - 1],
+      );
+  const total = cumulative[points - 1] || 1;
+  for (let s = 0; s < segments; s++) {
+    const a = s * 3;
+    const b = a + 3;
+    for (let v = 0; v < 4; v++) {
+      const vertex = s * 4 + v;
+      for (let k = 0; k < 3; k++) {
+        start[vertex * 3 + k] = flat[a + k] - origin[k];
+        end[vertex * 3 + k] = flat[b + k] - origin[k];
+      }
+      const atEnd = v >= 2 ? 1 : 0;
+      side[vertex * 2] = atEnd;
+      side[vertex * 2 + 1] = v % 2 === 0 ? 1 : -1;
+      along[vertex] = cumulative[s + atEnd] / total;
+    }
+    index.set(
+      [s * 4, s * 4 + 1, s * 4 + 2, s * 4 + 2, s * 4 + 1, s * 4 + 3],
+      s * 6,
+    );
+  }
+  const geometry = new BufferGeometry();
+  geometry.setAttribute('position', new BufferAttribute(start, 3));
+  geometry.setAttribute('gevEnd', new BufferAttribute(end, 3));
+  geometry.setAttribute('gevSide', new BufferAttribute(side, 2));
+  geometry.setAttribute('gevS', new BufferAttribute(along, 1));
+  geometry.setIndex(new BufferAttribute(index, 1));
+  return geometry;
+}
+
+/** @param {ReturnType<import('../../lines.js').normalizeLineOptions>} options */
+export function createLineMesh(options) {
+  const dash = options.dash;
+  const shared = {
+    uGevViewport: { value: [1, 1] },
+    uGevWidthPx: { value: options.widthPx },
+    uGevColor: { value: [...options.color] },
+    uGevDash: { value: dash?.kind === 'tactical' ? 2 : dash ? 1 : 0 },
+    uGevDashPx: {
+      value: dash?.kind === 'pixels' ? [dash.lengthPx, dash.gapPx] : [1, 0],
+    },
+    uGevTactical: {
+      value: dash?.kind === 'tactical' ? [dash.groups, dash.dashes] : [1, 1],
+    },
+  };
+  const material = (alphaScale, depthFunc) => {
+    const value = new MeshBasicMaterial({
+      transparent: true,
+      depthWrite: false,
+      depthFunc,
+      side: DoubleSide,
+    });
+    const uniforms = { ...shared, uGevAlphaScale: { value: alphaScale } };
+    value.onBeforeCompile = (shader) => patchLineShader(shader, uniforms);
+    value.customProgramCacheKey = () => 'gev-line';
+    return value;
+  };
+  const group = new Group();
+  group.matrixAutoUpdate = false;
+  group.frustumCulled = false;
+  const main = new Mesh(new BufferGeometry(), material(1, LessEqualDepth));
+  main.frustumCulled = false;
+  main.renderOrder = options.order;
+  group.add(main);
+  let behind = null;
+  if (options.depthFailAlpha > 0) {
+    behind = new Mesh(
+      main.geometry,
+      material(options.depthFailAlpha, GreaterDepth),
+    );
+    behind.frustumCulled = false;
+    behind.renderOrder = options.order;
+    group.add(behind);
+  }
+  let origin = [0, 0, 0];
+  const model = new Matrix4();
+  if (options.modelMatrix) model.fromArray(options.modelMatrix);
+  const place = () => {
+    group.matrix
+      .copy(model)
+      .multiply(new Matrix4().makeTranslation(origin[0], origin[1], origin[2]));
+    group.matrixWorldNeedsUpdate = true;
+  };
+  place();
+  return {
+    group,
+    uniforms: shared,
+    meshes: () => (behind ? [main, behind] : [main]),
+    setPositions(flat) {
+      const previous = main.geometry;
+      origin = flat.length >= 3 ? [flat[0], flat[1], flat[2]] : [0, 0, 0];
+      const geometry = buildRibbon(flat, origin);
+      main.geometry = geometry;
+      if (behind) behind.geometry = geometry;
+      previous.dispose();
+      place();
+    },
+    setColor(rgba) {
+      shared.uGevColor.value = [...rgba];
+    },
+    setModelMatrix(matrix) {
+      model.fromArray(matrix);
+      place();
+    },
+    show(visible) {
+      group.visible = visible;
+    },
+    /** Each drawn frame: the viewport the pixel width is measured in. */
+    update(width, height) {
+      shared.uGevViewport.value = [width, height];
+    },
+    dispose() {
+      main.geometry.dispose();
+      for (const mesh of [main, behind]) mesh?.material.dispose();
+    },
+  };
+}

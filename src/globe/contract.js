@@ -296,6 +296,37 @@
  * @property {(options: MoverSetOptions) => MoverSet} createSet
  * @property {() => { id: string, kind: string, count: number, capacity: number }[]} list
  *
+ * @typedef {object} LineOptions
+ *   A dynamic polyline (src/globe/lines.js checks and defaults these).
+ * @property {string} id Unique among the engine's live lines.
+ * @property {number} widthPx Width in CSS pixels.
+ * @property {number[]} color rgba in 0..1.
+ * @property {number} [depthFailAlpha] 0..1: where the scene hides the line, a
+ *   copy drawn with its alpha scaled by this (Cesium's depthFailAppearance);
+ *   0 (the default) draws nothing there.
+ * @property {{ lengthPx: number, gapPx: number } | 'tactical'} [dash]
+ *   Dashes in pixels along the screen direction (Cesium's PolylineDash), or
+ *   the launches' selected-orbit pattern over the whole line.
+ * @property {'none'|'geodesic'} [arc] 'geodesic' follows great circles
+ *   between points (Cesium's ArcType.GEODESIC); 'none' (default) draws
+ *   straight segments.
+ * @property {Matrix4} [modelMatrix] Applied to the positions (an orbit ring
+ *   turned by GMST).
+ * @property {any} [pickId] What a Cesium pick of the line returns (Navara
+ *   lines are not pickable yet).
+ *
+ * @typedef {object} Line
+ * @property {(positions: Cartesian3[] | Float64Array) => void} setPositions
+ * @property {(color: number[]) => void} setColor
+ * @property {(matrix: Matrix4) => void} setModelMatrix
+ * @property {(visible: boolean) => void} show
+ * @property {() => void} destroy
+ *   Every call requests a render; nothing animates on its own.
+ *
+ * @typedef {object} GlobeLines
+ * @property {(options: LineOptions) => Line} createLine
+ * @property {() => { id: string, points: number, shown: boolean }[]} list
+ *
  * @typedef {object} GlobeEngine
  * @property {'cesium'|'navara'} kind
  * @property {{ container: object, canvas: object, size: () => { width: number, height: number } }} host
@@ -317,6 +348,7 @@
  * @property {GlobeMaps} maps
  * @property {GlobeClock} clock
  * @property {GlobeMovers} movers
+ * @property {GlobeLines} lines
  * @property {() => void} destroy
  * @property {() => boolean} isDestroyed True once destroy() has run.
  */
@@ -497,6 +529,7 @@ const SHAPE = {
   credits: { addStatic: isFunction },
   clock: { now: isFunction, frameTime: isFunction, ticked: isEngineEvent },
   movers: { createSet: isFunction, list: isFunction },
+  lines: { createLine: isFunction, list: isFunction },
   maps: {
     setBaseImagery: isFunction,
     setTerrain: isFunction,
