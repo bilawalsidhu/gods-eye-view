@@ -286,14 +286,53 @@ export const VIEWER_ONLY_ACTIONS = Object.freeze([
 /** The refusal code of a viewer-only tool on an engine without a viewer. */
 export const UNAVAILABLE_ON_ENGINE = 'UNAVAILABLE_ON_ENGINE';
 
-function unavailableOnEngine(name, engine) {
+/**
+ * The tools that change the look of the Cesium scene (post stages, bloom,
+ * sharpen). The Navara engine has no visual styles yet: without a viewer
+ * these refuse too, rather than answer ok while changing nothing (and
+ * recording a style the view does not show).
+ */
+export const CESIUM_LOOK_ACTIONS = Object.freeze([
+  'set_visual_style',
+  'set_post_processing',
+]);
+
+/** What each refused tool is, for the refusal's message. */
+export const UNAVAILABLE_FEATURES = Object.freeze({
+  control_scene: 'The scene director',
+  annotate_map: 'Map annotation',
+  clear_annotations: 'Map annotation',
+  fly_route: 'Route flying',
+  move_camera: 'Camera motion (orbit, pan, tilt)',
+  control_cockpit: 'The cockpit',
+  set_context_mode: 'The Contacts mode',
+  control_radio: 'Radio',
+  control_cctv: 'CCTV',
+  set_visual_style: 'The visual style',
+  set_post_processing: 'Post-processing (bloom, sharpen)',
+});
+
+/** The engine to switch to for a refused feature. */
+export const SWITCH_ENGINE_HINT = '?engine=cesium';
+
+const engineName = (engine) =>
+  engine?.kind === 'navara' ? 'the Navara engine' : 'this engine';
+
+function unavailableOnEngine(
+  name,
+  engine,
+  feature = UNAVAILABLE_FEATURES[name],
+) {
+  const what = feature || name;
   return {
     ok: false,
     action: name,
     unavailable: true,
     code: UNAVAILABLE_ON_ENGINE,
     engine: engine?.kind ?? null,
-    error: 'Unavailable on this engine',
+    feature: what,
+    suggestion: SWITCH_ENGINE_HINT,
+    error: `${what} is not available on ${engineName(engine)} yet. Switch to the Cesium engine (${SWITCH_ENGINE_HINT}) to use it.`,
   };
 }
 
@@ -389,7 +428,10 @@ export function createGevActionRunner({
         /* Progress is advisory. */
       }
     };
-    if (!viewer && VIEWER_ONLY_ACTIONS.includes(name))
+    if (
+      !viewer &&
+      (VIEWER_ONLY_ACTIONS.includes(name) || CESIUM_LOOK_ACTIONS.includes(name))
+    )
       return unavailableOnEngine(name, engine);
 
     // Navigation tools interrupt any continuous camera motion (spec §1.1) —
@@ -427,6 +469,17 @@ export function createGevActionRunner({
         throw new Error(`Unknown data layer: ${args.layerId || 'missing'}`);
       }
       if (!dataManager.layers.has(layerId)) {
+        // A layer this engine cannot show (the catalog left it out): a
+        // refusal that names it, not an unknown-layer error.
+        if (!viewer && voiceLayer(layerId))
+          return {
+            ...unavailableOnEngine(
+              'set_layer_visibility',
+              engine,
+              `The ${layerId} layer`,
+            ),
+            layerId,
+          };
         if (layerId === 'radio') {
           return {
             ok: false,
@@ -4512,46 +4565,6 @@ function dominantValue(values) {
   };
 }
 
-function summarizeEntity(viewer, entity, { includeProperties = false } = {}) {
-  const now = Cesium.JulianDate.now();
-  if (entity.__gevContextId) {
-    const store = window.__gevContextStore;
-    const record = store?.entities?.get(entity.__gevContextId);
-    if (record) return summarizeContextRecord(record, { includeProperties });
-  }
-  const props = propertyObject(entity);
-  const layerId = entity.__localLayerId || props.layerId || null;
-  const tags = props.tags || {};
-  const label = cleanText(
-    props.name ||
-      tags.name ||
-      tags['name:en'] ||
-      tags.official_name ||
-      tags.operator ||
-      props.operator ||
-      entity.name ||
-      layerTitle(layerId),
-  );
-  const position =
-    entity.__localBaseCartesian ||
-    entity.position?.getValue?.(now) ||
-    polygonCenter(entity, now);
-  const carto = position ? geo.cartographic.fromCartesian(position) : null;
-  return {
-    id: String(entity.id || ''),
-    name: label || layerTitle(layerId),
-    layerId,
-    layerName: layerTitle(layerId),
-    latitude: carto
-      ? Number(geo.math.toDegrees(carto.latitude).toFixed(6))
-      : null,
-    longitude: carto
-      ? Number(geo.math.toDegrees(carto.longitude).toFixed(6))
-      : null,
-    properties: includeProperties ? compactProperties(props) : undefined,
-  };
-}
-
 function summarizeContextRecord(record, { includeProperties = false } = {}) {
   return {
     id: String(record.id || ''),
@@ -4568,31 +4581,6 @@ function summarizeContextRecord(record, { includeProperties = false } = {}) {
       : undefined,
     active: isContextRecordActive(record),
   };
-}
-
-function polygonCenter(entity, now) {
-  const hierarchy = entity.polygon?.hierarchy?.getValue?.(now);
-  const positions = hierarchy?.positions;
-  if (!positions?.length) return null;
-  return Cesium.BoundingSphere.fromPoints(positions).center;
-}
-
-function propertyObject(entity) {
-  const raw = entity?.properties?.getValue?.(Cesium.JulianDate.now()) || {};
-  return unwrapProperties(raw);
-}
-
-function unwrapProperties(value) {
-  if (!value || typeof value !== 'object') return value;
-  if (Array.isArray(value)) return value.map(unwrapProperties);
-  const out = {};
-  for (const [key, entry] of Object.entries(value)) {
-    out[key] =
-      entry && typeof entry.getValue === 'function'
-        ? unwrapProperties(entry.getValue(Cesium.JulianDate.now()))
-        : unwrapProperties(entry);
-  }
-  return out;
 }
 
 function compactProperties(props) {
