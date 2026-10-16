@@ -1,5 +1,6 @@
 import { FOLLOW_MAP_STACK_ID } from '../../policy.js';
 import { createMapsLoader } from './mapsLoader.js';
+import { getLocale } from '../../../../i18n/index.js';
 import { createGoogleViewer } from './viewer.js';
 import {
   COLORS,
@@ -48,7 +49,7 @@ function settleWithin(promise, { ms, signal, loader }) {
  */
 export function createGoogleProvider({
   getApiKey,
-  loader = createMapsLoader({ getApiKey }),
+  loader = createMapsLoader({ getApiKey, getLanguage: getLocale }),
 }) {
   if (typeof getApiKey !== 'function')
     throw new TypeError('Google Street View needs getApiKey');

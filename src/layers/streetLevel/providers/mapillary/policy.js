@@ -1,5 +1,9 @@
 import { COLORS as SHARED_COLORS, PROVIDER_COLORS } from '../../policy.js';
 
+// Reached by source.js (no browser globals, see check:boundaries), so no
+// i18n import: the messages stay English data, translated where shown.
+const msg = (text) => text;
+
 export { NEAREST_RADIUS_M } from '../../policy.js';
 
 /** Identity and tuning for the Mapillary street-level provider. */
@@ -36,11 +40,13 @@ export const COVERAGE_MAX_TILES = 9;
 /** Overview (z0–5) coverage points seen from orbit. */
 export const COVERAGE_OVERVIEW_MAX_TILES = 16;
 /** Shown when Mapillary refuses the server's token (401/403). */
-export const KEY_REJECTED_MESSAGE =
-  'Mapillary rejected MAPILLARY_CLIENT_TOKEN — replace it in Provider Settings';
+export const KEY_REJECTED_MESSAGE = msg(
+  'Mapillary rejected MAPILLARY_CLIENT_TOKEN — replace it in Provider Settings',
+);
 /** Shown while Mapillary rate-limits tile requests (429). */
-export const RATE_LIMITED_MESSAGE =
-  'Coverage requests are being rate-limited — they resume on their own';
+export const RATE_LIMITED_MESSAGE = msg(
+  'Coverage requests are being rate-limited — they resume on their own',
+);
 /**
  * Street-zoom coverage reaches this far from the camera: camera height times
  * the factor, never below the floor, even when a tilted view sees further.

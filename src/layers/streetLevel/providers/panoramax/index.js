@@ -12,6 +12,7 @@ import { createLru, createTileCache } from '../../tileCache.js';
 import { decodeCoverageTileSliced, decodePictures } from './decode.js';
 import { createPanoramaxSource } from './source.js';
 import { createPanoramaxViewer } from './viewer.js';
+import { msg } from '../../../../i18n/index.js';
 import {
   COLORS,
   COVERAGE_LINES_BELOW_M,
@@ -447,7 +448,8 @@ export function createPanoramaxProvider({
             .open(photoId)
             .catch((error) =>
               context.actions.reportError(
-                error?.message || 'The Panoramax photo could not be loaded',
+                error?.message ||
+                  msg('The Panoramax photo could not be loaded'),
               ),
             ),
         step,
