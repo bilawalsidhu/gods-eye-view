@@ -1008,6 +1008,7 @@
   "scripts/qa-engine-shell.mjs",
   "scripts/qa/navara-contract.html",
   "scripts/qa/navaraContractPage.js",
+  "scripts/qa/tileCache.mjs",
   "src/annotations/resolverEngine.test.mjs",
   "src/app/controls.test.mjs",
   "src/app/engineChoice.js",
@@ -1032,6 +1033,7 @@
   "src/globe/cesium/render.js",
   "src/globe/cesium/surface.js",
   "src/globe/contract.js",
+  "src/globe/navara/atmosphereLuminance.js",
   "src/globe/navara/cameraMath.js",
   "src/globe/navara/cameraMath.test.mjs",
   "src/globe/navara/cameraModel.js",
@@ -1060,5 +1062,6 @@
   "src/orbit.test.mjs",
   "src/services/groundSnap.test.mjs",
   "src/sharelinkPose.test.mjs",
-  "src/tooling/navaraAssets.test.mjs"
+  "src/tooling/navaraAssets.test.mjs",
+  "src/tooling/tileCache.test.mjs"
 ]
