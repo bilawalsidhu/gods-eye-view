@@ -8,7 +8,12 @@ import { createSelection } from './selection.js';
  * `frame()` runs them; timers and Date.now() are mocked so a burst of moves
  * has a known timeline.
  */
-function harness({ selected = false } = {}) {
+function harness({
+  selected = false,
+  router = null,
+  providers = new Map(),
+  services = {},
+} = {}) {
   const saved = {
     document: globalThis.document,
     requestAnimationFrame: globalThis.requestAnimationFrame,
@@ -34,6 +39,7 @@ function harness({ selected = false } = {}) {
     removeListener(type, listener, options);
   };
   const sequences = { selected, cleared: 0 };
+  const groundClicks = [];
   const picks = [];
   /** What the pointer is over: a line this layer owns, or nothing. */
   const scene = { under: null };
@@ -59,13 +65,19 @@ function harness({ selected = false } = {}) {
     viewer,
     enabled: true,
     clickHandler: null,
-    services: { picking: null, input: null },
+    providers,
+    services: { picking: null, input: null, ...services },
   };
   const selection = createSelection({
     state,
     parts: {
-      router: { ownsPick: (id) => id === 'mly:seq:1', resolve: () => null },
+      router: router || {
+        ownsPick: (id) => id === 'mly:seq:1',
+        resolve: () => null,
+      },
       hasSelectedSequence: () => sequences.selected,
+      openAtGround: (position, picked) =>
+        groundClicks.push({ position, picked }),
       clearSequences() {
         sequences.cleared++;
         sequences.selected = false;
@@ -75,6 +87,9 @@ function harness({ selected = false } = {}) {
   selection.install(viewer);
   const onMove = state.clickHandler.getInputAction(
     Cesium.ScreenSpaceEventType.MOUSE_MOVE,
+  );
+  const onClick = state.clickHandler.getInputAction(
+    Cesium.ScreenSpaceEventType.LEFT_CLICK,
   );
   return {
     state,
@@ -97,6 +112,8 @@ function harness({ selected = false } = {}) {
     camera,
     picks,
     move: (x) => onMove({ endPosition: { x, y: 10 } }),
+    click: (x) => onClick({ position: { x, y: 10 } }),
+    groundClicks,
     frame() {
       for (const task of frames.splice(0)) task();
     },
@@ -252,6 +269,64 @@ test('Esc in a text field or rich-text editor keeps the selection (M61)', () => 
     // A <div contenteditable> (or anything inside one) is a text field too.
     h.key('Escape', element('div', { isContentEditable: true }));
     assert.equal(h.sequences.cleared, 0, 'typing in a contenteditable');
+  } finally {
+    h.restore();
+  }
+});
+
+test('a click on nothing of ours goes to the ground handler with the pick, which decides', () => {
+  const h = harness();
+  try {
+    h.click(5);
+    h.scene.under = 'flight:abc';
+    h.click(6);
+    assert.deepEqual(
+      h.groundClicks.map(({ position, picked }) => [position.x, picked?.id]),
+      [
+        [5, undefined],
+        [6, 'flight:abc'],
+      ],
+    );
+  } finally {
+    h.restore();
+  }
+});
+
+test('a click on a provider line hands it the ground under the click, measured only if asked', () => {
+  const handled = [];
+  const instance = {
+    handlePick: (id, click) => handled.push({ id, click }),
+  };
+  const groundPicks = [];
+  const h = harness({
+    router: {
+      ownsPick: () => true,
+      resolve: (id) => ({ providerId: 'kartaview', instance, id }),
+    },
+    providers: new Map([['kartaview', { on: true }]]),
+    services: {
+      scenePick: {
+        pickGroundPosition: (viewer, position) => {
+          groundPicks.push(position);
+          return Cesium.Cartesian3.fromDegrees(-83.0458, 42.3314, 190);
+        },
+      },
+    },
+  });
+  try {
+    h.scene.under = 'kv:line:14/1/2/3';
+    h.click(40);
+    assert.equal(handled.length, 1);
+    assert.equal(handled[0].id, 'kv:line:14/1/2/3');
+    assert.equal(
+      groundPicks.length,
+      0,
+      'no depth read until the provider asks',
+    );
+    const point = handled[0].click.groundPoint();
+    assert.ok(Math.abs(point.lon + 83.0458) < 1e-9);
+    assert.ok(Math.abs(point.lat - 42.3314) < 1e-9);
+    assert.deepEqual(groundPicks, [{ x: 40, y: 10 }]);
   } finally {
     h.restore();
   }

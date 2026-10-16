@@ -253,3 +253,14 @@ test('the Cyber theme frames the Street Level panel like its rail peers (P3)', (
   // A theme header rule must be able to outrank the panel's own.
   assert.doesNotMatch(panelCss, /#street-level-panel \.panel-header/);
 });
+
+test('OPEN STREET VIEW keeps its width beside a long coverage line', () => {
+  // .scene-btn grows and shrinks (flex: 1) and loads after this stylesheet:
+  // only a more specific rule keeps the button from being squeezed.
+  assert.match(css, /\.scene-btn \{[^}]*flex: 1;/);
+  assert.match(
+    panelCss,
+    /\.sl-meta-row \.sl-nearest-btn \{\s*flex: 0 0 auto;\s*\}/,
+  );
+  assert.match(panelCss, /\.sl-meta-row \.sl-meta \{[^}]*min-width: 0;/);
+});

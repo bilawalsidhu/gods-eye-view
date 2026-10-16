@@ -65,6 +65,15 @@ export function imageConeGlyph({
   });
 }
 
+/** Street View-style marker: a field-of-view cone from a white-ringed dot. */
+export function viewConeMarkerGlyph({ size = 56, color = '#4285f4' } = {}) {
+  return cachedGlyph(`view-cone:${size}:${color}`, size, (ctx, c) => {
+    wedge(ctx, c, size * 0.48, 0.62, color, 0.38);
+    wedge(ctx, c, size * 0.3, 0.62, color, 0.3);
+    dot(ctx, c, size * 0.13, color, '#ffffff', Math.max(2, size * 0.05));
+  });
+}
+
 /** Marker for the image the viewer currently shows. */
 export function positionMarkerGlyph({ size = 44, color = '#ffb300' } = {}) {
   return cachedGlyph(`pos:${size}:${color}`, size, (ctx, c) => {

@@ -36,7 +36,7 @@ export const KEY_SETUP_KEYS = Object.freeze([
   Object.freeze({
     id: 'google-maps',
     title: 'GOOGLE MAPS',
-    unlocks: 'The photorealistic 3D planet + place search',
+    unlocks: 'The photorealistic 3D planet, place search + Street View',
     getUrl: 'https://developers.google.com/maps/documentation/tile/get-api-key',
     envVars: Object.freeze(['GOOGLE_MAPS_API_KEY']),
     tier: 'metered',
@@ -125,6 +125,32 @@ export const KEY_SETUP_KEYS = Object.freeze([
 const LOCAL_HOSTNAMES = new Set(['localhost', '127.0.0.1', '::1', '[::1]']);
 /** Socket addresses that count as this machine. */
 const LOOPBACK_ADDRESSES = new Set(['127.0.0.1', '::1', '::ffff:127.0.0.1']);
+
+/**
+ * Whether a socket address is one the operator has explicitly declared to be
+ * this machine through GEV_KEY_SETUP_TRUSTED_PEERS: a comma-separated list of
+ * EXACT addresses, never wildcards, prefixes or hostnames. Unset trusts
+ * nothing, which is every launcher but one.
+ *
+ * The shipped use is the Docker launcher (scripts/docker-start.mjs). A port
+ * published on the host's loopback still reaches the container FROM the
+ * container network's gateway, never from 127.0.0.1, so the loopback check
+ * alone refuses the very machine running the server. Admitting that one
+ * address relaxes nothing else: the sharing, Host, Origin, Content-Type and
+ * proxy-header checks all still apply to it.
+ */
+function isTrustedPeerAddress(remoteAddress, env) {
+  const normalize = (value) =>
+    String(value || '')
+      .trim()
+      .toLowerCase()
+      .replace(/^::ffff:/, '');
+  const address = normalize(remoteAddress);
+  if (!address) return false;
+  return String(env?.GEV_KEY_SETUP_TRUSTED_PEERS || '')
+    .split(',')
+    .some((entry) => entry.trim() !== '' && normalize(entry) === address);
+}
 
 /** Parse an exact local request authority from a Host header. */
 function localAuthority(hostHeader, protocol) {
@@ -224,7 +250,9 @@ export function isSharingEnabled(env = {}) {
  *    outright — a credential-writing endpoint has no business existing on a
  *    shared instance, and tunnel traffic reaches the server FROM loopback, so
  *    the socket check below cannot carry that boundary alone;
- *  - loopback socket: refuses LAN peers when the server is bound wide;
+ *  - loopback socket: refuses LAN peers when the server is bound wide. The
+ *    only exception is an exact address listed in
+ *    GEV_KEY_SETUP_TRUSTED_PEERS, and every check below still applies to it;
  *  - local Host header: tunnel and DNS-rebinding traffic carries a foreign
  *    Host even when the socket says loopback;
  *  - exact same Origin on POST: a hostile web page can make a browser POST to
@@ -274,7 +302,10 @@ export function admitKeySetupRequest({
       error: 'Provider Settings is disabled while sharing is enabled',
     };
   }
-  if (!LOOPBACK_ADDRESSES.has(String(remoteAddress || ''))) {
+  if (
+    !LOOPBACK_ADDRESSES.has(String(remoteAddress || '')) &&
+    !isTrustedPeerAddress(remoteAddress, env)
+  ) {
     return {
       ok: false,
       status: 403,
@@ -350,6 +381,28 @@ export function keySetupRequirement(id) {
   const entry = KEY_SETUP_KEYS.find((candidate) => candidate.id === id);
   if (!entry || entry.hidden) return '';
   return `Needs ${entry.envVars.join(' + ')} — add it in Provider Settings`;
+}
+
+/**
+ * Key guidance that also names switched-off sources whose key is already set.
+ * @param {string} requirement What `keySetupRequirement` said ('' allowed).
+ * @param {Array<{label: string, requiresKeyId?: string|null}>} [alternatives]
+ */
+export function keySetupWithAlternatives(requirement, alternatives = []) {
+  const options = alternatives.map(({ label, requiresKeyId }) => {
+    const entry = KEY_SETUP_KEYS.find(
+      (candidate) => candidate.id === requiresKeyId,
+    );
+    const name = entry
+      ? entry.title
+          .toLowerCase()
+          .replace(/\b\w/g, (letter) => letter.toUpperCase())
+      : null;
+    return name ? `light ${label} to use your ${name} key` : `light ${label}`;
+  });
+  if (!options.length) return requirement;
+  const offer = `or ${options.join(', or ')}`;
+  return requirement ? `${requirement}, ${offer}` : offer.replace(/^or l/, 'L');
 }
 
 /**

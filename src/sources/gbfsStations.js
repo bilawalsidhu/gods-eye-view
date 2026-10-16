@@ -50,6 +50,26 @@ export function extractStationsArray(payload) {
   return [];
 }
 
+/** Read legacy text or a GBFS v3 Localized String, preferring usable English text. */
+function stationName(value) {
+  if (typeof value === 'string') return value.trim();
+  if (!Array.isArray(value)) return '';
+
+  let fallback = '';
+  for (const translation of value) {
+    if (typeof translation?.text !== 'string') continue;
+    const text = translation.text.trim();
+    if (!text) continue;
+    if (!fallback) fallback = text;
+    if (
+      typeof translation.language === 'string' &&
+      /^en(?:-|$)/i.test(translation.language.trim())
+    )
+      return text;
+  }
+  return fallback;
+}
+
 /**
  * Parse a GBFS station_information payload into a Map of station metadata.
  * Handles field-name variations across different GBFS providers
@@ -63,7 +83,7 @@ export function parseStationInformation(payload) {
   const stationMap = new Map();
 
   for (const raw of stations) {
-    // Accept both GBFS 2.x (station_id) and alternate (id) field names
+    // Accept both GBFS (station_id) and alternate (id) field names
     const stationId = String(raw?.station_id ?? raw?.id ?? '').trim();
     const lat = Number(raw?.lat ?? raw?.latitude);
     const lon = Number(raw?.lon ?? raw?.longitude);
@@ -71,7 +91,7 @@ export function parseStationInformation(payload) {
 
     stationMap.set(stationId, {
       stationId,
-      name: String(raw?.name || raw?.short_name || '').trim(),
+      name: stationName(raw?.name) || stationName(raw?.short_name),
       lat,
       lon,
       capacity: toNonNegativeInteger(raw?.capacity),

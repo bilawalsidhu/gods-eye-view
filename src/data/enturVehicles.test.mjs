@@ -135,11 +135,33 @@ test('the proxy snapshot for Entur carries the reported mode through', () => {
   assert.equal(snapshot.count, 1);
   assert.equal(snapshot.vehicles[0].timestampSource, 'vehicle');
   const record = snapshot.vehicles[0];
-  assert.equal(transitModeFor(entur, record.routeId, record.mode), 'ferry');
-  assert.equal(transitModeResolved(entur, record.routeId, record.mode), true);
+  assert.equal(
+    transitModeFor(entur, record.routeId, record.id, record.mode),
+    'ferry',
+  );
+  assert.equal(
+    transitModeResolved(entur, record.routeId, record.id, record.mode),
+    true,
+  );
   // Without a reported mode the route hint still applies.
-  assert.equal(transitModeFor(entur, 'VYG:Line:R10', null), 'rail');
-  assert.equal(transitModeFor(entur, 'SKY:Line:465', 'unknown'), 'bus');
+  assert.equal(transitModeFor(entur, 'VYG:Line:R10', null, null), 'rail');
+  assert.equal(transitModeFor(entur, 'SKY:Line:465', null, 'unknown'), 'bus');
+});
+
+test('a reported mode outranks the fleet and route hints', () => {
+  const feed = {
+    defaultMode: 'bus',
+    vehicleMode: (id) => (id === '4507' ? 'tram' : null),
+    routeMode: (route) => (route === '501' ? 'tram' : null),
+  };
+  // The vehicle's own report wins over both hints.
+  assert.equal(transitModeFor(feed, '501', '4507', 'ferry'), 'ferry');
+  assert.equal(transitModeResolved(feed, null, null, 'ferry'), true);
+  // Without one, the fleet number, then the route, then the default.
+  assert.equal(transitModeFor(feed, null, '4507', null), 'tram');
+  assert.equal(transitModeFor(feed, '501', '1', 'unknown'), 'tram');
+  assert.equal(transitModeFor(feed, '36', '1', null), 'bus');
+  assert.equal(transitModeResolved(feed, '36', '1', null), false);
 });
 
 test('Entur covers the whole country, from Kristiansand to Kirkenes', () => {

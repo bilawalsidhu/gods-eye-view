@@ -3,7 +3,10 @@ import { syncRowList } from './rowList.js';
 import { layerFeedState } from '../data/feedState.js';
 export { layerFeedState } from '../data/feedState.js';
 import { GUIDANCE_STATUSES } from '../loadingFeedback.js';
-import { keySetupRequirement } from '../keySetupCore.mjs';
+import {
+  keySetupRequirement,
+  keySetupWithAlternatives,
+} from '../keySetupCore.mjs';
 import { createWeatherPanel } from './weatherPanel.js';
 const FEED_STATE_LABELS = Object.freeze({
   nominal: 'ON',
@@ -46,11 +49,18 @@ const PANEL_GROUPS = [
   },
   {
     label: 'Events',
-    ids: ['rocket-launches', 'earthquakes', 'local-firms', 'fire-perimeters'],
+    ids: [
+      'rocket-launches',
+      'earthquakes',
+      'local-firms',
+      'fire-perimeters',
+      'gnss-integrity',
+    ],
   },
   {
     label: 'Weather',
     ids: [
+      'air-quality',
       'wind',
       'weather-radar',
       'weather-satellite',
@@ -100,7 +110,11 @@ function panelLabel(layer) {
 export function layerKeyRequirementTooltip(layer = {}) {
   if (layer?.stats?.keyRequired !== true) return '';
   const requiresKeyId = String(layer.requiresKeyId || '').trim();
-  return requiresKeyId ? keySetupRequirement(requiresKeyId) : '';
+  // A layer with several sources also names the ones it could use instead.
+  return keySetupWithAlternatives(
+    requiresKeyId ? keySetupRequirement(requiresKeyId) : '',
+    layer.stats.keyAlternatives || [],
+  );
 }
 
 /** Layer row presentation over supplied state and actions; no layer imports. */
@@ -368,6 +382,7 @@ export class LayerPanel {
               'weather-satellite',
               'weather-lightning',
               'weather-cyclones',
+              'air-quality',
             ].includes(layer.id),
         )
         .map((layer) => ({

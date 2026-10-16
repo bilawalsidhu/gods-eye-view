@@ -27,3 +27,48 @@ test('explicit providers replace the default source and an empty list removes it
     /array/,
   );
 });
+
+test('the defaults are Mapillary (given its source), Street View, KartaView and Panoramax, which start off and travel as provider switches', async () => {
+  const { createDefaultLayerState } = await import('../../data/layerState.js');
+  const mapillary = {
+    getStatus() {},
+    getTile() {},
+    getSequenceImages() {},
+    nearestImages() {},
+  };
+  const layer = createApplicationStreetLevel({ sources: { mapillary } });
+  assert.deepEqual(layer.providerIds, [
+    'mapillary',
+    'google',
+    'kartaview',
+    'panoramax',
+  ]);
+  // A fresh page and a restored default agree: Street View is billed, so off.
+  layer.setParams(createDefaultLayerState().options['street-level']);
+  assert.equal(layer.getParams().google, false);
+  assert.equal(layer.getParams().mapillary, true);
+  // A link that lit Street View carries it in the shared switch field.
+  layer.setParams({ providerSwitches: 'google-1' });
+  assert.equal(layer.getParams().google, true);
+  assert.equal(
+    layer.getParams().providerSwitches,
+    'google-1*kartaview-0*panoramax-0',
+  );
+  // KartaView is keyless and free, but one source shows at a time.
+  layer.setParams({ providerSwitches: 'kartaview-1' });
+  assert.equal(layer.getParams().kartaview, true);
+  assert.equal(layer.getParams().google, false);
+  assert.equal(layer.getParams().mapillary, false);
+  // As is Panoramax: lighting it puts KartaView out.
+  layer.setParams({ providerSwitches: 'panoramax-1' });
+  assert.equal(layer.getParams().panoramax, true);
+  assert.equal(layer.getParams().kartaview, false);
+  assert.equal(layer.getParams().mapillary, false);
+  // The form the app writes (the README and CHANGELOG quote it).
+  assert.equal(
+    layer.getParams().providerSwitches,
+    'google-0*kartaview-0*panoramax-1',
+  );
+  // Without the application's Street Level source there are none.
+  assert.deepEqual(createApplicationStreetLevel({}).providerIds, []);
+});
