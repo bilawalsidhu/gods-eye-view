@@ -194,9 +194,6 @@
 
 - Director timeline seeks cross the dateline along the short longitude arc.
 
-- Exclude aircraft without a reported altitude from requested altitude bands;
-  unfiltered aircraft queries still retain them.
-
 - Keep unknown GBFS availability counts neutral instead of turning null or empty
   values into zero bikes.
 
