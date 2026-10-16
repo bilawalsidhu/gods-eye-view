@@ -33,6 +33,21 @@ function preservedCanvas(container) {
   return canvas;
 }
 
+/** The camera's place in degrees (for the sun's elevation), or null. */
+function cameraPlace(camera) {
+  try {
+    const place = camera.pose().cartographic;
+    return place
+      ? {
+          lat: geo.math.toDegrees(place.latitude),
+          lng: geo.math.toDegrees(place.longitude),
+        }
+      : null;
+  } catch {
+    return null;
+  }
+}
+
 /** The camera height, or NaN while the camera has no position yet. */
 function cameraHeight(camera) {
   try {
@@ -118,7 +133,9 @@ export async function createNavaraGlobe({
       engine.frames.preRender.addEventListener(() => {
         if (!moving && !groundSettled && engine.surface.tilesLoaded())
           readGround();
-        if (look.frame(cameraHeight(camera), moving, ground))
+        if (
+          look.frame(cameraHeight(camera), moving, ground, cameraPlace(camera))
+        )
           engine.render.request('navara-look');
       }),
     ];

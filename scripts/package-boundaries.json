@@ -1760,6 +1760,7 @@
       "src/globe/cesium/render.js",
       "src/globe/cesium/surface.js",
       "src/globe/cesium/engineFromViewer.js",
+      "src/globe/navara/atmosphereLuminance.js",
       "src/globe/navara/cameraMath.js",
       "src/globe/navara/cameraModel.js",
       "src/globe/navara/createNavaraEngine.js",

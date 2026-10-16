@@ -16,6 +16,12 @@ import {
   navaraViewOptions,
   resolveNavaraLook,
   sunDateStale,
+  ATMOSPHERE_LUMINANCE_SCALE,
+  STARS_HIDE_SUN_ABOVE_DEG,
+  STARS_SHOW_SUN_BELOW_DEG,
+  STARS_SPACE_ENTER_M,
+  STARS_SPACE_EXIT_M,
+  starsVisibleAt,
 } from './viewOptions.js';
 
 test('the product view renders on demand with MSAA 4 at the native pixel ratio', () => {
@@ -55,6 +61,8 @@ test('cinematic is the default look; photoreal is the default plugin scene; mini
     lights: [],
     effects: [],
     globeLighting: false,
+    atmosphereLuminance: 1,
+    daylightHidesStars: false,
   });
   assert.deepEqual(navaraScenePlan('minimal'), {
     pluginDefault: false,
@@ -62,6 +70,8 @@ test('cinematic is the default look; photoreal is the default plugin scene; mini
     lights: [{ skyLightProbe: {} }, { sun: {} }],
     effects: [],
     globeLighting: false,
+    atmosphereLuminance: 1,
+    daylightHidesStars: false,
   });
   assert.throws(() => navaraScenePlan('cine'), RangeError);
   assert.throws(() => navaraScenePlan('toString'), RangeError);
@@ -74,7 +84,7 @@ test('the cinematic look: photoreal plus clouds and ACES, no sun shadow maps, no
   assert.equal(plan.pluginDefault, false);
   assert.deepEqual(plan.meshes, [
     { sky: {} },
-    { stars: { intensity: 40, pointSize: 2 } },
+    { stars: { intensity: 40 / ATMOSPHERE_LUMINANCE_SCALE, pointSize: 2 } },
   ]);
   assert.deepEqual(plan.lights, [
     { skyLightProbe: {} },
@@ -172,4 +182,35 @@ test('the sun date is stale once it drifts a minute from the clock', () => {
   assert.equal(sunDateStale(0, 60_001), true);
   assert.equal(sunDateStale(120_000, 0), true, 'either direction');
   assert.equal(sunDateStale(Number.NaN, 0), true);
+});
+
+test('the cinematic look brightens the atmosphere, not the tiles, and hides stars by day', () => {
+  const plan = navaraScenePlan('cinematic');
+  assert.equal(plan.atmosphereLuminance, ATMOSPHERE_LUMINANCE_SCALE);
+  assert.ok(ATMOSPHERE_LUMINANCE_SCALE > 1);
+  assert.equal(plan.daylightHidesStars, true);
+  for (const look of ['minimal', 'photoreal']) {
+    assert.equal(navaraScenePlan(look).atmosphereLuminance, 1, look);
+    assert.equal(navaraScenePlan(look).daylightHidesStars, false, look);
+  }
+});
+
+test('stars show at night and from space, not in a daylit sky, with hysteresis', () => {
+  assert.equal(starsVisibleAt(900, 40, true), false, 'noon');
+  assert.equal(starsVisibleAt(900, 40, false), false);
+  assert.equal(starsVisibleAt(900, STARS_SHOW_SUN_BELOW_DEG - 1, false), true);
+  assert.equal(starsVisibleAt(900, -5, false), false, 'inside the gap');
+  assert.equal(starsVisibleAt(900, -5, true), true, 'inside the gap');
+  assert.equal(starsVisibleAt(900, STARS_HIDE_SUN_ABOVE_DEG + 1, true), false);
+  assert.equal(starsVisibleAt(STARS_SPACE_ENTER_M, 40, false), true, 'space');
+  assert.equal(starsVisibleAt(90_000, 40, true), true, 'inside the gap');
+  assert.equal(starsVisibleAt(STARS_SPACE_EXIT_M - 1, 40, true), false);
+  assert.equal(starsVisibleAt(900, Number.NaN, true), true, 'unknown keeps it');
+  assert.equal(
+    starsVisibleAt(Number.NaN, 40, false),
+    false,
+    'unknown keeps it',
+  );
+  assert.ok(STARS_SHOW_SUN_BELOW_DEG < STARS_HIDE_SUN_ABOVE_DEG);
+  assert.ok(STARS_SPACE_EXIT_M < STARS_SPACE_ENTER_M);
 });

@@ -94,6 +94,41 @@ export function cloudsVisibleAt(height, ground, current = true) {
     : height < CLOUDS_SHOW_BELOW_M && low < CLOUDS_SHOW_OVER_GROUND_M;
 }
 
+// Navara's sky, clouds and haze come from the atmosphere model in physical
+// radiance, scaled for a tone-mapping exposure near 10, while the Google
+// tiles carry baked colours that need exposure 1. At exposure 1 the noon sky
+// came out dark navy (sRGB about 39, 58, 90 at Manhattan facing the
+// horizon), and the stars showed through it. The cinematic look multiplies
+// the atmosphere's radiance-to-luminance factors (sky, clouds, aerial
+// perspective; Navara's stars share them) by this scale instead of raising
+// the exposure, so the sky turns daylight blue and the tiles keep their
+// colours.
+export const ATMOSPHERE_LUMINANCE_SCALE = 3;
+const STAR_INTENSITY = 40;
+
+// Stars show from space or once the sun is well below the horizon at the
+// camera (civil twilight), and hide in a daylit sky. Gaps keep a camera
+// near a limit from flickering them.
+export const STARS_SHOW_SUN_BELOW_DEG = -6;
+export const STARS_HIDE_SUN_ABOVE_DEG = -4;
+export const STARS_SPACE_ENTER_M = 100_000;
+export const STARS_SPACE_EXIT_M = 80_000;
+
+/**
+ * Whether the cinematic stars show for a camera at `height` (metres above
+ * the ellipsoid) with the sun `sunElevation` degrees above its horizon; an
+ * unknown height or sun elevation keeps `current`.
+ */
+export function starsVisibleAt(height, sunElevation, current = true) {
+  if (!Number.isFinite(height)) return current;
+  if (current ? height > STARS_SPACE_EXIT_M : height >= STARS_SPACE_ENTER_M)
+    return true;
+  if (!Number.isFinite(sunElevation)) return current;
+  return current
+    ? sunElevation <= STARS_HIDE_SUN_ABOVE_DEG
+    : sunElevation < STARS_SHOW_SUN_BELOW_DEG;
+}
+
 /**
  * Whether the atmosphere's sun date has drifted from the wall clock (the
  * HUD's SUN elevation uses `new Date()`) by more than a minute.
@@ -105,8 +140,17 @@ export function sunDateStale(atmosphereMs, nowMs, toleranceMs = 60_000) {
 const cinematic = (mobile) => ({
   pluginDefault: false,
   // Brighter, larger stars (defaults 10 and 1 px) so the night sky and the
-  // globe from space keep a visible starfield next to a sunlit Earth.
-  meshes: [{ sky: {} }, { stars: { intensity: 40, pointSize: 2 } }],
+  // globe from space keep a visible starfield next to a sunlit Earth: 40,
+  // divided by the atmosphere scale the stars share.
+  meshes: [
+    { sky: {} },
+    {
+      stars: {
+        intensity: STAR_INTENSITY / ATMOSPHERE_LUMINANCE_SCALE,
+        pointSize: 2,
+      },
+    },
+  ],
   // The tiles carry baked sunlight, so the sun casts no shadow maps (CSM
   // would cost every frame and darken nothing the tiles show).
   lights: [{ skyLightProbe: {} }, { sun: { castShadow: false } }],
@@ -140,6 +184,8 @@ const cinematic = (mobile) => ({
     mobile ? { fxaa: {} } : { smaa: {} },
   ],
   globeLighting: true,
+  atmosphereLuminance: ATMOSPHERE_LUMINANCE_SCALE,
+  daylightHidesStars: true,
 });
 
 const PLANS = {
@@ -149,6 +195,8 @@ const PLANS = {
     lights: [{ skyLightProbe: {} }, { sun: {} }],
     effects: [],
     globeLighting: false,
+    atmosphereLuminance: 1,
+    daylightHidesStars: false,
   }),
   photoreal: () => ({
     pluginDefault: true,
@@ -156,6 +204,8 @@ const PLANS = {
     lights: [],
     effects: [],
     globeLighting: false,
+    atmosphereLuminance: 1,
+    daylightHidesStars: false,
   }),
   cinematic,
 };
@@ -168,7 +218,8 @@ const PLANS = {
  * - `cinematic` (the app's default): photoreal plus volumetric clouds for
  *   low views over low ground (cloudsVisibleAt), ACES tone mapping, brighter stars, no sun shadow
  *   maps, and atmosphere lighting of the globe from space (`globeLighting`,
- *   see globeLightingAt). On a mobile-optimized
+ *   see globeLightingAt), a brighter atmosphere (ATMOSPHERE_LUMINANCE_SCALE)
+ *   and stars only at night or from space (starsVisibleAt). On a mobile-optimized
  *   view it drops the clouds and the lens flare and uses FXAA.
  */
 export function navaraScenePlan(
