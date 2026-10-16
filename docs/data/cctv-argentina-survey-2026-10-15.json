@@ -5,7 +5,7 @@
   "runtimeCounts": {
     "embed": 25,
     "hls": 24,
-    "image": 25
+    "image": 15
   },
   "runtimeVerification": [
     {
@@ -349,96 +349,6 @@
       "contentType": "application/vnd.apple.mpegurl",
       "decoded": true,
       "lastModified": null
-    },
-    {
-      "cameraId": "ar-varitech-cam016",
-      "method": "HTTP response, decoded image and visual inspection",
-      "checkedAt": "2026-10-15",
-      "httpStatus": 200,
-      "contentType": "image/jpeg",
-      "decoded": true,
-      "lastModified": "Thu, 15 Oct 2026 18:45:14 GMT"
-    },
-    {
-      "cameraId": "ar-varitech-cam017",
-      "method": "HTTP response, decoded image and visual inspection",
-      "checkedAt": "2026-10-15",
-      "httpStatus": 200,
-      "contentType": "image/jpeg",
-      "decoded": true,
-      "lastModified": "Thu, 15 Oct 2026 18:45:15 GMT"
-    },
-    {
-      "cameraId": "ar-varitech-cam018",
-      "method": "HTTP response, decoded image and visual inspection",
-      "checkedAt": "2026-10-15",
-      "httpStatus": 200,
-      "contentType": "image/jpeg",
-      "decoded": true,
-      "lastModified": "Thu, 15 Oct 2026 18:45:16 GMT"
-    },
-    {
-      "cameraId": "ar-varitech-cam031",
-      "method": "HTTP response, decoded image and visual inspection",
-      "checkedAt": "2026-10-15",
-      "httpStatus": 200,
-      "contentType": "image/jpeg",
-      "decoded": true,
-      "lastModified": "Thu, 15 Oct 2026 18:45:19 GMT"
-    },
-    {
-      "cameraId": "ar-varitech-cam032",
-      "method": "HTTP response, decoded image and visual inspection",
-      "checkedAt": "2026-10-15",
-      "httpStatus": 200,
-      "contentType": "image/jpeg",
-      "decoded": true,
-      "lastModified": "Thu, 15 Oct 2026 18:50:10 GMT"
-    },
-    {
-      "cameraId": "ar-varitech-cam008",
-      "method": "HTTP response, decoded image and visual inspection",
-      "checkedAt": "2026-10-15",
-      "httpStatus": 200,
-      "contentType": "image/jpeg",
-      "decoded": true,
-      "lastModified": "Thu, 15 Oct 2026 18:48:37 GMT"
-    },
-    {
-      "cameraId": "ar-varitech-cam005",
-      "method": "HTTP response, decoded image and visual inspection",
-      "checkedAt": "2026-10-15",
-      "httpStatus": 200,
-      "contentType": "image/jpeg",
-      "decoded": true,
-      "lastModified": "Thu, 15 Oct 2026 18:46:39 GMT"
-    },
-    {
-      "cameraId": "ar-varitech-cam002",
-      "method": "HTTP response, decoded image and visual inspection",
-      "checkedAt": "2026-10-15",
-      "httpStatus": 200,
-      "contentType": "image/jpeg",
-      "decoded": true,
-      "lastModified": "Thu, 15 Oct 2026 18:50:15 GMT"
-    },
-    {
-      "cameraId": "ar-varitech-cam003",
-      "method": "HTTP response, decoded image and visual inspection",
-      "checkedAt": "2026-10-15",
-      "httpStatus": 200,
-      "contentType": "image/jpeg",
-      "decoded": true,
-      "lastModified": "Thu, 15 Oct 2026 18:48:10 GMT"
-    },
-    {
-      "cameraId": "ar-varitech-cam001",
-      "method": "HTTP response, decoded image and visual inspection",
-      "checkedAt": "2026-10-15",
-      "httpStatus": 200,
-      "contentType": "image/jpeg",
-      "decoded": true,
-      "lastModified": "Thu, 15 Oct 2026 18:45:40 GMT"
     },
     {
       "cameraId": "ar-bayo-copitos",
@@ -2516,5 +2426,128 @@
       "covered-by-pr": 8
     },
     "policy": "Misiones remains in PR #1145. Discard sources with express republication restrictions and unresolved leads without a verified current public feed. Retain dated exclusion evidence to avoid rediscovery."
-  }
+  },
+  "separatePacks": [
+    {
+      "provider": "Varitech",
+      "status": "covered-by-pr",
+      "pullRequest": "https://github.com/bilawalsidhu/gods-eye-view/pull/1147",
+      "enableEnv": "CCTV_VARITECH_ENABLED=1",
+      "termsUrl": "https://varitech.ar/terminos",
+      "reason": "Removed from the general catalog on 2026-10-16. The separate pack is opt-in and applies provider-specific caching and reuse restrictions; enabling it does not grant permission.",
+      "verification": [
+        {
+          "cameraId": "ar-varitech-cam016",
+          "method": "HTTP response, decoded image and visual inspection",
+          "checkedAt": "2026-10-15",
+          "httpStatus": 200,
+          "contentType": "image/jpeg",
+          "decoded": true,
+          "lastModified": "Thu, 15 Oct 2026 18:45:14 GMT",
+          "sourcePageUrl": "https://www.cerrochapelco.com.ar/webcams-cerro-chapelco/",
+          "publishedUrl": "https://varitech.ar/cameras/cam016/latest.jpg"
+        },
+        {
+          "cameraId": "ar-varitech-cam017",
+          "method": "HTTP response, decoded image and visual inspection",
+          "checkedAt": "2026-10-15",
+          "httpStatus": 200,
+          "contentType": "image/jpeg",
+          "decoded": true,
+          "lastModified": "Thu, 15 Oct 2026 18:45:15 GMT",
+          "sourcePageUrl": "https://www.cerrochapelco.com.ar/webcams-cerro-chapelco/",
+          "publishedUrl": "https://varitech.ar/cameras/cam017/latest.jpg"
+        },
+        {
+          "cameraId": "ar-varitech-cam018",
+          "method": "HTTP response, decoded image and visual inspection",
+          "checkedAt": "2026-10-15",
+          "httpStatus": 200,
+          "contentType": "image/jpeg",
+          "decoded": true,
+          "lastModified": "Thu, 15 Oct 2026 18:45:16 GMT",
+          "sourcePageUrl": "https://www.cerrochapelco.com.ar/webcams-cerro-chapelco/",
+          "publishedUrl": "https://varitech.ar/cameras/cam018/latest.jpg"
+        },
+        {
+          "cameraId": "ar-varitech-cam031",
+          "method": "HTTP response, decoded image and visual inspection",
+          "checkedAt": "2026-10-15",
+          "httpStatus": 200,
+          "contentType": "image/jpeg",
+          "decoded": true,
+          "lastModified": "Thu, 15 Oct 2026 18:45:19 GMT",
+          "sourcePageUrl": "https://skilahoya.com/webcams/",
+          "publishedUrl": "https://varitech.ar/cameras/cam031/latest.jpg"
+        },
+        {
+          "cameraId": "ar-varitech-cam032",
+          "method": "HTTP response, decoded image and visual inspection",
+          "checkedAt": "2026-10-15",
+          "httpStatus": 200,
+          "contentType": "image/jpeg",
+          "decoded": true,
+          "lastModified": "Thu, 15 Oct 2026 18:50:10 GMT",
+          "sourcePageUrl": "https://skilahoya.com/webcams/",
+          "publishedUrl": "https://varitech.ar/cameras/cam032/latest.jpg"
+        },
+        {
+          "cameraId": "ar-varitech-cam008",
+          "method": "HTTP response, decoded image and visual inspection",
+          "checkedAt": "2026-10-15",
+          "httpStatus": 200,
+          "contentType": "image/jpeg",
+          "decoded": true,
+          "lastModified": "Thu, 15 Oct 2026 18:48:37 GMT",
+          "sourcePageUrl": "https://catedralaltapatagonia.com/webcams/",
+          "publishedUrl": "https://varitech.ar/cameras/cam008/latest.jpg"
+        },
+        {
+          "cameraId": "ar-varitech-cam005",
+          "method": "HTTP response, decoded image and visual inspection",
+          "checkedAt": "2026-10-15",
+          "httpStatus": 200,
+          "contentType": "image/jpeg",
+          "decoded": true,
+          "lastModified": "Thu, 15 Oct 2026 18:46:39 GMT",
+          "sourcePageUrl": "https://catedralaltapatagonia.com/webcams/",
+          "publishedUrl": "https://varitech.ar/cameras/cam005/latest.jpg"
+        },
+        {
+          "cameraId": "ar-varitech-cam002",
+          "method": "HTTP response, decoded image and visual inspection",
+          "checkedAt": "2026-10-15",
+          "httpStatus": 200,
+          "contentType": "image/jpeg",
+          "decoded": true,
+          "lastModified": "Thu, 15 Oct 2026 18:50:15 GMT",
+          "sourcePageUrl": "https://catedralaltapatagonia.com/webcams/",
+          "publishedUrl": "https://varitech.ar/cameras/cam002/latest.jpg"
+        },
+        {
+          "cameraId": "ar-varitech-cam003",
+          "method": "HTTP response, decoded image and visual inspection",
+          "checkedAt": "2026-10-15",
+          "httpStatus": 200,
+          "contentType": "image/jpeg",
+          "decoded": true,
+          "lastModified": "Thu, 15 Oct 2026 18:48:10 GMT",
+          "sourcePageUrl": "https://catedralaltapatagonia.com/webcams/",
+          "publishedUrl": "https://varitech.ar/cameras/cam003/latest.jpg",
+          "observation": "Catalina Reynal lens was obscured at the 2026-10-15 verification."
+        },
+        {
+          "cameraId": "ar-varitech-cam001",
+          "method": "HTTP response, decoded image and visual inspection",
+          "checkedAt": "2026-10-15",
+          "httpStatus": 200,
+          "contentType": "image/jpeg",
+          "decoded": true,
+          "lastModified": "Thu, 15 Oct 2026 18:45:40 GMT",
+          "sourcePageUrl": "https://catedralaltapatagonia.com/webcams/",
+          "publishedUrl": "https://varitech.ar/uploads/cameras/cam001/cam001.jpg"
+        }
+      ]
+    }
+  ]
 }

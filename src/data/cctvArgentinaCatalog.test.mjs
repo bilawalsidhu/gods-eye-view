@@ -9,6 +9,30 @@ const catalog = read('../../config/cctv_sources.argentina.json');
 const survey = read('../../docs/data/cctv-argentina-survey-2026-10-15.json');
 const mediaUrl = (camera) => camera.embedUrl || camera.url;
 
+test('Varitech stays in its separate opt-in pack, with historical receipts preserved', () => {
+  const pack = survey.separatePacks.find(
+    (entry) => entry.provider === 'Varitech',
+  );
+  assert.equal(pack.status, 'covered-by-pr');
+  assert.equal(
+    pack.pullRequest,
+    'https://github.com/bilawalsidhu/gods-eye-view/pull/1147',
+  );
+  assert.equal(pack.enableEnv, 'CCTV_VARITECH_ENABLED=1');
+  assert.equal(pack.verification.length, 10);
+  const activeIds = new Set(catalog.map((camera) => camera.id));
+  for (const receipt of pack.verification) {
+    assert.ok(!activeIds.has(receipt.cameraId));
+    assert.equal(receipt.checkedAt, survey.checkedAt);
+    assert.equal(receipt.decoded, true);
+    assert.equal(new URL(receipt.publishedUrl).hostname, 'varitech.ar');
+  }
+  for (const camera of catalog) {
+    assert.ok(!camera.id.startsWith('ar-varitech-'));
+    assert.notEqual(new URL(mediaUrl(camera)).hostname, 'varitech.ar');
+  }
+});
+
 test('Argentina sources have unique public media and uncalibrated area anchors', () => {
   assert.equal(new Set(catalog.map((c) => c.id)).size, catalog.length);
   assert.equal(new Set(catalog.map(mediaUrl)).size, catalog.length);

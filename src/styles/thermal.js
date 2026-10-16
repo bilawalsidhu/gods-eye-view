@@ -1,3 +1,5 @@
+import { msg } from '../i18n/index.js';
+
 /**
  * FLIR — Forward Looking Infrared
  * Military-grade thermal imaging with White-Hot/Black-Hot modes,
@@ -14,11 +16,11 @@
 export const thermalShader = {
   name: 'thermal',
   uniforms: {
-    sensitivity: { default: 0.75, min: 0, max: 1, label: 'Sensitivity' },
-    bloom: { default: 0.65, min: 0, max: 1, label: 'Bloom' },
-    mode: { default: 0.0, min: 0, max: 1, label: 'WHOT/BHOT' },
-    pixelation: { default: 1.5, min: 1, max: 6, label: 'Pixelation' },
-    palette: { default: 0.0, min: 0, max: 1, label: 'Ironbow' },
+    sensitivity: { default: 0.75, min: 0, max: 1, label: msg('Sensitivity') },
+    bloom: { default: 0.65, min: 0, max: 1, label: msg('Bloom') },
+    mode: { default: 0.0, min: 0, max: 1, label: msg('WHOT/BHOT') },
+    pixelation: { default: 1.5, min: 1, max: 6, label: msg('Pixelation') },
+    palette: { default: 0.0, min: 0, max: 1, label: msg('Ironbow') },
   },
   fragmentShader: /* glsl */ `
     uniform sampler2D colorTexture;

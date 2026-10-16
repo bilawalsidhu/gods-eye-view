@@ -1,8 +1,8 @@
 # Argentina public webcam catalog
 
-`config/cctv_sources.argentina.json` is an opt-in catalog of **74 public feeds**
+`config/cctv_sources.argentina.json` is an opt-in catalog of **64 public feeds**
 checked on **2026-10-15**: 25 external players (20 YouTube, two Twitch, two Angelcam and one Roundshot),
-24 HLS streams and 25 periodically updated still images. It covers eleven
+24 HLS streams and 15 periodically updated still images. It covers eleven
 provinces and CABA. Some feeds rotate views;
 this is a count of feeds, not independently located camera mounts.
 
@@ -24,7 +24,7 @@ CCTV_SOURCES_FILE=config/cctv_sources.argentina.json npm run dev
 
 Enable CCTV, then select a city and camera in the panel. A configured pack
 replaces the default camera packs unless `CCTV_FORCE_AUSTIN=1` is set. Leave that
-flag unset for an Argentina-only session. A custom `CCTV_MAX_SOURCES` below 74
+flag unset for an Argentina-only session. A custom `CCTV_MAX_SOURCES` below 64
 truncates this pack. Restart the server after editing the file, or wait for the
 normal source-cache refresh.
 
@@ -41,14 +41,14 @@ normal source-cache refresh.
 | Municipalidad de Neuquén                                           |       0 |      7 |             0 |
 | Telpin: Pinamar, Ostende, Cariló                                   |       0 |      9 |             0 |
 | Ciudad de Mendoza and Las Leñas                                    |       0 |      3 |             0 |
-| Chapelco / La Hoya / Catedral / Cerro Bayo                         |       0 |      0 | 3 / 2 / 5 / 5 |
+| Cerro Bayo | 0 | 0 | 5 |
 | Multimedios: Pringles, Monte Hermoso (two), Sierra railway station | 0 | 4 | 0 |
 | Municipalidad de Tandil: Lago del Fuerte | 0 | 1 | 0 |
 | Tucumán Turismo / Mar del Plata Webcam (Twitch) | 2 | 0 | 0 |
 | Veladero (Angelcam) / Finca La Anita (Roundshot) | 3 | 0 | 0 |
 | Comodoro Turismo / Las Heras, Santa Cruz (IPCamLive stills) | 0 | 0 | 4 / 5 |
 | The Vines Resort & Spa | 0 | 0 | 1 |
-| **Total** | **25** | **24** | **25** |
+| **Total** | **25** | **24** | **15** |
 
 Per-feed operator links, credits, location sources and verification dates are in
 the configuration. These are deliberately public tourist, weather, traffic and
@@ -57,7 +57,12 @@ municipal views. No private camera addresses were scanned.
 The eight Misiones feeds are handled by
 [PR #1145](https://github.com/bilawalsidhu/gods-eye-view/pull/1145); they remain
 in the survey as `covered-by-pr` and are intentionally excluded from this pack.
-No Encarnación camera or implementation is included.
+The ten Varitech entries were removed on 2026-10-16 to avoid duplicate
+registrations with [PR #1147](https://github.com/bilawalsidhu/gods-eye-view/pull/1147).
+That separate pack is off by default and requires `CCTV_VARITECH_ENABLED=1`
+and provider permission for the intended use. This catalog does not enable it.
+Their dated verification receipts remain under `separatePacks` in the survey,
+outside the 115 additional findings. No Encarnación camera or implementation is included.
 
 ## Verification and location limits
 
@@ -66,7 +71,7 @@ No Encarnación camera or implementation is included.
   broadcast live. IDs can change when an operator restarts a broadcast; find a
   replacement on the original operator/channel page.
 - All 24 included HLS URLs returned manifests and decoded a frame through FFmpeg.
-  All 25 still URLs returned decodable images with current HTTP timestamps. Frames were
+  All 15 still URLs returned decodable images with current HTTP timestamps. Frames were
   visually inspected. This proves availability at the check, not uptime or
   compatibility with every browser.
 - The two Twitch and two Angelcam players also decoded advancing video. An
@@ -77,11 +82,9 @@ No Encarnación camera or implementation is included.
 - Tandil periodically stops and restarts its playlist. Mendoza advertises some
   expired segments; the relay recovery fix skips old 404s without tolerating
   failures in the newest pair. Neither check is an uptime guarantee.
-- Varitech resort images are published at approximately five-minute intervals,
-  not continuous video. This data pack does not change the existing frame-loop
-  polling interval. Catedral's Catalina Reynal lens was obscured; Cerro Bayo's
-  Telesilla Lagos overlay clock was incorrect, although its image and HTTP
-  timestamp updated. Both limitations are recorded.
+- Cerro Bayo's Telesilla Lagos overlay clock was incorrect, although its image
+  and HTTP timestamp updated. The former Varitech Catalina Reynal obscured-lens
+  observation remains in the separate pack's historical verification receipt.
 - Cerro Bayo, Comodoro and Las Heras public snapshot aliases redirect to image hosts on IPCamLive.
   The catalog pins the final public image URLs observed at verification, and
   retains each `snapshotAliasUrl` for maintenance. Re-resolve that operator link
