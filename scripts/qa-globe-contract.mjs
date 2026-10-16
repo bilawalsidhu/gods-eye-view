@@ -987,7 +987,11 @@ async function runNavara(page, url, consoleErrors) {
           ensure(
             at >= 0 &&
               toneMapping >= 0 &&
-              at === toneMapping + 1 &&
+              // Right after tone mapping, or after gev's overlay there
+              // (sprites, points and lines, which Cesium sharpens too).
+              (at === toneMapping + 1 ||
+                (at === toneMapping + 2 &&
+                  names[toneMapping + 1] === 'gevOverlay')) &&
               (antiAliasing < 0 || at < antiAliasing),
             `the sharpening is not between tone mapping and anti-aliasing: ${names.join(', ')}`,
           );
