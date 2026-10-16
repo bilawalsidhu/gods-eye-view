@@ -6,7 +6,11 @@ import ThreeView from '@navaramap/three';
 import * as geo from '../../geo/index.js';
 import { DefaultPlugin } from '@navaramap/three-default-plugin';
 import { createNavaraEngine } from './createNavaraEngine.js';
-import { forEachLuminanceUniform, navaraHooks } from './internals.js';
+import {
+  forEachLuminanceUniform,
+  keepCascadedLightIds,
+  navaraHooks,
+} from './internals.js';
 import { buildNavaraLook } from './look.js';
 import { createNavaraSharpen } from './sharpen.js';
 import { createNavaraMovers } from './movers/index.js';
@@ -112,6 +116,8 @@ export async function createNavaraGlobe({
       () => engine.clock.frameTime(),
       { forEachLuminanceUniform },
     );
+    // The look's shadowed sun leaked a light per frame (internals.js).
+    keepCascadedLightIds(view);
     engine = createNavaraEngine(view, {
       hooks: navaraHooks(view),
       container,

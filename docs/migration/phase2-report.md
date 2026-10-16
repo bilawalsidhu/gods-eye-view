@@ -170,6 +170,15 @@ providers.
   - terrain or tile collision in the camera controller (gev adds its own
     floor, `src/globe/navara/groundFloor.js`);
   - a synchronous pick, or picks with ids for 3D tiles.
+  - (phase 3) the transparent pass copies the sun's cascaded shadow lights
+    with `CascadedDirectionalLights.copy`, which clones every cascade each
+    frame: new light ids grow three's light uniforms cache by about
+    1.2 KB a frame (4.3 MB/min post-GC at 60 fps in the minimal and
+    photoreal looks). gev patches the copy to update in place
+    (`src/globe/navara/cascadedLightCopy.js`, applied by `internals.js`);
+    upstream: copy cascaded lights in place;
+  - (phase 3) a click pick that is not stale when clicks follow each
+    other within a frame (0.2.1 answers with the first click's pick).
 - **Other notes:**
   - Navara logs `THREE.WARNING: Multiple instances of Three.js being
     imported` (a warning, not an error).

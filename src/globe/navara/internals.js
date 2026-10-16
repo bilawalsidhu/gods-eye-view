@@ -5,6 +5,7 @@
 // found it and the public API that would replace it upstream.
 
 import { ModelMesh } from '@navaramap/three';
+import { patchCascadedLightCopy } from './cascadedLightCopy.js';
 
 export const NAVARA_INTERNALS_VERSION = '0.2.1';
 
@@ -128,6 +129,23 @@ export function forEachLuminanceUniform(handles, visit) {
     true,
     visit,
   );
+}
+
+/**
+ * Phase 3 review (leak): the sun's cascaded shadow lights are re-cloned by
+ * the transparent pass every frame (cascadedLightCopy.js). Finds the
+ * CascadedDirectionalLights class among the view's scene lights (private:
+ * view._scenes.light) and patches its copy to update in place. Returns the
+ * restore function, or null when the look has no cascaded light (the
+ * cinematic sun casts no shadow). Upstream ask: copy cascaded lights in
+ * place.
+ */
+export function keepCascadedLightIds(view) {
+  const lights = view._scenes?.light?.children ?? [];
+  const cascaded = lights.find((light) => Array.isArray(light?.cascadedLights));
+  return cascaded
+    ? patchCascadedLightCopy(Object.getPrototypeOf(cascaded))
+    : null;
 }
 
 /** The hooks createNavaraEngine takes. */
