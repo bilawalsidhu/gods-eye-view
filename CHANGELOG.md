@@ -1,10 +1,5 @@
 # Changelog
 
-- Recover live CCTV HLS windows that still advertise expired older segments:
-  skip older 404s once and mark the gap, while recent-segment and access errors
-  still fail. Raise the bounded segment allowance from 4 to 12 MiB for public
-  1080p cameras; the 24 MiB retained cache and two-session limits stay in place.
-
 - Local FM seek finds stations after wrapping around 87.5–108 MHz, covers both
   band edges, skips the starting station and rejects spectra from an earlier
   tune (Aditya, @Rohilalala, #1174).
