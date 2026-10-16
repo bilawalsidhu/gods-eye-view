@@ -1108,5 +1108,6 @@
   "src/app/layers/qaSources.js",
   "src/app/layers/qaSources.test.mjs",
   "scripts/qa-w1-layers.mjs",
-  "src/bench/w1Feeds.js"
+  "src/bench/w1Feeds.js",
+  "scripts/qa-map-switch.mjs"
 ]
