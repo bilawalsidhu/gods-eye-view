@@ -74,6 +74,19 @@ function regionalBriefProxy({
     return payload;
   }
 
+  async function weatherForPoint(entry, point) {
+    if (!isSmnCoveragePoint(point) && entry.payload.weather?.source !== 'smn')
+      return entry.payload.weather;
+    try {
+      const weather = await weatherProvider(point, entry.payload.weather);
+      // Retain a model fallback for this cell without caching a station choice.
+      if (weather && weather.source !== 'smn') entry.payload.weather = weather;
+      return weather;
+    } catch {
+      return null;
+    }
+  }
+
   function install(middlewares) {
     middlewares.use('/api/regional-brief', async (req, res) => {
       if (req.method !== 'GET') {
@@ -100,25 +113,14 @@ function regionalBriefProxy({
         );
         return;
       }
-      // Station choice can change within a 0.1° cell. Use the exact query in
-      // SMN coverage, while the provider shares its bulk downloads globally.
-      const key = isSmnCoveragePoint(point)
-        ? `smn:${point.latitude},${point.longitude}`
-        : `${(Math.round(point.latitude * 10) / 10).toFixed(1)},${(Math.round(point.longitude * 10) / 10).toFixed(1)}`;
+      const key = `${(Math.round(point.latitude * 10) / 10).toFixed(1)},${(Math.round(point.longitude * 10) / 10).toFixed(1)}`;
       const now = Date.now();
       const cached = _regionalBriefCache.get(key);
-      // A cached observation can expire before the regional cache itself.
-      const cachedWeather =
-        cached?.payload.weather?.source === 'smn'
-          ? smnWeatherAtPoint(cached.payload.weather, point, now)
-          : cached?.payload.weather;
-      const usableCache =
-        cached?.payload.weather?.source !== 'smn' || cachedWeather;
-      if (
-        cached &&
-        usableCache &&
-        now - cached.cachedAt <= REGIONAL_BRIEF_CACHE_MS
-      ) {
+      const fresh = cached && now - cached.cachedAt <= REGIONAL_BRIEF_CACHE_MS;
+      const cachedWeather = fresh
+        ? await weatherForPoint(cached, point)
+        : cached?.payload.weather;
+      if (cached && now - cached.cachedAt <= REGIONAL_BRIEF_CACHE_MS) {
         res.writeHead(200, {
           'Content-Type': 'application/json',
           'Cache-Control': 'public, max-age=60',
@@ -129,6 +131,7 @@ function regionalBriefProxy({
             ...cached.payload,
             coordinates: point,
             weather: cachedWeather,
+            weatherStatus: cachedWeather ? 'ready' : 'unavailable',
             status: 'cached',
           }),
         );
@@ -144,7 +147,20 @@ function regionalBriefProxy({
           'Cache-Control': 'public, max-age=60',
           'X-Regional-Brief': request.shared ? 'INFLIGHT' : 'MISS',
         });
-        res.end(JSON.stringify(payload));
+        // Coalesced requests can be in the same cell but nearer different stations.
+        const weather =
+          payload.coordinates.latitude === point.latitude &&
+          payload.coordinates.longitude === point.longitude
+            ? payload.weather
+            : await weatherForPoint({ payload }, point);
+        res.end(
+          JSON.stringify({
+            ...payload,
+            coordinates: point,
+            weather,
+            weatherStatus: weather ? 'ready' : 'unavailable',
+          }),
+        );
       } catch {
         if (cached && now - cached.cachedAt <= REGIONAL_BRIEF_STALE_MS) {
           const staleWeather =

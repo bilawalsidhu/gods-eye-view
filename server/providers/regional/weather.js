@@ -30,13 +30,15 @@ function createRegionalBriefWeatherProvider({
   smnProvider = createSmnWeatherProvider(),
   modelProvider = fetchRegionalWeather,
 } = {}) {
-  return async (point) => {
+  return async (point, cachedModel = null) => {
     try {
       const observation = await smnProvider(point);
       if (observation) return observation;
     } catch {
       // An optional observation source must not take down the model fallback.
     }
+    // The regional cell cache may reuse a model, never a station selection.
+    if (cachedModel && cachedModel.source !== 'smn') return cachedModel;
     const weather = await modelProvider(point);
     return weather
       ? {

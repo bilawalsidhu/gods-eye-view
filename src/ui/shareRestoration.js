@@ -1,7 +1,55 @@
 import { LayerStateCoordinator } from '../data/layerStateCoordinator.js';
 import { stampInitialShareGesture } from '../navigationPolicy.js';
 import { canPresentDeferredStatusNotice } from '../loadingFeedback.js';
+import { t, msg } from '../i18n/index.js';
 import { UiLifetime } from './uiLifetime.js';
+
+// One ready-made sentence per restore policy (SHARE_TRACKING_RESTORE_POLICIES
+// label) and outcome: a label dropped into a template cannot take the case or
+// article the sentence needs in every language. The generic template stays
+// for a label this table does not know.
+const SHARE_RESTORE_NOTICES = Object.freeze({
+  expired: Object.freeze({
+    flight: msg('Shared flight follow expired'),
+    'military flight': msg('Shared military flight follow expired'),
+    satellite: msg('Shared satellite follow expired'),
+  }),
+  'source-unavailable': Object.freeze({
+    flight: msg('Shared flight could not be restored — feed unavailable'),
+    'military flight': msg(
+      'Shared military flight could not be restored — feed unavailable',
+    ),
+    satellite: msg('Shared satellite could not be restored — feed unavailable'),
+  }),
+  unavailable: Object.freeze({
+    flight: msg('Shared flight is unavailable'),
+    'military flight': msg('Shared military flight is unavailable'),
+    satellite: msg('Shared satellite is unavailable'),
+  }),
+});
+
+/**
+ * The status notice for a terminal share-tracking restore result.
+ * @param {{classification?: string, label?: string}} result
+ * @returns {string}
+ */
+export function shareTrackingRestoreNotice(result) {
+  const outcome =
+    result?.classification === 'expired' ||
+    result?.classification === 'source-unavailable'
+      ? result.classification
+      : 'unavailable';
+  const ready = SHARE_RESTORE_NOTICES[outcome][result?.label];
+  if (ready) return t(ready);
+  const subject = result?.label ? t(result.label) : t('entity');
+  return outcome === 'expired'
+    ? t('Shared {subject} follow expired', { subject })
+    : outcome === 'source-unavailable'
+      ? t('Shared {subject} could not be restored — feed unavailable', {
+          subject,
+        })
+      : t('Shared {subject} is unavailable', { subject });
+}
 
 /** Own initial share restoration, durable layer state and restoration notices. */
 export class ShareRestoration {
@@ -188,9 +236,13 @@ export class ShareRestoration {
     if (result.classification === 'pending') {
       this._shareTrackingNoticeGeneration += 1;
       this._shareTrackingAcquiringKey = trackingKey;
-      this.showStatus('ACQUIRING', {
+      this.showStatus(t('ACQUIRING'), {
         state: 'acquiring',
-        detail: `SHARED ${String(result.label || 'SUBJECT').toUpperCase()}`,
+        detail: t('SHARED {subject}', {
+          subject: String(
+            result.label ? t(result.label) : t('subject'),
+          ).toUpperCase(),
+        }),
         persistent: true,
       });
       return;
@@ -214,13 +266,7 @@ export class ShareRestoration {
     const noticeGeneration = ownsAcquiringNotice
       ? this._shareTrackingNoticeGeneration
       : ++this._shareTrackingNoticeGeneration;
-    const subject = result.label || 'entity';
-    const message =
-      result.classification === 'expired'
-        ? `Shared ${subject} follow expired`
-        : result.classification === 'source-unavailable'
-          ? `Shared ${subject} could not be restored — feed unavailable`
-          : `Shared ${subject} is unavailable`;
+    const message = shareTrackingRestoreNotice(result);
     const showAfterStartupCover = () => {
       this._lifetime.frame(() => {
         if (

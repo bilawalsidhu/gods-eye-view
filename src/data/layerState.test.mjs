@@ -202,8 +202,8 @@ function encode(state) {
 
 test('production registry is exact, canonical, and rejects incomplete contracts', async () => {
   assert.equal(validateLayerStateRegistry(), true);
-  assert.equal(REGISTERED_LAYER_IDS.length, 30);
-  assert.equal(new Set(REGISTERED_LAYER_IDS).size, 30);
+  assert.equal(REGISTERED_LAYER_IDS.length, 31);
+  assert.equal(new Set(REGISTERED_LAYER_IDS).size, 31);
   assert.ok(REGISTERED_LAYER_IDS.includes('transit'));
   assert.deepEqual(REGISTERED_LAYER_IDS, [...REGISTERED_LAYER_IDS].sort());
   assert.deepEqual(LEGACY_LAYER_STATE_TOKENS, {
@@ -242,19 +242,19 @@ test('production registry is exact, canonical, and rejects incomplete contracts'
   for (const [id, token] of Object.entries(LEGACY_LAYER_STATE_TOKENS)) {
     assert.equal(LAYER_STATE_TOKEN_RESERVATIONS[id], token);
   }
-  assert.equal(nextLayerStateToken(), '4');
+  assert.equal(nextLayerStateToken(), '5');
   assert.equal(
     nextLayerStateToken({
       ...LAYER_STATE_TOKEN_RESERVATIONS,
-      alpha: '4',
-      bravo: '5',
+      alpha: '5',
+      bravo: '6',
     }),
-    '6',
+    '7',
   );
   const digitsExhausted = {
     ...LAYER_STATE_TOKEN_RESERVATIONS,
     ...Object.fromEntries(
-      [...'456789'].map((digit) => [`prior-${digit}`, digit]),
+      [...'56789'].map((digit) => [`prior-${digit}`, digit]),
     ),
   };
   assert.equal(nextLayerStateToken(digitsExhausted), '00');
@@ -307,8 +307,8 @@ test('production registry is exact, canonical, and rejects incomplete contracts'
   assert.equal(
     validateLayerStateAllocations(LAYER_STATE_TOKEN_RESERVATIONS, {
       ...LAYER_STATE_TOKEN_RESERVATIONS,
-      future: '4',
-      next: '5',
+      future: '5',
+      next: '6',
     }),
     true,
   );
@@ -318,7 +318,7 @@ test('production registry is exact, canonical, and rejects incomplete contracts'
         ...LAYER_STATE_TOKEN_RESERVATIONS,
         future: '00',
       }),
-    /next free token 4/,
+    /next free token 5/,
   );
   const beforeLastDigit = { ...digitsExhausted };
   delete beforeLastDigit['prior-9'];
@@ -341,10 +341,10 @@ test('production registry is exact, canonical, and rejects incomplete contracts'
   assert.throws(
     () =>
       validateLayerStateAllocations(
-        { ...LAYER_STATE_TOKEN_RESERVATIONS, merged: '4' },
-        { ...LAYER_STATE_TOKEN_RESERVATIONS, merged: '4', competing: '4' },
+        { ...LAYER_STATE_TOKEN_RESERVATIONS, merged: '5' },
+        { ...LAYER_STATE_TOKEN_RESERVATIONS, merged: '5', competing: '5' },
       ),
-    /next free token 5/,
+    /next free token 6/,
   );
   assert.throws(
     () => validateLayerStateAllocations({ future: '00' }, { future: '01' }),
@@ -2422,23 +2422,74 @@ test('wind appearance shares round trip while old links retain weather defaults'
   assert.deepEqual(invalid.options.wind, defaults);
 });
 
-test('observed weather round trips product and opacity without persisting historical playback', () => {
+test('observed weather round trips product and presets without persisting historical playback', () => {
   const state = normalizeLayerState({
     enabledLayerIds: ['weather-radar', 'weather-satellite'],
     options: {
       'weather-radar': { opacity: 'light', play: true },
-      'weather-satellite': { product: 'clouds', opacity: 'light', step: -1 },
+      'weather-satellite': {
+        product: 'clouds',
+        opacity: 'light',
+        infrared: 'filtered',
+        step: -1,
+      },
     },
   });
   const params = new URLSearchParams(encode(state));
   const decoded = decodeLayerStateParams(params);
   assert.deepEqual(decoded, state);
   assert.equal(state.options['weather-satellite'].product, 'clouds');
+  assert.equal(state.options['weather-satellite'].opacity, 'light');
+  assert.equal(state.options['weather-satellite'].infrared, 100);
   assert.equal(Object.hasOwn(state.options['weather-radar'], 'play'), false);
 });
 
-test('satellite infrared display mode round trips and invalid or absent values use filtered', () => {
-  for (const infrared of ['full', 'filtered', undefined, 'invalid']) {
+test('satellite filter strength percentages round-trip and legacy mode codes remain readable', () => {
+  const state = normalizeLayerState({
+    enabledLayerIds: ['weather-satellite'],
+    options: { 'weather-satellite': { infrared: 53, opacity: 'light' } },
+  });
+  const params = encodeLayerStateParams(
+    new URLSearchParams([['v', '2']]),
+    state,
+  );
+  assert.deepEqual(decodeLayerStateParams(params), state);
+  assert.equal(state.options['weather-satellite'].infrared, 53);
+  assert.equal(state.options['weather-satellite'].opacity, 'light');
+  for (const [legacy, expected] of [
+    ['f', 100],
+    ['a', 0],
+  ]) {
+    const decoded = decodeLayerStateParams(
+      new URLSearchParams(`v=2&l=o&lo=o.i.${legacy}`),
+    );
+    assert.equal(decoded.options['weather-satellite'].infrared, expected);
+  }
+  for (const [legacy, expected] of [
+    ['filtered', 100],
+    ['full', 0],
+  ]) {
+    const normalized = normalizeLayerState({
+      enabledLayerIds: ['weather-satellite'],
+      options: { 'weather-satellite': { infrared: legacy } },
+    });
+    assert.equal(normalized.options['weather-satellite'].infrared, expected);
+  }
+  const invalid = normalizeLayerState({
+    enabledLayerIds: ['weather-satellite'],
+    options: { 'weather-satellite': { infrared: 101 } },
+  });
+  assert.equal(invalid.options['weather-satellite'].infrared, 100);
+});
+
+test('satellite cloud filter round trips and invalid or absent values default to Clouds only', () => {
+  for (const [infrared, expected] of [
+    ['full', 0],
+    ['filtered', 100],
+    [53, 53],
+    [undefined, 100],
+    ['invalid', 100],
+  ]) {
     const state = normalizeLayerState({
       enabledLayerIds: ['weather-satellite'],
       options: {
@@ -2454,10 +2505,7 @@ test('satellite infrared display mode round trips and invalid or absent values u
       decodeLayerStateParams(new URLSearchParams(encode(state))),
       state,
     );
-    assert.equal(
-      state.options['weather-satellite'].infrared,
-      infrared === 'full' ? 'full' : 'filtered',
-    );
+    assert.equal(state.options['weather-satellite'].infrared, expected);
     assert.equal(
       Object.hasOwn(state.options['weather-satellite'], 'step'),
       false,

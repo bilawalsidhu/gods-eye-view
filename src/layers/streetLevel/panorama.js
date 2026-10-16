@@ -188,13 +188,15 @@ export function createPanoramaRenderer(canvas) {
         gl.UNSIGNED_BYTE,
         image,
       );
+      // Read before the close: a closed bitmap measures 0×0.
+      const { width, height } = image;
       // The pixels are on the GPU now; a bitmap's copy can go.
       image.close?.();
       // Linear only: a mipmapped lookup draws a seam where longitude wraps.
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
       const repeat =
-        isPowerOfTwo(image.width) && isPowerOfTwo(image.height)
+        isPowerOfTwo(width) && isPowerOfTwo(height)
           ? gl.REPEAT
           : gl.CLAMP_TO_EDGE;
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, repeat);

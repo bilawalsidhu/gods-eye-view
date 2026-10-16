@@ -329,7 +329,7 @@ test('failed refresh clears old observations and model fallback is identified an
   );
 });
 
-test('regional cache keeps station queries distinct and refreshes observations expiring inside its TTL', async (t) => {
+test('regional cache reselects stations for each point and refreshes observations expiring inside its TTL', async (t) => {
   let time = epoch + 3 * 60 * 60_000 - 60_000;
   t.mock.method(Date, 'now', () => time);
   let calls = 0;
@@ -372,16 +372,16 @@ test('regional cache keeps station queries distinct and refreshes observations e
   };
   const first = await request(-55.9);
   assert.equal((await request(-55.9)).status, 'cached');
-  assert.equal(calls, 1);
-  const second = await request(-55.91);
   assert.equal(calls, 2);
+  const second = await request(-55.91);
+  assert.equal(calls, 3);
   assert.notEqual(
     first.weather.station.distanceKm,
     second.weather.station.distanceKm,
   );
   time += 2 * 60_000; // Still inside the cell TTL, but the observation expired.
   assert.equal((await request(-55.91)).weather.source, 'open-meteo');
-  assert.equal(calls, 3);
+  assert.equal(calls, 4);
 });
 
 test('closest station is selected independently of file order and unavailable closer rows', () => {
@@ -401,4 +401,82 @@ test('closest station is selected independently of file order and unavailable cl
     selectSmnObservation(oldNearby, point, epoch).station.id,
     '87178',
   );
+});
+
+test('nearby SMN-area queries share news and model fallback but reselect observations', async (t) => {
+  let modelCalls = 0,
+    newsCalls = 0,
+    placeCalls = 0;
+  let observationsAvailable = false;
+  const observationQueries = [];
+  t.mock.method(globalThis, 'fetch', async (url) => {
+    assert.ok(String(url).startsWith('https://news.google.com/'));
+    newsCalls++;
+    return new Response(
+      '<rss><item><title>Fixture</title><link>https://example.com/news</link></item></rss>',
+    );
+  });
+  let handler;
+  regionalBriefProxy({
+    placeProvider: async () => {
+      placeCalls++;
+      return { locality: 'Fixture' };
+    },
+    weatherProvider: createRegionalBriefWeatherProvider({
+      smnProvider: async (point) => {
+        observationQueries.push(point.longitude);
+        return observationsAvailable && point.longitude <= -52
+          ? {
+              source: 'smn',
+              station: { id: point.longitude < -55.905 ? 'west' : 'east' },
+            }
+          : null;
+      },
+      modelProvider: async () => {
+        modelCalls++;
+        return { temperatureC: 20 };
+      },
+    }),
+  }).configureServer({
+    middlewares: {
+      use: (_, route) => {
+        handler = route;
+      },
+    },
+  });
+  const request = async (longitude) => {
+    let result;
+    await handler(
+      {
+        method: 'GET',
+        url: `?latitude=-27.37&longitude=${longitude}`,
+        headers: {},
+        socket: { remoteAddress: 'fixture' },
+      },
+      {
+        writeHead() {},
+        end(body) {
+          result = JSON.parse(body);
+        },
+      },
+    );
+    return result;
+  };
+  assert.equal((await request(-55.9)).weather.source, 'open-meteo');
+  assert.equal((await request(-55.91)).weather.source, 'open-meteo');
+  observationsAvailable = true;
+  assert.equal((await request(-55.9)).weather.station.id, 'east');
+  assert.equal((await request(-55.91)).weather.station.id, 'west');
+  assert.equal(modelCalls, 1);
+  assert.equal(newsCalls, 1);
+  assert.equal(placeCalls, 1);
+  assert.deepEqual(observationQueries, [-55.9, -55.91, -55.9, -55.91]);
+  // The same rounded cell can straddle the observation coverage boundary.
+  assert.equal((await request(-52.01)).weather.source, 'smn');
+  assert.equal((await request(-51.99)).weather.source, 'open-meteo');
+  assert.equal((await request(-51.98)).weather.source, 'open-meteo');
+  assert.equal(modelCalls, 2);
+  assert.equal(newsCalls, 2);
+  assert.equal(placeCalls, 2);
+  assert.deepEqual(observationQueries.slice(4), [-52.01, -51.99]);
 });

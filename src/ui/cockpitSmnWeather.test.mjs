@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { setLocale } from '../i18n/index.js';
 import {
   renderRegionalBrief,
   renderRegionalBriefStatus,
@@ -100,3 +101,22 @@ test('model fallback and subject changes clear station attribution and old measu
     assert.match(ui.briefSource.textContent, /WEATHER UNAVAILABLE/);
   }
 });
+
+for (const locale of ['es', 'ru']) {
+  test(`${locale}: station provenance follows the UI language without inventing a timezone`, () => {
+    setLocale(locale);
+    try {
+      const ui = controller();
+      renderRegionalBrief.call(ui, { weather }, {});
+      assert.ok(!ui.localWeatherStation.textContent.includes('KM FROM QUERY'));
+      assert.ok(
+        !ui.localWeatherTime.textContent.includes('TIME ZONE UNSPECIFIED'),
+      );
+      assert.ok(!ui.localWeatherStation.title.includes('Ground station'));
+      assert.ok(ui.localWeatherStation.textContent.includes('POSADAS AERO'));
+      assert.ok(!ui.localWeatherTime.textContent.includes('UTC'));
+    } finally {
+      setLocale('en');
+    }
+  });
+}

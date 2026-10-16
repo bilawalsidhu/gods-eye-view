@@ -1,5 +1,6 @@
 import { militaryOsmKey } from '../../data/militaryNames.js';
 import { isUnavailableCapability } from '../../sources/capability.js';
+import { msg } from '../../i18n/index.js';
 /** Keep named point coverage until its matching polygon takes over. */
 export function retainNamedHandoff(previous, records, box) {
   const named = new Map(
@@ -255,7 +256,7 @@ export function createIngestion({
           payload.status === 'stale'
             ? `Serving cached mapped context · ${payload.records[0]?.retrievedAt || 'date unknown'}`
             : saturated
-              ? 'Too many mapped sites in view to list them all'
+              ? msg('Too many mapped sites in view to list them all')
               : placesError,
         );
         parts.rendering.renderRecords();
@@ -291,7 +292,7 @@ export function createIngestion({
       layerState.failureReason = error?.failureReason || 'unavailable';
       setInstallationStatus(
         'unavailable',
-        error?.message || 'Installation context unavailable',
+        error?.message || msg('Installation context unavailable'),
       );
       if (!isUnavailableCapability(error))
         parts.viewport.scheduleUnavailableRetry(error?.retryAfterMs);
