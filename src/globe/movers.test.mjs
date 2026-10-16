@@ -170,7 +170,7 @@ test('the set facade forwards to the store and an engine commit, once destroyed 
   );
   const calls = [];
   const set = createMoverSet(store, {
-    commit: () => calls.push(['commit', store.dirty()]),
+    commit: () => calls.push(['commit', { ...store.dirty() }]),
     destroy: () => calls.push(['destroy']),
   });
   set.set(0, { position: { x: 1, y: 2, z: 3 } });
@@ -186,4 +186,24 @@ test('the set facade forwards to the store and an engine commit, once destroyed 
   assert.equal(calls.length, 2);
   assert.throws(() => set.set(0, {}), /destroyed/);
   assert.throws(() => set.commit(), /destroyed/);
+});
+
+test('a destroyed set releases its instance arrays', () => {
+  const store = createMoverStore(
+    normalizeMoverSetOptions({
+      id: 'r',
+      kind: 'point',
+      capacity: 1000,
+      point: { sizePx: 2 },
+    }),
+  );
+  const set = createMoverSet(store, { commit() {}, destroy() {} });
+  set.set(0, { position: { x: 1, y: 2, z: 3 }, pickId: 'p' });
+  set.setCount(1);
+  set.destroy();
+  assert.equal(store.count, 0);
+  assert.equal(store.positions.length, 0);
+  assert.equal(store.pickIds.length, 0);
+  assert.equal(set.positionsView().length, 0);
+  assert.equal(store.dirty(), null);
 });

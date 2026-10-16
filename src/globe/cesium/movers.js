@@ -12,6 +12,8 @@ const scratchPosition = new Cesium.Cartesian3();
 const scratchColor = new Cesium.Color();
 const scratchQuaternion = new Cesium.Quaternion();
 const scratchRotation = new Cesium.Matrix3();
+// Model.modelMatrix and Model.color copy what they are given.
+const scratchModelMatrix = new Cesium.Matrix4();
 
 /** The atlas cells as canvases, by key (a DOM canvas or image source). */
 async function cropAtlasCells(atlas, keys) {
@@ -143,6 +145,9 @@ function spritePart(scene, options, store, factories, requestRender, owners) {
     },
     destroy() {
       destroyed = true;
+      billboards.length = 0;
+      shownCell.length = 0;
+      cells = null;
     },
   };
 }
@@ -180,7 +185,9 @@ function pointPart(options, store, factories, requestRender, owners) {
         }
       requestRender('movers');
     },
-    destroy() {},
+    destroy() {
+      points.length = 0;
+    },
   };
 }
 
@@ -203,13 +210,12 @@ function modelPart(options, store, factories, requestRender, owners) {
     item.modelMatrix = Cesium.Matrix4.fromRotationTranslation(
       Cesium.Matrix3.fromQuaternion(scratchQuaternion, scratchRotation),
       readPosition(store, index),
-      new Cesium.Matrix4(),
+      scratchModelMatrix,
     );
     item.scale = store.scales[index];
     item.show = index < store.count && store.shows[index] === 1;
     item.id = store.pickIds[index];
-    if (model.colorBlend)
-      item.color = Cesium.Color.clone(readColor(store, index));
+    if (model.colorBlend) item.color = readColor(store, index);
   };
   const ensure = (index) => {
     if (models[index] || loading[index]) return;
@@ -258,6 +264,8 @@ function modelPart(options, store, factories, requestRender, owners) {
     },
     destroy() {
       destroyed = true;
+      models.length = 0;
+      loading.length = 0;
     },
   };
 }
