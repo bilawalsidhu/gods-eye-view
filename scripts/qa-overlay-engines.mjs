@@ -109,8 +109,8 @@ async function runEngine(browser, engine) {
                 },
               ]
             : [
-                ...[-0.02, 0, 0.02].flatMap((dLon, i) =>
-                  [-0.01, 0.01].map((dLat, j) => ({
+                ...[-0.02, -0.01, 0, 0.01, 0.02].flatMap((dLon, i) =>
+                  [-0.015, -0.005, 0.005, 0.015].map((dLat, j) => ({
                     id: `p${i}${j}`,
                     position: geo.cartesian3.fromDegrees(
                       lon + dLon * (poseName === 'orbit' ? 400 : 1),
@@ -142,9 +142,9 @@ async function runEngine(browser, engine) {
         const rects = {};
         for (const { id } of entries) {
           const rect = overlay.getOverlayPaintRect('qa-engines', id);
-          rects[id] = rect
-            ? { x: rect.x, y: rect.y, width: rect.width, height: rect.height }
-            : null;
+          // The label's projected anchor (where the host put the point the
+          // card belongs to); the card's own slot is the solver's choice.
+          rects[id] = rect ? { x: rect.anchorX, y: rect.anchorY } : null;
         }
         overlay.clearOverlaySource('qa-engines');
         return rects;
@@ -152,6 +152,73 @@ async function runEngine(browser, engine) {
       pose,
       name,
     );
+  // A moving camera: the city labels are published once, then the camera
+  // moves on (heading and position) and the painted labels are read at
+  // each step, the same steps on both engines.
+  const steps = await page.evaluate(async () => {
+    const geo = await import('/src/geo/index.js');
+    const loaded = performance
+      .getEntriesByType('resource')
+      .map((entry) => entry.name)
+      .find((name) => name.includes('/src/overlays/worldOverlay.js'));
+    const overlay = await import(loaded ?? '/src/overlays/worldOverlay.js');
+    const { engine } = window.__godsEyeView;
+    const rad = geo.math.toRadians;
+    const at = (step) => ({
+      destination: geo.cartesian3.fromDegrees(
+        -73.99 + step * 0.002,
+        40.7 + step * 0.001,
+        3000 - step * 150,
+      ),
+      orientation: { heading: rad(20 + step * 4), pitch: rad(-35), roll: 0 },
+    });
+    engine.camera.setView(at(0));
+    const ids = [];
+    const entries = [];
+    for (let i = 0; i < 5; i++)
+      for (let j = 0; j < 4; j++) {
+        const id = `m${i}${j}`;
+        ids.push(id);
+        entries.push({
+          id,
+          variant: 'label',
+          title: id.toUpperCase(),
+          horizonCull: true,
+          position: geo.cartesian3.fromDegrees(
+            -74.01 + i * 0.012,
+            40.715 + j * 0.008,
+            0,
+          ),
+        });
+      }
+    overlay.setOverlayEntries('qa-engines-moving', entries, {
+      cohortLimit: 64,
+      collisionCapacity: 64,
+      moving: true,
+    });
+    overlay.setOverlaySourceVisible('qa-engines-moving', true);
+    const frames = async (count) => {
+      for (let frame = 0; frame < count; frame++) {
+        engine.render.request('qa-overlay-engines');
+        await new Promise((resolve) => requestAnimationFrame(resolve));
+      }
+    };
+    await frames(20);
+    const out = [];
+    for (let step = 1; step <= 6; step++) {
+      engine.camera.setView(at(step));
+      await frames(4);
+      const rects = {};
+      for (const id of ids) {
+        const rect = overlay.getOverlayPaintRect('qa-engines-moving', id);
+        rects[id] = rect ? { x: rect.anchorX, y: rect.anchorY } : null;
+      }
+      out.push(rects);
+    }
+    overlay.clearOverlaySource('qa-engines-moving');
+    return out;
+  });
+  result.moving = steps;
   await context.close();
   return result;
 }
@@ -186,6 +253,32 @@ try {
     }
     console.log(
       `[overlay-engines] ${pose}: ${compared} labels on both, worst ${worst.toFixed(2)} px`,
+    );
+  }
+  {
+    let worst = 0;
+    let compared = 0;
+    let onlyOne = 0;
+    runs.cesium.moving.forEach((cesium, step) => {
+      const navara = runs.navara.moving[step];
+      for (const id of Object.keys(cesium)) {
+        const a = cesium[id];
+        const b = navara[id];
+        // Which cards the solver paints while the camera moves depends on
+        // its timing; the anchors of the ones both painted are compared.
+        if (!a || !b) {
+          if (a || b) onlyOne++;
+          continue;
+        }
+        compared++;
+        const d = Math.max(Math.abs(a.x - b.x), Math.abs(a.y - b.y));
+        worst = Math.max(worst, d);
+        if (d > TOLERANCE_PX)
+          fail(`moving step ${step + 1} ${id}: ${d.toFixed(2)} px apart`);
+      }
+    });
+    console.log(
+      `[overlay-engines] moving camera: ${compared} label anchors over 6 steps on both, worst ${worst.toFixed(2)} px (${onlyOne} painted on one engine only)`,
     );
   }
   for (const engine of ['cesium', 'navara']) {
