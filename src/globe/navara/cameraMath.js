@@ -221,20 +221,27 @@ export function pickEllipsoid(camera, screen) {
   return intersectEllipsoid(camera.position, pickRay(camera, screen).direction);
 }
 
+// horizonVisible runs per label per frame (worldOverlay): no allocation.
+const horizonCamera = cartesian3.create();
+const horizonTarget = cartesian3.create();
+const horizonVt = cartesian3.create();
+
 /** Cesium's EllipsoidalOccluder.isPointVisible from `eye`. */
 export function horizonVisible(eye, position) {
-  const camera = cartesian3.create(
+  const camera = cartesian3.fromElements(
     eye.x / RADII.x,
     eye.y / RADII.y,
     eye.z / RADII.z,
+    horizonCamera,
   );
   const limbSquared = cartesian3.magnitudeSquared(camera) - 1;
-  const target = cartesian3.create(
+  const target = cartesian3.fromElements(
     position.x / RADII.x,
     position.y / RADII.y,
     position.z / RADII.z,
+    horizonTarget,
   );
-  const vt = cartesian3.subtract(target, camera, cartesian3.create());
+  const vt = cartesian3.subtract(target, camera, horizonVt);
   const vtDotVc = -cartesian3.dot(vt, camera);
   const occluded =
     limbSquared < 0

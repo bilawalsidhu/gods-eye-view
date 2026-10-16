@@ -23,6 +23,16 @@
  */
 import * as Cesium from 'cesium';
 import * as geo from '../geo/index.js';
+import { engineFromViewer } from '../globe/cesium/engineFromViewer.js';
+
+// A window position through the engine's projector when `scene` has a
+// registered engine (engineFromViewer), else Cesium's SceneTransforms.
+function worldToWindow(scene, position, result) {
+  const projector = engineFromViewer(scene)?.projector;
+  return projector
+    ? projector.worldToWindow(position, result)
+    : Cesium.SceneTransforms.worldToWindowCoordinates(scene, position, result);
+}
 
 /** Meters used to give the course vector a stable projection magnitude. */
 const FORWARD_PROBE_M = 2000;
@@ -331,16 +341,8 @@ export function perspectiveProjectedRotation(
   );
   geo.cartesian3.add(position, _scratchWorldForward, _scratchProbe);
 
-  const at = Cesium.SceneTransforms.worldToWindowCoordinates(
-    scene,
-    position,
-    _scratchWindowAt,
-  );
-  const ahead = Cesium.SceneTransforms.worldToWindowCoordinates(
-    scene,
-    _scratchProbe,
-    _scratchWindowAhead,
-  );
+  const at = worldToWindow(scene, position, _scratchWindowAt);
+  const ahead = worldToWindow(scene, _scratchProbe, _scratchWindowAhead);
   if (!at || !ahead) {
     return screenProjectedRotation(scene, position, courseDeg, previous);
   }
