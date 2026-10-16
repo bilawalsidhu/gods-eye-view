@@ -504,3 +504,54 @@ test('without a viewer a layer the engine lacks refuses instead of throwing', as
     'a name no engine knows is still an unknown layer',
   );
 });
+
+test('without a viewer analyst_query on a layer the engine lacks refuses', async () => {
+  const engine = engineOverAustin({ kind: 'navara' });
+  const runner = runnerOn(engine, {
+    dataManager: dataManagerWith({ flights: {} }),
+  });
+  const one = await runner('analyst_query', { layers: ['cctv'] });
+  assert.equal(one.ok, false);
+  assert.equal(one.code, UNAVAILABLE_ON_ENGINE);
+  assert.deepEqual(one.layerIds, ['cctv']);
+  assert.match(
+    one.error,
+    /^The cctv layer is not available on the Navara engine yet/,
+  );
+  const two = await runner('analyst_query', { layers: ['cctv', 'vessels'] });
+  assert.match(
+    two.error,
+    /^The cctv, ais-live-vessels layers are not available on the Navara engine yet\. Switch to the Cesium engine \(\?engine=cesium\) to use them\.$/,
+  );
+});
+
+test('stop_tracking with nothing tracked is a no-op success, also without the layers', async () => {
+  const engine = engineOverAustin({ kind: 'navara' });
+  const dataManager = dataManagerWith({
+    flights: { getTrackedInfo: () => null },
+  });
+  // As the manager answers: a layer it does not hold takes no params.
+  dataManager.setLayerParams = (id) => dataManager.layers.has(id);
+  const runner = runnerOn(engine, { dataManager });
+  const result = await runner('stop_tracking', {});
+  assert.equal(result.ok, true);
+  assert.deepEqual(result.released, []);
+});
+
+test('the spoken refusal of an unavailable layer carries its reason', async () => {
+  const { SPEECH_BUILDERS } = await import('./speech.js');
+  const engine = engineOverAustin({ kind: 'navara' });
+  const runner = runnerOn(engine, {
+    dataManager: dataManagerWith({ flights: {} }),
+  });
+  const result = await runner('set_layer_visibility', {
+    layerId: 'cctv',
+    enabled: true,
+  });
+  const speech = SPEECH_BUILDERS.set_layer_visibility(result, {
+    layerId: 'cctv',
+    enabled: true,
+  });
+  assert.equal(speech.say, result.error);
+  assert.match(speech.say, /Switch to the Cesium engine/);
+});

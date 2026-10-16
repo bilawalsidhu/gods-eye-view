@@ -332,7 +332,9 @@ function unavailableOnEngine(
     engine: engine?.kind ?? null,
     feature: what,
     suggestion: SWITCH_ENGINE_HINT,
-    error: `${what} is not available on ${engineName(engine)} yet. Switch to the Cesium engine (${SWITCH_ENGINE_HINT}) to use it.`,
+    error: /\blayers$/.test(what)
+      ? `${what} are not available on ${engineName(engine)} yet. Switch to the Cesium engine (${SWITCH_ENGINE_HINT}) to use them.`
+      : `${what} is not available on ${engineName(engine)} yet. Switch to the Cesium engine (${SWITCH_ENGINE_HINT}) to use it.`,
   };
 }
 
@@ -1110,6 +1112,29 @@ export function createGevActionRunner({
     }
 
     if (name === 'analyst_query') {
+      // Layers this engine's catalog left out cannot be asked: say so rather
+      // than answer zero.
+      const missing = !viewer
+        ? (Array.isArray(args.layers) ? args.layers : [])
+            .map(normalizeLayerId)
+            .filter(
+              (layerId) =>
+                layerId &&
+                voiceLayer(layerId) &&
+                !dataManager.layers.has(layerId),
+            )
+        : [];
+      if (missing.length)
+        return {
+          ...unavailableOnEngine(
+            'analyst_query',
+            engine,
+            missing.length === 1
+              ? `The ${missing[0]} layer`
+              : `The ${missing.join(', ')} layers`,
+          ),
+          layerIds: missing,
+        };
       return runAnalystQuery(
         ensureAnalystEngine(),
         dataManager,
@@ -2484,6 +2509,8 @@ function stopAllTracking(engine, dataManager) {
     ['military', 'selectedMilitaryTrackingId'],
     ['satellites', 'selectedSatTrackingId'],
   ]) {
+    // A layer this engine does not have tracks nothing to clear.
+    if (dataManager.layers && !dataManager.layers.has(layerId)) continue;
     try {
       if (
         dataManager.setLayerParams(
