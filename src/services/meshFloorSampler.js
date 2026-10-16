@@ -2,11 +2,16 @@ import * as geo from '../geo/index.js';
 import { engineFromViewer } from '../globe/cesium/engineFromViewer.js';
 import { acceptedSurfaceHeight } from '../globe/surfaceDetail.js';
 
-/** Answers from tiles larger than this are too coarse to latch (m): on
- *  Navara at Austin a 1.8 km tile read the ground (122.5 m) and the 28 km
- *  tile shown while streaming read 143.2 m. Cesium does not size its
- *  answers, so its gates are the camera height and tilesLoaded below. */
-export const MAX_FLOOR_TILE_SIZE_M = 4000;
+/** Answers from tiles larger than this are too coarse to latch (m).
+ *  Measured on Navara (scripts/qa-surface-heights.mjs): from 800 m the
+ *  answering tiles were 112-314 m and within 2 m of Cesium; from 15 km, cold,
+ *  3.5-4 km tiles were off by -16.2 to +6.2 m; while streaming a 27.9 km tile
+ *  read 143.2 m at Austin where the ground is 122.5 m. A 1.8 km tile at
+ *  Austin (the hidden tile under a 600 m camera looking ahead) read the
+ *  ground right, but 1 km keeps every measured coarse error out; such a miss
+ *  only leaves the DEM prior in place. Cesium does not size its answers, so
+ *  its gates are the camera height and tilesLoaded below. */
+export const MAX_FLOOR_TILE_SIZE_M = 1000;
 
 /** Construct an instance-owned meshFloorSampler service with explicit dependencies. */
 export function createMeshFloorSampler({

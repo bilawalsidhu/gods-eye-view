@@ -154,7 +154,12 @@ test('sampler: a coarse tile answer is a miss; a fine one latches', async () => 
   engine.fake.script('sampleHeightDetailed', () => ({ height: 143.2, source: 'tiles', tileSizeM: 27_914 }));
   sampleMeshFloorCells(engine, [cell], opts);
   assert.equal(cachedMeshFloor(cell.lat, cell.lon), null, 'coarse: no latch');
-  engine.fake.script('sampleHeightDetailed', () => ({ height: 122.5, source: 'tiles', tileSizeM: 1_797 }));
+  // A 3.5 km tile from 15 km, cold, read 16 m off: still too coarse.
+  engine.fake.script('sampleHeightDetailed', () => ({ height: 138.7, source: 'tiles', tileSizeM: 3_456 }));
+  sampleMeshFloorCells(engine, [cell], opts);
+  assert.equal(cachedMeshFloor(cell.lat, cell.lon), null, '3.5 km: no latch');
+  // The tiles answering from 800 m are 112-314 m.
+  engine.fake.script('sampleHeightDetailed', () => ({ height: 122.5, source: 'tiles', tileSizeM: 241 }));
   sampleMeshFloorCells(engine, [cell], opts);
   assert.equal(cachedMeshFloor(cell.lat, cell.lon), 122.5);
   const terrainOnly = nextSite();
