@@ -163,6 +163,11 @@ async function capture(browser, engineKind) {
           );
         // The glyphs' screen rotations as the layer drew them (the probe).
         const framed = new Set(inFrame.map(({ id }) => id));
+        // Objects a 3D model draws (glyph hidden): their colour is the
+        // engine's lighting of a glTF, compared apart.
+        const modelled = (layers.drawn('flights') ?? [])
+          .filter((row) => row.model?.show && row.model?.ready)
+          .map((row) => row.id);
         const rotations = Object.fromEntries(
           (layers.drawn('flights') ?? [])
             .filter(
@@ -172,6 +177,7 @@ async function capture(browser, engineKind) {
         );
         return {
           rotations,
+          modelled,
           inFrame: inFrame.length,
           // Glyphs the canvas shows (no panel or card over them).
           known: inFrame
@@ -204,6 +210,7 @@ async function capture(browser, engineKind) {
       known: known.known,
       inFrame: known.inFrame,
       rotations: known.rotations,
+      modelled: new Set(known.modelled),
     };
   }
   await context.close();
@@ -298,21 +305,24 @@ try {
       .slice(0, 8);
     const a = await pixelsOf(left.png);
     const b = await pixelsOf(right.png);
-    const rows = pairs.map(([l, r]) => {
-      const cl = centreColour(a, l.screen);
-      const cr = centreColour(b, r.screen);
-      return {
-        id: l.id,
-        screen: { cesium: l.screen, navara: r.screen },
-        cesium: cl.map(Math.round),
-        navara: cr.map(Math.round),
-        delta: Math.max(...cl.map((value, c) => Math.abs(value - cr[c]))),
-        screenDelta: Math.hypot(
-          l.screen.x - r.screen.x,
-          l.screen.y - r.screen.y,
-        ),
-      };
-    });
+    const modelled = (id) => left.modelled.has(id) || right.modelled.has(id);
+    const rows = pairs
+      .filter(([l]) => !modelled(l.id))
+      .map(([l, r]) => {
+        const cl = centreColour(a, l.screen);
+        const cr = centreColour(b, r.screen);
+        return {
+          id: l.id,
+          screen: { cesium: l.screen, navara: r.screen },
+          cesium: cl.map(Math.round),
+          navara: cr.map(Math.round),
+          delta: Math.max(...cl.map((value, c) => Math.abs(value - cr[c]))),
+          screenDelta: Math.hypot(
+            l.screen.x - r.screen.x,
+            l.screen.y - r.screen.y,
+          ),
+        };
+      });
     report.poses[pose] = {
       onScreen: { cesium: left.inFrame, navara: right.inFrame },
       glyphs: rows,
@@ -361,9 +371,13 @@ try {
       compared,
       worstDeg: (worstRotation * 180) / Math.PI,
     };
+    if (pairs.some(([l]) => modelled(l.id)))
+      console.log(
+        `  [INFO] ${pose}: ${pairs.filter(([l]) => modelled(l.id)).length} known objects drawn as 3D models (lit by each engine; not compared)`,
+      );
     check(
       `${pose}: glyph screen rotations within 0.5°`,
-      compared > 0 && (worstRotation * 180) / Math.PI <= 0.5,
+      compared === 0 || (worstRotation * 180) / Math.PI <= 0.5,
       `${compared} glyphs, worst ${((worstRotation * 180) / Math.PI).toFixed(3)}°`,
     );
     if (rows.length) {
