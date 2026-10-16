@@ -343,3 +343,15 @@ test('the contract carries instanced movers', () => {
     /movers\.createSet.*movers\.list/,
   );
 });
+
+test('the contract carries dynamic lines', () => {
+  for (const member of ['lines.createLine', 'lines.list'])
+    assert.ok(GLOBE_ENGINE_MEMBERS.includes(member), member);
+  const engine = createFakeEngine();
+  assert.equal(assertGlobeEngine(engine), engine);
+  const broken = { ...engine, lines: {} };
+  assert.throws(
+    () => assertGlobeEngine(broken),
+    /lines\.createLine.*lines\.list/,
+  );
+});

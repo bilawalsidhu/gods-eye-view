@@ -26,6 +26,7 @@ import {
   mergeSharpen,
 } from '../contract.js';
 import { createAppClock } from '../../time/clock.js';
+import { createLineRegistry } from '../lines.js';
 import { createMoverRegistry } from '../movers.js';
 
 const { cartesian2, cartesian3, cartographic, ellipsoid, math, matrix4 } = geo;
@@ -261,6 +262,42 @@ export function createFakeEngine(options = {}) {
   let wallMs = options.nowMs ?? FAKE_EPOCH_MS;
   const appClock = options.appClock ?? createAppClock({ now: () => wallMs });
   const ownsWall = !options.appClock;
+  // Lines keep what they were given; each change counts as a render request.
+  const fakeLines = new Map();
+  const lineRegistry = createLineRegistry((options) => {
+    const state = {
+      options,
+      positions: new Float64Array(0),
+      color: [...options.color],
+      modelMatrix: options.modelMatrix,
+      shown: true,
+    };
+    fakeLines.set(options.id, state);
+    const changed = () => {
+      fake.renderRequests++;
+    };
+    return {
+      setPositions(flat) {
+        state.positions = flat;
+        changed();
+      },
+      setColor(rgba) {
+        state.color = rgba;
+        changed();
+      },
+      setModelMatrix(matrix) {
+        state.modelMatrix = matrix;
+        changed();
+      },
+      show(visible) {
+        state.shown = visible;
+        changed();
+      },
+      destroy() {
+        fakeLines.delete(options.id);
+      },
+    };
+  });
   // Movers keep their store for tests; commit counts as a render request.
   const moverRegistry = createMoverRegistry(() => {
     const part = {
@@ -807,6 +844,7 @@ export function createFakeEngine(options = {}) {
       horizonVisible,
     },
     movers: moverRegistry.movers,
+    lines: lineRegistry.lines,
     clock: {
       now: () => appClock.now(),
       frameTime: () => appClock.frameTime(),
@@ -922,6 +960,7 @@ export function createFakeEngine(options = {}) {
       record('destroy', []);
       cancelCurrentFlight();
       moverRegistry.destroyAll();
+      lineRegistry.destroyAll();
       fake.destroyed = true;
     },
     isDestroyed: () => fake.destroyed,
@@ -982,6 +1021,8 @@ export function createFakeEngine(options = {}) {
       scripts.delete(name);
     },
     lookAtTarget: () => (lookAtTarget ? copy3(lookAtTarget) : undefined),
+    /** A live line's options, positions, colour, matrix and visibility, by id. */
+    line: (id) => fakeLines.get(id),
     /** A live mover set's options, store and commit count, by id. */
     moverSet(id) {
       const entry = moverRegistry.sets.get(id);

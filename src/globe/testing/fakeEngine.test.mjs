@@ -474,3 +474,26 @@ test('fake movers keep their sets and instances for layer tests', () => {
   assert.deepEqual(engine.movers.list(), []);
   assert.equal(engine.fake.moverSet('flights'), undefined);
 });
+
+test('fake lines keep their positions, colour, matrix and visibility', () => {
+  const engine = createFakeEngine();
+  const line = engine.lines.createLine({
+    id: 'trail',
+    widthPx: 2,
+    color: [1, 0, 0, 1],
+  });
+  line.setPositions([
+    { x: 1, y: 2, z: 3 },
+    { x: 4, y: 5, z: 6 },
+  ]);
+  line.show(false);
+  const stored = engine.fake.line('trail');
+  assert.deepEqual([...stored.positions], [1, 2, 3, 4, 5, 6]);
+  assert.deepEqual(stored.color, [1, 0, 0, 1]);
+  assert.equal(stored.shown, false);
+  assert.deepEqual(engine.lines.list(), [
+    { id: 'trail', points: 2, shown: false },
+  ]);
+  line.destroy();
+  assert.equal(engine.fake.line('trail'), undefined);
+});
