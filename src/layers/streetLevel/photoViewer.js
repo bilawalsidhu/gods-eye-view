@@ -4,6 +4,7 @@ import {
   wrapDegrees,
 } from './panorama.js';
 import { imageSize } from './imageSize.js';
+import { msg, t } from '../../i18n/index.js';
 
 /** A photo download (tens of kilobytes to a few megabytes). */
 export const IMAGE_TIMEOUT_MS = 15_000;
@@ -44,7 +45,7 @@ export function loadImage(
     crossOrigin = true,
     timeoutMs = IMAGE_TIMEOUT_MS,
     resize = null,
-    failure = 'The photo could not be loaded',
+    failure = msg('The photo could not be loaded'),
     signal = null,
   } = {},
 ) {
@@ -602,11 +603,14 @@ export function createPhotoViewer({
     root.setAttribute('role', 'group');
     root.setAttribute(
       'aria-label',
-      `${name} photo. ← and → step along the sequence. On a 360° photo, drag or use Shift+← →, ↑ ↓ to look around, and + − to zoom`,
+      t(
+        '{name} photo. ← and → step along the sequence. On a 360° photo, drag or use Shift+← →, ↑ ↓ to look around, and + − to zoom',
+        { name },
+      ),
     );
     picture = doc.createElement('img');
     picture.className = 'sl-photo-flat';
-    picture.alt = `${name} street-level photo`;
+    picture.alt = t('{name} street-level photo', { name });
     picture.draggable = false;
     picture.hidden = true;
     canvas = makeCanvas(doc);
@@ -624,8 +628,8 @@ export function createPhotoViewer({
       });
       return button;
     };
-    prevButton = nav('Previous photo in this sequence (←)', '‹', -1);
-    nextButton = nav('Next photo in this sequence (→)', '›', 1);
+    prevButton = nav(t('Previous photo in this sequence (←)'), '‹', -1);
+    nextButton = nav(t('Next photo in this sequence (→)'), '›', 1);
     root.append(picture, canvas, prevButton, nextButton);
     host.append(root);
     listen(root, 'keydown', onKeyDown);

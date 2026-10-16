@@ -124,7 +124,8 @@ test('a partial answer names the layers it could not read', async () => {
   assert.match(result.say, /Partial; earthquakes not answered/);
   assert.deepEqual(result.unanswered, ['earthquakes']);
   assert.ok(view.chips.includes('partial'));
-  assert.ok(view.notes.includes('Not answered: earthquakes'));
+  // The card names the layer; the result keeps its key for the model.
+  assert.ok(view.notes.includes('Not answered: Earthquakes (24h)'));
 });
 
 test('"the second one" is the second row the card lists', async () => {
