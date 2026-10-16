@@ -583,3 +583,67 @@ test('track backfill proxy returns 502 on an oversized upstream body and caches 
   assert.equal(res2.statusCode, 502);
   assert.equal(callCount, 1);
 });
+
+test('the aircraft snapshot routes decline a non-GET before any upstream work', async (t) => {
+  // Both routes answered every verb with the full snapshot, unlike the query
+  // proxies beside them, so nothing said whether a body was read or ignored.
+  // A stubbed fetch that throws proves the refusal happens before the handler
+  // reaches upstream, rather than after paying for the work and discarding it.
+  t.mock.method(globalThis, 'fetch', async (url) => {
+    throw new Error(`upstream must not be reached: ${url}`);
+  });
+  const cases = [
+    [install(providers.openSkyProxy()), '/api/flights'],
+    [install(providers.adsbLolProxy()), '/api/military'],
+  ];
+  for (const [request, route] of cases) {
+    for (const method of ['POST', 'PUT', 'DELETE', 'PATCH']) {
+      const response = await request(route, '/', method);
+      assert.equal(response.statusCode, 405, `${method} ${route}`);
+      // RFC 9110 section 15.5.6 requires a 405 to name the methods it does
+      // accept, which is what `/api/radio/stations` already does in-tree.
+      assert.equal(response.headers.allow, 'GET', `${method} ${route}`);
+      assert.deepEqual(JSON.parse(response.body), {
+        error: 'Method Not Allowed',
+      });
+    }
+  }
+});
+
+test('the snapshot method check hands each /track route on to its own handler', async () => {
+  // Each snapshot mount is a prefix of its /track route, so the snapshot
+  // handler sees /track requests first and must hand them on before it
+  // judges the method; otherwise the 405 would answer for the other route.
+  for (const [plugin, route] of [
+    [providers.openSkyProxy(), '/api/flights'],
+    [providers.adsbLolProxy(), '/api/military'],
+  ]) {
+    const routes = new Map();
+    plugin.configureServer({
+      middlewares: { use: (path, handler) => routes.set(path, handler) },
+    });
+    const res = {
+      statusCode: 200,
+      headers: {},
+      setHeader() {},
+      writeHead(s) {
+        this.statusCode = s;
+      },
+      end() {},
+    };
+    let handedOn = false;
+    await routes.get(route)(
+      { url: '/track?icao24=abc123', method: 'POST' },
+      res,
+      () => {
+        handedOn = true;
+      },
+    );
+    assert.ok(handedOn, `${route}/track reaches next()`);
+    assert.equal(
+      res.statusCode,
+      200,
+      `${route}/track is not answered by the snapshot handler`,
+    );
+  }
+});

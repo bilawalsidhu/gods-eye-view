@@ -79,6 +79,17 @@ export function adsbLolProxy() {
         // This mount also matches its /track route, served by its own handler.
         if (new URL(req.url || '/', 'http://localhost').pathname !== '/')
           return next();
+        // Read-only snapshot endpoint; match the method contract its sibling
+        // query proxies already declare instead of serving every verb alike.
+        // Checked after the /track hand-off, so that route keeps its own.
+        if (req.method !== 'GET') {
+          res.writeHead(405, {
+            'Content-Type': 'application/json',
+            Allow: 'GET',
+          });
+          res.end(JSON.stringify({ error: 'Method Not Allowed' }));
+          return;
+        }
         const now = Date.now();
         if (_cache && now - _cacheAt < CACHE_MS) {
           serve(res, 200, _cache, 'HIT');

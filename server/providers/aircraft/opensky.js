@@ -423,6 +423,18 @@ export function openSkyProxy() {
         // This mount also matches its /track route, served by its own handler.
         if (new URL(req.url || '/', 'http://localhost').pathname !== '/')
           return next();
+        // Read-only snapshot endpoint: state the method contract the way
+        // /api/geocode and the other query proxies state it, rather than
+        // answering any verb with the same body and ignoring the request body.
+        // Checked after the /track hand-off, so that route keeps its own.
+        if (req.method !== 'GET') {
+          res.writeHead(405, {
+            'Content-Type': 'application/json',
+            Allow: 'GET',
+          });
+          res.end(JSON.stringify({ error: 'Method Not Allowed' }));
+          return;
+        }
         res.setHeader('X-Feed-Source', 'OpenSky Network');
         const requestedMode = normalizeOpenSkyAuthMode(
           process.env.OPENSKY_AUTH_MODE,
