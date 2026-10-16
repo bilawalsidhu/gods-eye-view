@@ -1352,6 +1352,19 @@ Node-only package entries expose both provider factories. Routes, payloads,
 fallback behavior and existing dev/preview hook registration are preserved;
 browser rendering is unchanged.
 
+## CCTV missing numeric fields
+
+CCTV numbers are read as missing when they are absent, null, blank or boolean,
+on the server (`toFiniteNumber`, every pack and the file/env source packs) and
+in the browser (`safeNumber`). `/api/cctv/sources` sends an unknown number as
+JSON null; the browser then uses the bundled seed camera's value when one
+shares the id, else the field's default — id-hash heading, pitch −17°, FOV 74°
+(which a matched datasheet can still replace), range 700 m, mount 24 m, the
+city's ground elevation — rather than reading zero and clamping it to the
+field's floor. A camera with a missing latitude or longitude and no seed
+position is skipped by the browser catalog instead of being placed at 0,0.
+Real zeros, including `"0"`, are kept.
+
 ## Terrain, traffic, fire and bike-share provider modules
 
 Local composition now imports separate Node modules for Re:Earth heights,
@@ -3208,7 +3221,11 @@ test:track` 43 tracking invariants · headless QA harnesses under
 >   metres low. `qa-floor-verify.mjs` now **exits non-zero on FAIL** (1 = FAIL,
 >   2 = INCONCLUSIVE); it previously exited 0 on every verdict, which is how the
 >   burial stayed invisible. It also honours `QA_BASE_URL` and puppeteer's
->   pinned Chrome-for-Testing, like the other harnesses.
+>   pinned Chrome-for-Testing, like the other harnesses. The viewer-distance
+>   gate, the corridor walk and cell hysteresis take the short way across 180°
+>   (`src/data/approxDistance.js` is the one distance both the flights records
+>   and the mesh-floor sampler use), so contacts just across the antimeridian
+>   are floored like any other.
 > - **2026-07-16:** the FIRMS Active Fires layer is **LIVE** —
 >   the bundled 2026-05-25 snapshot (58 MB) is deleted; a new `/api/firms` proxy
 >   (vite.config.js) merges VIIRS NOAA-20/NOAA-21/Suomi-NPP NRT world CSVs
@@ -3465,7 +3482,10 @@ controls (the address goes in the caption); a pose goes out at once and
 again when the panorama's month, photographer and address arrive (one
 successful lookup per panorama per session, seeded by the nearest lookup;
 a details lookup that fails or takes over ten seconds waits five seconds
-before a view event can retry, and an unmount drops lookups in flight). A key
+before a view event can retry, and an unmount drops lookups in flight). Opening
+another panorama settles the previous open before registering its wait; closing
+then releases the current wait immediately. A details lookup released while its
+service loads makes no panorama request after that service becomes available. A key
 Google refuses (`gm_authFailure`: the API not enabled, a referrer it does
 not allow, billing off) reads KEY REJECTED and fails a pending open at
 once; a lookup or open Google never answers fails after 10 or 20 s. In CI
@@ -4233,7 +4253,7 @@ silently demoting every later lookup for the session.
 - The internal Context coordinator is available in every visual style. Its dedicated right-side `CONTEXT` chooser exposes the neutral shell; the coordinator is not duplicated in Data Layers and does not enable a live-data dependency until a mode is selected.
 - The expanded `CONTEXT` view offers mutually exclusive `CONTACTS` and `SPACE MISSIONS` modes. Selecting `CONTACTS` enables the context-owned Flights, Military Flights, AIS Vessels, and Mapped Installations dependencies only when they are not already user-enabled; selecting `SPACE MISSIONS` enables the recent-launch layer and its Satellite dependency. `CONTACTS` cycles the nearest supported contact of whatever type is selected. Satellites are deliberately excluded from those Awareness cohorts and keep their own tracking UX. Selecting the active mode again returns to the neutral chooser and releases only mode-owned dependencies.
 - If a civilian or military aircraft is already tracked when `CONTACTS` becomes operational, that source-owned track is adopted as the Context subject before nearest-contact autofocus. Context rechecks the tracker after its dependencies settle, so a newer selection wins, while an explicit clear during activation prevents fallback from silently selecting a replacement. Cockpit entry remains unavailable until that Context transaction has settled, so its camera takeover cannot clear Cesium tracking before adoption. Adoption does not recreate tracking or transfer camera ownership; it initializes the normal 250 km ring, history, proximity results, and Cockpit Previous/Next state for the original aircraft.
-- `SEARCH NEARBY SITES` retains the bounded OSM results and makes one user-initiated, view-biased Google Maps Places text search for “military installation.” Google results are source-stamped, deduplicated against OSM by rounded location/name, and remain mapped context rather than operational claims. If Places is unavailable or the API is not enabled for the supplied key, OSM context remains available.
+- `SEARCH NEARBY SITES` retains the bounded OSM results and makes one user-initiated, view-biased Google Maps Places text search for “military installation.” Google results are source-stamped, deduplicated against OSM by rounded location/name, and remain mapped context rather than operational claims. If Places is unavailable or the API is not enabled for the supplied key, OSM context remains available. A view across the antimeridian is searched around its own centre, with a radius from its real width.
 - The expanded desktop header omits the redundant `ON` label; the active mode button carries state. Expanded Contact results also omit the duplicate `GLOBAL CONTEXT` / `CONTEXT ONLY` status row and begin with the selected subject and its 250 km scope. Global Context does not fabricate a selected-entity model preview: the provisional hand-authored aircraft wireframe was removed because it was not geometry extracted from the selected entity's actual asset.
 - Dependency ownership is reversible: disabling Global Context releases only dependencies it enabled, while user-enabled layers remain on. This also removes the Military-layer suppression handoff when Global Context owned Military, allowing an already-enabled civilian Flights layer to resume its normal mixed rendering. If OpenSky is unavailable and has no last-good cache, Flights requests a capped 250 nm adsb.lol point snapshot around the current view anchor and labels that provenance explicitly; it never relabels military-feed rows as civilian data. If both inputs fail, Flights remains `UNKNOWN`.
 - Space Missions is replay-isolated: Rocket Launches and Satellites are the only Data Layers permitted while the mode is active. Direct UI and voice entry capture the same pre-entry snapshot; internal dependency and restoration enables do not create a user-owned Context session. Entry waits for incompatible layers to shut down, direct incompatible enables are blocked before lifecycle work, and the entry gate remains active through the complete Rocket Launches enable. A newer same-target ON request takes ownership of the pending entry without releasing its isolation snapshot, including when it arrives while the prior request is awaiting the adoption guard. A caller abort, resource cancellation, newer OFF, or layer teardown waits for exact manager settlement and restores that snapshot without resurrecting Rocket Launches. If an abort lands after only part of a restore settles, Context completes the same exact target without the stale caller signal and then replays newer explicit layer intent. Dedicated Voice Context cancellation reports a stable cancelled result plus the current Context state; generic layer visibility additionally exposes manager phase, reason, successor, and lifecycle details. Once an exact voice visibility intent commits, a newer voice turn cannot relabel it as cancelled while Context settlement completes; pre-commit aborts remain cancellable and final lifecycle mismatches remain failures. Clear Selected Layers reserves its complete captured OFF set before sequential teardown; a newer absolute request of any origin supersedes only its layer reservation and remains authoritative. A rejected layer teardown retains the truthful enabled state, rolls already-stopped siblings back to the captured pre-entry set, and aborts replay; rapid exit/re-entry serializes the full Satellite enabled-state and parameter restore before a new snapshot is taken. Contacts remains additive and restores user-enabled layers normally.
