@@ -1063,5 +1063,8 @@
   "src/services/groundSnap.test.mjs",
   "src/sharelinkPose.test.mjs",
   "src/tooling/navaraAssets.test.mjs",
-  "src/tooling/tileCache.test.mjs"
+  "src/tooling/tileCache.test.mjs",
+  "scripts/check-main-chunk.mjs",
+  "src/tooling/mainChunk.test.mjs",
+  "scripts/qa-w1-baseline.mjs"
 ]
