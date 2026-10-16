@@ -5,6 +5,7 @@ import { createVoiceCommands } from './commands.js';
 import { cameraPoseKey, createPointerTracker } from './pointerContext.js';
 import { createPointerPicker } from './pointerPick.js';
 import { createReferentRegistry } from './referents.js';
+import { engineFromViewer } from '../globe/cesium/engineFromViewer.js';
 export * from './realtimeController.js';
 
 const ACTION_NAMES = new Set(GEV_ACTION_SCHEMAS.map((schema) => schema.name));
@@ -30,10 +31,15 @@ export function withToolCatalog(runner, loadCatalog) {
   return runGevTool;
 }
 
-/** Compose the standalone action runner with the voice controls. */
+/**
+ * Compose the standalone action runner with the voice controls, on the globe
+ * `engine` (by default the one registered for `options.viewer`). Without a
+ * viewer (the Navara engine) the runner refuses the viewer-only tools.
+ */
 export function initGevVoiceCommands(options) {
-  const canvas = options.viewer?.scene?.canvas || null;
-  const cameraKey = () => cameraPoseKey(options.viewer);
+  const engine = options.engine ?? engineFromViewer(options.viewer);
+  const canvas = engine?.host.canvas || null;
+  const cameraKey = () => cameraPoseKey(engine);
   // Point-and-ask: the tracker and referents are shared by the runner (which
   // resolves 'pointer' and referent:n) and the controls (which snapshot the
   // pointer at turn start and clear both when the session ends).
@@ -42,7 +48,7 @@ export function initGevVoiceCommands(options) {
         element: canvas,
         cameraKey,
         pick: createPointerPicker({
-          viewer: options.viewer,
+          engine,
           dataManager: options.dataManager,
         }),
       })
@@ -55,7 +61,7 @@ export function initGevVoiceCommands(options) {
     pointer,
     referents,
     runner: withToolCatalog(
-      createGevActionRunner({ ...options, deixis }),
+      createGevActionRunner({ ...options, engine, deixis }),
       options.toolCatalog,
     ),
   });
