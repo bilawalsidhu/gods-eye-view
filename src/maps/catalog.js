@@ -39,7 +39,7 @@ export const MAP_STACKS = [
   },
   {
     id: 'kartverket-topo',
-    label: 'Kartverket Topo',
+    label: 'Kartverket Topo', // i18n-ignore: map product name
     shortLabel: 'Topo',
     kind: 'kartverket',
     layer: 'topo',
@@ -47,7 +47,7 @@ export const MAP_STACKS = [
   },
   {
     id: 'kartverket-nautical',
-    label: 'Kartverket Nautical',
+    label: 'Kartverket Nautical', // i18n-ignore: map product name
     shortLabel: 'Nautical',
     kind: 'kartverket',
     layer: 'sjokartraster',
