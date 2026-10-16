@@ -53,6 +53,29 @@ function isolate(t, env = {}) {
 }
 const json = (res) => JSON.parse(res.body);
 
+/** A response that streams 1 MiB chunks of `text` well past every cap, then ends. */
+function oversizedResponse(text) {
+  const state = { pulled: 0, cancelled: false };
+  const chunk = new TextEncoder().encode(
+    text.repeat(Math.ceil((1 << 20) / text.length)),
+  );
+  const response = new Response(
+    new ReadableStream(
+      {
+        pull(controller) {
+          if (++state.pulled > 40) controller.close();
+          else controller.enqueue(chunk);
+        },
+        cancel() {
+          state.cancelled = true;
+        },
+      },
+      { highWaterMark: 0 },
+    ),
+  );
+  return { response, state };
+}
+
 test('standalone composition mounts every extracted provider exactly once without acquisition', (t) => {
   t.mock.method(globalThis, 'fetch', () => {
     throw Error('construction must not fetch');
@@ -166,6 +189,29 @@ test('traffic middleware preserves keyless mode, caching, stale budget fallback 
     'MISS',
   );
   assert.equal(calls, 2);
+});
+
+test('traffic middleware answers 502 to an oversized tile without caching it', async (t) => {
+  isolate(t, { TOMTOM_API_KEY: 'fixture-key', TOMTOM_DAILY_TILE_BUDGET: '' });
+  const bodies = [];
+  t.mock.method(globalThis, 'fetch', async () => {
+    const oversized = oversizedResponse('\x01');
+    bodies.push(oversized.state);
+    return oversized.response;
+  });
+  const request = install(tomtomProxy());
+  const first = await request('/flow/8/1/1.pbf');
+  assert.equal(first.status, 502);
+  assert.equal(bodies[0].cancelled, true);
+  assert.ok(bodies[0].pulled <= 9, 'reading stops at the 8 MiB cap');
+  assert.ok(
+    !fsp.writeFile.mock.calls.some(({ arguments: [file] }) =>
+      String(file).endsWith('.pbf'),
+    ),
+    'no tile reached the disk cache',
+  );
+  assert.equal((await request('/flow/8/1/1.pbf')).status, 502);
+  assert.equal(bodies.length, 2, 'nothing was cached in memory');
 });
 
 test('FIRMS retains a large successful source during partial failure and filters stale data at serve time', async (t) => {

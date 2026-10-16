@@ -6,6 +6,17 @@ import { RealtimeRadio } from './realtimeRadio.js';
 import { RealtimeFacade } from './realtimeFacade.js';
 import { RealtimeCost } from './realtimeCost.js';
 import { RealtimeInput } from './realtimeInput.js';
+import { TurnMetrics } from './turnMetrics.js';
+import { createNarrationScheduler } from './narration.js';
+import { createEarcon } from './earcon.js';
+import {
+  POINTER_OPEN_MIC_RECENT_MS,
+  pointerChip,
+  pointerContextItem,
+} from './pointerContext.js';
+
+/** Dedupe key of the clearing pointer_context item. */
+const POINTER_NONE_KEY = 'none';
 
 import { shouldPauseRadioForVoice } from './realtimeProtocol.js';
 import { postDebugLog } from './realtimeDiagnostics.js';
@@ -64,8 +75,12 @@ export class GevRealtimeController extends RealtimeFacade {
     debugSink = postDebugLog,
     actionExecutor,
     onSessionEvent,
+    pointer = null,
   }) {
     super();
+    this.pointer = pointer;
+    this.pointerSentKey = null;
+    this.pointerAnnounced = null;
     this.actionExecutor = actionExecutor;
     this.onSessionEvent = onSessionEvent;
     this.backend = backend;
@@ -79,6 +94,7 @@ export class GevRealtimeController extends RealtimeFacade {
     this.dataManager = dataManager;
     this._viewport = new RealtimeViewport({
       readChannel: () => this.dc,
+      readPointer: () => this.pointer?.activeSnapshot?.() || null,
 
       operations: {
         sendRealtimeEvent: (...args) => this.sendRealtimeEvent(...args),
@@ -130,6 +146,11 @@ export class GevRealtimeController extends RealtimeFacade {
         setStatus: (...args) => this.setStatus(...args),
         start: (...args) => this.start(...args),
         pauseRadioForVoice: (...args) => this.pauseRadioForVoice(...args),
+        bargeIn: () => this._turns.bargeIn(),
+        holdPointer: () => this.pointer?.hold('keydown'),
+        releasePointerHold: () => this.pointer?.releaseHold(),
+        beginPointerTurn: (at) => this.beginPointerTurn(at),
+        mayClaimSpeaker: () => this._radio.mayVoiceClaimSpeaker(),
       },
     });
 
@@ -139,6 +160,12 @@ export class GevRealtimeController extends RealtimeFacade {
 
     this.status = 'idle';
 
+    this._metrics = new TurnMetrics({
+      emit: (span) => {
+        this.debugLog('turn.span', span);
+        this.emitSessionEvent({ type: 'turn-metrics', span });
+      },
+    });
     this._turns = new RealtimeTurns({
       readActionExecutor: () => this.actionExecutor,
       readRunner: () => this.runner,
@@ -147,8 +174,10 @@ export class GevRealtimeController extends RealtimeFacade {
       readRadioLayer: () => this.radioLayer,
       radio: this._radio,
       viewport: this._viewport,
+      metrics: this._metrics,
       operations: {
         cancelRadioHandoff: (...args) => this.cancelRadioHandoff(...args),
+        beginPointerTurn: (...args) => this.beginPointerTurn(...args),
         connectionDiagnostics: (...args) => this.connectionDiagnostics(...args),
         debugLog: (...args) => this.debugLog(...args),
         emitSessionEvent: (...args) => this.emitSessionEvent(...args),
@@ -157,6 +186,8 @@ export class GevRealtimeController extends RealtimeFacade {
         isSessionEnding: (...args) => this.isSessionEnding(...args),
         pauseRadioForVoice: (...args) => this.pauseRadioForVoice(...args),
         recordUsage: (...args) => this.recordUsage(...args),
+        recordTranscriptionUsage: (...args) =>
+          this.recordTranscriptionUsage(...args),
         reportError: (...args) => this.reportError(...args),
         reserveRadioToolHandoff: (...args) =>
           this.reserveRadioToolHandoff(...args),
@@ -171,6 +202,20 @@ export class GevRealtimeController extends RealtimeFacade {
           this.startPendingRadioHandoff(...args),
         stop: (...args) => this.stop(...args),
       },
+    });
+    // Progress narration: spoken lines go out of band through the turns
+    // owner; the earcon plays only while push-to-talk has the mic muted.
+    this._earcon = createEarcon({
+      isMicrophoneMuted: () =>
+        Boolean(this.pushToTalkMode && !this.pushToTalkKeyHeld && this.stream),
+    });
+    this._turns.narration = createNarrationScheduler({
+      speak: (line) => this._turns.speakProgressLine(line),
+      retract: () => this._turns.retractProgressLine(),
+      stop: () => this._turns.stopProgressLine(),
+      earcon: this._earcon,
+      canSpeak: () => !this.pushToTalkKeyHeld && this._turns.canNarrate(),
+      onNarration: (kind) => this._metrics.narration(kind),
     });
     this._connection = new RealtimeConnection({
       readLifetimeSignal: () => this.lifetimeSignal,
@@ -201,6 +246,96 @@ export class GevRealtimeController extends RealtimeFacade {
 
   isActive() {
     return this.status !== 'idle' && this.status !== 'error';
+  }
+
+  /**
+   * Point-and-ask: read the pointer as a user turn starts and tell the model.
+   *
+   * A Space hold is an explicit pointing gesture: its keydown snapshot is
+   * shown at once (reticle and chip) and sent as a pointer_context item with
+   * the target. Open-mic speech and typed turns carry no gesture, so they
+   * count only a pointer that moved on the map in the last few seconds, and
+   * the model is told only that one is available; the target is revealed
+   * when a tool resolves 'pointer' (see announcePointer). Losing the pointer
+   * after one was sent appends a clearing item. Unchanged items are not
+   * repeated.
+   * @param {'keydown'|'speech_start'|'text'} at
+   */
+  beginPointerTurn(at) {
+    if (!this.pointer) return null;
+    this._viewport.beginTurn();
+    // A speech start after the Space release belongs to the gesture that
+    // just ended; it must not re-read a pointer that has since moved.
+    if (
+      at === 'speech_start' &&
+      this.pushToTalkMode &&
+      !this.pointer.isHeld?.()
+    )
+      return this.pointer.activeSnapshot?.() || null;
+    const gesture =
+      at === 'keydown' || (at === 'speech_start' && this.pushToTalkMode);
+    let snapshot = null;
+    try {
+      snapshot = this.pointer.beginTurn(
+        at,
+        gesture ? {} : { recentMs: POINTER_OPEN_MIC_RECENT_MS },
+      );
+    } catch {
+      snapshot = null;
+    }
+    const chip = pointerChip(snapshot);
+    this.pointerAnnounced = gesture && chip ? snapshot : null;
+    this.emitSessionEvent({
+      type: 'pointer',
+      pointer:
+        gesture && chip ? { ...chip, screenPx: snapshot.screenPx } : null,
+    });
+    const item = !chip
+      ? this.pointerSentKey && this.pointerSentKey !== POINTER_NONE_KEY
+        ? { type: 'pointer_context', at, target: 'none' }
+        : null
+      : gesture
+        ? pointerContextItem(snapshot)
+        : // What kind of thing, never which: no label or coordinates.
+          {
+            type: 'pointer_context',
+            at,
+            pointing: snapshot.entity?.kind || 'ground',
+          };
+    if (!item) return snapshot;
+    const { at: _at, ...content } = item;
+    const key = chip ? JSON.stringify(content) : POINTER_NONE_KEY;
+    if (key === this.pointerSentKey) return snapshot;
+    if (this._turns.notifyMapEvent(item)) {
+      this.pointerSentKey = key;
+      this.debugLog('pointer.context', {
+        at,
+        target: chip ? snapshot.target : 'none',
+        detail: chip ? (gesture ? 'target' : 'available') : 'cleared',
+      });
+    }
+    return snapshot;
+  }
+
+  /**
+   * A tool just resolved 'pointer' for a turn that had no gesture: show the
+   * reticle and chip now, once per snapshot.
+   */
+  announcePointer() {
+    const snapshot = this.pointer?.activeSnapshot?.() || null;
+    const chip = pointerChip(snapshot);
+    if (!chip || snapshot === this.pointerAnnounced) return false;
+    this.pointerAnnounced = snapshot;
+    this.emitSessionEvent({
+      type: 'pointer',
+      pointer: { ...chip, screenPx: snapshot.screenPx },
+    });
+    return true;
+  }
+
+  /** What the retained context image shows, for pixel targeting. */
+  retainedImageFrame() {
+    return this._viewport.retainedFrame;
   }
 
   // Fatal error path: tear the session down (stop tracks, close pc/dc, kill the
@@ -239,11 +374,21 @@ export class GevRealtimeController extends RealtimeFacade {
       status: this.status,
       connection: this.connectionDiagnostics(),
     });
-    if (this.dc && this.responseActive) this.costTracker.markIncomplete();
+    if (this.dc && this.responseActive) {
+      this.costTracker.markIncomplete();
+      this.syncCostUi();
+    }
+    this._metrics.flush('stop');
     this._connection.closeTransport();
     this.stopVoiceVisualizer();
     this._connection.releaseMedia();
     this._turns.reset();
+    // A Space hold that is starting a session keeps its keydown snapshot.
+    this.pointer?.clear({ keepHold: this.pushToTalkKeyHeld });
+    this.pointerSentKey = null;
+    this.pointerAnnounced = null;
+    this._earcon.stop();
+    if (removeUi) this._earcon.dispose();
     this._radio.clearPendingPlayback();
     this._viewport.reset();
     this._input.resetSession();

@@ -106,6 +106,34 @@ test('bike share joins station information with live status inside the area', as
   assert.equal(result.data.rows[1].capacity, 10);
 });
 
+test('bike share returns localized names without losing stations with malformed names', async () => {
+  const informationUrl = 'https://gbfs.example/austin/station_information.json';
+  const information = structuredClone(documents[informationUrl]);
+  information.version = '3.0';
+  information.data.stations[0].name = [
+    { language: 'hu', text: 'Magyar név' },
+    { language: 'en', text: 'Congress & 2nd' },
+  ];
+  information.data.stations[2].name = [null, { language: 42, text: [] }];
+  const source = bikeshare([system('austin', 'Austin, TX', 30.27, -97.74)]);
+  const catalog = composeCatalog({
+    tools: coreTools,
+    services: {
+      bikeshare: {
+        ...source,
+        getStations: (url) =>
+          url === informationUrl ? information : source.getStations(url),
+      },
+    },
+  });
+  const result = await catalog.call('get_bike_share', { area: downtown });
+  assert.equal(result.data.total, 2);
+  assert.equal(result.data.rows[0].name, 'Congress & 2nd');
+  assert.equal(result.data.rows[0].bikes_available, 4);
+  assert.equal(result.data.rows[1].name, null);
+  assert.doesNotMatch(result.summary, /unavailable/);
+});
+
 test('bike share reports uncovered areas and failed systems honestly', async () => {
   const none = composeCatalog({
     tools: coreTools,
@@ -427,6 +455,51 @@ test('bike share names the systems it did not search', async () => {
     result.summary,
     /more not searched: .*; use a smaller area\)\.$/,
   );
+});
+
+test('bike share over Oslo searches only the nearby Norwegian systems', async () => {
+  const requested = [];
+  const result = await composeCatalog({
+    tools: coreTools,
+    services: {
+      bikeshare: {
+        systems: GBFS_CITY_REGISTRY,
+        getStations: async (url) => {
+          requested.push(url);
+          return { data: { stations: [] } };
+        },
+      },
+    },
+  }).call('get_bike_share', {
+    area: { lat: 59.9139, lon: 10.7522, radius_km: 5 },
+  });
+  assert.deepEqual(result.data.systems.sort(), [
+    'Lillestrøm, Norway',
+    'Oslo, Norway',
+  ]);
+  assert.deepEqual(result.data.systems_not_searched, []);
+  assert.ok(
+    requested.every(
+      (url) =>
+        url.startsWith('https://gbfs.urbansharing.com/oslobysykkel.no/') ||
+        url.startsWith('https://api.cyclocity.fr/contracts/lillestrom/'),
+    ),
+  );
+});
+
+test('bike share over Stavanger searches Kolumbus Bysykkel', async () => {
+  const result = await composeCatalog({
+    tools: coreTools,
+    services: {
+      bikeshare: {
+        systems: GBFS_CITY_REGISTRY,
+        getStations: async () => ({ data: { stations: [] } }),
+      },
+    },
+  }).call('get_bike_share', {
+    area: { lat: 58.97, lon: 5.7331, radius_km: 5 },
+  });
+  assert.deepEqual(result.data.systems, ['Stavanger, Norway']);
 });
 
 test('traffic counts only roads inside a radius area and reports missing tiles', async () => {

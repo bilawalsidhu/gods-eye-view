@@ -7,6 +7,21 @@ import {
 } from './globePanel.js';
 import { panelRuntime } from '../app/globePanelRuntime.js';
 import { composeCatalog, coreTools } from './index.js';
+import { MAPILLARY_GRAPH_HOST } from '../layers/streetLevel/providers/mapillary/policy.js';
+
+/** Whether a CSP source list allows a URL (exact origin or `https://*.host`). */
+function allows(sources, url) {
+  const { origin, protocol, hostname } = new URL(url);
+  return sources.some((source) => {
+    if (source === origin) return true;
+    const wildcard = source.match(/^(https:)\/\/\*\.(.+)$/);
+    return (
+      Boolean(wildcard) &&
+      protocol === wildcard[1] &&
+      hostname.endsWith(`.${wildcard[2]}`)
+    );
+  });
+}
 
 test('the globe panel is an MCP Apps resource that loads the app through its server', () => {
   const resource = createGlobePanelResource({
@@ -43,6 +58,27 @@ test('the globe panel is an MCP Apps resource that loads the app through its ser
   assert.doesNotMatch(resource.text, /<iframe|createElement\('base'\)/);
   const script = resource.text.match(/<script>([\s\S]*)<\/script>/)[1];
   assert.doesNotThrow(() => new Function(script));
+});
+
+test('the panel lets Street Level reach Mapillary from inside the embed', () => {
+  const { csp } = createGlobePanelResource({
+    runtime: panelRuntime,
+    panelKey: 'test-key',
+  })._meta.ui;
+  // Graph API lookups (nearest image, sequences) and MapillaryJS photo loads.
+  for (const url of [
+    `${MAPILLARY_GRAPH_HOST}/images?fields=id&bbox=1,2,3,4`,
+    'https://scontent-man2-1.xx.fbcdn.net/m1/v/t6/photo.jpg',
+    'https://scontent-iad3-2.xx.fbcdn.net/m1/v/t6/photo.jpg',
+  ]) {
+    assert.ok(allows(csp.connectDomains, url), `connect-src allows ${url}`);
+    assert.ok(allows(csp.resourceDomains, url), `img-src allows ${url}`);
+  }
+  assert.equal(allows(csp.connectDomains, 'https://evil.example/x'), false);
+  assert.equal(
+    allows(csp.connectDomains, 'https://fbcdn.net.evil.example/'),
+    false,
+  );
 });
 
 test('the globe panel needs a request key', () => {
@@ -132,4 +168,21 @@ test('the package exports the panel resource and its runtime together', async ()
   assert.equal(resource.uri, panel.GLOBE_PANEL_URI);
   assert.equal(panel.PANEL_BASE, '/panel/');
   assert.match(resource.text, /panelRuntime|function/);
+});
+
+test('the panel lets Street Level reach Google Street View from inside the embed', () => {
+  const { csp } = createGlobePanelResource({
+    runtime: panelRuntime,
+    panelKey: 'test-key',
+  })._meta.ui;
+  // The API script and lookups, panorama tiles, control images, contributed photos.
+  for (const url of [
+    'https://maps.googleapis.com/maps/api/js?key=k&v=weekly',
+    'https://streetviewpixels-pa.googleapis.com/v1/tile?panoid=p&x=0&y=0&zoom=1',
+    'https://maps.gstatic.com/mapfiles/api-3/images/cb_scout5_hdpi.png',
+    'https://lh3.ggpht.com/p/photo.jpg',
+  ]) {
+    assert.ok(allows(csp.connectDomains, url), `connect-src allows ${url}`);
+    assert.ok(allows(csp.resourceDomains, url), `img-src allows ${url}`);
+  }
 });
