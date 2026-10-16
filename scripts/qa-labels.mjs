@@ -322,7 +322,38 @@ async function main() {
       (ids) => ids.filter((id) => !window.__godsEyeView.layers.available(id)),
       fieldLayers,
     );
-    if (missingLayers.length) {
+    // An engine with flights but not the other field layers (Navara, W1 so
+    // far): the same 12,000 / 5,200 observations, all as aircraft, so the
+    // detection lane is measured on the layers the engine has.
+    let fieldCounts = FIELD_COUNTS;
+    let normalCounts = NORMAL_COUNTS;
+    if (missingLayers.length && !missingLayers.includes('flights')) {
+      const sum = (counts) =>
+        Object.values(counts).reduce((total, count) => total + count, 0);
+      fieldCounts = Object.fromEntries(
+        fieldLayers.map((id) => [
+          id,
+          missingLayers.includes(id)
+            ? 0
+            : id === 'flights'
+              ? sum(FIELD_COUNTS) - fieldLayers.filter((other) => other !== 'flights' && !missingLayers.includes(other)).reduce((total, other) => total + FIELD_COUNTS[other], 0)
+              : FIELD_COUNTS[id],
+        ]),
+      );
+      normalCounts = Object.fromEntries(
+        fieldLayers.map((id) => [
+          id,
+          missingLayers.includes(id)
+            ? 0
+            : id === 'flights'
+              ? sum(NORMAL_COUNTS) - fieldLayers.filter((other) => other !== 'flights' && !missingLayers.includes(other)).reduce((total, other) => total + NORMAL_COUNTS[other], 0)
+              : NORMAL_COUNTS[id],
+        ]),
+      );
+      console.log(
+        `  [INFO] the field as ${JSON.stringify(fieldCounts)} (no ${missingLayers.join(', ')} on ${ENGINE})`,
+      );
+    } else if (missingLayers.length) {
       console.log(`  [SKIP] the deterministic field checks — no ${missingLayers.join(', ')} on ${ENGINE}`);
       skippedChecks += 1;
       record(
@@ -370,7 +401,8 @@ async function main() {
       window.__LABEL_QA_NORMAL_COUNTS = normalCounts;
       for (const layerId of layerIds) {
         const entry = dataManager.layers.get(layerId);
-        entry.module.getDetectableObjects = () => window.__LABEL_QA_FIELD[layerId];
+        if (entry)
+          entry.module.getDetectableObjects = () => window.__LABEL_QA_FIELD[layerId];
       }
 
       // The global camera, orbiting west to east (the old rotateRight about
@@ -446,7 +478,7 @@ async function main() {
       };
       requestAnimationFrame(sample);
       return Object.fromEntries(layerIds.map((layerId) => [layerId, field[layerId].length]));
-    }, { fieldCounts: FIELD_COUNTS, normalCounts: NORMAL_COUNTS });
+    }, { fieldCounts, normalCounts });
 
     record(
       'deterministic field contains exactly 12,000 observations',
