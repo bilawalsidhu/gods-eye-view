@@ -220,7 +220,10 @@ export class NavigationController {
       release: () => {
         this.interruptCameraMotion('camera-orientation');
         this.stopOrbit();
-        this.engine?.camera.cancelFlight();
+        // Only a running flight: a cancel is a camera command, which ends an
+        // engine's own follow (Navara) that the orientation keeps.
+        if (this.engine?.camera.flightActive?.() !== false)
+          this.engine?.camera.cancelFlight();
       },
       navigate,
     });
