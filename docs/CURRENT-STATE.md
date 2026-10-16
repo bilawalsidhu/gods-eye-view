@@ -100,6 +100,9 @@ shared `area` argument (place name, bounding box, or point and radius) and cap
 lists at 25 rows by default. Voice offers the same queries next to its app
 actions: the session lists them, and the browser runs them through the same
 catalog, loaded on first use. See [tools and the MCP server](TOOLS.md).
+Aircraft altitude-band queries require a reported barometric or geometric altitude
+for each match, so a grounded contact that reports none is left out of a band too.
+Queries without an altitude band retain unknown-altitude contacts.
 
 Catalog calls check their cancellation signal immediately before executing a
 tool. Already-cancelled queries do not start; cancellation after execution starts
@@ -525,7 +528,7 @@ are protected from fallback writes. Version 6 is the export format, with
 zero pitch, low camera heights, scope and detection edits preserved. See [the document contract](SCENE-DOCUMENT.md);
 see [Director](DIRECTOR.md) for camera, pack, action and sharing support.
 
-Search framing and annotations request semantic map features from an explicit source. The Overpass adapter owns bounded queries, member/tag decoding and request deadlines; callers retain candidate ranking, outline caching, deferred retries and scene placement. Empty, unavailable, transient and throttled outcomes remain distinct. Traffic sources return road records and installation sources return mapped records with freshness/saturation metadata, so their layers no longer decode upstream elements. ALPR already normalizes its records in the source. Traffic uses OpenFreeMap roads with optional matched TomTom congestion; ALPR uses an hourly OpenStreetMap extract. Keyless installations use military-area tiles. Detailed feature queries require operator-configured Overpass.
+Search framing and annotations request semantic map features from an explicit source. The Overpass adapter owns bounded queries, member/tag decoding and request deadlines; callers retain candidate ranking, outline caching, deferred retries and scene placement. Empty, unavailable, transient and throttled outcomes remain distinct; a data reply is refused only for its `remark`, never for text in element tags. Traffic sources return road records and installation sources return mapped records with freshness/saturation metadata, so their layers no longer decode upstream elements. ALPR already normalizes its records in the source. Traffic uses OpenFreeMap roads with optional matched TomTom congestion; ALPR uses an hourly OpenStreetMap extract. Keyless installations use military-area tiles. Detailed feature queries require operator-configured Overpass.
 
 Nepal media preloads survive repeated camera-flight updates, but Stop, event disable and replacement remove abandoned frames and revoke pending Facebook sessions. Fallback evidence-card clicks respect the shared drawing-tool pointer lease.
 
@@ -584,7 +587,9 @@ pinning, first-position grace, source time and sea-surface placement are unchang
 
 Military flights also separate portable records and source acquisition from
 Cesium snapshot application. The metadata owner retains aviation feet, source
-fix times, sticky fields and partial-feed retention. Rendering retains ground
+fix times, sticky fields and partial-feed retention. A row without track or
+speed holds the last known value, as civil records do; a grounded row without
+speed reads 0. Rendering retains ground
 model ownership, motion history, military registration and tracking cleanup.
 
 Civil flights separate source acquisition, portable record reconciliation and
