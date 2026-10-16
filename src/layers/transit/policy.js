@@ -4,7 +4,10 @@
  * scene state, no network: everything here is exercised by node:test.
  */
 
-import { TRANSIT_MODE_ICON } from '../../data/transitFeeds.js';
+import {
+  TRANSIT_MODE_ICON,
+  transitRouteLabel,
+} from '../../data/transitFeeds.js';
 import { displayMotion, playbackPosition } from './movement.js';
 
 export const TRANSIT_SELECTED_OVERLAY_SOURCE_ID = 'transit-selected';
@@ -337,7 +340,7 @@ export function buildTransitSelectionCopy(
 ) {
   const icon = TRANSIT_MODE_ICON[mode] || TRANSIT_MODE_ICON.unknown;
   const routeLabel = record.routeId
-    ? `Route ${record.routeId}`
+    ? `Route ${transitRouteLabel(feed, record.routeId)}`
     : record.label
       ? `Vehicle ${record.label}`
       : `Vehicle ${record.id}`;
@@ -345,7 +348,7 @@ export function buildTransitSelectionCopy(
   // The mode is said in words on its own line. A glyph and a route id do not
   // tell a reader that the dot on Tremont Street is a subway train, and a
   // subway drawn on a street reads as a bug until the card says what it is.
-  const kindWord = TRANSIT_MODE_WORD[mode] || TRANSIT_MODE_WORD.unknown;
+  const kindWord = transitModeWord(mode, feed);
   const details = [`${kindWord} · ${feed.name} · ${feed.region}`];
   const motion = [];
   // What the SCREEN is doing leads, because that is what the reader can check.
@@ -480,16 +483,49 @@ export const TRANSIT_MODE_ABBR = Object.freeze({
 });
 
 /**
+ * The mode in the operator's own vocabulary. A Toronto 501 and a Helsinki 1010
+ * are both the `tram` mode, but only one of them is called a tram by the people
+ * who ride it. A feed may name the modes it runs; everything else falls through
+ * to the shared table, so an override renames one word and nothing else.
+ * @param {string} mode Resolved transit mode.
+ * @param {object|null} [feed] Registry entry.
+ * @returns {string}
+ */
+export function transitModeWord(mode, feed = null) {
+  return (
+    feed?.modeWords?.[mode]?.word ||
+    TRANSIT_MODE_WORD[mode] ||
+    TRANSIT_MODE_WORD.unknown
+  );
+}
+
+/**
+ * The operator's short mode word for the fixed-width detection fields.
+ * @param {string} mode Resolved transit mode.
+ * @param {object|null} [feed] Registry entry.
+ * @returns {string}
+ */
+export function transitModeAbbr(mode, feed = null) {
+  return (
+    feed?.modeWords?.[mode]?.abbr ||
+    TRANSIT_MODE_ABBR[mode] ||
+    TRANSIT_MODE_ABBR.unknown
+  );
+}
+
+/**
  * The bright first line of a vehicle's detection label: its route when the feed
  * names one, else the fleet number, else the raw id. What a person standing at
  * the stop would call it.
  * @param {object} record Normalized vehicle record.
+ * @param {object|null} [feed] Registry entry, for feeds whose route ids are
+ *   internal keys rather than the number on the vehicle.
  * @returns {string}
  */
-export function transitDetectionId(record) {
+export function transitDetectionId(record, feed = null) {
   const route =
     typeof record?.routeId === 'string' ? record.routeId.trim() : '';
-  if (route) return elideRouteText(route);
+  if (route) return elideRouteText(transitRouteLabel(feed, route));
   const label = typeof record?.label === 'string' ? record.label.trim() : '';
   if (label) return elideRouteText(label);
   return elideRouteText(String(record?.id || 'TRANSIT'));
@@ -521,7 +557,7 @@ export function elideRouteText(text) {
  * @returns {string}
  */
 export function transitDetectionClass(mode, feed) {
-  const kind = TRANSIT_MODE_ABBR[mode] || TRANSIT_MODE_ABBR.unknown;
+  const kind = transitModeAbbr(mode, feed);
   const operator =
     typeof feed?.name === 'string' ? feed.name.toUpperCase() : '';
   return operator ? `${kind} ${operator}`.slice(0, 20) : kind;
@@ -538,10 +574,17 @@ export function transitDetectionClass(mode, feed) {
  *
  * @param {object} record Normalized vehicle record.
  * @param {string} mode Resolved transit mode.
+ * @param {number} [nowMs]
+ * @param {object|null} [feed] Registry entry, for its own mode vocabulary.
  * @returns {string}
  */
-export function transitDetectionMetric(entry, mode, nowMs = Date.now()) {
-  const kind = TRANSIT_MODE_ABBR[mode] || TRANSIT_MODE_ABBR.unknown;
+export function transitDetectionMetric(
+  entry,
+  mode,
+  nowMs = Date.now(),
+  feed = null,
+) {
+  const kind = transitModeAbbr(mode, feed);
   const state = transitVehicleState(entry, nowMs);
   return state ? `${kind} ${state}` : kind;
 }

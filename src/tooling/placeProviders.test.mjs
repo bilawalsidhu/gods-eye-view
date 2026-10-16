@@ -503,3 +503,64 @@ test('the routing proxy declines a non-GET before rate limiting or upstream', as
     assert.deepEqual(response.body, { error: 'Method Not Allowed' });
   }
 });
+
+test('both paid Google routes refuse cross-site requests before calling Google', async (t) => {
+  const plugin = googlePlacesContextProxy({ resolveApiKey: () => 'key' });
+  const routes = new Map();
+  plugin.configureServer({
+    middlewares: { use: (route, handler) => routes.set(route, handler) },
+  });
+  let upstream = 0;
+  t.mock.method(globalThis, 'fetch', async () => {
+    upstream += 1;
+    return Response.json({ places: [] });
+  });
+  const call = async (route, url, headers) => {
+    const res = {
+      statusCode: 200,
+      headers: {},
+      setHeader(name, value) {
+        this.headers[name.toLowerCase()] = value;
+      },
+      writeHead(status) {
+        this.statusCode = status;
+      },
+      end() {},
+    };
+    await routes.get(route)(
+      {
+        url,
+        method: 'GET',
+        headers: { host: 'localhost:4173', ...headers },
+        socket: { remoteAddress: '127.0.0.1' },
+      },
+      res,
+    );
+    return res.statusCode;
+  };
+  const crossSite = {
+    origin: 'https://attacker.example',
+    'sec-fetch-site': 'cross-site',
+  };
+  for (const [route, url] of [
+    ['/api/google/nearby-places', '?lat=30&lon=-97'],
+    ['/api/google/text-search', '?q=museum&lat=30&lon=-97'],
+  ]) {
+    assert.equal(await call(route, url, crossSite), 403, route);
+    assert.equal(
+      await call(route, url, { 'sec-fetch-site': 'cross-site' }),
+      403,
+      route,
+    );
+  }
+  assert.equal(upstream, 0, 'a refused request never reaches Google');
+  // The app's own page still gets answers.
+  assert.equal(
+    await call('/api/google/text-search', '?q=museum&lat=30&lon=-97', {
+      origin: 'http://localhost:4173',
+      'sec-fetch-site': 'same-origin',
+    }),
+    200,
+  );
+  assert.equal(upstream, 1);
+});

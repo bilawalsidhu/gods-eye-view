@@ -219,7 +219,7 @@ async function main() {
         });
         return;
       }
-      if (url.origin === APP_ORIGIN && url.pathname === '/api/ais-live') {
+      if (url.origin === APP_ORIGIN && url.pathname === '/api/vessels') {
         request.respond({
           status: 200,
           contentType: 'application/json',

@@ -132,5 +132,19 @@ export function createWeatherSource({
         signal?.removeEventListener('abort', abort);
       }
     },
+    /** Read one image frame through the bounded image route. */
+    async getImage({ product, time, size, bbox = null, signal } = {}) {
+      signal?.throwIfAborted();
+      const response = await fetchImpl(
+        weatherImageUrl(product, time, size, bbox),
+        { signal, redirect: 'error' },
+      );
+      if (!response.ok)
+        throw new Error(`Weather image HTTP ${response.status}`);
+      const bytes = new Uint8Array(await response.arrayBuffer());
+      signal?.throwIfAborted();
+      const type = response.headers.get('content-type') || '';
+      return { contentType: type.split(';')[0].trim().toLowerCase(), bytes };
+    },
   };
 }

@@ -58,30 +58,18 @@ export function normalizeAdminName(value) {
 const PACKS = {
   countries: {
     url: new URL('./local_data/natural_earth/countries.json', import.meta.url),
-    importJson: () =>
-      import('./local_data/natural_earth/countries.json', {
-        with: { type: 'json' },
-      }),
   },
   admin1: {
     url: new URL(
       './local_data/natural_earth/states_provinces.json',
       import.meta.url,
     ),
-    importJson: () =>
-      import('./local_data/natural_earth/states_provinces.json', {
-        with: { type: 'json' },
-      }),
   },
   counties: {
     url: new URL(
       './local_data/us_census_counties/counties.json',
       import.meta.url,
     ),
-    importJson: () =>
-      import('./local_data/us_census_counties/counties.json', {
-        with: { type: 'json' },
-      }),
   },
 };
 
@@ -297,7 +285,7 @@ function addKey(index, key, entry, tier) {
 
 const loadAdmin1 = createRetryableLoader(async () => {
   packLoads.admin1 += 1;
-  const pack = await loadBundledJson(PACKS.admin1.url, PACKS.admin1.importJson);
+  const pack = await loadBundledJson(PACKS.admin1.url);
   const decimals = pack.meta?.decimals ?? 3;
   const index = new Map();
   for (const feature of pack.features || []) {
@@ -323,10 +311,7 @@ const loadAdmin1 = createRetryableLoader(async () => {
 
 const loadCounties = createRetryableLoader(async () => {
   packLoads.counties += 1;
-  const pack = await loadBundledJson(
-    PACKS.counties.url,
-    PACKS.counties.importJson,
-  );
+  const pack = await loadBundledJson(PACKS.counties.url);
   const decimals = pack.meta?.decimals ?? 4;
   const byFull = new Map();
   const byName = new Map();
@@ -348,10 +333,7 @@ const loadCounties = createRetryableLoader(async () => {
 
 const loadCountries = createRetryableLoader(async () => {
   packLoads.countries += 1;
-  const pack = await loadBundledJson(
-    PACKS.countries.url,
-    PACKS.countries.importJson,
-  );
+  const pack = await loadBundledJson(PACKS.countries.url);
   const index = new Map();
   for (const feature of pack.features || []) {
     const entry = {
