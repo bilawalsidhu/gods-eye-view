@@ -956,6 +956,10 @@
   "Image by {creator}": "Автор снимка: {creator}",
   "zoom in to see KartaView coverage": "приблизьтесь, чтобы увидеть покрытие KartaView",
   "no KartaView photos in view": "фотографий KartaView в зоне видимости нет",
+  "zoom in to see Vegbilder coverage": "приблизьтесь, чтобы увидеть покрытие Vegbilder",
+  "no Vegbilder photos in view": "фотографий Vegbilder в зоне видимости нет",
+  "Statens vegvesen is limiting requests — they resume on their own": "Statens vegvesen ограничивает запросы — они возобновятся сами",
+  "Statens vegvesen has no file for this photo": "У Statens vegvesen нет файла для этой фотографии",
   "{names}: by upload date": "{names}: по дате загрузки",
   "{n} streets in view · click a line for its nearest photo": {
     "one": "{n} улица в кадре · щёлкните линию, чтобы открыть ближайшую фотографию",

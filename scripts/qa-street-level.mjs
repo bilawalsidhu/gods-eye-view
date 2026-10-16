@@ -75,6 +75,7 @@ export const EXPECTED_PROVIDERS = Object.freeze([
   'google',
   'kartaview',
   'panoramax',
+  'vegbilder',
 ]);
 
 /**
