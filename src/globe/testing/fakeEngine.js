@@ -18,7 +18,13 @@
 // - zoom distances are Cesium's defaults (1 m to unbounded).
 
 import * as geo from '../../geo/index.js';
-import { INPUT_TYPES, MODIFIERS, createEngineEvent } from '../contract.js';
+import {
+  INPUT_TYPES,
+  MODIFIERS,
+  SHARPEN_INITIAL,
+  createEngineEvent,
+  mergeSharpen,
+} from '../contract.js';
 
 const { cartesian2, cartesian3, cartographic, ellipsoid, math, matrix4 } = geo;
 const WGS84 = ellipsoid.WGS84;
@@ -250,6 +256,7 @@ export function createFakeEngine(options = {}) {
   let transform = [...matrix4.IDENTITY];
   let percentageChanged = 0.5;
   let continuous = false;
+  let sharpen = { ...SHARPEN_INITIAL };
   let flight = null;
   let lookAtTarget = null;
   let clock = 0;
@@ -790,6 +797,11 @@ export function createFakeEngine(options = {}) {
         continuous = Boolean(enabled);
       },
       isContinuous: () => continuous,
+      setSharpen(options) {
+        record('render.setSharpen', [options]);
+        sharpen = mergeSharpen(sharpen, options);
+      },
+      sharpen: () => ({ ...sharpen }),
     },
     surface: {
       sampleHeight(position, exclude) {

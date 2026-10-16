@@ -7,7 +7,11 @@
 // destroy() removes everything the engine added; the view stays the caller's.
 
 import * as geo from '../../geo/index.js';
-import { createEngineEvent } from '../contract.js';
+import {
+  SHARPEN_INITIAL,
+  createEngineEvent,
+  mergeSharpen,
+} from '../contract.js';
 import { cesiumFovy } from './cameraMath.js';
 import { createCameraModel } from './cameraModel.js';
 import { createNavaraCredits } from './credits.js';
@@ -64,13 +68,16 @@ function rayRaisedEllipsoid({ origin, direction }, height) {
  *   container?: HTMLElement,
  *   fetch?: typeof fetch,
  *   clock?: object,
+ *   sharpen?: { set: (state: { enabled: boolean, amount: number }) => void, destroy: () => void },
  * }} options `hooks` are internals.js; `container` defaults to the
- *   canvas's parent; `fetch` and `clock` are test seams.
+ *   canvas's parent; `sharpen` draws render.setSharpen (sharpen.js; without
+ *   it the engine only keeps the state) and the engine destroys it; `fetch`
+ *   and `clock` are test seams.
  * @returns {import('../contract.js').GlobeEngine}
  */
 export function createNavaraEngine(
   view,
-  { hooks, container, fetch, clock } = {},
+  { hooks, container, fetch, clock, sharpen: sharpenPort = null } = {},
 ) {
   if (!view?.camera?.raw)
     throw new TypeError('createNavaraEngine needs a view');
@@ -177,6 +184,7 @@ export function createNavaraEngine(
     },
   };
 
+  let sharpen = { ...SHARPEN_INITIAL };
   let destroyed = false;
   return {
     kind: 'navara',
@@ -196,6 +204,16 @@ export function createNavaraEngine(
         view.animation = Boolean(enabled);
       },
       isContinuous: () => view.animation === true,
+      setSharpen(options) {
+        const next = mergeSharpen(sharpen, options);
+        const changed =
+          next.enabled !== sharpen.enabled || next.amount !== sharpen.amount;
+        sharpen = next;
+        if (!changed || destroyed) return;
+        sharpenPort?.set({ ...next });
+        view.forceUpdate();
+      },
+      sharpen: () => ({ ...sharpen }),
     },
     surface,
     input: input.input,
@@ -210,6 +228,7 @@ export function createNavaraEngine(
       input.destroy();
       credits.destroy();
       maps.destroy();
+      sharpenPort?.destroy();
     },
     isDestroyed: () => destroyed,
   };

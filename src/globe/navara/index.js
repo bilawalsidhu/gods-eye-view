@@ -8,6 +8,7 @@ import { DefaultPlugin } from '@navaramap/three-default-plugin';
 import { createNavaraEngine } from './createNavaraEngine.js';
 import { navaraHooks } from './internals.js';
 import { buildNavaraLook } from './look.js';
+import { createNavaraSharpen } from './sharpen.js';
 import {
   NAVARA_CONTEXT_ATTRIBUTES,
   navaraScenePlan,
@@ -91,6 +92,7 @@ export async function createNavaraGlobe({
     engine = createNavaraEngine(view, {
       hooks: navaraHooks(view),
       container,
+      sharpen: createNavaraSharpen(view),
     });
     const camera = engine.camera;
     let ground = Number.NaN;

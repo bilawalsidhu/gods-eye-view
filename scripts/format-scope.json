@@ -1049,6 +1049,7 @@
   "src/globe/navara/internals.test.mjs",
   "src/globe/navara/maps.js",
   "src/globe/navara/maps.test.mjs",
+  "src/globe/navara/sharpen.js",
   "src/globe/navara/surface.js",
   "src/globe/navara/surface.test.mjs",
   "src/globe/navara/viewOptions.js",

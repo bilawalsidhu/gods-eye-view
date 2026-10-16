@@ -5,9 +5,13 @@ import {
   GLOBAL_POST_DEFAULTS,
   STYLE_PRESET_DEFAULTS,
   MILITARY_DETECTION_PRESET,
+  NAVARA_SHARPEN_INTENSITY_DEFAULT,
+  SHARPEN_INTENSITY_DEFAULT,
+  sharpenAmount,
+  sharpenIntensityForEngine,
 } from './visualPresets.js';
 
-function fixture() {
+function fixture(engine = null) {
   let time = 0;
   let next = 0;
   const frames = new Map();
@@ -37,6 +41,7 @@ function fixture() {
   };
   const effects = new VisualEffects({
     viewer: { scene: { postProcessStages: pipeline } },
+    engine,
     requestRender: (reason) => requests.push(reason),
     holdRender: (reason) => holds.add(reason),
     releaseRender: (reason) => holds.delete(reason),
@@ -187,6 +192,57 @@ test('sharpen uses the existing uniform scale and keeps values while disabled', 
   assert.equal(f.effects.sharpenIntensity, 1);
   assert.equal(f.effects.sharpenStage.enabled, false);
   f.effects.destroy();
+});
+
+test('without a viewer the engine sharpens with the same amount scale', () => {
+  const sharpen = [];
+  const requests = [];
+  const engine = {
+    render: { setSharpen: (options) => sharpen.push(options) },
+  };
+  const effects = new VisualEffects({
+    viewer: null,
+    engine,
+    requestRender: (reason) => requests.push(reason),
+    holdRender() {},
+    releaseRender() {},
+  });
+  effects.initStyles();
+  effects.initPostProcess(0.49);
+  assert.equal(effects.sharpenStage, null);
+  effects.applySharpenIntensity(0.8);
+  effects.setSharpenEnabled(true);
+  effects.setSharpenEnabled(false);
+  assert.deepEqual(sharpen, [
+    { amount: 1.7000000000000002 },
+    { enabled: true },
+    { enabled: false },
+  ]);
+  assert.equal(sharpen[0].amount, sharpenAmount(0.8));
+  assert.deepEqual(requests, ['sharpen', 'sharpen', 'sharpen']);
+  effects.destroy();
+});
+
+test('with a viewer the Cesium stage sharpens and the engine is left alone', () => {
+  let calls = 0;
+  const f = fixture({ render: { setSharpen: () => calls++ } });
+  f.effects.initPostProcess(0.49);
+  f.effects.applySharpenIntensity(0.8);
+  f.effects.setSharpenEnabled(true);
+  assert.equal(calls, 0);
+  assert.equal(f.effects.sharpenStage.uniforms.amount, sharpenAmount(0.8));
+  f.effects.destroy();
+});
+
+test('Navara reads the Cesium sharpen default as 80 %, other values stay', () => {
+  assert.equal(SHARPEN_INTENSITY_DEFAULT, 49);
+  assert.equal(NAVARA_SHARPEN_INTENSITY_DEFAULT, 80);
+  assert.equal(sharpenIntensityForEngine(49, 'navara'), 80);
+  assert.equal(sharpenIntensityForEngine(49, 'cesium'), 49);
+  assert.equal(sharpenIntensityForEngine(65, 'navara'), 65);
+  assert.equal(sharpenIntensityForEngine(0, 'navara'), 0);
+  for (const preset of Object.values(STYLE_PRESET_DEFAULTS))
+    assert.equal(preset.sharpen.intensity, SHARPEN_INTENSITY_DEFAULT);
 });
 
 test('stop revokes pending work immediately but retains stages until final destruction', () => {

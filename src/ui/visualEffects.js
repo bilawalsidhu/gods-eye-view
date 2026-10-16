@@ -8,16 +8,20 @@ import {
   STYLES,
   SHARPEN_SHADER,
   TRANSITION_DURATION_MS,
+  sharpenAmount,
 } from './visualPresets.js';
 
 /** Own the post-process stages and their animation, without DOM dependencies. */
 export class VisualEffects {
   /**
    * @param {object} options - Viewer, render ownership callbacks and optional clocks.
-   * Construction is inert; initStyles/initPostProcess retain startup ordering.
+   * Without a viewer, `engine` (the globe engine) draws the sharpening
+   * through render.setSharpen. Construction is inert; initStyles and
+   * initPostProcess retain startup ordering.
    */
   constructor({
     viewer,
+    engine = null,
     requestRender,
     holdRender,
     releaseRender,
@@ -28,6 +32,12 @@ export class VisualEffects {
     createStage = (options) => new PostProcessStage(options),
   }) {
     this.viewer = viewer;
+    // Cesium sharpens with its own post stage below; an engine without a
+    // viewer (Navara) sharpens in its render pipeline.
+    this.engineRender =
+      !viewer && typeof engine?.render?.setSharpen === 'function'
+        ? engine.render
+        : null;
     this.requestRender = requestRender;
     this.holdRender = holdRender;
     this.releaseRender = releaseRender;
@@ -53,7 +63,8 @@ export class VisualEffects {
   }
 
   // Post-process stages are Cesium's: without a viewer (the Navara engine)
-  // there are none, and the style, bloom and sharpen controls change nothing.
+  // there are none, and the style and bloom controls change nothing (the
+  // engine sharpens, see engineRender).
   initStyles() {
     if (!this.viewer || this.stopped || this.stageEntries.length) return;
     for (const [name, shader] of Object.entries(STYLES)) {
@@ -158,7 +169,8 @@ export class VisualEffects {
     if (this.stopped) return;
     this.sharpenIntensity = value;
     if (this.sharpenStage)
-      this.sharpenStage.uniforms.amount = 0.1 + value * 2.0;
+      this.sharpenStage.uniforms.amount = sharpenAmount(value);
+    this.engineRender?.setSharpen({ amount: sharpenAmount(value) });
     this.requestRender('sharpen');
   }
 
@@ -166,6 +178,7 @@ export class VisualEffects {
     if (this.stopped) return;
     this.sharpenEnabled = !!enabled;
     if (this.sharpenStage) this.sharpenStage.enabled = this.sharpenEnabled;
+    this.engineRender?.setSharpen({ enabled: this.sharpenEnabled });
     this.requestRender('sharpen');
   }
 

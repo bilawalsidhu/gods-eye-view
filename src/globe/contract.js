@@ -160,6 +160,16 @@
  *   Owns whatever the engine needs to render every frame or only on request
  *   (Cesium: requestRenderMode and maximumRenderTimeChange = Infinity).
  * @property {() => boolean} isContinuous
+ * @property {(options: { enabled?: boolean, amount?: number }) => void} setSharpen
+ *   An unsharp mask on the final image, after tone mapping and before
+ *   anti-aliasing: each pixel moves away from its 3×3 box blur by `amount`
+ *   (the maths of the app's Cesium sharpen stage, whose `amount` uniform the
+ *   Sharpen slider sets in 0.1..2.1). Omitted fields keep their value; a
+ *   non-boolean `enabled` or a negative or non-finite `amount` throws a
+ *   TypeError. Off with amount 1 until set. The Cesium engine only keeps the
+ *   state: in Cesium mode the app's own post stage sharpens.
+ * @property {() => { enabled: boolean, amount: number }} sharpen
+ *   The sharpening last set (a copy).
  *
  * @typedef {object} PickResult
  * @property {any} id The picked entity or object id; undefined for map tiles.
@@ -382,6 +392,8 @@ const SHAPE = {
     request: isFunction,
     setContinuous: isFunction,
     isContinuous: isFunction,
+    setSharpen: isFunction,
+    sharpen: isFunction,
   },
   surface: {
     sampleHeight: isFunction,
@@ -447,4 +459,24 @@ export function assertGlobeEngine(engine) {
       `GlobeEngine is missing or mistypes: ${problems.join(', ')}`,
     );
   return engine;
+}
+
+/** The sharpening an engine starts with (GlobeRender.sharpen). */
+export const SHARPEN_INITIAL = Object.freeze({ enabled: false, amount: 1 });
+
+/**
+ * GlobeRender.setSharpen's argument merged onto `current`: a new state, or a
+ * TypeError for a non-boolean `enabled` or a negative or non-finite `amount`.
+ */
+export function mergeSharpen(current, { enabled, amount } = {}) {
+  if (enabled !== undefined && !isBoolean(enabled))
+    throw new TypeError(`Sharpen enabled must be a boolean: ${enabled}`);
+  if (amount !== undefined && !(isNumber(amount) && amount >= 0))
+    throw new TypeError(
+      `Sharpen amount must be a finite number >= 0: ${amount}`,
+    );
+  return {
+    enabled: enabled ?? current.enabled,
+    amount: amount ?? current.amount,
+  };
 }

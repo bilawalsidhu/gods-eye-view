@@ -143,6 +143,40 @@ test('render requests are forceUpdate and continuous mode is Navara animation', 
   assert.equal(view.animation, false);
 });
 
+test('setSharpen hands changed states to the sharpen port and draws a frame', () => {
+  const view = fakeView();
+  const shown = [];
+  let destroyed = 0;
+  const engine = createNavaraEngine(view, {
+    hooks,
+    sharpen: {
+      set: (state) => shown.push(state),
+      destroy: () => destroyed++,
+    },
+  });
+  assert.deepEqual(engine.render.sharpen(), { enabled: false, amount: 1 });
+  engine.render.setSharpen({ amount: 1.7 });
+  engine.render.setSharpen({ enabled: true });
+  assert.deepEqual(view.calls.at(-1), ['forceUpdate']);
+  const calls = view.calls.length;
+  engine.render.setSharpen({ enabled: true, amount: 1.7 });
+  assert.equal(view.calls.length, calls, 'an unchanged state draws nothing');
+  assert.throws(() => engine.render.setSharpen({ amount: -1 }), TypeError);
+  assert.deepEqual(shown, [
+    { enabled: false, amount: 1.7 },
+    { enabled: true, amount: 1.7 },
+  ]);
+  engine.destroy();
+  engine.destroy();
+  assert.equal(destroyed, 1);
+});
+
+test('without a sharpen port setSharpen keeps the state only', () => {
+  const { engine } = setup();
+  engine.render.setSharpen({ enabled: true, amount: 0.5 });
+  assert.deepEqual(engine.render.sharpen(), { enabled: true, amount: 0.5 });
+});
+
 test("the camera starts from Navara's drawn camera and pushes poses with setCamera", () => {
   const { engine, view } = setup();
   near(engine.camera.pose().cartographic.height, 1e7, 1e-3, 'height');
