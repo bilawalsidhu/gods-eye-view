@@ -16,6 +16,11 @@ export const CACHED_TILE_HOSTS = Object.freeze([
   'terrain.reearth.land',
 ]);
 const RETRIES = 4;
+/** Who is asking, with a contact URL (the tile hosts' usage policies). */
+export const QA_USER_AGENT =
+  'gods-eye-view-qa/1 (headless tests with a disk cache; https://github.com/bilawalsidhu/gods-eye-view)';
+/** Fetches to the tile hosts in flight at once. */
+export const MAX_MISSES_IN_FLIGHT = 2;
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 /**
@@ -59,7 +64,7 @@ export async function fetchTile(
   for (let attempt = 0; ; attempt++) {
     const response = await fetchImpl(url, {
       headers: {
-        'User-Agent': 'gods-eye-view-qa (headless test, cached)',
+        'User-Agent': QA_USER_AGENT,
         ...(accept ? { Accept: accept } : {}),
       },
     });
@@ -74,6 +79,48 @@ export async function fetchTile(
 }
 
 /**
+ * Loads missing tiles politely: at most MAX_MISSES_IN_FLIGHT fetches at
+ * once (the rest queue), and one fetch for identical misses in flight (same
+ * URL and Accept). `load(url, accept)` resolves to fetchTile's result.
+ */
+export function createMissLoader({
+  fetchImpl = fetch,
+  wait = sleep,
+  maxInFlight = MAX_MISSES_IN_FLIGHT,
+} = {}) {
+  const pending = new Map();
+  const queue = [];
+  let running = 0;
+  const next = () => {
+    while (running < maxInFlight && queue.length) {
+      const job = queue.shift();
+      running++;
+      fetchTile(job.url, { accept: job.accept, fetchImpl, wait })
+        .then(job.resolve, job.reject)
+        .finally(() => {
+          running--;
+          pending.delete(job.key);
+          next();
+        });
+    }
+  };
+  return {
+    load(url, accept) {
+      const key = `${url}\n${accept ?? ''}`;
+      let promise = pending.get(key);
+      if (!promise) {
+        promise = new Promise((resolve, reject) =>
+          queue.push({ key, url, accept, resolve, reject }),
+        );
+        pending.set(key, promise);
+        next();
+      }
+      return promise;
+    },
+  };
+}
+
+/**
  * Serves the page's requests to CACHED_TILE_HOSTS from the cache (filling
  * it on a miss). Returns the counts.
  */
@@ -84,6 +131,7 @@ export async function installTileCache(
   fs.mkdirSync(dir, { recursive: true });
   const stats = { hits: 0, fetched: 0, cancelled: 0, failed: 0, errors: {} };
   const client = await page.createCDPSession();
+  const misses = createMissLoader();
   client.on('Fetch.requestPaused', async ({ requestId, request }) => {
     const accept = Object.entries(request.headers ?? {}).find(
       ([name]) => name.toLowerCase() === 'accept',
@@ -101,7 +149,7 @@ export async function installTileCache(
         };
         stats.hits++;
       } else {
-        const tile = await fetchTile(request.url, { accept });
+        const tile = await misses.load(request.url, accept);
         // Only successes are cached; a 404 (no tile there) is passed on.
         if (tile.status === 200) {
           fs.writeFileSync(file, tile.body);
