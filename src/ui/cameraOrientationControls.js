@@ -24,6 +24,18 @@ function followedEntity(engine, viewer) {
   return handle ? (handle.native ?? null) : (viewer?.trackedEntity ?? null);
 }
 
+// An engine's own follow (no tracked entity: Navara): its handle, which
+// knows its target and takes a new offset without ending the follow.
+function engineFollow(engine, viewer) {
+  const handle = engine?.camera.following?.();
+  return handle &&
+    !followedEntity(engine, viewer) &&
+    typeof handle.target === 'function' &&
+    typeof handle.retarget === 'function'
+    ? handle
+    : null;
+}
+
 function trackedTarget(entity, viewer) {
   // Read the visual's sample first; sampling a flight CallbackProperty twice
   // can advance dead reckoning ahead of the displayed aircraft.
@@ -89,9 +101,10 @@ export function readCameraTargetFrame(target, tracker) {
   if (!engine) return null;
   const viewer = trackerOf(target, tracker);
   const entity = followedEntity(engine, viewer);
+  const follow = engineFollow(engine, viewer);
   const center = entity
     ? trackedTarget(entity, viewer)
-    : pickViewTarget(engine);
+    : (follow?.target() ?? pickViewTarget(engine));
   const pose = engine.camera.pose();
   if (!center || !isPickedWorldPosition(pose.position)) return null;
 
@@ -133,6 +146,23 @@ export function setCameraTargetFrame(target, frame, tracker) {
   if (!engine || !frame?.target || !Number.isFinite(frame.range)) return false;
   const viewer = trackerOf(target, tracker);
   const { camera } = engine;
+  // Inside an engine's own follow: the new frame is the follow's offset (a
+  // camera command would end the follow; Cesium's tracked entity keeps its
+  // follow through lookAt below, so both engines keep following).
+  const follow = engineFollow(engine, viewer);
+  if (follow) {
+    const heading = normalizedHeading(frame.heading);
+    const flat = Math.cos(frame.pitch);
+    follow.retarget({
+      viewFrom: geo.cartesian3.create(
+        -frame.range * Math.sin(heading) * flat,
+        -frame.range * Math.cos(heading) * flat,
+        -frame.range * Math.sin(frame.pitch),
+      ),
+    });
+    engine.render.request('camera-orientation');
+    return true;
+  }
   try {
     const trackedTransform = followedEntity(engine, viewer)
       ? camera.transform()

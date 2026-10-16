@@ -13,6 +13,7 @@ import {
 } from './cameraOrientationControls.js';
 import { NavigationController } from './navigationController.js';
 import { createFakeEngine } from '../globe/testing/fakeEngine.js';
+import * as geo from '../geo/index.js';
 import { createCesiumEngine } from '../globe/cesium/createCesiumEngine.js';
 import { registerViewerEngine } from '../globe/cesium/engineFromViewer.js';
 
@@ -651,6 +652,10 @@ test('orientation navigation preserves follow and selection; new navigation canc
     cancelFlight();
   };
   let cockpit = false;
+  engine.camera.flyTo({
+    destination: geo.cartesian3.fromDegrees(30, 40, 5000),
+    duration: 1,
+  });
   const navigation = new NavigationController({
     viewer,
     engine,
@@ -673,6 +678,15 @@ test('orientation navigation preserves follow and selection; new navigation canc
     'interrupt-motion',
     'stop-orbit',
     'cancel-flight',
+  ]);
+  calls.length = 0;
+  // No running flight: a cancel would be a camera command, ending an engine's
+  // own follow, so the orientation leaves the camera alone.
+  navigation.runOrientation('camera', () => 'animated');
+  assert.deepEqual(calls, [
+    'cancel-orientation',
+    'interrupt-motion',
+    'stop-orbit',
   ]);
   calls.length = 0;
   navigation._stampNavigation({ cancelPendingSelection: false });
@@ -760,4 +774,40 @@ test('the controls run on a globe engine alone', (t) => {
   assert.equal(engine.frames.preRender.numberOfListeners, 0);
   assert.equal(engine.frames.preUpdate.numberOfListeners, 0);
   assert.equal(engine.camera.moveEnd.numberOfListeners, 0);
+});
+
+test("north-up and tilt inside an engine's own follow keep following (Navara)", () => {
+  const engine = createFakeEngine();
+  const target = Cesium.Cartesian3.fromDegrees(-73.78, 40.64, 3000);
+  const handle = engine.camera.follow({
+    position: () => target,
+    // 2 km south-east of the target, 1 km up: heading about 315°.
+    viewFrom: { x: 1400, y: -1400, z: 1000 },
+  });
+  engine.fake.frame();
+  const before = readCameraTargetFrame(engine);
+  assert.ok(before, 'a frame around the followed target');
+  sameXYZ(before.target, target, 'the frame centres the follow target');
+  assert.equal(resetCameraNorth(engine), true);
+  engine.fake.frame();
+  assert.equal(engine.camera.following(), handle, 'north-up keeps the follow');
+  const north = readCameraTargetFrame(engine);
+  const headingDeg = Cesium.Math.toDegrees(north.heading);
+  assert.ok(
+    Math.min(headingDeg, 360 - headingDeg) < 0.01,
+    `north-up left the follow at ${headingDeg.toFixed(2)} deg`,
+  );
+  assert.ok(Math.abs(north.range - before.range) < 1, 'same range');
+  assert.ok(Math.abs(north.pitch - before.pitch) < 1e-6, 'same pitch');
+  const tilt = toggleCameraTilt(engine);
+  assert.ok(tilt, 'tilt applied');
+  engine.fake.frame();
+  assert.equal(engine.camera.following(), handle, 'tilt keeps the follow');
+  const tilted = readCameraTargetFrame(engine);
+  assert.ok(
+    Math.abs(tilted.pitch - tilt.pitch) < 1e-6,
+    'the follow took the tilted pitch',
+  );
+  handle.stop();
+  engine.destroy();
 });
