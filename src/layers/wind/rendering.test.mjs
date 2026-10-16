@@ -35,6 +35,7 @@ function harness({
   getHost,
   eventTarget,
   shell = false,
+  spec,
 } = {}) {
   const shellScene = shell ? createShellScene() : null;
   const strokes = [];
@@ -194,7 +195,7 @@ function harness({
     Event: Cesium.Event,
     Cartesian3: { fromDegrees: (lon, lat) => ({ lon, lat }) },
     Ellipsoid: { WGS84: {} },
-    Rectangle: { MAX_VALUE: {} },
+    Rectangle: { MAX_VALUE: {}, fromDegrees: (w, s, e, n) => [w, s, e, n] },
     EllipsoidalOccluder: class {
       isPointVisible() {
         return !occluded;
@@ -218,6 +219,7 @@ function harness({
     onStatusChange,
     getHost,
     eventTarget,
+    spec,
   });
   return {
     rendering,
@@ -1193,3 +1195,53 @@ for (const overlay of ['speed', 'temperature', 'pressure']) {
     h.rendering.destroy();
   });
 }
+
+const OCEAN = {
+  grid: { nx: 10, ny: 10, lo1: -75, la1: 39, dx: 1, dy: 1 },
+  u: new Float32Array(100).fill(0.4),
+  v: new Float32Array(100),
+  bbox: { latMin: 30, latMax: 39, lonMin: -75, lonMax: -66 },
+  noData: -9999,
+  speed: { medianMs: 0.4, p95Ms: 0.8 },
+};
+
+test('ocean spec: canvas particles spawn inside the field box and the speed scale carries (E1)', async () => {
+  const { OCEAN_FIELD_SPEC } = await import('./fieldSpec.js');
+  const seen = [];
+  const h = harness({
+    spec: OCEAN_FIELD_SPEC,
+    createGpuRendering: () => ({
+      supported: () => false,
+      setField: () => false,
+      updateVisibility: () => false,
+      tick() {},
+      setOptions() {},
+      clear() {},
+      destroy() {},
+      getParticleCount: () => 0,
+      getDiagnostics: () => ({}),
+    }),
+    projected: (scene, point, result) => {
+      seen.push(point);
+      return Object.assign(result ?? {}, { x: 100, y: 100 });
+    },
+  });
+  h.rendering.attach();
+  h.rendering.setField(OCEAN);
+  h.rendering.start();
+  h.callbacks.shift()?.(16);
+  assert.ok(seen.length > 0);
+  // Heads spawn inside the box; a stroke tail may trail up to a few tenths of
+  // a degree behind the head at the scaled speed. A global spawn would scatter
+  // points across the whole sphere.
+  for (const point of seen) {
+    assert.ok(point.lon >= -75.5 && point.lon <= -65.5, `lon ${point.lon}`);
+    assert.ok(point.lat >= 29.5 && point.lat <= 39.5, `lat ${point.lat}`);
+  }
+  const diagnostics = h.rendering.getDiagnostics();
+  assert.equal(diagnostics.speedScale, 5.836 / 0.4);
+  assert.equal(diagnostics.imageryRectangle, null, 'no imagery without an overlay');
+  h.rendering.setOptions({ overlay: 'speed' });
+  assert.deepEqual(h.rendering.getDiagnostics().imageryRectangle, [-75, 30, -66, 39]);
+  h.rendering.destroy();
+});

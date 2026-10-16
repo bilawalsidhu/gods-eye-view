@@ -5,14 +5,32 @@ import {
   WIND_PATH_LIMIT,
   WIND_NARROW_PATH_LIMIT,
 } from './streamlines.js';
+import {
+  WIND_FIELD_SPEC,
+  fieldRampMax,
+  fieldSpeedScale,
+  rampStopVectors,
+} from './fieldSpec.js';
 
 export const WIND_FADE_LOW_METERS = 15000;
 export const WIND_FADE_HIGH_METERS = 60000;
 
 // Original material: a persistent fine curve plus a moving, tapered highlight.
 // The integer part of s identifies a path; its fractional part follows the wind.
+// fieldRamp() tints the curve by the path's seed speed; the wind spec passes
+// five white stops, so its pixels are unchanged.
 const FLOW_MATERIAL = `
 in float v_windFacing;
+in float v_fieldSpeed;
+vec3 fieldRamp(float t)
+{
+    float p = clamp(t, 0.0, 1.0) * 4.0;
+    vec3 c = mix(rampStop0, rampStop1, clamp(p, 0.0, 1.0));
+    c = mix(c, rampStop2, clamp(p - 1.0, 0.0, 1.0));
+    c = mix(c, rampStop3, clamp(p - 2.0, 0.0, 1.0));
+    c = mix(c, rampStop4, clamp(p - 3.0, 0.0, 1.0));
+    return c;
+}
 czm_material czm_getMaterial(czm_materialInput materialInput)
 {
     czm_material material = czm_getDefaultMaterial(materialInput);
@@ -25,13 +43,17 @@ czm_material czm_getMaterial(czm_materialInput materialInput)
     float ends = smoothstep(0.0, 0.055, along) * (1.0 - smoothstep(0.945, 1.0, along));
     float edge = 1.0 - smoothstep(0.26, 0.5, abs(materialInput.st.t - 0.5));
     float horizon = smoothstep(0.0, 0.065, v_windFacing);
-    material.diffuse = mix(vec3(0.50, 0.79, 0.90), vec3(0.91, 0.99, 1.0), tip);
+    material.diffuse = mix(vec3(0.50, 0.79, 0.90), vec3(0.91, 0.99, 1.0), tip) * fieldRamp(pow(v_fieldSpeed, rampGamma));
     material.alpha = (ghostAlpha + 0.64 * tail + 0.16 * tip) * ends * edge * horizon * heightFade;
     return material;
 }`;
 
 /** Native Cesium geometry/material owner. No animation loop or DOM ownership. */
-export function createWindGpuRendering({ cesium: C, getViewer }) {
+export function createWindGpuRendering({
+  cesium: C,
+  getViewer,
+  spec = WIND_FIELD_SPEC,
+}) {
   const cells = [];
   let occluder = null;
   let collection = null;
@@ -47,6 +69,8 @@ export function createWindGpuRendering({ cesium: C, getViewer }) {
     visibleCells: 0,
     visibleVertexCount: 0,
     heightFade: 0,
+    speedScale: 1,
+    stepSeconds: 1800,
   });
   let diagnostics = emptyDiagnostics();
 
@@ -96,9 +120,17 @@ export function createWindGpuRendering({ cesium: C, getViewer }) {
       const width = getViewer().scene.canvas?.clientWidth;
       const budget =
         width > 0 && width < 700 ? WIND_NARROW_PATH_LIMIT : WIND_PATH_LIMIT;
-      const paths = bakeWindStreamlines(field, { count: budget });
+      const speedScale = fieldSpeedScale(spec, field);
+      const stepSeconds = 1800 * speedScale;
+      const rampMax = fieldRampMax(spec, field);
+      const paths = bakeWindStreamlines(field, {
+        count: budget,
+        stepSeconds,
+        calmCutoffMs: spec.calmCutoffMs,
+      });
       if (!paths.length) return false;
       let vertexCount = 0;
+      const stops = rampStopVectors(spec.ramp);
       material = new C.Material({
         fabric: {
           type: 'GevWindStreamline',
@@ -106,6 +138,13 @@ export function createWindGpuRendering({ cesium: C, getViewer }) {
             phaseTime: 0,
             ghostAlpha: paused ? 0.34 : 0.25,
             heightFade: 0,
+            rampGamma: spec.rampGamma,
+            ...Object.fromEntries(
+              stops.map(([r, g, b], i) => [
+                `rampStop${i}`,
+                new C.Cartesian3(r, g, b),
+              ]),
+            ),
           },
           source: FLOW_MATERIAL,
         },
@@ -126,9 +165,9 @@ export function createWindGpuRendering({ cesium: C, getViewer }) {
         'v_st.s = st.s * 0.999 + czm_batchTable_windSeed(batchId);',
       );
       const vertexShaderSource =
-        `out float v_windFacing;\n${seededSource}`.replace(
+        `out float v_windFacing;\nout float v_fieldSpeed;\n${seededSource}`.replace(
           /void\s+main\s*\(\s*\)\s*\{/,
-          `void main() {\nvec3 windWorld = (czm_model * vec4(position3DHigh + position3DLow, 1.0)).xyz;\nv_windFacing = dot(normalize(windWorld), normalize(czm_viewerPositionWC - windWorld));\n`,
+          `void main() {\nvec3 windWorld = (czm_model * vec4(position3DHigh + position3DLow, 1.0)).xyz;\nv_windFacing = dot(normalize(windWorld), normalize(czm_viewerPositionWC - windWorld));\nv_fieldSpeed = czm_batchTable_fieldSpeed(batchId);\n`,
         );
       const scene = getViewer().scene;
       collection = scene.primitives;
@@ -166,6 +205,11 @@ export function createWindGpuRendering({ cesium: C, getViewer }) {
                 componentsPerAttribute: 1,
                 value: [path.seed],
               }),
+              fieldSpeed: new C.GeometryInstanceAttribute({
+                componentDatatype: C.ComponentDatatype.FLOAT,
+                componentsPerAttribute: 1,
+                value: [Math.max(0, Math.min(1, path.speed / rampMax))],
+              }),
             },
           });
         });
@@ -200,6 +244,8 @@ export function createWindGpuRendering({ cesium: C, getViewer }) {
         vertexCount,
         buildMs: (globalThis.performance?.now?.() ?? Date.now()) - started,
         error: null,
+        speedScale,
+        stepSeconds,
       };
       return true;
     } catch (error) {
