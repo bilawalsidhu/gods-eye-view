@@ -34,7 +34,9 @@
       "build/allowedHosts.js",
       "build/embed-framing.js",
       "build/panel.js",
-      "build/navaraAssets.js"
+      "build/navaraAssets.js",
+      "build/initialChunkGuard.js",
+      "build/navaraDependencies.js"
     ],
     "external": ["vite-plugin-cesium"]
   },
@@ -890,7 +892,8 @@
       "src/geo/scaleToGeodeticSurface.js",
       "src/geo/check.js",
       "src/geo/debug.js",
-      "src/geo/developerError.js"
+      "src/geo/developerError.js",
+      "src/time/clock.js"
     ],
     "external": ["cesium"]
   },
@@ -943,7 +946,8 @@
       "src/geo/scaleToGeodeticSurface.js",
       "src/geo/check.js",
       "src/geo/debug.js",
-      "src/geo/developerError.js"
+      "src/geo/developerError.js",
+      "src/time/clock.js"
     ],
     "external": ["cesium"]
   },
@@ -1124,7 +1128,8 @@
       "src/geo/scaleToGeodeticSurface.js",
       "src/geo/check.js",
       "src/geo/debug.js",
-      "src/geo/developerError.js"
+      "src/geo/developerError.js",
+      "src/time/clock.js"
     ],
     "external": ["cesium", "satellite.js"]
   },
@@ -1165,7 +1170,8 @@
       "src/geo/scaleToGeodeticSurface.js",
       "src/geo/check.js",
       "src/geo/debug.js",
-      "src/geo/developerError.js"
+      "src/geo/developerError.js",
+      "src/time/clock.js"
     ],
     "external": ["cesium"]
   },
@@ -2529,7 +2535,27 @@
       "src/geo/scaleToGeodeticSurface.js",
       "src/geo/check.js",
       "src/geo/debug.js",
-      "src/geo/developerError.js"
+      "src/geo/developerError.js",
+      "src/time/clock.js",
+      "src/globe/navara/overlay.js",
+      "src/globe/cesium/clock.js",
+      "src/globe/pickDelivery.js",
+      "src/globe/navara/clock.js",
+      "src/globe/cesium/lines.js",
+      "src/globe/lines.js",
+      "src/globe/navara/movers/pickIds.js",
+      "src/globe/cesium/movers.js",
+      "src/globe/movers.js",
+      "src/globe/cpuPicks.js",
+      "src/globe/navara/picking.js",
+      "src/globe/navara/lines/lineMesh.js",
+      "src/globe/navara/lines/index.js",
+      "src/globe/navara/cascadedLightCopy.js",
+      "src/globe/navara/overlayDepth.js",
+      "src/globe/navara/movers/moverMesh.js",
+      "src/globe/navara/movers/pack.js",
+      "src/globe/navara/movers/modelMover.js",
+      "src/globe/navara/movers/index.js"
     ],
     "external": [
       "hls.js",
@@ -3095,7 +3121,8 @@
       "src/geo/scaleToGeodeticSurface.js",
       "src/geo/check.js",
       "src/geo/debug.js",
-      "src/geo/developerError.js"
+      "src/geo/developerError.js",
+      "src/time/clock.js"
     ],
     "external": [
       "hls.js",
@@ -3656,7 +3683,8 @@
       "src/geo/scaleToGeodeticSurface.js",
       "src/geo/check.js",
       "src/geo/debug.js",
-      "src/geo/developerError.js"
+      "src/geo/developerError.js",
+      "src/time/clock.js"
     ],
     "external": ["cesium", "egm96-universal", "pbf"]
   },
