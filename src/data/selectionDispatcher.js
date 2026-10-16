@@ -9,8 +9,8 @@
 //   onEmptyClick(ctx)   a clean click (short, no drag) on the map or nothing;
 //   onEscape()          Escape.
 // The rules are the old handlers': a pick another layer owns is not empty
-// space; `passThrough` picks (trails) never take the click, the next pick
-// does; a `drillThrough` owner (local ADS-B) takes its object from under
+// space (a pick nobody owns is); `passThrough` picks (trails) never take the
+// click, the next pick does; a `drillThrough` owner (local ADS-B) takes its object from under
 // another layer's; a drag selects nothing; a pointer owned by a tool
 // (inputOwnership) selects nothing. Layers not moved yet keep their own
 // handlers: the dispatcher never acts on an id it does not own.
@@ -125,6 +125,10 @@ export function createSelectionDispatcher(
         return;
       }
     }
+    // A pick no layer owns (an unclaimed entity) is empty space, as it was
+    // for the old handlers: only another layer's object is not.
+    if (first.owner === null && isTrackingClickGesture(gesture))
+      for (const owner of [...owners.values()]) owner.onEmptyClick?.(ctx);
   };
 
   const onKey = (event) => {
@@ -184,6 +188,23 @@ export function createSelectionDispatcher(
       detach();
     },
   };
+}
+
+const dispatchers = new WeakMap();
+
+/**
+ * The application's one dispatcher for `engine`, created on first use (the
+ * layers that moved onto the engine share it).
+ * @param {import('../globe/contract.js').GlobeEngine} engine
+ */
+export function selectionDispatcherFor(engine) {
+  if (!engine) return null;
+  let dispatcher = dispatchers.get(engine);
+  if (!dispatcher) {
+    dispatcher = createSelectionDispatcher(engine);
+    dispatchers.set(engine, dispatcher);
+  }
+  return dispatcher;
 }
 
 function safely(run) {
