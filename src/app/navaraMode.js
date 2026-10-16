@@ -12,6 +12,7 @@ import {
   installRenderGovernor,
   uninstallRenderGovernor,
 } from '../renderGovernor.js';
+import { initGevVoiceCommands } from '../voice/gevRealtime.js';
 
 /** The Navara globe module, loaded on demand. */
 const loadNavaraGlobeModule = async () =>
@@ -109,14 +110,17 @@ export async function createNavaraScene({
 
 /**
  * The tools without a viewer (the experimental Navara engine): the startup
- * chrome, the render governor on the engine, hidden-tab handling and the
- * debug handle. The shell shows which features are unavailable.
+ * chrome, the render governor on the engine, hidden-tab handling, voice on
+ * the engine and the debug handle. The shell shows which features are
+ * unavailable.
  */
 export function createViewerlessTools({
   scene: { engine, mapStackController, operations },
   controls: { styleManager },
   data,
   loadingScreen,
+  placeSearch,
+  voice = {},
   startChrome,
   signal,
   defer,
@@ -170,5 +174,26 @@ export function createViewerlessTools({
   defer(() => {
     if (window.__godsEyeView === debug) delete window.__godsEyeView;
   });
-  return { sceneDirector: null, annotations: null, voiceCommands: null };
+  // Voice on the engine (phase 3, Task 9): the W1 tools drive the engine;
+  // the viewer-only ones (director, annotations, cockpit, radio…) refuse.
+  const voiceCommands = initGevVoiceCommands({
+    ...voice,
+    annotationResolver: operations.annotationResolver,
+    searchNavigation: operations.searchAndFlyTo,
+    signal,
+    placeSearch,
+    viewer: null,
+    engine,
+    styleManager,
+    dataManager,
+    sceneDirector: null,
+    annotations: null,
+  });
+  defer(() => {
+    voiceCommands.stop({ removeUi: true });
+    if (window.__gevVoiceCommands === voiceCommands)
+      delete window.__gevVoiceCommands;
+  });
+  debug.voiceCommands = voiceCommands;
+  return { sceneDirector: null, annotations: null, voiceCommands };
 }

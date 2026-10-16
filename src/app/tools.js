@@ -17,8 +17,9 @@ import {
 /**
  * Attach scene tools, rendering listeners and the application debug handle.
  * Without a viewer (the experimental Navara engine) the viewer-bound tools
- * (director, annotations, drawing, imagery box, scope mask, tracking, voice,
- * embedded views) are not created; their handles are null.
+ * (director, annotations, drawing, imagery box, scope mask, tracking,
+ * embedded views) are not created; their handles are null. Voice runs on
+ * the engine there (src/app/navaraMode.js).
  */
 export function createApplicationTools({
   scene,
@@ -44,6 +45,8 @@ export function createApplicationTools({
         controls,
         data,
         loadingScreen,
+        placeSearch,
+        voice,
         startChrome,
         signal,
         defer,
@@ -189,6 +192,7 @@ export function createApplicationTools({
     signal,
     placeSearch,
     viewer,
+    engine,
     styleManager,
     dataManager,
     sceneDirector,
