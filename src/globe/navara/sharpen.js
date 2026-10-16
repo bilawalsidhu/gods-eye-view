@@ -3,8 +3,10 @@
 // (src/ui/visualPresets.js SHARPEN_SHADER): a 3×3 box blur, then
 // center + (center − blur) × amount, clamped to [0, 1].
 //
-// Where it sits: right after tone mapping and before SMAA or FXAA (before
-// `final` in a look without them), as Cesium runs its custom stages after
+// Where it sits: right after tone mapping (after gev's overlay of sprites,
+// points and lines, which Cesium's sharpen stage also sharpens) and before
+// SMAA or FXAA (before `final` in a look without them), as Cesium runs its
+// custom stages after
 // its tone mapping and before FXAA. After tone mapping the colours are the
 // display's [0, 1] range, so highlights do not blow up; anti-aliasing after
 // it smooths the stair steps sharpening brings out. Cesium sharpens
@@ -84,7 +86,7 @@ class UnsharpMaskEffect extends Effect {
 /** config.gevSharpen: { amount } (Cesium's `amount` uniform). */
 export class SharpenEffectDesc extends EffectDesc {
   static key = SHARPEN_EFFECT_KEY;
-  static insertAfter = ['toneMapping'];
+  static insertAfter = ['gevOverlay', 'toneMapping'];
   static insertBefore = ['smaa', 'fxaa', 'final'];
 
   constructor(view, ctx, config) {

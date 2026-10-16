@@ -1,10 +1,12 @@
-// engine.movers on Navara: each set is one Navara mesh descriptor (public
-// MeshDesc API) holding its instanced meshes (moverMesh.js, modelMover.js).
-// Pickable sets register a PickableInstancedMeshWrapper so Navara's pick
-// pass sees each instance; pickIds.js turns its batch ids back into
-// instances. commit() uploads and asks for one frame (view.forceUpdate): a
-// descriptor's update() runs only on frames the view draws anyway (S5), so
-// an idle view stays idle.
+// engine.movers on Navara. Sprites and points are one instanced quad mesh
+// per set (moverMesh.js) in gev's overlay (overlay.js: drawn after tone
+// mapping, so their colours are exact); models are a Navara mesh descriptor
+// (public MeshDesc API) holding one InstancedMesh per glTF mesh
+// (modelMover.js), lit and graded like the scene. Pickable sets register a
+// PickableInstancedMeshWrapper so Navara's pick pass sees each instance;
+// pickIds.js turns its batch ids back into instances. commit() uploads and
+// asks for one frame (view.forceUpdate); per-frame work runs only on frames
+// the view draws anyway (S5), so an idle view stays idle.
 
 import {
   MeshDesc,
@@ -28,13 +30,8 @@ class GevMoverSetDesc extends MeshDesc {
     this.wrappers = [];
   }
 
-  // Sprites and points are screen overlays: the transparent pass, unlit.
-  getPassKey() {
-    return this.gev?.kind === 'model' ? super.getPassKey() : 'transparent';
-  }
-
   createMesh() {
-    const { mover, pickable, onPickable, kind } = this.gev;
+    const { mover, pickable, onPickable } = this.gev;
     const register = (mesh, key) => {
       if (!pickable) return;
       const wrapper = new PickableInstancedMeshWrapper(
@@ -46,10 +43,6 @@ class GevMoverSetDesc extends MeshDesc {
       this.wrappers.push(key);
       onPickable(wrapper);
     };
-    if (kind !== 'model') {
-      register(mover.mesh, this.id);
-      return mover.mesh;
-    }
     const group = new Group();
     group.frustumCulled = false;
     // Meshes arrive with the glTF; they join the group (and the pick pass).
@@ -65,21 +58,7 @@ class GevMoverSetDesc extends MeshDesc {
   }
 
   update() {
-    const raw = this.view.camera.raw;
-    const height = this.ctx.getRenderer().domElement.clientHeight;
-    if (!raw || !(height > 0)) return;
-    raw.updateMatrixWorld();
-    const e = raw.matrixWorld.elements;
-    const cameraPosition = { x: e[12], y: e[13], z: e[14] };
-    const cameraHeight =
-      Math.hypot(cameraPosition.x, cameraPosition.y, cameraPosition.z) -
-      EARTH_RADIUS_M;
-    this.gev.mover.update({
-      cameraPosition,
-      cameraHeight,
-      fovDeg: raw.fov,
-      viewportHeightPx: height,
-    });
+    updateMover(this.view, this.ctx, this.gev.mover);
   }
 
   onDestroy() {
@@ -90,13 +69,38 @@ class GevMoverSetDesc extends MeshDesc {
   }
 }
 
+// The camera a mover needs each drawn frame (scratch: no allocation).
+const frameCamera = {
+  cameraPosition: { x: 0, y: 0, z: 0 },
+  cameraHeight: 0,
+  fovDeg: 60,
+  viewportHeightPx: 0,
+};
+function updateMover(view, ctx, mover) {
+  const raw = view.camera.raw;
+  const height = ctx?.getRenderer().domElement.clientHeight;
+  if (!raw || !(height > 0)) return;
+  raw.updateMatrixWorld();
+  const e = raw.matrixWorld.elements;
+  const position = frameCamera.cameraPosition;
+  position.x = e[12];
+  position.y = e[13];
+  position.z = e[14];
+  frameCamera.cameraHeight =
+    Math.hypot(position.x, position.y, position.z) - EARTH_RADIUS_M;
+  frameCamera.fovDeg = raw.fov;
+  frameCamera.viewportHeightPx = height;
+  mover.update(frameCamera);
+}
+
 /**
  * @param {object} view an initialised Navara ThreeView
+ * @param {{ overlay: ReturnType<import('../overlay.js').createNavaraOverlay> }} ports
  * @returns {{ movers: import('../../contract.js').GlobeMovers,
  *   resolvePick: (batchId: number) => ({ set: string, instance: number, pickId: any } | null),
  *   destroy: () => void }}
  */
-export function createNavaraMovers(view) {
+export function createNavaraMovers(view, { overlay }) {
   if (!registered.has(view)) {
     view.registerMesh(DESC_NAME, GevMoverSetDesc);
     registered.add(view);
@@ -108,13 +112,43 @@ export function createNavaraMovers(view) {
     return loader.loadAsync(url);
   };
   const request = () => view.forceUpdate();
+  const overlaySet = (options, store) => {
+    const mover = createMoverMesh(options, store, {
+      onTextureLoad: request,
+      overlayUniforms: overlay.uniforms,
+    });
+    const key = `gevMovers:${options.id}`;
+    if (options.pickable) {
+      const wrapper = new PickableInstancedMeshWrapper(
+        mover.mesh,
+        options.capacity,
+        overlay.ctx,
+      );
+      overlay.registerPickable(key, wrapper);
+      pickIndex.add(options.id, wrapper, (index) => store.pickIds[index]);
+    }
+    overlay.add(mover.mesh, () => updateMover(view, overlay.ctx, mover));
+    return {
+      commit() {
+        mover.commit(store.dirty());
+        request();
+      },
+      destroy() {
+        pickIndex.remove(options.id);
+        if (options.pickable) overlay.unregisterPickable(key);
+        overlay.remove(mover.mesh);
+        mover.dispose();
+        request();
+      },
+    };
+  };
   const registry = createMoverRegistry((options, store) => {
-    const mover =
-      options.kind === 'model'
-        ? createModelMover(options, store, { load: loadGltf, onLoad: request })
-        : createMoverMesh(options, store, { onTextureLoad: request });
+    if (options.kind !== 'model') return overlaySet(options, store);
+    const mover = createModelMover(options, store, {
+      load: loadGltf,
+      onLoad: request,
+    });
     const handle = view.addMesh({
-      ...(options.kind === 'model' ? {} : { lit: false }),
       [DESC_NAME]: {
         mover,
         kind: options.kind,

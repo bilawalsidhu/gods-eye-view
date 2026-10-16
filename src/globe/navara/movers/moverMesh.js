@@ -23,6 +23,11 @@ import {
   originFor,
   packInstances,
 } from './pack.js';
+import {
+  OVERLAY_DEPTH_FRAGMENT,
+  OVERLAY_DEPTH_MODES,
+  OVERLAY_DEPTH_VERTEX,
+} from '../overlayDepth.js';
 
 const VERTEX_HEAD = /* glsl */ `
 attribute vec4 gevStyle;
@@ -37,6 +42,7 @@ uniform float uGevOutlinePx;
 varying vec4 vGevColor;
 varying vec2 vGevLocal;
 varying float vGevOutline;
+${OVERLAY_DEPTH_VERTEX}
 `;
 
 const VERTEX_PROJECT = /* glsl */ `
@@ -66,6 +72,7 @@ gl_Position = projectionMatrix * mvPosition;
 vGevColor = gevColor;
 vGevLocal = gevCorner;
 vGevOutline = uGevOutlinePx / max(gevSizePx, 1e-3);
+vGevDepthFree = gevDistance < uGevDisableWithinM ? 1.0 : 0.0;
 `;
 
 const VERTEX_UV = /* glsl */ `
@@ -75,23 +82,18 @@ vMapUv = mix(gevUv.xy, gevUv.zw, uv);
 #endif
 `;
 
-const VERTEX_DEPTH = /* glsl */ `
-#include <logdepthbuf_vertex>
-#ifdef USE_LOGARITHMIC_DEPTH_BUFFER
-if (gevDistance < uGevDisableWithinM) vFragDepth = 1.0;
-#endif
-`;
-
 const FRAGMENT_HEAD = /* glsl */ `
 varying vec4 vGevColor;
 varying vec2 vGevLocal;
 varying float vGevOutline;
+${OVERLAY_DEPTH_FRAGMENT}
 `;
 
 const fragmentColor = (point) =>
   point
     ? /* glsl */ `
 #include <color_fragment>
+if (gevOverlayHidden()) discard;
 float gevRadius = length(vGevLocal) * 2.0;
 if (gevRadius > 1.0) discard;
 diffuseColor *= vGevColor;
@@ -99,8 +101,15 @@ if (gevRadius > 1.0 - vGevOutline) diffuseColor.rgb = vec3(0.0);
 `
     : /* glsl */ `
 #include <color_fragment>
+if (gevOverlayHidden()) discard;
 diffuseColor *= vGevColor;
 `;
+
+// Overlay uniforms of a mesh drawn outside an overlay (tests): no depth.
+const DETACHED_OVERLAY = Object.freeze({
+  tGevSceneDepth: { value: null },
+  uGevResolution: { value: [0, 0] },
+});
 
 /** Patches three's MeshBasicMaterial shaders into the screen-space quad. */
 export function patchMoverShader(shader, uniforms, { point = false } = {}) {
@@ -117,7 +126,6 @@ export function patchMoverShader(shader, uniforms, { point = false } = {}) {
   );
   vertex = replace(vertex, '#include <project_vertex>', VERTEX_PROJECT);
   vertex = replace(vertex, '#include <uv_vertex>', VERTEX_UV);
-  vertex = replace(vertex, '#include <logdepthbuf_vertex>', VERTEX_DEPTH);
   let fragment = replace(
     shader.fragmentShader,
     'void main() {',
@@ -161,7 +169,7 @@ function atlasTexture(atlas, onLoad) {
 export function createMoverMesh(
   options,
   store,
-  { onTextureLoad = () => {} } = {},
+  { onTextureLoad = () => {}, overlayUniforms = DETACHED_OVERLAY } = {},
 ) {
   const { capacity, kind, depthTest } = options;
   const point = kind === 'point';
@@ -192,12 +200,23 @@ export function createMoverMesh(
       value: typeof depthTest === 'object' ? depthTest.disableWithinM : -1,
     },
     uGevOutlinePx: { value: point ? options.point.outlinePx : 0 },
+    uGevDepthMode: {
+      value:
+        depthTest === 'always'
+          ? OVERLAY_DEPTH_MODES.always
+          : OVERLAY_DEPTH_MODES.normal,
+    },
+    // Shared by every overlay: the scene depth and the target's size.
+    tGevSceneDepth: overlayUniforms.tGevSceneDepth,
+    uGevResolution: overlayUniforms.uGevResolution,
   };
   const material = new MeshBasicMaterial({
     map: point ? null : atlasTexture(options.sprite.atlas, onTextureLoad),
     transparent: true,
     alphaTest: 0.02,
-    depthTest: depthTest !== 'always',
+    // Drawn after tone mapping, with no depth buffer: the shader tests the
+    // scene depth itself (overlayDepth.js).
+    depthTest: false,
     depthWrite: false,
     side: DoubleSide,
   });

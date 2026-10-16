@@ -1,10 +1,12 @@
 // The three side of a Navara line: a ribbon of one quad per segment whose
 // vertices are pushed apart in the vertex shader to the line's width in CSS
 // pixels (projected ends, the screen-space normal), so the width holds at any
-// distance. A second copy of the ribbon, drawn only where the scene hides it
-// (depthFunc GreaterDepth) with the alpha scaled, is depthFailAlpha. Dashes
-// in pixels are cut in the fragment shader along the segment's screen
-// direction (as Cesium's PolylineDash); the tactical dash is the launches'
+// distance. Drawn after tone mapping (overlay.js) with the depth test in the
+// shader (overlayDepth.js); a second copy of the ribbon, drawn only where the
+// scene hides it with the alpha scaled, is depthFailAlpha. Dashes in CSS
+// pixels are cut in the fragment shader along the segment's screen
+// direction (as Cesium's PolylineDash; gl_FragCoord over the pixel ratio, so
+// the period is the same on any screen); the tactical dash is the launches'
 // pattern over the fraction along the whole line. Positions are relative to
 // the first point (the group sits there, in doubles), the model matrix
 // multiplies the group's transform (an orbit ring turned by GMST).
@@ -13,13 +15,16 @@ import {
   BufferAttribute,
   BufferGeometry,
   DoubleSide,
-  GreaterDepth,
   Group,
-  LessEqualDepth,
   Matrix4,
   Mesh,
   MeshBasicMaterial,
 } from 'three';
+import {
+  OVERLAY_DEPTH_FRAGMENT,
+  OVERLAY_DEPTH_MODES,
+  OVERLAY_DEPTH_VERTEX,
+} from '../overlayDepth.js';
 
 const VERTEX_HEAD = /* glsl */ `
 attribute vec3 gevEnd;
@@ -30,6 +35,7 @@ uniform float uGevWidthPx;
 varying float vGevS;
 varying float vGevT;
 varying vec2 vGevDirection;
+${OVERLAY_DEPTH_VERTEX}
 `;
 
 const VERTEX_PROJECT = /* glsl */ `
@@ -50,11 +56,14 @@ vec4 mvPosition = modelViewMatrix * vec4(gevSide.x < 0.5 ? position : gevEnd, 1.
 vGevS = gevS;
 vGevT = gevSide.y * 0.5 + 0.5;
 vGevDirection = gevDirection;
+vGevDepthFree = 0.0;
 `;
 
 const FRAGMENT_HEAD = /* glsl */ `
 uniform vec4 uGevColor;
 uniform float uGevAlphaScale;
+uniform float uGevPixelRatio;
+${OVERLAY_DEPTH_FRAGMENT}
 uniform float uGevDash;
 uniform vec2 uGevDashPx;
 uniform vec2 uGevTactical;
@@ -80,12 +89,13 @@ float gevTactical() {
 
 const FRAGMENT_COLOR = /* glsl */ `
 #include <color_fragment>
+if (gevOverlayHidden()) discard;
 diffuseColor = uGevColor;
 diffuseColor.a *= uGevAlphaScale;
 if (uGevDash > 1.5) {
   diffuseColor.a *= gevTactical();
 } else if (uGevDash > 0.5) {
-  float gevAlong = dot(gl_FragCoord.xy, vGevDirection);
+  float gevAlong = dot(gl_FragCoord.xy / uGevPixelRatio, vGevDirection);
   if (mod(gevAlong, uGevDashPx.x + uGevDashPx.y) > uGevDashPx.x) discard;
 }
 `;
@@ -170,11 +180,23 @@ export function buildRibbon(flat, origin) {
   return geometry;
 }
 
+// Overlay uniforms of a line drawn outside an overlay (tests): no depth.
+const DETACHED_OVERLAY = Object.freeze({
+  tGevSceneDepth: { value: null },
+  uGevResolution: { value: [0, 0] },
+});
+
 /** @param {ReturnType<import('../../lines.js').normalizeLineOptions>} options */
-export function createLineMesh(options) {
+export function createLineMesh(
+  options,
+  { overlayUniforms = DETACHED_OVERLAY } = {},
+) {
   const dash = options.dash;
   const shared = {
     uGevViewport: { value: [1, 1] },
+    uGevPixelRatio: { value: 1 },
+    tGevSceneDepth: overlayUniforms.tGevSceneDepth,
+    uGevResolution: overlayUniforms.uGevResolution,
     uGevWidthPx: { value: options.widthPx },
     uGevColor: { value: [...options.color] },
     uGevDash: { value: dash?.kind === 'tactical' ? 2 : dash ? 1 : 0 },
@@ -185,14 +207,19 @@ export function createLineMesh(options) {
       value: dash?.kind === 'tactical' ? [dash.groups, dash.dashes] : [1, 1],
     },
   };
-  const material = (alphaScale, depthFunc) => {
+  const material = (alphaScale, depthMode) => {
     const value = new MeshBasicMaterial({
       transparent: true,
+      depthTest: false,
       depthWrite: false,
-      depthFunc,
       side: DoubleSide,
     });
-    const uniforms = { ...shared, uGevAlphaScale: { value: alphaScale } };
+    const uniforms = {
+      ...shared,
+      uGevAlphaScale: { value: alphaScale },
+      uGevDepthMode: { value: depthMode },
+    };
+    value.userData.gevDepthMode = depthMode;
     value.onBeforeCompile = (shader) => patchLineShader(shader, uniforms);
     value.customProgramCacheKey = () => 'gev-line';
     return value;
@@ -200,7 +227,10 @@ export function createLineMesh(options) {
   const group = new Group();
   group.matrixAutoUpdate = false;
   group.frustumCulled = false;
-  const main = new Mesh(new BufferGeometry(), material(1, LessEqualDepth));
+  const main = new Mesh(
+    new BufferGeometry(),
+    material(1, OVERLAY_DEPTH_MODES.normal),
+  );
   main.frustumCulled = false;
   main.renderOrder = options.order;
   group.add(main);
@@ -208,7 +238,7 @@ export function createLineMesh(options) {
   if (options.depthFailAlpha > 0) {
     behind = new Mesh(
       main.geometry,
-      material(options.depthFailAlpha, GreaterDepth),
+      material(options.depthFailAlpha, OVERLAY_DEPTH_MODES.fail),
     );
     behind.frustumCulled = false;
     behind.renderOrder = options.order;
@@ -247,9 +277,16 @@ export function createLineMesh(options) {
     show(visible) {
       group.visible = visible;
     },
-    /** Each drawn frame: the viewport the pixel width is measured in. */
-    update(width, height) {
-      shared.uGevViewport.value = [width, height];
+    /**
+     * Each drawn frame: the viewport (CSS px) the width is measured in and
+     * the device pixel ratio the dashes are measured with. In place: no
+     * allocation per frame.
+     */
+    update(width, height, pixelRatio = 1) {
+      const viewport = shared.uGevViewport.value;
+      viewport[0] = width;
+      viewport[1] = height;
+      shared.uGevPixelRatio.value = pixelRatio;
     },
     dispose() {
       main.geometry.dispose();

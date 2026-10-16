@@ -67,7 +67,17 @@ test('a line places its group at the first point under its model matrix', () => 
   // (6378137, 0, 0) turned 90° about z.
   assert.ok(Math.abs(origin.x) < 1e-6 && Math.abs(origin.y - 6_378_137) < 1e-6);
   const [main, behind] = line.meshes();
-  assert.equal(behind.material.depthFunc, GreaterDepth);
+  // The overlay tests depth in the shader: normal for the line, drawn
+  // only where the scene is nearer for its depth-fail copy.
+  assert.equal(main.material.depthTest, false);
+  assert.equal(main.material.userData.gevDepthMode, 1);
+  assert.equal(behind.material.userData.gevDepthMode, 2);
+  // Viewport and pixel ratio update in place (no allocation per frame).
+  const viewport = line.uniforms.uGevViewport.value;
+  line.update(1280, 800, 2);
+  assert.equal(line.uniforms.uGevViewport.value, viewport);
+  assert.deepEqual(viewport, [1280, 800]);
+  assert.equal(line.uniforms.uGevPixelRatio.value, 2);
   assert.equal(main.geometry, behind.geometry);
   assert.equal(line.uniforms.uGevDash.value, 2);
   assert.deepEqual(line.uniforms.uGevTactical.value, [4, 100]);

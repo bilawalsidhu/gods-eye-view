@@ -15,6 +15,7 @@ import { buildNavaraLook } from './look.js';
 import { createNavaraSharpen } from './sharpen.js';
 import { createNavaraMovers } from './movers/index.js';
 import { createNavaraLines } from './lines/index.js';
+import { createNavaraOverlay } from './overlay.js';
 import {
   NAVARA_CONTEXT_ATTRIBUTES,
   navaraScenePlan,
@@ -98,6 +99,7 @@ export async function createNavaraGlobe({
   const canvas = preservedCanvas(container);
   let view;
   let engine;
+  let overlay = null;
   let removeLook = null;
   try {
     view = new ThreeView(navaraViewOptions({ container, canvas, pixelRatio }));
@@ -118,13 +120,15 @@ export async function createNavaraGlobe({
     );
     // The look's shadowed sun leaked a light per frame (internals.js).
     keepCascadedLightIds(view);
+    // Sprites, points and lines, drawn after tone mapping (overlay.js).
+    overlay = createNavaraOverlay(view);
     engine = createNavaraEngine(view, {
       hooks: navaraHooks(view),
       container,
       ...(appClock ? { appClock } : {}),
       sharpen: createNavaraSharpen(view),
-      movers: createNavaraMovers(view),
-      lines: createNavaraLines(view),
+      movers: createNavaraMovers(view, { overlay }),
+      lines: createNavaraLines(view, { overlay }),
     });
     const camera = engine.camera;
     let ground = Number.NaN;
@@ -166,6 +170,7 @@ export async function createNavaraGlobe({
   } catch (error) {
     removeLook?.();
     engine?.destroy();
+    overlay?.destroy();
     view?.dispose();
     canvas.remove();
     throw error;
@@ -179,6 +184,7 @@ export async function createNavaraGlobe({
       destroyed = true;
       removeLook();
       engine.destroy();
+      overlay.destroy();
       view.dispose();
       canvas.remove();
     },

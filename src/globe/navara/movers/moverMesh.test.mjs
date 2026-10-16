@@ -32,10 +32,14 @@ test('the shader patch sizes the quad in pixels and colours it per instance', ()
     /uGevFootprint \* max\(-mvCenter\.z, 0\.0\)/,
   );
   assert.match(shader.vertexShader, /vMapUv = mix\(gevUv\.xy, gevUv\.zw, uv\)/);
-  assert.match(shader.vertexShader, /vFragDepth = 1\.0;/);
+  assert.match(
+    shader.vertexShader,
+    /vGevDepthFree = gevDistance < uGevDisableWithinM/,
+  );
+  assert.match(shader.fragmentShader, /if \(gevOverlayHidden\(\)\) discard;/);
   assert.doesNotMatch(shader.vertexShader, /#include <project_vertex>/);
   assert.match(shader.fragmentShader, /diffuseColor \*= vGevColor;/);
-  assert.doesNotMatch(shader.fragmentShader, /discard/);
+  assert.doesNotMatch(shader.fragmentShader, /gevRadius > 1\.0\) discard/);
   const point = patchMoverShader(basicShader(), {}, { point: true });
   assert.match(point.fragmentShader, /if \(gevRadius > 1\.0\) discard;/);
 });
@@ -46,7 +50,9 @@ test('a sprite mesh uploads committed instances relative to its origin', () => {
   const { mesh, uniforms } = mover;
   assert.equal(mesh.renderOrder, 3);
   assert.equal(mesh.count, 0);
-  assert.equal(mesh.material.depthTest, true);
+  // The overlay tests depth in the shader, against the scene's.
+  assert.equal(mesh.material.depthTest, false);
+  assert.equal(uniforms.uGevDepthMode.value, 1);
   assert.equal(uniforms.uGevDisableWithinM.value, 2000);
   assert.deepEqual(uniforms.uGevScaleByDistance.value, [1000, 1, 100000, 0.5]);
   store.set(0, { position: { x: 6_378_137, y: 10, z: 20 } });
@@ -98,6 +104,7 @@ test('points have no atlas and draw a disc', () => {
   const mover = createMoverMesh(options, createMoverStore(options));
   assert.equal(mover.mesh.material.map, null);
   assert.equal(mover.mesh.material.depthTest, false);
+  assert.equal(mover.uniforms.uGevDepthMode.value, 0, "'always': no test");
   assert.equal(mover.uniforms.uGevOutlinePx.value, 1);
   mover.dispose();
 });

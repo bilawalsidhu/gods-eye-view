@@ -510,17 +510,13 @@ export function createContractSuite(
           );
           // Pixels close to a colour in a 64 px box around a point: their
           // count and centroid.
-          // A pure colour as drawn through either engine's tone mapping and
-          // grading (Navara's cinematic look desaturates): every full
-          // channel above 170 and at least 60 over every empty one.
-          const like = (colour, data, i) => {
-            let low = 0;
-            let high = 255;
-            for (let k = 0; k < 3; k++)
-              if (colour[k] > 0.5) high = Math.min(high, data[i + k]);
-              else low = Math.max(low, data[i + k]);
-            return high > 170 && high - low >= 60;
-          };
+          // A colour as drawn: within 40 of the asked one on every channel
+          // (both engines draw overlays after tone mapping, unlit).
+          const like = (colour, data, i) =>
+            colour.every(
+              (channel, k) =>
+                k > 2 || Math.abs(data[i + k] - channel * 255) <= 40,
+            );
           const find = (screen, colour) => {
             const half = 32;
             const x0 = Math.round(screen.x) - half;
