@@ -55,7 +55,7 @@ test('fMP4 cache bounds and leases cover init and media', async (t) => {
   const requests = [];
   const manager = createHlsPuller({
     // Parse all three candidates so the byte budget actually evicts the first.
-    limits: { ...limits, segments: 3, sessionBytes: 10 },
+    limits: { ...limits, segments: 3, segmentBytes: 3, sessionBytes: 10 },
     fetchImpl: async (url) => {
       requests.push(url);
       return new Response(
@@ -113,7 +113,7 @@ test('eviction frees init files after their last segment leaves', async (t) => {
     '#EXT-X-MAP:URI="new.mp4"\n#EXTINF:5,\nb.mp4',
   );
   const manager = createHlsPuller({
-    limits: { ...limits, segments: 3, sessionBytes: 10 },
+    limits: { ...limits, segments: 3, segmentBytes: 3, sessionBytes: 10 },
     fetchImpl: async (url) =>
       new Response(
         url.endsWith('.m3u8')

@@ -421,12 +421,6 @@ export function createHlsPuller({
       ? entry
       : null;
   };
-  const getSegment = (cameraId, token, seq, leaseId = 'legacy') => {
-    const entry = getEntry(cameraId, token, leaseId);
-    const body = entry?.segments.get(seq)?.body;
-    if (body) touch(entry, leaseId);
-    return body || null;
-  };
   const getAsset = (cameraId, token, name, leaseId = 'legacy') => {
     const entry = getEntry(cameraId, token, leaseId);
     const match = /^(seg|init)_(0|[1-9]\d*)\.(ts|mp4)$/.exec(name);
@@ -454,7 +448,6 @@ export function createHlsPuller({
     ensure,
     waitReady,
     buildPlaylist,
-    getSegment,
     getAsset,
     stop,
     release,

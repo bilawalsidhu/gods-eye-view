@@ -1,8 +1,10 @@
 import { readResponseTextCapped } from './common/http.js';
+import { makeRateLimiter, clientKey } from './common/rate-limit.js';
 import {
   isAllowedGbfsHost,
   isAllowedGbfsPath,
   gbfsCacheControl,
+  gbfsUpstreamHeaders,
 } from '../../src/data/gbfsSource.js';
 
 // ---------------------------------------------------------------------------
@@ -11,7 +13,23 @@ import {
 /** Upstream fetch timeout for GBFS requests (ms). */
 const GBFS_PROXY_TIMEOUT_MS = 12000;
 
+/** Value of the Client-Identifier header sent with every upstream request. */
+export const GBFS_CLIENT_IDENTIFIER = 'gods-eye-view';
+
 export const GBFS_MAX_BODY_BYTES = 5 * 1024 * 1024; // 5 MB
+
+/**
+ * Requests/minute/IP admitted by the proxy.
+ *
+ * The bikeshare layer's own demand is small and known: `src/layers/bikeshare/
+ * registry.js` catalogues 15 systems, station information is cached per city
+ * after its first fetch, and station status refreshes once per city every
+ * `STATUS_POLL_MS` (60 s) with in-flight requests deduplicated. Even with every
+ * catalogued system in camera range at once that is about 15 requests a minute,
+ * so 120 is eight times a maximal real session while still capping a caller
+ * using this proxy as an open relay against a third-party GBFS host.
+ */
+export const GBFS_RATE_PER_MIN = 120;
 
 function gbfsRedirectHost(location, requestUrl) {
   if (!location) return '';
@@ -60,6 +78,10 @@ export async function fetchGbfsUpstream(
       headers: {
         Accept: 'application/json',
         'User-Agent': 'gods-eye-view-gbfs-proxy/1.0',
+        // Urban Sharing (the Norwegian city-bike feeds) asks every client to
+        // name itself in this header; other operators ignore it.
+        'Client-Identifier': GBFS_CLIENT_IDENTIFIER,
+        ...gbfsUpstreamHeaders(new URL(url).hostname),
       },
       redirect: 'manual',
       signal: controller.signal,
@@ -113,7 +135,12 @@ export async function fetchGbfsUpstream(
  *
  * @returns {import('vite').Plugin}
  */
-export function gbfsProxy() {
+export function gbfsProxy({ ratePerMinute = GBFS_RATE_PER_MIN } = {}) {
+  const allow = makeRateLimiter({
+    windowMs: 60_000,
+    max: ratePerMinute,
+    globalMax: ratePerMinute * 3,
+  });
   const installMiddleware = (server) => {
     server.middlewares.use('/api/gbfs', async (req, res) => {
       try {
@@ -123,6 +150,19 @@ export function gbfsProxy() {
             'Cache-Control': 'no-store',
           });
           res.end(JSON.stringify({ error: 'Method Not Allowed' }));
+          return;
+        }
+
+        // Frequency, checked before the target is even parsed: the allowlist
+        // already says WHERE this proxy may go, nothing said HOW OFTEN. A
+        // refused request performs no outbound fetch and starts no timer.
+        if (!allow(clientKey(req))) {
+          res.writeHead(429, {
+            'Content-Type': 'application/json',
+            'Cache-Control': 'no-store',
+            'Retry-After': '10',
+          });
+          res.end(JSON.stringify({ error: 'Rate limit exceeded' }));
           return;
         }
 
@@ -181,7 +221,7 @@ export function gbfsProxy() {
           return;
         }
 
-        if (!isAllowedGbfsPath(upstreamUrl.pathname)) {
+        if (!isAllowedGbfsPath(upstreamUrl.pathname, upstreamUrl.hostname)) {
           res.writeHead(400, {
             'Content-Type': 'application/json',
             'Cache-Control': 'no-store',

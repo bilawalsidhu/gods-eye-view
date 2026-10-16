@@ -256,8 +256,15 @@ Clouds only applies a soft brightness ramp to decoded pixels once, using
 Cesium's sRGB-to-linear conversion (`channel ** 2.2`) and smoothstep from 0.40
 to 0.70. The old 0.55 threshold is the ramp midpoint. RGB and source alpha are
 preserved in Full image mode; both modes use the chosen layer opacity. This
-is a display filter, not a cloud mask. Satellite share links retain the display
-mode; observation history remains transient and links open latest.
+is a display filter, not a cloud mask. The cloud-filter slider is a continuous
+0–100% strength: 0% is Full, 100% is the existing Clouds only key, and
+intermediate values blend their alpha. The value commits on slider release to
+avoid restaging for every pointer event. Status refreshes retain the uncommitted
+drag preview; changed model values or disabled controls supersede it.
+Satellite share links carry the filter
+strength; legacy `f`/`a` values keep their Clouds only / Full meanings. Soft and
+Vivid remain layer-opacity presets (40%/70%); history remains transient and links
+open latest.
 Global infrared fetches one capped 4 MiB, 2048×1024 mosaic per frame and decodes
 and processes it before staging. Globe hosts crop that canvas into 256 px tiles
 to maximum level 3 on a geographic 2×1 root grid bounded to the manifest extent,
@@ -302,7 +309,8 @@ release commits immediately. Latest selects the newest frame per product, and
 history labels the actual displayed frame as synced or nearest. Missing-frame
 messages use each product's eligibility gap (30 minutes, or three hours for the
 global mosaic). Wind shows forecast valid and issue times and does not follow
-history. Satellite clouds uses Clouds only / Full image configuration labels.
+history. Satellite clouds uses Clouds only / Full controls, a continuous cloud
+filter slider and Soft/Vivid opacity presets in its right-rail settings.
 
 Left weather rows retain only the toggle and one status line with a source
 tooltip. Configuration and the cyclone Storms list live in the cards, as do the
@@ -331,7 +339,12 @@ Cyclones combine fixed NHC/CPHC status and summary GIS endpoints through a bound
 same-origin provider. The status endpoint lacks browser CORS; each installation
 fetches keyless public sources at runtime, with no centralized ingestion service.
 The five-minute snapshot covers Atlantic and eastern/central North Pacific only.
-Current positions, advisory issue time and position time stay distinct. Tracks,
+Current positions, advisory issue time and position time stay distinct. NHC may
+release an advisory before its nominal time (routinely up to about 30 minutes,
+rarely about an hour), so advisory issue and position times up to and including
+90 minutes ahead of the server clock are accepted; 90 minutes is this app's
+tolerance, not an NHC limit. Later, non-canonical, or more than 12-hour-old
+times still reject the status snapshot. Tracks,
 forecast lead-hour points and cones render only when all source parts match the
 status advisory; a newer status shows its position with geometry pending rather
 than relabeling older geometry. The cone represents forecast center uncertainty,
@@ -571,7 +584,9 @@ pinning, first-position grace, source time and sea-surface placement are unchang
 
 Military flights also separate portable records and source acquisition from
 Cesium snapshot application. The metadata owner retains aviation feet, source
-fix times, sticky fields and partial-feed retention. Rendering retains ground
+fix times, sticky fields and partial-feed retention. A row without track or
+speed holds the last known value, as civil records do; a grounded row without
+speed reads 0. Rendering retains ground
 model ownership, motion history, military registration and tracking cleanup.
 
 Civil flights separate source acquisition, portable record reconciliation and
@@ -864,7 +879,13 @@ addition to the locally accumulated trail, never a promise of complete coverage.
 
 Snapshot coverage, completeness and freshness are separate fields. A partially
 admitted aircraft snapshot retains absent contacts for up to five minutes before
-the usual missed-poll eviction. Unknown snapshot times remain unknown in stats. An invalid nonempty
+the usual missed-poll eviction. An OpenSky row with an ICAO24 address but null
+longitude and latitude is a contact without a position, not a malformed row: it
+leaves the snapshot complete and is listed in `retainIds`, so civil flights
+retain that aircraft under the same five-minute bound, unless it is likely
+landed, while other absent aircraft fade and leave on the missed-poll limits. A
+nonempty snapshot with no positioned rows is still malformed. Military readsb
+admission is unchanged. Unknown snapshot times remain unknown in stats. An invalid nonempty
 snapshot retains the previous display. Empty vessel refreshes retain the existing
 first-connect grace and warm-data behavior. Known source failures have bounded
 messages; arbitrary HTTP response bodies are not surfaced as diagnostics.
@@ -969,7 +990,41 @@ id-hash fallback at low confidence.
 
 Once enabled, the 250 cameras nearest the five borough cores load.
 `CCTV_NYC_MAX_SOURCES` sets the pack cap (8–400). The catalog-wide ceiling stays at 4,000 and is shared
-round-robin, so adding this pack does not silently drop another region.
+round-robin: no region is dropped outright, but when the packs together exceed
+the ceiling, adding a pack trims cameras from the largest packs.
+
+## City of Toronto RESCU CCTV source pack
+
+The CCTV catalog adds the City of Toronto RESCU traffic cameras — downtown
+arterials plus the Gardiner, DVP, Allen and Lake Shore, which the Ontario 511
+pack does not cover. The server reads the keyless camera list the City
+publishes on its open data portal (`tmcearthcameras.json`, served as JSONP).
+The list has no URL field: frame URLs are built from each validated, digits-only
+camera number on the fixed origin
+`https://opendata.toronto.ca/transportation/tmc/rescucameraimages/CameraImages/`.
+The feed has no compass data, so headings are low-confidence priors. Some
+cameras return a 200 "Image Unavailable" placeholder frame instead of an error.
+
+By default all ~336 cameras load, nearest downtown first.
+`CCTV_TORONTO_MAX_SOURCES` sets the pack cap (8–500) and
+`CCTV_TORONTO_ENABLED=0` turns the pack off. The pack shares the 4,000
+catalog-wide ceiling round-robin with the other packs.
+
+## Lithuania CCTV source pack
+
+The CCTV catalog can include Via Lietuva / Eismoinfo road cameras. The pack is
+off unless `CCTV_LITHUANIA_ENABLED=1`, because its camera endpoints are the
+eismoinfo.lt website backend rather than a service listed in Via Lietuva's
+open-data statement, so the licence for the photos is unconfirmed.
+Two keyless public endpoints provide current snapshot URLs and WGS84 camera
+locations; records are joined by ID, with invalid coordinates and off-origin
+image URLs rejected. Catalog requests refuse redirects, have a 15-second
+deadline and a 4 MiB response cap, and use the existing shared 15-minute cache
+and fair catalog allocation. An unavailable source contributes an empty pack.
+Frames use the registered-image proxy and retain Via Lietuva attribution.
+The images are periodically updated road-condition photographs, not continuous
+video; camera poses use the existing low-confidence heading prior.
+`CCTV_LITHUANIA_MAX_SOURCES` sets its cap (default 400, bounded to 1–1000).
 
 ## DriveBC CCTV source pack
 
@@ -1094,6 +1149,9 @@ collapse can still be undone.
 
 ## Surface keyboard lifecycle
 
+Surface Tab cycling excludes controls with a negative tabindex, native disabled
+state or inert ancestry; ordinary visible enabled controls retain their order.
+
 `ui/surfaces` owns the capture-phase keyboard listener, Tab cycling and return
 focus shared by the first-run launcher and Provider Settings. Each caller
 activates it while open and deactivates it on dismissal; destruction releases
@@ -1151,6 +1209,9 @@ still waiting to drain reschedules that deadline, so a slow client does not read
 as a stalled upstream. Error responses are cancelled. Buffered snapshots have a
 16 MiB streaming cap; an oversized image remains an upstream miss and uses the
 normal fallback chain. The existing declared media size ceiling remains 64 MiB.
+`/api/cctv/media` relays live feeds (HLS, MP4, WebM, MJPEG) only; a still-image
+camera is refused there with a JSON 404 and is served solely through
+`/api/cctv/frame` and its same-origin, `image/*`-only, size-capped fetch.
 
 ## GBFS upstream bounds
 
@@ -1171,13 +1232,55 @@ The station reader addresses the proxy as `/api/gbfs/<encoded feed URL>`; the
 feed address is read from the path, and a query-string form is refused with a 400. GBFS refuses upstream redirects and enforces its 5 MiB response cap while
 streaming. The 12-second deadline includes reading the body, and rejected or
 stalled downloads are cancelled. Development and preview use the same handler.
+Every upstream request carries `Client-Identifier: gods-eye-view`, which Urban
+Sharing asks of clients of the Oslo, Bergen and Trondheim Bysykkel feeds
+(`gbfs.urbansharing.com`); other operators ignore it. Requests to Entur
+(`api.entur.io`, Kolumbus and Farte Bysykkel) also carry
+`ET-Client-Name: gods-eye-view-bikeshare`. Entur serves its feeds without a
+`.json` suffix, so the endpoint check accepts `station_information` and
+`station_status` with or without it. Hosts that front more than GBFS are kept to
+their GBFS tree: `api.entur.io` to `/mobility/v2/gbfs/` and `api.cyclocity.fr`
+(Bysykkel Lillestrøm) to `/contracts/`.
+
+## Upstream body bounds
+
+FIRMS CSV, CelesTrak TLE groups, adsb.lol military responses, TomTom flow
+tiles, OpenSky states/all and adsbdb lookups now read their bodies through the
+shared streaming readers in `src/sources/httpBody.js`, so a declared or observed body
+over the cap is refused with `RESPONSE_TOO_LARGE` and cancelled rather than
+buffered. TomTom flow tiles use `readResponseBytesCapped` alongside
+GTFS-Realtime. Each read takes the route's abort signal, so a body still
+streaming when the deadline fires is cancelled. Caps are bounds, not budgets, sized well
+above measured payloads: FIRMS 64 MiB per satellite source, CelesTrak 16 MiB
+per group, OpenSky `states/all` 8 MiB, adsb.lol `/v2/mil` 8 MiB, TomTom tiles
+8 MiB and adsbdb lookups 1 MiB. Where a route already had a deadline (FIRMS
+60 s, CelesTrak 20 s, TomTom 15 s, adsbdb 8 s, and each 10 s OpenSky
+`states/all` attempt) it already bounded the body read, because aborting a
+fetch signal also aborts its body; the capped reader takes the same signal.
+The adsb.lol military poll, which had no deadline, now waits at most 12
+seconds for headers and body together. An oversized OpenSky snapshot is not
+retried, and an OpenSky 429 starts its cooldown from the response headers and
+cancels the body unread. A rejected or timed-out body is an upstream miss and
+follows each route's existing error and cached-data paths. FIRMS map-key
+status, the OpenSky token exchange and CCTV media keep their current handling.
+
+The route also bounds request frequency: 120 requests/minute per client
+address, with a global backstop of three times that. A refused request answers
+429 with `Retry-After` and `Cache-Control: no-store` and performs no outbound
+fetch. The bikeshare layer's own demand is about 15 requests a minute with
+every catalogued system in range, so an ordinary session never meets the limit;
+the method, host and path guards run unchanged.
+
+Updated: September 21, 2026
 
 ## Remaining local service modules
 
 Overpass query validation, geometry simplification, disk caching and upstream
 transport now have separate modules; military-installation search reuses that
 transport. Regional briefing combines separate place, news and weather sources,
-while weather effects uses only the weather source. Existing process-scoped
+while weather effects uses only the weather source.
+GDELT compact dates that do not name a real calendar instant keep the article
+with an unknown publication time. Existing process-scoped
 caches, rate limits, stale fallbacks and route ordering are preserved.
 
 Local voice has separate HUD-summary, debug-log and Realtime-token handlers,
@@ -1193,6 +1296,28 @@ services, local voice and standalone key setup. Importing them starts no network
 acquisition. Browser layer lifecycle, rendering and voice execution stay in their
 existing modules.
 
+## Web app install icons
+
+`public/manifest.webmanifest` declares the installable app: standalone display,
+`#0a0a0f` background and theme, and 192/512 icons plus a 512 maskable variant.
+`index.html` links the manifest, a 180px `apple-touch-icon` and a 32px PNG
+favicon; the existing SVG favicon still serves the browser tab. Safari ignores an
+SVG apple-touch-icon and substitutes a page screenshot, so the raster is what
+makes an installed icon appear at all.
+
+Manifest `start_url`, `scope` and icon paths are relative to the manifest, and
+Vite rewrites the `index.html` links under `base`, so a build served from a path
+prefix installs and launches inside that prefix.
+
+`node scripts/generate-icons.mjs` renders every raster from `public/logo.svg` and
+writes `public/icons/`. Output is committed, so building needs no image
+toolchain; re-run the script after changing the logo. Ordinary icons inset the
+mark to 78% of the canvas and the maskable variant to 54%, keeping it inside the
+circle Android may crop to. `src/tooling/webAppIcons.test.mjs` checks the links,
+the manifest fields and that each committed PNG is square at its declared size.
+It also builds the install links under `base: '/example/'` and asserts every
+emitted link and manifest URL stays inside that base.
+
 ## Local build preview
 
 After `npm run build`, `npm run preview` serves the built app with the same data
@@ -1206,13 +1331,21 @@ a browser key. Preview is for local build verification, not a production server.
 
 ## CCTV and radio provider modules
 
+CCTV direction text resolves travel tokens first, then intercardinals, then
+bare cardinals when enabled. Only conflicting headings within the highest
+matching tier remain unknown; street quadrants and lower-tier words do not
+cancel an explicit travel heading.
+
 CCTV catalog acquisition, source normalization and frame/media delivery now live
 in separate modules. Each CCTV factory owns its catalog and health state; its
 `sourceRoot` option resolves relative source files against the application root.
 Radio Browser station normalization, restricted outbound transport and directory
-caching are separate modules. Node-only package entries expose both provider
-factories. Routes, payloads, fallback behavior and existing dev/preview hook
-registration are preserved; browser rendering is unchanged.
+caching are separate modules. The pinned transport gives a mirror's 204, 205 or
+304 reply an empty body and fails any reply outside 200–599 without throwing
+outside its promise, so an unusual mirror status cannot crash the server.
+Node-only package entries expose both provider factories. Routes, payloads,
+fallback behavior and existing dev/preview hook registration are preserved;
+browser rendering is unchanged.
 
 ## Terrain, traffic, fire and bike-share provider modules
 
@@ -1223,6 +1356,9 @@ and stale/error responses remain unchanged. Each has a Node-only package entry
 under `gods-eye-view/server/providers/`. Portable terrain mechanics, traffic tile
 math and GBFS source rules are available under `gods-eye-view/sources/`.
 The browser layers and their rendering remain in their existing modules.
+GBFS null or empty availability counts retain an unknown value through station
+parsing and rendering; they use the neutral station color rather than reporting
+an empty dock. Explicit zero and caller-supplied numeric fallbacks remain valid.
 
 ## Terrain height cache bound
 
@@ -3094,6 +3230,39 @@ test:track` 43 tracking invariants · headless QA harnesses under
 > attribution 18/18). New modules: `src/data/{motionModel,aircraftMeta,aircraftClass,aircraftIcons,issPass,routePlausible,dataCredits}.js`.
 > The live runtime now declares 30 voice tools; the 17→20 count above is retained only as milestone history.
 
+### Interface localization (October 2026)
+
+Shipped locales: **en** (source and fallback), **es** and **ru**. The code lives in
+`src/i18n/`. How to mark UI text: [`docs/I18N.md`](./I18N.md); translator workflow:
+[`docs/TRANSLATORS.md`](./TRANSLATORS.md).
+
+- **Keys are the English text.** `t('Save keys')`, `tn(count, '{count} camera',
+  '{count} cameras')`, and `msg('Live Flights')` for text stored in data and
+  translated later. Markup opts in with `data-i18n` (element text) and
+  `data-i18n-title` / `-aria-label` / `-placeholder` (that attribute's English
+  value). English has no catalog; every other locale is
+  `src/i18n/locales/<code>.json`, and a missing entry falls back to English.
+- **Locale choice.** `?lang=` → stored choice (`gev:locale:v1`) →
+  `navigator.languages` → English. `?lang=` is not stored, and share links drop
+  it, so a recipient keeps their own language. The globe picker in the
+  bottom-right corner (`src/ui/localePicker.js`) stores the choice, drops
+  `?lang=` (keeps it only when storage is blocked) and reloads. It asks first
+  when the reload would lose work registered with `registerUnsavedWork`:
+  unsaved keys or CCTV calibration, Draw marks, imported map files, the open
+  cockpit, a voice session.
+- **Gate.** `npm run i18n` (and `src/i18n/catalog.test.mjs` under `npm test`)
+  extracts every message and fails on missing, empty, unused,
+  placeholder-mismatched, still-English (plural forms included) or
+  wrongly-shaped plural entries.
+- **Not translated by design:** layer ids, share-link and hash parameters, API
+  fields, voice tool schemas, provider names, feed data (callsigns, vessel and
+  station names) and attribution.
+- **Unmarked text.** The same check lists UI text that is not marked at all
+  (markup without `data-i18n*`, literals reaching the page without `t`/`tn`/`msg`)
+  and fails on it. Text kept on purpose says why: `translate="no"`,
+  `data-i18n-runtime`, or `// i18n-ignore: <reason>`. `src/tools/` is skipped:
+  it writes for AI clients, not the page.
+
 ## Canonical Docs Order
 
 Use docs in this order when details conflict:
@@ -3136,13 +3305,14 @@ its criteria cannot be silently ignored.
 | Live AIS Vessels 🚢    | AISStream websocket                                                                                                                                                                             | `src/data/aisLiveVessels.js`                          | `/api/vessels`                                          | 60s (+800ms visibility pass)                                                      |
 | Mapped Installations ⌖ | OpenFreeMap military areas; optional configured Overpass names and Google Places search | `src/data/militaryInstallations.js` | OpenFreeMap tiles, `/api/military-installations`, `/api/google/text-search` | viewport-driven; transient errors back off, missing capability switches to tiles |
 | Earthquakes            | USGS                                                                                                                                                                                            | `src/data/earthquakes.js`                             | —                                                        | 60s                                                                               |
+| Air quality            | ECCC MSC GeoMet OGC API (AQHI, Canada only)                                                                                                                                                      | `src/layers/airQuality/`                              | —                                                        | 20 min readings, 12 h station catalog                                             |
 | Satellites             | CelesTrak                                                                                                                                                                                       | `src/data/satellites.js`                              | `/api/celestrak`                                         | 120s                                                                              |
 | Space Missions (30d)   | Launch Library 2 + CelesTrak                                                                                                                                                                    | `src/data/rocketLaunches.js`                          | `/api/launches` + `/api/celestrak/active`                | 5 min                                                                             |
 | Traffic | Selectable TomTom / OpenStreetMap / Hybrid roads; optional TomTom flow (BYOK) | `src/data/traffic.js` | browser-direct OpenFreeMap tiles; `/api/tomtom` for flow | viewport-driven; capped tile cache |
-| CCTV                   | Austin + Caltrans (CA) + TfL London + Ontario 511 + Fintraffic (FI) + DriveBC (BC) + TxDOT (TX) + Estonia (Tallinn, Tarktee) + Live Traffic NSW + Open Calgary Open Data + Statens vegvesen (NO, stills + live HLS) + NYC DOT TMC (opt-in) + Street View fallback | `src/data/cctv.js`                                    | `/api/cctv`                                              | 10s (active)                                                                      |
+| CCTV                   | Austin + Caltrans (CA) + TfL London + Ontario 511 + Fintraffic (FI) + DriveBC (BC) + TxDOT (TX) + Estonia (Tallinn, Tarktee) + Live Traffic NSW + Open Calgary Open Data + Statens vegvesen (NO, stills + live HLS) + King County (WA) Open Data + WSDOT (WA) Open Data + NYC DOT TMC (opt-in) + City of Toronto RESCU + Catalonia (Servei Català de Trànsit) + Street View fallback | `src/data/cctv.js`                                    | `/api/cctv`                                              | 10s (active)                                                                      |
 | Radio                  | Radio Browser (public-domain station directory)                                                                                                                                                 | `src/data/radio.js`                                   | `/api/radio/stations`, `/api/radio/click/:uuid`          | 45 min directory refresh                                                          |
 | Transit 🚌             | Operator GTFS-Realtime VehiclePositions (7 keyless regions, `src/data/transitFeeds.js`)                                                                                                         | `src/layers/transit/` via `src/app/layers/transit.js` | `/api/transit`                                           | 15s (poll + delayed playback)                                                     |
-| Bikeshare 🚲           | GBFS (Lyft + BCycle)                                                                                                                                                                            | `src/data/bikeshare.js`                               | `/api/gbfs`                                              | 60s                                                                               |
+| Bikeshare 🚲           | GBFS (Lyft + BCycle + Social Bicycles + PBSC incl. Bike Share Toronto, Bike Itaú (Brazil) and Bicing (Barcelona) + Urban Sharing, Entur, JCDecaux NO + nextbike (AMBici))                                                                                                                                        | `src/data/bikeshare.js`                               | `/api/gbfs`                                              | 60s                                                                               |
 | Directions 🧭          | OSRM on FOSSGIS servers (OpenStreetMap)                                                                                                                                                         | `src/data/directions.js`                              | `/api/route` (`steps=1`)                                 | on placement / mode change                                                        |
 | Datacenters ▣          | OSM extract (bundled)                                                                                                                                                                           | `src/data/localLayers.js`                             | —                                                        | static                                                                            |
 | Dams ▰                 | OpenInfraMap/OSM extract (bundled)                                                                                                                                                              | `src/data/localLayers.js`                             | —                                                        | static                                                                            |
@@ -3191,7 +3361,7 @@ provider draws in one colour (`PROVIDER_COLORS` in
 `src/layers/streetLevel/policy.js`); 360° cones are rings and the selected
 sequence is GEV cyan. Share options: `m` (Mapillary), `r` (the other providers' switches by id,
 e.g. `google-1` for Street View), `p` (`a`/`p`/`f` panoramas), `s` (since, days). Mapillary, Google
-Street View and KartaView are registered. Without
+Street View, KartaView and Panoramax are registered. Without
 `MAPILLARY_CLIENT_TOKEN` the panel reads KEY REQUIRED and the controls are
 disabled. With it, coverage draws as z0–5 overview points from orbit and z11–14
 sequence lines below 60 km; the proxy strips the unused `image` layer from z14
@@ -3387,14 +3557,88 @@ photo that was opening is drawn on the new canvas instead. FIT / FILL hide
 for panoramas (`supportsRenderModes`). The
 caption has no place name (KartaView's is where the drive began) and links to
 the full-size photo through the image proxy, since kartaview.org's photo
-pages fail for signed-out visitors.
+pages fail for signed-out visitors. The viewer itself is `photoViewer.js`,
+shared with Panoramax: each provider hands it a `PhotoSources` table (first
+and sharper flat and panorama URLs, and the caption fields).
+
+Panoramax (`providers/panoramax/`) is keyless and browser-side: the
+meta-catalogue `api.panoramax.xyz` (CORS open) federates every instance, and
+each picture is served by the instance holding it (OpenStreetMap France,
+IGN, MapComplete…; IGN's redirect to its OVH object storage). Its chip
+(orange, `#ff6f00`, Panoramax's own) starts off. Coverage comes from its
+vector tiles (`/api/map/{z}/{x}/{y}.mvt`, an hour's HTTP cache): sequence
+lines from z14 below 1.8 km above ground, z13 to 5 km, z12 to 12 km, z11
+to 30 km and z10 to 60 km, as Mapillary's (a dense z10 tile over Paris is
+~2.1 MB and 8,600 sequences, 750,000 points). `decode.js` simplifies each
+line (Douglas–Peucker to the segment, 4 units of a 4,096 tile: about a
+pixel where it is drawn, 6–10% of a GPS track's points), and the tiles in
+view draw their longest lines within 90,000 points (`maxPoints`,
+`keepOrder`), shared out once loading settles so a sparse tile keeps all
+it has and a dense one (a city centre) takes the rest; the selected
+sequence is always drawn. Every point becomes ~8 ground-line vertices:
+unsimplified, the lines hung the tab. Decoded tiles are kept while the
+provider is on (16, ten minutes, `tileCache.js`, shared with KartaView),
+and above
+60 km the `grid` layer's 0.1°
+density cells, binned to at most 96×96 points a tile (a z0 tile holds
+~70,000 cells) and not counted as sequences: the panel says to zoom in.
+A tile decodes in slices of about 8 ms, the page getting a turn between
+them (a 2 MB z10 tile is ~200 ms of work). A busy API (429/503) holds the
+tiles back for its Retry-After, which the browser cannot read here (the API
+exposes no headers), so the wait doubles from 5 s to 5 minutes until it
+answers; an answer may take as long as it keeps arriving (silent for 15 s
+is given up), so a slow link still gets its megabyte tiles. Both
+filters apply: lines carry their day and camera type, and a cell stays while
+it holds pictures of the kind asked for (cells are undated). A click on a
+line asks the core (`actions.openNearest`) for that sequence's picture
+nearest the click, within the camera height / 100 (50–400 m: from high up
+a click lands well off a line), without framing, then any sequence's within
+50 m. Each lookup is two searches side by side, ranked by distance in the
+browser: `place_position` (nearest first, but even at
+`place_fov_tolerance=180` it leaves out pictures looking away from the
+point) and a bounding box (those too, roughly nearest first, so 20 are
+asked for: ~60 kB, against ~600 kB for 100); the filters go to both (`filter=field_of_view=360`, `datetime=<since>/..`). A line is dated
+by its sequence's first day, so a sequence still growing can hide under
+SINCE; a line with no camera type or day stays drawn. Lines keep the
+decoded longest-first order under the per-tile cap (`keepOrder`). Once the picture is on screen
+its sequence is highlighted and drawn as cones from the z15 tiles around it
+(their `pictures` layer, ~110 bytes a picture, against ~7.5 kB for a STAC
+item), plus the neighbours within 150 m of an edge, on their own connection
+(coverage tiles take three, searches two); each tile's list for the sequence
+is kept. The open picture's own tile draws at once and the neighbours join
+as they arrive; one that fails is not counted, so a picture opening in it
+re-centres the cones there. The cones re-centre when a picture opens outside the tiles
+they were drawn from, judged from the moment their load starts, and centre
+only on a picture actually shown (never on a lookup that came back after
+the user moved on); a lookup nobody waits for any more is stopped. ‹ › follow the picture's own `prev`/`next`
+links, so stepping costs one small search per picture. The viewer shows the
+2,048 px SD derivative (equirectangular for a 360° picture, decoded at
+2,048 × 1,024) and swaps in the HD original only when the viewer is wider
+than SD (flat) or, for a panorama, expanded; once, shrunk while it decodes.
+When SD fails a flat picture falls back to the thumbnail, and to the
+original only in the expanded viewer. Every download of a photo, first or
+sharper, stops when another opens or the viewer closes. Originals wider than
+8,192 px are never fetched; a file's header (JPEG, PNG, WebP, GIF) is read
+before it decodes, and one declaring more than 64 MP or 16,384 px a side
+is refused undecoded, as is an `<img>` that decodes larger and any file
+over 48 MB. The caption names every
+producer (an uploading app and its photographer; never an account named by
+an email address), or else the instance holding the picture ("via
+panoramax.ign.fr"), and the picture's licence (CC BY-SA 4.0, Licence
+Ouverte 2.0…; StreetPose `license`), and links to the picture in the
+Panoramax viewer. Esc anywhere in the docked viewer clears the selected
+sequence before the panel can take it (KartaView too). After a GPU reset
+the viewer draws the same picture again itself (`onReopen`), leaving the
+core's lookups alone. The MCP globe panel allows the meta-catalogue and the
+three biggest instances; a picture on another instance shows only in the
+app.
 
 Street Level has two browser gates. `npm run qa:street-level -- --url <server>`
 runs against real Mapillary and needs `MAPILLARY_CLIENT_TOKEN`. `npm run
 qa:street-level:fixtures -- --url <server>` answers every Mapillary request
 from fixtures (`providers/mapillary/coverageFixture.mjs`,
-`scripts/fixtures/street-level/`), so it needs no network and covers the whole
-photo flow. CI runs the fixture gate and `qa:panel-resize`
+`scripts/fixtures/street-level/`), and KartaView's and Panoramax's too, so it
+needs no network and covers the whole photo flow. CI runs the fixture gate and `qa:panel-resize`
 against a production build served by `vite preview` with a dummy token.
 
 Directions is a keyless front end to the routing the voice agent already
@@ -3484,8 +3728,11 @@ Transit is off by default, and share links use token `j`. The movement panel ord
 places Transit directly after Street Traffic and before Bike Share. Cameras and
 utilities retain their own groups. The layer polls
 registered feeds near the camera every 15 seconds, below a 3,000 km altitude
-gate. Seven keyless regions are available: Boston, Austin, Minneapolis–St Paul,
-Helsinki, the Netherlands, Norway and South East Queensland. Mode silhouettes
+gate. Sixteen keyless regions are available: Boston, Austin, Minneapolis–St Paul,
+Helsinki, the Netherlands, Norway, South East Queensland, and nine in
+Ontario — Toronto (TTC surface vehicles; the subway publishes no
+positions), MiWay, Hamilton HSR, Durham Region, YRT/Viva, Guelph,
+Burlington, Barrie and Kingston. Mode silhouettes
 identify buses, trams, subways, trains, ferries and unclassified vehicles.
 
 Retained transit history uses the same outlier quarantine as live observations and
@@ -4018,6 +4265,14 @@ silently demoting every later lookup for the session.
   (`calSource: 'manual'`) or curated pose (`poseSource: 'curated'`) is never presented as
   estimated, matching the CAL badge. Public camera state carries `headingConfidence` and
   `headingEstimated` (`src/layers/cctv/headingConfidence.js`, #639).
+- **CCTV identified hardware:** a camera whose source or seed names a hardware `model` that
+  resolves in `src/layers/cctv/modelSpecs.js` (vendored CC0 records from the CCTV Camera
+  Database) gets the model's specs appended to the HUD meta line. Only fixed single-lens
+  hardware fills the FOV, and only when the source or seed states none and the pose is not
+  curated, shown as `FOV n° (DATASHEET)` until a manual calibration moves it. PTZ, varifocal and
+  multi-sensor datasheets publish a capability range, not the lens's current zoom, so those
+  cameras keep their estimate and show `SPEC FOV min–max° (CAPABILITY)` beside it. Public
+  camera state carries `fovSource`, `specFovMinDeg`, `specFovMaxDeg` and `spec` (#452).
 - **FIRMS**: no ground clamping (zero 3D-tiles height sampling), ≤18 screen-decluttered ambient labels, click-to-inspect detail card, 2.5k/3k sprite budgets viewport-clipped by FRP.
 - **CCTV v2 foundation:** a pitched
   frustum wireframe (4 corner rays + far-cap rectangle) with a monitor plane at the frustum's
@@ -4119,6 +4374,10 @@ for, resolved lazily after env loading. It replaces the empty default list;
 there is no built-in fallback. Local/private instances are allowed. The stable
 `gods-eye-view/…` User-Agent is unchanged. URLs never appear in response headers
 or upstream errors, including old cached endpoint metadata.
+Disk cache entries for both routes carry a SHA-256 tag of the configured
+instance set (order does not matter) and are served only while it matches, so
+repointing `OVERPASS_UPSTREAMS` refetches instead of serving another instance's
+answers; untagged entries stop serving once an instance is configured.
 
 The shared transport guards `/api/overpass` and `/api/military-installations`.
 With no configured upstream, each route serves existing cache data (including
@@ -4435,7 +4694,24 @@ Providers normalize coordinates, canonical name, label, place types and optional
 bounds. Camera framing, nearby landmark recovery and footprint selection remain
 in their consumers, including the Capitol identity/containment safeguards.
 Radio keeps localized country names in labels rather than station filters.
-Reverse geocoding and nearby/text-search endpoints retain their existing behavior.
+Nearby/text-search endpoints retain their existing behavior.
+
+**Google geocoding is a server route, not a browser call** (#363). Forward and
+reverse lookups go to `/api/google/geocode` and `/api/google/reverse-geocode`,
+which carry `GOOGLE_MAPS_SERVER_API_KEY` (falling back to `GOOGLE_MAPS_API_KEY`)
+and share the Places routes' opt-in `GEV_RATELIMIT_GOOGLE_PER_MIN` throttle.
+Google's Geocoding **web service** refuses referrer-restricted keys, so the
+previous browser call forced the bundled browser key — visible in devtools by
+design — to be left unrestricted; it now needs only the Map Tiles API and the
+Maps JavaScript API (Street View). Both routes answer in Google's own
+`status`/`results` shape rather than the Places routes' `places: []` contract,
+because the browser adapters normalize that shape directly. The browser key still gates the provider client-side, so a keyless
+session spends no request to learn it has no Google: the route's own keyless
+answer reads as an unanswered provider, which would stop the chain caching the
+negative Photon or Nominatim then produces. Its query is capped at 200
+characters, its reverse coordinates are validated against WGS84 bounds before
+the request is paid for, and a malformed viewport bias is dropped rather than
+refused, since a bias only ranks results.
 
 Only valid answers and definitive misses enter bounded caches; malformed replies,
 HTTP refusals and outages remain retryable. Searches share a 12-second total
@@ -4531,6 +4807,8 @@ are omitted rather than framing the wrong part of the globe.
 - **Validation.** `node scripts/qa-geo-import.mjs` covers all four formats and real painted show/hide. Run `node scripts/qa-geo-import-regressions.mjs` against both dev and preview for XYZ/track heights, failure recovery, namespace/BOM support, portrait framing and panel drops. `node scripts/qa-geo-import-large.mjs [--file /absolute/path/sample.kml] [--expect-local-pins]` checks a 27.6 MB repeated-style file, native style/image equivalence, large-file painted output and frame times. It records the WebGL renderer; software-rendered runs do not establish GPU performance. Unit tests live beside the data/controller/framing modules.
 
 ### Recent Imagery (September 2026)
+
+CMR pagination counts raw rows when checking page completion and the record budget. A catalog is truncated when upstream hits exceed the rows examined or the record cap drops valid granules from the last page; discarded malformed rows do not imply unseen imagery.
 
 Programmatic boxes passed to the exported `setBox` and `searchHls` operations
 reject missing, blank or boolean edges instead of interpreting them as zero
@@ -5153,6 +5431,22 @@ Local FM and internet radio are one listening surface: starting local FM stops
 internet-radio playback, and starting internet radio stops local FM. ADS-B
 reception does not interrupt internet radio.
 
+- **FM seek.** Seeking wraps across 87.5–108 MHz, covers both band edges and
+  skips the starting station. Spectra carry a decoder epoch, so a retune or mode
+  change rejects earlier output. A failed scan retune stops seeking. This
+  integrates Aditya's (@Rohilalala) contribution in #1174; it does not change
+  the peak-selection algorithm or guarantee that a final station retune succeeds.
+- **Streaming and playback.** Four ordered USB reads keep input available while
+  the page handles other work; control changes drain those reads before touching
+  the receiver. The worker must finish loading before reads start. Decoder work
+  is limited to eight unacknowledged blocks / 512 KiB, with a one-second oldest
+  block watchdog. Overload stops the receiver with an explicit error. Stop
+  terminates the worker immediately and disables the audio session; stale decoder
+  output and audio from retired sessions are refused. FM audio starts after an
+  80 ms prebuffer and retains at most 256 ms, dropping the oldest frames on
+  overflow. FM signal display updates are coalesced to at most four per second;
+  spectra are computed only while seeking. Optional `decoderDiagnostics` adds
+  bounded timing samples and overload snapshots without recording audio or IQ.
 - **Modes.** FM (87.5–108 MHz, tune, seek, volume) or ADS-B at 1090 MHz.
   With a receiver open, selecting ADS-B enables the Local ADS-B layer;
   selecting FM disables it.

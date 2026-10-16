@@ -1,4 +1,16 @@
 import { AWARENESS_RADIUS_M } from '../../data/militaryAwarenessEngine.js';
+
+// The reason stays English for the voice analyst; the Contacts panel shows it
+// in the UI language from `reasonTemplate`.
+const msg = (text) => text;
+const fillTemplate = (template, values = {}) =>
+  template.replace(/\{(\w+)\}/g, (_, name) => String(values[name]));
+const withReason = (summary, template, values) => ({
+  ...summary,
+  reason: fillTemplate(template, values),
+  reasonTemplate: template,
+  reasonValues: values,
+});
 import { DEPENDENCIES, AWARENESS_QUERY_LIMIT } from './policy.js';
 
 export function createQueries({ state: layerState, services, parts, source }) {
@@ -119,19 +131,20 @@ export function createQueries({ state: layerState, services, parts, source }) {
     // A subject window is its own bounded area: name it instead of the viewport.
     if (coverage?.kind === 'subject' && Number.isFinite(coverage.radiusM)) {
       const km = Math.round(coverage.radiusM / 1000);
-      return {
-        ...summary,
-        reason: summary.count
-          ? `mapped matches within ${km} km of the subject`
-          : `none mapped within ${km} km; not a complete 250 km survey`,
-      };
+      return withReason(
+        summary,
+        summary.count
+          ? msg('mapped matches within {km} km of the subject')
+          : msg('none mapped within {km} km; not a complete 250 km survey'),
+        { km },
+      );
     }
-    return {
-      ...summary,
-      reason: summary.count
-        ? 'mapped matches from the loaded viewport'
-        : 'viewport feed is not a complete 250 km survey',
-    };
+    return withReason(
+      summary,
+      summary.count
+        ? msg('mapped matches from the loaded viewport')
+        : msg('viewport feed is not a complete 250 km survey'),
+    );
   }
 
   /**

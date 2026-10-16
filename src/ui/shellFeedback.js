@@ -9,6 +9,112 @@ import {
   reduceTrafficSyncFeedback,
 } from '../loadingFeedback.js';
 import { setSplitFlapText, disposeSplitFlap } from '../splitFlap.js';
+import { getLocale, t, msg } from '../i18n/index.js';
+import { localizeLayerName } from './layerPanel.js';
+import { translateFeedError } from './statusText.js';
+
+// The server also loads loadingFeedback.js (through the HUD summary), so its
+// labels stay English. Translate the known ones; pass anything else (a live
+// provider error) through.
+const STATUS_LABEL_KEYS = Object.freeze({
+  'LOADING LIVE DATA': msg('LOADING LIVE DATA'),
+  'LOAD COMPLETE': msg('LOAD COMPLETE'),
+  'LOAD CANCELLED': msg('LOAD CANCELLED'),
+  'LOAD FAILED': msg('LOAD FAILED'),
+  'LIVE DATA OFF': msg('LIVE DATA OFF'),
+  'MAPPED SITES LOADED': msg('MAPPED SITES LOADED'),
+  'RETRYING MAPPED SITES': msg('RETRYING MAPPED SITES'),
+  'FETCHING MAPPED SITES': msg('FETCHING MAPPED SITES'),
+  'RETRYING ALPR CAMERAS': msg('RETRYING ALPR CAMERAS'),
+  'FETCHING ALPR CAMERAS': msg('FETCHING ALPR CAMERAS'),
+  'OVERPASS TEMPORARILY UNAVAILABLE': msg('OVERPASS TEMPORARILY UNAVAILABLE'),
+  // The other mapped-site failure reasons (src/data/installationFeedback.js),
+  // upper-cased by presentGlobalLoadingStatus.
+  'OVERPASS RATE-LIMITED': msg('OVERPASS RATE-LIMITED'),
+  'OVERPASS TIMED OUT': msg('OVERPASS TIMED OUT'),
+  'OVERPASS COULD NOT COMPLETE THE QUERY': msg(
+    'OVERPASS COULD NOT COMPLETE THE QUERY',
+  ),
+  'MAP TILES TEMPORARILY UNAVAILABLE': msg('MAP TILES TEMPORARILY UNAVAILABLE'),
+  'MAPPED NAMES TEMPORARILY UNAVAILABLE': msg(
+    'MAPPED NAMES TEMPORARILY UNAVAILABLE',
+  ),
+  'TURNING OFF LIVE DATA': msg('TURNING OFF LIVE DATA'),
+  'REFRESHING LIVE DATA': msg('REFRESHING LIVE DATA'),
+  'syncing road network': msg('syncing road network'),
+});
+
+// The ALPR retry chip shows the layer's English error upper-cased
+// (loadingFeedback.js). These are the camera and vector tile failures it can
+// carry, by their upper-cased text; each is translated through its own
+// sentence-case key, the one the layer row shows, and upper-cased again.
+const CHIP_ERROR_KEYS = new Map(
+  [
+    msg('Vector tile metadata unavailable'),
+    msg('Vector tiles unavailable'),
+    msg('Vector tile request timed out'),
+    msg('Camera coverage unavailable'),
+    msg('Camera source temporarily unavailable'),
+    msg('Overpass returned an incomplete camera response'),
+  ].map((key) => [key.toUpperCase(), key]),
+);
+const CHIP_TILE_HTTP_RE = /^VECTOR TILES UNAVAILABLE \(HTTP (\d+)\)$/;
+
+function localizeStatusLabel(label) {
+  if (typeof label !== 'string' || !label) return label;
+  const text = label.trim();
+  const key = STATUS_LABEL_KEYS[text];
+  if (key) return t(key);
+  const errorKey = CHIP_ERROR_KEYS.get(text);
+  const http = errorKey ? null : CHIP_TILE_HTTP_RE.exec(text);
+  if (!errorKey && !http) return label;
+  return translateFeedError(
+    errorKey || `Vector tiles unavailable (HTTP ${http[1]})`,
+  ).toLocaleUpperCase(getLocale());
+}
+
+// A retry detail is "retrying in Ns" or "retry pending", optionally prefixed
+// by the ALPR layer name (loadingFeedback.js). The prefix is kept in every
+// language: it is what tells the chip apart from a mapped-sites retry.
+const RETRY_DETAIL_RE =
+  /^(?:(ALPR cameras) · )?(?:retrying in (\d+)s|(retry pending))$/;
+
+function localizeStatusDetail(detail) {
+  if (typeof detail !== 'string' || !detail) return detail;
+  const match = detail.trim().match(RETRY_DETAIL_RE);
+  if (match) {
+    const [, prefix, seconds, pending] = match;
+    const retry = pending
+      ? t('retry pending')
+      : t('retrying in {seconds}s', { seconds });
+    return prefix ? `${t('ALPR cameras')} · ${retry}` : retry;
+  }
+  return localizeLayerRoster(detail);
+}
+
+// The loading detail is the active layers' English names joined by " · ",
+// with " +N" when more are loading. Translate each known layer name; anything
+// else (a provider such as "OpenStreetMap · Overpass") passes through.
+function localizeLayerRoster(detail) {
+  const [, names, suffix = ''] = detail.match(/^(.*?)( \+\d+)?$/s) || [];
+  if (!names) return detail;
+  return (
+    names
+      .split(' · ')
+      .map((name) => localizeLayerName(name))
+      .join(' · ') + suffix
+  );
+}
+
+/** The chip's label and detail in the UI language (exported for tests). */
+export function localizeLoadingPresentation(presentation) {
+  if (!presentation) return presentation;
+  return {
+    ...presentation,
+    label: localizeStatusLabel(presentation.label),
+    detail: localizeStatusDetail(presentation.detail),
+  };
+}
 export class ShellFeedback {
   constructor({ readLayers }) {
     this.readLayers = readLayers;
@@ -76,10 +182,14 @@ export class ShellFeedback {
     // the flap keeps textContent equal to the settled label throughout, so
     // this stays a no-op on the repeat ticks exactly as it did before.
     if (presentation.label)
-      setSplitFlapText(this._trafficSyncLabel, presentation.label, {
-        // Completion is a timing signal, not another animated loading stage.
-        immediate: !presentation.busy,
-      });
+      setSplitFlapText(
+        this._trafficSyncLabel,
+        localizeStatusLabel(presentation.label),
+        {
+          // Completion is a timing signal, not another animated loading stage.
+          immediate: !presentation.busy,
+        },
+      );
     // Written on every change INCLUDING the empty settled value — the reducer
     // clears the progress number once the sync lands, and a truthiness guard
     // here would strand the last "..." beside the settled label.
@@ -120,6 +230,7 @@ export class ShellFeedback {
     if (this._loadingFeedbackState?.phase !== 'idle' || noticeNeedsTicker) {
       this._armLoadingFeedbackTicker();
     }
+    const localized = localizeLoadingPresentation(presentation);
     this._globalLoadingStatus.hidden = !presentation;
     if (!presentation) {
       delete this._globalLoadingStatus.dataset.state;
@@ -131,8 +242,8 @@ export class ShellFeedback {
     // here: this runs on every 60 ms and 500 ms tick. The detail line is the
     // live layer roster inside an ellipsised, width-capped span — flapping a
     // list that churns as layers join would be noise, not delight.
-    setSplitFlapText(this._globalLoadingLabel, presentation.label);
-    this._globalLoadingDetail.textContent = presentation.detail;
+    setSplitFlapText(this._globalLoadingLabel, localized.label);
+    this._globalLoadingDetail.textContent = localized.detail;
   }
 
   _showGlobalStatusNotice(message, options = {}) {
