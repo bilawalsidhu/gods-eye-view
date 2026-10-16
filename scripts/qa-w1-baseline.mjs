@@ -17,8 +17,17 @@
  *
  * Output: qa-artifacts/w1-baseline/<run>/{summary.json, *.jpg} (git-ignored).
  *
+ * Comparable runs: --record=DIR keeps every /api response of each layer's run
+ * (DIR/<layer>.json); --replay=DIR answers /api from them and freezes the page
+ * clock (Date.now and new Date(), hence JulianDate.now and the app clock) at
+ * the recording's time, so a run of another commit sees the same objects at
+ * the same positions. --compare=A/summary.json,B/summary.json diffs two runs
+ * (counts, known objects' positions and screen points, tracking poses;
+ * src/tooling/w1Baseline.js tolerances) and exits 1 on a difference.
+ *
  *   node scripts/qa-w1-baseline.mjs [--layers=flights,vessels] [--base-url=URL]
  *     [--fill-ms=60000] [--out=qa-artifacts/w1-baseline]
+ *     [--record=DIR | --replay=DIR] [--compare=A,B]
  *
  * Starts this checkout's Vite dev server on a free port (never 4185 or 4186)
  * unless --base-url names one. Browsers are always headless. Provider keys are
@@ -31,6 +40,13 @@ import net from 'node:net';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import puppeteer from 'puppeteer';
+import {
+  compareBaselines,
+  feedRequestKey,
+  frozenClockScript,
+  isFeedRequest,
+  replayEntry,
+} from '../src/tooling/w1Baseline.js';
 
 const repoRoot = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -60,6 +76,15 @@ for (const layer of LAYERS)
     process.exit(2);
   }
 const FILL_MS = Number(argument('fill-ms') ?? 60000);
+// --record=DIR keeps every /api response per layer (DIR/<layer>.json);
+// --replay=DIR answers /api from those files and freezes the page clock at
+// the recording's time, so two runs (two commits) see the same objects.
+const RECORD_DIR = argument('record');
+const REPLAY_DIR = argument('replay');
+if (RECORD_DIR && REPLAY_DIR) {
+  console.error('--record and --replay exclude each other');
+  process.exit(2);
+}
 const BOOT_TIMEOUT_MS = Number(process.env.QA_BOOT_TIMEOUT_MS || 180000);
 const RESERVED_PORTS = new Set([4185, 4186]);
 const VIEWPORT = { width: 1280, height: 800 };
@@ -136,10 +161,63 @@ const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 // --- In-page probes ---------------------------------------------------------
 
-async function bootPage(browser, baseUrl, hash) {
+/** A page that records its /api responses into `feed.entries`. */
+function recordFeeds(page, feed) {
+  page.on('response', async (response) => {
+    const request = response.request();
+    const url = response.url();
+    if (!isFeedRequest(url)) return;
+    try {
+      const body = await response.buffer();
+      const key = feedRequestKey(request.method(), url);
+      const entry = {
+        key,
+        path: new URL(url).pathname,
+        status: response.status(),
+        contentType: response.headers()['content-type'] ?? 'application/json',
+        body: body.toString('base64'),
+        atMs: Date.now(),
+      };
+      const index = feed.entries.findIndex((other) => other.key === key);
+      if (index >= 0) feed.entries.splice(index, 1);
+      feed.entries.push(entry);
+    } catch (error) {
+      // No body (redirect, aborted): the replay answers it as unavailable.
+      (feed.unrecorded ??= []).push(
+        `${request.method()} ${new URL(url).pathname}: ${error.message}`,
+      );
+    }
+  });
+}
+
+/** A page whose /api requests are answered from a recording, at its time. */
+async function replayFeeds(page, recording) {
+  await page.evaluateOnNewDocument(frozenClockScript(recording.frozenMs));
+  await page.setRequestInterception(true);
+  page.on('request', (request) => {
+    const url = request.url();
+    if (!isFeedRequest(url)) return request.continue();
+    const entry = replayEntry(recording, request.method(), url);
+    if (!entry)
+      return request.respond({
+        status: 503,
+        contentType: 'application/json',
+        body: '{"error":"not in the recording"}',
+      });
+    return request.respond({
+      status: entry.status,
+      contentType: entry.contentType,
+      body: Buffer.from(entry.body, 'base64'),
+    });
+  });
+}
+
+async function bootPage(browser, baseUrl, hash, feed = null) {
   const context = await browser.createBrowserContext();
   const page = await context.newPage();
   await page.setViewport(VIEWPORT);
+  if (feed?.mode === 'record') recordFeeds(page, feed.recording);
+  if (feed?.mode === 'replay') await replayFeeds(page, feed.recording);
   const errors = [];
   page.on('console', (message) => {
     if (message.type() === 'error') errors.push(redact(message.text()));
@@ -325,14 +403,31 @@ const trackedSummary = (info) =>
 
 async function runLayer(browser, baseUrl, name, outDir) {
   const layer = W1_LAYER_IDS[name];
+  const recordingFile = (dir) => path.resolve(repoRoot, dir, `${name}.json`);
+  const feed = RECORD_DIR
+    ? { mode: 'record', recording: { layer: name, entries: [] } }
+    : REPLAY_DIR
+      ? {
+          mode: 'replay',
+          recording: JSON.parse(
+            fs.readFileSync(recordingFile(REPLAY_DIR), 'utf8'),
+          ),
+        }
+      : null;
   const result = {
     layer: name,
     id: layer,
-    source: 'live',
+    source: feed?.mode === 'replay' ? `replay ${REPLAY_DIR}` : 'live',
+    ...(feed?.mode === 'replay' ? { frozenMs: feed.recording.frozenMs } : {}),
     poses: {},
     errors: [],
   };
-  const opened = await bootPage(browser, baseUrl, poseHash(W1_POSES.city));
+  const opened = await bootPage(
+    browser,
+    baseUrl,
+    poseHash(W1_POSES.city),
+    feed,
+  );
   const { page } = opened;
   try {
     await page.evaluate(
@@ -343,6 +438,21 @@ async function runLayer(browser, baseUrl, name, outDir) {
       layer,
     );
     result.fill = await waitForFill(page, layer);
+    if (feed?.mode === 'record') {
+      // The replay clock: the last feed answer of the fill.
+      const recording = feed.recording;
+      recording.frozenMs = Math.max(
+        Date.now() - 1000,
+        ...recording.entries.map((entry) => entry.atMs),
+      );
+      fs.mkdirSync(path.resolve(repoRoot, RECORD_DIR), { recursive: true });
+      fs.writeFileSync(recordingFile(RECORD_DIR), JSON.stringify(recording));
+      result.recorded = {
+        unrecorded: recording.unrecorded ?? [],
+        entries: recording.entries.length,
+        frozenMs: recording.frozenMs,
+      };
+    }
     const reads = {};
     for (const name of ['city', 'global', 'orbit']) {
       const wait = await goToPose(page, W1_POSES[name]);
@@ -387,7 +497,12 @@ async function runLayer(browser, baseUrl, name, outDir) {
           poseAfter2s: pose,
           shareHash: redact(hash),
         };
-        const shared = await bootPage(browser, baseUrl, hash.slice(1));
+        const shared = await bootPage(
+          browser,
+          baseUrl,
+          hash.slice(1),
+          feed?.mode === 'replay' ? feed : null,
+        );
         try {
           await sleep(15000);
           result.tracking.sharedOpen = await shared.page.evaluate((layer) => {
@@ -415,6 +530,23 @@ async function runLayer(browser, baseUrl, name, outDir) {
     await opened.context.close();
   }
   return result;
+}
+
+// --compare=A,B compares two summary.json runs and exits.
+const compareArg = argument('compare');
+if (compareArg) {
+  const [a, b] = compareArg
+    .split(',')
+    .map((file) => JSON.parse(fs.readFileSync(file, 'utf8')));
+  const { ok, differences } = compareBaselines(a, b);
+  for (const difference of differences)
+    console.log(`[w1-baseline] DIFF ${JSON.stringify(difference)}`);
+  console.log(
+    ok
+      ? '[w1-baseline] the runs agree within the tolerances'
+      : `[w1-baseline] ${differences.length} difference(s)`,
+  );
+  process.exit(ok ? 0 : 1);
 }
 
 const executablePath =
