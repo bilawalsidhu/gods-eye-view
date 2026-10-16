@@ -119,7 +119,7 @@ export function createBrowserViteConfig({
           // Root-anchored: a bare '**/dist/**' would also deny every
           // dependency's own dist/ (e.g. node_modules/vite/dist/client),
           // breaking /@vite/client and other dev-client assets.
-          `${REPO_ROOT}/dist/**`,
+          `${REPO_ROOT_GLOB}/dist/**`,
         ],
       },
       // These headers protect the document containing Provider Settings and
