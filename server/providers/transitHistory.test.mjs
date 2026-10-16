@@ -179,3 +179,26 @@ test('snapshot capacity pressure preserves members not yet visited and discloses
   assert.equal(recreated.fixes.length, 1);
   assert.equal(recreated.truncated, true);
 });
+test('a feed fleet-number mode outranks its route mode in the epoch context', (t) => {
+  const h = history(t);
+  const ttc = {
+    id: 'ttc',
+    historyRetention: true,
+    defaultMode: 'bus',
+    routeMode: (route) => (/^5\d\d$/.test(route ?? '') ? 'tram' : 'bus'),
+    vehicleMode: (id) =>
+      /^4[4-6]\d\d$/.test(id) ? 'tram' : /^\d{4}$/.test(id) ? 'bus' : 'unknown',
+  };
+  h.ingest(
+    ttc,
+    [
+      row(100000, '8515', { routeId: '506' }),
+      row(100000, '4507', { routeId: null }),
+      row(100000, 'x1', { routeId: '501' }),
+    ],
+    100000,
+  );
+  assert.equal(h.get('ttc', '8515', 100000).epochs[0].mode, 'bus');
+  assert.equal(h.get('ttc', '4507', 100000).epochs[0].mode, 'tram');
+  assert.equal(h.get('ttc', 'x1', 100000).epochs[0].mode, 'tram');
+});

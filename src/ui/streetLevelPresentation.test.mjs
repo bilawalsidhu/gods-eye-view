@@ -446,9 +446,11 @@ test('the meta line keeps the sequence count and adds the other providers’ hin
       },
     }),
   );
+  // The count follows the app locale (formatNumber under the default 'en'),
+  // not the system locale of the Node process running the tests.
   assert.equal(
     view.meta,
-    `${(2514).toLocaleString()} sequences in view · click a line for its photos · click a street to open Street View`,
+    '2,514 sequences in view · click a line for its photos · click a street to open Street View',
   );
 });
 

@@ -15,13 +15,36 @@
  * Only ECCC's AQHI is implemented here; `AIR_QUALITY_PROVIDERS` is the seam a
  * later provider registers against.
  */
+// A portable export (package.json): no i18n here. The labels stay English data;
+// the Weather card (index.js) shows them translated.
+const msg = (text) => text;
 
 /** Band identifiers shared across providers, in ascending severity. */
 export const AIR_QUALITY_BANDS = Object.freeze([
-  Object.freeze({ id: 'low', label: 'Low', color: '#4cc9f0' }),
-  Object.freeze({ id: 'moderate', label: 'Moderate', color: '#ffd43b' }),
-  Object.freeze({ id: 'high', label: 'High', color: '#ff6b35' }),
-  Object.freeze({ id: 'very-high', label: 'Very High', color: '#c1121f' }),
+  Object.freeze({
+    id: 'low',
+    label: msg('Low'),
+    risk: msg('Low health risk'),
+    color: '#4cc9f0',
+  }),
+  Object.freeze({
+    id: 'moderate',
+    label: msg('Moderate'),
+    risk: msg('Moderate health risk'),
+    color: '#ffd43b',
+  }),
+  Object.freeze({
+    id: 'high',
+    label: msg('High'),
+    risk: msg('High health risk'),
+    color: '#ff6b35',
+  }),
+  Object.freeze({
+    id: 'very-high',
+    label: msg('Very High'),
+    risk: msg('Very High health risk'),
+    color: '#c1121f',
+  }),
 ]);
 
 const BAND_BY_ID = new Map(AIR_QUALITY_BANDS.map((band) => [band.id, band]));
@@ -89,9 +112,9 @@ export const AIR_QUALITY_PROVIDERS = Object.freeze({
   eccc: Object.freeze({
     id: 'eccc',
     scale: 'AQHI',
-    label: 'Air quality',
+    label: msg('Air quality'),
     network: 'Environment and Climate Change Canada',
-    coverage: 'Canada only · ECCC AQHI network',
+    coverage: msg('Canada only · ECCC AQHI network'),
     /** ECCC's published band thresholds, evaluated in order. */
     bands: Object.freeze([
       Object.freeze({ id: 'low', max: 3 }),
@@ -161,8 +184,7 @@ export function valueLabel(providerId, value) {
 
 /** Plain-language risk phrase for a band id. */
 export function bandRiskText(bandId) {
-  const band = airQualityBandById(bandId);
-  return band ? `${band.label} health risk` : null;
+  return airQualityBandById(bandId)?.risk ?? null;
 }
 
 /**

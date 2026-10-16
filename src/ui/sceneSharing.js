@@ -1,3 +1,5 @@
+import { t, tn } from '../i18n/index.js';
+
 /** Small owned modal for scene authoring and import review; text never becomes markup. */
 export function createSceneDialog(title, onClose) {
   const dialog = document.createElement('dialog');
@@ -79,10 +81,72 @@ export function createSceneDialog(title, onClose) {
     });
     if (multiline) node.rows = 9;
     wrapper.append(node);
+    if (type === 'file') fileChooser(wrapper, node);
     body.append(wrapper);
     return node;
   }
-  button('Cancel', onClose);
+  /**
+   * The browser draws a file input's button and "no file" text in its own
+   * language. Stretch the native input, transparent, over the whole row (so
+   * click, focus and drops stay native) and draw translated text under it.
+   */
+  function fileChooser(wrapper, node) {
+    wrapper.style.position = 'relative';
+    Object.assign(node.style, {
+      position: 'absolute',
+      inset: '0',
+      width: '100%',
+      height: '100%',
+      margin: '0',
+      padding: '0',
+      border: '0',
+      opacity: '0',
+      cursor: 'pointer',
+      zIndex: '1',
+    });
+    const row = document.createElement('span');
+    row.setAttribute('aria-hidden', 'true');
+    Object.assign(row.style, {
+      display: 'flex',
+      alignItems: 'center',
+      gap: '10px',
+      margin: '6px 0 14px',
+      padding: '7px',
+      background: '#10242e',
+      border: '1px solid #397080',
+    });
+    const chooser = document.createElement('span');
+    chooser.textContent = t('Choose files');
+    Object.assign(chooser.style, {
+      padding: '3px 9px',
+      border: '1px solid #397080',
+      borderRadius: '3px',
+      background: '#08141e',
+      cursor: 'pointer',
+    });
+    const chosen = document.createElement('span');
+    const showChosen = () => {
+      const count = node.files?.length || 0;
+      // One file shows its name, like the browser's own picker did.
+      chosen.textContent =
+        count === 1
+          ? node.files[0].name
+          : count
+            ? tn(count, '{count} file selected', '{count} files selected')
+            : t('No file chosen');
+    };
+    showChosen();
+    row.append(chooser, chosen);
+    wrapper.append(row);
+    listen(node, 'change', showChosen);
+    listen(node, 'focus', () => {
+      chooser.style.outline = '2px solid #e3faff';
+    });
+    listen(node, 'blur', () => {
+      chooser.style.outline = '';
+    });
+  }
+  button(t('Cancel'), onClose);
   listen(dialog, 'cancel', (event) => {
     event.preventDefault();
     onClose();
@@ -116,8 +180,8 @@ export function mountSceneSharing(
   bar.dataset.directorAuthoring = '';
   bar.className = 'scene-controls';
   const entries = [
-    ['EDIT DETAILS', edit],
-    ['SHARE SCENE', share],
+    [t('EDIT DETAILS'), edit],
+    [t('SHARE SCENE'), share],
   ];
   const removers = [];
   for (const [text, fn] of entries) {

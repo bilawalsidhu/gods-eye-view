@@ -1,3 +1,4 @@
+import { t } from '../i18n/index.js';
 import {
   normalizeCctvEmbedUrl,
   normalizeCctvSourcePageUrl,
@@ -44,7 +45,9 @@ export function createCctvEmbed(container, { documentImpl = document } = {}) {
         clear();
         player = documentImpl.createElement('iframe');
         player.className = `cctv-embed${isTwitch ? ' cctv-embed-twitch' : ''}`;
-        player.title = `${camera.name || 'CCTV'} — public player`;
+        player.title = t('{camera} — public player', {
+          camera: camera.name || 'CCTV',
+        });
         player.setAttribute(
           'allow',
           'autoplay; encrypted-media; fullscreen; picture-in-picture',
@@ -76,7 +79,7 @@ export function createCctvEmbed(container, { documentImpl = document } = {}) {
           container.appendChild(link);
         }
         link.href = sourceUrl;
-        link.textContent = 'Open official camera page ↗';
+        link.textContent = t('Open official camera page ↗');
       } else {
         link?.remove();
         link = null;
