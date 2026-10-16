@@ -14,7 +14,7 @@ export function createLabels({ state: layerState, services, parts, source }) {
       id: String(ISS_NORAD),
       position,
       variant: 'label',
-      title: 'ISS',
+      title: 'ISS', // i18n-ignore: satellite name, as in the satellite catalog
       accent: '#ff4444',
       priority: 1000,
       collisionGroup: 'ambient-label',
