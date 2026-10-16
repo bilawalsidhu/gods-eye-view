@@ -4,7 +4,11 @@
  * legibility over bright ground.
  *
  * Run:
- *   node scripts/qa-label-readability.mjs --url http://localhost:4244 --tag after
+ *   node scripts/qa-label-readability.mjs --url http://localhost:4244 --tag after [--engine=cesium|navara]
+ *
+ * Engine-neutral: camera, tiles and layers go through the globe engine and the
+ * QA probe; an engine without the flights/satellites layers (Navara today)
+ * shoots the scenes without a contact field and says so.
  *
  * Every scene pins its own camera pose AND substitutes a deterministic
  * synthetic contact field for the live pollers, so a `before` run and an
@@ -36,7 +40,12 @@ const getOpt = (name, fallback) => {
   return index >= 0 && argv[index + 1] ? argv[index + 1] : fallback;
 };
 
-const APP_URL = getOpt('--url', 'http://localhost:4244');
+const ENGINE = argv.find((value) => value.startsWith('--engine='))?.slice(9) ?? 'cesium';
+const APP_URL = (() => {
+  const url = new URL(getOpt('--url', 'http://localhost:4244'));
+  url.searchParams.set('engine', ENGINE);
+  return url.href;
+})();
 const TAG = getOpt('--tag', 'after');
 /** Comma-separated scene-id prefixes. Empty runs the whole set. */
 const SCENE_FILTER = getOpt('--scenes', '')
@@ -205,11 +214,8 @@ async function settle(page) {
   while (Date.now() - started < SETTLE_MAX_MS) {
     await new Promise((resolve) => setTimeout(resolve, 1500));
     const state = await page.evaluate(() => {
-      const { viewer, tileset } = window.__godsEyeView;
-      return {
-        tilesLoaded: tileset?.tilesLoaded !== false,
-        pending: viewer.scene.globe?._surface?._tileLoadQueueHigh?.length ?? 0,
-      };
+      const { engine } = window.__godsEyeView;
+      return { tilesLoaded: engine.surface.tilesLoaded(), pending: 0 };
     });
     const settled = state.tilesLoaded && state.pending === 0;
     if (settled && previous && Date.now() - started > SETTLE_MIN_MS) return true;
@@ -254,7 +260,7 @@ async function main() {
 
     await page.goto(APP_URL, { waitUntil: 'domcontentloaded', timeout: 60_000 });
     await page.waitForFunction(
-      () => window.__godsEyeView?.viewer && window.__godsEyeView?.styleManager,
+      () => window.__godsEyeView?.layers && window.__godsEyeView?.styleManager,
       { timeout: 60_000, polling: 100 },
     );
     // flyToAustin arrives ~500 ms after init; let it start and land before any
@@ -268,12 +274,16 @@ async function main() {
 
     for (const scene of selected) {
       process.stdout.write(`  ${scene.id} … `);
-      await page.evaluate((spec) => {
-        const { viewer, dataManager, styleManager } = window.__godsEyeView;
-        viewer.camera.cancelFlight();
-        const Cartesian3 = viewer.camera.position.constructor;
+      const fieldShown = await page.evaluate(async (spec) => {
+        const { engine, dataManager, styleManager, layers } = window.__godsEyeView;
+        const geo = await import('/src/geo/index.js');
+        engine.camera.cancelFlight();
+        const Cartesian3 = Object.assign(
+          (x, y, z) => geo.cartesian3.create(x, y, z),
+          { fromDegrees: (lon, lat, height) => geo.cartesian3.fromDegrees(lon, lat, height) },
+        );
 
-        viewer.camera.setView({
+        engine.camera.setView({
           destination: Cartesian3.fromDegrees(
             spec.camera.lon, spec.camera.lat, spec.camera.height,
           ),
@@ -290,10 +300,9 @@ async function main() {
         // the frame comes back with two labels instead of a field. Building
         // straight off the camera basis guarantees every contact lands inside
         // the keyhole, at a known depth, in both the before and after runs.
-        const camera = viewer.camera;
-        const frustum = camera.frustum;
-        const halfHeight = Math.tan((frustum.fovy ?? frustum.fov ?? 1.0) / 2);
-        const halfWidth = halfHeight * (frustum.aspectRatio || 1.6);
+        const camera = engine.camera.pose();
+        const halfHeight = Math.tan((camera.fovy ?? 1.0) / 2);
+        const halfWidth = halfHeight * (camera.aspectRatio || 1.6);
         const basis = {
           px: camera.position.x, py: camera.position.y, pz: camera.position.z,
           dx: camera.direction.x, dy: camera.direction.y, dz: camera.direction.z,
@@ -305,7 +314,7 @@ async function main() {
         const pointAt = (ndcX, ndcY, distance) => {
           const sx = ndcX * halfWidth * distance;
           const sy = ndcY * halfHeight * distance;
-          return new Cartesian3(
+          return Cartesian3(
             basis.px + basis.dx * distance + basis.rx * sx + basis.ux * sy,
             basis.py + basis.dy * distance + basis.ry * sx + basis.uy * sy,
             basis.pz + basis.dz * distance + basis.rz * sx + basis.uz * sy,
@@ -347,6 +356,9 @@ async function main() {
           ? { satellites: build('s'), flights: [], military: [] }
           : { flights: build('f'), military: [], satellites: [] };
         window.__LABEL_EVIDENCE = assignment;
+        const fieldLayers = Object.keys(assignment).filter(
+          (layerId) => assignment[layerId].length,
+        );
         for (const layerId of Object.keys(assignment)) {
           const entry = dataManager.layers.get(layerId);
           if (entry?.module) {
@@ -362,6 +374,7 @@ async function main() {
           densityPct: 100,
           allocationStrategy: 'elastic',
         });
+        return fieldLayers.every((layerId) => layers.available(layerId));
       }, scene);
 
       const converged = await settle(page);
@@ -399,10 +412,11 @@ async function main() {
       const diagnostics = await page.evaluate(
         () => window.__godsEyeView.styleManager.getDetectionState?.() || {},
       );
-      results.push({ scene: scene.id, converged, ...stats });
+      results.push({ scene: scene.id, engine: ENGINE, converged, fieldShown, ...stats });
       console.log(
         `p05=${stats.p05} p25=${stats.p25} p50=${stats.p50} p95=${stats.p95}`
         + `${converged ? '' : '  (tiles did not fully settle)'}`
+        + `${fieldShown ? '' : `  (no contact field: its layers are not on ${ENGINE})`}`
         + `  [${diagnostics.detectionMode || '?'}]`,
       );
     }

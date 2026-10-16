@@ -8,6 +8,7 @@ import { createStandaloneData } from './data.js';
 import { createStandaloneTools } from './tools.js';
 import { createGoogleTokenSource } from '../maps/googleTokens.js';
 import { resolveEngineKind } from '../app/engineChoice.js';
+import { createQaProbe } from '../app/qaProbe.js';
 
 // The existing controls and layer catalog contain page-scoped state.
 let constructed = false;
@@ -65,9 +66,18 @@ export function createStandaloneApplication({
       // The catalog of this engine: on Navara only the layers with a Navara
       // renderer (src/app/layers/renderers.js; none yet), the others' state
       // kept for links.
+      // QA fixture sources (?qaFeed=…) on the dev server only.
+      const search = globalThis.location?.search ?? '';
+      const qaSources =
+        allowQaRegistration && /[?&]qaFeed=/.test(search)
+          ? await import('../app/layers/qaSources.js').then(
+              ({ createQaSources, parseQaFeed }) =>
+                createQaSources(parseQaFeed(search)),
+            )
+          : {};
       catalog = createStandaloneCatalog({
         engineKind,
-        sources,
+        sources: { ...sources, ...qaSources },
         streetLevelProviders,
         nepalBoundaryResolver: (signal) =>
           scene.operations.annotationResolver.resolveRegionRingForQuery(
@@ -91,7 +101,28 @@ export function createStandaloneApplication({
       }),
     createData: (context) =>
       createStandaloneData({ ...context, allowQaRegistration, catalog }),
-    createTools: (context) =>
-      createStandaloneTools({ ...context, loadingScreen, placeSearch, voice }),
+    createTools: async (context) => {
+      const tools = await createStandaloneTools({
+        ...context,
+        loadingScreen,
+        placeSearch,
+        voice,
+      });
+      // The engine-neutral QA probe on the debug handle (src/app/qaProbe.js).
+      const debug = globalThis.window?.__godsEyeView;
+      if (debug) {
+        const probe = createQaProbe({
+          engine: context.scene.engine,
+          dataManager: context.data.dataManager,
+          availability: catalog.availability,
+        });
+        debug.layers = probe;
+        context.defer(() => {
+          probe.destroy();
+          if (debug.layers === probe) delete debug.layers;
+        });
+      }
+      return tools;
+    },
   });
 }

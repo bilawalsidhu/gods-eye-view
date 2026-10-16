@@ -1101,5 +1101,11 @@
   "src/app/layers/renderers.js",
   "src/app/layers/renderers.test.mjs",
   "src/data/lifecycleEngine.test.mjs",
-  "src/ui/shareRestorationEngine.test.mjs"
+  "src/ui/shareRestorationEngine.test.mjs",
+  "src/app/qaProbe.js",
+  "src/app/qaProbe.test.mjs",
+  "src/app/layers/qaSources.js",
+  "src/app/layers/qaSources.test.mjs",
+  "scripts/qa-w1-layers.mjs",
+  "src/bench/w1Feeds.js"
 ]

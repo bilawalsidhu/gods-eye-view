@@ -15,6 +15,12 @@
  *   node scripts/qa-overlay-baseline.mjs --screenshots-dir /tmp/overlay-shots
  *   node scripts/qa-overlay-baseline.mjs --hardware-gpu --headful
  *   node scripts/qa-overlay-baseline.mjs --dist-dir /tmp/gev-dist
+ *   node scripts/qa-overlay-baseline.mjs --engine=navara
+ *
+ * Engine-neutral: the camera and frames go through the globe engine and the
+ * layers through the QA probe (window.__godsEyeView.layers). A scene whose
+ * layers the engine does not have is SKIPPED; without a Cesium viewer the
+ * entity inventory reports the engine's mover sets instead.
  */
 
 import fs from 'node:fs';
@@ -263,7 +269,10 @@ function printScene(result) {
   }
   if (result.entityInventory) {
     const totals = result.entityInventory.totals;
-    console.log(`  scene total : entities ${totals.entities} · LabelGraphics ${totals.labelGraphics} (${totals.shownLabelGraphics} show=true) · primitive labels ${totals.primitiveLabels}`);
+    if (totals.entities === undefined)
+      console.log(`  scene total : mover sets ${totals.moverSets} · instances ${totals.moverInstances}`);
+    else
+      console.log(`  scene total : entities ${totals.entities} · LabelGraphics ${totals.labelGraphics} (${totals.shownLabelGraphics} show=true) · primitive labels ${totals.primitiveLabels}`);
   }
   for (const phaseName of ['motion', 'rest']) {
     const phase = result.samples?.[phaseName];
@@ -345,33 +354,29 @@ async function installPageInstrumentation(page) {
 async function waitForApp(page) {
   await page.goto(APP_URL, { waitUntil: 'domcontentloaded', timeout: 60_000 });
   await page.waitForFunction(
-    () => Boolean(window.__godsEyeView?.viewer && window.__godsEyeView?.dataManager),
+    () => Boolean(window.__godsEyeView?.layers && window.__godsEyeView?.dataManager),
     { timeout: 60_000 },
   );
   await page.evaluate(() => {
-    const viewer = window.__godsEyeView.viewer;
-    try { viewer.camera.cancelFlight(); } catch { /* no flight */ }
-    try { viewer.scene.tweens?.removeAll?.(); } catch { /* no tween collection */ }
+    const { engine, viewer } = window.__godsEyeView;
+    try { engine.camera.cancelFlight(); } catch { /* no flight */ }
+    try { viewer?.scene.tweens?.removeAll?.(); } catch { /* no tween collection */ }
   });
   await sleep(1_250);
 }
 
 async function setCamera(page, camera) {
   if (!camera) return;
-  await page.evaluate(([lon, lat, height, heading, pitch]) => {
-    const viewer = window.__godsEyeView.viewer;
-    const ellipsoid = viewer.scene.globe.ellipsoid;
-    viewer.camera.cancelFlight?.();
-    viewer.scene.tweens?.removeAll?.();
-    viewer.camera.setView({
-      destination: ellipsoid.cartographicToCartesian({
-        longitude: lon * Math.PI / 180,
-        latitude: lat * Math.PI / 180,
-        height,
-      }),
+  await page.evaluate(async ([lon, lat, height, heading, pitch]) => {
+    const { engine, viewer } = window.__godsEyeView;
+    const geo = await import('/src/geo/index.js');
+    engine.camera.cancelFlight();
+    viewer?.scene.tweens?.removeAll?.();
+    engine.camera.setView({
+      destination: geo.cartesian3.fromDegrees(lon, lat, height),
       orientation: { heading, pitch, roll: 0 },
     });
-    viewer.scene.requestRender?.();
+    engine.render.request('qa-overlay-baseline');
   }, camera);
 }
 
@@ -411,7 +416,19 @@ async function waitForLayer(page, layerId) {
 
 async function readEntityInventory(page) {
   return page.evaluate(() => {
-    const viewer = window.__godsEyeView.viewer;
+    const { viewer, layers } = window.__godsEyeView;
+    // Without a Cesium viewer (Navara): the engine's mover sets.
+    if (!viewer) {
+      const sets = layers.movers();
+      return {
+        totals: {
+          moverSets: sets.length,
+          moverInstances: sets.reduce((sum, set) => sum + set.count, 0),
+        },
+        collections: sets,
+        primitiveTypes: {},
+      };
+    }
     const time = viewer.clock.currentTime;
     const collections = [];
     const totals = {
@@ -605,7 +622,7 @@ async function prepareTrackedFlight(page, cockpit) {
   });
   if (!tracked.ok) return `Civil tracking unavailable (${tracked.reason})`;
   try {
-    await page.waitForFunction(() => Boolean(window.__godsEyeView.viewer.trackedEntity?.position), { timeout: 10_000 });
+    await page.waitForFunction(() => Boolean(window.__godsEyeView.layers.following()), { timeout: 10_000 });
   } catch {
     return 'Civil tracking did not create a tracked entity';
   }
@@ -638,7 +655,7 @@ async function prepareMission(page) {
   });
   if (!selected) return 'Mission roster did not expose a selectable mission';
   try {
-    await page.waitForFunction(() => String(window.__godsEyeView.viewer.selectedEntity?.id || '').startsWith('rocket-launch:'), { timeout: 10_000 });
+    await page.waitForFunction(() => String(window.__godsEyeView.viewer?.selectedEntity?.id || '').startsWith('rocket-launch:'), { timeout: 10_000 });
   } catch {
     return 'Mission selection did not reach the Cesium selected entity';
   }
@@ -647,6 +664,12 @@ async function prepareMission(page) {
 }
 
 async function prepareScene(page, scene) {
+  const missing = await page.evaluate(
+    (ids) => ids.filter((id) => !window.__godsEyeView.layers.available(id)),
+    scene.layers,
+  );
+  if (missing.length)
+    return { layerActivations: [], skipReason: `no ${missing.join(', ')} on ${ENGINE}` };
   if (scene.camera) await setCamera(page, scene.camera);
   const layerActivations = await activateLayers(page, scene.layers);
   let skipReason = null;
@@ -678,7 +701,28 @@ async function readCanvasSummary(page) {
 
 async function samplePhase(page, moving) {
   const raw = await page.evaluate(async ({ durationMs, movingCamera }) => {
-    const viewer = window.__godsEyeView.viewer;
+    const { engine } = window.__godsEyeView;
+    // Cesium's rotateRight / rotateUp: the camera turned about the axis
+    // through the globe centre along its up (right) vector.
+    const rotate = (axis, angle) => {
+      const pose = engine.camera.pose();
+      const len = Math.hypot(axis.x, axis.y, axis.z);
+      const [ux, uy, uz] = [axis.x / len, axis.y / len, axis.z / len];
+      const cos = Math.cos(angle);
+      const sin = Math.sin(angle);
+      const turn = (v) => {
+        const dot = ux * v.x + uy * v.y + uz * v.z;
+        return {
+          x: v.x * cos + (uy * v.z - uz * v.y) * sin + ux * dot * (1 - cos),
+          y: v.y * cos + (uz * v.x - ux * v.z) * sin + uy * dot * (1 - cos),
+          z: v.z * cos + (ux * v.y - uy * v.x) * sin + uz * dot * (1 - cos),
+        };
+      };
+      engine.camera.setView({
+        destination: turn(pose.position),
+        orientation: { direction: turn(pose.direction), up: turn(pose.up) },
+      });
+    };
     const instrumentation = window.__overlayBaselineInstrumentation;
     instrumentation?.reset?.();
     const intervals = [];
@@ -690,10 +734,11 @@ async function samplePhase(page, moving) {
         lastFrameAt = now;
         const elapsed = now - startedAt;
         if (movingCamera) {
-          viewer.camera.rotateRight(0.00035);
-          viewer.camera.rotateUp(0.00008 * Math.sin(elapsed / 600));
+          const pose = engine.camera.pose();
+          rotate(pose.up, -0.00035);
+          rotate(engine.camera.pose().right, 0.00008 * Math.sin(elapsed / 600));
         }
-        viewer.scene.requestRender?.();
+        engine.render.request('qa-overlay-baseline');
         if (elapsed >= durationMs) resolve();
         else requestAnimationFrame(step);
       };
@@ -813,7 +858,12 @@ async function runScene(browser, scene, shotsDir) {
   }
 }
 
-const APP_URL = getOpt('--url', DEFAULT_URL);
+const ENGINE = process.argv.find((value) => value.startsWith('--engine='))?.slice(9) ?? 'cesium';
+const APP_URL = (() => {
+  const url = new URL(getOpt('--url', DEFAULT_URL));
+  url.searchParams.set('engine', ENGINE);
+  return url.href;
+})();
 const DPR = Number(getOpt('--dpr', '1'));
 const JSON_PATH = getOpt('--json');
 const SCREENSHOTS_DIR = getOpt('--screenshots-dir');
