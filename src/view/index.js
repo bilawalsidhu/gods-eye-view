@@ -37,6 +37,8 @@ export const VIEW_MAPS = Object.freeze([
   'bing-labels',
   'esri-imagery',
   'osm',
+  'kartverket-topo',
+  'kartverket-nautical',
 ]);
 
 /**

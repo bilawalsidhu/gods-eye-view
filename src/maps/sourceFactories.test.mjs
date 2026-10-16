@@ -1,7 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as Cesium from 'cesium';
-import { createIonImagery } from './imagery.js';
+import {
+  createIonImagery,
+  createKartverketImagery,
+  KARTVERKET_ATTRIBUTION_HTML,
+} from './imagery.js';
 import { createWorldTerrain, createKeylessTerrain } from './terrain.js';
 import { createDefaultMapSources } from './defaultSources.js';
 
@@ -316,4 +320,32 @@ test('both Google 3D routes keep tiles drawing while draped imagery loads', asyn
   assert.equal(calls[1][0].accessToken, 'token');
   assert.equal(calls[1][1].asynchronouslyLoadImagery, true);
   assert.equal(calls[1][1].enableCollision, true);
+});
+
+test('Kartverket topo and nautical charts are keyless web-mercator tiles bounded to their extent, falling back to OSM', () => {
+  const { sources } = createDefaultMapSources();
+  for (const [id, layer] of [
+    ['kartverket-topo', 'topo'],
+    ['kartverket-nautical', 'sjokartraster'],
+  ]) {
+    const source = sources.find(({ descriptor }) => descriptor.id === id);
+    assert.equal(source.available, true, `${id} needs no key`);
+    assert.equal(source.terrain.id, 'keyless');
+    assert.equal(source.credit, KARTVERKET_ATTRIBUTION_HTML);
+    assert.deepEqual(source.tileFailureFallback.id, 'osm');
+    const provider = source.imagery();
+    assert.ok(provider instanceof Cesium.UrlTemplateImageryProvider);
+    assert.ok(provider.tilingScheme instanceof Cesium.WebMercatorTilingScheme);
+    assert.equal(provider.maximumLevel, 18);
+    assert.equal(
+      provider.url,
+      `https://cache.kartverket.no/v1/wmts/1.0.0/${layer}/default/webmercator/{z}/{y}/{x}.png`,
+    );
+    // Oslo is inside both extents; New York is outside them.
+    const oslo = Cesium.Cartographic.fromDegrees(10.75, 59.91);
+    const newYork = Cesium.Cartographic.fromDegrees(-74, 40.7);
+    assert.ok(Cesium.Rectangle.contains(provider.rectangle, oslo));
+    assert.ok(!Cesium.Rectangle.contains(provider.rectangle, newYork));
+  }
+  assert.throws(() => createKartverketImagery('norge-i-bilder'), /Unknown/);
 });

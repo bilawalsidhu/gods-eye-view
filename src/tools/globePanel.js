@@ -33,6 +33,7 @@ const PROVIDER_ORIGINS = Object.freeze([
   'https://services.arcgisonline.com',
   'https://server.arcgisonline.com',
   'https://tile.openstreetmap.org',
+  'https://cache.kartverket.no',
   'https://tiles.openfreemap.org',
   'https://gibs.earthdata.nasa.gov',
   'https://fonts.googleapis.com',
