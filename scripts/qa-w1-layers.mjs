@@ -493,6 +493,80 @@ try {
             JSON.stringify(sharedState),
           );
         }
+        // 4. tracking under navigation, the same on both engines: north-up
+        // and tilt keep the follow; a city pill (the place search's fly-to)
+        // and voice fly_to_location release it.
+        const followedId = () =>
+          page.evaluate(
+            () =>
+              window.__godsEyeView.layers.selected('flights')?.icao24 ?? null,
+          );
+        const isFollowing = () =>
+          page.evaluate(() => window.__godsEyeView.layers.following() !== null);
+        const retrack = async () => {
+          await page.evaluate(async (objectId) => {
+            window.__godsEyeView.dataManager.layers
+              .get('flights')
+              .module.trackById(objectId);
+          }, id);
+          await new Promise((resolve) => setTimeout(resolve, 2500));
+        };
+        report.sections[4].navigation = {};
+        for (const button of ['#north-up-view', '#tilt-map-view']) {
+          await retrack();
+          await page.click(button);
+          await new Promise((resolve) => setTimeout(resolve, 2500));
+          const state = {
+            selected: await followedId(),
+            following: await isFollowing(),
+          };
+          report.sections[4].navigation[button] = state;
+          check(
+            `4 tracking: ${button} keeps the follow`,
+            state.selected === id && state.following,
+            JSON.stringify(state),
+          );
+        }
+        await retrack();
+        // The pills sit in a collapsed row: a DOM click, as the row's own.
+        const pill = await page.evaluate(() => {
+          const button = document.querySelector('.location-pill');
+          button?.click();
+          return button?.dataset.locationId ?? null;
+        });
+        if (pill) {
+          await new Promise((resolve) => setTimeout(resolve, 2500));
+          const state = {
+            selected: await followedId(),
+            following: await isFollowing(),
+          };
+          report.sections[4].navigation.pill = state;
+          check(
+            '4 tracking: a city pill (search fly-to) releases the follow and the selection',
+            !state.following && state.selected === null,
+            JSON.stringify(state),
+          );
+        }
+        await retrack();
+        const voiceFly = await page.evaluate(async () => {
+          const answer = await window.__gevVoiceCommands?.runner?.(
+            'fly_to_location',
+            { latitude: 48.8566, longitude: 2.3522, rangeM: 20_000 },
+          );
+          return { ok: answer?.ok !== false, error: answer?.error ?? null };
+        });
+        await new Promise((resolve) => setTimeout(resolve, 1500));
+        const voiceState = {
+          ...voiceFly,
+          selected: await followedId(),
+          following: await isFollowing(),
+        };
+        report.sections[4].navigation.voiceFlyTo = voiceState;
+        check(
+          '4 tracking: voice fly_to_location releases the follow and the selection',
+          voiceFly.ok && !voiceState.following && voiceState.selected === null,
+          JSON.stringify(voiceState),
+        );
         await page.keyboard.press('Escape');
       } else {
         check('2 click: an object to click at the city pose', false);
