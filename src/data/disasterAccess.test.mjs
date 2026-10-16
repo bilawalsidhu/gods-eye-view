@@ -32,26 +32,23 @@ test('missing access remains explicitly not assessed', () => {
   assert.deepEqual(packet.gaps, ['access-not-assessed']);
 });
 
-test(
-  'a fresh blocked segment invalidates an otherwise supported candidate',
-  () => {
-    const route = { id: 'relief-a', segmentIds: ['a', 'b', 'c'] };
-    const baseline = [segment('a'), segment('b'), segment('c')];
+test('blocked access invalidates an otherwise supported route', () => {
+  const route = { id: 'relief-a', segmentIds: ['a', 'b', 'c'] };
+  const baseline = [segment('a'), segment('b'), segment('c')];
 
-    assert.equal(
-      evaluateDisasterRouteSupport(route, baseline).support,
-      'supported',
-    );
+  assert.equal(
+    evaluateDisasterRouteSupport(route, baseline).support,
+    'supported',
+  );
 
-    const outage = baseline.map((entry) =>
-      entry.id === 'b' ? segment('b', 'blocked') : entry,
-    );
-    const result = evaluateDisasterRouteSupport(route, outage);
+  const outage = baseline.map((entry) =>
+    entry.id === 'b' ? segment('b', 'blocked') : entry,
+  );
+  const result = evaluateDisasterRouteSupport(route, outage);
 
-    assert.equal(result.support, 'unsupported');
-    assert.deepEqual(result.reasons, ['blocked:b']);
-  },
-);
+  assert.equal(result.support, 'unsupported');
+  assert.deepEqual(result.reasons, ['blocked:b']);
+});
 
 test('stale open evidence cannot support a current-open route claim', () => {
   const result = evaluateDisasterRouteSupport(
@@ -117,18 +114,15 @@ test('candidate with no mapped access segments is unknown', () => {
   assert.deepEqual(result.reasons, ['route-segments-not-mapped']);
 });
 
-test(
-  'packet results use evidence-support language, never a safety verdict',
-  () => {
-    const packet = buildDisasterAccessPacket({
-      accessSegments: [segment('a')],
-      candidateRoutes: [{ id: 'relief-a', segmentIds: ['a'] }],
-    });
+test('packet labels support without asserting safety', () => {
+  const packet = buildDisasterAccessPacket({
+    accessSegments: [segment('a')],
+    candidateRoutes: [{ id: 'relief-a', segmentIds: ['a'] }],
+  });
 
-    assert.equal(packet.routes[0].support, 'supported');
-    assert.equal(JSON.stringify(packet).toLowerCase().includes('safe'), false);
-  },
-);
+  assert.equal(packet.routes[0].support, 'supported');
+  assert.equal(JSON.stringify(packet).toLowerCase().includes('safe'), false);
+});
 
 test('malformed route references cannot become fully supported', () => {
   for (const ref of [null, undefined, ' ', false, 0, {}, []]) {
@@ -176,34 +170,28 @@ test('unmapped route receipt keeps its segment identifiers immutable', () => {
   assert.deepEqual(result.segmentIds, []);
 });
 
-test(
-  'sparse route references cannot disappear from the support decision',
-  () => {
-    const refs = Array(2);
-    refs[0] = 'bridge';
-    const result = evaluateDisasterRouteSupport(
-      { id: 'relief-bridge', segmentIds: refs },
-      [segment('bridge')],
-    );
-    assert.equal(result.support, 'unknown');
-    assert.deepEqual(result.reasons, ['invalid-route-segment-refs']);
-  },
-);
+test('sparse segment references fail closed', () => {
+  const refs = Array(2);
+  refs[0] = 'bridge';
+  const result = evaluateDisasterRouteSupport(
+    { id: 'relief-bridge', segmentIds: refs },
+    [segment('bridge')],
+  );
+  assert.equal(result.support, 'unknown');
+  assert.deepEqual(result.reasons, ['invalid-route-segment-refs']);
+});
 
-test(
-  'valid trimmed duplicate references preserve support and input ownership',
-  () => {
-    const refs = [' bridge ', 'bridge'];
-    const result = evaluateDisasterRouteSupport(
-      { id: 'relief-bridge', segmentIds: refs },
-      [segment('bridge')],
-    );
-    assert.equal(result.support, 'supported');
-    assert.deepEqual(result.segmentIds, ['bridge']);
-    assert.deepEqual(result.reasons, []);
-    assert.deepEqual(refs, [' bridge ', 'bridge']);
-    refs.push('later');
-    assert.deepEqual(result.segmentIds, ['bridge']);
-    assert.equal(Object.isFrozen(result.segmentIds), true);
-  },
-);
+test('duplicate references preserve support and input ownership', () => {
+  const refs = [' bridge ', 'bridge'];
+  const result = evaluateDisasterRouteSupport(
+    { id: 'relief-bridge', segmentIds: refs },
+    [segment('bridge')],
+  );
+  assert.equal(result.support, 'supported');
+  assert.deepEqual(result.segmentIds, ['bridge']);
+  assert.deepEqual(result.reasons, []);
+  assert.deepEqual(refs, [' bridge ', 'bridge']);
+  refs.push('later');
+  assert.deepEqual(result.segmentIds, ['bridge']);
+  assert.equal(Object.isFrozen(result.segmentIds), true);
+});
