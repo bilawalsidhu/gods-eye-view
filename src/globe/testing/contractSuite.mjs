@@ -1210,6 +1210,7 @@ export function createContractSuite(
             return count;
           };
           await until(() => modelPixels() > 150, 'the model drawn');
+          ensure(models.ready(), 'a drawn model set is not ready()');
         } finally {
           for (const set of sets) set.destroy();
         }

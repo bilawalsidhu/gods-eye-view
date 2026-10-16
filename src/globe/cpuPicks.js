@@ -42,14 +42,22 @@ const segmentT = (p, a, b) => {
     : 0;
 };
 
-// scaleByDistance [nearM, nearScale, farM, farScale] at `distance`, linear
-// between near and far as the Navara mover shader draws it.
-function distanceScale(scaleByDistance, distance) {
+// scaleByDistance [nearM, nearScale, farM, farScale] at `distance`, as
+// Cesium's NearFarScalar and the Navara mover shader draw it: over the
+// squared distance, eased by ^0.2.
+export function distanceScale(scaleByDistance, distance) {
   if (!scaleByDistance) return 1;
   const [near, nearScale, far, farScale] = scaleByDistance;
-  const t = Math.min(
-    1,
-    Math.max(0, (distance - near) / Math.max(far - near, 1e-6)),
+  const t = Math.pow(
+    Math.min(
+      1,
+      Math.max(
+        0,
+        (distance * distance - near * near) /
+          Math.max(far * far - near * near, 1e-6),
+      ),
+    ),
+    0.2,
   );
   return nearScale + (farScale - nearScale) * t;
 }

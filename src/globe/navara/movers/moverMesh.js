@@ -50,12 +50,15 @@ vec4 mvCenter = modelViewMatrix * instanceMatrix * vec4(0.0, 0.0, 0.0, 1.0);
 float gevScale = gevStyle.y;
 float gevDistance = length(mvCenter.xyz);
 if (uGevHasScaleByDistance > 0.5) {
+  // Cesium's czm_nearFarScalar: over the squared distance, eased by ^0.2.
+  float gevNearSq = uGevScaleByDistance.x * uGevScaleByDistance.x;
+  float gevFarSq = uGevScaleByDistance.z * uGevScaleByDistance.z;
   float t = clamp(
-    (gevDistance - uGevScaleByDistance.x) /
-      max(uGevScaleByDistance.z - uGevScaleByDistance.x, 1e-6),
+    (gevDistance * gevDistance - gevNearSq) / max(gevFarSq - gevNearSq, 1e-6),
     0.0,
     1.0
   );
+  t = pow(t, 0.2);
   gevScale *= mix(uGevScaleByDistance.y, uGevScaleByDistance.w, t);
 }
 float gevSizePx = uGevSizePx * gevScale;
@@ -213,8 +216,15 @@ export function createMoverMesh(
     tGevSceneDepth: overlayUniforms.tGevSceneDepth,
     uGevResolution: overlayUniforms.uGevResolution,
   };
+  // A canvas atlas is there at once; a URL one once its image loads.
+  let textureReady = point || Boolean(options.sprite.atlas.canvas);
   const material = new MeshBasicMaterial({
-    map: point ? null : atlasTexture(options.sprite.atlas, onTextureLoad),
+    map: point
+      ? null
+      : atlasTexture(options.sprite.atlas, () => {
+          textureReady = true;
+          onTextureLoad();
+        }),
     transparent: true,
     alphaTest: 0.02,
     // Drawn after tone mapping, with no depth buffer: the shader tests the
@@ -260,6 +270,7 @@ export function createMoverMesh(
   return {
     mesh,
     uniforms,
+    ready: () => textureReady,
     origin: () => origin,
     /** Writes the changed instances; the origin starts at the first one. */
     commit(range) {

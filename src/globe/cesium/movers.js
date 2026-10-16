@@ -139,6 +139,7 @@ function spritePart(scene, options, store, factories, requestRender, owners) {
     .catch((error) => console.warn(`[movers] ${id}: atlas failed`, error));
   return {
     primitive: collection,
+    ready: () => cells !== null,
     commit(range) {
       if (cells && range) apply(range.from, range.to);
       requestRender('movers');
@@ -254,6 +255,11 @@ function modelPart(options, store, factories, requestRender, owners) {
   };
   return {
     primitive: collection,
+    ready() {
+      for (let index = 0; index < store.count; index++)
+        if (!models[index]?.ready) return false;
+      return true;
+    },
     commit(range) {
       if (range)
         for (let index = range.from; index < range.to; index++) {
@@ -308,6 +314,7 @@ export function createCesiumMovers(
     rootCollection().add(primitive, at);
     return {
       primitive,
+      ready: part.ready,
       commit: () => part.commit(store.dirty()),
       destroy() {
         part.destroy();
