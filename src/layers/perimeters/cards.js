@@ -11,20 +11,26 @@ export function containmentAccent(containedPct) {
   return '#8bc34a';
 }
 
-/** Shoelace area (degree², sign dropped) — relative sizes only. */
+/** Shoelace area along short longitude edges (degree², relative sizes only). */
 function ringArea(ring) {
   let sum = 0;
-  for (let i = 0; i < ring.length - 1; i++) {
-    const [x1, y1] = ring[i];
-    const [x2, y2] = ring[i + 1];
+  let [x1, y1] = ring[0];
+  for (let i = 1; i < ring.length; i++) {
+    let delta = ring[i][0] - ring[i - 1][0];
+    if (delta > 180) delta -= 360;
+    else if (delta < -180) delta += 360;
+    const x2 = x1 + delta;
+    const y2 = ring[i][1];
     sum += x1 * y2 - x2 * y1;
+    x1 = x2;
+    y1 = y2;
   }
   return Math.abs(sum / 2);
 }
 
 /**
- * Anchor point for the incident card: the centroid of the largest polygon's
- * outer ring. Degrees, so callers own the Cartesian conversion.
+ * Anchor point for the incident card: the vertex mean of the largest polygon's
+ * outer ring, with circular longitude. Callers own the Cartesian conversion.
  * @param {Array<Array<Array<[number, number]>>>} polygons - Normalized rows' polygons.
  * @returns {{lon: number, lat: number}}
  */
@@ -41,14 +47,17 @@ export function perimeterAnchorDegrees(polygons) {
   }
   // Vertex mean over the closed ring (first == last point dropped): perimeters
   // are compact enough that this stays inside or near the polygon.
-  let lon = 0;
+  let sinLon = 0;
+  let cosLon = 0;
   let lat = 0;
   const count = best.length - 1;
+  const toRad = Math.PI / 180;
   for (let i = 0; i < count; i++) {
-    lon += best[i][0];
+    sinLon += Math.sin(best[i][0] * toRad);
+    cosLon += Math.cos(best[i][0] * toRad);
     lat += best[i][1];
   }
-  return { lon: lon / count, lat: lat / count };
+  return { lon: Math.atan2(sinLon, cosLon) / toRad, lat: lat / count };
 }
 
 /**
