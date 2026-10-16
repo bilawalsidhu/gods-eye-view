@@ -1,7 +1,5 @@
 # Changelog
 
-- Add Acaray and Yacyretá dam geometries from OpenStreetMap to the existing Dams layer, with source provenance and a corrected OpenStreetMap source label.
-
 - Local FM seek finds stations after wrapping around 87.5–108 MHz, covers both
   band edges, skips the starting station and rejects spectra from an earlier
   tune (Aditya, @Rohilalala, #1174).
