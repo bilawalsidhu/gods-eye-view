@@ -41,7 +41,8 @@ for (const index of [0, 1]) test(`${index ? 'dams' : 'datacenters'} introduce th
   t.mock.method(globalThis, 'fetch', async () => ({ ok: true, text: async () => JSON.stringify({ type: 'Feature', id: 'test', properties: { name: 'Site' }, geometry: { type: 'Polygon', coordinates: [[[0, 0], [0.01, 0], [0, 0.01], [0, 0]]] } }) }));
   const layer = createInfrastructureLayers({ overlayHost, registerEntityContext: noop, selectEntityContext: noop, clearSelectedEntityContextForLayer: noop, removeEntityContextsForLayer: noop, governorRequestRender: noop, showOsmCredit, hideOsmCredit })[index];
   await layer.enable(v);
-  assert.equal(layer.getStats().count, 1);
+  // Dams read the OpenStreetMap file and Norway's NVE supplement; the stub answers both.
+  assert.equal(layer.getStats().count, index ? 2 : 1);
   assertCredit(v);
   layer.destroy(v);
   assert.equal(v.credits.filter(c => c.showOnScreen).length, 0);
