@@ -244,8 +244,38 @@ async function runCesium(page, url) {
             photoreal: { kind: 'photoreal', tileset: debug.tileset },
           }
         : null;
+
+      // RGBA of the last drawn frame in a CSS-pixel box (both engines keep
+      // their drawing buffer), and 2D canvases for sprite atlases.
+      const readRegion = (x, y, width, height) => {
+        const source = engine.host.canvas;
+        const ratio = source.width / source.clientWidth || 1;
+        const probe = document.createElement('canvas');
+        probe.width = width;
+        probe.height = height;
+        const context = probe.getContext('2d', { willReadFrequently: true });
+        context.drawImage(
+          source,
+          x * ratio,
+          y * ratio,
+          width * ratio,
+          height * ratio,
+          0,
+          0,
+          width,
+          height,
+        );
+        return context.getImageData(0, 0, width, height).data;
+      };
+      const makeCanvas = (width, height) =>
+        Object.assign(document.createElement('canvas'), { width, height });
       const results = (
-        await runContractSuite(engine, { waitFrames, mapSources })
+        await runContractSuite(engine, {
+          waitFrames,
+          mapSources,
+          readRegion,
+          makeCanvas,
+        })
       ).map(({ name, ok, error }) => ({ name, ok, error: error?.message }));
       // Reapplying the active stack sends its sources to the engine again.
       if (debug.mapStackController)
@@ -553,8 +583,38 @@ async function runNavara(page, url, consoleErrors) {
           photoreal: { kind: 'photoreal', googleApiKey: qa.googleApiKey },
         }
       : null;
+
+    // RGBA of the last drawn frame in a CSS-pixel box (both engines keep
+    // their drawing buffer), and 2D canvases for sprite atlases.
+    const readRegion = (x, y, width, height) => {
+      const source = engine.host.canvas;
+      const ratio = source.width / source.clientWidth || 1;
+      const probe = document.createElement('canvas');
+      probe.width = width;
+      probe.height = height;
+      const context = probe.getContext('2d', { willReadFrequently: true });
+      context.drawImage(
+        source,
+        x * ratio,
+        y * ratio,
+        width * ratio,
+        height * ratio,
+        0,
+        0,
+        width,
+        height,
+      );
+      return context.getImageData(0, 0, width, height).data;
+    };
+    const makeCanvas = (width, height) =>
+      Object.assign(document.createElement('canvas'), { width, height });
     const results = (
-      await runContractSuite(engine, { waitFrames, mapSources })
+      await runContractSuite(engine, {
+        waitFrames,
+        mapSources,
+        readRegion,
+        makeCanvas,
+      })
     ).map(({ name, ok, error }) => ({ name, ok, error: error?.message }));
 
     const extra = [];

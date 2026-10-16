@@ -440,3 +440,37 @@ test('a fake engine can share an app clock', async () => {
   engine.fake.frame();
   assert.equal(appClock.frameTime(), 6000);
 });
+
+test('fake movers keep their sets and instances for layer tests', () => {
+  const engine = createFakeEngine();
+  const set = engine.movers.createSet({
+    id: 'flights',
+    kind: 'point',
+    capacity: 4,
+    point: { sizePx: 6 },
+  });
+  set.set(0, { position: { x: 1, y: 2, z: 3 }, color: [1, 0, 0, 1] });
+  set.setCount(1);
+  assert.deepEqual(engine.movers.list(), [
+    { id: 'flights', kind: 'point', count: 1, capacity: 4 },
+  ]);
+  const before = engine.fake.renderRequests;
+  set.commit();
+  assert.equal(engine.fake.renderRequests, before + 1);
+  const stored = engine.fake.moverSet('flights');
+  assert.equal(stored.commits, 1);
+  assert.deepEqual([...stored.store.colors.subarray(0, 4)], [1, 0, 0, 1]);
+  assert.throws(
+    () =>
+      engine.movers.createSet({
+        id: 'flights',
+        kind: 'point',
+        capacity: 1,
+        point: { sizePx: 1 },
+      }),
+    /already/,
+  );
+  set.destroy();
+  assert.deepEqual(engine.movers.list(), []);
+  assert.equal(engine.fake.moverSet('flights'), undefined);
+});

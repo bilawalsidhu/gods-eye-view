@@ -1067,5 +1067,12 @@
   "src/tooling/mainChunkComposition.test.mjs",
   "scripts/qa-w1-baseline.mjs",
   "src/tooling/initialChunkGuard.test.mjs",
-  "src/tooling/w1Baseline.test.mjs"
+  "src/tooling/w1Baseline.test.mjs",
+  "src/globe/movers.test.mjs",
+  "src/globe/cesium/movers.test.mjs",
+  "src/globe/navara/movers/pack.test.mjs",
+  "src/globe/navara/movers/pickIds.test.mjs",
+  "src/globe/navara/movers/moverMesh.test.mjs",
+  "src/globe/navara/movers/modelMover.test.mjs",
+  "src/bench/syntheticFlights.test.mjs"
 ]

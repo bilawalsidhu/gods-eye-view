@@ -26,6 +26,15 @@
  * omitted). Reports every run and the medians. Headless numbers are
  * indicative: no display, no vsync, a software-composited headless window.
  * Provider keys are never printed. Exits 1 when a run fails.
+ *
+ * --scenario=movers (phase 3 Task 2) measures engine.movers instead of the
+ * flight: --count (10000) synthetic aircraft (src/bench/syntheticFlights.js,
+ * the same fleet on both engines) as one sprite set, every instance moved
+ * and committed every frame, at each --scene (global,city,orbit) with the
+ * app's layers off; frame times over 10 s after a 3 s warm-up while the
+ * engine renders continuously, and the JS heap. Cesium draws with the app's
+ * default style (no post stages on) and without its 60 fps cap for the
+ * measurement; Navara with --navara-look (pass minimal for the gate).
  */
 import { spawn } from 'node:child_process';
 import fs from 'node:fs';
@@ -59,6 +68,30 @@ if (!['dev', 'preview'].includes(serverKind)) {
 }
 const RUNS = Math.max(1, Number(argument('runs') ?? 3));
 const outFile = argument('out');
+const scenario = argument('scenario') ?? 'flight';
+if (!['flight', 'movers'].includes(scenario)) {
+  console.error(`Unknown scenario "${scenario}"; known: flight, movers`);
+  process.exit(2);
+}
+const MOVER_COUNT = Number(argument('count') ?? 10000);
+const MOVER_SCENES = (argument('scene') ?? 'global,city,orbit').split(',');
+// Camera poses (degrees, metres) of the movers scenario.
+const SCENES = {
+  global: { lat: 20, lon: -40, height: 20_000_000, pitch: -90, near: null },
+  city: {
+    lat: 40.64,
+    lon: -73.78,
+    height: 3_000,
+    pitch: -30,
+    near: { lat: 40.7, lng: -73.8, radiusM: 30_000, count: 2_000 },
+  },
+  orbit: { lat: 35, lon: -95, height: 3_000_000, pitch: -90, near: null },
+};
+for (const scene of MOVER_SCENES)
+  if (!SCENES[scene]) {
+    console.error(`Unknown scene "${scene}"; known: ${Object.keys(SCENES)}`);
+    process.exit(2);
+  }
 const navaraLook = argument('navara-look');
 if (navaraLook && !['cinematic', 'photoreal', 'minimal'].includes(navaraLook)) {
   console.error(
@@ -278,6 +311,110 @@ async function runFlight(flight) {
   };
 }
 
+/**
+ * In the page: the movers scenario at one scene. Layers off, the camera at
+ * the scene, tiles loaded; then `count` aircraft as one sprite set, moved and
+ * committed on every frame while the engine renders continuously.
+ */
+async function runMovers({ scene, count, warmMs, measureMs }) {
+  const { engine, dataManager, viewer } = window.__godsEyeView;
+  const geo = await import('/src/geo/index.js');
+  // The app caps Cesium at 60 fps (viewer.targetFrameRate); Navara has no
+  // cap. Uncapped for the measurement, so both report their frame cost.
+  const targetFrameRate = viewer?.targetFrameRate;
+  if (viewer) viewer.targetFrameRate = undefined;
+  const { createSyntheticFlights } =
+    await import('/src/bench/syntheticFlights.js');
+  const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+  for (const [id] of dataManager?.layers ?? [])
+    if (dataManager.isEnabled?.(id)) await dataManager.setEnabled(id, false);
+  const rad = geo.math.toRadians;
+  engine.camera.setView({
+    destination: geo.cartesian3.fromDegrees(scene.lon, scene.lat, scene.height),
+    orientation: { heading: 0, pitch: rad(scene.pitch), roll: 0 },
+  });
+  engine.render.request('bench');
+  const waitStart = performance.now();
+  let loadedSince = null;
+  while (performance.now() - waitStart < 60000) {
+    await sleep(100);
+    if (!engine.surface.tilesLoaded()) loadedSince = null;
+    else if (loadedSince == null) loadedSince = performance.now();
+    else if (performance.now() - loadedSince >= 1500) break;
+  }
+  const atlas = document.createElement('canvas');
+  atlas.width = 32;
+  atlas.height = 32;
+  const context = atlas.getContext('2d');
+  context.fillStyle = '#ffffff';
+  context.beginPath();
+  context.moveTo(16, 1);
+  context.lineTo(29, 30);
+  context.lineTo(16, 23);
+  context.lineTo(3, 30);
+  context.closePath();
+  context.fill();
+  const flights = createSyntheticFlights({ count, seed: 1, near: scene.near });
+  const set = engine.movers.createSet({
+    id: 'bench-movers',
+    kind: 'sprite',
+    capacity: count,
+    sprite: {
+      atlas: { canvas: atlas, cells: { plane: [0, 0, 1, 1] } },
+      sizePx: 16,
+    },
+  });
+  const position = geo.cartesian3.create();
+  const fields = { position, rotation: 0, color: [0.5, 0.86, 1, 1] };
+  let last = performance.now();
+  const step = () => {
+    const now = performance.now();
+    flights.advance((now - last) / 1000);
+    last = now;
+    for (let index = 0; index < count; index++) {
+      geo.cartesian3.fromDegrees(
+        flights.lon[index],
+        flights.lat[index],
+        flights.alt[index],
+        geo.ellipsoid.WGS84,
+        position,
+      );
+      fields.rotation = rad(-flights.heading[index]);
+      set.set(index, fields);
+    }
+    set.setCount(count);
+    set.commit();
+  };
+  const memory = () => performance.memory?.usedJSHeapSize ?? null;
+  step();
+  const removeTick = engine.frames.preUpdate.addEventListener(step);
+  const times = [];
+  const removeFrame = engine.frames.postRender.addEventListener(() =>
+    times.push(performance.now()),
+  );
+  engine.render.setContinuous(true);
+  try {
+    await sleep(warmMs);
+    const heapBefore = memory();
+    const from = performance.now();
+    await sleep(measureMs);
+    const to = performance.now();
+    return {
+      startTilesMs: Math.round(loadedSince ? loadedSince - waitStart : -1),
+      wallMs: to - from,
+      times: times.filter((time) => time >= from && time <= to),
+      heapBefore,
+      heapAfter: memory(),
+    };
+  } finally {
+    engine.render.setContinuous(false);
+    if (viewer) viewer.targetFrameRate = targetFrameRate;
+    removeTick();
+    removeFrame();
+    set.destroy();
+  }
+}
+
 // --- Runner -----------------------------------------------------------------
 
 const quantile = (sorted, q) =>
@@ -347,6 +484,40 @@ async function runOnce(browser, baseUrl, engine) {
             window.__godsEyeView.engine.render.sharpen(),
           )
         : null;
+    if (scenario === 'movers') {
+      const scenes = {};
+      for (const name of MOVER_SCENES) {
+        const measured = await page.evaluate(runMovers, {
+          scene: SCENES[name],
+          count: MOVER_COUNT,
+          warmMs: 3000,
+          measureMs: 10000,
+        });
+        const deltas = measured.times
+          .slice(1)
+          .map((time, index) => time - measured.times[index])
+          .sort((a, b) => a - b);
+        scenes[name] = {
+          frames: measured.times.length,
+          fps: round((measured.times.length / measured.wallMs) * 1000),
+          p50: round(quantile(deltas, 0.5), 2),
+          p95: round(quantile(deltas, 0.95), 2),
+          max: round(deltas.at(-1), 1),
+          heapMB: round((measured.heapAfter ?? 0) / 1e6, 1),
+          heapGrowthMB: round(
+            ((measured.heapAfter ?? 0) - (measured.heapBefore ?? 0)) / 1e6,
+            1,
+          ),
+          startTilesMs: measured.startTilesMs,
+        };
+      }
+      return {
+        ok: errors.length === 0,
+        initialViewMs: round(initial.initialViewMs, 0),
+        scenes,
+        errors,
+      };
+    }
     const flight = await page.evaluate(runFlight, FLIGHT);
     const deltas = flight.times
       .slice(1)
@@ -405,6 +576,10 @@ const report = {
   navaraLook: navaraLook ?? 'default',
   navaraSharpen: navaraSharpenArg ?? 'default',
   runs: RUNS,
+  scenario,
+  ...(scenario === 'movers'
+    ? { count: MOVER_COUNT, scenes: MOVER_SCENES }
+    : {}),
   flight: FLIGHT,
   engines: {},
 };
@@ -437,17 +612,45 @@ try {
         );
       }
     }
-    const summary = {
-      initialViewMs: median(runs.map((run) => run.initialViewMs)),
-      engineReadyMs: median(runs.map((run) => run.engineReadyMs)),
-      flightP50: median(runs.map((run) => run.flight.p50)),
-      flightP95: median(runs.map((run) => run.flight.p95)),
-      flightMax: median(runs.map((run) => run.flight.max)),
-      flightFps: median(runs.map((run) => run.flight.fps)),
-    };
+    const summary =
+      scenario === 'movers'
+        ? Object.fromEntries(
+            MOVER_SCENES.map((name) => {
+              const of = (key) =>
+                median(runs.map((run) => run.scenes?.[name]?.[key]));
+              return [
+                name,
+                {
+                  p50: of('p50'),
+                  p95: of('p95'),
+                  max: of('max'),
+                  fps: of('fps'),
+                  heapMB: of('heapMB'),
+                  heapGrowthMB: of('heapGrowthMB'),
+                },
+              ];
+            }),
+          )
+        : flightSummary(runs);
     report.engines[engine] = { runs, median: summary };
     console.log(
       `[${engine}] median of ${runs.length}: ${JSON.stringify(summary)}`,
+    );
+  }
+  if (scenario === 'movers' && report.engines.cesium && report.engines.navara) {
+    report.gate = Object.fromEntries(
+      MOVER_SCENES.map((name) => {
+        const cesium = report.engines.cesium.median[name]?.p95;
+        const navara = report.engines.navara.median[name]?.p95;
+        const ratio = cesium && navara ? round(navara / cesium, 2) : null;
+        return [
+          name,
+          { cesium, navara, ratio, pass: ratio != null && ratio <= 1.1 },
+        ];
+      }),
+    );
+    console.log(
+      `[gate] p95 Navara / Cesium <= 1.1: ${JSON.stringify(report.gate)}`,
     );
   }
 } finally {
@@ -456,3 +659,14 @@ try {
 }
 if (outFile) fs.writeFileSync(outFile, `${JSON.stringify(report, null, 2)}\n`);
 process.exit(failed ? 1 : 0);
+
+function flightSummary(runs) {
+  return {
+    initialViewMs: median(runs.map((run) => run.initialViewMs)),
+    engineReadyMs: median(runs.map((run) => run.engineReadyMs)),
+    flightP50: median(runs.map((run) => run.flight.p50)),
+    flightP95: median(runs.map((run) => run.flight.p95)),
+    flightMax: median(runs.map((run) => run.flight.max)),
+    flightFps: median(runs.map((run) => run.flight.fps)),
+  };
+}

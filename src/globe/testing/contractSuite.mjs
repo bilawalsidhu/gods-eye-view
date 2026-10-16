@@ -70,14 +70,24 @@ const along = (origin, direction, distance) =>
 /**
  * @param {import('../contract.js').GlobeEngine} engine
  * @param {{ waitFrames: (count: number) => Promise<void>, maxWaitFrames?: number,
- *   mapSources?: { imagery: object[], photoreal: object } }} options
+ *   mapSources?: { imagery: object[], photoreal: object },
+ *   readRegion?: (x: number, y: number, width: number, height: number) => Uint8ClampedArray,
+ *   makeCanvas?: (width: number, height: number) => object }} options
  *   `mapSources` (two imagery sources and a photoreal one the engine can
  *   show) adds the maps checks; they leave photoreal tiles hidden.
+ *   `readRegion` (RGBA bytes of the last drawn frame in a CSS-pixel box) and
+ *   `makeCanvas` (a 2D canvas) add the pixel checks of drawn objects.
  * @returns {{ name: string, run: () => Promise<void> }[]}
  */
 export function createContractSuite(
   engine,
-  { waitFrames, maxWaitFrames = 240, mapSources = null },
+  {
+    waitFrames,
+    maxWaitFrames = 240,
+    mapSources = null,
+    readRegion = null,
+    makeCanvas = null,
+  },
 ) {
   if (typeof waitFrames !== 'function')
     throw new TypeError('createContractSuite needs a waitFrames(count) helper');
@@ -428,6 +438,157 @@ export function createContractSuite(
             ticksSincePreUpdate = 0;
           }
         }
+      },
+    ],
+    [
+      'movers: three sprites draw at their projections, hide, recolour and go',
+      async () => {
+        await nadirView(1e6);
+        const atlasCanvas = makeCanvas
+          ? makeCanvas(16, 16)
+          : { width: 16, height: 16 };
+        if (makeCanvas) {
+          const context = atlasCanvas.getContext('2d');
+          context.fillStyle = '#ffffff';
+          context.fillRect(0, 0, 16, 16);
+        }
+        const places = [
+          [20, 10],
+          [21.5, 10],
+          [20, 11.5],
+        ].map(([lon, lat]) => cartesian3.fromDegrees(lon, lat, 1000));
+        const set = engine.movers.createSet({
+          id: 'contract-sprites',
+          kind: 'sprite',
+          capacity: 3,
+          order: 100,
+          depthTest: 'always',
+          sprite: {
+            atlas: { canvas: atlasCanvas, cells: { box: [0, 0, 1, 1] } },
+            sizePx: 24,
+          },
+        });
+        const MAGENTA = [1, 0, 1, 1];
+        // Frames drawn in a window, with nothing asked of the engine.
+        const framesIn = async (ms) => {
+          let frames = 0;
+          const remove = engine.frames.postRender.addEventListener(
+            () => frames++,
+          );
+          await new Promise((resolve) => setTimeout(resolve, ms));
+          remove();
+          return frames;
+        };
+        const idleFrames = readRegion ? await framesIn(2000) : 0;
+        try {
+          places.forEach((position, index) =>
+            set.set(index, { position, color: MAGENTA, cell: 'box' }),
+          );
+          set.setCount(3);
+          set.commit();
+          ensure(set.count() === 3, `count ${set.count()}`);
+          const view = set.positionsView();
+          ensure(
+            view.length === 9 && view[3] === places[1].x,
+            'positionsView does not hold the positions',
+          );
+          ensure(
+            engine.movers
+              .list()
+              .some(
+                ({ id, count }) => id === 'contract-sprites' && count === 3,
+              ),
+            'movers.list() does not show the set',
+          );
+          if (!readRegion) return;
+          const screens = places.map((position) =>
+            engine.projector.worldToWindow(position),
+          );
+          // Pixels close to a colour in a 64 px box around a point: their
+          // count and centroid.
+          // A pure colour as drawn through either engine's tone mapping and
+          // grading (Navara's cinematic look desaturates): every full
+          // channel above 170 and at least 60 over every empty one.
+          const like = (colour, data, i) => {
+            let low = 0;
+            let high = 255;
+            for (let k = 0; k < 3; k++)
+              if (colour[k] > 0.5) high = Math.min(high, data[i + k]);
+              else low = Math.max(low, data[i + k]);
+            return high > 170 && high - low >= 60;
+          };
+          const find = (screen, colour) => {
+            const half = 32;
+            const x0 = Math.round(screen.x) - half;
+            const y0 = Math.round(screen.y) - half;
+            const data = readRegion(x0, y0, 2 * half, 2 * half);
+            let count = 0;
+            let sx = 0;
+            let sy = 0;
+            for (let y = 0; y < 2 * half; y++)
+              for (let x = 0; x < 2 * half; x++) {
+                const i = (y * 2 * half + x) * 4;
+                if (like(colour, data, i)) {
+                  count++;
+                  sx += x0 + x + 0.5;
+                  sy += y0 + y + 0.5;
+                }
+              }
+            return count
+              ? { count, x: sx / count, y: sy / count }
+              : { count, x: NaN, y: NaN };
+          };
+          // The atlas and the upload may take a few frames.
+          await until(
+            () => find(screens[0], MAGENTA).count > 100,
+            'the first sprite drawn',
+          );
+          screens.forEach((screen, index) => {
+            const seen = find(screen, MAGENTA);
+            ensure(
+              seen.count > 300,
+              `sprite ${index}: ${seen.count} magenta pixels, a 24 px square has 576`,
+            );
+            ensure(
+              Math.hypot(seen.x - screen.x, seen.y - screen.y) <= 2,
+              `sprite ${index} centred at ${seen.x.toFixed(1)}, ${seen.y.toFixed(1)}, projected ${screen.x.toFixed(1)}, ${screen.y.toFixed(1)}`,
+            );
+          });
+          set.set(1, { show: false });
+          set.set(0, { color: [0, 1, 0, 1] });
+          set.commit();
+          await until(
+            () => find(screens[1], MAGENTA).count < 10,
+            'the hidden sprite gone',
+          );
+          ensure(
+            find(screens[0], [0, 1, 0, 1]).count > 300,
+            'the recoloured sprite is not green',
+          );
+          ensure(
+            find(screens[2], MAGENTA).count > 300,
+            'an untouched sprite changed',
+          );
+          // Idle: once a commit has drawn, the set adds no frames (the
+          // page may draw for its own reasons: the app's other layers).
+          await settle(2);
+          const framesAfter = await framesIn(2000);
+          ensure(
+            framesAfter <= idleFrames + 1,
+            `${framesAfter} frames in 2 s after a commit, ${idleFrames} before the set`,
+          );
+          set.destroy();
+          await until(
+            () => find(screens[2], MAGENTA).count < 10,
+            'the destroyed set gone',
+          );
+        } finally {
+          set.destroy();
+        }
+        ensure(
+          !engine.movers.list().some(({ id }) => id === 'contract-sprites'),
+          'a destroyed set is still listed',
+        );
       },
     ],
     [

@@ -11,6 +11,7 @@ import { createCesiumCredits } from './credits.js';
 import { createCesiumFrames } from './frames.js';
 import { createCesiumInput } from './input.js';
 import { createCesiumMaps } from './maps.js';
+import { createCesiumMovers } from './movers.js';
 import { createCesiumPicker } from './picker.js';
 import { createCesiumProjector } from './projector.js';
 import { createCesiumRender } from './render.js';
@@ -45,6 +46,10 @@ export function createCesiumEngine(viewer, options = {}) {
     projector: createCesiumProjector(viewer),
     frames: createCesiumFrames(viewer),
     clock: createCesiumClock(viewer, options),
+    movers: createCesiumMovers(viewer, {
+      requestRender: (reason) => render.render.request(reason),
+      ...(options.moverFactories ? { factories: options.moverFactories } : {}),
+    }),
     render,
     surface: createCesiumSurface(viewer),
     input: createCesiumInput(viewer, options),

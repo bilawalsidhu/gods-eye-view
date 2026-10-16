@@ -243,6 +243,59 @@
  *   not); Navara on the view's preUpdate, which it emits on every turn of
  *   its loop.
  *
+ * @typedef {object} MoverSetOptions
+ *   A set of moving objects drawn as one batch (src/globe/movers.js checks
+ *   and defaults these):
+ * @property {string} id Unique among the engine's live sets.
+ * @property {'sprite'|'point'|'model'} kind
+ * @property {number} capacity The most instances the set holds.
+ * @property {number} [order] Draw order among sets (higher draws later, on
+ *   top); 0 by default.
+ * @property {'normal'|'always'|{ disableWithinM: number }} [depthTest]
+ *   'always' draws over the scene; { disableWithinM } skips the depth test for
+ *   instances closer to the camera than that (Cesium's
+ *   disableDepthTestDistance). 'normal' by default.
+ * @property {{ atlas: { url?: string, canvas?: object, cells: Object<string, number[]> },
+ *   sizePx: number, scaleByDistance?: number[] }} [sprite] An image atlas
+ *   whose cells are [u0, v0, u1, v1] in 0..1 (v down from the image top);
+ *   each sprite is a square of sizePx CSS px times its scale, times the
+ *   NearFarScalar [nearM, nearScale, farM, farScale] when given.
+ * @property {{ sizePx: number, outlinePx?: number, scaleByDistance?: number[] }} [point]
+ *   A filled disc of sizePx CSS px diameter with a dark outline.
+ * @property {{ url: string, minimumPixelSize?: number, maximumScale?: number,
+ *   colorBlend?: { mode: 'mix'|'replace', amount: number }, unlit?: boolean }} [model]
+ *   A glTF drawn per instance in metres, at least minimumPixelSize px.
+ * @property {boolean} [pickable]
+ *
+ * @typedef {object} MoverFields
+ *   One instance; omitted fields keep their value (defaults: white, scale 1,
+ *   rotation 0, the first atlas cell, shown, identity orientation).
+ * @property {Cartesian3} [position]
+ * @property {number} [rotation] Sprites: screen angle in radians,
+ *   counter-clockwise from screen up (Cesium's Billboard.rotation).
+ * @property {{ x: number, y: number, z: number, w: number }} [orientation]
+ *   Models: the model frame's rotation into Earth-fixed axes.
+ * @property {number[]} [color] rgba in 0..1; multiplies the sprite's texels.
+ * @property {number} [scale]
+ * @property {string} [cell] An atlas cell key.
+ * @property {boolean} [show]
+ * @property {string|number} [pickId] What a pick of this instance returns.
+ *
+ * @typedef {object} MoverSet
+ * @property {(index: number, fields: MoverFields) => void} set Stored only;
+ *   drawn after commit().
+ * @property {(count: number) => void} setCount Instances [0, count) draw.
+ * @property {() => number} count
+ * @property {() => void} commit Uploads what changed (one buffer write) and
+ *   requests a render; nothing else draws a frame.
+ * @property {() => Float64Array} positionsView x, y, z of the drawn
+ *   instances (a view on the set's own array; read-only).
+ * @property {() => void} destroy
+ *
+ * @typedef {object} GlobeMovers
+ * @property {(options: MoverSetOptions) => MoverSet} createSet
+ * @property {() => { id: string, kind: string, count: number, capacity: number }[]} list
+ *
  * @typedef {object} GlobeEngine
  * @property {'cesium'|'navara'} kind
  * @property {{ container: object, canvas: object, size: () => { width: number, height: number } }} host
@@ -263,6 +316,7 @@
  * @property {{ addStatic: (html: string, options?: { onScreen?: boolean }) => () => void }} credits
  * @property {GlobeMaps} maps
  * @property {GlobeClock} clock
+ * @property {GlobeMovers} movers
  * @property {() => void} destroy
  * @property {() => boolean} isDestroyed True once destroy() has run.
  */
@@ -442,6 +496,7 @@ const SHAPE = {
   input: { on: isFunction, setCameraInputs: isFunction },
   credits: { addStatic: isFunction },
   clock: { now: isFunction, frameTime: isFunction, ticked: isEngineEvent },
+  movers: { createSet: isFunction, list: isFunction },
   maps: {
     setBaseImagery: isFunction,
     setTerrain: isFunction,
