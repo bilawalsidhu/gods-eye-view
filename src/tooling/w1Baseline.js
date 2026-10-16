@@ -98,6 +98,9 @@ export function compareBaselines(a, b, tolerance = BASELINE_TOLERANCE) {
       });
       continue;
     }
+    const asked = (run) => JSON.stringify(run.requests ?? null);
+    if (asked(left) !== asked(right))
+      add({ layer, what: 'requests', a: left.requests, b: right.requests });
     if (left.fill?.count !== right.fill?.count)
       add({ layer, what: 'count', a: left.fill?.count, b: right.fill?.count });
     for (const pose of Object.keys(left.poses ?? {})) {

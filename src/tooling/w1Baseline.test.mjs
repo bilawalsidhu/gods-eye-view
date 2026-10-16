@@ -104,3 +104,19 @@ test('equal runs compare equal; moved objects and poses are reported', () => {
   near.layers.flights.tracking.poseAfter2s.z += 1;
   assert.equal(compareBaselines(run(), near).ok, true);
 });
+
+test('the feed requests a run made are compared too', () => {
+  const asked = run({ requests: ['GET /api/flights → exact'] });
+  const other = run({
+    requests: ['GET /api/flights?lat=1 → as GET /api/flights'],
+  });
+  const { differences } = compareBaselines(asked, other);
+  assert.deepEqual(
+    differences.map(({ what }) => what),
+    ['requests'],
+  );
+  assert.equal(
+    compareBaselines(asked, run({ requests: ['GET /api/flights → exact'] })).ok,
+    true,
+  );
+});

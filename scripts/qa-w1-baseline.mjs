@@ -47,6 +47,7 @@ import {
   isFeedRequest,
   replayEntry,
 } from '../src/tooling/w1Baseline.js';
+import { syntheticRecordings } from '../src/tooling/w1Feeds.js';
 
 const repoRoot = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -198,6 +199,13 @@ async function replayFeeds(page, recording) {
     const url = request.url();
     if (!isFeedRequest(url)) return request.continue();
     const entry = replayEntry(recording, request.method(), url);
+    // What the page asked and how it was answered, for --compare.
+    const key = feedRequestKey(request.method(), url);
+    recording.served ??= new Map();
+    recording.served.set(
+      key,
+      !entry ? 'none' : entry.key === key ? 'exact' : `as ${entry.key}`,
+    );
     if (!entry)
       return request.respond({
         status: 503,
@@ -527,12 +535,33 @@ async function runLayer(browser, baseUrl, name, outDir) {
     result.failure = redact(error.stack ?? error.message);
   } finally {
     result.errors = opened.errors.slice(0, 10);
+    if (feed?.mode === 'replay' && feed.recording.served)
+      result.requests = [...feed.recording.served]
+        .map(([key, how]) => `${key} → ${how}`)
+        .sort();
     await opened.context.close();
   }
   return result;
 }
 
 // --compare=A,B compares two summary.json runs and exits.
+// --synthesize=DIR writes the seeded synthetic recordings of flights
+// (global OpenSky snapshot), vessels (12 000 AIS rows, with and without the
+// city area) and local ADS-B (1090 MHz and 978 MHz UAT) into DIR, beside
+// the recorded military, satellites and launches, and exits.
+const synthesizeDir = argument('synthesize');
+if (synthesizeDir) {
+  const dir = path.resolve(repoRoot, synthesizeDir);
+  fs.mkdirSync(dir, { recursive: true });
+  for (const [layer, recording] of Object.entries(syntheticRecordings()))
+    fs.writeFileSync(
+      path.join(dir, `${layer}.json`),
+      JSON.stringify(recording),
+    );
+  console.log(`[w1-baseline] synthetic flights, vessels, localAdsb in ${dir}`);
+  process.exit(0);
+}
+
 const compareArg = argument('compare');
 if (compareArg) {
   const [a, b] = compareArg
