@@ -13,7 +13,7 @@
  *   node scripts/qa-surface-heights.mjs --base-url=http://localhost:PORT/
  *     [--out=qa-artifacts/surface-heights.json] [--settle-ms=20000]
  *
- * The server is the caller's (never on ports 4185–4188). Browsers are always
+ * The server is the caller's (never on ports 4185–4189). Browsers are always
  * headless. Keys are never printed. Exits 1 when a gate fails.
  */
 import fs from 'node:fs';
@@ -31,14 +31,14 @@ const argument = (name) =>
     .find((value) => value.startsWith(`--${name}=`))
     ?.slice(name.length + 3);
 
-const RESERVED_PORTS = new Set([4185, 4186, 4187, 4188]);
+const RESERVED_PORTS = new Set([4185, 4186, 4187, 4188, 4189]);
 const baseUrl = argument('base-url');
 if (!baseUrl) {
   console.error('--base-url=http://localhost:PORT/ is required');
   process.exit(2);
 }
 if (RESERVED_PORTS.has(Number(new URL(baseUrl).port))) {
-  console.error('ports 4185–4188 are reserved');
+  console.error('ports 4185–4189 are reserved');
   process.exit(2);
 }
 const outFile = argument('out');

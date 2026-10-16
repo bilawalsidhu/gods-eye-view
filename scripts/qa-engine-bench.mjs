@@ -16,7 +16,7 @@
  *
  * --server=dev (the default) starts this checkout's Vite dev server and
  * --server=preview a `vite preview` of dist/ (run `npm run build` first),
- * each on a free port (never 4185–4188), unless --base-url names a running server.
+ * each on a free port (never 4185–4189), unless --base-url names a running server.
  * Each engine gets one discarded warm-up run (the dev server transforms
  * modules on first request), then --runs measured runs, each in a fresh
  * browser context. --navara-look picks Navara's look (`?look=`; the app's
@@ -118,7 +118,7 @@ if (
   );
   process.exit(2);
 }
-const RESERVED_PORTS = new Set([4185, 4186, 4187, 4188]);
+const RESERVED_PORTS = new Set([4185, 4186, 4187, 4188, 4189]);
 const BOOT_TIMEOUT_MS = 180000;
 const FLIGHT = {
   from: { lat: 30.2672, lon: -97.7431, height: 20000 },

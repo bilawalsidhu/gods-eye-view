@@ -14,7 +14,7 @@
  * the horizon (SHARPEN_VIEWS), each frame scaled down above a 1:1 crop, into
  * sharpen.jpg. --png-dir=DIR also keeps the frames as PNG.
  *
- * Starts this checkout's Vite dev server on a free port (never 4185–4188)
+ * Starts this checkout's Vite dev server on a free port (never 4185–4189)
  * unless --base-url names a running server. Headless Chrome with
  * --use-angle=metal, never a visible window. The page's clock is shifted to
  * each scene's UTC time (Date only; performance.now is untouched), so the
@@ -86,7 +86,7 @@ const VARIANTS = [
 const SHOT = { width: 1280, height: 800 };
 const TILE = { width: 640, height: 400 };
 const MAX_BYTES = 500 * 1024;
-const RESERVED_PORTS = new Set([4185, 4186, 4187, 4188]);
+const RESERVED_PORTS = new Set([4185, 4186, 4187, 4188, 4189]);
 
 const sharpenLevels = argument('sharpen')
   ?.split(',')

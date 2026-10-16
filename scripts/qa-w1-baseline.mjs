@@ -29,7 +29,7 @@
  *     [--fill-ms=60000] [--out=qa-artifacts/w1-baseline]
  *     [--record=DIR | --replay=DIR] [--compare=A,B]
  *
- * Starts this checkout's Vite dev server on a free port (never 4185–4188)
+ * Starts this checkout's Vite dev server on a free port (never 4185–4189)
  * unless --base-url names one. Browsers are always headless. Provider keys are
  * never printed: server output is not echoed and URLs are redacted.
  */
@@ -90,7 +90,7 @@ if (RECORD_DIR && REPLAY_DIR) {
   process.exit(2);
 }
 const BOOT_TIMEOUT_MS = Number(process.env.QA_BOOT_TIMEOUT_MS || 180000);
-const RESERVED_PORTS = new Set([4185, 4186, 4187, 4188]);
+const RESERVED_PORTS = new Set([4185, 4186, 4187, 4188, 4189]);
 const VIEWPORT = { width: 1280, height: 800 };
 const KNOWN_OBJECTS = 5;
 const TRACK_SETTLE_MS = 2000;

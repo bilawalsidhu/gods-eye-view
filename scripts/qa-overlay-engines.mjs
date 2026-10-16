@@ -12,7 +12,7 @@
  *
  *   node scripts/qa-overlay-engines.mjs --base-url=http://localhost:PORT/
  *
- * The server is the caller's (never on ports 4185–4188). Browsers are always
+ * The server is the caller's (never on ports 4185–4189). Browsers are always
  * headless. Exits 1 on a failure.
  */
 import puppeteer from 'puppeteer';
@@ -21,11 +21,11 @@ const argument = (name) =>
   process.argv
     .find((value) => value.startsWith(`--${name}=`))
     ?.slice(name.length + 3);
-const RESERVED_PORTS = new Set([4185, 4186, 4187, 4188]);
+const RESERVED_PORTS = new Set([4185, 4186, 4187, 4188, 4189]);
 const baseUrl = argument('base-url');
 if (!baseUrl || RESERVED_PORTS.has(Number(new URL(baseUrl).port))) {
   console.error(
-    '--base-url=http://localhost:PORT/ (not 4185–4188) is required',
+    '--base-url=http://localhost:PORT/ (not 4185–4189) is required',
   );
   process.exit(2);
 }
