@@ -173,3 +173,69 @@ test('immediate abort of one caller retains a loader needed by a surviving calle
   assert.equal(await retained, 'retained');
   assert.equal(lane.getInFlightCount(), 0);
 });
+
+test('distinct terrain keys never share a transport or result', async () => {
+  const lane = createSingleflight();
+  const north = deferred();
+  const south = deferred();
+  let northLoads = 0;
+  let southLoads = 0;
+
+  const northCall = lane.run('terrain:-97,30', () => {
+    northLoads += 1;
+    return north.promise;
+  });
+  const southCall = lane.run('terrain:-97,-30', () => {
+    southLoads += 1;
+    return south.promise;
+  });
+  await Promise.resolve();
+
+  assert.equal(northLoads, 1);
+  assert.equal(southLoads, 1);
+  assert.equal(lane.getInFlightCount(), 2);
+  south.resolve([{ elevation: -5 }]);
+  north.resolve([{ elevation: 200 }]);
+  assert.deepEqual(await northCall, [{ elevation: 200 }]);
+  assert.deepEqual(await southCall, [{ elevation: -5 }]);
+  assert.equal(lane.getInFlightCount(), 0);
+});
+
+test('synchronous terrain loader failure reaches both waiters then permits retry', async () => {
+  const lane = createSingleflight();
+  let loads = 0;
+  const loader = () => {
+    loads += 1;
+    throw new TypeError('bad terrain payload');
+  };
+  const first = lane.run('terrain:broken', loader);
+  const second = lane.run('terrain:broken', loader);
+  const independent = lane.run('terrain:good', () => 'valid heights');
+
+  await assert.rejects(first, /bad terrain payload/);
+  await assert.rejects(second, /bad terrain payload/);
+  assert.equal(loads, 1);
+  assert.equal(await independent, 'valid heights');
+  assert.equal(lane.getInFlightCount(), 0);
+  assert.equal(
+    await lane.run('terrain:broken', () => 'recovered heights'),
+    'recovered heights',
+  );
+});
+
+test('one abort cannot conceal a shared terrain failure from another waiter', async () => {
+  const lane = createSingleflight();
+  const gate = deferred();
+  const caller = new AbortController();
+  const first = lane.run('terrain:failure', () => gate.promise, {
+    signal: caller.signal,
+  });
+  const second = lane.run('terrain:failure', () => gate.promise);
+
+  await Promise.resolve();
+  caller.abort();
+  await assert.rejects(first, { name: 'AbortError' });
+  gate.reject(new Error('terrain unavailable'));
+  await assert.rejects(second, /terrain unavailable/);
+  assert.equal(lane.getInFlightCount(), 0);
+});
