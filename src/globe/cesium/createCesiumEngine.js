@@ -4,6 +4,7 @@
 // (the viewer itself stays owned by the app).
 
 import { createCesiumCamera } from './camera.js';
+import { createCesiumClock } from './clock.js';
 import { createCesiumCredits } from './credits.js';
 import { createCesiumFrames } from './frames.js';
 import { createCesiumInput } from './input.js';
@@ -21,8 +22,9 @@ import { createCesiumSurface } from './surface.js';
  *   createEventHandler?: Function,
  *   createImageryLayer?: Function,
  *   loadPhotorealTileset?: Function,
- * }} [options] `requestRender` defaults to the render governor; the
- *   `create*`/`load*` options are test seams.
+ *   appClock?: import('../../time/clock.js').AppClock,
+ * }} [options] `requestRender` defaults to the render governor; `appClock`
+ *   to the page's app clock; the `create*`/`load*` options are test seams.
  *
  * `render.setContinuous` takes a hold on the app's singleton renderGovernor
  * (src/renderGovernor.js), which governs the one viewer it was installed on;
@@ -40,6 +42,7 @@ export function createCesiumEngine(viewer, options = {}) {
     picker: createCesiumPicker(viewer),
     projector: createCesiumProjector(viewer),
     frames: createCesiumFrames(viewer),
+    clock: createCesiumClock(viewer, options),
     render,
     surface: createCesiumSurface(viewer),
     input: createCesiumInput(viewer, options),

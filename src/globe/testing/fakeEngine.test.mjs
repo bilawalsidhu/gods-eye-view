@@ -397,3 +397,46 @@ test('fake isDestroyed, commanded and pickGlobe are inspectable', () => {
   engine.destroy();
   assert.equal(engine.isDestroyed(), true);
 });
+
+test('the fake clock is the app clock the test controls, latched per frame', () => {
+  const start = Date.UTC(2026, 9, 16, 12);
+  const engine = createFakeEngine({ nowMs: start });
+  const seen = [];
+  engine.clock.ticked.addEventListener((time) =>
+    seen.push(['ticked', time, engine.clock.frameTime()]),
+  );
+  for (const name of ['preUpdate', 'preRender', 'postRender'])
+    engine.frames[name].addEventListener(() =>
+      seen.push([name, engine.clock.frameTime()]),
+    );
+  assert.equal(engine.clock.now(), start);
+  engine.fake.frame(16);
+  assert.deepEqual(seen, [
+    ['ticked', start + 16, start + 16],
+    ['preUpdate', start + 16],
+    ['preRender', start + 16],
+    ['postRender', start + 16],
+  ]);
+  // Time moves between frames; the frame time only at the next frame.
+  engine.fake.advanceTime(1000);
+  assert.equal(engine.clock.now(), start + 1016);
+  assert.equal(engine.clock.frameTime(), start + 16);
+  engine.fake.frame(16);
+  assert.equal(engine.clock.frameTime(), start + 1032);
+  // The app clock's controls work through engine.fake.appClock.
+  engine.fake.appClock.freeze(start);
+  engine.fake.frame(16);
+  assert.equal(engine.clock.frameTime(), start);
+});
+
+test('a fake engine can share an app clock', async () => {
+  const { createAppClock } = await import('../../time/clock.js');
+  let wall = 5000;
+  const appClock = createAppClock({ now: () => wall });
+  const engine = createFakeEngine({ appClock });
+  assert.equal(engine.fake.appClock, appClock);
+  wall = 6000;
+  assert.equal(engine.clock.now(), 6000);
+  engine.fake.frame();
+  assert.equal(appClock.frameTime(), 6000);
+});

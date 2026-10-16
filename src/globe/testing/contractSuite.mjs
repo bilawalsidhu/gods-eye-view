@@ -360,6 +360,77 @@ export function createContractSuite(
       },
     ],
     [
+      'clock: one frame time per frame, latched before preUpdate, never decreasing',
+      async () => {
+        const records = [];
+        const read = (name, value) =>
+          records.push({
+            name,
+            value,
+            frame: engine.clock.frameTime(),
+            now: engine.clock.now(),
+          });
+        const removers = [
+          engine.clock.ticked.addEventListener((time) => read('ticked', time)),
+          ...['preUpdate', 'preRender', 'postRender'].map((name) =>
+            engine.frames[name].addEventListener(() => read(name)),
+          ),
+        ];
+        try {
+          await until(
+            () =>
+              records.filter(({ name }) => name === 'postRender').length >= 3,
+            'three drawn frames',
+          );
+        } finally {
+          for (const remove of removers) remove();
+        }
+        ensure(
+          Number.isFinite(engine.clock.now()) &&
+            Number.isFinite(engine.clock.frameTime()),
+          'clock.now or clock.frameTime is not a number',
+        );
+        // From the first tick on: every frame event belongs to the frame the
+        // last tick opened, and reads that tick's frame time.
+        const start = records.findIndex(({ name }) => name === 'ticked');
+        ensure(start >= 0, 'clock.ticked never fired');
+        let tick = null;
+        let ticksSincePreUpdate = 0;
+        let previousFrame = -Infinity;
+        for (const record of records.slice(start)) {
+          ensure(
+            record.frame <= record.now,
+            `${record.name}: frameTime ${record.frame} is after now ${record.now}`,
+          );
+          if (record.name === 'ticked') {
+            ensure(
+              record.value === record.frame,
+              `ticked passed ${record.value}, frameTime read ${record.frame}`,
+            );
+            ensure(
+              record.frame >= previousFrame,
+              `frame time went back from ${previousFrame} to ${record.frame}`,
+            );
+            previousFrame = record.frame;
+            tick = record;
+            ticksSincePreUpdate++;
+            continue;
+          }
+          ensure(
+            record.frame === tick.frame,
+            `${record.name} read frame time ${record.frame}, its frame's is ${tick.frame}`,
+          );
+          if (record.name === 'preUpdate') {
+            ensure(
+              ticksSincePreUpdate >= 1,
+              'preUpdate ran without a tick before it',
+            );
+            ticksSincePreUpdate = 0;
+          }
+        }
+      },
+    ],
+    [
       'render: continuous mode toggles',
       async () => {
         const previous = engine.render.isContinuous();

@@ -165,6 +165,9 @@ export function createFakeViewer({ width = 1024, height = 768 } = {}) {
     staticCredits,
     primitiveList,
     trackedEntityChanged: new Cesium.Event(),
+    // The viewer clock: only its tick event (CesiumWidget ticks it right
+    // before scene.render on every animation frame).
+    clock: { onTick: new Cesium.Event() },
     imageryList,
     terrainProvider: undefined,
     imageryLayers: {

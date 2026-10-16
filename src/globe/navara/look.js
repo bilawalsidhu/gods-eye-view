@@ -1,6 +1,8 @@
 // Builds a Navara look (viewOptions.js navaraScenePlan) on an initialised
-// view and keeps it current while the view renders: the sun follows the wall
-// clock as the HUD's SUN elevation does; the cinematic look lights the globe
+// view and keeps it current while the view renders: the sun follows `now`
+// (the engine clock's frame time in the app: the app clock, which is the wall
+// clock the HUD's SUN elevation reads unless QA moves it); the cinematic look
+// lights the globe
 // from the atmosphere when seen from space, shows its clouds only for low
 // views over low ground, brightens the atmosphere (atmosphereLuminance.js)
 // and shows its stars only at night or from space. All of it runs only on frames the view draws

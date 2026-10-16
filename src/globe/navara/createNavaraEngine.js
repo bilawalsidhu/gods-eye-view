@@ -14,6 +14,7 @@ import {
 } from '../contract.js';
 import { cesiumFovy } from './cameraMath.js';
 import { createCameraModel } from './cameraModel.js';
+import { createNavaraClock } from './clock.js';
 import { createNavaraCredits } from './credits.js';
 import { createNavaraInput } from './input.js';
 import { createNavaraMaps } from './maps.js';
@@ -68,16 +69,25 @@ function rayRaisedEllipsoid({ origin, direction }, height) {
  *   container?: HTMLElement,
  *   fetch?: typeof fetch,
  *   clock?: object,
+ *   appClock?: import('../../time/clock.js').AppClock,
  *   sharpen?: { set: (state: { enabled: boolean, amount: number }) => void, destroy: () => void },
  * }} options `hooks` are internals.js; `container` defaults to the
  *   canvas's parent; `sharpen` draws render.setSharpen (sharpen.js; without
- *   it the engine only keeps the state) and the engine destroys it; `fetch`
- *   and `clock` are test seams.
+ *   it the engine only keeps the state) and the engine destroys it;
+ *   `appClock` (the engine clock's time) defaults to the page's app clock;
+ *   `fetch` and `clock` (the camera model's timers) are test seams.
  * @returns {import('../contract.js').GlobeEngine}
  */
 export function createNavaraEngine(
   view,
-  { hooks, container, fetch, clock, sharpen: sharpenPort = null } = {},
+  {
+    hooks,
+    container,
+    fetch,
+    clock,
+    appClock,
+    sharpen: sharpenPort = null,
+  } = {},
 ) {
   if (!view?.camera?.raw)
     throw new TypeError('createNavaraEngine needs a view');
@@ -112,10 +122,14 @@ export function createNavaraEngine(
     preRender: createEngineEvent(),
     postRender: createEngineEvent(),
   };
+  const engineClock = createNavaraClock(appClock ? { appClock } : {});
   // Defined below, with the surface and input it needs.
   let groundFloor = null;
   const handlers = {
-    preUpdate: (time) => frames.preUpdate.raiseEvent(time),
+    preUpdate: (time) => {
+      engineClock.beginFrame();
+      frames.preUpdate.raiseEvent(time);
+    },
     preRender: (time) => {
       model.sync();
       groundFloor?.update();
@@ -219,6 +233,7 @@ export function createNavaraEngine(
     input: input.input,
     credits: credits.credits,
     maps: maps.maps,
+    clock: engineClock.clock,
     destroy() {
       if (destroyed) return;
       destroyed = true;
