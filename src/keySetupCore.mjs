@@ -1,8 +1,9 @@
 /**
  * Key setup ("POWER UP") — the pure core.
  *
- * One registry and pure functions; its only import is the proxy-header check
- * shared with the other local gates (localRequestGate.mjs). The dev server's
+ * One registry and pure functions; it imports only the proxy-header check
+ * shared with the other local gates (localRequestGate.mjs) and the msg()
+ * marker (src/i18n/marker.js). The dev server's
  * /api/setup endpoints (vite.config.js) and the in-app panel (keySetup.js)
  * are both thin shells over this module, so what a key is called, what it
  * unlocks, and how a .env line is written each live in exactly one place.
@@ -12,6 +13,7 @@
  * behavior below unit-testable.
  */
 
+import { msg } from './i18n/marker.js';
 import { hasProxySignals } from './localRequestGate.mjs';
 
 /** Longest accepted key/token value. Real provider keys are all far shorter. */
@@ -35,8 +37,8 @@ export const KEY_SETUP_APPEND_HEADER =
 export const KEY_SETUP_KEYS = Object.freeze([
   Object.freeze({
     id: 'google-maps',
-    title: 'GOOGLE MAPS',
-    unlocks: 'The photorealistic 3D planet, place search + Street View',
+    title: 'GOOGLE MAPS', // i18n-ignore: provider product name
+    unlocks: msg('The photorealistic 3D planet, place search + Street View'),
     getUrl: 'https://developers.google.com/maps/documentation/tile/get-api-key',
     envVars: Object.freeze(['GOOGLE_MAPS_API_KEY']),
     tier: 'metered',
@@ -44,8 +46,10 @@ export const KEY_SETUP_KEYS = Object.freeze([
   }),
   Object.freeze({
     id: 'google-maps-server',
-    title: 'GOOGLE MAPS — SERVER',
-    unlocks: 'Places context + Street View fallback; optional separate key',
+    title: 'GOOGLE MAPS — SERVER', // i18n-ignore: provider product name; row is hidden
+    unlocks: msg(
+      'Places context + Street View fallback; optional separate key',
+    ),
     getUrl:
       'https://developers.google.com/maps/documentation/places/web-service/get-api-key',
     envVars: Object.freeze(['GOOGLE_MAPS_SERVER_API_KEY']),
@@ -54,40 +58,40 @@ export const KEY_SETUP_KEYS = Object.freeze([
   }),
   Object.freeze({
     id: 'openai',
-    title: 'OPENAI',
-    unlocks: 'Voice control — API key or ChatGPT OAuth',
+    title: 'OPENAI', // i18n-ignore: provider product name
+    unlocks: msg('Voice control — API key or ChatGPT OAuth'),
     getUrl: 'https://platform.openai.com/api-keys',
     envVars: Object.freeze(['OPENAI_API_KEY']),
     tier: 'metered',
   }),
   Object.freeze({
     id: 'aisstream',
-    title: 'AISSTREAM',
-    unlocks: 'Live ships, worldwide',
+    title: 'AISSTREAM', // i18n-ignore: provider product name
+    unlocks: msg('Live ships, worldwide'),
     getUrl: 'https://aisstream.io',
     envVars: Object.freeze(['AISSTREAM_API_KEY']),
     tier: 'free',
   }),
   Object.freeze({
     id: 'firms',
-    title: 'NASA FIRMS',
-    unlocks: 'Live active-fire detections',
+    title: 'NASA FIRMS', // i18n-ignore: provider product name
+    unlocks: msg('Live active-fire detections'),
     getUrl: 'https://firms.modaps.eosdis.nasa.gov/api/map_key/',
     envVars: Object.freeze(['FIRMS_MAP_KEY']),
     tier: 'free',
   }),
   Object.freeze({
     id: 'tomtom',
-    title: 'TOMTOM',
-    unlocks: 'Real live traffic (keyless runs a simulation)',
+    title: 'TOMTOM', // i18n-ignore: provider product name
+    unlocks: msg('Real live traffic (keyless runs a simulation)'),
     getUrl: 'https://my.tomtom.com/keys',
     envVars: Object.freeze(['TOMTOM_API_KEY']),
     tier: 'free',
   }),
   Object.freeze({
     id: 'cesium-ion',
-    title: 'CESIUM ION',
-    unlocks: 'Bing imagery map stacks + world terrain',
+    title: 'CESIUM ION', // i18n-ignore: provider product name
+    unlocks: msg('Bing imagery map stacks + world terrain'),
     getUrl: 'https://ion.cesium.com/tokens',
     envVars: Object.freeze(['CESIUM_ION_TOKEN']),
     tier: 'free',
@@ -95,17 +99,18 @@ export const KEY_SETUP_KEYS = Object.freeze([
   }),
   Object.freeze({
     id: 'opensky',
-    title: 'OPENSKY',
-    unlocks: 'More flight-polling credits (anonymous works without)',
+    title: 'OPENSKY', // i18n-ignore: provider product name
+    unlocks: msg('More flight-polling credits (anonymous works without)'),
     getUrl: 'https://opensky-network.org',
     envVars: Object.freeze(['OPENSKY_CLIENT_ID', 'OPENSKY_CLIENT_SECRET']),
     tier: 'free',
   }),
   Object.freeze({
     id: 'mapillary',
-    title: 'MAPILLARY',
-    unlocks:
+    title: 'MAPILLARY', // i18n-ignore: provider product name
+    unlocks: msg(
       'Street-level imagery and coverage in the Street Level layer. Free: register an app in the Mapillary developer dashboard and paste its Client Token',
+    ),
     getUrl: 'https://www.mapillary.com/dashboard/developers',
     envVars: Object.freeze(['MAPILLARY_CLIENT_TOKEN']),
     tier: 'free',
@@ -113,8 +118,8 @@ export const KEY_SETUP_KEYS = Object.freeze([
   }),
   Object.freeze({
     id: 'launch-library',
-    title: 'LAUNCH LIBRARY',
-    unlocks: 'Higher space-missions request allowance',
+    title: 'LAUNCH LIBRARY', // i18n-ignore: provider product name
+    unlocks: msg('Higher space-missions request allowance'),
     getUrl: 'https://thespacedevs.com',
     envVars: Object.freeze(['LL2_API_TOKEN']),
     tier: 'free',
@@ -262,7 +267,9 @@ export function isSharingEnabled(env = {}) {
  *    preflight this server never answers, closing the simple-request CSRF
  *    write primitive.
  *
- * @returns {{ok: true} | {ok: false, status: number, error: string}}
+ * A refusal also carries `code`, which the panel turns into its own localized
+ * sentence (keySetup.js); `error` stays the English for logs and API callers.
+ * @returns {{ok: true} | {ok: false, status: number, error: string, code: string}}
  */
 export function admitKeySetupRequest({
   method,
@@ -283,6 +290,7 @@ export function admitKeySetupRequest({
       ok: false,
       status: 403,
       error: 'Provider Settings does not answer proxied requests',
+      code: 'proxied',
     };
   }
   // Every sharing signal the launcher recognizes (scripts/pinokio-preflight.mjs)
@@ -300,6 +308,7 @@ export function admitKeySetupRequest({
       ok: false,
       status: 403,
       error: 'Provider Settings is disabled while sharing is enabled',
+      code: 'sharing',
     };
   }
   if (
@@ -310,6 +319,7 @@ export function admitKeySetupRequest({
       ok: false,
       status: 403,
       error: 'Provider Settings answers only the machine running the server',
+      code: 'not-loopback',
     };
   }
   const authority = localAuthority(hostHeader, protocol);
@@ -318,6 +328,7 @@ export function admitKeySetupRequest({
       ok: false,
       status: 403,
       error: 'Provider Settings answers only local hostnames',
+      code: 'not-local-host',
     };
   }
   if (
@@ -328,6 +339,7 @@ export function admitKeySetupRequest({
       ok: false,
       status: 403,
       error: 'Provider Settings requires an exact local Origin',
+      code: 'origin-required',
     };
   }
   if (origin !== undefined && origin !== null && origin !== '') {
@@ -335,7 +347,12 @@ export function admitKeySetupRequest({
     try {
       parsedOrigin = new URL(String(origin));
     } catch {
-      return { ok: false, status: 403, error: 'Unrecognized Origin refused' };
+      return {
+        ok: false,
+        status: 403,
+        error: 'Unrecognized Origin refused',
+        code: 'origin-unrecognized',
+      };
     }
     const exactOrigin =
       parsedOrigin.username === '' &&
@@ -349,6 +366,7 @@ export function admitKeySetupRequest({
         ok: false,
         status: 403,
         error: 'Cross-origin requests are refused',
+        code: 'cross-origin',
       };
     }
   }
@@ -362,6 +380,7 @@ export function admitKeySetupRequest({
       ok: false,
       status: 415,
       error: 'Content-Type must be application/json',
+      code: 'content-type',
     };
   }
   return { ok: true };
@@ -376,7 +395,19 @@ export function knownKeySetupEnvVars() {
   return names;
 }
 
-/** Tooltip guidance for a control gated by one registry entry. */
+/**
+ * Env-var names a registry entry needs, joined with ' + ', for callers that
+ * build the guidance sentence in the UI language (src/ui/keyGuidance.js).
+ * @param {string} id Registry entry id.
+ * @returns {string|null} null for an unknown or hidden entry.
+ */
+export function keySetupRequirementEnvVars(id) {
+  const entry = KEY_SETUP_KEYS.find((candidate) => candidate.id === id);
+  if (!entry || entry.hidden) return null;
+  return entry.envVars.join(' + ');
+}
+
+/** English tooltip guidance for a control gated by one registry entry. */
 export function keySetupRequirement(id) {
   const entry = KEY_SETUP_KEYS.find((candidate) => candidate.id === id);
   if (!entry || entry.hidden) return '';
@@ -458,6 +489,8 @@ export function keySetupStatus(env = {}) {
  * below safe to write without quoting rules. A `null` value means REMOVE:
  * the writer comments the assignment back out, returning the file to its
  * template state for that key.
+ * A refusal carries `code` and `params` for the panel's localized sentence
+ * (keySetup.js) besides the English `error`.
  * @param {unknown} body Parsed JSON from the request.
  */
 export function validateKeySetupUpdates(body) {
@@ -465,38 +498,63 @@ export function validateKeySetupUpdates(body) {
     return {
       ok: false,
       error: 'Body must be a JSON object of {ENV_VAR: value}',
+      code: 'not-object',
     };
   }
   const entries = Object.entries(body);
-  if (entries.length === 0) return { ok: false, error: 'No keys provided' };
+  if (entries.length === 0)
+    return { ok: false, error: 'No keys provided', code: 'no-keys' };
   if (entries.length > KEY_SETUP_UPDATE_LIMIT) {
     return {
       ok: false,
       error: `At most ${KEY_SETUP_UPDATE_LIMIT} keys per save`,
+      code: 'too-many',
+      params: { limit: KEY_SETUP_UPDATE_LIMIT },
     };
   }
   const known = knownKeySetupEnvVars();
   const updates = {};
   for (const [name, raw] of entries) {
-    if (!known.has(name)) return { ok: false, error: `Unknown key: ${name}` };
+    if (!known.has(name))
+      return {
+        ok: false,
+        error: `Unknown key: ${name}`,
+        code: 'unknown-key',
+        params: { name },
+      };
     if (raw === null) {
       updates[name] = null;
       continue;
     }
     if (typeof raw !== 'string')
-      return { ok: false, error: `${name} must be a string` };
+      return {
+        ok: false,
+        error: `${name} must be a string`,
+        code: 'not-string',
+        params: { name },
+      };
     const value = raw.trim();
-    if (!value) return { ok: false, error: `${name} is empty` };
+    if (!value)
+      return {
+        ok: false,
+        error: `${name} is empty`,
+        code: 'empty',
+        params: { name },
+      };
     if (value.length > KEY_SETUP_VALUE_LIMIT) {
       return {
         ok: false,
         error: `${name} is longer than any real key (${KEY_SETUP_VALUE_LIMIT} max)`,
+        code: 'too-long',
+        params: { name, limit: KEY_SETUP_VALUE_LIMIT },
       };
     }
     if (!/^[\x21-\x7e]+$/.test(value)) {
       return {
         ok: false,
         error: `${name} may only contain printable characters with no spaces`,
+        code: 'not-printable',
+        params: { name },
       };
     }
     // Reject the dotenv metacharacters that would round-trip WRONG when written
@@ -508,6 +566,8 @@ export function validateKeySetupUpdates(body) {
       return {
         ok: false,
         error: `${name} contains a character that is not valid in a key (#, quotes, $, \\, or backtick)`,
+        code: 'invalid-char',
+        params: { name },
       };
     }
     updates[name] = value;

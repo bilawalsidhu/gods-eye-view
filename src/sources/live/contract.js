@@ -9,6 +9,9 @@
  * Snapshots describe coverage and completeness independently of freshness.
  * Records contain observation data only, with no scene objects or transport data.
  */
+// Messages are English data (AI tools read them too); the Layers panel shows
+// them translated by their shape (translateFeedError in src/ui/statusText.js),
+// so a new or reworded message is changed there as well.
 export class LiveSourceError extends Error {
   constructor(
     code,

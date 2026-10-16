@@ -1,3 +1,4 @@
+import { t } from '../i18n/index.js';
 import { shouldExpandGlobalContextPanel } from '../rightRailPolicy.js';
 
 export function _initGlobalContextPanel() {
@@ -32,7 +33,7 @@ export function _initGlobalContextPanel() {
     void this._runUserFacingContextAction(
       (notificationToken) =>
         this._selectContextMode(nextMode, { notificationToken }),
-      'Contacts could not complete the requested transition; try again',
+      t('Contacts could not complete the requested transition; try again'),
     ).then((succeeded) => {
       if (
         !this.destroyed &&
@@ -61,7 +62,9 @@ export function _initGlobalContextPanel() {
     void this._runUserFacingContextAction(
       (notificationToken) =>
         this._selectContextMode(nextMode, { notificationToken }),
-      'Space Missions could not complete the requested transition; try again',
+      t(
+        'Space Missions could not complete the requested transition; try again',
+      ),
     ).then((succeeded) => {
       if (
         !this.destroyed &&
@@ -108,14 +111,16 @@ export function _initGlobalContextPanel() {
       this.showToast(
         stats?.statusMessage ||
           (stats?.status === 'zoom-in'
-            ? 'Zoom in to search mapped installations'
-            : 'Nearby installations refreshed'),
+            ? t('Zoom in to search mapped installations')
+            : t('Nearby installations refreshed')),
       );
       return true;
-    }, 'Nearby installations could not be refreshed; try again').finally(() => {
-      if (this.destroyed) return;
-      button.setAttribute('aria-disabled', 'false');
-      button.setAttribute('aria-busy', 'false');
-    });
+    }, t('Nearby installations could not be refreshed; try again')).finally(
+      () => {
+        if (this.destroyed) return;
+        button.setAttribute('aria-disabled', 'false');
+        button.setAttribute('aria-busy', 'false');
+      },
+    );
   });
 }

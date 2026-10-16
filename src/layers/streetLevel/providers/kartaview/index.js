@@ -12,6 +12,7 @@ import {
 } from './decode.js';
 import { createKartaViewSource } from './source.js';
 import { createKartaViewViewer } from './viewer.js';
+import { msg } from '../../../../i18n/index.js';
 import {
   ARCHIVED_MESSAGE,
   COLORS,
@@ -147,7 +148,8 @@ export function createKartaViewProvider({
         const cached = photos.get(photoId);
         if (cached) return cached;
         const photo = remember(await source.getPhoto(photoId, { signal }));
-        if (!photo) throw new Error('KartaView has no position for this photo');
+        if (!photo)
+          throw new Error(msg('KartaView has no position for this photo'));
         return photo;
       }
 
@@ -443,7 +445,8 @@ export function createKartaViewProvider({
             .open(photoId)
             .catch((error) =>
               context.actions.reportError(
-                error?.message || 'The KartaView photo could not be loaded',
+                error?.message ||
+                  msg('The KartaView photo could not be loaded'),
               ),
             ),
         // Esc in the viewer clears the selected drive, as the panel says.

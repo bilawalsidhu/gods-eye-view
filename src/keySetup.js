@@ -20,12 +20,22 @@ import {
  * the chip and the dialog are removed outright.
  */
 
-/** Chip label — pure, exported for tests. */
+import { t, msg, tn, registerUnsavedWork } from './i18n/index.js';
+
+/**
+ * Chip label — pure, exported for tests (keySetup.test.mjs pins the English).
+ * @param {{total?: number, setCount?: number}|null} status
+ * @returns {string}
+ */
 export function keySetupChipLabel(status) {
   const missing = Math.max(0, (status?.total || 0) - (status?.setCount || 0));
   return missing > 0
-    ? `POWER UP · ${missing} ${missing === 1 ? 'KEY' : 'KEYS'} WAITING`
-    : 'POWERED UP';
+    ? tn(
+        missing,
+        'POWER UP · {count} KEY WAITING',
+        'POWER UP · {count} KEYS WAITING',
+      )
+    : t('POWERED UP');
 }
 
 /**
@@ -40,6 +50,73 @@ export function collectKeyUpdates(fields) {
     if (value && field?.envVar) updates[field.envVar] = value;
   }
   return updates;
+}
+
+/**
+ * Why /api/setup/keys refused a save, by the `code` the server sends beside
+ * its English `error` (src/keySetupCore.mjs, server/standalone/key-setup.js).
+ * The English matches the server's text.
+ */
+const SAVE_REFUSALS = Object.freeze({
+  proxied: msg('Provider Settings does not answer proxied requests'),
+  sharing: msg('Provider Settings is disabled while sharing is enabled'),
+  'not-loopback': msg(
+    'Provider Settings answers only the machine running the server',
+  ),
+  'not-local-host': msg('Provider Settings answers only local hostnames'),
+  'origin-required': msg('Provider Settings requires an exact local Origin'),
+  'origin-unrecognized': msg('Unrecognized Origin refused'),
+  'cross-origin': msg('Cross-origin requests are refused'),
+  'content-type': msg('Content-Type must be application/json'),
+  method: msg('Method not allowed'),
+  'too-large': msg('Request too large'),
+  'invalid-json': msg('Invalid JSON'),
+  'not-object': msg('Body must be a JSON object of {ENV_VAR: value}'),
+  'no-keys': msg('No keys provided'),
+  'too-many': msg('At most {limit} keys per save'),
+  'unknown-key': msg('Unknown key: {name}'),
+  'not-string': msg('{name} must be a string'),
+  empty: msg('{name} is empty'),
+  'too-long': msg('{name} is longer than any real key ({limit} max)'),
+  'not-printable': msg(
+    '{name} may only contain printable characters with no spaces',
+  ),
+  'invalid-char': msg(
+    '{name} contains a character that is not valid in a key (#, quotes, $, \\, or backtick)',
+  ),
+  external: msg(
+    '{name} is configured outside Provider Settings and can only be changed where it was set',
+  ),
+  'harden-failed': msg(
+    'The key was not saved: could not restrict the credential file to your account; nothing was saved',
+  ),
+  'store-unreadable': msg(
+    'The key was not saved: the existing configuration could not be read, so nothing was changed',
+  ),
+  'write-failed': msg('Could not write the {store} store'),
+});
+
+/**
+ * The status line for a refused save — pure, exported for tests. A known
+ * `code` reads in the active language; anything else shows the server's text.
+ * @param {{code?: string, params?: object, error?: string}} payload
+ * @param {number} status HTTP status of the response.
+ * @returns {string}
+ */
+export function saveRefusalText(payload, status) {
+  const pattern = Object.hasOwn(SAVE_REFUSALS, payload?.code)
+    ? SAVE_REFUSALS[payload.code]
+    : null;
+  if (pattern) {
+    const values = {};
+    for (const name of ['name', 'limit', 'store']) {
+      const value = payload.params?.[name];
+      if (typeof value === 'string' || typeof value === 'number')
+        values[name] = value;
+    }
+    return t(pattern, values);
+  }
+  return payload?.error || t('Save failed ({status}).', { status });
 }
 
 function sleepWithSignal(ms, signal) {
@@ -57,6 +134,34 @@ function sleepWithSignal(ms, signal) {
       resolve();
     }, ms);
     signal?.addEventListener('abort', onAbort, { once: true });
+  });
+}
+
+/**
+ * An OAuth check error. A server reason is later wrapped in «OAuth check
+ * failed: …»; our own translated fallback is flagged to show unwrapped.
+ * @param {unknown} serverError
+ * @param {string} fallback Already-translated fallback sentence.
+ * @returns {Error}
+ */
+function oauthCheckError(serverError, fallback) {
+  if (serverError) return new Error(String(serverError));
+  const error = new Error(fallback);
+  error.oauthFallback = true;
+  return error;
+}
+
+/**
+ * Status text for a failed OAuth check — pure, exported for tests. A fallback
+ * sentence of our own already says what failed and is shown alone; any other
+ * reason (server text, network error) gets the «OAuth check failed» wrapper.
+ * @param {unknown} error
+ * @returns {string}
+ */
+export function oauthCheckFailureText(error) {
+  if (error?.oauthFallback && error.message) return error.message;
+  return t('OAuth check failed: {detail}', {
+    detail: error?.message || error,
   });
 }
 
@@ -78,8 +183,9 @@ export async function waitForChatGptOAuth({
     if (signal?.aborted) return false;
     if (response.ok && payload.available) return true;
     if (!response.ok || payload.loginFailed) {
-      throw new Error(
-        payload.error || 'Could not check ChatGPT sign-in. Try again.',
+      throw oauthCheckError(
+        payload.error,
+        t('Could not check ChatGPT sign-in. Try again.'),
       );
     }
     if (now() >= deadline) break;
@@ -116,12 +222,17 @@ function updateCloudVoiceAuthControl(auth, busy = false) {
   const state = auth.querySelector('.key-setup-cloud-auth-state');
   const toggle = auth.querySelector('[data-cloud-voice-auth-toggle]');
   state.textContent =
-    mode === 'oauth' ? 'VOICE AUTH · CHATGPT OAUTH' : 'VOICE AUTH · API KEY';
-  toggle.textContent = mode === 'oauth' ? 'USE API KEY' : 'USE CHATGPT OAUTH';
+    mode === 'oauth'
+      ? t('VOICE AUTH · CHATGPT OAUTH')
+      : t('VOICE AUTH · API KEY');
+  toggle.textContent =
+    mode === 'oauth' ? t('USE API KEY') : t('USE CHATGPT OAUTH');
   toggle.title =
     mode === 'oauth'
-      ? 'Use OPENAI_API_KEY for the next cloud voice session'
-      : 'Use the signed-in local ChatGPT/Codex OAuth session for the next cloud voice session';
+      ? t('Use OPENAI_API_KEY for the next cloud voice session')
+      : t(
+          'Use the signed-in local ChatGPT/Codex OAuth session for the next cloud voice session',
+        );
   // Keep the control focusable while the delegated handler blocks repeats.
   toggle.setAttribute('aria-disabled', String(busy));
 }
@@ -141,21 +252,22 @@ function buildRow(documentRef, key) {
   led.className = 'key-setup-led';
   led.setAttribute('aria-hidden', 'true');
   const title = documentRef.createElement('strong');
-  title.textContent = key.title;
+  title.textContent = key.title; // i18n-ignore: provider product name
   const tier = documentRef.createElement('span');
   tier.className = 'key-setup-tier';
   tier.textContent = TIER_DOTS[key.tier] || '';
   tier.title =
     key.tier === 'metered'
-      ? 'Metered — a billing-enabled account'
-      : 'Free key — register, paste, done';
+      ? t('Metered — a billing-enabled account')
+      : t('Free key — register, paste, done');
   head.append(led, title, tier);
   if (key.clientExposed) {
     const exposed = documentRef.createElement('span');
     exposed.className = 'key-setup-exposed';
-    exposed.textContent = 'browser-side';
-    exposed.title =
-      'This key runs in the browser by design — restrict it at the provider (see SECURITY.md)';
+    exposed.textContent = t('browser-side');
+    exposed.title = t(
+      'This key runs in the browser by design — restrict it at the provider (see SECURITY.md)',
+    );
     head.append(exposed);
   }
   if (external) {
@@ -163,9 +275,10 @@ function buildRow(documentRef, key) {
     // facts this panel reports, never values it rewrites or deletes.
     const badge = documentRef.createElement('span');
     badge.className = 'key-setup-external';
-    badge.textContent = 'configured externally';
-    badge.title =
-      'Supplied by your environment, Keychain, or launcher — change it where it was set';
+    badge.textContent = t('configured externally');
+    badge.title = t(
+      'Supplied by your environment, Keychain, or launcher — change it where it was set',
+    );
     head.append(badge);
   }
   const get = documentRef.createElement('a');
@@ -173,12 +286,12 @@ function buildRow(documentRef, key) {
   get.href = key.getUrl;
   get.target = '_blank';
   get.rel = 'noopener noreferrer';
-  get.textContent = key.set ? 'MANAGE ↗' : 'GET KEY ↗';
+  get.textContent = key.set ? t('MANAGE ↗') : t('GET KEY ↗');
   head.append(get);
 
   const unlocks = documentRef.createElement('p');
   unlocks.className = 'key-setup-unlocks';
-  unlocks.textContent = key.unlocks;
+  unlocks.textContent = t(key.unlocks);
 
   row.append(head, unlocks);
   if (!external) {
@@ -194,8 +307,8 @@ function buildRow(documentRef, key) {
       input.dataset.envVar = envVar;
       input.setAttribute('aria-label', envVar);
       input.placeholder = key.set
-        ? `${envVar} saved — paste to replace`
-        : `paste ${envVar}`;
+        ? t('{envVar} saved — paste to replace', { envVar })
+        : t('paste {envVar}', { envVar });
       fields.append(input);
     }
     if (key.managed === 'file') {
@@ -203,8 +316,10 @@ function buildRow(documentRef, key) {
       remove.type = 'button';
       remove.className = 'key-setup-remove';
       remove.dataset.keySetupRemove = JSON.stringify(key.envVars);
-      remove.textContent = 'REMOVE';
-      remove.title = `Remove ${key.title} from this app's saved keys`;
+      remove.textContent = t('REMOVE');
+      remove.title = t("Remove {title} from this app's saved keys", {
+        title: key.title,
+      });
       fields.append(remove);
     }
     row.append(fields);
@@ -225,17 +340,22 @@ function buildRow(documentRef, key) {
   return row;
 }
 
-/** Move the existing setup action with the theme, retaining its listeners. */
-export function bindKeySetupPlacement(documentRef, chip, root) {
+/**
+ * Move the existing setup action with the theme, retaining its listeners:
+ * Cyber puts it in the top toolbar, every other theme keeps it first in its
+ * markup home (the bottom-right corner row, beside the language picker).
+ */
+export function bindKeySetupPlacement(documentRef, chip) {
   const theme = documentRef?.documentElement;
   const toolbar = documentRef?.getElementById?.('top-center-actions');
   const Observer = documentRef?.defaultView?.MutationObserver;
-  if (!theme || !toolbar || !Observer) return () => {};
+  const home = chip?.parentNode;
+  if (!theme || !toolbar || !Observer || !home) return () => {};
   const sync = () => {
     if (theme.dataset.uiTheme === 'cyber') {
       if (chip.parentNode !== toolbar) toolbar.append(chip);
-    } else if (chip.parentNode !== root.parentNode) {
-      root.before(chip);
+    } else if (chip.parentNode !== home) {
+      home.prepend(chip);
     }
   };
   const observer = new Observer(sync);
@@ -261,9 +381,19 @@ export async function initKeySetup({
   let disposed = false;
   let disposeControls = () => {};
   let disposePlacement = () => {};
+  // A pasted key lives only in its field until Save: switching language (a
+  // reload) asks first while any field holds one.
+  const unregisterUnsavedWork = registerUnsavedWork(() =>
+    [...(root.querySelectorAll?.('input[data-env-var]') || [])].some((input) =>
+      String(input.value ?? '').trim(),
+    )
+      ? msg('unsaved provider keys')
+      : null,
+  );
   const destroy = () => {
     if (disposed) return;
     disposed = true;
+    unregisterUnsavedWork();
     lifetime.abort();
     signal?.removeEventListener('abort', destroy);
     disposeControls();
@@ -295,7 +425,7 @@ export async function initKeySetup({
   }
 
   const rowsHost = root.querySelector('[data-key-setup-rows]');
-  disposePlacement = bindKeySetupPlacement(documentRef, chip, root);
+  disposePlacement = bindKeySetupPlacement(documentRef, chip);
   const applyButton = root.querySelector('[data-key-setup-apply]');
   const closeButton = root.querySelector('[data-key-setup-close]');
   const chipLabel = chip.querySelector('[data-key-setup-chip-label]') || chip;
@@ -314,7 +444,9 @@ export async function initKeySetup({
     if (disposed) return;
     status = nextStatus;
     chipLabel.textContent = keySetupChipLabel(status);
-    chip.title = `Project keys: ${keySetupChipLabel(status)}`;
+    chip.title = t('Project keys: {status}', {
+      status: keySetupChipLabel(status),
+    });
     chip.setAttribute('aria-label', chip.title);
     // Fully powered is the owner's clean screen: the chip retires. The dialog
     // stays reachable this session (and via ?setup=1) to swap or verify keys.
@@ -369,17 +501,19 @@ export async function initKeySetup({
 
   const storeLabel = () =>
     status?.store === 'pinokio-environment'
-      ? 'your app configuration'
-      : 'your local .env';
+      ? t('your app configuration')
+      : t('your local .env');
 
-  const submitUpdates = async (updates, doneVerb) => {
+  // doneMessageKey names the whole saved/removed sentence; the storage
+  // destination is interpolated so the {store} phrase stays one spelling.
+  const submitUpdates = async (updates, doneMessageKey) => {
     if (disposed || busy) return;
     const googleWasUnset = !status?.keys?.find(
       (key) => key.id === 'google-maps',
     )?.set;
     busy = true;
     applyButton?.setAttribute('aria-disabled', 'true');
-    say('Saving…');
+    say(t('Saving…'));
     try {
       const response = await doFetch('/api/setup/keys', {
         method: 'POST',
@@ -390,7 +524,7 @@ export async function initKeySetup({
       const payload = await response.json().catch(() => ({}));
       if (disposed) return;
       if (!response.ok || !payload.ok) {
-        say(payload.error || `Save failed (${response.status}).`);
+        say(saveRefusalText(payload, response.status));
         return;
       }
       for (const input of root.querySelectorAll('input[data-env-var]'))
@@ -420,11 +554,13 @@ export async function initKeySetup({
           signal: lifetime.signal,
         });
       }
-      say(
-        `${doneVerb} ${storeLabel()}. Restarting — this page reloads itself.`,
-      );
+      say(t(doneMessageKey, { store: storeLabel() }));
     } catch (error) {
-      say(`Save failed: ${error?.message || error}`);
+      say(
+        t('Save failed: {detail}', {
+          detail: error?.message || error,
+        }),
+      );
     } finally {
       busy = false;
       applyButton?.setAttribute('aria-disabled', 'false');
@@ -441,10 +577,13 @@ export async function initKeySetup({
       })),
     );
     if (!Object.keys(updates).length) {
-      say('Paste at least one key first.');
+      say(t('Paste at least one key first.'));
       return;
     }
-    await submitUpdates(updates, 'Saved to');
+    await submitUpdates(
+      updates,
+      msg('Saved to {store}. Restarting — this page reloads itself.'),
+    );
   };
 
   chip.addEventListener('click', openDialog);
@@ -462,12 +601,12 @@ export async function initKeySetup({
         if (current === 'oauth') {
           writeStoredCloudVoiceAuthMode('api-key');
           syncCloudVoiceAuth();
-          say('Cloud voice will use OPENAI_API_KEY on the next session.');
+          say(t('Cloud voice will use OPENAI_API_KEY on the next session.'));
           return;
         }
         oauthBusy = true;
         syncCloudVoiceAuth();
-        say('Checking local ChatGPT OAuth sign-in…');
+        say(t('Checking local ChatGPT OAuth sign-in…'));
         try {
           const response = await doFetch('/api/realtime/oauth-status', {
             cache: 'no-store',
@@ -476,22 +615,25 @@ export async function initKeySetup({
           const payload = await response.json().catch(() => ({}));
           if (lifetime.signal.aborted) return;
           if (!response.ok)
-            throw new Error(
-              payload.error || 'Could not check ChatGPT sign-in.',
+            throw oauthCheckError(
+              payload.error,
+              t('Could not check ChatGPT sign-in.'),
             );
           if (payload.available) {
             writeStoredCloudVoiceAuthMode('oauth');
             syncCloudVoiceAuth();
             say(
-              'ChatGPT OAuth selected for cloud voice. Your API key stays saved and available.',
+              t(
+                'ChatGPT OAuth selected for cloud voice. Your API key stays saved and available.',
+              ),
             );
             return;
           }
 
           say(
             payload.code === 'CODEX_OAUTH_REAUTH_REQUIRED'
-              ? 'ChatGPT sign-in expired. Opening sign-in again…'
-              : 'Opening ChatGPT sign-in in your browser…',
+              ? t('ChatGPT sign-in expired. Opening sign-in again…')
+              : t('Opening ChatGPT sign-in in your browser…'),
           );
           const loginResponse = await doFetch('/api/realtime/oauth-login', {
             method: 'POST',
@@ -504,7 +646,7 @@ export async function initKeySetup({
             say(
               loginPayload.error ||
                 payload.error ||
-                'Could not start ChatGPT sign-in on this machine.',
+                t('Could not start ChatGPT sign-in on this machine.'),
             );
             return;
           }
@@ -512,13 +654,17 @@ export async function initKeySetup({
             writeStoredCloudVoiceAuthMode('oauth');
             syncCloudVoiceAuth();
             say(
-              'ChatGPT OAuth selected for cloud voice. Your API key stays saved and available.',
+              t(
+                'ChatGPT OAuth selected for cloud voice. Your API key stays saved and available.',
+              ),
             );
             return;
           }
 
           say(
-            'Finish ChatGPT sign-in in the browser. Waiting for it to complete…',
+            t(
+              'Finish ChatGPT sign-in in the browser. Waiting for it to complete…',
+            ),
           );
           const available = await waitForChatGptOAuth({
             fetchImpl: doFetch,
@@ -527,18 +673,22 @@ export async function initKeySetup({
           if (lifetime.signal.aborted) return;
           if (!available) {
             say(
-              'ChatGPT sign-in timed out. Click USE CHATGPT OAUTH to try again.',
+              t('ChatGPT sign-in timed out. Click {button} to try again.', {
+                button: t('USE CHATGPT OAUTH'),
+              }),
             );
             return;
           }
           writeStoredCloudVoiceAuthMode('oauth');
           syncCloudVoiceAuth();
           say(
-            'ChatGPT sign-in complete. OAuth will be used for the next cloud voice session.',
+            t(
+              'ChatGPT sign-in complete. OAuth will be used for the next cloud voice session.',
+            ),
           );
         } catch (error) {
           if (lifetime.signal.aborted) return;
-          say(`OAuth check failed: ${error?.message || error}`);
+          say(oauthCheckFailureText(error));
         } finally {
           oauthBusy = false;
           if (!disposed) syncCloudVoiceAuth();
@@ -560,11 +710,11 @@ export async function initKeySetup({
     // a deliberate two-step the lure cannot pre-satisfy.
     const ok =
       typeof globalThis.confirm !== 'function' ||
-      globalThis.confirm('Remove this key from your saved configuration?');
+      globalThis.confirm(t('Remove this key from your saved configuration?'));
     if (!ok) return;
     void submitUpdates(
       Object.fromEntries(envVars.map((name) => [name, null])),
-      'Removed from',
+      msg('Removed from {store}. Restarting — this page reloads itself.'),
     );
   });
 

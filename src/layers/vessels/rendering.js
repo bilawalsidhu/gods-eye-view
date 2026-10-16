@@ -1,4 +1,5 @@
 import * as Cesium from 'cesium';
+import { t } from '../../i18n/index.js';
 import {
   vesselTypeCss,
   vesselOverlayCohortLimit,
@@ -448,7 +449,10 @@ export function createRendering({
           : '';
         return {
           ...card,
-          accessibilityLabel: `Focus vessel ${card.title}, MMSI ${mmsi}`,
+          accessibilityLabel: t('Focus vessel {name}, MMSI {mmsi}', {
+            name: card.title,
+            mmsi,
+          }),
           activate: () => {
             const record = state.records.byMmsi.get(mmsi);
             if (!record) return false;

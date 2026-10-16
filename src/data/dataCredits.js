@@ -304,7 +304,8 @@ export const DATA_CREDITS = [
     key: 'gbfs',
     html:
       'Bikeshare availability: GBFS operator feeds ' +
-      '(e.g. Austin BCycle; Bike Share Toronto, operated by the Toronto Parking Authority)',
+      '(e.g. Austin BCycle; Bike Share Toronto, operated by the Toronto Parking Authority; Bike Itaú and Tembici Bogotá, operated by Tembici; ' +
+      'Bicing, Barcelona City Council (B:SM); AMBici, Àrea Metropolitana de Barcelona, operated by nextbike)',
   },
   {
     key: 'urbansharing-gbfs',
