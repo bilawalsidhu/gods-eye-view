@@ -3,6 +3,7 @@ import { orderWeatherImagery } from './imageryOrder.js';
 import { imageryHostStatus } from './imageryHost.js';
 import { createRasterTileProvider } from './rasterTiles.js';
 import { createWeatherShell } from './shellRendering.js';
+import { msg } from '../../i18n/index.js';
 import { readResponseBytesCapped } from '../../sources/httpBody.js';
 import {
   acquireInfraredMosaic,
@@ -200,7 +201,8 @@ function createGlobeRendering({
           await Promise.all(
             urls.map(async (url) => {
               const response = await fetchImpl(url, { signal });
-              if (!response.ok) throw new Error('Weather prefetch unavailable');
+              if (!response.ok)
+                throw new Error(msg('Weather prefetch unavailable'));
               await readResponseBytesCapped(response, 4 * 1024 * 1024 + 65_536);
             }),
           );
@@ -294,7 +296,9 @@ function createGlobeRendering({
             );
           }
         } else {
-          lastError = 'Weather tiles unavailable · previous frame retained';
+          lastError = msg(
+            'Weather tiles unavailable · previous frame retained',
+          );
           remove(frame);
         }
         frame.resolve(ok);
@@ -413,7 +417,7 @@ function createGlobeRendering({
             return;
           }
           frame.failed = true;
-          lastError = 'Some weather tiles unavailable';
+          lastError = msg('Some weather tiles unavailable');
           onChange();
         });
         // A shown, transparent layer lets Cesium request staging tiles while the last
