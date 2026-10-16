@@ -130,6 +130,26 @@ test('the ground is resampled after a move or a while, and the clamp only on rea
   state.position = at(2.36, 48.85, 500);
   state.ground = 140;
   floor.update();
+  assert.equal(state.samples, 2, 'not within MIN_RESAMPLE_MS of the last');
+  state.time += GROUND_FLOOR.MIN_RESAMPLE_MS;
+  floor.update();
   assert.equal(state.samples, 3, 'resampled after a move');
   assert.equal(state.clamps.length, 2, 'a 40 m change is sent');
+});
+
+test('a pan resamples at most every MIN_RESAMPLE_MS, however far it moves', () => {
+  // A sample of the ground outside the view costs about 1.6 ms (surface.js):
+  // not on every frame of a pan.
+  assert.ok(GROUND_FLOOR.MIN_RESAMPLE_MS >= 100);
+  const { floor, state } = setup({ ground: 100 });
+  state.position = at(2.35, 48.85, 500);
+  floor.update();
+  for (let frame = 1; frame <= 30; frame++) {
+    state.time = frame * 16;
+    state.position = at(2.35 + frame * 0.001, 48.85, 500); // ~73 m a frame
+    floor.update();
+  }
+  // 480 ms of panning: the first sample and one every 100 ms at most.
+  assert.ok(state.samples <= 1 + Math.ceil(480 / GROUND_FLOOR.MIN_RESAMPLE_MS));
+  assert.ok(state.samples >= 3, 'still follows the pan');
 });

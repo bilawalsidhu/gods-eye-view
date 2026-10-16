@@ -369,3 +369,10 @@ test('the floor does not fight flights or a lookAt target', () => {
   near(heightOf(engine), 130, 1e-6, 'lifted once released');
   engine.destroy();
 });
+
+test('the ground floor reports its own ground and margin (diagnostics, not contract)', () => {
+  const { engine } = setup();
+  assert.equal(typeof engine.groundFloor.ground, 'function');
+  assert.equal(engine.groundFloor.margin, 30);
+  assert.equal(engine.groundFloor.ground(), undefined, 'nothing sampled yet');
+});
