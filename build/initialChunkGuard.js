@@ -5,7 +5,11 @@
 // (what Rollup put in each chunk), and fails the build otherwise;
 // scripts/check-main-chunk.mjs checks the built files' text as well.
 
-/** Module ids that only the Navara engine may load. */
+/**
+ * Module ids that only the Navara engine may load, when no package list is
+ * given (the browser build passes the full dependency closure,
+ * navaraDependencies.js).
+ */
 export const ENGINE_ONLY_MODULES =
   /[\\/]node_modules[\\/](?:three|@navaramap[\\/][^\\/]+|postprocessing)[\\/]/;
 
@@ -32,21 +36,24 @@ export function initialChunkViolations(bundle, pattern = ENGINE_ONLY_MODULES) {
 }
 
 /** The Rollup plugin: fails generateBundle when an initial chunk holds three or Navara. */
-export function initialChunkGuard({ log = console.log } = {}) {
+export function initialChunkGuard({
+  log = console.log,
+  pattern = ENGINE_ONLY_MODULES,
+} = {}) {
   return {
     name: 'gev-initial-chunk-guard',
     generateBundle(_options, bundle) {
-      const violations = initialChunkViolations(bundle);
+      const violations = initialChunkViolations(bundle, pattern);
       if (violations.length) {
         this.error(
-          'three/Navara in the Cesium-mode initial chunks:\n' +
+          'Navara-only modules in the Cesium-mode initial chunks:\n' +
             violations
               .map(({ chunk, module }) => `  ${chunk}: ${module}`)
               .join('\n'),
         );
         return;
       }
-      log('[initial-chunks] no three or Navara modules in the initial chunks');
+      log('[initial-chunks] no Navara-only modules in the initial chunks');
     },
   };
 }

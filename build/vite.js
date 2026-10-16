@@ -1,3 +1,4 @@
+import { fileURLToPath } from 'node:url';
 import { applicationHtmlPlugin } from './application-html.js';
 import cesium from 'vite-plugin-cesium';
 import { DEFAULT_ALLOWED_HOSTS, hostCheckPlugin } from './allowedHosts.js';
@@ -5,6 +6,7 @@ import { embedFramingPlugin } from './embed-framing.js';
 import { panelBuildPlugin } from './panel.js';
 import { navaraChunkFileNames, navaraWorkerAssets } from './navaraAssets.js';
 import { initialChunkGuard } from './initialChunkGuard.js';
+import { navaraOnlyPackages, packagePattern } from './navaraDependencies.js';
 
 /**
  * Content-Security-Policy for every document the dev/preview server serves.
@@ -134,7 +136,14 @@ export function createBrowserViteConfig({
       // The lazy chunk with the Navara engine is named navara-engine.
       rollupOptions: {
         // initialChunkGuard: no three/Navara module in the initial chunks.
-        plugins: [navaraWorkerAssets(), initialChunkGuard()],
+        plugins: [
+          navaraWorkerAssets(),
+          initialChunkGuard({
+            pattern: packagePattern(
+              navaraOnlyPackages(fileURLToPath(new URL('..', import.meta.url))),
+            ),
+          }),
+        ],
         output: { chunkFileNames: navaraChunkFileNames },
       },
     },
