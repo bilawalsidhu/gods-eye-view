@@ -38,73 +38,83 @@ function finite(value, label) {
  * @param {{ now?: () => number }} [options] `now`: the wall clock (Date.now).
  * @returns {AppClock}
  */
-export function createAppClock({ now: source = () => Date.now() } = {}) {
+// The wall clock, read through Date.now at each call (so a mocked Date.now
+// is the app clock's too).
+const wallClock = () => Date.now();
+
+export function createAppClock({ now: source = wallClock } = {}) {
   if (typeof source !== 'function')
     throw new TypeError('createAppClock needs a now() function');
   // Rate 1: wall + offsetMs, exact. Any other rate: anchorValue plus the wall
-  // time since anchorSource, scaled.
-  let offsetMs = 0;
-  let rateValue = 1;
-  let anchorValue = 0;
-  let anchorSource = 0;
-  let frozen = null;
-  let latched = null;
+  // time since anchorSource, scaled. Numbers live in object fields (stored in
+  // place), not closure variables, so the per-frame latch allocates nothing.
+  const state = {
+    offsetMs: 0,
+    rate: 1,
+    anchorValue: 0,
+    anchorSource: 0,
+    frozen: false,
+    frozenMs: 0,
+    latched: false,
+    latchedMs: 0,
+  };
 
   const running = () =>
-    rateValue === 1
-      ? source() + offsetMs
-      : anchorValue + (source() - anchorSource) * rateValue;
-  const now = () => (frozen === null ? running() : frozen);
+    state.rate === 1
+      ? source() + state.offsetMs
+      : state.anchorValue + (source() - state.anchorSource) * state.rate;
+  const now = () => (state.frozen ? state.frozenMs : running());
   // Make the running clock read `value` from this moment on.
   const runFrom = (value) => {
-    if (rateValue === 1) offsetMs = value - source();
+    if (state.rate === 1) state.offsetMs = value - source();
     else {
-      anchorValue = value;
-      anchorSource = source();
+      state.anchorValue = value;
+      state.anchorSource = source();
     }
   };
 
   return {
     now,
-    frameTime: () => (latched === null ? now() : latched),
+    frameTime: () => (state.latched ? state.latchedMs : now()),
     beginFrame() {
-      latched = now();
-      return latched;
+      state.latchedMs = now();
+      state.latched = true;
+      return state.latchedMs;
     },
     freeze(ms) {
-      frozen = ms === undefined ? now() : finite(ms, 'Frozen time');
+      state.frozenMs = ms === undefined ? now() : finite(ms, 'Frozen time');
+      state.frozen = true;
     },
     resume() {
-      if (frozen === null) return;
-      const value = frozen;
-      frozen = null;
-      runFrom(value);
+      if (!state.frozen) return;
+      state.frozen = false;
+      runFrom(state.frozenMs);
     },
     offset(ms) {
       const value = source() + finite(ms, 'Clock offset');
-      frozen = null;
+      state.frozen = false;
       runFrom(value);
     },
     rate(rate) {
       if (!(isFiniteNumber(rate) && rate >= 0))
         throw new TypeError(`Clock rate must be a finite number >= 0: ${rate}`);
-      if (frozen !== null) {
-        rateValue = rate;
+      if (state.frozen) {
+        state.rate = rate;
         return;
       }
       const value = running();
-      rateValue = rate;
+      state.rate = rate;
       runFrom(value);
     },
     reset() {
-      offsetMs = 0;
-      rateValue = 1;
-      frozen = null;
+      state.offsetMs = 0;
+      state.rate = 1;
+      state.frozen = false;
     },
     state: () => ({
-      frozen: frozen !== null,
+      frozen: state.frozen,
       offsetMs: now() - source(),
-      rate: rateValue,
+      rate: state.rate,
     }),
   };
 }
