@@ -32,7 +32,8 @@
  * the same fleet on both engines) as one sprite set, every instance moved
  * and committed every frame, at each --scene (global,city,orbit) with the
  * app's layers off; frame times over 10 s after a 3 s warm-up while the
- * engine renders continuously, and the JS heap. Cesium draws with the app's
+ * engine renders continuously; then, still running, the post-GC JS heap
+ * every 10 s for --heap-seconds (60) and its slope in MB per minute. Cesium draws with the app's
  * default style (no post stages on) and without its 60 fps cap for the
  * measurement; Navara with --navara-look (pass minimal for the gate).
  */
@@ -75,6 +76,8 @@ if (!['flight', 'movers'].includes(scenario)) {
 }
 const MOVER_COUNT = Number(argument('count') ?? 10000);
 const MOVER_SCENES = (argument('scene') ?? 'global,city,orbit').split(',');
+// Post-GC heap sampling per movers scene (0 skips it).
+const HEAP_SECONDS = Number(argument('heap-seconds') ?? 60);
 // Camera poses (degrees, metres) of the movers scenario.
 const SCENES = {
   global: { lat: 20, lon: -40, height: 20_000_000, pitch: -90, near: null },
@@ -316,7 +319,7 @@ async function runFlight(flight) {
  * the scene, tiles loaded; then `count` aircraft as one sprite set, moved and
  * committed on every frame while the engine renders continuously.
  */
-async function runMovers({ scene, count, warmMs, measureMs }) {
+async function runMovers({ scene, count, warmMs, measureMs, hold }) {
   const { engine, dataManager, viewer } = window.__godsEyeView;
   const geo = await import('/src/geo/index.js');
   // The app caps Cesium at 60 fps (viewer.targetFrameRate); Navara has no
@@ -393,26 +396,73 @@ async function runMovers({ scene, count, warmMs, measureMs }) {
     times.push(performance.now()),
   );
   engine.render.setContinuous(true);
-  try {
-    await sleep(warmMs);
-    const heapBefore = memory();
-    const from = performance.now();
-    await sleep(measureMs);
-    const to = performance.now();
-    return {
-      startTilesMs: Math.round(loadedSince ? loadedSince - waitStart : -1),
-      wallMs: to - from,
-      times: times.filter((time) => time >= from && time <= to),
-      heapBefore,
-      heapAfter: memory(),
-    };
-  } finally {
+  const stop = () => {
     engine.render.setContinuous(false);
     if (viewer) viewer.targetFrameRate = targetFrameRate;
     removeTick();
     removeFrame();
     set.destroy();
+  };
+  let holding = false;
+  try {
+    await sleep(warmMs);
+    const from = performance.now();
+    await sleep(measureMs);
+    const to = performance.now();
+    // `hold`: the scene keeps running for the heap samples the runner
+    // takes over CDP; window.__benchStop() ends it.
+    const result = {
+      startTilesMs: Math.round(loadedSince ? loadedSince - waitStart : -1),
+      wallMs: to - from,
+      times: times.filter((time) => time >= from && time <= to),
+    };
+    if (hold) {
+      holding = true;
+      // No more frame times: the heap samples must not count them.
+      removeFrame();
+      times.length = 0;
+      window.__benchStop = stop;
+    }
+    return result;
+  } finally {
+    if (!holding) stop();
   }
+}
+
+/**
+ * Post-GC JS heap while the movers scene keeps running: a forced GC (CDP
+ * HeapProfiler.collectGarbage) and Runtime.getHeapUsage every 10 s for
+ * `seconds`, then the least-squares slope in MB per minute.
+ */
+async function heapSlope(page, seconds) {
+  const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+  const cdp = await page.createCDPSession();
+  const samples = [];
+  const started = Date.now();
+  try {
+    for (;;) {
+      await cdp.send('HeapProfiler.collectGarbage');
+      const { usedSize } = await cdp.send('Runtime.getHeapUsage');
+      samples.push([(Date.now() - started) / 60000, usedSize / 1e6]);
+      if (Date.now() - started >= seconds * 1000) break;
+      await sleep(10000);
+    }
+  } finally {
+    await cdp.detach();
+  }
+  const n = samples.length;
+  const mx = samples.reduce((sum, [x]) => sum + x, 0) / n;
+  const my = samples.reduce((sum, [, y]) => sum + y, 0) / n;
+  const sxx = samples.reduce((sum, [x]) => sum + (x - mx) ** 2, 0);
+  const slope =
+    sxx > 0
+      ? samples.reduce((sum, [x, y]) => sum + (x - mx) * (y - my), 0) / sxx
+      : 0;
+  return {
+    postGcMB: round(samples.at(-1)[1], 1),
+    slopeMBPerMin: round(slope, 2),
+    samples: n,
+  };
 }
 
 // --- Runner -----------------------------------------------------------------
@@ -492,7 +542,16 @@ async function runOnce(browser, baseUrl, engine) {
           count: MOVER_COUNT,
           warmMs: 3000,
           measureMs: 10000,
+          hold: HEAP_SECONDS > 0,
         });
+        let heap = null;
+        if (HEAP_SECONDS > 0) {
+          try {
+            heap = await heapSlope(page, HEAP_SECONDS);
+          } finally {
+            await page.evaluate(() => window.__benchStop?.());
+          }
+        }
         const deltas = measured.times
           .slice(1)
           .map((time, index) => time - measured.times[index])
@@ -503,11 +562,12 @@ async function runOnce(browser, baseUrl, engine) {
           p50: round(quantile(deltas, 0.5), 2),
           p95: round(quantile(deltas, 0.95), 2),
           max: round(deltas.at(-1), 1),
-          heapMB: round((measured.heapAfter ?? 0) / 1e6, 1),
-          heapGrowthMB: round(
-            ((measured.heapAfter ?? 0) - (measured.heapBefore ?? 0)) / 1e6,
-            1,
-          ),
+          ...(heap
+            ? {
+                heapPostGcMB: heap.postGcMB,
+                heapSlopeMBPerMin: heap.slopeMBPerMin,
+              }
+            : {}),
           startTilesMs: measured.startTilesMs,
         };
       }
@@ -625,8 +685,8 @@ try {
                   p95: of('p95'),
                   max: of('max'),
                   fps: of('fps'),
-                  heapMB: of('heapMB'),
-                  heapGrowthMB: of('heapGrowthMB'),
+                  heapPostGcMB: of('heapPostGcMB'),
+                  heapSlopeMBPerMin: of('heapSlopeMBPerMin'),
                 },
               ];
             }),
