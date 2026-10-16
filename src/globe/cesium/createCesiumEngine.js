@@ -1,7 +1,9 @@
 // The GlobeEngine on an existing Cesium Viewer. Creating it changes nothing
-// in the viewer: Cesium subscriptions, the input handler and render holds
+// in the scene: Cesium subscriptions, the input handler and render holds
 // appear only when the shell uses them, and destroy() removes them again
-// (the viewer itself stays owned by the app).
+// (the viewer itself stays owned by the app). The one exception is the
+// engine clock's frame latch on viewer.clock.onTick (clock.js), attached at
+// creation so it runs before onTick listeners added later.
 
 import { createCesiumCamera } from './camera.js';
 import { createCesiumClock } from './clock.js';
