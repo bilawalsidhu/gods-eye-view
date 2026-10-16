@@ -380,6 +380,59 @@ export function createContractSuite(
       },
     ],
     [
+      'render.setSharpen: merges partial updates, rejects bad values, draws',
+      async () => {
+        const previous = engine.render.sharpen();
+        const same = (expected, label) => {
+          const actual = engine.render.sharpen();
+          ensure(
+            actual.enabled === expected.enabled &&
+              actual.amount === expected.amount,
+            `${label}: ${JSON.stringify(actual)} is not ${JSON.stringify(expected)}`,
+          );
+        };
+        ensure(
+          typeof previous.enabled === 'boolean' &&
+            Number.isFinite(previous.amount),
+          `sharpen() ${JSON.stringify(previous)} is not { enabled, amount }`,
+        );
+        try {
+          engine.render.setSharpen({ enabled: true, amount: 1.7 });
+          same({ enabled: true, amount: 1.7 }, 'after enabling');
+          engine.render.sharpen().amount = 0;
+          same({ enabled: true, amount: 1.7 }, 'sharpen() is a copy');
+          // A frame with the sharpening on draws without errors.
+          await settle(2);
+          engine.render.setSharpen({ amount: 0.5 });
+          same({ enabled: true, amount: 0.5 }, 'after an amount alone');
+          engine.render.setSharpen({ enabled: false });
+          same({ enabled: false, amount: 0.5 }, 'after disabling');
+          for (const bad of [
+            { enabled: 'yes' },
+            { amount: -0.1 },
+            { amount: Number.NaN },
+            { amount: '1' },
+          ]) {
+            let error = null;
+            try {
+              engine.render.setSharpen(bad);
+            } catch (caught) {
+              error = caught;
+            }
+            ensure(
+              error instanceof TypeError,
+              `setSharpen(${JSON.stringify(bad)}) did not throw a TypeError`,
+            );
+          }
+          same({ enabled: false, amount: 0.5 }, 'after rejected values');
+          await settle(1);
+        } finally {
+          engine.render.setSharpen(previous);
+          await settle(1);
+        }
+      },
+    ],
+    [
       'camera.flyTo: duration 0 lands and completes before flyTo returns',
       async () => {
         await nadirView();

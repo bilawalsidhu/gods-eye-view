@@ -5,9 +5,11 @@ import {
   GLOBE_ENGINE_MEMBERS,
   INPUT_TYPES,
   MODIFIERS,
+  SHARPEN_INITIAL,
   assertGlobeEngine,
   createEngineEvent,
   isEngineEvent,
+  mergeSharpen,
 } from './contract.js';
 import { createFakeEngine } from './testing/fakeEngine.js';
 import {
@@ -291,4 +293,24 @@ test('raiseValue raises exactly one argument with the event semantics', () => {
   event.raiseValue(42);
   assert.deepEqual(seen, [['first', [42]]]);
   assert.equal(event.numberOfListeners, 1);
+});
+
+test('the contract carries the sharpening and checks its values', () => {
+  for (const member of ['render.setSharpen', 'render.sharpen'])
+    assert.ok(GLOBE_ENGINE_MEMBERS.includes(member), member);
+  assert.deepEqual(SHARPEN_INITIAL, { enabled: false, amount: 1 });
+  const on = mergeSharpen(SHARPEN_INITIAL, { enabled: true });
+  assert.deepEqual(on, { enabled: true, amount: 1 });
+  assert.deepEqual(mergeSharpen(on, { amount: 0 }), {
+    enabled: true,
+    amount: 0,
+  });
+  assert.deepEqual(mergeSharpen(on), on);
+  for (const bad of [
+    { enabled: 1 },
+    { amount: -1 },
+    { amount: Infinity },
+    { amount: null },
+  ])
+    assert.throws(() => mergeSharpen(on, bad), TypeError);
 });

@@ -170,6 +170,7 @@ export class StyleManager extends ShellFacade {
 
     this._visualSettings = new VisualSettings({
       viewer,
+      engine,
       mapStackController,
       services: {
         setScopeTerminusOverride: services.setScopeTerminusOverride,

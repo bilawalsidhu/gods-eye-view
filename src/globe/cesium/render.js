@@ -8,6 +8,7 @@ import {
   isRenderGovernorInstalled,
   releaseContinuousRender,
 } from '../../renderGovernor.js';
+import { SHARPEN_INITIAL, mergeSharpen } from '../contract.js';
 
 export const RENDER_OWNER = 'globe-engine';
 
@@ -28,6 +29,7 @@ export function createCesiumRender(
   } = {},
 ) {
   let held = false;
+  let sharpen = { ...SHARPEN_INITIAL };
   const render = {
     request(reason = RENDER_OWNER) {
       requestRender(reason);
@@ -39,6 +41,12 @@ export function createCesiumRender(
     },
     // The scene's real mode: another owner's hold keeps it continuous.
     isContinuous: () => viewer.scene.requestRenderMode === false,
+    // State only: in Cesium mode the app's own post stage sharpens
+    // (src/ui/visualEffects.js), and the scene stays as it was.
+    setSharpen(options) {
+      sharpen = mergeSharpen(sharpen, options);
+    },
+    sharpen: () => ({ ...sharpen }),
   };
   return {
     render,

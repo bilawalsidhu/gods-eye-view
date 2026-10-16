@@ -1770,6 +1770,7 @@
       "src/globe/navara/internals.js",
       "src/globe/navara/look.js",
       "src/globe/navara/maps.js",
+      "src/globe/navara/sharpen.js",
       "src/globe/navara/surface.js",
       "src/globe/navara/viewOptions.js",
       "src/app/engineChoice.js",
