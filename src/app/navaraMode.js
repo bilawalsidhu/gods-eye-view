@@ -5,7 +5,11 @@
 
 import { DATA_CREDITS, registerDataCredits } from '../data/dataCredits.js';
 import { isEmbeddedInline } from './embed.js';
-import { createLayerAvailability } from './layers/renderers.js';
+import {
+  createLayerAvailability,
+  layerAvailableOn,
+  registerLayerRenderers,
+} from './layers/renderers.js';
 import {
   getRenderGovernorDiagnostics,
   governorRequestRender,
@@ -46,6 +50,18 @@ const SHELL_CREDIT_KEYS = new Set([
 ]);
 
 /**
+ * Registers the Navara layer renderers (once per page). Each loads only
+ * here, through import(), so Cesium mode never fetches them.
+ */
+export async function registerNavaraLayerRenderers() {
+  if (layerAvailableOn('flights', 'navara')) return;
+  const { createFlightsNavaraRenderer } =
+    await import('../layers/flights/render/navara.js');
+  if (!layerAvailableOn('flights', 'navara'))
+    registerLayerRenderers('navara', { flights: createFlightsNavaraRenderer });
+}
+
+/**
  * The scene on the experimental Navara engine: no viewer and no Cesium
  * objects. Navara builds the map sources from the controller's descriptions
  * (Google 3D tiles from the browser key, else base imagery) and shows their
@@ -72,6 +88,10 @@ export async function createNavaraScene({
   });
   defer(() => globe.destroy());
   const { engine } = globe;
+  // The layers drawn on Navara (their render/navara.js), before the catalog
+  // asks the registry which layers this engine shows.
+  await registerNavaraLayerRenderers();
+  signal.throwIfAborted();
   // The tools install the governor on this engine; it goes before the engine.
   defer(() => uninstallRenderGovernor(engine));
   signal.throwIfAborted();

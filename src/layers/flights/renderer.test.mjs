@@ -247,3 +247,85 @@ test('the flights logic draws, selects and follows only through its renderer', a
   }
   assert.ok(renderer.calls.some(([name]) => name === 'destroy'));
 });
+
+test('the flights logic draws and follows on the Navara renderer (fake engine)', async () => {
+  const { createAircraftNavaraRenderer, aircraftAtlasLayout } =
+    await import('../aircraft/render/navara.js');
+  const layout = aircraftAtlasLayout();
+  const engine = createFakeEngine();
+  let renderer = null;
+  const layer = createApplicationFlights({
+    surface: defaultSurface,
+    source: {
+      label: 'Fixture aircraft',
+      getSnapshot: async () => snapshotOf(['abc123', 'def456']),
+    },
+    militaryRegistry,
+    renderer: {
+      create: ({ engine: given }) =>
+        (renderer = createAircraftNavaraRenderer({
+          engine: given,
+          layerId: 'flights',
+          order: 8,
+          headingOffsetDeg: 180,
+          drawAtlas: async () => ({
+            canvas: { width: layout.width, height: layout.height },
+            cells: layout.cells,
+          }),
+        })),
+    },
+  });
+  layer.init(null, { engine });
+  layer.enable();
+  try {
+    await renderer.whenReady();
+    await layer.update(null);
+    await Promise.resolve();
+    const sprites = engine.movers
+      .list()
+      .filter(({ id }) => id.startsWith('flights-sprites'));
+    assert.equal(sprites.length, 1);
+    assert.equal(sprites[0].count, 2);
+    const { store } = engine.fake.moverSet(sprites[0].id);
+    assert.deepEqual([...store.pickIds.slice(0, 2)].sort(), [
+      'abc123',
+      'def456',
+    ]);
+    // A click on a contact selects it; the engine follows with its label.
+    engine.fake.script('pick', () => ({ id: 'def456' }));
+    engine.fake.script('drillPick', () => [{ id: 'def456' }]);
+    engine.fake.input('down', { position: { x: 10, y: 10 } });
+    engine.fake.input('up', { position: { x: 10, y: 10 } });
+    engine.fake.input('click', { position: { x: 10, y: 10 } });
+    assert.equal(layer.getTrackedInfo()?.icao24, 'def456');
+    const following = engine.camera.following();
+    assert.equal(following?.label?.id, 'flights:def456');
+    engine.fake.frame();
+    const tracked = engine.movers
+      .list()
+      .find(({ id }) => id.startsWith('flights-tracked'));
+    assert.equal(tracked.count, 1);
+    assert.equal(layer.getAllPositions().length, 2);
+    // A camera command ends the engine's follow; the contact stays selected
+    // (as on Cesium after a search flight), and tracking it again follows.
+    engine.camera.setView({
+      destination: geo.cartesian3.fromDegrees(-97.7, 30.2, 50_000),
+    });
+    assert.equal(engine.camera.following(), null);
+    assert.equal(layer.getTrackedInfo()?.icao24, 'def456');
+    assert.equal(layer.trackById('def456', { origin: 'voice' }), true);
+    assert.equal(engine.camera.following()?.label?.id, 'flights:def456');
+    assert.equal(layer.stopTracking(), true);
+    assert.equal(engine.camera.following(), null);
+    assert.equal(
+      engine.movers.list().find(({ id }) => id.startsWith('flights-tracked'))
+        .count,
+      0,
+    );
+  } finally {
+    layer.disable();
+    layer.destroy(null);
+  }
+  assert.equal(engine.movers.list().length, 0, 'no mover set left behind');
+  engine.destroy();
+});
