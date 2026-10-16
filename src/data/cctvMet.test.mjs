@@ -2,8 +2,11 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
+  KARTVERKET_HEIGHT_URL,
   MET_IMAGE_ORIGIN,
   MET_WEBCAM_CATALOG_URL,
+  applyMetGroundHeights,
+  clearMetHeightCache,
   loadMetSources,
   metCameraToSource,
   metFacingToHeading,
@@ -39,6 +42,17 @@ const page = (...rows) =>
 <table align=center width=90% border=0 >
 ${rows.join('\n')}
 </table></body></html>`;
+
+/** A Kartverket `punkt` answer for the points the request asked about. */
+const heightAnswer = (url, zFor) => {
+  const asked = JSON.parse(new URL(url).searchParams.get('punkter'));
+  return Response.json({
+    koordsys: 4258,
+    punkter: asked.map(([x, y]) => ({ x, y, ...zFor(x, y) })),
+  });
+};
+
+const camera = (lat, lon, id = `c-${lat}-${lon}`) => ({ id, lat, lon });
 
 test('the list page parses into one entry per camera', () => {
   const entries = parseMetWebcamList(
@@ -128,11 +142,15 @@ test('cameras without an image, off-path frames and bad rows are dropped', () =>
 });
 
 test('the loader dedupes, and failures degrade to an empty pack', async (t) => {
+  clearMetHeightCache();
   t.mock.method(console, 'log', () => {});
   t.mock.method(console, 'warn', () => {});
   const requested = [];
   const fetchMock = t.mock.method(globalThis, 'fetch', async (url, init) => {
     requested.push([String(url), init.redirect]);
+    if (String(url).startsWith(KARTVERKET_HEIGHT_URL)) {
+      return heightAnswer(url, () => ({ z: 347.13, datakilde: 'dtm1' }));
+    }
     return new Response(
       page(
         row(),
@@ -147,13 +165,15 @@ test('the loader dedupes, and failures degrade to an empty pack', async (t) => {
     );
   });
   const cameras = await loadMetSources();
-  assert.deepEqual(requested, [[MET_WEBCAM_CATALOG_URL, 'manual']]);
+  assert.deepEqual(requested[0], [MET_WEBCAM_CATALOG_URL, 'manual']);
   // Nearest-to-anchor first: Hurum (near Oslo) leads.
   assert.deepEqual(
     cameras.map((c) => c.id),
     ['no-met-hurum', 'no-met-bjornoya1'],
   );
   assert.equal(cameras[0].name, 'Værradar på Hurum');
+  assert.equal(cameras[0].groundElevationM, 347.1);
+  assert.equal(cameras[1].groundElevationM, undefined);
 
   fetchMock.mock.mockImplementation(
     async () => new Response('nope', { status: 503 }),
@@ -171,6 +191,87 @@ test('the loader dedupes, and failures degrade to an empty pack', async (t) => {
     throw new Error('offline');
   });
   assert.deepEqual(await loadMetSources(), []);
+});
+
+test('mainland cameras get Kartverket heights; the Arctic ones keep none', async (t) => {
+  clearMetHeightCache();
+  t.mock.method(console, 'warn', () => {});
+  const requested = [];
+  t.mock.method(globalThis, 'fetch', async (url) => {
+    requested.push(String(url));
+    return heightAnswer(url, (x) =>
+      x === 7.213865
+        ? { z: 986.04, datakilde: 'dtm1' }
+        : x === 10.450589
+          ? // Over water the API returns the sea-floor depth.
+            { z: -9.8, datakilde: 'dybdekurver', terreng: 'Havflate' }
+          : { z: null },
+    );
+  });
+  const haukeliseter = camera(59.81186, 7.213865);
+  const buholmsrasa = camera(64.4016412, 10.450589);
+  const noHeight = camera(68.0, 16.0);
+  const bjornoya = camera(74.50384, 18.996419);
+  const janMayen = camera(70.922686, -8.715629);
+  const cameras = [haukeliseter, buholmsrasa, noHeight, bjornoya, janMayen];
+  await applyMetGroundHeights(cameras, 1000);
+  assert.equal(requested.length, 1);
+  const url = new URL(requested[0]);
+  assert.equal(`${url.origin}${url.pathname}`, KARTVERKET_HEIGHT_URL);
+  assert.equal(url.searchParams.get('koordsys'), '4258');
+  // Svalbard and Jan Mayen are outside Kartverket's coverage: not asked.
+  assert.equal(JSON.parse(url.searchParams.get('punkter')).length, 3);
+  assert.equal(haukeliseter.groundElevationM, 986);
+  assert.equal(buholmsrasa.groundElevationM, 0);
+  assert.equal(noHeight.groundElevationM, undefined);
+  assert.equal(bjornoya.groundElevationM, undefined);
+  assert.equal(janMayen.groundElevationM, undefined);
+
+  // Heights are cached; a miss is asked about again only after its TTL.
+  const again = [camera(59.81186, 7.213865), camera(68.0, 16.0)];
+  await applyMetGroundHeights(again, 2000);
+  assert.equal(requested.length, 1);
+  assert.equal(again[0].groundElevationM, 986);
+  await applyMetGroundHeights(again, 1000 + 7 * 60 * 60 * 1000);
+  assert.equal(requested.length, 2);
+  assert.equal(
+    JSON.parse(new URL(requested[1]).searchParams.get('punkter')).length,
+    1,
+  );
+});
+
+test('a failed height lookup leaves cameras without heights and backs off', async (t) => {
+  clearMetHeightCache();
+  t.mock.method(console, 'warn', () => {});
+  let calls = 0;
+  t.mock.method(globalThis, 'fetch', async () => {
+    calls += 1;
+    return new Response('busy', { status: 429 });
+  });
+  const cameras = [camera(59.81186, 7.213865)];
+  await applyMetGroundHeights(cameras, 1000);
+  assert.equal(cameras[0].groundElevationM, undefined);
+  await applyMetGroundHeights(cameras, 1000 + 60 * 1000);
+  assert.equal(calls, 1);
+  await applyMetGroundHeights(cameras, 1000 + 11 * 60 * 1000);
+  assert.equal(calls, 2);
+});
+
+test('CCTV_MET_HEIGHTS=0 skips the lookup', async (t) => {
+  clearMetHeightCache();
+  const fetchMock = t.mock.method(globalThis, 'fetch', async () => {
+    throw new Error('unexpected');
+  });
+  const saved = process.env.CCTV_MET_HEIGHTS;
+  t.after(() => {
+    if (saved === undefined) delete process.env.CCTV_MET_HEIGHTS;
+    else process.env.CCTV_MET_HEIGHTS = saved;
+  });
+  process.env.CCTV_MET_HEIGHTS = '0';
+  const cameras = [camera(59.81186, 7.213865)];
+  await applyMetGroundHeights(cameras);
+  assert.equal(fetchMock.mock.callCount(), 0);
+  assert.equal(cameras[0].groundElevationM, undefined);
 });
 
 const runCatalog = async (t) => {

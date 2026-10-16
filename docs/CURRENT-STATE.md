@@ -1035,7 +1035,10 @@ the shared 15-minute catalog cache. Only each camera's own
 `obs-view.met.no/obswebcam/last/site1_<site>.jpg` still is registered, and
 cameras whose image cell is empty are dropped. The place text's compass word
 ("mot øst") sets an 8-point heading; otherwise the low-confidence prior is
-used. `CCTV_MET_ENABLED=0` turns the pack off and `CCTV_MET_MAX_SOURCES`
+used. Mainland cameras get their ground height from Kartverket's keyless
+point-height API (CC BY 4.0) in one bounded, cached request; Svalbard and Jan
+Mayen are outside its coverage and keep the client's 0 m, within ~25 m of
+their true height. `CCTV_MET_HEIGHTS=0` skips the lookup. `CCTV_MET_ENABLED=0` turns the pack off and `CCTV_MET_MAX_SOURCES`
 caps it (default 100, bounded to 1–500). Data from MET Norway under NLOD 2.0
 and CC BY 4.0.
 
