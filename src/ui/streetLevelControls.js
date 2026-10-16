@@ -5,6 +5,7 @@ import {
   SINCE_STOPS,
 } from './streetLevelPresentation.js';
 
+import { t, translateKnown } from '../i18n/index.js';
 const RENDER_MODE_KEY = 'gev:street-level:render-mode';
 const FOCUSABLE =
   'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
@@ -66,10 +67,14 @@ export class StreetLevelControls {
       status: byId('sl-status'),
       controls: byId('sl-controls'),
       providerChips: byId('sl-provider-chips'),
+      nearestBtn: byId('sl-nearest-btn'),
       error: byId('sl-error'),
       errorText: byId('sl-error-text'),
+      panoRow: byId('sl-pano-row'),
+      sinceRow: byId('sl-since-row'),
       sinceRange: byId('sl-since'),
       sinceLabel: byId('sl-since-label'),
+      sinceNote: byId('sl-since-note'),
       legend: byId('sl-legend'),
       followBtn: byId('sl-follow-btn'),
       viewerWrap: byId('sl-viewer-wrap'),
@@ -103,9 +108,11 @@ export class StreetLevelControls {
     this.listen(el.providerChips, 'click', (event) => {
       const button = event.target?.closest?.('.data-toggle-chip');
       if (!button || button.disabled) return;
-      // Without a key the chips stay focusable for their tooltip; a click
-      // says the same thing rather than switching on a layer that cannot draw.
-      if (this._view?.controlsDisabled) {
+      // A keyless chip shows its tooltip instead of switching; others switch.
+      const chip = this._view?.providers.find(
+        (entry) => entry.id === button.dataset.chipId,
+      );
+      if (chip?.state === 'error') {
         if (button.title) this.actions.showToast?.(button.title);
         return;
       }
@@ -122,13 +129,22 @@ export class StreetLevelControls {
     const sinceDays = () =>
       SINCE_STOPS[Number(el.sinceRange?.value) || 0]?.days ?? 0;
     this.listen(el.sinceRange, 'input', () => {
-      const label = SINCE_STOPS[Number(el.sinceRange.value) || 0].label;
+      const label = t(SINCE_STOPS[Number(el.sinceRange.value) || 0].label);
       if (el.sinceLabel) el.sinceLabel.textContent = label;
       el.sinceRange.setAttribute('aria-valuetext', label);
     });
     this.listen(el.sinceRange, 'change', () =>
       this._setParams({ sinceDays: sinceDays() }),
     );
+    this.listen(el.nearestBtn, 'click', () => {
+      const nearest = this._view?.nearest;
+      if (!nearest?.visible || nearest.disabled) return;
+      this.layer.openNearest?.(undefined, {
+        providerIds: nearest.providerIds,
+        frame: false,
+        aim: 'screen-centre',
+      });
+    });
     this.listen(el.followBtn, 'click', () => {
       this.layer.setFollow?.(!(this._state?.street?.follow === true));
     });
@@ -214,7 +230,8 @@ export class StreetLevelControls {
       await this.actions.setEnabled?.(true);
     } catch (error) {
       this.actions.showToast?.(
-        error?.message || 'Street Level could not start',
+        translateKnown(error?.message || '') ||
+          t('Street Level could not start'),
       );
       return false;
     }
@@ -226,7 +243,9 @@ export class StreetLevelControls {
     try {
       await this.actions.setEnabled?.(!enabled);
     } catch (error) {
-      this.actions.showToast?.(error?.message || 'Street Level toggle failed');
+      this.actions.showToast?.(
+        translateKnown(error?.message || '') || t('Street Level toggle failed'),
+      );
     }
   }
 
@@ -238,28 +257,29 @@ export class StreetLevelControls {
   }
 
   /**
-   * Lighting a chip turns the layer on; darkening the last lit one turns the
-   * layer off but keeps the provider on, so the layer comes back with it.
+   * Lighting a chip turns the layer on and darkens the others (one source at
+   * a time); darkening the lit one turns the layer off, keeping the provider.
    */
   async _toggleProvider(providerId) {
     const chip = this._view?.providers.find((entry) => entry.id === providerId);
     if (!chip) return;
     if (!chip.active) {
-      this._setParams({ [providerId]: true });
+      // Every registered provider in one update (those hidden on this map
+      // too), so the share link records the swap.
+      const ids =
+        this.layer.providerIds || this._view.providers.map((entry) => entry.id);
+      this._setParams(
+        Object.fromEntries(ids.map((id) => [id, id === providerId])),
+      );
       await this._ensureEnabled();
-      return;
-    }
-    const othersLit = this._view.providers.some(
-      (entry) => entry.id !== providerId && entry.active,
-    );
-    if (othersLit) {
-      this._setParams({ [providerId]: false });
       return;
     }
     try {
       await this.actions.setEnabled?.(false);
     } catch (error) {
-      this.actions.showToast?.(error?.message || 'Street Level toggle failed');
+      this.actions.showToast?.(
+        translateKnown(error?.message || '') || t('Street Level toggle failed'),
+      );
     }
   }
 
@@ -311,7 +331,7 @@ export class StreetLevelControls {
       wrap.classList.add('sl-viewer-wrap-expanded');
       wrap.setAttribute('role', 'dialog');
       wrap.setAttribute('aria-modal', 'true');
-      wrap.setAttribute('aria-label', 'Street-level image');
+      wrap.setAttribute('aria-label', t('Street-level image'));
       wrap.tabIndex = -1;
       wrap.focus({ preventScroll: true });
       this._watchModal(true);
@@ -343,9 +363,9 @@ export class StreetLevelControls {
       const icon = button.querySelector('.sl-btn-icon');
       const text = button.querySelector('.sl-btn-text');
       if (icon) icon.textContent = on ? '⤡' : '⤢';
-      if (text) text.textContent = on ? 'SHRINK' : 'EXPAND';
+      if (text) text.textContent = on ? t('SHRINK') : t('EXPAND');
       button.setAttribute('aria-pressed', String(on));
-      button.setAttribute('aria-label', on ? 'Shrink' : 'Expand');
+      button.setAttribute('aria-label', on ? t('Shrink') : t('Expand'));
     }
     if (!on && dock) this.actions.dockPanel?.();
     this._requestResize();
@@ -466,6 +486,7 @@ export class StreetLevelControls {
     this._renderFilters(view);
     this._renderViewer(view);
     this._renderMeta(view);
+    this._renderNearest(view);
     this._reactToTransitions(view, state);
   }
 
@@ -510,6 +531,14 @@ export class StreetLevelControls {
 
   _renderFilters(view) {
     const el = this._elements;
+    const shows = view.filterControls || { pano: true, since: true };
+    setProp(el.panoRow, 'hidden', !shows.pano);
+    setProp(el.sinceRow, 'hidden', !shows.since);
+    // A lit source that dates by upload says so under the slider.
+    setProp(el.sinceNote, 'textContent', view.sinceNote || '');
+    setProp(el.sinceNote, 'hidden', !view.sinceNote);
+    setProp(el.controls, 'hidden', !shows.pano && !shows.since);
+    setProp(el.legend, 'hidden', view.legend.length === 0);
     this._renderRadios(
       el.panoButtons,
       (button) => button.dataset.slPano === view.filter.pano,
@@ -577,6 +606,9 @@ export class StreetLevelControls {
       el.renderButtons,
       (button) => button.dataset.slRender === viewer.renderMode,
     );
+    // Google's viewer always fills its frame: no FIT/FILL to offer.
+    const renderGroup = el.renderButtons[0]?.parentElement;
+    if (renderGroup) setProp(renderGroup, 'hidden', !viewer.renderModes);
     if (!viewer.open) return;
     setProp(el.imageBy, 'textContent', viewer.captionLeft);
     setProp(el.imageWhen, 'textContent', viewer.captionRight);
@@ -590,6 +622,17 @@ export class StreetLevelControls {
 
   _renderMeta(view) {
     setProp(this._elements.coverageMeta, 'textContent', view.meta);
+  }
+
+  _renderNearest(view) {
+    const button = this._elements.nearestBtn;
+    if (!button) return;
+    const { nearest } = view;
+    setProp(button, 'hidden', !nearest.visible);
+    if (!nearest.visible) return;
+    setProp(button, 'textContent', nearest.label);
+    setProp(button, 'title', nearest.title);
+    setProp(button, 'disabled', nearest.disabled);
   }
 
   /**

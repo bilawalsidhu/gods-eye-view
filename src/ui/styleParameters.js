@@ -1,3 +1,13 @@
+import { formatNumber, t } from '../i18n/index.js';
+
+/** A slider value in the UI language: 0.85 in English, 0,85 in Spanish. */
+const formatParam = (value, digits) =>
+  formatNumber(value, {
+    minimumFractionDigits: digits,
+    maximumFractionDigits: digits,
+    useGrouping: false,
+  });
+
 /**
  * Own generated parameter rows and their input listeners.
  * The caller supplies uniform metadata/value access and rendering/persistence
@@ -30,11 +40,11 @@ export function createStyleParameters({
         row.className = 'param-slider-row';
         const label = documentRef.createElement('span');
         label.className = 'param-label';
-        label.textContent = metadata.label;
+        label.textContent = t(metadata.label);
         const slider = documentRef.createElement('input');
         slider.type = 'range';
         slider.className = 'param-slider';
-        slider.setAttribute('aria-label', metadata.label);
+        slider.setAttribute('aria-label', t(metadata.label));
         slider.min = metadata.min;
         slider.max = metadata.max;
         slider.step = metadata.max <= 1 ? '0.01' : '0.1';
@@ -42,11 +52,14 @@ export function createStyleParameters({
         const digits = metadata.max <= 1 ? 2 : 1;
         const valueDisplay = documentRef.createElement('span');
         valueDisplay.className = 'param-value';
-        valueDisplay.textContent = parseFloat(slider.value).toFixed(digits);
+        valueDisplay.textContent = formatParam(
+          parseFloat(slider.value),
+          digits,
+        );
         const onInput = () => {
           const value = parseFloat(slider.value);
           writeValue(name, value);
-          valueDisplay.textContent = value.toFixed(digits);
+          valueDisplay.textContent = formatParam(value, digits);
           onChange();
         };
         slider.addEventListener('input', onInput);

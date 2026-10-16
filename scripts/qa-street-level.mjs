@@ -3,8 +3,9 @@
  * Browser QA for the Street Level layer against a running server. Run with
  * `npm run qa:street-level -- --url http://localhost:4173`.
  *
- * `--fixtures` (the CI mode) answers every *.mapillary.com request from
- * fixtures, so nothing reaches Mapillary. The server still needs a token
+ * `--fixtures` (the CI mode) answers every *.mapillary.com, KartaView and
+ * Panoramax request from fixtures, so nothing reaches those providers. The
+ * server still needs a token
  * because the bundle carries it; CI uses a dummy one. Fixture runs also stage
  * a rejected key and a keyless second server.
  *
@@ -37,6 +38,26 @@ import {
   PHOTO_SEQUENCE_ID,
   photoImages,
 } from './fixtures/street-level/mapillaryGraph.mjs';
+import {
+  answerKartaViewRequest,
+  describeKartaViewCall,
+  KV_LINE,
+  KV_SEQUENCE_ID,
+  kartaViewLookups,
+  kartaViewPhotos,
+  resetKartaViewFixture,
+} from './fixtures/street-level/kartaView.mjs';
+import {
+  answerPanoramaxRequest,
+  describePanoramaxCall,
+  PNX_CREATOR,
+  PNX_LINE,
+  PNX_PARK,
+  PNX_SEQUENCES,
+  panoramaxHdDownloads,
+  panoramaxPictures,
+  resetPanoramaxFixture,
+} from './fixtures/street-level/panoramax.mjs';
 
 const PANEL_ID = 'street-level-panel';
 
@@ -49,17 +70,31 @@ export const VIEWPORTS = Object.freeze([
 ]);
 
 /** Provider chips the panel must show, in order. */
-export const EXPECTED_PROVIDERS = Object.freeze(['mapillary']);
+export const EXPECTED_PROVIDERS = Object.freeze([
+  'mapillary',
+  'google',
+  'kartaview',
+  'panoramax',
+]);
 
 /**
- * Skips no setup can avoid: CI forks have no Google key, and live runs cannot
- * stage fixture-only cases. `no Mapillary key` is not accepted: CI's dummy
- * token runs the keyed flow, so a keyless strict run means that wiring broke.
+ * Skips no setup can avoid: CI forks have no Google key (so neither Google 3D
+ * nor Street View), and live runs cannot stage fixture-only cases. `no
+ * Mapillary key` is not accepted: CI's dummy token runs the keyed flow, so a
+ * keyless strict run means that wiring broke. Nor is `Google key refused`: a
+ * key that is set must work.
  */
 export const STRICT_ALLOWED_SKIPS = Object.freeze([
   'no Google 3D',
+  'no Google key',
   'fixtures only',
 ]);
+
+/** A Sacramento street with Google Street View (10th St, by the Capitol). */
+export const STREET_VIEW_STREET = Object.freeze({
+  lon: -121.49372,
+  lat: 38.57986,
+});
 
 export function strictViolations(skips) {
   return skips.filter((skip) => !STRICT_ALLOWED_SKIPS.includes(skip.reason));
@@ -220,6 +255,11 @@ export async function serveFixtures(page, fixture) {
     patterns: [
       { urlPattern: '*://*.mapillary.com/*' },
       { urlPattern: '*/api/mapillary/*' },
+      { urlPattern: '*://api.kartaview.org/*' },
+      { urlPattern: '*://cdn.kartaview.org/*' },
+      { urlPattern: '*://*.openstreetcam.org/*' },
+      { urlPattern: '*://api.panoramax.xyz/*' },
+      { urlPattern: '*://panoramax.openstreetmap.fr/*' },
     ],
   });
   const fulfil = (requestId, { status, headers = {}, contentType, body }) =>
@@ -248,6 +288,19 @@ export async function serveFixtures(page, fixture) {
         url: request.url,
         images: fixture.images,
       });
+      fixture.calls.add(call);
+      if (!answer.known) fixture.unknown.push(call);
+    } else if (/(^|\.)(kartaview|openstreetcam)\.org$/.test(address.hostname)) {
+      const call = describeKartaViewCall(method, address);
+      answer = answerKartaViewRequest({ method, url: request.url });
+      fixture.calls.add(call);
+      if (!answer.known) fixture.unknown.push(call);
+    } else if (
+      address.hostname === 'api.panoramax.xyz' ||
+      address.hostname === 'panoramax.openstreetmap.fr'
+    ) {
+      const call = describePanoramaxCall(method, address);
+      answer = answerPanoramaxRequest({ method, url: request.url });
       fixture.calls.add(call);
       if (!answer.known) fixture.unknown.push(call);
     } else if (
@@ -435,9 +488,49 @@ async function assertKeylessGate(page) {
 }
 
 /**
+ * With no Mapillary key the panel points at KartaView, which needs none:
+ * lit, it draws coverage and the layer is not key-gated.
+ */
+async function assertKeylessKartaView(page) {
+  assert.match(
+    await page.$eval('#sl-coverage-meta', (node) => node.textContent),
+    /light KARTAVIEW/,
+    'KEY REQUIRED points at KartaView',
+  );
+  for (let attempt = 0; attempt < 4; attempt++) {
+    await page.evaluate((at) => {
+      const v = window.__godsEyeView.viewer;
+      v.camera.cancelFlight?.();
+      const C = v.camera.positionCartographic.constructor;
+      v.camera.setView({
+        destination: v.scene.globe.ellipsoid.cartographicToCartesian(
+          C.fromDegrees(at.lon, at.lat, at.height),
+        ),
+        orientation: { heading: 0, pitch: at.pitch, roll: 0 },
+      });
+    }, PARK);
+    await sleep(1000);
+  }
+  await clickPanelControl(
+    page,
+    '#sl-provider-chips [data-chip-id="kartaview"]',
+  );
+  await waitForCoverage(page);
+  const state = await page.evaluate(() => ({
+    status: document.getElementById('sl-status').textContent,
+    keyRequired: window.__godsEyeView.dataManager.layers
+      .get('street-level')
+      .module.getUIState().keyRequired,
+  }));
+  assert.equal(state.keyRequired, false);
+  assert.doesNotMatch(state.status, /KEY/);
+}
+
+/**
  * Runs in the page. Find a point where a real click picks `prefix` + `id` (any
  * id when null), searched around `points` ([lon, lat]), the aimed billboards,
  * or else a grid mid-screen. Only points where the canvas is topmost count.
+ * Each call picks for at most `budgetMs`; the next call resumes the search.
  * @returns {{x: number, y: number, id: string}|null} client coordinates
  */
 export function findPickPoint({
@@ -446,6 +539,7 @@ export function findPickPoint({
   points,
   billboardIds,
   billboardPrefix = null,
+  budgetMs = 4000,
 }) {
   const viewer = window.__godsEyeView.viewer;
   const scene = viewer.scene;
@@ -500,24 +594,54 @@ export function findPickPoint({
       centres.push([at.x, at.y]);
     }
   }
-  for (const [cx, cy] of centres)
-    for (let r = 0; r <= 16; r += 2)
+  // A pick is a render of the scene (0.5–2 s each under SwiftShader): try
+  // the centres the canvas is on top of first, nearest the screen centre,
+  // so the first pick usually hits.
+  const uncovered = ([x, y]) =>
+    document.elementFromPoint(rect.left + x, rect.top + y) === canvas;
+  const fromMiddle = ([x, y]) =>
+    (x - rect.width / 2) ** 2 + (y - rect.height / 2) ** 2;
+  centres.sort(
+    (a, b) =>
+      Number(uncovered(b)) - Number(uncovered(a)) ||
+      fromMiddle(a) - fromMiddle(b),
+  );
+  const candidates = [];
+  for (const [cx, cy] of centres) {
+    candidates.push([cx, cy]);
+    for (let r = 2; r <= 16; r += 2)
       for (const [dx, dy] of [
-        [0, 0],
         [r, 0],
         [-r, 0],
         [0, r],
         [0, -r],
-      ]) {
-        const hit = tryAt(cx + dx, cy + dy);
-        if (hit) return hit;
-      }
-  if (points || billboardIds) return null;
-  for (let y = rect.height * 0.25; y < rect.height * 0.8; y += 18)
-    for (let x = rect.width * 0.25; x < rect.width * 0.7; x += 6) {
-      const hit = tryAt(x, y);
-      if (hit) return hit;
+      ])
+        candidates.push([cx + dx, cy + dy]);
+  }
+  // Aimed at known places: never fall back to a scan of the whole screen.
+  if (!points && !billboardIds && billboardPrefix === null)
+    for (let y = rect.height * 0.25; y < rect.height * 0.8; y += 18)
+      for (let x = rect.width * 0.25; x < rect.width * 0.7; x += 6)
+        candidates.push([x, y]);
+  // One evaluation stays well inside the caller's wait: past the budget it
+  // returns null, and the next poll carries on from where this one stopped.
+  const key = JSON.stringify([prefix, id, billboardPrefix]);
+  const cursors = (window.__qaPickCursors ??= {});
+  const deadline = performance.now() + budgetMs;
+  let at = cursors[key] ?? 0;
+  if (at >= candidates.length) at = 0;
+  for (; at < candidates.length; at++) {
+    const hit = tryAt(...candidates[at]);
+    if (hit) {
+      delete cursors[key];
+      return hit;
     }
+    if (performance.now() > deadline) {
+      cursors[key] = at + 1;
+      return null;
+    }
+  }
+  delete cursors[key];
   return null;
 }
 
@@ -619,14 +743,21 @@ async function main() {
     }
     await page.setViewport(VIEWPORTS[0]);
     const expandStrip = async (target = page) => {
-      await target.click(
+      await clickPanelControl(
+        target,
         '.panel-collapse-btn[data-collapse-target="street-level-panel"]',
       );
-      await settle(
-        target,
-        () =>
-          getComputedStyle(document.getElementById('sl-body')).display ===
-          'flex',
+      assert.ok(
+        await settle(
+          target,
+          () =>
+            !document
+              .getElementById('street-level-panel')
+              .classList.contains('collapsed') &&
+            getComputedStyle(document.getElementById('sl-body')).display ===
+              'flex',
+        ),
+        'Street Level panel did not expand before the timeout',
       );
     };
     await expandStrip();
@@ -643,14 +774,30 @@ async function main() {
             ),
           ].map((chip) => chip.dataset.chipId),
         );
-        assert.deepEqual(chips, EXPECTED_PROVIDERS);
-        // One swatch per source plus "Selected"; each chip wears its colour.
-        assert.equal(
-          await page.evaluate(
-            () => document.querySelectorAll('#sl-legend li').length,
-          ),
-          EXPECTED_PROVIDERS.length + 1,
+        // Every registered provider usable on this map, in order (Street View
+        // only on Google 3D).
+        const listed = await page.evaluate(() =>
+          window.__godsEyeView.dataManager.layers
+            .get('street-level')
+            .module.getUIState()
+            .providers.map((provider) => provider.id),
         );
+        assert.deepEqual(chips, listed);
+        assert.deepEqual(
+          EXPECTED_PROVIDERS.filter((id) => listed.includes(id)),
+          listed,
+        );
+        assert.ok(listed.includes('mapillary'));
+        // One swatch per switched-on source plus "Selected" (Street View
+        // starts off); each chip wears its colour.
+        const legend = await page.evaluate(() => ({
+          swatches: document.querySelectorAll('#sl-legend li').length,
+          on: window.__godsEyeView.dataManager.layers
+            .get('street-level')
+            .module.getUIState()
+            .providers.filter((provider) => provider.on).length,
+        }));
+        assert.equal(legend.swatches, legend.on + 1);
         assert.equal(
           await page.$eval('[data-chip-id="mapillary"]', (chip) =>
             chip.style.getPropertyValue('--chip-color'),
@@ -693,6 +840,762 @@ async function main() {
     console.log(
       `${count} steps: ${count - skips.length} ok, ${skips.length} skipped`,
     );
+
+    /**
+     * KartaView: keyless coverage from its JSON tiles, a line click opening
+     * the nearest photo, cones along the drive, › and a 360° photo. Runs on a
+     * draped map so a line is where it is drawn; leaves Mapillary lit.
+     */
+    async function kartaViewSteps() {
+      // The first lookup from here on is the rate-limited one.
+      resetKartaViewFixture();
+      const ui = () =>
+        page.evaluate(() =>
+          window.__godsEyeView.dataManager.layers
+            .get('street-level')
+            .module.getUIState(),
+        );
+      const uiUntil = (test, arg = null, options) =>
+        settle(
+          page,
+          `(${test})(window.__godsEyeView.dataManager.layers.get('street-level').module.getUIState(), ${JSON.stringify(arg)})`,
+          undefined,
+          options,
+        );
+      const lit = (id) =>
+        uiUntil(
+          (u, want) =>
+            u.providers.find((p) => p.id === want)?.on === true &&
+            u.providers.filter((p) => p.on).length === 1,
+          id,
+        );
+      const stack = () =>
+        page.evaluate(() =>
+          window.__godsEyeView.mapStackController.getActiveId(),
+        );
+      const setStack = async (id) => {
+        await page.evaluate(
+          (stackId) =>
+            window.__godsEyeView.mapStackController.setStack(stackId),
+          id,
+        );
+        await settle(
+          page,
+          (stackId) =>
+            window.__godsEyeView.mapStackController.getActiveId() === stackId,
+          id,
+        );
+      };
+      const kvChip = '#sl-provider-chips [data-chip-id="kartaview"]';
+      const original = await stack();
+      const photos = kartaViewPhotos();
+      await page.evaluate(() =>
+        window.__godsEyeView.dataManager.layers
+          .get('street-level')
+          .module.closeViewer(),
+      );
+      await setStack('esri-imagery');
+      // Over the fixture drive, looking down: its line is mid-screen.
+      for (let attempt = 0; attempt < 4; attempt++) {
+        await page.evaluate((at) => {
+          const v = window.__godsEyeView.viewer;
+          v.camera.cancelFlight?.();
+          const C = v.camera.positionCartographic.constructor;
+          v.camera.setView({
+            destination: v.scene.globe.ellipsoid.cartographicToCartesian(
+              C.fromDegrees(at.lon, at.lat, at.height),
+            ),
+            orientation: { heading: 0, pitch: at.pitch, roll: 0 },
+          });
+        }, PARK);
+        await sleep(1000);
+      }
+      await step(
+        'KartaView: its chip draws keyless coverage, credits KartaView and offers Mapillary’s filters, SINCE noted as its upload date',
+        async () => {
+          await clickPanelControl(page, kvChip);
+          assert.ok(await lit('kartaview'), 'KartaView alone is lit');
+          await waitForCoverage(page);
+          const u = await ui();
+          assert.equal(u.keyRequired, false);
+          assert.deepEqual(u.filterControls, { pano: true, since: true });
+          // KartaView's SINCE is its upload date: the panel says so.
+          assert.equal(u.sinceNote, 'KartaView: by upload date');
+          assert.equal(
+            await page.$eval('#sl-since-note', (node) =>
+              node.hidden ? null : node.textContent,
+            ),
+            'KartaView: by upload date',
+          );
+          assert.equal(
+            await page.$eval(kvChip, (chip) =>
+              chip.style.getPropertyValue('--chip-color'),
+            ),
+            '#635bff',
+          );
+          assert.match(
+            await page.$eval('#sl-coverage-meta', (node) => node.textContent),
+            /streets in view · click a line for its nearest photo/,
+          );
+          await page.waitForFunction(
+            () =>
+              document.body.innerHTML.includes('KartaView</a> contributors'),
+            { timeout: 15_000 },
+          );
+          assert.ok(
+            await settle(page, () =>
+              (new URLSearchParams(location.hash.slice(1)).get('lo') || '')
+                .split('_')
+                .some(
+                  (entry) =>
+                    entry.startsWith('0.') && entry.includes('kartaview-1'),
+                ),
+            ),
+            `the share link lights KartaView: ${await page.evaluate(() => location.hash)}`,
+          );
+        },
+      );
+      await step(
+        'KartaView: 360° and SINCE thin its lines through KartaView’s filtered tiles, and ALL / ANY DATE bring them back',
+        async () => {
+          const before = (await ui()).coverage.count;
+          const setStop = (index) =>
+            page.$eval(
+              '#sl-since',
+              (input, value) => {
+                input.value = String(value);
+                input.dispatchEvent(new Event('input', { bubbles: true }));
+                input.dispatchEvent(new Event('change', { bubbles: true }));
+              },
+              index,
+            );
+          // Filtered tiles are drawn by KartaView on demand: give them time.
+          const settled = async (test, arg, what) =>
+            assert.ok(
+              await uiUntil(test, arg, { timeout: 60_000 }),
+              `${what}: ${JSON.stringify((await ui()).coverage)}`,
+            );
+          await clickPanelControl(page, '[data-sl-pano="pano"]');
+          await settled(
+            (u) => u.filter.pano === 'pano' && !u.coverage.loading,
+            null,
+            '360° drawn',
+          );
+          const panos = (await ui()).coverage.count;
+          assert.ok(panos <= before, `${panos} ≤ ${before}`);
+          // Fixtures: the old street has only flat photos, the drive 360° too.
+          if (fixtures)
+            assert.ok(panos > 0 && panos < before, `0 < ${panos} < ${before}`);
+          await clickPanelControl(page, '[data-sl-pano="all"]');
+          await settled(
+            (u, n) =>
+              u.filter.pano === 'all' &&
+              !u.coverage.loading &&
+              u.coverage.count === n,
+            before,
+            'every line again',
+          );
+          await setStop(5);
+          await settled(
+            (u) => u.filter.sinceDays === 365 && !u.coverage.loading,
+            null,
+            'LAST YEAR drawn',
+          );
+          const lastYear = (await ui()).coverage.count;
+          assert.ok(lastYear <= before, `${lastYear} ≤ ${before}`);
+          // Fixtures: the drive is a month old, the old street from 2019.
+          if (fixtures)
+            assert.ok(
+              lastYear > 0 && lastYear < before,
+              `0 < ${lastYear} < ${before}`,
+            );
+          await setStop(0);
+          await settled(
+            (u, n) =>
+              u.filter.sinceDays === 0 &&
+              !u.coverage.loading &&
+              u.coverage.count === n,
+            before,
+            'ANY DATE: every line again',
+          );
+          assert.equal((await ui()).coverage.error, null);
+        },
+      );
+      await step(
+        'KartaView: a click on a line opens the nearest photo where the camera is, cones follow its drive, and › steps along it, past an archived photo',
+        async ({ skip }) => {
+          const along = Array.from({ length: 9 }, (_, i) => [
+            KV_LINE.lon,
+            KV_LINE.south + ((i + 2) / 13) * (KV_LINE.north - KV_LINE.south),
+          ]);
+          const handle = await page
+            .waitForFunction(
+              findPickPoint,
+              { timeout: 30_000, polling: 250 },
+              {
+                prefix: 'kv:line:',
+                id: null,
+                points: fixtures ? along : null,
+                billboardIds: null,
+              },
+            )
+            .catch(() => null);
+          if (!handle && !fixtures) return skip('no KartaView line in view');
+          assert.ok(handle, 'a KartaView line is pickable');
+          const at = await handle.jsonValue();
+          const camera = () =>
+            page.evaluate(() => {
+              const c = window.__godsEyeView.viewer.camera.positionCartographic;
+              return {
+                lon: (c.longitude * 180) / Math.PI,
+                lat: (c.latitude * 180) / Math.PI,
+                height: c.height,
+              };
+            });
+          const parked = await camera();
+          // The first lookup is rate-limited (fixtures): it waits and retries.
+          await page.mouse.click(at.x, at.y);
+          await page.waitForFunction(
+            () => {
+              const s = window.__godsEyeView.dataManager.layers
+                .get('street-level')
+                .module.getUIState().street;
+              return (s.imageId && !s.loading) || s.error;
+            },
+            { timeout: 60_000 },
+          );
+          const street = (await ui()).street;
+          if (!fixtures && /No street-level imagery/.test(street.error || ''))
+            return skip('no KartaView photo near the line');
+          if (fixtures)
+            assert.ok(
+              kartaViewLookups() >= 2,
+              `the rate-limited lookup was asked again (${kartaViewLookups()} lookups)`,
+            );
+          assert.equal(street.error, null, `viewer error: ${street.error}`);
+          assert.equal(street.providerId, 'kartaview');
+          assert.equal(street.renderModes, true, 'FIT / FILL for a flat photo');
+          assert.ok(
+            await settle(page, () => {
+              const img = document.querySelector('.sl-photo-flat');
+              return img && !img.hidden && img.naturalWidth > 0;
+            }),
+            'the photo is on screen',
+          );
+          // A line click picks a spot: the camera stays where it was.
+          await sleep(1500);
+          const now = await camera();
+          assert.ok(
+            Math.abs(now.lon - parked.lon) < 1e-6 &&
+              Math.abs(now.lat - parked.lat) < 1e-6 &&
+              Math.abs(now.height - parked.height) < 0.5,
+            `the camera did not move: ${JSON.stringify({ parked, now })}`,
+          );
+          if (fixtures) {
+            const opened = photos.find((photo) => photo.id === street.imageId);
+            assert.ok(opened, `${street.imageId} is a fixture photo`);
+            assert.equal(
+              opened.archived,
+              false,
+              'the nearest photo that storage still has',
+            );
+            assert.ok(
+              await uiUntil(
+                (u, want) =>
+                  u.sequence.selectedId === want.id &&
+                  !u.sequence.loading &&
+                  u.sequence.images === want.count,
+                { id: KV_SEQUENCE_ID, count: photos.length },
+                { timeout: 30_000 },
+              ),
+              `cones for the whole drive: ${JSON.stringify((await ui()).sequence)}`,
+            );
+            // The drive runs north; the photos' compass says 200°.
+            assert.ok(
+              await uiUntil(
+                (u) =>
+                  Number.isFinite(u.street.bearing) &&
+                  Math.min(u.street.bearing, 360 - u.street.bearing) < 2,
+              ),
+              `the camera looks along the drive, not where the compass points: ${(await ui()).street.bearing}`,
+            );
+          }
+          const before = street.imageId;
+          await clickPanelControl(page, '.sl-photo-step-next');
+          assert.ok(
+            await uiUntil(
+              (u, was) =>
+                u.street.imageId && u.street.imageId !== was && !u.street.error,
+              before,
+              { timeout: 30_000 },
+            ),
+            '› opened the next photo',
+          );
+          if (fixtures) {
+            const skipped = photos.find(
+              (photo) => photo.id === String(Number(before) + 1),
+            );
+            assert.equal(
+              skipped?.archived,
+              true,
+              'the photo after is archived',
+            );
+            assert.equal(
+              (await ui()).street.imageId,
+              String(Number(before) + 2),
+              '› skipped the archived photo to the next one along the drive',
+            );
+          }
+        },
+      );
+      if (fixtures)
+        await step(
+          'KartaView: a 360° photo opens on the panorama without FIT / FILL, dragging turns it, and it survives a lost WebGL context',
+          async () => {
+            const pano = photos.find((photo) => photo.isPano);
+            await page.evaluate((id) => {
+              void window.__godsEyeView.dataManager.layers
+                .get('street-level')
+                .module.openImage('kartaview', id);
+            }, pano.id);
+            assert.ok(
+              await uiUntil(
+                (u, want) =>
+                  u.street.imageId === want &&
+                  !u.street.loading &&
+                  u.street.isPano,
+                pano.id,
+                { timeout: 60_000 },
+              ),
+              `the panorama opened: ${JSON.stringify((await ui()).street)}`,
+            );
+            const u = await ui();
+            assert.equal(u.street.error, null);
+            assert.equal(u.street.renderModes, false, 'no frame to fit');
+            assert.equal(
+              await page.$eval('.sl-photo-pano', (canvas) => canvas.hidden),
+              false,
+            );
+            const box = await page.$eval('.sl-photo-pano', (canvas) => {
+              const r = canvas.getBoundingClientRect();
+              return { x: r.x + r.width / 2, y: r.y + r.height / 2 };
+            });
+            const bearing = u.street.bearing;
+            await page.mouse.move(box.x, box.y);
+            await page.mouse.down();
+            for (let i = 1; i <= 8; i++)
+              await page.mouse.move(box.x - i * 15, box.y);
+            await page.mouse.up();
+            assert.ok(
+              await uiUntil((v, was) => v.street.bearing !== was, bearing),
+              'dragging the panorama turned its bearing',
+            );
+            // A GPU reset: the panorama comes back on a new canvas, and drags.
+            assert.ok(
+              await page.evaluate(() => {
+                const canvas = document.querySelector('.sl-photo-pano');
+                window.__kvLostCanvas = canvas;
+                const lose = canvas
+                  .getContext('webgl')
+                  ?.getExtension('WEBGL_lose_context');
+                lose?.loseContext();
+                return Boolean(lose);
+              }),
+              'the browser can lose a WebGL context on purpose',
+            );
+            assert.ok(
+              await settle(
+                page,
+                () => {
+                  const canvas = document.querySelector('.sl-photo-pano');
+                  return (
+                    canvas &&
+                    canvas !== window.__kvLostCanvas &&
+                    !canvas.hidden &&
+                    canvas.width > 1
+                  );
+                },
+                null,
+                { timeout: 30_000 },
+              ),
+              'the panorama is drawn again on a new canvas',
+            );
+            const after = await ui();
+            assert.equal(after.street.imageId, pano.id);
+            assert.equal(after.street.isPano, true);
+            assert.equal(after.street.error, null);
+            const turned = after.street.bearing;
+            await page.mouse.move(box.x, box.y);
+            await page.mouse.down();
+            for (let i = 1; i <= 8; i++)
+              await page.mouse.move(box.x + i * 15, box.y);
+            await page.mouse.up();
+            assert.ok(
+              await uiUntil((v, was) => v.street.bearing !== was, turned),
+              'the new canvas drags',
+            );
+          },
+        );
+      else
+        await skipStep(
+          'fixtures only',
+          'KartaView: a 360° photo opens on the panorama without FIT / FILL, dragging turns it, and it survives a lost WebGL context',
+        );
+      await page.evaluate(() =>
+        window.__godsEyeView.dataManager.layers
+          .get('street-level')
+          .module.closeViewer(),
+      );
+      await clickPanelControl(
+        page,
+        '#sl-provider-chips [data-chip-id="mapillary"]',
+      );
+      assert.ok(await lit('mapillary'), 'Mapillary is lit again');
+      await setStack(original);
+    }
+
+    /**
+     * Panoramax: keyless orange coverage with both filters, a line click
+     * opening that sequence's picture nearest the click (author, licence,
+     * cones, ›), a 360° picture whose original is fetched once on EXPAND.
+     * Live runs park over Paris, where Panoramax has pictures. Runs on a
+     * draped map; leaves Mapillary lit.
+     */
+    async function panoramaxSteps() {
+      resetPanoramaxFixture();
+      const ui = () =>
+        page.evaluate(() =>
+          window.__godsEyeView.dataManager.layers
+            .get('street-level')
+            .module.getUIState(),
+        );
+      const uiUntil = (test, arg = null, options) =>
+        settle(
+          page,
+          `(${test})(window.__godsEyeView.dataManager.layers.get('street-level').module.getUIState(), ${JSON.stringify(arg)})`,
+          undefined,
+          options,
+        );
+      const lit = (id) =>
+        uiUntil(
+          (u, want) =>
+            u.providers.find((p) => p.id === want)?.on === true &&
+            u.providers.filter((p) => p.on).length === 1,
+          id,
+        );
+      const module = (call, ...args) =>
+        page.evaluate(
+          (name, list) =>
+            window.__godsEyeView.dataManager.layers
+              .get('street-level')
+              .module[name](...list),
+          call,
+          args,
+        );
+      const stack = () =>
+        page.evaluate(() =>
+          window.__godsEyeView.mapStackController.getActiveId(),
+        );
+      const setStack = async (id) => {
+        await page.evaluate(
+          (stackId) =>
+            window.__godsEyeView.mapStackController.setStack(stackId),
+          id,
+        );
+        await settle(
+          page,
+          (stackId) =>
+            window.__godsEyeView.mapStackController.getActiveId() === stackId,
+          id,
+        );
+      };
+      const camera = () =>
+        page.evaluate(() => {
+          const c = window.__godsEyeView.viewer.camera.positionCartographic;
+          return {
+            lon: (c.longitude * 180) / Math.PI,
+            lat: (c.latitude * 180) / Math.PI,
+            height: c.height,
+          };
+        });
+      const pnxChip = '#sl-provider-chips [data-chip-id="panoramax"]';
+      const original = await stack();
+      await module('closeViewer');
+      await setStack('esri-imagery');
+      for (let attempt = 0; attempt < 4; attempt++) {
+        await page.evaluate((at) => {
+          const v = window.__godsEyeView.viewer;
+          v.camera.cancelFlight?.();
+          const C = v.camera.positionCartographic.constructor;
+          v.camera.setView({
+            destination: v.scene.globe.ellipsoid.cartographicToCartesian(
+              C.fromDegrees(at.lon, at.lat, at.height),
+            ),
+            orientation: { heading: 0, pitch: at.pitch, roll: 0 },
+          });
+        }, PNX_PARK);
+        await sleep(1000);
+      }
+      try {
+        await step(
+          'Panoramax: its chip draws keyless orange coverage, keeps both filters, credits Panoramax and lights in the share link',
+          async () => {
+            await clickPanelControl(page, pnxChip);
+            assert.ok(await lit('panoramax'), 'Panoramax alone is lit');
+            await waitForCoverage(page);
+            const u = await ui();
+            assert.equal(u.keyRequired, false);
+            assert.deepEqual(u.filterControls, { pano: true, since: true });
+            assert.equal(
+              await page.$eval(pnxChip, (chip) =>
+                chip.style.getPropertyValue('--chip-color'),
+              ),
+              '#ff6f00',
+            );
+            assert.match(
+              await page.$eval('#sl-coverage-meta', (node) => node.textContent),
+              /sequences in view · click a line for its nearest photo/,
+            );
+            await page.waitForFunction(
+              () =>
+                document.body.innerHTML.includes('Panoramax</a> contributors'),
+              { timeout: 15_000 },
+            );
+            assert.ok(
+              await settle(page, () =>
+                (new URLSearchParams(location.hash.slice(1)).get('lo') || '')
+                  .split('_')
+                  .some(
+                    (entry) =>
+                      entry.startsWith('0.') && entry.includes('panoramax-1'),
+                  ),
+              ),
+              `the share link lights Panoramax: ${await page.evaluate(() => location.hash)}`,
+            );
+          },
+        );
+        await step(
+          'Panoramax: a click on a line opens that sequence’s picture nearest the click, camera still, with author and licence, cones and ›',
+          async ({ skip }) => {
+            // Points on the street: the fixture's, or live pictures there.
+            let points = null;
+            if (fixtures)
+              points = Array.from({ length: 9 }, (_, i) => [
+                PNX_LINE.west +
+                  ((i + 2) / 13) * (PNX_LINE.east - PNX_LINE.west),
+                PNX_LINE.lat,
+              ]);
+            else {
+              const near = await fetch(
+                `https://api.panoramax.xyz/api/search?place_position=${PNX_PARK.lon},${PNX_PARK.lat}&place_distance=0-150&place_fov_tolerance=180&limit=12`,
+              )
+                .then((r) => r.json())
+                .catch(() => null);
+              points = near?.features?.map((f) => f.geometry.coordinates);
+              if (!points?.length)
+                return skip('no Panoramax picture near the park');
+            }
+            const handle = await page
+              .waitForFunction(
+                findPickPoint,
+                { timeout: 60_000, polling: 500 },
+                {
+                  prefix: 'pnx:seq:',
+                  id: null,
+                  points,
+                  billboardIds: null,
+                },
+              )
+              .catch(() => null);
+            if (!handle && !fixtures) return skip('no Panoramax line in view');
+            assert.ok(handle, 'a Panoramax line is pickable');
+            let at = await handle.jsonValue();
+            if (fixtures) {
+              // Click the top line where the other sequence's pictures are:
+              // the nearest picture is then the other's, and only the line
+              // click's own-sequence lookup opens the clicked line's.
+              const others = panoramaxPictures()
+                .filter((p) => p.sequenceId !== at.id)
+                .slice(40, 100)
+                .map((p) => [p.lon, p.lat]);
+              const aimed = await page
+                .waitForFunction(
+                  findPickPoint,
+                  { timeout: 60_000, polling: 500 },
+                  {
+                    prefix: 'pnx:seq:',
+                    id: at.id,
+                    points: others,
+                    billboardIds: null,
+                  },
+                )
+                .catch(() => null);
+              assert.ok(
+                aimed,
+                'the line is pickable over the other’s pictures',
+              );
+              at = await aimed.jsonValue();
+            }
+            const parked = await camera();
+            await page.mouse.click(at.x, at.y);
+            await page.waitForFunction(
+              () => {
+                const s = window.__godsEyeView.dataManager.layers
+                  .get('street-level')
+                  .module.getUIState().street;
+                return (s.imageId && !s.loading) || s.error;
+              },
+              { timeout: 60_000 },
+            );
+            const street = (await ui()).street;
+            assert.equal(street.error, null, `viewer error: ${street.error}`);
+            assert.equal(street.providerId, 'panoramax');
+            assert.equal(
+              street.sequenceId,
+              at.id,
+              'the picture is from the line clicked',
+            );
+            assert.ok(street.license, 'the caption names the licence');
+            assert.match(
+              street.externalUrl,
+              /^https:\/\/api\.panoramax\.xyz\/#pic=/,
+            );
+            await sleep(1500);
+            const now = await camera();
+            assert.ok(
+              Math.abs(now.lon - parked.lon) < 1e-6 &&
+                Math.abs(now.lat - parked.lat) < 1e-6 &&
+                Math.abs(now.height - parked.height) < 0.5,
+              `the camera did not move: ${JSON.stringify({ parked, now })}`,
+            );
+            if (fixtures) {
+              const caption = await page.$eval(
+                '#sl-image-by',
+                (node) => node.textContent,
+              );
+              if (street.sequenceId === PNX_SEQUENCES[0])
+                assert.equal(caption, `Image by ${PNX_CREATOR} · CC BY-SA 4.0`);
+              else
+                assert.equal(
+                  caption,
+                  'via panoramax.openstreetmap.fr · Licence Ouverte 2.0',
+                  'an account named by an email address is not shown; the instance is',
+                );
+              const pictures = panoramaxPictures().filter(
+                (p) => p.sequenceId === street.sequenceId,
+              );
+              assert.ok(
+                await uiUntil(
+                  (u, want) =>
+                    u.sequence.selectedId === want &&
+                    !u.sequence.loading &&
+                    u.sequence.images > 0,
+                  street.sequenceId,
+                  { timeout: 30_000 },
+                ),
+                `cones along the sequence: ${JSON.stringify((await ui()).sequence)}`,
+              );
+              assert.ok((await ui()).sequence.images <= pictures.length);
+            }
+            const before = street.imageId;
+            await clickPanelControl(page, '.sl-photo-step-next');
+            assert.ok(
+              await uiUntil(
+                (u, was) =>
+                  u.street.imageId &&
+                  u.street.imageId !== was &&
+                  !u.street.loading &&
+                  !u.street.error,
+                before,
+                { timeout: 30_000 },
+              ),
+              '› opened the next picture',
+            );
+            const after = (await ui()).street;
+            assert.equal(after.sequenceId, street.sequenceId);
+            if (fixtures) {
+              const all = panoramaxPictures();
+              const from = all.find((p) => p.id === before);
+              assert.equal(
+                after.imageId,
+                all.find(
+                  (p) =>
+                    p.sequenceId === from.sequenceId &&
+                    p.index === from.index + 1,
+                ).id,
+                '› followed the picture’s next link',
+              );
+            }
+          },
+        );
+        if (fixtures)
+          await step(
+            'Panoramax: a 360° picture opens on the panorama without FIT / FILL, drags, and EXPAND fetches its original once',
+            async () => {
+              const pano = panoramaxPictures().find((p) => p.isPano);
+              await module('openImage', 'panoramax', pano.id);
+              assert.ok(
+                await uiUntil(
+                  (u, want) =>
+                    u.street.imageId === want &&
+                    !u.street.loading &&
+                    u.street.isPano,
+                  pano.id,
+                  { timeout: 60_000 },
+                ),
+                `the panorama opened: ${JSON.stringify((await ui()).street)}`,
+              );
+              const u = await ui();
+              assert.equal(u.street.renderModes, false, 'no frame to fit');
+              const box = await page.$eval('.sl-photo-pano', (canvas) => {
+                const r = canvas.getBoundingClientRect();
+                return { x: r.x + r.width / 2, y: r.y + r.height / 2 };
+              });
+              const bearing = u.street.bearing;
+              await page.mouse.move(box.x, box.y);
+              await page.mouse.down();
+              for (let i = 1; i <= 8; i++)
+                await page.mouse.move(box.x - i * 15, box.y);
+              await page.mouse.up();
+              assert.ok(
+                await uiUntil((v, was) => v.street.bearing !== was, bearing),
+                'dragging the panorama turned its bearing',
+              );
+              assert.equal(panoramaxHdDownloads(), 0, 'docked: SD only');
+              await clickPanelControl(page, '#sl-viewer-expand');
+              assert.ok(
+                await settle(page, () =>
+                  Boolean(document.querySelector('.sl-viewer-wrap-expanded')),
+                ),
+                'the viewer expanded',
+              );
+              const deadline = Date.now() + 30_000;
+              while (panoramaxHdDownloads() === 0 && Date.now() < deadline)
+                await sleep(250);
+              await sleep(2000);
+              assert.equal(
+                panoramaxHdDownloads(),
+                1,
+                'the original, once, for the expanded viewer',
+              );
+              await page.keyboard.press('Escape');
+            },
+          );
+        else
+          await skipStep(
+            'fixtures only',
+            'Panoramax: a 360° picture opens on the panorama without FIT / FILL, drags, and EXPAND fetches its original once',
+          );
+      } finally {
+        await module('closeViewer');
+        await clickPanelControl(
+          page,
+          '#sl-provider-chips [data-chip-id="mapillary"]',
+        );
+        assert.ok(await lit('mapillary'), 'Mapillary is lit again');
+        await setStack(original);
+      }
+    }
 
     async function keyedSteps() {
       // A late startup flight only shows itself by moving the camera, so park
@@ -784,6 +1687,13 @@ async function main() {
       await step(
         'the header ON/OFF pill switches the layer off and on',
         async () => {
+          // Tiles requested while the credit painted can flip the pill back
+          // to LOADING, so let coverage settle before reading it.
+          await waitForCoverage(page);
+          await settle(
+            page,
+            () => document.getElementById('sl-status').textContent === 'ON',
+          );
           assert.equal(
             await page.$eval('#sl-status', (node) =>
               [
@@ -1084,9 +1994,10 @@ async function main() {
               ((i + 2) / 13) * (PHOTO_LINE.north - PHOTO_LINE.south),
           ]);
           // Ground primitives are built over a few frames: poll for a pick.
+          // A loaded machine renders a frame in seconds: 60 s, not 30.
           const handle = await page.waitForFunction(
             findPickPoint,
-            { timeout: 30_000, polling: 250 },
+            { timeout: 60_000, polling: 250 },
             {
               prefix: 'mly:seq:',
               id: target,
@@ -1111,22 +2022,28 @@ async function main() {
           );
           if (fixtures)
             assert.equal(sequence.images, fixture.images.length, 'every photo');
-          // The cones are on the globe: one of them picks as an image.
+          // The cones are on the globe: one of them picks as an image. Aim at
+          // where each cone billboard is drawn (its ground position at
+          // height 0 can sit a few pixels off, and every missed pick costs a
+          // render); the same 60 s as the line pick above.
           const cone = await page.waitForFunction(
             findPickPoint,
-            { timeout: 15_000, polling: 250 },
+            { timeout: 60_000, polling: 250 },
             {
               prefix: 'mly:img:',
               id: null,
-              points: fixtures
-                ? fixture.images.map((image) => [image.lon, image.lat])
-                : null,
+              points: null,
               billboardIds: null,
-              // Live: the cones' positions are only known from the globe.
-              billboardPrefix: fixtures ? null : 'mly:img:',
+              billboardPrefix: 'mly:img:',
             },
           );
-          assert.ok(await cone.jsonValue(), 'an image cone is pickable');
+          const picked = await cone.jsonValue();
+          assert.ok(picked, 'an image cone is pickable');
+          if (fixtures)
+            assert.ok(
+              fixture.images.some((image) => image.id === picked.id),
+              `the cone is a photo of the drive: ${picked.id}`,
+            );
           await page.evaluate(() =>
             window.__godsEyeView.dataManager.layers
               .get('street-level')
@@ -1254,7 +2171,9 @@ async function main() {
             assert.ok(neighbour, 'a neighbour of the other camera type');
             const handle = await page.waitForFunction(
               findPickPoint,
-              { timeout: 15_000, polling: 250 },
+              // A pick is a render; under SwiftShader on a busy machine one
+              // evaluation can take seconds.
+              { timeout: 30_000, polling: 250 },
               {
                 prefix: 'mly:img:',
                 id: neighbour.id,
@@ -1715,6 +2634,295 @@ async function main() {
           );
         },
       );
+      const googleChip = '#sl-provider-chips [data-chip-id="google"]';
+      const googleKey = await page.evaluate(() =>
+        Boolean(window.__GOOGLE_MAPS_API_KEY__),
+      );
+      await step(
+        'Street View starts off, appears only on the Google 3D map, and travels in the share link',
+        async () => {
+          const module = () =>
+            window.__godsEyeView.dataManager.layers.get('street-level').module;
+          assert.equal(
+            await page.evaluate(`(${module})().getParams().google`),
+            false,
+            'off until lit: panoramas are billed',
+          );
+          const setStreetView = (on) =>
+            page.evaluate(
+              (value) =>
+                window.__godsEyeView.dataManager.setLayerParams(
+                  'street-level',
+                  { google: value },
+                  { origin: 'user' },
+                ),
+              on,
+            );
+          const shown = () =>
+            page.evaluate(() => ({
+              chip: Boolean(
+                document.querySelector(
+                  '#sl-provider-chips [data-chip-id="google"]',
+                ),
+              ),
+              legend: [...document.querySelectorAll('#sl-legend li')].some(
+                (item) => /Street View/.test(item.textContent),
+              ),
+              credit: document.body.innerHTML.includes('Street View imagery'),
+              button: !document.getElementById('sl-nearest-btn').hidden,
+            }));
+          const original = await stacks.active();
+          // Off Google 3D (CI's only map) nothing of Street View shows, even
+          // switched on: Google's terms keep it off other maps.
+          if (original === 'photoreal') await stacks.set('esri-imagery');
+          await setStreetView(true);
+          await uiUntil((u) => u.providers.every((p) => p.id !== 'google'));
+          assert.ok(
+            await settle(
+              page,
+              () => !document.body.innerHTML.includes('Street View imagery'),
+            ),
+            'no Google credit on another map',
+          );
+          assert.deepEqual(await shown(), {
+            chip: false,
+            legend: false,
+            credit: false,
+            button: false,
+          });
+          // Street View rides the shared provider-switch field (r), beside
+          // the other providers' switches a chip click recorded.
+          const option = `${STREET_LEVEL_TOKEN}.r.google-1`;
+          assert.ok(
+            await settle(
+              page,
+              (prefix) =>
+                (new URLSearchParams(location.hash.slice(1)).get('lo') || '')
+                  .split('_')
+                  .some(
+                    (entry) =>
+                      entry.startsWith(prefix) &&
+                      entry
+                        .slice(prefix.length)
+                        .split('*')
+                        .includes('google-1'),
+                  ),
+              `${STREET_LEVEL_TOKEN}.r.`,
+              // The link is written once the view rests for 500 ms; under a
+              // software renderer with a photo open that can take a while.
+              { timeout: 30_000 },
+            ),
+            `the share link keeps the choice: ${option}`,
+          );
+          if (await stacks.photoreal()) {
+            await stacks.set('photoreal');
+            await uiUntil((u) => u.providers.some((p) => p.id === 'google'));
+            const chipNow = await page.$eval(googleChip, (node) => ({
+              className: node.className,
+              title: node.title,
+              color: node.style.getPropertyValue('--chip-color'),
+            }));
+            assert.equal(chipNow.color, '#4285f4');
+            if (googleKey) assert.match(chipNow.className, /chip-active/);
+            else {
+              assert.match(chipNow.className, /chip-error/);
+              assert.match(chipNow.title, /GOOGLE_MAPS_API_KEY/);
+            }
+            assert.ok(
+              await settle(page, () =>
+                document.body.innerHTML.includes('Street View imagery'),
+              ),
+              'the Google credit shows on Google 3D',
+            );
+          }
+          // Back to Mapillary (one source at a time), as the next steps expect.
+          await page.evaluate(() =>
+            window.__godsEyeView.dataManager.setLayerParams(
+              'street-level',
+              { mapillary: true, google: false },
+              { origin: 'user' },
+            ),
+          );
+          await stacks.set(original);
+          await uiUntil(
+            (u) => u.providers.find((p) => p.id === 'google')?.on !== true,
+          );
+        },
+      );
+      await step(
+        'on Google 3D a click on a street opens Google Street View where it is, captioned and linked, and its view drives the pose',
+        async ({ skip }) => {
+          if (!googleKey) return skip('no Google key');
+          // Google's terms: Street View only beside Google's own map.
+          if (!(await stacks.photoreal())) return skip('no Google 3D');
+          const original = await stacks.active();
+          const closePhoto = () =>
+            page.evaluate(() =>
+              window.__godsEyeView.dataManager.layers
+                .get('street-level')
+                .module.closeViewer(),
+            );
+          const setOn = async (selector, id, on) => {
+            const now = (await ui()).providers.find((p) => p.id === id)?.on;
+            if (now === on) return;
+            await clickPanelControl(page, selector);
+            assert.ok(
+              await uiUntil(
+                (u, want) =>
+                  u.providers.find((p) => p.id === want.id)?.on === want.on,
+                { id, on },
+              ),
+              `the ${id} chip switched ${on ? 'on' : 'off'}`,
+            );
+          };
+          await closePhoto();
+          await stacks.set('photoreal');
+          // A Mapillary line under the pointer wins the click: aim at bare
+          // ground with only Street View on (lit first: the last lit chip
+          // would switch the layer off).
+          await setOn(googleChip, 'google', true);
+          await setOn(chip, 'mapillary', false);
+          try {
+            const street = STREET_VIEW_STREET;
+            await page.evaluate((at) => {
+              const v = window.__godsEyeView.viewer;
+              v.camera.cancelFlight?.();
+              const C = v.camera.positionCartographic.constructor;
+              v.camera.setView({
+                destination: v.scene.globe.ellipsoid.cartographicToCartesian(
+                  C.fromDegrees(at.lon, at.lat, 300),
+                ),
+                orientation: { heading: 0, pitch: -Math.PI / 2, roll: 0 },
+              });
+            }, street);
+            // At street zoom the hint invites the click.
+            assert.ok(
+              await uiUntil(
+                (u) =>
+                  u.providers.find((p) => p.id === 'google')?.hint ===
+                  'click a street to open Street View',
+              ),
+              'the click hint shows at street zoom',
+            );
+            const camera = () =>
+              page.evaluate(() => {
+                const c = window.__godsEyeView.viewer.camera.positionWC;
+                return [c.x, c.y, c.z];
+              });
+            const at = await page.evaluate((point) => {
+              const v = window.__godsEyeView.viewer;
+              const C = v.camera.positionCartographic.constructor;
+              const ground = v.scene.globe.ellipsoid.cartographicToCartesian(
+                C.fromDegrees(point.lon, point.lat, 0),
+              );
+              const canvas = v.scene.cartesianToCanvasCoordinates(ground);
+              const box = v.scene.canvas.getBoundingClientRect();
+              return (
+                canvas && { x: box.left + canvas.x, y: box.top + canvas.y }
+              );
+            }, street);
+            assert.ok(at, 'the street is on screen');
+            const before = await camera();
+            await page.mouse.click(at.x, at.y);
+            await uiUntil(
+              (u) =>
+                Boolean(u.street.error) ||
+                (u.street.providerId === 'google' &&
+                  Boolean(u.street.imageId) &&
+                  !u.street.loading),
+              null,
+              { timeout: 30_000 },
+            );
+            const opened = (await ui()).street;
+            if (/refused GOOGLE_MAPS_API_KEY/.test(opened.error || ''))
+              return skip('Google key refused');
+            if (/did not answer/.test(opened.error || ''))
+              return skip('Google did not answer');
+            assert.equal(opened.error, null);
+            assert.equal(opened.providerId, 'google');
+            const after = await camera();
+            assert.ok(
+              Math.hypot(...after.map((v, i) => v - before[i])) < 1,
+              'the camera stays where the user clicked',
+            );
+            const shown = await page.evaluate(() => ({
+              by: document.getElementById('sl-image-by').textContent,
+              when: document.getElementById('sl-image-when').textContent,
+              label: document.getElementById('sl-image-link').textContent,
+              href: document.getElementById('sl-image-link').href,
+              fitFillHidden:
+                document.querySelector('[data-sl-render]').parentElement.hidden,
+              panorama: Boolean(
+                document.querySelector('#sl-viewer .sl-google-panorama'),
+              ),
+              mapillaryLeft: Boolean(
+                document.querySelector('#sl-viewer .mapillary-dom'),
+              ),
+            }));
+            assert.match(shown.by, /Image by /);
+            assert.match(shown.when, /\d{4}-\d{2}$/, 'dated by month');
+            assert.equal(shown.label, 'GOOGLE STREET VIEW ↗');
+            assert.match(shown.href, /map_action=pano&pano=/);
+            assert.equal(shown.fitFillHidden, true, 'no FIT/FILL for Google');
+            assert.equal(shown.panorama, true);
+            assert.equal(shown.mapillaryLeft, false, 'no viewer left under it');
+            // A real drag turns Google's view, and the pose follows it.
+            const box = await page.$eval(
+              '#sl-viewer .sl-google-panorama',
+              (node) => {
+                const r = node.getBoundingClientRect();
+                return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+              },
+            );
+            await page.mouse.move(box.x, box.y);
+            await page.mouse.down();
+            await page.mouse.move(box.x - 120, box.y, { steps: 12 });
+            await page.mouse.up();
+            assert.ok(
+              await uiUntil(
+                (u, start) =>
+                  Number.isFinite(u.street.bearing) &&
+                  Math.abs(u.street.bearing - start) > 5,
+                opened.bearing ?? 0,
+                { timeout: 10_000 },
+              ),
+              'the pose bearing follows the drag',
+            );
+            // The keyboard path: OPEN STREET VIEW at the view centre.
+            await closePhoto();
+            await uiUntil((u) => u.street.open === false);
+            await clickPanelControl(page, '#sl-nearest-btn');
+            assert.ok(
+              await uiUntil(
+                (u) =>
+                  u.street.providerId === 'google' &&
+                  Boolean(u.street.imageId) &&
+                  !u.street.loading,
+                null,
+                { timeout: 30_000 },
+              ),
+              'OPEN STREET VIEW opens the panorama at the view centre',
+            );
+            // Leaving Google 3D closes the panorama (Google's terms).
+            await stacks.set('esri-imagery');
+            assert.ok(
+              await uiUntil((u) => u.street.open === false),
+              'the panorama closes off Google 3D',
+            );
+          } finally {
+            await closePhoto();
+            // Off Google 3D the Street View chip is hidden: return to it
+            // before switching the chip, or the cleanup throws and hides
+            // the step's own result.
+            await stacks.set('photoreal');
+            await setOn(chip, 'mapillary', true);
+            await setOn(googleChip, 'google', false);
+            await stacks.set(original);
+          }
+        },
+      );
+      await kartaViewSteps();
+      await panoramaxSteps();
       await step(
         'a reload with the layer on keeps a collapsed panel collapsed, and the share link carries its ui token',
         async () => {
@@ -1773,7 +2981,7 @@ async function main() {
       );
       if (fixtures)
         await step(
-          'keyless install (a second page, no key on the server) gates the controls and reports KEY REQUIRED',
+          'keyless install (a second page, no key on the server) gates the controls and reports KEY REQUIRED, and KartaView draws there',
           async () => {
             const keyless = await browser.newPage();
             await keyless.setViewport(VIEWPORTS[0]);
@@ -1782,6 +2990,7 @@ async function main() {
             await boot(keyless, url);
             await expandStrip(keyless);
             await assertKeylessGate(keyless);
+            await assertKeylessKartaView(keyless);
             renderErrorsSeen.push(
               ...(await readRenderErrors(keyless)).map(
                 (text) => `[keyless] scene.renderError: ${text}`,
@@ -1797,7 +3006,7 @@ async function main() {
         );
       if (fixtures)
         await step(
-          'every Mapillary request was answered from a fixture',
+          'every Mapillary, KartaView and Panoramax request was answered from a fixture',
           () => {
             console.log(
               `  (answered: ${[...fixture.calls].sort().join(' | ')})`,

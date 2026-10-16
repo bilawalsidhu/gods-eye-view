@@ -367,6 +367,17 @@ export function isLikelyCalgaryCoordinate(lat, lon) {
   );
 }
 
+/** New York City's five boroughs, with slack for the harbor and city line. */
+export function isLikelyNycCoordinate(lat, lon) {
+  return (
+    isPlausibleLatLon(lat, lon) &&
+    lat >= 40.45 &&
+    lat <= 40.95 &&
+    lon >= -74.3 &&
+    lon <= -73.65
+  );
+}
+
 /** Mainland Norway, with slack for the coast and the Finnmark border. */
 export function isLikelyNorwayCoordinate(lat, lon) {
   return (
@@ -381,6 +392,44 @@ export function isLikelyNorwayCoordinate(lat, lon) {
 export function isLikelyFinlandCoordinate(lat, lon) {
   if (!Number.isFinite(lat) || !Number.isFinite(lon)) return false;
   return lat >= 59.5 && lat <= 70.5 && lon >= 19 && lon <= 32;
+}
+
+/** Catalonia bounding box (mainland is roughly 40.5..42.9 N, 0.15..3.4 E). */
+export function isLikelyCataloniaCoordinate(lat, lon) {
+  return (
+    isPlausibleLatLon(lat, lon) &&
+    lat >= 40.3 &&
+    lat <= 42.9 &&
+    lon >= 0.0 &&
+    lon <= 3.4
+  );
+}
+
+/**
+ * Decode numeric HTML character references, decimal ("&#237;") and hex
+ * ("&#xED;") alike, the entity form the Catalonia feed uses for accented
+ * place names, plus the handful of named entities XML/HTML text commonly
+ * carries. A reference that names no valid character (NUL, a surrogate, or
+ * anything past U+10FFFF) is left as written rather than thrown on, so one
+ * bad field cannot fail a whole catalog.
+ *
+ * @param {string} text
+ * @returns {string}
+ */
+export function decodeNumericEntities(text) {
+  return String(text || '')
+    .replace(/&#(?:x([0-9a-f]+)|(\d+));/gi, (match, hex, dec) => {
+      const code = hex ? Number.parseInt(hex, 16) : Number(dec);
+      const valid =
+        code > 0 && code <= 0x10ffff && (code < 0xd800 || code > 0xdfff);
+      return valid ? String.fromCodePoint(code) : match;
+    })
+    .replace(/&amp;/g, '&')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .trim();
 }
 
 /**
@@ -551,5 +600,30 @@ export function normalizeSourceItem(item) {
     // badge can distinguish them from raw automated priors (e.g. Austin Open
     // Data, which never sets this field). Passed through as-is to the client.
     poseSource: item.poseSource === 'curated' ? 'curated' : undefined,
+    // Optional hardware-model passthrough (additive, like poseSource): packs
+    // whose catalog publishes the camera's hardware model — King County's
+    // layer carries Manufacturer/Model per camera — pass it through so
+    // identified-hardware consumers can use it. Absent everywhere else.
+    model:
+      typeof item.model === 'string' && item.model.trim()
+        ? item.model.trim()
+        : undefined,
+    // Bare model strings collide across vendors (e.g. "3950"), so the
+    // publishing pack's manufacturer rides along for disambiguation.
+    manufacturer:
+      typeof item.manufacturer === 'string' && item.manufacturer.trim()
+        ? item.manufacturer.trim()
+        : undefined,
   };
+}
+
+/** City of Toronto bounding box (Steeles to the lake, Etobicoke to Scarborough). */
+export function isLikelyTorontoCoordinate(lat, lon) {
+  return (
+    isPlausibleLatLon(lat, lon) &&
+    lat >= 43.55 &&
+    lat <= 43.9 &&
+    lon >= -79.7 &&
+    lon <= -79.1
+  );
 }

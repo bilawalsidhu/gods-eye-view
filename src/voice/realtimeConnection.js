@@ -1,3 +1,5 @@
+import { t } from '../i18n/index.js';
+
 const DISCONNECT_GRACE_MS = 6000;
 
 function releaseStartResources({ localStream = null, localPc = null } = {}) {
@@ -59,7 +61,7 @@ export class RealtimeConnection {
     this.input.pushToTalkKeyHeld = pushToTalkKeyHeld;
     this.input.spaceKeyHeld = spaceKeyHeld;
     if (!window.RTCPeerConnection || !navigator.mediaDevices?.getUserMedia) {
-      this.setStatus('error', 'WebRTC microphone support unavailable');
+      this.setStatus('error', t('WebRTC microphone support unavailable'));
       return;
     }
 
@@ -78,10 +80,11 @@ export class RealtimeConnection {
     // — this is what "applies next session" means.
     this.cost.prepareSession();
     this.syncCostUi();
-    this.setStatus('connecting', 'Requesting microphone');
+    this.setStatus('connecting', t('Requesting microphone'));
     this.debugLog('session.starting', {
       epoch,
       tier: this.cost.voiceTier,
+      authMode: this.cost.sessionCloudVoiceAuth,
       connection: this.connectionDiagnostics(),
     });
     let localStream = null;
@@ -89,6 +92,7 @@ export class RealtimeConnection {
     try {
       const minted = await this.backend.requestToken({
         tier: this.cost.voiceTier,
+        authMode: this.cost.sessionCloudVoiceAuth,
         signal,
       });
       const token = minted.token;
@@ -177,9 +181,9 @@ export class RealtimeConnection {
         if (!ownsChannel()) return;
         const detail = this.input.pushToTalkMode
           ? this.input.pushToTalkKeyHeld
-            ? 'Release Space to send'
-            : 'Hold Space to talk'
-          : 'Ask or command';
+            ? t('Release Space to send')
+            : t('Hold Space to talk')
+          : t('Ask or command');
         this.setStatus('listening', detail);
         this.debugLog('data_channel.open', {
           connection: this.connectionDiagnostics(dataChannel),

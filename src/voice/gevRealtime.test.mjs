@@ -3195,6 +3195,54 @@ test('F1: the toggle still records the next-session preference while live', () =
   assert.match(ui.tierButton.title, /this session stays on/i);
 });
 
+test('OAuth cloud sessions report unknown cost and usage without tripping the API spend guard', () => {
+  const { controller, ui } = costControllerHarness();
+  controller.status = 'listening';
+  controller._cost.cloudVoiceAuth = 'oauth';
+  controller._cost.sessionCloudVoiceAuth = 'oauth';
+  controller.syncCostUi();
+  const before = controller.costTracker.state();
+  assert.equal(ui.costValue.hidden, false);
+  assert.equal(ui.costValue.textContent, 'COST UNKNOWN');
+  assert.deepEqual(controller.recordUsage(usdUsage(100)), {
+    responses: 1,
+    input: 0,
+    output: 1562500,
+    captions: 0,
+    costKnown: false,
+  });
+  const after = controller.costTracker.state();
+  assert.equal(after.totalUsd, before.totalUsd);
+  assert.equal(controller.costCapStopped, false);
+  assert.match(ui.costValue.title, /1 response\(s\).*1562500 output tokens/);
+  controller.dc = {};
+  controller.responseActive = true;
+  controller.stop();
+  assert.match(ui.costValue.title, /Usage is incomplete/);
+});
+
+test('OAuth cloud sessions count caption transcriptions without pricing them into the API cap', () => {
+  const { controller, ui } = costControllerHarness();
+  controller.status = 'listening';
+  controller._cost.cloudVoiceAuth = 'oauth';
+  controller._cost.sessionCloudVoiceAuth = 'oauth';
+  controller._cost.bindTranscriptionModel('gpt-4o-mini-transcribe');
+  const before = controller.costTracker.state();
+  // Priced, this much caption audio would cross the $5 cap.
+  const result = controller.recordTranscriptionUsage({
+    type: 'duration',
+    seconds: 3_600_000,
+  });
+  assert.equal(result.captions, 1);
+  assert.equal(result.costKnown, false);
+  const after = controller.costTracker.state();
+  assert.equal(after.totalUsd, before.totalUsd);
+  assert.equal(after.capReached, false);
+  assert.equal(controller.costCapStopped, false);
+  assert.equal(ui.costValue.textContent, 'COST UNKNOWN');
+  assert.match(ui.costValue.title, /1 caption transcription\(s\)/);
+});
+
 test('F1: when idle, toggling does re-price the preview meter', () => {
   const { controller } = costControllerHarness();
   controller.status = 'idle';

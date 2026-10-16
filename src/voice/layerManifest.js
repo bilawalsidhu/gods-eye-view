@@ -34,9 +34,29 @@ const AIRCRAFT_FIELDS = {
   aircraftClass: ['t'],
   military: ['f'],
   onGround: ['f'],
+  squawk: ['t'],
+  emergency: ['f'],
+  emergencyKind: ['t'],
+  emergencySource: ['t'],
+  emergencyBroadcast: ['t'],
+  lastContactAtMs: ['ms'],
 };
 
 const layers = [
+  {
+    id: 'gnss-integrity',
+    aliases: [
+      'gnss integrity',
+      'navigation integrity',
+      'low navigation accuracy',
+      'gnss interference',
+      'gps interference',
+      'gps jamming',
+      'gnss',
+    ],
+    context: false,
+    noQuery: 'navigation-integrity cells; no countable analyst records',
+  },
   {
     id: 'flights',
     track: true,
@@ -229,6 +249,24 @@ const layers = [
     aliases: ['winds', 'wind map'],
     context: false,
     noQuery: 'map overlay; no countable records',
+  },
+  {
+    id: 'air-quality',
+    aliases: ['air quality', 'aqhi', 'smog', 'air pollution'],
+    context: false,
+    query: {
+      fields: {
+        value: ['n', 'AQHI'],
+        band: ['t'],
+        scale: ['t'],
+        provider: ['t'],
+        name: ['t'],
+        zone: ['t'],
+        risk: ['t'],
+        observedMs: ['ms'],
+      },
+      timeField: 'observedMs',
+    },
   },
   {
     id: 'traffic',
