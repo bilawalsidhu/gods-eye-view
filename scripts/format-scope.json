@@ -1094,5 +1094,6 @@
   "src/globe/surfaceDetail.test.mjs",
   "scripts/qa-surface-heights.mjs",
   "src/globe/navara/followGestures.js",
-  "src/globe/navara/followGestures.test.mjs"
+  "src/globe/navara/followGestures.test.mjs",
+  "src/globe/cpuPicks.test.mjs"
 ]

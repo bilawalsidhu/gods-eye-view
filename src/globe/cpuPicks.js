@@ -42,13 +42,28 @@ const segmentT = (p, a, b) => {
     : 0;
 };
 
-function moverRadius(options, scale) {
-  const size =
+// scaleByDistance [nearM, nearScale, farM, farScale] at `distance`, linear
+// between near and far as the Navara mover shader draws it.
+function distanceScale(scaleByDistance, distance) {
+  if (!scaleByDistance) return 1;
+  const [near, nearScale, far, farScale] = scaleByDistance;
+  const t = Math.min(
+    1,
+    Math.max(0, (distance - near) / Math.max(far - near, 1e-6)),
+  );
+  return nearScale + (farScale - nearScale) * t;
+}
+
+function moverRadius(options, scale, distance) {
+  const style =
     options.kind === 'sprite'
-      ? options.sprite.sizePx
+      ? options.sprite
       : options.kind === 'point'
-        ? options.point.sizePx
-        : Math.max(options.model.minimumPixelSize, 24);
+        ? options.point
+        : null;
+  const size = style
+    ? style.sizePx * distanceScale(style.scaleByDistance, distance)
+    : Math.max(options.model.minimumPixelSize, 24);
   return Math.max((size * scale) / 2, PICK_RADIUS_PX) + PICK_RADIUS_PX;
 }
 
@@ -92,9 +107,10 @@ export function createCpuPicker({ projector, camera, movers, lines }) {
         const screen = projector.worldToWindow(scratch, scratchScreen);
         if (!screen || !projector.horizonVisible(scratch)) continue;
         const distance = Math.hypot(screen.x - at.x, screen.y - at.y);
-        if (distance > moverRadius(options, scales[index])) continue;
+        const depth = depthOf(scratch);
+        if (distance > moverRadius(options, scales[index], depth)) continue;
         hits.push({
-          depth: depthOf(scratch),
+          depth,
           result: { id: pickIds[index], owner: options.id, instance: index },
         });
       }
@@ -159,7 +175,7 @@ export function createCpuPicker({ projector, camera, movers, lines }) {
     if (!screen) return false;
     return (
       Math.hypot(screen.x - at.x, screen.y - at.y) <=
-      moverRadius(options, store.scales[instance]) * slack
+      moverRadius(options, store.scales[instance], depthOf(scratch)) * slack
     );
   };
   return drill;
