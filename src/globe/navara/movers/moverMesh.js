@@ -89,6 +89,9 @@ varying float vGevOutline;
 ${OVERLAY_DEPTH_FRAGMENT}
 `;
 
+// Instance colours are sRGB (as Cesium takes them) and the overlay output
+// encodes linear to sRGB, so they are decoded first (the atlas is an sRGB
+// texture, decoded by the sampler): grey 0.5 draws 128, not 187.
 const fragmentColor = (point) =>
   point
     ? /* glsl */ `
@@ -96,13 +99,13 @@ const fragmentColor = (point) =>
 if (gevOverlayHidden()) discard;
 float gevRadius = length(vGevLocal) * 2.0;
 if (gevRadius > 1.0) discard;
-diffuseColor *= vGevColor;
+diffuseColor *= sRGBTransferEOTF(vGevColor);
 if (gevRadius > 1.0 - vGevOutline) diffuseColor.rgb = vec3(0.0);
 `
     : /* glsl */ `
 #include <color_fragment>
 if (gevOverlayHidden()) discard;
-diffuseColor *= vGevColor;
+diffuseColor *= sRGBTransferEOTF(vGevColor);
 `;
 
 // Overlay uniforms of a mesh drawn outside an overlay (tests): no depth.

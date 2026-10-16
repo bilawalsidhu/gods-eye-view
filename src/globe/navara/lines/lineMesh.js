@@ -90,7 +90,8 @@ float gevTactical() {
 const FRAGMENT_COLOR = /* glsl */ `
 #include <color_fragment>
 if (gevOverlayHidden()) discard;
-diffuseColor = uGevColor;
+// sRGB colours (as Cesium takes them) into the linear output.
+diffuseColor = sRGBTransferEOTF(uGevColor);
 diffuseColor.a *= uGevAlphaScale;
 if (uGevDash > 1.5) {
   diffuseColor.a *= gevTactical();
