@@ -68,8 +68,12 @@ export function createStandaloneApplication({
       // kept for links.
       // QA fixture sources (?qaFeed=…) on the dev server only.
       const search = globalThis.location?.search ?? '';
+      // import.meta.env.DEV at the import site, so production builds drop
+      // the chunk instead of shipping it unreachable.
       const qaSources =
-        allowQaRegistration && /[?&]qaFeed=/.test(search)
+        import.meta.env?.DEV &&
+        allowQaRegistration &&
+        /[?&]qaFeed=/.test(search)
           ? await import('../app/layers/qaSources.js').then(
               ({ createQaSources, parseQaFeed }) =>
                 createQaSources(parseQaFeed(search)),
