@@ -135,12 +135,16 @@ if (!executablePath || !fs.existsSync(executablePath))
 async function qaPointer(page, kind, x, y, ...rest) {
   if (kind === 'click') return page.mouse.click(x, y);
   if (kind === 'move') return page.mouse.move(x, y);
-  if (kind === 'drag') {
+  if (kind === 'drag' || kind === 'dragRight') {
     const [x1, y1] = rest;
+    const button = kind === 'dragRight' ? 'right' : 'left';
     await page.mouse.move(x, y);
-    await page.mouse.down();
+    await page.mouse.down({ button });
     await page.mouse.move(x1, y1, { steps: 12 });
-    return page.mouse.up();
+    // Held still before the release: Cesium adds no gesture inertia, so
+    // the drag itself is measured.
+    await new Promise((resolve) => setTimeout(resolve, 600));
+    return page.mouse.up({ button });
   }
   if (kind === 'wheel') {
     await page.mouse.move(x, y);
@@ -316,6 +320,16 @@ async function runCesium(page, url) {
           const rect = engine.host.canvas.getBoundingClientRect();
           await window.__qaPointer(
             'drag',
+            rect.left + x0,
+            rect.top + y0,
+            rect.left + x1,
+            rect.top + y1,
+          );
+        },
+        dragRight: async (x0, y0, x1, y1) => {
+          const rect = engine.host.canvas.getBoundingClientRect();
+          await window.__qaPointer(
+            'dragRight',
             rect.left + x0,
             rect.top + y0,
             rect.left + x1,
@@ -690,6 +704,16 @@ async function runNavara(page, url, consoleErrors) {
         const rect = engine.host.canvas.getBoundingClientRect();
         await window.__qaPointer(
           'drag',
+          rect.left + x0,
+          rect.top + y0,
+          rect.left + x1,
+          rect.top + y1,
+        );
+      },
+      dragRight: async (x0, y0, x1, y1) => {
+        const rect = engine.host.canvas.getBoundingClientRect();
+        await window.__qaPointer(
+          'dragRight',
           rect.left + x0,
           rect.top + y0,
           rect.left + x1,

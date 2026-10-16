@@ -205,6 +205,28 @@ export function zoomOffset(
   return cartesian3.multiplyByScalar(offset, next / range, result);
 }
 
+/**
+ * The ENU offset dollied as Cesium's zoom3D: `ratio` is the drag over the
+ * canvas height (down closes in), at most a tenth per move; the camera moves
+ * five times that share of its distance above the floor (closing) or of its
+ * range (opening), never inside `minRange`.
+ */
+export function dollyOffset(
+  offset,
+  ratio,
+  minRange,
+  result = cartesian3.create(),
+) {
+  const range = cartesian3.magnitude(offset);
+  if (!(range > 0) || !Number.isFinite(ratio))
+    return cartesian3.clone(offset, result);
+  const window = Math.min(ratio, 0.1);
+  const closing = window > 0;
+  const distance = 5 * (range - (closing ? minRange : 0)) * window;
+  const next = Math.max(minRange, range - distance);
+  return cartesian3.multiplyByScalar(offset, next / range, result);
+}
+
 const STILL_M = 1e-6;
 
 /**
@@ -254,6 +276,13 @@ export function createFollowController({
       const handle = current;
       if (!handle?.offset) return;
       orbitOffset(handle.offset, dHeading, dPitch, handle.offset);
+      handle.moved = true;
+      requestRender();
+    },
+    dolly(ratio) {
+      const handle = current;
+      if (!handle?.offset) return;
+      dollyOffset(handle.offset, ratio, handle.options.minRange, handle.offset);
       handle.moved = true;
       requestRender();
     },
