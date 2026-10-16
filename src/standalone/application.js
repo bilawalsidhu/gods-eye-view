@@ -7,7 +7,6 @@ import { createStandaloneControls } from './controls.js';
 import { createStandaloneData } from './data.js';
 import { createStandaloneTools } from './tools.js';
 import { createGoogleTokenSource } from '../maps/googleTokens.js';
-import { createLayerCatalog } from '../app/catalog.js';
 import { resolveEngineKind } from '../app/engineChoice.js';
 
 // The existing controls and layer catalog contain page-scoped state.
@@ -63,13 +62,11 @@ export function createStandaloneApplication({
         loaderStatus,
         engineKind,
       });
-      // The experimental Navara engine runs without data layers: an empty
-      // catalog with the same interface.
-      if (engineKind === 'navara') {
-        catalog = createLayerCatalog([], []);
-        return scene;
-      }
+      // The catalog of this engine: on Navara only the layers with a Navara
+      // renderer (src/app/layers/renderers.js; none yet), the others' state
+      // kept for links.
       catalog = createStandaloneCatalog({
+        engineKind,
         sources,
         streetLevelProviders,
         nepalBoundaryResolver: (signal) =>

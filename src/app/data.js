@@ -3,7 +3,7 @@ import { LayerPresentation } from './layerPresentation.js';
 import { createCyberSonarScene } from '../cyberSonarScene.js';
 /** Register the application layer catalog before allowing state restoration. */
 export function createApplicationData({
-  scene: { viewer, mapStackController },
+  scene: { viewer, engine, mapStackController },
   controls: { styleManager },
   catalog,
   allowQaRegistration,
@@ -11,7 +11,9 @@ export function createApplicationData({
   defer,
 }) {
   // Initialize data layer manager
+  // The modules get { signal, engine } on every call (viewer null on Navara).
   const dataManager = new LayerLifecycle(viewer, {
+    engine,
     allowQaRegistration,
     getSourceAvailability: catalog?.getSourceAvailability,
   });

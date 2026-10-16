@@ -1,7 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createApplicationTools } from './tools.js';
-import { NAVARA_MODE_NOTICE } from './navaraMode.js';
+import { navaraModeNotice } from './navaraMode.js';
+import {
+  createLayerAvailability,
+  createRendererRegistry,
+} from './layers/renderers.js';
 import { createFakeEngine } from '../globe/testing/fakeEngine.js';
 import {
   _resetRenderGovernorForTest,
@@ -66,19 +70,27 @@ test('without a viewer the tools run the governor on the engine, show the notice
   assert.equal(chrome.length, 1);
   assert.equal(chrome[0].initializeWelcome, null, 'no first-run welcome');
   assert.equal(chrome[0].styleManager, styleManager);
+  const notice = navaraModeNotice(createLayerAvailability('navara'));
   assert.deepEqual(notices, [
     {
-      label: NAVARA_MODE_NOTICE.label,
+      label: notice.label,
       options: {
         state: 'retry',
-        detail: NAVARA_MODE_NOTICE.detail,
+        detail: notice.detail,
         persistent: true,
       },
     },
   ]);
   assert.match(
-    `${NAVARA_MODE_NOTICE.label}: ${NAVARA_MODE_NOTICE.detail}`,
-    /^Experimental Navara engine: layers, cockpit, director and voice are unavailable$/i,
+    `${notice.label}: ${notice.detail}`,
+    /^Experimental Navara engine: no data layers on this engine yet; cockpit, director and voice are unavailable$/i,
+  );
+  // With Navara renderers, the notice names the layers it shows.
+  const registry = createRendererRegistry();
+  registry.register('navara', { satellites: () => ({}), flights: () => ({}) });
+  assert.equal(
+    navaraModeNotice(createLayerAvailability('navara', { registry })).detail,
+    'Data layers: Live Flights, Satellites; the other layers, cockpit, director and voice are unavailable',
   );
   // The governor drives the engine's continuous rendering.
   assert.equal(isRenderGovernorInstalled(engine), true);

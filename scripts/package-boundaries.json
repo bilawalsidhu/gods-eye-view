@@ -702,7 +702,8 @@
       "src/geo/scaleToGeodeticSurface.js",
       "src/geo/check.js",
       "src/geo/debug.js",
-      "src/geo/developerError.js"
+      "src/geo/developerError.js",
+      "src/app/layers/directory.js"
     ],
     "external": ["cesium"]
   },
@@ -2583,7 +2584,9 @@
       "src/globe/navara/movers/modelMover.js",
       "src/globe/navara/movers/index.js",
       "src/globe/surfaceDetail.js",
-      "src/globe/navara/followGestures.js"
+      "src/globe/navara/followGestures.js",
+      "src/app/layers/directory.js",
+      "src/app/layers/renderers.js"
     ],
     "external": [
       "hls.js",
@@ -3152,7 +3155,9 @@
       "src/geo/developerError.js",
       "src/time/clock.js",
       "src/globe/follow.js",
-      "src/globe/cesium/follow.js"
+      "src/globe/cesium/follow.js",
+      "src/app/layers/directory.js",
+      "src/app/layers/renderers.js"
     ],
     "external": [
       "hls.js",
@@ -3279,7 +3284,8 @@
       "src/loadingFeedback.js",
       "src/navigationPolicy.js",
       "src/ui/shareRestoration.js",
-      "src/ui/uiLifetime.js"
+      "src/ui/uiLifetime.js",
+      "src/app/layers/directory.js"
     ],
     "external": []
   },

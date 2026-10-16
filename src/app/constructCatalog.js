@@ -4,6 +4,8 @@ import { createWeatherLayer } from '../layers/weather/index.js';
 import { createCyclonesLayer } from '../layers/cyclones/index.js';
 import { createWindLayer } from '../layers/wind/index.js';
 import { createLayerCatalog } from './catalog.js';
+import { createLayerAvailability } from './layers/renderers.js';
+import { APPLICATION_LAYER_DIRECTORY } from './layers/directory.js';
 import { LAYER_STATE_REGISTRY } from '../data/layerState.js';
 import { createMilitaryRegistry } from '../layers/aircraft/classification.js';
 import { createApplicationFlights } from './layers/flights.js';
@@ -47,6 +49,10 @@ export const APPLICATION_LAYER_METADATA = Object.freeze([
 ]);
 
 /** Construct the current catalog without choosing any source provider.
+ * `engineKind` ('cesium' | 'navara'): only the layers that engine can show
+ * (src/app/layers/renderers.js) are constructed, in the same order; the
+ * catalog keeps the others' metadata (`unavailableMetadata`) and carries
+ * the engine's `availability`.
  * Scene engines remain page-owned; layers and classification have this app's lifetime.
  * The manager owns layer destruction, while abort releases classification even if startup fails.
  */
@@ -59,6 +65,8 @@ export function createApplicationCatalog({
   resolveAsset,
   nepalBoundaryResolver,
   streetLevelProviders,
+  engineKind = 'cesium',
+  availability = createLayerAvailability(engineKind),
 }) {
   if (!signal?.addEventListener)
     throw new TypeError('An application lifetime signal is required');
@@ -79,104 +87,211 @@ export function createApplicationCatalog({
   try {
     if (sourceComposition.isConfigured('military'))
       militaryRegistry.configureSource(sources.military, { signal });
-    const flights = createApplicationFlights({
-      surface,
-      source: sources.flights,
-      militaryRegistry,
-      resolveAsset,
-    });
-    const military = createApplicationMilitary({
-      surface,
-      source: sources.military,
-      militaryRegistry,
-      resolveAsset,
-    });
-    const vessels = createApplicationVessels({
-      source: sources.vessels,
-      options: vesselOptions,
-    });
-    const installations = createApplicationInstallations({
-      surface,
-      source: sources.installations,
-    });
-    const satellites = createApplicationSatellites({
-      source: sources.satellites,
-    });
-    const catalog = createLayerCatalog(
+    // Shared instances (awareness and launches read others) are made once,
+    // when the first layer that needs them is built.
+    const once = (create) => {
+      let value;
+      return () => (value ??= create());
+    };
+    const flights = once(() =>
+      createApplicationFlights({
+        surface,
+        source: sources.flights,
+        militaryRegistry,
+        resolveAsset,
+      }),
+    );
+    const military = once(() =>
+      createApplicationMilitary({
+        surface,
+        source: sources.military,
+        militaryRegistry,
+        resolveAsset,
+      }),
+    );
+    const vessels = once(() =>
+      createApplicationVessels({
+        source: sources.vessels,
+        options: vesselOptions,
+      }),
+    );
+    const installations = once(() =>
+      createApplicationInstallations({
+        surface,
+        source: sources.installations,
+      }),
+    );
+    const satellites = once(() =>
+      createApplicationSatellites({
+        source: sources.satellites,
+      }),
+    );
+    // Catalog order: [layer id(s), construction]. Only the layers the
+    // engine can show are constructed (renderers.js).
+    const entries = [
+      ['bhote-koshi-2026', () => createBhoteKoshiEventLayer()],
       [
-        createBhoteKoshiEventLayer(),
-        createBhoteKoshiLocatorLayer({
-          boundaryResolver: nepalBoundaryResolver,
-        }),
-        flights,
-        military,
-        createApplicationLocalAdsb({
-          surface,
-          enrichment: sources.flights,
-          displayParams: () => flights.getParams(),
-          ...(resolveAsset ? { resolveAsset } : {}),
-        }),
-        createApplicationEarthquakes({ source: sources.earthquakes }),
-        createApplicationFirePerimeters({
-          source: sources['fire-perimeters'],
-        }),
-        createApplicationAlpr({ surface, source: sources.alpr }),
-        createApplicationStreetLevel({
-          surface,
-          sources: { mapillary: sources.mapillary },
-          providers: streetLevelProviders,
-        }),
-        satellites,
-        createApplicationLaunches({ source: sources.launches, satellites }),
-        createApplicationTraffic({ source: sources.traffic, surface }),
-        createApplicationCctv({ surface, source: sources.cctv }),
-        createApplicationRadio({ surface, source: sources.radio }),
-        createApplicationTransit({ surface, source: sources.transit }),
-        createApplicationBikeshare({ source: sources.bikeshare }),
-        createApplicationDirections({ source: sources.directions }),
-        createApplicationRecentImagery({ source: sources['recent-imagery'] }),
-        vessels,
-        installations,
-        createApplicationAwareness({
-          flights,
-          military,
-          vessels,
-          installations,
-        }),
-        createWindLayer({ feed: sources.wind, clock: weatherClock }),
-        createWeatherLayer({
-          feed: sources.weather,
-          id: 'weather-radar',
-          clock: weatherClock,
-        }),
-        createWeatherLayer({
-          feed: sources.weather,
-          id: 'weather-satellite',
-          clock: weatherClock,
-        }),
-        createWeatherLayer({
-          feed: sources.weather,
-          id: 'weather-lightning',
-          clock: weatherClock,
-        }),
-        createCyclonesLayer({ feed: sources.cyclones }),
-        ...createInfrastructureLayers(localGeoJsonServices),
-        createApplicationCables({ source: sources.cables }),
-        createApplicationFirms({
-          surface,
-          id: 'local-firms',
-          name: 'FIRMS Active Fires',
-          icon: '▲',
-          source: 'NASA FIRMS · LIVE',
-          feed: sources.firms,
-        }),
+        'bhote-koshi-locator',
+        () =>
+          createBhoteKoshiLocatorLayer({
+            boundaryResolver: nepalBoundaryResolver,
+          }),
       ],
-      metadata,
+      ['flights', flights],
+      ['military', military],
+      [
+        'local-adsb',
+        () =>
+          createApplicationLocalAdsb({
+            surface,
+            enrichment: sources.flights,
+            displayParams: () => flights().getParams(),
+            ...(resolveAsset ? { resolveAsset } : {}),
+          }),
+      ],
+      [
+        'earthquakes',
+        () => createApplicationEarthquakes({ source: sources.earthquakes }),
+      ],
+      [
+        'fire-perimeters',
+        () =>
+          createApplicationFirePerimeters({
+            source: sources['fire-perimeters'],
+          }),
+      ],
+      [
+        'alpr-cameras',
+        () => createApplicationAlpr({ surface, source: sources.alpr }),
+      ],
+      [
+        'street-level',
+        () =>
+          createApplicationStreetLevel({
+            surface,
+            sources: { mapillary: sources.mapillary },
+            providers: streetLevelProviders,
+          }),
+      ],
+      ['satellites', satellites],
+      [
+        'rocket-launches',
+        () =>
+          createApplicationLaunches({
+            source: sources.launches,
+            satellites: satellites(),
+          }),
+      ],
+      [
+        'traffic',
+        () => createApplicationTraffic({ source: sources.traffic, surface }),
+      ],
+      ['cctv', () => createApplicationCctv({ surface, source: sources.cctv })],
+      [
+        'radio',
+        () => createApplicationRadio({ surface, source: sources.radio }),
+      ],
+      [
+        'transit',
+        () => createApplicationTransit({ surface, source: sources.transit }),
+      ],
+      [
+        'bikeshare',
+        () => createApplicationBikeshare({ source: sources.bikeshare }),
+      ],
+      [
+        'directions',
+        () => createApplicationDirections({ source: sources.directions }),
+      ],
+      [
+        'recent-imagery',
+        () =>
+          createApplicationRecentImagery({
+            source: sources['recent-imagery'],
+          }),
+      ],
+      ['ais-live-vessels', vessels],
+      ['military-installations', installations],
+      [
+        'military-awareness',
+        () =>
+          createApplicationAwareness({
+            flights: flights(),
+            military: military(),
+            vessels: vessels(),
+            installations: installations(),
+          }),
+      ],
+      [
+        'wind',
+        () => createWindLayer({ feed: sources.wind, clock: weatherClock }),
+      ],
+      ...['weather-radar', 'weather-satellite', 'weather-lightning'].map(
+        (id) => [
+          id,
+          () =>
+            createWeatherLayer({
+              feed: sources.weather,
+              id,
+              clock: weatherClock,
+            }),
+        ],
+      ),
+      [
+        'weather-cyclones',
+        () => createCyclonesLayer({ feed: sources.cyclones }),
+      ],
+      [
+        ['local-datacenters', 'local-dams'],
+        () => createInfrastructureLayers(localGeoJsonServices),
+      ],
+      [
+        'telegeography-submarine-cables',
+        () => createApplicationCables({ source: sources.cables }),
+      ],
+      [
+        'local-firms',
+        () =>
+          createApplicationFirms({
+            surface,
+            id: 'local-firms',
+            name: 'FIRMS Active Fires',
+            icon: '▲',
+            source: 'NASA FIRMS · LIVE',
+            feed: sources.firms,
+          }),
+      ],
+    ];
+    const available = (id) => availability.isAvailable(id);
+    const layers = [];
+    for (const [ids, create] of entries) {
+      const wanted = [ids].flat().filter(available);
+      if (!wanted.length) continue;
+      for (const layer of [create()].flat())
+        if (wanted.includes(layer.id)) layers.push(layer);
+    }
+    const catalog = createLayerCatalog(
+      layers,
+      metadata.filter(({ id }) => available(id)),
     );
     return Object.freeze({
       ...catalog,
+      engineKind,
+      // Layers this engine cannot show: their metadata, so links keep their
+      // state (data.js), and the stable availability API (renderers.js).
+      unavailableMetadata: Object.freeze(
+        metadata.filter(({ id }) => !available(id)),
+      ),
+      availability,
       getSourceAvailability: sourceComposition.createAvailabilityLookup(
         catalog.layers,
+        {
+          omitted: new Set(
+            APPLICATION_LAYER_DIRECTORY.map(({ id }) => id).filter(
+              (id) => !available(id),
+            ),
+          ),
+        },
       ),
       militaryRegistry,
       surface,

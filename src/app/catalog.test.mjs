@@ -190,3 +190,40 @@ test('data setup without a viewer registers an empty catalog and no sonar scene'
   assert.equal(dataManager.registrationsFinalized, true);
   for (const release of releases.reverse()) await release();
 });
+
+test('a catalog for an engine gives stand-ins only for the layers it leaves out', () => {
+  const flights = { id: 'flights' };
+  const catalog = {
+    ...createLayerCatalog(
+      [flights],
+      [{ id: 'flights', disposition: 'enabled-only' }],
+    ),
+    unavailableMetadata: Object.keys({
+      traffic: 1,
+      military: 1,
+      satellites: 1,
+      cctv: 1,
+      'street-level': 1,
+      radio: 1,
+      bikeshare: 1,
+      transit: 1,
+      'ais-live-vessels': 1,
+      'military-awareness': 1,
+      'military-installations': 1,
+      'rocket-launches': 1,
+      'local-adsb': 1,
+    }).map((id) => ({ id })),
+  };
+  const services = catalogControlServices(catalog);
+  assert.equal(services.flightsLayer, flights);
+  assert.deepEqual(services.trafficLayer, {});
+  assert.notEqual(services.trafficLayer, services.militaryFlightsLayer);
+  const missing = {
+    ...catalog,
+    unavailableMetadata: catalog.unavailableMetadata.slice(1),
+  };
+  assert.throws(
+    () => catalogControlServices(missing),
+    /Control layer missing from catalog: traffic/,
+  );
+});
