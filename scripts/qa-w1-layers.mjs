@@ -12,7 +12,10 @@
  *   node scripts/qa-w1-layers.mjs --compare=A.json,B.json
  *
  * Sections (the checklist's numbers). Filled now: 1 view (object counts per
- * pose, screen points of 5 known objects), 8 idle (frames drawn in 2 s with
+ * pose, screen points of 5 known objects), 2 click for layers with a tracked
+ * selection (a real mouse click selects the clearest object at the city pose,
+ * empty space and Escape release it; the select latency is recorded) with the
+ * follow part of 4, 8 idle (frames drawn in 2 s with
  * the layer on and the camera still), 9 errors (console errors; the layer
  * on/off 10 times leaves no mover sets behind), 5 voice in part (the runner's
  * layer-neutral answers; a viewer-only action refuses off Cesium). 2 click,
@@ -207,6 +210,136 @@ try {
         `${read.inView.length}/${read.total} on screen`,
       );
     }
+    // 2. click (layers with a tracked selection): a click on an object
+    // selects it (and the camera follows), a click on empty space and Escape
+    // release it — through the engine's input, as a user clicks.
+    const selectable = await page.evaluate(
+      (id) =>
+        typeof window.__godsEyeView.dataManager.layers.get(id)?.module
+          ?.getTrackedInfo === 'function',
+      layer,
+    );
+    if (selectable) {
+      await page.evaluate(async ([lon, lat, height, heading, pitch]) => {
+        const geo = await import('/src/geo/index.js');
+        const { engine } = window.__godsEyeView;
+        const rad = geo.math.toRadians;
+        engine.camera.setView({
+          destination: geo.cartesian3.fromDegrees(lon, lat, height),
+          orientation: { heading: rad(heading), pitch: rad(pitch), roll: 0 },
+        });
+        for (let frame = 0; frame < 30; frame++) {
+          engine.render.request('qa-w1-layers');
+          await new Promise((resolve) => requestAnimationFrame(resolve));
+        }
+      }, POSES.city);
+      // The on-screen object farthest from its neighbours (and the edges),
+      // and the emptiest point of the screen.
+      const pickTargets = () =>
+        page.evaluate((id) => {
+          const { engine, layers } = window.__godsEyeView;
+          const { width, height } = engine.host.size();
+          const shown = layers
+            .objects(id, 1_000_000)
+            .filter(
+              ({ screen }) =>
+                screen &&
+                screen.x > 120 &&
+                screen.y > 120 &&
+                screen.x < width - 120 &&
+                screen.y < height - 120,
+            );
+          const clearance = (x, y, skip) =>
+            Math.min(
+              Infinity,
+              ...shown
+                .filter((row) => row !== skip)
+                .map(({ screen }) => Math.hypot(screen.x - x, screen.y - y)),
+            );
+          let target = null;
+          for (const row of shown) {
+            const room = clearance(row.screen.x, row.screen.y, row);
+            if (!target || room > target.room)
+              target = { id: row.id, screen: row.screen, room };
+          }
+          let empty = null;
+          for (let x = 140; x < width - 140; x += 40)
+            for (let y = 140; y < height - 140; y += 40) {
+              const room = clearance(x, y, null);
+              if (!empty || room > empty.room) empty = { x, y, room };
+            }
+          return { target, empty };
+        }, layer);
+      const selectedId = () =>
+        page.evaluate((id) => {
+          const info = window.__godsEyeView.layers.selected(id);
+          return info ? String(info.icao24 ?? info.id ?? '') : null;
+        }, layer);
+      const waitFor = async (predicate, ms = 3000) => {
+        const start = Date.now();
+        for (;;) {
+          const value = await selectedId();
+          if (predicate(value)) return { value, ms: Date.now() - start };
+          if (Date.now() - start > ms) return { value, ms: null };
+          await new Promise((resolve) => setTimeout(resolve, 25));
+        }
+      };
+      const clickAt = (point) => page.mouse.click(point.x, point.y);
+      const section = {};
+      let targets = await pickTargets();
+      section.target = targets.target;
+      if (targets.target) {
+        await clickAt(targets.target.screen);
+        const picked = await waitFor((value) => value === targets.target.id);
+        section.selectMs = picked.ms;
+        section.following = await page.evaluate(() =>
+          window.__godsEyeView.layers.following(),
+        );
+        check(
+          '2 click: a click on an object selects it',
+          picked.value === targets.target.id,
+          `${targets.target.id} at ${targets.target.screen.x.toFixed(0)},${targets.target.screen.y.toFixed(0)} (${targets.target.room.toFixed(0)} px clear) → ${picked.value} in ${picked.ms} ms`,
+        );
+        check(
+          '4 tracking: the camera follows the selected object',
+          Boolean(section.following),
+          JSON.stringify(section.following),
+        );
+        // Let the follow settle, then empty space (re-read: the camera moved).
+        await new Promise((resolve) => setTimeout(resolve, 1500));
+        targets = await pickTargets();
+        section.empty = targets.empty;
+        await clickAt(targets.empty);
+        const released = await waitFor((value) => value === null);
+        check(
+          '2 click: a click on empty space releases it',
+          released.value === null,
+          `at ${targets.empty.x},${targets.empty.y} (${targets.empty.room.toFixed(0)} px clear) → ${released.value}`,
+        );
+        // Select again, then Escape.
+        targets = await pickTargets();
+        await clickAt(targets.target.screen);
+        const again = await waitFor((value) => value === targets.target.id);
+        await page.keyboard.press('Escape');
+        const escaped = await waitFor((value) => value === null);
+        check(
+          '2 click: Escape releases it',
+          again.value === targets.target.id && escaped.value === null,
+          `${again.value} → ${escaped.value}`,
+        );
+        section.followingAfter = await page.evaluate(() =>
+          window.__godsEyeView.layers.following(),
+        );
+        check(
+          '4 tracking: release frees the camera',
+          section.followingAfter === null,
+          JSON.stringify(section.followingAfter),
+        );
+      } else {
+        check('2 click: an object to click at the city pose', false);
+      }
+      report.sections[2] = section;
+    }
     // 8. idle: the camera still for 2 s.
     const idleFrames = await page.evaluate(async () => {
       const { layers } = window.__godsEyeView;
@@ -295,6 +428,7 @@ try {
         );
     }
     for (const [number, name] of Object.entries(TODO_SECTIONS)) {
+      if (report.sections[number]) continue;
       report.sections[number] = 'TODO';
       console.log(
         `  [TODO] ${number} ${name} — filled by the ${layer} layer task`,
