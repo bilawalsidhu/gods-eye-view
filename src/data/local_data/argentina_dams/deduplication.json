@@ -1,6 +1,6 @@
 {
   "inputCount": 125,
-  "outputCount": 123,
+  "outputCount": 122,
   "existingCount": 704,
   "omitted": [
     {
@@ -16,6 +16,33 @@
       "retainedId": 220340687,
       "retainedName": "Central Hidroeléctrica Los Quiroga",
       "reason": "inside-existing-dam-polygon"
+    }
+  ],
+  "excluded": [
+    {
+      "id": "ign-ar-dique-2575",
+      "name": "Terraplén de Defensa del Río Salado",
+      "sourceFeatureId": "puntos_de_aguas_continentales_BH051.2575",
+      "sourceType": "Terraplén de Defensa",
+      "reason": "flood-defense-embankment"
+    }
+  ],
+  "nearbyUnnamed": [
+    {
+      "ids": [
+        "ign-ar-dique-2578",
+        "ign-ar-dique-2579"
+      ],
+      "distanceM": 77.9,
+      "status": "retained-distinctness-unverified"
+    },
+    {
+      "ids": [
+        "ign-ar-dique-2956",
+        "ign-ar-dique-2957"
+      ],
+      "distanceM": 36.1,
+      "status": "retained-distinctness-unverified"
     }
   ]
 }

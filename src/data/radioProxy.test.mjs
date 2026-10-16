@@ -1,5 +1,9 @@
 import assert from 'node:assert/strict';
+import { EventEmitter } from 'node:events';
+import https from 'node:https';
+import { Readable } from 'node:stream';
 import test from 'node:test';
+import { fetchPinnedRadioResponse } from '../../server/providers/radio/transport.js';
 import {
   createRadioProxyMiddleware,
   isPublicRadioAddress,
@@ -468,4 +472,64 @@ test('proxy rejects any hostname resolution containing a forbidden address befor
     assert.equal((await invoke(middleware, '/stations')).status, 503);
   }
   assert.equal(fetchCount, 0);
+});
+
+// Answer every pinned request with `status`, invoking the response callback
+// asynchronously as `https.request` does, outside the caller's promise.
+// The returned promise rejects on an uncaught exception, so a regression fails
+// the race at once instead of leaving the fetch pending.
+function mockMirrorStatus(t, status, statusMessage = '') {
+  let crash;
+  const crashed = new Promise((_resolve, reject) => (crash = reject));
+  const onUncaught = (error) =>
+    crash(new Error(`uncaught exception: ${error.message}`));
+  process.on('uncaughtException', onUncaught);
+  t.after(() => process.off('uncaughtException', onUncaught));
+  t.mock.method(https, 'request', (_url, _options, callback) => {
+    const request = new EventEmitter();
+    request.end = () =>
+      setImmediate(() =>
+        callback(
+          Object.assign(Readable.from([]), {
+            statusCode: status,
+            statusMessage,
+            headers: { 'content-type': 'application/json' },
+          }),
+        ),
+      );
+    return request;
+  });
+  return crashed;
+}
+
+function fetchMirror() {
+  return fetchPinnedRadioResponse(
+    new URL('https://de1.api.radio-browser.info/json/servers'),
+    { headers: {} },
+    [{ address: '93.184.216.34', family: 4 }],
+  );
+}
+
+for (const status of [204, 205, 304]) {
+  test(`a mirror answering null-body status ${status} resolves with a null body instead of crashing`, async (t) => {
+    const crashed = mockMirrorStatus(t, status);
+    const response = await Promise.race([fetchMirror(), crashed]);
+    assert.equal(response.status, status);
+    assert.equal(response.body, null);
+  });
+}
+
+for (const status of [600, 999]) {
+  test(`a mirror answering out-of-range status ${status} rejects instead of crashing`, async (t) => {
+    const crashed = mockMirrorStatus(t, status);
+    await assert.rejects(
+      Promise.race([fetchMirror(), crashed]),
+      new RegExp(`unsupported status ${status}`),
+    );
+  });
+}
+
+test('a mirror answering an invalid reason phrase rejects instead of crashing', async (t) => {
+  const crashed = mockMirrorStatus(t, 200, 'OK\x7f');
+  await assert.rejects(Promise.race([fetchMirror(), crashed]), TypeError);
 });

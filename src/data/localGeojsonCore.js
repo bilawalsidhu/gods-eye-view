@@ -302,7 +302,6 @@ export function createLocalGeoJsonLayer(
   {
     id,
     url,
-    supplementUrls = [],
     name,
     color,
     icon = '📍',
@@ -588,7 +587,7 @@ export function createLocalGeoJsonLayer(
               let features = _cachedFeatures;
               if (!features) {
                 features = await loadInfrastructureFeatures(
-                  [url, ...supplementUrls],
+                  Array.isArray(url) ? url : [url],
                   {
                     signal: _loadController.signal,
                   },

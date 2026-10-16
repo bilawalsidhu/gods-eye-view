@@ -30,6 +30,13 @@ export const INFRASTRUCTURE_SUPPLEMENT_URLS = Object.freeze({
   },
 });
 
+/** Every data file of a local infrastructure layer, main file first. */
+export function infrastructureDataUrls(layerId) {
+  const main = INFRASTRUCTURE_DATA_URLS[layerId];
+  if (!main) return [];
+  return [main, ...(INFRASTRUCTURE_SUPPLEMENT_URLS[layerId] ?? [])];
+}
+
 /** Load a layer's GeoJSONL files together; failed/aborted loads are not cached. */
 export async function loadInfrastructureFeatures(
   urls,
@@ -75,7 +82,8 @@ export function layerTitle(layerId) {
  * @param {string} [layerId] Local layer id (`local-datacenters` / `local-dams`).
  * @returns {{id: string, name: string|null, lat: number|null, lon: number|null,
  *   operator: string|null, capacity: string|null, river: string|null,
- *   output: string|null}}
+ *   output: string|null, source?: string|null, sourceFeatureId?: string|null,
+ *   attribution?: string|null, retrievedAt?: string|null, sourceUpdatedAt?: string|null}}
  */
 export function mapAnalystRecord(raw, layerId = '') {
   const num = (v) => (Number.isFinite(v) ? v : null);
@@ -123,6 +131,9 @@ export function mapAnalystRecord(raw, layerId = '') {
     layerId === 'local-dams'
       ? text(props.output) || text(tags['plant:output:electricity'])
       : null;
+  const osmId =
+    text(props.osm_id) ||
+    (/^-?\d+$/.test(String(raw?.id)) ? text(raw.id) : null);
   return {
     id: name || text(raw?.id) || layerTitle(layerId),
     name,
@@ -132,6 +143,21 @@ export function mapAnalystRecord(raw, layerId = '') {
     capacity,
     river,
     output,
+    ...(layerId === 'local-dams'
+      ? {
+          source:
+            text(props.data_source) ||
+            (osmId ? 'OpenStreetMap / OpenInfraMap' : null),
+          sourceFeatureId: text(props.source_feature_id) || osmId,
+          retrievedAt: text(props.retrieved_at),
+          sourceUpdatedAt: text(props.source_updated_at),
+          attribution:
+            text(props.attribution) ||
+            (osmId
+              ? '© OpenStreetMap contributors (ODbL 1.0), via Open Infrastructure Map'
+              : null),
+        }
+      : {}),
   };
 }
 
@@ -165,13 +191,14 @@ export function createInfrastructureSource({
   const cache = new Map();
   return {
     async getRecords(layerId, { signal } = {}) {
-      const url = INFRASTRUCTURE_DATA_URLS[layerId];
-      if (!url) throw new TypeError(`Unknown infrastructure layer: ${layerId}`);
+      const urls = infrastructureDataUrls(layerId);
+      if (!urls.length)
+        throw new TypeError(`Unknown infrastructure layer: ${layerId}`);
       if (!cache.has(layerId)) {
-        const features = await loadInfrastructureFeatures(
-          [url, ...(INFRASTRUCTURE_SUPPLEMENT_URLS[layerId] || [])],
-          { fetchImpl, signal },
-        );
+        const features = await loadInfrastructureFeatures(urls, {
+          fetchImpl,
+          signal,
+        });
         const records = features.flatMap((feature) => {
           const point = featurePoint(feature);
           return point

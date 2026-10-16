@@ -1,7 +1,7 @@
 import { createLocalGeoJsonLayer } from './localGeojsonCore.js';
 import {
   INFRASTRUCTURE_DATA_URLS,
-  INFRASTRUCTURE_SUPPLEMENT_URLS,
+  infrastructureDataUrls,
 } from '../sources/infrastructureData.js';
 
 /**
@@ -11,7 +11,7 @@ import {
  */
 export function createInfrastructureLayers(services) {
   const datacentersUrl = INFRASTRUCTURE_DATA_URLS['local-datacenters'];
-  const damsUrl = INFRASTRUCTURE_DATA_URLS['local-dams'];
+  const damsUrl = infrastructureDataUrls('local-dams');
   const datacenters = createLocalGeoJsonLayer(
     {
       id: 'local-datacenters',
@@ -32,7 +32,6 @@ export function createInfrastructureLayers(services) {
     {
       id: 'local-dams',
       url: damsUrl,
-      supplementUrls: INFRASTRUCTURE_SUPPLEMENT_URLS['local-dams'],
       name: 'Dams',
       color: '#0088ff', // Blue
       icon: '▰',

@@ -4,7 +4,7 @@ FUENTE: Instituto Geográfico Nacional de la República Argentina.
 
 The `Dique` point dataset supplements the existing **Dams** layer. These are
 mapped structures, not live operational, water-level, or safety observations.
-The upstream WFS response contains 125 features. The original properties,
+The upstream WFS response contains 125 features; 122 enter the runtime pack. The original properties,
 including `fdc` (compilation source) and `sag`, are retained under `ign`.
 Unnamed records remain unnamed. No generating capacity is inferred.
 
@@ -15,12 +15,17 @@ Unnamed records remain unnamed. No generating capacity is inferred.
 - Original response, URL, checksum and dates: `source.geojson`, `source.json`.
 - Runtime: `dams.geojsonl`; rebuild offline with
   `node scripts/build-argentina-dams.mjs` from the repository root.
-- `deduplication.json` records every omitted point and its retained OSM/IGN
-  counterpart. A point inside an existing dam polygon, a same-name feature
+- `deduplication.json` records omitted duplicates and their retained OSM/IGN
+  counterparts, excluded non-dam features, and nearby unnamed review candidates. A point inside an existing dam polygon, a same-name feature
   within 1.5 km, or coincident points within 5 m are treated as duplicates.
   Name matching folds accents and generic dam prefixes. Different names at
   nearby coordinates are retained unless their geometry establishes overlap.
-- The 704 original OSM/OpenInfraMap records remain in their own directory,
+- The Río Salado record (gid 2575) is excluded because its structured `gna`
+  field identifies a flood-defense embankment (`Terraplén de Defensa`).
+- Unnamed pairs 2578/2579 (77.9 m) and 2956/2957 (36.1 m) remain separate
+  records. Their distinctness is unverified: proximity alone is not sufficient
+  to merge two structures. Both pairs are listed in the audit for source review.
+- The original OSM/OpenInfraMap records remain in their own directory,
   unmodified and under ODbL. The IGN supplement is a separate data source;
   it is not relicensed as ODbL or MIT.
 
@@ -37,3 +42,15 @@ disclaimer; the repository's MIT code license does not apply to it.
 When refreshing, download the linked WFS response, review its changes and terms,
 update `source.json` with its checksum and provenance, rebuild, and review the
 deduplication report. Do not silently redate the underlying observations.
+
+## Integration with other dam packs
+
+Both the renderer and analyst source obtain their URL list from
+`infrastructureDataUrls`; the shared loader keeps failed or aborted loads retryable.
+PR #1009 uses the same URL-list contract for NVE: when combining them, append
+both regional URLs to the one supplement list and retain the shared loader.
+No NVE data or implementation is included here.
+
+PR #1152 adds two OSM geometries. Rebuild this audit after that data change and
+update the displayed combined counts. IGN analyst-count tests derive totals from
+the input geometries rather than assuming a fixed OSM count.

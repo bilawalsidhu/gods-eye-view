@@ -101,6 +101,8 @@ export function buildSupplement(collection, existing, provenance) {
     throw new Error('Expected a complete IGN FeatureCollection');
   const features = [];
   const omitted = [];
+  const excluded = [];
+  const nearbyUnnamed = [];
   const seen = new Set();
   for (const raw of [...collection.features].sort(
     (a, b) => a.properties.gid - b.properties.gid,
@@ -120,12 +122,23 @@ export function buildSupplement(collection, existing, provenance) {
     )
       throw new Error('Invalid or duplicate IGN dam: ' + raw.id);
     seen.add(p.gid);
+    if (p.gna === 'Terraplén de Defensa') {
+      excluded.push({
+        id: 'ign-ar-dique-' + p.gid,
+        name: p.fna,
+        sourceFeatureId: raw.id,
+        sourceType: p.gna,
+        reason: 'flood-defense-embankment',
+      });
+      continue;
+    }
     const feature = {
       type: 'Feature',
       id: 'ign-ar-dique-' + p.gid,
       properties: {
         name: p.fna || p.nam || null,
         data_source: 'IGN Argentina · Dique',
+        attribution: provenance.attribution,
         source_layer: 'ign:puntos_de_aguas_continentales_BH051',
         source_feature_id: raw.id,
         source_updated_at: provenance.sourceUpdatedAt,
@@ -144,9 +157,26 @@ export function buildSupplement(collection, existing, provenance) {
         retainedName: duplicate.candidate.properties?.name || null,
         reason: duplicate.reason,
       });
-    else features.push(feature);
+    else {
+      if (!feature.properties.name) {
+        for (const other of features.filter((f) => !f.properties.name)) {
+          const separation = distance(
+            featurePoint(feature),
+            featurePoint(other),
+          );
+          if (separation <= 100) {
+            nearbyUnnamed.push({
+              ids: [other.id, feature.id],
+              distanceM: Math.round(separation * 10) / 10,
+              status: 'retained-distinctness-unverified',
+            });
+          }
+        }
+      }
+      features.push(feature);
+    }
   }
-  return { features, omitted };
+  return { features, omitted, excluded, nearbyUnnamed };
 }
 
 async function main() {
@@ -174,6 +204,8 @@ async function main() {
         outputCount: result.features.length,
         existingCount: existing.length,
         omitted: result.omitted,
+        excluded: result.excluded,
+        nearbyUnnamed: result.nearbyUnnamed,
       },
       null,
       2,
@@ -186,7 +218,9 @@ async function main() {
       result.features.length +
       ' additional, ' +
       result.omitted.length +
-      ' duplicates suppressed',
+      ' duplicates suppressed, ' +
+      result.excluded.length +
+      ' non-dam records excluded',
   );
 }
 

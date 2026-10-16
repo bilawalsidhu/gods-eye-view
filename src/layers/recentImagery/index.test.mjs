@@ -228,7 +228,7 @@ test('a valid box searches and previews the START HERE day alone in IMAGE mode',
   assert.equal(snapshot.focus.key, S18, 'focus starts on it');
   assert.equal(snapshot.preview.key, S18);
   assert.equal(snapshot.preview.slot, 'a');
-  assert.equal(snapshot.preview.label, 'Sep 18 · Sentinel-2 · 30 m');
+  assert.equal(snapshot.preview.label, 'Sep 18 · Sentinel-2 · 30\u00a0m');
   assert.equal(snapshot.candidates[1].preview, true);
   const none = {
     key: null,

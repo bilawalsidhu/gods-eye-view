@@ -17,7 +17,6 @@ const KINDS = {
 };
 const ATTRIBUTION = {
   datacenters: '© OpenStreetMap contributors (ODbL 1.0)',
-  dams: '© OpenStreetMap contributors (ODbL 1.0), via Open Infrastructure Map; FUENTE: Instituto Geográfico Nacional de la República Argentina (Dique snapshot retrieved 2026-10-15; source update date not supplied; IGN reuse terms)',
 };
 
 const round = (value, digits) =>
@@ -47,14 +46,21 @@ export const findInfrastructure = defineTool({
     const records = await services.infrastructure.getRecords(layerId, {
       signal,
     });
-    const rows = records
-      .filter((record) => areaContains(area, record))
+    const matching = records.filter((record) => areaContains(area, record));
+    const rows = matching
       .map((record) => ({
         name: record.name,
         operator: record.operator,
         ...(args.kind === 'datacenters'
           ? { capacity: record.capacity }
-          : { river: record.river, output: record.output }),
+          : {
+              river: record.river,
+              output: record.output,
+              source: record.source ?? null,
+              source_id: record.sourceFeatureId ?? null,
+              retrieved_at: record.retrievedAt ?? null,
+              source_updated_at: record.sourceUpdatedAt ?? null,
+            }),
         lat: round(record.lat, 5),
         lon: round(record.lon, 5),
         distance_km: round(distanceKm(center, record), 1),
@@ -65,7 +71,14 @@ export const findInfrastructure = defineTool({
       data: {
         view: suggestView(services, { area, layers: [layerId] }),
         ...capRows(rows, args.limit),
-        attribution: ATTRIBUTION[args.kind],
+        attribution:
+          args.kind === 'dams'
+            ? [
+                ...new Set(
+                  matching.map((record) => record.attribution).filter(Boolean),
+                ),
+              ].join('; ') || null
+            : ATTRIBUTION[args.kind],
       },
     };
   },

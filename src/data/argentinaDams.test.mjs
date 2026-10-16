@@ -6,6 +6,8 @@ import {
   createInfrastructureSource,
   parseGeojsonLines,
   loadInfrastructureFeatures,
+  featurePoint,
+  infrastructureDataUrls,
 } from '../sources/infrastructureData.js';
 
 const folder = new URL('./local_data/argentina_dams/', import.meta.url);
@@ -18,16 +20,41 @@ const osm = parseGeojsonLines(
     'utf8',
   ),
 );
+const packed = parseGeojsonLines(read('dams.geojsonl'));
+const expectedAnalystCount = [...osm, ...packed].filter(featurePoint).length;
 
-test('the pinned IGN snapshot reproduces 123 additions and audits its two OSM duplicates', () => {
+test('the pinned IGN snapshot reproduces 122 additions and audits exclusions and uncertain pairs', () => {
   const result = buildSupplement(original, osm, metadata);
-  const packed = parseGeojsonLines(read('dams.geojsonl'));
   assert.deepEqual(result.features, packed);
-  assert.equal(packed.length, 123);
-  assert.equal(osm.length, 704);
+  assert.equal(packed.length, 122);
   assert.deepEqual(
     result.omitted.map((f) => f.retainedId),
     [110183925, 220340687],
+  );
+  const audit = JSON.parse(read('deduplication.json'));
+  assert.deepEqual(result.excluded, audit.excluded);
+  assert.deepEqual(
+    result.excluded.map((f) => f.id),
+    ['ign-ar-dique-2575'],
+  );
+  assert.equal(result.excluded[0].reason, 'flood-defense-embankment');
+  assert.deepEqual(result.nearbyUnnamed, audit.nearbyUnnamed);
+  assert.deepEqual(
+    result.nearbyUnnamed.map((pair) => pair.ids),
+    [
+      ['ign-ar-dique-2578', 'ign-ar-dique-2579'],
+      ['ign-ar-dique-2956', 'ign-ar-dique-2957'],
+    ],
+  );
+  for (const pair of result.nearbyUnnamed) {
+    assert.ok(pair.distanceM > 5 && pair.distanceM <= 100);
+    assert.equal(pair.status, 'retained-distinctness-unverified');
+    for (const id of pair.ids)
+      assert.ok(packed.some((feature) => feature.id === id));
+  }
+  assert.equal(
+    original.features.length,
+    packed.length + result.omitted.length + result.excluded.length,
   );
   assert.deepEqual(
     result.omitted,
@@ -46,6 +73,7 @@ test('the pinned IGN snapshot reproduces 123 additions and audits its two OSM du
     assert.equal(feature.geometry.type, 'Point');
     assert.equal(feature.properties.source_updated_at, null);
     assert.equal(feature.properties.retrieved_at, metadata.retrievedAt);
+    assert.equal(feature.properties.attribution, metadata.attribution);
     assert.ok(
       !('osm_id' in feature.properties),
       'IGN is not represented as OSM',
@@ -96,13 +124,13 @@ test('renderer acquisition and analyst source include the same separate IGN pack
   };
   const source = createInfrastructureSource({ fetchImpl });
   const records = await source.getRecords('local-dams');
-  assert.equal(records.length, 826); // One existing OSM MultiLineString has no analyst point.
-  assert.equal(requests.length, 2);
+  assert.equal(records.length, expectedAnalystCount);
+  assert.deepEqual(requests, infrastructureDataUrls('local-dams'));
   assert.ok(records.some((r) => r.name === 'Dique El Chocón'));
   const features = await loadInfrastructureFeatures(requests.slice(), {
     fetchImpl,
   });
-  assert.equal(features.length, 827);
+  assert.equal(features.length, osm.length + packed.length);
   assert.equal(await source.getRecords('local-dams'), records);
 });
 
@@ -117,7 +145,10 @@ test('a missing supplement fails the complete load and can be retried', async ()
   });
   await assert.rejects(source.getRecords('local-dams'), /HTTP 404/);
   fail = false;
-  assert.equal((await source.getRecords('local-dams')).length, 826);
+  assert.equal(
+    (await source.getRecords('local-dams')).length,
+    expectedAnalystCount,
+  );
   const controller = new AbortController();
   controller.abort();
   await assert.rejects(
