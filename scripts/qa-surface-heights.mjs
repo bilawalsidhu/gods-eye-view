@@ -4,7 +4,8 @@
  * places (the JFK, SFO and AUS airfields, roofs and streets) the camera
  * looks straight down from 800 m above the ground, waits for the tiles, and
  * reads engine.surface.sampleHeightDetailed; then again from 15 km with
- * lod 'finest'. Cesium at 800 m is the reference. Gates (plan Task 6): at
+ * lod 'finest' - that pass first, in a fresh page (cold tiles), then the
+ * 800 m pass in another. Cesium at 800 m is the reference. Gates (plan Task 6): at
  * 800 m at least 18 of 20 Navara heights within 2 m of Cesium, at 15 km
  * (finest) at least 15. Also prints each answer's tile size and whether
  * the floor rule (meshFloorSampler's MAX_FLOOR_TILE_SIZE_M) would take it.
@@ -70,7 +71,10 @@ const PLACES = [
   ['Salesforce Tower roof', -122.397, 37.7897, 300],
 ];
 
-async function runEngine(browser, engine) {
+// One pass over every place in a fresh page (cold tiles): `near` from 800 m
+// above the ground (lod 'visible'), `far` from 15 km (lod 'finest'). While
+// the tiles stream, every answer the floor rule would take is kept.
+async function runPass(browser, engine, pass) {
   const context = await browser.createBrowserContext();
   const page = await context.newPage();
   await page.setViewport({ width: 1280, height: 800 });
@@ -99,45 +103,68 @@ async function runEngine(browser, engine) {
   });
   const results = [];
   for (const [name, lon, lat, ground] of PLACES) {
-    const row = { name };
-    for (const [key, height, lod] of [
-      ['near', ground + 800, 'visible'],
-      ['far', 15000, 'finest'],
-    ])
-      row[key] = await page.evaluate(
-        async ({ lon, lat, height, lod, settleMs }) => {
-          const geo = await import('/src/geo/index.js');
-          const { engine } = window.__godsEyeView;
-          engine.camera.setView({
-            destination: geo.cartesian3.fromDegrees(lon, lat, height),
-            orientation: { heading: 0, pitch: -Math.PI / 2, roll: 0 },
-          });
-          const place = geo.cartographic.fromDegrees(lon, lat, 0);
-          const started = performance.now();
-          let loadedSince = null;
-          // Tiles loaded for 1 s (bounded by settleMs).
-          while (performance.now() - started < settleMs) {
-            engine.render.request('qa-surface-heights');
-            await new Promise((resolve) => setTimeout(resolve, 200));
-            if (!engine.surface.tilesLoaded()) loadedSince = null;
-            else if (loadedSince === null) loadedSince = performance.now();
-            else if (performance.now() - loadedSince >= 1000) break;
-          }
-          return {
-            settled: loadedSince !== null,
-            ms: Math.round(performance.now() - started),
-            detail: engine.surface.sampleHeightDetailed(place, { lod }) ?? null,
-          };
-        },
-        { lon, lat, height, lod, settleMs: SETTLE_MS },
-      );
-    results.push(row);
-    console.log(
-      `[surface-heights] ${engine} ${name}: 800 m ${format(row.near)}; 15 km ${format(row.far)}`,
+    const [height, lod] =
+      pass === 'near' ? [ground + 800, 'visible'] : [15000, 'finest'];
+    const row = await page.evaluate(
+      async ({ lon, lat, height, lod, settleMs, maxTileSizeM }) => {
+        const geo = await import('/src/geo/index.js');
+        const { engine } = window.__godsEyeView;
+        engine.camera.setView({
+          destination: geo.cartesian3.fromDegrees(lon, lat, height),
+          orientation: { heading: 0, pitch: -Math.PI / 2, roll: 0 },
+        });
+        const place = geo.cartographic.fromDegrees(lon, lat, 0);
+        const started = performance.now();
+        let loadedSince = null;
+        const taken = [];
+        // Tiles loaded for 1 s (bounded by settleMs).
+        while (performance.now() - started < settleMs) {
+          engine.render.request('qa-surface-heights');
+          await new Promise((resolve) => setTimeout(resolve, 200));
+          const streaming = engine.surface.sampleHeightDetailed(place, { lod });
+          if (
+            streaming?.source === 'tiles' &&
+            !(streaming.tileSizeM > maxTileSizeM)
+          )
+            taken.push(streaming.height);
+          if (!engine.surface.tilesLoaded()) loadedSince = null;
+          else if (loadedSince === null) loadedSince = performance.now();
+          else if (performance.now() - loadedSince >= 1000) break;
+        }
+        return {
+          settled: loadedSince !== null,
+          ms: Math.round(performance.now() - started),
+          detail: engine.surface.sampleHeightDetailed(place, { lod }) ?? null,
+          taken,
+        };
+      },
+      {
+        lon,
+        lat,
+        height,
+        lod,
+        settleMs: SETTLE_MS,
+        maxTileSizeM: MAX_FLOOR_TILE_SIZE_M,
+      },
     );
+    results.push(row);
+    console.log(`[surface-heights] ${engine} ${pass} ${name}: ${format(row)}`);
   }
   await context.close();
   return { startup, results };
+}
+
+// The 15 km pass first, cold, then the 800 m pass in another fresh page.
+async function runEngine(browser, engine) {
+  const far = await runPass(browser, engine, 'far');
+  const near = await runPass(browser, engine, 'near');
+  return {
+    startup: near.startup,
+    results: near.results.map((row, index) => ({
+      near: row,
+      far: far.results[index],
+    })),
+  };
 }
 
 const format = ({ detail, settled }) =>
@@ -156,7 +183,14 @@ try {
   const runs = {};
   for (const engine of ['cesium', 'navara'])
     runs[engine] = await runEngine(browser, engine);
-  const summary = { near: 0, far: 0, floorTaken: 0, rows: [] };
+  const summary = {
+    near: 0,
+    far: 0,
+    floorTaken: 0,
+    floorTakenFar: 0,
+    floorWrongWhileStreaming: 0,
+    rows: [],
+  };
   for (let i = 0; i < PLACES.length; i++) {
     const reference = runs.cesium.results[i].near.detail?.height;
     const navara = runs.navara.results[i];
@@ -168,12 +202,18 @@ try {
     const far = diff(navara.far);
     if (near !== null && Math.abs(near) <= TOLERANCE_M) summary.near++;
     if (far !== null && Math.abs(far) <= TOLERANCE_M) summary.far++;
-    const size = navara.near.detail?.tileSizeM;
+    const takes = (detail) =>
+      detail?.source === 'tiles' && !(detail.tileSizeM > MAX_FLOOR_TILE_SIZE_M);
+    if (takes(navara.near.detail)) summary.floorTaken++;
+    if (takes(navara.far.detail)) summary.floorTakenFar++;
+    // Any answer the floor rule took while streaming, more than 2 m off.
     if (
-      navara.near.detail?.source === 'tiles' &&
-      !(size > MAX_FLOOR_TILE_SIZE_M)
+      Number.isFinite(reference) &&
+      [...navara.near.taken, ...navara.far.taken].some(
+        (height) => Math.abs(height - reference) > TOLERANCE_M,
+      )
     )
-      summary.floorTaken++;
+      summary.floorWrongWhileStreaming++;
     summary.rows.push({
       name: PLACES[i][0],
       cesium: reference ?? null,
@@ -193,7 +233,7 @@ try {
     `[surface-heights] startup Austin: cesium ${JSON.stringify(runs.cesium.startup)}, navara ${JSON.stringify(runs.navara.startup)}`,
   );
   console.log(
-    `[surface-heights] within ${TOLERANCE_M} m: ${summary.near}/20 at 800 m (gate ${GATES.near}), ${summary.far}/20 at 15 km finest (gate ${GATES.far}); floor rule takes ${summary.floorTaken}/20 Navara answers at 800 m`,
+    `[surface-heights] within ${TOLERANCE_M} m: ${summary.near}/20 at 800 m (gate ${GATES.near}), ${summary.far}/20 at 15 km finest (gate ${GATES.far}); floor rule (≤ ${MAX_FLOOR_TILE_SIZE_M} m tiles) takes ${summary.floorTaken}/20 Navara answers at 800 m and ${summary.floorTakenFar}/20 at 15 km; places where it took an answer more than ${TOLERANCE_M} m off while streaming: ${summary.floorWrongWhileStreaming}/20`,
   );
   failed =
     summary.near < GATES.near ||

@@ -71,7 +71,7 @@ test('a coarse tile answer or only terrain is a miss; a viewer reaches its engin
   engine.fake.script('sampleHeightDetailed', () => ({
     height: 122.5,
     source: 'tiles',
-    tileSizeM: 1_797,
+    tileSizeM: 241,
   }));
   const viewer = {};
   const unregister = registerViewerEngine(viewer, engine);
