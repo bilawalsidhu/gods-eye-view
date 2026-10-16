@@ -1,6 +1,10 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { DATA_CREDITS, OURAIRPORTS_CREDIT } from './dataCredits.js';
+import {
+  DATA_CREDITS,
+  OURAIRPORTS_CREDIT,
+  NYC_DOT_DISCLAIMER,
+} from './dataCredits.js';
 
 test('every credit carries a unique key and some markup to render', () => {
   const keys = DATA_CREDITS.map((entry) => entry.key);
@@ -136,4 +140,12 @@ test('OurAirports is credited even though its license does not require it', () =
     !DATA_CREDITS.some((entry) => entry.key === OURAIRPORTS_CREDIT.key),
     'a lazily registered credit must not also sit in the always-on list',
   );
+});
+
+test('the NYC camera credit carries NYC DOT’s requested disclaimer', () => {
+  const credit = DATA_CREDITS.find((entry) => entry.key === 'nyc-cctv');
+  assert.ok(credit, 'NYC DOT camera frames must be credited');
+  assert.ok(credit.html.includes(NYC_DOT_DISCLAIMER));
+  assert.match(credit.html, /make no representation as to the accuracy/);
+  assert.match(credit.html, /observe posted signage/);
 });
