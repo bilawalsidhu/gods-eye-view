@@ -11,6 +11,8 @@
 //                          plain { x, y, z }, screen a window point or null)
 //   screenOf(id, objectId) the window point of one object, or null
 //   selected(id)           the layer's tracked/selected info, or null
+//   drawn(id)              what the layer draws per object (glyph, model),
+//                          as plain data, or null (layers with qaDrawn)
 //   following()            { label, native } of engine.camera.following()
 //   movers()               engine.movers.list()
 //   framesDrawn()          frames drawn since the probe started
@@ -67,6 +69,7 @@ export function createQaProbe({ engine, dataManager, availability }) {
       return row ? screenOf(row.position) : null;
     },
     selected: (layerId) => moduleOf(layerId)?.getTrackedInfo?.() ?? null,
+    drawn: (layerId) => moduleOf(layerId)?.qaDrawn?.() ?? null,
     following() {
       const handle = engine.camera.following();
       if (!handle) return null;
