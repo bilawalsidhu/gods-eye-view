@@ -443,7 +443,7 @@ test('explicit cyclone selection publishes shared context without auto-claiming 
   assert.equal(selectedEvents, 1);
   assert.equal(selectedContext?.layerId, 'weather-cyclones');
   assert.equal(selectedContext?.source, 'NOAA NHC / CPHC');
-  assert.equal(selectedContext?.label, 'Cyclone · Another system');
+  assert.equal(selectedContext?.label, 'Another system');
   assert.equal(selectedContext?.latitude, 15.5);
   assert.equal(selectedContext?.longitude, -125.8);
   assert.equal(selectedContext?.properties.advisoryNumber, '10');
