@@ -18,8 +18,15 @@ export function freshStreet() {
     altitude: null,
     isPano: false,
     capturedAt: null,
+    /** 'day', or 'month' for providers that date images by month (Google). */
+    capturedAtPrecision: 'day',
+    /** A place name for the caption (Google's address), or null. */
+    title: null,
+    /** Whether the open viewer has FIT/FILL render modes. */
+    renderModes: true,
     sequenceId: null,
     creator: null,
+    license: null,
     externalUrl: null,
     loading: false,
     error: null,
@@ -50,10 +57,13 @@ export function createState({ services }) {
       ...freshStreet(),
     },
 
+    /** Whether the camera is low enough for a ground click to open an image. */
+    groundClickReady: false,
+
     /** 'terrain' on Google 3D at street zoom (overlays on the bare earth), else 'draped'. */
     surface: 'draped',
 
-    marker: { collection: null, billboard: null },
+    marker: { collection: null, billboard: null, look: null },
     clickHandler: null,
   };
 }

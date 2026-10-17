@@ -1,3 +1,4 @@
+import { msg } from '../../i18n/index.js';
 import { freshStreet } from './state.js';
 
 /**
@@ -33,11 +34,23 @@ export function createViewerHost({ state, parts }) {
       altitude: Number.isFinite(pose.altitude) ? pose.altitude : null,
       isPano: pose.isPano === true,
       capturedAt: pose.capturedAt ?? null,
+      capturedAtPrecision:
+        pose.capturedAtPrecision === 'month' ? 'month' : 'day',
+      title: pose.title || null,
       sequenceId: pose.sequenceId ?? null,
       creator: pose.creator || null,
+      license: pose.license || null,
       externalUrl: pose.externalUrl || null,
+      // FIT / FILL, unless this image has no frame to fit (a panorama).
+      renderModes:
+        typeof active.adapter.setRenderMode === 'function' &&
+        active.adapter.supportsRenderModes?.() !== false,
     });
-    parts.marker.set(state.street.position, state.street.bearing);
+    parts.marker.set(
+      state.street.position,
+      state.street.bearing,
+      providerEntry(pose.providerId)?.def.marker,
+    );
     parts.follow.followCamera();
     // Select the sequence only once the image is on screen, so its lookup
     // never competes with the image download.
@@ -67,6 +80,12 @@ export function createViewerHost({ state, parts }) {
       active.unsubscribe();
       active.adapter.unmount();
       active = null;
+    }
+    // A prewarmed viewer would sit under this one, holding its WebGL context.
+    for (const [id, warm] of warmed) {
+      if (id === entry.def.id) continue;
+      warmed.delete(id);
+      warm.unmount();
     }
     const adapter = entry.instance.viewer;
     const promise = (async () => {
@@ -107,7 +126,8 @@ export function createViewerHost({ state, parts }) {
     if (!state.street.host) {
       // A nearest-image lookup may have set it; nothing is loading now.
       state.street.loading = false;
-      state.street.error = 'Open the Street Level panel to view imagery';
+      // English data: the Street Level panel translates it (translateKnown).
+      state.street.error = msg('Open the Street Level panel to view imagery');
       notify();
       return false;
     }
@@ -128,12 +148,14 @@ export function createViewerHost({ state, parts }) {
     try {
       const adapter = await mount(entry);
       if (!current()) return false;
+      // Per open: close() resets it, and a reopen skips mount().
+      state.street.renderModes = typeof adapter.setRenderMode === 'function';
       await adapter.open(String(imageId));
       if (!current()) return false;
       if (ticket && !state.street.follow) parts.follow.lookAtPosition(ticket);
     } catch (error) {
       if (current())
-        state.street.error = error?.message || 'Image could not be opened';
+        state.street.error = error?.message || msg('Image could not be opened');
     } finally {
       if (current()) state.street.loading = false;
       notify();
@@ -183,14 +205,17 @@ export function createViewerHost({ state, parts }) {
     for (const entry of entries) {
       const adapter = entry.instance.viewer;
       if (!adapter.prewarm || !entry.on) continue;
+      // Another provider's viewer is showing in the host: do not build under it.
+      if (active && active.id !== entry.def.id) continue;
       try {
         await adapter.prewarm(host);
       } catch {
         /* the real open reports errors */
       }
-      if (active?.id === entry.def.id) continue;
-      // Switched off while it loaded: release it now rather than keep it.
-      if (!state.enabled || !entry.on) adapter.unmount();
+      if (active?.id === entry.def.id || mounting?.id === entry.def.id)
+        continue;
+      // Switched off, or another viewer took the host meanwhile.
+      if (!state.enabled || !entry.on || active || mounting) adapter.unmount();
       else warmed.set(entry.def.id, adapter);
     }
   }

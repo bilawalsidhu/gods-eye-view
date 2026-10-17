@@ -143,6 +143,11 @@ test('405 responses declare the methods each route accepts', async (t) => {
     assert.equal(rejected.status, 405);
     assert.equal(rejected.headers.allow, allow);
   }
+  // /api/overpass/status also answers GET; other paths take POST queries only.
+  const overpass = install(overpassProxy()).get('/api/overpass');
+  const probe = await request(overpass, { method: 'HEAD', url: '/status' });
+  assert.equal(probe.status, 405);
+  assert.equal(probe.headers.allow, 'GET, POST');
 });
 
 test('allowedMethods keeps route order, drops repeats and rejects malformed methods', () => {

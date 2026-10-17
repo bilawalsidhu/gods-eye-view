@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { requiresKeyIdFor, validateProviders } from './registry.js';
+import { filtersOf, requiresKeyIdFor, validateProviders } from './registry.js';
 
 const def = (overrides = {}) => ({
   id: 'mapillary',
@@ -26,9 +26,14 @@ test('a valid list is frozen in registration order', () => {
   );
 });
 
-test('an empty list, duplicate ids and malformed ids are rejected', () => {
-  assert.throws(() => validateProviders([]), /at least one/);
-  assert.throws(() => validateProviders(null), /at least one/);
+test('an empty provider list is valid and has no key requirement', () => {
+  assert.deepEqual(validateProviders([]), []);
+  assert.ok(Object.isFrozen(validateProviders([])));
+  assert.equal(requiresKeyIdFor([]), null);
+});
+
+test('non-arrays, duplicate ids and malformed ids are rejected', () => {
+  assert.throws(() => validateProviders(null), /array/);
   assert.throws(() => validateProviders([def(), def()]), /Duplicate/);
   assert.throws(() => validateProviders([def({ id: 'Bad Id' })]), /slug/);
 });
@@ -95,4 +100,26 @@ test('requiresKeyIdFor is the shared key, or null once providers differ', () => 
     null,
   );
   assert.equal(requiresKeyIdFor([def({ requiresKeyId: null })]), null);
+});
+
+test('a provider may narrow the filters it honours and pick a view-cone marker', () => {
+  assert.deepEqual(filtersOf(def()), ['pano', 'since'], 'both by default');
+  const narrowed = def({
+    filters: [],
+    marker: { kind: 'view-cone', color: '#4285f4' },
+  });
+  assert.deepEqual(filtersOf(validateProviders([narrowed])[0]), []);
+  assert.throws(
+    () => validateProviders([def({ filters: ['colour'] })]),
+    /filters must list pano or since/,
+  );
+  assert.throws(
+    () => validateProviders([def({ marker: { kind: 'pegman' } })]),
+    /marker must be/,
+  );
+  validateProviders([def({ sinceBasis: 'upload' })]);
+  assert.throws(
+    () => validateProviders([def({ sinceBasis: 'shot' })]),
+    /sinceBasis must be 'capture' or 'upload'/,
+  );
 });

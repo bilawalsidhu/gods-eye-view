@@ -77,7 +77,8 @@ function overpassProxy({ routing = {} } = {}) {
       let cacheKey = null;
       try {
         // Capability probe: lets clients skip queries when nothing is configured.
-        if (req.method === 'GET' && req.url?.split('?')[0] === '/status') {
+        const isStatusProbe = req.url?.split('?')[0] === '/status';
+        if (req.method === 'GET' && isStatusProbe) {
           res.writeHead(200, {
             'Content-Type': 'application/json',
             'Cache-Control': 'no-store',
@@ -91,7 +92,10 @@ function overpassProxy({ routing = {} } = {}) {
         }
         if (req.method !== 'POST') {
           res.writeHead(405, {
-            Allow: allowedMethods('POST'),
+            // /status also answers GET; every path accepts POST queries.
+            Allow: isStatusProbe
+              ? allowedMethods('GET', 'POST')
+              : allowedMethods('POST'),
             'Content-Type': 'application/json',
           });
           res.end(JSON.stringify({ error: 'Method Not Allowed' }));

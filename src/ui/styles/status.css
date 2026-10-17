@@ -123,6 +123,11 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+/* Translated retry details ("cámaras ALPR · reintento en 53 s") run longer
+   than the English one; English keeps its 220px. */
+html:not([lang='en']) #global-loading-detail {
+  max-width: min(300px, 46vw);
+}
 #global-loading-status:is(
   [data-state='complete'],
   [data-state='cancelled'],

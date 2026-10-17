@@ -4,6 +4,10 @@ import { decodeWindGribMessage } from './wind/decode.js';
 import { weatherScalarMetadata, weatherScalarError } from './wind/grid.js';
 import { allowedMethods } from './common/methods.js';
 
+// Data, not UI copy: the client (src/layers/wind/index.js) marks this exact
+// English with msg() and translates it when shown, so keep the two in sync.
+const UPSTREAM_UNAVAILABLE = 'Wind upstream unavailable';
+
 /** Serve bounded, single-flight, per-model/overlay forecast snapshots from fixed providers. */
 export function windProxy({
   fetchImpl = fetch,
@@ -26,7 +30,7 @@ export function windProxy({
       ...(overlay === 'none' ? {} : { overlay }),
       unavailable: true,
       stale: true,
-      reason: 'Wind upstream unavailable',
+      reason: UPSTREAM_UNAVAILABLE,
     },
   });
   const sendJson = (res, value, status = 200) => {
@@ -141,7 +145,7 @@ export function windProxy({
           old.manifest = {
             ...old.manifest,
             stale: true,
-            reason: 'Wind upstream unavailable',
+            reason: UPSTREAM_UNAVAILABLE,
           };
           return old;
         }

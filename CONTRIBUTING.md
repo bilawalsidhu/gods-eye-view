@@ -79,8 +79,8 @@ if its layer is later removed.
 
 New layers first use the remaining unreserved single-character digits (`0`
 through `9`), then the two-character base-36 namespace (`00` through `zz`). On the
-current published ledger, `0`, `1` and `2` are already owned, so the next
-choices are `3` through `9`, then `00`. After rebasing onto the latest `main`, run
+current published ledger, `0`, `1`, `2` and `3` are already owned, so the next
+choices are `4` through `9`, then `00`. After rebasing onto the latest `main`, run
 `npm run layer-token:next -- <layer-id>`, add that result to both the permanent
 JSON reservation ledger and registry entry, and keep the exact registered-layer
 count assertion up to date. The token is assigned against the merge-time base, not
@@ -98,7 +98,7 @@ remove only your still-unpublished layer's registry entry and ledger row so the
 local registry is valid again, then rerun `npm run layer-token:next -- <layer-id>`.
 For example, if PR A publishes `0` while PR B still provisionally uses `0`,
 PR B removes only its own provisional entry, reruns the helper, and receives
-`3`. Put `3` on PR B's registry entry and ledger row, update its pinned count
+`4`. Put `4` on PR B's registry entry and ledger row, update its pinned count
 and token tests, then rerun `npm run layer-token:check -- --base-ref origin/main`.
 An invalid duplicate ledger can fail during module import before the helper
 prints anything; never fix that by renaming or deleting PR A's published token.
@@ -126,6 +126,7 @@ The highest-leverage places to jump in:
 - ES modules, **2-space indent, single quotes, semicolons.**
 - JSDoc on exported/public functions.
 - Match the surrounding code — comment density, naming, and idiom.
+- User-visible text goes through `t()`, `tn()` or `msg()`, or a `data-i18n*` attribute in markup, and `npm run i18n` must pass. See [docs/I18N.md](docs/I18N.md).
 - Prefer small, reviewable commits. Conventional-commit-style prefixes (`feat:`, `fix:`, `perf:`, `docs:`) are appreciated but not required.
 
 ## Formatting and reusable components
@@ -149,7 +150,7 @@ ownership and adoption process.
 
 1. Branch off `main`.
 2. Keep `npm run build`, `npm test`, and `npm run test:track` green and avoid new console errors, plus the [feature gate](#feature-regression-gates) for the area you touched.
-3. If you change runtime behavior, update `docs/CURRENT-STATE.md` and `CHANGELOG.md` in the same PR.
+3. If you change runtime behavior, update `docs/CURRENT-STATE.md` in the same PR, and add your changelog entry as `changelog.d/<pr-number>-<slug>.md` instead of editing `CHANGELOG.md` — see [changelog.d/README.md](changelog.d/README.md). Distinct filenames don't conflict; a release assembles the directory into `CHANGELOG.md`. A documentation claim that needs a regression test should assert against `docs/CURRENT-STATE.md` or `README.md`, which a PR still edits directly.
 4. If you add or change a data source, update [DATA_SOURCES.md](DATA_SOURCES.md) with its license and attribution. **Don't add data you don't have the right to redistribute** — fetch it at runtime instead.
 5. Describe what you changed and how you verified it (screenshots welcome for anything visual).
 
