@@ -44,7 +44,9 @@ function uniqueIds(values) {
 function snapshotMetadata(value, ancestors = new WeakSet()) {
   if (value == null) return null;
   if (typeof value !== 'object') {
-    return ['string', 'number', 'boolean'].includes(typeof value) ? value : null;
+    return ['string', 'number', 'boolean'].includes(typeof value)
+      ? value
+      : null;
   }
   if (ancestors.has(value)) return null;
   if (
@@ -120,9 +122,8 @@ export function evaluateDisasterRouteSupport(route, accessSegments = []) {
       break;
     }
   }
-  const normalizedSegments = (
-    Array.isArray(accessSegments) ? accessSegments : []
-  )
+  const records = Array.isArray(accessSegments) ? accessSegments : [];
+  const normalizedSegments = records
     .map(normalizeDisasterAccessSegment)
     .filter(Boolean);
   const byId = new Map();
