@@ -1,0 +1,167 @@
+[
+  {
+    "id": "cam001",
+    "name": "Punta Princesa",
+    "center": "catedral",
+    "lat": -41.1771,
+    "lon": -71.484,
+    "groundElevationM": 2122,
+    "locationAccuracy": "approximate",
+    "locationNote": "Punta Princesa peak reference; not the camera mount.",
+    "locationSources": [
+      "https://www.openstreetmap.org/node/339894320",
+      "https://mapcarta.com/N339894320"
+    ],
+    "sourcePage": "https://varitech.ar/camara/cam001"
+  },
+  {
+    "id": "cam002",
+    "name": "Playpark",
+    "center": "catedral",
+    "lat": -41.1658,
+    "lon": -71.4434,
+    "groundElevationM": 1005,
+    "locationAccuracy": "approximate",
+    "locationNote": "Catedral base / Plaza Catalina Reynal reference; not the camera mount.",
+    "locationSources": [
+      "https://www.openstreetmap.org/way/304395859",
+      "https://mapcarta.com/W304395859"
+    ],
+    "sourcePage": "https://varitech.ar/camara/cam002"
+  },
+  {
+    "id": "cam003",
+    "name": "Plaza Catalina Reynal",
+    "center": "catedral",
+    "lat": -41.1658,
+    "lon": -71.4434,
+    "groundElevationM": 1005,
+    "locationAccuracy": "approximate",
+    "locationNote": "Plaza Catalina Reynal reference; not the camera mount.",
+    "locationSources": [
+      "https://www.openstreetmap.org/way/304395859",
+      "https://mapcarta.com/W304395859"
+    ],
+    "sourcePage": "https://varitech.ar/camara/cam003"
+  },
+  {
+    "id": "cam004",
+    "name": "Cable carril inferior",
+    "center": "catedral",
+    "lat": -41.1645,
+    "lon": -71.4427,
+    "groundElevationM": 1005,
+    "locationAccuracy": "approximate",
+    "locationNote": "Lower Cable Carril station reference; not the camera mount.",
+    "locationSources": [
+      "https://www.openstreetmap.org/node/2643930368",
+      "https://mapcarta.com/N2643930368"
+    ],
+    "sourcePage": "https://varitech.ar/camara/cam004"
+  },
+  {
+    "id": "cam005",
+    "name": "Pista Eventos",
+    "center": "catedral",
+    "lat": -41.1658,
+    "lon": -71.4434,
+    "groundElevationM": 1005,
+    "locationAccuracy": "approximate",
+    "locationNote": "Catedral base / Plaza Catalina Reynal reference; not the camera mount.",
+    "locationSources": [
+      "https://www.openstreetmap.org/way/304395859",
+      "https://mapcarta.com/W304395859"
+    ],
+    "sourcePage": "https://varitech.ar/camara/cam005"
+  },
+  {
+    "id": "cam008",
+    "name": "Diente de caballo Sur",
+    "center": "catedral",
+    "lat": -41.18,
+    "lon": -71.4759,
+    "groundElevationM": 2100,
+    "locationAccuracy": "approximate",
+    "locationNote": "Diente de Caballo peak reference; not the camera mount. Elevation is an approximate placement prior.",
+    "locationSources": [
+      "https://www.openstreetmap.org/node/339893748",
+      "https://mapcarta.com/N339893748"
+    ],
+    "sourcePage": "https://varitech.ar/camara/cam008"
+  },
+  {
+    "id": "cam016",
+    "name": "Mocho inferior",
+    "center": "chapelco",
+    "lat": -40.2096,
+    "lon": -71.3027,
+    "groundElevationM": 1700,
+    "locationAccuracy": "approximate",
+    "locationNote": "Chapelco ski-area reference shared by its three cameras; individual mounts are unknown. Elevation is an approximate placement prior.",
+    "locationSources": [
+      "https://www.openstreetmap.org/way/934098320",
+      "https://mapcarta.com/W934098320"
+    ],
+    "sourcePage": "https://varitech.ar/camara/cam016"
+  },
+  {
+    "id": "cam017",
+    "name": "Lift Superior",
+    "center": "chapelco",
+    "lat": -40.2096,
+    "lon": -71.3027,
+    "groundElevationM": 1700,
+    "locationAccuracy": "approximate",
+    "locationNote": "Chapelco ski-area reference shared by its three cameras; individual mounts are unknown. Elevation is an approximate placement prior.",
+    "locationSources": [
+      "https://www.openstreetmap.org/way/934098320",
+      "https://mapcarta.com/W934098320"
+    ],
+    "sourcePage": "https://varitech.ar/camara/cam017"
+  },
+  {
+    "id": "cam018",
+    "name": "Rancho Superior",
+    "center": "chapelco",
+    "lat": -40.2096,
+    "lon": -71.3027,
+    "groundElevationM": 1700,
+    "locationAccuracy": "approximate",
+    "locationNote": "Chapelco ski-area reference shared by its three cameras; individual mounts are unknown. Elevation is an approximate placement prior.",
+    "locationSources": [
+      "https://www.openstreetmap.org/way/934098320",
+      "https://mapcarta.com/W934098320"
+    ],
+    "sourcePage": "https://varitech.ar/camara/cam018"
+  },
+  {
+    "id": "cam031",
+    "name": "Principiantes — Base 1600",
+    "center": "lahoya",
+    "lat": -42.8331,
+    "lon": -71.2574,
+    "groundElevationM": 1525,
+    "locationAccuracy": "approximate",
+    "locationNote": "La Hoya resort reference shared by its two cameras; individual mounts are unknown.",
+    "locationSources": [
+      "https://www.openstreetmap.org/node/2643713446",
+      "https://mapcarta.com/La_Hoya"
+    ],
+    "sourcePage": "https://varitech.ar/camara/cam031"
+  },
+  {
+    "id": "cam032",
+    "name": "Plateau",
+    "center": "lahoya",
+    "lat": -42.8331,
+    "lon": -71.2574,
+    "groundElevationM": 1525,
+    "locationAccuracy": "approximate",
+    "locationNote": "La Hoya resort reference shared by its two cameras; individual mounts are unknown.",
+    "locationSources": [
+      "https://www.openstreetmap.org/node/2643713446",
+      "https://mapcarta.com/La_Hoya"
+    ],
+    "sourcePage": "https://varitech.ar/camara/cam032"
+  }
+]

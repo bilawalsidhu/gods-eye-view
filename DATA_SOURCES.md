@@ -50,6 +50,7 @@ How to read this:
 | **TxDOT ITS (its.txdot.gov)**                                         | CCTV camera catalogs + frames, Texas districts                                                                                      | Public TxDOT traffic camera data                                                                                                                                                                                                                                                                                                                      | "Texas Department of Transportation" (courtesy)                                                                                             |
 | **City of Tallinn (ristmikud.tallinn.ee)**                            | CCTV camera catalog + frames, Tallinn intersections                                                                                 | Public City of Tallinn traffic camera data                                                                                                                                                                                                                                                                                                            | "City of Tallinn — ristmikud.tallinn.ee" (courtesy)                                                                                         |
 | **Transpordiamet / Tarktee**                                          | CCTV camera catalog + frames, Estonia road-weather cameras                                                                          | Public Transpordiamet / Tarktee road camera data                                                                                                                                                                                                                                                                                                      | "Transpordiamet / Tarktee — tarktee.transpordiamet.ee" (courtesy)                                                                           |
+| **Varitech webcams (Argentina)** | Five-minute JPEG snapshots from Cerro Catedral, Chapelco and La Hoya | [Provider terms](https://varitech.ar/terminos), §§6 and 8; opt-in only, restricted media reuse and automated access. See details below. Approximate map references: ODbL 1.0 | “Varitech - varitech.ar” and the ski resort; © OpenStreetMap contributors |
 | **Stadt Warendorf webcam**                                            | Webcam frames, Marktplatz / Historisches Rathaus (`config/cctv_sources.warendorf.json`)                                             | Public municipal webcam data                                                                                                                                                                                                                                                                                                                          | "Stadt Warendorf — webcam.warendorf.de" (courtesy)      |
 | **Live Traffic NSW (Transport for NSW)**                              | CCTV camera catalog + frames, New South Wales                                                                                       | [CC BY 4.0](https://opendata.transport.nsw.gov.au/) — attribution REQUIRED                                                                                                                                                                                                                                                                            | "Live Traffic NSW — Transport for NSW"                                                                                                      |
 | **Caltrans (cwwp2.dot.ca.gov)**                                       | CCTV camera catalogs + frames, California districts                                                                                 | Public Caltrans traffic camera data                                                                                                                                                                                                                                                                                                                   | "Caltrans — cwwp2.dot.ca.gov" (courtesy)                                                                                                    |
@@ -179,6 +180,50 @@ The optional Local ADS-B layer and the broadcast-FM receiver use radio you recei
 - **Dynamic weather presentation.** While cockpit mode is active, `/api/weather-effects` requests current Open-Meteo observations for the aircraft/camera location, rounds coordinates into 0.1° cache cells, caches results for five minutes, and may retain a stale observation for up to 30 minutes during a transient outage. WMO condition code selects the visual family; observed cloud cover, precipitation, visibility, wind speed, and wind direction bound its strength and motion. Missing or expired weather renders no synthetic atmospheric effect, and normal globe view never renders the weather overlay.
 
 ---
+
+### Varitech ski-resort webcams (Argentina)
+
+The opt-in CCTV pack includes 11 published Varitech JPEG endpoints from
+Cerro Catedral (6), Chapelco (3), and La Hoya (2). The source IDs and named-area
+map references live in `config/cctv_sources.varitech.json`. Set
+`CCTV_VARITECH_ENABLED=1` to enable this otherwise-disabled pack.
+
+- Provider and published embedding URLs: https://varitech.ar/prensa
+- Availability report: https://varitech.ar/api/status
+- Terms: https://varitech.ar/terminos
+- Attribution: **Varitech - varitech.ar** and the corresponding ski resort.
+- Reference geography: **© OpenStreetMap contributors**, ODbL 1.0,
+  https://www.openstreetmap.org/copyright. Each catalog row names its map source.
+
+The provider publishes an embedding example for each latest JPEG and advertises
+a five-minute update interval. Images are fetched at runtime only when requested,
+through the existing registered-camera frame route; the repository contains no
+camera images or video. A per-proxy cache shares concurrent requests and keeps
+successful JPEGs for five minutes, with a two-MiB limit per image and a fixed
+eleven-URL allowlist. Failed refreshes replace the cached result with a miss for
+30 seconds, allowing the existing fallback chain to run. Still images are served
+only through `/api/cctv/frame`; `/api/cctv/media` returns 404 for them.
+
+The pack is **off by default**. Set `CCTV_VARITECH_ENABLED=1` only after confirming
+provider permission for the intended use. Enabling it does not grant permission.
+[Terms §§6 and 8](https://varitech.ar/terminos), checked 2026-10-16, allow attributed
+informational media use, require prior written authorization for commercial reuse,
+prohibit unauthorized scraping, automated crawling or bulk image extraction, and
+prohibit surveillance or tracking of people. Published embedding endpoints and
+public availability do not remove those restrictions.
+
+Coordinates are **approximate named-area references, not verified camera mounts**.
+The camera name and credit say so. Bearings are synthetic, tagged low confidence
+using the existing estimated-heading UI; no surveyed pose or calibrated coverage
+is claimed. Several cameras can share a reference point when their mounts are
+unknown. Reported mountain elevations are approximate placement priors.
+
+On 2026-10-15, all eleven endpoints returned HTTP 200, image/jpeg, and decodable
+1280×720 JPEGs without authentication; their Last-Modified headers and the public
+status report indicated recent captures. The two unavailable catalog entries
+`cam006` (old image) and `catedral-vivo` (no image) are excluded.
+That observation is not a guarantee of continuing availability; timestamps
+burned into the provider's images remain the capture-time reference.
 
 ## Bundled snapshots
 
