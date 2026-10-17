@@ -413,6 +413,8 @@ export function createRendering({
       height,
       labelRowLimit(),
     );
+    // The cards published last (QA: qaDrawn).
+    vesselState._publishedCards = entries;
     vesselState._vesselOverlayHost.setEntries(
       VESSEL_OVERLAY_SOURCE_ID,
       entries.map((entry) => {

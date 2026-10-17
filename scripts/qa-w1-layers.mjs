@@ -54,7 +54,9 @@ const DEFAULT_FEEDS = {
   // flights (duplicate suppression), and the follow passes between them.
   military: 'military:synthetic:1000,flights:synthetic:10000',
   'local-adsb': 'local-adsb:fixture',
-  'ais-live-vessels': 'vessels:fixture',
+  // Vessels with the civil fleet: a click on a flight beside the vessels
+  // (section 2, another layer's object).
+  'ais-live-vessels': 'vessels:fixture,flights:synthetic:10000',
 };
 const TODO_SECTIONS = {
   2: 'click',
@@ -185,6 +187,25 @@ try {
     report.skipped = `no ${layer} layer on ${engineKind}`;
     console.log(`[w1-layers] SKIP ${report.skipped}`);
   } else {
+    // Vessels are asked for by view: both engines start the layer from the
+    // same (global) view, not their own boot views (Cesium boots at 600 m
+    // over Austin, where the fixture has no vessels, and a move while that
+    // first request is in flight is not asked again until the 60 s refresh
+    // — the layer's behaviour on both engines, not the QA's to change).
+    if (layer === 'ais-live-vessels')
+      await page.evaluate(async ([lon, lat, height, heading, pitch]) => {
+        const geo = await import('/src/geo/index.js');
+        const { engine } = window.__godsEyeView;
+        const rad = geo.math.toRadians;
+        engine.camera.setView({
+          destination: geo.cartesian3.fromDegrees(lon, lat, height),
+          orientation: { heading: rad(heading), pitch: rad(pitch), roll: 0 },
+        });
+        for (let frame = 0; frame < 30; frame++) {
+          engine.render.request('qa-w1-layers');
+          await new Promise((resolve) => requestAnimationFrame(resolve));
+        }
+      }, POSES.global);
     await page.evaluate((id) => window.__godsEyeView.layers.enable(id), layer);
     // 1. view: objects per pose, screen points of 5 known objects.
     let known = null;
@@ -201,6 +222,22 @@ try {
           for (let frame = 0; frame < 30; frame++) {
             engine.render.request('qa-w1-layers');
             await new Promise((resolve) => requestAnimationFrame(resolve));
+          }
+          // A layer asked for by view (vessels): its request for this view.
+          const module =
+            window.__godsEyeView.dataManager.layers.get(id)?.module;
+          if (typeof module?.getStats === 'function') {
+            const started = performance.now();
+            await new Promise((resolve) => setTimeout(resolve, 300));
+            while (
+              module.getStats().loading &&
+              performance.now() - started < 20_000
+            )
+              await new Promise((resolve) => setTimeout(resolve, 100));
+            for (let frame = 0; frame < 30; frame++) {
+              engine.render.request('qa-w1-layers');
+              await new Promise((resolve) => requestAnimationFrame(resolve));
+            }
           }
           const { width, height: h } = engine.host.size();
           const objects = layers.objects(id, 1_000_000);
@@ -717,6 +754,354 @@ try {
       } else
         check('2 click: a local aircraft to click at the city pose', false);
       report.sections[2] = section;
+    }
+    // Vessels (the same on both engines): a click on a chevron selects it
+    // (its full card, the world-focus flight to it), the camera never
+    // follows it, Escape and a click on empty sea release it; a click on a
+    // flight beside it: the flights follow takes the camera, which releases
+    // the vessel (as on Cesium); the layer's queries; the share link keeps
+    // the layer on.
+    if (layer === 'ais-live-vessels') {
+      const setPose = (pose) =>
+        page.evaluate(
+          async ([lon, lat, height, heading, pitch], id) => {
+            const geo = await import('/src/geo/index.js');
+            const { engine, dataManager } = window.__godsEyeView;
+            const rad = geo.math.toRadians;
+            engine.camera.setView({
+              destination: geo.cartesian3.fromDegrees(lon, lat, height),
+              orientation: {
+                heading: rad(heading),
+                pitch: rad(pitch),
+                roll: 0,
+              },
+            });
+            const module = dataManager.layers.get(id).module;
+            const started = performance.now();
+            for (let frame = 0; frame < 30; frame++) {
+              engine.render.request('qa-w1-layers');
+              await new Promise((resolve) => requestAnimationFrame(resolve));
+            }
+            while (
+              module.getStats().loading &&
+              performance.now() - started < 20_000
+            )
+              await new Promise((resolve) => setTimeout(resolve, 100));
+            for (let frame = 0; frame < 30; frame++) {
+              engine.render.request('qa-w1-layers');
+              await new Promise((resolve) => requestAnimationFrame(resolve));
+            }
+          },
+          pose,
+          layer,
+        );
+      // The port view: 20 km over the fixture's vessels off JFK.
+      const PORT = [-73.9, 40.5, 20_000, 0, -90];
+      await setPose(PORT);
+      const targetsOf = (id) =>
+        page.evaluate(async (layerId) => {
+          const { engine, layers } = window.__godsEyeView;
+          const { hitTestWorldOverlay } =
+            await import('/src/overlays/worldOverlay.js');
+          const { width, height } = engine.host.size();
+          const onCanvas = (x, y) =>
+            document.elementFromPoint(x, y) === engine.host.canvas;
+          const all = ['ais-live-vessels', 'flights'].flatMap((lid) =>
+            layers.available(lid)
+              ? layers.objects(lid, 1_000_000).map((row) => ({ ...row, lid }))
+              : [],
+          );
+          const shown = all.filter(
+            ({ screen }) =>
+              screen &&
+              screen.x > 120 &&
+              screen.y > 120 &&
+              screen.x < width - 120 &&
+              screen.y < height - 120,
+          );
+          const clearance = (x, y, skip) =>
+            Math.min(
+              Infinity,
+              ...shown
+                .filter((row) => row !== skip)
+                .map(({ screen }) => Math.hypot(screen.x - x, screen.y - y)),
+            );
+          // Cards cover the sea around their vessels: a point on a card is
+          // not empty map.
+          const offCards = (x, y) => !hitTestWorldOverlay(x, y);
+          let target = null;
+          for (const row of shown) {
+            if (row.lid !== layerId) continue;
+            if (!onCanvas(row.screen.x, row.screen.y)) continue;
+            const room = clearance(row.screen.x, row.screen.y, row);
+            if (!target || room > target.room)
+              target = { id: String(row.id), screen: row.screen, room };
+          }
+          let empty = null;
+          for (let x = 140; x < width - 140; x += 40)
+            for (let y = 140; y < height - 140; y += 40) {
+              if (!onCanvas(x, y) || !offCards(x, y)) continue;
+              const room = clearance(x, y, null);
+              if (!empty || room > empty.room) empty = { x, y, room };
+            }
+          return { target, empty };
+        }, id);
+      const selectedMmsi = () =>
+        page.evaluate(
+          (layerId) =>
+            window.__godsEyeView.layers.selected(layerId)?.mmsi ?? null,
+          layer,
+        );
+      const waitSelected = async (predicate, ms = 3000) => {
+        const start = Date.now();
+        for (;;) {
+          const value = await selectedMmsi();
+          if (predicate(value)) return { value, ms: Date.now() - start };
+          if (Date.now() - start > ms) return { value, ms: null };
+          await new Promise((resolve) => setTimeout(resolve, 25));
+        }
+      };
+      const selectedCard = () =>
+        page.evaluate((layerId) => {
+          const drawn = window.__godsEyeView.layers.drawn(layerId);
+          return drawn?.cards.find((card) => card.selected)?.id ?? null;
+        }, layer);
+      const cameraPose = () =>
+        page.evaluate(async () => {
+          const geo = await import('/src/geo/index.js');
+          const pose = window.__godsEyeView.engine.camera.pose();
+          const carto = geo.cartographic.fromCartesian(pose.position);
+          return {
+            position: {
+              x: pose.position.x,
+              y: pose.position.y,
+              z: pose.position.z,
+            },
+            lon: geo.math.toDegrees(carto.longitude),
+            lat: geo.math.toDegrees(carto.latitude),
+            height: carto.height,
+            heading: geo.math.toDegrees(pose.heading),
+            pitch: geo.math.toDegrees(pose.pitch),
+          };
+        });
+      const section = {};
+      let targets = await targetsOf(layer);
+      section.target = targets.target;
+      if (targets.target) {
+        const id = targets.target.id;
+        await page.mouse.click(
+          targets.target.screen.x,
+          targets.target.screen.y,
+        );
+        const picked = await waitSelected((value) => value === id);
+        section.selectMs = picked.ms;
+        await new Promise((resolve) => setTimeout(resolve, 900));
+        section.card = await selectedCard();
+        check(
+          '2 click: a click on a vessel selects it and shows its full card',
+          picked.value === id && section.card === `vessel:${id}`,
+          `${id} at ${targets.target.screen.x.toFixed(0)},${targets.target.screen.y.toFixed(0)} (${targets.target.room.toFixed(0)} px clear) → ${picked.value} in ${picked.ms} ms, card ${section.card}`,
+        );
+        section.following = await page.evaluate(() =>
+          window.__godsEyeView.layers.following(),
+        );
+        check(
+          '4 tracking: the camera does not follow a vessel',
+          section.following === null,
+          JSON.stringify(section.following),
+        );
+        // 3. focus: the select's world-focus flight, settled.
+        await new Promise((resolve) => setTimeout(resolve, 4000));
+        const focusPose = await cameraPose();
+        const vesselScreen = await page.evaluate(
+          (layerId, objectId) =>
+            window.__godsEyeView.layers.screenOf(layerId, objectId),
+          layer,
+          id,
+        );
+        report.sections[3] = { pose: focusPose, vesselScreen };
+        check(
+          '3 focus: select-and-show flies the camera to the vessel (it is on screen)',
+          Boolean(vesselScreen),
+          JSON.stringify({ ...focusPose, position: undefined, vesselScreen }),
+        );
+        await page.keyboard.press('Escape');
+        const escaped = await waitSelected((value) => value === null);
+        check(
+          '2 click: Escape releases it',
+          escaped.value === null,
+          String(escaped.value),
+        );
+        // Select again (by a click where it is drawn now), then empty sea.
+        await setPose(PORT);
+        targets = await targetsOf(layer);
+        await page.mouse.click(
+          targets.target.screen.x,
+          targets.target.screen.y,
+        );
+        const again = await waitSelected(
+          (value) => value === targets.target.id,
+        );
+        await new Promise((resolve) => setTimeout(resolve, 4000));
+        await setPose(PORT);
+        targets = await targetsOf(layer);
+        await page.mouse.click(targets.empty.x, targets.empty.y);
+        const emptied = await waitSelected((value) => value === null);
+        check(
+          '2 click: a click on empty sea releases it',
+          again.value !== null && emptied.value === null,
+          `${again.value} → ${emptied.value} at ${targets.empty.x},${targets.empty.y} (${targets.empty.room.toFixed(0)} px clear)`,
+        );
+        // 5. the layer's queries, for --compare (the same object).
+        report.sections[5] = {
+          ...(report.sections[5] ?? {}),
+          queries: await page.evaluate(
+            ([objectId, layerId]) => {
+              const module =
+                window.__godsEyeView.dataManager.layers.get(layerId).module;
+              const found = module.findByQuery(objectId);
+              module.selectById(objectId);
+              const selected = module.getSelectedInfo();
+              module.clearSelection();
+              return {
+                tracked: objectId,
+                found: found?.mmsi ?? null,
+                selected: selected?.mmsi ?? null,
+                nearby: found
+                  ? module
+                      .getNearby(found.position, 50_000, 10)
+                      .map((row) => row.mmsi)
+                      .sort()
+                  : [],
+                all: module.getAllPositions(1_000_000).length,
+                detectable: module.getDetectableObjects({ maxCount: 50 })
+                  .length,
+                hasContact: module.hasContact(objectId),
+              };
+            },
+            [id, layer],
+          ),
+        };
+        check(
+          '5 queries: find, select, nearby and contacts answer',
+          report.sections[5].queries.found === id &&
+            report.sections[5].queries.selected === id &&
+            report.sections[5].queries.hasContact === true,
+          JSON.stringify(report.sections[5].queries),
+        );
+        // 2/4. another layer's object: a flight beside the vessels.
+        await page.evaluate(() =>
+          window.__godsEyeView.layers.enable('flights'),
+        );
+        await setPose(PORT);
+        const flightTarget = await page.evaluate(() => {
+          const { engine, layers } = window.__godsEyeView;
+          const { width, height } = engine.host.size();
+          const vessels = layers
+            .objects('ais-live-vessels', 1_000_000)
+            .filter(({ screen }) => screen);
+          let best = null;
+          for (const row of layers.objects('flights', 1_000_000)) {
+            const s = row.screen;
+            if (
+              !s ||
+              s.x < 120 ||
+              s.y < 120 ||
+              s.x > width - 120 ||
+              s.y > height - 120
+            )
+              continue;
+            if (document.elementFromPoint(s.x, s.y) !== engine.host.canvas)
+              continue;
+            const room = Math.min(
+              Infinity,
+              ...vessels.map(({ screen }) =>
+                Math.hypot(screen.x - s.x, screen.y - s.y),
+              ),
+            );
+            if (!best || room > best.room)
+              best = { id: row.id, screen: s, room };
+          }
+          return best;
+        });
+        await page.evaluate(
+          (layerId, objectId) =>
+            window.__godsEyeView.dataManager.layers
+              .get(layerId)
+              .module.selectById(objectId),
+          layer,
+          id,
+        );
+        if (flightTarget) {
+          await page.mouse.click(flightTarget.screen.x, flightTarget.screen.y);
+          await new Promise((resolve) => setTimeout(resolve, 1500));
+        }
+        const sibling = {
+          flight: flightTarget?.id ?? null,
+          flightSelected: await page.evaluate(
+            () =>
+              window.__godsEyeView.layers.selected('flights')?.icao24 ?? null,
+          ),
+          vessel: await selectedMmsi(),
+          following: await page.evaluate(
+            () => window.__godsEyeView.layers.following() !== null,
+          ),
+        };
+        section.sibling = sibling;
+        check(
+          "2 click: a flight's click is the flights' (it follows; the follow releases the vessel, as on Cesium)",
+          sibling.flight !== null &&
+            sibling.flightSelected === sibling.flight &&
+            sibling.vessel === null,
+          JSON.stringify(sibling),
+        );
+        await page.keyboard.press('Escape');
+        await page.evaluate(() =>
+          window.__godsEyeView.layers.disable('flights'),
+        );
+        // 6. share link: the layer stays on in a fresh page of each engine.
+        await new Promise((resolve) => setTimeout(resolve, 2500));
+        const hash = await page.evaluate(() => location.hash);
+        report.sections[6] = {};
+        for (const opened of [
+          engineKind,
+          engineKind === 'cesium' ? 'navara' : 'cesium',
+        ]) {
+          const sharedContext = await browser.createBrowserContext();
+          const shared = await sharedContext.newPage();
+          await shared.setViewport({ width: 1280, height: 800 });
+          const sharedUrl = new URL(page.url());
+          sharedUrl.searchParams.set('engine', opened);
+          sharedUrl.hash = hash;
+          await shared.goto(sharedUrl.href, { waitUntil: 'domcontentloaded' });
+          await shared.waitForFunction(
+            () => Boolean(window.__godsEyeView?.layers),
+            {
+              timeout: 180_000,
+              polling: 250,
+            },
+          );
+          const restored = await shared
+            .waitForFunction(
+              (layerId) =>
+                window.__godsEyeView.dataManager.isEnabled?.(layerId) ===
+                  true &&
+                window.__godsEyeView.layers.objects(layerId, 1).length > 0,
+              { timeout: 60_000, polling: 250 },
+              layer,
+            )
+            .then(() => true)
+            .catch(() => false);
+          await sharedContext.close();
+          report.sections[6][opened] = { restored };
+          check(
+            `6 share link: opened on ${opened}, the vessels layer is on and drawn`,
+            restored,
+          );
+        }
+      } else check('2 click: a vessel to click at the port view', false);
+      report.sections[2] = section;
+      report.sections[4] = { following: section.following ?? null };
     }
     // Military with the civil flights layer (the same on both engines): the
     // follow passes between the two layers, and the flights layer leaves

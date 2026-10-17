@@ -73,9 +73,12 @@ const POSES = {
   // aircraft are 3D models (with --models=on).
   near: [-73.78, 40.58, 6_000, 0, -35],
 };
-// --near=lon,lat,height,heading,pitch: another near pose (military's
-// aircraft in that view are on the ground, which stay glyphs until the
-// ground is sampled; from 100 km its airborne fleet near JFK are models).
+// Military's aircraft in the flights near view are on the ground, which
+// stay glyphs until the ground is sampled: its near pose is 100 km over JFK,
+// where its airborne fleet are models.
+const LAYER_NEAR = { military: [-73.78, 40.64, 100_000, 0, -90] };
+if (LAYER_NEAR[layer]) POSES.near = LAYER_NEAR[layer];
+// --near=lon,lat,height,heading,pitch: another near pose.
 if (argument('near')) POSES.near = argument('near').split(',').map(Number);
 const WIDTH = 1280;
 const HEIGHT = 800;

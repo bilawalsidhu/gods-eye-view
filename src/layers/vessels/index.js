@@ -10,6 +10,7 @@ import { createCards } from './cards.js';
 import { createTesting } from './testing.js';
 import { createEvidence } from './evidence.js';
 import { createQueries } from './queries.js';
+import { vesselTypeCss } from '../../data/vesselLabels.js';
 /** Compose one vessel layer with application-owned scene services. */
 export function createVesselLayer({ source, services, options = {} } = {}) {
   const vesselState = createVesselState({ source, services });
@@ -67,6 +68,40 @@ export function createVesselLayer({ source, services, options = {} } = {}) {
     cardScreenSeparated: parts.cards.cardScreenSeparated,
   });
   Object.defineProperty(layer, 'testing', { value: parts.testing });
+  /**
+   * What the layer draws, as plain data (the QA probe's drawn(id)): each
+   * chevron as the renderer holds it, and the cards published last.
+   */
+  layer.qaDrawn = () => {
+    const { state } = vesselState;
+    if (!state.feed.enabled) return null;
+    const plain = (p) => (p ? { x: p.x, y: p.y, z: p.z } : null);
+    return {
+      chevrons: state.records.all
+        .map((record) => [record, parts.rendering.getVisual(record).billboard])
+        .filter(([, billboard]) => billboard)
+        .map(([record, billboard]) => ({
+          id: record.mmsi ?? null,
+          position: plain(billboard.position),
+          show: billboard.show === true,
+          rotation: billboard.rotation,
+          scale: billboard.scale,
+          alpha: billboard.color?.alpha ?? 1,
+          depthFree:
+            billboard.disableDepthTestDistance === Number.POSITIVE_INFINITY,
+          selected: record === state.selectedRecord,
+          css:
+            record === state.selectedRecord
+              ? '#ffffff'
+              : vesselTypeCss(record.type),
+        })),
+      cards: (vesselState._publishedCards ?? []).map((entry) => ({
+        id: entry.id,
+        selected: entry.selected === true,
+        position: plain(entry.position),
+      })),
+    };
+  };
   return layer;
 }
 export { AIS_FIRST_CONNECT_GRACE_MS } from './policy.js';

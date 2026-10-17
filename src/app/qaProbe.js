@@ -68,7 +68,12 @@ export function createQaProbe({ engine, dataManager, availability }) {
       );
       return row ? screenOf(row.position) : null;
     },
-    selected: (layerId) => moduleOf(layerId)?.getTrackedInfo?.() ?? null,
+    // The tracked object, or the selected one of a layer that selects
+    // without tracking (vessels).
+    selected: (layerId) => {
+      const module = moduleOf(layerId);
+      return module?.getTrackedInfo?.() ?? module?.getSelectedInfo?.() ?? null;
+    },
     drawn: (layerId) => moduleOf(layerId)?.qaDrawn?.() ?? null,
     following() {
       const handle = engine.camera.following();
