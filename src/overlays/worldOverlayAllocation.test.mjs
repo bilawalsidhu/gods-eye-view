@@ -11,6 +11,7 @@ import { EARTHQUAKE_OVERLAY_COHORT_LIMIT } from '../data/earthquakes.js';
 import { ROCKET_MISSION_AMBIENT_OVERLAY_COHORT_LIMIT } from '../data/rocketLaunches.js';
 import { RADIO_OVERLAY_COHORT_LIMIT } from '../data/radio.js';
 import { CABLE_REFERENCE_LABEL_WINNER_CAP } from '../data/telegeographySubmarineCables.js';
+import { AIR_QUALITY_OVERLAY_COHORT_LIMIT } from '../layers/airQuality/model.js';
 import { isCalibratedAllocationRuntime } from '../../scripts/run-unit-tests.mjs';
 
 /**
@@ -34,6 +35,7 @@ import { isCalibratedAllocationRuntime } from '../../scripts/run-unit-tests.mjs'
  *   ---------------------+---------+------------+---------+----------------+-------------+-------------
  *   generic below cap    |      60 |         60 |      60 |           3182 |        53.0 |       4,100
  *   generic above cap    |     250 |        250 |      96 |          10022 |        40.1 |      13,000
+ *   air quality          |      48 |         48 |      32 |           3900 |        81.3 |       5,200
  *   local infrastructure |     320 |        320 |     192 |          39478 |       123.4 |      49,000
  *   Phase 3 + FIRMS      |     338 |        338 |     210 |          41220 |       122.0 |      53,600
  *   Phase 3 + vessels    |     451 |        451 |     311 |          67252 |       149.1 |      87,500
@@ -257,6 +259,23 @@ const WORKLOADS = [
     entries: CABLE_REFERENCE_LABEL_WINNER_CAP,
     candidates: CABLE_REFERENCE_LABEL_WINNER_CAP,
     maxBytesPerFrame: 19_000,
+    saturated: true,
+  },
+  {
+    // The air-quality station cohort on its own. Measured standalone rather
+    // than stacked on the Phase-5 host (the submarine-cable precedent): these
+    // stations are sparse and, with the single registered provider,
+    // continental, so what matters is its own cohort cost.
+    //
+    // Re-measured against the current worker: median 3,900 B/frame, max 4,114,
+    // and 85.7 B/candidate at the ceiling — inside the shared 154 B/candidate
+    // bound, so no per-source exception is taken. The 5,200 frame budget
+    // carries 26.4% headroom over the measured maximum.
+    name: 'with the air-quality station cohort live',
+    profile: 'air-quality',
+    entries: AIR_QUALITY_OVERLAY_COHORT_LIMIT,
+    candidates: AIR_QUALITY_OVERLAY_COHORT_LIMIT,
+    maxBytesPerFrame: 5_200,
     saturated: true,
   },
   {

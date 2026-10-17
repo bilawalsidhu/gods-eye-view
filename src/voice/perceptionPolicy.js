@@ -46,7 +46,7 @@ export function resolvePerceptionTier({
  * @param {object} input
  * @param {string} input.chosenTier
  * @param {string} input.minimumSufficientTier
- * @returns {'matched'|'missed'|'wasted'|'unknown'}
+ * @returns {'matched'|'missed'|'wasted'|'abstained'|'unsafe'|'unknown'}
  */
 export function classifyPerceptionChoice({
   chosenTier,
@@ -56,5 +56,9 @@ export function classifyPerceptionChoice({
   const minimum = PERCEPTION_TIERS.indexOf(minimumSufficientTier);
   if (chosen < 0 || minimum < 0) return 'unknown';
   if (chosen === minimum) return 'matched';
+  // Abstaining makes no perception request. It has no relative cost rank.
+  if (chosenTier === 'abstain') return 'abstained';
+  // A real perception step when abstention was required violates the bound.
+  if (minimumSufficientTier === 'abstain') return 'unsafe';
   return chosen < minimum ? 'missed' : 'wasted';
 }

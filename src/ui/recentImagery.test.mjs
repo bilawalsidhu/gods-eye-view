@@ -646,7 +646,10 @@ test('cards carry thumbnail, date, sensor, cloud, START HERE and PREVIEW; the ch
   f.layer.focus(1);
   const s18 = f.card(S18);
   assert.equal(f.part(s18, 'ri-card-date').textContent, 'Sep 18');
-  assert.equal(f.part(s18, 'ri-card-sensor').textContent, 'Sentinel-2 · 30 m');
+  assert.equal(
+    f.part(s18, 'ri-card-sensor').textContent,
+    'Sentinel-2 · 30\u00a0m',
+  );
   assert.equal(f.part(s18, 'ri-card-cloud').textContent, '12% cloud');
   assert.equal(f.part(s18, 'ri-card-start').hidden, false);
   assert.match(f.part(s18, 'ri-card-start').title, /Newest low-cloud day/);
@@ -658,11 +661,11 @@ test('cards carry thumbnail, date, sensor, cloud, START HERE and PREVIEW; the ch
   assert.equal(f.part(f.card(V21), 'ri-thumb-text').textContent, 'Checking');
   assert.equal(
     f.part(f.card(V21), 'ri-card-sensor').textContent,
-    'Daily overview · 250 m',
+    'Daily overview · 250\u00a0m',
   );
   assert.equal(
     f.part(f.card(L16), 'ri-card-sensor').textContent,
-    'Landsat 8/9 · 30 m',
+    'Landsat 8/9 · 30\u00a0m',
   );
   // IMAGE: one SHOW chip; the B chip keeps its box but is invisible.
   const [a, b] = [f.chip(S18, 'a'), f.chip(S18, 'b')];
@@ -734,7 +737,10 @@ test('the selection bar reads the mode, both rows and a preview, with × reserve
       ['A / B', 'radio', 'false'],
     ],
   );
-  assert.equal(rowText(f, 'a'), 'IMAGE | Sep 18 · Sentinel-2 · 30 m · preview');
+  assert.equal(
+    rowText(f, 'a'),
+    'IMAGE | Sep 18 · Sentinel-2 · 30\u00a0m · preview',
+  );
   assert.equal(f.byId('ri-slot-a').dataset.state, 'preview');
   assert.equal(rowText(f, 'b'), 'VS | Basemap');
   assert.equal(f.byId('ri-slot-b').classList.contains('lit'), false, 'dimmed');
@@ -748,7 +754,7 @@ test('the selection bar reads the mode, both rows and a preview, with × reserve
     [true, true, '×'],
   );
   f.key('s');
-  assert.equal(rowText(f, 'a'), 'IMAGE | Sep 18 · Sentinel-2 · 30 m');
+  assert.equal(rowText(f, 'a'), 'IMAGE | Sep 18 · Sentinel-2 · 30\u00a0m');
   assert.equal(f.byId('ri-slot-a').dataset.state, 'pinned');
   assert.equal(unpinA.disabled, false);
   assert.equal(unpinA.getAttribute('aria-label'), 'Unpin the image');
@@ -757,12 +763,12 @@ test('the selection bar reads the mode, both rows and a preview, with × reserve
   assert.equal(modes[1].getAttribute('aria-checked'), 'true');
   assert.equal(f.byId('ri-slot-b').classList.contains('lit'), true, 'lit');
   modes[2].click();
-  assert.equal(rowText(f, 'a'), 'A | Sep 18 · Sentinel-2 · 30 m');
+  assert.equal(rowText(f, 'a'), 'A | Sep 18 · Sentinel-2 · 30\u00a0m');
   assert.equal(rowText(f, 'b'), 'B | Not set');
   assert.equal(f.byId('ri-slot-b').dataset.state, 'empty');
   assert.equal(f.byId('ri-unpin-b').classList.contains('is-reserved'), true);
   f.chip(L16, 'b').click();
-  assert.equal(rowText(f, 'b'), 'B | Sep 16 · Landsat 8/9 · 30 m');
+  assert.equal(rowText(f, 'b'), 'B | Sep 16 · Landsat 8/9 · 30\u00a0m');
   f.byId('ri-unpin-b').click();
   assert.equal(f.snap().pins.b.key, null);
   unpinA.click();
@@ -879,7 +885,10 @@ test('the notice line shows the refusal, then errors, then CLEAR, then the Esri 
   );
   assert.equal(notice.classList.contains('info'), true);
   f.layer.setBox({ west: 0, south: 0, east: 20, north: 20 });
-  assert.equal(noticeText.textContent, 'Box is 2,226 km wide · limit 1,000 km');
+  assert.equal(
+    noticeText.textContent,
+    'Box is 2,226\u00a0km wide · limit 1,000\u00a0km',
+  );
   assert.equal(notice.classList.contains('warn'), true);
   assert.equal(hint.textContent, 'Zoom in or draw a smaller box');
   f.layer.setBox(BOX);
@@ -929,7 +938,7 @@ test('an oversized box offers ZOOM IN in a fixed slot at the end of the notice l
   assert.deepEqual(reserved(), [false, false, 'false', true]);
   assert.equal(
     f.byId('ri-notice-text').textContent,
-    'Box is 2,226 km wide · limit 1,000 km',
+    'Box is 2,226\u00a0km wide · limit 1,000\u00a0km',
   );
   assert.equal(f.byId('ri-hint').textContent, 'Zoom in or draw a smaller box');
   assert.equal(zoom.title, 'Fly in until the view fits the 1,000 km limit');
@@ -998,7 +1007,10 @@ test('the divider exists only while a swipe is live, labelled A / B or IMAGE / B
     [split.options.beforeLabel, split.options.afterLabel],
     ['A', 'B'],
   );
-  assert.equal(split.options.afterTitle, 'Landsat 8/9 · 30 m · 2026-09-16');
+  assert.equal(
+    split.options.afterTitle,
+    'Landsat 8/9 · 30\u00a0m · 2026-09-16',
+  );
   split.options.onChange(0.3);
   assert.equal(f.snap().split, 0.3);
   assert.deepEqual(directions(), ['left', 'right']);
@@ -1015,7 +1027,7 @@ test('the divider exists only while a swipe is live, labelled A / B or IMAGE / B
   assert.deepEqual(labels(), ['B', 'A']);
   assert.equal(
     f.splits.at(-1).options.beforeTitle,
-    'Landsat 8/9 · 30 m · 2026-09-16',
+    'Landsat 8/9 · 30\u00a0m · 2026-09-16',
   );
   assert.equal(f.splits.at(-1).options.initialValue, 0.3);
   assert.deepEqual(directions(), ['right', 'left']);
@@ -1133,6 +1145,29 @@ test('the body scroll position survives renders even when DOM mutations reset it
   f.thumbnails.probe(L16, 'empty');
   f.layer.setShowUnavailable(true);
   assert.equal(f.body.scrollTop, 120);
+});
+
+test('opening DETAILS scrolls its card into view, and closing it does not scroll', async () => {
+  const f = fixture();
+  await f.ready();
+  // The body is 100 px high and scrolled 40 px; the card opens 150 px down.
+  f.body.scrollTop = 40;
+  f.body.clientHeight = 100;
+  f.body.getBoundingClientRect = () => ({ top: 0 });
+  const header = f
+    .byId('ri-details')
+    .find((node) => node.classList.contains('rail-card-header'));
+  const card = header.parentNode;
+  card.getBoundingClientRect = () => ({
+    top: 150,
+    height: card.dataset.open === 'true' ? 60 : 0,
+  });
+  header.click();
+  assert.equal(card.dataset.open, 'true');
+  assert.equal(f.body.scrollTop, 150);
+  header.click();
+  assert.equal(card.dataset.open, 'false');
+  assert.equal(f.body.scrollTop, 150);
 });
 
 test('destroy returns every listener, the divider and the panel state', async () => {

@@ -101,7 +101,7 @@ export function createInstallationSource({
 } = {}) {
   let overpassUnavailable = false;
   const installationIds = new Map();
-  async function getNamedSites(box, signal) {
+  async function getNamedSites(box, signal, thinned = true) {
     const names = await waitForSignal(loadNames(), signal).catch((cause) => {
       signal?.throwIfAborted();
       throw Object.assign(
@@ -112,7 +112,13 @@ export function createInstallationSource({
       );
     });
     signal?.throwIfAborted();
-    const { records, count } = militaryNamesInView(names, box);
+    // The map keeps one site per display cell; queries can ask for all.
+    const { records, count } = militaryNamesInView(
+      names,
+      box,
+      thinned ? undefined : Infinity,
+      thinned,
+    );
     return {
       records,
       namedInView: count,
@@ -124,9 +130,9 @@ export function createInstallationSource({
       source: 'OpenStreetMap',
     };
   }
-  async function getTileSites(box, signal) {
+  async function getTileSites(box, signal, thinned) {
     const zoom = installationTileZoom(box);
-    if (zoom === null) return getNamedSites(box, signal);
+    if (zoom === null) return getNamedSites(box, signal, thinned);
     let names = null;
     const namesJob = waitForSignal(loadNames(), signal)
       .then((loaded) => {
@@ -181,7 +187,7 @@ export function createInstallationSource({
       mapTiles.clear();
       installationIds.clear();
     },
-    async getMappedSites(box, { exact = false, signal } = {}) {
+    async getMappedSites(box, { exact = false, thinned = true, signal } = {}) {
       const { south, west, north, east } = box || {};
       if (
         ![south, west, north, east].every(Number.isFinite) ||
@@ -197,8 +203,8 @@ export function createInstallationSource({
         throw new TypeError('A bounded installation viewport is required');
       signal?.throwIfAborted();
       if (east < west || north - south > 10 || east - west > 10)
-        return getNamedSites(box, signal);
-      if (overpassUnavailable) return getTileSites(box, signal);
+        return getNamedSites(box, signal, thinned);
+      if (overpassUnavailable) return getTileSites(box, signal, thinned);
       const query = new URLSearchParams(
         Object.entries({ south, west, north, east }).map(([key, value]) => [
           key,
@@ -213,7 +219,7 @@ export function createInstallationSource({
       signal?.throwIfAborted();
       if (isUnavailableCapability(body)) {
         overpassUnavailable = true;
-        return getTileSites(box, signal);
+        return getTileSites(box, signal, thinned);
       }
       if (!response.ok)
         throw Object.assign(

@@ -77,3 +77,34 @@ test('perception receipts distinguish missed from wasted escalation', () => {
     'unknown',
   );
 });
+
+test('abstention is a decision, never the most expensive evidence tier', () => {
+  assert.equal(
+    classifyPerceptionChoice({
+      chosenTier: 'abstain',
+      minimumSufficientTier: 'state',
+    }),
+    'abstained',
+  );
+  assert.equal(
+    classifyPerceptionChoice({
+      chosenTier: 'multimodal',
+      minimumSufficientTier: 'abstain',
+    }),
+    'unsafe',
+  );
+  assert.equal(
+    classifyPerceptionChoice({
+      chosenTier: 'abstain',
+      minimumSufficientTier: 'abstain',
+    }),
+    'matched',
+  );
+  assert.equal(
+    classifyPerceptionChoice({
+      chosenTier: 'crop',
+      minimumSufficientTier: 'state',
+    }),
+    'wasted',
+  );
+});

@@ -8,6 +8,7 @@ import {
   twoline2satrec,
 } from 'satellite.js';
 import { findNextSatellitePass } from '../../data/satellitePass.js';
+import { parseTleText } from '../../sources/tle.js';
 import { ORBIT_PATH_STEPS, ISS_NORAD } from './policy.js';
 
 export function createOrbits({ state: layerState, services, parts, source }) {
@@ -40,24 +41,7 @@ export function createOrbits({ state: layerState, services, parts, source }) {
   /**
    * Parse TLE text into array of { name, line1, line2 } objects.
    */
-
-  function parseTLE(text) {
-    const lines = text
-      .trim()
-      .split('\n')
-      .map((l) => l.trim())
-      .filter((l) => l.length > 0);
-    const result = [];
-    for (let i = 0; i < lines.length - 2; i += 3) {
-      const name = lines[i];
-      const line1 = lines[i + 1];
-      const line2 = lines[i + 2];
-      if (line1.startsWith('1 ') && line2.startsWith('2 ')) {
-        result.push({ name, line1, line2 });
-      }
-    }
-    return result;
-  }
+  const parseTLE = parseTleText;
 
   /**
    * Propagate satellite position at a given JS Date.

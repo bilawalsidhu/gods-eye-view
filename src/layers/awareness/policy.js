@@ -38,8 +38,8 @@ export const AWARENESS_MAX_EXAMPLES = 10;
 // so these caps sit far above any realistic in-range population rather than at
 // the display limit. They are still FINITE: an unbounded materialization would
 // let a pathological feed sort an eleven-thousand-contact array on every
-// refresh. Truthfulness does not depend on them — `summarizeAwarenessCohort`
-// derives `count` from the full in-range set before any slice.
+// refresh. Callers sample beyond this cap and carry explicit completeness, so
+// a saturated cohort is a lower bound rather than a silently exact count.
 
 export const AWARENESS_QUERY_LIMIT = 20000;
 

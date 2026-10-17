@@ -1,5 +1,12 @@
 import * as Cesium from 'cesium';
+import { msg } from '../../i18n/index.js';
 import { WINDOW_DAYS } from './policy.js';
+
+/**
+ * Fallback when Launch Library sends no status. English in the record
+ * (launchStatusAllowsOrbit, analyst records); the mission panel translates it.
+ */
+export const UNKNOWN_LAUNCH_STATUS = msg('Unknown');
 
 export function createModel({ state: layerState, services, parts, source }) {
   function finiteCoordinate(value) {
@@ -192,7 +199,7 @@ export function createModel({ state: layerState, services, parts, source }) {
             launch.id || launch.slug || launch.name || `launch-${date}`,
           ),
           name: launch.name || 'Unnamed launch',
-          status: launch.status?.name || 'Unknown',
+          status: launch.status?.name || UNKNOWN_LAUNCH_STATUS,
           launchTime: Number.isFinite(date)
             ? new Date(date).toISOString()
             : null,
