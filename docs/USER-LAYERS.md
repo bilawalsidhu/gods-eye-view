@@ -188,6 +188,9 @@ what your layer is actually allowed to reach.
 `src/data/lifecycle.js` isolates each layer, so a live source that fails does
 not take the application with it:
 
+- A `createLayer()` that throws at startup is caught, logged as
+  `[UserLayers] <id> createLayer() failed; layer left out:`, and that layer is
+  unregistered. The application and the other user layers start normally.
 - A throwing or rejecting `update()` is caught, logged as
   `[Data] <id> refresh error:`, recorded on the layer's status, and published
   as a `refresh-failed` event. **Other layers keep refreshing.**
@@ -359,6 +362,7 @@ ships with no layers, which is exactly the state CI sees.
 | `Invalid user-layer id` at startup | `id` has capitals, underscores, spaces or dots. |
 | `collides with a built-in layer` | Your `id` matches a shipped layer; pick another. |
 | `must supply a createLayer function` | Descriptor exports a layer object directly instead of a factory. |
+| `createLayer() failed; layer left out` in the console | The factory threw; the error follows the message. |
 | Layer appears but never draws | Cesium resources created in `createLayer()` instead of `init(viewer)`. |
 | Share link drops the layer | Opened on an install that does not have that layer — expected. |
 | `check:boundaries` reports a module your layer imports | The layer imports an application module its loading packages do not own; see above. |
