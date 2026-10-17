@@ -7,6 +7,7 @@ import { localMcpPlugin } from '../mcp/plugin.js';
 import { apiNotFoundPlugin } from './api-not-found.js';
 import { googleTokenUnavailablePlugin } from './google-token-unavailable.js';
 import { standaloneVoiceTools } from './voiceTools.js';
+import { unwatchedRuntimeDirsPlugin } from './unwatched-cache.js';
 
 const root = fileURLToPath(new URL('../../', import.meta.url));
 
@@ -22,6 +23,7 @@ export default defineConfig(({ command, mode }) => {
       localMcpPlugin(),
       googleTokenUnavailablePlugin(),
       apiNotFoundPlugin(),
+      unwatchedRuntimeDirsPlugin(),
     ],
     googleApiKey: process.env.GOOGLE_MAPS_API_KEY,
     cesiumToken: process.env.CESIUM_ION_TOKEN,

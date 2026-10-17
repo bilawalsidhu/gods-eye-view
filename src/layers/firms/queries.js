@@ -1,4 +1,5 @@
 import { fireDetectionKey } from '../../data/firmsLabels.js';
+import { t } from '../../i18n/index.js';
 import { REFRESH_INTERVAL_MS } from './policy.js';
 
 export function createQueries({
@@ -17,7 +18,9 @@ export function createQueries({
       if (!fire) return null;
       return {
         id: fireDetectionKey(fire),
-        label: `Fire · FRP ${components.model.formatFrp(fire.frp)} MW`,
+        label: t('Fire · FRP {frp} MW', {
+          frp: components.model.formatFrp(fire.frp),
+        }),
         latitude: fire.lat,
         longitude: fire.lon,
         frp: fire.frp,
@@ -59,21 +62,26 @@ export function createQueries({
     getStats() {
       const now = Date.now();
       const staleText = layerState._lastUpdate
-        ? `STALE · cached ${components.model.formatAge(now - layerState._lastUpdate) || '<1h'}`
-        : 'STALE';
+        ? t('STALE · cached {age}', {
+            age:
+              components.model.formatAge(now - layerState._lastUpdate) || '<1h',
+          })
+        : t('STALE');
       let loadingLabel = '';
       if (layerState._loading) {
         loadingLabel = layerState._fires.length
-          ? 'refreshing...'
-          : 'loading...';
+          ? t('refreshing...')
+          : t('loading...');
       } else if (layerState._keyRequired) {
-        loadingLabel = 'KEY REQUIRED';
+        loadingLabel = t('KEY REQUIRED');
       } else if (layerState._stale) {
         loadingLabel = staleText;
       } else if (layerState._error) {
         loadingLabel = layerState._error;
       } else if (layerState._lastUpdate) {
-        loadingLabel = `LIVE · updated ${components.model.formatAgoMinutes(now - layerState._lastUpdate)}`;
+        loadingLabel = t('LIVE · updated {age}', {
+          age: components.model.formatAgoMinutes(now - layerState._lastUpdate),
+        });
       }
       return {
         count: layerState._count,
@@ -87,7 +95,7 @@ export function createQueries({
         // the operator can take.
         keyRequired: layerState._keyRequired,
         error: layerState._keyRequired
-          ? 'KEY REQUIRED'
+          ? t('KEY REQUIRED')
           : layerState._stale
             ? staleText
             : layerState._error,
@@ -109,7 +117,9 @@ export function createQueries({
         latitude: strongest.lat,
         longitude: strongest.lon,
         frp: strongest.frp,
-        label: `Fire · FRP ${components.model.formatFrp(strongest.frp)} MW`,
+        label: t('Fire · FRP {frp} MW', {
+          frp: components.model.formatFrp(strongest.frp),
+        }),
       };
     },
 

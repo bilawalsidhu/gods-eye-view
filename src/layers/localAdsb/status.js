@@ -1,13 +1,18 @@
 import { localReceiverFeedName } from './feedNames.js';
 import { LAYER_SOURCE } from './policy.js';
 
+// Marks English that the Layers panel translates when it shows the status.
+// Texts with a number or a feed name stay English data too; the panel shows
+// them through STATUS_PIECE_PATTERNS (ui/statusText.js), piece by piece.
+const msg = (text) => text;
+
 /**
  * Layers-panel status for Local ADS-B, from its two inputs: the browser
  * WebUSB receiver and the server's decoder feeds. Pure; no DOM or Cesium.
  */
 
-export const FEED_SOURCE = 'Decoder feeds';
-export const COMBINED_SOURCE = 'WebUSB + decoder feeds';
+export const FEED_SOURCE = msg('Decoder feeds');
+export const COMBINED_SOURCE = msg('WebUSB + decoder feeds');
 
 function plural(count, one, many) {
   return count === 1 ? one : many;
@@ -48,25 +53,29 @@ function webUsbStatus(receiver, heard, feedState) {
   if (receiver.status === 'error')
     return { status: 'error', error: receiver.message };
   if (receiver.status === 'connecting' || receiver.status === 'tuning')
-    return { loading: true, loadingLabel: 'opening receiver' };
+    return { loading: true, loadingLabel: msg('opening receiver') };
   if (
     feedState?.polling &&
     feedState.configured === null &&
     !receiver.connected
   )
-    return { loading: true, loadingLabel: 'checking decoder feeds' };
+    return { loading: true, loadingLabel: msg('checking decoder feeds') };
   if (!receiver.webUsbSupported)
     return {
       status: 'idle',
-      statusMessage: 'WebUSB needs desktop Chrome or Edge',
+      statusMessage: msg('WebUSB needs desktop Chrome or Edge'),
     };
   if (!receiver.connected)
-    return { status: 'idle', statusMessage: 'connect a receiver in Radio' };
+    return {
+      status: 'idle',
+      statusMessage: msg('connect a receiver in Radio'),
+    };
   if (receiver.mode !== 'adsb')
-    return { status: 'idle', statusMessage: 'receiver is in FM mode' };
+    return { status: 'idle', statusMessage: msg('receiver is in FM mode') };
   const rate = Number.isFinite(receiver.messagesPerSecond)
     ? `${receiver.messagesPerSecond} msg/s`
-    : 'listening';
+    : msg('listening');
+  // i18n-ignore: English data, shown through STATUS_PIECE_PATTERNS
   return { status: 'streaming', loadingLabel: `${heard} heard · ${rate}` };
 }
 
@@ -97,7 +106,7 @@ export function localAdsbStatus({ receiver, feedState, heard }) {
   const source = usbActive ? COMBINED_SOURCE : FEED_SOURCE;
   const live = feedState.feeds.filter((feed) => feed.status === 'live');
   const problems = [describeFeedProblems(feedState.feeds)].filter(Boolean);
-  if (usbActive && receiver.status === 'error') problems.push('USB error');
+  if (usbActive && receiver.status === 'error') problems.push(msg('USB error'));
   const rate =
     usbActive &&
     receiver.status !== 'error' &&
@@ -109,6 +118,7 @@ export function localAdsbStatus({ receiver, feedState, heard }) {
     return {
       source,
       status: 'streaming',
+      // i18n-ignore: English data, shown through STATUS_PIECE_PATTERNS
       loadingLabel: `${live.length} ${plural(live.length, 'feed', 'feeds')} live · ${heardText}${rate}`,
     };
   }
