@@ -437,15 +437,24 @@ export class RealtimeViewport {
     const captured = await captureImage();
     const imageUrl =
       typeof captured === 'string' ? captured : captured?.dataUrl || null;
+    if (!imageUrl) {
+      this.debugLog?.('viewport_context.skipped', {
+        reason: 'capture-unavailable',
+      });
+      return false;
+    }
     if (
-      !imageUrl ||
       generation !== this.generation ||
       request !== this.captureSeq ||
       this.dc !== channel ||
       channel.readyState !== 'open' ||
       (typeof frame.valid === 'function' && !frame.valid())
-    )
+    ) {
+      this.debugLog?.('viewport_context.skipped', {
+        reason: 'capture-invalidated',
+      });
       return false;
+    }
 
     // Keep at most one viewport screenshot in context. Images are the single
     // most expensive item (re-billed every turn they linger), so we proactively
@@ -506,6 +515,9 @@ export class RealtimeViewport {
           cameraKey: this.readCameraKey(),
         }
       : null;
+    this.debugLog?.('viewport_context.result', {
+      reason: sent ? 'sent' : 'data-channel-send-failed',
+    });
     return sent;
   }
 

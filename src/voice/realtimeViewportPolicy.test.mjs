@@ -179,3 +179,64 @@ test('closed channel never captures pointer or full viewport', async () => {
   );
   assert.equal(await viewport.sendVisualContextIfUseful(localContext()), false);
 });
+
+test('capture failures and invalidated turns are reason-coded without sending', async () => {
+  const channel = { readyState: 'open' };
+  const diagnostics = [];
+  const viewport = new RealtimeViewport({
+    readChannel: () => channel,
+    operations: {
+      sendRealtimeEvent: () => {
+        throw new Error('should not send unavailable image');
+      },
+      debugLog: (event, detail) => diagnostics.push({ event, detail }),
+    },
+    capture: async () => null,
+  });
+  assert.equal(await viewport.sendVisualContextIfUseful(localContext()), false);
+  assert.ok(
+    diagnostics.some(
+      (item) =>
+        item.event === 'viewport_context.skipped' &&
+        item.detail.reason === 'capture-unavailable',
+    ),
+  );
+  let release;
+  viewport.capture = () =>
+    new Promise((resolve) => {
+      release = resolve;
+    });
+  const pending = viewport.sendVisualContextIfUseful(localContext());
+  viewport.reset();
+  release('data:image/jpeg;base64,AA==');
+  assert.equal(await pending, false);
+  assert.ok(
+    diagnostics.some(
+      (item) =>
+        item.event === 'viewport_context.skipped' &&
+        item.detail.reason === 'capture-invalidated',
+    ),
+  );
+});
+
+test('successful retained send is logged without recording image contents', async () => {
+  const channel = { readyState: 'open' };
+  const diagnostics = [];
+  const viewport = new RealtimeViewport({
+    readChannel: () => channel,
+    readCameraKey: () => 'camera:fixture',
+    operations: {
+      sendRealtimeEvent: () => true,
+      debugLog: (event, detail) => diagnostics.push({ event, detail }),
+    },
+    capture: async () => 'data:image/jpeg;base64,AA==',
+  });
+  assert.equal(await viewport.sendVisualContextIfUseful(localContext()), true);
+  assert.ok(diagnostics.some((item) =>
+    item.event === 'viewport_context.result' && item.detail.reason === 'sent'
+  ));
+  assert.equal(
+    JSON.stringify(diagnostics).includes('data:image/jpeg'),
+    false,
+  );
+});
