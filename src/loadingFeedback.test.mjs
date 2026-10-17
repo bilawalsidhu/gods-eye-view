@@ -107,6 +107,7 @@ test('share-follow failures use the universal top-center status instead of the b
   assert.doesNotMatch(handler, /pushCockpitSignal/);
   assert.match(handler, /result\.classification === 'pending'/);
   assert.match(handler, /state: 'acquiring'/);
+  assert.match(handler, /shareTrackingRestoreNotice\(result\)/);
   assert.match(handler, /persistent: true/);
   assert.match(handler, /this\._shareTrackingNoticeGeneration \+= 1/);
   assert.match(handler, /canPresentDeferredStatusNotice\(/);

@@ -249,6 +249,7 @@ export function createAisWatchdog(options = {}) {
     if (!env.hasKey) {
       const actions = terminateOwned('key-absent');
       status = 'missing-key';
+      // i18n-ignore: server detail; layers/vessels/queries.js shows a translated reason
       error = 'AISSTREAM_API_KEY is not set';
       reconnectAttempt = 0;
       keyFingerprint = null;
@@ -257,6 +258,7 @@ export function createAisWatchdog(options = {}) {
     if (env.hasTransport === false) {
       const actions = terminateOwned('no-transport');
       status = 'unsupported';
+      // i18n-ignore: server detail; layers/vessels/queries.js shows a translated reason
       error = 'Node WebSocket transport is unavailable';
       return actions;
     }
@@ -329,6 +331,7 @@ export function createAisWatchdog(options = {}) {
       if (!silenceWatchArmed) return [];
       const silentFor = monoNow - silenceSinceMono;
       if (silentFor >= recycleAfterMs) {
+        // i18n-ignore: server detail; layers/vessels/queries.js shows a translated reason
         error = `AISStream delivered no data for ${Math.round(silentFor / 1000)}s`;
         const actions = terminateOwned('silent');
         scheduleRetry('transport');
@@ -401,6 +404,7 @@ export function createAisWatchdog(options = {}) {
   function onClose(eventGeneration) {
     if (!ownsGeneration(eventGeneration)) return [];
     release();
+    // i18n-ignore: server detail; layers/vessels/queries.js shows a translated reason
     if (!error) error = 'AISStream websocket closed';
     scheduleRetry('transport');
     return [];

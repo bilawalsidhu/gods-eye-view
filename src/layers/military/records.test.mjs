@@ -114,3 +114,39 @@ test('military emergency status follows the latest poll instead of sticking', ()
   );
   assert.equal(next.meta.emergency, null);
 });
+
+test('military records hold the last track and speed when a poll omits them', () => {
+  const records = store();
+  records.receive(observation({ courseDeg: 270, speedMps: 200 }), context());
+  const missing = records.receive(
+    observation({ courseDeg: null, speedMps: null }),
+    context(),
+  );
+  assert.equal(missing.meta.track, 270);
+  assert.equal(missing.meta.speedMps, 200);
+  const north = records.receive(
+    observation({ courseDeg: 0, speedMps: 0 }),
+    context(),
+  );
+  assert.equal(north.meta.track, 0);
+  assert.equal(north.meta.speedMps, 0);
+  const unseen = store().receive(
+    observation({ courseDeg: undefined, speedMps: undefined }),
+    context(),
+  );
+  assert.equal(unseen.meta.track, 0);
+  assert.equal(unseen.meta.speedMps, 0);
+  const landing = store();
+  landing.receive(observation({ courseDeg: 90, speedMps: 70 }), context());
+  const parked = landing.receive(
+    observation({
+      onGround: true,
+      baroAltitudeM: null,
+      courseDeg: null,
+      speedMps: null,
+    }),
+    context(),
+  );
+  assert.equal(parked.meta.speedMps, 0);
+  assert.equal(parked.meta.track, 90);
+});

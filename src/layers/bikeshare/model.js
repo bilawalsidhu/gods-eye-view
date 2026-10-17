@@ -39,11 +39,36 @@ export function createModel({ state: layerState, services, parts, source }) {
     return 6371 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   }
 
+  /**
+   * Drop stations outside a city's load radius. Some operators list depots on
+   * other continents as in-service stations in a city's feed (Bogotá's and
+   * Santiago's PBSC feeds carry warehouses in São Paulo and Madrid), which
+   * would otherwise draw as live docks thousands of kilometres away.
+   * @param {{ centerLat: number, centerLon: number, loadRadiusKm: number }} city
+   * @param {Map<string, Object>} stationMap - Parsed station info map.
+   * @returns {Map<string, Object>} Stations within the city's load radius.
+   */
+
+  function stationsWithinCity(city, stationMap) {
+    const kept = new Map();
+    for (const [stationId, station] of stationMap) {
+      const distance = haversineKm(
+        city.centerLat,
+        city.centerLon,
+        station.lat,
+        station.lon,
+      );
+      if (distance <= city.loadRadiusKm) kept.set(stationId, station);
+    }
+    return kept;
+  }
+
   return {
     normalizeGbfsBool,
     toNonNegativeInteger,
     stationKey,
     haversineKm,
+    stationsWithinCity,
     extractStationsArray,
     parseStationInformation,
     parseStationStatus,
