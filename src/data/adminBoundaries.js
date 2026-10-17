@@ -1,12 +1,15 @@
 /**
  * Bundled administrative boundaries — countries and states/provinces (Natural
- * Earth admin-0/admin-1) and US counties (US Census Bureau cartographic boundaries),
+ * Earth admin-0/admin-1), US counties (US Census Bureau cartographic boundaries)
+ * and Argentine departments, partidos and comunas (IGN),
  * so "outline Texas", "outline Bavaria" or "outline Travis County" draws the
  * real boundary without a network lookup.
  *
  * Data: `local_data/natural_earth/{countries,states_provinces}.json` and
  * `local_data/us_census_counties/counties.json`, public domain and built
  * by `scripts/build-admin-packs.mjs` (provenance in each folder's README).
+ * Argentine admin-2: `local_data/argentina_admin/departments.json`, under
+ * IGN reuse terms; built by `scripts/build-argentina-admin.mjs`.
  * Rings are delta-encoded integers; see `decodeRing`.
  *
  * PURE data module — no Cesium, node-testable. Each pack is fetched through
@@ -71,10 +74,16 @@ const PACKS = {
       import.meta.url,
     ),
   },
+  argentina: {
+    url: new URL(
+      './local_data/argentina_admin/departments.json',
+      import.meta.url,
+    ),
+  },
 };
 
 /** Test seam: count pack loads (lazy-loading contract). */
-export const packLoads = { admin1: 0, counties: 0, countries: 0 };
+export const packLoads = { admin1: 0, counties: 0, countries: 0, argentina: 0 };
 
 const EARTH_RADIUS_KM = 6371;
 const toRad = (d) => (d * Math.PI) / 180;
@@ -331,6 +340,58 @@ const loadCounties = createRetryableLoader(async () => {
   return { byFull, byName, states };
 });
 
+const loadArgentina = createRetryableLoader(async () => {
+  packLoads.argentina += 1;
+  const pack = await loadBundledJson(PACKS.argentina.url);
+  const index = new Map();
+  for (const feature of pack.features || []) {
+    const entry = {
+      kind: 'county',
+      source: 'ign-argentina',
+      feature,
+      decimals: pack.meta.decimals,
+      region: normalizeAdminName(feature.region),
+      unitType: normalizeAdminName(feature.type),
+    };
+    addKey(index, normalizeAdminName(feature.full), entry, 0);
+    addKey(index, normalizeAdminName(feature.name), entry, 1);
+    // The official Comuna name repeats the type ("Comuna 1").
+    if (entry.unitType === 'comuna')
+      addKey(
+        index,
+        normalizeAdminName(feature.name).replace(/^comuna /, ''),
+        entry,
+        1,
+      );
+  }
+  return { index };
+});
+
+/** Argentine admin-2 only: foreign or unknown qualifiers never match. */
+async function argentinaCandidates(parsed) {
+  const { index } = await loadArgentina();
+  const list = index.get(parsed.full) || index.get(parsed.name) || [];
+  const aliases = new Map([
+    ['caba', 'ciudad autonoma de buenos aires'],
+    ['ciudad de buenos aires', 'ciudad autonoma de buenos aires'],
+    [
+      'tierra del fuego',
+      'tierra del fuego antartida e islas del atlantico sur',
+    ],
+  ]);
+  return list.filter(
+    ({ entry }) =>
+      (!parsed.argentinaWord || entry.unitType === parsed.argentinaWord) &&
+      parsed.qualifiers.every(
+        (q) =>
+          ['argentina', 'ar', 'arg', 'republica argentina'].includes(q) ||
+          entry.region ===
+            (aliases.get(q) || q.replace(/^provincia de /, '')) ||
+          entry.feature.regionCode === q,
+      ),
+  );
+}
+
 const loadCountries = createRetryableLoader(async () => {
   packLoads.countries += 1;
   const pack = await loadBundledJson(PACKS.countries.url);
@@ -430,6 +491,23 @@ export function parseAdminQuery(text) {
   const postal = /^[A-Za-z]{2}$/.test(raw) ? raw.toLowerCase() : null;
   // "TX", "DC", "D.C.": written as an abbreviation, not a short word.
   const abbreviation = /^[A-Z]{2,3}$/.test(raw.replace(/[.\s]/g, ''));
+
+  // Explicit Spanish administrative wording; bare city names keep their
+  // existing geocoder path. A geocoder-confirmed county can omit the wording.
+  const arPrefix = /^(departamento|partido|comuna) (?:de )?(.+)$/.exec(head);
+  const arSuffix = /^(.+) (departamento|partido|comuna)$/.exec(head);
+  if (arPrefix || arSuffix) {
+    const word = arPrefix ? arPrefix[1] : arSuffix[2];
+    return {
+      kind: 'county',
+      name: arPrefix ? arPrefix[2] : arSuffix[1],
+      qualifiers,
+      postal: null,
+      countyWord: word,
+      argentinaWord: word,
+      full: head,
+    };
+  }
 
   // "County Cork", "County of Los Angeles"
   const countyPrefix = /^county (?:of )?(.+)$/.exec(head);
@@ -535,6 +613,24 @@ function toResult(scored, candidateCount) {
   const geometry = geometryOf(entry);
   // Parts are stored largest first, so polygons[0][0] is the main outline.
   const polygons = geometry.polygons;
+  if (entry.source === 'ign-argentina') {
+    return {
+      kind: 'county',
+      name: feature.full,
+      type: feature.type,
+      region: feature.region,
+      regionCode: feature.regionCode,
+      country: 'Argentina',
+      id: feature.id,
+      source: entry.source,
+      polygons,
+      ring: polygons[0][0],
+      bbox: geometry.bbox,
+      areaKm2: geometry.areaKm2,
+      label: geometry.label,
+      candidates: candidateCount,
+    };
+  }
   if (entry.kind === 'county') {
     return {
       kind: 'county',
@@ -678,7 +774,7 @@ async function stateCandidates(parsed, { allowAmbiguous = false } = {}) {
  *
  * @typedef {{kind:'country'|'state'|'county', name:string, region:string|null,
  *   regionCode:string|null, country:string, id:string|null,
- *   source:'natural-earth'|'us-census',
+ *   source:'natural-earth'|'us-census'|'ign-argentina',
  *   polygons:Array<Array<Array<[number,number]>>>, ring:Array<[number,number]>,
  *   bbox:number[], areaKm2:number, label:{lat:number, lon:number},
  *   candidates:number}} AdminArea
@@ -689,6 +785,8 @@ export async function findAdminArea(query, { near = null } = {}) {
   let candidates = [];
   if (parsed.kind === 'country') {
     candidates = await countryCandidates(parsed);
+  } else if (parsed.argentinaWord) {
+    candidates = await argentinaCandidates(parsed);
   } else if (parsed.kind === 'county') {
     // County wording also names admin-1 units abroad. Neither pack gets
     // first refusal: qualifiers exclude ineligible countries before ranking.
@@ -762,6 +860,24 @@ export async function findAdminAreaAt(names, lat, lon, scope) {
     return found.length
       ? toResult(rank(found, { lat, lon })[0], found.length)
       : null;
+  }
+  // Same county-equivalent contract as the US pack. Containment is mandatory:
+  // "Capital" may be a department in several provinces, or a city elsewhere.
+  if (
+    scope === 'county' &&
+    lat <= -21 &&
+    lat >= -90 &&
+    lon >= -75 &&
+    lon <= -25
+  ) {
+    const departments = [];
+    for (const parsed of parsedList)
+      departments.push(
+        ...(await argentinaCandidates({ ...parsed, qualifiers: [] })),
+      );
+    const found = containing(departments);
+    if (found.length)
+      return toResult(rank(found, { lat, lon })[0], found.length);
   }
   // The geocoder's scope says what kind of unit this is; the ask's wording
   // may omit it ("Travis" typed as a county). A US county that matches wins
