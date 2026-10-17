@@ -44,6 +44,13 @@
  * continuously (the layer holds it), Cesium uncapped; the fleet tick's CPU
  * time (the layer's preRender pass, 12 Hz) and the longest frame; the
  * post-GC heap slope as for movers. Same gate: p95 Navara / Cesium <= 1.1.
+ * --layer=military measures the military layer the same way
+ * (?qaFeed=military:synthetic:--count, default 1000). Each scene also
+ * reports the frames over 33 ms and 50 ms, and the fleet ticks timed. The
+ * heap: --heap-warm-seconds (0) of running before the samples (dead-
+ * reckoning histories fill to 5 fixes per aircraft in ~150 s), and the
+ * slope of the second half of the samples beside the whole one (a warm-up
+ * shows as a slope that flattens; a leak does not).
  */
 import { spawn } from 'node:child_process';
 import fs from 'node:fs';
@@ -84,7 +91,11 @@ if (!['flight', 'movers', 'w1-fleet'].includes(scenario)) {
   );
   process.exit(2);
 }
-const MOVER_COUNT = Number(argument('count') ?? 10000);
+const FLEET_LAYER = argument('layer') ?? 'flights';
+const MOVER_COUNT = Number(
+  argument('count') ?? (FLEET_LAYER === 'military' ? 1000 : 10000),
+);
+const HEAP_WARM_SECONDS = Number(argument('heap-warm-seconds') ?? 0);
 const MOVER_SCENES = (argument('scene') ?? 'global,city,orbit').split(',');
 // Post-GC heap sampling per movers scene (0 skips it).
 const HEAP_SECONDS = Number(argument('heap-seconds') ?? 60);
@@ -333,14 +344,14 @@ async function runFlight(flight) {
  * In the page: the flights layer on its synthetic feed at one scene, frame
  * times while the engine renders continuously.
  */
-async function runFleet({ scene, warmMs, measureMs, hold }) {
+async function runFleet({ scene, warmMs, measureMs, hold, layerId }) {
   const { engine, dataManager, viewer, layers } = window.__godsEyeView;
   const geo = await import('/src/geo/index.js');
   const targetFrameRate = viewer?.targetFrameRate;
   if (viewer) viewer.targetFrameRate = undefined;
   const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
   for (const [id] of dataManager?.layers ?? [])
-    if (id !== 'flights' && dataManager.isEnabled?.(id))
+    if (id !== layerId && dataManager.isEnabled?.(id))
       await dataManager.setEnabled(id, false);
   const rad = geo.math.toRadians;
   engine.camera.setView({
@@ -350,7 +361,7 @@ async function runFleet({ scene, warmMs, measureMs, hold }) {
   // The fleet tick's CPU time: the layer's preRender listener (installed on
   // enable, so the layer is re-enabled under the wrapper), timed when it
   // does work (the 12 Hz pass; other frames return at once).
-  if (dataManager.isEnabled?.('flights')) await layers.disable('flights');
+  if (dataManager.isEnabled?.(layerId)) await layers.disable(layerId);
   window.__gevFleetTicks = null;
   const timed = (event) => {
     const add = event.addEventListener.bind(event);
@@ -376,9 +387,9 @@ async function runFleet({ scene, warmMs, measureMs, hold }) {
     timed(engine.frames.preRender),
     ...(viewer?.scene?.preRender ? [timed(viewer.scene.preRender)] : []),
   ];
-  await layers.enable('flights');
+  await layers.enable(layerId);
   for (const restore of untime) restore();
-  const flights = dataManager.layers.get('flights').module;
+  const flights = dataManager.layers.get(layerId).module;
   const waitStart = performance.now();
   while (
     flights.getAllPositions(1).length === 0 &&
@@ -560,18 +571,23 @@ async function heapSlope(page, seconds) {
   } finally {
     await cdp.detach();
   }
-  const n = samples.length;
-  const mx = samples.reduce((sum, [x]) => sum + x, 0) / n;
-  const my = samples.reduce((sum, [, y]) => sum + y, 0) / n;
-  const sxx = samples.reduce((sum, [x]) => sum + (x - mx) ** 2, 0);
-  const slope =
-    sxx > 0
-      ? samples.reduce((sum, [x, y]) => sum + (x - mx) * (y - my), 0) / sxx
+  const slopeOf = (points) => {
+    const n = points.length;
+    const mx = points.reduce((sum, [x]) => sum + x, 0) / n;
+    const my = points.reduce((sum, [, y]) => sum + y, 0) / n;
+    const sxx = points.reduce((sum, [x]) => sum + (x - mx) ** 2, 0);
+    return sxx > 0
+      ? points.reduce((sum, [x, y]) => sum + (x - mx) * (y - my), 0) / sxx
       : 0;
+  };
   return {
     postGcMB: round(samples.at(-1)[1], 1),
-    slopeMBPerMin: round(slope, 2),
-    samples: n,
+    slopeMBPerMin: round(slopeOf(samples), 2),
+    secondHalfSlopeMBPerMin: round(
+      slopeOf(samples.slice(Math.floor(samples.length / 2))),
+      2,
+    ),
+    samples: samples.length,
   };
 }
 
@@ -618,7 +634,7 @@ async function runOnce(browser, baseUrl, engine) {
     if (engine !== 'cesium') params.set('engine', engine);
     if (engine !== 'cesium' && navaraLook) params.set('look', navaraLook);
     if (scenario === 'w1-fleet')
-      params.set('qaFeed', `flights:synthetic:${MOVER_COUNT}`);
+      params.set('qaFeed', `${FLEET_LAYER}:synthetic:${MOVER_COUNT}`);
     const query = params.size ? `?${params}` : '';
     await page.goto(`${baseUrl}${query}`, { waitUntil: 'domcontentloaded' });
     await page.waitForFunction(() => Boolean(window.__qaInitialView?.done), {
@@ -663,10 +679,15 @@ async function runOnce(browser, baseUrl, engine) {
                 warmMs: 3000,
                 measureMs: 10000,
                 hold: HEAP_SECONDS > 0,
+                layerId: FLEET_LAYER,
               });
         let heap = null;
         if (HEAP_SECONDS > 0) {
           try {
+            if (HEAP_WARM_SECONDS > 0)
+              await new Promise((resolve) =>
+                setTimeout(resolve, HEAP_WARM_SECONDS * 1000),
+              );
             heap = await heapSlope(page, HEAP_SECONDS);
           } finally {
             await page.evaluate(() => window.__benchStop?.());
@@ -682,6 +703,9 @@ async function runOnce(browser, baseUrl, engine) {
           p50: round(quantile(deltas, 0.5), 2),
           p95: round(quantile(deltas, 0.95), 2),
           max: round(deltas.at(-1), 1),
+          longFrames33: deltas.filter((delta) => delta > 33.4).length,
+          longFrames50: deltas.filter((delta) => delta > 50).length,
+          fleetTicks: measured.fleetTicksMs?.length ?? 0,
           ...(measured.fleetTicksMs?.length
             ? {
                 fleetTickP50: round(
@@ -707,6 +731,7 @@ async function runOnce(browser, baseUrl, engine) {
             ? {
                 heapPostGcMB: heap.postGcMB,
                 heapSlopeMBPerMin: heap.slopeMBPerMin,
+                heapSlopeSecondHalfMBPerMin: heap.secondHalfSlopeMBPerMin,
               }
             : {}),
           startTilesMs: measured.startTilesMs,
@@ -828,7 +853,12 @@ try {
                   fps: of('fps'),
                   heapPostGcMB: of('heapPostGcMB'),
                   heapSlopeMBPerMin: of('heapSlopeMBPerMin'),
+                  heapSlopeSecondHalfMBPerMin: of(
+                    'heapSlopeSecondHalfMBPerMin',
+                  ),
                   fleetTickP95: of('fleetTickP95'),
+                  longFrames33: of('longFrames33'),
+                  longFrames50: of('longFrames50'),
                 },
               ];
             }),
