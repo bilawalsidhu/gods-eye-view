@@ -64,19 +64,11 @@ while an unknown user-layer id just means a different local install.
 
 ## If you also contribute upstream
 
-`npm run check:boundaries` walks real imports rather than the manifest, so it
-sees your `*.layer.js` files through this loader's glob. It exempts them by
-path: they are gitignored by design and can never be declared in a package,
-so failing the gate for having them would punish doing what this document
-asks. Every gate therefore runs clean with your layers in place:
-
-```bash
-npm run format:check && npm run check:boundaries && npm test && npm run build
-```
-
-What the exemption does not do is check your layer. Nothing in the gate reads
-it, so a mistake inside a `*.layer.js` file surfaces when you load the app,
-not when you run the gates.
+`npm run check:boundaries` exempts your `*.layer.js` files by path, but still
+follows what they import. A self-contained layer passes every gate in place; a
+layer that imports an application module the loading packages do not own
+fails. The exact rule is in
+[docs/USER-LAYERS.md](../../docs/USER-LAYERS.md#if-you-also-contribute-upstream).
 
 The tracked half of this feature also passes on its own — the loader ships
 with no layers, which is exactly the state CI sees.
