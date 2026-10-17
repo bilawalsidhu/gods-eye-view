@@ -120,6 +120,12 @@ export async function formatAdoptedFiles(root, mode) {
   }
 
   const changed = files.filter(({ source, formatted }) => source !== formatted);
+  // Temporary PR diagnostics: emit the pinned formatter's exact bytes.
+  for (const { name, formatted } of changed) {
+    if (name === 'src/data/disasterAccess.js') {
+      console.error('GEV_FORMAT_BYTES=' + Buffer.from(formatted).toString('base64'));
+    }
+  }
   if (mode === '--write') {
     for (const { file, formatted } of changed) await writeFile(file, formatted);
   }
