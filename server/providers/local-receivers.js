@@ -3,6 +3,7 @@ import http from 'node:http';
 import https from 'node:https';
 import { Readable } from 'node:stream';
 import { coalesceProxyRequest, readResponseTextCapped } from './common/http.js';
+import { allowedMethods } from './common/methods.js';
 import { isLocalIpv4, parseTapAddress } from '../../src/data/tapAddress.js';
 import { normalizeDump1090Aircraft } from '../../src/sources/adsbRecords.js';
 
@@ -468,6 +469,7 @@ export function createLocalReceiversHandler({
   async function handle(req, res) {
     if (req.method !== 'GET' && req.method !== 'HEAD') {
       res.writeHead(405, {
+        Allow: allowedMethods('GET', 'HEAD'),
         'Content-Type': 'application/json',
         'Cache-Control': 'no-store',
       });

@@ -155,6 +155,7 @@ test('status reports whether a token exists, never its value, and rejects non-GE
     assert.doesNotMatch(String(res.body), /MLY\||planner/);
     const post = await call('/api/mapillary/status', '/', 'POST');
     assert.equal(post.statusCode, 405);
+    assert.equal(post.headers.allow, 'GET');
   } finally {
     for (const [key, value] of Object.entries(saved))
       if (value === undefined) delete process.env[key];
@@ -176,6 +177,7 @@ test('tile route validates the path and refuses to proxy without a token', async
     assert.deepEqual(json(noKey), { error: 'no_key', keyRequired: true });
     const post = await call('/api/mapillary/tiles', '/coverage/14/1/2', 'POST');
     assert.equal(post.statusCode, 405);
+    assert.equal(post.headers.allow, 'GET');
   } finally {
     if (saved === undefined) delete process.env.MAPILLARY_CLIENT_TOKEN;
     else process.env.MAPILLARY_CLIENT_TOKEN = saved;

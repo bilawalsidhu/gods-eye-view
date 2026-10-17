@@ -156,7 +156,9 @@ for (const preview of [false, true]) {
     );
     assert.equal((await request(search, '?lat=30&lon=-97')).statusCode, 400);
     assert.equal((await request(nearby, '?lat=bad&lon=-97')).statusCode, 400);
-    assert.equal((await request(nearby, '', 'POST')).statusCode, 405);
+    const rejected = await request(nearby, '', 'POST');
+    assert.equal(rejected.statusCode, 405);
+    assert.equal(rejected.headers.allow, 'GET');
     t.mock.method(globalThis, 'fetch', async () =>
       Response.json({ error: { message: 'Denied' } }, { status: 403 }),
     );

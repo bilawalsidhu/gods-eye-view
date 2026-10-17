@@ -1,4 +1,5 @@
 import { readResponseTextCapped } from './common/http.js';
+import { allowedMethods } from './common/methods.js';
 import { readWindBody as readBytesCapped } from '../../src/sources/windBody.js';
 
 const BASE = 'https://nowcoast.noaa.gov/geoserver/observations/';
@@ -419,6 +420,7 @@ export function weatherProxy({
     res.writeHead(status, {
       'Content-Type': 'application/json',
       'Cache-Control': 'no-store',
+      ...(status === 405 ? { Allow: allowedMethods('GET') } : {}),
       ...(status === 429 ? { 'Retry-After': '2' } : {}),
     });
     res.end(JSON.stringify(body));

@@ -2,6 +2,7 @@ import { lookup as lookupDns } from 'node:dns/promises';
 import { randomUUID } from 'node:crypto';
 
 import { readResponseTextCapped } from '../common/http.js';
+import { allowedMethods } from '../common/methods.js';
 import {
   normalizeRadioBrowserStation,
   publicRadioStation,
@@ -345,7 +346,10 @@ export function createRadioProxyMiddleware({
     const requestUrl = new URL(req.url || '/', 'http://localhost');
     if (requestUrl.pathname === '/stations') {
       if (req.method !== 'GET') {
-        res.writeHead(405, { Allow: 'GET', 'Cache-Control': 'no-store' });
+        res.writeHead(405, {
+          Allow: allowedMethods('GET'),
+          'Cache-Control': 'no-store',
+        });
         res.end();
         return;
       }
@@ -374,7 +378,10 @@ export function createRadioProxyMiddleware({
     const clickMatch = requestUrl.pathname.match(/^\/click\/([0-9a-f-]+)$/i);
     if (clickMatch) {
       if (req.method !== 'POST') {
-        res.writeHead(405, { Allow: 'POST', 'Cache-Control': 'no-store' });
+        res.writeHead(405, {
+          Allow: allowedMethods('POST'),
+          'Cache-Control': 'no-store',
+        });
         res.end();
         return;
       }

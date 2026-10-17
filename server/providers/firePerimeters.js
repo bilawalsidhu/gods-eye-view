@@ -4,6 +4,7 @@ import {
   readResponseTextCapped,
   coalesceProxyRequest,
 } from './common/http.js';
+import { allowedMethods } from './common/methods.js';
 import { makeRateLimiter, clientKey } from './common/rate-limit.js';
 
 // NIFC WFIGS current interagency fire perimeters (public, keyless).
@@ -176,7 +177,7 @@ export function firePerimetersProxy({
       res.writeHead(status, {
         'Content-Type': 'application/json',
         'Cache-Control': 'no-store',
-        ...(status === 405 ? { Allow: 'GET' } : {}),
+        ...(status === 405 ? { Allow: allowedMethods('GET') } : {}),
         ...(status === 429 ? { 'Retry-After': '60' } : {}),
         ...(stale ? { 'X-Data-Stale': 'true' } : {}),
       });
