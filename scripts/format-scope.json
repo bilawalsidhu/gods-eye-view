@@ -690,6 +690,7 @@
   "src/ui/shareRestoration.js",
   "src/ui/visualSettings.js",
   "src/ui/panelChrome.js",
+  "src/ui/panelChrome.radioOwnership.test.mjs",
   "src/testSupport/readShellSource.mjs",
   "src/ui/stateOwners.test.mjs",
   "src/layers/flights/records.js",

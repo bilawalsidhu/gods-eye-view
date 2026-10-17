@@ -1172,6 +1172,10 @@ Automatic collapse remains presentation only, prioritizes the latest explicit
 panel, and honors keyboard focus on the right. Mobile layout still releases
 desktop allocation styles. Stable Display allocation avoids unnecessary style
 writes. This extraction does not change panel positions or layout defaults.
+Context expansion through the panel owner or adaptive right-rail restoration
+closes an open compact Radio disclosure before Context/Space Missions becomes
+visible. The mini remains available while Context is collapsed. This fixes the
+Radio-overlap path reported in #804 without changing z-index or layout policy.
 The right rail skips panels hidden by other CSS (computed `display: none`), but
 keeps the collapsed panels its own exclusive presentation hides, so automatic
 collapse can still be undone.
