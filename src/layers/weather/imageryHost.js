@@ -1,3 +1,5 @@
+import { msg } from '../../i18n/index.js';
+
 /** Resolve the visible surface that can own weather imagery without scene mutation. */
 export function resolveImageryHost({ viewer, tileset }) {
   if (viewer?.scene?.globe?.show === true)
@@ -7,7 +9,9 @@ export function resolveImageryHost({ viewer, tileset }) {
   return { collection: null, kind: 'none' };
 }
 
-export const NO_IMAGERY_HOST = 'Hidden by this map source · choose a globe map';
+export const NO_IMAGERY_HOST = msg(
+  'Hidden by this map source · choose a globe map',
+);
 
 /** Report imagery suspension without changing or detaching the resolved host. */
 export function imageryHostStatus(host) {

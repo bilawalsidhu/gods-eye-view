@@ -1,4 +1,5 @@
 import * as Cesium from 'cesium';
+import { t } from '../i18n/index.js';
 import { createStateChannel } from '../app/stateChannel.js';
 import { LocationControls } from './location.js';
 import {
@@ -108,8 +109,9 @@ export class LocationNavigation {
       this._currentPoi = null;
       this._collapsePOIRow();
       this._updateLocationMiniStatus();
-    } else if (change.type === 'missing') this._showToast('Location not found');
-    else if (change.type === 'failed') this._showToast('Search failed');
+    } else if (change.type === 'missing')
+      this._showToast(t('Location not found'));
+    else if (change.type === 'failed') this._showToast(t('Search failed'));
     else if (change.type === 'settled')
       this._settleLocationSearchUi(change.generation);
     else if (
@@ -138,7 +140,7 @@ export class LocationNavigation {
         }),
       onResult: (destination) => {
         if (destination.outlineUnavailable)
-          this._showToast('Detailed outline unavailable');
+          this._showToast(t('Detailed outline unavailable'));
       },
       onError: (error) => console.error('[Search] Geocoding failed:', error),
     });
@@ -174,8 +176,8 @@ export class LocationNavigation {
     if (!isGeolocationAvailable() || !isSecureGeolocationContext()) {
       this._myLocationBtn.disabled = true;
       this._myLocationBtn.title = isSecureGeolocationContext()
-        ? 'Location not supported in this browser'
-        : 'Location requires a secure (HTTPS) connection';
+        ? t('Location not supported in this browser')
+        : t('Location requires a secure (HTTPS) connection');
       this._myLocationBtn.setAttribute('aria-disabled', 'true');
       return;
     }
@@ -213,8 +215,8 @@ export class LocationNavigation {
     if (!isGeolocationAvailable() || !isSecureGeolocationContext()) {
       this._showToast(
         isSecureGeolocationContext()
-          ? 'Location not supported in this browser'
-          : 'Location requires a secure (HTTPS) connection',
+          ? t('Location not supported in this browser')
+          : t('Location requires a secure (HTTPS) connection'),
       );
       return;
     }
@@ -228,7 +230,7 @@ export class LocationNavigation {
       this._applyMyLocationFix(fix, { follow, generation });
     } catch (error) {
       if (this._disposed || generation !== this._navigationGeneration) return;
-      this._showToast(error?.message || 'Could not get your location');
+      this._showToast(error?.message || t('Could not get your location'));
       if (follow) this._stopMyLocationFollow();
     } finally {
       this._myLocationBtn?.classList.remove('searching');
@@ -323,7 +325,7 @@ export class LocationNavigation {
         variant: 'label',
         paintLane: 'ambient-label',
         collisionGroup: 'ambient-label',
-        title: 'You',
+        title: t('You'),
         accent: '#40b4ff',
         interactive: false,
         anchorRadiusPx: 9,
@@ -347,9 +349,10 @@ export class LocationNavigation {
     this._myLocationBtn?.classList.add('following');
     this._myLocationBtn?.setAttribute('aria-pressed', 'true');
     if (this._myLocationBtn)
-      this._myLocationBtn.title =
-        'Following you — your position is added to the link (hold to stop)';
-    this._showToast('Following your location');
+      this._myLocationBtn.title = t(
+        'Following you — your position is added to the link (hold to stop)',
+      );
+    this._showToast(t('Following your location'));
     this._ensureMyLocationEntity(initialFix);
     this._myLocationUserInterruptHandler = () => {
       if (this._myLocationFollow)
@@ -380,12 +383,12 @@ export class LocationNavigation {
         if (this._disposed || !this._myLocationFollow) return;
         const code = error?.code;
         if (code === GEOLOCATION_DENIED || code === GEOLOCATION_UNAVAILABLE) {
-          this._showToast(error?.message || 'Could not get your location');
+          this._showToast(error?.message || t('Could not get your location'));
           this._stopMyLocationFollow();
         } else if (!this._myLocationTransientToastShown) {
           // Timeout / position-unavailable is transient — toast once and keep watching.
           this._myLocationTransientToastShown = true;
-          this._showToast(error?.message || 'Could not get your location');
+          this._showToast(error?.message || t('Could not get your location'));
         }
       },
     });
@@ -425,8 +428,9 @@ export class LocationNavigation {
     this._myLocationBtn?.classList.remove('following');
     this._myLocationBtn?.setAttribute('aria-pressed', 'false');
     if (this._myLocationBtn)
-      this._myLocationBtn.title =
-        'My location (click: go there; hold: follow) — your position is added to the link';
+      this._myLocationBtn.title = t(
+        'My location (click: go there; hold: follow) — your position is added to the link',
+      );
     if (this._myLocationUserInterruptHandler) {
       this.viewer?.canvas?.removeEventListener(
         'pointerdown',
@@ -585,7 +589,7 @@ export class LocationNavigation {
 
   _toggleOrbit() {
     if (!this._currentTarget) {
-      this._showToast('Fly to a POI first');
+      this._showToast(t('Fly to a POI first'));
       return;
     }
 
@@ -687,11 +691,11 @@ export class LocationNavigation {
       };
       this._resetGlobeBtn?.setAttribute(
         'aria-label',
-        'Reset to full globe view',
+        t('Reset to full globe view'),
       );
       this._cockpitResetGlobeBtn?.setAttribute(
         'aria-label',
-        'Reset cockpit to full globe view',
+        t('Reset cockpit to full globe view'),
       );
       this._globeResetPromise = null;
       this._cancelGlobeReset = null;
@@ -707,11 +711,11 @@ export class LocationNavigation {
     }, 4200);
     this._resetGlobeBtn?.setAttribute(
       'aria-label',
-      'Resetting to full globe view',
+      t('Resetting to full globe view'),
     );
     this._cockpitResetGlobeBtn?.setAttribute(
       'aria-label',
-      'Resetting cockpit to full globe view',
+      t('Resetting cockpit to full globe view'),
     );
     const target = flyToGlobeView(this.viewer, {
       onComplete: () => finish(false),

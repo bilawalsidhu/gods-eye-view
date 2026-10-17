@@ -1,6 +1,7 @@
 import * as Cesium from 'cesium';
 import { isPointerFree } from '../data/inputOwnership.js';
 import { createInteractionSession } from '../director/interactions/session.js';
+import { t } from '../i18n/index.js';
 
 /** Own the active shot's pick handler, accessible actions and plain-text feedback. */
 export function createSceneInteractions(
@@ -24,7 +25,7 @@ export function createSceneInteractions(
         card.append(text);
         if (item.action.url) {
           const link = document.createElement('a');
-          link.textContent = 'Source';
+          link.textContent = t('Source');
           link.style.color = '#6eeaff';
           link.href = item.action.url;
           link.target = '_blank';
@@ -60,8 +61,8 @@ export function createSceneInteractions(
     const ok = await session.dispatch(id);
     if (current && current === panel && status)
       status.textContent = ok
-        ? 'Action complete'
-        : 'Action unavailable or cancelled';
+        ? t('Action complete')
+        : t('Action unavailable or cancelled');
     return ok;
   }
   return {
@@ -87,7 +88,7 @@ export function createSceneInteractions(
       }
       panel = document.createElement('section');
       panel.dataset.directorInteractions = '';
-      panel.setAttribute('aria-label', 'Scene actions');
+      panel.setAttribute('aria-label', t('Scene actions'));
       Object.assign(panel.style, {
         position: 'absolute',
         left: '12px',
@@ -104,12 +105,13 @@ export function createSceneInteractions(
       });
       const owner = panel;
       const title = document.createElement('strong');
-      title.textContent = 'Scene actions';
+      title.textContent = t('Scene actions');
       panel.append(title);
       status = document.createElement('p');
       status.setAttribute('role', 'status');
-      status.textContent =
-        'Select a feature or use Tab and Enter to choose an action.';
+      status.textContent = t(
+        'Select a feature or use Tab and Enter to choose an action.',
+      );
       panel.append(status);
       for (const item of items) {
         const button = document.createElement('button');
@@ -157,7 +159,12 @@ export function createSceneInteractions(
             ? '2px solid #6eeaff'
             : '';
         }
-        status.textContent = `Selected feature: ${matches[0].target.featureId}. Choose an action.`;
+        status.textContent = t(
+          'Selected feature: {feature}. Choose an action.',
+          {
+            feature: matches[0].target.featureId,
+          },
+        );
         buttons.get(matches[0].id)?.focus({ preventScroll: true });
       }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
     },

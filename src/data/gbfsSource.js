@@ -8,6 +8,7 @@ const GBFS_ALLOWED_HOSTS = new Set([
   'austin.publicbikesystem.net',
   'hon.publicbikesystem.net',
   'chat.publicbikesystem.net',
+  'gbfs.nextbike.net',
   'gbfs.urbansharing.com',
   'api.entur.io',
   'api.cyclocity.fr',

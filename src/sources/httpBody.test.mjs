@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readResponseBytesCapped } from './httpBody.js';
+import { setLocale, translateKnown } from '../i18n/index.js';
+import { readResponseBytesCapped, readResponseTextCapped } from './httpBody.js';
 
 /**
  * A Response that streams `chunk` forever until the reader cancels it. The
@@ -131,3 +132,19 @@ test('falls back to arrayBuffer() for a body with no stream reader', async () =>
   assert.equal(buf.byteLength, 16);
   assert.equal(buf[0], 9);
 });
+
+for (const locale of ['es', 'ru']) {
+  test(`${locale}: an oversized upstream response is translated`, async () => {
+    const response = new Response('x'.repeat(10), {
+      headers: { 'content-length': '10' },
+    });
+    const error = await readResponseTextCapped(response, 4).catch((e) => e);
+    assert.equal(error.message, 'Upstream response too large');
+    setLocale(locale);
+    try {
+      assert.notEqual(translateKnown(error.message), error.message);
+    } finally {
+      setLocale('en');
+    }
+  });
+}
