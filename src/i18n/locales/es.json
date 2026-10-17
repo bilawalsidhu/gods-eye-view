@@ -2889,5 +2889,8 @@
   "USB work abandoned after a stalled transfer": "Trabajo USB cancelado tras una transferencia bloqueada",
   "SDR decoder did not start; receiver stopped": "El decodificador SDR no arrancó; receptor detenido",
   "SDR decoder stopped responding; receiver stopped": "El decodificador SDR dejó de responder; receptor detenido",
-  "SDR decoder fell behind; receiver stopped": "El decodificador SDR se quedó atrás; receptor detenido"
+  "SDR decoder fell behind; receiver stopped": "El decodificador SDR se quedó atrás; receptor detenido",
+  "Buenos Aires Data · location inventory": "Buenos Aires Data · inventario de ubicaciones",
+  "CABA Traffic Enforcement": "Fiscalización de tránsito de CABA",
+  "CABA inventory unavailable": "Inventario de CABA no disponible"
 }

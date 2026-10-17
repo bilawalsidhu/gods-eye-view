@@ -1061,5 +1061,9 @@
   "src/ui/flyToDataSource.test.mjs",
   "scripts/assemble-changelog.mjs",
   "src/tooling/changelogFragments.test.mjs",
-  "src/data/gbfsProxyRateLimit.test.mjs"
+  "src/data/gbfsProxyRateLimit.test.mjs",
+  "src/layers/trafficEnforcement/records.test.mjs",
+  "src/layers/trafficEnforcement/source.test.mjs",
+  "server/providers/cabaTraffic.test.mjs",
+  "scripts/qa-caba-traffic.mjs"
 ]

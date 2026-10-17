@@ -272,12 +272,10 @@ export function createLocalInfrastructureOverlayPublisher({ sourceId, host }) {
 }
 
 /**
- * Reduce a bundled-dataset load failure to one short, honest stats string.
+ * Reduce a dataset load failure to one short, honest stats string.
  *
- * These layers ship their data with the build, so a failure means the asset
- * is missing (404 / bad path) or corrupt — never "the network is slow". Both
- * must reach the user's chip; the raw parser message is console-only because
- * a truncated JSON blob is not a status line.
+ * Bundled assets and supplied acquisition sources use the same error surface.
+ * A failed load must reach the user's chip instead of appearing as zero sites.
  *
  * @param {Error|{name?:string, message?:string}|null|undefined} error - The thrown load failure.
  * @returns {string} Short reason for getStats().error.
@@ -292,7 +290,8 @@ export function localDatasetError(error) {
  * A minimal, rock-solid native implementation for loading local GeoJSON Data.
  * Draws 3D stems (polylines) attached to Point entities and ensures
  * standard scene.pick natively clicks them.
- * @param {object} options Dataset URL, identity, appearance and optional Cesium adapters.
+ * @param {object} options Dataset URL or loadFeatures({signal}) callback,
+ * identity, appearance and optional Cesium adapters.
  * @param {object} services Caller-owned operations; see docs/INFRASTRUCTURE-LAYERS.md.
  * @returns {object} A fresh layer implementing init/enable/disable/update/destroy/getStats/getAnalystRecords.
  * One live instance per layer id is allowed in a given viewer/context/overlay host.
@@ -302,6 +301,7 @@ export function createLocalGeoJsonLayer(
   {
     id,
     url,
+    loadFeatures,
     name,
     color,
     icon = '📍',
@@ -573,7 +573,7 @@ export function createLocalGeoJsonLayer(
             _loadController = new AbortController();
             const baseColor = Cesium.Color.fromCssColorString(color);
 
-            // Fetch and parse JSON Lines (.geojsonl) into a FeatureCollection.
+            // Acquire features or parse JSON Lines into a FeatureCollection.
             // The source is built into a local and committed to `_dataSource`
             // only once setup finishes: a half-built source published early would
             // make every later enable() skip this block, so the layer could never
@@ -586,18 +586,26 @@ export function createLocalGeoJsonLayer(
             try {
               let features = _cachedFeatures;
               if (!features) {
-                const response = await fetch(url, {
-                  signal: _loadController.signal,
-                });
-                if (_destroyed) return;
-                // A 404 returns an HTML body that would otherwise die in JSON.parse
-                // one line later, reported as a parse error for a missing file.
-                if (!response.ok) {
-                  throw new Error(`HTTP ${response.status ?? '?'}`);
+                if (loadFeatures) {
+                  features = await loadFeatures({
+                    signal: _loadController.signal,
+                  });
+                } else {
+                  const response = await fetch(url, {
+                    signal: _loadController.signal,
+                  });
+                  if (_destroyed) return;
+                  if (!response.ok) {
+                    throw new Error(`HTTP ${response.status ?? '?'}`);
+                  }
+                  const text = await response.text();
+                  if (_destroyed) return;
+                  features = parseGeojsonLines(text);
                 }
-                const text = await response.text();
                 if (_destroyed) return;
-                features = parseGeojsonLines(text);
+                if (!Array.isArray(features)) {
+                  throw new TypeError('Expected GeoJSON features');
+                }
                 _cachedFeatures = features;
               }
 
@@ -758,8 +766,7 @@ export function createLocalGeoJsonLayer(
               _dataSource = loaded;
               _lastUpdate = Date.now();
             } catch (e) {
-              // The dataset ships with the build, so this is a broken install,
-              // not a blip — it has to reach the chip, not just the console.
+              // Both asset and provider failures must reach the layer chip.
               if (!_destroyed) _error = localDatasetError(e);
               // Roll the partial build back so a later enable() retries from
               // scratch instead of inheriting a half-populated source. Only the

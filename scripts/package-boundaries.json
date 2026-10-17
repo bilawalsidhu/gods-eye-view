@@ -2481,7 +2481,10 @@
       "src/layers/airQuality/index.js",
       "src/layers/airQuality/model.js",
       "src/layers/airQuality/source.js",
-      "src/ui/statusText.js"
+      "src/ui/statusText.js",
+      "src/layers/trafficEnforcement/index.js",
+      "src/layers/trafficEnforcement/source.js",
+      "src/layers/trafficEnforcement/records.js"
     ],
     "external": [
       "hls.js",
@@ -3050,7 +3053,10 @@
       "src/layers/airQuality/model.js",
       "src/layers/airQuality/source.js",
       "src/ui/statusText.js",
-      "src/ui/layerNames.js"
+      "src/ui/layerNames.js",
+      "src/layers/trafficEnforcement/index.js",
+      "src/layers/trafficEnforcement/source.js",
+      "src/layers/trafficEnforcement/records.js"
     ],
     "external": [
       "hls.js",
