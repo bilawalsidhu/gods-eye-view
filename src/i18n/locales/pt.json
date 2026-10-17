@@ -3692,5 +3692,10 @@
   "Confirm: remove every added entry from Data Layers": "Confirmar: remover de \"Camadas de dados\" todas as entradas adicionadas",
   "Remove every added entry from Data Layers": "Remover de \"Camadas de dados\" todas as entradas adicionadas",
   "Showing {shown} of {total}": "Mostrando {shown} de {total}",
-  "BROWSE DATA LIBRARY": "EXPLORAR BIBLIOTECA DE DADOS"
+  "BROWSE DATA LIBRARY": "EXPLORAR BIBLIOTECA DE DADOS",
+  "NOAA SWPC solar wind": "Vento solar NOAA SWPC",
+  "extrapolated": "extrapolado",
+  "Solar wind feed unavailable": "Fluxo de vento solar indisponível",
+  "Field lines not re-traced · previous lines kept": "Linhas de campo não retraçadas · linhas anteriores mantidas",
+  "Magnetosphere": "Magnetosfera"
 }

@@ -3518,5 +3518,10 @@
   "Confirm: remove every added entry from Data Layers": "確認：從數據圖層中移除所有已添加條目",
   "Remove every added entry from Data Layers": "從數據圖層中移除所有已添加條目",
   "Showing {shown} of {total}": "顯示 {shown} / {total}",
-  "BROWSE DATA LIBRARY": "瀏覽數據資源庫"
+  "BROWSE DATA LIBRARY": "瀏覽數據資源庫",
+  "NOAA SWPC solar wind": "NOAA SWPC 太陽風",
+  "extrapolated": "外推",
+  "Solar wind feed unavailable": "太陽風資料來源無法使用",
+  "Field lines not re-traced · previous lines kept": "磁力線未重新追蹤 · 保留先前的磁力線",
+  "Magnetosphere": "磁層"
 }

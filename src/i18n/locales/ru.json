@@ -3779,5 +3779,10 @@
   "500–1,000 m": "500–1000 м",
   "1,000–2,000 m": "1000–2000 м",
   "2,000–3,000 m": "2000–3000 м",
-  "3,000 m and above": "3000 м и выше"
+  "3,000 m and above": "3000 м и выше",
+  "NOAA SWPC solar wind": "солнечный ветер NOAA SWPC",
+  "extrapolated": "экстраполяция",
+  "Solar wind feed unavailable": "Данные о солнечном ветре недоступны",
+  "Field lines not re-traced · previous lines kept": "Силовые линии не пересчитаны · оставлены прежние",
+  "Magnetosphere": "Магнитосфера"
 }
