@@ -256,13 +256,17 @@ test('switching perimeter picks evicts stale context', async () => {
 
   picked = otherId;
   h.clicks.handler({ position: { x: 10, y: 10 } });
-  assert.deepEqual([...h.contexts.records.keys()], [`fire-perimeter:${otherId}`]);
+  assert.deepEqual([...h.contexts.records.keys()], [
+    `fire-perimeter:${otherId}`,
+  ]);
   assert.equal(h.contexts.selected?.id, `fire-perimeter:${otherId}`);
   assert.equal(h.contexts.selected?.label, 'Wildfire · Neighbor Fire');
   assert.equal(h.contexts.selectedEvents, 2);
 
   await h.layer.update(h.viewer);
-  assert.deepEqual([...h.contexts.records.keys()], [`fire-perimeter:${otherId}`]);
+  assert.deepEqual([...h.contexts.records.keys()], [
+    `fire-perimeter:${otherId}`,
+  ]);
   assert.equal(h.contexts.selectedEvents, 2);
   h.layer.destroy(h.viewer);
 });
