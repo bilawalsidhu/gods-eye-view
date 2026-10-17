@@ -108,7 +108,7 @@ const report = await page.evaluate(async () => {
     // is hidden and keeps the pre-floor height by design, T7).
     const drawnRows = new Map((gev.layers.drawn('flights') ?? []).map((row) => [row.id, row]));
     const drawnAt = (p) => {
-      const model = drawnRows.get(p.id)?.model;
+      const model = drawnRows.get(p.icao24 ?? p.id)?.model;
       return model?.show && model.ready && model.position ? model.position : null;
     };
     for (const p of nearby) {
@@ -166,7 +166,7 @@ const report = await page.evaluate(async () => {
   walk(v.scene.primitives);
   const drawnRows = new Map((gev.layers?.drawn('flights') ?? []).map((row) => [row.id, row]));
   const drawnAt = (p) => {
-    const model = drawnRows.get(p.id)?.model;
+    const model = drawnRows.get(p.icao24 ?? p.id)?.model;
     return model?.show && model.ready && model.position ? model.position : null;
   };
   const out = [];
@@ -185,6 +185,13 @@ const report = await page.evaluate(async () => {
       drawnBy: modelAt ? 'model' : 'sprite',
       meshM: meshH != null ? +meshH.toFixed(1) : null,
       aboveMeshM: meshH != null ? +(c.height - meshH).toFixed(1) : null,
+      // A contact whose sprite hides under a model that is not (yet) drawn.
+      model: drawnRows.get(p.icao24 ?? p.id)?.model
+        ? { show: drawnRows.get(p.icao24 ?? p.id).model.show, ready: drawnRows.get(p.icao24 ?? p.id).model.ready }
+        : null,
+      spriteShown: drawnRows.get(p.icao24 ?? p.id)?.show ?? null,
+      // The coarse floor (mesh cell ?? DEM prior) the layer reads here.
+      demFloorM: gev.surfaceServices?.groundFloor.cachedGroundFloor(latDeg, lonDeg) ?? null,
     });
   }
   // Visibility census (round 6): getNearby only returns contacts a sprite or a
