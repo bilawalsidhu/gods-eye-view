@@ -100,6 +100,7 @@ const report = await page.evaluate(async () => {
     const center = geo.cartesian3.fromDegrees(window.__QA_SITE.lon, window.__QA_SITE.lat, 200);
     const nearby = layer.getNearby(center, 15000, 60);
     const exclude = engine.movers.list().map(({ id }) => id).filter((id) => id.startsWith('flights'));
+    const { cachedGroundFloor } = await import('/src/data/groundFloor.js');
     const out = [];
     for (const p of nearby) {
       const c = geo.cartographic.fromCartesian(p.position);
@@ -113,6 +114,10 @@ const report = await page.evaluate(async () => {
         renderAltM: +c.height.toFixed(1),
         meshM: meshH != null ? +meshH.toFixed(1) : null,
         aboveMeshM: meshH != null ? +(c.height - meshH).toFixed(1) : null,
+        // Why a contact sits where it does (10b review 6): the probe's own
+        // answer (source, tile size) and the coarse DEM floor (the prior).
+        probe: answer ? { source: answer.source, tileSizeM: answer.tileSizeM ?? null } : null,
+        demFloorM: cachedGroundFloor(c.latitude * 180 / Math.PI, c.longitude * 180 / Math.PI) ?? null,
       });
     }
     let shown = 0, hidden = 0;
