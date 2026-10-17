@@ -248,6 +248,9 @@ export class PanelPositionControls {
         handle: cctvPanel?.querySelector('.panel-header'),
         portable: true,
         min: { width: 300, height: 160 },
+        // The video window must never linger over the globe folded to a strip —
+        // collapsing it docks it back into the rail.
+        dockOnCollapse: true,
       },
       {
         id: 'street-level-panel',

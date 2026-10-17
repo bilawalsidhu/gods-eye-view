@@ -44,6 +44,25 @@ provider registration rejects compositions that cannot fit rather than truncatin
 identities. A malformed or duplicate entry invalidates the complete custom-switch
 field. Existing whole-link size limits still apply.
 
+## Multi-track flight highlights — October 17, 2026
+
+The follow-camera is single-slot, so following a new aircraft used to unmark the
+previous one. Each superseded contact now keeps an amber Cesium point ring
+(`src/data/trackedHighlights.js`) that reads its fleet billboard's live position,
+so the followed plane stays cyan while the previously-followed ones remain
+ringed. Rings clear on deliberate deselect (empty-space click or Escape, which
+now also fire when the follow-camera moved to another layer and left ring-only
+state), feed eviction, layer teardown and military suppression, and are dropped
+for the incoming aircraft when it becomes the followed target. Clicking a ring
+re-follows that aircraft instead of reading as empty space and deselecting the
+current target. Mirrored across the civil and military flight layers and covered
+by `src/data/trackedHighlights.test.mjs`.
+
+The portable CCTV video window docks back into the right rail when collapsed
+(`dockOnCollapse`), so it never lingers over the globe as a folded strip. The
+CCTV panel stays visible while its layer is disabled because it owns the
+CCTV OFF/ON toggle.
+
 ## God's Eye View in conversations — October 2, 2026
 
 Tool answers that can be shown in God's Eye View include a view: camera, layers,
