@@ -78,7 +78,12 @@ export function createConaeGoesSource({
             failed = false;
             retryAt = 0;
           })
-          .catch(() => {
+          .catch((error) => {
+            console.warn(
+              '[CONAE GOES]',
+              error.message,
+              error.cause?.message || '',
+            );
             failed = true;
             retryAt = now() + RETRY_MS;
           })

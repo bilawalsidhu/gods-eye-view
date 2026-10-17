@@ -162,3 +162,17 @@ the actual app. Fixture/browser success is not live-source acceptance.
   described as a measured zero.
 - Run format, format:check, check:boundaries, npm test, npm run build,
   npm run test:track and scripts/qa-firms.mjs as applicable.
+
+## Integration and deployment notes
+
+Reachability depends on the deployment network; overseas connection timeouts
+have been reported. Run `node scripts/check-conae-goes.mjs` on the deployment.
+The 20-second request budget is an upper bound; a transport connection timeout
+may fail earlier. Refresh failures log the network, HTTP or parsing cause once
+per retry window. Partial FIRMS satellite failures are reported even when
+CONAE is disabled, while available detections remain visible.
+
+When integrating #497, preserve source identity, the complete-snapshot policy
+and the shared HTTP body cap in ingestion/httpBody. #965 and #1078 also touch
+`server/providers/firms.js`; retain the independent CONAE opt-in/cache and main
+FIRMS response bounds when resolving those overlaps.

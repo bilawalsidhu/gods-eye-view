@@ -19,6 +19,31 @@ const payload = () => ({
   ],
 });
 
+test('refresh failures log their cause once per retry window', async (t) => {
+  const warn = t.mock.method(console, 'warn', () => {});
+  const source = createConaeGoesSource({
+    now: () => START,
+    fetchImpl: async () => {
+      throw new TypeError('fetch failed', {
+        cause: new Error('connection timed out'),
+      });
+    },
+  });
+  await assert.rejects(source.getSnapshot(), /unavailable/);
+  await assert.rejects(source.getSnapshot(), /unavailable/);
+  assert.equal(warn.mock.callCount(), 1);
+  assert.match(
+    warn.mock.calls[0].arguments.join(' '),
+    /fetch failed.*connection timed out/,
+  );
+  const http = createConaeGoesSource({
+    now: () => START,
+    fetchImpl: async () => new Response('', { status: 503 }),
+  });
+  await assert.rejects(http.getSnapshot(), /unavailable/);
+  assert.match(warn.mock.calls[1].arguments.join(' '), /CONAE HTTP 503/);
+});
+
 test('CONAE requests are fixed, bounded, coalesced and cached independently', async () => {
   let now = START,
     calls = 0,
