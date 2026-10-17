@@ -2889,5 +2889,10 @@
   "USB work abandoned after a stalled transfer": "Trabajo USB cancelado tras una transferencia bloqueada",
   "SDR decoder did not start; receiver stopped": "El decodificador SDR no arrancó; receptor detenido",
   "SDR decoder stopped responding; receiver stopped": "El decodificador SDR dejó de responder; receptor detenido",
-  "SDR decoder fell behind; receiver stopped": "El decodificador SDR se quedó atrás; receptor detenido"
+  "SDR decoder fell behind; receiver stopped": "El decodificador SDR se quedó atrás; receptor detenido",
+  "NOAA SWPC solar wind": "viento solar NOAA SWPC",
+  "extrapolated": "extrapolado",
+  "Solar wind feed unavailable": "Datos de viento solar no disponibles",
+  "Field lines not re-traced · previous lines kept": "Líneas de campo sin recalcular · se mantienen las anteriores",
+  "Magnetosphere": "Magnetosfera"
 }

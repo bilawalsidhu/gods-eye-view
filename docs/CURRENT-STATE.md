@@ -71,6 +71,65 @@ authentication. Large-response continuations remain process-local and require
 consistent tool-call routing. Two-process reproduction is covered locally;
 Windows/Claude Desktop Cowork confirmation remains outstanding (#927).
 
+## Magnetosphere — October 1, 2026
+
+A keyless `magnetosphere` layer draws Earth's magnetic field as filaments and
+the magnetopause as a live boundary cage.
+
+The internal field is IGRF-14 to degree 13, evaluated from a vendored
+public-domain coefficient table in `src/data/local_data/igrf/`. It is validated
+against an independent implementation across 105 points and three radii to
+better than 0.001% of |B|. Field lines are traced in the browser with RK4, step
+growing with radius. Each line is traced as a resumable generator and the frame
+is handed back every 8 ms, mid-line if need be: a single T96 line can take
+~90 ms, so yielding only between lines still dropped frames.
+
+IGRF alone models only the field generated inside the Earth, so past a few Earth
+radii the trace adds an external field from a Tsyganenko model: **T96** when the
+feed carries dynamic pressure, Dst and the IMF By and Bz, **T89c** when only Kp
+is available, and neither — internal field only — when the feed carries neither.
+There is deliberately no fallback to a guessed storm state. Both models are
+transliterations of the MIT-licensed Python `geopack` translation, validated
+point by point against it: T89c across 420 points, T96 across 61,488 spanning
+seven solar wind states and six dipole tilts, agreeing to 9.7e-11 nT. Both stop
+at 70 Re, their stated limit of validity.
+
+The first trace runs from IGRF alone so the layer paints without waiting on the
+network; the filaments are then re-traced once the feed names a usable model,
+and again whenever the solar wind changes enough to move them or the Sun has
+moved 5° in the Earth-fixed frame (twenty minutes of rotation), since the
+external field is built in GSM and the tail must keep pointing anti-sunward. Kp
+maps to T89's bands by its nearest whole value, as geopack's table does, so 1-
+(0.67) is band 2, not band 1. The row's meta
+line names the model that drew the lines on screen, and says when it is being
+run outside the range it was fitted within.
+
+Only the solar wind crosses the network. `/api/magnetosphere` returns a few
+hundred bytes: SWPC's propagated speed, density and IMF, Kp, Kyoto Dst, and the
+Shue et al. (1998) magnetopause derived from them. It takes the newest
+*complete* row, because SWPC's tail is often a timestamp with null plasma values
+and reading that as current state would render missing data as a dead-calm solar
+wind. The solar wind, Kp and Dst are each one shared upstream fetch: concurrent
+requests coalesce, each fetch has its own 10 s timeout rather than a caller's
+signal (so one client disconnecting cannot fail the others), and a failure is
+backed off for a minute instead of retried on every request. Kp and Dst fail
+soft: losing Dst costs T96, losing Kp costs T89, and neither touches the
+boundary.
+
+The boundary is an empirical fit, drawn as a cage rather than a shell, and
+reports when the solar wind is outside the range the fit was published for. It
+also reports when the boundary is compressed inside geosynchronous orbit at 6.6
+Earth radii, which is the condition worth noticing.
+
+`scripts/qa-magnetosphere.mjs` is the browser gate. It measures the drawn
+polylines rather than trusting the row label, because the one failure mode the
+unit tests cannot see is a layer that names an external model while the
+filaments were traced without one — which is how this layer shipped once. It
+also blocks the feed and asserts the opposite: still drawing, naming no model,
+and staying inside the internal budget.
+
+Share token `5`, enabled plus an opacity option.
+
 ## Tools and local MCP server — October 1, 2026
 
 Tool argument string lengths follow JSON Schema Unicode code-point counts, so supplementary characters count once rather than as two UTF-16 units.
