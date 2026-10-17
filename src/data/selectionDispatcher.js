@@ -20,6 +20,10 @@
 // nothing, is empty space for it (it releases its selection); a click that
 // only meets what it looks under does nothing; no gesture rule (its old
 // handler took every click). To the others it is another layer.
+// An own-rule owner (`onClick(ctx)`: vessels) keeps its whole old click
+// handler: it gets every click with the top pick and decides itself (no
+// gesture rule, as its old LEFT_CLICK handler); to the others it is another
+// layer.
 
 import { isPointerFree as pointerFree } from './inputOwnership.js';
 import {
@@ -104,7 +108,9 @@ export function createSelectionDispatcher(
     }
     return lookedUnder ? 'under' : null;
   };
-  const plain = (owner) => typeof owner.lookUnder !== 'function';
+  const ownRule = (owner) => typeof owner.onClick === 'function';
+  const plain = (owner) =>
+    typeof owner.lookUnder !== 'function' && !ownRule(owner);
 
   const onClick = (event) => {
     if (press) finish(event.position);
@@ -119,6 +125,15 @@ export function createSelectionDispatcher(
     };
     for (const [name, owner] of [...owners]) {
       if (plain(owner)) continue;
+      if (ownRule(owner)) {
+        // Its old handler ran alone: a throw there leaves the others be.
+        try {
+          owner.onClick(ctx);
+        } catch (error) {
+          console.error(error);
+        }
+        continue;
+      }
       const target = lookUnderTarget(name, owner, event);
       if (target === 'under') continue;
       if (target && target !== 'other')
@@ -205,7 +220,7 @@ export function createSelectionDispatcher(
      * @param {string} name the owning layer's id
      * @param {{ owns: (id: string) => boolean, onSelect?: Function, onEmptyClick?: Function,
      *   onEscape?: Function, passThrough?: (picked: object) => boolean, drillThrough?: boolean,
-     *   lookUnder?: (id: string) => boolean }} owner
+     *   lookUnder?: (id: string) => boolean, onClick?: (ctx: object) => void }} owner
      * @returns {() => void} unregister
      */
     register(name, owner) {
