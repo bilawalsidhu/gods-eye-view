@@ -185,9 +185,9 @@ export function normalizeOsrmSteps(route) {
         }
         continue;
       }
+      if (out.length >= ROUTE_STEPS_MAX) return { steps: out, truncated: true };
       step.instruction = instructionFor(step);
       out.push(step);
-      if (out.length >= ROUTE_STEPS_MAX) return { steps: out, truncated: true };
     }
   }
   return { steps: out, truncated: false };

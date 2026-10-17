@@ -1,12 +1,14 @@
 import path from 'node:path';
 import { promises as fsp } from 'node:fs';
 
+import { readResponseBytesCapped } from './common/http.js';
 import {
   isValidTileCoord as isValidTomTomTile,
   utcDayKey as tomtomUtcDayKey,
   normalizeBudget as normalizeTomTomBudget,
   isOverBudget as isTomTomOverBudget,
 } from '../../src/data/tomtomTiles.js';
+import { admitSameSite } from './common/same-site.js';
 
 /**
  * TomTom traffic-flow vector-tile proxy with a daily budget governor.
@@ -34,6 +36,13 @@ import {
  * for the rest of the billing period. 6,000/day keeps a full 31-day month
  * inside the allowance (186,000) with headroom to spare.
  *
+ * Cross-site gate: both routes refuse cross-site browser requests with 403
+ * (the gate Mapillary, OpenAI and Places already use). Every uncached tile is
+ * a billed upstream attempt counted against the persistent daily budget, so
+ * without the gate any web page the user visits could fire `<img>` requests
+ * at distinct tiles, spend the TomTom quota and leave the traffic layer on
+ * 429 budget for the rest of the UTC day.
+ *
  * GET /api/tomtom/status → {hasKey, dailyCount, budget, date}. Keyless mode:
  * status reports hasKey:false and the tile endpoint 503s {error:'no_key'}
  * without touching upstream — the traffic layer then stays in simulation mode.
@@ -48,6 +57,8 @@ export function tomtomProxy() {
   const DEFAULT_DAILY_BUDGET = 6000;
   const MEM_MAX_ENTRIES = 256;
   const UPSTREAM_TIMEOUT_MS = 15000;
+  /** Flow tiles are well under 1 MB; this bounds a runaway body, not a budget. */
+  const TOMTOM_TILE_MAX_RESPONSE_BYTES = 8 * 1024 * 1024;
 
   /** @type {Map<string, {at:number, buf:Buffer}>} tile key `z/x/y` -> cached tile (kept past TTL for serve-stale). */
   const mem = new Map();
@@ -143,17 +154,23 @@ export function tomtomProxy() {
       'https://api.tomtom.com/traffic/map/4/tile/flow/relative/' +
       `${z}/${x}/${y}.pbf?key=${encodeURIComponent(process.env.TOMTOM_API_KEY)}`;
     recordUpstreamFetch(); // attempts count — upstream bills the request either way
-    const res = await fetch(url, {
-      signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
-    });
+    const signal = AbortSignal.timeout(UPSTREAM_TIMEOUT_MS);
+    const res = await fetch(url, { signal });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const buf = Buffer.from(await res.arrayBuffer());
+    const bytes = await readResponseBytesCapped(
+      res,
+      TOMTOM_TILE_MAX_RESPONSE_BYTES,
+      signal,
+    );
+    const buf = Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength);
     if (buf.length === 0) throw new Error('empty tile body');
     return buf;
   }
 
   const installMiddleware = (server) => {
     server.middlewares.use('/api/tomtom', async (req, res) => {
+      // Gate first: a cross-site <img>/fetch must not reach the budget counter.
+      if (admitSameSite(req, res)) return;
       // Sanitized responses only (proxy/security baseline): no upstream
       // error details, and never echo the key or the upstream URL.
       const sendJson = (status, obj, extraHeaders = {}) => {

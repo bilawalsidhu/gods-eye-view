@@ -62,3 +62,34 @@ test('ordinary background failure stays visible without claiming exception state
     reasonCode: 'no-surface-needed',
   });
 });
+
+test('unknown freshness transition is visible without inventing emergency', () => {
+  assert.deepEqual(
+    resolveAttentionDisposition({
+      freshnessTransition: 'stale',
+      quietMode: true,
+      repeated: true,
+    }),
+    {
+      disposition: 'ambient',
+      reasonCode: 'unrecognized-freshness-transition',
+    },
+  );
+  assert.deepEqual(
+    resolveAttentionDisposition({
+      freshnessTransition: 'stale',
+      affectsActiveTask: true,
+    }),
+    {
+      disposition: 'activity',
+      reasonCode: 'unrecognized-freshness-transition',
+    },
+  );
+  assert.deepEqual(
+    resolveAttentionDisposition({
+      freshnessTransition: null,
+      blocking: true,
+    }),
+    { disposition: 'exception', reasonCode: 'blocking' },
+  );
+});

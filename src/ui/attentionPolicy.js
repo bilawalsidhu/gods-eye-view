@@ -35,6 +35,19 @@ export function resolveAttentionDisposition({
     return { disposition: 'exception', reasonCode: 'blocking' };
   }
 
+  // Unknown source transitions must not look like healthy, unchanged state.
+  // Give a bounded visibility signal; never manufacture an emergency.
+  if (
+    freshnessTransition !== 'none' &&
+    freshnessTransition !== 'failed' &&
+    freshnessTransition !== 'recovered'
+  ) {
+    return {
+      disposition: affectsActiveTask ? 'activity' : 'ambient',
+      reasonCode: 'unrecognized-freshness-transition',
+    };
+  }
+
   if (affectsActiveTask && freshnessTransition === 'failed') {
     return {
       disposition: 'exception',
