@@ -2889,5 +2889,6 @@
   "USB work abandoned after a stalled transfer": "Trabajo USB cancelado tras una transferencia bloqueada",
   "SDR decoder did not start; receiver stopped": "El decodificador SDR no arrancó; receptor detenido",
   "SDR decoder stopped responding; receiver stopped": "El decodificador SDR dejó de responder; receptor detenido",
-  "SDR decoder fell behind; receiver stopped": "El decodificador SDR se quedó atrás; receptor detenido"
+  "SDR decoder fell behind; receiver stopped": "El decodificador SDR se quedó atrás; receptor detenido",
+  "Shared layer selection could not be restored": "No se pudo restaurar la selección de capas del enlace compartido"
 }

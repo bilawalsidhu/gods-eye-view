@@ -95,6 +95,11 @@ export class ShareRestoration {
       : Promise.resolve({ status: 'not-requested', share: null, layers: [] });
     if (savedState) {
       this._hasShareState = true;
+      if (savedState.layerStateInvalid) {
+        this._showDeferredStatusNotice(
+          t('Shared layer selection could not be restored'),
+        );
+      }
       // Reserve camera authority now; the delayed mesh-friendly flight may
       // run only if no newer user, voice, or tracking navigation has won.
       this._initialShareNavigationGeneration =
@@ -267,16 +272,18 @@ export class ShareRestoration {
       ? this._shareTrackingNoticeGeneration
       : ++this._shareTrackingNoticeGeneration;
     const message = shareTrackingRestoreNotice(result);
+    this._showDeferredStatusNotice(message, () =>
+      canPresentDeferredStatusNotice(
+        noticeGeneration,
+        this._shareTrackingNoticeGeneration,
+        this._disposed,
+      ),
+    );
+  }
+  _showDeferredStatusNotice(message, canPresent = () => !this._disposed) {
     const showAfterStartupCover = () => {
       this._lifetime.frame(() => {
-        if (
-          !canPresentDeferredStatusNotice(
-            noticeGeneration,
-            this._shareTrackingNoticeGeneration,
-            this._disposed,
-          )
-        )
-          return;
+        if (!canPresent()) return;
         const startupCover = document.getElementById('loading-screen');
         if (
           !startupCover ||
@@ -290,14 +297,7 @@ export class ShareRestoration {
         const showOnce = () => {
           removeStartupListener();
           if (fallbackTimer) this._lifetime.cancelTimeout(fallbackTimer);
-          if (
-            canPresentDeferredStatusNotice(
-              noticeGeneration,
-              this._shareTrackingNoticeGeneration,
-              this._disposed,
-            )
-          )
-            this.showStatus(message);
+          if (canPresent()) this.showStatus(message);
         };
         removeStartupListener = this._lifetime.listen(
           startupCover,
