@@ -1,0 +1,1 @@
+- Bind gamepad navigation to Cesium camera with continuous render hold during stick input, and add Wikipedia nearby intelligence with API client rate-limit caching and attribution (VG31OP, #1010).

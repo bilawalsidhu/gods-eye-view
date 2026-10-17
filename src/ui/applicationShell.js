@@ -503,6 +503,8 @@ export class StyleManager extends ShellFacade {
         setScopeMaskEnabled: services.setScopeMaskEnabled,
         isScopeMaskEnabled: services.isScopeMaskEnabled,
         setScopeMaskFeather: services.setScopeMaskFeather,
+        holdContinuousRender: services.holdContinuousRender,
+        releaseContinuousRender: services.releaseContinuousRender,
       },
       elements: {
         _locationSearch: this._locationSearch,

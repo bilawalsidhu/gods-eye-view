@@ -94,3 +94,19 @@ test('a failed probe is retried after its backoff, not on every query', async ()
     'GET /api/overpass/status',
   ]);
 });
+
+test('requests services expose the integrated wikipedia spatial service', async () => {
+  const seen = [];
+  const fetchImpl = async (url) => {
+    seen.push(url);
+    return Response.json({
+      query: { geosearch: [{ pageid: 42, title: 'Sample Landmark', lat: 30, lon: -97, dist: 120 }] },
+    });
+  };
+  const services = createApplicationRequestServices({ fetchImpl });
+  assert.ok(services.wikipedia);
+  const nearby = await services.wikipedia.fetchNearby({ latitude: 30, longitude: -97 });
+  assert.equal(nearby.length, 1);
+  assert.equal(nearby[0].title, 'Sample Landmark');
+  assert.ok(seen[0].includes('list=geosearch'));
+});
