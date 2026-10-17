@@ -142,7 +142,7 @@ test('clicking an earthquake publishes one shared USGS context record', async ()
   assert.equal(h.contexts.selected?.longitude, 30);
   assert.equal(h.contexts.selected?.properties.magnitude, 4);
   assert.equal(h.contexts.selected?.properties.depthKm, 3);
-  assert.match(h.contexts.selected?.label || '', /M4\.0/);
+  assert.equal(h.contexts.selected?.label, 'M4.0 · Fixture');
 
   // Refresh updates the record without inventing a second selection event.
   await h.layer.update(h.viewer);

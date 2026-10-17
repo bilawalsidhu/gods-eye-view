@@ -62,7 +62,7 @@ export function createEarthquakesLayer({
       layerName: 'Earthquakes (24h)',
       source: 'USGS',
       dataSource: _dataSource,
-      label: `Earthquake · M${Number(row.mag).toFixed(1)}${
+      label: `M${Number(row.mag).toFixed(1)}${
         row.place ? ` · ${row.place}` : ''
       }`,
       latitude: row.lat,
