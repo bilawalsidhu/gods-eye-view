@@ -1,4 +1,5 @@
 import * as Cesium from 'cesium';
+import { cyberSonarBaseAlpha } from '../../cyberSonar.js';
 import { CLASS_SCALE_2D } from '../../data/aircraftClass.js';
 import {
   turnRateFromFixHistory,
@@ -7,12 +8,7 @@ import {
 } from '../../data/motionModel.js';
 import { aircraftIcon } from '../../data/aircraftIcons.js';
 import { POSITION_HISTORY_LIMIT } from './recordPolicy.js';
-import {
-  BILLBOARD_SCALE,
-  GROUND_SCALE,
-  TRACKED_ICON_COLOR,
-  MIL_ICON_COLOR,
-} from './policy.js';
+import { BILLBOARD_SCALE, GROUND_SCALE, TRACKED_ICON_COLOR } from './policy.js';
 
 /** Apply military record changes to Cesium resources and existing follow operations. */
 export function createMilitarySnapshotRenderer({
@@ -23,6 +19,7 @@ export function createMilitarySnapshotRenderer({
   militaryRegistry,
   rendering,
   tracking,
+  motion,
   queries,
 }) {
   const { warmGroundFloor, cachedGroundFloor, GROUND_FLOOR_LIFT_M } =
@@ -124,6 +121,11 @@ export function createMilitarySnapshotRenderer({
 
       if (flightState._billboards.has(icao24)) {
         const bb = flightState._billboards.get(icao24);
+        if (!isTracked) {
+          bb.color = rendering
+            ._fleetBillboardColor(icao24, meta)
+            .withAlpha(cyberSonarBaseAlpha(bb));
+        }
         // Position AND rotation are owned by the fleet pass (_fleetTick);
         // course changes land on the next rotation pass (forced below).
         // Ground flips (landing/takeoff) restyle this SAME billboard in
@@ -142,8 +144,14 @@ export function createMilitarySnapshotRenderer({
         // Round 5: depth policy is uniform (always depth-test-free, see
         // _groundDepthDistance) — nothing to flip on landing/takeoff.
       } else {
+        // Start where the fleet pass will draw it: the fleet renders behind
+        // real time, so a fresh contact's displayed position is its fix
+        // projected back to that delayed time. Creating it at the raw fix drew
+        // it ahead until the next fleet tick snapped it back.
+        const displayed =
+          motion._deadReckon(icao24, new Cesium.Cartesian3()) || position;
         const bb = flightState._billboardCollection.add({
-          position,
+          position: displayed,
           image: aircraftIcon(rendering._iconKind(icao24, meta.klass)),
           width: isTracked ? 24 : 20,
           height: isTracked ? 24 : 20,
@@ -154,7 +162,9 @@ export function createMilitarySnapshotRenderer({
           // Screen-projected rotation lands on the next fleet tick.
           rotation: 0,
           alignedAxis: Cesium.Cartesian3.ZERO,
-          color: isTracked ? TRACKED_ICON_COLOR : MIL_ICON_COLOR,
+          color: isTracked
+            ? TRACKED_ICON_COLOR
+            : rendering._fleetBillboardColor(icao24, meta),
           sizeInMeters: false,
           scaleByDistance: rendering._normalBillboardScaleByDistance(),
           // Grounded/near-surface planes sit at/below the photoreal tile

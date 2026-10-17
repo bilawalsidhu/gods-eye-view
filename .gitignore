@@ -14,8 +14,13 @@ qa-shots/
 output/
 .gev-logs/
 .gev-cache/
+# Browser QA gate evidence (screenshots, console and network dumps).
+qa-artifacts/
 .DS_Store
 .gstack/
 3d-models/
 pinokio/ENVIRONMENT
 pinokio/.installed
+
+# Transient: a release interrupted mid-assembly (npm run changelog recovers it)
+changelog.d/.assembling/

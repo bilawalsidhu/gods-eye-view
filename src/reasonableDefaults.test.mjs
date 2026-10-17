@@ -61,7 +61,7 @@ function uiBlock(start, end) {
 /** A ShareLinkManager over a synthetic hash — enough surface for parseInitialHash. */
 function managerForHash(hash) {
   globalThis.window = { location: { hash, href: `http://localhost/${hash}` } };
-  globalThis.history = { replaceState(_s, _t, next) { window.location.hash = next; } };
+  globalThis.history = { replaceState(_s, _t, next) { window.location.hash = new URL(next, window.location.href).hash; } };
   const viewer = {
     camera: {
       changed: { addEventListener() {} },

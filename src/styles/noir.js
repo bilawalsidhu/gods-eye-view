@@ -1,3 +1,5 @@
+import { msg } from '../i18n/index.js';
+
 /**
  * Noir Style — Desaturation + High Contrast + Vignette
  * Classic film noir / detective movie look
@@ -5,9 +7,9 @@
 export const noirShader = {
   name: 'noir',
   uniforms: {
-    contrastAmt: { default: 1.2, min: 0, max: 2, label: 'Contrast' },
-    grainAmt: { default: 0.5, min: 0, max: 1, label: 'Grain' },
-    vignetteAmt: { default: 0.5, min: 0, max: 1, label: 'Vignette' },
+    contrastAmt: { default: 1.2, min: 0, max: 2, label: msg('Contrast') },
+    grainAmt: { default: 0.5, min: 0, max: 1, label: msg('Grain') },
+    vignetteAmt: { default: 0.5, min: 0, max: 1, label: msg('Vignette') },
   },
   fragmentShader: /* glsl */ `
     uniform sampler2D colorTexture;

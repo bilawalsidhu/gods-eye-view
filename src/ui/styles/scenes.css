@@ -163,6 +163,26 @@
   outline: none;
 }
 
+/* A translated scene name needs the width: the select takes its own row,
+   NEW / DEL share the next one. */
+html:not([lang='en']) #scene-select {
+  flex: 1 1 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.04em;
+}
+
+/* A translated action longer than its button wraps inside the button instead
+   of running past it. English keeps its one-line buttons ("EXPORT PRESETS"
+   included). */
+html:not([lang='en']) #scene-panel .scene-controls .scene-btn {
+  white-space: normal;
+  overflow-wrap: break-word;
+}
+
 .scene-btn {
   background: rgba(255, 255, 255, 0.05);
   border: 1px solid rgba(255, 255, 255, 0.14);

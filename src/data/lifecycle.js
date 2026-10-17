@@ -74,7 +74,11 @@ function refreshFailureFromStats(stats, label) {
  * for real-time data overlays on the CesiumJS globe.
  */
 export class LayerLifecycle {
-  constructor(viewer, { allowQaRegistration = false } = {}) {
+  constructor(
+    viewer,
+    { allowQaRegistration = false, getSourceAvailability } = {},
+  ) {
+    this._catalogSourceAvailability = getSourceAvailability;
     this.viewer = viewer;
     this._activityListeners = new Set();
     this.layers = new Map(); // id → { module, enabled, initialized, intervalId, lifecycleState, lifecycleUncertain }
@@ -228,6 +232,7 @@ export class LayerLifecycle {
 
   _normalizedStats(entry) {
     const moduleStats = this._moduleStats(entry);
+    const availability = this._sourceAvailability(entry.module.id);
     const lifecycleLoading =
       entry.lifecycleState === 'enabling' ||
       entry.lifecycleState === 'disabling';
@@ -235,6 +240,13 @@ export class LayerLifecycle {
       count: 0,
       lastUpdate: null,
       ...moduleStats,
+      ...(availability?.available === false
+        ? {
+            status: 'unavailable',
+            sourceUnavailable: true,
+            error: availability.reason,
+          }
+        : {}),
       loading: lifecycleLoading || moduleStats.loading === true,
       refreshing: entry.refreshing || moduleStats.refreshing === true,
       managerRefreshError: entry.managerRefreshError,
@@ -2282,7 +2294,17 @@ export class LayerLifecycle {
     }
   }
 
+  _sourceAvailability(layerId) {
+    return (
+      this._catalogSourceAvailability?.(layerId) ??
+      this.layers.get(layerId)?.module.getSourceAvailability?.()
+    );
+  }
+
   async _visibilityBlockReason(change) {
+    const availability = this._sourceAvailability(change.layerId);
+    if (change.enabled && availability?.available === false)
+      return availability.reason || 'Data source unavailable';
     for (const callback of this._visibilityGuards) {
       try {
         const result = await callback(change);
