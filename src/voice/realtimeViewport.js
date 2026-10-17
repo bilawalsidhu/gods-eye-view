@@ -112,7 +112,6 @@ export function viewportContextDecision(result, { channelOpen = true } = {}) {
   };
 }
 
-
 /**
  * Square source rectangle around a canvas point, clamped inside the canvas,
  * in drawing-buffer pixels, plus where the point lands in the output image.

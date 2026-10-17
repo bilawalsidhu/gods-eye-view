@@ -141,18 +141,6 @@ if (import.meta.url === invoked) {
     if (mode === '--check' && result.changed.length) {
       for (const name of result.changed)
         console.error(`Needs formatting: ${name}`);
-      // Temporary CI-only formatter diagnostic. This commit is never promoted.
-      for (const name of result.changed.filter((file) =>
-        ['src/voice/realtimeViewport.js', 'src/voice/realtimeViewportPolicy.test.mjs'].includes(file)
-      )) {
-        const file = path.join(fileURLToPath(new URL('../', import.meta.url)), name);
-        const output = await prettier.format(await readFile(file, 'utf8'), {
-          ...(await prettier.resolveConfig(file)), filepath: file,
-        });
-        const encoded = Buffer.from(output).toString('base64');
-        for (let pos = 0; pos < encoded.length; pos += 1000)
-          console.error(`PRETTIER-DATA|${name}|${pos}|${encoded.slice(pos, pos + 1000)}`);
-      }
       process.exitCode = 1;
     } else {
       console.log(

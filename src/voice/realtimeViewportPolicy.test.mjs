@@ -1,7 +1,10 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { RealtimeViewport, viewportContextDecision } from './realtimeViewport.js';
+import {
+  RealtimeViewport,
+  viewportContextDecision,
+} from './realtimeViewport.js';
 
 const localContext = (overrides = {}) => ({
   action: 'get_entity_context',
@@ -99,7 +102,10 @@ test('pointer ground selects the #837 crop path, not a full viewport', () => {
     },
   );
   assert.deepEqual(
-    viewportContextDecision({ ...pointerContext, selected: { id: 'building' } }),
+    viewportContextDecision({
+      ...pointerContext,
+      selected: { id: 'building' },
+    }),
     {
       send: false,
       reason: 'pointer-identity-present',
@@ -144,8 +150,14 @@ test('runtime dispatch preserves pointer crop and full image separation', async 
     true,
   );
   assert.equal(calls.filter((call) => call.kind === 'crop').length, 1);
-  assert.deepEqual(calls.find((call) => call.kind === 'crop').snapshot, pointer);
-  assert.equal(calls.find((call) => call.kind === 'crop').options.viewScale, 'city');
+  assert.deepEqual(
+    calls.find((call) => call.kind === 'crop').snapshot,
+    pointer,
+  );
+  assert.equal(
+    calls.find((call) => call.kind === 'crop').options.viewScale,
+    'city',
+  );
   assert.equal(calls.filter((call) => call.kind === 'viewport').length, 0);
 
   assert.equal(await viewport.sendVisualContextIfUseful(localContext()), true);
@@ -157,10 +169,13 @@ test('runtime dispatch preserves pointer crop and full image separation', async 
     false,
   );
   assert.equal(calls.filter((call) => call.kind === 'viewport').length, 1);
-  assert.ok(calls.some((call) =>
-    call.event === 'viewport_context.decision' &&
-    call.detail.reason === 'pointer-ground-crop'
-  ));
+  assert.ok(
+    calls.some(
+      (call) =>
+        call.event === 'viewport_context.decision' &&
+        call.detail.reason === 'pointer-ground-crop',
+    ),
+  );
 });
 
 test('closed channel never captures pointer or full viewport', async () => {
@@ -232,11 +247,12 @@ test('successful retained send is logged without recording image contents', asyn
     capture: async () => 'data:image/jpeg;base64,AA==',
   });
   assert.equal(await viewport.sendVisualContextIfUseful(localContext()), true);
-  assert.ok(diagnostics.some((item) =>
-    item.event === 'viewport_context.result' && item.detail.reason === 'sent'
-  ));
-  assert.equal(
-    JSON.stringify(diagnostics).includes('data:image/jpeg'),
-    false,
+  assert.ok(
+    diagnostics.some(
+      (item) =>
+        item.event === 'viewport_context.result' &&
+        item.detail.reason === 'sent',
+    ),
   );
+  assert.equal(JSON.stringify(diagnostics).includes('data:image/jpeg'), false);
 });
