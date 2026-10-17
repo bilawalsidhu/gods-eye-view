@@ -9,6 +9,11 @@
  *   handle), `_models` (id → model handle), `_trackedIcao`, `_trackedModel`.
  * @returns {Array<object>}
  */
+const translationOf = (matrix) =>
+  matrix && Number.isFinite(matrix[12])
+    ? { x: matrix[12], y: matrix[13], z: matrix[14] }
+    : null;
+
 export function aircraftQaDrawn(state) {
   const out = [];
   for (const [id, sprite] of state._billboards) {
@@ -36,6 +41,8 @@ export function aircraftQaDrawn(state) {
             computedScale: model.computedScale,
             show: model.show,
             ready: model.ready,
+            // Where it is drawn: its transform's translation.
+            position: translationOf(model.modelMatrix),
           }
         : null,
     });
