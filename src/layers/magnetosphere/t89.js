@@ -86,11 +86,18 @@ export const T89_COEFFICIENTS = Object.freeze(
   ].map((row) => Object.freeze(row)),
 );
 
-/** Kp index to the model's 1..7 disturbance band. */
+/**
+ * Kp index to the model's 1..7 disturbance band.
+ *
+ * Geopack's IOPT table groups Kp by its nearest whole value: band 1 is 0 and
+ * 0+, band 2 is 1-, 1 and 1+, and so on up to band 7 for 6- and above. In
+ * decimal Kp the thirds are 0.33 and 0.67, so 1- (0.67) belongs with 1, not
+ * with 0. Rounding gives exactly that; flooring put every "minus" value one
+ * band low.
+ */
 export function t89BandForKp(kp) {
-  if (!Number.isFinite(kp) || kp < 1) return 1;
-  if (kp >= 6) return 7;
-  return Math.floor(kp) + 1;
+  if (!Number.isFinite(kp) || kp < 0) return 1;
+  return Math.min(7, Math.round(kp) + 1);
 }
 
 /**
