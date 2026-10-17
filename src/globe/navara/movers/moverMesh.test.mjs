@@ -112,3 +112,35 @@ test('points have no atlas and draw a disc', () => {
   assert.equal(mover.uniforms.uGevOutlinePx.value, 1);
   mover.dispose();
 });
+
+test('an origin move uploads every instance even when a commit follows in the same frame', () => {
+  const store = createMoverStore(spriteOptions);
+  const mover = createMoverMesh(spriteOptions, store);
+  for (let index = 0; index < 4; index++)
+    store.set(index, { position: { x: 6_378_137 + index * 10, y: 0, z: 0 } });
+  store.setCount(4);
+  mover.commit(store.dirty());
+  store.clean();
+  // The GPU took that upload (three clears the ranges after it).
+  mover.mesh.instanceMatrix.clearUpdateRanges();
+  // The camera went far: the origin moves and every instance is rewritten...
+  assert.equal(
+    mover.update({
+      cameraPosition: { x: 6_378_137 + 2_000_000, y: 0, z: 0 },
+      cameraHeight: 2_000_000,
+      fovDeg: 60,
+      viewportHeightPx: 800,
+    }),
+    true,
+  );
+  // ...then one instance changes before the frame is drawn.
+  store.set(2, { rotation: 1 });
+  mover.commit(store.dirty());
+  store.clean();
+  const ranges = mover.mesh.instanceMatrix.updateRanges;
+  const covered = new Set();
+  for (const { start, count } of ranges)
+    for (let i = start; i < start + count; i++) covered.add(i);
+  for (let i = 0; i < 4 * 16; i++)
+    assert.ok(covered.has(i), `instance float ${i} is uploaded`);
+});
