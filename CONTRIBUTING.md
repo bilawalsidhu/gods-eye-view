@@ -54,8 +54,8 @@ head -40 scripts/qa-radio.mjs  # what this runnable gate proves and how to run i
 Runnable gate entrypoints document what they assert and how to invoke them.
 Most need a dev server; some also need a specific provider key or port. Follow
 the entrypoint's header rather than assuming every matching file accepts the
-same arguments. Only a couple (`qa:map-source-tray`, `qa:transit`) have an
-`npm run` alias.
+same arguments. Some gates have an `npm run` alias; check `package.json` for
+the available commands.
 
 If you aren't sure which gate covers your change, search `docs/CURRENT-STATE.md`
 for the feature: it names the gate for many of them, and it's the authoritative
@@ -63,12 +63,14 @@ runtime reference either way. `scripts/qa-l9-matrix.mjs` aggregates the broader
 release-candidate checks and selected harnesses; it does not replace the focused
 gate for the feature you changed.
 
-> **CI does not cover this for you.** The workflow runs the setup policy
-> checks, the formatting and package-boundary checks, the unit suite and the
-> production build, plus a Windows onboarding job. It runs neither
-> `npm run test:track` nor any `qa-*.mjs` gate — both need a live dev server
-> and a browser. Include the applicable local run in your PR's validation
-> evidence.
+> **CI covers selected browser gates.** The [workflow](.github/workflows/ci.yml)
+> runs setup, formatting, package-boundary and layer-token checks, the unit
+> suite and production build, plus a Windows onboarding job. It also runs the
+> fixture-based Street Level gate (`qa:street-level:fixtures`) and the portable
+> panel gate (`qa:panel-resize`) against the built app. Tracking
+> (`npm run test:track`) and other feature-specific gates remain local checks.
+> Run the applicable local gates and include their results in your PR's
+> validation evidence.
 
 ## Share-link layer tokens
 
