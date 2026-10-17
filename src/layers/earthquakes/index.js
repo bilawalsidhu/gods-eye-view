@@ -11,6 +11,10 @@ import {
 export * from './model.js';
 export { createUsgsEarthquakeSource } from './source.js';
 
+// A portable package (no i18n): the error stays English data and the layer
+// panel shows it translated.
+const msg = (text) => text;
+
 /** Own one earthquake display and its refresh lifecycle. */
 export function createEarthquakesLayer({
   source,
@@ -37,7 +41,10 @@ export function createEarthquakesLayer({
 
   const canSelect = () => screenSpaceEventHandlerFactory && picking && context;
 
-  function clearSelectedContext() {
+  function clearSelectedContext({ evicted = false } = {}) {
+    // An explicit user deselection differs from a feed eviction.
+    if (!evicted)
+      context?.clearSelectedEntityContextForLayer?.('earthquakes');
     context?.removeEntityContextsForLayer?.('earthquakes');
     _selectedId = null;
     _selectedContextEntity = null;
@@ -46,7 +53,7 @@ export function createEarthquakesLayer({
   function publishSelectedContext({ announce = false } = {}) {
     const row = _selectedId ? _rowById.get(_selectedId) : null;
     if (!row) {
-      clearSelectedContext();
+      clearSelectedContext({ evicted: true });
       return null;
     }
     _selectedContextEntity ||= { show: true };
@@ -71,6 +78,12 @@ export function createEarthquakesLayer({
     });
     if (announce && record)
       context?.selectEntityContext?.(_selectedContextEntity);
+    // Prune A after selecting B, not before: no false eviction is announced
+    // for a deliberate switch and no stale source-owned record survives.
+    if (record)
+      context?.removeEntityContextsForLayer?.('earthquakes', {
+        retainIds: new Set([record.id]),
+      });
     return record || null;
   }
 
@@ -259,7 +272,7 @@ export function createEarthquakesLayer({
         if (request.signal.aborted || _request !== request || !_enabled)
           return false;
         console.warn('[Data:Earthquakes] Fetch error:', e);
-        _lastError = e?.message || 'Earthquake source unavailable';
+        _lastError = e?.message || msg('Earthquake source unavailable');
         return false;
       } finally {
         if (_request === request) _request = null;

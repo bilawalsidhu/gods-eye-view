@@ -172,12 +172,12 @@ export function createTerrainHeights({
    * @param {Array<{key: string, lat: number, lon: number}>} chunk
    * @returns {Promise<Map<string, number>>} key -> ellipsoid height (m)
    */
-  async function fetchChunk(chunk) {
+  async function fetchChunk(chunk, requestSignal = signal) {
     // lon,lat order (matches the proxy's documented `points=lon,lat;…` contract
     // and Task 2's implementation).
     const results = await source.getHeights(chunk, {
-      signal: signal
-        ? AbortSignal.any([signal, AbortSignal.timeout(30000)])
+      signal: requestSignal
+        ? AbortSignal.any([requestSignal, AbortSignal.timeout(30000)])
         : AbortSignal.timeout(30000),
     });
     const body = { results };
@@ -239,8 +239,15 @@ export function createTerrainHeights({
    * @returns {Promise<Array<{ellipsoid:number, source:'reearth'|'geoid-fallback'}>>}
    *   Same length and order as `coords`.
    */
-  async function resolveEllipsoidalGround(coords) {
-    signal?.throwIfAborted();
+  async function resolveEllipsoidalGround(
+    coords,
+    { signal: consumerSignal } = {},
+  ) {
+    const requestSignal =
+      signal && consumerSignal
+        ? AbortSignal.any([signal, consumerSignal])
+        : consumerSignal || signal;
+    requestSignal?.throwIfAborted();
     if (!Array.isArray(coords) || coords.length === 0) return [];
 
     // Build the per-input work list (key + original index) up front so the
@@ -265,27 +272,25 @@ export function createTerrainHeights({
     const uncached = [];
     const seenKeys = new Set();
     const now = Date.now();
+    // What this call resolved or found warm, so the assembly below can report a
+    // point even if a later chunk's writes pushed it past CACHE_MAX_ENTRIES.
+    // Without it a batch big enough to evict its own entries would report
+    // points as unresolved that it had in fact resolved.
+    const resolvedThisCall = new Map();
     for (const item of work) {
-      const entry = cache.get(item.key);
+      const entry = cacheTouch(item.key);
       const fallbackCooling =
         entry?.source === 'geoid-fallback' &&
         Number.isFinite(entry.retryAt) &&
         now < entry.retryAt;
-      if (
-        (entry && entry.source === 'reearth') ||
-        fallbackCooling ||
-        seenKeys.has(item.key)
-      )
+      if ((entry && entry.source === 'reearth') || fallbackCooling) {
+        resolvedThisCall.set(item.key, entry);
         continue;
+      }
+      if (seenKeys.has(item.key)) continue;
       seenKeys.add(item.key);
       uncached.push(item);
     }
-
-    // What this call resolved, so the assembly below can report a point even
-    // if a later chunk's writes pushed it past CACHE_MAX_ENTRIES. Without it a
-    // batch big enough to evict its own earlier chunks would report points as
-    // unresolved that it had in fact just resolved.
-    const resolvedThisCall = new Map();
 
     // Resolve the network path in sequential <=CHUNK_SIZE chunks. Each chunk's
     // failure is isolated to that chunk's points (geoid fallback), so a single
@@ -293,8 +298,8 @@ export function createTerrainHeights({
     for (let i = 0; i < uncached.length; i += CHUNK_SIZE) {
       const chunk = uncached.slice(i, i + CHUNK_SIZE);
       try {
-        const resolved = await fetchChunk(chunk);
-        signal?.throwIfAborted();
+        const resolved = await fetchChunk(chunk, requestSignal);
+        requestSignal?.throwIfAborted();
         for (const item of chunk) {
           const ellipsoid = resolved.get(item.key);
           // Round 6: only a FINITE value may be cached as 'reearth'. A point
@@ -310,13 +315,13 @@ export function createTerrainHeights({
           }
         }
       } catch {
-        signal?.throwIfAborted();
+        requestSignal?.throwIfAborted();
         // Proxy down (or cold cache had nothing to serve-stale) — fall back to
         // geoid math for every point in this chunk. `ensureGeoidReady()` is
         // awaited lazily, only on the fallback path, so the common (proxy
         // healthy) case never pays for the geoid grid's dynamic import.
         await ensureGeoidReady();
-        signal?.throwIfAborted();
+        requestSignal?.throwIfAborted();
         for (const item of chunk) {
           const ellipsoid = geoidFallback(
             item.lat,

@@ -11,6 +11,7 @@ function harness(source, { pick = () => null } = {}) {
     records: new Map(),
     selected: null,
     selectedEvents: 0,
+    clearReasons: [],
   };
   const viewer = {
     scene: { pick },
@@ -71,11 +72,20 @@ function harness(source, { pick = () => null } = {}) {
         contexts.selectedEvents += 1;
         return contexts.selected;
       },
-      removeEntityContextsForLayer(layerId) {
+      clearSelectedEntityContextForLayer(layerId, { evicted = false } = {}) {
+        if (contexts.selected?.layerId !== layerId) return;
+        contexts.selected = null;
+        contexts.clearReasons.push(evicted ? 'evicted' : 'deliberate');
+      },
+      removeEntityContextsForLayer(layerId, { retainIds } = {}) {
         for (const [id, record] of contexts.records) {
-          if (record.layerId === layerId) contexts.records.delete(id);
+          if (record.layerId === layerId && !retainIds?.has(id))
+            contexts.records.delete(id);
         }
-        if (contexts.selected?.layerId === layerId) contexts.selected = null;
+        if (contexts.selected && !contexts.records.has(contexts.selected.id)) {
+          contexts.selected = null;
+          contexts.clearReasons.push('evicted');
+        }
       },
     },
   });
@@ -150,6 +160,34 @@ test('clicking an earthquake publishes one shared USGS context record', async ()
   h.clicks.handler({ position: { x: 10, y: 10 } });
   assert.equal(h.contexts.selected, null);
   assert.equal(h.contexts.records.size, 0);
+  assert.deepEqual(h.contexts.clearReasons, ['deliberate']);
+  h.layer.destroy(h.viewer);
+});
+
+test('switching earthquake A to B keeps one live source record without false eviction', async () => {
+  let picked = { id: 'earthquake:event-a' };
+  const next = { ...row, stableId: 'event-b', usgsId: 'event-b', lat: 21 };
+  const h = harness(
+    { getSnapshot: async () => [row, next] },
+    { pick: () => picked },
+  );
+  await h.layer.update(h.viewer);
+  h.clicks.handler({ position: { x: 10, y: 10 } });
+  assert.equal(h.contexts.selected?.id, 'earthquake:event-a');
+  assert.equal(h.contexts.records.size, 1);
+
+  picked = { id: 'earthquake:event-b' };
+  h.clicks.handler({ position: { x: 12, y: 12 } });
+  assert.equal(h.contexts.selected?.id, 'earthquake:event-b');
+  assert.equal(h.contexts.selected?.latitude, 21);
+  assert.equal(h.contexts.records.size, 1);
+  assert.equal(h.contexts.records.has('earthquake:event-a'), false);
+  assert.equal(h.contexts.selectedEvents, 2);
+  assert.deepEqual(h.contexts.clearReasons, []);
+
+  await h.layer.update(h.viewer);
+  assert.equal(h.contexts.selectedEvents, 2);
+  assert.equal(h.contexts.records.size, 1);
   h.layer.destroy(h.viewer);
 });
 
@@ -167,6 +205,7 @@ test('earthquake refresh eviction clears the shared selected record', async () =
   await h.layer.update(h.viewer);
   assert.equal(h.contexts.selected, null);
   assert.equal(h.contexts.records.size, 0);
+  assert.deepEqual(h.contexts.clearReasons, ['evicted']);
   h.layer.destroy(h.viewer);
 });
 

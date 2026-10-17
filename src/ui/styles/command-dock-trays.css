@@ -392,6 +392,12 @@
     transform 220ms cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
+/* The side wings sit at z-index 100 (controls.css, location.css), so their
+   open trays would cover the alert; lift the voice column while it shows. */
+#command-dock > #gev-voice-control[data-status='error']:not(.error-dismissed) {
+  z-index: 101;
+}
+
 #command-dock
   #gev-voice-control[data-status='error']:not(.error-dismissed)
   .gev-voice-error-tray {
@@ -442,17 +448,17 @@
   letter-spacing: 0.035rem;
 }
 
-/* The compact dock leaves both lower corners free for required attribution and telemetry. */
+/* Keep the complete inline attribution row above the command dock. */
 body:not(.ui-clean-view):not(.recording-mode) #cesium-credits,
 body:not(.ui-clean-view):not(.recording-mode):has(
     #intel-hud[data-variant='minimal'].active
   )
   #cesium-credits {
   right: auto;
-  bottom: 0.75rem;
+  bottom: calc(2vh + 5rem);
   left: 1.5rem;
   width: auto !important;
-  max-width: calc(50vw - 15rem);
+  max-width: calc(100vw - 3rem);
   text-align: left;
 }
 
