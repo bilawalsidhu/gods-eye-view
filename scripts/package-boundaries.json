@@ -97,6 +97,7 @@
       "server/providers/space.js",
       "server/providers/space/celestrak.js",
       "server/providers/space/launch-library.js",
+      "server/providers/space/fireballs.js",
       "server/providers/common/http.js",
       "src/data/spaceProviderRequests.js",
       "src/sources/httpBody.js",

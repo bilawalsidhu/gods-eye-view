@@ -4,12 +4,15 @@ import { promises as fsp } from 'node:fs';
 import {
   celestrakProxy,
   rocketLaunchesProxy,
+  fireballsProxy,
   launchLibraryRequestHeaders,
   LL2_CACHE_TTL_MS,
+  CNEOS_CACHE_TTL_MS,
 } from 'gods-eye-view/server/providers/space';
 import {
   celestrakTleUrl,
   launchLibraryRecentUrl,
+  cneosFireballsUrl,
 } from 'gods-eye-view/sources/space';
 import * as compatibility from '../../server/providers/local.js';
 
@@ -186,6 +189,31 @@ for (const preview of [false, true])
     assert.equal(first.headers['X-GEV-Cache'], 'MISS');
     assert.doesNotMatch(first.body, /fixture-token/);
     const hit = await request('/api/launches');
+    assert.equal(hit.headers['X-GEV-Cache'], 'HIT');
+    assert.equal(hit.body, first.body);
+    assert.equal(calls, 1);
+  });
+
+for (const preview of [false, true])
+  test(`exported fireballs plugin serves CNEOS data with caching and rejection of non-GET in ${preview ? 'preview' : 'development'}`, async (t) => {
+    isolateDisk(t);
+    let calls = 0;
+    t.mock.method(globalThis, 'fetch', async (url) => {
+      calls++;
+      assert.equal(url.searchParams.get('req-loc'), 'true');
+      return Response.json({
+        signature: { source: 'NASA/JPL CNEOS', version: '1.0' },
+        count: '1',
+        fields: ['date', 'lat', 'lat-dir', 'lon', 'lon-dir'],
+        data: [['2023-01-01 12:00:00', '10.0', 'N', '20.0', 'E']],
+      });
+    });
+    const request = install(fireballsProxy(), preview);
+    assert.equal((await request('/api/fireballs', '/', 'POST')).status, 405);
+    const first = await request('/api/fireballs');
+    assert.equal(first.headers['X-GEV-Cache'], 'MISS');
+    assert.equal(first.status, 200);
+    const hit = await request('/api/fireballs');
     assert.equal(hit.headers['X-GEV-Cache'], 'HIT');
     assert.equal(hit.body, first.body);
     assert.equal(calls, 1);
