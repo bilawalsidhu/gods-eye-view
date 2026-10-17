@@ -1,15 +1,18 @@
 #!/usr/bin/env node
 /**
- * Flights on Cesium and Navara side by side (phase 3 Task 10b, parity item
- * 1): the same synthetic fleet (?qaFeed=flights:synthetic:N) at the global,
- * city and orbit poses on both engines. Writes each engine's canvas and a
- * side-by-side JPEG (Cesium left, Navara right) to --out, and compares the
- * colour drawn at the centre of known glyphs (the same objects on both
- * engines): every channel within --tolerance (default 3).
+ * An aircraft layer on Cesium and Navara side by side (phase 3 Tasks 10b,
+ * 11b; parity item 1): the same synthetic fleet (?qaFeed=…) at the global,
+ * city, orbit and near poses on both engines. Writes each engine's canvas
+ * and a side-by-side JPEG (Cesium left, Navara right) to --out, and compares
+ * the colour drawn at the centre of known glyphs (the same objects on both
+ * engines): every channel within --tolerance (default 3). With
+ * --models=on, the near pose gates the 3D models: the pixels they cover
+ * (against the same view with the layer off) within ±20 % of Cesium's, and
+ * their median luminance within ±10 %.
  *
  *   node scripts/qa-flights-engines.mjs --base-url=http://localhost:PORT/
- *     [--out=docs/migration/phase3/flights] [--feed=flights:synthetic:10000]
- *     [--models=off|on] [--tolerance=3]
+ *     [--layer=flights|military] [--out=docs/migration/phase3/<layer>]
+ *     [--feed=flights:synthetic:10000] [--models=off|on] [--tolerance=3]
  *
  * The server is the caller's (never ports 4185-4189). Headless only. Exits 1
  * on a failed check.
@@ -39,16 +42,22 @@ if ([4185, 4186, 4187, 4188, 4189].includes(Number(new URL(baseUrl).port))) {
   console.error('ports 4185-4189 are reserved');
   process.exit(2);
 }
+const layer = argument('layer') ?? 'flights';
+const DEFAULT_FEEDS = {
+  flights: 'flights:synthetic:10000',
+  military: 'military:synthetic:1000',
+};
 const outDir = path.resolve(
   repoRoot,
-  argument('out') ?? 'docs/migration/phase3/flights',
+  argument('out') ??
+    `docs/migration/phase3/${layer}${argument('models') === 'on' ? '/models' : ''}`,
 );
 // Each engine's full picture (git-ignored); --out keeps the side-by-side.
 const shotDir = path.resolve(
   repoRoot,
-  argument('shots') ?? 'qa-artifacts/flights-engines',
+  argument('shots') ?? `qa-artifacts/${layer}-engines`,
 );
-const feed = argument('feed') ?? 'flights:synthetic:10000';
+const feed = argument('feed') ?? DEFAULT_FEEDS[layer];
 const models = argument('models') ?? 'off';
 const tolerance = Number(argument('tolerance') ?? 3);
 const POSES = {
@@ -96,33 +105,37 @@ async function capture(browser, engineKind) {
     polling: 250,
   });
   await new Promise((resolve) => setTimeout(resolve, 6000));
-  await page.evaluate(async (models3d) => {
-    const { layers, dataManager, styleManager } = window.__godsEyeView;
-    await layers.enable('flights');
-    dataManager.setLayerParams?.('flights', { models3d: models3d === 'on' });
-    // What draws over or onto the glyphs on one engine only: the scope
-    // mask and Cesium's sharpen/bloom post stages; the detection callouts
-    // (both engines) would cover glyph centres.
-    (await import('/src/scopeMask.js')).setScopeMaskEnabled(false);
-    (await import('/src/data/detection.js')).setMode('OFF');
-    styleManager.setSharpen?.({ enabled: false });
-    styleManager.setBloom?.({ enabled: false });
-    // Only the globe in the pictures: the shell's panels, HUD text and
-    // cards (different on each engine: the Navara notice and attribution)
-    // would cover glyphs.
-    const canvas = window.__godsEyeView.engine.host.canvas;
-    const style = document.createElement('style');
-    style.textContent = '.qa-hidden { visibility: hidden !important; }';
-    document.head.append(style);
-    for (const element of document.body.querySelectorAll('*'))
-      if (element !== canvas && !element.contains(canvas))
-        element.classList.add('qa-hidden');
-  }, models);
+  await page.evaluate(
+    async (models3d, layerId) => {
+      const { layers, dataManager, styleManager } = window.__godsEyeView;
+      await layers.enable(layerId);
+      dataManager.setLayerParams?.(layerId, { models3d: models3d === 'on' });
+      // What draws over or onto the glyphs on one engine only: the scope
+      // mask and Cesium's sharpen/bloom post stages; the detection callouts
+      // (both engines) would cover glyph centres.
+      (await import('/src/scopeMask.js')).setScopeMaskEnabled(false);
+      (await import('/src/data/detection.js')).setMode('OFF');
+      styleManager.setSharpen?.({ enabled: false });
+      styleManager.setBloom?.({ enabled: false });
+      // Only the globe in the pictures: the shell's panels, HUD text and
+      // cards (different on each engine: the Navara notice and attribution)
+      // would cover glyphs.
+      const canvas = window.__godsEyeView.engine.host.canvas;
+      const style = document.createElement('style');
+      style.textContent = '.qa-hidden { visibility: hidden !important; }';
+      document.head.append(style);
+      for (const element of document.body.querySelectorAll('*'))
+        if (element !== canvas && !element.contains(canvas))
+          element.classList.add('qa-hidden');
+    },
+    models,
+    layer,
+  );
   await new Promise((resolve) => setTimeout(resolve, 4000));
   const shots = {};
   for (const [pose, camera] of Object.entries(POSES)) {
     const known = await page.evaluate(
-      async ([lon, lat, height, heading, pitch]) => {
+      async ([lon, lat, height, heading, pitch], layerId) => {
         const geo = await import('/src/geo/index.js');
         const { engine, layers } = window.__godsEyeView;
         const rad = geo.math.toRadians;
@@ -133,12 +146,17 @@ async function capture(browser, engineKind) {
         // The page clock is frozen, so the layer's 12 Hz fleet tick runs only
         // when a camera move ends (it resets the tick): end one, as a user's
         // move would, so rotations are computed at this pose on both engines.
+        // Models take a few ticks (load, then hand-off), so the move ends
+        // every 10 frames while the view loads.
         const { viewer } = window.__godsEyeView;
-        (viewer ? viewer.camera.moveEnd : engine.camera.moveEnd).raiseEvent();
+        const moveEnd = () =>
+          (viewer ? viewer.camera.moveEnd : engine.camera.moveEnd).raiseEvent();
+        moveEnd();
         const started = performance.now();
-        for (;;) {
+        for (let frame = 1; ; frame++) {
           engine.render.request('qa-flights-engines');
           await new Promise((resolve) => requestAnimationFrame(resolve));
+          if (frame % 10 === 0) moveEnd();
           if (
             performance.now() - started > 4000 &&
             (engine.surface.tilesLoaded() ||
@@ -152,7 +170,7 @@ async function capture(browser, engineKind) {
         }
         const { width, height: h } = engine.host.size();
         const inFrame = layers
-          .objects('flights', 1_000_000)
+          .objects(layerId, 1_000_000)
           .filter(
             ({ screen }) =>
               screen &&
@@ -165,11 +183,11 @@ async function capture(browser, engineKind) {
         const framed = new Set(inFrame.map(({ id }) => id));
         // Objects a 3D model draws (glyph hidden): their colour is the
         // engine's lighting of a glTF, compared apart.
-        const modelled = (layers.drawn('flights') ?? [])
+        const modelled = (layers.drawn(layerId) ?? [])
           .filter((row) => row.model?.show && row.model?.ready)
           .map((row) => row.id);
         const rotations = Object.fromEntries(
-          (layers.drawn('flights') ?? [])
+          (layers.drawn(layerId) ?? [])
             .filter(
               (row) => !row.trackedModel && row.show && framed.has(row.id),
             )
@@ -200,17 +218,44 @@ async function capture(browser, engineKind) {
                 ),
             )
             .map(({ id, screen }) => ({ id, screen })),
+          // Every modelled object's screen point (the model gate).
+          modelPoints: inFrame
+            .filter(({ id }) => modelled.includes(id))
+            .map(({ id, screen }) => ({ id, screen })),
+          computedScales: Object.fromEntries(
+            (layers.drawn(layerId) ?? [])
+              .filter((row) => row.model?.show && row.model?.ready)
+              .map((row) => [row.id, row.model.computedScale]),
+          ),
         };
       },
       camera,
+      layer,
     );
     const png = await page.screenshot({ type: 'png' });
+    // The same view without the layer (the model gate's background): the
+    // last pose only, then the layer is off.
+    let background = null;
+    if (pose === 'near' && models === 'on') {
+      await page.evaluate(async (layerId) => {
+        const { layers, engine } = window.__godsEyeView;
+        await layers.disable(layerId);
+        for (let frame = 0; frame < 30; frame++) {
+          engine.render.request('qa-flights-engines');
+          await new Promise((resolve) => requestAnimationFrame(resolve));
+        }
+      }, layer);
+      background = await page.screenshot({ type: 'png' });
+    }
     shots[pose] = {
       png,
       known: known.known,
       inFrame: known.inFrame,
       rotations: known.rotations,
       modelled: new Set(known.modelled),
+      modelPoints: known.modelPoints,
+      computedScales: known.computedScales,
+      background,
     };
   }
   await context.close();
@@ -394,6 +439,84 @@ try {
         `${exact}/${opaque.length} opaque glyphs within ${tolerance}, median ${median}, worst ${deltas.at(-1) ?? 0}; ${rows.length - opaque.length} translucent`,
       );
     }
+  }
+  if (models === 'on') {
+    // The 3D models at the near pose: the pixels each covers (the shot
+    // against the same view with the layer off, |Δ luminance| > 25 within
+    // 26 px of its point) and their luminance, per object modelled on both.
+    const left = cesium.shots.near;
+    const right = navara.shots.near;
+    const footprints = async (shot) => {
+      const a = await pixelsOf(shot.png);
+      const b = await pixelsOf(shot.background);
+      const luma = (p, i) =>
+        0.2126 * p.data[i] + 0.7152 * p.data[i + 1] + 0.0722 * p.data[i + 2];
+      const rows = new Map();
+      for (const { id, screen } of shot.modelPoints) {
+        let pixels = 0;
+        let sum = 0;
+        for (let y = Math.round(screen.y) - 26; y < screen.y + 26; y++)
+          for (let x = Math.round(screen.x) - 26; x < screen.x + 26; x++) {
+            if (x < 0 || y < 0 || x >= WIDTH || y >= HEIGHT) continue;
+            const i = (y * a.width + x) * a.channels;
+            if (Math.abs(luma(a, i) - luma(b, i)) > 25) {
+              pixels++;
+              sum += luma(a, i);
+            }
+          }
+        rows.set(id, { pixels, luminance: pixels ? sum / pixels : null });
+      }
+      return rows;
+    };
+    const fl = await footprints(left);
+    const fr = await footprints(right);
+    const ids = [...fl.keys()].filter((id) => fr.has(id));
+    const total = (rows) =>
+      ids.reduce((sum, id) => sum + rows.get(id).pixels, 0);
+    const median = (values) => {
+      const sorted = values.filter(Number.isFinite).sort((x, y) => x - y);
+      return sorted.length ? sorted[Math.floor(sorted.length / 2)] : null;
+    };
+    const lum = (rows) => median(ids.map((id) => rows.get(id).luminance));
+    // The drawn size: each model's scale after the minimum pixel size.
+    const sizeRatios = ids
+      .map((id) => right.computedScales[id] / left.computedScales[id])
+      .filter(Number.isFinite);
+    const models3d = {
+      objects: ids.length,
+      computedScaleRatio: {
+        median: median(sizeRatios),
+        min: Math.min(...sizeRatios),
+        max: Math.max(...sizeRatios),
+      },
+      footprintPx: { cesium: total(fl), navara: total(fr) },
+      medianLuminance: { cesium: lum(fl), navara: lum(fr) },
+    };
+    report.poses.near.models = models3d;
+    const ratio = models3d.footprintPx.navara / models3d.footprintPx.cesium;
+    const lumRatio =
+      models3d.medianLuminance.navara / models3d.medianLuminance.cesium;
+    check(
+      'near: 3D models on both engines',
+      ids.length >= 5,
+      `${ids.length} objects modelled on both`,
+    );
+    check(
+      'near: model drawn size (computed scale) within ±5 % of Cesium',
+      sizeRatios.length > 0 &&
+        sizeRatios.every((value) => Math.abs(value - 1) <= 0.05),
+      JSON.stringify(models3d.computedScaleRatio),
+    );
+    check(
+      'near: model footprint within ±20 % of Cesium',
+      Math.abs(ratio - 1) <= 0.2,
+      `${models3d.footprintPx.navara} vs ${models3d.footprintPx.cesium} px (${(ratio * 100).toFixed(0)} %)`,
+    );
+    check(
+      'near: model luminance within ±10 % of Cesium (median)',
+      Math.abs(lumRatio - 1) <= 0.1,
+      `${models3d.medianLuminance.navara?.toFixed(1)} vs ${models3d.medianLuminance.cesium?.toFixed(1)}`,
+    );
   }
   check(
     'no page errors',

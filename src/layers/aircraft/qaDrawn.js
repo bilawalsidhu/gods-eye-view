@@ -30,7 +30,13 @@ export function aircraftQaDrawn(state) {
           }
         : null,
       model: model
-        ? { scale: model.scale, show: model.show, ready: model.ready }
+        ? {
+            scale: model.scale,
+            // The drawn scale, after the minimum pixel size.
+            computedScale: model.computedScale,
+            show: model.show,
+            ready: model.ready,
+          }
         : null,
     });
   }

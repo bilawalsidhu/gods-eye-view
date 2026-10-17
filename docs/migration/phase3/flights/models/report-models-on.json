@@ -880,6 +880,22 @@
         "pairs": [],
         "compared": 0,
         "worstDeg": 0
+      },
+      "models": {
+        "objects": 24,
+        "computedScaleRatio": {
+          "median": 1.0000066397504008,
+          "min": 1.0000066317299159,
+          "max": 1.0000066647714139
+        },
+        "footprintPx": {
+          "cesium": 1496,
+          "navara": 1553
+        },
+        "medianLuminance": {
+          "cesium": 196.66676533333333,
+          "navara": 189.77240000000006
+        }
       }
     }
   }

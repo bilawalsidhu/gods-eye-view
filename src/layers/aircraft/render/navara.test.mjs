@@ -227,11 +227,15 @@ test("a model pose is the Cesium model frame, turned to Navara's glTF axes", asy
   );
   for (let index = 0; index < 16; index++)
     assert.ok(Math.abs(model.modelMatrix[index] - expected[index]) < 1e-6);
-  // The instance orientation: modelMatrix × Cesium's Z_UP_TO_X_UP (Navara's
-  // loader already turned the glTF Z-up).
+  // The instance orientation: modelMatrix × Cesium's glTF axis correction
+  // (Y_UP_TO_Z_UP × Z_UP_TO_X_UP; Navara's loader keeps the glTF Y-up).
   const corrected = Cesium.Matrix4.multiplyTransformation(
     expected,
-    Cesium.Axis.Z_UP_TO_X_UP,
+    Cesium.Matrix4.multiplyTransformation(
+      Cesium.Axis.Y_UP_TO_Z_UP,
+      Cesium.Axis.Z_UP_TO_X_UP,
+      new Cesium.Matrix4(),
+    ),
     new Cesium.Matrix4(),
   );
   const q = Cesium.Quaternion.fromRotationMatrix(

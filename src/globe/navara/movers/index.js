@@ -72,6 +72,7 @@ class GevMoverSetDesc extends MeshDesc {
 // The camera a mover needs each drawn frame (scratch: no allocation).
 const frameCamera = {
   cameraPosition: { x: 0, y: 0, z: 0 },
+  cameraDirection: { x: 0, y: 0, z: -1 },
   cameraHeight: 0,
   fovDeg: 60,
   viewportHeightPx: 0,
@@ -86,6 +87,12 @@ function updateMover(view, ctx, mover) {
   position.x = e[12];
   position.y = e[13];
   position.z = e[14];
+  // A three camera looks down its local −z.
+  const direction = frameCamera.cameraDirection;
+  const length = Math.hypot(e[8], e[9], e[10]) || 1;
+  direction.x = -e[8] / length;
+  direction.y = -e[9] / length;
+  direction.z = -e[10] / length;
   frameCamera.cameraHeight =
     Math.hypot(position.x, position.y, position.z) - EARTH_RADIUS_M;
   frameCamera.fovDeg = raw.fov;

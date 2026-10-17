@@ -19,12 +19,39 @@ import {
 } from 'three';
 import { footprintPerDepth, originFor } from './pack.js';
 
+/**
+ * Ambient light on the tinted surface, as an emissive share of it: Cesium
+ * lights models with image-based lighting besides the sun, so a tinted
+ * aircraft reads near-white at any sun angle; Navara's sky light alone left
+ * them grey-brown at dawn. 0.5 matched Cesium's model luminance at the near
+ * pose (qa-flights-engines --models=on: median 190 vs 193 on Cesium; 139
+ * without it).
+ */
+export const MODEL_AMBIENT = 0.5;
+
+/**
+ * The distance Cesium sizes a model's minimumPixelSize at (Camera
+ * distanceToBoundingSphere): |offset · view direction| less `radiusM`, at
+ * least 0; the straight-line distance when no direction is known.
+ */
+export function modelPixelDistance(dx, dy, dz, direction, radiusM) {
+  const along = direction
+    ? Math.abs(dx * direction.x + dy * direction.y + dz * direction.z)
+    : Math.sqrt(dx * dx + dy * dy + dz * dz);
+  return Math.max(0, along - radiusM);
+}
+
 const scratchMatrix = new Matrix4();
 const scratchQuaternion = new Quaternion();
 const scratchTranslation = new Vector3();
 const scratchScale = new Vector3();
 
-/** Mixes the instance colour into the material's colour by uGevBlend × alpha. */
+/**
+ * Mixes the instance colour into the material's colour by uGevBlend (the
+ * set's colorBlend, as Cesium's colorBlendAmount); the instance alpha is the
+ * model's opacity (Cesium: a model colour's alpha makes it translucent; the
+ * aircraft fade with distance through it), not a blend weight.
+ */
 function blendInstanceColor(material, uniforms) {
   material.onBeforeCompile = (shader) => {
     Object.assign(shader.uniforms, uniforms);
@@ -40,11 +67,15 @@ function blendInstanceColor(material, uniforms) {
     shader.fragmentShader = shader.fragmentShader
       .replace(
         'void main() {',
-        'uniform float uGevBlend;\nvarying vec4 vGevColor;\nvoid main() {',
+        'uniform float uGevBlend;\nuniform float uGevAmbient;\nvarying vec4 vGevColor;\nvoid main() {',
+      )
+      .replace(
+        '#include <emissivemap_fragment>',
+        '#include <emissivemap_fragment>\ntotalEmissiveRadiance += diffuseColor.rgb * uGevAmbient;',
       )
       .replace(
         '#include <map_fragment>',
-        '#include <map_fragment>\ndiffuseColor.rgb = mix(diffuseColor.rgb, vGevColor.rgb, uGevBlend * vGevColor.a);',
+        '#include <map_fragment>\ndiffuseColor.rgb = mix(diffuseColor.rgb, vGevColor.rgb, uGevBlend);\ndiffuseColor.a *= vGevColor.a;',
       );
   };
   material.customProgramCacheKey = () => 'gev-mover-model-blend';
@@ -58,6 +89,7 @@ function blendInstanceColor(material, uniforms) {
 export function createModelMover(options, store, { load, onLoad = () => {} }) {
   const { capacity, model } = options;
   const uniforms = {
+    uGevAmbient: { value: MODEL_AMBIENT },
     uGevBlend: {
       value: model.colorBlend
         ? model.colorBlend.mode === 'replace'
@@ -71,9 +103,24 @@ export function createModelMover(options, store, { load, onLoad = () => {} }) {
   let origin = null;
   let footprint = 0;
   let cameraPosition = null;
+  let cameraDirection = null;
   let loaded = false;
   let disposed = false;
   const colorAttributes = [];
+  const materials = [];
+  // Translucent only while an instance is faded (opaque models keep the
+  // opaque pass).
+  const syncTransparency = () => {
+    const { colors } = store;
+    let faded = false;
+    for (let index = 0; index < store.count && !faded; index++)
+      if (store.shows[index] === 1 && colors[index * 4 + 3] < 1) faded = true;
+    for (const material of materials)
+      if (material.transparent !== faded) {
+        material.transparent = faded;
+        material.needsUpdate = true;
+      }
+  };
 
   const write = (from, to) => {
     if (!loaded || !origin) return;
@@ -84,7 +131,16 @@ export function createModelMover(options, store, { load, onLoad = () => {} }) {
         const dx = positions[index * 3] - cameraPosition.x;
         const dy = positions[index * 3 + 1] - cameraPosition.y;
         const dz = positions[index * 3 + 2] - cameraPosition.z;
-        const distance = Math.sqrt(dx * dx + dy * dy + dz * dz);
+        // Cesium's distance for minimumPixelSize (Camera
+        // distanceToBoundingSphere): the depth along the view direction
+        // less the model's radius at its own scale.
+        const distance = modelPixelDistance(
+          dx,
+          dy,
+          dz,
+          cameraDirection,
+          radius * scale,
+        );
         const pixels = (2 * radius * scale) / (footprint * distance);
         if (pixels < model.minimumPixelSize)
           scale *= model.minimumPixelSize / pixels;
@@ -119,6 +175,7 @@ export function createModelMover(options, store, { load, onLoad = () => {} }) {
       mesh.instanceMatrix.needsUpdate = true;
     }
     for (const attribute of colorAttributes) attribute.needsUpdate = true;
+    syncTransparency();
   };
 
   const group = { meshes: [], ready: null };
@@ -140,6 +197,7 @@ export function createModelMover(options, store, { load, onLoad = () => {} }) {
         });
       else material = material.clone();
       blendInstanceColor(material, uniforms);
+      materials.push(material);
       const geometry = child.geometry.clone();
       const color = new InstancedBufferAttribute(
         new Float32Array(capacity * 4).fill(1),
@@ -189,9 +247,16 @@ export function createModelMover(options, store, { load, onLoad = () => {} }) {
       for (const { mesh } of parts) mesh.count = store.count;
     },
     /** Each drawn frame: pixel limits need every instance rewritten. */
-    update({ cameraPosition: camera, cameraHeight, fovDeg, viewportHeightPx }) {
+    update({
+      cameraPosition: camera,
+      cameraDirection: direction = null,
+      cameraHeight,
+      fovDeg,
+      viewportHeightPx,
+    }) {
       footprint = footprintPerDepth(fovDeg, viewportHeightPx);
       cameraPosition = camera;
+      cameraDirection = direction;
       if (!origin || store.count === 0) return false;
       const next = originFor(camera, origin, cameraHeight);
       if (next !== origin) placeAt(next);
