@@ -573,7 +573,9 @@ pack with `CCTV_DELDOT_ENABLED=0`.
 The server allows two concurrent sessions. Each retains at most 12 segments
 and 24 MiB in memory; individual downloads are capped at 4 MiB with a ten
 second deadline. There are no segment files or ffmpeg processes. Redirects,
-off-origin references, encrypted playlists and non-MPEG-TS segments are refused.
+off-origin references, encrypted playlists, byte ranges and mixed containers are refused.
+Clear MPEG-TS and whole-file fMP4 with same-origin `EXT-X-MAP` initialization
+segments are supported; HEVC playback depends on the browser and device.
 Each decoder has its own client lease (at most eight per session), including
 native HLS. Closing it releases only that lease; abandoned leases expire after
 15 seconds without access. The last release stops upstream work. Failed live video
