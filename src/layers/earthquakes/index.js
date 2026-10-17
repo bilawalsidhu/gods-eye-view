@@ -16,7 +16,14 @@ export { createUsgsEarthquakeSource } from './source.js';
 const msg = (text) => text;
 
 /** Own one earthquake display and its refresh lifecycle. */
-export function createEarthquakesLayer({ source, overlayHost } = {}) {
+export function createEarthquakesLayer({
+  source,
+  overlayHost,
+  context = null,
+  picking = null,
+  pointer = null,
+  screenSpaceEventHandlerFactory = null,
+} = {}) {
   if (typeof source?.getSnapshot !== 'function')
     throw new TypeError('Earthquakes require a snapshot source');
   if (!overlayHost) throw new TypeError('Earthquakes require an overlay host');
@@ -27,6 +34,97 @@ export function createEarthquakesLayer({ source, overlayHost } = {}) {
   let _lastUpdate = null;
   let _lastError = null;
   let _enabled = false;
+  let _clickHandler = null;
+  let _selectedId = null;
+  let _selectedContextEntity = null;
+  const _rowById = new Map();
+
+  const canSelect = () => screenSpaceEventHandlerFactory && picking && context;
+
+  function clearSelectedContext({ evicted = false } = {}) {
+    // An explicit user deselection differs from a feed eviction.
+    if (!evicted) context?.clearSelectedEntityContextForLayer?.('earthquakes');
+    context?.removeEntityContextsForLayer?.('earthquakes');
+    _selectedId = null;
+    _selectedContextEntity = null;
+  }
+
+  function publishSelectedContext({ announce = false } = {}) {
+    const row = _selectedId ? _rowById.get(_selectedId) : null;
+    if (!row) {
+      clearSelectedContext({ evicted: true });
+      return null;
+    }
+    _selectedContextEntity ||= { show: true };
+    const record = context?.registerEntityContext?.(_selectedContextEntity, {
+      id: `earthquake:${row.stableId}`,
+      layerId: 'earthquakes',
+      layerName: 'Earthquakes (24h)',
+      source: 'USGS',
+      dataSource: _dataSource,
+      label: `M${Number(row.mag).toFixed(1)}${
+        row.place ? ` · ${row.place}` : ''
+      }`,
+      latitude: row.lat,
+      longitude: row.lon,
+      properties: {
+        magnitude: row.mag ?? null,
+        depthKm: row.depthKm ?? null,
+        place: row.place ?? null,
+        time: row.time ?? null,
+        usgsId: row.usgsId ?? null,
+      },
+    });
+    if (announce && record)
+      context?.selectEntityContext?.(_selectedContextEntity);
+    // Prune A after selecting B, not before: no false eviction is announced
+    // for a deliberate switch and no stale source-owned record survives.
+    if (record)
+      context?.removeEntityContextsForLayer?.('earthquakes', {
+        retainIds: new Set([record.id]),
+      });
+    return record || null;
+  }
+
+  function pickedEarthquakeId(picked) {
+    const pickId = picking?.resolvePickId?.(picked);
+    if (typeof pickId !== 'string' || !pickId.startsWith('earthquake:'))
+      return null;
+    const id = pickId.slice('earthquake:'.length);
+    return _rowById.has(id) ? id : null;
+  }
+
+  function installClickHandler() {
+    if (!canSelect() || _clickHandler || !_viewer) return;
+    picking.registerPickOwner?.('earthquakes', (pickedId) =>
+      String(pickedId).startsWith('earthquake:'),
+    );
+    _clickHandler = screenSpaceEventHandlerFactory(_viewer);
+    _clickHandler.setInputAction((click) => {
+      if (pointer && !pointer.isPointerFree()) return;
+      const picked = _viewer.scene.pick(click.position);
+      const earthquakeId = pickedEarthquakeId(picked);
+      if (earthquakeId) {
+        _selectedId = earthquakeId;
+        publishSelectedContext({ announce: true });
+        return;
+      }
+      if (picked) {
+        const pickId = picking.resolvePickId(picked);
+        if (pickId && picking.isOwnedByOtherLayer?.('earthquakes', pickId))
+          return;
+      }
+      clearSelectedContext();
+    }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
+  }
+
+  function removeClickHandler() {
+    if (_clickHandler) {
+      _clickHandler.destroy();
+      _clickHandler = null;
+    }
+    picking?.unregisterPickOwner?.('earthquakes');
+  }
 
   const layer = {
     id: 'earthquakes',
@@ -55,6 +153,7 @@ export function createEarthquakesLayer({ source, overlayHost } = {}) {
       // layer has no per-frame animator to keep the render loop alive for.
       if (_dataSource) _dataSource.show = true;
       overlayHost.setVisible(EARTHQUAKE_OVERLAY_SOURCE_ID, true);
+      installClickHandler();
     },
 
     disable(viewer) {
@@ -62,6 +161,8 @@ export function createEarthquakesLayer({ source, overlayHost } = {}) {
       _request = null;
       _enabled = false;
       if (_dataSource) _dataSource.show = false;
+      removeClickHandler();
+      clearSelectedContext();
       overlayHost.clearSource(EARTHQUAKE_OVERLAY_SOURCE_ID);
       overlayHost.setVisible(EARTHQUAKE_OVERLAY_SOURCE_ID, false);
     },
@@ -79,6 +180,7 @@ export function createEarthquakesLayer({ source, overlayHost } = {}) {
         const nextEntities = [];
         let count = 0;
         const overlayEntries = [];
+        _rowById.clear();
 
         for (const {
           stableId,
@@ -90,6 +192,16 @@ export function createEarthquakesLayer({ source, overlayHost } = {}) {
           place,
           time,
         } of rows) {
+          _rowById.set(String(stableId), {
+            stableId: String(stableId),
+            usgsId,
+            lon,
+            lat,
+            depthKm,
+            mag,
+            place,
+            time,
+          });
           count++;
           const baseRadius = Math.pow(2, mag) * 1000;
           const color = depthColor(depthKm || 0);
@@ -149,6 +261,7 @@ export function createEarthquakesLayer({ source, overlayHost } = {}) {
           );
         }
 
+        if (_selectedId) publishSelectedContext();
         _count = count;
         _lastUpdate = Date.now();
         _lastError = null;
@@ -168,6 +281,9 @@ export function createEarthquakesLayer({ source, overlayHost } = {}) {
     destroy(viewer = _viewer) {
       _request?.abort();
       _request = null;
+      removeClickHandler();
+      clearSelectedContext();
+      _rowById.clear();
       _viewer = null;
       _enabled = false;
       overlayHost.clearSource(EARTHQUAKE_OVERLAY_SOURCE_ID);

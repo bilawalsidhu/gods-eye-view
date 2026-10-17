@@ -808,6 +808,14 @@ its entities and request lifecycle; the application supplies the overlay host
 and snapshot source. The standalone adapter keeps the existing USGS daily feed,
 M2.5+ filtering, static discs, magnitude labels and analyst records. Disabling or
 destroying the layer cancels pending work and ignores late results.
+The browser application also wires explicit earthquake map clicks into the
+shared selected-entity context with USGS source coordinates, magnitude, depth,
+place and observation time. An ordinary refresh updates the selected quake
+without another click announcement; changing from quake A to B removes A's
+obsolete record without announcing a false eviction. Empty-space deselection
+announces `reason: 'deliberate'`, while disappearance from the refreshed USGS
+feed announces `reason: 'evicted'`. Other layers' owned picks are unaffected.
+This is a selection-context seam, not a new hazard inference or alert.
 
 ## Vessel components and sources
 
