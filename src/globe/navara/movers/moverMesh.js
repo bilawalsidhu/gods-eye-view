@@ -262,7 +262,9 @@ export function createMoverMesh(
       [colorAttribute, 4],
       [uvAttribute, 4],
     ]) {
-      value.clearUpdateRanges();
+      // Ranges add up until three uploads them (and clears them): a
+      // partial commit after a full rewrite in the same frame (an origin
+      // move) must not drop the rewrite — sprites drew offset by the move.
       value.addUpdateRange(from * size, (to - from) * size);
       value.needsUpdate = true;
     }
