@@ -46,6 +46,22 @@ test('raster preserves both hemispheres and flips rows for canvas north-up', () 
   assert.ok(northAlpha > southAlpha);
 });
 
+test('raster columns start at -180°, where the shell rectangle starts', () => {
+  // OVATION's grid starts at 0° and the shells span Rectangle.MAX_VALUE, which
+  // starts at -180°. The oval NOAA puts at 17°W must be drawn at 17°W, not at
+  // 163°E: image column = longitude + 180.
+  const probabilities = new Array(360 * 181).fill(0);
+  probabilities[(68 + 90) * 360 + 343] = 100; // 68°N, 343°E = 17°W
+  const raster = createAuroraRaster({
+    grid: { nx: 360, ny: 181, lo1: 0, la1: -90, dx: 1, dy: 1 },
+    probabilities,
+  });
+  const alphaAt = (lat, lon) =>
+    raster.rgba[((90 - lat) * 360 + (lon + 180)) * 4 + 3];
+  assert.ok(alphaAt(68, -17) > 0, 'the peak is drawn at 17°W');
+  assert.equal(alphaAt(68, 163), 0, 'and not on the far side of the globe');
+});
+
 test('rejects a short grid rather than implying missing cells are zero', () => {
   const value = payload();
   value.coordinates.pop();
