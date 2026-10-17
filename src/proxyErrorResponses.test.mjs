@@ -37,7 +37,7 @@ function fixture(name, overrides = {}, preview = false) {
     resolveTerrainHeightRequest: async () => { throw new Error(detail); },
     ...overrides,
   };
-  const helpers = ['launchLibraryRequestHeaders', 'celestrakTleUrl', 'launchLibraryRecentUrl'].map(extract).join('\n');
+  const helpers = ['launchLibraryRequestHeaders', 'celestrakTleUrl', 'celestrakOmmUrl', 'launchLibraryRecentUrl'].map(extract).join('\n');
   const plugin = new Function(...Object.keys(deps), `${helpers}\n${extract(name)}\nreturn ${name}();`)(...Object.values(deps));
   let middleware;
   plugin[preview ? 'configurePreviewServer' : 'configureServer']({ middlewares: { use(_route, handler) { middleware = handler; } } });
@@ -124,19 +124,20 @@ test('CelesTrak retains invalid-group and unavailable responses', async () => {
   assert.equal(res.headers['x-tle-cache'], 'NONE');
 });
 
-test('CelesTrak retains fresh and stale TLE caches', async () => {
+test('CelesTrak retains fresh and stale element caches', async () => {
   let now = Date.now();
   let calls = 0;
+  const omm = '[{"NORAD_CAT_ID":25544}]';
   const app = fixture('celestrakProxy', {
     Date: { now: () => now },
-    fetch: async () => { if (++calls > 1) throw new Error(detail); return new Response('1 valid-fixture-TLE'); },
+    fetch: async () => { if (++calls > 1) throw new Error(detail); return new Response(omm); },
   });
   assert.equal((await app.request('/active')).headers['x-tle-cache'], 'MISS');
   assert.equal((await app.request('/active')).headers['x-tle-cache'], 'HIT');
   now += 7 * 3600_000;
   const stale = await app.request('/active');
   assert.equal(stale.status, 200);
-  assert.equal(stale.body, '1 valid-fixture-TLE');
+  assert.equal(stale.body, omm);
   assert.equal(stale.headers['x-tle-cache'], 'STALE-ERROR');
 });
 

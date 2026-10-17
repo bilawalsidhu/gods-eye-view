@@ -1,12 +1,15 @@
 /** Space queries: launches, satellite passes and satellites overhead. */
 
 import { suggestView } from '../views.js';
-import { twoline2satrec } from 'satellite.js';
 import {
   findNextSatellitePass,
   lookAnglesAt,
 } from '../../data/satellitePass.js';
-import { parseTleText, tleCatalogNumber } from '../../sources/tle.js';
+import {
+  elementsCatalogNumber,
+  parseOrbitalElements,
+  satrecFromElements,
+} from '../../sources/orbitalElements.js';
 import { POINT_SCHEMA, resolvePoint } from '../area.js';
 import { defineTool, ToolError } from '../catalog.js';
 import { LIMIT_SCHEMA, capRows, countNoun, isoTime } from '../results.js';
@@ -130,13 +133,13 @@ async function readCatalog(services, group, signal) {
       'unavailable',
       `The ${group} satellite catalog is unavailable (HTTP ${result.status})`,
     );
-  const entries = parseTleText(result.text).flatMap((entry) => {
+  const entries = parseOrbitalElements(result.text).flatMap((entry) => {
     try {
       return [
         {
           ...entry,
-          norad: tleCatalogNumber(entry.line1),
-          satrec: twoline2satrec(entry.line1, entry.line2),
+          norad: elementsCatalogNumber(entry),
+          satrec: satrecFromElements(entry),
         },
       ];
     } catch {

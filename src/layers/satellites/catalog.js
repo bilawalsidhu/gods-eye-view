@@ -1,5 +1,5 @@
 import * as Cesium from 'cesium';
-import { twoline2satrec } from 'satellite.js';
+import { satrecFromElements } from '../../sources/orbitalElements.js';
 import {
   DENSE_REFRESH_FRAMES,
   DENSE_GROUP_PATH,
@@ -53,7 +53,7 @@ export function createCatalog({ state: layerState, services, parts, source }) {
 
   /**
    * Load the dense catalog extras (Starlink) as points-only satellites.
-   * Chunked so ~10K twoline2satrec builds + initial propagations never block a
+   * Chunked so ~10K satrec builds + initial propagations never block a
    * frame; a token guards against mode flips / catalog rebuilds mid-load.
    */
 
@@ -111,7 +111,7 @@ export function createCatalog({ state: layerState, services, parts, source }) {
         const end = Math.min(start + DENSE_CREATE_CHUNK, entries.length);
         for (let i = start; i < end; i++) {
           const entry = entries[i];
-          const satrec = twoline2satrec(entry.line1, entry.line2);
+          const satrec = satrecFromElements(entry);
           if (!satrec || satrec.error !== 0) continue;
           const noradId = Number(satrec.satnum);
           if (layerState._catalog.has(noradId)) continue; // core catalog keeps priority

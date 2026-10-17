@@ -41,6 +41,7 @@ import { spawn } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { dirname, resolve } from 'node:path';
+import { parseOrbitalElements, satrecFromElements } from '../src/sources/orbitalElements.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = resolve(__dirname, '..');
@@ -771,13 +772,13 @@ check({
 });
 
 check({
-  id: 'B4', group: 'B', desc: 'CelesTrak TLE proxy serves and caches (/api/celestrak/stations)',
+  id: 'B4', group: 'B', desc: 'CelesTrak GP proxy serves and caches (/api/celestrak/stations)',
   run: async () => {
     const r = await jget('/api/celestrak/stations', { timeoutMs: 40000 });
     if (!r.ok) return fail(`HTTP ${r.status}`);
-    const lines = r.text.split('\n').filter((l) => /^1 /.test(l)).length;
+    const records = parseOrbitalElements(r.text).length;
     const cache = r.headers.get('x-tle-cache');
-    return lines > 0 ? pass(`${lines} TLE records, x-tle-cache=${cache}`) : fail('no TLE lines in response');
+    return records > 0 ? pass(`${records} element sets, x-tle-cache=${cache}`) : fail('no element sets in response');
   },
 });
 
@@ -786,13 +787,10 @@ check({
   run: async () => {
     const r = await jget('/api/celestrak/stations', { timeoutMs: 40000 });
     if (!r.ok) return fail(`HTTP ${r.status}`);
-    const line1 = r.text.split('\n').find((l) => /^1 /.test(l));
-    if (!line1) return fail('no TLE line 1 found');
-    // Columns 19-32: epoch YYDDD.DDDDDDDD
-    const yy = Number(line1.slice(18, 20));
-    const ddd = Number(line1.slice(20, 32));
-    const year = yy < 57 ? 2000 + yy : 1900 + yy;
-    const epoch = new Date(Date.UTC(year, 0, 1) + (ddd - 1) * 86400000);
+    const [entry] = parseOrbitalElements(r.text);
+    if (!entry) return fail('no element set found');
+    // Julian date of the element-set epoch, from OMM or TLE alike
+    const epoch = new Date((satrecFromElements(entry).jdsatepoch - 2440587.5) * 86400000);
     const ageDays = (Date.now() - epoch.getTime()) / 86400000;
     return ageDays >= 0 && ageDays < 14
       ? pass(`newest epoch ${epoch.toISOString().slice(0, 10)} (${ageDays.toFixed(1)} d old)`)

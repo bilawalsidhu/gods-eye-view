@@ -1273,7 +1273,7 @@ their GBFS tree: `api.entur.io` to `/mobility/v2/gbfs/` and `api.cyclocity.fr`
 
 ## Upstream body bounds
 
-FIRMS CSV, CelesTrak TLE groups, adsb.lol military responses, TomTom flow
+FIRMS CSV, CelesTrak GP groups, adsb.lol military responses, TomTom flow
 tiles, OpenSky states/all and adsbdb lookups now read their bodies through the
 shared streaming readers in `src/sources/httpBody.js`, so a declared or observed body
 over the cap is refused with `RESPONSE_TOO_LARGE` and cancelled rather than
@@ -1445,9 +1445,13 @@ retain their established behavior.
 
 ## Satellite and launch provider modules
 
-`server/providers/space/` owns the CelesTrak TLE and Launch Library 2 Node
+`server/providers/space/` owns the CelesTrak GP and Launch Library 2 Node
 proxies. Their routes, six-hour/15-minute caches, disk storage, stale fallback,
 request coalescing and optional LL2 server token retain existing behavior.
+CelesTrak groups are fetched as OMM JSON, because CelesTrak serves no catalog
+number above 99999 as TLE; objects catalogued since July 2026 would otherwise
+never load. `src/sources/orbitalElements.js` parses OMM and still accepts TLE
+text, so caches written before the switch keep serving stale fallbacks.
 The Node-only `gods-eye-view/server/providers/space` export supplies factories;
 `sources/space` supplies fixed upstream URL builders with no I/O or environment
 access. Callers retain validation, transport and response policy.

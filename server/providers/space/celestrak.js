@@ -1,20 +1,22 @@
 import path from 'node:path';
 import { promises as fsp } from 'node:fs';
-import { celestrakTleUrl } from '../../../src/data/spaceProviderRequests.js';
+import { celestrakOmmUrl } from '../../../src/data/spaceProviderRequests.js';
 import { readResponseTextCapped } from '../common/http.js';
 
 /**
- * Vite plugin: CelesTrak TLE proxy.
+ * Vite plugin: CelesTrak GP proxy.
  *
  * CelesTrak does not send CORS headers, so this middleware fetches
- * satellite TLE data server-side and forwards it to the browser.
+ * satellite OMM JSON server-side and forwards it to the browser.
  * Upstream URL: https://celestrak.org/NORAD/elements/gp.php
  *
  * @returns {import('vite').Plugin}
  */
 /**
- * CelesTrak GP/TLE proxy with a memory + disk cache.
- * Upstream: https://celestrak.org/NORAD/elements/gp.php?GROUP=<group>&FORMAT=tle
+ * CelesTrak GP proxy with a memory + disk cache.
+ * Upstream: https://celestrak.org/NORAD/elements/gp.php?GROUP=<group>&FORMAT=json
+ * OMM JSON, because CelesTrak serves no catalog number above 99999 as TLE.
+ * Caches written as TLE text before the switch still parse in the browser.
  * CelesTrak asks clients not to re-fetch GP data more than ~every 2 h and
  * throttles offenders; every dev reload used to refetch every group. Cache TTL
  * 6 h; on upstream failure the freshest stale copy is served (a stale TLE
@@ -49,11 +51,11 @@ export function celestrakProxy() {
     }
   }
 
-  /** The largest group (`active`) measures ~2.7 MB; this bounds a runaway body. */
+  /** The largest group (`active`) measures ~7 MB as OMM JSON; this bounds a runaway body. */
   const CELESTRAK_MAX_RESPONSE_BYTES = 16 * 1024 * 1024;
 
   async function fetchUpstream(group) {
-    const url = celestrakTleUrl(group);
+    const url = celestrakOmmUrl(group);
     const signal = AbortSignal.timeout(20000);
     const res = await fetch(url.toString(), {
       signal,
@@ -70,8 +72,9 @@ export function celestrakProxy() {
       CELESTRAK_MAX_RESPONSE_BYTES,
       signal,
     );
-    // An upstream error page parses to zero TLEs — treat as failure, keep cache.
-    if (!/^1 /m.test(body)) throw new Error('no TLE lines in response');
+    // An upstream error page parses to zero records — treat as failure, keep cache.
+    if (!/^\s*\[\s*\{/.test(body) || !body.includes('"NORAD_CAT_ID"'))
+      throw new Error('no OMM records in response');
     return { at: Date.now(), body };
   }
 

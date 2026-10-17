@@ -6,6 +6,13 @@ export function celestrakTleUrl(group) {
   return url;
 }
 
+/** CelesTrak OMM JSON, the only GP format that carries six-digit catalog numbers. */
+export function celestrakOmmUrl(group) {
+  const url = celestrakTleUrl(group);
+  url.searchParams.set('FORMAT', 'json');
+  return url;
+}
+
 export function launchLibraryRecentUrl(end) {
   const start = new Date(end.getTime() - 30 * 86400000);
   const url = new URL('https://ll.thespacedevs.com/2.3.0/launches/');

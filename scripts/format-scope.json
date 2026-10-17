@@ -1054,6 +1054,7 @@
   "src/tools/globePanel.test.mjs",
   "src/costEndpointThrottle.test.mjs",
   "src/sources/gbfsStations.test.mjs",
+  "src/sources/orbitalElements.test.mjs",
   "scripts/qa-gbfs-names.mjs",
   "scripts/generate-icons.mjs",
   "src/tooling/webAppIcons.test.mjs",
