@@ -308,12 +308,7 @@ test('one repeated receipt counts once but distinct starts are occurrences', () 
   const second = episode({ startedAt: 300, completedAt: 400 });
   const third = episode({ startedAt: 500, completedAt: 600 });
   assert.deepEqual(detectReflexCandidates([first, first, first]), []);
-  const [candidate] = detectReflexCandidates([
-    first,
-    first,
-    second,
-    third,
-  ]);
+  const [candidate] = detectReflexCandidates([first, first, second, third]);
   assert.equal(candidate.occurrences, 3);
   assert.equal(candidate.verifiedSuccesses, 3);
 });

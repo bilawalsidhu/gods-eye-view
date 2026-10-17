@@ -27,8 +27,7 @@ function normalizePlainValue(
   budget = { nodes: 0, characters: 0 },
   depth = 0,
 ) {
-  if (depth > MAX_ARG_DEPTH || ++budget.nodes > MAX_ARG_NODES)
-    return INVALID;
+  if (depth > MAX_ARG_DEPTH || ++budget.nodes > MAX_ARG_NODES) return INVALID;
   if (value === null) return null;
   if (typeof value === 'string') {
     budget.characters += value.length;
@@ -41,8 +40,7 @@ function normalizePlainValue(
   if (typeof value === 'number')
     return Number.isFinite(value) ? value : INVALID;
   if (Array.isArray(value)) {
-    if (ancestors.has(value) || value.length > MAX_ARG_ENTRIES)
-      return INVALID;
+    if (ancestors.has(value) || value.length > MAX_ARG_ENTRIES) return INVALID;
     const next = new Set(ancestors).add(value);
     const normalized = [];
     for (const item of value) {
@@ -122,9 +120,10 @@ export function normalizeActionEpisode(value) {
   if (!value || typeof value !== 'object') return null;
   if (Number(value.version) !== ACTION_EPISODE_VERSION) return null;
   const contextFingerprint = boundedText(value.contextFingerprint, 256);
-  const actions = Array.isArray(value.actions) && value.actions.length <= 32
-    ? value.actions.map(normalizeActionEpisodeStep)
-    : [];
+  const actions =
+    Array.isArray(value.actions) && value.actions.length <= 32
+      ? value.actions.map(normalizeActionEpisodeStep)
+      : [];
   const startedAt = Number(value.startedAt);
   const completedAt = Number(value.completedAt);
   if (
