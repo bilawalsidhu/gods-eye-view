@@ -304,9 +304,10 @@
   snapshot is not retried, and an OpenSky 429 starts its cooldown before the
   body is read.
 
-- Keep later satellites when a TLE catalog entry is missing an orbital line.
-  The parser skips the incomplete set and resumes at the next complete named
-  set, instead of losing the rest of the group (#906).
+- Keep later satellites when a TLE catalog entry is missing an orbital line or
+  pairs lines with mismatched NORAD catalog numbers. The parser skips corrupt sets
+  and resumes at the next complete named set, instead of losing the rest of the
+  group (#906, #936).
 
 - Satellite clouds keep Clouds only / Full as quick endpoints and add a continuous
   cloud-filter slider: 0% is Full, 100% is the existing brightness key, and

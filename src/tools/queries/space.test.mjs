@@ -51,6 +51,40 @@ for (const missingLine of [1, 2]) {
   });
 }
 
+test('TLE parsing rejects pairs with mismatched catalog numbers and resumes', () => {
+  const text = `SAT A
+1 25544U 98067A   24001.50000000  .00016717  00000-0  30270-3 0  9994
+2 48274  41.4697 175.8913 0005643 312.8370 141.6893 15.61287398150000
+SAT B
+1 48274U 21035A   24001.50000000  .00020137  00000-0  24481-3 0  9993
+2 48274  41.4697 175.8913 0005643 312.8370 141.6893 15.61287398150000
+`;
+  const entries = parseTleText(text);
+  assert.deepEqual(
+    entries.map((entry) => entry.name),
+    ['SAT B'],
+  );
+  assert.equal(tleCatalogNumber(entries[0].line1), 48274);
+  assert.equal(tleCatalogNumber(entries[0].line2), 48274);
+});
+
+test('TLE parsing accepts matching Alpha-5 pairs and rejects mismatched Alpha-5 pairs', () => {
+  const text = `SAT MISMATCH
+1 A0000U 98067A   24001.50000000  .00016717  00000-0  30270-3 0  9994
+2 A0001  41.4697 175.8913 0005643 312.8370 141.6893 15.61287398150000
+SAT ALPHA5
+1 A0000U 98067A   24001.50000000  .00016717  00000-0  30270-3 0  9994
+2 A0000  41.4697 175.8913 0005643 312.8370 141.6893 15.61287398150000
+`;
+  const entries = parseTleText(text);
+  assert.deepEqual(
+    entries.map((entry) => entry.name),
+    ['SAT ALPHA5'],
+  );
+  assert.equal(tleCatalogNumber(entries[0].line1), 100000);
+  assert.equal(tleCatalogNumber(entries[0].line2), 100000);
+});
+
 test('the next pass defaults to the ISS and reports times, peak and direction', async () => {
   const catalog = composeCatalog({
     tools: coreTools,
