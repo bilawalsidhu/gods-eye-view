@@ -1,4 +1,9 @@
 import * as Cesium from 'cesium';
+import { t } from '../../i18n/index.js';
+import {
+  createCyberSonarSampler,
+  isCyberContactSonarActive as isCyberSonarActive,
+} from '../../cyberSonar.js';
 import {
   formatAwarenessLabel,
   formatAwarenessDistance,
@@ -105,6 +110,9 @@ export function createRendering({
     const canvas = layerState.viewer.scene.canvas;
     const width = canvas.clientWidth || canvas.width;
     const height = canvas.clientHeight || canvas.height;
+    const sonar = isCyberSonarActive()
+      ? createCyberSonarSampler(width, height)
+      : null;
     const geometry = getKeyholeGeometry(width, height);
     if (!(geometry.radius > 0)) {
       root.hidden = true;
@@ -130,7 +138,9 @@ export function createRendering({
       '--compass-rotation',
       `${-headingDeg}deg`,
     );
-    layerState.compassHeading.textContent = `HDG ${String(headingDeg).padStart(3, '0')}°`;
+    layerState.compassHeading.textContent = t('HDG {value}°', {
+      value: String(headingDeg).padStart(3, '0'),
+    });
     layerState.compassHeading.style.left = `${geometry.centerX}px`;
     layerState.compassHeading.style.top = `${geometry.centerY - compassRadius + 39}px`;
     for (const label of layerState.compassLabels) {
@@ -182,6 +192,15 @@ export function createRendering({
       marker.style.left = `${geometry.centerX + Math.cos(projection.angle) * markerRadius}px`;
       marker.style.top = `${geometry.centerY + Math.sin(projection.angle) * markerRadius}px`;
       marker.style.opacity = String(projection.opacity);
+      const sonarFactor =
+        sonar?.at(
+          geometry.centerX + Math.cos(projection.angle) * markerRadius,
+          geometry.centerY + Math.sin(projection.angle) * markerRadius,
+        ) ?? 1;
+      marker._arrow.style.opacity = String(sonarFactor);
+      marker._label.style.opacity = String(
+        sonar ? sonar.label(sonarFactor) : 1,
+      );
       marker._arrow.style.transform = `translate(-50%, -50%) rotate(${projection.angle}rad)`;
       marker._label.style.transform = `translate(-50%, -50%) translate(${-Math.cos(projection.angle) * 56}px, ${-Math.sin(projection.angle) * 56}px)`;
       const label = formatAwarenessLabel(item);
@@ -205,10 +224,14 @@ export function createRendering({
             )
           : null;
       const bearingText = Number.isFinite(bearing)
-        ? `BRG ${String(Math.round(bearing)).padStart(3, '0')}°`
-        : 'BRG —';
+        ? t('BRG {value}°', {
+            value: String(Math.round(bearing)).padStart(3, '0'),
+          })
+        : t('BRG —');
       const courseText = Number.isFinite(item.track)
-        ? ` · CRS ${String(Math.round(item.track)).padStart(3, '0')}°`
+        ? ` · ${t('CRS {value}°', {
+            value: String(Math.round(item.track)).padStart(3, '0'),
+          })}`
         : '';
       marker._label.textContent = `${label} · ${formatAwarenessDistance(item.distanceM)}\n${bearingText}${courseText}`;
       marker.hidden = false;

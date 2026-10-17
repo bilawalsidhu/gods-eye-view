@@ -92,14 +92,18 @@ export function aircraftBracketAlphaFloor(outsideOpacity) {
  * @param {number} keyholeAlpha - Radial keyhole alpha for this contact.
  * @param {number} [outsideOpacity] - Live OUTSIDE slider value. Omitted means
  *   the default, so a caller that does not know it reproduces the shipped look.
+ * @param {boolean} [strictKeyholeFade] - When true, do not apply the AIR
+ *   readability floor; the bracket follows the radial keyhole alpha exactly.
  * @returns {number} Paint alpha, 0-1.
  */
 export function detectionBracketAlpha(
   type,
   keyholeAlpha,
   outsideOpacity = AIRCRAFT_BRACKET_FLOOR_ANCHOR,
+  strictKeyholeFade = false,
 ) {
   const alpha = Math.max(0, Math.min(1, Number(keyholeAlpha) || 0));
+  if (strictKeyholeFade) return alpha;
   if (String(type || '').toUpperCase() !== 'AIR' || alpha <= 0) return alpha;
   return Math.max(aircraftBracketAlphaFloor(outsideOpacity), alpha);
 }

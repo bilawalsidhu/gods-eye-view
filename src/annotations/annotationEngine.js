@@ -1,3 +1,4 @@
+import { isUnavailableCapability } from '../sources/capability.js';
 import { defaultGeospatial } from '../search/defaults.js';
 import * as Cesium from 'cesium';
 import {
@@ -81,6 +82,7 @@ export async function resolveOutlineWithRetry(
     } catch {
       fp = null; // hard failure — definitive, keep the honest point
     }
+    if (isUnavailableCapability(fp)) return fp;
     if (isRateLimitedOutcome(fp)) {
       // A throttle gets one deliberately spaced retry. If that retry is throttled
       // too, stop this mark's outline task instead of replaying the batch storm.
@@ -333,6 +335,7 @@ export function createAnnotationEngine({
               // refreshes it — usually instantly from the footprint cache.
               if (anno.pendingOutline && !anno.ring && dup.ring) {
                 anno.ring = dup.ring;
+                anno.polygons = dup.polygons || null;
                 anno.footprintKind = dup.footprintKind || null;
                 anno.buildingHeight = dup.buildingHeight || null;
                 anno.synthesized = Boolean(dup.synthesized);
@@ -673,8 +676,11 @@ export function createAnnotationEngine({
       if (myGen !== generation || controller.signal.aborted) return; // board superseded
       if (!annotations.has(anno.id)) return; // mark replaced/removed while resolving
       anno.pendingOutline = false;
-      if (fp) {
+      anno.outlineUnavailable = isUnavailableCapability(fp);
+      if (anno.outlineUnavailable) renderer.update(anno);
+      if (fp && !anno.outlineUnavailable) {
         anno.ring = fp.ring;
+        anno.polygons = fp.polygons || null;
         anno.footprintKind = fp.footprintKind || null;
         anno.buildingHeight = fp.buildingHeight || null;
         anno.synthesized = Boolean(fp.synthesized);
@@ -725,7 +731,14 @@ export function createAnnotationEngine({
         id: anno.id,
         label: anno.label || null,
         target: anno.targetKey || null,
-        status: fp ? 'resolved' : 'failed',
+        status: anno.outlineUnavailable
+          ? 'unavailable'
+          : fp
+            ? 'resolved'
+            : 'failed',
+        ...(anno.outlineUnavailable
+          ? { message: 'Detailed outline unavailable' }
+          : {}),
         ...(fp && anno.synthesized ? { approximate: true } : {}),
       });
     } finally {
@@ -753,6 +766,9 @@ export function createAnnotationEngine({
       // layer narrate without waiting out a slow Overpass — and without calling the
       // missing outline a failure.
       ...(anno.pendingOutline ? { outlinePending: true } : {}),
+      ...(anno.outlineUnavailable
+        ? { outlineUnavailable: true, message: 'Detailed outline unavailable' }
+        : {}),
       // approximate=true means the area was SYNTHESIZED (a buffered blob around a label
       // point), not a real OSM boundary — so the voice layer can be honest.
       ...(anno.synthesized ? { approximate: true } : {}),
@@ -919,6 +935,9 @@ export function createAnnotationEngine({
       anchor: { lon: resolved.lon, lat: resolved.lat, height: resolved.height },
       to: null,
       ring: resolved.ring || null,
+      // Every part with its holes ([outer, ...holes][]), when the outline has
+      // more than the main ring (Hawaii's islands, Berlin inside Brandenburg).
+      polygons: resolved.polygons || null,
       footprintKind: resolved.footprintKind || null, // 'building' | 'area'
       buildingHeight: resolved.buildingHeight || null, // meters, for extruded volume
       synthesized: Boolean(resolved.synthesized), // approximate buffered area → dashed render
@@ -926,6 +945,7 @@ export function createAnnotationEngine({
       // the upgrade task fills ring/kind in place when it lands. Transient render state
       // (not persisted).
       pendingOutline: typeof resolved.resolveOutline === 'function',
+      outlineUnavailable: Boolean(resolved.outlineUnavailable),
       // Which THING + SHAPE was asked for — the dedup identity while geometry is still
       // pending (see findDuplicate). targetKey is the normalized place name with trailing
       // locality qualifiers stripped ("California, United States" ≡ "California"; null for
@@ -1047,7 +1067,11 @@ export function createAnnotationEngine({
       // Places viewport box when we have one, so a big compound isn't framed at
       // building scale while its outline is traced. Never re-fly when the ring lands.
       const range = anno.ring
-        ? ringRange(anno.ring)
+        ? ringRange(
+            anno.polygons?.length
+              ? anno.polygons.flatMap((poly) => poly[0])
+              : anno.ring,
+          )
         : viewportRange(anno.viewport) || 600;
       viewer.camera.flyToBoundingSphere(
         new Cesium.BoundingSphere(
@@ -1113,12 +1137,14 @@ export function createAnnotationEngine({
           {
             type: 'highlight',
             target: 'Palace of Fine Arts, San Francisco',
+            // i18n-ignore: dev demo of voice-agent labels (not translated)
             label: 'Palace of Fine Arts',
             color: 'amber',
           },
           {
             type: 'area',
             target: 'Presidio of San Francisco',
+            // i18n-ignore: dev demo of voice-agent labels (not translated)
             label: 'The Presidio (former Army base)',
             color: 'green',
             footprint: true,
@@ -1126,6 +1152,7 @@ export function createAnnotationEngine({
           {
             type: 'pin',
             target: 'Letterman Digital Arts Center, San Francisco',
+            // i18n-ignore: dev demo of voice-agent labels (not translated)
             label: 'ILM / Lucasfilm',
             color: 'cyan',
           },
@@ -1133,6 +1160,7 @@ export function createAnnotationEngine({
             type: 'arrow',
             target: 'Palace of Fine Arts, San Francisco',
             toTarget: 'Marina District, San Francisco',
+            // i18n-ignore: dev demo of voice-agent labels (not translated)
             label: 'next to the Marina',
           },
         ],
@@ -1162,6 +1190,7 @@ export function createAnnotationEngine({
           {
             type: 'highlight',
             target: 'Palace of Fine Arts, San Francisco',
+            // i18n-ignore: dev demo of voice-agent labels (not translated)
             label: 'Palace of Fine Arts',
             color: 'amber',
           },
@@ -1176,6 +1205,7 @@ export function createAnnotationEngine({
             type: 'arrow',
             target: 'Palace of Fine Arts, San Francisco',
             toTarget: 'Marina Green, San Francisco',
+            // i18n-ignore: dev demo of voice-agent labels (not translated)
             label: 'next to the Marina',
             color: 'cyan',
           },
@@ -1199,6 +1229,7 @@ export function createAnnotationEngine({
           {
             type: 'area',
             target: 'Presidio of San Francisco',
+            // i18n-ignore: dev demo of voice-agent labels (not translated)
             label: 'The Presidio — a former Army base',
             color: 'green',
             footprint: true,
@@ -1213,6 +1244,7 @@ export function createAnnotationEngine({
           {
             type: 'pin',
             target: 'Letterman Digital Arts Center, San Francisco',
+            // i18n-ignore: dev demo of voice-agent labels (not translated)
             label: 'ILM / Lucasfilm',
             color: 'red',
           },
@@ -1226,6 +1258,7 @@ export function createAnnotationEngine({
           {
             type: 'route',
             color: 'amber',
+            // i18n-ignore: dev demo of voice-agent labels (not translated)
             label: 'Crissy Field shoreline',
             points: [
               { target: 'Palace of Fine Arts, San Francisco' },
@@ -1388,7 +1421,11 @@ function ringRange(ring) {
   let maxLat = -Infinity;
   let minLon = Infinity;
   let maxLon = -Infinity;
-  for (const [lon, lat] of ring) {
+  // Unwrap around the first vertex so parts cut at the antimeridian (the
+  // Aleutians) measure as neighbours, not as a globe-wide span.
+  const ref = ring[0]?.[0] ?? 0;
+  for (const [rawLon, lat] of ring) {
+    const lon = rawLon - 360 * Math.round((rawLon - ref) / 360);
     if (lat < minLat) minLat = lat;
     if (lat > maxLat) maxLat = lat;
     if (lon < minLon) minLon = lon;

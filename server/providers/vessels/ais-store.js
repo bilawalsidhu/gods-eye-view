@@ -72,8 +72,8 @@ export function ingestAisStreamEnvelope(envelope) {
     imo: stringValue(message.ImoNumber ?? message.IMO ?? staticData.imo),
     type: vesselTypeFromAis(message, staticData),
     destination: stringValue(message.Destination ?? staticData.destination),
-    speed: numberValue(message.Sog ?? message.SOG),
-    course: numberValue(message.Cog ?? message.COG),
+    speed: normalizedSpeedOverGround(message.Sog ?? message.SOG),
+    course: normalizedCourseOverGround(message.Cog ?? message.COG),
     heading: normalizedHeading(message.TrueHeading ?? message.Heading),
     last_position_UTC: normalizeAisTimestamp(
       metadata.time_utc ?? metadata.TimeUtc,
@@ -275,6 +275,28 @@ function numberValue(value) {
 function normalizedHeading(value) {
   const heading = numberValue(value);
   return heading !== null && heading >= 0 && heading <= 360 ? heading : null;
+}
+
+/**
+ * Speed over ground in knots, or null when the report carries AIS's "not
+ * available" code. ITU-R M.1371 encodes SOG in 0.1-knot units where 1022 means
+ * "102.2 knots or higher" and 1023 means unavailable, so 102.3 is a sentinel
+ * and not a reading. It is finite, so every consumer would otherwise treat it
+ * as a genuine speed.
+ */
+function normalizedSpeedOverGround(value) {
+  const speed = numberValue(value);
+  return speed !== null && speed >= 0 && speed < 102.3 ? speed : null;
+}
+
+/**
+ * Course over ground in degrees, or null when the report carries AIS's "not
+ * available" code (3600 in 0.1-degree units, i.e. 360). Valid courses stop at
+ * 359.9; heading keeps its own separate sentinel of 511.
+ */
+function normalizedCourseOverGround(value) {
+  const course = numberValue(value);
+  return course !== null && course >= 0 && course < 360 ? course : null;
 }
 
 function normalizeAisTimestamp(value) {

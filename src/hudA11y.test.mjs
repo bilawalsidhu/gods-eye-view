@@ -22,10 +22,12 @@ test('HUD sliders and location search have descriptive explicit names', () => {
 });
 
 test('the first-run checkbox keeps its native visible label', () => {
-  assert.match(html, /<label\b[^>]*class="first-run-suppress"[^>]*>\s*<input type="checkbox" data-first-run-suppress \/>\s*<span>Don't show this again<\/span>\s*<\/label>/);
+  // The span may carry a data-i18n extraction attribute; the native wrapping
+  // label contract is what this guards.
+  assert.match(html, /<label\b[^>]*class="first-run-suppress"[^>]*>\s*<input type="checkbox" data-first-run-suppress \/>\s*<span\b[^>]*>Don't show this again<\/span>\s*<\/label>/);
 });
 
 test('generated style sliders use the visible parameter label as their name', () => {
-  assert.match(parameters, /label\.textContent\s*=\s*metadata\.label;/);
-  assert.match(parameters, /slider\.setAttribute\(['"]aria-label['"],\s*metadata\.label\)/);
+  assert.match(parameters, /label\.textContent\s*=\s*t\(metadata\.label\);/);
+  assert.match(parameters, /slider\.setAttribute\(['"]aria-label['"],\s*t\(metadata\.label\)\)/);
 });

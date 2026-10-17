@@ -34,8 +34,8 @@ function assertClaimsBefore(block, mutation, label) {
 function makeManager(hash = '') {
   globalThis.window = { location: { hash, href: `http://localhost/${hash}` } };
   globalThis.history = {
-    replaceState(_state, _title, nextHash) {
-      window.location.hash = nextHash;
+    replaceState(_state, _title, next) {
+      window.location.hash = new URL(next, window.location.href).hash;
     },
   };
   const viewer = {
@@ -75,6 +75,23 @@ test('unknown-only v2 layer tokens are invalid, while historical l fields stay i
     const legacy = makeManager(hash).parseInitialHash();
     assert.equal(legacy.layerState, null);
     assert.equal(legacy.layerStateInvalid, false);
+  }
+});
+
+test('malformed v2 layer lists mark the whole incoming share payload invalid', () => {
+  for (const layers of ['.f', 'f.', 'f..c', 'f.f']) {
+    const parsed = makeManager(
+      `#v=2&lat=10&lon=20&l=${layers}`,
+    ).parseInitialHash();
+    assert.equal(parsed.layerState, null, `l=${layers}`);
+    assert.equal(parsed.layerStateInvalid, true, `l=${layers}`);
+  }
+  for (const layers of ['l=f&l=f', 'l=f&l=unknown', 'l=&l=f']) {
+    const parsed = makeManager(
+      `#v=2&lat=10&lon=20&${layers}`,
+    ).parseInitialHash();
+    assert.equal(parsed.layerState, null, layers);
+    assert.equal(parsed.layerStateInvalid, true, layers);
   }
 });
 
@@ -136,6 +153,53 @@ test('visual parameters, explicit empty layers, and panel state are v2-only', ()
   assert.equal(legacy.layerState, null);
   assert.equal(legacy.styleParams, null);
   assert.equal(legacy.panelState, null);
+});
+
+// The panel chrome shares every rail panel, so the link registry must know
+// each one: a collapsed Recent Imagery panel used to restore expanded because
+// the encoder had no token for it.
+test('a collapsed Recent Imagery panel survives the share-link round trip beside the older panels', () => {
+  const manager = makeManager();
+  manager.setPanelStateProvider(() => ({ specs: [
+    { id: 'cctv-panel', collapsed: false },
+    { id: 'recent-imagery-panel', collapsed: true },
+    { id: 'global-context-panel', collapsed: true },
+  ] }));
+  clearTimeout(manager._debounceTimer);
+  manager._updateHash();
+  const params = new URLSearchParams(window.location.hash.slice(1));
+  assert.equal(params.get('ui'), 'v.c.0_i.c.1_g.c.1');
+  const restored = makeManager(`#v=2&lat=10&lon=20&ui=${params.get('ui')}`)
+    .parseInitialHash();
+  assert.deepEqual(restored.panelState, { specs: [
+    { id: 'cctv-panel', collapsed: false, pinned: null },
+    { id: 'recent-imagery-panel', collapsed: true, pinned: null },
+    { id: 'global-context-panel', collapsed: true, pinned: null },
+  ] });
+  // A link written before the token existed decodes exactly as it did.
+  const older = makeManager('#v=2&lat=10&lon=20&ui=v.c.1_g.c.0').parseInitialHash();
+  assert.deepEqual(older.panelState, { specs: [
+    { id: 'cctv-panel', collapsed: true, pinned: null },
+    { id: 'global-context-panel', collapsed: false, pinned: null },
+  ] });
+});
+
+test('a collapsed Street Level panel survives the share-link round trip', () => {
+  const manager = makeManager();
+  manager.setPanelStateProvider(() => ({ specs: [
+    { id: 'cctv-panel', collapsed: false },
+    { id: 'street-level-panel', collapsed: true },
+  ] }));
+  clearTimeout(manager._debounceTimer);
+  manager._updateHash();
+  const params = new URLSearchParams(window.location.hash.slice(1));
+  assert.equal(params.get('ui'), 'v.c.0_t.c.1');
+  const restored = makeManager(`#v=2&lat=10&lon=20&ui=${params.get('ui')}`)
+    .parseInitialHash();
+  assert.deepEqual(restored.panelState, { specs: [
+    { id: 'cctv-panel', collapsed: false, pinned: null },
+    { id: 'street-level-panel', collapsed: true, pinned: null },
+  ] });
 });
 
 test('camera-only, partial, and malformed panel shares remain valid incoming state', () => {

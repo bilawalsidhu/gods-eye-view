@@ -97,12 +97,23 @@ export function createModel({ state: layerState, services, parts, source }) {
 
   /**
    * Coerces a value to a finite number or returns the fallback.
+   *
+   * Absent, blank and boolean values return the fallback as well. The source
+   * list serializes an unknown number (NaN) as JSON null, and `Number(null)`
+   * is 0, so without this an unknown pose field arrived as zero and was
+   * clamped to the field's floor instead of taking its default.
    * @param {*} value
    * @param {number} [fallback=NaN]
    * @returns {number}
    */
 
   function safeNumber(value, fallback = NaN) {
+    if (
+      value == null ||
+      typeof value === 'boolean' ||
+      (typeof value === 'string' && !value.trim())
+    )
+      return fallback;
     const n = Number(value);
     return Number.isFinite(n) ? n : fallback;
   }

@@ -2,9 +2,13 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as Cesium from 'cesium';
 import { createAlprOverlay } from './overlay.js';
-import { directionWedgePositions, alprLabelDetails } from './visuals.js';
+import {
+  directionWedgePositions,
+  alprLabelDetails,
+  markerScale,
+} from './visuals.js';
 
-function harness(t, count = 2) {
+function harness(t, count = 2, { floor = null } = {}) {
   const previousImage = globalThis.Image;
   const project = Cesium.SceneTransforms.worldToWindowCoordinates;
   globalThis.Image = class {
@@ -43,7 +47,7 @@ function harness(t, count = 2) {
   const overlay = createAlprOverlay({
     state,
     services: {
-      groundFloor: { cachedGroundFloor: () => null },
+      groundFloor: { cachedGroundFloor: () => floor },
       overlays: {
         registerPaintLane(_lane, painter) {
           paint = painter;
@@ -190,6 +194,20 @@ test('an unresolved surface preserves the native marker; the horizon removes ove
   assert.equal(h.draw.length, 0);
 });
 
+test('repeated paints of a still view never rewrite marker properties', (t) => {
+  // Each Entity write raises definitionChanged; paint used to hide then show
+  // every overlay camera's native marker on every frame.
+  const h = harness(t, 3);
+  h.overlay.sync(h.records);
+  h.paint();
+  let changes = 0;
+  for (const entity of h.entities.values)
+    entity.definitionChanged.addEventListener(() => changes++);
+  for (let i = 0; i < 5; i++) h.paint();
+  assert.equal(changes, 0);
+  assert.equal(h.entities.getById('camera:0').billboard.show.getValue(), true);
+});
+
 test('adapter labels never claim a custom source is public OSM data', () => {
   assert.deepEqual(
     alprLabelDetails(
@@ -198,4 +216,50 @@ test('adapter labels never claim a custom source is public OSM data', () => {
     ),
     ['Source: Custom directory', 'VENDOR'],
   );
+});
+
+test('overlay glyphs and native badges shrink alike with distance', () => {
+  assert.equal(markerScale(100), 1.15);
+  assert.equal(markerScale(40_000), 0.45);
+  assert.equal(markerScale(90_000), 0.45);
+  assert.ok(Math.abs(markerScale(20_250) - 0.8) < 1e-9);
+});
+
+test('a still view replaces floor anchors with the rendered surface, within the floor window', (t) => {
+  // Floors come from ~111 m cells; on a slope a badge floated above the mesh.
+  const h = harness(t, 2, { floor: 150 });
+  const scene = h.state.viewer.scene;
+  const camera = h.state.viewer.camera;
+  camera.directionWC = Cesium.Cartesian3.UNIT_X;
+  scene.sampleHeightSupported = true;
+  scene.primitives = { length: 0, get: () => null };
+  let samples = 0;
+  scene.sampleHeight = (carto) => {
+    samples++;
+    return Cesium.Math.toDegrees(carto.latitude) > 30.00005 ? 400 : 172;
+  };
+  h.overlay.sync(h.records);
+  h.paint();
+  const height = (id) =>
+    Cesium.Cartographic.fromCartesian(
+      h.entities.getById(id).gevAlprCanvasPosition,
+    ).height;
+  assert.equal(
+    samples,
+    0,
+    'no depth samples while the camera may still be moving',
+  );
+  assert.ok(Math.abs(height('camera:0') - 151.5) < 0.01, 'floor anchor first');
+  h.paint();
+  assert.ok(
+    Math.abs(height('camera:0') - 173.5) < 0.01,
+    'rendered surface once still',
+  );
+  assert.ok(
+    Math.abs(height('camera:1') - 151.5) < 0.01,
+    'a rooftop-height sample is rejected',
+  );
+  const taken = samples;
+  h.paint();
+  assert.equal(samples, taken, 'each anchor is checked once');
 });

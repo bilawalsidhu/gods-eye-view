@@ -1,0 +1,322 @@
+import assert from 'node:assert/strict';
+import test from 'node:test';
+import * as Cesium from 'cesium';
+import {
+  cameraHeightAboveGround,
+  createHorizonCull,
+  metresBetween,
+  viewCentre,
+  viewFocus,
+  visibleBbox,
+} from './view.js';
+import { rayCamera } from '../../testSupport/streetLevelFakes.mjs';
+
+const RAD = Math.PI / 180;
+/** A viewer 300 m above a street 1,600 m up (Denver-like). */
+function viewer({ globeShown, globeHeight }) {
+  return {
+    camera: {
+      positionCartographic: {
+        longitude: -104.99 * RAD,
+        latitude: 39.74 * RAD,
+        height: 1900,
+      },
+    },
+    scene: { globe: { show: globeShown, getHeight: () => globeHeight } },
+  };
+}
+
+test('a shown globe answers the ground under the camera', () => {
+  assert.equal(
+    cameraHeightAboveGround(viewer({ globeShown: true, globeHeight: 1600 })),
+    300,
+  );
+});
+
+test('a hidden globe (Google 3D) falls back to the bare-earth height', () => {
+  const calls = [];
+  const groundAt = (lon, lat) => {
+    calls.push([+lon.toFixed(2), +lat.toFixed(2)]);
+    return 1600;
+  };
+  // A hidden globe's getHeight is ignored even when it returns a number.
+  const hidden = viewer({ globeShown: false, globeHeight: 0 });
+  assert.equal(cameraHeightAboveGround(hidden, { groundAt }), 300);
+  assert.deepEqual(calls, [[-104.99, 39.74]]);
+});
+
+test('with no ground sample the ellipsoidal height is used', () => {
+  const hidden = viewer({ globeShown: false, globeHeight: 0 });
+  assert.equal(cameraHeightAboveGround(hidden), 1900);
+  assert.equal(cameraHeightAboveGround(hidden, { groundAt: () => null }), 1900);
+  assert.equal(cameraHeightAboveGround({}), null);
+});
+
+/** A camera whose screen rays land on a grid of lon/lat points. */
+function gridViewer(lons, lats) {
+  const points = [];
+  for (const lat of lats)
+    for (const lon of lons)
+      points.push(Cesium.Cartesian3.fromDegrees(lon, lat));
+  let next = 0;
+  return {
+    scene: { canvas: { clientWidth: 100, clientHeight: 100 }, globe: {} },
+    camera: {
+      pickEllipsoid: () => points[next++ % points.length],
+      positionCartographic: { longitude: 0, latitude: 0, height: 1000 },
+    },
+  };
+}
+
+test('a view across the date line is a narrow box with west > east', () => {
+  const viewer = gridViewer([178, 179, -179, -178], [-1, 0, 1]);
+  const bbox = visibleBbox(viewer);
+  assert.ok(bbox[0] > 177 && bbox[0] < 179, `west ${bbox[0]}`);
+  assert.ok(bbox[2] < -177 && bbox[2] > -179, `east ${bbox[2]}`);
+  const centre = viewCentre(viewer);
+  assert.ok(Math.abs(Math.abs(centre.lon) - 180) < 0.5, `centre ${centre.lon}`);
+});
+
+test('an ordinary view keeps west < east', () => {
+  const bbox = visibleBbox(gridViewer([10, 11, 12], [50, 51]));
+  assert.ok(bbox[0] < bbox[2]);
+  assert.ok(
+    Math.abs(viewCentre(gridViewer([10, 11, 12], [50, 51])).lon - 11) < 1e-6,
+  );
+});
+
+/** A pinhole viewer `agl` m above ground `ground` m up, looking north. */
+function pinhole({ lon, lat, ground, agl, pitch, w = 1600, h = 900 }) {
+  return {
+    scene: {
+      canvas: { clientWidth: w, clientHeight: h },
+      globe: { show: false, ellipsoid: Cesium.Ellipsoid.WGS84 },
+    },
+    camera: rayCamera({
+      lon,
+      lat,
+      altitude: ground + agl,
+      pitch,
+      width: w,
+      height: h,
+    }),
+  };
+}
+
+test('a tilted street view over high ground boxes the streets it looks at, not the horizon', () => {
+  // Denver, 600 m above a street 1,610 m up, looking 20° down: the centre of
+  // the screen meets the street about 1.65 km north of the camera.
+  const view = pinhole({
+    lon: -104.99,
+    lat: 39.74,
+    ground: 1610,
+    agl: 600,
+    pitch: -20,
+  });
+  const ahead = 39.74 + 1648 / 111_000;
+  const unranged = visibleBbox(view);
+  // Without options, rays to the bare ellipsoid travel 1.6 km further down:
+  // the box is 20 km wide and starts past the street at the screen centre.
+  assert.ok(unranged[2] - unranged[0] > 0.2);
+  assert.ok(unranged[1] > ahead, 'the old box missed the street in view');
+  const options = { groundHeight: 1610, maxRange: 6000, nearRange: 1000 };
+  const [west, south, east, north] = visibleBbox(view, options);
+  assert.ok(north - south < 0.08 && east - west < 0.08, 'a street-sized box');
+  assert.ok(south < 39.74 && north > ahead, 'camera and screen centre inside');
+  const focus = viewFocus(view, options);
+  assert.ok(Math.abs(focus.nadir.lat - 39.74) < 1e-9);
+  assert.ok(
+    Math.abs(focus.ahead.lat - ahead) < 0.002,
+    'centre ray on the street',
+  );
+  assert.ok(Math.abs(focus.ahead.lon - -104.99) < 1e-6);
+});
+
+test('looking at the horizon from eye height still boxes the ground around the camera', () => {
+  const view = pinhole({
+    lon: -121.4944,
+    lat: 38.5816,
+    ground: 10,
+    agl: 2,
+    pitch: -5,
+  });
+  const [west, south, east, north] = visibleBbox(view, {
+    groundHeight: 10,
+    maxRange: 2500,
+    nearRange: 1000,
+  });
+  assert.ok(north - 38.5816 > 0.008 && 38.5816 - south > 0.008);
+  assert.ok(east - -121.4944 > 0.008 && -121.4944 - west > 0.008);
+});
+
+test('metresBetween measures the short way round the date line', () => {
+  const east = { lon: 179.9999, lat: 0 };
+  const west = { lon: -179.9999, lat: 0 };
+  // 0.0002° of longitude at the equator, not 40,000 km round the other way.
+  assert.ok(Math.abs(metresBetween(east, west) - 22.264) < 1e-6);
+  assert.ok(Math.abs(metresBetween(west, east) - 22.264) < 1e-6);
+  assert.ok(
+    Math.abs(
+      metresBetween({ lon: 180, lat: 0 }, { lon: -180, lat: 0.0001 }) - 11.054,
+    ) < 1e-6,
+    'the two names of the same meridian',
+  );
+  // Away from the date line nothing changes.
+  assert.ok(
+    Math.abs(
+      metresBetween({ lon: 10, lat: 0 }, { lon: 10.001, lat: 0 }) - 111.32,
+    ) < 1e-9,
+  );
+});
+
+/**
+ * A horizon cull over `items` for a camera the test moves, with the frame's
+ * pre-render listeners and a count of the points tested against the horizon.
+ */
+function cullHarness(t, items) {
+  const visible = t.mock.method(
+    Cesium.EllipsoidalOccluder.prototype,
+    'isPointVisible',
+  );
+  const preRender = new Set();
+  const camera = { positionWC: Cesium.Cartesian3.fromDegrees(0, 0, 1e7) };
+  const viewer = {
+    camera,
+    scene: {
+      preRender: {
+        addEventListener(listener) {
+          preRender.add(listener);
+          return () => preRender.delete(listener);
+        },
+      },
+    },
+  };
+  let changes = 0;
+  const cull = createHorizonCull({
+    getViewer: () => viewer,
+    items: () => items,
+    onChange: () => changes++,
+  });
+  return {
+    cull,
+    preRender,
+    tested: () => visible.mock.callCount(),
+    changes: () => changes,
+    frame: () => {
+      for (const listener of [...preRender]) listener();
+    },
+    // Moved in place, as Cesium updates positionWC.
+    moveTo: (lon, lat) =>
+      Cesium.Cartesian3.fromDegrees(
+        lon,
+        lat,
+        1e7,
+        undefined,
+        camera.positionWC,
+      ),
+  };
+}
+
+const point = (lon, lat) => ({
+  position: Cesium.Cartesian3.fromDegrees(lon, lat),
+  show: true,
+});
+
+test('the horizon cull does no work while the camera stands still', (t) => {
+  const near = point(0, 0);
+  const far = point(180, 0);
+  const h = cullHarness(t, [near, far]);
+  h.cull.update();
+  assert.equal(h.tested(), 2);
+  assert.deepEqual([near.show, far.show], [true, false]);
+  assert.equal(h.preRender.size, 1, 'listening for camera moves');
+  for (let i = 0; i < 5; i++) h.frame();
+  assert.equal(h.tested(), 2, 'a still camera re-culls nothing');
+  h.moveTo(180, 0);
+  h.frame();
+  assert.equal(h.tested(), 4, 'a moved camera re-culls everything once');
+  assert.deepEqual([near.show, far.show], [false, true]);
+  h.frame();
+  h.frame();
+  assert.equal(h.tested(), 4, 'and then rests again');
+  h.cull.stop();
+  assert.equal(h.preRender.size, 0);
+});
+
+test('the horizon cull stops listening once nothing is left, and starts again for new items', (t) => {
+  const items = [point(0, 0)];
+  const h = cullHarness(t, items);
+  h.cull.update();
+  assert.equal(h.preRender.size, 1);
+  // Every item goes (the tiles are dropped); the next camera move finds none.
+  items.length = 0;
+  h.moveTo(10, 0);
+  h.frame();
+  assert.equal(h.preRender.size, 0, 'the listener is removed');
+  // New items arrive: they are culled now, and camera moves are watched again.
+  const far = point(-170, 0);
+  items.push(far);
+  h.cull.update([far]);
+  assert.equal(far.show, false, 'culled on arrival');
+  assert.equal(h.preRender.size, 1, 'the listener is back');
+  h.moveTo(-170, 0);
+  h.frame();
+  assert.equal(far.show, true, 're-culled when the camera moves');
+  assert.equal(h.changes(), 2, 'a redraw for each change');
+  h.cull.stop();
+});
+
+/** A cull over `points` ([lon, lat, height]) seen from a camera at `camera`. */
+function cullFrom(camera, points) {
+  const items = points.map(([lon, lat, height]) => ({
+    position: Cesium.Cartesian3.fromDegrees(lon, lat, height),
+    show: true,
+  }));
+  const horizon = createHorizonCull({
+    getViewer: () => ({
+      camera: { positionWC: Cesium.Cartesian3.fromDegrees(...camera) },
+      scene: { preRender: { addEventListener: () => () => {} } },
+    }),
+    items: () => items,
+  });
+  horizon.update();
+  horizon.stop();
+  return items.map((item) => item.show);
+}
+
+test('cones and the marker stay visible on ground below the WGS84 ellipsoid', () => {
+  // NYC in FOLLOW: eye 2.4 m above ground at -22 m, a cone 10 m away.
+  assert.deepEqual(
+    cullFrom([-74.006, 40.7128, -19.6], [[-74.006, 40.71289, -22]]),
+    [true],
+  );
+  // Colombo framing view: camera at -21 m, cones at -95 m about 80 m away.
+  assert.deepEqual(
+    cullFrom(
+      [79.8612, 6.9271, -21],
+      [
+        [79.8612, 6.92782, -95],
+        [79.86192, 6.9271, -95],
+      ],
+    ),
+    [true, true],
+  );
+  // Austin, ground well above the ellipsoid.
+  assert.deepEqual(
+    cullFrom([-97.7431, 30.2672, 132], [[-97.7431, 30.2681, 130]]),
+    [true],
+  );
+});
+
+test('the horizon cull still hides the far side of the Earth from orbit', () => {
+  assert.deepEqual(
+    cullFrom(
+      [0, 0, 20_000_000],
+      [
+        [10, 10, 0],
+        [180, 0, 0],
+      ],
+    ),
+    [true, false],
+  );
+});

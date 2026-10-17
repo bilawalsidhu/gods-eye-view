@@ -120,6 +120,72 @@ try {
     /No cameras in map view/,
   );
   assert.equal(await page.$eval('#cctv-next-btn', (el) => el.disabled), true);
+  await page.select('#cctv-camera-scope', 'all');
+  const stableOptions = await page.evaluate(() => {
+    const select = document.getElementById('cctv-camera-select');
+    window.state.cameras = Array.from({ length: 4000 }, (_, i) => ({
+      id: `camera-${i}`,
+      city: 'Fixture',
+      name: `Camera ${i}`,
+      lat: 10 + i / 10000,
+      lon: 20,
+    }));
+    window.state.activeCameraId = null;
+    window.state.activeCamera = null;
+    window.view.center = { lat: 0, lon: 0 };
+    window.mapMoved();
+    const before = new Map(
+      Array.from(select.options, (option) => [option.value, option]),
+    );
+    const firstLabel = select.options[0].textContent;
+    window.view.center = { lat: 1, lon: 1 };
+    window.mapMoved();
+    const changedLabel = select.options[0].textContent !== firstLabel;
+    const sameNodes = Array.from(select.options).every(
+      (option) => before.get(option.value) === option,
+    );
+    // Reversing distance order must move existing nodes, too.
+    window.view.center = { lat: 40, lon: 20 };
+    window.mapMoved();
+    return {
+      changedLabel,
+      sameNodes,
+      sameAfterReorder: Array.from(select.options).every(
+        (option) => before.get(option.value) === option,
+      ),
+      count: select.options.length,
+    };
+  });
+  assert.deepEqual(stableOptions, {
+    changedLabel: true,
+    sameNodes: true,
+    sameAfterReorder: true,
+    count: 4000,
+  });
+  const translated = await page.evaluate(async () => {
+    const { setLocale, applyDocumentTranslations } =
+      await import('/src/i18n/index.js');
+    const template = await (
+      await fetch('/src/ui/templates/layer-panels.html')
+    ).text();
+    const results = [];
+    for (const locale of ['es', 'ru']) {
+      setLocale(locale);
+      const fresh = document.createElement('div');
+      fresh.innerHTML = template;
+      applyDocumentTranslations(fresh);
+      window.mapMoved();
+      results.push({
+        status: document.getElementById('cctv-discovery-status').textContent,
+        placeholder: fresh.querySelector('#cctv-camera-search').placeholder,
+      });
+    }
+    return results;
+  });
+  assert.match(translated[0].status, /cámaras/);
+  assert.match(translated[0].placeholder, /Buscar/);
+  assert.match(translated[1].status, /камер/);
+  assert.match(translated[1].placeholder, /Поиск/);
   console.log(
     'PASS: real DOM search, scope, selection, local cycling, and map movement',
   );

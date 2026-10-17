@@ -23,13 +23,17 @@ try {
     `${process.env.QA_BASE_URL || 'http://localhost:4173'}/?welcome=0`,
     { waitUntil: 'domcontentloaded' },
   );
-  await page.waitForFunction(
-    () => window.__godsEyeView?.dataManager?._layerPanel,
-    { timeout: 60000 },
-  );
+  await page.waitForFunction(() => window.__godsEyeView?.dataManager, {
+    timeout: 60000,
+  });
   const results = await page.evaluate(async () => {
     const manager = window.__godsEyeView.dataManager;
-    const container = manager._toggleContainer;
+    const entry = document.querySelector(
+      'script[type="module"][src*="/src/main.js"]',
+    );
+    const { application } = await import(entry.src);
+    const { presentation } = application.getComponents().data;
+    const container = presentation.panel._toggleContainer;
     const id = 'qa-panel-lifecycle';
     let listener = null;
     let enabled = 0;
@@ -54,7 +58,7 @@ try {
     });
     const result = [];
     try {
-      manager.buildTogglePanel(container);
+      presentation.mount(container);
       const row = () => container.querySelector(`[data-layer-id="${id}"]`);
       const first = row().querySelector('.data-toggle-btn');
       result.push([
@@ -66,7 +70,7 @@ try {
         'row subscription is installed',
         typeof listener === 'function',
       ]);
-      manager.buildTogglePanel(container);
+      presentation.mount(container);
       first.click();
       await Promise.resolve();
       result.push([
@@ -97,7 +101,7 @@ try {
       ]);
       await manager.setEnabled(id, true);
       const final = row().querySelector('.data-toggle-btn');
-      manager._layerPanel.destroy();
+      presentation._panel.destroy();
       final.click();
       await Promise.resolve();
       result.push([
@@ -109,10 +113,10 @@ try {
         manager.isEnabled(id),
       ]);
     } finally {
-      manager._layerPanel?.destroy();
-      manager._layerPanel = null;
+      presentation._panel?.destroy();
+      presentation._panel = null;
       await window.__gevQaUnregisterLayer(manager, id);
-      manager.buildTogglePanel(container);
+      presentation.mount(container);
     }
     result.push([
       'ordinary layer rows return after reassembly',

@@ -1,11 +1,15 @@
+import { t, tn, formatNumber } from '../i18n/index.js';
+import { cctvSourceLabelText, cctvSourceMessageText } from './cctvFrames.js';
+
+import { createCctvVideoSurface } from './cctvVideo.js';
 export function _calBadgeLabel(badge) {
   switch (badge) {
     case 'calibrated':
-      return 'CALIBRATED';
+      return t('CALIBRATED');
     case 'curated':
-      return 'CURATED';
+      return t('CURATED');
     case 'raw-prior':
-      return 'RAW PRIOR';
+      return t('RAW PRIOR');
     default:
       return '--';
   }
@@ -35,12 +39,22 @@ export function _renderCctvState(state) {
 
   if (this._cctvDiscoveryStatus) {
     this._cctvDiscoveryStatus.textContent = cameras.length
-      ? `${cameras.length} cameras ${localScope ? 'in map view' : 'across the world'} · nearest first`
+      ? localScope
+        ? tn(
+            cameras.length,
+            '{count} camera in map view · nearest first',
+            '{count} cameras in map view · nearest first',
+          )
+        : tn(
+            cameras.length,
+            '{count} camera worldwide · nearest first',
+            '{count} cameras worldwide · nearest first',
+          )
       : this._cctvSearch?.value?.trim()
-        ? 'No matching cameras. Try another search or All cameras.'
+        ? t('No matching cameras. Try another search or All cameras.')
         : localScope
-          ? 'No cameras in map view. Move the map or choose All cameras.'
-          : 'No cameras loaded.';
+          ? t('No cameras in map view. Move the map or choose All cameras.')
+          : t('No cameras loaded.');
   }
 
   // Auto-expand the panel when the active camera CHANGES to a new non-null
@@ -67,28 +81,42 @@ export function _renderCctvState(state) {
 
   if (this._cctvEnableBtn) {
     this._cctvEnableBtn.classList.toggle('active', enabled);
-    this._cctvEnableBtn.textContent = enabled ? 'CCTV ON' : 'CCTV OFF';
+    this._cctvEnableBtn.textContent = enabled ? t('CCTV ON') : t('CCTV OFF');
   }
 
-  const cameraLabel = (camera) =>
-    `${camera.city} · ${camera.name}${Number.isFinite(camera.distanceKm) ? ` · ${camera.distanceKm < 1 ? '<1' : Math.round(camera.distanceKm).toLocaleString()} km` : ''}`;
+  const cameraLabel = (camera) => {
+    const distance = Number.isFinite(camera.distanceKm)
+      ? camera.distanceKm < 1
+        ? t('<1 km')
+        : t('{distance} km', {
+            distance: formatNumber(Math.round(camera.distanceKm)),
+          })
+      : '';
+    return `${camera.city} · ${camera.name}${distance ? ` · ${distance}` : ''}`;
+  };
   if (this._cctvSelect) {
-    const shouldRebuild =
-      this._cctvSelect.options.length !== cameras.length ||
-      cameras.some(
-        (cam, idx) =>
-          this._cctvSelect.options[idx]?.value !== cam.id ||
-          this._cctvSelect.options[idx]?.textContent !== cameraLabel(cam),
-      );
-    if (shouldRebuild) {
-      this._cctvSelect.innerHTML = '';
-      for (const camera of cameras) {
-        const option = document.createElement('option');
-        option.value = camera.id;
-        option.textContent = cameraLabel(camera);
-        this._cctvSelect.appendChild(option);
-      }
+    // Keep option identity across map moves: distances update in place and
+    // only membership/order changes touch the select's child list.
+    const existing = new Map(
+      Array.from(this._cctvSelect.options, (option) => [option.value, option]),
+    );
+    const wanted = new Set(cameras.map((camera) => camera.id));
+    for (const [id, option] of existing) {
+      if (!wanted.has(id)) option.remove();
     }
+    cameras.forEach((camera, index) => {
+      const option =
+        existing.get(camera.id) || document.createElement('option');
+      option.value = camera.id;
+      const label = cameraLabel(camera);
+      if (option.textContent !== label) option.textContent = label;
+      if (this._cctvSelect.options[index] !== option) {
+        this._cctvSelect.insertBefore(
+          option,
+          this._cctvSelect.options[index] || null,
+        );
+      }
+    });
     this._cctvSelect.disabled = !enabled || cameras.length === 0;
     if (
       activeId &&
@@ -117,17 +145,19 @@ export function _renderCctvState(state) {
     this._cctvCoverageBtn.classList.toggle('active', mode !== 'off');
     this._cctvCoverageBtn.textContent =
       mode === 'viewshed'
-        ? 'VIEWSHED ON'
+        ? t('VIEWSHED ON')
         : mode === 'on'
-          ? 'COVERAGE ON'
-          : 'COVERAGE OFF';
+          ? t('COVERAGE ON')
+          : t('COVERAGE OFF');
     this._cctvCoverageBtn.disabled = !enabled;
   }
 
   if (this._cctvAutoHopBtn) {
     const autoHop = !!state?.autoHop;
     this._cctvAutoHopBtn.classList.toggle('active', autoHop);
-    this._cctvAutoHopBtn.textContent = autoHop ? 'AUTO HOP ON' : 'AUTO HOP OFF';
+    this._cctvAutoHopBtn.textContent = autoHop
+      ? t('AUTO HOP ON')
+      : t('AUTO HOP OFF');
     this._cctvAutoHopBtn.disabled = !enabled;
   }
 
@@ -135,8 +165,8 @@ export function _renderCctvState(state) {
     const showProjection = state?.showProjection !== false;
     this._cctvProjectionBtn.classList.toggle('active', showProjection);
     this._cctvProjectionBtn.textContent = showProjection
-      ? 'PROJECTION ON'
-      : 'PROJECTION OFF';
+      ? t('PROJECTION ON')
+      : t('PROJECTION OFF');
     this._cctvProjectionBtn.disabled = !enabled;
   }
 
@@ -151,8 +181,10 @@ export function _renderCctvState(state) {
     const badge = activeCamera?.calBadge || null;
     const dirty = !!activeCamera?.calDirty;
     this._cctvQualityChip.textContent = dirty
-      ? 'CAL · EDITED (UNSAVED)'
-      : `CAL · ${this._calBadgeLabel(badge)}`;
+      ? t('CAL · EDITED (UNSAVED)')
+      : t('CAL · {badge}', {
+          badge: this._calBadgeLabel(badge),
+        });
     this._cctvQualityChip.dataset.calBadge = dirty ? 'edited' : badge || '';
   }
 
@@ -160,32 +192,74 @@ export function _renderCctvState(state) {
 
   if (this._cctvMeta) {
     if (activeCamera) {
-      const provider =
+      const provider = cctvSourceLabelText(
         activeCamera.sourceLabel ||
-        activeCamera.provider ||
-        'Configured Source';
+          activeCamera.provider ||
+          'Configured Source',
+      );
       const statusMsg = activeCamera.sourceMessage
-        ? ` · ${activeCamera.sourceMessage}`
+        ? ` · ${cctvSourceMessageText(activeCamera.sourceMessage)}`
         : '';
       // A partner-supplied feed inside a pack names its owner here.
       const credit = activeCamera.credit ? ` · ${activeCamera.credit}` : '';
       const calBadge = activeCamera.calBadge
         ? this._calBadgeLabel(activeCamera.calBadge)
         : '';
-      const projLabel = state?.showProjection !== false ? 'MONITOR' : 'OFF';
-      this._cctvMeta.textContent = `${activeCamera.city} · HDG ${Math.round(activeCamera.headingDeg)}° · FOV ${Math.round(activeCamera.fovDeg)}° · RANGE ${Math.round(activeCamera.rangeM)}m · ${projLabel}${calBadge ? ` · ${calBadge}` : ''} · ${provider}${credit}${statusMsg}`;
+      const projLabel =
+        state?.showProjection !== false ? t('MONITOR') : t('OFF');
+      this._cctvMeta.textContent = t(
+        '{city} · HDG {heading} · FOV {fov} · RANGE {range}m · {projection}{calBadge} · {provider}{status}',
+        {
+          city: activeCamera.city,
+          heading: `${Math.round(activeCamera.headingDeg)}°`,
+          fov: `${Math.round(activeCamera.fovDeg)}°`,
+          range: Math.round(activeCamera.rangeM),
+          projection: projLabel,
+          calBadge: calBadge ? ` · ${calBadge}` : '',
+          provider,
+          status: `${credit}${statusMsg}`,
+        },
+      );
     } else if (cameras.length > 0) {
       this._cctvMeta.textContent = enabled
-        ? `${cameras.length} cameras loaded · click a camera to activate`
-        : `${cameras.length} cameras loaded · enable CCTV to activate`;
+        ? tn(
+            cameras.length,
+            '{count} camera loaded · click a camera to activate',
+            '{count} cameras loaded · click a camera to activate',
+          )
+        : tn(
+            cameras.length,
+            '{count} camera loaded · enable CCTV to activate',
+            '{count} cameras loaded · enable CCTV to activate',
+          );
     } else {
       this._cctvMeta.textContent = enabled
-        ? 'No camera selected in this area'
-        : 'Enable CCTV to load cameras';
+        ? t('No camera selected in this area')
+        : t('Enable CCTV to load cameras');
     }
   }
 
-  if (this._cctvFrame) {
+  const liveIntent = enabled && !!activeCamera?.isVideo;
+  if (this._cctvVideo) {
+    this._cctvVideo.hidden = !liveIntent;
+    if (this._cctvFrame) this._cctvFrame.hidden = liveIntent;
+    const visible =
+      liveIntent &&
+      !document.hidden &&
+      !this._cctvPanel?.classList.contains('collapsed');
+    if (!visible || this._cctvVideoCameraId !== activeId) {
+      this._cctvVideoSurface?.stop();
+      this._cctvVideoSurface = null;
+    }
+    this._cctvVideoCameraId = activeId;
+    if (visible && !this._cctvVideoSurface) {
+      this._cctvVideoSurface = createCctvVideoSurface(this._cctvVideo, () =>
+        this.cctv.getActiveVideoElement?.(),
+      );
+    }
+  }
+
+  if (this._cctvFrame && !liveIntent) {
     const nextSrc = enabled ? activeCamera?.frameUrl : null;
     const nextCameraId = enabled ? activeCamera?.id || '' : '';
     const cameraChanged = this._cctvFrame.dataset.cameraId !== nextCameraId;
@@ -204,20 +278,24 @@ export function _renderCctvState(state) {
     if (!nextSrc) {
       this._clearCctvFrame();
     }
+  } else if (liveIntent) {
+    this._clearCctvFrame();
   }
 
   this._syncCctvSourceBadge(activeCamera, enabled);
   this._typeCctvSummary(
     (outsideView
-      ? 'The selected camera is outside the map view. Choose a camera here, or switch to All cameras.'
+      ? t(
+          'The selected camera is outside the map view. Choose a camera here, or switch to All cameras.',
+        )
       : state?.summary) ||
-      'Enable CCTV to start camera-linked intelligence summaries.',
+      t('Enable CCTV to start camera-linked intelligence summaries.'),
   );
 }
 
 export function _typeCctvSummary(text) {
   if (this.destroyed || !this._cctvSummary) return;
-  const nextText = String(text || '').trim() || 'No summary available.';
+  const nextText = String(text || '').trim() || t('No summary available.');
   if (nextText === this._lastCctvSummaryText) return;
   this._lastCctvSummaryText = nextText;
 
@@ -249,7 +327,7 @@ export function _updateCctvSyncChip(loading, enabled) {
     clearTimeout(this._cctvChipHideTimer);
     this._cctvChipHideTimer = null;
     this._cctvChipWasBusy = true;
-    this.actions.setSplitFlapText(this._cctvSyncLabel, 'loading frames');
+    this.actions.setSplitFlapText(this._cctvSyncLabel, t('loading frames'));
     // The counter is left plain on purpose: it ticks every few frames
     // during a grid load, and flapping it would read as a slot machine.
     this._cctvSyncProgress.textContent = `${loaded}/${total}`;
@@ -260,7 +338,7 @@ export function _updateCctvSyncChip(loading, enabled) {
   if (this._cctvChipWasBusy && enabled && total > 0) {
     // Load just completed — flash the final count, then auto-hide.
     this._cctvChipWasBusy = false;
-    this.actions.setSplitFlapText(this._cctvSyncLabel, 'camera grid ready');
+    this.actions.setSplitFlapText(this._cctvSyncLabel, t('camera grid ready'));
     this._cctvSyncProgress.textContent = `${total}/${total}`;
     this._cctvSyncChip.classList.add('visible');
     clearTimeout(this._cctvChipHideTimer);

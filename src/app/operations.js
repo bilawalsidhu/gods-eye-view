@@ -39,6 +39,7 @@ export function createApplicationOperations({ requests, signal, eventTarget }) {
       searchAndFlyTo(viewer, query, {
         ...options,
         features,
+        ground: surface.groundFloor,
         signal:
           signal && options.signal
             ? AbortSignal.any([signal, options.signal])

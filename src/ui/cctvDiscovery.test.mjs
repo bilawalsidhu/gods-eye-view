@@ -116,11 +116,13 @@ test('map changes refresh discovery, navigation stays in results, and disposal r
   });
   controls.connect();
   controls._cctvState = { cameras, activeCameraId: 'vancouver' };
+  assert.equal(controls.selectNearestDiscoveredCamera(), 'cape-near');
   controls.cycleDiscoveredCamera(1);
   assert.equal(selected, 'cape-near');
   mapView = { ...view, south: 0, north: 1 };
   update();
   assert.equal(controls.cycleDiscoveredCamera(1), null);
+  assert.equal(controls.selectNearestDiscoveredCamera(), null);
   controls.destroy();
   assert.equal(removed, 1);
 });

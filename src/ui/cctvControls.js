@@ -40,6 +40,19 @@ export class CctvControls {
     this._calibrationEdit = null;
     this._actionGeneration = 0;
     this._initCctvPanel();
+    if (this._cctvVideo && typeof MutationObserver !== 'undefined') {
+      this._videoVisibilityObserver = new MutationObserver(() =>
+        this._renderCctvState(this._cctvState),
+      );
+      if (this._cctvPanel)
+        this._videoVisibilityObserver.observe(this._cctvPanel, {
+          attributes: true,
+          attributeFilter: ['class', 'hidden'],
+        });
+      this.listen(document, 'visibilitychange', () =>
+        this._renderCctvState(this._cctvState),
+      );
+    }
   }
   listen(target, type, handler, options = {}) {
     target?.addEventListener(type, handler, {
@@ -71,6 +84,12 @@ export class CctvControls {
         this._cctvScope?.value || (this.actions.readMapView ? 'view' : 'all'),
       query: this._cctvSearch?.value || '',
     });
+  }
+  /** Select the nearest result without flying; shared by panel enable and Nearest. */
+  selectNearestDiscoveredCamera() {
+    const state = this.cctv.getUIState?.() || this._cctvState;
+    const camera = this.discoverCameras(state).cameras[0];
+    return camera && this.cctv.selectCamera(camera.id) ? camera.id : null;
   }
   cycleDiscoveredCamera(step) {
     const cameras = this.discoverCameras(this._cctvState).cameras;
@@ -129,6 +148,8 @@ export class CctvControls {
   destroy() {
     if (this.destroyed) return;
     this.destroyed = true;
+    this._cctvVideoSurface?.stop();
+    this._videoVisibilityObserver?.disconnect();
     this._actionGeneration++;
     this.listeners.abort();
     this._cctvViewUnsubscribe?.();

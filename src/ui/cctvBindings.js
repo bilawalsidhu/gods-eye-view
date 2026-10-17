@@ -1,3 +1,5 @@
+import { t } from '../i18n/index.js';
+
 export function _initCctvPanel() {
   if (!this._cctvPanel) return;
 
@@ -25,10 +27,7 @@ export function _initCctvPanel() {
     )
       return;
     this.actions.runExplicitFocus(
-      () => {
-        const camera = this.discoverCameras({ ...this._cctvState }).cameras[0];
-        return camera && this.cctv.selectCamera(camera.id) ? camera.id : null;
-      },
+      () => this.selectNearestDiscoveredCamera(),
       (cameraId) => this.cctv.focusCamera(cameraId, 1.8),
     );
   });
@@ -151,7 +150,7 @@ export function _initCctvPanel() {
       },
       { origin: 'user' },
     );
-    this.actions.showToast('CCTV calibration saved');
+    this.actions.showToast(t('CCTV calibration saved'));
   });
 
   this.listen(this._cctvCalibResetBtn, 'click', () => {

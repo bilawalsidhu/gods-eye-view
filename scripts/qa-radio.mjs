@@ -167,6 +167,13 @@ async function main() {
     page.on('request', (request) => {
       const url = new URL(request.url());
 
+      // Radio QA uses keyless maps; an optional Google token is not offered.
+      if (request.method() === 'GET' && url.origin === APP_ORIGIN
+        && url.pathname === '/api/google/tiles-token') {
+        request.respond({ status: 200, contentType: 'application/json', body: '{}' });
+        return;
+      }
+
     // These scenarios exercise Context lifecycle and keyboard ownership, not
     // live orbit accuracy. Reuse the tracking suite's fixed element sets so
     // CelesTrak outages cannot invalidate an otherwise clean UI run.
@@ -219,7 +226,7 @@ async function main() {
         });
         return;
       }
-      if (url.origin === APP_ORIGIN && url.pathname === '/api/ais-live') {
+      if (url.origin === APP_ORIGIN && url.pathname === '/api/vessels') {
         request.respond({
           status: 200,
           contentType: 'application/json',
@@ -374,7 +381,7 @@ async function main() {
         enabled: true,
         uncertain: true,
       });
-      gev.dataManager._refreshTogglePanel();
+      gev.dataManager.refreshLayerStats();
       const staticResult = module.setTuningStatic(true);
       const filterBefore = module.getUIState().filter;
       const filterControl = document.getElementById('radio-filter');
@@ -447,7 +454,7 @@ async function main() {
         enabled: true,
         uncertain: false,
       });
-      gev.dataManager._refreshTogglePanel();
+      gev.dataManager.refreshLayerStats();
       module.cancelTuning();
       camera.flyTo = originalFlyTo;
       return result;
@@ -4048,7 +4055,13 @@ async function main() {
       const { getOverlayPaintRect, getWorldOverlayDiagnostics } = await import('/src/overlays/worldOverlay.js');
       const expectedEntryId = `selected:${selected.id}`;
       let painted = null;
-      for (let attempt = 0; attempt < 20 && !painted?.rect; attempt += 1) {
+      // Radio's horizon pass reveals the selected entity on its own timer
+      // after the camera jump, so a stationary view waits for both to settle.
+      for (
+        let attempt = 0;
+        attempt < 20 && !(painted?.rect && selectedEntity?.show === true);
+        attempt += 1
+      ) {
         painted = await new Promise((resolve) => {
           let removePostRender = null;
           const timeout = setTimeout(() => {

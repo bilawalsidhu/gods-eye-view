@@ -54,7 +54,14 @@ export function createSelection({
 
       // A sibling layer already owns this click. Preserve the current vessel
       // selection and do not compete with its camera command.
-      if (pickedId && isOwnedByOtherLayer('ais-live-vessels', pickedId)) return;
+      const siblingOwned =
+        pickedId && isOwnedByOtherLayer('ais-live-vessels', pickedId);
+      // Cyclone geometry is ambient context behind painted cards. Its handler
+      // yields to the same foreground AIS hit. Keep moving-contact precedence
+      // unchanged: those handlers may issue their own camera command.
+      const cycloneBackground =
+        siblingOwned && !isOwnedByOtherLayer('weather-cyclones', pickedId);
+      if (siblingOwned && !cycloneBackground) return;
 
       // Cards are painted on a pointer-events:none canvas, so the scene pick is
       // usually terrain behind the card. Resolve against the host's current
@@ -64,10 +71,14 @@ export function createSelection({
             click.position?.x,
             click.position?.y,
             {
-              sourceId: VESSEL_OVERLAY_SOURCE_ID,
+              ...(cycloneBackground
+                ? {}
+                : { sourceId: VESSEL_OVERLAY_SOURCE_ID }),
             },
           )
         : null;
+      if (cycloneBackground && cardHit?.sourceId !== VESSEL_OVERLAY_SOURCE_ID)
+        return;
       if (!record && cardHit) {
         const mmsi = String(cardHit.entryId || '').startsWith('vessel:')
           ? cardHit.entryId.slice('vessel:'.length)

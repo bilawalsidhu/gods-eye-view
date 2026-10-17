@@ -1,3 +1,4 @@
+import { cancelCameraArrival } from '../data/cameraArrival.js';
 import { createStateChannel } from '../app/stateChannel.js';
 import * as Cesium from 'cesium';
 import {
@@ -45,6 +46,7 @@ export class NavigationController {
     cancelPendingSelection = true,
     clearSearchedLocation = true,
   } = {}) {
+    cancelCameraArrival(this.viewer);
     this.cancelOrientation();
     const { flightsLayer, militaryFlightsLayer, satellitesLayer } =
       this.tracking;
@@ -257,6 +259,7 @@ export class NavigationController {
     return this._cameraHandoffs.subscribe(listener, { emitCurrent: false });
   }
   stop() {
+    cancelCameraArrival(this.viewer);
     this._disposed = true;
     this._cameraHandoffs?.publish();
     this._cameraHandoffs?.destroy();
