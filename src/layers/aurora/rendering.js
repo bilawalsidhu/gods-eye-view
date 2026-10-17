@@ -1,4 +1,5 @@
 import { createShellSurface } from '../weather/shellRendering.js';
+import { msg } from '../../i18n/index.js';
 import { NO_IMAGERY_HOST } from '../weather/imageryHost.js';
 import { dipoleAxis, mltRotationRadians } from './magneticLocalTime.js';
 
@@ -176,14 +177,20 @@ export function createAuroraRaster(snapshot, transition = null) {
       (transition.mix >= 1 && snapshot) ||
       null;
 
+  // The grid starts at 0° and runs east; the image spans the shells'
+  // rectangle, whose first column is -180°. Image column x therefore shows
+  // grid column x + 180°, as the wind field does in fields.js.
+  const half = width / 2;
+
   if (endpoint) {
     for (let latIndex = 0; latIndex < height; latIndex++) {
       const imageY = height - 1 - latIndex;
-      for (let lonIndex = 0; lonIndex < width; lonIndex++) {
+      for (let x = 0; x < width; x++) {
+        const lonIndex = (x + half) % width;
         const color = rgbaFor(
           endpoint.probabilities[latIndex * width + lonIndex],
         );
-        rgba.set(color, (imageY * width + lonIndex) * 4);
+        rgba.set(color, (imageY * width + x) * 4);
       }
     }
     return { width, height, rgba };
@@ -224,15 +231,12 @@ export function createAuroraRaster(snapshot, transition = null) {
 
   for (let latIndex = 0; latIndex < height; latIndex++) {
     const imageY = height - 1 - latIndex;
-    for (let lonIndex = 0; lonIndex < width; lonIndex++) {
-      const cell = latIndex * width + lonIndex;
+    for (let x = 0; x < width; x++) {
+      const cell = latIndex * width + ((x + half) % width);
       const i = cell * 3;
       const a = sampleRotated(previous, forPrevious, i);
       const b = sampleRotated(snapshot, forCurrent, i);
-      rgba.set(
-        rgbaFor(a * (1 - mix) + b * mix),
-        (imageY * width + lonIndex) * 4,
-      );
+      rgba.set(rgbaFor(a * (1 - mix) + b * mix), (imageY * width + x) * 4);
     }
   }
   return { width, height, rgba };
@@ -352,7 +356,7 @@ export function createAuroraRendering({
       shells = [];
       kind = null;
       viewer.scene?.requestRender?.();
-      error = 'Aurora field image unavailable';
+      error = msg('Aurora field image unavailable');
       return;
     }
   }
