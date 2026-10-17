@@ -4644,6 +4644,11 @@
   "{name} · sensor": "{name} · sensore",
   "Reference monitor": "Strumento di riferimento",
   "Needs {envVars} — add one in Provider Settings": "Richiede {envVars}: aggiungine una in Impostazioni provider",
-  "CABLE \u00b7 {name}": "CAVO · {name}",
-  "LANDING POINT \u00b7 {name}": "PUNTO DI APPRODO · {name}"
+  "CABLE · {name}": "CAVO · {name}",
+  "LANDING POINT · {name}": "PUNTO DI APPRODO · {name}",
+  "NOAA SWPC solar wind": "Vento solare NOAA SWPC",
+  "extrapolated": "estrapolato",
+  "Solar wind feed unavailable": "Flusso del vento solare non disponibile",
+  "Field lines not re-traced · previous lines kept": "Linee di campo non ritracciate · linee precedenti mantenute",
+  "Magnetosphere": "Magnetosfera"
 }

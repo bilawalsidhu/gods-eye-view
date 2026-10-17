@@ -72,7 +72,7 @@ export function selectExternalModel(state) {
     );
     return {
       name: 't96',
-      label: 'Tsyganenko T96',
+      label: 'Tsyganenko T96', // i18n-ignore: model name
       evaluate: t96,
       parameters,
       extrapolated,
@@ -92,7 +92,7 @@ export function selectExternalModel(state) {
     const band = t89BandForKp(state.kp);
     return {
       name: 't89',
-      label: 'Tsyganenko T89c',
+      label: 'Tsyganenko T89c', // i18n-ignore: model name
       evaluate: t89,
       parameters: band,
       extrapolated: false,

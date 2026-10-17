@@ -4749,6 +4749,11 @@
   "{name} · sensor": "{name} · датчик",
   "Reference monitor": "Эталонный прибор",
   "Needs {envVars} — add one in Provider Settings": "Нужен {envVars} — добавьте любой из них в «Настройках провайдеров»",
-  "CABLE \u00b7 {name}": "КАБЕЛЬ · {name}",
-  "LANDING POINT \u00b7 {name}": "ТОЧКА ВЫХОДА НА БЕРЕГ · {name}"
+  "CABLE · {name}": "КАБЕЛЬ · {name}",
+  "LANDING POINT · {name}": "ТОЧКА ВЫХОДА НА БЕРЕГ · {name}",
+  "NOAA SWPC solar wind": "солнечный ветер NOAA SWPC",
+  "extrapolated": "экстраполяция",
+  "Solar wind feed unavailable": "Данные о солнечном ветре недоступны",
+  "Field lines not re-traced · previous lines kept": "Силовые линии не пересчитаны · оставлены прежние",
+  "Magnetosphere": "Магнитосфера"
 }
