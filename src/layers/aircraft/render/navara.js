@@ -27,15 +27,15 @@ import { registerViewerEngine } from '../../../globe/cesium/engineFromViewer.js'
 const BASE_SIZE_PX = 20;
 
 /**
- * The model frame → glTF scene axes on Navara. Cesium draws a glTF through
- * Y_UP_TO_Z_UP × Z_UP_TO_X_UP (data/modelVisualAnchor.js); Navara's glTF
- * loader already turns the scene Y-up to Z-up, so here it is Z_UP_TO_X_UP
- * alone: nose, top and heading of airplane.glb where Cesium draws them
- * (checked side by side with Cesium on a tracked aircraft at 300 m against
- * five other axis candidates).
+ * The model frame → glTF scene axes on Navara: Cesium's own glTF axis
+ * correction, Y_UP_TO_Z_UP × Z_UP_TO_X_UP (data/modelVisualAnchor.js).
+ * Navara's glTF loader is three's GLTFLoader, which keeps the scene Y-up.
+ * (10b used Z_UP_TO_X_UP alone, on the belief that the loader turned the
+ * scene Z-up: every fleet model drew 90° off its heading — side by side
+ * with Cesium at the near pose, 10b review item 3.)
  */
-// Cesium's Axis.Z_UP_TO_X_UP, column-major.
-const NAVARA_GLTF_AXIS = [0, 0, -1, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 1];
+// Cesium's Axis.Y_UP_TO_Z_UP × Axis.Z_UP_TO_X_UP, column-major.
+const NAVARA_GLTF_AXIS = [0, 1, 0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0, 0, 0, 1];
 const FIRST_CAPACITY = 1024;
 const ATLAS_PAD = 2;
 const TRAIL_ALPHA = 0.85;
@@ -644,6 +644,8 @@ export function createAircraftNavaraRenderer({
     return bank;
   };
 
+  const scratchOffset = geo.cartesian3.create();
+
   class ModelHandle {
     constructor(spec) {
       this.spec = spec;
@@ -669,9 +671,13 @@ export function createAircraftNavaraRenderer({
       const minimum = this.spec.minimumPixelSize ?? 0;
       if (!(minimum > 0)) return this._scale;
       const cam = freshCamera();
-      const distance = geo.cartesian3.distance(
-        cam.positionWC,
-        this.translation,
+      // Cesium's distance (Camera distanceToBoundingSphere): the depth
+      // along the view less the radius at the model's own scale.
+      geo.cartesian3.subtract(this.translation, cam.positionWC, scratchOffset);
+      const distance = Math.max(
+        0,
+        Math.abs(geo.cartesian3.dot(scratchOffset, cam.directionWC)) -
+          this.radiusM * this._scale,
       );
       const height = engine.host.size().height;
       if (!(distance > 0) || !(height > 0)) return this._scale;
