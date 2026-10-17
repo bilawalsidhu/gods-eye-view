@@ -88,7 +88,7 @@ test('a far model keeps its minimum pixel size', async () => {
   );
 });
 
-test("the instance colour tints by the set's blend amount; its alpha is opacity, as Cesium's model colour", async () => {
+test("the instance colour (sRGB, decoded) tints by the set's blend amount; its alpha is opacity, as Cesium's model colour", async () => {
   const store = createMoverStore(options);
   const mover = createModelMover(options, store, {
     load: async () => fakeGltf(),
@@ -110,7 +110,7 @@ test("the instance colour tints by the set's blend amount; its alpha is opacity,
   mesh.material.onBeforeCompile(shader);
   assert.match(
     shader.fragmentShader,
-    /diffuseColor\.rgb = mix\(diffuseColor\.rgb, vGevColor\.rgb, uGevBlend\);\s*diffuseColor\.a \*= vGevColor\.a;/,
+    /diffuseColor\.rgb = mix\(diffuseColor\.rgb, sRGBTransferEOTF\(vGevColor\)\.rgb, uGevBlend\);\s*diffuseColor\.a \*= vGevColor\.a;/,
   );
   // Ambient light on the tinted surface (Cesium's image-based lighting).
   assert.match(

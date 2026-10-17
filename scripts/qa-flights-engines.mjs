@@ -518,6 +518,7 @@ try {
       for (const { id, screen } of shot.modelPoints) {
         let pixels = 0;
         let sum = 0;
+        const lumas = [];
         for (let y = Math.round(screen.y) - 26; y < screen.y + 26; y++)
           for (let x = Math.round(screen.x) - 26; x < screen.x + 26; x++) {
             if (x < 0 || y < 0 || x >= WIDTH || y >= HEIGHT) continue;
@@ -525,9 +526,17 @@ try {
             if (Math.abs(luma(a, i) - luma(b, i)) > 25) {
               pixels++;
               sum += luma(a, i);
+              lumas.push(luma(a, i));
             }
           }
-        rows.set(id, { pixels, luminance: pixels ? sum / pixels : null });
+        lumas.sort((p, q) => p - q);
+        rows.set(id, {
+          pixels,
+          luminance: pixels ? sum / pixels : null,
+          // The highlights: the brightest tenth, and the near-white pixels.
+          p90: lumas.length ? lumas[Math.floor(lumas.length * 0.9)] : null,
+          highlights: lumas.filter((value) => value >= 230).length,
+        });
       }
       return rows;
     };
@@ -541,6 +550,9 @@ try {
       return sorted.length ? sorted[Math.floor(sorted.length / 2)] : null;
     };
     const lum = (rows) => median(ids.map((id) => rows.get(id).luminance));
+    const p90 = (rows) => median(ids.map((id) => rows.get(id).p90));
+    const highlights = (rows) =>
+      ids.reduce((sum, id) => sum + rows.get(id).highlights, 0);
     // The drawn size: each model's scale after the minimum pixel size.
     const sizeRatios = ids
       .map((id) => right.computedScales[id] / left.computedScales[id])
@@ -554,6 +566,8 @@ try {
       },
       footprintPx: { cesium: total(fl), navara: total(fr) },
       medianLuminance: { cesium: lum(fl), navara: lum(fr) },
+      p90Luminance: { cesium: p90(fl), navara: p90(fr) },
+      highlightPx: { cesium: highlights(fl), navara: highlights(fr) },
     };
     report.poses.near.models = models3d;
     const ratio = models3d.footprintPx.navara / models3d.footprintPx.cesium;
@@ -574,6 +588,13 @@ try {
       'near: model footprint within ±20 % of Cesium',
       Math.abs(ratio - 1) <= 0.2,
       `${models3d.footprintPx.navara} vs ${models3d.footprintPx.cesium} px (${(ratio * 100).toFixed(0)} %)`,
+    );
+    const p90Ratio =
+      models3d.p90Luminance.navara / models3d.p90Luminance.cesium;
+    check(
+      'near: model highlights (p90 luminance) within ±10 % of Cesium',
+      Math.abs(p90Ratio - 1) <= 0.1,
+      `${models3d.p90Luminance.navara?.toFixed(1)} vs ${models3d.p90Luminance.cesium?.toFixed(1)}; near-white px ${models3d.highlightPx.navara} vs ${models3d.highlightPx.cesium}`,
     );
     check(
       'near: model luminance within ±10 % of Cesium (median)',

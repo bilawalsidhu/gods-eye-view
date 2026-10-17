@@ -845,11 +845,19 @@
         },
         "footprintPx": {
           "cesium": 8610,
-          "navara": 10666
+          "navara": 9902
         },
         "medianLuminance": {
           "cesium": 155.287376,
-          "navara": 168.88873417721513
+          "navara": 158.94989068322982
+        },
+        "p90Luminance": {
+          "cesium": 184.541,
+          "navara": 190.8764
+        },
+        "highlightPx": {
+          "cesium": 0,
+          "navara": 0
         }
       }
     }

@@ -895,6 +895,14 @@
         "medianLuminance": {
           "cesium": 196.66676533333333,
           "navara": 189.77240000000006
+        },
+        "p90Luminance": {
+          "cesium": 247.7874,
+          "navara": 223.051
+        },
+        "highlightPx": {
+          "cesium": 510,
+          "navara": 83
         }
       }
     }

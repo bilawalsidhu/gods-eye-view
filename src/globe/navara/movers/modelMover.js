@@ -47,7 +47,8 @@ const scratchTranslation = new Vector3();
 const scratchScale = new Vector3();
 
 /**
- * Mixes the instance colour into the material's colour by uGevBlend (the
+ * Mixes the instance colour, decoded from sRGB (as Cesium takes colours;
+ * the material works in linear), into the material's colour by uGevBlend (the
  * set's colorBlend, as Cesium's colorBlendAmount); the instance alpha is the
  * model's opacity (Cesium: a model colour's alpha makes it translucent; the
  * aircraft fade with distance through it), not a blend weight.
@@ -75,7 +76,7 @@ function blendInstanceColor(material, uniforms) {
       )
       .replace(
         '#include <map_fragment>',
-        '#include <map_fragment>\ndiffuseColor.rgb = mix(diffuseColor.rgb, vGevColor.rgb, uGevBlend);\ndiffuseColor.a *= vGevColor.a;',
+        '#include <map_fragment>\ndiffuseColor.rgb = mix(diffuseColor.rgb, sRGBTransferEOTF(vGevColor).rgb, uGevBlend);\ndiffuseColor.a *= vGevColor.a;',
       );
   };
   material.customProgramCacheKey = () => 'gev-mover-model-blend';
