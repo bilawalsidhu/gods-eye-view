@@ -1,6 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createMagnetosphereLayer } from './index.js';
+import { createMagnetosphereLayer, traceFilaments } from './index.js';
+import { coefficientsFor } from './field.js';
+import { fieldLineSeeds } from './geometry.js';
 
 /**
  * Enough of Cesium for init to build its rendering; nothing here draws.
@@ -201,4 +203,86 @@ test('no Sun direction means no re-trace rather than a wrong frame', async () =>
   await layer.init(null, { cesium });
   await layer.update(null, {});
   assert.equal(await layer.retrace(), false);
+});
+
+/** Record what each re-trace returned, so a test can tell work from a no-op. */
+function recordRetraces(layer) {
+  const results = [];
+  const original = layer.retrace;
+  layer.retrace = async (signal) => {
+    const replaced = await original(signal);
+    results.push(replaced);
+    return replaced;
+  };
+  return results;
+}
+
+test('the filaments follow the Sun, not only the solar wind', async () => {
+  // The same solar wind six hours later: the Earth has turned 90° under the
+  // Sun, so a tail traced against the old Sun would point the wrong way. The
+  // feed is still fresh, so only the Sun can be what triggers the trace.
+  const { layer, loads } = harness([t96State]);
+  await layer.init(null, { cesium });
+  await layer.enable(null, { sunDirection: SUN });
+  await layer.update(null, { sunDirection: SUN });
+  const retraces = recordRetraces(layer);
+
+  await layer.update(null, { sunDirection: { x: 0, y: 1, z: 0 } });
+  assert.equal(loads(), 1, 'the feed was not fetched again');
+  assert.deepEqual(retraces, [true], 'but the filaments were re-traced');
+
+  // A degree or two of rotation is not worth seconds of tracing.
+  await layer.update(null, {
+    sunDirection: { x: -Math.sin(0.03), y: Math.cos(0.03), z: 0 },
+  });
+  assert.deepEqual(retraces, [true, false]);
+});
+
+test('an internal-only trace does not go stale with the Sun', async () => {
+  // IGRF is Earth-fixed, so with no usable external model there is nothing to
+  // re-trace when the Sun moves.
+  const { layer } = harness([{ ...t96State, dst: null, byNT: null, kp: null }]);
+  await layer.init(null, { cesium });
+  await layer.enable(null, { sunDirection: SUN });
+  await layer.update(null, { sunDirection: SUN });
+  const retraces = recordRetraces(layer);
+  await layer.update(null, { sunDirection: { x: 0, y: 1, z: 0 } });
+  assert.deepEqual(retraces, [false]);
+});
+
+test('tracing hands the frame back mid-line and draws the same lines', async () => {
+  // One T96 line can take ~90 ms, so pausing only between lines still drops
+  // frames. A clock that advances a millisecond per reading forces a pause
+  // every few readings; the lines must come out exactly as an unsliced trace.
+  const coefficients = coefficientsFor(2026.5);
+  const seeds = fieldLineSeeds(1);
+  const unsliced = await traceFilaments(coefficients, seeds, {
+    yieldTo: async () => {},
+    sliceMs: Infinity,
+  });
+  let now = 0;
+  let pauses = 0;
+  const sliced = await traceFilaments(coefficients, seeds, {
+    yieldTo: async () => {
+      pauses += 1;
+    },
+    clock: () => (now += 1),
+    sliceMs: 4,
+  });
+  assert.ok(pauses > seeds.length, `paused ${pauses} times for ${seeds.length} lines`);
+  assert.deepEqual(sliced, unsliced);
+});
+
+test('an abort during a slice pause stops the trace', async () => {
+  const controller = new AbortController();
+  const lines = await traceFilaments(coefficientsFor(2026.5), fieldLineSeeds(1), {
+    signal: controller.signal,
+    yieldTo: async () => controller.abort(),
+    clock: (() => {
+      let now = 0;
+      return () => (now += 10);
+    })(),
+    sliceMs: 1,
+  });
+  assert.equal(lines.length, 0);
 });
