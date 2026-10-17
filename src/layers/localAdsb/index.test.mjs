@@ -12,6 +12,14 @@ import {
   localAdsbReceiverLine,
   localAdsbStatus,
 } from './index.js';
+import { createLocalAdsbCesiumRenderer } from './render/cesium.js';
+import * as selection from '../../data/selectionDispatcher.js';
+import { registerViewerEngine } from '../../globe/cesium/engineFromViewer.js';
+import { createFakeEngine } from '../../globe/testing/fakeEngine.js';
+import {
+  registerPickOwner,
+  unregisterPickOwner,
+} from '../../data/pickRegistry.js';
 
 function fakeReceiver(initial = {}) {
   const state = {
@@ -73,6 +81,13 @@ function fakeServices() {
         },
       },
       picking: { registerPickOwner() {}, unregisterPickOwner() {} },
+      // As src/app/layers/localAdsb.js composes them: the layer's Cesium
+      // renderer, and the engine's selection dispatcher (clicks).
+      selection,
+      renderer: {
+        create: ({ engine = null, ...options }) =>
+          createLocalAdsbCesiumRenderer(engine, options),
+      },
       detection: { markSourcesChanged() {} },
       overlays: { refreshReadout() {} },
     },
@@ -198,9 +213,6 @@ async function enabledLayer(receiver, clock, feeds = null, options = {}) {
     services: { ...services, ...options.services },
     now: () => clock.now,
     loadModel: options.loadModel,
-    ...(options.createInputHandler
-      ? { createInputHandler: options.createInputHandler }
-      : {}),
   });
   layer.init(viewer);
   await layer.enable();
@@ -1051,35 +1063,29 @@ test('the last aircraft expiring removes its 3D model and cancels a pending load
   assert.equal(late.destroyed, true);
 });
 
-/** A viewer with a canvas and scripted picks, plus the layer's click action. */
+/**
+ * A viewer whose engine (a fake globe engine registered for it) scripts the
+ * picks under a click; clicks reach the layer through the engine's
+ * selection dispatcher, as in the app.
+ */
 function clickHarness() {
   const base = fakeViewer();
-  const scene = {
-    ...base.viewer.scene,
-    canvas: {},
-    pickResult: null,
-    drillResult: [],
-    pick() {
-      return scene.pickResult;
-    },
-    drillPick() {
-      return scene.drillResult;
-    },
-  };
-  const handler = { actions: new Map() };
+  const engine = createFakeEngine();
+  const scene = { pickResult: null, drillResult: [] };
+  engine.fake.script('pick', () => scene.pickResult ?? undefined);
+  engine.fake.script('drillPick', () => scene.drillResult);
+  const unregister = registerViewerEngine(base.viewer, engine);
   return {
     scene,
-    viewer: { ...base, viewer: { ...base.viewer, scene } },
-    createInputHandler: () => ({
-      setInputAction(action, type) {
-        handler.actions.set(type, action);
-      },
-      destroy() {},
-    }),
+    viewer: base,
+    release() {
+      unregister();
+      engine.destroy();
+    },
     click() {
-      handler.actions.get(Cesium.ScreenSpaceEventType.LEFT_CLICK)({
-        position: new Cesium.Cartesian2(10, 10),
-      });
+      engine.fake.input('down', { position: { x: 10, y: 10 } });
+      engine.fake.input('up', { position: { x: 10, y: 10 } });
+      engine.fake.input('click', { position: { x: 10, y: 10 } });
     },
   };
 }
@@ -1090,9 +1096,11 @@ test('clicking the selected aircraft keeps it selected and republishes its card'
   const harness = clickHarness();
   const { layer, calls } = await enabledLayer(receiver, clock, null, {
     viewer: harness.viewer,
-    createInputHandler: harness.createInputHandler,
   });
-  t.after(() => layer.destroy());
+  t.after(() => {
+    layer.destroy();
+    harness.release();
+  });
   receiver.set({ aircraft: [record()] });
   await layer.update();
   const entity =
@@ -1111,26 +1119,18 @@ test('a click on a local aircraft under an unowned or trail pick still selects i
   const receiver = fakeReceiver({ mode: 'adsb', connected: true });
   const clock = { now: 100_000 };
   const harness = clickHarness();
-  const owners = new Map();
-  const { resolvePickId } = await import('../../data/pickRegistry.js');
   const { layer, calls } = await enabledLayer(receiver, clock, null, {
     viewer: harness.viewer,
-    createInputHandler: harness.createInputHandler,
-    services: {
-      picking: {
-        registerPickOwner: (id, predicate) => owners.set(id, predicate),
-        unregisterPickOwner: (id) => owners.delete(id),
-        resolvePickId,
-        isOwnedByOtherLayer: (layerId, pickedId) =>
-          [...owners].some(
-            ([owner, predicate]) => owner !== layerId && predicate(pickedId),
-          ),
-      },
-    },
   });
-  owners.set('trails', (id) => String(id).startsWith('gev-trail:'));
-  owners.set('flights', (id) => id === 'abc123');
-  t.after(() => layer.destroy());
+  // The app's pick owners: the trails, and a Flights contact.
+  registerPickOwner('trails', (id) => String(id).startsWith('gev-trail:'));
+  registerPickOwner('flights', (id) => id === 'abc123');
+  t.after(() => {
+    unregisterPickOwner('trails');
+    unregisterPickOwner('flights');
+    layer.destroy();
+    harness.release();
+  });
   receiver.set({
     aircraft: [record(), record({ icao: 'def456', lat: 0.01 })],
   });

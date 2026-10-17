@@ -65,7 +65,10 @@ const cesiumNearFar = (scalar) =>
  * @param {string} options.spriteLayer The fleet's slot in data/spriteOrder.
  * @param {number} [options.headingOffsetDeg=0] Model nose vs Cesium heading 0.
  * @param {{ billboardCollection?: object, modelCollection?: object }} [options.adopt]
- *   Test seam: drive existing (fake) collections instead of creating them.
+ *   Drive existing collections instead of creating them (test fakes; a
+ *   layer that keeps its own model collection, local ADS-B).
+ * @param {(options: object) => Promise<object>} [options.loadModel] The glTF
+ *   loader (test seam; Cesium.Model.fromGltfAsync).
  * @returns {import('./contract.js').AircraftRenderer}
  */
 export function createAircraftCesiumRenderer({
@@ -74,6 +77,7 @@ export function createAircraftCesiumRenderer({
   spriteLayer,
   headingOffsetDeg = 0,
   adopt = null,
+  loadModel = (options) => Cesium.Model.fromGltfAsync(options),
 }) {
   let billboards = adopt?.billboardCollection ?? null;
   let models = adopt?.modelCollection ?? null;
@@ -202,7 +206,7 @@ export function createAircraftCesiumRenderer({
       unlit,
       id,
     }) =>
-      Cesium.Model.fromGltfAsync({
+      loadModel({
         url,
         asynchronous: false,
         minimumPixelSize,
@@ -222,7 +226,7 @@ export function createAircraftCesiumRenderer({
       unlit,
       id,
     }) =>
-      Cesium.Model.fromGltfAsync({
+      loadModel({
         url,
         asynchronous: false,
         minimumPixelSize,
@@ -237,7 +241,7 @@ export function createAircraftCesiumRenderer({
       }),
     // Warms Cesium's glTF cache (the retained instance is never drawn).
     preload: (url) =>
-      Cesium.Model.fromGltfAsync({
+      loadModel({
         url,
         asynchronous: false,
       }),

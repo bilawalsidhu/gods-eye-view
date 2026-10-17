@@ -26,6 +26,7 @@
 import { APPLICATION_LAYER_DIRECTORY } from './directory.js';
 import { createFlightsCesiumRenderer } from '../../layers/flights/render/cesium.js';
 import { createMilitaryCesiumRenderer } from '../../layers/military/render/cesium.js';
+import { createLocalAdsbCesiumRenderer } from '../../layers/localAdsb/render/cesium.js';
 
 const ENGINE_KINDS = new Set(['cesium', 'navara']);
 
@@ -87,6 +88,7 @@ export const layerAvailableOn = (layerId, engineKind) =>
 export const CESIUM_LAYER_RENDERERS = Object.freeze({
   flights: createFlightsCesiumRenderer,
   military: createMilitaryCesiumRenderer,
+  'local-adsb': createLocalAdsbCesiumRenderer,
 });
 
 // The other application layers still draw themselves on Cesium.
