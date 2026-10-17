@@ -100,10 +100,20 @@ const report = await page.evaluate(async () => {
     const center = geo.cartesian3.fromDegrees(window.__QA_SITE.lon, window.__QA_SITE.lat, 200);
     const nearby = layer.getNearby(center, 15000, 60);
     const exclude = engine.movers.list().map(({ id }) => id).filter((id) => id.startsWith('flights'));
-    const { cachedGroundFloor } = await import('/src/data/groundFloor.js');
+    // The app's own ground floor (the scene's surface services, not a fresh
+    // import of the module).
+    const { cachedGroundFloor } = gev.surfaceServices.groundFloor;
     const out = [];
+    // A contact a 3D model draws is measured where the model is (its sprite
+    // is hidden and keeps the pre-floor height by design, T7).
+    const drawnRows = new Map((gev.layers.drawn('flights') ?? []).map((row) => [row.id, row]));
+    const drawnAt = (p) => {
+      const model = drawnRows.get(p.id)?.model;
+      return model?.show && model.ready && model.position ? model.position : null;
+    };
     for (const p of nearby) {
-      const c = geo.cartographic.fromCartesian(p.position);
+      const modelAt = drawnAt(p);
+      const c = geo.cartographic.fromCartesian(modelAt ?? p.position);
       const answer = engine.surface.sampleHeightDetailed(
         geo.cartographic.fromRadians(c.longitude, c.latitude, 0),
         { exclude },
@@ -112,6 +122,7 @@ const report = await page.evaluate(async () => {
       out.push({
         id: p.id,
         renderAltM: +c.height.toFixed(1),
+        drawnBy: modelAt ? 'model' : 'sprite',
         meshM: meshH != null ? +meshH.toFixed(1) : null,
         aboveMeshM: meshH != null ? +(c.height - meshH).toFixed(1) : null,
         // Why a contact sits where it does (10b review 6): the probe's own
@@ -153,9 +164,15 @@ const report = await page.evaluate(async () => {
     }
   };
   walk(v.scene.primitives);
+  const drawnRows = new Map((gev.layers?.drawn('flights') ?? []).map((row) => [row.id, row]));
+  const drawnAt = (p) => {
+    const model = drawnRows.get(p.id)?.model;
+    return model?.show && model.ready && model.position ? model.position : null;
+  };
   const out = [];
   for (const p of nearby) {
-    const c = ell.cartesianToCartographic(p.position);
+    const modelAt = drawnAt(p);
+    const c = ell.cartesianToCartographic(modelAt ?? p.position);
     const latDeg = c.latitude * 180 / Math.PI, lonDeg = c.longitude * 180 / Math.PI;
     let meshH = null;
     try {
@@ -165,6 +182,7 @@ const report = await page.evaluate(async () => {
     out.push({
       id: p.id,
       renderAltM: +c.height.toFixed(1),
+      drawnBy: modelAt ? 'model' : 'sprite',
       meshM: meshH != null ? +meshH.toFixed(1) : null,
       aboveMeshM: meshH != null ? +(c.height - meshH).toFixed(1) : null,
     });
