@@ -119,10 +119,18 @@ export function createViewerHost({ state, parts }) {
     return promise;
   }
 
-  /** Open an image: true once its first pose is in, false if it failed or was overtaken. */
-  async function open(providerId, imageId, { frame = true } = {}) {
+  /**
+   * Open an image: true once its first pose is in, false if it failed, was
+   * overtaken, or `signal` fired first. An abort while the viewer mounts or
+   * loads closes the photo: nothing opens for a request that was withdrawn.
+   */
+  async function open(
+    providerId,
+    imageId,
+    { frame = true, signal = null } = {},
+  ) {
     const entry = providerEntry(providerId);
-    if (!entry || !imageId) return false;
+    if (!entry || !imageId || signal?.aborted) return false;
     if (!state.street.host) {
       // A nearest-image lookup may have set it; nothing is loading now.
       state.street.loading = false;
@@ -133,6 +141,10 @@ export function createViewerHost({ state, parts }) {
     }
     const seq = ++openSeq;
     const current = () => seq === openSeq;
+    const onAbort = () => {
+      if (current()) close();
+    };
+    signal?.addEventListener('abort', onAbort, { once: true });
     // Claimed now, honoured after loading only if nothing newer took the camera.
     const ticket =
       frame && !state.street.follow ? parts.follow.beginFraming() : null;
@@ -157,6 +169,7 @@ export function createViewerHost({ state, parts }) {
       if (current())
         state.street.error = error?.message || msg('Image could not be opened');
     } finally {
+      signal?.removeEventListener('abort', onAbort);
       if (current()) state.street.loading = false;
       notify();
     }

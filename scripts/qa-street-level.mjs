@@ -423,9 +423,21 @@ async function clickPanelControl(page, selector, { timeout = 5_000 } = {}) {
   }
 }
 
+/**
+ * Open a share link as a fresh document. Changing only the hash of a live
+ * page and reloading races the app's share-link writer, which can put its
+ * own state back in the hash before the reload reads it.
+ */
+async function openLinkFresh(page, link) {
+  await page.goto('about:blank');
+  await page.goto(link, { waitUntil: 'domcontentloaded', timeout: 120_000 });
+}
+
 /** Load the app and clear the first-run dialog. */
 export async function boot(page, url) {
-  await page.goto(url, { waitUntil: 'domcontentloaded' });
+  // A cold dev server compiles the app on first load; under load that can
+  // take longer than the default 30 s.
+  await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 120_000 });
   await clearFirstRun(page);
 }
 
@@ -461,6 +473,174 @@ function waitForCoverage(page, { timeout = 90_000 } = {}) {
     },
     { timeout },
   );
+}
+
+/**
+ * Coverage that has stopped changing: live tiles keep streaming in after the
+ * first ones, and every batch rebuilds the ground primitives a click aims at.
+ */
+function waitForCoverageSettled(
+  page,
+  { quietMs = 1_200, timeout = 60_000 } = {},
+) {
+  return page.waitForFunction(
+    (quiet) => {
+      const u = window.__godsEyeView.dataManager.layers
+        .get('street-level')
+        .module.getUIState();
+      const now = Date.now();
+      const last = window.__qaCoverageWatch || { count: -1, since: now };
+      if (u.coverage.loading || u.coverage.count !== last.count) {
+        window.__qaCoverageWatch = { count: u.coverage.count, since: now };
+        return false;
+      }
+      return u.coverage.count > 0 && now - last.since >= quiet;
+    },
+    { timeout, polling: 200 },
+    quietMs,
+  );
+}
+
+/**
+ * Coverage lines are asynchronous ground primitives: built over frames (many
+ * of them on a software renderer), and not pickable until built. Wait until
+ * every primitive the layer owns reports ready.
+ */
+function waitForLinesReady(page, { timeout = 120_000 } = {}) {
+  return page.waitForFunction(
+    () => {
+      const scene = window.__godsEyeView.viewer.scene;
+      let total = 0;
+      let ready = 0;
+      const visit = (collection) => {
+        if (!collection || typeof collection.get !== 'function') return;
+        for (let i = 0; i < collection.length; i++) {
+          const item = collection.get(i);
+          if (!item) continue;
+          if (typeof item.get === 'function' && 'length' in item) visit(item);
+          else if ('ready' in item && 'geometryInstances' in item) {
+            total++;
+            if (item.ready) ready++;
+          }
+        }
+      };
+      visit(scene.primitives);
+      visit(scene.groundPrimitives);
+      window.__qaLinesReady = { total, ready };
+      return total > 0 && ready === total;
+    },
+    { timeout, polling: 250 },
+  );
+}
+
+/**
+ * Cesium compiles the pick pass for new primitives on their first pick; on a
+ * software renderer that one pick can take 20 s, while the next take
+ * milliseconds. Pay it once, outside any timed wait.
+ */
+async function warmPickPass(page) {
+  await page.evaluate(() => {
+    const viewer = window.__godsEyeView.viewer;
+    const scene = viewer.scene;
+    const rect = scene.canvas.getBoundingClientRect();
+    const Cartographic = viewer.camera.positionCartographic.constructor;
+    const probe = scene.cartesianToCanvasCoordinates(
+      scene.globe.ellipsoid.cartographicToCartesian(
+        Cartographic.fromDegrees(0, 0, 0),
+      ),
+    );
+    const Cartesian2 = probe?.constructor;
+    const at = Cartesian2
+      ? new Cartesian2(rect.width / 2, rect.height / 2)
+      : { x: rect.width / 2, y: rect.height / 2 };
+    scene.pick(at);
+    scene.pick(at, 15, 15);
+  });
+}
+
+/**
+ * Install `findPickPoint` in the page, so a pick and the click on it can
+ * happen in one JavaScript turn: no frame can rebuild the primitive between
+ * finding the pixel and clicking it. The click is the pointer pair Cesium's
+ * LEFT_CLICK is made of, dispatched on the canvas.
+ */
+async function installPicker(page) {
+  await page.evaluate(`window.__qaFindPickPoint = ${findPickPoint};`);
+}
+
+/** In the page: find a pickable pixel for `spec` and click it at once. */
+function findAndClickPickPoint(spec) {
+  const hit = window.__qaFindPickPoint(spec);
+  if (!hit) return null;
+  const canvas = window.__godsEyeView.viewer.scene.canvas;
+  const init = (buttons) => ({
+    bubbles: true,
+    cancelable: true,
+    composed: true,
+    clientX: hit.x,
+    clientY: hit.y,
+    screenX: hit.x,
+    screenY: hit.y,
+    button: 0,
+    buttons,
+    pointerId: 1,
+    pointerType: 'mouse',
+    isPrimary: true,
+    view: window,
+  });
+  canvas.dispatchEvent(new PointerEvent('pointerdown', init(1)));
+  canvas.dispatchEvent(new PointerEvent('pointerup', init(0)));
+  return hit;
+}
+
+/**
+ * Select a sequence by clicking its line: find and click in one turn, wait
+ * for the selection, and start over on a scene that rebuilt under the click.
+ */
+async function selectSequenceByClick(
+  page,
+  spec,
+  { attempts = 3, findTimeout = 90_000, selectTimeout = 12_000 } = {},
+) {
+  const tried = [];
+  for (let attempt = 1; attempt <= attempts; attempt++) {
+    let handle;
+    try {
+      handle = await page.waitForFunction(
+        findAndClickPickPoint,
+        { timeout: findTimeout, polling: 300 },
+        spec,
+      );
+    } catch (error) {
+      if (error?.name !== 'TimeoutError') throw error;
+      const seen = await page.evaluate(() => ({
+        picks: window.__qaPickStats || null,
+        primitives: window.__qaLinesReady || null,
+        coverage: window.__godsEyeView.dataManager.layers
+          .get('street-level')
+          .module.getUIState().coverage,
+      }));
+      throw new Error(
+        `no pickable coverage line within ${findTimeout / 1000} s: ${JSON.stringify(seen)}`,
+        { cause: error },
+      );
+    }
+    const at = await handle.jsonValue();
+    const selected = await settle(
+      page,
+      (id) => {
+        const q = window.__godsEyeView.dataManager.layers
+          .get('street-level')
+          .module.getUIState().sequence;
+        return q.selectedId === id && !q.loading && q.images > 0;
+      },
+      at.id,
+      { timeout: selectTimeout },
+    );
+    if (selected) return { at, attempt, tried };
+    tried.push(`${Math.round(at.x)},${Math.round(at.y)} on ${at.id}`);
+  }
+  return { at: null, attempt: attempts, tried };
 }
 
 async function assertKeylessGate(page) {
@@ -539,6 +719,7 @@ export function findPickPoint({
   points,
   billboardIds,
   billboardPrefix = null,
+  linesFrom = null,
   budgetMs = 4000,
 }) {
   const viewer = window.__godsEyeView.viewer;
@@ -547,6 +728,66 @@ export function findPickPoint({
   const rect = canvas.getBoundingClientRect();
   const Cartographic = viewer.camera.positionCartographic.constructor;
   let Cartesian2 = null;
+  // Draped lines lie on the drawn surface, not the ellipsoid: in Sacramento
+  // the ground is ~30 m below it, enough to miss a line by 10+ px. Aim at
+  // the height the globe reports where it has it.
+  const surfacePoint = (lon, lat) => {
+    const at = Cartographic.fromDegrees(lon, lat, 0);
+    const height =
+      scene.globe && scene.globe.show !== false
+        ? scene.globe.getHeight(at)
+        : undefined;
+    at.height = Number.isFinite(height) ? height : 0;
+    return scene.globe.ellipsoid.cartographicToCartesian(at);
+  };
+  // Live coverage: aim at the lines the provider drew, nearest the middle of
+  // the screen first. A blind pixel scan needs thousands of picks, each a
+  // render, which a loaded machine cannot finish in time.
+  if (!points && linesFrom) {
+    const lines = window.__godsEyeView.dataManager.layers
+      .get('street-level')
+      .module.coverageLines(linesFrom);
+    const samples = [];
+    for (const line of lines) {
+      if (id !== null && line.id !== id) continue;
+      for (const part of line.parts) {
+        const step = Math.max(1, Math.floor(part.length / 6));
+        for (let i = 0; i < part.length; i += step) samples.push(part[i]);
+      }
+    }
+    const centreX = rect.width / 2;
+    const centreY = rect.height / 2;
+    const onScreen = [];
+    for (const [lon, lat] of samples) {
+      // Ranking only: the ellipsoid is close enough, and the surface height
+      // of thousands of vertices is not cheap. The aimed few use it below.
+      const at = scene.cartesianToCanvasCoordinates(
+        scene.globe.ellipsoid.cartographicToCartesian(
+          Cartographic.fromDegrees(lon, lat, 0),
+        ),
+      );
+      if (!at) continue;
+      if (
+        at.x < rect.width * 0.1 ||
+        at.x > rect.width * 0.9 ||
+        at.y < rect.height * 0.15 ||
+        at.y > rect.height * 0.85
+      )
+        continue;
+      onScreen.push([lon, lat, Math.hypot(at.x - centreX, at.y - centreY)]);
+    }
+    onScreen.sort((a, b) => a[2] - b[2]);
+    // A few points near the middle per attempt: every pick is a render, and
+    // short attempts repeat often while the scene settles.
+    points = onScreen.slice(0, 16).map(([lon, lat]) => [lon, lat]);
+    window.__qaPickStats = {
+      lines: lines.length,
+      onScreen: onScreen.length,
+      tried: points.length,
+      at: Date.now(),
+    };
+    if (!points.length) return null;
+  }
   const windowPoint = (x, y) => (Cartesian2 ? new Cartesian2(x, y) : { x, y });
   const wanted = (picked) => {
     const pid =
@@ -584,15 +825,39 @@ export function findPickPoint({
     }
   }
   for (const [lon, lat] of points || []) {
-    const at = scene.cartesianToCanvasCoordinates(
-      scene.globe.ellipsoid.cartographicToCartesian(
-        Cartographic.fromDegrees(lon, lat, 0),
-      ),
-    );
+    const at = scene.cartesianToCanvasCoordinates(surfacePoint(lon, lat));
     if (at) {
       Cartesian2 ??= at.constructor;
       centres.push([at.x, at.y]);
     }
+  }
+  if (linesFrom) {
+    // One 15 px pick per aimed point says whether a line is near it; only a
+    // window that answers is searched pixel by pixel. Each pick is a render.
+    const around = [];
+    for (let r = 0; r <= 7; r++)
+      for (const offset of [
+        [0, 0],
+        [r, 0],
+        [-r, 0],
+        [0, r],
+        [0, -r],
+        [r, r],
+        [-r, -r],
+        [r, -r],
+        [-r, r],
+      ])
+        around.push(offset);
+    for (const [cx, cy] of centres) {
+      if (cx < 10 || cy < 10 || cx > rect.width - 10 || cy > rect.height - 10)
+        continue;
+      if (!wanted(scene.pick(windowPoint(cx, cy), 15, 15))) continue;
+      for (const [dx, dy] of around) {
+        const hit = tryAt(cx + dx, cy + dy);
+        if (hit) return hit;
+      }
+    }
+    return null;
   }
   // A pick is a render of the scene (0.5–2 s each under SwiftShader): try
   // the centres the canvas is on top of first, nearest the screen centre,
@@ -1676,11 +1941,18 @@ async function main() {
               window.__godsEyeView.mapStackController.setStack(stackId),
             id,
           );
-          await settle(
+          // A stack switch loads imagery; under load that outlasts the
+          // default wait. A step must never go on with the wrong map.
+          const switched = await settle(
             page,
             (stackId) =>
               window.__godsEyeView.mapStackController.getActiveId() === stackId,
             id,
+            { timeout: 60_000 },
+          );
+          assert.ok(
+            switched,
+            `the map stack switched to ${id} (active: ${await stacks.active()})`,
           );
         },
       };
@@ -1993,33 +2265,29 @@ async function main() {
             PHOTO_LINE.south +
               ((i + 2) / 13) * (PHOTO_LINE.north - PHOTO_LINE.south),
           ]);
-          // Ground primitives are built over a few frames: poll for a pick.
-          // A loaded machine renders a frame in seconds: 60 s, not 30.
-          const handle = await page.waitForFunction(
-            findPickPoint,
-            { timeout: 60_000, polling: 250 },
-            {
-              prefix: 'mly:seq:',
-              id: target,
-              points: fixtures ? along : null,
-              billboardIds: null,
-            },
-          );
-          const at = await handle.jsonValue();
-          await page.mouse.click(at.x, at.y);
-          const selected = await uiUntil(
-            (u, id) =>
-              u.sequence.selectedId === id &&
-              !u.sequence.loading &&
-              u.sequence.images > 0,
-            at.id,
-            { timeout: 30_000 },
-          );
+          // Live tiles keep arriving and every batch rebuilds the lines: wait
+          // for them to settle, then find and click in one turn.
+          await waitForCoverageSettled(page);
+          await waitForLinesReady(page);
+          await waitForStill(page, PANEL_ID);
+          await warmPickPass(page);
+          await installPicker(page);
+          const { at, attempt, tried } = await selectSequenceByClick(page, {
+            prefix: 'mly:seq:',
+            id: target,
+            points: fixtures ? along : null,
+            billboardIds: null,
+            linesFrom: fixtures ? null : 'mapillary',
+          });
           const sequence = (await ui()).sequence;
           assert.ok(
-            selected,
-            `the click at ${Math.round(at.x)},${Math.round(at.y)} on ${at.id} selected it: ${JSON.stringify(sequence)}`,
+            at,
+            `a click on a coverage line selected its sequence (tried ${tried.join(' | ')}): ${JSON.stringify(sequence)}`,
           );
+          if (attempt > 1)
+            console.log(
+              `  (selected on attempt ${attempt}; the scene rebuilt under ${tried.join(' | ')})`,
+            );
           if (fixtures)
             assert.equal(sequence.images, fixture.images.length, 'every photo');
           // The cones are on the globe: one of them picks as an image. Aim at
@@ -2977,6 +3245,235 @@ async function main() {
             'the restored layer did not reopen the panel',
           );
           assert.ok(await shared(true), 'still shared as collapsed');
+        },
+      );
+      if (fixtures) {
+        const photo = fixture.images[0];
+        // The camera sits ~330 m north of the photo: the lookup must use the
+        // link's point, not the view centre.
+        const cameraLat = Number((photo.lat + 0.003).toFixed(6));
+        await step(
+          'a link to street-level photos (sl=) opens the one at its point after it restores',
+          async () => {
+            await openLinkFresh(
+              page,
+              `${url.split('#')[0]}#v=2&lat=${cameraLat}&lon=${photo.lon}&alt=600&heading=0&pitch=-60&roll=0&sl=mapillary,${photo.lat},${photo.lon}`,
+            );
+            await clearFirstRun(page);
+            await waitForImage();
+            const street = (await ui()).street;
+            assert.equal(street.error, null, `viewer error: ${street.error}`);
+            assert.equal(street.providerId, 'mapillary');
+            assert.equal(
+              street.imageId,
+              photo.id,
+              `the photo at the link's point opened, not the nearest to the camera: ${street.imageId}`,
+            );
+            assert.equal(
+              await page.evaluate(() => location.hash.includes('sl=')),
+              false,
+              'the rewritten link no longer carries the one-shot request',
+            );
+          },
+        );
+        await step(
+          'the show_street_level action opens the nearest photo at a point without a pointer',
+          async () => {
+            await page.evaluate(() =>
+              window.__godsEyeView.dataManager.layers
+                .get('street-level')
+                .module.closeViewer(),
+            );
+            const result = await page.evaluate(
+              (at) =>
+                window.__godsEyeView.voiceCommands.runner('show_street_level', {
+                  latitude: at.lat,
+                  longitude: at.lon,
+                  provider: 'mapillary',
+                  fly: false,
+                }),
+              { lat: photo.lat, lon: photo.lon },
+            );
+            assert.equal(
+              result.ok,
+              true,
+              `action failed: ${result.stage} ${result.error}`,
+            );
+            assert.equal(result.provider, 'mapillary');
+            assert.ok(
+              fixtureIds.has(result.imageId),
+              `a fixture photo opened: ${result.imageId}`,
+            );
+            assert.match(result.say || '', /^Mapillary at /);
+          },
+        );
+      } else
+        await skipStep(
+          'fixtures only',
+          'a link to street-level photos (sl=) and the show_street_level action open a fixture photo',
+        );
+      await step(
+        'an sl=google link never loads a photo by itself: keyless it stops at the key, keyed it arms and waits for OPEN',
+        async ({ skip }) => {
+          const streetLevel = () =>
+            window.__godsEyeView.dataManager.layers.get('street-level').module;
+          const point = STREET_VIEW_STREET;
+          // The link's camera sits ~330 m north of the photo: a flight would
+          // move it, and a press that ignored the armed point would open
+          // something else.
+          const cameraLat = Number((point.lat + 0.003).toFixed(6));
+          const cameraHeight = 600;
+          // What a Street View lookup and load cost: the Maps JS API's
+          // SingleImageSearch (the nearest lookup), GetMetadata and the
+          // panorama tiles. Script loads are not counted.
+          const STREET_VIEW_REQUEST =
+            /MapsJsInternalService\/(SingleImageSearch|GetMetadata)|GeoPhotoService|streetviewpixels-pa\.googleapis\.com/;
+          const googleRequests = [];
+          const onRequest = (request) => {
+            if (STREET_VIEW_REQUEST.test(request.url()))
+              googleRequests.push(request.url());
+          };
+          page.on('request', onRequest);
+          try {
+            await openLinkFresh(
+              page,
+              `${url.split('#')[0]}#v=2&lat=${cameraLat}&lon=${point.lon}&alt=${cameraHeight}&heading=0&pitch=-60&roll=0&map=osm&sl=google,${point.lat},${point.lon}`,
+            );
+            await clearFirstRun(page);
+            await page.waitForFunction(
+              () => Boolean(window.__godsEyeView?.voiceCommands?.runner),
+              { timeout: 60_000 },
+            );
+            // The restored camera: the link's pose, before any action moved it.
+            const camera = () =>
+              page.evaluate(() => {
+                const c =
+                  window.__godsEyeView.viewer.camera.positionCartographic;
+                return {
+                  lat: (c.latitude * 180) / Math.PI,
+                  lon: (c.longitude * 180) / Math.PI,
+                  height: c.height,
+                };
+              });
+            assert.ok(
+              await settle(
+                page,
+                (want) => {
+                  const c =
+                    window.__godsEyeView.viewer.camera.positionCartographic;
+                  return (
+                    Math.abs((c.latitude * 180) / Math.PI - want.lat) < 0.0005
+                  );
+                },
+                { lat: cameraLat },
+                { timeout: 60_000 },
+              ),
+              'the link camera restored',
+            );
+            if (!googleKey) {
+              // Without a key the action stops at the key, before any flight,
+              // map switch or source change: the camera stays where the link
+              // put it, and the direct call says why.
+              const direct = await page.evaluate(
+                (at) =>
+                  window.__godsEyeView.voiceCommands.runner(
+                    'show_street_level',
+                    {
+                      latitude: at.lat,
+                      longitude: at.lon,
+                      provider: 'google',
+                      fly: false,
+                      autoOpen: false,
+                    },
+                  ),
+                point,
+              );
+              assert.equal(direct.ok, false);
+              assert.equal(
+                direct.stage,
+                'key',
+                `stage: ${direct.stage} ${direct.error}`,
+              );
+              const after = await page.evaluate(
+                `(() => { const m = (${streetLevel})(); const u = m.getUIState(); return { stack: window.__godsEyeView.mapStackController.getActiveId(), google: m.getParams().google === true, armed: u.street.armed, open: u.street.open }; })()`,
+              );
+              assert.deepEqual(
+                after,
+                { stack: 'osm', google: false, armed: null, open: false },
+                'a keyless Street View link changes nothing',
+              );
+              const still = await camera();
+              assert.ok(
+                Math.abs(still.lat - cameraLat) < 0.0005,
+                `the camera did not fly: ${still.lat}`,
+              );
+              assert.deepEqual(googleRequests, [], 'no Street View request');
+              return skip('no Google key');
+            }
+            if (!(await stacks.photoreal())) return skip('no Google 3D');
+            const armed = await settle(
+              page,
+              `(() => { const u = (${streetLevel})().getUIState(); return u.street.armed !== null && u.providers.some((p) => p.id === 'google' && p.on); })()`,
+              undefined,
+              { timeout: 90_000 },
+            );
+            assert.ok(armed, 'the link armed Street View');
+            await new Promise((resolve) => setTimeout(resolve, 5_000));
+            const waiting = await page.evaluate(
+              `(() => { const u = (${streetLevel})().getUIState(); return { open: u.street.open, loading: u.street.loading, imageId: u.street.imageId, stack: window.__godsEyeView.mapStackController.getActiveId(), armedAt: u.street.armed?.point }; })()`,
+            );
+            assert.deepEqual(
+              {
+                open: waiting.open,
+                loading: waiting.loading,
+                imageId: waiting.imageId,
+                stack: waiting.stack,
+              },
+              {
+                open: false,
+                loading: false,
+                imageId: null,
+                stack: 'photoreal',
+              },
+              'nothing loaded without a click',
+            );
+            assert.deepEqual(
+              waiting.armedAt,
+              { lat: point.lat, lon: point.lon },
+              'armed at the link point',
+            );
+            assert.deepEqual(
+              googleRequests,
+              [],
+              'no Street View request before the press',
+            );
+            // The press, on a button that is really in view.
+            await clickPanelControl(page, '#sl-nearest-btn');
+            await page.waitForFunction(
+              `(() => { const s = (${streetLevel})().getUIState().street; return (s.imageId && !s.loading) || s.error; })()`,
+              { timeout: 90_000 },
+            );
+            const street = (await ui()).street;
+            assert.equal(street.error, null, `viewer error: ${street.error}`);
+            assert.equal(street.providerId, 'google');
+            assert.ok(street.imageId, 'the press opened the panorama');
+            assert.ok(
+              googleRequests.length >= 1,
+              'the press made the Street View request',
+            );
+            const metres = Math.hypot(
+              (street.position.lat - point.lat) * 111_320,
+              (street.position.lon - point.lon) *
+                111_320 *
+                Math.cos((point.lat * Math.PI) / 180),
+            );
+            assert.ok(
+              metres <= 250,
+              `the panorama is within 250 m of the link point: ${Math.round(metres)} m`,
+            );
+          } finally {
+            page.off('request', onRequest);
+          }
         },
       );
       if (fixtures)

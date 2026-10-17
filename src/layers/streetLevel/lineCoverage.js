@@ -1061,6 +1061,25 @@ export function createLineCoverage({
     return ids.size + points;
   }
 
+  /**
+   * The sequence lines drawn now, as `[lon, lat]` parts per sequence: for
+   * diagnostics and the browser gate, which aims its clicks at them instead
+   * of scanning pixels. Stale tiles stay on the globe while a new zoom loads,
+   * so they count. Read-only copies.
+   */
+  function drawnLines() {
+    const lines = [];
+    for (const entry of drawnEntries())
+      for (const [id, sequence] of entry.sequences ?? [])
+        lines.push({
+          id,
+          parts: (sequence.parts || []).map((part) =>
+            part.map(([lon, lat]) => [lon, lat]),
+          ),
+        });
+    return lines;
+  }
+
   return {
     attach,
     detach,
@@ -1072,5 +1091,6 @@ export function createLineCoverage({
     setSurface,
     recolorSequence,
     sequenceCount,
+    drawnLines,
   };
 }

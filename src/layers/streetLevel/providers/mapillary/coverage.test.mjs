@@ -987,3 +987,90 @@ test('lines a partial terrain lookup left draped are cast once the terrain recov
   assert.deepEqual([entry.castLines, entry.drapedLines], [2, 0], 'all cast');
   coverage.clear();
 });
+
+test('drawnLines reports the lines on the globe as [lon, lat] copies, filtered like the drawing', async () => {
+  const { source, state, coverage, centre } = setup();
+  assert.deepEqual(coverage.drawnLines(), [], 'nothing before a tile');
+  const sequences = [
+    {
+      id: 'flat-1',
+      parts: [
+        [
+          [centre.lon - 0.001, centre.lat],
+          [centre.lon + 0.001, centre.lat],
+        ],
+      ],
+      capturedAt: 2_000_000_000_000,
+    },
+    {
+      id: 'pano-1',
+      parts: [
+        [
+          [centre.lon, centre.lat - 0.001],
+          [centre.lon, centre.lat],
+          [centre.lon, centre.lat + 0.001],
+        ],
+      ],
+      capturedAt: 1_000_000_000_000,
+      isPano: true,
+    },
+  ];
+  state.context.filter = { pano: 'pano', sinceMs: null };
+  coverage.refresh();
+  source.calls[0].resolve(encodeCoverageTile(centre.tile, { sequences }));
+  await settle();
+  const lines = coverage.drawnLines();
+  assert.deepEqual(
+    lines.map((line) => line.id),
+    ['pano-1'],
+    'only the drawn (filtered) lines',
+  );
+  assert.equal(lines[0].parts.length, 1);
+  assert.equal(lines[0].parts[0].length, 3);
+  // Tile coordinates are quantised to the tile grid (a few metres at z14).
+  const [midLon, midLat] = lines[0].parts[0][1];
+  assert.ok(
+    Math.abs(midLon - centre.lon) < 1e-4 &&
+      Math.abs(midLat - centre.lat) < 1e-4,
+    `coordinates as [lon, lat]: ${midLon}, ${midLat} vs ${centre.lon}, ${centre.lat}`,
+  );
+  assert.ok(
+    lines[0].parts[0][0][1] < lines[0].parts[0][2][1],
+    'vertex order kept: south to north',
+  );
+  // Copies: a caller cannot bend the drawn line.
+  lines[0].parts[0][1][0] = 0;
+  assert.notEqual(coverage.drawnLines()[0].parts[0][1][0], 0);
+  state.context.filter = { pano: 'all', sinceMs: null };
+  coverage.rebuild();
+  assert.deepEqual(
+    coverage
+      .drawnLines()
+      .map((line) => line.id)
+      .sort(),
+    ['flat-1', 'pano-1'],
+  );
+});
+
+test('drawnLines includes the stale zoom’s tiles, which stay on the globe while the new zoom loads', async () => {
+  const { source, state, coverage, centre, bytes, tileKey } = setup();
+  coverage.refresh();
+  source.calls[0].resolve(bytes);
+  await settle();
+  assert.deepEqual(
+    coverage.drawnLines().map((line) => line.id),
+    ['seq-1'],
+  );
+  // A zoom change moves the drawn tile to the stale set until the new one lands.
+  const entry = state.coverage.tiles.get(tileKey);
+  state.coverage.tiles.delete(tileKey);
+  state.coverage.stale.set(tileKey, entry);
+  assert.deepEqual(
+    coverage.drawnLines().map((line) => line.id),
+    ['seq-1'],
+    'still aimed at while stale',
+  );
+  state.coverage.stale.delete(tileKey);
+  assert.deepEqual(coverage.drawnLines(), [], 'gone once purged');
+  void centre;
+});

@@ -36,11 +36,33 @@ test('the complete Realtime tool payload pins the manifest-generated layer relea
     // consolidated tool wording (each policy stated once); model-facing tools
     // omit top-level anyOf (OpenAI rejects it). Contacts list routing preserves
     // requested radius and center authority in descriptions only.
-    // Street Level and GNSS extend the manifest; tracked and analyst aircraft describe broadcasts.
-    // Air quality (ECCC AQHI) extends the manifest.
+    // Street Level, GNSS and air quality (ECCC AQHI) extend the manifest;
+    // tracked and analyst aircraft describe broadcasts; show_street_level
+    // (map, source, photo) is the only change on top of main.
+    SHOW_STREET_LEVEL_PAYLOAD_DIGEST,
+  );
+  // Every shipped tool is byte-identical to the previous release: the new
+  // tool is the whole difference, so a later edit cannot hide in a re-pin.
+  const shipped = createHash('sha256')
+    .update(
+      JSON.stringify(
+        stable(
+          GEV_REALTIME_TOOLS.filter(
+            (tool) =>
+              !['set_cyber_sonar', 'show_street_level'].includes(tool.name),
+          ),
+        ),
+      ),
+    )
+    .digest('hex');
+  assert.equal(
+    shipped,
     '775ba323384b4c1b62fb8415bac52aecc3fc668e20bedcfa57e426dcd1da3969',
   );
 });
+
+const SHOW_STREET_LEVEL_PAYLOAD_DIGEST =
+  'b08de88ab9cf7c0525e4a9ae42ff6175616f6f69e4730500da2417430038f021';
 
 test('descriptions customize wording without changing immutable shared arguments', () => {
   const descriptions = {
@@ -96,7 +118,10 @@ test('metadata cannot add tools, fields, types or enum values', () => {
 
 test('all legacy action arguments are byte-identical after removing the deliberate additions', () => {
   const legacy = structuredClone(GEV_ACTION_SCHEMAS).filter(
-    (tool) => !['next_satellite_pass', 'set_cyber_sonar'].includes(tool.name),
+    (tool) =>
+      !['next_satellite_pass', 'set_cyber_sonar', 'show_street_level'].includes(
+        tool.name,
+      ),
   );
   // Layer enums are generated from the voice layer manifest and pinned by
   // layerManifest.test.mjs; the two shipped right-rail panels are additive.

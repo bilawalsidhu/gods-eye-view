@@ -13,3 +13,15 @@ body.ui-embed #world-overlay-actions,
 body.ui-embed #view-switcher {
   display: none !important;
 }
+
+/* Street-level photos open as the lifted viewer: the rail that holds the
+   panel is hidden here, and clean view would hide the lifted viewer too. */
+body.ui-embed .sl-viewer-wrap-expanded {
+  opacity: 1 !important;
+  visibility: visible !important;
+  pointer-events: auto !important;
+}
+/* Shrinking would return the photo into the hidden rail. */
+body.ui-embed .sl-viewer-wrap-expanded #sl-viewer-expand {
+  display: none !important;
+}

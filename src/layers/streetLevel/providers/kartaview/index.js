@@ -568,6 +568,7 @@ export function createKartaViewProvider({
             state.sequence.images.length,
           loading: state.sequence.loading,
         }),
+        coverageLines: () => coverage.drawnLines(),
 
         /**
          * The nearest photo within the search radius that can be shown, or

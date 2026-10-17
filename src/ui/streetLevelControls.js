@@ -29,6 +29,11 @@ const setAttr = (node, key, value) => {
  * Fills the Street Level panel body: provider chips, filters, legend and
  * viewer. The panel chrome itself belongs to the application shell.
  */
+/** True on an embedded page (`?embed=1` or the inline panel). */
+function isEmbedPage() {
+  return globalThis.document?.body?.classList?.contains('ui-embed') === true;
+}
+
 export class StreetLevelControls {
   constructor({ root, layer, actions }) {
     this.root = root;
@@ -450,7 +455,9 @@ export class StreetLevelControls {
     if (event.key === 'Escape') {
       event.preventDefault();
       event.stopPropagation();
-      this.setViewerExpanded(false, { dock: true });
+      // Embed mode hides the rail the photo would shrink into: Esc closes it.
+      if (isEmbedPage()) this.layer.closeViewer?.();
+      else this.setViewerExpanded(false, { dock: true });
       return;
     }
     // A radio off the roving tab stop (tabindex -1) is not a stop either.
@@ -660,6 +667,10 @@ export class StreetLevelControls {
     const open = state.street.open === true;
     if (open && !this._wasStreetOpen)
       this.setCollapsed(false, { persist: false });
+    // Embed mode hides the rail the panel sits in: an open photo is only
+    // visible lifted out of it, over the globe, whatever shrank it.
+    if (open && isEmbedPage() && !this.isViewerExpanded())
+      this.setViewerExpanded(true);
     this._wasStreetOpen = open;
   }
 

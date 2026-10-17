@@ -35,6 +35,14 @@ export const FILTER_DEFAULT = Object.freeze({ pano: 'all', sinceDays: 0 });
 export const NEAREST_RADIUS_M = 50;
 
 /**
+ * Widest nearest-image radius a caller may ask for, in metres. A geocoded
+ * landmark sits at its centroid, often further than 50 m from the nearest
+ * street; providers that can search wider (Google) honour it, the rest keep
+ * their own cap.
+ */
+export const NEAREST_RADIUS_MAX_M = 250;
+
+/**
  * The only map stack camera follow is offered on: elsewhere a camera at eye
  * height looks at a smeared texture.
  */

@@ -182,6 +182,7 @@ export function createMapillaryProvider({ source }) {
           images: state.sequence.images.length,
           loading: state.sequence.loading,
         }),
+        coverageLines: () => parts.coverage.drawnLines(),
 
         /**
          * Nearest image that passes the imagery filter, or null. The core

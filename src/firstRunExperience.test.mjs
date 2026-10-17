@@ -973,8 +973,9 @@ test('the voice TOOL SCHEMA matches the pinned contract — the mission mapping 
   // Canonical serialization pins every tool name, description, property and
   // ordering while allowing source formatting. Derived from the unchanged
   // release schema before formatting (the previous source-byte pin passed).
+  // show_street_level (street-level photos) is a later, separate tool.
   const legacyTools = structuredClone(GEV_REALTIME_TOOLS).filter(
-    (tool) => tool.name !== 'set_cyber_sonar',
+    (tool) => !['set_cyber_sonar', 'show_street_level'].includes(tool.name),
   );
   const hudLayout = legacyTools.find((tool) => tool.name === 'set_hud')
     .parameters.properties.layout;

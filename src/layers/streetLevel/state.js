@@ -30,6 +30,8 @@ export function freshStreet() {
     externalUrl: null,
     loading: false,
     error: null,
+    // A lookup a link prepared but left to a click: {point, providerIds, radiusM}.
+    armed: null,
   };
 }
 

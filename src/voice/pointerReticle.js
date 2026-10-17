@@ -23,6 +23,7 @@ export const CAMERA_TOOLS = new Set([
   'fly_route',
   'frame_overhead',
   'select_nearest_aircraft',
+  'show_street_level',
   'control_cockpit',
 ]);
 

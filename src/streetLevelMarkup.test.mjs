@@ -267,3 +267,25 @@ test('OPEN STREET VIEW keeps its width beside a long coverage line', () => {
   );
   assert.match(panelCss, /\.sl-meta-row \.sl-meta \{[^}]*min-width: 0;/);
 });
+
+test('embed mode shows the lifted viewer that clean view hides, without its shrink button', () => {
+  const lifted = css.match(
+    /body\.ui-embed \.sl-viewer-wrap-expanded \{([^}]*)\}/,
+  );
+  assert.ok(lifted, 'embed shows the lifted viewer');
+  for (const rule of [
+    'visibility: visible !important',
+    'opacity: 1 !important',
+    'pointer-events: auto !important',
+  ])
+    assert.ok(lifted[1].includes(rule), rule);
+  // The embed rules must come after clean view's hide, which they outrank only by order.
+  assert.ok(
+    css.indexOf('body.ui-clean-view .sl-viewer-wrap-expanded') <
+      css.indexOf('body.ui-embed .sl-viewer-wrap-expanded'),
+  );
+  assert.match(
+    css,
+    /body\.ui-embed \.sl-viewer-wrap-expanded #sl-viewer-expand \{[^}]*display: none !important/,
+  );
+});
