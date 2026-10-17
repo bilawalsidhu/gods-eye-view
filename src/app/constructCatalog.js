@@ -144,6 +144,10 @@ export function createApplicationCatalog({
         () =>
           createApplicationLocalAdsb({
             surface,
+            // QA fixture receivers (?qaFeed=local-adsb:fixture, dev only).
+            ...(sources.localAdsbFeeds
+              ? { feeds: sources.localAdsbFeeds }
+              : {}),
             enrichment: sources.flights,
             displayParams: () => flights().getParams(),
             ...(resolveAsset ? { resolveAsset } : {}),

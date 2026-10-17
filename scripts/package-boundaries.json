@@ -2601,7 +2601,8 @@
       "src/layers/flights/render/navara.js",
       "src/layers/military/render/navara.js",
       "src/layers/aircraft/qaDrawn.js",
-      "src/layers/localAdsb/render/cesium.js"
+      "src/layers/localAdsb/render/cesium.js",
+      "src/layers/localAdsb/render/navara.js"
     ],
     "external": [
       "hls.js",

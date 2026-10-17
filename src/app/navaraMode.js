@@ -61,6 +61,9 @@ export async function registerNavaraLayerRenderers() {
     military: async () =>
       (await import('../layers/military/render/navara.js'))
         .createMilitaryNavaraRenderer,
+    'local-adsb': async () =>
+      (await import('../layers/localAdsb/render/navara.js'))
+        .createLocalAdsbNavaraRenderer,
   };
   const missing = Object.keys(loaders).filter(
     (id) => !layerAvailableOn(id, 'navara'),
