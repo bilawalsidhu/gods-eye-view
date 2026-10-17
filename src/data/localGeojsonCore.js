@@ -586,14 +586,16 @@ export function createLocalGeoJsonLayer(
             try {
               let features = _cachedFeatures;
               if (!features) {
-                features = await loadInfrastructureFeatures(
+                const result = await loadInfrastructureFeatures(
                   Array.isArray(url) ? url : [url],
                   {
                     signal: _loadController.signal,
                   },
                 );
                 if (_destroyed) return;
-                _cachedFeatures = features;
+                features = result.features;
+                if (result.error) _error = localDatasetError(result.error);
+                else _cachedFeatures = features;
               }
 
               const geojson = {

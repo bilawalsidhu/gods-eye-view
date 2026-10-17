@@ -122,13 +122,13 @@ export function buildSupplement(collection, existing, provenance) {
     )
       throw new Error('Invalid or duplicate IGN dam: ' + raw.id);
     seen.add(p.gid);
-    if (p.gna === 'Terraplén de Defensa') {
+    if (p.gna === 'Terraplén de Defensa' || p.gna === 'Bañado') {
       excluded.push({
         id: 'ign-ar-dique-' + p.gid,
         name: p.fna,
         sourceFeatureId: raw.id,
         sourceType: p.gna,
-        reason: 'flood-defense-embankment',
+        reason: p.gna === 'Bañado' ? 'wetland' : 'flood-defense-embankment',
       });
       continue;
     }

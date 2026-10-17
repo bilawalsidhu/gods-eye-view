@@ -23,10 +23,10 @@ const osm = parseGeojsonLines(
 const packed = parseGeojsonLines(read('dams.geojsonl'));
 const expectedAnalystCount = [...osm, ...packed].filter(featurePoint).length;
 
-test('the pinned IGN snapshot reproduces 122 additions and audits exclusions and uncertain pairs', () => {
+test('the pinned IGN snapshot reproduces 121 additions and audits exclusions and uncertain pairs', () => {
   const result = buildSupplement(original, osm, metadata);
   assert.deepEqual(result.features, packed);
-  assert.equal(packed.length, 122);
+  assert.equal(packed.length, 121);
   assert.deepEqual(
     result.omitted.map((f) => f.retainedId),
     [110183925, 220340687],
@@ -35,9 +35,12 @@ test('the pinned IGN snapshot reproduces 122 additions and audits exclusions and
   assert.deepEqual(result.excluded, audit.excluded);
   assert.deepEqual(
     result.excluded.map((f) => f.id),
-    ['ign-ar-dique-2575'],
+    ['ign-ar-dique-2512', 'ign-ar-dique-2575'],
   );
-  assert.equal(result.excluded[0].reason, 'flood-defense-embankment');
+  assert.deepEqual(
+    result.excluded.map((f) => f.reason),
+    ['wetland', 'flood-defense-embankment'],
+  );
   assert.deepEqual(result.nearbyUnnamed, audit.nearbyUnnamed);
   assert.deepEqual(
     result.nearbyUnnamed.map((pair) => pair.ids),
@@ -127,14 +130,18 @@ test('renderer acquisition and analyst source include the same separate IGN pack
   assert.equal(records.length, expectedAnalystCount);
   assert.deepEqual(requests, infrastructureDataUrls('local-dams'));
   assert.ok(records.some((r) => r.name === 'Dique El Chocón'));
-  const features = await loadInfrastructureFeatures(requests.slice(), {
-    fetchImpl,
-  });
+  const { features, error } = await loadInfrastructureFeatures(
+    requests.slice(),
+    {
+      fetchImpl,
+    },
+  );
+  assert.equal(error, null);
   assert.equal(features.length, osm.length + packed.length);
   assert.equal(await source.getRecords('local-dams'), records);
 });
 
-test('a missing supplement fails the complete load and can be retried', async () => {
+test('a missing supplement keeps OSM available and is retried before caching the complete load', async () => {
   let fail = true;
   const source = createInfrastructureSource({
     fetchImpl: async (url) => ({
@@ -143,18 +150,54 @@ test('a missing supplement fails the complete load and can be retried', async ()
       text: async () => readFileSync(new URL(url), 'utf8'),
     }),
   });
-  await assert.rejects(source.getRecords('local-dams'), /HTTP 404/);
+  const partial = await source.getRecords('local-dams');
+  assert.equal(partial.length, osm.filter(featurePoint).length);
+  assert.ok(partial.every((r) => r.source === 'OpenStreetMap / OpenInfraMap'));
   fail = false;
-  assert.equal(
-    (await source.getRecords('local-dams')).length,
-    expectedAnalystCount,
-  );
+  const complete = await source.getRecords('local-dams');
+  assert.equal(complete.length, expectedAnalystCount);
+  assert.equal(await source.getRecords('local-dams'), complete);
   const controller = new AbortController();
   controller.abort();
   await assert.rejects(
     loadInfrastructureFeatures(['unused'], {
       signal: controller.signal,
       fetchImpl: () => assert.fail('aborted before fetch'),
+    }),
+    { name: 'AbortError' },
+  );
+});
+
+test('supplement parse failures preserve the main dataset, while main failures and aborts remain errors', async () => {
+  const urls = infrastructureDataUrls('local-dams');
+  const partial = await loadInfrastructureFeatures(urls, {
+    fetchImpl: async (url) => ({
+      ok: true,
+      text: async () =>
+        url === urls[0] ? readFileSync(new URL(url), 'utf8') : 'invalid JSON',
+    }),
+  });
+  assert.deepEqual(partial.features, osm);
+  assert.ok(partial.error instanceof SyntaxError);
+  await assert.rejects(
+    loadInfrastructureFeatures(urls, {
+      fetchImpl: async (url) => ({
+        ok: url !== urls[0],
+        status: 404,
+        text: async () => readFileSync(new URL(url), 'utf8'),
+      }),
+    }),
+    /HTTP 404/,
+  );
+  await assert.rejects(
+    loadInfrastructureFeatures(urls, {
+      fetchImpl: async (url) => {
+        if (url !== urls[0]) throw new DOMException('cancelled', 'AbortError');
+        return {
+          ok: true,
+          text: async () => readFileSync(new URL(url), 'utf8'),
+        };
+      },
     }),
     { name: 'AbortError' },
   );

@@ -131,7 +131,7 @@ test('datacenters and dams are listed nearest first with their own fields', asyn
   assert.doesNotMatch(dams.data.attribution, /IGN|Geográfico/);
 });
 
-test('dam query attribution follows matching records and rows retain their provenance', async () => {
+test('dam query attribution follows returned rows and rows retain their provenance', async () => {
   const osm = mapAnalystRecord(
     { id: 42, lat: 36, lon: -114, properties: { osm_id: 42, name: 'OSM dam' } },
     'local-dams',
@@ -157,8 +157,12 @@ test('dam query attribution follows matching records and rows retain their prove
     tools: coreTools,
     services: { infrastructure: { getRecords: async () => [osm, ign] } },
   });
-  const query = (bbox) =>
-    catalog.call('find_infrastructure', { kind: 'dams', area: { bbox } });
+  const query = (bbox, limit) =>
+    catalog.call('find_infrastructure', {
+      kind: 'dams',
+      area: { bbox },
+      ...(limit ? { limit } : {}),
+    });
   const onlyOsm = await query([-115, 35, -113, 37]);
   assert.equal(onlyOsm.data.attribution, osm.attribution);
   assert.equal(onlyOsm.data.rows[0].source_id, '42');
@@ -171,6 +175,12 @@ test('dam query attribution follows matching records and rows retain their prove
   const mixed = await query([-180, -90, 180, 90]);
   assert.match(mixed.data.attribution, /OpenStreetMap/);
   assert.match(mixed.data.attribution, /Geográfico/);
+  const limited = await query([-180, -90, 180, 90], 1);
+  assert.equal(limited.data.total, 2);
+  assert.equal(limited.data.returned, 1);
+  assert.equal(limited.data.rows[0].name, 'IGN dam');
+  assert.equal(limited.data.attribution, ign.attribution);
+  assert.equal('attribution' in limited.data.rows[0], false);
   assert.equal((await query([0, 0, 1, 1])).data.attribution, null);
 });
 

@@ -37,13 +37,13 @@ export function infrastructureDataUrls(layerId) {
   return [main, ...(INFRASTRUCTURE_SUPPLEMENT_URLS[layerId] ?? [])];
 }
 
-/** Load a layer's GeoJSONL files together; failed/aborted loads are not cached. */
+/** Keep the main dataset available when an optional supplement fails. */
 export async function loadInfrastructureFeatures(
   urls,
   { fetchImpl = (...args) => globalThis.fetch(...args), signal } = {},
 ) {
   signal?.throwIfAborted();
-  const batches = await Promise.all(
+  const batches = await Promise.allSettled(
     urls.map(async (url) => {
       const response = await fetchImpl(url, { signal });
       if (!response.ok) throw new Error(`HTTP ${response.status ?? '?'}`);
@@ -52,7 +52,21 @@ export async function loadInfrastructureFeatures(
       return parseGeojsonLines(text);
     }),
   );
-  return batches.flat();
+  signal?.throwIfAborted();
+  let error = null;
+  for (const [index, batch] of batches.entries()) {
+    if (batch.status === 'rejected') {
+      if (index === 0 || batch.reason?.name === 'AbortError')
+        throw batch.reason;
+      error ??= batch.reason;
+    }
+  }
+  return {
+    features: batches.flatMap((batch) =>
+      batch.status === 'fulfilled' ? batch.value : [],
+    ),
+    error,
+  };
 }
 
 /** Parse GeoJSON Lines: one Feature per non-empty line. */
@@ -195,7 +209,7 @@ export function createInfrastructureSource({
       if (!urls.length)
         throw new TypeError(`Unknown infrastructure layer: ${layerId}`);
       if (!cache.has(layerId)) {
-        const features = await loadInfrastructureFeatures(urls, {
+        const { features, error } = await loadInfrastructureFeatures(urls, {
           fetchImpl,
           signal,
         });
@@ -214,7 +228,8 @@ export function createInfrastructureSource({
               ]
             : [];
         });
-        cache.set(layerId, records);
+        if (!error) cache.set(layerId, records);
+        return records;
       }
       return cache.get(layerId);
     },

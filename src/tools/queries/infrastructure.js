@@ -64,18 +64,23 @@ export const findInfrastructure = defineTool({
         lat: round(record.lat, 5),
         lon: round(record.lon, 5),
         distance_km: round(distanceKm(center, record), 1),
+        attribution: record.attribution,
       }))
       .sort((a, b) => a.distance_km - b.distance_km);
+    const capped = capRows(rows, args.limit);
     return {
       summary: `${countNoun(rows.length, `mapped ${noun}`)} in ${area.label}.`,
       data: {
         view: suggestView(services, { area, layers: [layerId] }),
-        ...capRows(rows, args.limit),
+        ...capped,
+        rows: capped.rows.map(({ attribution, ...row }) => row),
         attribution:
           args.kind === 'dams'
             ? [
                 ...new Set(
-                  matching.map((record) => record.attribution).filter(Boolean),
+                  capped.rows
+                    .map((record) => record.attribution)
+                    .filter(Boolean),
                 ),
               ].join('; ') || null
             : ATTRIBUTION[args.kind],

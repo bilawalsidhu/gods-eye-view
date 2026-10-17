@@ -15,7 +15,7 @@ const deferred = () => {
   return { promise, resolve };
 };
 
-function harness(t) {
+function harness(t, url = '/dams.geojsonl') {
   const previousWindow = globalThis.window;
   globalThis.window = { dispatchEvent() {} };
   t.after(() => {
@@ -36,7 +36,7 @@ function harness(t) {
     camera: { moveEnd: event },
   };
   const create = () => createLocalGeoJsonLayer({
-    id: 'local-dams', name: 'Dams', color: '#0088ff', url: '/dams.geojsonl',
+    id: 'local-dams', name: 'Dams', color: '#0088ff', url,
     overlayHost: { setVisible() {}, setEntries() {}, clearSource() {} },
     screenSpaceEventHandlerFactory() {
       handlers++;
@@ -46,6 +46,25 @@ function harness(t) {
   const layer = create();
   return { layer, create, viewer, sources, listeners, handlers: () => handlers };
 }
+
+test('a failed supplement preserves the main layer and is retried after a toggle', async t => {
+  const env = harness(t, ['/dams.geojsonl', '/ign.geojsonl']);
+  let fail = true;
+  t.mock.method(globalThis, 'fetch', async url => {
+    if (url === '/dams.geojsonl') return response();
+    return { ok: !fail, status: 404, text: async () => dataset.replace('"id":"dam"', '"id":"ign"') };
+  });
+  await env.layer.enable(env.viewer);
+  assert.equal(env.layer.getStats().count, 1);
+  assert.ok(env.layer.getStats().error);
+  assert.equal(env.sources.size, 1);
+  fail = false;
+  env.layer.disable(env.viewer);
+  await env.layer.enable(env.viewer);
+  assert.equal(env.layer.getStats().count, 2);
+  assert.equal(env.layer.getStats().error, null);
+  assert.equal(env.sources.size, 1);
+});
 
 test('destroy removes context records and permits a fresh replacement', async t => {
   const env = harness(t);

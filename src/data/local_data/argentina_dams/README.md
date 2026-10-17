@@ -4,7 +4,7 @@ FUENTE: Instituto Geográfico Nacional de la República Argentina.
 
 The `Dique` point dataset supplements the existing **Dams** layer. These are
 mapped structures, not live operational, water-level, or safety observations.
-The upstream WFS response contains 125 features; 122 enter the runtime pack. The original properties,
+The upstream WFS response contains 125 features; 121 enter the runtime pack. The original properties,
 including `fdc` (compilation source) and `sag`, are retained under `ign`.
 Unnamed records remain unnamed. No generating capacity is inferred.
 
@@ -21,7 +21,9 @@ Unnamed records remain unnamed. No generating capacity is inferred.
   Name matching folds accents and generic dam prefixes. Different names at
   nearby coordinates are retained unless their geometry establishes overlap.
 - The Río Salado record (gid 2575) is excluded because its structured `gna`
-  field identifies a flood-defense embankment (`Terraplén de Defensa`).
+  field identifies a flood-defense embankment (`Terraplén de Defensa`). Bañado
+  de la Estrella (gid 2512) is also excluded because `gna` identifies a wetland
+  (`Bañado`); the untouched source snapshot and audit retain both records.
 - Unnamed pairs 2578/2579 (77.9 m) and 2956/2957 (36.1 m) remain separate
   records. Their distinctness is unverified: proximity alone is not sufficient
   to merge two structures. Both pairs are listed in the audit for source review.
@@ -46,7 +48,11 @@ deduplication report. Do not silently redate the underlying observations.
 ## Integration with other dam packs
 
 Both the renderer and analyst source obtain their URL list from
-`infrastructureDataUrls`; the shared loader keeps failed or aborted loads retryable.
+`infrastructureDataUrls`; the shared loader returns `{ features, error }`. The
+first URL is required; supplement failures preserve the original OSM dataset and
+return an error with the partial features. Partial loads are not cached: analyst
+queries retry them and the renderer retries on the next off/on toggle. Main-file
+failures and aborts still reject the load.
 PR #1009 uses the same URL-list contract for NVE: when combining them, append
 both regional URLs to the one supplement list and retain the shared loader.
 No NVE data or implementation is included here.

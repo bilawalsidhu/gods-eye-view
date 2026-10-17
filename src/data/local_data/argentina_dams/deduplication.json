@@ -1,6 +1,6 @@
 {
   "inputCount": 125,
-  "outputCount": 122,
+  "outputCount": 121,
   "existingCount": 704,
   "omitted": [
     {
@@ -19,6 +19,13 @@
     }
   ],
   "excluded": [
+    {
+      "id": "ign-ar-dique-2512",
+      "name": "Bañado de la Estrella",
+      "sourceFeatureId": "puntos_de_aguas_continentales_BH051.2512",
+      "sourceType": "Bañado",
+      "reason": "wetland"
+    },
     {
       "id": "ign-ar-dique-2575",
       "name": "Terraplén de Defensa del Río Salado",
