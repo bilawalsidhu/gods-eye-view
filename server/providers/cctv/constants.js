@@ -236,6 +236,37 @@ export const CALGARY_DOWNTOWN = { lat: 51.0461, lon: -114.0626 };
  * body cannot be buffered without limit. */
 export const CALGARY_MAX_CATALOG_BYTES = 4 * 1024 * 1024;
 
+/** Statens vegvesen (Norway) road cameras: the keyless OGC API Features view
+ * of the official DATEX 3.1 CCTV site table, one GeoJSON request for the whole
+ * country (~900 cameras). The raw DATEX node needs an account; this view does
+ * not. Frames are stills on the agency's camera host. */
+export const DEFAULT_VEGVESEN_CCTV_URL =
+  'https://ogckart-sn1.atlas.vegvesen.no/ogc/features/v1/collections/datex_3_1:CctvSimple/items?f=application/geo%2Bjson&limit=5000';
+/** The only origin Vegvesen camera frames may come from. */
+export const VEGVESEN_IMAGE_ORIGIN =
+  'https://kamera.atlas.vegvesen.no/api/images/';
+/** Live HLS for the ~140 cameras that publish video; only this exact
+ * per-camera manifest path is registered. */
+export const VEGVESEN_VIDEO_URL = (cameraId) =>
+  `https://kamera.vegvesen.no/public/${cameraId}/manifest.m3u8`;
+/** Above the ~850 working cameras so a default install keeps them all, while
+ * staying close to them: the per-pack defaults are meant to sum to no more
+ * than DEFAULT_CCTV_MAX_SOURCES. */
+export const DEFAULT_VEGVESEN_MAX_SOURCES = 900;
+/** Hard ceiling on the catalog body. The whole country is ~800 KB. */
+export const VEGVESEN_MAX_CATALOG_BYTES = 8 * 1024 * 1024;
+/** Prioritization anchors: the largest cities from south to north, so a cap
+ * keeps national coverage rather than just the capital region. */
+export const NORWAY_ANCHORS = [
+  { lat: 59.9139, lon: 10.7522 }, // Oslo
+  { lat: 60.3913, lon: 5.3221 }, // Bergen
+  { lat: 58.97, lon: 5.7331 }, // Stavanger
+  { lat: 63.4305, lon: 10.3951 }, // Trondheim
+  { lat: 58.1467, lon: 7.9956 }, // Kristiansand
+  { lat: 67.2804, lon: 14.4049 }, // Bodø
+  { lat: 69.6492, lon: 18.9553 }, // Tromsø
+];
+
 /** DelDOT CCTV: one keyless statewide JSON catalog; live video via RTMP-over-HTTP (rtmpt:80). */
 export const DELDOT_CCTV_URL = 'https://tmc.deldot.gov/json/videocamera.json';
 export const DEFAULT_DELDOT_MAX_SOURCES = 300;
