@@ -1415,6 +1415,18 @@ an empty dock. Explicit zero and caller-supplied numeric fallbacks remain valid.
 
 ## Terrain height cache bound
 
+The `/api/terrain/heights` route refuses cross-site browser requests before
+rate limiting, cache access or upstream work: a `Sec-Fetch-Site` other than
+`same-origin`/`none` (an `<img>` on another page), or a foreign or opaque
+`Origin`, gets `403`. The per-client limiter keys on the socket address, which
+for such a request is the visitor's own browser, so without the gate any page
+could spend the visitor's 90/min quota and leave the app's own lookups on
+`429`. Unlike the cost-bearing routes, the terrain gate does not refuse
+reverse-proxy forwarding headers: terrain is keyless and needed for rendering,
+and a `403` there would send every chunk to the geoid fallback for an instance
+served behind the documented reverse proxy. Same-origin app requests,
+non-browser local callers and proxied same-origin requests keep working.
+
 The terrain proxy parser rejects finite longitudes outside [-180, 180] and
 latitudes outside [-90, 90] for every client before upstream resolution. One
 out-of-range point rejects the whole batch; inclusive WGS84 bounds remain valid.
@@ -2635,6 +2647,17 @@ down | auth-failed` (plus the unchanged `missing-key`/`unsupported`) with
 >   tunings. Ambient overlap includes each sprite's own rendered extent. The
 >   gated AIS, CCTV, and satellite passes retain an active-emphasis count so a
 >   settled dim contact always completes its release after tracking ends.
+> - **Terrain-height bounds:** because every distinct 5-decimal point is its own
+>   cache key, its own line in `.gev-cache/terrain-heights.json`, and its own
+>   upstream call, four limits bound what a caller can grow. Coordinates outside
+>   WGS-84 range are rejected with `400` at parse (finite is not the same as on
+>   Earth); the point cache holds at most 50,000 entries, evicting oldest-first
+>   — terrain does not move, so an evicted point costs one refetch and never a
+>   wrong answer; a cache file above 24 MB is not read back into memory (the
+>   ceiling `rocketLaunchesProxy` already applies); and the route carries an
+>   always-on limiter of 90 requests/minute/client, 270 global. That cap is an
+>   order of magnitude above measured demand — a full `npm run test:track` run
+>   drove 10 requests, peaking at 8/min.
 > - **Terrain-height resilience:** `/api/terrain/heights` caches canonical
 >   5-decimal points individually, reconstructs reordered/overlapping batches
 >   in exact request order, and refreshes only missing or stale points. Upstream
