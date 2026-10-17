@@ -139,6 +139,41 @@ function record(name, ok, detail) {
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
+// Every page.waitForFunction / page.evaluate is a single CDP call that
+// puppeteer aborts after `protocolTimeout` (default 180s). The headful drain
+// budget is uncapped and reaches ~50 minutes on the full ~3,900-camera
+// catalog, so long waits are polled in slices of at most WAIT_SLICE_MS and
+// protocolTimeout is set with headroom above the largest slice.
+const WAIT_SLICE_MS = 120000;
+const PROTOCOL_TIMEOUT_MS = 2 * WAIT_SLICE_MS;
+
+/**
+ * page.waitForFunction with an overall budget that may exceed
+ * protocolTimeout: waits in WAIT_SLICE_MS slices until the predicate holds or
+ * the budget runs out.
+ * @param {import('puppeteer').Page} page
+ * @param {Function} predicate - In-page predicate.
+ * @param {number} budgetMs - Overall budget.
+ * @returns {Promise<boolean>} True if the predicate held within the budget.
+ */
+async function waitForFunctionSliced(page, predicate, budgetMs) {
+  const deadline = Date.now() + budgetMs;
+  for (;;) {
+    const remaining = deadline - Date.now();
+    if (remaining <= 0) return false;
+    const ok = await page
+      .waitForFunction(predicate, {
+        timeout: Math.min(remaining, WAIT_SLICE_MS),
+      })
+      .then(() => true)
+      .catch((err) => {
+        if (err?.name === 'TimeoutError') return false;
+        throw err;
+      });
+    if (ok) return true;
+  }
+}
+
 // SwiftShader can spend tens of seconds servicing the hover drillPick emitted
 // by page.mouse.move(), before the LEFT_DOWN under test even runs. Position the
 // pointer while ADJUST is disabled, then re-enable it and explicitly render a
@@ -364,6 +399,7 @@ async function main() {
   const chromeExecutable = findChromeExecutable();
   const browser = await puppeteer.launch({
     headless: HEADFUL ? false : 'new',
+    protocolTimeout: PROTOCOL_TIMEOUT_MS,
     ...(chromeExecutable ? { executablePath: chromeExecutable } : {}),
     args: [
       '--no-sandbox',
@@ -373,6 +409,9 @@ async function main() {
       '--disable-web-security',
       '--disable-background-timer-throttling',
       '--disable-renderer-backgrounding',
+      // Puppeteer's defaults already include this; listed so the headful
+      // run keeps rendering when covered even if those defaults change.
+      '--disable-backgrounding-occluded-windows',
       '--window-size=1280,800',
     ],
   });
@@ -475,18 +514,15 @@ async function main() {
     console.log(
       `Waiting for geometry-load queue to drain (N=${camCount}, budget ${Math.round(drainBudgetMs / 1000)}s)...`,
     );
-    const drained = await page
-      .waitForFunction(
-        () => {
-          const mod =
-            window.__godsEyeView.dataManager.layers.get('cctv').module;
-          const ui = mod.getUIState();
-          return ui.loading && ui.loading.active === false;
-        },
-        { timeout: drainBudgetMs },
-      )
-      .then(() => true)
-      .catch(() => false);
+    const drained = await waitForFunctionSliced(
+      page,
+      () => {
+        const mod = window.__godsEyeView.dataManager.layers.get('cctv').module;
+        const ui = mod.getUIState();
+        return ui.loading && ui.loading.active === false;
+      },
+      drainBudgetMs,
+    );
     record(
       `geometry-load queue drains within ${Math.round(drainBudgetMs / 1000)}s (N=${camCount})`,
       drained ? true : HEADFUL ? false : null,
@@ -1358,16 +1394,23 @@ async function main() {
         },
       });
       window.__qaCctvSiblingOwner = owner;
-      await new Promise((resolve) => {
+      // Bounded: if the browser stops producing frames (headful window
+      // asleep or hidden), report it instead of hanging the CDP call.
+      const framesRendered = await new Promise((resolve) => {
         let frames = 0;
+        const finish = () => {
+          clearTimeout(timer);
+          remove();
+          resolve(frames);
+        };
         const remove = scene.postRender.addEventListener(() => {
           if (++frames < 3) {
             scene.requestRender();
             return;
           }
-          remove();
-          resolve();
+          finish();
         });
+        const timer = setTimeout(finish, 10000);
         scene.requestRender();
       });
       const rect = scene.canvas.getBoundingClientRect();
@@ -1382,6 +1425,7 @@ async function main() {
           typeof pickedId === 'string' ? pickedId : (pickedId?.id ?? null),
         ownerId: owner.id,
         ownsExactObject: picked?.id === owner,
+        framesRendered,
         projectionDelta: Math.hypot(
           projected.x - canvasPoint.x,
           projected.y - canvasPoint.y,
@@ -1395,7 +1439,7 @@ async function main() {
             siblingTarget.ownsExactObject
         : null,
       siblingTarget
-        ? `picked=${siblingTarget.pickedId} exactOwner=${siblingTarget.ownsExactObject} projectionΔ=${siblingTarget.projectionDelta}`
+        ? `picked=${siblingTarget.pickedId} exactOwner=${siblingTarget.ownsExactObject} projectionΔ=${siblingTarget.projectionDelta} frames=${siblingTarget.framesRendered}/3`
         : 'no previously verified empty canvas ray was available',
     );
     if (
