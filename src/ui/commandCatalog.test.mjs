@@ -33,22 +33,39 @@ test('catalog rejects actions or arguments that are not in the canonical schema'
     /Unknown command action/,
   );
 
+  assert.deepEqual(
+    createCommandCatalog([
+      {
+        id: 'open-weather',
+        label: 'Open Weather',
+        group: 'Panels',
+        keywords: ['weather'],
+        action: {
+          name: 'set_panel_open',
+          args: { panelId: 'weather-panel', open: true },
+        },
+      },
+    ])[0].action.args,
+    { panelId: 'weather-panel', open: true },
+    'weather-panel is now a supported typed action',
+  );
+
   assert.throws(
     () =>
       createCommandCatalog([
         {
-          id: 'open-weather',
-          label: 'Open Weather',
+          id: 'invalid-panel',
+          label: 'Invalid Panel',
           group: 'Panels',
-          keywords: ['weather'],
+          keywords: [],
           action: {
             name: 'set_panel_open',
-            args: { panelId: 'weather-panel', open: true },
+            args: { panelId: 'no-such-panel', open: true },
           },
         },
       ]),
     /schema enum/,
-    'the visible Weather panel is not currently a legal set_panel_open target',
+    'unknown panel ids still fail before execution',
   );
 
   assert.throws(
@@ -76,6 +93,7 @@ test('search ranks exact and label-prefix matches ahead of keyword-only matches'
     'open-cameras',
   );
   assert.equal(searchCommandCatalog(catalog, 'thermal')[0].id, 'style-thermal');
+  assert.equal(searchCommandCatalog(catalog, 'weather')[0].id, 'open-weather');
   assert.equal(
     searchCommandCatalog(catalog, 'missions')[0].id,
     'space-missions-context',
