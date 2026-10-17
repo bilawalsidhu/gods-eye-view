@@ -41,3 +41,28 @@
   2026-09-25. Each record names its XYZ tile and expected traffic eligibility.
   Modified, test-only OpenStreetMap data; same ODbL attribution and database
   share-alike terms as the OpenFreeMap fixtures above.
+
+- `trafficsa-points-sample.json` and `trafficsa-lines.json` — Traffic SA open
+  data from the keyless ArcGIS MapServer
+  `maps.sa.gov.au/arcgis/rest/services/DPTIExtTransport/TrafficSAOpenData/MapServer`,
+  retrieved 2026-10-13. The points file is 12 of the 1,321 layer 0 features
+  (one incident, six 24 h roadworks, five roadworks) with original geometry and
+  attributes; the lines file is all 8 layer 1 closure features, unmodified.
+  Note the upstream date fields carry Adelaide wall-clock time encoded as UTC.
+  These are the roadworks-service shapes (upper-case field names); layer 1 is
+  the frozen legacy closures layer that the proxy no longer reads, kept as a
+  shape sample for the normaliser.
+  © Department for Infrastructure and Transport, Government of South Australia,
+  CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/). Test-only.
+
+- `trafficsa-geohub-incidents.json` and `trafficsa-geohub-closures.json` —
+  Traffic SA open data from the keyless ArcGIS MapServer
+  `dit-cms-prod.geohub.sa.gov.au/arcgis/rest/services/TrafficSATime_OpenData/TrafficSATime_OpenData/MapServer`,
+  retrieved 2026-10-17 (lower-case field names, GeoJSON output). The incidents
+  file is all 10 layer 0 features (incident, collision, flooding, emergency
+  waterworks); the closures file is 6 of the 11 layer 2 features (four
+  closures and two detours, chosen for short geometry; one carries HTML in its
+  details) with original geometry and attributes. The date fields carry
+  Adelaide wall-clock time encoded as UTC, as in the older service.
+  © Department for Infrastructure and Transport, Government of South Australia,
+  CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/). Test-only.
