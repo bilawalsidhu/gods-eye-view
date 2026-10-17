@@ -19,6 +19,12 @@ function harness(
   const clicks = { handler: null, destroyed: 0 };
   const owners = new Map();
   const opened = [];
+  const contexts = {
+    records: new Map(),
+    selected: null,
+    selectedEvents: 0,
+    removals: 0,
+  };
   const viewer = {
     scene: { pick },
     dataSources: {
@@ -61,6 +67,28 @@ function harness(
       unregisterPickOwner: (layerId) => owners.delete(layerId),
     },
     pointer: { isPointerFree: () => true },
+    context: {
+      registerEntityContext(entity, metadata) {
+        entity.__gevContextId = metadata.id;
+        const record = { ...metadata, entity };
+        contexts.records.set(metadata.id, record);
+        return record;
+      },
+      selectEntityContext(entity) {
+        contexts.selected = contexts.records.get(entity.__gevContextId) || null;
+        contexts.selectedEvents += 1;
+        return contexts.selected;
+      },
+      removeEntityContextsForLayer(layerId, { retainIds } = {}) {
+        contexts.removals += 1;
+        for (const [id, record] of contexts.records) {
+          if (record.layerId === layerId && !retainIds?.has(id))
+            contexts.records.delete(id);
+        }
+        if (contexts.selected && !contexts.records.has(contexts.selected.id))
+          contexts.selected = null;
+      },
+    },
     inciwebSource: inciwebIndex
       ? { getIndex: async () => inciwebIndex }
       : { getIndex: async () => [] },
@@ -69,7 +97,16 @@ function harness(
   });
   layer.init(viewer);
   layer.enable(viewer);
-  return { layer, viewer, sources, overlay, clicks, owners, opened };
+  return {
+    layer,
+    viewer,
+    sources,
+    overlay,
+    clicks,
+    owners,
+    opened,
+    contexts,
+  };
 }
 
 const ring = [
@@ -172,6 +209,85 @@ test('clicking a perimeter publishes its incident card; empty space clears it', 
   pickResult = null;
   h.clicks.handler({ position: { x: 10, y: 10 } });
   assert.equal(h.overlay.entries.get('fire-perimeters')?.length ?? 0, 0);
+});
+
+test('perimeter selection publishes one shared NIFC context record and clears it with selection', async () => {
+  let pickResult = { id: 'fire-perimeter:2026-NMGNF-000123:0' };
+  const h = harness(
+    { getSnapshot: async () => [row] },
+    { pick: () => pickResult },
+  );
+  await h.layer.update(h.viewer);
+
+  h.clicks.handler({ position: { x: 10, y: 10 } });
+  assert.equal(h.contexts.selectedEvents, 1);
+  assert.equal(h.contexts.selected?.layerId, 'fire-perimeters');
+  assert.equal(h.contexts.selected?.source, 'NIFC WFIGS');
+  assert.equal(h.contexts.selected?.label, 'Fixture Fire');
+  assert.equal(h.contexts.selected?.properties.containedPct, 40);
+  assert.ok(Math.abs(h.contexts.selected.latitude - 35.2333) < 0.01);
+  assert.ok(Math.abs(h.contexts.selected.longitude - -108.0333) < 0.01);
+
+  // An ordinary refresh updates the record in place without pretending the
+  // operator selected it again.
+  await h.layer.update(h.viewer);
+  assert.equal(h.contexts.selectedEvents, 1);
+
+  pickResult = null;
+  h.clicks.handler({ position: { x: 10, y: 10 } });
+  assert.equal(h.contexts.selected, null);
+  assert.equal(h.contexts.records.size, 0);
+  h.layer.destroy(h.viewer);
+});
+
+test('switching perimeter picks evicts stale context', async () => {
+  const otherId = '2026-NMGNF-000124';
+  const nextRow = { ...row, stableId: otherId, name: 'Neighbor Fire' };
+  let picked = row.stableId;
+  const h = harness(
+    { getSnapshot: async () => [row, nextRow] },
+    { pick: () => ({ id: `fire-perimeter:${picked}:0` }) },
+  );
+  await h.layer.update(h.viewer);
+
+  h.clicks.handler({ position: { x: 10, y: 10 } });
+  assert.equal(h.contexts.records.size, 1);
+  assert.ok(h.contexts.records.has(`fire-perimeter:${row.stableId}`));
+
+  picked = otherId;
+  h.clicks.handler({ position: { x: 10, y: 10 } });
+  assert.deepEqual(
+    [...h.contexts.records.keys()],
+    [`fire-perimeter:${otherId}`],
+  );
+  assert.equal(h.contexts.selected?.id, `fire-perimeter:${otherId}`);
+  assert.equal(h.contexts.selected?.label, 'Neighbor Fire');
+  assert.equal(h.contexts.selectedEvents, 2);
+
+  await h.layer.update(h.viewer);
+  assert.deepEqual(
+    [...h.contexts.records.keys()],
+    [`fire-perimeter:${otherId}`],
+  );
+  assert.equal(h.contexts.selectedEvents, 2);
+  h.layer.destroy(h.viewer);
+});
+
+test('refresh eviction clears the shared perimeter context with the card', async () => {
+  let rows = [row];
+  const h = harness(
+    { getSnapshot: async () => rows },
+    { pick: () => ({ id: 'fire-perimeter:2026-NMGNF-000123:0' }) },
+  );
+  await h.layer.update(h.viewer);
+  h.clicks.handler({ position: { x: 10, y: 10 } });
+  assert.equal(h.contexts.selected?.layerId, 'fire-perimeters');
+
+  rows = [{ ...row, stableId: 'different' }];
+  await h.layer.update(h.viewer);
+  assert.equal(h.contexts.selected, null);
+  assert.equal(h.contexts.records.size, 0);
+  h.layer.destroy(h.viewer);
 });
 
 test('disable removes the click handler, pick ownership, and any card', async () => {
