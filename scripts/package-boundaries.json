@@ -187,6 +187,7 @@
       "server/providers/cctv/groundHeights.js",
       "server/providers/cctv/catalog.js",
       "server/providers/cctv/lithuania.js",
+      "server/providers/cctv/met.js",
       "server/providers/cctv/constants.js",
       "server/providers/cctv/media.js",
       "server/providers/cctv/normalize.js",

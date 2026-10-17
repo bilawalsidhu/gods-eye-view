@@ -5,6 +5,7 @@ import { allocateSourceCap, resolveCatalogCap } from './cap.js';
 import { loadGroundHeights, joinGroundHeights } from './groundHeights.js';
 import { cameraRegion, normalizeSourceItem } from './normalize.js';
 import { loadLithuaniaSources } from './lithuania.js';
+import { loadMetSources } from './met.js';
 import {
   loadAustinSourcesFromOpenData,
   loadCaltransSourcesFromOpenData,
@@ -124,6 +125,11 @@ const LIVE_PACKS = [
     name: 'vegvesen',
     enabled: () => envEnabled('CCTV_VEGVESEN_ENABLED'),
     load: loadVegvesenSourcesFromOpenData,
+  },
+  {
+    name: 'met',
+    enabled: () => envEnabled('CCTV_MET_ENABLED'),
+    load: loadMetSources,
   },
   {
     // NYC DOT requires a data-sharing agreement for this feed, so the pack is
