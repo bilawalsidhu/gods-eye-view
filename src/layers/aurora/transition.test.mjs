@@ -70,7 +70,11 @@ function peakOf(raster) {
       const a = raster.rgba[(y * raster.width + x) * 4 + 3];
       if (a > best) {
         best = a;
-        at = { latitudeDeg: raster.height - 1 - y - 90, longitudeDeg: x };
+        // Image column 0 is -180°, grid column 0 is 0°.
+        at = {
+          latitudeDeg: raster.height - 1 - y - 90,
+          longitudeDeg: (x + raster.width / 2) % raster.width,
+        };
       }
     }
   }
