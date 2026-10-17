@@ -268,10 +268,6 @@
   needs only the Map Tiles API and the Maps JavaScript API (Street View). Keyless sessions and the Photon/Nominatim
   fallback order are unchanged.
 
-- Keyless standalone startup answers an unavailable Google tile-token endpoint
-  with uncached 204 instead of a browser-visible 404. Existing providers take
-  precedence, and unrelated API routes behave as before.
-
 
 ## [0.2.1] — 2026-10-02 — God's Eye View through Your Agent (with security fixes and other features)
 
