@@ -55,6 +55,33 @@ export function instantiateUserLayer(entry) {
 }
 
 /**
+ * Build every registered layer, leaving out any whose `createLayer()` throws.
+ *
+ * A malformed descriptor is the author's mistake and refuses to load, but a
+ * factory that throws is the layer's own code failing, like a throwing
+ * `enable()`: it takes down that layer, not the application. A layer left out
+ * is unregistered again, so the state codec and the manager never see an id
+ * the catalog does not hold, and a share link naming it is treated like one
+ * from an install without that layer.
+ */
+export function instantiateUserLayers(entries) {
+  const built = [];
+  for (const entry of entries) {
+    try {
+      built.push({ entry, layer: instantiateUserLayer(entry) });
+    } catch (error) {
+      console.error(
+        `[UserLayers] ${entry.id} createLayer() failed; layer left out:`,
+        error,
+      );
+    }
+  }
+  if (built.length !== entries.length)
+    registerUserLayers(built.map(({ entry }) => entry));
+  return built.map(({ layer }) => layer);
+}
+
+/**
  * Register every discovered user layer and return their live instances for
  * the catalog. Returns an empty array when the directory holds no layers,
  * which is the shipped state.
@@ -70,6 +97,7 @@ export function loadUserLayers() {
   } catch {
     modules = {};
   }
-  const entries = registerUserLayers(collectUserLayerEntries(modules));
-  return entries.map((entry) => instantiateUserLayer(entry));
+  return instantiateUserLayers(
+    registerUserLayers(collectUserLayerEntries(modules)),
+  );
 }
