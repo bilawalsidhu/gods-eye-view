@@ -257,6 +257,32 @@ test('stickyFloorCell does not stick to a far-away stale cell', () => {
   assert.deepEqual(stickyFloorCell(30.2004, -97.6604, prev), { lat: 30.2, lon: -97.66 });
 });
 
+// --- Antimeridian ------------------------------------------------------------
+// Raw longitude arithmetic walks a segment across 180° the long way round and
+// reads a contact on the seam as half a world from its previous cell.
+
+test('corridorFloorCells walks across the antimeridian, not the long way round', () => {
+  for (const [from, to, across, behind] of [
+    [179.999, -179.998, -179.999, 179.998],
+    [-179.999, 179.998, 179.999, -179.998],
+  ]) {
+    const cells = corridorFloorCells([{ lat: -16.69, lon: from }, { lat: -16.69, lon: to }]);
+    const lons = cells.map((c) => c.lon);
+    assert.equal(lons[0], from);
+    assert.equal(lons.at(-1), to);
+    assert.ok(lons.includes(across), `crosses through ${across}: ${lons}`);
+    assert.ok(!lons.includes(behind), `never walks back through ${behind}: ${lons}`);
+    assert.ok(lons.every((lon) => Math.abs(lon) <= 180), `normalised: ${lons}`);
+  }
+});
+
+test('stickyFloorCell holds across the antimeridian', () => {
+  for (const [prevLon, lon] of [[180, -179.9998], [-180, 179.9998]]) {
+    const prev = { lat: -16.69, lon: prevLon };
+    assert.deepEqual(stickyFloorCell(-16.69, lon, prev), prev);
+  }
+});
+
 // --- F2: corridor budget fairness ------------------------------------------
 // The first cut spent the budget in Map insertion order and decremented it
 // BEFORE deduping, so parked contacts (whose corridor is the fix cell the poll

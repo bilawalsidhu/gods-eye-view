@@ -32,6 +32,11 @@
   area, run by nextbike). Both are keyless GBFS 2.3 feeds listed in
   MobilityData's systems catalogue; AMBici's is CC0. `gbfs.nextbike.net` joins
   the proxy allowlist. These are the layer's first stations in Spain.
+- The tracked-aircraft descriptor now publishes `verticalRateMps`, on both the
+  civil and military layers, so a consumer reading `getTrackedInfo()` no longer
+  has to reach past it into the raw poll record for climb/descent. Reported,
+  never derived: an aircraft that has not transmitted a rate reads as `null`
+  rather than a level-flight `0`.
 
 - Add nine Ontario transit feeds: TTC, MiWay, Hamilton HSR, Durham Region,
   YRT/Viva, Guelph, Burlington, Barrie and Kingston, each carrying its own
