@@ -4,9 +4,10 @@ import {
   AURORA_COLORS,
   AURORA_TRANSITION_FPS,
 } from './rendering.js';
+import { msg, t, translateKnown } from '../../i18n/index.js';
 
 const utc = (value) =>
-  value ? `${value.slice(0, 16).replace('T', ' ')} UTC` : 'Unavailable';
+  value ? `${value.slice(0, 16).replace('T', ' ')} UTC` : t('Unavailable');
 
 export function createAuroraLayer({
   feed,
@@ -117,7 +118,7 @@ export function createAuroraLayer({
         if (!enabled || controller.signal.aborted || request !== controller)
           return false;
         if (next.unavailable) {
-          error = next.reason || 'Aurora forecast unavailable';
+          error = next.reason || msg('Aurora forecast unavailable');
         } else {
           snapshot = next;
           error = null;
@@ -127,7 +128,7 @@ export function createAuroraLayer({
         return true;
       } catch (cause) {
         if (controller.signal.aborted || request !== controller) return false;
-        error = cause?.message || 'Aurora forecast unavailable';
+        error = cause?.message || msg('Aurora forecast unavailable');
         return true;
       } finally {
         signal?.removeEventListener('abort', abort);
@@ -151,48 +152,57 @@ export function createAuroraLayer({
     getRowControls() {
       const valid = snapshot?.forecastTime;
       const issued = snapshot?.observationTime;
+      const problem = error || rendering?.getDiagnostics?.().error;
       const status = loading
-        ? 'Loading forecast'
-        : error ||
-          rendering?.getDiagnostics?.().error ||
-          (snapshot?.stale ? 'Cached forecast · stale' : null);
+        ? t('Loading forecast')
+        : problem
+          ? translateKnown(problem)
+          : snapshot?.stale
+            ? t('Cached forecast · stale')
+            : null;
       const chips = ['light', 'strong'].map((value) => ({
         id: `opacity-${value}`,
-        label: value === 'light' ? 'Soft' : 'Vivid',
+        label: value === 'light' ? t('Soft') : t('Vivid'),
         active: opacity === value,
         params: { opacity: value },
-        title: 'Display opacity only; does not change forecast probability',
+        title: t('Display opacity only; does not change forecast probability'),
       }));
       return {
         readout: true,
         summary: {
-          label: 'Aurora probability · FORECAST',
-          coverage: 'Both hemispheres · 1° grid',
-          horizon: 'Variable 30–90 min forecast',
-          uncertainty: 'Modeled probability, not guaranteed visibility',
+          label: t('Aurora probability · FORECAST'),
+          coverage: t('Both hemispheres · 1° grid'),
+          horizon: t('Variable 30–90 min forecast'),
+          uncertainty: t('Modeled probability, not guaranteed visibility'),
           validTime: valid,
           issuedTime: issued,
-          detail: `NOAA OVATION forecast · valid ${utc(valid)}`,
+          detail: t('NOAA OVATION forecast · valid {valid}', {
+            valid: utc(valid),
+          }),
           status,
-          units: '% probability',
-          settings: [{ id: 'opacity', label: 'OPACITY', chips }],
+          units: t('% probability'),
+          settings: [{ id: 'opacity', label: t('OPACITY'), chips }],
           actions: [],
         },
         chips,
         legend: AURORA_COLORS.map(([value, color]) => ({
           label: `${value}%`,
           color: `rgba(${color.join(',')})`,
-          blurb: `${value}% modeled probability of visible aurora`,
+          blurb: t('{value}% modeled probability of visible aurora', { value }),
         })),
         info:
-          `OVATION AURORA · FORECAST · BOTH HEMISPHERES\n` +
-          `Valid: ${utc(valid)} · variable 30–90 min horizon\n` +
-          `Issued/input: ${utc(issued)}${snapshot?.stale ? ' · STALE' : ''}` +
+          `${t('OVATION AURORA · FORECAST · BOTH HEMISPHERES')}\n` +
+          `${t('Valid: {time} · variable 30–90 min horizon', { time: utc(valid) })}\n` +
+          t('Issued/input: {time}', { time: utc(issued) }) +
+          (snapshot?.stale ? ` · ${t('STALE')}` : '') +
           (status ? `\n${status}` : '') +
-          '\nModeled viewing probability, not a guarantee of visibility\n' +
-          'Clouds, darkness, local light pollution, and model uncertainty affect actual visibility',
-        infoTitle:
+          `\n${t('Modeled viewing probability, not a guarantee of visibility')}\n` +
+          t(
+            'Clouds, darkness, local light pollution, and model uncertainty affect actual visibility',
+          ),
+        infoTitle: t(
           'NOAA OVATION is a 30–90 minute model forecast. Lead time varies with solar-wind travel time. Darkness, clouds, local light pollution and model uncertainty affect actual visibility. Low probability is not an all-clear.',
+        ),
       };
     },
     setRowControlsListener(value) {
@@ -201,7 +211,7 @@ export function createAuroraLayer({
     getStats() {
       return {
         count: snapshot?.probabilities?.length || 0,
-        countLabel: snapshot?.probabilities ? '360×181 grid cells' : '',
+        countLabel: snapshot?.probabilities ? t('360×181 grid cells') : '',
         lastUpdate: snapshot?.observationTime
           ? Date.parse(snapshot.observationTime)
           : null,
