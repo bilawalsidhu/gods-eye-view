@@ -1,16 +1,21 @@
+import { gibsTileUrl } from '../../maps/gibs.js';
 import { lookupStop, parseColormap } from './colormap.js';
-import { TILE_PIXELS, locateTilePixel, metresPerPixel } from './tiles.js';
+import { TILE_PIXELS, locateTilePixel } from './tiles.js';
 import {
   COLORMAP_URL,
   GIBS_LAYER,
   GIBS_MAX_LEVEL,
-  GIBS_TILE_MATRIX_SET,
   SAMPLE_TILE_CACHE_MAX,
+  SOURCE_GRID,
 } from './policy.js';
 
 /** @param {string} date Frame time key. @param {object} at Tile location. @returns {string} Tile URL. */
 export function sampleTileUrl(date, { level, tileX, tileY }) {
-  return `https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/${GIBS_LAYER}/default/${date}/${GIBS_TILE_MATRIX_SET}/${level}/${tileY}/${tileX}.png`;
+  // The single host: the canvas readback relies on its CORS headers.
+  return gibsTileUrl(
+    { layer: GIBS_LAYER, date, maxLevel: GIBS_MAX_LEVEL },
+    { z: level, y: tileY, x: tileX },
+  );
 }
 
 /**
@@ -151,7 +156,8 @@ export function createTemperatureSampler({
         stop,
         latitude,
         longitude,
-        resolutionM: metresPerPixel(latitude, GIBS_MAX_LEVEL),
+        // The product's measurement grid, not the display tile's pixel.
+        sourceGrid: SOURCE_GRID,
       };
     },
 

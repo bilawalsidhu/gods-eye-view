@@ -1739,6 +1739,7 @@
   "recent-imagery": {
     "exports": ["./layers/recent-imagery"],
     "modules": [
+      "src/maps/gibs.js",
       "src/i18n/marker.js",
       "src/layers/recentImagery/index.js",
       "src/layers/recentImagery/source.js",
@@ -1958,6 +1959,13 @@
   "temperature-layer": {
     "exports": ["./layers/temperature"],
     "modules": [
+      "src/i18n/index.js",
+      "src/i18n/locales/ru.json",
+      "src/i18n/locales/es.json",
+      "src/i18n/locale.js",
+      "src/i18n/marker.js",
+      "src/layers/temperature/labels.js",
+      "src/maps/gibs.js",
       "src/layers/temperature/controls.js",
       "src/layers/temperature/dates.js",
       "src/layers/temperature/index.js",
@@ -2573,6 +2581,8 @@
       "src/sources/adsbFields.js",
       "src/data/headingDegrees.js",
       "src/data/distanceFormat.js",
+      "src/layers/temperature/labels.js",
+      "src/maps/gibs.js",
       "src/ui/placeNames.js",
       "src/cyberSonarScene.js",
       "src/cyberSonar.js",
@@ -3860,6 +3870,8 @@
       "src/sources/adsbFields.js",
       "src/data/headingDegrees.js",
       "src/data/distanceFormat.js",
+      "src/layers/temperature/labels.js",
+      "src/maps/gibs.js",
       "src/cyberSonar.js",
       "src/awarenessEcho.js",
       "src/data/approxDistance.js",
@@ -4898,6 +4910,7 @@
   "recent-imagery-source": {
     "exports": ["./layers/recent-imagery/source"],
     "modules": [
+      "src/maps/gibs.js",
       "src/layers/recentImagery/source.js",
       "src/layers/recentImagery/catalog.js",
       "src/layers/recentImagery/model.js"
@@ -5082,6 +5095,8 @@
   "temperature-source": {
     "exports": ["./layers/temperature/source"],
     "modules": [
+      "src/i18n/marker.js",
+      "src/maps/gibs.js",
       "src/layers/temperature/dates.js",
       "src/layers/temperature/policy.js",
       "src/layers/temperature/source.js"
@@ -5749,6 +5764,7 @@
     "exports": ["./tools/services"],
     "modules": [
       "src/sources/adsbFields.js",
+      "src/maps/gibs.js",
       "src/tools/services.js",
       "src/layers/bikeshare/registry.js",
       "src/layers/bikeshare/source.js",

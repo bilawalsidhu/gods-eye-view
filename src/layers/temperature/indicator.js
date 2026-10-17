@@ -1,20 +1,7 @@
-import { monthIndex, monthName } from './dates.js';
+import { t } from '../../i18n/index.js';
+import { monthIndex } from './dates.js';
+import { monthInitial, monthName } from './labels.js';
 import { scaleGradient, scaleTicks } from './scale.js';
-
-const MONTH_INITIALS = [
-  'J',
-  'F',
-  'M',
-  'A',
-  'M',
-  'J',
-  'J',
-  'A',
-  'S',
-  'O',
-  'N',
-  'D',
-];
 
 /** Years labelled on the year scale besides the selected one. */
 const YEAR_LABEL_EVERY = 5;
@@ -65,10 +52,10 @@ export function createMonthIndicator({ container, onYear, onMonth, onToggle }) {
   const root = element('div', 'temperature-timeline');
   root.hidden = true;
   root.setAttribute('role', 'group');
-  root.setAttribute('aria-label', 'Surface temperature playback');
+  root.setAttribute('aria-label', t('Surface temperature playback'));
 
   const kicker = element('div', 'temperature-timeline-kicker');
-  kicker.textContent = 'Land surface temperature · monthly mean';
+  kicker.textContent = t('Land surface temperature · monthly mean');
 
   const head = element('div', 'temperature-timeline-head');
   const toggle = element('button', 'temperature-timeline-toggle');
@@ -83,7 +70,7 @@ export function createMonthIndicator({ container, onYear, onMonth, onToggle }) {
   // NASA's colour scale, as one bar: the key to every frame, placed between
   // the month it describes and the scales that choose it.
   const scale = element('div', 'temperature-timeline-scale');
-  scale.title = 'NASA MODIS land surface temperature scale, °C';
+  scale.title = t('NASA MODIS land surface temperature scale, °C');
   const bar = element('div', 'temperature-timeline-scale-bar');
   bar.style.background = scaleGradient();
   const marker = element('span', 'temperature-timeline-scale-marker');
@@ -103,17 +90,17 @@ export function createMonthIndicator({ container, onYear, onMonth, onToggle }) {
   scale.append(bar, scaleTickRow);
 
   const yearTrack = element('div', 'temperature-timeline-track is-years');
-  yearTrack.setAttribute('aria-label', 'Year');
+  yearTrack.setAttribute('aria-label', t('Year'));
   const monthTrack = element('div', 'temperature-timeline-track is-months');
-  monthTrack.setAttribute('aria-label', 'Month');
+  monthTrack.setAttribute('aria-label', t('Month'));
   const playhead = element('span', 'temperature-timeline-playhead');
   playhead.setAttribute('aria-hidden', 'true');
 
-  const monthTicks = MONTH_INITIALS.map((initial, index) => {
+  const monthTicks = Array.from({ length: 12 }, (_, index) => {
     const tick = element('button', 'temperature-timeline-tick');
     tick.type = 'button';
     tick.dataset.month = String(index);
-    tick.textContent = initial;
+    tick.textContent = monthInitial(index);
     monthTrack.appendChild(tick);
     return tick;
   });
@@ -125,7 +112,7 @@ export function createMonthIndicator({ container, onYear, onMonth, onToggle }) {
   let collapsed = false;
   function applyCollapsed() {
     root.classList.toggle('is-collapsed', collapsed);
-    const label = collapsed ? 'Expand timeline' : 'Minimize timeline';
+    const label = collapsed ? t('Expand timeline') : t('Minimize timeline');
     collapse.title = label;
     collapse.setAttribute('aria-label', label);
     collapse.setAttribute('aria-expanded', String(!collapsed));
@@ -185,7 +172,7 @@ export function createMonthIndicator({ container, onYear, onMonth, onToggle }) {
     monthTicks.forEach((tick, index) => {
       tick.disabled = !published.has(index);
       tick.title = tick.disabled
-        ? 'Not published'
+        ? t('Not published')
         : monthName(dates.find((date) => monthIndex(date) === index));
     });
   }
@@ -205,7 +192,7 @@ export function createMonthIndicator({ container, onYear, onMonth, onToggle }) {
       status.textContent = view.error
         ? view.error
         : view.loadingYear
-          ? `Loading ${view.loadingYear}…`
+          ? t('Loading {year}…', { year: view.loadingYear })
           : '';
       if (view.dates.length) {
         syncMonths(view.dates);
@@ -223,7 +210,7 @@ export function createMonthIndicator({ container, onYear, onMonth, onToggle }) {
           shownDate = date;
         }
       }
-      const label = view.playing ? 'Pause' : 'Play';
+      const label = view.playing ? t('Pause') : t('Play');
       if (toggle.title !== label) {
         toggle.title = label;
         toggle.setAttribute('aria-label', label);

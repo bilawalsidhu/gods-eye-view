@@ -247,9 +247,11 @@ export const DATA_CREDITS = [
   {
     key: 'nasa-gibs-surface-temperature',
     html:
-      'Surface temperature: ' +
-      '<a href="https://nasa-gibs.github.io/gibs-api-docs/" target="_blank" rel="noopener">NASA EOSDIS GIBS</a> ' +
-      '(MODIS Terra land surface temperature, 8-day composite)',
+      'Surface temperature: We acknowledge the use of imagery provided by services from ' +
+      "NASA's Global Imagery Browse Services (GIBS), part of NASA's Earth Science " +
+      'Data and Information System (ESDIS). ' +
+      '<a href="https://gibs.earthdata.nasa.gov" target="_blank" rel="noopener">gibs.earthdata.nasa.gov</a> · ' +
+      'MODIS Terra land surface temperature, monthly mean (MOD11C3)',
   },
   {
     key: 'open-meteo',

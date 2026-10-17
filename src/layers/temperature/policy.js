@@ -1,3 +1,5 @@
+import { msg } from '../../i18n/marker.js';
+
 export const LAYER_ID = 'surface-temperature';
 
 /**
@@ -12,10 +14,9 @@ export const LAYER_ID = 'surface-temperature';
  */
 export const GIBS_LAYER = 'MODIS_Terra_L3_Land_Surface_Temp_Monthly_Day';
 
-export const GIBS_TILE_MATRIX_SET = 'GoogleMapsCompatible_Level6';
-
 /**
- * Deepest level GoogleMapsCompatible_Level6 defines, read from the EPSG:3857
+ * The GoogleMapsCompatible level of the monthly product's matrix set
+ * (GoogleMapsCompatible_Level6). Deepest level it defines, read from the EPSG:3857
  * capabilities: levels 0..6, 256 px tiles. The monthly product is published on
  * this set only; asking it for level 7 answers 400 on every tile.
  */
@@ -54,8 +55,9 @@ export const MAX_ALPHA = 1;
  * The retrieval is a clear-sky land product: cloud and water carry no value and
  * arrive transparent. Say so rather than letting a gap read as "temperate".
  */
-export const COVERAGE_NOTE =
-  'monthly clear-sky land average; cloud-persistent areas and water carry no value';
+export const COVERAGE_NOTE = msg(
+  'monthly clear-sky land average; cloud-persistent areas and water carry no value',
+);
 
 /**
  * NASA's published colour map for this product, the document the layer's WMTS
@@ -86,6 +88,19 @@ export const CROSSFADE_SHARE = 0.6;
 
 /** Duration of a glide to a clicked month. */
 export const SEEK_DURATION_MS = 450;
+
+/**
+ * The measurement grid behind the tiles: MOD11C3, a 0.05° Climate Modeling Grid
+ * (about 5.6 km at the equator). GIBS resamples it onto a finer Web Mercator
+ * tile grid for display, but a finer PNG pixel is not a finer measurement, so
+ * the readout states this grid, never the tile pixel.
+ * https://data.nasa.gov/dataset/modis-terra-land-surface-temperature-emissivity-monthly-l3-global-0-05deg-cmg-v061-8e12e
+ */
+export const SOURCE_GRID = Object.freeze({
+  product: 'MOD11C3',
+  degrees: 0.05,
+  nominalKm: 5.6,
+});
 
 /** Sampled tiles held in memory: a pinned point re-read through a year. */
 export const SAMPLE_TILE_CACHE_MAX = 24;

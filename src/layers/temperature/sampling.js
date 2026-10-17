@@ -1,7 +1,7 @@
 import * as Cesium from 'cesium';
 import { isPointerFree } from '../../data/inputOwnership.js';
-import { formatStop } from './colormap.js';
-import { frameLabel } from './dates.js';
+import { formatNumber, t } from '../../i18n/index.js';
+import { frameLabel, readingText } from './labels.js';
 import { SAMPLE_MARKER_COLOR } from './policy.js';
 
 export const TEMPERATURE_OVERLAY_SOURCE_ID = 'surface-temperature';
@@ -62,19 +62,19 @@ export function createSampling({ state: layerState, services, parts, source }) {
    * @returns {string} Card title.
    */
   function readoutTitle(sample) {
-    if (sample.outcome === 'measured') return formatStop(sample.stop);
-    if (sample.outcome === 'no-value') return 'No clear-sky value';
-    if (sample.outcome === 'no-tile') return 'No tile for this point';
+    if (sample.outcome === 'measured') return readingText(sample.stop);
+    if (sample.outcome === 'no-value') return t('No clear-sky value');
+    if (sample.outcome === 'no-tile') return t('No tile for this point');
     if (sample.outcome === 'outside-projection')
-      return 'Outside the projection';
-    return 'Sample unavailable';
+      return t('Outside the projection');
+    return t('Sample unavailable');
   }
 
   /**
    * Context under the headline — never the reading again.
    *
    * Every line qualifies the number rather than repeating it: what quantity it
-   * is, how coarse the pixel is, and which month it came from. A reader who
+   * is, how coarse the source grid is, and which month it came from. A reader who
    * takes the figure without those three has the wrong idea of it.
    * @param {object} sample Sample outcome.
    * @returns {Array<string>} Card body lines.
@@ -84,13 +84,20 @@ export function createSampling({ state: layerState, services, parts, source }) {
     // The month itself is named on the frame line below; this line only
     // has to say which quantity the number is, because land surface temperature
     // and air temperature differ by tens of degrees in sun.
-    if (sample.outcome === 'measured') lines.push('land surface temperature');
+    if (sample.outcome === 'measured')
+      lines.push(t('land surface temperature'));
     // Cloud, water, or outside the retrieval. Saying so is the whole point: a
     // gap here is not a mild temperature.
     else if (sample.outcome === 'no-value')
-      lines.push('cloud, water or unretrieved');
-    if (sample.resolutionM)
-      lines.push(`~${Math.round(sample.resolutionM / 100) / 10} km pixel`);
+      lines.push(t('cloud, water or unretrieved'));
+    // The measurement grid, not the finer display tile it was drawn on.
+    if (sample.sourceGrid)
+      lines.push(
+        t('{degrees}° grid, ~{km} km nominal', {
+          degrees: formatNumber(sample.sourceGrid.degrees),
+          km: formatNumber(sample.sourceGrid.nominalKm),
+        }),
+      );
     lines.push(frameLabel(layerState.date));
     return lines;
   }

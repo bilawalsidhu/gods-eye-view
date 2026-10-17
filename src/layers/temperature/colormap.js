@@ -69,20 +69,3 @@ export function lookupStop(stops, { r, g, b, a }) {
 export function kelvinToCelsius(kelvin) {
   return kelvin - ZERO_CELSIUS_K;
 }
-
-/**
- * Render a stop as the temperature text shown to the operator.
- *
- * A range, not a single number: the product quantises into 0.6 K buckets, so
- * one figure would be false precision. The catch-all ends read as bounds.
- * @param {?object} stop Matching stop, or null.
- * @returns {string} Display text.
- */
-export function formatStop(stop) {
-  if (!stop) return 'No clear-sky value';
-  const low = kelvinToCelsius(stop.lowK);
-  const high = kelvinToCelsius(stop.highK);
-  if (stop.clampLow) return `≤ ${high.toFixed(1)} °C`;
-  if (stop.clampHigh) return `≥ ${low.toFixed(1)} °C`;
-  return `${low.toFixed(1)} to ${high.toFixed(1)} °C`;
-}

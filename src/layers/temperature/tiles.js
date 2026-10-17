@@ -39,18 +39,3 @@ export function locateTilePixel(latitude, longitude, level = GIBS_MAX_LEVEL) {
     pixelY: Math.min(TILE_PIXELS - 1, Math.floor((y - tileY) * TILE_PIXELS)),
   };
 }
-
-/**
- * Ground resolution of one sampled pixel, so the readout can say how coarse it
- * is rather than implying the value belongs to the exact clicked spot.
- * @param {number} latitude Degrees north.
- * @param {number} level Tile matrix level.
- * @returns {number} Metres per pixel.
- */
-export function metresPerPixel(latitude, level = GIBS_MAX_LEVEL) {
-  const equatorial = 40_075_016.686;
-  return (
-    (equatorial * Math.cos((latitude * Math.PI) / 180)) /
-    (TILE_PIXELS * 2 ** level)
-  );
-}
