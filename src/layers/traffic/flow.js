@@ -11,6 +11,7 @@ import {
   FAST_FETCH_ALTITUDE,
   roadDotBudget,
 } from './policy.js';
+import { msg } from '../../i18n/index.js';
 
 export function createFlow({ state: layerState, services, parts, source }) {
   const { registerDynamicCredit, TOMTOM_CREDIT } = services.credits;
@@ -36,11 +37,13 @@ export function createFlow({ state: layerState, services, parts, source }) {
     const status = Number.isFinite(error.status)
       ? error.status
       : Number(message.match(/HTTP (\d{3})/)?.[1]);
-    if (status === 503) return 'TomTom key unavailable';
-    if (status === 429) return 'TomTom daily budget reached';
-    if (status === 502 || status === 504) return 'TomTom upstream unreachable';
+    // English in state; trafficFeedPresentation translates it for the panel.
+    if (status === 503) return msg('TomTom key unavailable');
+    if (status === 429) return msg('TomTom daily budget reached');
+    if (status === 502 || status === 504)
+      return msg('TomTom upstream unreachable');
     if (Number.isFinite(status)) return `TomTom flow error (HTTP ${status})`;
-    return 'TomTom flow unavailable';
+    return msg('TomTom flow unavailable');
   }
 
   /**

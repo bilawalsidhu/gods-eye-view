@@ -623,7 +623,7 @@ async function main() {
     record('a mission never auto-suppresses itself', state.durable === null, `durable=${state.durable}`);
     record('a mission never writes the detection-allocation pref',
       state.allocation === before.allocation, `${before.allocation} → ${state.allocation}`);
-    record('ENVIRONMENTAL enables its hazard feeds',
+    record('ENVIRONMENTAL enables all three hazard layers',
       state.layers.earthquakes && state.layers['local-firms'] && state.layers['fire-perimeters'],
       `quakes=${state.layers.earthquakes} fires=${state.layers['local-firms']} perimeters=${state.layers['fire-perimeters']}`);
     record('ENVIRONMENTAL loads real quake records', (state.counts.earthquakes ?? 0) > 0,

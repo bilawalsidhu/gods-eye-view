@@ -206,9 +206,9 @@ test('the step list is capped, and the cap is reported rather than hidden', () =
   // would present a route that simply stops in the middle of a road.
   assert.equal(cut.truncated, true);
   const exact = normalizeOsrmSteps({
-    legs: [{ steps: many.slice(0, ROUTE_STEPS_MAX - 1) }],
+    legs: [{ steps: many.slice(0, ROUTE_STEPS_MAX) }],
   });
-  assert.equal(exact.steps.length, ROUTE_STEPS_MAX - 1);
+  assert.equal(exact.steps.length, ROUTE_STEPS_MAX);
   assert.equal(exact.truncated, false, 'a route that fits is not cut');
 });
 

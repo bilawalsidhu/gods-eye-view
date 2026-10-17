@@ -1,4 +1,5 @@
 import { UiLifetime } from './uiLifetime.js';
+import { t, msg } from '../i18n/index.js';
 import { displayPanelScroller } from './displayPanelScroll.js';
 import { PanelPositionControls } from './panelPositionControls.js';
 import { PanelLayoutController } from './panelLayoutController.js';
@@ -14,6 +15,7 @@ const SHARE_PANEL_STATE_SPECS = Object.freeze([
   { id: 'cctv-panel' },
   { id: 'weather-panel' },
   { id: 'recent-imagery-panel' },
+  { id: 'street-level-panel' },
   { id: 'radio-panel' },
   { id: 'scene-panel' },
   { id: 'global-context-panel' },
@@ -26,6 +28,7 @@ const COCKPIT_ENTRY_COLLAPSE_PANEL_IDS = Object.freeze([
   'cctv-panel',
   'weather-panel',
   'recent-imagery-panel',
+  'street-level-panel',
   'scene-panel',
   'pp-toggles',
   'global-context-panel',
@@ -61,6 +64,7 @@ export class PanelChrome {
       layoutRightPanels: () => this._layoutRightPanels(),
       syncCctvPanelViewport: () => this._syncCctvPanelViewport(),
       showToast: (message) => this._showToast(message),
+      onPanelResized: (panelId) => this._onPanelResized(panelId),
     });
     this._panelLayout = new PanelLayoutController({
       readHud: () => ({
@@ -144,6 +148,7 @@ export class PanelChrome {
     this._initCommandDockPins();
     this._initCommandDockTrayMetrics();
     this._maybeNotifyLayoutReset();
+    this._panelPosition._initPanelDrag();
   }
 
   _collapsePanelOnEscape(event, panelId) {
@@ -288,6 +293,7 @@ export class PanelChrome {
       'cctv-panel',
       'weather-panel',
       'recent-imagery-panel',
+      'street-level-panel',
       'global-context-panel',
     ].includes(panelEl?.id);
     const collapsed = panelEl.classList.contains('collapsed');
@@ -305,14 +311,25 @@ export class PanelChrome {
         const panelName =
           panelEl
             .querySelector('.panel-title, .pp-header-label')
-            ?.textContent?.trim() || 'panel';
-        const action = collapsed ? 'Expand' : 'Collapse';
-        btn.title = `${action} ${panelName}`;
-        btn.setAttribute('aria-label', `${action} ${panelName}`);
+            ?.textContent?.trim() || t('panel');
+        const titleKey = collapsed
+          ? msg('Expand {name}')
+          : msg('Collapse {name}');
+        btn.title = t(titleKey, { name: panelName });
+        btn.setAttribute('aria-label', t(titleKey, { name: panelName }));
         if (panelEl.id === 'radio-panel') {
-          const action = collapsed ? 'Expand' : 'Collapse';
-          btn.title = `${action} Radio`;
-          btn.setAttribute('aria-label', `${action} Radio section`);
+          // Radio keeps the wording of its static button (context.html).
+          btn.title = t(
+            collapsed ? msg('Expand Radio') : msg('Collapse Radio'),
+          );
+          btn.setAttribute(
+            'aria-label',
+            t(
+              collapsed
+                ? msg('Expand Radio section')
+                : msg('Collapse Radio section'),
+            ),
+          );
         }
       });
     const dockToggle = panelEl.querySelector(
@@ -322,11 +339,13 @@ export class PanelChrome {
       const panelName =
         panelEl
           .querySelector('.panel-title, .location-toolbar-label')
-          ?.textContent?.trim() || 'panel';
-      const action = collapsed ? 'Expand' : 'Collapse';
+          ?.textContent?.trim() || t('panel');
+      const titleKey = collapsed
+        ? msg('Expand {name}')
+        : msg('Collapse {name}');
       dockToggle.setAttribute('aria-expanded', String(!collapsed));
-      dockToggle.setAttribute('aria-label', `${action} ${panelName}`);
-      dockToggle.title = `${action} ${panelName}`;
+      dockToggle.setAttribute('aria-label', t(titleKey, { name: panelName }));
+      dockToggle.title = t(titleKey, { name: panelName });
     }
     if (panelEl.id === 'radio-panel' && this._contextRadioDetailsBtn) {
       this._contextRadioDetailsBtn.setAttribute(
@@ -383,6 +402,11 @@ export class PanelChrome {
     this.shareLinkManager?.onPanelStateChange?.();
   }
 
+  /** @returns {boolean} Whether the panel was floating and is now docked. */
+  dockPanel(panelId) {
+    return this._panelPosition?.dockPanel?.(panelId) === true;
+  }
+
   setPanelCollapsed(
     panelId,
     collapsed,
@@ -405,17 +429,20 @@ export class PanelChrome {
       panelEl.classList.contains('cyber-accordion-collapsed');
     // A user opening a Cyber rail panel owns the whole accordion, including
     // peers that were only presentation-collapsed during a saved-state restore.
+    // A floating window is outside the accordion both ways.
     if (
       explicit &&
       !restore &&
       !nextCollapsed &&
       document.documentElement?.dataset.uiTheme === 'cyber' &&
-      panelEl.parentElement === this._rightPanelStack
+      panelEl.parentElement === this._rightPanelStack &&
+      !panelEl.classList.contains('panel-floating')
     ) {
       for (const peer of this._rightPanelStack.children) {
         if (
           peer !== panelEl &&
           peer.matches('[data-panel-id]') &&
+          !peer.classList.contains('panel-floating') &&
           !peer.hidden
         ) {
           this.setPanelCollapsed(peer.id, true, {
@@ -543,6 +570,10 @@ export class PanelChrome {
       }
     }
     panelEl.classList.toggle('collapsed', nextCollapsed);
+    // Only a user's own collapse docks a floating window; restores, cockpit
+    // entry and accordion peers keep its place.
+    if (explicit && !restore)
+      this._panelPosition?.onPanelCollapsed?.(panelId, nextCollapsed);
     if (
       nextCollapsed &&
       this.cockpitView?.active &&

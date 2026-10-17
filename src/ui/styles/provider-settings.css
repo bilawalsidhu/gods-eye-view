@@ -4,11 +4,9 @@
    mono kickers. The chip retires once every key is configured.
    ============================================================ */
 
+/* The chip sits in the bottom-right corner row (#corner-actions,
+   locale-picker.css), which owns the position. */
 #key-setup-chip {
-  position: fixed;
-  right: 0.9rem;
-  bottom: 0.9rem;
-  z-index: 60;
   display: flex;
   align-items: center;
   gap: 0.4rem;
@@ -300,6 +298,43 @@
   color: rgba(148, 178, 188, 0.42);
 }
 
+.key-setup-cloud-auth {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.key-setup-cloud-auth-state {
+  color: rgba(190, 214, 222, 0.7);
+  font-family: var(--font-mono);
+  font-size: 0.56rem;
+  letter-spacing: 0.05rem;
+}
+
+.key-setup-cloud-auth-toggle {
+  margin-left: auto;
+  padding: 0.28rem 0.55rem;
+  color: rgba(54, 220, 255, 0.9);
+  font-family: var(--font-mono);
+  font-size: 0.55rem;
+  letter-spacing: 0.06rem;
+  background: rgba(54, 220, 255, 0.08);
+  border: 1px solid rgba(54, 220, 255, 0.28);
+  border-radius: 0.32rem;
+  cursor: pointer;
+}
+
+.key-setup-cloud-auth-toggle:hover,
+.key-setup-cloud-auth-toggle:focus-visible {
+  border-color: rgba(54, 220, 255, 0.65);
+  outline: none;
+}
+
+.key-setup-cloud-auth-toggle[aria-disabled='true'] {
+  cursor: wait;
+  opacity: 0.5;
+}
+
 .key-setup-footer {
   margin-top: 0.85rem;
 }
@@ -350,13 +385,6 @@ body.recording-mode #key-setup,
 body.cockpit-mode #key-setup,
 body.scene-playback-mode #key-setup {
   display: none;
-}
-
-@media (max-width: 620px) {
-  /* Clear the dock. Desktop-first app; this is a courtesy, not a layout. */
-  #key-setup-chip {
-    bottom: 5.8rem;
-  }
 }
 
 /* Provider Settings additions: externally-managed badge + per-row remove. */

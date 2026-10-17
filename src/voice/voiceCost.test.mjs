@@ -612,3 +612,29 @@ test('reset clears totals and re-arms both latches for a new session', () => {
   assert.equal(cleared.capReached, false);
   assert.equal(tracker.record(dollarsOfUsage(2)).warnCrossed, true);
 });
+
+test('input transcription is priced with its own model and folds into the session cap', async () => {
+  const {
+    estimateTranscriptionCostUsd,
+    transcriptionRates,
+    TRANSCRIPTION_MODEL_RATES,
+    createVoiceCostTracker: createTracker,
+  } = await import('./voiceCost.js');
+  const usage = {
+    type: 'tokens',
+    input_tokens: 1_000_000,
+    input_token_details: { audio_tokens: 1_000_000, text_tokens: 0 },
+    output_tokens: 0,
+  };
+  assert.equal(estimateTranscriptionCostUsd(usage, 'gpt-4o-mini-transcribe'), 3);
+  assert.equal(
+    transcriptionRates('someday-transcribe'),
+    TRANSCRIPTION_MODEL_RATES['gpt-4o-transcribe'],
+    'unknown ids bill at the priciest',
+  );
+  assert.ok(Math.abs(estimateTranscriptionCostUsd({ type: 'duration', seconds: 60 }) - 0.006) < 1e-12);
+  const tracker = createTracker({ tier: 'standard', limits: { warnUsd: 1, capUsd: 2 } });
+  const state = tracker.recordUsd(estimateTranscriptionCostUsd(usage, 'gpt-4o-mini-transcribe'));
+  assert.equal(state.totalUsd, 3);
+  assert.equal(state.capCrossed, true);
+});
