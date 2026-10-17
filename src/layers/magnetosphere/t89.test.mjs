@@ -47,16 +47,23 @@ test('symmetry holds on the Sun-Earth line at zero tilt', () => {
 });
 
 test('disturbance bands map from Kp the way the model documents', () => {
-  assert.equal(t89BandForKp(0), 1);
-  assert.equal(t89BandForKp(0.33), 1);
-  assert.equal(t89BandForKp(1), 2);
-  assert.equal(t89BandForKp(2.7), 3);
-  assert.equal(t89BandForKp(5.9), 6);
-  assert.equal(t89BandForKp(6), 7);
-  assert.equal(t89BandForKp(9), 7);
-  // A missing Kp must mean "quiet", not "NaN propagated into the field".
+  // Geopack's IOPT table, in decimal Kp (thirds are 0.33 and 0.67).
+  const table = [
+    [[0, 0.33], 1], // 0, 0+
+    [[0.67, 1, 1.33], 2], // 1-, 1, 1+
+    [[1.67, 2, 2.33], 3],
+    [[2.67, 3, 3.33], 4],
+    [[3.67, 4, 4.33], 5],
+    [[4.67, 5, 5.33], 6],
+    [[5.67, 6, 7, 9], 7], // >= 6-
+  ];
+  for (const [values, band] of table)
+    for (const kp of values) assert.equal(t89BandForKp(kp), band, `Kp ${kp}`);
+  // SWPC's estimated_kp of 1.67 ("2M") was being drawn as band 2.
+  assert.equal(t89BandForKp(1.67), 3);
   assert.equal(t89BandForKp(Number.NaN), 1);
   assert.equal(t89BandForKp(undefined), 1);
+  assert.equal(t89BandForKp(-1), 1);
 });
 
 test('the field varies monotonically with disturbance band', () => {
