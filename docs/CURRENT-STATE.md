@@ -1,5 +1,10 @@
 # God's Eye View Current State
 
+The standard application viewer (`src/app/viewer.js`) clamps `viewer.resolutionScale`
+to the WebGL hardware limit (`Cesium.ContextLimits.maximumTextureSize`) on high-resolution
+displays, keeping drawing buffer dimensions within bounds for framebuffer depth/color
+textures and restoring requested scaling when the window shrinks.
+
 Vessel sources can report healthy empty coverage using a current, complete
 snapshot with zero raw rows, a healthy transport and a positive last-message
 time. This clears obsolete contacts and settles startup without manufacturing
