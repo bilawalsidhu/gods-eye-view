@@ -5,7 +5,7 @@ export const HLS_LIMITS = Object.freeze({
   sessions: 2,
   leasesPerSession: 8,
   playlistBytes: 256 * 1024,
-  segmentBytes: 4 * 1024 * 1024,
+  segmentBytes: 12 * 1024 * 1024,
   initBytes: 256 * 1024,
   sessionBytes: 24 * 1024 * 1024,
   segments: 12,
@@ -40,11 +40,14 @@ export async function fetchHlsBytes(
       headers: { 'User-Agent': 'gods-eye-view-cctv-proxy/1.0' },
     });
     if (
-      !response.ok ||
       response.redirected ||
       (response.url && new URL(response.url).href !== new URL(url).href)
     )
       throw new Error('HLS upstream refused');
+    if (!response.ok)
+      throw Object.assign(new Error('HLS upstream refused'), {
+        status: response.status,
+      });
     if (Number(response.headers.get('content-length')) > maxBytes)
       throw new Error('HLS response too large');
     reader = response.body?.getReader?.();
@@ -207,6 +210,11 @@ export function createHlsPuller({
   };
   const upstreamKey = (segment) =>
     JSON.stringify([segment.uri, segment.initUri]);
+  const rememberUpstream = (entry, segment) => {
+    entry.upstream.set(segment.seq, upstreamKey(segment));
+    while (entry.upstream.size > limits.segments * 2)
+      entry.upstream.delete(entry.upstream.keys().next().value);
+  };
   const poll = async (entry) => {
     try {
       let base = entry.chunklistUrl || entry.url;
@@ -244,6 +252,17 @@ export function createHlsPuller({
         entry.pendingDiscontinuity = true;
       }
       entry.upstreamNewest = newest;
+      // Start near live edge; do not download a DVR tail only to evict it.
+      // Include the init URI even for skipped entries: URI-only identities
+      // would falsely restart every subsequent fMP4 poll.
+      if (!entry.segments.size || restarted) {
+        const startupCount = Math.max(
+          2,
+          Math.floor(limits.sessionBytes / limits.segmentBytes),
+        );
+        for (const segment of segments.slice(0, -startupCount))
+          rememberUpstream(entry, segment);
+      }
       for (const segment of segments) {
         if (entry.stopping) return;
         if (entry.upstream.has(segment.seq)) continue;
@@ -266,7 +285,18 @@ export function createHlsPuller({
             };
           }
         }
-        const body = await read(entry, segment.uri, limits.segmentBytes);
+        let body;
+        try {
+          body = await read(entry, segment.uri, limits.segmentBytes);
+        } catch (error) {
+          // Only expired media may be skipped. Init failures and either of
+          // the newest two media failures retain the session retry policy.
+          if (error.status !== 404 || segment.seq >= newest - 1) throw error;
+          if (entry.stopping) return;
+          rememberUpstream(entry, segment);
+          entry.pendingDiscontinuity = true;
+          continue;
+        }
         if (entry.stopping) return;
         // Both media and shared init files count against the same budget.
         // One bounded init and one media download may exist outside the cache.
@@ -303,9 +333,7 @@ export function createHlsPuller({
         });
         entry.lastInitId = initId;
         entry.pendingDiscontinuity = false;
-        entry.upstream.set(segment.seq, upstreamKey(segment));
-        while (entry.upstream.size > limits.segments * 2)
-          entry.upstream.delete(entry.upstream.keys().next().value);
+        rememberUpstream(entry, segment);
         entry.bytes += body.length;
       }
       entry.failures = 0;

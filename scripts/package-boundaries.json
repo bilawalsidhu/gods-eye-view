@@ -187,6 +187,7 @@
       "server/providers/cctv/groundHeights.js",
       "server/providers/cctv/catalog.js",
       "server/providers/cctv/lithuania.js",
+      "server/providers/cctv/misiones.js",
       "server/providers/cctv/constants.js",
       "server/providers/cctv/media.js",
       "server/providers/cctv/normalize.js",
@@ -201,8 +202,7 @@
       "src/data/cctvFootprint.js",
       "src/sources/cctvTypes.js",
       "src/sources/httpBody.js",
-      "src/i18n/marker.js",
-      "server/providers/cctv/misiones.js"
+      "src/i18n/marker.js"
     ],
     "external": []
   },
