@@ -17,6 +17,7 @@ import {
   optionSpecs,
   parseStoredLayerState,
   serializeStoredLayerState,
+  userLayerEntries,
 } from './layerState.js';
 
 /** Re-check cadence while a shared subject waits for its feed row to arrive. */
@@ -312,14 +313,18 @@ export class LayerStateCoordinator {
   }
 
   async _restoreSelectedState(origin) {
-    for (const entry of LAYER_STATE_REGISTRY) {
+    // User layers carry enabled state in `ul` and are registered with the
+    // manager like any built-in, so they restore through the same loop. They
+    // own no options, so layerOptionsForRestore returns null for them.
+    const restoreEntries = [...LAYER_STATE_REGISTRY, ...userLayerEntries()];
+    for (const entry of restoreEntries) {
       this._restoreControllers.set(entry.id, new AbortController());
     }
     try {
       await this._waitForRestoreGate();
       const enabled = new Set(this._durableState.enabledLayerIds);
       const settled = await Promise.allSettled(
-        LAYER_STATE_REGISTRY.map(async (entry) => {
+        restoreEntries.map(async (entry) => {
           const controller = this._restoreControllers.get(entry.id);
           const targetEnabled = enabled.has(entry.id);
           const options = layerOptionsForRestore(this._durableState, entry.id);
@@ -372,7 +377,7 @@ export class LayerStateCoordinator {
       );
       this.lastRestoreResults = settled.map((result, index) => {
         if (result.status === 'fulfilled') return result.value;
-        const entry = LAYER_STATE_REGISTRY[index];
+        const entry = restoreEntries[index];
         return {
           layerId: entry.id,
           targetEnabled: enabled.has(entry.id),
