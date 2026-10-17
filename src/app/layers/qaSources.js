@@ -8,6 +8,9 @@
 //   military:synthetic[:count]  readsb rows, `count` aircraft (1 000); the
 //                               first 25 are also synthetic civil flights
 //   vessels:fixture             12 000 AIS rows, or those within an area
+//   local-adsb:fixture          the local receivers' answer (server format,
+//                               /api/local-receivers/aircraft): 40 aircraft
+//                               near JFK, 1090 MHz and 978 MHz UAT
 
 import {
   createFlightSource,
@@ -16,14 +19,17 @@ import {
 } from '../../sources/live/standalone.js';
 import {
   syntheticFlights,
+  syntheticLocalReceivers,
   syntheticMilitary,
   syntheticVessels,
 } from '../../bench/w1Feeds.js';
+import { createLocalReceiverFeeds } from '../../layers/localAdsb/feeds.js';
 
 const KINDS = Object.freeze({
   flights: new Set(['synthetic']),
   military: new Set(['synthetic']),
   vessels: new Set(['fixture']),
+  'local-adsb': new Set(['fixture']),
 });
 
 /** The qaFeed entries of a location search, or a TypeError. */
@@ -38,7 +44,7 @@ export function parseQaFeed(search = '') {
       (count !== null && !(Number.isInteger(count) && count > 0))
     )
       throw new TypeError(
-        `qaFeed: unknown entry "${item}" (flights:synthetic[:count], military:synthetic[:count], vessels:fixture)`,
+        `qaFeed: unknown entry "${item}" (flights:synthetic[:count], military:synthetic[:count], vessels:fixture, local-adsb:fixture)`,
       );
     return { layer, kind, count };
   });
@@ -67,6 +73,11 @@ export function createQaSources(entries, { now = () => Date.now() } = {}) {
           String(url).includes('/track')
             ? json({ timestamp: now() / 1000, trace: [] })
             : json(syntheticMilitary({ nowMs: now(), count: count ?? 1000 })),
+      });
+    if (layer === 'local-adsb')
+      sources.localAdsbFeeds = createLocalReceiverFeeds({
+        now,
+        fetchImpl: async () => json(syntheticLocalReceivers({ nowMs: now() })),
       });
     if (layer === 'vessels')
       sources.vessels = createVesselSource({

@@ -63,3 +63,26 @@ test('military:synthetic answers with the military source’s shape, some shared
   const track = await sources.military.getTrack('ae1100');
   assert.deepEqual(track.records, []);
 });
+
+test('local-adsb:fixture answers as the local receivers do (1090 MHz and UAT)', async () => {
+  const now = Date.UTC(2026, 9, 16, 12);
+  assert.deepEqual(parseQaFeed('?qaFeed=local-adsb:fixture'), [
+    { layer: 'local-adsb', kind: 'fixture', count: null },
+  ]);
+  const { localAdsbFeeds } = createQaSources(
+    parseQaFeed('?qaFeed=local-adsb:fixture'),
+    { now: () => now },
+  );
+  const loaded = new Promise((resolve) =>
+    localAdsbFeeds.subscribe((state) => {
+      if (state.records?.length) resolve();
+    }),
+  );
+  localAdsbFeeds.start();
+  await loaded;
+  const state = localAdsbFeeds.getState();
+  localAdsbFeeds.stop();
+  assert.equal(state.records.length, 40);
+  assert.ok(state.records.some((record) => record.band === '978'));
+  assert.ok(state.records.some((record) => record.band === '1090'));
+});

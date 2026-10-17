@@ -10,20 +10,20 @@ import {
   rendererFor,
 } from './layers/renderers.js';
 
-test('the Navara mode registers the flights and military renderers, once', async () => {
+test('the Navara mode registers the aircraft layers’ renderers, once', async () => {
   assert.equal(layerAvailableOn('military', 'navara'), false);
   await Promise.all([
     registerNavaraLayerRenderers(),
     registerNavaraLayerRenderers(),
   ]);
   await registerNavaraLayerRenderers();
-  for (const id of ['flights', 'military'])
+  for (const id of ['flights', 'military', 'local-adsb'])
     assert.equal(layerAvailableOn(id, 'navara'), true, id);
   assert.deepEqual(
     createLayerAvailability('navara')
       .available()
       .map(({ id }) => id),
-    ['flights', 'military'],
+    ['flights', 'military', 'local-adsb'],
   );
   assert.equal(rendererFor('satellites', { kind: 'navara' }), null);
 });

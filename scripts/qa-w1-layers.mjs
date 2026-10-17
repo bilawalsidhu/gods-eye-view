@@ -53,6 +53,7 @@ const DEFAULT_FEEDS = {
   // Military with the civil fleet: 25 military hexes are also civil
   // flights (duplicate suppression), and the follow passes between them.
   military: 'military:synthetic:1000,flights:synthetic:10000',
+  'local-adsb': 'local-adsb:fixture',
   'ais-live-vessels': 'vessels:fixture',
 };
 const TODO_SECTIONS = {
@@ -90,9 +91,10 @@ function compare(files) {
         Math.abs(known.screen.x - other.screen.x),
         Math.abs(known.screen.y - other.screen.y),
       );
-      // At 15,000 km the engines' cameras differ by 2.3 px vertically
-      // (Cesium projects its own nadir 2.27 px above the centre there): a
-      // camera difference, reported apart.
+      // At 15,000 km the engines' cameras differ by 2.27 px vertically:
+      // Cesium's set-view "up" is the ellipsoid gradient at the camera, 0.117°
+      // off the geodetic normal below that Navara uses (qa-flights-engines
+      // explains it): a camera difference, reported apart.
       if (d > SCREEN_TOLERANCE_PX && pose === 'global')
         console.log(
           `[w1-layers] INFO ${pose} ${known.id}: ${d.toFixed(2)} px apart (camera)`,
@@ -587,6 +589,126 @@ try {
       } else {
         check('2 click: an object to click at the city pose', false);
       }
+      report.sections[2] = section;
+    }
+    // Local ADS-B (the same on both engines): a click on a marker selects it
+    // and shows its card (receiver line), the camera never follows it, a
+    // click on empty map releases it, and Escape does not (the layer has
+    // never answered Escape).
+    if (layer === 'local-adsb') {
+      await page.evaluate(async ([lon, lat, height, heading, pitch]) => {
+        const geo = await import('/src/geo/index.js');
+        const { engine } = window.__godsEyeView;
+        const rad = geo.math.toRadians;
+        engine.camera.setView({
+          destination: geo.cartesian3.fromDegrees(lon, lat, height),
+          orientation: { heading: rad(heading), pitch: rad(pitch), roll: 0 },
+        });
+        for (let frame = 0; frame < 30; frame++) {
+          engine.render.request('qa-w1-layers');
+          await new Promise((resolve) => requestAnimationFrame(resolve));
+        }
+      }, POSES.city);
+      const targets = await page.evaluate((id) => {
+        const { engine, layers } = window.__godsEyeView;
+        const { width, height } = engine.host.size();
+        const onCanvas = (x, y) =>
+          document.elementFromPoint(x, y) === engine.host.canvas;
+        const shown = layers
+          .objects(id, 1_000_000)
+          .filter(
+            ({ screen }) =>
+              screen &&
+              screen.x > 120 &&
+              screen.y > 120 &&
+              screen.x < width - 120 &&
+              screen.y < height - 120,
+          );
+        const clearance = (x, y, skip) =>
+          Math.min(
+            Infinity,
+            ...shown
+              .filter((row) => row !== skip)
+              .map(({ screen }) => Math.hypot(screen.x - x, screen.y - y)),
+          );
+        let target = null;
+        for (const row of shown) {
+          if (!onCanvas(row.screen.x, row.screen.y)) continue;
+          const room = clearance(row.screen.x, row.screen.y, row);
+          if (!target || room > target.room)
+            target = { id: row.id, screen: row.screen, room };
+        }
+        let empty = null;
+        for (let x = 140; x < width - 140; x += 40)
+          for (let y = 140; y < height - 140; y += 40) {
+            if (!onCanvas(x, y)) continue;
+            const room = clearance(x, y, null);
+            if (!empty || room > empty.room) empty = { x, y, room };
+          }
+        return { target, empty };
+      }, layer);
+      const selectedCard = () =>
+        page.evaluate(async () => {
+          const { getSelectedEntityContext } =
+            await import('/src/data/contextStore.js');
+          const record = getSelectedEntityContext();
+          if (record?.layerId !== 'local-adsb') return null;
+          return {
+            id: record.id,
+            title: record.entity?.gevLabelModel?.title ?? null,
+            receiver: record.entity?.gevLabelModel?.details?.at(-1) ?? null,
+          };
+        });
+      const settle = () => new Promise((resolve) => setTimeout(resolve, 800));
+      const section = { target: targets.target };
+      if (targets.target) {
+        const started = Date.now();
+        await page.mouse.click(
+          targets.target.screen.x,
+          targets.target.screen.y,
+        );
+        let card = null;
+        while (Date.now() - started < 3000) {
+          card = await selectedCard();
+          if (card) break;
+          await new Promise((resolve) => setTimeout(resolve, 25));
+        }
+        section.selectMs = card ? Date.now() - started : null;
+        section.card = card;
+        check(
+          '2 click: a click on a local aircraft selects it and shows its card',
+          card?.id === `local-adsb:${targets.target.id}` &&
+            Boolean(card.title) &&
+            /heard|receiver|mhz/i.test(card.receiver ?? ''),
+          JSON.stringify(card),
+        );
+        section.following = await page.evaluate(() =>
+          window.__godsEyeView.layers.following(),
+        );
+        check(
+          '4 tracking: the camera does not follow a local aircraft',
+          section.following === null,
+          JSON.stringify(section.following),
+        );
+        await page.keyboard.press('Escape');
+        await settle();
+        const afterEscape = await selectedCard();
+        check(
+          '2 click: Escape leaves the selection (as before)',
+          afterEscape?.id === card?.id,
+          JSON.stringify(afterEscape),
+        );
+        await page.mouse.click(targets.empty.x, targets.empty.y);
+        await settle();
+        const afterEmpty = await selectedCard();
+        check(
+          '2 click: a click on empty map releases it',
+          afterEmpty === null,
+          JSON.stringify(afterEmpty),
+        );
+        report.sections[4] = { following: section.following };
+      } else
+        check('2 click: a local aircraft to click at the city pose', false);
       report.sections[2] = section;
     }
     // Military with the civil flights layer (the same on both engines): the
