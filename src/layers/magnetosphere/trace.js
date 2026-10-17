@@ -65,6 +65,36 @@ function unitField(coefficients, position, externalField) {
  * @returns {{points:Array<{x,y,z}>, end:string}}
  */
 export function traceFieldLine(coefficients, start, options = {}) {
+  return drain(fieldLineSteps(coefficients, start, options));
+}
+
+/**
+ * Run a stepper to completion and return what it returns.
+ *
+ * @param {Generator} steps From `fieldLineSteps` or `fullLineSteps`.
+ * @returns {*} The trace.
+ */
+function drain(steps) {
+  for (;;) {
+    const { done, value } = steps.next();
+    if (done) return value;
+  }
+}
+
+/** RK4 steps between pauses; a few hundred microseconds even under T96. */
+const STEPS_PER_PAUSE = 8;
+
+/**
+ * `traceFieldLine` as a generator that pauses every few steps.
+ *
+ * One T96 line costs up to ~90 ms, several frames, so pausing only between
+ * lines still drops frames. A caller that drives this with a time budget can
+ * hand the frame back mid-line. It yields no values; the generator's return
+ * value is the trace, exactly as `traceFieldLine` returns it.
+ *
+ * @returns {Generator<undefined, {points:Array<{x,y,z}>, end:string}>}
+ */
+export function* fieldLineSteps(coefficients, start, options = {}) {
   const {
     direction = 1,
     stepKm = 80,
@@ -136,6 +166,7 @@ export function traceFieldLine(coefficients, start, options = {}) {
     points.push(next);
     if (radius >= maxRadiusKm) return { points, end: TRACE_END.escaped };
     current = next;
+    if ((step + 1) % STEPS_PER_PAUSE === 0) yield;
   }
   return { points, end: TRACE_END.exhausted };
 }
@@ -147,11 +178,16 @@ export function traceFieldLine(coefficients, start, options = {}) {
  * directions; tracing one way alone silently returns half of it.
  */
 export function traceFullLine(coefficients, seed, options = {}) {
-  const forward = traceFieldLine(coefficients, seed, {
+  return drain(fullLineSteps(coefficients, seed, options));
+}
+
+/** `traceFullLine` as a pausing generator, like `fieldLineSteps`. */
+export function* fullLineSteps(coefficients, seed, options = {}) {
+  const forward = yield* fieldLineSteps(coefficients, seed, {
     ...options,
     direction: 1,
   });
-  const backward = traceFieldLine(coefficients, seed, {
+  const backward = yield* fieldLineSteps(coefficients, seed, {
     ...options,
     direction: -1,
   });
