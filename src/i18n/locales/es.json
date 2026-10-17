@@ -2889,5 +2889,9 @@
   "USB work abandoned after a stalled transfer": "Trabajo USB cancelado tras una transferencia bloqueada",
   "SDR decoder did not start; receiver stopped": "El decodificador SDR no arrancó; receptor detenido",
   "SDR decoder stopped responding; receiver stopped": "El decodificador SDR dejó de responder; receptor detenido",
-  "SDR decoder fell behind; receiver stopped": "El decodificador SDR se quedó atrás; receptor detenido"
+  "SDR decoder fell behind; receiver stopped": "El decodificador SDR se quedó atrás; receptor detenido",
+  "DMH / DINAC · STATION OBSERVATION": "DMH / DINAC · OBSERVACIÓN DE ESTACIÓN",
+  "RH {percent}%": "HR {percent}%",
+  "WIND {speed} KM/H {direction}": "VIENTO {speed} KM/H {direction}",
+  "{station} · {distance} KM FROM LOCATION": "{station} · A {distance} KM DE LA UBICACIÓN"
 }

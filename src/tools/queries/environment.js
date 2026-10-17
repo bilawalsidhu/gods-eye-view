@@ -126,7 +126,7 @@ export const getRegionalBrief = defineTool({
   title: 'Regional brief',
   description:
     'What and where a location is, its current weather, and recent news ' +
-    'headlines for the region.',
+    'headlines for the region. In and near Paraguay, station_observation separately identifies a recent nearby DMH reading; it is not a forecast at the requested point.',
   inputSchema: {
     type: 'object',
     properties: { location: POINT_SCHEMA },
@@ -160,6 +160,8 @@ export const getRegionalBrief = defineTool({
           kind: place.kind ?? null,
         },
         weather,
+        station_observation: brief?.stationObservation ?? null,
+        station_observation_status: brief?.stationObservationStatus ?? null,
         news_source: brief?.newsSource ?? null,
         articles,
       },

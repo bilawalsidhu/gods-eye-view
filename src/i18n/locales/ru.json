@@ -2956,5 +2956,9 @@
   "USB work abandoned after a stalled transfer": "Работа с USB прервана: передача данных зависла",
   "SDR decoder did not start; receiver stopped": "Декодер SDR не запустился; приёмник остановлен",
   "SDR decoder stopped responding; receiver stopped": "Декодер SDR перестал отвечать; приёмник остановлен",
-  "SDR decoder fell behind; receiver stopped": "Декодер SDR не успевает; приёмник остановлен"
+  "SDR decoder fell behind; receiver stopped": "Декодер SDR не успевает; приёмник остановлен",
+  "DMH / DINAC · STATION OBSERVATION": "DMH / DINAC · НАБЛЮДЕНИЕ СТАНЦИИ",
+  "RH {percent}%": "ОВ {percent}%",
+  "WIND {speed} KM/H {direction}": "ВЕТЕР {speed} КМ/Ч {direction}",
+  "{station} · {distance} KM FROM LOCATION": "{station} · В {distance} КМ ОТ ТОЧКИ"
 }
