@@ -86,7 +86,9 @@ function stationName(value) {
  * geofenced area around the docks to `capacity` and reports that part as
  * `geofenced_capacity` (not a GBFS field): Bilbao Bizi publishes 39 docks as
  * capacity 839 with geofenced_capacity 800. Without the extension, or when it
- * would exceed the total, `capacity` is read as given.
+ * would exceed the total, `capacity` is read as given. PBSC also counts the
+ * bikes parked in that area (`num_bikes_overflow`) in `num_bikes_available`, so
+ * a crowded station can report more bikes than docks.
  */
 function dockCapacity(raw) {
   const capacity = toNonNegativeInteger(raw?.capacity);
