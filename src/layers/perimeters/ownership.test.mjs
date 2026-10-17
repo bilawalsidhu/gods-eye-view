@@ -223,7 +223,7 @@ test('perimeter selection publishes one shared NIFC context record and clears it
   assert.equal(h.contexts.selectedEvents, 1);
   assert.equal(h.contexts.selected?.layerId, 'fire-perimeters');
   assert.equal(h.contexts.selected?.source, 'NIFC WFIGS');
-  assert.equal(h.contexts.selected?.label, 'Wildfire · Fixture Fire');
+  assert.equal(h.contexts.selected?.label, 'Fixture Fire');
   assert.equal(h.contexts.selected?.properties.containedPct, 40);
   assert.ok(Math.abs(h.contexts.selected.latitude - 35.2333) < 0.01);
   assert.ok(Math.abs(h.contexts.selected.longitude - -108.0333) < 0.01);
@@ -261,7 +261,7 @@ test('switching perimeter picks evicts stale context', async () => {
     [`fire-perimeter:${otherId}`],
   );
   assert.equal(h.contexts.selected?.id, `fire-perimeter:${otherId}`);
-  assert.equal(h.contexts.selected?.label, 'Wildfire · Neighbor Fire');
+  assert.equal(h.contexts.selected?.label, 'Neighbor Fire');
   assert.equal(h.contexts.selectedEvents, 2);
 
   await h.layer.update(h.viewer);
