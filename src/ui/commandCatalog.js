@@ -1,10 +1,11 @@
+import { msg } from '../i18n/index.js';
 import { GEV_ACTION_SCHEMAS } from '../voice/actionSchemas.js';
 
 const DEFAULT_COMMAND_ENTRIES = [
   {
     id: 'open-data-layers',
-    label: 'Open Data Layers',
-    group: 'Panels',
+    label: msg('Open Data Layers'),
+    group: msg('Panels'),
     keywords: ['layers', 'data', 'panel'],
     action: {
       name: 'set_panel_open',
@@ -13,8 +14,8 @@ const DEFAULT_COMMAND_ENTRIES = [
   },
   {
     id: 'open-cameras',
-    label: 'Open Cameras',
-    group: 'Panels',
+    label: msg('Open Cameras'),
+    group: msg('Panels'),
     keywords: ['cctv', 'camera', 'panel'],
     action: {
       name: 'set_panel_open',
@@ -23,8 +24,8 @@ const DEFAULT_COMMAND_ENTRIES = [
   },
   {
     id: 'open-radio',
-    label: 'Open Radio',
-    group: 'Panels',
+    label: msg('Open Radio'),
+    group: msg('Panels'),
     keywords: ['radio', 'audio', 'panel'],
     action: {
       name: 'set_panel_open',
@@ -32,9 +33,19 @@ const DEFAULT_COMMAND_ENTRIES = [
     },
   },
   {
+    id: 'open-weather',
+    label: msg('Open Weather'),
+    group: msg('Panels'),
+    keywords: ['weather', 'conditions', 'forecast', 'panel'],
+    action: {
+      name: 'set_panel_open',
+      args: { panelId: 'weather-panel', open: true },
+    },
+  },
+  {
     id: 'open-context',
-    label: 'Open Context',
-    group: 'Panels',
+    label: msg('Open Context'),
+    group: msg('Panels'),
     keywords: ['context', 'contacts', 'missions', 'panel'],
     action: {
       name: 'set_panel_open',
@@ -43,8 +54,8 @@ const DEFAULT_COMMAND_ENTRIES = [
   },
   {
     id: 'open-location',
-    label: 'Open Location',
-    group: 'Panels',
+    label: msg('Open Location'),
+    group: msg('Panels'),
     keywords: ['location', 'search', 'place', 'panel'],
     action: {
       name: 'set_panel_open',
@@ -53,8 +64,8 @@ const DEFAULT_COMMAND_ENTRIES = [
   },
   {
     id: 'contacts-context',
-    label: 'Enter Contacts Context',
-    group: 'Context',
+    label: msg('Enter Contacts Context'),
+    group: msg('Context'),
     keywords: ['contacts', 'aircraft', 'vessels', 'nearby'],
     action: {
       name: 'set_context_mode',
@@ -63,8 +74,8 @@ const DEFAULT_COMMAND_ENTRIES = [
   },
   {
     id: 'space-missions-context',
-    label: 'Enter Space Missions',
-    group: 'Context',
+    label: msg('Enter Space Missions'),
+    group: msg('Context'),
     keywords: ['space', 'missions', 'launches', 'rockets'],
     action: {
       name: 'set_context_mode',
@@ -73,8 +84,8 @@ const DEFAULT_COMMAND_ENTRIES = [
   },
   {
     id: 'hud-on',
-    label: 'Show HUD',
-    group: 'Display',
+    label: msg('Show HUD'),
+    group: msg('Display'),
     keywords: ['hud', 'heads up', 'display', 'show'],
     action: {
       name: 'set_hud',
@@ -83,8 +94,8 @@ const DEFAULT_COMMAND_ENTRIES = [
   },
   {
     id: 'hud-off',
-    label: 'Hide HUD',
-    group: 'Display',
+    label: msg('Hide HUD'),
+    group: msg('Display'),
     keywords: ['hud', 'heads up', 'display', 'hide'],
     action: {
       name: 'set_hud',
@@ -93,8 +104,8 @@ const DEFAULT_COMMAND_ENTRIES = [
   },
   {
     id: 'style-normal',
-    label: 'Normal Visual Style',
-    group: 'Visual',
+    label: msg('Normal Visual Style'),
+    group: msg('Visual'),
     keywords: ['normal', 'style', 'filter', 'visual'],
     action: {
       name: 'set_visual_style',
@@ -103,8 +114,8 @@ const DEFAULT_COMMAND_ENTRIES = [
   },
   {
     id: 'style-thermal',
-    label: 'Thermal Visual Style',
-    group: 'Visual',
+    label: msg('Thermal Visual Style'),
+    group: msg('Visual'),
     keywords: ['thermal', 'flir', 'style', 'filter'],
     action: {
       name: 'set_visual_style',
@@ -113,8 +124,8 @@ const DEFAULT_COMMAND_ENTRIES = [
   },
   {
     id: 'map-osm',
-    label: 'Use OpenStreetMap',
-    group: 'Map',
+    label: msg('Use OpenStreetMap'),
+    group: msg('Map'),
     keywords: ['osm', 'openstreetmap', 'map', 'basemap'],
     action: {
       name: 'set_map_stack',
