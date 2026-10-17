@@ -194,3 +194,89 @@ test('duplicate references preserve support and input ownership', () => {
   assert.deepEqual(result.segmentIds, ['bridge']);
   assert.equal(Object.isFrozen(result.segmentIds), true);
 });
+
+test('duplicate fresh blockage wins regardless of observation order', () => {
+  const route = { id: 'relief-a', segmentIds: ['a'] };
+  for (const observations of [
+    [segment('a', 'blocked'), segment('a', 'open')],
+    [segment('a', 'open'), segment('a', 'blocked')],
+  ]) {
+    const result = evaluateDisasterRouteSupport(route, observations);
+    assert.equal(result.support, 'unsupported');
+    assert.deepEqual(result.reasons, ['blocked:a']);
+  }
+});
+
+test('duplicate open with degraded or unknown evidence is conservative', () => {
+  const route = { id: 'relief-a', segmentIds: ['a'] };
+  for (const state of ['degraded', 'unknown', 'not-assessed']) {
+    for (const observations of [
+      [segment('a', state), segment('a')],
+      [segment('a'), segment('a', state)],
+    ]) {
+      const result = evaluateDisasterRouteSupport(route, observations);
+      assert.equal(
+        result.support,
+        state === 'degraded' ? 'degraded' : 'unknown',
+      );
+      assert.deepEqual(result.reasons, [`${state}:a`]);
+    }
+  }
+});
+
+test('simulated, derived and missing determinations never support access', () => {
+  const route = { id: 'relief-a', segmentIds: ['a'] };
+  for (const determination of ['simulated', 'derived', null]) {
+    const observation = { ...segment('a'), determination };
+    const result = evaluateDisasterRouteSupport(route, [observation]);
+    assert.equal(result.support, 'unknown');
+    assert.deepEqual(result.reasons, ['unverified-access:a']);
+  }
+  const mixed = evaluateDisasterRouteSupport(route, [
+    segment('a'),
+    { ...segment('a', 'blocked'), determination: 'simulated' },
+  ]);
+  assert.equal(mixed.support, 'unknown');
+});
+
+test('fresh direct evidence takes priority over stale duplicates', () => {
+  const result = evaluateDisasterRouteSupport(
+    { id: 'relief-a', segmentIds: ['a'] },
+    [segment('a', 'blocked', 'stale'), segment('a')],
+  );
+  assert.equal(result.support, 'supported');
+});
+
+test('null packet lists are treated as unassessed, never as open', () => {
+  for (const options of [
+    null,
+    { accessSegments: null, candidateRoutes: null },
+    { accessSegments: false, candidateRoutes: false },
+  ]) {
+    const packet = buildDisasterAccessPacket(options);
+    assert.deepEqual(packet.access.segments, []);
+    assert.deepEqual(packet.routes, []);
+    assert.ok(packet.gaps.includes('access-not-assessed'));
+  }
+  assert.equal(
+    evaluateDisasterRouteSupport({ segmentIds: ['a'] }, null).support,
+    'unknown',
+  );
+});
+
+test('quality and provenance remain snapshots after input mutation', () => {
+  const input = {
+    ...segment('a'),
+    quality: { flags: ['validated'] },
+    provenance: { source: { name: 'report' } },
+  };
+  const packet = buildDisasterAccessPacket({ accessSegments: [input] });
+  const observation = packet.access.segments[0];
+  assert.equal(Object.isFrozen(observation.quality.flags), true);
+  assert.equal(Object.isFrozen(observation.provenance.source), true);
+  input.quality.flags.push('modified');
+  input.provenance.source.name = 'overwritten';
+  assert.deepEqual(observation.quality.flags, ['validated']);
+  assert.equal(observation.provenance.source.name, 'report');
+  assert.throws(() => observation.quality.flags.push('new'), TypeError);
+});
