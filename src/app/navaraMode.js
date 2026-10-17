@@ -64,6 +64,9 @@ export async function registerNavaraLayerRenderers() {
     'local-adsb': async () =>
       (await import('../layers/localAdsb/render/navara.js'))
         .createLocalAdsbNavaraRenderer,
+    'ais-live-vessels': async () =>
+      (await import('../layers/vessels/render/navara.js'))
+        .createVesselsNavaraRenderer,
   };
   const missing = Object.keys(loaders).filter(
     (id) => !layerAvailableOn(id, 'navara'),

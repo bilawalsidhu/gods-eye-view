@@ -46,6 +46,10 @@ export function createVesselState({ source, services }) {
 
   vesselState.shipIconCache = new Map();
 
+  /** The card entries published last (QA: the layer's qaDrawn). */
+
+  vesselState._publishedCards = [];
+
   vesselState.state = {
     feed: createVesselFeed(),
     records: new VesselRecords({ now: () => vesselState._aisRuntime.now() }),

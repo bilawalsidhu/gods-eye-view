@@ -208,3 +208,81 @@ test('vessel logic draws and selects through a plain renderer on an engine, with
     globalThis.document = previousDocument;
   }
 });
+
+test('vessels on the Navara renderer: one always-on-top chevron bank, MMSI picks, the trail on engine.lines', async () => {
+  const { createVesselsNavaraRenderer, vesselAtlasLayout } =
+    await import('./render/navara.js');
+  const engine = createFakeEngine();
+  const layout = vesselAtlasLayout();
+  const renderer = createVesselsNavaraRenderer(engine, {
+    drawAtlas: async () => ({ canvas: { kind: 'atlas' }, cells: layout.cells }),
+  });
+  assert.deepEqual(missingVesselRendererMembers(renderer), []);
+  const layer = createVesselLayer({
+    source: {
+      label: 'Fixture vessels',
+      getSnapshot: async () => ({
+        records: [row('111', 40.6, -73.9), row('222', 40.7, -74.0)],
+        source: 'Fixture vessels',
+        complete: true,
+        stale: false,
+        freshness: 'current',
+        observedAtMs: 500,
+        transportStatus: 'live',
+        rawRowCount: 2,
+      }),
+      getTrack: async () => ({
+        records: [{ latitude: 40.5, longitude: -73.8 }],
+      }),
+    },
+    services: {
+      ...services(renderer),
+      geoid: {
+        ensureGeoidReady: () => new Promise(noop),
+        geoidHeight: () => 0,
+      },
+    },
+  });
+  const previousDocument = globalThis.document;
+  globalThis.document = Object.assign(new EventTarget(), {
+    getElementById: () => null,
+  });
+  try {
+    layer.init(null, { engine });
+    await layer.enable(null, { engine });
+    await renderer.whenReady();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    const sets = engine.movers.list();
+    assert.equal(sets.length, 1);
+    assert.equal(sets[0].count, 2);
+    const set = engine.fake.moverSet(sets[0].id);
+    assert.equal(set.options.depthTest, 'always');
+    assert.equal(set.options.sprite.sizePx, 32);
+    assert.deepEqual([...set.store.pickIds.slice(0, 2)].sort(), ['111', '222']);
+
+    // A click on its pick (the MMSI) selects it: the white chevron ×1.2.
+    engine.fake.script('pick', () => ({ id: '111', owner: sets[0].id }));
+    engine.fake.input('click', { position: { x: 10, y: 10 } });
+    assert.equal(layer.getSelectedInfo()?.mmsi, '111');
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    const index = [...set.store.pickIds].indexOf('111');
+    assert.ok(Math.abs(set.store.scales[index] - 0.72) < 1e-6);
+    // The trail: an engine line (the backfill fix + the live position).
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    assert.ok(engine.fake.line('gev-trail:ais-live-vessels-1'));
+
+    // Another layer follows something: the vessel selection goes.
+    const handle = engine.camera.follow({
+      position: () => engine.camera.pose().position,
+      viewFrom: { x: 0, y: -100, z: 100 },
+    });
+    assert.equal(layer.getSelectedInfo(), null);
+    handle.stop();
+
+    layer.disable(null, { engine });
+    layer.destroy(null, { engine });
+    assert.equal(engine.movers.list().length, 0);
+  } finally {
+    globalThis.document = previousDocument;
+  }
+});
