@@ -117,6 +117,7 @@
   "src/data/firmsCsv.test.mjs",
   "src/data/userLayerRegistry.test.mjs",
   "src/data/userLayerState.test.mjs",
+  "src/data/userLayerRestore.test.mjs",
   "src/userLayers/loader.test.mjs",
   "src/tooling/environmentProviders.test.mjs",
   "server/providers/cctv.js",
