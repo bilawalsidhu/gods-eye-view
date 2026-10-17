@@ -71,7 +71,8 @@
  *   restoreOrder(), restoreOrderOnEnable().
  * @property {object} models live(), setVisible(bool), loadFleet(spec),
  *   loadTracked(spec), preload(url) → Promise<ModelHandle>, add(model),
- *   remove(model), destroy(model), setPose(model, position, headingDeg).
+ *   remove(model), destroy(model), setPose(model, position, headingDeg,
+ *   offsetDeg?) (offsetDeg: the model's nose offset, default the layer's).
  *   spec: { url, minimumPixelSize, scale, color, blendAmount, unlit, id }.
  * @property {object} tracked create(spec) → TrackedHandle, remove(handle),
  *   isLive(handle), setImage(handle, image), setViewFrom(handle, enu),

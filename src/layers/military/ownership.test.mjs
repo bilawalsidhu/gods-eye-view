@@ -6,8 +6,8 @@ import { createFlightState } from './state.js';
 function services() {
   const names = [
     'picking',
-    'sprites',
-    'trails',
+    'selection',
+    'renderer',
     'aircraftPresentation',
     'camera',
     'militaryRegistry',
@@ -119,18 +119,19 @@ test('a normalized source can retain its stale reason without changing standalon
 async function firstPlacement(appClockLagMs) {
   const Cesium = await import('cesium');
   const { RENDER_DELAY_SEC } = await import('./policy.js');
+  const { createMilitaryCesiumRenderer } = await import('./render/cesium.js');
   // The application's own scene services, as src/app/layers/militaryFlights.js
   // composes them; only the surface samplers and registry are stubbed.
   const supplied = {
     picking: await import('../../data/pickRegistry.js'),
-    sprites: await import('../../data/spriteOrder.js'),
-    trails: await import('../../data/trailRenderer.js'),
-    aircraftPresentation: await import('../../data/tr3bRegistry.js'),
-    camera: {
-      ...(await import('../../data/trackedCamera.js')),
-      applyTrackedCameraFrame: (await import('../../globe/cesium/follow.js'))
-        .applyTrackedCameraFrame,
+    selection: await import('../../data/selectionDispatcher.js'),
+    // The layer's Cesium renderer, as the app creates it without an engine.
+    renderer: {
+      create: ({ viewer, adopt }) =>
+        createMilitaryCesiumRenderer(null, { viewer, adopt }),
     },
+    aircraftPresentation: await import('../../data/tr3bRegistry.js'),
+    camera: await import('../../data/trackedCamera.js'),
     labels: await import('../../data/detectionDraw.js'),
     geoid: await import('../../data/geoid.js'),
     focus: await import('../../data/focusDeemphasis.js'),

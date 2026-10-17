@@ -110,6 +110,23 @@ test('a model pose is the old heading-pitch-roll frame with the nose offset', ()
   );
 });
 
+test('a model pose takes a per-model nose offset (military per-class specs)', () => {
+  const { viewer } = stubViewer();
+  const r = renderer(viewer);
+  const model = { modelMatrix: new Cesium.Matrix4() };
+  const position = geo.cartesian3.fromDegrees(-97.7, 30.2, 3000);
+  r.models.setPose(model, position, 75, 90);
+  const expected = Cesium.Transforms.headingPitchRollToFixedFrame(
+    position,
+    new Cesium.HeadingPitchRoll(Cesium.Math.toRadians(75 + 90), 0, 0),
+    Cesium.Ellipsoid.WGS84,
+  );
+  assert.deepEqual(
+    [...Cesium.Matrix4.toArray(model.modelMatrix)],
+    [...Cesium.Matrix4.toArray(expected)],
+  );
+});
+
 test('model loads carry the layer spec; the IR boost loads an UNLIT model', async () => {
   const { viewer } = stubViewer();
   const r = renderer(viewer);

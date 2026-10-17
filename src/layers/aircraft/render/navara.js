@@ -719,11 +719,10 @@ export function createAircraftNavaraRenderer({
       model?.gevBank?.remove(model);
     },
     /** The same HPR frame as Cesium (modelMatrix); the instance turned by
-     *  Navara's glTF axes (NAVARA_GLTF_AXIS). */
-    setPose(model, position, headingDeg) {
-      scratchHpr.heading = geo.math.toRadians(
-        (headingDeg || 0) + headingOffsetDeg,
-      );
+     *  Navara's glTF axes (NAVARA_GLTF_AXIS). `offsetDeg`: this model's
+     *  nose offset when the layer's models differ (default: the layer's). */
+    setPose(model, position, headingDeg, offsetDeg = headingOffsetDeg) {
+      scratchHpr.heading = geo.math.toRadians((headingDeg || 0) + offsetDeg);
       geo.transforms.headingPitchRollToFixedFrame(
         position,
         scratchHpr,

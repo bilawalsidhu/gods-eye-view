@@ -1,10 +1,10 @@
 import { createMilitaryFlightLayer } from '../../layers/military/index.js';
 import * as picking from '../../data/pickRegistry.js';
-import * as sprites from '../../data/spriteOrder.js';
-import * as trails from '../../data/trailRenderer.js';
+import * as selection from '../../data/selectionDispatcher.js';
 import * as aircraftPresentation from '../../data/tr3bRegistry.js';
 import * as trackedCamera from '../../data/trackedCamera.js';
-import { applyTrackedCameraFrame } from '../../globe/cesium/follow.js';
+import { rendererFor } from './renderers.js';
+import { createMilitaryCesiumRenderer } from '../../layers/military/render/cesium.js';
 import * as labels from '../../data/detectionDraw.js';
 import * as geoid from '../../data/geoid.js';
 import * as focus from '../../data/focusDeemphasis.js';
@@ -20,6 +20,13 @@ export function createApplicationMilitary({
   militaryRegistry,
   resolveAsset = (url) =>
     `${import.meta.env?.BASE_URL || '/'}${url.replace(/^\//, '')}`,
+  // Test seam: the renderer factory (default: the engine's, from the registry).
+  renderer = {
+    create: ({ viewer, engine = null, adopt }) =>
+      engine
+        ? rendererFor('military', engine, { viewer, adopt })
+        : createMilitaryCesiumRenderer(null, { viewer, adopt }),
+  },
 }) {
   const { groundFloor, meshFloor, groundSnap } = surface;
   return createMilitaryFlightLayer({
@@ -27,10 +34,13 @@ export function createApplicationMilitary({
     resolveAsset,
     services: {
       picking,
-      sprites,
-      trails,
+      selection,
+      // The engine's military renderer from the registry (render/cesium.js
+      // on Cesium); a bare viewer without an engine (unit tests) draws on
+      // Cesium.
+      renderer,
       aircraftPresentation,
-      camera: { ...trackedCamera, applyTrackedCameraFrame },
+      camera: trackedCamera,
       militaryRegistry,
       labels,
       groundFloor,

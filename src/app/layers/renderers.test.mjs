@@ -56,12 +56,18 @@ test('the default registry: every layer on Cesium, none yet on Navara', () => {
   }
 });
 
-test('flights has an extracted Cesium renderer; the others still draw themselves', () => {
-  assert.deepEqual(Object.keys(CESIUM_LAYER_RENDERERS), ['flights']);
+test('flights and military have extracted Cesium renderers; the others still draw themselves', () => {
+  assert.deepEqual(Object.keys(CESIUM_LAYER_RENDERERS), [
+    'flights',
+    'military',
+  ]);
   const viewer = { scene: {}, camera: {} };
   const renderer = rendererFor('flights', { kind: 'cesium' }, { viewer });
   assert.equal(renderer.kind, 'cesium');
   assert.equal(renderer.viewer, viewer);
+  const military = rendererFor('military', { kind: 'cesium' }, { viewer });
+  assert.equal(military.kind, 'cesium');
+  assert.equal(military.viewer, viewer);
   assert.equal(rendererFor('satellites', { kind: 'cesium' }), null);
 });
 

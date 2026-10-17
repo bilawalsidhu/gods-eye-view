@@ -14,7 +14,7 @@ import {
   MIL_ICON_COLOR,
 } from './policy.js';
 
-/** Apply military record changes to Cesium resources and existing follow operations. */
+/** Apply military record changes to the renderer's fleet and existing follow operations. */
 export function createMilitarySnapshotRenderer({
   flightState,
   records,
@@ -153,7 +153,7 @@ export function createMilitarySnapshotRenderer({
         // it ahead until the next fleet tick snapped it back.
         const displayed =
           motion._deadReckon(icao24, geo.cartesian3.create()) || position;
-        const bb = flightState._billboardCollection.add({
+        const bb = flightState._renderer.fleet.add({
           position: displayed,
           image: aircraftIcon(rendering._iconKind(icao24, meta.klass)),
           width: isTracked ? 24 : 20,
@@ -235,20 +235,27 @@ export function createMilitarySnapshotRenderer({
     // this layer's own billboards/models from the probe.
     {
       const viewerCarto =
-        flightState._viewer?.camera?.positionCartographic || null;
-      sampleMeshFloorCells(flightState._viewer?.scene, _floorWarmPoints, {
-        excludeObjects: [
-          ...flightState._billboards.values(),
-          ...flightState._models.values(),
-          flightState._trackedModel,
-        ].filter(Boolean),
-        viewerLat: viewerCarto
-          ? geo.math.toDegrees(viewerCarto.latitude)
-          : undefined,
-        viewerLon: viewerCarto
-          ? geo.math.toDegrees(viewerCarto.longitude)
-          : undefined,
-      });
+        flightState._renderer?.view.camera?.positionCartographic || null;
+      sampleMeshFloorCells(
+        flightState._renderer?.view.surfaceScene,
+        _floorWarmPoints,
+        {
+          excludeObjects:
+            flightState._renderer?.surfaceExclusions({
+              sprites: flightState._billboards.values(),
+              models: [
+                ...flightState._models.values(),
+                flightState._trackedModel,
+              ],
+            }) ?? [],
+          viewerLat: viewerCarto
+            ? geo.math.toDegrees(viewerCarto.latitude)
+            : undefined,
+          viewerLon: viewerCarto
+            ? geo.math.toDegrees(viewerCarto.longitude)
+            : undefined,
+        },
+      );
     }
 
     // Remove aircraft only after MISSING_POLL_LIMIT consecutive absences.
@@ -285,7 +292,7 @@ export function createMilitarySnapshotRenderer({
         tracking._clearTracking(false, { evicted: true });
       }
 
-      flightState._billboardCollection.remove(bb);
+      flightState._renderer.fleet.remove(bb);
       flightState._billboards.delete(icao24);
       rendering._releaseModel(icao24); // aged-out aircraft: drop its 3D model (no orphan / cap leak)
       records.forget(icao24);
