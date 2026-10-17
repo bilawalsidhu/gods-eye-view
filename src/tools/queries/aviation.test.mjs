@@ -389,6 +389,63 @@ test('the real OpenSky source marks an hour-old snapshot stale for searches', as
   assert.match(result.summary, /may be stale\.$/);
 });
 
+test('aircraft in an area can be counted by operator over every match', async () => {
+  const fleet = [
+    record('a1', 37.6, -122.3, { operator: 'United' }),
+    record('a2', 37.61, -122.3, { operator: 'Delta' }),
+    record('a3', 37.62, -122.3, { operator: 'United', baroAltitudeM: 3000 }),
+    record('a4', 37.63, -122.3, { onGround: true, baroAltitudeM: 0 }),
+    record('a5', 51.5, -0.1, { operator: 'British Airways' }),
+  ];
+  const catalog = composeCatalog({
+    tools: coreTools,
+    services: { aircraft: feed(fleet) },
+  });
+  const result = await catalog.call('aircraft_in_area', {
+    area: bay,
+    group_by: 'operator',
+    stats: true,
+    limit: 1,
+  });
+  assert.equal(
+    result.summary,
+    '4 aircraft in 60 km around 37.600, -122.300; most by operator: United (2), Delta (1); 1 unknown.',
+  );
+  assert.equal(result.data.returned, 1);
+  assert.deepEqual(result.data.breakdown, {
+    field: 'operator',
+    groups: [
+      { value: 'United', count: 2 },
+      { value: 'Delta', count: 1 },
+    ],
+    other_count: 0,
+    unknown_count: 1,
+  });
+  // Altitude covers airborne aircraft only; speed covers every match.
+  assert.deepEqual(result.data.stats.altitude_m, {
+    count: 3,
+    min: 3000,
+    median: 10000,
+    mean: 7666.7,
+    max: 10000,
+  });
+  assert.equal(result.data.stats.speed_mps.count, 4);
+});
+
+test('aircraft answers carry no breakdown or stats unless asked', async () => {
+  const catalog = composeCatalog({
+    tools: coreTools,
+    services: { aircraft: feed(civil) },
+  });
+  const result = await catalog.call('aircraft_in_area', { area: bay });
+  assert.equal('breakdown' in result.data, false);
+  assert.equal('stats' in result.data, false);
+  await assert.rejects(
+    catalog.call('aircraft_in_area', { area: bay, group_by: 'callsign' }),
+    /must be one of/,
+  );
+});
+
 test('altitude bands require a reported altitude from normalized OpenSky records', async () => {
   const { normalizeOpenSkyAircraft } =
     await import('../../sources/live/aircraft.js');

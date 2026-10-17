@@ -97,7 +97,13 @@ perimeters, terrain height, military installations and map features, plus a
 combined situation brief, military awareness around a point, the app's heads-up display caption, and a link that
 opens the app over an area. Tools reuse the layers' portable source factories, take a
 shared `area` argument (place name, bounding box, or point and radius) and cap
-lists at 25 rows by default. Voice offers the same queries next to its app
+lists at 25 rows by default. `aircraft_in_area` and `vessels_in_area` can also
+count every match by a field (`group_by`: operator, country or type for
+aircraft; type or destination for ships; the ten largest groups, then other and
+unknown counts; the summary says when a feed reports none of the field) and
+summarize airborne altitude and speed (`stats`: count, min, median, mean, max).
+Both cover all matches, not just the rows returned; voice leaves these two
+tools out, so they reach MCP clients only. Voice offers the same queries next to its app
 actions: the session lists them, and the browser runs them through the same
 catalog, loaded on first use. See [tools and the MCP server](TOOLS.md).
 Aircraft altitude-band queries require a reported barometric or geometric altitude

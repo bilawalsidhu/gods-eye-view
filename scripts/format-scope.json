@@ -1025,6 +1025,7 @@
   "scripts/qa-context-arrivals.mjs",
   "src/tools/catalog.test.mjs",
   "src/tools/area.test.mjs",
+  "src/tools/results.test.mjs",
   "src/tools/queries/queries.test.mjs",
   "src/tools/mcp/mcp.test.mjs",
   "src/tools/localServer.test.mjs",

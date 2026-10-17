@@ -224,3 +224,66 @@ test('an area search names its area to the server; a vessel lookup asks for ever
   assert.equal(lookup.has('lat'), false);
   assert.equal(lookup.has('radius_km'), false);
 });
+
+test('AIS type 0 (not available) is counted as unknown, not as a type', async () => {
+  const catalog = composeCatalog({
+    tools: coreTools,
+    services: {
+      vessels: vessels({
+        records: [
+          vessel('366000001', 37.78, -122.4, { type: '0' }),
+          vessel('366000002', 37.79, -122.41, { type: '0' }),
+          vessel('366000003', 37.77, -122.39, { type: 'Cargo' }),
+          vessel('366000004', 37.76, -122.38, { type: 'Tanker' }),
+        ],
+      }),
+    },
+  });
+  const result = await catalog.call('vessels_in_area', {
+    area: bay,
+    group_by: 'type',
+  });
+  assert.deepEqual(result.data.breakdown, {
+    field: 'type',
+    groups: [
+      { value: 'Cargo', count: 1 },
+      { value: 'Tanker', count: 1 },
+    ],
+    other_count: 0,
+    unknown_count: 2,
+  });
+  assert.match(
+    result.summary,
+    /most by type: Cargo \(1\), Tanker \(1\); 2 unknown\./,
+  );
+  assert.doesNotMatch(result.summary, /0 \(/);
+  assert.equal(
+    result.data.rows.find((row) => row.mmsi === '366000001').type,
+    null,
+  );
+});
+
+test('vessels in an area can be counted by destination with a speed summary', async () => {
+  const catalog = composeCatalog({
+    tools: coreTools,
+    services: { vessels: vessels() },
+  });
+  const result = await catalog.call('vessels_in_area', {
+    area: bay,
+    group_by: 'destination',
+    stats: true,
+  });
+  assert.equal(
+    result.summary,
+    '2 vessels in 20 km around 37.780, -122.400; most by destination: OAKLAND (1); 1 unknown.',
+  );
+  assert.deepEqual(result.data.breakdown, {
+    field: 'destination',
+    groups: [{ value: 'OAKLAND', count: 1 }],
+    other_count: 0,
+    unknown_count: 1,
+  });
+  assert.deepEqual(result.data.stats, {
+    speed_mps: { count: 2, min: 6.2, median: 6.2, mean: 6.2, max: 6.2 },
+  });
+});
