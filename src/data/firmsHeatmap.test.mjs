@@ -25,6 +25,7 @@ test('firms analyst record: full record maps every contract field', () => {
     frp: 1520.4,
     confidence: 0.9,
     satellite: 'N21',
+    sensor: 'VIIRS',
     acqTime: 1_753_600_000_000,
   });
 });

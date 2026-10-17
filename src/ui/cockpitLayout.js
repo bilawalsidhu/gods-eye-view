@@ -1,4 +1,5 @@
 /** Measure Cockpit panels against visible HUD and viewport obstacles. */
+import { t, msg } from '../i18n/index.js';
 import {
   resolveCockpitUtilityAnchor,
   resolveCockpitUtilityLayout,
@@ -37,9 +38,11 @@ export function setContextCollapsed(collapsed) {
     this.contextToggle.setAttribute('aria-expanded', String(expanded));
     this.contextToggle.setAttribute(
       'aria-label',
-      `${expanded ? 'Collapse' : 'Expand'} Contact panel`,
+      expanded ? t('Collapse Contact panel') : t('Expand Contact panel'),
     );
-    this.contextToggle.title = `${expanded ? 'Collapse' : 'Expand'} contact panel`;
+    this.contextToggle.title = t(
+      expanded ? msg('Collapse contact panel') : msg('Expand contact panel'),
+    );
     const icon = this.contextToggle.querySelector('.material-symbols-outlined');
     if (icon) icon.textContent = expanded ? 'chevron_left' : 'chevron_right';
   }
@@ -60,9 +63,15 @@ export function setSignalCollapsed(collapsed, { user = false } = {}) {
     this.signalToggle.setAttribute('aria-expanded', String(expanded));
     this.signalToggle.setAttribute(
       'aria-label',
-      `${expanded ? 'Collapse' : 'Expand'} cockpit briefing panel`,
+      t(
+        expanded
+          ? msg('Collapse cockpit briefing panel')
+          : msg('Expand cockpit briefing panel'),
+      ),
     );
-    this.signalToggle.title = `${expanded ? 'Collapse' : 'Expand'} briefing panel`;
+    this.signalToggle.title = t(
+      expanded ? msg('Collapse briefing panel') : msg('Expand briefing panel'),
+    );
     const icon = this.signalToggle.querySelector('.material-symbols-outlined');
     if (icon)
       icon.textContent = expanded ? 'right_panel_close' : 'right_panel_open';

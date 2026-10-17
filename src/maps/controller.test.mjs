@@ -70,7 +70,7 @@ const settle = async () => {
   for (let i = 0; i < 20; i++) await Promise.resolve();
 };
 const descriptor = (id) => ({ id, label: id, kind: 'imagery' });
-function publicFixture() {
+function publicFixture(options) {
   const tileset = { show: true };
   const registry = createDefaultMapSources({ googleTileset: tileset });
   const providers = new Map();
@@ -84,7 +84,7 @@ function publicFixture() {
       create: async () => ({ provider: { id: 'terrain' } }),
     };
   }
-  return { ...fixture(registry), registry, providers, tileset };
+  return { ...fixture(registry, options), registry, providers, tileset };
 }
 
 test('an additional imagery source needs no controller branch and owns its cached resources', async () => {
@@ -838,4 +838,547 @@ test('each switch generation reports its origin: an outside setStack is manual, 
     ['recovery', 'manual'],
   ]);
   recovering.controller.destroy();
+});
+
+function failingEsri(env) {
+  const esri = { failing: true, attempts: 0, next: null };
+  env.registry.sources.find(
+    (source) => source.descriptor.id === 'esri-imagery',
+  ).imagery = async () => {
+    esri.attempts++;
+    if (esri.next) await esri.next;
+    if (esri.failing) throw new Error('Esri unreachable');
+    return env.providers.get('esri-imagery');
+  };
+  return esri;
+}
+const deferred = () => {
+  let resolve;
+  const promise = new Promise((done) => (resolve = done));
+  return { promise, resolve };
+};
+
+test('a failed Esri construction shows OSM at once, backs off while retries fail, and recovers in place', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const env = publicFixture();
+  const esri = failingEsri(env);
+  await env.controller.setStack('esri-imagery');
+  assert.equal(env.controller.getActiveId(), 'osm');
+  const osmLayer = env.imagery.at(-1);
+  t.mock.timers.tick(30_000);
+  await settle();
+  assert.equal(esri.attempts, 2, 'one background retry');
+  assert.equal(env.imagery.at(-1), osmLayer, 'a failed retry keeps the layer');
+  await env.controller.setStack('osm');
+  await env.controller.setStack('esri-imagery');
+  assert.equal(esri.attempts, 2, 'a reselection does not retry at once');
+  t.mock.timers.tick(30_000);
+  await settle();
+  assert.equal(esri.attempts, 2, 'the second retry waits twice as long');
+  t.mock.timers.tick(30_000);
+  await settle();
+  assert.equal(esri.attempts, 3);
+  esri.failing = false;
+  t.mock.timers.tick(120_000);
+  await settle();
+  assert.equal(esri.attempts, 4);
+  assert.equal(env.controller.getActiveId(), 'esri-imagery');
+  assert.equal(env.controller.getSwitchOrigin(), 'automatic');
+  assert.equal(env.controller.getState().lastError, null);
+  assert.equal(env.imagery.at(-1).provider, env.providers.get('esri-imagery'));
+  t.mock.timers.tick(600_000);
+  await settle();
+  assert.equal(esri.attempts, 4, 'the real provider ends the retries');
+  env.controller.destroy();
+});
+
+test('retries of a fallback that keeps failing back off to a 10 minute cap', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const env = publicFixture();
+  const esri = failingEsri(env);
+  await env.controller.setStack('esri-imagery');
+  for (const delay of [30, 60, 120, 240, 480, 600, 600]) {
+    t.mock.timers.tick(delay * 1000);
+    await settle();
+  }
+  assert.equal(esri.attempts, 8);
+  env.controller.destroy();
+});
+
+test('Esri is retried only while its fallback is shown', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const env = publicFixture();
+  const esri = failingEsri(env);
+  await env.controller.setStack('esri-imagery');
+  await env.controller.setStack('osm');
+  t.mock.timers.tick(30_000);
+  await settle();
+  assert.equal(esri.attempts, 1, 'no retry while OSM was chosen');
+  await env.controller.setStack('esri-imagery');
+  assert.equal(esri.attempts, 1, 'the cached fallback shows at once');
+  assert.equal(env.controller.getActiveId(), 'osm');
+  esri.failing = false;
+  t.mock.timers.tick(30_000);
+  await settle();
+  assert.equal(esri.attempts, 2);
+  assert.equal(env.controller.getActiveId(), 'esri-imagery');
+  env.controller.destroy();
+});
+
+test('an Esri recovery that lands mid-switch applies once the switch settles', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const env = publicFixture();
+  const esri = failingEsri(env);
+  await env.controller.setStack('esri-imagery');
+  const retry = deferred();
+  esri.next = retry.promise;
+  esri.failing = false;
+  t.mock.timers.tick(30_000);
+  await settle();
+  // The fallback activates OSM's terrain; make that switch slow.
+  const slow = deferred();
+  env.registry.sources.find(
+    (source) => source.descriptor.id === 'osm',
+  ).terrain = { id: 'slow', create: () => slow.promise };
+  const switching = env.controller.setStack('esri-imagery');
+  retry.resolve();
+  await settle();
+  assert.equal(env.controller.getActiveId(), 'osm', 'the switch is still open');
+  slow.resolve({ provider: { id: 'slow' } });
+  await switching;
+  await settle();
+  assert.equal(env.controller.getActiveId(), 'esri-imagery');
+  assert.equal(env.imagery.at(-1).provider, env.providers.get('esri-imagery'));
+  env.controller.destroy();
+});
+
+function terrainFixture(t, create) {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  let renders = 0;
+  const env = publicFixture({ requestRender: () => renders++ });
+  const installed = [];
+  Object.defineProperty(env.viewer, 'terrainProvider', {
+    get: () => installed.at(-1),
+    set: (provider) => installed.push(provider),
+  });
+  const terrain = { id: 'keyless', calls: 0 };
+  terrain.create = () => create(++terrain.calls);
+  for (const source of env.registry.sources)
+    if (source.imagery) source.terrain = terrain;
+  return { env, installed, terrain, renders: () => renders };
+}
+const flatTerrain = (n) => ({ provider: { id: `flat-${n}` }, fallback: true });
+
+test('flat fallback terrain stays installed while retries run, and real terrain replaces it live', async (t) => {
+  const real = { id: 'real' };
+  let working = false;
+  const { env, installed, terrain, renders } = terrainFixture(t, async (n) =>
+    working ? { provider: real } : flatTerrain(n),
+  );
+  await env.controller.setStack('esri-imagery');
+  const [flat] = installed;
+  t.mock.timers.tick(30_000);
+  await settle();
+  assert.equal(terrain.calls, 2, 'one background retry');
+  await env.controller.setStack('osm');
+  assert.deepEqual(installed, [flat], 'failed retries and switches keep it');
+  working = true;
+  const before = renders();
+  t.mock.timers.tick(60_000);
+  await settle();
+  assert.equal(terrain.calls, 3);
+  assert.deepEqual(installed, [flat, real]);
+  assert.equal(renders(), before + 1, 'the live swap requests a render');
+  t.mock.timers.tick(600_000);
+  await settle();
+  assert.equal(terrain.calls, 3, 'the real terrain ends the retries');
+  env.controller.destroy();
+});
+
+test('terrain is not retried or installed while a 3D tileset hides the globe', async (t) => {
+  const real = { id: 'real' };
+  let working = false;
+  const { env, installed, terrain } = terrainFixture(t, async (n) =>
+    working ? { provider: real } : flatTerrain(n),
+  );
+  await env.controller.setStack('esri-imagery');
+  await env.controller.setStack('photoreal');
+  t.mock.timers.tick(30_000);
+  await settle();
+  assert.equal(terrain.calls, 1, 'no retry behind a hidden globe');
+  await env.controller.setStack('esri-imagery');
+  const hidden = deferred();
+  terrain.create = async () => {
+    terrain.calls++;
+    await hidden.promise;
+    return { provider: real };
+  };
+  t.mock.timers.tick(30_000);
+  await settle();
+  assert.equal(terrain.calls, 2, 'the globe activation re-arms the retry');
+  await env.controller.setStack('photoreal');
+  hidden.resolve();
+  await settle();
+  assert.equal(installed.length, 1, 'nothing is installed behind a tileset');
+  await env.controller.setStack('osm');
+  assert.equal(installed.at(-1), real, 'the next globe activation installs it');
+  assert.equal(terrain.calls, 2);
+  env.controller.destroy();
+});
+
+test('a switch that read the flat fallback installs the terrain a retry just cached', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  // Sweep the microtask distance between the retry landing and the switch.
+  for (let hops = 0; hops < 12; hops++) {
+    const real = { id: 'real' },
+      gate = deferred();
+    const keyless = {
+      id: 'keyless',
+      create: async () => {
+        if (!keyless.retried) return flatTerrain(1);
+        await gate.promise;
+        return { provider: real };
+      },
+    };
+    const other = { id: 'other', create: async () => ({ provider: {} }) };
+    const source = (id, terrain) => ({
+      descriptor: descriptor(id),
+      imagery: async () => ({ id }),
+      terrain,
+    });
+    const env = fixture({
+      defaultId: 'a',
+      sources: [source('a', keyless), source('c', other)],
+    });
+    const installed = [];
+    Object.defineProperty(env.viewer, 'terrainProvider', {
+      get: () => installed.at(-1),
+      set: (provider) => installed.push(provider),
+    });
+    await env.controller.setStack('a');
+    keyless.retried = true;
+    t.mock.timers.tick(30_000);
+    await settle();
+    await env.controller.setStack('c');
+    gate.resolve();
+    for (let i = 0; i < hops; i++) await null;
+    await env.controller.setStack('a');
+    await settle();
+    assert.equal(installed.at(-1), real, `hops ${hops}`);
+    env.controller.destroy();
+  }
+});
+
+test('destroy cancels a pending retry and releases one in flight', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const env = publicFixture();
+  const esri = failingEsri(env);
+  await env.controller.setStack('esri-imagery');
+  env.controller.destroy();
+  t.mock.timers.tick(30_000);
+  await settle();
+  assert.equal(esri.attempts, 1, 'a pending retry is cancelled');
+
+  const late = publicFixture();
+  const lateEsri = failingEsri(late);
+  await late.controller.setStack('esri-imagery');
+  const retry = deferred();
+  lateEsri.next = retry.promise;
+  lateEsri.failing = false;
+  let destroyed = 0;
+  late.providers.get('esri-imagery').destroy = () => destroyed++;
+  t.mock.timers.tick(30_000);
+  await settle();
+  late.controller.destroy();
+  retry.resolve();
+  await settle();
+  assert.equal(destroyed, 1, 'a late provider is released');
+  assert.equal(late.imagery.length, 0);
+  t.mock.timers.tick(600_000);
+  await settle();
+  assert.equal(lateEsri.attempts, 2);
+});
+
+test('retries stay single-flight when an activation re-shows the fallback mid-retry', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const env = publicFixture();
+  const created = [],
+    pending = [];
+  let attempts = 0;
+  env.registry.sources.find(
+    (source) => source.descriptor.id === 'esri-imagery',
+  ).imagery = async () => {
+    if (++attempts === 1) throw new Error('Esri unreachable');
+    const gate = deferred();
+    pending.push(gate);
+    await gate.promise;
+    const provider = { id: `esri-${attempts}`, errorEvent: event() };
+    provider.destroy = () => (provider.destroyed = true);
+    created.push(provider);
+    return provider;
+  };
+  await env.controller.setStack('esri-imagery');
+  t.mock.timers.tick(30_000);
+  await settle();
+  assert.equal(attempts, 2, 'retry #1 is in flight');
+  await env.controller.setStack('osm');
+  await env.controller.setStack('esri-imagery');
+  assert.equal(env.controller.getActiveId(), 'osm', 'the fallback is shown');
+  t.mock.timers.tick(30_000);
+  await settle();
+  assert.equal(attempts, 2, 'no second retry while one is in flight');
+  for (const gate of pending.reverse()) {
+    gate.resolve();
+    await settle();
+  }
+  const shown = env.imagery.at(-1).provider;
+  assert.equal(env.controller.getActiveId(), 'esri-imagery');
+  await env.controller.setStack('osm');
+  await env.controller.setStack('esri-imagery');
+  assert.equal(env.imagery.at(-1).provider, shown, 'the cached one is shown');
+  env.controller.destroy();
+  await settle();
+  assert.ok(created.length > 0);
+  for (const provider of created)
+    assert.equal(provider.destroyed, true, `${provider.id} is disposed`);
+});
+
+test('a stalled terrain retry does not hold back recovered imagery', async (t) => {
+  const stalled = deferred();
+  const { env, terrain } = terrainFixture(t, async (n) => {
+    if (n > 1) await stalled.promise;
+    return flatTerrain(n);
+  });
+  const esri = failingEsri(env);
+  await env.controller.setStack('esri-imagery');
+  assert.equal(env.controller.getActiveId(), 'osm');
+  esri.failing = false;
+  t.mock.timers.tick(30_000);
+  await settle();
+  assert.equal(terrain.calls, 2, 'the terrain retry is in flight');
+  assert.equal(env.controller.getActiveId(), 'esri-imagery');
+  assert.equal(env.imagery.at(-1).provider, env.providers.get('esri-imagery'));
+  stalled.resolve();
+  await settle();
+  env.controller.destroy();
+});
+
+test('a stalled imagery retry does not hold back recovered terrain', async (t) => {
+  const real = { id: 'real' };
+  const { env, installed } = terrainFixture(t, async (n) =>
+    n > 1 ? { provider: real } : flatTerrain(n),
+  );
+  const esri = failingEsri(env);
+  await env.controller.setStack('esri-imagery');
+  const stalled = deferred();
+  esri.next = stalled.promise;
+  t.mock.timers.tick(30_000);
+  await settle();
+  assert.equal(esri.attempts, 2, 'the imagery retry is in flight');
+  assert.equal(installed.at(-1), real, 'real terrain is installed');
+  stalled.resolve();
+  await settle();
+  env.controller.destroy();
+});
+
+test('a retry attempt that never settles is abandoned at its deadline and released if it lands late', async (t) => {
+  const hung = deferred();
+  const late = { id: 'late', destroy: () => (late.destroyed = true) };
+  const { env, installed, terrain } = terrainFixture(t, async (n) => {
+    if (n === 2) await hung.promise;
+    return n === 2 ? { provider: late } : flatTerrain(n);
+  });
+  const esri = failingEsri(env);
+  await env.controller.setStack('esri-imagery');
+  t.mock.timers.tick(30_000);
+  await settle();
+  assert.equal(esri.attempts, 2, 'imagery failed');
+  assert.equal(terrain.calls, 2, 'terrain hangs');
+  t.mock.timers.tick(60_000); // The hung attempt's deadline.
+  await settle();
+  t.mock.timers.tick(60_000); // The doubled backoff.
+  await settle();
+  assert.equal(esri.attempts, 3, 'imagery is retried again');
+  assert.equal(terrain.calls, 3, 'terrain is retried again');
+  hung.resolve();
+  await settle();
+  assert.equal(late.destroyed, true, 'the late provider is released');
+  assert.ok(!installed.includes(late), 'and never installed');
+  env.controller.destroy();
+});
+
+test('a failed retry after a mid-retry re-show re-arms once, after the doubled delay', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const env = publicFixture();
+  const esri = failingEsri(env);
+  await env.controller.setStack('esri-imagery');
+  const gate = deferred();
+  esri.next = gate.promise;
+  t.mock.timers.tick(30_000);
+  await settle();
+  await env.controller.setStack('osm');
+  await env.controller.setStack('esri-imagery');
+  gate.resolve();
+  await settle();
+  assert.equal(esri.attempts, 2);
+  t.mock.timers.tick(59_999);
+  await settle();
+  assert.equal(esri.attempts, 2, 'not before the doubled delay');
+  t.mock.timers.tick(1);
+  await settle();
+  assert.equal(esri.attempts, 3, 'one retry after it');
+  t.mock.timers.tick(119_999);
+  await settle();
+  assert.equal(esri.attempts, 3, 'no second timer was armed');
+  env.controller.destroy();
+});
+
+test('destroy releases recovered imagery and terrain that lands afterwards', async (t) => {
+  const stalled = deferred();
+  const real = { id: 'real', destroy: () => (real.destroyed = true) };
+  const { env, installed } = terrainFixture(t, async (n) => {
+    if (n === 1) return flatTerrain(n);
+    await stalled.promise;
+    return { provider: real };
+  });
+  const esri = failingEsri(env);
+  const imagery = env.providers.get('esri-imagery');
+  imagery.destroy = () => (imagery.destroyed = true);
+  await env.controller.setStack('esri-imagery');
+  esri.failing = false;
+  t.mock.timers.tick(30_000);
+  await settle();
+  assert.equal(env.imagery.at(-1).provider, imagery, 'imagery has landed');
+  env.controller.destroy();
+  stalled.resolve();
+  await settle();
+  assert.equal(imagery.destroyed, true);
+  assert.equal(real.destroyed, true);
+  assert.ok(!installed.includes(real));
+});
+
+function liveTimers(t) {
+  const live = new Set();
+  const { setTimeout: set, clearTimeout: clear } = globalThis;
+  globalThis.setTimeout = (fn, ms, ...args) => {
+    const id = set(
+      (...values) => {
+        live.delete(id);
+        fn(...values);
+      },
+      ms,
+      ...args,
+    );
+    live.add(id);
+    return id;
+  };
+  globalThis.clearTimeout = (id) => {
+    live.delete(id);
+    clear(id);
+  };
+  t.after(() =>
+    Object.assign(globalThis, { setTimeout: set, clearTimeout: clear }),
+  );
+  return live;
+}
+
+test('destroy during a hung retry attempt clears its deadline at once', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const live = liveTimers(t);
+  const env = publicFixture();
+  const esri = failingEsri(env);
+  await env.controller.setStack('esri-imagery');
+  esri.next = new Promise(() => {});
+  t.mock.timers.tick(30_000);
+  await settle();
+  assert.equal(esri.attempts, 2, 'the attempt hangs');
+  assert.equal(live.size, 1, 'only its deadline is armed');
+  env.controller.destroy();
+  assert.equal(live.size, 0, 'destroy clears the deadline');
+  assert.equal(env.controller._retrying, false);
+  await settle();
+  assert.equal(live.size, 0, 'and nothing re-arms');
+});
+
+function destroyableFlat(n) {
+  const provider = { id: `flat-${n}` };
+  provider.destroy = () => (provider.destroyed = true);
+  return { provider, fallback: true };
+}
+
+test('terrain recovered on screen releases the fallback it replaced', async (t) => {
+  const real = { id: 'real' };
+  let flat;
+  const { env, installed } = terrainFixture(t, async (n) =>
+    n === 1 ? (flat = destroyableFlat(n)) : { provider: real },
+  );
+  await env.controller.setStack('esri-imagery');
+  t.mock.timers.tick(30_000);
+  await settle();
+  assert.equal(installed.at(-1), real);
+  assert.equal(flat.provider.destroyed, true);
+  env.controller.destroy();
+});
+
+test('terrain recovered behind a tileset releases the fallback once a globe replaces it', async (t) => {
+  const real = { id: 'real' };
+  const gate = deferred();
+  let flat;
+  const { env, installed } = terrainFixture(t, async (n) => {
+    if (n === 1) return (flat = destroyableFlat(n));
+    await gate.promise;
+    return { provider: real };
+  });
+  await env.controller.setStack('esri-imagery');
+  t.mock.timers.tick(30_000);
+  await settle();
+  await env.controller.setStack('photoreal');
+  gate.resolve();
+  await settle();
+  assert.equal(installed.at(-1), flat.provider);
+  assert.ok(!flat.provider.destroyed, 'still installed behind the tileset');
+  await env.controller.setStack('osm');
+  assert.equal(installed.at(-1), real);
+  assert.equal(flat.provider.destroyed, true);
+  env.controller.destroy();
+});
+
+test('a hung imagery attempt that lands after its deadline is released, never cached or shown', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const env = publicFixture();
+  const hung = deferred();
+  const late = { id: 'late', errorEvent: event() };
+  const good = { id: 'good', errorEvent: event() };
+  for (const provider of [late, good])
+    provider.destroy = () => (provider.destroyed = true);
+  let attempts = 0;
+  env.registry.sources.find(
+    (source) => source.descriptor.id === 'esri-imagery',
+  ).imagery = async () => {
+    if (++attempts === 1) throw new Error('Esri unreachable');
+    if (attempts === 2) {
+      await hung.promise;
+      return late;
+    }
+    return good;
+  };
+  await env.controller.setStack('esri-imagery');
+  t.mock.timers.tick(30_000);
+  await settle();
+  t.mock.timers.tick(60_000); // The deadline.
+  await settle();
+  hung.resolve();
+  await settle();
+  assert.equal(late.destroyed, true, 'the late provider is released');
+  assert.equal(env.controller.getActiveId(), 'osm', 'and not shown');
+  t.mock.timers.tick(60_000);
+  await settle();
+  assert.equal(attempts, 3);
+  assert.equal(env.imagery.at(-1).provider, good, 'the next retry installs');
+  await env.controller.setStack('osm');
+  await env.controller.setStack('esri-imagery');
+  assert.equal(env.imagery.at(-1).provider, good, 'only its own is cached');
+  env.controller.destroy();
+  await settle();
+  assert.equal(good.destroyed, true);
 });

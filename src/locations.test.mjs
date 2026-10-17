@@ -599,6 +599,21 @@ test('search without an authority hook preserves the existing caller contract', 
   assert.equal(viewer.flights.length, 1);
 });
 
+test('near-view recovery searches through the application place search', async () => {
+  // Recovery must use the place search the application configured, not the module default.
+  const viewer = stubViewer();
+  const placeSearch = createStandalonePlaceSearch({ resolveApiKey: () => 'test-key' });
+  let received = null;
+  await runSearch(viewer, {
+    placeSearch,
+    recoverNearView: async (...args) => {
+      received = args[4];
+      return null;
+    },
+  });
+  assert.equal(received, placeSearch);
+});
+
 test('a precise search without an outline frames against the resolved ground, not sea level', async () => {
   // Camp Mabry field report: with no detailed outline (no configured Overpass)
   // framing used the 250 m landmark range from a sea-level target, and the eye
