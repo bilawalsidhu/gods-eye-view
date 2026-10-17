@@ -542,7 +542,7 @@ credentials runtime will accept. Basic and credentials-file modes remain
 advanced `dev-fresh.sh` configuration.
 
 <details>
-<summary>Advanced setup: environment variables and macOS Keychain</summary>
+<summary>Advanced setup: env vars, credential managers and macOS Keychain</summary>
 
 For headless machines, coding agents, or scripted setups:
 
@@ -550,13 +550,26 @@ For headless machines, coding agents, or scripted setups:
 # Put keys in .env (see .env.example), or pass them as env vars:
 OPENAI_API_KEY="…" AISSTREAM_API_KEY="…" npm run dev -- --host localhost --port 4173
 
-# On macOS, store any of them in the Keychain and dev-fresh.sh pulls them in:
+# Proton Pass CLI, authenticated with pass-cli login:
+GEV_SECRET_OPENAI_API_KEY='pass://Gods Eye View/OpenAI/password' npm run dev
+
+# BWS with BWS_ACCESS_TOKEN in your host environment:
+GEV_BWS_PROJECT_IDS='project-uuid-a,project-uuid-b' npm run dev
+
+# On macOS, Keychain remains supported by dev-fresh.sh:
 security add-generic-password -U -s "google-maps-api" -a "api-key" -w
 security add-generic-password -U -s "openai-api"      -a "api-key" -w
 security add-generic-password -U -s "aisstream-api"   -a "api-key" -w
 security add-generic-password -U -s "firms-map"       -a "map-key" -w
 security add-generic-password -U -s "cesium-ion"      -a "token"   -w
 ```
+
+External manager references resolve at startup with the same Provider Settings
+registry allowlist. Existing literal values win, then direct provider references,
+then `GEV_SECRET_<ENV_VAR>`, then BWS project hydration; no secrets are saved
+to `.env` or passed to unrelated subprocesses. BWS and Proton Pass CLIs must
+already be authenticated; the browser-exposed Google Maps, Cesium and Mapillary
+client credentials remain public by design and need provider restrictions.
 
 OpenSky can run fully anonymous (`OPENSKY_AUTH_MODE=anon`), or import OAuth credentials with `./scripts/opensky-import-client.sh /path/to/credentials.json`.
 

@@ -2,6 +2,7 @@ import { fileURLToPath } from 'node:url';
 import { defineConfig, loadEnv } from 'vite';
 import { resolveAllowedHosts } from '../../build/allowedHosts.js';
 import { createBrowserViteConfig } from '../../build/vite.js';
+import { resolveCredentialEnvironment } from '../credentials/resolve.mjs';
 import { localProviderPlugins } from '../providers/local.js';
 import { localMcpPlugin } from '../mcp/plugin.js';
 import { apiNotFoundPlugin } from './api-not-found.js';
@@ -15,6 +16,8 @@ export default defineConfig(({ command, mode }) => {
   for (const [key, value] of Object.entries(loaded)) {
     if (process.env[key] === undefined) process.env[key] = value;
   }
+  // Run after dotenv precedence, before browser definitions or providers.
+  resolveCredentialEnvironment({ env: process.env });
   return createBrowserViteConfig({
     plugins: [
       ...localProviderPlugins({ realtime: { tools: standaloneVoiceTools() } }),
