@@ -5,6 +5,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { setLocale, t } from '../../i18n/index.js';
 import { buildIncidentCard } from './cards.js';
+import { translateFeedError } from '../../ui/statusText.js';
 
 const now = Date.UTC(2026, 9, 14);
 const row = {
@@ -148,3 +149,31 @@ test('en: compact costs keep the dollar prefix', () => {
   assert.equal(cost(999_600), '$1M to date');
   assert.equal(cost(1_300_000_000), '$1.3B to date');
 });
+
+for (const locale of ['es', 'ru']) {
+  test(`${locale}: INFONA estimates and partial-source warnings are localized`, () => {
+    setLocale(locale);
+    try {
+      const card = buildIncidentCard(
+        {
+          stableId: 'infona',
+          geometryKind: 'estimated-active-fire-area',
+          hectares: 1234.5,
+          reportTime: now,
+        },
+        now,
+      );
+      assert.ok(!card.title.includes('FIRE ESTIMATE'));
+      assert.ok(!card.details.join(' ').includes('grouped thermal detections'));
+      assert.ok(!card.details.join(' ').includes('1,234.5'));
+      for (const status of ['stale', 'unavailable', 'truncated']) {
+        assert.notEqual(
+          translateFeedError(`WFIGS: ${status} · INFONA: ${status}`),
+          `WFIGS: ${status} · INFONA: ${status}`,
+        );
+      }
+    } finally {
+      setLocale('en');
+    }
+  });
+}

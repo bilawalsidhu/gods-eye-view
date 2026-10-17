@@ -246,8 +246,8 @@ export const getFirePerimeters = defineTool({
   name: 'get_fire_perimeters',
   title: 'Wildfire perimeters',
   description:
-    'Mapped wildfire perimeters from the US WFIGS service in an area, ' +
-    'largest first, with size, containment, cause and personnel.',
+    'US WFIGS wildfire perimeters and INFONA estimated fire areas in Paraguay, ' +
+    'largest first. INFONA groups thermal detections; containment and incident facts are unknown. Check source status for incomplete coverage.',
   inputSchema: {
     type: 'object',
     properties: { area: AREA_SCHEMA, limit: LIMIT_SCHEMA },
@@ -264,6 +264,13 @@ export const getFirePerimeters = defineTool({
       .map(({ fire, point }) => ({
         id: fire.stableId,
         name: fire.name,
+        source: fire.source || 'NIFC WFIGS',
+        geometry_kind: fire.geometryKind || 'incident-perimeter',
+        country_code: fire.countryCode || 'US',
+        hectares: fire.hectares ?? null,
+        department: fire.department ?? null,
+        district: fire.district ?? null,
+        report_date: isoTime(fire.reportTime),
         acres: round(fire.acres, 0),
         contained_pct: fire.containedPct,
         state: fire.state,
@@ -279,9 +286,10 @@ export const getFirePerimeters = defineTool({
       }))
       .sort((a, b) => (b.acres ?? 0) - (a.acres ?? 0));
     return {
-      summary: `${countNoun(rows.length, 'mapped wildfire perimeter')} in ${area.label}.`,
+      summary: `${countNoun(rows.length, rows.some((row) => row.geometry_kind === 'estimated-active-fire-area') ? 'mapped fire area' : 'mapped wildfire perimeter')} in ${area.label}.`,
       data: {
         view: suggestView(services, { area, layers: ['fire-perimeters'] }),
+        sources: services.perimeters.getStatus?.() ?? null,
         ...capRows(rows, args.limit),
       },
     };

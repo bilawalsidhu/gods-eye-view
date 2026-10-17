@@ -1241,7 +1241,6 @@
   "Under 50% contained": "Contenido por debajo del 50%",
   "50–99% contained": "Contenido al 50–99%",
   "Fully contained": "Totalmente contenido",
-  "Colour shows reported containment. Perimeters are simplified to about 100 m.": "El color indica la contención notificada. Los perímetros se simplifican a unos 100 m.",
   "MORE DETAIL · 30 m": "MÁS DETALLE · 30 m",
   "Sentinel-2 and Landsat via HLS, 30 m, every 2–6 days": "Sentinel‑2 y Landsat vía HLS, 30 m, cada 2–6 días",
   "DAILY OVERVIEW · 250 m": "VISTA GENERAL DIARIA · 250 m",
@@ -2889,5 +2888,16 @@
   "USB work abandoned after a stalled transfer": "Trabajo USB cancelado tras una transferencia bloqueada",
   "SDR decoder did not start; receiver stopped": "El decodificador SDR no arrancó; receptor detenido",
   "SDR decoder stopped responding; receiver stopped": "El decodificador SDR dejó de responder; receptor detenido",
-  "SDR decoder fell behind; receiver stopped": "El decodificador SDR se quedó atrás; receptor detenido"
+  "SDR decoder fell behind; receiver stopped": "El decodificador SDR se quedó atrás; receptor detenido",
+  "Estimated area unknown": "Área estimada desconocida",
+  "Estimated fire area (INFONA)": "Área estimada de incendio (INFONA)",
+  "FIRE ESTIMATE · {name}": "INCENDIO ESTIMADO · {name}",
+  "INFONA · grouped thermal detections": "INFONA · detecciones térmicas agrupadas",
+  "Report date unavailable": "Fecha del informe no disponible",
+  "Report date: {date}": "Fecha del informe: {date}",
+  "US colours show reported containment. Purple: estimated areas from grouped thermal detections in Paraguay (INFONA), with no containment measurement. Boundaries are simplified to about 100 m.": "Los colores de EE. UU. muestran la contención informada. Violeta: áreas estimadas a partir de detecciones térmicas agrupadas en Paraguay (INFONA), sin medición de contención. Los límites se simplifican a unos 100 m.",
+  "{area} ha estimated": "{area} ha estimadas",
+  "{source}: stale": "{source}: datos desactualizados",
+  "{source}: truncated": "{source}: datos incompletos",
+  "{source}: unavailable": "{source}: no disponible"
 }

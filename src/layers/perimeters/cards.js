@@ -1,7 +1,14 @@
 /** Card model for one selected fire-perimeter incident. Pure — no Cesium types. */
-import { formatNumber, t, tn } from '../../i18n/index.js';
+import { formatDate, formatNumber, t, tn } from '../../i18n/index.js';
 
 export const PERIMETER_OVERLAY_SOURCE_ID = 'fire-perimeters';
+
+/** Estimates have no containment measurement and use a separate legend band. */
+export function perimeterAccent(row) {
+  return row.geometryKind === 'estimated-active-fire-area'
+    ? '#b388ff'
+    : containmentAccent(row.containedPct);
+}
 
 /** CSS accent for a perimeter card by containment progress (mirrors the fill). */
 export function containmentAccent(containedPct) {
@@ -155,6 +162,38 @@ function formatAge(deltaMs) {
  * @returns {Object} World-overlay entry without `position`.
  */
 export function buildIncidentCard(row, nowMs, { link = null } = {}) {
+  if (row.geometryKind === 'estimated-active-fire-area') {
+    return {
+      id: `fire-perimeter-card:${row.stableId}`,
+      selected: true,
+      interactive: false,
+      title: t('FIRE ESTIMATE · {name}', { name: row.name || 'Paraguay' }),
+      details: [
+        Number.isFinite(row.hectares)
+          ? t('{area} ha estimated', {
+              area: formatNumber(row.hectares, { maximumFractionDigits: 2 }),
+            })
+          : t('Estimated area unknown'),
+        [row.district, row.department, 'Paraguay'].filter(Boolean).join(' · '),
+        t('INFONA · grouped thermal detections'),
+        row.reportTime != null
+          ? t('Report date: {date}', {
+              date: formatDate(row.reportTime, {
+                year: 'numeric',
+                month: 'short',
+                day: 'numeric',
+                timeZone: 'UTC',
+              }),
+            })
+          : t('Report date unavailable'),
+      ],
+      accent: perimeterAccent(row),
+      priority: Number.MAX_SAFE_INTEGER,
+      gapPx: 15,
+      verticalOnly: true,
+      placement: 'above',
+    };
+  }
   // The row keeps WFIGS values as sent (AI tools read them); the card translates
   // the known cause, behavior and complexity values and the wording around them.
   const facts = [];
