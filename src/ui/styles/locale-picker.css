@@ -1,0 +1,299 @@
+/* ============================================================
+   Bottom-right corner row: the POWER UP chip (provider-settings.css)
+   and, in the very corner, the interface language picker
+   (src/ui/localePicker.js). Logical properties throughout, so a
+   right-to-left page mirrors the row and the list.
+   ============================================================ */
+
+#corner-actions {
+  position: fixed;
+  inset-inline-end: 0.9rem;
+  inset-block-end: 0.9rem;
+  /* Above the dock (145), the cockpit HUD and panel stacks (146–147);
+     below the first-run launcher (175) and Provider Settings (190). */
+  z-index: 150;
+  display: flex;
+  align-items: stretch;
+  gap: 0.4rem;
+  pointer-events: none;
+}
+
+#corner-actions > * {
+  pointer-events: auto;
+}
+
+.locale-picker {
+  position: relative;
+  display: flex;
+}
+
+/* Same HUD frame as #key-setup-chip, so the two read as one group. */
+.locale-picker-button {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin: 0;
+  padding: 0.45rem 0.6rem;
+  color: rgba(225, 244, 248, 0.92);
+  font-family: var(--font-mono);
+  font-size: 0.6rem;
+  letter-spacing: 0.09rem;
+  line-height: 1;
+  background: linear-gradient(
+    145deg,
+    rgba(10, 27, 37, 0.92),
+    rgba(7, 13, 22, 0.9)
+  );
+  border: 1px solid rgba(54, 220, 255, 0.38);
+  border-radius: 0.42rem;
+  box-shadow:
+    0 0.4rem 1.6rem rgba(0, 0, 0, 0.5),
+    0 0 1.2rem rgba(0, 212, 255, 0.07);
+  backdrop-filter: blur(18px) saturate(1.2);
+  -webkit-backdrop-filter: blur(18px) saturate(1.2);
+  cursor: pointer;
+  transition:
+    border-color var(--transition-fast),
+    background var(--transition-fast),
+    transform var(--transition-fast);
+}
+
+.locale-picker-button:hover,
+.locale-picker-button:focus-visible,
+.locale-picker.is-open .locale-picker-button {
+  background: linear-gradient(
+    145deg,
+    rgba(14, 38, 51, 0.95),
+    rgba(9, 18, 28, 0.93)
+  );
+  border-color: rgba(54, 220, 255, 0.7);
+  outline: none;
+}
+
+.locale-picker-button:hover,
+.locale-picker-button:focus-visible {
+  transform: translateY(-1px);
+}
+
+.locale-picker-globe {
+  flex: none;
+  width: 0.95rem;
+  height: 0.95rem;
+  color: #55dff5;
+}
+
+.locale-picker-caret {
+  flex: none;
+  width: 0.62rem;
+  height: 0.62rem;
+  margin-inline-start: -0.1rem;
+  opacity: 0.75;
+  transition: transform var(--transition-fast);
+}
+
+.locale-picker.is-open .locale-picker-caret {
+  transform: rotate(180deg);
+}
+
+/* Opens upward, aligned to the corner edge. */
+.locale-picker-popup {
+  position: absolute;
+  inset-block-end: calc(100% + 0.4rem);
+  inset-inline-end: 0;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  width: max-content;
+  min-width: 14rem;
+  max-width: calc(100vw - 1.8rem);
+  max-height: min(26rem, calc(100vh - 4.5rem));
+  max-height: min(26rem, calc(100dvh - 4.5rem));
+  padding: 0.45rem;
+  color: var(--text-primary);
+  background:
+    linear-gradient(145deg, rgba(10, 27, 37, 0.97), rgba(7, 13, 22, 0.95)),
+    rgba(7, 17, 25, 0.96);
+  border: 1px solid rgba(54, 220, 255, 0.42);
+  border-radius: 0.55rem;
+  box-shadow:
+    0 1rem 3rem rgba(0, 0, 0, 0.65),
+    0 0 2rem rgba(0, 212, 255, 0.08),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.025);
+  backdrop-filter: blur(24px) saturate(1.25);
+  -webkit-backdrop-filter: blur(24px) saturate(1.25);
+}
+
+.locale-picker-popup[hidden] {
+  display: none;
+}
+
+.locale-picker-heading {
+  padding: 0.2rem 0.4rem 0.45rem;
+  color: rgba(85, 223, 245, 0.85);
+  font-family: var(--font-mono);
+  font-size: 0.55rem;
+  letter-spacing: 0.14rem;
+  text-transform: uppercase;
+}
+
+.locale-picker-search {
+  box-sizing: border-box;
+  width: 100%;
+  margin: 0 0 0.4rem;
+  padding: 0.45rem 0.55rem;
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(54, 220, 255, 0.28);
+  border-radius: 0.35rem;
+  outline: none;
+}
+
+.locale-picker-search:focus {
+  border-color: rgba(54, 220, 255, 0.7);
+}
+
+.locale-picker-list {
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+  outline: none;
+  overscroll-behavior: contain;
+}
+
+.locale-picker-option {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.45rem 0.5rem;
+  border: 1px solid transparent;
+  border-radius: 0.35rem;
+  cursor: pointer;
+}
+
+.locale-picker-option.is-active {
+  background: rgba(54, 220, 255, 0.09);
+  border-color: rgba(54, 220, 255, 0.28);
+}
+
+/* Keyboard focus lives on the list (aria-activedescendant): show it. */
+.locale-picker-list:focus-visible .locale-picker-option.is-active,
+.locale-picker-search:focus
+  ~ .locale-picker-list
+  .locale-picker-option.is-active {
+  border-color: rgba(54, 220, 255, 0.75);
+}
+
+.locale-picker-text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-width: 0;
+}
+
+.locale-picker-native {
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: 0.85rem;
+  line-height: 1.2;
+}
+
+.locale-picker-option[aria-selected='true'] .locale-picker-native {
+  color: #55dff5;
+}
+
+.locale-picker-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  color: rgba(199, 225, 231, 0.6);
+  font-family: var(--font-mono);
+  font-size: 0.55rem;
+  letter-spacing: 0.05rem;
+}
+
+.locale-picker-check {
+  flex: none;
+  width: 0.95rem;
+  height: 0.95rem;
+  margin-inline-start: auto;
+  color: #55dff5;
+}
+
+.locale-picker-empty {
+  margin: 0;
+  padding: 0.5rem;
+  color: rgba(199, 225, 231, 0.62);
+  font-family: var(--font-mono);
+  font-size: 0.6rem;
+}
+
+.locale-picker-empty[hidden] {
+  display: none;
+}
+
+/* The surfaces that hide the rest of the chrome hide the corner too. The
+   cockpit keeps the language picker (provider-settings.css hides the chip). */
+body.ui-clean-view #corner-actions,
+body.recording-mode #corner-actions,
+body.scene-playback-mode #corner-actions {
+  display: none;
+}
+
+/* The cockpit's position readout shares this corner: it steps up to clear
+   the picker row (0.9rem inset + one ~2rem button + a gap). */
+body.cockpit-mode .cockpit-position-readout {
+  bottom: max(clamp(22px, 4vh, 42px), 3.5rem);
+}
+
+/* Below this width the full chip label runs into the centred dock: the chip
+   keeps its bolt, and its count stays in its title and aria-label. */
+@media (max-width: 1180px) {
+  #corner-actions #key-setup-chip [data-key-setup-chip-label] {
+    display: none;
+  }
+}
+
+@media (max-width: 767.98px) {
+  /* Phone: the corner beside the dock, clear of the attribution above it.
+     There is room for one button across, so the chip stacks on the globe. */
+  #corner-actions {
+    inset-inline-end: 10px;
+    inset-block-end: max(16px, env(safe-area-inset-bottom));
+    flex-direction: column;
+  }
+
+  #corner-actions #key-setup-chip {
+    justify-content: center;
+    padding-inline: 0.5rem;
+  }
+
+  /* Phone: the globe alone; the label stays in aria-label. */
+  .locale-picker-code,
+  .locale-picker-caret {
+    display: none;
+  }
+
+  .locale-picker-button {
+    padding-inline: 0.5rem;
+  }
+
+  /* The list becomes a bottom sheet across the screen. */
+  .locale-picker-popup {
+    position: fixed;
+    inset-inline: 16px;
+    inset-block-end: 16px;
+    width: auto;
+    min-width: 0;
+    max-width: none;
+    max-height: calc(100vh - 32px);
+    max-height: calc(100dvh - 32px);
+    padding: 0.6rem;
+  }
+
+  .locale-picker-option {
+    padding-block: 0.7rem;
+  }
+}

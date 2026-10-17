@@ -5,8 +5,12 @@
  * neither exists there is nowhere to drape and the caller says so.
  */
 
+import { msg } from '../i18n/marker.js';
+
 /** Guidance shown when the active map stack cannot host draped imagery. */
-export const NO_IMAGERY_HOST = 'Hidden by this map source · choose a globe map';
+export const NO_IMAGERY_HOST = msg(
+  'Hidden by this map source · choose a globe map',
+);
 
 /**
  * Resolve the imagery layer collection for the active map stack.
