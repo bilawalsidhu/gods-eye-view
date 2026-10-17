@@ -961,8 +961,6 @@ export function validateLayerStateRegistry(
 
 validateLayerStateRegistry();
 
-/** Produce the complete durable default state. */
-
 /* ------------------------------------------------------------------ *
  * Operator-supplied ("user") layers
  *
@@ -1073,6 +1071,7 @@ export function registerUserLayers(entries) {
   return sealUserLayers(entries, { reservedIds: REGISTERED_LAYER_IDS });
 }
 
+/** Produce the complete durable default state. */
 export function createDefaultLayerState() {
   return {
     version: LAYER_STATE_VERSION,
