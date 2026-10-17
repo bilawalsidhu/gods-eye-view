@@ -43,7 +43,10 @@
  * after the fleet has loaded and a 3 s warm-up, the engine rendering
  * continuously (the layer holds it), Cesium uncapped; the fleet tick's CPU
  * time (the layer's preRender pass, 12 Hz) and the longest frame; the
- * post-GC heap slope as for movers. Same gate: p95 Navara / Cesium <= 1.1.
+ * post-GC heap slope as for movers. The gate (amended in T13): uncapped,
+ * workP95 Navara / Cesium <= 1.1; with --vsync, interval p95 <= 1.1 and
+ * frames over 33 ms <= Cesium's + 2 (per 10 s); --layer=ais-live-vessels
+ * measures vessels on ?qaFeed=vessels:fixture (12 000 rows).
  * Each scene also reports workP95: the p95 of a frame's own work (its
  * preRender to its postRender), which a burst of queued frames (an engine
  * rendering faster than the browser presents, without vsync) leaves out.
@@ -99,6 +102,12 @@ if (!['flight', 'movers', 'w1-fleet'].includes(scenario)) {
   process.exit(2);
 }
 const FLEET_LAYER = argument('layer') ?? 'flights';
+// The QA feed of the measured layer (src/app/layers/qaSources.js): vessels
+// are the 12 000-row fixture (asked for by view, as the layer asks).
+const fleetFeed = (layerId, count) =>
+  layerId === 'ais-live-vessels'
+    ? 'vessels:fixture'
+    : `${layerId}:synthetic:${count}`;
 const MOVER_COUNT = Number(
   argument('count') ?? (FLEET_LAYER === 'military' ? 1000 : 10000),
 );
@@ -658,7 +667,7 @@ async function runOnce(browser, baseUrl, engine) {
     if (engine !== 'cesium') params.set('engine', engine);
     if (engine !== 'cesium' && navaraLook) params.set('look', navaraLook);
     if (scenario === 'w1-fleet')
-      params.set('qaFeed', `${FLEET_LAYER}:synthetic:${MOVER_COUNT}`);
+      params.set('qaFeed', fleetFeed(FLEET_LAYER, MOVER_COUNT));
     const query = params.size ? `?${params}` : '';
     await page.goto(`${baseUrl}${query}`, { waitUntil: 'domcontentloaded' });
     await page.waitForFunction(() => Boolean(window.__qaInitialView?.done), {
@@ -909,19 +918,68 @@ try {
     report.engines.cesium &&
     report.engines.navara
   ) {
+    // The layer gate (plan amendment to the phase-0/S5 gate, T13):
+    // uncapped, the WORK p95 (preRender → postRender) ratio Navara/Cesium
+    // <= 1.1 — the uncapped inter-frame p95 measures headless pacing and is
+    // only reported; with --vsync, the frame-interval p95 ratio <= 1.1 and
+    // frames over 33 ms <= Cesium's + 2 per 10 s (the measured window).
+    const ratioOf = (key, name) => {
+      const cesium = report.engines.cesium.median[name]?.[key];
+      const navara = report.engines.navara.median[name]?.[key];
+      return {
+        cesium,
+        navara,
+        ratio: cesium && navara ? round(navara / cesium, 2) : null,
+      };
+    };
     report.gate = Object.fromEntries(
       MOVER_SCENES.map((name) => {
-        const cesium = report.engines.cesium.median[name]?.p95;
-        const navara = report.engines.navara.median[name]?.p95;
-        const ratio = cesium && navara ? round(navara / cesium, 2) : null;
+        if (!VSYNC && scenario === 'movers') {
+          const interval = ratioOf('p95', name);
+          return [
+            name,
+            {
+              ...interval,
+              pass: interval.ratio != null && interval.ratio <= 1.1,
+            },
+          ];
+        }
+        if (!VSYNC) {
+          const work = ratioOf('workP95', name);
+          const interval = ratioOf('p95', name);
+          return [
+            name,
+            {
+              mode: 'uncapped',
+              work,
+              intervalInformative: interval,
+              pass: work.ratio != null && work.ratio <= 1.1,
+            },
+          ];
+        }
+        const interval = ratioOf('p95', name);
+        const long = ratioOf('longFrames33', name);
+        const longPass =
+          long.cesium != null &&
+          long.navara != null &&
+          long.navara <= long.cesium + 2;
         return [
           name,
-          { cesium, navara, ratio, pass: ratio != null && ratio <= 1.1 },
+          {
+            mode: 'vsync',
+            interval,
+            longFrames33: { cesium: long.cesium, navara: long.navara },
+            pass: interval.ratio != null && interval.ratio <= 1.1 && longPass,
+          },
         ];
       }),
     );
     console.log(
-      `[gate] p95 Navara / Cesium <= 1.1: ${JSON.stringify(report.gate)}`,
+      `[gate] ${
+        VSYNC
+          ? 'vsync: interval p95 Navara / Cesium <= 1.1 and frames > 33 ms <= Cesium + 2'
+          : 'uncapped: work p95 Navara / Cesium <= 1.1'
+      }: ${JSON.stringify(report.gate)}`,
     );
   }
 } finally {
