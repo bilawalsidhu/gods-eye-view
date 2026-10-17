@@ -20,6 +20,7 @@ import {
   loadCalgarySourcesFromOpenData,
   loadCataloniaSourcesFromOpenData,
   loadDelDOTSourcesFromOpenData,
+  loadVancouverSourcesFromCatalog,
   loadKingCountySourcesFromOpenData,
   loadWsdotSourcesFromOpenData,
   loadVegvesenSourcesFromOpenData,
@@ -109,6 +110,15 @@ const LIVE_PACKS = [
     name: 'deldot',
     enabled: () => envEnabled('CCTV_DELDOT_ENABLED'),
     load: loadDelDOTSourcesFromOpenData,
+  },
+  {
+    name: 'vancouver',
+    // The City of Vancouver Terms of Use don't confirm redistribution of the
+    // frame JPEGs (the open-data licence covers only the link/location list), so
+    // — like NYC and Lithuania — the pack is opt-in: off unless an operator sets
+    // CCTV_VANCOUVER_ENABLED=1. See DATA_SOURCES.md.
+    enabled: () => envOptIn('CCTV_VANCOUVER_ENABLED'),
+    load: loadVancouverSourcesFromCatalog,
   },
   {
     name: 'kingcounty',
