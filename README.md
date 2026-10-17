@@ -73,7 +73,7 @@ Start with the included data sources, then add your own. Each layer is a separat
 - **🔭 Satellite passes:** Ask by voice when any loaded satellite next rises over you: rise, peak and set times, and whether you can see it.
 - **🔎 Analyst answers:** Count, filter and rank satellites, datacenters and dams by voice, alongside flights, ships, fires and quakes; answers say when a feed is stale or on a fallback.
 - **🧭 Tilt and North Up:** Switch between straight-down and a 35° oblique, or put north at the top, while a tracked target stays centered.
-- **🔍 Keyless search:** Type coordinates or a bundled city or landmark to fly there with no network request; other names use Google when configured, then Photon and Nominatim.
+- **🔍 Keyless search:** Type decimal coordinates, a two-dimensional WGS84 `geo:` URI (for example, `geo:39.7392,-104.9903`), or a bundled city or landmark to fly there with no geocoder request; other names use Google when configured, then Photon and Nominatim.
 - **📦 Shareable scenes:** Import, preview and share Director scenes as files or bundles, with camera anchors, authored moves and data packs.
 - **🌊 Nepal flood scene:** Replay the Bhote Koshi flood: flood path, witness sources and before-and-after imagery (bundled data is non-commercial; see [DATA_SOURCES.md](DATA_SOURCES.md)).
 
@@ -571,14 +571,16 @@ and panel. DelDOT uses its official HTTPS HLS catalog links. Disable that
 pack with `CCTV_DELDOT_ENABLED=0`.
 
 The server allows two concurrent sessions. Each retains at most 12 segments
-and 24 MiB in memory; individual downloads are capped at 4 MiB with a ten
-second deadline. There are no segment files or ffmpeg processes. Redirects,
+and 24 MiB in memory; segment downloads are capped at 12 MiB with a ten
+second deadline. Large HD segments can leave only two or three segments in the
+retained playlist. There are no segment files or ffmpeg processes. Redirects,
 off-origin references, encrypted playlists and non-MPEG-TS segments are refused.
 Each decoder has its own client lease (at most eight per session), including
 native HLS. Closing it releases only that lease; abandoned leases expire after
 15 seconds without access. The last release stops upstream work. Failed live video
 uses the existing still/Street View/synthetic fallback, which is not live video.
-RTMP-only sources are not supported by this integration.
+Cold or restarted sessions begin with the newest two segments; later polls fetch
+only newly advertised segments. RTMP-only sources are not supported by this integration.
 
 </details>
 

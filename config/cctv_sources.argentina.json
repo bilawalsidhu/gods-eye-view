@@ -806,7 +806,7 @@
     "province": "Neuquén",
     "provider": "Cerro Bayo",
     "feedType": "image",
-    "url": "https://s132.ipcamlive.com/streams/84wzmjgqdfouxlizp/snapshot.jpg",
+    "url": "https://ipcamlive.com/player/snapshot.php?alias=copitos",
     "sourcePageUrl": "https://www.cerrobayo.com.ar/montana/camara/",
     "lat": -40.749683,
     "lon": -71.605927,
@@ -817,8 +817,9 @@
     "license": "Public operator webcam, fetched at runtime. No open license asserted for the media.",
     "credit": "Cerro Bayo",
     "checkedAt": "2026-10-15",
-    "snapshotUrl": "https://s132.ipcamlive.com/streams/84wzmjgqdfouxlizp/snapshot.jpg",
-    "snapshotAliasUrl": "https://ipcamlive.com/player/snapshot.php?alias=copitos"
+    "snapshotUrl": "https://ipcamlive.com/player/snapshot.php?alias=copitos",
+    "snapshotAliasUrl": "https://ipcamlive.com/player/snapshot.php?alias=copitos",
+    "mediaNote": "Periodically updated public IPCamLive snapshot; not continuous video. The registered public alias resolves at request time through a restricted HTTPS snapshot-host redirect."
   },
   {
     "id": "ar-bayo-principiantes1500",
@@ -829,7 +830,7 @@
     "province": "Neuquén",
     "provider": "Cerro Bayo",
     "feedType": "image",
-    "url": "https://s136.ipcamlive.com/streams/88s07z3avlb1xjj84/snapshot.jpg",
+    "url": "https://ipcamlive.com/player/snapshot.php?alias=principiantes1500",
     "sourcePageUrl": "https://www.cerrobayo.com.ar/montana/camara/",
     "lat": -40.749683,
     "lon": -71.605927,
@@ -840,8 +841,9 @@
     "license": "Public operator webcam, fetched at runtime. No open license asserted for the media.",
     "credit": "Cerro Bayo",
     "checkedAt": "2026-10-15",
-    "snapshotUrl": "https://s136.ipcamlive.com/streams/88s07z3avlb1xjj84/snapshot.jpg",
-    "snapshotAliasUrl": "https://ipcamlive.com/player/snapshot.php?alias=principiantes1500"
+    "snapshotUrl": "https://ipcamlive.com/player/snapshot.php?alias=principiantes1500",
+    "snapshotAliasUrl": "https://ipcamlive.com/player/snapshot.php?alias=principiantes1500",
+    "mediaNote": "Periodically updated public IPCamLive snapshot; not continuous video. The registered public alias resolves at request time through a restricted HTTPS snapshot-host redirect."
   },
   {
     "id": "ar-bayo-telecabina1500",
@@ -852,7 +854,7 @@
     "province": "Neuquén",
     "provider": "Cerro Bayo",
     "feedType": "image",
-    "url": "https://s143.ipcamlive.com/streams/8f5ovbpop8cn1jzig/snapshot.jpg",
+    "url": "https://ipcamlive.com/player/snapshot.php?alias=telecabina1500",
     "sourcePageUrl": "https://www.cerrobayo.com.ar/montana/camara/",
     "lat": -40.749683,
     "lon": -71.605927,
@@ -863,8 +865,9 @@
     "license": "Public operator webcam, fetched at runtime. No open license asserted for the media.",
     "credit": "Cerro Bayo",
     "checkedAt": "2026-10-15",
-    "snapshotUrl": "https://s143.ipcamlive.com/streams/8f5ovbpop8cn1jzig/snapshot.jpg",
-    "snapshotAliasUrl": "https://ipcamlive.com/player/snapshot.php?alias=telecabina1500"
+    "snapshotUrl": "https://ipcamlive.com/player/snapshot.php?alias=telecabina1500",
+    "snapshotAliasUrl": "https://ipcamlive.com/player/snapshot.php?alias=telecabina1500",
+    "mediaNote": "Periodically updated public IPCamLive snapshot; not continuous video. The registered public alias resolves at request time through a restricted HTTPS snapshot-host redirect."
   },
   {
     "id": "ar-bayo-lagos2",
@@ -875,7 +878,7 @@
     "province": "Neuquén",
     "provider": "Cerro Bayo",
     "feedType": "image",
-    "url": "https://s40.ipcamlive.com/streams/28cqjrbh03d9skmfc/snapshot.jpg",
+    "url": "https://ipcamlive.com/player/snapshot.php?alias=lagos2",
     "sourcePageUrl": "https://www.cerrobayo.com.ar/montana/camara/",
     "lat": -40.749683,
     "lon": -71.605927,
@@ -886,8 +889,9 @@
     "license": "Public operator webcam, fetched at runtime. No open license asserted for the media.",
     "credit": "Cerro Bayo",
     "checkedAt": "2026-10-15",
-    "snapshotUrl": "https://s40.ipcamlive.com/streams/28cqjrbh03d9skmfc/snapshot.jpg",
-    "snapshotAliasUrl": "https://ipcamlive.com/player/snapshot.php?alias=lagos2"
+    "snapshotUrl": "https://ipcamlive.com/player/snapshot.php?alias=lagos2",
+    "snapshotAliasUrl": "https://ipcamlive.com/player/snapshot.php?alias=lagos2",
+    "mediaNote": "Periodically updated public IPCamLive snapshot; not continuous video. The registered public alias resolves at request time through a restricted HTTPS snapshot-host redirect."
   },
   {
     "id": "ar-bayo-principiantes2",
@@ -898,7 +902,7 @@
     "province": "Neuquén",
     "provider": "Cerro Bayo",
     "feedType": "image",
-    "url": "https://s81.ipcamlive.com/streams/516jzu3lsn05khp8r/snapshot.jpg",
+    "url": "https://ipcamlive.com/player/snapshot.php?alias=principiantes2",
     "sourcePageUrl": "https://www.cerrobayo.com.ar/montana/camara/",
     "lat": -40.749683,
     "lon": -71.605927,
@@ -909,8 +913,9 @@
     "license": "Public operator webcam, fetched at runtime. No open license asserted for the media.",
     "credit": "Cerro Bayo",
     "checkedAt": "2026-10-15",
-    "snapshotUrl": "https://s81.ipcamlive.com/streams/516jzu3lsn05khp8r/snapshot.jpg",
-    "snapshotAliasUrl": "https://ipcamlive.com/player/snapshot.php?alias=principiantes2"
+    "snapshotUrl": "https://ipcamlive.com/player/snapshot.php?alias=principiantes2",
+    "snapshotAliasUrl": "https://ipcamlive.com/player/snapshot.php?alias=principiantes2",
+    "mediaNote": "Periodically updated public IPCamLive snapshot; not continuous video. The registered public alias resolves at request time through a restricted HTTPS snapshot-host redirect."
   },
   {
     "id": "ar-comodoro-en-vivo-comodoro-rivadavia-centro-iii",
@@ -931,10 +936,10 @@
     "license": "Public operator feed; media rights remain with the operator. No open media license is asserted.",
     "credit": "Comodoro Turismo",
     "checkedAt": "2026-10-15",
-    "url": "https://s144.ipcamlive.com/streams/90du7machzl8wtvay/snapshot.jpg",
-    "snapshotUrl": "https://s144.ipcamlive.com/streams/90du7machzl8wtvay/snapshot.jpg",
+    "url": "https://ipcamlive.com/player/snapshot.php?alias=6a453248a4517",
+    "snapshotUrl": "https://ipcamlive.com/player/snapshot.php?alias=6a453248a4517",
     "snapshotAliasUrl": "https://ipcamlive.com/player/snapshot.php?alias=6a453248a4517",
-    "mediaNote": "Periodically updated public IPCamLive snapshot; not continuous video. Re-resolve the published alias if its image host changes."
+    "mediaNote": "Periodically updated public IPCamLive snapshot; not continuous video. The registered public alias resolves at request time through a restricted HTTPS snapshot-host redirect."
   },
   {
     "id": "ar-comodoro-en-vivo-comodoro-rivadavia-nautico-centro",
@@ -955,10 +960,10 @@
     "license": "Public operator feed; media rights remain with the operator. No open media license is asserted.",
     "credit": "Comodoro Turismo",
     "checkedAt": "2026-10-15",
-    "url": "https://s144.ipcamlive.com/streams/90b3vzqdgu7hsesfl/snapshot.jpg",
-    "snapshotUrl": "https://s144.ipcamlive.com/streams/90b3vzqdgu7hsesfl/snapshot.jpg",
+    "url": "https://ipcamlive.com/player/snapshot.php?alias=685894ca09cce",
+    "snapshotUrl": "https://ipcamlive.com/player/snapshot.php?alias=685894ca09cce",
     "snapshotAliasUrl": "https://ipcamlive.com/player/snapshot.php?alias=685894ca09cce",
-    "mediaNote": "Periodically updated public IPCamLive snapshot; not continuous video. Re-resolve the published alias if its image host changes."
+    "mediaNote": "Periodically updated public IPCamLive snapshot; not continuous video. The registered public alias resolves at request time through a restricted HTTPS snapshot-host redirect."
   },
   {
     "id": "ar-comodoro-en-vivo-comodoro-rivadavia-nautico-centro-ii",
@@ -979,10 +984,10 @@
     "license": "Public operator feed; media rights remain with the operator. No open media license is asserted.",
     "credit": "Comodoro Turismo",
     "checkedAt": "2026-10-15",
-    "url": "https://s144.ipcamlive.com/streams/90fqnya3kecsl4uz7/snapshot.jpg",
-    "snapshotUrl": "https://s144.ipcamlive.com/streams/90fqnya3kecsl4uz7/snapshot.jpg",
+    "url": "https://ipcamlive.com/player/snapshot.php?alias=685895e75b3d6",
+    "snapshotUrl": "https://ipcamlive.com/player/snapshot.php?alias=685895e75b3d6",
     "snapshotAliasUrl": "https://ipcamlive.com/player/snapshot.php?alias=685895e75b3d6",
-    "mediaNote": "Periodically updated public IPCamLive snapshot; not continuous video. Re-resolve the published alias if its image host changes."
+    "mediaNote": "Periodically updated public IPCamLive snapshot; not continuous video. The registered public alias resolves at request time through a restricted HTTPS snapshot-host redirect."
   },
   {
     "id": "ar-comodoro-en-vivo-nautico-km3",
@@ -1003,10 +1008,10 @@
     "license": "Public operator feed; media rights remain with the operator. No open media license is asserted.",
     "credit": "Comodoro Turismo",
     "checkedAt": "2026-10-15",
-    "url": "https://s144.ipcamlive.com/streams/90pu2oj0qbccrelbg/snapshot.jpg",
-    "snapshotUrl": "https://s144.ipcamlive.com/streams/90pu2oj0qbccrelbg/snapshot.jpg",
+    "url": "https://ipcamlive.com/player/snapshot.php?alias=68588baa5ac13",
+    "snapshotUrl": "https://ipcamlive.com/player/snapshot.php?alias=68588baa5ac13",
     "snapshotAliasUrl": "https://ipcamlive.com/player/snapshot.php?alias=68588baa5ac13",
-    "mediaNote": "Periodically updated public IPCamLive snapshot; not continuous video. Re-resolve the published alias if its image host changes."
+    "mediaNote": "Periodically updated public IPCamLive snapshot; not continuous video. The registered public alias resolves at request time through a restricted HTTPS snapshot-host redirect."
   },
   {
     "id": "ar-las-heras-1",
@@ -1027,10 +1032,10 @@
     "license": "Public operator feed; media rights remain with the operator. No open media license is asserted.",
     "credit": "Municipalidad de Las Heras",
     "checkedAt": "2026-10-15",
-    "url": "https://s144.ipcamlive.com/streams/90n6wckmz5imeqzae/snapshot.jpg",
-    "snapshotUrl": "https://s144.ipcamlive.com/streams/90n6wckmz5imeqzae/snapshot.jpg",
+    "url": "https://ipcamlive.com/player/snapshot.php?alias=6aad7d75eee34",
+    "snapshotUrl": "https://ipcamlive.com/player/snapshot.php?alias=6aad7d75eee34",
     "snapshotAliasUrl": "https://ipcamlive.com/player/snapshot.php?alias=6aad7d75eee34",
-    "mediaNote": "Periodically updated public IPCamLive snapshot; not continuous video. Re-resolve the published alias if its image host changes."
+    "mediaNote": "Periodically updated public IPCamLive snapshot; not continuous video. The registered public alias resolves at request time through a restricted HTTPS snapshot-host redirect."
   },
   {
     "id": "ar-las-heras-2",
@@ -1051,10 +1056,10 @@
     "license": "Public operator feed; media rights remain with the operator. No open media license is asserted.",
     "credit": "Municipalidad de Las Heras",
     "checkedAt": "2026-10-15",
-    "url": "https://s144.ipcamlive.com/streams/90kwfgxyuz3qpfumd/snapshot.jpg",
-    "snapshotUrl": "https://s144.ipcamlive.com/streams/90kwfgxyuz3qpfumd/snapshot.jpg",
+    "url": "https://ipcamlive.com/player/snapshot.php?alias=6aad7de18c9bf",
+    "snapshotUrl": "https://ipcamlive.com/player/snapshot.php?alias=6aad7de18c9bf",
     "snapshotAliasUrl": "https://ipcamlive.com/player/snapshot.php?alias=6aad7de18c9bf",
-    "mediaNote": "Periodically updated public IPCamLive snapshot; not continuous video. Re-resolve the published alias if its image host changes."
+    "mediaNote": "Periodically updated public IPCamLive snapshot; not continuous video. The registered public alias resolves at request time through a restricted HTTPS snapshot-host redirect."
   },
   {
     "id": "ar-las-heras-3",
@@ -1075,10 +1080,10 @@
     "license": "Public operator feed; media rights remain with the operator. No open media license is asserted.",
     "credit": "Municipalidad de Las Heras",
     "checkedAt": "2026-10-15",
-    "url": "https://s62.ipcamlive.com/streams/3efyhxipt9auozd0c/snapshot.jpg",
-    "snapshotUrl": "https://s62.ipcamlive.com/streams/3efyhxipt9auozd0c/snapshot.jpg",
+    "url": "https://ipcamlive.com/player/snapshot.php?alias=6aad7e58dcd02",
+    "snapshotUrl": "https://ipcamlive.com/player/snapshot.php?alias=6aad7e58dcd02",
     "snapshotAliasUrl": "https://ipcamlive.com/player/snapshot.php?alias=6aad7e58dcd02",
-    "mediaNote": "Periodically updated public IPCamLive snapshot; not continuous video. Re-resolve the published alias if its image host changes."
+    "mediaNote": "Periodically updated public IPCamLive snapshot; not continuous video. The registered public alias resolves at request time through a restricted HTTPS snapshot-host redirect."
   },
   {
     "id": "ar-las-heras-4",
@@ -1099,10 +1104,10 @@
     "license": "Public operator feed; media rights remain with the operator. No open media license is asserted.",
     "credit": "Municipalidad de Las Heras",
     "checkedAt": "2026-10-15",
-    "url": "https://s144.ipcamlive.com/streams/903j74xpdy6nbklun/snapshot.jpg",
-    "snapshotUrl": "https://s144.ipcamlive.com/streams/903j74xpdy6nbklun/snapshot.jpg",
+    "url": "https://ipcamlive.com/player/snapshot.php?alias=6aad7ee2c96a3",
+    "snapshotUrl": "https://ipcamlive.com/player/snapshot.php?alias=6aad7ee2c96a3",
     "snapshotAliasUrl": "https://ipcamlive.com/player/snapshot.php?alias=6aad7ee2c96a3",
-    "mediaNote": "Periodically updated public IPCamLive snapshot; not continuous video. Re-resolve the published alias if its image host changes."
+    "mediaNote": "Periodically updated public IPCamLive snapshot; not continuous video. The registered public alias resolves at request time through a restricted HTTPS snapshot-host redirect."
   },
   {
     "id": "ar-las-heras-5",
@@ -1123,10 +1128,10 @@
     "license": "Public operator feed; media rights remain with the operator. No open media license is asserted.",
     "credit": "Municipalidad de Las Heras",
     "checkedAt": "2026-10-15",
-    "url": "https://s144.ipcamlive.com/streams/90g8lqzlofhjgmme3/snapshot.jpg",
-    "snapshotUrl": "https://s144.ipcamlive.com/streams/90g8lqzlofhjgmme3/snapshot.jpg",
+    "url": "https://ipcamlive.com/player/snapshot.php?alias=6aad7eb800990",
+    "snapshotUrl": "https://ipcamlive.com/player/snapshot.php?alias=6aad7eb800990",
     "snapshotAliasUrl": "https://ipcamlive.com/player/snapshot.php?alias=6aad7eb800990",
-    "mediaNote": "Periodically updated public IPCamLive snapshot; not continuous video. Re-resolve the published alias if its image host changes."
+    "mediaNote": "Periodically updated public IPCamLive snapshot; not continuous video. The registered public alias resolves at request time through a restricted HTTPS snapshot-host redirect."
   },
   {
     "id": "ar-multimedios-pringles",

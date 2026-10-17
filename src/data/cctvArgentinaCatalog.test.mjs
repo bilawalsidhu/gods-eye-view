@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { normalizeSourceItem } from '../../server/providers/cctv/normalize.js';
 import { allocateSourceCap } from '../../server/providers/cctv/cap.js';
+import { fetchWithinHost } from '../../server/providers/cctv/media.js';
 
 const read = (path) =>
   JSON.parse(readFileSync(new URL(path, import.meta.url), 'utf8'));
@@ -118,6 +119,7 @@ test('Argentina types use supported URL contracts and normalize direct feeds unc
     assert.ok(['embed', 'hls', 'image'].includes(camera.feedType));
     const url = new URL(mediaUrl(camera));
     if (camera.feedType === 'embed') {
+      assert.ok(normalizeSourceItem(camera).embedUrl, camera.id);
       if (url.hostname === 'www.youtube.com') {
         assert.equal(url.pathname, '/watch');
         assert.match(url.searchParams.get('v'), /^[A-Za-z0-9_-]{11}$/);
@@ -149,10 +151,96 @@ test('Argentina types use supported URL contracts and normalize direct feeds unc
       assert.equal(alias.pathname, '/player/snapshot.php');
       assert.deepEqual([...alias.searchParams.keys()], ['alias']);
       assert.match(alias.searchParams.get('alias'), /^[a-z0-9]+$/);
-      assert.match(url.hostname, /^s\d+\.ipcamlive\.com$/);
-      assert.match(url.pathname, /^\/streams\/[a-z0-9]+\/snapshot\.jpg$/);
+      assert.equal(camera.url, camera.snapshotAliasUrl);
     }
   }
+});
+
+test('IPCamLive aliases follow only public snapshot redirects and never forward private headers', async () => {
+  const alias =
+    'https://ipcamlive.com/player/snapshot.php?alias=telecabina1500';
+  const target = 'https://s123.ipcamlive.com/streams/abcd1234/snapshot.jpg';
+  const requests = [];
+  const response = await fetchWithinHost(
+    alias,
+    { headers: { Authorization: 'private', Cookie: 'private' } },
+    async (url, init) => {
+      requests.push(url);
+      assert.equal(new Headers(init.headers).get('authorization'), null);
+      assert.equal(new Headers(init.headers).get('cookie'), null);
+      assert.equal(init.credentials, 'omit');
+      return url === alias
+        ? new Response(null, { status: 302, headers: { location: target } })
+        : new Response('image');
+    },
+  );
+  assert.equal(await response.text(), 'image');
+  assert.deepEqual(requests, [alias, target]);
+  for (const location of [
+    'http://s123.ipcamlive.com/streams/a/snapshot.jpg',
+    'https://s123.ipcamlive.com.evil.example/streams/a/snapshot.jpg',
+    'https://127.0.0.1/snapshot.jpg',
+    'https://s123.ipcamlive.com:8443/streams/a/snapshot.jpg',
+    'https://user:pass@s123.ipcamlive.com/streams/a/snapshot.jpg',
+    'https://s123.ipcamlive.com/private',
+    target + '?token=x',
+  ]) {
+    let calls = 0;
+    assert.equal(
+      await fetchWithinHost(alias, {}, async () => {
+        calls++;
+        return new Response(null, { status: 302, headers: { location } });
+      }),
+      null,
+    );
+    assert.equal(calls, 1, location);
+  }
+  let calls = 0;
+  assert.equal(
+    await fetchWithinHost(
+      'https://camera.example/snapshot.jpg',
+      {},
+      async () => {
+        calls++;
+        return new Response(null, {
+          status: 302,
+          headers: { location: target },
+        });
+      },
+    ),
+    null,
+  );
+  assert.equal(
+    calls,
+    1,
+    'other registered hosts keep their original origin pin',
+  );
+  calls = 0;
+  assert.equal(
+    await fetchWithinHost(alias + '&token=private', {}, async () => {
+      calls++;
+      return new Response(null, { status: 302, headers: { location: target } });
+    }),
+    null,
+  );
+  assert.equal(
+    calls,
+    1,
+    'only the exact public alias contract receives the exception',
+  );
+  calls = 0;
+  assert.equal(
+    await fetchWithinHost(alias, {}, async () => {
+      calls++;
+      return new Response(null, { status: 302, headers: { location: target } });
+    }),
+    null,
+  );
+  assert.equal(
+    calls,
+    3,
+    'the existing two-redirect limit also bounds alias loops',
+  );
 });
 
 test('every active feed has a dated receipt and unavailable media stays out', () => {

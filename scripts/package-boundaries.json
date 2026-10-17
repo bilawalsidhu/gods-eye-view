@@ -131,7 +131,9 @@
       "server/providers/common/http.js",
       "src/sources/httpBody.js",
       "src/i18n/marker.js",
-      "src/data/tomtomTiles.js"
+      "src/data/tomtomTiles.js",
+      "server/providers/common/same-site.js",
+      "src/localRequestGate.mjs"
     ],
     "external": []
   },
@@ -199,7 +201,8 @@
       "src/data/cctvFootprint.js",
       "src/sources/cctvTypes.js",
       "src/sources/httpBody.js",
-      "src/i18n/marker.js"
+      "src/i18n/marker.js",
+      "src/sources/youtube.js"
     ],
     "external": []
   },
@@ -538,7 +541,10 @@
       "src/i18n/locale.js",
       "src/i18n/locales/es.json",
       "src/i18n/locales/ru.json",
-      "src/ui/unitLabels.js"
+      "src/ui/unitLabels.js",
+      "src/sources/cctvTypes.js",
+      "src/sources/youtube.js",
+      "src/ui/cctvEmbed.js"
     ],
     "external": []
   },
@@ -760,7 +766,10 @@
       "src/ui/unitLabels.js",
       "src/ui/keyGuidance.js",
       "src/ui/layerNames.js",
-      "src/ui/statusText.js"
+      "src/ui/statusText.js",
+      "src/sources/cctvTypes.js",
+      "src/sources/youtube.js",
+      "src/ui/cctvEmbed.js"
     ],
     "external": ["cesium"]
   },
@@ -1356,7 +1365,9 @@
       "src/i18n/index.js",
       "src/i18n/locale.js",
       "src/i18n/locales/es.json",
-      "src/i18n/locales/ru.json"
+      "src/i18n/locales/ru.json",
+      "src/sources/cctvTypes.js",
+      "src/sources/youtube.js"
     ],
     "external": ["hls.js", "cesium"]
   },
@@ -2479,7 +2490,10 @@
       "src/layers/airQuality/index.js",
       "src/layers/airQuality/model.js",
       "src/layers/airQuality/source.js",
-      "src/ui/statusText.js"
+      "src/ui/statusText.js",
+      "src/sources/cctvTypes.js",
+      "src/sources/youtube.js",
+      "src/ui/cctvEmbed.js"
     ],
     "external": [
       "hls.js",
@@ -3048,7 +3062,9 @@
       "src/layers/airQuality/model.js",
       "src/layers/airQuality/source.js",
       "src/ui/statusText.js",
-      "src/ui/layerNames.js"
+      "src/ui/layerNames.js",
+      "src/sources/cctvTypes.js",
+      "src/sources/youtube.js"
     ],
     "external": [
       "hls.js",
@@ -3321,7 +3337,7 @@
   },
   "cctv-types-source": {
     "exports": ["./sources/cctv-types"],
-    "modules": ["src/sources/cctvTypes.js"],
+    "modules": ["src/sources/cctvTypes.js", "src/sources/youtube.js"],
     "external": []
   },
   "regional-source": {

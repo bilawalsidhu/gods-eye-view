@@ -3,11 +3,18 @@ import {
   FRAME_ENDPOINT,
   MEDIA_ENDPOINT,
 } from './sourcePolicy.js';
+const FRAME_SOURCE_KINDS = new Set([
+  'upstream-image',
+  'hls-pull',
+  'streetview',
+  'synthetic',
+]);
 function safeNumber(value, fallback = NaN) {
   const n = Number(value);
   return Number.isFinite(n) ? n : fallback;
 }
 function frameUrlFor(camera, refreshMs = ACTIVE_FRAME_REFRESH_MS) {
+  if (camera.feedType === 'embed') return null;
   const cadenceMs = Math.max(
     1000,
     safeNumber(refreshMs, ACTIVE_FRAME_REFRESH_MS),
@@ -26,6 +33,7 @@ function frameUrlFor(camera, refreshMs = ACTIVE_FRAME_REFRESH_MS) {
   return `${FRAME_ENDPOINT}/${encodeURIComponent(camera.id)}?${params.toString()}`;
 }
 function mediaUrlFor(camera) {
+  if (camera.feedType === 'embed') return null;
   return `${MEDIA_ENDPOINT}/${encodeURIComponent(camera.id)}?ts=${Math.floor(Date.now() / 15000)}`;
 }
 /** Supply catalog/health records and the existing registered camera URL families. */
@@ -51,9 +59,11 @@ export function createCctvSource({
     },
     getFrameUrl: frameUrlFor,
     getMediaUrl: mediaUrlFor,
-    /** Read one current frame through the registered frame endpoint. */
+    /** Read a registered frame and its provenance, including fallback frames. */
     async getFrame(camera, { signal } = {}) {
       signal?.throwIfAborted();
+      if (camera.feedType === 'embed')
+        throw new Error('Embedded camera frames are not available');
       const response = await fetchImpl(frameUrlFor(camera), {
         cache: 'no-store',
         signal,
@@ -62,7 +72,12 @@ export function createCctvSource({
       const bytes = new Uint8Array(await response.arrayBuffer());
       signal?.throwIfAborted();
       const type = response.headers.get('content-type') || '';
-      return { contentType: type.split(';')[0].trim().toLowerCase(), bytes };
+      const sourceKind = response.headers.get('x-cctv-source');
+      return {
+        contentType: type.split(';')[0].trim().toLowerCase(),
+        bytes,
+        sourceKind: FRAME_SOURCE_KINDS.has(sourceKind) ? sourceKind : null,
+      };
     },
   };
 }

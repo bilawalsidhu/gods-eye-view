@@ -6,17 +6,15 @@ checked on **2026-10-15**: 25 external players (20 YouTube, two Twitch, two Ange
 provinces and CABA. Some feeds rotate views;
 this is a count of feeds, not independently located camera mounts.
 
-This data-only pack is based on `main`, separate from the Encarnación work. The
-external players require the support in
-[PR #1162](https://github.com/bilawalsidhu/gods-eye-view/pull/1162). The Mendoza terrace and Tandil streams also require
-[PR #1165](https://github.com/bilawalsidhu/gods-eye-view/pull/1165) for expired old
-404 segments and a bounded 12 MiB segment allowance. Merge
-these support changes before enabling the complete pack. This PR contains no
-player or relay implementation.
+This branch includes the shared players from [PR #1162](https://github.com/bilawalsidhu/gods-eye-view/pull/1162)
+and bounded HLS recovery from [PR #1165](https://github.com/bilawalsidhu/gods-eye-view/pull/1165).
+Merge those prerequisites first; the complete pack is functional on this branch.
+It also resolves public IPCamLive snapshot aliases at request time, with a
+restricted redirect policy for the provider's HTTPS image hosts.
 
 ## Run locally
 
-After the player and HLS support is available, start a fresh server with:
+Start a fresh server with:
 
 ```bash
 CCTV_SOURCES_FILE=config/cctv_sources.argentina.json npm run dev
@@ -88,9 +86,14 @@ outside the 115 additional findings. No Encarnación camera or implementation is
   and HTTP timestamp updated. The former Varitech Catalina Reynal obscured-lens
   observation remains in the separate pack's historical verification receipt.
 - Cerro Bayo, Comodoro and Las Heras public snapshot aliases redirect to image hosts on IPCamLive.
-  The catalog pins the final public image URLs observed at verification, and
-  retains each `snapshotAliasUrl` for maintenance. Re-resolve that operator link
-  if the hosting address changes; the proxy's origin checks remain unchanged.
+  The catalog uses each stable `snapshotAliasUrl` at request time instead of
+  pinning a transient stream host. Only HTTPS `sNNN.ipcamlive.com` snapshot paths
+  are accepted, within the existing two-redirect limit and image byte/time caps.
+  Credentials, custom ports, query strings on image targets and other hosts are
+  refused; no private request headers are forwarded. Other sources retain their
+  original same-origin redirect policy. The 2026-10-15 receipts remain historical. The [2026-10-17 UTC alias check](data/cctv-argentina-alias-check-2026-10-17.json)
+  received HTTP 200 JPEG payloads with current Last-Modified headers from all
+  fourteen aliases; this was a transport/signature check, not a visual or uptime guarantee.
 - Most coordinates are **approximate place or area anchors**, sometimes shared
   by several cameras at a resort, not surveyed camera positions. OSM anchors
   retain their object links; the Chapelco ski-area anchor cites its location
