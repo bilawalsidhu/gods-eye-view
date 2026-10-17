@@ -100,12 +100,12 @@ export function createThumbnailLoader({
         cancelled = true;
       } else if (response?.ok) {
         const present = String(
-          response.headers?.get?.('Data-Present') ?? 'true',
+          response.headers?.get?.('Data-Present') ?? '',
         ).toLowerCase();
         acquisitionTime = response.headers?.get?.('Acquisition-Time') || null;
         if (present === 'false') {
           status = 'empty';
-        } else {
+        } else if (present === 'true') {
           const blob = await response.blob();
           if (controller.signal.aborted) cancelled = true;
           else {

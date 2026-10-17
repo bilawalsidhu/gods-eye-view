@@ -1,4 +1,5 @@
 import { displayedKinematics } from '../../data/motionModel.js';
+import { t } from '../../i18n/index.js';
 import * as Cesium from 'cesium';
 import { isExplicitLayerStateOrigin } from '../../data/layerState.js';
 import { aircraftIncludedInNearby } from '../../data/aircraftNearbyPolicy.js';
@@ -9,6 +10,7 @@ import {
   CONTACT_MATCH_TIER,
 } from '../../data/contactMatch.js';
 import { LANDED_ALT_MAX_FT, LANDED_SPEED_MAX_MPS } from './policy.js';
+import { emergencyBroadcastPhrase } from '../../data/aircraftEmergency.js';
 
 export function createQueries({
   flightState,
@@ -54,7 +56,7 @@ export function createQueries({
    */
 
   function _formatAltitude(altitudeFt) {
-    if (!Number.isFinite(altitudeFt)) return 'Alt unknown';
+    if (!Number.isFinite(altitudeFt)) return t('Alt unknown');
     return `${Math.round(altitudeFt)} ft`;
   }
 
@@ -86,7 +88,7 @@ export function createQueries({
    * Build a public descriptor for one aircraft using its best current position
    * (dead-reckoned when history exists, billboard position otherwise).
    * @param {string} icao24 - ICAO hex identifier of the aircraft.
-   * @returns {{icao24: string, callsign: string|null, position: Cesium.Cartesian3, latitude: number, longitude: number, altitudeM: number, velocityMps: number|null, track: number|null}|null}
+   * @returns {{icao24: string, callsign: string|null, position: Cesium.Cartesian3, latitude: number, longitude: number, altitudeM: number, velocityMps: number|null, track: number|null, verticalRateMps: number|null}|null}
    *   Descriptor with a cloned position, or null if the aircraft is unknown.
    */
 
@@ -129,10 +131,21 @@ export function createQueries({
       onGround: info?.onGround === true,
       velocityMps: displayed.speedMps,
       track: displayed.trackDeg,
+      // Same field, same name, same null-when-absent rule as the civil
+      // descriptor — the two layers store the record under different keys
+      // (`verticalRateMps` here, `verticalRate` there), so only the mapping
+      // makes `resolveTrackedAircraftInfo` hand back one shape for both.
+      verticalRateMps: Number.isFinite(info?.verticalRateMps)
+        ? info.verticalRateMps
+        : null,
       stale: Boolean(
         flightState.records.missingPolls.get(icao24) ||
         flightState.feed._backoff,
       ),
+      // This poll's transponder broadcast (not sticky; see records.js).
+      squawk: info?.squawk ?? null,
+      emergency: info?.emergency ? { ...info.emergency } : null,
+      emergencyBroadcast: emergencyBroadcastPhrase(info?.emergency),
     };
   }
 
@@ -156,7 +169,9 @@ export function createQueries({
    *   lon: number|null, altitudeM: number|null, speedMps: number|null,
    *   heading: number|null, verticalRateMps: number|null, onGround: boolean,
    *   military: boolean, aircraftClass: string|null, originCountry: null,
-   *   operator: string|null, routeOrigin: null, routeDestination: null}}
+   *   operator: string|null, squawk: string|null, emergency: boolean,
+   *   emergencyKind: string|null, emergencySource: 'squawk'|'ads-b'|null,
+   *   emergencyBroadcast: string|null, lastContactAtMs: number|null, routeOrigin: null, routeDestination: null}}
    */
 
   function mapAnalystRecord(icao24, info) {
@@ -187,6 +202,20 @@ export function createQueries({
       aircraftClass: tr3bAircraftClass(icao24, text(info?.klass)),
       originCountry: null,
       operator: text(info?.operator),
+      squawk: text(info?.squawk),
+      // True while this poll broadcast an emergency (7500/7600/7700 or the
+      // ADS-B status); priority statuses (lifeguard, minfuel) report the kind
+      // without the flag.
+      emergency: info?.emergency?.severity === 'emergency',
+      emergencyKind: text(info?.emergency?.kind),
+      // Provenance, so a summary can say "broadcasting squawk 7700" rather
+      // than "ADS-B reports general emergency" (or flatten both): 'squawk'
+      // when the Mode A code names the status, 'ads-b' for the readsb field.
+      emergencySource: text(info?.emergency?.source),
+      emergencyBroadcast: emergencyBroadcastPhrase(info?.emergency),
+      // Latest known general aircraft-message contact, retained if a poll
+      // has no time. This is not the receipt time of the current status.
+      lastContactAtMs: num(info?.lastContactEpochMs),
       routeOrigin: null,
       routeDestination: null,
     };
@@ -755,7 +784,7 @@ export function createQueries({
 
     /**
      * Describe the currently tracked aircraft at its dead-reckoned position.
-     * @returns {{icao24: string, callsign: string|null, latitude: number, longitude: number, altitudeM: number, velocityMps: number|null, track: number|null}|null}
+     * @returns {{icao24: string, callsign: string|null, latitude: number, longitude: number, altitudeM: number, velocityMps: number|null, track: number|null, verticalRateMps: number|null}|null}
      *   Tracked aircraft info, or null when nothing is tracked.
      */
     getTrackedInfo() {

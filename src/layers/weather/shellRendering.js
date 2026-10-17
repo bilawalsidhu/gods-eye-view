@@ -1,6 +1,7 @@
 import { acquireWeatherImage } from './infraredImage.js';
 import { imageryHostStatus } from './imageryHost.js';
 import { WEATHER_DETAIL_SIZE, WEATHER_IMAGE_SIZES } from './source.js';
+import { msg } from '../../i18n/index.js';
 
 /** Metres above the ellipsoid. Lower shells draw first, so lightning draws last. */
 export const WEATHER_SHELL_HEIGHTS = Object.freeze({
@@ -630,7 +631,7 @@ export function createWeatherShell({
     if (incoming !== frame) return;
     incoming = null;
     close(frame);
-    lastError = 'Weather tiles unavailable · previous frame retained';
+    lastError = msg('Weather tiles unavailable · previous frame retained');
     frame.resolve(false);
     scene.requestRender();
     onChange();

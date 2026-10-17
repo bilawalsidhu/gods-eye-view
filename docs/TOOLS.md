@@ -273,7 +273,7 @@ and the development server's internal routes. See SECURITY.md.
 | `next_satellite_pass` | `satellites` | Next pass over a place or point (default the ISS), with naked-eye visibility |
 | `satellites_overhead` | `satellites` | Satellites in a CelesTrak group above a place or point now, highest first |
 | `find_cctv_cameras` | `cctv` | Public cameras in an area, nearest first |
-| `get_cctv_snapshot` | `cctv` | The current image from one camera, returned as image content |
+| `get_cctv_snapshot` | `cctv` | An image from one camera, returned as image content; Street View fallbacks are labelled historical |
 | `find_alpr_cameras` | `alpr` | OpenStreetMap-mapped license plate readers in a US/Canadian area up to 3° |
 | `find_radio_stations` | `radio` | Radio Browser stations by area and/or search terms, with stream URLs |
 | `search_places` | `placeSearch` | Points of interest matching a query within an area (Google Places) |
