@@ -131,7 +131,9 @@
       "server/providers/common/http.js",
       "src/sources/httpBody.js",
       "src/i18n/marker.js",
-      "src/data/tomtomTiles.js"
+      "src/data/tomtomTiles.js",
+      "server/providers/common/same-site.js",
+      "src/localRequestGate.mjs"
     ],
     "external": []
   },
