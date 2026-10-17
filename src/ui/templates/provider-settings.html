@@ -1,3 +1,12 @@
+  <button id="provider-health-toggle" class="provider-health-toggle" type="button" aria-expanded="false" aria-controls="provider-health-panel" title="Show provider health">
+    <span class="material-symbols-outlined" aria-hidden="true">monitor_heart</span>
+    <span data-health-summary>0 live · 0 attention</span>
+  </button>
+  <section id="provider-health-panel" class="provider-health-panel" aria-label="Provider health" hidden>
+    <div class="provider-health-panel-title">SYSTEM HEALTH</div>
+    <div id="provider-health-list" class="provider-health-list"></div>
+  </section>
+
   <!-- POWER UP — in-app key setup. Dev-server only: src/keySetup.js removes
        both the chip and this dialog outright when /api/setup/status is not
        there to answer (prod builds, LAN visitors). Rows are rendered from
