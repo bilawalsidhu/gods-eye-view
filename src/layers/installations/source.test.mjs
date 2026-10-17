@@ -206,6 +206,82 @@ test('too-wide tile views use bundled named points without requesting tiles', as
   assert.deepEqual(fetched, [9]);
 });
 
+test('a named site with no mapped area stays in close tile views', async () => {
+  const source = createInstallationSource({
+    fetchImpl: async () =>
+      Response.json({ code: 'OVERPASS_NOT_CONFIGURED', retryable: false }),
+    mapTiles: {
+      clear() {},
+      async fetchBounds() {
+        return { tiles: [], partial: false };
+      },
+    },
+  });
+  const close = async (box) => {
+    const payload = await source.getMappedSites(box);
+    return (await payload.enrichment) || payload;
+  };
+  const bodo = await close({
+    south: 67.24,
+    west: 14.3,
+    north: 67.3,
+    east: 14.45,
+  });
+  assert.equal(bodo.tileSource, true);
+  const base = bodo.records.find((r) => r.name === 'Luftforsvarsbase Bodø');
+  assert.equal(base.id, 'wikidata:military:Q4380750');
+  assert.deepEqual(
+    base.sources.map((s) => [s.name, s.id]),
+    [['Wikidata', 'Q4380750']],
+  );
+  // Andøya's name rides on its mapped area, so tiles alone carry it.
+  const andenes = await close({
+    south: 69.27,
+    west: 16.05,
+    north: 69.32,
+    east: 16.2,
+  });
+  assert.deepEqual(andenes.records, []);
+});
+
+test('live Overpass answers take supplement names only where OSM has none', async () => {
+  const way = (id, tags) => ({
+    type: 'way',
+    id,
+    tags: { landuse: 'military', ...tags },
+    bounds: { minlat: 69.284, minlon: 16.08, maxlat: 69.295, maxlon: 16.12 },
+  });
+  const source = createInstallationSource({
+    fetchImpl: async () =>
+      Response.json({
+        elements: [
+          way(162902961, {}),
+          way(918686469, { name: 'Gardermoen flystasjon (OSM)' }),
+          way(1, {}),
+        ],
+        retrievedAt: '2026-10-07T00:00:00Z',
+      }),
+  });
+  const { records } = await source.getMappedSites({
+    south: 69.2,
+    west: 16,
+    north: 69.4,
+    east: 16.3,
+  });
+  const byId = new Map(records.map((r) => [r.id, r]));
+  assert.equal(byId.get('osm:way:162902961').name, 'Andøya flystasjon');
+  assert.deepEqual(
+    byId.get('osm:way:162902961').sources.map((s) => s.name),
+    ['OpenStreetMap', 'Wikidata'],
+  );
+  assert.equal(
+    byId.get('osm:way:918686469').name,
+    'Gardermoen flystasjon (OSM)',
+    'a name OpenStreetMap gained wins',
+  );
+  assert.equal(byId.get('osm:way:1').name, 'Military land');
+});
+
 test('the military-only decoder keeps Camp Mabry and skips road geometry', () => {
   const bytes = readFileSync(
     new URL(

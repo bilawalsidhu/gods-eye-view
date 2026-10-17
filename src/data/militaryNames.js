@@ -9,6 +9,52 @@ export const MILITARY_LABEL_CAP = 24;
 
 export const MILITARY_NAMES_TIMEOUT_MS = 10_000;
 
+/** Map a pack row (optionally carrying a Wikidata item) onto a display record. */
+function nameRecord(classes, row) {
+  const [
+    osmKey,
+    name,
+    longitude,
+    latitude,
+    west,
+    south,
+    east,
+    north,
+    kind,
+    areaM2,
+    wikidata,
+  ] = row;
+  // A supplement row without an OSM identity is a Wikidata position with no
+  // mapped military area: it stands alone in close views too.
+  const key = osmKey || wikidata;
+  return {
+    id: osmKey ? `osm:military:${osmKey}` : `wikidata:military:${wikidata}`,
+    osmKey: key,
+    name,
+    longitude,
+    latitude,
+    bbox: [west, south, east, north],
+    class: classes[kind],
+    areaM2,
+    kind: 'installation',
+    namedArea: true,
+    pointOnly: true,
+    ...(osmKey ? {} : { standalone: true }),
+    validation: 'unreviewed',
+    sources: [
+      ...(osmKey
+        ? [
+            { name: 'OpenStreetMap', id: osmKey },
+            ...(wikidata
+              ? []
+              : [{ name: 'Overture Maps Foundation', id: osmKey }]),
+          ]
+        : []),
+      ...(wikidata ? [{ name: 'Wikidata', id: wikidata }] : []),
+    ],
+  };
+}
+
 /** Share a bounded acquisition; failed assets become retryable after cooldown. */
 export function createMilitaryNamesLoader({
   loadPack = (signal) =>
@@ -16,46 +62,34 @@ export function createMilitaryNamesLoader({
       new URL('./local_data/osm_military_names/names.json', import.meta.url),
       { signal },
     ),
+  // Curated Norwegian names for areas OpenStreetMap leaves unnamed, plus
+  // Wikidata positions for active sites with no mapped area.
+  loadSupplements = (signal) =>
+    Promise.all([
+      loadBundledJson(
+        new URL('./local_data/osm_military_names/norway.json', import.meta.url),
+        { signal },
+      ),
+    ]),
   timeoutMs = MILITARY_NAMES_TIMEOUT_MS,
   ...retryOptions
 } = {}) {
   return createRetryableLoader(async () => {
-    const pack = await requestWithDeadline(loadPack, { timeoutMs });
-    const records = pack.records.map(
-      ([
-        osmKey,
-        name,
-        longitude,
-        latitude,
-        west,
-        south,
-        east,
-        north,
-        kind,
-        areaM2,
-      ]) => ({
-        id: `osm:military:${osmKey}`,
-        osmKey,
-        name,
-        longitude,
-        latitude,
-        bbox: [west, south, east, north],
-        class: pack.classes[kind],
-        areaM2,
-        kind: 'installation',
-        namedArea: true,
-        pointOnly: true,
-        validation: 'unreviewed',
-        sources: [
-          { name: 'OpenStreetMap', id: osmKey },
-          { name: 'Overture Maps Foundation', id: osmKey },
-        ],
-      }),
+    const [pack, supplements] = await requestWithDeadline(
+      (signal) => Promise.all([loadPack(signal), loadSupplements(signal)]),
+      { timeoutMs },
     );
-    records.sort(
+    const byId = new Map();
+    for (const { classes, records } of [pack, ...supplements])
+      for (const row of records) {
+        const record = nameRecord(classes, row);
+        // Supplements only name what the pack leaves unnamed.
+        if (!byId.has(record.osmKey)) byId.set(record.osmKey, record);
+      }
+    const records = [...byId.values()].sort(
       (a, b) => b.areaM2 - a.areaM2 || a.osmKey.localeCompare(b.osmKey),
     );
-    return { records, byId: new Map(records.map((r) => [r.osmKey, r])) };
+    return { records, byId };
   }, retryOptions);
 }
 
