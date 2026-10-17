@@ -178,6 +178,61 @@ test('synchronous stop before execution prevents any side effect; rejection unlo
   assert.equal(calls, 2);
 });
 
+test('a throwing changed observer does not break session dispatch, activation, or clearing', async () => {
+  let executed = 0;
+  let throwOnBusy = true;
+  let throwOnEnd = true;
+  const warnings = [];
+  const origWarn = console.warn;
+  console.warn = (...args) => warnings.push(args);
+  try {
+    const session = createInteractionSession({
+      execute: () => {
+        executed++;
+        return true;
+      },
+      changed: (state) => {
+        if (throwOnBusy && state.busy) throw new Error('start failed');
+        if (throwOnEnd && !state.busy && state.selected === 'a') {
+          throw new Error('end failed');
+        }
+      },
+    });
+    session.activate([{ id: 'a' }]);
+    const result = await session.dispatch('a');
+    assert.equal(result, true);
+    assert.equal(executed, 1);
+    assert.deepEqual(session.getState(), {
+      active: true,
+      busy: false,
+      selected: 'a',
+      count: 1,
+    });
+    assert.equal(warnings.length, 2);
+    assert.equal(
+      warnings[0][0],
+      '[Scenes] Interaction session observer failed:',
+    );
+    assert.equal(
+      warnings[1][0],
+      '[Scenes] Interaction session observer failed:',
+    );
+    throwOnBusy = false;
+    throwOnEnd = false;
+    assert.equal(await session.dispatch('a'), true);
+    assert.equal(executed, 2);
+    session.clear();
+    assert.deepEqual(session.getState(), {
+      active: false,
+      busy: false,
+      selected: null,
+      count: 0,
+    });
+  } finally {
+    console.warn = origWarn;
+  }
+});
+
 test('settled pack shots cannot take the same-shot seek shortcut after Stop released geometry', async () => {
   const { SceneDirector } = await import('../../scenes/director.js');
   const shot = { id: 'shot', dataPackIds: ['pack'] };

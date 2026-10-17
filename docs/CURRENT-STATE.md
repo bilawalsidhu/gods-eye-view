@@ -1,5 +1,9 @@
 # God's Eye View Current State
 
+Director clock listeners, interaction observers and scene release failures no
+longer leave the director inconsistent, and a phase error is kept when cleanup
+also fails.
+
 Vessel sources can report healthy empty coverage using a current, complete
 snapshot with zero raw rows, a healthy transport and a positive last-message
 time. This clears obsolete contacts and settles startup without manufacturing
