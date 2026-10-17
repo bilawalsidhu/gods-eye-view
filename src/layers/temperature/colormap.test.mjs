@@ -1,11 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import {
-  formatStop,
-  kelvinToCelsius,
-  lookupStop,
-  parseColormap,
-} from './colormap.js';
+import { kelvinToCelsius, lookupStop, parseColormap } from './colormap.js';
+import { readingText } from './labels.js';
 
 // Shaped exactly like the published document, including its catch-all ends.
 const XML = `<ColorMap units="K">
@@ -39,15 +35,21 @@ test('a bounded pixel reports the range it was quantised into', () => {
   assert.equal(hit.colorDistance, 0);
   // 250.40 - 273.15 is -22.749999... in floating point, so the upper bound
   // renders -22.7. Either way it is inside the product's own 0.6 K bucket.
-  assert.equal(formatStop(hit), '-23.3 to -22.7 °C');
+  assert.equal(readingText(hit), '-23.3 to -22.7 °C');
 });
 
 test('a clamped pixel reads as a bound, never as absolute zero', () => {
   // Regression: the first bucket starts at 0.02 K, so a naive range render
   // reported the Antarctic plateau as "-273.1 to -73.1 C".
   const stops = parseColormap(XML);
-  assert.equal(formatStop(lookupStop(stops, { r: 201, g: 0, b: 255, a: 255 })), '≤ -73.1 °C');
-  assert.equal(formatStop(lookupStop(stops, { r: 255, g: 1, b: 0, a: 255 })), '≥ 76.9 °C');
+  assert.equal(
+    readingText(lookupStop(stops, { r: 201, g: 0, b: 255, a: 255 })),
+    '≤ -73.1 °C',
+  );
+  assert.equal(
+    readingText(lookupStop(stops, { r: 255, g: 1, b: 0, a: 255 })),
+    '≥ 76.9 °C',
+  );
 });
 
 test('a transparent pixel has no temperature at all', () => {
@@ -56,7 +58,7 @@ test('a transparent pixel has no temperature at all', () => {
   const stops = parseColormap(XML);
   assert.equal(lookupStop(stops, { r: 64, g: 64, b: 64, a: 0 }), null);
   assert.equal(lookupStop(stops, { r: 0, g: 179, b: 255, a: 0 }), null);
-  assert.equal(formatStop(null), 'No clear-sky value');
+  assert.equal(readingText(null), 'No clear-sky value');
 });
 
 test('lookup survives an unparsed or empty colour map', () => {

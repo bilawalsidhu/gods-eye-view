@@ -47,7 +47,12 @@ test('a clear-sky pixel reads as the range the product quantised it into', async
   assert.equal(result.outcome, 'measured');
   assert.equal(result.stop.lowK, 309.8);
   assert.equal(result.stop.colorDistance, 0);
-  assert.ok(result.resolutionM > 0);
+  // The readout states the source grid, not the finer display tile pixel.
+  assert.deepEqual(result.sourceGrid, {
+    product: 'MOD11C3',
+    degrees: 0.05,
+    nominalKm: 5.6,
+  });
 });
 
 test('a transparent pixel is reported as having no value, not as the nearest colour', async () => {
@@ -105,7 +110,11 @@ test('the colour map is fetched once across many samples', async () => {
     loadPixels: async () => solidTile(0, 179, 255),
   });
   for (let i = 0; i < 4; i += 1)
-    await sampler.sample({ latitude: 10 + i, longitude: 20, date: '2026-09-06' });
+    await sampler.sample({
+      latitude: 10 + i,
+      longitude: 20,
+      date: '2026-09-06',
+    });
   assert.equal(fetches, 1);
 });
 
@@ -119,11 +128,19 @@ test('repeated clicks in one area reuse the cached tile', async () => {
     },
   });
   // Two points inside the same level-6 tile.
-  await sampler.sample({ latitude: 51.5, longitude: -0.12, date: '2026-09-06' });
+  await sampler.sample({
+    latitude: 51.5,
+    longitude: -0.12,
+    date: '2026-09-06',
+  });
   await sampler.sample({ latitude: 51.5, longitude: -0.1, date: '2026-09-06' });
   assert.equal(loads, 1);
   sampler.reset();
-  await sampler.sample({ latitude: 51.5, longitude: -0.12, date: '2026-09-06' });
+  await sampler.sample({
+    latitude: 51.5,
+    longitude: -0.12,
+    date: '2026-09-06',
+  });
   assert.equal(loads, 2);
 });
 

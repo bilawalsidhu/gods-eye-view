@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { TILE_PIXELS, locateTilePixel, metresPerPixel } from './tiles.js';
+import { TILE_PIXELS, locateTilePixel } from './tiles.js';
 
 test('the null island maps to the centre of the Web Mercator grid', () => {
   const at = locateTilePixel(0, 0, 1);
@@ -33,20 +33,22 @@ test('beyond the Mercator limit there is no tile to sample', () => {
 test('indices stay inside the grid at every level', () => {
   for (const level of [0, 3, 7]) {
     const tiles = 2 ** level;
-    for (const [lat, lon] of [[85, 180], [-85, -180], [45, 90]]) {
+    for (const [lat, lon] of [
+      [85, 180],
+      [-85, -180],
+      [45, 90],
+    ]) {
       const at = locateTilePixel(lat, lon, level);
-      assert.ok(at.tileX >= 0 && at.tileX < tiles, `tileX ${at.tileX} level ${level}`);
-      assert.ok(at.tileY >= 0 && at.tileY < tiles, `tileY ${at.tileY} level ${level}`);
+      assert.ok(
+        at.tileX >= 0 && at.tileX < tiles,
+        `tileX ${at.tileX} level ${level}`,
+      );
+      assert.ok(
+        at.tileY >= 0 && at.tileY < tiles,
+        `tileY ${at.tileY} level ${level}`,
+      );
       assert.ok(at.pixelX >= 0 && at.pixelX < TILE_PIXELS);
       assert.ok(at.pixelY >= 0 && at.pixelY < TILE_PIXELS);
     }
   }
-});
-
-test('ground resolution shrinks with latitude, so the readout can say how coarse it is', () => {
-  const equator = metresPerPixel(0, 7);
-  const sixty = metresPerPixel(60, 7);
-  assert.ok(equator > sixty);
-  // Level 7 with 256 px tiles is roughly 1.2 km at the equator.
-  assert.ok(equator > 1000 && equator < 1500, String(equator));
 });
