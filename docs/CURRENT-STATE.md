@@ -406,7 +406,12 @@ doubling to a 15 s cap, with every retry waiting behind one shared cooldown
 plus up to 1.5 s of jitter, and `Retry-After` extending the cooldown when the
 upstream exposes it. One console warning is logged per cooldown window. Other
 failures keep Cesium's handling and the flat `EllipsoidTerrainProvider`
-fallback. `scripts/qa-terrain-429.mjs` reproduces the burst against a keyless
+fallback; while that flat terrain is on a shown globe the map controller
+retries Re:Earth in the background (30 s, doubling to a 10-minute cap, each
+attempt abandoned after 60 s) and installs the real terrain without waiting
+for a map switch or an imagery retry. Behind a 3D tileset it neither retries
+nor installs; the next globe activation does.
+`scripts/qa-terrain-429.mjs` reproduces the burst against a keyless
 dev server, counts real throttles with their headers as evidence, synthesises
 throttles with `--inject N` when the upstream is not throttling, and fails if
 a throttled tile never loads.
@@ -4809,7 +4814,7 @@ are omitted rather than framing the wrong part of the globe.
 - The bottom Visual Presets tray presents a **five-tile MAP SOURCE row** (`#map-stack-chips`, `src/mapStackChips.js`): Google 3D, Esri Satellite, Bing Aerial, Bing Labels, and OSM. The duplicate left `#stack-panel` is retired. The five tiles share one row on desktop and two rows on narrow screens, carry `aria-pressed` on the active source, and remain keyboard-reachable with a visible focus outline.
 - The lit tile follows controller state, not the click: a rejected switch (no ion token) or a superseded one (rapid A→B) leaves the genuinely active source lit, and the tray heading keeps its short-label status readout (`...` while switching, amber on `lastError`).
 - Ion stacks remain visible and keyboard-focusable when no ion token is configured, but expose `aria-disabled="true"` and do not switch. Their accessible label and tooltip quote `getStacks().unavailableReason` — the same string `setStack()` puts in the toast. OSM works keyless. The `ION` badge is gated on the stack's own `requiresIon`, so a `photoreal` chip unavailable because the Google tileset failed says so instead of falsely demanding an ion token.
-- Stack choice participates in share links (`src/sharelink.js`) and falls back to the best available stack when the requested one is unavailable (keyless boots land on Esri; OSM takes over automatically if Esri is unreachable). Share-link restore, the `set_map_stack` voice tool, and the chip row all land on the same `_setMapStack()` path.
+- Stack choice participates in share links (`src/sharelink.js`) and falls back to the best available stack when the requested one is unavailable (keyless boots land on Esri; OSM takes over automatically if Esri is unreachable; while that construction fallback is on screen Esri is retried in the background, 30 s doubling to a 10-minute cap with each attempt abandoned after 60 s, and replaces OSM once it loads. The switch to OSM after repeated Esri tile failures is not retried; selecting Esri again tries it). Share-link restore, the `set_map_stack` voice tool, and the chip row all land on the same `_setMapStack()` path.
 
 ### Voice Map Whiteboard / Annotations (June 2026)
 
