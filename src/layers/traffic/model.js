@@ -248,15 +248,21 @@ export function createModel({ state: layerState, services, parts, source }) {
     // that meaning.
     const mode = liveMode ? 'live' : 'sim';
     if (liveMode && flowError) {
-      // One string for both fields. The manager's meta line renders `error` and
-      // drops `loadingLabel` in its error branch, so the owner's SIMULATED copy
-      // has to BE the error text or the steady state reverts to a bare
+      // Both fields carry the SIMULATED copy. The manager's meta line renders
+      // `error` and drops `loadingLabel` in its error branch, so the copy has
+      // to BE the error text or the steady state reverts to a bare
       // "TomTom daily budget reached" that never says what is on screen.
       // The reason is ours (flow.js marks it) or carries an HTTP code.
-      const degraded = t('SIMULATED — {reason}', {
-        reason: translateKnown(flowError),
-      });
-      return { mode, error: degraded, loadingLabel: degraded };
+      // `error` is English data, which the Layers panel shows in the UI
+      // language (ui/statusText.js); `loadingLabel` is already the translated
+      // display text.
+      return {
+        mode,
+        error: `SIMULATED — ${flowError}`,
+        loadingLabel: t('SIMULATED — {reason}', {
+          reason: translateKnown(flowError),
+        }),
+      };
     }
     // TomTom and Hybrid name their geometry; OpenStreetMap keeps its match copy.
     if (liveMode && roadSource === 'TomTom') {

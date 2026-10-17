@@ -56,6 +56,33 @@ const FEED_ERROR_PATTERNS = [
     /^Vector tiles unavailable \(HTTP (\d+)\)$/,
     ([, status]) => t('Vector tiles unavailable (HTTP {status})', { status }),
   ],
+  // Feed states with a number or a reason in them: NASA FIRMS
+  // (firms/queries.js), AIS vessels (vessels/queries.js) and Street Traffic
+  // (traffic/model.js).
+  [/^STALE · cached (.+)$/, ([, age]) => t('STALE · cached {age}', { age })],
+  [
+    /^feed silent (\d+)s — no AIS data$/,
+    ([, seconds]) => t('feed silent {seconds}s — no AIS data', { seconds }),
+  ],
+  [
+    /^feed down — retrying slowly \(attempt (\d+)\)$/,
+    ([, attempt]) =>
+      t('feed down — retrying slowly (attempt {attempt})', { attempt }),
+  ],
+  [
+    /^reconnecting to feed… \(attempt (\d+)\)$/,
+    ([, attempt]) =>
+      t('reconnecting to feed… (attempt {attempt})', { attempt }),
+  ],
+  [
+    /^feed unavailable \((.+)\)$/,
+    ([, detail]) => `${t('feed unavailable')} (${detail})`,
+  ],
+  [
+    /^SIMULATED — (.+)$/,
+    ([, reason]) =>
+      t('SIMULATED — {reason}', { reason: translateKnown(reason) }),
+  ],
   // Layer statuses with a number or a feed name in them: GNSS
   // (gnss/source.js), CelesTrak groups (satellites/ingestion.js) and transit
   // feeds (transit/ingestion.js).

@@ -1,5 +1,5 @@
 import { fireDetectionKey } from '../../data/firmsLabels.js';
-import { t } from '../../i18n/index.js';
+import { msg, t } from '../../i18n/index.js';
 import { REFRESH_INTERVAL_MS } from './policy.js';
 
 export function createQueries({
@@ -61,12 +61,15 @@ export function createQueries({
      */
     getStats() {
       const now = Date.now();
-      const staleText = layerState._lastUpdate
-        ? t('STALE · cached {age}', {
-            age:
-              components.model.formatAge(now - layerState._lastUpdate) || '<1h',
-          })
+      const staleAge = layerState._lastUpdate
+        ? components.model.formatAge(now - layerState._lastUpdate) || '<1h'
+        : '';
+      const staleText = staleAge
+        ? t('STALE · cached {age}', { age: staleAge })
         : t('STALE');
+      // `error` is English data (voice, analyst); the Layers panel shows it
+      // in the UI language (ui/statusText.js).
+      const staleError = staleAge ? `STALE · cached ${staleAge}` : msg('STALE');
       let loadingLabel = '';
       if (layerState._loading) {
         loadingLabel = layerState._fires.length
@@ -95,9 +98,9 @@ export function createQueries({
         // the operator can take.
         keyRequired: layerState._keyRequired,
         error: layerState._keyRequired
-          ? t('KEY REQUIRED')
+          ? msg('KEY REQUIRED')
           : layerState._stale
-            ? staleText
+            ? staleError
             : layerState._error,
         loadingLabel,
       };
