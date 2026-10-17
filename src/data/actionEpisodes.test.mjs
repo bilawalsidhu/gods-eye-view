@@ -257,3 +257,87 @@ test('context, corrections, and observed failures prevent unsafe promotion', () 
     0,
   );
 });
+
+test('prototype-sensitive argument keys fail closed instead of aliasing identities', () => {
+  const base = episode().actions[0];
+  for (const target of ['Paris', 'Tokyo']) {
+    const args = JSON.parse(
+      JSON.stringify({ target }).replace('"target"', '"__proto__"'),
+    );
+    assert.equal(
+      normalizeActionEpisode(episode({ actions: [{ ...base, args }] })),
+      null,
+    );
+  }
+  const nested = JSON.parse('{"location":{"constructor":{"target":"x"}}}');
+  assert.equal(
+    normalizeActionEpisode(episode({ actions: [{ ...base, args: nested }] })),
+    null,
+  );
+  assert.ok(
+    normalizeActionEpisode(episode({ actions: [{ ...base, args: {} }] })),
+  );
+});
+
+test('argument normalization enforces depth, width and size limits', () => {
+  const base = episode().actions[0];
+  for (const args of [
+    { city: 'x'.repeat(5_000_000) },
+    { stops: Array(200_000).fill(1) },
+    {
+      nested: Object.fromEntries(
+        Array.from({ length: 70 }, (_, i) => [`k${i}`, i]),
+      ),
+    },
+  ]) {
+    assert.equal(
+      normalizeActionEpisode(episode({ actions: [{ ...base, args }] })),
+      null,
+    );
+  }
+  let nested = { leaf: 'ok' };
+  for (let i = 0; i < 10; i += 1) nested = { child: nested };
+  assert.equal(
+    normalizeActionEpisode(episode({ actions: [{ ...base, args: nested }] })),
+    null,
+  );
+});
+
+test('one repeated receipt counts once but distinct starts are occurrences', () => {
+  const first = episode();
+  const second = episode({ startedAt: 300, completedAt: 400 });
+  const third = episode({ startedAt: 500, completedAt: 600 });
+  assert.deepEqual(detectReflexCandidates([first, first, first]), []);
+  const [candidate] = detectReflexCandidates([
+    first,
+    first,
+    second,
+    third,
+  ]);
+  assert.equal(candidate.occurrences, 3);
+  assert.equal(candidate.verifiedSuccesses, 3);
+});
+
+test('conflicting duplicate results cannot inflate verified success', () => {
+  const first = episode();
+  const corrected = episode({
+    actions: first.actions.map((action, i) =>
+      i === 0 ? { ...action, outcome: 'failed' } : action,
+    ),
+  });
+  const others = [
+    episode({ startedAt: 300, completedAt: 400 }),
+    episode({ startedAt: 500, completedAt: 600 }),
+  ];
+  assert.deepEqual(detectReflexCandidates([first, ...others, corrected]), []);
+  assert.deepEqual(detectReflexCandidates([corrected, ...others, first]), []);
+});
+
+test('unsafe minimum occurrence settings are rejected explicitly', () => {
+  for (const minOccurrences of [0, 1, 1.5, NaN, '2']) {
+    assert.throws(
+      () => detectReflexCandidates([episode()], { minOccurrences }),
+      RangeError,
+    );
+  }
+});

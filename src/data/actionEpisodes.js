@@ -13,16 +13,44 @@ function boundedText(value, maxLength) {
   return text && text.length <= maxLength ? text : null;
 }
 
-function normalizePlainValue(value, ancestors = new Set()) {
+// Bound untrusted action arguments before they enter a replay identity.
+const MAX_ARG_DEPTH = 8;
+const MAX_ARG_NODES = 256;
+const MAX_ARG_ENTRIES = 64;
+const MAX_ARG_CHARACTERS = 8192;
+const MAX_ARG_VALUE_LENGTH = 2048;
+const UNSAFE_ARG_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
+
+function normalizePlainValue(
+  value,
+  ancestors = new Set(),
+  budget = { nodes: 0, characters: 0 },
+  depth = 0,
+) {
+  if (depth > MAX_ARG_DEPTH || ++budget.nodes > MAX_ARG_NODES)
+    return INVALID;
   if (value === null) return null;
-  if (typeof value === 'string' || typeof value === 'boolean') return value;
+  if (typeof value === 'string') {
+    budget.characters += value.length;
+    return value.length <= MAX_ARG_VALUE_LENGTH &&
+      budget.characters <= MAX_ARG_CHARACTERS
+      ? value
+      : INVALID;
+  }
+  if (typeof value === 'boolean') return value;
   if (typeof value === 'number')
     return Number.isFinite(value) ? value : INVALID;
   if (Array.isArray(value)) {
-    if (ancestors.has(value)) return INVALID;
+    if (ancestors.has(value) || value.length > MAX_ARG_ENTRIES)
+      return INVALID;
     const next = new Set(ancestors).add(value);
-    const normalized = value.map((item) => normalizePlainValue(item, next));
-    return normalized.includes(INVALID) ? INVALID : normalized;
+    const normalized = [];
+    for (const item of value) {
+      const copy = normalizePlainValue(item, next, budget, depth + 1);
+      if (copy === INVALID) return INVALID;
+      normalized.push(copy);
+    }
+    return normalized;
   }
   if (!value || typeof value !== 'object') return INVALID;
   if (
@@ -32,9 +60,19 @@ function normalizePlainValue(value, ancestors = new Set()) {
     return INVALID;
   if (ancestors.has(value)) return INVALID;
   const next = new Set(ancestors).add(value);
+  const keys = Object.keys(value).sort();
+  if (keys.length > MAX_ARG_ENTRIES) return INVALID;
   const normalized = {};
-  for (const key of Object.keys(value).sort()) {
-    const item = normalizePlainValue(value[key], next);
+  for (const key of keys) {
+    budget.characters += key.length;
+    if (
+      !key ||
+      key.length > 128 ||
+      budget.characters > MAX_ARG_CHARACTERS ||
+      UNSAFE_ARG_KEYS.has(key)
+    )
+      return INVALID;
+    const item = normalizePlainValue(value[key], next, budget, depth + 1);
     if (item === INVALID) return INVALID;
     normalized[key] = item;
   }
@@ -55,7 +93,14 @@ export function normalizeActionEpisodeStep(value) {
   )
     return null;
   const args = normalizePlainValue(value.args ?? {});
-  if (args === INVALID || Array.isArray(args) || args === null) return null;
+  if (
+    args === INVALID ||
+    Array.isArray(args) ||
+    args === null ||
+    typeof args !== 'object' ||
+    JSON.stringify(args).length > MAX_ARG_CHARACTERS
+  )
+    return null;
   return {
     name,
     schemaFingerprint,
@@ -77,7 +122,7 @@ export function normalizeActionEpisode(value) {
   if (!value || typeof value !== 'object') return null;
   if (Number(value.version) !== ACTION_EPISODE_VERSION) return null;
   const contextFingerprint = boundedText(value.contextFingerprint, 256);
-  const actions = Array.isArray(value.actions)
+  const actions = Array.isArray(value.actions) && value.actions.length <= 32
     ? value.actions.map(normalizeActionEpisodeStep)
     : [];
   const startedAt = Number(value.startedAt);
@@ -132,13 +177,16 @@ function episodeSucceeded(episode) {
  *
  * This performs no fuzzy matching and no model call. Argument object key order
  * is normalized before identity is calculated, so logically identical typed
- * actions group together.
+ * actions group together. Repeated sightings with the same sequence and start
+ * time count as one run; any conflicting outcome makes that run unverified.
  */
 export function detectReflexCandidates(
   episodes,
   { minOccurrences = 3, minSuccessRate = 1 } = {},
 ) {
-  const minimum = Math.max(2, Math.floor(Number(minOccurrences) || 0));
+  if (!Number.isSafeInteger(minOccurrences) || minOccurrences < 2)
+    throw new RangeError('minOccurrences must be an integer >= 2');
+  const minimum = minOccurrences;
   const requiredRate = Math.min(
     1,
     Math.max(
@@ -167,15 +215,26 @@ export function detectReflexCandidates(
         ),
         occurrences: 0,
         verifiedSuccesses: 0,
+        runSuccesses: new Map(),
       };
       groups.set(key, group);
     }
+    const succeeded = episodeSucceeded(episode);
+    const previous = group.runSuccesses.get(episode.startedAt);
+    if (previous !== undefined) {
+      if (previous && !succeeded) {
+        group.runSuccesses.set(episode.startedAt, false);
+        group.verifiedSuccesses -= 1;
+      }
+      continue;
+    }
+    group.runSuccesses.set(episode.startedAt, succeeded);
     group.occurrences += 1;
-    if (episodeSucceeded(episode)) group.verifiedSuccesses += 1;
+    if (succeeded) group.verifiedSuccesses += 1;
   }
 
   return [...groups.values()]
-    .map((group) => ({
+    .map(({ runSuccesses, ...group }) => ({
       ...group,
       successRate: group.verifiedSuccesses / group.occurrences,
     }))
