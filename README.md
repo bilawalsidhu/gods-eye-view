@@ -578,7 +578,8 @@ Each decoder has its own client lease (at most eight per session), including
 native HLS. Closing it releases only that lease; abandoned leases expire after
 15 seconds without access. The last release stops upstream work. Failed live video
 uses the existing still/Street View/synthetic fallback, which is not live video.
-RTMP-only sources are not supported by this integration.
+Cold or restarted sessions begin with the newest two segments; later polls fetch
+only newly advertised segments. RTMP-only sources are not supported by this integration.
 
 </details>
 

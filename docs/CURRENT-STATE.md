@@ -5782,6 +5782,8 @@ ids use `crypto.randomUUID` where the page is a secure context and an equivalent
 v4 id from `crypto.getRandomValues` on plain-HTTP LAN pages. Encrypted/fMP4/byte-range playlists fail
 closed. Performance and live agency reliability require recorded validation.
 
+Cold and restarted relay sessions start with the newest two segments; subsequent
+polls fetch newly advertised segments without downloading the older DVR tail.
 The relay accepts at most 12 MiB per incoming segment and retains at most
 24 MiB per session. A playlist may advertise already-expired segments: 404s
 older than its newest two entries are skipped once while advertised, and only

@@ -51,6 +51,62 @@ test('a 48-hour DVR playlist downloads only its live tail and keeps the cache bo
   );
 });
 
+test('cold starts and sequence rollbacks fetch only two HD segments, while advancing polls fetch new segments', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  let first = 100;
+  const requested = [];
+  const body = new Uint8Array(6.5 * 1024 * 1024);
+  const manager = createHlsPuller({
+    fetchImpl: async (url) => {
+      if (url === base)
+        return new Response(
+          `#EXTM3U\n#EXT-X-MEDIA-SEQUENCE:${first}\n` +
+            Array.from(
+              { length: 12 },
+              (_, i) => `#EXTINF:2,\n${first + i}.ts\n`,
+            ).join(''),
+        );
+      requested.push(url);
+      return new Response(body);
+    },
+  });
+  t.after(() => manager.shutdown());
+  const entry = await manager.ensure('live-edge', base);
+  await entry.polling;
+  assert.deepEqual(
+    requested,
+    [110, 111].map((n) => new URL(`${n}.ts`, base).href),
+  );
+  assert.equal(entry.segments.size, 2);
+  assert.equal(manager.stats().bytes, 2 * body.length);
+  assert.equal(
+    entry.nextSeq,
+    2,
+    'cold startup downloads nothing that needs eviction',
+  );
+
+  first = 103;
+  t.mock.timers.tick(HLS_LIMITS.pollMs);
+  await entry.polling;
+  assert.deepEqual(
+    requested.slice(2),
+    [112, 113, 114].map((n) => new URL(`${n}.ts`, base).href),
+  );
+  assert.ok([...entry.segments.values()].every((s) => !s.discontinuity));
+
+  first = 0;
+  t.mock.timers.tick(HLS_LIMITS.pollMs);
+  await entry.polling;
+  assert.deepEqual(
+    requested.slice(5),
+    [10, 11].map((n) => new URL(`${n}.ts`, base).href),
+  );
+  assert.equal(entry.nextSeq, 7);
+  assert.equal(entry.segments.get(5).discontinuity, true);
+  assert.equal(entry.segments.get(6).discontinuity, false);
+  assert.ok(manager.stats().bytes <= HLS_LIMITS.sessionBytes);
+});
+
 test('public HD segments over 6 MiB fit without increasing the session cache budget', async (t) => {
   const body = new Uint8Array(6 * 1024 * 1024 + 1024);
   const manager = createHlsPuller({
