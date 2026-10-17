@@ -38,6 +38,10 @@ export function createNavaraPicking({
   now = () => performance.now(),
 }) {
   const drillPick = createCpuPicker({ projector, camera, movers, lines });
+  const isModelSet = (id) =>
+    movers().some(
+      ({ options }) => options.id === id && options.kind === 'model',
+    );
 
   // Clicks waiting for Navara's GPU answer, oldest first.
   const waiting = [];
@@ -55,10 +59,25 @@ export function createNavaraPicking({
   // frame): a set that changes its instances after it still names the
   // instance that was under the pointer.
   const resolveInfo = (info) => (info ? resolveBatch(info.batchId) : null);
+  // A GPU answer is checked against the CPU pick at the click: an instance
+  // the CPU sees must be drawn under the click (its pick radius, no slack)
+  // and be the one the CPU finds on top. A stale answer from the previous
+  // gesture (the followed aircraft at the centre) lay within twice its
+  // radius of a neighbour's click and won (10b/11b flake). Models, which
+  // the CPU pick does not see, are still taken as answered.
   const answerFrom = (hit, at) => {
-    if (hit && !drillPick.near(hit.set, hit.instance, at)) {
-      stats.stale++;
-      return drillPick(at, 1)[0];
+    if (hit) {
+      // The instance the CPU sees on top (lines are not in the GPU pick).
+      const top = drillPick(at, 1, { includeLines: false })[0];
+      const stale =
+        !drillPick.near(hit.set, hit.instance, at, 1) ||
+        (top !== undefined &&
+          !(top.owner === hit.set && top.instance === hit.instance) &&
+          !isModelSet(hit.set));
+      if (stale) {
+        stats.stale++;
+        return drillPick(at, 1)[0];
+      }
     }
     return hit
       ? { id: hit.pickId, owner: hit.set, instance: hit.instance }

@@ -296,3 +296,37 @@ test('the pick id is the one the instance had when Navara answered', async () =>
   time += 1;
   assert.equal((await picking.clickPick({ x: 10, y: 10 })).id, 'before');
 });
+
+test('a stale GPU answer for a neighbour of the click never wins over the instance under it (20 gestures)', async () => {
+  // The followed aircraft A sits at the centre; B is drawn 15 px from it.
+  // Navara answers B's click with the previous gesture's pick (A): within
+  // twice A's pick radius, but the instance under the click is B.
+  const view = fakeView();
+  const sets = [
+    moverSet('flights', [
+      [100, 100, 5, 'a'],
+      [115, 100, 5, 'b'],
+    ]),
+  ];
+  const picking = createNavaraPicking({
+    view,
+    projector,
+    camera,
+    movers: () => sets,
+    lines: () => [],
+    resolveBatch: (batchId) =>
+      batchId === 1
+        ? { set: 'flights', instance: 0, pickId: 'a' }
+        : { set: 'flights', instance: 1, pickId: 'b' },
+    ...timers(),
+  });
+  for (let gesture = 0; gesture < 20; gesture++) {
+    const onA = picking.clickPick({ x: 100, y: 100 });
+    view.emit('featureClick', { batchId: 1 });
+    assert.equal((await onA).id, 'a', `gesture ${gesture}: a`);
+    const onB = picking.clickPick({ x: 115, y: 100 });
+    view.emit('featureClick', { batchId: 1 }); // stale: A again
+    assert.equal((await onB).id, 'b', `gesture ${gesture}: b, not the stale a`);
+  }
+  assert.equal(picking.clickStats().stale, 20);
+});
