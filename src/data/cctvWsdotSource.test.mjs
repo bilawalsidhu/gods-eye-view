@@ -273,6 +273,8 @@ test('CCTV_WSDOT_ENABLED=0 skips the WSDOT request', async (t) => {
     CCTV_PREFER_AUSTIN: undefined,
     CCTV_MAX_SOURCES: undefined,
     CCTV_WSDOT_ENABLED: undefined,
+    CCTV_ENCARNACION_ENABLED: '0',
+    CCTV_ALTO_PARANA_ENABLED: '0',
     CCTV_WSDOT_MAX_SOURCES: undefined,
   });
   const requested = [];

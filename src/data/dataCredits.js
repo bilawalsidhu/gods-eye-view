@@ -206,6 +206,14 @@ export const DATA_CREDITS = [
       '(location-matched article links; publisher terms apply)',
   },
   {
+    key: 'youtube-cctv',
+    html:
+      'YouTube CCTV examples (when configured): ' +
+      '<a href="https://www.youtube.com/@ArgentinaNewsTV" target="_blank" rel="noopener">Argentina News</a>, ' +
+      '<a href="https://www.uade.edu.ar/" target="_blank" rel="noopener">UADE</a>. ' +
+      'Original YouTube players; no open video license asserted.',
+  },
+  {
     key: 'austin-cctv',
     html:
       'CCTV cameras &amp; frames: City of Austin, TX — ' +
@@ -293,6 +301,22 @@ export const DATA_CREDITS = [
       'CCTV cameras &amp; frames (New York City, when enabled): ' +
       '<a href="https://webcams.nyctmc.org/" target="_blank" rel="noopener">NYC DOT Traffic Management Center</a>. ' +
       NYC_DOT_DISCLAIMER,
+  },
+  {
+    key: 'encarnacion-cctv',
+    html:
+      'Public Sambódromo / Costanera camera (Paraguay): ' +
+      '<a href="https://encarnacion.gov.py/en-vivo/" target="_blank" rel="noopener">Municipalidad de Encarnación</a> · ' +
+      '<a href="https://rtsp.me/" target="_blank" rel="noopener">RTSP.me</a>. ' +
+      'Approximate venue location; original public player, no open video license asserted.',
+  },
+  {
+    key: 'alto-parana-cctv',
+    html:
+      'Public cameras in Alto Paraná (Paraguay): ' +
+      '<a href="https://atacadoconnect.com/camera-da-ponte-da-amizade-ao-vivo" target="_blank" rel="noopener">Atacado Connect</a> · ' +
+      '<a href="https://www.gibarra.com.py/" target="_blank" rel="noopener">Grupo Ibarra</a>. ' +
+      'Approximate area locations; operator credits and watermarks retained, no open video license asserted.',
   },
   {
     key: 'toronto-cctv',

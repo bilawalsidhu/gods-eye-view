@@ -38,7 +38,10 @@ export class CctvControls {
     this._calibrationEdit = null;
     this._actionGeneration = 0;
     this._initCctvPanel();
-    if (this._cctvVideo && typeof MutationObserver !== 'undefined') {
+    if (
+      (this._cctvVideo || this._cctvFrameWrap) &&
+      typeof MutationObserver !== 'undefined'
+    ) {
       this._videoVisibilityObserver = new MutationObserver(() =>
         this._renderCctvState(this._cctvState),
       );
@@ -113,6 +116,7 @@ export class CctvControls {
     if (this.destroyed) return;
     this.destroyed = true;
     this._cctvVideoSurface?.stop();
+    this._cctvEmbed?.destroy();
     this._videoVisibilityObserver?.disconnect();
     this._actionGeneration++;
     this.listeners.abort();

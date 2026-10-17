@@ -1062,5 +1062,9 @@
   "src/ui/flyToDataSource.test.mjs",
   "scripts/assemble-changelog.mjs",
   "src/tooling/changelogFragments.test.mjs",
-  "src/data/gbfsProxyRateLimit.test.mjs"
+  "src/data/gbfsProxyRateLimit.test.mjs",
+  "src/sources/youtube.test.mjs",
+  "src/data/cctvYouTube.test.mjs",
+  "src/ui/cctvEmbed.test.mjs",
+  "config/cctv_sources.youtube.json"
 ]

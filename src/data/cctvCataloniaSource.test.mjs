@@ -457,6 +457,8 @@ test('CCTV catalog merges Catalonia cameras and CCTV_CATALONIA_ENABLED=0 skips t
     CCTV_CALTRANS_DISTRICTS: undefined,
     CCTV_TFL_ENABLED: undefined,
     CCTV_CATALONIA_ENABLED: undefined,
+    CCTV_ENCARNACION_ENABLED: '0',
+    CCTV_ALTO_PARANA_ENABLED: '0',
     CCTV_CATALONIA_MAX_SOURCES: undefined,
   });
   const requested = [];

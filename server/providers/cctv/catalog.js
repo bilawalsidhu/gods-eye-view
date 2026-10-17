@@ -4,6 +4,8 @@ import { DEFAULT_CCTV_SOURCE_FILE, CCTV_SOURCE_CACHE_MS } from './constants.js';
 import { allocateSourceCap, resolveCatalogCap } from './cap.js';
 import { loadGroundHeights, joinGroundHeights } from './groundHeights.js';
 import { cameraRegion, normalizeSourceItem } from './normalize.js';
+import { loadEncarnacionSources } from './encarnacion.js';
+import { loadAltoParanaSources } from './altoParana.js';
 import { loadLithuaniaSources } from './lithuania.js';
 import {
   loadAustinSourcesFromOpenData,
@@ -131,6 +133,16 @@ const LIVE_PACKS = [
     name: 'nyc',
     enabled: () => envOptIn('CCTV_NYC_ENABLED'),
     load: loadNycSourcesFromOpenData,
+  },
+  {
+    name: 'encarnacion',
+    enabled: () => envOptIn('CCTV_ENCARNACION_ENABLED'),
+    load: loadEncarnacionSources,
+  },
+  {
+    name: 'alto-parana',
+    enabled: () => envOptIn('CCTV_ALTO_PARANA_ENABLED'),
+    load: loadAltoParanaSources,
   },
   {
     name: 'toronto',
