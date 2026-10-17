@@ -1,12 +1,11 @@
-import * as Cesium from 'cesium';
+import * as geo from '../../geo/index.js';
 import { CLASS_SCALE_2D } from '../../data/aircraftClass.js';
 import { aircraftIcon } from '../../data/aircraftIcons.js';
 import {
-  horizonOccluder,
   screenProjectedRotation,
   stabilizeScreenRotation,
 } from '../../data/iconOrientation.js';
-import { isPointerFree } from '../../data/inputOwnership.js';
+import { rgbaFromCss } from '../shared/color.js';
 import { pickRenderAltitudeM } from '../../data/renderAltitude.js';
 import { routePlausible } from '../../data/routePlausible.js';
 import {
@@ -32,7 +31,6 @@ import {
   LOCAL_ADSB_COLOR,
   LOCAL_ADSB_SYNC_MS,
   LOCAL_ADSB_TICK_MS,
-  LOCAL_ADSB_UAT_RING_COLOR,
 } from './policy.js';
 import { localAdsbStatus } from './status.js';
 
@@ -52,10 +50,10 @@ export { localAdsbStatus } from './status.js';
 
 const FEET_TO_METERS = 0.3048;
 const RENDER_HOLD_ID = 'local-adsb';
-/** Picks looked through under a click for a local aircraft. */
-const CLICK_DRILL_LIMIT = 8;
 /** Trail lines pass through their aircraft; a click never stops on one. */
 const TRAIL_PICK_PREFIX = 'gev-trail:';
+/** The model tint (the layer's magenta), engine-neutral. */
+const MODEL_COLOR = Object.freeze(rgbaFromCss(LOCAL_ADSB_COLOR));
 /** The DISPLAY rail's first-run 3D preference, used when no reader is wired. */
 const DEFAULT_DISPLAY = Object.freeze({
   models3d: true,
@@ -86,18 +84,18 @@ const DEFAULT_DISPLAY = Object.freeze({
  * @param {object} options.receiver Local receiver session.
  * @param {object} [options.feeds] Decoder-feed session (start, stop,
  *   getState, subscribe).
- * @param {object} options.services Render, context, picking, detection and
- *   readout operations supplied by the application; optionally `display`
- *   (`getParams()` → `{ models3d, models3dMode }`), `enrichment` (a source
- *   with `getEnrichment`), `trails` (`createTrail`), `geoid`
- *   (`ensureGeoidReady`, `geoidHeight`) and `groundSnap`
+ * @param {object} options.services Render, context, picking, selection
+ *   (`selectionDispatcherFor`), renderer (`create({ viewer, engine,
+ *   loadModel, createTrail })`: the engine's Local ADS-B renderer),
+ *   detection and readout operations supplied by the application;
+ *   optionally `display` (`getParams()` → `{ models3d, models3dMode }`),
+ *   `enrichment` (a source with `getEnrichment`), `trails` (`createTrail`),
+ *   `geoid` (`ensureGeoidReady`, `geoidHeight`) and `groundSnap`
  *   (`createGroundSnap`).
  * @param {() => number} [options.now] Clock, injectable for tests.
  * @param {(url: string) => string} [options.resolveAsset] Model URL resolver.
  * @param {(options: object) => Promise<object>} [options.loadModel] Model
  *   loader, injectable for tests.
- * @param {(canvas: HTMLCanvasElement) => object} [options.createInputHandler]
- *   Click-handler factory, injectable for tests.
  * @returns {object} Data-layer module.
  */
 export function createLocalAdsbLayer({
@@ -107,7 +105,6 @@ export function createLocalAdsbLayer({
   now = Date.now,
   resolveAsset = (url) => url,
   loadModel,
-  createInputHandler = (canvas) => new Cesium.ScreenSpaceEventHandler(canvas),
 }) {
   if (typeof receiver?.getState !== 'function')
     throw new TypeError('Local ADS-B requires a receiver session');
@@ -124,19 +121,15 @@ export function createLocalAdsbLayer({
     removeEntityContextsForLayer,
   } = services.context;
   const { registerPickOwner, unregisterPickOwner } = services.picking;
-  const color = Cesium.Color.fromCssColorString(LOCAL_ADSB_COLOR);
-  const uatRingColor = Cesium.Color.fromCssColorString(
-    LOCAL_ADSB_UAT_RING_COLOR,
-  );
 
-  let viewer = null;
-  let dataSource = null;
+  /** The engine's Local ADS-B renderer for this lifecycle (render/*.js). */
+  let renderer = null;
   let enabled = false;
   let unsubscribe = null;
   let unsubscribeFeeds = null;
   let tickTimer = null;
   let syncTimer = null;
-  let clickHandler = null;
+  let selectionRemove = null;
   let removePreRender = null;
   let renderHeld = false;
   let selectedId = null;
@@ -181,14 +174,14 @@ export function createLocalAdsbLayer({
   }
 
   function markerVisible(marker) {
-    if (!viewer?.camera?.positionWC || !marker.position) return true;
-    return horizonOccluder(viewer.camera).isPointVisible(marker.position);
+    if (!renderer?.view.camera?.positionWC || !marker.position) return true;
+    return renderer.view.horizon().isPointVisible(marker.position);
   }
 
   function markerRotation(marker) {
-    if (!viewer?.scene || !marker.position) return marker.lastRotation;
+    if (!renderer?.view.scene || !marker.position) return marker.lastRotation;
     const projected = screenProjectedRotation(
-      viewer.scene,
+      renderer.view.scene,
       marker.position,
       marker.courseDeg ?? 0,
       marker.lastRotation,
@@ -226,7 +219,7 @@ export function createLocalAdsbLayer({
   }
 
   function fixPosition(marker, fix) {
-    return Cesium.Cartesian3.fromDegrees(
+    return geo.cartesian3.fromDegrees(
       fix.lon,
       fix.lat,
       renderHeightM(marker, fix.altitudeFt, fix.lat, fix.lon),
@@ -238,12 +231,12 @@ export function createLocalAdsbLayer({
     if (!display) return;
     marker.lat = display.lat;
     marker.lon = display.lon;
-    marker.position = Cesium.Cartesian3.fromDegrees(
+    marker.position = geo.cartesian3.fromDegrees(
       display.lon,
       display.lat,
       renderHeightM(marker, display.altitudeFt, display.lat, display.lon),
-      Cesium.Ellipsoid.WGS84,
-      marker.position || new Cesium.Cartesian3(),
+      geo.ellipsoid.WGS84,
+      marker.position || geo.cartesian3.create(),
     );
     if (display.courseDeg !== null) marker.courseDeg = display.courseDeg;
   }
@@ -262,16 +255,15 @@ export function createLocalAdsbLayer({
     );
     marker.evidence = evidence;
     marker.klass = klass;
-    const billboard = marker.entity?.billboard;
-    if (!billboard) return;
+    if (!marker.entity || !renderer) return;
     if (marker.iconKind !== klass) {
       marker.iconKind = klass;
-      billboard.image = aircraftIcon(klass);
+      renderer.markers.setImage(marker.entity, aircraftIcon(klass));
     }
     const scale = billboardScale(marker);
     if (marker.iconScale !== scale) {
       marker.iconScale = scale;
-      billboard.scale = scale;
+      renderer.markers.setScale(marker.entity, scale);
     }
   }
 
@@ -309,7 +301,7 @@ export function createLocalAdsbLayer({
     return {
       id,
       layerId: LAYER_ID,
-      dataSource,
+      dataSource: renderer?.dataSource ?? null,
       layerName: LAYER_NAME,
       source: localAdsbSourceText(record),
       label: localAdsbTitle(record),
@@ -334,34 +326,12 @@ export function createLocalAdsbLayer({
     };
   }
 
-  function uatRing(marker) {
-    return new Cesium.PointGraphics({
-      pixelSize: 24,
-      color: Cesium.Color.TRANSPARENT,
-      outlineColor: uatRingColor,
-      outlineWidth: 1.5,
-      scaleByDistance: new Cesium.NearFarScalar(1000, 3.0, 8_000_000, 0.5),
-      show: new Cesium.CallbackProperty(() => markerVisible(marker), false),
-      disableDepthTestDistance: Number.POSITIVE_INFINITY,
-      distanceDisplayCondition: new Cesium.DistanceDisplayCondition(
-        0,
-        2_000_000,
-      ),
-    });
-  }
-
   // ── Trail of the selected aircraft ──────────────────────────────────────
 
   function releaseTrail() {
     if (!selectedTrail) return;
     selectedTrail.trail?.destroy();
-    if (selectedTrail.head && viewer && !viewer.isDestroyed?.()) {
-      try {
-        viewer.entities.remove(selectedTrail.head);
-      } catch {
-        /* torn down */
-      }
-    }
+    if (selectedTrail.head) renderer?.trails.removeHead(selectedTrail.head);
     selectedTrail = null;
   }
 
@@ -377,31 +347,30 @@ export function createLocalAdsbLayer({
 
   function startTrail(marker) {
     releaseTrail();
-    const createTrail = services.trails?.createTrail;
-    if (typeof createTrail !== 'function' || !viewer?.entities) return;
+    const trail = renderer?.trails.create({
+      color: LOCAL_ADSB_COLOR,
+      width: 2.5,
+    });
+    if (!trail) return;
     selectedTrail = {
       id: marker.id,
-      trail: createTrail(viewer, { color: LOCAL_ADSB_COLOR, width: 2.5 }),
+      trail,
       head: null,
       lastFix: null,
     };
     // Live head: last heard fix → the extrapolated marker, every frame.
-    selectedTrail.head = viewer.entities.add({
+    selectedTrail.head = renderer.trails.createHead({
       // 'gev-trail' namespace: claimed by the trail pick owner so a click on
       // the head segment never reads as empty space.
       id: `gev-trail:local-adsb-head-${++trailHeadSeq}`,
-      polyline: {
-        positions: new Cesium.CallbackProperty(() => {
-          const current = markers.get(selectedTrail?.id);
-          const from = selectedTrail?.lastFix;
-          if (!current?.position || !from) return [];
-          return [from, Cesium.Cartesian3.clone(current.position)];
-        }, false),
-        width: 2.5,
-        material: color.withAlpha(0.9),
-        depthFailMaterial: color.withAlpha(0.45),
-        arcType: Cesium.ArcType.GEODESIC,
+      positions: () => {
+        const current = markers.get(selectedTrail?.id);
+        const from = selectedTrail?.lastFix;
+        if (!current?.position || !from) return [];
+        return [from, geo.cartesian3.clone(current.position)];
       },
+      color: LOCAL_ADSB_COLOR,
+      width: 2.5,
     });
     refreshTrail();
   }
@@ -439,40 +408,22 @@ export function createLocalAdsbLayer({
     rejectedFixes += marker.motion.rejectedFixes - rejectedBefore;
     updateDisplay(marker, at);
     if (!marker.entity) {
-      marker.entity = dataSource.entities.add({
+      // Magenta glyph, 20 px, ×3 near / ×0.5 far, always on top, not drawn
+      // past 2,000 km (the renderer's display distance).
+      marker.entity = renderer.markers.add({
         id,
-        position: new Cesium.CallbackProperty(() => marker.position, false),
-        billboard: {
-          image: aircraftIcon('airliner'),
-          width: 20,
-          height: 20,
-          scale: 1,
-          color,
-          sizeInMeters: false,
-          scaleByDistance: new Cesium.NearFarScalar(1000, 3.0, 8_000_000, 0.5),
-          alignedAxis: Cesium.Cartesian3.ZERO,
-          rotation: new Cesium.CallbackProperty(
-            () => markerRotation(marker),
-            false,
-          ),
-          show: new Cesium.CallbackProperty(
-            () => !marker.modelOwnsVisual && markerVisible(marker),
-            false,
-          ),
-          disableDepthTestDistance: Number.POSITIVE_INFINITY,
-          distanceDisplayCondition: new Cesium.DistanceDisplayCondition(
-            0,
-            2_000_000,
-          ),
-        },
+        image: aircraftIcon('airliner'),
+        position: () => marker.position,
+        rotation: () => markerRotation(marker),
+        show: () => !marker.modelOwnsVisual && markerVisible(marker),
       });
       marker.entity.gevTrackedId = id;
       marker.entity.gevDisplayPosition = () => marker.position;
     }
     refreshClass(marker);
     const uat = localAdsbIsUat(record);
-    if (uat !== Boolean(marker.entity.point))
-      marker.entity.point = uat ? uatRing(marker) : undefined;
+    if (uat !== renderer.markers.hasRing(marker.entity))
+      renderer.markers.setRing(marker.entity, uat, () => markerVisible(marker));
     marker.entity.gevLabelModel = cardModel(marker, at);
     registerEntityContext(marker.entity, contextMetadata(id, marker));
     if (newFix && id === selectedId) refreshTrail();
@@ -513,7 +464,7 @@ export function createLocalAdsbLayer({
   function sync() {
     clearTimeout(syncTimer);
     syncTimer = null;
-    if (!dataSource) return;
+    if (!renderer) return;
     const at = now();
     const live = new Set();
     let added = false;
@@ -527,7 +478,7 @@ export function createLocalAdsbLayer({
     let removed = false;
     for (const [id, marker] of markers) {
       if (live.has(id)) continue;
-      if (marker.entity) dataSource.entities.remove(marker.entity);
+      if (marker.entity) renderer.markers.remove(marker.entity);
       markers.delete(id);
       removed = true;
     }
@@ -582,82 +533,46 @@ export function createLocalAdsbLayer({
     return true;
   }
 
-  function pickedId(picked) {
-    const resolved = services.picking.resolvePickId?.(picked);
-    if (resolved !== undefined) return resolved;
-    if (typeof picked?.id === 'string') return picked.id;
-    if (typeof picked?.id?.id === 'string') return picked.id.id;
-    return typeof picked?.primitive?.id === 'string'
-      ? picked.primitive.id
-      : null;
-  }
-
-  function ownedElsewhere(id) {
-    return Boolean(id) && services.picking.isOwnedByOtherLayer?.(LAYER_ID, id);
-  }
-
   /**
-   * What a click at `position` means for this layer: a local aircraft id,
-   * `'other'` when a sibling layer's contact is under the pointer, `'trail'`
-   * for a trail line, or null for empty map.
-   *
-   * The frontmost pick decides, except that something no layer owns (a
-   * photoreal tile, a ring) or a trail line drawn over or through a local
-   * aircraft does not hide it: the click looks underneath for the aircraft.
+   * Join the engine's selection dispatcher with this layer's own click rule
+   * (`lookUnder`): a click on a local aircraft — on top, or under picks no
+   * layer owns (a photoreal tile, a ring) and trail lines — always
+   * (re)selects it and republishes its card, including the one already
+   * selected (its card may have been displaced; a click on a marker never
+   * reads as "deselect"); another layer's contact on top, or empty map,
+   * releases only this layer's selection, leaving a sibling layer's new
+   * selection intact; a click on a trail line alone does nothing. The
+   * dispatcher picks with a drill of 8 and yields to a tool that owns the
+   * pointer (src/data/inputOwnership.js).
    */
-  function clickTarget(position) {
-    const scene = viewer.scene;
-    const top = pickedId(scene.pick(position));
-    if (top && markers.has(top)) return top;
-    const trail = Boolean(top) && String(top).startsWith(TRAIL_PICK_PREFIX);
-    if (ownedElsewhere(top) && !trail) return 'other';
-    let hits = [];
-    try {
-      hits = scene.drillPick?.(position, CLICK_DRILL_LIMIT) || [];
-    } catch {
-      hits = [];
-    }
-    for (const hit of hits) {
-      const id = pickedId(hit);
-      if (id && markers.has(id)) return id;
-      if (id && String(id).startsWith(TRAIL_PICK_PREFIX)) continue;
-      // A sibling layer's contact above ours takes the click.
-      if (ownedElsewhere(id)) return 'other';
-    }
-    return trail ? 'trail' : null;
-  }
-
   function installInteraction() {
-    if (clickHandler || !viewer?.scene?.canvas) return;
-    clickHandler = createInputHandler(viewer.scene.canvas);
-    clickHandler.setInputAction((click) => {
-      // A tool owns the pointer (src/data/inputOwnership.js): yield the click.
-      if (!isPointerFree() || !enabled) return;
-      const target = clickTarget(click.position);
-      // Clicking a local aircraft always (re)selects it and republishes its
-      // card, including the one already selected: its card may have been
-      // displaced, and a click on a marker must never read as "deselect".
-      if (target && markers.has(target)) {
-        selectMarker(target);
-        return;
-      }
-      // A click on a trail line is not empty map.
-      if (target === 'trail' || !selectedId) return;
-      // Another contact or empty map releases only this layer's selection,
-      // leaving a sibling layer's new selection intact.
-      clearSelection();
-      governorRequestRender('local-adsb-selection');
-    }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
+    if (selectionRemove || !renderer) return;
+    const dispatcher = services.selection?.selectionDispatcherFor?.(
+      renderer.engine,
+    );
+    if (!dispatcher) return;
+    selectionRemove = dispatcher.register(LAYER_ID, {
+      owns: (id) => markers.has(id),
+      lookUnder: (id) => String(id).startsWith(TRAIL_PICK_PREFIX),
+      onSelect(id) {
+        if (enabled && markers.has(id)) selectMarker(id);
+      },
+      onEmptyClick() {
+        if (!enabled || !selectedId) return;
+        clearSelection();
+        governorRequestRender('local-adsb-selection');
+      },
+    });
   }
 
   function releaseInteraction() {
-    clickHandler?.destroy();
-    clickHandler = null;
+    selectionRemove?.();
+    selectionRemove = null;
   }
 
   function installFrame() {
-    if (removePreRender || !viewer?.scene?.preRender?.addEventListener) return;
-    removePreRender = viewer.scene.preRender.addEventListener(frame);
+    if (removePreRender || !renderer) return;
+    removePreRender = renderer.view.on('preRender', frame);
   }
 
   function releaseFrame() {
@@ -671,12 +586,12 @@ export function createLocalAdsbLayer({
     for (const marker of markers.values()) {
       if (rows.length >= maxCount) break;
       if (!marker.position) continue;
-      const carto = Cesium.Cartographic.fromCartesian(marker.position);
+      const carto = geo.cartographic.fromCartesian(marker.position);
       rows.push({
         id: marker.record.icao,
         label: localAdsbTitle(marker.record),
         callsign: marker.record.callsign,
-        position: Cesium.Cartesian3.clone(marker.position),
+        position: geo.cartesian3.clone(marker.position),
         latitude: marker.lat,
         longitude: marker.lon,
         altitudeM: carto?.height ?? 0,
@@ -697,18 +612,25 @@ export function createLocalAdsbLayer({
     /** Decoder-feed session; the Radio card shows its one-line summary. */
     feeds,
 
-    init(nextViewer) {
-      viewer = nextViewer;
-      dataSource = new Cesium.CustomDataSource(LAYER_ID);
-      dataSource.show = false;
-      viewer.dataSources.add(dataSource);
-      if (viewer.scene?.primitives) {
+    /**
+     * @param {object|null} nextViewer The Cesium viewer (null on an engine
+     *   without one).
+     * @param {{ engine?: object }} [context] LayerLifecycle's context.
+     */
+    init(nextViewer, { engine = null } = {}) {
+      renderer = services.renderer.create({
+        viewer: nextViewer,
+        engine,
+        loadModel,
+        createTrail: services.trails?.createTrail ?? null,
+      });
+      renderer.attach();
+      if (renderer.models) {
         models = createLocalAdsbModels({
-          viewer,
-          color,
+          renderer,
+          color: MODEL_COLOR,
           resolveAsset,
           groundSnap: services.groundSnap?.createGroundSnap?.() || null,
-          ...(loadModel ? { loadModel } : {}),
         });
       }
       services.geoid
@@ -727,7 +649,7 @@ export function createLocalAdsbLayer({
 
     async enable() {
       enabled = true;
-      if (dataSource) dataSource.show = true;
+      renderer?.setVisible(true);
       registerPickOwner(LAYER_ID, (pickedValue) => markers.has(pickedValue));
       installInteraction();
       installFrame();
@@ -753,7 +675,7 @@ export function createLocalAdsbLayer({
       unregisterPickOwner(LAYER_ID);
       sync();
       models?.clear();
-      if (dataSource) dataSource.show = false;
+      renderer?.setVisible(false);
       markSourcesChanged('local-adsb-disabled');
       return true;
     },
@@ -786,9 +708,9 @@ export function createLocalAdsbLayer({
       updateRenderHold();
       models?.destroy();
       models = null;
-      if (viewer && dataSource) viewer.dataSources.remove(dataSource, true);
-      dataSource = null;
-      viewer = null;
+      renderer?.detach();
+      renderer?.destroy();
+      renderer = null;
       void receiver.destroy?.();
     },
 

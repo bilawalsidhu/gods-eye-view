@@ -205,3 +205,54 @@ test('the application has one dispatcher per engine', () => {
   selectionDispatcherFor(engine).destroy();
   selectionDispatcherFor(other).destroy();
 });
+
+test('a look-under owner (local ADS-B) keeps its own click rule beside the others', () => {
+  // x: what lies under each column, top first.
+  const { dispatcher, click } = setup({
+    10: [{ id: 'local-adsb:a' }], // its own marker
+    20: [{ primitive: { tileset: true } }, { id: 'local-adsb:a' }], // under a tile
+    30: [{ id: 'gev-trail:local-adsb-head-1' }, { id: 'local-adsb:b' }], // under a trail
+    40: [{ id: 'gev-trail:x' }], // a trail alone
+    50: [{ id: 'ae01ce' }, { id: 'local-adsb:a' }], // another layer's on top
+    60: [{ id: 'cctv-1' }, { id: 'local-adsb:a' }], // a registry owner's on top
+    70: [], // empty map
+  });
+  registerPickOwner('trails', (id) => id.startsWith('gev-trail:'));
+  registerPickOwner('cctv', (id) => id.startsWith('cctv'));
+  try {
+    const local = recorder();
+    const flights = recorder();
+    dispatcher.register('local-adsb', {
+      owns: (id) => id.startsWith('local-adsb:'),
+      lookUnder: (id) => id.startsWith('gev-trail:'),
+      ...local.handlers,
+    });
+    dispatcher.register('flights', {
+      owns: (id) => id === 'ae01ce',
+      ...flights.handlers,
+    });
+    for (const x of [10, 20, 30, 40, 50, 60, 70]) click(x);
+    // A long press on empty map still reaches it (its old LEFT_CLICK rule).
+    click(70, { ms: 900 });
+    assert.deepEqual(local.calls, [
+      ['select', 'local-adsb:a', undefined],
+      ['select', 'local-adsb:a', undefined],
+      ['select', 'local-adsb:b', undefined],
+      // 40: a trail alone is not empty map: nothing.
+      ['empty', 0], // 50: another layer's contact releases local's selection
+      ['empty', 0], // 60: the same for a registry owner's
+      ['empty', 0], // 70
+      ['empty', 0], // 70, long press
+    ]);
+    // Flights, as before: its own contact at 50 and empty map at 70 (the
+    // long press does not deselect); a local marker (even under a tile), a
+    // trail or another owner's object is not its empty space.
+    assert.deepEqual(flights.calls, [
+      ['select', 'ae01ce', undefined],
+      ['empty', 0],
+    ]);
+  } finally {
+    unregisterPickOwner('trails');
+    unregisterPickOwner('cctv');
+  }
+});

@@ -10,10 +10,16 @@
 //   onEscape()          Escape.
 // The rules are the old handlers': a pick another layer owns is not empty
 // space (a pick nobody owns is); `passThrough` picks (trails) never take the
-// click, the next pick does; a `drillThrough` owner (local ADS-B) takes its object from under
-// another layer's; a drag selects nothing; a pointer owned by a tool
+// click, the next pick does; a `drillThrough` owner takes its object from
+// under another layer's; a drag selects nothing; a pointer owned by a tool
 // (inputOwnership) selects nothing. Layers not moved yet keep their own
 // handlers: the dispatcher never acts on an id it does not own.
+// A `lookUnder` owner (local ADS-B) keeps its own old click rule instead:
+// its object on top, or under picks no layer owns and picks it looks under
+// (`lookUnder(id)`: trails), is selected; another layer's object on top, or
+// nothing, is empty space for it (it releases its selection); a click that
+// only meets what it looks under does nothing; no gesture rule (its old
+// handler took every click). To the others it is another layer.
 
 import { isPointerFree as pointerFree } from './inputOwnership.js';
 import {
@@ -75,6 +81,31 @@ export function createSelectionDispatcher(
     return { id, owner: findPickOwner(id) };
   };
 
+  // The look-under rule (local ADS-B's old click handler, kept as is).
+  const lookUnderTarget = (name, owner, event) => {
+    const ownedElsewhere = (id) => {
+      if (id === null) return false;
+      for (const [other, entry] of owners)
+        if (other !== name && safely(() => entry.owns(id))) return true;
+      const found = findPickOwner(id);
+      return found !== null && found !== undefined && found !== name;
+    };
+    const mine = (id) => id !== null && safely(() => owner.owns(id));
+    const under = (id) => id !== null && safely(() => owner.lookUnder(id));
+    const top = resolvePickId(event.picked);
+    if (mine(top)) return { id: top, picked: event.picked };
+    const lookedUnder = under(top);
+    if (ownedElsewhere(top) && !lookedUnder) return 'other';
+    for (const hit of event.drilled ?? []) {
+      const id = resolvePickId(hit);
+      if (mine(id)) return { id, picked: hit };
+      if (under(id)) continue;
+      if (ownedElsewhere(id)) return 'other';
+    }
+    return lookedUnder ? 'under' : null;
+  };
+  const plain = (owner) => typeof owner.lookUnder !== 'function';
+
   const onClick = (event) => {
     if (press) finish(event.position);
     const gesture = completed ?? { travelPx: 0, durationMs: 0 };
@@ -86,6 +117,14 @@ export function createSelectionDispatcher(
       drilled: event.drilled ?? [],
       gesture,
     };
+    for (const [name, owner] of [...owners]) {
+      if (plain(owner)) continue;
+      const target = lookUnderTarget(name, owner, event);
+      if (target === 'under') continue;
+      if (target && target !== 'other')
+        owner.onSelect?.(target.id, { ...ctx, picked: target.picked });
+      else owner.onEmptyClick?.(ctx);
+    }
     const candidates = [event.picked, ...(event.drilled ?? [])].filter(
       (picked) =>
         picked &&
@@ -104,15 +143,16 @@ export function createSelectionDispatcher(
     });
     if (!picks.length) {
       if (!isTrackingClickGesture(gesture)) return;
-      for (const owner of [...owners.values()]) owner.onEmptyClick?.(ctx);
+      for (const owner of [...owners.values()].filter(plain))
+        owner.onEmptyClick?.(ctx);
       return;
     }
     if (!isTrackingSelectionGesture(gesture)) return;
     const first = ownerOf(picks[0]);
     if (owners.has(first.owner)) {
-      owners
-        .get(first.owner)
-        .onSelect?.(first.id, { ...ctx, picked: picks[0] });
+      const owner = owners.get(first.owner);
+      if (plain(owner))
+        owner.onSelect?.(first.id, { ...ctx, picked: picks[0] });
       return;
     }
     // Another layer's object on top: a drill-through owner may still take
@@ -120,7 +160,7 @@ export function createSelectionDispatcher(
     for (const picked of picks.slice(1)) {
       const below = ownerOf(picked);
       const owner = owners.get(below.owner);
-      if (owner?.drillThrough) {
+      if (owner?.drillThrough && plain(owner)) {
         owner.onSelect?.(below.id, { ...ctx, picked });
         return;
       }
@@ -128,7 +168,8 @@ export function createSelectionDispatcher(
     // A pick no layer owns (an unclaimed entity) is empty space, as it was
     // for the old handlers: only another layer's object is not.
     if (first.owner === null && isTrackingClickGesture(gesture))
-      for (const owner of [...owners.values()]) owner.onEmptyClick?.(ctx);
+      for (const owner of [...owners.values()].filter(plain))
+        owner.onEmptyClick?.(ctx);
   };
 
   const onKey = (event) => {
@@ -163,7 +204,8 @@ export function createSelectionDispatcher(
     /**
      * @param {string} name the owning layer's id
      * @param {{ owns: (id: string) => boolean, onSelect?: Function, onEmptyClick?: Function,
-     *   onEscape?: Function, passThrough?: (picked: object) => boolean, drillThrough?: boolean }} owner
+     *   onEscape?: Function, passThrough?: (picked: object) => boolean, drillThrough?: boolean,
+     *   lookUnder?: (id: string) => boolean }} owner
      * @returns {() => void} unregister
      */
     register(name, owner) {

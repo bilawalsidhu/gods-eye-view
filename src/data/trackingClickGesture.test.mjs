@@ -120,7 +120,7 @@ test('civilian and military click handlers apply duration only at the deselect b
   // each layer answers with a user-origin clear.
   const dispatcher = readFileSync(new URL('./selectionDispatcher.js', import.meta.url), 'utf8');
   assert.match(dispatcher, /if \(!isTrackingSelectionGesture\(gesture\)\) return;[\s\S]+onSelect/);
-  assert.match(dispatcher, /if \(!isTrackingClickGesture\(gesture\)\) return;\s*for \(const owner of \[\.\.\.owners\.values\(\)\]\) owner\.onEmptyClick/);
+  assert.match(dispatcher, /if \(!isTrackingClickGesture\(gesture\)\) return;\s*for \(const owner of \[\.\.\.owners\.values\(\)\]\.filter\(plain\)\)\s*owner\.onEmptyClick/);
   for (const [layer, source] of [['flights', sources[0]], ['military', sources[1]]]) {
     assert.match(source, new RegExp(`dispatcher\\.register\\('${layer}', \\{[\\s\\S]+onEmptyClick: _onEmptyClick`));
     assert.match(source, /function _onEmptyClick\(\) \{[\s\S]+?_clearTracking\(false, \{ origin: 'user' \}\)/);
