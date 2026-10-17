@@ -3335,6 +3335,7 @@
     "exports": ["./voice/action-schemas"],
     "modules": [
       "src/voice/actionSchemas.js",
+      "src/data/actionEpisodes.js",
       "src/voice/layerManifest.js",
       "src/hudLayoutPolicy.js"
     ],
