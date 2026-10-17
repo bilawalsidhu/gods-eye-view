@@ -382,10 +382,49 @@ export const DATA_CREDITS = [
       'Modified: resampled 10 m IFS forecast vectors and animated display. ' +
       'ECMWF does not accept any liability whatsoever for any error or omission in the data, their availability, or for any loss or damage arising from their use.',
   },
+  {
+    // The PRIMARY global tier. It had no credit entry at all while
+    // `globalTier.js` preferred it, so the app's canonical attribution surface
+    // named only the product that stands in when HYCOM is down.
+    key: 'hycom-espc-currents',
+    html:
+      'Global surface currents (forecast): ' +
+      '<a href="https://www.hycom.org/" target="_blank" rel="noopener">' +
+      'US Navy HYCOM ESPC-D V02</a> ' +
+      'via NRL/FNMOC THREDDS — "Approved for public release; distribution unlimited" ' +
+      '(a release statement, not an explicit licence grant)',
+  },
+  {
+    key: 'coastwatch-blended-currents',
+    html:
+      'Global surface currents (altimetric fallback): ' +
+      '<a href="https://coastwatch.noaa.gov/erddap/griddap/noaacwBLENDEDNRTcurrentsDaily.html" target="_blank" rel="noopener">' +
+      'NOAA CoastWatch blended geostrophic currents</a> ' +
+      // The dataset's own licence string names two further parties and is a
+      // free-use-with-disclaimer statement, not a public-domain dedication.
+      // Calling it "U.S. public domain" dropped both acknowledgements.
+      '(altimetry: S-3A/B, CryoSat-2, Jason-2/3, SARAL; Sentinel data courtesy of ' +
+      'the Copernicus Programme, generated using AVISO+ products — free to use ' +
+      'and redistribute, not for legal use)',
+  },
+  {
+    key: 'ioos-hfradar',
+    html:
+      'Nearshore surface currents: ' +
+      '<a href="https://hfradar.ndbc.noaa.gov/" target="_blank" rel="noopener">IOOS HF-radar national network</a> ' +
+      'via NOAA CoastWatch ERDDAP (U.S. public domain)',
+  },
   // ── Bundled snapshots ───────────────────────────────────────────
   {
     key: 'dams',
     html: 'Dams: Open Infrastructure Map',
+  },
+  {
+    key: 'gshhg-mask',
+    html:
+      'Land/sea mask: ' +
+      '<a href="https://www.soest.hawaii.edu/pwessel/gshhg/" target="_blank" rel="noopener">Wessel &amp; Smith, GSHHG</a> ' +
+      '(LGPL)',
   },
   {
     key: 'firms',

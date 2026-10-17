@@ -54,6 +54,7 @@
     "qa:street-level:fixtures": "node scripts/qa-street-level.mjs --fixtures",
     "check:boundaries": "node scripts/check-import-directions.mjs && node scripts/check-package-boundaries.mjs",
     "qa:transit": "node scripts/qa-transit.mjs",
+    "qa:ocean-currents": "node scripts/qa-ocean-currents.mjs",
     "mcp": "node server/mcp/stdio.js"
   },
   "dependencies": {

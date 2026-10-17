@@ -397,3 +397,133 @@ test('a failed later cell build releases already installed cells and shared mate
   }
   assert.match(h.owner.getDiagnostics().error, /later cell failed/);
 });
+
+test('wind spec reproduces the shipped bake and shader; ramp uniforms are white', async () => {
+  const h = harness();
+  h.owner.setField(field());
+  const batch = [...h.members][0];
+  assert.ok(
+    batch.appearance.vertexShaderSource.includes(
+      'czm_batchTable_fieldSpeed(batchId)',
+    ),
+  );
+  assert.ok(
+    batch.appearance.vertexShaderSource.includes('out float v_fieldSpeed;'),
+  );
+  assert.ok(
+    batch.appearance.material.source.includes(
+      'fieldRamp(pow(v_fieldSpeed, rampGamma))',
+    ),
+  );
+  const uniforms = batch.appearance.material.uniforms;
+  for (let i = 0; i < 5; i++)
+    assert.deepEqual(
+      [
+        uniforms[`rampStop${i}`].x,
+        uniforms[`rampStop${i}`].y,
+        uniforms[`rampStop${i}`].z,
+      ],
+      [1, 1, 1],
+    );
+  assert.equal(uniforms.rampGamma, 1);
+  const diagnostics = h.owner.getDiagnostics();
+  assert.equal(diagnostics.speedScale, 1);
+  assert.equal(diagnostics.stepSeconds, 1800);
+  for (const instance of [...h.members].flatMap((p) => p.geometryInstances)) {
+    assert.equal(instance.attributes.fieldSpeed.componentsPerAttribute, 1);
+    assert.ok(
+      Math.abs(instance.attributes.fieldSpeed.value[0] - 15 / 30) < 1e-12,
+    );
+  }
+});
+
+test('ocean spec scales the step by (E1), colours paths by speed and seeds inside the bbox', async () => {
+  const { OCEAN_FIELD_SPEC, rampStopVectors } = await import('./fieldSpec.js');
+  const h = harness();
+  const owner = createWindGpuRendering({
+    cesium: h.C,
+    getViewer: () => ({ scene: h.scene }),
+    spec: OCEAN_FIELD_SPEC,
+  });
+  const ocean = {
+    nx: 10,
+    ny: 10,
+    lo1: -75,
+    la1: 39,
+    dx: 1,
+    dy: 1,
+    u: new Float32Array(100).fill(0.4),
+    v: new Float32Array(100),
+    periodic: false,
+    noData: -9999,
+    bbox: { latMin: 30, latMax: 39, lonMin: -75, lonMax: -66 },
+    speed: { medianMs: 0.4, p95Ms: 0.8 },
+  };
+  assert.equal(owner.setField(ocean), true);
+  const diagnostics = owner.getDiagnostics();
+  assert.equal(diagnostics.speedScale, 5.836 / 0.4);
+  assert.equal(diagnostics.stepSeconds, 1800 * (5.836 / 0.4));
+  const batches = [...h.members];
+  assert.ok(batches.length > 0);
+  const batch = batches[0];
+  const stops = rampStopVectors(OCEAN_FIELD_SPEC.ramp);
+  const stop4 = batch.appearance.material.uniforms.rampStop4;
+  assert.deepEqual([stop4.x, stop4.y, stop4.z], stops[4]);
+  assert.equal(batch.appearance.material.uniforms.rampGamma, 0.55);
+  for (const instance of batches.flatMap((p) => p.geometryInstances)) {
+    assert.ok(Math.abs(instance.attributes.fieldSpeed.value[0] - 0.4 / 1) < 1e-6);
+    for (const position of instance.geometry.positions) {
+      const carto = Ellipsoid.WGS84.cartesianToCartographic(position);
+      const lon = (carto.longitude * 180) / Math.PI;
+      const lat = (carto.latitude * 180) / Math.PI;
+      assert.ok(
+        lon >= -75.001 && lon <= -65.999 && lat >= 29.999 && lat <= 39.001,
+        `${lon}, ${lat}`,
+      );
+    }
+  }
+  owner.destroy();
+});
+
+test('display height and height-fade thresholds come from the field spec', async () => {
+  const { OCEAN_FIELD_SPEC, WIND_FIELD_SPEC } = await import('./fieldSpec.js');
+  assert.equal(WIND_FIELD_SPEC.displayHeightMeters, 12000);
+  assert.equal(WIND_FIELD_SPEC.fadeLowMeters, 15000);
+  assert.equal(WIND_FIELD_SPEC.fadeHighMeters, 60000);
+  assert.equal(OCEAN_FIELD_SPEC.displayHeightMeters, 100);
+  assert.equal(OCEAN_FIELD_SPEC.fadeLowMeters, 300);
+  assert.equal(OCEAN_FIELD_SPEC.fadeHighMeters, 1200);
+  const h = harness();
+  const owner = createWindGpuRendering({
+    cesium: h.C,
+    getViewer: () => ({ scene: h.scene }),
+    spec: OCEAN_FIELD_SPEC,
+  });
+  const ocean = {
+    nx: 10,
+    ny: 10,
+    lo1: -75,
+    la1: 39,
+    dx: 1,
+    dy: 1,
+    u: new Float32Array(100).fill(0.4),
+    v: new Float32Array(100),
+    periodic: false,
+    noData: -9999,
+    bbox: { latMin: 30, latMax: 39, lonMin: -75, lonMax: -66 },
+    speed: { medianMs: 0.4, p95Ms: 0.8 },
+  };
+  assert.equal(owner.setField(ocean), true);
+  assert.equal(owner.getDiagnostics().displayHeightMeters, 100);
+  for (const instance of [...h.members].flatMap((p) => p.geometryInstances)) {
+    for (const position of instance.geometry.positions) {
+      const carto = Ellipsoid.WGS84.cartesianToCartographic(position);
+      assert.ok(Math.abs(carto.height - 100) < 1e-3, `height ${carto.height}`);
+    }
+  }
+  // Fade thresholds: 1000 m up is (1000 - 300) / 900 of the way from low to high.
+  const camera = { ...h.scene.camera, positionCartographic: { height: 1000 } };
+  owner.updateVisibility(camera);
+  assert.ok(Math.abs(owner.getDiagnostics().heightFade - 700 / 900) < 1e-9);
+  owner.destroy();
+});

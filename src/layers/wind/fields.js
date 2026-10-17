@@ -1,5 +1,6 @@
 import { msg } from '../../i18n/marker.js';
 import { normalizeLongitude, sampleWind } from './model.js';
+import { WIND_FIELD_SPEC, fieldRampMax } from './fieldSpec.js';
 
 // Imported by src/tools: the catalog-free marker, not src/i18n/index.js. The
 // texts stay English data and the wind layer and layer panel show them
@@ -126,23 +127,52 @@ export function sampleScalar(
   return Number.isFinite(value) ? value : null;
 }
 
+// Spec ramps are baked once per stops array, like the wind palettes above.
+const RAMP_PALETTES = new WeakMap();
+function specPalette(spec) {
+  let cached = RAMP_PALETTES.get(spec.ramp);
+  if (!cached) {
+    cached = palette(spec.ramp);
+    RAMP_PALETTES.set(spec.ramp, cached);
+  }
+  return cached;
+}
+
+/** Raster size: global fields keep 360x181; boxed fields follow the grid, longer side at most 1024 px. */
+export function rasterSizeFor(snapshot) {
+  const grid = snapshot?.grid ?? snapshot;
+  if (!snapshot?.bbox) return { width: 360, height: 181 };
+  const scale = Math.min(1, 1024 / Math.max(grid.nx, grid.ny));
+  return {
+    width: Math.max(2, Math.round(grid.nx * scale)),
+    height: Math.max(2, Math.round(grid.ny * scale)),
+  };
+}
+
 /** One bounded geographic texture per installed field, never per render frame. */
-export function createFieldRaster(snapshot, kind, width = 360, height = 181) {
-  const spec = WIND_FIELDS[kind];
+export function createFieldRaster(
+  snapshot,
+  kind,
+  width = 360,
+  height = 181,
+  spec = WIND_FIELD_SPEC,
+) {
+  const fieldSpec = WIND_FIELDS[kind];
   if (
-    !spec ||
+    !fieldSpec ||
     !snapshot ||
     !Number.isInteger(width) ||
     !Number.isInteger(height) ||
     width < 2 ||
     height < 2 ||
-    width > 720 ||
-    height > 362
+    width > 1024 ||
+    height > 1024
   )
     return null;
   if (
     kind !== 'speed' &&
-    (snapshot.scalar?.kind !== kind || snapshot.scalar.units !== spec.units)
+    (snapshot.scalar?.kind !== kind ||
+      snapshot.scalar.units !== fieldSpec.units)
   )
     return null;
   const rgba = new Uint8ClampedArray(width * height * 4);
@@ -152,18 +182,38 @@ export function createFieldRaster(snapshot, kind, width = 360, height = 181) {
         u: snapshot.u,
         v: snapshot.v,
         scalar: snapshot.scalar,
+        noData: snapshot.noData,
+        periodic: snapshot.periodic,
       }
     : snapshot;
+  // A boxed speed field is rasterized over its own box with the spec ramp;
+  // everything else keeps the global 360-degree raster and the fixed scales.
+  const box = kind === 'speed' ? (snapshot.bbox ?? null) : null;
+  const west = box ? box.lonMin : -180;
+  const lonSpan = box
+    ? (((box.lonMax - box.lonMin) % 360) + 360) % 360 || 360
+    : 360;
+  const north = box ? box.latMax : 90;
+  const latSpan = box ? box.latMax - box.latMin : 180;
+  const rampMax = box ? fieldRampMax(spec, snapshot) : fieldSpec.max;
+  const gamma = box ? spec.rampGamma : 1;
+  const colours = box ? specPalette(spec) : PALETTES[kind];
   let finiteCount = 0;
   for (let y = 0; y < height; y++) {
-    const lat = 90 - ((y + 0.5) / height) * 180;
+    const lat = north - ((y + 0.5) / height) * latSpan;
     for (let x = 0; x < width; x++) {
-      // Pixel centers cover -180..180; the source's 0-degree origin is not an image origin.
-      const lon = -180 + ((x + 0.5) / width) * 360;
+      // Pixel centers cover the raster box; the source's origin is not an image origin.
+      const lon = west + ((x + 0.5) / width) * lonSpan;
       const value = sampleScalar(flat, lon, lat, kind);
       if (value === null) continue;
-      const t = clamp((value - spec.min) / (spec.max - spec.min), 0, 1);
-      const rgb = PALETTES[kind][Math.round(t * 127)];
+      const t = box
+        ? Math.pow(clamp(value / rampMax, 0, 1), gamma)
+        : clamp(
+            (value - fieldSpec.min) / (fieldSpec.max - fieldSpec.min),
+            0,
+            1,
+          );
+      const rgb = colours[Math.round(t * 127)];
       const offset = (y * width + x) * 4;
       rgba[offset] = rgb[0];
       rgba[offset + 1] = rgb[1];

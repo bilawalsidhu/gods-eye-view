@@ -7,13 +7,15 @@ import { orderWeatherImagery } from '../weather/imageryOrder.js';
 import { NO_IMAGERY_HOST } from '../weather/imageryHost.js';
 import { msg } from '../../i18n/index.js';
 import { createWindGpuRendering } from './gpuRendering.js';
-import { advectParticle, sampleWind } from './model.js';
+import { advectParticle, intersectBounds, sampleWind } from './model.js';
 import {
   createFieldRaster,
   SCALAR_UNAVAILABLE,
+  rasterSizeFor,
   trailEraseAlpha,
   windTrailColor,
 } from './fields.js';
+import { WIND_FIELD_SPEC, fieldSpeedScale } from './fieldSpec.js';
 
 // English for diagnostics; the row status shows it translated (index.js). The
 // scalar texts are the source's own; setOptions accepts only these overlays.
@@ -43,8 +45,19 @@ function sameWind(previous, next, previousField, nextField) {
     if (previous[key] !== next[key]) return false;
   for (const key of ['runIso', 'validIso', 'forecastHour', 'date', 'hour'])
     if (previous.cycle?.[key] !== next.cycle?.[key]) return false;
-  for (const key of ['nx', 'ny', 'lo1', 'la1', 'dx', 'dy'])
+  for (const key of [
+    'nx',
+    'ny',
+    'lo1',
+    'la1',
+    'dx',
+    'dy',
+    'noData',
+    'periodic',
+  ])
     if (previousField[key] !== nextField[key]) return false;
+  for (const key of ['latMin', 'latMax', 'lonMin', 'lonMax'])
+    if (previousField.bbox?.[key] !== nextField.bbox?.[key]) return false;
   for (const key of ['u', 'v']) {
     const before = previousField[key];
     const after = nextField[key];
@@ -70,6 +83,7 @@ export function createWindRendering({
   eventTarget = globalThis.window,
   createGpuRendering = createWindGpuRendering,
   onStatusChange,
+  spec = WIND_FIELD_SPEC,
 } = {}) {
   let canvas = null;
   let context = null;
@@ -96,7 +110,9 @@ export function createWindRendering({
   let bounds = null;
   let cameraChanged = true;
   let painted = 0;
-  const gpu = createGpuRendering({ cesium, getViewer });
+  const gpu = createGpuRendering({ cesium, getViewer, spec });
+  let speedScale = 1;
+  let imageryRectangle = null;
   let gpuActive = false;
   let gpuVisible = false;
   let reportedGpuReady = null;
@@ -272,11 +288,21 @@ export function createWindRendering({
     point.y <= cssHeight;
 
   function spawn(particle, scene, occluder) {
+    const range = intersectBounds(
+      bounds ?? { west: -180, east: 180, sinSouth: -0.9998, sinNorth: 0.9998 },
+      field?.bbox ?? null,
+    );
+    if (!range) {
+      // The field box lies outside the view: nothing to draw until it returns.
+      particle.age = 0;
+      particle.life = 0;
+      return;
+    }
     for (let attempt = 0; attempt < 6; attempt++) {
-      const west = bounds?.west ?? -180;
-      const east = bounds?.east ?? 180;
-      const low = bounds?.sinSouth ?? -0.9998;
-      const high = bounds?.sinNorth ?? 0.9998;
+      const west = range.west;
+      const east = range.east;
+      const low = range.sinSouth;
+      const high = range.sinNorth;
       particle.lon = ((west + Math.random() * (east - west) + 540) % 360) - 180;
       particle.lat = Math.asin(low + Math.random() * (high - low)) / degree;
       particle.age = 1 + Math.random() * 7;
@@ -305,6 +331,7 @@ export function createWindRendering({
     shell = null;
     imageryCollection = null;
     imageryKind = null;
+    imageryRectangle = null;
   }
   function updateImageryFade(camera, settled = false) {
     // The tileset shell keeps the quantised move-end fade; globe imagery keeps
@@ -349,7 +376,14 @@ export function createWindRendering({
       imageryError = NO_IMAGERY_HOST;
       return;
     }
-    const raster = createFieldRaster(snapshot, overlay);
+    const size = rasterSizeFor(snapshot);
+    const raster = createFieldRaster(
+      snapshot,
+      overlay,
+      size.width,
+      size.height,
+      spec,
+    );
     if (!raster) {
       imageryError = fieldUnavailableText(overlay);
       return;
@@ -362,6 +396,16 @@ export function createWindRendering({
       imageryError = msg('Globe imagery unavailable');
       return;
     }
+    const box = snapshot.bbox;
+    const rectangle =
+      box && cesium.Rectangle?.fromDegrees
+        ? cesium.Rectangle.fromDegrees(
+            box.lonMin,
+            box.latMin,
+            box.lonMax,
+            box.latMax,
+          )
+        : cesium.Rectangle.MAX_VALUE;
     try {
       const texture = document.createElement('canvas');
       texture.width = raster.width;
@@ -374,11 +418,14 @@ export function createWindRendering({
         shell = createShellSurface({
           viewer,
           cesium,
-          rectangle: cesium.Rectangle.MAX_VALUE,
+          rectangle,
           height: WEATHER_SHELL_HEIGHTS.wind,
         });
         shell.setImage(texture);
         imageryKind = kind;
+        imageryRectangle = box
+          ? [box.lonMin, box.latMin, box.lonMax, box.latMax]
+          : null;
         shell.setAlpha(overlay === 'temperature' ? 1 : 0.85);
         updateImageryFade(viewer.scene.camera, true);
         viewer.scene?.requestRender?.();
@@ -388,12 +435,15 @@ export function createWindRendering({
         url: texture.toDataURL('image/png'),
         tileWidth: raster.width,
         tileHeight: raster.height,
-        rectangle: cesium.Rectangle.MAX_VALUE,
+        rectangle,
       });
       imagery = collection.addImageryProvider(provider);
       orderWeatherImagery(collection, imagery, 0);
       imageryCollection = collection;
       imageryKind = kind;
+      imageryRectangle = box
+        ? [box.lonMin, box.latMin, box.lonMax, box.latMax]
+        : null;
       // Temperature colors carry quantitative meaning; double transparency
       // blends orange heat into blue ocean and obscures useful gradients.
       imagery.alpha = overlay === 'temperature' ? 1 : 0.85;
@@ -564,8 +614,10 @@ export function createWindRendering({
     context.globalCompositeOperation = 'source-over';
     context.lineCap = 'round';
     const cameraHeight = scene.camera?.positionCartographic?.height ?? 1e6;
-    const speedScale = Math.max(0.002, Math.min(4000, cameraHeight / 400));
-    const advection = { speedScale };
+    const advection = {
+      speedScale:
+        Math.max(0.002, Math.min(4000, cameraHeight / 400)) * speedScale,
+    };
     // Stroke length is a display sample of the local field, not frame travel.
     // At low FPS capped advection still moves the head by dt, but a readable
     // world-anchored tail survives without extra projections or screen stretching.
@@ -702,8 +754,17 @@ export function createWindRendering({
     },
     setField(next) {
       const nextField = next?.grid
-        ? { ...next.grid, u: next.u, v: next.v }
+        ? {
+            ...next.grid,
+            u: next.u,
+            v: next.v,
+            noData: next.noData,
+            periodic: Math.abs(next.grid.nx * next.grid.dx - 360) <= 0.01,
+            bbox: next.bbox,
+            speed: next.speed,
+          }
         : next;
+      speedScale = fieldSpeedScale(spec, nextField);
       const viewer = viewerReady();
       const nextNarrow = (viewer?.scene?.canvas?.clientWidth || 800) < 700;
       const reuseGeometry =
@@ -810,6 +871,8 @@ export function createWindRendering({
         host: shell ? 'shell' : imagery ? 'globe' : null,
         shell: shell?.getDiagnostics() ?? null,
         imageryError,
+        speedScale,
+        imageryRectangle,
       };
     },
   };

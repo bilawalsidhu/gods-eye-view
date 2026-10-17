@@ -5,6 +5,8 @@ import { createRailTimeline, utcClock } from './railTimeline.js';
 // Remounting controls must not reopen a panel the user already collapsed.
 const appearedDocuments = new WeakSet();
 const openDocuments = new WeakMap();
+// Ocean currents sit last: OBSERVED slices the three nowCOAST products out of
+// positions 2 to 4, so the new card must not shift them.
 const ORDER = [
   'weather-cyclones',
   'wind',
@@ -12,6 +14,7 @@ const ORDER = [
   'weather-satellite',
   'weather-lightning',
   'air-quality',
+  'ocean-currents',
 ];
 const OBSERVED = new Set(ORDER.slice(2, 5));
 const utc = (time) =>
@@ -197,6 +200,8 @@ export function createWeatherPanel({
         });
         if (state.mode === 'history')
           detail = t('{detail} · Does not follow history', { detail });
+      } else if (id === 'ocean-currents') {
+        detail = summary.detail;
       }
       const lines = [
         { id: 'time', text: detail, muted: true },

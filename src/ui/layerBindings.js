@@ -123,6 +123,7 @@ export class LayerBindings {
     this._weatherShellModules = [];
     for (const id of [
       'wind',
+      'ocean-currents',
       'weather-radar',
       'weather-satellite',
       'weather-lightning',

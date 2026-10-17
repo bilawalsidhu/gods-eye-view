@@ -17,6 +17,9 @@ How to read this:
 | --------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
 | **NOAA GFS (wind)** (`noaa-gfs-bdp-pds.s3.amazonaws.com`) | Global 10 m wind, optional 2 m temperature and mean sea-level pressure for Wind. Keyless; latest 6-hourly 0.25° cycle, byte-range GRIB2 reads, cached for an hour | U.S. public domain (NOAA); keyless via NOAA Open Data on AWS | "NOAA Global Forecast System (GFS)" (courtesy; not an endorsement) |
 | **ECMWF IFS (wind)** (`data.ecmwf.int/forecasts`, ECMWF Open Data) | The alternative Wind model: 10 m wind, optional 2 m temperature and mean sea-level pressure. Keyless; latest 6-hourly 0.25° run, byte-range GRIB2 reads, cached for an hour | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) plus the [ECMWF Terms of Use](https://apps.ecmwf.int/datasets/licences/general/) | "This service is based on data and products of the European Centre for Medium-Range Weather Forecasts (ECMWF)", with the CC BY 4.0 link, the modification notice and ECMWF's liability disclaimer — shown in-app |
+| **HYCOM ESPC-D-V02**                                                          | Primary global surface-current field for the Ocean Currents layer (`FMRC_ESPC-D-V02_uv3z`, `water_u`/`water_v` at depth 0 m)                                   | The dataset declares **no `license` attribute**. Its `distribution_statement` reads "Approved for public release; distribution unlimited" with `classification_level` empty — a U.S. Government public-release statement, which is not itself an explicit grant of reuse terms; none is claimed here                                                  | "US Navy Fleet Numerical Meteorology and Oceanography Center (FNMOC)"                                                                       |
+| **NOAA CoastWatch blended currents**                                          | FALLBACK global field when HYCOM is unavailable (`noaacwBLENDEDNRTcurrentsDaily`)                                                                              | U.S. Government work. The dataset ships its own licence string — free use and redistribution, **not intended for legal use**, no warranty — which the app carries verbatim in the layer's provenance                                                                                                                                                  | "Data courtesy of NOAA; Sentinel data courtesy of Copernicus Program; Generated using AVISO+ products"                                      |
+| **IOOS HF-radar national network**                                            | Nearshore 0.5–6 km surface-current totals for the Ocean Currents layer (CoastWatch ERDDAP `ucsdHfrW500/W1/W2`, `ucsdHfrE1/E2/E6`, `ucsdHfrH1`, `ucsdHfrP2/P6`) | U.S. Government work, under the same ERDDAP disclaimer licence (free use and redistribution, not for legal use, no warranty), carried verbatim in the layer's provenance                                                                                                                                                                              | "IOOS HF-radar national network" via NOAA CoastWatch                                                                                        |
 | **NOAA nowCOAST observed weather** (`nowcoast.noaa.gov/geoserver/observations/{weather_radar,satellite}/ows`, WMS 1.1.1) | Rain radar (MRMS base reflectivity, contiguous US, about 4-minute updates) and Satellite clouds (GOES-19/18 Band 14 regional infrared, about 5-minute updates; global infrared mosaic, hourly). Keyless; layer metadata refreshed every 2 minutes, exact-time images cached for up to 24 hours | [NOAA disclaimer](https://oceanservice.noaa.gov/disclaimer.html) | "NOAA nowCOAST · NWS/OAR MRMS radar; NESDIS GOES and global satellite partners" |
 | **NOAA nowCOAST lightning density** (`nowcoast.noaa.gov/geoserver/observations/lightning_detection/ows`) | Lightning density: 15-minute accumulated strike density on an approximately 8 km grid, Americas and Pacific. Keyless; layer metadata refreshed every 10 minutes, exact-time images cached for up to 24 hours | NOAA Level-5 derived product from Vaisala NLDN/GLD360; the [product description](https://ocean.weather.gov/lightning/lightning_pdd.php) permits public distribution of this density product, not of raw Vaisala detections | "NOAA/NWS nowCOAST; derived from Vaisala NLDN/GLD360" |
 | **NOAA NHC / CPHC advisories** (`www.nhc.noaa.gov/CurrentStorms.json` + the `mapservices.weather.noaa.gov` tropical weather summary MapServer) | Cyclone advisories: storm positions, forecast tracks, points and cones for the Atlantic and eastern/central North Pacific. Keyless through `/api/cyclones`; cached for 5 minutes | [NWS public-data terms](https://www.weather.gov/disclaimer); no endorsement implied | "NOAA/NWS NHC / CPHC" |
@@ -198,6 +201,7 @@ The [Bhote Koshi event pack](public/events/bhote-koshi-2026/README.md), under `p
 | **US Census Bureau counties** (3,235 county polygons)                       | `us_census_counties/`             | **Public domain**                                                                                         | ✅ (no restrictions)                             | "U.S. Census Bureau" (courtesy — not legally required)                      |
 | **CCTV ground heights** (3,445 cameras)                                     | `cctv_ground_heights/`            | Precomputed camera placement heights, aligned to work with Google Photorealistic 3D Tiles (folder README) | —                                                | —                                                                           |
 | **CCTV Camera Database** model-enrichment extract v2.26.0 (17 camera-model records) | `src/layers/cctv/modelSpecs.js` | **CC0-1.0** (public domain dedication) | ✅ (no restrictions) | "Specs: cctv-database.com" (courtesy — not legally required) |
+| **GSHHG land/sea mask** (global 1/8° three-state raster, 1.04 MB)           | `gshhg_mask/`                     | **LGPL-3.0** (derived work; regeneration script committed)                                                | ✅ (attribution + LGPL terms on the data)        | "Wessel & Smith, GSHHG"                                                     |
 
 ### ⚠️ TeleGeography is bundled but NonCommercial
 
@@ -268,6 +272,22 @@ https://www.naturalearthdata.com/about/terms-of-use/). We credit anyway: "Made w
 Earth". Registration in the in-app `dataCredits.js` attribution list ships with the resolver
 wiring (see below).
 
+### GSHHG land/sea mask (`gshhg_mask/`)
+
+A global 1/8° three-state raster (water / land / coastal-mixed, 2 bits per cell,
+1,036,816 bytes) derived from **GSHHG v2.3.7** intermediate-resolution coastline
+polygons (Wessel & Smith — https://www.soest.hawaii.edu/pwessel/gshhg/, fetched
+2026-08-29; `gshhs_i.b` SHA-256 in the folder README). It is the synchronous
+water/land lookup for ocean layers: blanking land cells in current fields and
+gating ocean-point queries. Composition: L1 land, L2 lakes carved back to water,
+L3 islands-in-lakes land, L4 ponds water, L5 Antarctic ice front land, L6
+grounding line skipped. Regeneration is deterministic and committed:
+`node scripts/build-land-sea-mask.mjs path/to/gshhs_i.b`.
+
+GSHHG is distributed under the **LGPL**; this raster is a derived work of the
+data and keeps that license (see the carve-out in [LICENSE](LICENSE)). Credit:
+"Wessel & Smith, GSHHG", registered in `dataCredits.js`.
+
 ### DataSF Analysis Neighborhoods (`neighborhoods/`)
 
 `neighborhoods/san-francisco.json` bundles the City & County of San Francisco's official
@@ -324,6 +344,28 @@ This Wind prototype adds no cloud-volume or radar data. Mapped.earth's public
 bundles were studied for rendering ideas, but
 no code or assets were reused and no application licence granting reuse was
 found. Its presentation is not a weather-data source for this implementation.
+
+### Ocean currents
+
+The optional **Ocean Currents** layer animates the surface-current field through
+the wind renderer. `/api/ocean/currents` serves a manifest and a Float32 grid in
+the same shape as `/api/wind`, with a finite no-data value (`-9999` in both
+components) for land and uncovered water. Views wider than 5000 km get one
+cached 1 degree global lattice resampled from **HYCOM ESPC-D-V02**
+(`FMRC_ESPC-D-V02_uv3z`, `water_u`/`water_v` at depth 0 m, 3-hourly, a model
+forecast, not an observation); when HYCOM is unavailable the global tier falls
+back to NOAA CoastWatch `noaacwBLENDEDNRTcurrentsDaily` (0.25 degree,
+geostrophic only, no Ekman, no tides) and the legend says so. Narrower views are
+served on the fetched sub-grid's own axes, and views under 800 km analyse IOOS
+HF-radar total vectors (CoastWatch ERDDAP `ucsdHfr*`, 0.5 to 6 km, hourly) with
+quality gates (HDOP at most 1.6, per-component speed at most 2.4 m/s, at least
+40 vectors, served hour at most 12 h old) and a two-pass Barnes objective
+analysis with holdout cross-validation; radar cells are observed and the rest
+of the water is filled from the global field, one provenance per cell. Land is
+blanked server-side with the bundled GSHHG mask. Responses are cached ten
+minutes on a half-degree quantized box, upstream bodies are read through a
+streaming byte cap (2 MiB HYCOM and CoastWatch, 8 MiB HF radar), and the field
+is a snapshot: animation does not advance time.
 
 ### Observed weather: NOAA nowCOAST
 

@@ -1,5 +1,15 @@
 # Changelog
 
+- Add the Ocean Currents layer: the HYCOM / CoastWatch / IOOS HF-radar surface
+  current field served in the wind layer's manifest and grid shape and drawn
+  through the wind renderer, which gains a no-data value, regional grids, a
+  per-field speed scale from the field's median speed and per-path speed
+  colour. Globe views use a cached 1 degree global lattice, regional views the
+  fetched sub-grid, coastal views an HF-radar analysis over the global field;
+  the legend names the tier, its age and the radar holdout RMSE. The three
+  field fetchers read upstream bodies through a streaming byte cap. Share
+  token `5`.
+
 - The tracked-aircraft descriptor now publishes `verticalRateMps`, on both the
   civil and military layers, so a consumer reading `getTrackedInfo()` no longer
   has to reach past it into the raw poll record for climb/descent. Reported,

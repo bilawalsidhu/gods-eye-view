@@ -10,7 +10,13 @@ function interpolate(array, a, b, c, d, tx, ty) {
   );
 }
 
-/** Sample a north-to-south, seam-wrapped wind grid bilinearly. */
+/**
+ * Sample a north-to-south wind grid bilinearly. Periodic grids wrap the seam
+ * and clamp latitude (the original behaviour); a non-periodic grid rejects
+ * points outside it, and a finite `noData` sentinel in any weighted corner
+ * rejects the sample. Rejection is `u = v = NaN`, which every consumer
+ * already treats as "no vector here".
+ */
 export function sampleWind(field, lon, lat, result = {}) {
   if (!Number.isFinite(lon) || !Number.isFinite(lat)) {
     result.u = 0;
@@ -18,8 +24,14 @@ export function sampleWind(field, lon, lat, result = {}) {
     return result;
   }
   const { u, v, nx, ny, lo1, la1, dx, dy } = field;
+  const periodic = field.periodic !== false;
   const x = ((normalizeLongitude(lon - lo1) + 360) % 360) / dx;
   const y = (la1 - lat) / dy;
+  if (!periodic && (x > nx - 1 || y < 0 || y > ny - 1)) {
+    result.u = NaN;
+    result.v = NaN;
+    return result;
+  }
   const x0 = Math.floor(x);
   const tx = x - x0;
   const yClamped = Math.max(0, Math.min(ny - 1, y));
@@ -27,14 +39,49 @@ export function sampleWind(field, lon, lat, result = {}) {
   const y1 = Math.min(ny - 1, y0 + 1);
   const ty = yClamped - y0;
   const left = ((x0 % nx) + nx) % nx;
-  const right = (left + 1) % nx;
+  const right = periodic ? (left + 1) % nx : Math.min(left + 1, nx - 1);
   const a = y0 * nx + left;
   const b = y0 * nx + right;
   const c = y1 * nx + left;
   const d = y1 * nx + right;
+  const sentinel = field.noData;
+  if (
+    Number.isFinite(sentinel) &&
+    (u[a] === sentinel ||
+      (tx > 0 && u[b] === sentinel) ||
+      (ty > 0 && (u[c] === sentinel || (tx > 0 && u[d] === sentinel))))
+  ) {
+    result.u = NaN;
+    result.v = NaN;
+    return result;
+  }
   result.u = interpolate(u, a, b, c, d, tx, ty);
   result.v = interpolate(v, a, b, c, d, tx, ty);
   return result;
+}
+
+/** Clip a spawn range to a field box; `null` when they do not overlap. */
+export function intersectBounds(bounds, bbox) {
+  if (!bbox) return bounds;
+  const degree = Math.PI / 180;
+  let west = bbox.lonMin;
+  let east = bbox.lonMax;
+  if (east < west) east += 360;
+  // Shift the box by whole turns onto the view's unwrapped frame.
+  while (east < bounds.west) {
+    west += 360;
+    east += 360;
+  }
+  while (west > bounds.east) {
+    west -= 360;
+    east -= 360;
+  }
+  const outWest = Math.max(bounds.west, west);
+  const outEast = Math.min(bounds.east, east);
+  const sinSouth = Math.max(bounds.sinSouth, Math.sin(bbox.latMin * degree));
+  const sinNorth = Math.min(bounds.sinNorth, Math.sin(bbox.latMax * degree));
+  if (!(outEast > outWest) || !(sinNorth > sinSouth)) return null;
+  return { west: outWest, east: outEast, sinSouth, sinNorth };
 }
 
 /** Return metres represented by one longitude degree at a latitude. */

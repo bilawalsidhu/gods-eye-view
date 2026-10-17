@@ -13,7 +13,7 @@ const tooLarge = () =>
  * length-omitted response cannot blow past the limit. Throws { code:'RESPONSE_TOO_LARGE' }.
  */
 export async function readResponseTextCapped(response, maxBytes, signal) {
-  const declared = Number(response.headers.get('content-length'));
+  const declared = Number(response.headers?.get?.('content-length'));
   if (Number.isFinite(declared) && declared > maxBytes) {
     void response.body?.cancel().catch(() => {});
     throw tooLarge();
@@ -66,7 +66,7 @@ export async function readResponseJsonCapped(response, maxBytes, signal) {
  * Throws { code:'RESPONSE_TOO_LARGE' }.
  */
 export async function readResponseBytesCapped(response, maxBytes, signal) {
-  const declared = Number(response.headers.get('content-length'));
+  const declared = Number(response.headers?.get?.('content-length'));
   if (Number.isFinite(declared) && declared > maxBytes) {
     await response.body?.cancel().catch(() => {});
     throw tooLarge();
