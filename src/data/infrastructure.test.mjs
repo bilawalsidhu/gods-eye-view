@@ -95,6 +95,30 @@ test('dataset URLs still name the complete bundled sources', () => {
   }
 });
 
+test('Acaray and Yacyreta retain matching OSM records in both bundled formats', () => {
+  const folder = new URL('./local_data/dams/', import.meta.url);
+  const collection = JSON.parse(
+    readFileSync(new URL('dams.geojson', folder), 'utf8'),
+  );
+  const lines = readFileSync(new URL('dams.geojsonl', folder), 'utf8')
+    .trim()
+    .split('\n')
+    .map(JSON.parse);
+  for (const [id, name, version] of [
+    [262532166, 'Acaray', 7],
+    [-5671745, 'Represa Yacyretá-Apipé', 2],
+  ]) {
+    const matches = lines.filter((feature) => feature.id === id);
+    assert.equal(matches.length, 1);
+    assert.equal(matches[0].properties.name, name);
+    assert.equal(matches[0].properties.source_version, version);
+    assert.deepEqual(
+      collection.features.filter((feature) => feature.id === id),
+      matches,
+    );
+  }
+});
+
 test('two viewers use their supplied contexts and dispose independently', async (t) => {
   t.mock.method(globalThis, 'fetch', async () => ({
     ok: true,
