@@ -5,13 +5,18 @@
  * as 12, 34 flies the operator somewhere they did not ask for and looks like a
  * successful search. So every rule here is exact — a component is a decimal
  * number, optionally signed, optionally marked with one hemisphere letter, and
- * nothing else. Degrees/minutes/seconds and grid references are not handled;
+ * nothing else. Two-dimensional WGS84 geo URIs use their own strict grammar.
+ * Degrees/minutes/seconds and grid references are not handled;
  * they fall through to the geocoders, which is what happens today.
  */
 
 /** One decimal-degree component: an optional hemisphere letter on either side. */
 const COMPONENT =
   /^([NSEW])?\s*([+-]?(?:\d+(?:\.\d+)?|\.\d+))\s*°?\s*([NSEW])?$/i;
+
+/** RFC 5870's 2D WGS84 subset; never discard altitude or uncertainty. */
+const GEO_URI =
+  /^geo:(-?\d{1,2}(?:\.\d+)?),(-?\d{1,3}(?:\.\d+)?)(?:;crs=wgs84)?$/i;
 
 /** Hemisphere letters, by the axis each one can name. */
 const LATITUDE_LETTERS = new Set(['N', 'S']);
@@ -61,20 +66,25 @@ export function formatCoordinateLabel(lat, lon) {
 }
 
 /**
- * Parse a decimal-degree query, or return null.
+ * Parse a decimal-degree pair or a two-dimensional WGS84 geo URI, or return null.
  *
  * Both orders are accepted when the hemisphere letters say which is which
  * (`W 40, N 74` is longitude then latitude); with no letters the conventional
  * latitude-then-longitude order applies. Two letters naming the same axis, a
  * letter that fixes nothing, an out-of-range latitude or longitude, and any
  * trailing text all decline.
+ * Geo URIs accept only latitude/longitude and an optional `;crs=wgs84`;
+ * altitude, uncertainty, other parameters and query/fragment suffixes decline.
  *
  * @param {string} query
  * @returns {{ lat: number, lon: number, label: string } | null}
  */
 export function parseCoordinateQuery(query) {
   if (typeof query !== 'string') return null;
-  const parts = splitComponents(query);
+  const text = query.trim();
+  const parts = /^geo:/i.test(text)
+    ? GEO_URI.exec(text)?.slice(1, 3)
+    : splitComponents(text);
   if (!parts) return null;
 
   const first = readComponent(parts[0]);
