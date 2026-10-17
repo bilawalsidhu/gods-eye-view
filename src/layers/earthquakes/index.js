@@ -43,8 +43,7 @@ export function createEarthquakesLayer({
 
   function clearSelectedContext({ evicted = false } = {}) {
     // An explicit user deselection differs from a feed eviction.
-    if (!evicted)
-      context?.clearSelectedEntityContextForLayer?.('earthquakes');
+    if (!evicted) context?.clearSelectedEntityContextForLayer?.('earthquakes');
     context?.removeEntityContextsForLayer?.('earthquakes');
     _selectedId = null;
     _selectedContextEntity = null;
