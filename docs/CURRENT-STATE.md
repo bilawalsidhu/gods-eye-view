@@ -1392,6 +1392,14 @@ outside its promise, so an unusual mirror status cannot crash the server.
 Node-only package entries expose both provider factories. Routes, payloads,
 fallback behavior and existing dev/preview hook registration are preserved;
 browser rendering is unchanged.
+The portable frame source retains the proxy's known `X-CCTV-Source` kind. Camera
+snapshot tools label Street View fallback imagery as historical and credit Google,
+while upstream frames retain their current-view label and catalog attribution.
+Synthetic placeholders are unavailable as snapshots. Injected frame sources may
+supply `sourceKind`; missing or unknown provenance keeps `current_view` null and
+does not claim the image is current. The `current_view` field distinguishes camera-feed
+provenance from historical fallback imagery; it does not measure capture time or
+image freshness.
 
 ## CCTV missing numeric fields
 
@@ -1414,7 +1422,10 @@ plugin order, server-key selection, validation, disk caches, budgets, retries
 and stale/error responses remain unchanged. Each has a Node-only package entry
 under `gods-eye-view/server/providers/`. Portable terrain mechanics, traffic tile
 math and GBFS source rules are available under `gods-eye-view/sources/`.
-The browser layers and their rendering remain in their existing modules.
+The TomTom `/api/tomtom/*` routes run the shared same-site admission gate before
+status, cache or upstream work, refusing cross-site browser requests while
+preserving same-origin app requests and non-browser local callers. The browser
+layers and their rendering remain in their existing modules.
 GBFS null or empty availability counts retain an unknown value through station
 parsing and rendering; they use the neutral station color rather than reporting
 an empty dock. Explicit zero and caller-supplied numeric fallbacks remain valid.
@@ -4731,12 +4742,17 @@ Coordinate input requires exactly two nonempty components; extra comma or semico
 
 Location search/fly-to, annotations and Radio location lookup receive one
 `placeSearch.geocode(query, { bias, signal })` service. `src/standalone` composes
-two offline providers first — a strict decimal-degree coordinate reader and an
+two offline providers first — a strict decimal-degree/geo-URI coordinate reader and an
 exact-match reader over the bundled city and landmark names — then Google when
 configured and Photon/OpenStreetMap as fallback, including Google transport
 failures or declined requests. The offline pair answer with no request and no
 key, and decline everything they are not certain of: a coordinate must be a
-decimal-degree pair (either order when N/S/E/W fix the axes), and a bundled name
+decimal-degree pair (either order when N/S/E/W fix the axes), or a two-dimensional
+WGS84 `geo:latitude,longitude` URI with an optional `;crs=wgs84`. URI scheme and
+CRS names are case-insensitive; internal whitespace, altitude, uncertainty, other
+parameters, query strings and fragments decline rather than silently dropping
+information. For example, `geo:39.7392,-104.9903` resolves offline to the same exact
+point, decimal label and framing box as `39.7392, -104.9903`. A bundled name
 must match exactly, so `12junk, 34oops` and `austin, tx` both reach the
 geocoders instead of being answered from the bundle. Degrees/minutes/seconds and
 grid references are not parsed. An answer either provider gives is exact, so
