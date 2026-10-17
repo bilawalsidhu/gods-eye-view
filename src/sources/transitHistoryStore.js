@@ -328,8 +328,12 @@ export function createTransitHistory({
           t > now + 10000
         )
           continue;
+        const byVehicle = feed.vehicleMode?.(record.id);
         const mode =
-          feed.routeMode?.(record.routeId) || feed.defaultMode || 'unknown';
+          (byVehicle !== 'unknown' && byVehicle) ||
+          feed.routeMode?.(record.routeId) ||
+          feed.defaultMode ||
+          'unknown';
         const context = contextOf(record, mode);
         if (!context) continue;
         const key = `${feed.id}\u0000${record.id}`;

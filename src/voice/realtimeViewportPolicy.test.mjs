@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { viewportContextDecision } from './realtimeViewport.js';
+import { RealtimeViewport, viewportContextDecision } from './realtimeViewport.js';
 
 const localContext = (overrides = {}) => ({
   action: 'get_entity_context',
@@ -49,6 +49,7 @@ test('viewport context reasons preserve the existing escalation gate', () => {
   );
   assert.deepEqual(viewportContextDecision(localContext()), {
     send: true,
+    kind: 'viewport',
     reason: 'structured-identity-missing',
     viewScale: 'local',
   });
@@ -72,4 +73,109 @@ test('nearby structured place identity avoids visual escalation too', () => {
       viewScale: 'local',
     },
   );
+});
+
+test('pointer ground selects the #837 crop path, not a full viewport', () => {
+  const pointerContext = localContext({
+    scope: 'pointer',
+    pointer: { target: 'ground' },
+    scene: { basemap: { viewScale: 'city' } },
+  });
+  assert.deepEqual(viewportContextDecision(pointerContext), {
+    send: true,
+    kind: 'crop',
+    reason: 'pointer-ground-crop',
+    viewScale: 'city',
+  });
+  assert.deepEqual(
+    viewportContextDecision({
+      ...pointerContext,
+      scene: { basemap: { viewScale: 'global' } },
+    }),
+    {
+      send: false,
+      reason: 'pointer-scale-not-useful',
+      viewScale: 'global',
+    },
+  );
+  assert.deepEqual(
+    viewportContextDecision({ ...pointerContext, selected: { id: 'building' } }),
+    {
+      send: false,
+      reason: 'pointer-identity-present',
+      viewScale: 'city',
+    },
+  );
+  assert.deepEqual(
+    viewportContextDecision({ ...pointerContext, pointer: null }),
+    { send: false, reason: 'pointer-missing', viewScale: 'city' },
+  );
+});
+
+test('runtime dispatch preserves pointer crop and full image separation', async () => {
+  const channel = { readyState: 'open' };
+  const pointer = { fresh: true, target: 'ground' };
+  const calls = [];
+  const viewport = new RealtimeViewport({
+    readChannel: () => channel,
+    readPointer: () => pointer,
+    operations: {
+      debugLog: (event, detail) => calls.push({ event, detail }),
+    },
+    capture: async () => 'unused',
+  });
+  viewport.sendPointerCrop = async (snapshot, options) => {
+    calls.push({ kind: 'crop', snapshot, options });
+    return true;
+  };
+  viewport.sendRetainedImage = async () => {
+    calls.push({ kind: 'viewport' });
+    return true;
+  };
+
+  assert.equal(
+    await viewport.sendVisualContextIfUseful(
+      localContext({
+        scope: 'pointer',
+        pointer: { target: 'ground' },
+        scene: { basemap: { viewScale: 'city' } },
+      }),
+    ),
+    true,
+  );
+  assert.equal(calls.filter((call) => call.kind === 'crop').length, 1);
+  assert.deepEqual(calls.find((call) => call.kind === 'crop').snapshot, pointer);
+  assert.equal(calls.find((call) => call.kind === 'crop').options.viewScale, 'city');
+  assert.equal(calls.filter((call) => call.kind === 'viewport').length, 0);
+
+  assert.equal(await viewport.sendVisualContextIfUseful(localContext()), true);
+  assert.equal(calls.filter((call) => call.kind === 'viewport').length, 1);
+  assert.equal(
+    await viewport.sendVisualContextIfUseful(
+      localContext({ selected: { id: 'existing' } }),
+    ),
+    false,
+  );
+  assert.equal(calls.filter((call) => call.kind === 'viewport').length, 1);
+  assert.ok(calls.some((call) =>
+    call.event === 'viewport_context.decision' &&
+    call.detail.reason === 'pointer-ground-crop'
+  ));
+});
+
+test('closed channel never captures pointer or full viewport', async () => {
+  const viewport = new RealtimeViewport({
+    readChannel: () => ({ readyState: 'closed' }),
+    readPointer: () => {
+      throw new Error('should not inspect pointer when channel is closed');
+    },
+    operations: {},
+  });
+  assert.equal(
+    await viewport.sendVisualContextIfUseful(
+      localContext({ scope: 'pointer', pointer: { target: 'ground' } }),
+    ),
+    false,
+  );
+  assert.equal(await viewport.sendVisualContextIfUseful(localContext()), false);
 });

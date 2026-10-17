@@ -132,3 +132,67 @@ test('the poles and the dateline are inside the accepted range', () => {
   assert.deepEqual(parseCoordinateQuery('90, 180')?.lat, 90);
   assert.deepEqual(parseCoordinateQuery('-90, -180')?.lon, -180);
 });
+
+test('two-dimensional WGS84 geo URIs resolve to the same decimal coordinate', () => {
+  for (const query of [
+    'geo:39.7392,-104.9903',
+    'geo:39.7392,-104.9903;crs=wgs84',
+    '  GEO:39.7392,-104.9903;CRS=WGS84  ',
+  ]) {
+    assert.deepEqual(parseCoordinateQuery(query), {
+      lat: 39.7392,
+      lon: -104.9903,
+      label: '39.7392° N, 104.9903° W',
+    });
+  }
+  for (const [query, decimal] of [
+    ['geo:0,0', '0,0'],
+    ['geo:-33.8568,151.2153', '-33.8568,151.2153'],
+    ['geo:90,180', '90,180'],
+    ['geo:-90,-180;crs=wgs84', '-90,-180'],
+    ['geo:09,007', '9,7'],
+    ['geo:-0,-0', '-0,-0'],
+  ]) {
+    assert.deepEqual(
+      parseCoordinateQuery(query),
+      parseCoordinateQuery(decimal),
+    );
+  }
+});
+
+test('malformed or unsupported geo URIs are refused without losing their meaning', () => {
+  for (const query of [
+    'geo:',
+    'geo:39.7392',
+    'geo:,104.9903',
+    'geo:39.7392,,104.9903',
+    'geo:39.7392,-104.9903,',
+    'geo:91,0',
+    'geo:-90.1,0',
+    'geo:0,181',
+    'geo:0,-180.1',
+    'geo:000,0',
+    'geo:0,0000',
+    'geo:+39.7392,-104.9903',
+    'geo:.5,-.25',
+    'geo:1e1,2',
+    'geo:NaN,0',
+    'geo:Infinity,0',
+    'geo:39.7392, -104.9903',
+    'geo:39.7392;-104.9903',
+    'geo:39.7392N,104.9903W',
+    'geo:39.7392,-104.9903,1600',
+    'geo:39.7392,-104.9903;u=10',
+    'geo:39.7392,-104.9903;crs=unknown',
+    'geo:39.7392,-104.9903;crs=wgs84;crs=wgs84',
+    'geo:39.7392,-104.9903;crs=wgs84;u=0',
+    'geo:39.7392,-104.9903;custom=value',
+    'geo:0,0?q=39.7392,-104.9903(Denver)',
+    'geo:39.7392,-104.9903#Denver',
+    'geo:39.7392,-104.9903 trailing text',
+    'geo://39.7392,-104.9903',
+    'https://example.com/geo:39.7392,-104.9903',
+  ]) {
+    assert.equal(parseCoordinateQuery(query), null, query);
+  }
+});
