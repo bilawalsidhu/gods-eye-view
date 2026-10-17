@@ -230,10 +230,13 @@ export function evaluateDisasterRouteSupport(route, accessSegments = []) {
  * No access record means NOT ASSESSED, never OPEN.
  */
 export function buildDisasterAccessPacket(options = {}) {
-  const { event = null, accessSegments = [], candidateRoutes = [] } =
-    options && typeof options === 'object' && !Array.isArray(options)
-      ? options
-      : {};
+  const {
+    event = null,
+    accessSegments = [],
+    candidateRoutes = [],
+  } = options && typeof options === 'object' && !Array.isArray(options)
+    ? options
+    : {};
   const records = Array.isArray(accessSegments) ? accessSegments : [];
   const candidates = Array.isArray(candidateRoutes) ? candidateRoutes : [];
   const normalizedSegments = records
