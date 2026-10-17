@@ -11,8 +11,10 @@
  * their median luminance within ±10 %.
  *
  *   node scripts/qa-flights-engines.mjs --base-url=http://localhost:PORT/
- *     [--layer=flights|military] [--out=docs/migration/phase3/<layer>]
+ *     [--layer=flights|military|local-adsb]
+ *     [--out=docs/migration/phase3/<layer>]
  *     [--feed=flights:synthetic:10000] [--models=off|on] [--tolerance=3]
+ *     [--near=lon,lat,height,heading,pitch]
  *
  * The server is the caller's (never ports 4185-4189). Headless only. Exits 1
  * on a failed check.
@@ -46,6 +48,7 @@ const layer = argument('layer') ?? 'flights';
 const DEFAULT_FEEDS = {
   flights: 'flights:synthetic:10000',
   military: 'military:synthetic:1000',
+  'local-adsb': 'local-adsb:fixture',
 };
 const outDir = path.resolve(
   repoRoot,
@@ -58,6 +61,8 @@ const shotDir = path.resolve(
   argument('shots') ?? `qa-artifacts/${layer}-engines`,
 );
 const feed = argument('feed') ?? DEFAULT_FEEDS[layer];
+// A tinted layer's glyph fill (sRGB bytes); null: white glyphs (flights).
+const FILL = { military: [255, 184, 0], 'local-adsb': [255, 79, 216] }[layer];
 const models = argument('models') ?? 'off';
 const tolerance = Number(argument('tolerance') ?? 3);
 const POSES = {
@@ -68,6 +73,10 @@ const POSES = {
   // aircraft are 3D models (with --models=on).
   near: [-73.78, 40.58, 6_000, 0, -35],
 };
+// --near=lon,lat,height,heading,pitch: another near pose (military's
+// aircraft in that view are on the ground, which stay glyphs until the
+// ground is sampled; from 100 km its airborne fleet near JFK are models).
+if (argument('near')) POSES.near = argument('near').split(',').map(Number);
 const WIDTH = 1280;
 const HEIGHT = 800;
 
@@ -86,6 +95,9 @@ async function capture(browser, engineKind) {
   await page.setViewport({ width: WIDTH, height: HEIGHT });
   const errors = [];
   page.on('pageerror', (error) => errors.push(error.message));
+  page.on('console', (message) => {
+    if (message.type() === 'error') errors.push(message.text().slice(0, 200));
+  });
   // The same instant on both engines: the synthetic fleet is where its
   // feed put it, not where 30 s of dead reckoning took it.
   await page.evaluateOnNewDocument(frozenClockScript(W1_FROZEN_MS + 5000));
@@ -100,10 +112,17 @@ async function capture(browser, engineKind) {
   url.searchParams.set('engine', engineKind);
   url.searchParams.set('qaFeed', feed);
   await page.goto(url.href, { waitUntil: 'domcontentloaded' });
-  await page.waitForFunction(() => Boolean(window.__godsEyeView?.layers), {
-    timeout: 180_000,
-    polling: 250,
-  });
+  await page
+    .waitForFunction(() => Boolean(window.__godsEyeView?.layers), {
+      timeout: 180_000,
+      polling: 250,
+    })
+    .catch((error) => {
+      throw new Error(
+        `${engineKind} page did not start: ${errors.slice(0, 3).join(' | ')}`,
+        { cause: error },
+      );
+    });
   await new Promise((resolve) => setTimeout(resolve, 6000));
   await page.evaluate(
     async (models3d, layerId) => {
@@ -222,6 +241,12 @@ async function capture(browser, engineKind) {
           modelPoints: inFrame
             .filter(({ id }) => modelled.includes(id))
             .map(({ id, screen }) => ({ id, screen })),
+          // The glyphs' drawn alpha (focus and limb fades).
+          alphas: Object.fromEntries(
+            (layers.drawn(layerId) ?? [])
+              .filter((row) => !row.trackedModel)
+              .map((row) => [row.id, row.alpha]),
+          ),
           computedScales: Object.fromEntries(
             (layers.drawn(layerId) ?? [])
               .filter((row) => row.model?.show && row.model?.ready)
@@ -255,6 +280,7 @@ async function capture(browser, engineKind) {
       modelled: new Set(known.modelled),
       modelPoints: known.modelPoints,
       computedScales: known.computedScales,
+      alphas: known.alphas,
       background,
     };
   }
@@ -276,25 +302,40 @@ async function pixelsOf(png) {
  */
 function centreColour({ data, width, channels }, { x, y }) {
   let best = null;
-  let bestLuma = -1;
+  let bestScore = -Infinity;
   for (let dy = -3; dy <= 3; dy++)
     for (let dx = -3; dx <= 3; dx++) {
       const i = ((Math.round(y) + dy) * width + Math.round(x) + dx) * channels;
       const rgb = [data[i], data[i + 1], data[i + 2]];
-      const luma = 0.2126 * rgb[0] + 0.7152 * rgb[1] + 0.0722 * rgb[2];
-      if (luma > bestLuma) {
-        bestLuma = luma;
+      // White glyphs (flights): the brightest pixel. A tinted layer's glyph
+      // (military amber, local magenta) can be smaller than a bright map
+      // pixel beside it: the pixel nearest its fill colour.
+      const score = FILL
+        ? -Math.hypot(rgb[0] - FILL[0], rgb[1] - FILL[1], rgb[2] - FILL[2])
+        : 0.2126 * rgb[0] + 0.7152 * rgb[1] + 0.0722 * rgb[2];
+      if (score > bestScore) {
+        bestScore = score;
         best = rgb;
       }
     }
   return best;
 }
 
+// A browser per engine: after Cesium's models the same browser sometimes
+// never brought up the Navara page (its WebGL context).
+const capturedOn = async (engineKind) => {
+  const own = await puppeteer.launch({ headless: true });
+  try {
+    return await capture(own, engineKind);
+  } finally {
+    await own.close();
+  }
+};
 const browser = await puppeteer.launch({ headless: true });
 let report;
 try {
-  const cesium = await capture(browser, 'cesium');
-  const navara = await capture(browser, 'navara');
+  const cesium = await capturedOn('cesium');
+  const navara = await capturedOn('navara');
   fs.mkdirSync(outDir, { recursive: true });
   fs.mkdirSync(shotDir, { recursive: true });
   report = { feed, models, tolerance, poses: {} };
@@ -378,9 +419,12 @@ try {
       `${left.inFrame} / ${right.inFrame}`,
     );
     const worstScreen = Math.max(0, ...rows.map((row) => row.screenDelta));
-    // At 15,000 km the engines' cameras differ by 2.3 px vertically (Cesium
-    // projects its own nadir point 2.27 px above the centre there; Navara on
-    // it): a camera difference, recorded, not the layer's.
+    // At 15,000 km the engines' cameras differ by 2.27 px vertically: Cesium
+    // takes a set view's "up" from the ellipsoid's gradient at the camera
+    // (Ellipsoid.geodeticSurfaceNormal of a point 15,000 km up), 0.117° off
+    // the geodetic normal of the point below, which Navara's camera uses
+    // (measured from 5,000 km up; at 1,500 km both are 0.615 px off);
+    // f·tan(0.117°) = 2.267 px. A camera difference, not the layer's.
     if (pose === 'global')
       console.log(
         `  [INFO] ${pose}: known objects' screen points differ by ${worstScreen.toFixed(2)} px (camera)`,
@@ -427,17 +471,36 @@ try {
     );
     if (rows.length) {
       // Translucent glyphs (focus or limb fades: the fill below 250 on
-      // Cesium) blend with each engine's own map imagery; they are reported,
-      // not compared.
-      const opaque = rows.filter((row) => Math.max(...row.cesium) >= 250);
+      // Cesium, or for a tinted layer more than 3 per channel off its fill)
+      // blend with each engine's own map imagery; they are reported, not
+      // compared.
+      const opaque = rows.filter((row) =>
+        FILL
+          ? // The layer draws it opaque on both (its drawn alpha), and the
+            // Cesium sample is its fill (a glyph a few pixels across can
+            // lose its fill to filtering).
+            left.alphas?.[row.id] >= 0.999 &&
+            right.alphas?.[row.id] >= 0.999 &&
+            row.cesium.every((value, c) => Math.abs(value - FILL[c]) <= 3)
+          : Math.max(...row.cesium) >= 250,
+      );
       const deltas = opaque.map((row) => row.delta).sort((x, y) => x - y);
       const median = deltas.length ? deltas[Math.floor(deltas.length / 2)] : 0;
       const exact = deltas.filter((delta) => delta <= tolerance).length;
-      check(
-        `${pose}: glyph fill colours within ${tolerance} per channel (median), every one within ${tolerance + 2}`,
-        median <= tolerance && deltas.every((delta) => delta <= tolerance + 2),
-        `${exact}/${opaque.length} opaque glyphs within ${tolerance}, median ${median}, worst ${deltas.at(-1) ?? 0}; ${rows.length - opaque.length} translucent`,
-      );
+      const summary = `${exact}/${opaque.length} opaque glyphs within ${tolerance}, median ${median}, worst ${deltas.at(-1) ?? 0}; ${rows.length - opaque.length} translucent`;
+      // At the global pose a tinted glyph is a few pixels across and the
+      // engines' cameras differ by 2.27 px (see above): which pixels its
+      // fill covers depends on that sub-pixel phase, so its colour is
+      // reported, not compared (a white glyph's brightest pixel still is).
+      if (pose === 'global' && FILL)
+        console.log(`  [INFO] ${pose}: glyph fill colours — ${summary}`);
+      else
+        check(
+          `${pose}: glyph fill colours within ${tolerance} per channel (median), every one within ${tolerance + 2}`,
+          median <= tolerance &&
+            deltas.every((delta) => delta <= tolerance + 2),
+          summary,
+        );
     }
   }
   if (models === 'on') {
