@@ -1,4 +1,5 @@
 import { normalizeFirePerimeterSnapshot } from '../../src/layers/perimeters/records.js';
+import { fetchAuFireWarningRows } from './auFireWarnings.js';
 import {
   readResponseJsonCapped,
   readResponseTextCapped,
@@ -49,6 +50,7 @@ const MIB = 1024 * 1024;
 /** Fixed-origin, bounded WFIGS and InciWeb routes for dev and preview. */
 export function firePerimetersProxy({
   fetchImpl = (...args) => globalThis.fetch(...args),
+  fetchAuFire = fetchAuFireWarningRows,
   now = () => Date.now(),
 } = {}) {
   const cache = new Map();
@@ -82,7 +84,16 @@ export function firePerimetersProxy({
       if (!exceededTransferLimit(payload) || !payload.features.length) break;
     }
     const rows = normalizeFirePerimeterSnapshot({ features });
-    return { fetchedAt: now(), rows };
+    // Australian bushfire warnings (QLD QFES + NSW RFS) merge alongside the
+    // US snapshot. Both the helper and this call site are fail-soft: AU can
+    // only ever contribute rows, never remove or delay the WFIGS payload.
+    let auRows = [];
+    try {
+      auRows = await fetchAuFire({ fetchImpl });
+    } catch {
+      auRows = [];
+    }
+    return { fetchedAt: now(), rows: [...rows, ...auRows] };
   }
 
   async function fetchIndex() {

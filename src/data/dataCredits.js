@@ -165,7 +165,11 @@ export const DATA_CREDITS = [
       'Wildfire perimeters: ' +
       '<a href="https://data-nifc.opendata.arcgis.com/" target="_blank" rel="noopener">National Interagency Fire Center (WFIGS)</a>' +
       ' · Incident information: ' +
-      '<a href="https://inciweb.wildfire.gov/" target="_blank" rel="noopener">InciWeb</a>',
+      '<a href="https://inciweb.wildfire.gov/" target="_blank" rel="noopener">InciWeb</a>' +
+      ' · Australian bushfire warnings: ' +
+      '<a href="https://www.qfes.qld.gov.au/current-alerts/bushfire-community-warnings" target="_blank" rel="noopener">Queensland Fire Department (QFES)</a>' +
+      ' · ' +
+      '<a href="https://www.rfs.nsw.gov.au/fire-information/fires-near-me" target="_blank" rel="noopener">NSW Rural Fire Service</a>',
   },
   OSM_CREDIT,
   OPENMAPTILES_CREDIT,
