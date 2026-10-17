@@ -2956,5 +2956,13 @@
   "USB work abandoned after a stalled transfer": "Работа с USB прервана: передача данных зависла",
   "SDR decoder did not start; receiver stopped": "Декодер SDR не запустился; приёмник остановлен",
   "SDR decoder stopped responding; receiver stopped": "Декодер SDR перестал отвечать; приёмник остановлен",
-  "SDR decoder fell behind; receiver stopped": "Декодер SDR не успевает; приёмник остановлен"
+  "SDR decoder fell behind; receiver stopped": "Декодер SDR не успевает; приёмник остановлен",
+  "Location not supported in this browser": "Местоположение не поддерживается этим браузером",
+  "Location requires a secure (HTTPS) connection": "Для определения местоположения требуется защищённое (HTTPS) соединение",
+  "Could not get your location": "Не удалось определить ваше местоположение",
+  "You": "Вы",
+  "Following you — your position is added to the link (hold to stop)": "Следим за вами — ваша позиция добавляется в ссылку (удерживайте, чтобы остановить)",
+  "Following your location": "Следим за вашим местоположением",
+  "My location (click: go there; hold: follow) — your position is added to the link": "Моё местоположение (нажатие: перелёт туда; удержание: слежка) — ваша позиция добавляется в ссылку",
+  "My location": "Моё местоположение"
 }

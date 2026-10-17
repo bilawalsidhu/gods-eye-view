@@ -5,6 +5,7 @@ import { CITY_POIS } from '../cityPois.js';
 import {
   GLOBE_VIEW,
   flyToGlobeView,
+  flyToLandmark,
   flyToPresetLocation,
   flyToPOI,
   searchAndFlyTo,
@@ -24,8 +25,10 @@ import {
   initTrackedReadout,
 } from '../data/trackedReadout.js';
 import {
+  clearOverlaySource,
   destroyWorldOverlay,
   initWorldOverlay,
+  setOverlayEntries,
 } from '../overlays/worldOverlay.js';
 import {
   destroyDetection,
@@ -69,6 +72,7 @@ export class StyleManager extends ApplicationShell {
         CITY_POIS,
         GLOBE_VIEW,
         flyToGlobeView,
+        flyToLandmark,
         flyToPresetLocation,
         flyToPOI,
         searchAndFlyTo,
@@ -84,6 +88,8 @@ export class StyleManager extends ApplicationShell {
         initTrackedReadout,
         destroyWorldOverlay,
         initWorldOverlay,
+        setOverlayEntries,
+        clearOverlaySource,
         destroyDetection,
         initDetection,
         cycleDetectionMode,

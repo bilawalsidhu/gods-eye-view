@@ -2889,5 +2889,13 @@
   "USB work abandoned after a stalled transfer": "Trabajo USB cancelado tras una transferencia bloqueada",
   "SDR decoder did not start; receiver stopped": "El decodificador SDR no arrancó; receptor detenido",
   "SDR decoder stopped responding; receiver stopped": "El decodificador SDR dejó de responder; receptor detenido",
-  "SDR decoder fell behind; receiver stopped": "El decodificador SDR se quedó atrás; receptor detenido"
+  "SDR decoder fell behind; receiver stopped": "El decodificador SDR se quedó atrás; receptor detenido",
+  "Location not supported in this browser": "La ubicación no es compatible con este navegador",
+  "Location requires a secure (HTTPS) connection": "La ubicación requiere una conexión segura (HTTPS)",
+  "Could not get your location": "No se pudo obtener tu ubicación",
+  "You": "Tú",
+  "Following you — your position is added to the link (hold to stop)": "Siguiéndote — tu posición se añade al enlace (mantén pulsado para detener)",
+  "Following your location": "Siguiendo tu ubicación",
+  "My location (click: go there; hold: follow) — your position is added to the link": "Mi ubicación (clic: ir allí; mantener pulsado: seguir) — tu posición se añade al enlace",
+  "My location": "Mi ubicación"
 }
