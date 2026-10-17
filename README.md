@@ -571,14 +571,16 @@ and panel. DelDOT uses its official HTTPS HLS catalog links. Disable that
 pack with `CCTV_DELDOT_ENABLED=0`.
 
 The server allows two concurrent sessions. Each retains at most 12 segments
-and 24 MiB in memory; individual downloads are capped at 4 MiB with a ten
-second deadline. There are no segment files or ffmpeg processes. Redirects,
+and 24 MiB in memory; segment downloads are capped at 12 MiB with a ten
+second deadline. Large HD segments can leave only two or three segments in the
+retained playlist. There are no segment files or ffmpeg processes. Redirects,
 off-origin references, encrypted playlists and non-MPEG-TS segments are refused.
 Each decoder has its own client lease (at most eight per session), including
 native HLS. Closing it releases only that lease; abandoned leases expire after
 15 seconds without access. The last release stops upstream work. Failed live video
 uses the existing still/Street View/synthetic fallback, which is not live video.
-RTMP-only sources are not supported by this integration.
+Cold or restarted sessions begin with the newest two segments; later polls fetch
+only newly advertised segments. RTMP-only sources are not supported by this integration.
 
 </details>
 

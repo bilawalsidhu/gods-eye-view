@@ -429,8 +429,8 @@ export async function fetchTxdotSnapshot(
 const MAX_SAME_HOST_REDIRECTS = 2;
 
 /**
- * Fetch a registered frame URL following redirects ONLY within the original
- * origin (scheme, host and port; at most MAX_SAME_HOST_REDIRECTS hops).
+ * Fetch a registered frame URL with same-origin redirects. Public IPCamLive
+ * snapshot aliases may resolve only to HTTPS snapshot paths on its image hosts.
  * Default redirect-following would let an upstream steer a host-pinned
  * request, and its host-specific headers, to any origin, another port, or a
  * plaintext downgrade.
@@ -449,9 +449,23 @@ export async function fetchWithinHost(url, init, fetchImpl = fetch) {
     return null;
   }
   const origin = current.origin;
+  const ipcamliveAlias =
+    origin === 'https://ipcamlive.com' &&
+    !current.username &&
+    !current.password &&
+    !current.hash &&
+    current.pathname === '/player/snapshot.php' &&
+    current.searchParams.size === 1 &&
+    /^[a-z0-9]+$/.test(current.searchParams.get('alias') || '');
   for (let hop = 0; hop <= MAX_SAME_HOST_REDIRECTS; hop++) {
     const upstream = await fetchImpl(current.toString(), {
       ...init,
+      ...(ipcamliveAlias
+        ? {
+            headers: { 'User-Agent': cctvUpstreamUserAgent(current.href) },
+            credentials: 'omit',
+          }
+        : {}),
       redirect: 'manual',
     });
     // Anything that is not a 3xx (including a test double with no status) is
@@ -471,7 +485,19 @@ export async function fetchWithinHost(url, init, fetchImpl = fetch) {
     } catch {
       return null;
     }
-    if (next.origin !== origin) return null;
+    if (ipcamliveAlias) {
+      if (
+        next.protocol !== 'https:' ||
+        next.port ||
+        next.username ||
+        next.password ||
+        next.search ||
+        next.hash ||
+        !/^s\d+\.ipcamlive\.com$/.test(next.hostname) ||
+        !/^\/streams\/[a-z0-9]+\/snapshot\.jpg$/.test(next.pathname)
+      )
+        return null;
+    } else if (next.origin !== origin) return null;
     current = next;
   }
   return null;

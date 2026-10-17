@@ -118,7 +118,13 @@ export function createSelection({
     // prior is off, the clamp is measured from a shifted origin, but a
     // re-activation after the one-shot snap lands re-probes from real ground,
     // so it self-corrects.
-    parts.geometry.runActivationObstructionProbe(record);
+    const embedded = record.camera.feedType === 'embed';
+    if (!embedded) parts.geometry.runActivationObstructionProbe(record);
+    else {
+      layerState._calibrationMode = false;
+      layerState._gizmo?.setEnabled(false);
+      services.render.releaseContinuousRender('cctv-adjust');
+    }
     // Coverage is activation-lazy even while the mode is OFF: the active
     // camera's projection representation must be ready without materializing
     // any idle neighbor. The following geometry rewrite welds these entities to
@@ -138,7 +144,7 @@ export function createSelection({
     // Ground under the plane's footprint (DEM, cached proxy) for cameras
     // without a shipped precompute for this pose — only the camera the user
     // is looking at ever asks.
-    void parts.ground.resolveFootprintGround(record);
+    if (!embedded) void parts.ground.resolveFootprintGround(record);
     record.activationDone = true;
     parts.rendering.refreshCoverageStyles();
     // The newly active camera leaves the ambient ring (its monitor plane takes

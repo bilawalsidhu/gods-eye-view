@@ -2889,5 +2889,12 @@
   "USB work abandoned after a stalled transfer": "Trabajo USB cancelado tras una transferencia bloqueada",
   "SDR decoder did not start; receiver stopped": "El decodificador SDR no arrancó; receptor detenido",
   "SDR decoder stopped responding; receiver stopped": "El decodificador SDR dejó de responder; receptor detenido",
-  "SDR decoder fell behind; receiver stopped": "El decodificador SDR se quedó atrás; receptor detenido"
+  "SDR decoder fell behind; receiver stopped": "El decodificador SDR se quedó atrás; receptor detenido",
+  "Approximate location; coverage not calibrated.": "Ubicación aproximada; cobertura sin calibrar.",
+  "LOCATION · APPROXIMATE": "UBICACIÓN · APROXIMADA",
+  "Open official camera page ↗": "Abrir la página oficial de la cámara ↗",
+  "PLAYER IN PANEL": "REPRODUCTOR EN EL PANEL",
+  "PUBLIC PLAYER · EXTERNAL": "REPRODUCTOR PÚBLICO · EXTERNO",
+  "{camera} — public player": "{camera} — reproductor público",
+  "{city} CCTV · {name} · PUBLIC PLAYER · APPROXIMATE LOCATION · COVERAGE NOT CALIBRATED": "{city} CCTV · {name} · REPRODUCTOR PÚBLICO · UBICACIÓN APROXIMADA · COBERTURA SIN CALIBRAR"
 }
