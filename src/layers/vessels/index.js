@@ -36,7 +36,9 @@ export function createVesselLayer({ source, services, options = {} } = {}) {
   parts.ingestion = createIngestion({
     feed: vesselState.state.feed,
     readSource: () => vesselState._source,
-    readViewer: () => vesselState.state.viewer,
+    // The viewer, or the renderer's view on an engine without one.
+    readViewer: () =>
+      vesselState.state.viewer || vesselState.state.renderer?.view || null,
     readArea: vesselViewArea,
     getRowLimit: parts.rendering.renderRowLimit,
     readCount: () => vesselState.state.records.all.length,

@@ -388,9 +388,11 @@ test('vessel and fire layers announce valid clicks and never fly cameras', () =>
     assert.match(source, /requestWorldFocus\(\{/);
     assert.doesNotMatch(source, /camera\.flyTo/);
   }
+  // Vessels' click rule is a function the engine's selection dispatcher
+  // calls (phase 3, 13a): the same body, out of the old LEFT_CLICK handler.
   const vesselClick = body(
     vessels,
-    /handler\.setInputAction\(\s*\(click\) => \{([\s\S]*?)\n\s*\},\s*Cesium\.ScreenSpaceEventType\.LEFT_CLICK,?\s*\);/,
+    /function handleClick\(click\) \{([\s\S]*?)\n  \}/,
     'vessel click',
   );
   ordered(vesselClick, [

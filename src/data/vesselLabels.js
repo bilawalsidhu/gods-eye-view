@@ -39,6 +39,11 @@ const TYPE_STYLES = [
 ];
 const DEFAULT_STYLE = { css: '#39d5ff', accent: '57, 213, 255' };
 
+/** Every chevron hue vesselTypeCss() can return, once each. */
+export const VESSEL_TYPE_CSS_COLORS = Object.freeze([
+  ...new Set([...TYPE_STYLES, DEFAULT_STYLE].map(({ css }) => css)),
+]);
+
 const NUMERIC_TYPE_SPECIALS = {
   30: 'FISHING',
   31: 'TOWING',
