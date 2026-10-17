@@ -2956,5 +2956,12 @@
   "USB work abandoned after a stalled transfer": "Работа с USB прервана: передача данных зависла",
   "SDR decoder did not start; receiver stopped": "Декодер SDR не запустился; приёмник остановлен",
   "SDR decoder stopped responding; receiver stopped": "Декодер SDR перестал отвечать; приёмник остановлен",
-  "SDR decoder fell behind; receiver stopped": "Декодер SDR не успевает; приёмник остановлен"
+  "SDR decoder fell behind; receiver stopped": "Декодер SDR не успевает; приёмник остановлен",
+  "Approximate location; coverage not calibrated.": "Приблизительное местоположение; зона обзора не откалибрована.",
+  "LOCATION · APPROXIMATE": "МЕСТОПОЛОЖЕНИЕ · ПРИБЛИЗИТЕЛЬНОЕ",
+  "Open official camera page ↗": "Открыть официальную страницу камеры ↗",
+  "PLAYER IN PANEL": "ПРОИГРЫВАТЕЛЬ В ПАНЕЛИ",
+  "PUBLIC PLAYER · EXTERNAL": "ОБЩЕДОСТУПНЫЙ ПРОИГРЫВАТЕЛЬ · ВНЕШНИЙ",
+  "{camera} — public player": "{camera} — общедоступный проигрыватель",
+  "{city} CCTV · {name} · PUBLIC PLAYER · APPROXIMATE LOCATION · COVERAGE NOT CALIBRATED": "{city} CCTV · {name} · ОБЩЕДОСТУПНЫЙ ПРОИГРЫВАТЕЛЬ · ПРИБЛИЗИТЕЛЬНОЕ МЕСТОПОЛОЖЕНИЕ · ЗОНА ОБЗОРА НЕ ОТКАЛИБРОВАНА"
 }
