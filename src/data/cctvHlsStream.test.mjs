@@ -188,8 +188,8 @@ test('one session is reserved before await; disk-free cache and capacity remain 
   assert.deepEqual(manager.stats(), { sessions: 1, bytes: 6 });
   const text = await manager.buildPlaylist(a, 'a');
   assert.match(text, /seg_0\.ts\?session=/);
-  assert.equal(manager.getSegment('a', 'stale-token', 0), null);
-  assert.equal(manager.getSegment('a', a.token, 0).length, 3);
+  assert.equal(manager.getAsset('a', 'stale-token', 'seg_0.ts'), null);
+  assert.equal(manager.getAsset('a', a.token, 'seg_0.ts').body.length, 3);
   manager.stop('a', 'stale-token');
   assert.equal(manager.stats().sessions, 1);
   manager.stop('a', a.token);
@@ -303,8 +303,14 @@ test('two consumers share downloads but release and abandoned expiry are indepen
   await assert.rejects(manager.ensure('camera', base, 'viewer-c'));
   manager.release('camera', 'viewer-a');
   assert.equal(manager.stats().sessions, 1);
-  assert.equal(manager.getSegment('camera', a.token, 0, 'viewer-a'), null);
-  assert.equal(manager.getSegment('camera', a.token, 0, 'viewer-b').length, 3);
+  assert.equal(
+    manager.getAsset('camera', a.token, 'seg_0.ts', 'viewer-a'),
+    null,
+  );
+  assert.equal(
+    manager.getAsset('camera', a.token, 'seg_0.ts', 'viewer-b').body.length,
+    3,
+  );
   assert.match(
     await manager.buildPlaylist(b, 'camera', 'viewer-b'),
     /lease=viewer-b/,
