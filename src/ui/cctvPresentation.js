@@ -133,7 +133,10 @@ export function _renderCctvState(state) {
     btn.disabled = !enabled || cameras.length === 0;
   }
   if (this._cctvNearestBtn)
-    this._cctvNearestBtn.disabled = !enabled || !cameras.length;
+    this._cctvNearestBtn.disabled =
+      !enabled ||
+      (!cameras.length &&
+        (discovery.localIds.size > 0 || !state?.cameras?.length));
   if (this._cctvFocusBtn) {
     this._cctvFocusBtn.disabled = !enabled || cameras.length === 0 || !activeId;
   }

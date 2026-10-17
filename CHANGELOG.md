@@ -1,10 +1,5 @@
 # Changelog
 
-- Make CCTV discovery follow the map view, with city/camera/provider search,
-  distance ordering and an explicit worldwide scope. Keep panel navigation in
-  filtered results and explain missing local coverage instead of showing a
-  distant camera preview.
-
 - The tracked-aircraft descriptor now publishes `verticalRateMps`, on both the
   civil and military layers, so a consumer reading `getTrackedInfo()` no longer
   has to reach past it into the raw poll record for climb/descent. Reported,

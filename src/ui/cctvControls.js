@@ -85,10 +85,17 @@ export class CctvControls {
       query: this._cctvSearch?.value || '',
     });
   }
-  /** Select the nearest result without flying; shared by panel enable and Nearest. */
-  selectNearestDiscoveredCamera() {
+  /** Select a result without flying; only explicit Nearest may leave an empty view. */
+  selectNearestDiscoveredCamera({ fallbackToAll = false } = {}) {
     const state = this.cctv.getUIState?.() || this._cctvState;
-    const camera = this.discoverCameras(state).cameras[0];
+    const discovery = this.discoverCameras(state);
+    let camera = discovery.cameras[0];
+    if (!camera && fallbackToAll && !discovery.localIds.size) {
+      camera = discoverCctvCameras(state?.cameras || [], {
+        view: this.actions.readMapView?.(),
+        scope: 'all',
+      }).cameras.find((candidate) => Number.isFinite(candidate.distanceKm));
+    }
     return camera && this.cctv.selectCamera(camera.id) ? camera.id : null;
   }
   cycleDiscoveredCamera(step) {

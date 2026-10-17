@@ -111,7 +111,8 @@ try {
   await page.click('#cctv-next-btn');
   assert.equal(await page.evaluate(() => window.selected), 'cape');
   await page.evaluate(() => {
-    window.view = { ...window.view, south: 0, north: 1 };
+    window.view = { ...window.view, south: 0, north: 1, center: { lat: 0.5, lon: 18.5 } };
+    window.selected = null;
     window.mapMoved();
   });
   assert.deepEqual(await options(), []);
@@ -120,6 +121,10 @@ try {
     /No cameras in map view/,
   );
   assert.equal(await page.$eval('#cctv-next-btn', (el) => el.disabled), true);
+  assert.equal(await page.$eval('#cctv-nearest-btn', (el) => el.disabled), false);
+  await page.click('#cctv-nearest-btn');
+  assert.equal(await page.evaluate(() => window.selected), 'cape');
+  assert.deepEqual(await options(), []);
   await page.select('#cctv-camera-scope', 'all');
   const stableOptions = await page.evaluate(() => {
     const select = document.getElementById('cctv-camera-select');

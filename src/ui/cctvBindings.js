@@ -27,7 +27,7 @@ export function _initCctvPanel() {
     )
       return;
     this.actions.runExplicitFocus(
-      () => this.selectNearestDiscoveredCamera(),
+      () => this.selectNearestDiscoveredCamera({ fallbackToAll: true }),
       (cameraId) => this.cctv.focusCamera(cameraId, 1.8),
     );
   });

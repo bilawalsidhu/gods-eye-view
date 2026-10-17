@@ -126,3 +126,31 @@ test('map changes refresh discovery, navigation stays in results, and disposal r
   controls.destroy();
   assert.equal(removed, 1);
 });
+
+test('explicit Nearest reaches global coverage from an empty view without changing enable behavior', () => {
+  let mapView = {
+    west: 20, east: 21, south: -34, north: -33,
+    center: { lat: -33.92, lon: 20.5 },
+  };
+  const selected = [];
+  const controls = new CctvControls({
+    elements: { _cctvSearch: { value: 'Vancouver' } },
+    cctv: { selectCamera(id) { selected.push(id); return true; } },
+    actions: { readMapView: () => mapView },
+  });
+  controls._cctvState = { cameras };
+  assert.equal(controls.selectNearestDiscoveredCamera(), null);
+  assert.equal(controls.selectNearestDiscoveredCamera({ fallbackToAll: true }), 'cape-far');
+  assert.deepEqual(selected, ['cape-far']);
+  // Search misses in a covered view still remain empty.
+  mapView = view;
+  assert.equal(controls.selectNearestDiscoveredCamera({ fallbackToAll: true }), null);
+  controls._cctvSearch.value = 'Harbour';
+  assert.equal(controls.selectNearestDiscoveredCamera({ fallbackToAll: true }), 'cape-far');
+  mapView = undefined;
+  assert.equal(controls.selectNearestDiscoveredCamera({ fallbackToAll: true }), null);
+  controls._cctvState = { cameras: [] };
+  mapView = view;
+  assert.equal(controls.selectNearestDiscoveredCamera({ fallbackToAll: true }), null);
+  controls.destroy();
+});
