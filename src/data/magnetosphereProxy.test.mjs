@@ -321,3 +321,106 @@ test('a null index reading is skipped rather than read as zero', () => {
     0,
   );
 });
+
+/** Drive the handler once; `onClose` receives the response's close trigger. */
+function requester(proxy, onClose = () => {}) {
+  let handler;
+  proxy.configureServer({ middlewares: { use: (_path, h) => (handler = h) } });
+  return () =>
+    new Promise((resolve) => {
+      const listeners = [];
+      const res = {
+        statusCode: 200,
+        on(event, listener) {
+          if (event === 'close') listeners.push(listener);
+        },
+        removeListener() {},
+        setHeader() {},
+        end: (body) => resolve(JSON.parse(body)),
+      };
+      onClose(() => listeners.forEach((listener) => listener()));
+      handler({ method: 'GET', url: '/' }, res);
+    });
+}
+
+const okBody = (url) => {
+  const text = String(url);
+  if (text.includes('planetary_k_index'))
+    return JSON.stringify([{ time_tag: '2026-10-01T12:00:00', estimated_kp: 2.3 }]);
+  if (text.includes('kyoto-dst'))
+    return JSON.stringify([{ time_tag: '2026-10-01T12:00:00', dst: -18 }]);
+  return JSON.stringify([HEADER, row()]);
+};
+
+test('a hanging upstream times out instead of holding the client', async () => {
+  const proxy = magnetosphereProxy({
+    timeoutMs: 20,
+    // Never settles, and ignores its signal, like a stalled socket.
+    fetchImpl: () => new Promise(() => {}),
+  });
+  const started = Date.now();
+  const answer = await requester(proxy)();
+  assert.equal(answer.unavailable, true);
+  assert.ok(Date.now() - started < 2000, 'answered after the timeout, not never');
+});
+
+test('a client disconnecting does not fail the others waiting on the same fetch', async () => {
+  let release;
+  const gate = new Promise((resolve) => (release = resolve));
+  const closes = [];
+  const proxy = magnetosphereProxy({
+    fetchImpl: async (url, { signal } = {}) => {
+      await gate;
+      signal?.throwIfAborted();
+      return { ok: true, headers: { get: () => null }, text: async () => okBody(url) };
+    },
+  });
+  const run = requester(proxy, (close) => closes.push(close));
+  const first = run();
+  const second = run();
+  closes[0](); // the first client goes away mid-fetch
+  release();
+  const [, answer] = await Promise.all([first, second]);
+  assert.equal(answer.unavailable, false);
+  assert.equal(answer.stale, false);
+  assert.ok(answer.magnetopause.standoffRe > 0);
+});
+
+test('Kp and Dst are coalesced like the solar wind', async () => {
+  const calls = { wind: 0, kp: 0, dst: 0 };
+  const proxy = magnetosphereProxy({
+    fetchImpl: async (url) => {
+      const text = String(url);
+      if (text.includes('planetary_k_index')) calls.kp += 1;
+      else if (text.includes('kyoto-dst')) calls.dst += 1;
+      else calls.wind += 1;
+      await new Promise((resolve) => setTimeout(resolve, 5));
+      return { ok: true, headers: { get: () => null }, text: async () => okBody(url) };
+    },
+  });
+  const run = requester(proxy);
+  await Promise.all([run(), run(), run()]);
+  assert.deepEqual(calls, { wind: 1, kp: 1, dst: 1 });
+});
+
+test('a failing upstream is backed off, not asked again on every request', async () => {
+  let clock = 0;
+  let fetches = 0;
+  const proxy = magnetosphereProxy({
+    now: () => clock,
+    fetchImpl: async () => {
+      fetches += 1;
+      return { ok: false, status: 503 };
+    },
+  });
+  const run = requester(proxy);
+  for (let i = 0; i < 5; i += 1) {
+    const answer = await run();
+    assert.equal(answer.unavailable, true);
+    clock += 1000;
+  }
+  assert.equal(fetches, 3, 'one try per feed, then backoff');
+  clock += 60_000;
+  await run();
+  assert.equal(fetches, 6, 'and a retry once the backoff has passed');
+});

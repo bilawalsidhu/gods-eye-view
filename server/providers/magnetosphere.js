@@ -24,6 +24,10 @@ const KP_URL = 'https://services.swpc.noaa.gov/json/planetary_k_index_1m.json';
 const DST_URL = 'https://services.swpc.noaa.gov/products/kyoto-dst.json';
 const MAX_BYTES = 512 * 1024;
 const CACHE_MS = 60_000;
+/** Longest a client waits on SWPC before the stale or unavailable answer. */
+const UPSTREAM_TIMEOUT_MS = 10_000;
+/** After a failed fetch, how long the upstream is left alone. */
+const BACKOFF_MS = 60_000;
 const STALE_LIMIT_MS = 6 * 3600_000;
 
 function invalid(reason) {
@@ -191,140 +195,149 @@ export function describeState(
   };
 }
 
+/**
+ * One upstream feed, shared by every caller.
+ *
+ * Each fetch runs under its own timeout rather than a caller's signal: a fetch
+ * that several clients are waiting on must not be cancelled because the first
+ * of them disconnected. Concurrent callers share the fetch in flight, a fresh
+ * value is served from cache, and after a failure the upstream is left alone
+ * for `backoffMs` instead of being asked again on every request.
+ *
+ * @param {object} options
+ * @param {(signal: AbortSignal) => Promise<*>} options.fetchOnce One upstream
+ *   read, returning the parsed value.
+ * @returns {{get: () => Promise<*>, last: () => ?{value: *, fetchedAt: number}}}
+ *   `get` resolves to a fresh value or rejects; `last` is the newest good one.
+ */
+function sharedFeed({ fetchOnce, now, cacheMs, timeoutMs, backoffMs }) {
+  let cache = null;
+  let inFlight = null;
+  let lastFailureAt = -Infinity;
+  function get() {
+    if (cache && now() - cache.fetchedAt < cacheMs)
+      return Promise.resolve(cache.value);
+    if (inFlight) return inFlight;
+    if (now() - lastFailureAt < backoffMs)
+      return Promise.reject(new Error('upstream_backoff'));
+    inFlight = (async () => {
+      const controller = new AbortController();
+      const timer = setTimeout(
+        () => controller.abort(new Error('upstream_timeout')),
+        timeoutMs,
+      );
+      try {
+        // Raced as well as signalled, so a fetch that ignores its signal
+        // still cannot hold every waiting client past the timeout.
+        const value = await Promise.race([
+          fetchOnce(controller.signal),
+          new Promise((_, reject) => {
+            controller.signal.addEventListener(
+              'abort',
+              () => reject(controller.signal.reason),
+              { once: true },
+            );
+          }),
+        ]);
+        cache = { value, fetchedAt: now() };
+        lastFailureAt = -Infinity;
+        return value;
+      } catch (error) {
+        lastFailureAt = now();
+        throw error;
+      } finally {
+        clearTimeout(timer);
+        inFlight = null;
+      }
+    })();
+    return inFlight;
+  }
+  return { get, last: () => cache };
+}
+
+async function readJson(fetchImpl, url, signal, label) {
+  const response = await fetchImpl(url, { signal });
+  if (!response.ok) {
+    const error = new Error(`${label}_http_${response.status}`);
+    error.status = response.status;
+    throw error;
+  }
+  // readCappedResponseText reports the cap rather than throwing, so an
+  // oversized body must be checked for; destructuring it as a string would
+  // have parsed "[object Object]" and failed much later, as "bad JSON".
+  const { tooLarge, text } = await readCappedResponseText(response, MAX_BYTES);
+  if (tooLarge) throw invalid(`${label}_too_large`);
+  try {
+    return JSON.parse(text);
+  } catch {
+    throw invalid(`${label}_json`);
+  }
+}
+
 export function magnetosphereProxy({
   fetchImpl = (...args) => globalThis.fetch(...args),
   now = () => Date.now(),
+  timeoutMs = UPSTREAM_TIMEOUT_MS,
 } = {}) {
-  let cache = null;
-  let inFlight = null;
-  let kpCache = null;
-  let dstCache = null;
+  const feed = (url, label, parse) =>
+    sharedFeed({
+      fetchOnce: async (signal) =>
+        parse(await readJson(fetchImpl, url, signal, label)),
+      now,
+      cacheMs: CACHE_MS,
+      timeoutMs,
+      backoffMs: BACKOFF_MS,
+    });
+  const solarWind = feed(SOLAR_WIND_URL, 'solar_wind', latestSolarWind);
+  const kpFeed = feed(KP_URL, 'kp', latestKp);
+  const dstFeed = feed(DST_URL, 'dst', latestDst);
 
-  async function loadKp(signal) {
-    if (kpCache && now() - kpCache.fetchedAt < CACHE_MS) return kpCache.value;
-    try {
-      const response = await fetchImpl(KP_URL, { signal });
-      if (!response.ok) throw new Error(`kp_http_${response.status}`);
-      const { tooLarge, text } = await readCappedResponseText(
-        response,
-        MAX_BYTES,
-      );
-      if (tooLarge) throw invalid('kp_too_large');
-      const value = latestKp(JSON.parse(text));
-      kpCache = { value, fetchedAt: now() };
-      return value;
-    } catch {
-      // Kp is a refinement, not a prerequisite: the boundary and the field
-      // both stand without it. Keep the last good value if there is one.
-      return kpCache?.value ?? null;
-    }
-  }
-
-  async function loadDst(signal) {
-    if (dstCache && now() - dstCache.fetchedAt < CACHE_MS)
-      return dstCache.value;
-    try {
-      const response = await fetchImpl(DST_URL, { signal });
-      if (!response.ok) throw new Error(`dst_http_${response.status}`);
-      const { tooLarge, text } = await readCappedResponseText(
-        response,
-        MAX_BYTES,
-      );
-      if (tooLarge) throw invalid('dst_too_large');
-      const value = latestDst(JSON.parse(text));
-      dstCache = { value, fetchedAt: now() };
-      return value;
-    } catch {
-      // Losing Dst costs T96 and nothing else: the client drops to T89 and the
-      // boundary is untouched. Keep the last good value if there is one.
-      return dstCache?.value ?? null;
-    }
-  }
-
-  async function load(signal) {
-    const response = await fetchImpl(SOLAR_WIND_URL, { signal });
-    if (!response.ok) {
-      const error = new Error(`solar_wind_http_${response.status}`);
-      error.status = response.status;
-      throw error;
-    }
-    // readCappedResponseText reports the cap rather than throwing, so an
-    // oversized body must be checked for; destructuring it as a string would
-    // have parsed "[object Object]" and failed much later, as "bad JSON".
-    const { tooLarge, text } = await readCappedResponseText(
-      response,
-      MAX_BYTES,
-    );
-    if (tooLarge) throw invalid('too_large');
-    let parsed;
-    try {
-      parsed = JSON.parse(text);
-    } catch {
-      throw invalid('json');
-    }
-    const sample = latestSolarWind(parsed);
-    cache = { sample, fetchedAt: now() };
-    return sample;
-  }
-
-  function acquire(signal) {
-    if (cache && now() - cache.fetchedAt < CACHE_MS)
-      return Promise.resolve(cache.sample);
-    // Coalesce: one upstream request per generation however many tabs ask.
-    if (!inFlight) {
-      inFlight = load(signal).finally(() => {
-        inFlight = null;
-      });
-    }
-    return inFlight;
-  }
+  // Kp and Dst are refinements, not prerequisites: the boundary and the field
+  // both stand without them (losing Dst costs T96, losing both costs T89). So
+  // a failure keeps the last good value, or null, instead of failing the
+  // whole answer.
+  const refinement = (shared) =>
+    shared.get().catch(() => shared.last()?.value ?? null);
 
   async function handler(req, res) {
-    const controller = new AbortController();
-    const close = () => controller.abort();
-    res.on?.('close', close);
     const json = (status, body) => {
       res.statusCode = status;
       res.setHeader('Content-Type', 'application/json');
       res.setHeader('Cache-Control', 'no-store');
       res.end(JSON.stringify(body));
     };
+    if (req.method !== 'GET') return json(405, { error: 'method_not_allowed' });
+    if (req.url !== '/' && req.url !== '')
+      return json(400, { error: 'invalid_magnetosphere_query' });
     try {
-      if (req.method !== 'GET')
-        return json(405, { error: 'method_not_allowed' });
-      if (req.url !== '/' && req.url !== '')
-        return json(400, { error: 'invalid_magnetosphere_query' });
-      try {
-        const [sample, kp, dst] = await Promise.all([
-          acquire(controller.signal),
-          loadKp(controller.signal),
-          loadDst(controller.signal),
-        ]);
-        json(200, describeState(sample, { kp, dst }));
-      } catch (error) {
-        // A bounded last-good answer beats a blank boundary, but it is only
-        // offered while it is still plausibly the current state, and it is
-        // always labelled.
-        const usable = cache && now() - cache.fetchedAt <= STALE_LIMIT_MS;
-        if (usable)
-          return json(
-            200,
-            describeState(cache.sample, {
-              stale: true,
-              kp: kpCache?.value ?? null,
-              dst: dstCache?.value ?? null,
-            }),
-          );
-        json(200, {
-          schemaVersion: 1,
-          product: 'swpc-propagated-solar-wind',
-          stale: false,
-          unavailable: true,
-          reason: error.reason || error.message || 'unavailable',
-        });
-      }
-    } finally {
-      res.removeListener?.('close', close);
+      const [sample, kp, dst] = await Promise.all([
+        solarWind.get(),
+        refinement(kpFeed),
+        refinement(dstFeed),
+      ]);
+      json(200, describeState(sample, { kp, dst }));
+    } catch (error) {
+      // A bounded last-good answer beats a blank boundary, but it is only
+      // offered while it is still plausibly the current state, and it is
+      // always labelled.
+      const cache = solarWind.last();
+      const usable = cache && now() - cache.fetchedAt <= STALE_LIMIT_MS;
+      if (usable)
+        return json(
+          200,
+          describeState(cache.value, {
+            stale: true,
+            kp: kpFeed.last()?.value ?? null,
+            dst: dstFeed.last()?.value ?? null,
+          }),
+        );
+      json(200, {
+        schemaVersion: 1,
+        product: 'swpc-propagated-solar-wind',
+        stale: false,
+        unavailable: true,
+        reason: error.reason || error.message || 'unavailable',
+      });
     }
   }
 
