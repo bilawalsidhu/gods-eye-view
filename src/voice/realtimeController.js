@@ -102,6 +102,7 @@ export class GevRealtimeController extends RealtimeFacade {
 
       operations: {
         sendRealtimeEvent: (...args) => this.sendRealtimeEvent(...args),
+        debugLog: (...args) => this.debugLog(...args),
       },
     });
     this._diagnostics = new RealtimeDiagnostics({
