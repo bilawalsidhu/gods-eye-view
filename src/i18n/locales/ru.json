@@ -2956,5 +2956,31 @@
   "USB work abandoned after a stalled transfer": "Работа с USB прервана: передача данных зависла",
   "SDR decoder did not start; receiver stopped": "Декодер SDR не запустился; приёмник остановлен",
   "SDR decoder stopped responding; receiver stopped": "Декодер SDR перестал отвечать; приёмник остановлен",
-  "SDR decoder fell behind; receiver stopped": "Декодер SDR не успевает; приёмник остановлен"
+  "SDR decoder fell behind; receiver stopped": "Декодер SDR не успевает; приёмник остановлен",
+  "{count} cameras in map view · nearest first": {
+    "one": "{count} камера в области карты · сначала ближайшие",
+    "few": "{count} камеры в области карты · сначала ближайшие",
+    "many": "{count} камер в области карты · сначала ближайшие",
+    "other": "{count} камеры в области карты · сначала ближайшие"
+  },
+  "{count} cameras worldwide · nearest first": {
+    "one": "{count} камера по всему миру · сначала ближайшие",
+    "few": "{count} камеры по всему миру · сначала ближайшие",
+    "many": "{count} камер по всему миру · сначала ближайшие",
+    "other": "{count} камеры по всему миру · сначала ближайшие"
+  },
+  "No matching cameras. Try another search or All cameras.": "Нет подходящих камер. Измените поиск или выберите «Все камеры».",
+  "No cameras in map view. Move the map or choose All cameras.": "В области карты нет камер. Переместите карту или выберите «Все камеры».",
+  "No cameras loaded.": "Камеры не загружены.",
+  "<1 km": "<1 км",
+  "{distance} km": "{distance} км",
+  "No camera selected in this area": "В этой области камера не выбрана",
+  "Enable CCTV to load cameras": "Включите CCTV, чтобы загрузить камеры",
+  "The selected camera is outside the map view. Choose a camera here, or switch to All cameras.": "Выбранная камера находится вне области карты. Выберите камеру здесь или переключитесь на «Все камеры».",
+  "Search city, camera or provider": "Поиск города, камеры или поставщика",
+  "Search CCTV cameras": "Поиск камер CCTV",
+  "CCTV search area": "Область поиска CCTV",
+  "Filters panel controls only; voice navigation uses the full catalog.": "Фильтр действует только на панель; голосовая навигация использует весь каталог.",
+  "In map view": "В области карты",
+  "All cameras": "Все камеры"
 }

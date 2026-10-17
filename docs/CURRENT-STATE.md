@@ -1,5 +1,22 @@
 # God's Eye View Current State
 
+The CCTV panel defaults to cameras within the current map's geographic bounds,
+refreshing when map movement ends. Search matches city, camera name and provider;
+results show distance from the map center and sort nearest first. All cameras
+provides explicit worldwide discovery. Nearest and Previous/Next follow the
+filtered results. When the map contains no cameras, explicit Nearest falls back
+to the closest camera in the full catalog by map-center distance (ignoring search),
+while Previous/Next stay empty. Enabling the panel never triggers this fallback.
+An active camera outside the local view is omitted from the
+panel preview, with an explanation and an empty state when coverage is absent;
+changing the map or search alone does not select a camera or navigate the globe.
+Panel enable also respects discovery results when choosing an initial camera.
+The filter applies to panel controls; voice next/previous, voice nearest and
+layer auto-hop retain their catalog-wide contracts. A scope tooltip makes this
+boundary explicit. Option nodes are reused when distance labels or ordering
+change, including in the worldwide scope. Discovery copy supports English,
+Spanish and Russian. Run `node scripts/qa-cctv-discovery.mjs` for the focused gate.
+
 Vessel sources can report healthy empty coverage using a current, complete
 snapshot with zero raw rows, a healthy transport and a positive last-message
 time. This clears obsolete contacts and settles startup without manufacturing

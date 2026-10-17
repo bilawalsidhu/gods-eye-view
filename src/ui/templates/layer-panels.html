@@ -34,6 +34,14 @@
         <button id="cctv-nearest-btn" class="scene-btn" data-i18n>NEAREST</button>
       </div>
       <div class="cctv-controls">
+        <input id="cctv-camera-search" type="search" placeholder="Search city, camera or provider" aria-label="Search CCTV cameras" data-i18n-placeholder data-i18n-aria-label />
+        <select id="cctv-camera-scope" aria-label="CCTV search area" data-i18n-aria-label title="Filters panel controls only; voice navigation uses the full catalog." data-i18n-title>
+          <option value="view" data-i18n>In map view</option>
+          <option value="all" data-i18n>All cameras</option>
+        </select>
+      </div>
+      <div id="cctv-discovery-status" role="status" aria-live="polite"></div>
+      <div class="cctv-controls">
         <button id="cctv-prev-btn" class="scene-btn" data-i18n>PREV</button>
         <select id="cctv-camera-select" aria-label="CCTV camera" data-i18n-aria-label></select>
         <button id="cctv-next-btn" class="scene-btn" data-i18n>NEXT</button>
