@@ -1,4 +1,5 @@
 import { approxDistanceKm as _approxDistanceKm } from './recordPolicy.js';
+import { aircraftQaDrawn } from '../aircraft/qaDrawn.js';
 import { displayedKinematics } from '../../data/motionModel.js';
 import * as geo from '../../geo/index.js';
 import { isExplicitLayerStateOrigin } from '../../data/layerState.js';
@@ -817,42 +818,7 @@ export function createQueries({
      * @returns {Array<object>}
      */
     qaDrawn() {
-      const out = [];
-      for (const [id, sprite] of flightState._billboards) {
-        const model = flightState._models.get(id);
-        out.push({
-          id,
-          tracked: id === flightState._trackedIcao,
-          image: sprite.image,
-          scale: sprite.scale,
-          width: sprite.width,
-          show: sprite.show,
-          rotation: sprite.rotation,
-          alpha: sprite.color?.alpha ?? null,
-          position: sprite.position
-            ? {
-                x: sprite.position.x,
-                y: sprite.position.y,
-                z: sprite.position.z,
-              }
-            : null,
-          model: model
-            ? { scale: model.scale, show: model.show, ready: model.ready }
-            : null,
-        });
-      }
-      const tracked = flightState._trackedModel;
-      if (flightState._trackedIcao && tracked)
-        out.push({
-          id: flightState._trackedIcao,
-          trackedModel: true,
-          model: {
-            scale: tracked.scale,
-            show: tracked.show,
-            ready: tracked.ready,
-          },
-        });
-      return out;
+      return aircraftQaDrawn(flightState);
     },
 
     /**

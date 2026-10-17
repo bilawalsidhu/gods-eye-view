@@ -42,3 +42,24 @@ test('fixture sources answer with the live sources’ snapshot shape', async () 
   assert.ok(near.records.length > 10 && near.records.length < 12000);
   assert.deepEqual(createQaSources([]), {});
 });
+
+test('military:synthetic answers with the military source’s shape, some shared with flights', async () => {
+  const now = Date.UTC(2026, 9, 16, 12);
+  const sources = createQaSources(
+    parseQaFeed('?qaFeed=military:synthetic:300,flights:synthetic:500'),
+    { now: () => now },
+  );
+  const military = await sources.military.getSnapshot({});
+  assert.equal(military.records.length, 300);
+  assert.ok(military.records.some((record) => record.onGround));
+  assert.ok(military.records.every((record) => record.typeCode));
+  const identities = await sources.military.getIdentities({});
+  assert.ok(identities.records?.length ?? identities.length);
+  const civil = new Set(
+    (await sources.flights.getSnapshot({})).records.map(({ id }) => id),
+  );
+  const shared = military.records.filter(({ id }) => civil.has(id));
+  assert.equal(shared.length, 25);
+  const track = await sources.military.getTrack('ae1100');
+  assert.deepEqual(track.records, []);
+});

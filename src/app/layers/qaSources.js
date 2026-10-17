@@ -5,16 +5,24 @@
 // shape. Times are relative to now, so the objects stay fresh.
 //
 //   flights:synthetic[:count]   OpenSky states, `count` aircraft (8 000)
+//   military:synthetic[:count]  readsb rows, `count` aircraft (1 000); the
+//                               first 25 are also synthetic civil flights
 //   vessels:fixture             12 000 AIS rows, or those within an area
 
 import {
   createFlightSource,
+  createMilitarySource,
   createVesselSource,
 } from '../../sources/live/standalone.js';
-import { syntheticFlights, syntheticVessels } from '../../bench/w1Feeds.js';
+import {
+  syntheticFlights,
+  syntheticMilitary,
+  syntheticVessels,
+} from '../../bench/w1Feeds.js';
 
 const KINDS = Object.freeze({
   flights: new Set(['synthetic']),
+  military: new Set(['synthetic']),
   vessels: new Set(['fixture']),
 });
 
@@ -30,7 +38,7 @@ export function parseQaFeed(search = '') {
       (count !== null && !(Number.isInteger(count) && count > 0))
     )
       throw new TypeError(
-        `qaFeed: unknown entry "${item}" (flights:synthetic[:count], vessels:fixture)`,
+        `qaFeed: unknown entry "${item}" (flights:synthetic[:count], military:synthetic[:count], vessels:fixture)`,
       );
     return { layer, kind, count };
   });
@@ -51,6 +59,14 @@ export function createQaSources(entries, { now = () => Date.now() } = {}) {
         now,
         fetchImpl: async () =>
           json(syntheticFlights({ nowMs: now(), count: count ?? 8000 })),
+      });
+    if (layer === 'military')
+      sources.military = createMilitarySource({
+        now,
+        fetchImpl: async (url) =>
+          String(url).includes('/track')
+            ? json({ timestamp: now() / 1000, trace: [] })
+            : json(syntheticMilitary({ nowMs: now(), count: count ?? 1000 })),
       });
     if (layer === 'vessels')
       sources.vessels = createVesselSource({

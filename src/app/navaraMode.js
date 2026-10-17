@@ -54,11 +54,26 @@ const SHELL_CREDIT_KEYS = new Set([
  * here, through import(), so Cesium mode never fetches them.
  */
 export async function registerNavaraLayerRenderers() {
-  if (layerAvailableOn('flights', 'navara')) return;
-  const { createFlightsNavaraRenderer } =
-    await import('../layers/flights/render/navara.js');
-  if (!layerAvailableOn('flights', 'navara'))
-    registerLayerRenderers('navara', { flights: createFlightsNavaraRenderer });
+  const loaders = {
+    flights: async () =>
+      (await import('../layers/flights/render/navara.js'))
+        .createFlightsNavaraRenderer,
+    military: async () =>
+      (await import('../layers/military/render/navara.js'))
+        .createMilitaryNavaraRenderer,
+  };
+  const missing = Object.keys(loaders).filter(
+    (id) => !layerAvailableOn(id, 'navara'),
+  );
+  if (!missing.length) return;
+  const factories = await Promise.all(missing.map((id) => loaders[id]()));
+  // A concurrent call may have registered some meanwhile.
+  const fresh = Object.fromEntries(
+    missing
+      .map((id, index) => [id, factories[index]])
+      .filter(([id]) => !layerAvailableOn(id, 'navara')),
+  );
+  if (Object.keys(fresh).length) registerLayerRenderers('navara', fresh);
 }
 
 /**

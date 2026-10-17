@@ -1,5 +1,5 @@
 // Seeded synthetic feed answers: the global /api/flights snapshot (OpenSky
-// states), 12 000 AIS vessels on /api/vessels (with and without an area) and
+// states), the /api/military snapshot (readsb rows), 12 000 AIS vessels on /api/vessels (with and without an area) and
 // the local receivers' 1090 MHz and 978 MHz UAT aircraft near JFK, timed
 // relative to one instant, so every run sees the same objects at the same
 // places. Pure: Node and browser, no I/O. Used by the W1 baseline recordings
@@ -121,6 +121,66 @@ export function syntheticVessels({
   let rows = allVessels(nowMs, seed);
   if (area) rows = rows.filter((row) => kmBetween(area, row) <= area.radiusKm);
   return { rows, newestPositionAt: nowMs };
+}
+
+// Military types across the weight classes (data/aircraftClass): heavies,
+// fast jets, helicopters, tankers, patrol.
+const MILITARY_TYPES = [
+  ['C17', 'RCH'],
+  ['F16', 'VIPER'],
+  ['KC135', 'PACK'],
+  ['H60', 'DUSTY'],
+  ['C130', 'HERKY'],
+  ['P8', 'PELCN'],
+  ['E3TF', 'SENTRY'],
+  ['MQ9', 'REAPER'],
+];
+
+/**
+ * The /api/military answer (readsb rows): `count` aircraft, 150 of them near
+ * JFK (12 on the ground there), the rest worldwide. The first `overlap`
+ * hexes are also civil synthetic flights (a00000…), which the flights layer
+ * leaves to this layer while it is on (duplicate suppression).
+ */
+export function syntheticMilitary({
+  nowMs = W1_FROZEN_MS,
+  count = 1_000,
+  seed = 41,
+  overlap = 25,
+} = {}) {
+  const random = mulberry32(seed);
+  const near = Math.min(150, count);
+  const ac = [];
+  for (let index = 0; index < count; index++) {
+    const [type, call] = MILITARY_TYPES[index % MILITARY_TYPES.length];
+    const nearJfk = index < near;
+    const grounded = nearJfk && index % 12 === 5;
+    const lat = nearJfk
+      ? JFK.lat + (random() - 0.5) * (grounded ? 0.01 : 1.0)
+      : random() * 140 - 70;
+    const lon = nearJfk
+      ? JFK.lng + (random() - 0.5) * (grounded ? 0.01 : 1.3)
+      : random() * 360 - 180;
+    ac.push({
+      hex:
+        index < overlap ? hex(0xa00000 + index, 6) : hex(0xae1000 + index, 6),
+      type: 'adsb_icao',
+      flight: `${call}${String(index % 100).padStart(2, '0')}`.padEnd(8),
+      r: `${10_000 + index}`,
+      t: type,
+      alt_baro: grounded ? 'ground' : Math.round(2_000 + random() * 33_000),
+      gs: grounded
+        ? Math.round(random() * 12)
+        : Math.round(160 + random() * 330),
+      track: Math.round(random() * 3600) / 10,
+      baro_rate: 0,
+      lat: Number(lat.toFixed(5)),
+      lon: Number(lon.toFixed(5)),
+      seen_pos: Number((random() * 2).toFixed(1)),
+      seen: 0,
+    });
+  }
+  return { ac, now: nowMs / 1000, total: ac.length, msg: 'No error' };
 }
 
 /** The /api/local-receivers/aircraft answer: 1090 MHz and 978 MHz UAT aircraft. */
