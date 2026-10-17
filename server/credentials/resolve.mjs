@@ -5,6 +5,36 @@ import { knownKeySetupEnvVars } from '../../src/keySetupCore.mjs';
 const DEFAULT_TIMEOUT_MS = 15_000;
 const DEFAULT_MAX_BUFFER = 1024 * 1024;
 
+const BWS_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/;
+
+// Pass only the OS/runtime context each CLI needs, never other provider keys,
+// the GEV_SECRET_* configuration, or credentials fetched earlier in this pass.
+const MANAGER_OS_ENV = Object.freeze([
+  'PATH', 'Path', 'PATHEXT', 'HOME', 'USERPROFILE', 'APPDATA',
+  'LOCALAPPDATA', 'XDG_CONFIG_HOME', 'XDG_DATA_HOME', 'XDG_CACHE_HOME',
+  'XDG_RUNTIME_DIR', 'TMP', 'TEMP', 'TMPDIR', 'SystemRoot', 'SYSTEMROOT',
+  'WINDIR', 'LANG', 'LC_ALL', 'HTTP_PROXY', 'HTTPS_PROXY', 'NO_PROXY',
+  'http_proxy', 'https_proxy', 'no_proxy', 'SSL_CERT_FILE', 'SSL_CERT_DIR',
+]);
+
+function managerCommandEnvironment(env, command) {
+  const allowed = command === 'bws'
+    ? [...MANAGER_OS_ENV, 'BWS_ACCESS_TOKEN', 'BWS_API_URL', 'BWS_IDENTITY_URL']
+    : MANAGER_OS_ENV;
+  const child = {};
+  for (const name of allowed) {
+    if (env[name] !== undefined) child[name] = String(env[name]);
+  }
+  return child;
+}
+
+function safeBwsId(value) {
+  const id = String(value ?? '').trim();
+  if (!BWS_ID_PATTERN.test(id))
+    throw new Error('Invalid Bitwarden Secrets Manager identifier');
+  return id;
+}
+
 export function credentialReference(value) {
   const raw = String(value ?? '').trim();
   if (raw.startsWith('pass://')) {
@@ -12,7 +42,7 @@ export function credentialReference(value) {
       ? { provider: 'proton-pass', reference: raw }
       : null;
   }
-  const bws = raw.match(/^bws:\/\/([^/?#\s]+)$/);
+  const bws = raw.match(/^bws:\/\/([A-Za-z0-9][A-Za-z0-9_-]{0,127})$/);
   return bws ? { provider: 'bws', secretId: bws[1] } : null;
 }
 
@@ -79,7 +109,7 @@ function defaultRunCommand(command, args, env) {
 function resolveReference(ref, { env, runCommand }) {
   if (ref.provider === 'proton-pass') {
     const value = String(
-      runCommand('pass-cli', ['item', 'view', ref.reference], env),
+      runCommand('pass-cli', ['item', 'view', ref.reference], managerCommandEnvironment(env, 'pass-cli')),
     ).trim();
     if (!value) throw new Error('Proton Pass returned an empty secret');
     return value;
@@ -88,8 +118,8 @@ function resolveReference(ref, { env, runCommand }) {
     return parseBwsSecretObject(
       runCommand(
         'bws',
-        ['secret', 'get', ref.secretId, '--output', 'json'],
-        env,
+        ['secret', 'get', safeBwsId(ref.secretId), '--output', 'json'],
+        managerCommandEnvironment(env, 'bws'),
       ),
     );
   }
@@ -97,15 +127,11 @@ function resolveReference(ref, { env, runCommand }) {
 }
 
 function bwsProjectIds(env) {
-  const raw = String(
-    env.GEV_BWS_PROJECT_IDS || env.GEV_BWS_PROJECT_ID || '',
-  ).trim();
-  return raw
-    ? raw
-        .split(',')
-        .map((value) => value.trim())
-        .filter(Boolean)
-    : [];
+  const raw = [env.GEV_BWS_PROJECT_IDS, env.GEV_BWS_PROJECT_ID]
+    .filter((value) => value != null && String(value).trim())
+    .join(',');
+  if (!raw) return [];
+  return [...new Set(raw.split(',').map((value) => safeBwsId(value)))];
 }
 
 /**
@@ -131,11 +157,15 @@ export function resolveCredentialEnvironment({
   for (const name of names) {
     const current = String(env[name] ?? '').trim();
     const currentRef = credentialReference(current);
+    if (current.startsWith('bws://') && !currentRef)
+      throw new Error('Invalid Bitwarden Secrets Manager secret reference');
     if (current && !currentRef) continue;
 
-    const configured = currentRef
-      ? currentRef
-      : credentialReference(env[`GEV_SECRET_${name}`]);
+    const companion = String(env[`GEV_SECRET_${name}`] ?? '').trim();
+    const companionRef = credentialReference(companion);
+    if (companion.startsWith('bws://') && !companionRef)
+      throw new Error('Invalid Bitwarden Secrets Manager secret reference');
+    const configured = currentRef || companionRef;
     if (!configured) continue;
 
     env[name] = resolveReference(configured, { env, runCommand });
@@ -150,7 +180,7 @@ export function resolveCredentialEnvironment({
     const wanted = missing();
     if (!wanted.length) break;
     const project = parseBwsProjectSecrets(
-      runCommand('bws', ['secret', 'list', projectId, '--output', 'json'], env),
+      runCommand('bws', ['secret', 'list', projectId, '--output', 'json'], managerCommandEnvironment(env, 'bws')),
       wanted,
     );
     for (const [name, value] of Object.entries(project)) {
