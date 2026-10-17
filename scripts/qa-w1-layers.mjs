@@ -105,7 +105,14 @@ function compare(files) {
   }
   const qa = a.sections?.[5]?.queries;
   const qb = b.sections?.[5]?.queries;
-  if (qa && qb && JSON.stringify(qa) !== JSON.stringify(qb))
+  // The queries are compared for the same object: the object a run
+  // selects for them is the clearest on screen after the follows before
+  // it, which may differ between engines (the follow camera's settle).
+  if (qa && qb && qa.tracked !== qb.tracked)
+    console.log(
+      `[w1-layers] INFO 5 queries: different objects (${qa.tracked}, ${qb.tracked}); not compared`,
+    );
+  else if (qa && qb && JSON.stringify(qa) !== JSON.stringify(qb))
     differences.push(
       `5 queries: ${JSON.stringify(qa)} vs ${JSON.stringify(qb)}`,
     );
