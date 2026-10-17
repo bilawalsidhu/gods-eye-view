@@ -19,7 +19,6 @@ export function createQueries({
 }) {
   const { tr3bAircraftClass, tr3bTypeLabel } = services.aircraftPresentation;
   const { formatFlightLevel } = services.labels;
-  const { applyTrackedCameraFrame } = services.camera;
 
   /**
    * Coerce a value to a finite number, returning null if not possible.
@@ -241,7 +240,7 @@ export function createQueries({
           parts.tracking._syncTracked2dRotation();
           // Restore fleet billboards (horizon-cull re-asserts next tick), but NEVER the tracked
           // plane's own fleet billboard — its tracked entity is the visual (avoids a double-image).
-          if (flightState._billboardCollection)
+          if (flightState._renderer?.fleet.attached())
             for (const [icao, bb] of flightState._billboards) {
               if (icao !== flightState._trackedIcao) bb.show = true;
             }
@@ -324,12 +323,7 @@ export function createQueries({
      * @returns {Array<Object>} Sorted array of nearby aircraft descriptors
      */
     getNearby(center, range, maxCount = 50, { includeHidden = false } = {}) {
-      if (
-        !center ||
-        !flightState._billboardCollection ||
-        !flightState._billboardCollection.show
-      )
-        return [];
+      if (!center || !flightState._renderer?.fleet.visible()) return [];
 
       const limit = Number.isFinite(maxCount)
         ? Math.max(1, Math.floor(maxCount))
@@ -401,11 +395,7 @@ export function createQueries({
      * @returns {Array<{position: Cesium.Cartesian3, id: string, type: string, skipLabel: boolean}>}
      */
     getDetectableObjects(options = {}) {
-      if (
-        !flightState._billboardCollection ||
-        !flightState._billboardCollection.show
-      )
-        return [];
+      if (!flightState._renderer?.fleet.visible()) return [];
       const maxCount = Number.isFinite(options.maxCount)
         ? Math.max(1, Math.floor(options.maxCount))
         : flightState._billboards.size;
@@ -562,8 +552,7 @@ export function createQueries({
      */
     hasContact(icao24) {
       if (
-        !flightState._billboardCollection ||
-        !flightState._billboardCollection.show ||
+        !flightState._renderer?.fleet.visible() ||
         flightState._billboards.size === 0
       )
         return null;
@@ -577,7 +566,7 @@ export function createQueries({
 
     getAllPositions(maxCount = 500) {
       if (
-        !flightState._billboardCollection ||
+        !flightState._renderer?.fleet.attached() ||
         flightState._billboards.size === 0
       )
         return [];
@@ -624,8 +613,7 @@ export function createQueries({
      */
     getAnalystRecords(maxCount = 2000) {
       if (
-        !flightState._billboardCollection ||
-        !flightState._billboardCollection.show ||
+        !flightState._renderer?.fleet.visible() ||
         flightState.records.data.size === 0
       )
         return [];
@@ -713,7 +701,7 @@ export function createQueries({
       if (
         !icao24 ||
         flightState._cockpitContactMode ||
-        !flightState._viewer ||
+        !flightState._renderer ||
         !flightState._trackedEntity
       )
         return false;
@@ -721,19 +709,13 @@ export function createQueries({
       if (!flightState._billboards.has(id)) id = id.toLowerCase();
       if (
         id !== flightState._trackedIcao ||
-        !flightState._viewer.entities?.contains?.(flightState._trackedEntity) ||
-        flightState._viewer.trackedEntity !== flightState._trackedEntity
+        !flightState._renderer.tracked.isLive(flightState._trackedEntity) ||
+        !flightState._renderer.follow.isFollowing(flightState._trackedEntity)
       )
         return false;
       flightState._trackedCameraFrameStop?.();
-      flightState._viewer.camera.cancelFlight();
-      flightState._viewer.trackedEntity = flightState._trackedEntity;
       flightState._trackedCameraFrameStop =
-        applyTrackedCameraFrame(
-          flightState._viewer,
-          flightState._trackedEntity,
-          flightState._trackedEntity.viewFrom,
-        ) || null;
+        flightState._renderer.follow.refocus(flightState._trackedEntity);
       parts.tracking._publishTrackedSelection(id, origin);
       return true;
     },

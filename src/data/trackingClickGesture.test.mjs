@@ -114,18 +114,17 @@ test('civilian and military click handlers apply duration only at the deselect b
     readLayerSource(new URL('./flights.js', import.meta.url)),
     readLayerSource(new URL('./militaryFlights.js', import.meta.url)),
   ];
-  // Military still owns its handler; flights moved to the selection
-  // dispatcher (phase 3), whose source applies the same two rules: the
-  // selection gesture before a select, the full click classifier before the
-  // empty-space deselect, which flights answers with a user-origin clear.
-  const military = sources[1];
-  assert.match(military, /isTrackingSelectionGesture\(gesture\)[\s\S]+scene\.pick/);
-  assert.match(military, /isTrackingClickGesture\(gesture\)[\s\S]+(?:parts\.\w+\.)?_clearTracking\([^)]*\{ origin: 'user' \}\)/);
+  // Flights and military moved to the selection dispatcher (phase 3), whose
+  // source applies the same two rules: the selection gesture before a
+  // select, the full click classifier before the empty-space deselect, which
+  // each layer answers with a user-origin clear.
   const dispatcher = readFileSync(new URL('./selectionDispatcher.js', import.meta.url), 'utf8');
   assert.match(dispatcher, /if \(!isTrackingSelectionGesture\(gesture\)\) return;[\s\S]+onSelect/);
   assert.match(dispatcher, /if \(!isTrackingClickGesture\(gesture\)\) return;\s*for \(const owner of \[\.\.\.owners\.values\(\)\]\) owner\.onEmptyClick/);
-  assert.match(sources[0], /dispatcher\.register\('flights', \{[\s\S]+onEmptyClick: _onEmptyClick/);
-  assert.match(sources[0], /function _onEmptyClick\(\) \{[\s\S]+?_clearTracking\(false, \{ origin: 'user' \}\)/);
+  for (const [layer, source] of [['flights', sources[0]], ['military', sources[1]]]) {
+    assert.match(source, new RegExp(`dispatcher\\.register\\('${layer}', \\{[\\s\\S]+onEmptyClick: _onEmptyClick`));
+    assert.match(source, /function _onEmptyClick\(\) \{[\s\S]+?_clearTracking\(false, \{ origin: 'user' \}\)/);
+  }
   assert.doesNotMatch(
     sources[0],
     /(?:flightState\.)?_trackedEntity = (?:flightState\.)?_viewer\.entities\.add\(\{\s*id:/,

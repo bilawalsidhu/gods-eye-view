@@ -263,12 +263,11 @@ export function createAircraftCesiumRenderer({
      * written into the model's OWN modelMatrix: Model.modelMatrix is a plain
      * field Cesium clones per frame, so models never share one mutable
      * matrix (a shared scratch stacked every model on the last-written
-     * plane: the "flickering like mad" bug).
+     * plane: the "flickering like mad" bug). `offsetDeg`: this model's nose
+     * offset when the layer's models differ (default: the layer's).
      */
-    setPose(model, position, headingDeg) {
-      scratchHpr.heading = Cesium.Math.toRadians(
-        (headingDeg || 0) + headingOffsetDeg,
-      );
+    setPose(model, position, headingDeg, offsetDeg = headingOffsetDeg) {
+      scratchHpr.heading = Cesium.Math.toRadians((headingDeg || 0) + offsetDeg);
       scratchHpr.pitch = 0;
       scratchHpr.roll = 0;
       return Cesium.Transforms.headingPitchRollToFixedFrame(
