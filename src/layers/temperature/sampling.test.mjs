@@ -4,7 +4,7 @@ import { readoutEntry } from './sampling.js';
 
 test('a sample is a protected overlay card titled with the reading', () => {
   const position = { x: 1, y: 2, z: 3 };
-  const lines = ['land surface temperature', '~2.4 km pixel'];
+  const lines = ['land surface temperature', '0.05° grid, ~5.6 km nominal'];
   const entry = readoutEntry('31.4 °C', lines, position);
   assert.equal(entry.variant, 'selected');
   assert.equal(entry.title, '31.4 °C');

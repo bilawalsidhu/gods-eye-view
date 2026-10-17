@@ -3319,18 +3319,8 @@
   "approximate": "приблизительно",
   "{pct}% cloud": "Облачность {pct}%",
   "Over {area}": "Область: {area}",
-  "{count} of {total} acquisitions match": {
-    "few": "Подходящие снимки: {count} из {total}",
-    "many": "Подходящие снимки: {count} из {total}",
-    "one": "Подходящие снимки: {count} из {total}",
-    "other": "Подходящие снимки: {count} из {total}"
-  },
-  "{n} acquisitions searched": {
-    "few": "Просмотрено снимков: {n}",
-    "many": "Просмотрено снимков: {n}",
-    "one": "Просмотрено снимков: {n}",
-    "other": "Просмотрено снимков: {n}"
-  },
+  "{count} of {total} acquisitions match": {"few": "Подходящие снимки: {count} из {total}", "many": "Подходящие снимки: {count} из {total}", "one": "Подходящие снимки: {count} из {total}", "other": "Подходящие снимки: {count} из {total}"},
+  "{n} acquisitions searched": {"few": "Просмотрено снимков: {n}", "many": "Просмотрено снимков: {n}", "one": "Просмотрено снимков: {n}", "other": "Просмотрено снимков: {n}"},
   "No matching imagery": "Подходящих снимков нет",
   "Unknown number of {kind}": "{kind}: количество неизвестно",
   "About {count} {kind}": "{kind}: около {count}",
@@ -3358,24 +3348,9 @@
   "the catalog covers the last 30 days": "каталог охватывает последние 30 дней",
   "there are more": "есть и другие",
   "{radius} m around the landmark": "{radius} м вокруг ориентира",
-  "{count} parts": {
-    "few": "Частей: {count}",
-    "many": "Частей: {count}",
-    "one": "Частей: {count}",
-    "other": "Частей: {count}"
-  },
-  "{drawn} of {total} parts drawn": {
-    "few": "Нарисовано частей: {drawn} из {total}",
-    "many": "Нарисовано частей: {drawn} из {total}",
-    "one": "Нарисовано частей: {drawn} из {total}",
-    "other": "Нарисовано частей: {drawn} из {total}"
-  },
-  "{count} duplicate mappings merged": {
-    "few": "Объединено дублей: {count}",
-    "many": "Объединено дублей: {count}",
-    "one": "Объединено дублей: {count}",
-    "other": "Объединено дублей: {count}"
-  },
+  "{count} parts": {"few": "Частей: {count}", "many": "Частей: {count}", "one": "Частей: {count}", "other": "Частей: {count}"},
+  "{drawn} of {total} parts drawn": {"few": "Нарисовано частей: {drawn} из {total}", "many": "Нарисовано частей: {drawn} из {total}", "one": "Нарисовано частей: {drawn} из {total}", "other": "Нарисовано частей: {drawn} из {total}"},
+  "{count} duplicate mappings merged": {"few": "Объединено дублей: {count}", "many": "Объединено дублей: {count}", "one": "Объединено дублей: {count}", "other": "Объединено дублей: {count}"},
   "listed the first {limit}": "показаны первые результаты: {limit}",
   "counted over the bounding box of {area}, not its outline": "подсчитано по ограничивающему прямоугольнику ({area}), а не по контуру",
   "Search cancelled": "Поиск отменён",
@@ -3490,12 +3465,7 @@
   "EMODnet unavailable; showing Wikidata only": "EMODnet недоступен; показана только Wikidata",
   "Shipwrecks unavailable": "Данные о кораблекрушениях недоступны",
   "EMODnet (European waters) · Wikidata (worldwide)": "EMODnet (воды Европы) · Wikidata (весь мир)",
-  "{count} wrecks": {
-    "one": "{count} затонувшее судно",
-    "few": "{count} затонувших судна",
-    "many": "{count} затонувших судов",
-    "other": "{count} затонувшего судна"
-  },
+  "{count} wrecks": {"one": "{count} затонувшее судно", "few": "{count} затонувших судна", "many": "{count} затонувших судов", "other": "{count} затонувшего судна"},
   "1900–1945": "1900–1945",
   "Shipwreck": "Кораблекрушение",
   "Fatalities: {count}": "Погибших: {count}",
@@ -3711,12 +3681,7 @@
   "Zoom to layer": "Приблизить к слою",
   "ZOOM": "ПРИБЛИЗИТЬ",
   "Zoom to {name}": "Приблизить к «{name}»",
-  "CONFIRM · REMOVE ALL {count}": {
-    "one": "ПОДТВЕРДИТЬ · УБРАТЬ {count}",
-    "few": "ПОДТВЕРДИТЬ · УБРАТЬ ВСЕ {count}",
-    "many": "ПОДТВЕРДИТЬ · УБРАТЬ ВСЕ {count}",
-    "other": "ПОДТВЕРДИТЬ · УБРАТЬ ВСЕ {count}"
-  },
+  "CONFIRM · REMOVE ALL {count}": {"one": "ПОДТВЕРДИТЬ · УБРАТЬ {count}", "few": "ПОДТВЕРДИТЬ · УБРАТЬ ВСЕ {count}", "many": "ПОДТВЕРДИТЬ · УБРАТЬ ВСЕ {count}", "other": "ПОДТВЕРДИТЬ · УБРАТЬ ВСЕ {count}"},
   "REMOVE ALL": "УБРАТЬ ВСЁ",
   "Confirm: remove every added entry from Data Layers": "Подтвердите: убрать все добавленные записи из «Слоёв данных»",
   "Remove every added entry from Data Layers": "Убрать все добавленные записи из «Слоёв данных»",
@@ -3725,38 +3690,13 @@
   "Remove from Data Layers": "Убрать из «Слоёв данных»",
   "Remove from Data Layers · add it again from the library": "Убрать из «Слоёв данных» · снова добавить можно из библиотеки",
   "{datasets} · {tiles} · {packs}": "{datasets} · {tiles} · {packs}",
-  "{count} datasets": {
-    "one": "{count} набор данных",
-    "few": "{count} набора данных",
-    "many": "{count} наборов данных",
-    "other": "{count} набора данных"
-  },
-  "{count} tile layers": {
-    "one": "{count} слой тайлов",
-    "few": "{count} слоя тайлов",
-    "many": "{count} слоёв тайлов",
-    "other": "{count} слоя тайлов"
-  },
-  "{count} packs": {
-    "one": "{count} пакет",
-    "few": "{count} пакета",
-    "many": "{count} пакетов",
-    "other": "{count} пакета"
-  },
+  "{count} datasets": {"one": "{count} набор данных", "few": "{count} набора данных", "many": "{count} наборов данных", "other": "{count} набора данных"},
+  "{count} tile layers": {"one": "{count} слой тайлов", "few": "{count} слоя тайлов", "many": "{count} слоёв тайлов", "other": "{count} слоя тайлов"},
+  "{count} packs": {"one": "{count} пакет", "few": "{count} пакета", "many": "{count} пакетов", "other": "{count} пакета"},
   "Added": "Добавлено",
-  "{count} on the map": {
-    "one": "{count} на карте",
-    "few": "{count} на карте",
-    "many": "{count} на карте",
-    "other": "{count} на карте"
-  },
+  "{count} on the map": {"one": "{count} на карте", "few": "{count} на карте", "many": "{count} на карте", "other": "{count} на карте"},
   "none yet": "пока ничего",
-  "from {count} datasets": {
-    "one": "из {count} набора данных",
-    "few": "из {count} наборов данных",
-    "many": "из {count} наборов данных",
-    "other": "из {count} набора данных"
-  },
+  "from {count} datasets": {"one": "из {count} набора данных", "few": "из {count} наборов данных", "many": "из {count} наборов данных", "other": "из {count} набора данных"},
   "switch on a dataset to load features": "включите набор данных, чтобы загрузить объекты",
   "Data Library at a glance": "Библиотека данных вкратце",
   "Map features": "Объекты на карте",
@@ -3813,5 +3753,33 @@
   "Search layers…": "Поиск слоёв…",
   "Layer groups": "Группы слоёв",
   "Jump to {name}": "Перейти к «{name}»",
-  "No layers match": "Нет подходящих слоёв"
+  "No layers match": "Нет подходящих слоёв",
+  "monthly mean, {month}": "среднее за месяц, {month}",
+  "No clear-sky value": "Нет значения при ясном небе",
+  "{low} to {high} °C": "от {low} до {high} °C",
+  "Loading a year of monthly means…": "Загрузка средних за год по месяцам…",
+  "NASA GIBS unavailable": "NASA GIBS недоступен",
+  "Temperature overlay off": "Слой температуры выключен",
+  "{frame} · newest {month}": "{frame} · последний {month}",
+  "Loading frames…": "Загрузка кадров…",
+  "loading monthly means": "загрузка средних по месяцам",
+  "Surface temperature playback": "Воспроизведение температуры поверхности",
+  "Land surface temperature · monthly mean": "Температура поверхности суши · среднее за месяц",
+  "NASA MODIS land surface temperature scale, °C": "Шкала температуры поверхности суши NASA MODIS, °C",
+  "Year": "Год",
+  "Month": "Месяц",
+  "Expand timeline": "Развернуть шкалу времени",
+  "Minimize timeline": "Свернуть шкалу времени",
+  "Not published": "Не опубликовано",
+  "Loading {year}…": "Загрузка {year}…",
+  "Surface temperature for {year} unavailable": "Температура поверхности за {year} недоступна",
+  "monthly clear-sky land average; cloud-persistent areas and water carry no value": "среднее за месяц по суше при ясном небе; для районов с устойчивой облачностью и воды значений нет",
+  "No tile for this point": "Нет тайла для этой точки",
+  "Outside the projection": "Вне проекции",
+  "Sample unavailable": "Отсчёт недоступен",
+  "land surface temperature": "температура поверхности суши",
+  "cloud, water or unretrieved": "облака, вода или не получено",
+  "{degrees}° grid, ~{km} km nominal": "сетка {degrees}°, ~{km} км номинально",
+  "Surface Temperature": "Температура поверхности",
+  "NASA GIBS · MODIS Terra land surface temperature": "NASA GIBS · температура поверхности суши MODIS Terra"
 }

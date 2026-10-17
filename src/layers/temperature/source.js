@@ -1,8 +1,9 @@
+import { gibsTileUrl } from '../../maps/gibs.js';
 import { recentMonths, yearMonths } from './dates.js';
 import {
   FIRST_YEAR,
   GIBS_LAYER,
-  GIBS_TILE_MATRIX_SET,
+  GIBS_MAX_LEVEL,
   LATEST_LOOKBACK_MONTHS,
   PROBE_CONCURRENCY,
   PROBE_TILE,
@@ -11,7 +12,10 @@ import {
 /** @param {string} date First-of-month time key. @returns {string} Probe tile URL. */
 export function probeTileUrl(date) {
   const { level, row, col } = PROBE_TILE;
-  return `https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/${GIBS_LAYER}/default/${date}/${GIBS_TILE_MATRIX_SET}/${level}/${row}/${col}.png`;
+  return gibsTileUrl(
+    { layer: GIBS_LAYER, date, maxLevel: GIBS_MAX_LEVEL },
+    { z: level, y: row, x: col },
+  );
 }
 
 function unavailable(message) {

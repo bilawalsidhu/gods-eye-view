@@ -13,9 +13,10 @@ continuous and animation-frame driven; each month holds, then eases into the
 next, and the blending pair's alphas are solved so the overlay's total opacity
 stays at the operator's setting. Tiles come from the EPSG:3857 endpoint, because
 the GIBS geographic matrix sets are not power-of-two pyramids and Cesium
-mispositions them, and availability is resolved by image probe, not fetch: GIBS
-omits CORS headers on the 404 for an unpublished month, so a fetch probe cannot
-distinguish that from an outage.
+mispositions them; every GIBS tile URL, here and in Recent Imagery, is built by
+`src/maps/gibs.js`. Availability is resolved by image probe: an unpublished
+month answers 404, and an image load reads that the same way whether or not
+GIBS sends CORS headers on its 404s (it has not always).
 
 Playback is driven from an on-map panel; the layer row carries no controls. The
 panel names the month most on screen, holds the play/pause control, shows NASA's
@@ -34,7 +35,8 @@ colour is looked up in NASA's colour map document, which makes the reading the
 product's own quantised range rather than an estimate; the map's catch-all end
 stops are reported as bounds. A transparent pixel is cloud, water or unretrieved
 and reports no value rather than a temperature. The readout states the quantity,
-the pixel's ground size and the month it came from, lives on its own data source
+the source product's measurement grid (MOD11C3, 0.05°, about 5.6 km; never the
+finer display tile pixel, which GIBS resamples to) and the month it came from, lives on its own data source
 so clearing it never disturbs the overlay, and re-reads whenever the month on
 screen changes. The click yields to the shared pointer lease.
 ## Cyber HUD — September 23, 2026

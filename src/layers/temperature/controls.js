@@ -1,4 +1,5 @@
-import { frameLabel } from './dates.js';
+import { msg, t } from '../../i18n/index.js';
+import { frameLabel } from './labels.js';
 import { COVERAGE_NOTE, DEFAULT_ALPHA, LAYER_ID } from './policy.js';
 
 export function createControls({ state: layerState, services, parts }) {
@@ -48,15 +49,18 @@ export function createControls({ state: layerState, services, parts }) {
         opacity: layerState.alpha,
         coverage: COVERAGE_NOTE,
         statusMessage: layerState.loading
-          ? 'Loading a year of monthly means…'
+          ? msg('Loading a year of monthly means…')
           : layerState.status === 'unavailable'
-            ? layerState.error || 'NASA GIBS unavailable'
+            ? layerState.error || msg('NASA GIBS unavailable')
             : layerState.status === 'idle'
-              ? 'Temperature overlay off'
+              ? msg('Temperature overlay off')
               : layerState.date
-                ? `${frameLabel(layerState.date)} · newest ${layerState.latest.slice(0, 7)}`
-                : 'Loading frames…',
-        loadingLabel: layerState.loading ? 'loading monthly means' : '',
+                ? t('{frame} · newest {month}', {
+                    frame: frameLabel(layerState.date),
+                    month: layerState.latest.slice(0, 7),
+                  })
+                : msg('Loading frames…'),
+        loadingLabel: layerState.loading ? msg('loading monthly means') : '',
       };
     },
   };

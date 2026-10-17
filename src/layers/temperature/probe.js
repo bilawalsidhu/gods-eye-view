@@ -3,11 +3,12 @@ import { PROBE_TIMEOUT_MS } from './policy.js';
 /**
  * Probe a tile by loading it as an image rather than fetching it.
  *
- * GIBS sends `Access-Control-Allow-Origin: *` on a tile it has and **omits it
- * on the 404** for a period it does not. A `fetch` probe therefore cannot see
- * that 404 at all: the browser rejects it as a CORS failure, which is
- * indistinguishable from the network being down. An image load is not
- * CORS-gated, so `onload` means published and `onerror` means it is not.
+ * `onload` means the month is published and `onerror` means it is not (GIBS
+ * answers an unpublished month with 404). An image load does not depend on
+ * CORS headers at all. GIBS has at times omitted `Access-Control-Allow-Origin`
+ * on its 404s, which made a `fetch` probe read "unpublished" as a network
+ * failure; as of October 2026 it sends `*` on 404s too, but the image probe
+ * stays correct either way and costs no more.
  *
  * Lives outside `source.js` because that module is a portable package export
  * and may not reach browser globals; the source takes this as an injected

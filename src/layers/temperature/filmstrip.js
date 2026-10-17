@@ -1,9 +1,9 @@
-import { createGibsImagery } from '../../maps/imagery.js';
+import * as Cesium from 'cesium';
+import { gibsTileTemplate } from '../../maps/gibs.js';
 import {
   CROSSFADE_SHARE,
   GIBS_LAYER,
   GIBS_MAX_LEVEL,
-  GIBS_TILE_MATRIX_SET,
   MAX_ALPHA,
   MIN_ALPHA,
   PRELOAD_TIMEOUT_MS,
@@ -155,11 +155,19 @@ export function createFilmstrip({ state: layerState, services }) {
       position: 0,
       layers: dates.map((date) => {
         const imagery = collection.addImageryProvider(
-          createGibsImagery({
-            layer: GIBS_LAYER,
-            date,
-            tileMatrixSet: GIBS_TILE_MATRIX_SET,
+          new Cesium.UrlTemplateImageryProvider({
+            url: gibsTileTemplate({
+              layer: GIBS_LAYER,
+              date,
+              maxLevel: GIBS_MAX_LEVEL,
+              sharded: true,
+            }),
+            subdomains: ['a', 'b', 'c'],
+            minimumLevel: 0,
             maximumLevel: GIBS_MAX_LEVEL,
+            tilingScheme: new Cesium.WebMercatorTilingScheme(),
+            credit: 'NASA GIBS',
+            hasAlphaChannel: true,
           }),
         );
         imagery.alpha = 0;

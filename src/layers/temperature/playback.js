@@ -1,3 +1,4 @@
+import { t } from '../../i18n/index.js';
 import { monthIndex } from './dates.js';
 import { dominantFrame } from './filmstrip.js';
 import { FIRST_YEAR, MONTH_DURATION_MS, SEEK_DURATION_MS } from './policy.js';
@@ -179,8 +180,13 @@ export function createPlayback({ state: layerState, services, parts, source }) {
       return true;
     } catch (error) {
       if (!current() || error?.name === 'AbortError') return false;
-      layerState.playbackError =
-        error?.message || `Surface temperature for ${year} unavailable`;
+      // Shown on the panel; the upstream message is for developers.
+      layerState.playbackError = t(
+        'Surface temperature for {year} unavailable',
+        {
+          year,
+        },
+      );
       throw error;
     } finally {
       if (layerState.playbackAbort === request) {
