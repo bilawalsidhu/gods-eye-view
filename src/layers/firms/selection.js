@@ -81,7 +81,8 @@ export function createSelection({
     requestWorldFocus({
       kind: 'fire',
       id: fireDetectionKey(fire),
-      label: t('FIRE'),
+      label:
+        fire.provider === 'conae-goes' ? t('THERMAL DETECTION') : t('FIRE'),
       position: components.model.firePosition(fire),
     });
   }
@@ -191,11 +192,9 @@ export function createSelection({
       id: recordId,
       layerId: id,
       layerName: name,
-      source: 'NASA FIRMS',
+      source: components.model.fireSource(fire),
       dataSource: layerState._dataSource,
-      label: t('Fire · FRP {frp} MW', {
-        frp: components.model.formatFrp(fire.frp),
-      }),
+      label: components.model.detectionLabel(fire),
       latitude: fire.lat,
       longitude: fire.lon,
       properties: {

@@ -663,8 +663,6 @@
   "STALE · cached {age}": "DESACTUALIZADO · en caché hace {age}",
   "LIVE · updated {age}": "EN VIVO · actualizado {age}",
   "<1m ago": "hace <1 min",
-  "FIRE · {frp} MW": "INCENDIO · {frp} MW",
-  "▲ {frp} MW": "▲ {frp} MW",
   "FIRE": "INCENDIO",
   "FIRES": "INCENDIOS",
   "{value} conf": "confianza {value}",
@@ -1236,7 +1234,6 @@
   "Routing timed out": "El cálculo de la ruta agotó el tiempo de espera",
   "Routing unavailable — no response from the routing service": "Rutas no disponibles — sin respuesta del servicio de rutas",
   "Routing unavailable": "Rutas no disponibles",
-  "Fire · FRP {frp} MW": "Incendio · FRP {frp} MW",
   "Not contained or unknown": "Sin contener o desconocido",
   "Under 50% contained": "Contenido por debajo del 50%",
   "50–99% contained": "Contenido al 50–99%",
@@ -2889,5 +2886,23 @@
   "USB work abandoned after a stalled transfer": "Trabajo USB cancelado tras una transferencia bloqueada",
   "SDR decoder did not start; receiver stopped": "El decodificador SDR no arrancó; receptor detenido",
   "SDR decoder stopped responding; receiver stopped": "El decodificador SDR dejó de responder; receptor detenido",
-  "SDR decoder fell behind; receiver stopped": "El decodificador SDR se quedó atrás; receptor detenido"
+  "SDR decoder fell behind; receiver stopped": "El decodificador SDR se quedó atrás; receptor detenido",
+  "CONAE GOES · thermal anomaly, not a confirmed wildfire": "CONAE GOES · anomalía térmica, incendio forestal no confirmado",
+  "FIRE · {frp}": "INCENDIO · {frp}",
+  "FRP n/a": "FRP n/d",
+  "FRP {value}": "FRP {value}",
+  "Fire · {frp}": "Incendio · {frp}",
+  "PARTIAL · {sources} unavailable": "PARCIAL · {sources} no disponible",
+  "THERMAL DETECTION": "DETECCIÓN TÉRMICA",
+  "THERMAL DETECTION · {frp}": "DETECCIÓN TÉRMICA · {frp}",
+  "Thermal detection · {frp}": "Detección térmica · {frp}",
+  "confidence n/a": "confianza n/d",
+  "confidence not published": "confianza no publicada",
+  "{count} DETECTIONS": {
+    "one": "{count} DETECCIÓN",
+    "many": "{count} DE DETECCIONES",
+    "other": "{count} DETECCIONES"
+  },
+  "{value} MW": "{value} MW",
+  "▲ {frp}": "▲ {frp}"
 }

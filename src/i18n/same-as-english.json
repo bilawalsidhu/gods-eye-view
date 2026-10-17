@@ -31,6 +31,7 @@
     "FM MHZ",
     "FOV",
     "FOV {value}°",
+    "FRP {value}",
     "FT",
     "Folk",
     "Funk",
@@ -114,6 +115,7 @@
     "{value} KM",
     "{value} KM/H",
     "{value} KM/S",
+    "{value} MW",
     "ΔE",
     "ΔN",
     "▲ {frp} MW"
@@ -124,6 +126,7 @@
     "CCTV",
     "CRT",
     "FLIR",
+    "FRP {value}",
     "GEO",
     "Ironbow",
     "Landsat 8/9",
