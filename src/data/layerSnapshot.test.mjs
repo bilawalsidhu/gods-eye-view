@@ -2,6 +2,11 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import {
+  hudSummaryLayerContext,
+  hudSummaryMatchesProvenance,
+  hudTelemetryProvenance,
+} from '../hudSummaryResponse.js';
+import {
   FEED_STATE_SEVERITY,
   LAYER_FEED_STATE_LABELS,
   LAYER_FEED_STATES,
@@ -72,6 +77,10 @@ test('layerFeedState matches the chip classifier for every honesty class', () =>
     'degraded',
   );
   assert.equal(layerFeedState({ loading: true }), 'loading');
+  assert.equal(
+    layerFeedState({ partial: true, count: 5, lastUpdate: 1 }),
+    'partial',
+  );
   assert.equal(layerFeedState({ count: 5, lastUpdate: 1 }), 'nominal');
   assert.equal(
     layerFeedState({
@@ -90,7 +99,15 @@ test('layerFeedState matches the chip classifier for every honesty class', () =>
 test('chip labels and severity cover every feed-state the envelope can emit', () => {
   assert.deepEqual(
     [...LAYER_FEED_STATES],
-    ['nominal', 'loading', 'degraded', 'stale', 'fallback', 'unavailable'],
+    [
+      'nominal',
+      'loading',
+      'degraded',
+      'stale',
+      'partial',
+      'fallback',
+      'unavailable',
+    ],
   );
   assert.deepEqual([...SNAPSHOT_FEED_STATES], [...LAYER_FEED_STATES, 'off']);
   for (const state of LAYER_FEED_STATES) {
@@ -102,6 +119,11 @@ test('chip labels and severity cover every feed-state the envelope can emit', ()
     true,
   );
   assert.equal(FEED_STATE_SEVERITY.stale < FEED_STATE_SEVERITY.fallback, true);
+  assert.equal(
+    FEED_STATE_SEVERITY.fallback < FEED_STATE_SEVERITY.partial,
+    true,
+  );
+  assert.equal(FEED_STATE_SEVERITY.partial < FEED_STATE_SEVERITY.nominal, true);
   assert.equal(worstFeedState(['nominal', 'stale', 'fallback']), 'stale');
   assert.equal(worstFeedState(['degraded', 'unavailable']), 'unavailable');
   assert.equal(worstFeedState([]), null);
@@ -154,6 +176,90 @@ test('an enabled stale layer carries age, source, and a mechanical note', () => 
   assert.match(envelope.note, /OpenSky Network/);
   assert.match(envelope.note, /4m ago/);
   assert.match(envelope.note, /do not describe this as live/i);
+});
+
+for (const withNominal of [false, true]) {
+  test(`an enabled partial generic layer stays partial ${withNominal ? 'beside a nominal layer' : 'when queried alone'}`, () => {
+    const partial = {
+      id: 'partial-fixture',
+      name: 'Partial fixture',
+      enabled: true,
+      stats: {
+        partial: true,
+        count: 2,
+        sourceCount: 3,
+        skippedCount: 1,
+        lastUpdate: NOW - 10_000,
+        source: 'Generic fixture source',
+      },
+    };
+    const layers = [partial];
+    if (withNominal)
+      layers.push({
+        id: 'nominal-fixture',
+        name: 'Nominal fixture',
+        enabled: true,
+        stats: { count: 3, lastUpdate: NOW - 10_000 },
+      });
+    const envelope = feedProvenanceEnvelope(layers, { now: NOW });
+    assert.equal(envelope.overall, 'partial');
+    assert.equal(envelope.layers[0].enabled, true);
+    assert.equal(envelope.layers[0].feedState, 'partial');
+    assert.equal(envelope.layers[0].count, 2);
+    assert.match(envelope.note, /Partial fixture is PARTIAL/);
+    assert.match(envelope.note, /Generic fixture source/);
+    assert.match(envelope.note, /do not describe this as live/i);
+    assert.doesNotMatch(envelope.note, /is off|are nominal/);
+    assert.equal(viewStateLayerRow(partial, { now: NOW }).feedState, 'partial');
+    const hud = hudSummaryLayerContext(layers, { now: NOW });
+    assert.equal(hud.feedProvenance.overall, 'partial');
+    assert.deepEqual(hudTelemetryProvenance(layers, { now: NOW }), {
+      state: 'partial',
+      names: ['Partial fixture'],
+    });
+    assert.equal(
+      hudSummaryMatchesProvenance(
+        'Nominal observations in this view',
+        hud.feedProvenance,
+      ),
+      false,
+    );
+    assert.equal(
+      hudSummaryMatchesProvenance(
+        'Partial observations in this view',
+        hud.feedProvenance,
+      ),
+      true,
+    );
+  });
+}
+
+test('partial provenance outranks nominal but retains more severe warnings', () => {
+  assert.equal(worstFeedState(['partial', 'nominal']), 'partial');
+  assert.equal(worstFeedState(['nominal', 'partial']), 'partial');
+  for (const state of [
+    'unavailable',
+    'loading',
+    'degraded',
+    'stale',
+    'fallback',
+  ]) {
+    assert.equal(worstFeedState(['partial', state]), state);
+    assert.equal(worstFeedState([state, 'partial']), state);
+  }
+});
+
+test('disabled partial stats remain off in shared provenance', () => {
+  const layer = {
+    id: 'partial-fixture',
+    name: 'Partial fixture',
+    enabled: false,
+    stats: { partial: true, count: 2, lastUpdate: NOW - 10_000 },
+  };
+  const envelope = feedProvenanceEnvelope([layer], { now: NOW });
+  assert.equal(envelope.overall, 'off');
+  assert.equal(envelope.layers[0].feedState, 'off');
+  assert.equal(hudTelemetryProvenance([layer], { now: NOW }), null);
 });
 
 test('degraded and unavailable envelopes outrank leftover nominal neighbours', () => {
