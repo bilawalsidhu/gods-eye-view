@@ -327,6 +327,7 @@
   "src/layers/aircraft/render/navara.js",
   "src/layers/flights/renderer.test.mjs",
   "src/layers/military/renderer.test.mjs",
+  "src/layers/military/policy.test.mjs",
   "src/testSupport/aircraftRecordingRenderer.mjs",
   "src/layers/aircraft/render/cesium.test.mjs",
   "src/layers/aircraft/render/cesium.js",
