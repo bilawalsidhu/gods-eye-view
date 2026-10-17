@@ -791,6 +791,11 @@ and `./layers/launches`. Each owns its catalog, render state, tracking, interact
 and teardown. Source adapters retain the existing CelesTrak and Launch Library
 endpoints; standalone entries provide scene services and the satellite dependency.
 The mission factory separates paths, replay, camera, panel, overlays and placement.
+Launch Library pad coordinates retain unknown values: missing fields use the
+reported location coordinates when available, and launches without a known pad
+position stay off the map. Genuine zero coordinates remain valid. Undisclosed
+stage coordinates, downrange distance and flight numbers remain unknown; the
+mission panel omits the flight-number label when no number was reported.
 Pending mission requests abort on disable/destruction and malformed launch
 snapshots preserve the last accepted display. Catalog groups, propagation cadence,
 tracking intent, replay timing, controls and source attribution remain unchanged.
@@ -5460,9 +5465,9 @@ When runtime behavior or architecture changes, update this file in the same chan
 
 ## Dependency security baseline
 
-The lockfile uses DOMPurify 3.4.15, protobufjs 8.8.0, PostCSS 8.5.28, and
-nanoid 3.3.19. Cesium remains on 1.138.0. Browser QA uses Puppeteer 25.10.0;
-image-processing tools use Sharp 0.35.4. QA scripts await Puppeteer's asynchronous
+The lockfile uses DOMPurify 3.4.17, protobufjs 8.8.0, PostCSS 8.5.28,
+source-map-js 1.2.2 and nanoid 3.3.19. Cesium remains on 1.138.0. Browser QA
+uses Puppeteer 25.10.0; image-processing tools use Sharp 0.35.5. QA scripts await Puppeteer's asynchronous
 executable-path lookup before testing or passing the path to Chrome. Supported Node versions remain
 24.14.x and 26.x. Use `npm ci` to reproduce the checked-in dependency tree.
 
