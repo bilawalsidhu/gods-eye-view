@@ -101,7 +101,9 @@ export function createFirePerimetersLayer({
       layerName: 'Fire Perimeters',
       source: 'NIFC WFIGS',
       dataSource: _dataSource,
-      label: row.name ? `Wildfire · ${row.name}` : 'Wildfire perimeter',
+      // Context already carries the translated layer name; use the source's
+      // own incident name rather than an untranslated fixed prefix.
+      label: row.name || t('Fire Perimeters'),
       latitude: row.anchor.lat,
       longitude: row.anchor.lon,
       properties: {
