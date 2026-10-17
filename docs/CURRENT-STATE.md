@@ -797,7 +797,11 @@ position stay off the map. Genuine zero coordinates remain valid. Undisclosed
 stage coordinates, downrange distance and flight numbers remain unknown; the
 mission panel omits the flight-number label when no number was reported.
 Pending mission requests abort on disable/destruction and malformed launch
-snapshots preserve the last accepted display. Catalog groups, propagation cadence,
+snapshots preserve the last accepted display. A Launch Library stale-cache fallback
+retains its missions but reports STALE in Data Layers; a fresh snapshot clears that
+provenance. Hiding retained missions does not relabel them as fresh, and teardown
+clears the instance state. Injected getLaunches-only sources remain supported.
+Catalog groups, propagation cadence,
 tracking intent, replay timing, controls and source attribution remain unchanged.
 
 The fire layer now exposes `./layers/firms`: an instance factory with separate
