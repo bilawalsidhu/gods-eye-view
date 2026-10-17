@@ -111,7 +111,9 @@ export function createCyclonesLayer({
       layerId: 'weather-cyclones',
       layerName: 'Cyclone advisories',
       source: 'NOAA NHC / CPHC',
-      label: `Cyclone · ${storm.name}`,
+      // Layer identity is already carried separately. Keep source names literal
+      // rather than adding an untranslated user-facing prefix.
+      label: storm.name,
       latitude: storm.position.latitude,
       longitude: storm.position.longitude,
       properties: {
