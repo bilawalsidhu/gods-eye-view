@@ -1,3 +1,5 @@
+import fs from 'node:fs';
+import os from 'node:os';
 import { normalizeAdsbLolPointResponse } from '../../../src/data/adsbLolFallback.js';
 import {
   coalesceProxyRequest,
@@ -126,6 +128,8 @@ function openskyAdaptiveTtlMs(remaining) {
 }
 /** @type {boolean} Guards duplicate auth-failure warnings in logs. */
 let _openskyAuthWarned = false;
+/** One warning per process when OPENSKY_CREDENTIALS_FILE cannot be read. */
+let _openskyCredentialsFileWarned = false;
 /** @type {boolean} Guards duplicate invalid-auth-mode warnings. */
 let _openskyAuthModeWarned = false;
 /** Default auth mode when OPENSKY_AUTH_MODE env is unset. */
@@ -146,6 +150,48 @@ const ADSBLOL_POINT_MAX_RESPONSE_BYTES = 8 * 1024 * 1024;
 const OPENSKY_SOURCE_STALE_MS = 120_000;
 
 /**
+ * The OpenSky API client for OAuth: OPENSKY_CLIENT_ID and
+ * OPENSKY_CLIENT_SECRET, or else the credentials.json that OpenSky's account
+ * page downloads, named by OPENSKY_CREDENTIALS_FILE ("~" is the home
+ * directory). The file is read on each token refresh, so a replaced file is
+ * picked up without a restart.
+ *
+ * @param {Record<string, string|undefined>} [env]
+ * @param {(path: string) => string} [readFile]
+ * @returns {{ clientId: string, clientSecret: string } | null}
+ */
+export function openSkyClientCredentials(
+  env = process.env,
+  readFile = (path) => fs.readFileSync(path, 'utf8'),
+) {
+  const clientId = String(env.OPENSKY_CLIENT_ID || '').trim();
+  const clientSecret = String(env.OPENSKY_CLIENT_SECRET || '').trim();
+  if (clientId && clientSecret) return { clientId, clientSecret };
+  const file = String(env.OPENSKY_CREDENTIALS_FILE || '').trim();
+  if (!file) return null;
+  const path = file.replace(/^~(?=$|[\\/])/, os.homedir());
+  let raw;
+  try {
+    raw = JSON.parse(readFile(path));
+  } catch (error) {
+    if (!_openskyCredentialsFileWarned) {
+      console.warn(
+        `[OpenSky] OPENSKY_CREDENTIALS_FILE could not be read: ${error.code || error.message}`,
+      );
+      _openskyCredentialsFileWarned = true;
+    }
+    return null;
+  }
+  const fileId = String(raw?.clientId ?? raw?.client_id ?? '').trim();
+  const fileSecret = String(
+    raw?.clientSecret ?? raw?.client_secret ?? '',
+  ).trim();
+  return fileId && fileSecret
+    ? { clientId: fileId, clientSecret: fileSecret }
+    : null;
+}
+
+/**
  * Obtain a valid OpenSky OAuth2 bearer token, refreshing if needed.
  *
  * Uses the client_credentials grant against the OpenSky Keycloak realm.
@@ -163,9 +209,9 @@ export async function getOpenSkyToken() {
   // return the same promise instead of issuing a duplicate token request
   if (_openskyTokenPromise) return _openskyTokenPromise;
 
-  const clientId = process.env.OPENSKY_CLIENT_ID;
-  const clientSecret = process.env.OPENSKY_CLIENT_SECRET;
-  if (!clientId || !clientSecret) return null;
+  const credentials = openSkyClientCredentials();
+  if (!credentials) return null;
+  const { clientId, clientSecret } = credentials;
 
   // Wrap the async token fetch in a shared promise stored in _openskyTokenPromise
   _openskyTokenPromise = (async () => {
@@ -624,7 +670,7 @@ export function openSkyProxy() {
           } else if (requestedMode === 'oauth' && usedMode !== 'oauth') {
             body = JSON.stringify({
               error:
-                'OpenSky auth invalid. OAuth mode requires valid OPENSKY_CLIENT_ID and OPENSKY_CLIENT_SECRET.',
+                'OpenSky auth invalid. OAuth mode requires valid OPENSKY_CLIENT_ID and OPENSKY_CLIENT_SECRET, or OPENSKY_CREDENTIALS_FILE.',
             });
             reason = 'oauth_invalid_or_missing';
           } else if (usedMode === 'basic') {
