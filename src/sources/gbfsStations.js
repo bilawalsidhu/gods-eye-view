@@ -82,6 +82,21 @@ function stationName(value) {
 }
 
 /**
+ * Docks a station physically has. PBSC adds the bikes a station accepts in its
+ * geofenced area around the docks to `capacity` and reports that part as
+ * `geofenced_capacity` (not a GBFS field): Bilbao Bizi publishes 39 docks as
+ * capacity 839 with geofenced_capacity 800. Without the extension, or when it
+ * would exceed the total, `capacity` is read as given.
+ */
+function dockCapacity(raw) {
+  const capacity = toNonNegativeInteger(raw?.capacity);
+  const geofenced = toNonNegativeInteger(raw?.geofenced_capacity);
+  if (capacity == null || geofenced == null || geofenced > capacity)
+    return capacity;
+  return capacity - geofenced;
+}
+
+/**
  * Parse a GBFS station_information payload into a Map of station metadata.
  * Handles field-name variations across different GBFS providers
  * (station_id vs id, lat vs latitude, etc.). Stations with missing or
@@ -105,7 +120,7 @@ export function parseStationInformation(payload) {
       name: stationName(raw?.name) || stationName(raw?.short_name),
       lat,
       lon,
-      capacity: toNonNegativeInteger(raw?.capacity),
+      capacity: dockCapacity(raw),
       isInstalled: normalizeGbfsBool(raw?.is_installed, true),
       isRenting: normalizeGbfsBool(raw?.is_renting, true),
       isReturning: normalizeGbfsBool(raw?.is_returning, true),

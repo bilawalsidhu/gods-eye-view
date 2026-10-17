@@ -15,6 +15,25 @@ const parseName = (fields, version) =>
     data: { stations: [station(fields)] },
   }).get('s1').name;
 
+const parseCapacity = (fields) =>
+  parseStationInformation({ data: { stations: [station(fields)] } }).get('s1')
+    .capacity;
+
+test('capacity counts docks, not the geofenced area PBSC adds to it', () => {
+  // Bilbao Bizi, BiciMAD and Dbizi as published on 2026-10-17.
+  assert.equal(parseCapacity({ capacity: 839, geofenced_capacity: 800 }), 39);
+  assert.equal(parseCapacity({ capacity: 43, geofenced_capacity: 20 }), 23);
+  assert.equal(parseCapacity({ capacity: 19, geofenced_capacity: 0 }), 19);
+});
+
+test('capacity is read as given without a usable geofenced_capacity', () => {
+  assert.equal(parseCapacity({ capacity: 27 }), 27);
+  assert.equal(parseCapacity({ capacity: 27, geofenced_capacity: null }), 27);
+  assert.equal(parseCapacity({ capacity: 27, geofenced_capacity: 'n/a' }), 27);
+  assert.equal(parseCapacity({ capacity: 10, geofenced_capacity: 30 }), 10);
+  assert.equal(parseCapacity({ capacity: null, geofenced_capacity: 5 }), null);
+});
+
 test('GBFS v2 station names remain trimmed strings', () => {
   assert.equal(
     parseName({ name: ' Republic Square ', short_name: 'Short' }, '2.3'),
