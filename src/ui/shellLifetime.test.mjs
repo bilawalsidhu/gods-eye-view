@@ -1,3 +1,4 @@
+
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { LocationNavigation } from './locationNavigation.js';
@@ -140,7 +141,13 @@ test('weather shell supplies live imagery hosts to wind and observations and rel
   let host = { collection: {}, kind: 'tileset' };
   owner.services.imageryHost = () => host;
   const attached = new Map();
-  const ids = ['wind', 'weather-radar', 'weather-satellite', 'weather-lightning'];
+  const ids = [
+    'wind',
+    'weather-radar',
+    'weather-satellite',
+    'weather-lightning',
+    'weather-aurora',
+  ];
   owner.attachDataManager({
     layers: new Map(ids.map(id => [id, { module: {
       attachShellServices(services) { attached.set(id, services); },

@@ -2481,7 +2481,11 @@
       "src/layers/airQuality/index.js",
       "src/layers/airQuality/model.js",
       "src/layers/airQuality/source.js",
-      "src/ui/statusText.js"
+      "src/ui/statusText.js",
+      "src/layers/aurora/rendering.js",
+      "src/layers/aurora/magneticLocalTime.js",
+      "src/layers/aurora/source.js",
+      "src/layers/aurora/index.js"
     ],
     "external": [
       "hls.js",
@@ -3050,7 +3054,10 @@
       "src/layers/airQuality/model.js",
       "src/layers/airQuality/source.js",
       "src/ui/statusText.js",
-      "src/ui/layerNames.js"
+      "src/ui/layerNames.js",
+      "src/layers/aurora/rendering.js",
+      "src/layers/aurora/magneticLocalTime.js",
+      "src/layers/aurora/index.js"
     ],
     "external": [
       "hls.js",

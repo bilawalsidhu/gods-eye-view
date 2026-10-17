@@ -245,6 +245,17 @@ const layers = [
     noQuery: 'map overlay; no countable records',
   },
   {
+    id: 'weather-aurora',
+    aliases: [
+      'aurora',
+      'aurora forecast',
+      'northern lights',
+      'southern lights',
+    ],
+    context: false,
+    noQuery: 'forecast overlay; no countable records',
+  },
+  {
     id: 'wind',
     aliases: ['winds', 'wind map'],
     context: false,
