@@ -118,9 +118,11 @@ export const findCctvCameras = defineTool({
 
 export const getCctvSnapshot = defineTool({
   name: 'get_cctv_snapshot',
-  title: 'Current camera view',
+  title: 'Camera snapshot',
   description:
-    'The current image from one public camera, by the id from find_cctv_cameras.',
+    'An image from one public camera, by the id from find_cctv_cameras. ' +
+    'Street View fallback imagery is historical, not the current camera view; ' +
+    'unknown frame provenance is explicit.',
   inputSchema: {
     type: 'object',
     properties: { camera_id: { type: 'string', minLength: 1, maxLength: 200 } },
@@ -138,7 +140,7 @@ export const getCctvSnapshot = defineTool({
         `No camera has id ${args.camera_id}; use find_cctv_cameras first`,
       );
     const frame = await services.cctv.getFrame(camera, { signal });
-    if (!FRAME_TYPES.has(frame.contentType))
+    if (frame.sourceKind === 'synthetic' || !FRAME_TYPES.has(frame.contentType))
       throw new ToolError(
         'unavailable',
         `Camera ${camera.name || camera.id} has no still image right now`,
@@ -149,8 +151,22 @@ export const getCctvSnapshot = defineTool({
         'The camera image is too large to return',
       );
     const name = text(camera.name) || camera.id;
+    const fallback = frame.sourceKind === 'streetview';
+    const current = ['upstream-image', 'hls-pull'].includes(frame.sourceKind);
+    const credit = fallback ? 'Google Street View' : text(camera.credit);
+    const label = fallback
+      ? 'Street View fallback for'
+      : current
+        ? 'Current view from'
+        : 'Image from';
     return {
-      summary: `Current view from ${name}${camera.city ? ` in ${camera.city}` : ''}${camera.credit ? `, courtesy of ${camera.credit}` : ''}.`,
+      summary:
+        `${label} ${name}${camera.city ? ` in ${camera.city}` : ''}${credit ? `, courtesy of ${credit}` : ''}.` +
+        (fallback
+          ? ' Historical imagery; the current camera frame is unavailable.'
+          : current
+            ? ''
+            : ' Frame provenance is unknown.'),
       data: {
         view: suggestView(services, {
           point: { lat: camera.lat, lon: camera.lon },
@@ -160,8 +176,10 @@ export const getCctvSnapshot = defineTool({
         id: camera.id,
         name,
         city: text(camera.city),
-        provider: text(camera.provider),
-        credit: text(camera.credit),
+        provider: fallback ? 'Google Street View' : text(camera.provider),
+        credit,
+        source_kind: frame.sourceKind ?? null,
+        current_view: current ? true : fallback ? false : null,
         mime_type: frame.contentType,
         bytes: frame.bytes.byteLength,
       },
