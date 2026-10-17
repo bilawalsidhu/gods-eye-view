@@ -1,5 +1,13 @@
 # God's Eye View Current State
 
+## Terrain request singleflight — September 29, 2026
+
+Identical concurrent client requests to `/api/terrain/heights` share one transport
+request. Each caller retains independent cancellation; one cancelled consumer
+does not abort work still needed by another, while the final cancelled waiter
+does abort the shared request. This adds no TTL or stale-data policy and does not
+change the existing terrain result/cache semantics.
+
 Vessel sources can report healthy empty coverage using a current, complete
 snapshot with zero raw rows, a healthy transport and a positive last-message
 time. This clears obsolete contacts and settles startup without manufacturing

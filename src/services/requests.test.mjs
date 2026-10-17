@@ -94,3 +94,34 @@ test('a failed probe is retried after its backoff, not on every query', async ()
     'GET /api/overpass/status',
   ]);
 });
+
+
+test('identical concurrent terrain requests share one transport while callers stay independent', async () => {
+  let requests = 0;
+  let release;
+  const gate = new Promise((resolve) => {
+    release = resolve;
+  });
+  const services = createApplicationRequestServices({
+    fetchImpl: async () => {
+      requests += 1;
+      await gate;
+      return Response.json({ results: [{ ellipsoid: 10 }] });
+    },
+  });
+
+  const firstCaller = new AbortController();
+  const first = services.terrain.getHeights([{ lat: 30, lon: -97 }], {
+    signal: firstCaller.signal,
+  });
+  const second = services.terrain.getHeights([{ lat: 30, lon: -97 }]);
+
+  await Promise.resolve();
+  assert.equal(requests, 1);
+  firstCaller.abort();
+  await assert.rejects(first, { name: 'AbortError' });
+
+  release();
+  assert.deepEqual(await second, [{ ellipsoid: 10 }]);
+  assert.equal(requests, 1);
+});
