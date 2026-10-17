@@ -1,5 +1,23 @@
 # God's Eye View Current State
 
+Dams retains layer ID `local-dams` and loads the original 704 OSM/OpenInfraMap
+features plus 121 IGN Argentina Dique points (825 input features). The separate
+IGN pack is loaded lazily with the existing dataset by both the renderer and
+`find_infrastructure`. A failed IGN supplement leaves OSM visible with a source
+error; partial loads are not cached and retry on the next query or layer toggle.
+Main-file failures and aborts still fail the load. The two overlapping OSM/IGN
+records are excluded during the reproducible offline build
+(`scripts/build-argentina-dams.mjs`), with a checked-in audit trail. The source-typed
+Río Salado flood-defense embankment and Bañado de la Estrella wetland are also
+excluded. Two nearby unnamed pairs
+remain as separate IGN records, with their unverified distinctness recorded in
+the audit. Dam query rows carry source IDs and dates; the result attribution
+includes only sources represented in the returned rows, after the limit. IGN
+records retain compilation metadata, stable IDs and per-feature source attribution;
+retrieved 2026-10-15, underlying source update date unspecified. These are static
+structure locations. Existing toggles, layer tokens, LOD and card layout remain
+the same. Provenance and terms: `local_data/argentina_dams/README.md`.
+
 Vessel sources can report healthy empty coverage using a current, complete
 snapshot with zero raw rows, a healthy transport and a positive last-message
 time. This clears obsolete contacts and settles startup without manufacturing

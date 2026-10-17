@@ -1062,5 +1062,7 @@
   "src/ui/flyToDataSource.test.mjs",
   "scripts/assemble-changelog.mjs",
   "src/tooling/changelogFragments.test.mjs",
-  "src/data/gbfsProxyRateLimit.test.mjs"
+  "src/data/gbfsProxyRateLimit.test.mjs",
+  "scripts/build-argentina-dams.mjs",
+  "src/data/argentinaDams.test.mjs"
 ]
