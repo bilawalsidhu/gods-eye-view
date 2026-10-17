@@ -35,6 +35,11 @@ const cases = [
     () => t('No mapped sites in view'),
   ],
   [
+    { status: 'ready', lastUpdate: 1, records: [{ kind: 'installation' }] },
+    '1 mapped site in view',
+    () => tn(1, '{count} mapped site in view', '{count} mapped sites in view'),
+  ],
+  [
     {
       status: 'ready',
       lastUpdate: 1,

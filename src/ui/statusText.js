@@ -255,12 +255,12 @@ const MAPPED_SITE_PATTERNS = [
   ],
 ];
 
+// Every status piece shape, in matching order.
+const STATUS_SHAPES = [...STATUS_PIECE_PATTERNS, ...MAPPED_SITE_PATTERNS];
+
 /** A status piece by its shape in the UI language, or null. */
 function statusPatternText(piece) {
-  for (const [pattern, format] of [
-    ...STATUS_PIECE_PATTERNS,
-    ...MAPPED_SITE_PATTERNS,
-  ]) {
+  for (const [pattern, format] of STATUS_SHAPES) {
     const match = pattern.exec(piece);
     if (match) return format(match);
   }
