@@ -48,6 +48,9 @@
  * preRender to its postRender), which a burst of queued frames (an engine
  * rendering faster than the browser presents, without vsync) leaves out.
  * --warm-ms (3000) is the running time before the frames are measured.
+ * --vsync keeps Chrome's frame-rate limit and vsync (60 Hz): frames then
+ * pace as they present, so an engine's frame interval no longer includes
+ * the uncapped scheduler's bursts; compare the long-frame counts.
  * --layer=military measures the military layer the same way
  * (?qaFeed=military:synthetic:--count, default 1000). Each scene also
  * reports the frames over 33 ms and 50 ms, and the fleet ticks timed. The
@@ -102,6 +105,7 @@ const MOVER_COUNT = Number(
 const HEAP_WARM_SECONDS = Number(argument('heap-warm-seconds') ?? 0);
 // Running time with the layer on before the frames are measured (ms).
 const WARM_MS = Number(argument('warm-ms') ?? 3000);
+const VSYNC = process.argv.includes('--vsync');
 const MOVER_SCENES = (argument('scene') ?? 'global,city,orbit').split(',');
 // Post-GC heap sampling per movers scene (0 skips it).
 const HEAP_SECONDS = Number(argument('heap-seconds') ?? 60);
@@ -823,8 +827,7 @@ const browser = await puppeteer.launch({
   executablePath,
   args: [
     '--use-angle=metal',
-    '--disable-gpu-vsync',
-    '--disable-frame-rate-limit',
+    ...(VSYNC ? [] : ['--disable-gpu-vsync', '--disable-frame-rate-limit']),
     '--window-size=1280,800',
   ],
 });
