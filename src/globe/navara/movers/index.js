@@ -167,6 +167,7 @@ export function createNavaraMovers(view, { overlay }) {
     });
     return {
       ready: mover.ready,
+      pickRadiusPx: mover.pickRadiusPx,
       commit() {
         mover.commit(store.dirty());
         request();
@@ -183,9 +184,11 @@ export function createNavaraMovers(view, { overlay }) {
     resolvePick: (batchId) => pickIndex.resolve(batchId),
     /** The live sets' options and stores, for CPU picks. */
     pickables: () =>
-      [...registry.sets.values()].map(({ options, store }) => ({
+      [...registry.sets.values()].map(({ options, store, part }) => ({
         options,
         store,
+        // Models: the drawn radius the CPU checks a model hit against.
+        pickRadiusPx: part?.pickRadiusPx ?? null,
       })),
     destroy: () => registry.destroyAll(),
   };

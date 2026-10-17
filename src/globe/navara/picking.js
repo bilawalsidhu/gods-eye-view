@@ -63,8 +63,10 @@ export function createNavaraPicking({
   // the CPU sees must be drawn under the click (its pick radius, no slack)
   // and be the one the CPU finds on top. A stale answer from the previous
   // gesture (the followed aircraft at the centre) lay within twice its
-  // radius of a neighbour's click and won (10b/11b flake). Models, which
-  // the CPU pick does not see, are still taken as answered.
+  // radius of a neighbour's click and won (10b/11b flake). A model hit is
+  // checked against its projected position within its drawn radius
+  // (pickRadiusPx); the CPU's top hit (drawn order first) is not asked of
+  // it, as a model is drawn depth-tested among the glyphs.
   const answerFrom = (hit, at) => {
     if (hit) {
       // The instance the CPU sees on top (lines are not in the GPU pick).
