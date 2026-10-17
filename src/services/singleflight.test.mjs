@@ -94,11 +94,9 @@ test('final abort evicts abandoned loader keys', async () => {
   const lane = createSingleflight();
   for (let i = 0; i < 12; i += 1) {
     const caller = new AbortController();
-    const pending = lane.run(
-      'stalled-' + i,
-      () => new Promise(() => {}),
-      { signal: caller.signal },
-    );
+    const pending = lane.run('stalled-' + i, () => new Promise(() => {}), {
+      signal: caller.signal,
+    });
     await Promise.resolve();
     caller.abort();
     await assert.rejects(pending, { name: 'AbortError' });
