@@ -1480,7 +1480,10 @@ access. Callers retain validation, transport and response policy.
 
 The shared TLE text parser skips incomplete named sets and resumes at the next
 complete set. A missing orbital line does not discard the later satellites in
-the catalog; satellite layers and next-pass tools use the same parser.
+the catalog. A set whose two lines carry different catalog numbers, or a
+malformed catalog number, is skipped the same way, so a spliced catalog cannot
+pair one satellite's elements with another's. Satellite layers and next-pass
+tools use the same parser.
 
 ## Build configuration and local provider boundaries
 
