@@ -1400,7 +1400,10 @@ plugin order, server-key selection, validation, disk caches, budgets, retries
 and stale/error responses remain unchanged. Each has a Node-only package entry
 under `gods-eye-view/server/providers/`. Portable terrain mechanics, traffic tile
 math and GBFS source rules are available under `gods-eye-view/sources/`.
-The browser layers and their rendering remain in their existing modules.
+The TomTom `/api/tomtom/*` routes run the shared same-site admission gate before
+status, cache or upstream work, refusing cross-site browser requests while
+preserving same-origin app requests and non-browser local callers. The browser
+layers and their rendering remain in their existing modules.
 GBFS null or empty availability counts retain an unknown value through station
 parsing and rendering; they use the neutral station color rather than reporting
 an empty dock. Explicit zero and caller-supplied numeric fallbacks remain valid.
