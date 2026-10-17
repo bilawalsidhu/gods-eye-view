@@ -65,7 +65,7 @@ test('infrastructure factory preserves identity and creates independent state wi
     first.map(({ id, name, source }) => ({ id, name, source })),
     [
       { id: 'local-datacenters', name: 'Datacenters', source: 'Local' },
-      { id: 'local-dams', name: 'Dams', source: 'USACE' },
+      { id: 'local-dams', name: 'Dams', source: 'OpenStreetMap' },
     ],
   );
   first.forEach((layer, index) => {
@@ -83,7 +83,7 @@ test('infrastructure factory preserves identity and creates independent state wi
 test('dataset URLs still name the complete bundled sources', () => {
   for (const [file, count] of [
     ['datacenters', 4351],
-    ['dams', 704],
+    ['dams', 706],
   ]) {
     const lines = readFileSync(
       new URL(`./local_data/${file}/${file}.geojsonl`, import.meta.url),
@@ -92,6 +92,30 @@ test('dataset URLs still name the complete bundled sources', () => {
       .split('\n')
       .filter((line) => line.trim());
     assert.equal(lines.length, count);
+  }
+});
+
+test('Acaray and Yacyreta retain matching OSM records in both bundled formats', () => {
+  const folder = new URL('./local_data/dams/', import.meta.url);
+  const collection = JSON.parse(
+    readFileSync(new URL('dams.geojson', folder), 'utf8'),
+  );
+  const lines = readFileSync(new URL('dams.geojsonl', folder), 'utf8')
+    .trim()
+    .split('\n')
+    .map(JSON.parse);
+  for (const [id, name, version] of [
+    [262532166, 'Acaray', 7],
+    [-5671745, 'Represa Yacyretá-Apipé', 2],
+  ]) {
+    const matches = lines.filter((feature) => feature.id === id);
+    assert.equal(matches.length, 1);
+    assert.equal(matches[0].properties.name, name);
+    assert.equal(matches[0].properties.source_version, version);
+    assert.deepEqual(
+      collection.features.filter((feature) => feature.id === id),
+      matches,
+    );
   }
 });
 
