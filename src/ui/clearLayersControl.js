@@ -1,3 +1,5 @@
+import { t } from '../i18n/index.js';
+
 /** Keep the clear action focusable while busy; the caller owns its transaction. */
 export function bindClearLayersControl(button, clear) {
   let destroyed = false;
@@ -12,7 +14,9 @@ export function bindClearLayersControl(button, clear) {
       button.setAttribute('aria-busy', String(busy));
       button.setAttribute(
         'aria-label',
-        busy ? 'Clearing selected data layers' : 'Clear selected data layers',
+        busy
+          ? t('Clearing selected data layers')
+          : t('Clear selected data layers'),
       );
     },
     destroy() {

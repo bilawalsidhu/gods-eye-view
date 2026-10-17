@@ -15,7 +15,9 @@ body.recording-mode #cctv-panel,
 body.recording-mode #radio-panel,
 body.recording-mode #global-context-panel,
 body.recording-mode #gev-voice-control,
-body.recording-mode #scene-panel {
+body.recording-mode #scene-panel,
+/* The expanded viewer lives on <body>, outside every panel. */
+body.recording-mode .sl-viewer-wrap-expanded {
   opacity: 0 !important;
   visibility: hidden !important;
   pointer-events: none !important;

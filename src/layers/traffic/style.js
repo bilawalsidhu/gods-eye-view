@@ -104,7 +104,7 @@ export function createStyle({ state: layerState, services, parts, source }) {
       const bucket = dot.bucket;
       if (!bucket) continue; // sim/uncovered dots stay byte-identical
       dot.point.color = layerState._activeBucketColors[bucket];
-      dot.point.pixelSize =
+      dot.nominalSize = dot.point.pixelSize =
         baseDotSize(dot.road?.type, bucket) +
         (bucket === 'jam' ? 1 : 0) +
         activeSizeDelta(bucket);

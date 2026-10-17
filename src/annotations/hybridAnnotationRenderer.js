@@ -77,7 +77,11 @@ export function createHybridAnnotationRenderer(viewer) {
       add(anno);
       return;
     }
-    if (anno.type !== 'area' || !anno.ring || anno.ring.length < 3) return;
+    if (anno.type !== 'area' || !anno.ring || anno.ring.length < 3) {
+      if (anno.outlineUnavailable && entry.screenProxy)
+        screen.update(entry.screenProxy);
+      return;
+    }
 
     if (!entry.worldProxy) {
       entry.worldProxy = liveProxy(anno, { label: null });
