@@ -1,8 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  AISSTREAM_STALE_MS,
   aisStreamRows,
+  hasAisStreamStatic,
   ingestAisStreamEnvelope,
+  pruneAisStreamCache,
 } from '../../server/providers/vessels/ais-store.js';
 
 // ITU-R M.1371 encodes speed over ground in 0.1-knot units and course over
@@ -62,4 +65,69 @@ test('the fastest encodable reading below the unavailable code is kept', () => {
   const row = rowFor('244060366');
   assert.equal(row.speed, 102.2);
   assert.equal(row.course, 359.9);
+});
+
+test('pruneAisStreamCache evicts expired static data when vessel is stale', () => {
+  const mmsi = '999888777';
+  ingestAisStreamEnvelope({
+    MessageType: 'ShipStaticData',
+    Message: {
+      ShipStaticData: {
+        UserID: Number(mmsi),
+        Name: 'TEST VESSEL',
+        Destination: 'NOWHERE',
+      },
+    },
+    MetaData: { MMSI: mmsi },
+  });
+  assert.equal(hasAisStreamStatic(mmsi), true);
+  // Stale prune removes static entries for MMSIs with no active vessel
+  pruneAisStreamCache(Date.now() + AISSTREAM_STALE_MS + 1000);
+  assert.equal(
+    hasAisStreamStatic(mmsi),
+    false,
+    'stale static data was evicted',
+  );
+});
+
+test('pruneAisStreamCache preserves static data for active anchored vessels with stale pending track', () => {
+  const mmsi = '999888778';
+  // Static data arrives
+  ingestAisStreamEnvelope({
+    MessageType: 'ShipStaticData',
+    Message: {
+      ShipStaticData: {
+        UserID: Number(mmsi),
+        Name: 'ANCHORED VESSEL',
+        Destination: 'PORT',
+      },
+    },
+    MetaData: { MMSI: mmsi },
+  });
+  // First position fix creates pending track with old epoch (35 minutes in the past)
+  const pastEpoch = Math.floor(Date.now() / 1000) - 35 * 60;
+  ingestAisStreamEnvelope({
+    ...positionReport(mmsi, { Sog: 0, Cog: 0 }),
+    MetaData: {
+      MMSI: mmsi,
+      latitude: 53.40879,
+      longitude: 6.19741,
+      time_utc: new Date(pastEpoch * 1000).toISOString(),
+    },
+  });
+  assert.equal(hasAisStreamStatic(mmsi), true);
+
+  // Vessel reports fresh position right now, remaining anchored (< 25m move)
+  ingestAisStreamEnvelope(positionReport(mmsi, { Sog: 0, Cog: 0 }));
+
+  // Prune at Date.now(): pending fix (35 min old) is pruned, but vessel is fresh
+  pruneAisStreamCache(Date.now());
+  // Static data MUST survive because the vessel itself is still active in _aisStreamVessels!
+  assert.equal(
+    hasAisStreamStatic(mmsi),
+    true,
+    'active anchored vessel retained static data',
+  );
+  const row = rowFor(mmsi);
+  assert.equal(row.name, 'ANCHORED VESSEL');
 });

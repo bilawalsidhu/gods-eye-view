@@ -536,3 +536,51 @@ test('an <img> that turns out too large is refused and let go', async (t) => {
   await assert.rejects(aborted);
   assert.equal(images.at(-1).src, '', 'its download stops');
 });
+
+test('stepBy recovers when onStep throws or returns a rejected promise', async () => {
+  let stepCalls = 0;
+  let throwError = true;
+  const viewer = createPhotoViewer({
+    providerId: 'test',
+    name: 'Test',
+    sources: SOURCES,
+    getPhoto: async (id) => PHOTOS[id],
+    step: async (_from, delta) => (delta > 0 ? 'b' : null),
+    onStep() {
+      stepCalls++;
+      if (throwError) {
+        throw new Error('sync step failure');
+      }
+      return Promise.reject(new Error('async step failure'));
+    },
+    load: async (url) => ({ src: url, close() {} }),
+    createRenderer: () => ({
+      setImage() {},
+      setView() {},
+      getView: () => ({ yaw: 0, pitch: 0, fov: 80 }),
+      resize() {},
+      clear() {},
+      destroy() {},
+    }),
+  });
+  const host = fakeHost();
+  await viewer.mount(host);
+  await viewer.open('a');
+  const root = host.children[0];
+  const nextButton = root.children[3];
+
+  // First click: onStep throws synchronously
+  nextButton.fire('click', { stopPropagation() {} });
+  await tick();
+  assert.equal(stepCalls, 1);
+
+  // Second click: onStep returns a rejected promise
+  throwError = false;
+  nextButton.fire('click', { stopPropagation() {} });
+  await tick();
+  assert.equal(
+    stepCalls,
+    2,
+    'second click was processed without permanent lockup',
+  );
+});

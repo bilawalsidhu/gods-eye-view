@@ -7,9 +7,11 @@ export function createLimiter(limit, { lifo = false } = {}) {
   const queue = [];
   function next() {
     while (running < limit && queue.length) {
-      const { task, resolve, reject, signal } = lifo
-        ? queue.pop()
-        : queue.shift();
+      const item = lifo ? queue.pop() : queue.shift();
+      const { task, resolve, reject, signal, onAbort } = item;
+      if (onAbort) {
+        signal?.removeEventListener?.('abort', onAbort);
+      }
       if (signal?.aborted) {
         reject(signal.reason);
         continue;
@@ -26,19 +28,18 @@ export function createLimiter(limit, { lifo = false } = {}) {
   }
   return {
     run(task, { signal } = {}) {
+      if (signal?.aborted) return Promise.reject(signal.reason);
       return new Promise((resolve, reject) => {
         const item = { task, resolve, reject, signal };
+        const onAbort = () => {
+          const at = queue.indexOf(item);
+          if (at === -1) return;
+          queue.splice(at, 1);
+          reject(signal.reason);
+        };
+        item.onAbort = onAbort;
         queue.push(item);
-        signal?.addEventListener(
-          'abort',
-          () => {
-            const at = queue.indexOf(item);
-            if (at === -1) return;
-            queue.splice(at, 1);
-            reject(signal.reason);
-          },
-          { once: true },
-        );
+        signal?.addEventListener('abort', onAbort, { once: true });
         next();
       });
     },
