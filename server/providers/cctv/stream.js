@@ -200,6 +200,15 @@ export function createHlsPuller({
         entry.pendingDiscontinuity = true;
       }
       entry.upstreamNewest = newest;
+      // Start near live edge; do not download a DVR tail only to evict it.
+      if (!entry.segments.size || restarted) {
+        const startupCount = Math.max(
+          2,
+          Math.floor(limits.sessionBytes / limits.segmentBytes),
+        );
+        for (const segment of segments.slice(0, -startupCount))
+          entry.upstream.set(segment.seq, segment.uri);
+      }
       for (const segment of segments) {
         if (entry.stopping) return;
         if (entry.upstream.has(segment.seq)) continue;
