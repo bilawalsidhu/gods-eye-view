@@ -79,12 +79,14 @@ function harness(
         contexts.selectedEvents += 1;
         return contexts.selected;
       },
-      removeEntityContextsForLayer(layerId) {
+      removeEntityContextsForLayer(layerId, { retainIds } = {}) {
         contexts.removals += 1;
         for (const [id, record] of contexts.records) {
-          if (record.layerId === layerId) contexts.records.delete(id);
+          if (record.layerId === layerId && !retainIds?.has(id))
+            contexts.records.delete(id);
         }
-        if (contexts.selected?.layerId === layerId) contexts.selected = null;
+        if (contexts.selected && !contexts.records.has(contexts.selected.id))
+          contexts.selected = null;
       },
     },
     inciwebSource: inciwebIndex
@@ -235,6 +237,33 @@ test('perimeter selection publishes one shared NIFC context record and clears it
   h.clicks.handler({ position: { x: 10, y: 10 } });
   assert.equal(h.contexts.selected, null);
   assert.equal(h.contexts.records.size, 0);
+  h.layer.destroy(h.viewer);
+});
+
+test('switching perimeter picks evicts stale context', async () => {
+  const otherId = '2026-NMGNF-000124';
+  const nextRow = { ...row, stableId: otherId, name: 'Neighbor Fire' };
+  let picked = row.stableId;
+  const h = harness(
+    { getSnapshot: async () => [row, nextRow] },
+    { pick: () => ({ id: `fire-perimeter:${picked}:0` }) },
+  );
+  await h.layer.update(h.viewer);
+
+  h.clicks.handler({ position: { x: 10, y: 10 } });
+  assert.equal(h.contexts.records.size, 1);
+  assert.ok(h.contexts.records.has(`fire-perimeter:${row.stableId}`));
+
+  picked = otherId;
+  h.clicks.handler({ position: { x: 10, y: 10 } });
+  assert.deepEqual([...h.contexts.records.keys()], [`fire-perimeter:${otherId}`]);
+  assert.equal(h.contexts.selected?.id, `fire-perimeter:${otherId}`);
+  assert.equal(h.contexts.selected?.label, 'Wildfire · Neighbor Fire');
+  assert.equal(h.contexts.selectedEvents, 2);
+
+  await h.layer.update(h.viewer);
+  assert.deepEqual([...h.contexts.records.keys()], [`fire-perimeter:${otherId}`]);
+  assert.equal(h.contexts.selectedEvents, 2);
   h.layer.destroy(h.viewer);
 });
 

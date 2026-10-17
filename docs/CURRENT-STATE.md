@@ -2771,6 +2771,11 @@ its criteria cannot be silently ignored.
 
 Fire Perimeters uses capped, timed server reads with stale-on-error caching and a per-client limit. Unchanged snapshots retain geometry; link checks cancel on disable or selection change, and the row legend shows reported containment.
 
+Explicit perimeter picks publish one shared `fire-perimeters` context record with
+NIFC WFIGS provenance and the incident anchor. Switching incidents removes the
+previous record, while ordinary refreshes update the selected record without a
+new selection event. Clear, disable, and feed eviction remove the record.
+
 Directions is a keyless front end to the routing the voice agent already
 uses. Its row chips are the whole interface: DRIVE / WALK / BIKE pick the
 profile; SET A and SET B arm the next globe click (Escape or a second press

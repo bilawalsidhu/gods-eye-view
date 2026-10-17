@@ -90,8 +90,12 @@ export function createFirePerimetersLayer({
       return null;
     }
     _selectedContextEntity ||= { show: true };
+    const contextId = `fire-perimeter:${row.stableId}`;
+    context?.removeEntityContextsForLayer?.('fire-perimeters', {
+      retainIds: new Set([contextId]),
+    });
     const record = context?.registerEntityContext?.(_selectedContextEntity, {
-      id: `fire-perimeter:${row.stableId}`,
+      id: contextId,
       layerId: 'fire-perimeters',
       layerName: 'Fire Perimeters',
       source: 'NIFC WFIGS',
