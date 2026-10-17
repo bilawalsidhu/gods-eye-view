@@ -3373,7 +3373,7 @@ its criteria cannot be silently ignored.
 | Traffic | Selectable TomTom / OpenStreetMap / Hybrid roads; optional TomTom flow (BYOK) | `src/data/traffic.js` | browser-direct OpenFreeMap tiles; `/api/tomtom` for flow | viewport-driven; capped tile cache |
 | CCTV                   | Austin + Caltrans (CA) + TfL London + Ontario 511 + Fintraffic (FI) + DriveBC (BC) + TxDOT (TX) + Estonia (Tallinn, Tarktee) + Live Traffic NSW + Open Calgary Open Data + Statens vegvesen (NO, stills + live HLS) + King County (WA) Open Data + WSDOT (WA) Open Data + NYC DOT TMC (opt-in) + City of Toronto RESCU + Catalonia (Servei Català de Trànsit) + Street View fallback | `src/data/cctv.js`                                    | `/api/cctv`                                              | 10s (active)                                                                      |
 | Radio                  | Radio Browser (public-domain station directory)                                                                                                                                                 | `src/data/radio.js`                                   | `/api/radio/stations`, `/api/radio/click/:uuid`          | 45 min directory refresh                                                          |
-| Transit 🚌             | Operator GTFS-Realtime VehiclePositions (7 keyless regions, `src/data/transitFeeds.js`)                                                                                                         | `src/layers/transit/` via `src/app/layers/transit.js` | `/api/transit`                                           | 15s (poll + delayed playback)                                                     |
+| Transit 🚌             | Operator GTFS-Realtime VehiclePositions (17 keyless regions, `src/data/transitFeeds.js`)                                                                                                         | `src/layers/transit/` via `src/app/layers/transit.js` | `/api/transit`                                           | 15s (poll + delayed playback)                                                     |
 | Bikeshare 🚲           | GBFS (Lyft + BCycle + Social Bicycles + PBSC incl. Bike Share Toronto, Bike Itaú (Brazil) and Bicing (Barcelona) + Urban Sharing, Entur, JCDecaux NO + nextbike (AMBici))                                                                                                                                        | `src/data/bikeshare.js`                               | `/api/gbfs`                                              | 60s                                                                               |
 | Directions 🧭          | OSRM on FOSSGIS servers (OpenStreetMap)                                                                                                                                                         | `src/data/directions.js`                              | `/api/route` (`steps=1`)                                 | on placement / mode change                                                        |
 | Datacenters ▣          | OSM extract (bundled)                                                                                                                                                                           | `src/data/localLayers.js`                             | —                                                        | static                                                                            |
@@ -3793,12 +3793,34 @@ Transit is off by default, and share links use token `j`. The movement panel ord
 places Transit directly after Street Traffic and before Bike Share. Cameras and
 utilities retain their own groups. The layer polls
 registered feeds near the camera every 15 seconds, below a 3,000 km altitude
-gate. Sixteen keyless regions are available: Boston, Austin, Minneapolis–St Paul,
+gate. Seventeen keyless regions are available: Boston, Austin, Denver / Boulder,
+Minneapolis–St Paul,
 Helsinki, the Netherlands, Norway, South East Queensland, and nine in
 Ontario — Toronto (TTC surface vehicles; the subway publishes no
 positions), MiWay, Hamilton HSR, Durham Region, YRT/Viva, Guelph,
 Burlington, Barrie and Kingston. Mode silhouettes
 identify buses, trams, subways, trains, ferries and unclassified vehicles.
+
+**RTD Denver / Boulder.** One `rtd-denver` feed uses RTD's canonical keyless
+VehiclePositions endpoint and the existing decoder, proxy and renderer. A 70 km
+activation circle centered on Denver covers Boulder, Longmont, Nederland and
+Denver airport; it is not a service boundary. Fort Collins and Colorado Springs
+are outside cold activation, but the existing 40 km hysteresis keeps an already
+active feed polling until it leaves 110 km. Modes use exact static GTFS route IDs
+(120 bus, six light-rail/tram, four rail; schedule version
+`Sep26-37243-12-13-20261009-141920`, checked 2026-10-12). Only RTD opts into preserving
+nonblank route IDs exactly at snapshot decoding, including surrounding whitespace;
+other feeds keep the shared decoder's default trimming. Blank/whitespace-only IDs
+remain null for every feed. Padded IDs do not match RTD's lookup. Unknown/new/unassigned IDs
+stay unclassified, not assumed buses; refresh the lookup on service changes.
+The feed does not promise every scheduled vehicle or prove passenger service.
+No HOP/CU feeds, arrivals, alerts, runtime schedule download or proxy history
+retention are added. The existing per-feed dynamic credit shows Regional
+Transportation District (RTD) and links the RTD GTFS Realtime License Agreement;
+see `DATA_SOURCES.md` for terms and the unofficial-site disclaimer. Individual
+vehicle timestamps still govern fix age: fresh headers do not refresh old fixes.
+RTD shares the existing 15-second poll/cache, 90-second stale-contact indicator,
+five-minute failed-feed eviction and ten-minute fix expiry.
 
 Retained transit history uses the same outlier quarantine as live observations and
 preserves the active live bracket. Rejected reports do not publish route or mode

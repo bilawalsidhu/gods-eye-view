@@ -190,9 +190,14 @@ export function isPlausibleVehiclePosition(lat, lon) {
  * Flatten one decoded FeedEntity into the record the Transit layer renders,
  * or null when the entity carries no usable vehicle position.
  * @param {object} entity Decoded FeedEntity.
+ * @param {object} [options]
+ * @param {boolean} [options.preserveRouteId=false] Keep exact nonblank route IDs.
  * @returns {object|null}
  */
-export function normalizeVehicleEntity(entity) {
+export function normalizeVehicleEntity(
+  entity,
+  { preserveRouteId = false } = {},
+) {
   if (!entity || entity.isDeleted === true) return null;
   const vehicle = entity.vehicle;
   const position = vehicle?.position;
@@ -214,6 +219,7 @@ export function normalizeVehicleEntity(entity) {
   if (!id) return null;
   const bearing = finiteOrNull(position.bearing);
   const speed = finiteOrNull(position.speed);
+  const routeId = nonEmptyString(vehicle.trip?.routeId);
   const timestamp =
     Number.isFinite(vehicle.timestamp) && vehicle.timestamp > 0
       ? vehicle.timestamp
@@ -225,7 +231,7 @@ export function normalizeVehicleEntity(entity) {
     bearing: bearing === null ? null : ((bearing % 360) + 360) % 360,
     speedMps: speed === null || speed < 0 ? null : speed,
     timestamp,
-    routeId: nonEmptyString(vehicle.trip?.routeId),
+    routeId: preserveRouteId && routeId ? vehicle.trip.routeId : routeId,
     tripId: nonEmptyString(vehicle.trip?.tripId),
     directionId: Number.isInteger(vehicle.trip?.directionId)
       ? vehicle.trip.directionId
@@ -242,14 +248,16 @@ export function normalizeVehicleEntity(entity) {
  * Duplicate vehicle ids keep the newest timestamp (feeds occasionally repeat
  * a vehicle across two trip entities during a handover).
  * @param {Uint8Array|ArrayBuffer} bytes Protobuf wire bytes.
+ * @param {object} [options]
+ * @param {boolean} [options.preserveRouteId=false] Keep exact nonblank route IDs.
  * @returns {{ version: string|null, timestamp: number|null, incrementality: number,
  *   entityCount: number, truncated: boolean, vehicles: object[] }}
  */
-export function decodeVehiclePositions(bytes) {
+export function decodeVehiclePositions(bytes, options = {}) {
   const message = decodeFeedMessage(bytes);
   const byId = new Map();
   for (const entity of message.entities) {
-    const record = normalizeVehicleEntity(entity);
+    const record = normalizeVehicleEntity(entity, options);
     if (!record) continue;
     const existing = byId.get(record.id);
     if (!existing || (record.timestamp ?? 0) >= (existing.timestamp ?? 0)) {

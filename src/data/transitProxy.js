@@ -240,7 +240,10 @@ export function repairVehicleTimestamps(vehicles, headerTimestamp, fetchedAtS) {
  *   version: string|null, entityCount: number, truncated: boolean, count: number, vehicles: object[] }}
  */
 export function buildTransitSnapshot(feed, bytes, now = Date.now()) {
-  const decoded = decodeVehiclePositions(bytes);
+  // RTD's static route table requires exact wire IDs; other feeds keep trimming.
+  const decoded = decodeVehiclePositions(bytes, {
+    preserveRouteId: feed.id === 'rtd-denver',
+  });
   if (decoded.incrementality !== GTFS_INCREMENTALITY_FULL_DATASET) {
     throw new TransitFeedShapeError(
       `feed is differential (incrementality ${decoded.incrementality})`,

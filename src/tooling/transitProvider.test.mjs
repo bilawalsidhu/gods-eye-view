@@ -104,6 +104,77 @@ const FULL = feedBytes({
   vehicles: [{ id: 'bus-1', lat: 42.36, lon: -71.06 }],
 });
 
+test('RTD requests stay canonical, use conditional cache and never retain proxy history', async (t) => {
+  t.mock.timers.enable({ apis: ['Date'], now: 1_700_000_000_000 });
+  const bytes = feedBytes({
+    vehicles: [{ id: 'rtd-1', lat: 40.015, lon: -105.2705 }],
+  });
+  const { fetchImpl, calls } = scriptedUpstream([
+    upstreamResponse({ headers: { etag: '"rtd-1"' }, bytes }),
+    upstreamResponse({ status: 304 }),
+    upstreamResponse({ status: 503 }),
+  ]);
+  const call = install(transitProxy({ fetchImpl }));
+  const catalog = await call('/feeds');
+  const entries = JSON.parse(catalog.body).feeds.filter(
+    (feed) => feed.id === 'rtd-denver',
+  );
+  assert.equal(entries.length, 1);
+  assert.equal(entries[0].historyRetention, false);
+  assert.equal('url' in entries[0], false);
+  for (const path of [
+    '/vehicles/rtd-denver-unknown',
+    '/vehicles/rtd-denver/extra',
+    '/vehicles/rtd-denver%2F..%2Fmbta',
+    '/vehicles/https%3A%2F%2Fevil.example',
+    '/vehicles/%E0%A4%A',
+    '/trail/rtd-denver/rtd-1',
+  ]) {
+    assert.equal((await call(path)).status, 404, path);
+  }
+  assert.equal(calls.length, 0, 'rejected requests never reach the upstream');
+  const first = await call('/vehicles/rtd-denver?url=https://evil.example');
+  assert.equal(first.status, 200);
+  const snapshot = JSON.parse(first.body);
+  assert.equal(snapshot.feedId, 'rtd-denver');
+  assert.equal(snapshot.count, 1);
+  assert.equal(snapshot.vehicles[0].id, 'rtd-1');
+  assert.equal(first.headers.get('X-GEV-Cache'), 'MISS');
+  assert.equal(
+    (await call('/vehicles/rtd-denver')).headers.get('X-GEV-Cache'),
+    'HIT',
+  );
+  assert.equal(calls.length, 1);
+  t.mock.timers.setTime(Date.now() + TRANSIT_PROXY_TTL_MS + 1_000);
+  const revalidated = await call('/vehicles/rtd-denver');
+  assert.equal(revalidated.status, 200);
+  assert.equal(calls[1].headers['If-None-Match'], '"rtd-1"');
+  assert.equal(revalidated.headers.get('X-GEV-Cache'), 'MISS');
+  assert.deepEqual(
+    JSON.parse(revalidated.body),
+    snapshot,
+    '304 never freshens vehicle timestamps',
+  );
+  assert.equal(
+    Number(revalidated.headers.get('X-Transit-Contact')),
+    Date.now(),
+  );
+  t.mock.timers.setTime(Date.now() + TRANSIT_PROXY_TTL_MS + 1_000);
+  const failed = await call('/vehicles/rtd-denver');
+  assert.equal(failed.status, 200);
+  assert.equal(failed.headers.get('X-GEV-Cache'), 'STALE-ERROR');
+  assert.equal(failed.headers.get('Cache-Control'), 'no-store');
+  assert.deepEqual(JSON.parse(failed.body), snapshot);
+  assert.equal(calls.length, 3);
+  for (const upstream of calls) {
+    assert.equal(
+      upstream.url,
+      'https://open-data.rtd-denver.com/files/gtfs-rt/rtd/VehiclePosition.pb',
+    );
+    assert.equal(upstream.redirect, 'manual');
+  }
+});
+
 test('a 304 revalidation is a success, not a redirect with a missing Location', async (t) => {
   t.mock.timers.enable({ apis: ['Date'], now: 1_700_000_000_000 });
   const { fetchImpl, calls } = scriptedUpstream([

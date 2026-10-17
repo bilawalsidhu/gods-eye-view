@@ -110,6 +110,311 @@ test('feeds in range are nearest-first and honor slack as hysteresis', () => {
   );
 });
 
+test('Denver and Boulder activate one shared RTD regional feed', () => {
+  for (const [city, lat, lon] of [
+    ['Denver', 39.7392, -104.9903],
+    ['North Boulder', 40.06, -105.28],
+  ]) {
+    assert.deepEqual(
+      transitFeedsInRange(lat, lon).map((feed) => feed.id),
+      ['rtd-denver'],
+      `${city} polls RTD once rather than separate city feeds`,
+    );
+  }
+});
+
+test('RTD joins all sixteen existing regions and the docs count the resulting catalog', () => {
+  const ids = [
+    'mbta',
+    'capmetro-austin',
+    'rtd-denver',
+    'metrotransit-msp',
+    'hsl-helsinki',
+    'ovapi-nl',
+    'entur-norway',
+    'translink-seq',
+    'ttc-toronto',
+    'miway-mississauga',
+    'hsr-hamilton',
+    'durham-region',
+    'guelph-transit',
+    'kingston-transit',
+    'barrie-transit',
+    'yrt-york',
+    'burlington-transit',
+  ];
+  assert.equal(TRANSIT_FEED_REGISTRY.length, 17);
+  assert.deepEqual(
+    TRANSIT_FEED_REGISTRY.map((feed) => feed.id),
+    ids,
+  );
+  assert.deepEqual(
+    TRANSIT_ENABLED_FEEDS.map((feed) => feed.id),
+    ids,
+  );
+  assert.deepEqual(
+    publicTransitCatalog().map((feed) => feed.id),
+    ids,
+  );
+  const sources = readFileSync(
+    new URL('../../DATA_SOURCES.md', import.meta.url),
+    'utf8',
+  );
+  const current = readFileSync(
+    new URL('../../docs/CURRENT-STATE.md', import.meta.url),
+    'utf8',
+  );
+  assert.match(sources, /All seventeen registered regions are live-enabled/);
+  assert.match(current, /VehiclePositions \(17 keyless regions/);
+  assert.match(current, /Seventeen keyless regions are available/);
+});
+
+test('RTD catalog admits one canonical live feed without proxy history', () => {
+  const feed = getTransitFeed('rtd-denver');
+  assert.equal(
+    TRANSIT_FEED_REGISTRY.filter((entry) => entry.id === 'rtd-denver').length,
+    1,
+  );
+  assert.equal(feed, getRegisteredTransitFeed('rtd-denver'));
+  assert.equal(feed.defaultEnabled, true);
+  assert.equal(
+    feed.url,
+    'https://open-data.rtd-denver.com/files/gtfs-rt/rtd/VehiclePosition.pb',
+  );
+  assert.deepEqual(feed.center, { lat: 39.7392, lon: -104.9903 });
+  assert.equal(feed.loadRadiusKm, 70);
+  assert.equal(feed.license, 'RTD GTFS Realtime License Agreement');
+  assert.equal(
+    feed.licenseUrl,
+    'https://www.rtd-denver.com/open-records/open-spatial-information/gtfs-realtime-license-agreement',
+  );
+  assert.equal(feed.attribution, 'Regional Transportation District (RTD)');
+  assert.match(feed.terms.quote, /limited and revocable rights/);
+  for (const value of [feed, feed.center, feed.terms]) {
+    assert.ok(Object.isFrozen(value));
+  }
+  const entries = publicTransitCatalog().filter(
+    (entry) => entry.id === feed.id,
+  );
+  assert.equal(entries.length, 1);
+  assert.equal(entries[0].historyRetention, false);
+  assert.equal(entries[0].attribution, feed.attribution);
+  assert.equal(entries[0].licenseUrl, feed.licenseUrl);
+  assert.equal('url' in entries[0], false);
+  assert.equal('headers' in entries[0], false);
+});
+
+test('RTD coverage uses a 70 km cold radius and existing 40 km warm hysteresis', () => {
+  for (const [city, lat, lon] of [
+    ['Boulder', 40.015, -105.2705],
+    ['Longmont', 40.1672, -105.1019],
+    ['Nederland', 39.9614, -105.5108],
+    ['Denver airport', 39.8561, -104.6737],
+  ]) {
+    assert.deepEqual(
+      transitFeedsInRange(lat, lon).map((feed) => feed.id),
+      ['rtd-denver'],
+      city,
+    );
+  }
+  for (const [city, lat, lon] of [
+    ['Fort Collins', 40.5853, -105.0844],
+    ['Colorado Springs', 38.8339, -104.8214],
+  ]) {
+    assert.deepEqual(transitFeedsInRange(lat, lon), [], `${city}: cold`);
+    assert.deepEqual(
+      transitFeedsInRange(lat, lon, 40).map((feed) => feed.id),
+      ['rtd-denver'],
+      `${city}: warm`,
+    );
+  }
+  assert.deepEqual(transitFeedsInRange(41.14, -104.8202, 40), [], 'Cheyenne');
+  const feed = getTransitFeed('rtd-denver');
+  for (const slack of [0, 40]) {
+    for (const delta of [-0.01, 0.01]) {
+      const lat =
+        feed.center.lat + ((70 + slack + delta) / 6371) * (180 / Math.PI);
+      assert.equal(
+        transitFeedsInRange(lat, feed.center.lon, slack).includes(feed),
+        delta < 0,
+      );
+    }
+  }
+  for (const [lat, lon] of [
+    [NaN, -105],
+    [40, NaN],
+    [Infinity, -105],
+    [40, -Infinity],
+  ]) {
+    assert.deepEqual(transitFeedsInRange(lat, lon), []);
+  }
+});
+
+// RTD routes.txt from https://www.rtd-denver.com/files/gtfs/google_transit.zip,
+// feed version Sep26-37243-12-13-20261009-141920. Exact route_id, not short names.
+test('RTD resolves only the exact route IDs in its static GTFS mode table', () => {
+  const feed = getTransitFeed('rtd-denver');
+  const routes = {
+    tram: ['101C', '101D', '101E', '101T', '103W', '107R'],
+    rail: ['113B', '113G', '117N', 'A'],
+    bus: [
+      '0',
+      '0B',
+      '0L',
+      '1',
+      '10',
+      '100',
+      '104L',
+      '105',
+      '11',
+      '112',
+      '116X',
+      '12',
+      '120',
+      '120L',
+      '120X',
+      '121',
+      '130',
+      '133',
+      '135',
+      '139',
+      '14',
+      '145X',
+      '15',
+      '153',
+      '15L',
+      '16',
+      '169',
+      '169L',
+      '17',
+      '19',
+      '20',
+      '204',
+      '205',
+      '206',
+      '208',
+      '21',
+      '22',
+      '225',
+      '225D',
+      '225T',
+      '228A',
+      '228F',
+      '23',
+      '24',
+      '28',
+      '287',
+      '3',
+      '30',
+      '31',
+      '32',
+      '323',
+      '324',
+      '326',
+      '327',
+      '35',
+      '36',
+      '37',
+      '38',
+      '3L',
+      '4',
+      '40',
+      '402L',
+      '42',
+      '43',
+      '44',
+      '45',
+      '46',
+      '48',
+      '483',
+      '49',
+      '51',
+      '52',
+      '520',
+      '53',
+      '59',
+      '6',
+      '65',
+      '66',
+      '7',
+      '72',
+      '73',
+      '76',
+      '8',
+      '80',
+      '83D',
+      '83L',
+      '88',
+      '88L',
+      '9',
+      '92',
+      '93L',
+      '99',
+      'AB1',
+      'AB2',
+      'AB3',
+      'AL',
+      'ART',
+      'AT',
+      'ATA',
+      'BOLT',
+      'BOND',
+      'CV',
+      'DASH',
+      'EV',
+      'FF1',
+      'FF2',
+      'FF3',
+      'FF4',
+      'FF5',
+      'FMR',
+      'FREE',
+      'GS',
+      'JUMP',
+      'LD1',
+      'LX2',
+      'NB1',
+      'NB2',
+      'PD',
+      'RX',
+      'SKIP',
+    ],
+  };
+  assert.equal(new Set(Object.values(routes).flat()).size, 130);
+  for (const [mode, ids] of Object.entries(routes)) {
+    for (const id of ids) {
+      assert.equal(transitModeFor(feed, id), mode, id);
+      assert.equal(transitModeResolved(feed, id), true, id);
+    }
+  }
+  assert.equal(feed.defaultMode, 'unknown');
+  for (const id of [
+    null,
+    undefined,
+    '',
+    ' ',
+    'NEW',
+    '101Z',
+    '113Z',
+    'C',
+    'D',
+    'E',
+    'T',
+    'W',
+    'R',
+    'B',
+    'G',
+    'N',
+    'BOUND',
+    'bond',
+    ' BOND ',
+    0,
+  ]) {
+    assert.equal(transitModeFor(feed, id), 'unknown', String(id));
+    assert.equal(transitModeResolved(feed, id), false, String(id));
+  }
+});
+
 test('route hints refine a feed default and never escape the known modes', () => {
   const mbta = getTransitFeed('mbta');
   assert.equal(transitModeFor(mbta, 'Red'), 'subway');
