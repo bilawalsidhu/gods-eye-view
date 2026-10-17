@@ -33,6 +33,9 @@ import { createInfrastructureLayers } from '../data/infrastructure.js';
 import { localGeoJsonServices } from './localGeojsonServices.js';
 import { createBhoteKoshiEventLayer } from '../data/bhoteKoshiEvent.js';
 import { createBhoteKoshiLocatorLayer } from '../data/bhoteKoshiLocator.js';
+import { createUvIndexLayer } from '../data/uvIndex.js';
+import { createAuroraLayer } from '../data/aurora.js';
+import { createVolcanoesLayer } from '../data/volcanoes.js';
 
 /**
  * Hardware-local layers are registered like any other but never enter share
@@ -176,6 +179,9 @@ export function createApplicationCatalog({
           source: 'NASA FIRMS · LIVE',
           feed: sources.firms,
         }),
+        createUvIndexLayer(),
+        createAuroraLayer(),
+        createVolcanoesLayer(),
       ],
       metadata,
     );

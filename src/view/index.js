@@ -21,6 +21,7 @@ export const STYLE_URL_NAMES = Object.freeze({
   anime: 'anime',
   noir: 'noir',
   snow: 'snow',
+  redops: 'redops',
 });
 
 const STYLES_BY_URL_NAME = Object.freeze(

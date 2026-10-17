@@ -38,7 +38,9 @@ test('the complete Realtime tool payload pins the manifest-generated layer relea
     // requested radius and center authority in descriptions only.
     // Street Level and GNSS extend the manifest; tracked and analyst aircraft describe broadcasts.
     // Air quality (ECCC AQHI) extends the manifest.
-    '775ba323384b4c1b62fb8415bac52aecc3fc668e20bedcfa57e426dcd1da3969',
+    // UV Index, Aurora Forecast and Volcanic Activity extend the manifest;
+    // Red Ops adds one visual style.
+    'a2aefb079ae0f065db7e19d16f23a7f75480b556646e82668e042f9b2aec1c0b',
   );
 });
 
@@ -138,6 +140,9 @@ test('all legacy action arguments are byte-identical after removing the delibera
   // Cyber adds one HUD layout.
   const hud = property('set_hud').layout;
   hud.enum = hud.enum.filter((layout) => layout !== 'cyber');
+  // Red Ops adds one visual style.
+  const style = property('set_visual_style').style;
+  style.enum = style.enum.filter((name) => name !== 'redops');
   // Derived by applying the same removals to the 4b56d0e9 actionSchemas.
   assert.equal(
     createHash('sha256').update(JSON.stringify(legacy)).digest('hex'),

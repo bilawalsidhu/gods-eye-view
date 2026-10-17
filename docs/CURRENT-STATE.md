@@ -4658,6 +4658,26 @@ and unreachable upstream (502/504) separately from road geometry.
 - Client render cap `VITE_AIS_LIVE_MAX_ROWS` (default 12,000); type-colored ship icons (tanker/cargo/passenger/fishing/tug); screen-space label clustering caps active labels at `VITE_AIS_LIVE_LABEL_MAX_ROWS` (default 900).
 - Click-to-inspect wired into the voice context store.
 
+### Environmental Data Layers (September 2026)
+
+- **UV Index** — `src/data/uvIndex.js`, a `Cesium.CustomDataSource` layer of
+  one ellipse + label entity per city, rebuilt wholesale on each 15-minute
+  poll (42-city payload, not worth diffing). Skips any city reporting
+  `uv_index <= 0` (its own night side) rather than plotting a wall of "UV 0.0"
+  labels.
+- **Aurora Forecast** — `src/data/aurora.js` filters NOAA's ~32,000-cell
+  global grid down to cells at/above a visibility threshold, sorts by
+  intensity, and caps at 4,000 `Point` entities so a geomagnetic-storm night
+  (a much wider oval) stays bounded. Longitude arrives 0–360° and is
+  normalized to Cesium's -180..180.
+- **Volcanic Activity** — `src/data/volcanoes.js` joins USGS HANS's
+  name-only alert feed against a fixed `VOLCANO_COORDS` lookup in the same
+  file (the ~40 volcanoes USGS observatories actually monitor). An alert
+  for an unrecognized name is logged once per name and dropped, never
+  plotted at a guessed position.
+- All three are registered in `src/app/constructCatalog.js` (client) and
+  `server/providers/local.js` (server) alongside the existing layers.
+
 ### Voice Control (June 2026)
 
 `GEV MIC` button (bottom UI) starts an OpenAI Realtime session over WebRTC:

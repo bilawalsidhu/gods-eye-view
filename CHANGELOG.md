@@ -1552,6 +1552,19 @@ of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md
   available through environment configuration without a second setup row or
   missing-key reminder.
 
+- Two new keyless Data Layers: **Aurora Forecast** (NOAA SWPC OVATION model,
+  rendered as the live aurora oval) and **Volcanic Activity** (USGS HANS
+  elevated-alert volcanoes, color-coded by alert level), plus a new **UV
+  Index** layer (Open-Meteo, 42 major cities worldwide). See DATA_SOURCES.md
+  for licensing and implementation notes on each.
+- Location search now recognizes bare coordinates ("30.2672, -97.7431") and
+  flies there directly with no Google Maps key required. A new "fly to my
+  location" control next to the search box uses the browser's native
+  Geolocation API, also keyless.
+- New **Red Ops** visual style: a red-lit night-ops monochrome look (submarine/
+  command-bunker aesthetic), joining the existing CRT/NVG/FLIR/Anime/Noir/Snow
+  presets.
+
 - Separate terrain, traffic, FIRMS and GBFS middleware into focused provider
   modules, preserving local configuration, routes and cache/error behavior.
 

@@ -299,9 +299,58 @@ export function findPoiByName(query) {
 export const CANCELLED_SEARCH = Object.freeze({ cancelled: true });
 
 /**
+ * Parse a free-text query as decimal-degree coordinates ("30.2672, -97.7431" or
+ * "30.2672 -97.7431"). Lets location search fly directly with no geocoding
+ * key required. Returns null for anything that isn't a bare lat/lon pair.
+ */
+export function parseCoordinateQuery(query) {
+  const match = String(query).trim().match(/^(-?\d{1,3}(?:\.\d+)?)[,\s]+(-?\d{1,3}(?:\.\d+)?)$/);
+  if (!match) return null;
+  const lat = parseFloat(match[1]);
+  const lon = parseFloat(match[2]);
+  if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
+  if (lat < -90 || lat > 90 || lon < -180 || lon > 180) return null;
+  return { lat, lon };
+}
+
+/**
+ * Fly to the browser's geolocated position via the native Geolocation API.
+ * Needs no API key — the browser handles its own permission prompt.
+ * @returns {Promise<{lat: number, lon: number, range: number}>}
+ */
+export function flyToMyLocation(viewer, options = {}) {
+  return new Promise((resolve, reject) => {
+    if (!navigator.geolocation) {
+      reject(new Error('Geolocation is not supported by this browser'));
+      return;
+    }
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const { latitude, longitude } = position.coords;
+        const flight = flyToLandmark(viewer, latitude, longitude, {
+          range: finitePositive(options.range) || 2000,
+          pitch: -45,
+          heading: 0,
+          buildingHeight: 0,
+          duration: finitePositive(options.duration) || 3.0,
+          onStart: options.onStart,
+          onComplete: options.onComplete,
+          onCancel: options.onCancel,
+        });
+        resolve({ lat: latitude, lon: longitude, range: flight.range });
+      },
+      (error) => reject(error),
+      { enableHighAccuracy: false, timeout: 10000, maximumAge: 300000 }
+    );
+  });
+}
+
+/**
  * Geocode a place name through the supplied service, then fly there at a scale
  * appropriate to the request. Countries and cities use their viewport by
- * default; precise landmarks/buildings use close landmark framing.
+ * default; precise landmarks/buildings use close landmark framing. Bare
+ * coordinate input ("30.2672, -97.7431") short-circuits straight to
+ * flyToLandmark and needs no key at all.
  */
 export async function searchAndFlyTo(viewer, query, options = {}) {
   const { placeSearch = unavailablePlaceSearch, signal } = options;
@@ -310,6 +359,27 @@ export async function searchAndFlyTo(viewer, query, options = {}) {
     typeof options.beforeFly === 'function' ? options.beforeFly : null;
   const mayFly = () =>
     !signal?.aborted && (beforeFly === null || beforeFly() !== false);
+
+  const coords = parseCoordinateQuery(query);
+  if (coords) {
+    if (!mayFly()) return CANCELLED_SEARCH;
+    const flight = flyToLandmark(viewer, coords.lat, coords.lon, {
+      range: finitePositive(options.range) || 2000,
+      pitch: -45,
+      heading: 0,
+      buildingHeight: 0,
+      duration: finitePositive(options.duration) || 3.0,
+      onStart: options.onStart,
+      onComplete: options.onComplete,
+      onCancel: options.onCancel,
+    });
+    return {
+      label: `${coords.lat.toFixed(5)}, ${coords.lon.toFixed(5)}`,
+      navigationMode: 'coordinate',
+      rangeM: Math.round(flight.range),
+    };
+  }
+
   const outcome = await placeSearch.geocode(query, {
     bias: viewportBias(viewer),
     signal,

@@ -2956,5 +2956,22 @@
   "USB work abandoned after a stalled transfer": "Работа с USB прервана: передача данных зависла",
   "SDR decoder did not start; receiver stopped": "Декодер SDR не запустился; приёмник остановлен",
   "SDR decoder stopped responding; receiver stopped": "Декодер SDR перестал отвечать; приёмник остановлен",
-  "SDR decoder fell behind; receiver stopped": "Декодер SDR не успевает; приёмник остановлен"
+  "SDR decoder fell behind; receiver stopped": "Декодер SDR не успевает; приёмник остановлен",
+  "NOAA SWPC network error": "Ошибка сети NOAA SWPC",
+  "LOW": "НИЗКИЙ",
+  "MODERATE": "УМЕРЕННЫЙ",
+  "HIGH": "ВЫСОКИЙ",
+  "VERY HIGH": "ОЧЕНЬ ВЫСОКИЙ",
+  "EXTREME": "ЭКСТРЕМАЛЬНЫЙ",
+  "UV {value}": "УФ {value}",
+  "Open-Meteo network error": "Ошибка сети Open-Meteo",
+  "USGS HANS network error": "Ошибка сети USGS HANS",
+  "Tint": "Оттенок",
+  "UV Index": "УФ-индекс",
+  "Aurora Forecast": "Прогноз полярного сияния",
+  "Volcanic Activity": "Вулканическая активность",
+  "RED OPS": "КРАСНЫЙ РЕЖИМ",
+  "Red-lit night-ops monochrome, like a submarine or command bunker.": "Монохромный режим с красной подсветкой для ночных операций — как на подводной лодке или в командном бункере.",
+  "Red Ops": "Красный режим",
+  "Fly to my current location (uses your browser's location permission)": "Перелететь к моему текущему местоположению (использует разрешение браузера на геолокацию)"
 }

@@ -20,6 +20,7 @@ import {
   REGION_SWATH_SPAN_KM,
   GLOBE_VIEW,
   searchAndFlyTo,
+  parseCoordinateQuery,
 } from './locations.js';
 
 function stubViewer() {
@@ -86,6 +87,37 @@ function flownRectangleDegrees(viewer, index = 0) {
     crossesAntimeridian: rectangle.east < rectangle.west,
   };
 }
+
+test('parseCoordinateQuery accepts comma- or space-separated decimal degrees', () => {
+  assert.deepEqual(parseCoordinateQuery('30.2672, -97.7431'), { lat: 30.2672, lon: -97.7431 });
+  assert.deepEqual(parseCoordinateQuery('30.2672 -97.7431'), { lat: 30.2672, lon: -97.7431 });
+  assert.deepEqual(parseCoordinateQuery('-33.8688, 151.2093'), { lat: -33.8688, lon: 151.2093 });
+});
+
+test('parseCoordinateQuery rejects place names and out-of-range values', () => {
+  assert.equal(parseCoordinateQuery('Austin, TX'), null);
+  assert.equal(parseCoordinateQuery('Sixth Street'), null);
+  assert.equal(parseCoordinateQuery('91, 0'), null, 'latitude out of range');
+  assert.equal(parseCoordinateQuery('0, 181'), null, 'longitude out of range');
+});
+
+test('searchAndFlyTo flies straight to a coordinate query with no geocoding key and no network call', async () => {
+  const viewer = stubViewer();
+  const hadWindow = Object.hasOwn(globalThis, 'window');
+  const priorWindow = globalThis.window;
+  const priorFetch = globalThis.fetch;
+  delete globalThis.window;
+  globalThis.fetch = async () => { throw new Error('coordinate queries must not hit the network'); };
+  try {
+    const destination = await searchAndFlyTo(viewer, '30.2672, -97.7431');
+    assert.equal(destination.navigationMode, 'coordinate');
+    assert.equal(viewer.flights.length, 1, 'flies immediately, no geocode round-trip');
+  } finally {
+    globalThis.fetch = priorFetch;
+    if (hadWindow) globalThis.window = priorWindow;
+    else delete globalThis.window;
+  }
+});
 
 test('parks / lakes / campuses frame as area-overview, not precise-place', () => {
   // Zilker Park — the field-test rooftop bug.
@@ -522,7 +554,10 @@ test('a globe flight without callbacks still flies (both hooks are optional)', (
 
 test('geocoded Location branches forward the resolved-navigation ownership hook', () => {
   const source = fs.readFileSync(new URL('./locations.js', import.meta.url), 'utf8');
-  const searchStart = source.indexOf('export async function searchAndFlyTo');
+  // Scoped to the geocode-dependent branches only — the keyless coordinate
+  // short-circuit above the placeSearch call is a separate, non-geocoded path
+  // (covered by its own test) and is intentionally excluded here.
+  const searchStart = source.indexOf('const outcome = await placeSearch.geocode(');
   const searchEnd = source.indexOf('function placesViewportToBounds', searchStart);
   const search = source.slice(searchStart, searchEnd);
   assert.equal(
