@@ -320,18 +320,31 @@ durable choice.
 
 ## If you also contribute upstream
 
-`npm run check:boundaries` walks real imports, so while your `*.layer.js` files
-are present it reports them as unowned modules of the packages that reach the
-loader. That gate keeps the published package exports honest; it is not a
-statement about your install.
+`npm run check:boundaries` walks real imports rather than the manifest, so it
+sees your `*.layer.js` files through the loader's glob. It exempts the layer
+files themselves by path: they are gitignored by design and can never be
+declared in a package, so failing the gate for having them would punish doing
+what this document asks.
 
-Move your layers aside before running the gates or opening a pull request:
+The exemption covers the `*.layer.js` file and nothing it imports. The gate
+still follows your layer's imports, and counts them against the packages that
+load it (`application-components` and `application-layer-construction`):
+
+- A self-contained layer, or one that imports only modules those packages
+  already own, passes. `../data/layerState.js` is one such module.
+- A layer that imports any other application module fails the gate, for
+  example `Package boundary application-components imports an unowned module:
+  src/data/adsbLolFallback.js`. Move that layer aside before running the gates
+  or opening a pull request.
+
+With your layers in place and that rule met, every gate runs clean:
 
 ```bash
-mkdir -p ../gev-layers-held && mv src/userLayers/*.layer.js ../gev-layers-held/
 npm run format:check && npm run check:boundaries && npm test && npm run build
-mv ../gev-layers-held/*.layer.js src/userLayers/
 ```
+
+The exemption does not check your layer's own code. A mistake inside a
+`*.layer.js` file surfaces when you load the app, not when you run the gates.
 
 The tracked half of this feature passes every gate on its own — the loader
 ships with no layers, which is exactly the state CI sees.
@@ -348,4 +361,4 @@ ships with no layers, which is exactly the state CI sees.
 | `must supply a createLayer function` | Descriptor exports a layer object directly instead of a factory. |
 | Layer appears but never draws | Cesium resources created in `createLayer()` instead of `init(viewer)`. |
 | Share link drops the layer | Opened on an install that does not have that layer — expected. |
-| `check:boundaries` reports your layer | Expected while local layers are present; see above. |
+| `check:boundaries` reports a module your layer imports | The layer imports an application module its loading packages do not own; see above. |
