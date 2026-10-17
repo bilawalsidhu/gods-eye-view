@@ -305,6 +305,12 @@ const layers = [
     },
   },
   {
+    id: 'cits',
+    aliases: ['c-its', 'v2x', 'c-its live', 'opentrafficmap'],
+    context: false,
+    noQuery: 'live V2X stations; private vehicles stay anonymous dots',
+  },
+  {
     id: 'cctv',
     aliases: ['traffic cameras', 'cameras', 'webcams'],
     context: false,

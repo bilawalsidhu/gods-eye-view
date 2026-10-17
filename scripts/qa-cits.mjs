@@ -321,9 +321,7 @@ async function main() {
           ].map((node) => node.textContent),
           selectedEntries: diagnostics.entriesBySource?.['cits-selected'] || 0,
           card: painted?.entry
-            ? [painted.entry.title, ...(painted.entry.details || [])].join(
-                '\n',
-              )
+            ? [painted.entry.title, ...(painted.entry.details || [])].join('\n')
             : null,
         };
       });
@@ -347,7 +345,7 @@ async function main() {
     );
     check(
       '(ii) ANONYMOUS — the car is never handed to detection',
-      !state.detectable.some((id) => id.includes('anon-')),
+      !state.detectable.some((id) => id.includes(':anon:')),
       state.detectable.join(','),
     );
     check(
@@ -391,7 +389,7 @@ async function main() {
     const fixture = stateFixture().objects;
     const carRecord = fixture.find((object) => object.kind === 'car');
     const tramRecord = fixture.find((object) => object.kind === 'tram');
-    const carId = Object.keys(state.dots).find((id) => id.includes('anon-0'));
+    const carId = Object.keys(state.dots).find((id) => id.includes(':anon:'));
     const tramId = Object.keys(state.dots).find((id) =>
       id.includes('00:30:e7'),
     );
@@ -448,7 +446,7 @@ async function main() {
     check(
       '(iv) CONTROLS — the Cars switch removes the car dot',
       clicked &&
-        !Object.keys(state.dots).some((id) => id.includes('anon-0')) &&
+        !Object.keys(state.dots).some((id) => id.includes(':anon:')) &&
         Object.keys(state.dots).length === 4,
       `${Object.keys(state.dots).length} dots`,
     );

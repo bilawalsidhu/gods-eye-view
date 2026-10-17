@@ -3768,7 +3768,11 @@
       "src/layers/traffic/policy.js",
       "src/layers/traffic/surface.js",
       "src/renderGovernor.js",
-      "src/celestialRing.js"
+      "src/celestialRing.js",
+      "src/i18n/index.js",
+      "src/i18n/locale.js",
+      "src/i18n/locales/es.json",
+      "src/i18n/locales/ru.json"
     ],
     "external": ["cesium"]
   },

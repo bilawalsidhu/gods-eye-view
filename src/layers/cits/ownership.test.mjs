@@ -151,7 +151,7 @@ test('a tram click publishes one selected card and an empty click clears it', as
 test('the anonymous car never gets a card', async () => {
   const h = harness();
   await h.refresh();
-  h.setPick(`cits:obj:${car.id}`);
+  h.setPick('cits:anon:0');
   h.click();
   assert.deepEqual(selected(h.overlay), []);
 });

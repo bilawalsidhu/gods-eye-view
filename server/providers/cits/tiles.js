@@ -1,4 +1,4 @@
-import { createHmac, randomBytes } from 'node:crypto';
+import { createHmac, randomBytes, randomInt } from 'node:crypto';
 /**
  * Pure state handling for the OpenTrafficMap tiled C-ITS feed.
  *
@@ -34,21 +34,49 @@ export const CITS_MAX_POINTS_PER_TILE = 20_000;
 
 /**
  * Station kinds shown in full. Every other moving station — private cars and
- * any other vehicle that is not public transport — is reduced to an anonymous
- * dot: a per-process keyed hash instead of its station address, and only
- * kind, position, speed and report age. Vehicle tracks are never returned.
+ * any other vehicle that is not public transport, including trucks, emergency
+ * vehicles and stations without a kind — is reduced to an anonymous dot: a
+ * random id that is new in every response, and only kind, position, speed and
+ * report age. Vehicle tracks are never returned.
  */
 export const CITS_PUBLIC_KINDS = Object.freeze(
   new Set(['traffic_light', 'rsu', 'trailer', 'bus', 'tram']),
 );
 
 const FIXED_KINDS = new Set(['traffic_light', 'rsu', 'trailer']);
-// Rotates with the process; anonymous ids cannot be joined across restarts.
-const ANONYMOUS_ID_KEY = randomBytes(32);
+// Hazard ids only: they stay stable for as long as the process runs, so a
+// hazard corridor is not redrawn on every poll. Hazards come from public
+// stations only (see compactCitsState).
+const HAZARD_ID_KEY = randomBytes(32);
 
 /** Keyed, truncated hash that stands in for a station address. */
-export function citsAnonymousId(value, key = ANONYMOUS_ID_KEY) {
+export function citsAnonymousId(value, key = HAZARD_ID_KEY) {
   return `anon-${createHmac('sha256', key).update(String(value)).digest('hex').slice(0, 16)}`;
+}
+
+/**
+ * Upstream station kind as a lower-case snake_case key (`Bus`, `TRAM` and
+ * `heavy-truck` become `bus`, `tram`, `heavy_truck`); `unknown` when missing.
+ */
+export function citsNormalizeKind(kind) {
+  const key =
+    typeof kind === 'string'
+      ? kind
+          .trim()
+          .toLowerCase()
+          .replace(/[\s-]+/g, '_')
+      : '';
+  return key || 'unknown';
+}
+
+// Fisher-Yates, so the order of anonymous dots says nothing about which dot
+// was which in the previous response.
+function shuffle(items) {
+  for (let i = items.length - 1; i > 0; i--) {
+    const j = randomInt(i + 1);
+    [items[i], items[j]] = [items[j], items[i]];
+  }
+  return items;
 }
 
 function lonToX(lon, zoom) {
@@ -310,7 +338,13 @@ function compactDenm(denm) {
 
 /**
  * Compact the merged mirror into browser records inside `box`.
- * Device MACs are pseudonymous station addresses, kept as stable ids only.
+ *
+ * Public stations (CITS_PUBLIC_KINDS) keep their pseudonymous station address
+ * as a stable id. Every other station gets an id drawn from a key made for
+ * this response alone and is listed in random order, so two responses cannot
+ * be joined into a vehicle's track by id or position in the list. DENM hazards
+ * are only taken from public stations: a hazard sent by a private car would
+ * sit at that car's own position.
  */
 export function compactCitsState(
   merged,
@@ -322,11 +356,25 @@ export function compactCitsState(
   } = {},
 ) {
   const objects = [];
+  const anonymous = [];
   const hazards = new Map();
+  const responseKey = randomBytes(32);
+  // Station ids of private vehicles, so a DENM they originated is dropped
+  // even when a roadside unit re-broadcasts it.
+  const privateStations = new Set();
+  for (const feature of merged.points.values()) {
+    const p = feature?.properties || {};
+    if (
+      !CITS_PUBLIC_KINDS.has(citsNormalizeKind(p.kind)) &&
+      p.stationId != null
+    )
+      privateStations.add(String(p.stationId));
+  }
   for (const [id, feature] of merged.points) {
     const coordinates = feature?.geometry?.coordinates;
     const p = feature?.properties || {};
-    const kind = typeof p.kind === 'string' ? p.kind : 'unknown';
+    const kind = citsNormalizeKind(p.kind);
+    const isPublic = CITS_PUBLIC_KINDS.has(kind);
     const lastSeen = Date.parse(p.lastSeen || '');
     const fixed = FIXED_KINDS.has(kind);
     const age = now - lastSeen;
@@ -335,13 +383,20 @@ export function compactCitsState(
       age > (fixed ? fixedMaxAgeMs : vehicleMaxAgeMs)
     )
       continue;
-    const denms = [
-      ...(Array.isArray(p.denmEvents)
-        ? p.denmEvents.map((event) => [event?.key, event?.denmData])
-        : []),
-      ...(p.denmData ? [['current', p.denmData]] : []),
-    ];
+    const denms = !isPublic
+      ? []
+      : [
+          ...(Array.isArray(p.denmEvents)
+            ? p.denmEvents.map((event) => [event?.key, event?.denmData])
+            : []),
+          ...(p.denmData ? [['current', p.denmData]] : []),
+        ];
     for (const [key, data] of denms) {
+      if (
+        data?.originatingStationId != null &&
+        privateStations.has(String(data.originatingStationId))
+      )
+        continue;
       const hazard = compactDenm(data);
       if (!hazard?.position || !inBounds(hazard.position, box)) continue;
       // DENMs are re-broadcast by many stations; the originator and its
@@ -355,11 +410,11 @@ export function compactCitsState(
         hazards.set(hazardId, { id: hazardId, ...hazard });
     }
     if (!inBounds(coordinates, box)) continue;
-    if (objects.length >= CITS_MAX_OBJECTS) continue;
+    if (objects.length + anonymous.length >= CITS_MAX_OBJECTS) continue;
     const stale = age > (fixed ? CITS_STALE_AFTER_MS : CITS_VEHICLE_MAX_AGE_MS);
-    if (!CITS_PUBLIC_KINDS.has(kind)) {
-      objects.push({
-        id: citsAnonymousId(id),
+    if (!isPublic) {
+      anonymous.push({
+        id: citsAnonymousId(id, responseKey),
         kind,
         anonymous: true,
         lon: coordinates[0],
@@ -387,7 +442,10 @@ export function compactCitsState(
       hasMap: p.hasTrafficLightMap === true,
     });
   }
-  return { objects, hazards: [...hazards.values()] };
+  return {
+    objects: [...objects, ...shuffle(anonymous)],
+    hazards: [...hazards.values()],
+  };
 }
 
 /** Convert one MAPEM lane point (centimetres east/north) to degrees. */

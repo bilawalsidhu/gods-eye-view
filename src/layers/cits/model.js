@@ -7,6 +7,8 @@
  * same preset-aware treatment under NVG/FLIR/CRT.
  */
 
+import { msg, t } from '../../i18n/index.js';
+
 export const CITS_PICK_PREFIX = 'cits:';
 
 /** Bandwidth modes: tiled `/ws_tiled` or the full `/ws_ext` stream. */
@@ -37,28 +39,28 @@ export const CITS_UNKNOWN_CSS = '#ffffff';
 // Larger than Street Traffic's road-class dots (4-6 px): these sit on
 // signal-coloured lanes in the same palette and must read on top of them.
 const VEHICLE_KINDS = Object.freeze({
-  car: { label: 'Car', size: 7 },
-  bus: { label: 'Bus', size: 9 },
-  tram: { label: 'Tram', size: 9 },
-  heavy_truck: { label: 'Heavy truck', size: 8 },
-  light_truck: { label: 'Light truck', size: 8 },
-  special_vehicle: { label: 'Special vehicle', size: 8 },
-  motorcycle: { label: 'Motorcycle', size: 6 },
-  cyclist: { label: 'Cyclist', size: 6 },
-  pedestrian: { label: 'Pedestrian', size: 6 },
+  car: { label: msg('Car'), size: 7 },
+  bus: { label: msg('Bus'), size: 9 },
+  tram: { label: msg('Tram'), size: 9 },
+  heavy_truck: { label: msg('Heavy truck'), size: 8 },
+  light_truck: { label: msg('Light truck'), size: 8 },
+  special_vehicle: { label: msg('Special vehicle'), size: 8 },
+  motorcycle: { label: msg('Motorcycle'), size: 6 },
+  cyclist: { label: msg('Cyclist'), size: 6 },
+  pedestrian: { label: msg('Pedestrian'), size: 6 },
 });
 const FIXED_KINDS = Object.freeze({
-  traffic_light: { label: 'Traffic light', size: 5 },
-  rsu: { label: 'Roadside unit', size: 3 },
-  trailer: { label: 'Warning trailer', size: 5 },
+  traffic_light: { label: msg('Traffic light'), size: 5 },
+  rsu: { label: msg('Roadside unit'), size: 3 },
+  trailer: { label: msg('Warning trailer'), size: 5 },
 });
 
 /** Human label for a station kind. */
 export function citsKindLabel(kind) {
-  return (
+  return t(
     VEHICLE_KINDS[kind]?.label ||
-    FIXED_KINDS[kind]?.label ||
-    (kind === 'hazard' ? 'Hazard (DENM)' : 'Unknown station')
+      FIXED_KINDS[kind]?.label ||
+      (kind === 'hazard' ? msg('Hazard (DENM)') : msg('Unknown station')),
   );
 }
 
@@ -79,21 +81,21 @@ export function citsSpeedBucket(speedKmh) {
 export function citsSignalState(state) {
   switch (state) {
     case 2:
-      return { label: 'Stop then proceed', bucket: 'slow' };
+      return { label: msg('Stop then proceed'), bucket: 'slow' };
     case 3:
-      return { label: 'Red', bucket: 'jam' };
+      return { label: msg('Red'), bucket: 'jam' };
     case 4:
-      return { label: 'Red-amber', bucket: 'slow' };
+      return { label: msg('Red-amber'), bucket: 'slow' };
     case 5:
-      return { label: 'Green (permissive)', bucket: 'free' };
+      return { label: msg('Green (permissive)'), bucket: 'free' };
     case 6:
-      return { label: 'Green (protected)', bucket: 'free' };
+      return { label: msg('Green (protected)'), bucket: 'free' };
     case 7:
-      return { label: 'Amber (permissive)', bucket: 'slow' };
+      return { label: msg('Amber (permissive)'), bucket: 'slow' };
     case 8:
-      return { label: 'Amber (protected)', bucket: 'slow' };
+      return { label: msg('Amber (protected)'), bucket: 'slow' };
     case 9:
-      return { label: 'Amber flashing', bucket: 'slow' };
+      return { label: msg('Amber flashing'), bucket: 'slow' };
     default:
       return null;
   }
@@ -220,7 +222,7 @@ function boundTitle(text) {
 export function buildCitsSelectedCard(object, nowMs = Date.now()) {
   const kind =
     object.kind === 'hazard'
-      ? 'HAZARD'
+      ? t('HAZARD')
       : citsKindLabel(object.kind).toUpperCase();
   const subject =
     object.kind === 'hazard'
@@ -229,34 +231,37 @@ export function buildCitsSelectedCard(object, nowMs = Date.now()) {
   const title = boundTitle(subject ? `${kind} · ${subject}` : kind);
 
   const facts = [];
-  if (object.kind === 'hazard') facts.push('DENM warning');
-  if (object.vehicleNumber) facts.push(`vehicle ${object.vehicleNumber}`);
+  if (object.kind === 'hazard') facts.push(t('DENM warning'));
+  if (object.vehicleNumber)
+    facts.push(t('vehicle {number}', { number: object.vehicleNumber }));
   if (Number.isFinite(object.speedKmh))
     facts.push(`${Math.round(object.speedKmh)} km/h`);
   if (Number.isFinite(object.heading))
     facts.push(`${Math.round(object.heading)}°`);
   if (Number.isFinite(object.speedLimit))
-    facts.push(`limit ${object.speedLimit} km/h`);
+    facts.push(t('limit {speed} km/h', { speed: object.speedLimit }));
 
   const details = [];
   if (facts.length) details.push(facts.join(' · '));
   if (Array.isArray(object.spat) && object.spat.length) {
     const groups = object.spat.slice(0, SELECTED_SIGNAL_GROUPS).map((group) => {
       const info = citsSignalState(group.state);
-      return `${group.group} ${info ? info.label : '–'}`;
+      return `${group.group} ${info ? t(info.label) : '–'}`;
     });
     const more = object.spat.length - SELECTED_SIGNAL_GROUPS;
+    const signal = t('signal {groups}', { groups: groups.join(' · ') });
     details.push(
-      `signal ${groups.join(' · ')}${more > 0 ? ` · +${more} more` : ''}`,
+      more > 0 ? `${signal} · ${t('+{count} more', { count: more })}` : signal,
     );
   }
-  if (object.kind !== 'hazard') details.push(`station ${object.id}`);
+  if (object.kind !== 'hazard')
+    details.push(t('station {id}', { id: object.id }));
   const age = citsFormatAge(nowMs - Date.parse(object.lastSeen || ''));
   const provenance = [
-    age ? `heard ${age} ago` : null,
-    'OpenTrafficMap receivers',
+    age ? t('heard {age} ago', { age }) : null,
+    t('OpenTrafficMap receivers'),
   ].filter(Boolean);
-  if (object.stale) provenance.push('STALE');
+  if (object.stale) provenance.push(t('STALE'));
   details.push(provenance.join(' · '));
 
   return {
@@ -277,12 +282,12 @@ export function buildCitsSelectedCard(object, nowMs = Date.now()) {
 
 /** Kind groups the panel can switch on and off. */
 export const CITS_KIND_GROUPS = Object.freeze([
-  { id: 'car', label: 'Cars', kinds: ['car'] },
-  { id: 'bus', label: 'Buses', kinds: ['bus'] },
-  { id: 'tram', label: 'Trams', kinds: ['tram'] },
+  { id: 'car', label: msg('Cars'), kinds: ['car'] },
+  { id: 'bus', label: msg('Buses'), kinds: ['bus'] },
+  { id: 'tram', label: msg('Trams'), kinds: ['tram'] },
   {
     id: 'other',
-    label: 'Other vehicles',
+    label: msg('Other vehicles'),
     kinds: [
       'heavy_truck',
       'light_truck',
@@ -293,10 +298,14 @@ export const CITS_KIND_GROUPS = Object.freeze([
       'unknown',
     ],
   },
-  { id: 'traffic_light', label: 'Traffic lights', kinds: ['traffic_light'] },
-  { id: 'rsu', label: 'Roadside units', kinds: ['rsu'] },
-  { id: 'trailer', label: 'Warning trailers', kinds: ['trailer'] },
-  { id: 'hazard', label: 'Hazards', kinds: ['hazard'] },
+  {
+    id: 'traffic_light',
+    label: msg('Traffic lights'),
+    kinds: ['traffic_light'],
+  },
+  { id: 'rsu', label: msg('Roadside units'), kinds: ['rsu'] },
+  { id: 'trailer', label: msg('Warning trailers'), kinds: ['trailer'] },
+  { id: 'hazard', label: msg('Hazards'), kinds: ['hazard'] },
 ]);
 
 const GROUP_BY_KIND = new Map(
@@ -317,8 +326,8 @@ export function citsKindGroup(kind) {
 export const CITS_RANGE_SETTINGS = Object.freeze([
   {
     id: 'vehicleRangeKm',
-    label: 'VEHICLE RANGE',
-    title: 'Vehicles and hazards stay visible to this camera distance',
+    label: msg('VEHICLE RANGE'),
+    title: msg('Vehicles and hazards stay visible to this camera distance'),
     unit: 'km',
     min: 2,
     max: 400,
@@ -326,8 +335,10 @@ export const CITS_RANGE_SETTINGS = Object.freeze([
   },
   {
     id: 'fixedRangeKm',
-    label: 'LIGHT RANGE',
-    title: 'Traffic lights, roadside units and trailers stay visible to',
+    label: msg('LIGHT RANGE'),
+    title: msg(
+      'Traffic lights, roadside units and trailers stay visible to this camera distance',
+    ),
     unit: 'km',
     min: 1,
     max: 400,
@@ -335,8 +346,8 @@ export const CITS_RANGE_SETTINGS = Object.freeze([
   },
   {
     id: 'labelRangeKm',
-    label: 'LABEL RANGE',
-    title: 'Line and hazard labels show to this camera distance',
+    label: msg('LABEL RANGE'),
+    title: msg('Line and hazard labels show to this camera distance'),
     unit: 'km',
     min: 1,
     max: 60,
@@ -344,8 +355,8 @@ export const CITS_RANGE_SETTINGS = Object.freeze([
   },
   {
     id: 'bracketRangeKm',
-    label: 'BRACKET RANGE',
-    title: 'Tram brackets and callouts show to this camera distance',
+    label: msg('BRACKET RANGE'),
+    title: msg('Tram brackets and callouts show to this camera distance'),
     unit: 'km',
     min: 1,
     max: 40,
@@ -353,8 +364,8 @@ export const CITS_RANGE_SETTINGS = Object.freeze([
   },
   {
     id: 'dotScale',
-    label: 'DOT SIZE',
-    title: 'Station dot size',
+    label: msg('DOT SIZE'),
+    title: msg('Station dot size'),
     unit: '×',
     min: 0.5,
     max: 2.5,

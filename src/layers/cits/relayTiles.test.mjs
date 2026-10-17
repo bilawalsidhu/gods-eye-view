@@ -272,11 +272,95 @@ test('private vehicles are reduced to anonymous dots without tracks', async () =
     'speedKmh',
     'stale',
   ]);
-  assert.equal(car.id, citsAnonymousId('52:36:be:90:ac:ba'));
+  assert.match(car.id, /^anon-[0-9a-f]{16}$/);
+  assert.notEqual(car.id, citsAnonymousId('52:36:be:90:ac:ba'));
   assert.doesNotMatch(JSON.stringify(state), /52:36:be|3197152442/);
   const tram = state.objects.find((o) => o.kind === 'tram');
   assert.equal(tram.line, '6');
   assert.equal(tram.anonymous, undefined);
+});
+
+test('anonymous ids are new in every response and their order is random', async () => {
+  const { compactCitsState } =
+    await import('../../../server/providers/cits/tiles.js');
+  const cars = Array.from({ length: 12 }, (_, index) => [
+    `car-${index}`,
+    point(`car-${index}`, 'car', 15.41 + index * 0.005, 47.05),
+  ]);
+  const merged = { points: new Map(cars) };
+  const ids = new Set();
+  const orders = new Set();
+  for (let poll = 0; poll < 8; poll++) {
+    const { objects } = compactCitsState(merged, box, { now: NOW });
+    assert.equal(objects.length, 12);
+    for (const object of objects) ids.add(object.id);
+    orders.add(objects.map((object) => object.lon).join(','));
+  }
+  // The same twelve cars, polled eight times: no id comes back.
+  assert.equal(ids.size, 12 * 8);
+  assert.ok(orders.size > 1, 'the list order changes between responses');
+});
+
+test('hazards come from public stations only, never from a private car', async () => {
+  const { compactCitsState } =
+    await import('../../../server/providers/cits/tiles.js');
+  const denm = (originatingStationId, lon) => ({
+    eventPosition: [lon, 47.05],
+    messageKind: 'traffic_condition',
+    messageLabel: 'Stationary vehicle',
+    originatingStationId,
+    sequenceNumber: 1,
+  });
+  const merged = {
+    points: new Map([
+      [
+        'car',
+        point('car', 'car', 15.42, 47.05, {
+          stationId: 77,
+          denmData: denm(77, 15.42),
+        }),
+      ],
+      [
+        'rsu',
+        point('rsu', 'rsu', 15.44, 47.05, {
+          stationId: 5,
+          // A roadside unit re-broadcasting the car's warning, plus its own.
+          denmEvents: [
+            { key: 'relay', denmData: denm(77, 15.42) },
+            { key: 'own', denmData: denm(5, 15.45) },
+          ],
+        }),
+      ],
+    ]),
+  };
+  const { hazards } = compactCitsState(merged, box, { now: NOW });
+  assert.equal(hazards.length, 1);
+  assert.deepEqual(hazards[0].position, [15.45, 47.05]);
+});
+
+test('station kinds match case-insensitively; unknown kinds stay anonymous', async () => {
+  const { compactCitsState, citsNormalizeKind } =
+    await import('../../../server/providers/cits/tiles.js');
+  assert.equal(citsNormalizeKind('Bus'), 'bus');
+  assert.equal(citsNormalizeKind(' TRAM '), 'tram');
+  assert.equal(citsNormalizeKind('Heavy-Truck'), 'heavy_truck');
+  assert.equal(citsNormalizeKind(undefined), 'unknown');
+  const merged = {
+    points: new Map([
+      ['bus', point('bus', 'Bus', 15.41, 47.05, { transitLineDisplay: '31' })],
+      ['tram', point('tram', 'TRAM', 15.42, 47.05)],
+      ['truck', point('truck', 'truck', 15.43, 47.05)],
+      ['emergency', point('emergency', 'emergency', 15.44, 47.05)],
+      ['none', point('none', undefined, 15.45, 47.05)],
+    ]),
+  };
+  const { objects } = compactCitsState(merged, box, { now: NOW });
+  const byKind = Object.fromEntries(objects.map((o) => [o.kind, o]));
+  assert.equal(byKind.bus.id, 'bus');
+  assert.equal(byKind.bus.line, '31');
+  assert.equal(byKind.tram.id, 'tram');
+  for (const kind of ['truck', 'emergency', 'unknown'])
+    assert.equal(byKind[kind].anonymous, true, kind);
 });
 
 test('the tile mirror keeps track ids only, never coordinates', () => {

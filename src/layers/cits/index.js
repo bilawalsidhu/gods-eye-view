@@ -4,6 +4,7 @@ import {
   presetDotRgba,
   presetSizeDelta,
 } from '../../data/trafficPresetStyle.js';
+import { t } from '../../i18n/index.js';
 import { renderedRoadHeight } from '../traffic/surface.js';
 import { CITS_BRACKET_KINDS, createCitsBracketPainter } from './brackets.js';
 import {
@@ -319,9 +320,14 @@ export function createCitsLayer({
   function renderDots(records, now) {
     const keep = new Set();
     _counts = {};
+    // Anonymous ids are new in every response, so their dots are pooled by
+    // slot instead of id and jump to each report rather than glide.
+    let anonymousSlot = 0;
     for (const record of records) {
       const group = record.kind === 'hazard' ? 'hazard' : 'obj';
-      const id = `${CITS_PICK_PREFIX}${group}:${record.id}`;
+      const id = record.anonymous
+        ? `${CITS_PICK_PREFIX}anon:${anonymousSlot++}`
+        : `${CITS_PICK_PREFIX}${group}:${record.id}`;
       keep.add(id);
       if (record.kind !== 'hazard')
         _counts[record.kind] = (_counts[record.kind] || 0) + 1;
@@ -337,13 +343,19 @@ export function createCitsLayer({
         applyFade(point, record);
         dot = { point, record, from: target, to: target, t0: now };
         _dots.set(id, dot);
+      } else if (record.anonymous || !citsIsVehicle(record.kind)) {
+        // A pooled slot may now hold another kind with another range.
+        if (dot.record.kind !== record.kind) applyFade(dot.point, record);
+        dot.from = target;
+        dot.to = target;
+        dot.record = record;
+        dot.point.position = target;
       } else {
         // Glide from wherever the dot is now to the new report.
         dot.from = Cesium.Cartesian3.clone(dot.point.position);
         dot.to = target;
         dot.t0 = now;
         dot.record = record;
-        if (!citsIsVehicle(record.kind)) dot.point.position = target;
       }
       applyDotStyle(dot.point, record);
     }
@@ -772,7 +784,7 @@ export function createCitsLayer({
             id: hazard.id,
             kind: 'hazard',
             hazardKind: hazard.kind,
-            name: hazard.label || hazard.kind || 'Hazard',
+            name: hazard.label || hazard.kind || t('Hazard'),
             speedLimit: hazard.speedLimit,
             lon: hazard.position[0],
             lat: hazard.position[1],
@@ -829,7 +841,7 @@ export function createCitsLayer({
         message,
       )
         ? message
-        : 'C-ITS relay unavailable';
+        : t('C-ITS relay unavailable');
       return false;
     } finally {
       if (_request === request) _request = null;
@@ -950,17 +962,19 @@ export function createCitsLayer({
         ? [
             {
               id: 'bandwidth-tiled',
-              label: 'TILED',
-              title:
+              label: t('TILED'),
+              title: t(
                 'Only the map tiles around the view (/ws_tiled, ~100 KB/s)',
+              ),
               active: _mode === 'tiled',
               params: { bandwidth: 'tiled' },
             },
             {
               id: 'bandwidth-full',
-              label: 'HIGH BANDWIDTH',
-              title:
+              label: t('HIGH BANDWIDTH'),
+              title: t(
                 'Every station OpenTrafficMap hears, at any zoom (/ws_ext, ~1 MB/s compressed)',
+              ),
               active: _mode === 'full',
               params: { bandwidth: 'full' },
             },
@@ -970,8 +984,10 @@ export function createCitsLayer({
         const value = _settings[spec.id];
         return {
           id: `range-${spec.id}`,
-          label: `${spec.label} · ${citsFormatRange(spec, value)}`,
-          title: `${spec.title} — click for the next step`,
+          label: `${t(spec.label)} · ${citsFormatRange(spec, value)}`,
+          title: t('{setting} — click for the next step', {
+            setting: t(spec.title),
+          }),
           params: { settings: { [spec.id]: citsNextRangeStep(spec, value) } },
         };
       });
@@ -982,39 +998,40 @@ export function createCitsLayer({
           ...bandwidth,
           {
             id: 'brackets',
-            label: 'BRACKETS',
-            title: 'Detection brackets and info cards on trams',
+            label: t('BRACKETS'),
+            title: t('Detection brackets and info cards on trams'),
             active: _bracketsOn,
             params: { brackets: !_bracketsOn },
           },
           ...ranges,
           {
             id: 'reset',
-            label: 'RESET',
-            title: 'Restore the default ranges, dot size and kinds',
+            label: t('RESET'),
+            title: t('Restore the default ranges, dot size and kinds'),
             params: { resetSettings: true },
           },
         ],
         legend: [
           {
-            label: 'Moving or green',
+            label: t('Moving or green'),
             color: CITS_BUCKET_CSS.free,
-            blurb:
+            blurb: t(
               'Colour shows reported speed for vehicles and the live signal phase for traffic lights and their lanes.',
+            ),
           },
-          { label: 'Slow, amber or roadworks', color: CITS_BUCKET_CSS.slow },
-          { label: 'Stopped, red or hazard', color: CITS_BUCKET_CSS.jam },
-          { label: 'No speed or phase', color: CITS_UNKNOWN_CSS },
+          { label: t('Slow, amber or roadworks'), color: CITS_BUCKET_CSS.slow },
+          { label: t('Stopped, red or hazard'), color: CITS_BUCKET_CSS.jam },
+          { label: t('No speed or phase'), color: CITS_UNKNOWN_CSS },
         ],
         list: {
-          ariaLabel: 'C-ITS station kinds shown',
+          ariaLabel: t('C-ITS station kinds shown'),
           items: [
             ...CITS_KIND_GROUPS.map((group) => {
               const on = _settings.groups[group.id] !== false;
               return {
                 id: `kind-${group.id}`,
                 lead: count(_groupCounts[group.id]),
-                text: group.label,
+                text: t(group.label),
                 active: on,
                 params: { settings: { groups: { [group.id]: !on } } },
               };
@@ -1022,15 +1039,16 @@ export function createCitsLayer({
             {
               id: 'kind-lanes',
               lead: count(_intersections.length),
-              text: 'Signal lanes',
+              text: t('Signal lanes'),
               active: _settings.lanes,
               params: { settings: { lanes: !_settings.lanes } },
             },
           ],
         },
-        info: 'Private vehicles are anonymous dots: no card, no track.',
-        infoTitle:
+        info: t('Private vehicles are anonymous dots: no card, no track.'),
+        infoTitle: t(
           'Live C-ITS broadcasts heard by OpenTrafficMap volunteer receivers. Coverage is wherever a receiver listens, not every road. Click a tram, bus, traffic light or hazard for its card; click empty map space to clear it.',
+        ),
       };
     },
 
@@ -1080,11 +1098,11 @@ export function createCitsLayer({
         status: _status,
         loading: _status === 'loading' || _status === 'connecting',
         ...(_status === 'connecting'
-          ? { loadingLabel: 'Connecting to OpenTrafficMap…' }
+          ? { loadingLabel: t('Connecting to OpenTrafficMap…') }
           : undefined),
         // Guidance, not a fault: the prompt goes in `statusMessage`.
         ...(_status === 'zoom-in'
-          ? { statusMessage: 'Zoom in to load C-ITS stations' }
+          ? { statusMessage: t('Zoom in to load C-ITS stations') }
           : undefined),
         lastUpdate: _lastUpdate,
         upstream: _upstream,
