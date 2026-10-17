@@ -89,7 +89,7 @@ await page.evaluateOnNewDocument((site, icao) => {
       window.__TERRAIN.ok += 1;
       return realFetch(input, init);
     }
-    if (app && url.pathname === '/api/opensky') {
+    if (app && url.pathname === '/api/flights') {
       const c = window.__CONTACT;
       const t = Math.floor(Date.now() / 1000);
       // baro_altitude (7) and geo_altitude (13) both null, on_ground true.
@@ -99,7 +99,7 @@ await page.evaluateOnNewDocument((site, icao) => {
           null, true, 1.5, 90, 0, null, null, null, false, 0]],
       }));
     }
-    if (app && url.pathname === '/api/opensky-track') return Promise.resolve(json({ path: [] }));
+    if (app && url.pathname === '/api/flights/track') return Promise.resolve(json({ path: [] }));
     if (app && /^\/api\/adsbdb\//.test(url.pathname)) return Promise.resolve(json({}));
     return realFetch(input, init);
   };

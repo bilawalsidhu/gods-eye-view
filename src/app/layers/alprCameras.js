@@ -1,3 +1,4 @@
+import * as credits from '../../data/dataCredits.js';
 import { createAlprCamerasLayer } from '../../layers/alpr/index.js';
 import * as render from '../../renderGovernor.js';
 import * as context from '../../data/contextStore.js';
@@ -12,6 +13,7 @@ export function createApplicationAlpr({ surface, source }) {
   return createAlprCamerasLayer({
     source,
     services: {
+      credits,
       render,
       context,
       picking,

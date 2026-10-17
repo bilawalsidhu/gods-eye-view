@@ -5,7 +5,14 @@ import {
   MILITARY_INSTALLATION_DISK_TTL_MS,
   MILITARY_INSTALLATION_STALE_MS,
 } from './military-installations/constants.js';
-import { fetchOverpassPayload } from './overpass/transport.js';
+import {
+  fetchOverpassPayload,
+  overpassNotConfigured,
+} from './overpass/transport.js';
+import {
+  resolveOverpassUpstreams,
+  resolveOverpassUpstreamTag,
+} from './overpass/constants.js';
 import {
   _militaryInstallationCache,
   trimMilitaryInstallationCache,
@@ -45,6 +52,7 @@ function militaryInstallationsProxy() {
       throw Object.assign(
         new Error('Mapped installation upstream unavailable'),
         {
+          retryAfterMs: upstream.retryAfterMs,
           installationReason: upstream.rateLimited
             ? 'rate_limited'
             : upstream.status === 504
@@ -69,7 +77,13 @@ function militaryInstallationsProxy() {
       retrievedAt: new Date().toISOString(),
       status: 'ready',
     };
-    const entry = { payload, cachedAt: Date.now() };
+    // Tagged with the configured upstream set so the disk layer does not serve
+    // this answer back after the operator repoints (see overpass/cache.js).
+    const entry = {
+      payload,
+      cachedAt: Date.now(),
+      upstreams: resolveOverpassUpstreamTag(),
+    };
     _militaryInstallationCache.set(key, entry);
     trimMilitaryInstallationCache();
     writeMilitaryInstallationDisk(key, entry);
@@ -81,14 +95,6 @@ function militaryInstallationsProxy() {
       if (req.method !== 'GET') {
         res.writeHead(405, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ error: 'Method Not Allowed' }));
-        return;
-      }
-      if (!_militaryInstallationsRateLimiter(clientKey(req))) {
-        res.writeHead(429, {
-          'Content-Type': 'application/json',
-          'Retry-After': '5',
-        });
-        res.end(JSON.stringify({ error: 'Rate limit exceeded' }));
         return;
       }
       const url = new URL(req.url, 'http://localhost');
@@ -117,6 +123,36 @@ function militaryInstallationsProxy() {
         : militaryInstallationCacheKey(box);
       const now = Date.now();
       const cached = _militaryInstallationCache.get(key);
+      if (!resolveOverpassUpstreams().length) {
+        const stale =
+          cached || (await readMilitaryInstallationDisk(key, Infinity));
+        const disabled = overpassNotConfigured();
+        res.writeHead(200, {
+          'Content-Type': 'application/json',
+          'Cache-Control': 'no-store',
+          'X-Military-Installations': stale ? 'STALE' : 'DISABLED',
+        });
+        res.end(
+          stale
+            ? JSON.stringify({
+                ...stale.payload,
+                status: 'stale',
+                retrievedAt:
+                  stale.payload.retrievedAt ||
+                  new Date(stale.cachedAt).toISOString(),
+              })
+            : disabled.body,
+        );
+        return;
+      }
+      if (!_militaryInstallationsRateLimiter(clientKey(req))) {
+        res.writeHead(429, {
+          'Content-Type': 'application/json',
+          'Retry-After': '5',
+        });
+        res.end(JSON.stringify({ error: 'Rate limit exceeded' }));
+        return;
+      }
       const preflight = await resolveMilitaryInstallationTier({
         cacheKey: key,
         memoryCache: _militaryInstallationCache,
@@ -176,6 +212,9 @@ function militaryInstallationsProxy() {
           return;
         }
         res.writeHead(503, {
+          ...(error?.retryAfterMs
+            ? { 'Retry-After': String(Math.ceil(error.retryAfterMs / 1000)) }
+            : {}),
           'Content-Type': 'application/json',
           'Cache-Control': 'no-store',
         });
@@ -183,6 +222,7 @@ function militaryInstallationsProxy() {
           JSON.stringify({
             error: 'Mapped installation context is temporarily unavailable',
             reason: militaryInstallationFailureReason(error),
+            retryAfterMs: error?.retryAfterMs,
           }),
         );
       }

@@ -4,6 +4,8 @@
  * after the vessel cards moved out of their dedicated canvas renderer.
  */
 
+import { t, msg } from '../i18n/index.js';
+
 export const VESSEL_OVERLAY_SOURCE_ID = 'ais-live-vessels';
 /** Existing selector grid size; one ambient winner is retained per cell. */
 export const VESSEL_LABEL_GRID_PX = 118;
@@ -13,6 +15,8 @@ export const VESSEL_DEFAULT_LABEL_LIMIT = 900;
 export const VESSEL_OVERLAY_MAX_COHORT = VESSEL_DEFAULT_LABEL_LIMIT;
 /** Existing ambient vessel-card distance fade reaches zero at 5000 km. */
 export const VESSEL_CARD_FADE_DISTANCE_M = 5_000_000;
+/** Share of VESSEL_CARD_FADE_DISTANCE_M at which ambient cards begin to fade. */
+export const VESSEL_CARD_FADE_START_RATIO = 0.7;
 
 /**
  * AIS type family → chevron hue + card accent. Single source of truth for
@@ -63,6 +67,42 @@ const NUMERIC_TYPE_FAMILIES = {
   8: 'TANKER',
   9: 'OTHER',
 };
+
+// Card text for the type tokens above. The tokens stay English: TYPE_STYLES
+// and tests match on them.
+const TYPE_DISPLAY_KEYS = Object.freeze({
+  FISHING: msg('FISHING'),
+  TOWING: msg('TOWING'),
+  DREDGER: msg('DREDGER'),
+  'DIVE OPS': msg('DIVE OPS'),
+  MILITARY: msg('MILITARY'),
+  SAILING: msg('SAILING'),
+  PLEASURE: msg('PLEASURE'),
+  PILOT: msg('PILOT'),
+  SAR: msg('SAR'),
+  TUG: msg('TUG'),
+  'PORT TENDER': msg('PORT TENDER'),
+  'ANTI-POLLUTION': msg('ANTI-POLLUTION'),
+  'LAW ENFORCE': msg('LAW ENFORCE'),
+  MEDICAL: msg('MEDICAL'),
+  'HIGH-SPEED': msg('HIGH-SPEED'),
+  PASSENGER: msg('PASSENGER'),
+  CARGO: msg('CARGO'),
+  TANKER: msg('TANKER'),
+  OTHER: msg('OTHER'),
+});
+
+/**
+ * Card-display form of a normalized AIS type: known tokens translate through
+ * the catalog; free-text types and unknown codes render unchanged.
+ * @param {string} type Raw AIS type.
+ * @returns {string}
+ */
+export function displayVesselType(type) {
+  const normalized = normalizeVesselType(type);
+  const key = TYPE_DISPLAY_KEYS[normalized.toUpperCase()];
+  return key ? t(key) : normalized;
+}
 
 /**
  * Resolve an AIS type to display text: bare numeric ship-type codes map to
@@ -148,7 +188,7 @@ export function applyVesselOverlayPolicy(
     verticalOnly: !selected,
     viewportMargin: 4,
     maxDistance: selected ? Number.POSITIVE_INFINITY : fadeDistance,
-    distanceFadeStartRatio: 0.7,
+    distanceFadeStartRatio: VESSEL_CARD_FADE_START_RATIO,
     edgeFade: 'keyhole',
     horizonCull: true,
     terrainOcclusion: false,

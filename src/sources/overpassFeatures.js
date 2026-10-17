@@ -1,3 +1,4 @@
+import { isUnavailableCapability } from './capability.js';
 export {
   FEATURE_SOURCE_METHODS,
   requireFeatureSource,
@@ -14,9 +15,27 @@ function validPoint(lat, lon) {
     throw new TypeError('Valid feature coordinates are required');
 }
 
+/**
+ * Output box for `out geom(s,w,n,e)`: `out geom` prints every member of a
+ * matched relation, and one borough can run to tens of thousands of nodes.
+ * Geometry is printed only inside this box; a relation cut by it no longer
+ * closes and is rejected by ring stitching, so nothing partial is drawn.
+ * @param {number} lat
+ * @param {number} lon
+ * @param {number} halfSizeM - Half the box side in metres.
+ * @returns {string} `(south,west,north,east)` in degrees, 5 decimals.
+ */
+export function geometryOutputBox(lat, lon, halfSizeM) {
+  const dLat = halfSizeM / 111320;
+  const dLon =
+    halfSizeM / (111320 * Math.max(0.01, Math.cos((lat * Math.PI) / 180)));
+  const f = (value) => Number(value.toFixed(5));
+  return `(${f(Math.max(-90, lat - dLat))},${f(Math.max(-180, lon - dLon))},${f(Math.min(90, lat + dLat))},${f(Math.min(180, lon + dLon))})`;
+}
+
 /** Query bounded feature candidates; ranking and rendering belong to callers.
  * Array = definitive response (possibly empty), null = retryable failure,
- * {rateLimited, retryAfterMs} = admission delay.
+ * {rateLimited, retryAfterMs} = admission delay; {unavailable, retryable:false} = no capability.
  */
 export function createOverpassFeatureSource({
   boundarySource,
@@ -24,11 +43,13 @@ export function createOverpassFeatureSource({
 } = {}) {
   if (typeof boundarySource?.query !== 'function')
     throw new TypeError('A boundary query transport is required');
+  let unavailable = null;
   async function query(
     text,
     timeoutMs,
     { signal, focus = false, relationsOnly = false } = {},
   ) {
+    if (unavailable) return unavailable;
     const controller = new AbortController();
     const signals = [lifetime, signal, controller.signal].filter(Boolean);
     const combined = AbortSignal.any(signals);
@@ -37,6 +58,14 @@ export function createOverpassFeatureSource({
       combined.throwIfAborted();
       const elements = await boundarySource.query(text, { signal: combined });
       combined.throwIfAborted();
+      if (isUnavailableCapability(elements)) {
+        unavailable = {
+          unavailable: true,
+          code: elements.code || 'OVERPASS_NOT_CONFIGURED',
+          retryable: false,
+        };
+        return unavailable;
+      }
       return Array.isArray(elements)
         ? normalizeOverpassFeatures(
             relationsOnly
@@ -45,7 +74,15 @@ export function createOverpassFeatureSource({
             { focus },
           )
         : elements;
-    } catch {
+    } catch (error) {
+      if (isUnavailableCapability(error)) {
+        unavailable = {
+          unavailable: true,
+          code: error.code || 'OVERPASS_NOT_CONFIGURED',
+          retryable: false,
+        };
+        return unavailable;
+      }
       return null;
     } finally {
       clearTimeout(timer);
@@ -65,7 +102,7 @@ export function createOverpassFeatureSource({
       way(around:180,${lat},${lon})["tourism"="attraction"];
       relation(around:180,${lat},${lon})["tourism"="attraction"];
     );
-    out tags center geom;
+    out center geom${geometryOutputBox(lat, lon, 1500)};
   `,
         6000,
         { ...options, focus: true },
@@ -88,6 +125,10 @@ export function createOverpassFeatureSource({
         { ...options, relationsOnly: true },
       );
     },
+    // Polygon lookups print with `out geom`, not `out tags geom`: at `tags`
+    // verbosity a relation carries no members, so it arrives with bounds and
+    // no outline and is dropped. The output box bounds member geometry (6 km
+    // for neighbourhoods, 3 km for street areas, 1.5 km for focus footprints).
     getNeighborhoodAreas({ lat, lon }, options = {}) {
       validPoint(lat, lon);
       return query(
@@ -95,7 +136,7 @@ export function createOverpassFeatureSource({
           `way(around:1500,${lat},${lon})["place"~"neighbourhood|suburb|quarter|borough"]["name"];` +
           `relation(around:1500,${lat},${lon})["place"~"neighbourhood|suburb|quarter|borough"]["name"];` +
           `relation(around:1500,${lat},${lon})["boundary"="place"]["name"];` +
-          `);out tags geom;`,
+          `);out geom${geometryOutputBox(lat, lon, 6000)};`,
         14000,
         options,
       );
@@ -108,7 +149,7 @@ export function createOverpassFeatureSource({
           `relation(around:450,${lat},${lon})["place"~"quarter|neighbourhood|suburb"];` +
           `way(around:450,${lat},${lon})["landuse"~"commercial|retail"]["name"];` +
           `relation(around:450,${lat},${lon})["landuse"~"commercial|retail"]["name"]["type"="multipolygon"];` +
-          `);out tags geom;`,
+          `);out geom${geometryOutputBox(lat, lon, 3000)};`,
         14000,
         options,
       );

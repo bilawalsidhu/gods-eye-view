@@ -1,9 +1,12 @@
 import { fileURLToPath } from 'node:url';
 import { defineConfig, loadEnv } from 'vite';
+import { resolveAllowedHosts } from '../../build/allowedHosts.js';
 import { createBrowserViteConfig } from '../../build/vite.js';
 import { resolveCredentialEnvironment } from '../credentials/resolve.mjs';
 import { localProviderPlugins } from '../providers/local.js';
+import { localMcpPlugin } from '../mcp/plugin.js';
 import { apiNotFoundPlugin } from './api-not-found.js';
+import { standaloneVoiceTools } from './voiceTools.js';
 
 const root = fileURLToPath(new URL('../../', import.meta.url));
 
@@ -13,17 +16,20 @@ export default defineConfig(({ command, mode }) => {
   for (const [key, value] of Object.entries(loaded)) {
     if (process.env[key] === undefined) process.env[key] = value;
   }
-  // Resolve only registered provider credentials, after dotenv precedence is
-  // established and before any provider or browser define can consume them.
-  // Secret values stay in process memory; manager refs contain no credential
-  // material and are safe to keep in ignored local configuration.
+  // Run after dotenv precedence, before browser definitions or providers.
   resolveCredentialEnvironment({ env: process.env });
   return createBrowserViteConfig({
-    plugins: [...localProviderPlugins(), apiNotFoundPlugin()],
+    plugins: [
+      ...localProviderPlugins({ realtime: { tools: standaloneVoiceTools() } }),
+      localMcpPlugin(),
+      apiNotFoundPlugin(),
+    ],
     googleApiKey: process.env.GOOGLE_MAPS_API_KEY,
     cesiumToken: process.env.CESIUM_ION_TOKEN,
+    mapillaryToken: process.env.MAPILLARY_CLIENT_TOKEN,
     host: process.env.HOST,
     port: process.env.PORT,
+    allowedHosts: resolveAllowedHosts(process.env.GEV_ALLOWED_HOSTS),
     command,
   });
 });

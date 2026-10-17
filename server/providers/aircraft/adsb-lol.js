@@ -1,7 +1,9 @@
+import { readResponseTextCapped } from '../common/http.js';
+
 /**
  * Vite plugin: adsb.lol military aircraft proxy with 12 s response cache.
  *
- * Proxies GET /api/adsblol/mil to https://api.adsb.lol/v2/mil. When upstream
+ * Serves GET /api/military from https://api.adsb.lol/v2/mil. When upstream
  * fails — a thrown fetch OR a non-OK status such as 429 — the proxy serves its
  * cached body as STALE instead of relaying the failure, and it backs off from
  * upstream for the Retry-After period (bounded) so a rate limit is never
@@ -25,6 +27,10 @@ export function adsbLolProxy() {
   let _cooldownStatus = 0;
   /** Response cache TTL (ms). */
   const CACHE_MS = 12000;
+  /** Upstream deadline (ms); the fetch previously had none and could hang a poll. */
+  const UPSTREAM_TIMEOUT_MS = 12000;
+  /** /v2/mil measures ~67 KB; a relayed error page is bounded by the same cap. */
+  const ADSBLOL_MIL_MAX_RESPONSE_BYTES = 8 * 1024 * 1024;
   /** Cooldown after a 429 when upstream sends no usable Retry-After (ms). */
   const RATE_LIMIT_COOLDOWN_MS = 30000;
   /** Cooldown after a 5xx (ms). */
@@ -55,10 +61,11 @@ export function adsbLolProxy() {
     res.writeHead(status, {
       'Content-Type': 'application/json',
       'Cache-Control': 'no-store',
-      'X-ADS-B-Cache': cacheStatus,
+      'X-Feed-Source': 'adsb.lol',
+      'X-Feed-Cache': cacheStatus,
       ...(['HIT', 'STALE'].includes(cacheStatus)
         ? {
-            'X-ADS-B-Cache-Age-Ms': String(Math.max(0, Date.now() - _cacheAt)),
+            'X-Feed-Age-Ms': String(Math.max(0, Date.now() - _cacheAt)),
           }
         : {}),
       ...extra,
@@ -67,8 +74,11 @@ export function adsbLolProxy() {
   }
 
   const installMiddleware = (server) => {
-    server.middlewares.use('/api/adsblol/mil', async (req, res) => {
+    server.middlewares.use('/api/military', async (req, res, next) => {
       try {
+        // This mount also matches its /track route, served by its own handler.
+        if (new URL(req.url || '/', 'http://localhost').pathname !== '/')
+          return next();
         const now = Date.now();
         if (_cache && now - _cacheAt < CACHE_MS) {
           serve(res, 200, _cache, 'HIT');
@@ -94,11 +104,17 @@ export function adsbLolProxy() {
           );
           return;
         }
+        const signal = AbortSignal.timeout(UPSTREAM_TIMEOUT_MS);
         const upstream = await fetch('https://api.adsb.lol/v2/mil', {
           headers: { 'User-Agent': 'gods-eye-view-adsblol-proxy/1.0' },
+          signal,
         });
         if (upstream.ok) {
-          const body = await upstream.text();
+          const body = await readResponseTextCapped(
+            upstream,
+            ADSBLOL_MIL_MAX_RESPONSE_BYTES,
+            signal,
+          );
           _cache = body;
           _cacheAt = Date.now();
           _cooldownUntil = 0;
@@ -125,7 +141,11 @@ export function adsbLolProxy() {
             return;
           }
         }
-        const body = await upstream.text();
+        const body = await readResponseTextCapped(
+          upstream,
+          ADSBLOL_MIL_MAX_RESPONSE_BYTES,
+          signal,
+        );
         serve(
           res,
           upstream.status,

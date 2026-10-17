@@ -4,6 +4,12 @@ import {
   getActiveTrackedReadoutId,
   TRACKED_OVERLAY_SOURCE_ID,
 } from '../data/trackedReadout.js';
+import { t } from '../i18n/index.js';
+
+/** A label whose detailed outline could not be resolved. */
+function outlineUnavailableLabel(label) {
+  return t('{label} · Detailed outline unavailable', { label: label || '' });
+}
 
 /**
  * Screen-space annotation renderer (Direction B — the "whiteboard" aesthetic).
@@ -161,7 +167,12 @@ export function createScreenAnnotationRenderer(
         filter: 'url(#gev-sketch)',
       });
       group.appendChild(parts.poly);
-      parts.label = makeCallout(anno.label, c);
+      parts.label = makeCallout(
+        anno.outlineUnavailable
+          ? outlineUnavailableLabel(anno.label)
+          : anno.label,
+        c,
+      );
       if (parts.label) group.appendChild(parts.label.node);
     } else if (anno.type === 'arrow' && anno.to) {
       parts.path = svgEl('path', {
@@ -174,7 +185,12 @@ export function createScreenAnnotationRenderer(
       });
       ensureArrowMarker(defs, anno.color || 'primary', c);
       group.appendChild(parts.path);
-      parts.label = makeCallout(anno.label, c);
+      parts.label = makeCallout(
+        anno.outlineUnavailable
+          ? outlineUnavailableLabel(anno.label)
+          : anno.label,
+        c,
+      );
       if (parts.label) group.appendChild(parts.label.node);
     } else if (
       anno.type === 'route' &&
@@ -203,7 +219,12 @@ export function createScreenAnnotationRenderer(
         group.appendChild(dot);
         return dot;
       });
-      parts.label = makeCallout(anno.label, c);
+      parts.label = makeCallout(
+        anno.outlineUnavailable
+          ? outlineUnavailableLabel(anno.label)
+          : anno.label,
+        c,
+      );
       if (parts.label) group.appendChild(parts.label.node);
     } else {
       // pin / highlight / label — pulsing target rings + a marker dot + callout
@@ -242,7 +263,12 @@ export function createScreenAnnotationRenderer(
         'stroke-opacity': '0.7',
       });
       group.appendChild(parts.leader);
-      parts.label = makeCallout(anno.label, c);
+      parts.label = makeCallout(
+        anno.outlineUnavailable
+          ? outlineUnavailableLabel(anno.label)
+          : anno.label,
+        c,
+      );
       if (parts.label) group.appendChild(parts.label.node);
     }
 
@@ -301,6 +327,10 @@ export function createScreenAnnotationRenderer(
       return;
     }
     rec.anno = anno;
+    if (anno.outlineUnavailable && rec.parts.label) {
+      rec.parts.label.text.textContent = outlineUnavailableLabel(anno.label);
+      sizeCallout(rec.parts.label);
+    }
 
     if (empty) {
       for (const child of Array.from(rec.group.children)) child.remove();

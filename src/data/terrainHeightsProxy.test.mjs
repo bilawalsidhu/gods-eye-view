@@ -3,6 +3,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  parseTerrainPoints,
   fetchTerrainChunkWithRetry,
   resolveTerrainHeightRequest,
   terrainPointKey,
@@ -226,4 +227,14 @@ test('malformed height objects remain refresh failures, not absent readings', as
     assert.equal(response.absentPoints, 0);
     assert.equal(response.cacheChanged, false);
   }
+});
+
+test('terrain parser rejects out-of-range WGS84 points and accepts inclusive bounds', () => {
+  for (const value of ['181,0', '-181,0', '0,91', '0,-91', '1,2;0,91'])
+    assert.equal(parseTerrainPoints(value), null, value);
+  assert.deepEqual(parseTerrainPoints('-180,-90;180,90;0,0'), [
+    [-180, -90],
+    [180, 90],
+    [0, 0],
+  ]);
 });
