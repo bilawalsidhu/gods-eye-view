@@ -44,6 +44,10 @@
  * continuously (the layer holds it), Cesium uncapped; the fleet tick's CPU
  * time (the layer's preRender pass, 12 Hz) and the longest frame; the
  * post-GC heap slope as for movers. Same gate: p95 Navara / Cesium <= 1.1.
+ * Each scene also reports workP95: the p95 of a frame's own work (its
+ * preRender to its postRender), which a burst of queued frames (an engine
+ * rendering faster than the browser presents, without vsync) leaves out.
+ * --warm-ms (3000) is the running time before the frames are measured.
  * --layer=military measures the military layer the same way
  * (?qaFeed=military:synthetic:--count, default 1000). Each scene also
  * reports the frames over 33 ms and 50 ms, and the fleet ticks timed. The
@@ -96,6 +100,8 @@ const MOVER_COUNT = Number(
   argument('count') ?? (FLEET_LAYER === 'military' ? 1000 : 10000),
 );
 const HEAP_WARM_SECONDS = Number(argument('heap-warm-seconds') ?? 0);
+// Running time with the layer on before the frames are measured (ms).
+const WARM_MS = Number(argument('warm-ms') ?? 3000);
 const MOVER_SCENES = (argument('scene') ?? 'global,city,orbit').split(',');
 // Post-GC heap sampling per movers scene (0 skips it).
 const HEAP_SECONDS = Number(argument('heap-seconds') ?? 60);
@@ -404,13 +410,24 @@ async function runFleet({ scene, warmMs, measureMs, hold, layerId }) {
     else if (performance.now() - loadedSince >= 1500) break;
   }
   const times = [];
-  const removeFrame = engine.frames.postRender.addEventListener(() =>
-    times.push(performance.now()),
-  );
+  // Each frame's own work (its preRender to its postRender: the layer's
+  // frame listeners and the draw), apart from the time between frames.
+  const works = [];
+  let frameStart = null;
+  const removePre = engine.frames.preRender.addEventListener(() => {
+    frameStart = performance.now();
+  });
+  const removeFrame = engine.frames.postRender.addEventListener(() => {
+    const now = performance.now();
+    times.push(now);
+    if (frameStart !== null) works.push([now, now - frameStart]);
+    frameStart = null;
+  });
   engine.render.setContinuous(true);
   const stop = () => {
     engine.render.setContinuous(false);
     if (viewer) viewer.targetFrameRate = targetFrameRate;
+    removePre();
     removeFrame();
     window.__gevFleetTicks = null;
   };
@@ -425,6 +442,9 @@ async function runFleet({ scene, warmMs, measureMs, hold, layerId }) {
       startTilesMs: Math.round(loadedSince ? loadedSince - waitStart : -1),
       wallMs: to - from,
       times: times.filter((time) => time >= from && time <= to),
+      works: works
+        .filter(([time]) => time >= from && time <= to)
+        .map(([, work]) => work),
       fleetTicksMs: [...(window.__gevFleetTicks ?? [])],
       objects: flights.getAllPositions(1_000_000).length,
     };
@@ -676,7 +696,7 @@ async function runOnce(browser, baseUrl, engine) {
               })
             : await page.evaluate(runFleet, {
                 scene: SCENES[name],
-                warmMs: 3000,
+                warmMs: WARM_MS,
                 measureMs: 10000,
                 hold: HEAP_SECONDS > 0,
                 layerId: FLEET_LAYER,
@@ -704,6 +724,17 @@ async function runOnce(browser, baseUrl, engine) {
           p95: round(quantile(deltas, 0.95), 2),
           max: round(deltas.at(-1), 1),
           longFrames33: deltas.filter((delta) => delta > 33.4).length,
+          ...(measured.works?.length
+            ? {
+                workP95: round(
+                  quantile(
+                    [...measured.works].sort((a, b) => a - b),
+                    0.95,
+                  ),
+                  2,
+                ),
+              }
+            : {}),
           longFrames50: deltas.filter((delta) => delta > 50).length,
           fleetTicks: measured.fleetTicksMs?.length ?? 0,
           ...(measured.fleetTicksMs?.length
@@ -858,6 +889,7 @@ try {
                   ),
                   fleetTickP95: of('fleetTickP95'),
                   longFrames33: of('longFrames33'),
+                  workP95: of('workP95'),
                   longFrames50: of('longFrames50'),
                 },
               ];
