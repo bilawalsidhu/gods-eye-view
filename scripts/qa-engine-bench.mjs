@@ -114,6 +114,9 @@ const MOVER_COUNT = Number(
 const HEAP_WARM_SECONDS = Number(argument('heap-warm-seconds') ?? 0);
 // Running time with the layer on before the frames are measured (ms).
 const WARM_MS = Number(argument('warm-ms') ?? 3000);
+// --models=off: the aircraft layers' 3D models off (models3d: false), to
+// tell the models' cost apart.
+const MODELS_OFF = argument('models') === 'off';
 const VSYNC = process.argv.includes('--vsync');
 const MOVER_SCENES = (argument('scene') ?? 'global,city,orbit').split(',');
 // Post-GC heap sampling per movers scene (0 skips it).
@@ -363,7 +366,14 @@ async function runFlight(flight) {
  * In the page: the flights layer on its synthetic feed at one scene, frame
  * times while the engine renders continuously.
  */
-async function runFleet({ scene, warmMs, measureMs, hold, layerId }) {
+async function runFleet({
+  scene,
+  warmMs,
+  measureMs,
+  hold,
+  layerId,
+  modelsOff,
+}) {
   const { engine, dataManager, viewer, layers } = window.__godsEyeView;
   const geo = await import('/src/geo/index.js');
   const targetFrameRate = viewer?.targetFrameRate;
@@ -408,6 +418,7 @@ async function runFleet({ scene, warmMs, measureMs, hold, layerId }) {
   ];
   await layers.enable(layerId);
   for (const restore of untime) restore();
+  if (modelsOff) dataManager.setLayerParams(layerId, { models3d: false });
   const flights = dataManager.layers.get(layerId).module;
   const waitStart = performance.now();
   while (
@@ -713,6 +724,7 @@ async function runOnce(browser, baseUrl, engine) {
                 measureMs: 10000,
                 hold: HEAP_SECONDS > 0,
                 layerId: FLEET_LAYER,
+                modelsOff: MODELS_OFF,
               });
         let heap = null;
         if (HEAP_SECONDS > 0) {
