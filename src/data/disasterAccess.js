@@ -40,6 +40,32 @@ function uniqueIds(values) {
   return [...new Set(values.map(nonEmptyText).filter(Boolean))];
 }
 
+/** Copy metadata to a deeply frozen, JSON-compatible evidence snapshot. */
+function snapshotMetadata(value, ancestors = new WeakSet()) {
+  if (value == null) return null;
+  if (typeof value !== 'object') {
+    return ['string', 'number', 'boolean'].includes(typeof value) ? value : null;
+  }
+  if (ancestors.has(value)) return null;
+  if (
+    !Array.isArray(value) &&
+    Object.getPrototypeOf(value) !== Object.prototype &&
+    Object.getPrototypeOf(value) !== null
+  )
+    return null;
+  ancestors.add(value);
+  const copy = Array.isArray(value)
+    ? value.map((item) => snapshotMetadata(item, ancestors))
+    : Object.fromEntries(
+        Object.entries(value).map(([key, item]) => [
+          key,
+          snapshotMetadata(item, ancestors),
+        ]),
+      );
+  ancestors.delete(value);
+  return Object.freeze(copy);
+}
+
 /**
  * Normalize one explicit access observation.
  *
@@ -66,8 +92,8 @@ export function normalizeDisasterAccessSegment(input) {
     observedAt: nonEmptyText(input.observedAt),
     receivedAt: nonEmptyText(input.receivedAt),
     freshness,
-    quality: input.quality ?? null,
-    provenance: input.provenance ?? null,
+    quality: snapshotMetadata(input.quality),
+    provenance: snapshotMetadata(input.provenance),
   });
 }
 
@@ -75,10 +101,11 @@ export function normalizeDisasterAccessSegment(input) {
  * Evaluate whether explicit evidence currently supports a candidate route.
  *
  * Result states are evidence-support states, not safety claims:
- * - supported: every referenced segment is explicitly fresh + open
- * - degraded: every segment is known, but >=1 is explicitly fresh + degraded
- * - unsupported: >=1 segment is explicitly fresh + blocked
- * - unknown: missing, stale, unknown or not-assessed evidence prevents support
+ * - supported: every referenced segment has fresh, direct open evidence
+ * - degraded: direct fresh evidence has degraded but no block/unknown
+ * - unsupported: >=1 segment has explicit fresh observed/declared blockage
+ * - unknown: missing, stale, uncertain or simulated/derived evidence prevents support
+ * Duplicate observations are order-independent: a direct fresh block wins.
  */
 export function evaluateDisasterRouteSupport(route, accessSegments = []) {
   const routeId = nonEmptyText(route?.id) || 'candidate-route';
@@ -93,12 +120,17 @@ export function evaluateDisasterRouteSupport(route, accessSegments = []) {
       break;
     }
   }
-  const normalizedSegments = accessSegments
+  const normalizedSegments = (
+    Array.isArray(accessSegments) ? accessSegments : []
+  )
     .map(normalizeDisasterAccessSegment)
     .filter(Boolean);
-  const byId = new Map(
-    normalizedSegments.map((segment) => [segment.id, segment]),
-  );
+  const byId = new Map();
+  for (const segment of normalizedSegments) {
+    const observations = byId.get(segment.id) || [];
+    observations.push(segment);
+    byId.set(segment.id, observations);
+  }
 
   if (segmentIds.length === 0) {
     return Object.freeze({
@@ -119,37 +151,60 @@ export function evaluateDisasterRouteSupport(route, accessSegments = []) {
   let degraded = false;
 
   for (const segmentId of segmentIds) {
-    const segment = byId.get(segmentId);
-    if (!segment) {
+    const observations = byId.get(segmentId);
+    if (!observations) {
       unknown = true;
       reasons.push(`missing-access:${segmentId}`);
       continue;
     }
 
-    if (segment.freshness !== 'fresh') {
-      unknown = true;
-      reasons.push(`${segment.freshness}-access:${segmentId}`);
+    const fresh = observations.filter(
+      (observation) => observation.freshness === 'fresh',
+    );
+    const direct = fresh.filter(
+      (observation) =>
+        observation.determination === 'observed' ||
+        observation.determination === 'declared',
+    );
+
+    if (direct.some((observation) => observation.state === 'blocked')) {
+      blocked = true;
+      reasons.push(`blocked:${segmentId}`);
       continue;
     }
-
-    switch (segment.state) {
-      case 'blocked':
-        blocked = true;
-        reasons.push(`blocked:${segmentId}`);
-        break;
-      case 'degraded':
-        degraded = true;
-        reasons.push(`degraded:${segmentId}`);
-        break;
-      case 'open':
-        break;
-      case 'unknown':
-      case 'not-assessed':
-      default:
-        unknown = true;
-        reasons.push(`${segment.state}:${segmentId}`);
-        break;
+    if (
+      fresh.some(
+        (observation) =>
+          observation.determination !== 'observed' &&
+          observation.determination !== 'declared',
+      )
+    ) {
+      unknown = true;
+      reasons.push(`unverified-access:${segmentId}`);
+      continue;
     }
+    const uncertain =
+      direct.find((observation) => observation.state === 'unknown') ||
+      direct.find((observation) => observation.state === 'not-assessed');
+    if (uncertain) {
+      unknown = true;
+      reasons.push(`${uncertain.state}:${segmentId}`);
+      continue;
+    }
+    if (direct.some((observation) => observation.state === 'degraded')) {
+      degraded = true;
+      reasons.push(`degraded:${segmentId}`);
+      continue;
+    }
+    if (direct.some((observation) => observation.state === 'open')) continue;
+
+    unknown = true;
+    const freshness = observations.some(
+      (observation) => observation.freshness === 'stale',
+    )
+      ? 'stale'
+      : 'unknown';
+    reasons.push(`${freshness}-access:${segmentId}`);
   }
 
   const support = blocked
@@ -173,18 +228,19 @@ export function evaluateDisasterRouteSupport(route, accessSegments = []) {
  *
  * No access record means NOT ASSESSED, never OPEN.
  */
-export function buildDisasterAccessPacket({
-  event = null,
-  accessSegments = [],
-  candidateRoutes = [],
-} = {}) {
-  const normalizedSegments = accessSegments
+export function buildDisasterAccessPacket(options = {}) {
+  const { event = null, accessSegments = [], candidateRoutes = [] } =
+    options && typeof options === 'object' && !Array.isArray(options)
+      ? options
+      : {};
+  const records = Array.isArray(accessSegments) ? accessSegments : [];
+  const candidates = Array.isArray(candidateRoutes) ? candidateRoutes : [];
+  const normalizedSegments = records
     .map(normalizeDisasterAccessSegment)
     .filter(Boolean);
-  const invalidAccessRecordCount = Math.max(
-    0,
-    accessSegments.length - normalizedSegments.length,
-  );
+  const invalidAccessRecordCount =
+    Math.max(0, records.length - normalizedSegments.length) +
+    (accessSegments != null && !Array.isArray(accessSegments) ? 1 : 0);
 
   const gaps = [];
   if (normalizedSegments.length === 0) gaps.push('access-not-assessed');
@@ -192,7 +248,7 @@ export function buildDisasterAccessPacket({
     gaps.push(`invalid-access-records:${invalidAccessRecordCount}`);
 
   const eventId = nonEmptyText(event?.id);
-  const routes = candidateRoutes.map((route) =>
+  const routes = candidates.map((route) =>
     evaluateDisasterRouteSupport(route, normalizedSegments),
   );
 
