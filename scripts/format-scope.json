@@ -732,6 +732,7 @@
   "src/voice/session.test.mjs",
   "src/layers/alpr/records.js",
   "src/layers/earthquakes/records.js",
+  "src/layers/earthquakes/records.test.mjs",
   "src/sources/sourceSlot.js",
   "src/data/feedState.js",
   "src/app/localGeojsonServices.js",
@@ -1061,5 +1062,8 @@
   "src/ui/flyToDataSource.test.mjs",
   "scripts/assemble-changelog.mjs",
   "src/tooling/changelogFragments.test.mjs",
-  "src/data/gbfsProxyRateLimit.test.mjs"
+  "src/data/gbfsProxyRateLimit.test.mjs",
+  "src/data/cctvFmp4.test.mjs",
+  "src/data/cctvFmp4Routes.test.mjs",
+  "src/data/cctvFmp4Recovery.test.mjs"
 ]
