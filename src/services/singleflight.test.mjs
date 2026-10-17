@@ -223,7 +223,7 @@ test('loader failure reaches waiters and permits retry', async () => {
   );
 });
 
-test('abort cannot conceal another waiter's loader failure', async () => {
+test('abort cannot conceal a shared loader failure', async () => {
   const lane = createSingleflight();
   const gate = deferred();
   const caller = new AbortController();
