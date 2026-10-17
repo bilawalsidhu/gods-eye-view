@@ -101,6 +101,44 @@ test('the regional brief returns place, weather and at most ten headlines', asyn
   });
 });
 
+test('regional station observations retain provenance and do not acquire an invented UTC timestamp', async () => {
+  const regional = {
+    getBrief: async () => ({
+      weather: {
+        source: 'smn',
+        sourceUrl: 'https://www.smn.gob.ar/descarga-de-datos',
+        kind: 'station-observation',
+        temperatureC: 18.5,
+        conditionText: 'Nublado',
+        reportedAt: '2026-10-15T03:00',
+        timeZone: null,
+        station: {
+          id: '87178',
+          name: 'POSADAS AERO',
+          latitude: -27.383,
+          longitude: -55.967,
+          distanceKm: 6.747,
+        },
+        humidityPct: 92,
+        stationPressureHpa: 998.5,
+      },
+    }),
+  };
+  const result = await catalogWith({ regional }).call('get_regional_brief', {
+    location: { lat: -27.37, lon: -55.9 },
+  });
+  assert.equal(result.data.weather.source, 'smn');
+  assert.equal(result.data.weather.observed_at, null);
+  assert.equal(result.data.weather.time_zone, null);
+  assert.equal(result.data.weather.reported_at, '2026-10-15T03:00');
+  assert.equal(result.data.weather.station.distance_km, 6.7);
+  assert.equal(result.data.weather.conditions, 'Nublado');
+  assert.equal(result.data.weather.weather_code, null);
+  assert.equal(result.data.weather.precipitation_mm, null);
+  assert.match(result.summary, /SMN station POSADAS AERO, 6.7 km from query/);
+  assert.match(result.summary, /time zone unspecified/);
+});
+
 const storm = (id, name, latitude, longitude, windKt) => ({
   id,
   name,

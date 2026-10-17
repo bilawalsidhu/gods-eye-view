@@ -2889,5 +2889,16 @@
   "USB work abandoned after a stalled transfer": "Trabajo USB cancelado tras una transferencia bloqueada",
   "SDR decoder did not start; receiver stopped": "El decodificador SDR no arrancó; receptor detenido",
   "SDR decoder stopped responding; receiver stopped": "El decodificador SDR dejó de responder; receptor detenido",
-  "SDR decoder fell behind; receiver stopped": "El decodificador SDR se quedó atrás; receptor detenido"
+  "SDR decoder fell behind; receiver stopped": "El decodificador SDR se quedó atrás; receptor detenido",
+  "Atmospheric model by Open-Meteo.com": "Modelo atmosférico de Open-Meteo.com",
+  "Ground station {id}; conditions may differ at the selected position and flight altitude.": "Estación terrestre {id}; las condiciones pueden diferir en la posición seleccionada y a la altitud de vuelo.",
+  "MODEL {time} UTC": "MODELO {time} UTC",
+  "NATURAL EARTH · OPEN-METEO · UTC": "NATURAL EARTH · OPEN-METEO · HORA UTC",
+  "NATURAL EARTH · SMN STATION OBSERVATION": "NATURAL EARTH · OBSERVACIÓN DE ESTACIÓN SMN",
+  "NATURAL EARTH · WEATHER UNAVAILABLE": "NATURAL EARTH · METEOROLOGÍA NO DISPONIBLE",
+  "REPORTED {time} · TIME ZONE UNSPECIFIED": "INFORMADO {time} · ZONA HORARIA NO ESPECIFICADA",
+  "SMN OBS": "OBS. SMN",
+  "SMN · {station} · {distance}": "SMN · Estación {station} · {distance}",
+  "UNKNOWN STATION": "ESTACIÓN DESCONOCIDA",
+  "{distance} KM FROM QUERY": "A {distance} KM DE LA CONSULTA"
 }

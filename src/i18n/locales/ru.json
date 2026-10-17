@@ -435,7 +435,7 @@
   "MILITARY FLIGHT": "ВОЕННЫЙ РЕЙС",
   "COMMERCIAL FLIGHT": "ГРАЖДАНСКИЙ РЕЙС",
   "{aircraftClass} · {distance}": "{aircraftClass} · {distance}",
-  "DISTANCE UNKNOWN": "ДИСТАНЦИЯ НЕИЗВЕСТНА",
+  "DISTANCE UNKNOWN": "РАССТОЯНИЕ НЕИЗВЕСТНО",
   "{count} INPUTS UNKNOWN": {
     "one": "{count} ИСТОЧНИК ДАННЫХ НЕИЗВЕСТЕН",
     "few": "{count} ИСТОЧНИКА ДАННЫХ НЕИЗВЕСТНЫ",
@@ -2956,5 +2956,16 @@
   "USB work abandoned after a stalled transfer": "Работа с USB прервана: передача данных зависла",
   "SDR decoder did not start; receiver stopped": "Декодер SDR не запустился; приёмник остановлен",
   "SDR decoder stopped responding; receiver stopped": "Декодер SDR перестал отвечать; приёмник остановлен",
-  "SDR decoder fell behind; receiver stopped": "Декодер SDR не успевает; приёмник остановлен"
+  "SDR decoder fell behind; receiver stopped": "Декодер SDR не успевает; приёмник остановлен",
+  "Atmospheric model by Open-Meteo.com": "Атмосферная модель Open-Meteo.com",
+  "Ground station {id}; conditions may differ at the selected position and flight altitude.": "Наземная станция {id}; условия в выбранной точке и на высоте полёта могут отличаться.",
+  "MODEL {time} UTC": "МОДЕЛЬ {time} UTC",
+  "NATURAL EARTH · OPEN-METEO · UTC": "NATURAL EARTH · OPEN-METEO · ВРЕМЯ UTC",
+  "NATURAL EARTH · SMN STATION OBSERVATION": "NATURAL EARTH · НАБЛЮДЕНИЕ СТАНЦИИ SMN",
+  "NATURAL EARTH · WEATHER UNAVAILABLE": "NATURAL EARTH · МЕТЕОДАННЫЕ НЕДОСТУПНЫ",
+  "REPORTED {time} · TIME ZONE UNSPECIFIED": "СООБЩЕНО {time} · ЧАСОВОЙ ПОЯС НЕ УКАЗАН",
+  "SMN OBS": "НАБЛ. SMN",
+  "SMN · {station} · {distance}": "SMN · Станция {station} · {distance}",
+  "UNKNOWN STATION": "НЕИЗВЕСТНАЯ СТАНЦИЯ",
+  "{distance} KM FROM QUERY": "В {distance} КМ ОТ ТОЧКИ ЗАПРОСА"
 }

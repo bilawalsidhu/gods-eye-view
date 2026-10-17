@@ -212,12 +212,12 @@
         <div class="cockpit-route-endpoints">
           <div class="cockpit-route-airport">
             <span data-i18n>FROM</span>
-            <strong id="cockpit-route-from" data-i18n>UNKNOWN</strong>
+            <strong id="cockpit-route-from" data-i18n data-i18n>UNKNOWN</strong>
           </div>
           <span class="cockpit-route-arrow material-symbols-outlined" aria-hidden="true">east</span>
           <div class="cockpit-route-airport">
             <span data-i18n>TO</span>
-            <strong id="cockpit-route-to" data-i18n>UNKNOWN</strong>
+            <strong id="cockpit-route-to" data-i18n data-i18n>UNKNOWN</strong>
           </div>
         </div>
       </section>
@@ -260,12 +260,16 @@
             <small id="cockpit-local-coordinates">--</small>
           </div>
           <div class="cockpit-local-grid">
-            <div><span data-i18n>TEMP</span><strong id="cockpit-local-temperature">—</strong><small translate="no">OPEN-METEO</small></div>
+            <div><span data-i18n>TEMP</span><strong id="cockpit-local-temperature">—</strong><small id="cockpit-local-weather-source" data-i18n-runtime>UNAVAILABLE</small></div>
             <div><span data-i18n>WIND</span><strong id="cockpit-local-wind">—</strong><small id="cockpit-local-wind-direction">—</small></div>
             <div><span data-i18n>SKY</span><strong id="cockpit-local-condition" data-i18n>UNKNOWN</strong><small id="cockpit-local-cloud">—</small></div>
             <div><span data-i18n>PRECIP</span><strong id="cockpit-local-precipitation">—</strong><small data-i18n>MM</small></div>
           </div>
-          <a class="cockpit-weather-credit" href="https://open-meteo.com/" target="_blank" rel="noopener" data-i18n>Weather data by Open-Meteo.com</a>
+          <div class="cockpit-weather-provenance">
+            <a id="cockpit-local-weather-station" data-i18n-runtime href="https://www.smn.gob.ar/descarga-de-datos" target="_blank" rel="noopener noreferrer" hidden></a>
+            <small id="cockpit-local-weather-time" data-i18n-runtime hidden></small>
+          </div>
+          <a id="cockpit-weather-credit" data-i18n-runtime class="cockpit-weather-credit" href="https://open-meteo.com/" target="_blank" rel="noopener">Weather data by Open-Meteo.com</a>
         </section>
       </div>
       <footer class="cockpit-signal-footer">

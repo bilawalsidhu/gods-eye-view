@@ -193,6 +193,16 @@ export class CockpitViewController {
     this.localPrecipitation = document.getElementById(
       'cockpit-local-precipitation',
     );
+    this.localWeatherSource = document.getElementById(
+      'cockpit-local-weather-source',
+    );
+    this.localWeatherStation = document.getElementById(
+      'cockpit-local-weather-station',
+    );
+    this.localWeatherTime = document.getElementById(
+      'cockpit-local-weather-time',
+    );
+    this.localWeatherCredit = document.getElementById('cockpit-weather-credit');
     this.signalCollapsed = false;
     this.signalUserCollapsed = false;
     this.signalItems = [];
