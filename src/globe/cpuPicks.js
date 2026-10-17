@@ -156,10 +156,14 @@ export function createCpuPicker({ projector, camera, movers, lines }) {
     }
   }
 
-  const drill = (at, limit = Infinity, { includeMovers = true } = {}) => {
+  const drill = (
+    at,
+    limit = Infinity,
+    { includeMovers = true, includeLines = true } = {},
+  ) => {
     const hits = [];
     if (includeMovers) moverHits(at, hits);
-    lineHits(at, hits);
+    if (includeLines) lineHits(at, hits);
     hits.sort((a, b) => a.depth - b.depth);
     return hits.slice(0, limit).map(({ result }) => result);
   };
