@@ -4,11 +4,9 @@
    mono kickers. The chip retires once every key is configured.
    ============================================================ */
 
+/* The chip sits in the bottom-right corner row (#corner-actions,
+   locale-picker.css), which owns the position. */
 #key-setup-chip {
-  position: fixed;
-  right: 0.9rem;
-  bottom: 0.9rem;
-  z-index: 60;
   display: flex;
   align-items: center;
   gap: 0.4rem;
@@ -387,13 +385,6 @@ body.recording-mode #key-setup,
 body.cockpit-mode #key-setup,
 body.scene-playback-mode #key-setup {
   display: none;
-}
-
-@media (max-width: 620px) {
-  /* Clear the dock. Desktop-first app; this is a courtesy, not a layout. */
-  #key-setup-chip {
-    bottom: 5.8rem;
-  }
 }
 
 /* Provider Settings additions: externally-managed badge + per-row remove. */
