@@ -663,7 +663,9 @@ The internal field is IGRF-14 to degree 13, evaluated from a vendored
 public-domain coefficient table in `src/data/local_data/igrf/`. It is validated
 against an independent implementation across 105 points and three radii to
 better than 0.001% of |B|. Field lines are traced in the browser with RK4, step
-growing with radius, yielding between lines to keep the frame alive.
+growing with radius. Each line is traced as a resumable generator and the frame
+is handed back every 8 ms, mid-line if need be: a single T96 line can take
+~90 ms, so yielding only between lines still dropped frames.
 
 IGRF alone models only the field generated inside the Earth, so past a few Earth
 radii the trace adds an external field from a Tsyganenko model: **T96** when the
@@ -677,7 +679,11 @@ at 70 Re, their stated limit of validity.
 
 The first trace runs from IGRF alone so the layer paints without waiting on the
 network; the filaments are then re-traced once the feed names a usable model,
-and again whenever the solar wind changes enough to move them. The row's meta
+and again whenever the solar wind changes enough to move them or the Sun has
+moved 5° in the Earth-fixed frame (twenty minutes of rotation), since the
+external field is built in GSM and the tail must keep pointing anti-sunward. Kp
+maps to T89's bands by its nearest whole value, as geopack's table does, so 1-
+(0.67) is band 2, not band 1. The row's meta
 line names the model that drew the lines on screen, and says when it is being
 run outside the range it was fitted within.
 
@@ -686,8 +692,12 @@ hundred bytes: SWPC's propagated speed, density and IMF, Kp, Kyoto Dst, and the
 Shue et al. (1998) magnetopause derived from them. It takes the newest
 *complete* row, because SWPC's tail is often a timestamp with null plasma values
 and reading that as current state would render missing data as a dead-calm solar
-wind. Kp and Dst each have their own cache and fail soft: losing Dst costs T96,
-losing Kp costs T89, and neither touches the boundary.
+wind. The solar wind, Kp and Dst are each one shared upstream fetch: concurrent
+requests coalesce, each fetch has its own 10 s timeout rather than a caller's
+signal (so one client disconnecting cannot fail the others), and a failure is
+backed off for a minute instead of retried on every request. Kp and Dst fail
+soft: losing Dst costs T96, losing Kp costs T89, and neither touches the
+boundary.
 
 The boundary is an empirical fit, drawn as a cage rather than a shell, and
 reports when the solar wind is outside the range the fit was published for. It
