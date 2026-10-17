@@ -419,11 +419,13 @@ test('explicit cyclone selection publishes shared context without auto-claiming 
       selectedEvents += 1;
       return selectedContext;
     },
-    removeEntityContextsForLayer(layerId) {
+    removeEntityContextsForLayer(layerId, { retainIds } = {}) {
       for (const [id, record] of records) {
-        if (record.layerId === layerId) records.delete(id);
+        if (record.layerId === layerId && !retainIds?.has(id))
+          records.delete(id);
       }
-      if (selectedContext?.layerId === layerId) selectedContext = null;
+      if (selectedContext && !records.has(selectedContext.id))
+        selectedContext = null;
     },
   };
   const h = harness({ getSnapshot: async () => next }, { context });
@@ -446,10 +448,18 @@ test('explicit cyclone selection publishes shared context without auto-claiming 
   assert.equal(selectedContext?.longitude, -125.8);
   assert.equal(selectedContext?.properties.advisoryNumber, '10');
 
+  h.layer.setParams({ stormId: 'ep152026' });
+  assert.deepEqual([...records.keys()], ['cyclone:ep152026']);
+  assert.equal(selectedContext?.id, 'cyclone:ep152026');
+  h.layer.setParams({ stormId: 'ep162026' });
+  assert.deepEqual([...records.keys()], ['cyclone:ep162026']);
+  assert.equal(selectedContext?.id, 'cyclone:ep162026');
+  assert.equal(selectedEvents, 3, 'each explicit storm switch announces once');
+
   await h.layer.update();
   assert.equal(
     selectedEvents,
-    1,
+    3,
     'refresh updates the selected record without re-announcing the click',
   );
 
@@ -463,7 +473,7 @@ test('explicit cyclone selection publishes shared context without auto-claiming 
   assert.equal(records.size, 0);
 
   h.layer.setParams({ stormId: 'ep152026' });
-  assert.equal(selectedEvents, 2);
+  assert.equal(selectedEvents, 4);
   h.layer.setParams({ clear: true });
   assert.equal(selectedContext, null);
   assert.equal(records.size, 0);

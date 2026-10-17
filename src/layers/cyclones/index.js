@@ -79,8 +79,12 @@ export function createCyclonesLayer({
       return null;
     }
     selectedContextEntity ||= { show: true };
+    const contextId = `cyclone:${storm.id}`;
+    context.removeEntityContextsForLayer?.('weather-cyclones', {
+      retainIds: new Set([contextId]),
+    });
     const record = context.registerEntityContext?.(selectedContextEntity, {
-      id: `cyclone:${storm.id}`,
+      id: contextId,
       layerId: 'weather-cyclones',
       layerName: 'Cyclone advisories',
       source: 'NOAA NHC / CPHC',
