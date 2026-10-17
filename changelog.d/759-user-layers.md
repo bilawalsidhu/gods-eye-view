@@ -6,5 +6,7 @@
   cannot compete for the 36 shared token slots or collide with whatever
   upstream assigns next. An unknown id in `ul` is skipped so a link from an
   install with different layers still restores its built-in half, while an
-  unknown token in `l` still fails the payload closed. Documented in
+  unknown token in `l` still fails the payload closed. A layer whose
+  `createLayer()` throws is logged and left out instead of stopping the
+  application from starting. Documented in
   `docs/USER-LAYERS.md` (KnottyDyes, #759).

@@ -1,6 +1,17 @@
-import { test } from 'node:test';
+import { test, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { collectUserLayerEntries, instantiateUserLayer } from './index.js';
+import {
+  collectUserLayerEntries,
+  instantiateUserLayer,
+  instantiateUserLayers,
+} from './index.js';
+import {
+  registerUserLayers,
+  resetUserLayersForTest,
+  userLayerIds,
+} from '../data/layerState.js';
+
+beforeEach(() => resetUserLayersForTest());
 
 const mod = (id, extra = {}) => ({
   default: { id, createLayer: () => ({ id, ...extra }) },
@@ -106,4 +117,40 @@ test('the shipped example implements every method the manager calls unconditiona
       'function',
       `the example layer is missing ${name}(), which the manager calls without a guard`,
     );
+});
+
+test('a createLayer() that throws leaves out that layer, not the others', (t) => {
+  const logged = t.mock.method(console, 'error', () => {});
+  const entries = registerUserLayers([
+    { id: 'alpha', createLayer: () => ({ id: 'alpha' }) },
+    {
+      id: 'broken',
+      createLayer: () => {
+        throw new Error('no API key');
+      },
+    },
+    { id: 'charlie', createLayer: () => ({ id: 'charlie' }) },
+  ]);
+
+  const layers = instantiateUserLayers(entries);
+
+  assert.deepEqual(
+    layers.map((layer) => layer.id),
+    ['alpha', 'charlie'],
+  );
+  // Unregistered again, so the codec and the manager agree with the catalog.
+  assert.deepEqual(userLayerIds(), ['alpha', 'charlie']);
+  assert.equal(logged.mock.callCount(), 1);
+  assert.match(
+    logged.mock.calls[0].arguments[0],
+    /broken createLayer\(\) failed/,
+  );
+});
+
+test('when every createLayer() succeeds the registry is left as it was', () => {
+  const entries = registerUserLayers([
+    { id: 'alpha', createLayer: () => ({ id: 'alpha' }) },
+  ]);
+  assert.equal(instantiateUserLayers(entries).length, 1);
+  assert.equal(userLayerIds()[0], 'alpha');
 });
