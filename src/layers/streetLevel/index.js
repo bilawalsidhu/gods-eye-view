@@ -18,6 +18,7 @@ import { cameraHeightAboveGround, viewCentre, whenIdle } from './view.js';
 import { createGroundClick, groundClickHeightOk } from './groundClick.js';
 import { createGroundCaster, nextSurfaceMode } from './groundCast.js';
 import { createMeshSampler } from './meshSampler.js';
+import { msg, t, translateKnown } from '../../i18n/index.js';
 
 /** Above this camera height the ground under the camera is not worth fetching. */
 const SURFACE_WARM_BELOW_M = 6000;
@@ -108,7 +109,15 @@ export function createStreetLevelLayer({
       getSurface: () => state.surface,
       notify,
       actions: {
-        openImage: (imageId) => openImage(entry.def.id, imageId),
+        /** `{frame: false}` opens it without moving the camera. */
+        openImage: (imageId, options) =>
+          openImage(entry.def.id, imageId, options),
+        /** This provider's image nearest a point the user picked on the map. */
+        openNearest: (point) =>
+          layer.openNearest(point, {
+            providerIds: [entry.def.id],
+            frame: false,
+          }),
         /**
          * Show a provider error, or withdraw it (null). A withdrawal clears
          * only this provider's own error, never a newer one from elsewhere.
@@ -327,20 +336,43 @@ export function createStreetLevelLayer({
   }
 
   function unavailableReason(entry) {
-    return `${entry.def.name} needs the Google 3D map: choose it under MAP SOURCE`;
+    return t('{name} needs the Google 3D map: choose it under MAP SOURCE', {
+      name: translateKnown(entry.def.name),
+    });
   }
 
   /** One imagery source at a time: lighting a provider darkens the others. */
   function setProviderEnabled(providerId, on) {
     const entry = state.providers.get(providerId);
     if (!entry) return false;
+    const before = litIds();
     const next = on !== false;
     if (next)
       for (const other of state.providers.values())
         if (other !== entry && other.on) switchProvider(other, false);
     switchProvider(entry, next);
+    sourceChanged(before);
     notify();
     return true;
+  }
+
+  const litIds = () =>
+    [...state.providers]
+      .filter(([, entry]) => entry.on)
+      .map(([id]) => id)
+      .join();
+
+  /**
+   * After a chip, voice or a link changed the lit source: a lookup still
+   * running and its spinner or error were about the source switched away
+   * (an open photo keeps its own state).
+   */
+  function sourceChanged(before) {
+    if (litIds() === before) return;
+    abortNearest();
+    if (state.street.open) return;
+    state.street.error = null;
+    state.street.loading = false;
   }
 
   function switchProvider(entry, on) {
@@ -381,7 +413,9 @@ export function createStreetLevelLayer({
   /** The hint a ground-click provider shows, or the provider's own. */
   function hintFor(entry, stats) {
     if (entry.def.groundClick && stats.hint && !state.groundClickReady)
-      return `zoom in to a street to open ${entry.def.name}`;
+      return t('zoom in to a street to open {name}', {
+        name: translateKnown(entry.def.name),
+      });
     return stats.hint || '';
   }
 
@@ -407,6 +441,9 @@ export function createStreetLevelLayer({
         hint: hintFor(entry, stats),
         error: stats.error || null,
         color: entry.def.colors.coverage,
+        coverageLabel: entry.def.coverageLabel || null,
+        highlightsSequence: entry.def.highlightsSequence !== false,
+        sinceBasis: entry.def.sinceBasis === 'upload' ? 'upload' : 'capture',
         groundClick: entry.def.groundClick === true,
         filters: [...filtersOf(entry.def)],
       };
@@ -546,10 +583,13 @@ export function createStreetLevelLayer({
       // The lifecycle polls this every second: summarise, don't snapshot.
       const snapshots = providerSnapshots();
       const coverage = summarizeCoverage(snapshots);
+      // English data: the layer panel translates these through translateKnown.
       let loadingLabel = '';
-      const keyLabel = coverage.keyRejected ? 'KEY REJECTED' : 'KEY REQUIRED';
+      const keyLabel = coverage.keyRejected
+        ? msg('KEY REJECTED')
+        : msg('KEY REQUIRED');
       if (coverage.keyRequired) loadingLabel = keyLabel;
-      else if (coverage.loading) loadingLabel = 'loading coverage...';
+      else if (coverage.loading) loadingLabel = msg('loading coverage...');
       else if (coverage.hint && state.enabled) loadingLabel = coverage.hint;
       return {
         source: layer.source,
@@ -606,9 +646,11 @@ export function createStreetLevelLayer({
         filter: state.filter,
       });
       const lit = litByParams(decoded.providers);
+      const before = litIds();
       for (const [id, entry] of state.providers)
         if (id !== lit) switchProvider(entry, false);
       if (lit) switchProvider(state.providers.get(lit), true);
+      sourceChanged(before);
       notify();
       setCoverageFilter(decoded.filter);
       return true;
@@ -698,10 +740,21 @@ export function createStreetLevelLayer({
       const stillOn = entries.some(
         (entry) => entry.on && providerAvailable(entry),
       );
+      // A provider's own refusal is English data that the panel translates;
+      // the core's refusal is built here, for the panel only, in the language.
       if (state.enabled && stillOn)
         state.street.error =
           lastError?.message ||
-          `No street-level imagery within ${NEAREST_RADIUS_M} m of ${point ? 'that point' : 'the view centre'}`;
+          (point
+            ? t('No street-level imagery within {radius} m of that point', {
+                radius: NEAREST_RADIUS_M,
+              })
+            : t(
+                'No street-level imagery within {radius} m of the view centre',
+                {
+                  radius: NEAREST_RADIUS_M,
+                },
+              ));
       state.street.loading = false;
       notify();
       return false;

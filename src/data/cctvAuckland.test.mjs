@@ -407,53 +407,56 @@ const runCatalogWithMockedUpstreams = async (t) => {
   return { requested, sources };
 };
 
-test('the Auckland lane is wired into the catalog and its loader runs', async (t) => {
+/** Run one catalog refresh with CCTV_AUCKLAND_ENABLED set to `flag`
+ * (undefined deletes it) and restore the environment afterwards. */
+const runWithAucklandFlag = async (t, flag) => {
   const saved = { ...process.env };
   try {
     delete process.env.CCTV_SOURCES_FILE;
     delete process.env.CCTV_SOURCES_JSON;
-    delete process.env.CCTV_AUCKLAND_ENABLED;
-    const { requested, sources } = await runCatalogWithMockedUpstreams(t);
-    assert.ok(
-      requested.includes(AUCKLAND_CAMERAS_URL),
-      'the catalog refresh invokes the Auckland loader',
-    );
-    assert.deepEqual(
-      new Set(sources.filter((s) => s.cityId === 'auckland').map((s) => s.id)),
-      new Set([`auckland-${CARRINGTON_ID}`, `auckland-${CONSTELLATION_ID}`]),
-      'Auckland cameras reach the served catalog through the registered lane',
-    );
+    if (flag === undefined) delete process.env.CCTV_AUCKLAND_ENABLED;
+    else process.env.CCTV_AUCKLAND_ENABLED = flag;
+    return await runCatalogWithMockedUpstreams(t);
   } finally {
     for (const key of Object.keys(process.env)) {
       if (!(key in saved)) delete process.env[key];
     }
     Object.assign(process.env, saved);
   }
+};
+
+test('CCTV_AUCKLAND_ENABLED=1 wires the Auckland lane into the catalog', async (t) => {
+  const { requested, sources } = await runWithAucklandFlag(t, '1');
+  assert.ok(
+    requested.includes(AUCKLAND_CAMERAS_URL),
+    'the catalog refresh invokes the Auckland loader',
+  );
+  assert.deepEqual(
+    new Set(sources.filter((s) => s.cityId === 'auckland').map((s) => s.id)),
+    new Set([`auckland-${CARRINGTON_ID}`, `auckland-${CONSTELLATION_ID}`]),
+    'Auckland cameras reach the served catalog through the registered lane',
+  );
 });
 
-test('CCTV_AUCKLAND_ENABLED=0 keeps the lane from being loaded at all', async (t) => {
-  const saved = { ...process.env };
-  try {
-    delete process.env.CCTV_SOURCES_FILE;
-    delete process.env.CCTV_SOURCES_JSON;
-    process.env.CCTV_AUCKLAND_ENABLED = '0';
-    const { requested, sources } = await runCatalogWithMockedUpstreams(t);
+for (const [label, flag] of [
+  ['an unset CCTV_AUCKLAND_ENABLED', undefined],
+  ['an empty CCTV_AUCKLAND_ENABLED', ''],
+  ['CCTV_AUCKLAND_ENABLED=0', '0'],
+  ['CCTV_AUCKLAND_ENABLED=true', 'true'],
+]) {
+  test(`${label} keeps the lane from being loaded at all`, async (t) => {
+    const { requested, sources } = await runWithAucklandFlag(t, flag);
     assert.equal(
       requested.includes(AUCKLAND_CAMERAS_URL),
       false,
-      'the disabled lane never reaches its upstream',
+      'the opt-in lane never reaches its upstream',
     );
     assert.deepEqual(
       sources.filter((s) => s.cityId === 'auckland'),
       [],
     );
-  } finally {
-    for (const key of Object.keys(process.env)) {
-      if (!(key in saved)) delete process.env[key];
-    }
-    Object.assign(process.env, saved);
-  }
-});
+  });
+}
 
 test('the shipped catalog ceiling is not raised to make room for this pack', () => {
   assert.equal(DEFAULT_CCTV_MAX_SOURCES, 4000);

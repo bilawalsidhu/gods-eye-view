@@ -659,3 +659,29 @@ test('FIT/FILL stays hidden for a second Street View panorama after a close', as
   await host.open('google', 'g-2');
   assert.equal(state.street.renderModes, false);
 });
+
+test('an adapter that can frame but says this image has no frame offers no FIT / FILL', async () => {
+  const adapter = fakeAdapter();
+  let frameable = false;
+  adapter.setRenderMode = () => {};
+  adapter.supportsRenderModes = () => frameable;
+  const { state, host } = harness(adapter);
+  await host.open('mapillary', 'pano-1');
+  assert.equal(state.street.imageId, 'pano-1', 'the pose arrived');
+  assert.equal(state.street.renderModes, false);
+  frameable = true;
+  await host.open('mapillary', 'flat-1');
+  assert.equal(state.street.renderModes, true, 'a flat image can be framed');
+});
+
+test('a pose’s licence reaches the caption state, and a closed viewer forgets it', async () => {
+  const { state, host, google } = twoProviders();
+  await host.open('google', 'g-1');
+  google.emitPose('g-1', { providerId: 'google', license: 'CC BY-SA 4.0' });
+  assert.equal(state.street.license, 'CC BY-SA 4.0');
+  google.emitPose('g-1', { providerId: 'google' });
+  assert.equal(state.street.license, null, 'none given: none shown');
+  google.emitPose('g-1', { providerId: 'google', license: 'CC0' });
+  host.close();
+  assert.equal(state.street.license, null);
+});

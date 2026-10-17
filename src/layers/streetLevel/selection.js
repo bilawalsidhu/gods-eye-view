@@ -28,7 +28,24 @@ export function createSelection({ state, parts }) {
     }
     const entry = state.providers.get(route.providerId);
     if (!entry?.on) return;
-    route.instance.handlePick(route.id);
+    route.instance.handlePick(route.id, {
+      groundPoint: () => groundPointAt(viewer, click.position),
+    });
+  }
+
+  /** Lon/lat of the ground under a screen point, or null (sky, no picker). */
+  function groundPointAt(viewer, screenPosition) {
+    const position = state.services.scenePick?.pickGroundPosition?.(
+      viewer,
+      screenPosition,
+    );
+    const carto = position && Cesium.Cartographic.fromCartesian(position);
+    return carto
+      ? {
+          lon: Cesium.Math.toDegrees(carto.longitude),
+          lat: Cesium.Math.toDegrees(carto.latitude),
+        }
+      : null;
   }
 
   /**

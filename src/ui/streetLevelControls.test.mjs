@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
 import test from 'node:test';
 import { StreetLevelControls } from './streetLevelControls.js';
 import { createStreetLevelLayer } from '../layers/streetLevel/index.js';
@@ -313,6 +314,7 @@ function panelDom() {
   const sinceRow = add(controls, 'div', { id: 'sl-since-row' });
   add(sinceRow, 'input', { id: 'sl-since' });
   add(sinceRow, 'output', { id: 'sl-since-label' });
+  add(sinceRow, 'small', { id: 'sl-since-note' });
   add(settings, 'ul', { id: 'sl-legend' });
   const metaRow = add(settings, 'div', { classes: ['sl-meta-row'] });
   add(metaRow, 'div', { id: 'sl-coverage-meta' });
@@ -1222,6 +1224,26 @@ test('a swap names every registered provider, also those hidden on this map', ()
     assert.deepEqual(calls.setParams, [
       [{ mapillary: true, google: false }, { origin: 'user' }],
     ]);
+  }));
+
+test('a note under SINCE says what date it compares, only while one is given', () =>
+  withDom(async (dom) => {
+    const state = uiState();
+    const { layer } = stubPanel(dom, state);
+    const note = () => dom.root.querySelector('#sl-since-note');
+    assert.equal(note().hidden, true, 'none for Mapillary');
+    layer.publish({ ...state, sinceNote: 'KartaView: by upload date' });
+    assert.equal(note().hidden, false);
+    assert.equal(note().textContent, 'KartaView: by upload date');
+    layer.publish(state);
+    assert.equal(note().hidden, true);
+    // The panel's own markup has it, read out with the slider.
+    const template = fs.readFileSync(
+      new URL('./templates/layer-panels.html', import.meta.url),
+      'utf8',
+    );
+    assert.match(template, /<small id="sl-since-note"[^>]* hidden>/);
+    assert.match(template, /aria-describedby="sl-since-label sl-since-note"/);
   }));
 
 test('Street View lit hides the imagery filters and the legend; Mapillary lit shows them', () =>

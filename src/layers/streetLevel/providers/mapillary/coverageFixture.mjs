@@ -1,6 +1,6 @@
 import { PbfWriter } from 'pbf';
 
-const zigzag = (value) => (value << 1) ^ (value >> 31);
+export const zigzag = (value) => (value << 1) ^ (value >> 31);
 
 /** Tile-local [x, y] (0..extent) of a lon/lat inside tile (x, y, z). */
 export function lonLatToTileLocal([lon, lat], { x, y, z }, extent = 4096) {
@@ -13,7 +13,7 @@ export function lonLatToTileLocal([lon, lat], { x, y, z }, extent = 4096) {
 }
 
 /** One MVT layer writer with deduplicated keys and appended values. */
-function layerWriter(name, extent) {
+export function layerWriter(name, extent) {
   const keys = new Map();
   const values = [];
   const features = [];
@@ -62,7 +62,7 @@ function layerWriter(name, extent) {
 }
 
 /** MVT MoveTo/LineTo commands; the cursor carries over between parts. */
-function lineGeometry(parts) {
+export function lineGeometry(parts) {
   const out = [];
   let cx = 0;
   let cy = 0;

@@ -25,6 +25,7 @@ export function normalizeGbfsBool(value, fallback = true) {
  * @returns {number|null}
  */
 export function toNonNegativeInteger(value, fallback = null) {
+  if (value == null || value === '') return fallback;
   const n = Number(value);
   if (!Number.isFinite(n) || n < 0) return fallback;
   return Math.round(n);
@@ -50,15 +51,25 @@ export function extractStationsArray(payload) {
   return [];
 }
 
+/**
+ * Station name text as a reader expects it. JCDecaux's Spanish contracts
+ * (Valenbisi, Sevici) prefix every name with "_" and Valenbisi joins words
+ * with it ("_PLAZA_MUSICO_LOPEZ_CHAVARRI"), so an underscore reads as a word
+ * break. Other spacing is the operator's own and stays as published.
+ */
+function tidyStationName(text) {
+  return text.replace(/\s*_+\s*/g, ' ').trim();
+}
+
 /** Read legacy text or a GBFS v3 Localized String, preferring usable English text. */
 function stationName(value) {
-  if (typeof value === 'string') return value.trim();
+  if (typeof value === 'string') return tidyStationName(value);
   if (!Array.isArray(value)) return '';
 
   let fallback = '';
   for (const translation of value) {
     if (typeof translation?.text !== 'string') continue;
-    const text = translation.text.trim();
+    const text = tidyStationName(translation.text);
     if (!text) continue;
     if (!fallback) fallback = text;
     if (
@@ -68,6 +79,23 @@ function stationName(value) {
       return text;
   }
   return fallback;
+}
+
+/**
+ * Docks a station physically has. PBSC adds the bikes a station accepts in its
+ * geofenced area around the docks to `capacity` and reports that part as
+ * `geofenced_capacity` (not a GBFS field): Bilbao Bizi publishes 39 docks as
+ * capacity 839 with geofenced_capacity 800. Without the extension, or when it
+ * would exceed the total, `capacity` is read as given. PBSC also counts the
+ * bikes parked in that area (`num_bikes_overflow`) in `num_bikes_available`, so
+ * a crowded station can report more bikes than docks.
+ */
+function dockCapacity(raw) {
+  const capacity = toNonNegativeInteger(raw?.capacity);
+  const geofenced = toNonNegativeInteger(raw?.geofenced_capacity);
+  if (capacity == null || geofenced == null || geofenced > capacity)
+    return capacity;
+  return capacity - geofenced;
 }
 
 /**
@@ -94,7 +122,7 @@ export function parseStationInformation(payload) {
       name: stationName(raw?.name) || stationName(raw?.short_name),
       lat,
       lon,
-      capacity: toNonNegativeInteger(raw?.capacity),
+      capacity: dockCapacity(raw),
       isInstalled: normalizeGbfsBool(raw?.is_installed, true),
       isRenting: normalizeGbfsBool(raw?.is_renting, true),
       isReturning: normalizeGbfsBool(raw?.is_returning, true),
