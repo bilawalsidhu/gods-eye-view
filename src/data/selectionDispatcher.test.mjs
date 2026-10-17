@@ -256,3 +256,47 @@ test('a look-under owner (local ADS-B) keeps its own click rule beside the other
     unregisterPickOwner('cctv');
   }
 });
+
+test('an own-rule owner (vessels) gets every click with its top pick and is another layer to the rest', () => {
+  const { dispatcher, click, escape } = setup({
+    10: [{ id: { mmsi: '111' } }], // its own object (Cesium: the record)
+    20: [{ id: 'ae01ce' }], // flights' contact
+    30: [], // empty map
+  });
+  const seen = [];
+  const flights = recorder();
+  let owned = true;
+  dispatcher.register('ais-live-vessels', {
+    owns: (id) => owned && id === '111',
+    onClick: (ctx) =>
+      seen.push([ctx.position.x, ctx.picked?.id ?? null, ctx.gesture.travelPx]),
+  });
+  dispatcher.register('flights', {
+    owns: (id) => id === 'ae01ce',
+    ...flights.handlers,
+  });
+  click(10);
+  click(20);
+  click(30);
+  // No gesture rule: a long press and a drag still reach it (LEFT_CLICK).
+  click(30, { ms: 900 });
+  click(30, { travel: 40 });
+  escape();
+  assert.deepEqual(seen, [
+    [10, { mmsi: '111' }, 0],
+    [20, 'ae01ce', 0],
+    [30, null, 0],
+    [30, null, 0],
+    [70, null, 40],
+  ]);
+  // To flights a vessel is another layer's object: not its empty space.
+  assert.deepEqual(flights.calls, [
+    ['select', 'ae01ce', undefined],
+    ['empty', 0],
+    ['escape'],
+  ]);
+  // A disowned vessel pick (the layer disabled) is empty space again.
+  owned = false;
+  click(10);
+  assert.deepEqual(flights.calls.at(-1), ['empty', 0]);
+});
