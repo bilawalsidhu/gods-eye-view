@@ -2854,7 +2854,8 @@ export function houstonCameraToSource(record) {
     url: imageUrl,
     snapshotUrl: imageUrl,
     sourceKind: 'houston-transtar',
-    license: 'Public Houston TranStar traffic camera',
+    license:
+      'TranStar disclaimer — redistribution and external framing need TxDOT written permission',
     code: cameraDisplayCode(name.toUpperCase()),
   };
 }

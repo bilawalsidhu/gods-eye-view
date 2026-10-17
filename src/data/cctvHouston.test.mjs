@@ -67,7 +67,10 @@ test('a Houston row maps to a source on the pinned HTTPS frame host', () => {
   assert.equal(source.lon, -95.355711);
   assert.equal(source.feedType, 'image');
   assert.equal(source.sourceKind, 'houston-transtar');
-  assert.equal(source.license, 'Public Houston TranStar traffic camera');
+  assert.equal(
+    source.license,
+    'TranStar disclaimer — redistribution and external framing need TxDOT written permission',
+  );
   assert.equal(source.groundElevationM, HOUSTON_GROUND_ELEVATION_M);
   assert.equal(source.url, HOUSTON_IMAGE_URL(DOWNTOWN_ID));
   assert.equal(source.url, source.snapshotUrl);
@@ -290,6 +293,7 @@ test('a reduced pack cap keeps cameras nearest the metro anchors', async (t) => 
  */
 const runCatalogWithMockedUpstreams = async (t) => {
   const requested = [];
+  t.mock.restoreAll();
   t.mock.method(console, 'log', () => {});
   t.mock.method(console, 'warn', () => {});
   t.mock.method(globalThis, 'fetch', async (url) => {
@@ -320,7 +324,7 @@ test('the Houston lane is wired into the catalog and its loader runs', async (t)
   try {
     delete process.env.CCTV_SOURCES_FILE;
     delete process.env.CCTV_SOURCES_JSON;
-    delete process.env.CCTV_HOUSTON_ENABLED;
+    process.env.CCTV_HOUSTON_ENABLED = '1';
     const { requested, sources } = await runCatalogWithMockedUpstreams(t);
     assert.ok(
       requested.includes(HOUSTON_CAMERAS_URL),
@@ -339,22 +343,25 @@ test('the Houston lane is wired into the catalog and its loader runs', async (t)
   }
 });
 
-test('CCTV_HOUSTON_ENABLED=0 keeps the lane from being loaded at all', async (t) => {
+test('Houston stays unloaded unless CCTV_HOUSTON_ENABLED=1', async (t) => {
   const saved = { ...process.env };
   try {
     delete process.env.CCTV_SOURCES_FILE;
     delete process.env.CCTV_SOURCES_JSON;
-    process.env.CCTV_HOUSTON_ENABLED = '0';
-    const { requested, sources } = await runCatalogWithMockedUpstreams(t);
-    assert.equal(
-      requested.includes(HOUSTON_CAMERAS_URL),
-      false,
-      'the disabled lane never reaches its upstream',
-    );
-    assert.deepEqual(
-      sources.filter((s) => s.cityId === 'houston'),
-      [],
-    );
+    for (const value of [undefined, '0']) {
+      if (value === undefined) delete process.env.CCTV_HOUSTON_ENABLED;
+      else process.env.CCTV_HOUSTON_ENABLED = value;
+      const { requested, sources } = await runCatalogWithMockedUpstreams(t);
+      assert.equal(
+        requested.includes(HOUSTON_CAMERAS_URL),
+        false,
+        'the pack reaches TranStar only after an explicit opt-in',
+      );
+      assert.deepEqual(
+        sources.filter((s) => s.cityId === 'houston'),
+        [],
+      );
+    }
   } finally {
     for (const key of Object.keys(process.env)) {
       if (!(key in saved)) delete process.env[key];

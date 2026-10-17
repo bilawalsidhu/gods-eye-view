@@ -147,7 +147,7 @@ const LIVE_PACKS = [
   },
   {
     name: 'houston',
-    enabled: () => envEnabled('CCTV_HOUSTON_ENABLED'),
+    enabled: () => envOptIn('CCTV_HOUSTON_ENABLED'),
     load: loadHoustonSourcesFromOpenData,
   },
 ];
