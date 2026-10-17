@@ -1,3 +1,11 @@
+> **ORYN Intelligence prototype.** This checkout wraps the God's Eye View engine
+> in an enterprise intelligence workspace (navigation rail, command bar,
+> inspector, layer manager, timeline, investigations, cameras, reports). Run
+> `npm run dev`, sign in with any name (local demo session), and read
+> [docs/ORYN_PROTOTYPE.md](docs/ORYN_PROTOTYPE.md) for what is real, what is
+> demo-labeled, and what still needs configuration. The upstream engine
+> documentation follows.
+
 <div align="center">
 
 # 🌐 God's Eye View

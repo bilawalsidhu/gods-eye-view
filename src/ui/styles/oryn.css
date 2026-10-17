@@ -1,0 +1,1363 @@
+/* ── ORYN Intelligence application shell ──────────────────────────────────
+   Enterprise workspace around the God's Eye View engine. The engine and all
+   of its native chrome render inside #oryn-stage; the stage is a containing
+   block for fixed descendants (contain: layout) so every existing panel keeps
+   its offsets but measures them from the workspace area, not the viewport.
+
+   Visual identity: the ORYN reference repository could not be inspected
+   (see docs/ORYN_PROTOTYPE.md), so these tokens are an independent
+   enterprise dark theme, kept deliberately restrained. Swap the token block
+   to adopt the real brand. */
+
+:root {
+  --oryn-bg: #0a0e16;
+  --oryn-surface: #111723;
+  --oryn-surface-2: #161e2d;
+  --oryn-surface-3: #1c2536;
+  --oryn-border: rgba(148, 163, 184, 0.14);
+  --oryn-border-strong: rgba(148, 163, 184, 0.28);
+  --oryn-text: #e6ebf2;
+  --oryn-text-2: #a3aec0;
+  --oryn-text-3: #6f7b92;
+  --oryn-accent: #4f9cf9;
+  --oryn-accent-dim: rgba(79, 156, 249, 0.16);
+  --oryn-ok: #34c77b;
+  --oryn-warn: #f2b134;
+  --oryn-danger: #ef5a5a;
+  --oryn-info: #8b9cff;
+  --oryn-radius: 8px;
+  --oryn-radius-sm: 6px;
+  --oryn-font: var(--font-sans);
+  --oryn-mono: var(--font-mono);
+  --oryn-rail-w: 224px;
+  --oryn-rail-collapsed-w: 60px;
+  --oryn-rail-current: var(--oryn-rail-w);
+  --oryn-topbar-h: 52px;
+  --oryn-timeline-collapsed-h: 34px;
+  --oryn-timeline-expanded-h: 188px;
+  --oryn-timeline-current: var(--oryn-timeline-collapsed-h);
+  --oryn-inspector-w: 360px;
+  --oryn-inspector-current: 0px;
+  --oryn-layers-w: 340px;
+  --oryn-z-chrome: 160;
+  --oryn-z-drawer: 158;
+  --oryn-z-login: 1200;
+}
+
+body.oryn-body {
+  font-family: var(--oryn-font);
+  background: var(--oryn-bg);
+  color: var(--oryn-text);
+  display: grid;
+  grid-template-columns: var(--oryn-rail-current) minmax(0, 1fr) var(
+      --oryn-inspector-current
+    );
+  grid-template-rows: var(--oryn-topbar-h) minmax(0, 1fr) var(
+      --oryn-timeline-current
+    );
+  grid-template-areas:
+    'rail topbar topbar'
+    'rail main inspector'
+    'rail timeline timeline';
+  transition: grid-template-columns var(--transition-smooth);
+}
+
+body.oryn-body[data-oryn-rail='collapsed'] {
+  --oryn-rail-current: var(--oryn-rail-collapsed-w);
+}
+body.oryn-body[data-oryn-inspector='open'] {
+  --oryn-inspector-current: var(--oryn-inspector-w);
+}
+body.oryn-body[data-oryn-timeline='open'] {
+  --oryn-timeline-current: var(--oryn-timeline-expanded-h);
+}
+
+.oryn-visually-hidden {
+  position: absolute !important;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.oryn-mono {
+  font-family: var(--oryn-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.oryn-link {
+  color: var(--oryn-accent);
+  text-decoration: none;
+}
+.oryn-link:hover {
+  text-decoration: underline;
+}
+
+/* ── Stage: the engine lives here ───────────────────────────────────────── */
+
+#oryn-main {
+  grid-area: main;
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  background: var(--bg-dark);
+}
+
+#oryn-stage {
+  position: absolute;
+  inset: 0;
+  contain: layout;
+  overflow: hidden;
+}
+
+/* The engine's own wordmark gives way to the ORYN brand. */
+body.oryn-body #title-bar {
+  display: none !important;
+}
+
+/* Engine surfaces appended to <body> at runtime sit outside the stage and
+   are offset by the shell regions explicitly. The Cesium credit element is
+   instead re-parented into the stage by src/ui/oryn/index.js so its own
+   modelled CSS keeps it visible (Google Maps Platform and Cesium terms). */
+body.oryn-body #gev-voice-control {
+  right: calc(var(--oryn-inspector-current) + 36px);
+  bottom: calc(var(--oryn-timeline-current) + 36px);
+}
+body.oryn-body #cockpit-cloud-effects {
+  top: var(--oryn-topbar-h);
+  left: var(--oryn-rail-current);
+  right: var(--oryn-inspector-current);
+  bottom: var(--oryn-timeline-current);
+}
+
+/* ── Shared controls ────────────────────────────────────────────────────── */
+
+.oryn-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  padding: 0 10px;
+  border: 1px solid var(--oryn-border);
+  border-radius: var(--oryn-radius-sm);
+  background: var(--oryn-surface-2);
+  color: var(--oryn-text);
+  font: 500 12.5px/1 var(--oryn-font);
+  cursor: pointer;
+  white-space: nowrap;
+  transition:
+    background var(--transition-fast),
+    border-color var(--transition-fast),
+    color var(--transition-fast);
+}
+.oryn-btn:hover {
+  background: var(--oryn-surface-3);
+  border-color: var(--oryn-border-strong);
+}
+.oryn-btn[aria-pressed='true'] {
+  background: var(--oryn-accent-dim);
+  border-color: var(--oryn-accent);
+  color: var(--oryn-text);
+}
+.oryn-btn[aria-disabled='true'] {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.oryn-btn-ghost {
+  background: transparent;
+  border-color: transparent;
+}
+.oryn-btn-ghost:hover {
+  background: var(--oryn-surface-2);
+  border-color: var(--oryn-border);
+}
+.oryn-btn-primary {
+  background: var(--oryn-accent);
+  border-color: var(--oryn-accent);
+  color: #06101f;
+  font-weight: 600;
+}
+.oryn-btn-primary:hover {
+  background: #6cb0ff;
+  border-color: #6cb0ff;
+}
+.oryn-btn-danger {
+  color: var(--oryn-danger);
+}
+.oryn-btn-sm {
+  min-height: 26px;
+  padding: 0 8px;
+  font-size: 11.5px;
+}
+.oryn-btn-icon {
+  padding: 0;
+  width: 32px;
+  justify-content: center;
+}
+.oryn-icon {
+  flex: none;
+}
+
+.oryn-select,
+.oryn-input,
+.oryn-textarea {
+  min-height: 32px;
+  padding: 4px 10px;
+  border: 1px solid var(--oryn-border);
+  border-radius: var(--oryn-radius-sm);
+  background: var(--oryn-surface);
+  color: var(--oryn-text);
+  font: 400 12.5px/1.4 var(--oryn-font);
+  color-scheme: dark;
+}
+.oryn-select:focus-visible,
+.oryn-input:focus-visible,
+.oryn-textarea:focus-visible {
+  outline: 2px solid var(--oryn-accent) !important;
+  outline-offset: 1px;
+}
+.oryn-textarea {
+  min-height: 80px;
+  resize: vertical;
+  width: 100%;
+}
+.oryn-input {
+  width: 100%;
+}
+
+.oryn-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 7px;
+  border-radius: 999px;
+  border: 1px solid var(--oryn-border);
+  background: var(--oryn-surface-2);
+  color: var(--oryn-text-2);
+  font: 600 10px/1.4 var(--oryn-mono);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.oryn-chip::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: 0.8;
+}
+.oryn-chip-current,
+.oryn-chip-ok {
+  color: var(--oryn-ok);
+  border-color: rgba(52, 199, 123, 0.35);
+}
+.oryn-chip-fallback,
+.oryn-chip-info {
+  color: var(--oryn-info);
+  border-color: rgba(139, 156, 255, 0.35);
+}
+.oryn-chip-stale,
+.oryn-chip-partial,
+.oryn-chip-warn {
+  color: var(--oryn-warn);
+  border-color: rgba(242, 177, 52, 0.35);
+}
+.oryn-chip-unavailable,
+.oryn-chip-danger {
+  color: var(--oryn-danger);
+  border-color: rgba(239, 90, 90, 0.35);
+}
+.oryn-chip-loading {
+  color: var(--oryn-accent);
+  border-color: rgba(79, 156, 249, 0.35);
+}
+.oryn-chip-off,
+.oryn-chip-neutral {
+  color: var(--oryn-text-3);
+}
+.oryn-chip-demo {
+  color: #d8b4fe;
+  border-color: rgba(216, 180, 254, 0.4);
+  border-style: dashed;
+}
+.oryn-chip-demo::before {
+  display: none;
+}
+
+/* ── Brand ──────────────────────────────────────────────────────────────── */
+
+.oryn-brand {
+  display: grid;
+  grid-template-columns: 28px 1fr;
+  grid-template-rows: auto auto;
+  column-gap: 10px;
+  align-items: center;
+  padding: 14px 16px 10px;
+}
+.oryn-brand-mark {
+  grid-row: 1 / span 2;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  background:
+    linear-gradient(135deg, var(--oryn-accent), #1e3a8a) padding-box,
+    conic-gradient(from 180deg, #ffffff22, transparent) border-box;
+  position: relative;
+}
+.oryn-brand-mark::after {
+  content: '';
+  position: absolute;
+  inset: 7px;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.85);
+  border-right-color: transparent;
+}
+.oryn-brand-word {
+  font: 700 15px/1 var(--oryn-font);
+  letter-spacing: 0.22em;
+  color: var(--oryn-text);
+}
+.oryn-brand-sub {
+  font: 500 9px/1.2 var(--oryn-mono);
+  letter-spacing: 0.2em;
+  color: var(--oryn-text-3);
+}
+.oryn-brand-large {
+  grid-template-columns: 40px 1fr;
+  padding: 0 0 18px;
+}
+.oryn-brand-large .oryn-brand-mark {
+  width: 40px;
+  height: 40px;
+  border-radius: 11px;
+}
+.oryn-brand-large .oryn-brand-word {
+  font-size: 22px;
+}
+
+/* ── Navigation rail ────────────────────────────────────────────────────── */
+
+#oryn-rail {
+  grid-area: rail;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: var(--oryn-surface);
+  border-right: 1px solid var(--oryn-border);
+  z-index: var(--oryn-z-chrome);
+  overflow: hidden;
+}
+#oryn-nav {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 4px 8px;
+  scrollbar-width: thin;
+}
+.oryn-nav-group {
+  margin: 10px 8px 4px;
+  font: 600 9.5px/1 var(--oryn-mono);
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--oryn-text-3);
+}
+.oryn-nav-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 34px;
+  padding: 0 10px;
+  margin: 1px 0;
+  border: 1px solid transparent;
+  border-radius: var(--oryn-radius-sm);
+  background: transparent;
+  color: var(--oryn-text-2);
+  font: 500 12.5px/1 var(--oryn-font);
+  text-align: left;
+  cursor: pointer;
+  transition:
+    background var(--transition-fast),
+    color var(--transition-fast);
+}
+.oryn-nav-item:hover {
+  background: var(--oryn-surface-2);
+  color: var(--oryn-text);
+}
+.oryn-nav-item[aria-current='page'] {
+  background: var(--oryn-accent-dim);
+  color: var(--oryn-text);
+  border-color: rgba(79, 156, 249, 0.35);
+}
+.oryn-nav-item[aria-current='page'] .oryn-icon {
+  color: var(--oryn-accent);
+}
+.oryn-nav-label {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.oryn-nav-badge {
+  font: 600 10px/1 var(--oryn-mono);
+  color: var(--oryn-text-3);
+}
+.oryn-rail-footer {
+  border-top: 1px solid var(--oryn-border);
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.oryn-rail-session {
+  display: grid;
+  grid-template-columns: 28px 1fr;
+  gap: 8px;
+  align-items: center;
+  padding: 4px 6px;
+  font-size: 11.5px;
+  color: var(--oryn-text-2);
+}
+.oryn-avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: var(--oryn-surface-3);
+  color: var(--oryn-text);
+  font: 600 11px/1 var(--oryn-mono);
+}
+.oryn-session-name {
+  color: var(--oryn-text);
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.oryn-session-meta {
+  color: var(--oryn-text-3);
+  font-size: 10.5px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+body[data-oryn-rail='collapsed'] .oryn-brand-word,
+body[data-oryn-rail='collapsed'] .oryn-brand-sub,
+body[data-oryn-rail='collapsed'] .oryn-nav-label,
+body[data-oryn-rail='collapsed'] .oryn-nav-badge,
+body[data-oryn-rail='collapsed'] .oryn-nav-group,
+body[data-oryn-rail='collapsed'] .oryn-rail-session > div {
+  display: none;
+}
+body[data-oryn-rail='collapsed'] .oryn-brand {
+  grid-template-columns: 28px;
+  justify-content: center;
+}
+body[data-oryn-rail='collapsed'] .oryn-nav-item {
+  justify-content: center;
+  padding: 0;
+}
+body[data-oryn-rail='collapsed'] .oryn-rail-session {
+  grid-template-columns: 28px;
+  justify-content: center;
+}
+
+/* ── Top command bar ────────────────────────────────────────────────────── */
+
+#oryn-topbar {
+  grid-area: topbar;
+  display: grid;
+  grid-template-columns: minmax(200px, 1fr) minmax(220px, 440px) auto auto;
+  align-items: center;
+  gap: 12px;
+  padding: 0 12px 0 14px;
+  background: var(--oryn-surface);
+  border-bottom: 1px solid var(--oryn-border);
+  z-index: var(--oryn-z-chrome);
+  min-width: 0;
+}
+.oryn-topbar-menu {
+  display: none;
+}
+.oryn-topbar-context {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.oryn-page-title {
+  font: 600 13px/1 var(--oryn-font);
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+.oryn-org-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--oryn-border);
+  background: var(--oryn-surface-2);
+  color: var(--oryn-text-2);
+  font: 500 11px/1.2 var(--oryn-font);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+.oryn-search {
+  position: relative;
+  min-width: 0;
+}
+#oryn-search {
+  width: 100%;
+  min-height: 32px;
+  padding: 0 12px 0 32px;
+  border: 1px solid var(--oryn-border);
+  border-radius: var(--oryn-radius-sm);
+  background: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%236f7b92' stroke-width='1.8' stroke-linecap='round'><path d='M10 4a6 6 0 100 12 6 6 0 000-12zm5 11l6 6'/></svg>")
+    10px center / 16px no-repeat var(--oryn-bg);
+  color: var(--oryn-text);
+  font: 400 12.5px/1 var(--oryn-font);
+}
+#oryn-search::placeholder {
+  color: var(--oryn-text-3);
+}
+.oryn-search-results {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  max-height: 60vh;
+  overflow-y: auto;
+  background: var(--oryn-surface-2);
+  border: 1px solid var(--oryn-border-strong);
+  border-radius: var(--oryn-radius);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.5);
+  z-index: 5;
+  padding: 4px;
+}
+.oryn-search-result {
+  display: grid;
+  grid-template-columns: 18px 1fr auto;
+  gap: 8px;
+  align-items: center;
+  width: 100%;
+  padding: 7px 8px;
+  border: 0;
+  border-radius: var(--oryn-radius-sm);
+  background: transparent;
+  color: var(--oryn-text);
+  font: 400 12.5px/1.3 var(--oryn-font);
+  text-align: left;
+  cursor: pointer;
+}
+.oryn-search-result:hover,
+.oryn-search-result[aria-selected='true'] {
+  background: var(--oryn-accent-dim);
+}
+.oryn-search-result small {
+  color: var(--oryn-text-3);
+  font-family: var(--oryn-mono);
+  font-size: 10.5px;
+}
+.oryn-search-section {
+  padding: 6px 8px 2px;
+  font: 600 9.5px/1 var(--oryn-mono);
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--oryn-text-3);
+}
+.oryn-topbar-status {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.oryn-feed-summary {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+.oryn-clock {
+  color: var(--oryn-text-2);
+  font-size: 11.5px;
+  white-space: nowrap;
+}
+.oryn-topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.oryn-topbar-buttons {
+  display: flex;
+  gap: 4px;
+}
+
+/* ── Inspector ──────────────────────────────────────────────────────────── */
+
+#oryn-inspector {
+  grid-area: inspector;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
+  background: var(--oryn-surface);
+  border-left: 1px solid var(--oryn-border);
+  z-index: var(--oryn-z-chrome);
+}
+#oryn-inspector[hidden] {
+  display: none;
+}
+.oryn-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--oryn-border);
+}
+.oryn-panel-title {
+  font: 600 10.5px/1 var(--oryn-mono);
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--oryn-text-2);
+}
+.oryn-panel-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 12px;
+  scrollbar-width: thin;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.oryn-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.oryn-section-title {
+  font: 600 10px/1 var(--oryn-mono);
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--oryn-text-3);
+  margin: 4px 0 0;
+}
+.oryn-entity-head {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.oryn-entity-title {
+  font: 600 15px/1.3 var(--oryn-font);
+  margin: 0;
+  word-break: break-word;
+}
+.oryn-entity-sub {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  color: var(--oryn-text-2);
+  font-size: 11.5px;
+}
+.oryn-field {
+  display: grid;
+  grid-template-columns: 112px 1fr;
+  gap: 8px;
+  align-items: baseline;
+  padding: 5px 0;
+  border-bottom: 1px solid var(--oryn-border);
+  font-size: 12px;
+}
+.oryn-field-label {
+  color: var(--oryn-text-3);
+  font-size: 11px;
+}
+.oryn-field-value {
+  color: var(--oryn-text);
+  word-break: break-word;
+  font-size: 12px;
+}
+.oryn-field[data-provenance='measured'] .oryn-field-label::before,
+.oryn-field[data-provenance='provider'] .oryn-field-label::before,
+.oryn-field[data-provenance='model'] .oryn-field-label::before,
+.oryn-field[data-provenance='analyst'] .oryn-field-label::before,
+.oryn-field[data-provenance='unverified'] .oryn-field-label::before {
+  content: '';
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-right: 6px;
+  border-radius: 1px;
+  vertical-align: middle;
+}
+.oryn-field[data-provenance='measured'] .oryn-field-label::before {
+  background: var(--oryn-ok);
+}
+.oryn-field[data-provenance='provider'] .oryn-field-label::before {
+  background: var(--oryn-accent);
+}
+.oryn-field[data-provenance='model'] .oryn-field-label::before {
+  background: #d8b4fe;
+}
+.oryn-field[data-provenance='analyst'] .oryn-field-label::before {
+  background: var(--oryn-warn);
+}
+.oryn-field[data-provenance='unverified'] .oryn-field-label::before {
+  background: var(--oryn-text-3);
+  border: 1px dashed var(--oryn-text-2);
+}
+.oryn-provenance-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  font-size: 10.5px;
+  color: var(--oryn-text-3);
+}
+.oryn-provenance-legend span::before {
+  content: '';
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-right: 5px;
+  border-radius: 1px;
+  vertical-align: middle;
+  background: var(--swatch, var(--oryn-text-3));
+}
+.oryn-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.oryn-note {
+  font-size: 11.5px;
+  color: var(--oryn-text-2);
+  line-height: 1.45;
+  margin: 0;
+}
+.oryn-note-warn {
+  color: var(--oryn-warn);
+}
+
+/* ── Timeline ───────────────────────────────────────────────────────────── */
+
+#oryn-timeline {
+  grid-area: timeline;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  background: var(--oryn-surface);
+  border-top: 1px solid var(--oryn-border);
+  z-index: var(--oryn-z-chrome);
+  overflow: hidden;
+}
+.oryn-timeline-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: var(--oryn-timeline-collapsed-h);
+  padding: 0 12px;
+  font-size: 11.5px;
+  color: var(--oryn-text-2);
+  flex: none;
+}
+.oryn-timeline-bar .oryn-mono {
+  color: var(--oryn-text);
+}
+.oryn-timeline-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  padding: 6px 12px 10px;
+  display: grid;
+  grid-template-columns: minmax(200px, 300px) 1fr;
+  gap: 12px;
+}
+.oryn-timeline-body[hidden] {
+  display: none;
+}
+.oryn-timeline-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.oryn-timeline-tracks {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+.oryn-track {
+  display: grid;
+  grid-template-columns: 150px 1fr 92px;
+  gap: 10px;
+  align-items: center;
+  font-size: 11px;
+  color: var(--oryn-text-2);
+}
+.oryn-track-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--oryn-text);
+}
+.oryn-track-rail {
+  position: relative;
+  height: 10px;
+  border-radius: 999px;
+  background: var(--oryn-surface-3);
+  overflow: hidden;
+}
+.oryn-track-span {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  border-radius: 999px;
+  background: var(--oryn-accent);
+  opacity: 0.75;
+}
+.oryn-track-span.oryn-track-snapshot {
+  background: var(--oryn-warn);
+}
+.oryn-track-tick {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: var(--oryn-text);
+}
+.oryn-track-meta {
+  text-align: right;
+  font-family: var(--oryn-mono);
+  font-size: 10.5px;
+  color: var(--oryn-text-3);
+}
+.oryn-timeline-axis {
+  display: flex;
+  justify-content: space-between;
+  font: 500 10px/1 var(--oryn-mono);
+  color: var(--oryn-text-3);
+  padding: 0 0 2px 160px;
+}
+.oryn-slider {
+  width: 100%;
+  accent-color: var(--oryn-accent);
+}
+
+/* ── Layer manager drawer (inside the workspace) ────────────────────────── */
+
+#oryn-layers {
+  position: absolute;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  width: min(var(--oryn-layers-w), 100%);
+  display: flex;
+  flex-direction: column;
+  background: rgba(17, 23, 35, 0.96);
+  border-right: 1px solid var(--oryn-border);
+  box-shadow: 12px 0 32px rgba(0, 0, 0, 0.4);
+  z-index: var(--oryn-z-drawer);
+  backdrop-filter: blur(12px);
+}
+#oryn-layers[hidden] {
+  display: none;
+}
+.oryn-layer-search {
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--oryn-border);
+}
+.oryn-layer-group {
+  margin: 10px 0 4px;
+  font: 600 10px/1 var(--oryn-mono);
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--oryn-text-3);
+}
+.oryn-layer-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 6px 10px;
+  padding: 7px 0;
+  border-bottom: 1px solid var(--oryn-border);
+}
+.oryn-layer-name {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12.5px;
+  font-weight: 500;
+  min-width: 0;
+}
+.oryn-layer-name span:first-child {
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  flex: none;
+  background: var(--swatch, var(--oryn-text-3));
+}
+.oryn-layer-meta {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  font: 400 10.5px/1.3 var(--oryn-mono);
+  color: var(--oryn-text-3);
+}
+.oryn-layer-error {
+  grid-column: 1 / -1;
+  font-size: 11px;
+  color: var(--oryn-warn);
+}
+.oryn-switch {
+  position: relative;
+  width: 34px;
+  height: 20px;
+  border-radius: 999px;
+  border: 1px solid var(--oryn-border-strong);
+  background: var(--oryn-surface-3);
+  cursor: pointer;
+  padding: 0;
+  transition: background var(--transition-fast);
+}
+.oryn-switch::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--oryn-text-2);
+  transition:
+    transform var(--transition-fast),
+    background var(--transition-fast);
+}
+.oryn-switch[aria-checked='true'] {
+  background: var(--oryn-accent);
+  border-color: var(--oryn-accent);
+}
+.oryn-switch[aria-checked='true']::after {
+  transform: translateX(14px);
+  background: #fff;
+}
+.oryn-switch[aria-busy='true'] {
+  opacity: 0.6;
+}
+.oryn-switch[aria-disabled='true'] {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* ── Pages (full-content sheets over the workspace) ─────────────────────── */
+
+#oryn-pages {
+  position: absolute;
+  inset: 0;
+  overflow-y: auto;
+  background: var(--oryn-bg);
+  z-index: var(--oryn-z-drawer);
+  scrollbar-width: thin;
+}
+#oryn-pages[hidden] {
+  display: none;
+}
+#oryn-pages[data-oryn-sheet='drawer'] {
+  inset: 0 auto 0 0;
+  width: min(420px, 100%);
+  background: rgba(10, 14, 22, 0.94);
+  border-right: 1px solid var(--oryn-border);
+  backdrop-filter: blur(12px);
+}
+.oryn-page {
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: 20px 24px 40px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+#oryn-pages[data-oryn-sheet='drawer'] .oryn-page {
+  padding: 14px 16px 24px;
+  gap: 14px;
+}
+.oryn-page-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px;
+}
+.oryn-page-head h2 {
+  margin: 0;
+  font: 600 18px/1.2 var(--oryn-font);
+}
+.oryn-page-head p {
+  margin: 4px 0 0;
+  color: var(--oryn-text-2);
+  font-size: 12.5px;
+  max-width: 70ch;
+}
+.oryn-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 12px;
+}
+.oryn-grid-wide {
+  grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+}
+.oryn-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 14px;
+  border: 1px solid var(--oryn-border);
+  border-radius: var(--oryn-radius);
+  background: var(--oryn-surface);
+  min-width: 0;
+}
+.oryn-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.oryn-card-title {
+  font: 600 13px/1.3 var(--oryn-font);
+  margin: 0;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.oryn-card-meta {
+  font: 400 10.5px/1.4 var(--oryn-mono);
+  color: var(--oryn-text-3);
+}
+.oryn-card-body {
+  font-size: 12.5px;
+  color: var(--oryn-text-2);
+  line-height: 1.45;
+}
+.oryn-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.oryn-stat-value {
+  font: 600 22px/1.1 var(--oryn-font);
+  font-variant-numeric: tabular-nums;
+}
+.oryn-stat-label {
+  font: 500 10px/1 var(--oryn-mono);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--oryn-text-3);
+}
+.oryn-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+.oryn-table th,
+.oryn-table td {
+  padding: 7px 8px;
+  text-align: left;
+  border-bottom: 1px solid var(--oryn-border);
+  vertical-align: top;
+}
+.oryn-table th {
+  font: 600 10px/1.2 var(--oryn-mono);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--oryn-text-3);
+  position: sticky;
+  top: 0;
+  background: var(--oryn-surface);
+}
+.oryn-table tr[tabindex]:hover,
+.oryn-table tr[tabindex]:focus-visible {
+  background: var(--oryn-surface-2);
+  cursor: pointer;
+}
+.oryn-table-wrap {
+  overflow: auto;
+  max-height: 60vh;
+  border: 1px solid var(--oryn-border);
+  border-radius: var(--oryn-radius);
+  background: var(--oryn-surface);
+}
+.oryn-empty {
+  padding: 22px 16px;
+  border: 1px dashed var(--oryn-border-strong);
+  border-radius: var(--oryn-radius);
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: center;
+}
+.oryn-empty-title {
+  margin: 0;
+  font-weight: 600;
+  font-size: 13px;
+}
+.oryn-empty-body {
+  margin: 0;
+  color: var(--oryn-text-2);
+  font-size: 12px;
+  max-width: 52ch;
+}
+.oryn-form {
+  display: grid;
+  gap: 8px;
+}
+.oryn-form label {
+  font: 600 10px/1 var(--oryn-mono);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--oryn-text-3);
+}
+.oryn-form-row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.oryn-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.oryn-list-item {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 6px 10px;
+  padding: 8px 10px;
+  border: 1px solid var(--oryn-border);
+  border-radius: var(--oryn-radius-sm);
+  background: var(--oryn-surface-2);
+  font-size: 12px;
+}
+.oryn-list-item .oryn-card-meta {
+  grid-column: 1 / -1;
+}
+.oryn-camera-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 12px;
+}
+.oryn-camera-frame {
+  aspect-ratio: 16 / 9;
+  border-radius: var(--oryn-radius-sm);
+  background:
+    repeating-linear-gradient(
+      45deg,
+      rgba(255, 255, 255, 0.03) 0 8px,
+      transparent 8px 16px
+    ),
+    var(--oryn-surface-3);
+  display: grid;
+  place-items: center;
+  color: var(--oryn-text-3);
+  font: 500 11px/1.4 var(--oryn-mono);
+  text-align: center;
+  padding: 10px;
+  border: 1px solid var(--oryn-border);
+}
+.oryn-camera-frame video,
+.oryn-camera-frame img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: var(--oryn-radius-sm);
+}
+.oryn-camera-focus .oryn-camera-frame {
+  aspect-ratio: 21 / 9;
+}
+
+/* ── Overlays ───────────────────────────────────────────────────────────── */
+
+#oryn-toast {
+  position: absolute;
+  left: 50%;
+  bottom: 18px;
+  transform: translateX(-50%);
+  padding: 8px 14px;
+  border-radius: var(--oryn-radius-sm);
+  background: var(--oryn-surface-3);
+  border: 1px solid var(--oryn-border-strong);
+  color: var(--oryn-text);
+  font-size: 12px;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.5);
+  z-index: calc(var(--oryn-z-drawer) + 1);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--transition-fast);
+}
+#oryn-toast.oryn-toast-visible {
+  opacity: 1;
+}
+
+#oryn-login {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background:
+    radial-gradient(
+      1200px 600px at 20% -10%,
+      rgba(79, 156, 249, 0.18),
+      transparent 60%
+    ),
+    radial-gradient(
+      800px 500px at 100% 100%,
+      rgba(30, 58, 138, 0.35),
+      transparent 60%
+    ),
+    var(--oryn-bg);
+  z-index: var(--oryn-z-login);
+}
+#oryn-login[hidden] {
+  display: none;
+}
+.oryn-login-card {
+  width: min(420px, 100%);
+  padding: 28px 28px 22px;
+  border: 1px solid var(--oryn-border);
+  border-radius: 14px;
+  background: var(--oryn-surface);
+  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.55);
+}
+.oryn-login-card h1 {
+  margin: 0 0 6px;
+  font: 600 19px/1.25 var(--oryn-font);
+}
+.oryn-login-note {
+  margin: 0 0 18px;
+  padding: 8px 10px;
+  border-radius: var(--oryn-radius-sm);
+  background: rgba(242, 177, 52, 0.1);
+  border: 1px solid rgba(242, 177, 52, 0.3);
+  color: var(--oryn-warn);
+  font-size: 11.5px;
+  line-height: 1.45;
+}
+.oryn-login-form {
+  display: grid;
+  gap: 6px;
+}
+.oryn-login-form label {
+  margin-top: 6px;
+  font: 600 10px/1 var(--oryn-mono);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--oryn-text-3);
+}
+.oryn-login-form input,
+.oryn-login-form select {
+  min-height: 36px;
+  padding: 0 10px;
+  border: 1px solid var(--oryn-border);
+  border-radius: var(--oryn-radius-sm);
+  background: var(--oryn-bg);
+  color: var(--oryn-text);
+  font: 400 13px/1 var(--oryn-font);
+  color-scheme: dark;
+}
+.oryn-login-form button {
+  margin-top: 14px;
+  min-height: 38px;
+  justify-content: center;
+  font-size: 13px;
+}
+.oryn-login-foot {
+  margin: 16px 0 0;
+  color: var(--oryn-text-3);
+  font-size: 10.5px;
+  line-height: 1.5;
+}
+
+/* ── Responsive ─────────────────────────────────────────────────────────── */
+
+@media (max-width: 1100px) {
+  body.oryn-body {
+    --oryn-inspector-current: 0px !important;
+  }
+  #oryn-inspector {
+    position: absolute;
+    top: var(--oryn-topbar-h);
+    right: 0;
+    bottom: var(--oryn-timeline-current);
+    width: min(var(--oryn-inspector-w), 100vw);
+    box-shadow: -12px 0 32px rgba(0, 0, 0, 0.45);
+  }
+  #oryn-topbar {
+    grid-template-columns: minmax(140px, 1fr) minmax(180px, 320px) auto;
+  }
+  .oryn-topbar-status {
+    display: none;
+  }
+}
+
+@media (max-width: 820px) {
+  body.oryn-body {
+    --oryn-rail-current: 0px !important;
+    grid-template-columns: 0 minmax(0, 1fr) 0;
+  }
+  #oryn-rail {
+    position: fixed;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    width: var(--oryn-rail-w);
+    transform: translateX(-100%);
+    transition: transform var(--transition-smooth);
+    box-shadow: 12px 0 32px rgba(0, 0, 0, 0.5);
+  }
+  body[data-oryn-rail-open='true'] #oryn-rail {
+    transform: none;
+  }
+  .oryn-topbar-menu {
+    display: inline-flex;
+  }
+  #oryn-topbar {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    padding: 0 8px;
+    gap: 8px;
+  }
+  .oryn-search {
+    grid-column: 1 / -1;
+    display: none;
+  }
+  .oryn-page-title {
+    font-size: 12px;
+  }
+  .oryn-org-chip {
+    display: none;
+  }
+  .oryn-timeline-body {
+    grid-template-columns: 1fr;
+  }
+  .oryn-track {
+    grid-template-columns: 100px 1fr 70px;
+  }
+  .oryn-timeline-axis {
+    padding-left: 110px;
+  }
+}

@@ -1,0 +1,74 @@
+  <!-- ORYN Intelligence application shell. The God's Eye View engine renders
+       inside #oryn-stage (see index.html); these regions are placed around it
+       by the #oryn-app grid, so DOM order here does not dictate layout.
+       Static text is marked for translation; lists are painted by
+       src/ui/oryn/*.js through t(). -->
+  <aside id="oryn-rail" aria-label="ORYN navigation" data-i18n-aria-label data-oryn-collapsed="false">
+    <div class="oryn-brand">
+      <span class="oryn-brand-mark" aria-hidden="true"></span>
+      <span class="oryn-brand-word" translate="no">ORYN</span>
+      <span class="oryn-brand-sub" data-i18n>INTELLIGENCE</span>
+    </div>
+    <nav id="oryn-nav" aria-label="Workspaces" data-i18n-aria-label></nav>
+    <div class="oryn-rail-footer">
+      <button type="button" id="oryn-rail-toggle" class="oryn-btn oryn-btn-ghost" aria-label="Collapse navigation" data-i18n-aria-label aria-expanded="true"></button>
+      <div id="oryn-rail-session" class="oryn-rail-session"></div>
+    </div>
+  </aside>
+
+  <header id="oryn-topbar" role="banner">
+    <button type="button" id="oryn-menu-btn" class="oryn-btn oryn-btn-ghost oryn-topbar-menu" aria-label="Open navigation" data-i18n-aria-label aria-expanded="false"></button>
+    <div class="oryn-topbar-context">
+      <span id="oryn-page-title" class="oryn-page-title" aria-live="polite"></span>
+      <span id="oryn-org-chip" class="oryn-org-chip"></span>
+    </div>
+    <form id="oryn-search-form" class="oryn-search" role="search" autocomplete="off">
+      <label for="oryn-search" class="oryn-visually-hidden" data-i18n>Search places, coordinates and loaded entities</label>
+      <input id="oryn-search" type="search" placeholder="Search place, coordinates, or loaded entity" data-i18n-placeholder aria-controls="oryn-search-results" aria-expanded="false" />
+      <div id="oryn-search-results" class="oryn-search-results" role="listbox" hidden></div>
+    </form>
+    <div class="oryn-topbar-status">
+      <div id="oryn-feed-summary" class="oryn-feed-summary" role="status" aria-live="polite"></div>
+      <span id="oryn-clock" class="oryn-clock oryn-mono" aria-label="Current time, UTC" data-i18n-aria-label></span>
+    </div>
+    <div class="oryn-topbar-actions">
+      <label class="oryn-visually-hidden" for="oryn-mode-select" data-i18n>Visualization mode</label>
+      <select id="oryn-mode-select" class="oryn-select"></select>
+      <div id="oryn-topbar-buttons" class="oryn-topbar-buttons"></div>
+    </div>
+  </header>
+
+  <aside id="oryn-inspector" aria-label="Context inspector" data-i18n-aria-label hidden>
+    <div class="oryn-panel-header">
+      <span class="oryn-panel-title" data-i18n>INSPECTOR</span>
+      <button type="button" id="oryn-inspector-close" class="oryn-btn oryn-btn-ghost" aria-label="Close inspector" data-i18n-aria-label></button>
+    </div>
+    <div id="oryn-inspector-body" class="oryn-panel-body"></div>
+  </aside>
+
+  <footer id="oryn-timeline" aria-label="Timeline" data-i18n-aria-label data-oryn-expanded="false">
+    <div id="oryn-timeline-bar" class="oryn-timeline-bar"></div>
+    <div id="oryn-timeline-body" class="oryn-timeline-body" hidden></div>
+  </footer>
+
+  <aside id="oryn-login" role="dialog" aria-modal="true" aria-labelledby="oryn-login-title" hidden>
+    <div class="oryn-login-card">
+      <div class="oryn-brand oryn-brand-large">
+        <span class="oryn-brand-mark" aria-hidden="true"></span>
+        <span class="oryn-brand-word" translate="no">ORYN</span>
+        <span class="oryn-brand-sub" data-i18n>INTELLIGENCE</span>
+      </div>
+      <h1 id="oryn-login-title" data-i18n>Sign in to your workspace</h1>
+      <p class="oryn-login-note" data-i18n>Prototype demo session. No password is checked and nothing leaves this browser. This is not production authentication.</p>
+      <form id="oryn-login-form" class="oryn-login-form">
+        <label for="oryn-login-name" data-i18n>Display name</label>
+        <input id="oryn-login-name" type="text" required maxlength="80" autocomplete="name" placeholder="Analyst name" data-i18n-placeholder />
+        <label for="oryn-login-org" data-i18n>Organization</label>
+        <select id="oryn-login-org"></select>
+        <label for="oryn-login-role" data-i18n>Role</label>
+        <select id="oryn-login-role"></select>
+        <button type="submit" class="oryn-btn oryn-btn-primary" data-i18n>Enter demo workspace</button>
+      </form>
+      <p class="oryn-login-foot" data-i18n>Geospatial engine: God's Eye View (MIT). Data from public sources; see Data Sources inside the workspace.</p>
+    </div>
+  </aside>

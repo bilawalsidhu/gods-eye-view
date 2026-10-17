@@ -45,3 +45,15 @@ Street Level viewer; the complete resolved dependency inventory remains in
 - Source: <https://github.com/mrdoob/three.js>
 - License: MIT
 - License text: <https://github.com/mrdoob/three.js/blob/dev/LICENSE>
+
+## ORYN Intelligence shell
+
+The ORYN shell (`src/ui/oryn`, `src/ui/styles/oryn.css`,
+`src/ui/templates/oryn-shell.html`) adds no npm packages. Its icons are
+inline SVG authored for this repository. It reuses the Inter and JetBrains
+Mono web fonts and the Material Symbols subset that the engine already loads
+from Google Fonts under their respective licenses (SIL Open Font License 1.1
+for Inter and JetBrains Mono; Apache License 2.0 for Material Symbols). The
+underlying God's Eye View engine remains under the MIT License in `LICENSE`;
+see `docs/ORYN_PROTOTYPE.md` for the prototype's boundaries and
+`DATA_SOURCES.md` for per-source data terms.
