@@ -205,6 +205,7 @@ export function createWindGpuRendering({ cesium: C, getViewer }) {
     } catch (error) {
       clear();
       diagnostics.error =
+        // i18n-ignore: GPU diagnostics only; the panel never shows this field
         error instanceof Error ? error.message : 'Wind geometry unavailable';
       return false;
     }

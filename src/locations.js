@@ -1,3 +1,4 @@
+import { rangeForBoundingSphere } from './data/cameraFraming.js';
 import { isUnavailableCapability } from './sources/capability.js';
 import { createOverpassFeatureSource } from './sources/overpassFeatures.js';
 import { applicationServices } from './services/application.js';
@@ -9,6 +10,7 @@ import {
 import { unavailablePlaceSearch } from './search/placeSearch.js';
 import { cancelCameraArrival } from './data/cameraArrival.js';
 import { guardCameraAboveGround } from './cameraGroundGuard.js';
+import { CITY_POIS } from './cityPois.js';
 
 /** Newest landmark arrival; an older post-arrival ground guard yields to it. */
 let arrivalGeneration = 0;
@@ -1471,19 +1473,6 @@ function buildingBoundingRadius(bounds) {
   const halfWidth = bounds.width / 2;
   const halfDepth = bounds.depth / 2;
   return Math.hypot(halfHeight, halfWidth, halfDepth) * 1.18;
-}
-
-function rangeForBoundingSphere(viewer, radius) {
-  const frustum = viewer.camera.frustum;
-  const verticalFov = Number(frustum?.fov) || Cesium.Math.toRadians(60);
-  const aspectRatio = Math.max(0.5, Number(frustum?.aspectRatio) || 1);
-  const horizontalFov = 2 * Math.atan(Math.tan(verticalFov / 2) * aspectRatio);
-  const limitingFov = Math.min(verticalFov, horizontalFov);
-  // Target 57% sphere occupancy so perspective still leaves at least 40%
-  // measured roof-to-base breathing room in ordinary oblique building views.
-  const occupiedViewportFraction = 0.57;
-  const desiredAngularRadius = (limitingFov * occupiedViewportFraction) / 2;
-  return (radius / Math.sin(desiredAngularRadius)) * 1.05;
 }
 
 function buildingPitch(bounds) {
