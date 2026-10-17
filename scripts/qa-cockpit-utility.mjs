@@ -1583,6 +1583,49 @@ try {
     manager._setCockpitDisclosure('radio', false);
   });
 
+  const dmhLocalInfo = await page.evaluate(() => {
+    const cockpit = window.__godsEyeView.styleManager.cockpitView;
+    const previous = cockpit.regionalBrief;
+    const previousPage = cockpit.briefPageIndex;
+    const info = { latitude: -25.28, longitude: -57.63 };
+    const fixture = {
+      status: 'partial', articles: [], place: { label: 'DMH QA' },
+      weather: { temperatureC: 24, weatherCode: 3 },
+      stationObservation: {
+        stationName: 'ASUNCION QA', distanceM: 1234,
+        observedAt: new Date().toISOString(),
+        temperatureC: 0, humidityPct: 0, windKph: 0, windDirectionDeg: 0,
+      },
+    };
+    try {
+      cockpit.regionalBrief = fixture;
+      cockpit.renderRegionalBrief(fixture, info);
+      cockpit.showBriefPage(2);
+      const station = document.getElementById('cockpit-local-observation');
+      const observed = !station.hidden
+        && station.textContent.includes('DMH / DINAC')
+        && station.textContent.includes('ASUNCION QA · 1.2 KM')
+        && station.textContent.includes('0.0°C · RH 0% · WIND 0 KM/H')
+        && station.textContent.includes('UTC')
+        && document.getElementById('cockpit-local-temperature').textContent === '24°C';
+      cockpit.renderRegionalBrief({ ...fixture, stationObservation: {
+        ...fixture.stationObservation,
+        observedAt: new Date(Date.now() - 91 * 60000).toISOString(),
+      } }, info);
+      const expired = station.hidden && !station.textContent;
+      cockpit.renderRegionalBrief(fixture, info);
+      cockpit.renderRegionalBriefStatus('loading', info);
+      return { observed, expired, cleared: station.hidden && !station.textContent };
+    } finally {
+      cockpit.regionalBrief = previous;
+      if (previous) cockpit.renderRegionalBrief(previous, previous.coordinates || info);
+      else cockpit.renderRegionalBriefStatus('loading', info);
+      cockpit.showBriefPage(previousPage);
+    }
+  });
+  check('Local Info separates DMH observations and clears expired or previous-subject readings',
+    dmhLocalInfo.observed && dmhLocalInfo.expired && dmhLocalInfo.cleared, dmhLocalInfo);
+
   const smnLocalInfo = await page.evaluate(() => {
     const cockpit = window.__godsEyeView.styleManager.cockpitView;
     const previous = cockpit.regionalBrief;
@@ -1591,6 +1634,10 @@ try {
     const text = (id) => document.getElementById(id)?.textContent || '';
     const fixture = {
       status: 'partial', articles: [], place: { label: 'SMN QA' },
+      stationObservation: {
+        stationName: 'ENCARNACION QA', distanceM: 2000,
+        observedAt: new Date().toISOString(), temperatureC: 0, humidityPct: 0, windKph: 0,
+      },
       weather: {
         source: 'smn', temperatureC: 18.5, conditionText: 'Cubierto',
         reportedAt: '2026-10-15T03:00',
@@ -1608,12 +1655,19 @@ try {
         && text('cockpit-local-weather-time').includes('TIME ZONE UNSPECIFIED')
         && !text('cockpit-local-weather-time').includes('UTC')
         && text('cockpit-local-precipitation') === '—'
-        && text('cockpit-brief-source').includes('SMN STATION OBSERVATION');
+        && text('cockpit-brief-source').includes('SMN STATION OBSERVATION')
+        && text('cockpit-brief-source').includes('DMH / DINAC')
+        && text('cockpit-local-observation').includes('ENCARNACION QA')
+        && text('cockpit-local-observation').includes('0.0°C');
       cockpit.renderRegionalBrief({ ...fixture, weather: { temperatureC: 20, weatherCode: 0 } }, info);
       const fallback = station.hidden && !station.textContent
-        && text('cockpit-local-weather-source') === 'OPEN-METEO';
+        && text('cockpit-local-weather-source') === 'OPEN-METEO'
+        && !document.getElementById('cockpit-local-observation').hidden
+        && text('cockpit-local-observation').includes('ENCARNACION QA');
       cockpit.renderRegionalBriefStatus('loading', info);
-      return { observed, fallback, cleared: text('cockpit-local-temperature') === '—' };
+      return { observed, fallback, cleared: text('cockpit-local-temperature') === '—'
+        && document.getElementById('cockpit-local-observation').hidden
+        && !text('cockpit-local-observation') };
     } finally {
       cockpit.regionalBrief = previous;
       if (previous) cockpit.renderRegionalBrief(previous, previous.coordinates || info);
@@ -1621,7 +1675,7 @@ try {
       cockpit.showBriefPage(previousPage);
     }
   });
-  check('Local Info shows SMN provenance and clears it on fallback/subject change',
+  check('Local Info keeps SMN and DMH independent through model fallback and subject change',
     smnLocalInfo.observed && smnLocalInfo.fallback && smnLocalInfo.cleared, smnLocalInfo);
 
   const visionCycle = await page.evaluate(async () => {

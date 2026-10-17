@@ -1882,6 +1882,16 @@ html:not([lang='en']) #cockpit-brief-auto {
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
+
+.cockpit-local-observation {
+  margin: 8px 0 0;
+  padding-top: 7px;
+  border-top: 1px solid rgba(244, 251, 255, 0.12);
+  color: rgba(244, 251, 255, 0.8);
+  font: 500 8px/1.5 var(--font-mono);
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+}
 .cockpit-signal-footer {
   display: flex;
   align-items: center;

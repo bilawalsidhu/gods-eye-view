@@ -335,6 +335,7 @@ test('regional cache reselects stations for each point and refreshes observation
   let calls = 0;
   let handler;
   regionalBriefProxy({
+    dmhProvider: async () => ({ status: 'unavailable', observation: null }),
     placeProvider: async () => null,
     weatherProvider: async (query) => {
       calls++;
@@ -418,6 +419,7 @@ test('nearby SMN-area queries share news and model fallback but reselect observa
   });
   let handler;
   regionalBriefProxy({
+    dmhProvider: async () => ({ status: 'unavailable', observation: null }),
     placeProvider: async () => {
       placeCalls++;
       return { locality: 'Fixture' };
@@ -428,7 +430,11 @@ test('nearby SMN-area queries share news and model fallback but reselect observa
         return observationsAvailable && point.longitude <= -52
           ? {
               source: 'smn',
-              station: { id: point.longitude < -55.905 ? 'west' : 'east' },
+              reportedAt: new Date(Date.now()).toISOString().slice(0, 16),
+              station: {
+                ...point,
+                id: point.longitude < -55.905 ? 'west' : 'east',
+              },
             }
           : null;
       },
