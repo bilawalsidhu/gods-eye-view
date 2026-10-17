@@ -203,3 +203,45 @@ test('polygon-selected tiles keep nearest-first order and cached revisits issue 
     'over-budget selection is rejected before fetching',
   );
 });
+
+test('a configured tileJsonUrl sets the tile origin, and a foreign tiles[0] is still refused', async () => {
+  // Without an explicit allowedOrigin the mirror's own TileJSON is honoured…
+  const mirrored = createVectorTileSource({
+    tileJsonUrl: 'http://127.0.0.1:12348/planet',
+    decode: () => [],
+    fetchImpl: async () =>
+      Response.json({ tiles: ['http://127.0.0.1:12348/p/{z}/{x}/{y}.pbf'] }),
+  });
+  assert.equal(
+    (await mirrored.getMetadata()).template,
+    'http://127.0.0.1:12348/p/{z}/{x}/{y}.pbf',
+  );
+
+  // …while a TileJSON that names a different host is refused rather than
+  // silently fetched, which is what the origin check is for.
+  const foreign = createVectorTileSource({
+    tileJsonUrl: 'http://127.0.0.1:12348/planet',
+    decode: () => [],
+    fetchImpl: async () =>
+      Response.json({
+        tiles: ['https://tiles.example/planet/{z}/{x}/{y}.pbf'],
+      }),
+  });
+  await assert.rejects(foreign.getMetadata(), { retryable: false });
+});
+
+test('an explicit allowedOrigin still wins over the one derived from tileJsonUrl', async () => {
+  const source = createVectorTileSource({
+    tileJsonUrl: 'http://127.0.0.1:12348/planet',
+    allowedOrigin: 'https://tiles.example',
+    decode: () => [],
+    fetchImpl: async () =>
+      Response.json({
+        tiles: ['https://tiles.example/planet/{z}/{x}/{y}.pbf'],
+      }),
+  });
+  assert.equal(
+    (await source.getMetadata()).template,
+    'https://tiles.example/planet/{z}/{x}/{y}.pbf',
+  );
+});

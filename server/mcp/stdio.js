@@ -11,6 +11,7 @@
 import { createInterface } from 'node:readline';
 import { fileURLToPath } from 'node:url';
 import { parseErrorResponse } from '../../src/tools/mcp/index.js';
+import { sharedPanelKey } from './panelKey.js';
 import { createLocalMcpServer } from './server.js';
 import { DEFAULT_API_BASE } from './services.js';
 
@@ -97,7 +98,10 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
     console.error(
       `God's Eye View MCP server reading ${options.apiBase || DEFAULT_API_BASE}`,
     );
-    await serveStdio(createLocalMcpServer(options), {
+    // A client may start several of these for one connection; they share
+    // the install's panel key so the panel works whichever one it reaches.
+    const panelKey = sharedPanelKey({ log: (line) => console.error(line) });
+    await serveStdio(createLocalMcpServer({ ...options, panelKey }), {
       input: process.stdin,
       output: process.stdout,
       log: (line) => console.error(`<- ${line}`),

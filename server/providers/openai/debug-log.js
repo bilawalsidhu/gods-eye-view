@@ -23,7 +23,59 @@ const REALTIME_DEBUG_LOG_MAX_FILE_BYTES = 32 * 1024 * 1024;
  */
 const REALTIME_DEBUG_LOG_MAX_PER_MIN = 120;
 
-function createDebugLogHandler({ sourceRoot = defaultSourceRoot } = {}) {
+/**
+ * Fields that carry what people said or heard: transcripts, typed and spoken
+ * text, streamed deltas, tool arguments/results and the span's quoted
+ * replies. They are dropped from the persisted log unless content logging is explicitly enabled
+ * (GEV_VOICE_LOG_CONTENT=1), so timing and tool diagnostics never retain
+ * speech by default.
+ */
+const VOICE_TEXT_FIELDS = new Set([
+  'transcript',
+  'text',
+  'delta',
+  'answer_text',
+  'preamble_text',
+]);
+const VOICE_CONTENT_MAX_DEPTH = 12;
+const VOICE_CONTENT_MAX_DEPTH_MARKER = '[omitted: max depth]';
+
+/** Replace spoken or typed content and complete tool argument/result bodies. */
+function omitVoiceContent(value, depth = 0) {
+  if (depth > VOICE_CONTENT_MAX_DEPTH) return VOICE_CONTENT_MAX_DEPTH_MARKER;
+  if (value === null || typeof value !== 'object') return value;
+  if (Array.isArray(value))
+    return value.map((item) => omitVoiceContent(item, depth + 1));
+  const output = {};
+  for (const [key, item] of Object.entries(value)) {
+    // Tool bodies have open-ended schemas: omit the whole body rather than
+    // chasing query, label, say, display, or future tool-specific fields.
+    // Protocol response.output arrays still carry useful event metadata; only
+    // string output is a serialized function result and must be opaque.
+    if (
+      key === 'arguments' ||
+      key === 'result' ||
+      (key === 'output' && typeof item === 'string')
+    ) {
+      output[key] =
+        typeof item === 'string'
+          ? `[omitted ${item.length} chars]`
+          : '[omitted]';
+      continue;
+    }
+    if (VOICE_TEXT_FIELDS.has(key) && typeof item === 'string') {
+      output[key] = `[omitted ${item.length} chars]`;
+      continue;
+    }
+    output[key] = omitVoiceContent(item, depth + 1);
+  }
+  return output;
+}
+
+function createDebugLogHandler({
+  sourceRoot = defaultSourceRoot,
+  includeContent = process.env.GEV_VOICE_LOG_CONTENT === '1',
+} = {}) {
   const logDir = path.join(sourceRoot, '.gev-logs');
   const logFile = path.join(logDir, 'realtime-conversations.jsonl');
   const allow = makeRateLimiter({
@@ -79,7 +131,8 @@ function createDebugLogHandler({ sourceRoot = defaultSourceRoot } = {}) {
 
     try {
       const body = await readRequestBody(req, REALTIME_DEBUG_LOG_MAX_BYTES);
-      const record = JSON.parse(body || '{}');
+      const parsed = JSON.parse(body || '{}');
+      const record = includeContent ? parsed : omitVoiceContent(parsed);
       // The server's own timestamp comes last, so a record cannot supply one.
       await append(
         `${JSON.stringify({
@@ -104,4 +157,4 @@ function createDebugLogHandler({ sourceRoot = defaultSourceRoot } = {}) {
   };
 }
 
-export { createDebugLogHandler };
+export { createDebugLogHandler, omitVoiceContent };

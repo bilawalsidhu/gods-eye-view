@@ -5,6 +5,7 @@ import {
   OVERPASS_DISK_DIR,
   OVERPASS_CACHE_MS,
   OVERPASS_CACHE_MAX_ENTRIES,
+  cachedByConfiguredUpstream,
 } from './constants.js';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
@@ -47,6 +48,11 @@ async function readOverpassDisk(cacheKey, maxAgeMs) {
     // Older versions persisted 4xx refusals with normal data TTLs. Ignore
     // them on both fresh and stale reads so an upgrade can recover immediately.
     if (!overpassPayloadIsData(payload)) return null;
+    // The key is the query alone, so a file written by a different upstream —
+    // including the public instances that were the default before #742 — is a
+    // hit for the same query. Refuse it: the operator's configured instance
+    // must be what answers, on the stale path too.
+    if (!cachedByConfiguredUpstream(payload)) return null;
     if (Date.now() - payload.cachedAt > maxAgeMs) return null;
     return payload;
   } catch {
