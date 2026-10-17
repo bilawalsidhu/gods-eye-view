@@ -330,3 +330,84 @@ test('a stale GPU answer for a neighbour of the click never wins over the instan
   }
   assert.equal(picking.clickStats().stale, 20);
 });
+
+function modelSet(id, rows, radiusPx) {
+  const options = normalizeMoverSetOptions({
+    id,
+    kind: 'model',
+    capacity: rows.length,
+    pickable: true,
+    model: { url: 'model.glb', minimumPixelSize: 24 },
+  });
+  const store = createMoverStore(options);
+  rows.forEach(([x, y, z, pickId], index) =>
+    store.set(index, { position: { x, y, z }, pickId }),
+  );
+  store.setCount(rows.length);
+  return { options, store, pickRadiusPx: () => radiusPx };
+}
+
+test('CPU hits rank as drawn: always-on-top sets, then set order, then depth', () => {
+  const ordered = (id, order, depthTest, z) => {
+    const options = normalizeMoverSetOptions({
+      id,
+      kind: 'point',
+      capacity: 1,
+      pickable: true,
+      order,
+      depthTest,
+      point: { sizePx: 20 },
+    });
+    const store = createMoverStore(options);
+    store.set(0, { position: { x: 100, y: 100, z }, pickId: id });
+    store.setCount(1);
+    return { options, store };
+  };
+  const sets = [
+    ordered('local-adsb', -1, 'always', 5), // nearest, drawn under flights
+    ordered('fleet', 0, 'always', 50),
+    ordered('tracked', 2, 'always', 500), // farthest, drawn on top
+    ordered('depth-tested', 5, 'normal', 1), // nearest of all, depth-tested
+  ];
+  const picking = createNavaraPicking({
+    view: fakeView(),
+    projector,
+    camera,
+    movers: () => sets,
+    lines: () => [],
+    resolveBatch: () => null,
+    ...timers(),
+  });
+  assert.deepEqual(
+    picking.drillPick({ x: 100, y: 100 }).map(({ id }) => id),
+    ['tracked', 'fleet', 'local-adsb', 'depth-tested'],
+  );
+});
+
+test('a model hit is checked against its projected position within its drawn radius', async () => {
+  const view = fakeView();
+  // A model drawn 40 px across (radius 20) at (100, 100).
+  const sets = [modelSet('models', [[100, 100, 50, 'jet']], 20)];
+  const picking = createNavaraPicking({
+    view,
+    projector,
+    camera,
+    movers: () => sets,
+    lines: () => [],
+    resolveBatch: () => ({ set: 'models', instance: 0, pickId: 'jet' }),
+    ...timers(),
+  });
+  // Within its radius (+3 px): the GPU answer stands.
+  const inside = picking.clickPick({ x: 118, y: 100 });
+  view.emit('featureClick', { batchId: 1 });
+  assert.equal((await inside)?.id, 'jet');
+  // A stale answer naming it from 60 px away: the CPU pick answers (nothing
+  // drawn there).
+  const outside = picking.clickPick({ x: 160, y: 100 });
+  view.emit('featureClick', { batchId: 1 });
+  assert.equal(await outside, undefined);
+  assert.equal(picking.clickStats().stale, 1);
+  // The CPU pick sees the model at its drawn radius, not the 24 px minimum.
+  assert.equal(picking.drillPick({ x: 121, y: 100 })[0]?.id, 'jet');
+  assert.equal(picking.drillPick({ x: 125, y: 100 }).length, 0);
+});

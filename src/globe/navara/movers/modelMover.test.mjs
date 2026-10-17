@@ -85,7 +85,10 @@ test('a far model keeps its minimum pixel size', async () => {
   assert.ok(
     Math.abs(scale - expected) / expected < 1e-6,
     `${scale} vs ${expected}`,
-  );
+  ); // CPU picks read the drawn radius: half the 40 px minimum (the pixel
+  // size at the pre-minimum distance, so within a radius's worth).
+  assert.ok(Math.abs(mover.pickRadiusPx(0) - 20) < 1e-3, mover.pickRadiusPx(0));
+  assert.equal(mover.pickRadiusPx(1), null);
 });
 
 test("the instance colour (sRGB, decoded) tints by the set's blend amount; its alpha is opacity, as Cesium's model colour", async () => {

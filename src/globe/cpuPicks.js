@@ -1,8 +1,13 @@
 // CPU picks of movers and lines for every engine that needs them (Navara's
 // hover, drill and synchronous pick, the fake engine): projected positions
 // within the drawn size (+3 px, Navara's PICK_RADIUS), lines within 8 px
-// (or half their width + 3 px when wider), hidden behind the globe excluded, nearest to the
-// camera first. Pure: src/geo and the engine's projector only.
+// (or half their width + 3 px when wider), hidden behind the globe excluded.
+// Hits rank as they are drawn on top: sets drawn without a depth test
+// ('always') over depth-tested ones, then by set order (higher drawn later,
+// on top: the tracked bank over the fleet, flights over local ADS-B), then
+// nearest to the camera. Models are checked against their drawn radius when
+// the engine knows it (pickRadiusPx). Pure: src/geo and the engine's
+// projector only.
 
 import * as geo from '../geo/index.js';
 
@@ -62,7 +67,9 @@ export function distanceScale(scaleByDistance, distance) {
   return nearScale + (farScale - nearScale) * t;
 }
 
-function moverRadius(options, scale, distance) {
+function moverRadius(options, scale, distance, modelRadiusPx = null) {
+  if (options.kind === 'model' && modelRadiusPx != null)
+    return Math.max(modelRadiusPx, PICK_RADIUS_PX) + PICK_RADIUS_PX;
   const style =
     options.kind === 'sprite'
       ? options.sprite
@@ -101,8 +108,10 @@ export function createCpuPicker({ projector, camera, movers, lines }) {
     geo.cartesian3.distance(position, camera.livePosition);
 
   function moverHits(at, hits) {
-    for (const { options, store } of movers()) {
+    for (const { options, store, pickRadiusPx } of movers()) {
       if (!options.pickable) continue;
+      const onTop = options.depthTest === 'always' ? 1 : 0;
+      const order = Number(options.order) || 0;
       const { positions, shows, scales, pickIds } = store;
       for (let index = 0; index < store.count; index++) {
         if (shows[index] !== 1) continue;
@@ -116,8 +125,14 @@ export function createCpuPicker({ projector, camera, movers, lines }) {
         if (!screen || !projector.horizonVisible(scratch)) continue;
         const distance = Math.hypot(screen.x - at.x, screen.y - at.y);
         const depth = depthOf(scratch);
-        if (distance > moverRadius(options, scales[index], depth)) continue;
+        if (
+          distance >
+          moverRadius(options, scales[index], depth, pickRadiusPx?.(index))
+        )
+          continue;
         hits.push({
+          onTop,
+          order,
           depth,
           result: { id: pickIds[index], owner: options.id, instance: index },
         });
@@ -150,6 +165,9 @@ export function createCpuPicker({ projector, camera, movers, lines }) {
       }
       if (best !== null)
         hits.push({
+          // Lines are depth-tested and drawn in their own order.
+          onTop: 0,
+          order: Number(options.order) || 0,
           depth: best,
           result: { id: options.pickId, owner: options.id },
         });
@@ -164,18 +182,23 @@ export function createCpuPicker({ projector, camera, movers, lines }) {
     const hits = [];
     if (includeMovers) moverHits(at, hits);
     if (includeLines) lineHits(at, hits);
-    hits.sort((a, b) => a.depth - b.depth);
+    hits.sort(
+      (a, b) => b.onTop - a.onTop || b.order - a.order || a.depth - b.depth,
+    );
     return hits.slice(0, limit).map(({ result }) => result);
   };
   /**
    * Whether a mover instance is drawn near a window position: within its
-   * pick radius times `slack` (a check of a GPU answer). Unknown sets and
-   * models (whose drawn size the CPU does not know) count as near.
+   * pick radius times `slack` (a check of a GPU answer). Unknown sets, and
+   * models whose drawn size the engine does not know yet, count as near.
    */
   drill.near = (owner, instance, at, slack = 2) => {
     const found = movers().find(({ options }) => options.id === owner);
-    if (!found || found.options.kind === 'model') return true;
-    const { options, store } = found;
+    if (!found) return true;
+    const { options, store, pickRadiusPx } = found;
+    const modelRadius =
+      options.kind === 'model' ? (pickRadiusPx?.(instance) ?? null) : null;
+    if (options.kind === 'model' && modelRadius == null) return true;
     if (instance >= store.count) return false;
     geo.cartesian3.fromElements(
       store.positions[instance * 3],
@@ -187,7 +210,13 @@ export function createCpuPicker({ projector, camera, movers, lines }) {
     if (!screen) return false;
     return (
       Math.hypot(screen.x - at.x, screen.y - at.y) <=
-      moverRadius(options, store.scales[instance], depthOf(scratch)) * slack
+      moverRadius(
+        options,
+        store.scales[instance],
+        depthOf(scratch),
+        modelRadius,
+      ) *
+        slack
     );
   };
   return drill;

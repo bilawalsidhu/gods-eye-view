@@ -109,6 +109,8 @@ export function createModelMover(options, store, { load, onLoad = () => {} }) {
   let disposed = false;
   const colorAttributes = [];
   const materials = [];
+  // Each instance's drawn diameter (px) at its last write (CPU picks).
+  const drawnPx = new Float32Array(capacity);
   // Translucent only while an instance is faded (opaque models keep the
   // opaque pass).
   const syncTransparency = () => {
@@ -128,6 +130,7 @@ export function createModelMover(options, store, { load, onLoad = () => {} }) {
     const { positions, orientations, scales, shows, colors } = store;
     for (let index = from; index < to; index++) {
       let scale = shows[index] === 1 ? scales[index] : 0;
+      drawnPx[index] = 0;
       if (scale > 0 && cameraPosition && footprint > 0) {
         const dx = positions[index * 3] - cameraPosition.x;
         const dy = positions[index * 3 + 1] - cameraPosition.y;
@@ -146,6 +149,7 @@ export function createModelMover(options, store, { load, onLoad = () => {} }) {
         if (pixels < model.minimumPixelSize)
           scale *= model.minimumPixelSize / pixels;
         scale = Math.min(scale, model.maximumScale);
+        drawnPx[index] = (pixels * scale) / scales[index];
       }
       scratchTranslation.set(
         positions[index * 3] - origin.x,
@@ -237,6 +241,15 @@ export function createModelMover(options, store, { load, onLoad = () => {} }) {
     uniforms,
     ready: () => loaded,
     origin: () => origin,
+    /**
+     * The drawn radius (px) of an instance at its last write, or null when
+     * not known yet (not loaded, no camera): CPU picks check a model hit
+     * against it.
+     */
+    pickRadiusPx: (index) =>
+      loaded && index < store.count && drawnPx[index] > 0
+        ? drawnPx[index] / 2
+        : null,
     commit(range) {
       if (!origin && store.count > 0)
         placeAt({
