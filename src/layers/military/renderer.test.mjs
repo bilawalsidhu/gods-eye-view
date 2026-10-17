@@ -140,3 +140,155 @@ test('the military logic draws, selects and follows only through its renderer', 
   assert.ok(renderer.calls.some(([name]) => name === 'destroy'));
   assert.equal(keyListeners.size, 0, 'the dispatcher left the keyboard');
 });
+
+test('the military logic draws and follows on the Navara renderer; the follow passes between flights and military', async () => {
+  const { createAircraftNavaraRenderer, aircraftAtlasLayout } =
+    await import('../aircraft/render/navara.js');
+  const { createApplicationFlights } =
+    await import('../../app/layers/flights.js');
+  const { openSkySnapshot } = await import('../../sources/live/aircraft.js');
+  const layout = aircraftAtlasLayout();
+  const drawAtlas = async () => ({
+    canvas: { width: layout.width, height: layout.height },
+    cells: layout.cells,
+  });
+  const engine = createFakeEngine();
+  const renderers = {};
+  const navara = (layerId, order) => ({
+    create: ({ engine: given }) =>
+      (renderers[layerId] = createAircraftNavaraRenderer({
+        engine: given,
+        layerId,
+        order,
+        headingOffsetDeg: 180,
+        drawAtlas,
+      })),
+  });
+  const military = createApplicationMilitary({
+    surface: defaultSurface,
+    source: {
+      label: 'Fixture military',
+      getSnapshot: async () => militarySnapshotOf(['ae0001', 'ae0002']),
+    },
+    militaryRegistry,
+    renderer: navara('military', 7),
+  });
+  const nowSec = Math.floor(Date.now() / 1000);
+  const flights = createApplicationFlights({
+    surface: defaultSurface,
+    source: {
+      label: 'Fixture aircraft',
+      getSnapshot: async () =>
+        openSkySnapshot({
+          time: nowSec,
+          states: [
+            [
+              'abc123',
+              'TST0 ',
+              'United States',
+              nowSec,
+              nowSec,
+              -97.9,
+              30.4,
+              10_668,
+              false,
+              250,
+              95,
+              5,
+              null,
+              10_700,
+              null,
+              null,
+              null,
+              5,
+            ],
+          ],
+        }),
+    },
+    militaryRegistry,
+    renderer: navara('flights', 8),
+  });
+  military.init(null, { engine });
+  flights.init(null, { engine });
+  military.enable();
+  flights.enable();
+  const awareness = [];
+  const listen = (event) => awareness.push([event.type, event.detail]);
+  const realDispatch = globalThis.window.dispatchEvent;
+  globalThis.window.dispatchEvent = (event) => {
+    listen(event);
+    return true;
+  };
+  try {
+    await renderers.military.whenReady();
+    await renderers.flights.whenReady();
+    await military.update(null);
+    await flights.update(null);
+    await Promise.resolve();
+    const sprites = engine.movers
+      .list()
+      .filter(({ id }) => id.startsWith('military-sprites'));
+    assert.equal(sprites.length, 1);
+    assert.equal(sprites[0].count, 2);
+    const drawn = military.qaDrawn();
+    assert.deepEqual(drawn.map((row) => row.id).sort(), ['ae0001', 'ae0002']);
+    // The fleet's colour reaches the engine as the layer's amber.
+    const { store } = engine.fake.moverSet(sprites[0].id);
+    assert.deepEqual([...store.pickIds.slice(0, 2)].sort(), [
+      'ae0001',
+      'ae0002',
+    ]);
+
+    // A click on a military contact selects it; the engine follows.
+    engine.fake.script('pick', () => ({ id: 'ae0002' }));
+    engine.fake.script('drillPick', () => [{ id: 'ae0002' }]);
+    click(engine);
+    assert.equal(military.getTrackedInfo()?.icao24, 'ae0002');
+    assert.equal(engine.camera.following()?.label?.id, 'military:ae0002');
+    engine.fake.frame();
+    assert.equal(
+      engine.movers.list().find(({ id }) => id.startsWith('military-tracked'))
+        .count,
+      1,
+    );
+
+    // A click on a civil flight takes the follow: military lets go, with
+    // the new owner's origin (as Cesium's trackedEntityChanged gives it).
+    engine.fake.script('pick', () => ({ id: 'abc123' }));
+    engine.fake.script('drillPick', () => [{ id: 'abc123' }]);
+    click(engine);
+    assert.equal(flights.getTrackedInfo()?.icao24, 'abc123');
+    assert.equal(military.getTrackedInfo(), null);
+    assert.equal(engine.camera.following()?.label?.id, 'flights:abc123');
+    const cleared = awareness.find(
+      ([type, detail]) =>
+        type === 'gev:awareness-subject-cleared' &&
+        detail.layerId === 'military',
+    );
+    assert.equal(cleared?.[1].origin, 'user');
+
+    // And back: tracking a military contact by voice releases flights.
+    assert.equal(military.trackById('ae0001', { origin: 'voice' }), true);
+    assert.equal(flights.getTrackedInfo(), null);
+    assert.equal(engine.camera.following()?.label?.id, 'military:ae0001');
+
+    // A camera command ends the follow; tracking it again follows it again.
+    engine.camera.setView({
+      destination: engine.camera.pose().position,
+    });
+    assert.equal(engine.camera.following(), null);
+    assert.equal(military.getTrackedInfo()?.icao24, 'ae0001');
+    assert.equal(military.trackById('ae0001', { origin: 'voice' }), true);
+    assert.equal(engine.camera.following()?.label?.id, 'military:ae0001');
+    assert.equal(military.stopTracking(), true);
+    assert.equal(engine.camera.following(), null);
+  } finally {
+    globalThis.window.dispatchEvent = realDispatch;
+    flights.disable();
+    military.disable();
+    flights.destroy(null);
+    military.destroy(null);
+  }
+  assert.equal(engine.movers.list().length, 0, 'no mover set left behind');
+  engine.destroy();
+});

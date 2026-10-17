@@ -1,4 +1,5 @@
 import { displayedKinematics } from '../../data/motionModel.js';
+import { aircraftQaDrawn } from '../aircraft/qaDrawn.js';
 import * as geo from '../../geo/index.js';
 import { isExplicitLayerStateOrigin } from '../../data/layerState.js';
 import { aircraftIncludedInNearby } from '../../data/aircraftNearbyPolicy.js';
@@ -640,8 +641,18 @@ export function createQueries({
       if (!flightState._billboards.has(id)) return false;
       if (parts.tracking._isExplicitTrackingOrigin(origin))
         parts.tracking._cancelPendingTrackingRestore();
-      if (flightState._trackedIcao === id)
+      if (flightState._trackedIcao === id) {
+        // Selected but no longer followed (a camera command took the camera:
+        // a search flight, the startup view; on Navara any command ends a
+        // follow): asking to track it again follows it again (as flights).
+        const entity = flightState._trackedEntity;
+        if (entity && !flightState._renderer?.follow.isFollowing(entity)) {
+          flightState._trackedCameraFrameStop?.();
+          flightState._trackedCameraFrameStop =
+            flightState._renderer.follow.refocus(entity);
+        }
         return parts.tracking._publishTrackedSelection(id, origin);
+      }
       parts.tracking._trackFlight(id, { origin });
       return true;
     },
@@ -718,6 +729,16 @@ export function createQueries({
         flightState._renderer.follow.refocus(flightState._trackedEntity);
       parts.tracking._publishTrackedSelection(id, origin);
       return true;
+    },
+
+    /**
+     * What this layer draws, as plain data (QA: the engine-neutral probe,
+     * window.__godsEyeView.layers.drawn): per contact its glyph and its 3D
+     * model, read from the renderer's handles — the same on every engine.
+     * @returns {Array<object>}
+     */
+    qaDrawn() {
+      return aircraftQaDrawn(flightState);
     },
 
     /**

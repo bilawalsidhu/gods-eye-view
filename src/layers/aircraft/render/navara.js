@@ -189,6 +189,16 @@ const scalarKey = (scalar) =>
     ? `${scalar.near},${scalar.nearValue},${scalar.far},${scalar.farValue}`
     : 'none';
 
+// Follow handle → the tracked handle it follows, for every aircraft layer on
+// the engine: a layer whose follow another aircraft layer took reads the
+// new owner's tracked handle (its gevSelectionOrigin), as Cesium's
+// viewer.trackedEntity gives it the other layer's entity.
+const FOLLOWED_TRACKED = new WeakMap();
+// The tracked handle whose follow is being started (any aircraft layer):
+// the engine raises followChanged inside follow(), before the follow
+// handle is known, and every layer's listener must see the new owner.
+let followStarting = null;
+
 // ---------------------------------------------------------------------------
 // The renderer
 // ---------------------------------------------------------------------------
@@ -849,7 +859,7 @@ export function createAircraftNavaraRenderer({
   };
 
   // --- follow ---------------------------------------------------------------
-  const ownFollows = new WeakMap(); // follow handle → tracked handle
+  const ownFollows = FOLLOWED_TRACKED; // follow handle → tracked handle
   // The follow carries the tracked readout's card as plain data (the
   // handle's annotation fields, read when the card paints).
   const followOf = (handle) => {
@@ -864,17 +874,15 @@ export function createAircraftNavaraRenderer({
       label: card,
     });
   };
-  // The tracked handle whose follow is being started: the engine raises
-  // followChanged inside follow(), before the handle is known here.
-  let starting = null;
   const follow = {
     start(handle) {
-      starting = handle;
+      const outer = followStarting;
+      followStarting = handle;
       let followHandle;
       try {
         followHandle = followOf(handle);
       } finally {
-        starting = null;
+        followStarting = outer;
       }
       handle.gevFollowHandle = followHandle;
       ownFollows.set(followHandle, handle);
@@ -892,7 +900,7 @@ export function createAircraftNavaraRenderer({
       Boolean(handle?.gevFollowHandle) &&
       engine.camera.following() === handle.gevFollowHandle,
     current() {
-      if (starting) return starting;
+      if (followStarting) return followStarting;
       const handle = engine.camera.following();
       return handle ? (ownFollows.get(handle) ?? handle) : undefined;
     },

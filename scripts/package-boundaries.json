@@ -897,7 +897,8 @@
       "src/time/clock.js",
       "src/globe/contract.js",
       "src/globe/cesium/engineFromViewer.js",
-      "src/layers/shared/color.js"
+      "src/layers/shared/color.js",
+      "src/layers/aircraft/qaDrawn.js"
     ],
     "external": ["cesium"]
   },
@@ -954,7 +955,8 @@
       "src/geo/developerError.js",
       "src/time/clock.js",
       "src/globe/contract.js",
-      "src/globe/cesium/engineFromViewer.js"
+      "src/globe/cesium/engineFromViewer.js",
+      "src/layers/aircraft/qaDrawn.js"
     ],
     "external": ["cesium"]
   },
@@ -2596,7 +2598,9 @@
       "src/data/selectionDispatcher.js",
       "src/layers/shared/color.js",
       "src/layers/aircraft/render/navara.js",
-      "src/layers/flights/render/navara.js"
+      "src/layers/flights/render/navara.js",
+      "src/layers/military/render/navara.js",
+      "src/layers/aircraft/qaDrawn.js"
     ],
     "external": [
       "hls.js",
@@ -3172,7 +3176,8 @@
       "src/data/selectionDispatcher.js",
       "src/layers/shared/color.js",
       "src/layers/flights/render/cesium.js",
-      "src/layers/military/render/cesium.js"
+      "src/layers/military/render/cesium.js",
+      "src/layers/aircraft/qaDrawn.js"
     ],
     "external": [
       "hls.js",

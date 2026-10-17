@@ -50,6 +50,9 @@ const KNOWN_OBJECTS = 5;
 const SCREEN_TOLERANCE_PX = 2;
 const DEFAULT_FEEDS = {
   flights: 'flights:synthetic:10000',
+  // Military with the civil fleet: 25 military hexes are also civil
+  // flights (duplicate suppression), and the follow passes between them.
+  military: 'military:synthetic:1000,flights:synthetic:10000',
   'ais-live-vessels': 'vessels:fixture',
 };
 const TODO_SECTIONS = {
@@ -409,15 +412,15 @@ try {
           await new Promise((resolve) => setTimeout(resolve, 80));
         }
         await new Promise((resolve) => setTimeout(resolve, 2500));
-        const range = await page.evaluate(async (objectId) => {
+        const range = await page.evaluate(async (layerId) => {
           const geo = await import('/src/geo/index.js');
           const { engine, dataManager } = window.__godsEyeView;
-          const module = dataManager.layers.get('flights').module;
+          const module = dataManager.layers.get(layerId).module;
           const target = module.getTrackedSubject?.()?.position;
           return target
             ? geo.cartesian3.distance(engine.camera.livePosition, target)
             : null;
-        }, id);
+        }, layer);
         report.sections[4].rangeAfterWheelM = range;
         check(
           '4 tracking: wheeled in, the camera keeps ≥ 149 m',
@@ -427,22 +430,26 @@ try {
         // 5. the layer's queries (the voice tools' data), for --compare.
         report.sections[5] = {
           ...(report.sections[5] ?? {}),
-          queries: await page.evaluate((objectId) => {
-            const module =
-              window.__godsEyeView.dataManager.layers.get('flights').module;
-            const tracked = module.getTrackedInfo();
-            const subject = module.getTrackedSubject?.();
-            const nearby = subject
-              ? module.getNearby(subject.position, 50_000, 10)
-              : [];
-            return {
-              tracked: tracked?.icao24 ?? null,
-              all: module.getAllPositions(1_000_000).length,
-              nearby: nearby.map((row) => row.id).sort(),
-              detectable: module.getDetectableObjects({ maxCount: 50 }).length,
-              hasContact: module.hasContact(objectId),
-            };
-          }, id),
+          queries: await page.evaluate(
+            ([objectId, layerId]) => {
+              const module =
+                window.__godsEyeView.dataManager.layers.get(layerId).module;
+              const tracked = module.getTrackedInfo();
+              const subject = module.getTrackedSubject?.();
+              const nearby = subject
+                ? module.getNearby(subject.position, 50_000, 10)
+                : [];
+              return {
+                tracked: tracked?.icao24 ?? null,
+                all: module.getAllPositions(1_000_000).length,
+                nearby: nearby.map((row) => row.id).sort(),
+                detectable: module.getDetectableObjects({ maxCount: 50 })
+                  .length,
+                hasContact: module.hasContact(objectId),
+              };
+            },
+            [id, layer],
+          ),
         };
         check(
           '5 queries: tracked info and contacts answer',
@@ -472,19 +479,23 @@ try {
           );
           const restored = await shared
             .waitForFunction(
-              (objectId) =>
-                window.__godsEyeView.layers.selected('flights')?.icao24 ===
+              (objectId, layerId) =>
+                window.__godsEyeView.layers.selected(layerId)?.icao24 ===
                   objectId && window.__godsEyeView.layers.following() !== null,
               { timeout: 60_000, polling: 250 },
               id,
+              layer,
             )
             .then(() => true)
             .catch(() => false);
-          const sharedState = await shared.evaluate(() => ({
-            selected:
-              window.__godsEyeView.layers.selected('flights')?.icao24 ?? null,
-            following: window.__godsEyeView.layers.following(),
-          }));
+          const sharedState = await shared.evaluate(
+            (layerId) => ({
+              selected:
+                window.__godsEyeView.layers.selected(layerId)?.icao24 ?? null,
+              following: window.__godsEyeView.layers.following(),
+            }),
+            layer,
+          );
           await sharedContext.close();
           report.sections[6][opened] = { restored, ...sharedState };
           check(
@@ -498,17 +509,22 @@ try {
         // and voice fly_to_location release it.
         const followedId = () =>
           page.evaluate(
-            () =>
-              window.__godsEyeView.layers.selected('flights')?.icao24 ?? null,
+            (layerId) =>
+              window.__godsEyeView.layers.selected(layerId)?.icao24 ?? null,
+            layer,
           );
         const isFollowing = () =>
           page.evaluate(() => window.__godsEyeView.layers.following() !== null);
         const retrack = async () => {
-          await page.evaluate(async (objectId) => {
-            window.__godsEyeView.dataManager.layers
-              .get('flights')
-              .module.trackById(objectId);
-          }, id);
+          await page.evaluate(
+            async (objectId, layerId) => {
+              window.__godsEyeView.dataManager.layers
+                .get(layerId)
+                .module.trackById(objectId);
+            },
+            id,
+            layer,
+          );
           await new Promise((resolve) => setTimeout(resolve, 2500));
         };
         report.sections[4].navigation = {};
@@ -572,6 +588,107 @@ try {
         check('2 click: an object to click at the city pose', false);
       }
       report.sections[2] = section;
+    }
+    // Military with the civil flights layer (the same on both engines): the
+    // follow passes between the two layers, and the flights layer leaves
+    // the aircraft both feeds report to the military layer while it is on.
+    if (layer === 'military') {
+      const both = await page.evaluate(async () => {
+        const { layers, dataManager } = window.__godsEyeView;
+        const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+        const civil = () => dataManager.layers.get('flights').module;
+        const military = () => dataManager.layers.get('military').module;
+        const count = () => civil().getAllPositions(1_000_000).length;
+        const until = async (predicate, ms = 20_000) => {
+          const start = Date.now();
+          while (!predicate() && Date.now() - start < ms) await wait(100);
+          return predicate();
+        };
+        await layers.enable('flights');
+        await until(() => count() > 0);
+        await wait(1500);
+        const shared = military()
+          .getAllPositions(1_000_000)
+          .map(({ id }) => id)
+          .filter((id) => /^a000/.test(id));
+        const withMilitary = count();
+        const civilHasShared = shared.some((id) => civil().hasContact(id));
+        await layers.disable('military');
+        await until(() => count() > withMilitary);
+        const withoutMilitary = count();
+        await layers.enable('military');
+        await until(() => count() < withoutMilitary);
+        await wait(1500);
+        const restoredMilitary = count();
+        // The follow: military → flights → military.
+        // The follow's label (the engine's own follow; null on Cesium,
+        // which follows the tracked entity: the selection tells there).
+        const label = () =>
+          layers.following() === null
+            ? 'none'
+            : (layers.following().label ?? 'entity');
+        const milId = military()
+          .getAllPositions(1_000_000)
+          .map(({ id }) => id)
+          .find((id) => !/^a000/.test(id));
+        const civilId = civil()
+          .getAllPositions(1_000_000)
+          .map(({ id }) => id)
+          .find((id) => !shared.includes(id));
+        military().trackById(milId, { origin: 'voice' });
+        await wait(800);
+        const first = {
+          military: layers.selected('military')?.icao24 ?? null,
+          label: label(),
+        };
+        civil().trackById(civilId, { origin: 'voice' });
+        await wait(800);
+        const second = {
+          military: layers.selected('military')?.icao24 ?? null,
+          flights: layers.selected('flights')?.icao24 ?? null,
+          label: label(),
+        };
+        military().trackById(milId, { origin: 'voice' });
+        await wait(800);
+        const third = {
+          military: layers.selected('military')?.icao24 ?? null,
+          flights: layers.selected('flights')?.icao24 ?? null,
+          label: label(),
+        };
+        military().stopTracking({ origin: 'user' });
+        await layers.disable('flights');
+        return {
+          shared: shared.length,
+          withMilitary,
+          withoutMilitary,
+          restoredMilitary,
+          civilHasShared,
+          milId,
+          civilId,
+          handoff: [first, second, third],
+        };
+      });
+      report.sections[4] = { ...(report.sections[4] ?? {}), withFlights: both };
+      const followed = (state, expected) =>
+        state.label === expected || state.label === 'entity';
+      check(
+        '4 tracking: the follow passes military → flights → military',
+        both.handoff[0].military === both.milId &&
+          followed(both.handoff[0], `military:${both.milId}`) &&
+          both.handoff[1].military === null &&
+          both.handoff[1].flights === both.civilId &&
+          followed(both.handoff[1], `flights:${both.civilId}`) &&
+          both.handoff[2].flights === null &&
+          followed(both.handoff[2], `military:${both.milId}`),
+        JSON.stringify(both.handoff),
+      );
+      check(
+        '1 view: flights leaves the shared aircraft to military while it is on',
+        both.withoutMilitary - both.withMilitary === 25 &&
+          both.restoredMilitary === both.withMilitary &&
+          !both.civilHasShared,
+        `flights ${both.withMilitary} with military, ${both.withoutMilitary} without, ${both.restoredMilitary} with it again`,
+      );
     }
     // 8. idle: the camera still for 2 s.
     const idleFrames = await page.evaluate(async () => {
@@ -637,7 +754,8 @@ try {
         cockpit: await ask('control_cockpit', { action: 'enter' }),
       };
     }, layer);
-    report.sections[5] = voice;
+    // Kept beside the layer's queries (5), which --compare reads.
+    report.sections[5] = { ...(report.sections[5] ?? {}), ...voice };
     check('5 voice: the runner is there', voice.available === true);
     if (voice.available) {
       check(
