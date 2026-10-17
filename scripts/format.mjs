@@ -123,15 +123,6 @@ export async function formatAdoptedFiles(root, mode) {
   if (mode === '--write') {
     for (const { file, formatted } of changed) await writeFile(file, formatted);
   }
-  // TEMPORARY DIAGNOSTIC for exact adopted formatting; remove on next commit.
-  const preview = changed.find(
-    ({ name }) => name === 'src/layers/perimeters/ownership.test.mjs',
-  );
-  if (preview && mode === '--check') {
-    console.error('GEV_FORMAT_PREVIEW_START');
-    console.error(preview.formatted);
-    console.error('GEV_FORMAT_PREVIEW_END');
-  }
   return { count: files.length, changed: changed.map(({ name }) => name) };
 }
 
