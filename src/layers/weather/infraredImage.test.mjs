@@ -33,6 +33,15 @@ test('decoded pixels are processed once on a same-sized canvas', () => {
   assert.equal(output.image, image);
   assert.deepEqual([...output.pixels], [194, 0, 0, 98]);
   assert.deepEqual(
+    [...processInfraredImage(image, 50, canvas).pixels],
+    [194, 0, 0, 149],
+    'half-strength filter retains a midpoint haze',
+  );
+  assert.deepEqual(
+    [...processInfraredImage(image, 0, canvas).pixels],
+    [194, 0, 0, 200],
+  );
+  assert.deepEqual(
     [...processInfraredImage(image, 'full', canvas).pixels],
     [194, 0, 0, 200],
   );

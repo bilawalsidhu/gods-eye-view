@@ -6,6 +6,39 @@ import { createSubject } from './subject.js';
 import { createControls } from '../installations/controls.js';
 import { createModel } from '../installations/model.js';
 import { summarizeAwarenessCohort } from '../../data/militaryAwarenessEngine.js';
+import { AWARENESS_QUERY_LIMIT } from './policy.js';
+
+test('aircraft window marks a capped layer as a lower bound', () => {
+  const rows = Array.from({ length: AWARENESS_QUERY_LIMIT + 1 }, (_, index) => ({
+    icao24: `f${index}`,
+    distance: index,
+  }));
+  let requested = null;
+  const services = {
+    flights: {
+      getNearby: (_position, _radius, limit) => {
+        requested = limit;
+        return rows.slice(0, limit);
+      },
+    },
+    military: { getNearby: () => [] },
+  };
+  const parts = {
+    navigation: {
+      summarizeAwarenessCohortForNavigation: (items, source) =>
+        summarizeAwarenessCohort(items, source),
+    },
+  };
+  const queries = createQueries({ state: {}, services, parts });
+  const window = queries.collectAircraftProximityWindow({ center: true });
+  assert.equal(requested, AWARENESS_QUERY_LIMIT + 2);
+  assert.equal(window.flights.length, AWARENESS_QUERY_LIMIT);
+  assert.equal(window.aircraft, AWARENESS_QUERY_LIMIT);
+  assert.deepEqual(window.completeByLayer, {
+    flights: false,
+    military: true,
+  });
+});
 
 test('Contacts excludes square corners and measures from the current moving subject', () => {
   const records = [

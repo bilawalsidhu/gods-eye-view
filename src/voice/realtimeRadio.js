@@ -1,3 +1,4 @@
+import { t } from '../i18n/index.js';
 import {
   silenceRadioForVoice,
   startPreparedRadioAfterPlaybackReady,
@@ -130,6 +131,19 @@ export class RealtimeRadio {
       });
   }
 
+  /**
+   * Whether voice may take the speaker now (barge-in, progress narration).
+   * False while a Radio handoff is prepared, reserved or starting playback:
+   * its spoken confirmation and muted-playback check own the speaker.
+   */
+  mayVoiceClaimSpeaker() {
+    return !(
+      this.pendingRadioPlaybackResult ||
+      this.radioHandoffInFlight ||
+      this.isRadioHandoffReserved()
+    );
+  }
+
   /** Whether any stronger Radio action is still awaiting semantic authority. */
   isRadioHandoffReserved() {
     return (
@@ -245,7 +259,7 @@ export class RealtimeRadio {
     if (radioHandoff.result?.ok || radioHandoff.cancelled || !stillCurrent)
       return;
     if (this.dc?.readyState === 'open' && !this.userTurnPending) {
-      this.setStatus('listening', 'Radio did not start');
+      this.setStatus('listening', t('Radio did not start'));
       this.queueResponseCreate(
         'Say exactly one short correction: “The Radio station could not start. Voice is still on.”',
       );

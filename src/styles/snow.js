@@ -1,3 +1,5 @@
+import { msg } from '../i18n/index.js';
+
 /**
  * Snow Style — White overlay + Desaturation + Falling particles
  * Transforms the world into a winter wonderland
@@ -5,8 +7,8 @@
 export const snowShader = {
   name: 'snow',
   uniforms: {
-    density: { default: 0.6, min: 0, max: 1, label: 'Density' },
-    wind: { default: 0.5, min: 0, max: 1, label: 'Wind' },
+    density: { default: 0.6, min: 0, max: 1, label: msg('Density') },
+    wind: { default: 0.5, min: 0, max: 1, label: msg('Wind') },
   },
   fragmentShader: /* glsl */ `
     uniform sampler2D colorTexture;
@@ -29,11 +31,13 @@ export const snowShader = {
       float depth = 0.5 + layer * 0.5;
       float speed = 0.4 + layer * 0.3;
       float size = mix(0.01, 0.025, layer);
-      float windForce = sin(time * 0.5 + layer * 3.14) * (0.05 + wind * 0.2);
+      float windForce = 0.05 + wind * 0.2;
 
       vec2 snowUV = uv * vec2(1.0, 0.5) * (4.0 + layer * 4.0);
       snowUV.y += time * speed;
-      snowUV.x += time * windForce;
+      // Offset is the integral of a swaying velocity sin(time * 0.5 + phase) * windForce,
+      // so the sway stays bounded however long the app has been running.
+      snowUV.x -= 2.0 * cos(time * 0.5 + layer * 3.14) * windForce;
 
       vec2 cell = floor(snowUV);
       vec2 f = fract(snowUV);
