@@ -1,7 +1,12 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { twoline2satrec } from 'satellite.js';
 import { composeCatalog, coreTools } from '../index.js';
-import { parseTleText, tleCatalogNumber } from '../../sources/tle.js';
+import {
+  noradIdFromSatnum,
+  parseTleText,
+  tleCatalogNumber,
+} from '../../sources/tle.js';
 
 // Element sets published for 1 January 2024.
 const TLE = `ISS (ZARYA)
@@ -50,6 +55,76 @@ for (const missingLine of [1, 2]) {
     );
   });
 }
+
+test('Alpha-5 catalog numbers decode, skipping I and O', () => {
+  for (const [field, id] of [
+    ['A0000', 100000],
+    ['A0404', 100404],
+    ['H9999', 179999],
+    ['J0000', 180000],
+    ['N9999', 229999],
+    ['P0000', 230000],
+    ['T0449', 270449],
+    ['Z9999', 339999],
+  ]) {
+    assert.equal(noradIdFromSatnum(field), id, field);
+    assert.equal(tleCatalogNumber(`1 ${field}U`), id, field);
+  }
+});
+
+test('a digit catalog field reads as it did before', () => {
+  assert.equal(noradIdFromSatnum('25544'), 25544);
+  assert.equal(noradIdFromSatnum('00404'), 404);
+  assert.equal(noradIdFromSatnum('  404'), 404);
+  assert.equal(tleCatalogNumber('1 25544U'), 25544);
+  assert.equal(tleCatalogNumber('1   404U'), 404);
+  // An OMM satrec carries the number unpadded, past five digits.
+  assert.equal(noradIdFromSatnum('100000'), 100000);
+});
+
+test('a malformed catalog field is no number', () => {
+  for (const field of [
+    'I0000',
+    'O0000',
+    'a0404',
+    'A00',
+    '2554A',
+    '255 4',
+    '-1234',
+    '0x1F0',
+    '1.5',
+    '1e3',
+    '',
+    '     ',
+  ]) {
+    assert.ok(Number.isNaN(noradIdFromSatnum(field)), JSON.stringify(field));
+    assert.equal(
+      tleCatalogNumber(`1 ${field.padEnd(5)}U`),
+      null,
+      JSON.stringify(field),
+    );
+  }
+  assert.ok(Number.isNaN(noradIdFromSatnum(undefined)));
+});
+
+test('a satellite numbered above 99999 keeps its number and is found by it', async () => {
+  // The ISS set with its catalog field in Alpha-5: A0000 is 100000.
+  const text = TLE.replaceAll('25544', 'A0000');
+  const [iss] = parseTleText(text);
+  const { satnum } = twoline2satrec(iss.line1, iss.line2);
+  assert.ok(Number.isNaN(Number(satnum))); // what the catalog builders used
+  assert.equal(noradIdFromSatnum(satnum), 100000);
+  const catalog = composeCatalog({
+    tools: coreTools,
+    services: { satellites: satellites(text), clock: CLOCK },
+  });
+  const result = await catalog.call('next_satellite_pass', {
+    location: { lat: 40.7, lon: -74 },
+    satellite: '100000',
+  });
+  assert.equal(result.data.satellite, 'ISS (ZARYA)');
+  assert.equal(result.data.norad, 100000);
+});
 
 test('the next pass defaults to the ISS and reports times, peak and direction', async () => {
   const catalog = composeCatalog({
