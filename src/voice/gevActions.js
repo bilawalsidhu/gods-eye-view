@@ -8,9 +8,10 @@ import { SPEECH_BUILDERS, attachVoiceResult } from './speech.js';
 import { resolveDeicticArgs } from './deixis.js';
 export { readLayerLifecycleSummary } from './layerSummary.js';
 import { defaultGeospatial } from '../search/defaults.js';
+import { msg } from '../i18n/index.js';
 import * as Cesium from 'cesium';
+import { CITY_POIS } from '../cityPois.js';
 import {
-  CITY_POIS,
   findPoiByName,
   flyToGlobeView,
   flyToLandmark,
@@ -1442,7 +1443,7 @@ function controlScene(sceneDirector, args = {}) {
     };
   }
   if (sceneAction === 'stop') {
-    sceneDirector.stopScene('Stopped by voice');
+    sceneDirector.stopScene(msg('Stopped by voice'));
     return { ok: true, action: 'control_scene', running: false };
   }
   if (sceneAction === 'next') {
@@ -1643,14 +1644,18 @@ export async function controlCctv(dataManager, args = {}, styleManager = null) {
 }
 
 const RADIO_COUNTRY_CENTERS = new Map([
+  // i18n-ignore: place name in tool data
   ['us', { lat: 39.8, lon: -98.6, country: 'US', label: 'United States' }],
+  // i18n-ignore: place name in tool data
   ['usa', { lat: 39.8, lon: -98.6, country: 'US', label: 'United States' }],
   [
     'united states',
+    // i18n-ignore: place name in tool data
     { lat: 39.8, lon: -98.6, country: 'US', label: 'United States' },
   ],
   [
     'united states of america',
+    // i18n-ignore: place name in tool data
     { lat: 39.8, lon: -98.6, country: 'US', label: 'United States' },
   ],
 ]);
@@ -2251,6 +2256,7 @@ async function trackEntity(
           action: 'track_entity',
           kind: 'fire',
           layerId: 'local-firms',
+          // i18n-ignore: entity name in a tool result for the voice model
           label: strongest.label || 'Strongest fire',
           latitude: strongest.latitude,
           longitude: strongest.longitude,
@@ -2997,7 +3003,11 @@ function focusDataLayerRow(layerId) {
   void row.offsetWidth;
   row.classList.add('gev-voice-focus');
   window.setTimeout(() => row.classList.remove('gev-voice-focus'), 3000);
-  const name = row.querySelector('.data-name')?.textContent?.trim() || layerId;
+  // The English name: tool results stay English whatever the UI language.
+  const name =
+    row.dataset.layerName ||
+    row.querySelector('.data-name')?.textContent?.trim() ||
+    layerId;
   return { id: layerId, name };
 }
 
@@ -4809,7 +4819,12 @@ function compactAnalystItem(r) {
     if (!present(r[key]) || key in compact) continue;
     if (spec.type === 'time') {
       const ms = Number(r[key]);
-      if (Number.isFinite(ms)) compact.time = new Date(ms).toISOString();
+      // A finite value can still be past Date's range, where toISOString throws.
+      const time = new Date(ms);
+      if (Number.isFinite(time.getTime())) {
+        if (key === 'lastContactAtMs') compact.lastContactAtMs = ms;
+        else compact.time = time.toISOString();
+      }
     } else compact[key] = r[key];
   }
   if (present(r.ageHours)) compact.ageHours = r.ageHours;

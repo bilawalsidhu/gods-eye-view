@@ -1,7 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { setLocale } from '../i18n/index.js';
 import { createWeatherPanel } from './weatherPanel.js';
 import { railFixture } from './railTestFixture.mjs';
+import { createAirQualityLayer } from '../layers/airQuality/index.js';
 const ticks = ['2026-09-22T01:00:00Z', '2026-09-22T01:05:00Z'];
 const wind = {
   id: 'wind',
@@ -166,6 +168,7 @@ test('cyclone readout retains advisory, position, intensity, geometry, coverage,
         },
       ],
     },
+    legendCategorical: true,
     legend: [
       { label: 'Advisory center / forecast track', color: '#7fe6ed' },
       { label: 'Center-track uncertainty cone', color: '#7fe6ed44' },
@@ -410,7 +413,7 @@ test('cyclones lead, and observed history owns one bordered group with only acti
   assert.deepEqual(opened(f), ['weather-cyclones']);
   assert.equal(
     card(f, cyclone.id).children[1].children[0].dataset.blockId,
-    'storms',
+    'list',
   );
   view.update([wind, satellite]);
   assert.equal(group.children[1].textContent, 'Satellite clouds');
@@ -653,4 +656,99 @@ test('a change of open card scrolls its header into view once; refreshes never m
   assert.equal(writes.length, 4, 'refresh after a reveal leaves it alone');
   assert.deepEqual(intoView, [], 'ancestor scrollers are never moved');
   view.destroy();
+});
+test('history time keeps the hour whatever the length of the localized date', () => {
+  for (const locale of ['en', 'es', 'ru']) {
+    setLocale(locale);
+    try {
+      const f = fixture();
+      const view = createWeatherPanel(f);
+      view.update([wind, radar]);
+      const ends = f.find((n) => n.className === 'rail-timeline-endpoints');
+      assert.deepEqual(
+        ends.children.map((n) => n.textContent),
+        ['01:00 UTC', '01:05 UTC'],
+        locale,
+      );
+      f.state({ mode: 'history', target: ticks[1] });
+      assert.match(
+        line(f, radar.id, 'time').textContent,
+        /(^|[^\d:])01:05 UTC/,
+        locale,
+      );
+      f.state({ products: [{ id: radar.id, shown: null, selected: null }] });
+      assert.match(
+        line(f, radar.id, 'time').textContent,
+        /(^|[^\d:])01:05 UTC/,
+        locale,
+      );
+      view.destroy();
+    } finally {
+      setLocale('en');
+    }
+  }
+});
+
+test('air-quality readout renders its band legend, Canada coverage and worst-first list', async () => {
+  const observedMs = Date.now() - 10 * 60_000;
+  const reading = (stationId, value, band, name) => ({
+    id: `eccc:${stationId}`,
+    provider: 'eccc',
+    scale: 'AQHI',
+    value,
+    band,
+    stationId,
+    name,
+    zone: 'on',
+    lat: 43.65,
+    lon: -79.38,
+    observedMs,
+    color: '#4cc9f0',
+    label: String(value),
+    risk: `${band} risk`,
+    note: null,
+  });
+  const layer = createAirQualityLayer({
+    source: {
+      getSnapshot: async () => [
+        reading('B', 8, 'high', 'Hamilton'),
+        reading('A', 2, 'low', 'Toronto'),
+      ],
+    },
+    overlayHost: { setEntries() {}, setVisible() {}, clearSource() {} },
+  });
+  layer.init({ dataSources: { add() {}, remove() {} } });
+  layer.enable();
+  await layer.update();
+  const f = fixture();
+  const view = createWeatherPanel(f);
+  view.update([{ id: layer.id, icon: layer.icon, ...layer.getRowControls() }]);
+  const aq = card(f, 'air-quality');
+  assert.ok(aq, 'the air-quality card is shown');
+  assert.equal(aq.dataset.open, 'true');
+  assert.match(
+    f.find((n) => n.classList?.contains?.('rail-card-badge'), aq).textContent,
+    /Canada only/,
+  );
+  assert.match(line(f, 'air-quality', 'status').textContent, /2 stations/);
+  const entries = f.find((n) => n.className === 'rail-card-legend-entries', aq);
+  assert.equal(entries.hidden, false);
+  assert.deepEqual(
+    entries.children.map((entry) => entry.children[1].textContent),
+    ['Low', 'Moderate', 'High', 'Very High'],
+  );
+  assert.equal(
+    f.find((n) => n.className === 'rail-card-ramp', aq).hidden,
+    true,
+  );
+  const list = f.find((n) => n.dataset.blockId === 'list', aq);
+  assert.equal(list.hidden, false);
+  assert.deepEqual(
+    list.children.map((item) =>
+      item.children[0].children.map((part) => part.textContent).join(' '),
+    ),
+    ['AQHI 8 Hamilton · high risk', 'AQHI 2 Toronto · low risk'],
+  );
+  view.destroy();
+  layer.destroy();
 });

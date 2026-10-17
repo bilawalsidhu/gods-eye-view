@@ -4,6 +4,12 @@
 #street-level-panel,
 .sl-viewer-wrap {
   --sl-green: #05cb63;
+  /* KartaView's purple for lines; a lighter one where it is text (WCAG AA). */
+  --sl-kartaview: #635bff;
+  --sl-kartaview-text: #8f8aff;
+  /* Panoramax's orange; the darker one sits behind white text. */
+  --sl-panoramax: #ff6f00;
+  --sl-panoramax-fill: #b84e00;
   --sl-text: 0.62rem;
   --sl-text-small: 0.6rem;
 }
@@ -174,6 +180,11 @@ button.sl-status:focus-visible {
   );
 }
 
+/* #635bff text on its own tint is 3.7:1 at this size; the lighter one is ~6:1. */
+.sl-chips .data-toggle-chip.active[data-chip-id='kartaview'] {
+  color: var(--sl-kartaview-text);
+}
+
 .sl-chips .data-toggle-chip.active::before {
   opacity: 1;
 }
@@ -181,6 +192,41 @@ button.sl-status:focus-visible {
 .sl-chips .data-toggle-chip.chip-error {
   color: #ffb300;
   border-color: rgba(255, 179, 0, 0.55);
+}
+
+/* The coverage hint and OPEN STREET VIEW share a line; the hint wraps. */
+.sl-meta-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.sl-meta-row .sl-meta {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+/* Scoped to outrank .scene-btn's flex: 1, which squeezed the button to its
+   min-width beside a long coverage line and clipped its one-line label. */
+.sl-meta-row .sl-nearest-btn {
+  flex: 0 0 auto;
+}
+
+.sl-nearest-btn[hidden] {
+  display: none;
+}
+
+/* When the hint and the button do not both fit, the button takes its own line. */
+html:not([lang='en']) .sl-meta-row {
+  flex-wrap: wrap;
+}
+
+html:not([lang='en']) .sl-meta-row .sl-meta {
+  flex: 1 1 14em;
+}
+
+html:not([lang='en']) .sl-meta-row .sl-nearest-btn {
+  flex: 1 0 auto;
 }
 
 /* ── Errors ──────────────────────────────────────────────────────────────── */
@@ -205,6 +251,14 @@ button.sl-status:focus-visible {
   display: inline-flex;
   border: 1px solid var(--glass-border-hover);
   border-radius: 999px;
+}
+
+.sl-seg[hidden],
+.sl-controls[hidden],
+.sl-filters[hidden],
+.sl-since[hidden],
+.sl-legend[hidden] {
+  display: none;
 }
 
 .sl-seg-btn {
@@ -259,6 +313,17 @@ button.sl-status:focus-visible {
 .sl-range:focus-visible {
   outline: 1px solid var(--accent);
   outline-offset: 3px;
+}
+
+.sl-since-note {
+  grid-column: 2;
+  font-family: var(--font-mono);
+  font-size: var(--sl-text-small);
+  color: var(--text-secondary);
+}
+
+.sl-since-note[hidden] {
+  display: none;
 }
 
 .sl-since-label {
@@ -480,7 +545,9 @@ button.sl-status:focus-visible {
 /* A dragged window keeps its natural height, so bound it to the viewport:
    the rail's max-height: 100% does not bind an auto-height parent.
    Id-qualified to outrank that rule. */
-#right-context-rail > #street-level-panel.panel-floating > .street-level-panel-inner {
+#right-context-rail
+  > #street-level-panel.panel-floating
+  > .street-level-panel-inner {
   max-height: calc(100vh - 12px);
   overflow-y: auto;
 }
@@ -579,6 +646,107 @@ button.sl-status:focus-visible {
   width: 34px;
   height: 34px;
   font-size: 1.3rem;
+}
+
+/* ── Photo viewer (KartaView, Panoramax) ─────────────────────────────────── */
+.sl-photo-viewer {
+  /* The lit source's colour: a focus ring, and behind the white ‹ › glyphs. */
+  --sl-photo-ring: var(--sl-kartaview-text);
+  --sl-photo-fill: color-mix(in srgb, var(--sl-kartaview) 85%, transparent);
+  position: absolute;
+  inset: 0;
+  background: #000;
+  outline: none;
+  overflow: hidden;
+}
+
+.sl-photo-viewer:focus-visible {
+  outline: none;
+}
+
+/* The photo and canvas fill the viewer and would cover a ring drawn on it:
+   draw the ring on a layer above them (clicks pass through). */
+.sl-photo-viewer:focus-visible::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  border: 2px solid var(--sl-photo-ring);
+  pointer-events: none;
+}
+
+/* White on #ff6f00 is 2.8:1; on the darker orange behind ‹ › it is 5.1:1. */
+.sl-photo-viewer[data-provider='panoramax'] {
+  --sl-photo-ring: var(--sl-panoramax);
+  --sl-photo-fill: var(--sl-panoramax-fill);
+}
+
+.sl-photo-flat,
+.sl-photo-pano {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  user-select: none;
+}
+
+.sl-photo-flat {
+  object-fit: contain;
+}
+
+.sl-photo-pano {
+  cursor: grab;
+  touch-action: none;
+}
+
+.sl-photo-pano.sl-photo-dragging {
+  cursor: grabbing;
+}
+
+.sl-photo-flat[hidden],
+.sl-photo-pano[hidden] {
+  display: none;
+}
+
+.sl-photo-step {
+  position: absolute;
+  top: 50%;
+  z-index: 2;
+  width: 34px;
+  height: 44px;
+  margin-top: -22px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 8px;
+  background: rgba(10, 10, 15, 0.62);
+  color: #fff;
+  font-size: 1.5rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.sl-photo-step-prev {
+  left: 6px;
+}
+
+.sl-photo-step-next {
+  right: 6px;
+}
+
+.sl-photo-step:hover:not(:disabled),
+.sl-photo-step:focus-visible {
+  background: var(--sl-photo-fill);
+  outline: none;
+}
+
+.sl-photo-step:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+
+/* Nothing to step through until a photo shows. */
+.sl-photo-viewer:not([data-kind='flat']):not([data-kind='pano'])
+  .sl-photo-step {
+  display: none;
 }
 
 /* ── Short viewports ─────────────────────────────────────────────────────── */

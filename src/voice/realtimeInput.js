@@ -1,3 +1,4 @@
+import { t } from '../i18n/index.js';
 import {
   PUSH_TO_TALK_HOLD_DELAY_MS,
   MICROPHONE_VISUALIZER_GATE,
@@ -118,7 +119,7 @@ export class RealtimeInput {
           this.ui.root.dataset.pushToTalk = 'held';
           this.setMicrophoneEnabled(true);
           if (this.status === 'listening')
-            this.setStatus('listening', 'Release Space to send');
+            this.setStatus('listening', t('Release Space to send'));
         } else {
           this.start({ pushToTalk: true });
           // start() performs a controlled stop() before connecting. Restore the
@@ -194,7 +195,7 @@ export class RealtimeInput {
     if (!this.pushToTalkMode) return;
     this.setMicrophoneEnabled(false);
     if (this.status === 'listening')
-      this.setStatus('listening', 'Hold Space to talk');
+      this.setStatus('listening', t('Hold Space to talk'));
     else this.updateVoiceButtonLabel();
   }
 
@@ -363,7 +364,8 @@ export class RealtimeInput {
    */
   updateVoiceButtonLabel() {
     if (!this.ui.buttonLabel) return;
-    this.ui.buttonLabel.textContent = 'MIC';
+    // The mic button's caption; the first-run tip names it the same way.
+    this.ui.buttonLabel.textContent = t('MIC');
     if (this.ui.helpDetail) {
       this.ui.helpDetail.textContent = resolveVoiceControlHint(
         this.pushToTalkMode,

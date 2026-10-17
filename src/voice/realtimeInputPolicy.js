@@ -1,3 +1,5 @@
+import { t } from '../i18n/index.js';
+
 export const PUSH_TO_TALK_HOLD_DELAY_MS = 500;
 
 // The input meter is intentionally stricter than the assistant-output meter:
@@ -206,8 +208,8 @@ export function resolveVoicePresentationState({
  */
 export function resolveVoiceControlHint(pushToTalkMode, pushToTalkKeyHeld) {
   return pushToTalkMode && pushToTalkKeyHeld
-    ? 'Release Space to send'
-    : 'Hold Space to speak · tap Space to activate focused controls';
+    ? t('Release Space to send')
+    : t('Hold Space to speak · tap Space to activate focused controls');
 }
 
 /**

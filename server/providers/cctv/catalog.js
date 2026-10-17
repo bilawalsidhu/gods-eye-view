@@ -4,6 +4,7 @@ import { DEFAULT_CCTV_SOURCE_FILE, CCTV_SOURCE_CACHE_MS } from './constants.js';
 import { allocateSourceCap, resolveCatalogCap } from './cap.js';
 import { loadGroundHeights, joinGroundHeights } from './groundHeights.js';
 import { cameraRegion, normalizeSourceItem } from './normalize.js';
+import { loadLithuaniaSources } from './lithuania.js';
 import {
   loadAustinSourcesFromOpenData,
   loadCaltransSourcesFromOpenData,
@@ -17,19 +18,30 @@ import {
   loadWarendorfSourcesFromCatalog,
   loadNswSourcesFromOpenData,
   loadCalgarySourcesFromOpenData,
+  loadCataloniaSourcesFromOpenData,
   loadDelDOTSourcesFromOpenData,
+  loadKingCountySourcesFromOpenData,
+  loadWsdotSourcesFromOpenData,
   loadVegvesenSourcesFromOpenData,
+  loadNycSourcesFromOpenData,
+  loadTorontoSourcesFromOpenData,
 } from './sources.js';
 
 /** Env kill switch: unset or anything but "0" means enabled. */
 const envEnabled = (name) => String(process.env[name] || '1').trim() !== '0';
+/** Env opt-in: only "1" enables. For packs whose feed access needs an
+ * operator agreement or whose terms are unconfirmed, so an unset flag never
+ * reaches the upstream. */
+const envOptIn = (name) => String(process.env[name] || '').trim() === '1';
 
 /**
  * Live open-data packs, in merge order. Adding a region is one entry here
- * plus its loader in sources.js; the catalog cap is shared across entries
- * round-robin (cap.js), so a new pack never silently evicts an older one.
+ * plus its loader (in sources.js or its own module); the catalog cap is
+ * shared across entries round-robin (cap.js), so a new pack never silently
+ * evicts an older one.
  * Each pack fails independently (allSettled) and is gated by its own env
- * kill switch.
+ * kill switch, or by an opt-in flag where access needs an agreement or the
+ * terms are unconfirmed.
  */
 const LIVE_PACKS = [
   { name: 'austin', enabled: () => true, load: loadAustinSourcesFromOpenData },
@@ -89,14 +101,48 @@ const LIVE_PACKS = [
     load: loadCalgarySourcesFromOpenData,
   },
   {
+    name: 'catalonia',
+    enabled: () => envEnabled('CCTV_CATALONIA_ENABLED'),
+    load: loadCataloniaSourcesFromOpenData,
+  },
+  {
     name: 'deldot',
     enabled: () => envEnabled('CCTV_DELDOT_ENABLED'),
     load: loadDelDOTSourcesFromOpenData,
   },
   {
+    name: 'kingcounty',
+    enabled: () => envEnabled('CCTV_KINGCOUNTY_ENABLED'),
+    load: loadKingCountySourcesFromOpenData,
+  },
+  {
+    name: 'wsdot',
+    enabled: () => envEnabled('CCTV_WSDOT_ENABLED'),
+    load: loadWsdotSourcesFromOpenData,
+  },
+  {
     name: 'vegvesen',
     enabled: () => envEnabled('CCTV_VEGVESEN_ENABLED'),
     load: loadVegvesenSourcesFromOpenData,
+  },
+  {
+    // NYC DOT requires a data-sharing agreement for this feed, so the pack is
+    // off unless the operator opts in (see DATA_SOURCES.md).
+    name: 'nyc',
+    enabled: () => envOptIn('CCTV_NYC_ENABLED'),
+    load: loadNycSourcesFromOpenData,
+  },
+  {
+    name: 'toronto',
+    enabled: () => envEnabled('CCTV_TORONTO_ENABLED'),
+    load: loadTorontoSourcesFromOpenData,
+  },
+  {
+    // Opt-in until the Via Lietuva open-data terms are confirmed to cover the
+    // camera photos (see DATA_SOURCES.md).
+    name: 'lithuania',
+    enabled: () => envOptIn('CCTV_LITHUANIA_ENABLED'),
+    load: loadLithuaniaSources,
   },
 ];
 /**
