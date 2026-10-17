@@ -90,6 +90,15 @@ test('Warendorf webcam display introduces the shared OSM credit', (t) => {
   assert.equal(v.credits.filter(c => c.showOnScreen).length, 0);
 });
 
+test('CET-SP cameras, placed from OSM intersections, introduce the shared OSM credit', (t) => {
+  const v = viewer(t), empty = new Proxy({}, { get: () => noop });
+  const lifecycle = createCctvLifecycle({ state: { _viewer: v, _records: [{ camera: { id: 'cetsp-164', cityId: 'sao-paulo' } }], _recordById: new Map(), _cctvOverlayHost: overlayHost },
+    services: { credits: { showOsmCredit, hideOsmCredit }, sprites: empty, activation: empty, picking: empty, focus: empty, render: empty },
+    parts: { selection: empty, geometryQueue: empty, rendering: empty, projection: empty, cards: empty, presentation: empty }, source: {} });
+  lifecycle.methods.enable(); assertCredit(v); lifecycle.methods.disable();
+  assert.equal(v.credits.filter(c => c.showOnScreen).length, 0);
+});
+
 test('optional Overpass ALPR adapter uses the shared contributor wording', () => {
   assert.equal(createOverpassAlprSource().attribution.text, '© OpenStreetMap contributors');
 });

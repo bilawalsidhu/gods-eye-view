@@ -5,6 +5,7 @@ import { allocateSourceCap, resolveCatalogCap } from './cap.js';
 import { loadGroundHeights, joinGroundHeights } from './groundHeights.js';
 import { cameraRegion, normalizeSourceItem } from './normalize.js';
 import { loadLithuaniaSources } from './lithuania.js';
+import { loadCetspSourcesFromCatalog } from './cetsp.js';
 import {
   loadAustinSourcesFromOpenData,
   loadCaltransSourcesFromOpenData,
@@ -143,6 +144,13 @@ const LIVE_PACKS = [
     name: 'lithuania',
     enabled: () => envOptIn('CCTV_LITHUANIA_ENABLED'),
     load: loadLithuaniaSources,
+  },
+  {
+    // Opt-in: CET-SP publishes the stills on a public website but no reuse
+    // terms for them (see DATA_SOURCES.md).
+    name: 'cetsp',
+    enabled: () => envOptIn('CCTV_CETSP_ENABLED'),
+    load: loadCetspSourcesFromCatalog,
   },
 ];
 /**

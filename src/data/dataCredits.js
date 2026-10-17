@@ -258,6 +258,14 @@ export const DATA_CREDITS = [
       '<a href="https://eismoinfo.lt/" target="_blank" rel="noopener">Via Lietuva / Eismoinfo</a>; periodically updated images',
   },
   {
+    key: 'cetsp-cctv',
+    html:
+      // Opt-in: the stills are public on CET's website, which publishes no
+      // reuse terms for them.
+      'Traffic-camera stills (São Paulo, when enabled): ' +
+      '<a href="https://www.cetsp.com.br/consultas/cameras-cet.aspx" target="_blank" rel="noopener">CET-SP — Companhia de Engenharia de Tráfego</a> (courtesy); periodically updated images',
+  },
+  {
     key: 'calgary-cctv',
     html:
       'Traffic cameras (Calgary): contains information licensed under the ' +
