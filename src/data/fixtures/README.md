@@ -41,3 +41,15 @@
   2026-09-25. Each record names its XYZ tile and expected traffic eligibility.
   Modified, test-only OpenStreetMap data; same ODbL attribution and database
   share-alike terms as the OpenFreeMap fixtures above.
+
+- `sa-fire-incidents.synthetic.json` — SYNTHETIC. Two invented incident
+  records (ids `F0000000001`/`F0000000002`, made-up place names, coordinates
+  and resources) shaped like the South Australian CFS/MFS current-incidents
+  feed as observed on 2026-10-13: string coordinates, a local
+  `dd/mm/yyyy` + `hh:mm` reported time with an IANA zone, CFS and MFS
+  agencies. It contains no feed data and is not a copy of any record. Used by
+  the SA Fire Incidents parser and proxy tests; never loaded at runtime. The
+  real feed is licensed CC BY-NC-ND 4.0 and is only ever fetched live. The
+  public-warnings layers had no live features when the layer was built, so
+  the tests build clearly labelled synthetic GeoJSON from the published layer
+  schemas inline.

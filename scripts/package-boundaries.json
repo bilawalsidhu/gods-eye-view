@@ -2263,6 +2263,11 @@
       "src/layers/perimeters/records.js",
       "src/layers/perimeters/cards.js",
       "src/layers/perimeters/inciweb.js",
+      "src/app/layers/saFire.js",
+      "src/layers/saFire/index.js",
+      "src/layers/saFire/source.js",
+      "src/layers/saFire/records.js",
+      "src/layers/saFire/cards.js",
       "src/app/layers/gnss.js",
       "src/layers/gnss/index.js",
       "src/layers/gnss/source.js",
@@ -2891,6 +2896,11 @@
       "src/layers/perimeters/records.js",
       "src/layers/perimeters/cards.js",
       "src/layers/perimeters/inciweb.js",
+      "src/app/layers/saFire.js",
+      "src/layers/saFire/index.js",
+      "src/layers/saFire/source.js",
+      "src/layers/saFire/records.js",
+      "src/layers/saFire/cards.js",
       "src/app/layers/gnss.js",
       "src/layers/gnss/index.js",
       "src/layers/gnss/source.js",
@@ -3476,6 +3486,8 @@
       "src/i18n/marker.js",
       "src/layers/perimeters/source.js",
       "src/layers/perimeters/records.js",
+      "src/layers/saFire/source.js",
+      "src/layers/saFire/records.js",
       "src/layers/submarineCables/bundledSource.js",
       "src/layers/gnss/source.js",
       "src/layers/airQuality/model.js",
@@ -3741,6 +3753,32 @@
       "src/sources/httpBody.js",
       "src/i18n/marker.js",
       "src/layers/perimeters/source.js"
+    ],
+    "external": []
+  },
+  "sa-fire": {
+    "exports": ["./layers/sa-fire"],
+    "modules": [
+      "src/layers/saFire/index.js",
+      "src/sources/httpBody.js",
+      "src/i18n/marker.js",
+      "src/layers/saFire/source.js",
+      "src/layers/saFire/records.js",
+      "src/layers/saFire/cards.js",
+      "src/i18n/index.js",
+      "src/i18n/locale.js",
+      "src/i18n/locales/es.json",
+      "src/i18n/locales/ru.json"
+    ],
+    "external": ["cesium"]
+  },
+  "sa-fire-source": {
+    "exports": ["./layers/sa-fire/source"],
+    "modules": [
+      "src/layers/saFire/records.js",
+      "src/sources/httpBody.js",
+      "src/i18n/marker.js",
+      "src/layers/saFire/source.js"
     ],
     "external": []
   },

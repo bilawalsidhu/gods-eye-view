@@ -3379,6 +3379,7 @@ its criteria cannot be silently ignored.
 | Wind 🌬                 | NOAA GFS 10 m wind (keyless, 0.25°→1° grid; animated particles)                                                                                                                                 | `src/data/wind.js`                                    | `/api/wind`                                              | 1 h (forecast cycle)                                                              |
 | GNSS Integrity 📡 (`gnss-integrity`) | adsb.lol point snapshot, low navigation accuracy binned per 0.5° cell (GEV NIC/NACp threshold + gpsjam.org formula and bands, keyless, ODbL) | `src/layers/gnss/` via `src/app/layers/gnss.js` | `/api/gnss-integrity` | camera-driven (600 ms debounce, minimum 2.5 s between reads) + 60s poll (server cache 60 s; 30 min rolling window) |
 | Fire Perimeters 🔥 | NIFC WFIGS current interagency perimeters (keyless, paged past the 2000-record cap); InciWeb catalog + incident page origin and update time checks for verified incident-page links | `src/layers/perimeters/` via `src/app/layers/perimeters.js` | `/api/fire-perimeters` + `/api/fire-perimeters/inciweb/*` | 5 min (server caches: catalog 1 h; publication 30 min) |
+| SA Fire Incidents 🔥 | South Australian CFS and MFS current incidents (keyless JSON) with CFS public warnings (ArcGIS points and polygons; failing independently, shown as "warnings unavailable" when down); times shown in Adelaide time | `src/layers/saFire/` via `src/app/layers/saFire.js` | `/api/sa-fire` | 1 min (server caches: incidents 60 s; warnings 120 s; failed upstreams back off) |
 
 GNSS Integrity samples a 250 nm circle around the Earth point under the screen
 centre. Camera reads debounce for 600 ms with a monotonic 2.5 s minimum gap;
@@ -3406,6 +3407,8 @@ by `scripts/qa-emergency-squawk.mjs`. Both accept `--timeout-ms` for slow boot.
 
 
 Fire Perimeters uses capped, timed server reads with stale-on-error caching and a per-client limit. Unchanged snapshots retain geometry; link checks cancel on disable or selection change, and the row legend shows reported containment.
+
+SA Fire Incidents reads the CFS/MFS incident JSON and the CFS public-warnings layers through capped, timed, redirect-refusing server reads with independent caches. An HTML or non-array response (the retired feed answers 200 with a File Unavailable page) is a failure that serves the last good snapshot flagged stale, or 502 when none exists; repeated failures back off and honour 429 Retry-After. The row shows the feed's last-updated time in Adelaide time, status legend counts, CFS/MFS filter chips and a stale or warnings-unavailable notice; warning polygons draw with ClassificationType.BOTH.
 
 Street Level is a collapsible right-rail panel (`#street-level-panel`, layer
 token `0`, option owner `street-level`, panel `ui` token `t`) that starts

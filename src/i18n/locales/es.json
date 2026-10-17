@@ -2889,5 +2889,51 @@
   "USB work abandoned after a stalled transfer": "Trabajo USB cancelado tras una transferencia bloqueada",
   "SDR decoder did not start; receiver stopped": "El decodificador SDR no arrancó; receptor detenido",
   "SDR decoder stopped responding; receiver stopped": "El decodificador SDR dejó de responder; receptor detenido",
-  "SDR decoder fell behind; receiver stopped": "El decodificador SDR se quedó atrás; receptor detenido"
+  "SDR decoder fell behind; receiver stopped": "El decodificador SDR se quedó atrás; receptor detenido",
+  "Going": "En curso",
+  "Contained": "Contenido",
+  "Controlled": "Controlado",
+  "Safe": "Seguro",
+  "Other / unknown": "Otro / desconocido",
+  "Region {region}": "Región {region}",
+  "{count} ground": {
+    "one": "{count} recurso terrestre",
+    "many": "{count} de recursos terrestres",
+    "other": "{count} recursos terrestres"
+  },
+  "{count} aircraft": {
+    "one": "{count} aeronave",
+    "many": "{count} de aeronaves",
+    "other": "{count} aeronaves"
+  },
+  "Reported {time}": "Notificado {time}",
+  "Reported time unknown": "Hora de notificación desconocida",
+  "Warning: {category}": "Aviso: {category}",
+  "Active": "Activo",
+  "Feed updated {time}": "Fuente actualizada {time}",
+  "Incident": "Incidente",
+  "Warning": "Aviso",
+  "Expires {time}": "Caduca {time}",
+  "No expiry set": "Sin fecha de caducidad",
+  "Updated {time}": "Actualizado {time}",
+  "Incident {id} · {name}": "Incidente {id} · {name}",
+  "Incident {id}": "Incidente {id}",
+  "More information ↗ · click card to open": "Más información ↗ · haz clic en la tarjeta para abrirla",
+  "Open {title} on cfs.sa.gov.au": "Abrir {title} en cfs.sa.gov.au",
+  "Country Fire Service incidents": "Incidentes del Country Fire Service (CFS)",
+  "Metropolitan Fire Service incidents": "Incidentes del Metropolitan Fire Service (MFS)",
+  "SA fire source unavailable": "Fuente de incendios de SA no disponible",
+  "Feed time unavailable": "Hora de la fuente no disponible",
+  "Warnings unavailable": "Avisos no disponibles",
+  "{count} public warnings": {
+    "one": "{count} aviso público",
+    "many": "{count} de avisos públicos",
+    "other": "{count} avisos públicos"
+  },
+  "No active public warnings": "Sin avisos públicos activos",
+  "Showing last good data · SA feed not responding": "Mostrando los últimos datos válidos · la fuente de SA no responde",
+  "Marker colour shows reported status; size shows incident level (L1 to L3). Warning areas are tinted red, orange or yellow by category.": "El color del marcador indica el estado notificado; el tamaño indica el nivel del incidente (L1 a L3). Las áreas de aviso se tiñen de rojo, naranja o amarillo según la categoría.",
+  "South Australian CFS and MFS current incidents with public warnings. Times are Adelaide local time. Consult the official CFS and MFS channels for emergency decisions.": "Incidentes actuales del CFS y el MFS de Australia Meridional con avisos públicos. Las horas son la hora local de Adelaida. Consulta los canales oficiales del CFS y el MFS para tomar decisiones en emergencias.",
+  "Malformed SA fire snapshot": "Instantánea de incendios de SA con formato incorrecto",
+  "SA Fire Incidents": "Incidentes de incendio en SA"
 }
