@@ -30,6 +30,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import puppeteer from 'puppeteer';
+import { resolveChromeExecutable } from './qa-browser.mjs';
 
 const argv = process.argv.slice(2);
 const getOpt = (name, dflt) => {
@@ -176,28 +177,8 @@ function syntheticVesselRows(portKey, port) {
   }));
 }
 
-const CHROME_EXECUTABLE_CANDIDATES = [
-  process.env.PUPPETEER_EXECUTABLE_PATH,
-  // Prefer puppeteer's version-pinned Chrome-for-Testing over the system
-  // Chrome: /Applications auto-updates underneath the harnesses, and its
-  // software-GL behavior shifts across majors (system Chrome 150 blew the
-  // tile-gated drain budget under SwiftShader on 2026-07-30 — six
-  // false-negative qa-cctv-v2 runs against a healthy build). A deterministic
-  // pinned browser beats the newest one for regression harnesses.
-  await puppeteer.executablePath().catch(() => null),
-  '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
-  '/Applications/Google Chrome Canary.app/Contents/MacOS/Google Chrome Canary',
-  '/Applications/Chromium.app/Contents/MacOS/Chromium',
-].filter(Boolean);
-
-function findChromeExecutable() {
-  for (const candidate of CHROME_EXECUTABLE_CANDIDATES) {
-    try {
-      if (fs.existsSync(candidate)) return candidate;
-    } catch { /* fall through to Puppeteer's cache */ }
-  }
-  return null;
-}
+const chromeExecutable = await resolveChromeExecutable(puppeteer);
+const findChromeExecutable = () => chromeExecutable;
 
 async function main() {
   console.log(`\nAIS Vessel Cards — visual proof harness`);

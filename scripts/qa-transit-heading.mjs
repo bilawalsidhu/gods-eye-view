@@ -1,11 +1,14 @@
 import puppeteer from 'puppeteer';
-import { chromeExecutablePath } from './qa-chrome.mjs';
+import { resolveChromeExecutable } from './qa-browser.mjs';
 
 /** Prove parked and moving headings in the real scene, without live feeds. */
 export async function runTransitHeadingRegression(base, check) {
+  const chromeExecutable = await resolveChromeExecutable(puppeteer, {
+    required: true,
+  });
   const browser = await puppeteer.launch({
     headless: true,
-    executablePath: chromeExecutablePath(),
+    executablePath: chromeExecutable,
     args: ['--no-sandbox', '--disable-background-timer-throttling'],
   });
   try {

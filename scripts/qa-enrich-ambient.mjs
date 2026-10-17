@@ -55,6 +55,7 @@ import path from 'node:path';
 import puppeteer from 'puppeteer';
 import { classifyAircraft, CLASS_SCALE_2D } from '../src/data/aircraftClass.js';
 import { aircraftIcon } from '../src/data/aircraftIcons.js';
+import { resolveChromeExecutable } from './qa-browser.mjs';
 
 // ---------------------------------------------------------------------------
 // Args (same shape as qa-sprites-b5.mjs)
@@ -85,26 +86,8 @@ const SESSION_CAP = 300;       // ENRICH_AMBIENT_BUDGET_CEIL (rolling-bucket cei
 const BUDGET_QA = { ceil: 20, refillTokens: 6, windowMs: 3600000 };
 const RESUME_WINDOW_MS = 1000; // E11 swaps windowMs to this to unlock refills
 
-const CHROME_EXECUTABLE_CANDIDATES = [
-  process.env.PUPPETEER_EXECUTABLE_PATH,
-  // Prefer puppeteer's version-pinned Chrome-for-Testing over the system
-  // Chrome: /Applications auto-updates underneath the harnesses, and its
-  // software-GL behavior shifts across majors (system Chrome 150 blew the
-  // tile-gated drain budget under SwiftShader on 2026-07-30 — six
-  // false-negative qa-cctv-v2 runs against a healthy build). A deterministic
-  // pinned browser beats the newest one for regression harnesses.
-  await puppeteer.executablePath().catch(() => null),
-  '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
-  '/Applications/Google Chrome Canary.app/Contents/MacOS/Google Chrome Canary',
-  '/Applications/Chromium.app/Contents/MacOS/Chromium',
-].filter(Boolean);
-
-function findChromeExecutable() {
-  for (const candidate of CHROME_EXECUTABLE_CANDIDATES) {
-    try { if (fs.existsSync(candidate)) return candidate; } catch { /* skip */ }
-  }
-  return null;
-}
+const chromeExecutable = await resolveChromeExecutable(puppeteer);
+const findChromeExecutable = () => chromeExecutable;
 
 const results = [];
 function record(name, ok, detail) {

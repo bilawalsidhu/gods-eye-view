@@ -5,11 +5,11 @@
  * Sign-in responses are fixtures. No credentials or live login are used.
  */
 import assert from 'node:assert/strict';
-import { existsSync } from 'node:fs';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { createServer } from 'node:http';
 import { after, before, test } from 'node:test';
 import puppeteer from 'puppeteer';
+import { resolveChromeExecutable } from './qa-browser.mjs';
 
 const root = new URL('../', import.meta.url);
 const template = await readFile(
@@ -59,12 +59,10 @@ before(async () => {
     server.listen(0, '127.0.0.1', resolve);
   });
   origin = `http://127.0.0.1:${server.address().port}`;
-  const chrome = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
+  const chromeExecutable = await resolveChromeExecutable(puppeteer);
   browser = await puppeteer.launch({
     headless: true,
-    executablePath:
-      process.env.PUPPETEER_EXECUTABLE_PATH ||
-      (existsSync(chrome) ? chrome : await puppeteer.executablePath()),
+    ...(chromeExecutable ? { executablePath: chromeExecutable } : {}),
   });
 });
 

@@ -22,6 +22,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import puppeteer from 'puppeteer';
+import { resolveChromeExecutable } from './qa-browser.mjs';
 
 const args = process.argv.slice(2);
 const getOpt = (flag, fallback) => {
@@ -35,12 +36,7 @@ const HEADFUL = args.includes('--headful');
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const SHOT_DIR = path.join(ROOT, 'qa-shots', 'firstrun');
 
-const CHROME_CANDIDATES = [
-  process.env.PUPPETEER_EXECUTABLE_PATH,
-  // Version-pinned Chrome-for-Testing over the auto-updating system Chrome.
-  await puppeteer.executablePath().catch(() => null),
-  '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
-].filter(Boolean);
+const chromeExecutable = await resolveChromeExecutable(puppeteer);
 
 const results = [];
 let currentSection = 'setup';
@@ -486,9 +482,7 @@ async function main() {
   }
 
   fs.mkdirSync(SHOT_DIR, { recursive: true });
-  const executablePath = CHROME_CANDIDATES.find((candidate) => {
-    try { return fs.existsSync(candidate); } catch { return false; }
-  });
+  const executablePath = chromeExecutable;
   const browser = await puppeteer.launch({
     headless: HEADFUL ? false : 'new',
     ...(executablePath ? { executablePath } : {}),

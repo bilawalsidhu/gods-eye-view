@@ -3,9 +3,9 @@
  * written against macOS Google Chrome, which Windows and Linux do not have.
  */
 import { existsSync } from 'node:fs';
+import { MACOS_CHROME } from './qa-browser.mjs';
 
-export const MACOS_CHROME =
-  '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
+export { MACOS_CHROME };
 
 /**
  * PUPPETEER_EXECUTABLE_PATH when set, then macOS Google Chrome when it is
