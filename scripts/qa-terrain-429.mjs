@@ -23,6 +23,7 @@
  */
 import fs from 'node:fs';
 import puppeteer from 'puppeteer';
+import { resolveChromeExecutable } from './qa-browser.mjs';
 
 const appUrl = process.env.QA_BASE_URL || 'http://localhost:4173';
 const argv = process.argv.slice(2);
@@ -46,11 +47,9 @@ const headful = argv.includes('--headful');
 const TERRAIN_HOST = 'terrain.reearth.land';
 const TILE_PATTERN = /\/cesium-mesh\/ellipsoid\/\d+\/\d+\/\d+\.terrain/;
 
-const executablePath =
-  process.env.PUPPETEER_EXECUTABLE_PATH ||
-  (await puppeteer.executablePath().catch(() => null));
+const executablePath = await resolveChromeExecutable(puppeteer);
 if (!executablePath || !fs.existsSync(executablePath)) {
-  throw new Error('Puppeteer Chrome for Testing is unavailable');
+  throw new Error('Chrome executable is unavailable');
 }
 
 const browser = await puppeteer.launch({

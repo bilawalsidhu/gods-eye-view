@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import puppeteer from 'puppeteer';
+import { resolveChromeExecutable } from './qa-browser.mjs';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const shotsDir = process.env.QA_SHOTS_DIR || path.join(repoRoot, 'qa-shots', 'map-source-tray');
@@ -18,11 +19,10 @@ const headful = process.argv.includes('--headful');
 // branch.
 const forceKeyless = process.argv.includes('--keyless')
   || process.env.QA_MAP_SOURCE_TRAY_KEYLESS === '1';
-const executablePath = process.env.PUPPETEER_EXECUTABLE_PATH
-  || await puppeteer.executablePath().catch(() => null);
+const executablePath = await resolveChromeExecutable(puppeteer);
 
 if (!executablePath || !fs.existsSync(executablePath)) {
-  throw new Error('Puppeteer Chrome for Testing is unavailable');
+  throw new Error('Chrome executable is unavailable');
 }
 fs.mkdirSync(shotsDir, { recursive: true });
 

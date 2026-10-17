@@ -32,6 +32,7 @@
  * real-GPU visual correctness.
  */
 import puppeteer from 'puppeteer';
+import { resolveChromeExecutable } from './qa-browser.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 
@@ -58,10 +59,10 @@ function record(name, ok, detail) {
 }
 
 fs.mkdirSync(OUT_DIR, { recursive: true });
-const chrome = await puppeteer.executablePath().catch(() => undefined);
+const chrome = await resolveChromeExecutable(puppeteer);
 const browser = await puppeteer.launch({
   headless: HEADFUL ? false : 'new',
-  executablePath: chrome,
+  ...(chrome ? { executablePath: chrome } : {}),
   args: ['--use-gl=angle', `--use-angle=${ANGLE}`, '--enable-webgl',
     '--ignore-gpu-blocklist', '--no-sandbox'],
 });

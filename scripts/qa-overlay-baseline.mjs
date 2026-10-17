@@ -21,8 +21,9 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import puppeteer from 'puppeteer';
+import { resolveChromeExecutable } from './qa-browser.mjs';
 
-const CHROME_EXECUTABLE = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
+const CHROME_EXECUTABLE = await resolveChromeExecutable(puppeteer);
 const DEFAULT_URL = 'http://localhost:4176';
 const VIEWPORT = Object.freeze({ width: 1440, height: 900 });
 const SAMPLE_MS = 5_000;
@@ -830,8 +831,8 @@ function unavailableRenderer(renderer) {
 }
 
 async function main() {
-  if (!fs.existsSync(CHROME_EXECUTABLE)) {
-    throw new Error(`Required Chrome executable not found: ${CHROME_EXECUTABLE}`);
+  if (!CHROME_EXECUTABLE || !fs.existsSync(CHROME_EXECUTABLE)) {
+    throw new Error(`Required Chrome executable not found: ${CHROME_EXECUTABLE || '(none found)'}`);
   }
   if (!Number.isFinite(DPR) || DPR <= 0) throw new Error(`Invalid --dpr value: ${DPR}`);
   const scenes = selectedScenes();
