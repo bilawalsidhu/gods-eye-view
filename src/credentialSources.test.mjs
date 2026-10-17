@@ -126,3 +126,65 @@ test('manager failures do not require exposing command output', () => {
     /pass-cli failed while resolving credentials/,
   );
 });
+
+test('refuses option-like and malformed BWS ids before invoking a CLI', () => {
+  assert.equal(credentialReference('bws://--output'), null);
+  assert.equal(credentialReference('bws://a/../../b'), null);
+  for (const env of [
+    { TOMTOM_API_KEY: 'bws://--output' },
+    { GEV_SECRET_TOMTOM_API_KEY: 'bws://--output' },
+    { GEV_BWS_PROJECT_IDS: 'valid-id,--output' },
+  ]) {
+    let invoked = false;
+    assert.throws(
+      () => resolveCredentialEnvironment({
+        env,
+        runCommand() { invoked = true; return '[]'; },
+      }),
+      /Invalid Bitwarden Secrets Manager/,
+    );
+    assert.equal(invoked, false);
+  }
+});
+
+test('manager subprocesses never inherit provider keys or previous resolutions', () => {
+  const env = {
+    PATH: '/usr/bin',
+    HOME: '/home/operator',
+    BWS_ACCESS_TOKEN: 'manager-auth',
+    OPENAI_API_KEY: 'bws://example-1',
+    TOMTOM_API_KEY: 'literal-tomtom',
+    GEV_SECRET_OPENAI_API_KEY: 'bws://example-1',
+    UNRELATED_PRIVATE_TOKEN: 'must-not-leak',
+  };
+  let childEnv;
+  resolveCredentialEnvironment({
+    env,
+    runCommand(command, args, passedEnv) {
+      assert.equal(command, 'bws');
+      childEnv = passedEnv;
+      return JSON.stringify({ value: 'resolved-openai' });
+    },
+  });
+  assert.equal(env.OPENAI_API_KEY, 'resolved-openai');
+  assert.equal(childEnv.PATH, '/usr/bin');
+  assert.equal(childEnv.HOME, '/home/operator');
+  assert.equal(childEnv.BWS_ACCESS_TOKEN, 'manager-auth');
+  assert.equal(childEnv.OPENAI_API_KEY, undefined);
+  assert.equal(childEnv.TOMTOM_API_KEY, undefined);
+  assert.equal(childEnv.GEV_SECRET_OPENAI_API_KEY, undefined);
+  assert.equal(childEnv.UNRELATED_PRIVATE_TOKEN, undefined);
+});
+
+test('plural and singular project ids both load, with duplicates removed', () => {
+  const ids = [];
+  resolveCredentialEnvironment({
+    env: { GEV_BWS_PROJECT_IDS: 'alpha,beta', GEV_BWS_PROJECT_ID: 'alpha' },
+    runCommand(command, args) {
+      assert.equal(command, 'bws');
+      ids.push(args[2]);
+      return '[]';
+    },
+  });
+  assert.deepEqual(ids, ['alpha', 'beta']);
+});
