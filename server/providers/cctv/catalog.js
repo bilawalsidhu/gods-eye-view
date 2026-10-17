@@ -25,6 +25,7 @@ import {
   loadVegvesenSourcesFromOpenData,
   loadNycSourcesFromOpenData,
   loadTorontoSourcesFromOpenData,
+  loadFloridaSourcesFromOpenData,
 } from './sources.js';
 
 /** Env kill switch: unset or anything but "0" means enabled. */
@@ -143,6 +144,13 @@ const LIVE_PACKS = [
     name: 'lithuania',
     enabled: () => envOptIn('CCTV_LITHUANIA_ENABLED'),
     load: loadLithuaniaSources,
+  },
+  {
+    // FL511's terms limit its content to individual, non-commercial use, so
+    // the pack is off unless the operator opts in (see DATA_SOURCES.md).
+    name: 'florida',
+    enabled: () => envOptIn('CCTV_FLORIDA_ENABLED'),
+    load: loadFloridaSourcesFromOpenData,
   },
 ];
 /**
