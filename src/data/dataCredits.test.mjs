@@ -121,6 +121,25 @@ test('tile attribution follows source changes and viewers have independent owner
   assert.equal(b.credits.size, 1);
 });
 
+test('the Bureau of Meteorology credit is conditional and carries the licence caveat', async () => {
+  const { BOM_RADAR_CREDIT, registerDynamicCredit } =
+    await import('./dataCredits.js');
+  // Registered only once the opt-in layer draws, never part of the static set.
+  assert.equal(
+    DATA_CREDITS.some((entry) => entry.key === BOM_RADAR_CREDIT.key),
+    false,
+  );
+  assert.match(BOM_RADAR_CREDIT.html, /Commonwealth of Australia/);
+  assert.match(BOM_RADAR_CREDIT.html, /Bureau of Meteorology/);
+  assert.match(BOM_RADAR_CREDIT.html, /personal or in-organisation use only/);
+  assert.match(BOM_RADAR_CREDIT.html, /bom\.gov\.au\/catalogue\/anon-ftp/);
+  const added = [];
+  const viewer = { creditDisplay: { addStaticCredit: (c) => added.push(c) } };
+  assert.equal(registerDynamicCredit(viewer, BOM_RADAR_CREDIT), true);
+  assert.equal(registerDynamicCredit(viewer, BOM_RADAR_CREDIT), true);
+  assert.equal(added.length, 1, 'idempotent per key');
+});
+
 test('the NYC camera credit carries NYC DOT’s requested disclaimer', () => {
   const credit = DATA_CREDITS.find((entry) => entry.key === 'nyc-cctv');
   assert.ok(credit, 'NYC DOT camera frames must be credited');

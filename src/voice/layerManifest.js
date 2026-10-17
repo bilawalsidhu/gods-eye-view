@@ -405,11 +405,14 @@ const layers = [
 
 /**
  * Catalog layers deliberately outside voice, with the reason. The Bhote Koshi
- * pair belong to a scripted scene and are driven by `control_scene`.
+ * pair belong to a scripted scene and are driven by `control_scene`. The BoM
+ * radar is licence-restricted (personal use only) and opt-in per server, so it
+ * is switched on from the layer panel rather than by a spoken request.
  */
 export const VOICE_OFF_LAYERS = Object.freeze({
   'bhote-koshi-2026': 'scene-driven event layer (control_scene)',
   'bhote-koshi-locator': 'scene-driven event layer (control_scene)',
+  'bom-radar': 'licence-restricted opt-in radar; panel toggle only',
 });
 
 const TYPE_NAMES = Object.freeze({

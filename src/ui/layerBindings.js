@@ -126,6 +126,7 @@ export class LayerBindings {
       'weather-radar',
       'weather-satellite',
       'weather-lightning',
+      'bom-radar',
       'weather-cyclones',
     ]) {
       const layer = this._dataManager?.layers?.get(id)?.module;
