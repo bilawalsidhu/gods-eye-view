@@ -178,6 +178,29 @@ test('fireballToGeoJsonFeature builds standard Point Feature with altitude in me
   assert.deepEqual(feature.geometry.coordinates, [0.1, 49.8, 34500]);
   assert.equal(feature.properties.impactEnergyKt, 0.45);
   assert.equal(feature.properties.altitudeKm, 34.5);
+  assert.equal(feature.properties.altitudeM, 34500);
+});
+
+test('fireballToGeoJsonFeature leaves altitude unknown when absent to prevent drawing at ground level', () => {
+  const eventWithoutAlt = {
+    id: 'fireball-test-2',
+    date: '2023-02-13T02:59:21.000Z',
+    epochMs: 1676257161000,
+    lat: 49.8,
+    lon: 0.1,
+    altitudeKm: null,
+    velocityKmS: null,
+    opticalEnergyJoules: null,
+    impactEnergyKt: null,
+  };
+
+  const feature = fireballToGeoJsonFeature(eventWithoutAlt);
+  assert.equal(feature.type, 'Feature');
+  assert.equal(feature.id, 'fireball-test-2');
+  assert.equal(feature.geometry.type, 'Point');
+  assert.deepEqual(feature.geometry.coordinates, [0.1, 49.8]);
+  assert.equal(feature.properties.altitudeKm, null);
+  assert.equal(feature.properties.altitudeM, null);
 });
 
 test('cneosFireballsUrl formats query parameters correctly', () => {

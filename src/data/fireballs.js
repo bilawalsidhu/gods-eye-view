@@ -157,23 +157,29 @@ export function normalizeFireballPayload(payload) {
  * @returns {object} GeoJSON Feature.
  */
 export function fireballToGeoJsonFeature(event) {
-  const altitudeM =
-    event.altitudeKm != null ? Math.round(event.altitudeKm * 1000) : 0;
+  const hasAltitude =
+    event.altitudeKm != null && Number.isFinite(event.altitudeKm);
+  const altitudeM = hasAltitude ? Math.round(event.altitudeKm * 1000) : null;
+  const coordinates = hasAltitude
+    ? [event.lon, event.lat, altitudeM]
+    : [event.lon, event.lat];
+
   return {
     type: 'Feature',
     id: event.id,
     geometry: {
       type: 'Point',
-      coordinates: [event.lon, event.lat, altitudeM],
+      coordinates,
     },
     properties: {
       id: event.id,
       date: event.date,
       epochMs: event.epochMs,
-      altitudeKm: event.altitudeKm,
-      velocityKmS: event.velocityKmS,
-      opticalEnergyJoules: event.opticalEnergyJoules,
-      impactEnergyKt: event.impactEnergyKt,
+      altitudeKm: event.altitudeKm ?? null,
+      altitudeM,
+      velocityKmS: event.velocityKmS ?? null,
+      opticalEnergyJoules: event.opticalEnergyJoules ?? null,
+      impactEnergyKt: event.impactEnergyKt ?? null,
     },
   };
 }
