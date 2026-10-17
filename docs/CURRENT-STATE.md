@@ -1,5 +1,11 @@
 # God's Eye View Current State
 
+CCTV includes Montevisión's public Peatonal Dufaur camera in Monte Hermoso,
+Argentina, as published by Noticias Monte Hermoso. The pack uses the existing
+HLS MPEG-TS relay and is disabled with `CCTV_MONTE_HERMOSO_ENABLED=0`.
+Its label and credit identify an approximate pedestrian-area map reference,
+and the synthetic bearing retains the estimated-heading presentation.
+
 Vessel sources can report healthy empty coverage using a current, complete
 snapshot with zero raw rows, a healthy transport and a positive last-message
 time. This clears obsolete contacts and settles startup without manufacturing

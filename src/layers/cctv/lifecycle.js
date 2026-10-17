@@ -341,7 +341,9 @@ export function createLifecycle({
       layerState._enabled = true;
       if (
         layerState._records.some(
-          (record) => record.camera.cityId === 'warendorf',
+          (record) =>
+            record.camera.cityId === 'warendorf' ||
+            record.camera.sourceKind === 'monte-hermoso-webcam',
         )
       )
         services.credits?.showOsmCredit?.(layerState._viewer, 'cctv');

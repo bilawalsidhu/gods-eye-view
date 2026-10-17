@@ -53,6 +53,7 @@ How to read this:
 | **Stadt Warendorf webcam**                                            | Webcam frames, Marktplatz / Historisches Rathaus (`config/cctv_sources.warendorf.json`)                                             | Public municipal webcam data                                                                                                                                                                                                                                                                                                                          | "Stadt Warendorf — webcam.warendorf.de" (courtesy)      |
 | **Live Traffic NSW (Transport for NSW)**                              | CCTV camera catalog + frames, New South Wales                                                                                       | [CC BY 4.0](https://opendata.transport.nsw.gov.au/) — attribution REQUIRED                                                                                                                                                                                                                                                                            | "Live Traffic NSW — Transport for NSW"                                                                                                      |
 | **Caltrans (cwwp2.dot.ca.gov)**                                       | CCTV camera catalogs + frames, California districts                                                                                 | Public Caltrans traffic camera data                                                                                                                                                                                                                                                                                                                   | "Caltrans — cwwp2.dot.ca.gov" (courtesy)                                                                                                    |
+| **Montevisión / Noticias Monte Hermoso** | Public Peatonal Dufaur HLS webcam, Argentina | Public viewing; provider rights retained, no open-data redistribution license established. Approximate map reference: ODbL 1.0 | “Montevisión · Noticias Monte Hermoso”; © OpenStreetMap contributors |
 | **DelDOT (video.deldot.gov)**                                         | CCTV camera catalog (`tmc.deldot.gov/json/videocamera.json`, cached for 15 minutes) + live HTTPS HLS video, Delaware. Keyless        | Public DelDOT traffic camera streams via the [DelDOT traffic map](https://deldot.gov/map/)                                                                                                                                                                                                                                                            | "DelDOT — Delaware Department of Transportation" (courtesy)                                                                                 |
 | **TfL Open Data (JamCams)**                                           | CCTV camera catalog + frames, London                                                                                                | [TfL Open Data terms](https://tfl.gov.uk/info-for/open-data-users/) — attribution REQUIRED                                                                                                                                                                                                                                                            | "Powered by TfL Open Data. Contains OS data © Crown copyright and database rights"                                                          |
 | **Ontario 511**                                                       | CCTV camera catalog + frames, Ontario highways including Kitchener-area routes                                                      | [Open Government Licence – Ontario](https://www.ontario.ca/page/open-government-licence-ontario)                                                                                                                                                                                                                                                      | "Ontario 511" plus Open Government Licence - Ontario                                                                                        |
@@ -179,6 +180,47 @@ The optional Local ADS-B layer and the broadcast-FM receiver use radio you recei
 - **Dynamic weather presentation.** While cockpit mode is active, `/api/weather-effects` requests current Open-Meteo observations for the aircraft/camera location, rounds coordinates into 0.1° cache cells, caches results for five minutes, and may retain a stale observation for up to 30 minutes during a transient outage. WMO condition code selects the visual family; observed cloud cover, precipitation, visibility, wind speed, and wind direction bound its strength and motion. Missing or expired weather renders no synthetic atmospheric effect, and normal globe view never renders the weather overlay.
 
 ---
+
+### Monte Hermoso public webcam (Argentina)
+
+The default CCTV catalog includes **Peatonal Dufaur**, supplied by Montevisión
+and embedded by Noticias Monte Hermoso on its public camera page:
+https://www.noticiasmontehermoso.com.ar/camara-de-monte-hermoso-en-vivo/.
+Set `CCTV_MONTE_HERMOSO_ENABLED=0` to disable it.
+
+The source is the publisher's canonical unsigned master URL:
+`https://encoder-1b.montevision.com.ar/live/monte2.m3u8`.
+It returns a same-origin media playlist with a short-lived `hls_ctx` query.
+The existing HLS relay follows that reference and its MPEG-TS segments at runtime;
+session URLs are never persisted in the catalog. It retains the existing
+same-origin policy, bounded sessions, leases, cancellation and memory limits.
+Playback needs no extra credentials, process, dependency or other open PR.
+There is no published still endpoint: the existing placeholder is shown until
+the camera's live player is selected.
+
+Attribution is **Montevisión · Noticias Monte Hermoso**. Public viewing was
+verified; no open-data license or general redistribution permission was
+established. The provider retains its rights. No frames, video or audio are
+committed to the repository.
+
+The map anchor is an **approximate pedestrian-area reference**, rounded from
+Patio Dufaur's OpenStreetMap geometry, not a verified camera mount:
+https://www.openstreetmap.org/way/782261091
+(consulted via https://mapcarta.com/es/W782261091).
+Geographic attribution: **© OpenStreetMap contributors**, ODbL 1.0,
+https://www.openstreetmap.org/copyright. The name and credit identify the
+approximation, and the synthetic bearing uses the existing low-confidence
+heading UI. Ground elevation is an approximate ten-metre placement prior.
+
+On 2026-10-15, the public page played this camera in Chromium at 1280×720.
+Unauthenticated HTTP requests returned both playlists; FFprobe identified H.264
+video and AAC audio. The source's playlists and segments use the existing
+MPEG-TS support in main. Availability is not guaranteed.
+
+Two other views on the publisher's page are deliberately excluded:
+Costanera y Patagonia returned HTTP 404 ("no stream is available"), while
+Guardalavaca used a redirect and a low-latency fMP4 playlist, which the existing
+relay does not support. They are not registered as working cameras.
 
 ## Bundled snapshots
 
