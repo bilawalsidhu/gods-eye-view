@@ -416,6 +416,7 @@
     "modules": [
       "src/ui/visualInput.js",
       "src/ui/applicationShortcuts.js",
+      "src/ui/commandCatalog.js",
       "src/ui/styleParameters.js",
       "src/i18n/index.js",
       "src/i18n/locale.js",
