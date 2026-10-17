@@ -805,6 +805,11 @@ and `./layers/launches`. Each owns its catalog, render state, tracking, interact
 and teardown. Source adapters retain the existing CelesTrak and Launch Library
 endpoints; standalone entries provide scene services and the satellite dependency.
 The mission factory separates paths, replay, camera, panel, overlays and placement.
+Launch Library pad coordinates retain unknown values: missing fields use the
+reported location coordinates when available, and launches without a known pad
+position stay off the map. Genuine zero coordinates remain valid. Undisclosed
+stage coordinates, downrange distance and flight numbers remain unknown; the
+mission panel omits the flight-number label when no number was reported.
 Pending mission requests abort on disable/destruction and malformed launch
 snapshots preserve the last accepted display. Catalog groups, propagation cadence,
 tracking intent, replay timing, controls and source attribution remain unchanged.
