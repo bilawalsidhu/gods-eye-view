@@ -11,7 +11,8 @@ const root = fileURLToPath(new URL('../../', import.meta.url));
 
 /** Load this checkout's configuration and attach its local provider middleware. */
 export default defineConfig(({ command, mode }) => {
-  const loaded = loadEnv(mode, root, '');
+  // GEV_STATE_DIR (desktop app) relocates the writable .env; default is the checkout.
+  const loaded = loadEnv(mode, process.env.GEV_STATE_DIR || root, '');
   for (const [key, value] of Object.entries(loaded)) {
     if (process.env[key] === undefined) process.env[key] = value;
   }
