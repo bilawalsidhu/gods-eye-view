@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createVesselLayer } from './index.js';
 import { createVesselState } from './state.js';
+import { createVesselsCesiumRenderer } from './render/cesium.js';
 
 const noop = () => {};
 function services() {
@@ -30,6 +31,10 @@ function services() {
     },
     worldFocus: {},
     render: { releaseContinuousRender: noop },
+    // The renderer service as the application's without an engine (Cesium).
+    renderer: {
+      create: (options) => createVesselsCesiumRenderer(null, options),
+    },
   };
 }
 function setup(source, options = {}) {

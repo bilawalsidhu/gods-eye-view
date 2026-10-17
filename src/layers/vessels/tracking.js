@@ -16,7 +16,6 @@ export function createTracking({
 }) {
   const { state } = vesselState;
   const { geoidHeight } = services.geoid;
-  const { createTrail } = services.trails;
 
   /**
    * Geoid undulation N at (lat, lon), or null until the grid has loaded.
@@ -34,7 +33,7 @@ export function createTracking({
    * TRAIL_HEIGHT_M above the sea surface (geoid, same datum as the anchor)
    * to avoid z-fighting.
    * @param {Object} record - Vessel record with lat/lon.
-   * @returns {Cesium.Cartesian3|null} Lifted position, or null without a fix.
+   * @returns {object|null} Lifted position (Cartesian3), or null without a fix.
    */
 
   function vesselTrailPosition(record) {
@@ -89,8 +88,8 @@ export function createTracking({
     state.trailPositions = [];
     const current = vesselTrailPosition(record);
     if (current) state.trailPositions.push(current);
-    if (!state.trail && state.viewer) {
-      state.trail = createTrail(state.viewer, {
+    if (!state.trail && state.renderer) {
+      state.trail = state.renderer.trails.create({
         color: TRAIL_COLOR,
         width: 2.5,
       });

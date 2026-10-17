@@ -117,11 +117,13 @@ export function createLifecycle({
     state.feed.firstConnectDeadline = null;
     state.feed.firstConnectTimer = null;
     state.feed.abort = null;
-    state.billboardCollection = null;
+    state.renderer?.destroy();
+    state.renderer = null;
     state.records.all = [];
     state.records.byMmsi = new Map();
     state.records.unkeyed = [];
     state.clickHandler = null;
+    state.selectionRemove = null;
     state.keyTarget = null;
     state.keydownHandler = null;
     state.trackedEntityRemover = null;
@@ -141,7 +143,8 @@ export function createLifecycle({
   const methods = {
     /** Configure the source before initialization; an active layer keeps its owner. */
     setSource(source) {
-      if (state.viewer)
+      // Initialized: a viewer, or an engine's renderer without one.
+      if (state.viewer || state.renderer?.engine)
         throw new Error('Configure the source before layer initialization');
       if (typeof source?.getSnapshot !== 'function')
         throw new TypeError('A snapshot source is required');
@@ -149,17 +152,28 @@ export function createLifecycle({
       this.source = source.label || this.source;
     },
 
-    init(viewer) {
+    /**
+     * Creates the engine's vessel renderer (render/*.js), its sprite
+     * collection, the click rule and the per-frame pass.
+     * @param {object|null} viewer The Cesium viewer (null on an engine
+     *   without one).
+     * @param {{ engine?: object }} [context] LayerLifecycle's context.
+     */
+    init(viewer, { engine = null } = {}) {
       if (typeof vesselState._source?.getSnapshot !== 'function')
         throw new TypeError('A snapshot source is required');
       state.viewer = viewer;
-      components.rendering.ensureCollections(viewer);
+      state.renderer ??= createRenderer(viewer, engine);
+      // The scene the layer draws in: the viewer, or the renderer's view on
+      // an engine without one.
+      const scene = viewer || state.renderer?.view || null;
+      components.rendering.ensureCollections(scene);
       vesselState._vesselOverlayHost.setVisible(
         VESSEL_OVERLAY_SOURCE_ID,
         false,
       );
-      components.selection.installInteraction(viewer);
-      components.rendering.installRuntime(viewer);
+      components.selection.installInteraction(scene);
+      components.rendering.installRuntime(scene);
       restoreSpriteOrder(viewer);
     },
 
@@ -169,8 +183,11 @@ export function createLifecycle({
       if (!wasEnabled) beginAisSession();
       holdContinuousRender('ais-vessels'); // per-frame animator (perf wave 2)
       const activeViewer = viewer || state.viewer;
-      components.rendering.ensureCollections(activeViewer);
-      components.selection.installInteraction(activeViewer);
+      // The scene the layer draws in: the viewer, or the renderer's view on
+      // an engine without one.
+      const scene = activeViewer || state.renderer?.view || null;
+      components.rendering.ensureCollections(scene);
+      components.selection.installInteraction(scene);
       components.rendering.setVisible(true);
       // Height-datum fix: warm the geoid grid once per layer-enable, never
       // blocking a poll. The first refresh may land pre-resolve (N = 0), and
@@ -198,12 +215,20 @@ export function createLifecycle({
       restoreSpriteOrderOnEnable('ais', activeViewer);
       // Vessels are asked for by view, so ask again when the view moves away.
       removeViewListener();
-      const moveEnd = activeViewer?.camera?.moveEnd;
-      if (typeof moveEnd?.addEventListener === 'function')
-        state.feed.removeViewListener = moveEnd.addEventListener(() => {
-          components.ingestion.refreshIfMoved(activeViewer);
-        });
-      return components.ingestion.loadLivePositions(activeViewer);
+      const onMoveEnd = () => {
+        components.ingestion.refreshIfMoved(scene);
+      };
+      if (state.renderer)
+        state.feed.removeViewListener = state.renderer.view.on(
+          'moveEnd',
+          onMoveEnd,
+        );
+      else {
+        const moveEnd = activeViewer?.camera?.moveEnd;
+        if (typeof moveEnd?.addEventListener === 'function')
+          state.feed.removeViewListener = moveEnd.addEventListener(onMoveEnd);
+      }
+      return components.ingestion.loadLivePositions(scene);
     },
 
     disable() {
@@ -225,18 +250,15 @@ export function createLifecycle({
       state.feed.loadingLabel = '';
     },
 
-    destroy(viewer) {
+    destroy() {
       removeViewListener();
-      const activeViewer = viewer || state.viewer;
       invalidateAisSession();
       releaseContinuousRender('ais-vessels'); // direct-destroy path (perf wave 2 fix)
       if (state.feed.abort) state.feed.abort.abort();
       unregisterPickOwner('ais-live-vessels');
       components.selection.clearVesselInspection();
       components.tracking.destroySelectedVesselTrail();
-      if (state.billboardCollection && activeViewer?.scene?.primitives) {
-        activeViewer.scene.primitives.remove(state.billboardCollection);
-      }
+      state.renderer?.fleet.detach();
       vesselState._vesselOverlayHost.clearSource(VESSEL_OVERLAY_SOURCE_ID);
       vesselState._vesselOverlayHost.setVisible(
         VESSEL_OVERLAY_SOURCE_ID,
@@ -249,6 +271,17 @@ export function createLifecycle({
       resetState();
     },
   };
+
+  /** The engine's vessel renderer (the Cesium one without an engine). */
+  function createRenderer(viewer, engine) {
+    return (
+      services.renderer?.create({
+        viewer,
+        engine,
+        createTrail: services.trails?.createTrail ?? null,
+      }) ?? null
+    );
+  }
 
   function removeViewListener() {
     const remove = state.feed.removeViewListener;
@@ -266,6 +299,7 @@ export function createLifecycle({
     isDefinitiveTransportFailure,
     markAisUnavailable,
     resetState,
+    createRenderer,
     methods,
   };
 }

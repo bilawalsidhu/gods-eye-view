@@ -51,13 +51,17 @@ export function createVesselState({ source, services }) {
     records: new VesselRecords({ now: () => vesselState._aisRuntime.now() }),
     viewer: null,
 
-    billboardCollection: null,
+    /** The engine's vessel renderer (render/*.js), per lifecycle. */
+    renderer: null,
+    /** Test-only: the handler-like click source (interactionHandlerFactory). */
     clickHandler: null,
+    /** Leaves the engine's selection dispatcher. */
+    selectionRemove: null,
     /** Exact EventTarget currently holding the Escape listener. */
     keyTarget: null,
     /** Exact callback registered on keyTarget. */
     keydownHandler: null,
-    /** Cesium trackedEntityChanged listener disposer. */
+    /** The renderer's follow-changed listener disposer. */
     trackedEntityRemover: null,
     /** Test-only factory used to exercise enable-time interaction installation. */
     interactionHandlerFactory: null,
@@ -72,7 +76,7 @@ export function createVesselState({ source, services }) {
     selectedRecord: null,
     /** @type {{setPositions: Function, clear: Function, destroy: Function}|null} Selected-vessel fading trail */
     trail: null,
-    /** @type {Cesium.Cartesian3[]} Chronological trail vertices (oldest first) */
+    /** @type {object[]} Chronological trail vertices, Cartesian3 (oldest first) */
     trailPositions: [],
     /** @type {string|null} MMSI that owns the active selected-vessel trail. */
     trailMmsi: null,
