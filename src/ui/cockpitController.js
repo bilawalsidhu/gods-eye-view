@@ -190,6 +190,9 @@ export class CockpitViewController {
     );
     this.localCondition = document.getElementById('cockpit-local-condition');
     this.localCloud = document.getElementById('cockpit-local-cloud');
+    this.localObservation = document.getElementById(
+      'cockpit-local-observation',
+    );
     this.localPrecipitation = document.getElementById(
       'cockpit-local-precipitation',
     );

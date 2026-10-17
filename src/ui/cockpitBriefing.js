@@ -1,5 +1,6 @@
 /** Regional briefing requests, pages and rotation for the Cockpit controller. */
-import { formatNumber, t, msg } from '../i18n/index.js';
+import { isRecentDmhObservation } from '../data/regionalModel.js';
+import { formatDate, formatNumber, t, msg } from '../i18n/index.js';
 import {
   COCKPIT_BRIEF_ROTATE_MS,
   COCKPIT_BRIEF_CYCLE_OFF_HELP,
@@ -12,12 +13,25 @@ import {
   formatCockpitWindDirection,
 } from './cockpitPresentation.js';
 
-function localWeatherFooter(weather) {
-  return weather?.source === 'smn'
-    ? t('NATURAL EARTH · SMN STATION OBSERVATION')
-    : weather
-      ? t('NATURAL EARTH · OPEN-METEO · UTC')
-      : t('NATURAL EARTH · WEATHER UNAVAILABLE');
+function localWeatherFooter(weather, observation) {
+  const base =
+    weather?.source === 'smn'
+      ? t('NATURAL EARTH · SMN STATION OBSERVATION')
+      : weather
+        ? t('NATURAL EARTH · OPEN-METEO · UTC')
+        : t('NATURAL EARTH · WEATHER UNAVAILABLE');
+  return usableDmhObservation(observation)
+    ? `${base} · ${t('DMH / DINAC · STATION OBSERVATION')}`
+    : base;
+}
+
+function usableDmhObservation(observation) {
+  return (
+    isRecentDmhObservation(observation) &&
+    Number.isFinite(observation?.distanceM) &&
+    observation.distanceM >= 0 &&
+    observation.distanceM <= 50_000
+  );
 }
 // regionalModel.weatherCodeLabel is shared with node code and returns
 // English; translate it here.
@@ -63,7 +77,10 @@ export function showBriefPage(index, { manual = false } = {}) {
   if (this.briefSource)
     this.briefSource.textContent =
       page.id === 'local'
-        ? localWeatherFooter(this.regionalBrief?.weather)
+        ? localWeatherFooter(
+            this.regionalBrief?.weather,
+            this.regionalBrief?.stationObservation,
+          )
         : page.sourceKey
           ? t(page.sourceKey, { source: page.sourceName })
           : page.source;
@@ -218,6 +235,10 @@ export function maybeRefreshRegionalBrief(info) {
 }
 
 export function renderRegionalBriefStatus(status, info) {
+  if (this.localObservation) {
+    this.localObservation.hidden = true;
+    this.localObservation.textContent = '';
+  }
   this.regionalBrief = null;
   renderLocalWeather.call(this, null);
   if (this.newsStatus) {
@@ -273,7 +294,44 @@ export function renderRegionalBrief(payload, info) {
     payload?.place?.label || payload?.place?.country || t('REGION UNAVAILABLE');
   if (this.localPlace) this.localPlace.textContent = placeLabel.toUpperCase();
   this.updateLocalPosition(info);
-  renderLocalWeather.call(this, payload?.weather);
+  if (this.localObservation) {
+    const observation = payload?.stationObservation;
+    const usable = usableDmhObservation(observation);
+    this.localObservation.hidden = !usable;
+    const values = [];
+    if (Number.isFinite(observation?.temperatureC))
+      values.push(
+        `${formatNumber(observation.temperatureC, { minimumFractionDigits: 1, maximumFractionDigits: 1 })}°C`,
+      );
+    if (Number.isFinite(observation?.humidityPct))
+      values.push(
+        t('RH {percent}%', {
+          percent: formatNumber(Math.round(observation.humidityPct)),
+        }),
+      );
+    if (Number.isFinite(observation?.windKph))
+      values.push(
+        t('WIND {speed} KM/H {direction}', {
+          speed: formatNumber(Math.round(observation.windKph)),
+          direction: formatCockpitWindDirection(observation.windDirectionDeg),
+        }),
+      );
+    this.localObservation.textContent = usable
+      ? [
+          t('DMH / DINAC · STATION OBSERVATION'),
+          t('{station} · {distance} KM FROM LOCATION', {
+            station: observation.stationName,
+            distance: formatNumber(observation.distanceM / 1000, {
+              minimumFractionDigits: 1,
+              maximumFractionDigits: 1,
+            }),
+          }),
+          values.join(' · '),
+          `${formatDate(new Date(observation.observedAt), { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'UTC' })} UTC · ${formatCockpitBriefAge(observation.observedAt)}`,
+        ].join('\n')
+      : '';
+  }
+  renderLocalWeather.call(this, payload?.weather, payload?.stationObservation);
   if (this.signalStream)
     this.signalStream.dataset.regionalStatus = payload?.status || 'partial';
   if (this.briefPageIndex === 1 && this.briefSource) {
@@ -284,7 +342,7 @@ export function renderRegionalBrief(payload, info) {
   this.scheduleContextLayout();
 }
 
-function renderLocalWeather(weather) {
+function renderLocalWeather(weather, observation) {
   if (this.localTemperature) {
     this.localTemperature.textContent = Number.isFinite(weather?.temperatureC)
       ? `${Math.round(weather.temperatureC)}°C`
@@ -378,5 +436,5 @@ function renderLocalWeather(weather) {
       ? t('Atmospheric model by Open-Meteo.com')
       : t('Weather data by Open-Meteo.com');
   if (this.briefPageIndex === 2 && this.briefSource)
-    this.briefSource.textContent = localWeatherFooter(weather);
+    this.briefSource.textContent = localWeatherFooter(weather, observation);
 }

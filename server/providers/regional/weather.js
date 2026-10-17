@@ -38,17 +38,28 @@ function createRegionalBriefWeatherProvider({
       // An optional observation source must not take down the model fallback.
     }
     // The regional cell cache may reuse a model, never a station selection.
-    if (cachedModel && cachedModel.source !== 'smn') return cachedModel;
-    const weather = await modelProvider(point);
-    return weather
-      ? {
-          ...weather,
-          source: 'open-meteo',
-          sourceUrl: 'https://open-meteo.com/',
-          kind: 'model',
-          timeZone: 'UTC',
-        }
-      : null;
+    if (
+      cachedModel &&
+      typeof cachedModel !== 'function' &&
+      cachedModel.source !== 'smn'
+    )
+      return cachedModel;
+    // Coalesce model downloads only when no usable SMN record exists.
+    const loadModel = async () => {
+      const weather = await modelProvider(point);
+      return weather
+        ? {
+            ...weather,
+            source: 'open-meteo',
+            sourceUrl: 'https://open-meteo.com/',
+            kind: 'model',
+            timeZone: 'UTC',
+          }
+        : null;
+    };
+    return typeof cachedModel === 'function'
+      ? cachedModel(loadModel)
+      : loadModel();
   };
 }
 

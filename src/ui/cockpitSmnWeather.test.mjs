@@ -120,3 +120,79 @@ for (const locale of ['es', 'ru']) {
     }
   });
 }
+
+for (const locale of ['en', 'es', 'ru']) {
+  test(`${locale}: simultaneous SMN and DMH readings keep values, clocks and clearing independent`, () => {
+    setLocale(locale);
+    try {
+      const ui = controller();
+      ui.localObservation = { textContent: '', hidden: true };
+      const stationObservation = {
+        source: 'DMH / DINAC',
+        stationName: 'ENCARNACION',
+        distanceM: 2000,
+        observedAt: new Date().toISOString(),
+        temperatureC: 0,
+        humidityPct: 0,
+        windKph: 0,
+      };
+      const both = { weather, stationObservation };
+      ui.regionalBrief = both;
+      renderRegionalBrief.call(ui, both, {});
+      showBriefPage.call(ui, 0);
+      showBriefPage.call(ui, 2);
+      assert.equal(ui.localTemperature.textContent, '19°C');
+      assert.match(ui.localWeatherStation.textContent, /SMN.*POSADAS AERO/);
+      assert.doesNotMatch(ui.localWeatherTime.textContent, /UTC/);
+      assert.equal(ui.localObservation.hidden, false);
+      assert.match(ui.localObservation.textContent, /ENCARNACION/);
+      assert.match(ui.localObservation.textContent, /0[.,]0°C/);
+      assert.match(ui.localObservation.textContent, /UTC/);
+      assert.match(ui.briefSource.textContent, /SMN/);
+      assert.match(ui.briefSource.textContent, /DMH \/ DINAC/);
+      renderRegionalBrief.call(
+        ui,
+        {
+          ...both,
+          stationObservation: {
+            ...stationObservation,
+            observedAt: new Date(Date.now() - 91 * 60_000).toISOString(),
+          },
+        },
+        {},
+      );
+      assert.equal(ui.localObservation.hidden, true);
+      assert.equal(ui.localObservation.textContent, '');
+      assert.match(ui.localWeatherStation.textContent, /POSADAS AERO/);
+      assert.doesNotMatch(ui.briefSource.textContent, /DMH/);
+      renderRegionalBrief.call(
+        ui,
+        {
+          ...both,
+          weather: { source: 'open-meteo', temperatureC: 24, weatherCode: 0 },
+        },
+        {},
+      );
+      assert.equal(ui.localTemperature.textContent, '24°C');
+      assert.equal(ui.localWeatherStation.hidden, true);
+      assert.equal(ui.localWeatherStation.textContent, '');
+      assert.equal(ui.localObservation.hidden, false);
+      assert.match(ui.localObservation.textContent, /ENCARNACION/);
+      for (const status of ['loading', 'unavailable']) {
+        ui.regionalBrief = both;
+        renderRegionalBrief.call(ui, both, {});
+        renderRegionalBriefStatus.call(ui, status, {});
+        showBriefPage.call(ui, 2);
+        assert.equal(ui.regionalBrief, null);
+        assert.equal(ui.localObservation.hidden, true);
+        assert.equal(ui.localObservation.textContent, '');
+        assert.equal(ui.localWeatherStation.hidden, true);
+        assert.equal(ui.localWeatherStation.textContent, '');
+        assert.equal(ui.localTemperature.textContent, '—');
+        assert.doesNotMatch(ui.briefSource.textContent, /SMN|DMH/);
+      }
+    } finally {
+      setLocale('en');
+    }
+  });
+}

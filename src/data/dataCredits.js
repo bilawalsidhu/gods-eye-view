@@ -199,6 +199,10 @@ export const DATA_CREDITS = [
       '<a href="http://www3.smn.gob.ar/dpd/PAD_legales.pdf" target="_blank" rel="noopener">source terms</a>.',
   },
   {
+    key: 'dmh-paraguay',
+    html: 'Paraguay station observations: <a href="https://www.meteorologia.gov.py/emas/" target="_blank" rel="noopener">Dirección de Meteorología e Hidrología / DINAC</a>',
+  },
+  {
     key: 'google-news-rss',
     html:
       'Cockpit regional headlines: ' +
