@@ -1,10 +1,13 @@
 import { createApplicationVessels } from '../app/layers/aisLiveVessels.js';
 
-import { createAisStreamSource } from '../sources/live/standalone.js';
+import { createVesselSource } from '../sources/live/standalone.js';
 
 const aisLiveVesselsLayer = createApplicationVessels({
-  source: createAisStreamSource({
-    apiUrl: import.meta.env?.VITE_AIS_LIVE_API_URL || '/api/ais-live',
+  source: createVesselSource({
+    apiUrl: import.meta.env?.VITE_AIS_LIVE_API_URL || '/api/vessels',
+    // Resolved against the document's address, which a panel host may serve
+    // from its own scheme.
+    origin: () => globalThis.document?.baseURI ?? 'http://localhost',
   }),
   options: {
     maxRows: import.meta.env?.VITE_AIS_LIVE_MAX_ROWS,

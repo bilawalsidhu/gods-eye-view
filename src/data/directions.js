@@ -1,3 +1,4 @@
+import { createDirectionsSource } from '../layers/directions/source.js';
 /**
  * @module directions
  * @description Service bundle for the Directions layer.
@@ -10,6 +11,7 @@
  * the layer's pure helpers for the tests and the share-link code.
  */
 
+import * as credits from './dataCredits.js';
 import * as render from '../renderGovernor.js';
 import * as sprites from './spriteOrder.js';
 import * as picking from './pickRegistry.js';
@@ -23,6 +25,7 @@ import { createDirectionsLayer } from '../layers/directions/index.js';
 
 /** The shared scene owners every Directions instance runs on. */
 export const directionsServices = Object.freeze({
+  credits,
   render,
   sprites,
   picking,
@@ -35,8 +38,10 @@ export const directionsServices = Object.freeze({
 });
 
 /** Construct one Directions layer over the application scene owners. */
-export function createApplicationDirectionsLayer() {
-  return createDirectionsLayer({ services: directionsServices });
+export function createApplicationDirectionsLayer({
+  source = createDirectionsSource(),
+} = {}) {
+  return createDirectionsLayer({ services: directionsServices, source });
 }
 
 export {

@@ -7,6 +7,7 @@ const sourceSlot = createSourceSlot(
   createInstallationSource(),
   ['getMappedSites', 'searchNearby'],
   'Installation source',
+  { destroy: () => {} },
 );
 export const configureInstallationSource = sourceSlot.configure;
 const layer = createApplicationInstallations({

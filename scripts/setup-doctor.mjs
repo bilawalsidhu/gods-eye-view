@@ -34,6 +34,7 @@ export const CREDENTIALS = Object.freeze([
     )),
   },
   { name: 'LL2_API_TOKEN', label: 'Launch Library 2', keychain: [] },
+  { name: 'MAPILLARY_CLIENT_TOKEN', label: 'Mapillary street level', keychain: [['mapillary', 'client-token'], ['mapillary', 'token']] },
 ]);
 
 export function isConfiguredValue(value) {
@@ -75,10 +76,15 @@ export function hasRequiredDependencies(rootDir = ROOT) {
   }
 }
 
-/** Return the npm command and spawn mode required by the target platform. */
-export function npmProcessSpec(platform = process.platform) {
-  const windows = platform === 'win32';
-  return { command: windows ? 'npm.cmd' : 'npm', shell: windows };
+/**
+ * Return the npm command, arguments and spawn mode for the target platform.
+ * Windows must run npm.cmd through a shell, and Node 24 deprecates passing an
+ * argument array with `shell: true` (DEP0190), so there the arguments, which
+ * are fixed npm subcommands, join the command string.
+ */
+export function npmProcessSpec(args, platform = process.platform) {
+  if (platform !== 'win32') return { command: 'npm', args, shell: false };
+  return { command: ['npm.cmd', ...args].join(' '), args: [], shell: true };
 }
 
 /** Read one key from Vite's dotenv file ladder without depending on Vite. */
@@ -175,7 +181,9 @@ export function buildCapabilitySummary(
         ? 'Google Photorealistic 3D Tiles through Cesium ion; Bing and world-terrain stacks available'
         : 'Esri World Imagery (keyless satellite basemap) with keyless terrain',
     flights,
-    voice: configured('OPENAI_API_KEY') ? 'available' : 'off until an OpenAI key is added',
+    voice: configured('OPENAI_API_KEY')
+      ? 'available'
+      : 'off until an OpenAI key is added, or a Codex ChatGPT sign-in is selected in Provider Settings (experimental)',
     vessels: configured('AISSTREAM_API_KEY') ? 'live AISStream feed' : 'off until an AISStream key is added',
     fires: configured('FIRMS_MAP_KEY') ? 'live NASA FIRMS feed' : 'off until a FIRMS key is added',
     traffic: configured('TOMTOM_API_KEY') ? 'live TomTom flow' : 'built-in traffic simulation',
@@ -187,8 +195,8 @@ export function buildCapabilitySummary(
 
 export function inspectSetup({ includeKeychain = true, authoritativeEnvironment = false, rootDir = ROOT } = {}) {
   const node = classifyNodeVersion();
-  const npm = npmProcessSpec();
-  const npmResult = spawnSync(npm.command, ['--version'], {
+  const npm = npmProcessSpec(['--version']);
+  const npmResult = spawnSync(npm.command, npm.args, {
     encoding: 'utf8',
     shell: npm.shell,
   });

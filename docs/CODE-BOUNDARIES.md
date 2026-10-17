@@ -17,6 +17,8 @@ until deliberately adopted.
 Generated output, local configuration, browser evidence and bundled datasets are
 excluded. The formatter validates every entry before writing any file.
 
+New world text labels must use the world-overlay host; Cesium text labels are forbidden.
+
 ## Current component ownership
 
 Package imports use `gods-eye-view`; `package.json` is the authoritative
@@ -63,11 +65,10 @@ check, not a JavaScript sandbox. Common voice controls cannot depend on a
 Realtime protocol implementation. Negative fixtures cover indirect helpers,
 self-package imports, symlinks and unreachable files.
 
-Source factories have dedicated exports for ALPR, bikeshare, CCTV, earthquakes,
-FIRMS, installations, launches, radio, satellites and traffic. They preserve the
-same factory implementations without loading layer rendering. ALPR/earthquake
-record normalization and CCTV source endpoint policy have plain owners separate
-from geometry/cards. Source exports do not start acquisition at import time.
+Source-only factories use dedicated `layers/<family>/source` exports where
+available, preserving the same factory implementation without loading rendering.
+Record normalization and endpoint policies have plain owners separate from
+geometry/cards. Source exports do not start acquisition at import time.
 
 Other layer `ingestion.js` files may still coordinate Cesium resources; the
 portable contract applies to the explicitly reviewed graphs above. Their layer
@@ -628,9 +629,9 @@ explicit operations. Both exports exclude Cesium, DOM and application assembly.
 The snapshot renderer applies record changes; rendering owns a weak map of
 geometry and billboard resources used by cards, picking and trails.
 
-`gods-eye-view/sources/reference` constructs fresh earthquake and bundled cable
+`gods-eye-view/sources/reference` constructs fresh earthquake, GNSS integrity and bundled cable
 source instances independently of standalone setup. Individual sources remain
-available through `layers/earthquakes/source` and `layers/submarine-cables/source`.
+available through their `layers/<family>/source` exports, including `layers/gnss/source`.
 The latter retains the bundled dataset’s attribution and licensing requirements.
 
 ## Geocoding and feature-query providers
@@ -668,8 +669,8 @@ An empty search array is a definitive miss. HTTP failures, malformed results
 and oversized responses remain retryable. Attribution identifies OpenStreetMap /
 Nominatim.
 
-Overpass currently supplies traffic road geometry, ALPR camera records, military
-installation footprints, and annotation geometry (administrative boundaries,
+Vector tile sources supply traffic roads, ALPR records and keyless military
+areas. Operator-configured Overpass supplies named installations and annotation geometry (administrative boundaries,
 neighborhoods, streets, building/grounds outlines and monument candidates).
 Nominatim forward/reverse lookup does not replace those queries. Layer source
 interfaces select traffic, camera and installation ingestion separately;
@@ -711,7 +712,9 @@ query-language strings or decoding backend tags and relation members.
 
 Points use `{lat, lon}`. Options carry `signal`. A successful array, including an
 empty array, is definitive; `null` means a transient failure;
-`{rateLimited: true, retryAfterMs}` retains a provider's retry delay. Candidates
+`{rateLimited: true, retryAfterMs}` retains a provider's retry delay.
+`{unavailable:true, code:'OVERPASS_NOT_CONFIGURED', retryable:false}` is a
+capability miss that stops retries while preserving pins and offline geometry. Candidates
 carry `id`, `names` (`primary`, `english`, `official`, `alternate`, `short`),
 `coordinates` (objects with `lat` and `lon`), `building` and optional `heightM`,
 `center` and `point`. Administrative candidates use `category: 'administrative'`

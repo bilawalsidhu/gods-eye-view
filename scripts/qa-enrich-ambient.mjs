@@ -12,7 +12,7 @@
  * honoring the politeness bounds.
  *
  * Fetch shim (installed before app code, same pattern as qa-sprites-b5.mjs):
- *   - /api/opensky           → 12 straight-flying planes, category 0
+ *   - /api/flights           → 12 straight-flying planes, category 0
  *   - /api/adsbdb/type/:hex  → varied REAL type codes (C172, B744, DH8D, H60,
  *                              F16, GLID, B77W, A320, B738, PC12, R44) + one
  *                              found:false miss; responses are HELD until the
@@ -260,14 +260,14 @@ async function main() {
           });
         }
         if (url.includes('/api/adsbdb/')) return Promise.resolve(jsonResponse({ found: false }));
-        if (url.includes('/api/opensky-track')) return Promise.resolve(jsonResponse({ path: [] }));
-        if (url.includes('/api/adsblol/trace')) {
+        if (url.includes('/api/flights/track')) return Promise.resolve(jsonResponse({ path: [] }));
+        if (url.includes('/api/military/track')) {
           return Promise.resolve(jsonResponse({ timestamp: Math.floor(nowSec), trace: [] }));
         }
-        if (url.includes('/api/adsblol/mil')) {
+        if (url.includes('/api/military')) {
           return Promise.resolve(jsonResponse({ msg: 'No error', now: Date.now(), ac: [] }));
         }
-        if (url.includes('/api/opensky')) {
+        if (url.includes('/api/flights')) {
           const states = S.planes.map((f) => {
             const s = S.stateAt(f, tRel);
             return [

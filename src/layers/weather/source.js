@@ -1,5 +1,9 @@
 import { readResponseJsonCapped } from '../../sources/httpBody.js';
 
+// Shared with the AI tools, so no i18n import: failures stay English here and
+// the weather layer translates them where it shows them (t / translateKnown).
+const msg = (text) => text;
+
 export const WEATHER_PRODUCTS = Object.freeze([
   'radar',
   'clouds',
@@ -10,7 +14,7 @@ export const WEATHER_PRODUCTS = Object.freeze([
 /** Only bounded, explicit observations may become imagery requests. */
 export function validateWeatherSnapshot(value, product) {
   if (!value || value.schemaVersion !== 1 || value.product !== product)
-    throw new Error('Malformed weather manifest');
+    throw new Error(msg('Malformed weather manifest'));
   if (value.unavailable) return value;
   const { bounds, times } = value;
   if (
@@ -40,7 +44,7 @@ export function validateWeatherSnapshot(value, product) {
     value.maxLevel !== 6 ||
     value.tilingScheme !== 'geographic'
   )
-    throw new Error('Malformed weather manifest');
+    throw new Error(msg('Malformed weather manifest'));
   return value;
 }
 
@@ -113,7 +117,7 @@ export function createWeatherSource({
       const abort = () => controller.abort(signal.reason);
       signal?.addEventListener('abort', abort, { once: true });
       const timer = setTimeout(
-        () => controller.abort(new Error('Weather request timed out')),
+        () => controller.abort(new Error(msg('Weather request timed out'))),
         timeoutMs,
       );
       try {
@@ -131,6 +135,20 @@ export function createWeatherSource({
         clearTimeout(timer);
         signal?.removeEventListener('abort', abort);
       }
+    },
+    /** Read one image frame through the bounded image route. */
+    async getImage({ product, time, size, bbox = null, signal } = {}) {
+      signal?.throwIfAborted();
+      const response = await fetchImpl(
+        weatherImageUrl(product, time, size, bbox),
+        { signal, redirect: 'error' },
+      );
+      if (!response.ok)
+        throw new Error(`Weather image HTTP ${response.status}`);
+      const bytes = new Uint8Array(await response.arrayBuffer());
+      signal?.throwIfAborted();
+      const type = response.headers.get('content-type') || '';
+      return { contentType: type.split(';')[0].trim().toLowerCase(), bytes };
     },
   };
 }

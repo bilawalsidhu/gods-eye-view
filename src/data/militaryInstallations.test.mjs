@@ -24,7 +24,7 @@ import {
   installRenderGovernor,
 } from '../renderGovernor.js';
 import * as Cesium from 'cesium';
-import { registerEntityContext, selectEntityContext, getSelectedEntityContext } from './contextStore.js';
+import { registerEntityContext, selectEntityContext, getSelectedEntityContext, clearSelectedEntityContextForLayer } from './contextStore.js';
 
 test('clicking a selected installation again or empty map clears it through refresh', async () => {
   const run = await runInstallationLoad({ elements: [{ type: 'node', id: 42,
@@ -39,6 +39,23 @@ test('clicking a selected installation again or empty map clears it through refr
       assert.equal(getSelectedEntityContext(), null, 'refresh must not resurrect selection');
       assert.equal(run.entities()[0].point.pixelSize.getValue(), 9);
     }
+  } finally { run.restore(); }
+});
+
+test('background installation paints neither reopen Contacts nor resurrect a cleared selection', async () => {
+  const run = await runInstallationLoad({ elements: [{ type:'node',id:42,lat:30.2,lon:-97.7,tags:{military:'base',name:'Site'} }] });
+  try {
+    const selected=()=>run.contextLabels().length;
+    run.click('osm:node:42');
+    assert.equal(selected(),1);
+    await militaryInstallationsLayer.update();
+    assert.equal(getSelectedEntityContext()?.id,'osm:node:42');
+    assert.equal(selected(),1,'data and floor refreshes must not publish a fresh selection');
+    clearSelectedEntityContextForLayer('military-installations');
+    await militaryInstallationsLayer.update();
+    assert.equal(getSelectedEntityContext(),null);
+    assert.equal(selected(),1,'an external clear must survive the next paint');
+    assert.equal(run.entities()[0].point.pixelSize.getValue(),9);
   } finally { run.restore(); }
 });
 
@@ -798,7 +815,7 @@ test('the unavailable retry backs off 30s to a 240s ceiling and restarts clean',
 
 test('the retry is wired to every lifecycle edge, not just declared', () => {
   assert.match(installationsSource,
-    /setInstallationStatus\(\s*'unavailable',[^]*?\);\n\s*parts\.viewport\.scheduleUnavailableRetry\(\);/,
+    /setInstallationStatus\(\s*'unavailable',[^]*?\);\n\s*if \(!isUnavailableCapability\(error\)\)\s*parts\.viewport\.scheduleUnavailableRetry\(error\?\.retryAfterMs\);/,
     'a failed load schedules the retry immediately after reporting unavailable');
   assert.match(installationsSource,
     /clearUnavailableRetry\(\);\n\s*setInstallationStatus\(\n?\s*layerState\.records\.length/,
@@ -814,4 +831,61 @@ test('the retry is wired to every lifecycle edge, not just declared', () => {
   assert.match(installationsSource,
     /layerState\.enabled && !layerState\.loading\)\s*parts\.ingestion\.loadInstallations\(\)/,
     'the fired retry re-checks enablement and never races an in-flight load');
+});
+
+
+test('a merged installation stays visible when only its second fragment intersects', () => {
+  const far = [[-96.6,30.4],[-96.4,30.4],[-96.4,30.6],[-96.6,30.6]];
+  const near = [[-97.5,30.4],[-97.4,30.4],[-97.4,30.6],[-97.5,30.6]];
+  assert.equal(installationWithinViewport({latitude:30.5,longitude:-96.5,footprint:far,footprints:[[far],[near]]},VIEWPORT), true);
+});
+
+test('a Contacts anchor replaces the viewport and ignores small subject moves', async () => {
+  // Field report: a follow/Cockpit camera never fires moveEnd and often looks at
+  // the horizon, so the Context row read "?" for the whole track.
+  const run = await runInstallationLoad({ elements: [{ type: 'node', id: 7,
+    lat: 30.3125, lon: -97.765, tags: { military: 'base', name: 'Camp Mabry' } }] });
+  try {
+    const box = (href) => {
+      const url = new URL(href, 'https://example.test');
+      return Object.fromEntries(['south', 'west', 'north', 'east']
+        .map((key) => [key, Number(url.searchParams.get(key))]));
+    };
+    const centre = (href) => (box(href).south + box(href).north) / 2;
+    assert.equal(run.stats().coverageLabel, 'CURRENT VIEWPORT ONLY');
+    assert.equal(militaryInstallationsLayer.setContextAnchor({ latitude: 30.3125, longitude: -97.765 }), true);
+    await new Promise((resolve) => setTimeout(resolve, 650));
+    const anchored = box(run.requests.at(-1));
+    assert.ok(Math.abs(centre(run.requests.at(-1)) - 30.3125) < 0.01);
+    assert.ok(anchored.north - anchored.south > 1.5, 'window reaches ~100 km each way');
+    assert.equal(run.stats().coverageLabel, 'WITHIN 100 KM');
+    assert.equal(run.stats().coverage.kind, 'subject');
+    const count = run.requests.length;
+    assert.equal(militaryInstallationsLayer.setContextAnchor({ latitude: 30.35, longitude: -97.765 }), false,
+      'a 4 km move keeps the window');
+    assert.equal(militaryInstallationsLayer.setContextAnchor({ latitude: 30.6, longitude: -97.765 }), true,
+      'a 32 km move shifts the window');
+    await new Promise((resolve) => setTimeout(resolve, 650));
+    assert.equal(run.requests.length, count + 1);
+    assert.ok(Math.abs(centre(run.requests.at(-1)) - 30.6) < 0.01);
+    assert.equal(militaryInstallationsLayer.setContextAnchor(null), true);
+    await new Promise((resolve) => setTimeout(resolve, 650));
+    assert.deepEqual(box(run.requests.at(-1)), { south: 30, west: -98, north: 31, east: -97 },
+      'clearing the subject returns to the viewport');
+    assert.equal(run.stats().coverageLabel, 'CURRENT VIEWPORT ONLY');
+  } finally { run.restore(); }
+});
+
+test('unchanged installations keep their entities across reloads', async () => {
+  const run = await runInstallationLoad({ elements: [{ type: 'node', id: 42,
+    lat: 30.2, lon: -97.7, tags: { military: 'base', name: 'Site' } }] });
+  try {
+    const before = run.entities().slice();
+    assert.ok(before.length > 0);
+    await militaryInstallationsLayer.update();
+    const after = run.entities();
+    assert.equal(after.length, before.length);
+    assert.ok(after.every((entity, index) => entity === before[index]),
+      'a reload with the same geometry must not recreate entities');
+  } finally { run.restore(); }
 });

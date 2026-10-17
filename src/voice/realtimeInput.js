@@ -1,3 +1,4 @@
+import { t } from '../i18n/index.js';
 import {
   PUSH_TO_TALK_HOLD_DELAY_MS,
   MICROPHONE_VISUALIZER_GATE,
@@ -79,6 +80,9 @@ export class RealtimeInput {
       // never surprise the user by muting a click-started conversation.
       if (this.isActive() && !this.pushToTalkMode) return;
       this.cancelPushToTalkHold();
+      // Point-and-ask: the user decided to ask at keydown, so that is where
+      // the pointer is read. A short tap releases it below.
+      this.holdPointer?.();
       const holdGeneration = ++this.pushToTalkHoldGeneration;
       this.pushToTalkHoldTimer = setTimeout(() => {
         this.pushToTalkHoldTimer = null;
@@ -102,13 +106,20 @@ export class RealtimeInput {
         ) {
           this.pushToTalkHoldControl.blur();
         }
+        // Read Radio's claim before pausing it: pausing can change the very
+        // handoff state that decides whether voice may interrupt.
+        const mayInterrupt = this.mayClaimSpeaker?.() ?? true;
         this.pauseRadioForVoice();
         this.pushToTalkKeyHeld = true;
         if (this.isActive()) {
+          // A claimed hold is an explicit request to speak: cut the assistant
+          // off if it is talking. Short taps never reach this point.
+          if (mayInterrupt) this.bargeIn?.();
+          this.beginPointerTurn?.('keydown');
           this.ui.root.dataset.pushToTalk = 'held';
           this.setMicrophoneEnabled(true);
           if (this.status === 'listening')
-            this.setStatus('listening', 'Release Space to send');
+            this.setStatus('listening', t('Release Space to send'));
         } else {
           this.start({ pushToTalk: true });
           // start() performs a controlled stop() before connecting. Restore the
@@ -124,6 +135,7 @@ export class RealtimeInput {
       this.spaceKeyHeld = false;
       this.cancelPushToTalkHold();
       if (!this.pushToTalkKeyHeld) {
+        if (wasHoldingSpace) this.releasePointerHold?.();
         if (wasHoldingSpace && !preservedNativeActivation)
           event.preventDefault();
         this.resetPushToTalkGesture();
@@ -175,13 +187,15 @@ export class RealtimeInput {
    */
   releasePushToTalkKey() {
     this.cancelPushToTalkHold();
+    // The pointer snapshot belongs to this gesture; release or blur ends it.
+    this.releasePointerHold?.();
     if (!this.pushToTalkKeyHeld) return;
     this.pushToTalkKeyHeld = false;
     delete this.ui.root.dataset.pushToTalk;
     if (!this.pushToTalkMode) return;
     this.setMicrophoneEnabled(false);
     if (this.status === 'listening')
-      this.setStatus('listening', 'Hold Space to talk');
+      this.setStatus('listening', t('Hold Space to talk'));
     else this.updateVoiceButtonLabel();
   }
 
@@ -350,7 +364,8 @@ export class RealtimeInput {
    */
   updateVoiceButtonLabel() {
     if (!this.ui.buttonLabel) return;
-    this.ui.buttonLabel.textContent = 'MIC';
+    // The mic button's caption; the first-run tip names it the same way.
+    this.ui.buttonLabel.textContent = t('MIC');
     if (this.ui.helpDetail) {
       this.ui.helpDetail.textContent = resolveVoiceControlHint(
         this.pushToTalkMode,

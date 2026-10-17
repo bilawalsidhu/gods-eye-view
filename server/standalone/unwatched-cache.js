@@ -11,9 +11,9 @@ const RUNTIME_WRITE_GLOBS = Object.freeze([
  * Keep the directories the app writes to out of the dev server's file watcher.
  *
  * Disk-cached providers write a file per response into `.gev-cache`, and the
- * voice debug log appends to `.gev-logs`. Left watched, each write triggers
- * chokidar stat calls that hold the libuv threads `getaddrinfo` needs, so the
- * next upstream fetch waits on a DNS lookup that cannot get a thread.
+ * voice debug log appends to `.gev-logs`. Left watched, each write costs the
+ * watcher stat calls on libuv's thread pool, which `getaddrinfo` shares; heavy
+ * cache writes have been seen to delay upstream DNS lookups.
  *
  * @returns {import('vite').Plugin} Config-only plugin; no server hooks.
  */
