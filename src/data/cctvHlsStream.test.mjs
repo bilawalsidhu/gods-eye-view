@@ -339,6 +339,7 @@ test('an expired old segment is skipped once as the live window advances', async
 test('recent missing segments and access failures still exhaust the retry budget', async (t) => {
   for (const [file, status] of [
     ['c.ts', 404],
+    ['b.ts', 404],
     ['a.ts', 403],
   ]) {
     const manager = createHlsPuller({
