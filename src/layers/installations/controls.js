@@ -1,10 +1,37 @@
 import * as Cesium from 'cesium';
-import { installationFeedback } from '../../data/installationFeedback.js';
+import { describeInstallationFeedback } from '../../data/installationFeedback.js';
 import {
   LAYER_ID,
   DISTANCE_PREFILTER_MARGIN_M,
   ANCHOR_REFRESH_M,
 } from './policy.js';
+import { formatNumber, t, tn } from '../../i18n/index.js';
+
+// installationFeedback.js is shared with the HUD (src/loadingFeedback.js) and
+// hands back msg()-marked English plus values; getStats translates them here.
+function localizeInstallationFeedback(feedback) {
+  if (feedback.text !== undefined) {
+    const values = {};
+    if (feedback.reason !== undefined) values.reason = t(feedback.reason);
+    if (feedback.seconds !== undefined) values.seconds = feedback.seconds;
+    return t(feedback.text, values);
+  }
+  const { count, km } = feedback;
+  if (km) {
+    const kmText = formatNumber(km);
+    return count === 0
+      ? t('No mapped sites within {km} km of the contact', { km: kmText })
+      : tn(
+          count,
+          '{count} mapped site within {km} km of the contact',
+          '{count} mapped sites within {km} km of the contact',
+          { km: kmText },
+        );
+  }
+  return count === 0
+    ? t('No mapped sites in view')
+    : tn(count, '{count} mapped site in view', '{count} mapped sites in view');
+}
 
 export function createControls({ state: layerState, services, parts, source }) {
   const methods = {
@@ -225,13 +252,15 @@ export function createControls({ state: layerState, services, parts, source }) {
         retryAt: layerState.retryAt,
         retrying: layerState.loading && Boolean(layerState.failureReason),
         failureReason: layerState.failureReason,
-        statusMessage: installationFeedback({
-          ...layerState,
-          count: layerState.lastUpdate ? mappedCount : undefined,
-          retrying: layerState.loading && Boolean(layerState.failureReason),
-        }),
+        statusMessage: localizeInstallationFeedback(
+          describeInstallationFeedback({
+            ...layerState,
+            count: layerState.lastUpdate ? mappedCount : undefined,
+            retrying: layerState.loading && Boolean(layerState.failureReason),
+          }),
+        ),
         loadingLabel: layerState.loading
-          ? 'loading mapped installation context'
+          ? t('loading mapped installation context')
           : '',
         coverage: layerState.coverage,
         coverageLabel:

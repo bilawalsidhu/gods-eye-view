@@ -21,6 +21,7 @@ import {
   TILE_TIMEOUT_MS,
   photoFilterParams,
 } from './policy.js';
+import { msg } from '../../../../i18n/index.js';
 import { createLimiter } from '../../limiter.js';
 
 export { createLimiter } from '../../limiter.js';
@@ -43,9 +44,10 @@ export class KartaViewSourceError extends Error {
   }
 }
 
-const NO_ANSWER = 'KartaView did not answer in time — try again';
-const UNREACHABLE = 'KartaView could not be reached — check the network';
-const UNREADABLE = 'KartaView sent an answer that could not be read';
+// Failure texts are English data: the Street Level panel translates them.
+const NO_ANSWER = msg('KartaView did not answer in time — try again');
+const UNREACHABLE = msg('KartaView could not be reached — check the network');
+const UNREADABLE = msg('KartaView sent an answer that could not be read');
 /** Statuses that mean a photo file is gone, not that storage hiccupped. */
 const GONE_STATUSES = Object.freeze([403, 404, 409, 410]);
 
@@ -122,10 +124,15 @@ export function createKartaViewSource({
     try {
       response = await fetchImpl(url, { signal: controller.signal });
       if (response.status === 429)
-        throw new KartaViewSourceError('KartaView is rate-limiting requests', {
-          status: 429,
-          retryAfterSec: retryAfterSeconds(response) ?? 2,
-        });
+        throw new KartaViewSourceError(
+          msg('KartaView is rate-limiting requests'),
+          {
+            status: 429,
+            retryAfterSec: retryAfterSeconds(response) ?? 2,
+          },
+        );
+      // English data with a number: the Street Level panel and the layer
+      // panel show it through the 'KartaView answered HTTP {status}' entry.
       if (!response.ok)
         throw new KartaViewSourceError(
           `KartaView answered HTTP ${response.status}`,
@@ -133,7 +140,7 @@ export function createKartaViewSource({
         );
       const length = Number(response.headers?.get?.('content-length'));
       const tooMuch = () =>
-        new KartaViewSourceError('KartaView sent too much data', {
+        new KartaViewSourceError(msg('KartaView sent too much data'), {
           status: response.status,
         });
       if (length > maxBytes) throw tooMuch();
@@ -228,6 +235,7 @@ export function createKartaViewSource({
         );
         const code = Number(payload?.status?.apiCode);
         // 600 ok, 601 empty, 602 partial: anything else is a refusal.
+        // Shown through 'KartaView refused the request (code {code})'.
         if (Number.isFinite(code) && (code < 600 || code > 603))
           throw new KartaViewSourceError(
             `KartaView refused the request (code ${code})`,
@@ -241,7 +249,9 @@ export function createKartaViewSource({
         if (error?.status !== 429 || attempt >= PHOTO_API_RETRIES) {
           if (error?.status === 429)
             throw new KartaViewSourceError(
-              'KartaView is rate-limiting requests — try again in a moment',
+              msg(
+                'KartaView is rate-limiting requests — try again in a moment',
+              ),
               { status: 429, retryAfterSec: error.retryAfterSec },
             );
           throw error;
@@ -372,7 +382,7 @@ export function createKartaViewSource({
         { signal },
       );
       if (!result.data || typeof result.data !== 'object')
-        throw new KartaViewSourceError('KartaView has no such photo');
+        throw new KartaViewSourceError(msg('KartaView has no such photo'));
       return result.data;
     },
 

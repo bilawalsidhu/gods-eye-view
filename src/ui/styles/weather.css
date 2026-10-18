@@ -152,6 +152,13 @@
   overflow-y: auto;
   color: var(--accent);
 }
+/* One line stays reserved so the card does not jump when a status appears;
+   a translated status runs longer and wraps instead of being cut. */
+html:not([lang='en']) .weather-card [data-line-id='status'] {
+  height: auto;
+  min-height: 1.45em;
+  overflow-y: visible;
+}
 .rail-card-ramp {
   position: relative;
   height: 4px;
@@ -261,6 +268,9 @@ body.recording-mode .gev-wind-inspection-marker {
   font: 9px/1.45 var(--font-mono);
   color: var(--text-dim);
 }
+html:not([lang='en']) .rail-card-zero::after {
+  white-space: nowrap;
+}
 
 .weather-observed-group {
   border: 1px solid var(--weather-card-border);
@@ -317,6 +327,18 @@ body.recording-mode .gev-wind-inspection-marker {
   align-items: baseline;
   gap: 6px;
   margin-top: 6px;
+}
+/* One label column per card, as wide as its longest label: chips line up
+   across rows, and a long translated label never runs under its chips. */
+html:not([lang='en']) .rail-card-settings {
+  display: grid;
+  grid-template-columns: minmax(56px, max-content) minmax(0, 1fr);
+  column-gap: 6px;
+}
+html:not([lang='en']) .rail-card-setting {
+  grid-column: 1 / -1;
+  grid-template-columns: minmax(56px, max-content) minmax(0, 1fr);
+  grid-template-columns: subgrid;
 }
 .rail-card-setting-label {
   color: var(--text-dim);

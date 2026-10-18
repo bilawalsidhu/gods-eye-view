@@ -1,3 +1,7 @@
+// Reached by the providers' source modules (no browser globals, see
+// check:boundaries), so no i18n import: the text stays English data here.
+const msg = (text) => text;
+
 /** Identity and shared tuning for the provider-neutral Street Level layer. */
 export const STREET_LEVEL_LAYER_ID = 'street-level';
 
@@ -42,5 +46,7 @@ export const FOLLOW_EYE_HEIGHT_M = 2.4;
 /** Above this, a ground click is a misclick, not a street. */
 export const GROUND_CLICK_MAX_HEIGHT_M = 3_000;
 
-export const AIM_AT_GROUND_MESSAGE =
-  'Aim the middle of the view at a street to look for imagery there';
+/** English data: the Street Level panel translates it (translateKnown). */
+export const AIM_AT_GROUND_MESSAGE = msg(
+  'Aim the middle of the view at a street to look for imagery there',
+);
