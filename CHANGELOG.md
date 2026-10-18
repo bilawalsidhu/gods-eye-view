@@ -1,34 +1,5 @@
 # Changelog
 
-- Earthquakes also read EMSC's SeismicPortal (CC BY 4.0), which carries
-  national networks the USGS feed largely lacks outside the United States.
-  On 2026-10-11 the 24-hour M2.5+ snapshot grew from 39 to 304 events:
-  +188 in Latin America, +48 in Asia and the Pacific, +24 in Europe. Over a
-  year Norway (with Svalbard and Jan Mayen) had 285 such events in EMSC
-  against 32 in USGS. EMSC events within 90 s and 150 km, or 5 minutes and
-  25 km, of a USGS event are treated as duplicates; quarry blasts and
-  explosions are excluded. Either catalog alone still yields a snapshot.
-- Local FM seek finds stations after wrapping around 87.5–108 MHz, covers both
-  band edges, skips the starting station and rejects spectra from an earlier
-  tune (Aditya, @Rohilalala, #1174).
-- Local RTL-SDR keeps USB reads queued in order and bounds pending decoder
-  work. A stalled or overloaded decoder stops with an explicit error; stopping
-  terminates its worker and rejects late audio. FM playback buffers short
-  scheduling gaps, caps its audio queue at 256 ms, and reduces display updates
-  and spectrum calculations while listening.
-
-- Add Bogotá (Tembici, 250 stations) and Santiago de Chile (Bike Itaú, 200
-  stations) to the GBFS bikeshare registry, the layer's first stations in
-  Colombia and Chile. Both are PBSC feeds like the Brazilian Bike Itaú cities,
-  so no proxy change is needed. Both feeds also list depot stations on other
-  continents (São Paulo, Madrid) as in service; stations outside a city's load
-  radius are now dropped instead of drawn as live docks.
-
-- Add Barcelona's bike share to the GBFS registry: Bicing (543 stations, the
-  city's PBSC system) and AMBici (237 e-bike stations across the metropolitan
-  area, run by nextbike). Both are keyless GBFS 2.3 feeds listed in
-  MobilityData's systems catalogue; AMBici's is CC0. `gbfs.nextbike.net` joins
-  the proxy allowlist. These are the layer's first stations in Spain.
 - The tracked-aircraft descriptor now publishes `verticalRateMps`, on both the
   civil and military layers, so a consumer reading `getTrackedInfo()` no longer
   has to reach past it into the raw poll record for climb/descent. Reported,
