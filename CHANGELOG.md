@@ -1,32 +1,5 @@
 # Changelog
 
-- Add Statens vegvesen's Vegbilder as a fourth, keyless Street Level provider
-  for Norway: coverage lines for the national and county roads photographed
-  in the last three years, the nearest flat or 360° photo on a click, cones
-  and ‹ › along the drive, and the IMAGERY and SINCE filters (by capture
-  date). Photos come from Vegvesen's public WFS under NLOD 2.0; listed photos
-  whose file is missing are skipped.
-- Local FM seek finds stations after wrapping around 87.5–108 MHz, covers both
-  band edges, skips the starting station and rejects spectra from an earlier
-  tune (Aditya, @Rohilalala, #1174).
-- Local RTL-SDR keeps USB reads queued in order and bounds pending decoder
-  work. A stalled or overloaded decoder stops with an explicit error; stopping
-  terminates its worker and rejects late audio. FM playback buffers short
-  scheduling gaps, caps its audio queue at 256 ms, and reduces display updates
-  and spectrum calculations while listening.
-
-- Add Bogotá (Tembici, 250 stations) and Santiago de Chile (Bike Itaú, 200
-  stations) to the GBFS bikeshare registry, the layer's first stations in
-  Colombia and Chile. Both are PBSC feeds like the Brazilian Bike Itaú cities,
-  so no proxy change is needed. Both feeds also list depot stations on other
-  continents (São Paulo, Madrid) as in service; stations outside a city's load
-  radius are now dropped instead of drawn as live docks.
-
-- Add Barcelona's bike share to the GBFS registry: Bicing (543 stations, the
-  city's PBSC system) and AMBici (237 e-bike stations across the metropolitan
-  area, run by nextbike). Both are keyless GBFS 2.3 feeds listed in
-  MobilityData's systems catalogue; AMBici's is CC0. `gbfs.nextbike.net` joins
-  the proxy allowlist. These are the layer's first stations in Spain.
 - The tracked-aircraft descriptor now publishes `verticalRateMps`, on both the
   civil and military layers, so a consumer reading `getTrackedInfo()` no longer
   has to reach past it into the raw poll record for climb/descent. Reported,
