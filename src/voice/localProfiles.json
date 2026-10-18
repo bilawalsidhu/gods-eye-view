@@ -1,20 +1,20 @@
 {
   "low": {
     "model": "Ternary-Bonsai-1.7B",
-    "context": 4096,
-    "maxTokens": 384,
+    "context": 2048,
+    "maxTokens": 192,
     "whisper": "tiny"
   },
   "balance": {
     "model": "Ternary-Bonsai-4B",
-    "context": 6144,
-    "maxTokens": 768,
+    "context": 3072,
+    "maxTokens": 256,
     "whisper": "base"
   },
   "max": {
     "model": "Ternary-Bonsai-8B",
-    "context": 8192,
-    "maxTokens": 1536,
+    "context": 4096,
+    "maxTokens": 384,
     "whisper": "small"
   }
 }

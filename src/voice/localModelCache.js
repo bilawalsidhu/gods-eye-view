@@ -1,4 +1,12 @@
 import catalog from './localModels.json' with { type: 'json' };
+import {
+  cachedFileBytes,
+  deleteCachedModelFile,
+  downloadModelPart,
+  hasCachedSize,
+  modelFileParts,
+  readCachedModelFile,
+} from './localModelStorage.js';
 
 export const MODEL_CACHE = 'gev-local-models-v1';
 export const LOCAL_MODELS = Object.freeze(catalog);
@@ -37,18 +45,18 @@ export function modelCacheReader(cache, models) {
   const urls = new Map();
   for (const model of models)
     for (const file of model.files) {
-      urls.set(file.url, file.url);
+      urls.set(file.url, file);
       urls.set(
         file.url.replace(`/resolve/${model.revision}/`, '/resolve/main/'),
-        file.url,
+        file,
       );
     }
   return {
     async match(request) {
-      const url = urls.get(
+      const file = urls.get(
         typeof request === 'string' ? request : request.url || String(request),
       );
-      return url ? cache.match(url) : undefined;
+      return file ? readCachedModelFile(cache, file) : undefined;
     },
     async put() {
       throw new Error(
@@ -62,18 +70,14 @@ export function modelCacheReader(cache, models) {
 export async function cachedModelBytes(model, cache) {
   cache ||= await openModelCache();
   let loaded = 0;
-  for (const file of model.files) {
-    const response = await cache.match(file.url);
-    if (response?.headers.get('X-GEV-Model-Size') === String(file.size))
-      loaded += file.size;
-  }
+  for (const file of model.files) loaded += await cachedFileBytes(cache, file);
   return loaded;
 }
 
-/** Stream directly into Cache Storage, without buffering multi-GB weights in the UI. */
+/** Save resumable parts, with bounded memory and compatibility with whole files. */
 export async function downloadModel(
   model,
-  { signal, onProgress = () => {}, cache, fetchImpl = fetch } = {},
+  { signal, onProgress = () => {}, cache, fetchImpl = fetch, retryDelays } = {},
 ) {
   cache ||= await openModelCache();
   const total = modelBytes(model);
@@ -91,55 +95,20 @@ export async function downloadModel(
       String(file.size)
     )
       continue;
-    const response = await fetchImpl(file.url, {
-      signal,
-      credentials: 'omit',
-      cache: 'no-store',
-    });
-    if (!response.ok || !response.body)
-      throw new Error(
-        `Download failed (HTTP ${response.status}). Retry to keep completed files.`,
-      );
-    let received = 0;
-    const stream = response.body.pipeThrough(
-      new TransformStream({
-        transform(chunk, controller) {
-          signal?.throwIfAborted();
-          received += chunk.byteLength;
-          if (received > file.size)
-            throw new Error('Unexpected model file size');
-          onProgress({ loaded: loaded + received, total });
-          controller.enqueue(chunk);
-        },
-        flush() {
-          if (received !== file.size)
-            throw new Error('Download incomplete. Retry to continue.');
-        },
-      }),
-      { signal },
-    );
-    try {
-      await cache.put(
-        file.url,
-        new Response(stream, {
-          headers: {
-            'Content-Type':
-              response.headers.get('Content-Type') ||
-              'application/octet-stream',
-            'Content-Length': String(file.size),
-            'X-GEV-Model-Size': String(file.size),
-          },
-        }),
-      );
-    } catch (error) {
-      await cache.delete(file.url);
-      if (error.name === 'QuotaExceededError')
-        throw new Error(
-          'Browser storage is full. Remove a cached model and retry.',
-        );
-      throw error;
+    for (const part of modelFileParts(file)) {
+      signal?.throwIfAborted();
+      if (hasCachedSize(await cache.match(part.url), part.size)) continue;
+      await downloadModelPart(file, part, {
+        cache,
+        signal,
+        fetchImpl,
+        retryDelays,
+        onProgress: (received) =>
+          onProgress({ loaded: loaded + received, total }),
+      });
+      loaded += part.size;
+      onProgress({ loaded, total });
     }
-    loaded += file.size;
   }
   signal?.throwIfAborted();
   onProgress({ loaded: total, total });
@@ -147,7 +116,7 @@ export async function downloadModel(
 
 export async function removeCachedModel(model) {
   const cache = await openModelCache();
-  for (const file of model.files) await cache.delete(file.url);
+  for (const file of model.files) await deleteCachedModelFile(cache, file);
 }
 
 export async function requireCachedModels(config) {

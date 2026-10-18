@@ -74,9 +74,11 @@ export async function startLocalDownload(model) {
     });
     state.status = 'ready';
   } catch (error) {
+    // Report committed bytes, not bytes from the request that just failed.
+    state.loaded = await cachedModelBytes(model).catch(() => state.loaded);
     state.status = controller.signal.aborted ? 'idle' : 'error';
     state.error = controller.signal.aborted
-      ? 'Download cancelled. Completed files are kept.'
+      ? 'Download cancelled. Saved parts are kept; download again to resume.'
       : error.message;
   } finally {
     delete state.controller;

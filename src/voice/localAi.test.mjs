@@ -66,7 +66,7 @@ test('local conversation executes an action and includes its result in the next 
   const events = [],
     calls = [];
   const result = await runLocalTurn({
-    text: 'Покажи Москву',
+    text: 'Нужен вид Москвы',
     signal: new AbortController().signal,
     emit: (event) => events.push(event),
     runAction: async (name, args) => {
@@ -93,8 +93,10 @@ test('local conversation executes an action and includes its result in the next 
         : (assert.equal(messages.at(-1).content, '{"ok":true}'),
           { message: { content: 'Показываю Москву.' } }),
   });
-  assert.deepEqual(calls, [['fly_to_location', { query: 'Москва' }]]);
-  assert.equal(result.text, 'Показываю Москву.');
+  assert.deepEqual(calls, [
+    ['fly_to_location', { query: 'Москва', waitForArrival: true }],
+  ]);
+  assert.equal(result.text, 'Переход ещё не подтверждён.');
   assert.equal(events.at(-1).role, 'assistant');
   assert.equal(result.history.length, 4);
 });
@@ -309,4 +311,30 @@ test('Piper PCM becomes a valid mono 16-bit WAV and clamps samples', () => {
   assert.equal(view.getUint32(40, true), 6);
   assert.equal(view.getInt16(44, true), -32768);
   assert.equal(view.getInt16(48, true), 32767);
+});
+
+test('bare and fenced Bonsai function JSON executes as a tool instead of being spoken', () => {
+  const json =
+    '{"name":"set_layer_visibility","arguments":{"layerId":"flights","enabled":true}}';
+  for (const output of [
+    json,
+    `\u0060\u0060\u0060json\n${json}\n\u0060\u0060\u0060`,
+  ]) {
+    const result = parseLocalCompletion(output);
+    assert.equal(result.content, '');
+    assert.equal(result.tool_calls[0].function.name, 'set_layer_visibility');
+    assert.deepEqual(JSON.parse(result.tool_calls[0].function.arguments), {
+      layerId: 'flights',
+      enabled: true,
+    });
+  }
+  assert.equal(parseLocalCompletion(`Example: ${json}`).tool_calls, undefined);
+  assert.equal(
+    parseLocalCompletion('{"temperature":20}').tool_calls,
+    undefined,
+  );
+  assert.throws(
+    () => parseLocalCompletion('{"name":"fly_to_location","arguments":[]}'),
+    /invalid action/,
+  );
 });

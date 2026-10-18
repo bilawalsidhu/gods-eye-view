@@ -149,7 +149,10 @@ test('tokenizer probes at main resolve to the selected cached revision without n
   );
   await cache.put(
     file.url,
-    Response.json({ tokenizer_class: 'Qwen2Tokenizer' }),
+    Response.json(
+      { tokenizer_class: 'Qwen2Tokenizer' },
+      { headers: { 'X-GEV-Model-Size': String(file.size) } },
+    ),
   );
   const reader = modelCacheReader(cache, [model]);
   const probe = file.url.replace(

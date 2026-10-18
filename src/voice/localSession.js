@@ -5,6 +5,7 @@ import {
   localSpeechSamples,
 } from './localAudioCapture.js';
 import { localJson, runLocalTurn } from './localConversation.js';
+import { localSpeechChunks } from './localCommands.js';
 import {
   isInteractiveSpaceTarget,
   isPushToTalkKey,
@@ -20,7 +21,16 @@ export function createLocalSession({
   radioLayer,
   runtime = createBrowserLocalRuntime(config),
 }) {
-  let active, stream, recorder, context, source, meter, timer, audio, audioUrl;
+  let active,
+    operation,
+    stream,
+    recorder,
+    context,
+    source,
+    meter,
+    timer,
+    audio,
+    audioUrl;
   let history = [],
     processing = false,
     held = false,
@@ -34,7 +44,12 @@ export function createLocalSession({
   const current = (session) => active === session && !session.signal.aborted;
   const combined = (session) =>
     AbortSignal.any(
-      [session.signal, signal, AbortSignal.timeout(600000)].filter(Boolean),
+      [
+        session.signal,
+        operation?.signal,
+        signal,
+        AbortSignal.timeout(180000),
+      ].filter(Boolean),
     );
   const stopAudio = () => {
     if (audio) {
@@ -50,6 +65,8 @@ export function createLocalSession({
   };
   function stop({ removeUi = false, preserveStatus = false } = {}) {
     active?.abort();
+    operation?.abort();
+    operation = null;
     runtime.stop();
     active = null;
     clearInterval(timer);
@@ -80,42 +97,56 @@ export function createLocalSession({
     state('error', error.message);
   }
   async function speak(text, session) {
-    const blob = await runtime.speech(text.slice(0, 6000), combined(session));
-    if (!current(session)) return;
-    audioUrl = URL.createObjectURL(blob);
-    audio = new Audio(audioUrl);
-    ui.root.dataset.speaker = 'ai';
-    await new Promise((resolve, reject) => {
-      const done = () => {
-        session.signal.removeEventListener('abort', done);
-        resolve();
-      };
-      session.signal.addEventListener('abort', done, { once: true });
-      audio.onended = done;
-      audio.onerror = () => {
-        session.signal.removeEventListener('abort', done);
-        reject(new Error('Could not play local speech'));
-      };
-      audio.play().catch((error) => {
-        session.signal.removeEventListener('abort', done);
-        reject(error);
+    const turnSignal = combined(session);
+    for (const chunk of localSpeechChunks(text)) {
+      turnSignal.throwIfAborted();
+      const blob = await runtime.speech(chunk, turnSignal, (message) => {
+        if (current(session) && !turnSignal.aborted) detail(message);
       });
-    });
-    if (current(session)) stopAudio();
+      turnSignal.throwIfAborted();
+      if (!current(session)) return;
+      audioUrl = URL.createObjectURL(blob);
+      audio = new Audio(audioUrl);
+      ui.root.dataset.speaker = 'ai';
+      await new Promise((resolve, reject) => {
+        const done = () => {
+          turnSignal.removeEventListener('abort', done);
+          resolve();
+        };
+        turnSignal.addEventListener('abort', done, { once: true });
+        audio.onended = done;
+        audio.onerror = () => {
+          turnSignal.removeEventListener('abort', done);
+          reject(new Error('Could not play local speech'));
+        };
+        audio.play().catch((error) => {
+          turnSignal.removeEventListener('abort', done);
+          reject(error);
+        });
+      });
+      turnSignal.throwIfAborted();
+      if (current(session)) stopAudio();
+    }
+    if (current(session)) detail(text);
   }
   async function turn(text, session) {
+    const turnSignal = combined(session);
     state('executing', 'LOCAL · THINKING');
     const result = await runLocalTurn({
       text,
       history,
+      language: config.language,
       runAction,
-      signal: combined(session),
+      signal: turnSignal,
       emit,
       request: (path, body, turnSignal) =>
         path === 'chat'
-          ? runtime.chat(body.messages, turnSignal)
+          ? runtime.chat(body.messages, turnSignal, (message) => {
+              if (current(session) && !turnSignal.aborted) detail(message);
+            })
           : localJson(path, body, turnSignal),
     });
+    turnSignal.throwIfAborted();
     if (!current(session)) return;
     history = result.history;
     detail(result.text);
@@ -139,16 +170,20 @@ export function createLocalSession({
         return;
       }
       processing = true;
+      const task = new AbortController();
+      operation = task;
       try {
         state('executing', 'LOCAL · TRANSCRIBING');
         const samples = await localSpeechSamples(pcm, sampleRate);
-        if (!current(session)) return;
+        if (!current(session) || task.signal.aborted) return;
         const { text } = await runtime.transcribe(samples, combined(session));
-        if (current(session) && text?.trim()) await turn(text, session);
+        if (current(session) && !task.signal.aborted && text?.trim())
+          await turn(text, session);
       } catch (error) {
-        fail(error, session);
+        if (!task.signal.aborted) fail(error, session);
       } finally {
-        if (current(session)) {
+        if (current(session) && operation === task) {
+          operation = null;
           processing = false;
           listen(session);
         }
@@ -239,6 +274,12 @@ export function createLocalSession({
       return;
     event.preventDefault();
     held = true;
+    if (processing && operation) {
+      operation.abort();
+      operation = null;
+      stopAudio();
+      processing = false;
+    }
     if (!active) void start({ pushToTalk: true });
     else if (!processing && recorder?.state === 'inactive') {
       manual = true;
@@ -261,9 +302,18 @@ export function createLocalSession({
     start,
     stop,
     async sendText(text) {
-      if (!active || processing || typeof text !== 'string' || !text.trim())
+      if (
+        !active ||
+        (processing && !operation) ||
+        typeof text !== 'string' ||
+        !text.trim()
+      )
         return false;
       const session = active;
+      operation?.abort();
+      stopAudio();
+      const task = new AbortController();
+      operation = task;
       if (recorder?.state !== 'inactive') {
         recorder?.cancel();
         clearInterval(timer);
@@ -273,10 +323,11 @@ export function createLocalSession({
         await turn(text, session);
         return true;
       } catch (error) {
-        fail(error, session);
+        if (!task.signal.aborted) fail(error, session);
         return false;
       } finally {
-        if (current(session)) {
+        if (current(session) && operation === task) {
+          operation = null;
           processing = false;
           listen(session);
         }

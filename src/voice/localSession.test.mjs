@@ -273,3 +273,163 @@ test('short Space taps are ignored and subsequent PCM speech reaches Whisper wit
   session.stop();
   assert.equal(trackStops, 1);
 });
+
+test('a new text command cancels generation without stopping the microphone or speaking a stale answer', async (t) => {
+  const originals = Object.fromEntries(
+    ['navigator', 'AudioContext', 'AudioWorkletNode', 'Audio'].map((key) => [
+      key,
+      Object.getOwnPropertyDescriptor(globalThis, key),
+    ]),
+  );
+  let trackStops = 0,
+    chatSignal,
+    chatResolve;
+  const spoken = [],
+    events = [],
+    actions = [];
+  Object.defineProperty(globalThis, 'navigator', {
+    configurable: true,
+    value: {
+      mediaDevices: {
+        getUserMedia: async () => ({
+          getTracks: () => [{ stop: () => trackStops++ }],
+        }),
+      },
+    },
+  });
+  globalThis.AudioContext = class {
+    audioWorklet = { addModule: async () => {} };
+    destination = {};
+    async resume() {}
+    async close() {}
+    createMediaStreamSource() {
+      return { connect() {}, disconnect() {} };
+    }
+    createAnalyser() {
+      return { getFloatTimeDomainData() {} };
+    }
+  };
+  globalThis.AudioWorkletNode = class {
+    port = { postMessage() {}, close() {} };
+    connect() {}
+    disconnect() {}
+  };
+  globalThis.Audio = class {
+    pause() {}
+    async play() {
+      queueMicrotask(() => this.onended?.());
+    }
+  };
+  const session = createLocalSession({
+    ui: ui(),
+    emit: (event) => events.push(event),
+    config: { profile: 'max', language: 'ru' },
+    runAction: async (name) => {
+      actions.push(name);
+      return { ok: true };
+    },
+    runtime: {
+      prepare: async () => {},
+      stop() {},
+      chat: async (_messages, signal) => {
+        chatSignal = signal;
+        return new Promise((resolve) => {
+          chatResolve = resolve;
+        });
+      },
+      speech: async (text) => {
+        spoken.push(text);
+        return new Blob(['wav']);
+      },
+    },
+  });
+  t.after(() => {
+    session.stop();
+    for (const [key, descriptor] of Object.entries(originals)) {
+      if (descriptor) Object.defineProperty(globalThis, key, descriptor);
+      else delete globalThis[key];
+    }
+  });
+  await session.start({ pushToTalk: true });
+  const first = session.sendText('Расскажи что-нибудь');
+  while (!chatResolve) await new Promise((resolve) => setImmediate(resolve));
+  const second = session.sendText('Приблизь немного');
+  assert.equal(chatSignal.aborted, true);
+  chatResolve({ message: { content: 'Stale answer' } });
+  assert.equal(await first, false);
+  assert.equal(await second, true);
+  assert.deepEqual(actions, ['adjust_camera_zoom']);
+  assert.deepEqual(spoken, ['Приближаю.']);
+  assert.equal(trackStops, 0);
+  assert.equal(
+    events.some((event) => event.state === 'error'),
+    false,
+  );
+  assert.equal(events.at(-1).state, 'listening');
+});
+
+test('stopping while local speech is pending prevents late playback', async (t) => {
+  const originalNavigator = Object.getOwnPropertyDescriptor(
+    globalThis,
+    'navigator',
+  );
+  const originalContext = globalThis.AudioContext,
+    originalWorklet = globalThis.AudioWorkletNode;
+  let speechResolve, speechSignal;
+  Object.defineProperty(globalThis, 'navigator', {
+    configurable: true,
+    value: {
+      mediaDevices: {
+        getUserMedia: async () => ({ getTracks: () => [{ stop() {} }] }),
+      },
+    },
+  });
+  globalThis.AudioContext = class {
+    audioWorklet = { addModule: async () => {} };
+    destination = {};
+    async resume() {}
+    async close() {}
+    createMediaStreamSource() {
+      return { connect() {}, disconnect() {} };
+    }
+    createAnalyser() {
+      return { getFloatTimeDomainData() {} };
+    }
+  };
+  globalThis.AudioWorkletNode = class {
+    port = { postMessage() {}, close() {} };
+    connect() {}
+    disconnect() {}
+  };
+  const events = [];
+  const session = createLocalSession({
+    ui: ui(),
+    config: { profile: 'low', language: 'ru' },
+    emit: (e) => events.push(e),
+    runAction: async () => ({ ok: true }),
+    runtime: {
+      prepare: async () => {},
+      stop() {},
+      speech: (_text, signal) => {
+        speechSignal = signal;
+        return new Promise((resolve) => {
+          speechResolve = resolve;
+        });
+      },
+    },
+  });
+  t.after(() => {
+    session.stop();
+    Object.defineProperty(globalThis, 'navigator', originalNavigator);
+    globalThis.AudioContext = originalContext;
+    globalThis.AudioWorkletNode = originalWorklet;
+  });
+  await session.start({ pushToTalk: true });
+  const pending = session.sendText('Приблизь');
+  while (!speechResolve) await new Promise((resolve) => setImmediate(resolve));
+  session.stop();
+  assert.equal(speechSignal.aborted, true);
+  speechResolve(new Blob(['wav']));
+  assert.equal(await pending, false);
+  assert.equal(events.at(-1).state, 'idle');
+});

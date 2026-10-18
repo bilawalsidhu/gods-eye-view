@@ -38,48 +38,62 @@ env.fetch = async (url) =>
 
 let tokenizer, model, recognizer, voice, voiceConfig, phonemizer;
 let printedPhonemes;
-async function prepare(config, status) {
-  if (model && recognizer && voice) return;
+async function prepare(config, kind, status) {
+  if (
+    (kind === 'chat' && model) ||
+    (kind === 'recognition' && recognizer) ||
+    (kind === 'speech' && voice)
+  )
+    return;
   cache ||= await openModelCache();
   const [chat, recognition, speech] = selectedLocalModels(config);
   env.customCache = modelCacheReader(cache, [chat, recognition, speech]);
-  status(`Loading ${chat.title} from browser cache…`);
-  tokenizer = await AutoTokenizer.from_pretrained(chat.repo, {
-    revision: chat.revision,
-  });
-  model = await AutoModelForCausalLM.from_pretrained(chat.repo, {
-    revision: chat.revision,
-    dtype: chat.dtype,
-    device: 'webgpu',
-  });
-  status(`Loading ${recognition.title} from browser cache…`);
-  recognizer = await pipeline(
-    'automatic-speech-recognition',
-    recognition.repo,
-    {
-      revision: recognition.revision,
-      dtype: recognition.dtype,
-      device: 'wasm',
-    },
-  );
-  status(`Loading ${speech.title} from browser cache…`);
-  voiceConfig = await (await cache.match(speech.files[1].url)).json();
-  voice = await ort.InferenceSession.create(
-    await (await cache.match(speech.files[0].url)).arrayBuffer(),
-    { executionProviders: ['wasm'] },
-  );
-  const data = await (await fetch(piperData)).arrayBuffer();
-  const wasm = new Uint8Array(await (await fetch(piperWasm)).arrayBuffer());
-  phonemizer = await createPiperPhonemize({
-    wasmBinary: wasm,
-    getPreloadedPackage: () => data,
-    print: (line) => {
-      printedPhonemes = JSON.parse(line).phoneme_ids;
-    },
-    printErr: (line) => {
-      throw new Error(line);
-    },
-  });
+  if (kind === 'chat') {
+    status(`Loading ${chat.title} from browser cache…`);
+    tokenizer = await AutoTokenizer.from_pretrained(chat.repo, {
+      revision: chat.revision,
+      progress_callback: () => {},
+    });
+    model = await AutoModelForCausalLM.from_pretrained(chat.repo, {
+      revision: chat.revision,
+      progress_callback: () => {},
+      dtype: chat.dtype,
+      device: 'webgpu',
+    });
+  } else if (kind === 'recognition') {
+    status(`Loading ${recognition.title} from browser cache…`);
+    recognizer = await pipeline(
+      'automatic-speech-recognition',
+      recognition.repo,
+      {
+        revision: recognition.revision,
+        progress_callback: () => {},
+        dtype: recognition.dtype,
+        device: 'wasm',
+      },
+    );
+  } else if (kind === 'speech') {
+    status(`Loading ${speech.title} from browser cache…`);
+    voiceConfig = await (
+      await env.customCache.match(speech.files[1].url)
+    ).json();
+    voice = await ort.InferenceSession.create(
+      await (await env.customCache.match(speech.files[0].url)).arrayBuffer(),
+      { executionProviders: ['wasm'] },
+    );
+    const data = await (await fetch(piperData)).arrayBuffer();
+    const wasm = new Uint8Array(await (await fetch(piperWasm)).arrayBuffer());
+    phonemizer = await createPiperPhonemize({
+      wasmBinary: wasm,
+      getPreloadedPackage: () => data,
+      print: (line) => {
+        printedPhonemes = JSON.parse(line).phoneme_ids;
+      },
+      printErr: (line) => {
+        throw new Error(line);
+      },
+    });
+  } else throw new Error('Unknown local model kind');
 }
 
 async function generate(messages, config) {
@@ -99,32 +113,46 @@ async function generate(messages, config) {
         }
       : message,
   );
-  const inputs = tokenizer.apply_chat_template(conversation, {
-    tools: payload.tools,
-    enable_thinking: false,
-    add_generation_prompt: true,
-    return_dict: true,
-  });
-  const inputLength = inputs.input_ids.dims.at(-1);
-  if (inputLength + config.maxTokens > config.context)
-    throw new Error(
-      'Conversation is too long for this profile. Restart voice or select a larger profile.',
-    );
-  const output = await model.generate({
-    ...inputs,
-    max_new_tokens: config.maxTokens,
-    do_sample: false,
-  });
-  const tokens = output.tolist()[0].slice(inputLength);
-  if (tokens.length >= config.maxTokens)
-    throw new Error(
-      'Bonsai reached the response limit. Try a shorter request.',
-    );
-  return {
-    message: parseLocalCompletion(
-      tokenizer.decode(tokens, { skip_special_tokens: true }),
-    ),
-  };
+  let inputs, output;
+  try {
+    while (true) {
+      inputs = tokenizer.apply_chat_template(conversation, {
+        tools: payload.tools,
+        enable_thinking: false,
+        add_generation_prompt: true,
+        return_dict: true,
+      });
+      if (inputs.input_ids.dims.at(-1) + config.maxTokens <= config.context)
+        break;
+      for (const tensor of Object.values(inputs)) tensor.dispose();
+      inputs = null;
+      const nextTurn = conversation.findIndex(
+        (message, index) => index > 1 && message.role === 'user',
+      );
+      if (nextTurn < 0)
+        throw new Error('This request is too long. Please shorten it.');
+      conversation.splice(1, nextTurn - 1);
+    }
+    const inputLength = inputs.input_ids.dims.at(-1);
+    output = await model.generate({
+      ...inputs,
+      max_new_tokens: config.maxTokens,
+      do_sample: false,
+    });
+    const tokens = output.tolist()[0].slice(inputLength);
+    if (tokens.length >= config.maxTokens)
+      throw new Error(
+        'Bonsai reached the response limit. Try a shorter request.',
+      );
+    return {
+      message: parseLocalCompletion(
+        tokenizer.decode(tokens, { skip_special_tokens: true }),
+      ),
+    };
+  } finally {
+    output?.dispose();
+    for (const tensor of Object.values(inputs || {})) tensor.dispose();
+  }
 }
 
 async function synthesize(text) {
@@ -159,14 +187,18 @@ async function synthesize(text) {
   };
   if (Object.keys(voiceConfig.speaker_id_map).length)
     feeds.sid = new ort.Tensor('int64', BigInt64Array.of(0n), [1]);
-  const result = await voice.run(feeds);
+  let result;
   try {
+    result = await voice.run(feeds);
     return new Blob(
       [pcmToWav(result.output.data, voiceConfig.audio.sample_rate)],
       { type: 'audio/wav' },
     );
   } finally {
-    for (const tensor of [...Object.values(feeds), ...Object.values(result)])
+    for (const tensor of [
+      ...Object.values(feeds),
+      ...Object.values(result || {}),
+    ])
       tensor.dispose();
   }
 }
@@ -181,8 +213,14 @@ self.onmessage = async ({ data: { id, type, data, config } }) => {
   busy = true;
   try {
     let result;
-    if (type === 'prepare')
-      await prepare(config, (status) => self.postMessage({ id, status }));
+    const kind =
+      type === 'prepare'
+        ? data.kind
+        : type === 'transcribe'
+          ? 'recognition'
+          : type;
+    await prepare(config, kind, (status) => self.postMessage({ id, status }));
+    if (type === 'prepare') result = { ready: true };
     else if (type === 'chat') result = await generate(data.messages, config);
     else if (type === 'transcribe')
       result = await recognizer(data.audio, {

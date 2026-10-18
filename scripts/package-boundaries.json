@@ -1159,7 +1159,11 @@
       "src/voice/localModels.json",
       "src/voice/localConfig.js",
       "src/voice/localProfiles.json",
-      "src/voice/localAudioCapture.js"
+      "src/voice/localAudioCapture.js",
+      "src/voice/localNavigation.js",
+      "src/voice/localCommands.js",
+      "src/voice/localPrompt.js",
+      "src/voice/localModelStorage.js"
     ],
     "external": []
   },
@@ -1783,7 +1787,11 @@
       "src/voice/localModels.json",
       "src/localModelControls.js",
       "src/voice/localDownloads.js",
-      "src/voice/localAudioCapture.js"
+      "src/voice/localAudioCapture.js",
+      "src/voice/localNavigation.js",
+      "src/voice/localCommands.js",
+      "src/voice/localPrompt.js",
+      "src/voice/localModelStorage.js"
     ],
     "external": [
       "@mapbox/vector-tile",
