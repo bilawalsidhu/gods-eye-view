@@ -231,6 +231,7 @@
   font-family: var(--font-sans);
   font-size: 0.78rem;
   font-weight: 600;
+  overflow-wrap: break-word;
 }
 
 .gev-voice-card-chips {
@@ -271,6 +272,8 @@
   font-size: 0.66rem;
   line-height: 1.4;
   color: rgba(223, 245, 250, 0.82);
+  /* A whole error line or a long headline wraps inside the card. */
+  overflow-wrap: break-word;
 }
 
 .gev-voice-card-referents {

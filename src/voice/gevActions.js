@@ -8,9 +8,11 @@ import { SPEECH_BUILDERS, attachVoiceResult } from './speech.js';
 import { resolveDeicticArgs } from './deixis.js';
 export { readLayerLifecycleSummary } from './layerSummary.js';
 import { defaultGeospatial } from '../search/defaults.js';
+import { msg } from '../i18n/index.js';
 import * as Cesium from 'cesium';
+import { CITY_POIS } from '../cityPois.js';
+import { greatCircleKm } from '../geoDistance.js';
 import {
-  CITY_POIS,
   findPoiByName,
   flyToGlobeView,
   flyToLandmark,
@@ -1442,7 +1444,7 @@ function controlScene(sceneDirector, args = {}) {
     };
   }
   if (sceneAction === 'stop') {
-    sceneDirector.stopScene('Stopped by voice');
+    sceneDirector.stopScene(msg('Stopped by voice'));
     return { ok: true, action: 'control_scene', running: false };
   }
   if (sceneAction === 'next') {
@@ -1643,14 +1645,18 @@ export async function controlCctv(dataManager, args = {}, styleManager = null) {
 }
 
 const RADIO_COUNTRY_CENTERS = new Map([
+  // i18n-ignore: place name in tool data
   ['us', { lat: 39.8, lon: -98.6, country: 'US', label: 'United States' }],
+  // i18n-ignore: place name in tool data
   ['usa', { lat: 39.8, lon: -98.6, country: 'US', label: 'United States' }],
   [
     'united states',
+    // i18n-ignore: place name in tool data
     { lat: 39.8, lon: -98.6, country: 'US', label: 'United States' },
   ],
   [
     'united states of america',
+    // i18n-ignore: place name in tool data
     { lat: 39.8, lon: -98.6, country: 'US', label: 'United States' },
   ],
 ]);
@@ -2251,6 +2257,7 @@ async function trackEntity(
           action: 'track_entity',
           kind: 'fire',
           layerId: 'local-firms',
+          // i18n-ignore: entity name in a tool result for the voice model
           label: strongest.label || 'Strongest fire',
           latitude: strongest.latitude,
           longitude: strongest.longitude,
@@ -2997,7 +3004,11 @@ function focusDataLayerRow(layerId) {
   void row.offsetWidth;
   row.classList.add('gev-voice-focus');
   window.setTimeout(() => row.classList.remove('gev-voice-focus'), 3000);
-  const name = row.querySelector('.data-name')?.textContent?.trim() || layerId;
+  // The English name: tool results stay English whatever the UI language.
+  const name =
+    row.dataset.layerName ||
+    row.querySelector('.data-name')?.textContent?.trim() ||
+    layerId;
   return { id: layerId, name };
 }
 
@@ -3732,8 +3743,10 @@ function centerMatchesSubject(center, subjectPosition) {
   const subjectLat = Cesium.Math.toDegrees(carto.latitude);
   const subjectLon = Cesium.Math.toDegrees(carto.longitude);
   return (
-    haversineKm(subjectLat, subjectLon, center.lat, center.lon) <=
-    SUBJECT_CENTER_TOLERANCE_KM
+    greatCircleKm(
+      { lat: subjectLat, lon: subjectLon },
+      { lat: center.lat, lon: center.lon },
+    ) <= SUBJECT_CENTER_TOLERANCE_KM
   );
 }
 
@@ -4023,7 +4036,7 @@ function nearbyKnownLandmarks(latitude, longitude, cameraHeightM) {
   for (const [cityId, city] of Object.entries(CITY_POIS)) {
     for (let poiIndex = 0; poiIndex < city.pois.length; poiIndex++) {
       const poi = city.pois[poiIndex];
-      const distanceKm = haversineKm(latitude, longitude, poi.lat, poi.lon);
+      const distanceKm = greatCircleKm({ lat: latitude, lon: longitude }, poi);
       if (distanceKm > maxDistanceKm) continue;
       matches.push({
         name: poi.name,
@@ -4036,20 +4049,6 @@ function nearbyKnownLandmarks(latitude, longitude, cameraHeightM) {
     }
   }
   return matches.sort((a, b) => a.distanceKm - b.distanceKm).slice(0, 5);
-}
-
-function haversineKm(lat1, lon1, lat2, lon2) {
-  const toRad = (value) => Cesium.Math.toRadians(value);
-  const radiusKm = 6371.0088;
-  const dLat = toRad(lat2 - lat1);
-  const dLon = toRad(lon2 - lon1);
-  const a =
-    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-    Math.cos(toRad(lat1)) *
-      Math.cos(toRad(lat2)) *
-      Math.sin(dLon / 2) *
-      Math.sin(dLon / 2);
-  return 2 * radiusKm * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
 function coarseBasemapPlace(
