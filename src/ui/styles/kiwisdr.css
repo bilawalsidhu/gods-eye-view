@@ -1,0 +1,441 @@
+/* Sit above the bottom command dock (2vh up, about 3.75rem tall) AND the
+   required map attribution row (bottom 2vh + 5rem, about 1.2rem tall, z-index
+   90), which would otherwise paint over the player's lower rows. */
+:root {
+  --kiwisdr-dock-clearance: calc(2vh + 6.9rem);
+}
+
+/* KiwiSDR listening panel. Receiver names come from a public directory and
+   are only ever inserted as text. */
+
+.kiwisdr-tooltip {
+  position: fixed;
+  z-index: 60;
+  max-width: 320px;
+  padding: 6px 10px;
+  border: 1px solid var(--glass-border-hover);
+  border-radius: 8px;
+  background: var(--menu-bg);
+  color: var(--text-primary);
+  font: 12px/1.3 var(--font-sans);
+  pointer-events: none;
+}
+.kiwisdr-tooltip[hidden] {
+  display: none;
+}
+
+.kiwisdr-panel {
+  position: fixed;
+  z-index: 40;
+  left: 50%;
+  bottom: var(--kiwisdr-dock-clearance);
+  transform: translateX(-50%);
+  width: min(640px, calc(100vw - 24px));
+  max-height: calc(100vh - var(--kiwisdr-dock-clearance) - 16px);
+  overflow: auto;
+  padding: 14px 16px 16px;
+  border: 1px solid var(--glass-border);
+  border-radius: var(--panel-radius);
+  background: var(--glass-bg);
+  backdrop-filter: blur(18px) saturate(1.2);
+  -webkit-backdrop-filter: blur(18px) saturate(1.2);
+  color: var(--text-primary);
+  font: 13px/1.4 var(--font-sans);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+}
+
+.kiwisdr-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 6px;
+}
+.kiwisdr-title {
+  margin: 0;
+  font: 600 15px/1.25 var(--font-sans);
+  overflow-wrap: anywhere;
+}
+.kiwisdr-sub {
+  margin: 2px 0 0;
+  color: var(--text-secondary);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.kiwisdr-close {
+  flex: none;
+  width: 30px;
+  height: 30px;
+  border: 1px solid var(--glass-border);
+  border-radius: var(--btn-radius);
+  background: transparent;
+  color: var(--text-primary);
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+}
+.kiwisdr-close:hover,
+.kiwisdr-chip:hover {
+  border-color: var(--glass-border-hover);
+  background: var(--accent-dim);
+}
+
+/* Status uses text plus a shape, never red/green alone. */
+.kiwisdr-status {
+  margin: 4px 0 8px;
+  font: 12px/1.3 var(--font-mono);
+  color: var(--text-secondary);
+}
+.kiwisdr-status::before {
+  content: '◌ ';
+}
+.kiwisdr-status[data-tone='ok'] {
+  color: #ffe14d;
+}
+.kiwisdr-status[data-tone='ok']::before {
+  content: '● ';
+}
+.kiwisdr-status[data-tone='warn'] {
+  color: #1fb5a8;
+}
+.kiwisdr-status[data-tone='warn']::before {
+  content: '▲ ';
+}
+.kiwisdr-status[data-tone='error'] {
+  color: #c9a7ff;
+}
+.kiwisdr-status[data-tone='error']::before {
+  content: '✕ ';
+}
+
+.kiwisdr-wf-wrap {
+  position: relative;
+  height: 160px;
+  border: 1px solid var(--glass-border);
+  border-radius: 8px;
+  overflow: hidden;
+  background: #000004;
+}
+.kiwisdr-wf,
+.kiwisdr-wf-overlay {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+.kiwisdr-wf-overlay {
+  cursor: crosshair;
+}
+.kiwisdr-axis {
+  position: relative;
+  height: 16px;
+  margin-bottom: 8px;
+  font: 10px/16px var(--font-mono);
+  color: var(--text-secondary);
+}
+.kiwisdr-tick {
+  position: absolute;
+  transform: translateX(-50%);
+  white-space: nowrap;
+}
+
+.kiwisdr-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+}
+.kiwisdr-readout {
+  min-width: 112px;
+  font: 600 18px/1 var(--font-mono);
+  color: #ffe14d;
+}
+.kiwisdr-field {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+.kiwisdr-field input {
+  width: 96px;
+  padding: 5px 8px;
+  border: 1px solid var(--glass-border-hover);
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.35);
+  color: var(--text-primary);
+  font: 13px var(--font-mono);
+}
+.kiwisdr-chip {
+  padding: 5px 10px;
+  border: 1px solid var(--glass-border);
+  border-radius: var(--btn-radius);
+  background: transparent;
+  color: var(--text-primary);
+  font: 12px var(--font-sans);
+  cursor: pointer;
+}
+.kiwisdr-chip[hidden] {
+  display: none;
+}
+/* Pressed state is a fill AND an underline so it reads without colour. */
+.kiwisdr-chip[aria-pressed='true'] {
+  border-color: #ffe14d;
+  background: rgba(255, 225, 77, 0.16);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.kiwisdr-label {
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+.kiwisdr-zoom {
+  min-width: 36px;
+  text-align: center;
+  font: 12px var(--font-mono);
+}
+.kiwisdr-meter {
+  flex: 1 1 160px;
+  height: 8px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.1);
+  overflow: hidden;
+}
+.kiwisdr-meter-bar {
+  height: 100%;
+  width: 0;
+  background: linear-gradient(90deg, #1fb5a8, #ffe14d);
+  transition: width 120ms linear;
+}
+.kiwisdr-meter-text {
+  min-width: 118px;
+  font: 12px var(--font-mono);
+  color: var(--text-secondary);
+}
+.kiwisdr-panel input[type='range'] {
+  width: 96px;
+  accent-color: #ffe14d;
+}
+.kiwisdr-panel :focus-visible {
+  outline: 2px solid #ffffff;
+  outline-offset: 2px;
+}
+@media (max-width: 520px) {
+  .kiwisdr-panel {
+    padding: 10px 12px 12px;
+  }
+}
+
+/* Header buttons: favorite, minimize, close. */
+.kiwisdr-headtext {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+.kiwisdr-headbtns {
+  display: flex;
+  flex: none;
+  gap: 6px;
+}
+.kiwisdr-iconbtn {
+  flex: none;
+  min-width: 30px;
+  height: 30px;
+  padding: 0 6px;
+  border: 1px solid var(--glass-border);
+  border-radius: var(--btn-radius);
+  background: transparent;
+  color: var(--text-primary);
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+}
+.kiwisdr-iconbtn:hover {
+  border-color: var(--glass-border-hover);
+  background: var(--accent-dim);
+}
+.kiwisdr-iconbtn[aria-pressed='true'] {
+  border-color: #ffe14d;
+  color: #ffe14d;
+}
+
+/* Docked: a slim bar in the bottom-left that keeps playing out of the way. */
+.kiwisdr-mini {
+  display: none;
+  align-items: center;
+  gap: 10px;
+  font: 600 13px var(--font-mono);
+  color: #ffe14d;
+  white-space: nowrap;
+}
+.kiwisdr-mini-meter {
+  color: var(--text-secondary);
+  font-weight: 400;
+}
+.kiwisdr-panel[data-docked='true'] {
+  left: 12px;
+  transform: none;
+  width: min(440px, calc(100vw - 24px));
+  padding: 8px 10px;
+  overflow: visible;
+}
+body:has(.kiwisdr-favs) .kiwisdr-panel[data-docked='true'] {
+  bottom: calc(var(--kiwisdr-dock-clearance) + 2.6rem);
+}
+.kiwisdr-panel[data-docked='true'] .kiwisdr-body,
+.kiwisdr-panel[data-docked='true'] .kiwisdr-sub,
+.kiwisdr-panel[data-docked='true']
+  .kiwisdr-status:not([data-tone='error']):not([data-tone='warn']),
+.kiwisdr-panel[data-docked='true'] .kiwisdr-diag {
+  display: none;
+}
+.kiwisdr-panel[data-docked='true'] .kiwisdr-mini {
+  display: flex;
+}
+.kiwisdr-panel[data-docked='true'] .kiwisdr-head {
+  align-items: center;
+  margin: 0;
+}
+.kiwisdr-panel[data-docked='true'] .kiwisdr-title {
+  font-size: 13px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.kiwisdr-diag {
+  margin: -4px 0 8px;
+  font: 11px/1.3 var(--font-mono);
+  color: var(--text-secondary);
+}
+.kiwisdr-diag[hidden],
+.kiwisdr-hint[hidden] {
+  display: none;
+}
+.kiwisdr-ext {
+  display: inline-block;
+  margin-top: 8px;
+  color: var(--text-secondary);
+  font-size: 11px;
+  text-decoration: underline;
+}
+
+/* Waterfall interaction: hover frequency tag, drag cursor. */
+.kiwisdr-wf-overlay {
+  touch-action: pan-y;
+}
+.kiwisdr-wf-overlay.is-dragging {
+  cursor: grabbing;
+}
+.kiwisdr-hover {
+  position: absolute;
+  top: 4px;
+  transform: translateX(-50%);
+  padding: 1px 6px;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.75);
+  color: #ffe14d;
+  font: 11px var(--font-mono);
+  pointer-events: none;
+  white-space: nowrap;
+}
+.kiwisdr-hover[hidden] {
+  display: none;
+}
+
+/* Saved frequencies for this receiver. */
+.kiwisdr-savedlist {
+  display: contents;
+}
+.kiwisdr-saved {
+  display: inline-flex;
+}
+.kiwisdr-saved .kiwisdr-chip:first-child {
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+}
+.kiwisdr-chip-x {
+  padding: 5px 7px;
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+  border-left: 0;
+  color: var(--text-secondary);
+}
+.kiwisdr-hint {
+  color: var(--text-secondary);
+  font-size: 11px;
+}
+
+/* Favorites tray, bottom-left above the command dock. */
+.kiwisdr-favs {
+  position: fixed;
+  z-index: 39;
+  left: 12px;
+  bottom: var(--kiwisdr-dock-clearance);
+  display: flex;
+  flex-direction: column-reverse;
+  align-items: flex-start;
+  gap: 6px;
+  font: 12px var(--font-sans);
+}
+.kiwisdr-favs-toggle {
+  padding: 6px 12px;
+  border: 1px solid var(--glass-border);
+  border-radius: var(--btn-radius);
+  background: var(--glass-bg);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  color: #ffe14d;
+  font: 600 12px var(--font-sans);
+  cursor: pointer;
+}
+.kiwisdr-favs-list {
+  width: min(320px, calc(100vw - 24px));
+  max-height: 40vh;
+  margin: 0;
+  padding: 6px;
+  overflow: auto;
+  list-style: none;
+  border: 1px solid var(--glass-border);
+  border-radius: var(--panel-radius);
+  background: var(--glass-bg);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  color: var(--text-primary);
+}
+.kiwisdr-favs-list[hidden] {
+  display: none;
+}
+.kiwisdr-favs-list li {
+  display: flex;
+  align-items: stretch;
+  gap: 2px;
+}
+.kiwisdr-fav {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  padding: 6px 8px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-primary);
+  text-align: left;
+  cursor: pointer;
+}
+.kiwisdr-fav:hover:not(:disabled) {
+  background: var(--accent-dim);
+}
+.kiwisdr-fav:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.kiwisdr-fav small {
+  color: var(--text-secondary);
+}
+.kiwisdr-favs :focus-visible {
+  outline: 2px solid #ffffff;
+  outline-offset: 2px;
+}

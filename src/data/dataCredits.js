@@ -351,6 +351,13 @@ export const DATA_CREDITS = [
       '(public domain; audio delivered directly by each broadcaster)',
   },
   {
+    key: 'kiwisdr',
+    html:
+      'Public SDR receivers: ' +
+      '<a href="https://kiwisdr.com/public/" target="_blank" rel="noopener">KiwiSDR.com receiver list</a> ' +
+      '(audio and waterfall streamed directly from each volunteer-operated receiver)',
+  },
+  {
     key: 'reearth-terrain',
     html:
       'Terrain (keyless globe stacks): ' +
