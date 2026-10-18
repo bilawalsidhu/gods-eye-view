@@ -349,3 +349,13 @@ test('Kartverket topo and nautical charts are keyless web-mercator tiles bounded
   }
   assert.throws(() => createKartverketImagery('norge-i-bilder'), /Unknown/);
 });
+
+test('unreachable keyless terrain falls back to flat terrain marked as a fallback', async (t) => {
+  t.mock.method(Cesium.CesiumTerrainProvider, 'fromUrl', async () => {
+    throw new Error('layer.json unreachable');
+  });
+  t.mock.method(console, 'warn', () => {});
+  const result = await createKeylessTerrain();
+  assert.ok(result.provider instanceof Cesium.EllipsoidTerrainProvider);
+  assert.equal(result.fallback, true);
+});
