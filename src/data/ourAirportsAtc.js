@@ -15,7 +15,7 @@
 
 import { loadBundledJson } from './bundledJson.js';
 import { createRetryableLoader } from './retryableLoad.js';
-import { greatCircleKm } from './routePlausible.js';
+import { greatCircleKm } from '../geoDistance.js';
 
 /**
  * Frequency classes carried by the pack, in OurAirports' own vocabulary.
@@ -158,7 +158,7 @@ export async function nearestAirportsWithFrequencies(lat, lon, options = {}) {
     const dLon = Math.abs(((airport.lon - lon + 540) % 360) - 180);
     if (dLon > lonWindow) continue;
     if (controlledOnly && !isControlled(airport)) continue;
-    const distanceKm = greatCircleKm(lat, lon, airport.lat, airport.lon);
+    const distanceKm = greatCircleKm({ lat, lon }, airport);
     if (distanceKm > maxKm) continue;
     hits.push({ ...airport, distanceKm, controlled: isControlled(airport) });
   }
