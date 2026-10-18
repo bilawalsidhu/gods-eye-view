@@ -123,6 +123,14 @@ export function responseInstructionForToolResult(result) {
         : 'Be concise: useful names, place, layer and one or two notable properties.',
     ].join(' ');
   }
+  if (
+    result?.action === 'move_camera' &&
+    result.ok === false &&
+    result.reason === 'globe-view-required'
+  ) {
+    // A refusal is not a completed action. Keep tool text out of instructions.
+    return 'The globe did not rotate. If this same rotation request already had a reset attempt, do not offer or perform another reset: explain that the globe still does not fit this viewport and ask the user to zoom out further. Otherwise ask "Reset to Globe View and rotate?" once, then end this response and wait for the user. Do not call any tool or reset now. Only the very next user reply can accept this offer with an explicit yes. No, unclear or unrelated replies expire it and permit no action. A new rotation request is not yes: call rotate_globe first and ask again if refused. Never reuse an earlier offer or yes. After an accepted offer, zoom_to_globe then rotate_globe with the requested options after a successful reset.';
+  }
   if (result?.action === 'adjust_camera_zoom') {
     return result.ok
       ? `Confirm once that the camera zoomed ${result.direction}. Do not claim any other change.`

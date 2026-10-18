@@ -727,6 +727,7 @@
   "server/providers/openai/toolDescriptions.js",
   "src/voice/session.js",
   "src/voice/sessionCommands.js",
+  "src/cameraGlobeRotation.test.mjs",
   "src/voice/realtimeSession.js",
   "src/voice/realtimeEvents.js",
   "src/voice/session.test.mjs",
@@ -1062,5 +1063,6 @@
   "src/ui/flyToDataSource.test.mjs",
   "scripts/assemble-changelog.mjs",
   "src/tooling/changelogFragments.test.mjs",
-  "src/data/gbfsProxyRateLimit.test.mjs"
+  "src/data/gbfsProxyRateLimit.test.mjs",
+  "src/voice/globeResetConfirmation.test.mjs"
 ]

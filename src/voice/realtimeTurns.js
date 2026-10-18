@@ -673,10 +673,16 @@ export class RealtimeTurns {
       if (!this.ownsConversation(eventChannel)) return;
       // Keep the Radio handoff wording authoritative even when another tool
       // result follows Radio in the same multi-intent response.
+      const followupResult =
+        this.radio.pendingRadioPlaybackResult || lastResult;
+      const instructions = responseInstructionForToolResult(followupResult);
+      // A close-up globe refusal asks permission; it cannot perform its own reset.
       this.queueResponseCreate(
-        responseInstructionForToolResult(
-          this.radio.pendingRadioPlaybackResult || lastResult,
-        ),
+        followupResult?.action === 'move_camera' &&
+          followupResult.ok === false &&
+          followupResult.reason === 'globe-view-required'
+          ? { instructions, tool_choice: 'none' }
+          : instructions,
       );
     }
     this.setStatus('listening', t('Ask or command'));
@@ -1045,7 +1051,8 @@ export class RealtimeTurns {
     const sent = this.sendRealtimeEvent(
       {
         type: 'response.create',
-        response: { instructions },
+        response:
+          typeof instructions === 'string' ? { instructions } : instructions,
       },
       'client.response_create.tool_followup',
     );

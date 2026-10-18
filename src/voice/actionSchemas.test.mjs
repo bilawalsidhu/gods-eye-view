@@ -1,3 +1,4 @@
+import { realtimeInstructions } from '../../server/providers/openai/instructions.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
@@ -38,7 +39,9 @@ test('the complete Realtime tool payload pins the manifest-generated layer relea
     // requested radius and center authority in descriptions only.
     // Street Level and GNSS extend the manifest; tracked and analyst aircraft describe broadcasts.
     // Air quality (ECCC AQHI) extends the manifest.
-    '775ba323384b4c1b62fb8415bac52aecc3fc668e20bedcfa57e426dcd1da3969',
+    // Globe rotation adds one motion; visual keyhole fit and explicit
+    // reset permission/defaults update only move_camera and mode descriptions.
+    '4b43ff0dc0856b43c261fc0ffa57abd2e7617e579acaead0a30c1215f8177c0d',
   );
 });
 
@@ -106,6 +109,17 @@ test('all legacy action arguments are byte-identical after removing the delibera
   delete property('show_data_layers_menu').layerId.enum;
   delete property('get_entity_context').layerId.enum;
   delete property('analyst_query').layers.items.enum;
+  // Earth-centered rotation is additive; local camera yaw keeps its contract.
+  const motion = property('move_camera').motion;
+  assert.deepEqual(motion.enum, [
+    'orbit',
+    'pan',
+    'tilt',
+    'rotate',
+    'rotate_globe',
+    'stop',
+  ]);
+  motion.enum = motion.enum.filter((value) => value !== 'rotate_globe');
   const panels = property('set_panel_open').panelId;
   panels.enum = panels.enum.filter(
     (id) => !['weather-panel', 'recent-imagery-panel'].includes(id),
@@ -145,6 +159,24 @@ test('all legacy action arguments are byte-identical after removing the delibera
   );
 });
 
+test('globe rotation is an additive camera motion with the existing control arguments', () => {
+  const schema = GEV_ACTION_SCHEMAS.find(
+    (tool) => tool.name === 'move_camera',
+  ).parameters;
+  for (const motion of ['rotate_globe', 'rotate', 'orbit', 'pan', 'tilt']) {
+    assert.deepEqual(
+      validateArgs(schema, {
+        motion,
+        direction: 'right',
+        speed: 'slow',
+        mode: 'continuous',
+      }),
+      [],
+    );
+  }
+  assert.ok(validateArgs(schema, { motion: 'spin_camera' }).length > 0);
+});
+
 test('track_entity accepts a referent alone but rejects an empty target', () => {
   const schema = GEV_ACTION_SCHEMAS.find(
     (tool) => tool.name === 'track_entity',
@@ -182,4 +214,28 @@ test('the benchmark still rejects an empty track_entity although the model-facin
     }),
     [],
   );
+});
+
+test('globe-only voice guidance binds the reset offer to explicit permission and settled success', () => {
+  const paragraph = realtimeInstructions()
+    .split('\n')
+    .find((line) => line.includes('reason=globe-view-required'));
+  assert.ok(paragraph);
+  for (const contract of [
+    /Camera turn\/look.*move_camera rotate ONLY/,
+    /rotate_globe FIRST.*never reset preemptively/,
+    /default right\/continuous; explicit options prevail/,
+    /client checks current keyhole fit/,
+    /reason=globe-view-required.*ask.*END the turn without tools/,
+    /NEXT user reply.*explicit YES.*every other reply expires the offer/,
+    /await a successful settled result.*retry rotate_globe once/,
+    /NO\/unclear\/unrelated: no action/,
+    /Failed\/cancelled reset or new camera intent cancels offer/,
+    /Still unfit:.*never repeat reset/,
+    /Cockpit\/tracking refusal: never offer reset or release owner/,
+    /New camera interaction stops rotation/,
+  ])
+    assert.match(paragraph, contract);
+  // This pins model instructions, not universal model compliance or a new
+  // application-side confirmation engine. Native voice acceptance is separate.
 });

@@ -986,6 +986,16 @@ test('the voice TOOL SCHEMA matches the pinned contract — the mission mapping 
   ]);
   // Cyber deliberately adds one layout; first-run missions still change no tools.
   hudLayout.enum = hudLayout.enum.filter((layout) => layout !== 'cyber');
+  const cameraMotion = legacyTools.find((tool) => tool.name === 'move_camera')
+    .parameters.properties.motion;
+  assert.deepEqual(cameraMotion.enum, [
+    'orbit',
+    'pan',
+    'tilt',
+    'rotate',
+    'rotate_globe',
+    'stop',
+  ]);
   const block = JSON.stringify(legacyTools);
   // Re-derived for the voice layer manifest (generated layer enums, alias and
   // field hints), point-and-ask's pointer/referent arguments and the prompt
@@ -995,10 +1005,13 @@ test('the voice TOOL SCHEMA matches the pinned contract — the mission mapping 
   // list descriptions; the missions still ride existing tools.
   // Street Level and GNSS extend the manifest; broadcast caveats describe tracked and analyst aircraft.
   // Air quality (ECCC AQHI) extends the manifest.
-  assert.equal(block.length, 30655, 'serialized tool schema length drifted');
+  // Globe rotation adds one camera motion and its descriptions; Globe View
+  // framing/default guidance updates only move_camera and mode descriptions.
+  // Radio markup and the complete production-request comparison pin locality.
+  assert.equal(block.length, 30634, 'serialized tool schema length drifted');
   assert.equal(
     crypto.createHash('sha256').update(block).digest('hex'),
-    '3b1d5e77c10a92f6543a4f9d1ff1870101a0306b65e5b8a6113111c81eda371e',
+    'f1398bd24980f8c7367d13ae94bca55d867158fabf7801b164718418df387af2',
     'the first-run missions must ride EXISTING tools: no schema edit, no cache bust',
   );
   const instructions = fs.readFileSync(

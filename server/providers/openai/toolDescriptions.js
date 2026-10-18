@@ -511,18 +511,18 @@ export const ACTION_DESCRIPTIONS = {
   },
   move_camera: {
     description:
-      'Direct the camera like a drone operator: orbit the current view target, pan, tilt, or rotate — one bounded nudge (mode=once) or continuous motion until stopped (mode=continuous). Continuous motion also stops on any manual camera input or when a navigation tool runs. Say the RESULTING state when confirming ("Orbiting slowly").',
+      'rotate_globe spins Earth (default right/continuous); explicit options prevail. rotate looks in place; orbit circles target; pan translates; tilt changes pitch. once nudges; continuous stops on stop/new camera input. Confirm resulting state.',
     $position: 1,
     parameters: {
       properties: {
         direction: {
           description:
-            'Required except for orbit (defaults right/clockwise) and stop.',
+            'Required for pan/tilt/rotate; orbit/rotate_globe default right.',
           $position: 2,
         },
         mode: {
           description:
-            'once = bounded eased nudge (default); continuous = until stop/manual input.',
+            'once = bounded eased nudge; continuous = until stop/manual input. rotate_globe defaults continuous; other motions default once.',
           $position: 2,
         },
       },
