@@ -106,8 +106,10 @@ export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
       sv.searchParams.set('size', '960x540');
       sv.searchParams.set('location', `${lat},${lon}`);
       // fov and pitch are clamped below; heading wraps instead, because a
-      // bearing is periodic — 400 is 40, not "too far north". The client sends
-      // a rounded catalog bearing, so this only bites a hand-written query.
+      // bearing is periodic — 400 is 40, not "too far north". This is on the
+      // ordinary path, not only for hand-written queries: the browser sends
+      // Math.round(headingDeg) (`frameUrlFor`), so a catalog bearing of 359.6
+      // arrives here as 360.
       sv.searchParams.set('heading', String(normalizeHeadingDeg(heading)));
       sv.searchParams.set(
         'fov',
