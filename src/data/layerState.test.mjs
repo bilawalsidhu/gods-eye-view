@@ -2858,3 +2858,12 @@ test('explicit provider switches reach durable state without adopting unrelated 
     coordinator.destroy();
   }
 });
+
+
+test('India air-quality provider and pollutant survive links and stored state', () => {
+  const state = createDefaultLayerState();
+  state.enabledLayerIds = ['air-quality'];
+  state.options['air-quality'] = { provider: 'cpcb', pollutant: 'NO2' };
+  assert.deepEqual(decodeLayerStateParams(new URLSearchParams(encode(state))).options['air-quality'], state.options['air-quality']);
+  assert.deepEqual(parseStoredLayerState(serializeStoredLayerState(state)).options['air-quality'], state.options['air-quality']);
+});

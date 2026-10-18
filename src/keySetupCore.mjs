@@ -33,8 +33,18 @@ export const KEY_SETUP_APPEND_HEADER =
  * `clientExposed` marks the keys that are injected into the browser
  * bundle by design (restrict them at the provider, per SECURITY.md).
  * `hidden` keeps advanced configuration out of the panel and missing-key count.
+ * `contextual` exposes setup only from its feature, outside the general count.
  */
 export const KEY_SETUP_KEYS = Object.freeze([
+  Object.freeze({
+    id: 'data-gov-in',
+    contextual: true,
+    title: 'DATA.GOV.IN', // i18n-ignore: provider product name
+    unlocks: msg('Indian air-quality station observations'),
+    getUrl: 'https://www.data.gov.in/',
+    envVars: Object.freeze(['DATA_GOV_IN_API_KEY']),
+    tier: 'free',
+  }),
   Object.freeze({
     id: 'google-maps',
     title: 'GOOGLE MAPS', // i18n-ignore: provider product name
@@ -472,13 +482,14 @@ export function keySetupStatus(env = {}) {
       envVars: [...entry.envVars],
       tier: entry.tier,
       clientExposed: Boolean(entry.clientExposed),
+      contextual: Boolean(entry.contextual),
       set,
     };
   });
   return {
     keys,
-    setCount: keys.filter((key) => key.set).length,
-    total: keys.length,
+    setCount: keys.filter((key) => !key.contextual && key.set).length,
+    total: keys.filter((key) => !key.contextual).length,
   };
 }
 

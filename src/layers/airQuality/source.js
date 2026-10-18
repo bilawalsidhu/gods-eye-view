@@ -1,5 +1,6 @@
 import { readResponseJsonCapped } from '../../sources/httpBody.js';
 import { normalizeAqhiStations, normalizeAqhiObservations } from './model.js';
+import { normalizeCpcbRecords } from './cpcb.js';
 
 // A portable export (package.json): no i18n here. Failures stay English data;
 // the Layers panel and the Weather card show them translated.
@@ -16,6 +17,60 @@ const OBSERVATION_LIMIT = 500;
 const STATION_TTL_MS = 12 * 60 * 60 * 1000;
 /** A full 500-row GeoJSON page is a few hundred KB; anything past this is not a page. */
 const MAX_RESPONSE_BYTES = 4 * 1024 * 1024;
+
+/** Select one network per request; never rank different index scales together. */
+export function createAirQualitySource({
+  fetchImpl = (...args) => globalThis.fetch(...args),
+  now = () => Date.now(),
+  timeoutMs = 35_000,
+} = {}) {
+  const eccc = createEcccAirQualitySource({ fetchImpl, now });
+  let stale = false;
+  return {
+    providers: ['eccc', 'cpcb'],
+    getStatus: () => ({ stale }),
+    async getSnapshot({ provider = 'eccc', pollutant = 'PM2.5', signal } = {}) {
+      stale = false;
+      if (provider === 'eccc') return eccc.getSnapshot({ signal });
+      if (provider !== 'cpcb') throw new Error('Unknown air-quality provider');
+      const controller = new AbortController();
+      const abort = () => controller.abort(signal.reason);
+      signal?.addEventListener('abort', abort, { once: true });
+      const timer = setTimeout(() => controller.abort(), timeoutMs);
+      try {
+        signal?.throwIfAborted();
+        const response = await fetchImpl('/api/air-quality/india', {
+          signal: controller.signal,
+          headers: { Accept: 'application/json' },
+        });
+        const payload = await readResponseJsonCapped(
+          response,
+          16 * 1024 * 1024,
+          controller.signal,
+        );
+        if (!response.ok) {
+          if (payload?.error === 'key_required')
+            throw new Error(
+              msg('India air quality requires a data.gov.in API key'),
+            );
+          throw new Error(msg('India air quality is unavailable'));
+        }
+        const readings = normalizeCpcbRecords(payload, {
+          pollutant,
+          now: now(),
+        });
+        if (!readings)
+          throw new Error(msg('Malformed India air-quality response'));
+        signal?.throwIfAborted();
+        stale = payload.stale === true;
+        return readings;
+      } finally {
+        clearTimeout(timer);
+        signal?.removeEventListener('abort', abort);
+      }
+    },
+  };
+}
 
 /**
  * Request and validate a complete ECCC AQHI snapshot before it can replace

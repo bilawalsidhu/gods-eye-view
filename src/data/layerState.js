@@ -318,6 +318,27 @@ function satelliteFilterOption() {
 }
 
 const OPTION_GROUPS = Object.freeze({
+  'air-quality': Object.freeze([
+    enumOption('provider', 'p', 'eccc', ['eccc', 'cpcb'], {
+      eccc: 'e',
+      cpcb: 'i',
+    }),
+    enumOption(
+      'pollutant',
+      'q',
+      'PM2.5',
+      ['PM2.5', 'PM10', 'NO2', 'SO2', 'CO', 'OZONE', 'NH3'],
+      {
+        'PM2.5': 'f',
+        PM10: 'c',
+        NO2: 'n',
+        SO2: 's',
+        CO: 'm',
+        OZONE: 'o',
+        NH3: 'a',
+      },
+    ),
+  ]),
   traffic: Object.freeze([
     enumOption('roadMode', 'r', null, ['tomtom', 'osm', 'hybrid'], {
       tomtom: 't',
@@ -588,7 +609,8 @@ export const LAYER_STATE_REGISTRY = Object.freeze([
   Object.freeze({
     id: 'air-quality',
     token: '4',
-    disposition: 'enabled-only',
+    disposition: 'enabled+options',
+    optionOwner: 'air-quality',
   }),
   Object.freeze({
     id: 'ais-live-vessels',
