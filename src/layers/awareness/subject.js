@@ -3,12 +3,26 @@ import {
   AWARENESS_RELATIONSHIP,
 } from '../../data/militaryAwarenessEngine.js';
 import * as Cesium from 'cesium';
+import { t } from '../../i18n/index.js';
 import {
   AWARENESS_QUERY_LIMIT,
   SOURCE_LABEL,
   SUBJECT_PRESENCE,
   AWARENESS_PAGE_SIZE,
 } from './policy.js';
+
+// coverageLabel is machine-composed English from installations/controls.js
+// (pinned by src/data/militaryInstallations.test.mjs); translate the known
+// forms here, pass anything else through.
+const WITHIN_KM_RE = /^WITHIN (\d+) KM$/;
+
+function localizeCoverageLabel(label) {
+  if (typeof label !== 'string' || !label) return label;
+  if (label === 'CURRENT VIEWPORT ONLY') return t('CURRENT VIEWPORT ONLY');
+  const within = WITHIN_KM_RE.exec(label);
+  if (within) return t('WITHIN {km} KM', { km: within[1] });
+  return label;
+}
 
 export function createSubject({ state: layerState, services, parts, source }) {
   const aisLiveVesselsLayer = services.vessels;
@@ -78,7 +92,7 @@ export function createSubject({ state: layerState, services, parts, source }) {
       cohorts: [
         {
           id: 'flights',
-          label: 'Flights',
+          label: t('Flights'),
           source: flightsState.stats.source || SOURCE_LABEL.flights,
           provenance: retainedProvenance(
             'flights',
@@ -97,7 +111,7 @@ export function createSubject({ state: layerState, services, parts, source }) {
         },
         {
           id: 'military',
-          label: 'Military flights',
+          label: t('Military flights'),
           source: militaryState.stats.source || SOURCE_LABEL.military,
           provenance: retainedProvenance(
             'military',
@@ -116,7 +130,7 @@ export function createSubject({ state: layerState, services, parts, source }) {
         },
         {
           id: 'ais-live-vessels',
-          label: 'AIS vessels',
+          label: t('AIS vessels'),
           source: vesselsState.stats.source || SOURCE_LABEL['ais-live-vessels'],
           provenance: retainedProvenance(
             'ais-live-vessels',
@@ -131,7 +145,7 @@ export function createSubject({ state: layerState, services, parts, source }) {
         },
         {
           id: 'military-installations',
-          label: 'Mapped installations',
+          label: t('Mapped installations'),
           source:
             installationsState.stats.source ||
             SOURCE_LABEL['military-installations'],
@@ -142,7 +156,8 @@ export function createSubject({ state: layerState, services, parts, source }) {
             SOURCE_LABEL['military-installations'],
           ),
           coverage:
-            installationsState.stats.coverageLabel || 'CURRENT VIEWPORT ONLY',
+            localizeCoverageLabel(installationsState.stats.coverageLabel) ||
+            t('CURRENT VIEWPORT ONLY'),
           summary: parts.queries.summarizeInstallationViewport(
             installations,
             installationsState,

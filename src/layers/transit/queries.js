@@ -246,9 +246,11 @@ export function createQueries({ state, parts }) {
           error: null,
           source: 'GTFS-RT',
           status: 'zoom-in',
+          // English data (the analyst's empty note to the model); the voice
+          // card shows it through NOTE_PATTERNS (voice/resultDisplay.js).
           coverage: state._altitudeGateOpen
             ? `No feed here yet · ${TRANSIT_ENABLED_FEEDS.length} regions available`
-            : `Fly below ${Math.round(ACTIVATION_ALTITUDE_M / 1000).toLocaleString()} km to a covered region`,
+            : `Fly below ${Math.round(ACTIVATION_ALTITUDE_M / 1000).toLocaleString('en-US')} km to a covered region`,
         };
       }
       // Age is shown by the same rule the row state uses, so the text and the
@@ -277,6 +279,7 @@ export function createQueries({ state, parts }) {
         degraded: count > 0 && health.degraded,
         loading: health.loading && count === 0,
         loadingLabel:
+          // i18n-ignore: English data, translated on display (ui/statusText.js)
           health.loading && count === 0
             ? `Loading ${active.map((feed) => feed.name).join(', ')}`
             : undefined,

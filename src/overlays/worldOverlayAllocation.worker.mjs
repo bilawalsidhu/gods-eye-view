@@ -357,6 +357,7 @@ function buildWorkload(count) {
       id: `mover-${index}`,
       position: () => position,
       variant: 'label',
+      // i18n-ignore: benchmark fixture
       title: `TRK ${1000 + index}`,
       details: [`ALT ${10_000 + index * 25}`],
       priority: index % 7,
@@ -467,6 +468,7 @@ function buildPhase3FirmsWorkload(count) {
           position,
           gapPx: 10,
           accent: '224, 82, 82',
+          // i18n-ignore: benchmark fixture
           title: `▲ ${50 + fireIndex} MW`,
           details: ['high · 2h · N20'],
           selected: false,
@@ -557,6 +559,7 @@ function buildPhase3VesselsWorkload(count) {
           position,
           gapPx: 10,
           accent: '224, 82, 82',
+          // i18n-ignore: benchmark fixture
           title: `▲ ${50 + fireIndex} MW`,
           details: ['high · 2h · N20'],
           selected: false,
@@ -576,6 +579,7 @@ function buildPhase3VesselsWorkload(count) {
         position,
         gapPx: selected ? 12 : 10,
         accent: '57, 213, 255',
+        // i18n-ignore: benchmark fixture
         title: selected ? 'SELECTED VESSEL' : `VESSEL ${vesselIndex}`,
         details: selected
           ? ['CARGO · 14.5KT · 231°', 'MMSI 353136000 · POS: LIVE']
@@ -650,6 +654,7 @@ function buildPhase3TrackedWorkload(count) {
     gevTrackedId: 'flights:allocation-probe',
     gevDisplayPosition: selected.position,
     gevLabelModel: {
+      // i18n-ignore: benchmark fixture
       title: 'ALLOC01',
       details: ['FL350 · 451 kts', 'TEST AIR · A320'],
       accent: '#39d0ff',
@@ -700,6 +705,7 @@ function buildPhase4CctvWorkload(count) {
     const entry = createCctvThumbnailOverlayEntry({
       id: active ? 'cctv:active' : `cctv:${index}`,
       position,
+      // i18n-ignore: benchmark fixture
       title: active ? 'ACTIVE CAMERA' : `CAMERA ${index}`,
       frameSlot: slot,
       rank: index,
@@ -873,6 +879,7 @@ function buildPhase5CivilWorkload(count) {
   const entry = registration?.entries[0];
   if (!entry)
     throw new Error('phase5-civil requires the protected tracked entry');
+  // i18n-ignore: benchmark fixture
   entry.title = 'ALLOC01 · FL350 · 451 kts';
   entry.details = ['TEST AIR · A320', 'AUS → LAX'];
   return workload;
@@ -887,6 +894,7 @@ function buildPhase5MilitaryWorkload(count) {
   if (!entry)
     throw new Error('phase5-military requires the protected tracked entry');
   entry.id = 'military:allocation-probe';
+  // i18n-ignore: benchmark fixture
   entry.title = 'RCH451';
   entry.details = ['C17 · 05-8152', 'USAF · 28000 ft · 400 kt'];
   entry.accent = '#ffd166';
@@ -1073,6 +1081,7 @@ function appendSubmarineCableWorkload(workload, count) {
       id: `${kind}-reference-${index}-alloc`,
       kind,
       label:
+        // i18n-ignore: benchmark fixture
         kind === 'cable' ? `Cable System ${index}` : `Landing Point ${index}`,
       tip: position,
       distanceM: 200_000 + index * 40_000,
@@ -1151,6 +1160,7 @@ function buildAirQualityWorkload(count) {
     const entry = createAirQualityOverlayEntry({
       id: `air-${index}`,
       position,
+      // i18n-ignore: benchmark fixture
       title: `Station ${index} ${1 + (index % 10)}`,
       accent: '#4cc9f0',
       value: 1 + (index % 10),

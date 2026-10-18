@@ -126,6 +126,32 @@ test('production reader rejects oversized, malformed and runtime-failure bodies'
   }
 });
 
+test('element data that mentions a failure phrase is data, and sets no cooldown', async () => {
+  const names = ['Timed Out Escape Rooms', 'Runtime Error Bar', 'Out of Memory Lane', 'Too Many Requests Cafe', 'rate_limited'];
+  for (const [i, name] of names.entries()) {
+    const body = JSON.stringify({ elements: [{ type: 'node', id: 1, lat: 1, lon: 2, tags: { name } }] });
+    let count = 0;
+    const options = { endpoints: [`https://phrase-${i}.example/`], fetchImpl: async () => {
+      count++; return new Response(body);
+    } };
+    const payload = await fetchOverpassPayload('first', 1024, options);
+    assert.equal(payload.status, 200, name);
+    assert.ok(overpassPayloadIsData(payload), name);
+    assert.ok(payload.body.includes(name), name);
+    await fetchOverpassPayload('different', 1024, options);
+    assert.equal(count, 2, name);
+  }
+  const remark = JSON.stringify({ elements: [], remark: 'runtime error: rate_limited' });
+  const limited = await fetchOverpassPayload('x', 1024, { endpoints: ['https://remark.example/'],
+    fetchImpl: async () => new Response(remark, { headers: { 'Retry-After': '90' } }) });
+  assert.equal(limited.status, 429);
+  assert.equal(limited.retryAfterMs, 90_000);
+  const error = await fetchOverpassPayload('x', 1024, { endpoints: ['https://error.example/'],
+    fetchImpl: async () => new Response('{"error":"rate_limited"}', { headers: { 'Retry-After': '120' } }) });
+  assert.equal(error.status, 429);
+  assert.equal(error.retryAfterMs, 120_000);
+});
+
 function proxyHandler() {
   const plugin = createViteConfig({ mode: 'test' }).plugins.find(p => p.name === 'overpass-proxy');
   const routes = new Map();

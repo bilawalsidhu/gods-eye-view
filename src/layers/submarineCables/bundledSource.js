@@ -35,7 +35,7 @@ export function createBundledCableSource({
     return json;
   }
   return {
-    label: 'TeleGeography',
+    label: 'TeleGeography', // i18n-ignore: data provider name
     async fetch(signal) {
       const [cables, landingPoints] = await Promise.all([
         read(cableUrl(), signal),
