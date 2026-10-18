@@ -19,6 +19,7 @@ export const PRESENTED_MAP_STACK_IDS = Object.freeze([
   'bing-aerial',
   'bing-labels',
   'esri-imagery',
+  'offline',
   'osm',
 ]);
 
@@ -36,7 +37,7 @@ export const PRESENTED_MAP_STACK_IDS = Object.freeze([
  */
 export function mapStackChipModel(stack, activeId) {
   const available = stack?.available !== false;
-  const label = String(stack?.label ?? stack?.id ?? '');
+  const label = t(String(stack?.label ?? stack?.id ?? ''));
   const requiresIon = stack?.requiresIon === true;
   // Stack labels are provider names and stay English; the sentence translates.
   const fallbackReason = requiresIon
@@ -60,7 +61,11 @@ export function mapStackChipModel(stack, activeId) {
     // unavailable chip carries the real reason in its tooltip.
     requirement: !available && requiresIon ? 'ION' : '',
     unavailableHint,
-    title: available ? label : unavailableHint,
+    title: available
+      ? stack.description
+        ? t(stack.description)
+        : label
+      : unavailableHint,
   };
 }
 

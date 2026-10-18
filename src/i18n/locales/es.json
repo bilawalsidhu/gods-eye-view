@@ -2889,5 +2889,10 @@
   "USB work abandoned after a stalled transfer": "Trabajo USB cancelado tras una transferencia bloqueada",
   "SDR decoder did not start; receiver stopped": "El decodificador SDR no arrancó; receptor detenido",
   "SDR decoder stopped responding; receiver stopped": "El decodificador SDR dejó de responder; receptor detenido",
-  "SDR decoder fell behind; receiver stopped": "El decodificador SDR se quedó atrás; receptor detenido"
+  "SDR decoder fell behind; receiver stopped": "El decodificador SDR se quedó atrás; receptor detenido",
+  "Offline globe": "Globo sin conexión",
+  "OFFLINE": "SIN CONEXIÓN",
+  "Bundled low-resolution map with flat terrain. Live data requires internet.": "Mapa incluido de baja resolución con terreno plano. Los datos en vivo requieren internet.",
+  "Online map unavailable; using the bundled offline globe": "Mapa en línea no disponible; usando el globo sin conexión incluido",
+  "Online map tiles failed; using the bundled offline globe": "Error al cargar los mosaicos en línea; usando el globo sin conexión incluido"
 }

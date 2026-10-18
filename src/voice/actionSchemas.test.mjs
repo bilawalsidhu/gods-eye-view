@@ -37,8 +37,8 @@ test('the complete Realtime tool payload pins the manifest-generated layer relea
     // omit top-level anyOf (OpenAI rejects it). Contacts list routing preserves
     // requested radius and center authority in descriptions only.
     // Street Level and GNSS extend the manifest; tracked and analyst aircraft describe broadcasts.
-    // Air quality (ECCC AQHI) extends the manifest.
-    '775ba323384b4c1b62fb8415bac52aecc3fc668e20bedcfa57e426dcd1da3969',
+    // Air quality (ECCC AQHI) extends the manifest; Offline globe adds a map choice.
+    '1fccb361f92c49b725715eafe533ec39023bddf17a53eca7188f8d7bfb060ff3',
   );
 });
 
@@ -138,6 +138,10 @@ test('all legacy action arguments are byte-identical after removing the delibera
   // Cyber adds one HUD layout.
   const hud = property('set_hud').layout;
   hud.enum = hud.enum.filter((layout) => layout !== 'cyber');
+  // Offline globe adds one map choice; every prior argument stays unchanged.
+  const map = property('set_map_stack').stack;
+  assert.ok(map.enum.includes('offline'));
+  map.enum = map.enum.filter((id) => id !== 'offline');
   // Derived by applying the same removals to the 4b56d0e9 actionSchemas.
   assert.equal(
     createHash('sha256').update(JSON.stringify(legacy)).digest('hex'),

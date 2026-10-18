@@ -2405,7 +2405,7 @@ down | auth-failed` (plus the unchanged `missing-key`/`unsupported`) with
 >   shared Parameters surface moves into Cockpit Display for the session and
 >   returns on exit, with slider values contained by the panel at its supported widths;
 >   the bottom Visual Presets tray owns the MAP SOURCE label, centered status,
->   and five-tile source row. Its compact wing is a keyboard disclosure:
+>   and six-tile source row. Its compact wing is a keyboard disclosure:
 >   Enter/Space opens and focuses Map Source, Escape closes and returns focus,
 >   and unavailable sources remain tabbable with their reason exposed. Expanded left-panel
 >   headers use the same container-owned background treatment without changing
@@ -5679,9 +5679,17 @@ the project's MIT license; see `DATA_SOURCES.md`.
 
 Map selection is composed from separate imagery, terrain and 3D factories.
 The default registry retains Google 3D, Bing Aerial/Labels, Esri Satellite and
-OSM, including their setup guidance and existing preset/share IDs. Esri still
+OSM and Offline globe, including their setup guidance and existing preset/share IDs. Esri still
 falls back to OSM on construction failure or two active tile failures, and
-credits follow the source actually displayed. Terrain remains lazy while the
+OSM and Bing fall back to the bundled Offline globe after construction failure
+or two active tile failures. Offline globe can also be selected directly in Map
+Source; it uses Cesium's bundled Natural Earth II geographic tiles (levels 0–2)
+and flat ellipsoid terrain, so neither imagery nor terrain needs an external
+request. Its OFFLINE status and tooltip explain the low resolution and that live
+data still needs internet. Select an online source to resume detailed maps after
+a tile outage. This is a local-server basemap fallback, not a service worker or
+an offline copy of live data/photorealistic tiles. The app and bundled assets must
+still be served locally. Credits follow the source actually displayed. Terrain remains lazy while the
 photoreal globe is hidden.
 
 Map-stack subscribers hear each settled activation once. A subscriber removed

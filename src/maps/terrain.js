@@ -62,3 +62,8 @@ export async function createKeylessTerrain() {
     return { provider: new Cesium.EllipsoidTerrainProvider(), fallback: true };
   }
 }
+
+/** Offline maps never request remote elevation tiles. */
+export function createOfflineTerrain() {
+  return { provider: new Cesium.EllipsoidTerrainProvider() };
+}

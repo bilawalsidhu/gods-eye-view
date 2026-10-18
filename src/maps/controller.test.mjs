@@ -1382,3 +1382,69 @@ test('a hung imagery attempt that lands after its deadline is released, never ca
   await settle();
   assert.equal(good.destroyed, true);
 });
+
+test('online tile failure chain reaches a local globe and stale errors cannot undo manual recovery', async () => {
+  const env = publicFixture();
+  const offline = env.registry.sources.find(
+    (s) => s.descriptor.id === 'offline',
+  );
+  offline.terrain = {
+    id: 'offline',
+    create: () => ({ provider: { id: 'flat' } }),
+  };
+  await env.controller.setStack('esri-imagery');
+  env.providers.get('esri-imagery').errorEvent.raise();
+  env.providers.get('esri-imagery').errorEvent.raise();
+  await settle();
+  assert.equal(env.controller.getActiveId(), 'osm');
+  env.providers.get('osm').errorEvent.raise();
+  env.providers.get('osm').errorEvent.raise();
+  await settle();
+  assert.equal(env.controller.getActiveId(), 'offline');
+  assert.equal(env.viewer.terrainProvider.id, 'flat');
+  assert.equal(env.viewer.scene.globe.show, true);
+  assert.equal(env.imagery[0].provider.id, 'offline');
+  assert.match(env.controller.getState().lastError, /offline globe/);
+  assert.equal(env.providers.get('osm').errorEvent.size, 0);
+  await env.controller.setStack('osm');
+  env.providers.get('esri-imagery').errorEvent.raise({ timesRetried: 9 });
+  await settle();
+  assert.equal(env.controller.getActiveId(), 'osm');
+  assert.equal(env.controller.getState().lastError, null);
+  env.controller.destroy();
+  assert.equal(env.providers.get('osm').errorEvent.size, 0);
+});
+
+test('offline selection never constructs remote imagery or terrain', async () => {
+  const registry = createDefaultMapSources();
+  const offline = registry.sources.find((s) => s.descriptor.id === 'offline');
+  offline.imagery = () => ({ id: 'local' });
+  for (const source of registry.sources) {
+    if (source === offline) continue;
+    source.imagery = () => assert.fail('remote imagery requested');
+    source.terrain = {
+      id: 'remote',
+      create: () => assert.fail('remote terrain requested'),
+    };
+  }
+  const env = fixture(registry);
+  await env.controller.setStack('offline');
+  assert.equal(env.controller.getActiveId(), 'offline');
+  assert.equal(env.controller.getState().lastError, null);
+  assert.equal(env.viewer.terrainProvider.hasWaterMask, false);
+  env.controller.destroy();
+});
+
+test('a failed construction chain reports the offline source actually installed', async () => {
+  const env = publicFixture();
+  for (const id of ['esri-imagery', 'osm']) {
+    env.registry.sources.find((s) => s.descriptor.id === id).imagery =
+      async () => {
+        throw new Error('network unavailable');
+      };
+  }
+  await env.controller.setStack('esri-imagery');
+  assert.equal(env.controller.getActiveId(), 'offline');
+  assert.match(env.controller.getState().lastError, /offline globe/);
+  env.controller.destroy();
+});

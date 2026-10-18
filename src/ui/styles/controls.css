@@ -869,7 +869,7 @@ html:not([lang='en']) .pp-slider-row > .pp-slider-mini-label {
 
 .map-stack-chip-row {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(6, minmax(0, 1fr));
   gap: 4px;
 }
 

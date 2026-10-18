@@ -271,9 +271,9 @@ try {
     controls: document.getElementById('control-panel-toggle')?.getAttribute('aria-controls'),
   }));
   check(
-    'exact five-source presentation; the retired left Map Stack panel is gone',
+    'exact six-source presentation; the retired left Map Stack panel is gone',
     JSON.stringify(presentation.ids) === JSON.stringify([
-      'photoreal', 'bing-aerial', 'bing-labels', 'esri-imagery', 'osm',
+      'photoreal', 'bing-aerial', 'bing-labels', 'esri-imagery', 'offline', 'osm',
     ]) && !presentation.retiredPanel,
     JSON.stringify(presentation),
   );
@@ -519,9 +519,9 @@ try {
   await page.keyboard.press('Enter');
   await waitTray('true', keyboardSource);
 
-  // Visual Styles precede the five Map Source tiles. Keep the existing opening
+  // Visual Styles precede the six Map Source tiles. Keep the existing opening
   // handoff to selected OSM, then use the user's real Shift+Tab path into styles.
-  await pressTabs(5, true);
+  await pressTabs(presentation.ids.length, true);
   const snowFocus = await styleFocusMetrics();
   check('Shift+Tab reaches Snow with a visible ring while Normal and OSM stay selected',
     hasVisibleStyleFocus(snowFocus, 'snow') && !snowFocus.selected

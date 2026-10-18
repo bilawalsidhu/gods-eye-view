@@ -76,6 +76,28 @@ try {
       );
     }),
   );
+  await page.click('[data-stack-id="offline"]');
+  await page.waitForFunction(() => {
+    const app = window.__godsEyeView;
+    return (
+      app.styleManager.mapStackController.getActiveId() === 'offline' &&
+      app.viewer.scene.globe.tilesLoaded
+    );
+  });
+  check(
+    'offline selection renders a local globe with truthful status',
+    await page.evaluate(() => {
+      const manager = window.__godsEyeView.styleManager;
+      return (
+        manager._mapStackStatus.textContent === 'OFFLINE' &&
+        manager._mapStackStatus.title.includes('Live data requires internet') &&
+        manager._mapStackChips.querySelector('[aria-pressed="true"]')?.dataset
+          .stackId === 'offline'
+      );
+    }),
+  );
+  if (process.env.QA_OFFLINE_SCREENSHOT)
+    await page.screenshot({ path: process.env.QA_OFFLINE_SCREENSHOT });
   check(
     'the public map action uses the same component and truthful result',
     await page.evaluate(async () => {

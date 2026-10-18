@@ -427,3 +427,14 @@ NOAA density imagery with the raw GLM product.
 ## In-app attribution
 
 The required Google Maps / Cesium credit renders on the on-globe credit line (`#cesium-credits`, bottom-left) and must stay visible — including in clean-view and recording modes (the whole line, logo + "Google Maps" + the "Data attribution" link, stays on screen; only the GEV panels/HUD fade). The layer-specific credits (adsb.lol, adsbdb, TeleGeography, OSM datacenters/dams/roads, NASA FIRMS, CelesTrak, USGS, City of Austin, Fintraffic, GBFS, Radio Browser, OpenSky, AISStream) are registered into the expandable **"Data attribution"** popover on that credit line via `viewer.creditDisplay.addStaticCredit(new Cesium.Credit(html, /* showOnScreen */ false))` — see `src/data/dataCredits.js`. When you add a new data source, add its license and attribution to this file **and** append an entry to `DATA_CREDITS` in `src/data/dataCredits.js` so it surfaces in the app.
+
+## Bundled offline basemap
+
+Offline globe uses the Natural Earth II raster tiles already distributed with
+CesiumJS (`Assets/Textures/NaturalEarthII`, levels 0–2). The existing Cesium build
+plugin serves/copies these assets in development and production; no new download
+or API key is needed at runtime. Terrain is a flat WGS84 ellipsoid, and the raster
+is a low-resolution reference map, not current satellite imagery or live data.
+Natural Earth raster data is public domain:
+https://www.naturalearthdata.com/about/terms-of-use/ . The globe displays a
+Natural Earth II credit. CesiumJS remains under its existing Apache-2.0 license.

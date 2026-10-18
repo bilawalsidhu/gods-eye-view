@@ -238,6 +238,8 @@ const STACK_ALIASES = new Map([
   ['esri', 'esri-imagery'],
   ['esri imagery', 'esri-imagery'],
   ['esri satellite', 'esri-imagery'],
+  ['offline', 'offline'],
+  ['offline globe', 'offline'],
   ['osm', 'osm'],
   ['openstreetmap', 'osm'],
   ['open street map', 'osm'],

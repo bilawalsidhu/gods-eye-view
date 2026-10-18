@@ -3,12 +3,17 @@ import { photorealUnavailableReason } from './availability.js';
 import { keySetupRequirementEnvVars } from '../keySetupCore.mjs';
 import { t } from '../i18n/index.js';
 import {
+  createOfflineImagery,
   createOsmImagery,
   createEsriImagery,
   createIonImagery,
   ESRI_ATTRIBUTION_HTML,
 } from './imagery.js';
-import { createWorldTerrain, createKeylessTerrain } from './terrain.js';
+import {
+  createWorldTerrain,
+  createKeylessTerrain,
+  createOfflineTerrain,
+} from './terrain.js';
 
 /** Select sources and setup guidance without putting provider branches in the controller. */
 export function createDefaultMapSources({
@@ -47,6 +52,12 @@ export function createDefaultMapSources({
           unavailableReason: photorealUnavailableReason(hasIon || hasGoogle),
           tileset: googleTileset,
         };
+      if (descriptor.id === 'offline')
+        return {
+          ...common,
+          imagery: createOfflineImagery,
+          terrain: { id: 'offline', create: createOfflineTerrain },
+        };
       const imagery =
         descriptor.kind === 'ion'
           ? () => createIonImagery(descriptor.style, ionToken)
@@ -70,7 +81,21 @@ export function createDefaultMapSources({
                 message: 'Esri Satellite tile requests failed; using OSM',
               },
             }
-          : {}),
+          : {
+              constructionFallback: {
+                id: 'offline',
+                message: t(
+                  'Online map unavailable; using the bundled offline globe',
+                ),
+              },
+              tileFailureFallback: {
+                id: 'offline',
+                threshold: 2,
+                message: t(
+                  'Online map tiles failed; using the bundled offline globe',
+                ),
+              },
+            }),
       };
     }),
   };
