@@ -42,13 +42,45 @@ export const GROUND_SAMPLE_MAX_ARMED_RETRIES = 30;
 export const LOCAL_STEM_TIP_EPSILON_M = 0.5;
 const LOCAL_STEM_TIP_EPSILON_SQ = LOCAL_STEM_TIP_EPSILON_M ** 2;
 
+// This package loads no catalogs: the application passes its t() as the
+// `translate` service, and without one the card stays English.
+const msg = (text) => text;
+const englishText = (text, values = {}) =>
+  text.replace(/\{(\w+)\}/g, (all, key) =>
+    key in values ? String(values[key]) : all,
+  );
+
+// OpenStreetMap's aerodrome:type and status values the Norway file holds; a
+// value not listed shows as it came, capitalised.
+const AERODROME_TYPES = Object.freeze({
+  airfield: msg('Airfield'),
+  international: msg('International'),
+  regional: msg('Regional'),
+  public: msg('Public'),
+  'military/public': msg('Military / public'),
+  private: msg('Private'),
+  civil: msg('Civil'),
+  gliding: msg('Gliding'),
+});
+const AERODROME_STATUSES = Object.freeze({
+  'under construction': msg('Under construction'),
+});
+const OPENS = msg('opens {year}');
+const RUNWAY = msg('runway {length}');
+const capitalised = (text) => text[0].toLocaleUpperCase() + text.slice(1);
+
 /**
  * Build the owner-approved local-infrastructure card copy.
  * @param {object} properties Unwrapped GeoJSON feature properties.
  * @param {string} layerId Local layer id.
+ * @param {(text: string, values?: object) => string} [translate] The UI's t().
  * @returns {{title:string,details:string[]}}
  */
-export function localInfrastructureOverlayCopy(properties, layerId) {
+export function localInfrastructureOverlayCopy(
+  properties,
+  layerId,
+  translate = englishText,
+) {
   const props = unwrapProperties(properties) || {};
   const tags = props.tags || {};
   const title = featureLabelFromProperties(props, layerId);
@@ -98,10 +130,13 @@ export function localInfrastructureOverlayCopy(properties, layerId) {
       details.push(
         clampCardLine(
           [
-            status[0].toLocaleUpperCase() + status.slice(1),
-            cleanLabel(tags.opening) && `opens ${cleanLabel(tags.opening)}`,
+            AERODROME_STATUSES[status]
+              ? translate(AERODROME_STATUSES[status])
+              : capitalised(status),
+            cleanLabel(tags.opening) &&
+              translate(OPENS, { year: cleanLabel(tags.opening) }),
             cleanLabel(tags.runway_length) &&
-              `runway ${cleanLabel(tags.runway_length)}`,
+              translate(RUNWAY, { length: cleanLabel(tags.runway_length) }),
           ]
             .filter(Boolean)
             .join(' · '),
@@ -110,7 +145,9 @@ export function localInfrastructureOverlayCopy(properties, layerId) {
     else if (kind)
       details.push(
         clampCardLine(
-          kind[0].toLocaleUpperCase() + kind.slice(1).replace('/', ' / '),
+          AERODROME_TYPES[kind]
+            ? translate(AERODROME_TYPES[kind])
+            : capitalised(kind).replace('/', ' / '),
         ),
       );
   }
@@ -128,6 +165,7 @@ export function localInfrastructureOverlayCopy(properties, layerId) {
  * @param {object} options.properties Unwrapped feature properties.
  * @param {number} options.priority Source-owned importance score.
  * @param {string} options.accent Source accent color.
+ * @param {(text: string, values?: object) => string} [options.translate] The UI's t().
  * @returns {object}
  */
 export function createLocalInfrastructureOverlayEntry({
@@ -137,8 +175,9 @@ export function createLocalInfrastructureOverlayEntry({
   properties,
   priority,
   accent,
+  translate,
 }) {
-  const copy = localInfrastructureOverlayCopy(properties, layerId);
+  const copy = localInfrastructureOverlayCopy(properties, layerId, translate);
   return createInfrastructureOverlayEntry({
     id,
     source: layerId,
@@ -344,6 +383,7 @@ export function createLocalGeoJsonLayer(
   },
   {
     overlayHost,
+    translate = englishText,
     registerEntityContext,
     selectEntityContext,
     clearSelectedEntityContextForLayer,
@@ -800,6 +840,7 @@ export function createLocalGeoJsonLayer(
                         properties,
                         priority,
                         accent: ownStroke || color,
+                        translate,
                       })
                     : null,
                 });

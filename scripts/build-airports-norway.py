@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Maintainer-only build of the bundled Norwegian airports layer (osmium-tool).
 
-Downloads a pinned Geofabrik Norway extract, verifies its MD5, and writes
+Downloads a dated Geofabrik Norway extract, verifies its MD5, and writes
 airports.geojsonl:
 
 - every `aeroway=aerodrome` inside Geofabrik's Norway boundary that carries a
@@ -15,6 +15,11 @@ airports.geojsonl:
 
 Runways, the terminal and the construction site carry `role` so the layer
 draws them without a stem or card of their own.
+
+Geofabrik keeps only its newest dated extracts. A build uses the current one
+(--extract latest, the default) and prints its name; --verify checks the
+committed file against RECORDED_EXTRACT, the extract it was built from, while
+Geofabrik still lists it.
 """
 import argparse
 import hashlib
@@ -24,11 +29,14 @@ from pathlib import Path
 import re
 import shutil
 import subprocess
+import urllib.error
 import urllib.request
 
 ROOT = Path(__file__).resolve().parent.parent
-EXTRACT = 'norway-261005'
+# The extract airports.geojsonl was built from (also in its README).
+RECORDED_EXTRACT = 'norway-261005'
 GEOFABRIK = 'https://download.geofabrik.de/europe/'
+TIMEOUT_SECONDS = 60
 DATASET = ROOT / 'src/data/local_data/airports/airports.geojsonl'
 ICAO = re.compile(r'^EN[A-Z]{2}$')
 KEEP_TAGS = ['name', 'name:en', 'icao', 'iata', 'operator', 'aerodrome:type', 'ele', 'wikidata']
@@ -61,10 +69,28 @@ NEW_BODO = {
 
 def fetch(url, target):
     if not target.exists():
-        with urllib.request.urlopen(url) as response, open(str(target) + '.part', 'wb') as out:
-            shutil.copyfileobj(response, out)
+        try:
+            with urllib.request.urlopen(url, timeout=TIMEOUT_SECONDS) as response, \
+                    open(str(target) + '.part', 'wb') as out:
+                shutil.copyfileobj(response, out)
+        except urllib.error.HTTPError as error:
+            if error.code == 404:
+                raise SystemExit('Geofabrik no longer lists %s: it keeps only its newest dated '
+                                 'extracts. Rebuild from the current one (without --verify) and '
+                                 'review the diff.' % url.rsplit('/', 1)[-1])
+            raise
         Path(str(target) + '.part').rename(target)
     return target
+
+
+def latest_extract():
+    """Resolve norway-latest to the dated name Geofabrik redirects it to."""
+    request = urllib.request.Request(GEOFABRIK + 'norway-latest.osm.pbf', method='HEAD')
+    with urllib.request.urlopen(request, timeout=TIMEOUT_SECONDS) as response:
+        name = response.geturl().rsplit('/', 1)[-1]
+    if not name.startswith('norway-') or not name.endswith('.osm.pbf') or name == 'norway-latest.osm.pbf':
+        raise RuntimeError('Unexpected Geofabrik latest target: %s' % name)
+    return name[:-len('.osm.pbf')]
 
 
 def md5(path):
@@ -78,7 +104,7 @@ def md5(path):
 def read_poly(path):
     """Geofabrik .poly -> list of (ring, is_hole)."""
     rings, ring, hole = [], None, False
-    for raw in path.read_text().splitlines()[1:]:
+    for raw in path.read_text(encoding='utf-8').splitlines()[1:]:
         line = raw.strip()
         if ring is None:
             if line and line != 'END':
@@ -157,16 +183,16 @@ def width_of(tags, fallback):
         return fallback
 
 
-def export(osmium, pbf, cache):
-    filtered = cache / (EXTRACT + '-airports.osm.pbf')
-    exported = cache / (EXTRACT + '-airports.geojsonseq')
+def export(osmium, pbf, cache, extract):
+    filtered = cache / (extract + '-airports.osm.pbf')
+    exported = cache / (extract + '-airports.geojsonseq')
     subprocess.run([osmium, 'tags-filter', '-O', '-o', str(filtered), str(pbf),
                     'nwr/aeroway=aerodrome', 'w/aeroway=runway',
                     'nwr/construction=airport,airport_terminal,runway'], check=True)
     subprocess.run([osmium, 'export', '-O', '-f', 'geojsonseq', '--add-unique-id=type_id',
                     '-o', str(exported), str(filtered)], check=True)
     features = {}
-    for line in exported.read_text().splitlines():
+    for line in exported.read_text(encoding='utf-8').splitlines():
         line = line.lstrip('\x1e').strip()
         if not line:
             continue
@@ -282,26 +308,33 @@ def main():
     parser.add_argument('--cache', type=Path, required=True)
     parser.add_argument('--osmium', default=shutil.which('osmium') or 'osmium')
     parser.add_argument('--verify', action='store_true')
+    parser.add_argument('--extract',
+                        help="dated Geofabrik name such as norway-261005, or 'latest'; "
+                             'defaults to RECORDED_EXTRACT with --verify, else latest')
     args = parser.parse_args()
     args.cache.mkdir(parents=True, exist_ok=True)
-    pbf = fetch(GEOFABRIK + EXTRACT + '.osm.pbf', args.cache / (EXTRACT + '.osm.pbf'))
-    expected = fetch(GEOFABRIK + EXTRACT + '.osm.pbf.md5',
-                     args.cache / (EXTRACT + '.osm.pbf.md5')).read_text().split()[0]
+    extract = args.extract or (RECORDED_EXTRACT if args.verify else 'latest')
+    if extract == 'latest':
+        extract = latest_extract()
+    pbf = fetch(GEOFABRIK + extract + '.osm.pbf', args.cache / (extract + '.osm.pbf'))
+    expected = fetch(GEOFABRIK + extract + '.osm.pbf.md5',
+                     args.cache / (extract + '.osm.pbf.md5')).read_text(encoding='utf-8').split()[0]
     actual = md5(pbf)
     if actual != expected:
         raise RuntimeError('MD5 mismatch for %s: %s != %s' % (pbf.name, actual, expected))
     rings = read_poly(fetch(GEOFABRIK + 'norway.poly', args.cache / 'norway.poly'))
-    out, report = build(export(args.osmium, pbf, args.cache), rings)
+    out, report = build(export(args.osmium, pbf, args.cache, extract), rings)
     payload = ''.join(json.dumps(f, ensure_ascii=False, separators=(',', ':')) + '\n' for f in out)
     if args.verify:
-        if payload != DATASET.read_text():
-            raise SystemExit('airports.geojsonl is not the %s build' % EXTRACT)
+        if payload != DATASET.read_text(encoding='utf-8'):
+            raise SystemExit('airports.geojsonl is not the %s build' % extract)
     else:
         DATASET.parent.mkdir(parents=True, exist_ok=True)
-        DATASET.write_text(payload)
+        with open(DATASET, 'w', encoding='utf-8', newline='\n') as handle:
+            handle.write(payload)
     for icao, name, count in report:
         print('%s %-44s %d runway(s)' % (icao, name, count))
-    print(json.dumps({'extract': EXTRACT, 'md5': actual, 'aerodromes': len(report),
+    print(json.dumps({'extract': extract, 'md5': actual, 'aerodromes': len(report),
                       'features': len(out), 'bytes': len(payload.encode())}))
 
 

@@ -6,8 +6,13 @@ OpenStreetMap-derived Norwegian airports bundled for the Airports layer.
   (OSM data 2026-10-05), MD5 `1d2cfdeb98980fce11b8891d0f9146c0`
 - License: Open Database License (ODbL) 1.0
 - Runtime file: `airports.geojsonl` (229 features)
-- Rebuild: `python scripts/build-airports-norway.py --cache <dir> [--verify]`
-  (requires `osmium-tool`)
+- Rebuild: `python scripts/build-airports-norway.py --cache <dir>` builds from
+  Geofabrik's current extract and prints its name (requires `osmium-tool`);
+  update the extract and MD5 above, and `RECORDED_EXTRACT` in the script.
+  `--verify` checks this file against the recorded extract, but Geofabrik keeps
+  only its newest dated extracts (norway-261005 is no longer listed), so once
+  it is gone the file itself is the record; `--extract <name>` verifies or
+  builds against any extract Geofabrik still lists.
 
 **Aerodromes (89).** Every `aeroway=aerodrome` inside Geofabrik's Norway
 boundary (Svalbard and Jan Mayen included) with a Norwegian ICAO location
@@ -28,6 +33,8 @@ terminal are drawn parts with a `role`. The OSM runway has no
 width, so it is drawn 45 m wide, the ICAO code-4 width of today's Bodø
 runway. The card's project facts come from Avinor's published project brief
 (January 2026): a 2,750 m runway about 900 m south-west of today's, a
-24,000 m² terminal, and trial operation from the second half of 2029. These
+24,000 m² terminal, and trial operation from the second half of 2029. The
+runway OSM maps is about 2.55 km long, shorter than the planned 2,750 m the
+card gives, so the drawing and the card differ by about 200 m. These
 features carry `stroke: "#ffb000"` and `status: "under construction"`, and the
 build fails if OSM stops mapping any of them as construction.
