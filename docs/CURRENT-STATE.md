@@ -3343,6 +3343,11 @@ Shipped locales: **en** (source and fallback), **es** and **ru**. The code lives
 - **Not translated by design:** layer ids, share-link and hash parameters, API
   fields, voice tool schemas, provider names, feed data (callsigns, vessel and
   station names) and attribution.
+- **Data stays English.** Text that leaves the page as data (layer stats,
+  voice tool results, what the analyst reads) is English, marked with `msg()`
+  or built from English templates. The screen that shows it translates it by
+  its shape (`src/ui/statusText.js`), so a Spanish or Russian interface never
+  changes what the voice model or the analyst reads.
 - **Unmarked text.** The same check lists UI text that is not marked at all
   (markup without `data-i18n*`, literals reaching the page without `t`/`tn`/`msg`)
   and fails on it. Text kept on purpose says why: `translate="no"`,
