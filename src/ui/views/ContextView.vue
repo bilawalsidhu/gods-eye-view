@@ -249,6 +249,9 @@ watch(
       <template #badge><span id="recent-imagery-panel-count" :aria-label="t('Imagery days in the box')"></span></template>
       <div id="recent-imagery-panel-body" class="ui-scroll" data-rail-scroller></div>
     </RailPanel>
+    <RailPanel id="gravity-panel" hidden :title="t('MASS CHANGE')" sideways rail-scroller>
+      <div id="gravity-panel-body" class="ui-scroll" data-rail-scroller></div>
+    </RailPanel>
     <RailPanel id="global-context-panel" start-collapsed v-class-toggle="{ ...(ctx && { 'context-enabled': ctx.enabled }) }" :data-context-mode="ctx?.mode" :data-context-tab="activeTab" :title="t('CONTEXT')" sideways scroll rail-scroller>
         <template #actions>
           <UiButton class="context-dock-btn" :pressed="Boolean(contextSearchOpen)" :aria-label="contextSearchOpen ? t('Close Context search') : t('Search in Context')" :title="contextSearchOpen ? t('Close search') : t('Search in Context')" @click="toggleSearch">
