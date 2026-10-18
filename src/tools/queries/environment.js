@@ -288,20 +288,25 @@ export const getFirePerimeters = defineTool({
   },
 });
 
-/** The average vertex of a perimeter's outer rings, enough to place it in an area. */
+/** Average outer-ring vertices, using a circular longitude mean at the dateline. */
 function polygonCenter(polygons) {
   let lat = 0;
-  let lon = 0;
+  let sinLon = 0;
+  let cosLon = 0;
   let count = 0;
+  const toRad = Math.PI / 180;
   for (const polygon of polygons || []) {
     for (const [x, y] of polygon?.[0] || []) {
       if (!Number.isFinite(x) || !Number.isFinite(y)) continue;
-      lon += x;
+      sinLon += Math.sin(x * toRad);
+      cosLon += Math.cos(x * toRad);
       lat += y;
       count += 1;
     }
   }
-  return count ? { lat: lat / count, lon: lon / count } : null;
+  return count
+    ? { lat: lat / count, lon: Math.atan2(sinLon, cosLon) / toRad }
+    : null;
 }
 
 export const getTerrainHeight = defineTool({

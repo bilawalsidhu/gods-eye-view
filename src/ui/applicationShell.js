@@ -37,6 +37,16 @@ import { ShellFeedback } from './shellFeedback.js';
 
 import { runCctvLayerEnableTransition } from '../cctvFocusPolicy.js';
 
+import {
+  describeUnsavedWork,
+  getLocale,
+  msg,
+  persistLocaleAndReload,
+  registerUnsavedWork,
+  t,
+} from '../i18n/index.js';
+import { applyLocaleChoice, mountLocalePicker } from './localePicker.js';
+
 /**
  * Central UI orchestrator for the God's Eye View application.
  *
@@ -566,7 +576,11 @@ export class StyleManager extends ShellFacade {
     });
     this._initUI();
     this._initMapStackControl();
+    // Headers first: panel chrome builds its toggle labels from them.
+    this._applyRuntimeStaticHeaderText();
     this._initPanelChrome();
+    this._initLocaleSelector();
+    this._sizeDisplayLabelColumn();
     this._initLeftPanelAdaptiveLayout();
     this._initRightPanelAdaptiveLayout();
     this._initRadioPanel();
@@ -701,6 +715,141 @@ export class StyleManager extends ShellFacade {
   }
 
   /**
+   * Mounts the language picker (src/ui/localePicker.js). A choice reloads the
+   * page; _confirmLocaleReload asks first when that would lose work.
+   * @returns {void}
+   */
+  _initLocaleSelector() {
+    // Work this shell can see that a reload drops. Other modules register
+    // their own (registerUnsavedWork in src/i18n/index.js).
+    this._unsavedWorkChecks = [
+      registerUnsavedWork(() =>
+        this.services?.cctvLayer
+          ?.getUIState?.()
+          ?.cameras?.some((camera) => camera.calDirty)
+          ? msg('unsaved CCTV calibration')
+          : null,
+      ),
+      registerUnsavedWork(() =>
+        this.cockpitView?.active ? msg('the open cockpit') : null,
+      ),
+    ];
+    const root = globalThis.document?.getElementById?.('locale-picker');
+    if (!root) return;
+    this._localePicker = mountLocalePicker({
+      root,
+      current: getLocale(),
+      onSelect: (locale) => this._chooseLocale(locale),
+    });
+  }
+
+  /**
+   * Switch to `locale`: nothing for the active language, otherwise store it
+   * and reload once _confirmLocaleReload agrees.
+   * @param {string} locale
+   * @returns {'unchanged'|'declined'|'switched'}
+   */
+  _chooseLocale(locale) {
+    return applyLocaleChoice(locale, {
+      current: getLocale(),
+      confirmSwitch: () => this._confirmLocaleReload(),
+      switchLocale: (next) => persistLocaleAndReload(next),
+    });
+  }
+
+  /**
+   * Switching language reloads the page. While that would lose work the page
+   * cannot restore, ask first.
+   * @returns {boolean} true to switch.
+   */
+  _confirmLocaleReload() {
+    const lost = describeUnsavedWork();
+    if (!lost.length || typeof globalThis.confirm !== 'function') return true;
+    return globalThis.confirm(
+      t(
+        'Switching language reloads the page. This will be lost: {items}. Switch anyway?',
+        { items: lost.join(', ') },
+      ),
+    );
+  }
+
+  /**
+   * Sizes one Display-panel label column to the longest label in the active
+   * language, so slider tracks line up. Counts characters (labels are
+   * monospace and often hidden); CSS turns the count into a width.
+   * @returns {void}
+   */
+  _sizeDisplayLabelColumn() {
+    const labels = document.querySelectorAll(
+      '#pp-toggles .pp-slider-row > .pp-slider-mini-label',
+    );
+    let longest = 0;
+    for (const label of labels) {
+      longest = Math.max(longest, label.textContent.trim().length);
+    }
+    if (longest > 0) {
+      document.documentElement.style.setProperty(
+        '--pp-label-chars',
+        String(longest),
+      );
+    }
+  }
+
+  /**
+   * Rewrites a header's last text node, keeping the leading icon span that a
+   * textContent write would destroy.
+   * @param {Element|null} element
+   * @param {string} text
+   * @returns {void}
+   */
+  _setHeaderText(element, text) {
+    if (!element) return;
+    const textNode = Array.from(element.childNodes)
+      .reverse()
+      .find(
+        (node) => node.nodeType === Node.TEXT_NODE && node.nodeValue?.trim(),
+      );
+    if (textNode) textNode.nodeValue = text;
+    else element.textContent = text;
+  }
+
+  /**
+   * Translates at boot the header texts that share their element with an
+   * icon or a <br> (data-i18n-runtime in the templates).
+   * @returns {void}
+   */
+  _applyRuntimeStaticHeaderText() {
+    this._setHeaderText(
+      document.querySelector('#control-panel .panel-title'),
+      t('VISUAL PRESETS'),
+    );
+    this._setHeaderText(
+      document.querySelector('#location-bar .location-toolbar-label'),
+      t('LOCATION'),
+    );
+    // One span holds both mode descriptions around a <br>; keep the <br>.
+    const standbyDescription = document.querySelector(
+      '#context-mode-standby span',
+    );
+    if (standbyDescription) {
+      standbyDescription.replaceChildren(
+        document.createTextNode(
+          t('CONTACTS — nearest planes · vessels · sites'),
+        ),
+        document.createElement('br'),
+        document.createTextNode(
+          t('SPACE MISSIONS — launches & orbital assets'),
+        ),
+      );
+    }
+    // Leading space after the live dot, as showBriefPage writes it.
+    const briefKicker = document.querySelector('#cockpit-brief-kicker');
+    if (briefKicker) {
+      this._setHeaderText(briefKicker, ` ${t('LIVE SIGNALS')}`);
+    }
+  }
+
+  /**
    * Renders the owner-approved map stack chip row from the matching controller
    * entries. Cesium ion/Bing chips remain keyboard-focusable but unavailable,
    * with an accessible explanation, until a CESIUM_ION_TOKEN is configured.
@@ -708,6 +857,7 @@ export class StyleManager extends ShellFacade {
    */
   _initMapStackControl() {
     if (!this.mapStackController) return;
+
     this._mapSourceControls?.destroy();
     this._mapSourceControls = createMapSourceControls({
       container: this._mapStackChips,
@@ -1029,7 +1179,7 @@ export class StyleManager extends ShellFacade {
     const { cctvLayer } = this.services;
     if (this._disposed) return false;
     if (!this._dataManager || !this._dataManager.layers?.has('cctv')) {
-      this._showToast('CCTV layer unavailable');
+      this._showToast(t('CCTV layer unavailable'));
       return false;
     }
     const enabled = this._dataManager.isEnabled('cctv');
@@ -1478,7 +1628,7 @@ export class StyleManager extends ShellFacade {
     this._lifetime.listen(this._shareBtn, 'click', async () => {
       const success = await this.shareLinkManager.copyLink();
       if (!this._disposed)
-        this._showToast(success ? 'Link copied!' : 'Copy failed');
+        this._showToast(success ? t('Link copied!') : t('Copy failed'));
     });
   }
 
@@ -1576,6 +1726,10 @@ export class StyleManager extends ShellFacade {
     this._shareState.destroy();
     this._locationNavigation.destroy();
     this._lifetime.destroy();
+    for (const unregister of this._unsavedWorkChecks?.splice(0) ?? [])
+      unregister();
+    this._localePicker?.destroy();
+    this._localePicker = null;
     this._recording.destroy();
     this._panelChrome.destroy();
     this._feedback.destroy();

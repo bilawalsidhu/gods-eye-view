@@ -1,3 +1,4 @@
+import { t, msg } from '../i18n/index.js';
 import {
   radioTunerSlot,
   radioTunerCommitSlot,
@@ -47,22 +48,36 @@ export function bindRadioControls() {
     );
     if (displayOpen) this.actions.revealStyleParameters();
     if (this._cockpitDisplayToggleBtn) {
-      const action = displayOpen ? 'Collapse' : 'Expand';
       this._cockpitDisplayToggleBtn.textContent = displayOpen ? '▶' : '◀';
       this._cockpitDisplayToggleBtn.setAttribute(
         'aria-label',
-        `${action} Cockpit display options`,
+        t(
+          displayOpen
+            ? msg('Collapse Cockpit display options')
+            : msg('Expand Cockpit display options'),
+        ),
       );
-      this._cockpitDisplayToggleBtn.title = `${action} Cockpit display options`;
+      this._cockpitDisplayToggleBtn.title = t(
+        displayOpen
+          ? msg('Collapse Cockpit display options')
+          : msg('Expand Cockpit display options'),
+      );
     }
     if (this._cockpitRadioToggleBtn) {
-      const action = radioOpen ? 'Collapse' : 'Expand';
       this._cockpitRadioToggleBtn.textContent = radioOpen ? '▶' : '◀';
       this._cockpitRadioToggleBtn.setAttribute(
         'aria-label',
-        `${action} Cockpit Radio controls`,
+        t(
+          radioOpen
+            ? msg('Collapse Cockpit Radio controls')
+            : msg('Expand Cockpit Radio controls'),
+        ),
       );
-      this._cockpitRadioToggleBtn.title = `${action} Cockpit Radio controls`;
+      this._cockpitRadioToggleBtn.title = t(
+        radioOpen
+          ? msg('Collapse Cockpit Radio controls')
+          : msg('Expand Cockpit Radio controls'),
+      );
     }
     if (!expanded && returnFocus) {
       (kind === 'display'
@@ -139,18 +154,25 @@ export function bindRadioControls() {
     syncTunerTape(resolvedCoordinate);
     if (this._radioTunerValue) {
       this._radioTunerValue.textContent = station
-        ? `CH ${String(slot.stationIndex + 1).padStart(2, '0')} / ${String(this._radioTunerStations.length).padStart(2, '0')}`
-        : 'NO STATIONS';
+        ? t('CH {index} / {total}', {
+            index: String(slot.stationIndex + 1).padStart(2, '0'),
+            total: String(this._radioTunerStations.length).padStart(2, '0'),
+          })
+        : t('NO STATIONS');
     }
     if (this._radioTunerStation)
       this._radioTunerStation.textContent =
-        station?.name || 'NO STATION AVAILABLE';
+        station?.name || t('NO STATION AVAILABLE');
     if (this._radioTunerSlider) {
       this._radioTunerSlider.setAttribute(
         'aria-valuetext',
         station
-          ? `${station.name}, station ${slot.stationIndex + 1} of ${this._radioTunerStations.length}`
-          : 'No station available',
+          ? t('{name}, station {index} of {total}', {
+              name: station.name,
+              index: slot.stationIndex + 1,
+              total: this._radioTunerStations.length,
+            })
+          : t('No station available'),
       );
     }
     if (syncStatic)
@@ -301,12 +323,12 @@ export function bindRadioControls() {
       this._radioTunerBandPinnedForNavigation = false;
       if (result.reason === 'station-unavailable') {
         if (this._radioTunerValue)
-          this._radioTunerValue.textContent = 'OFF AIR';
+          this._radioTunerValue.textContent = t('OFF AIR');
         if (this._radioTunerStation)
-          this._radioTunerStation.textContent = 'STATION UNAVAILABLE';
+          this._radioTunerStation.textContent = t('STATION UNAVAILABLE');
         this._radioTunerSlider?.setAttribute(
           'aria-valuetext',
-          'Station unavailable after directory refresh',
+          t('Station unavailable after directory refresh'),
         );
       }
     }
@@ -340,7 +362,14 @@ export function bindRadioControls() {
             origin: 'user',
             notificationToken,
           }),
+        // contextSessionOrdering.test.mjs pins this English argument; the
+        // toast shows localizedMessage.
         `Radio could not ${enabling ? 'start' : 'stop'} cleanly`,
+        {
+          localizedMessage: t('Radio could not {action} cleanly', {
+            action: enabling ? t('start') : t('stop'),
+          }),
+        },
       );
       if (this.destroyed || toggled === false) return;
       if (

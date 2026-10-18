@@ -260,6 +260,13 @@
   letter-spacing: 0.06em;
   cursor: pointer;
 }
+/* A longer translated action stays on one line, cut with an ellipsis. */
+html:not([lang='en']) .radio-transport button {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .radio-transport button:hover:not(:disabled),
 .radio-transport button:focus-visible:not(:disabled) {
   border-color: #65f7ff;
@@ -644,6 +651,89 @@
   text-align: right;
 }
 
+/* Longer translations below; English keeps the layout above. */
+
+/* The name takes the room the status column leaves; a long word wraps inside
+   it instead of pushing the toggle out of line. */
+html:not([lang='en']) .data-toggle-left {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+/* A fixed icon box, so every name (and the meta line under it, 26px in)
+   starts at the same x whatever the glyph's width. */
+html:not([lang='en']) .data-toggle-left .data-icon {
+  flex: none;
+  width: 18px;
+  text-align: center;
+}
+
+/* Translated layer names are longer: break between words, and hyphenate a
+   word that still does not fit instead of splitting it anywhere. */
+html:not([lang='en']) .data-name {
+  min-width: 0;
+  overflow-wrap: break-word;
+  hyphens: auto;
+  /* No two-letter pieces such as "es-paciales": a word hyphenates only when
+     at least four letters stay on each side. */
+  hyphenate-limit-chars: 8 4 4;
+}
+
+html:not([lang='en']) .data-count {
+  min-width: auto;
+  text-wrap: balance;
+}
+
+/* Row text pieces that must not break inside: a hyphenated code (ADS-B) and
+   the space before a " · " separator (see setRowText in layerPanel.js). */
+html:not([lang='en']) .data-keep {
+  white-space: nowrap;
+}
+
+/* A count phrase ("24 nearby · 2 on screen") takes its own line under the
+   name instead of squeezing it beside the toggle. layerPanel.js sets the
+   class only outside English. */
+html:not([lang='en']) .data-toggle-row--count-line .data-toggle-top {
+  flex-wrap: wrap;
+  row-gap: 2px;
+}
+
+html:not([lang='en']) .data-toggle-row--count-line .data-toggle-right {
+  display: contents;
+}
+
+/* A zero basis, so a long name wraps beside the toggle instead of pushing the
+   toggle onto the count's line. */
+html:not([lang='en']) .data-toggle-row--count-line .data-toggle-left {
+  flex-basis: 0;
+}
+
+html:not([lang='en']) .data-toggle-row--count-line .data-count {
+  order: 1;
+  flex: 1 0 100%;
+  padding-left: 26px;
+  font-size: 10px;
+  text-align: left;
+}
+
+/* The "—" placeholder gives way to a wide status chip, so the name keeps the
+   room it needs. */
+html:not([lang='en'])
+  .data-toggle-right:has(
+    .data-toggle-btn:is(
+      .transitioning,
+      .feed-loading,
+      .feed-degraded,
+      .feed-stale,
+      .feed-partial,
+      .feed-fallback,
+      .feed-unavailable
+    )
+  )
+  .data-count-empty {
+  display: none;
+}
+
 .data-toggle-btn {
   padding: 3px 10px;
   font-family: var(--font-mono);
@@ -666,6 +756,11 @@
   text-align: center;
 }
 
+html:not([lang='en']) .data-toggle-btn {
+  flex: none;
+  white-space: nowrap;
+}
+
 /* An inset ring stays visible inside the scrolling layer list. */
 .data-toggle-btn:focus-visible {
   outline: 2px solid var(--text-primary);
@@ -680,6 +775,20 @@
 .data-toggle-btn.feed-unavailable {
   min-width: 82px;
   letter-spacing: 0.8px;
+}
+
+/* Status chips up to eight characters share one width; a longer word grows
+   its own chip rather than widening every chip and squeezing every name. */
+html:not([lang='en'])
+  .data-toggle-btn:is(
+    .feed-loading,
+    .feed-degraded,
+    .feed-stale,
+    .feed-partial,
+    .feed-fallback,
+    .feed-unavailable
+  ) {
+  min-width: 72px;
 }
 
 .data-toggle-btn:hover {
@@ -891,6 +1000,20 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* A translated instruction wraps under itself rather than losing its tail:
+   "Gira a la derecha hacia …" says nothing. */
+html:not([lang='en']) .data-row-list-lead {
+  white-space: nowrap;
+}
+
+html:not([lang='en']) .data-row-list-text {
+  min-width: 0;
+  overflow: visible;
+  text-overflow: clip;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 /* A list line that states a limit rather than offering an action. */

@@ -1079,7 +1079,9 @@ test('generic layer visibility exposes lifecycle truth for every manager phase a
   });
   // The voice envelope is additive and states the failure plainly.
   assert.equal(say, "Couldn't turn on radio.");
-  assert.equal(display.title, 'radio');
+  // The card names the layer, not its id; the result keeps the id.
+  assert.equal(display.title, 'Radio');
+  assert.deepEqual(display.lines, ['Radio layer unavailable']);
 });
 
 test('generic voice visibility maps Space Missions to the explicit mission layer', async () => {

@@ -1,3 +1,4 @@
+import { msg } from '../../i18n/index.js';
 import { freshStreet } from './state.js';
 
 /**
@@ -125,7 +126,8 @@ export function createViewerHost({ state, parts }) {
     if (!state.street.host) {
       // A nearest-image lookup may have set it; nothing is loading now.
       state.street.loading = false;
-      state.street.error = 'Open the Street Level panel to view imagery';
+      // English data: the Street Level panel translates it (translateKnown).
+      state.street.error = msg('Open the Street Level panel to view imagery');
       notify();
       return false;
     }
@@ -153,7 +155,7 @@ export function createViewerHost({ state, parts }) {
       if (ticket && !state.street.follow) parts.follow.lookAtPosition(ticket);
     } catch (error) {
       if (current())
-        state.street.error = error?.message || 'Image could not be opened';
+        state.street.error = error?.message || msg('Image could not be opened');
     } finally {
       if (current()) state.street.loading = false;
       notify();
