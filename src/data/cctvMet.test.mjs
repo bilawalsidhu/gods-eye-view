@@ -160,6 +160,13 @@ test('the loader dedupes, and failures degrade to an empty pack', async (t) => {
           location: 'V&aelig;rradar p&aring; Hurum',
           position: '59.627180  10.564460',
         }),
+        // A camera MET is still trialling is left out.
+        row({
+          site: 'webcam_trial',
+          location: 'Pr&oslash;ve',
+          position: '60.0  10.0',
+          status: 'test',
+        }),
       ),
       { headers: { 'Content-Type': 'text/html' } },
     );
@@ -304,8 +311,8 @@ const withEnv = async (patch, fn) => {
   }
 };
 
-test('the MET lane is wired into the catalog', async (t) => {
-  await withEnv({}, async () => {
+test('the MET lane is wired into the catalog when opted in', async (t) => {
+  await withEnv({ CCTV_MET_ENABLED: '1' }, async () => {
     const { requested, sources } = await runCatalog(t);
     assert.ok(requested.includes(MET_WEBCAM_CATALOG_URL));
     assert.deepEqual(
@@ -315,13 +322,15 @@ test('the MET lane is wired into the catalog', async (t) => {
   });
 });
 
-test('CCTV_MET_ENABLED=0 keeps the lane from being loaded', async (t) => {
-  await withEnv({ CCTV_MET_ENABLED: '0' }, async () => {
-    const { requested, sources } = await runCatalog(t);
-    assert.equal(requested.includes(MET_WEBCAM_CATALOG_URL), false);
-    assert.deepEqual(
-      sources.filter((s) => s.sourceKind === 'met-obswebcam'),
-      [],
-    );
-  });
+test('the MET lane is off unless CCTV_MET_ENABLED=1', async (t) => {
+  for (const patch of [{}, { CCTV_MET_ENABLED: '0' }]) {
+    await withEnv(patch, async () => {
+      const { requested, sources } = await runCatalog(t);
+      assert.equal(requested.includes(MET_WEBCAM_CATALOG_URL), false);
+      assert.deepEqual(
+        sources.filter((s) => s.sourceKind === 'met-obswebcam'),
+        [],
+      );
+    });
+  }
 });

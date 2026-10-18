@@ -341,6 +341,8 @@ export async function loadMetSources() {
     const html = await readResponseTextCapped(resp, MET_MAX_CATALOG_BYTES);
     const cameras = new Map();
     for (const entry of parseMetWebcamList(html)) {
+      // MET still trials a camera marked `Status:test`; only operating ones.
+      if (entry.status === 'test') continue;
       const camera = metCameraToSource(entry);
       if (camera && !cameras.has(camera.id)) cameras.set(camera.id, camera);
     }

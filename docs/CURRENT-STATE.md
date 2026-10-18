@@ -1077,7 +1077,7 @@ video; camera poses use the existing low-confidence heading prior.
 
 ## MET Norway CCTV source pack
 
-The CCTV catalog includes MET Norway's weather-station webcams (about a dozen,
+The CCTV catalog can include MET Norway's weather-station webcams (about a dozen,
 from Haukeliseter and the Hurum weather radar to Bjørnøya, Hopen and Jan
 Mayen) in the same "Norway" picker category as the Statens vegvesen pack. The
 list is MET's keyless public webcam page, marked for free use; one request
@@ -1089,7 +1089,10 @@ cameras whose image cell is empty are dropped. The place text's compass word
 used. Mainland cameras get their ground height from Kartverket's keyless
 point-height API (CC BY 4.0) in one bounded, cached request; Svalbard and Jan
 Mayen are outside its coverage and keep the client's 0 m, within ~25 m of
-their true height. `CCTV_MET_HEIGHTS=0` skips the lookup. `CCTV_MET_ENABLED=0` turns the pack off and `CCTV_MET_MAX_SOURCES`
+their true height. `CCTV_MET_HEIGHTS=0` skips the lookup. The pack is off unless
+`CCTV_MET_ENABLED=1`: MET's licensing page covers its official data but does not
+mention the webcam images, so it stays opt-in until MET confirms they may be
+reused. Cameras the list marks `Status: test` are skipped. `CCTV_MET_MAX_SOURCES`
 caps it (default 100, bounded to 1–500). Data from MET Norway under NLOD 2.0
 and CC BY 4.0.
 
@@ -3413,7 +3416,7 @@ its criteria cannot be silently ignored.
 | Satellites             | CelesTrak                                                                                                                                                                                       | `src/data/satellites.js`                              | `/api/celestrak`                                         | 120s                                                                              |
 | Space Missions (30d)   | Launch Library 2 + CelesTrak                                                                                                                                                                    | `src/data/rocketLaunches.js`                          | `/api/launches` + `/api/celestrak/active`                | 5 min                                                                             |
 | Traffic | Selectable TomTom / OpenStreetMap / Hybrid roads; optional TomTom flow (BYOK) | `src/data/traffic.js` | browser-direct OpenFreeMap tiles; `/api/tomtom` for flow | viewport-driven; capped tile cache |
-| CCTV                   | Austin + Caltrans (CA) + TfL London + Ontario 511 + Fintraffic (FI) + DriveBC (BC) + TxDOT (TX) + Estonia (Tallinn, Tarktee) + Live Traffic NSW + Open Calgary Open Data + Statens vegvesen (NO, stills + live HLS) + MET Norway (NO weather webcams) + King County (WA) Open Data + WSDOT (WA) Open Data + NYC DOT TMC (opt-in) + City of Toronto RESCU + Catalonia (Servei Català de Trànsit) + Street View fallback | `src/data/cctv.js`                                    | `/api/cctv`                                              | 10s (active)                                                                      |
+| CCTV                   | Austin + Caltrans (CA) + TfL London + Ontario 511 + Fintraffic (FI) + DriveBC (BC) + TxDOT (TX) + Estonia (Tallinn, Tarktee) + Live Traffic NSW + Open Calgary Open Data + Statens vegvesen (NO, stills + live HLS) + MET Norway (NO weather webcams, opt-in) + King County (WA) Open Data + WSDOT (WA) Open Data + NYC DOT TMC (opt-in) + City of Toronto RESCU + Catalonia (Servei Català de Trànsit) + Street View fallback | `src/data/cctv.js`                                    | `/api/cctv`                                              | 10s (active)                                                                      |
 | Radio                  | Radio Browser (public-domain station directory)                                                                                                                                                 | `src/data/radio.js`                                   | `/api/radio/stations`, `/api/radio/click/:uuid`          | 45 min directory refresh                                                          |
 | Transit 🚌             | Operator GTFS-Realtime VehiclePositions (7 keyless regions, `src/data/transitFeeds.js`)                                                                                                         | `src/layers/transit/` via `src/app/layers/transit.js` | `/api/transit`                                           | 15s (poll + delayed playback)                                                     |
 | Bikeshare 🚲           | GBFS (Lyft + BCycle + Social Bicycles + PBSC incl. Bike Share Toronto, Bike Itaú (Brazil), Bicing (Barcelona) and seven other Spanish cities + Urban Sharing, Entur, JCDecaux (Lillestrøm, Valencia, Seville) + nextbike (AMBici))                                                                                                                                        | `src/data/bikeshare.js`                               | `/api/gbfs`                                              | 60s                                                                               |

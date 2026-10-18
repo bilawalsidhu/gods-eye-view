@@ -128,7 +128,9 @@ const LIVE_PACKS = [
   },
   {
     name: 'met',
-    enabled: () => envEnabled('CCTV_MET_ENABLED'),
+    // MET's licensing page covers its official data, not the webcam images:
+    // opt-in until MET confirms they may be reused.
+    enabled: () => envOptIn('CCTV_MET_ENABLED'),
     load: loadMetSources,
   },
   {
