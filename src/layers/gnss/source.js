@@ -1,5 +1,9 @@
 import { readResponseJsonCapped } from '../../sources/httpBody.js';
 
+// A portable export (package.json): no i18n here. Failures stay English data;
+// the Layers panel shows them translated.
+const msg = (text) => text;
+
 function retryDelay(raw, nowMs) {
   if (!raw) return null;
   const seconds = Number(raw);
@@ -21,7 +25,7 @@ export function createAdsbGnssSource({
     async getSnapshot({ latitude, longitude } = {}, { signal } = {}) {
       signal?.throwIfAborted();
       if (!Number.isFinite(latitude) || !Number.isFinite(longitude))
-        throw new Error('GNSS snapshot needs a view anchor');
+        throw new Error(msg('GNSS snapshot needs a view anchor'));
       const params = new URLSearchParams({
         lat: String(Math.round(latitude)),
         lon: String(Math.round(longitude)),
@@ -37,8 +41,9 @@ export function createAdsbGnssSource({
         );
         throw Object.assign(
           new Error(
+            // HTTP errors are matched by FEED_ERROR_PATTERNS in ui/statusText.js.
             limited
-              ? 'GNSS feed rate limited (HTTP 429)'
+              ? msg('GNSS feed rate limited (HTTP 429)')
               : `GNSS feed unavailable (HTTP ${response.status})`,
           ),
           {
@@ -55,12 +60,12 @@ export function createAdsbGnssSource({
       );
       signal?.throwIfAborted();
       if (!Array.isArray(payload?.rows))
-        throw new Error('Malformed GNSS integrity snapshot');
+        throw new Error(msg('Malformed GNSS integrity snapshot'));
       // The snapshot's age (measured on the proxy's clock) dates every row in
       // the rolling window; an undated snapshot could only be treated as new,
       // so it is refused.
       if (!Number.isFinite(payload.ageMs) || payload.ageMs < 0)
-        throw new Error('GNSS integrity snapshot has no observation time');
+        throw new Error(msg('GNSS integrity snapshot has no observation time'));
       return {
         rows: payload.rows,
         ageMs: payload.ageMs,

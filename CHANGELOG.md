@@ -1,12 +1,10 @@
 # Changelog
 
-- The read-only query proxies state their method contract. `/api/flights`,
-  `/api/military` and `/api/route` answered any verb with the same body
-  while ignoring the request; they now answer `405 Method Not Allowed` to
-  anything but `GET`, the way `/api/geocode` and the other query proxies
-  already did, and declare `Allow: GET` with it the way `/api/radio/stations`
-  does. The refusal precedes rate limiting and any upstream call
-  (daikaginza, #794).
+- The tracked-aircraft descriptor now publishes `verticalRateMps`, on both the
+  civil and military layers, so a consumer reading `getTrackedInfo()` no longer
+  has to reach past it into the raw poll record for climb/descent. Reported,
+  never derived: an aircraft that has not transmitted a rate reads as `null`
+  rather than a level-flight `0`.
 
 - Add nine Ontario transit feeds: TTC, MiWay, Hamilton HSR, Durham Region,
   YRT/Viva, Guelph, Burlington, Barrie and Kingston, each carrying its own
@@ -156,6 +154,18 @@
   the five borough cores load and `CCTV_NYC_MAX_SOURCES` changes the cap. The catalog-wide ceiling is
   unchanged; extra cameras share it round-robin with the other packs.
 
+- Spanish interface (`es`), translated by @meirm (#602) and reviewed against the
+  current English.
+
+- Interface localization, starting with Russian. UI text is marked with
+  `t()`, `tn()` (plurals) and `msg()` in code and `data-i18n*` in markup, keyed
+  by the English text itself; each language is one flat JSON catalog
+  (`src/i18n/locales/ru.json`). The language comes from `?lang=`, the language
+  picker (the globe button in the bottom-right corner), then the browser
+  language; English stays the default and the fallback. `npm run i18n`, also
+  run by `npm test`, fails on missing, unused or broken translations. Built on
+  the i18n foundation by @meirm (#601), with the Russian catalog started
+  from #312. It also fails on UI text that is not marked at all.
 - Street Level counts unique tiles before ranking so overlapping dateline halves
   in polar views do not waste slots in the 16-tile overview budget.
 
@@ -167,6 +177,9 @@
 - Tool string length validation counts Unicode characters correctly, including characters outside the basic multilingual plane.
 
 - Director timeline seeks cross the dateline along the short longitude arc.
+
+- Keep unknown GBFS availability counts neutral instead of turning null or empty
+  values into zero bikes.
 
 - Recent Imagery continues past malformed records in full catalog pages, respects the requested record limit, and reports results as truncated when that limit drops valid records.
 

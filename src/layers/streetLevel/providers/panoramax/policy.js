@@ -1,4 +1,5 @@
 import { COLORS as SHARED_COLORS, PROVIDER_COLORS } from '../../policy.js';
+import { msg } from '../../../../i18n/index.js';
 
 export { NEAREST_RADIUS_M } from '../../policy.js';
 
@@ -79,16 +80,18 @@ export const DECODE_SLICE_MS = 8;
  */
 export const OVERVIEW_BINS_PER_AXIS = 96;
 
-export const RATE_LIMITED_MESSAGE =
-  'Panoramax is busy — coverage resumes on its own';
-export const NO_COVERAGE_HINT = 'no Panoramax photos in view';
+export const RATE_LIMITED_MESSAGE = msg(
+  'Panoramax is busy — coverage resumes on its own',
+);
+export const NO_COVERAGE_HINT = msg('no Panoramax photos in view');
 /** Lines in view, all hidden by the imagery filter. */
-export const FILTERED_HINT = 'no Panoramax photos here match the filters';
-export const UNREADABLE_TILE_MESSAGE =
-  'Panoramax sent a map tile that could not be read';
-export const GONE_MESSAGE = 'This Panoramax photo is no longer available';
+export const FILTERED_HINT = msg('no Panoramax photos here match the filters');
+export const UNREADABLE_TILE_MESSAGE = msg(
+  'Panoramax sent a map tile that could not be read',
+);
+export const GONE_MESSAGE = msg('This Panoramax photo is no longer available');
 /** From high up the dots are where pictures are, not sequences to click. */
-export const OVERVIEW_HINT = 'zoom in to see Panoramax coverage';
+export const OVERVIEW_HINT = msg('zoom in to see Panoramax coverage');
 
 /** Cones come from z15 tiles' `pictures` layer (~110 bytes a picture). */
 export const PICTURE_TILE_ZOOM = 15;

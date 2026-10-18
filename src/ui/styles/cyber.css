@@ -174,6 +174,8 @@
     .context-mode-button,
     .map-stack-chip,
     .key-setup-chip,
+    .locale-picker-button,
+    .locale-picker-popup,
     .first-run-card
   ) {
   border-color: var(--glass-border);
@@ -1834,9 +1836,11 @@
     display: none;
   }
 
+  /* Sits above the language picker row in the bottom-right corner
+     (locale-picker.css: 0.9rem inset + one ~2rem button + a gap). */
   #intel-hud[data-variant='cyber'] .hud-bottom-right {
     right: 28px;
-    bottom: 28px;
+    bottom: 3.5rem;
   }
 }
 
@@ -2733,6 +2737,9 @@
 
 :root[data-ui-theme='cyber'] body.cockpit-mode .cockpit-position-readout {
   right: 30px;
+  /* Clears the language picker row it shares the corner with, as in the
+     other themes (locale-picker.css). */
+  bottom: 3.5rem;
 }
 
 :root[data-ui-theme='cyber'] body.cockpit-mode .cockpit-help {

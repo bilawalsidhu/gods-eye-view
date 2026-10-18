@@ -321,6 +321,42 @@ export function aggregateTransitFeedHealth(statuses, nowMs) {
   };
 }
 
+// AI tools (src/tools/queries/mobility.js) import this module, so no i18n here:
+// the card copy takes `t` from the caller (selection.js); without it, English.
+const msg = (text) => text;
+
+/** English {placeholder} interpolation, the default `t` of the card copy. */
+function englishText(text, values) {
+  if (!values) return text;
+  return text.replace(/\{([A-Za-z0-9_]+)\}/g, (literal, name) =>
+    Object.hasOwn(values, name) ? String(values[name]) : literal,
+  );
+}
+
+/** GTFS-realtime OccupancyStatus in words. */
+function occupancyText(occupancy, t) {
+  switch (occupancy) {
+    case 'EMPTY':
+      return t('empty', { context: 'occupancy' });
+    case 'MANY_SEATS_AVAILABLE':
+      return t('many seats available', { context: 'occupancy' });
+    case 'FEW_SEATS_AVAILABLE':
+      return t('few seats available', { context: 'occupancy' });
+    case 'STANDING_ROOM_ONLY':
+      return t('standing room only', { context: 'occupancy' });
+    case 'CRUSHED_STANDING_ROOM_ONLY':
+      return t('crushed standing room only', { context: 'occupancy' });
+    case 'FULL':
+      return t('full', { context: 'occupancy' });
+    case 'NOT_ACCEPTING_PASSENGERS':
+      return t('not accepting passengers', { context: 'occupancy' });
+    case 'NOT_BOARDABLE':
+      return t('not boardable', { context: 'occupancy' });
+    default:
+      return occupancy.toLowerCase().replaceAll('_', ' ');
+  }
+}
+
 /**
  * Build the human lines of the selection card from a vehicle record.
  * @param {object} feed Registry entry.
@@ -328,6 +364,9 @@ export function aggregateTransitFeedHealth(statuses, nowMs) {
  * @param {string} mode Resolved transit mode.
  * @param {number} nowMs
  * @param {number|null} [fetchedAtMs] Snapshot fetch time.
+ * @param {object|null} [entry] Playback entry of the vehicle.
+ * @param {(text: string, values?: object) => string} [t] Translates the
+ *   card's English text; English when omitted.
  * @returns {{title:string, details:string[]}}
  */
 export function buildTransitSelectionCopy(
@@ -337,44 +376,55 @@ export function buildTransitSelectionCopy(
   nowMs,
   fetchedAtMs = null,
   entry = null,
+  t = englishText,
 ) {
   const icon = TRANSIT_MODE_ICON[mode] || TRANSIT_MODE_ICON.unknown;
   const routeLabel = record.routeId
-    ? `Route ${transitRouteLabel(feed, record.routeId)}`
-    : record.label
-      ? `Vehicle ${record.label}`
-      : `Vehicle ${record.id}`;
+    ? t('Route {route}', { route: transitRouteLabel(feed, record.routeId) })
+    : t('Vehicle {vehicle}', { vehicle: record.label || record.id });
   const title = `${icon} ${routeLabel}`;
   // The mode is said in words on its own line. A glyph and a route id do not
   // tell a reader that the dot on Tremont Street is a subway train, and a
   // subway drawn on a street reads as a bug until the card says what it is.
-  const kindWord = transitModeWord(mode, feed);
+  // An operator's own mode word (feed.modeWords) is a name and stays as is.
+  const kindWord =
+    feed?.modeWords?.[mode]?.word ||
+    t(TRANSIT_MODE_WORD[mode] || TRANSIT_MODE_WORD.unknown);
   const details = [`${kindWord} · ${feed.name} · ${feed.region}`];
   const motion = [];
   // What the SCREEN is doing leads, because that is what the reader can check.
   const shown = entry ? displayMotion(entry, nowMs) : null;
-  if (shown?.word === 'STOPPED') motion.push('Stopped');
-  else if (shown?.word === 'NO FIX') motion.push('No recent fix');
-  else if (shown?.word === 'WAITING') motion.push('Waiting for update');
-  else if (shown) motion.push('Moving');
+  if (shown?.word === 'STOPPED')
+    motion.push(t('Stopped', { context: 'vehicle motion' }));
+  else if (shown?.word === 'NO FIX') motion.push(t('No recent fix'));
+  else if (shown?.word === 'WAITING') motion.push(t('Waiting for update'));
+  else if (shown) motion.push(t('Moving'));
   if (motion.length) details.push(motion.join(' · '));
   const reportedMotion = [];
   if (Number.isFinite(record.speedMps))
-    reportedMotion.push(`reported ${Math.round(record.speedMps * 3.6)} km/h`);
+    reportedMotion.push(
+      t('reported {speed} km/h', { speed: Math.round(record.speedMps * 3.6) }),
+    );
   if (Number.isFinite(record.bearing))
-    reportedMotion.push(`reported hdg ${Math.round(record.bearing)}°`);
+    reportedMotion.push(
+      t('reported hdg {heading}°', { heading: Math.round(record.bearing) }),
+    );
   // The operator's own claim, kept as a REPORT rather than as the live state.
   // It describes the moment of the report, which the display may not have
   // reached yet; presenting it as "now" is what put STOPPED on a moving metro.
   const state = [];
   if (record.status === 'STOPPED_AT' && record.stopId)
-    state.push(`Last report: stopped at stop ${record.stopId}`);
+    state.push(
+      t('Last report: stopped at stop {stop}', { stop: record.stopId }),
+    );
   else if (record.status === 'INCOMING_AT' && record.stopId)
-    state.push(`Last report: arriving at stop ${record.stopId}`);
+    state.push(
+      t('Last report: arriving at stop {stop}', { stop: record.stopId }),
+    );
   else if (record.status === 'IN_TRANSIT_TO' && record.stopId)
-    state.push(`Last report: next stop ${record.stopId}`);
+    state.push(t('Last report: next stop {stop}', { stop: record.stopId }));
   if (record.occupancy && record.occupancy !== 'NO_DATA_AVAILABLE') {
-    state.push(record.occupancy.toLowerCase().replaceAll('_', ' '));
+    state.push(occupancyText(record.occupancy, t));
   }
   if (reportedMotion.length) details.push(reportedMotion.join(' · '));
   if (state.length) details.push(state.join(' · '));
@@ -382,10 +432,10 @@ export function buildTransitSelectionCopy(
   // That is a deliberate choice — a train nobody can see is not worth drawing —
   // but it has to be stated, or a metro sitting on a road looks like an error.
   if (UNDERGROUND_MODES.has(mode)) {
-    details.push('Shown at street level · depth not in the feed');
+    details.push(t('Shown at street level · depth not in the feed'));
   }
   details.push(
-    `Vehicle ${record.id}${record.label && record.label !== record.id ? ` · ${record.label}` : ''}`,
+    `${t('Vehicle {vehicle}', { vehicle: record.id })}${record.label && record.label !== record.id ? ` · ${record.label}` : ''}`,
   );
   const ageS = Math.round(
     (Number.isFinite(entry?.sample?.latestReportAgeMs)
@@ -394,8 +444,8 @@ export function buildTransitSelectionCopy(
   );
   const reported =
     ageS < 90
-      ? `Reported ${ageS} s ago`
-      : `Reported ${Math.round(ageS / 60)} min ago`;
+      ? t('Reported {seconds} s ago', { seconds: ageS })
+      : t('Reported {minutes} min ago', { minutes: Math.round(ageS / 60) });
   // A time the feed did not give for THIS vehicle is labelled, so the card
   // never presents a borrowed or inferred time as the vehicle's own report.
   const ownTime =
@@ -407,19 +457,25 @@ export function buildTransitSelectionCopy(
   const lagS = Number.isFinite(entry?.sample?.actualDelayMs)
     ? Math.max(0, Math.round(entry.sample.actualDelayMs / 1000))
     : null;
-  const behind = lagS === null ? '' : ` · shown ${lagS} s behind`;
+  const behind =
+    lagS === null
+      ? ''
+      : ` · ${t('shown {seconds} s behind', { seconds: lagS })}`;
   details.splice(
     motion.length ? 2 : 1,
     0,
-    (ownTime ? reported : `${reported} (feed time)`) + behind,
+    (ownTime ? reported : t('{reported} (feed time)', { reported })) + behind,
   );
   if (entry?.track?.count) {
     const duration = Math.max(
       0,
       Math.min(entry.playT, entry.fixes.at(-1).t) - entry.fixes[0].t,
     );
+    const minutes = Math.round(duration / 60000);
     details.push(
-      `Available trail: ${Math.round(duration / 60000)} min${entry.track.truncated || entry.trailTruncated ? ' (limited)' : ''}`,
+      entry.track.truncated || entry.trailTruncated
+        ? t('Available trail: {minutes} min (limited)', { minutes })
+        : t('Available trail: {minutes} min', { minutes }),
     );
   }
   return { title, details };
@@ -464,12 +520,12 @@ export const UNDERGROUND_MODES = new Set(['subway']);
 
 /** The mode in plain words, for a card a person reads rather than scans. */
 export const TRANSIT_MODE_WORD = Object.freeze({
-  bus: 'Bus',
-  tram: 'Tram',
-  subway: 'Subway',
-  rail: 'Train',
-  ferry: 'Ferry',
-  unknown: 'Transit vehicle',
+  bus: msg('Bus'),
+  tram: msg('Tram'),
+  subway: msg('Subway'),
+  rail: msg('Train'),
+  ferry: msg('Ferry'),
+  unknown: msg('Transit vehicle'),
 });
 
 /** Short, fixed-width mode word for the detection card's class field. */

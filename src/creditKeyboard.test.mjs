@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { configureCreditKeyboardAccess } from './creditKeyboard.js';
+import { setLocale } from './i18n/index.js';
 
 function fakeElement() {
   const attributes = new Map();
@@ -186,3 +187,37 @@ test('credit keyboard setup is idempotent and safely declines incomplete markup'
   assert.equal(f.overlay.listenerCount('click'), 1);
   assert.equal(configureCreditKeyboardAccess({ querySelector: () => null }), false);
 });
+
+function textFixture() {
+  const f = fixture();
+  const title = fakeElement();
+  title.textContent = 'Data provided by:';
+  f.expand.textContent = 'Data attribution';
+  f.lightbox.querySelector = (selector) =>
+    selector === '.cesium-credit-lightbox-title' ? title : f.close;
+  return { ...f, title };
+}
+
+test('English keeps Cesium attribution texts', () => {
+  setLocale('en');
+  const f = textFixture();
+  configureCreditKeyboardAccess(f.root);
+  assert.equal(f.expand.textContent, 'Data attribution');
+  assert.equal(f.title.textContent, 'Data provided by:');
+});
+
+for (const [locale, link, title] of [
+  ['ru', 'Источники данных', 'Данные предоставлены:'],
+  ['es', 'Atribución de datos', 'Datos proporcionados por:'],
+])
+  test(`${locale}: Cesium attribution link and lightbox title are translated`, () => {
+    setLocale(locale);
+    try {
+      const f = textFixture();
+      configureCreditKeyboardAccess(f.root);
+      assert.equal(f.expand.textContent, link);
+      assert.equal(f.title.textContent, title);
+    } finally {
+      setLocale('en');
+    }
+  });
