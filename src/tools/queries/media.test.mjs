@@ -30,7 +30,13 @@ const cameras = [
   { id: 'no-position', name: 'Unplaced' },
 ];
 const PNG = Uint8Array.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
-const cctv = (frame = { contentType: 'image/png', bytes: PNG }) => ({
+const cctv = (
+  frame = {
+    contentType: 'image/png',
+    bytes: PNG,
+    sourceKind: 'upstream-image',
+  },
+) => ({
   frames: [],
   async getCatalog() {
     return { sources: cameras };
@@ -102,6 +108,183 @@ test('a snapshot returns the frame as an image with its credit', async () => {
     data: 'iVBORw0KGgo=',
     mimeType: 'image/png',
   });
+});
+
+test('mounted camera fallback provenance survives the source and MCP image result', async (t) => {
+  const { cctvProxy } = await import('../../../server/providers/cctv.js');
+  const { createCctvSource } = await import('../../layers/cctv/source.js');
+  const camera = {
+    id: 'fixture-camera',
+    name: 'Fixture crossing',
+    city: 'Fixture City',
+    provider: 'Fixture transport agency',
+    credit: 'Fixture transport agency',
+    lat: 30.2685,
+    lon: -97.7425,
+    headingDeg: 180,
+    fovDeg: 60,
+    url: 'https://camera.example/current.png',
+    feedType: 'image',
+  };
+  const environment = {
+    CCTV_SOURCES_JSON: JSON.stringify([camera]),
+    CCTV_PREFER_AUSTIN: '0',
+    CCTV_FORCE_AUSTIN: '0',
+    CCTV_SOURCES_FILE: 'missing-cctv-provenance-fixture.json',
+    GOOGLE_MAPS_SERVER_API_KEY: 'fixture-key',
+    GOOGLE_MAPS_API_KEY: '',
+  };
+  for (const [name, value] of Object.entries(environment)) {
+    const previous = process.env[name];
+    t.after(() => {
+      if (previous === undefined) delete process.env[name];
+      else process.env[name] = previous;
+    });
+    process.env[name] = value;
+  }
+  t.mock.method(console, 'warn', () => {});
+  let upstreamAvailable = false;
+  const calls = [];
+  t.mock.method(globalThis, 'fetch', async (raw) => {
+    const url = new URL(raw);
+    calls.push(url.origin);
+    if (url.origin === 'https://camera.example')
+      return upstreamAvailable
+        ? new Response(PNG, { headers: { 'Content-Type': 'image/png' } })
+        : new Response(null, { status: 503 });
+    assert.equal(
+      url.origin,
+      'https://maps.googleapis.com',
+      'no actual upstream is contacted',
+    );
+    assert.equal(url.searchParams.get('key'), 'fixture-key');
+    return new Response(PNG, { headers: { 'Content-Type': 'image/png' } });
+  });
+  let middleware;
+  cctvProxy().configureServer({
+    middlewares: {
+      use(route, handler) {
+        assert.equal(route, '/api/cctv');
+        middleware = handler;
+      },
+    },
+  });
+  const source = createCctvSource({
+    fetchImpl: async (path) => {
+      assert.ok(path.startsWith('/api/cctv/'));
+      const response = {
+        writeHead(status, headers) {
+          this.status = status;
+          this.headers = headers;
+        },
+        end(body) {
+          this.body = body;
+        },
+      };
+      await middleware(
+        { url: path.slice('/api/cctv'.length), method: 'GET', headers: {} },
+        response,
+      );
+      return new Response(response.body, {
+        status: response.status,
+        headers: response.headers,
+      });
+    },
+  });
+  const catalog = composeCatalog({
+    tools: coreTools,
+    services: { cctv: source },
+  });
+  const fallback = await catalog.call('get_cctv_snapshot', {
+    camera_id: camera.id,
+  });
+  assert.equal(fallback.data.source_kind, 'streetview');
+  assert.equal(fallback.data.current_view, false);
+  assert.equal(fallback.data.credit, 'Google Street View');
+  assert.match(fallback.summary, /Street View fallback/);
+  assert.match(fallback.summary, /Historical imagery/);
+  assert.doesNotMatch(
+    fallback.summary,
+    /Current view|courtesy of Fixture transport agency/,
+  );
+  assert.equal(
+    fallback.images.length,
+    1,
+    'the historical image stays available with its caveat',
+  );
+  assert.deepEqual(calls, [
+    'https://camera.example',
+    'https://maps.googleapis.com',
+  ]);
+  upstreamAvailable = true;
+  const current = await catalog.call('get_cctv_snapshot', {
+    camera_id: camera.id,
+  });
+  assert.equal(current.data.source_kind, 'upstream-image');
+  assert.equal(current.data.current_view, true);
+  assert.equal(current.data.credit, camera.credit);
+  assert.match(current.summary, /^Current view from/);
+  const server = createMcpServer({ catalog, name: 'test', version: '1' });
+  upstreamAvailable = false;
+  const result = await server.handle({
+    jsonrpc: '2.0',
+    id: 1,
+    method: 'tools/call',
+    params: { name: 'get_cctv_snapshot', arguments: { camera_id: camera.id } },
+  });
+  assert.ok(
+    result.result.content.some(
+      (entry) => entry.type === 'text' && /Historical imagery/.test(entry.text),
+    ),
+  );
+  assert.ok(result.result.content.some((entry) => entry.type === 'image'));
+  process.env.GOOGLE_MAPS_SERVER_API_KEY = '';
+  const placeholder = await source.getFrame(camera);
+  assert.equal(placeholder.sourceKind, 'synthetic');
+  assert.equal(placeholder.contentType, 'image/svg+xml');
+  await assert.rejects(
+    catalog.call('get_cctv_snapshot', { camera_id: camera.id }),
+    (error) => error.code === 'unavailable',
+  );
+  const unavailable = await server.handle({
+    jsonrpc: '2.0',
+    id: 2,
+    method: 'tools/call',
+    params: { name: 'get_cctv_snapshot', arguments: { camera_id: camera.id } },
+  });
+  assert.equal(unavailable.result.isError, true);
+  assert.ok(
+    !unavailable.result.content.some((entry) => entry.type === 'image'),
+  );
+});
+
+test('snapshot placeholders are refused and unknown frame provenance is explicit', async () => {
+  const synthetic = composeCatalog({
+    tools: coreTools,
+    services: {
+      cctv: cctv({
+        contentType: 'image/png',
+        bytes: PNG,
+        sourceKind: 'synthetic',
+      }),
+    },
+  });
+  await assert.rejects(
+    synthetic.call('get_cctv_snapshot', { camera_id: 'austin-1' }),
+    (error) => error.code === 'unavailable',
+  );
+  const unknown = await composeCatalog({
+    tools: coreTools,
+    services: { cctv: cctv({ contentType: 'image/png', bytes: PNG }) },
+  }).call('get_cctv_snapshot', { camera_id: 'austin-1' });
+  assert.equal(unknown.data.current_view, null);
+  assert.equal(
+    unknown.data.credit,
+    cameras[0].credit,
+    'catalog attribution is preserved',
+  );
+  assert.match(unknown.summary, /provenance is unknown/);
+  assert.doesNotMatch(unknown.summary, /Current view/);
 });
 
 test('unknown cameras, video-only feeds and oversized frames are reported', async () => {
