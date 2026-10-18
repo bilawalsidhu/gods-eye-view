@@ -254,11 +254,11 @@ export function createRadioProxyMiddleware({
               ),
             );
           return {
-            // Query coverage is based on accepted rows, not merely a payload that
-            // happens to match the upstream schema. Specialist responses must
-            // also contain an accepted station tagged for the requested category.
+            // A valid country response can contain no playable stations. Country
+            // coverage is advisory; only broad/specialist queries gate health.
+            // Specialist responses need an accepted station with matching tags.
             succeeded: country
-              ? rows.length === 0 || stations.length > 0
+              ? true
               : stations.length > 0 && requestedTagCovered,
             stations,
           };
@@ -312,8 +312,6 @@ export function createRadioProxyMiddleware({
     const broadQueryHealthy =
       outcomes[0].succeeded && outcomes[0].stations.length > 0;
     const healthReasons = [];
-    if (outcomes.slice(baseQueryCount).some((outcome) => !outcome.succeeded))
-      healthReasons.push('priority-country-query-unhealthy');
     if (!broadQueryHealthy) healthReasons.push('broad-query-unhealthy');
     if (successfulQueries < RADIO_CATALOG_MIN_SUCCESSFUL_QUERIES)
       healthReasons.push('query-coverage-below-policy');
