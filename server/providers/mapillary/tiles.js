@@ -425,8 +425,15 @@ export async function fetchTile(request, { signal } = {}) {
   const disk = await readDisk(address);
   if (disk) {
     // Older cache files may be untrimmed: rewrite once, keeping the fetch time.
+    // A concurrent hit that read the same untrimmed file has already put the
+    // tile in memory, and its rewrite may have finished (no longer pending)
+    // before this read resolved, so memory is what says it was done.
     const bytes = trim(address, disk.bytes);
-    if (bytes !== disk.bytes && !diskWritePending(address))
+    if (
+      bytes !== disk.bytes &&
+      !diskWritePending(address) &&
+      !_memory.has(address.key)
+    )
       writeDisk(address, bytes, disk.at);
     memoryPut(address.key, bytes, disk.at);
     return { bytes, source: 'disk', address };

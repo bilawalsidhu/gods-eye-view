@@ -944,6 +944,52 @@ test('concurrent disk hits on an untrimmed tile rewrite it once, keeping its age
   assert.ok(Math.abs(stat.mtimeMs - writtenAt) < 1000, 'no fresh 24 h of life');
 });
 
+// The CI flake behind the test above: on a slow runner the first rewrite can
+// finish, and stop being pending, before a later hit's read resolves.
+test('a disk hit whose read outlasts the first rewrite does not rewrite again', async (t) => {
+  const address = { layer: 'coverage', z: 14, x: 15, y: 15 };
+  const file = tileFile(address);
+  await writeAged(
+    file,
+    tile([
+      { name: 'sequence' },
+      { name: 'image', payload: Buffer.alloc(4000, 1) },
+    ]),
+    23 * HOUR,
+  );
+  const writeFile = fsp.writeFile;
+  const writes = [];
+  t.mock.method(fsp, 'writeFile', (target, ...rest) => {
+    if (String(target).startsWith(file)) writes.push(String(target));
+    return writeFile.call(fsp, target, ...rest);
+  });
+  const readFile = fsp.readFile;
+  let release;
+  const gate = new Promise((resolve) => (release = resolve));
+  let reads = 0;
+  t.mock.method(fsp, 'readFile', async (target, ...rest) => {
+    const bytes = await readFile.call(fsp, target, ...rest);
+    // Later hits read the untrimmed file, then resume after the rewrite.
+    if (String(target) === file && ++reads > 1) await gate;
+    return bytes;
+  });
+  t.mock.method(console, 'warn', () => {});
+  await withUpstream(
+    () => assert.fail('a disk hit never asks Mapillary'),
+    async () => {
+      const hits = [1, 2, 3].map(() => fetchTile(address));
+      // Whichever hit read freely has served and started the rewrite.
+      await Promise.race(hits);
+      await tiles._settleTileWritesForTest();
+      release();
+      for (const hit of await Promise.all(hits))
+        assert.deepEqual(listTileLayers(hit.bytes), ['sequence']);
+      await tiles._settleTileWritesForTest();
+    },
+  );
+  assert.equal(writes.length, 1, 'one rewrite for three hits');
+});
+
 test('a rewrite overtaken by a fresh tile write steps aside cleanly', async (t) => {
   const address = { layer: 'coverage', z: 14, x: 15, y: 15 };
   const file = tileFile(address);
