@@ -147,11 +147,25 @@ test('the gate requires the server’s real Mapillary status route', async () =>
 
 /**
  * A page stand-in that runs page functions in Node against a fake document.
- * The hit check always sees the header; `presses` says where each pointerdown
- * lands ('header', 'other', 'moved' or 'none').
+ * The hit check sees the header after `hitMisses` checks; `presses` says where each pointerdown
+ * lands ('header', 'other', 'moved', 'late' or 'none').
  */
-function fakePanelPage({ presses = [], floating = false, stuck = false } = {}) {
-  const state = { floating, downs: 0, last: null, dragging: false, shift: 0 };
+function fakePanelPage({
+  presses = [],
+  floating = false,
+  stuck = false,
+  hitMisses = 0,
+} = {}) {
+  const state = {
+    floating,
+    downs: 0,
+    last: null,
+    dragging: false,
+    shift: 0,
+    settled: 0,
+    checked: false,
+    hits: 0,
+  };
   const listeners = [];
   const node = (tagName, id, classes, inHeader) => ({
     tagName,
@@ -171,12 +185,16 @@ function fakePanelPage({ presses = [], floating = false, stuck = false } = {}) {
   const document = {
     querySelector: () => ({ getBoundingClientRect: rect(120, 210, 100, 20) }),
     getElementById: () => ({
-      getBoundingClientRect: () => rect(100, 200 + state.shift, 300, 400)(),
+      getBoundingClientRect: () =>
+        rect(100, 200 + state.shift + state.settled, 300, 400)(),
       classList: {
         contains: (name) => name === 'panel-floating' && state.floating,
       },
     }),
-    elementFromPoint: () => header,
+    elementFromPoint: () => {
+      state.checked = true;
+      return state.hits++ < hitMisses ? other : header;
+    },
   };
   const window = {
     addEventListener: (type, listener) => listeners.push(listener),
@@ -190,7 +208,14 @@ function fakePanelPage({ presses = [], floating = false, stuck = false } = {}) {
       Object.assign(globalThis, saved);
     }
   };
-  const evaluate = async (fn, ...args) => inPage(fn, ...args);
+  const evaluate = async (fn, ...args) => {
+    state.checked = false;
+    const result = inPage(fn, ...args);
+    // 'late': the rail moves the panel, for good, in the next page task after
+    // the hit check, so the press lands on the old header's point.
+    if (state.checked && presses[state.downs] === 'late') state.settled = -116;
+    return result;
+  };
   const press = () => {
     state.last = presses[state.downs++] ?? 'header';
     // 'none': the pointerdown never reaches the page.
@@ -606,6 +631,53 @@ test('QA_FAIL_ON_RETRY retries, with a warning, a miss the panel moving explains
   assert.ok(
     lines.some((line) =>
       /::warning title=Panel press retried::.*-> at press 100,84/.test(line),
+    ),
+    lines.join('\n'),
+  );
+});
+
+test('the hit check waits for the header, and says when it never came', async () => {
+  const { headerTarget } = await import('../../scripts/qa-panelDrag.mjs');
+  const opts = { tries: 3, intervalMs: 0 };
+  const late = await headerTarget(
+    fakePanelPage({ hitMisses: 2 }),
+    'street-level-panel',
+    opts,
+  );
+  assert.equal(late.timedOut, false);
+  assert.deepEqual(late.hit, { target: 'div.panel-title', inHeader: true });
+  assert.deepEqual(late.point, { x: 170, y: 220 });
+  const never = await headerTarget(
+    fakePanelPage({ hitMisses: 9 }),
+    'street-level-panel',
+    opts,
+  );
+  assert.equal(never.timedOut, true);
+  assert.deepEqual(never.hit, {
+    target: 'section#weather-panel.panel',
+    inHeader: false,
+  });
+});
+
+test('QA_FAIL_ON_RETRY retries a miss when the panel moved right after the hit check', async () => {
+  const { liftPanelByHeader } = await import('../../scripts/qa-panelDrag.mjs');
+  const page = fakePanelPage({ presses: ['late', 'header'] });
+  const lines = [];
+  const attempt = await liftPanelByHeader(page, 'street-level-panel', {
+    dx: -400,
+    dy: 80,
+    log: (line) => lines.push(line),
+    pauseMs: 0,
+    failOnRetry: true,
+  });
+  assert.equal(attempt.done, true, 'the second press lifted it');
+  assert.equal(page.state.downs, 2);
+  // The box comes from the hit check's own layout, not a later read.
+  assert.ok(
+    lines.some((line) =>
+      /::warning title=Panel press retried::.*hit check passed at 170,220.*panel box at hit check 100,200 300x400 -> at press 100,84/.test(
+        line,
+      ),
     ),
     lines.join('\n'),
   );

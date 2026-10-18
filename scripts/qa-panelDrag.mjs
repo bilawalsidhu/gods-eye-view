@@ -45,34 +45,29 @@ export function formatBox(box) {
   return `${r(box.left)},${r(box.top)} ${r(box.width)}x${r(box.height)}`;
 }
 
-function panelBox(page, panelId) {
-  return page.evaluate((id) => {
-    const r = document.getElementById(id).getBoundingClientRect();
-    return { left: r.left, top: r.top, width: r.width, height: r.height };
-  }, panelId);
-}
-
-export function headerPoint(page, panelId) {
+/**
+ * Resolve the header point, name the element there and read the panel's box
+ * in one page task, so all three describe the same layout. Read apart, the
+ * rail could move the panel in between: the box then matched the press while
+ * the point was the old header's, and a miss the move explains looked
+ * unexplained.
+ */
+export function headerSnapshot(page, panelId) {
   return page.evaluate((id) => {
     const title = document.querySelector(`#${id} .panel-header .panel-title`);
-    const r = title.getBoundingClientRect();
-    return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+    const t = title.getBoundingClientRect();
+    const point = { x: t.left + t.width / 2, y: t.top + t.height / 2 };
+    const r = document.getElementById(id).getBoundingClientRect();
+    const box = { left: r.left, top: r.top, width: r.width, height: r.height };
+    const node = document.elementFromPoint(point.x, point.y);
+    const hit = node
+      ? {
+          target: `${node.tagName.toLowerCase()}${node.id ? `#${node.id}` : ''}.${[...node.classList].join('.')}`,
+          inHeader: Boolean(node.closest(`#${id} .panel-header`)),
+        }
+      : { target: 'nothing', inHeader: false };
+    return { point, hit, box };
   }, panelId);
-}
-
-/** Name the element at a point, and whether it is the panel's header. */
-export function hitAt(page, point, panelId) {
-  return page.evaluate(
-    ({ x, y, id }) => {
-      const node = document.elementFromPoint(x, y);
-      if (!node) return { target: 'nothing', inHeader: false };
-      return {
-        target: `${node.tagName.toLowerCase()}${node.id ? `#${node.id}` : ''}.${[...node.classList].join('.')}`,
-        inHeader: Boolean(node.closest(`#${id} .panel-header`)),
-      };
-    },
-    { ...point, id: panelId },
-  );
 }
 
 /**
@@ -84,15 +79,12 @@ export async function headerTarget(
   panelId,
   { tries = 20, intervalMs = 500 } = {},
 ) {
-  let point = await headerPoint(page, panelId);
-  let hit = await hitAt(page, point, panelId);
-  for (let i = 0; i < tries && !hit.inHeader; i++) {
+  let snapshot = await headerSnapshot(page, panelId);
+  for (let i = 0; i < tries && !snapshot.hit.inHeader; i++) {
     await delay(intervalMs);
-    point = await headerPoint(page, panelId);
-    hit = await hitAt(page, point, panelId);
+    snapshot = await headerSnapshot(page, panelId);
   }
-  const box = await panelBox(page, panelId);
-  return { point, hit, timedOut: !hit.inHeader, box };
+  return { ...snapshot, timedOut: !snapshot.hit.inHeader };
 }
 
 /**
@@ -200,10 +192,10 @@ export function describeRetry(
   attempt,
   { round, retries, extra = '' },
 ) {
-  const { hit, pressed, timedOut, still, box } = attempt;
+  const { point, hit, pressed, timedOut, still, box } = attempt;
   return [
     `retry ${round + 1}/${retries}: the press missed the ${panelId} header (on ${pressed?.target ?? hit.target})`,
-    `pre-press hit check ${timedOut ? `timed out (on ${hit.target})` : 'passed'}`,
+    `pre-press hit check ${timedOut ? `timed out (on ${hit.target})` : 'passed'} at ${Math.round(point.x)},${Math.round(point.y)}`,
     `stillness ${still === false ? 'timed out' : 'held'}`,
     `panel box at hit check ${formatBox(box)} -> at press ${formatBox(pressed)}`,
   ]
