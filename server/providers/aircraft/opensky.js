@@ -130,6 +130,8 @@ function openskyAdaptiveTtlMs(remaining) {
 let _openskyAuthWarned = false;
 /** One warning per process when OPENSKY_CREDENTIALS_FILE cannot be read. */
 let _openskyCredentialsFileWarned = false;
+/** One warning per process when OPENSKY_AUTH_MODE=basic is requested. */
+let _openskyBasicRetiredWarned = false;
 /** @type {boolean} Guards duplicate invalid-auth-mode warnings. */
 let _openskyAuthModeWarned = false;
 /** Default auth mode when OPENSKY_AUTH_MODE env is unset. */
@@ -452,8 +454,10 @@ function openSkySourceIsStale(sourceEpochMs, now = Date.now()) {
  *
  * Supports four auth modes controlled by OPENSKY_AUTH_MODE env:
  *   - 'oauth'  (default) — client_credentials bearer token
- *   - 'basic'  — HTTP Basic with OPENSKY_USERNAME / OPENSKY_PASSWORD
- *   - 'auto'   — try OAuth first, fall back to Basic, then anon
+ *   - 'basic'  — retired: OpenSky stopped accepting HTTP Basic (username and
+ *                password) on 2026-03-18, so this requests anonymously and
+ *                warns once
+ *   - 'auto'   — try OAuth first, then anon
  *   - 'anon'   — no credentials
  *
  * Successful responses are cached for OPENSKY_CACHE_MS (~9 s). On
@@ -550,21 +554,21 @@ export function openSkyProxy() {
           return;
         }
 
-        const basicUser = process.env.OPENSKY_USERNAME || '';
-        const basicPass = process.env.OPENSKY_PASSWORD || '';
-        const hasBasicCreds = Boolean(basicUser && basicPass);
         const headers = { Accept: 'application/json' };
         let usedMode = 'anon';
         let reason = 'forced_anonymous';
 
         if (requestedMode === 'basic') {
-          if (hasBasicCreds) {
-            headers.Authorization = `Basic ${Buffer.from(`${basicUser}:${basicPass}`).toString('base64')}`;
-            usedMode = 'basic';
-            reason = 'basic_credentials';
-          } else {
-            reason = 'missing_basic_creds';
+          // OpenSky no longer accepts a Basic header, so sending
+          // OPENSKY_USERNAME / OPENSKY_PASSWORD would only fail; ask
+          // anonymously and say once what to configure instead.
+          if (!_openskyBasicRetiredWarned) {
+            console.warn(
+              '[OpenSky] OPENSKY_AUTH_MODE=basic: OpenSky retired username/password sign-in on 2026-03-18, so flights load anonymously (rate-limited). Use OAuth client credentials: OPENSKY_CLIENT_ID and OPENSKY_CLIENT_SECRET, or OPENSKY_CREDENTIALS_FILE.',
+            );
+            _openskyBasicRetiredWarned = true;
           }
+          reason = 'basic_retired';
         } else if (requestedMode === 'oauth') {
           const token = await getOpenSkyToken();
           if (token) {
@@ -580,31 +584,12 @@ export function openSkyProxy() {
             headers.Authorization = `Bearer ${token}`;
             usedMode = 'oauth';
             reason = 'oauth_token';
-          } else if (hasBasicCreds) {
-            headers.Authorization = `Basic ${Buffer.from(`${basicUser}:${basicPass}`).toString('base64')}`;
-            usedMode = 'basic';
-            reason = 'oauth_unavailable_fallback_basic';
           } else {
-            reason = 'missing_oauth_and_basic_creds';
+            reason = 'missing_oauth_creds';
           }
         }
 
         let { upstream, body } = await fetchOpenSkyStates(headers);
-        // Auto-mode fallback: if OAuth was rejected, retry with Basic credentials
-        if (
-          (upstream.status === 401 || upstream.status === 403) &&
-          requestedMode === 'auto' &&
-          usedMode === 'oauth' &&
-          hasBasicCreds
-        ) {
-          const retryHeaders = {
-            Accept: 'application/json',
-            Authorization: `Basic ${Buffer.from(`${basicUser}:${basicPass}`).toString('base64')}`,
-          };
-          ({ upstream, body } = await fetchOpenSkyStates(retryHeaders));
-          usedMode = 'basic';
-          reason = 'oauth_rejected_fallback_basic';
-        }
 
         const sourceEpochMs = upstream.ok ? openSkySourceEpochMs(body) : null;
         if (
@@ -661,35 +646,24 @@ export function openSkyProxy() {
         }
 
         if (upstream.status === 401 || upstream.status === 403) {
-          if (requestedMode === 'basic' && !hasBasicCreds) {
-            body = JSON.stringify({
-              error:
-                'OpenSky auth missing. Basic mode requires OPENSKY_USERNAME and OPENSKY_PASSWORD.',
-            });
-            reason = 'missing_basic_creds';
-          } else if (requestedMode === 'oauth' && usedMode !== 'oauth') {
+          if (requestedMode === 'oauth' && usedMode !== 'oauth') {
             body = JSON.stringify({
               error:
                 'OpenSky auth invalid. OAuth mode requires valid OPENSKY_CLIENT_ID and OPENSKY_CLIENT_SECRET, or OPENSKY_CREDENTIALS_FILE.',
             });
             reason = 'oauth_invalid_or_missing';
-          } else if (usedMode === 'basic') {
-            body = JSON.stringify({
-              error: 'OpenSky auth invalid. Username/password were rejected.',
-            });
-            reason = 'basic_invalid_credentials';
           } else if (usedMode === 'oauth') {
             body = JSON.stringify({
               error:
                 'OpenSky auth invalid. OAuth client credentials were rejected.',
             });
             reason = 'oauth_invalid_credentials';
-          } else if (requestedMode === 'auto' && !hasBasicCreds) {
+          } else if (requestedMode === 'auto') {
             body = JSON.stringify({
               error:
-                'OpenSky auth missing. Provide basic credentials or valid OAuth client credentials.',
+                'OpenSky auth missing. Provide OAuth client credentials: OPENSKY_CLIENT_ID and OPENSKY_CLIENT_SECRET, or OPENSKY_CREDENTIALS_FILE.',
             });
-            reason = 'missing_oauth_and_basic_creds';
+            reason = 'missing_oauth_creds';
           } else {
             body = JSON.stringify({
               error: 'OpenSky auth required.',
@@ -701,12 +675,6 @@ export function openSkyProxy() {
         // Refine the reason string to reflect the actual outcome
         if (upstream.ok && reason === 'forced_anonymous') {
           reason = 'anonymous_ok';
-        } else if (
-          upstream.ok &&
-          usedMode === 'basic' &&
-          reason === 'basic_credentials'
-        ) {
-          reason = 'basic_ok';
         } else if (
           upstream.ok &&
           usedMode === 'oauth' &&

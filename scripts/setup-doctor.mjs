@@ -164,7 +164,7 @@ export function buildCapabilitySummary(
   const flights = openSkyMode === 'anon'
     ? 'OpenSky keyless anonymous access (rate-limited)'
     : openSkyMode === 'basic'
-      ? 'OpenSky Basic mode selected (credential presence and validity not verified)'
+      ? 'OpenSky Basic mode selected: OpenSky retired username/password sign-in, so flights load anonymously (rate-limited)'
       : openSkyMode === 'auto'
         ? 'OpenSky auto mode selected (runtime credential choice and validity not verified)'
         : hasOAuthCredentials

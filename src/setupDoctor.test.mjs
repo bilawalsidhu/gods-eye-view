@@ -237,7 +237,7 @@ test('doctor retains OAuth capability wording for a complete client pair', () =>
   );
 });
 
-test('doctor reports Basic mode without inferring runtime auth from OAuth credentials', () => {
+test('doctor reports retired Basic mode as anonymous, whatever OAuth credentials exist', () => {
   const oauthCredentials = {
     OPENSKY_CLIENT_ID: { configured: true },
     OPENSKY_CLIENT_SECRET: { configured: true },
@@ -245,7 +245,7 @@ test('doctor reports Basic mode without inferring runtime auth from OAuth creden
   for (const credentials of [{}, oauthCredentials]) {
     assert.equal(
       buildCapabilitySummary(credentials, { openSkyAuthMode: 'basic' }).flights,
-      'OpenSky Basic mode selected (credential presence and validity not verified)',
+      'OpenSky Basic mode selected: OpenSky retired username/password sign-in, so flights load anonymously (rate-limited)',
     );
   }
 });
