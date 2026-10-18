@@ -269,20 +269,105 @@ test('tracing hands the frame back mid-line and draws the same lines', async () 
     clock: () => (now += 1),
     sliceMs: 4,
   });
-  assert.ok(pauses > seeds.length, `paused ${pauses} times for ${seeds.length} lines`);
+  assert.ok(
+    pauses > seeds.length,
+    `paused ${pauses} times for ${seeds.length} lines`,
+  );
   assert.deepEqual(sliced, unsliced);
 });
 
 test('an abort during a slice pause stops the trace', async () => {
   const controller = new AbortController();
-  const lines = await traceFilaments(coefficientsFor(2026.5), fieldLineSeeds(1), {
-    signal: controller.signal,
-    yieldTo: async () => controller.abort(),
-    clock: (() => {
-      let now = 0;
-      return () => (now += 10);
-    })(),
-    sliceMs: 1,
-  });
+  const lines = await traceFilaments(
+    coefficientsFor(2026.5),
+    fieldLineSeeds(1),
+    {
+      signal: controller.signal,
+      yieldTo: async () => controller.abort(),
+      clock: (() => {
+        let now = 0;
+        return () => (now += 10);
+      })(),
+      sliceMs: 1,
+    },
+  );
   assert.equal(lines.length, 0);
+});
+
+test('the default yield uses a real MessageChannel task and closes both ports without timers', async (t) => {
+  const Channel = globalThis.MessageChannel;
+  let posts = 0;
+  let deliveries = 0;
+  let closes = 0;
+  t.after(() => {
+    globalThis.MessageChannel = Channel;
+  });
+  globalThis.MessageChannel = class extends Channel {
+    constructor() {
+      super();
+      this.port1.addEventListener('message', () => {
+        deliveries += 1;
+      });
+      const post = this.port2.postMessage.bind(this.port2);
+      this.port2.postMessage = (...args) => {
+        posts += 1;
+        return post(...args);
+      };
+      for (const port of [this.port1, this.port2]) {
+        const close = port.close.bind(port);
+        port.close = () => {
+          closes += 1;
+          close();
+        };
+      }
+    }
+  };
+  t.mock.method(globalThis, 'setTimeout', () => {
+    throw new Error(
+      'default yield must not use a timer when MessageChannel exists',
+    );
+  });
+  const coefficients = coefficientsFor(2026.5);
+  const seeds = fieldLineSeeds(1).slice(0, 1);
+  const unsliced = await traceFilaments(coefficients, seeds, {
+    sliceMs: Infinity,
+  });
+  let now = 0;
+  const sliced = await traceFilaments(coefficients, seeds, {
+    clock: () => (now += 8),
+  });
+  assert.ok(posts > 1, 'must actually cross multiple task boundaries');
+  assert.equal(deliveries, posts, 'each pause awaits a real message event');
+  assert.equal(closes, posts * 2, 'no channel ports remain open after tracing');
+  assert.deepEqual(sliced, unsliced);
+});
+
+test('the default yield falls back to a zero-delay timer without MessageChannel and observes abort', async (t) => {
+  const Channel = globalThis.MessageChannel;
+  const timer = globalThis.setTimeout;
+  t.after(() => {
+    globalThis.MessageChannel = Channel;
+  });
+  globalThis.MessageChannel = undefined;
+  const controller = new AbortController();
+  let pauses = 0;
+  t.mock.method(globalThis, 'setTimeout', (resume, delay) => {
+    assert.equal(delay, 0);
+    pauses += 1;
+    return timer(() => {
+      controller.abort();
+      resume();
+    }, delay);
+  });
+  let now = 0;
+  const lines = await traceFilaments(
+    coefficientsFor(2026.5),
+    fieldLineSeeds(1),
+    {
+      signal: controller.signal,
+      clock: () => (now += 8),
+    },
+  );
+  assert.equal(pauses, 1);
+  assert.deepEqual(lines, []);
 });
