@@ -199,6 +199,7 @@
     .cctv-panel-inner,
     .weather-panel-inner,
     .recent-imagery-panel-inner,
+    .gravity-panel-inner,
     .street-level-panel-inner,
     .scene-panel-inner,
     .utilities-panel-inner,
@@ -221,6 +222,7 @@
     .cctv-panel-inner,
     .weather-panel-inner,
     .recent-imagery-panel-inner,
+    .gravity-panel-inner,
     .street-level-panel-inner,
     .scene-panel-inner,
     .utilities-panel-inner,
@@ -244,6 +246,7 @@
     .cctv-panel-inner,
     .weather-panel-inner,
     .recent-imagery-panel-inner,
+    .gravity-panel-inner,
     .street-level-panel-inner,
     .global-context-panel-inner
   ) {
@@ -259,6 +262,7 @@
     #cctv-panel,
     #weather-panel,
     #recent-imagery-panel,
+    #gravity-panel,
     #street-level-panel,
     #global-context-panel
   ).collapsed
@@ -266,6 +270,7 @@
     .cctv-panel-inner,
     .weather-panel-inner,
     .recent-imagery-panel-inner,
+    .gravity-panel-inner,
     .street-level-panel-inner,
     .global-context-panel-inner
   ) {
@@ -278,6 +283,7 @@
     #cctv-panel,
     #weather-panel,
     #recent-imagery-panel,
+    #gravity-panel,
     #street-level-panel,
     #global-context-panel
   ).collapsed
@@ -285,6 +291,7 @@
     .cctv-panel-inner,
     .weather-panel-inner,
     .recent-imagery-panel-inner,
+    .gravity-panel-inner,
     .street-level-panel-inner,
     .global-context-panel-inner
   )
@@ -304,6 +311,7 @@
     .cctv-panel-inner,
     .weather-panel-inner,
     .recent-imagery-panel-inner,
+    .gravity-panel-inner,
     .street-level-panel-inner,
     .scene-panel-inner,
     .utilities-panel-inner,
@@ -321,6 +329,7 @@
     .cctv-panel-inner,
     .weather-panel-inner,
     .recent-imagery-panel-inner,
+    .gravity-panel-inner,
     .street-level-panel-inner,
     .scene-panel-inner,
     .utilities-panel-inner,
@@ -346,6 +355,7 @@
     .cctv-panel-inner,
     .weather-panel-inner,
     .recent-imagery-panel-inner,
+    .gravity-panel-inner,
     .street-level-panel-inner,
     .scene-panel-inner,
     .utilities-panel-inner,
@@ -1790,6 +1800,7 @@
       #cctv-panel,
       #weather-panel,
       #recent-imagery-panel,
+      #gravity-panel,
       #street-level-panel,
       #global-context-panel
     ):not(.collapsed) {

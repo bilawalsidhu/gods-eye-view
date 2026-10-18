@@ -96,6 +96,7 @@ export class PanelLayoutController {
     this._cctvPanel = document.getElementById('cctv-panel');
     this._weatherPanel = document.getElementById('weather-panel');
     this._recentImageryPanel = document.getElementById('recent-imagery-panel');
+    this._gravityPanel = document.getElementById('gravity-panel');
     this._streetLevelPanel = document.getElementById('street-level-panel');
   }
   _scheduleAdaptivePanelLayout({ settle = false } = {}) {
@@ -192,6 +193,7 @@ export class PanelLayoutController {
       this._cctvPanel,
       this._weatherPanel,
       this._recentImageryPanel,
+      this._gravityPanel,
       this._streetLevelPanel,
     ]) {
       if (!panel) continue;
@@ -207,6 +209,7 @@ export class PanelLayoutController {
         this._cctvPanel,
         this._weatherPanel,
         this._recentImageryPanel,
+        this._gravityPanel,
         this._streetLevelPanel,
         globalContextPanel,
         document.getElementById('radio-panel'),
