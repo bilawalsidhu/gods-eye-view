@@ -73,8 +73,9 @@ export const NO_COVERAGE_HINT = msg('no Vegbilder photos in view');
 export const RATE_LIMITED_MESSAGE = msg(
   'Statens vegvesen is limiting requests — they resume on their own',
 );
-export const COVERAGE_NOUN = 'road stretches';
-export const LINE_CLICK_HINT = 'click a road for its nearest photo';
+// KartaView's wording: the panel has a translated count line for it.
+export const COVERAGE_NOUN = 'streets';
+export const LINE_CLICK_HINT = 'click a line for its nearest photo';
 export const MISSING_FILE_MESSAGE = msg(
   'Statens vegvesen has no file for this photo',
 );

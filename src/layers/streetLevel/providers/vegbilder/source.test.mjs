@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { createVegbilderSource } from './source.js';
+import { createVegbilderSource, readBoundedText } from './source.js';
 import { RATE_LIMITED_MESSAGE, VEGBILDER_WFS } from './policy.js';
 
 function response(body, { status = 200, headers = {} } = {}) {
@@ -173,4 +173,31 @@ test('at most four requests run at once; an aborted one rejects without asking',
     }),
     { name: 'AbortError' },
   );
+});
+
+test('an oversized Vegbilder answer is cut off while it is read', async () => {
+  let pulled = 0;
+  const chunk = new Uint8Array(1024).fill(0x61);
+  const endless = new ReadableStream({
+    pull(controller) {
+      pulled++;
+      controller.enqueue(chunk);
+    },
+  });
+  await assert.rejects(
+    readBoundedText(new Response(endless), 4096),
+    /oversized/,
+  );
+  assert.ok(pulled <= 6, `read ${pulled} chunks of an endless body`);
+  // A declared length past the limit is refused before reading.
+  const declared = new Response('x', {
+    headers: { 'Content-Length': '999999' },
+  });
+  await assert.rejects(readBoundedText(declared, 4096), /oversized/);
+  // Bytes, not characters: 2,000 'ø' are 4,000 bytes.
+  await assert.rejects(
+    readBoundedText(new Response('ø'.repeat(2000)), 3999),
+    /oversized/,
+  );
+  assert.equal(await readBoundedText(new Response('{"a":1}'), 4096), '{"a":1}');
 });

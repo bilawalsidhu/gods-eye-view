@@ -3748,8 +3748,9 @@ come from two hosts (`s3vegbilder.atlas.vegvesen.no`, and
 `s3-oslo.osys.vegvesen.no` for newer drives); any other address is dropped. A
 flat photo shows in an <img>; a 360° photo (8,192 × 4,096) is decoded into a
 4,096-wide bitmap for KartaView's WebGL panorama renderer, and its 2,520 px
-front view (`URLPREVIEW`) stands in if it fails. The viewer reuses
-KartaView's viewer styles in Vegvesen orange (`.sl-vb-viewer`). The caption
+front view (`URLPREVIEW`) stands in if it fails. The viewer uses the shared
+photo-viewer styles (`.sl-photo-viewer[data-provider='vegbilder']`) in
+Vegbilder pink (`#ec4899`). The caption
 reads the road ("Rv. 162") and links to the photo itself, since Vegvesen's
 map takes no photo id.
 

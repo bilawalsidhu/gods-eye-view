@@ -8,6 +8,37 @@ import {
   layerOfId,
 } from './policy.js';
 
+/**
+ * The body as text, refused once it passes `maxBytes`: a declared length is
+ * checked first, and the stream is read in chunks so an oversized answer is
+ * cut off rather than downloaded whole.
+ */
+export async function readBoundedText(response, maxBytes) {
+  const oversized = () => new Error('Vegbilder sent an oversized answer');
+  const declared = Number(response.headers?.get?.('Content-Length'));
+  if (Number.isFinite(declared) && declared > maxBytes) throw oversized();
+  const reader = response.body?.getReader?.();
+  if (!reader) {
+    const text = await response.text();
+    if (new TextEncoder().encode(text).length > maxBytes) throw oversized();
+    return text;
+  }
+  const decoder = new TextDecoder();
+  let total = 0;
+  let text = '';
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    total += value.byteLength;
+    if (total > maxBytes) {
+      await reader.cancel().catch(() => {});
+      throw oversized();
+    }
+    text += decoder.decode(value, { stream: true });
+  }
+  return text + decoder.decode();
+}
+
 /** The fields a coverage line or a drive needs (the signed photo addresses are long). */
 const LINE_FIELDS = [
   'POSISJON',
@@ -106,9 +137,7 @@ export function createVegbilderSource({
             Number(response.headers?.get?.('Retry-After')) || 10;
           throw error;
         }
-        const text = await response.text();
-        if (text.length > MAX_RESPONSE_BYTES)
-          throw new Error('Vegbilder sent an oversized answer');
+        const text = await readBoundedText(response, MAX_RESPONSE_BYTES);
         // GeoServer answers an unknown feature type (next year's, before the
         // first photo) with an exception report rather than an empty list.
         if (!response.ok || text.trimStart().startsWith('<')) {
