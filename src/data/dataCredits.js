@@ -444,6 +444,27 @@ export const DATA_CREDITS = [
       '<a href="https://www.submarinecablemap.com" target="_blank" rel="noopener">submarinecablemap.com</a> ' +
       '(CC BY-NC-SA 3.0 — NonCommercial)',
   },
+  {
+    key: 'gebco',
+    html:
+      'Global bathymetry &amp; seafloor relief: ' +
+      '<a href="https://www.gebco.net" target="_blank" rel="noopener">GEBCO — General Bathymetric Chart of the Oceans</a> ' +
+      '(IHO-IOC GEBCO Grid / WMS)',
+  },
+  {
+    key: 'noaa-pmel-vents',
+    html:
+      'Global hydrothermal vent locations &amp; activity: ' +
+      '<a href="https://www.pmel.noaa.gov/eoi/PlumeStudies/global-vents/" target="_blank" rel="noopener">NOAA PMEL Earth-Ocean Interactions Program</a> ' +
+      '(public domain / US Government work)',
+  },
+  {
+    key: 'noaa-ocean-exploration',
+    html:
+      'Deep-sea ROV dives, tracks &amp; expedition archives: ' +
+      '<a href="https://oceanexplorer.noaa.gov/" target="_blank" rel="noopener">NOAA Ocean Exploration</a> ' +
+      '— ROV Deep Discoverer / NOAA Ship Okeanos Explorer (public domain)',
+  },
 ];
 
 /**

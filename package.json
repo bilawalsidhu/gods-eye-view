@@ -54,6 +54,7 @@
     "qa:street-level:fixtures": "node scripts/qa-street-level.mjs --fixtures",
     "check:boundaries": "node scripts/check-import-directions.mjs && node scripts/check-package-boundaries.mjs",
     "qa:transit": "node scripts/qa-transit.mjs",
+    "qa:abyss": "node scripts/qa-abyss.mjs",
     "mcp": "node server/mcp/stdio.js"
   },
   "dependencies": {
