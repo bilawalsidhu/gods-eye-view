@@ -1897,6 +1897,8 @@ async function main() {
     // ============================================================
     console.log('\nChange 2b — tracked readout STALE cue during missed-poll grace');
     const staleCheck = await evalPage(async () => {
+      const { t } = await import(`${window.__gevQaSourceBase || '/src'}/i18n/index.js`);
+      const staleCue = t('STALE');
       const v = window.__godsEyeView.viewer;
       const fl = window.__godsEyeView.dataManager.layers.get('flights').module;
       const labelText = () => {
@@ -1925,14 +1927,14 @@ async function main() {
       await fl.update(v); // plane back → label rebuilt without the cue
       const recoveredLabel = labelText();
       fl.stopTracking(); // leave nothing tracked
-      return { freshLabel, staleLabel, recoveredLabel };
+      return { freshLabel, staleLabel, recoveredLabel, staleCue };
     });
     record('stale-readout: tracked label carries STALE cue during grace',
-      !!staleCheck.staleLabel && staleCheck.staleLabel.includes('STALE')
-        && !!staleCheck.freshLabel && !staleCheck.freshLabel.includes('STALE'),
+      !!staleCheck.staleLabel && staleCheck.staleLabel.includes(staleCheck.staleCue)
+        && !!staleCheck.freshLabel && !staleCheck.freshLabel.includes(staleCheck.staleCue),
       `fresh="${staleCheck.freshLabel && staleCheck.freshLabel.split('\n')[0]}" stale="${staleCheck.staleLabel && staleCheck.staleLabel.split('\n')[0]}"`);
     record('stale-readout: STALE cue clears when the plane reappears',
-      !!staleCheck.recoveredLabel && !staleCheck.recoveredLabel.includes('STALE'),
+      !!staleCheck.recoveredLabel && !staleCheck.recoveredLabel.includes(staleCheck.staleCue),
       `recovered="${staleCheck.recoveredLabel && staleCheck.recoveredLabel.split('\n')[0]}"`);
 
     // ============================================================
