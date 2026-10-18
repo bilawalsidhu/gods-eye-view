@@ -1,5 +1,3 @@
-import { makeRateLimiter } from '../common/rate-limit.js';
-
 // ---------------------------------------------------------------------------
 // Street View fallback admission
 // ---------------------------------------------------------------------------
@@ -7,38 +5,11 @@ import { makeRateLimiter } from '../common/rate-limit.js';
 // SVG. Only the middle step leaves the machine on a metered account: Street
 // View Static bills the operator's own Google key per image. Everything else
 // this proxy does is free, so this is the one branch where an unauthenticated
-// request costs the operator money, and it is the branch that decides who is
-// allowed to spend it.
-
-/** Fixed window for the Street View admission counter. */
-export const STREET_VIEW_WINDOW_MS = 60_000;
-
-/**
- * Per-IP Street View lookups per minute.
- *
- * Sized from what the layer itself asks for rather than from a round number:
- * the ambient card drain is capped at 16 cameras (CCTV_AMBIENT_CARD_DRAIN_CAP)
- * and an active card re-requests its frame every ACTIVE_FRAME_REFRESH_MS
- * (10s), so a viewer whose cameras have all lost their upstreams sits at
- * 16 x 6 = 96 fallback frames per minute. That is the honest worst case for
- * one person using the layer as designed, which is why the shared 90/min used
- * by the Overpass-backed routes would cut into normal use here. 240 leaves
- * that case 2.5x of headroom while still refusing the unbounded loop the
- * route accepted before.
- */
-export const STREET_VIEW_MAX_PER_IP = 240;
-
-/** Aggregate backstop so one host cannot spend the whole key by itself. */
-export const STREET_VIEW_GLOBAL_MAX = 720;
-
-/** Build the per-IP Street View admission gate. */
-export function makeStreetViewRateLimiter() {
-  return makeRateLimiter({
-    windowMs: STREET_VIEW_WINDOW_MS,
-    max: STREET_VIEW_MAX_PER_IP,
-    globalMax: STREET_VIEW_GLOBAL_MAX,
-  });
-}
+// request costs the operator money. It is admitted by the same per-IP Google
+// budget as the Places and geocoding routes (`googleRateLimiter` in
+// `places/google-key.js`, GEV_RATELIMIT_GOOGLE_PER_MIN), because it spends the
+// same key; this module decides what a lookup may be aimed at and caches what
+// it bought.
 
 /**
  * Wrap a bearing into [0, 360).

@@ -20,13 +20,12 @@ import { sanitizeCctvRangeHeader } from './cctv/range.js';
 import { createHlsPuller } from './cctv/stream.js';
 import {
   createStreetViewFrameCache,
-  makeStreetViewRateLimiter,
   resolveStreetViewTarget,
   streetViewCacheKey,
   streetViewPose,
 } from './cctv/streetview.js';
 import { clientKey } from './common/rate-limit.js';
-import { googleServerApiKey } from './places/google-key.js';
+import { googleRateLimiter, googleServerApiKey } from './places/google-key.js';
 export { CCTV_FRAME_FETCH_TIMEOUT_MS, fetchCctvImageFromUpstream };
 /**
  * Vite plugin: CCTV camera proxy with source registry, frame/media serving,
@@ -43,9 +42,8 @@ export { CCTV_FRAME_FETCH_TIMEOUT_MS, fetchCctvImageFromUpstream };
  */
 export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
   const getCctvSources = createCctvCatalog({ sourceRoot });
-  // Held per plugin instance rather than per module so the window belongs to
+  // Held per plugin instance rather than per module so the frames belong to
   // the server that is actually serving, the way the catalog above does.
-  const allowStreetView = makeStreetViewRateLimiter();
   const streetViewFrames = createStreetViewFrameCache();
   /** @type {Map<string,{id:string,status:string,sourceKind:string,label:string,message:string,updatedAt:number}>} */
   const health = new Map();
@@ -533,27 +531,31 @@ export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
 
         // Street View is the only metered step in this chain, so a frame
         // reaches it for a camera the catalog actually serves, at the pose
-        // that catalog recorded, and only within the per-IP window. A refusal
-        // is not something the viewer can act on, and the synthetic card
+        // that catalog recorded, and only within the per-IP Google budget it
+        // shares with the Places and geocoding routes. A refusal is not
+        // something the viewer can act on, and the synthetic card
         // below is already this route's answer for "no frame available", so a
         // refused lookup takes that same exit rather than breaking the <img>
         // element with a 429 the page has no way to render.
         //
         // A frame already bought for this exact camera and pose is served
-        // from memory first, before the window is consulted: the 10 s card
-        // refresh would otherwise buy the same still every time, and a cached
-        // answer costs nothing, so it does not spend the viewer's allowance.
+        // from memory first, before the Google budget is consulted: the 10 s
+        // card refresh would otherwise buy the same still every time, and a
+        // cached answer costs nothing, so it does not spend the viewer's
+        // allowance.
         //
         // Both wait on a configured key: removing the key is how an operator
         // turns Street View off, so it switches off the cached frames too,
-        // and a keyless request has nothing to spend the window on.
+        // and a keyless request has nothing to spend that budget on.
         const streetViewTarget = resolveStreetViewTarget(source);
         let sv = null;
         if (streetViewTarget && googleServerApiKey()) {
           const pose = streetViewPose({ heading, fov, pitch });
           const cacheKey = streetViewCacheKey(cameraId, streetViewTarget, pose);
           sv = streetViewFrames.get(cacheKey);
-          if (!sv && allowStreetView(clientKey(req))) {
+          // Null only for the explicit GEV_RATELIMIT_GOOGLE_PER_MIN=0 opt-out.
+          const allowGoogle = googleRateLimiter();
+          if (!sv && (!allowGoogle || allowGoogle(clientKey(req)))) {
             sv = await streetViewFallback({ ...streetViewTarget, ...pose });
             if (sv?.ok) streetViewFrames.set(cacheKey, sv);
           }

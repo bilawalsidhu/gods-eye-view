@@ -557,6 +557,7 @@
   "src/data/cctvTxdotSource.test.mjs",
   "src/data/cctvStreetViewQuota.test.mjs",
   "src/data/cctvStreetViewRoute.test.mjs",
+  "src/data/cctvStreetViewGoogleBudget.test.mjs",
   "src/layers/cctv/source.test.mjs",
   "src/data/alprCameras.js",
   "src/data/alprCameras.test.mjs",

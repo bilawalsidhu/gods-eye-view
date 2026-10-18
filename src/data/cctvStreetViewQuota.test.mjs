@@ -3,15 +3,13 @@ import assert from 'node:assert/strict';
 import {
   STREET_VIEW_CACHE_MAX_ENTRIES,
   STREET_VIEW_CACHE_MS,
-  STREET_VIEW_GLOBAL_MAX,
-  STREET_VIEW_MAX_PER_IP,
   createStreetViewFrameCache,
-  makeStreetViewRateLimiter,
   normalizeHeadingDeg,
   resolveStreetViewTarget,
   streetViewCacheKey,
   streetViewPose,
 } from '../../server/providers/cctv/streetview.js';
+import { GOOGLE_DEFAULT_PER_MIN } from '../../server/providers/places/google-key.js';
 
 test('an unregistered camera id cannot spend a Street View lookup', () => {
   assert.equal(resolveStreetViewTarget(undefined), null);
@@ -72,50 +70,18 @@ test('an unreadable bearing becomes due north rather than reaching Google', () =
   }
 });
 
-test('the per-IP window admits the layer’s own worst case and then refuses', () => {
-  const allow = makeStreetViewRateLimiter();
-  for (let i = 0; i < STREET_VIEW_MAX_PER_IP; i += 1) {
-    assert.equal(allow('10.0.0.1'), true, `lookup ${i + 1} should be admitted`);
-  }
-  assert.equal(
-    allow('10.0.0.1'),
-    false,
-    'the lookup past the per-IP cap must be refused',
-  );
-});
-
-test('the per-IP cap clears the demand the CCTV layer actually generates', () => {
+test('the shared Google budget clears the demand the CCTV layer generates', () => {
   // 16 ambient cards (CCTV_AMBIENT_CARD_DRAIN_CAP) refreshing every 10s
   // (ACTIVE_FRAME_REFRESH_MS) is 96 fallback frames a minute for one viewer
-  // using the layer as designed. A cap at or under that would throttle normal
-  // use, which is the failure mode that keeps rate limits out of a codebase.
-  const worstLegitimatePerMinute = 16 * (60_000 / 10_000);
-  assert.equal(worstLegitimatePerMinute, 96);
-  assert.ok(
-    STREET_VIEW_MAX_PER_IP > worstLegitimatePerMinute,
-    'per-IP cap must sit above the layer’s own steady-state demand',
-  );
-});
-
-test('one host cannot drain the key past the global backstop', () => {
-  const allow = makeStreetViewRateLimiter();
-  let admitted = 0;
-  // Rotate the key so the per-IP window is never the thing doing the refusing.
-  for (let i = 0; i < STREET_VIEW_GLOBAL_MAX + 50; i += 1) {
-    if (allow(`10.0.${Math.floor(i / 200)}.${i % 200}`)) admitted += 1;
-  }
-  assert.equal(admitted, STREET_VIEW_GLOBAL_MAX);
-});
-
-test('a refused caller does not consume another caller’s quota', () => {
-  const allow = makeStreetViewRateLimiter();
-  for (let i = 0; i < STREET_VIEW_MAX_PER_IP; i += 1) allow('10.0.0.1');
-  assert.equal(allow('10.0.0.1'), false);
-  assert.equal(
-    allow('10.0.0.2'),
-    true,
-    'a second viewer must still be served while the first is capped',
-  );
+  // whose cameras have all lost their upstreams. With the frame cache only the
+  // first refresh of each pose is a lookup, so the steady state is 16 lookups
+  // per cache lifetime. Either figure must sit under the default Google cap,
+  // or normal use of the layer would starve Places search on the same budget.
+  const uncachedPerMinute = 16 * (60_000 / 10_000);
+  const cachedPerMinute = 16 * (60_000 / STREET_VIEW_CACHE_MS);
+  assert.equal(uncachedPerMinute, 96);
+  assert.ok(uncachedPerMinute < GOOGLE_DEFAULT_PER_MIN);
+  assert.ok(cachedPerMinute <= 4, `${cachedPerMinute} lookups/min`);
 });
 
 test('the pose sent to Google is clamped and wrapped, with the route defaults', () => {

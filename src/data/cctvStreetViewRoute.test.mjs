@@ -8,7 +8,11 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { cctvProxy } from '../../server/providers/cctv.js';
-import { STREET_VIEW_MAX_PER_IP } from '../../server/providers/cctv/streetview.js';
+import { GOOGLE_DEFAULT_PER_MIN } from '../../server/providers/places/google-key.js';
+
+// The Google budget is built once per process on first use; pin the default
+// so a value exported in the shell cannot change what these tests measure.
+delete process.env.GEV_RATELIMIT_GOOGLE_PER_MIN;
 
 // No snapshot and no still URL, so every frame request reaches Street View.
 const CAMERA = {
@@ -155,10 +159,10 @@ test('the bearing the browser rounds up to 360 is sent to Google as 0', async (t
 test('a card refresh at the same pose is served from cache, not bought again', async (t) => {
   const app = mount(t);
   // Each 10 s refresh carries a new `ts`; the picture it asks for does not
-  // change. Run past the per-client window: a cached answer must not count
-  // against it, or a viewer on the fallback would be cut off by their own
+  // change. Run past the per-client Google budget: a cached answer must not
+  // count against it, or a viewer on the fallback would be cut off by their own
   // card refreshing.
-  for (let ts = 0; ts <= STREET_VIEW_MAX_PER_IP + 5; ts += 1) {
+  for (let ts = 0; ts <= GOOGLE_DEFAULT_PER_MIN + 5; ts += 1) {
     const res = await app.frame(`/frame/${CAMERA.id}?heading=90&ts=${ts}`);
     assert.equal(res.headers['X-CCTV-Source'], 'streetview', `refresh ${ts}`);
     assert.equal(res.body.toString(), 'jpeg-bytes');

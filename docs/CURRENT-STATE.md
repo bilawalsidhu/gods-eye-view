@@ -1241,8 +1241,8 @@ their `configured: false` response.
 
 The cost-bearing proxies are throttled per client IP without configuration:
 `/api/realtime/token` and `/api/openai/hud-summary` share 30 requests per
-minute per IP, `/api/google/nearby-places` and `/api/google/text-search` share
-120 — the caps the Pinokio build already sets, so the packaged app is
+minute per IP, `/api/google/nearby-places`, `/api/google/text-search`, the
+geocoding routes and the CCTV Street View fallback share 120 — the caps the Pinokio build already sets, so the packaged app is
 unaffected. `GEV_RATELIMIT_OPENAI_PER_MIN` and `GEV_RATELIMIT_GOOGLE_PER_MIN` override
 those; exactly `0` disables the limiter, while a value that cannot be read as a
 number falls back to the default rather than to unlimited. Over-limit requests
@@ -1263,20 +1263,22 @@ camera is refused there with a JSON 404 and is served solely through
 `/api/cctv/frame` and its same-origin, `image/*`-only, size-capped fetch.
 
 The Street View step of the CCTV frame fallback is the only metered call in that
-chain, so it is bounded separately. A frame reaches Street View only for a camera
-the catalog serves, and only at that camera's registered latitude and longitude:
-`lat` and `lon` on the query string are still sent by the browser but are no
-longer read. A pose that is absent, non-numeric or off-globe is refused before
-the request is made, heading wraps into `[0, 360)` beside the existing fov and
-pitch clamps, and admission is capped at 240 lookups per minute per client with a
-720 aggregate backstop, sized above the 16-card ambient drain refreshing every 10
-seconds. A frame Google returned is kept in memory for 5 minutes, keyed on the
-camera and the pose actually sent, at most 64 frames, oldest evicted first; a
-card refreshing at the same pose is answered from that cache without a lookup
-and without counting against the window, and nothing is written to disk. A
-refused lookup returns the existing synthetic card rather than an error status,
-so frame delivery for registered cameras and the upstream and synthetic steps
-are unchanged.
+chain, so it is bounded before the request is made. A frame reaches Street View
+only for a camera the catalog serves, and only at that camera's registered
+latitude and longitude: `lat` and `lon` on the query string are still sent by the
+browser but are no longer read. A pose that is absent, non-numeric or off-globe
+is refused, and heading wraps into `[0, 360)` beside the existing fov and pitch
+clamps. A lookup is admitted by the same per-IP Google budget as Places and
+geocoding (`GEV_RATELIMIT_GOOGLE_PER_MIN`, default 120, `0` to disable), since it
+bills the same key. A frame Google returned is kept in memory for 5 minutes,
+keyed on the camera and the pose actually sent, at most 64 frames with the oldest
+evicted first, and is never written to disk; a card refreshing at the same pose
+is answered from that cache without a lookup and without counting against the
+budget. Even uncached, the 16-card ambient drain refreshing every 10 seconds is 96
+lookups a minute, under the default; cached, it is 16 per five minutes. Without a
+key neither the cache nor the budget is consulted. A refused lookup returns the
+existing synthetic card rather than an error status, so frame delivery for
+registered cameras and the upstream and synthetic steps are unchanged.
 
 
 ## GBFS upstream bounds
