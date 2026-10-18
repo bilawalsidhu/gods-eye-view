@@ -1,3 +1,5 @@
+import { displaySceneTitle, displayShotTitle } from './recipes.js';
+
 const DEFAULT_SHOT_DURATION_SEC = 4;
 const clamp01 = (value) => Math.max(0, Math.min(1, value));
 const deepClone = (value) => JSON.parse(JSON.stringify(value));
@@ -63,8 +65,10 @@ export function layerStatesForShot(
     state.params.sceneContext = {
       sceneId: scene.id,
       sceneTitle: scene.title,
+      sceneDisplayTitle: displaySceneTitle(scene),
       shotId: shot.id,
       shotTitle: shot.title,
+      shotDisplayTitle: displayShotTitle(shot.title, shot, scene),
       shotIndex,
       shotCount: scene.shots.length,
       durationSec: shot.durationSec || DEFAULT_SHOT_DURATION_SEC,

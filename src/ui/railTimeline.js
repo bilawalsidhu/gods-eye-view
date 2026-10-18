@@ -1,9 +1,19 @@
+import { formatUtcDayMonth, t } from '../i18n/index.js';
 const set = (node, key, value) => {
   if (node[key] !== value) node[key] = value;
 };
+/**
+ * "HH:MM UTC" of a time, or '' when it is not one. Computed on its own rather
+ * than cut from the dated readout: the localized day and month vary in length
+ * ("3/9" in Spanish, "09-03" in English).
+ */
+export const utcClock = (tick) =>
+  Number.isFinite(Date.parse(tick))
+    ? `${new Date(tick).toISOString().slice(11, 16)} UTC`
+    : '';
 const utc = (tick) =>
   Number.isFinite(Date.parse(tick))
-    ? `${new Date(tick).toISOString().slice(5, 16).replace('T', ' ')} UTC`
+    ? `${formatUtcDayMonth(tick)} ${utcClock(tick)}`
     : '';
 
 /** Stable native transport with local preview and a coalesced 150 ms drag commit. */
@@ -32,7 +42,7 @@ export function createRailTimeline({
     parent.appendChild(node);
     return node;
   };
-  const previous = makeButton('‹', 'Earlier observation', row);
+  const previous = makeButton('‹', t('Earlier observation'), row);
   const slider = document.createElement('input');
   slider.type = 'range';
   slider.className = `gev-quantitative-slider${sliderClassName ? ` ${sliderClassName}` : ''}`;
@@ -40,19 +50,23 @@ export function createRailTimeline({
   slider.max = '0';
   slider.step = '1';
   slider.value = '0';
-  slider.setAttribute('aria-label', 'Observed history');
+  slider.setAttribute('aria-label', t('Observed history'));
   row.appendChild(slider);
-  const next = makeButton('›', 'Later observation', row);
+  const next = makeButton('›', t('Later observation'), row);
   const controls = document.createElement('div');
   controls.className = 'rail-timeline-controls';
-  const latest = makeButton('Latest', 'Newest frame per product', controls);
-  const play = makeButton('Play', 'Replay observed history', controls);
+  const latest = makeButton(
+    t('Latest'),
+    t('Newest frame per product'),
+    controls,
+  );
+  const play = makeButton(t('Play'), t('Replay observed history'), controls);
   const readout = document.createElement('span');
   readout.className = 'rail-timeline-readout';
   controls.appendChild(readout);
   const label = document.createElement('div');
   label.className = 'panel-title';
-  label.textContent = 'Observed history';
+  label.textContent = t('Observed history');
   const endpoints = document.createElement('div');
   endpoints.className = 'rail-timeline-endpoints';
   const oldest = document.createElement('span');
@@ -110,8 +124,8 @@ export function createRailTimeline({
         String(Math.max(0, Math.min(props.index, ticks.length - 1))),
       );
       valueText(ticks[Number(slider.value)]);
-      set(oldest, 'textContent', utc(ticks[0]).slice(6));
-      set(newest, 'textContent', utc(ticks.at(-1)).slice(6));
+      set(oldest, 'textContent', utcClock(ticks[0]));
+      set(newest, 'textContent', utcClock(ticks.at(-1)));
       set(readout, 'textContent', props.readout || '');
     }
     for (const node of [slider, latest, play])
@@ -128,7 +142,7 @@ export function createRailTimeline({
       `data-toggle-chip${props.mode === 'latest' ? ' active' : ''}`,
     );
     set(play, 'className', `data-toggle-chip${props.playing ? ' active' : ''}`);
-    set(play, 'textContent', props.playing ? 'Pause' : 'Play');
+    set(play, 'textContent', props.playing ? t('Pause') : t('Play'));
     for (const [node, active] of [
       [latest, props.mode === 'latest'],
       [play, props.playing],

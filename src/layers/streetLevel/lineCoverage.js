@@ -9,6 +9,7 @@ import {
   whenIdle,
 } from './view.js';
 import { densifyLine, MESH_DENSIFY_DEG } from './groundCast.js';
+import { msg } from '../../i18n/index.js';
 import { MESH_SAMPLE_RADIUS_M } from './meshSampler.js';
 import { tileBounds, tilesForBbox } from './tileMath.js';
 
@@ -703,7 +704,7 @@ export function createLineCoverage({
         state.coverage.pending.get(key) !== controller
       )
         return;
-      state.coverage.lastError = error?.message || 'Coverage tile failed';
+      state.coverage.lastError = error?.message || msg('Coverage tile failed');
       if (error?.keyRequired) state.keyRequired = true;
       if (error?.keyRejected) {
         // Every other tile would be refused too: stop asking.
@@ -834,7 +835,7 @@ export function createLineCoverage({
       state.coverage.hint =
         zoom == null && Number.isFinite(height) && messages.tooHigh
           ? messages.tooHigh
-          : 'Point the camera at the globe for street-level coverage';
+          : msg('Point the camera at the globe for street-level coverage');
       clear();
       notify();
       return;
