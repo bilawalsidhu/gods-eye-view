@@ -20,6 +20,8 @@ import { t, tn } from '../i18n/index.js';
  * `drawTool.js`.
  */
 
+import { greatCircleMeters } from '../geoDistance.js';
+
 export const DRAW_SHAPES = Object.freeze(['area', 'line', 'pin']);
 export const MIN_VERTICES = Object.freeze({ area: 3, line: 2, pin: 1 });
 /**
@@ -49,14 +51,7 @@ export function createDrawSession(shape = 'area') {
 
 /** Great-circle distance in metres between two {lon, lat} points. */
 export function greatCircleM(a, b) {
-  const R = 6371000;
-  const toRad = (d) => (d * Math.PI) / 180;
-  const dLat = toRad(b.lat - a.lat);
-  const dLon = toRad(b.lon - a.lon);
-  const h =
-    Math.sin(dLat / 2) ** 2 +
-    Math.cos(toRad(a.lat)) * Math.cos(toRad(b.lat)) * Math.sin(dLon / 2) ** 2;
-  return 2 * R * Math.asin(Math.sqrt(Math.min(1, h)));
+  return greatCircleMeters(a, b);
 }
 
 /**
