@@ -476,6 +476,7 @@ export function createIngestion({ state, services, parts, source }) {
           `[Data:Transit] ${feed.id} poll failed:`,
           error?.message || error,
         );
+        // i18n-ignore: English data, translated on display (ui/statusText.js)
         status.error = `${feed.name} feed unavailable`;
         status.retryInSec = Number.isFinite(error?.retryInSec)
           ? error.retryInSec

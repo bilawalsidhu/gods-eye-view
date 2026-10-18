@@ -66,6 +66,7 @@ const RECORDS = [
     type: 'bullet',
     url: 'https://www.cctv-database.com/camera/hikvision-ds-2cd2087g3-li2uy/',
     fov_deg: '108.8 horizontal (2.8mm) / 93.3 horizontal (4mm)',
+    // i18n-ignore: datasheet label
     resolution: { mp: 8, w: 3840, h: 2160, label: '8MP (4K)' },
     night_vision: { type: 'color', range_m: 40 },
     environment: ['outdoor'],
@@ -78,6 +79,7 @@ const RECORDS = [
     type: 'dome',
     url: 'https://www.cctv-database.com/camera/axis-f4105-lre/',
     fov_deg: '110 horizontal, 60 vertical',
+    // i18n-ignore: datasheet label
     resolution: { mp: 2, w: 1920, h: 1080, label: '1080p HD' },
     night_vision: { type: 'ir', range_m: 10 },
     environment: ['outdoor'],
@@ -95,6 +97,7 @@ const RECORDS = [
       mp: 8,
       w: 1920,
       h: 1080,
+      // i18n-ignore: datasheet label
       label: '4x 2MP (8MP total; 4x 1080p)',
     },
     lens_count: 4,
@@ -117,6 +120,7 @@ const RECORDS = [
       mp: 8,
       w: 1920,
       h: 1080,
+      // i18n-ignore: datasheet label
       label: '4x 2MP (8MP total; 4x 1080p)',
     },
     lens_count: 4,
@@ -130,6 +134,7 @@ const RECORDS = [
     url: 'https://www.cctv-database.com/camera/axis-q6054-e/',
     aliases: ['AXIS Q6054-E', 'Q6054-E 50 Hz', 'Q6054-E 60 Hz'],
     fov_deg: '62.9-2.2 horizontal',
+    // i18n-ignore: datasheet label
     resolution: { mp: 1, w: 1280, h: 720, label: '720p HD' },
     ptz: true,
     autotracking: true,
@@ -144,6 +149,7 @@ const RECORDS = [
     url: 'https://www.cctv-database.com/camera/axis-q6155-e/',
     aliases: ['AXIS Q6155-E', 'Q6155-E 50 Hz', 'Q6155-E 60 Hz'],
     fov_deg: '66.7-2.36 horizontal',
+    // i18n-ignore: datasheet label
     resolution: { mp: 2, w: 1920, h: 1080, label: '1080p HD' },
     ptz: true,
     autotracking: true,
@@ -165,6 +171,7 @@ const RECORDS = [
       'VG4-500',
     ],
     fov_deg: '57.8-1.7 horizontal',
+    // i18n-ignore: datasheet label
     resolution: { mp: 0.4, label: '540 TVL (NTSC/PAL)' },
     ptz: true,
     autotracking: true,
@@ -179,6 +186,7 @@ const RECORDS = [
     url: 'https://www.cctv-database.com/camera/bosch-autodome-ip-dynamic-7000-hd/',
     aliases: ['AUTODOME IP dynamic 7000 HD', 'AUTODOME 7000 dynamic HD'],
     fov_deg: '65-2.3 horizontal',
+    // i18n-ignore: datasheet label
     resolution: { mp: 2, w: 1920, h: 1080, label: '1080p HD (2MP)' },
     ptz: true,
     autotracking: true,
@@ -198,6 +206,7 @@ const RECORDS = [
       'VG5-7130',
     ],
     fov_deg: '59-2.1 horizontal',
+    // i18n-ignore: datasheet label
     resolution: { mp: 1, w: 1280, h: 720, label: '720p HD (1.3MP sensor)' },
     ptz: true,
     autotracking: true,
@@ -217,6 +226,7 @@ const RECORDS = [
       'NDP-5502-30',
     ],
     fov_deg: '60.9-2.4 horizontal',
+    // i18n-ignore: datasheet label
     resolution: { mp: 2, w: 1920, h: 1080, label: '1080p HD (2MP)' },
     ptz: true,
     varifocal: true,
@@ -235,6 +245,7 @@ const RECORDS = [
       'NDP-7512-Z30K',
     ],
     fov_deg: '64.7-2.3 horizontal',
+    // i18n-ignore: datasheet label
     resolution: { mp: 2, w: 1920, h: 1080, label: '1080p HD (2MP)' },
     ptz: true,
     autotracking: true,
@@ -268,6 +279,7 @@ const RECORDS = [
       'iDome 3925',
       'Cohu iDome 3920 Series',
     ],
+    // i18n-ignore: datasheet label
     resolution: { mp: 0.4, label: 'NTSC / 470 TVL' },
     ptz: true,
     varifocal: true,
@@ -280,6 +292,7 @@ const RECORDS = [
     type: 'ptz',
     url: 'https://www.cctv-database.com/camera/cohu-3950-iview/',
     aliases: ['3950', '3950 Series', 'Cohu 3950 Series iVIEW'],
+    // i18n-ignore: datasheet label
     resolution: { mp: 0.4, label: 'NTSC / 470 TVL' },
     ptz: true,
     varifocal: true,
@@ -292,6 +305,7 @@ const RECORDS = [
     type: 'ptz',
     url: 'https://www.cctv-database.com/camera/cohu-3960/',
     aliases: ['3960 Series', '3964', '3965', 'Cohu 3960 iView'],
+    // i18n-ignore: datasheet label
     resolution: { mp: 0.4, label: 'NTSC/PAL / 470 TVL' },
     ptz: true,
     varifocal: true,
@@ -500,16 +514,21 @@ export function isDatasheetFov(camera) {
  * HUD token for a datasheet FOV that describes capability rather than the
  * camera's current state, e.g. 'SPEC FOV 2.4–58° (CAPABILITY)'.
  * @param {Object} camera - Catalog camera (see applyModelEnrichment).
+ * @param {(span: string) => string} [format] Builds the token from the
+ *   degree span; the HUD passes a translated one.
  * @returns {string|null} Null when the datasheet FOV already IS the camera's
  *   FOV (fixed lens) or no datasheet range is known.
  */
-export function specFovCapabilityToken(camera) {
+export function specFovCapabilityToken(
+  camera,
+  format = (span) => `SPEC FOV ${span}° (CAPABILITY)`,
+) {
   if (!camera || camera.fovSource === 'datasheet') return null;
   const { specFovMinDeg: min, specFovMaxDeg: max } = camera;
   if (!Number.isFinite(min) || !Number.isFinite(max)) return null;
   const fmt = (deg) => (deg < 10 ? deg.toFixed(1) : String(Math.round(deg)));
   const span = min === max ? fmt(max) : `${fmt(min)}–${fmt(max)}`;
-  return `SPEC FOV ${span}° (CAPABILITY)`;
+  return format(span);
 }
 
 /**

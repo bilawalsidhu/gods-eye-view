@@ -4,6 +4,8 @@ const STATUS_URL = 'https://www.nhc.noaa.gov/CurrentStorms.json';
 const GIS =
   'https://mapservices.weather.noaa.gov/tropical/rest/services/tropical/NHC_tropical_weather_summary/MapServer';
 const HOUR = 3600_000;
+// Data, not UI copy: src/layers/cyclones/index.js keeps the same English in
+// msg() and translates it when shown (likewise 'Cyclone data unavailable').
 const COVERAGE =
   'Atlantic and eastern/central North Pacific; not worldwide cyclone coverage.';
 const LAYERS = [
