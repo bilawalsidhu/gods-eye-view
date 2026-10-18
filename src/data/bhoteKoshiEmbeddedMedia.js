@@ -1,4 +1,5 @@
 import * as Cesium from 'cesium';
+import { t, msg } from '../i18n/index.js';
 
 const YOUTUBE_HOSTS = new Set([
   'youtube.com',
@@ -38,6 +39,55 @@ const MEDIA_PRECONNECT_ORIGINS = Object.freeze({
   ]),
   facebook: Object.freeze(['https://www.facebook.com']),
 });
+
+// Known English from public/events/bhote-koshi-2026/event.json, translated at
+// display (whole or by " · " parts). Anything else shows as authored.
+const EVENT_PACK_TEXT = new Set([
+  // Field reports: our labels (credits after " · " stay) and their statuses.
+  msg('Rasuwagadhi witness video'),
+  msg('Bhote Koshi valley footage'),
+  msg('Flood footage'),
+  msg('Compilation and casualty claims'),
+  msg('SOURCE GEOCONFIRMED · WORLD-PINNED'),
+  msg('SOURCE CREDITED · LOCATION UNRESOLVED'),
+  msg('REFERENCE ONLY · CLAIMS UNVERIFIED'),
+  msg('SOURCE GEOCONFIRMED'),
+  // Reconstruction caveat.
+  msg(
+    '2021 historical reference versus 2026 post-event imagery; changes are cumulative and include the July 2025 Rasuwagadhi flood. Schematic downstream progression, not modeled arrival time; not an official hazard model.',
+  ),
+  // Evidence titles that are more than a place name.
+  msg('Immediate collapse viewpoint'),
+  msg('Collapse viewpoint'),
+  msg('Debris-dammed lake'),
+  msg('Dammed lake'),
+  msg('Second landslide'),
+  msg('Gyirong border gate'),
+  msg('Border gate'),
+  msg('Timure evidence cluster'),
+  msg('Mailung / Upper Trishuli bridge'),
+  msg('Dandagaun viewpoint restaurant'),
+  msg('Dandagaun viewpoint'),
+  msg('Bidur - Trishuli bridge'),
+  msg('Bidur bridge'),
+  msg('Devighat / Taadi Khola Bridge'),
+  msg('Devighat bridge'),
+]);
+
+/**
+ * Display text for an authored event-pack string.
+ * @param {unknown} value
+ * @returns {string}
+ */
+export function bhoteEventText(value) {
+  const text = value == null ? '' : String(value);
+  if (EVENT_PACK_TEXT.has(text)) return t(text);
+  if (!text.includes(' · ')) return text;
+  return text
+    .split(' · ')
+    .map((part) => (EVENT_PACK_TEXT.has(part) ? t(part) : part))
+    .join(' · ');
+}
 
 let _xWidgetsPromise = null;
 let _facebookSdkPromise = null;
@@ -240,7 +290,7 @@ function loadFacebookSdk(documentRef, globalRef = globalThis) {
         prior?.();
       } finally {
         if (facebookSdkReady(globalRef.FB)) finish();
-        else finish(new Error('Facebook player API did not initialize.'));
+        else finish(new Error(msg('Facebook player API did not initialize.')));
       }
     };
     globalRef.fbAsyncInit = ready;
@@ -256,12 +306,12 @@ function loadFacebookSdk(documentRef, globalRef = globalThis) {
     }
     script.addEventListener?.(
       'error',
-      () => finish(new Error('Facebook player API could not load.')),
+      () => finish(new Error(msg('Facebook player API could not load.'))),
       { once: true },
     );
     timer =
       globalRef.setTimeout?.(
-        () => finish(new Error('Facebook player API timed out.')),
+        () => finish(new Error(msg('Facebook player API timed out.'))),
         EMBED_TIMEOUT_MS,
       ) ?? null;
   }).catch((error) => {
@@ -398,7 +448,7 @@ function loadXWidgets(documentRef, globalRef = globalThis) {
     };
     const ready = () => {
       if (xWidgetsReady(globalRef.twttr)) finish();
-      else finish(new Error('X embed API did not initialize.'));
+      else finish(new Error(msg('X embed API did not initialize.')));
     };
     let script = documentRef.querySelector?.(`script[src="${X_WIDGET_URL}"]`);
     if (!script) {
@@ -411,7 +461,7 @@ function loadXWidgets(documentRef, globalRef = globalThis) {
     }
     script.addEventListener?.(
       'error',
-      () => finish(new Error('X embed could not load.')),
+      () => finish(new Error(msg('X embed could not load.'))),
       {
         once: true,
       },
@@ -440,7 +490,7 @@ function loadXWidgets(documentRef, globalRef = globalThis) {
         },
       );
     timer = setTimeout(
-      () => finish(new Error('X embed timed out.')),
+      () => finish(new Error(msg('X embed timed out.'))),
       EMBED_TIMEOUT_MS,
     );
   }).catch((error) => {
@@ -450,9 +500,17 @@ function loadXWidgets(documentRef, globalRef = globalThis) {
   return _xWidgetsPromise;
 }
 
+// Outcomes a trimmed YouTube clip reports to the card status.
+const YOUTUBE_PHASE_LABELS = Object.freeze({
+  unavailable: msg('UNAVAILABLE'),
+  timeout: msg('TIMEOUT'),
+  blocked: msg('BLOCKED'),
+});
+
 function providerLabel(provider) {
   return (
-    { youtube: 'YOUTUBE', facebook: 'FACEBOOK', x: 'X' }[provider] || 'SOURCE'
+    { youtube: 'YOUTUBE', facebook: 'FACEBOOK', x: 'X' }[provider] ||
+    t('SOURCE')
   );
 }
 
@@ -737,7 +795,9 @@ export function createBhoteKoshiEmbeddedMedia({
           globalRef.setTimeout?.(() => {
             if (!session.active || session.ready) return;
             session.error = new Error(
-              'Facebook embed unavailable. The post may be private, removed, region-restricted, or blocked.',
+              msg(
+                'Facebook embed unavailable. The post may be private, removed, region-restricted, or blocked.',
+              ),
             );
             session.onError?.(session.error);
           }, EMBED_TIMEOUT_MS) ?? null;
@@ -857,7 +917,9 @@ export function createBhoteKoshiEmbeddedMedia({
       startAtSec,
       endAtSec,
     });
-    iframe.title = `Preloading ${providerLabel(source.provider)} media`;
+    iframe.title = t('Preloading {provider} media', {
+      provider: providerLabel(source.provider),
+    });
     iframe.tabIndex = -1;
     iframe.setAttribute('aria-hidden', 'true');
     iframe.loading = 'eager';
@@ -868,7 +930,7 @@ export function createBhoteKoshiEmbeddedMedia({
   }
 
   async function mountX(current, token) {
-    current.status.textContent = 'LOADING X POST…';
+    current.status.textContent = t('LOADING X POST…');
     try {
       const api = await xLoader(documentRef, globalRef);
       if (token !== generation || record !== current) return;
@@ -885,13 +947,17 @@ export function createBhoteKoshiEmbeddedMedia({
       );
       if (token !== generation || record !== current) return;
       if (!widget)
-        throw new Error('The X post is unavailable or cannot be embedded.');
-      current.status.textContent = 'X POST · PROVIDER CONTROLS';
+        throw new Error(
+          msg('The X post is unavailable or cannot be embedded.'),
+        );
+      current.status.textContent = t('X POST · PROVIDER CONTROLS');
       position();
     } catch (error) {
       if (token !== generation || record !== current) return;
       current.card.classList.add('is-unavailable');
-      current.status.textContent = `${String(error?.message || 'X embed unavailable')} OPEN ORIGINAL.`;
+      current.status.textContent = t('{reason} OPEN ORIGINAL.', {
+        reason: t(String(error?.message || msg('X embed unavailable'))),
+      });
       position();
     }
   }
@@ -904,19 +970,23 @@ export function createBhoteKoshiEmbeddedMedia({
     session.shouldPlay = autoplay === true;
     session.onReady = () => {
       if (token !== generation || record !== current) return;
-      current.status.textContent = 'FACEBOOK · PROVIDER CONTROLS';
+      current.status.textContent = t('FACEBOOK · PROVIDER CONTROLS');
       current.card.classList.remove('is-unavailable');
       position();
     };
     session.onError = (error) => {
       if (token !== generation || record !== current) return;
       current.card.classList.add('is-unavailable');
-      current.status.textContent = `${String(error?.message || 'Facebook embed unavailable')} OPEN ORIGINAL.`;
+      current.status.textContent = t('{reason} OPEN ORIGINAL.', {
+        reason: t(String(error?.message || msg('Facebook embed unavailable'))),
+      });
       position();
     };
     session.onPlaybackBlocked = () => {
       if (token !== generation || record !== current) return;
-      current.status.textContent = 'AUTOPLAY BLOCKED · USE PROVIDER CONTROLS';
+      current.status.textContent = t(
+        'AUTOPLAY BLOCKED · USE PROVIDER CONTROLS',
+      );
     };
     if (session.ready) session.onReady();
     else if (session.error) session.onError(session.error);
@@ -968,7 +1038,12 @@ export function createBhoteKoshiEmbeddedMedia({
     card.dataset.provider = source.provider;
     card.setAttribute(
       'aria-label',
-      `Embedded ${providerLabel(source.provider)} media for ${observation?.title || 'witness source'}`,
+      t('Embedded {provider} media for {source}', {
+        provider: providerLabel(source.provider),
+        source: observation?.title
+          ? bhoteEventText(observation.title)
+          : t('witness source'),
+      }),
     );
     const leader = documentRef.createElementNS(
       'http://www.w3.org/2000/svg',
@@ -982,17 +1057,19 @@ export function createBhoteKoshiEmbeddedMedia({
     player.className = 'bhote-embedded-callout-player';
     const footer = documentRef.createElement('footer');
     const title = documentRef.createElement('strong');
-    title.textContent = String(
-      observation?.shortTitle || observation?.title || 'Witness source',
+    title.textContent = bhoteEventText(
+      observation?.shortTitle || observation?.title || t('Witness source'),
     ).toUpperCase();
     const status = documentRef.createElement('small');
     status.setAttribute('role', 'status');
-    status.textContent = `${providerLabel(source.provider)} · EMBEDDED SOURCE`;
+    status.textContent = t('{provider} · EMBEDDED SOURCE', {
+      provider: providerLabel(source.provider),
+    });
     const link = documentRef.createElement('a');
     link.href = source.url;
     link.target = '_blank';
     link.rel = 'noopener noreferrer';
-    link.textContent = 'OPEN ORIGINAL ↗';
+    link.textContent = t('OPEN ORIGINAL ↗');
     footer.append(title, status, link);
     const body = documentRef.createElement('div');
     body.className = 'bhote-embedded-callout-body';
@@ -1032,7 +1109,12 @@ export function createBhoteKoshiEmbeddedMedia({
           url.searchParams.set('origin', globalRef.location.origin);
         iframe.src = url.href;
       }
-      iframe.title = `${providerLabel(source.provider)} media: ${observation?.title || 'witness source'}`;
+      iframe.title = t('{provider} media: {source}', {
+        provider: providerLabel(source.provider),
+        source: observation?.title
+          ? bhoteEventText(observation.title)
+          : t('witness source'),
+      });
       iframe.allow =
         'autoplay; encrypted-media; picture-in-picture; fullscreen';
       iframe.allowFullscreen = true;
@@ -1049,7 +1131,9 @@ export function createBhoteKoshiEmbeddedMedia({
               record.youtubeSession.getState().phase,
             )
           ) {
-            status.textContent = `${providerLabel(source.provider)} · PROVIDER CONTROLS`;
+            status.textContent = t('{provider} · PROVIDER CONTROLS', {
+              provider: providerLabel(source.provider),
+            });
           }
           position();
         },
@@ -1067,7 +1151,11 @@ export function createBhoteKoshiEmbeddedMedia({
           isCurrent: () => token === generation && record === current,
           onStatus: (phase) => {
             if (phase !== 'completed')
-              status.textContent = `YOUTUBE ${phase.toUpperCase()} · OPEN ORIGINAL`;
+              status.textContent = t('YOUTUBE {state} · OPEN ORIGINAL', {
+                state: YOUTUBE_PHASE_LABELS[phase]
+                  ? t(YOUTUBE_PHASE_LABELS[phase])
+                  : phase.toUpperCase(),
+              });
           },
         });
       }

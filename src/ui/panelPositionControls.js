@@ -1,6 +1,6 @@
 /** Own panel position preferences, viewport clamping and drag listeners. */
+import { t, msg } from '../i18n/index.js';
 import { RESIZE_DIRECTIONS, resizeBox } from './panelResize.js';
-
 /** Versioned localStorage namespace prefix to invalidate stale panel layouts. */
 const PANEL_LAYOUT_STORAGE_VERSION = 'v6';
 /**
@@ -32,7 +32,7 @@ const VIEWPORT_MARGIN_PX = 6;
  */
 const PANEL_OBSTACLE_IDS = ['command-dock', 'gev-voice-control'];
 const PANEL_FLOAT_HINT_STORAGE_KEY = `godsEyeView.${PANEL_POSITION_STORAGE_VERSION}.panelFloatHintShown`;
-const PANEL_FLOAT_HINT = 'Double-click the header to snap the panel back';
+const PANEL_FLOAT_HINT = msg('Double-click the header to snap the panel back');
 /** Header children whose own interaction wins over a drag or a snap-back. */
 const INTERACTIVE_SELECTOR =
   'input, select, option, textarea, button, a, [role="button"]';
@@ -221,7 +221,7 @@ export class PanelPositionControls {
       );
       if (hadOldPositions) {
         this._showToast(
-          'Panel layout updated — positions reset to new defaults',
+          t('Panel layout updated — positions reset to new defaults'),
         );
       }
     } catch {
@@ -477,7 +477,7 @@ export class PanelPositionControls {
       if (this._floatHintShown) return;
       this._floatHintShown = true;
     }
-    this._showToast(PANEL_FLOAT_HINT);
+    this._showToast(t(PANEL_FLOAT_HINT));
   }
 
   /**
@@ -761,7 +761,9 @@ export class PanelPositionControls {
       handle.dataset.dir = dir;
       handle.setAttribute('aria-hidden', 'true');
       if (dir === 'se') {
-        handle.title = 'Drag to resize · double-click the header to snap back';
+        handle.title = t(
+          'Drag to resize · double-click the header to snap back',
+        );
       }
       panelEl.appendChild(handle);
       this._resizeHandles.push(handle);

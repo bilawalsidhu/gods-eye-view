@@ -247,6 +247,114 @@ const RAW_GBFS_CITY_REGISTRY = [
     provider: 'Bike Chattanooga',
   },
   {
+    id: 'sao-paulo-bike-itau',
+    city: 'São Paulo, SP',
+    centerLat: -23.5505,
+    centerLon: -46.6333,
+    loadRadiusKm: 100,
+    stationInformationUrl:
+      'https://saopaulo.publicbikesystem.net/customer/gbfs/v2/en/station_information.json',
+    stationStatusUrl:
+      'https://saopaulo.publicbikesystem.net/customer/gbfs/v2/en/station_status.json',
+    provider: 'Bike Itaú',
+  },
+  {
+    id: 'rio-de-janeiro-bike-itau',
+    city: 'Rio de Janeiro, RJ',
+    centerLat: -22.9068,
+    centerLon: -43.1729,
+    loadRadiusKm: 100,
+    stationInformationUrl:
+      'https://riodejaneiro.publicbikesystem.net/customer/gbfs/v2/en/station_information.json',
+    stationStatusUrl:
+      'https://riodejaneiro.publicbikesystem.net/customer/gbfs/v2/en/station_status.json',
+    provider: 'Bike Itaú',
+  },
+  {
+    id: 'salvador-bike-itau',
+    city: 'Salvador, BA',
+    centerLat: -12.9777,
+    centerLon: -38.5016,
+    loadRadiusKm: 90,
+    stationInformationUrl:
+      'https://salvador.publicbikesystem.net/customer/gbfs/v2/en/station_information.json',
+    stationStatusUrl:
+      'https://salvador.publicbikesystem.net/customer/gbfs/v2/en/station_status.json',
+    provider: 'Bike Itaú',
+  },
+  {
+    id: 'recife-bike-itau',
+    city: 'Recife, PE',
+    centerLat: -8.0476,
+    centerLon: -34.877,
+    loadRadiusKm: 90,
+    stationInformationUrl:
+      'https://recife.publicbikesystem.net/customer/gbfs/v2/en/station_information.json',
+    stationStatusUrl:
+      'https://recife.publicbikesystem.net/customer/gbfs/v2/en/station_status.json',
+    provider: 'Bike Itaú',
+  },
+  {
+    id: 'porto-alegre-bike-itau',
+    city: 'Porto Alegre, RS',
+    centerLat: -30.0346,
+    centerLon: -51.2177,
+    loadRadiusKm: 90,
+    stationInformationUrl:
+      'https://portoalegre.publicbikesystem.net/customer/gbfs/v2/en/station_information.json',
+    stationStatusUrl:
+      'https://portoalegre.publicbikesystem.net/customer/gbfs/v2/en/station_status.json',
+    provider: 'Bike Itaú',
+  },
+  {
+    id: 'brasilia-bike-itau',
+    city: 'Brasília, DF',
+    centerLat: -15.7939,
+    centerLon: -47.8828,
+    loadRadiusKm: 90,
+    stationInformationUrl:
+      'https://brasilia.publicbikesystem.net/customer/gbfs/v2/en/station_information.json',
+    stationStatusUrl:
+      'https://brasilia.publicbikesystem.net/customer/gbfs/v2/en/station_status.json',
+    provider: 'Bike Itaú',
+  },
+  {
+    id: 'curitiba-bike-itau',
+    city: 'Curitiba, PR',
+    centerLat: -25.4284,
+    centerLon: -49.2733,
+    loadRadiusKm: 90,
+    stationInformationUrl:
+      'https://curitiba.publicbikesystem.net/customer/gbfs/v2/en/station_information.json',
+    stationStatusUrl:
+      'https://curitiba.publicbikesystem.net/customer/gbfs/v2/en/station_status.json',
+    provider: 'Bike Itaú',
+  },
+  {
+    id: 'bogota-tembici',
+    city: 'Bogotá, Colombia',
+    centerLat: 4.6533,
+    centerLon: -74.0836,
+    loadRadiusKm: 90,
+    stationInformationUrl:
+      'https://bogota.publicbikesystem.net/customer/gbfs/v2/en/station_information.json',
+    stationStatusUrl:
+      'https://bogota.publicbikesystem.net/customer/gbfs/v2/en/station_status.json',
+    provider: 'Tembici Bogotá',
+  },
+  {
+    id: 'santiago-bike-itau',
+    city: 'Santiago, Chile',
+    centerLat: -33.4372,
+    centerLon: -70.6506,
+    loadRadiusKm: 90,
+    stationInformationUrl:
+      'https://santiago.publicbikesystem.net/customer/gbfs/v2/en/station_information.json',
+    stationStatusUrl:
+      'https://santiago.publicbikesystem.net/customer/gbfs/v2/en/station_status.json',
+    provider: 'Bike Itaú Santiago',
+  },
+  {
     id: 'toronto-bike-share',
     city: 'Toronto, ON',
     centerLat: 43.6532,
@@ -469,6 +577,140 @@ const RAW_GBFS_CITY_REGISTRY = [
     stationStatusUrl:
       'https://api.cyclocity.fr/contracts/lillestrom/gbfs/station_status.json',
     provider: 'Bysykkel Lillestrøm',
+  },
+  {
+    id: 'barcelona-bicing',
+    city: 'Barcelona, Spain',
+    centerLat: 41.3926,
+    centerLon: 2.164,
+    loadRadiusKm: 40,
+    stationInformationUrl:
+      'https://barcelona.publicbikesystem.net/customer/gbfs/v2/en/station_information.json',
+    stationStatusUrl:
+      'https://barcelona.publicbikesystem.net/customer/gbfs/v2/en/station_status.json',
+    provider: 'Bicing',
+  },
+  // AMBici covers the metropolitan municipalities around Barcelona, from
+  // Castelldefels to Badalona, and overlaps Bicing only at the city edge.
+  {
+    id: 'barcelona-ambici',
+    city: 'Barcelona metropolitan area, Spain',
+    centerLat: 41.37,
+    centerLon: 2.07,
+    loadRadiusKm: 40,
+    stationInformationUrl:
+      'https://gbfs.nextbike.net/maps/gbfs/v2/nextbike_bs/en/station_information.json',
+    stationStatusUrl:
+      'https://gbfs.nextbike.net/maps/gbfs/v2/nextbike_bs/en/station_status.json',
+    provider: 'AMBici',
+  },
+  {
+    id: 'madrid-bicimad',
+    city: 'Madrid, Spain',
+    centerLat: 40.4241,
+    centerLon: -3.6825,
+    loadRadiusKm: 40,
+    stationInformationUrl:
+      'https://madrid.publicbikesystem.net/customer/gbfs/v2/en/station_information.json',
+    stationStatusUrl:
+      'https://madrid.publicbikesystem.net/customer/gbfs/v2/en/station_status.json',
+    provider: 'BiciMAD',
+  },
+  {
+    id: 'valencia-valenbisi',
+    city: 'Valencia, Spain',
+    centerLat: 39.4706,
+    centerLon: -0.3749,
+    loadRadiusKm: 40,
+    stationInformationUrl:
+      'https://api.cyclocity.fr/contracts/valence/gbfs/station_information.json',
+    stationStatusUrl:
+      'https://api.cyclocity.fr/contracts/valence/gbfs/station_status.json',
+    provider: 'Valenbisi',
+  },
+  {
+    id: 'zaragoza-bizi',
+    city: 'Zaragoza, Spain',
+    centerLat: 41.6481,
+    centerLon: -0.8927,
+    loadRadiusKm: 40,
+    stationInformationUrl:
+      'https://zaragoza.publicbikesystem.net/customer/gbfs/v2/en/station_information.json',
+    stationStatusUrl:
+      'https://zaragoza.publicbikesystem.net/customer/gbfs/v2/en/station_status.json',
+    provider: 'Bizi Zaragoza',
+  },
+  {
+    id: 'sevilla-sevici',
+    city: 'Seville, Spain',
+    centerLat: 37.3726,
+    centerLon: -5.9607,
+    loadRadiusKm: 40,
+    stationInformationUrl:
+      'https://api.cyclocity.fr/contracts/seville/gbfs/station_information.json',
+    stationStatusUrl:
+      'https://api.cyclocity.fr/contracts/seville/gbfs/station_status.json',
+    provider: 'Sevici',
+  },
+  {
+    id: 'valladolid-biki',
+    city: 'Valladolid, Spain',
+    centerLat: 41.6233,
+    centerLon: -4.7382,
+    loadRadiusKm: 40,
+    stationInformationUrl:
+      'https://valladolid.publicbikesystem.net/customer/gbfs/v2/en/station_information.json',
+    stationStatusUrl:
+      'https://valladolid.publicbikesystem.net/customer/gbfs/v2/en/station_status.json',
+    provider: 'BIKI',
+  },
+  {
+    id: 'a-coruna-bicicoruna',
+    city: 'A Coruña, Spain',
+    centerLat: 43.3534,
+    centerLon: -8.4156,
+    loadRadiusKm: 40,
+    stationInformationUrl:
+      'https://acoruna.publicbikesystem.net/customer/gbfs/v2/en/station_information.json',
+    stationStatusUrl:
+      'https://acoruna.publicbikesystem.net/customer/gbfs/v2/en/station_status.json',
+    provider: 'BiciCoruña',
+  },
+  {
+    id: 'donostia-dbizi',
+    city: 'Donostia-San Sebastián, Spain',
+    centerLat: 43.3075,
+    centerLon: -1.9696,
+    loadRadiusKm: 40,
+    stationInformationUrl:
+      'https://sansebastian.publicbikesystem.net/customer/gbfs/v2/en/station_information.json',
+    stationStatusUrl:
+      'https://sansebastian.publicbikesystem.net/customer/gbfs/v2/en/station_status.json',
+    provider: 'Dbizi',
+  },
+  {
+    id: 'bilbao-bilbaobizi',
+    city: 'Bilbao, Spain',
+    centerLat: 43.2624,
+    centerLon: -2.9367,
+    loadRadiusKm: 40,
+    stationInformationUrl:
+      'https://bilbao.publicbikesystem.net/customer/gbfs/v2/en/station_information.json',
+    stationStatusUrl:
+      'https://bilbao.publicbikesystem.net/customer/gbfs/v2/en/station_status.json',
+    provider: 'Bilbao Bizi',
+  },
+  {
+    id: 'rivas-bicinrivas',
+    city: 'Rivas-Vaciamadrid, Spain',
+    centerLat: 40.3535,
+    centerLon: -3.5319,
+    loadRadiusKm: 40,
+    stationInformationUrl:
+      'https://rivas.publicbikesystem.net/customer/gbfs/v2/en/station_information.json',
+    stationStatusUrl:
+      'https://rivas.publicbikesystem.net/customer/gbfs/v2/en/station_status.json',
+    provider: 'BicinRivas',
   },
 ];
 function normalizeRegistryEntry(entry) {

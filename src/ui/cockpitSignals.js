@@ -1,4 +1,6 @@
 /** Reconcile actionable signal rows without disturbing native keyboard focus. */
+import { t, tn } from '../i18n/index.js';
+import { formatCockpitDistance } from './cockpitPresentation.js';
 
 export function renderCockpitSignals() {
   if (!this.signalList) return;
@@ -57,7 +59,7 @@ export function renderCockpitSignals() {
     if (item.target) {
       heading.dataset.signalLayer = item.target.layerId;
       heading.dataset.signalId = item.target.id;
-      const label = `Select flight ${item.title}`;
+      const label = t('Select flight {title}', { title: item.title });
       if (heading.getAttribute('aria-label') !== label)
         heading.setAttribute('aria-label', label);
       setText(heading.children[0], item.title);
@@ -126,7 +128,12 @@ export function updateCockpitSignals(snapshot, unknownCount) {
       key: `flight:${subject.layerId}:${subject.id}`,
       tone: 'track',
       title: subject.label || subject.id,
-      detail: `${subject.layerId === 'military' ? 'MILITARY FLIGHT' : 'COMMERCIAL FLIGHT'} · CURRENT`,
+      detail: t('{aircraftClass} · CURRENT', {
+        aircraftClass:
+          subject.layerId === 'military'
+            ? t('MILITARY FLIGHT')
+            : t('COMMERCIAL FLIGHT'),
+      }),
       target: { layerId: subject.layerId, id: String(subject.id) },
       distanceM: -1,
     });
@@ -145,11 +152,15 @@ export function updateCockpitSignals(snapshot, unknownCount) {
         // contact reads as its registration here too. Same helper the
         // Context panel's nearest list uses.
         title: this.services.formatAwarenessLabel(item),
-        detail: `${cohort.id === 'military' ? 'MILITARY FLIGHT' : 'COMMERCIAL FLIGHT'} · ${
-          Number.isFinite(item.distanceM)
-            ? `${item.distanceM < 10000 ? (item.distanceM / 1000).toFixed(1) : Math.round(item.distanceM / 1000)} KM`
-            : 'DISTANCE UNKNOWN'
-        }`,
+        detail: t('{aircraftClass} · {distance}', {
+          aircraftClass:
+            cohort.id === 'military'
+              ? t('MILITARY FLIGHT')
+              : t('COMMERCIAL FLIGHT'),
+          distance: Number.isFinite(item.distanceM)
+            ? formatCockpitDistance(item.distanceM)
+            : t('DISTANCE UNKNOWN'),
+        }),
         target: { layerId: cohort.id, id: String(id) },
         distanceM: item.distanceM ?? Infinity,
       });
@@ -169,8 +180,12 @@ export function updateCockpitSignals(snapshot, unknownCount) {
     nextItems.splice(4, Math.max(0, nextItems.length - 4), {
       key: 'input-status',
       tone: 'warning',
-      title: `${unknownCount} INPUT${unknownCount === 1 ? '' : 'S'} UNKNOWN`,
-      detail: sources || 'SOURCE STATUS UNAVAILABLE',
+      title: tn(
+        unknownCount,
+        '{count} INPUT UNKNOWN',
+        '{count} INPUTS UNKNOWN',
+      ),
+      detail: sources || t('SOURCE STATUS UNAVAILABLE'),
       target: null,
       timestamp:
         previous.get('input-status')?.timestamp ||
