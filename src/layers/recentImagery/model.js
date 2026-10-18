@@ -519,13 +519,60 @@ export function granulesOverBox(candidate, box) {
   return overlapping.length ? overlapping : granules;
 }
 
+/** Points per side of the grid that weighs each granule by its share of the box. */
+const AREA_GRID = 9;
+
+/** An AREA_GRID × AREA_GRID grid of [lon, lat] points over the box, edges included. */
+function areaGrid({ west, south, east, north }) {
+  const points = [];
+  for (let i = 0; i < AREA_GRID; i++)
+    for (let j = 0; j < AREA_GRID; j++)
+      points.push([
+        west + ((east - west) * i) / (AREA_GRID - 1),
+        south + ((north - south) * j) / (AREA_GRID - 1),
+      ]);
+  return points;
+}
+
 /**
- * Scene cloud of the box's worst granule, or null when any is unknown.
+ * Each grid point's granules, or null when the grid cannot weigh them: no
+ * box, a granule without a footprint, or no point under any footprint.
+ */
+function gridCover(candidate, box) {
+  const normalized = normalizeBox(box);
+  const granules = candidate?.granules || [];
+  if (!normalized || !granules.length || !granules.every(footprintOf))
+    return null;
+  const cover = areaGrid(normalized)
+    .map(([lon, lat]) =>
+      granules.filter((granule) =>
+        pointInPolygon(lon, lat, footprintOf(granule)),
+      ),
+    )
+    .filter((over) => over.length);
+  return cover.length ? cover : null;
+}
+
+/**
+ * The box's scene cloud, weighted by area: the mean over a grid on the box of
+ * the worst granule at each point, so a tile that overlaps the box by a
+ * sliver counts for its sliver. Without footprints to weigh, the worst
+ * granule over the box. Null when a granule that counts has unknown cloud.
  * @param {object} candidate
  * @param {object} [box] Degrees box.
  * @returns {number | null}
  */
 export function boxCloud(candidate, box) {
+  const cover = gridCover(candidate, box);
+  if (cover) {
+    let sum = 0;
+    for (const over of cover) {
+      const clouds = over.map(cloudOf);
+      if (clouds.includes(null)) return null;
+      sum += Math.max(...clouds);
+    }
+    return Math.round(sum / cover.length);
+  }
   let worst = -Infinity;
   for (const granule of granulesOverBox(candidate, box)) {
     const cloud = cloudOf(granule);
@@ -533,6 +580,12 @@ export function boxCloud(candidate, box) {
     worst = Math.max(worst, cloud);
   }
   return Number.isFinite(worst) ? worst : null;
+}
+
+/** The granules that cover part of the box's grid, else those over the box. */
+function granulesInBox(candidate, box) {
+  const cover = gridCover(candidate, box);
+  return cover ? [...new Set(cover.flat())] : granulesOverBox(candidate, box);
 }
 
 /**
@@ -547,7 +600,7 @@ export function scopeToBox(candidate, box) {
   return {
     ...candidate,
     coverage: coverageFor(candidate, box),
-    cloud: cloudRange(granulesOverBox(candidate, box)),
+    cloud: cloudRange(granulesInBox(candidate, box)),
   };
 }
 

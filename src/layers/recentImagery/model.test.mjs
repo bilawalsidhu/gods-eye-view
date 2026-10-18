@@ -357,6 +357,54 @@ test('with no clear day, START HERE is the least cloudy, newer within 10 points'
   );
 });
 
+test('a cloudy tile overlapping the box by a sliver counts for its sliver', () => {
+  const square = (west, south, side = 1) => [
+    [west, south],
+    [west + side, south],
+    [west + side, south + side],
+    [west, south + side],
+  ];
+  const day = (granules) => ({
+    ...groupGranulesByDay(
+      granules.map((g, i) => granule({ id: `g${i}`, ...g })),
+    )[0],
+    coverage: 'full',
+  });
+  const { west, east, north } = BOX;
+  // 0.001° (about 55 m) over the north edge, and one lying along a whole edge.
+  for (const sliver of [
+    [
+      [west - 1, north - 0.001],
+      [east + 1, north - 0.001],
+      [east + 1, north + 1],
+      [west - 1, north + 1],
+    ],
+    square(east, BOX.south - 1, 2),
+  ]) {
+    const candidate = day([
+      { cloud: 5, footprint: square(west - 1, BOX.south - 1, 3) },
+      { cloud: 90, footprint: sliver },
+    ]);
+    assert.ok(boxCloud(candidate, BOX) <= 20, 'the day is still clear');
+    assert.equal(rankLatest([candidate], { box: BOX }).reason, 'clear');
+  }
+  // A cloudy tile over half the box makes it cloudy.
+  const half = day([
+    { cloud: 5, footprint: square(west - 1, BOX.south - 1, 3) },
+    {
+      cloud: 90,
+      footprint: [
+        [(west + east) / 2, BOX.south - 1],
+        [east + 1, BOX.south - 1],
+        [east + 1, north + 1],
+        [(west + east) / 2, north + 1],
+      ],
+    },
+  ]);
+  assert.ok(boxCloud(half, BOX) >= 40);
+  assert.equal(rankLatest([half], { box: BOX }).reason, 'cloudy');
+});
+
 test('only granules over the box judge its cloud', () => {
   const square = (west, south, side = 1) => [
     [west, south],
@@ -406,7 +454,9 @@ test('only granules over the box judge its cloud', () => {
       ],
     },
   ]);
-  assert.equal(boxCloud(band, BOX), 80);
+  // It counts, for its share of the box: neither ignored nor the whole box.
+  const banded = boxCloud(band, BOX);
+  assert.ok(banded > 5 && banded < 80, `band weighed ${banded}`);
   // A long thin box and a cloudy tile crossing it north to south.
   const thin = { west: -100, south: 30, east: -95, north: 30.4 };
   const crossing = day([
@@ -421,7 +471,9 @@ test('only granules over the box judge its cloud', () => {
       ],
     },
   ]);
-  assert.equal(boxCloud(crossing, thin), 90);
+  // A fifth of the box at 90% outweighs the clear rest past 20%.
+  const crossed = boxCloud(crossing, thin);
+  assert.ok(crossed > 20 && crossed < 90, `crossing weighed ${crossed}`);
   assert.equal(rankLatest([crossing], { box: thin }).reason, 'cloudy');
   // The card shows the cloud of the granules that ranked the day.
   assert.deepEqual(scopeToBox(edge, BOX).cloud, { min: 5, max: 5 });
