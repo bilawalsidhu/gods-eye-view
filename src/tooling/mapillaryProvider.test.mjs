@@ -978,10 +978,14 @@ test('a disk hit whose read outlasts the first rewrite does not rewrite again', 
     () => assert.fail('a disk hit never asks Mapillary'),
     async () => {
       const hits = [1, 2, 3].map(() => fetchTile(address));
-      // Whichever hit read freely has served and started the rewrite.
-      await Promise.race(hits);
-      await tiles._settleTileWritesForTest();
-      release();
+      try {
+        // Whichever hit read freely has served and started the rewrite.
+        await Promise.race(hits);
+        await tiles._settleTileWritesForTest();
+      } finally {
+        // Let the parked hits finish even if a step above failed.
+        release();
+      }
       for (const hit of await Promise.all(hits))
         assert.deepEqual(listTileLayers(hit.bytes), ['sequence']);
       await tiles._settleTileWritesForTest();
