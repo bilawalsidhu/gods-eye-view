@@ -1,4 +1,5 @@
 import { createLocalModelControls } from './localModelControls.js';
+import { t } from './i18n/index.js';
 
 /** Settings are saved by the panel; model downloads go directly to browser storage. */
 export function appendAiSettings(documentRef, row, ai) {
@@ -24,21 +25,21 @@ export function appendAiSettings(documentRef, row, ai) {
     input.dataset.aiSetting = name;
     input.dataset.initialValue = input.value;
     input.setAttribute('aria-label', label);
-    if (input.disabled) input.title = 'Configured externally';
+    if (input.disabled) input.title = t('Configured externally');
     wrapper.append(input);
     controls.append(wrapper);
     return { input, wrapper };
   };
-  const provider = add('GEV_AI_PROVIDER', 'AI provider', [
+  const provider = add('GEV_AI_PROVIDER', t('AI provider'), [
     ['openai', 'OpenAI'],
-    ['local', 'Local — no API key'],
+    ['local', t('Local — no API key')],
   ]);
-  const profile = add('LOCAL_AI_PROFILE', 'Local profile', [
+  const profile = add('LOCAL_AI_PROFILE', t('Local profile'), [
     ['low', 'low · Bonsai 1.7B / Whisper tiny'],
     ['balance', 'balance · Bonsai 4B / Whisper base'],
     ['max', 'max · Bonsai 8B / Whisper small'],
   ]);
-  const language = add('LOCAL_AI_LANGUAGE', 'Voice language', [
+  const language = add('LOCAL_AI_LANGUAGE', t('Voice language'), [
     ['ru', 'Русский · Piper Irina'],
     ['en', 'English · Piper Lessac'],
   ]);
@@ -46,14 +47,16 @@ export function appendAiSettings(documentRef, row, ai) {
   controls.append(models.root);
   const hint = documentRef.createElement('p');
   hint.className = 'key-setup-unlocks';
-  hint.textContent =
-    'Download once, then run in this browser. Bonsai uses WebGPU; speech stays on your device. Chrome or Edge with hardware acceleration required. Save settings after choosing your profile.';
+  hint.textContent = t(
+    'Download once, then run in this browser. Bonsai uses WebGPU; speech stays on your device. Chrome or Edge with hardware acceleration required. Save settings after choosing your profile.',
+  );
   controls.append(hint);
-  const mcp = add('LOCAL_AI_MCP_URL', 'Search MCP URL (optional)');
+  const mcp = add('LOCAL_AI_MCP_URL', t('Search MCP URL (optional)'));
   const searchHint = documentRef.createElement('p');
   searchHint.className = 'key-setup-unlocks';
-  searchHint.textContent =
-    'Only web search sends queries to this optional MCP server.';
+  searchHint.textContent = t(
+    'Only web search sends queries to this optional MCP server.',
+  );
   controls.append(searchHint);
   let selection;
   const sync = () => {
@@ -76,6 +79,7 @@ export function appendAiSettings(documentRef, row, ai) {
       '.key-setup-tier',
       '.key-setup-get',
       '.key-setup-external',
+      '.key-setup-cloud-auth',
     ]) {
       const element = row.querySelector(selector);
       if (element) element.hidden = local;

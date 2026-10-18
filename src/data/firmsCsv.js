@@ -5,9 +5,15 @@
  * VIIRS header (confirmed live 2026-07-16):
  *   latitude,longitude,bright_ti4,scan,track,acq_date,acq_time,satellite,
  *   instrument,confidence,version,bright_ti5,frp,daynight
+ * MODIS header:
+ *   latitude,longitude,brightness,scan,track,acq_date,acq_time,satellite,
+ *   instrument,confidence,version,bright_t31,frp,daynight
  *
  * Quirks this module owns:
- * - `confidence` is CATEGORICAL for VIIRS (`l`/`n`/`h`) — passed through raw.
+ * - `confidence` is CATEGORICAL for VIIRS (`l`/`n`/`h`) and numeric 0-100 for
+ *   MODIS — passed through raw.
+ * - Brightness maps from `bright_ti4`/`brightness`; the secondary band maps
+ *   from `bright_ti5`/`bright_t31`.
  * - `acq_time` is NOT zero-padded ("45" = 00:45 UTC) — kept as-is in records;
  *   {@link acquisitionMsUtc} does the padding.
  * - Upstream errors come back as HTML or plain text ("Invalid MAP_KEY"),
@@ -99,7 +105,17 @@ export function parseFirmsCsv(text) {
     if (parts.length < header.length) continue; // malformed row — skip
     const lat = Number(parts[iLat]);
     const lon = Number(parts[iLon]);
-    if (!Number.isFinite(lat) || !Number.isFinite(lon)) continue;
+    // Blank or out-of-range positions are dropped, never read as 0 (see
+    // hasCoordinateValue in firmsAdapt.js for the proxy-record side).
+    if (
+      !parts[iLat].trim() ||
+      !parts[iLon].trim() ||
+      !Number.isFinite(lat) ||
+      !Number.isFinite(lon) ||
+      Math.abs(lat) > 90 ||
+      Math.abs(lon) > 180
+    )
+      continue;
 
     records.push({
       lat,
@@ -147,7 +163,13 @@ export function acquisitionMsUtc(acqDate, acqTime) {
     minutes > 59
   )
     return NaN;
-  return Date.UTC(year, month - 1, day, hours, minutes);
+  const ms = Date.UTC(year, month - 1, day, hours, minutes);
+  const parsed = new Date(ms);
+  return parsed.getUTCFullYear() === year &&
+    parsed.getUTCMonth() === month - 1 &&
+    parsed.getUTCDate() === day
+    ? ms
+    : NaN;
 }
 
 /**

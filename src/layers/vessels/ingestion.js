@@ -1,10 +1,16 @@
 import { AIS_FIRST_CONNECT_LABEL } from './recordPolicy.js';
+import { viewAreaMovedEnough } from './viewArea.js';
+
+// A portable export (package.json): no i18n here. The text stays English data
+// and the layer panel shows it translated.
+const msg = (text) => text;
 
 /** Own source requests and classified feed state through explicit operations. */
 export function createIngestion({
   feed,
   readSource,
   readViewer,
+  readArea = () => null,
   getRowLimit,
   readCount,
   applyRows,
@@ -34,8 +40,11 @@ export function createIngestion({
               AbortSignal.timeout(10000),
             ])
           : requestController.signal;
+      // Ask for the vessels in view; a wide view asks for every vessel.
+      const area = readArea(viewer);
+      feed.lastArea = area;
       const snapshot = await readSource().getSnapshot(
-        { maxRows: getRowLimit() },
+        { maxRows: getRowLimit(), ...(area ? { area } : {}) },
         { signal },
       );
       if (!ownsAisRequest(requestController, requestSessionId)) return;
@@ -64,7 +73,7 @@ export function createIngestion({
         ownsAisRequest(requestController, requestSessionId) &&
         error?.name !== 'AbortError'
       ) {
-        markUnavailable(error?.message || 'AIS live load failed');
+        markUnavailable(error?.message || msg('AIS live load failed'));
         console.warn('[Data:ais-live-vessels]', feed.error, error);
       }
     } finally {
@@ -102,8 +111,9 @@ export function createIngestion({
     feed.lastMessageAt = snapshot.lastMessageAt;
     feed.rawRowCount = snapshot.rawRowCount;
     feed.acceptedRowCount = snapshot.acceptedRowCount;
+    feed.partial = payload?.complete === false;
 
-    if (snapshot.acceptedRowCount === 0) {
+    if (snapshot.acceptedRowCount === 0 && !snapshot.emptyCoverage) {
       feed.count = readCount();
       feed.stale = feed.count > 0 || Boolean(payload?.refreshing);
       if (isDefinitiveTransportFailure(snapshot.transportStatus)) {
@@ -133,7 +143,8 @@ export function createIngestion({
     feed.count = readCount();
     feed.stale =
       Boolean(payload?.refreshing) ||
-      payload?.complete === false ||
+      payload?.freshness === 'stale' ||
+      snapshot.transportStatus === 'stale' ||
       payload?.freshness === 'unknown';
     feed.newestPositionAt = payload?.newestPositionAt || null;
     // Not unconditionally null: a degraded feed keeps its reason even though the
@@ -167,6 +178,15 @@ export function createIngestion({
           : new Date(record.observedAtMs).toISOString(),
     };
   }
+  /** Ask again when the view moved away from the last area asked for. */
+  function refreshIfMoved(viewer) {
+    if (!feed.enabled || feed.loading) return Promise.resolve();
+    const active = viewer || readViewer();
+    if (!viewAreaMovedEnough(feed.lastArea ?? null, readArea(active)))
+      return Promise.resolve();
+    return loadLivePositions(active);
+  }
+
   const methods = {
     update(viewer) {
       if (!feed.enabled) return Promise.resolve();
@@ -176,6 +196,7 @@ export function createIngestion({
 
   return {
     loadLivePositions,
+    refreshIfMoved,
     ownsAisRequest,
     applyAisFeedSnapshot,
     vesselDisplayRow,
@@ -190,6 +211,7 @@ export function createVesselFeed() {
     loading: false,
     loaded: false,
     stale: false,
+    partial: false,
     error: null,
     loadingLabel: '',
     lastUpdate: null,
@@ -206,5 +228,9 @@ export function createVesselFeed() {
     firstConnectDeadline: null,
     firstConnectTimer: null,
     abort: null,
+    /** The area last asked for, null for every vessel. */
+    lastArea: null,
+    /** Stops listening for camera moves. */
+    removeViewListener: null,
   };
 }

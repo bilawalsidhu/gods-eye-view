@@ -1,6 +1,9 @@
 import { createApplicationOperations } from './operations.js';
 import * as Cesium from 'cesium';
-import { createApplicationViewer } from '../app/viewer.js';
+import {
+  createApplicationViewer,
+  installTrackpadPinchZoom,
+} from '../app/viewer.js';
 import { registerDataCredits } from '../data/dataCredits.js';
 import { configureCreditKeyboardAccess } from '../creditKeyboard.js';
 import { MapStackController } from '../mapStackController.js';
@@ -11,11 +14,13 @@ import {
   governorRequestRender,
 } from '../renderGovernor.js';
 import { describeError } from './errors.js';
+import { t } from '../i18n/index.js';
 
 /** Construct the application globe using the caller's local configuration. */
 export async function createApplicationScene({
   requestServices,
   googleApiKey,
+  googleTokens = null,
   cesiumToken,
   credits,
   MapController = MapStackController,
@@ -38,7 +43,7 @@ export async function createApplicationScene({
       else window.__GOOGLE_MAPS_API_KEY__ = previousKey;
     });
   }
-  loaderStatus.textContent = 'Configuring viewer...';
+  loaderStatus.textContent = t('Configuring viewer...');
   // Provider attribution stays visible, including clean-view and recording.
   const creditContainer = document.createElement('div');
   creditContainer.id = 'cesium-credits';
@@ -52,14 +57,16 @@ export async function createApplicationScene({
     uninstallRenderGovernor(viewer);
     if (!viewer.isDestroyed()) viewer.destroy();
   });
+  defer(installTrackpadPinchZoom(viewer));
   registerDataCredits(viewer, credits);
   configureCreditKeyboardAccess(document);
   loaderStatus.textContent =
-    googleApiKey || cesiumToken
-      ? 'Loading Google 3D Tiles...'
-      : 'Loading the keyless globe...';
+    googleApiKey || googleTokens || cesiumToken
+      ? t('Loading Google 3D Tiles...')
+      : t('Loading the keyless globe...');
   const photoreal = await loadPhotorealisticTileset(Cesium, {
     googleApiKey,
+    googleTokens,
     cesiumToken,
   });
   const tileset = photoreal.tileset;
@@ -84,12 +91,17 @@ export async function createApplicationScene({
         tileError,
       );
       const tileErrorDetail = describeError(tileError);
-      loaderStatus.textContent = `Google 3D Tiles unavailable (${tileErrorDetail}). Loading the keyless globe...`;
+      loaderStatus.textContent = t(
+        'Google 3D Tiles unavailable ({detail}). Loading the keyless globe...',
+        {
+          detail: tileErrorDetail,
+        },
+      );
     }
     viewer.scene.globe.show = true;
   }
 
-  loaderStatus.textContent = 'Initializing systems...';
+  loaderStatus.textContent = t('Initializing systems...');
 
   const mapStackController = new MapController(viewer, {
     requestRender: governorRequestRender,

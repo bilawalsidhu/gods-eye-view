@@ -10,6 +10,7 @@ import {
   startLocalDownload,
   subscribeLocalDownloads,
 } from './voice/localDownloads.js';
+import { t } from './i18n/index.js';
 
 export function createLocalModelControls(documentRef) {
   const root = documentRef.createElement('div');
@@ -27,22 +28,26 @@ export function createLocalModelControls(documentRef) {
       progress.max = state.total;
       progress.value = state.loaded;
       download.textContent = busy
-        ? 'CANCEL'
+        ? t('CANCEL')
         : ready
-          ? 'DOWNLOADED ✓'
+          ? t('DOWNLOADED ✓')
           : failed
-            ? 'RETRY DOWNLOAD'
-            : 'DOWNLOAD';
+            ? t('RETRY DOWNLOAD')
+            : t('DOWNLOAD');
       download.disabled = ready || checking;
       remove.hidden = busy || (!ready && !state.loaded);
       status.textContent = busy
         ? `${Math.min(100, Math.floor((state.loaded / state.total) * 100))}% · ${formatModelBytes(state.loaded)} / ${formatModelBytes(state.total)}`
-        : state.error ||
+        : (state.error && t(state.error)) ||
           (ready
-            ? 'Saved in this browser'
+            ? t('Saved in this browser')
             : checking
-              ? 'Checking browser cache…'
-              : `${formatModelBytes(state.total)}${state.loaded ? ' · partially downloaded' : ''}`);
+              ? t('Checking browser cache…')
+              : state.loaded
+                ? t('{size} · partially downloaded', {
+                    size: formatModelBytes(state.total),
+                  })
+                : formatModelBytes(state.total));
     }
   };
   const unsubscribe = subscribeLocalDownloads(paint);
@@ -61,21 +66,27 @@ export function createLocalModelControls(documentRef) {
         const kind = documentRef.createElement('span');
         kind.className = 'local-model-kind';
         kind.textContent = {
-          chat: 'AI MODEL',
-          recognition: 'SPEECH RECOGNITION',
-          speech: 'VOICE',
+          chat: t('AI MODEL'),
+          recognition: t('SPEECH RECOGNITION'),
+          speech: t('VOICE'),
         }[model.kind];
         const status = documentRef.createElement('span');
         status.className = 'local-model-status';
         status.setAttribute('role', 'status');
         const progress = documentRef.createElement('progress');
-        progress.setAttribute('aria-label', `${model.title} download progress`);
+        progress.setAttribute(
+          'aria-label',
+          t('{model} download progress', { model: model.title }),
+        );
         const actions = documentRef.createElement('div');
         actions.className = 'local-model-actions';
         const download = documentRef.createElement('button');
         download.type = 'button';
         download.className = 'local-model-download';
-        download.setAttribute('aria-label', `Download ${model.title}`);
+        download.setAttribute(
+          'aria-label',
+          t('Download {model}', { model: model.title }),
+        );
         download.addEventListener('click', () => {
           if (localDownloadState(model).status === 'downloading')
             cancelLocalDownload(model);
@@ -84,10 +95,10 @@ export function createLocalModelControls(documentRef) {
         const remove = documentRef.createElement('button');
         remove.type = 'button';
         remove.className = 'key-setup-remove';
-        remove.textContent = 'REMOVE FROM CACHE';
+        remove.textContent = t('REMOVE FROM CACHE');
         remove.setAttribute(
           'aria-label',
-          `Remove ${model.title} from browser cache`,
+          t('Remove {model} from browser cache', { model: model.title }),
         );
         remove.addEventListener('click', () => void deleteLocalDownload(model));
         actions.append(download, remove);

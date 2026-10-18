@@ -1,4 +1,7 @@
 /** Connect the portable Director runner to the existing scene presentation. */
+import { t } from '../i18n/index.js';
+import { displaySceneTitle, displayShotTitle } from './recipes.js';
+
 export function createScenePlaybackAdapter(director, defaultShotDurationSec) {
   let timing;
   let travel;
@@ -14,7 +17,12 @@ export function createScenePlaybackAdapter(director, defaultShotDurationSec) {
       director._renderSceneSelect();
       director._renderShotList();
       director._updateStatus(
-        `Running ${index + 1}/${total}: ${scene.title} / ${shot.title}`,
+        t('Running {index}/{total}: {scene} / {shot}', {
+          index: index + 1,
+          total,
+          scene: displaySceneTitle(scene),
+          shot: displayShotTitle(shot.title, shot, scene),
+        }),
       );
       director._logEvent('shot_start', {
         sceneId: scene.id,
@@ -29,18 +37,26 @@ export function createScenePlaybackAdapter(director, defaultShotDurationSec) {
         { isCurrent: () => !token.cancelled && !token.signal?.aborted },
       );
     },
-    applyLayers({ scene, shot, token }) {
-      return director._applyLayerStates(
+    async applyLayers({ scene, shot, token }) {
+      director._setSceneMediaPlayback(scene, shot, token);
+      const result = await director._applyLayerStates(
         director._layerStatesForShot(scene, shot),
         token,
       );
+      if (
+        !token.cancelled &&
+        !result.refused.length &&
+        !(await director._applyDataPacks(scene, shot, token))
+      )
+        throw new Error('Data packs unavailable');
+      return result;
     },
     travel({ scene, shot, token }) {
       director._loadedSceneId = scene.id;
       const duration = shot.durationSec || defaultShotDurationSec;
       timing = director._startSceneClockTicker(scene, shot, token);
       travel = director._beginShotTravel(scene, shot, duration);
-      const flight = director._flyCamera(shot.camera, duration, token);
+      const flight = director._flyShotCamera(scene, shot, duration, token);
       director._publishShotTravel(scene, shot, travel);
       return flight;
     },
@@ -63,7 +79,7 @@ export function createScenePlaybackAdapter(director, defaultShotDurationSec) {
     },
     complete() {
       director._setProgress(1);
-      director._updateStatus('Scene run complete');
+      director._updateStatus(t('Scene run complete'));
       director._logEvent('scene_run_complete', {});
     },
   };

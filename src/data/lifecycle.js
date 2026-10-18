@@ -1,3 +1,5 @@
+import { cancelCameraArrival } from './cameraArrival.js';
+
 function cloneLayerParams(value) {
   if (Array.isArray(value)) return value.map(cloneLayerParams);
   if (value && typeof value === 'object') {
@@ -16,6 +18,8 @@ const VALID_LAYER_SERIALIZATION_DISPOSITIONS = new Set([
   'enabled-only',
   'enabled+options',
   'enabled+mirrored-options',
+  // Registered but never serialized (for example hardware-local layers).
+  'local-only',
 ]);
 
 function isAbortError(error) {
@@ -70,7 +74,11 @@ function refreshFailureFromStats(stats, label) {
  * for real-time data overlays on the CesiumJS globe.
  */
 export class LayerLifecycle {
-  constructor(viewer, { allowQaRegistration = false } = {}) {
+  constructor(
+    viewer,
+    { allowQaRegistration = false, getSourceAvailability } = {},
+  ) {
+    this._catalogSourceAvailability = getSourceAvailability;
     this.viewer = viewer;
     this._activityListeners = new Set();
     this.layers = new Map(); // id → { module, enabled, initialized, intervalId, lifecycleState, lifecycleUncertain }
@@ -224,6 +232,7 @@ export class LayerLifecycle {
 
   _normalizedStats(entry) {
     const moduleStats = this._moduleStats(entry);
+    const availability = this._sourceAvailability(entry.module.id);
     const lifecycleLoading =
       entry.lifecycleState === 'enabling' ||
       entry.lifecycleState === 'disabling';
@@ -231,6 +240,13 @@ export class LayerLifecycle {
       count: 0,
       lastUpdate: null,
       ...moduleStats,
+      ...(availability?.available === false
+        ? {
+            status: 'unavailable',
+            sourceUnavailable: true,
+            error: availability.reason,
+          }
+        : {}),
       loading: lifecycleLoading || moduleStats.loading === true,
       refreshing: entry.refreshing || moduleStats.refreshing === true,
       managerRefreshError: entry.managerRefreshError,
@@ -1072,6 +1088,7 @@ export class LayerLifecycle {
     const entry = this.layers.get(layerId);
     if (!entry) return { intentEpoch: null, promise: Promise.resolve() };
     const desiredState = Boolean(shouldEnable);
+    if (!desiredState) cancelCameraArrival(this.viewer);
     if (entry.destroying) {
       return {
         intentEpoch: null,
@@ -2093,6 +2110,7 @@ export class LayerLifecycle {
   async destroyLayer(layerId) {
     const entry = this.layers.get(layerId);
     if (!entry || entry.destroying) return false;
+    cancelCameraArrival(this.viewer);
     entry.destroying = true;
     this._invalidateRefresh(layerId, entry, 'layer-destroyed');
     // Teardown becomes authoritative before the first await. Advancing the
@@ -2276,7 +2294,17 @@ export class LayerLifecycle {
     }
   }
 
+  _sourceAvailability(layerId) {
+    return (
+      this._catalogSourceAvailability?.(layerId) ??
+      this.layers.get(layerId)?.module.getSourceAvailability?.()
+    );
+  }
+
   async _visibilityBlockReason(change) {
+    const availability = this._sourceAvailability(change.layerId);
+    if (change.enabled && availability?.available === false)
+      return availability.reason || 'Data source unavailable';
     for (const callback of this._visibilityGuards) {
       try {
         const result = await callback(change);
@@ -2300,6 +2328,14 @@ export class LayerLifecycle {
     if (typeof callback !== 'function') return () => {};
     this._activityListeners.add(callback);
     return () => this._activityListeners.delete(callback);
+  }
+
+  /**
+   * Ask presentation to repaint layer rows now, for data that lands outside
+   * the manager tick (Transit's proximity polls, Directions' route steps).
+   */
+  refreshLayerStats() {
+    this._publishActivity({ type: 'status' });
   }
 
   _publishActivity(change) {

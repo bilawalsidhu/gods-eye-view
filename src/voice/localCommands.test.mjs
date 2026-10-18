@@ -123,10 +123,11 @@ for (const [text, name, args] of cases)
       request: () => assert.fail('Ordinary control must not load Bonsai'),
       runAction: async (tool, values) => {
         calls.push([tool, values]);
-        return { ok: true, arrived: true, label: 'Target' };
+        return { ok: true, arrived: true, label: 'Target', scene: { basemap: { target: { latitude: 30, longitude: -97 } } } };
       },
     });
-    assert.deepEqual(calls.at(-1), [name, args]);
+    const expected = name === 'select_nearest_aircraft' && !args.locationQuery ? { ...args, latitude: 30, longitude: -97 } : args;
+    assert.deepEqual(calls.at(-1), [name, expected]);
     if (name === 'track_entity')
       assert.deepEqual(calls[0], [
         'set_layer_visibility',
@@ -316,4 +317,22 @@ test('a model tool is confirmed directly without a second expensive generation',
     runAction: async () => ({ ok: true }),
   });
   assert.equal(answer.text, 'Приближаю.');
+});
+
+test('nearest aircraft uses the viewed ground target and never camera coordinates', async () => {
+  const calls = [];
+  await runLocalAction('select_nearest_aircraft', { layerId: 'flights' }, async (name, args) => {
+    calls.push([name, args]);
+    return { ok: true, scene: { camera: { latitude: 10, longitude: 20 }, basemap: { target: { latitude: 30, longitude: 40 } } } };
+  });
+  assert.deepEqual(calls, [
+    ['get_entity_context', { scope: 'in_view', limit: 1 }],
+    ['select_nearest_aircraft', { layerId: 'flights', latitude: 30, longitude: 40 }],
+  ]);
+  const missing = [];
+  const result = await runLocalAction('select_nearest_aircraft', { layerId: 'flights' }, async (name) => {
+    missing.push(name); return { ok: true, scene: { camera: { latitude: 10, longitude: 20 } } };
+  });
+  assert.equal(result.ok, false);
+  assert.deepEqual(missing, ['get_entity_context']);
 });

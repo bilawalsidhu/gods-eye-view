@@ -1,8 +1,8 @@
 // src/data/trafficBounds.test.mjs
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { greatCircleKm } from '../geoDistance.js';
 import {
-  greatCircleKm,
   deriveFetchCenter,
   clampBoundsAroundCenter,
 } from './trafficBounds.js';
@@ -11,7 +11,7 @@ import {
 const NADIR = { lat: 30.2672, lon: -97.7431 };
 
 test('greatCircleKm sanity: Austin -> ~5 km north', () => {
-  const d = greatCircleKm(NADIR.lat, NADIR.lon, NADIR.lat + 0.045, NADIR.lon);
+  const d = greatCircleKm(NADIR, { lat: NADIR.lat + 0.045, lon: NADIR.lon });
   assert.ok(Math.abs(d - 5.0) < 0.1, `got ${d}`);
 });
 
@@ -41,14 +41,14 @@ test('oblique look within 12 km: uses the hit point verbatim', () => {
 test('horizon gaze: far hit is pulled back to 12 km along the bearing', () => {
   // Hit ~100 km due east of nadir.
   const hit = { lat: NADIR.lat, lon: NADIR.lon + 1.041 };
-  assert.ok(greatCircleKm(NADIR.lat, NADIR.lon, hit.lat, hit.lon) > 90, 'precondition: far hit');
+  assert.ok(greatCircleKm(NADIR, hit) > 90, 'precondition: far hit');
   const c = deriveFetchCenter({
     nadirLat: NADIR.lat, nadirLon: NADIR.lon,
     hitLat: hit.lat, hitLon: hit.lon,
     maxPullKm: 12,
   });
   assert.equal(c.source, 'pulled');
-  const d = greatCircleKm(NADIR.lat, NADIR.lon, c.lat, c.lon);
+  const d = greatCircleKm(NADIR, c);
   assert.ok(Math.abs(d - 12) < 0.05, `pulled distance ${d} km, expected ~12`);
   // Due-east bearing: latitude stays ~constant, longitude moves east but well
   // short of the hit.
@@ -64,12 +64,12 @@ test('pull cap is honored for other maxPullKm values', () => {
     maxPullKm: 5,
   });
   assert.equal(c.source, 'pulled');
-  const d = greatCircleKm(NADIR.lat, NADIR.lon, c.lat, c.lon);
+  const d = greatCircleKm(NADIR, c);
   assert.ok(Math.abs(d - 5) < 0.05, `pulled distance ${d} km, expected ~5`);
 });
 
-test('pickEllipsoid failure (non-finite hit): falls back to the camera nadir', () => {
-  for (const [hitLat, hitLon] of [[NaN, NaN], [undefined, undefined], [30.3, undefined]]) {
+test('invalid ground hit falls back to the camera nadir', () => {
+  for (const [hitLat, hitLon] of [[NaN, NaN], [undefined, undefined], [30.3, undefined], [91, -97], [30, 181]]) {
     const c = deriveFetchCenter({
       nadirLat: NADIR.lat, nadirLon: NADIR.lon,
       hitLat, hitLon,
@@ -107,4 +107,20 @@ test('span clamp is idempotent on already-clamped bounds (loadRoadsForBounds re-
   const midpoint = { lat: (once.south + once.north) / 2, lon: (once.west + once.east) / 2 };
   const twice = clampBoundsAroundCenter(once, midpoint, 0.05);
   assert.deepEqual(twice, once);
+});
+
+test('span clamp keeps antimeridian bounds monotonic and request-safe', () => {
+  for (const centerLon of [179.99, -179.99]) {
+    const result = clampBoundsAroundCenter({
+      south: -0.02,
+      north: 0.02,
+      west: 179.98,
+      east: -179.98,
+    }, { lat: 0, lon: centerLon }, 0.05);
+
+    assert.ok(result.west >= -180 && result.east <= 180);
+    assert.ok(result.west <= result.east, `west/east not monotonic: ${result.west}, ${result.east}`);
+    assert.ok(Math.abs(result.east - result.west - 0.04) < 1e-12);
+    assert.ok(result.west <= centerLon && centerLon <= result.east);
+  }
 });

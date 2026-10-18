@@ -2,8 +2,8 @@
 
 Director is the scene playback system. Ordered shot execution, authored timing and playback clocks are separated
 from the scene editor and application rendering. This document
-also records the proposed next steps; the sharing format and interactions below
-are a design plan, not features already available.
+records implemented camera directions, data packs, declarative interactions and
+file sharing, along with the remaining extensions.
 
 ## Implemented boundary
 
@@ -66,41 +66,43 @@ and river coordinates are bundled. See the
    calculations, an owned clock and registered presentation rules preserve
    existing recipes and content. Tests cover direct load, forward/backward seek,
    replay, bounded media waits and cancellation at pending transitions.
-2. **Versioned scene document.** Build on the existing version-3 project export
-   and its importer. Specify a schema and migrations before changing writes.
-   Keep old imports and local-storage projects readable; reject unsupported
-   versions without replacing the current project. Include stable scene, shot,
-   anchor, pack and action IDs. Separate portable authored state from transient
-   loading state and run diagnostics. Bound document size, collection lengths,
-   numeric values and nesting; show errors at the affected field.
-3. **Camera directions.** Define named geographic anchors and explicit
-   move/hold segments: start and destination, duration, easing, heading, pitch,
-   roll and stop duration. State coordinate units, altitude reference and
-   terrain-relative behavior. Support the current camera-pose shots first;
-   paths, look-at targets and pauses follow with deterministic seek behavior.
-4. **Data packs and placement.** Define a pack manifest with format/version,
-   source, attribution/license and optional integrity/size metadata. Distinguish
-   where bytes live (relative files, a URL, or an eventual bundle) from where
-   features appear (geographic bounds, anchors, transforms and elevation rules).
-   Start with existing GeoJSON/image/media adapters. Resolve relative paths
-   against an explicit document base; define CORS, caching, missing-asset and
-   offline behavior. Fetch only through registered source adapters with bounded,
-   cancellable loading. Scene files carry no credentials or executable modules.
-5. **Declarative interactions.** Give pickable features stable IDs and connect
-   clicks to a small action registry: show a text/source card, focus an anchor,
-   seek a shot, or change an allowed layer state. Define selection feedback,
-   keyboard equivalents and precedence with drawing/tracking controls. Validate
-   target references and cancel pending actions on Stop, replacement or teardown.
-   No JavaScript evaluation or arbitrary HTML in scene files. Branching must
-   have explicit loop/transition limits and reproducible reset/seek semantics.
-6. **Sharing and authoring.** Add validated preview/import/export, missing-pack
-   diagnostics and an optional self-contained bundle. Preserve attribution with
-   each pack; a share link does not change an asset's license. A future node graph
-   could author this same document, but playback and the format will not require
-   a graph editor.
+2. **Versioned scene document — implemented for existing camera-pose shots.**
+   [The scene document](SCENE-DOCUMENT.md) preserves version-1/2/3 imports. Bounded validation
+   rejects malformed files before replacing current state; legacy migration
+   preserves IDs, pack bindings and visual edits. Unreadable saved files are
+   protected from fallback writes. Camera anchors, pack manifests and actions
+   receive stable IDs with their respective later format extensions.
+3. **Camera directions — implemented for pose-to-pose moves.**
+   [Version 4](DIRECTOR-CAMERA.md) adds scene-local geographic anchors, explicit
+   start/destination poses, easing, duration and holds. Playback and seek share
+   the same sampler. Ellipsoidal heights are explicit; terrain-relative input
+   is rejected. Existing shots retain ordinary flights. Basic anchor/move authoring is available through EDIT DETAILS; curved paths and
+   look-at targets remain later extensions.
+4. **Data packs and placement — implemented for bounded assets.**
+   [Version 5](DIRECTOR-DATA-PACKS.md) defines a pack manifest with format/version,
+   source, attribution/license and optional integrity/size metadata. It distinguishes
+   registered asset directories from geographic coordinates, image bounds and
+   media anchors. GeoJSON, PNG and native media adapters load with byte/time
+   limits and explicit ellipsoid heights. Stop and replacement release resources.
+   Paths resolve against a trusted directory base; missing/offline assets fail
+   explicitly. File bundles are available; transforms and terrain-relative placement
+   remain future extensions. Scene files carry no credentials or executable modules.
+5. **Declarative interactions — implemented.** [Version 6](DIRECTOR-INTERACTIONS.md)
+   connects selected feature IDs to accessible text/source cards, anchor focus,
+   shot seek and admitted layer changes. References are validated and pending
+   actions cancel on Stop, replacement or teardown. Scene files contain no
+   JavaScript or arbitrary HTML; actions require explicit user input.
+6. **Sharing and basic authoring — implemented.** [Authoring and sharing](DIRECTOR-SHARING.md)
+   adds import preview, missing-source/layer diagnostics, validated scene/shot
+   drafts and selected-scene JSON or explicit-file bundles. Pack attribution is
+   preserved. Bundle bytes last for the session and must be reimported after a
+   reload. A future node graph can author the same document without becoming a
+   playback or format requirement.
 
 Each step must preserve existing scene editing, keyboard playback, camera
 arbitration, layer cleanup, media timing and provider fallback. Acceptance includes
 portable runner tests, existing Director regressions and browser playback with
 Stop/seek/replay, plus tracking and voice checks. Use reproducible local fixtures
 for failures and cancellation, alongside live visual checks for actual content.
+
+Declarative actions are implemented in version 6; see [scene actions](DIRECTOR-INTERACTIONS.md) for supported targets, execution and reset semantics.

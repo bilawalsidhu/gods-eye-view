@@ -1,3 +1,4 @@
+import { t } from '../i18n/index.js';
 import { createBrowserLocalRuntime } from './browserLocalRuntime.js';
 import {
   createLocalPcmRecorder,
@@ -83,7 +84,7 @@ export function createLocalSession({
     history = [];
     processing = false;
     held = false;
-    if (!preserveStatus) state('idle', 'Local voice off');
+    if (!preserveStatus) state('idle', t('Local voice off'));
     if (removeUi) {
       window.removeEventListener('keydown', keyDown);
       window.removeEventListener('keyup', keyUp);
@@ -117,7 +118,7 @@ export function createLocalSession({
         audio.onended = done;
         audio.onerror = () => {
           turnSignal.removeEventListener('abort', done);
-          reject(new Error('Could not play local speech'));
+          reject(new Error(t('Could not play local speech')));
         };
         audio.play().catch((error) => {
           turnSignal.removeEventListener('abort', done);
@@ -131,7 +132,7 @@ export function createLocalSession({
   }
   async function turn(text, session) {
     const turnSignal = combined(session);
-    state('executing', 'LOCAL · THINKING');
+    state('executing', t('LOCAL · THINKING'));
     const result = await runLocalTurn({
       text,
       history,
@@ -158,7 +159,7 @@ export function createLocalSession({
     if (!stream || !meter || !recorder || recorder.state !== 'inactive') return;
     if (!current(session) || processing || (manual && !held)) {
       if (current(session) && !processing)
-        state('listening', 'LOCAL · HOLD SPACE TO SPEAK');
+        state('listening', t('LOCAL · HOLD SPACE TO SPEAK'));
       return;
     }
     recorder.start(async (pcm, sampleRate) => {
@@ -173,7 +174,7 @@ export function createLocalSession({
       const task = new AbortController();
       operation = task;
       try {
-        state('executing', 'LOCAL · TRANSCRIBING');
+        state('executing', t('LOCAL · TRANSCRIBING'));
         const samples = await localSpeechSamples(pcm, sampleRate);
         if (!current(session) || task.signal.aborted) return;
         const { text } = await runtime.transcribe(samples, combined(session));
@@ -191,7 +192,12 @@ export function createLocalSession({
     });
     state(
       'listening',
-      `LOCAL ${config.profile.toUpperCase()} · ${manual ? 'RELEASE SPACE TO SEND' : 'SPEAK, THEN PAUSE'}`,
+      t('LOCAL {profile} · {instruction}', {
+        profile: config.profile.toUpperCase(),
+        instruction: manual
+          ? t('RELEASE SPACE TO SEND')
+          : t('SPEAK, THEN PAUSE'),
+      }),
     );
     const samples = new Float32Array(meter.fftSize);
     const began = performance.now();
@@ -220,7 +226,7 @@ export function createLocalSession({
     active = session;
     processing = true;
     manual = pushToTalk;
-    state('connecting', 'Checking local models…');
+    state('connecting', t('Checking local models…'));
     try {
       await runtime.prepare(combined(session), (message) => {
         if (current(session)) state('connecting', message);
@@ -228,7 +234,7 @@ export function createLocalSession({
       if (!current(session)) return;
       if (!navigator.mediaDevices?.getUserMedia)
         throw new Error(
-          'Local voice requires microphone access on localhost or HTTPS',
+          t('Local voice requires microphone access on localhost or HTTPS'),
         );
       radioLayer?.pause?.();
       const microphone = await navigator.mediaDevices.getUserMedia({
@@ -339,8 +345,9 @@ export function createLocalSession({
       if (bound) return;
       bound = true;
       if (ui.helpDetail)
-        ui.helpDetail.textContent =
-          'Local · click to talk hands-free, or hold Space to speak';
+        ui.helpDetail.textContent = t(
+          'Local · click to talk hands-free, or hold Space to speak',
+        );
       detail(`LOCAL ${config.profile.toUpperCase()} · ${config.model}`);
       window.addEventListener('keydown', keyDown);
       window.addEventListener('keyup', keyUp);

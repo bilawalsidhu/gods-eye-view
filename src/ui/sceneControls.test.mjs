@@ -24,6 +24,16 @@ function fixture() {
     }
     appendChild(element) {
       this.children.push(element);
+      element.parentNode = this;
+    }
+    append(...nodes) {
+      for (const node of nodes) this.appendChild(node);
+    }
+    remove() {
+      if (this.parentNode)
+        this.parentNode.children = this.parentNode.children.filter(
+          (node) => node !== this,
+        );
     }
     setAttribute(name, value) {
       this[name] = value;

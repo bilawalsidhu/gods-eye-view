@@ -1,3 +1,4 @@
+import { t } from '../i18n/index.js';
 import { checkLocalGpu, requireCachedModels } from './localModelCache.js';
 import { localAiConfig } from './localConfig.js';
 
@@ -5,7 +6,9 @@ const stopped = () => new DOMException('Local inference stopped', 'AbortError');
 function inferenceError(message) {
   return new Error(
     /out of memory|\boom\b|memory access out of bounds/iu.test(message)
-      ? 'Local model ran out of memory. Its memory has been released. Try again with a shorter request or the low profile.'
+      ? t(
+          'Local model ran out of memory. Its memory has been released. Try again with a shorter request or the low profile.',
+        )
       : message,
   );
 }
@@ -78,7 +81,14 @@ export function createBrowserLocalRuntime(
         const item = owner.pending.get(reply.id);
         if (!item) return;
         if (reply.status) {
-          item.onStatus?.(reply.status);
+          const loading = reply.status.match(
+            /^Loading (.+) from browser cache…$/u,
+          );
+          item.onStatus?.(
+            loading
+              ? t('Loading {model} from browser cache…', { model: loading[1] })
+              : reply.status,
+          );
           return;
         }
         if (reply.error) {

@@ -4,6 +4,11 @@
  * New logic belongs with an owner, not in this forwarding surface.
  */
 export class ShellFacade {
+  /** Observe camera ownership transfers through the navigation owner. */
+  subscribeCameraHandoff(listener) {
+    return this._navigation.subscribeCameraHandoff(listener);
+  }
+
   get _models3dModeBtns() {
     return this._aircraftDisplay._models3dModeBtns;
   }
@@ -650,7 +655,7 @@ export class ShellFacade {
     return this._visualSettings._syncIrBoost(...arguments);
   }
 
-  /** Keep Cockpit's inherited label and restore target aligned with the active map preset. */
+  /** Keep Cockpit's exit restore target aligned with the active map preset. */
   _syncCockpitInheritedStyle() {
     return this._visualSettings._syncCockpitInheritedStyle(...arguments);
   }
@@ -755,6 +760,14 @@ export class ShellFacade {
    */
   _setHudVariant(variantName) {
     return this._visualSettings._setHudVariant(...arguments);
+  }
+
+  _setCyberSonarEnabled(enabled) {
+    return this._visualSettings._setCyberSonarEnabled(...arguments);
+  }
+
+  _setCyberSonarSetting(name, value) {
+    return this._visualSettings._setCyberSonarSetting(...arguments);
   }
 
   /**

@@ -1,0 +1,18 @@
+Browser local AI runtime sources
+
+The separately served piper_phonemize WebAssembly binary and data originate
+from @diffusionstudio/piper-wasm 1.0.0. They are used without modification.
+The package README provides the build procedure and source repositories:
+https://github.com/diffusionstudio/piper-wasm/blob/main/README.md
+
+Phonemizer source:
+https://github.com/wide-video/piper-phonemize
+
+eSpeak NG source and data, retained under GPL v3:
+https://github.com/rhasspy/espeak-ng
+https://github.com/rhasspy/espeak-ng/blob/master/COPYING
+License text: espeak-ng-GPL-3.0.txt in this directory.
+
+The eSpeak NG component is provided without warranty, under its own license.
+Its license is not replaced by the application's MIT source-code license or
+the npm wrapper's MIT metadata. See THIRD_PARTY_NOTICES.md in the repository.

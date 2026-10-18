@@ -1,4 +1,9 @@
 import * as Cesium from 'cesium';
+import { t, msg } from '../../i18n/index.js';
+import {
+  createCyberSonarSampler,
+  isCyberContactSonarActive as isCyberSonarActive,
+} from '../../cyberSonar.js';
 import {
   ROCKET_MISSION_AMBIENT_OVERLAY_COHORT_LIMIT,
   ROCKET_MISSION_AMBIENT_OVERLAY_SOURCE_ID,
@@ -115,8 +120,10 @@ export function createOverlays({ state: layerState, services, parts, source }) {
     const details = selected
       ? [
           siteName
-            ? `LAUNCH SITE · ${shortMissionLabel(siteName, 20).toUpperCase()}`
-            : 'LAUNCH SITE',
+            ? t('LAUNCH SITE · {site}', {
+                site: shortMissionLabel(siteName, 20).toUpperCase(),
+              })
+            : t('LAUNCH SITE'),
         ]
       : [];
     return {
@@ -303,6 +310,15 @@ export function createOverlays({ state: layerState, services, parts, source }) {
       <span data-replay-overlay-detail></span>
     </div>`;
     host.appendChild(layerState._replayVehicleOverlay);
+    layerState._replayVehicleOverlay._sonarIcons = [
+      ...layerState._replayVehicleOverlay.querySelectorAll(
+        '.mission-replay-flight-symbol, .mission-replay-orbit-dot',
+      ),
+    ];
+    layerState._replayVehicleOverlay._sonarLabel =
+      layerState._replayVehicleOverlay.querySelector(
+        '.mission-replay-overlay-callout',
+      );
   }
 
   function hideReplayVehicleOverlay() {
@@ -502,6 +518,17 @@ export function createOverlays({ state: layerState, services, parts, source }) {
         : windowPosition;
     track.lastOverlayWindowPosition = renderedWindowPosition;
     track.lastOverlayMode = mode;
+    const sonar = isCyberSonarActive()
+      ? createCyberSonarSampler(canvas.clientWidth, canvas.clientHeight)
+      : null;
+    const factor =
+      sonar?.at(renderedWindowPosition.x, renderedWindowPosition.y) ?? 1;
+    for (const icon of layerState._replayVehicleOverlay._sonarIcons || [])
+      icon.style.opacity = String(factor);
+    if (layerState._replayVehicleOverlay._sonarLabel)
+      layerState._replayVehicleOverlay._sonarLabel.style.opacity = String(
+        sonar ? sonar.label(factor) : 1,
+      );
     layerState._replayVehicleOverlay.hidden = false;
     layerState._replayVehicleOverlay.dataset.mode = mode;
     layerState._replayVehicleOverlay.classList.toggle(
@@ -562,27 +589,37 @@ export function createOverlays({ state: layerState, services, parts, source }) {
     const mission = shortMissionLabel(launch.name, 22).toUpperCase();
     const siteName = compactLaunchSiteName(launch.launchSite);
     const siteCallout = siteName
-      ? `LAUNCH SITE · ${shortMissionLabel(siteName, 20).toUpperCase()}`
-      : 'LAUNCH SITE';
+      ? t('LAUNCH SITE · {site}', {
+          site: shortMissionLabel(siteName, 20).toUpperCase(),
+        })
+      : t('LAUNCH SITE');
     let title = mission;
     let detail = siteCallout;
     if (mode === 'countdown') {
-      title = `T−${String(state.countdownSeconds).padStart(2, '0')} · ${mission}`;
-      detail = `LAUNCH STANDBY\n${siteCallout}`;
+      title = t('T−{time} · {mission}', {
+        time: String(state.countdownSeconds).padStart(2, '0'),
+        mission,
+      });
+      detail = `${t('LAUNCH STANDBY')}\n${siteCallout}`;
     } else if (mode === 'ascent') {
       title =
         state.elapsedSinceStart < 1
-          ? `LIFTOFF · ${mission}`
-          : `${launch.trajectory.length > 1 ? 'ASCENT REPLAY' : 'ASCENT ESTIMATE'} · ${mission}`;
+          ? t('LIFTOFF · {mission}', { mission })
+          : t(
+              launch.trajectory.length > 1
+                ? msg('ASCENT REPLAY · {mission}')
+                : msg('ASCENT ESTIMATE · {mission}'),
+              { mission },
+            );
       detail = parts.policyHelpers.formatMissionEventTime(state.eventTime);
     } else if (mode === 'recovery') {
-      title = `STAGE RE-ENTRY / RECOVERY · ${mission}`;
+      title = t('STAGE RE-ENTRY / RECOVERY · {mission}', { mission });
       detail = parts.policyHelpers.formatMissionEventTime(state.eventTime);
     } else if (mode === 'orbit') {
-      title = `ORBIT REPLAY · ${mission}`;
+      title = t('ORBIT REPLAY · {mission}', { mission });
       detail = parts.policyHelpers.formatMissionEventTime(state.eventTime);
     }
-    if (layerState._replayPaused) title = `PAUSED · ${title}`;
+    if (layerState._replayPaused) title = t('PAUSED · {title}', { title });
     const nextText = `${title}\n${detail}`;
     if (nextText !== layerState._replayVehicleOverlayText) {
       layerState._replayVehicleOverlayText = nextText;

@@ -1,11 +1,30 @@
+import { t, translateKnown } from '../i18n/index.js';
 import {
+  SPACE_MISSIONS_LAYER_BLOCK_REASON,
   cockpitEntryAllowed,
   isExplicitUserIntentOrigin,
+  parseContextLayerBlockReason,
   recordContextRestoreExplicitChange,
   recordContextSessionUserChange,
   shouldExitContextForLayerChange,
   spaceMissionEntryCancellationDisposition,
 } from '../contextModePolicy.js';
+import { localizeLayerName } from './layerNames.js';
+
+/**
+ * A blocked-visibility reason in the UI language. Reasons stay English (voice
+ * and tools read them): the Space Missions refusal is rebuilt with the layer
+ * name localized, a known sentence is looked up, anything else passes.
+ */
+export function localizeVisibilityBlockReason(reason) {
+  if (typeof reason !== 'string' || !reason) return reason;
+  const blocked = parseContextLayerBlockReason(reason);
+  if (blocked)
+    return t(SPACE_MISSIONS_LAYER_BLOCK_REASON, {
+      layer: localizeLayerName(blocked.layer),
+    });
+  return translateKnown(reason);
+}
 
 export function _handleContextLayerChange(change) {
   if (this.destroyed) return;
@@ -58,12 +77,23 @@ export function _handleContextLayerChange(change) {
       if (this._contextSessionSnapshot && !this._contextModeChanging) {
         this._contextMode = null;
         void this._trackContextLayerReaction(
-          this._runUserFacingContextAction(async (notificationToken) => {
-            await this._restoreContextSessionAfterLayerSettles(change.layerId, {
-              notificationToken,
-            });
-            return true;
-          }, 'Space Missions cancellation could not restore the previous layer state'),
+          this._runUserFacingContextAction(
+            async (notificationToken) => {
+              await this._restoreContextSessionAfterLayerSettles(
+                change.layerId,
+                {
+                  notificationToken,
+                },
+              );
+              return true;
+            },
+            'Space Missions cancellation could not restore the previous layer state', // i18n-ignore: English message; the toast shows localizedMessage
+            {
+              localizedMessage: t(
+                'Space Missions cancellation could not restore the previous layer state',
+              ),
+            },
+          ),
         );
       }
     }
@@ -83,15 +113,18 @@ export function _handleContextLayerChange(change) {
       !this._userFacingContextNotificationTokens.has(change.notificationToken)
     ) {
       this.showToast(
-        change.reason ||
-          'That layer is unavailable in the current Context mode',
+        localizeVisibilityBlockReason(change.reason) ||
+          t('That layer is unavailable in the current Context mode'),
       );
     }
     this._syncContextModeButtons();
     return;
   }
   if (change?.type === 'visibility-failed') {
-    const failureMessage = `${change.layerId} could not ${change.enabled ? 'start' : 'stop'} cleanly`;
+    const failureMessage = t('{layerId} could not {action} cleanly', {
+      layerId: change.layerId,
+      action: change.enabled ? t('start') : t('stop'),
+    });
     // A failed direct Context-shell START has already had its siblings
     // cleared by the visibility guard. Wait outside the synchronous manager
     // notification for this queue to settle, then reconcile the complete

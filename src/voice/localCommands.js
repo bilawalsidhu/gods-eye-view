@@ -215,6 +215,34 @@ export async function runLocalAction(name, args, runAction, signal) {
   const schema = schemas.get(name);
   if (!schema) throw new Error('Unknown map action');
   validate(args, schema, name);
+  if (
+    name === 'select_nearest_aircraft' &&
+    !args.locationId &&
+    !args.locationQuery &&
+    args.latitude == null &&
+    args.longitude == null
+  ) {
+    const context = await runAction(
+      'get_entity_context',
+      { scope: 'in_view', limit: 1 },
+      { signal },
+    );
+    signal?.throwIfAborted();
+    const target = context?.scene?.basemap?.target;
+    if (
+      context?.ok !== true ||
+      !Number.isFinite(target?.latitude) ||
+      !Number.isFinite(target?.longitude)
+    )
+      return {
+        ok: false,
+        action: name,
+        error:
+          'Point the map at a place or specify a city for nearest-aircraft selection',
+      };
+    args = { ...args, latitude: target.latitude, longitude: target.longitude };
+    validate(args, schema, name);
+  }
   if (name === 'track_entity' && args.layerId) {
     if (
       ![

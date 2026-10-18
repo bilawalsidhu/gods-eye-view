@@ -1,7 +1,9 @@
 /** Measure Cockpit panels against visible HUD and viewport obstacles. */
+import { t, msg } from '../i18n/index.js';
 import {
   resolveCockpitUtilityAnchor,
   resolveCockpitUtilityLayout,
+  resolveCyberCockpitPanelLane,
 } from '../cockpitUtilityLayout.js';
 import {
   COCKPIT_UTILITY_REC_GAP_PX,
@@ -36,9 +38,11 @@ export function setContextCollapsed(collapsed) {
     this.contextToggle.setAttribute('aria-expanded', String(expanded));
     this.contextToggle.setAttribute(
       'aria-label',
-      `${expanded ? 'Collapse' : 'Expand'} Contact panel`,
+      expanded ? t('Collapse Contact panel') : t('Expand Contact panel'),
     );
-    this.contextToggle.title = `${expanded ? 'Collapse' : 'Expand'} contact panel`;
+    this.contextToggle.title = t(
+      expanded ? msg('Collapse contact panel') : msg('Expand contact panel'),
+    );
     const icon = this.contextToggle.querySelector('.material-symbols-outlined');
     if (icon) icon.textContent = expanded ? 'chevron_left' : 'chevron_right';
   }
@@ -59,9 +63,15 @@ export function setSignalCollapsed(collapsed, { user = false } = {}) {
     this.signalToggle.setAttribute('aria-expanded', String(expanded));
     this.signalToggle.setAttribute(
       'aria-label',
-      `${expanded ? 'Collapse' : 'Expand'} cockpit briefing panel`,
+      t(
+        expanded
+          ? msg('Collapse cockpit briefing panel')
+          : msg('Expand cockpit briefing panel'),
+      ),
     );
-    this.signalToggle.title = `${expanded ? 'Collapse' : 'Expand'} briefing panel`;
+    this.signalToggle.title = t(
+      expanded ? msg('Collapse briefing panel') : msg('Expand briefing panel'),
+    );
     const icon = this.signalToggle.querySelector('.material-symbols-outlined');
     if (icon)
       icon.textContent = expanded ? 'right_panel_close' : 'right_panel_open';
@@ -90,7 +100,53 @@ export function syncContextLayout() {
     '--cockpit-context-left',
     `${desktopInset.toFixed(1)}px`,
   );
-  this.context.style.removeProperty('--cockpit-context-top');
+  if (document.documentElement.dataset.uiTheme !== 'cyber') {
+    this.context.style.removeProperty('--cockpit-context-top');
+    this.context.style.removeProperty('--cockpit-context-max-height');
+    return;
+  }
+  const defaultTop = Math.max(255, Math.min(300, window.innerHeight * 0.28));
+  const dataPanel = document.querySelector(
+    '#left-panel-stack > #data-panel:not(.collapsed)',
+  );
+  let desiredTop = defaultTop;
+  if (this.contextCollapsed && dataPanel) {
+    desiredTop = Math.max(
+      desiredTop,
+      dataPanel.getBoundingClientRect().bottom + 8,
+    );
+  }
+  const contextBounds = this.context.getBoundingClientRect();
+  let safeBottom = window.innerHeight - 24;
+  for (const selector of [
+    '#cesium-credits',
+    '#command-dock',
+    '#view-switcher',
+  ]) {
+    const obstacle = document.querySelector(selector);
+    if (!obstacle) continue;
+    const style = window.getComputedStyle(obstacle);
+    if (
+      style.display === 'none' ||
+      style.visibility === 'hidden' ||
+      Number(style.opacity) === 0
+    )
+      continue;
+    const bounds = obstacle.getBoundingClientRect();
+    const overlapsHorizontally =
+      bounds.right > contextBounds.left && bounds.left < contextBounds.right;
+    if (overlapsHorizontally && bounds.top > desiredTop) {
+      safeBottom = Math.min(safeBottom, bounds.top - 8);
+    }
+  }
+  const boundedTop = Math.max(
+    defaultTop,
+    Math.min(desiredTop, safeBottom - contextBounds.height),
+  );
+  this.context.style.setProperty(
+    '--cockpit-context-top',
+    `${boundedTop.toFixed(1)}px`,
+  );
   this.context.style.removeProperty('--cockpit-context-max-height');
 }
 
@@ -127,6 +183,34 @@ export function syncSignalLayout() {
   );
   this.signalStream.style.removeProperty('--cockpit-signal-top');
   this.signalStream.style.removeProperty('--cockpit-signal-max-height');
+  const cyber = document.documentElement.dataset.uiTheme === 'cyber';
+  const leftPanel = cyber
+    ? document.querySelector('#left-panel-stack > #data-panel')
+    : null;
+  const alignedTop = isRenderedOnScreen(leftPanel)
+    ? leftPanel.getBoundingClientRect().top
+    : null;
+  // Cyber's two rails share a top edge. Move the briefing below the collapsed
+  // strip rather than pulling the right rail upward to avoid it.
+  if (alignedTop !== null && utilityControls) {
+    const expanded = utilityControls.querySelector(
+      '.cockpit-utility-control.is-expanded',
+    );
+    if (!expanded) {
+      const signalTop = Math.max(
+        Math.max(255, Math.min(300, window.innerHeight * 0.28)),
+        alignedTop + utilityControls.getBoundingClientRect().height + 28,
+      );
+      this.signalStream.style.setProperty(
+        '--cockpit-signal-top',
+        `${signalTop.toFixed(1)}px`,
+      );
+      this.signalStream.style.setProperty(
+        '--cockpit-signal-max-height',
+        `${Math.max(44, window.innerHeight - signalTop - 80).toFixed(1)}px`,
+      );
+    }
+  }
   const signalBounds = this.signalStream.getBoundingClientRect();
   const utilityBounds = utilityControls?.getBoundingClientRect();
   if (utilityBounds) {
@@ -151,9 +235,51 @@ export function syncSignalLayout() {
           collapsedLauncher.scrollHeight,
         )
       : 0;
-    // Cockpit owns this anchor outright. The strip used to inherit the left
-    // accordion's committed top, which is solved against left-lane obstacles
-    // and dropped the strip straight through the briefing card below it.
+    if (alignedTop !== null) {
+      const lane = resolveCyberCockpitPanelLane({
+        viewportHeight: window.innerHeight,
+        top: alignedTop,
+        launcherHeight: Math.max(
+          collapsedHeight,
+          collapsedLauncher?.getBoundingClientRect().height || 60,
+        ),
+        signalHeight: this.signalCollapsed ? signalBounds.height : 44,
+        contactHeight:
+          this.contextCollapsed && this.context
+            ? this.context.getBoundingClientRect().height
+            : 64,
+      });
+      document.body.style.setProperty(
+        '--cyber-cockpit-panel-height',
+        `${lane.panelHeight.toFixed(2)}px`,
+      );
+      this.hud?.style.setProperty(
+        '--cockpit-utility-top',
+        `${alignedTop.toFixed(2)}px`,
+      );
+      this.hud?.style.setProperty(
+        '--cockpit-utility-max-height',
+        `${lane.utilityHeight.toFixed(2)}px`,
+      );
+      this.hud?.style.setProperty(
+        '--cockpit-utility-expanded-max-height',
+        `${lane.panelHeight.toFixed(2)}px`,
+      );
+      utilityControls.classList.remove('layout-primary-only');
+      utilityControls
+        .querySelectorAll('.cockpit-utility-control')
+        .forEach((control) => control.setAttribute('aria-hidden', 'false'));
+      if (expandedControl) {
+        this.signalStream.style.setProperty(
+          '--cockpit-signal-top',
+          `${lane.signalTop.toFixed(2)}px`,
+        );
+      }
+      this.syncContextLayout();
+      return;
+    }
+    // Non-Cyber themes retain their independent REC/briefing corridor. Cyber
+    // uses the rendered Data Layers top after reserving briefing space above.
     // The readout only anchors the strip while it is genuinely on screen:
     // the Minimal variant drops it with `display:none`, but HUD Off hides the
     // whole Intel HUD with `visibility`/`opacity`, which keeps its rect.
@@ -169,8 +295,20 @@ export function syncSignalLayout() {
       collapsedHeight,
       recGap: COCKPIT_UTILITY_REC_GAP_PX,
       signalGap: COCKPIT_UTILITY_SIGNAL_GAP_PX,
-      minTopFloor: COCKPIT_UTILITY_MIN_TOP_PX,
-      minTopRatio: COCKPIT_UTILITY_MIN_TOP_RATIO,
+      minTopFloor: alignedTop ?? COCKPIT_UTILITY_MIN_TOP_PX,
+      minTopRatio: alignedTop !== null ? 0 : COCKPIT_UTILITY_MIN_TOP_RATIO,
+      signalCollapsed: this.signalCollapsed,
+      utilityExpanded: Boolean(expandedControl),
+      // Only Cyber relocates its collapsed briefing below the utility lane.
+      // Other themes keep the measured visible card as the lower boundary.
+      reserveViewportLane: document.documentElement.dataset.uiTheme === 'cyber',
+      // Cyber keeps the collapsed briefing reachable below the utility instead
+      // of hiding it. Reserve its actual height, including wrapped headings.
+      signalHeight:
+        document.documentElement.dataset.uiTheme === 'cyber' &&
+        this.signalCollapsed
+          ? signalBounds.height
+          : 0,
     });
     const availableHeight = utilityAnchor.maxHeight;
     this.hud?.style.setProperty(

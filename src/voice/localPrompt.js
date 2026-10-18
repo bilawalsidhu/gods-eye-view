@@ -34,6 +34,9 @@ const descriptions = {
   annotate_map: 'Draw a requested annotation on the map.',
   clear_annotations: 'Remove map annotations.',
   next_iss_pass: 'Calculate the next ISS pass for a location.',
+  next_satellite_pass:
+    'Calculate the next pass of a named satellite for a location.',
+  set_cyber_sonar: 'Enable or disable the Cyber sonar display.',
 };
 export const LOCAL_ACTION_TOOLS = GEV_ACTION_SCHEMAS.filter((schema) =>
   Object.hasOwn(descriptions, schema.name),
@@ -99,6 +102,7 @@ const toolGroups = {
     'set_visual_style',
     'set_map_stack',
     'set_hud',
+    'set_cyber_sonar',
     'set_detection',
     'set_post_processing',
     'set_panel_open',
@@ -106,7 +110,7 @@ const toolGroups = {
     'control_scene',
   ],
   media: ['control_cctv', 'control_radio'],
-  analysis: ['analyst_query', 'next_iss_pass'],
+  analysis: ['analyst_query', 'next_iss_pass', 'next_satellite_pass'],
   annotations: ['annotate_map', 'clear_annotations'],
 };
 export const LOCAL_TOOL_DISCOVERY = {

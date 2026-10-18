@@ -11,14 +11,15 @@
  *
  * PURE data module — no Cesium imports, node-testable. The packs are lazy-
  * loaded on first lookup and cached in module scope (bbox/area computed once
- * at load). In the browser Vite bundles the JSON via dynamic import; under
- * node the same files are read from disk. A failed load is retried on the
- * next lookup rather than cached (see `createRetryableLoader`).
+ * at load) through `loadBundledJson`, which works in the browser and under
+ * node:test. A failed load is retried on the next lookup rather than cached
+ * (see `createRetryableLoader`).
  */
 
+import { loadBundledJson } from './bundledJson.js';
 import { createRetryableLoader } from './retryableLoad.js';
+import { EARTH_RADIUS_KM, greatCircleKm } from '../geoDistance.js';
 
-const EARTH_RADIUS_KM = 6371;
 const toRad = (d) => (d * Math.PI) / 180;
 
 /** Spherical-excess ring area (km²) — same family as turf/geojson-area. */
@@ -33,15 +34,6 @@ function ringAreaKm2(ring) {
       toRad(lon2 - lon1) * (2 + Math.sin(toRad(lat1)) + Math.sin(toRad(lat2)));
   }
   return Math.abs((sum * EARTH_RADIUS_KM * EARTH_RADIUS_KM) / 2);
-}
-
-function haversineKm(lon1, lat1, lon2, lat2) {
-  const dLat = toRad(lat2 - lat1);
-  const dLon = toRad(lon2 - lon1);
-  const h =
-    Math.sin(dLat / 2) ** 2 +
-    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
-  return 2 * EARTH_RADIUS_KM * Math.asin(Math.min(1, Math.sqrt(h)));
 }
 
 /**
@@ -120,20 +112,14 @@ function suffixVariants(norm) {
 /** @type {Array|null} flat entry list for listRegions() */
 let _entries = null;
 
-async function loadPackFile(base) {
-  // Vite bundles these JSON files as modules; the import attribute is what Node
-  // needs to load the same files under node:test (same pattern as
-  // neighborhoodPolygons.js). One path, so no node: import reaches the browser.
-  const mod =
-    base === 'regions'
-      ? await import('./local_data/natural_earth/regions.json', {
-          with: { type: 'json' },
-        })
-      : await import('./local_data/natural_earth/marine.json', {
-          with: { type: 'json' },
-        });
-  return mod.default || mod;
-}
+const PACKS = {
+  regions: {
+    url: new URL('./local_data/natural_earth/regions.json', import.meta.url),
+  },
+  marine: {
+    url: new URL('./local_data/natural_earth/marine.json', import.meta.url),
+  },
+};
 
 function buildEntries(pack, kind) {
   const out = [];
@@ -162,7 +148,10 @@ function buildEntries(pack, kind) {
       polygons,
       areaKm2,
       bbox: [minLon, minLat, maxLon, maxLat],
-      bboxDiagonalKm: haversineKm(minLon, minLat, maxLon, maxLat),
+      bboxDiagonalKm: greatCircleKm(
+        { lat: minLat, lon: minLon },
+        { lat: maxLat, lon: maxLon },
+      ),
     });
   }
   return out;
@@ -175,8 +164,8 @@ function buildEntries(pack, kind) {
  */
 const loadIndex = createRetryableLoader(async () => {
   const [regions, marine] = await Promise.all([
-    loadPackFile('regions'),
-    loadPackFile('marine'),
+    loadBundledJson(PACKS.regions.url),
+    loadBundledJson(PACKS.marine.url),
   ]);
   _entries = [
     ...buildEntries(regions, 'natural'),
@@ -321,4 +310,40 @@ export async function lookupNaturalRegionOutline(query, lat, lon) {
     }
   }
   return null;
+}
+
+/** Resolve the smallest containing bundled physical region without a network geocoder. */
+export async function naturalRegionAtPoint(latitude, longitude) {
+  if (
+    ![latitude, longitude].every(Number.isFinite) ||
+    Math.abs(latitude) > 90 ||
+    Math.abs(longitude) > 180
+  )
+    return null;
+  await loadIndex();
+  let best = null;
+  for (const entry of _entries) {
+    const [west, south, east, north] = entry.bbox;
+    if (
+      longitude < west ||
+      longitude > east ||
+      latitude < south ||
+      latitude > north
+    )
+      continue;
+    if (best && entry.areaKm2 >= best.areaKm2) continue;
+    if (entry.polygons.some((ring) => pointInRing(ring, latitude, longitude)))
+      best = entry;
+  }
+  return best
+    ? {
+        label: best.name,
+        locality: null,
+        region: best.name,
+        country: null,
+        countryCode: null,
+        source: 'Natural Earth',
+        kind: best.kind,
+      }
+    : null;
 }

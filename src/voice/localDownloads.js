@@ -1,3 +1,4 @@
+import { msg } from '../i18n/marker.js';
 import {
   cachedModelBytes,
   checkLocalGpu,
@@ -78,7 +79,9 @@ export async function startLocalDownload(model) {
     state.loaded = await cachedModelBytes(model).catch(() => state.loaded);
     state.status = controller.signal.aborted ? 'idle' : 'error';
     state.error = controller.signal.aborted
-      ? 'Download cancelled. Saved parts are kept; download again to resume.'
+      ? msg(
+          'Download cancelled. Saved parts are kept; download again to resume.',
+        )
       : error.message;
   } finally {
     delete state.controller;

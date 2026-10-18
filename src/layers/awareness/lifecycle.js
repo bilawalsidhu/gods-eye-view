@@ -206,6 +206,7 @@ export function createLifecycle({
       layerState.autoFocusAttempted = false;
       layerState.autoFocusRetryPending = false;
       layerState.subject = null;
+      services.installations?.setContextAnchor?.(null);
       layerState.results = null;
       layerState.lastSubjectRefreshMs = 0;
       layerState.lastEvaluatedPosition = null;

@@ -1,0 +1,1647 @@
+[
+  {
+    "area": "capitol",
+    "tile": [
+      14,
+      3743,
+      6745
+    ],
+    "properties": {
+      "subclass": "footway",
+      "surface": "paved",
+      "class": "path",
+      "layer": -1
+    },
+    "coordinates": [
+      [
+        -97.74848341941833,
+        30.276163503290732
+      ],
+      [
+        -97.74978697299957,
+        30.27650632546893
+      ]
+    ],
+    "drivable": false
+  },
+  {
+    "area": "capitol",
+    "tile": [
+      14,
+      3743,
+      6745
+    ],
+    "properties": {
+      "subclass": "pedestrian",
+      "surface": "paved",
+      "class": "path",
+      "layer": -1
+    },
+    "coordinates": [
+      [
+        -97.7460104227066,
+        30.273161441710428
+      ],
+      [
+        -97.74572610855103,
+        30.27395366132356
+      ]
+    ],
+    "drivable": false
+  },
+  {
+    "area": "capitol",
+    "tile": [
+      14,
+      3743,
+      6745
+    ],
+    "properties": {
+      "class": "service",
+      "layer": -1
+    },
+    "coordinates": [
+      [
+        -97.75270521640778,
+        30.269760847469698
+      ],
+      [
+        -97.75268375873566,
+        30.269802544842705
+      ]
+    ],
+    "drivable": false
+  },
+  {
+    "area": "capitol",
+    "tile": [
+      14,
+      3743,
+      6745
+    ],
+    "properties": {
+      "brunnel": "tunnel",
+      "surface": "paved",
+      "class": "service",
+      "oneway": 1
+    },
+    "coordinates": [
+      [
+        -97.73806571960449,
+        30.277002025690024
+      ],
+      [
+        -97.73812472820282,
+        30.276844513741622
+      ]
+    ],
+    "drivable": false
+  },
+  {
+    "area": "capitol",
+    "tile": [
+      14,
+      3743,
+      6745
+    ],
+    "properties": {
+      "class": "service",
+      "layer": -1,
+      "service": "alley"
+    },
+    "coordinates": [
+      [
+        -97.74352669715881,
+        30.27647852912071
+      ],
+      [
+        -97.74189054965973,
+        30.27601988823855
+      ]
+    ],
+    "drivable": false
+  },
+  {
+    "area": "capitol",
+    "tile": [
+      14,
+      3743,
+      6745
+    ],
+    "properties": {
+      "brunnel": "tunnel",
+      "class": "service",
+      "oneway": 1,
+      "service": "alley"
+    },
+    "coordinates": [
+      [
+        -97.74326384067535,
+        30.268936162453457
+      ],
+      [
+        -97.74347305297852,
+        30.26835239246782
+      ]
+    ],
+    "drivable": false
+  },
+  {
+    "area": "capitol",
+    "tile": [
+      14,
+      3743,
+      6745
+    ],
+    "properties": {
+      "surface": "paved",
+      "class": "service",
+      "service": "parking_aisle"
+    },
+    "coordinates": [
+      [
+        -97.7502429485321,
+        30.271215612013037
+      ],
+      [
+        -97.75045216083527,
+        30.271271207682517
+      ]
+    ],
+    "drivable": false
+  },
+  {
+    "area": "capitol",
+    "tile": [
+      14,
+      3743,
+      6745
+    ],
+    "properties": {
+      "bicycle": "yes",
+      "surface": "paved",
+      "class": "service",
+      "foot": "yes",
+      "service": "driveway"
+    },
+    "coordinates": [
+      [
+        -97.74083375930786,
+        30.274208467442406
+      ],
+      [
+        -97.74074256420135,
+        30.274217733106966
+      ]
+    ],
+    "drivable": false
+  },
+  {
+    "area": "capitol",
+    "tile": [
+      14,
+      3743,
+      6745
+    ],
+    "properties": {
+      "subclass": "cycleway",
+      "bicycle": "designated",
+      "surface": "paved",
+      "class": "path",
+      "foot": "designated"
+    },
+    "coordinates": [
+      [
+        -97.75103151798248,
+        30.27354133729358
+      ],
+      [
+        -97.75100469589233,
+        30.273601564507118
+      ]
+    ],
+    "drivable": false
+  },
+  {
+    "area": "capitol",
+    "tile": [
+      14,
+      3743,
+      6745
+    ],
+    "properties": {
+      "class": "service",
+      "access": "no"
+    },
+    "coordinates": [
+      [
+        -97.7535742521286,
+        30.276552652698456
+      ],
+      [
+        -97.7537190914154,
+        30.276288587197186
+      ]
+    ],
+    "drivable": false
+  },
+  {
+    "area": "capitol",
+    "tile": [
+      14,
+      3743,
+      6745
+    ],
+    "properties": {
+      "subclass": "steps",
+      "class": "path"
+    },
+    "coordinates": [
+      [
+        -97.74887502193451,
+        30.277641336297023
+      ],
+      [
+        -97.74842977523804,
+        30.277520886790924
+      ]
+    ],
+    "drivable": false
+  },
+  {
+    "area": "capitol",
+    "tile": [
+      14,
+      3743,
+      6745
+    ],
+    "properties": {
+      "class": "path_construction"
+    },
+    "coordinates": [
+      [
+        -97.73878455162048,
+        30.262806404480656
+      ],
+      [
+        -97.73877382278442,
+        30.262811037851165
+      ]
+    ],
+    "drivable": false
+  },
+  {
+    "area": "capitol",
+    "tile": [
+      14,
+      3743,
+      6745
+    ],
+    "properties": {
+      "subclass": "steps",
+      "surface": "paved",
+      "class": "path",
+      "ramp": 1
+    },
+    "coordinates": [
+      [
+        -97.75221168994904,
+        30.26652229739561
+      ],
+      [
+        -97.75218486785889,
+        30.266513031004664
+      ]
+    ],
+    "drivable": false
+  },
+  {
+    "area": "capitol",
+    "tile": [
+      14,
+      3743,
+      6745
+    ],
+    "properties": {
+      "subclass": "path",
+      "surface": "paved",
+      "class": "path"
+    },
+    "coordinates": [
+      [
+        -97.73926198482513,
+        30.277942459415485
+      ],
+      [
+        -97.7391117811203,
+        30.278340867044577
+      ]
+    ],
+    "drivable": false
+  },
+  {
+    "area": "capitol",
+    "tile": [
+      14,
+      3743,
+      6745
+    ],
+    "properties": {
+      "class": "service",
+      "service": "parking_aisle",
+      "access": "no"
+    },
+    "coordinates": [
+      [
+        -97.73838758468628,
+        30.263297540536755
+      ],
+      [
+        -97.73789942264557,
+        30.26316317336928
+      ]
+    ],
+    "drivable": false
+  },
+  {
+    "area": "capitol",
+    "tile": [
+      14,
+      3743,
+      6745
+    ],
+    "properties": {
+      "class": "service",
+      "service": "driveway",
+      "access": "no"
+    },
+    "coordinates": [
+      [
+        -97.75176107883453,
+        30.267221907387807
+      ],
+      [
+        -97.75165379047394,
+        30.26718947524671
+      ]
+    ],
+    "drivable": false
+  },
+  {
+    "area": "capitol",
+    "tile": [
+      14,
+      3743,
+      6745
+    ],
+    "properties": {
+      "surface": "paved",
+      "class": "minor_construction"
+    },
+    "coordinates": [
+      [
+        -97.74083375930786,
+        30.277354110307655
+      ],
+      [
+        -97.74049580097198,
+        30.278234316325467
+      ]
+    ],
+    "drivable": false
+  },
+  {
+    "area": "capitol",
+    "tile": [
+      14,
+      3743,
+      6745
+    ],
+    "properties": {
+      "class": "motorway",
+      "oneway": 1,
+      "ramp": 1
+    },
+    "coordinates": [
+      [
+        -97.7340316772461,
+        30.268509918044018
+      ],
+      [
+        -97.73410677909851,
+        30.268366291793555
+      ]
+    ],
+    "drivable": true
+  },
+  {
+    "area": "capitol",
+    "tile": [
+      14,
+      3743,
+      6745
+    ],
+    "properties": {
+      "surface": "paved",
+      "class": "minor"
+    },
+    "coordinates": [
+      [
+        -97.7566909790039,
+        30.278044377800157
+      ],
+      [
+        -97.75649785995483,
+        30.278340867044577
+      ]
+    ],
+    "drivable": true
+  },
+  {
+    "area": "capitol",
+    "tile": [
+      14,
+      3743,
+      6745
+    ],
+    "properties": {
+      "class": "secondary",
+      "oneway": 1,
+      "ramp": 1
+    },
+    "coordinates": [
+      [
+        -97.74268984794617,
+        30.273578400198616
+      ],
+      [
+        -97.74275958538055,
+        30.273527438700597
+      ]
+    ],
+    "drivable": true
+  },
+  {
+    "area": "capitol",
+    "tile": [
+      14,
+      3743,
+      6745
+    ],
+    "properties": {
+      "surface": "paved",
+      "class": "tertiary"
+    },
+    "coordinates": [
+      [
+        -97.75140702724457,
+        30.27687230998619
+      ],
+      [
+        -97.75420725345612,
+        30.27783127560241
+      ]
+    ],
+    "drivable": true
+  },
+  {
+    "area": "capitol",
+    "tile": [
+      14,
+      3743,
+      6745
+    ],
+    "properties": {
+      "surface": "paved",
+      "class": "secondary",
+      "oneway": 1
+    },
+    "coordinates": [
+      [
+        -97.74211585521698,
+        30.269913737750784
+      ],
+      [
+        -97.74315655231476,
+        30.270205618535314
+      ]
+    ],
+    "drivable": true
+  },
+  {
+    "area": "capitol",
+    "tile": [
+      14,
+      3743,
+      6745
+    ],
+    "properties": {
+      "surface": "paved",
+      "class": "primary"
+    },
+    "coordinates": [
+      [
+        -97.75459349155426,
+        30.270293645903166
+      ],
+      [
+        -97.75399267673492,
+        30.271526020764853
+      ]
+    ],
+    "drivable": true
+  },
+  {
+    "area": "capitol",
+    "tile": [
+      14,
+      3743,
+      6745
+    ],
+    "properties": {
+      "brunnel": "bridge",
+      "bicycle": "designated",
+      "surface": "paved",
+      "subclass": "cycleway",
+      "class": "path",
+      "foot": "designated",
+      "layer": 1
+    },
+    "coordinates": [
+      [
+        -97.74859607219696,
+        30.26163415472017
+      ],
+      [
+        -97.74885356426239,
+        30.261022540594325
+      ]
+    ],
+    "drivable": false
+  },
+  {
+    "area": "capitol",
+    "tile": [
+      14,
+      3743,
+      6745
+    ],
+    "properties": {
+      "subclass": "footway",
+      "brunnel": "bridge",
+      "surface": "paved",
+      "class": "path",
+      "layer": 1
+    },
+    "coordinates": [
+      [
+        -97.75168061256409,
+        30.27354133729358
+      ],
+      [
+        -97.75135338306427,
+        30.273490375776362
+      ]
+    ],
+    "drivable": false
+  },
+  {
+    "area": "capitol",
+    "tile": [
+      14,
+      3743,
+      6745
+    ],
+    "properties": {
+      "brunnel": "bridge",
+      "bicycle": "yes",
+      "surface": "paved",
+      "subclass": "pedestrian",
+      "class": "path",
+      "foot": "yes",
+      "layer": 1
+    },
+    "coordinates": [
+      [
+        -97.7353298664093,
+        30.274690280840986
+      ],
+      [
+        -97.73560881614685,
+        30.27476440576929
+      ]
+    ],
+    "drivable": false
+  },
+  {
+    "area": "capitol",
+    "tile": [
+      14,
+      3743,
+      6745
+    ],
+    "properties": {
+      "subclass": "steps",
+      "brunnel": "bridge",
+      "surface": "paved",
+      "class": "path",
+      "layer": 1
+    },
+    "coordinates": [
+      [
+        -97.7480274438858,
+        30.276302485399185
+      ],
+      [
+        -97.74804353713989,
+        30.276260790787305
+      ]
+    ],
+    "drivable": false
+  },
+  {
+    "area": "capitol",
+    "tile": [
+      14,
+      3743,
+      6745
+    ],
+    "properties": {
+      "brunnel": "bridge",
+      "surface": "paved",
+      "class": "minor",
+      "layer": 1,
+      "oneway": 1
+    },
+    "coordinates": [
+      [
+        -97.73505091667175,
+        30.27002029750288
+      ],
+      [
+        -97.73532450199127,
+        30.270099058984385
+      ]
+    ],
+    "drivable": true
+  },
+  {
+    "area": "capitol",
+    "tile": [
+      14,
+      3743,
+      6745
+    ],
+    "properties": {
+      "brunnel": "bridge",
+      "surface": "paved",
+      "class": "secondary",
+      "layer": 1
+    },
+    "coordinates": [
+      [
+        -97.74999618530273,
+        30.276464630943636
+      ],
+      [
+        -97.75032341480255,
+        30.276557285420196
+      ]
+    ],
+    "drivable": true
+  },
+  {
+    "area": "capitol",
+    "tile": [
+      14,
+      3743,
+      6745
+    ],
+    "properties": {
+      "brunnel": "bridge",
+      "surface": "paved",
+      "class": "primary",
+      "layer": 1,
+      "oneway": 1
+    },
+    "coordinates": [
+      [
+        -97.73508310317993,
+        30.275732657503724
+      ],
+      [
+        -97.73543179035187,
+        30.275829945427404
+      ]
+    ],
+    "drivable": true
+  },
+  {
+    "area": "capitol",
+    "tile": [
+      14,
+      3743,
+      6745
+    ],
+    "properties": {
+      "brunnel": "bridge",
+      "surface": "paved",
+      "class": "motorway",
+      "layer": 1,
+      "oneway": 1,
+      "network": "us-interstate"
+    },
+    "coordinates": [
+      [
+        -97.7340316772461,
+        30.267587926523163
+      ],
+      [
+        -97.7347880601883,
+        30.26551688887568
+      ]
+    ],
+    "drivable": true
+  },
+  {
+    "area": "greenbelt",
+    "tile": [
+      14,
+      3742,
+      6743
+    ],
+    "properties": {
+      "subclass": "path",
+      "class": "path",
+      "layer": -1
+    },
+    "coordinates": [
+      [
+        -97.77440965175629,
+        30.312060671216628
+      ],
+      [
+        -97.77440965175629,
+        30.31219960246341
+      ]
+    ],
+    "drivable": false
+  },
+  {
+    "area": "greenbelt",
+    "tile": [
+      14,
+      3742,
+      6743
+    ],
+    "properties": {
+      "subclass": "steps",
+      "class": "path",
+      "layer": -1
+    },
+    "coordinates": [
+      [
+        -97.77451694011688,
+        30.31219960246341
+      ],
+      [
+        -97.77446329593658,
+        30.31219960246341
+      ]
+    ],
+    "drivable": false
+  },
+  {
+    "area": "greenbelt",
+    "tile": [
+      14,
+      3742,
+      6743
+    ],
+    "properties": {
+      "class": "service"
+    },
+    "coordinates": [
+      [
+        -97.7786636352539,
+        30.314927246048484
+      ],
+      [
+        -97.7785187959671,
+        30.31488093694378
+      ]
+    ],
+    "drivable": false
+  },
+  {
+    "area": "greenbelt",
+    "tile": [
+      14,
+      3742,
+      6743
+    ],
+    "properties": {
+      "subclass": "footway",
+      "class": "path",
+      "foot": "yes"
+    },
+    "coordinates": [
+      [
+        -97.77170598506927,
+        30.305424159277564
+      ],
+      [
+        -97.77178108692169,
+        30.305433421993968
+      ]
+    ],
+    "drivable": false
+  },
+  {
+    "area": "greenbelt",
+    "tile": [
+      14,
+      3742,
+      6743
+    ],
+    "properties": {
+      "class": "service",
+      "service": "parking_aisle"
+    },
+    "coordinates": [
+      [
+        -97.76617527008057,
+        30.305317637976145
+      ],
+      [
+        -97.76645958423615,
+        30.3054797355628
+      ]
+    ],
+    "drivable": false
+  },
+  {
+    "area": "greenbelt",
+    "tile": [
+      14,
+      3742,
+      6743
+    ],
+    "properties": {
+      "class": "service",
+      "service": "driveway"
+    },
+    "coordinates": [
+      [
+        -97.76757538318634,
+        30.314315964103898
+      ],
+      [
+        -97.76729643344879,
+        30.314302071288125
+      ]
+    ],
+    "drivable": false
+  },
+  {
+    "area": "greenbelt",
+    "tile": [
+      14,
+      3742,
+      6743
+    ],
+    "properties": {
+      "class": "service",
+      "access": "no"
+    },
+    "coordinates": [
+      [
+        -97.77383029460907,
+        30.31558020209542
+      ],
+      [
+        -97.77405560016632,
+        30.315376443228644
+      ]
+    ],
+    "drivable": false
+  },
+  {
+    "area": "greenbelt",
+    "tile": [
+      14,
+      3742,
+      6743
+    ],
+    "properties": {
+      "class": "service",
+      "service": "driveway",
+      "access": "no"
+    },
+    "coordinates": [
+      [
+        -97.7786636352539,
+        30.315242147380275
+      ],
+      [
+        -97.77864754199982,
+        30.315246778274656
+      ]
+    ],
+    "drivable": false
+  },
+  {
+    "area": "greenbelt",
+    "tile": [
+      14,
+      3742,
+      6743
+    ],
+    "properties": {
+      "subclass": "corridor",
+      "class": "path"
+    },
+    "coordinates": [
+      [
+        -97.77376055717468,
+        30.315033756906317
+      ],
+      [
+        -97.77386784553528,
+        30.31493650786682
+      ]
+    ],
+    "drivable": false
+  },
+  {
+    "area": "greenbelt",
+    "tile": [
+      14,
+      3742,
+      6743
+    ],
+    "properties": {
+      "class": "pier"
+    },
+    "coordinates": [
+      [
+        -97.77461886405945,
+        30.313311045347447
+      ],
+      [
+        -97.77532696723938,
+        30.313204532617164
+      ]
+    ],
+    "drivable": false
+  },
+  {
+    "area": "greenbelt",
+    "tile": [
+      14,
+      3742,
+      6743
+    ],
+    "properties": {
+      "surface": "paved",
+      "class": "minor"
+    },
+    "coordinates": [
+      [
+        -97.76934027671814,
+        30.316284093102396
+      ],
+      [
+        -97.76902914047241,
+        30.316108120824694
+      ]
+    ],
+    "drivable": true
+  },
+  {
+    "area": "greenbelt",
+    "tile": [
+      14,
+      3742,
+      6743
+    ],
+    "properties": {
+      "bicycle": "private",
+      "class": "minor",
+      "access": "no"
+    },
+    "coordinates": [
+      [
+        -97.76675462722778,
+        30.313324938303722
+      ],
+      [
+        -97.7659285068512,
+        30.314459523085006
+      ]
+    ],
+    "drivable": false
+  },
+  {
+    "area": "greenbelt",
+    "tile": [
+      14,
+      3742,
+      6743
+    ],
+    "properties": {
+      "surface": "paved",
+      "class": "tertiary"
+    },
+    "coordinates": [
+      [
+        -97.7740341424942,
+        30.315529262418465
+      ],
+      [
+        -97.77437746524811,
+        30.315663557873336
+      ]
+    ],
+    "drivable": true
+  },
+  {
+    "area": "greenbelt",
+    "tile": [
+      14,
+      3742,
+      6743
+    ],
+    "properties": {
+      "subclass": "footway",
+      "brunnel": "bridge",
+      "surface": "paved",
+      "class": "path",
+      "layer": 1
+    },
+    "coordinates": [
+      [
+        -97.77391076087952,
+        30.315603356485283
+      ],
+      [
+        -97.77362644672394,
+        30.315445906526307
+      ]
+    ],
+    "drivable": false
+  },
+  {
+    "area": "greenbelt",
+    "tile": [
+      14,
+      3742,
+      6743
+    ],
+    "properties": {
+      "access": "no",
+      "brunnel": "bridge",
+      "class": "service",
+      "layer": 1
+    },
+    "coordinates": [
+      [
+        -97.77365863323212,
+        30.3157144974805
+      ],
+      [
+        -97.77383029460907,
+        30.31558020209542
+      ]
+    ],
+    "drivable": false
+  },
+  {
+    "area": "greenbelt",
+    "tile": [
+      14,
+      3742,
+      6743
+    ],
+    "properties": {
+      "brunnel": "bridge",
+      "surface": "paved",
+      "class": "minor",
+      "layer": 1
+    },
+    "coordinates": [
+      [
+        -97.77595460414886,
+        30.30595676404846
+      ],
+      [
+        -97.77581512928009,
+        30.306044759340736
+      ]
+    ],
+    "drivable": true
+  },
+  {
+    "area": "greenbelt",
+    "tile": [
+      14,
+      3742,
+      6743
+    ],
+    "properties": {
+      "brunnel": "bridge",
+      "surface": "paved",
+      "class": "tertiary",
+      "layer": 1
+    },
+    "coordinates": [
+      [
+        -97.77366399765015,
+        30.315362550563236
+      ],
+      [
+        -97.7740341424942,
+        30.315529262418465
+      ]
+    ],
+    "drivable": true
+  },
+  {
+    "area": "commercial",
+    "tile": [
+      14,
+      3743,
+      6743
+    ],
+    "properties": {
+      "brunnel": "tunnel",
+      "class": "service",
+      "layer": -1,
+      "service": "driveway"
+    },
+    "coordinates": [
+      [
+        -97.73649394512177,
+        30.299755212676814
+      ],
+      [
+        -97.73662805557251,
+        30.2995514209113
+      ]
+    ],
+    "drivable": false
+  },
+  {
+    "area": "commercial",
+    "tile": [
+      14,
+      3743,
+      6743
+    ],
+    "properties": {
+      "surface": "paved",
+      "class": "service",
+      "layer": -1,
+      "service": "driveway"
+    },
+    "coordinates": [
+      [
+        -97.74191200733185,
+        30.304659982160544
+      ],
+      [
+        -97.74242162704468,
+        30.303872641930724
+      ]
+    ],
+    "drivable": false
+  },
+  {
+    "area": "commercial",
+    "tile": [
+      14,
+      3743,
+      6743
+    ],
+    "properties": {
+      "brunnel": "tunnel",
+      "class": "service",
+      "oneway": 1
+    },
+    "coordinates": [
+      [
+        -97.73683190345764,
+        30.310662085694872
+      ],
+      [
+        -97.73686945438385,
+        30.310606512347945
+      ]
+    ],
+    "drivable": false
+  },
+  {
+    "area": "commercial",
+    "tile": [
+      14,
+      3743,
+      6743
+    ],
+    "properties": {
+      "subclass": "footway",
+      "class": "path",
+      "layer": -1
+    },
+    "coordinates": [
+      [
+        -97.74459958076477,
+        30.302705514191246
+      ],
+      [
+        -97.74402558803558,
+        30.302427624586286
+      ]
+    ],
+    "drivable": false
+  },
+  {
+    "area": "commercial",
+    "tile": [
+      14,
+      3743,
+      6743
+    ],
+    "properties": {
+      "class": "service",
+      "oneway": 1,
+      "service": "alley"
+    },
+    "coordinates": [
+      [
+        -97.73672997951508,
+        30.298912253081028
+      ],
+      [
+        -97.73644030094147,
+        30.299361523657637
+      ]
+    ],
+    "drivable": false
+  },
+  {
+    "area": "commercial",
+    "tile": [
+      14,
+      3743,
+      6743
+    ],
+    "properties": {
+      "class": "service",
+      "service": "parking_aisle",
+      "access": "no"
+    },
+    "coordinates": [
+      [
+        -97.74387001991272,
+        30.302737934593864
+      ],
+      [
+        -97.74367690086365,
+        30.303025086263204
+      ]
+    ],
+    "drivable": false
+  },
+  {
+    "area": "commercial",
+    "tile": [
+      14,
+      3743,
+      6743
+    ],
+    "properties": {
+      "class": "service",
+      "access": "no"
+    },
+    "coordinates": [
+      [
+        -97.74845659732819,
+        30.30689228890118
+      ],
+      [
+        -97.74851024150848,
+        30.30692470791918
+      ]
+    ],
+    "drivable": false
+  },
+  {
+    "area": "commercial",
+    "tile": [
+      14,
+      3743,
+      6743
+    ],
+    "properties": {
+      "surface": "paved",
+      "class": "service"
+    },
+    "coordinates": [
+      [
+        -97.75174498558044,
+        30.307577717284403
+      ],
+      [
+        -97.7512675523758,
+        30.30736467924619
+      ]
+    ],
+    "drivable": false
+  },
+  {
+    "area": "commercial",
+    "tile": [
+      14,
+      3743,
+      6743
+    ],
+    "properties": {
+      "surface": "paved",
+      "class": "service",
+      "service": "parking_aisle"
+    },
+    "coordinates": [
+      [
+        -97.7512139081955,
+        30.304400623724447
+      ],
+      [
+        -97.75106906890869,
+        30.304664613554948
+      ]
+    ],
+    "drivable": false
+  },
+  {
+    "area": "commercial",
+    "tile": [
+      14,
+      3743,
+      6743
+    ],
+    "properties": {
+      "class": "service",
+      "service": "driveway",
+      "access": "no"
+    },
+    "coordinates": [
+      [
+        -97.74178862571716,
+        30.298157288610156
+      ],
+      [
+        -97.74194955825806,
+        30.297888649543538
+      ]
+    ],
+    "drivable": false
+  },
+  {
+    "area": "commercial",
+    "tile": [
+      14,
+      3743,
+      6743
+    ],
+    "properties": {
+      "subclass": "steps",
+      "class": "path"
+    },
+    "coordinates": [
+      [
+        -97.75109052658081,
+        30.315274563636393
+      ],
+      [
+        -97.75109589099884,
+        30.315256040062764
+      ]
+    ],
+    "drivable": false
+  },
+  {
+    "area": "commercial",
+    "tile": [
+      14,
+      3743,
+      6743
+    ],
+    "properties": {
+      "bicycle": "designated",
+      "surface": "paved",
+      "subclass": "cycleway",
+      "class": "path",
+      "foot": "no",
+      "oneway": 1
+    },
+    "coordinates": [
+      [
+        -97.7424430847168,
+        30.308323346771814
+      ],
+      [
+        -97.742480635643,
+        30.30840207750464
+      ]
+    ],
+    "drivable": false
+  },
+  {
+    "area": "commercial",
+    "tile": [
+      14,
+      3743,
+      6743
+    ],
+    "properties": {
+      "surface": "paved",
+      "class": "minor"
+    },
+    "coordinates": [
+      [
+        -97.75369226932526,
+        30.31439005908814
+      ],
+      [
+        -97.75230824947357,
+        30.314885567855214
+      ]
+    ],
+    "drivable": true
+  },
+  {
+    "area": "commercial",
+    "tile": [
+      14,
+      3743,
+      6743
+    ],
+    "properties": {
+      "class": "primary",
+      "oneway": 1,
+      "ramp": 1
+    },
+    "coordinates": [
+      [
+        -97.73806571960449,
+        30.31370004737886
+      ],
+      [
+        -97.73795306682587,
+        30.313519439484864
+      ]
+    ],
+    "drivable": true
+  },
+  {
+    "area": "commercial",
+    "tile": [
+      14,
+      3743,
+      6743
+    ],
+    "properties": {
+      "class": "minor",
+      "access": "no"
+    },
+    "coordinates": [
+      [
+        -97.74015247821808,
+        30.303826327602636
+      ],
+      [
+        -97.73960530757904,
+        30.304697033309694
+      ]
+    ],
+    "drivable": false
+  },
+  {
+    "area": "commercial",
+    "tile": [
+      14,
+      3743,
+      6743
+    ],
+    "properties": {
+      "class": "tertiary"
+    },
+    "coordinates": [
+      [
+        -97.7532309293747,
+        30.31345460580073
+      ],
+      [
+        -97.75389611721039,
+        30.31481610416037
+      ]
+    ],
+    "drivable": true
+  },
+  {
+    "area": "commercial",
+    "tile": [
+      14,
+      3743,
+      6743
+    ],
+    "properties": {
+      "class": "secondary"
+    },
+    "coordinates": [
+      [
+        -97.75122463703156,
+        30.30752214218863
+      ],
+      [
+        -97.75162696838379,
+        30.307758336128003
+      ]
+    ],
+    "drivable": true
+  },
+  {
+    "area": "commercial",
+    "tile": [
+      14,
+      3743,
+      6743
+    ],
+    "properties": {
+      "surface": "paved",
+      "class": "primary"
+    },
+    "coordinates": [
+      [
+        -97.74883210659027,
+        30.297494953030068
+      ],
+      [
+        -97.74891793727875,
+        30.297170731185076
+      ]
+    ],
+    "drivable": true
+  },
+  {
+    "area": "commercial",
+    "tile": [
+      14,
+      3743,
+      6743
+    ],
+    "properties": {
+      "subclass": "footway",
+      "brunnel": "bridge",
+      "surface": "paved",
+      "class": "path",
+      "level": 2
+    },
+    "coordinates": [
+      [
+        -97.74286687374115,
+        30.304567354226435
+      ],
+      [
+        -97.74297416210175,
+        30.304604405410558
+      ]
+    ],
+    "drivable": false
+  },
+  {
+    "area": "commercial",
+    "tile": [
+      14,
+      3743,
+      6743
+    ],
+    "properties": {
+      "brunnel": "bridge",
+      "class": "service",
+      "layer": 1,
+      "service": "driveway"
+    },
+    "coordinates": [
+      [
+        -97.73461103439331,
+        30.29916699438232
+      ],
+      [
+        -97.73454666137695,
+        30.299134572798906
+      ]
+    ],
+    "drivable": false
+  }
+]

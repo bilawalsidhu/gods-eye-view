@@ -17,6 +17,20 @@ The local command/runtime/session tests cover Russian and English zoom, named cl
 
 The existing download/cache tests also cover resumable large-file downloads, truncated transfers, cancellation, invalid ranges, quota errors and compatibility with previously cached whole files.
 
+For a repeatable browser gate, start the development server and run
+`node scripts/qa-local-ai.mjs`. Its synthetic aircraft exercise the real map
+runner for navigation, zoom, exact-callsign tracking from a disabled layer,
+nearest airborne selection at the viewed ground point, selected-contact
+tracking, missing contacts, military tracking, stop and compound commands.
+The gate does not download models or capture a private microphone.
+
+After integration with upstream `93ea088f`, the settings UI correctly showed
+all three cached max/Russian models and switched between Local and the cloud
+authentication controls. An actual Local session with a synthetic microphone
+started cached Whisper small, executed zoom-in, zoom-out and stop-tracking
+through the shared session, synthesized and played its replies, then stopped
+cleanly. The three commands returned success without loading Bonsai.
+
 ## Limits
 
 The original screenshot's OOM was not reproduced in the short browser run. Separate heaps, bounded context/speech, tensor disposal and worker termination address concrete memory hazards; tests also inject OOM to verify cleanup. This does not guarantee that every model fits every browser/GPU or that live data always contains a requested aircraft. Free-form model interpretation remains slower and less reliable than the direct command paths.
