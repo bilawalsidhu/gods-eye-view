@@ -77,6 +77,7 @@
   "Higher space-missions request allowance": "Повышенный лимит запросов для космических миссий",
   "Places context + Street View fallback; optional separate key": "Контекст Places + резерв: Просмотр улиц; отдельный ключ — по желанию",
   "Voice control — API key or ChatGPT OAuth": "Голосовое управление — ключ API или ChatGPT OAuth",
+  "AI HUD summary when no OpenAI key is set": "ИИ-сводка HUD, если ключ OpenAI не задан",
   "Live ships, worldwide": "Суда в реальном времени по всему миру",
   "Live active-fire detections": "Обнаружение активных пожаров в реальном времени",
   "Real live traffic (keyless runs a simulation)": "Настоящие пробки в реальном времени (без ключа — симуляция)",

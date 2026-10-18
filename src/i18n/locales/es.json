@@ -850,6 +850,7 @@
   "Estimated session cost on {modelId} — {responses} response(s). Warns at {warn}, ends the session at {cap}.": "Costo de sesión estimado en {modelId} — {responses} respuesta(s). Avisa a {warn} y cierra la sesión a {cap}.",
   "Street-level imagery and coverage in the Street Level layer. Free: register an app in the Mapillary developer dashboard and paste its Client Token": "Imágenes y cobertura a nivel de calle en la capa \"A pie de calle\". Gratis: registra una app en el panel de desarrolladores de Mapillary y pega su token de cliente (Client Token)",
   "Voice control — API key or ChatGPT OAuth": "Control de voz — clave de API u OAuth de ChatGPT",
+  "AI HUD summary when no OpenAI key is set": "Resumen de IA del HUD cuando no hay clave de OpenAI",
   "WITHIN {km} KM": "A MENOS DE {km} KM",
   "Syncing flow · Roads: {source}": "Sincronizando flujo · Vías: {source}",
   "LIVE · Roads: {source} · Roads without flow hidden": "EN VIVO · Vías: {source} · Vías sin flujo ocultas",

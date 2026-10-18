@@ -323,6 +323,7 @@
       "server/providers/common/rate-limit.js",
       "server/providers/common/request.js",
       "server/providers/common/source-root.js",
+      "server/providers/gemini/interactions.js",
       "server/providers/openai.js",
       "server/providers/openai/codex-auth.js",
       "server/providers/openai/constants.js",

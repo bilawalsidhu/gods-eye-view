@@ -1064,5 +1064,6 @@
   "src/tooling/changelogFragments.test.mjs",
   "src/data/gbfsProxyRateLimit.test.mjs",
   "server/providers/gemini/interactions.js",
-  "src/geminiInteractions.test.mjs"
+  "src/geminiInteractions.test.mjs",
+  "src/hudSummaryProvider.test.mjs"
 ]
