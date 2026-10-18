@@ -5807,3 +5807,30 @@ datacenters, dams and the Nepal locator retain that shared credit while displaye
 
 Military fragments stitch by source identity. Different mapped parcels merge only
 when their footprints touch or contain one another, never across a seam tolerance gap.
+
+
+### Radio priority-country coverage
+
+Optional `RADIO_PRIORITY_COUNTRIES` is a server-owned comma-separated list of
+up to eight ISO alpha-2 codes (for example `IN,PL`). Restart after changing it.
+It needs no API key and adds no POWER UP entry. An empty list preserves the
+existing global/tag-based directory. Invalid configuration fails at startup.
+
+Each country adds one Radio Browser search capped at 200 rows, with existing
+HTTPS/geolocation/codec validation and an additional matching-country check.
+Up to 40 unique accepted stations per country are seeded before the specialist
+tag queries and global popularity fill, within the unchanged 750-station cap.
+No country gets exhaustive coverage; an empty valid country response is allowed.
+The response's `coverage.priorityCountries` reports accepted query status and
+selected counts when configured. The existing broad/specialist health policy
+still applies separately; a failed country query marks the refresh degraded
+and cannot evict a healthy cached catalog. Queries share the existing three-worker
+pool, single-flight refresh and 45-minute cache. At most three mirrors are tried
+per query; failed or partial refreshes retry after one minute. The seven-day
+last-good expiry and known-station-only click reporting remain in force.
+
+Validation: `node --test src/data/radioProxy.test.mjs` covers configuration,
+country quotas under global popularity pressure, duplicate records, concurrency,
+cache reuse, country mismatch/oversize/empty responses, stale fallback and retry
+backoff. `node scripts/qa-radio.mjs --url http://localhost:4173` covers the existing
+750-station browser presentation and playback contract.
