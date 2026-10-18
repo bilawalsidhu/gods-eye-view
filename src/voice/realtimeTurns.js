@@ -1,5 +1,5 @@
 import { realtimeSessionEvent } from './realtimeEvents.js';
-import { t } from '../i18n/index.js';
+import { getLocale, t } from '../i18n/index.js';
 import { readLayerLifecycleSummary } from './layerSummary.js';
 import {
   CALL_DEDUPE_MS,
@@ -11,6 +11,7 @@ import {
   parseArguments,
 } from './realtimeProtocol.js';
 import { narrationLabel } from './speech.js';
+import { voiceLanguageInstruction } from './voiceLanguage.js';
 
 /** Out-of-band progress responses carry this metadata tag. */
 export const PROGRESS_RESPONSE_TAG = 'progress';
@@ -1039,7 +1040,14 @@ export class RealtimeTurns {
       this.dc.readyState !== 'open'
     )
       return;
-    const instructions = this.pendingResponseInstructions;
+    // A response's instructions replace the session's, so the language
+    // line travels with every tool follow-up too.
+    const instructions = [
+      this.pendingResponseInstructions,
+      voiceLanguageInstruction(getLocale()),
+    ]
+      .filter(Boolean)
+      .join(' ');
     this.pendingResponseInstructions = null;
     this.responseCreatePending = true;
     const sent = this.sendRealtimeEvent(

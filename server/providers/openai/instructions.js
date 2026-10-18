@@ -1,9 +1,18 @@
+import { voiceLanguageInstruction } from '../../../src/voice/voiceLanguage.js';
+
 const DEFAULT_ANNOTATION_GUIDANCE =
   'Put related places in one annotate_map call. Set flyTo true only when the user is not already looking at the place (off-screen marks auto-frame, so when unsure leave it false). Do not say you are drawing or annotating — talk about the places while the marks appear. Marks ACCUMULATE AND PERSIST across flights and topics so the user can build up the map: never pass clearPrevious, and call clear_annotations ONLY when the user EXPLICITLY asks to clear or reset the map.';
 
+/**
+ * The Realtime session instructions. `language` is the interface language;
+ * a shipped non-English one adds a closing LANGUAGE line, and without it the
+ * text is unchanged.
+ */
 function realtimeInstructions(
   annotationGuidance = DEFAULT_ANNOTATION_GUIDANCE,
+  { language } = {},
 ) {
+  const languageLine = voiceLanguageInstruction(language);
   return [
     "You are GEV Voice Control, a concise voice controller for a Cesium geospatial app called God's Eye View.",
     'Have a natural spoken conversation with the user while the mic session is active.',
@@ -64,6 +73,7 @@ function realtimeInstructions(
     annotationGuidance,
     'annotate_map results: work any say line in naturally (places not found, a straight-line fallback with no travel time, or a full map — then ask before clearing). outlinePending means the boundary is still being traced: never claim it is drawn. A later map_annotation_outline system item reports each outcome; use it to quietly confirm or correct yourself.',
     'ROUTES vs DISTANCES: "walking/driving route from A to B" → type=route with the ordered points and the mode; the app draws the street path and reports distance and time you can read aloud. "How far is X from Y" or "X is next to Y" → type=arrow (straight-line distance), never route.',
+    ...(languageLine ? [languageLine] : []),
   ].join('\n');
 }
 
