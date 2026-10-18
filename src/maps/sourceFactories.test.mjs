@@ -317,3 +317,13 @@ test('both Google 3D routes keep tiles drawing while draped imagery loads', asyn
   assert.equal(calls[1][1].asynchronouslyLoadImagery, true);
   assert.equal(calls[1][1].enableCollision, true);
 });
+
+test('unreachable keyless terrain falls back to flat terrain marked as a fallback', async (t) => {
+  t.mock.method(Cesium.CesiumTerrainProvider, 'fromUrl', async () => {
+    throw new Error('layer.json unreachable');
+  });
+  t.mock.method(console, 'warn', () => {});
+  const result = await createKeylessTerrain();
+  assert.ok(result.provider instanceof Cesium.EllipsoidTerrainProvider);
+  assert.equal(result.fallback, true);
+});

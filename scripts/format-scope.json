@@ -117,6 +117,7 @@
   "server/providers/cctv/constants.js",
   "server/providers/cctv/media.js",
   "server/providers/cctv/normalize.js",
+  "src/data/cctvMissingNumbers.test.mjs",
   "server/providers/cctv/sources.js",
   "server/providers/radio.js",
   "server/providers/radio/catalog.js",
@@ -732,6 +733,7 @@
   "src/voice/session.test.mjs",
   "src/layers/alpr/records.js",
   "src/layers/earthquakes/records.js",
+  "src/layers/earthquakes/records.test.mjs",
   "src/sources/sourceSlot.js",
   "src/data/feedState.js",
   "src/app/localGeojsonServices.js",
@@ -1059,5 +1061,7 @@
   "src/tooling/webAppIcons.test.mjs",
   "src/ui/flyToDataSource.js",
   "src/ui/flyToDataSource.test.mjs",
+  "scripts/assemble-changelog.mjs",
+  "src/tooling/changelogFragments.test.mjs",
   "src/data/gbfsProxyRateLimit.test.mjs"
 ]

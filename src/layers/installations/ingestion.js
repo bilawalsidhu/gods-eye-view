@@ -134,15 +134,16 @@ export function createIngestion({
       let placesError = null;
       if (layerState.googleSearchRequested) {
         layerState.googleSearchRequested = false;
+        // A view across 180° has west > east; its width runs through 180°.
+        const lonSpan = box.east - box.west + (box.east < box.west ? 360 : 0);
         const latitude = (box.south + box.north) / 2;
-        const longitude = (box.west + box.east) / 2;
+        let longitude = box.west + lonSpan / 2;
+        if (longitude > 180) longitude -= 360;
         const radiusM = Math.min(
           50000,
           Math.max(
             1000,
-            Math.round(
-              Math.max(box.north - box.south, box.east - box.west) * 55_000,
-            ),
+            Math.round(Math.max(box.north - box.south, lonSpan) * 55_000),
           ),
         );
         try {
