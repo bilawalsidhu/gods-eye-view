@@ -12,6 +12,7 @@ import {
 export { localizeLayerName } from './layerNames.js';
 import { createWeatherPanel } from './weatherPanel.js';
 import { createNewsPanel } from './newsPanel.js';
+import { createGravityPanel } from './gravityPanel.js';
 import {
   translateFeedError,
   translateStatusLine,
@@ -85,6 +86,7 @@ const PANEL_GROUPS = [
       's2-ghostmaps',
       'shipwrecks',
       'news',
+      'gravity',
     ],
   },
   {
@@ -337,6 +339,12 @@ export class LayerPanel {
       container: container?.ownerDocument?.getElementById?.('news-panel-body'),
       setLayerParams: this.setLayerParams,
     });
+    this._gravityPanel?.destroy();
+    this._gravityPanel = createGravityPanel({
+      container:
+        container?.ownerDocument?.getElementById?.('gravity-panel-body'),
+      setLayerParams: this.setLayerParams,
+    });
     this._mountRecentImagery();
     this._renderToggles();
   }
@@ -374,6 +382,8 @@ export class LayerPanel {
     this._weatherPanel = null;
     this._newsPanel?.destroy();
     this._newsPanel = null;
+    this._gravityPanel?.destroy();
+    this._gravityPanel = null;
     this._recentImageryPanel?.destroy();
     this._recentImageryPanel = null;
     this._recentImageryFactory = null;
@@ -664,6 +674,10 @@ export class LayerPanel {
   }
 
   _refreshWeatherPanel() {
+    const gravity = this.getAll().find(({ id }) => id === 'gravity');
+    this._gravityPanel?.update(
+      gravity?.enabled ? this._rowControlsFor('gravity')?.card || null : null,
+    );
     this._weatherPanel?.update(
       this.getAll()
         .filter(
