@@ -1,6 +1,7 @@
 import { twoline2satrec } from 'satellite.js';
 import * as Cesium from 'cesium';
 import { msg } from '../../i18n/index.js';
+import { noradIdFromSatnum } from '../../sources/tle.js';
 import { CATALOG_GROUPS, ISS_NORAD, POINT_STYLES } from './policy.js';
 
 export function createIngestion({
@@ -111,7 +112,7 @@ export function createIngestion({
           const satrec = twoline2satrec(entry.line1, entry.line2);
           if (!satrec || satrec.error !== 0) continue;
 
-          const noradId = Number(satrec.satnum);
+          const noradId = noradIdFromSatnum(satrec.satnum);
           if (seen.has(noradId)) continue;
           seen.add(noradId);
 
