@@ -5177,6 +5177,7 @@ its criteria cannot be silently ignored.
 | Shipwrecks ⚓ (`shipwrecks`)         | EMODnet Human Activities heritage shipwrecks (European waters, keyless WFS, CC BY 4.0) and Wikidata (notable wrecks worldwide, keyless, CC0)                                                                                                                                                                                                                                                                                                                                                                                                                                                               | `src/layers/shipwrecks/` via `src/app/layers/shipwrecks.js`                                                                                               | `/api/shipwrecks`                                                                                                            | 6 h page check; server refresh once a day (stale-on-error up to 7 days)                                                     |
 | News ◆ (`news`)                      | The last 24 h of reports in two sections, Conflicts and Local, with hotspots, outlines and disputed areas: from a news server (`GEV_NEWS_ORIGIN`), else Core's own reading of GDELT 2.0 events (no key), Liveuamap (`LIVEUAMAP_API_KEY`) and World News API (`WORLDNEWSAPI_KEY`)                                                                                                                                                                                                                                                                                                                           | `src/layers/news/` via `src/app/layers/news.js`; panel `src/ui/newsPanel.js`, `src/ui/news/`; server `server/providers/news.js`, `server/providers/news/` | `/api/news/hotspots`, `/api/news/feed`, `/api/news/outline` (forwarded to `GEV_NEWS_ORIGIN` when set, else answered by Core) | 2 min map refresh; Local re-read when the camera settles 0.8 s in a new half-degree cell below 3,000 km                     |
 | Wildlife Sightings 🦉                | iNaturalist wildlife observed within 48 h (whales 7 d), per view; Acartia Salish Sea marine mammal coverage (keyless)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      | `src/layers/wildlifeSightings/` via `src/app/layers/wildlifeSightings.js`                                                                                 | `/api/inaturalist/observations`, `/api/inaturalist/grid`, `/api/acartia/sightings`                                           | camera moveEnd (600 ms debounce; enable settles 300 ms) + 5 min (observations 5 / 10 min; tiles 15 min; stale ≤ 1 h / 24 h) |
+| Mass Change (GRACE) ◍ (`gravity`)    | CSR GRACE/GRACE-FO RL06.3 mascons: monthly mass change as cm of equivalent water against the 2004–2009 mean (keyless); CSR's 0.25° land mask for the land-only view                                                                                                                                                                                                                                                                                                                                                                                                                                        | `src/layers/gravity/`, card `src/ui/gravityPanel.js`                                                                                                      | `/api/gravity/index`, `/field`, `/cell`, `/landmask`                                                                         | server checks CSR at most daily (conditional GET); the browser rereads the index every 6 h                                  |
 
 GNSS Integrity samples a 250 nm circle around the Earth point under the screen
 centre. Camera reads debounce for 600 ms with a monotonic 2.5 s minimum gap;
@@ -5221,6 +5222,29 @@ proxy.
 Polygons keep holes; pick ownership is deliberately unregistered so sibling
 cards still work over a zone. The row legend and selected card state that the
 layer is informational only and not a substitute for B4UFLY / LAANC.
+
+Mass Change (GRACE) draws CSR's monthly GRACE/GRACE-FO mascon solutions
+(2002 onward, about five weeks behind; no data July 2017 to May 2018 between
+the missions). The server downloads CSR's single NetCDF file (about 115 MB) at
+most once a day with a conditional GET, reads it with `h5wasm` (loaded only
+while converting), and keeps a one-degree int16 cube on disk under
+`.gev-cache/gravity` (about 34 MB for 260 solutions); the NetCDF file is
+deleted after conversion. The browser fetches one solution at a time (130 KB)
+and keeps the last 36. The field is drawn on one raised shell at 4 km, below
+the weather shells, at 0.25°: each pixel blends its four nearest cell centres,
+and the colour scale (red loss, blue gain) saturates at ±40 cm so aquifer
+signals stay visible beside metre-scale ice loss. Land only is the default:
+CSR's 0.25° land mask is fetched once by the server (about 4 MB), packed to
+about 10 KB and served from `/api/gravity/landmask`; without it the layer
+falls back to every cell and says so. The MASS CHANGE rail card
+(`#gravity-panel`) holds the month slider, previous/next, Latest and Play
+(replays from the first solution, never faster than a field arrives), and a
+click on open ground charts that one-degree cell's whole record from
+`/api/gravity/cell`, broken at the mission gap. Share links keep the month,
+land/ocean and opacity (layer token `02`). `scripts/qa-gravity.mjs` covers the
+live record, months and playback, the probe chart, land and ocean, a stubbed
+loading failure, a phone viewport and disable; it accepts `--ready-ms` for a
+fresh server's first download.
 
 Street Level is a docked, collapsible right-rail panel (`#street-level-panel`,
 layer token `0`, option owner `street-level`, panel `ui` token `t`) that starts

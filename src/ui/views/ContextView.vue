@@ -44,6 +44,9 @@ const sceneRuntime = computed(() => scenePanel.value?.runtime ?? '');
       <template #badge><span id="recent-imagery-panel-count" :aria-label="t('Imagery days in the box')"></span></template>
       <div id="recent-imagery-panel-body" class="ui-scroll" data-rail-scroller></div>
     </RailPanel>
+    <RailPanel id="gravity-panel" hidden :title="t('MASS CHANGE')" sideways rail-scroller>
+      <div id="gravity-panel-body" class="ui-scroll" data-rail-scroller></div>
+    </RailPanel>
     <RailPanel id="global-context-panel" start-collapsed v-class-toggle="{ ...(ctx && { 'context-enabled': ctx.enabled }) }" :data-context-mode="ctx?.mode" :title="t('CONTEXT')" sideways scroll rail-scroller>
         <div class="cyber-panel-body ui-scroll" data-rail-scroller>
         <div class="global-context-modes" role="tablist" :aria-label="t('Context mode')">

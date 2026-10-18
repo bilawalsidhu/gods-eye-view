@@ -41,6 +41,7 @@ export const LAYER_NAME_KEYS = Object.freeze({
   's2-ghostmaps': msg('S2 GhostMaps'),
   news: msg('News'),
   shipwrecks: msg('Shipwrecks'),
+  gravity: msg('Mass Change (GRACE)'),
   wind: msg('Wind'),
   'weather-radar': msg('Rain radar'),
   'weather-satellite': msg('Satellite clouds'),
