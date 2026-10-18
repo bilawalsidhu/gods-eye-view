@@ -394,3 +394,55 @@ for (const hook of ['configureServer', 'configurePreviewServer']) {
     );
   });
 }
+
+test('unknown GBFS counts stay unknown through the source, model and station color', async () => {
+  const { createRendering } = await import('./rendering.js');
+  const { COLOR_NEUTRAL, COLOR_RED } = await import('./policy.js');
+  for (const missing of [null, '']) {
+    const source = createBikeshareSource({
+      fetchImpl: async () =>
+        Response.json({
+          data: {
+            stations: [
+              {
+                station_id: '2537',
+                num_bikes_available: missing,
+                num_docks_available: 4,
+                is_installed: true,
+                is_renting: true,
+                is_returning: true,
+              },
+            ],
+          },
+        }),
+    });
+    const model = createModel({});
+    const status = model
+      .parseStationStatus(await source.getStations(AUSTIN.stationStatusUrl))
+      .get('2537');
+    const rendering = createRendering({
+      state: {},
+      services: { render: {} },
+      parts: { model },
+    });
+    assert.equal(status.bikesAvailable, null);
+    assert.equal(
+      model.toNonNegativeInteger(status.bikesAvailable),
+      null,
+      'render-map normalization preserves unknown',
+    );
+    assert.equal(rendering.statusToColor(status, 12), COLOR_NEUTRAL);
+    assert.equal(rendering.resolveCapacity(missing, status), 4);
+    assert.equal(
+      rendering.statusToColor({ ...status, bikesAvailable: 0 }, 12),
+      COLOR_RED,
+      'reported zero is still empty',
+    );
+    assert.equal(
+      model.toNonNegativeInteger(missing, 7),
+      7,
+      'caller fallback is preserved',
+    );
+    assert.equal(model.toNonNegativeInteger('3'), 3);
+  }
+});

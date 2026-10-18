@@ -262,3 +262,78 @@ test('a box radius reaches every point of the box, however large', async () => {
   const small = await resolveArea({ bbox: [-97.94, 30.1, -97.56, 30.52] });
   assert.ok(areaRadiusKm(small) < 30);
 });
+
+test('polygon containment follows the short edges across the antimeridian', async () => {
+  const ring = [
+    [179, -2],
+    [-179, -2],
+    [-179, 2],
+    [179, 2],
+  ];
+  const areas = [
+    [{ bbox: [179.4, -0.1, 179.6, 0.1] }, true],
+    [{ bbox: [-179.6, -0.1, -179.4, 0.1] }, true],
+    [{ bbox: [179.8, -0.1, -179.8, 0.1] }, true],
+    [{ lat: 0, lon: 179.5, radius_km: 10 }, true],
+    [{ lat: 0, lon: -179.5, radius_km: 10 }, true],
+    [{ lat: 0, lon: 180, radius_km: 10 }, true],
+    [{ lat: 0, lon: -180, radius_km: 10 }, true],
+    [{ bbox: [-0.1, -0.1, 0.1, 0.1] }, false],
+    [{ lat: 0, lon: 0, radius_km: 10 }, false],
+  ];
+  for (const vertices of [
+    ring,
+    [...ring, [...ring[0]]],
+    [...ring].reverse(),
+    [...ring.slice(2), ...ring.slice(0, 2)],
+  ]) {
+    for (const [input, expected] of areas) {
+      assert.equal(
+        polygonsTouchArea([[vertices]], await resolveArea(input)),
+        expected,
+        JSON.stringify({ vertices, input }),
+      );
+    }
+  }
+});
+
+test('antimeridian polygons keep holes empty and include their boundaries', async () => {
+  const outer = [
+    [178, -3],
+    [-178, -3],
+    [-178, 3],
+    [178, 3],
+  ];
+  const hole = [
+    [179, -1],
+    [-179, -1],
+    [-179, 1],
+    [179, 1],
+  ];
+  for (const input of [
+    { bbox: [179.4, -0.1, 179.6, 0.1] },
+    { bbox: [-179.6, -0.1, -179.4, 0.1] },
+    { lat: 0, lon: 180, radius_km: 10 },
+  ]) {
+    const area = await resolveArea(input);
+    assert.ok(polygonsTouchArea([[outer]], area));
+    assert.ok(!polygonsTouchArea([[outer, hole]], area));
+    assert.ok(!polygonsTouchArea([[outer, [...hole].reverse()]], area));
+  }
+  const solid = await resolveArea({ bbox: [178.4, -0.1, 178.6, 0.1] });
+  assert.ok(polygonsTouchArea([[outer, hole]], solid));
+  const boundary = await resolveArea({ bbox: [178.9, -0.1, 179.1, 0.1] });
+  assert.ok(polygonsTouchArea([[outer, hole]], boundary));
+});
+
+test('polygon containment retains rings spanning more than half the globe', async () => {
+  const longitudes = [-170, -110, -50, 10, 70, 130];
+  const ring = [
+    ...longitudes.map((lon) => [lon, -5]),
+    ...[...longitudes].reverse().map((lon) => [lon, 5]),
+  ];
+  const inside = await resolveArea({ bbox: [99, -1, 101, 1] });
+  const outside = await resolveArea({ bbox: [169, -1, 171, 1] });
+  assert.ok(polygonsTouchArea([[ring]], inside));
+  assert.ok(!polygonsTouchArea([[ring]], outside));
+});

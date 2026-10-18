@@ -221,6 +221,18 @@
   white-space: nowrap;
 }
 
+/* A longer translated title in a collapsed rail launcher tightens its
+   tracking rather than pushing the disclosure button out of the card. */
+html:not([lang='en'])
+  #right-context-rail
+  .panel-collapsible.collapsed
+  .panel-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  letter-spacing: 1.5px;
+}
+
 .panel-divider {
   flex: 1;
   height: 1px;
@@ -242,6 +254,11 @@
     background-color var(--transition-fast),
     border-color var(--transition-fast),
     color var(--transition-fast);
+}
+
+/* A long translated title must not squeeze the toggle into a sliver. */
+html:not([lang='en']) .panel-collapse-btn {
+  flex-shrink: 0;
 }
 
 .panel-collapse-btn:hover {
@@ -770,6 +787,14 @@
   white-space: nowrap;
 }
 
+/* One label column across the Display rows: --pp-label-chars is the longest
+   label of the active language (set in applicationShell.js); the labels are
+   monospace. 0.125em is the 1px letter-spacing at 8px. */
+html:not([lang='en']) .pp-slider-row > .pp-slider-mini-label {
+  flex: 0 0 auto;
+  min-width: calc(var(--pp-label-chars, 0) * (1ch + 0.125em));
+}
+
 .detection-slider-row {
   min-width: 170px;
   padding: 5px 8px 6px;
@@ -966,6 +991,11 @@
 #draw-mode-row {
   min-width: 184px;
 }
+/* Equal thirds with room around the label, so a long translated shape name
+   never runs edge to edge in its segment. */
+html:not([lang='en']) #draw-mode-row .pp-mode-btn {
+  padding: 0 4px;
+}
 #draw-label-row {
   flex-wrap: wrap;
   row-gap: 6px;
@@ -989,6 +1019,11 @@
 }
 .draw-color-select {
   flex: 0 0 74px;
+}
+/* Sized to its longest colour name so a translated one is never clipped. */
+html:not([lang='en']) .draw-color-select {
+  flex: 0 0 auto;
+  min-width: 74px;
 }
 .draw-clear-btn {
   flex: 0 0 auto;
@@ -1316,6 +1351,22 @@ body.ui-clean-view #scene-runtime.active {
 }
 
 .param-slider-row:last-child {
+  margin-bottom: 0;
+}
+
+/* One label column for every parameter, as wide as the longest translated
+   label, so all slider tracks start and end at the same x. */
+html:not([lang='en']) #param-sliders {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr) max-content;
+  align-items: center;
+  gap: 10px;
+}
+
+html:not([lang='en']) .param-slider-row {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: subgrid;
   margin-bottom: 0;
 }
 
