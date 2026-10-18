@@ -5,6 +5,14 @@ import {
   MAX_IMPORTED_FILES,
   loadGeoFile,
 } from '../data/geoFileImport.js';
+import {
+  formatNumber,
+  msg,
+  registerUnsavedWork,
+  t,
+  tn,
+  translateKnown,
+} from '../i18n/index.js';
 import { flyToDataSource } from './flyToDataSource.js';
 
 // One color per file, in import order, from the whiteboard palette.
@@ -43,6 +51,11 @@ export function initGeoFileImport({
   let cameraIntent = 0;
   const lifetime = new AbortController();
   let removeMapSource;
+  // Imports live for the page session: switching language (a reload) asks
+  // first while any are on the map.
+  const unregisterUnsavedWork = registerUnsavedWork(() =>
+    !destroyed && imports.length ? msg('imported map files') : null,
+  );
 
   const listen = (target, type, listener, options) => {
     if (!target?.addEventListener) return;
@@ -78,7 +91,9 @@ export function initGeoFileImport({
           } catch {
             if (!destroyed)
               setHint(
-                'Ground heights could not be refreshed. Try the file again when the map has loaded.',
+                t(
+                  'Ground heights could not be refreshed. Try the file again when the map has loaded.',
+                ),
               );
           } finally {
             groundQueued = false;
@@ -139,15 +154,22 @@ export function initGeoFileImport({
         name.className = 'geo-import-name';
         // textContent, never markup: the name comes from the file system.
         name.textContent = item.name;
-        name.title = `${item.name} — ${item.format.toUpperCase()}, ${item.entityCount.toLocaleString()} map object${item.entityCount === 1 ? '' : 's'}${item.ownStyles ? ', drawn with its own styles' : ''}`;
+        name.title = `${item.name} — ${item.format.toUpperCase()}, ${tn(
+          item.entityCount,
+          '{count} map object',
+          '{count} map objects',
+          { count: formatNumber(item.entityCount) },
+        )}${item.ownStyles ? t(', drawn with its own styles') : ''}`;
         const actions = [
           [
             item.visible ? 'visibility' : 'visibility_off',
-            item.visible ? `Hide ${item.name}` : `Show ${item.name}`,
+            item.visible
+              ? t('Hide {name}', { name: item.name })
+              : t('Show {name}', { name: item.name }),
             'toggle',
           ],
-          ['my_location', `Fly to ${item.name}`, 'fly'],
-          ['close', `Remove ${item.name}`, 'remove'],
+          ['my_location', t('Fly to {name}', { name: item.name }), 'fly'],
+          ['close', t('Remove {name}', { name: item.name }), 'remove'],
         ].map(([icon, label, action]) => {
           const btn = doc.createElement('button');
           btn.type = 'button';
@@ -264,11 +286,13 @@ export function initGeoFileImport({
         outcomes.push({
           name: fileName,
           ok: false,
-          error: `At most ${MAX_IMPORTED_FILES} files at once — remove one first.`,
+          error: t('At most {count} files at once — remove one first.', {
+            count: formatNumber(MAX_IMPORTED_FILES),
+          }),
         });
         continue;
       }
-      setHint(`Reading ${fileName}…`);
+      setHint(t('Reading {name}…', { name: fileName }));
       const color = COLORS[colorAt % COLORS.length];
       let loaded;
       try {
@@ -279,8 +303,8 @@ export function initGeoFileImport({
           ok: false,
           error:
             error instanceof GeoImportError || error?.name === 'GeoImportError'
-              ? error.message
-              : 'That file could not be read.',
+              ? t(error.template || error.message, error.values)
+              : t('That file could not be read.'),
         });
         continue;
       }
@@ -416,6 +440,7 @@ export function initGeoFileImport({
     destroy() {
       if (destroyed) return;
       destroyed = true;
+      unregisterUnsavedWork();
       lifetime.abort();
       removeMapSource?.();
       clearTimeout(groundTimer);
@@ -447,16 +472,28 @@ export function summarize(outcomes) {
   const failed = outcomes.filter((o) => !o.ok);
   const added = outcomes.length - failed.length;
   const parts = [];
-  if (added) parts.push(`Added ${added} file${added === 1 ? '' : 's'}.`);
-  if (failed.length === 1) parts.push(`${failed[0].name}: ${failed[0].error}`);
+  if (added)
+    parts.push(
+      tn(added, 'Added {count} file.', 'Added {count} files.', {
+        count: formatNumber(added),
+      }),
+    );
+  // Import errors stay English in the outcome; they translate here.
+  const error = translateKnown(failed[0]?.error);
+  if (failed.length === 1) parts.push(`${failed[0].name}: ${error}`);
   else if (failed.length > 1)
     parts.push(
-      `${failed.length} files could not be added (${failed[0].name}: ${failed[0].error})`,
+      tn(
+        failed.length,
+        '{count} file could not be added ({name}: {error})',
+        '{count} files could not be added ({name}: {error})',
+        { count: formatNumber(failed.length), name: failed[0].name, error },
+      ),
     );
   const stripped = outcomes.reduce(
     (n, o) => n + (o.ok ? o.removed || 0 : 0),
     0,
   );
-  if (added && stripped) parts.push('Some KML content was left out.');
+  if (added && stripped) parts.push(t('Some KML content was left out.'));
   return parts.join(' ');
 }

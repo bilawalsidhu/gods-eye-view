@@ -3,6 +3,11 @@ import { VectorTile } from '@mapbox/vector-tile';
 import { createVectorTileSource } from './vectorTiles.js';
 import { clipTileRing, militaryOutlineLines } from './militaryTileGeometry.js';
 import { tileToBBox } from '../data/tomtomTiles.js';
+// Kept English in data; the map card and Contacts translate it.
+import { UNNAMED_MILITARY_AREA } from '../data/installationNames.js';
+
+/** Name of a military polygon the names pack has not named. */
+export { UNNAMED_MILITARY_AREA };
 
 const ROAD_TYPES = Object.freeze({
   motorway: 'motorway',
@@ -191,7 +196,7 @@ function decodeLayers(bytes, z, x, y, layerNames) {
             id: `ofm:${z}/${x}/${y}:${feature.id ?? i}:${p}`,
             kind: 'installation',
             class: 'military_land',
-            name: 'Military area',
+            name: UNNAMED_MILITARY_AREA,
             latitude,
             longitude,
             footprint: ring,

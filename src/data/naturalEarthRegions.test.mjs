@@ -3,6 +3,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { statSync, readFileSync } from 'node:fs';
 import { findNaturalRegion, listRegions, lookupNaturalRegionOutline, pointInRing } from './naturalEarthRegions.js';
+import { greatCircleKm } from '../geoDistance.js';
 
 const PACK_DIR = new URL('./local_data/natural_earth/', import.meta.url);
 
@@ -19,6 +20,16 @@ test('marquee ranges resolve with sane areas (owner acceptance: Alps + Rockies)'
   assert.ok(rockies.areaKm2 >= 700_000 && rockies.areaKm2 < 1_500_000,
     `Rockies area sane (got ${Math.round(rockies.areaKm2)} km²)`);
   assert.ok(rockies.bboxDiagonalKm > 2000, 'Rockies span thousands of km');
+  const coordinates = rockies.polygons.flat();
+  const minLon = Math.min(...coordinates.map(([lon]) => lon));
+  const minLat = Math.min(...coordinates.map(([, lat]) => lat));
+  const maxLon = Math.max(...coordinates.map(([lon]) => lon));
+  const maxLat = Math.max(...coordinates.map(([, lat]) => lat));
+  assert.equal(
+    rockies.bboxDiagonalKm,
+    greatCircleKm({ lat: minLat, lon: minLon }, { lat: maxLat, lon: maxLon }),
+    'Natural Earth bbox conversion maps [lon, lat] data into { lat, lon } points',
+  );
 });
 
 test('aliases and articles: "the Alps", "Rockies", "Sahara Desert", "Himalaya"', async () => {

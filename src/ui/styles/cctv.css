@@ -70,6 +70,18 @@
   margin-bottom: 0;
 }
 
+/* Spanish labels overflow the nowrap .scene-btn row of the fixed-width
+   panel; wrap the row under es only, English stays as is. */
+html[lang='es'] .cctv-controls {
+  flex-wrap: wrap;
+}
+
+/* A label longer than its button wraps inside it, not past the panel edge. */
+html:not([lang='en']) .cctv-controls .scene-btn {
+  white-space: normal;
+  overflow-wrap: break-word;
+}
+
 .cctv-calibration-block {
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 9px;
@@ -157,6 +169,9 @@
   padding: 6px 8px;
   font-family: var(--font-sans);
   font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   outline: none;
 }
 
@@ -260,12 +275,12 @@
   animation: cctv-frame-shimmer 1.4s linear infinite;
 }
 
-/* "Acquiring" caption only when no previous frame is showing underneath */
-.cctv-frame-wrap.loading:not(.has-frame)::before {
-  content: 'ACQUIRING FRAME';
+/* "Acquiring" caption only when no previous frame is showing underneath.
+   The text lives in the markup (data-i18n) so it is translated. */
+.cctv-frame-caption {
+  display: none;
   position: absolute;
   inset: 0;
-  display: flex;
   align-items: center;
   justify-content: center;
   font-family: var(--font-mono);
@@ -273,6 +288,10 @@
   letter-spacing: 2.2px;
   color: rgba(145, 237, 255, 0.62);
   pointer-events: none;
+}
+
+.cctv-frame-wrap.loading:not(.has-frame) .cctv-frame-caption {
+  display: flex;
 }
 
 @keyframes cctv-frame-shimmer {
@@ -364,4 +383,33 @@
   line-height: 1.45;
   color: #a8f7ff;
   text-shadow: 0 0 10px rgba(0, 212, 255, 0.18);
+}
+
+/* Tighter calibration chips keep the seven values to two rows, so
+   SAVE / RESET stay in view. */
+html:not([lang='en']) .cctv-cal-readout {
+  gap: 4px;
+}
+
+html:not([lang='en']) .cctv-cal-value {
+  flex: 1 1 auto;
+  white-space: nowrap;
+  letter-spacing: 0.3px;
+  padding: 4px;
+}
+
+html:not([lang='en']) #cctv-camera-select {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.04em;
+}
+
+/* The camera name gets its own row; PREV / NEXT share the row below it. */
+html:not([lang='en']) .cctv-controls:has(#cctv-camera-select) {
+  flex-wrap: wrap;
+}
+
+html:not([lang='en']) #cctv-camera-select {
+  flex: 1 1 100%;
+  order: -1;
 }
