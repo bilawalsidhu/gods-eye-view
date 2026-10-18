@@ -247,12 +247,14 @@ const STACK_ALIASES = new Map([
   ['kartverket-topo', 'kartverket-topo'],
   ['kartverket', 'kartverket-topo'],
   ['kartverket topo', 'kartverket-topo'],
+  // Norway-only maps: a generic "topographic map" or "nautical chart" asked
+  // for elsewhere would show a bare globe, so only Norwegian names match.
   ['norwegian topo', 'kartverket-topo'],
-  ['topographic map', 'kartverket-topo'],
+  ['norwegian topographic map', 'kartverket-topo'],
   ['kartverket-nautical', 'kartverket-nautical'],
   ['kartverket nautical', 'kartverket-nautical'],
-  ['nautical chart', 'kartverket-nautical'],
-  ['sea chart', 'kartverket-nautical'],
+  ['norwegian nautical chart', 'kartverket-nautical'],
+  ['norwegian sea chart', 'kartverket-nautical'],
   ['sjøkart', 'kartverket-nautical'],
 ]);
 
