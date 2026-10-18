@@ -12,6 +12,21 @@ import { localAiConfig } from './localConfig.js';
 
 const cases = [
   [
+    'Приближ немного.',
+    'adjust_camera_zoom',
+    { direction: 'in', amount: 'little' },
+  ],
+  [
+    'Приближи камеру немного',
+    'adjust_camera_zoom',
+    { direction: 'in', amount: 'little' },
+  ],
+  [
+    'Приблизи немного',
+    'adjust_camera_zoom',
+    { direction: 'in', amount: 'little' },
+  ],
+  [
     'Пожалуйста, найди мне рейс EZY94CG и следи за ним.',
     'track_entity',
     { query: 'EZY94CG', layerId: 'flights' },
@@ -123,10 +138,18 @@ for (const [text, name, args] of cases)
       request: () => assert.fail('Ordinary control must not load Bonsai'),
       runAction: async (tool, values) => {
         calls.push([tool, values]);
-        return { ok: true, arrived: true, label: 'Target', scene: { basemap: { target: { latitude: 30, longitude: -97 } } } };
+        return {
+          ok: true,
+          arrived: true,
+          label: 'Target',
+          scene: { basemap: { target: { latitude: 30, longitude: -97 } } },
+        };
       },
     });
-    const expected = name === 'select_nearest_aircraft' && !args.locationQuery ? { ...args, latitude: 30, longitude: -97 } : args;
+    const expected =
+      name === 'select_nearest_aircraft' && !args.locationQuery
+        ? { ...args, latitude: 30, longitude: -97 }
+        : args;
     assert.deepEqual(calls.at(-1), [name, expected]);
     if (name === 'track_entity')
       assert.deepEqual(calls[0], [
@@ -241,7 +264,7 @@ test('all API map actions are accessible; unrelated schemas do not inflate a sma
   const config = localAiConfig({ LOCAL_AI_PROFILE: 'low' });
   const messages = [{ role: 'user', content: 'Hello' }];
   const initial = localChatPayload(messages, config);
-  assert.equal(initial.tools.length, 4);
+  assert.equal(initial.tools.length, 6);
   assert.ok(JSON.stringify(initial).length < 4000);
   const next = localChatPayload(
     [
@@ -321,18 +344,36 @@ test('a model tool is confirmed directly without a second expensive generation',
 
 test('nearest aircraft uses the viewed ground target and never camera coordinates', async () => {
   const calls = [];
-  await runLocalAction('select_nearest_aircraft', { layerId: 'flights' }, async (name, args) => {
-    calls.push([name, args]);
-    return { ok: true, scene: { camera: { latitude: 10, longitude: 20 }, basemap: { target: { latitude: 30, longitude: 40 } } } };
-  });
+  await runLocalAction(
+    'select_nearest_aircraft',
+    { layerId: 'flights' },
+    async (name, args) => {
+      calls.push([name, args]);
+      return {
+        ok: true,
+        scene: {
+          camera: { latitude: 10, longitude: 20 },
+          basemap: { target: { latitude: 30, longitude: 40 } },
+        },
+      };
+    },
+  );
   assert.deepEqual(calls, [
     ['get_entity_context', { scope: 'in_view', limit: 1 }],
-    ['select_nearest_aircraft', { layerId: 'flights', latitude: 30, longitude: 40 }],
+    [
+      'select_nearest_aircraft',
+      { layerId: 'flights', latitude: 30, longitude: 40 },
+    ],
   ]);
   const missing = [];
-  const result = await runLocalAction('select_nearest_aircraft', { layerId: 'flights' }, async (name) => {
-    missing.push(name); return { ok: true, scene: { camera: { latitude: 10, longitude: 20 } } };
-  });
+  const result = await runLocalAction(
+    'select_nearest_aircraft',
+    { layerId: 'flights' },
+    async (name) => {
+      missing.push(name);
+      return { ok: true, scene: { camera: { latitude: 10, longitude: 20 } } };
+    },
+  );
   assert.equal(result.ok, false);
   assert.deepEqual(missing, ['get_entity_context']);
 });

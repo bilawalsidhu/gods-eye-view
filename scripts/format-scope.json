@@ -1063,5 +1063,6 @@
   "scripts/assemble-changelog.mjs",
   "src/tooling/changelogFragments.test.mjs",
   "src/data/gbfsProxyRateLimit.test.mjs",
-  "scripts/qa-local-ai.mjs"
+  "scripts/qa-local-ai.mjs",
+  "src/tooling/localAudioWorkletBuild.test.mjs"
 ]

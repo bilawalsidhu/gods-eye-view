@@ -4,13 +4,18 @@ import { localAiConfig } from './localConfig.js';
 
 const stopped = () => new DOMException('Local inference stopped', 'AbortError');
 function inferenceError(message) {
-  return new Error(
-    /out of memory|\boom\b|memory access out of bounds/iu.test(message)
+  const oom = /out of memory|\boom\b|memory access out of bounds/iu.test(
+    message,
+  );
+  const error = new Error(
+    oom
       ? t(
           'Local model ran out of memory. Its memory has been released. Try again with a shorter request or the low profile.',
         )
       : message,
   );
+  error.code = oom ? 'LOCAL_AI_OOM' : 'LOCAL_AI_INFERENCE';
+  return error;
 }
 
 /** Independent WASM heaps; ordinary map commands never allocate Bonsai. */
@@ -65,6 +70,17 @@ export function createBrowserLocalRuntime(
     if (kind === 'chat' && !workers.has(kind)) await checkGpu();
     signal?.throwIfAborted();
     if (epoch !== generation) throw stopped();
+    // The 8B ONNX graph also needs substantial CPU/WASM memory. Independent
+    // heaps alone are insufficient when recognition, chat and VITS stay warm.
+    if (config.profile === 'max') {
+      if (
+        [...workers].some(
+          ([name, owner]) => name !== kind && owner.pending.size,
+        )
+      )
+        throw new Error('Local model is busy');
+      for (const name of [...workers.keys()]) if (name !== kind) release(name);
+    }
     let owner = workers.get(kind);
     if (!owner) {
       owner = { worker: createWorker(kind), pending: new Map() };
@@ -120,6 +136,24 @@ export function createBrowserLocalRuntime(
       }
     });
   }
+  async function speech(text, signal, onStatus) {
+    const epoch = generation;
+    try {
+      return await request('speech', { text }, signal, onStatus);
+    } catch (error) {
+      signal?.throwIfAborted();
+      if (epoch !== generation) throw stopped();
+      if (
+        error.code !== 'LOCAL_AI_OOM' ||
+        [...workers.values()].some((owner) => owner.pending.size)
+      )
+        throw error;
+      // Nothing has played yet. A fresh voice heap after releasing idle
+      // models can safely retry this utterance once without duplicate audio.
+      for (const name of [...workers.keys()]) release(name);
+      return request('speech', { text }, signal, onStatus);
+    }
+  }
   return {
     async prepare(signal, onStatus) {
       const epoch = generation;
@@ -131,8 +165,7 @@ export function createBrowserLocalRuntime(
     chat: (messages, signal, onStatus) =>
       request('chat', { messages }, signal, onStatus),
     transcribe: (audio, signal) => request('transcribe', { audio }, signal),
-    speech: (text, signal, onStatus) =>
-      request('speech', { text }, signal, onStatus),
+    speech,
     diagnostics: () => ({
       loadedWorkers: [...workers.keys()],
       pending: [...workers.values()].reduce(

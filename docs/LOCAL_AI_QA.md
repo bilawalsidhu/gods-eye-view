@@ -33,4 +33,23 @@ cleanly. The three commands returned success without loading Bonsai.
 
 ## Limits
 
-The original screenshot's OOM was not reproduced in the short browser run. Separate heaps, bounded context/speech, tensor disposal and worker termination address concrete memory hazards; tests also inject OOM to verify cleanup. This does not guarantee that every model fits every browser/GPU or that live data always contains a requested aircraft. Free-form model interpretation remains slower and less reliable than the direct command paths.
+Production testing reproduced an OOM while Piper synthesized a reply after
+8B generation with all models resident. Max therefore releases other inference
+workers at every stage transition. Speech also has one bounded retry with a
+fresh heap after freeing idle models. A production-only microphone failure
+was traced to Vite inlining the AudioWorklet as a data URL; it now emits a
+separate same-origin script, with a build regression test. Whisper's observed
+“Приближ немного” transcription is handled directly as zoom, without loading
+Bonsai or allowing a model-invented navigation target.
+
+The final built preview was tested at the same origin with the already cached
+max/Russian models. A Piper-generated command was played into a synthetic
+microphone, captured by the emitted AudioWorklet, transcribed by Whisper and
+executed as camera zoom. Worker instrumentation recorded zero chat requests
+for that zoom. A subsequent 8B text request returned “Привет.” and Piper
+played it successfully. Both turns completed with no worker errors or OOM,
+and stopping the session released its workers.
+
+These checks do not guarantee that every model fits every browser/GPU or
+that live data contains a requested aircraft. Free-form model interpretation
+remains slower and less reliable than deterministic map commands.

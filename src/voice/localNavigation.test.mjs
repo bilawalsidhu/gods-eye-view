@@ -8,6 +8,18 @@ import { runLocalTurn } from './localConversation.js';
 import { localChatPayload } from './localPrompt.js';
 import { localAiConfig } from './localConfig.js';
 
+test('relative camera requests cannot be redirected to an unrelated model-invented city', () => {
+  for (const text of [
+    'Приближ немного.',
+    'Приблизь камеру немного',
+    'Please zoom in a little',
+  ])
+    assert.throws(
+      () => localNavigationArguments({ query: 'Red Square, Moscow' }, text),
+      /did not request a destination/,
+    );
+});
+
 test('Russian and English place commands preserve landmarks and use automatic framing', () => {
   for (const [text, query] of [
     ['Покажи Красную площадь', 'Красная площадь, Москва'],

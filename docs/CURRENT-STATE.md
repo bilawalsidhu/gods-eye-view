@@ -6,14 +6,17 @@ Russian/English voices. Explicit download buttons save pinned model files to
 browser Cache Storage; interrupted large downloads resume in 16 MiB parts.
 No separate inference service or API key is needed. Bonsai uses WebGPU;
 Whisper and Piper use independent WASM workers. Only recognition loads at
-voice startup; other models load on demand, and idle Bonsai workers are
-released after two minutes. Voice shutdown terminates all inference workers.
+voice startup; other models load on demand. Max keeps only the current
+inference stage resident; low/balance reuse workers and release idle Bonsai
+after two minutes. Voice shutdown terminates all inference workers.
 Ordinary zoom, geocoded navigation, layer toggles and contact tracking execute
 through the shared map actions without generating a model response. Specific
 contact tracking enables its layer, nearest-aircraft requests use the atomic
 refresh/select/follow action, and confirmations use actual action results.
 New speech/text commands cancel previous inference or playback. Context and
 speech chunks are bounded, and failed workers are terminated after OOM.
+Speech retries once with a fresh heap after releasing idle models. The PCM
+AudioWorklet is emitted as a separate script to respect production CSP.
 Optional loopback MCP search sends only search queries to its configured
 server. Local inference has no cloud fallback or image input. See
 `docs/LOCAL_AI.md` and `docs/LOCAL_AI_QA.md` for setup and measured limits.

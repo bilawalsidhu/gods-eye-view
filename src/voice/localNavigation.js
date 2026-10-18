@@ -87,6 +87,24 @@ export function localNavigationArguments(args, userText) {
     args.query.length > 160
   )
     throw new Error('fly_to_location requires a place name in query');
+  const words =
+    String(userText)
+      .toLowerCase()
+      .match(/[a-zа-яё]+/gu) || [];
+  if (
+    !/\d/u.test(userText) &&
+    words.some((word) =>
+      /^(?:прибли|отдал|увелич|уменьш|zoom|closer|further)/u.test(word),
+    ) &&
+    words.every((word) =>
+      /^(?:прибли[а-яё]*|отдал[а-яё]*|увелич[а-яё]*|уменьш[а-яё]*|камер[а-яё]*|карт[а-яё]*|вид|масштаб|немног[а-яё]*|чуть|сильно|максимально|поближе|подальше|ближе|дальше|пожалуйста|zoom|closer|further|in|out|the|a|little|lot|camera|map|please)$/u.test(
+        word,
+      ),
+    )
+  )
+    throw new Error(
+      'Relative zoom requires adjust_camera_zoom; the user did not request a destination',
+    );
   const query = normalizeLocalPlaceQuery(args.query);
   if (/^[\d\s.,+\-]+$/u.test(query)) {
     const numbers = query.match(/[+-]?\d+(?:\.\d+)?/gu) || [];

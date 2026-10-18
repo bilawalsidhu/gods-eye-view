@@ -5,7 +5,9 @@ export async function createLocalPcmRecorder(context, source, onError) {
       'Microphone capture requires AudioWorklet on localhost or HTTPS.',
     );
   await context.audioWorklet.addModule(
-    new URL('./localAudioWorklet.js', import.meta.url),
+    // Keep a same-origin script URL in production; CSP intentionally blocks
+    // data: scripts, which Vite would otherwise inline for this small file.
+    new URL('./localAudioWorklet.js?no-inline', import.meta.url),
   );
   if (context.state === 'closed')
     throw new DOMException('Capture stopped', 'AbortError');
