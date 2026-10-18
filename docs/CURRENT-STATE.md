@@ -664,8 +664,12 @@ public-domain coefficient table in `src/data/local_data/igrf/`. It is validated
 against an independent implementation across 105 points and three radii to
 better than 0.001% of |B|. Field lines are traced in the browser with RK4, step
 growing with radius. Each line is traced as a resumable generator and the frame
-is handed back every 8 ms, mid-line if need be: a single T96 line can take
-~90 ms, so yielding only between lines still dropped frames.
+is handed back after an 8 ms work budget, mid-line if need be: a single T96 line
+can take ~90 ms, so yielding only between lines still dropped frames. The default
+pause posts a MessageChannel task rather than paying nested-timer clamping on
+every slice; both ports close before tracing resumes. Environments without
+MessageChannel use a zero-delay timer. The injectable yield callback, slice
+budget and traced geometry are unchanged.
 
 IGRF alone models only the field generated inside the Earth, so past a few Earth
 radii the trace adds an external field from a Tsyganenko model: **T96** when the

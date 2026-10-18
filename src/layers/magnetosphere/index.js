@@ -97,6 +97,24 @@ const RETRACE_FAILED = msg('Field lines not re-traced · previous lines kept');
 /** Tracing time per slice before the frame is handed back. */
 const TRACE_SLICE_MS = 8;
 
+/** Give the event loop a task turn without nested-timer clamping. */
+function yieldTraceTask() {
+  if (typeof globalThis.MessageChannel !== 'function') {
+    return new Promise((resolve) => setTimeout(resolve, 0));
+  }
+  return new Promise((resolve) => {
+    const { port1, port2 } = new globalThis.MessageChannel();
+    port1.onmessage = () => {
+      // A pause owns its channel; release both ports before resuming, including
+      // when the caller aborts at this boundary. Open ports keep Node alive.
+      port1.close();
+      port2.close();
+      resolve();
+    };
+    port2.postMessage(null);
+  });
+}
+
 /**
  * Trace every seed in slices of at most about TRACE_SLICE_MS.
  *
@@ -112,7 +130,7 @@ export async function traceFilaments(
   {
     signal,
     externalField = null,
-    yieldTo = () => new Promise((r) => setTimeout(r, 0)),
+    yieldTo = yieldTraceTask,
     clock = () => globalThis.performance?.now?.() ?? Date.now(),
     sliceMs = TRACE_SLICE_MS,
   } = {},
