@@ -19,9 +19,11 @@ import {
 import { sanitizeCctvRangeHeader } from './cctv/range.js';
 import { createHlsPuller } from './cctv/stream.js';
 import {
+  createStreetViewFrameCache,
   makeStreetViewRateLimiter,
-  normalizeHeadingDeg,
   resolveStreetViewTarget,
+  streetViewCacheKey,
+  streetViewPose,
 } from './cctv/streetview.js';
 import { clientKey } from './common/rate-limit.js';
 import { googleServerApiKey } from './places/google-key.js';
@@ -44,6 +46,7 @@ export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
   // Held per plugin instance rather than per module so the window belongs to
   // the server that is actually serving, the way the catalog above does.
   const allowStreetView = makeStreetViewRateLimiter();
+  const streetViewFrames = createStreetViewFrameCache();
   /** @type {Map<string,{id:string,status:string,sourceKind:string,label:string,message:string,updatedAt:number}>} */
   const health = new Map();
   /** Cap on health map entries to prevent unbounded growth. Sized to the
@@ -105,20 +108,11 @@ export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
       const sv = new URL('https://maps.googleapis.com/maps/api/streetview');
       sv.searchParams.set('size', '960x540');
       sv.searchParams.set('location', `${lat},${lon}`);
-      // fov and pitch are clamped below; heading wraps instead, because a
-      // bearing is periodic — 400 is 40, not "too far north". This is on the
-      // ordinary path, not only for hand-written queries: the browser sends
-      // Math.round(headingDeg) (`frameUrlFor`), so a catalog bearing of 359.6
-      // arrives here as 360.
-      sv.searchParams.set('heading', String(normalizeHeadingDeg(heading)));
-      sv.searchParams.set(
-        'fov',
-        String(Number.isFinite(fov) ? Math.max(20, Math.min(120, fov)) : 80),
-      );
-      sv.searchParams.set(
-        'pitch',
-        String(Number.isFinite(pitch) ? Math.max(-40, Math.min(20, pitch)) : 0),
-      );
+      // Already clamped (fov, pitch) and wrapped (heading) by
+      // `streetViewPose`, which is also what the frame cache keys on.
+      sv.searchParams.set('heading', String(heading));
+      sv.searchParams.set('fov', String(fov));
+      sv.searchParams.set('pitch', String(pitch));
       sv.searchParams.set('source', 'outdoor');
       sv.searchParams.set('return_error_code', 'true');
       sv.searchParams.set('key', streetViewKey);
@@ -544,17 +538,26 @@ export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
         // below is already this route's answer for "no frame available", so a
         // refused lookup takes that same exit rather than breaking the <img>
         // element with a 429 the page has no way to render.
+        //
+        // A frame already bought for this exact camera and pose is served
+        // from memory first, before the window is consulted: the 10 s card
+        // refresh would otherwise buy the same still every time, and a cached
+        // answer costs nothing, so it does not spend the viewer's allowance.
+        //
+        // Both wait on a configured key: removing the key is how an operator
+        // turns Street View off, so it switches off the cached frames too,
+        // and a keyless request has nothing to spend the window on.
         const streetViewTarget = resolveStreetViewTarget(source);
-        const sv =
-          streetViewTarget && allowStreetView(clientKey(req))
-            ? await streetViewFallback({
-                lat: streetViewTarget.lat,
-                lon: streetViewTarget.lon,
-                heading,
-                fov,
-                pitch,
-              })
-            : null;
+        let sv = null;
+        if (streetViewTarget && googleServerApiKey()) {
+          const pose = streetViewPose({ heading, fov, pitch });
+          const cacheKey = streetViewCacheKey(cameraId, streetViewTarget, pose);
+          sv = streetViewFrames.get(cacheKey);
+          if (!sv && allowStreetView(clientKey(req))) {
+            sv = await streetViewFallback({ ...streetViewTarget, ...pose });
+            if (sv?.ok) streetViewFrames.set(cacheKey, sv);
+          }
+        }
         if (sv?.ok) {
           setHealth(cameraId, {
             status: 'degraded',

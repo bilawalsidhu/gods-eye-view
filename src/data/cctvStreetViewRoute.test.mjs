@@ -8,6 +8,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { cctvProxy } from '../../server/providers/cctv.js';
+import { STREET_VIEW_MAX_PER_IP } from '../../server/providers/cctv/streetview.js';
 
 // No snapshot and no still URL, so every frame request reaches Street View.
 const CAMERA = {
@@ -149,4 +150,23 @@ test('the bearing the browser rounds up to 360 is sent to Google as 0', async (t
   const app = mount(t);
   await app.frame(`/frame/${CAMERA.id}?heading=360&ts=1`);
   assert.equal(app.streetView[0].searchParams.get('heading'), '0');
+});
+
+test('a card refresh at the same pose is served from cache, not bought again', async (t) => {
+  const app = mount(t);
+  // Each 10 s refresh carries a new `ts`; the picture it asks for does not
+  // change. Run past the per-client window: a cached answer must not count
+  // against it, or a viewer on the fallback would be cut off by their own
+  // card refreshing.
+  for (let ts = 0; ts <= STREET_VIEW_MAX_PER_IP + 5; ts += 1) {
+    const res = await app.frame(`/frame/${CAMERA.id}?heading=90&ts=${ts}`);
+    assert.equal(res.headers['X-CCTV-Source'], 'streetview', `refresh ${ts}`);
+    assert.equal(res.body.toString(), 'jpeg-bytes');
+  }
+  assert.equal(app.streetView.length, 1, 'one lookup for one pose');
+
+  // A different pose is a different picture, so it is bought once as well.
+  await app.frame(`/frame/${CAMERA.id}?heading=180&ts=1`);
+  await app.frame(`/frame/${CAMERA.id}?heading=180&ts=2`);
+  assert.equal(app.streetView.length, 2);
 });

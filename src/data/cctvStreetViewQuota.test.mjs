@@ -1,11 +1,16 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  STREET_VIEW_CACHE_MAX_ENTRIES,
+  STREET_VIEW_CACHE_MS,
   STREET_VIEW_GLOBAL_MAX,
   STREET_VIEW_MAX_PER_IP,
+  createStreetViewFrameCache,
   makeStreetViewRateLimiter,
   normalizeHeadingDeg,
   resolveStreetViewTarget,
+  streetViewCacheKey,
+  streetViewPose,
 } from '../../server/providers/cctv/streetview.js';
 
 test('an unregistered camera id cannot spend a Street View lookup', () => {
@@ -111,4 +116,65 @@ test('a refused caller does not consume another caller’s quota', () => {
     true,
     'a second viewer must still be served while the first is capped',
   );
+});
+
+test('the pose sent to Google is clamped and wrapped, with the route defaults', () => {
+  assert.deepEqual(streetViewPose({ heading: 360, fov: 200, pitch: -90 }), {
+    heading: 0,
+    fov: 120,
+    pitch: -40,
+  });
+  assert.deepEqual(streetViewPose({ heading: NaN, fov: NaN, pitch: NaN }), {
+    heading: 0,
+    fov: 80,
+    pitch: 0,
+  });
+});
+
+test('a cache key changes with every parameter that changes the image', () => {
+  const target = { lat: 30.2672, lon: -97.7431 };
+  const pose = { heading: 90, fov: 80, pitch: 0 };
+  const base = streetViewCacheKey('cam-1', target, pose);
+  assert.equal(base, streetViewCacheKey('cam-1', { ...target }, { ...pose }));
+  for (const [cameraId, t, p] of [
+    ['cam-2', target, pose],
+    ['cam-1', { ...target, lat: 30.2673 }, pose],
+    ['cam-1', target, { ...pose, heading: 91 }],
+    ['cam-1', target, { ...pose, fov: 81 }],
+    ['cam-1', target, { ...pose, pitch: -1 }],
+  ]) {
+    assert.notEqual(streetViewCacheKey(cameraId, t, p), base);
+  }
+});
+
+test('a cached frame is reused inside its TTL and dropped after it', () => {
+  let clock = 1_000_000;
+  const cache = createStreetViewFrameCache({ now: () => clock });
+  const frame = {
+    ok: true,
+    body: Buffer.from('jpeg'),
+    contentType: 'image/jpeg',
+  };
+  assert.equal(cache.get('k'), null);
+  cache.set('k', frame);
+  clock += STREET_VIEW_CACHE_MS;
+  assert.equal(cache.get('k'), frame, 'still fresh at exactly the TTL');
+  clock += 1;
+  assert.equal(cache.get('k'), null, 'expired one millisecond later');
+  assert.equal(cache.size, 0, 'an expired entry is removed, not kept');
+});
+
+test('the frame cache stays bounded and evicts the oldest frame first', () => {
+  const cache = createStreetViewFrameCache();
+  for (let i = 0; i < STREET_VIEW_CACHE_MAX_ENTRIES + 10; i += 1)
+    cache.set(`k${i}`, { ok: true, i });
+  assert.equal(cache.size, STREET_VIEW_CACHE_MAX_ENTRIES);
+  assert.equal(cache.get('k0'), null);
+  assert.equal(cache.get('k9'), null);
+  assert.equal(cache.get('k10')?.i, 10);
+  // Refreshing an entry protects it from the next eviction.
+  cache.set('k10', { ok: true, i: 10 });
+  cache.set('fresh', { ok: true });
+  assert.equal(cache.get('k10')?.i, 10);
+  assert.equal(cache.get('k11'), null);
 });

@@ -1270,9 +1270,13 @@ longer read. A pose that is absent, non-numeric or off-globe is refused before
 the request is made, heading wraps into `[0, 360)` beside the existing fov and
 pitch clamps, and admission is capped at 240 lookups per minute per client with a
 720 aggregate backstop, sized above the 16-card ambient drain refreshing every 10
-seconds. A refused lookup returns the existing synthetic card rather than an error
-status, so frame delivery for registered cameras and the upstream and synthetic
-steps are unchanged.
+seconds. A frame Google returned is kept in memory for 5 minutes, keyed on the
+camera and the pose actually sent, at most 64 frames, oldest evicted first; a
+card refreshing at the same pose is answered from that cache without a lookup
+and without counting against the window, and nothing is written to disk. A
+refused lookup returns the existing synthetic card rather than an error status,
+so frame delivery for registered cameras and the upstream and synthetic steps
+are unchanged.
 
 
 ## GBFS upstream bounds

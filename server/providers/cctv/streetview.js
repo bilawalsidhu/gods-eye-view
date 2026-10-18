@@ -106,3 +106,122 @@ export function resolveStreetViewTarget(source) {
   if (lat < -90 || lat > 90 || lon < -180 || lon > 180) return null;
   return { lat, lon };
 }
+
+// ---------------------------------------------------------------------------
+// Street View frame cache
+// ---------------------------------------------------------------------------
+// An active card re-requests its frame every ACTIVE_FRAME_REFRESH_MS (10s),
+// and the `ts` parameter that makes each refresh a new URL is only there to
+// beat the browser cache. For a camera on the Street View fallback every one
+// of those refreshes asks Google for the same still of the same place, and
+// Street View imagery does not change on that timescale, so each repeat is a
+// billed lookup that buys nothing.
+
+/**
+ * How long a fetched Street View frame is reused.
+ *
+ * Thirty refreshes of one card, and short enough that a camera whose own
+ * upstream recovers is not the reason anyone waits: the cache only answers
+ * after that upstream has already been tried and has failed.
+ */
+export const STREET_VIEW_CACHE_MS = 5 * 60_000;
+
+/**
+ * Frames kept at once. Four times the 16-card ambient drain
+ * (CCTV_AMBIENT_CARD_DRAIN_CAP), so panning between a few clusters does not
+ * evict the cards still on screen. A 960x540 JPEG is on the order of 100 KiB,
+ * which keeps the whole cache to a few MiB of process memory.
+ */
+export const STREET_VIEW_CACHE_MAX_ENTRIES = 64;
+
+/**
+ * The fov/pitch/heading actually sent to Google, from what the route read.
+ *
+ * fov and pitch are clamped to what Street View accepts; heading wraps
+ * instead, because a bearing is periodic — 400 is 40, not "too far north".
+ * The wrap is on the ordinary path, not only for hand-written queries: the
+ * browser sends Math.round(headingDeg) (`frameUrlFor`), so a catalog bearing
+ * of 359.6 arrives as 360. Missing values take the defaults the route has
+ * always used.
+ *
+ * @param {{heading?:unknown, fov?:unknown, pitch?:unknown}} pose
+ * @returns {{heading:number, fov:number, pitch:number}}
+ */
+export function streetViewPose({ heading, fov, pitch }) {
+  const fovNum = Number(fov);
+  const pitchNum = Number(pitch);
+  return {
+    heading: normalizeHeadingDeg(heading),
+    fov: Number.isFinite(fovNum) ? Math.max(20, Math.min(120, fovNum)) : 80,
+    pitch: Number.isFinite(pitchNum)
+      ? Math.max(-40, Math.min(20, pitchNum))
+      : 0,
+  };
+}
+
+/**
+ * Cache key for one billable lookup: the camera and every parameter that
+ * changes the image Google returns. Two requests with the same key would buy
+ * the same picture.
+ *
+ * @param {string} cameraId
+ * @param {{lat:number, lon:number}} target - From `resolveStreetViewTarget`.
+ * @param {{heading:number, fov:number, pitch:number}} pose - From `streetViewPose`.
+ * @returns {string}
+ */
+export function streetViewCacheKey(cameraId, target, pose) {
+  return [
+    cameraId,
+    target.lat,
+    target.lon,
+    pose.heading,
+    pose.fov,
+    pose.pitch,
+  ].join('|');
+}
+
+/**
+ * Bounded, in-memory store of fetched Street View frames.
+ *
+ * Same shape as the route and Overpass caches in this tree: a Map holding the
+ * value with its `cachedAt`, an age check on read, and oldest-first eviction
+ * once it is over size. Memory only, so a restart starts empty and nothing
+ * Google returned is ever written to disk. Only a successful image is stored;
+ * a miss or an upstream error is tried again on the next refresh.
+ *
+ * @param {object} [options]
+ * @param {number} [options.ttlMs]
+ * @param {number} [options.maxEntries]
+ * @param {() => number} [options.now]
+ * @returns {{get:(key:string)=>object|null, set:(key:string, frame:object)=>void, readonly size:number}}
+ */
+export function createStreetViewFrameCache({
+  ttlMs = STREET_VIEW_CACHE_MS,
+  maxEntries = STREET_VIEW_CACHE_MAX_ENTRIES,
+  now = Date.now,
+} = {}) {
+  /** @type {Map<string,{frame:object, cachedAt:number}>} */
+  const entries = new Map();
+  return {
+    get(key) {
+      const hit = entries.get(key);
+      if (!hit) return null;
+      if (now() - hit.cachedAt > ttlMs) {
+        entries.delete(key);
+        return null;
+      }
+      return hit.frame;
+    },
+    set(key, frame) {
+      // Re-inserting moves the key to the back, so eviction drops the frame
+      // fetched longest ago rather than one just refreshed.
+      entries.delete(key);
+      entries.set(key, { frame, cachedAt: now() });
+      while (entries.size > maxEntries)
+        entries.delete(entries.keys().next().value);
+    },
+    get size() {
+      return entries.size;
+    },
+  };
+}
