@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Maintainer-only build of the Norwegian military-name supplement (osmium-tool).
 
-Downloads a pinned Geofabrik Norway extract, verifies its MD5, and measures
+Downloads a dated Geofabrik Norway extract, verifies its MD5, and measures
 every OpenStreetMap object named in scripts/military-names-norway.json:
 interior label point, bounds and area. A named object must still be an
 unnamed military area (`landuse=military` or a known `military=*` class);
@@ -9,6 +9,10 @@ a `site` object (a co-located aerodrome) only lends its bounds and area to a
 point-only row. Every Wikidata position must lie inside Norway and within
 MAX_WIKIDATA_KM of the area it names, and a named area must be at least a
 hectare.
+
+Geofabrik keeps only its newest dated extracts. A build uses the current one
+(--extract latest, the default) and records it in the pack; --verify checks
+the pack against the extract it records, while Geofabrik still lists it.
 """
 import argparse
 import hashlib
@@ -17,11 +21,12 @@ import math
 from pathlib import Path
 import shutil
 import subprocess
+import urllib.error
 import urllib.request
 
 ROOT = Path(__file__).resolve().parent.parent
-EXTRACT = 'norway-261005'
 GEOFABRIK = 'https://download.geofabrik.de/europe/'
+TIMEOUT_SECONDS = 60
 CURATED = ROOT / 'scripts/military-names-norway.json'
 PACK = ROOT / 'src/data/local_data/osm_military_names'
 CLASSES = ['military_land', 'airfield', 'naval_base', 'range', 'barracks', 'base', 'training_area']
@@ -33,10 +38,28 @@ AUTHALIC_RADIUS_M = 6371007.2
 
 def fetch(url, target):
     if not target.exists():
-        with urllib.request.urlopen(url) as response, open(str(target) + '.part', 'wb') as out:
-            shutil.copyfileobj(response, out)
+        try:
+            with urllib.request.urlopen(url, timeout=TIMEOUT_SECONDS) as response, \
+                    open(str(target) + '.part', 'wb') as out:
+                shutil.copyfileobj(response, out)
+        except urllib.error.HTTPError as error:
+            if error.code == 404:
+                raise SystemExit('Geofabrik no longer lists %s: it keeps only its newest dated '
+                                 'extracts. Rebuild from the current one (without --verify) and '
+                                 'review the diff.' % url.rsplit('/', 1)[-1])
+            raise
         Path(str(target) + '.part').rename(target)
     return target
+
+
+def latest_extract():
+    """Resolve norway-latest to the dated name Geofabrik redirects it to."""
+    request = urllib.request.Request(GEOFABRIK + 'norway-latest.osm.pbf', method='HEAD')
+    with urllib.request.urlopen(request, timeout=TIMEOUT_SECONDS) as response:
+        name = response.geturl().rsplit('/', 1)[-1]
+    if not name.startswith('norway-') or not name.endswith('.osm.pbf') or name == 'norway-latest.osm.pbf':
+        raise RuntimeError('Unexpected Geofabrik latest target: %s' % name)
+    return name[:-len('.osm.pbf')]
 
 
 def md5(path):
@@ -50,7 +73,7 @@ def md5(path):
 def read_poly(path):
     """Geofabrik .poly -> list of (ring, is_hole)."""
     rings, ring, hole = [], None, False
-    for raw in path.read_text().splitlines()[1:]:
+    for raw in path.read_text(encoding='utf-8').splitlines()[1:]:
         line = raw.strip()
         if ring is None:
             if line and line != 'END':
@@ -128,9 +151,9 @@ def distance_km(polygons, lon, lat):
                for poly in polygons for ring in poly for p in ring)
 
 
-def export(osmium, pbf, cache, ids):
-    picked = cache / (EXTRACT + '-military-names-norway.osm.pbf')
-    exported = cache / (EXTRACT + '-military-names-norway.geojsonseq')
+def export(osmium, pbf, cache, ids, extract):
+    picked = cache / (extract + '-military-names-norway.osm.pbf')
+    exported = cache / (extract + '-military-names-norway.geojsonseq')
     subprocess.run([osmium, 'getid', '-r', '-O', '-o', str(picked), str(pbf), *sorted(ids)], check=True)
     subprocess.run([osmium, 'export', '-O', '-f', 'geojsonseq', '--add-unique-id=type_id',
                     '-o', str(exported), str(picked)], check=True)
@@ -150,7 +173,7 @@ def export(osmium, pbf, cache, ids):
     return areas
 
 
-def build(curated, areas, rings):
+def build(curated, areas, rings, extract):
     records = []
     for site in curated['sites']:
         cls = CLASSES.index(site['class'])
@@ -158,7 +181,7 @@ def build(curated, areas, rings):
         if 'osm' in site:
             feature = areas.get(site['osm'])
             if feature is None:
-                raise ValueError('%s is no longer an area in %s' % (site['osm'], EXTRACT))
+                raise ValueError('%s is no longer an area in %s' % (site['osm'], extract))
             tags = feature['properties']
             if tags.get('landuse') != 'military' and tags.get('military') not in MILITARY:
                 raise ValueError('%s is no longer tagged military' % site['osm'])
@@ -193,7 +216,7 @@ def build(curated, areas, rings):
     keys = [r[0] for r in records if r[0]]
     if len(set(keys)) != len(keys):
         raise ValueError('Duplicate OSM identity')
-    return {'extract': EXTRACT, 'wikidataRetrieved': curated['wikidataRetrieved'],
+    return {'extract': extract, 'wikidataRetrieved': curated['wikidataRetrieved'],
             'classes': CLASSES, 'records': records}
 
 
@@ -202,19 +225,26 @@ def main():
     parser.add_argument('--cache', type=Path, required=True)
     parser.add_argument('--osmium', default=shutil.which('osmium') or 'osmium')
     parser.add_argument('--verify', action='store_true')
+    parser.add_argument('--extract',
+                        help="dated Geofabrik name such as norway-261005, or 'latest'; "
+                             'defaults to the pack\'s own extract with --verify, else latest')
     args = parser.parse_args()
     args.cache.mkdir(parents=True, exist_ok=True)
-    pbf = fetch(GEOFABRIK + EXTRACT + '.osm.pbf', args.cache / (EXTRACT + '.osm.pbf'))
-    expected = fetch(GEOFABRIK + EXTRACT + '.osm.pbf.md5',
-                     args.cache / (EXTRACT + '.osm.pbf.md5')).read_text().split()[0]
+    recorded = json.loads((PACK / 'norway.json').read_text(encoding='utf-8'))['extract']
+    extract = args.extract or (recorded if args.verify else 'latest')
+    if extract == 'latest':
+        extract = latest_extract()
+    pbf = fetch(GEOFABRIK + extract + '.osm.pbf', args.cache / (extract + '.osm.pbf'))
+    expected = fetch(GEOFABRIK + extract + '.osm.pbf.md5',
+                     args.cache / (extract + '.osm.pbf.md5')).read_text(encoding='utf-8').split()[0]
     actual = md5(pbf)
     if actual != expected:
         raise RuntimeError('MD5 mismatch for %s: %s != %s' % (pbf.name, actual, expected))
     rings = read_poly(fetch(GEOFABRIK + 'norway.poly', args.cache / 'norway.poly'))
     curated = json.loads(CURATED.read_text(encoding='utf-8'))
     ids = {s[k] for s in curated['sites'] for k in ('osm', 'site') if k in s}
-    areas = export(args.osmium, pbf, args.cache, ids)
-    pack = build(curated, areas, rings)
+    areas = export(args.osmium, pbf, args.cache, ids, extract)
+    pack = build(curated, areas, rings, extract)
     for site, record in zip(curated['sites'], pack['records']):
         offset = distance_km(areas[site['osm']]['geometry']['coordinates'], *site['point']) \
             if 'osm' in site else None
@@ -223,13 +253,13 @@ def main():
     raw = json.dumps(pack, ensure_ascii=False, separators=(',', ':')).encode()
     digest = hashlib.sha256(raw).hexdigest()
     if args.verify:
-        expected = (PACK / 'norway.sha256').read_text().split()[0]
+        expected = (PACK / 'norway.sha256').read_text(encoding='utf-8').split()[0]
         if digest != expected:
             raise SystemExit('Output SHA-256 mismatch: %s' % digest)
     else:
         (PACK / 'norway.json').write_bytes(raw)
         (PACK / 'norway.sha256').write_text(digest + '  norway.json\n', encoding='utf-8', newline='\n')
-    print(json.dumps({'extract': EXTRACT, 'md5': actual, 'records': len(pack['records']),
+    print(json.dumps({'extract': extract, 'md5': actual, 'records': len(pack['records']),
                       'sha256': digest}))
 
 

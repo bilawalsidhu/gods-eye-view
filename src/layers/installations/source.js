@@ -13,6 +13,7 @@ import {
   militaryNameInView,
 } from '../../sources/militaryTileGeometry.js';
 import { tilesForBounds } from '../../data/tomtomTiles.js';
+import { approxDistanceKm } from '../../data/approxDistance.js';
 import {
   isUnavailableCapability,
   sourceResponseError,
@@ -98,9 +99,34 @@ const inBox = (r, box) =>
   r.latitude >= box.south &&
   r.latitude <= box.north;
 
-/** Named sites with no mapped area, which no tile or Overpass answer carries. */
-function standaloneNamedSites(names, box) {
-  return (names?.records || []).filter((r) => r.standalone && inBox(r, box));
+/**
+ * A standalone site gives way to an area OpenStreetMap has since mapped and
+ * named this close to it, so the place is not labelled twice.
+ */
+const STANDALONE_SHADOW_KM = 3;
+
+/**
+ * Named sites with no mapped area, which no tile or Overpass answer carries,
+ * except where `mapped` already holds an OSM-named record beside one.
+ */
+function standaloneNamedSites(names, box, mapped = []) {
+  const osmNamed = mapped.filter(
+    (r) => r.name && r.name !== humanizeInstallationClass(r.class),
+  );
+  return (names?.records || []).filter(
+    (r) =>
+      r.standalone &&
+      inBox(r, box) &&
+      !osmNamed.some(
+        (named) =>
+          approxDistanceKm(
+            r.latitude,
+            r.longitude,
+            named.latitude,
+            named.longitude,
+          ) <= STANDALONE_SHADOW_KM,
+      ),
+  );
 }
 
 /**
@@ -129,7 +155,7 @@ export function withNamedSupplement(records, names, box, retrievedAt) {
           }
         : record;
     }),
-    ...standaloneNamedSites(names, box).map((record) => ({
+    ...standaloneNamedSites(names, box, records).map((record) => ({
       ...record,
       retrievedAt,
       sources: cite(record.sources),
@@ -208,16 +234,22 @@ export function createInstallationSource({
         .map((record) => nameMilitaryFragment(record, names));
       const retrievedAt = new Date().toISOString();
       // Tiles carry only mapped areas; a named site with none would vanish
+      const merged = mergeMilitaryFragments(
+        fragments.slice(0, 2048),
+        installationIds,
+      );
       // on zooming in, so its own position joins the close view.
       return {
-        records: [
-          ...mergeMilitaryFragments(fragments.slice(0, 2048), installationIds),
-          ...standaloneNamedSites(names, box),
-        ].map((record) => ({
-          ...militaryNameInView(record, box),
-          retrievedAt,
-          sources: record.sources.map((source) => ({ ...source, retrievedAt })),
-        })),
+        records: [...merged, ...standaloneNamedSites(names, box, merged)].map(
+          (record) => ({
+            ...militaryNameInView(record, box),
+            retrievedAt,
+            sources: record.sources.map((source) => ({
+              ...source,
+              retrievedAt,
+            })),
+          }),
+        ),
         status: 'ready',
         droppedCount: 0,
         saturated: result.partial || fragments.length > 2048,

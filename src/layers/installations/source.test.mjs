@@ -282,6 +282,39 @@ test('live Overpass answers take supplement names only where OSM has none', asyn
   assert.equal(byId.get('osm:way:1').name, 'Military land');
 });
 
+test('a standalone site gives way to an area OSM has since mapped and named', async () => {
+  const bodo = (tags) =>
+    createInstallationSource({
+      fetchImpl: async () =>
+        Response.json({
+          elements: [
+            {
+              type: 'way',
+              id: 7,
+              tags: { landuse: 'military', ...tags },
+              bounds: {
+                minlat: 67.262,
+                minlon: 14.34,
+                maxlat: 67.276,
+                maxlon: 14.39,
+              },
+            },
+          ],
+          retrievedAt: '2026-10-18T00:00:00Z',
+        }),
+    });
+  const box = { south: 67.2, west: 14.2, north: 67.35, east: 14.5 };
+  const names = async (tags) =>
+    (await bodo(tags).getMappedSites(box)).records.map((r) => r.name);
+  assert.ok(
+    (await names({})).includes('Luftforsvarsbase Bodø'),
+    'with no OSM name, the cited site shows',
+  );
+  assert.deepEqual(await names({ name: 'Bodø flystasjon' }), [
+    'Bodø flystasjon',
+  ]);
+});
+
 test('the military-only decoder keeps Camp Mabry and skips road geometry', () => {
   const bytes = readFileSync(
     new URL(
