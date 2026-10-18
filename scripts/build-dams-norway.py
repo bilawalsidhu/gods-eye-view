@@ -60,6 +60,8 @@ SETTINGS = {
     6: 'Intake reservoir', 7: None,
 }
 STATUSES = {'D': 'In operation'}
+# NVE's name for the small coastal catchments between river systems: not a river.
+NOT_A_RIVER = {'KYSTFELT'}
 ROMAN = re.compile(r'^[IVX]+$')
 
 
@@ -126,6 +128,8 @@ def record(feature):
                 purposes.append(english)
     name = normal_case(a.get('damnavn'))
     catchment = text(a.get('nedborfelt'))
+    if catchment and catchment.upper() in NOT_A_RIVER:
+        catchment = None
     # The layer's shared card and analyst code read the river from this tag.
     tags = {'associated_river': catchment} if catchment else {}
     nve = {
@@ -143,34 +147,57 @@ def record(feature):
     # Only dams in operation are expected; anything else stops the build.
     lookup(STATUSES, a.get('status'), 'status')
     return {
-        'objectid': a['objectid'],
-        'feature': {
-            'type': 'Feature',
-            'geometry': {'type': 'Point', 'coordinates': [round(lon, 5), round(lat, 5)]},
-            'properties': {
-                'name': name,
-                'tags': tags,
-                'source': 'nve',
-                'nve': {k: v for k, v in nve.items() if v not in (None, [], '')},
-            },
+        'type': 'Feature',
+        'geometry': {'type': 'Point', 'coordinates': [round(lon, 5), round(lat, 5)]},
+        'properties': {
+            'name': name,
+            'tags': tags,
+            'source': 'nve',
+            'nve': {k: v for k, v in nve.items() if v not in (None, [], '')},
         },
     }
 
 
-def build(raw):
-    rows = [r for r in (record(f) for f in raw) if r]
+def richness(feature):
+    props = feature['properties']
+    return len(props['nve']) + len(props['tags']) + (props['name'] is not None)
+
+
+def finish(features):
+    """Stable ids, one record per dam, sorted.
+
+    A dam number NVE gives to one dam alone is its id. NVE's objectid is
+    renumbered between snapshots, so a dam with no number, number 0 or a
+    shared number is named by its number and position instead. A dam NVE
+    lists twice (same number, same position) keeps its fuller record.
+    """
+    by_site = {}
+    for feature in features:
+        lon, lat = feature['geometry']['coordinates']
+        key = (feature['properties']['nve'].get('damNumber'), lon, lat)
+        kept = by_site.get(key)
+        if kept is None or richness(feature) > richness(kept):
+            by_site[key] = feature
+    features = list(by_site.values())
     numbers = {}
-    for row in rows:
-        number = row['feature']['properties']['nve'].get('damNumber')
+    for feature in features:
+        number = feature['properties']['nve'].get('damNumber')
         numbers[number] = numbers.get(number, 0) + 1
-    for row in rows:
-        number = row['feature']['properties']['nve'].get('damNumber')
-        unique = number is not None and numbers[number] == 1
-        row['feature']['id'] = f'nve-dam-{number}' if unique else f'nve-dam-o{row["objectid"]}'
-    rows.sort(key=lambda row: row['feature']['id'])
-    lines = [json.dumps({'id': r['feature']['id'], **r['feature']}, ensure_ascii=False,
-                        separators=(',', ':')) for r in rows]
+    for feature in features:
+        number = feature['properties']['nve'].get('damNumber')
+        lon, lat = feature['geometry']['coordinates']
+        if number and numbers[number] == 1:
+            feature['id'] = f'nve-dam-{number}'
+        else:
+            feature['id'] = f'nve-dam-{number or "p"}-{lat:.5f}-{lon:.5f}'
+    features.sort(key=lambda feature: feature['id'])
+    lines = [json.dumps({'id': f['id'], **{k: v for k, v in f.items() if k != 'id'}},
+                        ensure_ascii=False, separators=(',', ':')) for f in features]
     return ('\n'.join(lines) + '\n').encode('utf-8')
+
+
+def build(raw):
+    return finish([f for f in (record(feature) for feature in raw) if f])
 
 
 def validate(raw):

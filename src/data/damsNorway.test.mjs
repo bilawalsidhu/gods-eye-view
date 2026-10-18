@@ -9,6 +9,7 @@ import {
 } from '../sources/infrastructureData.js';
 import { localInfrastructureOverlayCopy } from './localGeojsonCore.js';
 import { composeCatalog, coreTools } from '../tools/index.js';
+import { setLocale, t } from '../i18n/index.js';
 
 const PACK = new URL('./local_data/dams/', import.meta.url);
 
@@ -46,7 +47,7 @@ test('the Norwegian dam file matches its checksum and stays inside Norway', () =
     .trim()
     .split('\n')
     .map((line) => JSON.parse(line));
-  assert.equal(features.length, 4142);
+  assert.equal(features.length, 4141);
   assert.equal(new Set(features.map((f) => f.id)).size, features.length);
   for (const feature of features) {
     const [lon, lat] = feature.geometry.coordinates;
@@ -192,4 +193,31 @@ test('find_infrastructure returns NVE facts for Norwegian dams only', async () =
     distance_km: 0.2,
   });
   assert.match(result.data.attribution, /NVE \(NLOD\)/);
+});
+
+test('an NVE dam card follows the UI language when the app passes t()', () => {
+  try {
+    setLocale('es');
+    assert.deepEqual(
+      localInfrastructureOverlayCopy(magoB.properties, 'local-dams', t).details,
+      [
+        'Hidroeléctrica · presa de hormigón · de 1952',
+        'central eléctrica Mago B · Eidsvoll',
+        'Glommavassdraget',
+      ],
+    );
+  } finally {
+    setLocale('en');
+  }
+});
+
+test('dams NVE gives no number of their own keep an id across refreshes', () => {
+  const ids = readFileSync(new URL('norway.geojsonl', PACK), 'utf8')
+    .trim()
+    .split('\n')
+    .map((line) => JSON.parse(line).id);
+  // NVE renumbers objectids between snapshots, so none may name a dam.
+  assert.equal(ids.filter((id) => /^nve-dam-o\d+$/.test(id)).length, 0);
+  for (const id of ids)
+    assert.match(id, /^nve-dam-(\d+|(\d+|p)-\d+\.\d{5}--?\d+\.\d{5})$/);
 });
