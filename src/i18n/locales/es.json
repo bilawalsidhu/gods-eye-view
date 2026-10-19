@@ -2890,5 +2890,18 @@
   "USB work abandoned after a stalled transfer": "Trabajo USB cancelado tras una transferencia bloqueada",
   "SDR decoder did not start; receiver stopped": "El decodificador SDR no arrancó; receptor detenido",
   "SDR decoder stopped responding; receiver stopped": "El decodificador SDR dejó de responder; receptor detenido",
-  "SDR decoder fell behind; receiver stopped": "El decodificador SDR se quedó atrás; receptor detenido"
+  "SDR decoder fell behind; receiver stopped": "El decodificador SDR se quedó atrás; receptor detenido",
+  "Open GEV AI Chat": "Abrir el chat de GEV AI",
+  "AI provider": "Proveedor de IA",
+  "Close chat": "Cerrar chat",
+  "Close AI chat": "Cerrar chat de IA",
+  "READY — TYPE A COMMAND OR ASK A QUESTION": "LISTO — ESCRIBE UNA ORDEN O HAZ UNA PREGUNTA",
+  "Voice input (Web Speech API)": "Entrada de voz (Web Speech API)",
+  "Voice input": "Entrada de voz",
+  "Ask GEV AI anything...": "Pregunta lo que quieras a GEV AI...",
+  "Send message": "Enviar mensaje",
+  "Send": "Enviar",
+  "CONVERSATION RESET": "CONVERSACIÓN REINICIADA",
+  "PROVIDER — {name}": "PROVEEDOR — {name}",
+  "AI text chat + intelligence summary": "Chat de texto con IA + resumen de inteligencia"
 }

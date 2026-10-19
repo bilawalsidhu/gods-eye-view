@@ -66,6 +66,22 @@ export const KEY_SETUP_KEYS = Object.freeze([
     tier: 'metered',
   }),
   Object.freeze({
+    id: 'deepseek',
+    title: 'DEEPSEEK', // i18n-ignore: provider product name
+    unlocks: msg('AI text chat + intelligence summary'),
+    getUrl: 'https://platform.deepseek.com/api_keys',
+    envVars: Object.freeze(['DEEPSEEK_API_KEY']),
+    tier: 'metered',
+  }),
+  Object.freeze({
+    id: 'mimo',
+    title: 'XIAOMI MIMO', // i18n-ignore: provider product name
+    unlocks: msg('AI text chat + intelligence summary'),
+    getUrl: 'https://platform.xiaomimimo.com',
+    envVars: Object.freeze(['MIMO_API_KEY']),
+    tier: 'metered',
+  }),
+  Object.freeze({
     id: 'aisstream',
     title: 'AISSTREAM', // i18n-ignore: provider product name
     unlocks: msg('Live ships, worldwide'),

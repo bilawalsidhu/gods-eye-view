@@ -6,6 +6,8 @@ import { initImageryBoxTool } from '../ui/imageryBoxTool.js';
 import { createRecentImageryPanel } from '../ui/recentImagery.js';
 import { initGevVoiceCommands } from '../voice/gevRealtime.js';
 import { installViews, isEmbeddedInline } from './embed.js';
+import { initAiChat } from '../ai/aiChat.js';
+import { createGevActionRunner } from '../voice/gevActions.js';
 import { installScopeMask, destroyScopeMask } from '../scopeMask.js';
 import {
   installRenderGovernor,
@@ -199,5 +201,34 @@ export function createApplicationTools({
       signal,
     }),
   );
+
+  // AI Chat (DeepSeek / MiMo) — independent of OpenAI voice. Creates its own
+  // action runner so both systems can operate simultaneously. The panel
+  // auto-hides when no provider key is configured (status configured:false).
+  try {
+    const chatRunner = createGevActionRunner({
+      floorServices: operations.surface.groundFloor,
+      annotationResolver: operations.annotationResolver,
+      searchNavigation: operations.searchAndFlyTo,
+      placeSearch,
+      viewer,
+      styleManager,
+      dataManager,
+      sceneDirector,
+      annotations,
+    });
+    const aiChat = initAiChat(chatRunner);
+    debug.aiChat = aiChat;
+    defer(() => {
+      aiChat.panel?.remove();
+      aiChat.toggle?.remove();
+    });
+  } catch (dsError) {
+    console.warn(
+      '[AI chat] Chat panel initialization skipped:',
+      dsError?.message || dsError,
+    );
+  }
+
   return { sceneDirector, annotations, voiceCommands };
 }

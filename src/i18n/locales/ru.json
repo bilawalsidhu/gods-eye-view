@@ -2957,5 +2957,18 @@
   "USB work abandoned after a stalled transfer": "Работа с USB прервана: передача данных зависла",
   "SDR decoder did not start; receiver stopped": "Декодер SDR не запустился; приёмник остановлен",
   "SDR decoder stopped responding; receiver stopped": "Декодер SDR перестал отвечать; приёмник остановлен",
-  "SDR decoder fell behind; receiver stopped": "Декодер SDR не успевает; приёмник остановлен"
+  "SDR decoder fell behind; receiver stopped": "Декодер SDR не успевает; приёмник остановлен",
+  "Open GEV AI Chat": "Открыть чат GEV AI",
+  "AI provider": "Провайдер ИИ",
+  "Close chat": "Закрыть чат",
+  "Close AI chat": "Закрыть чат ИИ",
+  "READY — TYPE A COMMAND OR ASK A QUESTION": "ГОТОВ — ВВЕДИТЕ КОМАНДУ ИЛИ ЗАДАЙТЕ ВОПРОС",
+  "Voice input (Web Speech API)": "Голосовой ввод (Web Speech API)",
+  "Voice input": "Голосовой ввод",
+  "Ask GEV AI anything...": "Спросите GEV AI о чём угодно...",
+  "Send message": "Отправить сообщение",
+  "Send": "Отправить",
+  "CONVERSATION RESET": "РАЗГОВОР СБРОШЕН",
+  "PROVIDER — {name}": "ПРОВАЙДЕР — {name}",
+  "AI text chat + intelligence summary": "Текстовый чат ИИ + разведсводка"
 }

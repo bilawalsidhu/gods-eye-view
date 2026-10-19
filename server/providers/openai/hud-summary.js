@@ -5,6 +5,7 @@ import {
 import { enforceRateLimit, openAiRateLimiter } from './rate-limit.js';
 import { readRequestBody } from '../common/request.js';
 import { OPENAI_HUD_SUMMARY_MODEL_DEFAULT } from './constants.js';
+import { aiChatConfigured, handleAiChatHudSummary } from '../ai-chat.js';
 
 function extractOpenAiResponseText(data) {
   if (typeof data?.output_text === 'string' && data.output_text.trim()) {
@@ -37,6 +38,11 @@ async function handleHudSummary(req, res) {
   }
 
   const apiKey = process.env.OPENAI_API_KEY;
+  // AI chat fallback: no OpenAI key configured but a chat provider key is.
+  if (!String(apiKey ?? '').trim() && aiChatConfigured()) {
+    return handleAiChatHudSummary(req, res);
+  }
+
   const keyless = keylessHudSummaryResponse(apiKey);
   if (keyless) {
     res.statusCode = keyless.statusCode;
