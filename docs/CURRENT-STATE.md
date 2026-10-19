@@ -1023,6 +1023,16 @@ owners. Tuner calculations have a pure entry, with existing layer exports
 preserved. Destruction removes listeners and state subscriptions before ending
 tuning; a delayed Enable result cannot reveal or refocus removed controls.
 
+## Optional Boulder camera attribution
+
+The always-on `DATA_CREDITS` catalog includes City of Boulder and Boulder County
+Parks & Open Space acknowledgments in the Data attribution popover. Both label
+the configured pack optional and not enabled by default, disclose unresolved
+media reuse rights, and imply no endorsement. These static entries do not load
+the pack or fetch media; camera loading still requires `CCTV_SOURCES_FILE`.
+Per-camera panel credit and generic/coordinate-specific OSM attribution remain.
+See [Boulder configuration and rights caveats](BOULDER_CAMERAS.md).
+
 ## NYC DOT TMC CCTV source pack
 
 The CCTV catalog can add New York City traffic cameras from the NYC DOT
@@ -1261,6 +1271,19 @@ normal fallback chain. The existing declared media size ceiling remains 64 MiB.
 `/api/cctv/media` relays live feeds (HLS, MP4, WebM, MJPEG) only; a still-image
 camera is refused there with a JSON 404 and is served solely through
 `/api/cctv/frame` and its same-origin, `image/*`-only, size-capped fetch.
+
+The bounded HLS relay keeps the first advertised rendition while it works. If
+its child playlist or a segment download fails (including the unchanged 4 MiB
+segment cap), it can try lower-bandwidth renditions advertised by the same
+registered master, with at most three rendition attempts and one master read per
+poll. A failing active child is renewed through that master; a newly advertised
+URI at the same bandwidth can preserve quality before lower renditions are tried.
+Rendition changes clear upstream sequence mappings and insert a discontinuity.
+All references remain same-origin and redirects remain refused; malformed,
+encrypted, byte-range and fMP4 playlists do not trigger availability fallback.
+Existing session, lease, memory, timeout and idle limits remain unchanged. This
+is bounded availability fallback, not adaptive-bitrate streaming or a guarantee
+that every source has a compatible rendition.
 
 ## GBFS upstream bounds
 

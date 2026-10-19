@@ -119,6 +119,51 @@ export function parseHlsMedia(text, base, limit = HLS_LIMITS.segments) {
   return segments.slice(-limit);
 }
 
+/** Only paired, same-origin advertised renditions; never crawl arbitrary URIs. */
+function hlsVariants(text, base, failedVariant = null) {
+  if (
+    !text.startsWith('#EXTM3U') ||
+    /#EXT-X-(?:SESSION-KEY|KEY|MAP|BYTERANGE|I-FRAMES-ONLY)/.test(text)
+  )
+    throw new Error('Unsupported HLS master');
+  const variants = [];
+  let bandwidth = null;
+  for (const raw of text.split('\n')) {
+    const line = raw.trim();
+    if (line.startsWith('#EXT-X-STREAM-INF:')) {
+      if (bandwidth !== null) throw new Error('Missing HLS variant URI');
+      const value = line.slice(18).match(/(?:^|,)BANDWIDTH=(\d+)(?:,|$)/);
+      bandwidth = Number(value?.[1]);
+      if (!Number.isSafeInteger(bandwidth) || bandwidth <= 0)
+        throw new Error('Invalid HLS variant bandwidth');
+    } else if (line && !line.startsWith('#')) {
+      if (bandwidth === null) throw new Error('Unadvertised HLS variant');
+      const uri = sameOriginHlsUrl(line, base);
+      if (!variants.some((variant) => variant.uri === uri))
+        variants.push({ uri, bandwidth });
+      bandwidth = null;
+    }
+  }
+  if (bandwidth !== null || !variants.length)
+    throw new Error('Missing HLS variant');
+  // A failed current rendition already consumed one of three attempts.
+  const first = variants[0];
+  const bandwidthLimit = failedVariant?.bandwidth ?? first.bandwidth;
+  const lower = variants
+    .filter(
+      (variant) =>
+        variant.bandwidth < bandwidthLimit &&
+        variant.uri !== failedVariant?.uri,
+    )
+    .sort((a, b) => b.bandwidth - a.bandwidth);
+  if (!failedVariant) return [first, ...lower].slice(0, 3);
+  const renewed = variants.find(
+    (variant) =>
+      variant.bandwidth === bandwidthLimit && variant.uri !== failedVariant.uri,
+  );
+  return [...(renewed ? [renewed] : []), ...lower].slice(0, 2);
+}
+
 export function createHlsPuller({
   fetchImpl = fetch,
   limits = HLS_LIMITS,
@@ -168,26 +213,22 @@ export function createHlsPuller({
       maxBytes,
       timeoutMs: limits.timeoutMs,
     });
-  const poll = async (entry) => {
-    try {
-      let base = entry.chunklistUrl || entry.url;
-      let text = (await read(entry, base, limits.playlistBytes)).toString(
-        'utf8',
-      );
-      if (!text.includes('#EXTINF:')) {
-        const variant = text
-          .split('\n')
-          .map((line) => line.trim())
-          .find((line) => line && !line.startsWith('#'));
-        if (!variant || !text.includes('#EXT-X-STREAM-INF:'))
-          throw new Error('Missing HLS variant');
-        base = sameOriginHlsUrl(variant, entry.url);
+  const pullMedia = async (entry, base, text) => {
+    if (text === undefined) {
+      try {
         text = (await read(entry, base, limits.playlistBytes)).toString('utf8');
+      } catch {
+        return false;
       }
-      entry.chunklistUrl = base;
-      const segments = parseHlsMedia(text, base, limits.segments);
+    }
+    // Parse outside the availability fallback: unsupported or escaping media
+    // must fail closed, not silently select another rendition.
+    const segments = parseHlsMedia(text, base, limits.segments);
+    if (!segments.length) throw new Error('Empty HLS media playlist');
+    try {
       const newest = segments.at(-1)?.seq ?? -1;
       const restarted =
+        (entry.upstreamUrl && entry.upstreamUrl !== base) ||
         newest < entry.upstreamNewest ||
         segments.some((segment) => {
           const prior = entry.upstream.get(segment.seq);
@@ -196,13 +237,16 @@ export function createHlsPuller({
       if (restarted) {
         entry.upstream.clear();
         entry.pendingDiscontinuity = true;
+        entry.publication = { through: -1 };
       }
+      entry.upstreamUrl = base;
       entry.upstreamNewest = newest;
       for (const segment of segments) {
         if (entry.stopping) return;
         if (entry.upstream.has(segment.seq)) continue;
         const body = await read(entry, segment.uri, limits.segmentBytes);
         if (entry.stopping) return;
+        if (!body.length) throw new Error('Empty HLS segment');
         // Evict BEFORE retaining the incoming segment. One bounded download may
         // exist in addition to the cache; no unbounded disk output is possible.
         while (
@@ -213,7 +257,8 @@ export function createHlsPuller({
           const oldest = entry.segments.keys().next().value;
           const removed = entry.segments.get(oldest);
           entry.bytes -= removed.body.length;
-          if (removed.discontinuity) entry.discontinuitiesRemoved++;
+          if (removed.publishedSeq !== undefined && removed.discontinuity)
+            entry.discontinuitiesRemoved++;
           entry.segments.delete(oldest);
         }
         if (body.length > limits.sessionBytes)
@@ -223,6 +268,7 @@ export function createHlsPuller({
           ...segment,
           seq,
           body,
+          publication: entry.publication,
           discontinuity: segment.discontinuity || entry.pendingDiscontinuity,
         });
         entry.pendingDiscontinuity = false;
@@ -231,6 +277,66 @@ export function createHlsPuller({
           entry.upstream.delete(entry.upstream.keys().next().value);
         entry.bytes += body.length;
       }
+      // Publish only a completed rendition pull. Failed partials remain inside
+      // the existing cache cap, but cannot make a new session ready. Retained
+      // successful windows keep their own watermark across fallback attempts.
+      // Cache IDs include failed partials; HLS sequences count only publication.
+      for (const segment of entry.segments.values()) {
+        if (
+          segment.publication === entry.publication &&
+          segment.seq > entry.publication.through
+        ) {
+          segment.publishedSeq = entry.nextPublishedSeq++;
+          // Persist a skipped-cache boundary in the published timeline so it
+          // survives eviction of either the prior window or failed partials.
+          segment.discontinuity ||=
+            entry.lastPublishedCacheSeq !== null &&
+            segment.seq !== entry.lastPublishedCacheSeq + 1;
+          entry.lastPublishedCacheSeq = segment.seq;
+        }
+      }
+      entry.publication.through = entry.nextSeq - 1;
+      entry.chunklistUrl = base;
+      return true;
+    } catch {
+      return false;
+    }
+  };
+  const poll = async (entry) => {
+    try {
+      let ready = false;
+      let failedVariant = null;
+      if (entry.chunklistUrl) {
+        ready = await pullMedia(entry, entry.chunklistUrl);
+        if (!ready) {
+          if (entry.chunklistUrl === entry.url)
+            throw new Error('HLS media unavailable');
+          failedVariant = {
+            uri: entry.chunklistUrl,
+            bandwidth: entry.variantBandwidth,
+          };
+        }
+      }
+      if (!ready) {
+        if (entry.stopping) return;
+        // Renew temporary child URLs only through the registered master.
+        const text = (
+          await read(entry, entry.url, limits.playlistBytes)
+        ).toString('utf8');
+        if (text.includes('#EXTINF:')) {
+          ready = await pullMedia(entry, entry.url, text);
+        } else {
+          for (const variant of hlsVariants(text, entry.url, failedVariant)) {
+            if (entry.stopping) return;
+            if (await pullMedia(entry, variant.uri)) {
+              entry.variantBandwidth = variant.bandwidth;
+              ready = true;
+              break;
+            }
+          }
+        }
+      }
+      if (!ready) throw new Error('No available HLS rendition');
       entry.failures = 0;
     } catch {
       entry.chunklistUrl = null;
@@ -273,6 +379,9 @@ export function createHlsPuller({
       stopping: false,
       failures: 0,
       nextSeq: 0,
+      nextPublishedSeq: 0,
+      lastPublishedCacheSeq: null,
+      publication: { through: -1 },
       upstream: new Map(),
       leases: new Map(),
       upstreamNewest: -1,
@@ -284,37 +393,33 @@ export function createHlsPuller({
     entry.polling = poll(entry);
     return entry;
   };
+  const publishedSegments = (entry) =>
+    [...entry.segments.values()].filter((s) => s.seq <= s.publication.through);
   const waitReady = async (entry, signal) => {
     const until = Date.now() + limits.readyMs;
     while (!entry.stopping && !signal?.aborted && Date.now() < until) {
-      if (entry.segments.size >= 2) return true;
+      if (publishedSegments(entry).length >= 2) return true;
       await new Promise((resolve) => setTimeout(resolve, 50));
     }
     return false;
   };
   const buildPlaylist = async (entry, cameraId, leaseId = 'legacy') => {
-    if (entry.stopping || entry.segments.size < 2) return null;
+    const segments = publishedSegments(entry).sort((a, b) => a.seq - b.seq);
+    if (entry.stopping || segments.length < 2) return null;
     touch(entry, leaseId);
-    const segments = [...entry.segments.values()].sort((a, b) => a.seq - b.seq);
     const lines = [
       '#EXTM3U',
       '#EXT-X-VERSION:3',
       `#EXT-X-TARGETDURATION:${Math.ceil(Math.max(...segments.map((s) => s.duration)))}`,
-      `#EXT-X-MEDIA-SEQUENCE:${segments[0].seq}`,
+      `#EXT-X-MEDIA-SEQUENCE:${segments[0].publishedSeq}`,
       `#EXT-X-DISCONTINUITY-SEQUENCE:${entry.discontinuitiesRemoved}`,
     ];
-    let previous;
     for (const segment of segments) {
-      if (
-        segment.discontinuity ||
-        (previous !== undefined && segment.seq !== previous + 1)
-      )
-        lines.push('#EXT-X-DISCONTINUITY');
+      if (segment.discontinuity) lines.push('#EXT-X-DISCONTINUITY');
       lines.push(
         `#EXTINF:${segment.duration.toFixed(3)},`,
         `/api/cctv/media/${encodeURIComponent(cameraId)}/seg_${segment.seq}.ts?session=${entry.token}&lease=${encodeURIComponent(leaseId)}`,
       );
-      previous = segment.seq;
     }
     return lines.join('\n') + '\n';
   };
@@ -322,7 +427,11 @@ export function createHlsPuller({
     const entry = active.get(cameraId);
     if (!entry || entry.token !== token || !entry.leases.has(leaseId))
       return null;
-    const body = entry.segments.get(seq)?.body;
+    const segment = entry.segments.get(seq);
+    const body =
+      segment && segment.seq <= segment.publication.through
+        ? segment.body
+        : null;
     if (body) touch(entry, leaseId);
     return body || null;
   };

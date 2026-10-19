@@ -1,6 +1,71 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { DATA_CREDITS, NYC_DOT_DISCLAIMER } from './dataCredits.js';
+import {
+  DATA_CREDITS,
+  NYC_DOT_DISCLAIMER,
+  registerDataCredits,
+} from './dataCredits.js';
+
+test('the static credit surface acknowledges both optional Boulder operators without implying activation or reuse rights', (t) => {
+  const fetch = t.mock.method(globalThis, 'fetch', () => {
+    assert.fail('static attribution must not fetch camera data');
+  });
+  const displayed = [];
+  registerDataCredits({
+    creditDisplay: { addStaticCredit: (credit) => displayed.push(credit) },
+  });
+  const boulder = displayed.filter((credit) => /boulder/i.test(credit.html));
+  assert.equal(boulder.length, 2);
+  const operators = [
+    [
+      'boulder-city-cctv',
+      'City of Boulder',
+      'https://bouldercolorado.gov/traffic-cameras',
+    ],
+    [
+      'boulder-county-cctv',
+      'Boulder County Parks &amp; Open Space',
+      'https://bouldercounty.gov/open-space/parks-and-trails/live-trailhead-cameras/',
+    ],
+  ];
+  for (const [key, name, viewingUrl] of operators) {
+    const entry = DATA_CREDITS.find((credit) => credit.key === key);
+    assert.ok(entry, `${name} needs its own catalog credit`);
+    const credit = boulder.find((item) => item.html === entry.html);
+    assert.ok(
+      credit,
+      `${name} must reach the actual Cesium registration surface`,
+    );
+    assert.equal(credit.showOnScreen, false);
+    assert.ok(credit.html.includes(name));
+    assert.ok(credit.html.includes(`href="${viewingUrl}"`));
+    assert.match(
+      credit.html,
+      /optional configured pack; not enabled by default/i,
+    );
+    assert.match(credit.html, /media reuse rights unresolved/i);
+    assert.match(credit.html, /no endorsement implied/i);
+    assert.doesNotMatch(
+      credit.html,
+      /\bMIT\b|\bCC0\b|public domain|licensed under/i,
+    );
+    const links = [...credit.html.matchAll(/<a\s+([^>]+)>/g)];
+    assert.ok(links.length > 0);
+    for (const [, attributes] of links) {
+      assert.match(attributes, /href="https:\/\//);
+      assert.match(attributes, /target="_blank"/);
+      assert.match(attributes, /rel="noopener"/);
+    }
+  }
+  assert.equal(
+    displayed.filter((credit) =>
+      credit.html.includes('openstreetmap.org/copyright'),
+    ).length,
+    1,
+    'the existing generic OSM credit remains registered once',
+  );
+  assert.equal(fetch.mock.callCount(), 0);
+});
 
 test('every credit carries a unique key and some markup to render', () => {
   const keys = DATA_CREDITS.map((entry) => entry.key);

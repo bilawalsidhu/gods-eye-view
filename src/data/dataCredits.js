@@ -434,6 +434,23 @@ export const DATA_CREDITS = [
     html: 'Webcam (Warendorf): <a href="https://www.warendorf.de/" target="_blank" rel="noopener">Stadt Warendorf</a> (courtesy)',
   },
   {
+    key: 'boulder-city-cctv',
+    html:
+      'Webcams (optional configured pack; not enabled by default): ' +
+      '<a href="https://bouldercolorado.gov/traffic-cameras" target="_blank" rel="noopener">City of Boulder</a> ' +
+      '· <a href="https://bouldercolorado.gov/trailhead-cameras" target="_blank" rel="noopener">Trailhead cameras</a> ' +
+      '· <a href="https://bouldercolorado.gov/boulder-creek-webcam" target="_blank" rel="noopener">Boulder Creek</a> ' +
+      '· <a href="https://bouldercolorado.gov/south-boulder-creek-webcam" target="_blank" rel="noopener">South Boulder Creek</a>. ' +
+      'Media reuse rights unresolved; no endorsement implied.',
+  },
+  {
+    key: 'boulder-county-cctv',
+    html:
+      'Trailhead stills (optional configured pack; not enabled by default): ' +
+      '<a href="https://bouldercounty.gov/open-space/parks-and-trails/live-trailhead-cameras/" target="_blank" rel="noopener">Boulder County Parks &amp; Open Space</a>. ' +
+      'Media reuse rights unresolved; no endorsement implied.',
+  },
+  {
     key: 'nsw-cctv',
     html:
       'CCTV cameras &amp; frames (New South Wales): ' +
