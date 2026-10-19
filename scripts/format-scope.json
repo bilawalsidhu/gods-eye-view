@@ -732,6 +732,7 @@
   "src/voice/session.test.mjs",
   "src/layers/alpr/records.js",
   "src/layers/earthquakes/records.js",
+  "src/layers/earthquakes/records.test.mjs",
   "src/sources/sourceSlot.js",
   "src/data/feedState.js",
   "src/app/localGeojsonServices.js",

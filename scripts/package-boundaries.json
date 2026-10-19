@@ -301,6 +301,7 @@
       "server/providers/regional/weather-effects.js",
       "server/providers/regional/weather.js",
       "src/data/regionalModel.js",
+      "src/geoDistance.js",
       "src/nominatimGeocode.js",
       "src/sources/httpBody.js",
       "src/i18n/marker.js",
@@ -377,6 +378,7 @@
       "src/search/nominatim.js",
       "src/nominatimGeocode.js",
       "src/data/regionalModel.js",
+      "src/geoDistance.js",
       "src/data/naturalEarthRegions.js",
       "src/data/bundledJson.js",
       "src/data/retryableLoad.js",
@@ -915,6 +917,7 @@
       "src/data/motionModel.js",
       "src/data/renderAltitude.js",
       "src/data/routePlausible.js",
+      "src/geoDistance.js",
       "src/data/trackedModelRegime.js",
       "src/data/trackingClickGesture.js",
       "src/layers/flights/controller.js",
@@ -1009,6 +1012,7 @@
       "src/data/motionModel.js",
       "src/data/renderAltitude.js",
       "src/data/routePlausible.js",
+      "src/geoDistance.js",
       "src/data/trackedModelRegime.js",
       "src/data/trackingClickGesture.js",
       "src/layers/aircraft/classification.js",
@@ -1249,6 +1253,7 @@
       "src/data/flowMatch.js",
       "src/data/tomtomTiles.js",
       "src/data/trafficBounds.js",
+      "src/geoDistance.js",
       "src/data/trafficFlowStyle.js",
       "src/data/trafficPresetStyle.js",
       "src/data/trafficQueue.js",
@@ -1297,6 +1302,7 @@
       "src/layers/bikeshare/ingestion.js",
       "src/layers/bikeshare/lifecycle.js",
       "src/layers/bikeshare/model.js",
+      "src/geoDistance.js",
       "src/sources/gbfsStations.js",
       "src/layers/bikeshare/policy.js",
       "src/layers/bikeshare/queries.js",
@@ -1340,6 +1346,7 @@
       "src/layers/cctv/ingestion.js",
       "src/layers/cctv/lifecycle.js",
       "src/layers/cctv/model.js",
+      "src/geoDistance.js",
       "src/layers/cctv/modelSpecs.js",
       "src/layers/cctv/navigation.js",
       "src/layers/cctv/policy.js",
@@ -1527,6 +1534,7 @@
     "exports": ["./geography/natural-earth", "./geography/neighborhoods"],
     "modules": [
       "src/data/naturalEarthRegions.js",
+      "src/geoDistance.js",
       "src/data/neighborhoodPolygons.js",
       "src/data/bundledJson.js",
       "src/data/retryableLoad.js",
@@ -1661,6 +1669,7 @@
       "src/data/bhoteKoshiFloodPath.js",
       "src/data/bhoteKoshiShotPaths.js",
       "src/annotations/annotationEngine.js",
+      "src/geoDistance.js",
       "src/annotations/annotationResolver.js",
       "src/annotations/hybridAnnotationRenderer.js",
       "src/annotations/index.js",
@@ -2513,6 +2522,7 @@
       "src/data/bhoteKoshiIncidentPlaces.js",
       "src/data/bhoteKoshiFloodPath.js",
       "src/data/bhoteKoshiShotPaths.js",
+      "src/geoDistance.js",
       "src/annotations/annotationResolver.js",
       "src/annotations/resolver.js",
       "src/app/catalog.js",
@@ -3075,6 +3085,7 @@
       "src/data/approxDistance.js",
       "src/data/dataCredits.js",
       "src/data/geoid.js",
+      "src/geoDistance.js",
       "src/data/local_data/natural_earth/marine.json",
       "src/data/local_data/natural_earth/regions.json",
       "src/data/local_data/neighborhoods/san-francisco.json",
@@ -3328,7 +3339,7 @@
   },
   "regional-source": {
     "exports": ["./sources/regional"],
-    "modules": ["src/data/regionalModel.js"],
+    "modules": ["src/data/regionalModel.js", "src/geoDistance.js"],
     "external": []
   },
   "voice-action-schemas": {
@@ -3491,6 +3502,7 @@
       "src/search/google.js",
       "src/search/geospatial.js",
       "src/data/regionalModel.js",
+      "src/geoDistance.js",
       "src/sources/httpBody.js",
       "src/i18n/marker.js",
       "src/sources/nominatim.js"
@@ -3514,6 +3526,7 @@
       "src/nominatimGeocode.js",
       "src/search/geospatial.js",
       "src/data/regionalModel.js",
+      "src/geoDistance.js",
       "src/sources/httpBody.js",
       "src/i18n/marker.js"
     ],
@@ -3529,6 +3542,7 @@
       "server/providers/transitHistory.js",
       "src/data/gtfsRealtime.js",
       "src/data/transitFeeds.js",
+      "src/geoDistance.js",
       "src/data/transitProxy.js",
       "src/sources/httpBody.js",
       "src/i18n/marker.js",
@@ -3544,6 +3558,7 @@
     "modules": [
       "src/data/gtfsRealtime.js",
       "src/data/transitFeeds.js",
+      "src/geoDistance.js",
       "src/data/transitProxy.js",
       "src/sources/transitHistory.js"
     ],
@@ -3565,6 +3580,7 @@
       "src/data/geoid.js",
       "src/data/groundFloor.js",
       "src/data/gtfsRealtime.js",
+      "src/geoDistance.js",
       "src/data/iconOrientation.js",
       "src/data/inputOwnership.js",
       "src/data/labelArbiter.js",
@@ -3622,6 +3638,7 @@
       "src/data/iconOrientation.js",
       "src/data/inputOwnership.js",
       "src/data/transitFeeds.js",
+      "src/geoDistance.js",
       "src/data/transitIcons.js",
       "src/data/transitPresetStyle.js",
       "src/layers/transit/controls.js",
@@ -3669,6 +3686,7 @@
     "exports": ["./sources/transit-service"],
     "modules": [
       "src/data/transitFeeds.js",
+      "src/geoDistance.js",
       "src/data/transitProxy.js",
       "src/data/gtfsRealtime.js",
       "src/sources/httpBody.js",
@@ -3793,7 +3811,8 @@
       "src/view/index.js",
       "src/tools/views.js",
       "src/tools/globePanel.js",
-      "src/tools/queries/panelRequest.js"
+      "src/tools/queries/panelRequest.js",
+      "src/geoDistance.js"
     ],
     "external": ["satellite.js"]
   },
