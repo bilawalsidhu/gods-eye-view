@@ -1262,6 +1262,46 @@ normal fallback chain. The existing declared media size ceiling remains 64 MiB.
 camera is refused there with a JSON 404 and is served solely through
 `/api/cctv/frame` and its same-origin, `image/*`-only, size-capped fetch.
 
+## C-ITS layer (OpenTrafficMap)
+
+`cits` (share token `5`) shows C-ITS stations relayed by OpenTrafficMap
+volunteer receivers. `server/providers/cits.js` owns the relay: one demand-driven
+socket per upstream mode, shared by every tab, with the protocol mirror and
+compaction in `server/providers/cits/`. The tiled socket subscribes the union of
+tiles requested in the last 10 s (zoom 9–14, at most 16) and refuses views that
+need coarser tiles with `status: 'zoom-in'`; a socket closes after 60 s without
+demand and reconnects with backoff. `/api/cits/state` returns stations, hazards
+and the intersection-geometry version; `/api/cits/intersections` returns lane
+polylines. Buses, trams, infrastructure and hazards carry details; every other
+vehicle (kinds match case-insensitively; trucks, emergency vehicles and
+stations without a kind included) is an anonymous dot: kind, position, speed
+and report age under an id drawn from a key made for that response alone, in
+random order, so responses cannot be joined into a track by id. The browser
+pools these dots by slot and moves them without gliding; they are never
+selectable, bracketed or handed to detection. DENM hazards come only from
+public stations, never from a private vehicle or a warning it originated.
+Vehicle tracks are neither returned nor kept. `CITS_OTM_FULL_STREAM=1` enables the
+`mode=full` mirror of `/ws_ext`; otherwise it answers 403 and the layer hides
+its bandwidth chips. Errors are snake_case codes (`method_not_allowed`,
+`unknown_route`, `invalid_cits_query`, `rate_limited`, `full_stream_disabled`,
+`cits_unavailable`), and each client may make 240 requests a minute (2,400 in
+total) before a 429 with `Retry-After`.
+
+`src/layers/cits/` draws stations as Street Traffic-style point primitives on
+the rendered surface, interpolated between 1.5 s polls, with preset-aware
+colours; DENM corridors as ground glow lines; MAPEM lanes as one ground
+primitive whose per-instance colours follow SPaT phases. Trams get detection
+brackets and two-line cards on a world-overlay paint lane, independent of the
+global detection mode; bus and hazard labels use the overlay host. Clicking a
+tram, bus, traffic light, lane or hazard publishes one `selected` card on the
+`cits-selected` overlay source; an empty-space click clears it, a sibling
+layer's pick leaves it alone, and anonymous vehicles never get one. The layer
+row carries the controls: BRACKETS, stepped VEHICLE / LIGHT / LABEL / BRACKET
+RANGE and DOT SIZE chips, RESET, a colour legend and a kind list with live
+counts that switches kinds and signal lanes on and off. Settings are stored per
+viewer in `localStorage`. Zooming out past the tiled cover reports the
+`zoom-in` guidance status, not an error.
+
 ## GBFS upstream bounds
 
 Station information is normalized in `src/sources/gbfsStations.js` for both the
@@ -3416,6 +3456,7 @@ its criteria cannot be silently ignored.
 | Wind 🌬                 | NOAA GFS 10 m wind (keyless, 0.25°→1° grid; animated particles)                                                                                                                                 | `src/data/wind.js`                                    | `/api/wind`                                              | 1 h (forecast cycle)                                                              |
 | GNSS Integrity 📡 (`gnss-integrity`) | adsb.lol point snapshot, low navigation accuracy binned per 0.5° cell (GEV NIC/NACp threshold + gpsjam.org formula and bands, keyless, ODbL) | `src/layers/gnss/` via `src/app/layers/gnss.js` | `/api/gnss-integrity` | camera-driven (600 ms debounce, minimum 2.5 s between reads) + 60s poll (server cache 60 s; 30 min rolling window) |
 | Fire Perimeters 🔥 | NIFC WFIGS current interagency perimeters (keyless, paged past the 2000-record cap); InciWeb catalog + incident page origin and update time checks for verified incident-page links | `src/layers/perimeters/` via `src/app/layers/perimeters.js` | `/api/fire-perimeters` + `/api/fire-perimeters/inciweb/*` | 5 min (server caches: catalog 1 h; publication 30 min) |
+| C-ITS Live (V2X) 🚦 | OpenTrafficMap volunteer C-ITS receivers (keyless; anonymous dots for private vehicles) | `src/layers/cits/` via `src/app/layers/cits.js` | `/api/cits/state` + `/api/cits/intersections` (WebSocket relay) | 1.5 s poll of the in-memory mirror |
 
 GNSS Integrity samples a 250 nm circle around the Earth point under the screen
 centre. Camera reads debounce for 600 ms with a monotonic 2.5 s minimum gap;

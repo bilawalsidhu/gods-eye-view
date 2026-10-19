@@ -22,6 +22,7 @@ export const LAYER_NAME_KEYS = Object.freeze({
   cctv: msg('CCTV'),
   radio: msg('Radio'),
   bikeshare: msg('Bikeshare'),
+  cits: msg('C-ITS Live (V2X)'),
   'ais-live-vessels': msg('Live AIS Vessels'),
   'military-installations': msg('Mapped Installations'),
   'military-awareness': msg('Global Context'),
