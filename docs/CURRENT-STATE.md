@@ -1023,6 +1023,58 @@ owners. Tuner calculations have a pure entry, with existing layer exports
 preserved. Destruction removes listeners and state subscriptions before ending
 tuning; a delayed Enable result cannot reveal or refocus removed controls.
 
+## KiwiSDR receivers
+
+The KiwiSDR layer (`src/layers/kiwisdr/`) maps every public KiwiSDR receiver and
+opens an in-app player for the one you click. It is registered `local-only` (no
+share token), is off by default, and has no iframe: the browser speaks the
+receiver's websocket protocol itself, so it only works from a page that may open
+`ws://` connections (local `http://localhost` or LAN use, not an HTTPS deployment).
+
+**Directory.** `server/providers/kiwisdr.js` serves `/api/kiwisdr` from a fixed
+upstream (no caller-supplied URL), with `redirect: 'error'`, an 8 MB body cap, a
+10 minute cache and stale data for up to 6 hours when the upstream fails. A failed
+refresh answers 502 with `{ error: 'kiwisdr_unavailable', reason }`, and the layer
+shows the reason. `src/sources/kiwisdr.js` parses the upstream script leniently:
+one malformed row costs that row, not the list. A station needs `status` active, a
+real position (not 0,0), a public http(s) origin (no credentials, `localhost`,
+`.local` or non-global IPv4) and user counts. Stations are capped at 4000.
+
+**Map.** Dots are coloured by users / max users from a colorblind-safe palette
+(`palette.js`, no red/green pairs); busy and full receivers are dimmed. Points on
+the far side of the globe are culled with the horizon occluder. Favorites get a
+white ring (a second transparent point with the same pick id).
+
+**Player.** `client.js` runs one listening session: an audio socket (`SND`) and a
+waterfall socket (`W/F`) sharing one URL timestamp, which the receiver uses to
+pair them as a single listener. Receivers listed on `*.proxy.kiwisdr.com` or on a
+bare port 80 only answer a websocket handshake with a `307`, which browsers cannot
+follow, so `kiwiEndpoints()` tries `:8073` first, then the secondary proxy host
+(`NAME.proxy2.kiwisdr.com:8073`), each on the `/kiwi/<stamp>/` path and then the
+older path without `/kiwi`. A socket that closes emits a `diag` event (host, port,
+path, close code, elapsed time) which the panel prints and logs with
+`console.warn`. Server `MSG` fields that end a session (`too_busy`, `badp` 1–7,
+`down`, `redirect`) are turned into plain-language reasons by `fatalReason`.
+
+**Waterfall.** The wheel zooms around the pointer, dragging pans, hover shows the
+frequency under the pointer, and clicks, ◀ ▶ and the arrow keys tune at the
+resolution of the visible span (1 kHz at full band, down to 10 Hz at maximum
+zoom). The canvas is created with `willReadFrequently` because a GPU-backed
+canvas stalls the page when the globe also renders.
+
+**Docking.** The minimize button docks the panel to a slim bottom-left bar. Audio
+keeps playing, waterfall rows stop being painted, and clicking the same receiver
+again expands it. Closing the panel or disabling the layer ends both sockets. The
+panel, docked bar and favorites tray share `--kiwisdr-dock-clearance`, which keeps
+them above the command dock and the map attribution row.
+
+**Saved state.** `storage.js` keeps favorite receivers and per-receiver saved
+frequencies (frequency and mode) in `localStorage` under `gev.kiwisdr.v1`. Reads
+are validated and bounded (200 favorites, 24 saved frequencies per receiver), and
+an unavailable, full or corrupt `localStorage` falls back to memory for the
+session. Browser QA for the layer is `scripts/qa-kiwisdr.mjs`, which drives the
+real app against mock receivers.
+
 ## NYC DOT TMC CCTV source pack
 
 The CCTV catalog can add New York City traffic cameras from the NYC DOT
@@ -3405,6 +3457,7 @@ its criteria cannot be silently ignored.
 | Traffic | Selectable TomTom / OpenStreetMap / Hybrid roads; optional TomTom flow (BYOK) | `src/data/traffic.js` | browser-direct OpenFreeMap tiles; `/api/tomtom` for flow | viewport-driven; capped tile cache |
 | CCTV                   | Austin + Caltrans (CA) + TfL London + Ontario 511 + Fintraffic (FI) + DriveBC (BC) + TxDOT (TX) + Estonia (Tallinn, Tarktee) + Live Traffic NSW + Open Calgary Open Data + Statens vegvesen (NO, stills + live HLS) + King County (WA) Open Data + WSDOT (WA) Open Data + NYC DOT TMC (opt-in) + City of Toronto RESCU + Catalonia (Servei Català de Trànsit) + Street View fallback | `src/data/cctv.js`                                    | `/api/cctv`                                              | 10s (active)                                                                      |
 | Radio                  | Radio Browser (public-domain station directory)                                                                                                                                                 | `src/data/radio.js`                                   | `/api/radio/stations`, `/api/radio/click/:uuid`          | 45 min directory refresh                                                          |
+| KiwiSDR                | KiwiSDR.com public receiver directory (map maker list at `rx.linkfanel.net`); live audio and waterfall come straight from each receiver | `src/layers/kiwisdr/` | `/api/kiwisdr` (directory only; the browser connects to receivers directly) | 10 min directory refresh; local-only, off by default |
 | Transit 🚌             | Operator GTFS-Realtime VehiclePositions (7 keyless regions, `src/data/transitFeeds.js`)                                                                                                         | `src/layers/transit/` via `src/app/layers/transit.js` | `/api/transit`                                           | 15s (poll + delayed playback)                                                     |
 | Bikeshare 🚲           | GBFS (Lyft + BCycle + Social Bicycles + PBSC incl. Bike Share Toronto, Bike Itaú (Brazil), Bicing (Barcelona) and seven other Spanish cities + Urban Sharing, Entur, JCDecaux (Lillestrøm, Valencia, Seville) + nextbike (AMBici))                                                                                                                                        | `src/data/bikeshare.js`                               | `/api/gbfs`                                              | 60s                                                                               |
 | Directions 🧭          | OSRM on FOSSGIS servers (OpenStreetMap)                                                                                                                                                         | `src/data/directions.js`                              | `/api/route` (`steps=1`)                                 | on placement / mode change                                                        |

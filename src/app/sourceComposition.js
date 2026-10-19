@@ -19,6 +19,7 @@ export const CATALOG_SOURCE_CONTRACTS = Object.freeze({
     ['getCatalog', 'getHealth', 'getFrameUrl', 'getMediaUrl'],
   ),
   radio: contract(['radio'], ['getDirectory', 'recordClick']),
+  kiwisdr: contract(['kiwisdr'], ['getDirectory']),
   traffic: contract(
     ['traffic'],
     [
