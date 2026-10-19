@@ -275,6 +275,14 @@ export const DATA_CREDITS = [
       '<a href="https://data.calgary.ca/stories/s/Open-Calgary-Terms-of-Use/u45n-7awa" target="_blank" rel="noopener">Open Government Licence – City of Calgary</a>',
   },
   {
+    key: 'florida-cctv',
+    html:
+      'Traffic cameras (Florida): FL511, Florida Department of Transportation. ' +
+      'Individual, personal use only under the ' +
+      '<a href="https://fl511.com/privacy#disclaimer" target="_blank" rel="noopener">FL511 terms</a>; ' +
+      "any other use needs FDOT's express written consent",
+  },
+  {
     key: 'catalonia-cctv',
     html:
       'CCTV cameras &amp; frames (Catalonia): ' +
