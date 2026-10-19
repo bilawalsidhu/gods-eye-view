@@ -184,8 +184,8 @@
   max-height: 100%;
   pointer-events: auto;
 }
-#right-context-rail > #weather-panel,
-/* Collapsed, it must stay hideable by the rail's exclusive layout. */
+/* Collapsed, they must stay hideable by the rail's exclusive layout. */
+#right-context-rail > #weather-panel:not(.collapsed),
 #right-context-rail > #recent-imagery-panel:not(.collapsed) {
   display: flex;
   flex-direction: column;
@@ -358,6 +358,10 @@
   > .global-context-panel-inner {
   height: auto !important;
   max-height: none !important;
+}
+/* The glow overhangs its panel and would inflate scrollHeight. */
+#right-context-rail[data-rail-measuring] .panel-glow {
+  display: none !important;
 }
 #right-context-rail[data-rail-measuring] [data-rail-scroller],
 #right-context-rail[data-rail-measuring] .space-mission-roster-list {

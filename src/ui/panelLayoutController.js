@@ -60,6 +60,8 @@ const RIGHT_STACK_OBSTACLE_SELECTOR = [
   '#cesium-credits .cesium-credit-textContainer',
   '#command-dock',
   '#gev-voice-control',
+  // POWER UP and the language picker sit under the rail's bottom corner.
+  '#corner-actions',
 ].join(', ');
 export class PanelLayoutController {
   constructor({

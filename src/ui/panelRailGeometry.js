@@ -63,16 +63,23 @@ export function resolveHudRailLayout({
 
 /**
  * Tactical HUD gives an expanded right-rail panel the whole control lane.
- * Other HUD layouts keep collapsed launchers visible for quick switching.
+ * Operator and Minimal keep collapsed launchers visible for quick switching,
+ * unless they would leave the expanded panel too short for its content.
+ * Cyber keeps its accordion.
  *
  * @param {object} input Current rail state.
  * @param {string} input.hudVariant Active HUD layout variant.
  * @param {boolean} input.hasExpandedPanel Whether any rail panel is expanded.
+ * @param {boolean} [input.launchersSqueezeExpanded] Whether the visible
+ *   launchers would make the expanded panels scroll.
  * @returns {boolean} Whether collapsed sibling launchers should be hidden.
  */
 export function shouldHideCollapsedRightPanels({
   hudVariant,
   hasExpandedPanel,
+  launchersSqueezeExpanded = false,
 }) {
-  return hudVariant === 'tactical' && Boolean(hasExpandedPanel);
+  if (!hasExpandedPanel) return false;
+  if (hudVariant === 'tactical') return true;
+  return hudVariant !== 'cyber' && Boolean(launchersSqueezeExpanded);
 }

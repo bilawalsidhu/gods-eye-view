@@ -792,3 +792,89 @@ test('right layout ignores a hidden panel: no lane, no gap, no auto-collapse', (
     ) <= alone,
   );
 });
+
+function allocated(panel) {
+  return parseFloat(
+    panel.style.getPropertyValue('--right-panel-allocated-height'),
+  );
+}
+
+test('Operator and Minimal give a tall expanded panel the same lane as Tactical', () => {
+  const tactical = fixture('right');
+  tactical.expand(tactical.first, 900);
+  tactical.run();
+  for (const variant of ['operator', 'minimal']) {
+    const f = fixture('right', { hud: { visible: true, variant } });
+    f.expand(f.first, 900);
+    f.run();
+    assert.equal(f.stack.classList.contains('layout-exclusive'), true);
+    assert.equal(f.second.getAttribute('aria-hidden'), 'true');
+    assert.equal(allocated(f.first), allocated(tactical.first), variant);
+  }
+});
+
+test('Operator keeps launchers beside an expanded panel that fits next to them', () => {
+  const f = fixture('right', { hud: { visible: true, variant: 'operator' } });
+  f.expand(f.first, 300);
+  f.run();
+  assert.equal(f.stack.classList.contains('layout-exclusive'), false);
+  assert.equal(f.second.getAttribute('aria-hidden'), undefined);
+});
+
+test('Operator launchers stay hidden through small content changes and return once the panel fits', () => {
+  const f = fixture('right', { hud: { visible: true, variant: 'operator' } });
+  // Corridor 630 px (234 → 864); beside the 42 px launcher and a 12 px gap
+  // the panel has 576 px. The hysteresis band is 54 px.
+  f.expand(f.first, 577);
+  f.run();
+  assert.equal(f.stack.classList.contains('layout-exclusive'), true);
+  f.expand(f.first, 522);
+  f.run();
+  assert.equal(f.stack.classList.contains('layout-exclusive'), true);
+  f.expand(f.first, 521);
+  f.run();
+  assert.equal(f.stack.classList.contains('layout-exclusive'), false);
+  f.expand(f.first, 576);
+  f.run();
+  assert.equal(f.stack.classList.contains('layout-exclusive'), false);
+});
+
+test('Cyber keeps its accordion launchers even when the expanded panel is tall', () => {
+  const f = fixture('right', { hud: { visible: true, variant: 'cyber' } });
+  f.expand(f.first, 900);
+  f.run();
+  assert.equal(f.stack.classList.contains('layout-exclusive'), false);
+});
+
+test('Operator launcher visibility does not depend on arriving from Tactical', () => {
+  // Beside the launcher the panel has 576 px; 560 px fits with room to spare.
+  const fresh = fixture('right', {
+    hud: { visible: true, variant: 'operator' },
+  });
+  fresh.expand(fresh.first, 560);
+  fresh.run();
+  assert.equal(fresh.stack.classList.contains('layout-exclusive'), false);
+
+  const viaTactical = fixture('right');
+  viaTactical.expand(viaTactical.first, 560);
+  viaTactical.run();
+  assert.equal(viaTactical.stack.classList.contains('layout-exclusive'), true);
+  viaTactical.options.hud.variant = 'operator';
+  viaTactical.run();
+  assert.equal(viaTactical.stack.classList.contains('layout-exclusive'), false);
+  assert.equal(viaTactical.second.getAttribute('aria-hidden'), undefined);
+});
+
+test('an idle mobile rail does not rewrite its class attribute', () => {
+  const f = fixture('right', { mobile: true });
+  const removed = [];
+  const remove = f.stack.classList.remove;
+  f.stack.classList.remove = (...names) => {
+    removed.push(...names);
+    remove(...names);
+  };
+  f.run();
+  f.run();
+  assert.deepEqual(removed, []);
+  assert.equal(f.stack.dataset.layoutMode, 'mobile');
+});

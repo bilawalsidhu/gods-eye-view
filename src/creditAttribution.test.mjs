@@ -493,7 +493,7 @@ test('the full-width rail cannot inherit a height that overrides its floor', () 
   const gate = rail.indexOf("windowRef.matchMedia('(max-width: 720px)')");
   assert.ok(gate > 0, 'the rail layout pass no longer keys off (max-width: 720px)');
   const mobileBranch = rail.slice(gate, rail.indexOf("layoutMode = 'mobile'", gate) + 40);
-  assert.match(mobileBranch, /stack\.classList\.remove\('layout-focus'\)/);
+  assert.match(mobileBranch, /stack\.classList\.toggle\('layout-focus', false\)/);
   assert.match(mobileBranch, /stack\.style\.removeProperty\('--right-stack-max-height'\)/);
 });
 

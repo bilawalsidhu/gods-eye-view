@@ -21,14 +21,32 @@ test('collapsed launchers remain when Tactical has no expanded panel', () => {
   }), false);
 });
 
-test('other HUD layouts keep collapsed right-rail launchers visible', () => {
+test('other HUD layouts keep collapsed right-rail launchers visible while they fit', () => {
+  for (const hudVariant of ['operator', 'minimal', 'cyber']) {
+    assert.equal(shouldHideCollapsedRightPanels({
+      hudVariant,
+      hasExpandedPanel: true,
+    }), false);
+  }
+});
+
+test('Operator and Minimal hide launchers that would squeeze the expanded panel; Cyber keeps its accordion', () => {
+  for (const hudVariant of ['operator', 'minimal']) {
+    assert.equal(shouldHideCollapsedRightPanels({
+      hudVariant,
+      hasExpandedPanel: true,
+      launchersSqueezeExpanded: true,
+    }), true);
+    assert.equal(shouldHideCollapsedRightPanels({
+      hudVariant,
+      hasExpandedPanel: false,
+      launchersSqueezeExpanded: true,
+    }), false);
+  }
   assert.equal(shouldHideCollapsedRightPanels({
-    hudVariant: 'minimal',
+    hudVariant: 'cyber',
     hasExpandedPanel: true,
-  }), false);
-  assert.equal(shouldHideCollapsedRightPanels({
-    hudVariant: 'full',
-    hasExpandedPanel: true,
+    launchersSqueezeExpanded: true,
   }), false);
 });
 
@@ -49,6 +67,21 @@ test('desktop Display participates in Tactical exclusivity without changing mobi
   assert.match(
     css,
     /#right-context-rail\.layout-exclusive\s*> \[data-panel-id\]\.collapsed:not\(\.panel-floating\) \{/,
+  );
+});
+
+test('exclusive layout can hide every collapsed right-rail panel', () => {
+  const css = readStylesheet(new URL('../style.css', import.meta.url));
+  // An ID-specific display rule would outrank the exclusive hide rule.
+  assert.match(css, /#right-context-rail > #weather-panel:not\(\.collapsed\),/);
+  assert.doesNotMatch(css, /#right-context-rail > #weather-panel,[^{]*\{\s*display:/);
+});
+
+test('rail measurement leaves out the overhanging panel glow', () => {
+  const css = readStylesheet(new URL('../style.css', import.meta.url));
+  assert.match(
+    css,
+    /#right-context-rail\[data-rail-measuring\] \.panel-glow \{\s*display: none !important;/,
   );
 });
 

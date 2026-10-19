@@ -929,6 +929,8 @@ test('Cockpit panel corridors reserve the owned topline readouts', () => {
   assert.match(rightObstacles[1], /#cockpit-hud \.cockpit-topline/);
   assert.match(leftObstacles[1], /#cockpit-hud \.cockpit-topline > div/);
   assert.match(rightObstacles[1], /#cockpit-hud \.cockpit-topline > div/);
+  // The bottom-right corner row (POWER UP, language) sits under the rail.
+  assert.match(rightObstacles[1], /'#corner-actions'/);
   const leftLayout = fs.readFileSync(
     new URL('./ui/leftPanelRail.js', import.meta.url),
     'utf8',

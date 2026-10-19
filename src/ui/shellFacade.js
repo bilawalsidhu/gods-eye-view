@@ -1037,7 +1037,8 @@ export class ShellFacade {
    * Places the right rail inside the visible HUD-safe corridor. When the
    * corridor is too short, the expanded panel receives the remaining height
    * with internal scrolling. Tactical HUD hides collapsed sibling launchers
-   * while a panel is expanded; other HUD layouts keep them visible.
+   * while a panel is expanded; Operator and Minimal hide them only when they
+   * would make the expanded panel scroll; Cyber keeps them.
    * @returns {void}
    */
   _syncRightPanelAdaptiveLayout() {

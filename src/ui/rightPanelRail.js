@@ -117,19 +117,27 @@ export function layoutRightPanelRail({
       !panel.classList.contains('collapsed') &&
       (!isMobile || panel.id !== 'pp-toggles'),
   );
-  const exclusive = shouldHideCollapsedRightPanels({
-    hudVariant: hud.variant,
-    hasExpandedPanel,
-  });
-  stack.classList.toggle('layout-exclusive', exclusive);
-  for (const panel of panels) {
-    if (exclusive && panel.classList.contains('collapsed'))
-      panel.setAttribute('aria-hidden', 'true');
-    else panel.removeAttribute('aria-hidden');
-  }
+  const applyExclusive = (exclusive) => {
+    stack.classList.toggle('layout-exclusive', exclusive);
+    for (const panel of panels) {
+      if (exclusive && panel.classList.contains('collapsed'))
+        panel.setAttribute('aria-hidden', 'true');
+      else panel.removeAttribute('aria-hidden');
+    }
+    return exclusive;
+  };
 
   if (isMobile) {
-    stack.classList.remove('layout-focus');
+    applyExclusive(
+      shouldHideCollapsedRightPanels({
+        hudVariant: hud.variant,
+        hasExpandedPanel,
+      }),
+    );
+    // toggle(…, false) leaves an absent class alone; remove() would rewrite
+    // the attribute and wake the class observer every pass.
+    stack.classList.toggle('layout-focus', false);
+    delete stack.dataset.launchersSqueezed;
     stack.style.removeProperty('--right-stack-safe-top');
     stack.style.removeProperty('--right-stack-max-height');
     for (const panel of panels)
@@ -176,17 +184,6 @@ export function layoutRightPanelRail({
     });
   }
 
-  // Auto-collapsed headers contribute the same need even when exclusive
-  // presentation hides them. Manually collapsed launchers keep their policy.
-  const measuredPanels = panels.filter(
-    (panel) =>
-      !exclusive ||
-      !panel.classList.contains('collapsed') ||
-      panel.classList.contains('layout-auto-collapsed'),
-  );
-  const visiblePanels = panels.filter(
-    (panel) => !exclusive || !panel.classList.contains('collapsed'),
-  );
   const displayScrollTop = readDisplayScrollTop();
   // Measuring lifts each opted-in scroller's max-height, which clamps its
   // scroll offset; remember the offsets to put back afterwards.
@@ -201,7 +198,9 @@ export function layoutRightPanelRail({
   // Do not toggle layout classes here: the class observer schedules new passes.
   stack.setAttribute('data-rail-measuring', '');
   try {
-    for (const panel of measuredPanels) {
+    // Every panel, hidden launchers included: whether to hide them depends on
+    // their height.
+    for (const panel of panels) {
       naturalHeights.set(
         panel,
         Math.max(
@@ -217,15 +216,12 @@ export function layoutRightPanelRail({
       if (node.scrollTop !== top) node.scrollTop = top;
   }
   const gap = parseFloat(getComputedStyle(stack).rowGap) || 0;
-  const naturalHeight =
-    measuredPanels.reduce(
-      (total, panel) => total + naturalHeights.get(panel),
-      0,
-    ) +
-    gap * Math.max(0, measuredPanels.length - 1);
-  const layout = resolveHudRailLayout({
+  const stackHeight = (items) =>
+    items.reduce((total, panel) => total + naturalHeights.get(panel), 0) +
+    gap * Math.max(0, items.length - 1);
+  const corridor = resolveHudRailLayout({
     viewportHeight,
-    panelHeight: naturalHeight,
+    panelHeight: 0,
     laneLeft: stackRect.left,
     laneRight: stackRect.right,
     obstacles: obstacleRects,
@@ -234,14 +230,52 @@ export function layoutRightPanelRail({
     gap: safeGap,
     align: 'start',
   });
-  if (!layout) return;
-  const { safeTop, safeBottom, maxHeight: availableHeight } = layout;
+  if (!corridor) return;
   const stabilityBand = Math.max(48, viewportHeight * 0.06);
+  // Launchers squeeze the expanded panels when, beside them, those panels
+  // would have to scroll. Hysteresis keeps the rail from flickering as
+  // content height changes by a few pixels.
+  const collapsedPanels = panels.filter((panel) =>
+    panel.classList.contains('collapsed'),
+  );
+  const expandedNeed = stackHeight(
+    panels.filter((panel) => !panel.classList.contains('collapsed')),
+  );
+  const roomBesideLaunchers =
+    corridor.maxHeight -
+    stackHeight(collapsedPanels) -
+    (collapsedPanels.length ? gap : 0);
+  // Its own marker, not the exclusive class: Tactical sets that class
+  // regardless of room, which would carry over into Operator.
+  const launchersSqueezeExpanded =
+    stack.dataset.launchersSqueezed === 'true'
+      ? expandedNeed >= roomBesideLaunchers - stabilityBand
+      : expandedNeed > roomBesideLaunchers;
+  stack.dataset.launchersSqueezed = String(launchersSqueezeExpanded);
+  const exclusive = applyExclusive(
+    shouldHideCollapsedRightPanels({
+      hudVariant: hud.variant,
+      hasExpandedPanel,
+      launchersSqueezeExpanded,
+    }),
+  );
+  // Auto-collapsed headers contribute the same need even when exclusive
+  // presentation hides them. Manually collapsed launchers keep their policy.
+  const measuredPanels = panels.filter(
+    (panel) =>
+      !exclusive ||
+      !panel.classList.contains('collapsed') ||
+      panel.classList.contains('layout-auto-collapsed'),
+  );
+  const visiblePanels = panels.filter(
+    (panel) => !exclusive || !panel.classList.contains('collapsed'),
+  );
+  const naturalHeight = stackHeight(measuredPanels);
+  const { safeTop, safeBottom, maxHeight: availableHeight } = corridor;
   const wasFocused = stack.classList.contains('layout-focus');
   const shouldFocus = wasFocused
     ? naturalHeight >= availableHeight - stabilityBand
     : naturalHeight > availableHeight;
-  const layoutTop = shouldFocus ? safeTop : layout.top;
   const collapsedHeight = visiblePanels.reduce(
     (total, panel) =>
       panel.classList.contains('collapsed')
@@ -272,7 +306,7 @@ export function layoutRightPanelRail({
   const expandedAvailableHeight = Math.max(
     0,
     safeBottom -
-      layoutTop -
+      safeTop -
       collapsedHeight -
       gap * Math.max(0, visiblePanels.length - 1),
   );
@@ -318,17 +352,14 @@ export function layoutRightPanelRail({
     panel.style.removeProperty('--right-panel-allocated-height');
   }
 
-  stack.style.setProperty(
-    '--right-stack-safe-top',
-    `${layoutTop.toFixed(1)}px`,
-  );
+  stack.style.setProperty('--right-stack-safe-top', `${safeTop.toFixed(1)}px`);
   stack.style.setProperty(
     '--right-stack-max-height',
-    `${Math.max(0, safeBottom - layoutTop).toFixed(1)}px`,
+    `${Math.max(0, safeBottom - safeTop).toFixed(1)}px`,
   );
   stack.classList.toggle('layout-focus', shouldFocus);
   stack.dataset.layoutMode = shouldFocus ? 'focus' : 'normal';
-  stack.dataset.safeTop = layoutTop.toFixed(1);
+  stack.dataset.safeTop = safeTop.toFixed(1);
   stack.dataset.safeBottom = safeBottom.toFixed(1);
   stack.dataset.availableHeight = availableHeight.toFixed(1);
   stack.dataset.requiredHeight = naturalHeight.toFixed(1);
