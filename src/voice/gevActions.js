@@ -11,6 +11,7 @@ import { defaultGeospatial } from '../search/defaults.js';
 import { msg } from '../i18n/index.js';
 import * as Cesium from 'cesium';
 import { CITY_POIS } from '../cityPois.js';
+import { greatCircleKm } from '../geoDistance.js';
 import {
   findPoiByName,
   flyToGlobeView,
@@ -3742,8 +3743,10 @@ function centerMatchesSubject(center, subjectPosition) {
   const subjectLat = Cesium.Math.toDegrees(carto.latitude);
   const subjectLon = Cesium.Math.toDegrees(carto.longitude);
   return (
-    haversineKm(subjectLat, subjectLon, center.lat, center.lon) <=
-    SUBJECT_CENTER_TOLERANCE_KM
+    greatCircleKm(
+      { lat: subjectLat, lon: subjectLon },
+      { lat: center.lat, lon: center.lon },
+    ) <= SUBJECT_CENTER_TOLERANCE_KM
   );
 }
 
@@ -4033,7 +4036,7 @@ function nearbyKnownLandmarks(latitude, longitude, cameraHeightM) {
   for (const [cityId, city] of Object.entries(CITY_POIS)) {
     for (let poiIndex = 0; poiIndex < city.pois.length; poiIndex++) {
       const poi = city.pois[poiIndex];
-      const distanceKm = haversineKm(latitude, longitude, poi.lat, poi.lon);
+      const distanceKm = greatCircleKm({ lat: latitude, lon: longitude }, poi);
       if (distanceKm > maxDistanceKm) continue;
       matches.push({
         name: poi.name,
@@ -4046,20 +4049,6 @@ function nearbyKnownLandmarks(latitude, longitude, cameraHeightM) {
     }
   }
   return matches.sort((a, b) => a.distanceKm - b.distanceKm).slice(0, 5);
-}
-
-function haversineKm(lat1, lon1, lat2, lon2) {
-  const toRad = (value) => Cesium.Math.toRadians(value);
-  const radiusKm = 6371.0088;
-  const dLat = toRad(lat2 - lat1);
-  const dLon = toRad(lon2 - lon1);
-  const a =
-    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-    Math.cos(toRad(lat1)) *
-      Math.cos(toRad(lat2)) *
-      Math.sin(dLon / 2) *
-      Math.sin(dLon / 2);
-  return 2 * radiusKm * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
 function coarseBasemapPlace(

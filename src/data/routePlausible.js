@@ -10,19 +10,9 @@
  * low → its destination should be nearby).
  */
 
-const D2R = Math.PI / 180;
-const R_KM = 6371;
+import { EARTH_RADIUS_KM, greatCircleKm, isGeoPoint } from '../geoDistance.js';
 
-/** Haversine great-circle distance in km. */
-export function greatCircleKm(lat1, lon1, lat2, lon2) {
-  const p1 = lat1 * D2R;
-  const p2 = lat2 * D2R;
-  const dp = (lat2 - lat1) * D2R;
-  const dl = (lon2 - lon1) * D2R;
-  const a =
-    Math.sin(dp / 2) ** 2 + Math.cos(p1) * Math.cos(p2) * Math.sin(dl / 2) ** 2;
-  return R_KM * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-}
+const D2R = Math.PI / 180;
 
 function bearingRad(lat1, lon1, lat2, lon2) {
   const p1 = lat1 * D2R;
@@ -36,10 +26,11 @@ function bearingRad(lat1, lon1, lat2, lon2) {
 
 /** Signed cross-track distance (km) of point from the great circle p1→p2. */
 export function crossTrackKm(lat, lon, lat1, lon1, lat2, lon2) {
-  const d13 = greatCircleKm(lat1, lon1, lat, lon) / R_KM;
+  const d13 =
+    greatCircleKm({ lat: lat1, lon: lon1 }, { lat, lon }) / EARTH_RADIUS_KM;
   const b13 = bearingRad(lat1, lon1, lat, lon);
   const b12 = bearingRad(lat1, lon1, lat2, lon2);
-  return Math.asin(Math.sin(d13) * Math.sin(b13 - b12)) * R_KM;
+  return Math.asin(Math.sin(d13) * Math.sin(b13 - b12)) * EARTH_RADIUS_KM;
 }
 
 const NEAR_ENDPOINT_KM = 130;
@@ -65,14 +56,14 @@ export function routePlausible({
   origin = null,
   destination = null,
 }) {
-  const haveO = Number.isFinite(origin?.lat) && Number.isFinite(origin?.lon);
-  const haveD =
-    Number.isFinite(destination?.lat) && Number.isFinite(destination?.lon);
+  const position = { lat: latDeg, lon: lonDeg };
+  if (!isGeoPoint(position)) return true;
+  const haveO = isGeoPoint(origin);
+  const haveD = isGeoPoint(destination);
   if (!haveO && !haveD) return true; // no coordinates — cannot judge, do not hide
 
   // (a) Geographic consistency: near an endpoint, or roughly on the path.
-  const near = (pt) =>
-    greatCircleKm(latDeg, lonDeg, pt.lat, pt.lon) < NEAR_ENDPOINT_KM;
+  const near = (point) => greatCircleKm(position, point) < NEAR_ENDPOINT_KM;
   let geomOk = (haveO && near(origin)) || (haveD && near(destination));
   if (!geomOk && haveO && haveD) {
     geomOk =
@@ -99,17 +90,10 @@ export function routePlausible({
     Math.abs(verticalRateMps) > VERT_TREND_MPS
   ) {
     if (verticalRateMps > 0) {
-      if (
-        haveO &&
-        greatCircleKm(latDeg, lonDeg, origin.lat, origin.lon) > LOCAL_AIRPORT_KM
-      )
+      if (haveO && greatCircleKm(position, origin) > LOCAL_AIRPORT_KM)
         return false; // departing — origin should be local
     } else {
-      if (
-        haveD &&
-        greatCircleKm(latDeg, lonDeg, destination.lat, destination.lon) >
-          LOCAL_AIRPORT_KM
-      )
+      if (haveD && greatCircleKm(position, destination) > LOCAL_AIRPORT_KM)
         return false; // arriving — destination should be local
     }
   }
