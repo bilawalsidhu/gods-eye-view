@@ -22,7 +22,7 @@ function boundedBox(lat, lon, halfSpan) {
 }
 
 /**
- * Answer a decimal-degree query without asking anyone.
+ * Answer a decimal-degree or geo-URI query without asking anyone.
  *
  * It sits ahead of the network geocoders, so a coordinate costs no request and
  * works with no key. Anything that is not exactly a coordinate is passed on

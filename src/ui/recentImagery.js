@@ -344,7 +344,6 @@ export function createRecentImageryPanel({
   const detailsHost = el('div', 'ri-details', root);
   detailsHost.id = 'ri-details';
   let detailsOpen = false;
-  let detailsShownOpen = false;
   const details = createRailCards({
     container: detailsHost,
     document,
@@ -352,6 +351,8 @@ export function createRecentImageryPanel({
     onOpen: () => {
       detailsOpen = !detailsOpen;
       render();
+      // After the render: preserveScroll() puts the old position back.
+      if (detailsOpen) revealCard(container, detailsHost.children[0]);
     },
   });
 
@@ -875,9 +876,6 @@ export function createRecentImageryPanel({
         ],
       },
     ]);
-    if (detailsOpen && !detailsShownOpen)
-      revealCard(container, detailsHost.children[0]);
-    detailsShownOpen = detailsOpen;
   }
 
   // ---- divider ----------------------------------------------------------
