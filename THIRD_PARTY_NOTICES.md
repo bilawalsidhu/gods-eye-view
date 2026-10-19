@@ -45,3 +45,12 @@ Street Level viewer; the complete resolved dependency inventory remains in
 - Source: <https://github.com/mrdoob/three.js>
 - License: MIT
 - License text: <https://github.com/mrdoob/three.js/blob/dev/LICENSE>
+
+## basic-ftp
+
+- Package: `basic-ftp` 6.2.3 (server-side only; used by the opt-in Bureau of
+  Meteorology radar proxy, never bundled into browser code)
+- Author: Patrick Juchli
+- Source: <https://github.com/patrickjuchli/basic-ftp>
+- License: MIT
+- License text: <https://github.com/patrickjuchli/basic-ftp/blob/master/LICENSE.txt>

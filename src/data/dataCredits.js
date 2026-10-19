@@ -464,6 +464,22 @@ export const TOMTOM_CREDIT = {
     '<a href="https://www.tomtom.com" target="_blank" rel="noopener">TomTom</a>',
 };
 
+/**
+ * Registered once the opt-in Bureau of Meteorology radar loop first draws.
+ * BoM anonymous-FTP products are for personal or in-organisation use only (no
+ * onward supply, no commercial use), so the layer is off unless the operator
+ * enables it and the licence caveat travels with the credit.
+ */
+export const BOM_RADAR_CREDIT = {
+  key: 'bom-radar',
+  html:
+    'Rain radar: © Commonwealth of Australia, ' +
+    '<a href="https://www.bom.gov.au/other/copyright.shtml" target="_blank" rel="noopener">Bureau of Meteorology</a>. ' +
+    'Anonymous-FTP products are for ' +
+    '<a href="https://www.bom.gov.au/catalogue/anon-ftp.shtml" target="_blank" rel="noopener">personal or in-organisation use only</a>: ' +
+    'no redistribution, no commercial use.',
+};
+
 /** Registered when the first Natural Earth region or state/province outline
  * resolves (public domain — no attribution required; credited as a courtesy). */
 export const NATURAL_EARTH_CREDIT = {

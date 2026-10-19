@@ -10,6 +10,7 @@ import { makeFixtureRoot } from './fixtureRoot.mjs';
 test('data providers have both hooks; credential editing stays development-only', () => {
   const plugins = localProviderPlugins();
   assert.ok(plugins.some(({ name }) => name === 'fire-perimeters'));
+  assert.ok(plugins.some(({ name }) => name === 'bom-radar'));
   assert.ok(plugins.some(({ name }) => name === 'gnss-integrity'));
   for (const plugin of plugins) {
     if (plugin.name === 'gev-key-setup') {
@@ -46,6 +47,7 @@ test('real dev and built-preview servers serve provider JSON and terminate unkno
     GOOGLE_MAPS_API_KEY: '',
     GOOGLE_MAPS_SERVER_API_KEY: '',
     MAPILLARY_CLIENT_TOKEN: '',
+    BOM_RADAR_ENABLED: '',
     OPENAI_API_KEY: '',
     OPENSKY_AUTH_MODE: 'anon',
     OPENSKY_CLIENT_ID: '',
@@ -104,6 +106,9 @@ test('real dev and built-preview servers serve provider JSON and terminate unkno
         ['/api/adsbdb/type/invalid', 400],
         ['/api/firms/status', 200],
         ['/api/fire-perimeters/inciweb/publication/invalid', 400],
+        // BoM radar is opt-in: off here, so only its status answers.
+        ['/api/bom-radar/status', 200],
+        ['/api/bom-radar/products', 503],
         ['/api/gnss-integrity?lat=invalid', 400],
         ['/api/terrain/heights?points=invalid', 400],
         ['/api/overpass', 405],
@@ -135,6 +140,10 @@ test('real dev and built-preview servers serve provider JSON and terminate unkno
         const body = await response.json();
         if (route === '/api/cctv/sources')
           assert.equal(body.sources[0].id, 'fixture');
+        if (route === '/api/bom-radar/status')
+          assert.deepEqual(body, { enabled: false }, route);
+        if (route === '/api/bom-radar/products')
+          assert.deepEqual(body, { error: 'bom_radar_disabled' }, route);
         if (route === '/api/mapillary/status')
           assert.deepEqual(body, { configured: false }, route);
         if (route.startsWith('/api/mapillary/tiles'))
