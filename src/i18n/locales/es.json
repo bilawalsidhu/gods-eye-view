@@ -1,4 +1,6 @@
 {
+  "Connect India air quality with your data.gov.in key. It stays on this machine. Saving restarts the server.": "Conecta la calidad del aire de India con tu clave de data.gov.in. Se guarda en este equipo. Al guardar se reinicia el servidor.",
+  "Manage connection": "Gestionar conexión",
   "NO PLACE LEFT BEHIND": "NINGÚN RINCÓN SIN VIGILAR",
   "Initializing photorealistic world...": "Inicializando el mundo fotorrealista...",
   "Configuring viewer...": "Configurando el visor...",
@@ -2890,5 +2892,15 @@
   "USB work abandoned after a stalled transfer": "Trabajo USB cancelado tras una transferencia bloqueada",
   "SDR decoder did not start; receiver stopped": "El decodificador SDR no arrancó; receptor detenido",
   "SDR decoder stopped responding; receiver stopped": "El decodificador SDR dejó de responder; receptor detenido",
-  "SDR decoder fell behind; receiver stopped": "El decodificador SDR se quedó atrás; receptor detenido"
+  "SDR decoder fell behind; receiver stopped": "El decodificador SDR se quedó atrás; receptor detenido",
+  "India air quality requires a data.gov.in API key": "La calidad del aire de India requiere una clave API de data.gov.in",
+  "India air quality is unavailable": "La calidad del aire de India no está disponible",
+  "Malformed India air-quality response": "Respuesta de calidad del aire de India no válida",
+  "India · CPCB via OGD": "India · CPCB mediante OGD",
+  "Reported pollutant average · not an overall AQI": "Promedio del contaminante publicado · no es un AQI global",
+  "Canada": "Canadá",
+  "India": "India",
+  "Source updated: {time}": "Fuente actualizada: {time}",
+  "Showing cached observations": "Mostrando observaciones en caché",
+  "Indian air-quality station observations": "Observaciones de estaciones de calidad del aire de India"
 }

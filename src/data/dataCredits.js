@@ -170,6 +170,12 @@ export const DATA_CREDITS = [
   OSM_CREDIT,
   OPENMAPTILES_CREDIT,
   {
+    key: 'cpcb-ogd',
+    html:
+      'Indian air-quality observations: Central Pollution Control Board via ' +
+      '<a href="https://www.data.gov.in/catalog/real-time-air-quality-index" target="_blank" rel="noopener">Open Government Data Platform India</a> · Government Open Data License – India',
+  },
+  {
     key: 'eccc-aqhi',
     html:
       'Air quality (AQHI): Environment and Climate Change Canada — MSC GeoMet ' +

@@ -95,13 +95,50 @@ How to read this:
 | **Re:Earth Terrain** (Mapterhorn)                                     | Terrain (keyless globe stacks — OSM etc. — + `/api/terrain/heights` ellipsoidal-height lookups)                                     | Terrain mesh: CC BY 4.0; geoid: EGM2008 (NGA, public domain)                                                                                                                                                                                                                                                                                          | "Terrain (keyless globe stacks): Re:Earth Terrain / Mapterhorn (CC BY 4.0) / EGM2008 (NGA)"                                                 |
 | **OSRM on the FOSSGIS routing servers** (`routing.openstreetmap.de`) | Street-following routes for the Directions layer and voice route annotations, via `/api/route` | [FOSSGIS routing usage policy](https://routing.openstreetmap.de/about.html): "Display the required attribution and display a link to 'fix the map'", "Use a valid user agent and, if applicable, a correct referrer", "One request per second max", "No scraping, no heavy usage". The full policy is the German [FOSSGIS Nutzungsbedingungen](https://www.fossgis.de/arbeitsgruppen/osm-server/nutzungsbedingungen/); FOSSGIS also states that the server may be embedded in your own pages but "eine gewerbliche Nutzung ist nur mit Einschränkungen erlaubt" (commercial use only with restrictions). Route data derives from OpenStreetMap (ODbL 1.0) | "Routing: OSRM on the FOSSGIS servers" + a "fix the map" link — shown in the Data attribution popover |
 
+### India air-quality observations (CPCB / OGD)
+
+The Air quality card can select **India**, then one pollutant (PM2.5, PM10,
+NO2, SO2, CO, OZONE or NH3). Its source is CPCB's
+[Real time Air Quality Index catalog](https://www.data.gov.in/catalog/real-time-air-quality-index),
+OGD resource `3b01bcb8-0b14-4abf-b6f2-c1bfd384ba69`.
+The portal identifies published data as licensed under the Government Open Data
+License – India. Credit CPCB and OGD Platform India; no government endorsement
+is implied. Data is fetched at runtime, not bundled in this repository.
+
+Add a personal OGD key through **Air quality → India → Manage connection**, or set
+`DATA_GOV_IN_API_KEY` in the ignored `.env` and restart the server. This private
+key stays in the server proxy. Canada remains the default, keyless provider.
+
+**Value semantics:** the first integration preserves the selected pollutant's
+`avg_value` (or legacy `pollutant_avg`) as a reported average. It does not convert this field to an
+overall AQI, assign concentration units, or apply health categories. The OGD
+catalog title alone is insufficient to establish those field semantics.
+Markers are neutral station symbols, not interpolated pollution coverage.
+Canada's AQHI and India's reported averages are never combined in a ranking.
+
+`last_update` is interpreted as an IST publication timestamp, not as the
+sampling time. Missing, invalid, more-than-six-hour-old and implausibly future
+records are omitted. A successful response can still contain old source data:
+the existing two-hour freshness threshold applies. The proxy caches complete
+snapshots for 20 minutes, coalesces requests, caps pagination/response sizes,
+and pauses retries for one minute on failure. Cached fallback is explicitly
+labeled and expires after six hours. Switching provider clears the previous
+network's markers immediately. Provider and pollutant are included in share
+and persisted layer options.
+
+The schema and failure paths have fixture coverage. An authenticated live
+response verified on 18 October 2026 uses `avg_value`, `min_value`, and
+`max_value`; legacy `pollutant_*` fields remain supported. Field-unit
+verification is still required before adding AQI colors. The unauthenticated
+endpoint responds with `Authorization field missing`.
+
 ### Local receiver input (not fetched from a service)
 
 The optional Local ADS-B layer and the broadcast-FM receiver use radio you receive yourself: a USB RTL-SDR opened in the browser through WebUSB, or the `aircraft.json` of a decoder you run on your own machine or network (`LOCAL_RECEIVER_FEEDS`). Radio samples, audio and the optional receiver location stay in the browser. Decoder feeds are read by your local GEV server and relayed only to your browser, with about a second of in-memory caching. When you select a local aircraft, its ICAO address (and an airline-style callsign) is looked up, and aircraft that qualify for a 3D model are looked up by ICAO address, through the same adsbdb proxy the public flight layers use; your server caches those answers on disk and treats them as fresh for 24 hours. Received radio data is not stored or redistributed. ADS-B is an unauthenticated public broadcast and may be incomplete, delayed, spoofed or decoded in error; it is not suitable for navigation or operational use.
 
 ### Notes on the live sources
 
-- **Air quality (ECCC AQHI).** Keyless. Read from the MSC GeoMet OGC API (`api.weather.gc.ca`): the `aqhi-stations` catalog plus `aqhi-observations-realtime`. **Coverage is Canada only** — ECCC is the single registered provider, and the layer row and readout card both say so. Roughly 134 stations across ECCC's five administrative zones (Atlantic, Quebec, Ontario, Prairies & North, Pacific & Yukon). AQHI publishes hourly, so readings poll every 20 minutes and the station catalog, which changes a few times a year, is refetched only every 12 hours. Observations are requested with `latest=true`; without it the collection returns the full history, roughly 2,000 rows nationally. Readings older than six hours are dropped rather than displayed as current.
+- **Air quality (ECCC AQHI).** Keyless. Read from the MSC GeoMet OGC API (`api.weather.gc.ca`): the `aqhi-stations` catalog plus `aqhi-observations-realtime`. **ECCC coverage is Canada only** — Canada is the default provider; the card also offers the optional CPCB / OGD India observations described below. Roughly 134 stations across ECCC's five administrative zones (Atlantic, Quebec, Ontario, Prairies & North, Pacific & Yukon). AQHI publishes hourly, so readings poll every 20 minutes and the station catalog, which changes a few times a year, is refetched only every 12 hours. Observations are requested with `latest=true`; without it the collection returns the full history, roughly 2,000 rows nationally. Readings older than six hours are dropped rather than displayed as current.
 
   Readings are stored as `{ provider, scale, value, band }` rather than a bare number, because air-quality indices are not interchangeable: AQHI runs 1-10+ on health risk, the US AQI runs 0-500 on concentration breakpoints, and Europe's EAQI is a five-step category. Naming the index a value belongs to is what lets another network be added later without inventing a shared numeric meaning that does not exist.
 

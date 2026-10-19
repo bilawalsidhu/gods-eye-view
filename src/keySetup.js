@@ -433,9 +433,14 @@ export async function initKeySetup({
   const chipLabel = chip.querySelector('[data-key-setup-chip-label]') || chip;
   const statusLine = root.querySelector('[data-key-setup-status]');
   const defaultStatusText = statusLine?.textContent || '';
+  const titleNode = documentRef.getElementById('key-setup-title');
+  const defaultTitle = titleNode?.textContent || '';
+  const descriptionNode = documentRef.getElementById('key-setup-description');
+  const defaultDescription = descriptionNode?.textContent || '';
   let busy = false;
   let oauthBusy = false;
   let open = false;
+  let providerId = null;
 
   const syncCloudVoiceAuth = () => {
     for (const auth of rowsHost.querySelectorAll('.key-setup-cloud-auth'))
@@ -455,8 +460,10 @@ export async function initKeySetup({
     chip.hidden = status.setCount >= status.total;
     if (!rowsHost) return;
     rowsHost.textContent = '';
-    for (const key of status.keys || [])
+    for (const key of status.keys || []) {
+      if (providerId ? key.id !== providerId : key.contextual) continue;
       rowsHost.append(buildRow(documentRef, key));
+    }
     syncCloudVoiceAuth();
   };
 
@@ -472,8 +479,24 @@ export async function initKeySetup({
     onEscape: () => close(),
   });
 
-  const openDialog = () => {
+  const openDialog = (requestedProvider = null) => {
     if (disposed || open) return;
+    const previousProvider = providerId;
+    providerId =
+      typeof requestedProvider === 'string' ? requestedProvider : null;
+    if (titleNode)
+      titleNode.textContent = providerId
+        ? t('Manage connection')
+        : defaultTitle;
+    if (descriptionNode)
+      descriptionNode.textContent = providerId
+        ? t(
+            'Connect India air quality with your data.gov.in key. It stays on this machine. Saving restarts the server.',
+          )
+        : defaultDescription;
+    if (statusLine)
+      statusLine.textContent = providerId ? '' : defaultStatusText;
+    if (providerId !== previousProvider) render(status);
     open = true;
     keyboard.activate();
     root.hidden = false;
@@ -588,6 +611,12 @@ export async function initKeySetup({
     );
   };
 
+  const onConnectionSetup = (event) => {
+    const id = event.detail?.providerId;
+    if (status.keys?.some((key) => key.id === id && key.contextual))
+      openDialog(id);
+  };
+  documentRef.addEventListener?.('gev:connection-setup', onConnectionSetup);
   chip.addEventListener('click', openDialog);
   closeButton?.addEventListener('click', close);
   applyButton?.addEventListener('click', onApply);
@@ -737,6 +766,10 @@ export async function initKeySetup({
   disposeControls = () => {
     open = false;
     keyboard.destroy();
+    documentRef.removeEventListener?.(
+      'gev:connection-setup',
+      onConnectionSetup,
+    );
     chip.removeEventListener('click', openDialog);
     closeButton?.removeEventListener('click', close);
     applyButton?.removeEventListener('click', onApply);

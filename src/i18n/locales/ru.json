@@ -1,4 +1,6 @@
 {
+  "Connect India air quality with your data.gov.in key. It stays on this machine. Saving restarts the server.": "Подключите данные о качестве воздуха в Индии с помощью ключа data.gov.in. Он хранится на этом компьютере. Сохранение перезапускает сервер.",
+  "Manage connection": "Управление подключением",
   "Flying to Austin, TX...": "Перелёт в Остин, Техас...",
   "Restoring shared view...": "Восстановление общего вида...",
   "Initializing systems...": "Инициализация систем...",
@@ -2957,5 +2959,15 @@
   "USB work abandoned after a stalled transfer": "Работа с USB прервана: передача данных зависла",
   "SDR decoder did not start; receiver stopped": "Декодер SDR не запустился; приёмник остановлен",
   "SDR decoder stopped responding; receiver stopped": "Декодер SDR перестал отвечать; приёмник остановлен",
-  "SDR decoder fell behind; receiver stopped": "Декодер SDR не успевает; приёмник остановлен"
+  "SDR decoder fell behind; receiver stopped": "Декодер SDR не успевает; приёмник остановлен",
+  "India air quality requires a data.gov.in API key": "Для качества воздуха Индии нужен API-ключ data.gov.in",
+  "India air quality is unavailable": "Данные о качестве воздуха Индии недоступны",
+  "Malformed India air-quality response": "Некорректный ответ о качестве воздуха Индии",
+  "India · CPCB via OGD": "Индия · CPCB через OGD",
+  "Reported pollutant average · not an overall AQI": "Опубликованное среднее по загрязнителю · не общий AQI",
+  "Canada": "Канада",
+  "India": "Индия",
+  "Source updated: {time}": "Обновление источника: {time}",
+  "Showing cached observations": "Показаны сохранённые наблюдения",
+  "Indian air-quality station observations": "Наблюдения станций качества воздуха Индии"
 }

@@ -3399,7 +3399,7 @@ its criteria cannot be silently ignored.
 | Live AIS Vessels 🚢    | AISStream websocket                                                                                                                                                                             | `src/data/aisLiveVessels.js`                          | `/api/vessels`                                          | 60s (+800ms visibility pass)                                                      |
 | Mapped Installations ⌖ | OpenFreeMap military areas; optional configured Overpass names and Google Places search | `src/data/militaryInstallations.js` | OpenFreeMap tiles, `/api/military-installations`, `/api/google/text-search` | viewport-driven; transient errors back off, missing capability switches to tiles |
 | Earthquakes            | USGS                                                                                                                                                                                            | `src/data/earthquakes.js`                             | —                                                        | 60s                                                                               |
-| Air quality            | ECCC MSC GeoMet OGC API (AQHI, Canada only)                                                                                                                                                      | `src/layers/airQuality/`                              | —                                                        | 20 min readings, 12 h station catalog                                             |
+| Air quality            | ECCC MSC GeoMet OGC API (AQHI, Canada); optional CPCB / OGD India reported pollutant averages                                                                                                                                                      | `src/layers/airQuality/`                              | —                                                        | 20 min readings, 12 h station catalog                                             |
 | Satellites             | CelesTrak                                                                                                                                                                                       | `src/data/satellites.js`                              | `/api/celestrak`                                         | 120s                                                                              |
 | Space Missions (30d)   | Launch Library 2 + CelesTrak                                                                                                                                                                    | `src/data/rocketLaunches.js`                          | `/api/launches` + `/api/celestrak/active`                | 5 min                                                                             |
 | Traffic | Selectable TomTom / OpenStreetMap / Hybrid roads; optional TomTom flow (BYOK) | `src/data/traffic.js` | browser-direct OpenFreeMap tiles; `/api/tomtom` for flow | viewport-driven; capped tile cache |
@@ -5815,3 +5815,21 @@ datacenters, dams and the Nepal locator retain that shared credit while displaye
 
 Military fragments stitch by source identity. Different mapped parcels merge only
 when their footprints touch or contain one another, never across a seam tolerance gap.
+
+### India air-quality provider
+
+The Air quality Weather card defaults to Canadian AQHI and offers an India
+provider through the standalone source. Add `DATA_GOV_IN_API_KEY` through
+Air quality → India → Manage connection or `.env`. `/api/air-quality/india` is available in dev and preview;
+the key is never sent to the browser. Select a single pollutant in the card.
+India shows neutral station markers and OGD-reported averages, without
+claiming overall AQI, concentration units, or a health-risk band. Card entries
+include source publication times. Provider and pollutant survive share/local
+state restoration. Switching networks clears old markers and invalidates
+in-flight results. Canada-only portable reference sources remain unchanged.
+
+See DATA_SOURCES.md for attribution, freshness, caching and live-schema validation and the outstanding
+field-unit verification requirement. Focused tests:
+`node --test src/layers/airQuality/*.test.mjs server/providers/cpcb.test.mjs`.
+Browser fixture gate: `node scripts/qa-india-air-quality.mjs --url http://localhost:4173`.
+The existing live ECCC gate is `node scripts/qa-air-quality.mjs`.
