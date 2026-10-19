@@ -507,7 +507,7 @@ export class MapSourceController {
         );
         return {
           ...resolution,
-          fallbackMessage: fallback.message,
+          fallbackMessage: resolution.fallbackMessage || fallback.message,
           fallbackFor: stack.id,
         };
       }

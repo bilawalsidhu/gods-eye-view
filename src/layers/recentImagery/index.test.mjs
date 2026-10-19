@@ -668,7 +668,7 @@ test('without a lease (another owner held it first) a switch to Google 3D takes 
 /**
  * The real `MapSourceController` on Google 3D over the default sources, with
  * Esri tiles that can fail after it activated (`failEsriTiles`) and an OSM
- * map that never activates, so a tile fallback recovers to Google 3D.
+ * and offline map that never activate, so a tile fallback recovers to Google 3D.
  * Every `setStack` (the layer's, the operator's, the fallback's) is
  * recorded in `calls`.
  */
@@ -685,7 +685,7 @@ function failingMapController() {
     if (!source.imagery) continue;
     const id = source.descriptor.id;
     source.imagery =
-      id === 'osm'
+      id === 'osm' || id === 'offline'
         ? async () => {
             throw new Error('OSM offline');
           }

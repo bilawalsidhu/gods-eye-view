@@ -64,3 +64,15 @@ async function createBingIonImagery(style, accessToken) {
   ];
   return provider;
 }
+
+/** Low-resolution public-domain Natural Earth tiles shipped with Cesium. */
+export function createOfflineImagery() {
+  return new Cesium.UrlTemplateImageryProvider({
+    url: Cesium.buildModuleUrl(
+      'Assets/Textures/NaturalEarthII/{z}/{x}/{reverseY}.jpg',
+    ),
+    tilingScheme: new Cesium.GeographicTilingScheme(),
+    maximumLevel: 2,
+    credit: 'Natural Earth II (public domain)',
+  });
+}

@@ -2957,5 +2957,10 @@
   "USB work abandoned after a stalled transfer": "Работа с USB прервана: передача данных зависла",
   "SDR decoder did not start; receiver stopped": "Декодер SDR не запустился; приёмник остановлен",
   "SDR decoder stopped responding; receiver stopped": "Декодер SDR перестал отвечать; приёмник остановлен",
-  "SDR decoder fell behind; receiver stopped": "Декодер SDR не успевает; приёмник остановлен"
+  "SDR decoder fell behind; receiver stopped": "Декодер SDR не успевает; приёмник остановлен",
+  "Offline globe": "Автономный глобус",
+  "OFFLINE": "БЕЗ СЕТИ",
+  "Bundled low-resolution map with flat terrain. Live data requires internet.": "Встроенная карта низкого разрешения с плоским рельефом. Для актуальных данных нужен интернет.",
+  "Online map unavailable; using the bundled offline globe": "Онлайн-карта недоступна; используется встроенный автономный глобус",
+  "Online map tiles failed; using the bundled offline globe": "Не удалось загрузить тайлы онлайн-карты; используется встроенный автономный глобус"
 }

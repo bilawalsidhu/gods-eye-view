@@ -29,7 +29,10 @@ export function createMapSourceControls({
       statusElement.textContent =
         state.status === 'switching'
           ? '...'
-          : stack?.shortLabel || stack?.label || t('MAP');
+          : stack?.shortLabel || stack?.label
+            ? t(stack.shortLabel || stack.label)
+            : t('MAP');
+      statusElement.title = stack?.description ? t(stack.description) : '';
       statusElement.classList.toggle('warn', !!state.lastError);
     }
   }

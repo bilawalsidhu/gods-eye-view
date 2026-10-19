@@ -327,3 +327,20 @@ test('unreachable keyless terrain falls back to flat terrain marked as a fallbac
   assert.ok(result.provider instanceof Cesium.EllipsoidTerrainProvider);
   assert.equal(result.fallback, true);
 });
+
+test('offline imagery addresses only bundled geographic tiles at levels zero through two', async () => {
+  const { createOfflineImagery } = await import('./imagery.js');
+  Cesium.buildModuleUrl.setBaseUrl('https://local.example/cesium/');
+  try {
+    const provider = createOfflineImagery();
+    assert.equal(
+      provider.url,
+      'https://local.example/cesium/Assets/Textures/NaturalEarthII/{z}/{x}/{reverseY}.jpg',
+    );
+    assert.equal(provider.maximumLevel, 2);
+    assert.ok(provider.tilingScheme instanceof Cesium.GeographicTilingScheme);
+    assert.match(provider.credit.html, /Natural Earth II/);
+  } finally {
+    Cesium.buildModuleUrl._clearBaseResource();
+  }
+});

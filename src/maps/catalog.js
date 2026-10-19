@@ -1,4 +1,5 @@
 import * as Cesium from 'cesium';
+import { msg } from '../i18n/marker.js';
 export const MAP_STACKS = [
   {
     id: 'photoreal',
@@ -28,6 +29,16 @@ export const MAP_STACKS = [
     label: 'Esri Satellite', // i18n-ignore: imagery product name
     shortLabel: 'SAT',
     kind: 'esri-imagery',
+    requiresIon: false,
+  },
+  {
+    id: 'offline',
+    label: msg('Offline globe'),
+    shortLabel: msg('OFFLINE'),
+    description: msg(
+      'Bundled low-resolution map with flat terrain. Live data requires internet.',
+    ),
+    kind: 'offline',
     requiresIon: false,
   },
   {
