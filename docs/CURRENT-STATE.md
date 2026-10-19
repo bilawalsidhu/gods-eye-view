@@ -5331,6 +5331,11 @@ easier to meet (detection is now on more often), but does not create it.
   short-way-round longitude span and wraps the padded edges, so a dateline-
   crossing box stays its true width. Raw subtraction inflated a 0.41° metro box
   to 86.7° and a 60° territory to 132°.
+- **Point distances take the short way round 180°.** The annotation
+  resolver's `approximateDistanceM` (voice "point out" proximity checks) and
+  `places_nearby` distances wrap the longitude difference. Raw subtraction put
+  Savusavu 38,148 km from a camera over the Lau Islands, so the proximity check
+  refused it, and sorted a place 2 km across 180° last.
 - CCTV calibration persists at `godsEyeView.cctv.calibration.v2` (v2 rebuild;
   the store was wiped clean, no import from the old `v1` key).
 - CCTV v3 floor QA pins are: zero samples for heading-only edits; zero transient
