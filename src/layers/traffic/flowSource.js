@@ -33,6 +33,11 @@ export function createFlowTileSource({
     template: FLOW_TILE_PATH('{z}', '{x}', '{y}'),
     allowedOrigin: 'http://localhost',
     decode: (bytes, z, x, y) => {
+      // Take the mark before decoding, so a tile that fails to decode
+      // leaves nothing behind.
+      const path = FLOW_TILE_PATH(z, x, y);
+      const mark = pending.get(path);
+      pending.delete(path);
       const segments = decodeFlowTile(bytes, z, x, y, { strict: true })
         .filter(isDrivableFlowSegment)
         .flatMap((segment) =>
@@ -41,9 +46,7 @@ export function createFlowTileSource({
             coords,
           })),
         );
-      const path = FLOW_TILE_PATH(z, x, y);
-      if (pending.has(path)) freshness.set(segments, pending.get(path));
-      pending.delete(path);
+      if (mark) freshness.set(segments, mark);
       return segments;
     },
     fetchImpl: async (url, init) => {
@@ -92,6 +95,9 @@ export function createFlowTileSource({
       return (await fetchFlowDetail(bounds, options)).segments;
     },
     getFlowSessionStats: () => ({ ...tiles.getStats(), partial }),
-    resetFlowTileCache: () => tiles.clear(),
+    resetFlowTileCache: () => {
+      pending.clear();
+      tiles.clear();
+    },
   };
 }
