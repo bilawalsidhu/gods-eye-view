@@ -192,18 +192,26 @@ describe('scripts/qa-browser.mjs (unified browser resolver #770)', () => {
     });
 
     it('priority 2: falls back to pinned path if env does not exist or cannot execute', async () => {
+      const warnings = [];
       const resolved = await resolveChromeExecutable(null, {
         envPath: '/incompatible/env',
         pinnedPath: '/valid/pinned/chrome',
         systemCandidates: ['/mock/system'],
         canExecute: (c) => c === '/valid/pinned/chrome',
+        warn: (message) => warnings.push(message),
       });
       assert.equal(resolved, '/valid/pinned/chrome');
+      assert.equal(warnings.length, 1);
+      assert.match(
+        warnings[0],
+        /PUPPETEER_EXECUTABLE_PATH \(\/incompatible\/env\)/,
+      );
     });
 
     it('priority 3: falls back to system candidate if env and pinned are not executable', async () => {
       const resolved = await resolveChromeExecutable(null, {
         envPath: '/nonexistent/env',
+        warn: () => {},
         pinnedPath: '/incompatible/arm64_mismatch',
         systemCandidates: [
           '/nonexistent/1',
@@ -218,6 +226,7 @@ describe('scripts/qa-browser.mjs (unified browser resolver #770)', () => {
     it('returns null if no candidate can be executed and required is not set', async () => {
       const resolved = await resolveChromeExecutable(null, {
         envPath: '/nonexistent/env',
+        warn: () => {},
         pinnedPath: '/nonexistent/pinned',
         systemCandidates: ['/nonexistent/1', '/nonexistent/2'],
         canExecute: () => false,
@@ -230,6 +239,7 @@ describe('scripts/qa-browser.mjs (unified browser resolver #770)', () => {
         () =>
           resolveChromeExecutable(null, {
             envPath: '/nonexistent/env',
+            warn: () => {},
             pinnedPath: '/nonexistent/pinned',
             systemCandidates: ['/snap/bin/chromium'],
             canExecute: () => false,

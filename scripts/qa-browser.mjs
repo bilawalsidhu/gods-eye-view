@@ -136,11 +136,18 @@ export async function resolveChromeExecutable(puppeteer = null, options = {}) {
 
   const envPath = options.envPath ?? process.env.PUPPETEER_EXECUTABLE_PATH;
   if (envPath) {
+    let usable = false;
     try {
-      if (canExec(envPath)) return envPath;
+      usable = canExec(envPath);
     } catch {
       /* ignore */
     }
+    if (usable) return envPath;
+    // An explicit path that does not run is almost always a typo; say so
+    // rather than silently launching a different browser.
+    (options.warn ?? console.warn)(
+      `[qa-browser] PUPPETEER_EXECUTABLE_PATH (${envPath}) does not exist or cannot run here; falling back.`,
+    );
   }
 
   const pinnedPath =
