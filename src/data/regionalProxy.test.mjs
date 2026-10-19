@@ -59,9 +59,13 @@ test('new data proxies install the same routes in dev and preview servers', () =
 
 test('Launch Library uses a 15-minute cache and optional server-side token header', () => {
   assert.equal(LL2_CACHE_TTL_MS, 15 * 60_000);
-  assert.deepEqual(launchLibraryRequestHeaders(''), { Accept: 'application/json' });
-  assert.deepEqual(launchLibraryRequestHeaders(' secret '), {
+  const headers = {
     Accept: 'application/json',
+    'User-Agent': 'gods-eye-view-launch-library-proxy/1.0 (+https://github.com/bilawalsidhu/gods-eye-view)',
+  };
+  assert.deepEqual(launchLibraryRequestHeaders(''), headers);
+  assert.deepEqual(launchLibraryRequestHeaders(' secret '), {
+    ...headers,
     Authorization: 'Token secret',
   });
 });
