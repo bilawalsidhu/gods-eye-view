@@ -2,6 +2,10 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createPlaceSearch, createGoogleGeocoder, createPhotonGeocoder } from './index.js';
 import { createStandalonePlaceSearch } from '../standalone/placeSearch.js';
+import {
+  resetSharedPacer,
+  setSharedPacerClock,
+} from '../mobile/sourcePolicy.js';
 import { photonExtentToBounds } from '../keylessGeocoder.js';
 const feature = { geometry: { type: 'Point', coordinates: [105.85, 21.03] }, properties: { name: 'Hà Nội', type: 'city' } };
 const hit = () => Response.json({ features: [feature] });
@@ -98,4 +102,30 @@ test('definitive misses expire while outage outcomes are never cached', async ()
 test('wrapped and nonnumeric Photon bounds are omitted', () => {
   assert.equal(photonExtentToBounds([170, 10, -170, -10]), null);
   assert.equal(photonExtentToBounds([null, 10, 20, -10]), null);
+});
+
+test('direct place search paces through the shared gate', async (t) => {
+  resetSharedPacer();
+  let nowMs = 0;
+  let sleeps = 0;
+  setSharedPacerClock({
+    now: () => nowMs,
+    sleep: async (ms) => {
+      sleeps++;
+      nowMs += ms;
+    },
+  });
+  t.after(() => resetSharedPacer());
+  let fetches = 0;
+  const service = createStandalonePlaceSearch({
+    direct: true,
+    fetchImpl: async () => {
+      fetches++;
+      return Response.json([]);
+    },
+  });
+  await service.geocode('nowhere one');
+  await service.geocode('nowhere two');
+  assert.equal(fetches, 2);
+  assert.ok(sleeps > 0, 'second request waits out the shared gate');
 });
