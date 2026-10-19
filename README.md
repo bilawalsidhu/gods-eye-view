@@ -219,12 +219,14 @@ the container.
 
 </details>
 
-### Path 4 — GitHub Codespaces (cloud, no local GPU)
+### Path 4 — GitHub Codespaces (cloud, no local install)
 
-Runs the same dev server in a cloud workspace, so integrated graphics and a
-local GPU never come into it. GitHub Free includes 120 core-hours a month with
-no card on file — about 60 hours on the default 2-core machine. Org and
-Enterprise plans include no free quota; current terms and quotas apply.
+Runs the same dev server in a cloud workspace, so Node and the dependencies
+never touch your machine. The globe still renders in your own browser, so it
+needs the same graphics there as any other path. GitHub Free includes 120
+core-hours a month with no card on file — about 60 hours on the default 2-core
+machine. Org and Enterprise plans include no free quota; current terms and
+quotas apply.
 
 1. Fork this repository, then open **your fork** on GitHub.
 2. Click the green **Code** button, the **Codespaces** tab, then **Create codespace on main**.
