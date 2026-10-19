@@ -296,6 +296,12 @@ export const DATA_CREDITS = [
       'distributed by Statens vegvesen',
   },
   {
+    key: 'auckland-cctv',
+    html:
+      'CCTV cameras &amp; frames (Auckland): ' +
+      '<a href="https://www.nzta.govt.nz/traffic-and-travel-information/use-our-data/" target="_blank" rel="noopener">Waka Kotahi NZ Transport Agency</a>',
+  },
+  {
     key: 'nyc-cctv',
     html:
       'CCTV cameras &amp; frames (New York City, when enabled): ' +
