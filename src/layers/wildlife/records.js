@@ -2,12 +2,19 @@
  * Wildlife tracks: the curated Movebank studies and the pure parsing shared by
  * the `/api/wildlife` proxy and the browser.
  *
- * Only public studies whose licence was checked by hand are listed. Movebank
- * does not expose licence metadata without a login, so each entry names where
- * its licence was verified. Movebank applies each owner's hidden-animal and
+ * Only public studies whose published dataset was checked by hand to be CC0
+ * are listed, and each entry names that deposit (`licenceSource`). Movebank
+ * shows the licence an owner sets on the study itself only to signed-in users
+ * (its public study entity carries no licence field), so that setting is not
+ * verified and the layer says "published dataset" rather than claiming the
+ * live feed is CC0. Movebank applies each owner's hidden-animal and
  * embargo settings before its public feed answers; nothing here tries to get
  * around them.
+ *
+ * Shown text is marked with msg() and translated by the layer with t(); this
+ * module is also loaded by the server, so it does not load the catalogs.
  */
+import { msg } from '../../i18n/marker.js';
 
 /** Latest fixes kept per animal: the glyph and a short recent path. */
 export const WILDLIFE_MAX_FIXES = 20;
@@ -20,60 +27,62 @@ const DAY_MS = 86_400_000;
 /** Time windows the row offers, by the age of an animal's latest fix. */
 export const WILDLIFE_WINDOWS = Object.freeze({
   month: Object.freeze({
-    label: '30 days',
+    label: msg('30 days'),
     ms: 30 * DAY_MS,
-    title: 'Show animals whose latest fix is from the last 30 days',
-    phrase: 'in the last 30 days',
+    title: msg('Show animals whose latest fix is from the last 30 days'),
+    none: msg('No animals in the last 30 days'),
   }),
   year: Object.freeze({
-    label: '1 year',
+    label: msg('1 year'),
     ms: 365 * DAY_MS,
-    title: 'Show animals whose latest fix is from the last year',
-    phrase: 'in the last year',
+    title: msg('Show animals whose latest fix is from the last year'),
+    none: msg('No animals in the last year'),
   }),
   all: Object.freeze({
-    label: 'All time',
+    label: msg('All time'),
     ms: Infinity,
-    title: 'Show every animal, however old its latest fix',
-    phrase: 'with public fixes',
+    title: msg('Show every animal, however old its latest fix'),
+    none: msg('No animals with public fixes'),
   }),
 });
 
 /** Common names for the taxa the curated studies carry. */
 export const WILDLIFE_COMMON_NAMES = Object.freeze({
-  'Ciconia ciconia': 'White stork',
-  'Ichthyaetus melanocephalus': 'Mediterranean gull',
-  'Larus argentatus': 'Herring gull',
-  'Larus armenicus': 'Armenian gull',
-  'Larus fuscus': 'Lesser black-backed gull',
-  'Platalea leucorodia': 'Eurasian spoonbill',
+  'Ciconia ciconia': msg('White stork'),
+  'Ichthyaetus melanocephalus': msg('Mediterranean gull'),
+  'Larus argentatus': msg('Herring gull'),
+  'Larus armenicus': msg('Armenian gull'),
+  'Larus fuscus': msg('Lesser black-backed gull'),
+  'Platalea leucorodia': msg('Eurasian spoonbill'),
 });
 
 /** Names short enough for a one-line row and the legend. */
 export const WILDLIFE_SHORT_NAMES = Object.freeze({
-  'Ciconia ciconia': 'White stork',
-  'Ichthyaetus melanocephalus': 'Med gull',
-  'Larus argentatus': 'Herring gull',
-  'Larus armenicus': 'Armenian gull',
-  'Larus fuscus': 'LBB gull',
-  'Platalea leucorodia': 'Spoonbill',
+  'Ciconia ciconia': msg('White stork'),
+  'Ichthyaetus melanocephalus': msg('Med gull'),
+  'Larus argentatus': msg('Herring gull'),
+  'Larus armenicus': msg('Armenian gull'),
+  'Larus fuscus': msg('LBB gull'),
+  'Platalea leucorodia': msg('Spoonbill'),
 });
 
 const study = (entry) => Object.freeze({ licence: 'CC0 1.0', ...entry });
 
 /**
- * Public Movebank studies with a verified CC0 licence, verified 2026-09-30.
- * `doi` is the dataset's concept DOI, so it always resolves to the latest
- * published version.
+ * Public Movebank studies whose published datasets are CC0, each deposit's
+ * licence checked 2026-10-19 (`licenceSource`). `licence` is the deposit's
+ * licence, not a Movebank setting. `doi` is the dataset's concept DOI, so it
+ * always resolves to the latest published version.
  */
 export const WILDLIFE_STUDIES = Object.freeze([
   study({
     id: 1258895879,
-    label: 'Gulls · Neeltje Jans',
+    label: msg('Gulls · Neeltje Jans'),
     name: 'DELTATRACK',
     species: Object.freeze(['Larus argentatus', 'Larus fuscus']),
-    title:
+    title: msg(
       'Herring gulls and lesser black-backed gulls breeding at Neeltje Jans (Netherlands)',
+    ),
     owner: 'INBO — Stienen, Buijs, de Visser et al.',
     citation:
       'Stienen EWM, Buijs R-J, de Visser J et al. DELTATRACK - Herring gulls (Larus argentatus) and lesser black-backed gulls (Larus fuscus) breeding at Neeltje Jans (Netherlands). Zenodo.',
@@ -82,10 +91,10 @@ export const WILDLIFE_STUDIES = Object.freeze([
   }),
   study({
     id: 21231406,
-    label: 'Storks · SW Germany',
+    label: msg('Storks · SW Germany'),
     name: 'LifeTrack White Stork SW Germany',
     species: Object.freeze(['Ciconia ciconia']),
-    title: 'White storks from south-west Germany',
+    title: msg('White storks from south-west Germany'),
     owner: 'MPI of Animal Behavior — Fiedler, Flack, Wikelski et al.',
     citation:
       'Fiedler W, Flack A, Schäfle W, Keeves B, Quetting M, Eid B, Schmid H, Wikelski M. 2024. Data from: Study "LifeTrack White Stork SW Germany" (2013-2023). Movebank Data Repository.',
@@ -94,10 +103,10 @@ export const WILDLIFE_STUDIES = Object.freeze([
   }),
   study({
     id: 2298738353,
-    label: 'LBB gulls · Belgium',
+    label: msg('LBB gulls · Belgium'),
     name: 'LBBG_ADULT',
     species: Object.freeze(['Larus fuscus']),
-    title: 'Lesser black-backed gulls breeding in Belgium',
+    title: msg('Lesser black-backed gulls breeding in Belgium'),
     owner: 'INBO — Stienen, Müller, Lens et al.',
     citation:
       'Stienen EWM, Müller W, Lens L et al. LBBG_ADULT - Lesser black-backed gulls (Larus fuscus) breeding in Belgium. Zenodo.',
@@ -106,10 +115,10 @@ export const WILDLIFE_STUDIES = Object.freeze([
   }),
   study({
     id: 1609400843,
-    label: 'Med gulls · Antwerp',
+    label: msg('Med gulls · Antwerp'),
     name: 'MEDGULL_ANTWERPEN',
     species: Object.freeze(['Ichthyaetus melanocephalus']),
-    title: 'Mediterranean gulls breeding near Antwerp (Belgium)',
+    title: msg('Mediterranean gulls breeding near Antwerp (Belgium)'),
     owner: 'INBO — Stienen, Desmet, Govaert et al.',
     citation:
       'Stienen EWM, Desmet P, Govaert S et al. MEDGULL_ANTWERPEN - Mediterranean gulls (Ichthyaetus melanocephalus) breeding near Antwerp (Belgium). Zenodo.',
@@ -118,11 +127,12 @@ export const WILDLIFE_STUDIES = Object.freeze([
   }),
   study({
     id: 2217728245,
-    label: 'Young herring gulls',
+    label: msg('Young herring gulls'),
     name: 'HG_JUVENILE',
     species: Object.freeze(['Larus argentatus']),
-    title:
+    title: msg(
       'Juvenile herring gulls hatched at the southern North Sea coast (Belgium)',
+    ),
     owner: 'INBO — Allaert, Stienen, Lens et al.',
     citation:
       'Allaert RA, Stienen EWM, Lens L et al. HG_JUVENILE - Juvenile herring gulls (Larus argentatus) hatched at the southern North Sea coast (Belgium). Zenodo.',
@@ -131,11 +141,12 @@ export const WILDLIFE_STUDIES = Object.freeze([
   }),
   study({
     id: 4194049025,
-    label: 'Armenian gulls',
+    label: msg('Armenian gulls'),
     name: 'ARMENIAN_GULL',
     species: Object.freeze(['Larus armenicus']),
-    title:
+    title: msg(
       'Armenian gulls breeding in Sevan and Lake Arpi National Parks (Armenia)',
+    ),
     owner: 'INBO — Tumanyan, Matheve, Allaert et al.',
     citation:
       'Tumanyan S, Matheve H, Allaert RA et al. ARMENIAN_GULL - Armenian gulls (Larus armenicus) breeding in Sevan National Park and Lake Arpi National Park (Armenia). Zenodo.',
@@ -144,15 +155,15 @@ export const WILDLIFE_STUDIES = Object.freeze([
   }),
   study({
     id: 2313947453,
-    label: 'Spoonbills · Flanders',
+    label: msg('Spoonbills · Flanders'),
     name: 'SPOONBILL_VLAANDEREN',
     species: Object.freeze(['Platalea leucorodia']),
-    title: 'Eurasian spoonbills in Flanders (Belgium)',
+    title: msg('Eurasian spoonbills in Flanders (Belgium)'),
     owner: 'INBO — Spanoghe, Janssens, Govaert et al.',
     citation:
       'Spanoghe G, Janssens K, Govaert S et al. SPOONBILL_VLAANDEREN - Eurasian spoonbills (Platalea leucorodia) in Flanders (Belgium). Zenodo.',
     doi: '10.5281/zenodo.10055132',
-    licenceSource: 'Zenodo 10.5281/zenodo.15696453',
+    licenceSource: 'Zenodo 10.5281/zenodo.23103735',
   }),
 ]);
 
@@ -193,7 +204,7 @@ export function wildlifeShortName(taxon) {
 
 /** Plain-language species name, falling back to the scientific name. */
 export function wildlifeSpeciesName(taxon) {
-  if (!taxon) return 'Unidentified animal';
+  if (!taxon) return msg('Unidentified animal');
   return WILDLIFE_COMMON_NAMES[taxon] || taxon;
 }
 
@@ -310,34 +321,24 @@ export function wildlifeHeading(track) {
   return null;
 }
 
-/** "3 h ago" style age of a fix; "just now" under a minute. */
-export function wildlifeAge(ms, now) {
-  const age = Math.max(0, now - ms);
-  const minutes = Math.floor(age / 60_000);
-  if (minutes < 1) return 'just now';
-  if (minutes < 60) return `${minutes} min ago`;
+/**
+ * How old a fix is, as the unit and count the layer words it with: under a
+ * minute is `now`; minutes under an hour, hours under 48, days under 60, then
+ * months (never fewer than two) and, from 24 months, years.
+ * @returns {{unit: 'now'|'minute'|'hour'|'day'|'month'|'year', count: number}}
+ */
+export function wildlifeAgeParts(ms, now) {
+  const minutes = Math.floor(Math.max(0, now - ms) / 60_000);
+  if (minutes < 1) return { unit: 'now', count: 0 };
+  if (minutes < 60) return { unit: 'minute', count: minutes };
   const hours = Math.floor(minutes / 60);
-  if (hours < 48) return `${hours} h ago`;
+  if (hours < 48) return { unit: 'hour', count: hours };
   const days = Math.floor(hours / 24);
-  if (days < 60) return `${days} days ago`;
+  if (days < 60) return { unit: 'day', count: days };
   // Past 60 days, so never fewer than two months.
   const months = Math.max(2, Math.floor(days / 30.44));
-  if (months < 24) return `${months} months ago`;
-  return `${Math.floor(days / 365.25)} years ago`;
-}
-
-/** A list-lead age: "now", "45m", "3h", "12d", "4mo", "2y". */
-export function wildlifeAgeShort(ms, now) {
-  const minutes = Math.floor(Math.max(0, now - ms) / 60_000);
-  if (minutes < 1) return 'now';
-  if (minutes < 60) return `${minutes}m`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 48) return `${hours}h`;
-  const days = Math.floor(hours / 24);
-  if (days < 60) return `${days}d`;
-  const months = Math.max(2, Math.floor(days / 30.44));
-  if (months < 24) return `${months}mo`;
-  return `${Math.floor(days / 365.25)}y`;
+  if (months < 24) return { unit: 'month', count: months };
+  return { unit: 'year', count: Math.floor(days / 365.25) };
 }
 
 /** A fix time as "2026-09-30 07:43 UTC". */

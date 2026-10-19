@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { setLocale } from '../../i18n/index.js';
+import { wildlifeAge, wildlifeAgeShort } from './index.js';
 import {
   WILDLIFE_COMMON_NAMES,
   WILDLIFE_MAX_FIXES,
@@ -8,8 +10,7 @@ import {
   parseMovebankStudy,
   WILDLIFE_TRACK_GAP,
   sanitizeWildlifeSnapshot,
-  wildlifeAge,
-  wildlifeAgeShort,
+  wildlifeAgeParts,
   wildlifeDistanceKm,
   wildlifeRecentRun,
   wildlifeShortName,
@@ -27,7 +28,7 @@ const fix = (lon, lat, timestamp) => ({
   location_lat: lat,
 });
 
-test('every curated study is CC0 with an owner, citation and DOI', () => {
+test('every curated study names a CC0 published dataset, owner, citation and DOI', () => {
   const ids = WILDLIFE_STUDIES.map(({ id }) => id);
   assert.equal(new Set(ids).size, ids.length);
   for (const study of WILDLIFE_STUDIES) {
@@ -284,6 +285,50 @@ test('the browser draws animals only for fresh or stale studies', () => {
     'a proxy that sends coordinates for a withdrawn study is not trusted',
   );
 });
+
+test('ages are a unit and a count, so the layer can word them per language', () => {
+  const now = Date.parse('2026-09-30T10:00:00Z');
+  assert.deepEqual(wildlifeAgeParts(now + 1_000, now), {
+    unit: 'now',
+    count: 0,
+  });
+  assert.deepEqual(wildlifeAgeParts(now - 59 * 60_000, now), {
+    unit: 'minute',
+    count: 59,
+  });
+  assert.deepEqual(wildlifeAgeParts(now - 47 * 3_600_000, now), {
+    unit: 'hour',
+    count: 47,
+  });
+  assert.deepEqual(wildlifeAgeParts(now - 59 * 86_400_000, now), {
+    unit: 'day',
+    count: 59,
+  });
+  assert.deepEqual(wildlifeAgeParts(now - 60 * 86_400_000, now), {
+    unit: 'month',
+    count: 2,
+  });
+  assert.deepEqual(wildlifeAgeParts(now - 800 * 86_400_000, now), {
+    unit: 'year',
+    count: 2,
+  });
+});
+
+for (const [locale, days, months, lead] of [
+  ['es', 'hace 5 días', 'hace 2 meses', '3 h'],
+  ['ru', '5 дней назад', '2 месяца назад', '3 ч'],
+])
+  test(`${locale}: ages and list leads are translated`, () => {
+    const now = Date.parse('2026-09-30T10:00:00Z');
+    setLocale(locale);
+    try {
+      assert.equal(wildlifeAge(now - 5 * 86_400_000, now), days);
+      assert.equal(wildlifeAge(now - 60 * 86_400_000, now), months);
+      assert.equal(wildlifeAgeShort(now - 3 * 3_600_000, now), lead);
+    } finally {
+      setLocale('en');
+    }
+  });
 
 test('list leads and short names stay terse', () => {
   const now = Date.parse('2026-09-30T10:00:00Z');

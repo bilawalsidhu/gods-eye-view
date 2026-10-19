@@ -3863,8 +3863,13 @@
     "exports": ["./layers/wildlife"],
     "modules": [
       "src/layers/wildlife/index.js",
+      "src/i18n/index.js",
+      "src/i18n/locale.js",
+      "src/i18n/locales/es.json",
+      "src/i18n/locales/ru.json",
       "src/data/iconOrientation.js",
       "src/layers/wildlife/records.js",
+      "src/i18n/marker.js",
       "src/sources/httpBody.js",
       "src/layers/wildlife/source.js"
     ],
@@ -3874,6 +3879,7 @@
     "exports": ["./layers/wildlife/source"],
     "modules": [
       "src/sources/httpBody.js",
+      "src/i18n/marker.js",
       "src/layers/wildlife/source.js",
       "src/layers/wildlife/records.js"
     ],

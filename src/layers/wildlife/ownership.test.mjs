@@ -296,7 +296,7 @@ test('an enabled refresh draws a glyph and fading path per animal in the window'
   assert.equal(controls.list.items.length, WILDLIFE_STUDIES.length);
   assert.match(
     controls.info,
-    /^3 animals in 2 studies · select an arrow · CC0 · fixes may lag hours$/,
+    /^3 animals in 2 studies · select an arrow · Datasets CC0 · fixes may lag hours$/,
   );
   assert.match(controls.info, /CC0/);
   assert.match(controls.infoTitle, /Not for locating or disturbing animals/);
@@ -393,7 +393,7 @@ test('a study lists its animals, latest first, and cites its dataset', async () 
   );
   assert.equal(
     controls.info,
-    'Gulls · Neeltje Jans · 2 animals · select a row · CC0 · fixes may lag hours',
+    'Gulls · Neeltje Jans · 2 animals · select a row · Datasets CC0 · fixes may lag hours',
   );
   assert.match(controls.infoTitle, /Cite: Stienen EWM/);
   assert.match(
@@ -424,7 +424,7 @@ test('choosing an animal names its species, study, owner and last fix', async ()
   const controls = h.layer.getRowControls();
   assert.equal(
     controls.info,
-    'Herring gull H903 · 2 h ago (2026-09-30 08:00 UTC) · Gulls · Neeltje Jans · INBO — Stienen, Buijs, de Visser et al. · CC0 1.0',
+    'Herring gull H903 · 2 h ago (2026-09-30 08:00 UTC) · Gulls · Neeltje Jans · INBO — Stienen, Buijs, de Visser et al. · CC0 1.0 (published dataset)',
   );
   assert.match(controls.infoTitle, /^Herring gull \(Larus argentatus\) H903\./);
   assert.equal(controls.list.items[0].active, true);

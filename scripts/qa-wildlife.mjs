@@ -381,7 +381,7 @@ async function main() {
     );
     record(
       'LIVE: the row states the CC0 licence and a species legend',
-      /CC0 · fixes may lag hours/.test(liveRow.info) &&
+      /Datasets CC0 · fixes may lag hours/.test(liveRow.info) &&
         liveRow.legend.length > 0 &&
         liveRow.chips[0] === 'movebank',
       `${liveRow.info} | legend=${JSON.stringify(liveRow.legend)}`,

@@ -19,9 +19,10 @@ const CAMERA_LAYERS = Object.freeze([
   ['weather-radar', 'weather'],
   ['weather-satellite', 'weather'],
   ['weather-lightning', 'weather'],
-  ['weather-cyclones', 'weather'],
+  ['weather-cyclones', 'cyclone'],
   ['wildlife', 'animal'],
 ]);
+
 /** Own manager subscriptions and the camera-entry events that outlive controls. */
 export class LayerBindings {
   constructor({
@@ -140,7 +141,6 @@ export class LayerBindings {
     for (const [id, noun] of CAMERA_LAYERS) {
       const layer = this._dataManager?.layers?.get(id)?.module;
       if (typeof layer?.attachShellServices !== 'function') continue;
-      const noun = id === 'weather-cyclones' ? 'cyclone' : 'weather';
       layer.attachShellServices({
         runNavigation: (navigate) =>
           this.runImmediateNavigation(noun, navigate),

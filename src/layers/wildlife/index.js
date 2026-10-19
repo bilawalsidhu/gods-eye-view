@@ -1,4 +1,5 @@
 import * as Cesium from 'cesium';
+import { formatNumber, msg, t, tn, translateKnown } from '../../i18n/index.js';
 import {
   cameraPoseSignature,
   screenProjectedRotation,
@@ -6,8 +7,7 @@ import {
 import {
   WILDLIFE_PAGE_SIZE,
   WILDLIFE_WINDOWS,
-  wildlifeAge,
-  wildlifeAgeShort,
+  wildlifeAgeParts,
   wildlifeHeading,
   wildlifeRecentRun,
   wildlifeShortName,
@@ -37,22 +37,53 @@ const ANIMAL_FOCUS_HEIGHT_M = 300_000;
 /** While studies are still on their way from Movebank, look again this soon. */
 const PENDING_POLL_MS = 20_000;
 const MOVEBANK_PAGE = 'https://www.movebank.org/';
-const CAVEAT = 'CC0 · fixes may lag hours';
-const DISCLAIMER =
-  'Latest GPS fixes of tagged animals from public Movebank studies whose owners license the data CC0. Owners can hide animals or hold back recent data; only what Movebank shows publicly appears here. Tags report every few minutes to hours, and a study can go quiet for months. Arrows point along the last move; a dot means the animal has not moved or has one fix. Not for locating or disturbing animals.';
+const CAVEAT = msg('Datasets CC0 · fixes may lag hours');
+const DISCLAIMER = msg(
+  'Latest GPS fixes of tagged animals from public Movebank studies whose published datasets are CC0. Movebank shows the licence an owner sets on the study itself only to signed-in users, so that setting was not checked. Owners can hide animals or hold back recent data; only what Movebank shows publicly appears here. Tags report every few minutes to hours, and a study can go quiet for months. Arrows point along the last move; a dot means the animal has not moved or has one fix. Not for locating or disturbing animals.',
+);
 
-const plural = (count, word, many = `${word}s`) =>
-  `${count.toLocaleString('en-US')} ${count === 1 ? word : many}`;
+const animals = (count) =>
+  tn(count, '{count} animal', '{count} animals', {
+    count: formatNumber(count),
+  });
+const studies = (count) =>
+  tn(count, '{count} study', '{count} studies', { count: formatNumber(count) });
+/** Species names are ours (msg) unless Movebank names a taxon we do not list. */
+const speciesName = (taxon) => translateKnown(wildlifeSpeciesName(taxon));
+const shortName = (taxon) => translateKnown(wildlifeShortName(taxon));
 const lastFix = (animal) => animal.track[animal.track.length - 1];
 const speciesColor = (taxon) => SPECIES_COLORS[taxon] || DEFAULT_COLOR;
 
 /** A failed refresh, said in 45 characters or fewer. */
 export function wildlifeErrorReason(message) {
   const status = /HTTP (\d{3})/.exec(String(message))?.[1];
-  if (status) return `Tracking proxy error (HTTP ${status})`;
+  if (status) return t('Tracking proxy error (HTTP {status})', { status });
   if (/malformed/i.test(String(message)))
-    return 'Unexpected data from the proxy';
-  return 'Network error, retrying';
+    return t('Unexpected data from the proxy');
+  return t('Network error, retrying');
+}
+
+/** "3 h ago" style age of a fix; "just now" under a minute. */
+export function wildlifeAge(ms, now) {
+  const { unit, count } = wildlifeAgeParts(ms, now);
+  if (unit === 'now') return t('just now');
+  if (unit === 'minute') return t('{count} min ago', { count });
+  if (unit === 'hour') return t('{count} h ago', { count });
+  if (unit === 'day') return tn(count, '{count} day ago', '{count} days ago');
+  if (unit === 'month')
+    return tn(count, '{count} month ago', '{count} months ago');
+  return tn(count, '{count} year ago', '{count} years ago');
+}
+
+/** A list-lead age: "now", "45m", "3h", "12d", "4mo", "2y". */
+export function wildlifeAgeShort(ms, now) {
+  const { unit, count } = wildlifeAgeParts(ms, now);
+  if (unit === 'now') return t('now', { context: 'age' });
+  if (unit === 'minute') return t('{count}m', { count });
+  if (unit === 'hour') return t('{count}h', { count });
+  if (unit === 'day') return t('{count}d', { count });
+  if (unit === 'month') return t('{count}mo', { count });
+  return t('{count}y', { count });
 }
 
 /** One glyph image per color and shape, shared by every billboard. */
@@ -153,7 +184,7 @@ export function createWildlifeLayer({
     );
   const listedAnimals = () =>
     shownAnimals().sort((a, b) => lastFix(b)[2] - lastFix(a)[2]);
-  const noneShown = () => `No animals ${WILDLIFE_WINDOWS[_window].phrase}`;
+  const noneShown = () => t(WILDLIFE_WINDOWS[_window].none);
   const selectedAnimal = () =>
     (_animalId && _markers.get(_animalId)?.animal) || null;
 
@@ -270,7 +301,7 @@ export function createWildlifeLayer({
       const entity = _dataSource.entities.add(
         new C.Entity({
           id,
-          name: `${wildlifeSpeciesName(animal.taxon)} ${animal.name}`,
+          name: `${speciesName(animal.taxon)} ${animal.name}`,
           position,
           billboard: {
             image: wildlifeGlyph(color, heading !== null),
@@ -417,15 +448,20 @@ export function createWildlifeLayer({
   function animalLines(animal, study) {
     const [, , time] = lastFix(animal);
     return [
-      `${wildlifeShortName(animal.taxon)} ${animal.name} · ${wildlifeAge(time, now())} (${wildlifeTime(time)})`,
-      `${study.label} · ${study.owner} · ${study.licence}`,
+      `${shortName(animal.taxon)} ${animal.name} · ${wildlifeAge(time, now())} (${wildlifeTime(time)})`,
+      `${t(study.label)} · ${study.owner} · ${t('{licence} (published dataset)', { licence: study.licence })}`,
     ];
   }
 
   function pendingLine() {
     const pending = _studies.filter(({ status }) => status === 'pending');
     if (!pending.length) return '';
-    return `Fetching ${plural(pending.length, 'study', 'studies')} from Movebank…`;
+    return tn(
+      pending.length,
+      'Fetching {count} study from Movebank…',
+      'Fetching {count} studies from Movebank…',
+      { count: formatNumber(pending.length) },
+    );
   }
 
   /** Studies served from a copy past the cache TTL, oldest first. */
@@ -435,32 +471,50 @@ export function createWildlifeLayer({
     const oldest = Math.min(
       ...stale.map(({ fetchedAt }) => fetchedAt ?? Infinity),
     );
-    return `${plural(stale.length, 'study', 'studies')} not refreshed since ${Number.isFinite(oldest) ? wildlifeAge(oldest, now()) : 'over an hour ago'}`;
+    const count = formatNumber(stale.length);
+    return Number.isFinite(oldest)
+      ? tn(
+          stale.length,
+          '{count} study not refreshed since {age}',
+          '{count} studies not refreshed since {age}',
+          { count, age: wildlifeAge(oldest, now()) },
+        )
+      : tn(
+          stale.length,
+          '{count} study not refreshed for over an hour',
+          '{count} studies not refreshed for over an hour',
+          { count },
+        );
   }
 
   const failedLine = () =>
     _lastError && _lastUpdate
-      ? `Refresh failed: ${wildlifeErrorReason(_lastError)}`
+      ? t('Refresh failed: {reason}', {
+          reason: wildlifeErrorReason(_lastError),
+        })
       : '';
 
   function summaryLines() {
     const shown = shownAnimals();
-    const studies = new Set(shown.map(({ study }) => study));
+    const shownStudies = new Set(shown.map(({ study }) => study));
     const pending = _studies.some(({ status }) => status === 'pending');
     return [
       shown.length
-        ? `${plural(shown.length, 'animal')} in ${plural(studies.size, 'study', 'studies')} · select an arrow`
+        ? t('{animals} in {studies} · select an arrow', {
+            animals: animals(shown.length),
+            studies: studies(shownStudies.size),
+          })
         : _lastUpdate
           ? pending
             ? ''
             : noneShown()
           : _lastError
             ? wildlifeErrorReason(_lastError)
-            : 'Loading tracking data…',
+            : t('Loading tracking data…'),
       pendingLine(),
       staleLine(),
       failedLine(),
-      CAVEAT,
+      t(CAVEAT),
     ].filter(Boolean);
   }
 
@@ -470,29 +524,41 @@ export function createWildlifeLayer({
     const selected = selectedAnimal();
     if (selected)
       return [...animalLines(selected, study), failedLine()].filter(Boolean);
+    const label = t(study.label);
     return [
       study.status === 'pending'
-        ? `${study.label} · fetching from Movebank…`
+        ? t('{study} · fetching from Movebank…', { study: label })
         : study.status === 'withdrawn'
-          ? `${study.label} · no longer public on Movebank; its tracks were removed`
+          ? t(
+              '{study} · no longer public on Movebank; its tracks were removed',
+              {
+                study: label,
+              },
+            )
           : study.status === 'unavailable' && !list.length
-            ? 'Movebank did not return this study'
+            ? t('Movebank did not return this study')
             : !list.length
-              ? `${study.label} · ${noneShown()}`
-              : `${study.label} · ${plural(list.length, 'animal')} · select a row${pages > 1 ? ` · Page ${_page + 1} of ${pages}` : ''}`,
+              ? `${label} · ${noneShown()}`
+              : `${label} · ${animals(list.length)} · ${t('select a row')}${
+                  pages > 1
+                    ? ` · ${t('Page {page} of {pages}', { page: _page + 1, pages })}`
+                    : ''
+                }`,
       study.status === 'stale' && Number.isFinite(study.fetchedAt)
-        ? `Not refreshed since ${wildlifeAge(study.fetchedAt, now())}`
+        ? t('Not refreshed since {age}', {
+            age: wildlifeAge(study.fetchedAt, now()),
+          })
         : '',
       failedLine(),
-      CAVEAT,
+      t(CAVEAT),
     ].filter(Boolean);
   }
 
   function windowChips() {
     return Object.entries(WILDLIFE_WINDOWS).map(([id, { label, title }]) => ({
       id: `window-${id}`,
-      label,
-      title,
+      label: t(label),
+      title: t(title),
       active: _window === id,
       params: { window: id },
     }));
@@ -506,13 +572,14 @@ export function createWildlifeLayer({
     return [...counts]
       .sort((a, b) => b[1] - a[1])
       .map(([taxon, count], index) => ({
-        label: wildlifeShortName(taxon),
+        label: shortName(taxon),
         color: speciesColor(taxon),
         count,
         ...(index === 0
           ? {
-              blurb:
+              blurb: t(
                 'Colour shows species. Arrows point along the last move; a dot has not moved.',
+              ),
             }
           : {}),
       }));
@@ -591,7 +658,7 @@ export function createWildlifeLayer({
         if (request.signal.aborted || _request !== request || !_enabled)
           return false;
         console.warn('[Data:Wildlife] Fetch error:', e);
-        _lastError = e?.message || 'Tracking data unavailable';
+        _lastError = e?.message || msg('Tracking data unavailable');
         return false;
       } finally {
         if (_request === request) _request = null;
@@ -665,7 +732,7 @@ export function createWildlifeLayer({
             animal.study,
             Math.max(latest.get(animal.study) || 0, lastFix(animal)[2]),
           );
-        const studies = [..._studies].sort(
+        const ordered = [..._studies].sort(
           (a, b) =>
             (counts.get(b.id) || 0) - (counts.get(a.id) || 0) ||
             (latest.get(b.id) || 0) - (latest.get(a.id) || 0) ||
@@ -675,40 +742,47 @@ export function createWildlifeLayer({
           chips: [
             {
               id: 'movebank',
+              // i18n-ignore: product name
               label: 'Movebank ↗',
-              title:
+              title: t(
                 'Open Movebank, the source of the tracking data, in a new tab',
+              ),
               params: { movebank: true },
             },
             ...windowChips(),
           ],
           legend: legend(),
           list: {
-            ariaLabel: 'Tracking studies, most animals shown first',
-            items: studies.map((entry, index) => {
+            ariaLabel: t('Tracking studies, most animals shown first'),
+            items: ordered.map((entry, index) => {
+              const age = latest.has(entry.id)
+                ? wildlifeAge(latest.get(entry.id), now())
+                : null;
               const state =
                 entry.status === 'pending'
-                  ? 'loading'
+                  ? t('loading')
                   : entry.status === 'withdrawn'
-                    ? 'no longer public'
-                    : latest.has(entry.id)
-                      ? `last fix ${wildlifeAge(latest.get(entry.id), now())}${entry.status === 'stale' ? ' · not refreshed' : ''}`
+                    ? t('no longer public')
+                    : age !== null
+                      ? entry.status === 'stale'
+                        ? t('last fix {age} · not refreshed', { age })
+                        : t('last fix {age}', { age })
                       : entry.status === 'unavailable'
-                        ? 'unavailable'
-                        : 'no public fixes';
+                        ? t('unavailable')
+                        : t('no public fixes');
               return {
                 id: String(entry.id),
                 ordinal: index + 1,
                 lead: latest.has(entry.id)
                   ? String(counts.get(entry.id) || 0)
                   : '—',
-                text: `${entry.label} · ${state}`,
+                text: `${t(entry.label)} · ${state}`,
                 params: { study: entry.id, focus: true },
               };
             }),
           },
           info: summaryLines().join(' · '),
-          infoTitle: `Select an animal on the globe, or a study in the list. ${DISCLAIMER}`,
+          infoTitle: `${t('Select an animal on the globe, or a study in the list.')} ${t(DISCLAIMER)}`,
         };
       }
       const list = listedAnimals();
@@ -725,15 +799,15 @@ export function createWildlifeLayer({
             ? [
                 {
                   id: 'previous',
-                  label: '‹ Prev',
-                  title: 'Previous page of animals',
+                  label: t('‹ Prev'),
+                  title: t('Previous page of animals'),
                   disabled: _page === 0,
                   params: { page: 'previous' },
                 },
                 {
                   id: 'next',
-                  label: 'Next ›',
-                  title: 'Next page of animals',
+                  label: t('Next ›'),
+                  title: t('Next page of animals'),
                   disabled: _page >= pages - 1,
                   params: { page: 'next' },
                 },
@@ -741,20 +815,29 @@ export function createWildlifeLayer({
             : []),
           {
             id: 'doi',
+            // i18n-ignore: identifier scheme
             label: 'DOI ↗',
-            title: `Open the published dataset and its citation (doi:${study.doi})`,
+            title: t(
+              'Open the published dataset and its citation (doi:{doi})',
+              {
+                doi: study.doi,
+              },
+            ),
             params: { doi: true },
           },
           {
             id: 'studies',
-            label: 'All studies',
-            title: 'Back to the study list',
+            label: t('All studies'),
+            title: t('Back to the study list'),
             params: { clear: true },
           },
         ],
         legend: legend(),
         list: {
-          ariaLabel: `${study.label} animals, latest fix first, page ${_page + 1} of ${pages}`,
+          ariaLabel: t(
+            '{study} animals, latest fix first, page {page} of {pages}',
+            { study: t(study.label), page: _page + 1, pages },
+          ),
           items: shown.map((animal, index) => {
             const [, , time] = lastFix(animal);
             return {
@@ -763,7 +846,7 @@ export function createWildlifeLayer({
               lead: wildlifeAgeShort(time, now()),
               text:
                 study.species.length > 1
-                  ? `${wildlifeShortName(animal.taxon)} · ${animal.name}`
+                  ? `${shortName(animal.taxon)} · ${animal.name}`
                   : animal.name,
               active: animal.id === _animalId,
               params: { animal: animal.id, focus: true },
@@ -771,7 +854,15 @@ export function createWildlifeLayer({
           }),
         },
         info: studyLines(study).join(' · '),
-        infoTitle: `${selected ? `${wildlifeSpeciesName(selected.taxon)}${selected.taxon ? ` (${selected.taxon})` : ''} ${selected.name}. ` : ''}${study.title}. Cite: ${study.citation} https://doi.org/${study.doi} (Movebank study ${study.id}, ${study.licence}). ${DISCLAIMER}`,
+        infoTitle: `${selected ? `${speciesName(selected.taxon)}${selected.taxon ? ` (${selected.taxon})` : ''} ${selected.name}. ` : ''}${t(study.title)}. ${t(
+          'Cite: {citation} {url} (Movebank study {id}; published dataset {licence}).',
+          {
+            citation: study.citation,
+            url: `https://doi.org/${study.doi}`,
+            id: study.id,
+            licence: study.licence,
+          },
+        )} ${t(DISCLAIMER)}`,
       };
     },
 
