@@ -8,9 +8,9 @@
  *
  *   (i)   LIVE — the layer settles with no error, one entity and one row-list
  *         item per event, and legend counts that sum to the event count.
- *   (ii)  FIXTURE — a red cyclone, an orange flood and two green events (one
- *         on the far side of the globe) plus an invalid row: the invalid row
- *         is dropped, the list is most severe first, red and orange are
+ *   (ii)  FIXTURE — a red volcano, an orange flood and two green events (one
+ *         on the far side of the globe) plus an earthquake row: GDACS
+ *         earthquakes are not this layer's, so that row is dropped, the list is most severe first, red and orange are
  *         labelled, the far-side point is hidden and a missing feed is named.
  *   (iii) SELECT — a real mouse click on a globe point selects it and shows
  *         the report chip; the chip opens the GDACS report; a click on empty
@@ -47,7 +47,7 @@ const getOpt = (name, dflt) => {
 const APP_URL = getOpt('--url', 'http://localhost:4173');
 const HEADFUL = argv.includes('--headful');
 const LAYER_ID = 'gdacs-alerts';
-const REPORT = 'https://www.gdacs.org/report.aspx?eventtype=EQ&eventid=1003';
+const REPORT = 'https://www.gdacs.org/report.aspx?eventtype=VO&eventid=1003';
 
 const results = [];
 function record(name, ok, detail) {
@@ -240,32 +240,31 @@ const event = (type, eventId, level, lon, lat, extra = {}) => ({
 function fixturePayload() {
   return {
     fetchedAt: Date.now(),
-    feeds: ['EQ', 'TC', 'FL', 'VO', 'DR', 'WF'].map((type) =>
-      type === 'WF'
+    feeds: ['FL', 'VO', 'DR'].map((type) =>
+      type === 'DR'
         ? { type, fetchedAt: null, stale: false, missing: true }
         : { type, fetchedAt: Date.now(), stale: false },
     ),
     events: [
-      event('EQ', 1003, 'green', 142.5, 38, {
-        name: 'M 5.4 off the east coast of Honshu',
+      event('VO', 1003, 'green', 142.5, 38, {
+        name: 'Volcano Zao',
         country: 'Japan',
-        severity: 'Magnitude 5.4M, Depth:35km',
       }),
-      event('DR', 1004, 'green', -60, -10, {
-        name: 'Drought in Brazil',
+      event('FL', 1004, 'green', -60, -10, {
+        name: 'Flood in Brazil',
         country: 'Brazil',
       }),
-      event('TC', 1001, 'red', 128, 19, {
-        name: 'Typhoon QA-26',
+      event('VO', 1001, 'red', 128, 19, {
+        name: 'Volcano QA-26',
         country: 'Philippines',
-        severity: 'Typhoon, 230 km/h',
+        severity: 'VEI 4',
       }),
       event('FL', 1002, 'orange', 110, 28, {
         name: 'Flood in China',
         country: 'China',
       }),
-      // Unknown type: dropped by the client sanitizer.
-      { ...event('EQ', 9, 'green', 0, 0), id: 'XX-9', type: 'XX' },
+      // Earthquakes are left to the USGS layer: dropped by the sanitizer.
+      event('EQ', 9, 'green', 0, 0),
     ],
   };
 }
@@ -390,7 +389,7 @@ async function main() {
     );
     record(
       'FIXTURE: the missing feed and the GDACS caveat are shown in the row',
-      /No data this refresh: Wildfire/.test(dom.info) &&
+      /No data this refresh: Drought/.test(dom.info) &&
         /not official warnings/.test(dom.info),
       dom.info,
     );
@@ -411,14 +410,14 @@ async function main() {
     }, LAYER_ID);
     record(
       'FIXTURE: red and orange are labelled through the overlay host, green is not',
-      drawn.labels.join() === 'TC-1001,FL-1002',
+      drawn.labels.join() === 'VO-1001,FL-1002',
       JSON.stringify(drawn.labels),
     );
     record(
       'FIXTURE: the far-side point is hidden, the near ones shown',
-      drawn['DR-1004']?.show === false &&
-        drawn['TC-1001']?.show === true &&
-        drawn['EQ-1003']?.show === true,
+      drawn['FL-1004']?.show === false &&
+        drawn['VO-1001']?.show === true &&
+        drawn['VO-1003']?.show === true,
       JSON.stringify(drawn),
     );
     await shoot(page, 'fixture');
@@ -433,17 +432,17 @@ async function main() {
     });
     const lane = () => page.evaluate(() => window.__gdacsLane.splice(0));
     await lane();
-    const point = await eventOnScreen(page, 'EQ-1003');
+    const point = await eventOnScreen(page, 'VO-1003');
     if (point) await page.mouse.click(point.x, point.y);
     await sleep(500);
     const clicked = await rowDom(page);
     record(
       'SELECT: a globe click on a point selects it and offers the report',
       point !== null &&
-        (await selectedId(page)) === 'EQ-1003' &&
+        (await selectedId(page)) === 'VO-1003' &&
         clicked.chips.includes('report') &&
-        clicked.activeItems.join() === 'EQ-1003' &&
-        clicked.info.startsWith('M 5.4 off the east coast of Honshu'),
+        clicked.activeItems.join() === 'VO-1003' &&
+        clicked.info.startsWith('Volcano Zao'),
       `point=${JSON.stringify(point)} chips=${JSON.stringify(clicked.chips)} info=${JSON.stringify(clicked.info)}`,
     );
     const picked = await lane();
@@ -452,7 +451,7 @@ async function main() {
       'SELECT: the globe pick publishes one normalized gev:entity-selected',
       picked.length === 1 &&
         published.type === 'gev:entity-selected' &&
-        published.detail.id === 'gdacs-alerts:EQ-1003' &&
+        published.detail.id === 'gdacs-alerts:VO-1003' &&
         published.detail.kind === 'disaster-alert' &&
         published.detail.geometryKind === 'point' &&
         published.detail.locationKind === 'centroid' &&
@@ -461,7 +460,7 @@ async function main() {
         published.detail.provenance?.source === 'GDACS' &&
         published.detail.provenance?.reportUrl === REPORT &&
         published.detail.provenance?.alertLevel === 'green' &&
-        published.detail.provenance?.eventType === 'EQ' &&
+        published.detail.provenance?.eventType === 'VO' &&
         Number.isFinite(published.detail.provenance?.fetchedAt) &&
         !/polygon|footprint|bbox|extent|affectedArea/i.test(
           JSON.stringify(published.detail),
@@ -496,7 +495,7 @@ async function main() {
       JSON.stringify(released),
     );
     await page.click(
-      `[data-layer-id="${LAYER_ID}"] .data-row-list-item[data-list-item-id="TC-1001"]`,
+      `[data-layer-id="${LAYER_ID}"] .data-row-list-item[data-list-item-id="VO-1001"]`,
     );
     await sleep(3000);
     const camera = await page.evaluate(() => {
@@ -509,7 +508,7 @@ async function main() {
     });
     record(
       'SELECT: a list click selects the event and flies the camera there',
-      (await selectedId(page)) === 'TC-1001' &&
+      (await selectedId(page)) === 'VO-1001' &&
         Math.abs(camera.lon - 128) < 1 &&
         Math.abs(camera.lat - 19) < 1 &&
         Math.abs(camera.height - 1_500_000) < 150_000,
@@ -520,7 +519,7 @@ async function main() {
       'SELECT: the list click publishes one gev:entity-selected',
       rowLane.length === 1 &&
         rowLane[0].type === 'gev:entity-selected' &&
-        rowLane[0].detail.id === 'gdacs-alerts:TC-1001' &&
+        rowLane[0].detail.id === 'gdacs-alerts:VO-1001' &&
         rowLane[0].detail.geometryKind === 'point',
       JSON.stringify(rowLane),
     );
@@ -552,7 +551,7 @@ async function main() {
       window.__gdacsQaMode = 'fixture';
       window.__godsEyeView.dataManager.layers
         .get(id)
-        .module.setParams({ eventId: 'TC-1001' });
+        .module.setParams({ eventId: 'VO-1001' });
     }, LAYER_ID);
     await lane();
     const shown = await page.evaluate(async (id) => {

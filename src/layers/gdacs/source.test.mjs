@@ -3,21 +3,21 @@ import test from 'node:test';
 import { createGdacsSource } from './source.js';
 
 const event = {
-  id: 'TC-1001',
-  type: 'TC',
+  id: 'VO-1001',
+  type: 'VO',
   eventId: 1001,
   episodeId: 4,
   level: 'red',
-  name: 'POLO-26',
+  name: 'Suwanosejima',
   country: 'Japan',
   lon: 140.1,
   lat: 25.2,
   fromMs: 1,
   toMs: 2,
   modifiedMs: 3,
-  severity: 'Typhoon',
+  severity: 'VEI 2',
   current: true,
-  reportUrl: 'https://www.gdacs.org/report.aspx?eventid=1001&eventtype=TC',
+  reportUrl: 'https://www.gdacs.org/report.aspx?eventid=1001&eventtype=VO',
 };
 
 test('the source reads the same-origin proxy and reports missing feeds', async () => {
@@ -29,7 +29,8 @@ test('the source reads the same-origin proxy and reports missing feeds', async (
       return Response.json({
         fetchedAt: 5,
         feeds: [
-          { type: 'TC', fetchedAt: 5, stale: false },
+          { type: 'VO', fetchedAt: 5, stale: false },
+          { type: 'EQ', missing: true },
           { type: 'DR', fetchedAt: null, stale: false, missing: true },
           { type: '<b>', missing: true },
         ],

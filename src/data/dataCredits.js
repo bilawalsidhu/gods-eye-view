@@ -173,7 +173,8 @@ export const DATA_CREDITS = [
       'Disaster alerts: ' +
       '<a href="https://www.gdacs.org/" target="_blank" rel="noopener">GDACS</a>' +
       ' (Global Disaster Alert and Coordination System), © European Union, ' +
-      '<a href="https://commission.europa.eu/legal-notice_en#copyright-notice" target="_blank" rel="noopener">CC BY 4.0</a>',
+      '<a href="https://commission.europa.eu/legal-notice_en#copyright-notice" target="_blank" rel="noopener">CC BY 4.0</a>' +
+      '; flood, volcano and drought centroids re-drawn on the globe',
   },
   OSM_CREDIT,
   OPENMAPTILES_CREDIT,

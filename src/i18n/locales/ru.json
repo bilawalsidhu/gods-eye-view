@@ -3004,5 +3004,31 @@
   "Gemini access was refused. Check the API key and model access.": "Доступ к Gemini запрещён. Проверьте ключ API и доступ к модели.",
   "Gemini Live is unavailable for the configured model.": "Gemini Live недоступен для выбранной модели.",
   "Token request is too large": "Запрос токена слишком велик",
-  "Use an empty JSON token request": "Используйте запрос токена с пустым объектом JSON"
+  "Use an empty JSON token request": "Используйте запрос токена с пустым объектом JSON",
+  "GDACS alerts are automatic estimates of likely humanitarian impact. They do not replace official information or warnings from local or national disaster management authorities.": "Оповещения GDACS — автоматические оценки вероятных гуманитарных последствий. Они не заменяют официальную информацию и предупреждения местных или национальных органов по ликвидации чрезвычайных ситуаций.",
+  "Automatic impact estimates, not official warnings": "Автоматические оценки последствий, а не официальные предупреждения",
+  "{from} to {to}": "с {from} по {to}",
+  "{level} alert": "Уровень тревоги: {level}",
+  "Episode no longer marked current by GDACS": "GDACS больше не отмечает этот эпизод как текущий",
+  "No data this refresh: {types}": "Нет данных в этом обновлении: {types}",
+  "Some feeds are cached copies": "Часть лент — кэшированные копии",
+  "Last refresh failed: {error}": "Последнее обновление не удалось: {error}",
+  "{count} events": {
+    "one": "{count} событие",
+    "few": "{count} события",
+    "many": "{count} событий",
+    "other": "{count} события"
+  },
+  "No GDACS events on the map": "На карте нет событий GDACS",
+  "GDACS alerts unavailable": "Оповещения GDACS недоступны",
+  "Loading GDACS alerts…": "Загрузка оповещений GDACS…",
+  "GDACS report ↗": "Отчёт GDACS ↗",
+  "Open the GDACS report for {name} in a new tab": "Открыть отчёт GDACS о событии «{name}» в новой вкладке",
+  "GDACS events, most severe first": "События GDACS, сначала самые серьёзные",
+  "Floods, volcanoes and droughts from the GDACS map feeds. Earthquakes, wildfires and tropical cyclones have their own layers. Select an event on the map, or choose one in the list to select it and move the camera. Click empty map space to clear the selection. Points mark the event centre GDACS publishes, not the affected area.": "Наводнения, вулканы и засухи из картографических лент GDACS. Для землетрясений, лесных пожаров и тропических циклонов есть отдельные слои. Выберите событие на карте или в списке, чтобы выделить его и переместить камеру. Щёлкните по пустому месту карты, чтобы снять выделение. Точки отмечают центр события, опубликованный GDACS, а не пострадавшую зону.",
+  "Flood": "Наводнение",
+  "Volcano": "Вулкан",
+  "Drought": "Засуха",
+  "Orange": "Оранжевый",
+  "Disaster Alerts": "Оповещения о бедствиях"
 }

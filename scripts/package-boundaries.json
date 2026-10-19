@@ -3749,7 +3749,14 @@
       "src/layers/gdacs/index.js",
       "src/sources/httpBody.js",
       "src/layers/gdacs/source.js",
-      "src/layers/gdacs/records.js"
+      "src/layers/gdacs/records.js",
+      "src/i18n/marker.js",
+      "src/i18n/index.js",
+      "src/i18n/locale.js",
+      "src/i18n/locales/es.json",
+      "src/i18n/locales/ru.json",
+      "src/ui/statusText.js",
+      "src/ui/layerNames.js"
     ],
     "external": ["cesium"]
   },
@@ -3758,7 +3765,8 @@
     "modules": [
       "src/sources/httpBody.js",
       "src/layers/gdacs/source.js",
-      "src/layers/gdacs/records.js"
+      "src/layers/gdacs/records.js",
+      "src/i18n/marker.js"
     ],
     "external": []
   },
