@@ -178,11 +178,18 @@ export function createAircraftTypeDatabase({
         `aircraft type database download: HTTP ${response.status}`,
       );
     const bytes = await readResponseBytesCapped(response, DB_MAX_BYTES, signal);
-    const fresh = await parseTypeDatabase(bytes);
-    await fs.mkdir(path.dirname(cachePath), { recursive: true });
-    await fs.writeFile(cachePath, bytes);
-    index = fresh;
+    index = await parseTypeDatabase(bytes);
     fetchedAt = now();
+    // The copy on disk only spares the next start a download; a full or
+    // read-only disk must not cost this process the copy it just parsed.
+    try {
+      await fs.mkdir(path.dirname(cachePath), { recursive: true });
+      await fs.writeFile(cachePath, bytes);
+    } catch (error) {
+      console.warn(
+        `[aircraft-types] could not save the downloaded copy: ${error.code || error.message}`,
+      );
+    }
   }
 
   async function readDisk() {

@@ -285,6 +285,29 @@ test('with no copy and no download, the database has nothing to serve', async ()
   }
 });
 
+test('a download that cannot be saved is still served', async () => {
+  const fs = memoryFs();
+  fs.writeFile = async () => {
+    throw Object.assign(new Error('read-only'), { code: 'EROFS' });
+  };
+  const warn = console.warn;
+  const warnings = [];
+  console.warn = (message) => warnings.push(message);
+  try {
+    const database = createAircraftTypeDatabase({
+      fetchImpl: async () => ok(),
+      fs,
+      cachePath: '/cache/db.zip',
+      now: () => 3,
+    });
+    assert.equal((await database.loaded()).lookup('a835af').typeCode, 'GLF6');
+    assert.equal(database.retryInMs(), 0, 'not treated as a failed download');
+    assert.match(warnings[0], /could not save the downloaded copy: EROFS/);
+  } finally {
+    console.warn = warn;
+  }
+});
+
 test('an unreadable disk copy is replaced by a download', async () => {
   const fs = memoryFs({
     '/cache/db.zip': { bytes: Buffer.from('not a zip'), mtimeMs: 1 },
