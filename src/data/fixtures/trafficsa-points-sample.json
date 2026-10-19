@@ -1,0 +1,401 @@
+{
+ "type": "FeatureCollection",
+ "features": [
+  {
+   "type": "Feature",
+   "id": 146609,
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     138.63952521700003,
+     -28.71123555099996
+    ]
+   },
+   "properties": {
+    "ROADWORKS_AND_INCIDENTS_ID": "3398487668",
+    "REC_TYPE": "INCIDENT",
+    "INCIDENT_ID": 87254,
+    "DESCRIPTION": "Ferry Closed",
+    "START_DATE": 1775662850000,
+    "END_DATE": null,
+    "ROAD_NO": 11000,
+    "LOCAL_ROAD": "Birdsville Track",
+    "SIDE_STREET": "Coopers Creek Ferry Crossing Accs",
+    "SUBURB": null,
+    "LATITUDE": -28.7112355505794,
+    "LONGITUDE": 138.639525216617,
+    "GIS_LINK_ID": 99993398487668,
+    "ACTIVE": " ",
+    "START_DATE_STRING": "Wed 08 Apr 2026 03:40 PM",
+    "END_DATE_STRING": null,
+    "TRAFFIC_DIR": null,
+    "NO_LANES_CLOSED": null,
+    "SPEED_LIMIT": null,
+    "ESRI_OID": 146609
+   }
+  },
+  {
+   "type": "Feature",
+   "id": 146530,
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     140.67558837500007,
+     -32.15550049799998
+    ]
+   },
+   "properties": {
+    "ROADWORKS_AND_INCIDENTS_ID": "3398488346",
+    "REC_TYPE": "24HR ROADWORKS",
+    "INCIDENT_ID": 0,
+    "DESCRIPTION": "Shoulder Work",
+    "START_DATE": 1782453600000,
+    "END_DATE": 1793469600000,
+    "ROAD_NO": 3400,
+    "LOCAL_ROAD": "Barrier Highway",
+    "SIDE_STREET": "Bindarrah Rd",
+    "SUBURB": "Bindarrah",
+    "LATITUDE": -32.155500497749,
+    "LONGITUDE": 140.675588374705,
+    "GIS_LINK_ID": 99993398488346,
+    "ACTIVE": " ",
+    "START_DATE_STRING": "Fri 26 Jun 2026 06:00 AM",
+    "END_DATE_STRING": "Sat 31 Oct 2026 06:00 PM",
+    "TRAFFIC_DIR": "Both Directions",
+    "NO_LANES_CLOSED": "Shuttle Flow",
+    "SPEED_LIMIT": "60",
+    "ESRI_OID": 146530
+   }
+  },
+  {
+   "type": "Feature",
+   "id": 146533,
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     138.63974960300004,
+     -34.654893597999944
+    ]
+   },
+   "properties": {
+    "ROADWORKS_AND_INCIDENTS_ID": "3398487952",
+    "REC_TYPE": "24HR ROADWORKS",
+    "INCIDENT_ID": 0,
+    "DESCRIPTION": "Water Mains",
+    "START_DATE": 1779260400000,
+    "END_DATE": 1792429200000,
+    "ROAD_NO": 5006,
+    "LOCAL_ROAD": "Heaslip Road",
+    "SIDE_STREET": "Curtis Rd",
+    "SUBURB": "Angle Vale",
+    "LATITUDE": -34.6548935978605,
+    "LONGITUDE": 138.639749602863,
+    "GIS_LINK_ID": 99993398487952,
+    "ACTIVE": " ",
+    "START_DATE_STRING": "Wed 20 May 2026 07:00 AM",
+    "END_DATE_STRING": "Mon 19 Oct 2026 05:00 PM",
+    "TRAFFIC_DIR": "Both Directions",
+    "NO_LANES_CLOSED": "None",
+    "SPEED_LIMIT": "No Restriction",
+    "ESRI_OID": 146533
+   }
+  },
+  {
+   "type": "Feature",
+   "id": 146541,
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     138.5457310800001,
+     -35.05689131699995
+    ]
+   },
+   "properties": {
+    "ROADWORKS_AND_INCIDENTS_ID": "3398488579",
+    "REC_TYPE": "24HR ROADWORKS",
+    "INCIDENT_ID": 0,
+    "DESCRIPTION": "Weed Spraying",
+    "START_DATE": 1789761600000,
+    "END_DATE": 1792386000000,
+    "ROAD_NO": 6780,
+    "LOCAL_ROAD": "Southern Expressway Right Carriageway",
+    "SIDE_STREET": "Majors Road Ramp From Old Noarlunga Ramp",
+    "SUBURB": "O'Halloran Hill",
+    "LATITUDE": -35.056891316880005,
+    "LONGITUDE": 138.54573108032602,
+    "GIS_LINK_ID": 99993398488579,
+    "ACTIVE": " ",
+    "START_DATE_STRING": "Fri 18 Sep 2026 08:00 PM",
+    "END_DATE_STRING": "Mon 19 Oct 2026 05:00 AM",
+    "TRAFFIC_DIR": "Both Directions",
+    "NO_LANES_CLOSED": "One Lane",
+    "SPEED_LIMIT": "40",
+    "ESRI_OID": 146541
+   }
+  },
+  {
+   "type": "Feature",
+   "id": 146548,
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     138.55270490300006,
+     -35.05405068399995
+    ]
+   },
+   "properties": {
+    "ROADWORKS_AND_INCIDENTS_ID": "3398487896",
+    "REC_TYPE": "24HR ROADWORKS",
+    "INCIDENT_ID": 0,
+    "DESCRIPTION": "Majors Rd Interchange - Construction Works",
+    "START_DATE": 1748757600000,
+    "END_DATE": 1793426400000,
+    "ROAD_NO": 6720,
+    "LOCAL_ROAD": "Majors Road",
+    "SIDE_STREET": "The Avenue Trk",
+    "SUBURB": "O'Halloran Hill",
+    "LATITUDE": -35.054050684091095,
+    "LONGITUDE": 138.55270490281,
+    "GIS_LINK_ID": 99993398487896,
+    "ACTIVE": " ",
+    "START_DATE_STRING": "Sun 01 Jun 2025 06:00 AM",
+    "END_DATE_STRING": "Sat 31 Oct 2026 06:00 AM",
+    "TRAFFIC_DIR": "Both Directions",
+    "NO_LANES_CLOSED": "Lateral Shift",
+    "SPEED_LIMIT": "40",
+    "ESRI_OID": 146548
+   }
+  },
+  {
+   "type": "Feature",
+   "id": 146511,
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     138.52023302500004,
+     -34.97984862799996
+    ]
+   },
+   "properties": {
+    "ROADWORKS_AND_INCIDENTS_ID": "3398488987",
+    "REC_TYPE": "24HR ROADWORKS",
+    "INCIDENT_ID": 0,
+    "DESCRIPTION": "Asphalt Works",
+    "START_DATE": 1791784800000,
+    "END_DATE": 1792173600000,
+    "ROAD_NO": 6604,
+    "LOCAL_ROAD": "Brighton Road",
+    "SIDE_STREET": "Dunbar Tce",
+    "SUBURB": "Glenelg East",
+    "LATITUDE": -34.9798486284107,
+    "LONGITUDE": 138.52023302503503,
+    "GIS_LINK_ID": 99993398488987,
+    "ACTIVE": " ",
+    "START_DATE_STRING": "Mon 12 Oct 2026 06:00 AM",
+    "END_DATE_STRING": "Fri 16 Oct 2026 06:00 PM",
+    "TRAFFIC_DIR": "South Bound",
+    "NO_LANES_CLOSED": "Slip Lane",
+    "SPEED_LIMIT": "No Restriction",
+    "ESRI_OID": 146511
+   }
+  },
+  {
+   "type": "Feature",
+   "id": 146559,
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     138.56533242700004,
+     -34.91343736299996
+    ]
+   },
+   "properties": {
+    "ROADWORKS_AND_INCIDENTS_ID": "3398487957",
+    "REC_TYPE": "24HR ROADWORKS",
+    "INCIDENT_ID": 0,
+    "DESCRIPTION": "Torrens To Darlington - Civil Works",
+    "START_DATE": 1762200000000,
+    "END_DATE": 1796018400000,
+    "ROAD_NO": 6203,
+    "LOCAL_ROAD": "South Road",
+    "SIDE_STREET": "Weber St",
+    "SUBURB": "Thebarton",
+    "LATITUDE": -34.9134373627434,
+    "LONGITUDE": 138.565332426651,
+    "GIS_LINK_ID": 99993398487957,
+    "ACTIVE": " ",
+    "START_DATE_STRING": "Mon 03 Nov 2025 08:00 PM",
+    "END_DATE_STRING": "Mon 30 Nov 2026 06:00 AM",
+    "TRAFFIC_DIR": "South Bound",
+    "NO_LANES_CLOSED": "None",
+    "SPEED_LIMIT": "No Restriction",
+    "ESRI_OID": 146559
+   }
+  },
+  {
+   "type": "Feature",
+   "id": 146527,
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     138.53115900500006,
+     -34.88464399199995
+    ]
+   },
+   "properties": {
+    "ROADWORKS_AND_INCIDENTS_ID": "3398487791",
+    "REC_TYPE": "ROADWORKS",
+    "INCIDENT_ID": 0,
+    "DESCRIPTION": "Aerial Cabling",
+    "START_DATE": 1791190800000,
+    "END_DATE": 1792425600000,
+    "ROAD_NO": 5845,
+    "LOCAL_ROAD": "Findon Road",
+    "SIDE_STREET": "Patricia St",
+    "SUBURB": "Woodville South",
+    "LATITUDE": -34.884643991825996,
+    "LONGITUDE": 138.53115900458502,
+    "GIS_LINK_ID": 99993398487791,
+    "ACTIVE": " ",
+    "START_DATE_STRING": "Mon 05 Oct 2026 09:00 AM",
+    "END_DATE_STRING": "Mon 19 Oct 2026 04:00 PM",
+    "TRAFFIC_DIR": "South Bound",
+    "NO_LANES_CLOSED": "One Lane",
+    "SPEED_LIMIT": "40",
+    "ESRI_OID": 146527
+   }
+  },
+  {
+   "type": "Feature",
+   "id": 146529,
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     138.57011366300003,
+     -34.90371727899998
+    ]
+   },
+   "properties": {
+    "ROADWORKS_AND_INCIDENTS_ID": "3398487683",
+    "REC_TYPE": "ROADWORKS",
+    "INCIDENT_ID": 0,
+    "DESCRIPTION": "Torrens To Darlington - Civil Works",
+    "START_DATE": 1756706400000,
+    "END_DATE": 1793426400000,
+    "ROAD_NO": 5648,
+    "LOCAL_ROAD": "Port Road",
+    "SIDE_STREET": "Anne St",
+    "SUBURB": "Hindmarsh",
+    "LATITUDE": -34.9037172787287,
+    "LONGITUDE": 138.570113663316,
+    "GIS_LINK_ID": 99993398487683,
+    "ACTIVE": " ",
+    "START_DATE_STRING": "Mon 01 Sep 2025 06:00 AM",
+    "END_DATE_STRING": "Sat 31 Oct 2026 06:00 AM",
+    "TRAFFIC_DIR": "Both Directions",
+    "NO_LANES_CLOSED": "None",
+    "SPEED_LIMIT": "No Restriction",
+    "ESRI_OID": 146529
+   }
+  },
+  {
+   "type": "Feature",
+   "id": 146606,
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     137.842543803,
+     -34.55961198799997
+    ]
+   },
+   "properties": {
+    "ROADWORKS_AND_INCIDENTS_ID": "3398487675",
+    "REC_TYPE": "ROADWORKS",
+    "INCIDENT_ID": 0,
+    "DESCRIPTION": "Road Reconstruction",
+    "START_DATE": 1750312800000,
+    "END_DATE": 1792432800000,
+    "ROAD_NO": 4027,
+    "LOCAL_ROAD": "Curramulka Road",
+    "SIDE_STREET": "Redding Rd",
+    "SUBURB": "Sandilands",
+    "LATITUDE": -34.559611988301896,
+    "LONGITUDE": 137.842543803455,
+    "GIS_LINK_ID": 99993398487675,
+    "ACTIVE": " ",
+    "START_DATE_STRING": "Thu 19 Jun 2025 06:00 AM",
+    "END_DATE_STRING": "Mon 19 Oct 2026 06:00 PM",
+    "TRAFFIC_DIR": "Both Directions",
+    "NO_LANES_CLOSED": "Shuttle Flow",
+    "SPEED_LIMIT": "40",
+    "ESRI_OID": 146606
+   }
+  },
+  {
+   "type": "Feature",
+   "id": 146665,
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     138.5720229100001,
+     -34.95511039399997
+    ]
+   },
+   "properties": {
+    "ROADWORKS_AND_INCIDENTS_ID": "3398487725",
+    "REC_TYPE": "ROADWORKS",
+    "INCIDENT_ID": 0,
+    "DESCRIPTION": "Torrens To Darlington - Civil Works",
+    "START_DATE": 1788724800000,
+    "END_DATE": 1793426400000,
+    "ROAD_NO": 6232,
+    "LOCAL_ROAD": "Gallipoli Ramp (To South)",
+    "SIDE_STREET": "Hale St",
+    "SUBURB": "Everard Park",
+    "LATITUDE": -34.955110394128596,
+    "LONGITUDE": 138.57202290963102,
+    "GIS_LINK_ID": 99993398487725,
+    "ACTIVE": " ",
+    "START_DATE_STRING": "Sun 06 Sep 2026 08:00 PM",
+    "END_DATE_STRING": "Sat 31 Oct 2026 06:00 AM",
+    "TRAFFIC_DIR": "South Bound",
+    "NO_LANES_CLOSED": "Closure",
+    "SPEED_LIMIT": "40",
+    "ESRI_OID": 146665
+   }
+  },
+  {
+   "type": "Feature",
+   "id": 146666,
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     138.63668560000008,
+     -34.88212730399994
+    ]
+   },
+   "properties": {
+    "ROADWORKS_AND_INCIDENTS_ID": "3398487726",
+    "REC_TYPE": "ROADWORKS",
+    "INCIDENT_ID": 0,
+    "DESCRIPTION": "Asphalt Works",
+    "START_DATE": 1786959000000,
+    "END_DATE": 1793458800000,
+    "ROAD_NO": 5609,
+    "LOCAL_ROAD": "O G Road",
+    "SIDE_STREET": "Wilpena Av",
+    "SUBURB": "Klemzig",
+    "LATITUDE": -34.8821273038313,
+    "LONGITUDE": 138.636685600061,
+    "GIS_LINK_ID": 99993398487726,
+    "ACTIVE": " ",
+    "START_DATE_STRING": "Mon 17 Aug 2026 09:30 AM",
+    "END_DATE_STRING": "Sat 31 Oct 2026 03:00 PM",
+    "TRAFFIC_DIR": "Both Directions",
+    "NO_LANES_CLOSED": "Lateral Shift",
+    "SPEED_LIMIT": "40",
+    "ESRI_OID": 146666
+   }
+  }
+ ]
+}

@@ -167,6 +167,13 @@ export const DATA_CREDITS = [
       ' · Incident information: ' +
       '<a href="https://inciweb.wildfire.gov/" target="_blank" rel="noopener">InciWeb</a>',
   },
+  {
+    key: 'traffic-sa',
+    html:
+      'Roadworks, incidents and closures: ' +
+      '<a href="https://data.sa.gov.au/data/dataset/roadworks-and-incidents-real-time-information" target="_blank" rel="noopener">Traffic SA</a> — Department for Infrastructure and Transport, Government of South Australia ' +
+      '(<a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a>)',
+  },
   OSM_CREDIT,
   OPENMAPTILES_CREDIT,
   {

@@ -109,6 +109,7 @@
     "view band|GLOBAL",
     "voice|ERROR",
     "{rate} msg/s",
+    "{speed} km/h",
     "{speed} kn",
     "{type}  SPD: {speed}  HDG: {heading}",
     "{value} KM",

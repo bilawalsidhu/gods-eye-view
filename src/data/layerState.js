@@ -676,6 +676,11 @@ export const LAYER_STATE_REGISTRY = Object.freeze([
     disposition: 'enabled-only',
   }),
   Object.freeze({
+    id: 'sa-road-events',
+    token: '5',
+    disposition: 'enabled-only',
+  }),
+  Object.freeze({
     id: 'satellites',
     token: 's',
     disposition: 'enabled+options',
