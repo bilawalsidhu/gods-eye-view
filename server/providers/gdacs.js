@@ -27,7 +27,7 @@ const FAILURE_RETRY_MS = 5 * MINUTE;
 const COOLDOWN_MS = 5 * MINUTE;
 /** Floor for an upstream-supplied Retry-After; it only ever lengthens it. */
 const COOLDOWN_MIN_MS = 30_000;
-/** A Retry-After further out than this is treated as a broken header. */
+/** A Retry-After further out than this is capped to it. */
 const COOLDOWN_MAX_MS = 24 * 60 * MINUTE;
 const MAX_RESPONSE_BYTES = 8 * 1024 * 1024;
 const TIMEOUT_MS = 20_000;

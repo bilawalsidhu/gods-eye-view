@@ -253,6 +253,33 @@ test('missing feeds, cached copies and a failed refresh are reported without dro
   );
 });
 
+test('a failed refresh after an empty load is named on the row', async () => {
+  let fail = false;
+  const { layer } = harness(async () => {
+    if (fail) throw new Error('GDACS HTTP 502');
+    return { events: [], missing: [], stale: false };
+  });
+  layer.enable();
+  await layer.update();
+  assert.equal(
+    layer.getRowControls().info,
+    [
+      'No GDACS events on the map',
+      'Automatic impact estimates, not official warnings',
+    ].join(' · '),
+  );
+  fail = true;
+  assert.equal(await layer.update(), false);
+  assert.equal(
+    layer.getRowControls().info,
+    [
+      'No GDACS events on the map',
+      'Last refresh failed: GDACS HTTP 502',
+      'Automatic impact estimates, not official warnings',
+    ].join(' · '),
+  );
+});
+
 test('the caveat and the feed notices stay on the row while an event is selected', async () => {
   let fail = false;
   const { layer } = harness(async () => {
