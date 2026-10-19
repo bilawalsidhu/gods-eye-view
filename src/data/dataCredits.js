@@ -172,7 +172,7 @@ export const DATA_CREDITS = [
     html:
       'Animal tracking data: ' +
       '<a href="https://www.movebank.org/" target="_blank" rel="noopener">Movebank</a>' +
-      ' (movebank.org) studies by INBO and the Max Planck Institute of Animal Behavior, CC0',
+      ' (movebank.org) studies by INBO and the Max Planck Institute of Animal Behavior; published datasets CC0',
   },
   OSM_CREDIT,
   OPENMAPTILES_CREDIT,

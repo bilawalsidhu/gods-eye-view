@@ -1,6 +1,10 @@
 import { readResponseJsonCapped } from '../../sources/httpBody.js';
 import { sanitizeWildlifeSnapshot } from './records.js';
 
+// A portable export (package.json): no i18n here. Failures stay English data;
+// the Layers panel shows them translated.
+const msg = (text) => text;
+
 /** Request the curated Movebank tracks through the same-origin proxy. */
 export function createWildlifeSource({
   fetchImpl = (...args) => globalThis.fetch(...args),
@@ -18,7 +22,7 @@ export function createWildlifeSource({
       );
       signal?.throwIfAborted();
       const snapshot = sanitizeWildlifeSnapshot(payload);
-      if (!snapshot) throw new Error('Malformed wildlife snapshot');
+      if (!snapshot) throw new Error(msg('Malformed wildlife snapshot'));
       return {
         ...snapshot,
         fetchedAt: Number.isFinite(payload.fetchedAt)
