@@ -2957,5 +2957,8 @@
   "USB work abandoned after a stalled transfer": "Работа с USB прервана: передача данных зависла",
   "SDR decoder did not start; receiver stopped": "Декодер SDR не запустился; приёмник остановлен",
   "SDR decoder stopped responding; receiver stopped": "Декодер SDR перестал отвечать; приёмник остановлен",
-  "SDR decoder fell behind; receiver stopped": "Декодер SDR не успевает; приёмник остановлен"
+  "SDR decoder fell behind; receiver stopped": "Декодер SDR не успевает; приёмник остановлен",
+  "Overpass is not configured": "Overpass не настроен",
+  "Speed Cameras": "Камеры контроля скорости",
+  "Speed camera source unavailable": "Источник данных о камерах контроля скорости недоступен"
 }
