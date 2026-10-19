@@ -58,7 +58,28 @@ export function createVoiceCommands({
       ui.helpDetail.textContent = t('Activate to toggle voice');
   }
   // Retain the existing controller's inspection surface for browser tools.
-  const controls = adapter.controller || session;
+  const controls =
+    adapter.controller ||
+    (adapter.getController
+      ? new Proxy(session, {
+          get(target, name) {
+            if (name in target) return Reflect.get(target, name);
+            if (name === 'runner') return runner;
+            if (name === 'status') return target.state;
+            if (name === 'sendTextCommand') return target.sendText;
+            const controller = adapter.getController();
+            const value = controller?.[name];
+            return typeof value === 'function' ? value.bind(controller) : value;
+          },
+          set(target, name, value) {
+            const controller = adapter.getController();
+            if (name in target || name === 'session' || !controller)
+              target[name] = value;
+            else controller[name] = value;
+            return true;
+          },
+        })
+      : session);
   controls.session = session;
   const updateStatus = session.subscribe((event) => {
     if (event.type !== 'state') return;

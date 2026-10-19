@@ -2,11 +2,13 @@ import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { parseEnv } from 'node:util';
 import { fileURLToPath } from 'node:url';
+import { LOCAL_AI_SETTINGS } from '../src/voice/localConfig.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const DEFAULT_ENVIRONMENT_FILE = path.join(ROOT, 'pinokio', 'ENVIRONMENT');
 
 export const PINOKIO_CONFIG_FIELDS = Object.freeze([
+  ...Object.keys(LOCAL_AI_SETTINGS),
   'GOOGLE_MAPS_API_KEY',
   'GOOGLE_MAPS_SERVER_API_KEY',
   'CESIUM_ION_TOKEN',

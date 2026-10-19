@@ -1,3 +1,4 @@
+import { LOCAL_AI_SETTINGS } from './voice/localConfig.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -109,9 +110,10 @@ test('Windows owner SID parsing reads only the structured user-SID CSV field', (
 test('validation accepts every registry env var and only those', () => {
   const known = knownKeySetupEnvVars();
   for (const name of known) {
-    const verdict = validateKeySetupUpdates({ [name]: 'valid-value-123' });
+    const value = name === 'LOCAL_AI_MCP_URL' ? 'http://127.0.0.1:8000/mcp' : LOCAL_AI_SETTINGS[name] ?? 'valid-value-123';
+    const verdict = validateKeySetupUpdates({ [name]: value });
     assert.equal(verdict.ok, true, `${name} should validate`);
-    assert.equal(verdict.updates[name], 'valid-value-123');
+    assert.equal(verdict.updates[name], value);
   }
   assert.equal(validateKeySetupUpdates({ PATH: '/usr/bin' }).ok, false, 'PATH must be refused');
   assert.equal(validateKeySetupUpdates({ NODE_OPTIONS: '--x' }).ok, false, 'NODE_OPTIONS must be refused');

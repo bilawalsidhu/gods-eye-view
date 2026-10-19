@@ -1,0 +1,328 @@
+{
+  "bonsai-low": {
+    "id": "bonsai-low",
+    "kind": "chat",
+    "title": "Ternary Bonsai 1.7B",
+    "repo": "onnx-community/Ternary-Bonsai-1.7B-ONNX",
+    "revision": "8beb5ca724ad1489e02c7834d065cfce1a759628",
+    "dtype": "q2f16",
+    "files": [
+      {
+        "url": "https://huggingface.co/onnx-community/Ternary-Bonsai-1.7B-ONNX/resolve/8beb5ca724ad1489e02c7834d065cfce1a759628/chat_template.jinja",
+        "size": 4063
+      },
+      {
+        "url": "https://huggingface.co/onnx-community/Ternary-Bonsai-1.7B-ONNX/resolve/8beb5ca724ad1489e02c7834d065cfce1a759628/config.json",
+        "size": 2172
+      },
+      {
+        "url": "https://huggingface.co/onnx-community/Ternary-Bonsai-1.7B-ONNX/resolve/8beb5ca724ad1489e02c7834d065cfce1a759628/generation_config.json",
+        "size": 290
+      },
+      {
+        "url": "https://huggingface.co/onnx-community/Ternary-Bonsai-1.7B-ONNX/resolve/8beb5ca724ad1489e02c7834d065cfce1a759628/onnx/model_q2f16.onnx",
+        "size": 358985
+      },
+      {
+        "url": "https://huggingface.co/onnx-community/Ternary-Bonsai-1.7B-ONNX/resolve/8beb5ca724ad1489e02c7834d065cfce1a759628/onnx/model_q2f16.onnx_data",
+        "size": 470044188
+      },
+      {
+        "url": "https://huggingface.co/onnx-community/Ternary-Bonsai-1.7B-ONNX/resolve/8beb5ca724ad1489e02c7834d065cfce1a759628/tokenizer.json",
+        "size": 9117036
+      },
+      {
+        "url": "https://huggingface.co/onnx-community/Ternary-Bonsai-1.7B-ONNX/resolve/8beb5ca724ad1489e02c7834d065cfce1a759628/tokenizer_config.json",
+        "size": 4598
+      }
+    ]
+  },
+  "whisper-low": {
+    "id": "whisper-low",
+    "kind": "recognition",
+    "title": "Whisper tiny",
+    "repo": "Xenova/whisper-tiny",
+    "revision": "5332fcc35e32a33b86612b9a57a89be7906102b1",
+    "dtype": "q8",
+    "files": [
+      {
+        "url": "https://huggingface.co/Xenova/whisper-tiny/resolve/5332fcc35e32a33b86612b9a57a89be7906102b1/added_tokens.json",
+        "size": 2082
+      },
+      {
+        "url": "https://huggingface.co/Xenova/whisper-tiny/resolve/5332fcc35e32a33b86612b9a57a89be7906102b1/config.json",
+        "size": 2248
+      },
+      {
+        "url": "https://huggingface.co/Xenova/whisper-tiny/resolve/5332fcc35e32a33b86612b9a57a89be7906102b1/generation_config.json",
+        "size": 3716
+      },
+      {
+        "url": "https://huggingface.co/Xenova/whisper-tiny/resolve/5332fcc35e32a33b86612b9a57a89be7906102b1/merges.txt",
+        "size": 493869
+      },
+      {
+        "url": "https://huggingface.co/Xenova/whisper-tiny/resolve/5332fcc35e32a33b86612b9a57a89be7906102b1/normalizer.json",
+        "size": 52666
+      },
+      {
+        "url": "https://huggingface.co/Xenova/whisper-tiny/resolve/5332fcc35e32a33b86612b9a57a89be7906102b1/onnx/decoder_model_merged_quantized.onnx",
+        "size": 30727765
+      },
+      {
+        "url": "https://huggingface.co/Xenova/whisper-tiny/resolve/5332fcc35e32a33b86612b9a57a89be7906102b1/onnx/encoder_model_quantized.onnx",
+        "size": 10124910
+      },
+      {
+        "url": "https://huggingface.co/Xenova/whisper-tiny/resolve/5332fcc35e32a33b86612b9a57a89be7906102b1/preprocessor_config.json",
+        "size": 339
+      },
+      {
+        "url": "https://huggingface.co/Xenova/whisper-tiny/resolve/5332fcc35e32a33b86612b9a57a89be7906102b1/special_tokens_map.json",
+        "size": 2194
+      },
+      {
+        "url": "https://huggingface.co/Xenova/whisper-tiny/resolve/5332fcc35e32a33b86612b9a57a89be7906102b1/tokenizer.json",
+        "size": 2480466
+      },
+      {
+        "url": "https://huggingface.co/Xenova/whisper-tiny/resolve/5332fcc35e32a33b86612b9a57a89be7906102b1/tokenizer_config.json",
+        "size": 282683
+      },
+      {
+        "url": "https://huggingface.co/Xenova/whisper-tiny/resolve/5332fcc35e32a33b86612b9a57a89be7906102b1/vocab.json",
+        "size": 1036584
+      }
+    ]
+  },
+  "bonsai-balance": {
+    "id": "bonsai-balance",
+    "kind": "chat",
+    "title": "Ternary Bonsai 4B",
+    "repo": "onnx-community/Ternary-Bonsai-4B-ONNX",
+    "revision": "9d085aaf786063cadb648fff1725c2c36fd28ade",
+    "dtype": "q2f16",
+    "files": [
+      {
+        "url": "https://huggingface.co/onnx-community/Ternary-Bonsai-4B-ONNX/resolve/9d085aaf786063cadb648fff1725c2c36fd28ade/chat_template.jinja",
+        "size": 4063
+      },
+      {
+        "url": "https://huggingface.co/onnx-community/Ternary-Bonsai-4B-ONNX/resolve/9d085aaf786063cadb648fff1725c2c36fd28ade/config.json",
+        "size": 2348
+      },
+      {
+        "url": "https://huggingface.co/onnx-community/Ternary-Bonsai-4B-ONNX/resolve/9d085aaf786063cadb648fff1725c2c36fd28ade/generation_config.json",
+        "size": 290
+      },
+      {
+        "url": "https://huggingface.co/onnx-community/Ternary-Bonsai-4B-ONNX/resolve/9d085aaf786063cadb648fff1725c2c36fd28ade/onnx/model_q2f16.onnx",
+        "size": 459167
+      },
+      {
+        "url": "https://huggingface.co/onnx-community/Ternary-Bonsai-4B-ONNX/resolve/9d085aaf786063cadb648fff1725c2c36fd28ade/onnx/model_q2f16.onnx_data",
+        "size": 1086368163
+      },
+      {
+        "url": "https://huggingface.co/onnx-community/Ternary-Bonsai-4B-ONNX/resolve/9d085aaf786063cadb648fff1725c2c36fd28ade/tokenizer.json",
+        "size": 9117036
+      },
+      {
+        "url": "https://huggingface.co/onnx-community/Ternary-Bonsai-4B-ONNX/resolve/9d085aaf786063cadb648fff1725c2c36fd28ade/tokenizer_config.json",
+        "size": 4598
+      }
+    ]
+  },
+  "whisper-balance": {
+    "id": "whisper-balance",
+    "kind": "recognition",
+    "title": "Whisper base",
+    "repo": "Xenova/whisper-base",
+    "revision": "64da57285918e20ea79ea5c88eed7197933abaa8",
+    "dtype": "q8",
+    "files": [
+      {
+        "url": "https://huggingface.co/Xenova/whisper-base/resolve/64da57285918e20ea79ea5c88eed7197933abaa8/added_tokens.json",
+        "size": 2082
+      },
+      {
+        "url": "https://huggingface.co/Xenova/whisper-base/resolve/64da57285918e20ea79ea5c88eed7197933abaa8/config.json",
+        "size": 2248
+      },
+      {
+        "url": "https://huggingface.co/Xenova/whisper-base/resolve/64da57285918e20ea79ea5c88eed7197933abaa8/generation_config.json",
+        "size": 3776
+      },
+      {
+        "url": "https://huggingface.co/Xenova/whisper-base/resolve/64da57285918e20ea79ea5c88eed7197933abaa8/merges.txt",
+        "size": 493869
+      },
+      {
+        "url": "https://huggingface.co/Xenova/whisper-base/resolve/64da57285918e20ea79ea5c88eed7197933abaa8/normalizer.json",
+        "size": 52666
+      },
+      {
+        "url": "https://huggingface.co/Xenova/whisper-base/resolve/64da57285918e20ea79ea5c88eed7197933abaa8/onnx/decoder_model_merged_quantized.onnx",
+        "size": 53707539
+      },
+      {
+        "url": "https://huggingface.co/Xenova/whisper-base/resolve/64da57285918e20ea79ea5c88eed7197933abaa8/onnx/encoder_model_quantized.onnx",
+        "size": 23200850
+      },
+      {
+        "url": "https://huggingface.co/Xenova/whisper-base/resolve/64da57285918e20ea79ea5c88eed7197933abaa8/preprocessor_config.json",
+        "size": 339
+      },
+      {
+        "url": "https://huggingface.co/Xenova/whisper-base/resolve/64da57285918e20ea79ea5c88eed7197933abaa8/special_tokens_map.json",
+        "size": 2194
+      },
+      {
+        "url": "https://huggingface.co/Xenova/whisper-base/resolve/64da57285918e20ea79ea5c88eed7197933abaa8/tokenizer.json",
+        "size": 2480466
+      },
+      {
+        "url": "https://huggingface.co/Xenova/whisper-base/resolve/64da57285918e20ea79ea5c88eed7197933abaa8/tokenizer_config.json",
+        "size": 282683
+      },
+      {
+        "url": "https://huggingface.co/Xenova/whisper-base/resolve/64da57285918e20ea79ea5c88eed7197933abaa8/vocab.json",
+        "size": 1036584
+      }
+    ]
+  },
+  "bonsai-max": {
+    "id": "bonsai-max",
+    "kind": "chat",
+    "title": "Ternary Bonsai 8B",
+    "repo": "onnx-community/Ternary-Bonsai-8B-ONNX",
+    "revision": "c5855456da9518833230639397230788b5a45f1a",
+    "dtype": "q2f16",
+    "files": [
+      {
+        "url": "https://huggingface.co/onnx-community/Ternary-Bonsai-8B-ONNX/resolve/c5855456da9518833230639397230788b5a45f1a/chat_template.jinja",
+        "size": 4063
+      },
+      {
+        "url": "https://huggingface.co/onnx-community/Ternary-Bonsai-8B-ONNX/resolve/c5855456da9518833230639397230788b5a45f1a/config.json",
+        "size": 2352
+      },
+      {
+        "url": "https://huggingface.co/onnx-community/Ternary-Bonsai-8B-ONNX/resolve/c5855456da9518833230639397230788b5a45f1a/generation_config.json",
+        "size": 290
+      },
+      {
+        "url": "https://huggingface.co/onnx-community/Ternary-Bonsai-8B-ONNX/resolve/c5855456da9518833230639397230788b5a45f1a/onnx/model_q2f16.onnx",
+        "size": 459780
+      },
+      {
+        "url": "https://huggingface.co/onnx-community/Ternary-Bonsai-8B-ONNX/resolve/c5855456da9518833230639397230788b5a45f1a/onnx/model_q2f16.onnx_data",
+        "size": 2043353232
+      },
+      {
+        "url": "https://huggingface.co/onnx-community/Ternary-Bonsai-8B-ONNX/resolve/c5855456da9518833230639397230788b5a45f1a/onnx/model_q2f16.onnx_data_1",
+        "size": 166229224
+      },
+      {
+        "url": "https://huggingface.co/onnx-community/Ternary-Bonsai-8B-ONNX/resolve/c5855456da9518833230639397230788b5a45f1a/tokenizer.json",
+        "size": 9117036
+      },
+      {
+        "url": "https://huggingface.co/onnx-community/Ternary-Bonsai-8B-ONNX/resolve/c5855456da9518833230639397230788b5a45f1a/tokenizer_config.json",
+        "size": 4598
+      }
+    ]
+  },
+  "whisper-max": {
+    "id": "whisper-max",
+    "kind": "recognition",
+    "title": "Whisper small",
+    "repo": "Xenova/whisper-small",
+    "revision": "2d67713f236afa48a18992566e7647f6ca848e13",
+    "dtype": "q8",
+    "files": [
+      {
+        "url": "https://huggingface.co/Xenova/whisper-small/resolve/2d67713f236afa48a18992566e7647f6ca848e13/added_tokens.json",
+        "size": 2082
+      },
+      {
+        "url": "https://huggingface.co/Xenova/whisper-small/resolve/2d67713f236afa48a18992566e7647f6ca848e13/config.json",
+        "size": 2232
+      },
+      {
+        "url": "https://huggingface.co/Xenova/whisper-small/resolve/2d67713f236afa48a18992566e7647f6ca848e13/generation_config.json",
+        "size": 3837
+      },
+      {
+        "url": "https://huggingface.co/Xenova/whisper-small/resolve/2d67713f236afa48a18992566e7647f6ca848e13/merges.txt",
+        "size": 493869
+      },
+      {
+        "url": "https://huggingface.co/Xenova/whisper-small/resolve/2d67713f236afa48a18992566e7647f6ca848e13/normalizer.json",
+        "size": 52666
+      },
+      {
+        "url": "https://huggingface.co/Xenova/whisper-small/resolve/2d67713f236afa48a18992566e7647f6ca848e13/onnx/decoder_model_merged_quantized.onnx",
+        "size": 156780950
+      },
+      {
+        "url": "https://huggingface.co/Xenova/whisper-small/resolve/2d67713f236afa48a18992566e7647f6ca848e13/onnx/encoder_model_quantized.onnx",
+        "size": 92324809
+      },
+      {
+        "url": "https://huggingface.co/Xenova/whisper-small/resolve/2d67713f236afa48a18992566e7647f6ca848e13/preprocessor_config.json",
+        "size": 339
+      },
+      {
+        "url": "https://huggingface.co/Xenova/whisper-small/resolve/2d67713f236afa48a18992566e7647f6ca848e13/special_tokens_map.json",
+        "size": 2194
+      },
+      {
+        "url": "https://huggingface.co/Xenova/whisper-small/resolve/2d67713f236afa48a18992566e7647f6ca848e13/tokenizer.json",
+        "size": 2480466
+      },
+      {
+        "url": "https://huggingface.co/Xenova/whisper-small/resolve/2d67713f236afa48a18992566e7647f6ca848e13/tokenizer_config.json",
+        "size": 282683
+      },
+      {
+        "url": "https://huggingface.co/Xenova/whisper-small/resolve/2d67713f236afa48a18992566e7647f6ca848e13/vocab.json",
+        "size": 1036584
+      }
+    ]
+  },
+  "piper-ru": {
+    "id": "piper-ru",
+    "kind": "speech",
+    "title": "Piper Irina",
+    "repo": "rhasspy/piper-voices",
+    "revision": "8914c16824264dfe6425deffca679ce9bb1ab371",
+    "files": [
+      {
+        "url": "https://huggingface.co/rhasspy/piper-voices/resolve/8914c16824264dfe6425deffca679ce9bb1ab371/ru/ru_RU/irina/medium/ru_RU-irina-medium.onnx",
+        "size": 63201294
+      },
+      {
+        "url": "https://huggingface.co/rhasspy/piper-voices/resolve/8914c16824264dfe6425deffca679ce9bb1ab371/ru/ru_RU/irina/medium/ru_RU-irina-medium.onnx.json",
+        "size": 4765
+      }
+    ]
+  },
+  "piper-en": {
+    "id": "piper-en",
+    "kind": "speech",
+    "title": "Piper Lessac",
+    "repo": "rhasspy/piper-voices",
+    "revision": "8914c16824264dfe6425deffca679ce9bb1ab371",
+    "files": [
+      {
+        "url": "https://huggingface.co/rhasspy/piper-voices/resolve/8914c16824264dfe6425deffca679ce9bb1ab371/en/en_US/lessac/medium/en_US-lessac-medium.onnx",
+        "size": 63201294
+      },
+      {
+        "url": "https://huggingface.co/rhasspy/piper-voices/resolve/8914c16824264dfe6425deffca679ce9bb1ab371/en/en_US/lessac/medium/en_US-lessac-medium.onnx.json",
+        "size": 4885
+      }
+    ]
+  }
+}

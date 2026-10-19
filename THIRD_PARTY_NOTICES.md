@@ -2,8 +2,28 @@
 
 The project depends on third-party npm packages whose own licenses apply. This
 file records the packages added for the browser-local SDR feature and the
-Street Level viewer; the complete resolved dependency inventory remains in
+Street Level viewer and browser local AI; the complete resolved dependency inventory remains in
 `package-lock.json`.
+
+## Browser local AI
+
+- `@huggingface/transformers` 4.3.0: Apache License 2.0.
+  Source and license: <https://github.com/huggingface/transformers.js>.
+- `onnxruntime-web` 1.31.0-dev.20260914-8d85527a0: MIT.
+  Source and license: <https://github.com/microsoft/onnxruntime>.
+- `@diffusionstudio/piper-wasm` 1.0.0: npm package metadata declares MIT.
+  Its phonemizer build includes eSpeak NG, which retains GPL v3 terms.
+  The npm package's MIT metadata does not relicense that component.
+  Source, build instructions and generated assets:
+  <https://github.com/diffusionstudio/piper-wasm>;
+  phonemizer sources: <https://github.com/wide-video/piper-phonemize>;
+  eSpeak NG sources and license: <https://github.com/rhasspy/espeak-ng>.
+  The shipped license and source directions are in `public/licenses/`.
+
+Model weights are downloaded by the user from their pinned Hugging Face
+repositories, rather than redistributed in this repository. Bonsai, Whisper
+and individual Piper voices keep their own model-card licenses and attribution;
+the exact sources are recorded in `src/voice/localModels.json`.
 
 ## Web RTL-SDR
 

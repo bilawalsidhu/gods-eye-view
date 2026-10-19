@@ -139,6 +139,16 @@ function createRealtimeTokenHandler({
 } = {}) {
   return async (req, res) => {
     res.setHeader('Cache-Control', 'no-store');
+    if (process.env.GEV_AI_PROVIDER === 'local') {
+      res.statusCode = 409;
+      res.setHeader('Content-Type', 'application/json');
+      res.end(
+        JSON.stringify({
+          error: 'Local AI is selected; use the local voice service',
+        }),
+      );
+      return;
+    }
     if (req.method !== 'GET' && req.method !== 'POST') {
       res.statusCode = 405;
       res.setHeader('Content-Type', 'application/json');

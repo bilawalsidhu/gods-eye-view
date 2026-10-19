@@ -40,6 +40,8 @@ _“pretty cool”_ — [Brendan Eich](https://x.com/BrendanEich/status/20945920
 
 ## 🌍 Why This Exists
 
+**Local AI:** this fork supports Ternary Bonsai with **low / balance / max** profiles, Whisper speech recognition, Piper voices, and optional search MCP. Select **Local** in **POWER UP → AI ASSISTANT** and download the three models with the **DOWNLOAD** buttons. Models are cached in the browser and run there using WebGPU/WASM; no Python or separate inference server is needed. [Browser requirements and cache details](docs/LOCAL_AI.md).
+
 God's Eye View brings public signals into one explorable globe. Track the world live. Talk to it. Break it. Extend it.
 
 Flight transponders, ship beacons, orbital elements, seismographs, and public cameras already tell us a lot about the world. God's Eye View puts them in the same place, so you can move between a global picture and an individual aircraft, ship, or street. It runs locally in your browser, with source code you can inspect and extend.

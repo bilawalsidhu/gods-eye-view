@@ -357,7 +357,9 @@
       "server/standalone/key-setup.js",
       "src/keySetupCore.mjs",
       "src/localRequestGate.mjs",
-      "server/standalone/key-setup-hardening.mjs"
+      "server/standalone/key-setup-hardening.mjs",
+      "src/voice/localConfig.js",
+      "src/voice/localProfiles.json"
     ],
     "external": []
   },
@@ -463,7 +465,9 @@
       "src/i18n/index.js",
       "src/i18n/locale.js",
       "src/i18n/locales/es.json",
-      "src/i18n/locales/ru.json"
+      "src/i18n/locales/ru.json",
+      "src/voice/localConfig.js",
+      "src/voice/localProfiles.json"
     ],
     "external": []
   },
@@ -493,7 +497,9 @@
       "src/i18n/locales/ru.json",
       "src/ui/unitLabels.js",
       "src/ui/keyGuidance.js",
-      "src/ui/statusText.js"
+      "src/ui/statusText.js",
+      "src/voice/localConfig.js",
+      "src/voice/localProfiles.json"
     ],
     "external": []
   },
@@ -764,7 +770,9 @@
       "src/ui/unitLabels.js",
       "src/ui/keyGuidance.js",
       "src/ui/layerNames.js",
-      "src/ui/statusText.js"
+      "src/ui/statusText.js",
+      "src/voice/localConfig.js",
+      "src/voice/localProfiles.json"
     ],
     "external": ["cesium"]
   },
@@ -1572,7 +1580,9 @@
       "src/i18n/index.js",
       "src/i18n/locale.js",
       "src/i18n/locales/es.json",
-      "src/i18n/locales/ru.json"
+      "src/i18n/locales/ru.json",
+      "src/voice/localConfig.js",
+      "src/voice/localProfiles.json"
     ],
     "external": ["cesium"]
   },
@@ -1628,7 +1638,22 @@
       "src/i18n/locale.js",
       "src/i18n/locales/es.json",
       "src/i18n/locales/ru.json",
-      "src/ui/statusText.js"
+      "src/ui/statusText.js",
+      "src/voice/configuredSession.js",
+      "src/voice/localSession.js",
+      "src/voice/localConversation.js",
+      "src/voice/actionSchemas.js",
+      "src/voice/browserLocalRuntime.js",
+      "src/voice/localModelCache.js",
+      "src/voice/localModels.json",
+      "src/voice/localConfig.js",
+      "src/voice/localProfiles.json",
+      "src/voice/localAudioCapture.js",
+      "src/voice/localNavigation.js",
+      "src/voice/localCommands.js",
+      "src/voice/localPrompt.js",
+      "src/voice/localModelStorage.js",
+      "src/hudLayoutPolicy.js"
     ],
     "external": []
   },
@@ -2466,7 +2491,6 @@
       "src/data/cameraArrival.js",
       "src/layers/alpr/floors.js",
       "src/data/militaryNames.js",
-      "src/sources/requestDeadline.js",
       "src/data/local_data/osm_military_names/names.json",
       "src/layers/installations/namedMarkers.js",
       "src/data/infrastructureOverlayEntry.js",
@@ -2490,7 +2514,23 @@
       "src/layers/airQuality/index.js",
       "src/layers/airQuality/model.js",
       "src/layers/airQuality/source.js",
-      "src/ui/statusText.js"
+      "src/ui/statusText.js",
+      "src/voice/localConfig.js",
+      "src/voice/localProfiles.json",
+      "src/localAiSettings.js",
+      "src/voice/configuredSession.js",
+      "src/voice/localSession.js",
+      "src/voice/localConversation.js",
+      "src/voice/browserLocalRuntime.js",
+      "src/voice/localModelCache.js",
+      "src/voice/localModels.json",
+      "src/localModelControls.js",
+      "src/voice/localDownloads.js",
+      "src/voice/localAudioCapture.js",
+      "src/voice/localNavigation.js",
+      "src/voice/localCommands.js",
+      "src/voice/localPrompt.js",
+      "src/voice/localModelStorage.js"
     ],
     "external": [
       "hls.js",
@@ -3042,7 +3082,6 @@
       "src/data/cameraArrival.js",
       "src/layers/alpr/floors.js",
       "src/data/militaryNames.js",
-      "src/sources/requestDeadline.js",
       "src/data/local_data/osm_military_names/names.json",
       "src/layers/installations/namedMarkers.js",
       "src/data/infrastructureOverlayEntry.js",

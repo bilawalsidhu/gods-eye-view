@@ -69,6 +69,7 @@ export function createBrowserViteConfig({
       embedFramingPlugin(),
       panelBuildPlugin(),
     ],
+    worker: { format: 'es' },
     ...(publicDir === undefined ? {} : { publicDir }),
     // A production build must not clean the dependency cache a running dev
     // server is still serving optimized module URLs from.
@@ -78,6 +79,9 @@ export function createBrowserViteConfig({
       // them at startup so first use cannot invalidate already-transformed
       // URLs with Vite's "Outdated Optimize Dep" 504 response.
       include: [
+        '@huggingface/transformers',
+        'onnxruntime-web/webgpu',
+        '@diffusionstudio/piper-wasm',
         '@jtarrio/signals/demod/demodulator.js',
         '@jtarrio/signals/demod/modes.js',
         '@jtarrio/webrtlsdr/rtlsdr.js',

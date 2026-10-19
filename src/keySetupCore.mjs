@@ -1,7 +1,13 @@
+import {
+  LOCAL_AI_SETTINGS,
+  validateLocalSetting,
+} from './voice/localConfig.js';
+
 /**
  * Key setup ("POWER UP") — the pure core.
  *
- * One registry and pure functions; it imports only the proxy-header check
+ * Shared registries and pure functions; it imports the local AI setting
+ * registry/validator, the proxy-header check
  * shared with the other local gates (localRequestGate.mjs) and the msg()
  * marker (src/i18n/marker.js). The dev server's
  * /api/setup endpoints (vite.config.js) and the in-app panel (keySetup.js)
@@ -19,8 +25,8 @@ import { hasProxySignals } from './localRequestGate.mjs';
 /** Longest accepted key/token value. Real provider keys are all far shorter. */
 export const KEY_SETUP_VALUE_LIMIT = 512;
 
-/** Most env vars accepted in one save. The registry defines ten. */
-export const KEY_SETUP_UPDATE_LIMIT = 16;
+/** Most credentials and AI settings accepted in one save. */
+export const KEY_SETUP_UPDATE_LIMIT = 24;
 
 /** Header line written above keys the panel appends to a .env file. */
 export const KEY_SETUP_APPEND_HEADER =
@@ -391,7 +397,7 @@ export function admitKeySetupRequest({
 
 /** @returns {Set<string>} every env var the panel is allowed to write. */
 export function knownKeySetupEnvVars() {
-  const names = new Set();
+  const names = new Set(Object.keys(LOCAL_AI_SETTINGS));
   for (const entry of KEY_SETUP_KEYS) {
     for (const envVar of entry.envVars) names.add(envVar);
   }
@@ -573,6 +579,8 @@ export function validateKeySetupUpdates(body) {
         params: { name },
       };
     }
+    const settingError = validateLocalSetting(name, value);
+    if (settingError) return { ok: false, error: `${name}: ${settingError}` };
     updates[name] = value;
   }
   return { ok: true, updates };

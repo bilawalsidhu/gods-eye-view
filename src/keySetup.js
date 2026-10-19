@@ -1,4 +1,6 @@
 import { createSurfaceKeyboard } from './ui/surfaceKeyboard.js';
+import { appendAiSettings, collectAiSettings } from './localAiSettings.js';
+import { hasLocalDownloads } from './voice/localDownloads.js';
 import {
   readStoredCloudVoiceAuthMode,
   writeStoredCloudVoiceAuthMode,
@@ -238,7 +240,7 @@ function updateCloudVoiceAuthControl(auth, busy = false) {
 }
 
 /** Build one key row. All content is our own registry text, set via textContent. */
-function buildRow(documentRef, key) {
+function buildRow(documentRef, key, ai, onCleanup) {
   const row = documentRef.createElement('section');
   row.className = 'key-setup-row';
   row.dataset.keyId = key.id;
@@ -252,7 +254,7 @@ function buildRow(documentRef, key) {
   led.className = 'key-setup-led';
   led.setAttribute('aria-hidden', 'true');
   const title = documentRef.createElement('strong');
-  title.textContent = key.title; // i18n-ignore: provider product name
+  title.textContent = key.id === 'openai' && ai ? t('AI ASSISTANT') : key.title;
   const tier = documentRef.createElement('span');
   tier.className = 'key-setup-tier';
   tier.textContent = TIER_DOTS[key.tier] || '';
@@ -339,6 +341,8 @@ function buildRow(documentRef, key) {
     updateCloudVoiceAuthControl(auth);
     row.append(auth);
   }
+  if (key.id === 'openai' && ai)
+    onCleanup(appendAiSettings(documentRef, row, ai));
   return row;
 }
 
@@ -382,13 +386,17 @@ export async function initKeySetup({
   const lifetime = new AbortController();
   let disposed = false;
   let disposeControls = () => {};
+  let rowDisposers = [];
   let disposePlacement = () => {};
   // A pasted key lives only in its field until Save: switching language (a
   // reload) asks first while any field holds one.
   const unregisterUnsavedWork = registerUnsavedWork(() =>
     [...(root.querySelectorAll?.('input[data-env-var]') || [])].some((input) =>
       String(input.value ?? '').trim(),
-    )
+    ) ||
+    Object.keys(
+      collectAiSettings(root.querySelectorAll?.('[data-ai-setting]') || []),
+    ).length > 0
       ? msg('unsaved provider keys')
       : null,
   );
@@ -399,6 +407,7 @@ export async function initKeySetup({
     lifetime.abort();
     signal?.removeEventListener('abort', destroy);
     disposeControls();
+    for (const dispose of rowDisposers) dispose();
     disposePlacement();
     chip.remove();
     root.remove();
@@ -452,11 +461,17 @@ export async function initKeySetup({
     chip.setAttribute('aria-label', chip.title);
     // Fully powered is the owner's clean screen: the chip retires. The dialog
     // stays reachable this session (and via ?setup=1) to swap or verify keys.
-    chip.hidden = status.setCount >= status.total;
+    chip.hidden = status.setCount >= status.total && !status.ai;
     if (!rowsHost) return;
+    for (const dispose of rowDisposers) dispose();
+    rowDisposers = [];
     rowsHost.textContent = '';
     for (const key of status.keys || [])
-      rowsHost.append(buildRow(documentRef, key));
+      rowsHost.append(
+        buildRow(documentRef, key, status.ai, (dispose) =>
+          rowDisposers.push(dispose),
+        ),
+      );
     syncCloudVoiceAuth();
   };
 
@@ -510,6 +525,12 @@ export async function initKeySetup({
   // destination is interpolated so the {store} phrase stays one spelling.
   const submitUpdates = async (updates, doneMessageKey) => {
     if (disposed || busy) return;
+    if (hasLocalDownloads()) {
+      say(
+        t('Wait for model downloads to finish, or cancel them before saving.'),
+      );
+      return;
+    }
     const googleWasUnset = !status?.keys?.find(
       (key) => key.id === 'google-maps',
     )?.set;
@@ -578,8 +599,12 @@ export async function initKeySetup({
         value: input.value,
       })),
     );
+    Object.assign(
+      updates,
+      collectAiSettings(root.querySelectorAll('[data-ai-setting]')),
+    );
     if (!Object.keys(updates).length) {
-      say(t('Paste at least one key first.'));
+      say(t('Paste a key or change an AI setting first.'));
       return;
     }
     await submitUpdates(

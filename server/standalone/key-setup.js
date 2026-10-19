@@ -13,6 +13,7 @@ import fs from 'node:fs';
 import { parseEnv as parseDotenvText } from 'node:util';
 import { randomUUID } from 'node:crypto';
 import { hardenCredentialFile } from './key-setup-hardening.mjs';
+import { LOCAL_AI_SETTINGS } from '../../src/voice/localConfig.js';
 
 /**
  * Which launcher started this process, captured at MODULE LOAD — before the
@@ -175,7 +176,16 @@ function keySetupEndpoint({ sourceRoot = defaultSourceRoot } = {}) {
           : 'file'
         : null;
     }
-    return { ...status, store: storeName() };
+    const ai = Object.fromEntries(
+      Object.entries(LOCAL_AI_SETTINGS).map(([name, fallback]) => [
+        name,
+        {
+          value: process.env[name] || fallback,
+          external: isExternallyManaged(name, inStore),
+        },
+      ]),
+    );
+    return { ...status, store: storeName(), ai };
   };
   // Atomically replace the store's content: fresh same-dir temp created 0600
   // with the exclusive flag, fsync, rename over the target. Closes the window

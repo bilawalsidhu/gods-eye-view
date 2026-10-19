@@ -55,6 +55,9 @@ test('raw app-file values override Pinokio-global values, including blanks', () 
     writeFileSync(filepath, [
       'GOOGLE_MAPS_API_KEY=app-configured',
       'OPENAI_API_KEY=',
+      'GEV_AI_PROVIDER=local',
+      'LOCAL_AI_PROFILE=max',
+      'LOCAL_AI_MCP_URL=',
       'GEV_RATELIMIT_OPENAI_PER_MIN=45',
       'GEV_RATELIMIT_GOOGLE_PER_MIN=',
       'PINOKIO_SHARE_CLOUDFLARE=false',
@@ -66,6 +69,9 @@ test('raw app-file values override Pinokio-global values, including blanks', () 
       GOOGLE_MAPS_API_KEY: 'global-google',
       CESIUM_ION_TOKEN: 'global-ion',
       OPENAI_API_KEY: 'global-openai',
+      GEV_AI_PROVIDER: 'openai',
+      LOCAL_AI_PROFILE: 'low',
+      LOCAL_AI_MCP_URL: 'http://localhost:9999/mcp',
       GEV_RATELIMIT_OPENAI_PER_MIN: '999',
       GEV_RATELIMIT_GOOGLE_PER_MIN: '999',
       PINOKIO_SHARE_CLOUDFLARE: 'true',
@@ -78,6 +84,9 @@ test('raw app-file values override Pinokio-global values, including blanks', () 
     assert.equal(environment.GOOGLE_MAPS_API_KEY, 'app-configured');
     assert.equal(environment.CESIUM_ION_TOKEN, '');
     assert.equal(environment.OPENAI_API_KEY, '');
+    assert.equal(environment.GEV_AI_PROVIDER, 'local');
+    assert.equal(environment.LOCAL_AI_PROFILE, 'max');
+    assert.equal(environment.LOCAL_AI_MCP_URL, '');
     assert.equal(environment.GEV_RATELIMIT_OPENAI_PER_MIN, '45');
     assert.equal(environment.GEV_RATELIMIT_GOOGLE_PER_MIN, '');
     assert.equal(environment.PINOKIO_SHARE_CLOUDFLARE, 'false');

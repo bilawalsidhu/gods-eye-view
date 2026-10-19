@@ -4,6 +4,102 @@
    mono kickers. The chip retires once every key is configured.
    ============================================================ */
 
+.key-setup-ai {
+  display: grid;
+  gap: 0.7rem;
+  margin-top: 0.8rem;
+}
+.key-setup-ai label {
+  display: grid;
+  gap: 0.3rem;
+  font-size: 0.7rem;
+}
+.key-setup-ai select,
+.key-setup-ai input {
+  width: 100%;
+  min-width: 0;
+  padding: 0.55rem;
+  color: #e1f4f8;
+  background: #0a1b25;
+  border: 1px solid rgba(54, 220, 255, 0.38);
+  border-radius: 0.3rem;
+}
+.key-setup-ai [hidden],
+.key-setup-cloud-auth[hidden],
+.key-setup-fields[hidden],
+.key-setup-row-head [hidden] {
+  display: none;
+}
+.key-setup-ai a {
+  color: #55dff5;
+}
+
+.local-models,
+.local-model {
+  display: grid;
+  gap: 0.5rem;
+  min-width: 0;
+}
+.local-model {
+  padding: 0.7rem;
+  border: 1px solid rgba(54, 220, 255, 0.22);
+  border-radius: 0.35rem;
+  background: rgba(4, 14, 20, 0.55);
+}
+.local-model strong {
+  font-size: 0.8rem;
+}
+.local-model-kind {
+  color: #55dff5;
+  font-size: 0.55rem;
+  letter-spacing: 0.07rem;
+}
+.local-model-status {
+  font-size: 0.67rem;
+  color: rgba(215, 231, 235, 0.7);
+  overflow-wrap: anywhere;
+}
+.local-model[data-state='ready'] {
+  border-color: rgba(84, 227, 156, 0.4);
+}
+.local-model[data-state='ready'] .local-model-status {
+  color: #54e39c;
+}
+.local-model[data-state='error'] .local-model-status {
+  color: #ffab9a;
+}
+.local-model progress {
+  width: 100%;
+  height: 0.4rem;
+  accent-color: #45e0ff;
+}
+.local-model-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem;
+}
+.local-model-download {
+  padding: 0.45rem 0.65rem;
+  color: #04141c;
+  background: #45d6ee;
+  border: 1px solid #45d6ee;
+  border-radius: 0.3rem;
+  font-family: var(--font-mono);
+  font-size: 0.6rem;
+  cursor: pointer;
+}
+.local-model-download:disabled {
+  background: transparent;
+  color: #7cb9bf;
+  border-color: #3b6970;
+  cursor: default;
+}
+.local-model-download:focus-visible {
+  outline: 2px solid white;
+  outline-offset: 2px;
+}
+
 /* The chip sits in the bottom-right corner row (#corner-actions,
    locale-picker.css), which owns the position. */
 #key-setup-chip {
