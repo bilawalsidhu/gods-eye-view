@@ -112,7 +112,14 @@ perimeters, terrain height, military installations and map features, plus a
 combined situation brief, military awareness around a point, the app's heads-up display caption, and a link that
 opens the app over an area. Tools reuse the layers' portable source factories, take a
 shared `area` argument (place name, bounding box, or point and radius) and cap
-lists at 25 rows by default. Voice offers the same queries next to its app
+lists at 25 rows by default. `aircraft_in_area` and `vessels_in_area` can also
+count every match by a field (`group_by`: airline, read from the ICAO
+designator in the callsign, or operator, country or type for aircraft; type or
+destination for ships; the ten largest groups, then other and unknown counts;
+the summary says when a feed reports none of the field) and summarize airborne
+altitude and speed (`stats`: count, min, median, mean, max).
+Both cover all matches, not just the rows returned; voice leaves these two
+tools out, so they reach MCP clients only. Voice offers the same queries next to its app
 actions: the session lists them, and the browser runs them through the same
 catalog, loaded on first use. See [tools and the MCP server](TOOLS.md).
 Aircraft altitude-band queries require a reported barometric or geometric altitude
@@ -489,6 +496,11 @@ to layer toggles, fly_to_location, frame_overhead, select_nearest_aircraft,
 get_entity_context, annotate_map and analyst_query. Analyst speech and the card
 share one deterministic count/scope headline; lower bounds use "At least" and
 partial answers name the unanswered layers. `get_current_view_state` lists enabled layers only.
+The model-free `gods-eye-view/agent/world-packet` export exposes
+`getWorldPacket({ viewer, styleManager, dataManager, sceneDirector })` to
+non-voice consumers. It reads the same enabled-only state and feed
+provenance before voice adds speech/card fields, with no new network requests
+or mutations.
 The voice card nested in the mic control (`voiceCard.js`) shows captions, plan
 steps and the result. `resultDisplay.js` is the one adapter from a result to
 the card: builder results show as built, and analyst results show a title
@@ -812,7 +824,11 @@ position stay off the map. Genuine zero coordinates remain valid. Undisclosed
 stage coordinates, downrange distance and flight numbers remain unknown; the
 mission panel omits the flight-number label when no number was reported.
 Pending mission requests abort on disable/destruction and malformed launch
-snapshots preserve the last accepted display. Catalog groups, propagation cadence,
+snapshots preserve the last accepted display. A Launch Library stale-cache fallback
+retains its missions but reports STALE in Data Layers; a fresh snapshot clears that
+provenance. Hiding retained missions does not relabel them as fresh, and teardown
+clears the instance state. Injected getLaunches-only sources remain supported.
+Catalog groups, propagation cadence,
 tracking intent, replay timing, controls and source attribution remain unchanged.
 
 The fire layer now exposes `./layers/firms`: an instance factory with separate
@@ -1441,6 +1457,18 @@ an empty dock. Explicit zero and caller-supplied numeric fallbacks remain valid.
 
 ## Terrain height cache bound
 
+The `/api/terrain/heights` route refuses cross-site browser requests before
+rate limiting, cache access or upstream work: a `Sec-Fetch-Site` other than
+`same-origin`/`none` (an `<img>` on another page), or a foreign or opaque
+`Origin`, gets `403`. The per-client limiter keys on the socket address, which
+for such a request is the visitor's own browser, so without the gate any page
+could spend the visitor's 90/min quota and leave the app's own lookups on
+`429`. Unlike the cost-bearing routes, the terrain gate does not refuse
+reverse-proxy forwarding headers: terrain is keyless and needed for rendering,
+and a `403` there would send every chunk to the geoid fallback for an instance
+served behind the documented reverse proxy. Same-origin app requests,
+non-browser local callers and proxied same-origin requests keep working.
+
 The terrain proxy parser rejects finite longitudes outside [-180, 180] and
 latitudes outside [-90, 90] for every client before upstream resolution. One
 out-of-range point rejects the whole batch; inclusive WGS84 bounds remain valid.
@@ -1477,6 +1505,14 @@ request coalescing and optional LL2 server token retain existing behavior.
 The Node-only `gods-eye-view/server/providers/space` export supplies factories;
 `sources/space` supplies fixed upstream URL builders with no I/O or environment
 access. Callers retain validation, transport and response policy.
+
+LL2 recent-launch requests use UTC minute-aligned bounds over the same 30-day
+window, so installations refreshing in the same minute share an upstream cache
+key. The upper bound trails the current time by less than one minute. Requests
+identify the app and repository through User-Agent; the existing 15-minute local
+cache, stale fallback and optional server-only Authorization remain unchanged.
+Provider Settings identifies LL2 tokens as optional paid higher-rate upgrades:
+standard public access needs no key, and its field can remain blank.
 
 The shared TLE text parser skips incomplete named sets and resumes at the next
 complete set. A missing orbital line does not discard the later satellites in
@@ -2664,6 +2700,17 @@ down | auth-failed` (plus the unchanged `missing-key`/`unsupported`) with
 >   tunings. Ambient overlap includes each sprite's own rendered extent. The
 >   gated AIS, CCTV, and satellite passes retain an active-emphasis count so a
 >   settled dim contact always completes its release after tracking ends.
+> - **Terrain-height bounds:** because every distinct 5-decimal point is its own
+>   cache key, its own line in `.gev-cache/terrain-heights.json`, and its own
+>   upstream call, four limits bound what a caller can grow. Coordinates outside
+>   WGS-84 range are rejected with `400` at parse (finite is not the same as on
+>   Earth); the point cache holds at most 50,000 entries, evicting oldest-first
+>   — terrain does not move, so an evicted point costs one refetch and never a
+>   wrong answer; a cache file above 24 MB is not read back into memory (the
+>   ceiling `rocketLaunchesProxy` already applies); and the route carries an
+>   always-on limiter of 90 requests/minute/client, 270 global. That cap is an
+>   order of magnitude above measured demand — a full `npm run test:track` run
+>   drove 10 requests, peaking at 8/min.
 > - **Terrain-height resilience:** `/api/terrain/heights` caches canonical
 >   5-decimal points individually, reconstructs reordered/overlapping batches
 >   in exact request order, and refreshes only missing or stale points. Upstream
@@ -3395,7 +3442,7 @@ its criteria cannot be silently ignored.
 | Satellites             | CelesTrak                                                                                                                                                                                       | `src/data/satellites.js`                              | `/api/celestrak`                                         | 120s                                                                              |
 | Space Missions (30d)   | Launch Library 2 + CelesTrak                                                                                                                                                                    | `src/data/rocketLaunches.js`                          | `/api/launches` + `/api/celestrak/active`                | 5 min                                                                             |
 | Traffic | Selectable TomTom / OpenStreetMap / Hybrid roads; optional TomTom flow (BYOK) | `src/data/traffic.js` | browser-direct OpenFreeMap tiles; `/api/tomtom` for flow | viewport-driven; capped tile cache |
-| CCTV                   | Austin + Caltrans (CA) + TfL London + Ontario 511 + Fintraffic (FI) + DriveBC (BC) + TxDOT (TX) + Estonia (Tallinn, Tarktee) + Live Traffic NSW + Open Calgary Open Data + Statens vegvesen (NO, stills + live HLS) + King County (WA) Open Data + WSDOT (WA) Open Data + NYC DOT TMC (opt-in) + City of Toronto RESCU + Catalonia (Servei Català de Trànsit) + Street View fallback | `src/data/cctv.js`                                    | `/api/cctv`                                              | 10s (active)                                                                      |
+| CCTV                   | Austin + Caltrans (CA) + TfL London + Ontario 511 + Fintraffic (FI) + DriveBC (BC) + TxDOT (TX) + Estonia (Tallinn, Tarktee) + Live Traffic NSW + Open Calgary Open Data + Statens vegvesen (NO, stills + live HLS) + King County (WA) Open Data + WSDOT (WA) Open Data + NYC DOT TMC (opt-in) + City of Toronto RESCU + Catalonia (Servei Català de Trànsit) + FL511 (FL, opt-in) + Street View fallback | `src/data/cctv.js`                                    | `/api/cctv`                                              | 10s (active)                                                                      |
 | Radio                  | Radio Browser (public-domain station directory)                                                                                                                                                 | `src/data/radio.js`                                   | `/api/radio/stations`, `/api/radio/click/:uuid`          | 45 min directory refresh                                                          |
 | Transit 🚌             | Operator GTFS-Realtime VehiclePositions (7 keyless regions, `src/data/transitFeeds.js`)                                                                                                         | `src/layers/transit/` via `src/app/layers/transit.js` | `/api/transit`                                           | 15s (poll + delayed playback)                                                     |
 | Bikeshare 🚲           | GBFS (Lyft + BCycle + Social Bicycles + PBSC incl. Bike Share Toronto, Bike Itaú (Brazil), Bicing (Barcelona) and seven other Spanish cities + Urban Sharing, Entur, JCDecaux (Lillestrøm, Valencia, Seville) + nextbike (AMBici))                                                                                                                                        | `src/data/bikeshare.js`                               | `/api/gbfs`                                              | 60s                                                                               |

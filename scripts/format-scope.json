@@ -96,6 +96,7 @@
   "server/providers/space/launch-library.js",
   "src/data/spaceProviderRequests.js",
   "src/tooling/spaceProviders.test.mjs",
+  "src/tooling/ll2Integration.test.mjs",
   "server/providers/terrain.js",
   "server/providers/traffic.js",
   "server/providers/firms.js",
@@ -446,6 +447,7 @@
   "src/data/rocketLaunches.js",
   "src/layers/satellites/source.test.mjs",
   "src/layers/launches/source.test.mjs",
+  "src/layers/launches/ingestion.test.mjs",
   "src/layers/installations/lifecycle.js",
   "src/layers/installations/viewport.js",
   "src/layers/installations/controls.js",
@@ -635,6 +637,7 @@
   "src/voice/control.js",
   "src/voice/realtimeBackend.js",
   "src/voice/realtimeBackend.test.mjs",
+  "src/agent/worldPacket.test.mjs",
   "src/voice/layerSummary.js",
   "build/application-html.js",
   "src/app/sourceSlot.js",
@@ -1027,6 +1030,7 @@
   "scripts/qa-context-arrivals.mjs",
   "src/tools/catalog.test.mjs",
   "src/tools/area.test.mjs",
+  "src/tools/results.test.mjs",
   "src/tools/queries/queries.test.mjs",
   "src/tools/mcp/mcp.test.mjs",
   "src/tools/localServer.test.mjs",
@@ -1064,5 +1068,6 @@
   "scripts/assemble-changelog.mjs",
   "src/tooling/changelogFragments.test.mjs",
   "src/data/gbfsProxyRateLimit.test.mjs",
+  "src/terrainHeightsBounds.test.mjs",
   "src/voice/globeResetConfirmation.test.mjs"
 ]
