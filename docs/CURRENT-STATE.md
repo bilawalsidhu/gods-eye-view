@@ -496,6 +496,11 @@ to layer toggles, fly_to_location, frame_overhead, select_nearest_aircraft,
 get_entity_context, annotate_map and analyst_query. Analyst speech and the card
 share one deterministic count/scope headline; lower bounds use "At least" and
 partial answers name the unanswered layers. `get_current_view_state` lists enabled layers only.
+The model-free `gods-eye-view/agent/world-packet` export exposes
+`getWorldPacket({ viewer, styleManager, dataManager, sceneDirector })` to
+non-voice consumers. It reads the same enabled-only state and feed
+provenance before voice adds speech/card fields, with no new network requests
+or mutations.
 The voice card nested in the mic control (`voiceCard.js`) shows captions, plan
 steps and the result. `resultDisplay.js` is the one adapter from a result to
 the card: builder results show as built, and analyst results show a title
