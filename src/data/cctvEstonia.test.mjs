@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   loadTallinnSourcesFromCatalog,
+  loadTarkteeSourcesFromDatex,
   parseTarkteeDatexImages,
   parseTarkteeDatexLocations,
 } from '../../server/providers/cctv/sources.js';
@@ -83,4 +84,27 @@ test('Tarktee DATEX image parser rejects non-official hosts', () => {
   );
   const images = parseTarkteeDatexImages(xml);
   assert.equal(images.size, 0);
+});
+
+test('Tarktee DATEX requests wait 30 s, past the slow answers measured live', async (t) => {
+  const timeouts = [];
+  const timeout = AbortSignal.timeout;
+  t.mock.method(AbortSignal, 'timeout', (ms) => {
+    timeouts.push(ms);
+    return timeout.call(AbortSignal, ms);
+  });
+  t.mock.method(console, 'log', () => {});
+  t.mock.method(
+    globalThis,
+    'fetch',
+    async (url) =>
+      new Response(
+        String(url).includes('roadCameraLocations')
+          ? SAMPLE_LOCATIONS_XML
+          : SAMPLE_IMAGES_XML,
+      ),
+  );
+  const cameras = await loadTarkteeSourcesFromDatex();
+  assert.deepEqual(timeouts, [30_000, 30_000]);
+  assert.equal(cameras.length, 1);
 });

@@ -1634,7 +1634,15 @@
       "src/i18n/locale.js",
       "src/i18n/locales/es.json",
       "src/i18n/locales/ru.json",
-      "src/ui/statusText.js"
+      "src/ui/statusText.js",
+      "src/voice/providerCommands.js",
+      "src/voice/providerCapabilities.js",
+      "src/voice/geminiSession.js",
+      "src/voice/geminiAudio.js",
+      "src/voice/geminiCaptureWorklet.js",
+      "src/sources/httpBody.js",
+      "src/sources/requestDeadline.js",
+      "src/i18n/marker.js"
     ],
     "external": []
   },
@@ -2222,6 +2230,7 @@
       "src/voice/commands.js",
       "src/voice/control.js",
       "src/voice/gevActions.js",
+      "src/agent/worldPacket.js",
       "src/voice/speech.js",
       "src/ui/layerNames.js",
       "src/voice/earcon.js",
@@ -2497,7 +2506,12 @@
       "src/layers/airQuality/index.js",
       "src/layers/airQuality/model.js",
       "src/layers/airQuality/source.js",
-      "src/ui/statusText.js"
+      "src/ui/statusText.js",
+      "src/voice/providerCommands.js",
+      "src/voice/providerCapabilities.js",
+      "src/voice/geminiSession.js",
+      "src/voice/geminiAudio.js",
+      "src/voice/geminiCaptureWorklet.js"
     ],
     "external": [
       "hls.js",
@@ -3385,7 +3399,8 @@
       "src/i18n/locale.js",
       "src/i18n/locales/es.json",
       "src/i18n/locales/ru.json",
-      "src/ui/statusText.js"
+      "src/ui/statusText.js",
+      "src/voice/providerCapabilities.js"
     ],
     "external": []
   },
@@ -3952,5 +3967,18 @@
       "src/i18n/marker.js"
     ],
     "external": []
+  },
+  "agent-world-packet": {
+    "exports": ["./agent/world-packet"],
+    "modules": [
+      "src/agent/worldPacket.js",
+      "src/data/layerSnapshot.js",
+      "src/data/feedState.js",
+      "src/contextModePolicy.js",
+      "src/loadingFeedback.js",
+      "src/data/installationFeedback.js",
+      "src/i18n/marker.js"
+    ],
+    "external": ["cesium"]
   }
 }

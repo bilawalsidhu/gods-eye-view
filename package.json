@@ -277,6 +277,7 @@
     "./tools/mcp": "./src/tools/mcp/index.js",
     "./tools/panel": "./src/tools/panel.js",
     "./tools/services": "./src/tools/services.js",
-    "./view": "./src/view/index.js"
+    "./view": "./src/view/index.js",
+    "./agent/world-packet": "./src/agent/worldPacket.js"
   }
 }
