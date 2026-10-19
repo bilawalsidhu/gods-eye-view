@@ -114,7 +114,11 @@
     "exports": ["./server/providers/terrain"],
     "modules": [
       "server/providers/terrain.js",
-      "src/data/terrainHeightsProxy.js"
+      "src/data/terrainHeightsProxy.js",
+      "server/providers/common/rate-limit.js",
+      "src/sources/rateLimit.js",
+      "server/providers/common/same-site.js",
+      "src/localRequestGate.mjs"
     ],
     "external": []
   },
@@ -1040,6 +1044,7 @@
       "src/layers/vessels/tracking.js",
       "src/data/iconOrientation.js",
       "src/data/vesselLabels.js",
+      "src/data/vesselTypes.js",
       "src/layers/vessels/records.js",
       "src/layers/vessels/recordPolicy.js",
       "src/layers/vessels/snapshotRenderer.js",
@@ -1841,6 +1846,7 @@
       "src/data/trafficQueue.js",
       "src/data/trailRenderer.js",
       "src/data/vesselLabels.js",
+      "src/data/vesselTypes.js",
       "src/firstRunExperience.js",
       "src/hud.js",
       "src/hudLocality.js",
@@ -2629,6 +2635,7 @@
       "src/data/trafficQueue.js",
       "src/data/trailRenderer.js",
       "src/data/vesselLabels.js",
+      "src/data/vesselTypes.js",
       "src/keylessGeocoder.js",
       "src/layers/aircraft/classification.js",
       "src/layers/alpr/index.js",
@@ -3782,6 +3789,7 @@
       "src/tools/queries/maritime.js",
       "src/tools/queries/share.js",
       "src/data/idSwitches.js",
+      "src/data/vesselTypes.js",
       "src/data/layerState.js",
       "src/data/layerStateTokenReservations.json",
       "src/sources/gbfsStations.js",
