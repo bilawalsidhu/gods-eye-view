@@ -96,6 +96,7 @@
   "server/providers/space/launch-library.js",
   "src/data/spaceProviderRequests.js",
   "src/tooling/spaceProviders.test.mjs",
+  "src/tooling/ll2Integration.test.mjs",
   "server/providers/terrain.js",
   "server/providers/traffic.js",
   "server/providers/firms.js",
@@ -446,6 +447,7 @@
   "src/data/rocketLaunches.js",
   "src/layers/satellites/source.test.mjs",
   "src/layers/launches/source.test.mjs",
+  "src/layers/launches/ingestion.test.mjs",
   "src/layers/installations/lifecycle.js",
   "src/layers/installations/viewport.js",
   "src/layers/installations/controls.js",
@@ -1062,5 +1064,6 @@
   "src/ui/flyToDataSource.test.mjs",
   "scripts/assemble-changelog.mjs",
   "src/tooling/changelogFragments.test.mjs",
-  "src/data/gbfsProxyRateLimit.test.mjs"
+  "src/data/gbfsProxyRateLimit.test.mjs",
+  "src/terrainHeightsBounds.test.mjs"
 ]
