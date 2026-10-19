@@ -2774,6 +2774,7 @@
   "Data provided by:": "Данные предоставлены:",
   "Exit cockpit to view weather coverage": "Выйдите из кабины, чтобы показать зону покрытия погодного слоя",
   "Exit cockpit to fly to a cyclone": "Выйдите из кабины, чтобы перелететь к циклону",
+  "Exit cockpit to fly to a disaster alert": "Выйдите из кабины, чтобы перелететь к оповещению о бедствии",
   "the title of scene {scene} is empty or longer than {max} characters": "название сцены {scene} пустое или длиннее {max} символов",
   "the title of shot {shot} in scene {scene} is empty or longer than {max} characters": "название кадра {shot} в сцене {scene} пустое или длиннее {max} символов",
   "the project is larger than 5 MiB": "проект больше 5 МиБ",
