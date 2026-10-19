@@ -450,7 +450,7 @@ export function createGdacsAlertsLayer({
           })
         : '',
       _stale ? t('Some feeds are cached copies') : '',
-      _lastError && (_events.length || _selectedId)
+      _lastError && (_events.length || _selectedId || _lastUpdate)
         ? t('Last refresh failed: {error}', {
             error: translateFeedError(_lastError),
           })
