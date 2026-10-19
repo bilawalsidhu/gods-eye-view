@@ -4,30 +4,61 @@ import { clipTileLine } from '../../sources/openFreeMap.js';
 import { tileToBBox } from '../../data/tomtomTiles.js';
 import { decodeFlowTile } from './flowDecode.js';
 
+const FLOW_TILE_PATH = (z, x, y) => `/api/tomtom/flow/${z}/${x}/${y}.pbf`;
+
+/**
+ * Whether the proxy answered a tile from its cache past the refresh window
+ * (STALE-BUDGET once the daily budget is spent, STALE-ERROR when TomTom
+ * fails), and when TomTom produced it.
+ */
+function tileFreshness(response) {
+  const status = response.headers?.get?.('x-tomtom-cache') || '';
+  const fetchedAt = Number(response.headers?.get?.('x-tomtom-fetched-at'));
+  return {
+    stale: status.startsWith('STALE'),
+    fetchedAt: fetchedAt > 0 ? fetchedAt : null,
+  };
+}
+
 /** Own one bounded decoded flow cache; every request still passes the server tile budget. */
 export function createFlowTileSource({
   fetchImpl = (...args) => globalThis.fetch(...args),
 } = {}) {
+  // Freshness travels in response headers, but the tile cache keeps only
+  // decoded segments: hold each response's freshness until its tile decodes,
+  // then key it by the decoded tile, which the cache hands back on a hit.
+  const pending = new Map();
+  const freshness = new WeakMap();
   const tiles = createVectorTileSource({
-    template: '/api/tomtom/flow/{z}/{x}/{y}.pbf',
+    template: FLOW_TILE_PATH('{z}', '{x}', '{y}'),
     allowedOrigin: 'http://localhost',
-    decode: (bytes, z, x, y) =>
-      decodeFlowTile(bytes, z, x, y, { strict: true })
+    decode: (bytes, z, x, y) => {
+      const segments = decodeFlowTile(bytes, z, x, y, { strict: true })
         .filter(isDrivableFlowSegment)
         .flatMap((segment) =>
           clipTileLine(segment.coords, tileToBBox(z, x, y)).map((coords) => ({
             ...segment,
             coords,
           })),
-        ),
-    fetchImpl,
+        );
+      const path = FLOW_TILE_PATH(z, x, y);
+      if (pending.has(path)) freshness.set(segments, pending.get(path));
+      pending.delete(path);
+      return segments;
+    },
+    fetchImpl: async (url, init) => {
+      const response = await fetchImpl(url, init);
+      if (response.ok) pending.set(String(url), tileFreshness(response));
+      return response;
+    },
     ttlMs: 120_000,
     maxTiles: 16,
   });
   let partial = false;
   /**
    * Flow segments for bounds, with whether any covering tile failed to load
-   * for this request.
+   * for this request, whether any came from the proxy's stale cache, and when
+   * the oldest tile was produced.
    */
   async function fetchFlowDetail(bounds, { signal, zoom = 12 } = {}) {
     const result = await tiles.fetchBounds(bounds, {
@@ -44,7 +75,16 @@ export function createFlowTileSource({
             coords,
           })),
         );
-    return { segments, partial: result.partial === true };
+    const marks = result.tiles.map((tile) => freshness.get(tile) || {});
+    const times = marks
+      .map((mark) => mark.fetchedAt)
+      .filter((at) => Number.isFinite(at));
+    return {
+      segments,
+      partial: result.partial === true,
+      stale: marks.some((mark) => mark.stale === true),
+      oldestTileAt: times.length ? Math.min(...times) : null,
+    };
   }
   return {
     fetchFlowDetail,
