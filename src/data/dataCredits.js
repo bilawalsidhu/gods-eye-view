@@ -167,6 +167,17 @@ export const DATA_CREDITS = [
       ' · Incident information: ' +
       '<a href="https://inciweb.wildfire.gov/" target="_blank" rel="noopener">InciWeb</a>',
   },
+  {
+    key: 'sa-fire',
+    html:
+      'Incidents: SA Country Fire Service and Metropolitan Fire Service, Government of South Australia — ' +
+      '<a href="https://creativecommons.org/licenses/by-nc-nd/4.0/" target="_blank" rel="noopener">CC BY-NC-ND 4.0</a> ' +
+      '(<a href="https://data.sa.gov.au/data/dataset/south-australian-country-fire-service-current-incidents-rss-feed" target="_blank" rel="noopener">dataset</a>)',
+  },
+  {
+    key: 'sa-fire-warnings',
+    html: 'Warnings: SA Country Fire Service public warnings (cfs.geohub.sa.gov.au)',
+  },
   OSM_CREDIT,
   OPENMAPTILES_CREDIT,
   {

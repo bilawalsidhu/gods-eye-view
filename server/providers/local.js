@@ -24,6 +24,7 @@ import { mapillaryProxy } from './mapillary.js';
 import { keySetupEndpoint } from '../standalone/key-setup.js';
 import { weatherProxy } from './weather.js';
 import { firePerimetersProxy } from './firePerimeters.js';
+import { saFireProxy } from './saFire.js';
 import { gnssIntegrityProxy } from './gnssIntegrity.js';
 import { cycloneProxy } from './cyclones.js';
 import { windProxy } from './wind.js';
@@ -61,6 +62,7 @@ function localProviderPlugins({ realtime } = {}) {
     cycloneProxy(),
     mapillaryProxy(),
     firePerimetersProxy(),
+    saFireProxy(),
     gnssIntegrityProxy(),
     keySetupEndpoint(),
   ];

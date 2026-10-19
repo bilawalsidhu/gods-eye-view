@@ -1,0 +1,32 @@
+[
+  {
+    "id": "F0000000001",
+    "reported": { "date": "12/10/2026", "time": "19:30", "tz": "Australia/Adelaide" },
+    "agency": "CFS",
+    "location": {
+      "name": "TEST PLAINS",
+      "coordinates": { "lat": "-35.350000", "lon": "138.620000" },
+      "region": "R1",
+      "fbd": "MOUNT LOFTY RANGES"
+    },
+    "incident": { "type": "BURN OFF", "status": "Controlled", "level": "L1" },
+    "resources": { "ground": 0, "aircraft": 0 },
+    "messages": [],
+    "messages_count": 0
+  },
+  {
+    "id": "F0000000002",
+    "reported": { "date": "27/08/2026", "time": "21:18", "tz": "Australia/Adelaide" },
+    "agency": "MFS",
+    "location": {
+      "name": "EXAMPLE PARK",
+      "coordinates": { "lat": "-34.830000", "lon": "138.710000" },
+      "region": "METRN",
+      "fbd": "ADELAIDE METROPOLITAN"
+    },
+    "incident": { "type": "BURN OFF", "status": "Controlled", "level": "L1" },
+    "resources": { "ground": 0, "aircraft": 0 },
+    "messages": [],
+    "messages_count": 0
+  }
+]
