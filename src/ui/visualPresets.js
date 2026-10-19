@@ -4,6 +4,7 @@ import { noirShader } from '../styles/noir.js';
 import { snowShader } from '../styles/snow.js';
 import { nightVisionShader } from '../styles/surveillance.js';
 import { thermalShader } from '../styles/thermal.js';
+import { redOpsShader } from '../styles/redops.js';
 import { BLOOM_INTENSITY_DEFAULT } from '../bloom.js';
 import { msg } from '../i18n/index.js';
 
@@ -17,6 +18,7 @@ export const STYLES = {
   anime: animeShader,
   noir: noirShader,
   snow: snowShader,
+  redops: redOpsShader,
 };
 
 /**
@@ -157,4 +159,5 @@ export const STYLE_STATUS_LABELS = {
   anime: msg('ANIME'),
   noir: msg('NOIR'),
   snow: msg('SNOW'),
+  redops: msg('RED OPS'),
 };

@@ -251,6 +251,24 @@ const layers = [
     noQuery: 'map overlay; no countable records',
   },
   {
+    id: 'uv-index',
+    aliases: ['uv index', 'uv', 'sun exposure'],
+    context: false,
+    noQuery: 'map overlay; no countable records',
+  },
+  {
+    id: 'aurora',
+    aliases: ['aurora', 'aurora forecast', 'northern lights'],
+    context: false,
+    noQuery: 'map overlay; no countable records',
+  },
+  {
+    id: 'volcanoes',
+    aliases: ['volcanoes', 'volcanic activity', 'volcano alerts'],
+    context: false,
+    noQuery: 'map overlay; no countable records',
+  },
+  {
     id: 'air-quality',
     aliases: ['air quality', 'aqhi', 'smog', 'air pollution'],
     context: false,

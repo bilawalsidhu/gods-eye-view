@@ -102,7 +102,8 @@ export class LocationNavigation {
   }
 
   _initLocationBar() {
-    const { CITY_POIS, searchAndFlyTo, LocationSearch } = this.services;
+    const { CITY_POIS, searchAndFlyTo, flyToMyLocation, LocationSearch } =
+      this.services;
     this._locationControls?.destroy();
     this._locationLookupUnsubscribe?.();
     this._locationLookup?.destroy();
@@ -145,6 +146,26 @@ export class LocationNavigation {
       onPoi: (id, index) => this._onPoiClick(id, index),
       onSearch: (query) => this._locationLookup.run(query),
       onReset: () => this.resetToGlobeView(),
+    });
+
+    // Fly to the browser-geolocated position — no API key required.
+    this._locateMeBtn?.addEventListener('click', async () => {
+      const generation = this._beginDeferredNavigation('location');
+      if (generation === false) return;
+      this._locateMeBtn.disabled = true;
+      this._locateMeBtn.classList.add('searching');
+      try {
+        await flyToMyLocation(this.viewer, {
+          onStart: () => this._reassertNavigationHandoff(generation),
+        });
+      } catch (err) {
+        console.warn('[Location] Could not get current location:', err?.message || err);
+      } finally {
+        if (!this._disposed) {
+          this._locateMeBtn.disabled = false;
+          this._locateMeBtn.classList.remove('searching');
+        }
+      }
     });
   }
 

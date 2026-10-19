@@ -8,6 +8,7 @@ import {
   flyToPresetLocation,
   flyToPOI,
   searchAndFlyTo,
+  flyToMyLocation,
 } from '../locations.js';
 import { interruptCameraMotion } from '../cameraVerbs.js';
 import { IntelHUD } from '../hud.js';
@@ -72,6 +73,7 @@ export class StyleManager extends ApplicationShell {
         flyToPresetLocation,
         flyToPOI,
         searchAndFlyTo,
+        flyToMyLocation,
         interruptCameraMotion,
         IntelHUD,
         ShareLinkManager,

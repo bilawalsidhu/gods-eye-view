@@ -57,6 +57,7 @@ const ALLOWED_STYLES = new Set([
   'anime',
   'noir',
   'snow',
+  'redops',
 ]);
 const PANEL_ALIASES = new Map([
   ['data', 'data-panel'],

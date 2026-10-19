@@ -310,6 +310,7 @@ export class StyleManager extends ShellFacade {
       services: {
         CITY_POIS: services.CITY_POIS,
         searchAndFlyTo: services.searchAndFlyTo,
+        flyToMyLocation: services.flyToMyLocation,
         LocationSearch: services.LocationSearch,
         OrbitController: services.OrbitController,
         suspendDetection: services.suspendDetection,
@@ -333,6 +334,7 @@ export class StyleManager extends ShellFacade {
         _locationBarDivider: this._locationBarDivider,
         _locationSearch: this._locationSearch,
         _searchToggle: this._searchToggle,
+        _locateMeBtn: this._locateMeBtn,
         _resetGlobeBtn: this._resetGlobeBtn,
         _cockpitResetGlobeBtn: this._cockpitResetGlobeBtn,
         _locationMiniCity: this._locationMiniCity,
@@ -1549,7 +1551,7 @@ export class StyleManager extends ShellFacade {
    * 2. Crossfades the new shader stage intensity to 1.
    * 3. Applies style preset defaults (bloom/sharpen/HUD) if applyPreset is true.
    * 4. Updates button highlights, style indicator, slider panel, HUD, and detection overlay.
-   * @param {string} styleName - Target style ('normal'|'retro'|'surveillance'|'thermal'|'anime'|'noir'|'snow').
+   * @param {string} styleName - Target style ('normal'|'retro'|'surveillance'|'thermal'|'anime'|'noir'|'snow'|'redops').
    * @param {object} [options]
    * @param {boolean} [options.applyPreset=true] - Whether to apply STYLE_PRESET_DEFAULTS for the new style.
    * @param {boolean} [options.userInitiated=false] - Whether a direct user preset choice owns the Cyber exit style.

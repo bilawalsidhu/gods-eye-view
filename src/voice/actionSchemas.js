@@ -243,6 +243,7 @@ const schemas = [
             'anime',
             'noir',
             'snow',
+            'redops',
           ],
         },
       },

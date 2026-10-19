@@ -3,6 +3,9 @@ import { celestrakProxy, rocketLaunchesProxy } from './space.js';
 import { tomtomProxy } from './traffic.js';
 import { firmsProxy } from './firms.js';
 import { terrainHeightsProxy } from './terrain.js';
+import { uvIndexProxy } from './uvIndex.js';
+import { auroraProxy } from './aurora.js';
+import { volcanoProxy } from './volcanoes.js';
 import { adsbdbProxy } from './aircraft/enrichment.js';
 import { overpassProxy } from './overpass.js';
 import { militaryInstallationsProxy } from './military-installations.js';
@@ -62,6 +65,9 @@ function localProviderPlugins({ realtime } = {}) {
     mapillaryProxy(),
     firePerimetersProxy(),
     gnssIntegrityProxy(),
+    uvIndexProxy(),
+    auroraProxy(),
+    volcanoProxy(),
     keySetupEndpoint(),
   ];
 }

@@ -8,6 +8,8 @@ import { parsers } from 'prettier/plugins/babel.mjs';
 const legacyFiles = new Set([
   'src/scenes/dataPacks/presentation.js',
   'src/layers/directions/index.js',
+  'src/data/uvIndex.js',
+  'src/data/volcanoes.js',
 ]);
 const root = fileURLToPath(new URL('../', import.meta.url));
 const propertyName = (node) => node?.name ?? node?.value;

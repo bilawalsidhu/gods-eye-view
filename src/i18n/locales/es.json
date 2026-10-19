@@ -2890,5 +2890,22 @@
   "USB work abandoned after a stalled transfer": "Trabajo USB cancelado tras una transferencia bloqueada",
   "SDR decoder did not start; receiver stopped": "El decodificador SDR no arrancó; receptor detenido",
   "SDR decoder stopped responding; receiver stopped": "El decodificador SDR dejó de responder; receptor detenido",
-  "SDR decoder fell behind; receiver stopped": "El decodificador SDR se quedó atrás; receptor detenido"
+  "SDR decoder fell behind; receiver stopped": "El decodificador SDR se quedó atrás; receptor detenido",
+  "NOAA SWPC network error": "Error de red de NOAA SWPC",
+  "LOW": "BAJO",
+  "MODERATE": "MODERADO",
+  "HIGH": "ALTO",
+  "VERY HIGH": "MUY ALTO",
+  "EXTREME": "EXTREMO",
+  "UV {value}": "UV {value}",
+  "Open-Meteo network error": "Error de red de Open-Meteo",
+  "USGS HANS network error": "Error de red de USGS HANS",
+  "Tint": "Tinte",
+  "UV Index": "Índice UV",
+  "Aurora Forecast": "Pronóstico de Aurora",
+  "Volcanic Activity": "Actividad Volcánica",
+  "RED OPS": "MODO ROJO",
+  "Red-lit night-ops monochrome, like a submarine or command bunker.": "Monocromo rojo de operaciones nocturnas, como un submarino o un búnker de mando.",
+  "Red Ops": "Modo Rojo",
+  "Fly to my current location (uses your browser's location permission)": "Volar a mi ubicación actual (usa el permiso de ubicación del navegador)"
 }

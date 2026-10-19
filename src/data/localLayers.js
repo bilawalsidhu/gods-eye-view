@@ -2,6 +2,9 @@ import { localGeoJsonServices } from './localGeojson.js';
 import { createInfrastructureLayers } from './infrastructure.js';
 import { createFirmsHeatmapLayer } from './firmsHeatmap.js';
 import submarineCablesLayer from './telegeographySubmarineCables.js';
+import uvIndexLayer from './uvIndex.js';
+import auroraLayer from './aurora.js';
+import volcanoesLayer from './volcanoes.js';
 
 const [datacenters, dams] = createInfrastructureLayers(localGeoJsonServices);
 
@@ -15,4 +18,12 @@ const fires = createFirmsHeatmapLayer({
   source: 'NASA FIRMS · LIVE',
 });
 
-export default [datacenters, dams, submarineCablesLayer, fires];
+export default [
+  datacenters,
+  dams,
+  submarineCablesLayer,
+  fires,
+  uvIndexLayer,
+  auroraLayer,
+  volcanoesLayer,
+];

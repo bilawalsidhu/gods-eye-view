@@ -181,6 +181,7 @@ export function readShellElements(document = globalThis.document) {
     _toast: document.getElementById('toast'),
     _locationSearch: document.getElementById('location-search'),
     _searchToggle: document.getElementById('search-toggle'),
+    _locateMeBtn: document.getElementById('locate-me-btn'),
     _locationPills: document.getElementById('location-pills'),
     _poiRow: document.getElementById('poi-row'),
     _locationBarDivider: document.getElementById('location-bar-divider'),
