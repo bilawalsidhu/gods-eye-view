@@ -24,6 +24,7 @@ import { createApplicationLocalAdsb } from './layers/localAdsb.js';
 import { createApplicationAwareness } from './layers/militaryAwareness.js';
 import { createApplicationFirms } from './layers/firms.js';
 import { createApplicationEarthquakes } from './layers/earthquakes.js';
+import { createApplicationFireballs } from './layers/fireballs.js';
 import { createApplicationAirQuality } from './layers/airQuality.js';
 import { createApplicationFirePerimeters } from './layers/perimeters.js';
 import { createApplicationGnssIntegrity } from './layers/gnss.js';
@@ -119,6 +120,7 @@ export function createApplicationCatalog({
           ...(resolveAsset ? { resolveAsset } : {}),
         }),
         createApplicationEarthquakes({ source: sources.earthquakes }),
+        createApplicationFireballs({ source: sources.fireballs }),
         createApplicationAirQuality({ source: sources['air-quality'] }),
         createApplicationFirePerimeters({
           source: sources['fire-perimeters'],

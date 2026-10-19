@@ -151,6 +151,14 @@ export const DATA_CREDITS = [
     html: 'Earthquakes: Data courtesy of the U.S. Geological Survey',
   },
   {
+    key: 'jpl-fireballs',
+    html:
+      'Fireballs (bolides): ' +
+      '<a href="https://cneos.jpl.nasa.gov/fireballs/" target="_blank" rel="noopener">NASA/JPL Fireball and Bolide Data</a>, ' +
+      'Center for Near Earth Object Studies. Derived from U.S. Government sensor detections; ' +
+      'not real-time, and not all fireballs are reported',
+  },
+  {
     key: 'nasa-gibs',
     html:
       'Recent imagery: We acknowledge the use of imagery provided by services from ' +

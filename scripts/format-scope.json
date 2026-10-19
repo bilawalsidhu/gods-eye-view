@@ -96,6 +96,7 @@
   "server/providers/space/launch-library.js",
   "src/data/spaceProviderRequests.js",
   "src/tooling/spaceProviders.test.mjs",
+  "src/tooling/fireballsProxy.test.mjs",
   "server/providers/terrain.js",
   "server/providers/traffic.js",
   "server/providers/firms.js",

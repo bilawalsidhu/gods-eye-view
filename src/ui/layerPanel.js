@@ -70,6 +70,7 @@ const PANEL_GROUPS = [
     ids: [
       'rocket-launches',
       'earthquakes',
+      'fireballs',
       'local-firms',
       'fire-perimeters',
       'gnss-integrity',

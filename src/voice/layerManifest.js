@@ -171,6 +171,21 @@ const layers = [
     },
   },
   {
+    id: 'fireballs',
+    aliases: ['fireballs', 'bolides', 'meteors'],
+    context: false,
+    query: {
+      fields: {
+        impactEnergyKt: ['n', 'kt'],
+        radiatedEnergyE10J: ['n', 'E10 J'],
+        altitudeKm: ['n', 'km'],
+        velocityKmS: ['n', 'km/s'],
+        timeMs: ['ms'],
+      },
+      timeField: 'timeMs',
+    },
+  },
+  {
     id: 'local-firms',
     aliases: ['fires', 'wildfires', 'active fires', 'firms'],
     context: true,
