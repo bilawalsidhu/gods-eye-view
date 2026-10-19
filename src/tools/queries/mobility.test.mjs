@@ -585,7 +585,7 @@ test('traffic says when the proxy served cached tiles, and how old the oldest is
   assert.equal(stale.data.oldest_tile_at, '2026-10-16T08:00:00.000Z');
   assert.match(
     stale.summary,
-    /cached copies, the oldest from 2026-10-16T08:00:00.000Z, so traffic may be out of date./,
+    /cached copies, the oldest from 2026-10-16T08:00:00\.000Z, so traffic may be out of date\./,
   );
   const live = await call({ stale: false, oldestTileAt: oldest });
   assert.equal(live.data.stale, false);
