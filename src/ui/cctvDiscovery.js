@@ -1,3 +1,5 @@
+import { greatCircleKm } from '../geoDistance.js';
+
 /** Camera discovery uses degrees and supports view rectangles crossing the date line. */
 export function discoverCctvCameras(
   cameras,
@@ -15,21 +17,8 @@ export function discoverCctvCameras(
         : camera.lon >= west || camera.lon <= east)
     );
   };
-  const distance = (camera) => {
-    if (
-      !view?.center ||
-      !Number.isFinite(camera.lat) ||
-      !Number.isFinite(camera.lon)
-    )
-      return Infinity;
-    const rad = Math.PI / 180;
-    const a =
-      Math.sin(((camera.lat - view.center.lat) * rad) / 2) ** 2 +
-      Math.cos(camera.lat * rad) *
-        Math.cos(view.center.lat * rad) *
-        Math.sin(((camera.lon - view.center.lon) * rad) / 2) ** 2;
-    return 12742 * Math.asin(Math.sqrt(Math.min(1, a)));
-  };
+  const distance = (camera) =>
+    view?.center ? greatCircleKm(view.center, camera) : Infinity;
   const local = cameras.filter(inView);
   const results = (scope === 'all' ? cameras : local)
     .filter((camera) => {
