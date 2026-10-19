@@ -112,3 +112,51 @@ test('temperature uses a fixed Celsius scale with visible everyday gradients', (
   assert.deepEqual(colorAt(-60), colorAt(-40), 'only color saturates below the fixed scale');
   assert.deepEqual(colorAt(60), colorAt(50), 'only color saturates above the fixed scale');
 });
+
+test('bbox raster covers the field box with the spec ramp and blanks invalid cells', async () => {
+  const { OCEAN_FIELD_SPEC, rampColor } = await import('./fieldSpec.js');
+  const { rasterSizeFor } = await import('./fields.js');
+  const ocean = {
+    grid: { nx: 4, ny: 3, lo1: -75, la1: 40, dx: 1, dy: 1 },
+    u: Float32Array.from([
+      1, 1, 1, 1, 0.5, 0.5, 0.5, 0.5, -9999, -9999, -9999, -9999,
+    ]),
+    v: new Float32Array(12),
+    bbox: { latMin: 38, latMax: 40, lonMin: -75, lonMax: -72 },
+    noData: -9999,
+    periodic: false,
+    speed: { medianMs: 0.5, p95Ms: 0.8 },
+  };
+  const raster = createFieldRaster(ocean, 'speed', 4, 3, OCEAN_FIELD_SPEC);
+  assert.equal(raster.width, 4);
+  assert.equal(raster.height, 3);
+  // Pixel centres sit between node rows: row 0 is lat 39.667, bilinear 0.833.
+  const near = (rgb, expected) =>
+    rgb.every((channel, i) => Math.abs(channel - expected[i]) <= 3);
+  const expectedAt = (row) => {
+    const lat = 40 - ((row + 0.5) / 3) * 2;
+    const value = sampleScalar(
+      { ...ocean.grid, u: ocean.u, v: ocean.v, noData: -9999, periodic: false },
+      -74.5,
+      lat,
+      'speed',
+    );
+    return rampColor(OCEAN_FIELD_SPEC.ramp, Math.pow(value / 1, 0.55));
+  };
+  const top = [...raster.rgba.slice(0, 4)];
+  assert.ok(near(top.slice(0, 3), expectedAt(0)), String(top));
+  assert.ok(top[3] > 0);
+  const middle = [...raster.rgba.slice(4 * 4 + 4, 4 * 4 + 8)];
+  assert.ok(near(middle.slice(0, 3), expectedAt(1)), String(middle));
+  assert.notDeepEqual(top.slice(0, 3), middle.slice(0, 3));
+  assert.equal(raster.rgba[2 * 4 * 4 + 3], 0, 'no-data row is transparent');
+  assert.deepEqual(rasterSizeFor(ocean), { width: 4, height: 3 });
+  assert.deepEqual(rasterSizeFor({ grid: { nx: 360, ny: 181 } }), {
+    width: 360,
+    height: 181,
+  });
+  assert.deepEqual(rasterSizeFor({ grid: { nx: 2048, ny: 512 }, bbox: {} }), {
+    width: 1024,
+    height: 256,
+  });
+});

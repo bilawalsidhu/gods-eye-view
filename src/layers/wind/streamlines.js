@@ -1,4 +1,5 @@
 import { metersPerDegreeLon, normalizeLongitude, sampleWind } from './model.js';
+import { fieldStepCap } from './fieldSpec.js';
 
 // Desktop density is bounded independently of viewport zoom; camera motion
 // never triggers a regional rebake. Narrow-screen cost stays at 1200 paths.
@@ -9,13 +10,15 @@ export const WIND_DISPLAY_HEIGHT_METERS = 12000;
 export const WIND_CELL_DEGREES = 30;
 const DEGREE_METERS = 111320;
 const GOLDEN_ANGLE = 137.50776405003785;
+// Upper bound on one integration step; the old canvas' MAX_SECONDS_PER_FRAME.
+const MAX_STEP_SECONDS = 4e6;
 
 /** One bounded midpoint step. The integration interval is field time, not playback time. */
-function advance(field, point, seconds, scratch) {
+function advance(field, point, seconds, scratch, maxStepDegrees, calmCutoffMs) {
   sampleWind(field, point[0], point[1], scratch);
   if (
     !Number.isFinite(scratch.u + scratch.v) ||
-    Math.hypot(scratch.u, scratch.v) < 0.15
+    Math.hypot(scratch.u, scratch.v) < calmCutoffMs
   )
     return null;
   const lonRate = scratch.u / metersPerDegreeLon(point[1]);
@@ -25,7 +28,7 @@ function advance(field, point, seconds, scratch) {
     Math.sign(seconds) *
     Math.min(
       Math.abs(seconds),
-      0.75 / Math.max(Math.abs(lonRate), Math.abs(latRate), 1e-12),
+      maxStepDegrees / Math.max(Math.abs(lonRate), Math.abs(latRate), 1e-12),
     );
   const midLat = point[1] + latRate * dt * 0.5;
   if (Math.abs(midLat) > 88.5) return null;
@@ -37,6 +40,37 @@ function advance(field, point, seconds, scratch) {
   const lat = point[1] + (scratch.v * dt) / DEGREE_METERS;
   if (Math.abs(lat) > 88.5 || Math.abs(lon - point[0]) > 180) return null;
   if (Math.abs(lon - point[0]) + Math.abs(lat - point[1]) < 1e-8) return null;
+  // A bounded grid ends the path at its last valid point rather than stepping
+  // onto land, outside the box or into a no-data cell.
+  if (field.periodic === false) {
+    sampleWind(field, lon, lat, scratch);
+    if (!Number.isFinite(scratch.u + scratch.v)) return null;
+  }
+  return [lon, lat];
+}
+
+/** Equal-area seed: golden-angle longitude, uniform in sin(latitude). */
+function seedPoint(seed, budget, bbox) {
+  if (!bbox) {
+    return [
+      normalizeLongitude(seed * GOLDEN_ANGLE),
+      (Math.asin(
+        (((seed + 0.5) / budget) * 2 - 1) * Math.sin((88 * Math.PI) / 180),
+      ) *
+        180) /
+        Math.PI,
+    ];
+  }
+  const degree = Math.PI / 180;
+  const lonSpan = (((bbox.lonMax - bbox.lonMin) % 360) + 360) % 360 || 360;
+  const sinSouth = Math.sin(Math.max(-88, bbox.latMin) * degree);
+  const sinNorth = Math.sin(Math.min(88, bbox.latMax) * degree);
+  const lon = normalizeLongitude(
+    bbox.lonMin + (((seed * GOLDEN_ANGLE) % 360) / 360) * lonSpan,
+  );
+  const lat =
+    Math.asin(sinSouth + ((seed + 0.5) / budget) * (sinNorth - sinSouth)) /
+    degree;
   return [lon, lat];
 }
 
@@ -44,10 +78,22 @@ function advance(field, point, seconds, scratch) {
  * Bake geographic streamlines once from an immutable forecast snapshot.
  * Equal-area seeds avoid polar overpopulation. Increasing path position always
  * follows the wind; paths stop at the map seam, poles, calm or missing samples.
+ * A field with a `bbox` is seeded equal-area inside that box instead of the
+ * whole sphere; `maxCount` raises the seed ceiling above WIND_PATH_LIMIT for
+ * sparse fields (ocean globe); `calmCutoffMs` and `maxStepDegrees` default to the wind
+ * constants (0.15 m/s, 0.75 deg for a global grid).
  */
 export function bakeWindStreamlines(
   field,
-  { count = WIND_PATH_LIMIT, steps = WIND_PATH_STEPS, stepSeconds = 1800 } = {},
+  {
+    count = WIND_PATH_LIMIT,
+    maxCount = WIND_PATH_LIMIT,
+    steps = WIND_PATH_STEPS,
+    stepSeconds = 1800,
+    calmCutoffMs = 0.15,
+    maxStepDegrees,
+    bbox,
+  } = {},
 ) {
   if (
     !field ||
@@ -59,8 +105,14 @@ export function bakeWindStreamlines(
     !field.v
   )
     return [];
-  const budget = Math.min(
+  // The ceiling is the caller's: a field spec may seed a sparse field past
+  // the wind limit, but never below it.
+  const ceiling = Math.max(
     WIND_PATH_LIMIT,
+    Number.isFinite(maxCount) ? Math.floor(maxCount) : WIND_PATH_LIMIT,
+  );
+  const budget = Math.min(
+    ceiling,
     Math.max(0, Math.floor(Number.isFinite(count) ? count : WIND_PATH_LIMIT)),
   );
   const halfSteps = Math.min(
@@ -68,23 +120,22 @@ export function bakeWindStreamlines(
     Math.max(1, Math.floor(Number.isFinite(steps) ? steps : WIND_PATH_STEPS)),
   );
   const interval = Math.min(
-    3600,
+    MAX_STEP_SECONDS,
     Math.max(1, Number.isFinite(stepSeconds) ? stepSeconds : 1800),
   );
+  const stepCap =
+    Number.isFinite(maxStepDegrees) && maxStepDegrees > 0
+      ? maxStepDegrees
+      : fieldStepCap(field);
+  const box = bbox === undefined ? (field.bbox ?? null) : bbox;
+  const calm = Number.isFinite(calmCutoffMs) ? calmCutoffMs : 0.15;
   const paths = [];
   const scratch = { u: 0, v: 0 };
   for (let seed = 0; seed < budget; seed++) {
-    const lon = normalizeLongitude(seed * GOLDEN_ANGLE);
-    const lat =
-      (Math.asin(
-        (((seed + 0.5) / budget) * 2 - 1) * Math.sin((88 * Math.PI) / 180),
-      ) *
-        180) /
-      Math.PI;
-    const center = [lon, lat];
-    sampleWind(field, lon, lat, scratch);
+    const center = seedPoint(seed, budget, box);
+    sampleWind(field, center[0], center[1], scratch);
     const speed = Math.hypot(scratch.u, scratch.v);
-    if (!Number.isFinite(speed) || speed < 0.15) continue;
+    if (!Number.isFinite(speed) || speed < calm) continue;
     const backward = [];
     const forward = [];
     for (const [direction, points] of [
@@ -93,7 +144,14 @@ export function bakeWindStreamlines(
     ]) {
       let point = center;
       for (let step = 0; step < halfSteps; step++) {
-        point = advance(field, point, direction * interval, scratch);
+        point = advance(
+          field,
+          point,
+          direction * interval,
+          scratch,
+          stepCap,
+          calm,
+        );
         if (!point) break;
         points.push(point);
       }
@@ -108,6 +166,29 @@ export function bakeWindStreamlines(
     });
   }
   return paths;
+}
+
+/**
+ * Summed path length in degrees (longitude scaled by cos latitude, no
+ * great-circle correction) divided by the span in degrees: the line
+ * coverage the seed budget targets. 0 for an empty set or a zero span.
+ */
+export function measureLineCoverage(paths, spanDeg) {
+  if (!(spanDeg > 0)) return 0;
+  const degree = Math.PI / 180;
+  let total = 0;
+  for (const path of paths) {
+    const points = path.coordinates;
+    for (let i = 1; i < points.length; i++) {
+      const [lon0, lat0] = points[i - 1];
+      const [lon1, lat1] = points[i];
+      const dlon =
+        normalizeLongitude(lon1 - lon0) *
+        Math.cos(((lat0 + lat1) / 2) * degree);
+      total += Math.hypot(dlon, lat1 - lat0);
+    }
+  }
+  return total / spanDeg;
 }
 
 /** Group baked paths by their middle coordinate, preserving path and cell order. */
