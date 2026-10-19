@@ -839,7 +839,8 @@ without another click announcement; changing from quake A to B removes A's
 obsolete record without announcing a false eviction. Empty-space deselection
 announces `reason: 'deliberate'`, while disappearance from the refreshed USGS
 feed announces `reason: 'evicted'`. Other layers' owned picks are unaffected.
-This is a selection-context seam, not a new hazard inference or alert.
+Like fire perimeters, quake discs stay out of the pick-ownership registry, so
+FIRMS and vessel cards painted over a disc remain clickable. This is a selection-context seam, not a new hazard inference or alert.
 
 ## Vessel components and sources
 

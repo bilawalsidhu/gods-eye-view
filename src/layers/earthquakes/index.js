@@ -96,9 +96,10 @@ export function createEarthquakesLayer({
 
   function installClickHandler() {
     if (!canSelect() || _clickHandler || !_viewer) return;
-    picking.registerPickOwner?.('earthquakes', (pickedId) =>
-      String(pickedId).startsWith('earthquake:'),
-    );
+    // Deliberately NOT registered in the pick-ownership registry (same as
+    // fire perimeters): sibling layers yield to owned picks before their own
+    // overlay-card hit-tests, so claiming these ground discs would make
+    // FIRMS/vessel cards and near-miss radio picks inert over any quake.
     _clickHandler = screenSpaceEventHandlerFactory(_viewer);
     _clickHandler.setInputAction((click) => {
       if (pointer && !pointer.isPointerFree()) return;
@@ -123,7 +124,6 @@ export function createEarthquakesLayer({
       _clickHandler.destroy();
       _clickHandler = null;
     }
-    picking?.unregisterPickOwner?.('earthquakes');
   }
 
   const layer = {

@@ -132,7 +132,8 @@ test('clicking an earthquake publishes one shared USGS context record', async ()
   await h.layer.update(h.viewer);
 
   assert.equal(typeof h.clicks.handler, 'function');
-  assert.equal(h.owners.get('earthquakes')?.('earthquake:event-a'), true);
+  // Quake discs stay unowned so sibling cards painted over them still work.
+  assert.equal(h.owners.has('earthquakes'), false);
 
   h.clicks.handler({ position: { x: 10, y: 10 } });
   assert.equal(h.contexts.selectedEvents, 1);
