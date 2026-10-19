@@ -642,6 +642,10 @@ test('staticFrameRefreshMs follows known pack cadences and bounds explicit value
   // Digitraffic publishes one weathercam frame per 600 s collection interval.
   assert.equal(staticFrameRefreshMs({ provider: 'Fintraffic' }), 600_000);
   assert.equal(
+    staticFrameRefreshMs({ provider: 'City of Vancouver Traffic Cams' }),
+    300_000,
+  );
+  assert.equal(
     staticFrameRefreshMs({ provider: 'Servei Català de Trànsit' }),
     180_000,
   );

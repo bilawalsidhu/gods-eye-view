@@ -44,6 +44,9 @@ CCTV_NSW_ENABLED="${CCTV_NSW_ENABLED:-1}"
 CCTV_NSW_MAX_SOURCES="${CCTV_NSW_MAX_SOURCES:-250}"
 CCTV_CALGARY_ENABLED="${CCTV_CALGARY_ENABLED:-1}"
 CCTV_CALGARY_MAX_SOURCES="${CCTV_CALGARY_MAX_SOURCES:-220}"
+# CCTV_VANCOUVER_ENABLED stays unset (opt-in, like NYC): Vancouver's image terms
+# are unconfirmed, so the pack loads only when the operator exports =1.
+CCTV_VANCOUVER_MAX_SOURCES="${CCTV_VANCOUVER_MAX_SOURCES:-600}"
 CCTV_MAX_SOURCES="${CCTV_MAX_SOURCES:-4000}"
 
 # Capture which provider credentials genuinely came from the parent shell
