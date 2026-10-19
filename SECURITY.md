@@ -37,6 +37,25 @@ These are designed to be used directly in the browser (like a Mapbox public toke
 
 Never commit real keys. `.env` is gitignored; only `.env.example` (placeholder names) is tracked. On macOS `dev-fresh.sh` can read keys from the Keychain; plain Vite uses env vars or a local `.env`, and Pinokio uses its ignored app `ENVIRONMENT` file.
 
+### Optional external credential managers
+
+The local Vite launch may resolve registered provider secrets from Proton Pass
+CLI (`pass://`) or Bitwarden Secrets Manager (`bws://` references or configured
+BWS project IDs). A literal provider key always takes precedence; project imports
+admit only Provider Settings' known env names. Both singular and plural BWS
+project selectors are supported, with duplicates removed. Malformed/option-like
+BWS identifiers fail closed before invoking a manager.
+
+The CLI child process receives only an allowlist of runtime configuration
+variables and its necessary manager authentication, **not** unrelated provider
+keys or values already fetched from other managers. Resolved keys stay in
+process memory, are treated as externally managed by Provider Settings, and
+are not written to `.env` or included in error messages. Authenticated CLI
+session storage remains owned by the installed password manager. Managed keys
+used for **Google Maps, Cesium ion, or Mapillary** still become browser-visible
+client credentials; use the ordinary provider-side restrictions.
+
+
 The official Pinokio launcher stores optional values in its ignored local
 `pinokio/ENVIRONMENT` file and Vite explicitly denies that filename. Add,
 replace, or remove those values through the in-app **POWER UP → Provider
