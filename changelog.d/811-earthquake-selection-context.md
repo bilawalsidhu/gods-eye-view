@@ -2,5 +2,7 @@
   shared selected-entity owner. Selection refreshes do not re-announce clicks,
   switching quake A to B drops the obsolete record, and empty-space deselection
   reports `deliberate` rather than feed `evicted`. Current feed disappearance
-  remains `evicted`. Credits: the original GEV layer contributors and
-  quanticsoul4772's independent Windows review of #811.
+  remains `evicted`. Quake discs stay out of pick ownership, so FIRMS and
+  vessel cards painted over them remain clickable. Credits: kvnloo (#811),
+  the original GEV layer contributors and quanticsoul4772's independent
+  Windows review of #811.
