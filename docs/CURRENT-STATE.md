@@ -1,22 +1,5 @@
 # God's Eye View Current State
 
-The CCTV panel defaults to cameras within the current map's geographic bounds,
-refreshing when map movement ends. Search matches city, camera name and provider;
-results show distance from the map center and sort nearest first. All cameras
-provides explicit worldwide discovery. Nearest and Previous/Next follow the
-filtered results. When the map contains no cameras, explicit Nearest falls back
-to the closest camera in the full catalog by map-center distance (ignoring search),
-while Previous/Next stay empty. Enabling the panel never triggers this fallback.
-An active camera outside the local view is omitted from the
-panel preview, with an explanation and an empty state when coverage is absent;
-changing the map or search alone does not select a camera or navigate the globe.
-Panel enable also respects discovery results when choosing an initial camera.
-The filter applies to panel controls; voice next/previous, voice nearest and
-layer auto-hop retain their catalog-wide contracts. A scope tooltip makes this
-boundary explicit. Option nodes are reused when distance labels or ordering
-change, including in the worldwide scope. Discovery copy supports English,
-Spanish and Russian. Run `node scripts/qa-cctv-discovery.mjs` for the focused gate.
-
 Shared distance checks use `src/geoDistance.js` with `{ lat, lon }` points and
 the IUGG mean spherical Earth radius, 6371.0088 km. `greatCircleKm` is
 canonical; `greatCircleMeters` is its exact metre conversion. Missing,
@@ -1028,6 +1011,23 @@ Changing cameras invalidates old image callbacks and cancels an unfinished
 calibration edit. Failed refreshes preserve settled pixels for the same camera,
 while a newly selected camera never shows the prior camera's image. Disposal
 releases listeners, subscriptions, image handlers, summary timers and chip-hide timers.
+
+The CCTV panel defaults to cameras within the current map's geographic bounds,
+refreshing when map movement ends. Search matches city, camera name and provider;
+results show distance from the map center and sort nearest first. All cameras
+provides explicit worldwide discovery. Nearest and Previous/Next follow the
+filtered results. When the map contains no cameras, explicit Nearest falls back
+to the closest camera in the full catalog by map-center distance (ignoring search),
+while Previous/Next stay empty. Enabling the panel never triggers this fallback.
+An active camera outside the local view is omitted from the
+panel preview, with an explanation and an empty state when coverage is absent;
+changing the map or search alone does not select a camera or navigate the globe.
+Panel enable also respects discovery results when choosing an initial camera.
+The filter applies to panel controls; voice next/previous, voice nearest and
+layer auto-hop retain their catalog-wide contracts. A scope tooltip makes this
+boundary explicit. Option nodes are reused when distance labels or ordering
+change, including in the worldwide scope. Discovery copy supports English,
+Spanish and Russian. Run `node scripts/qa-cctv-discovery.mjs` for the focused gate.
 
 ## UI disposal
 
