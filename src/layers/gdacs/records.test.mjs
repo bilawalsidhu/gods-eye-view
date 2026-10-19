@@ -83,9 +83,9 @@ test('an event centroid becomes a trimmed record', () => {
 test('severity text, names, countries and report links are cleaned', () => {
   const record = normalizeGdacsFeature(
     gdacsFeature({
-      eventtype: 'TC',
+      eventtype: 'VO',
       alertlevel: 'Red',
-      name: `  Tropical   Cyclone ${'X'.repeat(300)}`,
+      name: `  Volcano   eruption ${'X'.repeat(300)}`,
       country: '',
       affectedcountries: [
         { countryname: 'Japan' },
@@ -93,7 +93,7 @@ test('severity text, names, countries and report links are cleaned', () => {
         {},
       ],
       severitydata: {
-        severitytext: 'Tropical Storm (maximum wind speed of 111 km/h)',
+        severitytext: 'VEI 3 (ash plume to 10 km)',
       },
       url: { report: 'https://evil.example/report.aspx' },
       iscurrent: 'false',
@@ -101,12 +101,9 @@ test('severity text, names, countries and report links are cleaned', () => {
   );
   assert.equal(record.level, 'red');
   assert.equal(record.name.length, 160);
-  assert.ok(record.name.startsWith('Tropical Cyclone X'));
+  assert.ok(record.name.startsWith('Volcano eruption X'));
   assert.equal(record.country, 'Japan, Guam');
-  assert.equal(
-    record.severity,
-    'Tropical Storm (maximum wind speed of 111 km/h)',
-  );
+  assert.equal(record.severity, 'VEI 3 (ash plume to 10 km)');
   assert.equal(record.reportUrl, null);
   assert.equal(record.current, false);
   for (const report of [
@@ -129,6 +126,10 @@ test('track, footprint and malformed features are not events', () => {
     gdacsFeature({ Class: 'Point_Polygon_Point_0' }),
     gdacsFeature({ Class: 'Poly_Cones' }),
     gdacsFeature({ eventtype: 'XX' }),
+    // Hazards GEV covers through other layers are not GDACS events here.
+    gdacsFeature({ eventtype: 'EQ' }),
+    gdacsFeature({ eventtype: 'TC' }),
+    gdacsFeature({ eventtype: 'WF' }),
     gdacsFeature({ eventid: 0 }),
     gdacsFeature({ eventid: 'abc' }),
     gdacsFeature({ alertlevel: 'Purple' }),
@@ -150,14 +151,15 @@ test('a feed keeps one record per event, the latest episode winning', () => {
       gdacsFeature({ episodeid: 3 }),
       gdacsFeature({ episodeid: 1, alertlevel: 'Red' }),
       gdacsFeature({ Class: 'Point_Affected' }),
-      gdacsFeature({ eventtype: 'EQ', eventid: 1104176 }),
+      gdacsFeature({ eventtype: 'DR', eventid: 1104176 }),
+      gdacsFeature({ eventtype: 'EQ', eventid: 1104177 }),
     ],
   });
   assert.deepEqual(
     events.map(({ id, episodeId, level }) => [id, episodeId, level]),
     [
       ['FL-1104176', 3, 'green'],
-      ['EQ-1104176', 3, 'green'],
+      ['DR-1104176', 3, 'green'],
     ],
   );
   assert.equal(normalizeGdacsCollection({}), null);
@@ -169,21 +171,21 @@ test('events sort by alert level, then most recent, then id', () => {
   const row = (id, level, toMs) => ({ id, level, toMs, fromMs: null });
   const sorted = [
     row('FL-1', 'green', 5),
-    row('TC-2', 'red', 1),
-    row('EQ-3', 'orange', 1),
-    row('EQ-4', 'orange', 9),
+    row('VO-2', 'red', 1),
+    row('DR-3', 'orange', 1),
+    row('DR-4', 'orange', 9),
     row('DR-5', 'green', 5),
   ].sort(compareGdacsEvents);
   assert.deepEqual(
     sorted.map(({ id }) => id),
-    ['TC-2', 'EQ-4', 'EQ-3', 'DR-5', 'FL-1'],
+    ['VO-2', 'DR-4', 'DR-3', 'DR-5', 'FL-1'],
   );
 });
 
 test('client validation keeps only well-formed proxy rows and their known fields', () => {
   const good = normalizeGdacsFeature(gdacsFeature());
   const red = normalizeGdacsFeature(
-    gdacsFeature({ eventtype: 'TC', eventid: 1001, alertlevel: 'Red' }),
+    gdacsFeature({ eventtype: 'VO', eventid: 1001, alertlevel: 'Red' }),
   );
   const events = sanitizeGdacsEvents([
     { ...good, injected: '<img src=x>', reportUrl: 'https://evil.example' },
@@ -193,11 +195,12 @@ test('client validation keeps only well-formed proxy rows and their known fields
     { ...good, id: 'FL-8', eventId: 7 },
     { ...good, id: 'FL-10', eventId: 10, lat: 95 },
     { ...good, id: 'XX-11', type: 'XX', eventId: 11 },
+    { ...good, id: 'EQ-12', type: 'EQ', eventId: 12 },
     null,
   ]);
   assert.deepEqual(
     events.map(({ id }) => id),
-    ['TC-1001', 'FL-1104176'],
+    ['VO-1001', 'FL-1104176'],
   );
   assert.equal('injected' in events[1], false);
   assert.equal(events[1].reportUrl, null, 'the first copy of an id wins');

@@ -5,24 +5,19 @@
  * event centroid with track, cone and footprint geometry; only the
  * `Point_Centroid` features are kept, trimmed to the fields the layer shows.
  */
+import { msg } from '../../i18n/marker.js';
 
-/** Hazard types GDACS publishes, in the order the list and proxy use. */
-export const GDACS_EVENT_TYPES = Object.freeze([
-  'EQ',
-  'TC',
-  'FL',
-  'VO',
-  'DR',
-  'WF',
-]);
+/**
+ * Hazard types the layer shows, in the order the list and proxy use: the
+ * ones GEV has no other source for. Earthquakes (USGS), wildfires (FIRMS,
+ * Fire Perimeters) and tropical cyclones (NHC/CPHC) are left to those layers.
+ */
+export const GDACS_EVENT_TYPES = Object.freeze(['FL', 'VO', 'DR']);
 
 export const GDACS_TYPE_NAMES = Object.freeze({
-  EQ: 'Earthquake',
-  TC: 'Tropical cyclone',
-  FL: 'Flood',
-  VO: 'Volcano',
-  DR: 'Drought',
-  WF: 'Wildfire',
+  FL: msg('Flood'),
+  VO: msg('Volcano'),
+  DR: msg('Drought'),
 });
 
 /** Alert levels from most to least severe. */
@@ -35,9 +30,9 @@ export const GDACS_LEVEL_COLORS = Object.freeze({
 });
 
 export const GDACS_LEVEL_NAMES = Object.freeze({
-  red: 'Red',
-  orange: 'Orange',
-  green: 'Green',
+  red: msg('Red'),
+  orange: msg('Orange'),
+  green: msg('Green'),
 });
 
 const REPORT_ORIGIN = 'https://www.gdacs.org';

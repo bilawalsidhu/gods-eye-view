@@ -1,4 +1,6 @@
 import * as Cesium from 'cesium';
+import { msg, t, tn } from '../../i18n/index.js';
+import { translateFeedError } from '../../ui/statusText.js';
 import {
   GDACS_LEVELS,
   GDACS_LEVEL_COLORS,
@@ -17,9 +19,10 @@ const LABELLED = new Set(['red', 'orange']);
 const LABEL_PRIORITY = Object.freeze({ red: 3000, orange: 2000, green: 1000 });
 const LABEL_LIMIT = 64;
 const LABEL_MAX_CHARS = 40;
-const DISCLAIMER =
-  'GDACS alerts are automatic estimates of likely humanitarian impact. They do not replace official information or warnings from local or national disaster management authorities.';
-const CAVEAT = 'Automatic impact estimates, not official warnings';
+const DISCLAIMER = msg(
+  'GDACS alerts are automatic estimates of likely humanitarian impact. They do not replace official information or warnings from local or national disaster management authorities.',
+);
+const CAVEAT = msg('Automatic impact estimates, not official warnings');
 /** The caveat every published selection carries downstream. */
 export const GDACS_SELECTION_CAVEAT =
   'automatic estimate, not official warning';
@@ -28,8 +31,7 @@ const LAYER_NAME = 'Disaster Alerts';
 const utc = (ms) =>
   Number.isFinite(ms)
     ? `${new Date(ms).toISOString().slice(0, 16).replace('T', ' ')} UTC`
-    : 'unknown';
-const plural = (count, word) => `${count} ${word}${count === 1 ? '' : 's'}`;
+    : t('unknown');
 
 /**
  * A globe label short enough to sit beside its point. GDACS names multi-country
@@ -55,7 +57,9 @@ const clip = (text, max) =>
  * @returns {object} Context metadata for `registerEntityContext`.
  */
 export function gdacsSelectionContext(event, { fetchedAt = null } = {}) {
-  const updatedAt = event.modifiedMs ?? event.toMs ?? event.fromMs ?? null;
+  // Only GDACS's own modification stamp says when the event was updated; an
+  // episode's start or end date is not a stand-in for it.
+  const updatedAt = Number.isFinite(event.modifiedMs) ? event.modifiedMs : null;
   return {
     id: `${ENTITY_PREFIX}${event.id}`,
     layerId: LAYER_ID,
@@ -94,8 +98,7 @@ export function gdacsSelectionContext(event, { fetchedAt = null } = {}) {
 
 /**
  * Own one GDACS alert display: the event centroids GDACS publishes for
- * earthquakes, tropical cyclones, floods, volcanoes, droughts and wildfires,
- * coloured by alert level and selectable from the globe or the row list.
+ * floods, volcanoes and droughts, coloured by alert level and selectable from the globe or the row list.
  * Globe selection needs the application's `picking` registry and `pointer`
  * ownership; without them the row list still selects and focuses events.
  * Event names are world-overlay labels, drawn only when an `overlayHost` is
@@ -322,18 +325,24 @@ export function createGdacsAlertsLayer({
     }
   }
 
-  /** Refresh the published record in place after a fetch, without reselecting. */
+  /**
+   * Refresh the published record in place after a fetch, without reselecting.
+   * A centroid GDACS has moved moves the record and the point voice projects.
+   */
   function refreshContext() {
     const event = selected();
     if (!context || !event) return;
     try {
       const metadata = gdacsSelectionContext(event, { fetchedAt: _fetchedAt });
       const existing = context.getContextStore().entities.get(metadata.id);
-      if (existing?.layerId === LAYER_ID)
-        context.registerEntityContext(existing.entity, {
-          ...metadata,
-          dataSource: _dataSource,
-        });
+      if (existing?.layerId !== LAYER_ID) return;
+      existing.entity.__localBaseCartesian =
+        _markers.get(event.id)?.position ||
+        C.Cartesian3.fromDegrees(event.lon, event.lat, 0);
+      context.registerEntityContext(existing.entity, {
+        ...metadata,
+        dataSource: _dataSource,
+      });
     } catch {
       // store unavailable: nothing to refresh
     }
@@ -412,14 +421,41 @@ export function createGdacsAlertsLayer({
   function detailLines(event) {
     const period =
       event.fromMs && event.toMs && event.toMs - event.fromMs >= 60_000
-        ? `${utc(event.fromMs)} to ${utc(event.toMs)}`
+        ? t('{from} to {to}', { from: utc(event.fromMs), to: utc(event.toMs) })
         : utc(event.toMs ?? event.fromMs);
     return [
       event.name,
-      `${GDACS_LEVEL_NAMES[event.level]} alert · ${GDACS_TYPE_NAMES[event.type]}${event.country ? ` · ${event.country}` : ''}`,
+      [
+        t('{level} alert', { level: t(GDACS_LEVEL_NAMES[event.level]) }),
+        t(GDACS_TYPE_NAMES[event.type]),
+        event.country,
+      ]
+        .filter(Boolean)
+        .join(' · '),
       event.severity,
       period,
-      event.current ? '' : 'Episode no longer marked current by GDACS',
+      event.current ? '' : t('Episode no longer marked current by GDACS'),
+    ].filter(Boolean);
+  }
+
+  // Feed health and the GDACS caveat stay on the row whether or not an
+  // event is selected.
+  function noticeLines() {
+    return [
+      _missing.length
+        ? t('No data this refresh: {types}', {
+            types: _missing
+              .map((type) => t(GDACS_TYPE_NAMES[type] || type))
+              .join(', '),
+          })
+        : '',
+      _stale ? t('Some feeds are cached copies') : '',
+      _lastError && (_events.length || _selectedId)
+        ? t('Last refresh failed: {error}', {
+            error: translateFeedError(_lastError),
+          })
+        : '',
+      t(CAVEAT),
     ].filter(Boolean);
   }
 
@@ -427,19 +463,14 @@ export function createGdacsAlertsLayer({
   function summaryLines() {
     return [
       _events.length
-        ? plural(_events.length, 'event')
+        ? tn(_events.length, '{count} event', '{count} events')
         : _lastUpdate
-          ? 'No GDACS events on the map'
+          ? t('No GDACS events on the map')
           : _lastError
-            ? 'GDACS alerts unavailable'
-            : 'Loading GDACS alerts…',
-      _missing.length
-        ? `No data this refresh: ${_missing.map((type) => GDACS_TYPE_NAMES[type] || type).join(', ')}`
-        : '',
-      _stale ? 'Some feeds are cached copies' : '',
-      _lastError && _events.length ? `Last refresh failed: ${_lastError}` : '',
-      CAVEAT,
-    ].filter(Boolean);
+            ? t('GDACS alerts unavailable')
+            : t('Loading GDACS alerts…'),
+      ...noticeLines(),
+    ];
   }
 
   const layer = {
@@ -519,7 +550,7 @@ export function createGdacsAlertsLayer({
         if (request.signal.aborted || _request !== request || !_enabled)
           return false;
         console.warn('[Data:GDACS] Fetch error:', e);
-        _lastError = e?.message || 'GDACS alerts unavailable';
+        _lastError = e?.message || msg('GDACS alerts unavailable');
         return false;
       } finally {
         if (_request === request) _request = null;
@@ -572,33 +603,40 @@ export function createGdacsAlertsLayer({
           ? [
               {
                 id: 'report',
-                label: 'GDACS report ↗',
-                title: `Open the GDACS report for ${event.name} in a new tab`,
+                label: t('GDACS report ↗'),
+                title: t('Open the GDACS report for {name} in a new tab', {
+                  name: event.name,
+                }),
                 params: { report: true },
               },
             ]
           : [],
         legend: GDACS_LEVELS.map((level, index) => ({
-          label: GDACS_LEVEL_NAMES[level],
+          label: t(GDACS_LEVEL_NAMES[level]),
           color: GDACS_LEVEL_COLORS[level],
           count: _events.filter((entry) => entry.level === level).length,
-          ...(index === 0 ? { blurb: DISCLAIMER } : {}),
+          ...(index === 0 ? { blurb: t(DISCLAIMER) } : {}),
         })),
         list: {
-          ariaLabel: 'GDACS events, most severe first',
+          ariaLabel: t('GDACS events, most severe first'),
           items: _events.map((entry, index) => ({
             id: entry.id,
             ordinal: index + 1,
             // GDACS names already say the hazard ("Flood in China").
-            lead: GDACS_LEVEL_NAMES[entry.level].toUpperCase(),
+            lead: t(GDACS_LEVEL_NAMES[entry.level]).toLocaleUpperCase(),
             text: `${entry.name}${entry.severity ? ` · ${entry.severity}` : ''}`,
             active: entry.id === _selectedId,
             params: { eventId: entry.id, focus: true },
           })),
         },
         // The row renders info as one wrapped paragraph.
-        info: (event ? detailLines(event) : summaryLines()).join(' · '),
-        infoTitle: `Select an event on the map, or choose one in the list to select it and move the camera. Click empty map space to clear the selection. Points mark the event centre GDACS publishes, not the affected area. ${DISCLAIMER}`,
+        info: (event
+          ? [...detailLines(event), ...noticeLines()]
+          : summaryLines()
+        ).join(' · '),
+        infoTitle: `${t(
+          'Floods, volcanoes and droughts from the GDACS map feeds. Earthquakes, wildfires and tropical cyclones have their own layers. Select an event on the map, or choose one in the list to select it and move the camera. Click empty map space to clear the selection. Points mark the event centre GDACS publishes, not the affected area.',
+        )} ${t(DISCLAIMER)}`,
       };
     },
 

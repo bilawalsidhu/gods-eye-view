@@ -30,8 +30,8 @@ const event = (id, level, lon, lat, extra = {}) => {
   };
 };
 
-const RED = event('TC-1', 'red', 140, 25);
-const GREEN = event('EQ-3', 'green', 20, 45);
+const RED = event('VO-1', 'red', 140, 25);
+const GREEN = event('DR-3', 'green', 20, 45);
 const FETCHED_AT = Date.UTC(2026, 8, 30, 12);
 const AREA_KEYS = [
   'polygon',
@@ -185,12 +185,12 @@ test('a row selection publishes exactly one normalized selected entity', async (
   await h.layer.update();
   assert.equal(h.log.length, 0, 'a refresh alone selects nothing');
 
-  h.layer.setParams({ eventId: 'EQ-3', focus: true });
+  h.layer.setParams({ eventId: 'DR-3', focus: true });
   assert.equal(h.selectedEvents().length, 1);
   assertNormalized(h.selectedEvents()[0].detail, GREEN);
-  assert.equal(context.getSelectedEntityContext().id, 'gdacs-alerts:EQ-3');
+  assert.equal(context.getSelectedEntityContext().id, 'gdacs-alerts:DR-3');
 
-  h.layer.setParams({ eventId: 'EQ-3' });
+  h.layer.setParams({ eventId: 'DR-3' });
   assert.equal(h.selectedEvents().length, 1, 're-choosing is not a new event');
   h.layer.getRowControls();
   assert.equal(h.log.length, 1);
@@ -209,16 +209,16 @@ test('switching events replaces the record; only one GDACS record is kept', asyn
   const h = harness(t);
   h.layer.enable();
   await h.layer.update();
-  h.layer.setParams({ eventId: 'TC-1' });
+  h.layer.setParams({ eventId: 'VO-1' });
   h.click({ id: h.sources[0].entities.values[1] });
   assert.deepEqual(
     h.selectedEvents().map((e) => e.detail.id),
-    ['gdacs-alerts:TC-1', 'gdacs-alerts:EQ-3'],
+    ['gdacs-alerts:VO-1', 'gdacs-alerts:DR-3'],
   );
   assert.equal(h.clearedEvents().length, 0, 'a switch is not a clear');
   assert.deepEqual(
     h.gdacsRecords().map(({ id }) => id),
-    ['gdacs-alerts:EQ-3'],
+    ['gdacs-alerts:DR-3'],
   );
 });
 
@@ -226,7 +226,7 @@ test('clear (row or empty map) releases the shared selection once', async (t) =>
   const h = harness(t);
   h.layer.enable();
   await h.layer.update();
-  h.layer.setParams({ eventId: 'TC-1' });
+  h.layer.setParams({ eventId: 'VO-1' });
   h.layer.setParams({ clear: true });
   assert.deepEqual(
     h.clearedEvents().map((e) => e.detail),
@@ -245,7 +245,7 @@ test('disable and destroy clear a GDACS-owned selection', async (t) => {
   const h = harness(t);
   h.layer.enable();
   await h.layer.update();
-  h.layer.setParams({ eventId: 'TC-1' });
+  h.layer.setParams({ eventId: 'VO-1' });
   h.layer.disable();
   assert.equal(h.clearedEvents().length, 1);
   assert.equal(context.getSelectedEntityContext(), null);
@@ -253,7 +253,7 @@ test('disable and destroy clear a GDACS-owned selection', async (t) => {
 
   h.layer.enable();
   await h.layer.update();
-  h.layer.setParams({ eventId: 'EQ-3' });
+  h.layer.setParams({ eventId: 'DR-3' });
   h.layer.destroy();
   assert.equal(h.clearedEvents().length, 2);
   assert.equal(context.getSelectedEntityContext(), null);
@@ -264,7 +264,7 @@ test('a sibling layer selection is never cleared by GDACS', async (t) => {
   const h = harness(t);
   h.layer.enable();
   await h.layer.update();
-  h.layer.setParams({ eventId: 'TC-1' });
+  h.layer.setParams({ eventId: 'VO-1' });
   const aircraft = { show: true };
   context.registerEntityContext(aircraft, { id: 'abc123', layerId: 'flights' });
   context.selectEntityContext(aircraft);
@@ -280,12 +280,12 @@ test('re-choosing the event after a sibling took the selection claims it back', 
   const h = harness(t);
   h.layer.enable();
   await h.layer.update();
-  h.layer.setParams({ eventId: 'TC-1' });
+  h.layer.setParams({ eventId: 'VO-1' });
   const vessel = { show: true };
   context.registerEntityContext(vessel, { id: 'v1', layerId: 'vessels' });
   context.selectEntityContext(vessel);
-  h.layer.setParams({ eventId: 'TC-1', focus: true });
-  assert.equal(context.getSelectedEntityContext().id, 'gdacs-alerts:TC-1');
+  h.layer.setParams({ eventId: 'VO-1', focus: true });
+  assert.equal(context.getSelectedEntityContext().id, 'gdacs-alerts:VO-1');
   assert.equal(
     h.selectedEvents().filter((e) => e.detail.layerId === 'gdacs-alerts')
       .length,
@@ -298,7 +298,7 @@ test('an event dropped by a refresh clears as an eviction', async (t) => {
   const h = harness(t, { events });
   h.layer.enable();
   await h.layer.update();
-  h.layer.setParams({ eventId: 'TC-1' });
+  h.layer.setParams({ eventId: 'VO-1' });
   events.splice(0, 1);
   await h.layer.update();
   assert.deepEqual(
@@ -313,7 +313,7 @@ test('a refresh updates the published record in place without re-announcing it',
   const h = harness(t, { events });
   h.layer.enable();
   await h.layer.update();
-  h.layer.setParams({ eventId: 'EQ-3' });
+  h.layer.setParams({ eventId: 'DR-3' });
   events[1] = { ...GREEN, level: 'orange' };
   await h.layer.update();
   assert.equal(h.selectedEvents().length, 1);
@@ -340,7 +340,46 @@ test('without the context service selection stays local and silent', async (t) =
   });
   layer.enable();
   await layer.update();
-  layer.setParams({ eventId: 'TC-1' });
-  assert.equal(layer.getDiagnostics().selectedId, 'TC-1');
+  layer.setParams({ eventId: 'VO-1' });
+  assert.equal(layer.getDiagnostics().selectedId, 'VO-1');
   assert.equal(heard, 0);
+});
+
+test('a centroid GDACS moves moves the published record and the projected point', async (t) => {
+  const events = [RED, GREEN];
+  const h = harness(t, { events });
+  h.layer.enable();
+  await h.layer.update();
+  h.layer.setParams({ eventId: 'DR-3' });
+  const before = context.getSelectedEntityContext();
+  const carrier = before.entity;
+  events[1] = { ...GREEN, lon: 22.5, lat: 41.25 };
+  await h.layer.update();
+  assert.equal(h.selectedEvents().length, 1, 'a move is not a new selection');
+  const record = context.getSelectedEntityContext();
+  assert.equal(record.entity, carrier, 'the same carrier is kept');
+  assert.equal(record.longitude, 22.5);
+  assert.equal(record.latitude, 41.25);
+  const projected = Cesium.Cartographic.fromCartesian(
+    carrier.__localBaseCartesian,
+  );
+  assert.ok(
+    Math.abs(Cesium.Math.toDegrees(projected.longitude) - 22.5) < 1e-9,
+  );
+  assert.ok(
+    Math.abs(Cesium.Math.toDegrees(projected.latitude) - 41.25) < 1e-9,
+  );
+  assertPointOnly(record);
+});
+
+test('provenance.updatedAt stays unknown without a GDACS datemodified', async (t) => {
+  const undated = event('FL-7', 'orange', 30, 10, { modifiedMs: null });
+  const h = harness(t, { events: [undated] });
+  h.layer.enable();
+  await h.layer.update();
+  h.layer.setParams({ eventId: 'FL-7' });
+  const record = context.getSelectedEntityContext();
+  assert.equal(record.provenance.updatedAt, null);
+  assert.notEqual(record.provenance.updatedAt, undated.toMs);
+  assert.notEqual(record.provenance.updatedAt, undated.fromMs);
 });

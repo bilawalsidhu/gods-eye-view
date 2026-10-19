@@ -25,9 +25,9 @@ const event = (id, level, lon, lat, extra = {}) => {
   };
 };
 
-const RED = event('TC-1', 'red', 140, 25, { severity: 'Typhoon' });
+const RED = event('VO-1', 'red', 140, 25, { severity: 'VEI 3' });
 const ORANGE = event('FL-2', 'orange', 110, 30);
-const GREEN = event('EQ-3', 'green', 20, 45);
+const GREEN = event('DR-3', 'green', 20, 45);
 // On the far side of the globe from the test camera above 0°N 0°E.
 const FAR = event('VO-4', 'green', 180, 0);
 
@@ -171,11 +171,11 @@ test('an enabled refresh draws one point per event, labelling red and orange', a
   const entities = sources[0].entities.values;
   assert.deepEqual(
     entities.map(({ id }) => id),
-    ['gdacs-alerts:TC-1', 'gdacs-alerts:FL-2', 'gdacs-alerts:EQ-3'],
+    ['gdacs-alerts:VO-1', 'gdacs-alerts:FL-2', 'gdacs-alerts:DR-3'],
   );
   assert.ok(entities.every((entity) => !entity.label));
   assert.deepEqual(labels(), [
-    ['TC-1', 'TC event 1', false],
+    ['VO-1', 'VO event 1', false],
     ['FL-2', 'FL event 2', false],
   ]);
   const [label] = overlay.entries.get('gdacs-alerts');
@@ -196,9 +196,9 @@ test('an enabled refresh draws one point per event, labelling red and orange', a
   assert.deepEqual(
     controls.list.items.map(({ lead, text, params }) => [lead, text, params]),
     [
-      ['RED', 'TC event 1 · Typhoon', { eventId: 'TC-1', focus: true }],
+      ['RED', 'VO event 1 · VEI 3', { eventId: 'VO-1', focus: true }],
       ['ORANGE', 'FL event 2', { eventId: 'FL-2', focus: true }],
-      ['GREEN', 'EQ event 3', { eventId: 'EQ-3', focus: true }],
+      ['GREEN', 'DR event 3', { eventId: 'DR-3', focus: true }],
     ],
   );
   assert.deepEqual(controls.chips, []);
@@ -228,7 +228,7 @@ test('missing feeds, cached copies and a failed refresh are reported without dro
   let fail = false;
   const { layer, sources } = harness(async () => {
     if (fail) throw new Error('GDACS HTTP 502');
-    return { events: [RED], missing: ['DR', 'WF'], stale: true };
+    return { events: [RED], missing: ['DR'], stale: true };
   });
   layer.enable();
   await layer.update();
@@ -236,7 +236,7 @@ test('missing feeds, cached copies and a failed refresh are reported without dro
     layer.getRowControls().info,
     [
       '1 event',
-      'No data this refresh: Drought, Wildfire',
+      'No data this refresh: Drought',
       'Some feeds are cached copies',
       'Automatic impact estimates, not official warnings',
     ].join(' · '),
@@ -253,6 +253,33 @@ test('missing feeds, cached copies and a failed refresh are reported without dro
   );
 });
 
+test('the caveat and the feed notices stay on the row while an event is selected', async () => {
+  let fail = false;
+  const { layer } = harness(async () => {
+    if (fail) throw new Error('GDACS HTTP 502');
+    return { events: [RED, GREEN], missing: ['FL'], stale: true };
+  });
+  layer.enable();
+  await layer.update();
+  layer.setParams({ eventId: 'VO-1' });
+  const lines = layer.getRowControls().info.split(' · ');
+  assert.equal(lines[0], 'VO event 1');
+  assert.deepEqual(lines.slice(-3), [
+    'No data this refresh: Flood',
+    'Some feeds are cached copies',
+    'Automatic impact estimates, not official warnings',
+  ]);
+  fail = true;
+  await layer.update();
+  assert.equal(layer.getDiagnostics().selectedId, 'VO-1');
+  assert.deepEqual(layer.getRowControls().info.split(' · ').slice(-4), [
+    'No data this refresh: Flood',
+    'Some feeds are cached copies',
+    'Last refresh failed: GDACS HTTP 502',
+    'Automatic impact estimates, not official warnings',
+  ]);
+});
+
 test('choosing a list row selects the event, moves the camera and offers the report', async () => {
   const { layer, flights, opened, labels } = harness(snapshot([RED, GREEN]));
   let navigations = 0;
@@ -264,7 +291,7 @@ test('choosing a list row selects the event, moves the camera and offers the rep
   });
   layer.enable();
   await layer.update();
-  layer.setParams({ eventId: 'EQ-3', focus: true });
+  layer.setParams({ eventId: 'DR-3', focus: true });
   assert.equal(navigations, 1);
   assert.equal(flights.length, 1);
   assert.equal(flights[0].duration, 1.4);
@@ -281,11 +308,11 @@ test('choosing a list row selects the event, moves the camera and offers the rep
   );
   assert.match(
     controls.info,
-    /^EQ event 3 · Green alert · Earthquake · Somewhere · /,
+    /^DR event 3 · Green alert · Drought · Somewhere · /,
   );
   assert.deepEqual(labels(), [
-    ['EQ-3', 'EQ event 3', true],
-    ['TC-1', 'TC event 1', false],
+    ['DR-3', 'DR event 3', true],
+    ['VO-1', 'VO event 1', false],
   ]);
   layer.setParams(controls.chips[0].params);
   assert.deepEqual(opened, [GREEN.reportUrl]);
@@ -293,13 +320,13 @@ test('choosing a list row selects the event, moves the camera and offers the rep
   layer.setParams({ eventId: 'NOPE-1', focus: true });
   assert.equal(
     layer.getDiagnostics().selectedId,
-    'EQ-3',
+    'DR-3',
     'an unknown id keeps the selection',
   );
   layer.setParams({ clear: true });
   assert.deepEqual(layer.getRowControls().chips, []);
-  assert.deepEqual(labels(), [['TC-1', 'TC event 1', false]]);
-  assert.deepEqual(layer.getDiagnostics().labels, ['TC-1']);
+  assert.deepEqual(labels(), [['VO-1', 'VO event 1', false]]);
+  assert.deepEqual(layer.getDiagnostics().labels, ['VO-1']);
 });
 
 test('focus honours reduced motion and does nothing without the shell', async () => {
@@ -307,13 +334,13 @@ test('focus honours reduced motion and does nothing without the shell', async ()
   quiet.layer.attachShellServices({ runNavigation: (navigate) => navigate() });
   quiet.layer.enable();
   await quiet.layer.update();
-  quiet.layer.setParams({ eventId: 'TC-1', focus: true });
+  quiet.layer.setParams({ eventId: 'VO-1', focus: true });
   assert.equal(quiet.flights[0].duration, 0);
 
   const detached = harness(snapshot([RED]));
   detached.layer.enable();
   await detached.layer.update();
-  detached.layer.setParams({ eventId: 'TC-1', focus: true });
+  detached.layer.setParams({ eventId: 'VO-1', focus: true });
   assert.equal(detached.flights.length, 0);
   assert.equal(detached.layer.getRowControls().list.items[0].active, true);
 });
@@ -326,11 +353,11 @@ test('a superseded or cancelled navigation does not fly', async () => {
   });
   layer.enable();
   await layer.update();
-  layer.setParams({ eventId: 'TC-1', focus: true });
-  layer.setParams({ eventId: 'EQ-3' });
+  layer.setParams({ eventId: 'VO-1', focus: true });
+  layer.setParams({ eventId: 'DR-3' });
   queued[0]();
   assert.equal(flights.length, 0);
-  layer.setParams({ eventId: 'EQ-3', focus: true });
+  layer.setParams({ eventId: 'DR-3', focus: true });
   layer.disable();
   queued[1]();
   assert.equal(flights.length, 0);
@@ -345,15 +372,15 @@ test('globe clicks select owned points, yield to sibling picks and clear on empt
   layer.enable();
   await layer.update();
   assert.equal(handlers.length, 1);
-  assert.equal(picking.owners.get('gdacs-alerts')('gdacs-alerts:TC-1'), true);
+  assert.equal(picking.owners.get('gdacs-alerts')('gdacs-alerts:VO-1'), true);
   assert.equal(picking.owners.get('gdacs-alerts')('aircraft-1'), false);
 
   click({ id: sources[0].entities.values[1] });
-  assert.equal(layer.getDiagnostics().selectedId, 'EQ-3');
+  assert.equal(layer.getDiagnostics().selectedId, 'DR-3');
   click({ id: 'aircraft-1' });
   assert.equal(
     layer.getDiagnostics().selectedId,
-    'EQ-3',
+    'DR-3',
     'sibling picks are not empty map',
   );
   click(undefined);
@@ -383,7 +410,7 @@ test('points behind the globe are hidden each frame', async () => {
   assert.deepEqual(
     sources[0].entities.values.map(({ id, show }) => [id, show]),
     [
-      ['gdacs-alerts:EQ-3', true],
+      ['gdacs-alerts:DR-3', true],
       ['gdacs-alerts:VO-4', false],
     ],
   );
@@ -458,20 +485,20 @@ test('a vanished event clears the selection, and disable aborts the request in f
   let result = layer.update();
   pending.resolve({ events: [RED, GREEN] });
   assert.equal(await result, true);
-  layer.setParams({ eventId: 'TC-1' });
+  layer.setParams({ eventId: 'VO-1' });
   result = layer.update();
   pending.resolve({ events: [GREEN] });
   assert.equal(await result, true);
   assert.equal(layer.getDiagnostics().selectedId, null);
 
   // The selected event vanishes while a new labelled one appears.
-  layer.setParams({ eventId: 'EQ-3' });
+  layer.setParams({ eventId: 'DR-3' });
   result = layer.update();
   pending.resolve({ events: [RED, ORANGE] });
   assert.equal(await result, true);
   assert.equal(layer.getStats().error, null);
   assert.equal(layer.getDiagnostics().selectedId, null);
-  assert.deepEqual(layer.getDiagnostics().labels, ['TC-1', 'FL-2']);
+  assert.deepEqual(layer.getDiagnostics().labels, ['VO-1', 'FL-2']);
 
   result = layer.update();
   layer.disable();
