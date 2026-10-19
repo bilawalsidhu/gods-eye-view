@@ -140,3 +140,29 @@ test('civil emergency status follows the latest poll instead of sticking', () =>
   assert.equal(next.meta.squawk, '2000');
   assert.equal(next.meta.emergency, null);
 });
+
+test('a type from the type database styles the record; adsbdb answers win', () => {
+  const store = records();
+  store.geoidReady = true;
+  const typed = observation({
+    typeCode: 'B744',
+    typeName: 'BOEING 747-400',
+    registration: 'N123AB',
+  });
+  const first = store.receive(typed, view());
+  assert.equal(first.meta.typeCode, 'B744');
+  assert.equal(first.meta.typeName, 'BOEING 747-400');
+  assert.equal(first.meta.registration, 'N123AB');
+  // Untyped aircraft default to 'airliner'; the 747 shape comes from the type.
+  assert.equal(first.meta.klass, 'quadjet');
+  // An adsbdb answer written onto the record outlives the next poll's fill.
+  first.meta.typeCode = 'B39M';
+  first.meta.registration = 'N999ZZ';
+  const second = store.receive(typed, view());
+  assert.equal(second.meta.typeCode, 'B39M');
+  assert.equal(second.meta.registration, 'N999ZZ');
+  // With no type anywhere, the record says so.
+  const untyped = records().receive(observation({ id: 'def456' }), view());
+  assert.equal(untyped.meta.typeCode, null);
+  assert.equal(untyped.meta.registration, null);
+});

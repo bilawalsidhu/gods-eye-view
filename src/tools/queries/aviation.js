@@ -50,6 +50,7 @@ function aircraftRow(record, from) {
     course_deg: round(record.courseDeg, 0),
     vertical_rate_mps: round(record.verticalRateMps, 1),
     type_code: record.typeCode || null,
+    type_name: record.typeName || null,
     registration: record.registration || null,
     operator: record.operator || null,
     origin_country: record.originCountry || null,
@@ -149,8 +150,7 @@ export const findAircraft = defineTool({
   title: 'Find an aircraft',
   description:
     'Find aircraft currently reported anywhere by callsign, ICAO 24-bit ' +
-    'address or registration. Registrations are known only for aircraft in ' +
-    'the military feed.',
+    'address or registration.',
   inputSchema: {
     type: 'object',
     properties: {
@@ -178,11 +178,9 @@ export const findAircraft = defineTool({
       icao24: 'id',
       registration: 'registration',
     }[key];
-    // Only the military feed reports registrations.
+    // Civil registrations come from the aircraft type database's fill.
     const feeds = [
-      ...(key === 'registration'
-        ? []
-        : [{ name: 'civil', feed: services.aircraft }]),
+      { name: 'civil', feed: services.aircraft },
       { name: 'military', feed: services.military },
     ].filter(({ feed }) => feed);
     if (!feeds.length)
@@ -322,7 +320,7 @@ export const getAircraftInfo = defineTool({
   title: 'Aircraft type and route',
   description:
     'Look up an aircraft type and registration by ICAO 24-bit address, and ' +
-    'a flight route by callsign, from adsbdb. Give either or both.',
+    'a flight route by callsign. Give either or both.',
   inputSchema: {
     type: 'object',
     properties: { icao24: ICAO24_SCHEMA, callsign: CALLSIGN_SCHEMA },

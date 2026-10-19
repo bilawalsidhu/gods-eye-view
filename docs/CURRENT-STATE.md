@@ -893,6 +893,22 @@ one name, so `resolveTrackedAircraftInfo` returns a single shape for either laye
 rate is reported, never derived: a blank poll keeps the last transmitted value and an
 absent rate stays null rather than reading as level flight.
 
+Civil aircraft carry a type and registration from the Mictronics aircraft
+database (ODC-By 1.0), since OpenSky state vectors report neither.
+`server/providers/aircraft/types.js` downloads the weekly `indexedDB.zip` export
+(3.4 MB) when it has no copy or a week-old one, keeps it in
+`.gev-cache/mictronics-aircraft-db.zip`, and indexes it as sorted typed arrays
+(about 7 MB). `POST /api/aircraft-types` answers a batch of ICAO addresses
+(at most 20,000) with type designator, type name and registration, and never
+waits for loading: until a copy is ready it answers 503 with a short
+`Retry-After`. The flight source (`src/sources/live/aircraftTypes.js`) fills each
+snapshot's untyped records, asking about each address once, so the tools, the
+aircraft classes and the layer queries all read the filled records. Type
+enrichment for one aircraft asks the database first and adsbdb only for
+addresses it lacks; adsbdb still answers routes, and an adsbdb answer for an
+aircraft takes precedence. Aircraft the database has typed no longer spend
+adsbdb's ambient budget.
+
 ## Transponder emergency highlighting
 
 `src/data/aircraftEmergency.js` derives one status per poll from the Mode A
@@ -1664,7 +1680,7 @@ Updated: September 23, 2026
 
 Standalone aircraft routes now live in `server/providers/aircraft/`: OpenSky
 state vectors and regional fallback, adsb.lol military positions, ADSBDB
-enrichment and track backfill. Vessel routes and websocket/watchdog setup live
+enrichment, the aircraft type database and track backfill. Vessel routes and websocket/watchdog setup live
 in `server/providers/vessels/ais-live.js`; AIS records and recent tracks live
 in `ais-store.js`. Common response caps, request coalescing and query parsing
 have their own modules. `server/providers/local.js` composes these with the

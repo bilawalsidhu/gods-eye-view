@@ -47,6 +47,9 @@
       "server/providers/aircraft/opensky.js",
       "server/providers/aircraft/adsb-lol.js",
       "server/providers/aircraft/enrichment.js",
+      "server/providers/aircraft/types.js",
+      "server/providers/common/request.js",
+      "src/data/zipEntry.js",
       "server/providers/aircraft/tracks.js",
       "server/providers/vessels/ais-store.js",
       "server/providers/vessels/ais-live.js",
@@ -891,6 +894,7 @@
       "src/sources/live/contract.js",
       "src/sources/live/index.js",
       "src/sources/live/standalone.js",
+      "src/sources/live/aircraftTypes.js",
       "src/sources/live/vessels.js"
     ],
     "external": []
@@ -2118,6 +2122,7 @@
       "src/sources/live/aircraft.js",
       "src/sources/live/contract.js",
       "src/sources/live/standalone.js",
+      "src/sources/live/aircraftTypes.js",
       "src/sources/live/vessels.js",
       "src/splitFlap.js",
       "src/standalone/catalog.js",
@@ -3883,6 +3888,7 @@
       "src/sources/overpassFeaturesRecords.js",
       "src/sources/featureGeometry.js",
       "src/sources/live/standalone.js",
+      "src/sources/live/aircraftTypes.js",
       "src/sources/live/contract.js",
       "src/data/aircraftEmergency.js",
       "src/sources/live/aircraft.js",
