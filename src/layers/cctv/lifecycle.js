@@ -339,9 +339,10 @@ export function createLifecycle({
      */
     enable() {
       layerState._enabled = true;
+      // Packs whose curated poses come from OpenStreetMap geometry.
       if (
-        layerState._records.some(
-          (record) => record.camera.cityId === 'warendorf',
+        layerState._records.some((record) =>
+          ['warendorf', 'sao-paulo'].includes(record.camera.cityId),
         )
       )
         services.credits?.showOsmCredit?.(layerState._viewer, 'cctv');

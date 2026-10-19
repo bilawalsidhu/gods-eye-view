@@ -1075,6 +1075,22 @@ The images are periodically updated road-condition photographs, not continuous
 video; camera poses use the existing low-confidence heading prior.
 `CCTV_LITHUANIA_MAX_SOURCES` sets its cap (default 400, bounded to 1–1000).
 
+## CET-SP CCTV source pack
+
+The CCTV catalog can include 14 CET-SP intersection cameras in central São
+Paulo. The pack is off unless `CCTV_CETSP_ENABLED=1`, because CET publishes the
+stills on a public website without reuse terms. CET publishes no coordinates,
+so the curated `config/cctv_sources.cetsp.json` places each camera at the
+OpenStreetMap node where its two named streets meet; enabling the layer with
+these cameras shows the shared OpenStreetMap credit. Poses use the existing
+low-confidence heading prior. CET overwrites a ring of 25–50 numbered stills
+per camera, one about every 14 seconds, so the pack registers frame 1, the
+thumbnail CET's own page shows, which is at most about 12 minutes old. Only
+`https://cameras.cetsp.com.br/Cams/<folder>/1.jpg` is registered, rebuilt from
+the folder number; rows with any other host, path, query or credentials, a
+mismatched id, or coordinates outside the municipality are dropped. The loader
+reads only the local file, so a disabled pack makes no request to CET.
+
 ## DriveBC CCTV source pack
 
 The CCTV catalog adds DriveBC highway cameras for British Columbia alongside the

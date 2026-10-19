@@ -1,0 +1,100 @@
+[
+  {
+    "id": "cetsp-15",
+    "name": "Av. Paulista × R. da Consolação (Praça do Ciclista)",
+    "lat": -23.555607,
+    "lon": -46.662842,
+    "url": "https://cameras.cetsp.com.br/Cams/15/1.jpg"
+  },
+  {
+    "id": "cetsp-23",
+    "name": "Av. Paulista × Av. Brig. Luís Antônio",
+    "lat": -23.567653,
+    "lon": -46.649021,
+    "url": "https://cameras.cetsp.com.br/Cams/23/1.jpg"
+  },
+  {
+    "id": "cetsp-31",
+    "name": "Av. Brig. Faria Lima × Av. Pres. Juscelino Kubitschek",
+    "lat": -23.590511,
+    "lon": -46.681403,
+    "url": "https://cameras.cetsp.com.br/Cams/31/1.jpg"
+  },
+  {
+    "id": "cetsp-57",
+    "name": "R. do Paraíso × R. Apeninos",
+    "lat": -23.573909,
+    "lon": -46.639294,
+    "url": "https://cameras.cetsp.com.br/Cams/57/1.jpg"
+  },
+  {
+    "id": "cetsp-164",
+    "name": "Av. Paulista × R. Peixoto Gomide (MASP)",
+    "lat": -23.560898,
+    "lon": -46.657096,
+    "url": "https://cameras.cetsp.com.br/Cams/164/1.jpg"
+  },
+  {
+    "id": "cetsp-180",
+    "name": "R. da Consolação × R. Caio Prado",
+    "lat": -23.547935,
+    "lon": -46.649033,
+    "url": "https://cameras.cetsp.com.br/Cams/180/1.jpg"
+  },
+  {
+    "id": "cetsp-184",
+    "name": "Av. Brasil × Av. Brig. Luís Antônio (Pç. Armando de Salles Oliveira)",
+    "lat": -23.579142,
+    "lon": -46.661583,
+    "url": "https://cameras.cetsp.com.br/Cams/184/1.jpg"
+  },
+  {
+    "id": "cetsp-195",
+    "name": "Av. Brasil × Av. Rebouças / Av. Henrique Schaumann",
+    "lat": -23.564426,
+    "lon": -46.678138,
+    "url": "https://cameras.cetsp.com.br/Cams/195/1.jpg"
+  },
+  {
+    "id": "cetsp-200",
+    "name": "Av. Brig. Faria Lima × R. Iguatemi / R. Jerônimo da Veiga",
+    "lat": -23.582123,
+    "lon": -46.68387,
+    "url": "https://cameras.cetsp.com.br/Cams/200/1.jpg"
+  },
+  {
+    "id": "cetsp-210",
+    "name": "Av. Brig. Luís Antônio × Al. Santos",
+    "lat": -23.568646,
+    "lon": -46.649885,
+    "url": "https://cameras.cetsp.com.br/Cams/210/1.jpg"
+  },
+  {
+    "id": "cetsp-220",
+    "name": "Av. Cidade Jardim × Av. Nove de Julho (Túnel Max Feffer)",
+    "lat": -23.580329,
+    "lon": -46.683471,
+    "url": "https://cameras.cetsp.com.br/Cams/220/1.jpg"
+  },
+  {
+    "id": "cetsp-222",
+    "name": "Av. Hélio Pellegrino × R. Diogo Jácome",
+    "lat": -23.597448,
+    "lon": -46.667934,
+    "url": "https://cameras.cetsp.com.br/Cams/222/1.jpg"
+  },
+  {
+    "id": "cetsp-224",
+    "name": "Av. Ibirapuera × R. Ipê",
+    "lat": -23.593655,
+    "lon": -46.652774,
+    "url": "https://cameras.cetsp.com.br/Cams/224/1.jpg"
+  },
+  {
+    "id": "cetsp-225",
+    "name": "Av. Prof. Ascendino Reis × R. Pedro de Toledo",
+    "lat": -23.597729,
+    "lon": -46.650831,
+    "url": "https://cameras.cetsp.com.br/Cams/225/1.jpg"
+  }
+]

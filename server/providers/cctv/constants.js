@@ -201,6 +201,9 @@ export const WARENDORF_IMAGE_ORIGINS = Object.freeze([
   'http://webcam.warendorf.de/',
   'https://www.kreis-warendorf.de/',
 ]);
+/** CET-SP (São Paulo): intersection cameras from a curated catalog file. */
+export const DEFAULT_CETSP_SOURCE_FILE = 'config/cctv_sources.cetsp.json';
+export const CETSP_IMAGE_ORIGIN = 'https://cameras.cetsp.com.br';
 /** Live Traffic NSW (Transport for NSW): keyless public camera catalog. */
 export const NSW_CAMERAS_URL =
   'https://data.livetraffic.com/cameras/traffic-cam.json';
