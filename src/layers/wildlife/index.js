@@ -123,6 +123,25 @@ export function wildlifeTrackChunks(fullTrack) {
 }
 
 /**
+ * Every fix counts: an owner can remove an outlier mid-track while the count
+ * and the latest fix stay the same.
+ */
+const sameFixes = (a, b) =>
+  a.length === b.length &&
+  a.every(
+    (fix, i) => fix[0] === b[i][0] && fix[1] === b[i][1] && fix[2] === b[i][2],
+  );
+const sameAnimals = (a, b) =>
+  a.length === b.length &&
+  a.every(
+    (animal, i) =>
+      animal.id === b[i].id &&
+      animal.name === b[i].name &&
+      animal.taxon === b[i].taxon &&
+      sameFixes(animal.track, b[i].track),
+  );
+
+/**
  * Own one wildlife display: the latest GPS fix of each tagged animal in the
  * curated Movebank studies as a glyph pointing along its last move, a short
  * fading path behind it, and a row that lists studies and their animals.
@@ -154,7 +173,8 @@ export function createWildlifeLayer({
   let _studyId = null;
   let _animalId = null;
   let _page = 0;
-  let _signature = null;
+  /** The animals last drawn, to skip redrawing an unchanged snapshot. */
+  let _shown = null;
   let _lastUpdate = null;
   let _lastError = null;
   let _pollTimer = null;
@@ -262,13 +282,8 @@ export function createWildlifeLayer({
 
   function render() {
     const animals = shownAnimals();
-    // Every fix counts: an owner can remove an outlier mid-track while the
-    // count and the latest fix stay the same.
-    const signature = JSON.stringify(
-      animals.map(({ id, name, taxon, track }) => [id, name, taxon, track]),
-    );
-    if (signature === _signature) return;
-    _signature = signature;
+    if (_shown && sameAnimals(animals, _shown)) return;
+    _shown = animals;
     _dataSource.entities.removeAll();
     _entityAnimals.clear();
     _markers.clear();
@@ -374,22 +389,26 @@ export function createWildlifeLayer({
     });
   }
 
-  function expireHeld() {
+  /** Drop studies past their deadline; true when any were dropped. */
+  function dropExpired() {
     const expired = new Set(
       _studies
         .filter(({ heldUntil }) => heldUntil <= now())
         .map(({ id }) => id),
     );
-    if (expired.size) {
-      _studies = _studies.map((study) =>
-        expired.has(study.id)
-          ? { ...study, status: 'unavailable', heldUntil: undefined }
-          : study,
-      );
-      _animals = _animals.filter(({ study }) => !expired.has(study));
-      clampPage();
-      render();
-    }
+    if (!expired.size) return false;
+    _studies = _studies.map((study) =>
+      expired.has(study.id)
+        ? { ...study, status: 'unavailable', heldUntil: undefined }
+        : study,
+    );
+    _animals = _animals.filter(({ study }) => !expired.has(study));
+    clampPage();
+    return true;
+  }
+
+  function expireHeld() {
+    if (dropExpired()) render();
     scheduleExpiry();
   }
 
@@ -718,6 +737,8 @@ export function createWildlifeLayer({
           return false;
         _studies = holdStudies(snapshot.studies, snapshot.generatedAt);
         _animals = snapshot.animals;
+        // A copy already past its deadline is never drawn.
+        dropExpired();
         if (_studyId !== null && !studyOf(_studyId)) _studyId = null;
         clampPage();
         render();
@@ -778,11 +799,8 @@ export function createWildlifeLayer({
         return;
       }
       if (params.page === 'next' || params.page === 'previous') {
-        const pages = Math.ceil(listedAnimals().length / WILDLIFE_PAGE_SIZE);
-        _page = Math.max(
-          0,
-          Math.min(pages - 1, _page + (params.page === 'next' ? 1 : -1)),
-        );
+        _page += params.page === 'next' ? 1 : -1;
+        clampPage();
         notify();
         return;
       }
@@ -958,6 +976,7 @@ export function createWildlifeLayer({
         enabled: _enabled,
         requestPending: Boolean(_request),
         pollScheduled: _pollTimer !== null,
+        expiryScheduled: _expiryTimer !== null,
         selectionActive: _clickHandler !== null,
         horizonCulling: _removePreRender !== null,
         window: _window,
@@ -976,7 +995,7 @@ export function createWildlifeLayer({
       layer.disable();
       _studies = [];
       _animals = [];
-      _signature = null;
+      _shown = null;
       _entityAnimals.clear();
       _markers.clear();
       if (_dataSource) {

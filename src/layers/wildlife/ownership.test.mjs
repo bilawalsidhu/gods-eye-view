@@ -114,7 +114,8 @@ function harness({ animals = ANIMALS, statuses = {}, picking = null } = {}) {
     source: {
       getSnapshot: async () => {
         if (fail) throw new Error('Wildlife HTTP 502');
-        return snapshot;
+        // The proxy stamps every answer with its clock, as /api/wildlife does.
+        return { generatedAt: clock, ...snapshot };
       },
     },
     cesium: { ...Cesium, ScreenSpaceEventHandler: FakeHandler },
@@ -670,6 +671,8 @@ test('while refreshes fail, held positions expire with the proxy copy', async ()
     h.timers.delete(id);
     return timer;
   };
+  // The only timer is the deadline: nothing is pending, so nothing polls.
+  assert.equal(h.layer.getDiagnostics().pollScheduled, false);
   assert.equal(h.timers.size, 1);
   assert.equal(
     [...h.timers.values()][0].ms,
@@ -699,25 +702,39 @@ test('while refreshes fail, held positions expire with the proxy copy', async ()
   assert.equal(h.entityIds().length, 0);
   assert.equal(h.timers.size, 0, 'nothing left to expire');
   h.fail(false);
-  h.setSnapshot({ studies: studies(), animals: ANIMALS });
+  h.setSnapshot({
+    studies: studies().map((study) => ({
+      ...study,
+      fetchedAt: NOW + 6 * HOUR,
+    })),
+    animals: ANIMALS,
+  });
   await h.layer.update();
   assert.equal(h.layer.getStats().count, 3, 'a good refresh brings them back');
   assert.equal(h.timers.size, 1);
   h.layer.disable();
-  assert.equal(h.timers.size, 0, 'disabling cancels the deadline');
+  assert.equal(
+    h.layer.getDiagnostics().expiryScheduled,
+    false,
+    'disable cancels it',
+  );
+  assert.equal(h.timers.size, 0);
 });
 
 test('a copy of unknown age is held only as long as its status allows', async () => {
-  const h = harness({ statuses: { [STORKS]: 'stale' } });
+  const h = harness();
+  h.setSnapshot({
+    generatedAt: undefined,
+    studies: studies({ [STORKS]: 'stale' }),
+    animals: ANIMALS,
+  });
   h.layer.enable();
   await h.layer.update();
   // No generatedAt (an older proxy): fresh may be up to an hour old, stale
-  // up to six, so the stale study has nothing left to hold.
-  const [[id, timer]] = [...h.timers];
-  assert.equal(timer.ms, 0);
-  h.timers.delete(id);
-  timer.callback();
+  // up to six, so the stale study has nothing left to hold and is never drawn.
   assert.equal(h.layer.getStats().count, 2);
+  assert.ok(!h.entityIds().some((id) => id.includes(String(STORKS))));
+  assert.equal(h.layer.getDiagnostics().expiryScheduled, true);
   assert.equal([...h.timers.values()][0].ms, 5 * HOUR);
 });
 
