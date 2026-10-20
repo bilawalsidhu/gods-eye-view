@@ -3070,7 +3070,7 @@
       "src/layers/airQuality/source.js",
       "src/ui/statusText.js",
       "src/ui/layerNames.js",
-"src/layers/streetLevel/providers/mapillary/policy.js",
+      "src/layers/streetLevel/providers/mapillary/policy.js",
       "src/layers/airQuality/providers.js",
       "src/layers/airQuality/southAfrica.js",
       "src/layers/airQuality/openAq.js",

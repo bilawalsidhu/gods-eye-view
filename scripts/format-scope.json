@@ -1063,7 +1063,7 @@
   "scripts/assemble-changelog.mjs",
   "src/tooling/changelogFragments.test.mjs",
   "src/data/gbfsProxyRateLimit.test.mjs",
-"src/data/routeSegment.test.mjs",
+  "src/data/routeSegment.test.mjs",
   "src/terrainHeightsBounds.test.mjs",
   "src/layers/airQuality/providers.js",
   "src/layers/airQuality/southAfrica.js",

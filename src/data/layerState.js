@@ -317,6 +317,15 @@ function satelliteFilterOption() {
   });
 }
 
+const AIR_QUALITY_PROVIDER_TOKENS = new Map([
+  ['eccc', 'c'],
+  ['saaqis', 's'],
+  ['openaq', 'o'],
+]);
+const AIR_QUALITY_PROVIDER_IDS = new Map(
+  [...AIR_QUALITY_PROVIDER_TOKENS].map(([id, token]) => [token, id]),
+);
+
 const OPTION_GROUPS = Object.freeze({
   'air-quality': Object.freeze([
     Object.freeze({
@@ -327,10 +336,9 @@ const OPTION_GROUPS = Object.freeze({
         typeof value === 'string' && /^[a-z][a-z0-9-]{0,39}$/.test(value)
           ? value
           : null,
-      encode: (value) =>
-        ({ eccc: 'c', saaqis: 's', openaq: 'o' })[value] || `x-${value}`,
+      encode: (value) => AIR_QUALITY_PROVIDER_TOKENS.get(value) || `x-${value}`,
       decode: (value) =>
-        ({ c: 'eccc', s: 'saaqis', o: 'openaq' })[value] ||
+        AIR_QUALITY_PROVIDER_IDS.get(value) ||
         (/^x-[a-z][a-z0-9-]{0,39}$/.test(value) ? value.slice(2) : null),
     }),
     enumOption(
