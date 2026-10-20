@@ -11,8 +11,10 @@
  *      exactly once per camera ACTIVATION (the §9.1 obstruction probe) and
  *      never again in steady state; shared mesh-floor sampling fires at most
  *      once per coarse cell during the staggered geometry-load drain, and
- *      actually COMPLETES once tiles load (>=1 real sample — the
- *      ceiling alone would pass trivially at Δ=0 if the snap never finished),
+ *      actually COMPLETES once tiles load in photoreal mode (>=1 real sample
+ *      — the ceiling alone would pass trivially at Δ=0 if the snap never
+ *      finished). Globe mode instead proves the rendered mount uses a real
+ *      terrain height with zero mesh samples. Sampling
  *      stays flat while idle, and stays flat for non-positional pose edits.
  *   2. Geometry contract: the 5-polyline frustum wireframe + far-cap plane
  *      exist for the active camera, the plane's corners coincide with the
@@ -658,24 +660,87 @@ async function main() {
     // (existence, not just ceiling). The wait below tolerates the update-tick
     // latency of the completion pass (update interval is 10s).
     // -----------------------------------------------------------------------
-    console.log('Waiting for tiles + the one-shot completion pass...');
-    const tilesSeenLoaded = await waitForTilesLoaded(page, 45000);
-    let sampleFloorOk = false;
-    if (tilesSeenLoaded) {
-      sampleFloorOk = await waitForPredicate(
-        page,
-        (base) => window.__qaCounters.sampleHeight - base >= 1,
-        { timeoutMs: 30000, args: [c0.sampleHeight] },
+    const globeMode = await page.evaluate(
+      () => window.__godsEyeView.viewer.scene.globe?.show !== false,
+    );
+    if (globeMode) {
+      // Globe stacks intentionally perform no scene.sampleHeight query.
+      // Require independently fetched DEM heights and the actual rendered
+      // mount, so a catalog/geoid fallback cannot turn zero samples into a pass.
+      console.log(
+        'Checking terrain-globe completion against live DEM heights...',
+      );
+      const terrain = await page.evaluate(async () => {
+        const camera = window.__godsEyeView.dataManager.layers
+          .get('cctv')
+          .module.getUIState().activeCamera;
+        const exact = `${camera.lon.toFixed(5)},${camera.lat.toFixed(5)}`;
+        const cell = `${camera.lon.toFixed(3)},${camera.lat.toFixed(3)}`;
+        const response = await fetch(
+          `/api/terrain/heights?points=${encodeURIComponent(`${exact};${cell}`)}`,
+          { signal: AbortSignal.timeout(30000) },
+        );
+        const body = await response.json();
+        return { ok: response.ok, results: body.results };
+      });
+      const heights = terrain.results?.map((result) => result?.ellipsoid);
+      const terrainReady =
+        terrain.ok && heights?.length === 2 && heights.every(Number.isFinite);
+      const mountResolved =
+        terrainReady &&
+        (await waitForPredicate(
+          page,
+          (expected, base) => {
+            const { viewer, dataManager } = window.__godsEyeView;
+            const camera = dataManager.layers
+              .get('cctv')
+              .module.getUIState().activeCamera;
+            const ray = viewer.entities.getById(`cctv-${camera.id}-ray-tl`);
+            const mount = ray?.polyline?.positions.getValue(
+              viewer.clock.currentTime,
+            )?.[0];
+            const height =
+              mount &&
+              viewer.scene.globe.ellipsoid.cartesianToCartographic(mount)
+                .height;
+            return (
+              Number.isFinite(camera.groundPriorM) &&
+              Math.abs(camera.groundPriorM - expected[0]) < 0.01 &&
+              Number.isFinite(height) &&
+              expected.some(
+                (ground) =>
+                  Math.abs(height - ground - camera.mountHeightM) < 0.05,
+              ) &&
+              window.__qaCounters.sampleHeight === base
+            );
+          },
+          { timeoutMs: 30000, args: [heights, c0.sampleHeight] },
+        ));
+      record(
+        'terrain-globe completion uses a real DEM height at the rendered mount without mesh samples',
+        Boolean(mountResolved),
+        `terrain=${JSON.stringify(heights)}, mesh sample Δ=${(await readCounters()).sampleHeight - c0.sampleHeight}`,
+      );
+    } else {
+      console.log('Waiting for tiles + the one-shot completion pass...');
+      const tilesSeenLoaded = await waitForTilesLoaded(page, 45000);
+      let sampleFloorOk = false;
+      if (tilesSeenLoaded) {
+        sampleFloorOk = await waitForPredicate(
+          page,
+          (base) => window.__qaCounters.sampleHeight - base >= 1,
+          { timeoutMs: 30000, args: [c0.sampleHeight] },
+        );
+      }
+      const cFloor = await readCounters();
+      record(
+        '>=1 real ground sample once tilesLoaded observed (one-shot snap completed)',
+        tilesSeenLoaded ? sampleFloorOk : null,
+        tilesSeenLoaded
+          ? `total real samples since enable=${cFloor.sampleHeight - c0.sampleHeight}`
+          : 'tilesLoaded never observed within 45s — floor not assessable this run',
       );
     }
-    const cFloor = await readCounters();
-    record(
-      '>=1 real ground sample once tilesLoaded observed (one-shot snap completed)',
-      tilesSeenLoaded ? sampleFloorOk : null,
-      tilesSeenLoaded
-        ? `total real samples since enable=${cFloor.sampleHeight - c0.sampleHeight}`
-        : 'tilesLoaded never observed within 45s — floor not assessable this run',
-    );
 
     // Let the completion pass finish before the steady-state window: require
     // the sampleHeight counter quiet for 12s (> the 10s update interval, so

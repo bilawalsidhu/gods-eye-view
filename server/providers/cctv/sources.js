@@ -42,6 +42,7 @@ import {
   TARKTEE_IMAGES_URL,
   TARKTEE_IMAGE_ORIGIN,
   DEFAULT_TARKTEE_MAX_SOURCES,
+  TARKTEE_MAX_CATALOG_BYTES,
   TARKTEE_ANCHORS,
   DEFAULT_WARENDORF_SOURCE_FILE,
   WARENDORF_IMAGE_ORIGINS,
@@ -523,22 +524,56 @@ function pickOntarioCctvView(views) {
   );
 }
 
+let ontarioKeyMissingLogged = false;
+
+/** Test seam: let the next keyless call log the missing-key line again. */
+export function _resetOntarioKeyWarningForTest() {
+  ontarioKeyMissingLogged = false;
+}
+
 /**
- * Fetch Ontario 511 CCTV cameras. Keyless: the catalog is exposed by the
- * public 511 API, while frame URLs are stable still-image endpoints under
- * 511on.ca/map/Cctv/. Only rows with finite Ontario coords and at least one
- * enabled official still view are kept.
+ * Fetch Ontario 511 CCTV cameras. The camera list comes from the 511 API,
+ * which now requires a free developer key (511on.ca/developers/doc, "Requires a
+ * developer key"; unkeyed calls answer 400 "Invalid Key"), read from
+ * ONTARIO_511_API_KEY. Without one the pack is skipped with a single log line.
+ * Frame URLs are stable still-image endpoints under 511on.ca/map/Cctv/. Only
+ * rows with finite Ontario coords and at least one enabled official still
+ * view are kept.
  *
+ * @param {object} [_options] The catalog's loader options (unused).
+ * @param {object} [env] Environment to read the key and the source cap from.
  * @returns {Promise<Array<object>>} Normalized camera source objects.
  */
-export async function loadOntarioSourcesFromOpenData() {
+export async function loadOntarioSourcesFromOpenData(
+  _options = {},
+  env = process.env,
+) {
+  const key = String(env.ONTARIO_511_API_KEY ?? '').trim();
+  if (!key) {
+    if (!ontarioKeyMissingLogged) {
+      ontarioKeyMissingLogged = true;
+      console.warn(
+        '[CCTV] Ontario 511 cameras skipped: the 511on.ca API needs a free developer key (set ONTARIO_511_API_KEY)',
+      );
+    }
+    return [];
+  }
   try {
-    const resp = await fetch(ONTARIO_511_CAMERAS_URL, {
+    const url = new URL(ONTARIO_511_CAMERAS_URL);
+    url.searchParams.set('key', key);
+    const resp = await fetch(url, {
       headers: { Accept: 'application/json' },
       signal: AbortSignal.timeout(CCTV_SOURCE_FETCH_TIMEOUT_MS),
     });
     if (!resp.ok) {
-      console.warn('[CCTV] Ontario 511 camera download failed:', resp.status);
+      // The API answers 400 "Invalid Key" to a wrong or revoked key.
+      const keyHint =
+        resp.status === 400 || resp.status === 401 || resp.status === 403
+          ? ' (check ONTARIO_511_API_KEY)'
+          : '';
+      console.warn(
+        `[CCTV] Ontario 511 camera download failed: ${resp.status}${keyHint}`,
+      );
       return [];
     }
     const rows = await resp.json();
@@ -601,7 +636,7 @@ export async function loadOntarioSourcesFromOpenData() {
       new Map(cameras.map((camera) => [camera.id, camera])).values(),
     );
     const maxRaw = Number(
-      process.env.CCTV_ONTARIO_MAX_SOURCES || DEFAULT_ONTARIO_MAX_SOURCES,
+      env.CCTV_ONTARIO_MAX_SOURCES || DEFAULT_ONTARIO_MAX_SOURCES,
     );
     const maxCount = Number.isFinite(maxRaw)
       ? Math.max(8, Math.min(1000, Math.floor(maxRaw)))
@@ -1212,28 +1247,73 @@ export function parseTarkteeDatexImages(xml) {
  */
 export async function loadTarkteeSourcesFromDatex() {
   try {
-    const [locResp, imgResp] = await Promise.all([
+    const responses = await Promise.allSettled([
       fetch(TARKTEE_LOCATIONS_URL, {
         headers: { Accept: 'application/xml,text/xml,*/*' },
+        redirect: 'manual',
         signal: AbortSignal.timeout(TARKTEE_FETCH_TIMEOUT_MS),
       }),
       fetch(TARKTEE_IMAGES_URL, {
         headers: { Accept: 'application/xml,text/xml,*/*' },
+        redirect: 'manual',
         signal: AbortSignal.timeout(TARKTEE_FETCH_TIMEOUT_MS),
       }),
     ]);
+    const [locResp, imgResp] = responses.map((result) =>
+      result.status === 'fulfilled' ? result.value : undefined,
+    );
+    // Both responses are fetched in parallel; if either is rejected or overflows
+    // its byte cap, both bodies must be released so neither transport leaks.
+    const discardBoth = async () => {
+      await Promise.allSettled([
+        locResp?.body?.cancel(),
+        imgResp?.body?.cancel(),
+      ]);
+      return [];
+    };
+    const rejected = responses.find((result) => result.status === 'rejected');
+    if (rejected) {
+      await discardBoth();
+      throw rejected.reason;
+    }
+    if (
+      (locResp.status >= 300 && locResp.status < 400) ||
+      (imgResp.status >= 300 && imgResp.status < 400)
+    ) {
+      console.warn(
+        '[CCTV] Tarktee DATEX catalog redirected; redirects are not followed',
+      );
+      return discardBoth();
+    }
     if (!locResp.ok) {
       console.warn('[CCTV] Tarktee locations download failed:', locResp.status);
-      return [];
+      return discardBoth();
     }
     if (!imgResp.ok) {
       console.warn('[CCTV] Tarktee images download failed:', imgResp.status);
-      return [];
+      return discardBoth();
     }
-    const [locXml, imgXml] = await Promise.all([
-      locResp.text(),
-      imgResp.text(),
-    ]);
+    let locXml;
+    let imgXml;
+    const readAbort = new AbortController();
+    try {
+      [locXml, imgXml] = await Promise.all([
+        readResponseTextCapped(
+          locResp,
+          TARKTEE_MAX_CATALOG_BYTES,
+          readAbort.signal,
+        ),
+        readResponseTextCapped(
+          imgResp,
+          TARKTEE_MAX_CATALOG_BYTES,
+          readAbort.signal,
+        ),
+      ]);
+    } catch (error) {
+      readAbort.abort();
+      await discardBoth();
+      throw error;
+    }
     const locations = parseTarkteeDatexLocations(locXml);
     const images = parseTarkteeDatexImages(imgXml);
     if (!locations.size || !images.size) {
@@ -1245,6 +1325,7 @@ export async function loadTarkteeSourcesFromDatex() {
     }
 
     const cameras = [];
+    const seen = new Set();
     for (const [locationId, loc] of locations.entries()) {
       const imageUrl = images.get(locationId);
       if (!imageUrl) continue;
@@ -1256,6 +1337,8 @@ export async function loadTarkteeSourcesFromDatex() {
       const cameraId = numMatch
         ? `ee-tarktee-${numMatch[1]}`
         : `ee-tarktee-${locationId}`;
+      if (seen.has(cameraId)) continue;
+      seen.add(cameraId);
       cameras.push({
         id: cameraId,
         name: loc.name,

@@ -57,9 +57,8 @@ Related keys (current versions):
 - Panel collapsed state: `godsEyeView.v6.panelCollapsed.<panel-id>` — `'0'` open,
   `'1'` closed, absent means the panel's own default. A view opened from a share
   link ignores the stored value entirely.
-- Panel positions: `godsEyeView.v8.panelPos.<panel-id>` — written only for a
-  floating portable panel (CCTV, Street Level). Deleting it, or double-clicking
-  the panel header, docks the panel again.
+- Panel positions: `godsEyeView.v8.panelPos.<panel-id>` — the current layout
+  writes none.
 - CCTV calibration: `godsEyeView.cctv.calibration.v2`
 
 ---
