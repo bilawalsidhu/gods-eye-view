@@ -146,7 +146,9 @@ test('failed archive windows cool down and the cache stores only merged fires', 
   const [cacheFile] = (await fsp.readdir(cacheDir)).filter((name) =>
     name.endsWith('.json'),
   );
-  const disk = JSON.parse(await fsp.readFile(path.join(cacheDir, cacheFile), 'utf8'));
+  const disk = JSON.parse(
+    await fsp.readFile(path.join(cacheDir, cacheFile), 'utf8'),
+  );
   assert.ok(disk.definitionHash);
   assert.equal('firesByWindow' in disk, false);
 });
@@ -182,6 +184,10 @@ test('editing an event definition changes the disk-cache identity', async (t) =>
     },
   });
   await install(proxy)('/test-fire-2018');
-  assert.equal(calls.length, 1, 'changed definition cannot reuse the old cache');
+  assert.equal(
+    calls.length,
+    1,
+    'changed definition cannot reuse the old cache',
+  );
   assert.equal((await fsp.readdir(first.cacheDir)).length, 2);
 });

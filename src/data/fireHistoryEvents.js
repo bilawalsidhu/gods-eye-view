@@ -87,7 +87,8 @@ export function normalizeFireEvent(raw) {
     ? raw.sources.filter((source) => FIRE_HISTORY_SOURCES.includes(source))
     : [];
   if (!sources.length) return null;
-  const perimeter = raw.perimeter == null ? null : normalizeFirePerimeter(raw.perimeter);
+  const perimeter =
+    raw.perimeter == null ? null : normalizeFirePerimeter(raw.perimeter);
   if (raw.perimeter != null && !perimeter) return null;
   const burnedHa = Number(raw.burnedHa);
   const references = Array.isArray(raw.references)
