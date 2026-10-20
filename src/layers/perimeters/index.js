@@ -59,6 +59,7 @@ export function createFirePerimetersLayer({
   let _lastError = null;
   let _enabled = false;
   let _clickHandler = null;
+  let _removeClickCapture = null;
   let _selectedId = null;
   let _selectedLink = null;
   let _selectedCardId = null;
@@ -79,7 +80,9 @@ export function createFirePerimetersLayer({
   const canSelect = () =>
     overlayHost && screenSpaceEventHandlerFactory && picking;
 
-  function clearSelectedContext() {
+  function clearSelectedContext({ evicted = false } = {}) {
+    if (!evicted)
+      context?.clearSelectedEntityContextForLayer?.('fire-perimeters');
     context?.removeEntityContextsForLayer?.('fire-perimeters');
     _selectedContextEntity = null;
   }
@@ -87,14 +90,11 @@ export function createFirePerimetersLayer({
   function publishSelectedContext({ announce = false } = {}) {
     const row = _selectedId ? _rowById.get(_selectedId) : null;
     if (!row) {
-      clearSelectedContext();
+      clearSelectedContext({ evicted: true });
       return null;
     }
     _selectedContextEntity ||= { show: true };
     const contextId = `fire-perimeter:${row.stableId}`;
-    context?.removeEntityContextsForLayer?.('fire-perimeters', {
-      retainIds: new Set([contextId]),
-    });
     const record = context?.registerEntityContext?.(_selectedContextEntity, {
       id: contextId,
       layerId: 'fire-perimeters',
@@ -119,6 +119,11 @@ export function createFirePerimetersLayer({
     });
     if (announce && record)
       context?.selectEntityContext?.(_selectedContextEntity);
+    if (record) {
+      context?.removeEntityContextsForLayer?.('fire-perimeters', {
+        retainIds: new Set([contextId]),
+      });
+    }
     return record || null;
   }
 
@@ -179,7 +184,7 @@ export function createFirePerimetersLayer({
       });
   }
 
-  function publishSelectedCard() {
+  function publishSelectedCard({ announce = false } = {}) {
     if (!canSelect()) return;
     const row = _selectedId ? _rowById.get(_selectedId) : null;
     if (!row) {
@@ -191,7 +196,7 @@ export function createFirePerimetersLayer({
         [],
         CARD_HOST_OPTIONS,
       );
-      clearSelectedContext();
+      clearSelectedContext({ evicted: true });
       return;
     }
     const candidate = findInciwebLink(_inciwebIndex, row);
@@ -217,7 +222,7 @@ export function createFirePerimetersLayer({
       [card],
       CARD_HOST_OPTIONS,
     );
-    publishSelectedContext();
+    publishSelectedContext({ announce });
   }
 
   /** Resolve a scene pick to one of this layer's incident ids, or null. */
@@ -236,16 +241,63 @@ export function createFirePerimetersLayer({
     // so claiming these large ground polygons would make FIRMS/vessel/CCTV
     // cards inert anywhere over a perimeter. Unowned, our picks read as
     // "empty space" to siblings — the pre-existing behavior for the globe.
-    _clickHandler = screenSpaceEventHandlerFactory(_viewer);
-    _clickHandler.setInputAction((click) => {
+    const owner = screenSpaceEventHandlerFactory(_viewer);
+    _clickHandler = owner;
+    // Read the topmost overlay before sibling click handlers rebuild its hits.
+    const canvas = _viewer.scene.canvas;
+    let capturedHit = null;
+    const overlayHit = (x, y) => {
+      const hit = overlayHost.hitTest?.(x, y);
+      return { sourceId: hit?.sourceId, entryId: hit?.entryId };
+    };
+    const resetCapture = () => {
+      capturedHit = null;
+    };
+    const capture = (event) => {
+      resetCapture();
+      const point = event.changedTouches?.[0] || event;
+      if (!Number.isFinite(point.clientX) || !Number.isFinite(point.clientY))
+        return;
+      const rect = canvas.getBoundingClientRect();
+      const x = point.clientX - rect.left,
+        y = point.clientY - rect.top;
+      capturedHit = { x, y, ...overlayHit(x, y) };
+    };
+    const resetEvents = [
+      'pointerdown',
+      'mousedown',
+      'touchstart',
+      'pointercancel',
+      'touchcancel',
+    ];
+    const captureEvents = ['pointerup', 'mouseup', 'touchend'];
+    for (const type of resetEvents)
+      canvas?.addEventListener?.(type, resetCapture, { capture: true });
+    for (const type of captureEvents)
+      canvas?.addEventListener?.(type, capture, { capture: true });
+    _removeClickCapture = () => {
+      for (const type of resetEvents)
+        canvas?.removeEventListener?.(type, resetCapture, { capture: true });
+      for (const type of captureEvents)
+        canvas?.removeEventListener?.(type, capture, { capture: true });
+      resetCapture();
+    };
+    owner.setInputAction((click) => {
+      const nativeHit = capturedHit;
+      resetCapture();
+      if (!_enabled || _clickHandler !== owner || !click?.position) return;
       if (pointer && !pointer.isPointerFree()) return;
+      const captureMatches =
+        nativeHit &&
+        Math.abs(nativeHit.x - click.position.x) < 1 &&
+        Math.abs(nativeHit.y - click.position.y) < 1;
+      const hit = captureMatches
+        ? nativeHit
+        : overlayHit(click.position.x, click.position.y);
+      if (hit.sourceId && hit.sourceId !== PERIMETER_OVERLAY_SOURCE_ID) return;
       // A click on the incident card itself opens its InciWeb page (when the
       // incident has one) and never disturbs the selection.
-      const cardHit = overlayHost.hitTest?.(
-        click.position?.x,
-        click.position?.y,
-        { sourceId: PERIMETER_OVERLAY_SOURCE_ID },
-      );
+      const cardHit = hit;
       if (cardHit && cardHit.entryId === _selectedCardId) {
         if (_selectedLink && openExternal) openExternal(_selectedLink);
         return;
@@ -255,8 +307,7 @@ export function createFirePerimetersLayer({
       if (incidentId) {
         abortLinkVerification();
         _selectedId = incidentId;
-        publishSelectedCard();
-        publishSelectedContext({ announce: true });
+        publishSelectedCard({ announce: true });
         return;
       }
       // A pick that belongs to a sibling layer (e.g. an aircraft) is not
@@ -268,13 +319,15 @@ export function createFirePerimetersLayer({
       if (_selectedId) {
         abortLinkVerification();
         _selectedId = null;
-        publishSelectedCard();
         clearSelectedContext();
+        publishSelectedCard();
       }
     }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
   }
 
   function removeClickHandler() {
+    _removeClickCapture?.();
+    _removeClickCapture = null;
     if (_clickHandler) {
       _clickHandler.destroy();
       _clickHandler = null;

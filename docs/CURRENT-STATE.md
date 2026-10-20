@@ -3497,6 +3497,8 @@ anchors, recovery, keyboard and mobile states; emergency repainting is covered
 by `scripts/qa-emergency-squawk.mjs`. Both accept `--timeout-ms` for slow boot.
 
 
+Foreground overlay cards take precedence over perimeter ground picks in either click-listener order. Deliberate deselection and switching preserve shared-context event semantics; true feed eviction remains distinct.
+
 Fire Perimeters uses capped, timed server reads with stale-on-error caching and a per-client limit. Unchanged snapshots retain geometry; link checks cancel on disable or selection change, and the row legend shows reported containment.
 
 Explicit perimeter picks publish one shared `fire-perimeters` context record with

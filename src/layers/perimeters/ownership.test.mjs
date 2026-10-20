@@ -1,11 +1,15 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import * as realContext from '../../data/contextStore.js';
 import { createFirePerimetersLayer } from './index.js';
 
 function harness(
   source,
   {
     pick = () => null,
+    canvas,
+    contextOwner = null,
+    pointerFree = () => true,
     inciwebIndex = null,
     cardHit = () => null,
     publication = async () => ({
@@ -26,7 +30,7 @@ function harness(
     removals: 0,
   };
   const viewer = {
-    scene: { pick },
+    scene: { pick, canvas },
     dataSources: {
       add(value) {
         sources.push(value);
@@ -66,8 +70,8 @@ function harness(
       registerPickOwner: (layerId, predicate) => owners.set(layerId, predicate),
       unregisterPickOwner: (layerId) => owners.delete(layerId),
     },
-    pointer: { isPointerFree: () => true },
-    context: {
+    pointer: { isPointerFree: pointerFree },
+    context: contextOwner || {
       registerEntityContext(entity, metadata) {
         entity.__gevContextId = metadata.id;
         const record = { ...metadata, entity };
@@ -78,6 +82,9 @@ function harness(
         contexts.selected = contexts.records.get(entity.__gevContextId) || null;
         contexts.selectedEvents += 1;
         return contexts.selected;
+      },
+      clearSelectedEntityContextForLayer(layerId) {
+        if (contexts.selected?.layerId === layerId) contexts.selected = null;
       },
       removeEntityContextsForLayer(layerId, { retainIds } = {}) {
         contexts.removals += 1;
@@ -668,3 +675,191 @@ for (const action of ['disable', 'destroy', 'selection']) {
     if (action !== 'destroy') h.layer.destroy();
   });
 }
+
+function installRealContextHost(t) {
+  const previous = globalThis.window;
+  const cleanup = [];
+  globalThis.window = new EventTarget();
+  t.after(() => {
+    for (const release of cleanup) release();
+    if (previous === undefined) delete globalThis.window;
+    else globalThis.window = previous;
+  });
+  const events = [];
+  window.addEventListener('gev:entity-selected', (event) =>
+    events.push(['selected', event.detail.id]),
+  );
+  window.addEventListener('gev:entity-selection-cleared', (event) =>
+    events.push(['cleared', event.detail.reason]),
+  );
+  return { events, cleanup };
+}
+
+function clickCanvas() {
+  const listeners = new Map();
+  return {
+    getBoundingClientRect: () => ({ left: 20, top: 30 }),
+    addEventListener(type, callback, options) {
+      assert.equal(options.capture, true);
+      listeners.set(type, callback);
+    },
+    removeEventListener(type, callback, options) {
+      assert.equal(options.capture, true);
+      assert.equal(listeners.get(type), callback);
+      listeners.delete(type);
+    },
+    emit(type, touch = false) {
+      const point = { clientX: 25, clientY: 37 };
+      listeners.get(type)?.(touch ? { changedTouches: [point] } : point);
+    },
+    listeners,
+  };
+}
+
+test('foreground sibling overlays own shared selection in either listener order', async (t) => {
+  const { events, cleanup } = installRealContextHost(t);
+  for (const siblingFirst of [false, true]) {
+    for (const sourceId of ['firms-test', 'ais-test']) {
+      let hit = { sourceId, entryId: 'sibling-card' };
+      const canvas = clickCanvas();
+      const h = harness(
+        { getSnapshot: async () => [row] },
+        {
+          pick: () => ({ id: 'fire-perimeter:2026-NMGNF-000123:0' }),
+          canvas,
+          contextOwner: realContext,
+          cardHit: (_x, _y, options) => {
+            assert.equal(options, undefined);
+            return hit;
+          },
+        },
+      );
+      cleanup.push(() => h.layer.destroy());
+      await h.layer.update(h.viewer);
+      const sibling = { show: true };
+      realContext.registerEntityContext(sibling, {
+        id: 'sibling',
+        layerId: sourceId,
+      });
+      const selectSibling = () => {
+        realContext.selectEntityContext(sibling);
+        hit = null; // Sibling publication invalidates overlay rectangles.
+      };
+      events.length = 0;
+      canvas.emit('mouseup');
+      if (siblingFirst) selectSibling();
+      h.clicks.handler({ position: { x: 5, y: 7 } });
+      if (!siblingFirst) selectSibling();
+      assert.equal(realContext.getSelectedEntityContext().id, 'sibling');
+      assert.deepEqual(events, [['selected', 'sibling']]);
+      h.layer.destroy();
+      assert.equal(canvas.listeners.size, 0);
+    }
+  }
+});
+
+test('touch capture resets, respects pointer ownership and releases on disable', async (t) => {
+  const { events, cleanup } = installRealContextHost(t);
+  const canvas = clickCanvas();
+  let hit = { sourceId: 'sibling-overlay', entryId: 'sibling-card' };
+  let pointerFree = true;
+  const h = harness(
+    { getSnapshot: async () => [row] },
+    {
+      pick: () => ({ id: 'fire-perimeter:2026-NMGNF-000123:0' }),
+      canvas,
+      contextOwner: realContext,
+      cardHit: () => hit,
+      pointerFree: () => pointerFree,
+    },
+  );
+  cleanup.push(() => h.layer.destroy());
+  await h.layer.update(h.viewer);
+  canvas.emit('touchend', true);
+  hit = null;
+  h.clicks.handler({ position: { x: 5, y: 7 } });
+  assert.deepEqual(events, []);
+  hit = { sourceId: 'sibling-overlay' };
+  canvas.emit('touchend', true);
+  hit = null;
+  h.clicks.handler({ position: { x: 9, y: 7 } });
+  assert.equal(
+    events.length,
+    1,
+    'a different click position uses its current hit instead of stale capture',
+  );
+  events.length = 0;
+  canvas.emit('touchend', true);
+  pointerFree = false;
+  h.clicks.handler({ position: { x: 5, y: 7 } });
+  assert.deepEqual(events, []);
+  pointerFree = true;
+  hit = { sourceId: 'sibling-overlay' };
+  canvas.emit('touchend', true);
+  canvas.emit('touchcancel');
+  hit = null;
+  h.clicks.handler({ position: { x: 5, y: 7 } });
+  assert.equal(
+    events.length,
+    1,
+    'cancelled capture cannot suppress a later ground click',
+  );
+  const oldHandler = h.clicks.handler;
+  h.layer.disable();
+  assert.equal(canvas.listeners.size, 0);
+  events.length = 0;
+  oldHandler({ position: { x: 5, y: 7 } });
+  assert.deepEqual(events, [], 'released handlers cannot reselect');
+  h.layer.enable();
+  assert.equal(canvas.listeners.size, 8);
+  h.layer.destroy();
+  assert.equal(canvas.listeners.size, 0);
+});
+
+test('real context distinguishes deliberate perimeter clears from feed eviction', async (t) => {
+  const { events, cleanup } = installRealContextHost(t);
+  let rows = [row, { ...row, stableId: 'second', name: 'Second incident' }];
+  let picked = { id: `fire-perimeter:${row.stableId}:0` };
+  const h = harness(
+    { getSnapshot: async () => rows },
+    {
+      pick: () => picked,
+      contextOwner: realContext,
+    },
+  );
+  cleanup.push(() => h.layer.destroy());
+  await h.layer.update(h.viewer);
+  h.clicks.handler({ position: { x: 1, y: 1 } });
+  events.length = 0;
+  picked = { id: 'fire-perimeter:second:0' };
+  h.clicks.handler({ position: { x: 1, y: 1 } });
+  assert.deepEqual(events, [['selected', 'fire-perimeter:second']]);
+  assert.deepEqual(
+    [...realContext.getContextStore().entities.keys()],
+    ['fire-perimeter:second'],
+  );
+  rows = [row, { ...row, stableId: 'second', name: 'Updated incident' }];
+  events.length = 0;
+  await h.layer.update(h.viewer);
+  assert.equal(
+    realContext.getSelectedEntityContext().label,
+    'Updated incident',
+  );
+  assert.deepEqual(events, []);
+  picked = null;
+  h.clicks.handler({ position: { x: 1, y: 1 } });
+  assert.deepEqual(events, [['cleared', 'deliberate']]);
+  picked = { id: 'fire-perimeter:second:0' };
+  h.clicks.handler({ position: { x: 1, y: 1 } });
+  events.length = 0;
+  rows = [row];
+  await h.layer.update(h.viewer);
+  assert.equal(realContext.getSelectedEntityContext(), null);
+  assert.deepEqual(events, [['cleared', 'evicted']]);
+  picked = { id: `fire-perimeter:${row.stableId}:0` };
+  h.clicks.handler({ position: { x: 1, y: 1 } });
+  events.length = 0;
+  h.layer.disable();
+  assert.deepEqual(events, [['cleared', 'deliberate']]);
+  assert.equal(realContext.getContextStore().entities.size, 0);
+});
