@@ -114,7 +114,11 @@
     "exports": ["./server/providers/terrain"],
     "modules": [
       "server/providers/terrain.js",
-      "src/data/terrainHeightsProxy.js"
+      "src/data/terrainHeightsProxy.js",
+      "server/providers/common/rate-limit.js",
+      "src/sources/rateLimit.js",
+      "server/providers/common/same-site.js",
+      "src/localRequestGate.mjs"
     ],
     "external": []
   },
@@ -131,7 +135,9 @@
       "server/providers/common/http.js",
       "src/sources/httpBody.js",
       "src/i18n/marker.js",
-      "src/data/tomtomTiles.js"
+      "src/data/tomtomTiles.js",
+      "server/providers/common/same-site.js",
+      "src/localRequestGate.mjs"
     ],
     "external": []
   },
@@ -299,6 +305,7 @@
       "server/providers/regional/weather-effects.js",
       "server/providers/regional/weather.js",
       "src/data/regionalModel.js",
+      "src/geoDistance.js",
       "src/nominatimGeocode.js",
       "src/sources/httpBody.js",
       "src/i18n/marker.js",
@@ -375,6 +382,7 @@
       "src/search/nominatim.js",
       "src/nominatimGeocode.js",
       "src/data/regionalModel.js",
+      "src/geoDistance.js",
       "src/data/naturalEarthRegions.js",
       "src/data/bundledJson.js",
       "src/data/retryableLoad.js",
@@ -901,6 +909,7 @@
       "src/data/aircraftIcons.js",
       "src/data/aircraftMeta.js",
       "src/data/aircraftNearbyPolicy.js",
+      "src/data/approxDistance.js",
       "src/data/cockpitAirLod.js",
       "src/data/cockpitContactDot.js",
       "src/data/contactMatch.js",
@@ -912,6 +921,7 @@
       "src/data/motionModel.js",
       "src/data/renderAltitude.js",
       "src/data/routePlausible.js",
+      "src/geoDistance.js",
       "src/data/trackedModelRegime.js",
       "src/data/trackingClickGesture.js",
       "src/layers/flights/controller.js",
@@ -1006,6 +1016,7 @@
       "src/data/motionModel.js",
       "src/data/renderAltitude.js",
       "src/data/routePlausible.js",
+      "src/geoDistance.js",
       "src/data/trackedModelRegime.js",
       "src/data/trackingClickGesture.js",
       "src/layers/aircraft/classification.js",
@@ -1033,6 +1044,7 @@
       "src/layers/vessels/tracking.js",
       "src/data/iconOrientation.js",
       "src/data/vesselLabels.js",
+      "src/data/vesselTypes.js",
       "src/layers/vessels/records.js",
       "src/layers/vessels/recordPolicy.js",
       "src/layers/vessels/snapshotRenderer.js",
@@ -1246,6 +1258,7 @@
       "src/data/flowMatch.js",
       "src/data/tomtomTiles.js",
       "src/data/trafficBounds.js",
+      "src/geoDistance.js",
       "src/data/trafficFlowStyle.js",
       "src/data/trafficPresetStyle.js",
       "src/data/trafficQueue.js",
@@ -1294,6 +1307,7 @@
       "src/layers/bikeshare/ingestion.js",
       "src/layers/bikeshare/lifecycle.js",
       "src/layers/bikeshare/model.js",
+      "src/geoDistance.js",
       "src/sources/gbfsStations.js",
       "src/layers/bikeshare/policy.js",
       "src/layers/bikeshare/queries.js",
@@ -1337,6 +1351,7 @@
       "src/layers/cctv/ingestion.js",
       "src/layers/cctv/lifecycle.js",
       "src/layers/cctv/model.js",
+      "src/geoDistance.js",
       "src/layers/cctv/modelSpecs.js",
       "src/layers/cctv/navigation.js",
       "src/layers/cctv/policy.js",
@@ -1524,6 +1539,7 @@
     "exports": ["./geography/natural-earth", "./geography/neighborhoods"],
     "modules": [
       "src/data/naturalEarthRegions.js",
+      "src/geoDistance.js",
       "src/data/neighborhoodPolygons.js",
       "src/data/bundledJson.js",
       "src/data/retryableLoad.js",
@@ -1617,7 +1633,15 @@
       "src/i18n/locale.js",
       "src/i18n/locales/es.json",
       "src/i18n/locales/ru.json",
-      "src/ui/statusText.js"
+      "src/ui/statusText.js",
+      "src/voice/providerCommands.js",
+      "src/voice/providerCapabilities.js",
+      "src/voice/geminiSession.js",
+      "src/voice/geminiAudio.js",
+      "src/voice/geminiCaptureWorklet.js",
+      "src/sources/httpBody.js",
+      "src/sources/requestDeadline.js",
+      "src/i18n/marker.js"
     ],
     "external": []
   },
@@ -1649,6 +1673,7 @@
       "src/ui/radioPanelPlacement.js",
       "src/cyberSonarGpu.js",
       "src/scenes/nepalEvidencePack.js",
+      "src/data/approxDistance.js",
       "src/data/bhoteKoshiEvent.js",
       "src/ui/imagerySplit.js",
       "src/data/bhoteKoshiEmbeddedMedia.js",
@@ -1657,6 +1682,7 @@
       "src/data/bhoteKoshiFloodPath.js",
       "src/data/bhoteKoshiShotPaths.js",
       "src/annotations/annotationEngine.js",
+      "src/geoDistance.js",
       "src/annotations/annotationResolver.js",
       "src/annotations/hybridAnnotationRenderer.js",
       "src/annotations/index.js",
@@ -1828,6 +1854,7 @@
       "src/data/trafficQueue.js",
       "src/data/trailRenderer.js",
       "src/data/vesselLabels.js",
+      "src/data/vesselTypes.js",
       "src/firstRunExperience.js",
       "src/hud.js",
       "src/hudLocality.js",
@@ -2202,6 +2229,7 @@
       "src/voice/commands.js",
       "src/voice/control.js",
       "src/voice/gevActions.js",
+      "src/agent/worldPacket.js",
       "src/voice/speech.js",
       "src/ui/layerNames.js",
       "src/voice/earcon.js",
@@ -2477,7 +2505,12 @@
       "src/layers/airQuality/index.js",
       "src/layers/airQuality/model.js",
       "src/layers/airQuality/source.js",
-      "src/ui/statusText.js"
+      "src/ui/statusText.js",
+      "src/voice/providerCommands.js",
+      "src/voice/providerCapabilities.js",
+      "src/voice/geminiSession.js",
+      "src/voice/geminiAudio.js",
+      "src/voice/geminiCaptureWorklet.js"
     ],
     "external": [
       "hls.js",
@@ -2500,6 +2533,7 @@
     "exports": ["./application/layers"],
     "modules": [
       "src/cyberSonar.js",
+      "src/data/approxDistance.js",
       "src/data/bhoteKoshiEvent.js",
       "src/ui/imagerySplit.js",
       "src/maps/imageryComparison.js",
@@ -2508,6 +2542,7 @@
       "src/data/bhoteKoshiIncidentPlaces.js",
       "src/data/bhoteKoshiFloodPath.js",
       "src/data/bhoteKoshiShotPaths.js",
+      "src/geoDistance.js",
       "src/annotations/annotationResolver.js",
       "src/annotations/resolver.js",
       "src/app/catalog.js",
@@ -2614,6 +2649,7 @@
       "src/data/trafficQueue.js",
       "src/data/trailRenderer.js",
       "src/data/vesselLabels.js",
+      "src/data/vesselTypes.js",
       "src/keylessGeocoder.js",
       "src/layers/aircraft/classification.js",
       "src/layers/alpr/index.js",
@@ -3067,8 +3103,10 @@
       "src/app/operations.js",
       "src/sources/sourceSlot.js",
       "src/app/surfaceServices.js",
+      "src/data/approxDistance.js",
       "src/data/dataCredits.js",
       "src/data/geoid.js",
+      "src/geoDistance.js",
       "src/data/local_data/natural_earth/marine.json",
       "src/data/local_data/natural_earth/regions.json",
       "src/data/local_data/neighborhoods/san-francisco.json",
@@ -3226,6 +3264,7 @@
       "src/layers/flights/records.js",
       "src/layers/flights/recordPolicy.js",
       "src/data/aircraftMeta.js",
+      "src/data/approxDistance.js",
       "src/data/renderAltitude.js",
       "src/data/aircraftClass.js",
       "src/data/aircraftEmergency.js"
@@ -3236,7 +3275,8 @@
     "exports": ["./layers/flights/ingestion"],
     "modules": [
       "src/layers/flights/ingestion.js",
-      "src/layers/flights/recordPolicy.js"
+      "src/layers/flights/recordPolicy.js",
+      "src/data/approxDistance.js"
     ],
     "external": []
   },
@@ -3320,7 +3360,7 @@
   },
   "regional-source": {
     "exports": ["./sources/regional"],
-    "modules": ["src/data/regionalModel.js"],
+    "modules": ["src/data/regionalModel.js", "src/geoDistance.js"],
     "external": []
   },
   "voice-action-schemas": {
@@ -3358,7 +3398,8 @@
       "src/i18n/locale.js",
       "src/i18n/locales/es.json",
       "src/i18n/locales/ru.json",
-      "src/ui/statusText.js"
+      "src/ui/statusText.js",
+      "src/voice/providerCapabilities.js"
     ],
     "external": []
   },
@@ -3483,6 +3524,7 @@
       "src/search/google.js",
       "src/search/geospatial.js",
       "src/data/regionalModel.js",
+      "src/geoDistance.js",
       "src/sources/httpBody.js",
       "src/i18n/marker.js",
       "src/sources/nominatim.js"
@@ -3506,6 +3548,7 @@
       "src/nominatimGeocode.js",
       "src/search/geospatial.js",
       "src/data/regionalModel.js",
+      "src/geoDistance.js",
       "src/sources/httpBody.js",
       "src/i18n/marker.js"
     ],
@@ -3521,6 +3564,7 @@
       "server/providers/transitHistory.js",
       "src/data/gtfsRealtime.js",
       "src/data/transitFeeds.js",
+      "src/geoDistance.js",
       "src/data/transitProxy.js",
       "src/sources/httpBody.js",
       "src/i18n/marker.js",
@@ -3536,6 +3580,7 @@
     "modules": [
       "src/data/gtfsRealtime.js",
       "src/data/transitFeeds.js",
+      "src/geoDistance.js",
       "src/data/transitProxy.js",
       "src/sources/transitHistory.js"
     ],
@@ -3547,6 +3592,7 @@
       "src/cyberSonar.js",
       "src/app/sourceSlot.js",
       "src/celestialRing.js",
+      "src/data/approxDistance.js",
       "src/data/cameraSensitivity.js",
       "src/data/contactPlayback.js",
       "src/data/contactTrailRenderer.js",
@@ -3556,6 +3602,7 @@
       "src/data/geoid.js",
       "src/data/groundFloor.js",
       "src/data/gtfsRealtime.js",
+      "src/geoDistance.js",
       "src/data/iconOrientation.js",
       "src/data/inputOwnership.js",
       "src/data/labelArbiter.js",
@@ -3613,6 +3660,7 @@
       "src/data/iconOrientation.js",
       "src/data/inputOwnership.js",
       "src/data/transitFeeds.js",
+      "src/geoDistance.js",
       "src/data/transitIcons.js",
       "src/data/transitPresetStyle.js",
       "src/layers/transit/controls.js",
@@ -3660,6 +3708,7 @@
     "exports": ["./sources/transit-service"],
     "modules": [
       "src/data/transitFeeds.js",
+      "src/geoDistance.js",
       "src/data/transitProxy.js",
       "src/data/gtfsRealtime.js",
       "src/sources/httpBody.js",
@@ -3755,6 +3804,7 @@
       "src/tools/queries/maritime.js",
       "src/tools/queries/share.js",
       "src/data/idSwitches.js",
+      "src/data/vesselTypes.js",
       "src/data/layerState.js",
       "src/data/layerStateTokenReservations.json",
       "src/sources/gbfsStations.js",
@@ -3784,7 +3834,8 @@
       "src/view/index.js",
       "src/tools/views.js",
       "src/tools/globePanel.js",
-      "src/tools/queries/panelRequest.js"
+      "src/tools/queries/panelRequest.js",
+      "src/geoDistance.js"
     ],
     "external": ["satellite.js"]
   },
@@ -3915,5 +3966,18 @@
       "src/i18n/marker.js"
     ],
     "external": []
+  },
+  "agent-world-packet": {
+    "exports": ["./agent/world-packet"],
+    "modules": [
+      "src/agent/worldPacket.js",
+      "src/data/layerSnapshot.js",
+      "src/data/feedState.js",
+      "src/contextModePolicy.js",
+      "src/loadingFeedback.js",
+      "src/data/installationFeedback.js",
+      "src/i18n/marker.js"
+    ],
+    "external": ["cesium"]
   }
 }
