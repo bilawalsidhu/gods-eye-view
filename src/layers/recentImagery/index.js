@@ -570,12 +570,14 @@ export function createRecentImageryLayer({
     const list = stripList();
     if (!list.length) return;
     reconcileFocus();
-    thumbnails.requestOrdered(list, _box, {
-      focusIndex: Math.max(0, focusIndexIn(list)),
-      firstVisible: _visible.first,
-      lastVisible: _visible.last,
-      extra: 2,
-    });
+    const wanted = new Set(
+      thumbnails.requestOrdered(list, _box, {
+        focusIndex: Math.max(0, focusIndexIn(list)),
+        firstVisible: _visible.first,
+        lastVisible: _visible.last,
+        extra: 2,
+      }) || [],
+    );
     for (const key of new Set([
       _assigned.a,
       _assigned.b,
@@ -583,8 +585,11 @@ export function createRecentImageryLayer({
       _followKey,
     ])) {
       const candidate = candidateFor(key);
-      if (sourceOn(candidate)) thumbnails.request(candidate, _box, 0);
+      if (!sourceOn(candidate)) continue;
+      thumbnails.request(candidate, _box, 0);
+      wanted.add(candidate.key);
     }
+    thumbnails.retain?.(wanted);
   }
 
   function resetCatalog() {
