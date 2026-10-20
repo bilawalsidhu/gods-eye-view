@@ -101,7 +101,7 @@ test('the standalone provider list mounts the fire-history proxy once', () => {
   );
 });
 
-test('keyless registry is public and perimeter fetching is not duplicated here', async (t) => {
+test('keyless registry does not duplicate perimeter fetching', async (t) => {
   const { request, calls } = await fixture(t, {
     fetchImpl: () => {
       throw new Error('must not fetch');
@@ -116,7 +116,7 @@ test('keyless registry is public and perimeter fetching is not duplicated here',
   assert.equal(calls.length, 0);
 });
 
-test('failed archive windows cool down and the cache stores only merged fires', async (t) => {
+test('failed archive cooldown and merged-fire disk cache', async (t) => {
   let modisDown = true;
   const { request, calls, cacheDir, advance } = await fixture(t, {
     key: 'fixture-key',
@@ -153,7 +153,7 @@ test('failed archive windows cool down and the cache stores only merged fires', 
   assert.equal('firesByWindow' in disk, false);
 });
 
-test('editing an event definition changes the disk-cache identity', async (t) => {
+test('event definition edits change disk-cache identity', async (t) => {
   const first = await fixture(t, {
     key: 'fixture-key',
     fetchImpl: () => new Response(CSV),
