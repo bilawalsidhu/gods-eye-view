@@ -21,6 +21,7 @@ import {
   shouldSendViewportImage,
   shouldStopVoiceAfterRadioTool,
   responseInstructionForToolResult,
+  isGlobeViewRefusal,
 } from './realtimeProtocol.js';
 
 const SOCKET_PATH =
@@ -182,6 +183,7 @@ export class GeminiSessionController {
     this.model = null;
     this.epoch = 0;
     this.turn = 0;
+    this.globeToolsBlocked = false;
     this.inputGeneration = 0;
     this.turnAbort = new AbortController();
     this.disposed = false;
@@ -659,6 +661,7 @@ export class GeminiSessionController {
             return;
           if (!pushToTalk || activityCaptureId === metadata.captureId) return;
           this.captureOwner.admitted = true;
+          this.globeToolsBlocked = false;
           if (
             !this.interrupt('push-to-talk', {
               keepPlayback: !this.pttPlaybackSuppressed,
@@ -1294,6 +1297,7 @@ export class GeminiSessionController {
           this.replyPending = false;
           if (!this.interrupt()) return;
         } else if (!this.retiredReplyPending && !this.interrupt()) return;
+        this.globeToolsBlocked = false;
         // Local activity ownership is only for expiry liveness, not tools.
         // Assign after retiring observed output so its boundary cannot clear
         // a newer detected activity that has not received a reply yet.
@@ -1620,6 +1624,12 @@ export class GeminiSessionController {
     let result;
     try {
       if (!actionCurrent()) throw cancelled();
+      // Live has no response-scoped tool_choice. Recheck here so queued siblings
+      // cannot reset while the assistant is asking for permission.
+      if (this.globeToolsBlocked)
+        throw new Error(
+          'Wait for fresh user input before calling another tool.',
+        );
       if (stronger)
         reservation = this.radio.reserveRadioToolHandoff({ abortScope });
       handoffEpoch = this.radio.radioHandoffEpoch;
@@ -1744,6 +1754,7 @@ export class GeminiSessionController {
       this.stopAfterReply = true;
     // Native call cancellation suppresses its output, without canceling siblings.
     if (!this.cancelledCalls.has(call.id)) {
+      if (isGlobeViewRefusal(result)) this.globeToolsBlocked = true;
       this.postToolOutput = false;
       this.modelComplete = false;
       this.replyPending = true;
@@ -1902,6 +1913,7 @@ export class GeminiSessionController {
       {
         onSent: () => {
           if (!owned() || this.typedIntent !== typedIntent) return;
+          this.globeToolsBlocked = false;
           this.replyPending = true;
           this.bindTextIntent(typedIntent);
           if (!owned() || this.typedIntent !== typedIntent) return;
@@ -2455,6 +2467,7 @@ export class GeminiSessionController {
     this.cancelledCalls.clear();
     this.pendingMapEvents = [];
     this.userTurnPending = false;
+    this.globeToolsBlocked = false;
     this.replyPending = false;
     this.unrequestedReply = false;
     this.automaticTurnOpen = false;

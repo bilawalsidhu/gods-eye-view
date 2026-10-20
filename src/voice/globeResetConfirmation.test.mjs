@@ -94,6 +94,12 @@ test('permission instructions do not interpolate untrusted failure text or alter
     say: 'UNTRUSTED_SAY',
   });
   assert.doesNotMatch(instruction, /UNTRUSTED/);
+  const unavailable = responseInstructionForToolResult({
+    ...refusal,
+    reason: 'globe-reset-unavailable',
+  });
+  assert.doesNotMatch(unavailable, /Reset to Globe View and rotate\?/);
+  assert.match(unavailable, /do not offer or perform a reset/i);
   assert.equal(
     responseInstructionForToolResult({
       ok: true,

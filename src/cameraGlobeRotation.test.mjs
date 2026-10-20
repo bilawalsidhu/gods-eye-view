@@ -845,7 +845,7 @@ for (const owner of ['tracking', 'cockpit', 'close-up'])
     let releases = 0,
       stamps = 0;
     const styleManager = {
-      _navigation: { isCockpitActive: () => owner === 'cockpit' },
+      getCockpitState: () => ({ active: owner === 'cockpit' }),
       runImmediateNavigation(noun, navigate) {
         return runExplicitNavigation({
           cockpitActive: owner === 'cockpit',
@@ -899,7 +899,10 @@ for (const [label, ellipsoid] of [
       handedOff = true;
     });
     assert.equal(result.ok, false);
-    assert.equal(result.reason, 'unsafe-ellipsoid');
+    assert.equal(
+      result.reason,
+      label === 'non-WGS84 radii' ? 'unsupported-view' : 'unsafe-ellipsoid',
+    );
     assert.equal(handedOff, false);
     assert.equal(hasRenderHold(), false);
     samePose(camera, before);
@@ -922,7 +925,7 @@ test('a non-WGS84 ellipsoid fails closed rather than borrowing the WGS84 silhoue
   const before = pose(camera);
   const result = moveCamera({ motion: 'rotate_globe' });
   assert.equal(result.ok, false);
-  assert.equal(result.reason, 'unsafe-ellipsoid');
+  assert.equal(result.reason, 'unsupported-view');
   samePose(camera, before);
 });
 
@@ -1011,25 +1014,6 @@ for (const [angle, fits] of [
     samePose(h.camera, before);
   });
 
-for (const [height, fits] of [
-  [25_000_000, false],
-  [35_000_000, true],
-])
-  test(`portrait canvas clipping is checked at height ${height}`, (t) => {
-    const h = harness(t, {
-      viewportWidth: 400,
-      viewportHeight: 1200,
-      height,
-      latitude: 0,
-    });
-    const disc = projected(h);
-    assert.ok(
-      disc.earthRadius < disc.keyholeRadius,
-      'both views fit the taller keyhole circle',
-    );
-    assert.equal(moveCamera({ motion: 'rotate_globe' }).ok, fits);
-  });
-
 test('wide viewport uses vertical fovy rather than horizontal fov', (t) => {
   const h = harness(t, {
     viewportWidth: 2000,
@@ -1040,7 +1024,7 @@ test('wide viewport uses vertical fovy rather than horizontal fov', (t) => {
   assert.ok(projected(h).earthRadius > projected(h).keyholeRadius);
   assert.equal(
     moveCamera({ motion: 'rotate_globe' }).reason,
-    'globe-view-required',
+    'globe-reset-unavailable',
   );
 });
 
@@ -1137,22 +1121,33 @@ for (const latitude of [0, 90])
     });
 
 for (const [viewportWidth, viewportHeight, fits] of [
-  [390, 844, false],
+  [390, 844, true],
+  [844, 390, true],
   [800, 1200, true],
   [1280, 800, true],
   [3440, 1440, false],
 ])
   test(`unchanged reset preset is rechecked at ${viewportWidth}x${viewportHeight}`, (t) => {
-    harness(t, {
+    const h = harness(t, {
       viewportWidth,
       viewportHeight,
       height: GLOBE_VIEW.heightM,
       latitude: 0,
     });
-    assert.equal(moveCamera({ motion: 'rotate_globe' }).ok, fits);
+    const disc = projected(h);
+    assert.equal(
+      disc.earthRadius < disc.keyholeRadius,
+      fits,
+      'reset preset keyhole fit',
+    );
+    const before = pose(h.camera);
+    const result = moveCamera({ motion: 'rotate_globe' });
+    assert.equal(result.ok, fits);
+    if (!fits) assert.equal(result.reason, 'globe-reset-unavailable');
+    samePose(h.camera, before);
   });
 
-test('viewport clipping after resize stops rotation before another pose write', (t) => {
+test('keyhole overlap after resize stops rotation before another pose write', (t) => {
   const h = harness(t);
   assert.equal(
     moveCamera({ motion: 'rotate_globe', mode: 'continuous' }).ok,
@@ -1161,6 +1156,7 @@ test('viewport clipping after resize stops rotation before another pose write', 
   h.canvas.clientWidth = 2000;
   h.canvas.clientHeight = 500;
   h.camera.frustum.aspectRatio = 4;
+  assert.ok(projected(h).earthRadius > projected(h).keyholeRadius);
   const before = pose(h.camera);
   h.tick();
   assert.equal(getActiveCameraMotion(), null);
@@ -1267,3 +1263,48 @@ for (const mode of [null, '', 'invalid', 'CONTINUOUS'])
     assert.equal(moveCamera({ motion: 'rotate_globe', mode }).mode, 'once');
     finishOnce();
   });
+
+test('canvas-only clipping after resize preserves a keyhole-fitting rotation', (t) => {
+  const h = harness(t, { latitude: 0 });
+  assert.equal(moveCamera({ motion: 'rotate_globe' }).ok, true);
+  h.canvas.clientWidth = 390;
+  h.canvas.clientHeight = 844;
+  h.camera.frustum.aspectRatio = 390 / 844;
+  const disc = projected(h);
+  assert.ok(disc.earthRadius < disc.keyholeRadius);
+  assert.ok(disc.earthRadius > h.canvas.clientWidth / 2);
+  const before = pose(h.camera);
+  h.tick();
+  h.tick();
+  assert.notDeepEqual(pose(h.camera).position, before.position);
+  assert.equal(getActiveCameraMotion()?.kind, 'rotate_globe');
+  assert.equal(hasRenderHold(), true);
+});
+
+test('an invalid camera request leaves the active globe rotation untouched', (t) => {
+  const h = harness(t);
+  assert.equal(moveCamera({ motion: 'rotate_globe' }).ok, true);
+  const before = pose(h.camera);
+  const active = getActiveCameraMotion();
+  assert.equal(moveCamera({ motion: 'pan' }).ok, false);
+  assert.deepEqual(getActiveCameraMotion(), active);
+  samePose(h.camera, before);
+  assert.equal(hasRenderHold(), true);
+});
+
+test('close-up ultrawide refusal does not offer an unfit reset or move the camera', (t) => {
+  const h = harness(t, {
+    viewportWidth: 3440,
+    viewportHeight: 1440,
+    height: 5000,
+  });
+  const before = pose(h.camera);
+  let handoffs = 0;
+  const result = moveCamera({ motion: 'rotate_globe' }, () => {
+    handoffs++;
+  });
+  assert.equal(result.reason, 'globe-reset-unavailable');
+  assert.equal(handoffs, 0);
+  samePose(h.camera, before);
+  assert.equal(hasRenderHold(), false);
+});

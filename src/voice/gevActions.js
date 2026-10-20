@@ -264,8 +264,7 @@ export function createGevActionRunner({
     ));
   installViewTargetPrewarm(viewer);
   initCameraVerbs(viewer, getViewTargetCartesian, {
-    isCockpitActive: () =>
-      Boolean(styleManager?._navigation?.isCockpitActive?.()),
+    isCockpitActive: () => Boolean(styleManager?.getCockpitState?.()?.active),
   });
   // Nested calls (select_nearest_aircraft composing layer + flight) use the
   // raw runner; only the outer call gets a voice envelope.

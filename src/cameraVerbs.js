@@ -19,6 +19,7 @@
  */
 
 import * as Cesium from 'cesium';
+import { GLOBE_VIEW } from './locations.js';
 import {
   projectEarthDiscToViewport,
   earthDiscScreenRadius,
@@ -29,8 +30,8 @@ import {
   releaseContinuousRender,
 } from './renderGovernor.js';
 
-/** °/s by speed word — orbit; pan uses fractions of view height/s. */
 let _isCockpitActive = null;
+/** °/s by speed word — orbit; pan uses fractions of view height/s. */
 const ORBIT_DEG_S = { slow: 2, normal: 6, fast: 15 };
 const TILT_DEG_S = { slow: 4, normal: 10, fast: 20 };
 const PAN_VIEW_FRACTION_S = { slow: 0.08, normal: 0.2, fast: 0.45 };
@@ -1267,14 +1268,14 @@ function globeRotationHasClearance(position) {
 }
 
 /** Use the existing WGS84/CSS-pixel projection; null means unsupported, not close-up. */
-function globeRotationFitsKeyhole() {
+function globeRotationFitsKeyhole(camera = _viewer.camera) {
   const ellipsoid = _viewer.scene.globe?.ellipsoid ?? Cesium.Ellipsoid.WGS84;
   if (!Cesium.Cartesian3.equals(ellipsoid.radii, Cesium.Ellipsoid.WGS84.radii))
     return null;
   const canvas = _viewer.scene.canvas;
   const width = canvas.clientWidth;
   const height = canvas.clientHeight;
-  const frustum = _viewer.camera.frustum;
+  const frustum = camera.frustum;
   if (
     !Number.isFinite(width) ||
     !Number.isFinite(height) ||
@@ -1290,7 +1291,7 @@ function globeRotationFitsKeyhole() {
   )
     return null;
   try {
-    const cam = _viewer.camera;
+    const cam = camera;
     const distance = Cesium.Cartesian3.magnitude(cam.positionWC);
     const sphereRadius = ellipsoid.maximumRadius;
     if (!Number.isFinite(distance) || distance <= 0) return null;
@@ -1298,8 +1299,12 @@ function globeRotationFitsKeyhole() {
     const radiusPx = earthDiscScreenRadius(distance, height, frustum.fovy);
     if (!radiusPx) return null;
     const keyhole = getKeyholeGeometry(width, height);
-    const disc = projectEarthDiscToViewport(_viewer, width, height);
-    if (!disc) {
+    // The known nadir reset probe uses the same exact cone below; projecting
+    // through SceneTransforms would read the live scene.camera instead.
+    if (
+      camera === _viewer.camera &&
+      !projectEarthDiscToViewport(_viewer, width, height)
+    ) {
       // A near-surface horizon view cannot fit even when pointed at Earth;
       // an orbital camera looking away is unsupported, not a close-up offer.
       return radiusPx > Math.min(keyhole.radius, width / 2, height / 2)
@@ -1307,7 +1312,8 @@ function globeRotationFitsKeyhole() {
         : null;
     }
     // The shared disc is an overlay approximation off-axis. Bound the sphere
-    // against the existing keyhole cone and the four actual viewport planes,
+    // against the existing keyhole cone. Canvas-edge clipping does not change
+    // framing during rigid globe rotation and is not a clearance condition,
     // without changing the UI projection or defining another keyhole/mask.
     const toCenter = Cesium.Cartesian3.negate(
       cam.positionWC,
@@ -1328,14 +1334,8 @@ function globeRotationFitsKeyhole() {
     const halfAngle = Math.asin(sphereRadius / distance);
     const centerAngle = Math.atan2(Math.hypot(right, up), depth);
     const keyholeAngle = Math.atan(keyhole.radius / Math.max(focalX, focalY));
-    const horizontalSlope = width / (2 * focalX);
-    const verticalSlope = height / (2 * focalY);
     // No overlay visibility hysteresis: a fully contained smaller globe needs no reset.
-    const framed =
-      centerAngle + halfAngle <= keyholeAngle &&
-      horizontalSlope * depth - right >=
-        sphereRadius * Math.hypot(1, horizontalSlope) &&
-      verticalSlope * depth - up >= sphereRadius * Math.hypot(1, verticalSlope);
+    const framed = centerAngle + halfAngle <= keyholeAngle;
     if (!framed) return false;
     // Projection alone does not prove that a tiny globe is within depth planes.
     if (
@@ -1346,6 +1346,30 @@ function globeRotationFitsKeyhole() {
     return true;
   } catch {
     return null;
+  }
+}
+
+/** Check the unchanged reset destination without moving the live camera. */
+function globeResetFitsKeyhole() {
+  try {
+    const camera = Cesium.Camera.clone(_viewer.camera);
+    const { longitude, latitude } = _viewer.camera.positionCartographic;
+    camera.setView({
+      destination: Cesium.Cartesian3.fromRadians(
+        longitude,
+        latitude,
+        GLOBE_VIEW.heightM,
+      ),
+      orientation: {
+        heading: 0,
+        pitch: Cesium.Math.toRadians(GLOBE_VIEW.pitchDeg),
+        roll: 0,
+      },
+      endTransform: Cesium.Matrix4.IDENTITY,
+    });
+    return globeRotationFitsKeyhole(camera) === true;
+  } catch {
+    return false;
   }
 }
 
@@ -1401,13 +1425,8 @@ export function initCameraVerbs(
   for (const rm of _inputRemovers) rm();
   _inputRemovers = [];
   const canvas = viewer.scene.canvas;
-  for (const event of ['pointerdown', 'touchstart', 'wheel']) {
-    const handler = () => interruptGlobeRotation('manual-input');
-    canvas.addEventListener(event, handler, { capture: true, passive: true });
-    _inputRemovers.push(() => canvas.removeEventListener(event, handler, true));
-  }
   // ANY manual camera input reclaims control — the cancelFlight reflex.
-  for (const evt of ['pointerdown', 'wheel']) {
+  for (const evt of ['pointerdown', 'touchstart', 'wheel']) {
     const h = () => interruptCameraMotion('manual-input');
     canvas.addEventListener(evt, h, { passive: true });
     _inputRemovers.push(() => canvas.removeEventListener(evt, h));
@@ -1421,8 +1440,6 @@ export function initCameraVerbs(
  * @param {Function|null} runNavigation Validated camera-authority transaction.
  */
 export function moveCamera(args = {}, runNavigation = null) {
-  if (String(args?.motion || '').toLowerCase() !== 'stop')
-    interruptGlobeRotation('new-camera-command');
   const motion = String(args.motion || '').toLowerCase();
   const direction = args.direction
     ? String(args.direction).toLowerCase()
@@ -1563,18 +1580,6 @@ export function moveCamera(args = {}, runNavigation = null) {
         error:
           'Globe rotation requires a finite supported ellipsoid and a clear globe view.',
       };
-    // The canonical projected-disc helper assumes WGS84. Fail closed for a
-    // different ellipsoid rather than silently under-bound its silhouette.
-    if (
-      !Cesium.Cartesian3.equals(ellipsoid.radii, Cesium.Ellipsoid.WGS84.radii)
-    )
-      return {
-        ok: false,
-        action: 'move_camera',
-        reason: 'unsafe-ellipsoid',
-        error:
-          'Globe rotation requires a finite supported ellipsoid and a clear globe view.',
-      };
     const fits = globeRotationFitsKeyhole();
     if (fits === null)
       return {
@@ -1583,13 +1588,17 @@ export function moveCamera(args = {}, runNavigation = null) {
         reason: 'unsupported-view',
         error: 'Globe rotation requires a supported perspective view.',
       };
-    if (!fits)
+    if (!fits) {
+      const canReset = globeResetFitsKeyhole();
       return {
         ok: false,
         action: 'move_camera',
-        reason: 'globe-view-required',
-        error: 'Zoom out to globe view first.',
+        reason: canReset ? 'globe-view-required' : 'globe-reset-unavailable',
+        error: canReset
+          ? 'Zoom out to globe view first.'
+          : 'Zoom out further to fit the globe inside the keyhole; the Globe View preset does not fit this viewport.',
       };
+    }
     if (!globeRotationHasClearance(globePose.position))
       return {
         ok: false,

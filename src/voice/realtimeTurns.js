@@ -6,6 +6,7 @@ import {
   SUPERSEDED_RESPONSE_MEMORY,
   shouldStopVoiceAfterRadioTool,
   responseInstructionForToolResult,
+  isGlobeViewRefusal,
   extractFunctionCalls,
   callDedupeKeys,
   parseArguments,
@@ -678,9 +679,7 @@ export class RealtimeTurns {
       const instructions = responseInstructionForToolResult(followupResult);
       // A close-up globe refusal asks permission; it cannot perform its own reset.
       this.queueResponseCreate(
-        followupResult?.action === 'move_camera' &&
-          followupResult.ok === false &&
-          followupResult.reason === 'globe-view-required'
+        isGlobeViewRefusal(followupResult)
           ? { instructions, tool_choice: 'none' }
           : instructions,
       );

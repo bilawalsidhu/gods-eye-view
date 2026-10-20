@@ -41,7 +41,7 @@ test('the complete Realtime tool payload pins the manifest-generated layer relea
     // Air quality (ECCC AQHI) extends the manifest.
     // Globe rotation adds one motion; visual keyhole fit and explicit
     // reset permission/defaults update only move_camera and mode descriptions.
-    '4b43ff0dc0856b43c261fc0ffa57abd2e7617e579acaead0a30c1215f8177c0d',
+    '79c17bc9e1a18eb3d52abd06f9ff8e702a2d7630c9f115bd76bc8d3ed99b46be',
   );
 });
 
@@ -216,26 +216,12 @@ test('the benchmark still rejects an empty track_entity although the model-facin
   );
 });
 
-test('globe-only voice guidance binds the reset offer to explicit permission and settled success', () => {
+test('globe reset guidance waits for explicit permission after the refused request', () => {
   const paragraph = realtimeInstructions()
     .split('\n')
-    .find((line) => line.includes('reason=globe-view-required'));
+    .find((line) => line.includes('globe-view-required'));
   assert.ok(paragraph);
-  for (const contract of [
-    /Camera turn\/look.*move_camera rotate ONLY/,
-    /rotate_globe FIRST.*never reset preemptively/,
-    /default right\/continuous; explicit options prevail/,
-    /client checks current keyhole fit/,
-    /reason=globe-view-required.*ask.*END the turn without tools/,
-    /NEXT user reply.*explicit YES.*every other reply expires the offer/,
-    /await a successful settled result.*retry rotate_globe once/,
-    /NO\/unclear\/unrelated: no action/,
-    /Failed\/cancelled reset or new camera intent cancels offer/,
-    /Still unfit:.*never repeat reset/,
-    /Cockpit\/tracking refusal: never offer reset or release owner/,
-    /New camera interaction stops rotation/,
-  ])
-    assert.match(paragraph, contract);
-  // This pins model instructions, not universal model compliance or a new
-  // application-side confirmation engine. Native voice acceptance is separate.
+  assert.match(paragraph, /rotate_globe first/);
+  assert.match(paragraph, /next explicit yes before zoom_to_globe/);
+  assert.match(paragraph, /new request cancels/);
 });

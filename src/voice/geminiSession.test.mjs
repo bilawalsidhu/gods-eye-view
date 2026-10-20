@@ -3398,3 +3398,61 @@ test('a narration callback that submits a successor keeps the old packet tools f
   assert.deepEqual(h.calls, []);
   h.c.stop();
 });
+
+for (const reply of ['typed', 'push-to-talk', 'open-mic']) {
+  test(`globe refusal blocks queued and later tools until fresh ${reply} input`, async () => {
+    const names = [];
+    const h = harness({
+      runAction: async (name) => {
+        names.push(name);
+        return name === 'move_camera'
+          ? { ok: false, action: 'move_camera', reason: 'globe-view-required' }
+          : { ok: true, action: name };
+      },
+    });
+    try {
+      await h.c.start({ pushToTalk: reply === 'push-to-talk' });
+      establishToolInput(h, 'rotate the globe');
+      const ws = h.sockets[0];
+      ws.message({ toolCall: { functionCalls: [
+        { id: 'rotate', name: 'move_camera', args: { motion: 'rotate_globe' } },
+        { id: 'queued-reset', name: 'zoom_to_globe', args: {} },
+      ] } });
+      await h.c.toolQueue;
+      assert.deepEqual(names, ['move_camera']);
+      const blocked = ws.sent.flatMap(entry => entry.toolResponse?.functionResponses || [])
+        .find(call => call.id === 'queued-reset');
+      assert.equal(blocked.response.ok, false);
+      assert.match(blocked.response.error, /fresh user input/i);
+
+      if (reply === 'typed') {
+        const stimuli = [
+          () => {},
+          () => ws.message({ serverContent: { interrupted: true } }),
+          () => ws.message({ serverContent: { inputTranscription: { text: 'yes' } } }),
+          () => { h.c.input.setMicrophoneEnabled(false); h.c.input.setMicrophoneEnabled(true); },
+        ];
+        for (const [i, stimulus] of stimuli.entries()) {
+          stimulus();
+          requestTool(ws, `unrequested-reset-${i}`, 'zoom_to_globe', {});
+          await h.c.toolQueue;
+          assert.deepEqual(names, ['move_camera']);
+        }
+      }
+      // Finish the refusal reply before admitting the actual next user input.
+      ws.message({ serverContent: { turnComplete: true } });
+      if (reply === 'typed') assert.equal(h.c.sendTextCommand('yes'), true);
+      else if (reply === 'push-to-talk') {
+        h.c.input.pushToTalkKeyHeld = true;
+        h.c.input.spaceKeyHeld = true;
+        h.c.input.setMicrophoneEnabled(true);
+        h.c.input.setMicrophoneEnabled(false);
+      } else ws.message({ voiceActivity: { type: 'ACTIVITY_START' } });
+      requestTool(ws, 'accepted-reset', 'zoom_to_globe', {});
+      await h.c.toolQueue;
+      assert.deepEqual(names, ['move_camera', 'zoom_to_globe']);
+    } finally {
+      h.c.stop();
+    }
+  });
+}

@@ -333,15 +333,8 @@ Thirty tools, four jobs — the commands below come straight from the product's 
 
 **🎥 Direct it** — drone-operator camera verbs:
 
-“Rotate the globe to the right” turns the view around Earth's center while
-preserving its framing and distance from the center; “turn the camera right”
-looks right in place. Globe rotation defaults to the right continuously; an
-explicit direction, mode or speed takes precedence. Rotation works when the whole globe fits inside the
-keyhole and canvas, at any altitude, with Cockpit and tracking off. A smaller,
-fully framed globe rotates directly without a reset offer. Only a close-up or
-overlapping globe needs permission to reset to Globe View before rotating.
-Any new camera interaction stops rotation. The constant-radius path clears the
-whole ellipsoid; terrain and buildings are outside that guarantee.
+“Rotate the globe” spins Earth to the right continuously; ask for left, a speed,
+or stop. Close-up views ask before resetting; camera input stops rotation.
 
 > 🗣️ _"Take me to Tokyo."_ · _"Orbit around this area slowly."_ · _"Draw the walking route from the Capitol to Zilker Park."_ → _"Fly the route we just drew."_ · _"Zoom out to a globe view."_
 

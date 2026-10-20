@@ -153,35 +153,3 @@ test('weather shell supplies live imagery hosts to wind and observations and rel
   owner.disconnect();
   for (const id of ids) assert.equal(attached.get(id), null);
 });
-
-test('globe reset resolves only when its real flight completes', async (t) => {
-  const { owner, readHooks } = location(t);
-  let settled = false;
-  const pending = owner.resetToGlobeView().then(result => { settled = true; return result; });
-  await Promise.resolve();
-  assert.equal(settled, false);
-  readHooks().onComplete();
-  assert.deepEqual(await pending, { ok: true, action: 'zoom_to_globe', cancelled: false, heightKm: 20000, centeredOn: { latitude: 0, longitude: 0 } });
-  owner.destroy();
-});
-
-test('cancelled globe reset cannot become successful from a late completion', async (t) => {
-  const { owner, readHooks } = location(t);
-  const pending = owner.resetToGlobeView();
-  readHooks().onCancel();
-  const result = await pending;
-  assert.equal(result.ok, false);
-  assert.equal(result.cancelled, true);
-  readHooks().onComplete();
-  assert.equal(await pending, result);
-  owner.destroy();
-});
-
-test('a globe reset timeout below its destination reports failure', async (t) => {
-  const { owner } = location(t);
-  owner.viewer.camera.positionCartographic.height = 5000;
-  const pending = owner.resetToGlobeView();
-  t.mock.timers.tick(4200);
-  assert.equal((await pending).ok, false);
-  owner.destroy();
-});

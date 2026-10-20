@@ -511,7 +511,7 @@ export const ACTION_DESCRIPTIONS = {
   },
   move_camera: {
     description:
-      'rotate_globe spins Earth (default right/continuous); explicit options prevail. rotate looks in place; orbit circles target; pan translates; tilt changes pitch. once nudges; continuous stops on stop/new camera input. Confirm resulting state.',
+      'Direct the camera like a drone operator: orbit the current view target, pan, tilt, or rotate — one bounded nudge (mode=once) or continuous motion until stopped (mode=continuous). Continuous motion also stops on any manual camera input or when a navigation tool runs. Say the RESULTING state when confirming ("Orbiting slowly"). Globe rotation (rotate_globe) spins Earth right continuously by default; explicit direction, mode and speed take precedence.',
     $position: 1,
     parameters: {
       properties: {
