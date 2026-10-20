@@ -50,7 +50,7 @@ export function createAirQualitySnapshotSource({
       }
       const payload = await readResponseJsonCapped(
         response,
-        8 * 1024 * 1024,
+        64 * 1024 * 1024,
         requestSignal,
       );
       if (
@@ -115,18 +115,18 @@ export function createDefaultAirQualityProviders({
     },
     {
       id: 'openaq',
-      title: msg('Africa · OpenAQ'),
-      label: msg('Air quality · Africa'),
-      coverage: msg('Africa · available OpenAQ stations'),
+      title: msg('Worldwide · OpenAQ'),
+      label: msg('Air quality · Worldwide'),
+      coverage: msg('Worldwide · available OpenAQ stations'),
       network: 'OpenAQ',
-      sourceLabel: 'OpenAQ · Africa',
+      sourceLabel: 'OpenAQ · Worldwide',
       observation: true,
       parameters: OPENAQ_POLLUTANTS,
       requiresKeyId: 'openaq',
       averagingLabel: msg('Source averaging period unspecified'),
       indexLabel: msg('Index unavailable'),
       coverageNote: msg(
-        'Available monitoring stations across Africa. Unmonitored areas have no measured coverage.',
+        'Available monitoring stations worldwide. Unmonitored areas have no measured coverage.',
       ),
       interpretation: msg(
         'OpenAQ supplies concentrations, not a health index. Source networks may also appear in SAAQIS.',

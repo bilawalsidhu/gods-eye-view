@@ -5924,9 +5924,9 @@ The deterministic real-app gate is `scripts/qa-south-africa-air-quality.mjs`;
 `--live` performs a separate national/Western Cape coverage audit.
 
 Air quality now accepts injected provider definitions through its source
-composition. Standalone defaults add optional OpenAQ Africa to ECCC and SAAQIS.
+composition. Standalone defaults add optional worldwide OpenAQ to ECCC and SAAQIS.
 OpenAQ uses the existing Provider Settings registry (`OPENAQ_API_KEY`, server-only)
-and a fixed local proxy, with bounded progressive acquisition across African
+and a fixed local proxy, with bounded progressive acquisition across all available
 countries/areas, explicit incomplete coverage, source attribution and no inferred
 AQI. The shared Weather card supplies provider/pollutant selection. The OpenAQ
 fixture gate is `scripts/qa-openaq.mjs`; live coverage requires the operator's key.

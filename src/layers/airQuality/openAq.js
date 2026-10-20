@@ -11,7 +11,7 @@ export const OPENAQ_POLLUTANTS = Object.freeze([
   'NOX',
   'H2S',
 ]);
-const parameters = Object.freeze({
+export const OPENAQ_PARAMETER_NAMES = Object.freeze({
   pm25: 'PM2.5',
   pm10: 'PM10',
   no2: 'NO2',
@@ -42,12 +42,12 @@ export function normalizeOpenAqLocations(locations) {
       .filter(
         (s) =>
           Number.isSafeInteger(s.id) &&
-          parameters[s.parameter?.name] &&
+          OPENAQ_PARAMETER_NAMES[s.parameter?.name] &&
           text(s.parameter?.units),
       )
       .map((s) => ({
         id: s.id,
-        parameter: parameters[s.parameter.name],
+        parameter: OPENAQ_PARAMETER_NAMES[s.parameter.name],
         units: text(s.parameter.units),
       }));
     if (!sensors.length) continue;

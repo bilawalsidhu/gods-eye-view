@@ -28,6 +28,7 @@ function fixture({
 } = {}) {
   const calls = [];
   const source = createOpenAqAcquisition({
+    scope: AFRICA_SCOPE,
     now,
     getKey,
     batchSize,
@@ -172,4 +173,143 @@ test('Vite registration hooks do not return the Connect application as a post-ho
   };
   assert.equal(plugin.configureServer(server), undefined);
   assert.equal(plugin.configurePreviewServer(server), undefined);
+});
+
+test('global default resumes beyond ten catalog pages and uses bulk latest observations', async () => {
+  let clock = start;
+  const calls = [];
+  const world = ['KE', 'FR', 'US', 'JP', 'AU', 'BR'].map((code, i) => ({
+    ...locations[0],
+    id: i + 1,
+    country: { code },
+    sensors: [{ id: 100 + i, parameter: { name: 'pm25', units: 'µg/m³' } }],
+  }));
+  const source = createOpenAqAcquisition({
+    getKey: () => 'private',
+    now: () => clock,
+    fetchImpl: async (raw) => {
+      const url = new URL(raw);
+      calls.push(url);
+      if (url.pathname === '/v3/locations') {
+        const page = Number(url.searchParams.get('page'));
+        return Response.json({
+          results:
+            page <= 11
+              ? Array.from({ length: 1000 }, (_, i) => world[i % world.length])
+              : world,
+        });
+      }
+      if (url.pathname === '/v3/parameters')
+        return Response.json({ results: [{ id: 2, name: 'pm25' }] });
+      assert.equal(url.pathname, '/v3/parameters/2/latest');
+      assert.ok(url.searchParams.get('datetime_min'));
+      return Response.json({
+        results: world.map((l, i) => ({
+          locationsId: l.id,
+          sensorsId: 100 + i,
+          value: i + 1,
+          datetime: { utc: new Date(start).toISOString() },
+        })),
+      });
+    },
+  });
+  const first = await source.getSnapshot();
+  assert.equal(first.scope, 'global');
+  assert.equal(first.catalogComplete, false);
+  assert.equal(first.partial, true);
+  assert.equal(first.countriesReporting, 6);
+  assert.equal(first.readings.length, 6);
+  clock += 61_000;
+  const second = await source.getSnapshot();
+  assert.equal(second.catalogComplete, true);
+  assert.equal(second.partial, false);
+  assert.equal(second.readings.length, 6);
+  assert.ok(calls.some((u) => u.searchParams.get('page') === '12'));
+  assert.ok(calls.every((u) => !u.searchParams.has('countries_id')));
+  assert.ok(!JSON.stringify(second).includes('private'));
+});
+
+test('global bulk latest pagination preserves progress, deduplicates and expires old readings', async () => {
+  let clock = start;
+  const pages = [];
+  const source = createOpenAqAcquisition({
+    getKey: () => 'key',
+    now: () => clock,
+    fetchImpl: async (raw) => {
+      const url = new URL(raw);
+      if (url.pathname === '/v3/locations')
+        return Response.json({ results: [locations[0]] });
+      if (url.pathname === '/v3/parameters')
+        return Response.json({ results: [{ id: 2, name: 'pm25' }] });
+      const page = Number(url.searchParams.get('page'));
+      pages.push(page);
+      const row = {
+        locationsId: 1,
+        sensorsId: 100,
+        value: 4,
+        datetime: { utc: new Date(start).toISOString() },
+      };
+      return Response.json({
+        results: page <= 17 ? Array(1000).fill(row) : [row],
+      });
+    },
+  });
+  const a = await source.getSnapshot();
+  assert.equal(a.partial, true);
+  assert.equal(a.readings.length, 1);
+  clock += 61_000;
+  const b = await source.getSnapshot();
+  assert.equal(b.partial, false);
+  assert.equal(b.readings.length, 1);
+  assert.ok(pages.includes(18));
+  clock += 7 * 3600_000;
+  assert.equal((await source.getSnapshot()).readings.length, 0);
+});
+
+test('global discovery isolates missing pollutant feeds and preserves results on transient failures', async () => {
+  let clock = start,
+    status = 404,
+    key = 'first';
+  const source = createOpenAqAcquisition({
+    now: () => clock,
+    getKey: () => key,
+    fetchImpl: async (raw) => {
+      const path = new URL(raw).pathname;
+      if (key === 'rejected') return new Response('', { status: 401 });
+      if (path === '/v3/locations')
+        return Response.json({ results: [locations[0]] });
+      if (path === '/v3/parameters')
+        return Response.json({
+          results: [
+            { id: 2, name: 'pm25' },
+            { id: 21, name: 'h2s' },
+          ],
+        });
+      if (path === '/v3/parameters/21/latest')
+        return new Response('', { status });
+      return Response.json({
+        results: [
+          {
+            locationsId: 1,
+            sensorsId: 100,
+            value: 2,
+            datetime: { utc: new Date(start).toISOString() },
+          },
+        ],
+      });
+    },
+  });
+  const a = await source.getSnapshot();
+  assert.equal(a.readings.length, 1);
+  assert.equal(a.stale, false);
+  clock += 61_000;
+  status = 503;
+  const b = await source.getSnapshot();
+  assert.equal(b.readings.length, 1);
+  assert.equal(b.stale, true);
+  assert.equal(b.partial, true);
+  key = 'rejected';
+  await assert.rejects(source.getSnapshot(), (e) => e.status === 401);
+  key = '';
+  await assert.rejects(source.getSnapshot(), (e) => e.status === 428);
 });

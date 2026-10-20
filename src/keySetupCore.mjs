@@ -40,7 +40,7 @@ export const KEY_SETUP_KEYS = Object.freeze([
     id: 'openaq',
     title: 'OPENAQ', // i18n-ignore: provider product name
     unlocks: msg(
-      'Air-quality observations across Africa. Free account key; coverage depends on reporting stations.',
+      'Air-quality observations worldwide. Free account key; coverage depends on reporting stations.',
     ),
     getUrl: 'https://explore.openaq.org/register',
     envVars: Object.freeze(['OPENAQ_API_KEY']),

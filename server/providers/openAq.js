@@ -2,6 +2,7 @@ import { readResponseJsonCapped } from './common/http.js';
 import {
   normalizeOpenAqLocations,
   normalizeOpenAqLatest,
+  OPENAQ_PARAMETER_NAMES,
 } from '../../src/layers/airQuality/openAq.js';
 
 // Geographic scope is configuration, not a station/city allowlist. UN M49 Africa
@@ -15,6 +16,7 @@ export const AFRICA_SCOPE = Object.freeze({
     ),
   ),
 });
+export const GLOBAL_SCOPE = Object.freeze({ id: 'global', countries: null });
 const ROOT = 'https://api.openaq.org/v3/';
 const HOUR = 3600_000;
 const error = (status, message) =>
@@ -25,11 +27,11 @@ export function createOpenAqAcquisition({
   fetchImpl = globalThis.fetch,
   now = Date.now,
   getKey = () => process.env.OPENAQ_API_KEY || '',
-  scope = AFRICA_SCOPE,
+  scope = GLOBAL_SCOPE,
   batchSize = 24,
 } = {}) {
   if (
-    !scope.countries?.length ||
+    !(scope.countries === null || scope.countries?.length) ||
     !Number.isInteger(batchSize) ||
     batchSize < 1 ||
     batchSize > 24
@@ -45,6 +47,137 @@ export function createOpenAqAcquisition({
   const readings = new Map(),
     checked = new Map();
   let calls = [];
+  let discoveryPage = 1,
+    discoveryDone = false,
+    discoveryAt = 0;
+  const globalCatalog = new Map();
+  let discoverySeen = new Set(),
+    parameterPages = null,
+    parameterCursor = 0;
+  const globalReadings = new Map();
+  async function acquireGlobal(request) {
+    const started = Date.now();
+    let failed = false;
+    const get = async (path) => {
+      if (failed || Date.now() - started > 30_000) return null;
+      try {
+        return await request(path);
+      } catch (e) {
+        if ([401, 403].includes(e.status)) throw e;
+        if (e.status === 404 && path.startsWith('parameters/'))
+          return { results: [] };
+        failed = true;
+        return null;
+      }
+    };
+    // Resume catalog pagination across refreshes: never truncate at a regional
+    // page limit, and leave request capacity for observations on every refresh.
+    if (discoveryDone && now() - discoveryAt > HOUR) {
+      discoveryPage = 1;
+      discoveryDone = false;
+      discoverySeen = new Set();
+    }
+    for (let i = 0; i < 8 && !discoveryDone; i++) {
+      const data = await get(
+        `locations?limit=1000&page=${discoveryPage}&order_by=id&sort_order=asc`,
+      );
+      if (!data) break;
+      for (const station of normalizeOpenAqLocations(data.results)) {
+        discoverySeen.add(station.stationId);
+        globalCatalog.set(station.stationId, station);
+      }
+      if (globalCatalog.size > 100_000)
+        throw error(503, 'OpenAQ catalog exceeds memory limit');
+      discoveryPage++;
+      if (data.results.length < 1000) {
+        discoveryDone = true;
+        discoveryAt = now();
+        for (const id of globalCatalog.keys())
+          if (!discoverySeen.has(id)) globalCatalog.delete(id);
+        for (const [id, row] of globalReadings)
+          if (!globalCatalog.has(row.stationId)) globalReadings.delete(id);
+      }
+    }
+    if (!parameterPages) {
+      const data = await get('parameters?limit=1000&page=1');
+      if (data)
+        parameterPages = data.results
+          .filter(
+            (p) => Number.isSafeInteger(p.id) && OPENAQ_PARAMETER_NAMES[p.name],
+          )
+          .map((p) => ({
+            id: p.id,
+            page: 1,
+            since: new Date(now() - 6 * HOUR).toISOString(),
+            complete: false,
+          }));
+    }
+    // Global parameter endpoints return up to 1,000 observations per request.
+    // Round-robin pagination prevents large pollutant networks starving others.
+    const finishedThisRefresh = new Set();
+    for (
+      let i = 0;
+      i < 16 && finishedThisRefresh.size < (parameterPages?.length || 0);
+      i++
+    ) {
+      const cursor = parameterPages[parameterCursor++ % parameterPages.length];
+      if (finishedThisRefresh.has(cursor.id)) continue;
+      const data = await get(
+        `parameters/${cursor.id}/latest?limit=1000&page=${cursor.page}&datetime_min=${encodeURIComponent(cursor.since)}`,
+      );
+      if (!data) break;
+      const groups = new Map();
+      for (const item of data.results) {
+        const id = String(item.locationsId);
+        if (!groups.has(id)) groups.set(id, []);
+        groups.get(id).push(item);
+      }
+      for (const [id, items] of groups) {
+        const station = globalCatalog.get(id);
+        if (!station) continue; // Joined on a later sweep as discovery advances.
+        for (const row of normalizeOpenAqLatest(station, items, now())) {
+          const old = globalReadings.get(row.id);
+          if (
+            !old ||
+            row.observedMs > old.observedMs ||
+            (row.observedMs === old.observedMs && row.sensorId < old.sensorId)
+          )
+            globalReadings.set(row.id, row);
+        }
+      }
+      if (data.results.length < 1000) {
+        cursor.page = 1;
+        cursor.since = new Date(now() - 6 * HOUR).toISOString();
+        cursor.complete = true;
+        finishedThisRefresh.add(cursor.id);
+      } else cursor.page++;
+    }
+    for (const [id, row] of globalReadings)
+      if (now() - row.observedMs > 6 * HOUR) globalReadings.delete(id);
+    const fresh = [...globalReadings.values()];
+    const stations = [...globalCatalog.values()];
+    return {
+      schemaVersion: 1,
+      fetchedAt: now(),
+      source: 'OpenAQ',
+      scope: scope.id,
+      sourceUrl: 'https://openaq.org/',
+      stations,
+      readings: fresh,
+      checked: new Set(fresh.map((r) => r.stationId)).size,
+      eligible: stations.filter(
+        (s) => !s.lastObservedMs || now() - s.lastObservedMs <= 6 * HOUR,
+      ).length,
+      countriesReporting: new Set(fresh.map((r) => r.country)).size,
+      catalogComplete: discoveryDone,
+      partial:
+        failed ||
+        !discoveryDone ||
+        !parameterPages?.length ||
+        parameterPages.some((p) => !p.complete),
+      stale: failed,
+    };
+  }
   async function acquire(key) {
     const signal = AbortSignal.timeout(40_000);
     async function get(path) {
@@ -72,7 +205,7 @@ export function createOpenAqAcquisition({
               : 60_000);
         }
         throw error(
-          [401, 403, 429].includes(res.status) ? res.status : 503,
+          [401, 403, 404, 429].includes(res.status) ? res.status : 503,
           'OpenAQ request unavailable',
         );
       }
@@ -81,6 +214,7 @@ export function createOpenAqAcquisition({
         throw error(503, 'Malformed OpenAQ response');
       return data;
     }
+    if (scope.countries === null) return acquireGlobal(get);
     if (!catalog || now() - catalogAt > HOUR) {
       const countries = await get('countries?limit=1000&page=1');
       const ids = countries.results
@@ -177,6 +311,13 @@ export function createOpenAqAcquisition({
         keyAtCache = key;
         catalog = null;
         cached = null;
+        discoveryPage = 1;
+        discoveryDone = false;
+        globalCatalog.clear();
+        discoverySeen.clear();
+        globalReadings.clear();
+        parameterPages = null;
+        parameterCursor = 0;
         readings.clear();
         checked.clear();
       }

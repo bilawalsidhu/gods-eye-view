@@ -395,7 +395,7 @@ export function createAirQualityLayer({ source, overlayHost } = {}) {
                         {
                           id: 'progress',
                           text: t(
-                            '{checked} of {eligible} recent stations checked · {countries} countries reporting',
+                            '{checked} stations with observations · {eligible} recent catalog stations · {countries} countries reporting',
                             {
                               checked: coverage.checked,
                               eligible: coverage.eligible,

@@ -6,10 +6,10 @@ import puppeteer from 'puppeteer';
 const base = process.env.QA_BASE_URL || 'http://127.0.0.1:4173';
 const fixtures = [
   ['KE', 'Nairobi', -1.28, 36.82],
-  ['NG', 'Lagos', 6.46, 3.39],
-  ['EG', 'Cairo', 30.04, 31.24],
+  ['US', 'New York', 40.71, -74.01],
+  ['JP', 'Tokyo', 35.68, 139.69],
   ['ZA', 'Cape Town', -33.92, 18.42],
-  ['MG', 'Antananarivo', -18.88, 47.5],
+  ['BR', 'São Paulo', -23.55, -46.63],
 ];
 const readings = fixtures.map(([country, name, lat, lon], i) => ({
   id: `openaq:${i}:1`,
@@ -122,7 +122,7 @@ try {
     state.controls.list.items.every((r) => r.badge === 'Index unavailable'),
   );
   console.log(
-    'PASS: existing Provider Settings has a masked, empty OpenAQ field; Africa fixture renders through shared layer',
+    'PASS: existing Provider Settings has a masked, empty OpenAQ field; worldwide fixture renders through shared layer',
   );
   status = 428;
   await page.evaluate(() =>

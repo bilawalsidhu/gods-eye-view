@@ -163,7 +163,7 @@ continue to apply to rated observations.
 Primary references: https://saaqis.environment.gov.za/ and
 https://saaqis.environment.gov.za/Scripts/modules/StationModule.js .
 
-## OpenAQ Africa and provider extension
+## Worldwide OpenAQ and provider extension
 
 OpenAQ is an optional observation provider in the same Air quality card. Open
 **POWER UP → OPENAQ**, follow its free registration link, paste the private key
@@ -172,23 +172,35 @@ write/restart path. The variable is `OPENAQ_API_KEY`; it is never client-exposed
 Provider Settings remains development/loopback-only. Preview and other hosts use
 environment configuration. No credential is needed for ECCC or SAAQIS.
 
-The standalone defaults offer Canada, South Africa and Africa/OpenAQ. The latter
-uses a configured UN M49 Africa country/area scope, including island territories,
-with OpenAQ's countries and paginated locations APIs. There is no city or station
-allowlist. The regional acquisition factory accepts a different scope without
-changing normalization or rendering. This does not imply monitors exist in every
-country or municipality. Live coverage cannot be verified without an account key.
+The standalone defaults offer Canada, South Africa and worldwide OpenAQ. The
+OpenAQ default has no country, city or station allowlist. Its global locations
+catalog is paginated incrementally (eight pages per refresh), with cursor state
+retained between refreshes; there is no regional ten-page truncation. The same
+acquisition factory still accepts an explicit country scope, including the Africa
+configuration, for hosts that want a regional deployment.
 
-Requests are demand-driven while enabled: up to 24 stations per refresh, shared
-60-second cache and in-flight coalescing, at most 45 requests/minute and 1,800/hour
-in this server process. Other installations sharing a key also consume its quota.
-HTTP 429 respects Retry-After; authentication failures remain explicit. Catalog
-refresh is hourly. Stations with catalog timestamps older than six hours are
-excluded from the current sweep; their return is discovered on catalog refresh.
-The card distinguishes catalog size, recent stations checked, countries reporting
-and incomplete loading. No upstream polling continues after the layer is disabled.
-A batch already in flight may finish. Last-good data on transient errors is marked
-stale; observations older than six hours are omitted at every client read.
+Global observations use the documented parameter/latest endpoints instead of one
+request per station. Supported parameter IDs are discovered from the API, and
+pagination rotates between pollutants (up to 16 requests per refresh). Values join
+the location catalog by location and sensor IDs, retaining original attribution.
+Newly discovered locations appear as subsequent observation sweeps reach them.
+A 60-second cache and coalesced requests share a 45/minute, 1,800/hour process
+budget; other installations using the same key also consume its quota. HTTP 429
+respects Retry-After. The catalog refreshes hourly; the existing catalog remains
+available while the replacement is discovered. A defensive 100,000-station memory
+limit fails explicitly rather than silently truncating coverage. Local snapshots
+allow up to 64 MiB; each upstream page remains capped at 8 MiB.
+
+The card reports stations with observations, recent catalog stations, countries
+reporting and incomplete loading. Discovery is demand-driven while the layer is
+enabled; an in-flight batch may finish after disabling it. Transient errors expose
+last-good data as stale. Observations older than six hours are removed. Worldwide
+availability does not mean every country or city has a current monitor.
+
+SAAQIS remains a national provider: the [South African government describes its
+scope as South Africa](https://www.gov.za/news/media-statements/south-african-air-quality-information-systems-saaqis-launched-department).
+Its adapter already discovers all returned regions, not a Western Cape allowlist.
+No worldwide SAAQIS network was found.
 
 OpenAQ supplies concentrations, not ratings. Records retain original units,
 network/owner, licences, observation time and unknown averaging duration. A
@@ -228,3 +240,27 @@ credentials), and the South African browser gate. Follow CONTRIBUTING.md for
 full unit/build/tracking checks. See https://docs.openaq.org/using-the-api/api-key,
 https://docs.openaq.org/using-the-api/rate-limits and
 https://docs.openaq.org/api/operations/locations_get_v3_locations_get .
+
+### Authenticated worldwide audit — 20 October 2026
+
+A private operator key was registered, verified and saved through the existing
+Provider Settings endpoint. The countries API returned 159 catalog entries.
+The progressive global audit discovered 25,965 supported stations and
+17,291 recent pollutant records at 7,623 distinct stations in
+113 countries/areas at this snapshot. Catalog discovery was complete;
+observation pagination was still partial. These are observed counts, not promised
+coverage. African results included South Africa, Uganda, Nigeria, Ghana, Kenya,
+Senegal, Cameroon, Egypt, Morocco and Tanzania. Source network attribution is
+retained; these figures do not establish independent coverage from SAAQIS.
+
+Live testing found that a listed parameter can return HTTP 404 from its latest
+endpoint. That feed is treated as unavailable without discarding other pollutants.
+Transient request failures retain successful observations with stale/partial flags;
+authentication failures remain explicit. Regression tests cover these cases.
+
+Validation: 8,240 unit tests passed (one skipped), allocation gates passed,
+production build passed, OpenAQ and SAAQIS browser gates passed, and the tracking
+gate passed 109/109 on a fresh development server. An earlier tracking attempt
+hit Vite's stale optimized-dependency HTTP 504; rebuilding dependencies resolved
+it without changes to aircraft code. Formatting, translations and package
+boundaries passed. The private key was absent from tracked files and built assets.

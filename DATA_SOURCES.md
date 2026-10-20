@@ -438,14 +438,14 @@ The required Google Maps / Cesium credit renders on the on-globe credit line (`#
 
 - **South African air quality (SAAQIS).** Optional provider in the existing Air quality layer. Anonymous server-side portal session; no personal key. National catalog discovery across all nine provinces, with no municipality allowlist. A municipality without reporting monitors has no measured coverage. The 20-minute cache and channel-level freshness filtering preserve source units and never infer AQI or emissions. See [access verification, coverage and contributor contract](docs/SOUTH-AFRICA-AIR-QUALITY.md).
 
-### OpenAQ African observations
+### OpenAQ worldwide observations
 
 Optional OpenAQ v3 access uses a private, free-account `OPENAQ_API_KEY` entered
-through Provider Settings. Africa is a geographic scope, not a city allowlist.
+through Provider Settings. Global discovery has no country or city allowlist.
 Station coverage depends on contributing networks and may overlap SAAQIS.
 Concentrations preserve source units, time, network and licence attribution;
 OpenAQ measurements are not presented as an AQI. Standard access is rate-limited;
-GEV acquires stations progressively with process-wide budgets and caching.
+GEV acquires bulk observations progressively with process-wide budgets and caching.
 Original data-provider terms still apply. No downloaded observation archive is
 bundled in the repository. References: [API](https://docs.openaq.org/),
 [terms](https://docs.openaq.org/about/terms),
