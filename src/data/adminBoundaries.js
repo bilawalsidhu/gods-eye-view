@@ -371,6 +371,18 @@ const loadArgentina = createRetryableLoader(async () => {
 async function argentinaCandidates(parsed) {
   const { index } = await loadArgentina();
   const list = index.get(parsed.full) || index.get(parsed.name) || [];
+  // The official province name itself contains a comma. Keep that pair as
+  // one qualifier without treating arbitrary trailing words as a province.
+  const qualifiers = [];
+  for (let i = 0; i < parsed.qualifiers.length; i += 1) {
+    let q = parsed.qualifiers[i];
+    if (
+      q.replace(/^provincia de /, '') === 'tierra del fuego' &&
+      parsed.qualifiers[i + 1] === 'antartida e islas del atlantico sur'
+    )
+      q += ` ${parsed.qualifiers[++i]}`;
+    qualifiers.push(q);
+  }
   const aliases = new Map([
     ['caba', 'ciudad autonoma de buenos aires'],
     ['ciudad de buenos aires', 'ciudad autonoma de buenos aires'],
@@ -382,7 +394,7 @@ async function argentinaCandidates(parsed) {
   return list.filter(
     ({ entry }) =>
       (!parsed.argentinaWord || entry.unitType === parsed.argentinaWord) &&
-      parsed.qualifiers.every(
+      qualifiers.every(
         (q) =>
           ['argentina', 'ar', 'arg', 'republica argentina'].includes(q) ||
           entry.region ===

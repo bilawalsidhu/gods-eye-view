@@ -28,7 +28,6 @@ const KEYS = [
   'Exit cockpit to fly to a shared view',
   'Go to expanded Radio section',
   'Expand Radio section in Context',
-  'Double-click the header to snap the panel back',
   'New scene name',
   'Delete scene "{scene}" and all shots?',
   'Detailed outline unavailable',

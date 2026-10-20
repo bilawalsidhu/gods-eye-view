@@ -445,6 +445,7 @@ export function createAnnotationResolver({
      * AFTER the anchor mark is drawn and upgrade the mark in place.
      */
     const resolveOutline = async () => {
+      signal?.throwIfAborted();
       let scope = baseScope;
       const isAdmin =
         scope === 'country' ||
@@ -470,6 +471,7 @@ export function createAnnotationResolver({
         const ne = await lookupNaturalRegionOutline(target, lat, lon).catch(
           () => null,
         );
+        signal?.throwIfAborted();
         if (ne) {
           registerDynamicCredit(viewer, NATURAL_EARTH_CREDIT);
           const neCentroid = ringCentroid(ne.ring);
@@ -527,6 +529,7 @@ export function createAnnotationResolver({
             lon,
             scope,
           ).catch(() => null);
+          signal?.throwIfAborted();
           if (admin) return bundledAdminOutline(viewer, admin);
         }
         // Pure admin: only an admin boundary is correct — never fall back to a
@@ -2009,8 +2012,8 @@ export function createAnnotationResolver({
   /**
    * Region ring for ANALYST queries ("how many flights over Texas / the Alps") —
    * a name-only entry point that reuses this module's boundary machinery
-   * without the annotation pipeline. Natural Earth pack first (offline,
-   * instant; largest-area match is correct for a global name-only ask), then
+   * without the annotation pipeline. Unique Natural Earth names resolve first
+   * (offline); duplicate names require a geocoded containment anchor, then
    * geocode + admin boundary for states/countries/counties (Tier A disk-cached
    * Overpass, so repeat asks are instant). Returns null when the name doesn't
    * resolve to a region-like boundary — the analyst engine reports that
@@ -2024,14 +2027,16 @@ export function createAnnotationResolver({
    * @param {string} name  e.g. "Texas", "the Alps", "France", "Gulf of Mexico"
    * @param {AbortSignal} [signal]
    * @param {object} [placeSearch]
-   * @param {{budgetMs?: number}} [options]  `Infinity` waits for the lookup.
-   * @returns {Promise<{name:string, ring:Array<[number,number]>}|{name:string, ring:null, error:'region-timeout'}|null>}
+   * @param {{budgetMs?: number, viewer?: Cesium.Viewer}} [options]
+   *   `Infinity` waits for the lookup. The viewer disambiguates IGN namesakes
+   *   and receives attribution; other countries keep their existing policy.
+   * @returns {Promise<{name:string, ring:Array<[number,number]>, source:string}|{name:string, ring:null, error:'region-timeout'}|null>}
    */
   async function resolveRegionRingForQuery(
     name,
     signal,
     placeSearch = unavailablePlaceSearch,
-    { budgetMs = REGION_FALLBACK_BUDGET_MS } = {},
+    { budgetMs = REGION_FALLBACK_BUDGET_MS, viewer } = {},
   ) {
     signal = lifetime
       ? signal
@@ -2042,18 +2047,35 @@ export function createAnnotationResolver({
     const q = String(name || '').trim();
     if (!q) return null;
     const ne = await findNaturalRegion(q).catch(() => null);
-    if (ne?.polygons?.length) {
+    signal?.throwIfAborted();
+    if (ne?.candidates === 1 && ne.polygons?.length) {
       // Largest ring carries the query scope; multi-ring regions (Andes) keep
       // their main cordillera — good enough for containment counting.
       const ring = [...ne.polygons].sort((a, b) => b.length - a.length)[0];
-      if (ring?.length >= 3) return { name: ne.name, ring };
+      if (ring?.length >= 3)
+        return { name: ne.name, ring, source: 'natural-earth' };
     }
     // Bundled states/provinces/counties by name (offline); the main part only,
     // like the Natural Earth rung above.
-    const admin = await findAdminArea(q).catch(() => null);
-    if (admin) return { name: admin.name, ring: [...admin.ring] };
+    let admin = await findAdminArea(q).catch(() => null);
+    signal?.throwIfAborted();
+    if (admin?.source === 'ign-argentina' && admin.candidates > 1) {
+      // The name-only pack lookup ranks by area without a nearby point.
+      // An analyst must instead use the camera or a geocoded anchor.
+      const near =
+        pickWorldFromScreen(viewer, 0.5, 0.5) || viewportProximity(viewer);
+      admin = near ? await findAdminArea(q, { near }).catch(() => null) : null;
+      signal?.throwIfAborted();
+    }
+    if (admin) return bundledAdminRegion(admin, admin.name, viewer);
     const lookup = resolveAdminRegionRing(q, signal, placeSearch);
-    if (!Number.isFinite(budgetMs)) return lookup;
+    const finish = (region) => {
+      signal?.throwIfAborted();
+      if (region?.source === 'ign-argentina')
+        registerDynamicCredit(viewer, IGN_ARGENTINA_ADMIN_CREDIT);
+      return region;
+    };
+    if (!Number.isFinite(budgetMs)) return finish(await lookup);
     let timer;
     const timeout = new Promise((resolve) => {
       timer = setTimeout(
@@ -2062,18 +2084,46 @@ export function createAnnotationResolver({
       );
     });
     try {
-      return await Promise.race([lookup, timeout]);
+      return finish(await Promise.race([lookup, timeout]));
     } finally {
       clearTimeout(timer);
     }
+  }
+
+  /** Keep IGN's specific provenance through analyst coverage and follow-ups. */
+  function bundledAdminRegion(admin, name, viewer) {
+    creditAdminSource(viewer, admin);
+    return {
+      name,
+      ring: [...admin.ring],
+      source: admin.source === 'ign-argentina' ? admin.source : 'bundled-admin',
+    };
   }
 
   async function resolveAdminRegionRing(q, signal, placeSearch) {
     const geo = await geocodePlace(q, null, signal, placeSearch).catch(
       () => null,
     );
+    signal?.throwIfAborted();
     if (!geo) return null;
     const scope = scopeFromTypes(geo.types);
+    if (
+      scope === 'auto' ||
+      (scope === 'compound' && geo.types?.includes('natural_feature'))
+    ) {
+      const natural = await lookupNaturalRegionOutline(
+        q,
+        geo.lat,
+        geo.lon,
+      ).catch(() => null);
+      signal?.throwIfAborted();
+      if (natural)
+        return {
+          name: natural.name,
+          ring: natural.ring,
+          source: 'natural-earth',
+        };
+    }
     if (!['country', 'state', 'county', 'city'].includes(scope)) return null;
     if (scope === 'state' || scope === 'county' || scope === 'country') {
       const admin = await findAdminAreaAt(
@@ -2082,12 +2132,15 @@ export function createAnnotationResolver({
         geo.lon,
         scope,
       ).catch(() => null);
-      if (admin) return { name: q, ring: [...admin.ring] };
+      signal?.throwIfAborted();
+      if (admin) return bundledAdminRegion(admin, q);
     }
     const fp = await fetchAdminArea(geo.lat, geo.lon, q, scope, signal).catch(
       () => null,
     );
-    if (fp?.ring?.length >= 3) return { name: q, ring: fp.ring };
+    signal?.throwIfAborted();
+    if (fp?.ring?.length >= 3)
+      return { name: q, ring: fp.ring, source: 'remote-boundary' };
     return null;
   }
 
