@@ -1,5 +1,14 @@
 # God's Eye View Current State
 
+## ABYSS: Deep-Sea Exploration & Intelligence — October 2026
+
+The ABYSS layer integrates ocean floor exploration into God's Eye View, bringing together global GEBCO bathymetry, NOAA PMEL global hydrothermal vent records, and NOAA Ocean Exploration ROV dive tracks.
+
+- **Bathymetry visualization:** Uses the verified GEBCO Web Map Service (WMS) to drape colored shaded bathymetry (`GEBCO_LATEST_2`), shaded relief (`GEBCO_LATEST`), or survey type identification (`GEBCO_LATEST_TID`) on the globe. It provides an interactive depth legend running from 0 m down to -11,000 m. *Limitation:* The visualization drapes high-resolution depth and relief imagery over the Earth surface; it does not displace the Cesium globe's physical terrain into true 3D underwater trenches.
+- **Hydrothermal vent catalog:** Displays documented hydrothermal vent fields sourced from the NOAA PMEL Earth-Ocean Interactions program. Markers distinguish active fields (thermal amber-orange), relict/inactive fields (slate-cyan), and unconfirmed/inferred locations (yellow). Selecting a vent opens its scientific detail panel displaying reported depth, coordinates, tectonic setting, spreading rate, and direct links to scientific literature.
+- **Expedition ROV dives and tracks:** Integrates documented deep-sea research expeditions conducted by NOAA Ship *Okeanos Explorer* using ROV *Deep Discoverer*. Querying the NOAA Ocean Exploration ArcGIS FeatureServer populates dive locations. On selection, the vehicle's bottom dive track is fetched on-demand and rendered as a high-visibility subsea polyline alongside vessel, year, dive duration, and archival links.
+- **Resilience and provenance:** Vents are served via `/api/abyss/vents` (cached for 24 hours), with seamless fallback to a verified bundled PMEL snapshot if network or upstream services are unavailable. Layer parameters (`bathymetryEnabled`, `bathymetryProduct`, `subseaFeaturesFilter`) and share tokens round-trip cleanly via layer token reservation `5`.
+
 Shared distance checks use `src/geoDistance.js` with `{ lat, lon }` points and
 the IUGG mean spherical Earth radius, 6371.0088 km. `greatCircleKm` is
 canonical; `greatCircleMeters` is its exact metre conversion. Missing,
