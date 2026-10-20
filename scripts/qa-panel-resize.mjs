@@ -298,11 +298,12 @@ async function main() {
     );
     console.log('PASS: header drag lifts CCTV out of the rail');
 
-    // Park near the top: the voice dock would cover the south corners once
-    // the loop below has grown the window.
+    // Park above and right of the voice dock and its raised provider chooser:
+    // growing every edge must leave the south handles clear of both controls.
     {
+      const panel = await readPanel();
       const header = await headerPoint();
-      await drag(header, 0, 120 - header.y);
+      await drag(header, 900 - panel.left, 120 - header.y);
     }
 
     const limits = {

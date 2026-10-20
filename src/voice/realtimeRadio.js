@@ -247,7 +247,9 @@ export class RealtimeRadio {
           handoffChannel?.readyState === 'open',
       },
     );
-    const stillCurrent = handoffEpoch === this.radioHandoffEpoch;
+    const stillCurrent =
+      handoffEpoch === this.radioHandoffEpoch &&
+      this.radioHandoffAttemptId === handoffAttemptId;
     if (this.radioHandoffAttemptId === handoffAttemptId) {
       this.radioHandoffInFlight = false;
       this.radioHandoffAttemptId = null;
@@ -264,6 +266,25 @@ export class RealtimeRadio {
         'Say exactly one short correction: “The Radio station could not start. Voice is still on.”',
       );
     }
+  }
+
+  /** Revoke one call's prepared/preflight result, preserving other owners. */
+  cancelPlaybackResult(result) {
+    if (!result) return;
+    if (this.pendingRadioPlaybackResult === result) {
+      this.pendingRadioPlaybackResult = null;
+      this.radioHandoffDeferredByReservation = false;
+    }
+    if (this.radioHandoffInFlightResult !== result) return;
+    const attemptId = this.radioHandoffAttemptId;
+    const shouldStopPlayback = this.radioHandoffInFlight;
+    this.radioHandoffInFlightResult = null;
+    this.radioHandoffInFlight = false;
+    this.radioHandoffAttemptId = null;
+    // Keep the group epoch and sibling reservations; release ownership before
+    // Stop can synchronously notify playback observers.
+    if (shouldStopPlayback)
+      this.radioLayer?.stopPlayback?.({ origin: 'voice-cleanup', attemptId });
   }
 
   /** Invalidate delayed Radio work inside the requested authority scope. */

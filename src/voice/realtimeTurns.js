@@ -137,7 +137,7 @@ export class RealtimeTurns {
         content: [{ type: 'input_text', text: cleanText }],
       },
     };
-    this.sendRealtimeEvent(itemEvent, 'client.user_text');
+    if (!this.sendRealtimeEvent(itemEvent, 'client.user_text')) return;
     this.requestUserTextResponse();
   }
 
