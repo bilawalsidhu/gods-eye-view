@@ -157,10 +157,10 @@ test('total outage retains failed-window cooldown', async (t) => {
   let online = false;
   const { request, calls, cacheDir, advance } = await fixture(t, {
     key: 'fixture-key',
-    fetchImpl: () =>
-      online
-        ? new Response(CSV)
-        : new Response('unavailable', { status: 503 }),
+    fetchImpl: () => {
+      if (online) return new Response(CSV);
+      return new Response('unavailable', { status: 503 });
+    },
   });
 
   assert.equal((await request('/test-fire-2018')).status, 502);
