@@ -6,3 +6,5 @@
   vessel cards painted over them remain clickable. Credits: kvnloo (#811),
   the original GEV layer contributors and quanticsoul4772's independent
   Windows review of #811.
+
+Foreground overlay cards take precedence over earthquake discs in either click-listener order. Failed snapshot staging preserves both the displayed events and their selection metadata.

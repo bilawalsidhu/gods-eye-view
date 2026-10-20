@@ -845,6 +845,8 @@ snapshots preserve the last good display. Refresh restoration keeps selection
 identity without announcing a new user selection. Source/label, LOD thresholds,
 card limits, fire identities, altitude placement and analyst records are retained.
 
+Foreground overlay cards take precedence over earthquake discs in either click-listener order. Failed snapshot staging preserves both the displayed events and their selection metadata.
+
 Earthquake rendering is exposed through `./layers/earthquakes`. The layer owns
 its entities and request lifecycle; the application supplies the overlay host
 and snapshot source. The standalone adapter keeps the existing USGS daily feed,

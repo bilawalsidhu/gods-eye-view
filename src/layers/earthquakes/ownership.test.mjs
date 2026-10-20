@@ -1,8 +1,18 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import * as realContext from '../../data/contextStore.js';
 import { createEarthquakesLayer } from './index.js';
 import { createUsgsEarthquakeSource } from './source.js';
-function harness(source, { pick = () => null } = {}) {
+function harness(
+  source,
+  {
+    pick = () => null,
+    canvas,
+    contextOwner = null,
+    cardHit = () => null,
+    pointerFree = () => true,
+  } = {},
+) {
   const sources = [];
   const events = [];
   const clicks = { handler: null, destroyed: 0 };
@@ -14,7 +24,7 @@ function harness(source, { pick = () => null } = {}) {
     clearReasons: [],
   };
   const viewer = {
-    scene: { pick },
+    scene: { pick, canvas },
     dataSources: {
       add(value) {
         sources.push(value);
@@ -27,6 +37,7 @@ function harness(source, { pick = () => null } = {}) {
   const layer = createEarthquakesLayer({
     source,
     overlayHost: {
+      hitTest: cardHit,
       setEntries(...args) {
         events.push(args);
       },
@@ -59,8 +70,8 @@ function harness(source, { pick = () => null } = {}) {
         owners.delete(layerId);
       },
     },
-    pointer: { isPointerFree: () => true },
-    context: {
+    pointer: { isPointerFree: pointerFree },
+    context: contextOwner || {
       registerEntityContext(entity, metadata) {
         entity.__gevContextId = metadata.id;
         const record = { ...metadata, entity };
@@ -236,4 +247,182 @@ test('USGS body completion honors cancellation even with an uncooperative transp
   await assert.rejects(source.getSnapshot({ signal: abort.signal }), {
     name: 'AbortError',
   });
+});
+
+function installRealContextHost(t) {
+  const previous = globalThis.window;
+  const cleanup = [];
+  globalThis.window = new EventTarget();
+  t.after(() => {
+    for (const release of cleanup) release();
+    if (previous === undefined) delete globalThis.window;
+    else globalThis.window = previous;
+  });
+  const events = [];
+  window.addEventListener('gev:entity-selected', (event) =>
+    events.push(['selected', event.detail.id]),
+  );
+  window.addEventListener('gev:entity-selection-cleared', (event) =>
+    events.push(['cleared', event.detail.reason]),
+  );
+  return { events, cleanup };
+}
+
+function clickCanvas() {
+  const listeners = new Map();
+  return {
+    getBoundingClientRect: () => ({ left: 20, top: 30 }),
+    addEventListener(type, callback, options) {
+      assert.equal(options.capture, true);
+      listeners.set(type, callback);
+    },
+    removeEventListener(type, callback, options) {
+      assert.equal(options.capture, true);
+      assert.equal(listeners.get(type), callback);
+      listeners.delete(type);
+    },
+    emit(type, touch = false) {
+      const point = { clientX: 25, clientY: 37 };
+      listeners.get(type)?.(touch ? { changedTouches: [point] } : point);
+    },
+    listeners,
+  };
+}
+
+test('foreground sibling overlays own shared selection in either listener order', async (t) => {
+  const { events, cleanup } = installRealContextHost(t);
+  for (const siblingFirst of [false, true]) {
+    for (const sourceId of ['firms-test', 'ais-test']) {
+      let hit = { sourceId, entryId: 'sibling-card' };
+      const canvas = clickCanvas();
+      const h = harness(
+        { getSnapshot: async () => [row] },
+        {
+          pick: () => ({ id: 'earthquake:event-a' }),
+          canvas,
+          contextOwner: realContext,
+          cardHit: (_x, _y, options) => {
+            assert.equal(options, undefined);
+            return hit;
+          },
+        },
+      );
+      cleanup.push(() => h.layer.destroy());
+      await h.layer.update(h.viewer);
+      const sibling = { show: true };
+      realContext.registerEntityContext(sibling, {
+        id: 'sibling',
+        layerId: sourceId,
+      });
+      const selectSibling = () => {
+        realContext.selectEntityContext(sibling);
+        hit = null; // Sibling publication invalidates overlay rectangles.
+      };
+      events.length = 0;
+      canvas.emit('mouseup');
+      if (siblingFirst) selectSibling();
+      h.clicks.handler({ position: { x: 5, y: 7 } });
+      if (!siblingFirst) selectSibling();
+      assert.equal(realContext.getSelectedEntityContext().id, 'sibling');
+      assert.deepEqual(events, [['selected', 'sibling']]);
+      h.layer.destroy();
+      assert.equal(canvas.listeners.size, 0);
+    }
+  }
+});
+
+test('touch capture resets, respects pointer ownership and releases on disable', async (t) => {
+  const { events, cleanup } = installRealContextHost(t);
+  const canvas = clickCanvas();
+  let hit = { sourceId: 'sibling-overlay', entryId: 'sibling-card' };
+  let pointerFree = true;
+  const h = harness(
+    { getSnapshot: async () => [row] },
+    {
+      pick: () => ({ id: 'earthquake:event-a' }),
+      canvas,
+      contextOwner: realContext,
+      cardHit: () => hit,
+      pointerFree: () => pointerFree,
+    },
+  );
+  cleanup.push(() => h.layer.destroy());
+  await h.layer.update(h.viewer);
+  canvas.emit('touchend', true);
+  hit = null;
+  h.clicks.handler({ position: { x: 5, y: 7 } });
+  assert.deepEqual(events, []);
+  hit = { sourceId: 'sibling-overlay' };
+  canvas.emit('touchend', true);
+  hit = null;
+  h.clicks.handler({ position: { x: 9, y: 7 } });
+  assert.equal(
+    events.length,
+    1,
+    'a different click position uses its current hit instead of stale capture',
+  );
+  events.length = 0;
+  canvas.emit('touchend', true);
+  pointerFree = false;
+  h.clicks.handler({ position: { x: 5, y: 7 } });
+  assert.deepEqual(events, []);
+  pointerFree = true;
+  hit = { sourceId: 'sibling-overlay' };
+  canvas.emit('touchend', true);
+  canvas.emit('touchcancel');
+  hit = null;
+  h.clicks.handler({ position: { x: 5, y: 7 } });
+  assert.equal(
+    events.length,
+    1,
+    'cancelled capture cannot suppress a later ground click',
+  );
+  const oldHandler = h.clicks.handler;
+  h.layer.disable();
+  assert.equal(canvas.listeners.size, 0);
+  events.length = 0;
+  oldHandler({ position: { x: 5, y: 7 } });
+  assert.deepEqual(events, [], 'released handlers cannot reselect');
+  h.layer.enable();
+  assert.equal(canvas.listeners.size, 8);
+  h.layer.destroy();
+  assert.equal(canvas.listeners.size, 0);
+});
+
+test('failed earthquake staging retains the displayed snapshot and its pick metadata', async (t) => {
+  const { events, cleanup } = installRealContextHost(t);
+  let rows = [row];
+  const h = harness(
+    { getSnapshot: async () => rows },
+    {
+      pick: () => ({ id: 'earthquake:event-a' }),
+      contextOwner: realContext,
+    },
+  );
+  cleanup.push(() => h.layer.destroy());
+  await h.layer.update(h.viewer);
+  const displayed = h.sources[0].entities.values[0];
+  rows = [
+    { ...row, lat: 22 },
+    {
+      stableId: 'event-b',
+      get lon() {
+        throw new Error('Injected row conversion failure');
+      },
+    },
+  ];
+  assert.equal(await h.layer.update(h.viewer), false);
+  assert.equal(h.sources[0].entities.values[0], displayed);
+  h.clicks.handler({ position: { x: 1, y: 1 } });
+  assert.equal(realContext.getSelectedEntityContext().latitude, row.lat);
+  assert.deepEqual(events, [['selected', 'earthquake:event-a']]);
+  events.length = 0;
+  rows = [{ ...row, lat: 21 }];
+  await h.layer.update(h.viewer);
+  assert.equal(realContext.getSelectedEntityContext().latitude, 21);
+  assert.deepEqual(
+    events,
+    [],
+    'successful refresh updates metadata without reselecting',
+  );
 });

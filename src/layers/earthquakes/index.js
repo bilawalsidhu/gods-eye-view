@@ -35,6 +35,7 @@ export function createEarthquakesLayer({
   let _lastError = null;
   let _enabled = false;
   let _clickHandler = null;
+  let _removeClickCapture = null;
   let _selectedId = null;
   let _selectedContextEntity = null;
   const _rowById = new Map();
@@ -100,9 +101,60 @@ export function createEarthquakesLayer({
     // fire perimeters): sibling layers yield to owned picks before their own
     // overlay-card hit-tests, so claiming these ground discs would make
     // FIRMS/vessel cards and near-miss radio picks inert over any quake.
-    _clickHandler = screenSpaceEventHandlerFactory(_viewer);
-    _clickHandler.setInputAction((click) => {
+    const owner = screenSpaceEventHandlerFactory(_viewer);
+    _clickHandler = owner;
+    // Read the topmost overlay before sibling click handlers rebuild its hits.
+    const canvas = _viewer.scene.canvas;
+    let capturedHit = null;
+    const overlayHit = (x, y) => {
+      const hit = overlayHost.hitTest?.(x, y);
+      return { sourceId: hit?.sourceId, entryId: hit?.entryId };
+    };
+    const resetCapture = () => {
+      capturedHit = null;
+    };
+    const capture = (event) => {
+      resetCapture();
+      const point = event.changedTouches?.[0] || event;
+      if (!Number.isFinite(point.clientX) || !Number.isFinite(point.clientY))
+        return;
+      const rect = canvas.getBoundingClientRect();
+      const x = point.clientX - rect.left,
+        y = point.clientY - rect.top;
+      capturedHit = { x, y, ...overlayHit(x, y) };
+    };
+    const resetEvents = [
+      'pointerdown',
+      'mousedown',
+      'touchstart',
+      'pointercancel',
+      'touchcancel',
+    ];
+    const captureEvents = ['pointerup', 'mouseup', 'touchend'];
+    for (const type of resetEvents)
+      canvas?.addEventListener?.(type, resetCapture, { capture: true });
+    for (const type of captureEvents)
+      canvas?.addEventListener?.(type, capture, { capture: true });
+    _removeClickCapture = () => {
+      for (const type of resetEvents)
+        canvas?.removeEventListener?.(type, resetCapture, { capture: true });
+      for (const type of captureEvents)
+        canvas?.removeEventListener?.(type, capture, { capture: true });
+      resetCapture();
+    };
+    owner.setInputAction((click) => {
+      const nativeHit = capturedHit;
+      resetCapture();
+      if (!_enabled || _clickHandler !== owner || !click?.position) return;
       if (pointer && !pointer.isPointerFree()) return;
+      const captureMatches =
+        nativeHit &&
+        Math.abs(nativeHit.x - click.position.x) < 1 &&
+        Math.abs(nativeHit.y - click.position.y) < 1;
+      const hit = captureMatches
+        ? nativeHit
+        : overlayHit(click.position.x, click.position.y);
+      if (hit.sourceId && hit.sourceId !== EARTHQUAKE_OVERLAY_SOURCE_ID) return;
       const picked = _viewer.scene.pick(click.position);
       const earthquakeId = pickedEarthquakeId(picked);
       if (earthquakeId) {
@@ -120,6 +172,8 @@ export function createEarthquakesLayer({
   }
 
   function removeClickHandler() {
+    _removeClickCapture?.();
+    _removeClickCapture = null;
     if (_clickHandler) {
       _clickHandler.destroy();
       _clickHandler = null;
@@ -180,7 +234,7 @@ export function createEarthquakesLayer({
         const nextEntities = [];
         let count = 0;
         const overlayEntries = [];
-        _rowById.clear();
+        const nextRowById = new Map();
 
         for (const {
           stableId,
@@ -192,7 +246,7 @@ export function createEarthquakesLayer({
           place,
           time,
         } of rows) {
-          _rowById.set(String(stableId), {
+          nextRowById.set(String(stableId), {
             stableId: String(stableId),
             usgsId,
             lon,
@@ -249,6 +303,8 @@ export function createEarthquakesLayer({
 
         _dataSource.entities.removeAll();
         for (const entity of nextEntities) _dataSource.entities.add(entity);
+        _rowById.clear();
+        for (const [id, row] of nextRowById) _rowById.set(id, row);
         if (_enabled) {
           overlayHost.setEntries(
             EARTHQUAKE_OVERLAY_SOURCE_ID,
