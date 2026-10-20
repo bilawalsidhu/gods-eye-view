@@ -298,11 +298,12 @@ async function main() {
     );
     console.log('PASS: header drag lifts CCTV out of the rail');
 
-    // Park near the top: the voice dock would cover the south corners once
-    // the loop below has grown the window.
+    // Park above and right of the voice dock and its raised provider chooser:
+    // growing every edge must leave the south handles clear of both controls.
     {
+      const panel = await readPanel();
       const header = await headerPoint();
-      await drag(header, 0, 120 - header.y);
+      await drag(header, 900 - panel.left, 120 - header.y);
     }
 
     const limits = {
@@ -381,11 +382,36 @@ async function main() {
       );
       await nextFrames(page);
     };
-    await drag(handlePoint(await readPanel(), 'se'), 0, 200);
-    const chosen = await readPanel();
+    // Grow it from the corner once the restored window holds still, with the
+    // pointer really on the handle (a press beside it selects page text).
+    let chosen = await readPanel();
+    const tried = [];
+    for (
+      let attempt = 0;
+      attempt < 3 && chosen.height <= MIN_SIZE.height + 150;
+      attempt++
+    ) {
+      await settle();
+      const box = await readPanel();
+      const corner = handlePoint(box, 'se');
+      const hit = await page.evaluate(({ x, y }) => {
+        const node = document.elementFromPoint(x, y);
+        return {
+          dir: node?.dataset?.dir || null,
+          target: node
+            ? `${node.tagName.toLowerCase()}${node.id ? `#${node.id}` : ''}.${[...node.classList].join('.')}`
+            : 'nothing',
+        };
+      }, corner);
+      tried.push(
+        `${Math.round(corner.x)},${Math.round(corner.y)} on ${hit.target} (box ${Math.round(box.left)},${Math.round(box.top)} ${Math.round(box.width)}x${Math.round(box.height)})`,
+      );
+      if (hit.dir === 'se') await drag(corner, 0, 200);
+      chosen = await readPanel();
+    }
     assert.ok(
       chosen.height > MIN_SIZE.height + 150,
-      `the window grew to ${chosen.height}px`,
+      `the window grew to ${chosen.height}px; tried ${tried.join('; ')}`,
     );
     await setCollapsed(true);
     const strip = await readPanel();

@@ -6,6 +6,7 @@ export {
   ERROR_BACKOFF_INTERVAL,
 } from './recordPolicy.js';
 import * as Cesium from 'cesium';
+import { EMERGENCY_TINT_CSS } from '../../data/aircraftEmergency.js';
 
 /**
  * @module militaryFlights
@@ -39,6 +40,11 @@ export const MIL_ICON_COLOR = Cesium.Color.fromCssColorString('#FFB800');
 /** @constant {Cesium.Color} Lighter amber tint applied to the actively tracked aircraft */
 
 export const TRACKED_ICON_COLOR = Cesium.Color.fromCssColorString('#FFD166');
+
+/** @constant {Cesium.Color} Red tint for aircraft broadcasting an emergency (mirror of flights) */
+
+export const EMERGENCY_ICON_COLOR =
+  Cesium.Color.fromCssColorString(EMERGENCY_TINT_CSS);
 
 // --- Ground traffic (owner reversal 2026-07-03; mirror of flights.js) ---------------
 // adsb.lol/readsb flags ground traffic with alt_baro === "ground" (no separate

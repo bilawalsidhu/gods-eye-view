@@ -272,27 +272,25 @@ export function createTerrainHeights({
     const uncached = [];
     const seenKeys = new Set();
     const now = Date.now();
+    // What this call resolved or found warm, so the assembly below can report a
+    // point even if a later chunk's writes pushed it past CACHE_MAX_ENTRIES.
+    // Without it a batch big enough to evict its own entries would report
+    // points as unresolved that it had in fact resolved.
+    const resolvedThisCall = new Map();
     for (const item of work) {
-      const entry = cache.get(item.key);
+      const entry = cacheTouch(item.key);
       const fallbackCooling =
         entry?.source === 'geoid-fallback' &&
         Number.isFinite(entry.retryAt) &&
         now < entry.retryAt;
-      if (
-        (entry && entry.source === 'reearth') ||
-        fallbackCooling ||
-        seenKeys.has(item.key)
-      )
+      if ((entry && entry.source === 'reearth') || fallbackCooling) {
+        resolvedThisCall.set(item.key, entry);
         continue;
+      }
+      if (seenKeys.has(item.key)) continue;
       seenKeys.add(item.key);
       uncached.push(item);
     }
-
-    // What this call resolved, so the assembly below can report a point even
-    // if a later chunk's writes pushed it past CACHE_MAX_ENTRIES. Without it a
-    // batch big enough to evict its own earlier chunks would report points as
-    // unresolved that it had in fact just resolved.
-    const resolvedThisCall = new Map();
 
     // Resolve the network path in sequential <=CHUNK_SIZE chunks. Each chunk's
     // failure is isolated to that chunk's points (geoid fallback), so a single

@@ -1,5 +1,17 @@
 import { locationMiniStatus } from '../locationStatus.js';
+import { t } from '../i18n/index.js';
+import { localizePlaceName } from './placeNames.js';
+
 const POI_KEYS = ['Q', 'W', 'E', 'R', 'T'];
+
+/**
+ * locationStatus.js placeholder lines, built by the module itself; renderStatus
+ * swaps them for translated text. Place names are shown as they are.
+ */
+const LOCATION_MINI_EMPTY = Object.freeze(locationMiniStatus());
+const LOCATION_MINI_SEARCHED_PLACEHOLDER = Object.freeze(
+  locationMiniStatus({ searchedLabel: '·' }),
+);
 
 /** Location DOM, keyboard handling and pending row animation over supplied actions. */
 export class LocationControls {
@@ -38,7 +50,7 @@ export class LocationControls {
       pill.type = 'button';
       pill.className = 'location-pill';
       pill.dataset.locationId = id;
-      pill.textContent = city.name;
+      pill.textContent = localizePlaceName(city.name);
       this.bind(pill, 'click', () => onCity(id));
       elements.pills.appendChild(pill);
     }
@@ -129,12 +141,28 @@ export class LocationControls {
     for (const pill of this.elements.pills.querySelectorAll('.location-pill'))
       pill.classList.toggle('active', pill.dataset.locationId === id);
   }
-  renderStatus(state) {
+  renderStatus(record) {
     if (this.destroyed || !this.elements.statusCity || !this.elements.statusPoi)
       return;
+    // A preset city shows its name in the UI language; the record stays English.
+    const state = record?.city?.name
+      ? {
+          ...record,
+          city: { ...record.city, name: localizePlaceName(record.city.name) },
+        }
+      : record;
     const lines = locationMiniStatus(state);
-    this.elements.statusCity.textContent = lines.city;
-    this.elements.statusPoi.textContent = lines.poi;
+    this.elements.statusCity.textContent =
+      lines.city === LOCATION_MINI_EMPTY.city
+        ? t('📍 Location: --')
+        : lines.city;
+    if (lines.poi === LOCATION_MINI_EMPTY.poi) {
+      this.elements.statusPoi.textContent = t('Landmark: --');
+    } else if (lines.poi === LOCATION_MINI_SEARCHED_PLACEHOLDER.poi) {
+      this.elements.statusPoi.textContent = t('Searched location');
+    } else {
+      this.elements.statusPoi.textContent = lines.poi;
+    }
   }
   createOrbitIndicator() {
     if (this.destroyed) return null;
@@ -144,7 +172,7 @@ export class LocationControls {
       const icon = this.doc.createElement('span');
       icon.className = 'orbit-icon';
       icon.textContent = '↻';
-      this.orbitIndicator.append(icon, ' ORBIT');
+      this.orbitIndicator.append(icon, ` ${t('ORBIT')}`);
       this.doc.body.appendChild(this.orbitIndicator);
     }
     return this.orbitIndicator;

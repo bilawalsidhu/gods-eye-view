@@ -1,4 +1,5 @@
 [
+  ["air-quality", "4"],
   ["ais-live-vessels", "a"],
   ["alpr-cameras", "p"],
   ["bhote-koshi-2026", "h"],
@@ -9,6 +10,7 @@
   ["earthquakes", "e"],
   ["fire-perimeters", "2"],
   ["flights", "f"],
+  ["gnss-integrity", "3"],
   ["local-dams", "q"],
   ["local-datacenters", "d"],
   ["local-firms", "w"],

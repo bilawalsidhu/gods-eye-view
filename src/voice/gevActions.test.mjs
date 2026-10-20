@@ -1079,7 +1079,9 @@ test('generic layer visibility exposes lifecycle truth for every manager phase a
   });
   // The voice envelope is additive and states the failure plainly.
   assert.equal(say, "Couldn't turn on radio.");
-  assert.equal(display.title, 'radio');
+  // The card names the layer, not its id; the result keeps the id.
+  assert.equal(display.title, 'Radio');
+  assert.deepEqual(display.lines, ['Radio layer unavailable']);
 });
 
 test('generic voice visibility maps Space Missions to the explicit mission layer', async () => {
@@ -3180,7 +3182,7 @@ test('voice Radio: a key that geocodes to nothing still places the station, keyl
   const requests = [];
   installKeyedFetch(t, async (url) => {
     requests.push(String(url));
-    if (String(url).startsWith('https://maps.googleapis.com/')) {
+    if (String(url).startsWith('/api/google/geocode')) {
       return { ok: true, json: async () => ({ status: 'ZERO_RESULTS', results: [] }) };
     }
     assert.match(String(url), /^https:\/\/photon\.komoot\.io\/api\/\?/);
@@ -3205,7 +3207,7 @@ test('voice Radio: a key that geocodes to nothing still places the station, keyl
   assert.ok(Math.abs(calls[0].criteria.anchor.lat - 20.9101) < 1e-9);
   assert.ok(Math.abs(calls[0].criteria.anchor.lon - 107.1839) < 1e-9);
   // Google is asked first and exactly once; Photon answers unbiased, in one call.
-  assert.equal(requests.filter((url) => url.includes('maps.googleapis.com')).length, 1);
+  assert.equal(requests.filter((url) => url.includes('/api/google/geocode')).length, 1);
   assert.equal(requests.filter((url) => url.includes('photon.komoot.io')).length, 1);
   assert.match(requests.at(-1), /[?&]q=H%E1%BA%A1\+Long\+Bay/);
   assert.doesNotMatch(requests.at(-1), /[?&](lat|lon|bbox)=/, 'a named radio location is not viewport-biased');
@@ -3218,7 +3220,7 @@ test('voice Radio: the keyless path applies no country filter the keyed path wou
   // "No Radio station matched" for exactly the places it just resolved, while a
   // keyed install placed a station. The label may carry it; the filter may not.
   const { calls, dataManager } = radioSelectionHarness();
-  installKeyedFetch(t, async (url) => (String(url).startsWith('https://maps.googleapis.com/')
+  installKeyedFetch(t, async (url) => (String(url).startsWith('/api/google/geocode')
     ? { ok: true, json: async () => ({ status: 'ZERO_RESULTS', results: [] }) }
     : {
       ok: true,
@@ -3259,6 +3261,30 @@ test('ALPR common names toggle only the registered camera layer through the norm
       assert.equal(result.ok, true);
       assert.equal(result.layerId, 'alpr-cameras');
       assert.deepEqual(calls.at(-1), ['alpr-cameras', value]);
+    }
+  }
+});
+
+test('GNSS integrity and interference common names toggle only the GNSS layer through the normal voice action', async () => {
+  globalThis.window = globalThis.window || { clearTimeout, setTimeout, requestIdleCallback: null };
+  const viewer = { clock: { onTick: { addEventListener: () => () => {} } },
+    scene: { canvas: { addEventListener() {}, removeEventListener() {} } },
+    camera: { moveEnd: { addEventListener() {} } } };
+  const calls = [];
+  let enabled = false;
+  const dataManager = {
+    layers: new Map([['gnss-integrity', { module: {} }]]),
+    getAll: () => [{ id: 'gnss-integrity', name: 'GNSS Integrity' }],
+    isEnabled: () => enabled,
+    setEnabled: async (id, value) => { calls.push([id, value]); enabled = value; return true; },
+  };
+  const runner = createGevActionRunner({ viewer, styleManager: {}, dataManager });
+  for (const alias of ['gnss-integrity', 'gnss integrity', 'navigation integrity', 'low navigation accuracy', 'gnss interference', 'gps interference', 'gps jamming', 'gnss']) {
+    for (const value of [true, false]) {
+      const result = await runner('set_layer_visibility', { layerId: alias, enabled: value });
+      assert.equal(result.ok, true);
+      assert.equal(result.layerId, 'gnss-integrity');
+      assert.deepEqual(calls.at(-1), ['gnss-integrity', value]);
     }
   }
 });
@@ -3457,6 +3483,26 @@ test('analyst_query refusals carry their code and the allowed values', async () 
   const ok = await runner('analyst_query', { layers: ['earthquakes'], scope: { kind: 'anywhere' } });
   assert.equal(ok.display.window, 'last 24 h');
   assert.match(ok.items[0].time, /^\d{4}-\d\d-\d\dT/);
+});
+
+test('analyst_query keeps its answer when one record has an out-of-range time', async () => {
+  globalThis.window = globalThis.window || { clearTimeout, setTimeout, requestIdleCallback: null };
+  const now = Date.now();
+  const earthquakes = {
+    getStats: () => ({ count: 2, lastUpdate: now }),
+    getAnalystRecords: () => [
+      { id: 'q', lat: 0, lon: 0, magnitude: 5, timeMs: now },
+      { id: 'r', lat: 1, lon: 1, magnitude: 4, timeMs: 8.64e15 + 1 },
+    ],
+  };
+  const { runner } = manifestRunner({ earthquakes }, { enabled: ['earthquakes'] });
+  const result = await runner('analyst_query', { layers: ['earthquakes'], scope: { kind: 'anywhere' } });
+  assert.equal(result.ok, true);
+  const q = result.items.find((item) => item.id === 'q');
+  assert.match(q.time, /^\d{4}-\d\d-\d\dT/);
+  const r = result.items.find((item) => item.id === 'r');
+  assert.ok(r, 'the record is still listed');
+  assert.equal(r.time, undefined, 'an unrepresentable time is omitted');
 });
 
 test('spoken layer names from the manifest reach the newer layers', async () => {

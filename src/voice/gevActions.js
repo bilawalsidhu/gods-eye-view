@@ -1,6 +1,5 @@
 import {
   layerSnapshot,
-  layerSnapshots,
   feedProvenanceEnvelope,
 } from '../data/layerSnapshot.js';
 import { readLayerLifecycleSummary } from './layerSummary.js';
@@ -8,9 +7,11 @@ import { SPEECH_BUILDERS, attachVoiceResult } from './speech.js';
 import { resolveDeicticArgs } from './deixis.js';
 export { readLayerLifecycleSummary } from './layerSummary.js';
 import { defaultGeospatial } from '../search/defaults.js';
+import { msg } from '../i18n/index.js';
 import * as Cesium from 'cesium';
+import { CITY_POIS } from '../cityPois.js';
+import { greatCircleKm } from '../geoDistance.js';
 import {
-  CITY_POIS,
   findPoiByName,
   flyToGlobeView,
   flyToLandmark,
@@ -25,7 +26,6 @@ import {
   isContextRecordActive,
 } from '../data/contextStore.js';
 import { CCTV_FOCUS_RESULT } from '../layers/cctv/index.js';
-import { contextModeWord } from '../contextModePolicy.js';
 import {
   createAnalystEngine,
   normalizeAnalystSpec,
@@ -46,6 +46,12 @@ import { unavailablePlaceSearch } from '../search/placeSearch.js';
 import * as defaultAnnotationResolver from '../annotations/annotationResolver.js';
 import { normalizeRadioCountryInput } from '../data/radioCountry.js';
 import { TR3B_CLASS } from '../data/tr3bRegistry.js';
+import {
+  getWorldPacket,
+  withContextModeVocabulary,
+  activeContactsWindow,
+  TRACKABLE_FAMILIES,
+} from '../agent/worldPacket.js';
 
 const ALLOWED_STYLES = new Set([
   'normal',
@@ -117,64 +123,6 @@ const CONTEXT_MODE_ALIASES = new Map([
   ['space-missions', 'space-missions'],
   ['missions', 'space-missions'],
 ]);
-/**
- * Every model-readable field that carries a context-mode id, and what an
- * absent value means for each.
- *
- * `mode` always names a mode, so nothing is 'off'. `entering` and `priorMode`
- * are absent when there is no such mode at all — calling those 'off' would
- * assert a state that does not exist.
- */
-const CONTEXT_MODE_RESULT_FIELDS = Object.freeze([
-  { field: 'mode', emptyAs: 'off' },
-  { field: 'entering', emptyAs: null },
-  { field: 'priorMode', emptyAs: null },
-]);
-
-/** Nested results that are themselves context-mode payloads the model reads. */
-const NESTED_CONTEXT_RESULT_FIELDS = Object.freeze([
-  'context',
-  'contextRollback',
-]);
-
-/**
- * Report a context-mode payload in the tools' own vocabulary.
- *
- * `set_context_mode` accepts 'contacts' while the mode's internal id is
- * 'flights'. Reporting the internal id back made the model read
- * `mode:'flights'` as "Contacts is off" and refuse to answer from the Contacts
- * window counts sitting in the very same payload (owner field session
- * 2026-08-21). Secondary fields and nested transition/rollback results are
- * translated too — one leaked internal id is enough to recreate the confusion,
- * and a rollback result is exactly what the model reads when something went
- * wrong. Each internal id is kept alongside as `<field>Internal` for anything
- * reasoning about layers.
- * @param {object|null|undefined} state Any payload carrying context-mode fields.
- * @returns {object|null|undefined} The same payload, modes translated.
- */
-function withContextModeVocabulary(state) {
-  if (!state || typeof state !== 'object') return state;
-  let out = state;
-  const mutable = () => {
-    if (out === state) out = { ...state };
-    return out;
-  };
-  for (const { field, emptyAs } of CONTEXT_MODE_RESULT_FIELDS) {
-    if (!(field in state)) continue;
-    const internal = state[field] ?? null;
-    const target = mutable();
-    target[field] = contextModeWord(internal, { emptyAs });
-    target[`${field}Internal`] = internal;
-  }
-  for (const field of NESTED_CONTEXT_RESULT_FIELDS) {
-    const nested = state[field];
-    if (!nested || typeof nested !== 'object') continue;
-    const translated = withContextModeVocabulary(nested);
-    if (translated !== nested) mutable()[field] = translated;
-  }
-  return out;
-}
-
 const COCKPIT_ACTION_ALIASES = new Map([
   ['next', 'next'],
   ['previous', 'previous'],
@@ -243,14 +191,6 @@ const STACK_ALIASES = new Map([
   ['roads', 'osm'],
   ['road map', 'osm'],
 ]);
-
-/** Search order for track_entity across entity layer families. */
-const TRACKABLE_FAMILIES = [
-  { layerId: 'flights', kind: 'aircraft' },
-  { layerId: 'military', kind: 'aircraft' },
-  { layerId: 'ais-live-vessels', kind: 'vessel' },
-  { layerId: 'satellites', kind: 'satellite' },
-];
 
 const FRAME_TARGETS = new Map([
   ['flights', 'flights'],
@@ -1442,7 +1382,7 @@ function controlScene(sceneDirector, args = {}) {
     };
   }
   if (sceneAction === 'stop') {
-    sceneDirector.stopScene('Stopped by voice');
+    sceneDirector.stopScene(msg('Stopped by voice'));
     return { ok: true, action: 'control_scene', running: false };
   }
   if (sceneAction === 'next') {
@@ -1643,14 +1583,18 @@ export async function controlCctv(dataManager, args = {}, styleManager = null) {
 }
 
 const RADIO_COUNTRY_CENTERS = new Map([
+  // i18n-ignore: place name in tool data
   ['us', { lat: 39.8, lon: -98.6, country: 'US', label: 'United States' }],
+  // i18n-ignore: place name in tool data
   ['usa', { lat: 39.8, lon: -98.6, country: 'US', label: 'United States' }],
   [
     'united states',
+    // i18n-ignore: place name in tool data
     { lat: 39.8, lon: -98.6, country: 'US', label: 'United States' },
   ],
   [
     'united states of america',
+    // i18n-ignore: place name in tool data
     { lat: 39.8, lon: -98.6, country: 'US', label: 'United States' },
   ],
 ]);
@@ -2251,6 +2195,7 @@ async function trackEntity(
           action: 'track_entity',
           kind: 'fire',
           layerId: 'local-firms',
+          // i18n-ignore: entity name in a tool result for the voice model
           label: strongest.label || 'Strongest fire',
           latitude: strongest.latitude,
           longitude: strongest.longitude,
@@ -2544,26 +2489,6 @@ function runManagedVoiceNavigation(
     action,
     error: 'Camera navigation is unavailable in the current view',
   };
-}
-
-/** Gathers tracked/selected entities across layer families for read-back. */
-function collectTrackedEntities(dataManager) {
-  const tracked = [];
-  for (const family of TRACKABLE_FAMILIES) {
-    const module = dataManager.layers.get(family.layerId)?.module;
-    if (!module) continue;
-    try {
-      const info =
-        family.kind === 'vessel'
-          ? module.getSelectedInfo?.()
-          : module.getTrackedInfo?.();
-      if (info)
-        tracked.push({ kind: family.kind, layerId: family.layerId, ...info });
-    } catch {
-      // layer not ready
-    }
-  }
-  return tracked;
 }
 
 export async function getBasemapLabelContext(
@@ -2997,7 +2922,11 @@ function focusDataLayerRow(layerId) {
   void row.offsetWidth;
   row.classList.add('gev-voice-focus');
   window.setTimeout(() => row.classList.remove('gev-voice-focus'), 3000);
-  const name = row.querySelector('.data-name')?.textContent?.trim() || layerId;
+  // The English name: tool results stay English whatever the UI language.
+  const name =
+    row.dataset.layerName ||
+    row.querySelector('.data-name')?.textContent?.trim() ||
+    layerId;
   return { id: layerId, name };
 }
 
@@ -3199,60 +3128,12 @@ function getCurrentViewState(
   dataManager,
   sceneDirector = null,
 ) {
-  const cartographic = Cesium.Cartographic.fromCartesian(
-    viewer.camera.positionWC,
-  );
-  return {
-    ok: true,
-    action: 'get_current_view_state',
-    camera: {
-      latitude: Cesium.Math.toDegrees(cartographic.latitude),
-      longitude: Cesium.Math.toDegrees(cartographic.longitude),
-      heightM: cartographic.height,
-    },
-    style: styleManager.activeStyle || 'normal',
-    context:
-      typeof styleManager.getContextModeState === 'function'
-        ? {
-            ...withContextModeVocabulary(styleManager.getContextModeState()),
-            // The numbers on the operator's Contacts panel, so a window/count
-            // question can be answered from what they are looking at.
-            ...(activeContactsWindow(dataManager)
-              ? { contactsWindow: activeContactsWindow(dataManager) }
-              : {}),
-          }
-        : null,
-    cockpit:
-      typeof styleManager.getCockpitState === 'function'
-        ? styleManager.getCockpitState()
-        : null,
-    controls:
-      typeof styleManager.getControlState === 'function'
-        ? styleManager.getControlState()
-        : null,
-    scenePlayback: sceneDirector?.getPlaybackStatus?.() || null,
-    tracked: collectTrackedEntities(dataManager),
-    // Enabled layers only: the full registry cost ~1k tokens per call and
-    // the model only reasons about what is on.
-    disabledLayerCount: dataManager.getAll().filter((layer) => !layer.enabled)
-      .length,
-    layers: dataManager
-      .getAll()
-      .filter((layer) => layer.enabled)
-      .map((layer) => ({
-        id: layer.id,
-        name: layer.name,
-        enabled: layer.enabled,
-        count: layer.stats?.count || 0,
-        error: layer.stats?.error || null,
-        feedState: layerSnapshot(layer).feedState,
-        source: layerSnapshot(layer).source,
-        lastUpdate: layerSnapshot(layer).lastUpdate,
-      })),
-    feedProvenance: feedProvenanceEnvelope(
-      layerSnapshots(dataManager.getAll()).filter((layer) => layer.enabled),
-    ),
-  };
+  return getWorldPacket({
+    viewer,
+    styleManager,
+    dataManager,
+    sceneDirector,
+  });
 }
 
 async function getEntityContext(
@@ -3732,8 +3613,10 @@ function centerMatchesSubject(center, subjectPosition) {
   const subjectLat = Cesium.Math.toDegrees(carto.latitude);
   const subjectLon = Cesium.Math.toDegrees(carto.longitude);
   return (
-    haversineKm(subjectLat, subjectLon, center.lat, center.lon) <=
-    SUBJECT_CENTER_TOLERANCE_KM
+    greatCircleKm(
+      { lat: subjectLat, lon: subjectLon },
+      { lat: center.lat, lon: center.lon },
+    ) <= SUBJECT_CENTER_TOLERANCE_KM
   );
 }
 
@@ -4023,7 +3906,7 @@ function nearbyKnownLandmarks(latitude, longitude, cameraHeightM) {
   for (const [cityId, city] of Object.entries(CITY_POIS)) {
     for (let poiIndex = 0; poiIndex < city.pois.length; poiIndex++) {
       const poi = city.pois[poiIndex];
-      const distanceKm = haversineKm(latitude, longitude, poi.lat, poi.lon);
+      const distanceKm = greatCircleKm({ lat: latitude, lon: longitude }, poi);
       if (distanceKm > maxDistanceKm) continue;
       matches.push({
         name: poi.name,
@@ -4036,20 +3919,6 @@ function nearbyKnownLandmarks(latitude, longitude, cameraHeightM) {
     }
   }
   return matches.sort((a, b) => a.distanceKm - b.distanceKm).slice(0, 5);
-}
-
-function haversineKm(lat1, lon1, lat2, lon2) {
-  const toRad = (value) => Cesium.Math.toRadians(value);
-  const radiusKm = 6371.0088;
-  const dLat = toRad(lat2 - lat1);
-  const dLon = toRad(lon2 - lon1);
-  const a =
-    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-    Math.cos(toRad(lat1)) *
-      Math.cos(toRad(lat2)) *
-      Math.sin(dLon / 2) *
-      Math.sin(dLon / 2);
-  return 2 * radiusKm * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
 function coarseBasemapPlace(
@@ -4637,23 +4506,6 @@ function clampNumber(value, min, max, fallback) {
  */
 
 /**
- * The Contacts panel's own counts, or null when Contacts has no subject.
- * Read through the awareness snapshot the panel renders, so the two cannot
- * diverge no matter which surface asks.
- * @returns {object|null} Panel-equivalent window counts.
- */
-function activeContactsWindow(dataManager) {
-  try {
-    const layer = dataManager?.layers?.get('military-awareness')?.module;
-    return (
-      layer?.contactsWindowFromSnapshot?.(layer.getContextSnapshot?.()) ?? null
-    );
-  } catch {
-    return null;
-  }
-}
-
-/**
  * Most records one layer hands a single query. Above every loaded feed seen
  * so far (flights ~8k, vessels ~12k, a 24 h global FIRMS day ~160k), so
  * answers count the whole loaded set; a feed past it reports
@@ -4809,7 +4661,12 @@ function compactAnalystItem(r) {
     if (!present(r[key]) || key in compact) continue;
     if (spec.type === 'time') {
       const ms = Number(r[key]);
-      if (Number.isFinite(ms)) compact.time = new Date(ms).toISOString();
+      // A finite value can still be past Date's range, where toISOString throws.
+      const time = new Date(ms);
+      if (Number.isFinite(time.getTime())) {
+        if (key === 'lastContactAtMs') compact.lastContactAtMs = ms;
+        else compact.time = time.toISOString();
+      }
     } else compact[key] = r[key];
   }
   if (present(r.ageHours)) compact.ageHours = r.ageHours;

@@ -88,16 +88,44 @@ test('root config retains existing named exports and standalone provider order',
   for (const [name, value] of Object.entries(providers))
     assert.equal(compatibility[name], value, name);
   const config = standaloneConfig({ mode: 'test' });
+  const standaloneProviders = config.plugins
+    .slice(3, -5)
+    .map((plugin) => plugin.name);
+  assert.equal(
+    standaloneProviders.filter((name) => name === 'gemini-live-proxy').length,
+    1,
+  );
+  assert.equal(
+    standaloneProviders.indexOf('gemini-live-proxy'),
+    standaloneProviders.indexOf('openai-realtime-proxy') + 1,
+  );
   assert.deepEqual(
-    config.plugins.slice(3, -4).map((plugin) => plugin.name),
+    standaloneProviders.filter((name) => name !== 'gemini-live-proxy'),
     providers.localProviderPlugins().map((plugin) => plugin.name),
   );
-  assert.equal(config.plugins.at(-5).name, 'gev-key-setup');
+  assert.equal(config.plugins.at(-6).name, 'gev-key-setup');
   // The local MCP route follows every provider and precedes the API fallback.
-  assert.equal(config.plugins.at(-4).name, 'local-mcp');
-  assert.equal(config.plugins.at(-3).name, 'api-not-found');
+  assert.equal(config.plugins.at(-5).name, 'local-mcp');
+  assert.equal(config.plugins.at(-4).name, 'api-not-found');
+  // Config-only, so it sits after the provider slice rather than in it.
+  assert.equal(config.plugins.at(-3).name, 'gev-unwatched-runtime-dirs');
   assert.equal(config.plugins.at(-2).name, 'embed-framing');
   assert.equal(config.plugins.at(-1).name, 'panel-build');
+});
+
+test('directories the server writes while it runs are kept out of the dev watcher', () => {
+  // Providers write cache files and logs here while the app runs; none of it is
+  // source, so the dev watcher has no reason to stat it.
+  const config = standaloneConfig({ mode: 'test' });
+  const plugin = config.plugins.find(
+    ({ name }) => name === 'gev-unwatched-runtime-dirs',
+  );
+  // Dev only: preview and build have no watcher.
+  assert.equal(plugin.apply, 'serve');
+  assert.deepEqual(plugin.config().server.watch.ignored, [
+    '**/.gev-cache/**',
+    '**/.gev-logs/**',
+  ]);
 });
 
 test('build export resolves in Node and has no browser fallback', async () => {
@@ -183,7 +211,7 @@ test('only embed-mode documents may be framed, and only by the allowed ancestors
   }
 });
 
-test('the CSP admits the event media embeds, and no other script origin', async () => {
+test('the CSP admits the event media embeds and the Maps JavaScript API, and no other script origin', async () => {
   const { embeddedMediaFrameUrl, resolveEmbeddedMediaSource } =
     await import('../../src/data/bhoteKoshiEmbeddedMedia.js');
   const directive = (name) =>
@@ -201,7 +229,8 @@ test('the CSP admits the event media embeds, and no other script origin', async 
     'https://platform.twitter.com',
   ])
     assert.ok(scripts.includes(origin), origin);
-  // Only those three, and never a wildcard or a scheme.
+  // Only those three and Google Street View's Maps JavaScript API, never a
+  // wildcard or a scheme.
   assert.deepEqual(
     scripts.filter(
       (source) => source.startsWith('http') || source === 'https:',
@@ -210,6 +239,7 @@ test('the CSP admits the event media embeds, and no other script origin', async 
       'https://www.youtube.com',
       'https://connect.facebook.net',
       'https://platform.twitter.com',
+      'https://maps.googleapis.com',
     ],
   );
   assert.ok(!scripts.some((source) => source.includes('*')));
