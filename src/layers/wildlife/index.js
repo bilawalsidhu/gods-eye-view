@@ -5,6 +5,7 @@ import {
   screenProjectedRotation,
 } from '../../data/iconOrientation.js';
 import {
+  WILDLIFE_MAX_STALE_MS,
   WILDLIFE_PAGE_SIZE,
   WILDLIFE_WINDOWS,
   wildlifeAgeParts,
@@ -343,6 +344,46 @@ export function createWildlifeLayer({
     render();
   }
 
+  /** Keep the page inside the list after it shrinks. */
+  function clampPage() {
+    const pages = Math.ceil(listedAnimals().length / WILDLIFE_PAGE_SIZE);
+    _page = Math.max(0, Math.min(_page, pages - 1));
+  }
+
+  /**
+   * Fail closed here too: while refreshes fail, a study's last positions leave
+   * the globe when the proxy's copy of them would have expired. Each deadline
+   * is set on this clock from the copy's age on the proxy's clock.
+   */
+  function holdStudies(studies, generatedAt) {
+    const received = now();
+    return studies.map((study) => {
+      if (study.status !== 'fresh' && study.status !== 'stale') return study;
+      const age =
+        Number.isFinite(generatedAt) && Number.isFinite(study.fetchedAt)
+          ? Math.max(0, generatedAt - study.fetchedAt)
+          : 0;
+      return { ...study, heldUntil: received + WILDLIFE_MAX_STALE_MS - age };
+    });
+  }
+
+  function expireHeld() {
+    const expired = new Set(
+      _studies
+        .filter(({ heldUntil }) => heldUntil <= now())
+        .map(({ id }) => id),
+    );
+    if (!expired.size) return;
+    _studies = _studies.map((study) =>
+      expired.has(study.id)
+        ? { ...study, status: 'unavailable', heldUntil: undefined }
+        : study,
+    );
+    _animals = _animals.filter(({ study }) => !expired.has(study));
+    clampPage();
+    render();
+  }
+
   /** Put the chosen animal on the current page of its study's list. */
   function pageTo(id) {
     const index = listedAnimals().findIndex((animal) => animal.id === id);
@@ -640,15 +681,17 @@ export function createWildlifeLayer({
     async update() {
       if (!_enabled || !_dataSource) return false;
       _request?.abort();
+      expireHeld();
       const request = new AbortController();
       _request = request;
       try {
         const snapshot = await source.getSnapshot({ signal: request.signal });
         if (request.signal.aborted || _request !== request || !_enabled)
           return false;
-        _studies = snapshot.studies;
+        _studies = holdStudies(snapshot.studies, snapshot.generatedAt);
         _animals = snapshot.animals;
         if (_studyId !== null && !studyOf(_studyId)) _studyId = null;
+        clampPage();
         render();
         _lastUpdate = now();
         _lastError = null;

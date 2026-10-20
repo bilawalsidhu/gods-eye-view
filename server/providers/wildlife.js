@@ -1,4 +1,5 @@
 import {
+  WILDLIFE_MAX_STALE_MS,
   WILDLIFE_STUDIES,
   movebankStudyUrl,
   parseMovebankStudy,
@@ -32,7 +33,7 @@ const FAILURE_BACKOFF_MS = 15 * MINUTE;
  * to ride out a Movebank restart or maintenance window, and by then the copy
  * is several report intervals behind the tags anyway.
  */
-export const WILDLIFE_MAX_STALE_MS = 6 * 60 * MINUTE;
+export { WILDLIFE_MAX_STALE_MS };
 /**
  * Answers that mean the study is no longer public: drop its tracks at once,
  * without the retry a transient failure gets.
@@ -200,6 +201,9 @@ export function wildlifeProxy({
     const times = [...cache.values()].map(({ fetchedAt }) => fetchedAt);
     return {
       fetchedAt: times.length ? Math.min(...times) : null,
+      // The proxy's clock, so the browser can age each copy without comparing
+      // its own clock to the proxy's.
+      generatedAt: now(),
       studies: rows,
       animals,
       pending: rows

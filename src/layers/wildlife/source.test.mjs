@@ -18,6 +18,7 @@ test('the snapshot reads the same-origin route and sanitizes it', async () => {
       urls.push(url);
       return Response.json({
         fetchedAt: 1_700_000_000_000,
+        generatedAt: 1_700_000_600_000,
         studies: [
           { id: STORKS, status: 'fresh' },
           { id: 1, status: 'ok' },
@@ -30,6 +31,7 @@ test('the snapshot reads the same-origin route and sanitizes it', async () => {
   const snapshot = await source.getSnapshot();
   assert.deepEqual(urls, ['/api/wildlife']);
   assert.equal(snapshot.fetchedAt, 1_700_000_000_000);
+  assert.equal(snapshot.generatedAt, 1_700_000_600_000);
   assert.deepEqual(
     snapshot.studies.map(({ id, status }) => [id, status]),
     [[STORKS, 'fresh']],

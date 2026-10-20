@@ -22,6 +22,11 @@ export const WILDLIFE_MAX_FIXES = 20;
 export const WILDLIFE_PAGE_SIZE = 40;
 /** Hard ceilings on what the proxy serves and the browser accepts. */
 export const WILDLIFE_MAX_ANIMALS = 2_000;
+/**
+ * The oldest copy of a study's coordinates ever shown, by the proxy and, while
+ * refreshes fail, by the browser holding its last snapshot.
+ */
+export const WILDLIFE_MAX_STALE_MS = 6 * 3_600_000;
 
 const DAY_MS = 86_400_000;
 /** Time windows the row offers, by the age of an animal's latest fix. */
