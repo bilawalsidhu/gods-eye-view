@@ -2937,5 +2937,20 @@
   "Gemini access was refused. Check the API key and model access.": "Se denegó el acceso a Gemini. Comprueba la clave de API y el acceso al modelo.",
   "Gemini Live is unavailable for the configured model.": "Gemini Live no está disponible para el modelo configurado.",
   "Token request is too large": "La solicitud de credencial es demasiado grande",
-  "Use an empty JSON token request": "Usa una solicitud de credencial con un objeto JSON vacío"
+  "Use an empty JSON token request": "Usa una solicitud de credencial con un objeto JSON vacío",
+  "Air quality · South Africa": "Calidad del aire · Sudáfrica",
+  "South Africa · SAAQIS": "Sudáfrica · SAAQIS",
+  "Canada": "Canadá",
+  "South Africa": "Sudáfrica",
+  "Pollutant": "Contaminante",
+  "Station observations across all nine provinces. Municipalities without monitors have no measured coverage.": "Observaciones de estaciones en las nueve provincias. Los municipios sin monitores no tienen cobertura medida.",
+  "{catalog} catalog stations · {reporting} reporting · {visible} in view": "{catalog} estaciones registradas · {reporting} con datos · {visible} en la vista",
+  "Hourly concentrations in source units; provisional data, not AQI or emissions.": "Concentraciones horarias en las unidades de origen; datos provisionales, no un índice AQI ni emisiones.",
+  "No current observations for this pollutant in the map view.": "No hay observaciones actuales de este contaminante en la vista del mapa.",
+  "Cached observations; SAAQIS refresh failed.": "Observaciones en caché; falló la actualización de SAAQIS.",
+  "South African observations in view": "Observaciones de Sudáfrica en la vista",
+  "Unknown air quality provider": "Proveedor de calidad del aire desconocido",
+  "South African air quality unavailable": "Datos de calidad del aire de Sudáfrica no disponibles",
+  "Malformed South African air quality snapshot": "Respuesta de calidad del aire de Sudáfrica no válida",
+  "Network": "Red"
 }

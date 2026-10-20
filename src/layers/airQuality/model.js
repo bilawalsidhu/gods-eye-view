@@ -12,8 +12,7 @@
  * network can be added without retrofitting a shared numeric meaning that does
  * not exist.
  *
- * Only ECCC's AQHI is implemented here; `AIR_QUALITY_PROVIDERS` is the seam a
- * later provider registers against.
+ * ECCC AQHI and SAAQIS concentrations share provenance, not a numeric scale.
  */
 // A portable export (package.json): no i18n here. The labels stay English data;
 // the Weather card (index.js) shows them translated.
@@ -109,6 +108,14 @@ export function readingsAreStale(readings, now = Date.now()) {
  * layer is not global and the row must say so.
  */
 export const AIR_QUALITY_PROVIDERS = Object.freeze({
+  saaqis: Object.freeze({
+    id: 'saaqis',
+    scale: 'concentration',
+    label: msg('Air quality · South Africa'),
+    network: 'SAAQIS',
+    coverage: msg('South Africa · SAAQIS'),
+    bands: Object.freeze([]),
+  }),
   eccc: Object.freeze({
     id: 'eccc',
     scale: 'AQHI',
@@ -395,5 +402,16 @@ export function mapAnalystRecord(raw, index = 0) {
     lat: num(raw?.lat),
     lon: num(raw?.lon),
     observedMs: num(raw?.observedMs),
+    ...(raw?.provider === 'saaqis'
+      ? {
+          parameter: text(raw.parameter),
+          units: text(raw.units),
+          averagingMinutes: num(raw.averagingMinutes),
+          kind: 'observation',
+          country: 'ZA',
+          owner: text(raw.owner),
+          note: text(raw.note),
+        }
+      : {}),
   };
 }

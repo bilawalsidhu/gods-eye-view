@@ -2500,7 +2500,9 @@
       "src/voice/providerCapabilities.js",
       "src/voice/geminiSession.js",
       "src/voice/geminiAudio.js",
-      "src/voice/geminiCaptureWorklet.js"
+      "src/voice/geminiCaptureWorklet.js",
+      "src/layers/airQuality/providers.js",
+      "src/layers/airQuality/southAfrica.js"
     ],
     "external": [
       "hls.js",
@@ -3067,7 +3069,9 @@
       "src/layers/airQuality/source.js",
       "src/ui/statusText.js",
       "src/ui/layerNames.js",
-      "src/layers/streetLevel/providers/mapillary/policy.js"
+"src/layers/streetLevel/providers/mapillary/policy.js",
+      "src/layers/airQuality/providers.js",
+      "src/layers/airQuality/southAfrica.js"
     ],
     "external": [
       "hls.js",
@@ -3497,7 +3501,9 @@
       "src/layers/submarineCables/bundledSource.js",
       "src/layers/gnss/source.js",
       "src/layers/airQuality/model.js",
-      "src/layers/airQuality/source.js"
+      "src/layers/airQuality/source.js",
+      "src/layers/airQuality/providers.js",
+      "src/layers/airQuality/southAfrica.js"
     ],
     "external": []
   },
@@ -3938,7 +3944,9 @@
       "src/i18n/locales/es.json",
       "src/i18n/locales/ru.json",
       "src/ui/statusText.js",
-      "src/ui/layerNames.js"
+      "src/ui/layerNames.js",
+      "src/layers/airQuality/providers.js",
+      "src/layers/airQuality/southAfrica.js"
     ],
     "external": ["cesium"]
   },
@@ -3948,7 +3956,9 @@
       "src/layers/airQuality/model.js",
       "src/layers/airQuality/source.js",
       "src/sources/httpBody.js",
-      "src/i18n/marker.js"
+      "src/i18n/marker.js",
+      "src/layers/airQuality/providers.js",
+      "src/layers/airQuality/southAfrica.js"
     ],
     "external": []
   },

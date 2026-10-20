@@ -1,4 +1,5 @@
 import * as Cesium from 'cesium';
+import { SA_POLLUTANTS } from './southAfrica.js';
 import { msg, t, tn } from '../../i18n/index.js';
 import { translateFeedError } from '../../ui/statusText.js';
 import {
@@ -16,6 +17,7 @@ import {
 } from './model.js';
 export * from './model.js';
 export { createEcccAirQualitySource } from './source.js';
+export { createAirQualitySource } from './providers.js';
 
 /** Station markers are a point reading, not an extent. */
 const STATION_MARKER_RADIUS_M = 6_000;
@@ -36,6 +38,11 @@ export function createAirQualityLayer({ source, overlayHost } = {}) {
   let _lastError = null;
   let _enabled = false;
   let rowControlsListener = null;
+  let providerId = 'eccc';
+  let parameter = 'PM2.5';
+  let coverage = null;
+  let overlayEntries = [];
+  let removeMoveEnd = null;
 
   const notify = () => rowControlsListener?.();
 
@@ -62,6 +69,12 @@ export function createAirQualityLayer({ source, overlayHost } = {}) {
     init(viewer) {
       if (_viewer) throw new Error('Air quality layer is already initialized');
       _viewer = viewer;
+      removeMoveEnd = viewer.camera?.moveEnd?.addEventListener(() => {
+        if (_enabled) {
+          this._publishOverlays();
+          notify();
+        }
+      });
       _dataSource = new Cesium.CustomDataSource('air-quality');
       _dataSource.show = false;
       viewer.dataSources.add(_dataSource);
@@ -91,18 +104,53 @@ export function createAirQualityLayer({ source, overlayHost } = {}) {
       notify();
     },
 
+    getParams() {
+      return { provider: providerId, parameter };
+    },
+
+    setParams(params = {}) {
+      if (params.provider === 'saaqis' && !source.providers?.includes('saaqis'))
+        return false;
+      const nextProvider = ['eccc', 'saaqis'].includes(params.provider)
+        ? params.provider
+        : providerId;
+      const nextParameter = SA_POLLUTANTS.includes(params.parameter)
+        ? params.parameter
+        : parameter;
+      if (nextProvider === providerId && nextParameter === parameter) return;
+      _request?.abort();
+      _request = null;
+      providerId = nextProvider;
+      parameter = nextParameter;
+      this.source =
+        providerId === 'saaqis' ? 'SAAQIS · South Africa' : 'ECCC MSC GeoMet';
+      _readings = [];
+      _count = 0;
+      _lastUpdate = null;
+      _lastError = null;
+      coverage = null;
+      this._render();
+      notify();
+      if (_enabled) void this.update();
+    },
+
     async update() {
       if (!_enabled || !_dataSource) return false;
       _request?.abort();
       const request = new AbortController();
       _request = request;
       try {
-        const readings = await source.getSnapshot({ signal: request.signal });
+        const readings = await source.getSnapshot({
+          signal: request.signal,
+          provider: providerId,
+          parameter,
+        });
         // A superseded or aborted request must not touch the scene, and neither
         // must one that lands after the layer was switched off.
         if (request.signal.aborted || _request !== request || !_enabled)
           return false;
         _readings = readings;
+        coverage = source.getCoverage?.() ?? null;
         this._render();
         _count = _readings.length;
         _lastUpdate = Date.now();
@@ -124,7 +172,7 @@ export function createAirQualityLayer({ source, overlayHost } = {}) {
     _render() {
       if (!_dataSource) return;
       _dataSource.entities.removeAll();
-      const overlayEntries = [];
+      overlayEntries = [];
       for (const reading of _readings) {
         const position = Cesium.Cartesian3.fromDegrees(
           reading.lon,
@@ -135,17 +183,31 @@ export function createAirQualityLayer({ source, overlayHost } = {}) {
           new Cesium.Entity({
             id: `air-quality:${reading.id}`,
             position,
-            ellipse: {
-              // Static axes, as in the earthquake layer: a per-frame axis
-              // re-tessellates the clamped ground primitive every frame.
-              semiMajorAxis: STATION_MARKER_RADIUS_M,
-              semiMinorAxis: STATION_MARKER_RADIUS_M,
-              material: new Cesium.ColorMaterialProperty(color.withAlpha(0.35)),
-              outline: true,
-              outlineColor: color.withAlpha(0.9),
-              outlineWidth: 2,
-              heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
-            },
+            ...(providerId === 'saaqis'
+              ? {
+                  point: {
+                    pixelSize: 8,
+                    color,
+                    outlineColor: Cesium.Color.BLACK,
+                    outlineWidth: 1,
+                    heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
+                  },
+                }
+              : {
+                  ellipse: {
+                    // Static axes, as in the earthquake layer: a per-frame axis
+                    // re-tessellates the clamped ground primitive every frame.
+                    semiMajorAxis: STATION_MARKER_RADIUS_M,
+                    semiMinorAxis: STATION_MARKER_RADIUS_M,
+                    material: new Cesium.ColorMaterialProperty(
+                      color.withAlpha(0.35),
+                    ),
+                    outline: true,
+                    outlineColor: color.withAlpha(0.9),
+                    outlineWidth: 2,
+                    heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
+                  },
+                }),
             properties: {
               provider: reading.provider,
               scale: reading.scale,
@@ -167,14 +229,30 @@ export function createAirQualityLayer({ source, overlayHost } = {}) {
             position,
             title: `${reading.name} ${reading.label}`,
             accent: reading.color,
-            value: reading.value,
+            value: providerId === 'saaqis' ? 0 : reading.value,
           }),
         );
       }
+      this._publishOverlays();
+    },
+
+    _publishOverlays() {
+      const visibleIds =
+        providerId === 'saaqis'
+          ? new Set(
+              readingsInView(_readings, viewRectangle(), _readings.length).map(
+                (row) => row.id,
+              ),
+            )
+          : null;
       if (_enabled) {
         overlayHost.setEntries(
           AIR_QUALITY_OVERLAY_SOURCE_ID,
-          selectAirQualityOverlayCohort(overlayEntries),
+          selectAirQualityOverlayCohort(
+            providerId === 'saaqis'
+              ? overlayEntries.filter((entry) => visibleIds.has(entry.id))
+              : overlayEntries,
+          ),
           {
             cohortLimit: AIR_QUALITY_OVERLAY_COHORT_LIMIT,
             collisionCapacity: AIR_QUALITY_OVERLAY_COLLISION_CAPACITY,
@@ -194,7 +272,10 @@ export function createAirQualityLayer({ source, overlayHost } = {}) {
         viewer?.dataSources?.remove(_dataSource, true);
         _dataSource = null;
       }
+      removeMoveEnd?.();
+      removeMoveEnd = null;
       _viewer = null;
+      overlayEntries = [];
       _readings = [];
       _count = 0;
       _lastUpdate = null;
@@ -210,8 +291,18 @@ export function createAirQualityLayer({ source, overlayHost } = {}) {
      * the rest. Coverage is stated plainly because this layer is not global.
      */
     getRowControls() {
-      const provider = AIR_QUALITY_PROVIDERS.eccc;
-      const inView = readingsInView(_readings, viewRectangle(), READOUT_LIMIT);
+      const isSa = providerId === 'saaqis';
+      const provider = isSa
+        ? { ...AIR_QUALITY_PROVIDERS.saaqis, scale: parameter }
+        : AIR_QUALITY_PROVIDERS.eccc;
+      const visible = readingsInView(
+        _readings,
+        viewRectangle(),
+        _readings.length,
+      );
+      const inView = (
+        isSa ? visible.sort((a, b) => a.name.localeCompare(b.name)) : visible
+      ).slice(0, READOUT_LIMIT);
       const newest = _readings.reduce(
         (max, reading) => Math.max(max, reading.observedMs || 0),
         0,
@@ -238,19 +329,106 @@ export function createAirQualityLayer({ source, overlayHost } = {}) {
                   '{count} stations reporting',
                 ),
           units: provider.scale,
+          settings: [
+            {
+              id: 'provider',
+              label: t('Network'),
+              chips: [
+                {
+                  id: 'eccc',
+                  label: t('Canada'),
+                  active: !isSa,
+                  params: { provider: 'eccc' },
+                },
+                ...(source.providers?.includes('saaqis')
+                  ? [
+                      {
+                        id: 'saaqis',
+                        label: t('South Africa'),
+                        active: isSa,
+                        params: { provider: 'saaqis' },
+                      },
+                    ]
+                  : []),
+              ],
+            },
+            ...(isSa
+              ? [
+                  {
+                    id: 'pollutant',
+                    label: t('Pollutant'),
+                    chips: SA_POLLUTANTS.map((id) => ({
+                      id,
+                      label: id,
+                      active: parameter === id,
+                      params: { parameter: id },
+                    })),
+                  },
+                ]
+              : []),
+          ],
+          ...(isSa
+            ? {
+                lines: [
+                  {
+                    id: 'coverage',
+                    text: t(
+                      'Station observations across all nine provinces. Municipalities without monitors have no measured coverage.',
+                    ),
+                  },
+                  {
+                    id: 'counts',
+                    text: t(
+                      '{catalog} catalog stations · {reporting} reporting · {visible} in view',
+                      {
+                        catalog: coverage?.stations?.length ?? 0,
+                        reporting: _count,
+                        visible: visible.length,
+                      },
+                    ),
+                  },
+                  {
+                    id: 'interpretation',
+                    text: visible.length
+                      ? t(
+                          'Hourly concentrations in source units; provisional data, not AQI or emissions.',
+                        )
+                      : t(
+                          'No current observations for this pollutant in the map view.',
+                        ),
+                  },
+                  ...(coverage?.stale
+                    ? [
+                        {
+                          id: 'cached',
+                          text: t(
+                            'Cached observations; SAAQIS refresh failed.',
+                          ),
+                        },
+                      ]
+                    : []),
+                ],
+              }
+            : {}),
         },
-        legend: AIR_QUALITY_BANDS.map((band) => ({
-          color: band.color,
-          label: t(band.label),
-        })),
+        legend: isSa
+          ? []
+          : AIR_QUALITY_BANDS.map((band) => ({
+              color: band.color,
+              label: t(band.label),
+            })),
         legendCategorical: true,
         list: {
-          ariaLabel: t('Highest air-quality readings in view'),
+          ariaLabel: isSa
+            ? t('South African observations in view')
+            : t('Highest air-quality readings in view'),
           items: inView.map((reading, index) => ({
             id: reading.id,
             ordinal: index + 1,
             lead: `${reading.scale} ${reading.label}`,
-            text: `${reading.name} · ${t(reading.risk)}`,
+            text: isSa
+              ? `${reading.name} · ${reading.zone} · ${reading.owner || 'SAAQIS'} · ${new Date(reading.observedMs).toISOString()}`
+              : `${reading.name} · ${t(reading.risk)}`,
             accent: reading.color,
           })),
         },
@@ -283,11 +461,14 @@ export function createAirQualityLayer({ source, overlayHost } = {}) {
       // than being narrated as live by the HUD and voice provenance envelope.
       return {
         count: _count,
+        source: this.source,
         lastUpdate: _lastUpdate,
         error: _lastError,
         observedAt: newestObservation(_readings),
         // Only a completed refresh can be stale; before one there is no feed.
-        stale: _lastUpdate !== null && readingsAreStale(_readings),
+        stale:
+          _lastUpdate !== null &&
+          (coverage?.stale === true || readingsAreStale(_readings)),
       };
     },
   };

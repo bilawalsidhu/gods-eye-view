@@ -3004,5 +3004,20 @@
   "Gemini access was refused. Check the API key and model access.": "Доступ к Gemini запрещён. Проверьте ключ API и доступ к модели.",
   "Gemini Live is unavailable for the configured model.": "Gemini Live недоступен для выбранной модели.",
   "Token request is too large": "Запрос токена слишком велик",
-  "Use an empty JSON token request": "Используйте запрос токена с пустым объектом JSON"
+  "Use an empty JSON token request": "Используйте запрос токена с пустым объектом JSON",
+  "Air quality · South Africa": "Качество воздуха · ЮАР",
+  "South Africa · SAAQIS": "ЮАР · SAAQIS",
+  "Canada": "Канада",
+  "South Africa": "ЮАР",
+  "Pollutant": "Загрязняющее вещество",
+  "Station observations across all nine provinces. Municipalities without monitors have no measured coverage.": "Наблюдения станций во всех девяти провинциях. В муниципалитетах без станций нет измерений.",
+  "{catalog} catalog stations · {reporting} reporting · {visible} in view": "Станций в каталоге: {catalog} · С данными: {reporting} · В области карты: {visible}",
+  "Hourly concentrations in source units; provisional data, not AQI or emissions.": "Часовые концентрации в единицах источника; предварительные данные, не AQI и не выбросы.",
+  "No current observations for this pollutant in the map view.": "В области карты нет текущих наблюдений этого загрязняющего вещества.",
+  "Cached observations; SAAQIS refresh failed.": "Сохранённые наблюдения; не удалось обновить SAAQIS.",
+  "South African observations in view": "Наблюдения в ЮАР в области карты",
+  "Unknown air quality provider": "Неизвестный поставщик данных о качестве воздуха",
+  "South African air quality unavailable": "Данные о качестве воздуха в ЮАР недоступны",
+  "Malformed South African air quality snapshot": "Некорректные данные о качестве воздуха в ЮАР",
+  "Network": "Сеть"
 }

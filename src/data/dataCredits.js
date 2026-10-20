@@ -170,6 +170,10 @@ export const DATA_CREDITS = [
   OSM_CREDIT,
   OPENMAPTILES_CREDIT,
   {
+    key: 'saaqis',
+    html: 'South African air quality: <a href="https://saaqis.environment.gov.za/" target="_blank" rel="noopener">SAAQIS</a> and originating monitoring networks. Provisional observations.',
+  },
+  {
     key: 'eccc-aqhi',
     html:
       'Air quality (AQHI): Environment and Climate Change Canada — MSC GeoMet ' +
