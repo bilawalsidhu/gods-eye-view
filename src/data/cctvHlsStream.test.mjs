@@ -387,3 +387,40 @@ test('1080p segments fit the bounded downloader while oversized responses still 
     /too large/,
   );
 });
+
+test('client lease ownership covers refresh, segments and release, with a bounded client budget', async (t) => {
+  const manager = createHlsPuller({
+    limits: { ...HLS_LIMITS, leasesPerClient: 1, pollMs: 100000 },
+    fetchImpl: async (url) =>
+      new Response(url.endsWith('.m3u8') ? playlist : 'abc'),
+  });
+  t.after(() => manager.shutdown());
+  const entry = await manager.ensure('a', base, 'lease-a', 'peer-a');
+  await manager.waitReady(entry);
+  await assert.rejects(
+    manager.ensure('a', base, 'lease-a', 'peer-b'),
+    /another client/,
+  );
+  assert.equal(
+    manager.getAsset('a', entry.token, 'seg_0.ts', 'lease-a', 'peer-b'),
+    null,
+  );
+  await assert.rejects(
+    manager.buildPlaylist(entry, 'a', 'lease-a', 'peer-b'),
+    /another client/,
+  );
+  manager.release('a', 'lease-a', 'peer-b');
+  assert.equal(entry.leases.size, 1);
+  await assert.rejects(
+    manager.ensure('b', base, 'lease-b', 'peer-a'),
+    /client lease capacity/,
+  );
+  assert.equal(
+    manager.stats().sessions,
+    1,
+    'failed admission reserves no session',
+  );
+  await manager.ensure('b', base, 'lease-b', 'peer-b');
+  manager.release('a', 'lease-a', 'peer-a');
+  assert.equal(entry.stopping, true);
+});

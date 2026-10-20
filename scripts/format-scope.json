@@ -1066,6 +1066,7 @@
   "src/data/cctvFmp4.test.mjs",
   "src/data/cctvFmp4Routes.test.mjs",
   "src/data/cctvFmp4Recovery.test.mjs",
+  "src/data/cctvHlsAdmission.test.mjs",
   "src/data/routeSegment.test.mjs",
   "src/terrainHeightsBounds.test.mjs"
 ]

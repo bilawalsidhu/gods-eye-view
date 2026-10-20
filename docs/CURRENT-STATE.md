@@ -9,6 +9,13 @@ broader suffix variants. Follow-ups retain boundary provenance, and cancelled
 lookups preserve the previous analyst cohort and boundary source. Navigation
 search keeps a successful geocode, with no search or view-based region recovery.
 
+CCTV live-media requests are same-site gated before catalog or media work, including
+HLS renewal, TS/fMP4 media and initialization reads, and DELETE cleanup. HLS leases belong to their socket
+peer (IPv4-mapped IPv6 is normalized), with eight leases per peer across the two
+global sessions. Peers behind the same NAT share that budget; this is resource
+admission, not authentication. Native same-origin video and range requests remain
+supported.
+
 Shared distance checks use `src/geoDistance.js` with `{ lat, lon }` points and
 the IUGG mean spherical Earth radius, 6371.0088 km. `greatCircleKm` is
 canonical; `greatCircleMeters` is its exact metre conversion. Missing,
@@ -5819,8 +5826,10 @@ inactive. The panel paints the same video at at most 640px/15 fps; collapse stop
 its paint loop. Camera deactivation destroys the decoder, and fatal playback
 errors revert to the labeled frame fallback. Camera changes clear the old panel
 frame. hls.js is imported only when an HLS camera starts. Two live sessions may
-coexist with at most eight independent consumer leases each; no-access lease
-expiry is 15 seconds. Closing one consumer leaves other consumers running. Lease
+coexist with at most eight independent consumer leases each, and each direct
+socket peer can hold at most eight leases across both sessions. The same-site
+gate precedes catalog I/O; all media and init reads, renewals and releases
+check the owning peer. No-access lease expiry is 15 seconds. Closing one consumer leaves other consumers running. Lease
 ids use `crypto.randomUUID` where the page is a secure context and an equivalent
 v4 id from `crypto.getRandomValues` on plain-HTTP LAN pages. Clear whole-file
 fMP4 playlists are supported with same-origin `EXT-X-MAP` initialization files,

@@ -58,12 +58,27 @@ test('HD fMP4 combines live-edge startup, expired 404s, init refresh, eviction a
     },
   });
   t.after(() => manager.shutdown());
-  const entry = await manager.ensure('hd', base, 'viewer');
+  const entry = await manager.ensure('hd', base, 'viewer', 'peer-a');
+  await manager.ensure('hd', base, 'other', 'peer-b');
   await entry.polling;
   const poll = async () => {
     t.mock.timers.tick(HLS_LIMITS.pollMs);
     await entry.polling;
     assertCache(manager, entry);
+    for (const init of entry.inits.values()) {
+      const name = `init_${init.id}.mp4`;
+      assert.equal(
+        manager.getAsset('hd', entry.token, name, 'viewer', 'peer-b'),
+        null,
+      );
+      const a = manager.getAsset('hd', entry.token, name, 'viewer', 'peer-a');
+      const b = manager.getAsset('hd', entry.token, name, 'other', 'peer-b');
+      assert.equal(
+        a.body,
+        b.body,
+        'both admitted peers share the retained init generation',
+      );
+    }
   };
   assert.deepEqual(requested, ['init.mp4', '110.m4s', '111.m4s']);
   assert.equal(entry.nextSeq, 2);
@@ -95,13 +110,13 @@ test('HD fMP4 combines live-edge startup, expired 404s, init refresh, eviction a
     [...entry.segments.values()].map((s) => s.discontinuity),
     [true, false, false],
   );
-  const output = await manager.buildPlaylist(entry, 'hd', 'viewer');
+  const output = await manager.buildPlaylist(entry, 'hd', 'viewer', 'peer-a');
   assert.match(output, /#EXT-X-VERSION:7/);
   assert.match(output, /#EXT-X-DISCONTINUITY\n#EXT-X-MAP:/);
   assert.equal(output.match(/#EXT-X-DISCONTINUITY\n/g)?.length, 1);
   assert.doesNotMatch(output, /camera\.example/);
   assert.equal(
-    manager.getAsset('hd', entry.token, 'init_0.mp4', 'viewer'),
+    manager.getAsset('hd', entry.token, 'init_0.mp4', 'viewer', 'peer-a'),
     null,
   );
   const currentInit = [...entry.inits.values()][0];
@@ -120,7 +135,7 @@ test('HD fMP4 combines live-edge startup, expired 404s, init refresh, eviction a
   assert.ok([...entry.segments.values()].every((s) => !s.discontinuity));
   assert.equal(entry.discontinuitiesRemoved, 1);
   assert.match(
-    await manager.buildPlaylist(entry, 'hd', 'viewer'),
+    await manager.buildPlaylist(entry, 'hd', 'viewer', 'peer-a'),
     /#EXT-X-DISCONTINUITY-SEQUENCE:1\n/,
   );
 
@@ -138,14 +153,27 @@ test('HD fMP4 combines live-edge startup, expired 404s, init refresh, eviction a
   assert.equal(entry.inits.get(retained[1].initId).body[0], 3);
   assert.notEqual(retained[0].initId, retained[1].initId);
   const name = `init_${retained[1].initId}.mp4`;
-  assert.equal(manager.getAsset('hd', 'stale', name, 'viewer'), null);
+  assert.equal(manager.getAsset('hd', 'stale', name, 'viewer', 'peer-a'), null);
   assert.equal(manager.getAsset('hd', entry.token, name, 'other'), null);
   assert.equal(
-    manager.getAsset('hd', entry.token, name, 'viewer').contentType,
+    manager.getAsset('hd', entry.token, name, 'viewer', 'peer-a').contentType,
     'video/mp4',
   );
-  manager.release('hd', 'viewer');
-  assert.equal(manager.getAsset('hd', entry.token, name, 'viewer'), null);
+  manager.release('hd', 'viewer', 'peer-b');
+  assert.equal(
+    entry.leases.size,
+    2,
+    'foreign release is ignored after recovery',
+  );
+  manager.release('hd', 'viewer', 'peer-a');
+  assert.equal(
+    manager.getAsset('hd', entry.token, name, 'viewer', 'peer-a'),
+    null,
+  );
+  assert.ok(manager.getAsset('hd', entry.token, name, 'other', 'peer-b'));
+  manager.release('hd', 'other', 'peer-b');
+  assert.equal(entry.inits.size, 0);
+  assert.equal(entry.initByUri.size, 0);
   assert.deepEqual(manager.stats(), { sessions: 0, bytes: 0 });
 });
 
