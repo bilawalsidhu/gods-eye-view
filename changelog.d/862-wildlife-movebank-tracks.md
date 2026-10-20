@@ -6,4 +6,5 @@
   of its last fix. `/api/wildlife` reads the studies one at a time, caches them
   for an hour and fails closed on revocation: an empty answer twice, or a 401,
   403, 404 or 410 once, drops the study, and no copy older than six hours is
-  served (leopechnicki, #862).
+  served, or kept on the globe while the proxy is unreachable
+  (leopechnicki, #862).

@@ -59,6 +59,7 @@ function harness({ animals = ANIMALS, statuses = {}, picking = null } = {}) {
   let preRender = null;
   let picked;
   let fail = false;
+  let clock = NOW;
   let snapshot = { studies: studies(statuses), animals };
   class FakeHandler {
     constructor() {
@@ -122,7 +123,7 @@ function harness({ animals = ANIMALS, statuses = {}, picking = null } = {}) {
       return previous + 0.5;
     },
     poseSignature: () => pose,
-    now: () => NOW,
+    now: () => clock,
     matchMedia: () => ({ matches: true }),
     openExternal: (url) => opened.push(url),
     setTimer: (callback, ms) => {
@@ -148,6 +149,9 @@ function harness({ animals = ANIMALS, statuses = {}, picking = null } = {}) {
     },
     fail(value) {
       fail = value;
+    },
+    advance(ms) {
+      clock += ms;
     },
     movePose(value) {
       pose = value;
@@ -499,6 +503,13 @@ test('long studies page through their animals', async () => {
     /page 1 of 2/,
     'choosing an animal shows its page',
   );
+  h.layer.setParams({ page: 'next' });
+  h.setSnapshot({ studies: studies(), animals: many.slice(0, 5) });
+  await h.layer.update();
+  controls = h.layer.getRowControls();
+  assert.equal(controls.list.items.length, 5, 'a shrunk study keeps a page');
+  assert.equal(controls.list.items[0].ordinal, 1);
+  assert.doesNotMatch(controls.info, /Page/);
 });
 
 test('studies still on their way are named and polled for', async () => {
@@ -597,6 +608,48 @@ test('a failed refresh keeps the animals and says so', async () => {
     cold.layer.getRowControls().info,
     /^Tracking proxy error \(HTTP 502\)/,
   );
+});
+
+test('while refreshes fail, held positions expire with the proxy copy', async () => {
+  const h = harness();
+  // The proxy's clock runs a day ahead; only the copies' ages on it count.
+  const PROXY = NOW + DAY;
+  h.setSnapshot({
+    generatedAt: PROXY,
+    studies: studies().map((study) => ({
+      ...study,
+      status: study.id === STORKS ? 'stale' : 'fresh',
+      fetchedAt: study.id === STORKS ? PROXY - 5 * HOUR : PROXY,
+    })),
+    animals: ANIMALS,
+  });
+  h.layer.enable();
+  await h.layer.update();
+  h.fail(true);
+  h.advance(HOUR - 1);
+  await h.layer.update();
+  assert.equal(h.layer.getStats().count, 3, 'a copy under six hours stays');
+  h.advance(1);
+  await h.layer.update();
+  assert.equal(h.layer.getStats().count, 2, 'the 5 h stale study goes at 6 h');
+  assert.ok(!h.entityIds().some((id) => id.includes(String(STORKS))));
+  h.layer.setParams({ study: STORKS });
+  assert.match(
+    h.layer.getRowControls().info,
+    /^Movebank did not return this study/,
+  );
+  h.layer.setParams({ clear: true });
+  h.advance(5 * HOUR - 1);
+  await h.layer.update();
+  assert.equal(h.layer.getStats().count, 2);
+  h.advance(1);
+  await h.layer.update();
+  assert.equal(h.layer.getStats().count, 0, 'nothing outlives six hours');
+  assert.equal(h.entityIds().length, 0);
+  h.fail(false);
+  h.setSnapshot({ studies: studies(), animals: ANIMALS });
+  await h.layer.update();
+  assert.equal(h.layer.getStats().count, 3, 'a good refresh brings them back');
 });
 
 test('globe clicks choose animals and leave other layers alone', async () => {

@@ -138,6 +138,7 @@ test('the first request answers at once and walks the studies one at a time', as
     [`${GULLS}:H1`, `${STORKS}:S1`],
   );
   assert.equal(done.body.fetchedAt, NOW);
+  assert.equal(done.body.generatedAt, NOW, "the proxy's own clock");
   assert.equal(plugin.refreshing, null, 'a fresh cache starts no walk');
   assert.equal(fake.calls.length, 2);
 });
