@@ -7,6 +7,7 @@ import {
 import {
   WILDLIFE_MAX_STALE_MS,
   WILDLIFE_PAGE_SIZE,
+  WILDLIFE_TTL_MS,
   WILDLIFE_WINDOWS,
   wildlifeAgeParts,
   wildlifeHeading,
@@ -356,7 +357,8 @@ export function createWildlifeLayer({
   /**
    * Fail closed here too: while refreshes fail, a study's last positions leave
    * the globe when the proxy's copy of them would have expired. Each deadline
-   * is set on this clock from the copy's age on the proxy's clock.
+   * is set on this clock from the copy's age on the proxy's clock; with no
+   * age to read, a copy is taken to be as old as its status allows.
    */
   function holdStudies(studies, generatedAt) {
     const received = now();
@@ -365,7 +367,9 @@ export function createWildlifeLayer({
       const age =
         Number.isFinite(generatedAt) && Number.isFinite(study.fetchedAt)
           ? Math.max(0, generatedAt - study.fetchedAt)
-          : 0;
+          : study.status === 'fresh'
+            ? WILDLIFE_TTL_MS
+            : WILDLIFE_MAX_STALE_MS;
       return { ...study, heldUntil: received + WILDLIFE_MAX_STALE_MS - age };
     });
   }

@@ -81,6 +81,9 @@ test('a Movebank answer becomes animals with ordered, bounded tracks', () => {
             fix(999, 48, 2_500),
             fix(0, 0, 2_600),
             fix('x', 48, 2_700),
+            fix(8.3, null, 2_800),
+            fix('', 48, 2_900),
+            fix(8.4, 48, null),
           ],
         },
         {

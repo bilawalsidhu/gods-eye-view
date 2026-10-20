@@ -22,11 +22,13 @@ export const WILDLIFE_MAX_FIXES = 20;
 export const WILDLIFE_PAGE_SIZE = 40;
 /** Hard ceilings on what the proxy serves and the browser accepts. */
 export const WILDLIFE_MAX_ANIMALS = 2_000;
+/** Tags report every few minutes to hours; an hour-old copy is current enough. */
+export const WILDLIFE_TTL_MS = 3_600_000;
 /**
  * The oldest copy of a study's coordinates ever shown, by the proxy and, while
  * refreshes fail, by the browser holding its last snapshot.
  */
-export const WILDLIFE_MAX_STALE_MS = 6 * 3_600_000;
+export const WILDLIFE_MAX_STALE_MS = 6 * WILDLIFE_TTL_MS;
 
 const DAY_MS = 86_400_000;
 /** Time windows the row offers, by the age of an animal's latest fix. */
@@ -222,6 +224,11 @@ export function wildlifeSpeciesName(taxon) {
  * @returns {Array<{id: string, study: number, name: string, taxon: string|null, track: number[][]}>|null}
  *   `track` rows are `[lon, lat, timeMs]`, oldest first. Null when malformed.
  */
+const reading = (value) =>
+  typeof value === 'number' || (typeof value === 'string' && value.trim())
+    ? Number(value)
+    : NaN;
+
 export function parseMovebankStudy(payload, studyId) {
   if (!STUDIES_BY_ID.has(studyId) || !Array.isArray(payload?.individuals))
     return null;
@@ -241,9 +248,10 @@ export function parseMovebankStudy(payload, studyId) {
     for (const fix of Array.isArray(individual.locations)
       ? individual.locations
       : []) {
-      const lon = Number(fix?.location_long);
-      const lat = Number(fix?.location_lat);
-      const t = Number(fix?.timestamp);
+      // Number(null) and Number('') are 0: a missing value is not a position.
+      const lon = reading(fix?.location_long);
+      const lat = reading(fix?.location_lat);
+      const t = reading(fix?.timestamp);
       if (validFix(lon, lat, t))
         byTime.set(t, [
           Math.round(lon * 1e5) / 1e5,
