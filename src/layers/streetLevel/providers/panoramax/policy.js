@@ -32,9 +32,7 @@ export const COLORS = Object.freeze({
 /**
  * Sequence lines come from z7–15 tiles; z10–14 are drawn below 60 km, as
  * Mapillary's are (a dense tile over Paris: z10 ~2.1 MB and 8,600
- * sequences, z11 ~1.4 MB, z12 ~800 kB). Higher up, the z0–5 `grid` layer's
- * density cells (0.1°, ~10 km) draw as points: lower down they would be a
- * handful of dots over a whole city, which reads as no coverage.
+ * sequences, z11 ~1.4 MB, z12 ~800 kB). Higher up nothing is drawn.
  */
 export const COVERAGE_Z14_BELOW_M = 1_800;
 export const COVERAGE_Z13_BELOW_M = 5_000;
@@ -43,23 +41,21 @@ export const COVERAGE_Z11_BELOW_M = 30_000;
 export const COVERAGE_LINES_BELOW_M = 60_000;
 export const COVERAGE_TUNING = Object.freeze({
   maxTiles: 9,
-  overviewMaxTiles: 6,
   // Each tile draws at most 1,600 lines, its longest first (as decoded,
   // `keepOrder`): a dense z11
   // tile over Paris holds 3,800, and a lower cap left the city centre
   // looking emptier than its suburbs. (KartaView draws as many.)
   maxSequences: 14_400,
   keepOrder: true,
-  // Points drawn at most, over every tile (each becomes ~8 ground-line
-  // vertices, ~1.4 kB of geometry): the simplified Paris z10 tile alone
-  // holds 57,000, unsimplified 750,000, which hung the tab.
+  // Points drawn at most, over every tile, a ninth of it a tile (each
+  // becomes ~8 ground-line vertices, ~1.4 kB of geometry): the simplified
+  // Paris z10 tile alone holds 57,000, unsimplified 750,000, which hung
+  // the tab.
   maxPoints: 90_000,
   lineWidthPx: 2.5,
-  overviewPointPx: 4,
   moveDebounceMs: 320,
   viewRangeMinM: 2_500,
   viewRangePerHeight: 10,
-  viewNearM: 1_000,
 });
 /**
  * Lines are simplified (Douglas–Peucker) to this many tile units of a
@@ -74,12 +70,6 @@ export const SIMPLIFY_TOLERANCE_UNITS = 4;
  */
 export const DECODE_SLICE_MS = 8;
 
-/**
- * Grid cells per overview tile, at most: a z0 tile holds ~70,000 cells
- * (1.9 MB), drawn as this many binned points.
- */
-export const OVERVIEW_BINS_PER_AXIS = 96;
-
 export const RATE_LIMITED_MESSAGE = msg(
   'Panoramax is busy — coverage resumes on its own',
 );
@@ -90,8 +80,8 @@ export const UNREADABLE_TILE_MESSAGE = msg(
   'Panoramax sent a map tile that could not be read',
 );
 export const GONE_MESSAGE = msg('This Panoramax photo is no longer available');
-/** From high up the dots are where pictures are, not sequences to click. */
-export const OVERVIEW_HINT = msg('zoom in to see Panoramax coverage');
+/** Above the line ceiling nothing is drawn. */
+export const ZOOM_IN_HINT = msg('zoom in to see Panoramax coverage');
 
 /** Cones come from z15 tiles' `pictures` layer (~110 bytes a picture). */
 export const PICTURE_TILE_ZOOM = 15;
