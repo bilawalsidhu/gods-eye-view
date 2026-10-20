@@ -402,7 +402,11 @@ export class StyleManager extends ShellFacade {
       readDataManager: () => this._dataManager,
       readContext: () => this.getContextModeState(),
       readActiveStyle: () => this.activeStyle,
-      enterPanels: () => this._panelChrome.enterCockpit(),
+      enterPanels: () => {
+        // The cockpit hides the panels: an expanded street-level photo too.
+        this._streetLevelControls?.shrinkViewer();
+        this._panelChrome.enterCockpit();
+      },
       exitPanels: () => this._panelChrome.exitCockpit(),
     });
 
@@ -1108,12 +1112,6 @@ export class StyleManager extends ShellFacade {
         setPanelCollapsed: (collapsed, options) =>
           this.setPanelCollapsed('street-level-panel', collapsed, options),
         showToast: (message) => this._showToast(message),
-        // Lets the panel open for a user, voice or tool switch-on, not a restore.
-        subscribeEnableRequests: (listener) =>
-          this._dataManager?.subscribeVisibilityRequests?.((change) => {
-            if (change?.layerId === 'street-level' && change.enabled)
-              listener(change.origin);
-          }) || null,
       },
     });
     this._streetLevelControls.connect();
@@ -1236,6 +1234,8 @@ export class StyleManager extends ShellFacade {
         ? forceEnabled
         : !document.body.classList.contains('ui-clean-view');
     document.body.classList.toggle('ui-clean-view', shouldEnable);
+    // Clean View hides the panels: an expanded street-level photo too.
+    if (shouldEnable) this._streetLevelControls?.shrinkViewer();
     if (this._cleanViewBtn) {
       this._cleanViewBtn.classList.toggle('active', shouldEnable);
     }

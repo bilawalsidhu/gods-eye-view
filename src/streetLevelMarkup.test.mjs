@@ -70,24 +70,26 @@ test('the key gate holds every filter, with the error line outside it', () => {
   assert.match(html, /id="sl-error"[^>]*role="alert"/);
 });
 
-test('each radiogroup is one tab stop, on its checked button', () => {
-  for (const [group, checked] of [
+test('the segmented filters are toggle buttons, each its own tab stop', () => {
+  for (const [group, chosen] of [
     ['data-sl-render', 'letterbox'],
     ['data-sl-pano', 'all'],
   ]) {
-    const radios = [
+    const buttons = [
       ...html.matchAll(
         new RegExp(`<button [^>]*${group}="([a-z]+)"[^>]*>`, 'g'),
       ),
     ];
-    assert.ok(radios.length >= 2, group);
-    for (const [tag, value] of radios)
-      assert.equal(
-        /tabindex="-1"/.test(tag),
-        value !== checked,
-        `${group}="${value}" roving tab stop`,
-      );
+    assert.ok(buttons.length >= 2, group);
+    for (const [tag, value] of buttons) {
+      assert.match(tag, new RegExp(`aria-pressed="${value === chosen}"`));
+      assert.doesNotMatch(tag, /role="radio"|tabindex=/, `${group}="${value}"`);
+    }
   }
+  assert.doesNotMatch(
+    html,
+    /role="radiogroup"[^>]*(Image fit|Panorama filter)/,
+  );
 });
 
 test('the Cyber theme frames the Street Level panel like its rail peers (P3)', () => {

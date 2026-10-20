@@ -35,7 +35,14 @@ export function sinceStopIndex(days) {
 function presentSince(days, now) {
   const value = Number(days) || 0;
   const index = sinceStopIndex(value);
-  if (value <= 0) return { index, days: 0, label: t('ANY DATE') };
+  if (value <= 0)
+    return {
+      index,
+      days: 0,
+      exact: true,
+      window: t('ANY DATE'),
+      label: t('ANY DATE'),
+    };
   const stop = SINCE_STOPS[index];
   const window =
     stop.days === value
@@ -44,6 +51,9 @@ function presentSince(days, now) {
   return {
     index,
     days: value,
+    /** One of SINCE_STOPS; a link may carry any other day count. */
+    exact: stop.days === value,
+    window,
     label: t('{window} · SINCE {date}', {
       window,
       date: formatDate(now - value * DAY_MS),

@@ -693,7 +693,10 @@ test('fresh Cockpit entry temporarily collapses map panels and exit restores the
   }
 
   assert.match(ui, /onEntered: \(\) => this\.enterPanels\(\)/);
-  assert.match(ui, /enterPanels: \(\) => this\._panelChrome\.enterCockpit\(\)/);
+  assert.match(
+    ui,
+    /enterPanels: \(\) => \{[^}]*this\._panelChrome\.enterCockpit\(\);\s*\}/,
+  );
   const callback = { 1: shellMethod('enterCockpit').toString() };
   assert.ok(callback, 'Cockpit onEntered callback is missing');
   assert.match(

@@ -1,20 +1,9 @@
-import { isExplicitLayerStateOrigin } from '../data/layerState.js';
 import { syncChipGroup } from './chipGroup.js';
 import {
   presentStreetLevelPanel,
   SINCE_STOPS,
 } from './streetLevelPresentation.js';
 import { t, translateKnown } from '../i18n/index.js';
-
-const RENDER_MODE_KEY = 'gev:street-level:render-mode';
-/** <body> classes of the modes that hide every panel; an expanded photo leaves with them. */
-const PANEL_HIDING_MODES = ['ui-clean-view', 'recording-mode', 'cockpit-mode'];
-const RADIO_STEPS = Object.freeze({
-  ArrowRight: 1,
-  ArrowDown: 1,
-  ArrowLeft: -1,
-  ArrowUp: -1,
-});
 
 // Renders run on every layer notification, and the rail's MutationObserver
 // relays out on each attribute write: write only what changed.
@@ -39,11 +28,11 @@ export class StreetLevelControls {
     this._unsubscribe = null;
     this._state = null;
     this._view = null;
-    this._wasEnabled = null;
     this._wasOpen = false;
-    // Whether the last switch-on was explicit (user, voice, tool), not a restore.
-    this._explicitEnable = false;
-    this._unsubscribeEnableRequests = null;
+    /** The error last shown: the same one never reopens the panel. */
+    this._streetError = null;
+    /** The SINCE option for a day count between the stops, while one is set. */
+    this._customSince = null;
     this._resizeQueued = false;
     this._elements = this._collect();
     this._bind();
@@ -63,8 +52,7 @@ export class StreetLevelControls {
       errorText: byId('sl-error-text'),
       panoRow: byId('sl-pano-row'),
       sinceRow: byId('sl-since-row'),
-      sinceRange: byId('sl-since'),
-      sinceLabel: byId('sl-since-label'),
+      since: byId('sl-since'),
       sinceNote: byId('sl-since-note'),
       viewerWrap: byId('sl-viewer-wrap'),
       viewerExpand: byId('sl-viewer-expand'),
@@ -111,18 +99,15 @@ export class StreetLevelControls {
         this._setParams({ pano: button.dataset.slPano }),
       );
     }
-    this._bindRadioGroup(el.panoButtons);
-    this._bindRadioGroup(el.renderButtons);
-    // The readout follows the thumb; coverage is rebuilt once, on release.
-    const sinceDays = () =>
-      SINCE_STOPS[Number(el.sinceRange?.value) || 0]?.days ?? 0;
-    this.listen(el.sinceRange, 'input', () => {
-      const label = t(SINCE_STOPS[Number(el.sinceRange.value) || 0].label);
-      if (el.sinceLabel) el.sinceLabel.textContent = label;
-      el.sinceRange.setAttribute('aria-valuetext', label);
-    });
-    this.listen(el.sinceRange, 'change', () =>
-      this._setParams({ sinceDays: sinceDays() }),
+    // The stops, in the UI language (a language change reloads the page).
+    for (const stop of SINCE_STOPS) {
+      const option = document.createElement('option');
+      option.value = String(stop.days);
+      option.textContent = t(stop.label);
+      el.since?.appendChild(option);
+    }
+    this.listen(el.since, 'change', () =>
+      this._setParams({ sinceDays: Number(el.since.value) || 0 }),
     );
     this.listen(el.nearestBtn, 'click', () => {
       const nearest = this._view?.nearest;
@@ -160,47 +145,15 @@ export class StreetLevelControls {
         this._exitExpanded();
       });
     } else setProp(el.viewerExpand, 'hidden', true);
-    for (const button of el.renderButtons) {
-      this.listen(button, 'click', () => {
-        const mode = button.dataset.slRender;
-        this.layer.setViewerRenderMode?.(mode);
-        try {
-          localStorage.setItem(RENDER_MODE_KEY, mode);
-        } catch {
-          /* storage unavailable */
-        }
-      });
-    }
-    try {
-      const stored = localStorage.getItem(RENDER_MODE_KEY);
-      if (stored === 'fill' || stored === 'letterbox')
-        this.layer.setViewerRenderMode?.(stored);
-    } catch {
-      /* storage unavailable */
-    }
+    for (const button of el.renderButtons)
+      this.listen(button, 'click', () =>
+        this.layer.setViewerRenderMode?.(button.dataset.slRender),
+      );
     // MapillaryJS only tracks window resizes; the panel resizes on its own.
     if (typeof ResizeObserver === 'function' && el.viewer) {
       this._resizeObserver = new ResizeObserver(() => this._requestResize());
       this._resizeObserver.observe(el.viewer);
     }
-  }
-
-  /** ARIA radio keys. Selecting clicks the radio, so keys and pointer share a path. */
-  _bindRadioGroup(buttons) {
-    buttons.forEach((button, index) => {
-      this.listen(button, 'keydown', (event) => {
-        let next = null;
-        if (event.key in RADIO_STEPS) {
-          const count = buttons.length;
-          next = buttons[(index + RADIO_STEPS[event.key] + count) % count];
-        } else if (event.key === 'Home') next = buttons[0];
-        else if (event.key === 'End') next = buttons[buttons.length - 1];
-        if (!next) return;
-        event.preventDefault();
-        next.focus();
-        if (next !== button) next.click();
-      });
-    });
   }
 
   /**
@@ -315,32 +268,18 @@ export class StreetLevelControls {
     this._syncExpanded();
   }
 
-  /** Clean View, recording and the cockpit hide every panel, so they end EXPAND too. */
-  _watchPanelHidingModes(on) {
-    const body = document.body;
-    if (!on || !body) {
-      this._modesObserver?.disconnect();
-      this._modesObserver = null;
-      return;
-    }
-    const leaveIfHiding = () => {
-      if (PANEL_HIDING_MODES.some((mode) => body.classList.contains(mode)))
-        this._exitExpanded();
-    };
-    if (!this._modesObserver && typeof MutationObserver === 'function') {
-      this._modesObserver = new MutationObserver(leaveIfHiding);
-      this._modesObserver.observe(body, {
-        attributes: true,
-        attributeFilter: ['class'],
-      });
-    }
-    leaveIfHiding();
+  /**
+   * Shrink an expanded photo. Clean View, recording and the cockpit hide
+   * every panel and call it, so the photo does not stay full screen (or, on
+   * iPhone, as a popover) over them.
+   */
+  shrinkViewer() {
+    this._exitExpanded();
   }
 
-  /** Mirror the expanded state on EXPAND, watch the panel-hiding modes, refit. */
+  /** Mirror the expanded state on EXPAND and refit. */
   _syncExpanded() {
     const on = this.isViewerExpanded();
-    this._watchPanelHidingModes(on);
     const button = this._elements.viewerExpand;
     if (button) {
       setProp(
@@ -363,12 +302,6 @@ export class StreetLevelControls {
     this._unsubscribe?.();
     this._unsubscribe = null;
     if (this.destroyed || !this.root) return;
-    this._unsubscribeEnableRequests?.();
-    this._unsubscribeEnableRequests = this.actions.subscribeEnableRequests(
-      (origin) => {
-        this._explicitEnable = isExplicitLayerStateOrigin(origin);
-      },
-    );
     this._unsubscribe = this.layer.subscribe?.((state) => this.render(state));
     if (this.layer.getUIState) this.render(this.layer.getUIState());
   }
@@ -416,12 +349,12 @@ export class StreetLevelControls {
     setProp(el.errorText, 'textContent', view.error || '');
   }
 
-  _renderRadios(buttons, isChecked) {
+  /** A segmented control: the chosen button is pressed. */
+  _renderPressed(buttons, isChosen) {
     for (const button of buttons) {
-      const checked = isChecked(button);
-      button.classList.toggle('is-active', checked);
-      setAttr(button, 'aria-checked', String(checked));
-      setAttr(button, 'tabindex', checked ? '0' : '-1');
+      const chosen = isChosen(button);
+      button.classList.toggle('is-active', chosen);
+      setAttr(button, 'aria-pressed', String(chosen));
     }
   }
 
@@ -434,23 +367,25 @@ export class StreetLevelControls {
     setProp(el.sinceNote, 'textContent', view.sinceNote || '');
     setProp(el.sinceNote, 'hidden', !view.sinceNote);
     setProp(el.controls, 'hidden', !shows.pano && !shows.since);
-    this._renderRadios(
+    this._renderPressed(
       el.panoButtons,
       (button) => button.dataset.slPano === view.filter.pano,
     );
-    if (el.sinceRange) {
-      // Never move the thumb under the user's hand; once the committed value
-      // matches the thumb, show the full readout with its cut-off date.
-      const index = String(view.since.index);
-      if (
-        document.activeElement !== el.sinceRange &&
-        el.sinceRange.value !== index
-      )
-        el.sinceRange.value = index;
-      if (el.sinceRange.value === index) {
-        setProp(el.sinceLabel, 'textContent', view.since.label);
-        setAttr(el.sinceRange, 'aria-valuetext', view.since.label);
+    if (el.since) {
+      // A link may carry a day count between the stops: it gets an option.
+      if (!view.since.exact) {
+        this._customSince ||= el.since.appendChild(
+          document.createElement('option'),
+        );
+        setProp(this._customSince, 'value', String(view.since.days));
+        setProp(this._customSince, 'textContent', view.since.window);
+      } else if (this._customSince) {
+        this._customSince.remove();
+        this._customSince = null;
       }
+      setProp(el.since, 'value', String(view.since.days));
+      // The cut-off date, for the pointer and for screen readers.
+      setProp(el.since, 'title', view.since.label);
     }
   }
 
@@ -467,7 +402,7 @@ export class StreetLevelControls {
       setProp(wrap, 'hidden', !viewer.open);
     }
     setProp(el.viewerPlaceholder, 'hidden', !viewer.loading);
-    this._renderRadios(
+    this._renderPressed(
       el.renderButtons,
       (button) => button.dataset.slRender === viewer.renderMode,
     );
@@ -497,22 +432,24 @@ export class StreetLevelControls {
   }
 
   /**
-   * Open the panel on a switch-on or when an image opens. Never persisted:
-   * the stored collapse state stays the user's own choice.
+   * Open the panel when an image opens, or when a click fails to open one or
+   * to load its sequence (the result, or its error, would otherwise be out of
+   * sight). Never persisted: the stored collapse state stays the user's own
+   * choice.
    */
   _reactToTransitions(view) {
-    const enabled = view.enabled;
-    if (enabled && this._wasEnabled === false) {
-      // A restore must not reopen a panel the user or a share link kept collapsed.
-      if (this._explicitEnable) this.setCollapsed(false, { persist: false });
-      this._explicitEnable = false;
-    }
-    this._wasEnabled = enabled;
     // Other size changes reach the viewer through the ResizeObserver; opening
     // asks for one resize because the element may not have a size yet.
     const open = view.viewer.open;
-    if (open && !this._wasOpen) this.setCollapsed(false, { persist: false });
+    // A photo that failed to open (a line or ground click, OPEN), or a
+    // Mapillary line whose sequence failed to load, says why in the panel:
+    // it opens for that too, or the click would seem to do nothing.
+    const error =
+      this._state?.street?.error || this._state?.sequence?.error || null;
+    if ((open && !this._wasOpen) || (error && error !== this._streetError))
+      this.setCollapsed(false, { persist: false });
     this._wasOpen = open;
+    this._streetError = error;
   }
 
   destroy() {
@@ -523,14 +460,11 @@ export class StreetLevelControls {
     // would hide the viewer even inside the panel.
     if (this._expandMode === 'popover')
       this._elements.viewerWrap?.removeAttribute('popover');
-    this._watchPanelHidingModes(false);
     this.listeners.abort();
     this._resizeObserver?.disconnect();
     this._resizeObserver = null;
     this._unsubscribe?.();
     this._unsubscribe = null;
-    this._unsubscribeEnableRequests?.();
-    this._unsubscribeEnableRequests = null;
     this.layer.attachViewerHost?.(null);
   }
 }

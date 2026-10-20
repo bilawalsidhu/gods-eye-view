@@ -1182,6 +1182,9 @@ export class ShellFacade {
    * @returns {void}
    */
   setRecordingMode(enabled, options) {
+    // Recording hides the panels: an expanded street-level photo goes too.
+    if (enabled && options?.hidePanels !== false)
+      this._streetLevelControls?.shrinkViewer();
     return this._recording.setRecordingMode(enabled, options);
   }
 

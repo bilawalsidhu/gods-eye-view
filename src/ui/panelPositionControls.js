@@ -8,10 +8,14 @@ const PANEL_LAYOUT_STORAGE_VERSION = 'v6';
  * the layout-reset notice and the documented key.
  */
 const PANEL_POSITION_STORAGE_VERSION = 'v8';
-/** Floating panels' stored positions and hint flag: nothing reads them now. */
+/**
+ * Floating panels' stored positions and hint flag, and Street Level's saved
+ * FIT / FILL (each session now starts at FIT): nothing reads them now.
+ */
 const RETIRED_PANEL_KEY_PREFIXES = [
   `godsEyeView.${PANEL_POSITION_STORAGE_VERSION}.panelPos.`,
   `godsEyeView.${PANEL_POSITION_STORAGE_VERSION}.panelFloatHintShown`,
+  'gev:street-level:render-mode',
 ];
 export class PanelPositionControls {
   constructor({ syncPanelCollapseButton, showToast }) {

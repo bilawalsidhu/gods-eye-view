@@ -278,17 +278,23 @@ html:not([lang='en']) .sl-meta-row .sl-nearest-btn {
   gap: 4px 10px;
 }
 
-.sl-range {
+.sl-select {
   width: 100%;
   min-width: 0;
-  margin: 0;
-  accent-color: var(--sl-green);
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 7px;
+  color: var(--text-primary);
+  padding: 4px 6px;
+  font-family: var(--font-mono);
+  font-size: var(--sl-text);
+  letter-spacing: 0.08em;
   cursor: pointer;
 }
 
-.sl-range:focus-visible {
+.sl-select:focus-visible {
   outline: 1px solid var(--accent);
-  outline-offset: 3px;
+  outline-offset: 2px;
 }
 
 .sl-since-note {
@@ -300,14 +306,6 @@ html:not([lang='en']) .sl-meta-row .sl-nearest-btn {
 
 .sl-since-note[hidden] {
   display: none;
-}
-
-.sl-since-label {
-  grid-column: 2;
-  font-family: var(--font-mono);
-  font-size: var(--sl-text);
-  letter-spacing: 0.08em;
-  color: var(--text-primary);
 }
 
 /* ── Embedded viewer ─────────────────────────────────────────────────────── */

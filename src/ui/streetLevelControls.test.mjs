@@ -255,8 +255,7 @@ function panelDom({ fullscreen = true, popover = false } = {}) {
   for (const pano of ['all', 'pano', 'flat'])
     add(panoRow, 'button', { dataset: { slPano: pano } });
   const sinceRow = add(controls, 'div', { id: 'sl-since-row' });
-  add(sinceRow, 'input', { id: 'sl-since' });
-  add(sinceRow, 'output', { id: 'sl-since-label' });
+  add(sinceRow, 'select', { id: 'sl-since' });
   add(sinceRow, 'small', { id: 'sl-since-note' });
   const metaRow = add(root, 'div', { classes: ['sl-meta-row'] });
   add(metaRow, 'div', { id: 'sl-coverage-meta' });
@@ -344,7 +343,6 @@ async function productionPanel(dom) {
         manager.setLayerParams('street-level', params, options),
       setPanelCollapsed() {},
       showToast() {},
-      subscribeEnableRequests: () => () => {},
     },
   });
   controls.connect();
@@ -380,11 +378,11 @@ test('a 360° click reaches the share link through the data manager', () =>
     coordinator.destroy();
   }));
 
-test('releasing the SINCE slider records the window in the share link', () =>
+test('choosing a SINCE window records it in the share link', () =>
   withDom(async (dom) => {
     const { coordinator, controls, share } = await productionPanel(dom);
     const since = dom.root.querySelector('#sl-since');
-    since.value = '5'; // the "last year" stop
+    since.value = '365'; // the "last year" stop
     since.dispatchEvent(new Event('change'));
     await settle();
     const days =
@@ -424,23 +422,31 @@ function uiState({
   on = true,
   open = false,
   pano = 'all',
+  sinceDays = 0,
   renderMode = 'letterbox',
   keyRequired = false,
+  streetError = null,
+  sequenceError = null,
 } = {}) {
   return {
     enabled,
     providers: [providerSnapshot({ on, keyRequired })],
     keyRequired,
     keyRejected: false,
-    filter: { pano, sinceDays: 0 },
+    filter: { pano, sinceDays },
     coverage: { count: 3, loading: false, hint: '', error: null },
-    sequence: { selectedId: null, images: 0, loading: false },
+    sequence: {
+      selectedId: null,
+      images: 0,
+      loading: false,
+      error: sequenceError,
+    },
     street: {
       open,
       loading: false,
       renderMode,
       imageId: open ? 'img-1' : null,
-      error: null,
+      error: streetError,
     },
   };
 }
@@ -449,8 +455,6 @@ function stubPanel(dom, state, extraActions = {}) {
   const layer = stubLayer();
   const calls = { setParams: [], setEnabled: [], collapsed: [], toasts: [] };
   let enabled = state.enabled;
-  /** Reports a switch-on request's origin, as the data manager does. */
-  let announce = null;
   layer.publish(state);
   const controls = new StreetLevelControls({
     root: dom.root,
@@ -465,12 +469,6 @@ function stubPanel(dom, state, extraActions = {}) {
       setPanelCollapsed: (collapsed, options) =>
         calls.collapsed.push([collapsed, options]),
       showToast: (message) => calls.toasts.push(message),
-      subscribeEnableRequests: (listener) => {
-        announce = listener;
-        return () => {
-          announce = null;
-        };
-      },
       ...extraActions,
     },
   });
@@ -479,8 +477,6 @@ function stubPanel(dom, state, extraActions = {}) {
     layer,
     calls,
     controls,
-    announce: (origin) => announce?.(origin),
-    subscribed: () => announce !== null,
     chip: () => dom.root.querySelector('#sl-provider-chips').children[0],
   };
 }
@@ -745,50 +741,84 @@ function fakeMutationObserver() {
   };
 }
 
-for (const mode of ['ui-clean-view', 'recording-mode', 'cockpit-mode'])
-  test(`entering ${mode} takes the photo out of full screen`, () =>
-    withDom(async (dom) => {
-      const saved = globalThis.MutationObserver;
-      const watch = fakeMutationObserver();
-      globalThis.MutationObserver = watch.FakeObserver;
-      try {
-        const { controls } = stubPanel(dom, uiState({ open: true }));
-        dom.root.querySelector('#sl-viewer-expand').click();
-        await settle();
-        await settle();
-        assert.equal(dom.document.fullscreenElement, dom.wrap);
-        assert.equal(watch.observers.size, 1, 'watching while expanded');
-        dom.document.body.classList.toggle(mode, true);
-        watch.fire();
-        await settle();
-        await settle();
-        assert.equal(dom.document.fullscreenElement, null);
-        assert.equal(watch.observers.size, 0, 'and not after');
-        controls.destroy();
-      } finally {
-        globalThis.MutationObserver = saved;
-      }
-    }));
+test('shrinkViewer takes the photo out of full screen (Clean View, recording, the cockpit)', () =>
+  withDom(async (dom) => {
+    const { controls } = stubPanel(dom, uiState({ open: true }));
+    dom.root.querySelector('#sl-viewer-expand').click();
+    await settle();
+    await settle();
+    assert.equal(dom.document.fullscreenElement, dom.wrap);
+    controls.shrinkViewer();
+    await settle();
+    await settle();
+    assert.equal(dom.document.fullscreenElement, null);
+    controls.shrinkViewer(); // nothing expanded: nothing to do
+    controls.destroy();
+  }));
+
+test('the shell shrinks the photo when Clean View, recording or the cockpit hide the panels', () => {
+  const shell = fs.readFileSync(
+    new URL('./applicationShell.js', import.meta.url),
+    'utf8',
+  );
+  const facade = fs.readFileSync(
+    new URL('./shellFacade.js', import.meta.url),
+    'utf8',
+  );
+  assert.match(
+    shell,
+    /toggleCleanView[\s\S]*?if \(shouldEnable\) this\._streetLevelControls\?\.shrinkViewer\(\)/,
+  );
+  assert.match(
+    shell,
+    /enterPanels: \(\) => \{[\s\S]*?this\._streetLevelControls\?\.shrinkViewer\(\);/,
+  );
+  assert.match(
+    facade,
+    /setRecordingMode\(enabled, options\) \{[\s\S]*?this\._streetLevelControls\?\.shrinkViewer\(\);/,
+  );
+});
 
 /* ── Restores and keyboard rules ───────────────────────────────────────── */
 
-test('only an explicit switch-on opens the panel, unstored; a restore never does (P2-1)', () =>
+test('a photo opening opens the panel, unstored; switching the layer on does not', () =>
   withDom(async (dom) => {
-    const { layer, calls, controls, announce, subscribed } = stubPanel(
+    const { layer, calls, controls } = stubPanel(
       dom,
       uiState({ enabled: false }),
     );
-    announce('restore');
     layer.publish(uiState({ enabled: true }));
-    assert.deepEqual(calls.collapsed, [], 'a restore leaves the panel be');
-    layer.publish(uiState({ enabled: false }));
-    announce('user');
-    layer.publish(uiState({ enabled: true }));
-    assert.deepEqual(calls.collapsed, [[false, { persist: false }]]);
+    assert.deepEqual(calls.collapsed, [], 'a switch-on leaves the panel be');
     layer.publish(uiState({ enabled: true, open: true }));
-    assert.equal(calls.collapsed.length, 2, 'a photo opening opens it too');
+    assert.deepEqual(calls.collapsed, [[false, { persist: false }]]);
     controls.destroy();
-    assert.equal(subscribed(), false, 'destroy unsubscribes');
+  }));
+
+test('a photo that fails to open opens the panel too, so its error shows', () =>
+  withDom(async (dom) => {
+    const { layer, calls, controls } = stubPanel(dom, uiState());
+    // A line click whose lookup KartaView never answered.
+    layer.publish(uiState({ streetError: 'KartaView did not answer in time' }));
+    assert.deepEqual(calls.collapsed, [[false, { persist: false }]]);
+    // The same error again opens nothing more; a new one does.
+    layer.publish(uiState({ streetError: 'KartaView did not answer in time' }));
+    assert.equal(calls.collapsed.length, 1);
+    layer.publish(uiState());
+    layer.publish(uiState({ streetError: 'No street-level imagery here' }));
+    assert.equal(calls.collapsed.length, 2);
+    controls.destroy();
+  }));
+
+test('a sequence that fails to load opens the panel, so its error shows', () =>
+  withDom(async (dom) => {
+    const { layer, calls, controls } = stubPanel(dom, uiState());
+    // A Mapillary line click whose sequence lookup the Graph API refused.
+    layer.publish(uiState({ sequenceError: 'Mapillary did not answer' }));
+    assert.deepEqual(calls.collapsed, [[false, { persist: false }]]);
+    assert.equal(dom.root.querySelector('#sl-error').hidden, false);
+    layer.publish(uiState({ sequenceError: 'Mapillary did not answer' }));
+    assert.equal(calls.collapsed.length, 1, 'the same error opens it once');
+    controls.destroy();
   }));
 
 test('FIT / FILL show the selected render mode (P3)', () =>
@@ -796,8 +826,8 @@ test('FIT / FILL show the selected render mode (P3)', () =>
     const { layer, controls } = stubPanel(dom, uiState({ open: true }));
     layer.publish(uiState({ open: true, renderMode: 'fill' }));
     const [fit, fill] = dom.wrap.querySelectorAll('[data-sl-render]');
-    assert.equal(fill.getAttribute('aria-checked'), 'true');
-    assert.equal(fit.getAttribute('aria-checked'), 'false');
+    assert.equal(fill.getAttribute('aria-pressed'), 'true');
+    assert.equal(fit.getAttribute('aria-pressed'), 'false');
     assert.equal(fill.classList.contains('is-active'), true);
     controls.destroy();
   }));
@@ -842,32 +872,43 @@ test('identical renders write nothing to the DOM (P3: rail MutationObserver)', (
     controls.destroy();
   }));
 
-test('arrow keys move the selection within a radiogroup, which has one tab stop (P3)', () =>
+test('the imagery filter is a row of toggle buttons, the chosen one pressed', () =>
   withDom(async (dom) => {
     const { layer, calls, controls } = stubPanel(dom, uiState());
-    const keydown = (target, key) =>
-      target.dispatchEvent({ type: 'keydown', bubbles: true, key });
     const [all, pano, flat] = dom.root.querySelectorAll('[data-sl-pano]');
-    assert.deepEqual(
-      [all, pano, flat].map((button) => button.getAttribute('tabindex')),
-      ['0', '-1', '-1'],
-    );
-    all.focus();
-    keydown(all, 'ArrowRight');
-    assert.equal(dom.document.activeElement, pano);
+    const pressed = () =>
+      [all, pano, flat].map((button) => button.getAttribute('aria-pressed'));
+    assert.deepEqual(pressed(), ['true', 'false', 'false']);
+    pano.click();
     assert.deepEqual(calls.setParams.at(-1), [
       { pano: 'pano' },
       { origin: 'user' },
     ]);
-    keydown(all, 'ArrowLeft'); // wraps to the end
-    assert.equal(dom.document.activeElement, flat);
-    keydown(flat, 'Home');
-    assert.equal(dom.document.activeElement, all);
     layer.publish(uiState({ pano: 'flat' }));
+    assert.deepEqual(pressed(), ['false', 'false', 'true']);
+    // No roving tab stop: every button is reachable with Tab.
     assert.deepEqual(
       [all, pano, flat].map((button) => button.getAttribute('tabindex')),
-      ['-1', '-1', '0'],
+      [null, null, null],
     );
+    controls.destroy();
+  }));
+
+test('SINCE lists the stops, adds a link’s own day count and names the cut-off date', () =>
+  withDom(async (dom) => {
+    const { layer, controls } = stubPanel(dom, uiState());
+    const since = dom.root.querySelector('#sl-since');
+    assert.equal(since.children.length, 9, 'the nine stops');
+    assert.equal(since.children[0].textContent, 'ANY DATE');
+    layer.publish(uiState({ sinceDays: 365 }));
+    assert.equal(since.value, '365');
+    assert.match(since.title, /^LAST YEAR · SINCE \d{4}-\d{2}-\d{2}$/);
+    layer.publish(uiState({ sinceDays: 400 }));
+    assert.equal(since.children.length, 10);
+    assert.equal(since.children[9].textContent, 'LAST 400 DAYS');
+    assert.equal(since.value, '400');
+    layer.publish(uiState({ sinceDays: 30 }));
+    assert.equal(since.children.length, 9, 'gone once a stop is chosen');
     controls.destroy();
   }));
 
@@ -992,7 +1033,10 @@ test('a note under SINCE says what date it compares, only while one is given', (
       'utf8',
     );
     assert.match(template, /<small id="sl-since-note"[^>]* hidden>/);
-    assert.match(template, /aria-describedby="sl-since-label sl-since-note"/);
+    assert.match(
+      template,
+      /<select id="sl-since"[^>]*aria-describedby="sl-since-note"/,
+    );
   }));
 
 test('Street View lit hides the imagery filters; Mapillary lit shows them', () =>

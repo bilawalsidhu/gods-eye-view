@@ -14,11 +14,12 @@ function fakeStorage(entries) {
   return storage;
 }
 
-test('the floating panels’ stored positions and hint flag are dropped; collapse state stays', (t) => {
+test('retired panel and FIT / FILL keys are dropped; collapse state stays', (t) => {
   const saved = globalThis.localStorage;
   globalThis.localStorage = fakeStorage({
     'godsEyeView.v8.panelPos.cctv-panel': '{"x":1}',
     'godsEyeView.v8.panelFloatHintShown': '1',
+    'gev:street-level:render-mode': 'fill',
     'godsEyeView.v6.panelCollapsed.cctv-panel': '1',
     'godsEyeView.v8.layoutResetNotified': '1',
   });

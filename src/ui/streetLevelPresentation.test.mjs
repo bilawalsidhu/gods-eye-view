@@ -182,7 +182,13 @@ test('a SINCE window from a link lands on the nearest slider stop', () => {
 test('the SINCE readout names the window and the cut-off date it means today', () => {
   const now = Date.UTC(2026, 8, 25);
   const any = presentStreetLevelPanel(snapshot(), { now });
-  assert.deepEqual(any.since, { index: 0, days: 0, label: 'ANY DATE' });
+  assert.deepEqual(any.since, {
+    index: 0,
+    days: 0,
+    exact: true,
+    window: 'ANY DATE',
+    label: 'ANY DATE',
+  });
   const year = presentStreetLevelPanel(
     snapshot({ filter: { pano: 'pano', sinceDays: 365 } }),
     { now },
@@ -191,6 +197,8 @@ test('the SINCE readout names the window and the cut-off date it means today', (
   assert.deepEqual(year.since, {
     index: 5,
     days: 365,
+    exact: true,
+    window: 'LAST YEAR',
     label: 'LAST YEAR · SINCE 2025-09-25',
   });
   const custom = presentStreetLevelPanel(
@@ -198,6 +206,8 @@ test('the SINCE readout names the window and the cut-off date it means today', (
     { now },
   );
   assert.equal(custom.since.index, 5);
+  assert.equal(custom.since.exact, false);
+  assert.equal(custom.since.window, 'LAST 400 DAYS');
   assert.equal(custom.since.label, 'LAST 400 DAYS · SINCE 2025-08-21');
 });
 

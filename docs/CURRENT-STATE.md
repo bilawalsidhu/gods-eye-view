@@ -3536,7 +3536,13 @@ Mapillary token, Street View on Google 3D with a Google key), the layer
 reports it (`keyAlternatives`), and the panel's KEY REQUIRED, its coverage
 line and the layer row's tooltip say to light it. The
 viewer sits under the header with EXPAND, FIT/FILL and close above the
-image. SINCE is a stepped slider whose readout names the cut-off date.
+image; FIT/FILL starts at FIT each session. IMAGERY and FIT/FILL are rows of
+toggle buttons (`aria-pressed`), each its own tab stop. SINCE is a select of
+the nine windows; a link's day count between them gets its own option, and
+the tooltip names the cut-off date. The panel opens by itself only when a
+photo opens, or a click fails to open one or to load its sequence (the
+result, or its error, would otherwise be out of sight), never when the layer
+is switched on.
 
 MapillaryJS loads on the first photo. Opening one frames it with a single
 camera flight through the application's deferred navigation (`begin` /
@@ -3545,7 +3551,8 @@ if newer navigation took the camera while the photo loaded; closing the photo
 cancels it. EXPAND is the browser's Fullscreen API on the viewer element; on
 iPhone, which has no element fullscreen, the viewer opens as a top-layer
 popover instead (hidden where neither API exists). Clean View, recording and
-the cockpit take an expanded photo out of full screen. At phone width the
+the cockpit take an expanded photo out of full screen: the shell calls the
+panel's `shrinkViewer()` as it enters them. At phone width the
 viewer height comes from the rail band so the whole photo fits.
 
 Providers implement the contract in `src/layers/streetLevel/registry.js`. The
@@ -3638,7 +3645,7 @@ lookup asks the photo API for the projection (`SPHERE`/`PLANE`; it ignores
 photos are near but none passes, the panel says so), and the cones pass on
 each photo's projection and upload date. The provider declares
 `sinceBasis: 'upload'`, so while it is lit the panel shows "KartaView: by
-upload date" under the SINCE slider (`sinceNote` in the UI state). Tiles come uncompressed and
+upload date" under the SINCE select (`sinceNote` in the UI state). Tiles come uncompressed and
 uncacheable, so the last 24 decoded tiles are kept for 10 minutes while
 KartaView is lit (`createTileCache`, dropped when it is switched off); one
 that does not answer in 20 s is asked once more, and one that is not a line
