@@ -82,3 +82,41 @@ test('a task already aborted when its turn comes is skipped', async () => {
   await assert.rejects(queued, /gone/);
   assert.deepEqual(log, ['a']);
 });
+
+test('detaches the abort listener once a task starts running', async () => {
+  const gate = createLimiter(1);
+  let listenerAttached = false;
+  let listenerRemoved = false;
+  const signal = {
+    aborted: false,
+    reason: undefined,
+    addEventListener(name) {
+      if (name === 'abort') listenerAttached = true;
+    },
+    removeEventListener(name) {
+      if (name === 'abort') listenerRemoved = true;
+    },
+  };
+  const task = async () => 'done';
+  await gate.run(task, { signal });
+  assert.equal(listenerAttached, true, 'listener was added');
+  assert.equal(listenerRemoved, true, 'listener was detached when started');
+});
+
+test('immediately rejects a pre-aborted task without queuing', async () => {
+  const gate = createLimiter(1);
+  const controller = new AbortController();
+  controller.abort(new Error('too-late'));
+  let ran = false;
+  await assert.rejects(
+    gate.run(
+      async () => {
+        ran = true;
+      },
+      { signal: controller.signal },
+    ),
+    /too-late/,
+  );
+  assert.equal(ran, false);
+  assert.equal(gate.pending, 0);
+});

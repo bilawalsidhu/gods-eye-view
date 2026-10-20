@@ -1712,8 +1712,11 @@ Standalone aircraft routes now live in `server/providers/aircraft/`: OpenSky
 state vectors and regional fallback, adsb.lol military positions, ADSBDB
 enrichment and track backfill. Vessel routes and websocket/watchdog setup live
 in `server/providers/vessels/ais-live.js`; AIS records and recent tracks live
-in `ais-store.js`. Common response caps, request coalescing and query parsing
-have their own modules. `server/providers/local.js` composes these with the
+in `ais-store.js`. A static (name, type, destination) record is dropped with
+its vessel, or after 30 minutes when no position arrives for that MMSI; the
+cache is pruned at most every 10 seconds (every second while over the
+50,000-vessel cap) rather than on every message. Common response caps, request
+coalescing and query parsing have their own modules. `server/providers/local.js` composes these with the
 remaining providers and retains existing named compatibility exports.
 
 `gods-eye-view/server/providers/live` is a Node-only entry for the existing
