@@ -72,7 +72,8 @@ export class PanelChrome {
         variant: this.hud.getVariant(),
       }),
       scheduleCockpitLayout: () => this.cockpitView?.scheduleContextLayout(),
-      syncPanelCollapseButton: (panel) => this._syncPanelCollapseButton(panel),
+      syncPanelCollapseButton: (panel) =>
+        this._syncRailPanelCollapseButton(panel),
       readDisplayScrollTop: () =>
         this._displayPortalScrollRestoreOwner === 'standard'
           ? this._standardDisplayScrollTop
@@ -285,6 +286,19 @@ export class PanelChrome {
 
   _scheduleLeftPanelLayout(options0) {
     return this._panelLayout._scheduleLeftPanelLayout(options0);
+  }
+
+  _syncRailPanelCollapseButton(panelEl) {
+    // Adaptive rail layout may directly restore an auto-collapsed Context
+    // without invoking setPanelCollapsed(). Enforce Radio ownership there too.
+    if (
+      panelEl?.id === 'global-context-panel' &&
+      !panelEl.classList.contains('collapsed') &&
+      this._contextRadioDock?.classList.contains('disclosure-open')
+    ) {
+      this._setRadioDisclosure?.(false);
+    }
+    this._syncPanelCollapseButton(panelEl);
   }
 
   _syncPanelCollapseButton(panelEl) {
@@ -500,6 +514,15 @@ export class PanelChrome {
         persist,
         syncShare,
       });
+    }
+    // A repeated Context-open request must clear a stale compact Radio mini
+    // even when no collapsed class changes.
+    if (
+      !nextCollapsed &&
+      panelId === 'global-context-panel' &&
+      this._contextRadioDock?.classList.contains('disclosure-open')
+    ) {
+      this._setRadioDisclosure?.(false);
     }
     if (
       panelEl.classList.contains('collapsed') === nextCollapsed &&

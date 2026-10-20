@@ -264,6 +264,14 @@ export const DATA_CREDITS = [
       '<a href="https://data.calgary.ca/stories/s/Open-Calgary-Terms-of-Use/u45n-7awa" target="_blank" rel="noopener">Open Government Licence – City of Calgary</a>',
   },
   {
+    key: 'florida-cctv',
+    html:
+      'Traffic cameras (Florida): FL511, Florida Department of Transportation. ' +
+      'Individual, personal use only under the ' +
+      '<a href="https://fl511.com/privacy#disclaimer" target="_blank" rel="noopener">FL511 terms</a>; ' +
+      "any other use needs FDOT's express written consent",
+  },
+  {
     key: 'catalonia-cctv',
     html:
       'CCTV cameras &amp; frames (Catalonia): ' +
@@ -285,7 +293,10 @@ export const DATA_CREDITS = [
     html:
       'Road cameras (Norway): contains data under the ' +
       '<a href="https://data.norge.no/nlod/en/2.0" target="_blank" rel="noopener">Norwegian licence for Open Government data (NLOD)</a> ' +
-      'distributed by Statens vegvesen',
+      'distributed by Statens vegvesen · camera ground heights © ' +
+      '<a href="https://kartverket.no/en/api-and-data/terrengdata" target="_blank" rel="noopener">Kartverket</a> ' +
+      '(<a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a>); ' +
+      'modified: heights over water set to 0 m and rounded to 0.1 m',
   },
   {
     key: 'nyc-cctv',
@@ -305,7 +316,10 @@ export const DATA_CREDITS = [
     html:
       'Bikeshare availability: GBFS operator feeds ' +
       '(e.g. Austin BCycle; Bike Share Toronto, operated by the Toronto Parking Authority; Bike Itaú and Tembici Bogotá, operated by Tembici; ' +
-      'Bicing, Barcelona City Council (B:SM); AMBici, Àrea Metropolitana de Barcelona, operated by nextbike)',
+      'Bicing, Barcelona City Council (B:SM); AMBici, Àrea Metropolitana de Barcelona, operated by nextbike; ' +
+      'BiciMAD, <a href="https://www.emtmadrid.es" target="_blank" rel="noopener">Powered by EMT de Madrid</a>; ' +
+      'Bizi Zaragoza; BIKI, AUVASA (Valladolid); BiciCoruña; Dbizi (Donostia-San Sebastián); ' +
+      'Bilbao Bizi, Bilbao City Council; BicinRivas, Rivas-Vaciamadrid City Council)',
   },
   {
     key: 'urbansharing-gbfs',
@@ -324,7 +338,7 @@ export const DATA_CREDITS = [
   {
     key: 'jcdecaux-gbfs',
     html:
-      'City bikes (Lillestrøm): Bysykkel Lillestrøm, JCDecaux — ' +
+      'City bikes (Lillestrøm, Valencia, Seville): Bysykkel Lillestrøm, Valenbisi, Sevici, JCDecaux — ' +
       '<a href="https://developer.jcdecaux.com/files/Open-Licence-fr.pdf" target="_blank" rel="noopener">Licence Ouverte</a>',
   },
   {
