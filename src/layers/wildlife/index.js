@@ -261,8 +261,10 @@ export function createWildlifeLayer({
 
   function render() {
     const animals = shownAnimals();
+    // Every fix counts: an owner can remove an outlier mid-track while the
+    // count and the latest fix stay the same.
     const signature = JSON.stringify(
-      animals.map(({ id, track }) => [id, track.length, track.at(-1)]),
+      animals.map(({ id, name, taxon, track }) => [id, name, taxon, track]),
     );
     if (signature === _signature) return;
     _signature = signature;
@@ -725,6 +727,8 @@ export function createWildlifeLayer({
           return false;
         console.warn('[Data:Wildlife] Fetch error:', e);
         _lastError = e?.message || msg('Tracking data unavailable');
+        // Keep asking while studies are still on their way.
+        schedulePoll(_studies.some(({ status }) => status === 'pending'));
         return false;
       } finally {
         if (_request === request) _request = null;

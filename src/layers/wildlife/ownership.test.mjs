@@ -306,6 +306,30 @@ test('an enabled refresh draws a glyph and fading path per animal in the window'
   assert.match(controls.infoTitle, /Not for locating or disturbing animals/);
 });
 
+test('a fix changed mid-track redraws the path', async () => {
+  const h = harness();
+  h.layer.enable();
+  await h.layer.update();
+  const id = `wildlife:${GULLS}:H903:track:0`;
+  const before = h.sources[0].entities.getById(id);
+  await h.layer.update();
+  assert.equal(
+    h.sources[0].entities.getById(id),
+    before,
+    'same data, no redraw',
+  );
+  const [gull, ...rest] = ANIMALS;
+  const track = gull.track.map((fix, i) => (i ? fix : [3.9, fix[1], fix[2]]));
+  h.setSnapshot({ studies: studies(), animals: [{ ...gull, track }, ...rest] });
+  await h.layer.update();
+  const after = h.sources[0].entities.getById(id);
+  assert.notEqual(after, before);
+  assert.notDeepEqual(
+    after.polyline.positions.getValue(),
+    before.polyline.positions.getValue(),
+  );
+});
+
 test('glyphs point along the last move, recomputed only when the camera moves', async () => {
   const h = harness();
   h.layer.enable();
@@ -540,6 +564,20 @@ test('studies still on their way are named and polled for', async () => {
   await new Promise((resolve) => setImmediate(resolve));
   assert.equal(h.layer.getStats().count, 3);
   assert.equal(polls().length, 0, 'no poll once every study is in');
+  h.setSnapshot({ studies: studies({ [GULLS]: 'pending' }), animals: [] });
+  await h.layer.update();
+  h.fail(true);
+  let [[poll2, { callback: retry }]] = polls();
+  h.timers.delete(poll2);
+  retry();
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(polls().length, 1, 'a failed poll keeps polling');
+  h.fail(false);
+  h.setSnapshot({ studies: studies(), animals: ANIMALS });
+  [[poll2, { callback: retry }]] = polls();
+  h.timers.delete(poll2);
+  retry();
+  await new Promise((resolve) => setImmediate(resolve));
   h.layer.setParams({ study: GULLS });
   h.setSnapshot({ studies: studies({ [GULLS]: 'pending' }), animals: [] });
   await h.layer.update();
