@@ -9,6 +9,9 @@ registered NASA FIRMS standard-processing windows. Disk cache names include a
 hash of the normalized event definition, so editing dates, bounds, sources, or
 metadata cannot silently reuse an old archive. Failed windows use a bounded
 cooldown/backoff before another keyed request can spend FIRMS quota.
+A complete upstream outage retains failed-window retry deadlines on disk and
+returns HTTP 502 until a window successfully responds; an empty but valid FIRMS
+CSV is a successful zero-record result rather than an upstream failure.
 
 This slice intentionally does not own perimeter acquisition. Event definitions
 carry structured matching metadata only; rendering will consume the shared fire

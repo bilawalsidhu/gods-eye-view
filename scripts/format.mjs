@@ -123,14 +123,6 @@ export async function formatAdoptedFiles(root, mode) {
   if (mode === '--write') {
     for (const { file, formatted } of changed) await writeFile(file, formatted);
   }
-  if (mode === '--check') {
-    const target = changed.find(
-      ({ name }) => name === 'src/tooling/fireHistoryProvider.test.mjs',
-    );
-    if (target)
-      console.error(`GEV_EXPECTED_PRETTIER_JSON:${JSON.stringify(target.formatted)}`);
-  }
-
   return { count: files.length, changed: changed.map(({ name }) => name) };
 }
 

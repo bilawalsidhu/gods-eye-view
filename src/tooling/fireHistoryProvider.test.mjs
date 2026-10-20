@@ -109,7 +109,10 @@ test('keyless registry does not duplicate perimeter fetching', async (t) => {
   });
   const list = json(await request('/'));
   assert.equal(list.hasKey, false);
-  assert.deepEqual(list.events.map((event) => event.id), ['test-fire-2018']);
+  assert.deepEqual(
+    list.events.map((event) => event.id),
+    ['test-fire-2018'],
+  );
   assert.equal(list.events[0].startMs, undefined);
   assert.equal((await request('/test-fire-2018')).status, 503);
   assert.equal((await request('/test-fire-2018/perimeter')).status, 404);
