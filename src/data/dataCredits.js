@@ -301,6 +301,13 @@ export const DATA_CREDITS = [
       'Partner-city cameras hosted on the county image handler (e.g. Newcastle) name their owner in the CCTV panel.',
   },
   {
+    key: 'hk-cctv',
+    html:
+      'Traffic snapshot cameras (Hong Kong): ' +
+      '<a href="https://data.gov.hk/en-data/dataset/hk-td-tis_2-traffic-snapshot-images" target="_blank" rel="noopener">Transport Department / DATA.GOV.HK</a> ' +
+      '(<a href="https://data.gov.hk/en/terms-and-conditions" target="_blank" rel="noopener">Terms of Use</a> — attribution required)',
+  },
+  {
     key: 'vegvesen-cctv',
     html:
       'Road cameras (Norway): contains data under the ' +
