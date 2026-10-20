@@ -113,6 +113,27 @@ export const CALTRANS_ANCHORS = [
   { lat: 32.7157, lon: -117.1611 }, // San Diego
   { lat: 38.5816, lon: -121.4944 }, // Sacramento
 ];
+export const FLORIDA_CCTV_URL =
+  'https://services.arcgis.com/3wFbqsFPLeKqOlIK/arcgis/rest/services/FL511_Traffic_Cameras/FeatureServer/0/query';
+export const FLORIDA_IMAGE_HOSTS = [
+  'images-dis.divas.cloud',
+  'snapshots.divas.cloud',
+];
+export const DEFAULT_FLORIDA_MAX_SOURCES = 500;
+/** Byte cap per catalog page (2,000 rows, about 650 KiB measured). */
+export const FLORIDA_MAX_CATALOG_BYTES = 2 * 1024 * 1024;
+/** Catalog page ceiling: 40 pages covers 4,000+ cameras even at 100 rows a page. */
+export const FLORIDA_MAX_CATALOG_PAGES = 40;
+export const FLORIDA_ANCHORS = [
+  { lat: 25.7617, lon: -80.1918 }, // Miami
+  { lat: 28.5384, lon: -81.3789 }, // Orlando
+  { lat: 27.9506, lon: -82.4572 }, // Tampa
+  { lat: 30.3322, lon: -81.6557 }, // Jacksonville
+  { lat: 30.4383, lon: -84.2807 }, // Tallahassee
+  { lat: 26.1224, lon: -80.1373 }, // Fort Lauderdale
+  { lat: 26.7153, lon: -80.0534 }, // West Palm Beach
+  { lat: 30.4213, lon: -87.2169 }, // Pensacola (panhandle)
+];
 /** TfL JamCams: one keyless list endpoint; frames live on a public S3 bucket. */
 export const TFL_JAMCAM_URL = 'https://api.tfl.gov.uk/Place/Type/JamCam';
 export const TFL_IMAGE_ORIGIN =
@@ -188,6 +209,8 @@ export const TARKTEE_IMAGES_URL =
   'https://tarktee.transpordiamet.ee/api/v1/datex/roadCameraImages';
 export const TARKTEE_IMAGE_ORIGIN = 'https://tarktee.transpordiamet.ee/images/';
 export const DEFAULT_TARKTEE_MAX_SOURCES = 179;
+/** Hard ceiling per Tarktee DATEX XML document (~120–165 KB live). */
+export const TARKTEE_MAX_CATALOG_BYTES = 4 * 1024 * 1024;
 export const TARKTEE_ANCHORS = [
   { lat: 59.437, lon: 24.753 }, // Tallinn
   { lat: 58.378, lon: 26.729 }, // Tartu
@@ -317,6 +340,49 @@ export const NORWAY_ANCHORS = [
   { lat: 69.6492, lon: 18.9553 }, // Tromsø
 ];
 
+/** Kartverket's keyless point-height API (CC BY 4.0): terrain height above
+ * sea level (NN2000), used as the Vegvesen cameras' ground prior because the
+ * camera feed's points are 2D. */
+export const KARTVERKET_HEIGHT_URL =
+  'https://ws.geonorge.no/hoydedata/v1/punkt';
+/** Points per request. The API takes up to 50, but above ~20 it answers the
+ * extra points from contour lines (`hoydekurver`, metres to ~20 m off) or not
+ * at all; at 20 nearly every camera resolves from the 1 m terrain model. */
+export const KARTVERKET_MAX_POINTS = 20;
+/** Requests in flight at once. The whole country is ~36 requests of
+ * 0.6-9.5 s each, so a cold lookup takes ~6-13 s. */
+export const KARTVERKET_CONCURRENCY = 8;
+/** Deadline for one complete lookup, shared by every request. A lookup cut
+ * short by it is resumed on the next refresh, without a backoff. */
+export const KARTVERKET_LOOKUP_TIMEOUT_MS = 30 * 1000;
+/** One request that takes longer than this counts as a failing service. */
+export const KARTVERKET_REQUEST_TIMEOUT_MS = 10 * 1000;
+/** The Vegvesen lane's budget, measured from the start of the loader (catalog
+ * fetch included), for waiting on heights. Under the 15 s per-provider fetch
+ * timeout so this pack is never the catalog's slowest lane. A lookup still
+ * running after it keeps filling the cache for the next refresh. */
+export const KARTVERKET_CATALOG_WAIT_MS = 12 * 1000;
+/** The lane only waits when more than this share of its cameras has no
+ * answer yet (a cold cache). A few new cameras or expired misses are looked
+ * up in the background instead of holding the refresh. */
+export const KARTVERKET_WAIT_MISSING_SHARE = 0.1;
+/** A point Kartverket has no height for (some ferry quays and bridges) is not
+ * asked about again for this long. */
+export const KARTVERKET_NULL_TTL_MS = 6 * 60 * 60 * 1000;
+/** After a failing request (408, 429, 5xx, a network error, a request
+ * timeout or an unreadable body), no lookup starts for this long, or for the
+ * Retry-After the service sent, bounded to [1 min, 1 h]. Longer than the
+ * 15-minute catalog refresh (CCTV_SOURCE_CACHE_MS), so a failing service
+ * costs one attempt per backoff, not one per refresh. */
+export const KARTVERKET_FAILURE_BACKOFF_MS = 30 * 60 * 1000;
+export const KARTVERKET_MAX_BACKOFF_MS = 60 * 60 * 1000;
+export const KARTVERKET_MAX_RESPONSE_BYTES = 256 * 1024;
+/** Plausible Norwegian terrain: below sea level only at the shore, and no road
+ * camera sits above ~1,500 m. Anything outside is treated as no height. */
+export const KARTVERKET_HEIGHT_RANGE_M = Object.freeze({ min: -20, max: 2500 });
+/** Same identity the other CCTV upstream requests send. */
+export const KARTVERKET_USER_AGENT = 'gods-eye-view-cctv-proxy/1.0';
+
 /** NYC DOT Traffic Management Center cameras: one keyless JSON list for the
  * five boroughs (~980 cameras). Frames are stills synthesized from each
  * camera UUID on the city's webcam host — never taken from the payload. */
@@ -439,6 +505,10 @@ export const CCTV_SOURCE_CACHE_MS = 15 * 60 * 1000;
  * pending forever — a hung fetch aborts, the loader returns [], and
  * serve-stale/other packs take over. */
 export const CCTV_SOURCE_FETCH_TIMEOUT_MS = 15 * 1000;
+/** Tarktee's two DATEX feeds (120 and 160 KB) answered in 2 to 16.6 s across
+ * ten requests on 2026-10-18, so the shared 15 s timeout dropped the Estonian
+ * pack on about a third of loads. Both must arrive for any camera to load. */
+export const TARKTEE_FETCH_TIMEOUT_MS = 30 * 1000;
 /** Individual CCTV image fetches must settle before the active 10-second
  * client refresh cadence. A bounded miss can fall through to Street View or
  * the synthetic frame instead of leaving the browser preview pending. */
