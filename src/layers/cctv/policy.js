@@ -35,6 +35,9 @@ export const PROJECTION_CANVAS_WIDTH = 1920;
 
 export const PROJECTION_CANVAS_HEIGHT = 1080;
 
+/** Matte behind fitted stills; the placeholder gradient's dark end. */
+export const PROJECTION_MATTE_COLOR = '#01070c';
+
 // Downsample grid for the unchanged-frame signature (drawProjectionFrame).
 // 64x36 keeps the 16:9 aspect and reads ~9 KB per check versus the 8.3 MB a
 // full-resolution compare would touch.
@@ -409,6 +412,9 @@ export const IDLE_CAMERA_COLOR =
 
 export const ACTIVE_CAMERA_COLOR =
   Cesium.Color.fromCssColorString('#ffd97a').withAlpha(0.95);
+
+export const LIVE_CAMERA_COLOR =
+  Cesium.Color.fromCssColorString('#b48cff').withAlpha(0.88);
 
 export const IDLE_COVERAGE_COLOR =
   Cesium.Color.fromCssColorString('#2fe0ff').withAlpha(0.24);

@@ -88,8 +88,19 @@ test('root config retains existing named exports and standalone provider order',
   for (const [name, value] of Object.entries(providers))
     assert.equal(compatibility[name], value, name);
   const config = standaloneConfig({ mode: 'test' });
+  const standaloneProviders = config.plugins
+    .slice(3, -5)
+    .map((plugin) => plugin.name);
+  assert.equal(
+    standaloneProviders.filter((name) => name === 'gemini-live-proxy').length,
+    1,
+  );
+  assert.equal(
+    standaloneProviders.indexOf('gemini-live-proxy'),
+    standaloneProviders.indexOf('openai-realtime-proxy') + 1,
+  );
   assert.deepEqual(
-    config.plugins.slice(3, -5).map((plugin) => plugin.name),
+    standaloneProviders.filter((name) => name !== 'gemini-live-proxy'),
     providers.localProviderPlugins().map((plugin) => plugin.name),
   );
   assert.equal(config.plugins.at(-6).name, 'gev-key-setup');
