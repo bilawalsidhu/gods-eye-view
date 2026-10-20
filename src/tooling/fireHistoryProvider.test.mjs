@@ -134,7 +134,7 @@ test('failed archive cooldown and merged-fire disk cache', async (t) => {
 
   const cooled = json(await request('/test-fire-2018'));
   assert.equal(cooled.complete, false);
-  assert.equal(calls.length, 2, 'failed window is not retried during cooldown');
+  assert.equal(calls.length, 2, 'cooldown prevents retry');
 
   advance(15 * 60_000);
   modisDown = false;
@@ -151,6 +151,38 @@ test('failed archive cooldown and merged-fire disk cache', async (t) => {
   );
   assert.ok(disk.definitionHash);
   assert.equal('firesByWindow' in disk, false);
+});
+
+test('total outage retains failed-window cooldown', async (t) => {
+  let online = false;
+  const { request, calls, cacheDir, advance } = await fixture(t, {
+    key: 'fixture-key',
+    fetchImpl: () =>
+      online
+        ? new Response(CSV)
+        : new Response('unavailable', { status: 503 }),
+  });
+
+  assert.equal((await request('/test-fire-2018')).status, 502);
+  assert.equal(calls.length, 2);
+  assert.equal((await request('/test-fire-2018')).status, 502);
+  assert.equal(calls.length, 2, 'total outage must not bypass cooldown');
+
+  const [filename] = await fsp.readdir(cacheDir);
+  const disk = JSON.parse(
+    await fsp.readFile(path.join(cacheDir, filename), 'utf8'),
+  );
+  assert.equal(disk.complete, false);
+  assert.equal(disk.fires.length, 0);
+  assert.equal(disk.windows.length, 2);
+  assert.ok(disk.windows.every((window) => !window.ok && window.retryAt));
+
+  advance(15 * 60_000);
+  online = true;
+  const recovered = json(await request('/test-fire-2018'));
+  assert.equal(recovered.complete, true);
+  assert.equal(recovered.count, 2);
+  assert.equal(calls.length, 4, 'each failed source retried after cooldown');
 });
 
 test('event definition edits change disk-cache identity', async (t) => {
