@@ -10,13 +10,12 @@ import { TurnMetrics } from './turnMetrics.js';
 import { createNarrationScheduler } from './narration.js';
 import { createEarcon } from './earcon.js';
 import {
+  POINTER_NONE_KEY,
   POINTER_OPEN_MIC_RECENT_MS,
-  pointerChip,
-  pointerContextItem,
+  pointerAnnouncement,
+  pointerTurnContext,
+  pointerTurnEvent,
 } from './pointerContext.js';
-
-/** Dedupe key of the clearing pointer_context item. */
-const POINTER_NONE_KEY = 'none';
 
 import { shouldPauseRadioForVoice } from './realtimeProtocol.js';
 import { postDebugLog } from './realtimeDiagnostics.js';
@@ -287,31 +286,18 @@ export class GevRealtimeController extends RealtimeFacade {
     } catch {
       snapshot = null;
     }
-    const chip = pointerChip(snapshot);
-    this.pointerAnnounced = gesture && chip ? snapshot : null;
-    this.emitSessionEvent({
-      type: 'pointer',
-      pointer:
-        gesture && chip ? { ...chip, screenPx: snapshot.screenPx } : null,
+    const event = pointerTurnEvent(snapshot, gesture);
+    this.pointerAnnounced = event.announced;
+    this.emitSessionEvent({ type: 'pointer', pointer: event.pointer });
+    const context = pointerTurnContext(snapshot, {
+      at,
+      gesture,
+      sentKey: this.pointerSentKey,
     });
-    const item = !chip
-      ? this.pointerSentKey && this.pointerSentKey !== POINTER_NONE_KEY
-        ? { type: 'pointer_context', at, target: 'none' }
-        : null
-      : gesture
-        ? pointerContextItem(snapshot)
-        : // What kind of thing, never which: no label or coordinates.
-          {
-            type: 'pointer_context',
-            at,
-            pointing: snapshot.entity?.kind || 'ground',
-          };
-    if (!item) return snapshot;
-    const { at: _at, ...content } = item;
-    const key = chip ? JSON.stringify(content) : POINTER_NONE_KEY;
-    if (key === this.pointerSentKey) return snapshot;
-    if (this._turns.notifyMapEvent(item)) {
-      this.pointerSentKey = key;
+    if (!context) return snapshot;
+    if (this._turns.notifyMapEvent(context.item)) {
+      this.pointerSentKey = context.key;
+      const chip = context.key !== POINTER_NONE_KEY;
       this.debugLog('pointer.context', {
         at,
         target: chip ? snapshot.target : 'none',
@@ -327,13 +313,10 @@ export class GevRealtimeController extends RealtimeFacade {
    */
   announcePointer() {
     const snapshot = this.pointer?.activeSnapshot?.() || null;
-    const chip = pointerChip(snapshot);
-    if (!chip || snapshot === this.pointerAnnounced) return false;
+    const pointer = pointerAnnouncement(snapshot, this.pointerAnnounced);
+    if (!pointer) return false;
     this.pointerAnnounced = snapshot;
-    this.emitSessionEvent({
-      type: 'pointer',
-      pointer: { ...chip, screenPx: snapshot.screenPx },
-    });
+    this.emitSessionEvent({ type: 'pointer', pointer });
     return true;
   }
 

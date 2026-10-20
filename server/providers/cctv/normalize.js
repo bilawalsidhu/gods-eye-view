@@ -377,6 +377,17 @@ export function isLikelyCalgaryCoordinate(lat, lon) {
   );
 }
 
+/** Florida statewide, Key West to Georgia state line, with slack at each edge */
+export function isLikelyFloridaCoordinate(lat, lon) {
+  return (
+    isPlausibleLatLon(lat, lon) &&
+    lat >= 24.3 &&
+    lat <= 31.1 &&
+    lon >= -87.7 &&
+    lon <= -79.8
+  );
+}
+
 /** New York City's five boroughs, with slack for the harbor and city line. */
 export function isLikelyNycCoordinate(lat, lon) {
   return (
