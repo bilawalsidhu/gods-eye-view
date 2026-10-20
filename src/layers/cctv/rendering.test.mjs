@@ -71,3 +71,56 @@ test('focus de-emphasis fades each icon from its own color', () => {
   );
   assert.equal(state._activeFocusStyleCount, 3);
 });
+
+test('focus release restores video hue and alpha after the style throttle', () => {
+  let target = {};
+  const records = ['mp4', 'webm'].map((feedType) => ({
+    camera: { id: feedType, feedType },
+    billboard: { show: true, color: LIVE_CAMERA_COLOR },
+  }));
+  const state = {
+    _enabled: true,
+    _viewer: { scene: {}, camera: {} },
+    _records: records,
+    _activeCameraId: null,
+    _activeFocusStyleCount: 0,
+    _lastFocusStyleAt: -Infinity,
+  };
+  const focus = {
+    focusNowMs: (nowMs) => nowMs,
+    getFocusTarget: () => target,
+    focusPassIsNeeded: (value, count) => !!value || count > 0,
+    advanceSpriteFocus: () => ({
+      factor: target ? FOCUS_FACTOR : 1,
+      active: !!target,
+      transitioning: false,
+    }),
+    focusAlphaNeedsWrite: (before, after) => before !== after,
+  };
+  const { refreshCctvFocusStyles } = createRendering({
+    state,
+    services: { focus },
+    parts: { model: { isVideoFeedType } },
+    source: {},
+  });
+
+  refreshCctvFocusStyles(1000);
+  for (const record of records) {
+    assertFadedFrom(
+      record.billboard.color,
+      LIVE_CAMERA_COLOR,
+      record.camera.id,
+    );
+  }
+  const dimmed = records.map((record) => record.billboard.color);
+  target = null;
+  refreshCctvFocusStyles(1050);
+  for (let i = 0; i < records.length; i += 1) {
+    assert.equal(records[i].billboard.color, dimmed[i]);
+  }
+  refreshCctvFocusStyles(1100);
+  for (const record of records) {
+    assert.deepEqual(record.billboard.color, LIVE_CAMERA_COLOR);
+  }
+  assert.equal(state._activeFocusStyleCount, 0);
+});

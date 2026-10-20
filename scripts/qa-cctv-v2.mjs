@@ -1797,6 +1797,34 @@ async function main() {
       gizmoStates.map((s, i) => `${GIZMO_PARTS[i]}=${s}`).join(' '),
     );
 
+    // Frame the actual gizmo for the drag fixture. Default autofocus can leave
+    // its shaft below the 10px interaction threshold; that distant view is not
+    // the drag-usability scenario this regression exercises.
+    const dragFraming = await page.evaluate(async () => {
+      const viewer = window.__godsEyeView.viewer;
+      const e = viewer.entities.getById('cctv-gizmo-move-east');
+      if (!e) return null;
+      const pts = e.polyline.positions.getValue(viewer.clock.currentTime);
+      const target = pts?.[0];
+      if (!target) return null;
+      const measure = () => {
+        const a = viewer.scene.cartesianToCanvasCoordinates(pts[0]);
+        const b = viewer.scene.cartesianToCanvasCoordinates(pts[pts.length - 1]);
+        return {
+          shaftPx: a && b ? Math.hypot(b.x - a.x, b.y - a.y) : null,
+          rangeM: target.constructor.distance(viewer.camera.positionWC, target),
+        };
+      };
+      const before = measure();
+      viewer.camera.cancelFlight();
+      viewer.camera.lookAt(target, new target.constructor(0, -200, 180));
+      viewer.camera.lookAtTransform(viewer.camera.transform.constructor.IDENTITY);
+      viewer.scene.requestRender();
+      const frames = await window.__qaRenderFrames(3, 10000);
+      return { before, after: measure(), frames };
+    });
+    console.log('Drag fixture framing:', JSON.stringify(dragFraming));
+
     // Synthetic CDP drag on the EAST arrow — the owner's field-test
     // regression. Sample effective elevation after every mouse move: it must
     // stay frozen until release, with no transient sampleHeight calls.

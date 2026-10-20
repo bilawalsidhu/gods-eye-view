@@ -238,8 +238,9 @@ export const DATA_CREDITS = [
     key: 'ontario-511-cctv',
     html:
       'CCTV cameras &amp; frames (Ontario): ' +
-      '<a href="https://511on.ca/" target="_blank" rel="noopener">Ontario 511</a> ' +
-      '(<a href="https://www.ontario.ca/page/open-government-licence-ontario" target="_blank" rel="noopener">Open Government Licence - Ontario</a>)',
+      '<a href="https://511on.ca/" target="_blank" rel="noopener">Ontario 511</a>. ' +
+      'Contains information licensed under the <a href="https://www.ontario.ca/page/open-government-licence-ontario" target="_blank" rel="noopener">Open Government Licence – Ontario</a>. ' +
+      'Provided as is, without warranty; actual road conditions may differ.',
   },
   {
     key: 'fintraffic-cctv',
