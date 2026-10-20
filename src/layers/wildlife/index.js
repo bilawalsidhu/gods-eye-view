@@ -157,6 +157,7 @@ export function createWildlifeLayer({
   let _lastUpdate = null;
   let _lastError = null;
   let _pollTimer = null;
+  let _expiryTimer = null;
   let _listener = null;
   let _runNavigation = null;
   let _clickHandler = null;
@@ -373,15 +374,35 @@ export function createWildlifeLayer({
         .filter(({ heldUntil }) => heldUntil <= now())
         .map(({ id }) => id),
     );
-    if (!expired.size) return;
-    _studies = _studies.map((study) =>
-      expired.has(study.id)
-        ? { ...study, status: 'unavailable', heldUntil: undefined }
-        : study,
+    if (expired.size) {
+      _studies = _studies.map((study) =>
+        expired.has(study.id)
+          ? { ...study, status: 'unavailable', heldUntil: undefined }
+          : study,
+      );
+      _animals = _animals.filter(({ study }) => !expired.has(study));
+      clampPage();
+      render();
+    }
+    scheduleExpiry();
+  }
+
+  /** Wake at the next deadline rather than at the next half-hourly refresh. */
+  function scheduleExpiry() {
+    if (_expiryTimer !== null) clearTimer(_expiryTimer);
+    _expiryTimer = null;
+    const next = Math.min(
+      ..._studies.map(({ heldUntil }) => heldUntil ?? Infinity),
     );
-    _animals = _animals.filter(({ study }) => !expired.has(study));
-    clampPage();
-    render();
+    if (!_enabled || !Number.isFinite(next)) return;
+    _expiryTimer = setTimer(
+      () => {
+        _expiryTimer = null;
+        expireHeld();
+        notify();
+      },
+      Math.max(0, next - now()),
+    );
   }
 
   /** Put the chosen animal on the current page of its study's list. */
@@ -665,6 +686,7 @@ export function createWildlifeLayer({
       _request = null;
       _enabled = false;
       schedulePoll(false);
+      scheduleExpiry();
       picking?.unregisterPickOwner(LAYER_ID);
       removeSelection();
       syncHorizonListener();
@@ -693,6 +715,7 @@ export function createWildlifeLayer({
         if (_studyId !== null && !studyOf(_studyId)) _studyId = null;
         clampPage();
         render();
+        scheduleExpiry();
         _lastUpdate = now();
         _lastError = null;
         schedulePoll(_studies.some(({ status }) => status === 'pending'));
