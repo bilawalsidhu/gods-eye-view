@@ -707,6 +707,20 @@ test('while refreshes fail, held positions expire with the proxy copy', async ()
   assert.equal(h.timers.size, 0, 'disabling cancels the deadline');
 });
 
+test('a copy of unknown age is held only as long as its status allows', async () => {
+  const h = harness({ statuses: { [STORKS]: 'stale' } });
+  h.layer.enable();
+  await h.layer.update();
+  // No generatedAt (an older proxy): fresh may be up to an hour old, stale
+  // up to six, so the stale study has nothing left to hold.
+  const [[id, timer]] = [...h.timers];
+  assert.equal(timer.ms, 0);
+  h.timers.delete(id);
+  timer.callback();
+  assert.equal(h.layer.getStats().count, 2);
+  assert.equal([...h.timers.values()][0].ms, 5 * HOUR);
+});
+
 test('globe clicks choose animals and leave other layers alone', async () => {
   const picking = fakePicking();
   picking.registerPickOwner('flights', (id) => id === 'flight:1');

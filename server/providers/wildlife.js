@@ -1,6 +1,7 @@
 import {
   WILDLIFE_MAX_STALE_MS,
   WILDLIFE_STUDIES,
+  WILDLIFE_TTL_MS,
   movebankStudyUrl,
   parseMovebankStudy,
 } from '../../src/layers/wildlife/records.js';
@@ -12,8 +13,6 @@ import { makeRateLimiter, clientKey } from './common/rate-limit.js';
 // it. One refresher walks the curated studies strictly one at a time and the
 // route serves whatever is cached, naming the studies still on their way.
 const MINUTE = 60_000;
-/** Tags report every few minutes to hours; an hour-old copy is current enough. */
-export const WILDLIFE_TTL_MS = 60 * MINUTE;
 /** The largest curated study took 116 s to answer on 2026-09-30. */
 const TIMEOUT_MS = 150_000;
 /** A study with 20 fixes for 200 animals is about 1 MB today. */
@@ -33,7 +32,7 @@ const FAILURE_BACKOFF_MS = 15 * MINUTE;
  * to ride out a Movebank restart or maintenance window, and by then the copy
  * is several report intervals behind the tags anyway.
  */
-export { WILDLIFE_MAX_STALE_MS };
+export { WILDLIFE_MAX_STALE_MS, WILDLIFE_TTL_MS };
 /**
  * Answers that mean the study is no longer public: drop its tracks at once,
  * without the retry a transient failure gets.
