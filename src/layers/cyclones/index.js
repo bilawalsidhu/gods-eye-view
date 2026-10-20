@@ -89,7 +89,9 @@ export function createCyclonesLayer({
   const notify = () => listener?.();
   const selected = () =>
     snapshot?.storms.find((storm) => storm.id === selectedId) || null;
-  function clearSelectedContext() {
+  function clearSelectedContext({ evicted = false } = {}) {
+    if (!evicted)
+      context?.clearSelectedEntityContextForLayer?.('weather-cyclones');
     context?.removeEntityContextsForLayer?.('weather-cyclones');
     selectedContextStormId = null;
     selectedContextEntity = null;
@@ -98,14 +100,11 @@ export function createCyclonesLayer({
   function publishSelectedContext({ announce = false } = {}) {
     const storm = selected();
     if (!storm || !context) {
-      if (!storm) clearSelectedContext();
+      if (!storm) clearSelectedContext({ evicted: true });
       return null;
     }
     selectedContextEntity ||= { show: true };
     const contextId = `cyclone:${storm.id}`;
-    context.removeEntityContextsForLayer?.('weather-cyclones', {
-      retainIds: new Set([contextId]),
-    });
     const record = context.registerEntityContext?.(selectedContextEntity, {
       id: contextId,
       layerId: 'weather-cyclones',
@@ -131,6 +130,9 @@ export function createCyclonesLayer({
     if (!record) return null;
     selectedContextStormId = storm.id;
     if (announce) context.selectEntityContext?.(selectedContextEntity);
+    context.removeEntityContextsForLayer?.('weather-cyclones', {
+      retainIds: new Set([contextId]),
+    });
     return record;
   }
 
@@ -302,7 +304,7 @@ export function createCyclonesLayer({
           snapshot = next;
           selectedId = null;
           ++navigationGeneration;
-          clearSelectedContext();
+          clearSelectedContext({ evicted: true });
           error = next.reason || ADVISORIES_UNAVAILABLE;
           return true;
         }
@@ -327,7 +329,7 @@ export function createCyclonesLayer({
         else rendering.setSelection(selectedId);
         if (selectedContextStormId) {
           if (selectedId === selectedContextStormId) publishSelectedContext();
-          else clearSelectedContext();
+          else clearSelectedContext({ evicted: true });
         }
         return true;
       } catch (cause) {
@@ -338,7 +340,7 @@ export function createCyclonesLayer({
         snapshot = null;
         selectedId = null;
         ++navigationGeneration;
-        clearSelectedContext();
+        clearSelectedContext({ evicted: true });
         return true;
       } finally {
         signal?.removeEventListener('abort', abort);

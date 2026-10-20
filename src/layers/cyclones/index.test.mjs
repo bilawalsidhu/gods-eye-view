@@ -7,6 +7,7 @@ import {
   isPointerFree,
 } from '../../data/inputOwnership.js';
 import { isOwnedByOtherLayer } from '../../data/pickRegistry.js';
+import * as contextStore from '../../data/contextStore.js';
 
 const time = '2026-09-16T03:00:00.000Z';
 const storm = (id = 'ep152026') => ({
@@ -479,6 +480,64 @@ test('explicit cyclone selection publishes shared context without auto-claiming 
   assert.equal(records.size, 0);
 
   h.layer.destroy();
+});
+
+test('shared cyclone context distinguishes switches, deliberate clears and feed eviction', async (t) => {
+  const previousWindow = Object.getOwnPropertyDescriptor(globalThis, 'window');
+  const host = new EventTarget();
+  Object.defineProperty(globalThis, 'window', {
+    configurable: true,
+    value: host,
+  });
+  let h;
+  t.after(() => {
+    try {
+      h?.layer.destroy();
+    } finally {
+      if (previousWindow)
+        Object.defineProperty(globalThis, 'window', previousWindow);
+      else delete globalThis.window;
+    }
+  });
+  const events = [];
+  host.addEventListener('gev:entity-selected', ({ detail }) =>
+    events.push(['selected', detail.id]),
+  );
+  host.addEventListener('gev:entity-selection-cleared', ({ detail }) =>
+    events.push(['cleared', detail.reason]),
+  );
+  let next = snapshot([storm(), storm('ep162026')]);
+  h = harness({ getSnapshot: async () => next }, { context: contextStore });
+  h.layer.enable();
+  await h.layer.update();
+  h.layer.setParams({ stormId: 'ep152026' });
+  h.layer.setParams({ stormId: 'ep162026' });
+  assert.deepEqual(events, [
+    ['selected', 'cyclone:ep152026'],
+    ['selected', 'cyclone:ep162026'],
+  ]);
+  assert.deepEqual(
+    [...contextStore.getContextStore().entities.keys()],
+    ['cyclone:ep162026'],
+  );
+  await h.layer.update();
+  assert.equal(events.length, 2, 'refresh must not announce selection');
+
+  h.layer.setParams({ clear: true });
+  assert.deepEqual(events.at(-1), ['cleared', 'deliberate']);
+  assert.equal(contextStore.getContextStore().entities.size, 0);
+
+  h.layer.setParams({ stormId: 'ep162026' });
+  next = snapshot([storm()]);
+  await h.layer.update();
+  assert.deepEqual(events.at(-1), ['cleared', 'evicted']);
+  assert.equal(contextStore.getContextStore().entities.size, 0);
+  assert.equal(contextStore.getContextStore().selectedEntityId, null);
+
+  h.layer.setParams({ stormId: 'ep152026' });
+  h.layer.disable();
+  assert.deepEqual(events.at(-1), ['cleared', 'deliberate']);
+  assert.equal(contextStore.getContextStore().entities.size, 0);
 });
 
 test('refresh preserves selection intent, including explicit clears and missing storms', async () => {
