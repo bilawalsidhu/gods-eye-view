@@ -4454,8 +4454,10 @@ silently demoting every later lookup for the session.
   default 36 → 250, hard bound 300), filtered to `camera_status === TURNED_ON` (~815 live of
   1,003 rows). City packs (2026-07-04): Caltrans (districts 4/7/11/3 — SF, LA, San Diego,
   Sacramento; cap 300) and TfL London JamCams (cap 250) join Austin (cap 250) as keyless default
-  sources. Ontario 511 (2026-09-12) adds keyless highway cameras including Kitchener-area routes
-  (cap 1,000, all enabled rows from the current ~944-camera catalog). All sources are RAW PRIOR
+  sources. Ontario 511 (2026-09-12) adds highway cameras including Kitchener-area routes
+  (cap 1,000, all enabled rows from the current ~944-camera catalog). The 511on.ca API now
+  requires a developer key, so the pack needs `ONTARIO_511_API_KEY` and is skipped without one
+  (#1228). All sources are RAW PRIOR
   poses, and the layer is stills-first.
   sources. Fintraffic Finland road weather cameras (2026-09-13; cap 300, `CCTV_FINTRAFFIC_MAX_SOURCES`,
   kill switch `CCTV_FINTRAFFIC_ENABLED=0`) are the fourth pack: one keyless GeoJSON station list
