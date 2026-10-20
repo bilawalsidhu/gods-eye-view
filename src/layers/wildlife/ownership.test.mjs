@@ -530,15 +530,16 @@ test('studies still on their way are named and polled for', async () => {
     '—',
   );
   assert.equal(h.layer.getStats().partial, true);
-  assert.equal(h.timers.size, 1);
-  assert.equal([...h.timers.values()][0].ms, 20_000);
+  // The fresh studies also arm their expiry deadline.
+  const polls = () => [...h.timers].filter(([, { ms }]) => ms === 20_000);
+  assert.equal(polls().length, 1);
   h.setSnapshot({ studies: studies(), animals: ANIMALS });
-  const [[, { callback }]] = [...h.timers];
-  h.timers.clear();
+  const [[poll, { callback }]] = polls();
+  h.timers.delete(poll);
   callback();
   await new Promise((resolve) => setImmediate(resolve));
   assert.equal(h.layer.getStats().count, 3);
-  assert.equal(h.timers.size, 0, 'no poll once every study is in');
+  assert.equal(polls().length, 0, 'no poll once every study is in');
   h.layer.setParams({ study: GULLS });
   h.setSnapshot({ studies: studies({ [GULLS]: 'pending' }), animals: [] });
   await h.layer.update();
@@ -626,11 +627,24 @@ test('while refreshes fail, held positions expire with the proxy copy', async ()
   h.layer.enable();
   await h.layer.update();
   h.fail(true);
+  const expiry = () => {
+    const [id, timer] = [...h.timers][0] || [];
+    h.timers.delete(id);
+    return timer;
+  };
+  assert.equal(h.timers.size, 1);
+  assert.equal(
+    [...h.timers.values()][0].ms,
+    HOUR,
+    'the 5 h copy is due in 1 h',
+  );
   h.advance(HOUR - 1);
   await h.layer.update();
   assert.equal(h.layer.getStats().count, 3, 'a copy under six hours stays');
+  let timer = expiry();
+  assert.equal(timer.ms, 1, 'a refresh re-arms the deadline');
   h.advance(1);
-  await h.layer.update();
+  timer.callback();
   assert.equal(h.layer.getStats().count, 2, 'the 5 h stale study goes at 6 h');
   assert.ok(!h.entityIds().some((id) => id.includes(String(STORKS))));
   h.layer.setParams({ study: STORKS });
@@ -639,17 +653,20 @@ test('while refreshes fail, held positions expire with the proxy copy', async ()
     /^Movebank did not return this study/,
   );
   h.layer.setParams({ clear: true });
-  h.advance(5 * HOUR - 1);
-  await h.layer.update();
-  assert.equal(h.layer.getStats().count, 2);
-  h.advance(1);
-  await h.layer.update();
+  timer = expiry();
+  assert.equal(timer.ms, 5 * HOUR);
+  h.advance(5 * HOUR);
+  timer.callback();
   assert.equal(h.layer.getStats().count, 0, 'nothing outlives six hours');
   assert.equal(h.entityIds().length, 0);
+  assert.equal(h.timers.size, 0, 'nothing left to expire');
   h.fail(false);
   h.setSnapshot({ studies: studies(), animals: ANIMALS });
   await h.layer.update();
   assert.equal(h.layer.getStats().count, 3, 'a good refresh brings them back');
+  assert.equal(h.timers.size, 1);
+  h.layer.disable();
+  assert.equal(h.timers.size, 0, 'disabling cancels the deadline');
 });
 
 test('globe clicks choose animals and leave other layers alone', async () => {
