@@ -140,3 +140,95 @@ html:not([lang='en'])
   white-space: normal;
   overflow-wrap: anywhere;
 }
+
+#gev-voice-control[data-provider-choice='true'] {
+  --gev-provider-lift: 0px;
+}
+
+/* Provider choice belongs to the existing voice control, not a separate panel. */
+.gev-voice-provider-field {
+  position: absolute;
+  bottom: calc(100% + var(--gev-provider-lift, 0px));
+  z-index: 9;
+  left: 0;
+  right: 0;
+  display: grid;
+  gap: 4px;
+  padding: 8px 6px;
+  border: 1px solid var(--glass-border);
+  border-radius: 8px;
+  background: var(--bg-panel, #09121b);
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  font-size: 0.5rem;
+  opacity: 0;
+  pointer-events: none;
+}
+.gev-voice-provider-field[hidden] {
+  display: none;
+}
+.gev-voice-provider-field select {
+  min-width: 0;
+  width: 100%;
+  min-height: 30px;
+  color: var(--text-primary);
+  background: #09121b;
+  border: 1px solid var(--glass-border);
+  border-radius: 4px;
+  font: inherit;
+  font-size: 0.65rem;
+}
+#gev-voice-control:hover .gev-voice-provider-field,
+#gev-voice-control:focus-within .gev-voice-provider-field {
+  opacity: 1;
+  pointer-events: auto;
+}
+#command-dock
+  #gev-voice-control[data-provider-choice='true']
+  .gev-voice-help-tray,
+#command-dock #gev-voice-control[data-provider-choice='true'] .gev-voice-card,
+#command-dock
+  #gev-voice-control[data-provider-choice='true']
+  .gev-voice-error-tray {
+  bottom: calc(100% + 4.8rem + var(--gev-provider-lift));
+}
+#command-dock.dock-has-pinned-tray
+  #gev-voice-control[data-provider-choice='true'] {
+  --gev-provider-lift: calc(1.7rem + var(--dock-pinned-stack-height));
+}
+/* Pinned trays separate the chooser from its hover owner. Keep it reachable
+   across that gap without requiring keyboard focus to hold it open. */
+#command-dock.dock-has-pinned-tray .gev-voice-provider-field {
+  opacity: 1;
+  pointer-events: auto;
+}
+@media (max-width: 900px) {
+  /* The attribution clearance also creates a gap for mouse users in a
+     narrow window, so the raised chooser must not depend on root hover. */
+  .gev-voice-provider-field {
+    opacity: 1;
+    pointer-events: auto;
+  }
+  #command-dock #gev-voice-control[data-provider-choice='true'] {
+    --gev-provider-lift: 3rem;
+  }
+  #command-dock.dock-has-pinned-tray
+    #gev-voice-control[data-provider-choice='true'] {
+    --gev-provider-lift: calc(3.5rem + var(--dock-pinned-stack-height));
+  }
+}
+@media (max-width: 720px) {
+  #command-dock #gev-voice-control[data-provider-choice='true'] {
+    --gev-provider-lift: calc(2vh + 2.5rem);
+  }
+  #command-dock.dock-has-pinned-tray
+    #gev-voice-control[data-provider-choice='true'] {
+    --gev-provider-lift: calc(2vh + 3rem + var(--dock-pinned-stack-height));
+  }
+}
+@media (hover: none) {
+  .gev-voice-provider-field {
+    opacity: 1;
+    pointer-events: auto;
+  }
+}
