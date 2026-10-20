@@ -37,6 +37,16 @@ export const KEY_SETUP_APPEND_HEADER =
  */
 export const KEY_SETUP_KEYS = Object.freeze([
   Object.freeze({
+    id: 'openaq',
+    title: 'OPENAQ', // i18n-ignore: provider product name
+    unlocks: msg(
+      'Air-quality observations across Africa. Free account key; coverage depends on reporting stations.',
+    ),
+    getUrl: 'https://explore.openaq.org/register',
+    envVars: Object.freeze(['OPENAQ_API_KEY']),
+    tier: 'free',
+  }),
+  Object.freeze({
     id: 'google-maps',
     title: 'GOOGLE MAPS', // i18n-ignore: provider product name
     unlocks: msg('The photorealistic 3D planet, place search + Street View'),

@@ -136,3 +136,95 @@ query-tool integration with issue #1213. Neither branch is imported here.
 - Optional live source audit: append `--live`.
 - Repository gates: `npm test`, `npm run build`, `npm run test:track`,
   formatting, package boundaries, i18n and layer-token checks.
+
+## Provider-reported index (verified 20 October 2026)
+
+The public SAAQIS portal publishes `IndexValAndColorString` for index type 1:
+1–3 Good (green), 4–5 Moderate (yellow), 6–7 Unhealthy (orange),
+8–9 Very Unhealthy (red), 10 Hazardous (purple).
+Its public `Scripts/modules/StationModule.js` requests
+`stations/index/latest`; we verified `stations/index/latest?hoursBack=6`
+through the same anonymous portal session. The payload supplies station
+`datetime` and per-pollutant `indexes` with numeric index and description.
+This is a source-reported index, not a locally calculated WHO or US EPA index.
+A complete calculation-method document has not been verified. In particular,
+`PollutantTimeBase: 0` is not interpreted as an averaging duration.
+
+GEV joins a rating only to the identical station, pollutant and observation
+ timestamp, validates integer scores 1–10 and the published category, and keeps
+concentrations separate from index scores. Unsupported scales, mismatches,
+missing ratings and sentinel values stay neutral with an explicit unavailable
+badge. Index endpoint failure does not discard concentrations. CO2 does not
+inherit another pollutant's rating. The legend identifies the SAAQIS method;
+category text accompanies colour, and station details state hourly averaging,
+source, timestamp and provisional status. Existing observation freshness rules
+continue to apply to rated observations.
+
+Primary references: https://saaqis.environment.gov.za/ and
+https://saaqis.environment.gov.za/Scripts/modules/StationModule.js .
+
+## OpenAQ Africa and provider extension
+
+OpenAQ is an optional observation provider in the same Air quality card. Open
+**POWER UP → OPENAQ**, follow its free registration link, paste the private key
+and save. This uses the existing `KEY_SETUP_KEYS` registry and local settings
+write/restart path. The variable is `OPENAQ_API_KEY`; it is never client-exposed.
+Provider Settings remains development/loopback-only. Preview and other hosts use
+environment configuration. No credential is needed for ECCC or SAAQIS.
+
+The standalone defaults offer Canada, South Africa and Africa/OpenAQ. The latter
+uses a configured UN M49 Africa country/area scope, including island territories,
+with OpenAQ's countries and paginated locations APIs. There is no city or station
+allowlist. The regional acquisition factory accepts a different scope without
+changing normalization or rendering. This does not imply monitors exist in every
+country or municipality. Live coverage cannot be verified without an account key.
+
+Requests are demand-driven while enabled: up to 24 stations per refresh, shared
+60-second cache and in-flight coalescing, at most 45 requests/minute and 1,800/hour
+in this server process. Other installations sharing a key also consume its quota.
+HTTP 429 respects Retry-After; authentication failures remain explicit. Catalog
+refresh is hourly. Stations with catalog timestamps older than six hours are
+excluded from the current sweep; their return is discovered on catalog refresh.
+The card distinguishes catalog size, recent stations checked, countries reporting
+and incomplete loading. No upstream polling continues after the layer is disabled.
+A batch already in flight may finish. Last-good data on transient errors is marked
+stale; observations older than six hours are omitted at every client read.
+
+OpenAQ supplies concentrations, not ratings. Records retain original units,
+network/owner, licences, observation time and unknown averaging duration. A
+SAAQIS station may also be distributed through OpenAQ: providers are alternatives,
+not summed together or advertised as independent coverage. Actual overlap needs
+an authenticated audit; no heuristic merges unrelated stations by proximity.
+
+### Injecting a provider
+
+`createAirQualitySource({ providers })` replaces the full default catalog.
+Each definition owns `id`, `title`, `label`, `network`, `coverage`, `sourceLabel`,
+`parameters`, `observation`, optional `legend`, explanatory text and a source
+implementing `getSnapshot({ parameter, signal })`. Optional `getCoverage()` returns
+coverage/progress metadata. Sources acquire and normalize; the existing layer owns
+Cesium, lifecycle, overlay labels and Weather-card descriptors. No browser/Node
+imports belong in a portable source. A legacy source without definitions remains
+ECCC-only. Duplicate/invalid definitions fail construction. Provider IDs are
+bounded URL-safe identifiers; share links preserve custom IDs with an extension
+encoding while old ECCC/SAAQIS aliases retain their meaning. A host must supply the
+corresponding definition to use such a link. Custom pollutant serialization still
+uses the published supported-pollutant codec and must be extended explicitly.
+
+Example host composition (no renderer edits or new settings UI):
+
+```js
+const source = createAirQualitySource({ providers: [{
+  id: 'community-network', title: 'Community', label: 'Community air quality',
+  network: 'Community network', coverage: 'Regional observations',
+  observation: true, parameters: ['PM2.5'], legend: [],
+  source: communityObservationSource,
+}] });
+```
+
+Validation: OpenAQ normalization/proxy/injection tests, existing setup and share
+codec tests, `scripts/qa-openaq.mjs` (explicit synthetic fixtures, never writes
+credentials), and the South African browser gate. Follow CONTRIBUTING.md for
+full unit/build/tracking checks. See https://docs.openaq.org/using-the-api/api-key,
+https://docs.openaq.org/using-the-api/rate-limits and
+https://docs.openaq.org/api/operations/locations_get_v3_locations_get .

@@ -48,6 +48,19 @@ export function syncRowList(container, list) {
     const bodyText = String(item.text ?? '');
     if (lead && lead.textContent !== leadText) lead.textContent = leadText;
     if (text && text.textContent !== bodyText) text.textContent = bodyText;
+    let badge = button.querySelector('.data-row-list-badge');
+    if (item.badge && !badge) {
+      badge = document.createElement('span');
+      badge.className = 'data-row-list-badge';
+      button.appendChild(badge);
+    }
+    if (badge) {
+      badge.hidden = !item.badge;
+      badge.textContent = String(item.badge || '');
+      badge.style.color = /^#[0-9a-f]{6}$/i.test(item.badgeColor || '')
+        ? item.badgeColor
+        : '';
+    }
     set(button, 'disabled', Boolean(item.disabled));
     set(
       button,

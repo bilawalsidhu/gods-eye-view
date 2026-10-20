@@ -204,7 +204,9 @@ test('provider switch clears old markers and ignores late requests; view changes
   let removed = false;
   let listener;
   const source = {
-    providers: ['eccc', 'saaqis'],
+    definitions: createAirQualitySource().definitions.filter((p) =>
+      ['eccc', 'saaqis'].includes(p.id),
+    ),
     getSnapshot: ({ provider }) =>
       provider === 'saaqis'
         ? Promise.resolve(selectSaReadings(snapshot([channel()]), 'PM2.5', now))
@@ -247,7 +249,7 @@ test('provider switch clears old markers and ignores late requests; view changes
   assert.equal(await old, false);
   assert.equal(layer.getStats().count, 1);
   const card = layer.getRowControls();
-  assert.deepEqual(card.legend, []);
+  assert.equal(card.legend.length, 6);
   assert.deepEqual(
     card.list.items,
     [],
@@ -272,4 +274,56 @@ test('a Canada-only injected source cannot be labelled South African', () => {
   assert.equal(layer.setParams({ provider: 'saaqis' }), false);
   assert.equal(layer.getParams().provider, 'eccc');
   assert.equal(layer.getRowControls().summary.settings[0].chips.length, 1);
+});
+
+test('provider index requires matching time, pollutant, category and supported scale', async () => {
+  const { attachSaIndexes } = await import('./southAfrica.js');
+  const row = {
+    stationId: '1',
+    parameter: 'PM2.5',
+    observedMs: Date.parse('2026-10-20T10:00:00Z'),
+  };
+  const payload = (score, description, overrides = {}) => ({
+    indexType: 1,
+    data: [
+      {
+        stationId: 1,
+        datetime: '2026-10-20T12:00:00+02:00',
+        indexes: [{ pollutant: 'PM2.5', index: score, description }],
+        ...overrides,
+      },
+    ],
+  });
+  for (const [score, label] of [
+    [1, 'Good'],
+    [3, 'Good'],
+    [4, 'Moderate'],
+    [5, 'Moderate'],
+    [6, 'Unhealthy'],
+    [7, 'Unhealthy'],
+    [8, 'Very Unhealthy'],
+    [9, 'Very Unhealthy'],
+    [10, 'Hazardous'],
+  ]) {
+    assert.equal(
+      attachSaIndexes([row], payload(score, label))[0].rating.label,
+      label,
+    );
+  }
+  for (const p of [
+    null,
+    payload(-9999, 'Good'),
+    payload(11, 'Hazardous'),
+    payload(1.5, 'Good'),
+    payload(1, 'Hazardous'),
+    payload(1, 'Good', { datetime: '2026-10-19T12:00:00+02:00' }),
+    { ...payload(1, 'Good'), indexType: 2 },
+  ]) {
+    assert.equal(attachSaIndexes([row], p)[0].rating, null);
+  }
+  assert.equal(
+    attachSaIndexes([{ ...row, parameter: 'CO2' }], payload(1, 'Good'))[0]
+      .rating,
+    null,
+  );
 });

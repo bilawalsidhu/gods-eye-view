@@ -1,3 +1,4 @@
+import { openAqProxy } from './openAq.js';
 import { southAfricaAirQualityProxy } from './southAfricaAirQuality.js';
 import { openSkyProxy } from './aircraft/opensky.js';
 import { celestrakProxy, rocketLaunchesProxy } from './space.js';
@@ -63,6 +64,7 @@ function localProviderPlugins({ realtime, gemini } = {}) {
     weatherProxy(),
     cycloneProxy(),
     southAfricaAirQualityProxy(),
+    openAqProxy(),
     mapillaryProxy(),
     firePerimetersProxy(),
     gnssIntegrityProxy(),

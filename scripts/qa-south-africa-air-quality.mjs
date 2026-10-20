@@ -107,6 +107,17 @@ const snapshot = {
     stations,
   ),
 };
+for (const row of snapshot.readings) {
+  if (row.parameter === 'PM2.5') {
+    row.rating = {
+      score: 4,
+      label: 'Moderate',
+      method: 'SAAQIS index',
+      observedMs: row.observedMs,
+    };
+    row.color = '#F7FF00';
+  }
+}
 let fail = false;
 const browser = await puppeteer.launch({
   headless: !process.argv.includes('--headful'),
@@ -193,7 +204,8 @@ try {
   assert.equal(result.records[0].units, 'µg/m³');
   assert.equal(result.records[0].band, null);
   assert.equal(result.controls.list.items.length, 1);
-  assert.equal(result.controls.legend.length, 0);
+  assert.equal(result.controls.legend.length, 6);
+  assert.equal(result.controls.list.items[0].badge, 'Moderate · 4/10');
   assert.ok(
     result.controls.summary.lines.some((row) =>
       row.text.includes('2 catalog stations'),
@@ -223,6 +235,10 @@ try {
   );
   const co2 = await page.$('[data-chip-id="CO2"]');
   assert.ok(co2, 'real Weather card exposes the pollutant controls');
+  assert.equal(
+    await page.$eval('.data-row-list-badge', (el) => el.textContent),
+    'Moderate · 4/10',
+  );
   await co2.click();
 
   await page.waitForFunction(
@@ -236,7 +252,7 @@ try {
   assert.equal(result.records[0].units, 'ppm');
   assert.equal(result.params.parameter, 'CO2');
   console.log(
-    'PASS: real CO2 control selects concentration, without an emissions/AQI legend',
+    'PASS: real CO2 control selects concentration, with an unavailable index badge',
   );
   if (process.env.QA_SA_SCREENSHOT)
     await page.screenshot({ path: process.env.QA_SA_SCREENSHOT });

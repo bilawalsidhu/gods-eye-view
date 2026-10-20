@@ -58,7 +58,7 @@ test('one coalesced national acquisition uses a private session and fixed bulk p
     source.getSnapshot(),
     source.getSnapshot(),
   ]);
-  assert.equal(calls.length, 3);
+  assert.equal(calls.length, 4);
   assert.equal(results[0].stations.length, 1);
   assert.equal(results[0].readings.length, 1);
   assert.ok(!JSON.stringify(results).includes('test-session'));
@@ -67,7 +67,7 @@ test('one coalesced national acquisition uses a private session and fixed bulk p
     /regionsIds=2&timebase=60$/,
   );
   await source.getSnapshot();
-  assert.equal(calls.length, 3);
+  assert.equal(calls.length, 4);
 });
 
 test('last-good fallback is marked stale, expires, and failed acquisitions back off', async () => {
@@ -152,5 +152,39 @@ test('route rejects arbitrary queries and writes; dev and preview both register'
       },
     );
     assert.equal(status, expected);
+  }
+});
+
+test('optional index endpoint attaches ratings and failure preserves concentrations', async () => {
+  for (const failIndex of [false, true]) {
+    const source = createSaAcquisition({
+      fetchImpl: async (url, options) => {
+        if (url.endsWith('GetApiFromBackToken'))
+          return Response.json({ key: 'private' });
+        const path = JSON.parse(options.body).url;
+        if (path.startsWith('stations/index/')) {
+          if (failIndex) return new Response('', { status: 503 });
+          return Response.json({
+            indexType: 1,
+            data: [
+              {
+                stationId: 1,
+                datetime: '2026-10-20T12:00:00+02:00',
+                indexes: [
+                  { pollutant: 'PM2.5', index: 1, description: 'Good' },
+                ],
+              },
+            ],
+          });
+        }
+        return Response.json(path === 'regions' ? regions : latest);
+      },
+    });
+    const result = await source.getSnapshot();
+    assert.equal(result.readings.length, 1);
+    assert.equal(
+      result.readings[0].rating?.label ?? null,
+      failIndex ? null : 'Good',
+    );
   }
 });

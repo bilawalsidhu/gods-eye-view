@@ -402,13 +402,13 @@ export function mapAnalystRecord(raw, index = 0) {
     lat: num(raw?.lat),
     lon: num(raw?.lon),
     observedMs: num(raw?.observedMs),
-    ...(raw?.provider === 'saaqis'
+    ...(raw?.kind === 'observation'
       ? {
           parameter: text(raw.parameter),
           units: text(raw.units),
           averagingMinutes: num(raw.averagingMinutes),
           kind: 'observation',
-          country: 'ZA',
+          country: text(raw.country),
           owner: text(raw.owner),
           note: text(raw.note),
         }

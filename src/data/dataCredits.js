@@ -170,6 +170,10 @@ export const DATA_CREDITS = [
   OSM_CREDIT,
   OPENMAPTILES_CREDIT,
   {
+    key: 'openaq',
+    html: 'Air-quality observations: <a href="https://openaq.org/" target="_blank" rel="noopener">OpenAQ</a> and originating networks. Provider attribution and licences accompany each station.',
+  },
+  {
     key: 'saaqis',
     html: 'South African air quality: <a href="https://saaqis.environment.gov.za/" target="_blank" rel="noopener">SAAQIS</a> and originating monitoring networks. Provisional observations.',
   },

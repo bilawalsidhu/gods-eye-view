@@ -1070,5 +1070,8 @@
   "src/layers/airQuality/southAfrica.test.mjs",
   "server/providers/southAfricaAirQuality.js",
   "server/providers/southAfricaAirQuality.test.mjs",
-  "scripts/qa-south-africa-air-quality.mjs"
+  "scripts/qa-south-africa-air-quality.mjs",
+  "src/layers/airQuality/openAq.test.mjs",
+  "server/providers/openAq.test.mjs",
+  "scripts/qa-openaq.mjs"
 ]

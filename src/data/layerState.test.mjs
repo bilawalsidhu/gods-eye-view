@@ -2868,3 +2868,10 @@ test('South African provider options round-trip while old air-quality links rema
     provider: 'eccc', parameter: 'PM2.5',
   });
 });
+
+test('OpenAQ and injected provider identities round-trip without changing old aliases', () => {
+  for (const provider of ['openaq', 'community-network']) {
+    const state = normalizeLayerState({enabledLayerIds:['air-quality'],options:{'air-quality':{provider,parameter:'NO2'}}});
+    assert.deepEqual(decodeLayerStateParams(new URLSearchParams(encode(state))),state);
+  }
+});

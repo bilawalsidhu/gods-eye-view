@@ -1,13 +1,12 @@
 import * as Cesium from 'cesium';
-import { SA_POLLUTANTS } from './southAfrica.js';
+import { keyRequirementText } from '../../ui/keyGuidance.js';
+import { ECCC_DEFINITION } from './providers.js';
 import { msg, t, tn } from '../../i18n/index.js';
 import { translateFeedError } from '../../ui/statusText.js';
 import {
-  AIR_QUALITY_BANDS,
   AIR_QUALITY_OVERLAY_SOURCE_ID,
   AIR_QUALITY_OVERLAY_COHORT_LIMIT,
   AIR_QUALITY_OVERLAY_COLLISION_CAPACITY,
-  AIR_QUALITY_PROVIDERS,
   createAirQualityOverlayEntry,
   mapAnalystRecord,
   newestObservation,
@@ -38,8 +37,12 @@ export function createAirQualityLayer({ source, overlayHost } = {}) {
   let _lastError = null;
   let _enabled = false;
   let rowControlsListener = null;
-  let providerId = 'eccc';
-  let parameter = 'PM2.5';
+  const definitions = source.definitions ?? [ECCC_DEFINITION];
+  const providers = new Map(definitions.map((entry) => [entry.id, entry]));
+  let providerId = definitions[0].id;
+  const definition = () => providers.get(providerId);
+  const observation = () => definition().observation === true;
+  let parameter = definitions[0].parameters[0] || 'PM2.5';
   let coverage = null;
   let overlayEntries = [];
   let removeMoveEnd = null;
@@ -63,8 +66,8 @@ export function createAirQualityLayer({ source, overlayHost } = {}) {
     id: 'air-quality',
     name: 'Air quality',
     icon: '◍',
-    source: 'ECCC MSC GeoMet',
-    updateInterval: 1_200_000,
+    source: definition().sourceLabel || definition().network,
+    updateInterval: 60_000,
 
     init(viewer) {
       if (_viewer) throw new Error('Air quality layer is already initialized');
@@ -109,21 +112,20 @@ export function createAirQualityLayer({ source, overlayHost } = {}) {
     },
 
     setParams(params = {}) {
-      if (params.provider === 'saaqis' && !source.providers?.includes('saaqis'))
-        return false;
-      const nextProvider = ['eccc', 'saaqis'].includes(params.provider)
-        ? params.provider
-        : providerId;
-      const nextParameter = SA_POLLUTANTS.includes(params.parameter)
+      if (params.provider && !providers.has(params.provider)) return false;
+      const nextProvider = params.provider || providerId;
+      const supported = providers.get(nextProvider).parameters;
+      const nextParameter = supported.includes(params.parameter)
         ? params.parameter
-        : parameter;
+        : supported.includes(parameter) || !supported.length
+          ? parameter
+          : supported[0];
       if (nextProvider === providerId && nextParameter === parameter) return;
       _request?.abort();
       _request = null;
       providerId = nextProvider;
       parameter = nextParameter;
-      this.source =
-        providerId === 'saaqis' ? 'SAAQIS · South Africa' : 'ECCC MSC GeoMet';
+      this.source = definition().sourceLabel || definition().network;
       _readings = [];
       _count = 0;
       _lastUpdate = null;
@@ -159,7 +161,12 @@ export function createAirQualityLayer({ source, overlayHost } = {}) {
         return true;
       } catch (error) {
         if (request.signal.aborted || _request !== request) return false;
-        _lastError = error?.message || msg('Air quality request failed');
+        _lastError =
+          (error?.code === 'no_key'
+            ? keyRequirementText(definition().requiresKeyId)
+            : '') ||
+          error?.message ||
+          msg('Air quality request failed');
         console.warn('[Data:AirQuality] Refresh failed:', _lastError);
         notify();
         return false;
@@ -183,7 +190,7 @@ export function createAirQualityLayer({ source, overlayHost } = {}) {
           new Cesium.Entity({
             id: `air-quality:${reading.id}`,
             position,
-            ...(providerId === 'saaqis'
+            ...(observation()
               ? {
                   point: {
                     pixelSize: 8,
@@ -229,7 +236,7 @@ export function createAirQualityLayer({ source, overlayHost } = {}) {
             position,
             title: `${reading.name} ${reading.label}`,
             accent: reading.color,
-            value: providerId === 'saaqis' ? 0 : reading.value,
+            value: observation() ? 0 : reading.value,
           }),
         );
       }
@@ -237,19 +244,18 @@ export function createAirQualityLayer({ source, overlayHost } = {}) {
     },
 
     _publishOverlays() {
-      const visibleIds =
-        providerId === 'saaqis'
-          ? new Set(
-              readingsInView(_readings, viewRectangle(), _readings.length).map(
-                (row) => row.id,
-              ),
-            )
-          : null;
+      const visibleIds = observation()
+        ? new Set(
+            readingsInView(_readings, viewRectangle(), _readings.length).map(
+              (row) => row.id,
+            ),
+          )
+        : null;
       if (_enabled) {
         overlayHost.setEntries(
           AIR_QUALITY_OVERLAY_SOURCE_ID,
           selectAirQualityOverlayCohort(
-            providerId === 'saaqis'
+            observation()
               ? overlayEntries.filter((entry) => visibleIds.has(entry.id))
               : overlayEntries,
           ),
@@ -291,17 +297,20 @@ export function createAirQualityLayer({ source, overlayHost } = {}) {
      * the rest. Coverage is stated plainly because this layer is not global.
      */
     getRowControls() {
-      const isSa = providerId === 'saaqis';
-      const provider = isSa
-        ? { ...AIR_QUALITY_PROVIDERS.saaqis, scale: parameter }
-        : AIR_QUALITY_PROVIDERS.eccc;
+      const isObservation = observation();
+      const provider = {
+        ...definition(),
+        scale: isObservation ? parameter : definition().scale,
+      };
       const visible = readingsInView(
         _readings,
         viewRectangle(),
         _readings.length,
       );
       const inView = (
-        isSa ? visible.sort((a, b) => a.name.localeCompare(b.name)) : visible
+        isObservation
+          ? visible.sort((a, b) => a.name.localeCompare(b.name))
+          : visible
       ).slice(0, READOUT_LIMIT);
       const newest = _readings.reduce(
         (max, reading) => Math.max(max, reading.observedMs || 0),
@@ -333,31 +342,19 @@ export function createAirQualityLayer({ source, overlayHost } = {}) {
             {
               id: 'provider',
               label: t('Network'),
-              chips: [
-                {
-                  id: 'eccc',
-                  label: t('Canada'),
-                  active: !isSa,
-                  params: { provider: 'eccc' },
-                },
-                ...(source.providers?.includes('saaqis')
-                  ? [
-                      {
-                        id: 'saaqis',
-                        label: t('South Africa'),
-                        active: isSa,
-                        params: { provider: 'saaqis' },
-                      },
-                    ]
-                  : []),
-              ],
+              chips: definitions.map((entry) => ({
+                id: entry.id,
+                label: t(entry.title),
+                active: entry.id === providerId,
+                params: { provider: entry.id },
+              })),
             },
-            ...(isSa
+            ...(isObservation
               ? [
                   {
                     id: 'pollutant',
                     label: t('Pollutant'),
-                    chips: SA_POLLUTANTS.map((id) => ({
+                    chips: provider.parameters.map((id) => ({
                       id,
                       label: id,
                       active: parameter === id,
@@ -367,14 +364,12 @@ export function createAirQualityLayer({ source, overlayHost } = {}) {
                 ]
               : []),
           ],
-          ...(isSa
+          ...(isObservation
             ? {
                 lines: [
                   {
                     id: 'coverage',
-                    text: t(
-                      'Station observations across all nine provinces. Municipalities without monitors have no measured coverage.',
-                    ),
+                    text: t(provider.coverageNote || provider.coverage),
                   },
                   {
                     id: 'counts',
@@ -390,19 +385,42 @@ export function createAirQualityLayer({ source, overlayHost } = {}) {
                   {
                     id: 'interpretation',
                     text: visible.length
-                      ? t(
-                          'Hourly concentrations in source units; provisional data, not AQI or emissions.',
-                        )
+                      ? t(provider.interpretation || '')
                       : t(
                           'No current observations for this pollutant in the map view.',
                         ),
                   },
+                  ...(Number.isFinite(coverage?.checked)
+                    ? [
+                        {
+                          id: 'progress',
+                          text: t(
+                            '{checked} of {eligible} recent stations checked · {countries} countries reporting',
+                            {
+                              checked: coverage.checked,
+                              eligible: coverage.eligible,
+                              countries: coverage.countriesReporting || 0,
+                            },
+                          ),
+                        },
+                      ]
+                    : []),
+                  ...(coverage?.partial
+                    ? [
+                        {
+                          id: 'partial',
+                          text: t(
+                            'Coverage is loading progressively within the provider request budget.',
+                          ),
+                        },
+                      ]
+                    : []),
                   ...(coverage?.stale
                     ? [
                         {
                           id: 'cached',
                           text: t(
-                            'Cached observations; SAAQIS refresh failed.',
+                            'Cached observations; provider refresh failed.',
                           ),
                         },
                       ]
@@ -411,23 +429,29 @@ export function createAirQualityLayer({ source, overlayHost } = {}) {
               }
             : {}),
         },
-        legend: isSa
-          ? []
-          : AIR_QUALITY_BANDS.map((band) => ({
-              color: band.color,
-              label: t(band.label),
-            })),
+        legend: (provider.legend || []).map((band) => ({
+          color: band.color,
+          label: `${t(band.label)}${band.range ? ` ${band.range}` : ''}`,
+        })),
         legendCategorical: true,
         list: {
-          ariaLabel: isSa
-            ? t('South African observations in view')
+          ariaLabel: isObservation
+            ? t('Observations in view')
             : t('Highest air-quality readings in view'),
           items: inView.map((reading, index) => ({
             id: reading.id,
             ordinal: index + 1,
             lead: `${reading.scale} ${reading.label}`,
-            text: isSa
-              ? `${reading.name} · ${reading.zone} · ${reading.owner || 'SAAQIS'} · ${new Date(reading.observedMs).toISOString()}`
+            ...(isObservation
+              ? {
+                  badge: reading.rating
+                    ? `${t(reading.rating.label)} · ${reading.rating.score}/10`
+                    : t('Index unavailable'),
+                  badgeColor: reading.color,
+                }
+              : {}),
+            text: isObservation
+              ? `${reading.name} · ${reading.zone} · ${reading.owner || provider.network} · ${t(provider.averagingLabel || 'Source averaging period unspecified')} · ${new Date(reading.observedMs).toISOString()} · ${reading.rating ? t(provider.indexLabel || 'Index unavailable') : t('Index unavailable')} · ${t('Provisional data')} · ${reading.network || provider.network} · ${(reading.licenses || []).map((item) => item.attribution || item.name).join(', ')}`
               : `${reading.name} · ${t(reading.risk)}`,
             accent: reading.color,
           })),
@@ -474,3 +498,10 @@ export function createAirQualityLayer({ source, overlayHost } = {}) {
   };
   return layer;
 }
+
+// Provider category labels are translated at presentation time.
+msg('Good');
+msg('Moderate');
+msg('Unhealthy');
+msg('Very Unhealthy');
+msg('Hazardous');

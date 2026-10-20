@@ -435,3 +435,38 @@ html:not([lang='en']) .rail-card-setting {
 .rail-card[data-open='true'] > .rail-card-header {
   padding-bottom: 0;
 }
+
+.rail-card .data-row-list-badge {
+  grid-column: 1 / -1;
+  justify-self: start;
+  border: 1px solid currentColor;
+  border-radius: 4px;
+  padding: 2px 6px;
+  font-size: 11px;
+  background: #101820;
+}
+.rail-card .data-row-list-badge[hidden] {
+  display: none;
+}
+
+.rail-card .data-row-list-item:has(.data-row-list-badge:not([hidden])) {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 5px;
+}
+.rail-card .data-row-list-item:has(.data-row-list-badge:not([hidden]))::before {
+  display: none;
+}
+.rail-card
+  .data-row-list-item:has(.data-row-list-badge:not([hidden]))
+  .data-row-list-text {
+  grid-column: 1 / -1;
+  grid-row: 2;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.rail-card .data-row-list-badge {
+  grid-column: 2;
+  grid-row: 1;
+  white-space: nowrap;
+}

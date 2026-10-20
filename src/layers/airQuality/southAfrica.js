@@ -164,3 +164,61 @@ export function selectSaReadings(
     )
     .sort((a, b) => a.name.localeCompare(b.name) || a.id.localeCompare(b.id));
 }
+
+// Published by the SAAQIS portal (IndexValAndColorString, indexType 1).
+// These classify provider-supplied scores, never hourly concentrations.
+export const SA_INDEX_BANDS = Object.freeze([
+  // i18n-ignore: exact upstream category; translated in layer presentation
+  { max: 3, label: 'Good', color: '#00FF00' },
+  // i18n-ignore: exact upstream category; translated in layer presentation
+  { max: 5, label: 'Moderate', color: '#F7FF00' },
+  // i18n-ignore: exact upstream category; translated in layer presentation
+  { max: 7, label: 'Unhealthy', color: '#FFC000' },
+  // i18n-ignore: exact upstream category; translated in layer presentation
+  { max: 9, label: 'Very Unhealthy', color: '#FF0000' },
+  // i18n-ignore: exact upstream category; translated in layer presentation
+  { max: 10, label: 'Hazardous', color: '#8D00FF' },
+]);
+
+/** Only attach the selected pollutant's index at the exact observation time. */
+export function attachSaIndexes(readings, payload) {
+  const indexes = new Map();
+  if (
+    payload?.indexType === 1 &&
+    Array.isArray(payload.data) &&
+    payload.data.length <= 2000
+  ) {
+    for (const station of payload.data) {
+      if (!Array.isArray(station.indexes) || station.indexes.length > 200)
+        continue;
+      const observedMs = saObservationTime(station.datetime);
+      for (const item of station.indexes) {
+        const score = item.index;
+        if (!Number.isInteger(score) || score < 1 || score > 10) continue;
+        const band = SA_INDEX_BANDS.find((b) => score <= b.max);
+        if (item.description !== band.label) continue;
+        indexes.set(`${station.stationId}:${item.pollutant}:${observedMs}`, {
+          score,
+          ...band,
+        });
+      }
+    }
+  }
+  return readings.map((reading) => {
+    const rating = indexes.get(
+      `${reading.stationId}:${reading.parameter}:${reading.observedMs}`,
+    );
+    return {
+      ...reading,
+      rating: rating
+        ? {
+            score: rating.score,
+            label: rating.label,
+            observedMs: reading.observedMs,
+            method: 'SAAQIS index',
+          }
+        : null,
+      color: rating?.color || '#8cb4ce',
+    };
+  });
+}

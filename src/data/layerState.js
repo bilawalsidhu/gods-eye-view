@@ -319,9 +319,19 @@ function satelliteFilterOption() {
 
 const OPTION_GROUPS = Object.freeze({
   'air-quality': Object.freeze([
-    enumOption('provider', 'p', 'eccc', ['eccc', 'saaqis'], {
-      eccc: 'c',
-      saaqis: 's',
+    Object.freeze({
+      key: 'provider',
+      token: 'p',
+      defaultValue: 'eccc',
+      normalize: (value) =>
+        typeof value === 'string' && /^[a-z][a-z0-9-]{0,39}$/.test(value)
+          ? value
+          : null,
+      encode: (value) =>
+        ({ eccc: 'c', saaqis: 's', openaq: 'o' })[value] || `x-${value}`,
+      decode: (value) =>
+        ({ c: 'eccc', s: 'saaqis', o: 'openaq' })[value] ||
+        (/^x-[a-z][a-z0-9-]{0,39}$/.test(value) ? value.slice(2) : null),
     }),
     enumOption(
       'parameter',
