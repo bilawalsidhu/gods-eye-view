@@ -140,7 +140,7 @@ export const TFL_IMAGE_ORIGIN =
   'https://s3-eu-west-1.amazonaws.com/jamcams.tfl.gov.uk/';
 export const DEFAULT_TFL_MAX_SOURCES = 250;
 export const LONDON_CENTER = { lat: 51.5074, lon: -0.1278 };
-/** Ontario 511: keyless CARS/511 camera catalog; frame URLs are still images. */
+/** Ontario 511: CARS/511 camera catalog, which needs a developer key (ONTARIO_511_API_KEY); frame URLs are still images. */
 export const ONTARIO_511_CAMERAS_URL =
   'https://511on.ca/api/v2/get/cameras?format=json&lang=en';
 export const ONTARIO_511_IMAGE_ORIGIN = 'https://511on.ca/map/Cctv/';
