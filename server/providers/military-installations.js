@@ -9,7 +9,10 @@ import {
   fetchOverpassPayload,
   overpassNotConfigured,
 } from './overpass/transport.js';
-import { resolveOverpassUpstreams } from './overpass/constants.js';
+import {
+  resolveOverpassUpstreams,
+  resolveOverpassUpstreamTag,
+} from './overpass/constants.js';
 import {
   _militaryInstallationCache,
   trimMilitaryInstallationCache,
@@ -74,7 +77,13 @@ function militaryInstallationsProxy() {
       retrievedAt: new Date().toISOString(),
       status: 'ready',
     };
-    const entry = { payload, cachedAt: Date.now() };
+    // Tagged with the configured upstream set so the disk layer does not serve
+    // this answer back after the operator repoints (see overpass/cache.js).
+    const entry = {
+      payload,
+      cachedAt: Date.now(),
+      upstreams: resolveOverpassUpstreamTag(),
+    };
     _militaryInstallationCache.set(key, entry);
     trimMilitaryInstallationCache();
     writeMilitaryInstallationDisk(key, entry);

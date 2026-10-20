@@ -4,6 +4,7 @@ export {
   AIS_FIRST_CONNECT_LABEL,
 } from './recordPolicy.js';
 import { VESSEL_LABEL_GRID_PX } from '../../data/vesselLabels.js';
+import { msg } from '../../i18n/index.js';
 
 export const FOCUS_EVIDENCE_DEV = import.meta.env?.DEV === true;
 
@@ -71,12 +72,12 @@ export const DEFAULT_AIS_RUNTIME = Object.freeze({
  */
 
 export const AIS_STATUS_REASON = {
-  'missing-key': 'AISSTREAM_API_KEY not set',
-  unsupported: 'live feed unsupported',
-  connecting: 'connecting to feed…',
-  closed: 'feed disconnected',
-  error: 'feed down',
-  idle: 'feed idle',
+  'missing-key': msg('AISSTREAM_API_KEY not set'),
+  unsupported: msg('live feed unsupported'),
+  connecting: msg('connecting to feed…'),
+  closed: msg('feed disconnected'),
+  error: msg('feed down'),
+  idle: msg('feed idle'),
 };
 
 /**

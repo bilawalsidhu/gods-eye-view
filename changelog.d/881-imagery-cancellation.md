@@ -1,0 +1,1 @@
+- Cancel superseded Recent Imagery thumbnail fetches when focus, visible range, pins or preview change; retain known-good availability metadata and count each aborted in-flight request once (kvnloo, #881; independent cancellation review: quanticsoul4772).

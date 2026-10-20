@@ -6,6 +6,16 @@ import { RealtimeRadio } from './realtimeRadio.js';
 import { RealtimeFacade } from './realtimeFacade.js';
 import { RealtimeCost } from './realtimeCost.js';
 import { RealtimeInput } from './realtimeInput.js';
+import { TurnMetrics } from './turnMetrics.js';
+import { createNarrationScheduler } from './narration.js';
+import { createEarcon } from './earcon.js';
+import {
+  POINTER_NONE_KEY,
+  POINTER_OPEN_MIC_RECENT_MS,
+  pointerAnnouncement,
+  pointerTurnContext,
+  pointerTurnEvent,
+} from './pointerContext.js';
 
 import { shouldPauseRadioForVoice } from './realtimeProtocol.js';
 import { postDebugLog } from './realtimeDiagnostics.js';
@@ -44,13 +54,17 @@ export {
 
 import { createRealtimeBackend } from './realtimeBackend.js';
 
-const STATUS = {
-  idle: 'OFF',
-  connecting: 'CONNECTING',
-  listening: 'LISTENING',
-  executing: 'EXECUTING',
-  error: 'ERROR',
-};
+import { t } from '../i18n/index.js';
+import { voiceStatusLabel } from './control.js';
+
+// Machine states (dataset.status, CSS); voiceStatusLabel() translates labels.
+const STATUS_STATES = new Set([
+  'idle',
+  'connecting',
+  'listening',
+  'executing',
+  'error',
+]);
 
 /** Compose voice state owners and coordinate ordered session startup/teardown. */
 export class GevRealtimeController extends RealtimeFacade {
@@ -64,8 +78,12 @@ export class GevRealtimeController extends RealtimeFacade {
     debugSink = postDebugLog,
     actionExecutor,
     onSessionEvent,
+    pointer = null,
   }) {
     super();
+    this.pointer = pointer;
+    this.pointerSentKey = null;
+    this.pointerAnnounced = null;
     this.actionExecutor = actionExecutor;
     this.onSessionEvent = onSessionEvent;
     this.backend = backend;
@@ -79,6 +97,7 @@ export class GevRealtimeController extends RealtimeFacade {
     this.dataManager = dataManager;
     this._viewport = new RealtimeViewport({
       readChannel: () => this.dc,
+      readPointer: () => this.pointer?.activeSnapshot?.() || null,
 
       operations: {
         sendRealtimeEvent: (...args) => this.sendRealtimeEvent(...args),
@@ -130,6 +149,11 @@ export class GevRealtimeController extends RealtimeFacade {
         setStatus: (...args) => this.setStatus(...args),
         start: (...args) => this.start(...args),
         pauseRadioForVoice: (...args) => this.pauseRadioForVoice(...args),
+        bargeIn: () => this._turns.bargeIn(),
+        holdPointer: () => this.pointer?.hold('keydown'),
+        releasePointerHold: () => this.pointer?.releaseHold(),
+        beginPointerTurn: (at) => this.beginPointerTurn(at),
+        mayClaimSpeaker: () => this._radio.mayVoiceClaimSpeaker(),
       },
     });
 
@@ -139,6 +163,12 @@ export class GevRealtimeController extends RealtimeFacade {
 
     this.status = 'idle';
 
+    this._metrics = new TurnMetrics({
+      emit: (span) => {
+        this.debugLog('turn.span', span);
+        this.emitSessionEvent({ type: 'turn-metrics', span });
+      },
+    });
     this._turns = new RealtimeTurns({
       readActionExecutor: () => this.actionExecutor,
       readRunner: () => this.runner,
@@ -147,8 +177,10 @@ export class GevRealtimeController extends RealtimeFacade {
       readRadioLayer: () => this.radioLayer,
       radio: this._radio,
       viewport: this._viewport,
+      metrics: this._metrics,
       operations: {
         cancelRadioHandoff: (...args) => this.cancelRadioHandoff(...args),
+        beginPointerTurn: (...args) => this.beginPointerTurn(...args),
         connectionDiagnostics: (...args) => this.connectionDiagnostics(...args),
         debugLog: (...args) => this.debugLog(...args),
         emitSessionEvent: (...args) => this.emitSessionEvent(...args),
@@ -157,6 +189,8 @@ export class GevRealtimeController extends RealtimeFacade {
         isSessionEnding: (...args) => this.isSessionEnding(...args),
         pauseRadioForVoice: (...args) => this.pauseRadioForVoice(...args),
         recordUsage: (...args) => this.recordUsage(...args),
+        recordTranscriptionUsage: (...args) =>
+          this.recordTranscriptionUsage(...args),
         reportError: (...args) => this.reportError(...args),
         reserveRadioToolHandoff: (...args) =>
           this.reserveRadioToolHandoff(...args),
@@ -171,6 +205,20 @@ export class GevRealtimeController extends RealtimeFacade {
           this.startPendingRadioHandoff(...args),
         stop: (...args) => this.stop(...args),
       },
+    });
+    // Progress narration: spoken lines go out of band through the turns
+    // owner; the earcon plays only while push-to-talk has the mic muted.
+    this._earcon = createEarcon({
+      isMicrophoneMuted: () =>
+        Boolean(this.pushToTalkMode && !this.pushToTalkKeyHeld && this.stream),
+    });
+    this._turns.narration = createNarrationScheduler({
+      speak: (line) => this._turns.speakProgressLine(line),
+      retract: () => this._turns.retractProgressLine(),
+      stop: () => this._turns.stopProgressLine(),
+      earcon: this._earcon,
+      canSpeak: () => !this.pushToTalkKeyHeld && this._turns.canNarrate(),
+      onNarration: (kind) => this._metrics.narration(kind),
     });
     this._connection = new RealtimeConnection({
       readLifetimeSignal: () => this.lifetimeSignal,
@@ -201,6 +249,80 @@ export class GevRealtimeController extends RealtimeFacade {
 
   isActive() {
     return this.status !== 'idle' && this.status !== 'error';
+  }
+
+  /**
+   * Point-and-ask: read the pointer as a user turn starts and tell the model.
+   *
+   * A Space hold is an explicit pointing gesture: its keydown snapshot is
+   * shown at once (reticle and chip) and sent as a pointer_context item with
+   * the target. Open-mic speech and typed turns carry no gesture, so they
+   * count only a pointer that moved on the map in the last few seconds, and
+   * the model is told only that one is available; the target is revealed
+   * when a tool resolves 'pointer' (see announcePointer). Losing the pointer
+   * after one was sent appends a clearing item. Unchanged items are not
+   * repeated.
+   * @param {'keydown'|'speech_start'|'text'} at
+   */
+  beginPointerTurn(at) {
+    if (!this.pointer) return null;
+    this._viewport.beginTurn();
+    // A speech start after the Space release belongs to the gesture that
+    // just ended; it must not re-read a pointer that has since moved.
+    if (
+      at === 'speech_start' &&
+      this.pushToTalkMode &&
+      !this.pointer.isHeld?.()
+    )
+      return this.pointer.activeSnapshot?.() || null;
+    const gesture =
+      at === 'keydown' || (at === 'speech_start' && this.pushToTalkMode);
+    let snapshot = null;
+    try {
+      snapshot = this.pointer.beginTurn(
+        at,
+        gesture ? {} : { recentMs: POINTER_OPEN_MIC_RECENT_MS },
+      );
+    } catch {
+      snapshot = null;
+    }
+    const event = pointerTurnEvent(snapshot, gesture);
+    this.pointerAnnounced = event.announced;
+    this.emitSessionEvent({ type: 'pointer', pointer: event.pointer });
+    const context = pointerTurnContext(snapshot, {
+      at,
+      gesture,
+      sentKey: this.pointerSentKey,
+    });
+    if (!context) return snapshot;
+    if (this._turns.notifyMapEvent(context.item)) {
+      this.pointerSentKey = context.key;
+      const chip = context.key !== POINTER_NONE_KEY;
+      this.debugLog('pointer.context', {
+        at,
+        target: chip ? snapshot.target : 'none',
+        detail: chip ? (gesture ? 'target' : 'available') : 'cleared',
+      });
+    }
+    return snapshot;
+  }
+
+  /**
+   * A tool just resolved 'pointer' for a turn that had no gesture: show the
+   * reticle and chip now, once per snapshot.
+   */
+  announcePointer() {
+    const snapshot = this.pointer?.activeSnapshot?.() || null;
+    const pointer = pointerAnnouncement(snapshot, this.pointerAnnounced);
+    if (!pointer) return false;
+    this.pointerAnnounced = snapshot;
+    this.emitSessionEvent({ type: 'pointer', pointer });
+    return true;
+  }
+
+  /** What the retained context image shows, for pixel targeting. */
+  retainedImageFrame() {
+    return this._viewport.retainedFrame;
   }
 
   // Fatal error path: tear the session down (stop tracks, close pc/dc, kill the
@@ -239,11 +361,21 @@ export class GevRealtimeController extends RealtimeFacade {
       status: this.status,
       connection: this.connectionDiagnostics(),
     });
-    if (this.dc && this.responseActive) this.costTracker.markIncomplete();
+    if (this.dc && this.responseActive) {
+      this.costTracker.markIncomplete();
+      this.syncCostUi();
+    }
+    this._metrics.flush('stop');
     this._connection.closeTransport();
     this.stopVoiceVisualizer();
     this._connection.releaseMedia();
     this._turns.reset();
+    // A Space hold that is starting a session keeps its keydown snapshot.
+    this.pointer?.clear({ keepHold: this.pushToTalkKeyHeld });
+    this.pointerSentKey = null;
+    this.pointerAnnounced = null;
+    this._earcon.stop();
+    if (removeUi) this._earcon.dispose();
     this._radio.clearPendingPlayback();
     this._viewport.reset();
     this._input.resetSession();
@@ -267,7 +399,7 @@ export class GevRealtimeController extends RealtimeFacade {
       this.ui.root.remove();
     }
     if (!preserveStatus && !removeUi) {
-      this.setStatus('idle', 'Voice off');
+      this.setStatus('idle', t('Voice off'));
     }
     this.setRadioVoiceDucking(false);
     if (removeUi) this.emitSessionEvent({ type: 'disposed' });
@@ -287,24 +419,25 @@ export class GevRealtimeController extends RealtimeFacade {
     this.ui.root.dataset.status = status;
     if (status === 'error') this.ui.root.classList.remove('error-dismissed');
     this.updateVoiceButtonLabel();
-    this.ui.status.textContent = STATUS[status] || STATUS.idle;
+    const shownStatus = STATUS_STATES.has(status) ? status : 'idle';
+    this.ui.status.textContent = voiceStatusLabel(shownStatus);
     const resolvedDetail =
       status === 'listening' && this.pushToTalkMode
         ? this.pushToTalkKeyHeld
-          ? 'Release Space to send'
-          : 'Hold Space to talk'
+          ? t('Release Space to send')
+          : t('Hold Space to talk')
         : detail;
     const primaryDetail =
       status === 'error'
-        ? 'VOICE UNAVAILABLE'
+        ? t('VOICE UNAVAILABLE')
         : resolvedDetail ||
-          (status === 'idle' ? 'VOICE STANDBY' : 'VOICE ACTIVE');
+          (status === 'idle' ? t('VOICE STANDBY') : t('VOICE ACTIVE'));
     this.ui.detail.textContent = primaryDetail;
     this.ui.detail.title = primaryDetail;
     if (this.ui.errorDetail) {
       this.ui.errorDetail.textContent =
         status === 'error'
-          ? resolvedDetail || 'Voice session could not be started.'
+          ? resolvedDetail || t('Voice session could not be started.')
           : '';
     }
     if (status === 'idle' || status === 'connecting' || status === 'error') {

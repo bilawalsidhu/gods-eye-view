@@ -316,6 +316,27 @@ test('a request queued behind an aborted fetch still starts once the abort settl
   });
 });
 
+test('injected thumbnail acquisition owns requests while the loader releases object URLs', async () => {
+  const calls = [];
+  const { loader, fetch, revoked } = fixture({
+    requestThumbnail: async (...args) => {
+      calls.push(args);
+      return response({ headers: { 'Data-Present': 'true' } });
+    },
+  });
+  const entry = candidate('S30', '2026-09-18');
+  loader.request(entry, BOX, 0);
+  await settle();
+  assert.equal(fetch.calls.length, 0);
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0][0], entry);
+  assert.deepEqual(calls[0][1], BOX);
+  assert.ok(calls[0][2].signal instanceof AbortSignal);
+  assert.equal(loader.get(entry.key).status, 'present');
+  loader.destroy();
+  assert.deepEqual(revoked, ['blob:1']);
+});
+
 test('retain aborts stale acquisition while allowing the current intent to start', async () => {
   const { loader, fetch } = fixture({ maxInFlight: 1 });
   const stale = candidate('S30', '2026-09-10');
@@ -341,4 +362,41 @@ test('retain aborts stale acquisition while allowing the current intent to start
     supersededInFlight: 1,
   });
   assert.equal(loader.get(stale.key).status, 'unknown');
+});
+
+test('repeat retain counts an aborted known-present re-fetch once', async () => {
+  const { loader, fetch } = fixture({ maxInFlight: 1, maxDecoded: 1 });
+  const stale = candidate('S30', '2026-09-10');
+  const newer = candidate('S30', '2026-09-11');
+
+  loader.request(stale, BOX, 0);
+  fetch.respond(0);
+  await settle();
+  const acquisitionTime = loader.get(stale.key).acquisitionTime;
+
+  loader.request(newer, BOX, 0);
+  fetch.respond(1);
+  await settle();
+  assert.equal(loader.get(stale.key).status, 'present');
+  assert.equal(loader.get(stale.key).objectUrl, null);
+
+  loader.request(stale, BOX, 0);
+  assert.equal(fetch.calls.length, 3, 'an evicted known day re-fetches');
+  loader.retain([]);
+  loader.retain([]);
+  assert.equal(fetch.calls[2].signal.aborted, true);
+  assert.deepEqual(loader.refinementStats(), {
+    supersededQueued: 0,
+    supersededInFlight: 1,
+  });
+
+  await settle();
+  assert.equal(loader.get(stale.key).status, 'present');
+  assert.equal(loader.get(stale.key).acquisitionTime, acquisitionTime);
+
+  loader.request(stale, BOX, 0);
+  assert.equal(fetch.calls.length, 4, 'a cancelled re-fetch is retryable');
+  fetch.respond(3);
+  await settle();
+  assert.equal(loader.get(stale.key).status, 'present');
 });

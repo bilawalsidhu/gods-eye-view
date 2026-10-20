@@ -8,15 +8,17 @@ import {
   trafficStyleProfile,
 } from '../../data/trafficPresetStyle.js';
 import { TRAFFIC_TIMING_ENABLED } from './policy.js';
+import { t, translateKnown } from '../../i18n/index.js';
 
 export function createControls({ state: layerState, services, parts, source }) {
   /** One status line: feed, drawn road source, then degraded-coverage notes. */
   function roadStatusLabel(feed) {
     const source = layerState._roadSource;
     if (layerState._roadError)
-      return `UNAVAILABLE · ${source} · Roads unavailable`;
+      return t('UNAVAILABLE · {source} · Roads unavailable', { source });
     const notes = [feed.loadingLabel];
-    if (!layerState._liveMode || feed.error) notes.push(`Roads: ${source}`);
+    if (!layerState._liveMode || feed.error)
+      notes.push(t('Roads: {source}', { source }));
     // An explicit TomTom or Hybrid choice without a key draws OpenStreetMap.
     if (
       !layerState._liveMode &&
@@ -24,16 +26,24 @@ export function createControls({ state: layerState, services, parts, source }) {
     )
       notes.push(
         layerState._flowStatusUnavailable
-          ? `${layerState._roadMode === 'tomtom' ? 'TomTom roads' : 'Hybrid'} unavailable while the traffic service is unreachable`
+          ? layerState._roadMode === 'tomtom'
+            ? t(
+                'TomTom roads unavailable while the traffic service is unreachable',
+              )
+            : t('Hybrid unavailable while the traffic service is unreachable')
           : layerState._roadMode === 'tomtom'
-            ? 'TomTom roads need a TomTom key'
-            : 'Hybrid needs a TomTom key',
+            ? t('TomTom roads need a TomTom key')
+            : t('Hybrid needs a TomTom key'),
       );
-    if (layerState._surfacePending) notes.push('Local surface still loading');
-    if (layerState._roadWarning) notes.push(layerState._roadWarning);
-    else if (layerState._roadPartial) notes.push('Partial coverage');
-    if (layerState._detailError) notes.push('Detailed roads unavailable');
-    else if (layerState._detailLimited) notes.push('Reduced detail coverage');
+    if (layerState._surfacePending)
+      notes.push(t('Local surface still loading'));
+    // The warning is a road-source message (source.js marks the known ones).
+    if (layerState._roadWarning)
+      notes.push(translateKnown(layerState._roadWarning));
+    else if (layerState._roadPartial) notes.push(t('Partial coverage'));
+    if (layerState._detailError) notes.push(t('Detailed roads unavailable'));
+    else if (layerState._detailLimited)
+      notes.push(t('Reduced detail coverage'));
     return notes.join(' · ');
   }
 
@@ -161,13 +171,22 @@ export function createControls({ state: layerState, services, parts, source }) {
     getRowControls() {
       const selected =
         layerState._roadMode || resolveRoadMode(null, layerState._liveMode);
-      const needsKey = layerState._liveMode ? '' : ' (needs a TomTom key)';
+      const live = layerState._liveMode;
       const titles = {
-        tomtom: `TomTom roads only, each with its live flow${needsKey}`,
-        osm: 'OpenStreetMap roads, with TomTom flow matched when available',
-        hybrid: `TomTom roads first; OpenStreetMap fills the rest, simulated${needsKey}`,
+        tomtom: live
+          ? t('TomTom roads only, each with its live flow')
+          : t(
+              'TomTom roads only, each with its live flow (needs a TomTom key)',
+            ),
+        osm: t('OpenStreetMap roads, with TomTom flow matched when available'),
+        hybrid: live
+          ? t('TomTom roads first; OpenStreetMap fills the rest, simulated')
+          : t(
+              'TomTom roads first; OpenStreetMap fills the rest, simulated (needs a TomTom key)',
+            ),
       };
-      const labels = { tomtom: 'TomTom', osm: 'OSM', hybrid: 'Hybrid' };
+      // TomTom and OSM are provider names and stay as they are.
+      const labels = { tomtom: 'TomTom', osm: 'OSM', hybrid: t('Hybrid') };
       return {
         chips: TRAFFIC_ROAD_MODES.map((mode) => ({
           id: `roads-${mode}`,

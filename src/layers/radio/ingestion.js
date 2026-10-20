@@ -1,7 +1,21 @@
+import { msg } from '../../i18n/index.js';
 import {
   RADIO_DIRECTORY_STALE_MS,
   RADIO_DIRECTORY_FUTURE_SKEW_MS,
 } from './policy.js';
+
+// Directory errors stay English in layer state and stats; the layer row and
+// the Radio panel translate them when shown.
+const ERROR_REFRESH_DEGRADED = msg(
+  'Directory refresh degraded; showing the previous station catalog.',
+);
+const ERROR_COVERAGE_DEGRADED = msg('Radio directory coverage is degraded.');
+const ERROR_REFRESH_FAILED = msg(
+  'Directory refresh failed; showing the previous station catalog.',
+);
+const ERROR_DIRECTORY_UNAVAILABLE = msg(
+  'Radio directory is temporarily unavailable.',
+);
 
 export function createIngestion({
   state: layerState,
@@ -136,9 +150,9 @@ export function createIngestion({
         layerState._degraded = body.degraded;
         layerState._stale = body.stale;
         layerState._error = preservingWarmCatalog
-          ? 'Directory refresh degraded; showing the previous station catalog.'
+          ? ERROR_REFRESH_DEGRADED
           : layerState._degraded
-            ? 'Radio directory coverage is degraded.'
+            ? ERROR_COVERAGE_DEGRADED
             : null;
       } catch (error) {
         if (
@@ -153,8 +167,8 @@ export function createIngestion({
         )
           return;
         layerState._error = layerState._stations.length
-          ? 'Directory refresh failed; showing the previous station catalog.'
-          : 'Radio directory is temporarily unavailable.';
+          ? ERROR_REFRESH_FAILED
+          : ERROR_DIRECTORY_UNAVAILABLE;
         layerState._stale = layerState._stations.length > 0;
         layerState._degraded = layerState._stations.length > 0;
       } finally {
