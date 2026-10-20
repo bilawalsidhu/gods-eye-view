@@ -30,6 +30,11 @@ export function _renderCctvState(state) {
   const activeId = state?.activeCameraId || '';
   const activeCamera = state?.activeCamera || null;
 
+  // The panel stays visible while the CCTV layer is disabled: it owns the
+  // CCTV OFF/ON toggle (and the "enable to load" prompts), so hiding it would
+  // remove the in-panel way to turn the layer back on. The stray floating-strip
+  // case is handled by `dockOnCollapse` on the panel's drag spec instead.
+
   // Auto-expand the panel when the active camera CHANGES to a new non-null
   // id while the layer is enabled. Covers click-on-globe, panel controls,
   // and voice (selectCamera/cycleCamera/focusNearest all notify through

@@ -267,6 +267,7 @@ export function createFlightSnapshotRenderer({
       if (icao24 === flightState._trackedIcao) {
         tracking._clearTracking(false, { evicted: true });
       }
+      tracking._removeTrackHighlight(icao24);
 
       flightState._billboardCollection.remove(bb);
       flightState._billboards.delete(icao24);

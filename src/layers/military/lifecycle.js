@@ -1,4 +1,5 @@
 import * as Cesium from 'cesium';
+import { isSelectionHighlightId } from '../../data/trackedHighlights.js';
 import { JET_MODEL_URL } from './policy.js';
 
 export function createLifecycle({
@@ -135,8 +136,13 @@ export function createLifecycle({
           });
       }
       parts.tracking._installClickHandler(viewer);
-      registerPickOwner('military', (pickedId) =>
-        flightState._billboards.has(pickedId),
+      // Selection rings belong to this layer too, so sibling layers do not
+      // treat a click on one as empty space.
+      registerPickOwner(
+        'military',
+        (pickedId) =>
+          flightState._billboards.has(pickedId) ||
+          isSelectionHighlightId(pickedId, 'military'),
       );
       // The flights layer suppresses its military duplicates while we render them
       setMilitaryLayerActive(true);

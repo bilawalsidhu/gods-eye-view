@@ -1,4 +1,5 @@
 import * as Cesium from 'cesium';
+import { isSelectionHighlightId } from '../../data/trackedHighlights.js';
 import { PLANE_MODEL_URL } from './policy.js';
 
 export function createLifecycle({
@@ -156,8 +157,13 @@ export function createLifecycle({
           });
       }
       parts.tracking._installClickHandler(viewer);
-      registerPickOwner('flights', (pickedId) =>
-        flightState._billboards.has(pickedId),
+      // Selection rings belong to this layer too, so sibling layers do not
+      // treat a click on one as empty space.
+      registerPickOwner(
+        'flights',
+        (pickedId) =>
+          flightState._billboards.has(pickedId) ||
+          isSelectionHighlightId(pickedId, 'flights'),
       );
       // Force a fresh rotation pass on the first tick after re-enable
       flightState._lastCamPoseSig = '';
