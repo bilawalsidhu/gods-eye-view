@@ -215,6 +215,12 @@ export function wildlifeSpeciesName(taxon) {
   return WILDLIFE_COMMON_NAMES[taxon] || taxon;
 }
 
+/** Number(null) and Number('') are 0: a missing value is not a reading. */
+const reading = (value) =>
+  typeof value === 'number' || (typeof value === 'string' && value.trim())
+    ? Number(value)
+    : NaN;
+
 /**
  * Turn one Movebank public-feed answer into animals with their latest fixes.
  * Animals with no public fix are left out, as is any `Homo sapiens` test tag.
@@ -224,11 +230,6 @@ export function wildlifeSpeciesName(taxon) {
  * @returns {Array<{id: string, study: number, name: string, taxon: string|null, track: number[][]}>|null}
  *   `track` rows are `[lon, lat, timeMs]`, oldest first. Null when malformed.
  */
-const reading = (value) =>
-  typeof value === 'number' || (typeof value === 'string' && value.trim())
-    ? Number(value)
-    : NaN;
-
 export function parseMovebankStudy(payload, studyId) {
   if (!STUDIES_BY_ID.has(studyId) || !Array.isArray(payload?.individuals))
     return null;
@@ -248,7 +249,6 @@ export function parseMovebankStudy(payload, studyId) {
     for (const fix of Array.isArray(individual.locations)
       ? individual.locations
       : []) {
-      // Number(null) and Number('') are 0: a missing value is not a position.
       const lon = reading(fix?.location_long);
       const lat = reading(fix?.location_lat);
       const t = reading(fix?.timestamp);
