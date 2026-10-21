@@ -19,7 +19,12 @@ import {
   nearestStations,
   summarizeStations,
 } from './records.js';
-import { localizedReading, stationCardLines, utcMinute } from './cardText.js';
+import {
+  localizedReading,
+  readingNumber,
+  stationCardLines,
+  utcMinute,
+} from './cardText.js';
 import {
   ALPINE_OVERLAY_COHORT_LIMIT,
   ALPINE_OVERLAY_COLLISION_CAPACITY,
@@ -533,7 +538,7 @@ export function createAlpineStationsLayer({
           id: 'range',
           text: t('{parameter} across the network: {min} to {max}', {
             parameter: t(current.label),
-            min: formatNumber(summary.min, { maximumFractionDigits: 1 }),
+            min: readingNumber(summary.min, current),
             max: localizedReading(summary.max, current),
           }),
         });

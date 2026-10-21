@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {
   describeWind,
   localizedReading,
+  readingNumber,
   stationCardLines,
   utcMinute,
 } from './cardText.js';
@@ -128,5 +129,39 @@ test('card text follows the reader language, numbers included', () => {
     assert.equal(utcMinute('nonsense'), 'No disponible');
   } finally {
     setLocale('en');
+  }
+});
+
+test('both ends of a range round and group the same way', () => {
+  // The card prints "{min} to {max}", and the open end used to go through a
+  // bare formatNumber: that printed "1,005.4 to 1025 hPa" in one line, and
+  // "4.2 to 76 km/h" beside a "4 km/h" on the map.
+  const expected = {
+    pressure: '1005 to 1025 hPa',
+    wind: '1005 to 1025 km/h',
+    snow: '1005 to 1025 cm',
+    temperature: '1005.4 to 1025.0 \u00b0C',
+    precipitation: '1005.4 to 1025.0 mm/10min',
+  };
+  for (const [id, line] of Object.entries(expected)) {
+    const view = parameterView(id);
+    const printed = `${readingNumber(1005.43, view)} to ${localizedReading(1025, view)}`;
+    assert.equal(printed.replace(/\u00a0/g, ' '), line, id);
+  }
+  assert.equal(readingNumber(null, parameterView('snow')), null);
+  assert.equal(readingNumber(Number.NaN, parameterView('snow')), null);
+});
+
+test('a range end carries no unit of its own, in any language', async () => {
+  const view = parameterView('temperature');
+  await setLocale('es');
+  try {
+    assert.equal(readingNumber(-3.5, view), '-3,5');
+    assert.equal(
+      localizedReading(-3.5, view).replace(/\u00a0/g, ' '),
+      '-3,5 \u00b0C',
+    );
+  } finally {
+    await setLocale('en');
   }
 });

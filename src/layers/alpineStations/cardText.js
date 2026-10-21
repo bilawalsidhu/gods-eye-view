@@ -20,11 +20,27 @@ import { isReporting, isStale } from './records.js';
 /** A reading and its unit in the active language, as "22 km/h" reads here. */
 export function localizedReading(value, view) {
   if (!Number.isFinite(value)) return null;
+  return formatQuantity(value, view.unit, readingDigits(view));
+}
+
+/**
+ * A reading's number alone, for the open end of a range such as "4 to 76 km/h".
+ *
+ * Rounded and grouped exactly as `localizedReading` rounds and groups it, so
+ * the two ends of one range cannot disagree. Formatting the open end with a
+ * bare `formatNumber` printed "1,005.4 to 1025 hPa" in a single line.
+ */
+export function readingNumber(value, view) {
+  if (!Number.isFinite(value)) return null;
+  return formatQuantity(value, '', readingDigits(view));
+}
+
+function readingDigits(view) {
   const decimals = parameterDecimals(view);
-  return formatQuantity(value, view.unit, {
+  return {
     minimumFractionDigits: decimals,
     maximumFractionDigits: decimals,
-  });
+  };
 }
 
 /** The presented value for a station under one view, formatted, or null. */

@@ -99,6 +99,12 @@ formatted with `formatQuantity` rather than a local template: the decimal
 separator and the non-breaking space before the unit follow the reader's
 language.
 
+Both ends of the card's range line go through `cardText.js` for the same
+reason: `readingNumber()` for the open end and `localizedReading()` for the end
+that carries the unit. They share `parameterDecimals(view)`, so the two
+ends cannot disagree. Formatting the open end with a bare `formatNumber`
+printed `1,005.4 to 1025 hPa` in one line.
+
 ## The share-link token
 
 This layer has **no token**, by request: the namespace is the maintainers' to
