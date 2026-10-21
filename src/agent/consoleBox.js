@@ -1,3 +1,4 @@
+import { t } from '../i18n/index.js';
 import { RESIZE_DIRECTIONS, resizeBox } from './boxResize.js';
 
 /**
@@ -373,7 +374,7 @@ function attachConsoleBox({
     grip.className = dir === 'se' ? 'agent-resize-grip' : 'agent-resize-edge';
     grip.dataset.dir = dir;
     grip.setAttribute('aria-hidden', 'true');
-    if (dir === 'se') grip.title = 'Drag to resize';
+    if (dir === 'se') grip.title = t('Drag to resize');
     dialog.appendChild(grip);
     handles.push(grip);
     listen(grip, 'pointerdown', (event) => {

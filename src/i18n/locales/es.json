@@ -2937,5 +2937,17 @@
   "Gemini access was refused. Check the API key and model access.": "Se denegó el acceso a Gemini. Comprueba la clave de API y el acceso al modelo.",
   "Gemini Live is unavailable for the configured model.": "Gemini Live no está disponible para el modelo configurado.",
   "Token request is too large": "La solicitud de credencial es demasiado grande",
-  "Use an empty JSON token request": "Usa una solicitud de credencial con un objeto JSON vacío"
+  "Use an empty JSON token request": "Usa una solicitud de credencial con un objeto JSON vacío",
+  "THINKING": "PENSANDO",
+  "RUNNING": "EJECUTANDO",
+  "Drag to resize": "Arrastra para cambiar el tamaño",
+  "Typed agent (GEV COMMAND) over hundreds of hosted models": "Agente escrito (GEV COMMAND) sobre cientos de modelos alojados",
+  "Type commands to the GEV agent": "Escribe comandos para el agente GEV",
+  "PROVIDER": "PROVEEDOR",
+  "Estimated cost per command": "Costo estimado por comando",
+  "Close GEV Command": "Cerrar GEV Command",
+  "Command transcript": "Transcripción de comandos",
+  "zoom out to full planet view": "aléjate hasta ver todo el planeta",
+  "Typed command": "Comando escrito",
+  "SEND": "ENVIAR"
 }

@@ -1,3 +1,4 @@
+import { msg, t } from '../i18n/index.js';
 import { createSurfaceKeyboard } from '../ui/surfaceKeyboard.js';
 import { attachConsoleBox } from './consoleBox.js';
 import { createAgentSession, AGENT_EVENTS } from './agentLoop.js';
@@ -30,10 +31,10 @@ const ENTRY_KIND = Object.freeze({
 
 /** Status strings shown under the input. */
 const AGENT_STATUS = Object.freeze({
-  READY: 'READY',
-  THINKING: 'THINKING',
-  RUNNING: 'RUNNING',
-  UNAVAILABLE: 'UNAVAILABLE',
+  READY: msg('READY'),
+  THINKING: msg('THINKING'),
+  RUNNING: msg('RUNNING'),
+  UNAVAILABLE: msg('UNAVAILABLE'),
 });
 
 /**
@@ -265,7 +266,10 @@ function mountAgentConsole({
   }
 
   function setStatus(status, detail = '') {
-    statusEl.textContent = detail ? `${status} · ${detail}` : status;
+    const label = t(status);
+    statusEl.textContent = detail ? `${label} · ${detail}` : label;
+    // The dataset keys off the untranslated status, so CSS and tests do not
+    // move with the language.
     dialog.dataset.agentStatus = status.toLowerCase();
   }
 

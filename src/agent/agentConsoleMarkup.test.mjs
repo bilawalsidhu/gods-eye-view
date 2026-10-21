@@ -67,11 +67,11 @@ test('every control the console drives has an accessible name', () => {
   // The two selects are labelled by their visible wrapper label.
   assert.match(
     template,
-    /<label class="agent-console-field">\s*<span>PROVIDER<\/span>/,
+    /<label class="agent-console-field">\s*<span data-i18n>PROVIDER<\/span>/,
   );
   assert.match(
     template,
-    /<label class="agent-console-field">\s*<span>MODEL<\/span>/,
+    /<label class="agent-console-field">\s*<span data-i18n>MODEL<\/span>/,
   );
 });
 

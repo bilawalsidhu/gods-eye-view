@@ -3004,5 +3004,17 @@
   "Gemini access was refused. Check the API key and model access.": "Доступ к Gemini запрещён. Проверьте ключ API и доступ к модели.",
   "Gemini Live is unavailable for the configured model.": "Gemini Live недоступен для выбранной модели.",
   "Token request is too large": "Запрос токена слишком велик",
-  "Use an empty JSON token request": "Используйте запрос токена с пустым объектом JSON"
+  "Use an empty JSON token request": "Используйте запрос токена с пустым объектом JSON",
+  "THINKING": "ДУМАЕТ",
+  "RUNNING": "ВЫПОЛНЯЕТСЯ",
+  "Drag to resize": "Потяните, чтобы изменить размер",
+  "Typed agent (GEV COMMAND) over hundreds of hosted models": "Текстовый агент (GEV COMMAND) на сотнях размещённых моделей",
+  "Type commands to the GEV agent": "Вводите команды агенту GEV",
+  "PROVIDER": "ПРОВАЙДЕР",
+  "Estimated cost per command": "Оценочная стоимость за команду",
+  "Close GEV Command": "Закрыть GEV Command",
+  "Command transcript": "Журнал команд",
+  "zoom out to full planet view": "отдалите до вида всей планеты",
+  "Typed command": "Текстовая команда",
+  "SEND": "ОТПРАВИТЬ"
 }
