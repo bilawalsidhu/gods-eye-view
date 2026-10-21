@@ -16,6 +16,9 @@ import {
 } from '../../sources/vectorTiles.js';
 import { buildOverpassQuery, normalizeAlprNode } from './records.js';
 import { decodeAlprTile } from './tileRecords.js';
+// Marks text for i18n extraction; the UI translates it with t(). Kept local
+// because AI tool services import this module outside the browser.
+const msg = (text) => text;
 
 /**
  * Finest attributed extract zoom whose tiles for `box` fit the per-view cap,
@@ -136,7 +139,7 @@ export function createAlprTileSource({
         const metadata = await source.getMetadata(signal);
         const [west, south, east, north] = metadata.bounds || [];
         if (![west, south, east, north].every(Number.isFinite))
-          throw new Error('Camera coverage unavailable');
+          throw new Error(msg('Camera coverage unavailable'));
         if (
           box.east < west ||
           box.west > east ||
@@ -184,7 +187,7 @@ export function createAlprTileSource({
       for (const source of sources) source.clear();
       precision.clear();
     },
-    label: 'OpenStreetMap · community mapped',
+    label: msg('OpenStreetMap · community mapped'),
     attribution: {
       name: 'OpenStreetMap',
       description: '© OpenStreetMap contributors, ODbL',
@@ -242,7 +245,7 @@ export function createOverpassAlprSource({
     // The shared proxy already rejects query errors. Validate here too so a
     // malformed or partial response never becomes an authoritative empty map.
     if (!Array.isArray(payload?.elements) || payload.remark) {
-      throw new Error('Overpass returned an incomplete camera response');
+      throw new Error(msg('Overpass returned an incomplete camera response'));
     }
     return {
       records: [
@@ -260,7 +263,7 @@ export function createOverpassAlprSource({
   }
   return {
     fetch: fetchAlprNodes,
-    label: 'OpenStreetMap · community mapped',
+    label: msg('OpenStreetMap · community mapped'),
     attribution: {
       name: 'OpenStreetMap',
       description: 'OpenStreetMap contributors (ODbL 1.0; community mapped)',

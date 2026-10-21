@@ -47,6 +47,29 @@ function isolateDisk(t) {
   t.mock.method(fsp, 'writeFile', async () => {});
 }
 
+/** A response that streams 1 MiB chunks of `text` well past every cap, then ends. */
+function oversizedResponse(text) {
+  const state = { pulled: 0, cancelled: false };
+  const chunk = new TextEncoder().encode(
+    text.repeat(Math.ceil((1 << 20) / text.length)),
+  );
+  const response = new Response(
+    new ReadableStream(
+      {
+        pull(controller) {
+          if (++state.pulled > 40) controller.close();
+          else controller.enqueue(chunk);
+        },
+        cancel() {
+          state.cancelled = true;
+        },
+      },
+      { highWaterMark: 0 },
+    ),
+  );
+  return { response, state };
+}
+
 test('portable requests keep fixed origins, encode group data and preserve the 30-day UTC window', () => {
   const tle = celestrakTleUrl('stations&FORMAT=json');
   assert.equal(tle.origin, 'https://celestrak.org');
@@ -58,8 +81,8 @@ test('portable requests keep fixed origins, encode group data and preserve the 3
   assert.equal(url.origin, 'https://ll.thespacedevs.com');
   assert.equal(url.pathname, '/2.3.0/launches/');
   assert.deepEqual(Object.fromEntries(url.searchParams), {
-    net__gte: '2026-01-30T12:34:56.000Z',
-    net__lte: '2026-03-01T12:34:56.000Z',
+    net__gte: '2026-01-30T12:34:00.000Z',
+    net__lte: '2026-03-01T12:34:00.000Z',
     limit: '100',
     mode: 'detailed',
   });
@@ -118,6 +141,27 @@ test('exported CelesTrak plugin coalesces refreshes, retains stale TLEs, and rea
   const disk = await install(celestrakProxy())('/api/celestrak', '/stations');
   assert.equal(disk.headers['x-tle-cache'], 'HIT');
   assert.equal(disk.body, tle);
+});
+
+test('CelesTrak answers 502 to an oversized TLE body without caching it', async (t) => {
+  isolateDisk(t);
+  t.mock.method(console, 'warn', () => {});
+  const bodies = [];
+  t.mock.method(globalThis, 'fetch', async () => {
+    const oversized = oversizedResponse(
+      'ISS\n1 25544U fixture\n2 25544 fixture\n',
+    );
+    bodies.push(oversized.state);
+    return oversized.response;
+  });
+  const request = install(celestrakProxy());
+  const first = await request('/api/celestrak', '/stations');
+  assert.equal(first.status, 502);
+  assert.equal(bodies[0].cancelled, true);
+  assert.ok(bodies[0].pulled <= 17, 'reading stops at the 16 MiB cap');
+  assert.equal(fsp.writeFile.mock.callCount(), 0);
+  assert.equal((await request('/api/celestrak', '/stations')).status, 502);
+  assert.equal(bodies.length, 2, 'nothing was cached in memory');
 });
 
 for (const preview of [false, true])
