@@ -194,8 +194,9 @@ The optional Local ADS-B layer and the broadcast-FM receiver use radio you recei
 
 The opt-in CCTV pack includes 11 published Varitech JPEG endpoints from
 Cerro Catedral (6), Chapelco (3), and La Hoya (2). The source IDs and named-area
-map references live in `config/cctv_sources.varitech.json`. Set
-`CCTV_VARITECH_ENABLED=1` to enable this otherwise-disabled pack.
+map references live in `config/cctv_sources.varitech.json`. The pack is
+**off by default**; this integration does not establish provider authorization
+for a GEV deployment.
 
 - Provider and published embedding URLs: https://varitech.ar/prensa
 - Availability report: https://varitech.ar/api/status
@@ -203,6 +204,43 @@ map references live in `config/cctv_sources.varitech.json`. Set
 - Attribution: **Varitech - varitech.ar** and the corresponding ski resort.
 - Reference geography: **© OpenStreetMap contributors**, ODbL 1.0,
   https://www.openstreetmap.org/copyright. Each catalog row names its map source.
+
+#### Authorization before activation
+
+[Terms §§6 and 8](https://varitech.ar/terminos), checked 2026-10-21, permit
+attributed informational use by media outlets, require prior written authorization
+for commercial reuse, prohibit unauthorized scraping, automated crawling or bulk
+image extraction, and prohibit surveillance or tracking of people. The
+[press page's embedding examples](https://varitech.ar/prensa) and public access
+to JPEGs do not establish blanket permission for GEV deployments.
+
+Before enabling the pack, the deployment operator must establish that applicable
+published permissions or a separate written authorization cover the intended use,
+including automated server-side retrieval, temporary caching and display to the
+deployment's users. Retain the applicable terms or written authorization. If that
+scope is unclear, request confirmation from Varitech and leave the pack disabled
+until it is resolved. An unanswered request does not establish authorization.
+Preserve the provider/resort attribution and watermarks, and do not use these
+images for surveillance or tracking of people.
+
+#### Enable or disable the pack
+
+Once permission for that scope is established, set the following in the **GEV
+server's environment** (or the checkout's `.env`) and restart the server:
+
+```dotenv
+CCTV_VARITECH_ENABLED=1
+```
+
+Only `1` enables the pack; unset, empty, `0`, `true` and `yes` leave it disabled.
+To disable it again, remove the setting or set it to `0` in the server's effective
+configuration and restart. While disabled, the pack contributes no cameras to
+the catalog and makes no Varitech image requests.
+
+This is an operator-controlled switch for the deployment, not a per-viewer
+consent setting. Enabling it or accepting GEV terms does not grant provider
+permission. The switch does not verify authorization or enforce permitted uses
+after activation; those remain the operator's responsibility.
 
 The provider publishes an embedding example for each latest JPEG and advertises
 a five-minute update interval. Images are fetched at runtime only when requested,
@@ -212,14 +250,6 @@ successful JPEGs for five minutes, with a two-MiB limit per image and a fixed
 eleven-URL allowlist. Failed refreshes replace the cached result with a miss for
 30 seconds, allowing the existing fallback chain to run. Still images are served
 only through `/api/cctv/frame`; `/api/cctv/media` returns 404 for them.
-
-The pack is **off by default**. Set `CCTV_VARITECH_ENABLED=1` only after confirming
-provider permission for the intended use. Enabling it does not grant permission.
-[Terms §§6 and 8](https://varitech.ar/terminos), checked 2026-10-16, allow attributed
-informational media use, require prior written authorization for commercial reuse,
-prohibit unauthorized scraping, automated crawling or bulk image extraction, and
-prohibit surveillance or tracking of people. Published embedding endpoints and
-public availability do not remove those restrictions.
 
 Coordinates are **approximate named-area references, not verified camera mounts**.
 The camera name and credit say so. Bearings are synthetic, tagged low confidence
