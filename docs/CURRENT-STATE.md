@@ -1,5 +1,14 @@
 # God's Eye View Current State
 
+Analyst region queries resolve unique Natural Earth names offline without
+geocoding, so Gold Coast and Ivory Coast name the West African natural regions.
+Duplicate names require a geocoded containment anchor; when several entries for
+the same name contain that anchor, the lookup stays unresolved rather than
+selecting the largest entry. Natural outlines try exact names before aliases and
+broader suffix variants. Follow-ups retain boundary provenance, and cancelled
+lookups preserve the previous analyst cohort and boundary source. Navigation
+search keeps a successful geocode, with no search or view-based region recovery.
+
 Shared distance checks use `src/geoDistance.js` with `{ lat, lon }` points and
 the IUGG mean spherical Earth radius, 6371.0088 km. `greatCircleKm` is
 canonical; `greatCircleMeters` is its exact metre conversion. Missing,
@@ -624,6 +633,14 @@ The standalone app offers OpenAI and Gemini Live through an explicit provider ch
 
 Voice action argument schemas have one portable owner under `src/voice/actionSchemas.js`. The Realtime provider builds 30 tools using separate description-only metadata. Description customization cannot replace argument types, enum values or required fields.
 
+`createGevActionRunner` routes `control_cctv` enable/disable through the shared
+layer visibility lifecycle. Results distinguish successful changes from
+manager-reported failures or cancellation and report enabled state and lifecycle
+uncertainty. A caller-supplied abort signal reaches the manager; a late abort
+preserves an already committed change. Missing-layer errors and other CCTV
+actions retain their existing behavior. The exported `controlCctv` helper refuses direct
+enable/disable requests and directs callers to `set_layer_visibility`.
+
 `src/voice/layerManifest.js` declares each catalog layer's voice capabilities: spoken aliases, `toggle`, in-view `context`, `track`, and analyst `query` fields with type and unit, or `noQuery` with the reason. The `set_layer_visibility`, `show_data_layers_menu`, `get_entity_context` and `analyst_query` layer enums, the runner's alias table and the analyst field hints are generated from it. `src/voice/layerManifest.test.mjs` fails when a catalog layer is neither listed nor named in `VOICE_OFF_LAYERS` (today only the two scene-driven Bhote Koshi layers). Global Context is listed with `toggle: false`; `set_context_mode` reaches it. `set_panel_open` also opens `weather-panel` and `recent-imagery-panel`.
 
 Portable source exports provide Radio Browser station normalization, CCTV feed types and regional records independently of HTTP middleware. Radio normalization accepts an explicit URL policy; the standalone directory retains its existing HTTPS rules. Tile coordinate validation accepts explicit zoom bounds with unchanged traffic defaults. Cache, request and rendering owners remain unchanged.
@@ -1095,6 +1112,26 @@ Frames use the registered-image proxy and retain Via Lietuva attribution.
 The images are periodically updated road-condition photographs, not continuous
 video; camera poses use the existing low-confidence heading prior.
 `CCTV_LITHUANIA_MAX_SOURCES` sets its cap (default 400, bounded to 1–1000).
+
+## Taiwan CCTV source pack
+
+The CCTV catalog includes Taiwan national freeway cameras from the Freeway
+Bureau, MOTC. One keyless request reads the daily MOTC 2.0 `CCTV.xml` table
+(~1,800 cameras); the request refuses redirects, has a 15-second deadline and a
+6 MiB response cap, and uses the shared 15-minute cache and fair catalog
+allocation. A failed download serves the last good table (up to a day old),
+or an empty pack, and is not retried for an hour: the catalog host does not
+answer from some networks outside Taiwan, and without the backoff every refresh
+there would wait out the connect timeout. The table
+publishes MJPEG stream URLs; each is mapped to the same camera server's
+single-JPEG path for the same camera number, and only those exact HTTPS pairs
+on the four `freeway.gov.tw` camera servers are registered with the frame
+proxy. Camera keys come from the server and camera number, because published
+CCTV IDs contain Chinese place names and a few repeat across cameras. Poses use
+the low-confidence heading prior. `CCTV_TAIWAN_ENABLED=0` disables the pack;
+`CCTV_TAIWAN_MAX_SOURCES` sets its cap (default 600, bounded to 1–2000), and
+`CCTV_TAIWAN_URL` overrides the table URL.
+Gate: `src/data/cctvTaiwan.test.mjs`.
 
 ## DriveBC CCTV source pack
 
@@ -3458,7 +3495,7 @@ its criteria cannot be silently ignored.
 | Satellites             | CelesTrak                                                                                                                                                                                       | `src/data/satellites.js`                              | `/api/celestrak`                                         | 120s                                                                              |
 | Space Missions (30d)   | Launch Library 2 + CelesTrak                                                                                                                                                                    | `src/data/rocketLaunches.js`                          | `/api/launches` + `/api/celestrak/active`                | 5 min                                                                             |
 | Traffic | Selectable TomTom / OpenStreetMap / Hybrid roads; optional TomTom flow (BYOK) | `src/data/traffic.js` | browser-direct OpenFreeMap tiles; `/api/tomtom` for flow | viewport-driven; capped tile cache |
-| CCTV                   | Austin + Caltrans (CA) + TfL London + Ontario 511 + Fintraffic (FI) + DriveBC (BC) + TxDOT (TX) + Estonia (Tallinn, Tarktee) + Live Traffic NSW + Open Calgary Open Data + Statens vegvesen (NO, stills + live HLS, Kartverket ground heights) + King County (WA) Open Data + WSDOT (WA) Open Data + NYC DOT TMC (opt-in) + City of Toronto RESCU + Catalonia (Servei Català de Trànsit) + FL511 (FL, opt-in) + Street View fallback | `src/data/cctv.js`                                    | `/api/cctv`                                              | 10s (active)                                                                      |
+| CCTV                   | Austin + Caltrans (CA) + TfL London + Ontario 511 + Fintraffic (FI) + DriveBC (BC) + TxDOT (TX) + Estonia (Tallinn, Tarktee) + Live Traffic NSW + Open Calgary Open Data + Statens vegvesen (NO, stills + live HLS, Kartverket ground heights) + King County (WA) Open Data + WSDOT (WA) Open Data + NYC DOT TMC (opt-in) + City of Toronto RESCU + Catalonia (Servei Català de Trànsit) + Hong Kong Transport Department + FL511 (FL, opt-in) + Freeway Bureau, MOTC (Taiwan) + Street View fallback | `src/data/cctv.js`                                    | `/api/cctv`                                              | 10s (active)                                                                      |
 | Radio                  | Radio Browser (public-domain station directory)                                                                                                                                                 | `src/data/radio.js`                                   | `/api/radio/stations`, `/api/radio/click/:uuid`          | 45 min directory refresh                                                          |
 | Transit 🚌             | Operator GTFS-Realtime VehiclePositions (7 keyless regions, `src/data/transitFeeds.js`)                                                                                                         | `src/layers/transit/` via `src/app/layers/transit.js` | `/api/transit`                                           | 15s (poll + delayed playback)                                                     |
 | Bikeshare 🚲           | GBFS (Lyft + BCycle + Social Bicycles + PBSC incl. Bike Share Toronto, Bike Itaú (Brazil), Bicing (Barcelona) and seven other Spanish cities + Urban Sharing, Entur, JCDecaux (Lillestrøm, Valencia, Seville) + nextbike (AMBici))                                                                                                                                        | `src/data/bikeshare.js`                               | `/api/gbfs`                                              | 60s                                                                               |
@@ -4443,8 +4480,10 @@ silently demoting every later lookup for the session.
   default 36 → 250, hard bound 300), filtered to `camera_status === TURNED_ON` (~815 live of
   1,003 rows). City packs (2026-07-04): Caltrans (districts 4/7/11/3 — SF, LA, San Diego,
   Sacramento; cap 300) and TfL London JamCams (cap 250) join Austin (cap 250) as keyless default
-  sources. Ontario 511 (2026-09-12) adds keyless highway cameras including Kitchener-area routes
-  (cap 1,000, all enabled rows from the current ~944-camera catalog). All sources are RAW PRIOR
+  sources. Ontario 511 (2026-09-12) adds highway cameras including Kitchener-area routes
+  (cap 1,000, all enabled rows from the current ~944-camera catalog). The 511on.ca API now
+  requires a developer key, so the pack needs `ONTARIO_511_API_KEY` and is skipped without one
+  (#1228). All sources are RAW PRIOR
   poses, and the layer is stills-first.
   sources. Fintraffic Finland road weather cameras (2026-09-13; cap 300, `CCTV_FINTRAFFIC_MAX_SOURCES`,
   kill switch `CCTV_FINTRAFFIC_ENABLED=0`) are the fourth pack: one keyless GeoJSON station list
