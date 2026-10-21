@@ -26,6 +26,7 @@ import { RadioControls } from './radio.js';
 import { LocalSdrControls } from './localSdrControls.js';
 import { LocationNavigation } from './locationNavigation.js';
 import { bindCameraOrientationControls } from './cameraOrientationControls.js';
+import { mountNavControl } from './navControl/navControl.js';
 import { createMapSourceControls } from './mapSource.js';
 import { STYLES } from './effects.js';
 import { isHudLayout } from '../hudLayouts.js';
@@ -642,6 +643,7 @@ export class StyleManager extends ShellFacade {
     this._initMobileShell();
     this._initShareButton();
     this._initCameraOrientationControls();
+    this._initNavControl();
     this._initClearSelectedLayersButton();
     this._initHUDToggle();
     this._initModels3dToggle();
@@ -1747,6 +1749,17 @@ export class StyleManager extends ShellFacade {
     this._cameraOrientationControls = controls;
   }
 
+  /** Mount the bottom-right zoom, rotate and tilt control. */
+  _initNavControl() {
+    this._navControl?.destroy();
+    this._navControl = mountNavControl({
+      viewer: this.viewer,
+      runNavigation: (noun, navigate) =>
+        this._navigation.runOrientation(noun, navigate),
+      showToast: (message) => this._showToast(message),
+    });
+  }
+
   // ── Share Button ─────────────────────────────
 
   /**
@@ -1889,6 +1902,7 @@ export class StyleManager extends ShellFacade {
     useDisplayStore(applicationPinia()).publishMapSource(null);
     this._cameraOrientationControls?.destroy();
     this._releaseGlobeActions();
+    this._navControl?.destroy();
     this._cctvControls?.destroy();
     this.services?.streetLevelLayer?.attachNavigation?.(null);
     this._streetLevelControls?.destroy();
