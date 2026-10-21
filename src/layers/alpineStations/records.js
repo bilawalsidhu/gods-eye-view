@@ -36,7 +36,7 @@
  * altitude bias, so it is not an acceptable substitute.
  */
 
-import { greatCircleKm } from '../../data/routePlausible.js';
+import { greatCircleKm } from '../../geoDistance.js';
 import { alpineNetwork } from './networks.js';
 import {
   formatParameter,
@@ -243,7 +243,7 @@ export function nearestStations(
   if (!Number.isFinite(lat) || !Number.isFinite(lon)) return [];
   const scored = [];
   for (const station of Array.isArray(stations) ? stations : []) {
-    const km = greatCircleKm(lat, lon, station.lat, station.lon);
+    const km = greatCircleKm({ lat, lon }, station);
     if (!Number.isFinite(km) || km > maxKm) continue;
     scored.push({ station, km });
   }
