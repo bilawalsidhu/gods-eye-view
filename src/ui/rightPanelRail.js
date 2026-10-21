@@ -69,15 +69,15 @@ export function layoutRightPanelRail({
   // A collapse may schedule one follow-up, which only measures and allocates.
   const isCollapseRetry = pendingCollapseRetries.delete(stack);
 
-  // A floating (lifted-out) panel is not laid out by the rail. Neither is one
-  // that other CSS hides, such as an event view. Exclusive presentation hides
-  // collapsed panels itself; those stay in the rail so they can be restored.
+  // Other CSS may hide a panel, such as an event view: it is not laid out.
+  // Exclusive presentation hides collapsed panels itself; those stay in the
+  // rail so they can be restored.
   const hiddenByRail = (panel) =>
     stack.classList.contains('layout-exclusive') &&
     panel.classList.contains('collapsed');
   const panels = [...stack.children].filter(
     (panel) =>
-      panel.matches('[data-panel-id]:not(.panel-floating)') &&
+      panel.matches('[data-panel-id]') &&
       !panel.hidden &&
       (hiddenByRail(panel) || getComputedStyle(panel).display !== 'none'),
   );

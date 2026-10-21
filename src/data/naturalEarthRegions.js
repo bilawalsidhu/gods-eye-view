@@ -18,8 +18,8 @@
 
 import { loadBundledJson } from './bundledJson.js';
 import { createRetryableLoader } from './retryableLoad.js';
+import { EARTH_RADIUS_KM, greatCircleKm } from '../geoDistance.js';
 
-const EARTH_RADIUS_KM = 6371;
 const toRad = (d) => (d * Math.PI) / 180;
 
 /** Spherical-excess ring area (km²) — same family as turf/geojson-area. */
@@ -34,15 +34,6 @@ function ringAreaKm2(ring) {
       toRad(lon2 - lon1) * (2 + Math.sin(toRad(lat1)) + Math.sin(toRad(lat2)));
   }
   return Math.abs((sum * EARTH_RADIUS_KM * EARTH_RADIUS_KM) / 2);
-}
-
-function haversineKm(lon1, lat1, lon2, lat2) {
-  const dLat = toRad(lat2 - lat1);
-  const dLon = toRad(lon2 - lon1);
-  const h =
-    Math.sin(dLat / 2) ** 2 +
-    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
-  return 2 * EARTH_RADIUS_KM * Math.asin(Math.min(1, Math.sqrt(h)));
 }
 
 /**
@@ -157,7 +148,10 @@ function buildEntries(pack, kind) {
       polygons,
       areaKm2,
       bbox: [minLon, minLat, maxLon, maxLat],
-      bboxDiagonalKm: haversineKm(minLon, minLat, maxLon, maxLat),
+      bboxDiagonalKm: greatCircleKm(
+        { lat: minLat, lon: minLon },
+        { lat: maxLat, lon: maxLon },
+      ),
     });
   }
   return out;
@@ -195,7 +189,7 @@ const loadIndex = createRetryableLoader(async () => {
   return index;
 });
 
-function toResult(entry) {
+function toResult(entry, candidates = 1) {
   return {
     name: entry.name,
     featurecla: entry.featurecla,
@@ -203,6 +197,7 @@ function toResult(entry) {
     polygons: entry.polygons,
     bboxDiagonalKm: entry.bboxDiagonalKm,
     areaKm2: entry.areaKm2,
+    candidates,
   };
 }
 
@@ -215,7 +210,9 @@ function toResult(entry) {
  * @param {string} query e.g. "the Alps", "Rockies", "Gulf of Mexico"
  * @returns {Promise<{name:string, featurecla:string, kind:'natural'|'marine',
  *   polygons:Array<Array<[number,number]>>, bboxDiagonalKm:number,
- *   areaKm2:number}|null>} largest-area match, or null when nothing matches.
+ *   areaKm2:number, candidates:number}|null>} largest-area match plus the
+ *   number of same-name entries, or null when nothing matches. Uniqueness in
+ *   this pack alone does not establish the user's intended place.
  */
 export async function findNaturalRegion(query) {
   const norm = normalizeName(query);
@@ -229,7 +226,7 @@ export async function findNaturalRegion(query) {
   for (const key of candidates) {
     if (!key) continue;
     const list = index.get(key);
-    if (list && list.length) return toResult(list[0]);
+    if (list && list.length) return toResult(list[0], list.length);
   }
   return null;
 }
@@ -276,9 +273,10 @@ export function pointInRing(ring, lat, lon) {
 /**
  * Resolve a natural-region OUTLINE ring for the annotation resolver's first
  * rung. Stricter than `findNaturalRegion`: walks ALL entries sharing the
- * matched name (duplicate names included — the US and Spanish "Sierra
- * Nevada" both exist upstream) and returns the single ring that CONTAINS the
- * geocoded anchor. Containment is simultaneously the disambiguator and the
+ * matched name (duplicate names included), trying exact names, aliases and
+ * broader suffix variants in that order. Returns a ring only when exactly one
+ * entry under the matched name CONTAINS the anchor. Containment is the
+ * disambiguator and the
  * wrong-place guard: when no ring contains the anchor this returns null and
  * the resolver's normal ladder continues unchanged.
  *
@@ -297,23 +295,26 @@ export async function lookupNaturalRegionOutline(query, lat, lon) {
     ALIASES[norm],
     ...suffixVariants(ALIASES[norm] || norm),
   ];
-  const seen = new Set();
-  for (const key of candidates) {
-    if (!key || seen.has(key)) continue;
-    seen.add(key);
+  for (const key of new Set(candidates.filter(Boolean))) {
+    const containing = [];
     for (const entry of index.get(key) || []) {
-      for (const ring of entry.polygons) {
-        if (pointInRing(ring, lat, lon)) {
-          return {
-            name: entry.name,
-            kind: entry.kind,
-            featurecla: entry.featurecla,
-            ring,
-            areaKm2: entry.areaKm2,
-          };
-        }
-      }
+      const ring = entry.polygons.find((candidate) =>
+        pointInRing(candidate, lat, lon),
+      );
+      if (ring) containing.push({ entry, ring });
     }
+    // Specific names win over aliases and broader rewrites. Ambiguity belongs
+    // to this name, not the union of every lower-priority candidate name.
+    if (containing.length > 1) return null;
+    if (containing.length === 0) continue;
+    const [{ entry, ring }] = containing;
+    return {
+      name: entry.name,
+      kind: entry.kind,
+      featurecla: entry.featurecla,
+      ring,
+      areaKm2: entry.areaKm2,
+    };
   }
   return null;
 }
