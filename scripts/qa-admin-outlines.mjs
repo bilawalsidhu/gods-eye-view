@@ -89,6 +89,20 @@ try {
   page = await browser.newPage();
   await page.evaluateOnNewDocument(() => {
     sessionStorage.setItem('gev:first-run-mission-session:v1', 'dismissed');
+    // Like radio QA, this keyless-map fixture offers no optional Google token.
+    const original = window.fetch.bind(window);
+    window.fetch = (input, init) => {
+      const target = new URL(
+        typeof input === 'string' || input instanceof URL ? input : input.url,
+        location.href,
+      );
+      if (
+        target.origin === location.origin &&
+        target.pathname === '/api/google/tiles-token'
+      )
+        return Promise.resolve(Response.json({}));
+      return original(input, init);
+    };
   });
   await page.setViewport({ width: 1280, height: 800 });
   const client = await page.createCDPSession();
