@@ -110,7 +110,8 @@ test('no reveal fails at a deadline before the one-second idle catch-up', async 
   assert.equal(ARRIVAL_OBSERVATION_MS, 500);
   f.frame(8, { shown: true, rotationError: 0 });
   f.frame(480);
-  f.expire(500);
+  // The reveal budget is measured from the 8 ms settle frame.
+  f.expire(508);
   const result = await f.observation;
   assert.match(result.error, /reveal.*500 ms/);
   assert.equal(arrivalRotationPassed(result), false);
@@ -123,20 +124,46 @@ test('no reveal fails at a deadline before the one-second idle catch-up', async 
 test('a late visible frame fails even if the timeout callback is delayed', async () => {
   const f = fixture();
   f.frame(8, { shown: true, rotationError: 0 });
-  f.frame(501, { shown: true, rotationError: 0 });
+  f.frame(509, { shown: true, rotationError: 0 });
   const result = await f.observation;
   assert.match(result.error, /reveal.*500 ms/);
-  assert.equal(result.elapsedMs, 501);
+  assert.equal(result.elapsedMs, 509);
   assert.equal(arrivalRotationPassed(result), false);
 });
 
-test('the deadline includes moveEnd setup rather than restarting when hidden', async () => {
+test('a slow software renderer passes when each frame stays inside its own budget', async () => {
+  // Headless SwiftShader frames run ~300 ms: settle lands at 300 ms and the
+  // reveal at 600 ms from moveEnd. Both stay inside the 1 s idle refresh.
   const f = fixture();
-  f.frame(400, { shown: true, rotationError: 0 });
+  f.frame(300, { shown: true, rotationError: 0 });
+  f.expire(500); // the settle frame re-armed the deadline to 800 ms
   f.frame(600, { shown: true, rotationError: 0 });
   const result = await f.observation;
-  assert.equal(result.moveEndMs, 400);
+  assert.equal(result.moveEndMs, 300);
+  assert.equal(result.revealMs, 300);
   assert.equal(result.elapsedMs, 600);
+  assert.equal(result.flipFrame, 1);
+  assert.equal(arrivalRotationPassed(result), true);
+  assert.equal(f.resources.timers, 0);
+});
+
+test('a settle frame later than its budget fails as a moveEnd timeout', async () => {
+  const f = fixture();
+  f.frame(500, { shown: true, rotationError: 0 });
+  const result = await f.observation;
+  assert.match(result.error, /moveEnd.*500 ms/);
+  assert.equal(result.moveEndMs, null);
+  assert.equal(arrivalRotationPassed(result), false);
+});
+
+test('a reveal later than its own budget fails even after a fast settle frame', async () => {
+  const f = fixture();
+  f.frame(400, { shown: true, rotationError: 0 });
+  f.frame(901, { shown: true, rotationError: 0 });
+  const result = await f.observation;
+  assert.match(result.error, /reveal.*500 ms/);
+  assert.equal(result.moveEndMs, 400);
+  assert.equal(result.elapsedMs, 901);
   assert.equal(arrivalRotationPassed(result), false);
 });
 

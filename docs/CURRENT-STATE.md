@@ -2840,9 +2840,12 @@ down | auth-failed` (plus the unchanged `missing-key`/`unsupported`) with
 >   first later successful fetch. Smaller chunks reduce timeout risk; complete
 >   camera batches still wait for their sequential requests, and unresolved
 >   placement continues to use the existing prior until real heights arrive.
-> - **Overpass cache admission:** `/api/overpass` refuses cross-site and forwarded
->   POSTs through the shared local-request gate, then limits requests to 300/min
->   per socket peer and 900/min globally before reading or validating bodies.
+> - **Overpass cache admission:** `/api/overpass` refuses cross-site POSTs
+>   through the keyless same-site gate (reverse-proxy forwarding headers are
+>   admitted, as for `/api/terrain/heights`), then limits requests to 300/min
+>   per peer — IPv6 peers keyed by /64 — and 900/min across all non-loopback
+>   peers before reading or validating bodies; loopback has its own 300/min
+>   window outside that global.
 >   Tag-filter brackets are scanned once; nested or unmatched brackets return 400.
 >   It then checks fresh memory, identical in-flight work, and fresh disk entries
 >   before invoking its separate local 90/min upstream limiter. Cache and
@@ -5119,7 +5122,7 @@ pins and share links already supply complete boxes.
 - Fleet model eligibility is distance-based with on-screen priority and hard caps (`MODEL_MAX`, `MODEL_MAX_ALL`) to avoid draw-call explosions. Each model owns its own `modelMatrix`; shared scratch matrices are forbidden because they caused stacking/flicker.
 - Tracked aircraft use standalone model primitives driven from the already-settled dead-reckoned display position, while the tracked Cesium entity remains billboard-backed so `viewer.trackedEntity` always has a ready bounding sphere.
 - Flights and military layers mirror the same tracking invariants: no warm-up freeze/jump, altitude-scaled framing, trail head glued to the displayed plane, no pull-out when switching targets, and no cross-layer orphan when switching between commercial and military tracks.
-- Regression surface: `npm run test:track` drives the real app headless with synthetic aircraft feeds and asserts the tracking invariants without depending on live OpenSky/adsb data. Arrival-rotation checks observe the first reveal within a bounded wall-clock window before the one-second idle fallback, rather than assuming the 80 ms fleet cadence fits inside four rendered frames; an incorrect first orientation fails immediately. `src/data/trackedModelRegime.test.mjs` pins the tracked contact's threshold math, the enter/exit asymmetry, and the default-on / cockpit / TR-3B / deselect wiring in both layers.
+- Regression surface: `npm run test:track` drives the real app headless with synthetic aircraft feeds and asserts the tracking invariants without depending on live OpenSky/adsb data. Arrival-rotation checks observe the settle frame and then the first reveal frame, each within a 500 ms wall-clock budget that sits inside the one-second idle fallback, rather than assuming the 80 ms fleet cadence fits inside four rendered frames; an incorrect first orientation fails immediately. `src/data/trackedModelRegime.test.mjs` pins the tracked contact's threshold math, the enter/exit asymmetry, and the default-on / cockpit / TR-3B / deselect wiring in both layers.
 
 ### TR-3B conversion Easter egg (August 2026)
 
