@@ -3015,5 +3015,20 @@
   "Play from this scene through the rest of the project": "Reproduce desde esta escena hasta el resto del proyecto",
   "Play the shot after the selected one, moving on to the next scene when needed": "Reproduce el plano posterior al seleccionado y pasa a la siguiente escena si hace falta",
   "Edit anchors, data packs and shot details": "Edita anclas, paquetes de datos y detalles de los planos",
-  "Download this scene as JSON or an asset bundle": "Descarga esta escena como JSON o como paquete de recursos"
+  "Download this scene as JSON or an asset bundle": "Descarga esta escena como JSON o como paquete de recursos",
+  "Tilt up toward the horizon": "Inclinar hacia el horizonte",
+  "Tilt down toward top-down view": "Inclinar hacia la vista cenital",
+  "Top-down view": "Vista cenital",
+  "Look left": "Mirar a la izquierda",
+  "Look right": "Mirar a la derecha",
+  "Look up": "Mirar hacia arriba",
+  "Look down": "Mirar hacia abajo",
+  "Map navigation": "Navegación del mapa",
+  "Tilt": "Inclinación",
+  "Tilt: top-down (bottom) to near horizon (top)": "Inclinación: cenital (abajo) a casi horizonte (arriba)",
+  "Map heading. Drag to rotate, arrow keys turn, Home for north": "Rumbo del mapa. Arrastra para girar, las flechas giran, Inicio para el norte",
+  "North, 0 degrees": "Norte, 0 grados",
+  "Look around": "Mirar alrededor",
+  "{heading} degrees from north": "{heading} grados desde el norte",
+  "{tilt} degrees from top-down": "{tilt} grados desde la vista cenital"
 }
