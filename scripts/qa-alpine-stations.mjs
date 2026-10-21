@@ -319,7 +319,7 @@ try {
         active: chip.classList.contains('active'),
       })),
       listRows: [
-        ...(block('stations')?.querySelectorAll('.data-row-list-item') ?? []),
+        ...(block('list')?.querySelectorAll('.data-row-list-item') ?? []),
       ]
         .map((item) => item.textContent.trim())
         .slice(0, 8),
@@ -511,7 +511,7 @@ try {
   // 6. Selecting a station from the list, and clearing it.
   const selected = await page.evaluate((id) => {
     const row = document.querySelector(
-      `[data-card-id="${id}"] [data-block-id="stations"] .data-row-list-item`,
+      `[data-card-id="${id}"] [data-block-id="list"] .data-row-list-item`,
     );
     if (!row) return null;
     const label = row.textContent.trim();
