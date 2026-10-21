@@ -67,6 +67,8 @@ export class RealtimeTurns {
     this.pendingUserTextResponse = false;
     this.activeResponseId = null;
     this.supersededResponseIds = new Set();
+    this.globeRefusals = new Map();
+    this.globeAdmissionGates = new Map();
     this.activeToolAbortControllers = new Set();
     this.narration = null;
     this.narrationSequence = 0;
@@ -385,6 +387,21 @@ export class RealtimeTurns {
     }
 
     const toolResponseId = payload.response_id || payload.response?.id || null;
+    // Later siblings must wait for globe admission before they can mutate state.
+    // Other tool responses keep their existing concurrency.
+    while (toolResponseId && this.globeAdmissionGates.has(toolResponseId)) {
+      // Drop claimed duplicates before every wait, before their keys can expire.
+      if (
+        calls.every((call) =>
+          callDedupeKeys(call).some((key) => this.processedCalls.has(key)),
+        )
+      )
+        return;
+      await this.globeAdmissionGates.get(toolResponseId).promise;
+      if (!this.ownsConversation(eventChannel) || this.isSessionEnding())
+        return;
+    }
+
     // A newer typed command superseded the response these calls belong to.
     // They are stale intent — dispatching one would let the old turn mutate
     // the map after the operator asked for something else.
@@ -430,7 +447,18 @@ export class RealtimeTurns {
       if (keys.some((key) => this.processedCalls.has(key))) continue;
       keys.forEach((key) => this.processedCalls.set(key, performance.now()));
 
+      if (this.globeRefusals.has(toolResponseId)) {
+        this.sendToolOutput(call.call_id || call.id, {
+          ok: false,
+          action: call.name,
+          skipped: true,
+          error: 'Not run: this response must wait for the Globe View reply.',
+        });
+        continue;
+      }
+
       let result;
+      let globeAdmissionGate = null;
       const resultChannel = this.dc;
       let radioHandoffEpochAtStart = this.radio.radioHandoffEpoch;
       let toolController = null;
@@ -444,6 +472,19 @@ export class RealtimeTurns {
         this.narration?.preamble();
       try {
         const parsedArguments = parseArguments(call.arguments);
+        if (
+          toolResponseId &&
+          call.name === 'move_camera' &&
+          String(parsedArguments.motion || '').toLowerCase() === 'rotate_globe'
+        ) {
+          let resolve;
+          const promise = new Promise((settle) => {
+            resolve = settle;
+          });
+          globeAdmissionGate = { promise, resolve };
+          this.globeAdmissionGates.set(toolResponseId, globeAdmissionGate);
+        }
+
         const isRadioControlCall = call.name === 'control_radio';
         const isRadioVisibilityCall =
           call.name === 'set_layer_visibility' &&
@@ -517,6 +558,19 @@ export class RealtimeTurns {
           },
         );
         if (!this.ownsConversation(eventChannel)) return;
+        if (
+          isGlobeViewRefusal(result) &&
+          toolResponseId &&
+          !this.isSupersededResponse(toolResponseId)
+        ) {
+          this.globeRefusals.set(toolResponseId, {
+            result,
+            followupQueued: false,
+          });
+          while (this.globeRefusals.size > SUPERSEDED_RESPONSE_MEMORY) {
+            this.globeRefusals.delete(this.globeRefusals.keys().next().value);
+          }
+        }
         if (result?.ok && result.radioPlaybackRequested) {
           const sessionIsCurrent =
             this.activeToolAbortControllers.has(toolController) &&
@@ -596,6 +650,13 @@ export class RealtimeTurns {
             : {}),
         };
       } finally {
+        if (globeAdmissionGate) {
+          if (
+            this.globeAdmissionGates.get(toolResponseId) === globeAdmissionGate
+          )
+            this.globeAdmissionGates.delete(toolResponseId);
+          globeAdmissionGate.resolve();
+        }
         if (toolController) {
           this.activeToolAbortControllers.delete(toolController);
           this.radio.releaseTool(toolController);
@@ -672,17 +733,37 @@ export class RealtimeTurns {
         });
       }
       if (!this.ownsConversation(eventChannel)) return;
-      // Keep the Radio handoff wording authoritative even when another tool
-      // result follows Radio in the same multi-intent response.
-      const followupResult =
-        this.radio.pendingRadioPlaybackResult || lastResult;
-      const instructions = responseInstructionForToolResult(followupResult);
-      // A close-up globe refusal asks permission; it cannot perform its own reset.
-      this.queueResponseCreate(
-        isGlobeViewRefusal(followupResult)
-          ? { instructions, tool_choice: 'none' }
-          : instructions,
-      );
+      const refusal = this.globeRefusals.get(toolResponseId);
+      // A newer turn may arrive during admission or the viewport-image await.
+      // Preserve its reply; neither the refusal map nor lastResult may revive
+      // an old permission follow-up after supersession.
+      if (
+        this.isSupersededResponse(toolResponseId) &&
+        (refusal || isGlobeViewRefusal(lastResult))
+      ) {
+        // Complete an idle turn below, but leave a newer running tool's status
+        // authoritative while suppressing this obsolete permission follow-up.
+        if (this.activeToolAbortControllers.size) return;
+      } else if (refusal) {
+        // Even an earlier sibling finishing late cannot replace the permission ask.
+        if (!refusal.followupQueued) {
+          refusal.followupQueued = true;
+          this.queueResponseCreate({
+            instructions: responseInstructionForToolResult(refusal.result),
+            tool_choice: 'none',
+          });
+        }
+      } else {
+        // Keep Radio handoff wording authoritative for ordinary multi-tool replies.
+        const followupResult =
+          this.radio.pendingRadioPlaybackResult || lastResult;
+        const instructions = responseInstructionForToolResult(followupResult);
+        this.queueResponseCreate(
+          isGlobeViewRefusal(followupResult)
+            ? { instructions, tool_choice: 'none' }
+            : instructions,
+        );
+      }
     }
     this.setStatus('listening', t('Ask or command'));
   }
@@ -1074,6 +1155,9 @@ export class RealtimeTurns {
     this.pendingUserTextResponse = false;
     this.activeResponseId = null;
     this.supersededResponseIds.clear();
+    this.globeRefusals.clear();
+    for (const gate of this.globeAdmissionGates.values()) gate.resolve();
+    this.globeAdmissionGates.clear();
     this.narration?.cancel();
     this.assistantAudioPlaying = false;
     this.speechResponseIds.clear();

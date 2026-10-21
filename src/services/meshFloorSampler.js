@@ -187,9 +187,5 @@ export function createMeshFloorSampler({
     () => eventTarget?.removeEventListener('gev:map-stack-changed', onStack),
     { once: true },
   );
-  return {
-    sampleMeshFloorCells,
-    cachedGroundFloor,
-    visibleTilesetLoaded: _visibleTilesetLoaded,
-  };
+  return { sampleMeshFloorCells, cachedGroundFloor };
 }
