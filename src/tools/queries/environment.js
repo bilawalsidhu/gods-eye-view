@@ -264,7 +264,7 @@ export const getFirePerimeters = defineTool({
       .map(({ fire, point }) => ({
         id: fire.stableId,
         name: fire.name,
-        source: fire.source || 'NIFC WFIGS',
+        source: fire.source || 'WFIGS',
         geometry_kind: fire.geometryKind || 'incident-perimeter',
         country_code: fire.countryCode || 'US',
         hectares: fire.hectares ?? null,
