@@ -9,3 +9,7 @@
   and expired 404s; init errors and redirect/origin failures cannot be skipped.
   The two-session limit and strict newest-segment failures stay in place.
   (radianx, #1165).
+- Reconcile asturksever's socket-owned HLS admission from #1267 with the
+  fMP4/HD relay, protecting init files and media without increasing either
+  lease or memory budgets. Cover shared-peer recovery, expiry, disconnects,
+  pending downloads and exact-limit HD caches (radianx, #1165; asturksever, #1267).

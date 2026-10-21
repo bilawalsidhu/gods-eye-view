@@ -4,6 +4,7 @@ import { randomUUID } from 'node:crypto';
 export const HLS_LIMITS = Object.freeze({
   sessions: 2,
   leasesPerSession: 8,
+  leasesPerClient: 8,
   playlistBytes: 256 * 1024,
   segmentBytes: 12 * 1024 * 1024,
   initBytes: 256 * 1024,
@@ -162,25 +163,37 @@ export function createHlsPuller({
     entry.upstream.clear();
     entry.bytes = 0;
   };
-  const release = (cameraId, leaseId) => {
+  const release = (cameraId, leaseId, clientId = 'legacy') => {
     const entry = active.get(cameraId);
     const lease = entry?.leases.get(leaseId);
-    if (!lease) return;
+    if (!lease || lease.clientId !== clientId) return;
     clearTimeout(lease.timer);
     entry.leases.delete(leaseId);
     if (!entry.leases.size) stop(cameraId, entry.token);
   };
-  const touch = (entry, leaseId, create = false) => {
+  const touch = (entry, leaseId, create = false, clientId = 'legacy') => {
     let lease = entry.leases.get(leaseId);
+    if (lease && lease.clientId !== clientId)
+      throw new Error('HLS lease belongs to another client');
     if (!lease) {
+      const clientLeases = [...active.values()].reduce(
+        (count, session) =>
+          count +
+          [...session.leases.values()].filter(
+            (item) => item.clientId === clientId,
+          ).length,
+        0,
+      );
+      if (clientLeases >= limits.leasesPerClient)
+        throw new Error('HLS client lease capacity reached');
       if (!create || entry.leases.size >= limits.leasesPerSession)
         throw new Error('HLS lease capacity reached');
-      lease = {};
+      lease = { clientId };
       entry.leases.set(leaseId, lease);
     }
     clearTimeout(lease.timer);
     lease.timer = setTimeout(
-      () => release(entry.cameraId, leaseId),
+      () => release(entry.cameraId, leaseId, clientId),
       limits.idleMs,
     );
     lease.timer.unref?.();
@@ -353,7 +366,12 @@ export function createHlsPuller({
       }
     }
   };
-  const ensure = async (cameraId, url, leaseId = 'legacy') => {
+  const ensure = async (
+    cameraId,
+    url,
+    leaseId = 'legacy',
+    clientId = 'legacy',
+  ) => {
     if (closed) throw new Error('HLS service closed');
     sameOriginHlsUrl(url, url);
     let entry = active.get(cameraId);
@@ -362,7 +380,7 @@ export function createHlsPuller({
       entry = null;
     }
     if (entry) {
-      touch(entry, leaseId, true);
+      touch(entry, leaseId, true, clientId);
       return entry;
     }
     // Reserve synchronously, before any await: concurrent creation is singleflight.
@@ -387,8 +405,8 @@ export function createHlsPuller({
       pendingDiscontinuity: false,
       discontinuitiesRemoved: 0,
     };
+    touch(entry, leaseId, true, clientId);
     active.set(cameraId, entry);
-    touch(entry, leaseId, true);
     entry.polling = poll(entry);
     return entry;
   };
@@ -400,9 +418,14 @@ export function createHlsPuller({
     }
     return false;
   };
-  const buildPlaylist = async (entry, cameraId, leaseId = 'legacy') => {
+  const buildPlaylist = async (
+    entry,
+    cameraId,
+    leaseId = 'legacy',
+    clientId = 'legacy',
+  ) => {
     if (entry.stopping || entry.segments.size < 2) return null;
-    touch(entry, leaseId);
+    touch(entry, leaseId, false, clientId);
     const segments = [...entry.segments.values()].sort((a, b) => a.seq - b.seq);
     const hasInit = segments.some((s) => s.initId !== null);
     const mediaRoot = '/api/cctv/media/' + encodeURIComponent(cameraId);
@@ -443,14 +466,22 @@ export function createHlsPuller({
     }
     return lines.join('\n') + '\n';
   };
-  const getEntry = (cameraId, token, leaseId) => {
+  const getEntry = (cameraId, token, leaseId, clientId) => {
     const entry = active.get(cameraId);
-    return entry && entry.token === token && entry.leases.has(leaseId)
+    return entry &&
+      entry.token === token &&
+      entry.leases.get(leaseId)?.clientId === clientId
       ? entry
       : null;
   };
-  const getAsset = (cameraId, token, name, leaseId = 'legacy') => {
-    const entry = getEntry(cameraId, token, leaseId);
+  const getAsset = (
+    cameraId,
+    token,
+    name,
+    leaseId = 'legacy',
+    clientId = 'legacy',
+  ) => {
+    const entry = getEntry(cameraId, token, leaseId, clientId);
     const match = /^(seg|init)_(0|[1-9]\d*)\.(ts|mp4)$/.exec(name);
     if (!entry || !match || !Number.isSafeInteger(Number(match[2])))
       return null;
@@ -460,7 +491,7 @@ export function createHlsPuller({
     if (!asset) return null;
     const extension = isInit || asset.initId !== null ? 'mp4' : 'ts';
     if (match[3] !== extension) return null;
-    touch(entry, leaseId);
+    touch(entry, leaseId, false, clientId);
     return {
       body: asset.body,
       contentType: extension === 'mp4' ? 'video/mp4' : 'video/mp2t',
