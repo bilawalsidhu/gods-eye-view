@@ -24,6 +24,7 @@ import {
   registerDynamicCredit,
   NATURAL_EARTH_CREDIT,
   US_CENSUS_CREDIT,
+  IGN_ARGENTINA_ADMIN_CREDIT,
 } from '../data/dataCredits.js';
 import { unavailablePlaceSearch } from '../search/placeSearch.js';
 import { isPickedWorldPosition } from '../data/scenePick.js';
@@ -528,6 +529,7 @@ export function createAnnotationResolver({
             lon,
             scope,
           ).catch(() => null);
+          signal?.throwIfAborted();
           if (admin) return bundledAdminOutline(viewer, admin);
         }
         // Pure admin: only an admin boundary is correct — never fall back to a
@@ -785,7 +787,11 @@ export function createAnnotationResolver({
   function creditAdminSource(viewer, admin) {
     registerDynamicCredit(
       viewer,
-      admin.source === 'us-census' ? US_CENSUS_CREDIT : NATURAL_EARTH_CREDIT,
+      admin.source === 'ign-argentina'
+        ? IGN_ARGENTINA_ADMIN_CREDIT
+        : admin.source === 'us-census'
+          ? US_CENSUS_CREDIT
+          : NATURAL_EARTH_CREDIT,
     );
   }
 
@@ -2021,14 +2027,16 @@ export function createAnnotationResolver({
    * @param {string} name  e.g. "Texas", "the Alps", "France", "Gulf of Mexico"
    * @param {AbortSignal} [signal]
    * @param {object} [placeSearch]
-   * @param {{budgetMs?: number}} [options]  `Infinity` waits for the lookup.
+   * @param {{budgetMs?: number, viewer?: Cesium.Viewer}} [options]
+   *   `Infinity` waits for the lookup. The viewer disambiguates IGN namesakes
+   *   and receives attribution; other countries keep their existing policy.
    * @returns {Promise<{name:string, ring:Array<[number,number]>, source:string}|{name:string, ring:null, error:'region-timeout'}|null>}
    */
   async function resolveRegionRingForQuery(
     name,
     signal,
     placeSearch = unavailablePlaceSearch,
-    { budgetMs = REGION_FALLBACK_BUDGET_MS } = {},
+    { budgetMs = REGION_FALLBACK_BUDGET_MS, viewer } = {},
   ) {
     signal = lifetime
       ? signal
@@ -2049,16 +2057,25 @@ export function createAnnotationResolver({
     }
     // Bundled states/provinces/counties by name (offline); the main part only,
     // like the Natural Earth rung above.
-    const admin = await findAdminArea(q).catch(() => null);
+    let admin = await findAdminArea(q).catch(() => null);
     signal?.throwIfAborted();
-    if (admin)
-      return {
-        name: admin.name,
-        ring: [...admin.ring],
-        source: 'bundled-admin',
-      };
+    if (admin?.source === 'ign-argentina' && admin.candidates > 1) {
+      // The name-only pack lookup ranks by area without a nearby point.
+      // An analyst must instead use the camera or a geocoded anchor.
+      const near =
+        pickWorldFromScreen(viewer, 0.5, 0.5) || viewportProximity(viewer);
+      admin = near ? await findAdminArea(q, { near }).catch(() => null) : null;
+      signal?.throwIfAborted();
+    }
+    if (admin) return bundledAdminRegion(admin, admin.name, viewer);
     const lookup = resolveAdminRegionRing(q, signal, placeSearch);
-    if (!Number.isFinite(budgetMs)) return lookup;
+    const finish = (region) => {
+      signal?.throwIfAborted();
+      if (region?.source === 'ign-argentina')
+        registerDynamicCredit(viewer, IGN_ARGENTINA_ADMIN_CREDIT);
+      return region;
+    };
+    if (!Number.isFinite(budgetMs)) return finish(await lookup);
     let timer;
     const timeout = new Promise((resolve) => {
       timer = setTimeout(
@@ -2067,10 +2084,20 @@ export function createAnnotationResolver({
       );
     });
     try {
-      return await Promise.race([lookup, timeout]);
+      return finish(await Promise.race([lookup, timeout]));
     } finally {
       clearTimeout(timer);
     }
+  }
+
+  /** Keep IGN's specific provenance through analyst coverage and follow-ups. */
+  function bundledAdminRegion(admin, name, viewer) {
+    creditAdminSource(viewer, admin);
+    return {
+      name,
+      ring: [...admin.ring],
+      source: admin.source === 'ign-argentina' ? admin.source : 'bundled-admin',
+    };
   }
 
   async function resolveAdminRegionRing(q, signal, placeSearch) {
@@ -2106,8 +2133,7 @@ export function createAnnotationResolver({
         scope,
       ).catch(() => null);
       signal?.throwIfAborted();
-      if (admin)
-        return { name: q, ring: [...admin.ring], source: 'bundled-admin' };
+      if (admin) return bundledAdminRegion(admin, q);
     }
     const fp = await fetchAdminArea(geo.lat, geo.lon, q, scope, signal).catch(
       () => null,

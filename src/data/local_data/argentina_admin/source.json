@@ -1,0 +1,23 @@
+{
+  "source": "Instituto Geográfico Nacional, República Argentina",
+  "attribution": "Fuente: Instituto Geográfico Nacional de la República Argentina",
+  "retrievedAt": "2026-10-15",
+  "sourceUpdatedAt": null,
+  "license": "IGN geographic information reuse terms",
+  "licenseUrl": "https://www.ign.gob.ar/descargas/tyc1.html",
+  "territorialRepresentation": "Boundaries follow the IGN source, including its representation of disputed territories and Antarctic claims. They do not replace the global country basemap.",
+  "sources": {
+    "departments": {
+      "layer": "ign:departamento",
+      "url": "https://wms.ign.gob.ar/geoserver/ign/ows?service=WFS&version=1.0.0&request=GetFeature&typeName=ign%3Adepartamento&outputFormat=application%2Fjson&srsName=EPSG%3A4326",
+      "featureCount": 529,
+      "contentSha256": "22c22aa21eaf760145fb401273b24071431cd1b53491a803fc606eeb66ec7ee0"
+    },
+    "provinces": {
+      "layer": "ign:provincia",
+      "url": "https://wms.ign.gob.ar/geoserver/ign/ows?service=WFS&version=1.0.0&request=GetFeature&typeName=ign%3Aprovincia&outputFormat=application%2Fjson&srsName=EPSG%3A4326&propertyName=in1%2Cnam%2Cfna",
+      "featureCount": 24,
+      "contentSha256": "b81500641143d82e8a0d56e2ad50de674fb5beae86c3da8a8d9ddf56523e026b"
+    }
+  }
+}

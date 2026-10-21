@@ -252,7 +252,9 @@ export function createGevActionRunner({
   const _layerEnabledAt = new Map();
   let analystEngine;
   const resolveRegionRing = (name, signal) =>
-    annotationResolver.resolveRegionRingForQuery(name, signal, placeSearch);
+    annotationResolver.resolveRegionRingForQuery(name, signal, placeSearch, {
+      viewer,
+    });
   const ensureAnalystEngine = () =>
     (analystEngine ||= createAnalystEngine(
       analystProviders(viewer, dataManager, {
@@ -4535,11 +4537,12 @@ function analystProviders(
   {
     recordLimitByLayer = null,
     placeSearch = unavailablePlaceSearch,
-    resolveRegionRing = (name) =>
+    resolveRegionRing = (name, signal) =>
       defaultAnnotationResolver.resolveRegionRingForQuery(
         name,
-        undefined,
+        signal,
         placeSearch,
+        { viewer },
       ),
     isWarming = () => false,
   } = {},

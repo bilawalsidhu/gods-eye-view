@@ -56,6 +56,35 @@ function harness(place = null) {
 
 const AUSTIN = viewerAt(30.2672, -97.7431, 3000);
 
+test('Argentine departments, partidos and comunas outline offline and credit IGN', async () => {
+  const { resolve, lookups, geocodes } = harness();
+  const credits = [];
+  const viewer = {
+    ...viewerAt(-27.37, -55.9),
+    creditDisplay: { addStaticCredit: (credit) => credits.push(credit) },
+  };
+  for (const target of [
+    'Departamento Capital, Misiones',
+    'Partido de La Matanza, Buenos Aires',
+    'Comuna 1, CABA',
+  ]) {
+    const resolved = await resolve(target, viewer);
+    assert.equal(resolved?.source, 'bundled', target);
+    assert.equal(resolved.synthesized, false);
+    assert.ok(resolved.polygons.length);
+    assert.deepEqual(resolved.ring[0], resolved.ring.at(-1));
+  }
+  assert.deepEqual(geocodes, []);
+  assert.deepEqual(lookups, []);
+  assert.ok(
+    credits.some((c) =>
+      c.html.includes(
+        'Instituto Geográfico Nacional de la República Argentina',
+      ),
+    ),
+  );
+});
+
 test('"Texas", "Travis County, Texas" and "Bavaria" outline offline', async () => {
   const { resolve, lookups, geocodes } = harness();
   for (const [target, label] of [

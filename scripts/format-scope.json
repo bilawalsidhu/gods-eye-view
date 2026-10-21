@@ -34,6 +34,7 @@
   "src/ui/geoFileImport.test.mjs",
   "src/annotations/adminOutline.test.mjs",
   "src/annotations/regionRing.test.mjs",
+  "src/annotations/argentinaRegion.test.mjs",
   "src/data/adminBoundaries.test.mjs",
   "scripts/build-admin-packs.mjs",
   "scripts/qa-admin-outlines.mjs",
@@ -1063,6 +1064,9 @@
   "scripts/assemble-changelog.mjs",
   "src/tooling/changelogFragments.test.mjs",
   "src/data/gbfsProxyRateLimit.test.mjs",
+  "scripts/build-argentina-admin.mjs",
+  "scripts/lib/admin-pack-geometry.mjs",
+  "src/data/argentinaAdmin.test.mjs",
   "src/data/routeSegment.test.mjs",
   "src/terrainHeightsBounds.test.mjs"
 ]
