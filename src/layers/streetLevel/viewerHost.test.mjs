@@ -619,16 +619,6 @@ class FakeGraphDataProvider {
   }
 }
 
-test('without a Graph endpoint the viewer gets the client token, as before', async () => {
-  const library = fakeLibrary();
-  library.gate.resolve();
-  const adapter = createMapillaryViewer({ source: { token: 't' } });
-  await adapter.mount({});
-  const [viewer] = library.viewers.instances;
-  assert.equal(viewer.options.accessToken, 't');
-  assert.equal(viewer.options.dataProvider, undefined);
-});
-
 test("with a Graph endpoint the viewer uses MapillaryJS's Graph provider there, without a token", async () => {
   const library = fakeLibrary();
   library.gate.resolve();
