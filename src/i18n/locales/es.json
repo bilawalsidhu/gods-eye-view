@@ -2937,5 +2937,12 @@
   "Gemini access was refused. Check the API key and model access.": "Se denegó el acceso a Gemini. Comprueba la clave de API y el acceso al modelo.",
   "Gemini Live is unavailable for the configured model.": "Gemini Live no está disponible para el modelo configurado.",
   "Token request is too large": "La solicitud de credencial es demasiado grande",
-  "Use an empty JSON token request": "Usa una solicitud de credencial con un objeto JSON vacío"
+  "Use an empty JSON token request": "Usa una solicitud de credencial con un objeto JSON vacío",
+  "Approximate location; coverage not calibrated.": "Ubicación aproximada; cobertura sin calibrar.",
+  "LOCATION · APPROXIMATE": "UBICACIÓN · APROXIMADA",
+  "Open official camera page ↗": "Abrir la página oficial de la cámara ↗",
+  "PLAYER IN PANEL": "REPRODUCTOR EN EL PANEL",
+  "PUBLIC PLAYER · EXTERNAL": "REPRODUCTOR PÚBLICO · EXTERNO",
+  "{camera} — public player": "{camera} — reproductor público",
+  "{city} CCTV · {name} · PUBLIC PLAYER · APPROXIMATE LOCATION · COVERAGE NOT CALIBRATED": "{city} CCTV · {name} · REPRODUCTOR PÚBLICO · UBICACIÓN APROXIMADA · COBERTURA SIN CALIBRAR"
 }

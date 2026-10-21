@@ -308,7 +308,9 @@ export function createCalibration({
     layerState._gizmo = createCalibrationGizmo({
       viewer: layerState._viewer,
       getActiveRecord: () =>
-        layerState._enabled && layerState._calibrationMode
+        layerState._enabled &&
+        layerState._calibrationMode &&
+        parts.selection.getActiveRecord()?.camera?.feedType !== 'embed'
           ? parts.selection.getActiveRecord()
           : null,
       applyPatch: (patch, draggedRecord) => {

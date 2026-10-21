@@ -2,6 +2,7 @@ import { t, tn } from '../i18n/index.js';
 import { cctvSourceLabelText, cctvSourceMessageText } from './cctvFrames.js';
 
 import { createCctvVideoSurface } from './cctvVideo.js';
+import { createCctvEmbed } from './cctvEmbed.js';
 export function _calBadgeLabel(badge) {
   switch (badge) {
     case 'calibrated':
@@ -29,6 +30,7 @@ export function _renderCctvState(state) {
   const enabled = !!state?.enabled && !!this.actions.isEnabled();
   const activeId = state?.activeCameraId || '';
   const activeCamera = state?.activeCamera || null;
+  const embedded = activeCamera?.feedType === 'embed';
 
   // Auto-expand the panel when the active camera CHANGES to a new non-null
   // id while the layer is enabled. Covers click-on-globe, panel controls,
@@ -124,7 +126,11 @@ export function _renderCctvState(state) {
     this._cctvProjectionBtn.textContent = showProjection
       ? t('PROJECTION ON')
       : t('PROJECTION OFF');
-    this._cctvProjectionBtn.disabled = !enabled;
+    this._cctvProjectionBtn.disabled = !enabled || embedded;
+    if (embedded) {
+      this._cctvProjectionBtn.textContent = t('PLAYER IN PANEL');
+      this._cctvProjectionBtn.classList.remove('active');
+    }
   }
 
   if (this._cctvQualityChip) {
@@ -143,6 +149,10 @@ export function _renderCctvState(state) {
           badge: this._calBadgeLabel(badge),
         });
     this._cctvQualityChip.dataset.calBadge = dirty ? 'edited' : badge || '';
+    if (embedded) {
+      this._cctvQualityChip.textContent = t('LOCATION · APPROXIMATE');
+      this._cctvQualityChip.dataset.calBadge = '';
+    }
   }
 
   this._syncCctvCalReadout(enabled, activeCamera);
@@ -177,6 +187,8 @@ export function _renderCctvState(state) {
           status: `${credit}${statusMsg}`,
         },
       );
+      if (embedded || activeCamera.locationNote)
+        this._cctvMeta.textContent = `${activeCamera.city} · ${provider}${credit} · ${activeCamera.locationNote || t('Approximate location; coverage not calibrated.')}`;
     } else if (cameras.length > 0) {
       this._cctvMeta.textContent = enabled
         ? tn(
@@ -196,10 +208,20 @@ export function _renderCctvState(state) {
     }
   }
 
-  const liveIntent = enabled && !!activeCamera?.isVideo;
+  const embedIntent = enabled && embedded;
+  if (embedIntent && this._cctvFrameWrap && !this._cctvEmbed)
+    this._cctvEmbed = createCctvEmbed(this._cctvFrameWrap);
+  this._cctvEmbed?.update(
+    activeCamera,
+    embedIntent &&
+      !document.hidden &&
+      !this._cctvPanel?.hidden &&
+      !this._cctvPanel?.classList.contains('collapsed'),
+  );
+  const liveIntent = enabled && !embedded && !!activeCamera?.isVideo;
+  if (this._cctvFrame) this._cctvFrame.hidden = liveIntent || embedIntent;
   if (this._cctvVideo) {
     this._cctvVideo.hidden = !liveIntent;
-    if (this._cctvFrame) this._cctvFrame.hidden = liveIntent;
     const visible =
       liveIntent &&
       !document.hidden &&
@@ -216,7 +238,7 @@ export function _renderCctvState(state) {
     }
   }
 
-  if (this._cctvFrame && !liveIntent) {
+  if (this._cctvFrame && !liveIntent && !embedIntent) {
     const nextSrc = enabled ? activeCamera?.frameUrl : null;
     const nextCameraId = enabled ? activeCamera?.id || '' : '';
     const cameraChanged = this._cctvFrame.dataset.cameraId !== nextCameraId;
@@ -235,7 +257,7 @@ export function _renderCctvState(state) {
     if (!nextSrc) {
       this._clearCctvFrame();
     }
-  } else if (liveIntent) {
+  } else if (liveIntent || embedIntent) {
     this._clearCctvFrame();
   }
 

@@ -222,6 +222,10 @@ test('the CSP admits the event media embeds and the Maps JavaScript API, and no 
       .slice(1) ?? [];
   const scripts = directive('script-src');
   const frames = directive('frame-src');
+  assert.ok(frames.includes('https://player.twitch.tv'));
+  assert.ok(frames.includes('https://v.angelcam.com'));
+  assert.ok(frames.includes('https://*.roundshot.com'));
+  assert.ok(!frames.includes('https:'));
   // The player API, the Facebook SDK and X's widget script.
   for (const origin of [
     'https://www.youtube.com',
@@ -256,4 +260,9 @@ test('the CSP admits the event media embeds and the Maps JavaScript API, and no 
   }
   // X posts load in X's own frames.
   assert.ok(frames.includes('https://platform.twitter.com'));
+  // CCTV can frame only RTSP.me's public player path; it needs no parent-page
+  // script or media-origin exception (the provider owns the child document).
+  assert.ok(frames.includes('https://rtsp.me/embed/'));
+  assert.ok(!frames.includes('https://rtsp.me'));
+  assert.ok(!scripts.some((source) => source.includes('rtsp.me')));
 });

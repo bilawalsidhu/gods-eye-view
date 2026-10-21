@@ -1,0 +1,34 @@
+[
+  {
+    "id": "youtube-buenos-aires-obelisco",
+    "name": "Obelisco view (approximate area)",
+    "city": "Buenos Aires",
+    "provider": "Argentina News",
+    "feedType": "embed",
+    "embedUrl": "https://www.youtube.com/watch?v=r8Busmkpsh8",
+    "sourcePageUrl": "https://www.youtube.com/watch?v=r8Busmkpsh8",
+    "lat": -34.6037,
+    "lon": -58.3816,
+    "locationNote": "Approximate Obelisco area; camera mount and facing unverified.",
+    "headingConfidence": "low",
+    "sourceKind": "youtube-player",
+    "license": "Public YouTube player; no open license asserted for the video.",
+    "credit": "Argentina News · YouTube"
+  },
+  {
+    "id": "youtube-uade-buenos-aires",
+    "name": "UADE Campus Buenos Aires (approximate location)",
+    "city": "Buenos Aires",
+    "provider": "UADE",
+    "feedType": "embed",
+    "embedUrl": "https://www.youtube.com/live/NfsyRx50gAI",
+    "sourcePageUrl": "https://www.uade.edu.ar/",
+    "lat": -34.6174,
+    "lon": -58.3816,
+    "locationNote": "Approximate UADE campus at Lima 757; camera mount and facing unverified.",
+    "headingConfidence": "low",
+    "sourceKind": "youtube-player",
+    "license": "Public YouTube player; no open license asserted for the video.",
+    "credit": "UADE · YouTube"
+  }
+]

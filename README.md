@@ -577,14 +577,26 @@ and panel. DelDOT uses its official HTTPS HLS catalog links. Disable that
 pack with `CCTV_DELDOT_ENABLED=0`.
 
 The server allows two concurrent sessions. Each retains at most 12 segments
-and 24 MiB in memory; individual downloads are capped at 4 MiB with a ten
-second deadline. There are no segment files or ffmpeg processes. Redirects,
-off-origin references, encrypted playlists and non-MPEG-TS segments are refused.
-Each decoder has its own client lease (at most eight per session), including
-native HLS. Closing it releases only that lease; abandoned leases expire after
+and 24 MiB in memory; segment downloads are capped at 12 MiB, playlists at 1 MiB,
+with a ten second deadline. Large HD segments can leave only two or three segments in the
+retained playlist. There are no segment files or ffmpeg processes. Redirects,
+off-origin references, encrypted playlists, byte ranges and mixed containers are refused.
+Clear MPEG-TS and whole-file fMP4 with same-origin `EXT-X-MAP` initialization
+files are supported; HEVC playback depends on the browser and device. Init
+files are capped independently at 256 KiB and share the 24 MiB session budget.
+Two maximum-size 12 MiB media files plus an init cannot fit that budget; such
+fMP4 streams cannot reach the two-segment readiness threshold.
+Each decoder has its own lease, including native HLS: at most eight per session
+and eight per direct socket peer across both sessions. Media requests pass the
+same-site gate before catalog or session work; refreshes, TS/fMP4 media reads,
+init reads and release require the owning peer. IPv4-mapped IPv6 addresses are
+normalized; clients sharing a NAT share the peer budget. Forwarding headers are
+refused by this gate, not used as peer identity. This is resource admission, not
+user authentication. Closing a decoder releases only its lease; abandoned leases expire after
 15 seconds without access. The last release stops upstream work. Failed live video
 uses the existing still/Street View/synthetic fallback, which is not live video.
-RTMP-only sources are not supported by this integration.
+Cold or restarted sessions begin with the newest two segments; later polls fetch
+only newly advertised segments. RTMP-only sources are not supported by this integration.
 
 </details>
 

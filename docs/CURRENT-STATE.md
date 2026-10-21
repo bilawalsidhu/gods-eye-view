@@ -9,6 +9,13 @@ broader suffix variants. Follow-ups retain boundary provenance, and cancelled
 lookups preserve the previous analyst cohort and boundary source. Navigation
 search keeps a successful geocode, with no search or view-based region recovery.
 
+CCTV live-media requests are same-site gated before catalog or media work, including
+HLS renewal, TS/fMP4 media and initialization reads, and DELETE cleanup. HLS leases belong to their socket
+peer (IPv4-mapped IPv6 is normalized), with eight leases per peer across the two
+global sessions. Peers behind the same NAT share that budget; this is resource
+admission, not authentication. Native same-origin video and range requests remain
+supported.
+
 Shared distance checks use `src/geoDistance.js` with `{ lat, lon }` points and
 the IUGG mean spherical Earth radius, 6371.0088 km. `greatCircleKm` is
 canonical; `greatCircleMeters` is its exact metre conversion. Missing,
@@ -1060,6 +1067,119 @@ marker placement, audio playback and camera policy stay with their existing
 owners. Tuner calculations have a pure entry, with existing layer exports
 preserved. Destruction removes listeners and state subscriptions before ending
 tuning; a delayed Enable result cannot reveal or refocus removed controls.
+
+## Paraguay public CCTV cameras
+
+Three additional native HLS feeds ship in the Alto Paraná pack: Atacado
+Connect (one rotating view in Ciudad del Este) and Grupo Ibarra CAM1/CAM2
+(Presidente Franco). `CCTV_ALTO_PARANA_ENABLED=1` opts into these independently
+of the municipal player. Source notes and restrictions are documented in
+[CCTV-PARAGUAY.md](CCTV-PARAGUAY.md). All coordinates remain approximate area
+anchors and no calibrated pose is supplied. The panel displays their uncertainty.
+
+The bounded HLS relay accepts 1 MiB playlists for Ibarra's 48-hour DVR lists,
+starts with the newest two segments within its 12-segment live window, and permits individual HD segments up to
+12 MiB for Atacado. Its two-session limit, 24 MiB cache per session, deadlines,
+origin checks and lease cleanup remain unchanged. Ibarra uses the operator's
+published 1024×576 variant, not its 8.5 Mbps original.
+
+### Encarnación municipal player
+
+The existing CCTV layer includes one public Encarnación, Paraguay camera,
+`encarnacion-sambodromo`. The Municipality publishes
+`https://rtsp.me/embed/3NsfyZGe/` on `https://encarnacion.gov.py/en-vivo/`.
+Its announcement describes the Playa San José / Costanera tourism broadcast.
+The marker uses the approximate Centro Cívico / Sambódromo location from the
+Municipality's tourism page; the physical mount, facing and coverage are not
+surveyed. The panel labels this uncertainty and suppresses calibration, projection
+and coverage for this `embed` feed type. It remains selectable through the normal
+map, camera selector and navigation controls. No new layer token is introduced.
+
+The provider's original player loads only for the active camera while the panel
+and document are visible. Collapse, backgrounding, camera changes, CCTV disable
+and destruction remove the iframe. Regular state refreshes reuse the same player.
+The panel links to the official municipal page and labels playback `EXTERNAL`;
+an iframe load is not treated as proof of live camera health. The catalog carries
+only the stable public player URL, with no camera credentials or media tokens.
+The player is sandboxed, its URL is constrained to HTTPS RTSP.me public embed
+paths, and the parent CSP adds only that frame path. The server never fetches the
+player: frame/media routes return 409 for this camera instead of showing an
+unrelated Street View or synthetic fallback. No ambient thumbnails are fetched.
+
+The pack is off by default and follows the existing custom-catalog policy and
+fair catalog cap. Set `CCTV_ENCARNACION_ENABLED=1` to opt in after checking operator terms. Video is neither bundled nor
+recorded; public availability is not represented as an open video license.
+Unit coverage: `cctvEncarnacion.test.mjs`, `cctvEmbed.test.mjs`, CCTV controls and
+CSP tests. Browser regression gate: `node scripts/qa-cctv-v2.mjs --url
+http://localhost:4173`; live provider playback is an additional manual check.
+## Public CCTV players
+
+CCTV's `embed` feed type accepts public HTTPS YouTube video URLs in
+`embedUrl`: `youtube.com/watch?v=VIDEO_ID`, `youtube.com/live/VIDEO_ID`,
+`youtu.be/VIDEO_ID`, `youtube.com/shorts/VIDEO_ID`, and the YouTube or
+YouTube-nocookie `/embed/VIDEO_ID` form. Canonicalization requires an exact
+allowlisted host and an eleven-character video ID, rejects credentials and
+nonstandard ports, and discards caller parameters. Every accepted link becomes
+`https://www.youtube-nocookie.com/embed/VIDEO_ID?playsinline=1`. The existing
+Bhote Koshi media callouts share the video-ID parser. No new dependency, API key,
+player SDK or server-side YouTube request is required.
+
+The same `embed` path also accepts public Twitch channels (`twitch.tv/CHANNEL`
+or `player.twitch.tv/?channel=CHANNEL`), Angelcam broadcasts
+(`v.angelcam.com/iframe?v=ID`, ten lowercase alphanumeric characters), and
+Roundshot panoramas (`NAME.roundshot.com/`). HTTPS, exact provider hosts and
+bounded paths/IDs are required. Caller player parameters are discarded.
+Twitch's required `parent` is set from the actual document hostname; its
+400-by-300 minimum viewport remains scrollable in narrow panels. Angelcam starts muted only while selected and visible; its current public
+player can get stuck without a usable Play control when autoplay is disabled. Roundshot retains the capture date, archives and panorama controls;
+it is periodically captured imagery, not necessarily continuous video. Only
+these provider frame origins are added to CSP; no provider script SDK is loaded
+into the app and no signed media URL is extracted or relayed.
+
+YouTube alone uses its privacy-enhanced host. Twitch, Angelcam and Roundshot
+load third-party players that may use cookies or analytics under their own
+policies; selecting a camera contacts that provider. The official-page link is
+a separate `noopener noreferrer` link outside the sandbox, so it remains the
+fallback when a provider popup cannot run inside the iframe sandbox.
+
+The original player retains its controls, branding and access restrictions.
+YouTube and Twitch require Play; consent, login, regional restrictions or disabled embedding
+remain provider-controlled. `sourcePageUrl` supplies the official-page link;
+when omitted for YouTube, the panel links to the canonical watch page. The iframe
+preserves an origin referrer and a minimum 200-by-200-pixel viewport. It loads
+only while selected and visible and is released on hide, collapse, switch,
+disable or destruction. The existing `EXTERNAL` status does not claim that a
+stream is currently live. Frame/media proxying, projection, calibration and
+ambient thumbnails stay disabled for these players.
+
+Try the two attributed Argentine examples with:
+
+```bash
+CCTV_SOURCES_FILE=config/cctv_sources.youtube.json npm run dev
+```
+
+The custom catalog replaces the default camera packs; add `CCTV_FORCE_AUSTIN=1`
+to merge it with the defaults. The file contains Argentina News' Obelisco view
+and UADE's Campus Buenos Aires view, discovered through SkylineWebcams and
+verified against YouTube's public oEmbed metadata; UADE also embeds its stream
+on its own homepage. Their rounded landmark/campus anchors are approximate,
+not surveyed mounts. No video or thumbnails are bundled. Details and coordinate
+provenance are in `DATA_SOURCES.md`.
+
+Channel `/@handle/live` URLs and playlist-only URLs are not video IDs. When a
+broadcaster restarts under a new video ID, update `embedUrl`; this feature does
+not scrape channels or discover replacement streams. Skyline-owned streams and
+private/paywalled aggregator catalogs are not imported. A camera listed by an
+aggregator needs an independently public, authorized original player.
+
+Unit coverage: `src/sources/youtube.test.mjs`, `cctvEmbed.test.mjs`,
+`cctvYouTube.test.mjs` (catalog, API routes, geometry and public state), and existing
+Bhote Koshi tests. Browser gate: `node scripts/qa-cctv-v2.mjs --url
+http://localhost:4173`; real YouTube playback and provider restrictions require
+an additional browser check, as do Twitch, Angelcam and Roundshot.
+Confirm decoded dimensions and advancing playback time; Angelcam's connecting
+animation is not camera video. For Roundshot, verify the panorama's capture date
+instead of treating periodically captured imagery as continuous video.
 
 ## NYC DOT TMC CCTV source pack
 
@@ -5819,11 +5939,34 @@ inactive. The panel paints the same video at at most 640px/15 fps; collapse stop
 its paint loop. Camera deactivation destroys the decoder, and fatal playback
 errors revert to the labeled frame fallback. Camera changes clear the old panel
 frame. hls.js is imported only when an HLS camera starts. Two live sessions may
-coexist with at most eight independent consumer leases each; no-access lease
-expiry is 15 seconds. Closing one consumer leaves other consumers running. Lease
+coexist with at most eight independent consumer leases each, and each direct
+socket peer can hold at most eight leases across both sessions. The same-site
+gate precedes catalog I/O; all media and init reads, renewals and releases
+check the owning peer. No-access lease expiry is 15 seconds. Closing one consumer leaves other consumers running. Lease
 ids use `crypto.randomUUID` where the page is a secure context and an equivalent
-v4 id from `crypto.getRandomValues` on plain-HTTP LAN pages. Encrypted/fMP4/byte-range playlists fail
-closed. Performance and live agency reliability require recorded validation.
+v4 id from `crypto.getRandomValues` on plain-HTTP LAN pages. Clear whole-file
+fMP4 playlists are supported with same-origin `EXT-X-MAP` initialization files,
+local MP4 routes and shared init bytes counted in the 24 MiB session budget.
+Encrypted, byte-range and mixed-container playlists fail closed. HEVC decoding
+remains browser/device-dependent. Performance and live agency reliability
+require recorded validation.
+
+Cold and restarted relay sessions start with the newest two segments; subsequent
+polls fetch newly advertised segments without downloading the older DVR tail.
+The relay accepts at most 12 MiB per incoming segment and retains at most
+24 MiB per session. A playlist may advertise already-expired segments: 404s
+older than its newest two entries are skipped once while advertised, and only
+the next retained segment marks that gap as a discontinuity. A 404 in that
+newest pair, access failures, redirects, TLS errors and oversized responses
+retain the existing retry/failure behavior. Init files are capped independently
+at 256 KiB; their errors are never treated as expired media. Every remembered
+upstream entry includes both media and init URIs, including startup omissions
+and skipped 404s. Encoder restarts and discontinuities refresh init ownership
+without invalidating maps still used by retained segments. Two 12 MiB media
+files plus an init do not fit the session budget, so those fMP4 streams remain
+unready rather than exceeding the cap.
+This accommodates Mendoza's expired live-window entries and Tandil's roughly
+8 MB 1080p segments without changing origin registration or storing recordings.
 
 ## Wind forecast models
 

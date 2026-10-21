@@ -10,6 +10,116 @@ const playlist =
   '#EXTM3U\n#EXT-X-MEDIA-SEQUENCE:12\n#EXTINF:2,\na.ts\n#EXTINF:2,\nb.ts\n#EXTINF:2,\nc.ts\n';
 const base = 'https://camera.example/live/list.m3u8';
 
+test('a 48-hour DVR playlist downloads only its live tail and keeps the cache bounded', async (t) => {
+  const count = 17280;
+  const dvr =
+    '#EXTM3U\n#EXT-X-MEDIA-SEQUENCE:100\n' +
+    Array.from(
+      { length: count },
+      (_, i) => `#EXTINF:10.000000,\nseg_${String(i).padStart(14, '0')}.ts\n`,
+    ).join('');
+  assert.ok(Buffer.byteLength(dvr) > 256 * 1024);
+  const requested = [];
+  const manager = createHlsPuller({
+    fetchImpl: async (url) => {
+      requested.push(url);
+      return new Response(url === base ? dvr : 'segment');
+    },
+  });
+  t.after(() => manager.shutdown());
+  const entry = await manager.ensure('dvr', base);
+  await entry.polling;
+  assert.deepEqual(
+    requested.slice(1),
+    Array.from(
+      { length: 2 },
+      (_, i) =>
+        new URL(`seg_${String(count - 2 + i).padStart(14, '0')}.ts`, base).href,
+    ),
+  );
+  assert.equal(entry.segments.size, 2);
+  assert.ok(manager.stats().bytes <= HLS_LIMITS.sessionBytes);
+  await assert.rejects(
+    fetchHlsBytes(base, {
+      maxBytes: HLS_LIMITS.playlistBytes,
+      fetchImpl: async () =>
+        new Response('', {
+          headers: { 'content-length': String(HLS_LIMITS.playlistBytes + 1) },
+        }),
+    }),
+    /too large/,
+  );
+});
+
+test('cold starts and sequence rollbacks fetch only two HD segments, while advancing polls fetch new segments', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  let first = 100;
+  const requested = [];
+  const body = new Uint8Array(6.5 * 1024 * 1024);
+  const manager = createHlsPuller({
+    fetchImpl: async (url) => {
+      if (url === base)
+        return new Response(
+          `#EXTM3U\n#EXT-X-MEDIA-SEQUENCE:${first}\n` +
+            Array.from(
+              { length: 12 },
+              (_, i) => `#EXTINF:2,\n${first + i}.ts\n`,
+            ).join(''),
+        );
+      requested.push(url);
+      return new Response(body);
+    },
+  });
+  t.after(() => manager.shutdown());
+  const entry = await manager.ensure('live-edge', base);
+  await entry.polling;
+  assert.deepEqual(
+    requested,
+    [110, 111].map((n) => new URL(`${n}.ts`, base).href),
+  );
+  assert.equal(entry.segments.size, 2);
+  assert.equal(manager.stats().bytes, 2 * body.length);
+  assert.equal(
+    entry.nextSeq,
+    2,
+    'cold startup downloads nothing that needs eviction',
+  );
+
+  first = 103;
+  t.mock.timers.tick(HLS_LIMITS.pollMs);
+  await entry.polling;
+  assert.deepEqual(
+    requested.slice(2),
+    [112, 113, 114].map((n) => new URL(`${n}.ts`, base).href),
+  );
+  assert.ok([...entry.segments.values()].every((s) => !s.discontinuity));
+
+  first = 0;
+  t.mock.timers.tick(HLS_LIMITS.pollMs);
+  await entry.polling;
+  assert.deepEqual(
+    requested.slice(5),
+    [10, 11].map((n) => new URL(`${n}.ts`, base).href),
+  );
+  assert.equal(entry.nextSeq, 7);
+  assert.equal(entry.segments.get(5).discontinuity, true);
+  assert.equal(entry.segments.get(6).discontinuity, false);
+  assert.ok(manager.stats().bytes <= HLS_LIMITS.sessionBytes);
+});
+
+test('public HD segments over 6 MiB fit without increasing the session cache budget', async (t) => {
+  const body = new Uint8Array(6 * 1024 * 1024 + 1024);
+  const manager = createHlsPuller({
+    fetchImpl: async (url) => new Response(url === base ? playlist : body),
+  });
+  t.after(() => manager.shutdown());
+  const entry = await manager.ensure('hd', base);
+  await entry.polling;
+  assert.equal(entry.segments.size, 2);
+  assert.equal(manager.stats().bytes, 2 * body.length);
+  assert.ok(manager.stats().bytes <= HLS_LIMITS.sessionBytes);
+});
+
 test('playlist parser uses sequence, refuses escaping and unsupported references', () => {
   assert.deepEqual(
     parseHlsMedia(playlist, base).map((s) => s.seq),
@@ -78,8 +188,8 @@ test('one session is reserved before await; disk-free cache and capacity remain 
   assert.deepEqual(manager.stats(), { sessions: 1, bytes: 6 });
   const text = await manager.buildPlaylist(a, 'a');
   assert.match(text, /seg_0\.ts\?session=/);
-  assert.equal(manager.getSegment('a', 'stale-token', 0), null);
-  assert.equal(manager.getSegment('a', a.token, 0).length, 3);
+  assert.equal(manager.getAsset('a', 'stale-token', 'seg_0.ts'), null);
+  assert.equal(manager.getAsset('a', a.token, 'seg_0.ts').body.length, 3);
   manager.stop('a', 'stale-token');
   assert.equal(manager.stats().sessions, 1);
   manager.stop('a', a.token);
@@ -141,7 +251,7 @@ test('agency sequence rollback creates a monotonic local discontinuity', async (
   const after = await manager.buildPlaylist(entry, 'a');
   assert.match(
     after,
-    /#EXT-X-DISCONTINUITY\n#EXTINF:2\.000,\n\/api\/cctv\/media\/a\/seg_3\.ts/,
+    /#EXT-X-DISCONTINUITY\n#EXTINF:2\.000,\n\/api\/cctv\/media\/a\/seg_2\.ts/,
   );
   await manager.shutdown();
 });
@@ -168,7 +278,7 @@ test('a reused agency sequence with changed segment URI cannot remain stale', as
   await new Promise((r) => setTimeout(r, 30));
   assert.match(
     await manager.buildPlaylist(entry, 'a'),
-    /#EXT-X-DISCONTINUITY\n#EXTINF:2\.000,\n\/api\/cctv\/media\/a\/seg_3\.ts/,
+    /#EXT-X-DISCONTINUITY\n#EXTINF:2\.000,\n\/api\/cctv\/media\/a\/seg_2\.ts/,
   );
   await manager.shutdown();
 });
@@ -188,13 +298,19 @@ test('two consumers share downloads but release and abandoned expiry are indepen
   ]);
   assert.equal(a, b);
   await manager.waitReady(a);
-  assert.equal(downloads, 4); // One manifest and three segments, not per consumer.
+  assert.equal(downloads, 3); // One manifest and two startup segments, shared by both consumers.
   assert.equal(a.leases.size, 2);
   await assert.rejects(manager.ensure('camera', base, 'viewer-c'));
   manager.release('camera', 'viewer-a');
   assert.equal(manager.stats().sessions, 1);
-  assert.equal(manager.getSegment('camera', a.token, 0, 'viewer-a'), null);
-  assert.equal(manager.getSegment('camera', a.token, 0, 'viewer-b').length, 3);
+  assert.equal(
+    manager.getAsset('camera', a.token, 'seg_0.ts', 'viewer-a'),
+    null,
+  );
+  assert.equal(
+    manager.getAsset('camera', a.token, 'seg_0.ts', 'viewer-b').body.length,
+    3,
+  );
   assert.match(
     await manager.buildPlaylist(b, 'camera', 'viewer-b'),
     /lease=viewer-b/,
@@ -222,4 +338,130 @@ test('an abandoned consumer expires while a renewed consumer keeps the session',
   assert.equal(entry.leases.has('active'), true);
   assert.equal(entry.controller.signal.aborted, false);
   await manager.shutdown();
+});
+
+test('an expired old segment is skipped once as the live window advances', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  let current = playlist;
+  let expiredFetches = 0;
+  const manager = createHlsPuller({
+    limits: { ...HLS_LIMITS, segmentBytes: 1024 },
+    fetchImpl: async (url) => {
+      if (url.endsWith('.m3u8')) return new Response(current);
+      if (url.endsWith('a.ts')) {
+        expiredFetches++;
+        return new Response('', { status: 404 });
+      }
+      return new Response('current');
+    },
+  });
+  t.after(() => manager.shutdown());
+  const entry = await manager.ensure('expired', base);
+  await entry.polling;
+  assert.equal(await manager.waitReady(entry), true);
+  assert.equal(entry.segments.size, 2);
+  assert.equal(manager.stats().bytes, 14);
+  const output = await manager.buildPlaylist(entry, 'expired');
+  assert.match(output, /#EXT-X-DISCONTINUITY\n#EXTINF/);
+
+  for (const next of ['', '#EXTINF:2,\nd.ts\n', '#EXTINF:2,\ne.ts\n']) {
+    current += next;
+    t.mock.timers.tick(HLS_LIMITS.pollMs);
+    await entry.polling;
+  }
+  assert.equal(expiredFetches, 1);
+  assert.deepEqual(
+    [...entry.segments.values()].map((segment) => segment.discontinuity),
+    [true, false, false, false],
+  );
+  assert.deepEqual([...entry.upstream.keys()], [12, 13, 14, 15, 16]);
+  assert.equal(
+    (await manager.buildPlaylist(entry, 'expired')).match(
+      /#EXT-X-DISCONTINUITY\n/g,
+    ).length,
+    1,
+  );
+});
+
+test('recent missing segments and access failures still exhaust the retry budget', async (t) => {
+  for (const [file, status] of [
+    ['c.ts', 404],
+    ['b.ts', 404],
+    ['a.ts', 403],
+  ]) {
+    const manager = createHlsPuller({
+      limits: { ...HLS_LIMITS, segmentBytes: 1024, pollMs: 1, readyMs: 1000 },
+      fetchImpl: async (url) =>
+        url.endsWith('.m3u8')
+          ? new Response(
+              status === 404
+                ? playlist.replace('#EXTINF:2,\na.ts\n', '')
+                : playlist,
+            )
+          : url.endsWith(file)
+            ? new Response('', { status })
+            : new Response('current'),
+    });
+    t.after(() => manager.shutdown());
+    const entry = await manager.ensure(`${file}-${status}`, base);
+    assert.equal(await manager.waitReady(entry), false);
+    assert.equal(entry.stopping, true);
+    assert.deepEqual(manager.stats(), { sessions: 0, bytes: 0 });
+  }
+});
+
+test('1080p segments fit the bounded downloader while oversized responses still fail', async () => {
+  const bytes = new Uint8Array(8 * 1024 * 1024 + 1024);
+  const body = await fetchHlsBytes(base, {
+    maxBytes: HLS_LIMITS.segmentBytes,
+    fetchImpl: async () => new Response(bytes),
+  });
+  assert.equal(body.length, bytes.length);
+  await assert.rejects(
+    fetchHlsBytes(base, {
+      maxBytes: HLS_LIMITS.segmentBytes,
+      fetchImpl: async () =>
+        new Response('x', {
+          headers: { 'content-length': String(HLS_LIMITS.segmentBytes + 1) },
+        }),
+    }),
+    /too large/,
+  );
+});
+
+test('client lease ownership covers refresh, segments and release, with a bounded client budget', async (t) => {
+  const manager = createHlsPuller({
+    limits: { ...HLS_LIMITS, leasesPerClient: 1, pollMs: 100000 },
+    fetchImpl: async (url) =>
+      new Response(url.endsWith('.m3u8') ? playlist : 'abc'),
+  });
+  t.after(() => manager.shutdown());
+  const entry = await manager.ensure('a', base, 'lease-a', 'peer-a');
+  await manager.waitReady(entry);
+  await assert.rejects(
+    manager.ensure('a', base, 'lease-a', 'peer-b'),
+    /another client/,
+  );
+  assert.equal(
+    manager.getAsset('a', entry.token, 'seg_0.ts', 'lease-a', 'peer-b'),
+    null,
+  );
+  await assert.rejects(
+    manager.buildPlaylist(entry, 'a', 'lease-a', 'peer-b'),
+    /another client/,
+  );
+  manager.release('a', 'lease-a', 'peer-b');
+  assert.equal(entry.leases.size, 1);
+  await assert.rejects(
+    manager.ensure('b', base, 'lease-b', 'peer-a'),
+    /client lease capacity/,
+  );
+  assert.equal(
+    manager.stats().sessions,
+    1,
+    'failed admission reserves no session',
+  );
+  await manager.ensure('b', base, 'lease-b', 'peer-b');
+  manager.release('a', 'lease-a', 'peer-a');
+  assert.equal(entry.stopping, true);
 });

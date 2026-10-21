@@ -1063,6 +1063,14 @@
   "scripts/assemble-changelog.mjs",
   "src/tooling/changelogFragments.test.mjs",
   "src/data/gbfsProxyRateLimit.test.mjs",
+  "src/data/cctvFmp4.test.mjs",
+  "src/data/cctvFmp4Routes.test.mjs",
+  "src/data/cctvFmp4Recovery.test.mjs",
+  "src/sources/youtube.test.mjs",
+  "src/data/cctvYouTube.test.mjs",
+  "src/ui/cctvEmbed.test.mjs",
+  "config/cctv_sources.youtube.json",
+  "src/data/cctvHlsAdmission.test.mjs",
   "src/data/routeSegment.test.mjs",
   "src/terrainHeightsBounds.test.mjs"
 ]
