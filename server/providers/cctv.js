@@ -1,3 +1,4 @@
+import path from 'node:path';
 import { createCctvCatalog } from './cctv/catalog.js';
 import { quebec511VideoUrl, quebecBrowserVideoEnabled } from './cctv/quebec.js';
 import { normalizeFeedType, isVideoFeedType } from './cctv/normalize.js';
@@ -21,6 +22,10 @@ import { PROXY_SIGNALS } from '../../src/localRequestGate.mjs';
 import { createHlsPuller } from './cctv/stream.js';
 import { isMlitRiverAdjustmentImage } from './cctv/worldCameras.js';
 import { ottawaAuthorizedFrameUrl } from './cctv/ottawa.js';
+import {
+  createFeedAvailability,
+  probeFeedGroups,
+} from './cctv/feedAvailability.js';
 import { googleServerApiKey } from './places/google-key.js';
 export { CCTV_FRAME_FETCH_TIMEOUT_MS, fetchCctvImageFromUpstream };
 /**
@@ -179,6 +184,38 @@ export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
     });
   };
 
+  // Location-only cameras (see ./cctv/feedAvailability.js).
+  const feedAvailability = createFeedAvailability({
+    file: path.join(sourceRoot, '.gev-cache', 'cctv-feed-availability.json'),
+  });
+  const feedGroupKey = (source) =>
+    source?.sourceKind === 'txdot-its' && source.cityId
+      ? `txdot:${source.cityId}`
+      : null;
+  let feedProbeInflight = null;
+  const maybeProbeFeedGroups = (sources) => {
+    if (feedProbeInflight) return;
+    feedProbeInflight = probeFeedGroups(
+      sources,
+      feedAvailability,
+      feedGroupKey,
+      async (source) => !!(await fetchTxdotSnapshot(source.snapshotUrl))?.ok,
+    )
+      .then((verdicts) => {
+        if (Object.keys(verdicts).length)
+          console.log('[CCTV] feed group probe:', JSON.stringify(verdicts));
+      })
+      .catch((error) =>
+        console.warn(
+          '[CCTV] feed group probe failed:',
+          error?.message || error,
+        ),
+      )
+      .finally(() => {
+        feedProbeInflight = null;
+      });
+  };
+
   /** Snapshot all camera health entries as an array. */
   const listHealth = () => Array.from(health.values());
 
@@ -265,6 +302,7 @@ export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
         // key-bearing Street View fallback below has its own check.
         if (admitSameSiteKeyless(req, res)) return;
         const sources = await getCctvSources();
+        maybeProbeFeedGroups(sources);
         const sourceById = new Map(
           sources.map((source) => [source.id, source]),
         );
@@ -290,7 +328,13 @@ export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
               rangeM: source.rangeM,
               mountHeightM: source.mountHeightM,
               groundElevationM: source.groundElevationM,
-              feedType: normalizeFeedType(source.feedType),
+              // 'none' = location-only (no public picture found).
+              feedType: feedAvailability.isUnavailable(
+                source.id,
+                feedGroupKey(source),
+              )
+                ? 'none'
+                : normalizeFeedType(source.feedType),
               sourceKind:
                 source.sourceKind || (source.url ? 'configured' : 'fallback'),
               sourceUrl: source.sourceUrl || '',
@@ -707,6 +751,9 @@ export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
           );
           return;
         }
+        // Learn cameras with no public picture.
+        if (source && upstreamCandidate)
+          feedAvailability.recordFrame(cameraId, !!upstreamImage?.ok);
         if (upstreamImage?.ok) {
           setHealth(cameraId, {
             status: upstreamImage.stale ? 'degraded' : 'ok',

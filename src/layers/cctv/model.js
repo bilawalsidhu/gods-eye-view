@@ -111,6 +111,11 @@ export function createModel({ state: layerState, services, parts, source }) {
     return String(camera?.sourceKind || '').startsWith('quebec-');
   }
 
+  /** 'none' = location-only camera (the server found no public picture). */
+  function isNoFeedType(feedType) {
+    return normalizeFeedType(feedType) === 'none';
+  }
+
   /**
    * Coerces a value to a finite number or returns the fallback.
    *
@@ -543,6 +548,7 @@ export function createModel({ state: layerState, services, parts, source }) {
     isVideoFeedType,
     isVideoFeedCamera,
     isBrowserOverlayCamera,
+    isNoFeedType,
     safeNumber,
     headingFromId,
     quantize,
