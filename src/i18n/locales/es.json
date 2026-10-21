@@ -3015,5 +3015,10 @@
   "Play from this scene through the rest of the project": "Reproduce desde esta escena hasta el resto del proyecto",
   "Play the shot after the selected one, moving on to the next scene when needed": "Reproduce el plano posterior al seleccionado y pasa a la siguiente escena si hace falta",
   "Edit anchors, data packs and shot details": "Edita anclas, paquetes de datos y detalles de los planos",
-  "Download this scene as JSON or an asset bundle": "Descarga esta escena como JSON o como paquete de recursos"
+  "Download this scene as JSON or an asset bundle": "Descarga esta escena como JSON o como paquete de recursos",
+  "USGS Rivers & Streams": "USGS: ríos y arroyos",
+  "USGS Lakes & Reservoirs": "USGS: lagos y embalses",
+  "USGS Springs": "USGS: manantiales",
+  "Water": "Agua",
+  "Zoom in to a region to load river gauges": "Acércate a una región para cargar los medidores de ríos"
 }

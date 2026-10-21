@@ -205,6 +205,7 @@ test('production registry is exact, canonical, and rejects incomplete contracts'
   assert.equal(REGISTERED_LAYER_IDS.length, 32);
   assert.equal(new Set(REGISTERED_LAYER_IDS).size, 32);
   assert.ok(REGISTERED_LAYER_IDS.includes('transit'));
+  assert.ok(REGISTERED_LAYER_IDS.includes('local-usgs-water'));
   assert.deepEqual(REGISTERED_LAYER_IDS, [...REGISTERED_LAYER_IDS].sort());
   assert.deepEqual(LEGACY_LAYER_STATE_TOKENS, {
     'ais-live-vessels': 'a',
@@ -527,6 +528,20 @@ test('Nepal event and locator have distinct enabled-only share tokens', () => {
     'bhote-koshi-locator',
   ]);
   assert.ok(encode(decoded).includes('l=h.z'));
+});
+
+test('USGS water layers have stable enabled-only share tokens', () => {
+  for (const [token, id] of [
+    ['5', 'local-usgs-water'],
+    ['6', 'local-usgs-lakes'],
+    ['7', 'local-usgs-springs'],
+  ]) {
+    const decoded = decodeLayerStateParams(
+      new URLSearchParams(`v=2&l=${token}`),
+    );
+    assert.deepEqual(decoded.enabledLayerIds, [id]);
+    assert.ok(encode(decoded).includes(`l=${token}`));
+  }
 });
 
 test('unknown and forbidden option fields are ignored while missing options use codec defaults', () => {
