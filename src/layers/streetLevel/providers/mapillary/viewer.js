@@ -137,7 +137,9 @@ export function createMapillaryViewer({ source, render } = {}) {
     viewer = new Viewer({
       // Graph requests go to this app's server, which holds the token; the
       // viewer is given no access token.
-      dataProvider: new GraphDataProvider({ endpoint: source.graphEndpoint }),
+      dataProvider: new GraphDataProvider({
+        endpoint: graphEndpointUrl(source),
+      }),
       container: host,
       component: {
         cover: false,
