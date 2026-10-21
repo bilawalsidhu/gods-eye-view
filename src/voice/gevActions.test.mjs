@@ -3289,6 +3289,30 @@ test('GNSS integrity and interference common names toggle only the GNSS layer th
   }
 });
 
+test('GDACS alert common names toggle only the GDACS layer through the normal voice action', async () => {
+  globalThis.window = globalThis.window || { clearTimeout, setTimeout, requestIdleCallback: null };
+  const viewer = { clock: { onTick: { addEventListener: () => () => {} } },
+    scene: { canvas: { addEventListener() {}, removeEventListener() {} } },
+    camera: { moveEnd: { addEventListener() {} } } };
+  const calls = [];
+  let enabled = false;
+  const dataManager = {
+    layers: new Map([['gdacs-alerts', { module: {} }]]),
+    getAll: () => [{ id: 'gdacs-alerts', name: 'Disaster Alerts' }],
+    isEnabled: () => enabled,
+    setEnabled: async (id, value) => { calls.push([id, value]); enabled = value; return true; },
+  };
+  const runner = createGevActionRunner({ viewer, styleManager: {}, dataManager });
+  for (const alias of ['gdacs-alerts', 'gdacs', 'gdacs alerts', 'disaster alerts', 'disasters']) {
+    for (const value of [true, false]) {
+      const result = await runner('set_layer_visibility', { layerId: alias, enabled: value });
+      assert.equal(result.ok, true);
+      assert.equal(result.layerId, 'gdacs-alerts');
+      assert.deepEqual(calls.at(-1), ['gdacs-alerts', value]);
+    }
+  }
+});
+
 test('Local ADS-B common names toggle only the receiver layer through the normal voice action', async () => {
   globalThis.window = globalThis.window || { clearTimeout, setTimeout, requestIdleCallback: null };
   const viewer = { clock: { onTick: { addEventListener: () => () => {} } },
