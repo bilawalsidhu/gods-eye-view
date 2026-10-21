@@ -138,16 +138,13 @@ test('every network is joined and credited in one response', async () => {
   assert.equal(payload.schemaVersion, 1);
   assert.equal(payload.unavailable, false);
   assert.equal(payload.stale, false);
-  assert.equal(payload.reason, null);
   assert.deepEqual(
     payload.networks.map((network) => network.id).sort(),
     [...ALPINE_NETWORK_IDS].sort(),
   );
-  for (const network of payload.networks) {
+  for (const network of payload.networks)
     assert.equal(network.status, 'ok', network.id);
-    assert.equal(network.licence, 'CC BY 4.0');
-    assert.ok(network.fetchedAt);
-  }
+  assert.ok(payload.fetchedAt, 'the newest read is dated');
   assert.ok(payload.stations.length >= 7);
   assert.match(payload.attribution, /CC BY 4\.0/);
   for (const fragment of ['SLF', 'MeteoSwiss', 'GeoSphere'])
@@ -258,7 +255,6 @@ test('one network failing never blanks the others', async () => {
   assert.equal(states[SLF_NETWORK_ID], 'unavailable');
   assert.equal(states[SMN_NETWORK_ID], 'ok');
   assert.equal(states[TAWES_NETWORK_ID], 'ok');
-  assert.match(payload.reason, /1 of 3 networks unavailable/);
   assert.ok(payload.stations.length > 0);
   assert.ok(
     !payload.stations.some((station) => station.networkId === SLF_NETWORK_ID),
@@ -299,16 +295,17 @@ test('a cached payload is served stale rather than dropped', async () => {
   const fail = new Set();
   const { json, clock } = harness({ fail });
   const fresh = await json();
-  const slfCount = fresh.networks.find(
-    (network) => network.id === SLF_NETWORK_ID,
-  ).stationCount;
+  const slfStations = (payload) =>
+    payload.stations.filter((station) => station.networkId === SLF_NETWORK_ID)
+      .length;
+  const slfCount = slfStations(fresh);
   assert.ok(slfCount > 0);
   fail.add('measurement-api.slf.ch');
   clock.value += OBSERVATION_CACHE_MS + 1;
   const payload = await json();
   const slf = payload.networks.find((network) => network.id === SLF_NETWORK_ID);
   assert.equal(slf.status, 'stale', 'a map a few minutes old beats none');
-  assert.equal(slf.stationCount, slfCount);
+  assert.equal(slfStations(payload), slfCount, 'the held readings still ship');
   assert.equal(payload.stale, true);
   assert.equal(payload.unavailable, false);
 });
@@ -326,7 +323,6 @@ test('every network down answers 200 with an honest envelope', async () => {
   const payload = await json();
   assert.equal(payload.unavailable, true);
   assert.deepEqual(payload.stations, []);
-  assert.match(payload.reason, /No Alpine station network is reachable/);
   assert.equal(payload.attribution, '');
   for (const network of payload.networks)
     assert.equal(network.status, 'unavailable');
@@ -450,12 +446,17 @@ test('the envelope carries only fields the client reads', () => {
       'attribution',
       'fetchedAt',
       'networks',
-      'reason',
       'schemaVersion',
       'stale',
       'stations',
       'unavailable',
     ]);
+    // And each network block is identity plus the one thing the client cannot
+    // work out for itself. A `reason` sentence used to ride along here too,
+    // written in English by a module that cannot load the catalogs, so the
+    // layer now builds that sentence from these statuses instead.
+    for (const network of payload.networks)
+      assert.deepEqual(Object.keys(network).sort(), ['id', 'status']);
   });
 });
 
@@ -477,7 +478,10 @@ test('the serve-stale ceiling binds during the cooldown as well as after it', ()
     .then((payload) => {
       const slf = payload.networks.find((n) => n.id === SLF_NETWORK_ID);
       assert.equal(slf.status, 'stale');
-      assert.ok(slf.stationCount > 0);
+      assert.ok(
+        payload.stations.some((s) => s.networkId === SLF_NETWORK_ID),
+        'and its held readings are what make it worth serving',
+      );
       // Past the ceiling, and still inside the retry cooldown the failure
       // above started. This is the path that leaked days-old readings.
       clock.value += 2 * MAX_SERVE_STALE_MS;
@@ -490,7 +494,6 @@ test('the serve-stale ceiling binds during the cooldown as well as after it', ()
         'unavailable',
         'a payload past the ceiling is not served, cooldown or not',
       );
-      assert.equal(slf.stationCount, 0);
       assert.ok(
         !payload.stations.some((s) => s.networkId === SLF_NETWORK_ID),
         'and none of its stations reach the client',

@@ -3017,6 +3017,8 @@
   "Loading stations…": "Загрузка станций…",
   "No reachable network publishes {parameter}": "Ни одна доступная сеть не публикует {parameter}",
   "Alpine station source unavailable": "Источник альпийских станций недоступен",
+  "{count} of {total} networks unavailable": "{count} из {total} сетей недоступно",
+  "Malformed Alpine station snapshot": "Некорректный снимок альпийских станций",
   "{measuring} of {count} stations": {
     "one": "{measuring} из {count} станции",
     "few": "{measuring} из {count} станций",

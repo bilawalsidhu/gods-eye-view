@@ -20,14 +20,14 @@ const station = (overrides = {}) => ({
   ...overrides,
 });
 
+// Deliberately wider than the envelope the proxy sends: a network block has
+// carried a label, a licence, a homepage, a cadence and a station count at
+// various points, and the reader must drop whatever it does not read rather
+// than pass an unvalidated field through to the layer.
 const networkState = (overrides = {}) => ({
   id: SLF_NETWORK_ID,
   label: 'SLF IMIS',
-  name: 'WSL',
-  country: 'CH',
-  attribution: 'WSL',
   licence: 'CC BY 4.0',
-  licenceUrl: 'https://creativecommons.org/licenses/by/4.0/',
   homepage: 'https://www.slf.ch/',
   parameters: ['snow'],
   cadenceMinutes: 30,
@@ -45,7 +45,6 @@ const envelope = (overrides = {}) => ({
   fetchedAt: '2026-10-09T11:55:00.000Z',
   stale: false,
   unavailable: false,
-  reason: null,
   ...overrides,
 });
 
@@ -144,16 +143,23 @@ test('an unknown network id or status is refused', () => {
 test('missing optional envelope fields take safe defaults', () => {
   const snapshot = readAlpineSnapshot({
     stations: [],
-    networks: [networkState({ label: 7, parameters: 'no', fetchedAt: 0 })],
+    networks: [networkState()],
   });
   assert.equal(snapshot.attribution, '');
   assert.equal(snapshot.fetchedAt, null);
   assert.equal(snapshot.stale, false);
   assert.equal(snapshot.unavailable, false);
-  assert.equal(snapshot.reason, null);
-  assert.equal(snapshot.networks[0].label, SLF_NETWORK_ID);
-  assert.deepEqual(snapshot.networks[0].parameters, []);
-  assert.equal(snapshot.networks[0].fetchedAt, null);
+});
+
+test('a network block is read down to the identity and the status', () => {
+  // Everything else about a network is in ALPINE_NETWORKS, which the layer
+  // imports. A second copy arriving over the wire could only ever disagree
+  // with it, so it does not reach the layer at all.
+  const snapshot = readAlpineSnapshot({
+    stations: [],
+    networks: [networkState({ label: 'Renamed', stationCount: 99 })],
+  });
+  assert.deepEqual(snapshot.networks, [{ id: SLF_NETWORK_ID, status: 'ok' }]);
 });
 
 test('the source reads the same-origin route and honours an abort', async () => {
@@ -216,7 +222,6 @@ test('a multi-network envelope keeps every network it was given', () => {
         }),
       ],
       stale: true,
-      reason: '1 of 2 networks unavailable',
     }),
   );
   assert.equal(snapshot.stations.length, 2);
@@ -225,5 +230,4 @@ test('a multi-network envelope keeps every network it was given', () => {
     ['ok', 'unavailable'],
   );
   assert.equal(snapshot.stale, true);
-  assert.match(snapshot.reason, /unavailable/);
 });

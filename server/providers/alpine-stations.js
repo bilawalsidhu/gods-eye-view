@@ -168,35 +168,20 @@ export function alpineStationsProxy({
     let newestFetch = null;
     for (const [index, result] of settled.entries()) {
       const network = ALPINE_NETWORKS[index];
-      const state = {
-        id: network.id,
-        label: network.label,
-        name: network.name,
-        country: network.country,
-        attribution: network.attribution,
-        licence: network.licence,
-        licenceUrl: network.licenceUrl,
-        homepage: network.homepage,
-        parameters: [...network.parameters],
-        cadenceMinutes: network.cadenceMinutes,
-      };
+      // Identity only, and the one thing the client cannot know: whether this
+      // network answered. Its label, licence, homepage, parameters and cadence
+      // are in ALPINE_NETWORKS, which the client imports, so repeating them
+      // here would be a second copy to drift.
       if (result.status === 'fulfilled') {
         groups.push(result.value.records);
         networks.push({
-          ...state,
+          id: network.id,
           status: result.value.stale ? 'stale' : 'ok',
-          fetchedAt: new Date(result.value.fetchedAt).toISOString(),
-          stationCount: result.value.records.length,
         });
         if (newestFetch === null || result.value.fetchedAt > newestFetch)
           newestFetch = result.value.fetchedAt;
       } else {
-        networks.push({
-          ...state,
-          status: 'unavailable',
-          fetchedAt: null,
-          stationCount: 0,
-        });
+        networks.push({ id: network.id, status: 'unavailable' });
       }
     }
     const stations = mergeNetworkStations(groups);
@@ -213,11 +198,6 @@ export function alpineStationsProxy({
         newestFetch === null ? null : new Date(newestFetch).toISOString(),
       stale: networks.some((network) => network.status === 'stale'),
       unavailable,
-      reason: unavailable
-        ? 'No Alpine station network is reachable'
-        : present.length < networks.length
-          ? `${networks.length - present.length} of ${networks.length} networks unavailable`
-          : null,
     };
   }
 

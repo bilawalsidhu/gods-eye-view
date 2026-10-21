@@ -40,6 +40,8 @@ src/layers/alpineStations/
 └── index.js             the Cesium layer and the rail card descriptor
 
 server/providers/alpine-stations.js      caching, coalescing, throttle, envelope
+                                         (identity and status only: no prose,
+                                          no copy of ALPINE_NETWORKS)
 server/providers/alpine-stations/
 ├── upstreams.js         every fixed URL with its own read cap
 └── fetchers.js          one fetch step per network
@@ -98,6 +100,13 @@ stays English there.
 formatted with `formatQuantity` rather than a local template: the decimal
 separator and the non-breaking space before the unit follow the reader's
 language.
+
+The same split is why **the proxy writes no prose at all**. It reports each
+network's `status` and the layer composes the sentence from those statuses in
+`networkReach()`. A `reason` string built server-side cannot be translated by
+anything downstream: `translateFeedError` matches a catalog entry or a known
+shape, and an English sentence assembled from a count matches neither, so it
+reached a Spanish reader in English. Status is data; the sentence is UI.
 
 Both ends of the card's range line go through `cardText.js` for the same
 reason: `readingNumber()` for the open end and `localizedReading()` for the end

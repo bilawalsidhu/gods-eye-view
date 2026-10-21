@@ -25,6 +25,7 @@ import {
   parameterView,
 } from './parameters.js';
 import { localizedReading } from './cardText.js';
+import { setLocale } from '../../i18n/index.js';
 
 const NOW = Date.UTC(2026, 9, 9, 12, 0);
 const MEASURED = new Date(NOW - 10 * 60_000).toISOString();
@@ -587,10 +588,9 @@ test('an unreachable network is reported without blanking the layer', async () =
   const { layer } = build({
     snapshotOverrides: {
       networks: [
-        { id: SLF_NETWORK_ID, status: 'ok', stationCount: 1 },
-        { id: SMN_NETWORK_ID, status: 'unavailable', stationCount: 0 },
+        { id: SLF_NETWORK_ID, status: 'ok' },
+        { id: SMN_NETWORK_ID, status: 'unavailable' },
       ],
-      reason: '1 of 2 networks unavailable',
     },
   });
   layer.enable();
@@ -709,10 +709,9 @@ test('a network that did not answer is not named as a source for a reading', asy
   const { layer } = build({
     snapshotOverrides: {
       networks: [
-        { id: SLF_NETWORK_ID, status: 'unavailable', stationCount: 0 },
-        { id: SMN_NETWORK_ID, status: 'ok', stationCount: 1 },
+        { id: SLF_NETWORK_ID, status: 'unavailable' },
+        { id: SMN_NETWORK_ID, status: 'ok' },
       ],
-      reason: '1 of 2 networks unavailable',
     },
   });
   layer.enable();
@@ -1090,4 +1089,52 @@ test('the card declares its legend categorical, so every band is explained', () 
     assert.equal(typeof entry.label, 'string');
     assert.match(entry.color, /^#[0-9a-f]{6}$/i);
   }
+});
+
+test('the missing-network sentence is written here, not relayed', async () => {
+  // The proxy cannot load the translation catalogs, so prose it writes can
+  // only ever be English. It reports statuses; this builds the sentence from
+  // them, which is the only way it reaches a Spanish reader in Spanish.
+  const { layer } = build({
+    snapshotOverrides: {
+      networks: [
+        { id: SLF_NETWORK_ID, status: 'ok' },
+        { id: SMN_NETWORK_ID, status: 'unavailable' },
+      ],
+      // Deliberately present and wrong: an envelope written by an older proxy
+      // must not be able to put untranslated text on the card.
+      reason: 'No Alpine station network is reachable',
+    },
+  });
+  layer.enable();
+  await layer.update();
+  assert.match(layer.getRowControls().summary.status, /^1 of 2 networks/);
+  await setLocale('es');
+  try {
+    assert.equal(
+      layer.getRowControls().summary.status,
+      '1 de 2 redes no disponibles',
+    );
+  } finally {
+    await setLocale('en');
+  }
+});
+
+test('every network down reports itself without an upstream sentence', async () => {
+  const { layer } = build({
+    snapshotOverrides: {
+      stations: [],
+      unavailable: true,
+      networks: ALPINE_NETWORK_IDS.map((id) => ({
+        id,
+        status: 'unavailable',
+      })),
+    },
+  });
+  layer.enable();
+  await layer.update();
+  assert.equal(
+    layer.getRowControls().summary.status,
+    'Station networks unavailable',
+  );
 });

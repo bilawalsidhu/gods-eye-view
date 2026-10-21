@@ -2950,6 +2950,8 @@
   "Loading stations…": "Cargando estaciones…",
   "No reachable network publishes {parameter}": "Ninguna red accesible publica {parameter}",
   "Alpine station source unavailable": "Fuente de estaciones alpinas no disponible",
+  "{count} of {total} networks unavailable": "{count} de {total} redes no disponibles",
+  "Malformed Alpine station snapshot": "Instantánea de estaciones alpinas mal formada",
   "{measuring} of {count} stations": {
     "one": "{measuring} de {count} estación",
     "many": "{measuring} de {count} estaciones",

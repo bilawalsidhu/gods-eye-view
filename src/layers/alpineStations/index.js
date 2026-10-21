@@ -343,20 +343,41 @@ export function createAlpineStationsLayer({
     return measuring.filter((network) => reachable.has(network.id));
   }
 
+  /**
+   * How many networks answered the most recent poll, and how many exist.
+   *
+   * Counted here rather than read from `snapshot.reason`: the proxy must not
+   * load the translation catalogs, so the prose it writes can only ever be
+   * English. The statuses it reports are data, and the sentence is built from
+   * them in the UI language. See docs/ALPINE-STATIONS.md.
+   */
+  function networkReach() {
+    const states = snapshot?.networks ?? [];
+    return {
+      total: states.length,
+      missing: states.filter((network) => network.status === 'unavailable')
+        .length,
+    };
+  }
+
   function statusLine() {
     if (error) return translateFeedError(error);
-    if (snapshot?.unavailable)
-      return snapshot.reason
-        ? translateFeedError(snapshot.reason)
-        : t('Station networks unavailable');
+    if (snapshot?.unavailable) return t('Station networks unavailable');
     if (loading && !snapshot) return t('Loading stations…');
-    // Ahead of the general reason: a visitor who chose a parameter nothing
-    // reachable measures needs to know THAT, not a count of networks.
+    // Ahead of the missing-network count: a visitor who chose a parameter
+    // nothing reachable measures needs to know THAT, not an upstream count.
     if (snapshot && !supportingNetworks().length)
       return t('No reachable network publishes {parameter}', {
         parameter: t(view().label).toLocaleLowerCase(getLocale()),
       });
-    if (snapshot?.reason) return translateFeedError(snapshot.reason);
+    const { total, missing } = networkReach();
+    // Not `tn`: "networks" is governed by the total, which is always three, so
+    // the sentence does not change shape with the count.
+    if (missing)
+      return t('{count} of {total} networks unavailable', {
+        count: formatNumber(missing),
+        total: formatNumber(total),
+      });
     return null;
   }
 
