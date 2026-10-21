@@ -221,23 +221,43 @@ function sanitizeMessages(raw, options = {}) {
 }
 
 /**
- * Drop `tool` messages that no longer answer an assistant tool call.
+ * Drop both halves of any broken tool-call pair.
  *
- * Sending one is not a degraded request, it is a 400 from every provider, so
- * this runs after any trim that could have removed the originating call.
+ * Either half alone is not a degraded request, it is a 400 from every
+ * provider, so this runs after any trim that could have removed one. A trim
+ * cuts from the oldest end and results follow their call, so it can only
+ * orphan a result; an assistant call loses its results when something throws
+ * between dispatching the call and recording what it returned, which would
+ * otherwise fail every later request in the session.
+ *
+ * Dropping an assistant message loses any narration it carried. The console
+ * keeps showing the whole exchange either way; only what the model is
+ * reminded of shrinks, which is the same trade the byte trim makes.
  *
  * @param {object[]} messages
  * @returns {object[]}
  */
-function dropOrphanToolMessages(messages) {
-  const answered = new Set();
+function dropUnpairedToolMessages(messages) {
+  const results = new Set();
   for (const message of messages) {
-    if (message.role === 'assistant' && Array.isArray(message.tool_calls)) {
-      for (const call of message.tool_calls) answered.add(call.id);
+    if (message.role === 'tool') results.add(message.tool_call_id);
+  }
+  const unanswered = new Set();
+  const paired = new Set();
+  for (const message of messages) {
+    if (message.role !== 'assistant' || !Array.isArray(message.tool_calls))
+      continue;
+    const ids = message.tool_calls.map((call) => call.id);
+    if (ids.every((id) => results.has(id))) {
+      for (const id of ids) paired.add(id);
+    } else {
+      unanswered.add(message);
     }
   }
-  return messages.filter(
-    (message) => message.role !== 'tool' || answered.has(message.tool_call_id),
+  return messages.filter((message) =>
+    unanswered.has(message)
+      ? false
+      : message.role !== 'tool' || paired.has(message.tool_call_id),
   );
 }
 
@@ -275,8 +295,8 @@ function safeStarts(messages) {
  */
 function trimHistory(messages, { maxMessages = MAX_HISTORY_MESSAGES } = {}) {
   const list = Array.isArray(messages) ? messages : [];
-  if (list.length <= maxMessages) return dropOrphanToolMessages([...list]);
-  return dropOrphanToolMessages(
+  if (list.length <= maxMessages) return dropUnpairedToolMessages([...list]);
+  return dropUnpairedToolMessages(
     list.slice(pairSafeStart(list, list.length - maxMessages)),
   );
 }
@@ -308,7 +328,7 @@ function fitHistoryToBytes(messages, { maxBytes }) {
   const list = Array.isArray(messages) ? messages : [];
   if (!list.length) return { messages: [], dropped: 0 };
   for (const start of safeStarts(list)) {
-    const candidate = dropOrphanToolMessages(list.slice(start));
+    const candidate = dropUnpairedToolMessages(list.slice(start));
     if (messagesByteLength(candidate) <= maxBytes) {
       return { messages: candidate, dropped: list.length - candidate.length };
     }
@@ -317,7 +337,7 @@ function fitHistoryToBytes(messages, { maxBytes }) {
   // server's own cap is the authority on refusal, and silently sending an
   // empty transcript would make the model answer a question nobody asked.
   const newestStart = safeStarts(list).at(-1) ?? 0;
-  const newest = dropOrphanToolMessages(list.slice(newestStart));
+  const newest = dropUnpairedToolMessages(list.slice(newestStart));
   return { messages: newest, dropped: list.length - newest.length };
 }
 
@@ -372,7 +392,7 @@ export {
   MAX_TOOL_RESULT_CHARS,
   boundedResultJson,
   buildRequestMessages,
-  dropOrphanToolMessages,
+  dropUnpairedToolMessages,
   fitHistoryToBytes,
   messagesByteLength,
   sanitizeMessage,

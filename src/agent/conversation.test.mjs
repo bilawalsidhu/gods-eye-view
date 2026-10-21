@@ -6,7 +6,7 @@ import {
   MAX_TOOL_RESULT_CHARS,
   boundedResultJson,
   buildRequestMessages,
-  dropOrphanToolMessages,
+  dropUnpairedToolMessages,
   fitHistoryToBytes,
   messagesByteLength,
   sanitizeMessage,
@@ -205,8 +205,51 @@ test('a tool result whose call was trimmed away is dropped, not sent', () => {
     { role: 'tool', tool_call_id: 'here', content: '{}' },
   ];
   assert.deepEqual(
-    dropOrphanToolMessages(messages).map((message) => message.role),
+    dropUnpairedToolMessages(messages).map((message) => message.role),
     ['assistant', 'tool'],
+  );
+});
+
+test('an assistant call left unanswered is dropped with its own results', () => {
+  // Reachable when something throws between dispatching a call and recording
+  // what it returned - a result holding a BigInt makes JSON.stringify throw
+  // inside boundedResultJson. Sending the pair half-finished is a 400 on
+  // every later request, so neither half survives.
+  const messages = [
+    { role: 'user', content: 'go' },
+    {
+      role: 'assistant',
+      content: 'Working on it.',
+      tool_calls: [
+        { id: 'a', function: { name: 'f', arguments: '{}' } },
+        { id: 'b', function: { name: 'g', arguments: '{}' } },
+      ],
+    },
+    { role: 'tool', tool_call_id: 'a', content: '{}' },
+  ];
+  assert.deepEqual(
+    dropUnpairedToolMessages(messages).map((message) => message.role),
+    ['user'],
+  );
+});
+
+test('a fully answered call is untouched, however many results it has', () => {
+  const messages = [
+    {
+      role: 'assistant',
+      content: '',
+      tool_calls: [
+        { id: 'a', function: { name: 'f', arguments: '{}' } },
+        { id: 'b', function: { name: 'g', arguments: '{}' } },
+      ],
+    },
+    { role: 'tool', tool_call_id: 'a', content: '{}' },
+    { role: 'tool', tool_call_id: 'b', content: '{}' },
+    { role: 'assistant', content: 'Done.' },
+  ];
+  assert.deepEqual(
+    dropUnpairedToolMessages(messages).map((message) => message.role),
+    ['assistant', 'tool', 'tool', 'assistant'],
   );
 });
 
