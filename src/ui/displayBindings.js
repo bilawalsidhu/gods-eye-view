@@ -64,6 +64,10 @@ export class DisplayBindings {
         },
         toggleOrbit: () => this._toggleOrbit(),
         toggleCleanView: () => this.toggleCleanView(),
+        exitCleanView: () => {
+          if (document.body.classList.contains('ui-clean-view'))
+            this.toggleCleanView(false);
+        },
         toggleLayers: () =>
           document.getElementById('data-panel').classList.toggle('active'),
         cycleDetection: () => {
