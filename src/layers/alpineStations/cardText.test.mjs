@@ -40,10 +40,7 @@ test('wind reads as the meteorological phrase the operator published', () => {
     describeWind({ windSpeedMs: 6, windDirDeg: 270, windGustMs: 11 }),
     '21.6 km/h W · gust 39.6 km/h',
   );
-  assert.equal(
-    describeWind({ windSpeedMs: 6, windDirDeg: null }),
-    '21.6 km/h',
-  );
+  assert.equal(describeWind({ windSpeedMs: 6, windDirDeg: null }), '21.6 km/h');
   assert.equal(describeWind({ windSpeedMs: null }), null);
   assert.equal(describeWind(null), null);
 });

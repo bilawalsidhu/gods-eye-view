@@ -1088,6 +1088,7 @@
   "src/ui/statusBadge.test.mjs",
   "src/ui/cctvBadges.test.mjs",
   "scripts/qa-status-badges.mjs",
+  "src/layers/alpineStations/cardText.test.mjs",
   "src/layers/alpineStations/index.test.mjs",
   "src/layers/alpineStations/model.test.mjs",
   "src/layers/alpineStations/networks.test.mjs",
