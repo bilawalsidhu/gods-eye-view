@@ -500,7 +500,8 @@
       "src/i18n/locales/ru.json",
       "src/ui/unitLabels.js",
       "src/ui/keyGuidance.js",
-      "src/ui/statusText.js"
+      "src/ui/statusText.js",
+      "src/ui/statusBadge.js"
     ],
     "external": []
   },
@@ -550,7 +551,8 @@
       "src/i18n/locale.js",
       "src/i18n/locales/es.json",
       "src/i18n/locales/ru.json",
-      "src/ui/unitLabels.js"
+      "src/ui/unitLabels.js",
+      "src/ui/statusBadge.js"
     ],
     "external": []
   },
@@ -777,7 +779,8 @@
       "src/ui/unitLabels.js",
       "src/ui/keyGuidance.js",
       "src/ui/layerNames.js",
-      "src/ui/statusText.js"
+      "src/ui/statusText.js",
+      "src/ui/statusBadge.js"
     ],
     "external": ["cesium"]
   },
@@ -2515,7 +2518,8 @@
       "src/voice/providerCapabilities.js",
       "src/voice/geminiSession.js",
       "src/voice/geminiAudio.js",
-      "src/voice/geminiCaptureWorklet.js"
+      "src/voice/geminiCaptureWorklet.js",
+      "src/ui/statusBadge.js"
     ],
     "external": [
       "hls.js",

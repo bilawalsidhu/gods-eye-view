@@ -1233,6 +1233,38 @@ Feature owners retain bounds, steps, formatted values, input/change timing and
 listener cleanup. The radio tuning dial, imagery comparison divider and event
 comparison/progression controls keep their specialized presentation and behavior.
 
+## Shared control CSS ownership
+
+Shared styles own ordinary control surfaces and interaction states; feature CSS
+owns surrounding layout and context-specific sizing. CCTV's calibration editor
+width lives in `ui/styles/cctv.css`, while the shared inline field variant owns
+only density and spinner treatment. Radio supplies its field palette and disabled
+opacity through the `--gev-field-*` variables, retaining compact typography and
+arrow space locally. Cyber supplies shared-field palette variables explicitly;
+its legacy native-field palette rules exclude `.gev-field`. These ownership
+boundaries preserve the current Tactical/Cyber appearance and native behavior.
+
+## Ordinary status badges
+
+CCTV source/frame labels, calibration provenance and Weather coverage labels use
+`ui/statusBadge.js` and the `gev-status-badge` CSS surface. The listener-free
+adapter accepts already-translated `label` and `hidden` values; pill, box and plain
+appearances describe shape/density only. Static CCTV markup uses the same classes
+as generated rail-card badges. Repeated identical updates do not rewrite text or
+replace nodes. Empty coverage remains hidden.
+
+Feature owners retain the status rules, machine-state attributes, translations
+and announcement policy. CCTV frame acquisition (`idle/loading/error/ready`)
+remains separate from provider status: retained pixels do not imply a healthy
+feed. Calibration still distinguishes manually saved, catalog-curated and raw
+prior poses; unsaved edits override the label until save/reset. Coverage labels
+remain geographic scope, not health claims. Existing colors and the source
+badge's polite live region are preserved; coverage and calibration do not gain
+live regions. Interactive layer toggles, progress indicators and world overlays
+retain their specialized ownership. Vue can reuse the view contract and CSS while
+replacing DOM construction. Browser acceptance:
+`QA_BASE_URL=http://127.0.0.1:4189 node scripts/qa-status-badges.mjs`.
+
 ## Ordinary action buttons
 
 Scene panel actions, shot LOAD/DEL actions, the EDIT DETAILS / SHARE SCENE
