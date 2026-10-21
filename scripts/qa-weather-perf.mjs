@@ -26,6 +26,7 @@
  *   node scripts/qa-weather-perf.mjs [--url http://localhost:4173]
  *     [--label google-baseline] [--states off,wind,...] [--repeat 1]
  *     [--headless] [--no-route] [--no-idle] [--out qa-shots/weather-perf]
+ *     [--dpr 2] [--scale 1]
  *
  * States: off · history-paused · history-playing · wind · wind+history-paused
  * · wind+history-playing. "history" is radar + regional clouds + lightning
@@ -77,6 +78,10 @@ const repeat = Math.max(1, Number(arg('--repeat', '1')) || 1);
 // `--scale 2` renders at 2× resolutionScale (4× the pixels) so a GPU that idles
 // at 60 fps natively still exposes per-frame cost differences.
 const scale = Number(arg('--scale', '1')) || 1;
+// `--dpr 1` emulates a standard screen; the default 2 is a Retina laptop. The
+// globe draws at up to 2 device pixels per CSS pixel (app/resolutionGovernor.js),
+// so compare builds at the same DPR.
+const dpr = Number(arg('--dpr', '2')) || 2;
 const outDir = path.resolve(arg('--out', 'qa-shots/weather-perf'), label);
 mkdirSync(outDir, { recursive: true });
 
@@ -132,7 +137,7 @@ const record = (row) => {
 
 try {
   const page = await browser.newPage();
-  await page.setViewport({ width: 1200, height: 886, deviceScaleFactor: 2 });
+  await page.setViewport({ width: 1200, height: 886, deviceScaleFactor: dpr });
   page.on('pageerror', (e) => console.log('  [pageerror]', e.message));
   // Non-2xx responses, counted per path so a burst of throttled tiles reads
   // as one line instead of one console error per tile.
@@ -174,6 +179,7 @@ try {
         navigator.userAgent.match(/Chrome\/[\d.]+/)?.[0] || navigator.userAgent,
       msaa: scene.msaaSamples,
       resolutionScale: gev.viewer.resolutionScale,
+      pixelRatio: scene.pixelRatio,
     };
   });
   console.log(`\nqa-weather-perf · ${label}\n  url=${url}`);
@@ -358,6 +364,7 @@ try {
               heightMax: hs.length ? Math.max(...hs) : null,
               canvasStable: canvas.width === w0 && canvas.height === h0,
               canvas: `${w0}x${h0}`,
+              pixelRatio: scene.pixelRatio,
             });
           };
           const tick = (now) => {
