@@ -168,9 +168,7 @@ export function createBrowserViteConfig({
   plugins = [],
   publicDir,
   googleApiKey,
-  cesiumToken,
   photonUrl,
-  mapillaryToken,
   host = 'localhost',
   port = 4173,
   allowedHosts = DEFAULT_ALLOWED_HOSTS,
@@ -238,6 +236,9 @@ export function createBrowserViteConfig({
     // The preview server serves the same documents, so it carries the same
     // framing + CSP hardening (one constant, no drift).
     preview: { headers: BROWSER_HEADERS },
+    // Only the Google Maps browser key is defined (restricted at Google, per
+    // SECURITY.md). Cesium ion and Mapillary tokens stay on the server
+    // (server/providers/keyIsolation, src/tooling/keyExposure.test.mjs).
     define: {
       // vue-i18n holds the locale and catalogs; Core formats the messages
       // (src/ui/i18n.js), so the build drops vue-i18n's message compiler.
@@ -246,17 +247,12 @@ export function createBrowserViteConfig({
       __INTLIFY_PROD_DEVTOOLS__: 'false',
       __INTLIFY_DROP_MESSAGE_COMPILER__: 'true',
       'import.meta.env.GOOGLE_MAPS_API_KEY': JSON.stringify(googleApiKey),
-      'import.meta.env.CESIUM_ION_TOKEN': JSON.stringify(cesiumToken),
       // Only expose a validated URL or the explicit disabled sentinel.
       ...(photonSetting === undefined
         ? {}
         : {
             'import.meta.env.PHOTON_URL': JSON.stringify(photonSetting),
           }),
-      // Mapillary client tokens are public by design (see SECURITY.md).
-      'import.meta.env.MAPILLARY_CLIENT_TOKEN': JSON.stringify(
-        mapillaryToken ?? '',
-      ),
     },
     build: { chunkSizeWarningLimit: 1500 },
   };
