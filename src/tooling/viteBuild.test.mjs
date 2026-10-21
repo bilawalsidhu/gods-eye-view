@@ -1,7 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { BROWSER_CSP, createBrowserViteConfig } from '../../build/vite.js';
+import {
+  BROWSER_CSP,
+  createBrowserViteConfig,
+  escapeFsDenyPath,
+} from '../../build/vite.js';
 import standaloneConfig, * as compatibility from '../../vite.config.js';
 import * as providers from '../../server/providers/local.js';
 
@@ -21,6 +25,15 @@ test('explicit build inputs preserve browser-only defines, plugin order and loop
   assert.deepEqual(config.server.allowedHosts, ['localhost', '127.0.0.1']);
   assert.ok(config.server.fs.deny.includes('**/ENVIRONMENT'));
   assert.ok(config.server.fs.deny.includes('.env.*'));
+  assert.ok(config.server.fs.deny.includes('**/.gev-logs/**'));
+  assert.ok(config.server.fs.deny.includes('**/.gev-cache/**'));
+  assert.ok(
+    config.server.fs.deny.some((pattern) => pattern.endsWith('/dist/**')),
+  );
+  assert.equal(
+    escapeFsDenyPath('C:/Users/a/gods-eye-view (1)'),
+    'C:/Users/a/gods-eye-view \\(1\\)',
+  );
   assert.equal(config.server.headers['X-Frame-Options'], 'DENY');
   assert.equal(config.server.headers['X-Content-Type-Options'], 'nosniff');
   const csp = config.server.headers['Content-Security-Policy'];
