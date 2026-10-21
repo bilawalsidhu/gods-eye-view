@@ -3793,5 +3793,20 @@
   "Cable car": "Канатный трамвай",
   "Monorail": "Монорельс",
   "Funicular": "Фуникулёр",
-  "Gondola": "Канатная дорога"
+  "Gondola": "Канатная дорога",
+  "Tilt up toward the horizon": "Наклонить к горизонту",
+  "Tilt down toward top-down view": "Наклонить к виду сверху",
+  "Top-down view": "Вид сверху",
+  "Look left": "Посмотреть влево",
+  "Look right": "Посмотреть вправо",
+  "Look up": "Посмотреть вверх",
+  "Look down": "Посмотреть вниз",
+  "Map navigation": "Навигация по карте",
+  "Tilt": "Наклон",
+  "Tilt: top-down (bottom) to near horizon (top)": "Наклон: вид сверху (внизу) — почти горизонт (вверху)",
+  "Map heading. Drag to rotate, arrow keys turn, Home for north": "Курс карты. Перетащите, чтобы повернуть; стрелки поворачивают, Home — на север",
+  "North, 0 degrees": "Север, 0°",
+  "Look around": "Осмотреться",
+  "{heading} degrees from north": "{heading}° от севера",
+  "{tilt} degrees from top-down": "{tilt}° от вида сверху"
 }
