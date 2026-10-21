@@ -30,6 +30,10 @@ export function parseGeojsonLines(text) {
 export function layerTitle(layerId) {
   if (layerId === 'local-datacenters') return 'Datacenter';
   if (layerId === 'local-dams') return 'Dam';
+  // USGS water layers (src/layers/usgsWater/).
+  if (layerId === 'local-usgs-water') return 'USGS River Gauge';
+  if (layerId === 'local-usgs-lakes') return 'USGS Lake/Reservoir';
+  if (layerId === 'local-usgs-springs') return 'USGS Spring';
   return 'Feature';
 }
 

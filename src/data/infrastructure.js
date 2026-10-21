@@ -1,4 +1,5 @@
 import { createLocalGeoJsonLayer } from './localGeojsonCore.js';
+import { createUsgsWaterLayers } from '../layers/usgsWater/index.js';
 import { INFRASTRUCTURE_DATA_URLS } from '../sources/infrastructureData.js';
 
 /**
@@ -41,5 +42,6 @@ export function createInfrastructureLayers(services) {
     services,
   );
 
-  return [datacenters, dams];
+  // USGS rivers (viewport-tiled), lakes and springs.
+  return [datacenters, dams, ...createUsgsWaterLayers(services)];
 }
