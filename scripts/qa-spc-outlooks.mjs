@@ -72,41 +72,68 @@ const compact = (time) =>
 function fixture(product) {
   const now = Date.now(),
     tornado = product.endsWith('tornado');
+  const inner = {
+    type: 'Feature',
+    properties: {
+      objectid: tornado ? 2 : 1,
+      dn: tornado ? 5 : 3,
+      label: tornado ? '0.05' : 'MRGL',
+      issue: compact(now - 3600_000),
+      valid: compact(now - 1800_000),
+      expire: compact(now + 3600_000),
+    },
+    geometry: {
+      type: 'Polygon',
+      coordinates: [
+        [
+          [-102, 30],
+          [-96, 30],
+          [-96, 36],
+          [-102, 36],
+          [-102, 30],
+        ],
+        [
+          [-100, 32],
+          [-100, 34],
+          [-98, 34],
+          [-98, 32],
+          [-100, 32],
+        ],
+      ],
+    },
+  };
   return {
     type: 'FeatureCollection',
     fetchedAt: now,
-    features: [
-      {
-        type: 'Feature',
-        properties: {
-          objectid: 1,
-          dn: tornado ? 5 : 3,
-          label: tornado ? '0.05' : 'MRGL',
-          issue: compact(now - 3600_000),
-          valid: compact(now - 1800_000),
-          expire: compact(now + 3600_000),
-        },
-        geometry: {
-          type: 'Polygon',
-          coordinates: [
-            [
-              [-102, 30],
-              [-96, 30],
-              [-96, 36],
-              [-102, 36],
-              [-102, 30],
-            ],
-            [
-              [-100, 32],
-              [-100, 34],
-              [-98, 34],
-              [-98, 32],
-              [-100, 32],
-            ],
-          ],
-        },
-      },
-    ],
+    features: tornado
+      ? [
+          {
+            type: 'Feature',
+            properties: {
+              objectid: 1,
+              dn: 2,
+              label: '0.02',
+              issue: inner.properties.issue,
+              valid: inner.properties.valid,
+              expire: inner.properties.expire,
+            },
+            geometry: {
+              type: 'Polygon',
+              coordinates: [
+                [
+                  [-103, 29],
+                  [-95, 29],
+                  [-95, 37],
+                  [-103, 37],
+                  [-103, 29],
+                ],
+                inner.geometry.coordinates[0],
+              ],
+            },
+          },
+          inner,
+        ]
+      : [inner],
   };
 }
 const layerId = 'severe-weather-outlooks';
@@ -351,6 +378,85 @@ try {
         type === 'categorical' ? 6 : 7,
       );
       record(`${day}-${type} selector`, { count: state.stats.count });
+      if (fixtures && day === 'day1' && type === 'tornado') {
+        await page.waitForFunction(
+          () => {
+            const viewer = window.__godsEyeView.viewer;
+            viewer.scene.requestRender();
+            const source = [...Array(viewer.dataSources.length)]
+              .map((_, i) => viewer.dataSources.get(i))
+              .find((item) => item.name === 'severe-weather-outlooks');
+            const primitives = (
+              source?._groundPrimitives?._collectionsArray || []
+            ).flatMap((collection) =>
+              [...Array(collection.length)].map((_, i) => collection.get(i)),
+            );
+            return (
+              primitives.length &&
+              primitives.every((primitive) => primitive.ready && primitive.show)
+            );
+          },
+          { timeout: 60_000, polling: 100 },
+        );
+        await page.waitForFunction(
+          () => {
+            const viewer = window.__godsEyeView.viewer;
+            const C = window.__spcQaCesium;
+            viewer.scene.requestRender();
+            const point = C.SceneTransforms.worldToWindowCoordinates(
+              viewer.scene,
+              C.Cartesian3.fromDegrees(-101, 31),
+            );
+            return viewer.scene
+              .pick(point)
+              ?.id?.id?.startsWith('spc:day1-tornado:2:0');
+          },
+          { timeout: 30_000, polling: 100 },
+        );
+        const nested = await page.evaluate(async () => {
+          const viewer = window.__godsEyeView.viewer;
+          const C = window.__spcQaCesium;
+          const source = [...Array(viewer.dataSources.length)]
+            .map((_, i) => viewer.dataSources.get(i))
+            .find((item) => item.name === 'severe-weather-outlooks');
+          const entities = source.entities.values;
+          const higher = entities.find(
+            (entity) => entity.id === 'spc:day1-tornado:2:0',
+          );
+          const lowerHole = entities.find(
+            (entity) => entity.id === 'spc:day1-tornado:1:0:ring:1',
+          );
+          const higherEdge = entities.find(
+            (entity) => entity.id === 'spc:day1-tornado:2:0:ring:0',
+          );
+          const pickAt = (lon, lat) => {
+            const point = C.SceneTransforms.worldToWindowCoordinates(
+              viewer.scene,
+              C.Cartesian3.fromDegrees(lon, lat),
+            );
+            return viewer.scene.pick(point)?.id?.id || '';
+          };
+          viewer.scene.requestRender();
+          return {
+            higher: higher?.polygon.material.color
+              .getValue()
+              .toCssColorString(),
+            edgeOrder:
+              higherEdge?.polyline.zIndex.getValue() >
+              lowerHole?.polyline.zIndex.getValue(),
+            innerPick: pickAt(-101, 31),
+            outerPick: pickAt(-102.5, 31),
+            holePick: pickAt(-99, 33),
+          };
+        });
+        assert.equal(nested.higher, 'rgba(189,153,138,0.7)');
+        assert.equal(nested.edgeOrder, true);
+        assert.match(nested.innerPick, /^spc:day1-tornado:2:0/);
+        assert.match(nested.outerPick, /^spc:day1-tornado:1:0/);
+        assert.ok(!nested.holePick.startsWith('spc:'));
+        await page.screenshot({ path: `${output}/fixture-nested-tornado.png` });
+        record('nested 2%/5% tornado bands and unfilled hole', nested);
+      }
     }
   if (state.stats.count) {
     await page.waitForSelector(`${card} .data-row-list-item`, {
