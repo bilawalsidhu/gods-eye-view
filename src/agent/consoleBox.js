@@ -1,14 +1,14 @@
-import { RESIZE_DIRECTIONS, resizeBox } from '../ui/panelResize.js';
+import { RESIZE_DIRECTIONS, resizeBox } from './boxResize.js';
 
 /**
  * Position and size for the typed console's window.
  *
  * The console is a dialog rather than a rail panel, so it cannot use
  * `PanelPositionControls` — that owns lifting a panel OUT of a rail and
- * docking it back, which this has no rail to return to. What it does reuse is
- * the part that is already general: `resizeBox` for the geometry of one drag
- * on one edge, and the `.panel-resize-edge` / `.panel-resize-grip` handles the
- * rest of the app already styles.
+ * docking it back, which this has no rail to return to. The geometry lives in
+ * `./boxResize.js` and the `.agent-resize-edge` / `.agent-resize-grip`
+ * handles are styled by `agent-console.css`, because the app's own floating
+ * panels and their shared resize styling were removed.
  *
  * Everything that decides a number is pure and exported, so the clamping is
  * testable without a browser; `attachConsoleBox` is the only part that touches
@@ -370,7 +370,7 @@ function attachConsoleBox({
   const handles = [];
   for (const dir of RESIZE_DIRECTIONS) {
     const grip = root.createElement('div');
-    grip.className = dir === 'se' ? 'panel-resize-grip' : 'panel-resize-edge';
+    grip.className = dir === 'se' ? 'agent-resize-grip' : 'agent-resize-edge';
     grip.dataset.dir = dir;
     grip.setAttribute('aria-hidden', 'true');
     if (dir === 'se') grip.title = 'Drag to resize';

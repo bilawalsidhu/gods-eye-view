@@ -1717,6 +1717,7 @@
       "src/app/tools.js",
       "src/agent/agentConsole.js",
       "src/agent/consoleBox.js",
+      "src/agent/boxResize.js",
       "src/agent/agentLoop.js",
       "src/agent/conversation.js",
       "src/agent/cost.js",

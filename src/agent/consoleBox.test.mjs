@@ -4,7 +4,7 @@ import {
   agentConsoleDom,
   fakeStorage,
 } from '../testSupport/agentConsoleDom.mjs';
-import { RESIZE_DIRECTIONS } from '../ui/panelResize.js';
+import { RESIZE_DIRECTIONS } from './boxResize.js';
 import {
   CONSOLE_BOX_STORAGE_KEY,
   CONSOLE_DEFAULT_SIZE,
@@ -197,11 +197,11 @@ test('a resize handle is added for every direction, and removed on destroy', () 
   // introducing a second set.
   assert.equal(
     grips.find((g) => g.dataset.dir === 'se').className,
-    'panel-resize-grip',
+    'agent-resize-grip',
   );
   assert.equal(
     grips.find((g) => g.dataset.dir === 'n').className,
-    'panel-resize-edge',
+    'agent-resize-edge',
   );
   for (const grip of grips)
     assert.equal(grip.getAttribute('aria-hidden'), 'true');

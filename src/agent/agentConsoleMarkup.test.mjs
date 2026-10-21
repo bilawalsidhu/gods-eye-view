@@ -164,14 +164,16 @@ test('the console keeps the shared glass surface, and reads as a drag handle', (
   );
 });
 
-test('the console reuses the resize handle styling the app already ships', () => {
-  // consoleBox.js creates .panel-resize-edge / .panel-resize-grip rather than
-  // a second set of handles, so this stylesheet must not restyle them.
-  assert.match(css, /\.panel-resize-edge,\s*\n?\.panel-resize-grip \{/);
+test('the console owns the styling for its own resize handles', () => {
+  // The shared .panel-resize-* styling went with the floating rail panels
+  // (fbbc4cda), so consoleBox.js names its handles .agent-resize-edge /
+  // .agent-resize-grip and this stylesheet is the only thing that styles them.
   const consoleCss = readStylesheet(
     new URL('../ui/styles/agent-console.css', import.meta.url),
   );
+  assert.match(consoleCss, /\.agent-resize-edge,\s*\n?\.agent-resize-grip \{/);
   assert.doesNotMatch(consoleCss, /panel-resize-(edge|grip)/);
+  assert.doesNotMatch(css, /panel-resize-(edge|grip)/);
 });
 
 test('the template adds no icon glyph, so the font subset stays untouched', () => {
