@@ -2937,5 +2937,56 @@
   "Gemini access was refused. Check the API key and model access.": "Se denegó el acceso a Gemini. Comprueba la clave de API y el acceso al modelo.",
   "Gemini Live is unavailable for the configured model.": "Gemini Live no está disponible para el modelo configurado.",
   "Token request is too large": "La solicitud de credencial es demasiado grande",
-  "Use an empty JSON token request": "Usa una solicitud de credencial con un objeto JSON vacío"
+  "Use an empty JSON token request": "Usa una solicitud de credencial con un objeto JSON vacío",
+  "Click your antenna on the globe (Esc cancels).": "Haz clic en tu antena en el globo (Esc cancela).",
+  "Another tool is using map clicks. Finish it, then SET ANTENNA.": "Otra herramienta está usando los clics en el mapa. Termínala y luego pulsa FIJAR ANTENA.",
+  "Needs your antenna position: LOCATE in the Radio card, a location in your decoder's receiver.json, or SET ANTENNA.": "Necesita la posición de tu antena: UBICAR en la tarjeta de Radio, una ubicación en el receiver.json de tu decodificador o FIJAR ANTENA.",
+  "{count} positions waiting.": {
+    "one": "{count} posición en espera.",
+    "many": "{count} de posiciones en espera.",
+    "other": "{count} posiciones en espera."
+  },
+  "Antenna: {source}": "Antena: {source}",
+  "waiting for aircraft from Local ADS-B": "esperando aeronaves de ADS-B local",
+  "{positions} from {aircraft}": "{positions} de {aircraft}",
+  "{count} positions": {
+    "one": "{count} posición",
+    "many": "{count} de posiciones",
+    "other": "{count} posiciones"
+  },
+  "{count} aircraft": {
+    "one": "{count} aeronave",
+    "many": "{count} de aeronaves",
+    "other": "{count} aeronaves"
+  },
+  "farthest {range} at {bearing}°, {altitude}": "la más lejana a {range} en {bearing}°, {altitude}",
+  "{count} positions beyond line of sight ignored": {
+    "one": "{count} posición más allá de la línea de visión ignorada",
+    "many": "{count} de posiciones más allá de la línea de visión ignoradas",
+    "other": "{count} posiciones más allá de la línea de visión ignoradas"
+  },
+  "heights ×{scale} for display": "alturas ×{scale} solo para visualización",
+  "Waiting for aircraft heard by Local ADS-B": "Esperando aeronaves captadas por ADS-B local",
+  "Needs your antenna position": "Necesita la posición de tu antena",
+  "SET ANTENNA": "FIJAR ANTENA",
+  "Click your antenna on the globe (click again or Esc to cancel)": "Haz clic en tu antena en el globo (vuelve a hacer clic o pulsa Esc para cancelar)",
+  "Then click the globe where your antenna is": "Luego haz clic en el globo donde está tu antena",
+  "Use the decoder's receiver.json or the Radio card LOCATE again": "Volver a usar el receiver.json del decodificador o UBICAR de la tarjeta de Radio",
+  "HEIGHT ×{scale}": "ALTURA ×{scale}",
+  "Draw heights at true scale again": "Volver a dibujar las alturas a escala real",
+  "Stretch heights ×{scale} so the shell's steps read in 3D (ranges are unchanged)": "Estirar las alturas ×{scale} para que los escalones de la envolvente se vean en 3D (los alcances no cambian)",
+  "Forget every position heard so far": "Olvidar todas las posiciones captadas hasta ahora",
+  "{band}: heard in {percent}% of directions, out to {range}.": "{band}: captado en el {percent}% de las direcciones, hasta {range}.",
+  "{band}: nothing heard yet.": "{band}: aún no se ha captado nada.",
+  "Reception Horizon": "Horizonte de recepción",
+  "Your receiver": "Tu receptor",
+  "this session": "esta sesión",
+  "Below 5,000 ft": "Por debajo de 5000 ft",
+  "5,000–15,000 ft": "5000–15 000 ft",
+  "15,000–25,000 ft": "15 000–25 000 ft",
+  "25,000–35,000 ft": "25 000–35 000 ft",
+  "35,000 ft and above": "35 000 ft o más",
+  "set on the map": "fijada en el mapa",
+  "decoder receiver.json": "receiver.json del decodificador",
+  "browser location (LOCATE)": "ubicación del navegador (UBICAR)"
 }

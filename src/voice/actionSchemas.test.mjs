@@ -38,7 +38,8 @@ test('the complete Realtime tool payload pins the manifest-generated layer relea
     // requested radius and center authority in descriptions only.
     // Street Level and GNSS extend the manifest; tracked and analyst aircraft describe broadcasts.
     // Air quality (ECCC AQHI) extends the manifest.
-    '775ba323384b4c1b62fb8415bac52aecc3fc668e20bedcfa57e426dcd1da3969',
+    // Reception Horizon adds its toggle enum value and generated alias hint.
+    '38e59bdaebcb9e8fa96062778eeaad879f1a6ecb38f6aeb3d4a530389fb9fa01',
   );
 });
 

@@ -57,6 +57,7 @@ test('tool enums are generated from the manifest', () => {
     'rocket-launches',
     'bikeshare',
     'local-adsb',
+    'reception-horizon',
   ])
     assert.ok(toggle.includes(id), `${id} is voice-toggleable`);
   assert.ok(!toggle.includes('military-awareness'), 'Global Context is reached through set_context_mode');
@@ -103,6 +104,8 @@ test('spoken aliases resolve to real layers, keep every legacy phrase and never 
     'street level': 'street-level', mapillary: 'street-level',
     wind: 'wind', directions: 'directions', 'fire perimeters': 'fire-perimeters',
     'wildfire perimeters': 'fire-perimeters', 'burn areas': 'fire-perimeters',
+    'reception horizon': 'reception-horizon', 'my coverage': 'reception-horizon',
+    'antenna coverage': 'reception-horizon', 'receiver range': 'reception-horizon',
   };
   for (const [phrase, id] of Object.entries(added)) assert.equal(aliases.get(phrase), id, phrase);
   const claimed = new Map();

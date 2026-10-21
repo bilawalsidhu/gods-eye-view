@@ -3004,5 +3004,60 @@
   "Gemini access was refused. Check the API key and model access.": "Доступ к Gemini запрещён. Проверьте ключ API и доступ к модели.",
   "Gemini Live is unavailable for the configured model.": "Gemini Live недоступен для выбранной модели.",
   "Token request is too large": "Запрос токена слишком велик",
-  "Use an empty JSON token request": "Используйте запрос токена с пустым объектом JSON"
+  "Use an empty JSON token request": "Используйте запрос токена с пустым объектом JSON",
+  "Click your antenna on the globe (Esc cancels).": "Щёлкните по своей антенне на глобусе (Esc — отмена).",
+  "Another tool is using map clicks. Finish it, then SET ANTENNA.": "Щелчки по карте использует другой инструмент. Завершите работу с ним, затем нажмите «ЗАДАТЬ АНТЕННУ».",
+  "Needs your antenna position: LOCATE in the Radio card, a location in your decoder's receiver.json, or SET ANTENNA.": "Нужно положение антенны: «ГЕОПОЗИЦИЯ» в карточке «Радио», местоположение в receiver.json вашего декодера или «ЗАДАТЬ АНТЕННУ».",
+  "{count} positions waiting.": {
+    "one": "Ожидает {count} позиция.",
+    "few": "Ожидают {count} позиции.",
+    "many": "Ожидают {count} позиций.",
+    "other": "Ожидают {count} позиции."
+  },
+  "Antenna: {source}": "Антенна: {source}",
+  "waiting for aircraft from Local ADS-B": "ожидание воздушных судов от локального ADS-B",
+  "{positions} from {aircraft}": "{positions} от {aircraft}",
+  "{count} positions": {
+    "one": "{count} позиция",
+    "few": "{count} позиции",
+    "many": "{count} позиций",
+    "other": "{count} позиции"
+  },
+  "{count} aircraft": {
+    "one": "{count} воздушного судна",
+    "few": "{count} воздушных судов",
+    "many": "{count} воздушных судов",
+    "other": "{count} воздушного судна"
+  },
+  "farthest {range} at {bearing}°, {altitude}": "самая дальняя — {range} по азимуту {bearing}°, {altitude}",
+  "{count} positions beyond line of sight ignored": {
+    "one": "{count} позиция за пределами прямой видимости отброшена",
+    "few": "{count} позиции за пределами прямой видимости отброшены",
+    "many": "{count} позиций за пределами прямой видимости отброшено",
+    "other": "{count} позиции за пределами прямой видимости отброшены"
+  },
+  "heights ×{scale} for display": "высоты ×{scale} только для отображения",
+  "Waiting for aircraft heard by Local ADS-B": "Ожидание воздушных судов, принятых локальным ADS-B",
+  "Needs your antenna position": "Нужно положение антенны",
+  "SET ANTENNA": "ЗАДАТЬ АНТЕННУ",
+  "Click your antenna on the globe (click again or Esc to cancel)": "Щёлкните по своей антенне на глобусе (повторный щелчок или Esc — отмена)",
+  "Then click the globe where your antenna is": "Затем щёлкните по глобусу там, где находится антенна",
+  "Use the decoder's receiver.json or the Radio card LOCATE again": "Снова использовать receiver.json декодера или «ГЕОПОЗИЦИЯ» в карточке «Радио»",
+  "HEIGHT ×{scale}": "ВЫСОТА ×{scale}",
+  "Draw heights at true scale again": "Снова показывать высоты в истинном масштабе",
+  "Stretch heights ×{scale} so the shell's steps read in 3D (ranges are unchanged)": "Растянуть высоты ×{scale}, чтобы ступени оболочки читались в 3D (дальности не меняются)",
+  "Forget every position heard so far": "Забыть все принятые позиции",
+  "{band}: heard in {percent}% of directions, out to {range}.": "{band}: принято в {percent}% направлений, до {range}.",
+  "{band}: nothing heard yet.": "{band}: пока ничего не принято.",
+  "Reception Horizon": "Горизонт приёма",
+  "Your receiver": "Ваш приёмник",
+  "this session": "этот сеанс",
+  "Below 5,000 ft": "Ниже 5000 ft",
+  "5,000–15,000 ft": "5000–15 000 ft",
+  "15,000–25,000 ft": "15 000–25 000 ft",
+  "25,000–35,000 ft": "25 000–35 000 ft",
+  "35,000 ft and above": "35 000 ft и выше",
+  "set on the map": "задана на карте",
+  "decoder receiver.json": "receiver.json декодера",
+  "browser location (LOCATE)": "местоположение браузера («ГЕОПОЗИЦИЯ»)"
 }
