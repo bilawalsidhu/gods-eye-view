@@ -356,8 +356,8 @@ drag or final change. Feature adapters own data mapping and service subscription
 generic modules own DOM/listeners/timers and release them in `destroy()`.
 
 Keep persistence with panel chrome: collapse uses
-`godsEyeView.v6.panelCollapsed.<panelId>`, position uses
-`godsEyeView.v8.panelPos.<panelId>`, and share state uses the registered panel id.
+`godsEyeView.v6.panelCollapsed.<panelId>`, positions are
+not stored (`godsEyeView.v8.panelPos.<panelId>` stays reserved), and share state uses the registered panel id.
 Do not rename existing
 ids or reset persistence versions when adding a body. The WEATHER adapter is
 `src/ui/weatherPanel.js`; its observed-history selection remains transient.
@@ -373,6 +373,15 @@ Clearing permits reuse; destruction is final. Neither module imports the app,
 renderer, persistence or services. The facade retains panel visibility, share
 restore claims and render scheduling. Both controls are destroyed before the
 facade's asynchronous teardown can yield.
+
+## Ordinary action buttons
+
+`src/ui/actionButton.js` is a native, listener-free view helper used by Scene
+presentation and sharing-toolbar owners. It receives translated text and explicit
+presentation/accessibility properties. Feature controllers own action dispatch,
+state, persistence and cleanup. Static Scenes/CCTV templates use the same CSS
+surface and preserve IDs and layout hooks. The helper imports no application,
+renderer, storage or services; it belongs to the consuming package closures.
 
 ## Display controls
 
@@ -729,3 +738,13 @@ sources supply `{records, droppedCount, status, saturated}`; viewport filtering,
 exact-bound retry and rendering stay in the layer. Legacy cache saturation is
 decoded in the source. Source and geometry modules remain independent of Cesium,
 DOM and platform middleware.
+
+### Native form fields
+
+`src/ui/formField.js` constructs native numeric inputs without listeners or
+application state. Static selects and number inputs use the same `gev-field`
+surface, with explicit compact and inline densities. Feature owners retain
+option identity/order, bounds, parsing, draft values, input/change timing and
+teardown. CCTV effective-pose conversion and tuner/device operations remain
+feature responsibilities. A Vue replacement can reuse this contract and CSS;
+it replaces DOM construction, rather than adding a second state owner.

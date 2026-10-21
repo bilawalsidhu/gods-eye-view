@@ -37,16 +37,15 @@ export const COVERAGE_STREET_ZOOM_BELOW_M = 2_500;
 export const COVERAGE_MAX_HEIGHT_M = 6_000;
 export const COVERAGE_TUNING = Object.freeze({
   maxTiles: 9,
-  overviewMaxTiles: 0,
   // Chained ways are short: a dense downtown z13 tile holds ~1,500, so each
   // tile may draw 1,600 (a frame stays at 16.7 ms with 4,400 drawn).
   maxSequences: 14_400,
   lineWidthPx: 2.5,
-  overviewPointPx: 2.5,
   moveDebounceMs: 320,
   viewRangeMinM: 2_500,
   viewRangePerHeight: 10,
-  viewNearM: 1_000,
+  // Lines carry no date to sort by: keep KartaView's order.
+  keepOrder: true,
 });
 export const TOO_HIGH_HINT = msg('zoom in to see KartaView coverage');
 export const NO_COVERAGE_HINT = msg('no KartaView photos in view');
@@ -142,7 +141,7 @@ export const FILTERED_OUT_MESSAGE = msg(
   'None of KartaView’s photos here pass the imagery filter',
 );
 /** Under the SINCE slider while KartaView is lit. */
-export const SINCE_NOTE = 'KartaView: by upload date';
+export const SINCE_NOTE = '(by upload date)';
 
 /** The UTC calendar day of `ms`, as KartaView's startDate reads it. */
 function utcDay(ms) {

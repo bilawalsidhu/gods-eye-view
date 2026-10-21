@@ -182,6 +182,63 @@ export function pointerChip(snapshot) {
   };
 }
 
+/** Dedupe key of the clearing pointer_context item. */
+export const POINTER_NONE_KEY = 'none';
+
+/**
+ * The voice-card event for a turn's pointer: a gesture reveals its target at
+ * once; open-mic and typed turns reveal it only through announcePointer.
+ * @param {object|null} snapshot
+ * @param {boolean} gesture
+ * @returns {{announced: object|null, pointer: object|null}}
+ */
+export function pointerTurnEvent(snapshot, gesture) {
+  const chip = gesture ? pointerChip(snapshot) : null;
+  return chip
+    ? { announced: snapshot, pointer: { ...chip, screenPx: snapshot.screenPx } }
+    : { announced: null, pointer: null };
+}
+
+/**
+ * The pointer_context item a turn should send, or null when there is nothing
+ * new. Without a gesture the model learns only what kind of thing is pointed
+ * at, never which. Losing a sent pointer produces one clearing item.
+ * @param {object|null} snapshot
+ * @param {{at: string, gesture: boolean, sentKey: string|null}} turn
+ * @returns {{item: object, key: string}|null}
+ */
+export function pointerTurnContext(snapshot, { at, gesture, sentKey }) {
+  const chip = pointerChip(snapshot);
+  const item = !chip
+    ? sentKey && sentKey !== POINTER_NONE_KEY
+      ? { type: 'pointer_context', at, target: 'none' }
+      : null
+    : gesture
+      ? pointerContextItem(snapshot)
+      : {
+          type: 'pointer_context',
+          at,
+          pointing: snapshot.entity?.kind || 'ground',
+        };
+  if (!item) return null;
+  const { at: _at, ...content } = item;
+  const key = chip ? JSON.stringify(content) : POINTER_NONE_KEY;
+  return key === sentKey ? null : { item, key };
+}
+
+/**
+ * The voice-card event revealing a pointer a tool resolved, once per snapshot.
+ * @param {object|null} snapshot
+ * @param {object|null} announced Snapshot already shown.
+ * @returns {object|null}
+ */
+export function pointerAnnouncement(snapshot, announced) {
+  const chip = pointerChip(snapshot);
+  return chip && snapshot !== announced
+    ? { ...chip, screenPx: snapshot.screenPx }
+    : null;
+}
+
 /**
  * Track the pointer over one element (the globe canvas).
  * @param {object} options
@@ -330,7 +387,14 @@ export function createPointerTracker({
      * (open mic only when it moved recently: `recentMs`). The result becomes
      * the turn's referent (null when stale).
      */
-    beginTurn(at, { recentMs = POINTER_FRESH_MS } = {}) {
+    beginTurn(at, { recentMs = POINTER_FRESH_MS, capturedSnapshot } = {}) {
+      // Delayed admitted audio keeps its capture's pointer without replacing a
+      // newer physical hold. Undefined preserves existing caller behavior.
+      if (capturedSnapshot !== undefined) {
+        const snapshot = destroyed ? { fresh: false, at } : capturedSnapshot;
+        active = snapshot?.fresh ? snapshot : null;
+        return snapshot;
+      }
       const reuse =
         at !== 'text' && held && now() - held.heldAt <= POINTER_HOLD_MS;
       const snapshot = reuse ? held.snapshot : capture(at, { recentMs });

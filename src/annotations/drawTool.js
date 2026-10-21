@@ -30,6 +30,7 @@
  * at finish, deliberately and in one place — see `finishSpec` in drawMode.js.
  */
 import * as Cesium from 'cesium';
+import { createSegmentedControl } from '../ui/segmentedControl.js';
 import { pickWorldFromScreen } from './annotationResolver.js';
 import {
   claimPointer,
@@ -432,22 +433,21 @@ export function initDrawTool({ viewer, annotations }) {
   const shapeButtons = [
     ...(modeRow?.querySelectorAll('.pp-mode-btn[data-shape]') || []),
   ];
-  for (const btn of shapeButtons) {
-    listen(btn, 'click', () => {
-      shape = normalizeShape(btn.dataset.shape);
-      for (const other of shapeButtons) {
-        const on = other === btn;
-        other.classList.toggle('active', on);
-        other.setAttribute('aria-checked', String(on));
-      }
+  const shapeControl = createSegmentedControl({
+    buttons: shapeButtons,
+    valueOf: (button) => button.dataset.shape,
+    listen,
+    onChange: (value) => {
+      shape = normalizeShape(value);
+      shapeControl.update(shape);
       if (active) {
         generation += 1;
         session = createDrawSession(shape);
         cursor = null;
         syncPreview();
       }
-    });
-  }
+    },
+  });
   listen(colorSelect, 'change', () => {
     color = COLORS.includes(colorSelect.value) ? colorSelect.value : 'primary';
     syncPreview();

@@ -16,6 +16,7 @@ export function createRealtimeSession({
     controller,
     capabilities: { costControls: true, pushToTalk: true },
     start: (settings) => controller.start(settings),
+    getStartOptions: () => ({ pushToTalk: Boolean(controller.pushToTalkMode) }),
     stop: (settings) => controller.stop(settings),
     sendText: (text) => controller.sendTextCommand(text),
     sendMapEvent: (event) => controller.notifyMapEvent(event),
