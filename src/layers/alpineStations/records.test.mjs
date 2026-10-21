@@ -3,17 +3,14 @@ import assert from 'node:assert/strict';
 import {
   READING_FIELDS,
   alpineStationRecord,
-  describeWind,
   finiteOrNull,
   isoOrNull,
   isReporting,
   isStale,
   mergeNetworkStations,
   nearestStations,
-  stationCardLines,
   summarizeStations,
   textOrNull,
-  utcMinute,
 } from './records.js';
 import { parameterView } from './parameters.js';
 import { SLF_NETWORK_ID, SMN_NETWORK_ID } from './networks.js';
@@ -112,9 +109,20 @@ test('blank, dash and non-numeric strings all read as absent', () => {
 
 test('a silent station is not stale, because it has no reading to age', () => {
   const silent = alpineStationRecord(
-    raw({ measuredAt: null, snowDepthCm: null, airTempC: null, windSpeedMs: null, windGustMs: null, windDirDeg: null }),
+    raw({
+      measuredAt: null,
+      snowDepthCm: null,
+      airTempC: null,
+      windSpeedMs: null,
+      windGustMs: null,
+      windDirDeg: null,
+    }),
   );
-  assert.equal(isStale(silent, NOW), false, 'silent and stale read differently');
+  assert.equal(
+    isStale(silent, NOW),
+    false,
+    'silent and stale read differently',
+  );
   assert.equal(isReporting(silent), false);
 });
 
@@ -146,7 +154,9 @@ test('merging is de-duplicated, stable and tolerant of junk', () => {
     ['A', 'B'],
   );
   assert.equal(first[0].label, 'Bärentälli', 'the first record for an id wins');
-  const second = mergeNetworkStations([[raw({ code: 'A' }), raw({ code: 'B' })]]);
+  const second = mergeNetworkStations([
+    [raw({ code: 'A' }), raw({ code: 'B' })],
+  ]);
   assert.deepEqual(
     first.map((s) => s.id),
     second.map((s) => s.id),
@@ -161,7 +171,15 @@ test('the summary counts reporting honestly and keeps feed staleness out', () =>
     [
       raw({ code: 'A' }),
       raw({ code: 'B', snowDepthCm: 100 }),
-      raw({ code: 'C', measuredAt: null, snowDepthCm: null, airTempC: null, windSpeedMs: null, windGustMs: null, windDirDeg: null }),
+      raw({
+        code: 'C',
+        measuredAt: null,
+        snowDepthCm: null,
+        airTempC: null,
+        windSpeedMs: null,
+        windGustMs: null,
+        windDirDeg: null,
+      }),
       raw({
         code: 'D',
         measuredAt: new Date(NOW - 7 * 24 * 60 * 60_000).toISOString(),
@@ -226,68 +244,11 @@ test('nearest returns the closest stations first, bounded by count and range', (
   });
   assert.equal(bounded.length, 2, 'Berlin is out of the Alpine window');
   assert.deepEqual(nearestStations(stations, { lat: null, lon: 7 }), []);
-  assert.deepEqual(nearestStations(stations, { lat: 46, lon: 7.75, limit: 0 }), []);
-  assert.deepEqual(nearestStations(null, { lat: 46, lon: 7.75 }), []);
-});
-
-test('wind reads as the meteorological phrase the operator published', () => {
-  // The published direction is where the wind blows FROM (WMO convention), so
-  // the card must not silently flip it.
-  assert.equal(describeWind({ windSpeedMs: 6, windDirDeg: 270, windGustMs: 11 }), '21.6 km/h W · gust 39.6 km/h');
-  assert.equal(describeWind({ windSpeedMs: 6, windDirDeg: null }), '21.6 km/h');
-  assert.equal(describeWind({ windSpeedMs: null }), null);
-  assert.equal(describeWind(null), null);
-});
-
-test('a card line is never printed for a measurement a station did not make', () => {
-  const station = alpineStationRecord(raw());
-  const lines = stationCardLines(station, parameterView('snow'), { now: NOW });
-  const ids = lines.map((line) => line.id);
-  assert.ok(ids.includes('place'));
-  assert.ok(ids.includes('selected'));
-  assert.ok(!ids.includes('snow'), 'the selected parameter is not repeated');
-  assert.ok(ids.includes('wind'));
-  assert.ok(ids.includes('air'));
-  assert.ok(ids.includes('measured'));
-  assert.equal(new Set(ids).size, ids.length, 'line ids are stable and unique');
-  assert.match(lines.find((line) => line.id === 'selected').text, /42 cm/);
-  assert.match(lines.find((line) => line.id === 'place').text, /SLF IMIS · GR · 2558 m/);
-});
-
-test('a card says what a station does not measure, rather than omitting it', () => {
-  const station = alpineStationRecord(raw());
-  const lines = stationCardLines(station, parameterView('pressure'), { now: NOW });
-  const selected = lines.find((line) => line.id === 'selected');
-  assert.match(selected.text, /not measured here/);
-  assert.equal(selected.muted, true);
-});
-
-test('a silent station reads as silent and stops', () => {
-  const silent = alpineStationRecord(
-    raw({ measuredAt: null, snowDepthCm: null, airTempC: null, windSpeedMs: null, windGustMs: null, windDirDeg: null }),
-  );
-  const lines = stationCardLines(silent, parameterView('snow'), { now: NOW });
   assert.deepEqual(
-    lines.map((line) => line.id),
-    ['place', 'silent'],
+    nearestStations(stations, { lat: 46, lon: 7.75, limit: 0 }),
+    [],
   );
-  assert.deepEqual(stationCardLines(null, parameterView('snow')), []);
-});
-
-test('a late reading is labelled late on its own line', () => {
-  const late = alpineStationRecord(
-    raw({ measuredAt: new Date(NOW - 7 * 24 * 60 * 60_000).toISOString() }),
-  );
-  const measured = stationCardLines(late, parameterView('snow'), {
-    now: NOW,
-  }).find((line) => line.id === 'measured');
-  assert.match(measured.text, /· late$/);
-});
-
-test('times print as a UTC minute, and an unusable one says so', () => {
-  assert.equal(utcMinute('2026-10-09T12:34:56Z'), '10-09 12:34 UTC');
-  assert.equal(utcMinute('nonsense'), 'Unavailable');
-  assert.equal(utcMinute(null), 'Unavailable');
+  assert.deepEqual(nearestStations(null, { lat: 46, lon: 7.75 }), []);
 });
 
 test('a stale reading is excluded from the range the card prints', () => {

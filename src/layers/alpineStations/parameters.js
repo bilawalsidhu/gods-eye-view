@@ -9,7 +9,12 @@
  * hazard ratings: snow depth is a measurement, and the only authority on
  * avalanche danger is the operator's own bulletin, which is a separate product
  * this layer does not reproduce.
+ *
+ * Portable: the server imports this through `./records.js`, so the band and
+ * view labels are marked with `msg()` and stay English here. The Weather card
+ * and the globe labels translate them where they are shown.
  */
+import { msg } from '../../i18n/marker.js';
 
 /** Metres per second to kilometres per hour, to one decimal. */
 export function msToKmh(ms) {
@@ -33,113 +38,158 @@ export function windCompass(degrees) {
  * render it identically to a station with no sensor at all.
  */
 const WIND_BANDS = Object.freeze([
-  Object.freeze({ id: 'storm', min: 75, label: 'Storm', accent: '#ff5c5c' }),
-  Object.freeze({ id: 'strong', min: 40, label: 'Strong', accent: '#ffa23f' }),
+  Object.freeze({
+    id: 'storm',
+    min: 75,
+    label: msg('Storm'),
+    accent: '#ff5c5c',
+  }),
+  Object.freeze({
+    id: 'strong',
+    min: 40,
+    label: msg('Strong'),
+    accent: '#ffa23f',
+  }),
   Object.freeze({
     id: 'moderate',
     min: 20,
-    label: 'Moderate',
+    label: msg('Moderate'),
     accent: '#ffe066',
   }),
-  Object.freeze({ id: 'light', min: 5, label: 'Light', accent: '#8ed081' }),
+  Object.freeze({
+    id: 'light',
+    min: 5,
+    label: msg('Light'),
+    accent: '#8ed081',
+  }),
   Object.freeze({
     id: 'calm',
     min: -Infinity,
-    label: 'Calm',
+    label: msg('Calm'),
     accent: '#6b8f9e',
   }),
 ]);
 
 const TEMPERATURE_BANDS = Object.freeze([
-  Object.freeze({ id: 'hot', min: 30, label: 'Hot', accent: '#ff4d4d' }),
-  Object.freeze({ id: 'warm', min: 20, label: 'Warm', accent: '#ffa23f' }),
-  Object.freeze({ id: 'mild', min: 10, label: 'Mild', accent: '#8ed081' }),
-  Object.freeze({ id: 'cool', min: 0, label: 'Cool', accent: '#63c7d6' }),
+  Object.freeze({ id: 'hot', min: 30, label: msg('Hot'), accent: '#ff4d4d' }),
+  Object.freeze({ id: 'warm', min: 20, label: msg('Warm'), accent: '#ffa23f' }),
+  Object.freeze({ id: 'mild', min: 10, label: msg('Mild'), accent: '#8ed081' }),
+  Object.freeze({ id: 'cool', min: 0, label: msg('Cool'), accent: '#63c7d6' }),
   Object.freeze({
     id: 'freezing',
     min: -10,
-    label: 'Freezing',
+    label: msg('Freezing'),
     accent: '#5b8dd9',
   }),
   Object.freeze({
     id: 'severe',
     min: -Infinity,
-    label: 'Severe frost',
+    label: msg('Severe frost'),
     accent: '#9b7fe0',
   }),
 ]);
 
 const PRECIPITATION_BANDS = Object.freeze([
-  Object.freeze({ id: 'heavy', min: 5, label: 'Heavy', accent: '#b06bd6' }),
+  Object.freeze({
+    id: 'heavy',
+    min: 5,
+    label: msg('Heavy'),
+    accent: '#b06bd6',
+  }),
   Object.freeze({
     id: 'moderate',
     min: 2,
-    label: 'Moderate',
+    label: msg('Moderate'),
     accent: '#4d7ee8',
   }),
-  Object.freeze({ id: 'light', min: 0.5, label: 'Light', accent: '#63c7d6' }),
-  Object.freeze({ id: 'trace', min: 0.1, label: 'Trace', accent: '#8fb8c4' }),
+  Object.freeze({
+    id: 'light',
+    min: 0.5,
+    label: msg('Light'),
+    accent: '#63c7d6',
+  }),
+  Object.freeze({
+    id: 'trace',
+    min: 0.1,
+    label: msg('Trace'),
+    accent: '#8fb8c4',
+  }),
   Object.freeze({
     id: 'dry',
     min: -Infinity,
-    label: 'Dry',
+    label: msg('Dry'),
     accent: '#6b8f9e',
   }),
 ]);
 
 const SNOW_BANDS = Object.freeze([
-  Object.freeze({ id: 'deep', min: 200, label: 'Deep', accent: '#ffffff' }),
+  Object.freeze({
+    id: 'deep',
+    min: 200,
+    label: msg('Deep'),
+    accent: '#ffffff',
+  }),
   Object.freeze({
     id: 'substantial',
     min: 100,
-    label: 'Substantial',
+    label: msg('Substantial'),
     accent: '#cfe8ff',
   }),
   Object.freeze({
     id: 'moderate',
     min: 50,
-    label: 'Moderate',
+    label: msg('Moderate'),
     accent: '#8fc7f0',
   }),
   Object.freeze({
     id: 'shallow',
     min: 10,
-    label: 'Shallow',
+    label: msg('Shallow'),
     accent: '#5b9bd5',
   }),
-  Object.freeze({ id: 'trace', min: 1, label: 'Trace', accent: '#7f9bb0' }),
+  Object.freeze({
+    id: 'trace',
+    min: 1,
+    label: msg('Trace'),
+    accent: '#7f9bb0',
+  }),
   Object.freeze({
     id: 'bare',
     min: -Infinity,
-    label: 'Bare',
+    label: msg('Bare'),
     accent: '#6b8f9e',
   }),
 ]);
 
 const PRESSURE_BANDS = Object.freeze([
-  Object.freeze({ id: 'high', min: 1025, label: 'High', accent: '#ff8f4d' }),
+  Object.freeze({
+    id: 'high',
+    min: 1025,
+    label: msg('High'),
+    accent: '#ff8f4d',
+  }),
   Object.freeze({
     id: 'above',
     min: 1015,
-    label: 'Above average',
+    label: msg('Above average'),
     accent: '#ffe066',
   }),
   Object.freeze({
     id: 'average',
     min: 1005,
-    label: 'Average',
+    label: msg('Average'),
     accent: '#8fb8c4',
   }),
   Object.freeze({
     id: 'below',
     min: 995,
-    label: 'Below average',
+    label: msg('Below average'),
     accent: '#5b8dd9',
   }),
   Object.freeze({
     id: 'low',
     min: -Infinity,
-    label: 'Low',
+    label: msg('Low'),
     accent: '#9b7fe0',
   }),
 ]);
@@ -174,8 +224,8 @@ const PRESSURE_BANDS = Object.freeze([
 export const STATION_PARAMETER_VIEWS = Object.freeze({
   wind: Object.freeze({
     id: 'wind',
-    label: 'Wind',
-    chipLabel: 'WIND',
+    label: msg('Wind'),
+    chipLabel: msg('WIND'),
     field: 'windSpeedMs',
     derive: msToKmh,
     unit: 'km/h',
@@ -185,8 +235,8 @@ export const STATION_PARAMETER_VIEWS = Object.freeze({
   }),
   temperature: Object.freeze({
     id: 'temperature',
-    label: 'Temperature',
-    chipLabel: 'TEMP',
+    label: msg('Temperature'),
+    chipLabel: msg('TEMP'),
     field: 'airTempC',
     derive: null,
     unit: '°C',
@@ -196,8 +246,8 @@ export const STATION_PARAMETER_VIEWS = Object.freeze({
   }),
   snow: Object.freeze({
     id: 'snow',
-    label: 'Snow depth',
-    chipLabel: 'SNOW',
+    label: msg('Snow depth'),
+    chipLabel: msg('SNOW'),
     field: 'snowDepthCm',
     derive: null,
     unit: 'cm',
@@ -207,8 +257,8 @@ export const STATION_PARAMETER_VIEWS = Object.freeze({
   }),
   precipitation: Object.freeze({
     id: 'precipitation',
-    label: 'Precipitation',
-    chipLabel: 'RAIN',
+    label: msg('Precipitation'),
+    chipLabel: msg('RAIN'),
     field: 'precipMm',
     derive: null,
     unit: 'mm/10min',
@@ -218,8 +268,8 @@ export const STATION_PARAMETER_VIEWS = Object.freeze({
   }),
   pressure: Object.freeze({
     id: 'pressure',
-    label: 'Pressure (QFF)',
-    chipLabel: 'PRES',
+    label: msg('Pressure (QFF)'),
+    chipLabel: msg('PRES'),
     field: 'pressureQffHpa',
     derive: null,
     unit: 'hPa',
@@ -287,15 +337,22 @@ export function parameterProminence(value, view) {
 
 const clampUnit = (value) => Math.min(1, Math.max(0, value));
 
-/** A reading's text with its unit, for a card line or a marker label. */
+/**
+ * Decimal places a reading in this view is printed to.
+ *
+ * Shared rather than duplicated: the globe label and the card line print the
+ * same reading, so the rounding has to come from one place even though they
+ * format the number through different paths.
+ */
+export function parameterDecimals(view) {
+  if (view.id === 'snow' || view.id === 'pressure') return 0;
+  return view.id === 'wind' ? 0 : 1;
+}
+
+/** A reading's text with its unit, unlocalized, for portable callers. */
 export function formatParameter(value, view) {
   if (!Number.isFinite(value)) return null;
-  const decimals = view.id === 'precipitation' ? 1 : view.id === 'wind' ? 0 : 1;
-  const rounded =
-    view.id === 'snow' || view.id === 'pressure'
-      ? String(Math.round(value))
-      : value.toFixed(decimals);
-  return `${rounded} ${view.unit}`;
+  return `${value.toFixed(parameterDecimals(view))} ${view.unit}`;
 }
 
 /**

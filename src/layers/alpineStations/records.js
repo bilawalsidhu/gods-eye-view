@@ -38,14 +38,7 @@
 
 import { greatCircleKm } from '../../geoDistance.js';
 import { alpineNetwork } from './networks.js';
-import {
-  formatParameter,
-  msToKmh,
-  parameterValue,
-  parameterView,
-  staleAfterMs,
-  windCompass,
-} from './parameters.js';
+import { parameterValue, parameterView, staleAfterMs } from './parameters.js';
 
 /** The reading fields a record carries, in card order. */
 export const READING_FIELDS = Object.freeze([
@@ -249,82 +242,4 @@ export function nearestStations(
   }
   scored.sort((a, b) => a.km - b.km || (a.station.id < b.station.id ? -1 : 1));
   return scored.slice(0, Math.max(0, limit));
-}
-
-/** Wind as one phrase, in the meteorological reading the operator published. */
-export function describeWind(station) {
-  const kmh = msToKmh(station?.windSpeedMs);
-  if (kmh === null) return null;
-  const compass = windCompass(station.windDirDeg);
-  const gust = msToKmh(station.windGustMs);
-  return `${kmh} km/h${compass ? ` ${compass}` : ''}${
-    gust === null ? '' : ` · gust ${gust} km/h`
-  }`;
-}
-
-/**
- * Card lines for one station.
- *
- * Every figure carries its unit and an absent reading is omitted entirely, so
- * a line is never printed for a measurement the station did not make.
- */
-export function stationCardLines(station, view, { now = Date.now() } = {}) {
-  if (!station) return [];
-  const network = alpineNetwork(station.networkId);
-  const lines = [];
-  const place = [
-    network?.label,
-    station.region,
-    Number.isFinite(station.elevationM)
-      ? `${Math.round(station.elevationM)} m`
-      : null,
-  ]
-    .filter(Boolean)
-    .join(' · ');
-  if (place) lines.push({ id: 'place', text: place, muted: true });
-  if (!isReporting(station)) {
-    lines.push({ id: 'silent', text: 'No current reading', muted: true });
-    return lines;
-  }
-  const selected = formatParameter(parameterValue(station, view), view);
-  lines.push({
-    id: 'selected',
-    text: selected
-      ? `${view.label}: ${selected}`
-      : `${view.label}: not measured here`,
-    muted: !selected,
-  });
-  const wind = describeWind(station);
-  if (wind && view.id !== 'wind')
-    lines.push({ id: 'wind', text: `Wind ${wind}` });
-  if (Number.isFinite(station.airTempC) && view.id !== 'temperature') {
-    const humidity = Number.isFinite(station.humidityPct)
-      ? ` · ${Math.round(station.humidityPct)}% RH`
-      : '';
-    lines.push({
-      id: 'air',
-      text: `Air ${station.airTempC.toFixed(1)} °C${humidity}`,
-    });
-  }
-  if (Number.isFinite(station.snowDepthCm) && view.id !== 'snow') {
-    lines.push({
-      id: 'snow',
-      text: `Snow ${Math.round(station.snowDepthCm)} cm`,
-    });
-  }
-  if (station.measuredAt) {
-    lines.push({
-      id: 'measured',
-      text: `${utcMinute(station.measuredAt)}${isStale(station, now) ? ' · late' : ''}`,
-      muted: true,
-    });
-  }
-  return lines;
-}
-
-/** `MM-DD HH:MM UTC`, the format the weather rail already reads in. */
-export function utcMinute(iso) {
-  const parsed = Date.parse(iso ?? '');
-  if (!Number.isFinite(parsed)) return 'Unavailable';
-  return `${new Date(parsed).toISOString().slice(5, 16).replace('T', ' ')} UTC`;
 }

@@ -21,10 +21,10 @@ import {
 import {
   DEFAULT_PARAMETER_ID,
   STATION_PARAMETER_IDS,
-  formatParameter,
   parameterValue,
   parameterView,
 } from './parameters.js';
+import { localizedReading } from './cardText.js';
 
 const NOW = Date.UTC(2026, 9, 9, 12, 0);
 const MEASURED = new Date(NOW - 10 * 60_000).toISOString();
@@ -223,7 +223,10 @@ function build({ stations, snapshotOverrides, fail, rotations } = {}) {
 
 test('construction refuses a source or overlay host it cannot use', () => {
   assert.throws(() => createAlpineStationsLayer(), /snapshot source/);
-  assert.throws(() => createAlpineStationsLayer({ source: {} }), /snapshot source/);
+  assert.throws(
+    () => createAlpineStationsLayer({ source: {} }),
+    /snapshot source/,
+  );
   assert.throws(
     () => createAlpineStationsLayer({ source: { getSnapshot() {} } }),
     /overlay host/,
@@ -307,7 +310,10 @@ test('an unknown parameter degrades to the default rather than throwing', () => 
 
 test('a station that stops being published loses its entity', async () => {
   const { layer, dataSource, serve } = build({
-    stations: [station(), station({ code: 'VSC1', id: `${SLF_NETWORK_ID}:VSC1` })],
+    stations: [
+      station(),
+      station({ code: 'VSC1', id: `${SLF_NETWORK_ID}:VSC1` }),
+    ],
   });
   layer.enable();
   await layer.update();
@@ -406,14 +412,25 @@ test('the card lists the nearest stations in view, bounded and nearest first', a
   assert.equal(list.items.length, NEAREST_LIST_LIMIT);
   assert.equal(list.items[0].id, `${SLF_NETWORK_ID}:S0`);
   assert.ok(list.items.every((item) => item.params.stationId === item.id));
-  assert.equal(new Set(list.items.map((item) => item.id)).size, list.items.length);
+  assert.equal(
+    new Set(list.items.map((item) => item.id)).size,
+    list.items.length,
+  );
 });
 
 test('settling the camera republishes the list only when its membership changes', async () => {
   // The objection this answers: nothing about the geometry depends on the
   // camera, so a settle must never rebuild an entity.
-  const near = station({ code: 'NEAR', id: `${SLF_NETWORK_ID}:NEAR`, lat: 46.0 });
-  const away = station({ code: 'AWAY', id: `${SLF_NETWORK_ID}:AWAY`, lat: 47.5 });
+  const near = station({
+    code: 'NEAR',
+    id: `${SLF_NETWORK_ID}:NEAR`,
+    lat: 46.0,
+  });
+  const away = station({
+    code: 'AWAY',
+    id: `${SLF_NETWORK_ID}:AWAY`,
+    lat: 47.5,
+  });
   const { layer, viewer, dataSource } = build({ stations: [near, away] });
   let notices = 0;
   layer.setRowControlsListener(() => notices++);
@@ -426,7 +443,11 @@ test('settling the camera republishes the list only when its membership changes'
   assert.equal(notices, 0, 'a settle that changes nothing is silent');
   viewer.setCentre(46.001, 7.75);
   viewer.moveEnd();
-  assert.equal(notices, 0, 'panning within the same neighbourhood is silent too');
+  assert.equal(
+    notices,
+    0,
+    'panning within the same neighbourhood is silent too',
+  );
   viewer.setCentre(47.5, 7.75);
   viewer.moveEnd();
   assert.equal(notices, 1, 'a changed list is published once');
@@ -476,7 +497,11 @@ test('the card is a readout with a legend covering the selected parameter', asyn
   layer.enable();
   await layer.update();
   const controls = layer.getRowControls();
-  assert.equal(controls.readout, true, 'the row stays a toggle and a meta line');
+  assert.equal(
+    controls.readout,
+    true,
+    'the row stays a toggle and a meta line',
+  );
   assert.ok(controls.legend.length >= 5);
   for (const entry of controls.legend) {
     assert.match(entry.color, /^#[0-9a-f]{6}$/);
@@ -740,7 +765,11 @@ test('the arrow points where the wind is GOING, not where it comes from', async 
   layer.enable();
   await layer.update();
   assert.ok(projected.length);
-  assert.equal(projected.at(-1).bearingDeg, 90, 'wind FROM the west blows east');
+  assert.equal(
+    projected.at(-1).bearingDeg,
+    90,
+    'wind FROM the west blows east',
+  );
 });
 
 test('a station with no vane, or calm air, stays a dot', async () => {
@@ -748,7 +777,11 @@ test('a station with no vane, or calm air, stays a dot', async () => {
   // station never really measured.
   const { layer, dataSource } = build({
     stations: [
-      station({ code: 'NOVANE', id: `${SLF_NETWORK_ID}:NOVANE`, windDirDeg: null }),
+      station({
+        code: 'NOVANE',
+        id: `${SLF_NETWORK_ID}:NOVANE`,
+        windDirDeg: null,
+      }),
       station({ code: 'CALM', id: `${SLF_NETWORK_ID}:CALM`, windSpeedMs: 0.1 }),
       station({ code: 'BLOWING', id: `${SLF_NETWORK_ID}:BLOWING` }),
     ],
@@ -824,7 +857,11 @@ test('an arrow carries the same band colour and grows with the reading', async (
   const { layer, dataSource } = build({
     stations: [
       station({ code: 'LIGHT', id: `${SLF_NETWORK_ID}:LIGHT`, windSpeedMs: 2 }),
-      station({ code: 'STORM', id: `${SLF_NETWORK_ID}:STORM`, windSpeedMs: 25 }),
+      station({
+        code: 'STORM',
+        id: `${SLF_NETWORK_ID}:STORM`,
+        windSpeedMs: 25,
+      }),
     ],
   });
   layer.enable();
@@ -839,7 +876,11 @@ test('without a canvas the layer falls back to dots rather than failing', async 
   // Server-side rendering and headless harnesses have no document.
   const overlayHost = fakeOverlayHost();
   const layer = createAlpineStationsLayer({
-    source: { async getSnapshot() { return snapshot(); } },
+    source: {
+      async getSnapshot() {
+        return snapshot();
+      },
+    },
     overlayHost,
     cesium: fakeCesium(),
     now: () => NOW,
@@ -909,7 +950,10 @@ test('the operators are credited on the globe for as long as their data is', asy
   await layer.update();
   assert.deepEqual(calls, [['show', true]]);
   layer.disable();
-  assert.deepEqual(calls, [['show', true], ['hide', true]]);
+  assert.deepEqual(calls, [
+    ['show', true],
+    ['hide', true],
+  ]);
   layer.enable();
   layer.destroy();
   assert.deepEqual(calls.at(-1), ['hide', true], 'destroy releases it too');
@@ -919,7 +963,11 @@ test('a layer built without a credit host still runs', () => {
   // The credit is injected by the application wrapper; the layer itself must
   // not require one to be drivable in a test or a standalone host.
   const layer = createAlpineStationsLayer({
-    source: { async getSnapshot() { return snapshot(); } },
+    source: {
+      async getSnapshot() {
+        return snapshot();
+      },
+    },
     overlayHost: fakeOverlayHost(),
     cesium: fakeCesium(),
     now: () => NOW,
@@ -939,7 +987,9 @@ test('an arrow reports itself visible on the very first draw', async () => {
   const { layer, dataSource } = build();
   layer.enable();
   await layer.update();
-  const arrows = dataSource.entities.values.filter((entity) => entity.billboard);
+  const arrows = dataSource.entities.values.filter(
+    (entity) => entity.billboard,
+  );
   assert.ok(arrows.length, 'the wind view drew at least one arrow');
   for (const entity of arrows)
     assert.equal(
@@ -961,7 +1011,7 @@ test('a list row and a marker label format the same reading identically', async 
     const { list } = layer.getRowControls();
     for (const item of list.items) {
       const record = snapshot().stations.find((s) => s.id === item.id);
-      const expected = formatParameter(parameterValue(record, view), view);
+      const expected = localizedReading(parameterValue(record, view), view);
       if (!expected) continue;
       assert.ok(
         item.text.endsWith(expected),
@@ -987,7 +1037,7 @@ test('the detail line never trails a dangling separator', async () => {
   layer.setParams({ parameter: 'pressure' });
   const { detail } = layer.getRowControls().summary;
   assert.ok(!/·\s*$/.test(detail), `trailing separator in "${detail}"`);
-  assert.match(detail, /^\d+ of \d+ stations$/);
+  assert.match(detail, /^\d+ of \d+ stations?$/);
 });
 
 test('a parameter no reachable network publishes is offered but disabled', async () => {
@@ -1006,7 +1056,11 @@ test('a parameter no reachable network publishes is offered but disabled', async
   const chips = layer.getRowControls().summary.settings[0].chips;
   assert.equal(chips.length, STATION_PARAMETER_IDS.length, 'all still offered');
   const byId = Object.fromEntries(chips.map((chip) => [chip.id, chip]));
-  assert.equal(byId.pressure.disabled, true, 'only SwissMetNet has a barometer');
+  assert.equal(
+    byId.pressure.disabled,
+    true,
+    'only SwissMetNet has a barometer',
+  );
   assert.equal(byId.snow.disabled, false, 'SLF answers for snow');
   assert.equal(byId.wind.disabled, false);
   // The active chip is never disabled, or it could not be changed away from.
@@ -1021,4 +1075,19 @@ test('with every network reachable no parameter chip is disabled', async () => {
   await layer.update();
   for (const chip of layer.getRowControls().summary.settings[0].chips)
     assert.equal(chip.disabled, false, chip.id);
+});
+
+test('the card declares its legend categorical, so every band is explained', () => {
+  // The ramp path prints only its endpoints. With word labels that leaves
+  // every middle band unexplained: "Calm — Storm km/h" says nothing about the
+  // three colours between them. The panel switches on this flag (the shared
+  // mechanism cyclones and air quality use), not on a list of layer ids.
+  const { layer } = build();
+  const controls = layer.getRowControls();
+  assert.equal(controls.legendCategorical, true);
+  assert.ok(controls.legend.length > 2, 'a named-band legend has middles');
+  for (const entry of controls.legend) {
+    assert.equal(typeof entry.label, 'string');
+    assert.match(entry.color, /^#[0-9a-f]{6}$/i);
+  }
 });

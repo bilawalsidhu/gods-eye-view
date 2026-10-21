@@ -8,7 +8,6 @@ import {
   DEFAULT_PARAMETER_ID,
   STATION_PARAMETER_IDS,
   STATION_PARAMETER_VIEWS,
-  formatParameter,
   parameterLegend,
   parameterProminence,
   parameterValue,
@@ -18,10 +17,9 @@ import {
   isReporting,
   isStale,
   nearestStations,
-  stationCardLines,
   summarizeStations,
-  utcMinute,
 } from './records.js';
+import { localizedReading, stationCardLines, utcMinute } from './cardText.js';
 import {
   ALPINE_OVERLAY_COHORT_LIMIT,
   ALPINE_OVERLAY_COLLISION_CAPACITY,
@@ -38,6 +36,10 @@ import {
   screenProjectedRotation,
   stabilizeScreenRotation,
 } from '../../data/iconOrientation.js';
+import { formatNumber, getLocale, msg, t, tn } from '../../i18n/index.js';
+import { formatQuantity } from '../../ui/unitLabels.js';
+import { translateFeedError } from '../../ui/statusText.js';
+export * from './cardText.js';
 export * from './model.js';
 export * from './networks.js';
 export * from './parameters.js';
@@ -337,15 +339,19 @@ export function createAlpineStationsLayer({
   }
 
   function statusLine() {
-    if (error) return error;
+    if (error) return translateFeedError(error);
     if (snapshot?.unavailable)
-      return snapshot.reason || 'Station networks unavailable';
-    if (loading && !snapshot) return 'Loading stations…';
+      return snapshot.reason
+        ? translateFeedError(snapshot.reason)
+        : t('Station networks unavailable');
+    if (loading && !snapshot) return t('Loading stations…');
     // Ahead of the general reason: a visitor who chose a parameter nothing
     // reachable measures needs to know THAT, not a count of networks.
     if (snapshot && !supportingNetworks().length)
-      return `No reachable network publishes ${view().label.toLowerCase()}`;
-    if (snapshot?.reason) return snapshot.reason;
+      return t('No reachable network publishes {parameter}', {
+        parameter: t(view().label).toLocaleLowerCase(getLocale()),
+      });
+    if (snapshot?.reason) return translateFeedError(snapshot.reason);
     return null;
   }
 
@@ -415,7 +421,7 @@ export function createAlpineStationsLayer({
         return true;
       } catch (failure) {
         if (owned.signal.aborted || request !== owned || !enabled) return false;
-        error = failure?.message || 'Alpine station source unavailable';
+        error = failure?.message || msg('Alpine station source unavailable');
         return false;
       } finally {
         if (request === owned) {
@@ -489,34 +495,55 @@ export function createAlpineStationsLayer({
       const detail = snapshot
         ? summary.total
           ? [
-              `${summary.measuring} of ${summary.total} stations`,
+              tn(
+                summary.total,
+                '{measuring} of {count} station',
+                '{measuring} of {count} stations',
+                {
+                  measuring: formatNumber(summary.measuring),
+                  count: formatNumber(summary.total),
+                },
+              ),
               // Omitted rather than left as a dangling separator when the
               // selected parameter has no reachable network behind it.
               ...supporting.map((network) => network.label),
             ].join(' · ')
-          : 'No stations loaded'
+          : t('No stations loaded')
         : loading
-          ? 'Loading stations…'
-          : 'Stations unavailable';
+          ? t('Loading stations…')
+          : t('Stations unavailable');
+      const reporting = t('{reporting} of {count} reporting', {
+        reporting: formatNumber(summary.reporting),
+        count: formatNumber(summary.total),
+      });
+      const late = summary.staleStations
+        ? tn(summary.staleStations, '{count} late', '{count} late', {
+            count: formatNumber(summary.staleStations),
+          })
+        : null;
       const lines = [
         {
           id: 'reporting',
-          text: `${summary.reporting} of ${summary.total} reporting${
-            summary.staleStations ? ` · ${summary.staleStations} late` : ''
-          }`,
+          text: late ? `${reporting} · ${late}` : reporting,
           muted: true,
         },
       ];
       if (summary.min !== null && summary.max !== null) {
         lines.push({
           id: 'range',
-          text: `${current.label} across the network: ${summary.min.toFixed(1)} to ${summary.max.toFixed(1)} ${current.unit}`,
+          text: t('{parameter} across the network: {min} to {max}', {
+            parameter: t(current.label),
+            min: formatNumber(summary.min, { maximumFractionDigits: 1 }),
+            max: localizedReading(summary.max, current),
+          }),
         });
       }
       if (summary.newestAt)
         lines.push({
           id: 'newest',
-          text: `Newest reading ${utcMinute(summary.newestAt)}`,
+          text: t('Newest reading {time}', {
+            time: utcMinute(summary.newestAt),
+          }),
           muted: true,
         });
       // A selected station's detail belongs to the result block alone, which
@@ -528,11 +555,13 @@ export function createAlpineStationsLayer({
       return {
         readout: true,
         summary: {
-          label: 'Alpine Stations',
+          label: t('Alpine Stations'),
           coverage: [
             ...new Set(ALPINE_NETWORKS.map((network) => network.country)),
           ].join(' · '),
-          compact: station ? `${station.label} selected` : detail,
+          compact: station
+            ? t('{station} selected', { station: station.label })
+            : detail,
           detail,
           status: statusLine(),
           units: current.unit,
@@ -540,13 +569,13 @@ export function createAlpineStationsLayer({
           settings: [
             {
               id: 'parameter',
-              label: 'VALUE',
+              label: t('VALUE'),
               // A parameter no reachable network publishes stays visible, so
               // the picker does not change shape under the pointer, but is
               // disabled: choosing it could only ever draw an empty map.
               chips: STATION_PARAMETER_IDS.map((id) => ({
                 id,
-                label: STATION_PARAMETER_VIEWS[id].chipLabel,
+                label: t(STATION_PARAMETER_VIEWS[id].chipLabel),
                 active: id === parameterId,
                 disabled:
                   id !== parameterId &&
@@ -572,16 +601,20 @@ export function createAlpineStationsLayer({
             : {}),
         },
         list: {
-          ariaLabel: 'Nearest Alpine weather stations in view',
+          ariaLabel: t('Nearest Alpine weather stations in view'),
           items: inView.map(({ station: item, km }, index) => ({
             id: item.id,
             ordinal: index + 1,
-            lead: `${Math.round(km)} km`,
-            text: `${item.label} · ${
+            lead: formatQuantity(Math.round(km), 'km'),
+            text: [
+              item.label,
               Number.isFinite(item.elevationM)
-                ? `${Math.round(item.elevationM)} m · `
-                : ''
-            }${readingText(item, current, now())}`,
+                ? formatQuantity(Math.round(item.elevationM), 'm')
+                : null,
+              readingText(item, current, now()),
+            ]
+              .filter(Boolean)
+              .join(' · '),
             active: item.id === selectedId,
             params: { stationId: item.id },
           })),
@@ -626,7 +659,10 @@ export function createAlpineStationsLayer({
       return {
         count: summary.total,
         countLabel: summary.total
-          ? `${summary.reporting}/${summary.total} reporting`
+          ? t('{reporting}/{count} reporting', {
+              reporting: formatNumber(summary.reporting),
+              count: formatNumber(summary.total),
+            })
           : undefined,
         lastUpdate,
         error,
@@ -668,9 +704,11 @@ export function createAlpineStationsLayer({
 function readingText(station, current, clock) {
   const marker = stationMarker(station, current, { now: clock });
   if (marker.state === 'offline')
-    return isReporting(station) && isStale(station, clock) ? 'late' : 'no data';
-  if (marker.state === 'unmeasured') return 'not measured';
+    return isReporting(station) && isStale(station, clock)
+      ? t('late')
+      : t('no data');
+  if (marker.state === 'unmeasured') return t('not measured');
   // The SAME formatter the marker label uses. Re-deriving the decimals here
   // printed "42.0 cm" in the list beside "42 cm" on the map, in one card.
-  return formatParameter(parameterValue(station, current), current);
+  return localizedReading(parameterValue(station, current), current);
 }

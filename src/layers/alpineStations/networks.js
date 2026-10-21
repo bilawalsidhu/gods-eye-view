@@ -25,6 +25,7 @@ export const TAWES_NETWORK_ID = 'geosphere-tawes';
 export const ALPINE_NETWORKS = Object.freeze([
   Object.freeze({
     id: SLF_NETWORK_ID,
+    // i18n-ignore: the operator's own name for the network
     label: 'SLF IMIS',
     name: 'WSL Institute for Snow and Avalanche Research SLF',
     country: 'CH',
@@ -39,6 +40,7 @@ export const ALPINE_NETWORKS = Object.freeze([
   }),
   Object.freeze({
     id: SMN_NETWORK_ID,
+    // i18n-ignore: the operator's own name for the network
     label: 'SwissMetNet',
     name: 'MeteoSwiss (Federal Office of Meteorology and Climatology)',
     country: 'CH',
@@ -59,6 +61,7 @@ export const ALPINE_NETWORKS = Object.freeze([
   }),
   Object.freeze({
     id: TAWES_NETWORK_ID,
+    // i18n-ignore: the operator's own name for the network
     label: 'TAWES',
     name: 'GeoSphere Austria',
     country: 'AT',

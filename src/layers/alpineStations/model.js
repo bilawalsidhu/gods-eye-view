@@ -7,8 +7,8 @@
  * without a WebGL context.
  */
 
+import { localizedReading } from './cardText.js';
 import {
-  formatParameter,
   parameterBand,
   parameterProminence,
   parameterValue,
@@ -133,7 +133,7 @@ export function stationMarker(station, view, { now = Date.now() } = {}) {
  */
 export function stationLabel(station, view, marker) {
   if (marker.state !== 'value') return null;
-  const text = formatParameter(marker.value, view);
+  const text = localizedReading(marker.value, view);
   if (!text) return null;
   if (view.id !== 'wind') return text;
   const compass = windCompass(station.windDirDeg);

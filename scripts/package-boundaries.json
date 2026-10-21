@@ -2539,6 +2539,7 @@
       "src/layers/alpineStations/networks/tawes.js",
       "src/layers/alpineStations/model.js",
       "src/layers/alpineStations/source.js",
+      "src/layers/alpineStations/cardText.js",
       "src/layers/alpineStations/index.js",
       "src/app/layers/alpineStations.js",
       "src/layers/alpineStations/windArrow.js"
@@ -3117,6 +3118,7 @@
       "src/layers/alpineStations/networks/tawes.js",
       "src/layers/alpineStations/model.js",
       "src/layers/alpineStations/source.js",
+      "src/layers/alpineStations/cardText.js",
       "src/layers/alpineStations/index.js",
       "src/app/layers/alpineStations.js",
       "src/layers/alpineStations/windArrow.js"

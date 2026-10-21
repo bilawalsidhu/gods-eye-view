@@ -370,11 +370,14 @@ test('the Alpine station card sits in Weather, after wind and before the rasters
     source.indexOf('const PANEL_POSITIONS ='),
   );
   const order = JSON.parse(
-    runInNewContext(`${declarations}\nJSON.stringify(PANEL_ORDER)`),
+    runInNewContext(
+      `const msg = (text) => text;\n${declarations}\nJSON.stringify(PANEL_ORDER)`,
+    ),
   );
   assert.deepEqual(
     order.filter(({ label }) => label === 'Weather').map(({ id }) => id),
     [
+      'air-quality',
       'wind',
       'alpine-stations',
       'weather-radar',
@@ -400,7 +403,9 @@ test('the WEATHER rail subscribes to exactly the layers the group lists', () => 
     source.indexOf('const PANEL_POSITIONS ='),
   );
   const group = JSON.parse(
-    runInNewContext(`${declarations}\nJSON.stringify(PANEL_ORDER)`),
+    runInNewContext(
+      `const msg = (text) => text;\n${declarations}\nJSON.stringify(PANEL_ORDER)`,
+    ),
   )
     .filter(({ label }) => label === 'Weather')
     .map(({ id }) => id);
