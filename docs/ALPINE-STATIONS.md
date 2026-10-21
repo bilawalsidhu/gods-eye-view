@@ -148,6 +148,17 @@ It also means the observation call cannot be flattened before it is read: an
 index is only meaningful against the `timestamps` array of the response it
 arrived in. `tawesReadings` reads each chunked response before anything merges.
 
+### A time without an offset is refused, not guessed at
+
+`isoOrNull` rejects `2026-10-08T23:30` and takes `...Z` or `...+02:00`.
+`Date.parse` reads an offsetless datetime in the HOST zone, so one payload
+would land two hours out on a European container and on time in UTC. Against
+the 90-minute staleness floor that is enough to report a whole working national
+network as late, from nothing but the server's timezone. GeoSphere publishes
+naked `valid_from`/`valid_to` beside the offsets this reads, so the shape is
+already in the feed; `parseSmnTimestamp` does its own round-trip check on top,
+because VQHA80 carries no offset at all and is known to be Swiss local time.
+
 ### Pressure is QFF, and two of the three networks cannot supply it
 
 Station-level pressure (QFE) is a map of ALTITUDE, not of weather. Measured

@@ -107,6 +107,31 @@ test('blank, dash and non-numeric strings all read as absent', () => {
   assert.equal(isoOrNull(null), null);
 });
 
+test('a time with no offset is refused rather than read as host-local', () => {
+  // `Date.parse` reads an offsetless datetime in the HOST zone, so the same
+  // GeoSphere payload would land two hours out on a European container and on
+  // time in UTC. Against the 90-minute staleness floor that is enough to
+  // report a working national network as late. GeoSphere does publish naked
+  // `valid_from`/`valid_to` beside the offsets this reads, so the shape is
+  // already in the feed.
+  for (const naked of [
+    '2026-10-08T23:30',
+    '2026-10-08T23:30:00',
+    '2026-10-08T23:30:00.000',
+    '2026-10-08 23:30:00',
+  ])
+    assert.equal(isoOrNull(naked), null, naked);
+  for (const [offset, expected] of [
+    ['2026-10-08T23:30:00Z', '2026-10-08T23:30:00.000Z'],
+    ['2026-10-08T23:30:00+00:00', '2026-10-08T23:30:00.000Z'],
+    ['2026-10-08T23:30:00+02:00', '2026-10-08T21:30:00.000Z'],
+    ['  2026-10-08T23:30:00Z  ', '2026-10-08T23:30:00.000Z'],
+    // A bare ISO date is UTC by specification, so it needs no offset.
+    ['2026-10-09', '2026-10-09T00:00:00.000Z'],
+  ])
+    assert.equal(isoOrNull(offset), expected, offset);
+});
+
 test('a silent station is not stale, because it has no reading to age', () => {
   const silent = alpineStationRecord(
     raw({

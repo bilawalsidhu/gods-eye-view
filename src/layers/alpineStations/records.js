@@ -69,11 +69,27 @@ export function textOrNull(value) {
   return trimmed ? trimmed : null;
 }
 
-/** An ISO 8601 UTC instant, or null. Rejects a date that does not round-trip. */
+/**
+ * An ISO 8601 UTC instant, or null.
+ *
+ * A datetime with no offset is REJECTED rather than guessed at. `Date.parse`
+ * reads one as host-local, so the same GeoSphere payload would land two hours
+ * off on a European container and on time in UTC; against the staleness floor
+ * that is enough to report a whole working network as late. GeoSphere does
+ * publish naked `valid_from`/`valid_to` alongside the offsets this reads, so
+ * the shape is already in the feed.
+ */
 export function isoOrNull(value) {
-  const parsed = Date.parse(typeof value === 'string' ? value : '');
+  if (typeof value !== 'string') return null;
+  const text = value.trim();
+  if (DATETIME_WITHOUT_OFFSET.test(text)) return null;
+  const parsed = Date.parse(text);
   return Number.isFinite(parsed) ? new Date(parsed).toISOString() : null;
 }
+
+// A date and a time, with no trailing Z and no +hh:mm / -hh:mm.
+const DATETIME_WITHOUT_OFFSET =
+  /^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}(:\d{2}(\.\d+)?)?$/;
 
 const inRange = (value, limit) =>
   Number.isFinite(value) && Math.abs(value) <= limit;
