@@ -30,7 +30,8 @@ credentials, like USGS earthquakes rather than like TomTom.
 src/layers/alpineStations/
 ├── networks.js          the registry: who, where, licence, WHAT EACH PUBLISHES
 ├── parameters.js        the five views, their bands, units and staleness rules
-├── records.js           the canonical record, merge, summary, nearest, card copy
+├── records.js           the canonical record, merge, summary, nearest
+├── cardText.js          the card and label text, in the reader's language
 ├── networks/slf.js      \
 ├── networks/smn.js       }  pure adapters: payload in, canonical records out
 ├── networks/tawes.js    /
@@ -54,19 +55,49 @@ A layer is not "added" until all of these are done. Missing one fails quietly,
 in a different way each time:
 
 1. `src/sources/reference.js` — construct the source.
-2. `src/app/constructCatalog.js` — `SOURCE_METHODS`, the instance, and a
-   metadata entry. `constructCatalog.test.mjs` pins the layer count.
-3. `src/ui/layerPanel.js` — the Weather group **and** the subscription list in
+2. `src/app/sourceComposition.js` — a `CATALOG_SOURCE_CONTRACTS` entry naming
+   the layer ids the source feeds and the methods it must have. Without one an
+   omitted source is neither validated nor made inert, so the layer reaches for
+   an undefined feed instead of reporting itself unavailable.
+3. `src/app/constructCatalog.js` — the instance and a metadata entry.
+   `constructCatalog.test.mjs` and `sourceComposition.test.mjs` both pin the
+   layer count.
+4. `src/ui/layerPanel.js` — the Weather group **and** the subscription list in
    `_refreshWeatherPanel`. Two separate lists; a layer in one and not the other
    either never refreshes its card or refreshes a card it has no row for.
-4. `src/ui/weatherPanel.js` — `ORDER`, and a `LIST_BLOCK_IDS` entry if the card
-   has a list.
-5. `src/data/dataCredits.js` — attribution, or the credit never appears, which
+5. `src/ui/weatherPanel.js` — `ORDER`. A card whose legend is named bands
+   rather than a numeric scale declares `legendCategorical: true` in its own
+   row controls; the panel reads the flag, so no list of ids is kept here.
+6. `src/data/dataCredits.js` — attribution, or the credit never appears, which
    is a licence breach rather than a cosmetic gap.
-6. `DATA_SOURCES.md` — licence and attribution text.
-7. `src/voice/layerManifest.js` — or `layerManifest.test.mjs` fails.
-8. `scripts/package-boundaries.json` — every new module, in every group that
-   transitively reaches it. `npm run check:boundaries` names them one at a time.
+7. `DATA_SOURCES.md` — licence and attribution text.
+8. `src/voice/layerManifest.js` — or `layerManifest.test.mjs` fails.
+9. `src/ui/layerNames.js` — `LAYER_NAME_KEYS`, so the panel and the HUD show
+   the layer's name translated. `layer.name` itself stays English: it is data
+   that reaches share links and the AI tool schemas.
+10. `src/ui/statusText.js` — any error text the layer assigns, in
+    `FEED_ERRORS`, or the row shows it in English whatever the language.
+11. `scripts/package-boundaries.json` — every new module, in every group that
+    transitively reaches it. `npm run check:boundaries` names them one at a
+    time.
+12. `scripts/format-scope.json` — the layer's tests, fixtures and qa script.
+    Runtime code under src and server is discovered; these are adopted by name.
+13. `src/i18n/locales/{es,ru}.json` — every string the layer shows.
+    `node scripts/i18n.mjs` lists what is missing and what is unmarked.
+
+## Which module may translate
+
+`networks.js`, `parameters.js`, `records.js` and the adapters are imported by
+`server/providers/alpine-stations.js`, so they must not load the translation
+catalogs. They mark their text with `msg()` from `src/i18n/marker.js` and it
+stays English there.
+
+`cardText.js`, `model.js` and `index.js` are browser-only and translate with
+`t()` where the text is shown. That split is why the card copy lives in
+`cardText.js` rather than beside the records it describes, and why readings are
+formatted with `formatQuantity` rather than a local template: the decimal
+separator and the non-breaking space before the unit follow the reader's
+language.
 
 ## The share-link token
 
