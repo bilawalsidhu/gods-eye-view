@@ -116,6 +116,15 @@ export function alpineStationRecord(raw) {
   // A direction outside the compass is a broken vane, not a bearing to draw.
   if (readings.windDirDeg !== null && !inRange(readings.windDirDeg - 180, 180))
     readings.windDirDeg = null;
+  // Snow depth is measured by ranging to the snow surface from a fixed head,
+  // so a bare station drifts a centimetre or two either side of its calibrated
+  // ground reference. Measured live, Dornbirn (TAWES) published -1 cm. Below
+  // zero the sensor is reading its own baseline rather than a snowpack, and
+  // the depth there is bare ground, so it is floored rather than relayed: a
+  // negative depth is not a measurement anybody can act on, and it reached the
+  // card as "Snow depth across the network: -1 to 66 cm".
+  if (readings.snowDepthCm !== null && readings.snowDepthCm < 0)
+    readings.snowDepthCm = 0;
   const measuredAt = isoOrNull(raw?.measuredAt);
   return {
     id: `${networkId}:${code}`,

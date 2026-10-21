@@ -66,6 +66,42 @@ test('a station falls back to its code and its network country', () => {
   assert.equal(record.country, 'CH');
 });
 
+test('a snow depth below zero reads as bare, not as a negative depth', () => {
+  // An ultrasonic head ranges to the snow surface from a fixed mount, so a
+  // bare station drifts either side of its calibrated ground reference.
+  // Measured live, Dornbirn (TAWES) published -1 cm and the card printed
+  // "Snow depth across the network: -1 to 66 cm".
+  assert.equal(alpineStationRecord(raw({ snowDepthCm: -1 })).snowDepthCm, 0);
+  assert.equal(alpineStationRecord(raw({ snowDepthCm: -0.4 })).snowDepthCm, 0);
+  assert.equal(alpineStationRecord(raw({ snowDepthCm: 0 })).snowDepthCm, 0);
+  assert.equal(alpineStationRecord(raw({ snowDepthCm: 12 })).snowDepthCm, 12);
+  // Absent is still absent: the floor must not invent a bare-ground reading
+  // for a station that carries no snow sensor at all.
+  assert.equal(
+    alpineStationRecord(raw({ snowDepthCm: null })).snowDepthCm,
+    null,
+  );
+  // And a genuinely negative temperature is a reading, not a fault.
+  assert.equal(alpineStationRecord(raw({ airTempC: -11.1 })).airTempC, -11.1);
+});
+
+test('a floored depth counts as a reading and bounds the network range', () => {
+  // The summary's minimum is what leaked the negative onto the card.
+  const stations = mergeNetworkStations([
+    [
+      raw({ code: 'FLAT', snowDepthCm: -1 }),
+      raw({ code: 'DEEP', snowDepthCm: 66 }),
+    ],
+  ]);
+  const summary = summarizeStations(stations, {
+    parameterId: 'snow',
+    now: NOW,
+  });
+  assert.equal(summary.min, 0, 'not the -1 the sensor published');
+  assert.equal(summary.max, 66);
+  assert.equal(summary.measuring, 2, 'a bare station is still measuring snow');
+});
+
 test('a wind direction outside the compass is discarded, not clamped', () => {
   // A vane reading 400 degrees is broken. Clamping would invent a bearing.
   assert.equal(alpineStationRecord(raw({ windDirDeg: 400 })).windDirDeg, null);

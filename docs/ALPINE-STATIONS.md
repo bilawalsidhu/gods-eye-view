@@ -209,11 +209,21 @@ local time. Nothing reads them; do not start.
 ### Absent is not zero
 
 0 cm, 0 mm and 0 °C are all real, common readings, and a station without a
-sensor leaves its column empty. The automatic snow sensor also reports small
-negatives over bare ground (-1.0 cm measured), which is a working sensor saying
-"no snow" — so the snow band table has an **open floor** rather than `min: 0`,
-or bare ground would drop out of the scale and render identically to a station
-with no sensor at all.
+sensor leaves its column empty. The two must never be conflated: an absent
+reading stays `null` end to end, and a measured zero stays zero.
+
+Snow depth is the one reading that is floored rather than relayed as published.
+An ultrasonic head ranges to the snow surface from a fixed mount, so a bare
+station drifts either side of its calibrated ground reference — Dornbirn
+(TAWES) published **-1.0 cm** measured live. Below zero the sensor is reading
+its own baseline, not a snowpack, and the depth there is bare ground, so
+`alpineStationRecord` floors it at 0. Left alone it reached the card as "Snow
+depth across the network: -1 to 66 cm". An absent snow reading is untouched by
+the floor: no sensor is still no sensor, not bare ground.
+
+Every band table keeps an **open floor** at its quiet end rather than `min: 0`,
+so every finite reading matches a band and no working sensor can drop out of
+the scale and render identically to a station with no sensor at all.
 
 Three marker states exist for the same reason, and collapsing them would assert
 readings that were never made: a current value, `unmeasured` (the station is

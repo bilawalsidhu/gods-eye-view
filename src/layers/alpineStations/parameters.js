@@ -32,10 +32,13 @@ export function windCompass(degrees) {
  * Bands run strongest first so the first match wins, and the quiet end is an
  * open floor rather than `min: 0`.
  *
- * The floor matters for more than tidiness: the automatic snow sensor reports
- * small negatives over bare ground (-1.0 cm measured live), which is a working
- * sensor saying "no snow". A `min: 0` floor would drop it out of the scale and
- * render it identically to a station with no sensor at all.
+ * An open floor is what keeps a band total: every finite reading matches one,
+ * so no working sensor can fall out of the scale and render identically to a
+ * station that carries no sensor at all. Snow depth used to rely on this to
+ * catch the small negatives a bare ultrasonic head reports (-1.0 cm measured
+ * live); `alpineStationRecord` now floors those at zero, so the open end is no
+ * longer load-bearing for snow, but it still is for any reading below a band
+ * table's lowest `min`.
  */
 const WIND_BANDS = Object.freeze([
   Object.freeze({
