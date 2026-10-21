@@ -153,6 +153,9 @@ try {
         location.href,
       );
       if (target.origin === location.origin) {
+        // Like radio QA, this keyless-map fixture offers no optional Google token.
+        if (target.pathname === '/api/google/tiles-token')
+          return Promise.resolve(Response.json({}));
         if (target.pathname === '/api/fire-perimeters/inciweb/index')
           return Promise.resolve(Response.json([]));
         if (target.pathname === '/api/fire-perimeters')
