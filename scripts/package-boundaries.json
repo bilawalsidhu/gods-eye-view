@@ -11,7 +11,10 @@
       "src/data/localGeojsonLod.js",
       "src/data/inputOwnership.js",
       "src/data/infrastructureOverlayEntry.js",
-      "src/sources/infrastructureData.js"
+      "src/sources/infrastructureData.js",
+      "src/layers/usgsWater/index.js",
+      "src/layers/usgsWater/copy.js",
+      "src/i18n/marker.js"
     ],
     "external": ["cesium"]
   },
@@ -2528,7 +2531,9 @@
       "src/voice/geminiSession.js",
       "src/voice/geminiAudio.js",
       "src/voice/geminiCaptureWorklet.js",
-      "src/ui/statusBadge.js"
+      "src/ui/statusBadge.js",
+      "src/layers/usgsWater/index.js",
+      "src/layers/usgsWater/copy.js"
     ],
     "external": [
       "hls.js",
@@ -3095,7 +3100,9 @@
       "src/layers/airQuality/source.js",
       "src/ui/statusText.js",
       "src/ui/layerNames.js",
-      "src/layers/streetLevel/providers/mapillary/policy.js"
+      "src/layers/streetLevel/providers/mapillary/policy.js",
+      "src/layers/usgsWater/index.js",
+      "src/layers/usgsWater/copy.js"
     ],
     "external": [
       "hls.js",

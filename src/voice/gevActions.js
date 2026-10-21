@@ -4494,6 +4494,9 @@ function cleanText(value) {
 function layerTitle(layerId) {
   if (layerId === 'local-datacenters') return 'Datacenter';
   if (layerId === 'local-dams') return 'Dam';
+  if (layerId === 'local-usgs-water') return 'USGS River Gauge';
+  if (layerId === 'local-usgs-lakes') return 'USGS Lake/Reservoir';
+  if (layerId === 'local-usgs-springs') return 'USGS Spring';
   if (layerId === 'telegeography-submarine-cables') return 'Submarine Cable';
   if (layerId === 'local-firms') return 'Active Fire';
   return layerId || 'Entity';

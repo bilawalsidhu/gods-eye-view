@@ -3004,5 +3004,10 @@
   "Gemini access was refused. Check the API key and model access.": "Доступ к Gemini запрещён. Проверьте ключ API и доступ к модели.",
   "Gemini Live is unavailable for the configured model.": "Gemini Live недоступен для выбранной модели.",
   "Token request is too large": "Запрос токена слишком велик",
-  "Use an empty JSON token request": "Используйте запрос токена с пустым объектом JSON"
+  "Use an empty JSON token request": "Используйте запрос токена с пустым объектом JSON",
+  "USGS Rivers & Streams": "USGS: реки и ручьи",
+  "USGS Lakes & Reservoirs": "USGS: озёра и водохранилища",
+  "USGS Springs": "USGS: родники",
+  "Water": "Вода",
+  "Zoom in to a region to load river gauges": "Приблизьте регион, чтобы загрузить речные датчики"
 }

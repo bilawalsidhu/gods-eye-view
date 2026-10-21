@@ -66,6 +66,11 @@ const PANEL_GROUPS = [
     ],
   },
   {
+    // USGS water layers
+    label: msg('Water'),
+    ids: ['local-usgs-water', 'local-usgs-lakes', 'local-usgs-springs'],
+  },
+  {
     label: msg('Events'),
     ids: [
       'rocket-launches',
