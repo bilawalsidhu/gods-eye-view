@@ -11,7 +11,10 @@
       "src/data/localGeojsonLod.js",
       "src/data/inputOwnership.js",
       "src/data/infrastructureOverlayEntry.js",
-      "src/sources/infrastructureData.js"
+      "src/sources/infrastructureData.js",
+      "src/layers/usgsWater/index.js",
+      "src/layers/usgsWater/copy.js",
+      "src/i18n/marker.js"
     ],
     "external": ["cesium"]
   },
@@ -3320,7 +3323,9 @@
       "src/ui/wildlifeSightingPlacement.js",
       "src/overlays/worldOverlayChrome.js",
       "src/layers/wildlifeSightings/photoText.js",
-      "src/layers/wildlifeSightings/performance.js"
+      "src/layers/wildlifeSightings/performance.js",
+      "src/layers/usgsWater/index.js",
+      "src/layers/usgsWater/copy.js"
     ],
     "external": [
       "hls.js",
@@ -3970,7 +3975,9 @@
       "src/layers/wildlifeSightings/sprites.js",
       "src/overlays/worldOverlayChrome.js",
       "src/layers/wildlifeSightings/photoText.js",
-      "src/layers/wildlifeSightings/performance.js"
+      "src/layers/wildlifeSightings/performance.js",
+      "src/layers/usgsWater/index.js",
+      "src/layers/usgsWater/copy.js"
     ],
     "external": [
       "hls.js",
