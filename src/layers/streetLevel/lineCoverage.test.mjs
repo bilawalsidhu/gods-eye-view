@@ -1,532 +1,624 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { createLineCoverage } from './lineCoverage.js';
+import * as Cesium from 'cesium';
 import {
-  coverageViewer,
-  tileCentre,
-} from '../../testSupport/streetLevelFakes.mjs';
-import { until } from '../../testSupport/kartaViewFakes.mjs';
+  createLineCoverage,
+  freshCoverage,
+  ZOOM_IN_HINT,
+} from './lineCoverage.js';
+import { resolveFilter } from './filter.js';
+import { encodeCoverageTile } from './providers/mapillary/coverageFixture.mjs';
+import { decodeCoverageTile } from './providers/mapillary/decode.js';
+import { rayCamera } from '../../testSupport/streetLevelFakes.mjs';
+import {
+  COLORS,
+  COVERAGE_TUNING,
+  KEY_REJECTED_MESSAGE,
+  PICK_PREFIX,
+  RATE_LIMITED_MESSAGE,
+} from './providers/mapillary/policy.js';
+import {
+  coverageZoomForHeight,
+  lonToTileX,
+  latToTileY,
+  tileBounds,
+} from './tileMath.js';
 
-const TUNING = Object.freeze({
-  maxTiles: 9,
-  overviewMaxTiles: 0,
-  maxSequences: 900,
-  lineWidthPx: 2,
-  overviewPointPx: 2,
-  moveDebounceMs: 10,
-  viewRangeMinM: 2_500,
-  viewRangePerHeight: 10,
-  viewNearM: 1_000,
-});
+const { maxSequences: COVERAGE_MAX_SEQUENCES, maxTiles: COVERAGE_MAX_TILES } =
+  COVERAGE_TUNING;
 
-/**
- * Line coverage over one tile holding one line, on a viewer looking down from
- * `height`. `fetchTile` answers with that line unless `fail` says otherwise.
- */
-function setup(
-  t,
-  {
-    zoomFor,
-    messages = { rateLimited: 'busy' },
-    passes,
-    fail,
-    decoded = null,
-    tuning = TUNING,
-    overviewPointSize = null,
-  } = {},
-) {
+/** Line coverage as the Mapillary provider builds it, over `source`. */
+function createCoverage({ state, source }) {
+  return createLineCoverage({
+    state,
+    fetchTile: async (tile, { signal }) =>
+      decodeCoverageTile(
+        await source.getTile('coverage', tile.z, tile.x, tile.y, { signal }),
+        tile,
+      ),
+    zoomFor: coverageZoomForHeight,
+    colors: COLORS,
+    pickPrefix: PICK_PREFIX.sequence,
+    renderKey: 'mapillary-coverage',
+    tuning: COVERAGE_TUNING,
+    messages: {
+      keyRejected: KEY_REJECTED_MESSAGE,
+      rateLimited: RATE_LIMITED_MESSAGE,
+    },
+  });
+}
+
+const RAD = Math.PI / 180;
+// Node has no WebGL context to report line-width limits; a browser's
+// context sets these on startup, and appearances validate against them.
+Cesium.ContextLimits._minimumAliasedLineWidth = 1;
+Cesium.ContextLimits._maximumAliasedLineWidth = 10;
+const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+/** A scene collection that remembers what is on the globe. */
+function collection() {
+  const items = new Set();
+  return {
+    items,
+    add(primitive) {
+      items.add(primitive);
+      return primitive;
+    },
+    remove(primitive) {
+      return items.delete(primitive);
+    },
+  };
+}
+
+/** The centre of the z14 tile holding a point, so a small view is one tile. */
+function tileCentre(lon, lat) {
+  const x = lonToTileX(lon, 14);
+  const y = latToTileY(lat, 14);
+  const { west, east, south, north } = tileBounds(x, y, 14);
+  return {
+    tile: { x, y, z: 14 },
+    lon: (west + east) / 2,
+    lat: (south + north) / 2,
+  };
+}
+
+/** A viewer looking straight down on a 0.004° square around `view`. */
+function fakeViewer(view) {
+  return {
+    view,
+    scene: {
+      canvas: { clientWidth: 100, clientHeight: 100 },
+      globe: { show: false, ellipsoid: Cesium.Ellipsoid.WGS84 },
+      groundPrimitives: collection(),
+      primitives: collection(),
+    },
+    camera: {
+      get positionCartographic() {
+        return {
+          longitude: view.lon * RAD,
+          latitude: view.lat * RAD,
+          height: view.height,
+        };
+      },
+      pickEllipsoid(point) {
+        return Cesium.Cartesian3.fromDegrees(
+          view.lon - 0.002 + (point.x / 100) * 0.004,
+          view.lat + 0.002 - (point.y / 100) * 0.004,
+        );
+      },
+    },
+  };
+}
+
+/** A source whose tile requests the test resolves, one call at a time. */
+function deferredSource() {
+  const calls = [];
+  return {
+    calls,
+    getTile(layer, z, x, y, { signal } = {}) {
+      return new Promise((resolve, reject) => {
+        calls.push({ key: `${z}/${x}/${y}`, z, signal, resolve, reject });
+      });
+    },
+  };
+}
+
+function setup() {
   const centre = tileCentre(-121.4944, 38.5816);
-  const viewer = coverageViewer(
-    { lon: centre.lon, lat: centre.lat, height: 900 },
-    t,
-  );
+  const viewer = fakeViewer({ lon: centre.lon, lat: centre.lat, height: 900 });
+  const source = deferredSource();
   const state = {
     viewer,
     services: {},
-    keyRequired: false,
-    keyRejected: false,
+    enabled: true,
+    providerOn: true,
+    filter: { pano: 'all', sinceDays: 0 },
     context: {
-      getFilter: () => ({ pano: 'all', sinceMs: null }),
-      isActive: () => true,
+      getFilter: () => resolveFilter(state.filter),
+      isActive: () => state.enabled && state.providerOn,
       notify() {},
-      getSurface: () => 'draped',
-      groundCaster: null,
-      meshSampler: null,
     },
     coverage: {
-      zoom: null,
-      kind: null,
-      tiles: new Map(),
-      stale: new Map(),
-      staleTimer: null,
-      pending: new Map(),
-      lastError: null,
-      holdUntil: 0,
-      holdTimer: null,
-      debounceTimer: null,
-      removeCameraListener: null,
+      ...freshCoverage(),
+      // The key status is in; skip Cesium's one-time terrain table download.
+      blocked: null,
       terrainReady: Promise.resolve(),
-      hint: '',
     },
     sequence: { selectedId: null },
   };
-  const asked = [];
-  const coverage = createLineCoverage({
-    state,
-    fetchTile: async (tile) => {
-      asked.push(tile);
-      if (fail) throw fail;
-      if (decoded) return decoded(centre, tile);
-      return {
-        sequences: [
-          {
-            id: 'line-1',
-            parts: [
-              [
-                [centre.lon - 0.001, centre.lat],
-                [centre.lon + 0.001, centre.lat],
-              ],
-            ],
-            capturedAt: 0,
-            isPano: false,
-          },
-        ],
-        overview: [],
-      };
-    },
-    zoomFor:
-      zoomFor ??
-      ((height) =>
-        Number.isFinite(height) && height <= 6_000
-          ? { zoom: 14, kind: 'sequence' }
-          : null),
-    colors: { coverage: '#635bff', selected: '#00e5ff' },
-    pickPrefix: 'test:line:',
-    renderKey: 'test-coverage',
-    tuning,
-    messages,
-    ...(passes ? { passes } : {}),
-    ...(overviewPointSize ? { overviewPointSize } : {}),
-  });
-  t.after(() => {
-    coverage.clear();
-    coverage.resetErrors();
-  });
-  return { viewer, state, coverage, asked };
-}
-
-test('above the zoom range the provider’s own “zoom in” hint shows; without one, the generic hint', (t) => {
-  const tooHigh = 'zoom in to see test coverage';
-  const high = setup(t, { messages: { rateLimited: 'busy', tooHigh } });
-  high.viewer.view.height = 7_000;
-  high.coverage.refresh();
-  assert.equal(high.state.coverage.hint, tooHigh);
-  assert.equal(high.state.coverage.zoom, null);
-  assert.equal(high.asked.length, 0, 'nothing is asked from up there');
-  const generic = setup(t);
-  generic.viewer.view.height = 7_000;
-  generic.coverage.refresh();
-  assert.notEqual(generic.state.coverage.hint, tooHigh);
-  assert.match(generic.state.coverage.hint, /Point the camera/);
-});
-
-test('a provider’s passes() decides which lines are drawn and counted', async (t) => {
-  const all = setup(t, { passes: () => true });
-  all.coverage.refresh();
-  assert.ok(await until(() => all.state.coverage.tiles.size === 1));
-  assert.equal(all.coverage.sequenceCount(), 1, 'control: the line is drawn');
-  const none = setup(t, { passes: () => false });
-  none.coverage.refresh();
-  assert.ok(await until(() => none.state.coverage.tiles.size === 1));
-  assert.equal(none.coverage.sequenceCount(), 0, 'filtered out');
-});
-
-test('a refused key without its own message keeps the error it came with', async (t) => {
-  const refused = Object.assign(new Error('the source refused the key'), {
-    keyRejected: true,
-  });
-  const { state, coverage } = setup(t, { fail: refused });
-  coverage.refresh();
-  assert.ok(await until(() => state.keyRejected === true));
-  assert.equal(state.coverage.lastError, 'the source refused the key');
-});
-
-/** Three lines in one tile: an old long one, then two newer short ones. */
-function threeLines(centre) {
-  const line = (id, capturedAt, span) => ({
-    id,
-    parts: [
-      [
-        [centre.lon - span, centre.lat],
-        [centre.lon + span, centre.lat],
-      ],
-    ],
-    capturedAt,
-    isPano: false,
-  });
-  return {
+  const coverage = createCoverage({ state, source });
+  const bytes = encodeCoverageTile(centre.tile, {
     sequences: [
-      line('old-long', 1, 0.002),
-      line('new-short', 2, 0.0002),
-      line('newer-short', 3, 0.0001),
-    ],
-    overview: [],
-  };
-}
-
-test('the per-tile cap keeps the newest lines, or the provider’s own order with keepOrder', async (t) => {
-  const capped = { ...TUNING, maxTiles: 1, maxSequences: 2 };
-  const drawnIds = (state) =>
-    [...state.coverage.tiles.values()].flatMap((tile) => [
-      ...tile.sequences.keys(),
-    ]);
-  const newest = setup(t, { decoded: threeLines, tuning: capped });
-  newest.coverage.refresh();
-  assert.ok(await until(() => newest.state.coverage.tiles.size === 1));
-  assert.deepEqual(drawnIds(newest.state).sort(), ['new-short', 'newer-short']);
-  const kept = setup(t, {
-    decoded: threeLines,
-    tuning: { ...capped, keepOrder: true },
-  });
-  kept.coverage.refresh();
-  assert.ok(await until(() => kept.state.coverage.tiles.size === 1));
-  assert.deepEqual(drawnIds(kept.state), ['old-long', 'new-short']);
-});
-
-test('overview points take the provider’s size, each its own', async (t) => {
-  const { state, coverage, viewer } = setup(t, {
-    zoomFor: () => ({ zoom: 3, kind: 'overview' }),
-    tuning: { ...TUNING, overviewMaxTiles: 4 },
-    decoded: (centre) => ({
-      sequences: [],
-      overview: [
-        { id: 'a', lon: centre.lon, lat: centre.lat, weight: 1 },
-        { id: 'b', lon: centre.lon + 0.01, lat: centre.lat, weight: 50_000 },
-      ],
-    }),
-    overviewPointSize: (point) => (point.weight > 1 ? 7 : 3),
-  });
-  coverage.refresh();
-  assert.ok(await until(() => state.coverage.tiles.size > 0));
-  const sizes = [];
-  for (const primitive of viewer.scene.primitives.items)
-    for (let i = 0; i < (primitive.length ?? 0); i++)
-      sizes.push(primitive.get(i).pixelSize);
-  assert.deepEqual(sizes.sort(), [3, 7]);
-});
-
-test('a point budget skips lines past it, and a shorter one later may still fit', async (t) => {
-  const { state, coverage } = setup(t, {
-    tuning: {
-      ...TUNING,
-      maxTiles: 1,
-      maxSequences: 10,
-      maxPoints: 5,
-      keepOrder: true,
-    },
-    decoded: (centre) => {
-      const line = (id, n) => ({
-        id,
+      {
+        id: 'seq-1',
         parts: [
-          Array.from({ length: n }, (_, i) => [
-            centre.lon - 0.001 + i * 0.0001,
-            centre.lat,
-          ]),
+          [
+            [centre.lon - 0.001, centre.lat],
+            [centre.lon + 0.001, centre.lat],
+          ],
         ],
-        capturedAt: 0,
-        isPano: false,
-      });
-      return {
-        sequences: [line('three', 3), line('four', 4), line('two', 2)],
-        overview: [],
-      };
-    },
-  });
-  coverage.refresh();
-  assert.ok(await until(() => state.coverage.tiles.size === 1));
-  const [tile] = state.coverage.tiles.values();
-  assert.deepEqual([...tile.sequences.keys()], ['three', 'two']);
-});
-
-/** A line of `n` points, its id unique to the tile. */
-function pointsLine(id, n, tile, centre) {
-  return {
-    id,
-    parts: [
-      Array.from({ length: n }, (_, i) => [
-        centre.lon - 0.001 + i * 0.00001,
-        centre.lat,
-      ]),
+      },
     ],
-    capturedAt: 0,
-    isPano: false,
-  };
+  });
+  const tileKey = `14/${centre.tile.x}/${centre.tile.y}`;
+  const onGlobe = () =>
+    viewer.scene.groundPrimitives.items.size +
+    viewer.scene.primitives.items.size;
+  return { viewer, source, state, coverage, bytes, tileKey, onGlobe, centre };
 }
 
-test('the point budget is shared: a sparse tile keeps its few, a dense one gets the rest', async (t) => {
-  const tuning = {
-    ...TUNING,
-    maxTiles: 9,
-    maxSequences: 900,
-    maxPoints: 90,
-    keepOrder: true,
-  };
-  const { state, coverage } = setup(t, {
-    // Street zoom far enough in that several tiles are in view.
-    zoomFor: () => ({ zoom: 18, kind: 'sequence' }),
-    tuning,
-    decoded: (centre, tile) => {
-      const dense = tile.x % 2 === 0 && tile.y % 2 === 0;
-      const lines = dense
-        ? Array.from({ length: 30 }, (_, i) =>
-            pointsLine(`d${tile.x}/${tile.y}/${i}`, 5, tile, centre),
-          )
-        : [pointsLine(`s${tile.x}/${tile.y}`, 2, tile, centre)];
-      return { sequences: lines, overview: [] };
-    },
-  });
+test('a superseded tile request cannot strand lines on the globe', async () => {
+  const { viewer, source, state, coverage, bytes, tileKey, onGlobe } = setup();
+  const forTile = () => source.calls.filter((call) => call.key === tileKey);
+
+  coverage.refresh(); // street zoom: request #1 for the tile
+  assert.equal(forTile().length, 1);
+  viewer.view.height = 100_000; // zoom out: clear() drops request #1
   coverage.refresh();
-  assert.ok(
-    await until(
-      () => state.coverage.tiles.size > 1 && !state.coverage.pending.size,
-    ),
+  viewer.view.height = 900; // back in before #1 settles: request #2
+  coverage.refresh();
+  assert.equal(forTile().length, 2);
+  await settle();
+
+  // The superseded request finishes late. It must not settle request #2's
+  // key, or the next refresh would start a duplicate load.
+  forTile()[0].resolve(bytes);
+  await settle();
+  assert.equal(
+    state.coverage.pending.has(tileKey),
+    true,
+    '#2 still owns the key',
   );
-  const entries = [...state.coverage.tiles.values()];
-  const drawn = (entry) => entry.pointsDrawn;
-  const total = entries.reduce((sum, entry) => sum + drawn(entry), 0);
-  assert.ok(total <= tuning.maxPoints, `within the budget: ${total}`);
-  const sparse = entries.filter((entry) => entry.pointDemand === 2);
-  const dense = entries.filter((entry) => entry.pointDemand === 150);
-  assert.ok(sparse.length && dense.length, 'both kinds in view');
-  for (const entry of sparse)
-    assert.equal(drawn(entry), 2, 'a sparse tile keeps all');
-  const fair = Math.floor(tuning.maxPoints / tuning.maxTiles);
-  const left = tuning.maxPoints - sparse.length * 2;
-  for (const entry of dense)
-    assert.ok(
-      drawn(entry) > fair || dense.length * fair >= left,
-      `a dense tile gets more than the even share: ${drawn(entry)}`,
-    );
-  assert.ok(
-    total > tuning.maxPoints - 5 * dense.length,
-    'little budget unused',
-  );
+  assert.equal(state.coverage.pending.size, 1, 'still loading');
+  coverage.refresh();
+  assert.equal(forTile().length, 2, 'no duplicate request');
+
+  forTile()[1].resolve(bytes);
+  await settle();
+  assert.equal(state.coverage.tiles.size, 1);
+  assert.ok(onGlobe() > 0, 'the tile drew its lines');
+
+  // Everything drawn can be removed: nothing is orphaned.
+  coverage.clear();
+  assert.equal(onGlobe(), 0);
 });
 
-test('a selected sequence the budget left out is drawn, highlighted', async (t) => {
-  const { state, coverage } = setup(t, {
-    tuning: {
-      ...TUNING,
-      maxTiles: 1,
-      maxSequences: 10,
-      maxPoints: 5,
-      keepOrder: true,
-    },
-    decoded: (centre, tile) => ({
-      sequences: [
-        pointsLine('long', 5, tile, centre),
-        pointsLine('short', 3, tile, centre),
-      ],
-      overview: [],
-    }),
-  });
+test('sequence lines are draped on the globe and on 3D tiles alike', async () => {
+  const { viewer, source, coverage, bytes } = setup();
   coverage.refresh();
-  assert.ok(await until(() => state.coverage.tiles.size === 1));
-  const [tile] = state.coverage.tiles.values();
-  assert.deepEqual([...tile.sequences.keys()], ['long']);
-  state.sequence.selectedId = 'short';
-  coverage.recolorSequence('short', true);
-  assert.deepEqual([...tile.sequences.keys()].sort(), ['long', 'short']);
+  source.calls[0].resolve(bytes);
+  await settle();
+  const { groundPrimitives, primitives } = viewer.scene;
+  assert.equal(primitives.items.size, 0);
+  assert.equal(groundPrimitives.items.size, 1);
+  const [line] = groundPrimitives.items;
+  assert.ok(line instanceof Cesium.GroundPolylinePrimitive);
+  assert.equal(line.classificationType, Cesium.ClassificationType.BOTH);
+  coverage.clear();
+  assert.equal(groundPrimitives.items.size, 0);
 });
 
-/** Count the line primitives a coverage adds to the scene. */
-function countAdds(viewer) {
-  const counts = { added: 0 };
-  for (const collection of [
-    viewer.scene.groundPrimitives,
-    viewer.scene.primitives,
-  ]) {
-    const add = collection.add.bind(collection);
-    collection.add = (primitive) => {
-      counts.added++;
-      return add(primitive);
-    };
-  }
-  return counts;
-}
-
-test('a tile redrawn for a new share keeps its old lines until the new ones are ready', async (t) => {
-  const tuning = {
-    ...TUNING,
-    maxTiles: 9,
-    maxSequences: 900,
-    maxPoints: 90,
-    keepOrder: true,
-  };
-  const { state, coverage, viewer } = setup(t, {
-    zoomFor: () => ({ zoom: 18, kind: 'sequence' }),
-    tuning,
-    decoded: (centre, tile) => {
-      const dense = tile.x % 2 === 0 && tile.y % 2 === 0;
-      return {
-        sequences: dense
-          ? Array.from({ length: 30 }, (_, i) =>
-              pointsLine(`d${tile.x}/${tile.y}/${i}`, 5, tile, centre),
-            )
-          : [pointsLine(`s${tile.x}/${tile.y}`, 2, tile, centre)],
-        overview: [],
-      };
-    },
-  });
+test('panning off a tile that is still loading stops counting it as loading', async () => {
+  const { viewer, source, state, coverage } = setup();
   coverage.refresh();
-  assert.ok(
-    await until(
-      () => state.coverage.tiles.size > 1 && !state.coverage.pending.size,
-    ),
+  assert.equal(state.coverage.pending.size, 1);
+  // Same zoom, two tiles east: the first request is dropped, a new one starts.
+  viewer.view.lon += 0.05;
+  coverage.refresh();
+  assert.equal(source.calls.length, 2);
+  assert.equal(source.calls[0].signal.aborted, true);
+  assert.equal(
+    state.coverage.pending.size,
+    1,
+    'only the live request counts as loading',
   );
-  const redrawn = [...state.coverage.tiles.values()].filter(
-    (entry) => entry.swap,
-  );
-  assert.ok(redrawn.length > 0, 'a dense tile took a bigger share');
-  for (const entry of redrawn)
-    for (const { primitive } of entry.swap.old)
-      assert.ok(
-        viewer.scene.groundPrimitives.items.has(primitive) ||
-          viewer.scene.primitives.items.has(primitive),
-        'the old lines are still on the globe while the new ones build',
+  source.calls[0].reject(new DOMException('aborted', 'AbortError'));
+  source.calls[1].resolve(new Uint8Array());
+  await settle();
+  assert.equal(state.coverage.pending.size, 0, 'LOADING clears');
+  coverage.clear();
+});
+
+test('from orbit nothing is requested or drawn, and the hint says to zoom in', async () => {
+  const { viewer, source, state, coverage, bytes } = setup();
+  coverage.refresh();
+  source.calls[0].resolve(bytes);
+  await settle();
+  assert.ok(viewer.scene.groundPrimitives.items.size > 0, 'street lines');
+  viewer.view.height = 20_000_000;
+  coverage.refresh();
+  assert.equal(source.calls.length, 1, 'no tile is asked for');
+  assert.equal(viewer.scene.groundPrimitives.items.size, 0, 'nothing drawn');
+  assert.equal(state.coverage.zoom, null);
+  assert.equal(coverage.stats().hint, ZOOM_IN_HINT);
+  viewer.view.height = 900;
+  coverage.refresh();
+  assert.equal(coverage.stats().hint, '', 'back at street zoom');
+  assert.equal(source.calls.length, 2);
+  coverage.clear();
+});
+
+test('the key status gates coverage: nothing before it answers, nothing without a key', () => {
+  for (const configured of [false, true]) {
+    const { source, state, coverage } = setup();
+    state.coverage.blocked = 'status';
+    coverage.refresh();
+    assert.equal(source.calls.length, 0, 'nothing before the status answers');
+    assert.equal(coverage.stats().loading, true, 'waiting reads as loading');
+    state.enabled = false;
+    assert.equal(coverage.stats().loading, false, 'but not while off');
+    state.enabled = true;
+    coverage.setKeyStatus(configured);
+    if (configured)
+      assert.equal(source.calls.length, 1, 'coverage loads once it is known');
+    else {
+      assert.equal(source.calls.length, 0, 'a key-less install never asks');
+      assert.equal(coverage.stats().loading, false);
+      assert.equal(coverage.stats().keyRequired, true);
+      assert.equal(coverage.stats().keyRejected, false);
+      coverage.unblock();
+      assert.equal(
+        coverage.stats().keyRequired,
+        true,
+        'kept: it is no refusal',
       );
-});
-
-test('a second redraw while a swap still builds keeps the lines on screen', async (t) => {
-  const { state, coverage, viewer } = setup(t, {
-    zoomFor: () => ({ zoom: 18, kind: 'sequence' }),
-    tuning: {
-      ...TUNING,
-      maxTiles: 9,
-      maxSequences: 900,
-      maxPoints: 90,
-      keepOrder: true,
-    },
-    decoded: (centre, tile) => {
-      const dense = tile.x % 2 === 0 && tile.y % 2 === 0;
-      return {
-        sequences: dense
-          ? Array.from({ length: 30 }, (_, i) =>
-              pointsLine(`d${tile.x}/${tile.y}/${i}`, 5, tile, centre),
-            )
-          : [pointsLine(`s${tile.x}/${tile.y}`, 2, tile, centre)],
-        overview: [],
-      };
-    },
-  });
-  coverage.refresh();
-  assert.ok(
-    await until(
-      () => state.coverage.tiles.size > 1 && !state.coverage.pending.size,
-    ),
-  );
-  // A tile mid-swap (its new lines never become ready here) with a line
-  // the cap left out: selecting that line redraws the tile again.
-  const entry = [...state.coverage.tiles.values()].find(
-    (tile) =>
-      tile.swap &&
-      tile.sequenceList.some((sequence) => !tile.sequences.has(sequence.id)),
-  );
-  assert.ok(entry, 'a swapping tile with a line left out');
-  const onScreen = [...entry.swap.old];
-  const building = entry.primitives.map(({ primitive }) => primitive);
-  const left = entry.sequenceList.find(
-    (sequence) => !entry.sequences.has(sequence.id),
-  );
-  state.sequence.selectedId = left.id;
-  coverage.recolorSequence(left.id, true);
-  assert.ok(entry.sequences.has(left.id), 'the selected line is drawn');
-  const onGlobe = (primitive) =>
-    viewer.scene.groundPrimitives.items.has(primitive) ||
-    viewer.scene.primitives.items.has(primitive);
-  for (const { primitive } of onScreen)
-    assert.ok(
-      onGlobe(primitive),
-      'the lines on screen stay until the new ones are ready',
-    );
-  for (const primitive of building)
-    assert.ok(!onGlobe(primitive), 'the first swap’s unready lines are gone');
-  assert.ok(entry.swap, 'still swapping');
-});
-
-test('a selected line outside the cap does not make its tile redraw on every settle, nor does one the filter hides', async (t) => {
-  let pano = 'all';
-  const { state, coverage, viewer } = setup(t, {
-    tuning: {
-      ...TUNING,
-      maxTiles: 1,
-      maxSequences: 10,
-      maxPoints: 5,
-      keepOrder: true,
-    },
-    decoded: (centre, tile) => ({
-      sequences: [
-        pointsLine('long', 5, tile, centre),
-        { ...pointsLine('short', 3, tile, centre), isPano: true },
-      ],
-      overview: [],
-    }),
-  });
-  state.context.getFilter = () => ({ pano, sinceMs: null });
-  coverage.refresh();
-  assert.ok(await until(() => state.coverage.tiles.size === 1));
-  state.sequence.selectedId = 'short';
-  coverage.recolorSequence('short', true);
-  const counts = countAdds(viewer);
-  for (let i = 0; i < 3; i++) {
-    coverage.refresh();
-    await new Promise((resolve) => setTimeout(resolve, 20));
+    }
+    coverage.clear();
   }
-  assert.equal(counts.added, 0, 'settles redraw nothing');
-  // A selection the filter hides is not drawn, so it is not redrawn for.
-  pano = 'flat';
-  coverage.rebuild();
-  const after = countAdds(viewer);
-  for (let i = 0; i < 3; i++) coverage.recolorSequence('short', true);
-  assert.equal(after.added, 0);
 });
 
-test('small share increases add up: a retained tile redraws once its share has grown past the threshold since its last draw', async (t) => {
-  const tuning = {
-    ...TUNING,
-    maxTiles: 1,
-    maxSequences: 900,
-    maxPoints: 100,
-    keepOrder: true,
-  };
-  const { state, coverage } = setup(t, {
-    tuning,
-    decoded: (centre, tile) => ({
-      sequences: Array.from({ length: 30 }, (_, i) =>
-        pointsLine(`l${i}`, 4, tile, centre),
-      ),
-      overview: [],
-    }),
-  });
+test('a rejected key stops coverage requests until the layer goes off', async () => {
+  const { viewer, source, state, coverage } = setup();
   coverage.refresh();
-  assert.ok(
-    await until(
-      () => state.coverage.tiles.size === 1 && !state.coverage.pending.size,
-    ),
+  const rejected = Object.assign(
+    new Error('Mapillary rejected the access token'),
+    {
+      keyRejected: true,
+    },
   );
-  const [tile] = state.coverage.tiles.values();
-  assert.equal(tile.pointsDrawn, 100);
-  const settle = async () => {
-    coverage.refresh();
-    await until(() => !state.coverage.pending.size);
-    await new Promise((resolve) => setTimeout(resolve, 10));
+  source.calls[0].reject(rejected);
+  await settle();
+  assert.equal(state.coverage.blocked, 'rejected');
+  assert.equal(coverage.stats().keyRequired, true, 'gated like a missing key');
+  assert.equal(coverage.stats().keyRejected, true);
+  assert.match(coverage.stats().error, /rejected MAPILLARY_CLIENT_TOKEN/);
+  viewer.view.lon += 0.05;
+  coverage.refresh();
+  assert.equal(source.calls.length, 1, 'panning asks for nothing more');
+  // Turning the layer off forgets the verdict; the next run asks again.
+  coverage.clear();
+  coverage.unblock();
+  assert.equal(coverage.stats().keyRejected, false);
+  assert.equal(coverage.stats().error, null);
+  coverage.refresh();
+  assert.equal(source.calls.length, 2);
+  coverage.clear();
+});
+
+test('a rate limit keeps the drawn tiles and asks again once the wait is over', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout', 'Date'] });
+  const { viewer, source, state, coverage } = setup();
+  coverage.refresh();
+  source.calls[0].reject(
+    Object.assign(new Error('rate limited'), { retryAfterSec: 30 }),
+  );
+  await Promise.resolve();
+  await Promise.resolve();
+  await Promise.resolve();
+  assert.match(coverage.stats().error, /rate-limited/);
+  assert.equal(coverage.stats().keyRequired, false);
+  viewer.view.lon += 0.05;
+  coverage.refresh();
+  assert.equal(source.calls.length, 1, 'held: nothing is requested');
+  t.mock.timers.tick(30_000);
+  assert.equal(source.calls.length, 2, 'one refresh once the wait is over');
+  assert.equal(coverage.stats().error, null);
+  coverage.clear();
+  coverage.unblock();
+});
+
+test('the per-tile cap applies after the imagery filter, so a dense tile keeps its 360° lines', async () => {
+  const { state, source, coverage, centre } = setup();
+  const line = (n) => [
+    [
+      [centre.lon - 0.001, centre.lat + n * 1e-6],
+      [centre.lon + 0.001, centre.lat + n * 1e-6],
+    ],
+  ];
+  // 700 newer flat sequences, then 300 older 360° ones.
+  const sequences = [];
+  for (let i = 0; i < 700; i++)
+    sequences.push({
+      id: `flat-${i}`,
+      parts: line(i),
+      capturedAt: 2_000_000_000_000 + i,
+    });
+  for (let i = 0; i < 300; i++)
+    sequences.push({
+      id: `pano-${i}`,
+      parts: line(i),
+      capturedAt: 1_000_000_000_000 + i,
+      isPano: true,
+    });
+  state.filter = { pano: 'pano', sinceDays: 0 };
+  coverage.refresh();
+  source.calls[0].resolve(encodeCoverageTile(centre.tile, { sequences }));
+  await settle();
+  const [entry] = state.coverage.tiles.values();
+  const cap = Math.floor(COVERAGE_MAX_SEQUENCES / COVERAGE_MAX_TILES);
+  assert.equal(
+    entry.sequences.size,
+    Math.min(300, cap),
+    'every 360° line is drawn',
+  );
+  assert.equal(coverage.stats().count, Math.min(300, cap));
+  // Picking and the highlight look sequences up among the drawn lines.
+  assert.ok(entry.sequences.has('pano-0'), 'drawn lines can be looked up');
+  assert.equal(entry.sequences.has('flat-699'), false);
+  state.filter = { pano: 'all', sinceDays: 0 };
+  coverage.rebuild();
+  assert.equal(entry.sequences.size, cap, 'all imagery is capped as before');
+  assert.ok(entry.sequences.has('flat-699'), 'the newest flat line is drawn');
+  assert.equal(entry.sequences.has('pano-299'), false, 'over the cap');
+  coverage.clear();
+});
+
+test('a sequence that crosses a tile edge is counted once', async () => {
+  const { viewer, source, coverage, centre } = setup();
+  // Look straight down on the edge between this tile and its east neighbour.
+  const { east } = tileBounds(centre.tile.x, centre.tile.y, 14);
+  viewer.view.lon = east;
+  coverage.refresh();
+  assert.equal(source.calls.length, 2, 'two tiles in view');
+  const across = [
+    [
+      [east - 0.001, centre.lat],
+      [east + 0.001, centre.lat],
+    ],
+  ];
+  for (const call of source.calls) {
+    const [, x, y] = call.key.split('/').map(Number);
+    call.resolve(
+      encodeCoverageTile(
+        { x, y, z: 14 },
+        {
+          sequences: [
+            { id: 'across', parts: across },
+            { id: `only-${x}`, parts: across },
+          ],
+        },
+      ),
+    );
+  }
+  await settle();
+  assert.equal(coverage.stats().count, 3, 'across, plus one per tile');
+  coverage.clear();
+});
+
+/** A camera over a 100×100 canvas with a 60°×40° view (see rayCamera). */
+function tiltedCamera({ lon, lat, height, heading, pitch }) {
+  return rayCamera({
+    lon,
+    lat,
+    altitude: height,
+    heading,
+    pitch,
+    width: 100,
+    height: 100,
+    fovX: 60,
+    fovY: 40,
+  });
+}
+
+/**
+ * Denver: 300 m above a street 1,600 m up, at a z14 tile centre, looking east
+ * at ground `aheadM` metres out; the globe terrain knows the ground.
+ */
+function denverStreetView(aheadM) {
+  const z = 14;
+  const x = lonToTileX(-104.99, z);
+  const y = latToTileY(39.74, z);
+  const tile = tileBounds(x, y, z);
+  const lon = (tile.west + tile.east) / 2;
+  const lat = (tile.south + tile.north) / 2;
+  const ground = 1600;
+  const above = 300;
+  const context = setup();
+  context.viewer.scene.globe = {
+    show: true,
+    ellipsoid: Cesium.Ellipsoid.WGS84,
+    getHeight: () => ground,
   };
-  // +8%: under the threshold, nothing is redrawn.
-  tuning.maxPoints = 108;
+  const tileWidthM = (tile.east - tile.west) * 111_320 * Math.cos(lat * RAD);
+  context.viewer.camera = tiltedCamera({
+    lon,
+    lat,
+    height: ground + above,
+    heading: 90,
+    pitch: -Math.atan(above / aheadM(tileWidthM)) / RAD,
+  });
+  context.coverage.refresh();
+  const keys = context.source.calls.map((call) => call.key);
+  /** Requested tiles as [dx, dy] from the tile under the camera. */
+  const offsets = keys.map((k) => {
+    const [, tx, ty] = k.split('/').map(Number);
+    return [tx - x, ty - y];
+  });
+  return {
+    ...context,
+    keys,
+    offsets,
+    key: (dx, dy) => `${z}/${x + dx}/${y + dy}`,
+  };
+}
+
+test('a tilted street view over ground 1,600 m up asks for the ground it looks at, nearest the camera first', () => {
+  // The screen centre meets the ground at the centre of the next tile east.
+  const { state, coverage, keys, offsets, key } = denverStreetView(
+    (tileWidthM) => tileWidthM,
+  );
+  assert.equal(state.coverage.zoom, 14, 'height measured from the ground');
+  assert.equal(keys[0], key(0, 0), 'the tile under the camera first');
+  assert.ok(keys.includes(key(1, 0)), 'the tile the screen centre looks at');
+  for (const [dx, dy] of offsets)
+    assert.ok(dx >= 0 && dx <= 2 && Math.abs(dy) <= 1, `${dx},${dy} in view`);
+  coverage.clear();
+});
+
+test('a street view toward the horizon asks only for the ground within range', () => {
+  // The screen centre meets the ground 6 km out, past the 3 km range.
+  const { coverage, keys, offsets, key } = denverStreetView(() => 6000);
+  assert.equal(keys[0], key(0, 0), 'the tile under the camera first');
+  for (const [dx, dy] of offsets)
+    assert.ok(dx >= 0 && dx <= 1 && Math.abs(dy) <= 1, `${dx},${dy} near it`);
+  coverage.clear();
+});
+
+test('the selected sequence is drawn over the coverage, and goes with the selection', async () => {
+  const { viewer, source, state, coverage, bytes } = setup();
+  coverage.refresh();
+  source.calls[0].resolve(bytes);
   await settle();
-  assert.equal(tile.pointsDrawn, 100);
-  // +8% again: +16% since the tile was last drawn, so it is redrawn.
-  tuning.maxPoints = 116;
+  const lines = () => [...viewer.scene.groundPrimitives.items];
+  assert.equal(lines().length, 1, 'the coverage');
+  coverage.highlight('seq-1');
+  assert.equal(lines().length, 2);
+  const highlight = lines().at(-1);
+  assert.equal(state.coverage.highlight, highlight, 'drawn last, on top');
+  assert.equal(highlight.classificationType, Cesium.ClassificationType.BOTH);
+  coverage.highlight('not-drawn');
+  assert.equal(lines().length, 1, 'nothing to highlight off the map');
+  coverage.highlight(null);
+  assert.equal(state.coverage.highlight, null);
+  coverage.clear();
+  assert.equal(lines().length, 0);
+});
+
+test('a tile that lands with the selected sequence draws the highlight again, on top', async () => {
+  const { viewer, source, state, coverage, bytes } = setup();
+  state.sequence.selectedId = 'seq-1';
+  coverage.refresh();
+  assert.equal(state.coverage.highlight, null, 'nothing loaded yet');
+  source.calls[0].resolve(bytes);
   await settle();
-  assert.equal(tile.pointsDrawn, 116, 'the grown share is drawn');
+  assert.ok(state.coverage.highlight, 'highlighted once its tile is in');
+  assert.equal(
+    [...viewer.scene.groundPrimitives.items].at(-1),
+    state.coverage.highlight,
+  );
+  coverage.clear();
+});
+
+test("a zoom change drops the old zoom's lines", async () => {
+  const { viewer, source, state, coverage, bytes } = setup();
+  coverage.refresh();
+  source.calls[0].resolve(bytes);
+  await settle();
+  const [old] = viewer.scene.groundPrimitives.items;
+  assert.ok(old, 'the z14 lines are drawn');
+  viewer.view.height = 3000; // zoom out to z13
+  coverage.refresh();
+  assert.equal(state.coverage.zoom, 13);
+  assert.equal(viewer.scene.groundPrimitives.items.has(old), false);
+  assert.ok(state.coverage.pending.size > 0, 'the new zoom is loading');
+  coverage.clear();
+});
+
+test('a rate limit holds every refresh inside its wait, not only the first', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout', 'Date'] });
+  const { viewer, source, coverage } = setup();
+  coverage.refresh();
+  source.calls[0].reject(
+    Object.assign(new Error('rate limited'), { retryAfterSec: 30 }),
+  );
+  await Promise.resolve();
+  await Promise.resolve();
+  await Promise.resolve();
+  t.mock.timers.tick(1000);
+  viewer.view.lon += 0.05;
+  coverage.refresh();
+  assert.equal(source.calls.length, 1, 'held 1 s into a 30 s wait');
+  t.mock.timers.tick(28_000);
+  viewer.view.lon += 0.05;
+  coverage.refresh();
+  assert.equal(source.calls.length, 1, 'held 29 s into a 30 s wait');
+  t.mock.timers.tick(1000);
+  assert.ok(source.calls.length > 1, 'asked again once the wait is over');
+  coverage.clear();
+  coverage.unblock();
+});
+
+test('a tile that fails before the terrain table loads is reported at once, never unhandled', async () => {
+  const { source, state, coverage, tileKey } = setup();
+  let terrainLoaded;
+  state.coverage.terrainReady = new Promise((resolve) => {
+    terrainLoaded = resolve;
+  });
+  const unhandled = [];
+  const onUnhandled = (reason) => unhandled.push(reason);
+  process.on('unhandledRejection', onUnhandled);
+  try {
+    coverage.refresh();
+    source.calls
+      .find((call) => call.key === tileKey)
+      .reject(new Error('Mapillary tiles HTTP 500'));
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    assert.equal(state.coverage.lastError, 'Mapillary tiles HTTP 500');
+    assert.deepEqual(unhandled, []);
+  } finally {
+    terrainLoaded();
+    await settle();
+    process.off('unhandledRejection', onUnhandled);
+  }
+});
+
+test('the selected sequence is drawn and highlighted even past the per-tile cap', async () => {
+  const { state, source, coverage, centre, viewer } = setup();
+  const line = (n) => [
+    [
+      [centre.lon - 0.001, centre.lat + n * 1e-6],
+      [centre.lon + 0.001, centre.lat + n * 1e-6],
+    ],
+  ];
+  const sequences = [];
+  for (let i = 0; i < 700; i++)
+    sequences.push({
+      id: `new-${i}`,
+      parts: line(i),
+      capturedAt: 2_000_000_000_000 + i,
+    });
+  sequences.push({
+    id: 'old',
+    parts: line(800),
+    capturedAt: 1_000_000_000_000,
+  });
+  state.sequence.selectedId = 'old';
+  coverage.refresh();
+  source.calls[0].resolve(encodeCoverageTile(centre.tile, { sequences }));
+  await settle();
+  const [entry] = state.coverage.tiles.values();
+  assert.ok(entry.sequences.has('old'), 'the selected line is drawn');
+  coverage.highlight('old');
+  assert.ok(state.coverage.highlight, 'the selected line is highlighted');
+  coverage.clear();
 });

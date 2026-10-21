@@ -54,9 +54,8 @@ head -40 scripts/qa-radio.mjs  # what this runnable gate proves and how to run i
 Runnable gate entrypoints document what they assert and how to invoke them.
 Most need a dev server; some also need a specific provider key or port. Follow
 the entrypoint's header rather than assuming every matching file accepts the
-same arguments. Five have an `npm run` alias: `qa:map-source-tray`,
-`qa:panel-resize`, `qa:street-level`, `qa:street-level:fixtures` and
-`qa:transit`.
+same arguments. Four have an `npm run` alias: `qa:map-source-tray`,
+`qa:street-level`, `qa:street-level:fixtures` and `qa:transit`.
 
 If you aren't sure which gate covers your change, search `docs/CURRENT-STATE.md`
 for the feature: it names the gate for many of them, and it's the authoritative
@@ -66,11 +65,10 @@ gate for the feature you changed.
 
 > **CI covers only two of these for you.** The workflow runs the setup policy
 > checks, the formatting and package-boundary checks, the unit suite and the
-> production build, plus a Windows onboarding job, and against the built preview
-> it runs `qa:street-level:fixtures` and `qa:panel-resize`. It does not run
-> `npm run test:track` or any other `qa-*.mjs` gate — those need a live dev
-> server and a browser. Include the applicable local run in your PR's
-> validation evidence.
+> production build, plus a Windows onboarding job. It runs neither
+> `npm run test:track` nor any `qa-*.mjs` gate except the Street Level fixture
+> gate (`street-level-browser` job) — they need a live dev server and a
+> browser. Include the applicable local run in your PR's validation evidence.
 
 ## Share-link layer tokens
 

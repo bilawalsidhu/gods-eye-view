@@ -2001,8 +2001,7 @@ body.cockpit-mode
     #command-dock,
     #military-awareness-panel,
     #military-awareness-direction-overlay,
-    #cockpit-entry,
-    .sl-viewer-wrap-expanded
+    #cockpit-entry
   ) {
   display: none !important;
 }

@@ -61,10 +61,7 @@ export class PanelChrome {
     this._cockpitContextCollapsedForDataPanel = false;
     this._panelPosition = new PanelPositionControls({
       syncPanelCollapseButton: (panel) => this._syncPanelCollapseButton(panel),
-      layoutRightPanels: () => this._layoutRightPanels(),
-      syncCctvPanelViewport: () => this._syncCctvPanelViewport(),
       showToast: (message) => this._showToast(message),
-      onPanelResized: (panelId) => this._onPanelResized(panelId),
     });
     this._panelLayout = new PanelLayoutController({
       readHud: () => ({
@@ -72,7 +69,8 @@ export class PanelChrome {
         variant: this.hud.getVariant(),
       }),
       scheduleCockpitLayout: () => this.cockpitView?.scheduleContextLayout(),
-      syncPanelCollapseButton: (panel) => this._syncPanelCollapseButton(panel),
+      syncPanelCollapseButton: (panel) =>
+        this._syncRailPanelCollapseButton(panel),
       readDisplayScrollTop: () =>
         this._displayPortalScrollRestoreOwner === 'standard'
           ? this._standardDisplayScrollTop
@@ -148,7 +146,6 @@ export class PanelChrome {
     this._initCommandDockPins();
     this._initCommandDockTrayMetrics();
     this._maybeNotifyLayoutReset();
-    this._panelPosition._initPanelDrag();
   }
 
   _collapsePanelOnEscape(event, panelId) {
@@ -287,6 +284,19 @@ export class PanelChrome {
     return this._panelLayout._scheduleLeftPanelLayout(options0);
   }
 
+  _syncRailPanelCollapseButton(panelEl) {
+    // Adaptive rail layout may directly restore an auto-collapsed Context
+    // without invoking setPanelCollapsed(). Enforce Radio ownership there too.
+    if (
+      panelEl?.id === 'global-context-panel' &&
+      !panelEl.classList.contains('collapsed') &&
+      this._contextRadioDock?.classList.contains('disclosure-open')
+    ) {
+      this._setRadioDisclosure?.(false);
+    }
+    this._syncPanelCollapseButton(panelEl);
+  }
+
   _syncPanelCollapseButton(panelEl) {
     const isRightRail = [
       'pp-toggles',
@@ -402,11 +412,6 @@ export class PanelChrome {
     this.shareLinkManager?.onPanelStateChange?.();
   }
 
-  /** @returns {boolean} Whether the panel was floating and is now docked. */
-  dockPanel(panelId) {
-    return this._panelPosition?.dockPanel?.(panelId) === true;
-  }
-
   setPanelCollapsed(
     panelId,
     collapsed,
@@ -429,20 +434,17 @@ export class PanelChrome {
       panelEl.classList.contains('cyber-accordion-collapsed');
     // A user opening a Cyber rail panel owns the whole accordion, including
     // peers that were only presentation-collapsed during a saved-state restore.
-    // A floating window is outside the accordion both ways.
     if (
       explicit &&
       !restore &&
       !nextCollapsed &&
       document.documentElement?.dataset.uiTheme === 'cyber' &&
-      panelEl.parentElement === this._rightPanelStack &&
-      !panelEl.classList.contains('panel-floating')
+      panelEl.parentElement === this._rightPanelStack
     ) {
       for (const peer of this._rightPanelStack.children) {
         if (
           peer !== panelEl &&
           peer.matches('[data-panel-id]') &&
-          !peer.classList.contains('panel-floating') &&
           !peer.hidden
         ) {
           this.setPanelCollapsed(peer.id, true, {
@@ -500,6 +502,15 @@ export class PanelChrome {
         persist,
         syncShare,
       });
+    }
+    // A repeated Context-open request must clear a stale compact Radio mini
+    // even when no collapsed class changes.
+    if (
+      !nextCollapsed &&
+      panelId === 'global-context-panel' &&
+      this._contextRadioDock?.classList.contains('disclosure-open')
+    ) {
+      this._setRadioDisclosure?.(false);
     }
     if (
       panelEl.classList.contains('collapsed') === nextCollapsed &&
@@ -570,10 +581,6 @@ export class PanelChrome {
       }
     }
     panelEl.classList.toggle('collapsed', nextCollapsed);
-    // Only a user's own collapse docks a floating window; restores, cockpit
-    // entry and accordion peers keep its place.
-    if (explicit && !restore)
-      this._panelPosition?.onPanelCollapsed?.(panelId, nextCollapsed);
     if (
       nextCollapsed &&
       this.cockpitView?.active &&
@@ -643,7 +650,6 @@ export class PanelChrome {
     if (this._disposed) return;
     this._disposed = true;
     this._lifetime.destroy();
-    this._panelPosition.destroy();
     this._panelLayout.destroy();
     for (const control of this._panelDisclosureControls || [])
       control.destroy();
