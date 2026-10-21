@@ -263,11 +263,11 @@ and the development server's internal routes. See SECURITY.md.
 | `get_earthquakes`     | `earthquakes` | USGS M2.5+ events in the last 24 hours, strongest first        |
 | `get_active_fires`    | `fires`       | NASA FIRMS detections in an area, highest radiative power first |
 | `get_recent_launches` | `launches`    | Launch Library 2 launches in the last 30 days, newest first    |
-| `aircraft_in_area`    | `aircraft`    | Aircraft in an area, nearest first; `military: true` reads the `military` feed |
+| `aircraft_in_area`    | `aircraft`    | Aircraft in an area, nearest first; `military: true` reads the `military` feed; `group_by` and `stats` count and summarize every match |
 | `find_aircraft`       | `aircraft`    | Aircraft anywhere by callsign, ICAO address or registration    |
 | `get_aircraft_track`  | `aircraft`    | Recent positions of one aircraft, thinned to 200 points        |
 | `get_aircraft_info`   | `aircraft`    | Aircraft type and registration, and flight route, from adsbdb  |
-| `vessels_in_area` | `vessels` | Ships reported by AIS in an area, nearest first, optionally by type |
+| `vessels_in_area` | `vessels` | Ships reported by AIS in an area, nearest first, optionally by type; `group_by` and `stats` count and summarize every match |
 | `find_vessel` | `vessels` | Ships anywhere by MMSI, IMO number or name |
 | `get_vessel_track` | `vessels` | Recent positions of one ship, thinned to 200 points |
 | `next_satellite_pass` | `satellites` | Next pass over a place or point (default the ISS), with naked-eye visibility |
