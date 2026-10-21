@@ -309,10 +309,10 @@ html:not([lang='en'])
   display: none;
 }
 
-/* 4. The selection bar: mode, then two rows that are always there. */
+/* 4. The selection bar: 24px mode buttons plus borders, then two stable rows. */
 .recent-imagery-readout .ri-selection {
   display: grid;
-  grid-template-rows: 20px 20px 20px;
+  grid-template-rows: 26px 20px 20px;
   row-gap: 4px;
   padding: 5px;
   border: 1px solid var(--weather-card-border);
@@ -321,7 +321,6 @@ html:not([lang='en'])
 .recent-imagery-readout .ri-mode {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 4px;
 }
 .recent-imagery-readout .ri-selection .data-toggle-chip {
   height: 20px;
@@ -423,16 +422,6 @@ html:not([lang='en']) .recent-imagery-readout .ri-opacity-label {
 }
 .recent-imagery-readout .ri-opacity-value {
   font-variant-numeric: tabular-nums;
-  color: var(--text-secondary);
-}
-.recent-imagery-readout .ri-opacity {
-  width: 100%;
-  min-width: 0;
-  margin: 0;
-  accent-color: var(--accent);
-}
-.recent-imagery-readout .ri-opacity:disabled {
-  opacity: 0.35;
 }
 .recent-imagery-readout .ri-swap {
   width: 40px;
