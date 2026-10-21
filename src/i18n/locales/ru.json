@@ -3016,5 +3016,12 @@
   "Command transcript": "Журнал команд",
   "zoom out to full planet view": "отдалите до вида всей планеты",
   "Typed command": "Текстовая команда",
-  "SEND": "ОТПРАВИТЬ"
+  "SEND": "ОТПРАВИТЬ",
+  "no provider": "нет провайдера",
+  "set {envVar}": "задайте {envVar}",
+  "loading models": "загрузка моделей",
+  "no usable models": "нет подходящих моделей",
+  "Could not list models": "Не удалось получить список моделей",
+  "Agent backend unavailable": "Бэкенд агента недоступен",
+  "Select a model before sending a command.": "Выберите модель перед отправкой команды."
 }

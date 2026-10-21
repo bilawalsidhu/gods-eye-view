@@ -320,15 +320,18 @@ function mountAgentConsole({
 
     const provider = providers.find((entry) => entry.id === providerId);
     if (!provider) {
-      setStatus(AGENT_STATUS.UNAVAILABLE, 'no provider');
+      setStatus(AGENT_STATUS.UNAVAILABLE, t('no provider'));
       return;
     }
     if (!provider.configured) {
-      setStatus(AGENT_STATUS.UNAVAILABLE, `set ${provider.apiKeyEnv}`);
+      setStatus(
+        AGENT_STATUS.UNAVAILABLE,
+        t('set {envVar}', { envVar: provider.apiKeyEnv }),
+      );
       return;
     }
 
-    setStatus(AGENT_STATUS.THINKING, 'loading models');
+    setStatus(AGENT_STATUS.THINKING, t('loading models'));
     try {
       const data = await readJson(
         `/api/agent/models?provider=${encodeURIComponent(providerId)}`,
@@ -349,7 +352,7 @@ function mountAgentConsole({
       refreshCost();
       setStatus(
         models.length ? AGENT_STATUS.READY : AGENT_STATUS.UNAVAILABLE,
-        models.length ? '' : 'no usable models',
+        models.length ? '' : t('no usable models'),
       );
       // Only a provider with a usable model may accept input.
       setBusy(models.length === 0);
@@ -357,7 +360,7 @@ function mountAgentConsole({
     } catch (error) {
       if (superseded()) return;
       setStatus(AGENT_STATUS.UNAVAILABLE);
-      append(ENTRY_KIND.ERROR, error?.message || 'Could not list models');
+      append(ENTRY_KIND.ERROR, error?.message || t('Could not list models'));
       providerSelect.disabled = false;
     }
   }
@@ -381,7 +384,10 @@ function mountAgentConsole({
       await loadModels(providerSelect.value);
     } catch (error) {
       setStatus(AGENT_STATUS.UNAVAILABLE);
-      append(ENTRY_KIND.ERROR, error?.message || 'Agent backend unavailable');
+      append(
+        ENTRY_KIND.ERROR,
+        error?.message || t('Agent backend unavailable'),
+      );
       // Clear the memo so reopening retries. A transient failure on the very
       // first open would otherwise leave the console empty until a reload,
       // because the swallowed rejection still resolves the remembered promise.
@@ -417,7 +423,7 @@ function mountAgentConsole({
     const text = input.value.trim();
     if (!text || session.busy) return;
     if (!modelSelect.value) {
-      append(ENTRY_KIND.ERROR, 'Select a model before sending a command.');
+      append(ENTRY_KIND.ERROR, t('Select a model before sending a command.'));
       return;
     }
 

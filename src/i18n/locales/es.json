@@ -2949,5 +2949,12 @@
   "Command transcript": "Transcripción de comandos",
   "zoom out to full planet view": "aléjate hasta ver todo el planeta",
   "Typed command": "Comando escrito",
-  "SEND": "ENVIAR"
+  "SEND": "ENVIAR",
+  "no provider": "sin proveedor",
+  "set {envVar}": "configura {envVar}",
+  "loading models": "cargando modelos",
+  "no usable models": "sin modelos utilizables",
+  "Could not list models": "No se pudieron listar los modelos",
+  "Agent backend unavailable": "El backend del agente no está disponible",
+  "Select a model before sending a command.": "Selecciona un modelo antes de enviar un comando."
 }
