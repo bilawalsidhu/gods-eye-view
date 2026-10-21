@@ -369,6 +369,11 @@ export class PanelChrome {
     return this._chromeStore.panels[panelEl.id] ?? readPanelState(panelEl);
   }
 
+  /** Clean view hides both rails: hold their layout until it ends. */
+  holdPanelLayout(held) {
+    return this._panelLayout.setLayoutHeld(held);
+  }
+
   _buildSharePanelState() {
     const specs = [];
     for (const spec of SHARE_PANEL_STATE_SPECS) {
