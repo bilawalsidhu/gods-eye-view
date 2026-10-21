@@ -64,6 +64,10 @@ export class DisplayBindings {
         },
         toggleOrbit: () => this._toggleOrbit(),
         toggleCleanView: () => this.toggleCleanView(),
+        exitCleanView: () => {
+          if (document.body.classList.contains('ui-clean-view'))
+            this.toggleCleanView(false);
+        },
         // Same collapse as the panel's own button, so its rail entry stays.
         toggleLayers: () => this._togglePanel('data-panel'),
         cycleDetection: () => {
