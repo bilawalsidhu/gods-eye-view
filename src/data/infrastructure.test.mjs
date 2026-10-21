@@ -86,6 +86,15 @@ test('infrastructure factory preserves identity and creates independent state wi
         name: 'Dams',
         source: 'OpenStreetMap / OpenInfraMap',
       },
+      ...[
+        ['local-usgs-water', 'USGS Rivers & Streams'],
+        ['local-usgs-lakes', 'USGS Lakes & Reservoirs'],
+        ['local-usgs-springs', 'USGS Springs'],
+      ].map(([id, name]) => ({
+        id,
+        name,
+        source: 'USGS Water Data · refreshed hourly',
+      })),
     ],
   );
   first.forEach((layer, index) => {
@@ -270,23 +279,28 @@ test('consumer build includes only infrastructure code and resolves assets under
   const output = result.output;
   const entry = output.find((item) => item.type === 'chunk' && item.isEntry);
   const sources = Object.keys(entry.modules).filter((id) => id.endsWith('.js'));
+  // USGS water layers (copy.js, index.js) ship with the infrastructure
+  // package; marker.js is the dependency-free msg() for portable modules.
   // It draws and takes clicks through the renderer's ports: a viewer with no
   // renderer bound draws once the caller has loaded
   // `./render/cesium/unbound`.
   assert.deepEqual(sources.map((id) => id.split('/').at(-1)).sort(), [
     'color.js',
+    'copy.js',
     'dispatcher.js',
     'ellipsoid.js',
     'frustum.js',
     'geojsonPins.js',
     'heights.js',
     'horizon.js',
+    'index.js',
     'infrastructure.js',
     'infrastructureData.js',
     'infrastructureOverlayEntry.js',
     'inputOwnership.js',
     'localGeojsonCore.js',
     'localGeojsonLod.js',
+    'marker.js',
     'pickRegistry.js',
     'rendererOf.js',
     'rhumb.js',

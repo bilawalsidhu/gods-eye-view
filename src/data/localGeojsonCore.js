@@ -24,6 +24,10 @@ import { createGeojsonPins } from './geojsonPins.js';
 import { inputFor as defaultInputFor } from '../input/dispatcher.js';
 import { isUnderOtherCard } from './pickRegistry.js';
 import {
+  isUsgsWaterLayer,
+  usgsWaterCardDetails,
+} from '../layers/usgsWater/copy.js';
+import {
   selectInfraLod,
   applyInfraEvictionGrace,
   shouldRecomputeInfraLod,
@@ -109,6 +113,11 @@ export function localInfrastructureOverlayCopy(properties, layerId) {
     for (const line of props.__gevDetails.slice(0, 2)) {
       const clean = cleanLabel(line);
       if (clean) details.push(clampCardLine(clean));
+    }
+  } else if (isUsgsWaterLayer(layerId)) {
+    // Gauge readings + observation time (src/layers/usgsWater/copy.js).
+    for (const line of usgsWaterCardDetails(props)) {
+      details.push(clampCardLine(line));
     }
   }
 
@@ -538,7 +547,13 @@ export function createLocalGeoJsonLayer(
     labels = true,
     labelMax = DEFAULT_LABEL_MAX,
     labelGridPx = DEFAULT_LABEL_GRID_PX,
+    /**
+     * Optional loader `({ signal, viewer }) => Promise<object[]>` used instead
+     * of fetching `url`. `cacheLoadedFeatures: false` keeps its result out of
+     * the cross-enable cache so viewport-driven layers can call `reload()`.
+     */
     loadFeatures = null,
+    cacheLoadedFeatures = true,
     featureColor = null,
     inputFor = defaultInputFor,
     projectToWindow = (viewer, position) =>
@@ -580,6 +595,8 @@ export function createLocalGeoJsonLayer(
   let _destroyed = false;
   let _loadPromise = null;
   let _loadController = null;
+  /** A reload() requested while a load was in flight. */
+  let _reloadQueued = false;
   /**
    * The parsed bundled dataset, kept across disable/enable so a re-enable
    * rebuilds its sets without refetching. The sets themselves are NOT kept:
@@ -1058,11 +1075,12 @@ export function createLocalGeoJsonLayer(
                 // its own live dataset; this layer only draws it.
                 features = await loadFeatures({
                   signal: _loadController.signal,
+                  viewer,
                 });
                 if (_destroyed) return;
                 if (!Array.isArray(features))
                   throw new Error('dataset unavailable');
-                _cachedFeatures = features;
+                if (cacheLoadedFeatures) _cachedFeatures = features;
               } else if (!features) {
                 const response = await fetch(url, {
                   signal: _loadController.signal,
@@ -1474,6 +1492,29 @@ export function createLocalGeoJsonLayer(
       for (const set of Object.values(built.sets)) set.show = true;
       disposeSets(outgoing.sets);
       findFrame(viewer)?.requestRender('local-geojson');
+    },
+
+    /**
+     * Rebuild entities from a fresh `loadFeatures()` call while the
+     * layer stays enabled (viewport layers call this on camera settle). A
+     * reload while a load is in flight is coalesced into one follow-up.
+     * @param {object} viewer
+     * @returns {Promise<void>}
+     */
+    reload: async (viewer) => {
+      if (_destroyed || !_enabled) return;
+      if (_loadPromise) {
+        _reloadQueued = true;
+        return;
+      }
+      releaseDataSource(viewer);
+      _cachedFeatures = null;
+      await layer.enable(viewer);
+      if (_reloadQueued && _enabled && !_destroyed) {
+        _reloadQueued = false;
+        releaseDataSource(viewer);
+        await layer.enable(viewer);
+      }
     },
 
     destroy: (viewer) => {

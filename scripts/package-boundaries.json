@@ -68,7 +68,10 @@
       "src/render/cesium/zoomOutGuard.js",
       "src/render/cesium/sceneOcclusionProbe.js",
       "src/render/occlusion/depthProbe.js",
-      "src/data/detectionOcclusion.js"
+      "src/data/detectionOcclusion.js",
+      "src/layers/usgsWater/index.js",
+      "src/layers/usgsWater/copy.js",
+      "src/i18n/marker.js"
     ],
     "external": ["cesium", "kdbush"]
   },
@@ -5597,7 +5600,9 @@
       "src/layers/satellites/tiangongStation.js",
       "src/layers/satellites/tiangongModel.js",
       "src/layers/satellites/tiangongJoints.js",
-      "src/layers/satellites/tiangongArticulation.js"
+      "src/layers/satellites/tiangongArticulation.js",
+      "src/layers/usgsWater/index.js",
+      "src/layers/usgsWater/copy.js"
     ],
     "external": [
       "hls.js",
@@ -6453,7 +6458,9 @@
       "src/layers/satellites/tiangongStation.js",
       "src/layers/satellites/tiangongJoints.js",
       "src/layers/satellites/tiangongArticulation.js",
-      "src/layers/satellites/tiangongModel.js"
+      "src/layers/satellites/tiangongModel.js",
+      "src/layers/usgsWater/index.js",
+      "src/layers/usgsWater/copy.js"
     ],
     "external": [
       "hls.js",
