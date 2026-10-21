@@ -4,6 +4,7 @@ import { randomUUID } from 'node:crypto';
 export const HLS_LIMITS = Object.freeze({
   sessions: 2,
   leasesPerSession: 8,
+  leasesPerClient: 8,
   playlistBytes: 256 * 1024,
   segmentBytes: 4 * 1024 * 1024,
   sessionBytes: 24 * 1024 * 1024,
@@ -138,25 +139,37 @@ export function createHlsPuller({
     entry.upstream.clear();
     entry.bytes = 0;
   };
-  const release = (cameraId, leaseId) => {
+  const release = (cameraId, leaseId, clientId = 'legacy') => {
     const entry = active.get(cameraId);
     const lease = entry?.leases.get(leaseId);
-    if (!lease) return;
+    if (!lease || lease.clientId !== clientId) return;
     clearTimeout(lease.timer);
     entry.leases.delete(leaseId);
     if (!entry.leases.size) stop(cameraId, entry.token);
   };
-  const touch = (entry, leaseId, create = false) => {
+  const touch = (entry, leaseId, create = false, clientId = 'legacy') => {
     let lease = entry.leases.get(leaseId);
+    if (lease && lease.clientId !== clientId)
+      throw new Error('HLS lease belongs to another client');
     if (!lease) {
+      const clientLeases = [...active.values()].reduce(
+        (count, session) =>
+          count +
+          [...session.leases.values()].filter(
+            (item) => item.clientId === clientId,
+          ).length,
+        0,
+      );
+      if (clientLeases >= limits.leasesPerClient)
+        throw new Error('HLS client lease capacity reached');
       if (!create || entry.leases.size >= limits.leasesPerSession)
         throw new Error('HLS lease capacity reached');
-      lease = {};
+      lease = { clientId };
       entry.leases.set(leaseId, lease);
     }
     clearTimeout(lease.timer);
     lease.timer = setTimeout(
-      () => release(entry.cameraId, leaseId),
+      () => release(entry.cameraId, leaseId, clientId),
       limits.idleMs,
     );
     lease.timer.unref?.();
@@ -248,7 +261,12 @@ export function createHlsPuller({
       }
     }
   };
-  const ensure = async (cameraId, url, leaseId = 'legacy') => {
+  const ensure = async (
+    cameraId,
+    url,
+    leaseId = 'legacy',
+    clientId = 'legacy',
+  ) => {
     if (closed) throw new Error('HLS service closed');
     sameOriginHlsUrl(url, url);
     let entry = active.get(cameraId);
@@ -257,7 +275,7 @@ export function createHlsPuller({
       entry = null;
     }
     if (entry) {
-      touch(entry, leaseId, true);
+      touch(entry, leaseId, true, clientId);
       return entry;
     }
     // Reserve synchronously, before any await: concurrent creation is singleflight.
@@ -279,8 +297,8 @@ export function createHlsPuller({
       pendingDiscontinuity: false,
       discontinuitiesRemoved: 0,
     };
+    touch(entry, leaseId, true, clientId);
     active.set(cameraId, entry);
-    touch(entry, leaseId, true);
     entry.polling = poll(entry);
     return entry;
   };
@@ -292,9 +310,14 @@ export function createHlsPuller({
     }
     return false;
   };
-  const buildPlaylist = async (entry, cameraId, leaseId = 'legacy') => {
+  const buildPlaylist = async (
+    entry,
+    cameraId,
+    leaseId = 'legacy',
+    clientId = 'legacy',
+  ) => {
     if (entry.stopping || entry.segments.size < 2) return null;
-    touch(entry, leaseId);
+    touch(entry, leaseId, false, clientId);
     const segments = [...entry.segments.values()].sort((a, b) => a.seq - b.seq);
     const lines = [
       '#EXTM3U',
@@ -318,12 +341,22 @@ export function createHlsPuller({
     }
     return lines.join('\n') + '\n';
   };
-  const getSegment = (cameraId, token, seq, leaseId = 'legacy') => {
+  const getSegment = (
+    cameraId,
+    token,
+    seq,
+    leaseId = 'legacy',
+    clientId = 'legacy',
+  ) => {
     const entry = active.get(cameraId);
-    if (!entry || entry.token !== token || !entry.leases.has(leaseId))
+    if (
+      !entry ||
+      entry.token !== token ||
+      entry.leases.get(leaseId)?.clientId !== clientId
+    )
       return null;
     const body = entry.segments.get(seq)?.body;
-    if (body) touch(entry, leaseId);
+    if (body) touch(entry, leaseId, false, clientId);
     return body || null;
   };
   const shutdown = async () => {

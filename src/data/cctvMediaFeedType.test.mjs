@@ -268,3 +268,46 @@ test('/frame does not follow a still camera off its origin', async (t) => {
     [STILL.url],
   );
 });
+
+test('cross-site media creation, segment reads and release fail before any catalog or media fetch', async (t) => {
+  let handler;
+  const originalFetch = globalThis.fetch;
+  let calls = 0;
+  globalThis.fetch = async () => {
+    calls++;
+    throw new Error('must not fetch');
+  };
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+  cctvProxy().configureServer({
+    middlewares: {
+      use: (_path, fn) => {
+        handler = fn;
+      },
+    },
+  });
+  for (const headers of [
+    { origin: 'https://foreign.example' },
+    { origin: 'null' },
+    { 'sec-fetch-site': 'cross-site' },
+    { 'sec-fetch-site': 'same-site' },
+  ]) {
+    for (const [method, url] of [
+      ['GET', '/media/camera?lease=test'],
+      ['DELETE', '/media/camera?lease=test'],
+      ['GET', '/media/camera/seg_0.ts?lease=test'],
+    ]) {
+      const { res } = recordingResponse();
+      res.setHeader = (name, value) => {
+        res.headers[name] = value;
+      };
+      await handler(
+        { method, url, headers: { host: 'localhost:4173', ...headers } },
+        res,
+      );
+      assert.equal(res.statusCode, 403);
+    }
+  }
+  assert.equal(calls, 0);
+});
