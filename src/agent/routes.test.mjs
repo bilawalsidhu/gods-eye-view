@@ -589,6 +589,69 @@ test('a tool call with no id is given one, in the call and in the message', asyn
   assert.equal(res.json.message.tool_calls[0].function.name, 'zoom_to_globe');
 });
 
+test('two calls sharing one id are separated before they are answered', async () => {
+  // A local model sometimes reuses an id across a turn. Two results would
+  // then carry the same tool_call_id, which the next round answers with a
+  // 400 - the same malformation this module exists to absorb.
+  const res = response();
+  const fetchImpl = stubFetch([
+    {
+      body: {
+        model: 'gpt-5-mini',
+        choices: [
+          {
+            message: {
+              role: 'assistant',
+              content: '',
+              tool_calls: [
+                {
+                  id: 'dup',
+                  type: 'function',
+                  function: { name: 'zoom_to_globe', arguments: '{}' },
+                },
+                {
+                  id: 'dup',
+                  type: 'function',
+                  function: {
+                    name: 'set_layer_visibility',
+                    arguments: JSON.stringify({
+                      layerId: 'flights',
+                      enabled: true,
+                    }),
+                  },
+                },
+              ],
+            },
+            finish_reason: 'tool_calls',
+          },
+        ],
+      },
+    },
+  ]);
+  await createAgentCommandHandler({ env: KEYED, fetchImpl, limiter: admitAll })(
+    request({
+      method: 'POST',
+      body: JSON.stringify({
+        provider: 'openai',
+        messages: [{ role: 'user', content: 'zoom out and show flights' }],
+      }),
+    }),
+    res,
+  );
+
+  const ids = res.json.toolCalls.map((call) => call.id);
+  assert.equal(ids.length, 2, 'both calls survive; neither is dropped');
+  assert.equal(new Set(ids).size, 2, `ids still collide: ${ids.join(', ')}`);
+  assert.equal(ids[0], 'dup', 'the first keeps the id the model sent');
+  assert.match(ids[1], /^gev_call_\d+$/);
+  // The echoed assistant message has to carry the same ids, or the browser
+  // pairs its results against the originals.
+  assert.deepEqual(
+    res.json.message.tool_calls.map((call) => call.id),
+    ids,
+  );
+});
+
 test('an id the provider supplied is passed through untouched', async () => {
   const res = response();
   const fetchImpl = stubFetch([

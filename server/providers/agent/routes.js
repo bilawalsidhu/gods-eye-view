@@ -203,20 +203,38 @@ function createAgentModelsHandler({
  * the loop gives up. Issuing the id server-side keeps the result pairable.
  */
 let assignedCallSequence = 0;
-function toolCallPairingId(call) {
-  const id = typeof call?.id === 'string' ? call.id.trim() : '';
-  if (id) return id;
+function assignCallId() {
   assignedCallSequence += 1;
   return `gev_call_${assignedCallSequence}`;
+}
+
+/**
+ * Pairing id for one call, rejecting a repeat as well as a missing one.
+ *
+ * A local model that reuses one id across two calls in the same turn is the
+ * same malformation in a different shape: two results would carry the same
+ * `tool_call_id`, which the next round answers with a 400. The second call
+ * gets a fresh id rather than being dropped, because the model did ask for
+ * two actions.
+ *
+ * @param {{id?: unknown}|null} call
+ * @param {Set<string>} taken - ids already used by this turn.
+ */
+function toolCallPairingId(call, taken) {
+  const id = typeof call?.id === 'string' ? call.id.trim() : '';
+  if (!id || taken.has(id)) return assignCallId();
+  return id;
 }
 
 /** Shape the tool calls one completion asked for, or the reason it cannot run. */
 function prepareCalls(message) {
   const raw = Array.isArray(message?.tool_calls) ? message.tool_calls : [];
-  return raw.map((call) => ({
-    id: toolCallPairingId(call),
-    result: prepareToolCall(call?.function, toolIndex()),
-  }));
+  const taken = new Set();
+  return raw.map((call) => {
+    const id = toolCallPairingId(call, taken);
+    taken.add(id);
+    return { id, result: prepareToolCall(call?.function, toolIndex()) };
+  });
 }
 
 /**
