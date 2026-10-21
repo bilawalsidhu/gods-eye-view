@@ -356,8 +356,8 @@ drag or final change. Feature adapters own data mapping and service subscription
 generic modules own DOM/listeners/timers and release them in `destroy()`.
 
 Keep persistence with panel chrome: collapse uses
-`godsEyeView.v6.panelCollapsed.<panelId>`, position uses
-`godsEyeView.v8.panelPos.<panelId>`, and share state uses the registered panel id.
+`godsEyeView.v6.panelCollapsed.<panelId>`, positions are
+not stored (`godsEyeView.v8.panelPos.<panelId>` stays reserved), and share state uses the registered panel id.
 Do not rename existing
 ids or reset persistence versions when adding a body. The WEATHER adapter is
 `src/ui/weatherPanel.js`; its observed-history selection remains transient.
