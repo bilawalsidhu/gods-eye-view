@@ -22,7 +22,14 @@
   },
   "viewer": {
     "exports": ["./application/viewer"],
-    "modules": ["src/app/viewer.js", "src/app/atmosphereCompat.js"],
+    "modules": [
+      "src/app/viewer.js",
+      "src/app/atmosphereCompat.js",
+      "src/sky/starrySky.js",
+      "src/sky/stars.js",
+      "src/data/bundledJson.js",
+      "src/renderGovernor.js"
+    ],
     "external": ["cesium"]
   },
   "vite-build": {
@@ -500,7 +507,8 @@
       "src/i18n/locales/ru.json",
       "src/ui/unitLabels.js",
       "src/ui/keyGuidance.js",
-      "src/ui/statusText.js"
+      "src/ui/statusText.js",
+      "src/ui/statusBadge.js"
     ],
     "external": []
   },
@@ -550,7 +558,8 @@
       "src/i18n/locale.js",
       "src/i18n/locales/es.json",
       "src/i18n/locales/ru.json",
-      "src/ui/unitLabels.js"
+      "src/ui/unitLabels.js",
+      "src/ui/statusBadge.js"
     ],
     "external": []
   },
@@ -777,7 +786,8 @@
       "src/ui/unitLabels.js",
       "src/ui/keyGuidance.js",
       "src/ui/layerNames.js",
-      "src/ui/statusText.js"
+      "src/ui/statusText.js",
+      "src/ui/statusBadge.js"
     ],
     "external": ["cesium"]
   },
@@ -1732,6 +1742,8 @@
       "src/app/surfaceServices.js",
       "src/app/tools.js",
       "src/app/viewer.js",
+      "src/sky/starrySky.js",
+      "src/sky/stars.js",
       "src/app/atmosphereCompat.js",
       "src/bloom.js",
       "src/camera.js",
@@ -2520,7 +2532,8 @@
       "src/voice/providerCapabilities.js",
       "src/voice/geminiSession.js",
       "src/voice/geminiAudio.js",
-      "src/voice/geminiCaptureWorklet.js"
+      "src/voice/geminiCaptureWorklet.js",
+      "src/ui/statusBadge.js"
     ],
     "external": [
       "hls.js",
