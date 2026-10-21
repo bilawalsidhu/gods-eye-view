@@ -10,6 +10,7 @@ export function createSpcRendering({ viewer, cesium: C = Cesium }) {
     setSnapshot(snapshot) {
       source.entities.removeAll();
       rowsByPick.clear();
+      const alpha = snapshot.product.endsWith('-tornado') ? 0.7 : 0.35;
       for (const row of snapshot.rows) {
         for (const [index, rings] of row.polygons.entries()) {
           const positions = rings.map((ring) =>
@@ -25,7 +26,7 @@ export function createSpcRendering({ viewer, cesium: C = Cesium }) {
                 positions[0],
                 positions.slice(1).map((ring) => new C.PolygonHierarchy(ring)),
               ),
-              material: C.Color.fromCssColorString(row.fill).withAlpha(0.35),
+              material: C.Color.fromCssColorString(row.fill).withAlpha(alpha),
               classificationType: C.ClassificationType.BOTH,
               arcType: C.ArcType.GEODESIC,
             },
@@ -38,6 +39,7 @@ export function createSpcRendering({ viewer, cesium: C = Cesium }) {
                 positions: ring,
                 clampToGround: true,
                 width: 2,
+                zIndex: row.dn,
                 classificationType: C.ClassificationType.BOTH,
                 material: C.Color.fromCssColorString(row.stroke),
                 arcType: C.ArcType.GEODESIC,

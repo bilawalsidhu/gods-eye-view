@@ -135,6 +135,50 @@ test('Cesium fills retain risk-band holes; all exterior/interior boundaries drap
   assert.equal(h.timers.size, 0);
 });
 
+test('nested tornado bands keep the higher risk fill and boundary visible', async () => {
+  const outer = ring();
+  const inner = ring(-98, 32, 2);
+  const h = harness({
+    getSnapshot: async () =>
+      snapshot(
+        [
+          feature(
+            { dn: 2, label: '0.02' },
+            { type: 'Polygon', coordinates: [outer, inner] },
+          ),
+          feature(
+            { objectid: 2, dn: 5, label: '0.05' },
+            { type: 'Polygon', coordinates: [inner] },
+          ),
+        ],
+        'day1-tornado',
+      ),
+  });
+  h.layer.setParams({ type: 'tornado' });
+  h.layer.enable();
+  assert.equal(await h.layer.update(), true);
+  const entities = h.sources[0].entities.values;
+  const lower = entities.find((entity) => entity.id === 'spc:day1-tornado:1:0');
+  const higher = entities.find(
+    (entity) => entity.id === 'spc:day1-tornado:2:0',
+  );
+  assert.equal(lower.polygon.hierarchy.getValue().holes.length, 1);
+  assert.equal(higher.polygon.material.color.getValue().alpha, 0.7);
+  assert.equal(
+    higher.polygon.material.color.getValue().toCssColorString(),
+    'rgba(189,153,138,0.7)',
+  );
+  assert.ok(
+    entities
+      .find((entity) => entity.id === `${higher.id}:ring:0`)
+      .polyline.zIndex.getValue() >
+      entities
+        .find((entity) => entity.id === `${lower.id}:ring:1`)
+        .polyline.zIndex.getValue(),
+  );
+  h.layer.destroy();
+});
+
 test('map selection shows hazard, risk, issue/validity and official source, without claiming pointer/overlay clicks', async () => {
   const h = harness();
   h.layer.enable();
