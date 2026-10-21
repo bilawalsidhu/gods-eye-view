@@ -71,7 +71,7 @@ and uses `OPENAI_API_KEY`, the same credential voice uses.
 | `OPENROUTER_API_KEY` | Enables OpenRouter. Pasteable in Provider Settings (the POWER UP chip) like any other server-side key. |
 | `OPENROUTER_BASE_URL` | Overrides OpenRouter's base URL. |
 | `OLLAMA_BASE_URL` | Where the Ollama daemon is, default `http://localhost:11434/v1`. |
-| `GEV_RATELIMIT_AGENT_PER_MIN` | Per-IP cap on the agent endpoints, default 60. Exactly `0` disables it. |
+| `GEV_RATELIMIT_AGENT_PER_MIN` | Per-IP cap on the agent endpoints in requests, default 240. One command costs up to 8. Exactly `0` disables it. |
 
 OpenAI's base URL is deliberately not overridable: the only values that can
 repoint a request are the ones named above.

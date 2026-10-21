@@ -85,7 +85,8 @@ rather than leaving a spoken instruction in the typed prompt.
 Credentials, the manual, the tool list and the model decision stay server-side.
 `GET /api/agent/config`, `GET /api/agent/models` and `POST /api/agent/command`
 refuse cross-site browser requests and share a per-IP throttle
-(`GEV_RATELIMIT_AGENT_PER_MIN`, default 60; exactly `0` disables it). A
+(`GEV_RATELIMIT_AGENT_PER_MIN`, default 240 requests, one command costing up
+to 8; exactly `0` disables it). A
 requested model id that is malformed, over-long or outside
 `GEV_AGENT_MODELS`/`GEV_AGENT_MODELS_<PROVIDER>` degrades to the configured
 default instead of reaching the upstream, and that default is itself held to

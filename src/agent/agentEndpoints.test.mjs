@@ -111,13 +111,13 @@ test('a same-origin browser request reaches the handler', async () => {
 });
 
 test('the agent throttle defaults on, and only an explicit 0 disables it', () => {
-  assert.equal(AGENT_DEFAULT_PER_MIN, 60);
-  assert.equal(resolvePerMinuteCap(undefined, AGENT_DEFAULT_PER_MIN), 60);
-  assert.equal(resolvePerMinuteCap('', AGENT_DEFAULT_PER_MIN), 60);
+  assert.equal(AGENT_DEFAULT_PER_MIN, 240);
+  assert.equal(resolvePerMinuteCap(undefined, AGENT_DEFAULT_PER_MIN), 240);
+  assert.equal(resolvePerMinuteCap('', AGENT_DEFAULT_PER_MIN), 240);
   assert.equal(resolvePerMinuteCap('120', AGENT_DEFAULT_PER_MIN), 120);
   // A typo must not quietly disarm the guard on an exposed server.
-  assert.equal(resolvePerMinuteCap('6O', AGENT_DEFAULT_PER_MIN), 60);
-  assert.equal(resolvePerMinuteCap('-5', AGENT_DEFAULT_PER_MIN), 60);
+  assert.equal(resolvePerMinuteCap('6O', AGENT_DEFAULT_PER_MIN), 240);
+  assert.equal(resolvePerMinuteCap('-5', AGENT_DEFAULT_PER_MIN), 240);
   assert.equal(resolvePerMinuteCap('0', AGENT_DEFAULT_PER_MIN), 0);
 });
 

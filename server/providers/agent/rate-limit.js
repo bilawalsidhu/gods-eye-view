@@ -4,13 +4,16 @@ import { makeCostRateLimiter } from '../common/rate-limit.js';
  * Requests/min/IP applied to the typed agent endpoints when
  * GEV_RATELIMIT_AGENT_PER_MIN is unset.
  *
- * One typed command costs two or more upstream round trips, and a person types
- * a handful of commands a minute, so 60 clears ordinary use several times over
- * and bites only a caller working the endpoint far harder than the console
- * does. Local providers are throttled too: a runaway tool loop against a
- * daemon costs no money but will still saturate a GPU.
+ * Counted per REQUEST, and one typed command is not one request: the browser
+ * posts once per tool round, up to the loop's cap of 8, plus a config and a
+ * models listing when the console opens. A cap set for commands therefore
+ * bites part-way through one, which is worse than refusing it outright - the
+ * transcript is left mid-exchange with an assistant turn already recorded.
+ * 240 is 8 rounds for each of 30 commands a minute, well past what anyone
+ * types, and still refuses a caller scripting the endpoint. What bounds a
+ * runaway loop is the round cap, not this.
  */
-const AGENT_DEFAULT_PER_MIN = 60;
+const AGENT_DEFAULT_PER_MIN = 240;
 
 // Built LAZILY on first request, NOT at module load: `.env` values reach
 // process.env in the plugin's config hook, after this module is imported, so
