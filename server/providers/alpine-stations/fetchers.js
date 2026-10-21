@@ -35,7 +35,6 @@ import {
   TAWES_METADATA_URL,
   TAWES_OBSERVATIONS_MAX_BYTES,
   TAWES_STATIONS_PER_REQUEST,
-  UPSTREAM_TIMEOUT_MS,
 } from './upstreams.js';
 
 const USER_AGENT = 'Gods Eye View (public Alpine weather station context)';
@@ -43,7 +42,6 @@ const USER_AGENT = 'Gods Eye View (public Alpine weather station context)';
 /** A reader that never relays an upstream's own wording to the client. */
 export function createUpstreamReader({
   fetchImpl = (...args) => globalThis.fetch(...args),
-  timeoutMs = UPSTREAM_TIMEOUT_MS,
 } = {}) {
   async function request(url, accept, signal) {
     signal?.throwIfAborted();
@@ -59,7 +57,6 @@ export function createUpstreamReader({
     return response;
   }
   return {
-    timeoutMs,
     async json(url, cap, signal) {
       const response = await request(
         url,

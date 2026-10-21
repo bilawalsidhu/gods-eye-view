@@ -78,7 +78,7 @@ export function alpineStationsProxy({
   now = () => Date.now(),
   timeoutMs = UPSTREAM_TIMEOUT_MS,
 } = {}) {
-  const reader = createUpstreamReader({ fetchImpl, timeoutMs });
+  const reader = createUpstreamReader({ fetchImpl });
   const caches = new Map();
   const metadata = new Map();
   const failures = new Map();

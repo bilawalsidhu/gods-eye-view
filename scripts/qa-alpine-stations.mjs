@@ -146,16 +146,16 @@ try {
     )
     .catch(() => {});
 
-  // 2. The row exists, in the Weather group, and enabling it works.
+  // 2. The row exists and enabling it works. Which GROUP the row sits in is
+  // not readable here — the panel renders group headings as siblings, with no
+  // attribute on the row — so weatherPanel.test.mjs owns that assertion.
   const row = await page.evaluate((id) => {
     const node = document.querySelector(`[data-layer-id="${id}"]`);
     if (!node) return null;
     const button = node.querySelector('.data-toggle-btn');
     button?.scrollIntoView({ block: 'center' });
     button?.click();
-    return {
-      group: node.closest('[data-layer-group]')?.dataset.layerGroup ?? null,
-    };
+    return { found: true };
   }, LAYER);
   check('the layer has a row in the data-layers panel', row !== null);
 
