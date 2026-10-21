@@ -401,17 +401,23 @@ export function createAirQualityLayer({ source, overlayHost } = {}) {
             ? t('Loading observations for this view…')
             : _lastError
               ? translateFeedError(_lastError)
-              : coverage?.partial
-                ? t('Partial coverage · discovery continues')
-                : _count === 0
-                  ? _lastUpdate === null
-                    ? t('No readings available')
-                    : t('No current readings')
-                  : tn(
-                      _count,
-                      '{count} station reporting',
-                      '{count} stations reporting',
-                    ),
+              : coverage?.failureStatus === 429
+                ? t(
+                    'Provider request budget reached. Cached data will refresh later.',
+                  )
+                : coverage?.stale
+                  ? t('Air quality provider unavailable')
+                  : coverage?.partial
+                    ? t('Partial coverage · discovery continues')
+                    : _count === 0
+                      ? _lastUpdate === null
+                        ? t('No readings available')
+                        : t('No current readings')
+                      : tn(
+                          _count,
+                          '{count} station reporting',
+                          '{count} stations reporting',
+                        ),
           units: provider.scale,
           settings: [
             {

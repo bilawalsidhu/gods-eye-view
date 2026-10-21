@@ -425,3 +425,22 @@ test('partial or stale coverage does not label visible observations unavailable'
   );
   layer.destroy();
 });
+
+test('viewport rate limits are explicit and do not disable the layer', async () => {
+  const definition = createAirQualitySource().definitions.find(
+    (p) => p.id === 'openaq',
+  );
+  const layer = createAirQualityLayer({
+    source: {
+      definitions: [definition],
+      getSnapshot: async () => [],
+      getCoverage: () => ({ partial: true, stale: true, failureStatus: 429 }),
+    },
+    overlayHost: { setEntries() {}, setVisible() {}, clearSource() {} },
+  });
+  layer.init({ dataSources: { add() {}, remove() {} } });
+  layer.enable();
+  assert.equal(await layer.update(), true);
+  assert.match(layer.getRowControls().summary.status, /request budget reached/);
+  layer.destroy();
+});

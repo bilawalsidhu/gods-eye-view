@@ -441,6 +441,7 @@ test('viewport changes share one request budget and evict old view caches', asyn
   const limited = await source.getSnapshot({ view: view(31) });
   assert.equal(limited.partial, true);
   assert.equal(limited.stale, true);
+  assert.equal(limited.failureStatus, 429);
 });
 
 test('overlapping views reuse recent station checks and refresh them after expiry', async () => {
@@ -457,4 +458,81 @@ test('overlapping views reuse recent station checks and refresh them after expir
   clock += 21 * 60_000;
   await source.getSnapshot({ view: [1, -10, 39, 10, 21, 0] });
   assert.equal(latestCount(), 6);
+});
+
+test('four new globe views can discover observations within one minute', async () => {
+  let calls = 0;
+  let region = 0;
+  const source = createOpenAqAcquisition({
+    getKey: () => 'fixture',
+    now: () => start,
+    fetchImpl: async (raw) => {
+      calls++;
+      const url = new URL(raw);
+      if (url.pathname === '/v3/locations') {
+        return Response.json({
+          results: Array.from({ length: 30 }, (_, i) => ({
+            ...locations[0],
+            id: region * 100 + i + 1,
+            sensors: [
+              {
+                id: region * 100 + i + 1,
+                parameter: { name: 'pm25', units: 'µg/m³' },
+              },
+            ],
+          })),
+        });
+      }
+      const id = Number(url.pathname.split('/')[3]);
+      return Response.json({
+        results: [
+          {
+            locationsId: id,
+            sensorsId: id,
+            value: 10,
+            datetime: { utc: new Date(start).toISOString() },
+          },
+        ],
+      });
+    },
+  });
+  for (region = 0; region < 4; region++) {
+    const snapshot = await source.getSnapshot({
+      view: [-180, -90, 180, 90, region * 40, 0],
+    });
+    assert.equal(snapshot.readings.length, 8);
+    assert.equal(snapshot.stale, false);
+    assert.equal(snapshot.partial, true);
+  }
+  assert.equal(calls, 40);
+});
+
+test('a failed wider catalog page does not suppress available focus observations', async () => {
+  let catalogs = 0;
+  const source = createOpenAqAcquisition({
+    getKey: () => 'fixture',
+    now: () => start,
+    fetchImpl: async (raw) => {
+      if (new URL(raw).pathname === '/v3/locations') {
+        if (++catalogs === 2) return new Response('', { status: 503 });
+        return Response.json({ results: [locations[0]] });
+      }
+      return Response.json({
+        results: [
+          {
+            locationsId: 1,
+            sensorsId: 100,
+            value: 10,
+            datetime: { utc: new Date(start).toISOString() },
+          },
+        ],
+      });
+    },
+  });
+  const result = await source.getSnapshot({
+    view: [-180, -90, 180, 90, 20, 0],
+  });
+  assert.equal(result.readings.length, 1);
+  assert.equal(result.stale, true);
+  assert.equal(result.failureStatus, 503);
 });

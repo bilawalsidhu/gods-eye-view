@@ -138,6 +138,7 @@ export function createOpenAqAcquisition({
       viewCache.delete(oldest);
     }
     let failed = false;
+    let failureStatus = null;
     // Query the focus area first, then resume the full viewport catalog.
     for (let i = 0; i < 2; i++) {
       const page = state.pages.find((p) => !p.done);
@@ -161,6 +162,7 @@ export function createOpenAqAcquisition({
       } catch (e) {
         if ([401, 403].includes(e.status)) throw e;
         failed = true;
+        failureStatus = e.status || 503;
         break;
       }
     }
@@ -190,10 +192,12 @@ export function createOpenAqAcquisition({
           (state.checked.get(a.stationId) || 0) -
             (state.checked.get(b.stationId) || 0) || distance(a) - distance(b),
       )
-      .slice(0, batchSize);
+      // Leave capacity for subsequent camera moves and other active views.
+      // A stationary view continues discovery on its next refresh.
+      .slice(0, Math.min(batchSize, 8));
     // Four bounded workers shorten the time to first visible markers; all share
     // the same process request budget as global acquisition and other views.
-    for (let i = 0; i < due.length && !failed; i += 4) {
+    for (let i = 0; i < due.length && failureStatus !== 429; i += 4) {
       const results = await Promise.allSettled(
         due.slice(i, i + 4).map(async (station) => {
           try {
@@ -217,6 +221,7 @@ export function createOpenAqAcquisition({
           } catch (e) {
             if ([401, 403].includes(e.status)) throw e;
             failed = true;
+            failureStatus = e.status === 429 ? 429 : failureStatus || 503;
           }
         }),
       );
@@ -244,6 +249,7 @@ export function createOpenAqAcquisition({
         state.pages.some((p) => !p.done) ||
         eligible.some((s) => !state.checked.has(s.stationId)),
       stale: failed,
+      failureStatus,
     };
   }
   async function acquireGlobal(request) {
