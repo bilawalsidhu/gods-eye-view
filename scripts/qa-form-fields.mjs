@@ -92,6 +92,13 @@ try {
     owner.actions = {
       ...owner.actions,
       isEnabled: () => true,
+      readMapView: () => ({
+        west: -2,
+        east: 2,
+        south: -2,
+        north: 2,
+        center: { lat: 0, lon: 0 },
+      }),
       toggleEnabled: async () => true,
       setParams: (...args) => window.__qaFormCalls.push(args),
       runExplicitFocus: (select, focus) => focus(select()),
@@ -106,8 +113,8 @@ try {
       enabled: true,
       activeCameraId: 'a',
       cameras: [
-        { id: 'a', name: 'A' },
-        { id: 'b', name: 'B' },
+        { id: 'a', name: 'A', lat: 0, lon: 0 },
+        { id: 'b', name: 'B', lat: 0, lon: 1 },
       ],
       activeCamera: {
         id: 'a',
@@ -295,6 +302,12 @@ try {
     }, lang);
     for (const width of [1440, 620, 390]) {
       await page.setViewport({ width, height: 900 });
+      // Panel expansion/resize is asynchronous; measure the settled visible field.
+      await page.waitForFunction(
+        () =>
+          document.getElementById('cctv-camera-select').getBoundingClientRect()
+            .width > 0,
+      );
       const layout = await page.evaluate(() => {
         const ids = [
           'scene-select',
@@ -352,6 +365,10 @@ try {
         !document.querySelector('.cctv-cal-input') &&
         window.__qaFormCalls.length === 2,
     ),
+    await page.evaluate(() => ({
+      calls: window.__qaFormCalls,
+      editorPresent: Boolean(document.querySelector('.cctv-cal-input')),
+    })),
   );
   // Scene selection can restore application settings. Exercise it after the
   // fixture-owned CCTV phase so those asynchronous effects cannot replace ports.

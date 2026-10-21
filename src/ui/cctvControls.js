@@ -16,6 +16,7 @@ import {
   _typeCctvSummary,
   _updateCctvSyncChip,
 } from './cctvPresentation.js';
+import { discoverCctvCameras } from './cctvDiscovery.js';
 import { _initCctvPanel } from './cctvBindings.js';
 
 /** Own camera-panel interaction and presentation; receive the camera port and application actions. */
@@ -27,6 +28,7 @@ export class CctvControls {
     this.destroyed = false;
     this.listeners = new AbortController();
     this._cctvUnsubscribe = null;
+    this._cctvViewUnsubscribe = null;
     this._cctvState = null;
     this._cctvSummaryTypingTimer = null;
     this._lastCctvSummaryText = '';
@@ -64,11 +66,52 @@ export class CctvControls {
   connect() {
     this._cctvUnsubscribe?.();
     this._cctvUnsubscribe = null;
+    this._cctvViewUnsubscribe?.();
+    this._cctvViewUnsubscribe = null;
     if (this.destroyed) return;
+    this._cctvViewUnsubscribe = this.actions.subscribeMapView?.(() => {
+      this._renderCctvState(this._cctvState);
+    });
     this._cctvUnsubscribe = this.cctv.subscribe?.((state) =>
       this._renderCctvState(state),
     );
     if (this.cctv.getUIState) this._renderCctvState(this.cctv.getUIState());
+  }
+  discoverCameras(state) {
+    return discoverCctvCameras(state?.cameras || [], {
+      view: this.actions.readMapView?.(),
+      scope:
+        this._cctvScope?.value || (this.actions.readMapView ? 'view' : 'all'),
+      query: this._cctvSearch?.value || '',
+    });
+  }
+  /** Select a result without flying; only explicit Nearest may leave an empty view. */
+  selectNearestDiscoveredCamera({ fallbackToAll = false } = {}) {
+    const state = this.cctv.getUIState?.() || this._cctvState;
+    const discovery = this.discoverCameras(state);
+    let camera = discovery.cameras[0];
+    if (!camera && fallbackToAll && !discovery.localIds.size) {
+      camera = discoverCctvCameras(state?.cameras || [], {
+        view: this.actions.readMapView?.(),
+        scope: 'all',
+      }).cameras.find((candidate) => Number.isFinite(candidate.distanceKm));
+    }
+    return camera && this.cctv.selectCamera(camera.id) ? camera.id : null;
+  }
+  cycleDiscoveredCamera(step) {
+    const cameras = this.discoverCameras(this._cctvState).cameras;
+    if (!cameras.length) return null;
+    const index = cameras.findIndex(
+      (camera) => camera.id === this._cctvState?.activeCameraId,
+    );
+    const next =
+      index < 0
+        ? step < 0
+          ? cameras.length - 1
+          : 0
+        : (index + step + cameras.length) % cameras.length;
+    const id = cameras[next].id;
+    return this.cctv.selectCamera(id) ? id : null;
   }
   _clearCctvFrame(...args) {
     return _clearCctvFrame.call(this, ...args);
@@ -116,6 +159,8 @@ export class CctvControls {
     this._videoVisibilityObserver?.disconnect();
     this._actionGeneration++;
     this.listeners.abort();
+    this._cctvViewUnsubscribe?.();
+    this._cctvViewUnsubscribe = null;
     this._cctvUnsubscribe?.();
     this._cctvUnsubscribe = null;
     this._calibrationEdit?.(false);
