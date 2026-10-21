@@ -108,6 +108,7 @@
     "panel",
     "view band|GLOBAL",
     "voice|ERROR",
+    "{count} animals",
     "{rate} msg/s",
     "{speed} kn",
     "{type}  SPD: {speed}  HDG: {heading}",
