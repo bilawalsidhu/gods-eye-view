@@ -218,7 +218,8 @@
       "src/data/cctvFootprint.js",
       "src/sources/cctvTypes.js",
       "src/sources/httpBody.js",
-      "src/i18n/marker.js"
+      "src/i18n/marker.js",
+      "server/providers/cctv/feedAvailability.js"
     ],
     "external": []
   },
