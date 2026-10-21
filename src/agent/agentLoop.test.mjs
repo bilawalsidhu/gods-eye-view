@@ -369,6 +369,169 @@ test('an aborted command reports cancellation rather than a transport fault', as
   assert.equal(session.busy, false);
 });
 
+/** A relay turn asking for two actions, the first of which blocks. */
+function blockingPairSession(turns, { onFirstStart } = {}) {
+  const ran = [];
+  let releaseFirst;
+  let announceStart;
+  const firstStarted = new Promise((resolve) => {
+    announceStart = resolve;
+  });
+  const session = createAgentSession({
+    runAction: async (name) => {
+      ran.push(name);
+      if (ran.length === 1) {
+        announceStart();
+        await new Promise((resolve) => {
+          releaseFirst = resolve;
+        });
+      }
+      return { ok: true, action: name };
+    },
+    fetchImpl: turns,
+  });
+  onFirstStart?.(session);
+  return {
+    session,
+    ran,
+    firstStarted,
+    releaseFirst: () => releaseFirst(),
+  };
+}
+
+/** Call ids the assistant turns in a posted transcript asked for. */
+function postedCallIds(messages) {
+  return messages
+    .filter((message) => message.role === 'assistant')
+    .flatMap((message) => message.tool_calls ?? [])
+    .map((call) => call.id);
+}
+
+test('cancelling while a tool runs does not start the next one', async () => {
+  const relay = stubRelay([
+    toolTurn([
+      { id: 'c1', name: 'set_layer_visibility', args: { layerId: 'flights' } },
+      { id: 'c2', name: 'zoom_to_globe' },
+    ]),
+  ]);
+  const { session, ran, firstStarted, releaseFirst } =
+    blockingPairSession(relay);
+
+  const { events, onEvent } = collect();
+  const pending = session.send('flights on and zoom out', { onEvent });
+  await firstStarted;
+  session.abort();
+  releaseFirst();
+  const result = await pending;
+
+  assert.deepEqual(result, {
+    ok: false,
+    content: '',
+    rounds: 0,
+    error: 'Command cancelled.',
+  });
+  assert.deepEqual(ran, ['set_layer_visibility']);
+  assert.equal(session.busy, false);
+
+  // The already-running action keeps its real result; only the unstarted one
+  // is reported as cancelled, and each result still follows its own start.
+  const starts = events.filter(
+    (event) => event.type === AGENT_EVENTS.TOOL_START,
+  );
+  const results = events.filter(
+    (event) => event.type === AGENT_EVENTS.TOOL_RESULT,
+  );
+  assert.deepEqual(
+    starts.map((event) => event.name),
+    ['set_layer_visibility', 'zoom_to_globe'],
+  );
+  assert.deepEqual(
+    results.map((event) => [event.name, event.result.ok]),
+    [
+      ['set_layer_visibility', true],
+      ['zoom_to_globe', false],
+    ],
+  );
+  assert.match(results.at(-1).result.error, /cancelled/i);
+  assert.equal(events.at(-1).error, 'Command cancelled.');
+});
+
+test('a cancelled round still answers every call it was asked for', async () => {
+  const relay = stubRelay([
+    toolTurn([
+      { id: 'c1', name: 'set_layer_visibility', args: { layerId: 'flights' } },
+      { id: 'c2', name: 'zoom_to_globe' },
+    ]),
+    answerTurn('Globe view.'),
+  ]);
+  const { session, firstStarted, releaseFirst } = blockingPairSession(relay);
+
+  const cancelled = session.send('flights on and zoom out');
+  await firstStarted;
+  session.abort();
+  releaseFirst();
+  await cancelled;
+
+  assert.deepEqual(
+    session.transcript.map((message) => message.role),
+    ['user', 'assistant', 'tool', 'tool'],
+  );
+  assert.deepEqual(
+    session.transcript
+      .filter((message) => message.role === 'tool')
+      .map((message) => message.tool_call_id),
+    ['c1', 'c2'],
+  );
+
+  // An unanswered call is a 400 from every provider, so the command that
+  // follows a cancellation has to post a complete transcript.
+  const next = await session.send('zoom out');
+  assert.equal(next.ok, true);
+  const posted = relay.posts[1].body.messages;
+  assert.deepEqual(
+    posted
+      .filter((message) => message.role === 'tool')
+      .map((m) => m.tool_call_id),
+    postedCallIds(posted),
+  );
+});
+
+test('cancelling before a round dispatches runs nothing in it', async () => {
+  const ran = [];
+  let session;
+  session = createAgentSession({
+    runAction: async (name) => {
+      ran.push(name);
+      return { ok: true, action: name };
+    },
+    fetchImpl: async () => {
+      // Lands in the window between the relay answering and the first
+      // dispatch, which no action boundary would cover.
+      session.abort();
+      return {
+        ok: true,
+        status: 200,
+        json: async () =>
+          toolTurn([
+            { id: 'c1', name: 'set_layer_visibility', args: {} },
+            { id: 'c2', name: 'zoom_to_globe' },
+          ]).payload,
+      };
+    },
+  });
+
+  const result = await session.send('flights on and zoom out');
+  assert.equal(result.error, 'Command cancelled.');
+  assert.deepEqual(ran, []);
+  assert.deepEqual(
+    session.transcript
+      .filter((message) => message.role === 'tool')
+      .map((message) => message.tool_call_id),
+    ['c1', 'c2'],
+  );
+  assert.equal(session.busy, false);
+});
+
 test('a second command while one runs is refused instead of interleaved', async () => {
   let release;
   const session = createAgentSession({

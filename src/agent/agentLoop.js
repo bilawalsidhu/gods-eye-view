@@ -87,6 +87,21 @@ async function runActionSafely(runAction, name, args) {
 }
 
 /**
+ * Result recorded for a call that cancellation reached before it started.
+ *
+ * Abandoning the call silently is not an option: a provider answers an
+ * assistant `tool_calls` entry whose results are incomplete with a 400, so a
+ * cancelled round still has to answer the calls it never dispatched.
+ */
+function cancelledActionResult(name) {
+  return {
+    ok: false,
+    action: name,
+    error: 'Command cancelled before this action ran.',
+  };
+}
+
+/**
  * Create a stateful agent session.
  *
  * @param {{
@@ -200,6 +215,7 @@ function createAgentSession({
 
       try {
         for (let round = 0; round < maxToolRounds; round += 1) {
+          controller.signal.throwIfAborted();
           onEvent({ type: AGENT_EVENTS.REQUEST, round });
 
           const data = await postTurn({
@@ -236,7 +252,27 @@ function createAgentSession({
             });
           }
 
-          for (const call of toolCalls) {
+          for (const [index, call] of toolCalls.entries()) {
+            // Checked at the top of every iteration, so this covers both the
+            // first dispatch and the gap after each action's await: an abort
+            // that lands while one tool runs must not start the next one.
+            if (controller.signal.aborted) {
+              for (const unrun of toolCalls.slice(index)) {
+                const cancelled = cancelledActionResult(unrun.name);
+                onEvent({
+                  type: AGENT_EVENTS.TOOL_START,
+                  name: unrun.name,
+                  args: unrun.args,
+                });
+                onEvent({
+                  type: AGENT_EVENTS.TOOL_RESULT,
+                  name: unrun.name,
+                  result: cancelled,
+                });
+                messages.push(toolResultMessage(unrun.id, cancelled));
+              }
+              controller.signal.throwIfAborted();
+            }
             onEvent({
               type: AGENT_EVENTS.TOOL_START,
               name: call.name,
