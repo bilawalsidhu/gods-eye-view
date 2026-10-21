@@ -532,6 +532,47 @@ test('cancelling before a round dispatches runs nothing in it', async () => {
   assert.equal(session.busy, false);
 });
 
+test('a 2xx reply with no message fails the command and leaves no orphan', async () => {
+  // A server that answers 200 with only {error} used to have its missing
+  // message pushed into the transcript: the command reported an empty
+  // success, and every later command died on the orphan.
+  const session = createAgentSession({
+    runAction: async () => ({ ok: true }),
+    fetchImpl: stubRelay([
+      { status: 200, payload: { error: 'Upstream returned no message.' } },
+      answerTurn('Globe view.'),
+    ]),
+  });
+
+  const { events, onEvent } = collect();
+  const first = await session.send('zoom out', { onEvent });
+  assert.equal(first.ok, false);
+  assert.match(first.error, /no message/);
+  assert.equal(events.at(-1).type, AGENT_EVENTS.ERROR);
+
+  // Only the user's own turn survives, so the session still works afterwards.
+  assert.deepEqual(
+    session.transcript.map((message) => message.role),
+    ['user'],
+  );
+  assert.equal(session.busy, false);
+  const second = await session.send('zoom out');
+  assert.equal(second.ok, true);
+});
+
+test('a 2xx reply whose message is not an object is refused too', async () => {
+  const session = createAgentSession({
+    runAction: async () => ({ ok: true }),
+    fetchImpl: stubRelay([{ status: 200, payload: { message: 'oops' } }]),
+  });
+  const result = await session.send('zoom out');
+  assert.equal(result.ok, false);
+  assert.deepEqual(
+    session.transcript.map((message) => message.role),
+    ['user'],
+  );
+});
+
 test('a second command while one runs is refused instead of interleaved', async () => {
   let release;
   const session = createAgentSession({

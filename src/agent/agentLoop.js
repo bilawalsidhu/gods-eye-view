@@ -154,6 +154,12 @@ function createAgentSession({
         data?.error || `Agent request failed (HTTP ${response.status})`,
       );
     }
+    // A 2xx body is still not a turn unless it carries a message. Pushing a
+    // missing one into the transcript reports the command as an empty success
+    // and breaks every later command on the orphan it leaves behind.
+    if (!data.message || typeof data.message !== 'object') {
+      throw new Error(data.error || 'Agent response carried no message');
+    }
     return data;
   }
 

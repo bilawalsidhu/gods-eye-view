@@ -314,13 +314,17 @@ function createAgentCommandHandler({
       });
 
       if (!completion.ok) {
-        sendJson(
-          res,
-          completion.status && completion.status < 500
+        // Only a 4xx is worth relaying as-is. A failure can carry a 2xx
+        // status - a 200 whose body holds no message is one - and relaying
+        // that answers a failure with a success the client cannot detect.
+        const status =
+          completion.status >= 400 && completion.status < 500
             ? completion.status
-            : 502,
-          { error: completion.error, provider: resolved.provider.id },
-        );
+            : 502;
+        sendJson(res, status, {
+          error: completion.error,
+          provider: resolved.provider.id,
+        });
         return;
       }
 

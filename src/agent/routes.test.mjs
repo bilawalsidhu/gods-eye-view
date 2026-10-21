@@ -526,6 +526,30 @@ test('an upstream 5xx becomes a 502 from this server', async () => {
   assert.equal(res.statusCode, 502);
 });
 
+test('an upstream 200 carrying no message becomes a 502, not a 200', async () => {
+  // The failure's `status` is the upstream's own 200. Relaying it would answer
+  // a failure with a success the client cannot detect, and the browser would
+  // record the absent message in its transcript.
+  const res = response();
+  await createAgentCommandHandler({
+    env: KEYED,
+    fetchImpl: stubFetch([{ status: 200, body: { choices: [] } }]),
+    limiter: admitAll,
+  })(
+    request({
+      method: 'POST',
+      body: JSON.stringify({
+        provider: 'openai',
+        messages: [{ role: 'user', content: 'go' }],
+      }),
+    }),
+    res,
+  );
+  assert.equal(res.statusCode, 502);
+  assert.match(res.json.error, /no message/);
+  assert.equal(res.json.message, undefined);
+});
+
 test('a JSON body of null is answered, not left hanging', async () => {
   // `null` parses, so the parse guard passes and every field read on it used to
   // throw past the catch with nothing written to the response at all.
