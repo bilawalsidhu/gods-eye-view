@@ -133,10 +133,12 @@ export function createCards({ state: layerState, services, parts, source }) {
         ),
         inView,
         // Québec's browser-only sources have no registered frame endpoint;
-        // keep them out of still-card fill just like video feeds.
+        // keep them out of still-card fill just like video feeds. Location-only
+        // cameras (feedType 'none') never get an ambient card either.
         isVideo:
           parts.model.isVideoFeedCamera(record.camera) ||
-          parts.model.isBrowserOverlayCamera(record.camera),
+          parts.model.isBrowserOverlayCamera(record.camera) ||
+          parts.model.isNoFeedType(record.camera.feedType),
         sx,
         sy,
       });

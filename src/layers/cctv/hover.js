@@ -50,7 +50,9 @@ export function createHover({ state: layerState, services, parts, source }) {
       cameraId !== layerState._activeCameraId &&
       !layerState._cardIds.has(cameraId) &&
       !parts.model.isBrowserOverlayCamera(record.camera) &&
-      !parts.model.isVideoFeedCamera(record.camera);
+      !parts.model.isVideoFeedCamera(record.camera) &&
+      // No hover card for a location-only camera.
+      !parts.model.isNoFeedType(record.camera.feedType);
     if (eligible) {
       cancelHoverRelease();
       layerState._hoverCardId = cameraId;
