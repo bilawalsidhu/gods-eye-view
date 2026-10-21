@@ -1671,6 +1671,11 @@
       "./standalone/catalog"
     ],
     "modules": [
+      "src/app/layers/spc.js",
+      "src/layers/spc/index.js",
+      "src/layers/spc/rendering.js",
+      "src/layers/spc/records.js",
+      "src/layers/spc/source.js",
       "src/ui/placeNames.js",
       "src/cyberSonarScene.js",
       "src/cyberSonar.js",
@@ -2537,6 +2542,10 @@
   "application-layer-construction": {
     "exports": ["./application/layers"],
     "modules": [
+      "src/app/layers/spc.js",
+      "src/layers/spc/index.js",
+      "src/layers/spc/rendering.js",
+      "src/layers/spc/records.js",
       "src/cyberSonar.js",
       "src/data/approxDistance.js",
       "src/data/bhoteKoshiEvent.js",

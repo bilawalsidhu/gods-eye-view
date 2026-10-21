@@ -84,6 +84,7 @@ const PANEL_GROUPS = [
       'weather-satellite',
       'weather-lightning',
       'weather-cyclones',
+      'severe-weather-outlooks',
     ],
   },
   {
@@ -460,6 +461,7 @@ export class LayerPanel {
               'weather-satellite',
               'weather-lightning',
               'weather-cyclones',
+              'severe-weather-outlooks',
               'air-quality',
             ].includes(layer.id),
         )
