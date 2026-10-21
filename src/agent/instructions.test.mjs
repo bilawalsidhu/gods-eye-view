@@ -54,6 +54,31 @@ test('the typed manual never tells the model to speak into a microphone', () => 
   }
 });
 
+test('the typed manual never promises a capability this channel lacks', () => {
+  const instructions = buildAgentInstructions();
+  // control_radio action=play only prepares a station here: the handoff that
+  // starts audio lives in the Realtime session.
+  assert.doesNotMatch(instructions, /say "Turning on the radio"/);
+  assert.doesNotMatch(instructions, /closes voice before restoring Radio/);
+  assert.match(instructions, /does not start audio/);
+  assert.match(instructions, /playback starts from the Radio panel/);
+
+  // The map_annotation_outline item is injected by session.sendMapEvent,
+  // which only the Realtime session has.
+  assert.doesNotMatch(instructions, /map_annotation_outline/);
+  assert.match(instructions, /no later item reports the outcome/);
+});
+
+test('the radio action mapping voice encodes survives the rewrite', () => {
+  // The rewrite corrects what playback does, not which action to call: a
+  // typed agent that reaches for action=enable to play a station is the
+  // original bug the voice line exists to prevent.
+  const instructions = buildAgentInstructions();
+  assert.match(instructions, /means action=play/);
+  assert.match(instructions, /action=enable only reveals Radio markers/);
+  assert.match(instructions, /Radio selection never moves the camera/);
+});
+
 test('the typed manual keeps the product contracts voice encodes', () => {
   const instructions = buildAgentInstructions();
   assert.match(instructions, /^You are GEV Command,/);

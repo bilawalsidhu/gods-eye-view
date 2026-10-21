@@ -18,9 +18,11 @@ import { realtimeDirectives } from '../openai/instructions.js';
 /**
  * Channel rewrites applied to the voice manual.
  *
- * Deliberately small. Every entry here is a line that would otherwise tell a
- * typed agent to speak, which produces stage directions in the transcript
- * instead of an answer.
+ * Deliberately small, and only for lines the typed channel cannot honour:
+ * one that tells the agent to speak, which produces stage directions in the
+ * transcript instead of an answer, or one that promises a follow-up or a
+ * handoff only the Realtime session performs. A line left unrewritten there
+ * makes the model report something that never happened.
  *
  * @type {ReadonlyArray<{anchor: RegExp, line: string}>}
  */
@@ -36,6 +38,21 @@ const TEXT_ADAPTATIONS = Object.freeze([
   {
     anchor: /^PREAMBLES:/,
     line: 'PREAMBLES: for instant commands (layers, styles, HUD, detection, zoom, panels, basemap, radio controls, and lookups such as get_entity_context) call the tool and write nothing alongside the call. Only for slow or multi-step work (annotate_map, a searched fly_to_location, select_nearest_aircraft, analyst_query over a named place, or two or more tools) you may first write ONE line of at most 12 words naming the actual steps ("Finding the Capitol, then outlining its grounds."), then call the tools at once in the same response.',
+  },
+  {
+    // action=play only prepares a station: cycleStation runs with
+    // autoplay:false and the handoff that starts audio lives in the Realtime
+    // session, so this console has nothing to hand off to. Left unrewritten,
+    // the model says "Turning on the radio" and no sound ever arrives.
+    anchor: /^Radio playback requests use control_radio/,
+    line: 'Radio playback requests use control_radio. "Turn on/start the radio" means action=play; action=enable only reveals Radio markers and must be reserved for explicit "show/enable the Radio layer/markers" requests. In this console action=play selects and prepares a station but does not start audio: name the station it prepared and say playback starts from the Radio panel\'s play control. Never say the radio is playing, or that you are turning it on. Examples: "play news near Austin" → select category=news locationId=austin; "play US news" → select category=news country=US; "Radio volume 30" → volume; pause/resume/stop/next/previous use the matching action. Radio selection never moves the camera.',
+  },
+  {
+    // The map_annotation_outline item is injected by session.sendMapEvent,
+    // which only the Realtime session has. A typed agent told to wait for it
+    // waits forever, and never corrects an outlinePending outcome.
+    anchor: /^annotate_map results:/,
+    line: 'annotate_map results: work any say line in naturally (places not found, a straight-line fallback with no travel time, or a full map — then ask before clearing). outlinePending means the boundary is still being traced: never claim it is drawn, and say it is still being traced rather than waiting to confirm it, because no later item reports the outcome in this console.',
   },
   {
     anchor: /^AFTER TOOLS:/,
