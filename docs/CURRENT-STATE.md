@@ -1235,6 +1235,50 @@ future driver fix restores the effect with no code change; iOS/iPadOS platform
 detection is the backstop for when no probe context can be created. Applied
 during viewer construction, before any tile builds a draw command.
 
+## Drawing resolution
+
+The globe draws in device pixels on high-DPI screens. `createApplicationViewer`
+turns off Cesium's `useBrowserRecommendedResolution`, which drew one pixel per
+CSS pixel and let the browser pixel-double the frame on a 2x screen, and
+installs `src/app/resolutionGovernor.js`. The drawing ratio is at most
+`min(devicePixelRatio, 2)`, and at most a 3840 × 2160 drawing buffer (rounded
+down to a 0.25 step), and never below 1. A DPR 1 screen draws exactly as
+before; every laptop screen gets its full 2x; a full-screen 2560 × 1440 CSS
+window on a 5K display draws at 1.5. Framebuffer memory grows about 150 bytes
+per drawn pixel (`docs/PERFORMANCE.md`), which is what the budget bounds. Tile
+detail does not change with the ratio: Cesium divides screen-space error by the
+pixel ratio.
+
+- **Governor.** It reads the smoothed interval between back-to-back frames:
+  continuous render, or a moving camera. Request-mode frames on a parked camera
+  carry no cost signal and are skipped, so an idle globe never changes
+  resolution and the governor never requests a frame. The first 5 s after
+  start-up are skipped as well. Over 20 ms, without getting back to 18 ms, for
+  2 s of frames steps the ratio down by 0.25, never below 1; the gap keeps a
+  frame time that hovers at the budget from resetting that window. 8 s of
+  frames at or under 18 ms steps it back up. A step up that fails doubles that
+  wait, up to 64 s. A `devicePixelRatio` change (another screen, browser zoom)
+  restarts at the new ceiling; a canvas resize keeps a stepped-down ratio
+  inside the new ceiling. Frame time cannot tell CPU from GPU cost, so a
+  CPU-bound scene also steps down, at worst to the old 1x.
+- **MSAA.** 4 samples below ratio 1.5 and 2 samples from 1.5 up. Ratio² ×
+  samples never falls below the 4 coverage samples per CSS pixel the old 1x
+  drawing had, at half the multisample memory.
+- **Upscaling.** Cesium sets `image-rendering: pixelated` on its canvas. The
+  governor keeps it at whole-number upscaling factors and switches to `auto` at
+  fractional ones, where nearest-neighbour would double uneven rows.
+- **Post stages.** Sharpen and the CRT, NVG, FLIR and Anime styles size their
+  kernels, pixel blocks and scanlines in CSS pixels (`czm_pixelRatio`, as
+  Cesium's own blur and edge stages do), so each effect looks the same at any
+  ratio. Transit's sensor-click mapping (`layers/transit/selection.js`) snaps
+  on the same CSS-pixel grid.
+- `?maxPixelRatio=1` restores one drawing pixel per CSS pixel; values from 1 to
+  3 are accepted. `window.__godsEyeView.getResolutionDiagnostics()` reports the
+  ratio, ceiling, smoothed interval and step counts.
+- Cesium labels and billboards keep CSS-size glyph textures, so text drawn by
+  Cesium gains little; lines, polygons, 3D tiles and models gain the most. The
+  world overlay's own text canvas was already DPR-aware.
+
 ## Map Source control ownership
 
 Map Source controls own chip listeners, source-state subscriptions and selection
