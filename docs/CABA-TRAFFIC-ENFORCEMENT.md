@@ -49,7 +49,7 @@ selection and context records on disable/destroy. Reload the app to request a
 new inventory; toggles do not poll the publisher. Destruction aborts acquisition
 and discards late results.
 
-Layer ID: `caba-traffic-enforcement`. Provisional share token: `4`; rerun the
+Layer ID: `caba-traffic-enforcement`. Provisional share token: `5`; rerun the
 allocator against merge-time main before merging. Voice supports visibility and
 entity context; aggregate analyst queries are not exposed for this inventory.
 
