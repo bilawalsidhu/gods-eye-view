@@ -4467,5 +4467,9 @@
     "other": "Показать {what} · {place} ({count} объекта)"
   },
   "Go there": "Перейти туда",
-  "Open draw options": "Открыть параметры рисования"
+  "Open draw options": "Открыть параметры рисования",
+  "Clean view: hide the controls": "Чистый вид: скрыть элементы управления",
+  "Exit clean view: show the controls": "Выйти из чистого вида: показать элементы управления",
+  "Clean view: hide the controls (V)": "Чистый вид: скрыть элементы управления (V)",
+  "{label} (V)": "{label} (V)"
 }
