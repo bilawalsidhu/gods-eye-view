@@ -1,4 +1,5 @@
 import { formatNumber, t, msg } from '../i18n/index.js';
+import { createNumberInput } from './formField.js';
 
 /** Shortest-wrap signed degrees, for heading offsets typed as absolute values. */
 const signedNormalizeDeg = (deg) => ((((deg + 180) % 360) + 360) % 360) - 180;
@@ -117,11 +118,12 @@ export function _beginCctvCalValueEdit(chip) {
   const basePose = { ...activeCamera.basePose };
   const editListeners = new AbortController();
   const startValue = field.get(activeCamera);
-  const input = document.createElement('input');
-  input.type = 'number';
-  input.step = field.decimals > 0 ? '0.1' : '1';
-  input.value = Number(startValue).toFixed(field.decimals);
-  input.className = 'cctv-cal-input';
+  const input = createNumberInput({
+    className: 'gev-field--inline cctv-cal-input',
+    step: field.decimals > 0 ? '0.1' : '1',
+    value: Number(startValue).toFixed(field.decimals),
+    ariaLabel: t(field.label),
+  });
   chip.textContent = `${t(field.label)} `;
   chip.appendChild(input);
   input.focus();

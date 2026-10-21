@@ -13,3 +13,7 @@
   HTTPS image-host redirects, keeping their short-lived addresses out of the
   runtime catalog. Include player/HLS prerequisites and operator credits.
   (radianx, #1163).
+- Adapt external-player source and location labels to the shared status badges,
+  preserving external/approximate semantics without redundant live-region
+  updates; retain shared native controls and feature-owned calibration width.
+  (radianx, #1163).

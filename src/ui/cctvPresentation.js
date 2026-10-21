@@ -1,3 +1,4 @@
+import { updateStatusBadge } from './statusBadge.js';
 import { t, tn } from '../i18n/index.js';
 import { cctvSourceLabelText, cctvSourceMessageText } from './cctvFrames.js';
 
@@ -143,16 +144,20 @@ export function _renderCctvState(state) {
     // promotes to CALIBRATED, RESET CAL clears.
     const badge = activeCamera?.calBadge || null;
     const dirty = !!activeCamera?.calDirty;
-    this._cctvQualityChip.textContent = dirty
-      ? t('CAL · EDITED (UNSAVED)')
-      : t('CAL · {badge}', {
-          badge: this._calBadgeLabel(badge),
-        });
-    this._cctvQualityChip.dataset.calBadge = dirty ? 'edited' : badge || '';
-    if (embedded) {
-      this._cctvQualityChip.textContent = t('LOCATION · APPROXIMATE');
-      this._cctvQualityChip.dataset.calBadge = '';
-    }
+    updateStatusBadge(this._cctvQualityChip, {
+      label: embedded
+        ? t('LOCATION · APPROXIMATE')
+        : dirty
+          ? t('CAL · EDITED (UNSAVED)')
+          : t('CAL · {badge}', {
+              badge: this._calBadgeLabel(badge),
+            }),
+    });
+    this._cctvQualityChip.dataset.calBadge = embedded
+      ? ''
+      : dirty
+        ? 'edited'
+        : badge || '';
   }
 
   this._syncCctvCalReadout(enabled, activeCamera);

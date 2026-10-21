@@ -131,3 +131,38 @@ browser startup (`Target closed`). Neither is a browser pass. No socket policy,
 assertion or threshold was weakened. Live playback/codec acceptance on this
 combined tree remains unverified; previous PR browser evidence belongs to its
 original tree.
+
+## Argentina shared-control integration — 2026-10-21
+
+The #1163 branch merges upstream main
+`275513bf2c5a84c379dbed3d57422c6d2a7c5b3a`, including #1306's status badges and
+#1309's shared-field CSS ownership. The existing #1162 head
+`896bf69d673bac88cb28cc0d7e4aa67328fb6972` and #1165 head
+`48b67a794223b460b045d951fd1ef889950b62af` remain ancestors; their landing order
+is unchanged. Publishing this branch does not merge any upstream PR.
+
+The only textual conflict was in `scripts/package-boundaries.json`: the CCTV
+and composition exports retain both the external-player dependencies and the
+new status-badge adapter. CCTV templates use main's shared buttons, select and
+badge classes; numeric calibration fields retain the shared field factory and
+CCTV-owned 58px width. External players retain their iframe lifecycle and
+projection/calibration exclusions. Their source and location labels now use
+`updateStatusBadge` directly, without first painting a native calibration label
+or rewriting the source live region on identical updates.
+
+The 64-entry catalog (25 external players, 24 HLS streams, 15 images), its 14
+IPCamLive aliases, image redirect policy and external-player implementation
+are unchanged from the previous #1163 head. `server/providers/cctv/stream.js`
+is byte-identical to #1165; the route file retains #1162's player metadata and
+native-proxy exclusions alongside #1165's media admission checks. This keeps
+the peer lease limits, same-site media gate, recovery behavior and 24 MiB
+retained-cache budget intact.
+
+Regression coverage in `src/ui/cctvBadges.test.mjs` now covers English, Spanish
+and Russian player labels, native/player/idle transitions, stale native-frame
+flags, approximate-location semantics, visibility and zero repeated text writes.
+Browser acceptance on this integration tree remains unverified: Chrome
+152.0.7977.75 is absent from the executor and its download failed through the
+network proxy. The status-badge, form-field, CCTV v2 and tracking gates cannot
+reach their assertions without that browser. Earlier browser results do not
+validate this new tree. No live camera availability check was repeated.

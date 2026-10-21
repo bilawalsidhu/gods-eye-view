@@ -1,3 +1,4 @@
+import { updateStatusBadge } from './statusBadge.js';
 import { msg, t } from '../i18n/index.js';
 
 /**
@@ -164,24 +165,28 @@ export function _settleCctvFrame(token, src, ok) {
 export function _syncCctvSourceBadge(activeCamera, enabled) {
   if (!this._cctvSourceBadge) return;
   if (!enabled || !activeCamera) {
-    this._cctvSourceBadge.textContent = t('SOURCE · UNKNOWN');
+    updateStatusBadge(this._cctvSourceBadge, { label: t('SOURCE · UNKNOWN') });
     this._cctvSourceBadge.dataset.frameState = 'idle';
     return;
   }
   if (activeCamera.feedType === 'embed') {
-    this._cctvSourceBadge.textContent = t('PUBLIC PLAYER · EXTERNAL');
+    updateStatusBadge(this._cctvSourceBadge, {
+      label: t('PUBLIC PLAYER · EXTERNAL'),
+    });
     this._cctvSourceBadge.dataset.frameState = 'external';
     return;
   }
   const hasDisplayedFrame =
     this._cctvFrameWrap?.classList.contains('has-frame');
   if (this._cctvFrame?.dataset.loading === 'true' && !hasDisplayedFrame) {
-    this._cctvSourceBadge.textContent = t('FRAME · LOADING');
+    updateStatusBadge(this._cctvSourceBadge, { label: t('FRAME · LOADING') });
     this._cctvSourceBadge.dataset.frameState = 'loading';
     return;
   }
   if (this._cctvFrame?.dataset.error === 'true' && !hasDisplayedFrame) {
-    this._cctvSourceBadge.textContent = t('FRAME · UNAVAILABLE');
+    updateStatusBadge(this._cctvSourceBadge, {
+      label: t('FRAME · UNAVAILABLE'),
+    });
     this._cctvSourceBadge.dataset.frameState = 'error';
     return;
   }
@@ -189,6 +194,6 @@ export function _syncCctvSourceBadge(activeCamera, enabled) {
     activeCamera.sourceKind || activeCamera.feedType || 'unknown',
   );
   const status = cctvSourceStatusLabel(activeCamera.sourceStatus || 'unknown');
-  this._cctvSourceBadge.textContent = `${kind} · ${status}`;
+  updateStatusBadge(this._cctvSourceBadge, { label: `${kind} · ${status}` });
   this._cctvSourceBadge.dataset.frameState = 'ready';
 }
