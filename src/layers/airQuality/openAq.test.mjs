@@ -116,3 +116,27 @@ test('multiple sensors do not double-count one station and pollutant', () => {
   assert.equal(result.length, 1);
   assert.equal(result[0].sensorId, 9);
 });
+
+test('injected viewport travels through the fixed snapshot route without exposing credentials', async () => {
+  let request;
+  const source = createAirQualitySource({
+    fetchImpl: async (url, options) => {
+      request = { url, options };
+      return Response.json({
+        schemaVersion: 1,
+        stations: [],
+        readings: [],
+        partial: false,
+      });
+    },
+  });
+  const view = [170, -30, -170, 30, 179, 0];
+  await source.getSnapshot({ provider: 'openaq', view });
+  assert.equal(
+    new URL(request.url, 'http://localhost').searchParams.get('view'),
+    view.join(','),
+  );
+  assert.equal(request.options.headers, undefined);
+  assert.ok(source.definitions.find((p) => p.id === 'openaq').viewDriven);
+  assert.ok(!source.definitions.find((p) => p.id === 'saaqis').viewDriven);
+});

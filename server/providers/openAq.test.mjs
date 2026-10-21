@@ -313,3 +313,148 @@ test('global discovery isolates missing pollutant feeds and preserves results on
   key = '';
   await assert.rejects(source.getSnapshot(), (e) => e.status === 428);
 });
+
+test('viewport discovery prioritizes focus, coalesces, and resumes unchecked stations', async () => {
+  let clock = start;
+  const { source, calls } = fixture({ now: () => clock, batchSize: 1 });
+  const view = [0, -40, 50, 10, 18, -34];
+  const [a, b] = await Promise.all([
+    source.getSnapshot({ view }),
+    source.getSnapshot({ view }),
+  ]);
+  assert.equal(a, b);
+  assert.equal(new URL(calls[0].url).searchParams.get('bbox'), '13,-39,23,-29');
+  assert.equal(new URL(calls[1].url).searchParams.get('bbox'), '0,-40,50,10');
+  assert.equal(a.scope, 'viewport');
+  assert.equal(a.checked, 1);
+  assert.equal(a.partial, true);
+  clock += 61_000;
+  assert.equal((await source.getSnapshot({ view })).checked, 2);
+  clock += 61_000;
+  assert.equal((await source.getSnapshot({ view })).partial, false);
+  assert.ok(calls.every((c) => !c.url.includes('/countries?')));
+});
+
+test('viewport antimeridian queries split; empty coverage is complete only after all pages', async () => {
+  let clock = start;
+  const boxes = [];
+  const source = createOpenAqAcquisition({
+    getKey: () => 'fixture',
+    now: () => clock,
+    fetchImpl: async (url) => {
+      boxes.push(new URL(url).searchParams.get('bbox').split(',').map(Number));
+      return Response.json({ results: [] });
+    },
+  });
+  const view = [170, -30, -170, 30, 179, 0];
+  const first = await source.getSnapshot({ view });
+  assert.equal(first.partial, true);
+  clock += 61_000;
+  const next = await source.getSnapshot({ view });
+  assert.equal(next.partial, false);
+  assert.equal(next.readings.length, 0);
+  assert.ok(
+    boxes.every(([w, s, e, n]) => w < e && s < n && w >= -180 && e <= 180),
+  );
+  assert.ok(boxes.some((b) => b[0] === -180));
+  assert.ok(boxes.some((b) => b[2] === 180));
+});
+
+test('viewport cache is scoped and invalidated when credentials change', async () => {
+  let key = 'one';
+  const { source, calls } = fixture({ getKey: () => key });
+  const a = [0, -10, 30, 10, 20, 0],
+    b = [40, -10, 70, 10, 50, 0];
+  const first = await source.getSnapshot({ view: a });
+  assert.equal(await source.getSnapshot({ view: a }), first);
+  const previousCalls = calls.length;
+  assert.notEqual(await source.getSnapshot({ view: b }), first);
+  assert.ok(calls.length > previousCalls);
+  key = 'two';
+  assert.notEqual(await source.getSnapshot({ view: a }), first);
+  assert.equal(calls.at(-1).options.headers['X-API-Key'], 'two');
+});
+
+test('invalid geographic queries fail before upstream requests', async () => {
+  const { parseOpenAqView } = await import('./openAq.js');
+  for (const input of [
+    '',
+    '1,2,3,4',
+    '1,2,3,4,5,Infinity',
+    '181,0,5,10,0,0',
+    '0,20,10,0,5,5',
+    '0,0,0,10,0,5',
+    '0,,10,10,5,5',
+  ]) {
+    assert.throws(
+      () => parseOpenAqView(input),
+      (e) => e.status === 400,
+    );
+  }
+  assert.deepEqual(
+    parseOpenAqView('-180,-90,180,90,0,0'),
+    [-180, -90, 180, 90, 0, 0],
+  );
+});
+
+test('viewport latest acquisition chooses nearest stations before catalog ID order', async () => {
+  const ids = [];
+  const source = createOpenAqAcquisition({
+    getKey: () => 'fixture',
+    now: () => start,
+    batchSize: 1,
+    fetchImpl: async (raw) => {
+      const url = new URL(raw);
+      if (url.pathname === '/v3/locations')
+        return Response.json({
+          results: locations.slice(0, 2).map((s, i) => ({
+            ...s,
+            coordinates: { latitude: 0, longitude: i ? 20 : 40 },
+          })),
+        });
+      ids.push(url.pathname);
+      return Response.json({ results: [] });
+    },
+  });
+  await source.getSnapshot({ view: [0, -10, 50, 10, 20, 0] });
+  assert.deepEqual(ids, ['/v3/locations/2/latest']);
+});
+
+test('viewport changes share one request budget and evict old view caches', async () => {
+  let count = 0;
+  const source = createOpenAqAcquisition({
+    getKey: () => 'fixture',
+    now: () => start,
+    fetchImpl: async () => {
+      count++;
+      return Response.json({ results: [] });
+    },
+  });
+  const view = (i) => [i, -10, i + 20, 10, i + 10, 0];
+  await source.getSnapshot({ view: view(0) });
+  for (let i = 1; i <= 8; i++) await source.getSnapshot({ view: view(i) });
+  const before = count;
+  await source.getSnapshot({ view: view(0) });
+  assert.equal(count, before + 2, 'ninth view evicts oldest cache');
+  for (let i = 9; i < 30; i++) await source.getSnapshot({ view: view(i) });
+  assert.equal(count, 45, 'navigation cannot bypass per-minute budget');
+  const limited = await source.getSnapshot({ view: view(31) });
+  assert.equal(limited.partial, true);
+  assert.equal(limited.stale, true);
+});
+
+test('overlapping views reuse recent station checks and refresh them after expiry', async () => {
+  let clock = start;
+  const { source, calls } = fixture({ now: () => clock });
+  await source.getSnapshot({ view: [0, -10, 40, 10, 20, 0] });
+  const latestCount = () =>
+    calls.filter((c) => /\/latest\?/.test(c.url)).length;
+  assert.equal(latestCount(), 3);
+  const next = await source.getSnapshot({ view: [1, -10, 39, 10, 21, 0] });
+  assert.equal(latestCount(), 3);
+  assert.equal(next.checked, 3);
+  assert.equal(next.partial, false);
+  clock += 21 * 60_000;
+  await source.getSnapshot({ view: [1, -10, 39, 10, 21, 0] });
+  assert.equal(latestCount(), 6);
+});

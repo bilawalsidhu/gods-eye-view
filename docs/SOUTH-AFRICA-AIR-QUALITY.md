@@ -173,7 +173,21 @@ Provider Settings remains development/loopback-only. Preview and other hosts use
 environment configuration. No credential is needed for ECCC or SAAQIS.
 
 The standalone defaults offer Canada, South Africa and worldwide OpenAQ. The
-OpenAQ default has no country, city or station allowlist. Its global locations
+OpenAQ default has no country, city or station allowlist. The map requests the
+visible geographic bounds and focus point through the fixed local proxy. OpenAQ
+location discovery starts within five degrees of the focus, then paginates the
+whole visible rectangle, splitting dateline crossings. Each refresh discovers up
+to two catalog pages and checks up to 24 recent stations, nearest unchecked ones
+first, with four concurrent latest-observation requests. Camera movement is
+debounced by 400 ms; superseded browser requests are cancelled and cannot redraw.
+The server coalesces identical views, retains up to eight view caches for one hour,
+and permits at most two distinct view acquisitions concurrently. A bounded cache
+of up to 5,000 station checks reuses results for 20 minutes across overlapping views. View caches and
+background/global callers share the same request budget. The card distinguishes
+loading, partial discovery, failed/stale refreshes, and a completed search with no
+recent readings. Explicit Canada and South Africa selections remain national.
+
+Hosts calling the proxy without a viewport retain global acquisition. Its locations
 catalog is paginated incrementally (eight pages per refresh), with cursor state
 retained between refreshes; there is no regional ten-page truncation. The same
 acquisition factory still accepts an explicit country scope, including the Africa

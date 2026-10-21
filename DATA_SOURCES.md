@@ -445,7 +445,9 @@ through Provider Settings. Global discovery has no country or city allowlist.
 Station coverage depends on contributing networks and may overlap SAAQIS.
 Concentrations preserve source units, time, network and licence attribution;
 OpenAQ measurements are not presented as an AQI. Standard access is rate-limited;
-GEV acquires bulk observations progressively with process-wide budgets and caching.
+GEV prioritizes station discovery and recent observations in the visible map area,
+then continues pagination within process-wide budgets and bounded view caches.
+Calls without a viewport retain progressive bulk acquisition.
 Original data-provider terms still apply. No downloaded observation archive is
 bundled in the repository. References: [API](https://docs.openaq.org/),
 [terms](https://docs.openaq.org/about/terms),

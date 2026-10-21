@@ -46,6 +46,9 @@ export function createAirQualityLayer({ source, overlayHost } = {}) {
   let coverage = null;
   let overlayEntries = [];
   let removeMoveEnd = null;
+  let moveTimer = null;
+  let loading = false;
+  let requestedView = null;
 
   const notify = () => rowControlsListener?.();
 
@@ -62,6 +65,35 @@ export function createAirQualityLayer({ source, overlayHost } = {}) {
     };
   };
 
+  const currentView = () => {
+    const rect = viewRectangle();
+    if (!rect) return null;
+    const width = (rect.east - rect.west + 360) % 360 || 360;
+    const lon = ((rect.west + width / 2 + 540) % 360) - 180;
+    const canvas = _viewer?.scene?.canvas;
+    const focus =
+      canvas &&
+      _viewer.camera.pickEllipsoid?.(
+        new Cesium.Cartesian2(canvas.clientWidth / 2, canvas.clientHeight / 2),
+        _viewer.scene.globe?.ellipsoid,
+      );
+    const center = focus ? Cesium.Cartographic.fromCartesian(focus) : null;
+    const values = [
+      rect.west,
+      rect.south,
+      rect.east,
+      rect.north,
+      center ? Cesium.Math.toDegrees(center.longitude) : lon,
+      center
+        ? Cesium.Math.toDegrees(center.latitude)
+        : (rect.south + rect.north) / 2,
+    ];
+    const rounded = values.map((v) => Number(v.toFixed(4)));
+    return rounded[0] === rounded[2] || rounded[1] >= rounded[3]
+      ? values
+      : rounded;
+  };
+
   const layer = {
     id: 'air-quality',
     name: 'Air quality',
@@ -75,6 +107,21 @@ export function createAirQualityLayer({ source, overlayHost } = {}) {
       removeMoveEnd = viewer.camera?.moveEnd?.addEventListener(() => {
         if (_enabled) {
           this._publishOverlays();
+          if (
+            definition().viewDriven &&
+            JSON.stringify(currentView()) !== requestedView
+          ) {
+            _request?.abort();
+            _request = null;
+            loading = true;
+            coverage = null;
+            _lastError = null;
+            clearTimeout(moveTimer);
+            moveTimer = setTimeout(() => {
+              moveTimer = null;
+              void this.update();
+            }, 400);
+          }
           notify();
         }
       });
@@ -100,6 +147,9 @@ export function createAirQualityLayer({ source, overlayHost } = {}) {
       // Abort in flight: a response arriving after disable must not redraw.
       _request?.abort();
       _request = null;
+      clearTimeout(moveTimer);
+      moveTimer = null;
+      loading = false;
       _enabled = false;
       if (_dataSource) _dataSource.show = false;
       overlayHost.clearSource(AIR_QUALITY_OVERLAY_SOURCE_ID);
@@ -123,6 +173,10 @@ export function createAirQualityLayer({ source, overlayHost } = {}) {
       if (nextProvider === providerId && nextParameter === parameter) return;
       _request?.abort();
       _request = null;
+      clearTimeout(moveTimer);
+      moveTimer = null;
+      loading = false;
+      requestedView = null;
       providerId = nextProvider;
       parameter = nextParameter;
       this.source = definition().sourceLabel || definition().network;
@@ -141,16 +195,26 @@ export function createAirQualityLayer({ source, overlayHost } = {}) {
       _request?.abort();
       const request = new AbortController();
       _request = request;
+      clearTimeout(moveTimer);
+      moveTimer = null;
+      const view = definition().viewDriven ? currentView() : null;
+      requestedView = JSON.stringify(view);
+      loading = true;
+      _lastError = null;
+      notify();
       try {
         const readings = await source.getSnapshot({
           signal: request.signal,
           provider: providerId,
           parameter,
+          ...(view ? { view } : {}),
         });
         // A superseded or aborted request must not touch the scene, and neither
         // must one that lands after the layer was switched off.
         if (request.signal.aborted || _request !== request || !_enabled)
-          return false;
+          // A newer view owns acquisition. This is not a failed layer enable:
+          // the lifecycle manager must keep the layer and its refresh loop on.
+          return _enabled;
         _readings = readings;
         coverage = source.getCoverage?.() ?? null;
         this._render();
@@ -160,7 +224,7 @@ export function createAirQualityLayer({ source, overlayHost } = {}) {
         notify();
         return true;
       } catch (error) {
-        if (request.signal.aborted || _request !== request) return false;
+        if (request.signal.aborted || _request !== request) return _enabled;
         _lastError =
           (error?.code === 'no_key'
             ? keyRequirementText(definition().requiresKeyId)
@@ -171,7 +235,11 @@ export function createAirQualityLayer({ source, overlayHost } = {}) {
         notify();
         return false;
       } finally {
-        if (_request === request) _request = null;
+        if (_request === request) {
+          _request = null;
+          loading = false;
+          notify();
+        }
       }
     },
 
@@ -271,6 +339,9 @@ export function createAirQualityLayer({ source, overlayHost } = {}) {
     destroy(viewer = _viewer) {
       _request?.abort();
       _request = null;
+      clearTimeout(moveTimer);
+      moveTimer = null;
+      loading = false;
       _enabled = false;
       overlayHost.clearSource(AIR_QUALITY_OVERLAY_SOURCE_ID);
       overlayHost.setVisible(AIR_QUALITY_OVERLAY_SOURCE_ID, false);
@@ -326,17 +397,21 @@ export function createAirQualityLayer({ source, overlayHost } = {}) {
           coverage: t(provider.coverage),
           validTime: newest ? new Date(newest).toISOString() : undefined,
           detail: `${provider.network} · ${provider.scale}`,
-          status: _lastError
-            ? translateFeedError(_lastError)
-            : _count === 0
-              ? _lastUpdate === null
-                ? t('No readings available')
-                : t('No current readings')
-              : tn(
-                  _count,
-                  '{count} station reporting',
-                  '{count} stations reporting',
-                ),
+          status: loading
+            ? t('Loading observations for this view…')
+            : _lastError
+              ? translateFeedError(_lastError)
+              : coverage?.partial
+                ? t('Partial coverage · discovery continues')
+                : _count === 0
+                  ? _lastUpdate === null
+                    ? t('No readings available')
+                    : t('No current readings')
+                  : tn(
+                      _count,
+                      '{count} station reporting',
+                      '{count} stations reporting',
+                    ),
           units: provider.scale,
           settings: [
             {
@@ -384,11 +459,19 @@ export function createAirQualityLayer({ source, overlayHost } = {}) {
                   },
                   {
                     id: 'interpretation',
-                    text: visible.length
-                      ? t(provider.interpretation || '')
-                      : t(
-                          'No current observations for this pollutant in the map view.',
-                        ),
+                    text: loading
+                      ? t('Loading observations for this view…')
+                      : visible.length
+                        ? t(provider.interpretation || '')
+                        : _lastError || coverage?.stale
+                          ? t('Observations unavailable; retrying on refresh.')
+                          : coverage?.partial
+                            ? t(
+                                'Discovery is incomplete; empty areas do not yet mean no data.',
+                              )
+                            : t(
+                                'No current observations for this pollutant in the map view.',
+                              ),
                   },
                   ...(Number.isFinite(coverage?.checked)
                     ? [

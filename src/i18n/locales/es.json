@@ -2972,5 +2972,9 @@
   "Air quality · Worldwide": "Calidad del aire · Todo el mundo",
   "Worldwide · available OpenAQ stations": "Todo el mundo · estaciones OpenAQ disponibles",
   "Available monitoring stations worldwide. Unmonitored areas have no measured coverage.": "Estaciones de monitoreo disponibles en todo el mundo. Las áreas sin monitoreo no tienen cobertura medida.",
-  "{checked} stations with observations · {eligible} recent catalog stations · {countries} countries reporting": "{checked} estaciones con observaciones · {eligible} estaciones recientes en el catálogo · {countries} países con datos"
+  "{checked} stations with observations · {eligible} recent catalog stations · {countries} countries reporting": "{checked} estaciones con observaciones · {eligible} estaciones recientes en el catálogo · {countries} países con datos",
+  "Loading observations for this view…": "Cargando observaciones para esta vista…",
+  "Partial coverage · discovery continues": "Cobertura parcial · la búsqueda continúa",
+  "Observations unavailable; retrying on refresh.": "Observaciones no disponibles; se reintentará al actualizar.",
+  "Discovery is incomplete; empty areas do not yet mean no data.": "La búsqueda está incompleta; las áreas vacías aún no indican ausencia de datos."
 }

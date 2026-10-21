@@ -246,7 +246,7 @@ test('provider switch clears old markers and ignores late requests; view changes
   layer.setParams({ provider: 'saaqis' });
   await layer.update();
   resolveCanada([]);
-  assert.equal(await old, false);
+  assert.equal(await old, true);
   assert.equal(layer.getStats().count, 1);
   const card = layer.getRowControls();
   assert.equal(card.legend.length, 6);
@@ -326,4 +326,102 @@ test('provider index requires matching time, pollutant, category and supported s
       .rating,
     null,
   );
+});
+
+test('view-driven providers debounce navigation, abort old requests, and separate loading from empty coverage', async () => {
+  let moveEnd,
+    resolveOld,
+    coverage = { partial: false };
+  let rect = { west: 0, south: 0, east: 0.1, north: 0.1 };
+  const calls = [];
+  const definition = createAirQualitySource().definitions.find(
+    (p) => p.id === 'openaq',
+  );
+  const layer = createAirQualityLayer({
+    source: {
+      definitions: [definition],
+      getCoverage: () => coverage,
+      getSnapshot: (request) => {
+        calls.push(request);
+        return new Promise((resolve) => {
+          resolveOld = resolve;
+        });
+      },
+    },
+    overlayHost: { setEntries() {}, setVisible() {}, clearSource() {} },
+  });
+  layer.init({
+    dataSources: { add() {}, remove() {} },
+    camera: {
+      computeViewRectangle: () => rect,
+      moveEnd: {
+        addEventListener(fn) {
+          moveEnd = fn;
+          return () => {};
+        },
+      },
+    },
+  });
+  layer.enable();
+  const initial = layer.update();
+  assert.match(layer.getRowControls().summary.status, /Loading/);
+  const resolveInitial = resolveOld;
+  rect = { ...rect, west: 1, east: 1.1 };
+  moveEnd();
+  moveEnd();
+  moveEnd();
+  assert.equal(calls[0].signal.aborted, true);
+  await new Promise((resolve) => setTimeout(resolve, 450));
+  assert.equal(calls.length, 2);
+  assert.notDeepEqual(calls[0].view, calls[1].view);
+  resolveInitial([]);
+  assert.equal(
+    await initial,
+    true,
+    'supersession must not fail the manager enable transaction',
+  );
+  assert.match(layer.getRowControls().summary.status, /Loading/);
+  coverage = { partial: true };
+  resolveOld([]);
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.match(layer.getRowControls().summary.status, /Partial/);
+  assert.ok(
+    layer.getRowControls().summary.lines.some((l) => /incomplete/.test(l.text)),
+  );
+  const complete = layer.update();
+  coverage = { partial: false };
+  resolveOld([]);
+  await complete;
+  assert.match(layer.getRowControls().summary.status, /No current readings/);
+  rect = { ...rect, west: 2, east: 2.1 };
+  moveEnd();
+  layer.disable();
+  await new Promise((resolve) => setTimeout(resolve, 450));
+  assert.equal(calls.length, 3, 'disable cancels pending camera refresh');
+  layer.destroy();
+});
+
+test('partial or stale coverage does not label visible observations unavailable', async () => {
+  const definition = createAirQualitySource().definitions.find(
+    (p) => p.id === 'saaqis',
+  );
+  const layer = createAirQualityLayer({
+    source: {
+      definitions: [definition],
+      getSnapshot: async () =>
+        selectSaReadings(snapshot([channel()]), 'PM2.5', now),
+      getCoverage: () => ({ partial: true, stale: true }),
+    },
+    overlayHost: { setEntries() {}, setVisible() {}, clearSource() {} },
+  });
+  layer.init({ dataSources: { add() {}, remove() {} } });
+  layer.enable();
+  await layer.update();
+  assert.equal(layer.getStats().count, 1);
+  assert.equal(
+    layer.getRowControls().summary.lines.find((l) => l.id === 'interpretation')
+      .text,
+    definition.interpretation,
+  );
+  layer.destroy();
 });

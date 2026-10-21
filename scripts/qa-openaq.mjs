@@ -60,19 +60,48 @@ try {
   page.on('pageerror', (e) => errors.push(e.message));
   const cdp = await page.createCDPSession();
   let status = 200;
+  let scoped = false;
+  let incomplete = false;
+  const requestedViews = [];
   await cdp.send('Fetch.enable', {
     patterns: [{ urlPattern: '*/api/air-quality/openaq*' }],
   });
-  cdp.on('Fetch.requestPaused', async ({ requestId }) =>
-    cdp.send('Fetch.fulfillRequest', {
-      requestId,
-      responseCode: status,
-      responseHeaders: [{ name: 'Content-Type', value: 'application/json' }],
-      body: Buffer.from(
-        JSON.stringify(status === 200 ? payload : { error: 'no_key' }),
-      ).toString('base64'),
-    }),
-  );
+  cdp.on('Fetch.requestPaused', async ({ requestId, request }) => {
+    const raw = new URL(request.url).searchParams.get('view');
+    const view = raw?.split(',').map(Number);
+    requestedViews.push(view);
+    const selected =
+      scoped && view
+        ? readings.filter(
+            (r) =>
+              r.lat >= view[1] &&
+              r.lat <= view[3] &&
+              (view[0] < view[2]
+                ? r.lon >= view[0] && r.lon <= view[2]
+                : r.lon >= view[0] || r.lon <= view[2]),
+          )
+        : readings;
+    await new Promise((resolve) => setTimeout(resolve, scoped ? 700 : 5000));
+    await cdp
+      .send('Fetch.fulfillRequest', {
+        requestId,
+        responseCode: status,
+        responseHeaders: [{ name: 'Content-Type', value: 'application/json' }],
+        body: Buffer.from(
+          JSON.stringify(
+            status === 200
+              ? {
+                  ...payload,
+                  readings: selected,
+                  stations: selected,
+                  partial: incomplete,
+                }
+              : { error: 'no_key' },
+          ),
+        ).toString('base64'),
+      })
+      .catch(() => {}); // Navigation/disable may have cancelled the request.
+  });
   await page.goto(
     `${base}/?welcome=0&setup=1#v=2&lat=0&lon=20&alt=12000000&pitch=-90&map=esri-imagery&l=4&lo=4.p.o`,
     { waitUntil: 'domcontentloaded', timeout: 90000 },
@@ -123,6 +152,79 @@ try {
   );
   console.log(
     'PASS: existing Provider Settings has a masked, empty OpenAQ field; worldwide fixture renders through shared layer',
+  );
+  scoped = true;
+  async function navigate(lat, lon) {
+    await page.evaluate(
+      ({ lat, lon }) => {
+        const { viewer } = window.__godsEyeView;
+        viewer.camera.cancelFlight();
+        viewer.camera.setView({
+          destination: viewer.scene.globe.ellipsoid.cartographicToCartesian({
+            longitude: (lon * Math.PI) / 180,
+            latitude: (lat * Math.PI) / 180,
+            height: 150_000,
+          }),
+          orientation: { heading: 0, pitch: -Math.PI / 2, roll: 0 },
+        });
+        viewer.scene.requestRender();
+      },
+      { lat, lon },
+    );
+  }
+  for (const country of ['ZA', 'BR', 'JP']) {
+    const [, , lat, lon] = fixtures.find((f) => f[0] === country);
+    await navigate(lat, lon);
+    await page.waitForFunction(() =>
+      /Loading/.test(
+        window.__godsEyeView.dataManager.layers
+          .get('air-quality')
+          .module.getRowControls().summary.status,
+      ),
+    );
+    await page.waitForFunction(
+      (country) => {
+        const m =
+          window.__godsEyeView.dataManager.layers.get('air-quality').module;
+        const rows = m.getAnalystRecords();
+        return (
+          !/Loading/.test(m.getRowControls().summary.status) &&
+          rows.length === 1 &&
+          rows[0].country === country
+        );
+      },
+      { timeout: 15000 },
+      country,
+    );
+  }
+  assert.ok(requestedViews.every((view) => view?.length === 6));
+  console.log(
+    'PASS: camera navigation automatically loads South Africa, Brazil and Japan with geographic queries and visible loading state',
+  );
+  incomplete = true;
+  await navigate(0, -140);
+  await page.waitForFunction(() =>
+    /Partial/.test(
+      window.__godsEyeView.dataManager.layers
+        .get('air-quality')
+        .module.getRowControls().summary.status,
+    ),
+  );
+  incomplete = false;
+  await page.evaluate(() =>
+    window.__godsEyeView.dataManager.layers.get('air-quality').module.update(),
+  );
+  assert.match(
+    await page.evaluate(
+      () =>
+        window.__godsEyeView.dataManager.layers
+          .get('air-quality')
+          .module.getRowControls().summary.status,
+    ),
+    /No current readings/,
+  );
+  console.log(
+    'PASS: empty incomplete discovery differs from a completed empty ocean search',
   );
   status = 428;
   await page.evaluate(() =>

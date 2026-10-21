@@ -25,12 +25,17 @@ export function createAirQualitySnapshotSource({
   let coverage = null;
   return {
     getCoverage: () => coverage,
-    async getSnapshot({ parameter = 'PM2.5', signal } = {}) {
+    async getSnapshot({ parameter = 'PM2.5', signal, view } = {}) {
       const requestSignal = AbortSignal.any([
         AbortSignal.timeout(50_000),
         ...(signal ? [signal] : []),
       ]);
-      const response = await fetchImpl(endpoint, { signal: requestSignal });
+      const response = await fetchImpl(
+        view
+          ? `${endpoint}?view=${encodeURIComponent(view.join(','))}`
+          : endpoint,
+        { signal: requestSignal },
+      );
       if (!response.ok) {
         if (response.status === 401 || response.status === 403)
           throw new Error(
@@ -115,6 +120,7 @@ export function createDefaultAirQualityProviders({
     },
     {
       id: 'openaq',
+      viewDriven: true,
       title: msg('Worldwide · OpenAQ'),
       label: msg('Air quality · Worldwide'),
       coverage: msg('Worldwide · available OpenAQ stations'),
@@ -182,7 +188,7 @@ export function createAirQualitySource(options = {}) {
       const entry = registry.get(provider);
       if (!entry) throw new Error(msg('Unknown air quality provider'));
       const ticket = ++generation;
-      const cacheKey = `${provider}:${request.parameter || ''}`;
+      const cacheKey = `${provider}:${request.parameter || ''}:${request.view?.join(',') || ''}`;
       const previous = cache.get(cacheKey);
       if (previous && clock() - previous.at < (entry.refreshMs || 0)) {
         coverage = previous.coverage;
@@ -192,7 +198,11 @@ export function createAirQualitySource(options = {}) {
       request.signal?.throwIfAborted();
       if (ticket === generation) {
         coverage = entry.source.getCoverage?.() ?? null;
-        cache.set(cacheKey, { readings, coverage, at: clock() });
+        if (entry.refreshMs > 0) {
+          cache.delete(cacheKey);
+          cache.set(cacheKey, { readings, coverage, at: clock() });
+          while (cache.size > 16) cache.delete(cache.keys().next().value);
+        }
       }
       return readings;
     },

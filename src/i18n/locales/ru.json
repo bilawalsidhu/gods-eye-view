@@ -3039,5 +3039,9 @@
   "Air quality · Worldwide": "Качество воздуха · Весь мир",
   "Worldwide · available OpenAQ stations": "Весь мир · доступные станции OpenAQ",
   "Available monitoring stations worldwide. Unmonitored areas have no measured coverage.": "Доступные станции мониторинга по всему миру. В районах без станций нет измерений.",
-  "{checked} stations with observations · {eligible} recent catalog stations · {countries} countries reporting": "{checked} станций с наблюдениями · {eligible} недавних станций в каталоге · {countries} стран с данными"
+  "{checked} stations with observations · {eligible} recent catalog stations · {countries} countries reporting": "{checked} станций с наблюдениями · {eligible} недавних станций в каталоге · {countries} стран с данными",
+  "Loading observations for this view…": "Загрузка наблюдений для этой области…",
+  "Partial coverage · discovery continues": "Частичное покрытие · поиск продолжается",
+  "Observations unavailable; retrying on refresh.": "Наблюдения недоступны; повторная попытка при обновлении.",
+  "Discovery is incomplete; empty areas do not yet mean no data.": "Поиск не завершён; пустые области пока не означают отсутствие данных."
 }
