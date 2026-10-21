@@ -63,16 +63,14 @@ test('explicit build inputs preserve browser-only defines, plugin order and loop
   }
   assert.ok(!csp.includes("script-src 'self' 'unsafe-inline'"));
   assert.deepEqual(config.preview.headers, config.server.headers);
+  // Only the Google browser key is defined; ion and Mapillary stay on the
+  // server whatever a caller passes.
   assert.deepEqual(config.define, {
     'import.meta.env.GOOGLE_MAPS_API_KEY': '"browser-fixture"',
-    'import.meta.env.CESIUM_ION_TOKEN': '"ion-fixture"',
-    'import.meta.env.MAPILLARY_CLIENT_TOKEN': '""',
   });
-  assert.equal(
-    createBrowserViteConfig({ mapillaryToken: 'MLY|1|abc' }).define[
-      'import.meta.env.MAPILLARY_CLIENT_TOKEN'
-    ],
-    '"MLY|1|abc"',
+  assert.deepEqual(
+    createBrowserViteConfig({ mapillaryToken: 'MLY|1|abc' }).define,
+    { 'import.meta.env.GOOGLE_MAPS_API_KEY': undefined },
   );
   // A wildcard bind keeps the Host-header check; LAN names are explicit.
   for (const host of ['0.0.0.0', '::'])

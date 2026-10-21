@@ -1994,6 +1994,33 @@ provider returns an uncached `204 No Content` for `GET /api/google/tiles-token`
 real token providers and before the unknown-API handler, so existing Google
 browser keys, provider-issued tokens, and unrelated API routes remain unchanged.
 
+## Cesium ion and Mapillary tokens stay on the server
+
+`CESIUM_ION_TOKEN` and `MAPILLARY_CLIENT_TOKEN` are no longer injected into the
+browser bundle; the build defines only `GOOGLE_MAPS_API_KEY`
+(`server/providers/keyIsolation/`, `src/sources/serverKeys.js`).
+
+- **Cesium ion.** At start the browser asks `/api/ion/status` whether the server
+  holds a token. If it does, world terrain, Bing imagery and ion-hosted Google
+  3D load through CesiumJS's `server` option, so CesiumJS requests
+  `/api/ion/v1/assets/{id}/endpoint` from this app. The server calls ion with
+  the token and returns only ion's endpoint document (for terrain a one-hour
+  token limited to that asset). Only assets 1-4 and 2275207 are answered;
+  endpoint documents are cached while their token has at least 10 minutes left
+  (30 minutes when they carry no expiry), and an answer that would contain the
+  configured token is refused. An explicit token passed by an embedder still
+  goes straight to ion.
+- **Mapillary.** MapillaryJS and the Street Level source call
+  `/api/mapillary/graph/*`; the server adds the token as an `Authorization`
+  header and forwards only the Graph paths (`images`, `image_ids`, an image id,
+  its `tiles`) and parameters the app uses, dropping any client-supplied
+  `access_token`. Image CDN URLs in the answers carry no token.
+- Both routes sit behind the cross-site gate and a per-IP limit.
+- `src/tooling/keyExposure.test.mjs` starts the real Vite config with fake
+  tokens and fails if either reaches served client code;
+  `node scripts/check-key-exposure.mjs` scans a running app or a production
+  build the same way. The Google browser key is expected in the bundle.
+
 ## Infrastructure marker visibility
 
 Datacenter/dam registration uses fresh reusable factories with the application's

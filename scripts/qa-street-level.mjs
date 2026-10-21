@@ -6,7 +6,7 @@
  * `--fixtures` (CI) answers every *.mapillary.com, KartaView and Panoramax
  * request and the coverage tile route from fixtures, so nothing reaches those
  * providers; the server still needs a (dummy) Mapillary token because the
- * bundle carries it. `--strict` fails on any
+ * server adds it to Graph and tile calls. `--strict` fails on any
  * skip other than "fixtures only". A failed run saves evidence under
  * qa-artifacts/street-level/.
  */
@@ -144,11 +144,22 @@ async function serveFixtures(page, fixture) {
     body: JSON.stringify(payload),
   });
   const answerFor = (method, address) => {
-    if (/(^|\.)mapillary\.com$/.test(address.hostname)) {
-      const call = describeCall(method, address);
+    // Graph calls go to this server (/api/mapillary/graph), which adds the
+    // token, so the page never reaches graph.mapillary.com itself. Answer them
+    // as if it had, which keeps the fixture paths identical.
+    const graphPrefix = '/api/mapillary/graph/';
+    const viaServer = address.pathname.startsWith(graphPrefix);
+    if (viaServer || /(^|\.)mapillary\.com$/.test(address.hostname)) {
+      const upstream = viaServer
+        ? new URL(
+            `${address.pathname.slice(graphPrefix.length - 1)}${address.search}`,
+            'https://graph.mapillary.com',
+          )
+        : address;
+      const call = describeCall(method, upstream);
       const answer = answerMapillaryRequest({
         method,
-        url: address.href,
+        url: upstream.href,
         images: fixture.images,
       });
       fixture.calls.add(call);
