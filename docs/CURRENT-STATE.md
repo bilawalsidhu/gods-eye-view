@@ -1205,6 +1205,24 @@ snapshots, lifecycle actions and row descriptors. Remount and teardown remove
 listeners and row subscriptions; obsolete completions do not repaint old rows.
 The clear control presents busy state while its existing action owns the transaction.
 
+## Sky background
+
+`src/sky/starrySky.js` fills Cesium's `Scene#skyBox` slot with 9,096 Yale
+Bright Star Catalogue stars and a soft ESO/S. Brunier Milky Way. Both layers
+rotate from ICRF/J2000 into the Earth-fixed frame at the scene clock, with
+a TEME fallback while Cesium's IAU 2006 tables load. Bundled assets and
+their provenance are documented in `src/data/local_data/sky/README.md`.
+
+Anime fades out the Milky Way with its style intensity to avoid cel-shaded
+bands; the catalogue stars remain. A separate black 1×1 cube map preserves
+model environment lighting independently of the visible sky. The adapter
+is validated against Cesium 1.138.0 and must be revalidated on upgrades.
+
+`scripts/qa-anime-sky.mjs` checks asset readiness, visible Normal sky and
+Anime band coverage against a Vite dev server.
+`scripts/qa-sky-model-lighting.mjs` compares a lit `airplane.glb` against
+black and white environment maps in isolated scenes.
+
 ## Model atmosphere on Apple Metal
 
 Cesium's per-vertex model atmosphere is kept out of the pipeline on devices
@@ -1258,6 +1276,38 @@ Generated controls use `createSlider`; static templates apply the same class.
 Feature owners retain bounds, steps, formatted values, input/change timing and
 listener cleanup. The radio tuning dial, imagery comparison divider and event
 comparison/progression controls keep their specialized presentation and behavior.
+
+## Shared control CSS ownership
+
+Shared styles own ordinary control surfaces and interaction states; feature CSS
+owns surrounding layout and context-specific sizing. CCTV's calibration editor
+width lives in `ui/styles/cctv.css`, while the shared inline field variant owns
+only density and spinner treatment. Radio supplies its field palette and disabled
+opacity through the `--gev-field-*` variables, retaining compact typography and
+arrow space locally. Cyber supplies shared-field palette variables explicitly;
+its legacy native-field palette rules exclude `.gev-field`. These ownership
+boundaries preserve the current Tactical/Cyber appearance and native behavior.
+
+## Ordinary status badges
+
+CCTV source/frame labels, calibration provenance and Weather coverage labels use
+`ui/statusBadge.js` and the `gev-status-badge` CSS surface. The listener-free
+adapter accepts already-translated `label` and `hidden` values; pill, box and plain
+appearances describe shape/density only. Static CCTV markup uses the same classes
+as generated rail-card badges. Repeated identical updates do not rewrite text or
+replace nodes. Empty coverage remains hidden.
+
+Feature owners retain the status rules, machine-state attributes, translations
+and announcement policy. CCTV frame acquisition (`idle/loading/error/ready`)
+remains separate from provider status: retained pixels do not imply a healthy
+feed. Calibration still distinguishes manually saved, catalog-curated and raw
+prior poses; unsaved edits override the label until save/reset. Coverage labels
+remain geographic scope, not health claims. Existing colors and the source
+badge's polite live region are preserved; coverage and calibration do not gain
+live regions. Interactive layer toggles, progress indicators and world overlays
+retain their specialized ownership. Vue can reuse the view contract and CSS while
+replacing DOM construction. Browser acceptance:
+`QA_BASE_URL=http://127.0.0.1:4189 node scripts/qa-status-badges.mjs`.
 
 ## Ordinary action buttons
 

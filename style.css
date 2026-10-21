@@ -2,6 +2,7 @@
 @import './src/ui/styles/foundation.css';
 @import './src/ui/styles/action-button.css';
 @import './src/ui/styles/form-field.css';
+@import './src/ui/styles/status-badge.css';
 @import './src/ui/styles/slider.css';
 @import './src/ui/styles/controls.css';
 @import './src/ui/styles/location.css';
