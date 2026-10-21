@@ -21,7 +21,7 @@ test('tiles go through the local proxy and never carry the token', async () => {
   const { calls, fetchImpl } = fakeFetch(
     () => new Response(new Uint8Array([1, 2, 3]), { status: 200 }),
   );
-  const source = createMapillarySource({ token: 'MLY|1|abc', fetchImpl });
+  const source = createMapillarySource({ fetchImpl });
   const bytes = await source.getTile('coverage', 14, 2662, 6285);
   assert.deepEqual([...bytes], [1, 2, 3]);
   assert.equal(calls[0].url, '/api/mapillary/tiles/coverage/14/2662/6285');
@@ -30,7 +30,7 @@ test('tiles go through the local proxy and never carry the token', async () => {
 
 test('an empty tile (204) is an empty byte array, not an error', async () => {
   const { fetchImpl } = fakeFetch(() => new Response(null, { status: 204 }));
-  const source = createMapillarySource({ token: 'MLY|1|abc', fetchImpl });
+  const source = createMapillarySource({ fetchImpl });
   assert.equal((await source.getTile('coverage', 14, 1, 1)).length, 0);
 });
 
@@ -38,7 +38,7 @@ test('a missing key on the proxy surfaces as keyRequired', async () => {
   const { fetchImpl } = fakeFetch(() =>
     jsonResponse({ error: 'no_key', keyRequired: true }, 503),
   );
-  const source = createMapillarySource({ token: '', fetchImpl });
+  const source = createMapillarySource({ fetchImpl });
   assert.equal(source.hasToken(), false);
   await assert.rejects(
     () => source.getTile('coverage', 14, 1, 1),
@@ -49,37 +49,58 @@ test('a missing key on the proxy surfaces as keyRequired', async () => {
   );
 });
 
-test('graph lookups call graph.mapillary.com with the client token and requested fields', async () => {
+test('graph lookups go through this app, with the requested fields and no token', async () => {
   const { calls, fetchImpl } = fakeFetch(() =>
     jsonResponse({ data: [{ id: '1', geometry: { coordinates: [1, 2] } }] }),
   );
-  const source = createMapillarySource({ token: 'MLY|1|abc', fetchImpl });
+  const source = createMapillarySource({ fetchImpl });
   const images = await source.getSequenceImages('seq-1');
   assert.equal(images.length, 1);
-  const url = new URL(calls[0].url);
-  assert.equal(url.host, 'graph.mapillary.com');
-  assert.equal(url.pathname, '/images');
-  assert.equal(url.searchParams.get('access_token'), 'MLY|1|abc');
+  const url = new URL(calls[0].url, 'http://localhost');
+  assert.equal(url.pathname, '/api/mapillary/graph/images');
+  assert.equal(url.searchParams.has('access_token'), false);
+  assert.doesNotMatch(calls[0].url, /graph\.mapillary\.com|MLY/);
   assert.equal(url.searchParams.get('sequence_ids'), 'seq-1');
   assert.match(url.searchParams.get('fields'), /geometry/);
 });
 
-test('graph calls without a token fail fast as keyRequired without a request', async () => {
-  const { calls, fetchImpl } = fakeFetch(() => jsonResponse({}));
-  const source = createMapillarySource({ token: '', fetchImpl });
+test('a missing server key surfaces from the graph route as keyRequired', async () => {
+  const { fetchImpl } = fakeFetch(() =>
+    jsonResponse({ error: 'no_key', keyRequired: true }, 503),
+  );
+  const source = createMapillarySource({ fetchImpl });
   await assert.rejects(
     () => source.getSequenceImages('123'),
     (error) =>
-      error instanceof MapillarySourceError && error.keyRequired === true,
+      error instanceof MapillarySourceError &&
+      error.status === 503 &&
+      error.keyRequired === true,
   );
-  assert.equal(calls.length, 0);
+});
+
+test('the source holds no token; hasToken follows the server status', async () => {
+  const { fetchImpl } = fakeFetch(() => jsonResponse({ configured: true }));
+  const source = createMapillarySource({ fetchImpl });
+  assert.equal(source.hasToken(), false);
+  assert.equal('token' in source, false);
+  await source.getStatus();
+  assert.equal(source.hasToken(), true);
+});
+
+test('the viewer endpoint is an absolute same-origin Graph URL ending in a slash', () => {
+  const endpoint = createMapillarySource().graphEndpoint;
+  assert.match(endpoint, /^https?:\/\/[^/]+\/api\/mapillary\/graph\/$/);
+  assert.equal(
+    new URL('images', endpoint).pathname,
+    '/api/mapillary/graph/images',
+  );
 });
 
 test('graph API errors carry the upstream message and status', async () => {
   const { fetchImpl } = fakeFetch(() =>
     jsonResponse({ error: { message: 'Invalid OAuth 2.0 Access Token' } }, 400),
   );
-  const source = createMapillarySource({ token: 'MLY|1|abc', fetchImpl });
+  const source = createMapillarySource({ fetchImpl });
   await assert.rejects(
     () => source.getSequenceImages('999'),
     (error) =>
@@ -89,9 +110,14 @@ test('graph API errors carry the upstream message and status', async () => {
   );
 });
 
+test('the source exposes only imagery lookups', () => {
+  const source = createMapillarySource();
+  for (const gone of ['queryFeatures', 'plan', 'geocode', 'spriteUrl'])
+    assert.equal(source[gone], undefined, gone);
+});
+
 test('a rejected key and a rate limit are told apart from other tile errors', async () => {
   const rejectedSource = createMapillarySource({
-    token: 'MLY|1|abc',
     fetchImpl: fakeFetch(() =>
       jsonResponse(
         { error: 'Mapillary rejected the access token', keyRejected: true },
@@ -107,7 +133,6 @@ test('a rejected key and a rate limit are told apart from other tile errors', as
       error.retryAfterSec === null,
   );
   const limitedSource = createMapillarySource({
-    token: 'MLY|1|abc',
     fetchImpl: fakeFetch(
       () =>
         new Response(

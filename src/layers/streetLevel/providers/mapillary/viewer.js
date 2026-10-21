@@ -135,12 +135,9 @@ export function createMapillaryViewer({ source, render } = {}) {
     if (built !== generation) throw new Error('Mapillary viewer was unmounted');
     const endpoint = graphEndpointUrl(source);
     viewer = new Viewer({
-      // A source with its own Graph endpoint (which adds the token itself)
-      // answers the viewer's lookups, sent without a token; otherwise
-      // MapillaryJS calls the Graph API with the client token.
-      ...(endpoint
-        ? { dataProvider: new GraphDataProvider({ endpoint }) }
-        : { accessToken: source.token }),
+      // Graph requests go to this app's server, which holds the token; the
+      // viewer is given no access token.
+      dataProvider: new GraphDataProvider({ endpoint: source.graphEndpoint }),
       container: host,
       component: {
         cover: false,
