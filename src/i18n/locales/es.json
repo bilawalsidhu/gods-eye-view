@@ -2937,5 +2937,9 @@
   "Gemini access was refused. Check the API key and model access.": "Se denegó el acceso a Gemini. Comprueba la clave de API y el acceso al modelo.",
   "Gemini Live is unavailable for the configured model.": "Gemini Live no está disponible para el modelo configurado.",
   "Token request is too large": "La solicitud de credencial es demasiado grande",
-  "Use an empty JSON token request": "Usa una solicitud de credencial con un objeto JSON vacío"
+  "Use an empty JSON token request": "Usa una solicitud de credencial con un objeto JSON vacío",
+  "DMH / DINAC · STATION OBSERVATION": "DMH / DINAC · OBSERVACIÓN DE ESTACIÓN",
+  "RH {percent}%": "HR {percent}%",
+  "WIND {speed} KM/H {direction}": "VIENTO {speed} KM/H {direction}",
+  "{station} · {distance} KM FROM LOCATION": "{station} · A {distance} KM DE LA UBICACIÓN"
 }
