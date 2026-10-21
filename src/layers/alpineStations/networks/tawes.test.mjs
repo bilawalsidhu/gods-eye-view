@@ -45,7 +45,10 @@ test('only active stations are requested, and the ids are shaped safely', () => 
 test('the parameter query is fixed by the column table', () => {
   assert.equal(TAWES_PARAMETER_QUERY, Object.keys(TAWES_PARAMETERS).join(','));
   assert.match(TAWES_PARAMETER_QUERY, /^[A-Z,]+$/);
-  assert.equal(new Set(Object.values(TAWES_PARAMETERS)).size, Object.keys(TAWES_PARAMETERS).length);
+  assert.equal(
+    new Set(Object.values(TAWES_PARAMETERS)).size,
+    Object.keys(TAWES_PARAMETERS).length,
+  );
 });
 
 test('GeoSphere reduces pressure to a local datum, so neither column is read', () => {
@@ -76,7 +79,11 @@ test('readings are found at each station OWN timestamp slot, not at index 0', ()
   );
   const indices = [...found.values()].filter((index) => index >= 0).sort();
   assert.ok(indices.length >= 2, 'at least two stations report');
-  assert.notEqual(indices[0], indices.at(-1), 'and they report at DIFFERENT slots');
+  assert.notEqual(
+    indices[0],
+    indices.at(-1),
+    'and they report at DIFFERENT slots',
+  );
   assert.ok(indices.includes(0), 'one of them reports at the oldest slot');
   const readings = tawesReadings(TAWES_OBSERVATIONS);
   for (const [code, index] of found) {
@@ -117,8 +124,14 @@ test('shouted station names are cased for display, keeping their separators', ()
   // Every name is published in upper case; shouting them would be the loudest
   // thing on the map.
   assert.equal(titleCase('ACHENKIRCH CAMPINGPLATZ'), 'Achenkirch Campingplatz');
-  assert.equal(titleCase('BRUNNENKOGEL / OETZTALER ALPEN'), 'Brunnenkogel / Oetztaler Alpen');
-  assert.equal(titleCase('RUDOLFSHUETTE-ALPINZENTRUM'), 'Rudolfshuette-Alpinzentrum');
+  assert.equal(
+    titleCase('BRUNNENKOGEL / OETZTALER ALPEN'),
+    'Brunnenkogel / Oetztaler Alpen',
+  );
+  assert.equal(
+    titleCase('RUDOLFSHUETTE-ALPINZENTRUM'),
+    'Rudolfshuette-Alpinzentrum',
+  );
   assert.equal(titleCase('SONNBLICK - AUTOM.'), 'Sonnblick - Autom.');
   assert.equal(titleCase('WIEN/HOHE WARTE'), 'Wien/Hohe Warte');
   assert.equal(titleCase(''), null);
@@ -144,7 +157,8 @@ test('a reading with no metadata entry keeps the position its feature carries', 
   // Metadata is the authority, but a station missing from it must not lose its
   // coordinates and vanish.
   const orphan = TAWES_OBSERVATIONS.features.find(
-    (feature) => !TAWES_METADATA.stations.some((s) => s.id === feature.properties.station),
+    (feature) =>
+      !TAWES_METADATA.stations.some((s) => s.id === feature.properties.station),
   );
   assert.ok(orphan, 'the fixture must carry a station absent from metadata');
   const joined = byCode(joinTawesStations(TAWES_METADATA, TAWES_OBSERVATIONS));
@@ -152,7 +166,11 @@ test('a reading with no metadata entry keeps the position its feature carries', 
   assert.ok(record);
   assert.equal(record.lon, orphan.geometry.coordinates[0]);
   assert.equal(record.lat, orphan.geometry.coordinates[1]);
-  assert.equal(record.elevationM, null, 'with no altitude, which metadata owns');
+  assert.equal(
+    record.elevationM,
+    null,
+    'with no altitude, which metadata owns',
+  );
 });
 
 test('a measured zero survives the join', () => {

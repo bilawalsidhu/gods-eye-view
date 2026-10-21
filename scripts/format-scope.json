@@ -1087,5 +1087,17 @@
   "src/ui/styles/status-badge.css",
   "src/ui/statusBadge.test.mjs",
   "src/ui/cctvBadges.test.mjs",
-  "scripts/qa-status-badges.mjs"
+  "scripts/qa-status-badges.mjs",
+  "src/layers/alpineStations/index.test.mjs",
+  "src/layers/alpineStations/model.test.mjs",
+  "src/layers/alpineStations/networks.test.mjs",
+  "src/layers/alpineStations/parameters.test.mjs",
+  "src/layers/alpineStations/records.test.mjs",
+  "src/layers/alpineStations/source.test.mjs",
+  "src/layers/alpineStations/networks/slf.test.mjs",
+  "src/layers/alpineStations/networks/smn.test.mjs",
+  "src/layers/alpineStations/networks/tawes.test.mjs",
+  "src/data/alpineStationsProxy.test.mjs",
+  "src/testSupport/alpineStationFixtures.mjs",
+  "scripts/qa-alpine-stations.mjs"
 ]

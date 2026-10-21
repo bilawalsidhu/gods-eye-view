@@ -27,7 +27,11 @@ test('the CSV reader keys by header and treats a dash as absent', () => {
   assert.deepEqual(readSemicolonCsv(''), []);
   assert.deepEqual(readSemicolonCsv('header-only'), []);
   assert.deepEqual(readSemicolonCsv(null), []);
-  assert.equal(readSemicolonCsv('a;b\r\n1;2\r\n')[0].b, '2', 'CRLF is tolerated');
+  assert.equal(
+    readSemicolonCsv('a;b\r\n1;2\r\n')[0].b,
+    '2',
+    'CRLF is tolerated',
+  );
 });
 
 test('the YYYYMMDDHHMM stamp is read as UTC, not local time', () => {
@@ -41,7 +45,11 @@ test('the YYYYMMDDHHMM stamp is read as UTC, not local time', () => {
   assert.equal(parseSmnTimestamp(''), null);
   assert.equal(parseSmnTimestamp(null), null);
   assert.equal(parseSmnTimestamp('nonsense1234'), null);
-  assert.equal(parseSmnTimestamp('202602310000'), null, 'February 31 is rejected');
+  assert.equal(
+    parseSmnTimestamp('202602310000'),
+    null,
+    'February 31 is rejected',
+  );
   assert.equal(parseSmnTimestamp('202613010000'), null, 'month 13 is rejected');
 });
 
@@ -63,7 +71,10 @@ test('metadata supplies the identity, canton, altitude and position', () => {
 test('the metadata file is ISO-8859-1, and its accents survive the parse', () => {
   // `Response.text()` assumes UTF-8 and mangles this name, so the proxy reads
   // the bytes and decodes them explicitly before this adapter sees them.
-  assert.equal(normalizeSmnStations(SMN_METADATA_CSV).get('AEG').label, 'Oberägeri');
+  assert.equal(
+    normalizeSmnStations(SMN_METADATA_CSV).get('AEG').label,
+    'Oberägeri',
+  );
 });
 
 test('a station with no usable position is dropped from metadata', () => {
@@ -98,7 +109,9 @@ test('pressure is QFF only; QFE and QNH are never substituted', () => {
       !Object.hasOwn(SMN_OBSERVATION_COLUMNS, column),
       `${column} must not be read`,
     );
-  const joined = byCode(joinSmnStations(SMN_METADATA_CSV, SMN_OBSERVATIONS_CSV));
+  const joined = byCode(
+    joinSmnStations(SMN_METADATA_CSV, SMN_OBSERVATIONS_CSV),
+  );
   const row = readSemicolonCsv(SMN_OBSERVATIONS_CSV).find(
     (entry) => entry['Station/Location'] === 'ZER',
   );
@@ -117,7 +130,9 @@ test('SwissMetNet publishes no snow depth through this route', () => {
 });
 
 test('a measured zero is kept and an absent cell stays null', () => {
-  const joined = byCode(joinSmnStations(SMN_METADATA_CSV, SMN_OBSERVATIONS_CSV));
+  const joined = byCode(
+    joinSmnStations(SMN_METADATA_CSV, SMN_OBSERVATIONS_CSV),
+  );
   assert.equal(joined.ZER.precipMm, 0, '0 mm of rain is a real reading');
   assert.equal(joined.ZER.airTempC, 5);
   assert.equal(joined.ZER.humidityPct, 90.9);
@@ -132,9 +147,15 @@ test('the join drops a reading with no station, and keeps a station with no read
   const joined = joinSmnStations(SMN_METADATA_CSV, extra);
   assert.equal(joined.length, 3, 'the orphan reading is not drawn');
   assert.ok(!joined.some((station) => station.code === 'MRP'));
-  const noObservations = byCode(joinSmnStations(SMN_METADATA_CSV, 'Station/Location;Date\n'));
+  const noObservations = byCode(
+    joinSmnStations(SMN_METADATA_CSV, 'Station/Location;Date\n'),
+  );
   assert.equal(noObservations.ZER.measuredAt, null);
-  assert.equal(noObservations.ZER.label, 'Zermatt', 'identity survives silence');
+  assert.equal(
+    noObservations.ZER.label,
+    'Zermatt',
+    'identity survives silence',
+  );
 });
 
 test('every joined station survives canonical validation', () => {

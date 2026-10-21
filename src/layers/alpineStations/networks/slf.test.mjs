@@ -13,8 +13,7 @@ import {
   SLF_STATIONS,
 } from '../../../testSupport/alpineStationFixtures.mjs';
 
-const byCode = (rows) =>
-  Object.fromEntries(rows.map((row) => [row.code, row]));
+const byCode = (rows) => Object.fromEntries(rows.map((row) => [row.code, row]));
 
 test('a station carries its published identity, canton and altitude', () => {
   const station = normalizeSlfStation(SLF_STATIONS[0]);
@@ -32,7 +31,10 @@ test('the canonical record carries only network-neutral fields', () => {
   // The network's own station type is read and dropped: nothing downstream
   // can present an SLF-only label, and a field no consumer reads only invites
   // someone to trust it later.
-  const station = normalizeSlfStation({ ...SLF_STATIONS[0], type: 'SOMETHING_NEW' });
+  const station = normalizeSlfStation({
+    ...SLF_STATIONS[0],
+    type: 'SOMETHING_NEW',
+  });
   assert.ok(!('stationType' in station));
   assert.ok(!('stationTypeLabel' in station));
   assert.deepEqual(Object.keys(station).sort(), [

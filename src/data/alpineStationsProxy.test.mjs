@@ -110,7 +110,9 @@ function harness({ fail = new Set(), clock = { value: NOW } } = {}) {
 }
 
 test('the route mounts once on both the dev and the preview server', () => {
-  const plugin = alpineStationsProxy({ fetchImpl: async () => jsonResponse([]) });
+  const plugin = alpineStationsProxy({
+    fetchImpl: async () => jsonResponse([]),
+  });
   assert.equal(plugin.name, 'alpine-stations');
   for (const hook of ['configureServer', 'configurePreviewServer']) {
     const routes = new Map();
@@ -304,9 +306,7 @@ test('a cached payload is served stale rather than dropped', async () => {
   fail.add('measurement-api.slf.ch');
   clock.value += OBSERVATION_CACHE_MS + 1;
   const payload = await json();
-  const slf = payload.networks.find(
-    (network) => network.id === SLF_NETWORK_ID,
-  );
+  const slf = payload.networks.find((network) => network.id === SLF_NETWORK_ID);
   assert.equal(slf.status, 'stale', 'a map a few minutes old beats none');
   assert.equal(slf.stationCount, slfCount);
   assert.equal(payload.stale, true);
@@ -391,7 +391,10 @@ test('GeoSphere observations are requested in bounded chunks of fixed shape', ()
   assert.equal(url.pathname, '/v1/station/current/tawes-v1-10min');
   assert.equal(url.searchParams.get('output_format'), 'geojson');
   assert.match(url.searchParams.get('parameters'), /^[A-Z,]+$/);
-  assert.equal(url.searchParams.get('station_ids').split(',').length, ids.length);
+  assert.equal(
+    url.searchParams.get('station_ids').split(',').length,
+    ids.length,
+  );
   assert.ok(url.href.length < 8000, 'a chunk stays inside any line limit');
 });
 
@@ -402,9 +405,7 @@ test('a decommissioned station is never requested', async () => {
     .filter((station) => station.is_active === false)
     .map((station) => station.id);
   assert.ok(inactive.length);
-  const observationCalls = calls.filter((url) =>
-    url.includes('station_ids='),
-  );
+  const observationCalls = calls.filter((url) => url.includes('station_ids='));
   assert.ok(observationCalls.length);
   for (const id of inactive)
     for (const url of observationCalls)
@@ -417,9 +418,8 @@ test('a decommissioned station is never requested', async () => {
 test('the standalone composition mounts the provider exactly once', async () => {
   // Registered in `localProviderPlugins` so dev and preview both serve the
   // route; mounted twice it would answer from whichever middleware ran first.
-  const { localProviderPlugins } = await import(
-    '../../server/providers/local.js'
-  );
+  const { localProviderPlugins } =
+    await import('../../server/providers/local.js');
   const plugins = localProviderPlugins();
   assert.equal(
     plugins.filter((plugin) => plugin.name === 'alpine-stations').length,
@@ -446,19 +446,16 @@ test('the envelope carries only fields the client reads', () => {
   // own summary against the chosen parameter.
   const { json } = harness();
   return json().then((payload) => {
-    assert.deepEqual(
-      Object.keys(payload).sort(),
-      [
-        'attribution',
-        'fetchedAt',
-        'networks',
-        'reason',
-        'schemaVersion',
-        'stale',
-        'stations',
-        'unavailable',
-      ],
-    );
+    assert.deepEqual(Object.keys(payload).sort(), [
+      'attribution',
+      'fetchedAt',
+      'networks',
+      'reason',
+      'schemaVersion',
+      'stale',
+      'stations',
+      'unavailable',
+    ]);
   });
 });
 

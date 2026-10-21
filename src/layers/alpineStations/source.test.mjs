@@ -116,11 +116,17 @@ test('an unknown network id or status is refused', () => {
   // These are the fields the card and the attribution read, so a value outside
   // the contract must not reach them.
   assert.throws(
-    () => readAlpineSnapshot(envelope({ networks: [networkState({ id: 'nope' })] })),
+    () =>
+      readAlpineSnapshot(
+        envelope({ networks: [networkState({ id: 'nope' })] }),
+      ),
     /Malformed/,
   );
   assert.throws(
-    () => readAlpineSnapshot(envelope({ networks: [networkState({ status: 'fine' })] })),
+    () =>
+      readAlpineSnapshot(
+        envelope({ networks: [networkState({ status: 'fine' })] }),
+      ),
     /Malformed/,
   );
   assert.throws(
@@ -173,7 +179,8 @@ test('the source reads the same-origin route and honours an abort', async () => 
 
 test('a non-200 reply reports its status without relaying a body', async () => {
   const source = createAlpineStationSource({
-    fetchImpl: () => respond({ error: 'upstream said something' }, { ok: false, status: 502 }),
+    fetchImpl: () =>
+      respond({ error: 'upstream said something' }, { ok: false, status: 502 }),
   });
   await assert.rejects(() => source.getSnapshot(), /Alpine stations HTTP 502/);
 });
@@ -196,10 +203,17 @@ test('an oversized body is refused rather than parsed', async () => {
 test('a multi-network envelope keeps every network it was given', () => {
   const snapshot = readAlpineSnapshot(
     envelope({
-      stations: [station(), station({ networkId: SMN_NETWORK_ID, code: 'ZER' })],
+      stations: [
+        station(),
+        station({ networkId: SMN_NETWORK_ID, code: 'ZER' }),
+      ],
       networks: [
         networkState(),
-        networkState({ id: SMN_NETWORK_ID, status: 'unavailable', fetchedAt: null }),
+        networkState({
+          id: SMN_NETWORK_ID,
+          status: 'unavailable',
+          fetchedAt: null,
+        }),
       ],
       stale: true,
       reason: '1 of 2 networks unavailable',

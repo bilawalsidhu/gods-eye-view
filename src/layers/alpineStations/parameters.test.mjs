@@ -147,8 +147,14 @@ test('staleness scales with a network cadence and never drops below the floor', 
     staleAfterMs({ cadenceMinutes: 30 }),
     30 * STALE_AFTER_CYCLES * 60_000,
   );
-  assert.ok(staleAfterMs({ cadenceMinutes: 30 }) > staleAfterMs({ cadenceMinutes: 10 }));
-  assert.equal(staleAfterMs(null), MIN_STALE_AFTER_MS, 'an unknown network takes the floor');
+  assert.ok(
+    staleAfterMs({ cadenceMinutes: 30 }) > staleAfterMs({ cadenceMinutes: 10 }),
+  );
+  assert.equal(
+    staleAfterMs(null),
+    MIN_STALE_AFTER_MS,
+    'an unknown network takes the floor',
+  );
   assert.equal(staleAfterMs({ cadenceMinutes: 'ten' }), MIN_STALE_AFTER_MS);
 });
 
@@ -161,7 +167,6 @@ test('the legend reads quietest first and covers every band', () => {
     for (const entry of legend) assert.match(entry.color, /^#[0-9a-f]{6}$/);
   }
 });
-
 
 test('a bigger reading is a bigger marker, inside a band as well as across one', () => {
   // The bug this pins: sizing by band index quantised the reading to five
@@ -209,7 +214,10 @@ test('pressure varies by size across a real synoptic spread', () => {
     parameterProminence(1023, pressure) > parameterProminence(1017, pressure),
     'and 1023 must outgrow 1017, which shares its band',
   );
-  assert.equal(parameterBand(1023, pressure).id, parameterBand(1017, pressure).id);
+  assert.equal(
+    parameterBand(1023, pressure).id,
+    parameterBand(1017, pressure).id,
+  );
 });
 
 test('prominence stays bounded for absurd readings in every view', () => {

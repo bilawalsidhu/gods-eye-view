@@ -45,7 +45,9 @@ let failed = 0;
 function check(name, ok, detail = '') {
   checks.push({ name, ok: Boolean(ok), detail });
   if (!ok) failed += 1;
-  console.log(`  ${ok ? 'PASS' : 'FAIL'}  ${name}${detail ? `  — ${detail}` : ''}`);
+  console.log(
+    `  ${ok ? 'PASS' : 'FAIL'}  ${name}${detail ? `  — ${detail}` : ''}`,
+  );
 }
 
 const browser = await puppeteer.launch({
@@ -79,7 +81,10 @@ try {
       const response = await fetch('/api/alpine-stations');
       const type = response.headers.get('content-type') || '';
       if (!type.includes('json'))
-        return { contentType: type, body: (await response.text()).slice(0, 80) };
+        return {
+          contentType: type,
+          body: (await response.text()).slice(0, 80),
+        };
       return { contentType: type, ...(await response.json()) };
     })
     .catch((error) => ({ error: error.message }));
@@ -148,7 +153,9 @@ try {
     const button = node.querySelector('.data-toggle-btn');
     button?.scrollIntoView({ block: 'center' });
     button?.click();
-    return { group: node.closest('[data-layer-group]')?.dataset.layerGroup ?? null };
+    return {
+      group: node.closest('[data-layer-group]')?.dataset.layerGroup ?? null,
+    };
   }, LAYER);
   check('the layer has a row in the data-layers panel', row !== null);
 
@@ -244,7 +251,11 @@ try {
     'every marker has a colour and a pixel size',
     enabled.colors.every(Boolean) && enabled.sizes.every(Number.isFinite),
   );
-  check('the layer reports no error', !enabled.stats?.error, enabled.stats?.error || '');
+  check(
+    'the layer reports no error',
+    !enabled.stats?.error,
+    enabled.stats?.error || '',
+  );
   check(
     'the row reports feed staleness separately from late stations',
     enabled.stats?.stale === false &&
@@ -284,7 +295,8 @@ try {
     if (!node) return null;
     const header = node.querySelector('button');
     if (node.dataset.open !== 'true') header?.click();
-    const block = (blockId) => node.querySelector(`[data-block-id="${blockId}"]`);
+    const block = (blockId) =>
+      node.querySelector(`[data-block-id="${blockId}"]`);
     return {
       title: header?.textContent?.trim() ?? '',
       open: node.dataset.open,
@@ -306,7 +318,9 @@ try {
         id: chip.dataset.chipId,
         active: chip.classList.contains('active'),
       })),
-      listRows: [...(block('stations')?.querySelectorAll('.data-row-list-item') ?? [])]
+      listRows: [
+        ...(block('stations')?.querySelectorAll('.data-row-list-item') ?? []),
+      ]
         .map((item) => item.textContent.trim())
         .slice(0, 8),
       detailLines: [...(block('details')?.children ?? [])]
@@ -316,7 +330,11 @@ try {
   }, LAYER);
 
   check('the card appears in the WEATHER rail', card !== null);
-  check('the card is titled for the layer', /Alpine Stations/i.test(card?.title || ''), card?.title);
+  check(
+    'the card is titled for the layer',
+    /Alpine Stations/i.test(card?.title || ''),
+    card?.title,
+  );
   check(
     'the card offers every parameter, with exactly one active',
     card?.chips.length === PARAMETERS.length &&
@@ -329,7 +347,9 @@ try {
     card?.hasLegend &&
       card.swatches.length === overAlps.legend &&
       overAlps.legend >= 5 &&
-      card.swatches.every((entry) => entry.label && /^#[0-9a-f]{6}$/i.test(entry.colour)),
+      card.swatches.every(
+        (entry) => entry.label && /^#[0-9a-f]{6}$/i.test(entry.colour),
+      ),
     `${card?.swatches.length}/${overAlps.legend} bands: ${card?.swatches.map((e) => e.label).join(', ')}`,
   );
   check(
@@ -362,10 +382,17 @@ try {
       { id: LAYER, chip: chipId },
     );
 
-  check('the snow chip is clickable at its own centre', await clickChip('snow'));
+  check(
+    'the snow chip is clickable at its own centre',
+    await clickChip('snow'),
+  );
   await sleep(900);
   const snow = await readState(LAYER);
-  check('the chip change applied the parameter', snow.params?.parameter === 'snow', snow.params?.parameter);
+  check(
+    'the chip change applied the parameter',
+    snow.params?.parameter === 'snow',
+    snow.params?.parameter,
+  );
   check(
     'changing parameter recolours in place, keeping every entity',
     snow.entityCount === overAlps.entityCount &&
@@ -416,12 +443,18 @@ try {
   );
   check(
     'arrows carry a real screen rotation, not a default of zero',
-    windView.arrows.some((arrow) => Number.isFinite(arrow.rotation) && arrow.rotation !== 0),
-    `rotations: ${windView.arrows.slice(0, 3).map((arrow) => arrow.rotation?.toFixed(3)).join(', ')}`,
+    windView.arrows.some(
+      (arrow) => Number.isFinite(arrow.rotation) && arrow.rotation !== 0,
+    ),
+    `rotations: ${windView.arrows
+      .slice(0, 3)
+      .map((arrow) => arrow.rotation?.toFixed(3))
+      .join(', ')}`,
   );
   check(
     'arrows point in different directions, as a wind field does',
-    new Set(windView.arrows.map((arrow) => arrow.rotation?.toFixed(2))).size > 2,
+    new Set(windView.arrows.map((arrow) => arrow.rotation?.toFixed(2))).size >
+      2,
   );
   await page.screenshot({ path: path.join(outDir, '05-wind-arrows.png') });
 
@@ -467,7 +500,8 @@ try {
   const snowView = await readState(LAYER);
   check(
     'leaving the wind view puts the dots back',
-    snowView.arrows.length === 0 && snowView.entityCount === windView.entityCount,
+    snowView.arrows.length === 0 &&
+      snowView.entityCount === windView.entityCount,
     `${snowView.arrows.length} arrows remain`,
   );
 
@@ -486,7 +520,11 @@ try {
   }, LAYER);
   await sleep(600);
   const afterSelect = await readState(LAYER);
-  check('a list row selects its station', afterSelect.hasResult, selected ?? 'no row');
+  check(
+    'a list row selects its station',
+    afterSelect.hasResult,
+    selected ?? 'no row',
+  );
   const cleared = await page.evaluate((id) => {
     const button = document.querySelector(
       `[data-card-id="${id}"] [data-action-id="clear"]`,
@@ -506,12 +544,14 @@ try {
   check(
     'settling the camera rebuilds no geometry',
     afterMove.entityCount === beforeMove.entityCount &&
-      JSON.stringify(afterMove.entityIds) === JSON.stringify(beforeMove.entityIds),
+      JSON.stringify(afterMove.entityIds) ===
+        JSON.stringify(beforeMove.entityIds),
     `${beforeMove.entityCount} -> ${afterMove.entityCount}`,
   );
   check(
     'but it does refresh the nearest list for the new view',
-    JSON.stringify(afterMove.listItems) !== JSON.stringify(beforeMove.listItems),
+    JSON.stringify(afterMove.listItems) !==
+      JSON.stringify(beforeMove.listItems),
     `${beforeMove.listItems[0] ?? '-'} -> ${afterMove.listItems[0] ?? '-'}`,
   );
   check(
@@ -542,16 +582,28 @@ try {
     onScreen.links.some((href) => href.startsWith('https://www.slf.ch/')),
   );
   for (const operator of ['MeteoSwiss', 'GeoSphere Austria'])
-    check(`${operator} is credited on the globe`, onScreen.text.includes(operator));
-  check('the on-globe credit states the licence', /CC BY 4\.0/.test(onScreen.text));
+    check(
+      `${operator} is credited on the globe`,
+      onScreen.text.includes(operator),
+    );
+  check(
+    'the on-globe credit states the licence',
+    /CC BY 4\.0/.test(onScreen.text),
+  );
 
   const credits = await page.evaluate(() => {
     const lightbox = document.querySelector('.cesium-credit-lightbox');
     document.querySelector('.cesium-credit-expand-link')?.click();
-    return (lightbox?.textContent || document.body.textContent || '').slice(0, 20_000);
+    return (lightbox?.textContent || document.body.textContent || '').slice(
+      0,
+      20_000,
+    );
   });
   for (const operator of ['SLF', 'MeteoSwiss', 'GeoSphere Austria'])
-    check(`${operator} is credited in the lightbox too`, credits.includes(operator));
+    check(
+      `${operator} is credited in the lightbox too`,
+      credits.includes(operator),
+    );
 
   // 9. Disabling releases everything.
   await page.evaluate((id) => {
@@ -577,7 +629,11 @@ try {
     ),
   );
 
-  check('no uncaught page errors', pageErrors.length === 0, pageErrors.join(' | '));
+  check(
+    'no uncaught page errors',
+    pageErrors.length === 0,
+    pageErrors.join(' | '),
+  );
 
   writeFileSync(
     path.join(outDir, 'checks.json'),
