@@ -21,6 +21,7 @@ import { LocalSdrControls } from './localSdrControls.js';
 import { LocationNavigation } from './locationNavigation.js';
 import { bindClearLayersControl } from './layers.js';
 import { bindCameraOrientationControls } from './cameraOrientationControls.js';
+import { mountNavControl } from './navControl/navControl.js';
 import { createMapSourceControls } from './mapSource.js';
 import { STYLES } from './effects.js';
 import { isHudLayout } from '../hudLayouts.js';
@@ -589,6 +590,7 @@ export class StyleManager extends ShellFacade {
     this._initLocationBar();
     this._initShareButton();
     this._initCameraOrientationControls();
+    this._initNavControl();
     this._initClearSelectedLayersButton();
     this._initHUDToggle();
     this._initModels3dToggle();
@@ -1601,6 +1603,17 @@ export class StyleManager extends ShellFacade {
     });
   }
 
+  /** Mount the bottom-right zoom, rotate and tilt control. */
+  _initNavControl() {
+    this._navControl?.destroy();
+    this._navControl = mountNavControl({
+      viewer: this.viewer,
+      runNavigation: (noun, navigate) =>
+        this._navigation.runOrientation(noun, navigate),
+      showToast: (message) => this._showToast(message),
+    });
+  }
+
   // ── Share Button ─────────────────────────────
 
   /**
@@ -1713,6 +1726,7 @@ export class StyleManager extends ShellFacade {
     this._displayBindings.destroy();
     this._mapSourceControls?.destroy();
     this._cameraOrientationControls?.destroy();
+    this._navControl?.destroy();
     this._clearLayersControl?.destroy();
     this._cctvControls?.destroy();
     this.services?.streetLevelLayer?.attachNavigation?.(null);

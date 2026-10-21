@@ -2937,5 +2937,20 @@
   "Gemini access was refused. Check the API key and model access.": "Se denegó el acceso a Gemini. Comprueba la clave de API y el acceso al modelo.",
   "Gemini Live is unavailable for the configured model.": "Gemini Live no está disponible para el modelo configurado.",
   "Token request is too large": "La solicitud de credencial es demasiado grande",
-  "Use an empty JSON token request": "Usa una solicitud de credencial con un objeto JSON vacío"
+  "Use an empty JSON token request": "Usa una solicitud de credencial con un objeto JSON vacío",
+  "Tilt up toward the horizon": "Inclinar hacia el horizonte",
+  "Tilt down toward top-down view": "Inclinar hacia la vista cenital",
+  "Top-down view": "Vista cenital",
+  "Look left": "Mirar a la izquierda",
+  "Look right": "Mirar a la derecha",
+  "Look up": "Mirar hacia arriba",
+  "Look down": "Mirar hacia abajo",
+  "Map navigation": "Navegación del mapa",
+  "Tilt": "Inclinación",
+  "Tilt: top-down (bottom) to near horizon (top)": "Inclinación: cenital (abajo) a casi horizonte (arriba)",
+  "Map heading. Drag to rotate, arrow keys turn, Home for north": "Rumbo del mapa. Arrastra para girar, las flechas giran, Inicio para el norte",
+  "North, 0 degrees": "Norte, 0 grados",
+  "Look around": "Mirar alrededor",
+  "{heading} degrees from north": "{heading} grados desde el norte",
+  "{tilt} degrees from top-down": "{tilt} grados desde la vista cenital"
 }

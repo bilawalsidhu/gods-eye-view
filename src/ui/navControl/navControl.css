@@ -1,0 +1,206 @@
+/* On-screen map navigation control (compass, tilt, zoom, look around).
+   Bottom-right like Google Earth; src/ui/navControl/navControl.js.
+   Keyboard focus rings come from the global :where(button, [role='slider'])
+   rule in foundation.css. */
+.gev-nav {
+  --gev-nav-heading: 0deg;
+  --gev-nav-size: 84px;
+  --gev-nav-button: 28px;
+  position: fixed;
+  right: 36px;
+  bottom: 14px;
+  z-index: 96;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--glass-border);
+  border-radius: 16px;
+  background: var(--glass-bg);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: manipulation;
+}
+
+.gev-nav-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--gev-nav-button);
+  height: var(--gev-nav-button);
+  padding: 0;
+  border: 1px solid var(--glass-border);
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--text-secondary);
+  font: 600 13px/1 var(--font-mono);
+  cursor: pointer;
+  transition:
+    background-color var(--transition-fast),
+    border-color var(--transition-fast),
+    color var(--transition-fast);
+}
+.gev-nav-btn:hover {
+  border-color: var(--glass-border-hover);
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--accent);
+}
+.gev-nav-btn:active {
+  background: var(--accent-dim);
+}
+.gev-nav-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.35;
+}
+
+.gev-nav-tilt,
+.gev-nav-zoom {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  height: var(--gev-nav-size);
+}
+.gev-nav-tilt .gev-nav-btn,
+.gev-nav-zoom .gev-nav-btn {
+  width: 22px;
+  height: 22px;
+  font-size: 11px;
+}
+.gev-nav-zoom {
+  gap: 3px;
+}
+.gev-nav-zoom .gev-nav-top-down {
+  font-size: 7px;
+  letter-spacing: 0.4px;
+}
+.gev-nav-slider {
+  /* Vertical range: top is near-horizon, bottom is top-down. */
+  writing-mode: vertical-lr;
+  direction: rtl;
+  width: 20px;
+  height: 30px;
+  margin: 0;
+  padding: 0;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+.gev-nav-compass {
+  position: relative;
+  width: var(--gev-nav-size);
+  height: var(--gev-nav-size);
+}
+.gev-nav-dial {
+  position: absolute;
+  inset: 0;
+  border: 1px solid var(--glass-border-hover);
+  border-radius: 50%;
+  background:
+    radial-gradient(circle, transparent 58%, rgba(0, 212, 255, 0.08) 60%),
+    repeating-conic-gradient(
+      from -1deg,
+      rgba(255, 255, 255, 0.22) 0 2deg,
+      transparent 2deg 30deg
+    );
+  cursor: grab;
+  touch-action: none;
+  transform: rotate(calc(-1 * var(--gev-nav-heading)));
+}
+.gev-nav[data-dragging='ring'] .gev-nav-dial {
+  cursor: grabbing;
+}
+.gev-nav-dial-mark {
+  position: absolute;
+  top: 3px;
+  left: 50%;
+  width: 0;
+  height: 0;
+  border-right: 5px solid transparent;
+  border-bottom: 9px solid var(--cyber-red-bright, #ff5a4d);
+  border-left: 5px solid transparent;
+  transform: translateX(-50%);
+}
+.gev-nav-north {
+  position: absolute;
+  top: -9px;
+  left: 50%;
+  width: 20px;
+  height: 20px;
+  font-size: 10px;
+  color: var(--accent);
+  background: var(--glass-bg);
+  transform: translateX(-50%);
+}
+.gev-nav[data-north-up='true'] .gev-nav-north {
+  color: var(--cyber-red-bright, #ff5a4d);
+}
+.gev-nav-look {
+  position: absolute;
+  inset: 22px;
+  display: grid;
+  grid-template: repeat(3, 1fr) / repeat(3, 1fr);
+  align-items: center;
+  justify-items: center;
+  pointer-events: none;
+}
+.gev-nav-look .gev-nav-btn {
+  width: 16px;
+  height: 16px;
+  border: 0;
+  background: transparent;
+  font-size: 9px;
+  pointer-events: auto;
+}
+.gev-nav-look-up {
+  grid-area: 1 / 2;
+}
+.gev-nav-look-left {
+  grid-area: 2 / 1;
+}
+.gev-nav-look-right {
+  grid-area: 2 / 3;
+}
+.gev-nav-look-down {
+  grid-area: 3 / 2;
+}
+
+/* Fingers: bigger targets, and clear of the thumb-height dock. */
+@media (pointer: coarse) {
+  .gev-nav {
+    --gev-nav-size: 96px;
+    --gev-nav-button: 36px;
+  }
+  .gev-nav-tilt .gev-nav-btn,
+  .gev-nav-zoom .gev-nav-btn {
+    width: 32px;
+    height: 32px;
+  }
+  .gev-nav-slider {
+    width: 28px;
+    height: 24px;
+  }
+  .gev-nav-look .gev-nav-btn {
+    width: 22px;
+    height: 22px;
+  }
+}
+
+/* Narrow screens: tuck against the corner and sit above the command dock. */
+@media (max-width: 900px) {
+  .gev-nav {
+    right: 12px;
+    bottom: calc(2vh + 7.5rem);
+  }
+}
+
+/* The cockpit, scene playback, recording and clean view own the screen. */
+body:is(.cockpit-mode, .scene-playback-mode, .recording-mode, .ui-clean-view)
+  .gev-nav {
+  display: none !important;
+}

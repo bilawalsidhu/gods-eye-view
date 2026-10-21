@@ -1251,6 +1251,27 @@ Feature owners retain bounds, steps, formatted values, input/change timing and
 listener cleanup. The radio tuning dial, imagery comparison divider and event
 comparison/progression controls keep their specialized presentation and behavior.
 
+## On-screen navigation control
+
+A Google Earth-style control sits at the bottom right (`src/ui/navControl/`):
+a compass ring that shows the heading and turns the map when dragged (arrow
+keys turn it, Home returns to north), a north-up button, a tilt slider with
+up/down buttons and a top-down button, zoom in/out with press-and-hold repeat,
+and a four-way look-around pad. Steps ease over about 220 ms; a pointer press
+or wheel on the globe cancels a step that is still easing.
+
+The control orbits the camera around the point under the centre of the view
+through the same `readCameraTargetFrame` / `setCameraTargetFrame` helpers as
+Tilt Map and North Up, and every action goes through the navigation policy
+(`runOrientation`), so it declines while the Cockpit owns the camera and
+releases a followed aircraft first. A centre pick outside a plausible surface
+band (below -1,500 m or above 25,000 m) is not used as the orbit target, so a
+zoom step never drives the camera under the ground while tiles are still
+streaming. The look-around buttons are disabled while an entity is tracked.
+The control is hidden in Cockpit, Scene playback, recording and Clean UI, and
+its listeners are removed when the shell is destroyed. Its text is translated
+(es, ru).
+
 ## Shared control CSS ownership
 
 Shared styles own ordinary control surfaces and interaction states; feature CSS
