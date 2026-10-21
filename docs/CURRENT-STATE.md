@@ -1638,6 +1638,12 @@ supported. `.env.example` and `pinokio/_ENVIRONMENT` document both entries.
 The Street View headings tool uses the same server-first selection after
 resolving environment overrides per variable; its explicit `--key` wins.
 
+In standalone development and preview servers, a missing Google tile-token
+provider returns an uncached `204 No Content` for `GET /api/google/tiles-token`
+(and HEAD) instead of a browser-visible 404. The fallback is registered after
+real token providers and before the unknown-API handler, so existing Google
+browser keys, provider-issued tokens, and unrelated API routes remain unchanged.
+
 ## Infrastructure marker visibility
 
 Datacenter/dam registration uses fresh reusable factories with the application's
