@@ -4,6 +4,13 @@ import {
   createApplicationViewer,
   installTrackpadPinchZoom,
 } from '../app/viewer.js';
+import {
+  canReloadAfterContextLoss,
+  dismissCesiumErrorPanel,
+  markContextLossReload,
+  showContextLossNotice,
+} from './contextLoss.js';
+import { isEmbeddedInline } from './embed.js';
 import { registerDataCredits } from '../data/dataCredits.js';
 import { configureCreditKeyboardAccess } from '../creditKeyboard.js';
 import { MapStackController } from '../mapStackController.js';
@@ -14,7 +21,7 @@ import {
   governorRequestRender,
 } from '../renderGovernor.js';
 import { describeError } from './errors.js';
-import { t } from '../i18n/index.js';
+import { msg, t } from '../i18n/index.js';
 
 /** Construct the application globe using the caller's local configuration. */
 export async function createApplicationScene({
@@ -52,6 +59,37 @@ export async function createApplicationScene({
   const viewer = createApplicationViewer({
     container: 'cesiumContainer',
     creditContainer,
+    // Recovery for a dropped/evicted WebGL context (CesiumGS/cesium#5991).
+    // The share-link hash already persists camera, layers and style, so a
+    // fresh boot restores the view; see app/contextLoss.js for the routes.
+    onContextLoss: ({ error } = {}) => {
+      console.error(
+        "[God's Eye View] WebGL context lost; recovering.",
+        error ?? '',
+      );
+      // The error-first route (the loss event arriving after a frame
+      // already rendered into the dead context) leaves Cesium's panel up;
+      // recovery replaces it.
+      dismissCesiumErrorPanel();
+      // A panel embeds the app into a host page this document must never
+      // reload; the panel runtime owns that UX (globePanelRuntime.js).
+      if (isEmbeddedInline()) return;
+      if (!canReloadAfterContextLoss()) {
+        // Losing another context within the cooldown means this machine
+        // (or this boot) cannot hold one — offer the manual way out.
+        showContextLossNotice({ allowManualReload: true });
+        return;
+      }
+      // Fail-closed: reload only when the cooldown flag was durably written.
+      // A storage that refuses writes can never arm the cooldown, so an
+      // automatic reload here would loop unboundedly on repeated losses.
+      if (!markContextLossReload()) {
+        showContextLossNotice({ allowManualReload: true });
+        return;
+      }
+      showContextLossNotice({ message: msg('Restoring the 3D globe…') });
+      window.location.reload();
+    },
   });
   defer(() => {
     uninstallRenderGovernor(viewer);

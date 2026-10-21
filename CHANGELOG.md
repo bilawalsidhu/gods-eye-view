@@ -1,5 +1,13 @@
 # Changelog
 
+- A lost or evicted WebGL context no longer kills the globe with Cesium's
+  "Rendering has stopped" `DeveloperError` (#1067): the viewer now
+  `preventDefault()`s `webglcontextlost`, stops the render loop before any
+  frame renders into the dead context, and recovers by reloading the page
+  once — the share link's hash restores camera, layers and style — or, inside
+  a 30-second cooldown, shows a plain notice with a manual reload. Inline
+  panels never reload their host page and keep their own notice.
+
 - The tracked-aircraft descriptor now publishes `verticalRateMps`, on both the
   civil and military layers, so a consumer reading `getTrackedInfo()` no longer
   has to reach past it into the raw poll record for climb/descent. Reported,
