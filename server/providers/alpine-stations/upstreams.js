@@ -25,15 +25,29 @@ export const UPSTREAM_TIMEOUT_MS = 25_000;
 /**
  * Refresh windows.
  *
- * SLF publishes every 30 minutes and SwissMetNet and TAWES every 10, so a
- * five-minute window never serves data older than one publication while
- * cutting a 3 MB re-read that would change nothing.
- *
  * Station metadata is identity, not weather: names, cantons, altitudes and
  * positions change when a network is re-surveyed, so it is held for a day.
  */
 export const OBSERVATION_CACHE_MS = 5 * 60 * 1000;
 export const METADATA_CACHE_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * One network's refresh window: half its publication cadence, at least the
+ * floor above.
+ *
+ * A re-read inside a cadence cannot return a reading the network has not
+ * published yet. SLF publishes every 30 minutes and its measurement payload is
+ * ~3 MB, so the flat floor spent five of every six reads re-fetching bytes SLF
+ * had not changed. Half a cadence stays well inside one publication, so no
+ * reading waits a whole cycle, and it leaves the ten-minute networks on the
+ * floor they already used.
+ */
+export function observationCacheMs(cadenceMinutes) {
+  const half = (Number(cadenceMinutes) / 2) * 60 * 1000;
+  return Number.isFinite(half) && half > OBSERVATION_CACHE_MS
+    ? half
+    : OBSERVATION_CACHE_MS;
+}
 
 /**
  * How stale a cached payload may be and still be worth serving.

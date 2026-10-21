@@ -24,6 +24,7 @@
 import {
   ALPINE_NETWORKS,
   alpineAttribution,
+  alpineNetwork,
 } from '../../src/layers/alpineStations/networks.js';
 import { mergeNetworkStations } from '../../src/layers/alpineStations/records.js';
 import { coalesceProxyRequest } from './common/http.js';
@@ -37,7 +38,7 @@ import {
 import {
   MAX_SERVE_STALE_MS,
   METADATA_CACHE_MS,
-  OBSERVATION_CACHE_MS,
+  observationCacheMs,
   UPSTREAM_TIMEOUT_MS,
 } from './alpine-stations/upstreams.js';
 
@@ -123,7 +124,10 @@ export function alpineStationsProxy({
    */
   async function acquire(networkId, signal) {
     const held = caches.get(networkId);
-    if (held && now() - held.fetchedAt < OBSERVATION_CACHE_MS)
+    const cacheWindow = observationCacheMs(
+      alpineNetwork(networkId)?.cadenceMinutes,
+    );
+    if (held && now() - held.fetchedAt < cacheWindow)
       return { ...held, stale: false };
     // Both the cooldown and the failure path serve the last payload, and BOTH
     // have to stop at the same ceiling. Checking it in only one of them made a

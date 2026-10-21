@@ -10,6 +10,7 @@ import {
   MAX_SERVE_STALE_MS,
   METADATA_CACHE_MS,
   OBSERVATION_CACHE_MS,
+  observationCacheMs,
   SLF_MEASUREMENTS_URL,
   SLF_STATIONS_URL,
   SMN_METADATA_URL,
@@ -20,10 +21,15 @@ import {
 import { tawesObservationUrl } from '../../server/providers/alpine-stations/fetchers.js';
 import {
   ALPINE_NETWORK_IDS,
+  alpineNetwork,
   SLF_NETWORK_ID,
   SMN_NETWORK_ID,
   TAWES_NETWORK_ID,
 } from '../layers/alpineStations/networks.js';
+
+const SLF_CACHE_MS = observationCacheMs(
+  alpineNetwork(SLF_NETWORK_ID).cadenceMinutes,
+);
 import {
   SLF_MEASUREMENTS,
   SLF_STATIONS,
@@ -214,6 +220,37 @@ test('a second request inside the window is served from cache', async () => {
   assert.ok(calls.length > cold, 'and the window does expire');
 });
 
+test('a network is refetched on its own cadence, not one flat window', async () => {
+  // SLF publishes every 30 minutes and its measurement payload is ~3 MB, so a
+  // flat five-minute window spent five of every six reads re-fetching bytes
+  // that had not changed. The ten-minute networks keep the floor.
+  assert.ok(SLF_CACHE_MS > OBSERVATION_CACHE_MS, 'SLF holds longer');
+  for (const id of [SMN_NETWORK_ID, TAWES_NETWORK_ID])
+    assert.equal(
+      observationCacheMs(alpineNetwork(id).cadenceMinutes),
+      OBSERVATION_CACHE_MS,
+      id,
+    );
+  const { json, calls, clock } = harness();
+  await json();
+  calls.length = 0;
+  clock.value += OBSERVATION_CACHE_MS + 1;
+  await json();
+  assert.ok(calls.includes(SMN_OBSERVATIONS_URL), 'the fast networks refresh');
+  assert.ok(!calls.includes(SLF_MEASUREMENTS_URL), 'SLF is still inside its');
+  calls.length = 0;
+  clock.value += SLF_CACHE_MS;
+  await json();
+  assert.ok(calls.includes(SLF_MEASUREMENTS_URL), 'and refreshes on its own');
+});
+
+test('a window with no cadence behind it falls back to the floor', () => {
+  // `alpineNetwork()` returns undefined for an id the registry does not carry,
+  // so the window must not become NaN and cache a payload for ever.
+  for (const absent of [undefined, null, Number.NaN, 'thirty', 0, -5])
+    assert.equal(observationCacheMs(absent), OBSERVATION_CACHE_MS, `${absent}`);
+});
+
 test('station metadata is held far longer than the readings', async () => {
   // Names, cantons, altitudes and positions are identity, not weather.
   const { json, calls, clock } = harness();
@@ -301,7 +338,7 @@ test('a cached payload is served stale rather than dropped', async () => {
   const slfCount = slfStations(fresh);
   assert.ok(slfCount > 0);
   fail.add('measurement-api.slf.ch');
-  clock.value += OBSERVATION_CACHE_MS + 1;
+  clock.value += SLF_CACHE_MS + 1;
   const payload = await json();
   const slf = payload.networks.find((network) => network.id === SLF_NETWORK_ID);
   assert.equal(slf.status, 'stale', 'a map a few minutes old beats none');

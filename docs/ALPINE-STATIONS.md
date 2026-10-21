@@ -388,6 +388,9 @@ every camera settle. That is what the current design exists to avoid.
 1. Check the terms. Keyless and redistributable, or it does not belong here.
 2. Add an entry to `ALPINE_NETWORKS`, listing only the parameters it can supply
    **honestly** — see the pressure trap above for what dishonest looks like.
+   `cadenceMinutes` is load-bearing: it sets both the staleness window and the
+   proxy's refresh window, so a wrong figure either reports a working network as
+   late or re-reads a payload the operator has not republished.
 3. Write a pure adapter in `networks/` that returns canonical records. Cut its
    fixture from a live response.
 4. Add its fixed URLs and read caps to `server/providers/alpine-stations/upstreams.js`
