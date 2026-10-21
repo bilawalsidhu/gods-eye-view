@@ -1,70 +1,67 @@
-import { createCoverage, sequenceIdFromPick } from './coverage.js';
-import { createSequences } from './sequences.js';
+import {
+  createLineCoverage,
+  freshCoverage,
+  sequenceIdFromPick,
+} from '../../lineCoverage.js';
+import { createSequenceCones, thinImages } from '../../sequenceCones.js';
+import { coverageZoomForHeight } from '../../tileMath.js';
+import { decodeCoverageTile } from './decode.js';
 import { createMapillaryViewer } from './viewer.js';
-import { passesImageryFilter } from '../../filter.js';
-import { metresBetween } from '../../view.js';
 import {
   COLORS,
+  COVERAGE_TUNING,
+  KEY_REJECTED_MESSAGE,
   MAPILLARY_CREDIT_HTML,
   MAPILLARY_KEY_ID,
   MAPILLARY_LABEL,
   MAPILLARY_NAME,
   MAPILLARY_PROVIDER_ID,
   MAPILLARY_SOURCE_METHODS,
-  NEAREST_LIMIT,
-  NEAREST_RADIUS_M,
   PICK_PREFIX,
+  RATE_LIMITED_MESSAGE,
 } from './policy.js';
 
-/** Per-provider mutable state, created once per `create()`. */
+/** Normalize a graph image record into the shape the cones use. */
+function normalizeSequenceImage(record) {
+  const coordinates = record?.geometry?.coordinates;
+  if (!Array.isArray(coordinates) || coordinates.length < 2) return null;
+  return {
+    id: String(record.id),
+    lon: Number(coordinates[0]),
+    lat: Number(coordinates[1]),
+    compassAngle: Number(record.compass_angle) || 0,
+    capturedAt: Number(record.captured_at) || 0,
+    isPano: record.is_pano === true,
+  };
+}
+
+/** Per-provider mutable state; coverage and cones share it. */
 function createProviderState(context) {
   return {
     context,
     services: context.services,
     viewer: null,
-    keyRequired: false,
-    /** Coverage waits for the first status: no tile requests without a key. */
-    statusKnown: false,
-    /** Mapillary refused the token: request nothing until re-enabled. */
-    keyRejected: false,
-    status: null,
-    coverage: {
-      zoom: null,
-      /** Current zoom's tiles by `z/x/y` key. */
-      tiles: new Map(),
-      /** Previous zoom's tiles, kept on screen until replacements land. */
-      stale: new Map(),
-      staleTimer: null,
-      /** Tile key → its request's controller; any entry means LOADING. */
-      pending: new Map(),
-      lastError: null,
-      /** While Mapillary rate-limits: no requests before this time (ms). */
-      holdUntil: 0,
-      holdTimer: null,
-      debounceTimer: null,
-      removeCameraListener: null,
-      terrainReady: null,
-      hint: '',
-      kind: null,
-    },
+    coverage: freshCoverage(),
     sequence: {
       selectedId: null,
       images: [],
-      /** Recent sequences' thinned images, by sequence id. */
-      cache: new Map(),
       collection: null,
       loading: false,
+      /** Why the selected sequence's images could not load, until it goes. */
+      error: null,
       abort: null,
     },
   };
 }
 
 /**
- * Mapillary Street Level provider: tile coverage, Graph API image cones and
- * the MapillaryJS viewer. `source` is ./source.js or a stand-in.
+ * The Mapillary provider: coverage lines from vector tiles, image cones from
+ * the Graph API and the MapillaryJS viewer.
+ * @param {{source: object, photoViewer?: object}} options  `source` is
+ *   source.js or a stand-in; `photoViewer` stands in for the viewer adapter.
  * @returns {import('../../registry.js').StreetLevelProvider}
  */
-export function createMapillaryProvider({ source }) {
+export function createMapillaryProvider({ source, photoViewer = null }) {
   if (
     !MAPILLARY_SOURCE_METHODS.every(
       (method) => typeof source?.[method] === 'function',
@@ -84,58 +81,85 @@ export function createMapillaryProvider({ source }) {
     create(context) {
       const state = createProviderState(context);
       const parts = {};
-      parts.coverage = createCoverage({ state, source, parts });
-      parts.sequences = createSequences({ state, source, parts });
-      const viewer = createMapillaryViewer({
-        source,
-        render: context.services?.render,
+      parts.coverage = createLineCoverage({
+        state,
+        fetchTile: async (tile, { signal }) =>
+          decodeCoverageTile(
+            await source.getTile('coverage', tile.z, tile.x, tile.y, {
+              signal,
+            }),
+            tile,
+          ),
+        zoomFor: coverageZoomForHeight,
+        colors: COLORS,
+        pickPrefix: PICK_PREFIX.sequence,
+        renderKey: 'mapillary-coverage',
+        tuning: COVERAGE_TUNING,
+        messages: {
+          keyRejected: KEY_REJECTED_MESSAGE,
+          rateLimited: RATE_LIMITED_MESSAGE,
+        },
+      });
+      parts.sequences = createSequenceCones({
+        state,
+        async loadImages(sequenceId, { signal }) {
+          const records = await source.getSequenceImages(sequenceId, {
+            signal,
+          });
+          return thinImages(
+            records
+              .map(normalizeSequenceImage)
+              .filter(Boolean)
+              .sort((a, b) => a.capturedAt - b.capturedAt),
+          );
+        },
+        colors: COLORS,
+        pickPrefix: PICK_PREFIX.image,
+        spriteId: 'street-level:mapillary-cones',
+        renderKey: 'mapillary-sequence',
+        onHighlight: (sequenceId) => parts.coverage.highlight(sequenceId),
       });
 
       return {
-        async status() {
+        /** Coverage waits for the answer: no tile requests without a key. */
+        async status({ signal } = {}) {
+          let configured;
           try {
-            state.status = await source.getStatus();
-            state.keyRequired = state.status?.configured !== true;
+            configured =
+              (await source.getStatus({ signal }))?.configured === true;
           } catch {
-            state.status = null;
-            state.keyRequired = !source.hasToken();
+            configured = source.hasToken?.() === true;
           }
-          const first = !state.statusKnown;
-          state.statusKnown = true;
-          // Coverage held back until now: draw it if the layer is on.
-          if (first) parts.coverage.refresh();
-          context.notify();
-          return { configured: !state.keyRequired };
+          parts.coverage.setKeyStatus(configured);
+          return { configured };
         },
 
-        init(cesiumViewer) {
-          state.viewer = cesiumViewer;
-          parts.sequences.ensureCollections(cesiumViewer);
+        init(viewer) {
+          state.viewer = viewer;
+          parts.sequences.ensureCollections(viewer);
           parts.sequences.setVisible(false);
         },
 
-        activate(cesiumViewer) {
-          state.viewer = cesiumViewer;
+        activate(viewer) {
+          state.viewer = viewer;
           parts.sequences.setVisible(true);
-          parts.coverage.attach(cesiumViewer);
+          parts.coverage.attach(viewer);
         },
 
+        /** Clear lines and cones, forget refusals. */
         deactivate() {
           parts.coverage.detach();
           parts.coverage.clear();
-          parts.coverage.resetErrors();
+          parts.coverage.unblock();
           parts.sequences.clearSelection();
           parts.sequences.setVisible(false);
         },
 
-        destroy(cesiumViewer) {
+        destroy(viewer) {
           parts.coverage.detach();
           parts.coverage.clear();
-          parts.coverage.resetErrors();
-          parts.sequences.destroy(cesiumViewer);
+          parts.sequences.destroy(viewer);
         },
-
-        refreshCoverage: () => parts.coverage.refresh(),
 
         /** The filter changed: redraw. Each draw reads it from the context. */
         setFilter() {
@@ -143,27 +167,11 @@ export function createMapillaryProvider({ source }) {
           parts.sequences.rerender();
         },
 
-        /** Core surface mode changed: redraw lines and cones draped or cast. */
-        setSurface() {
-          parts.coverage.setSurface();
-          parts.sequences.rerender();
-        },
+        coverageStats: () => parts.coverage.stats(),
 
-        coverageStats() {
-          return {
-            count: parts.coverage.sequenceCount(),
-            zoom: state.coverage.zoom,
-            kind: state.coverage.kind,
-            loading: state.coverage.pending.size > 0,
-            hint: state.coverage.hint,
-            error: state.coverage.lastError,
-            keyRequired: state.keyRequired,
-            keyRejected: state.keyRejected,
-          };
-        },
-
+        /** A line selects its sequence; a cone opens its image. */
         handlePick(pickId) {
-          const sequenceId = sequenceIdFromPick(pickId);
+          const sequenceId = sequenceIdFromPick(pickId, PICK_PREFIX.sequence);
           if (sequenceId) {
             parts.sequences.select(sequenceId);
             return true;
@@ -181,39 +189,12 @@ export function createMapillaryProvider({ source }) {
           selectedId: state.sequence.selectedId,
           images: state.sequence.images.length,
           loading: state.sequence.loading,
+          error: state.sequence.error,
         }),
 
-        /**
-         * Nearest image that passes the imagery filter, or null. The core
-         * aborts `signal` once a newer request overtakes the lookup.
-         */
-        async nearestImage({ lat, lon }, { signal } = {}) {
-          const images = await source.nearestImages(
-            { lat, lon, radius: NEAREST_RADIUS_M, limit: NEAREST_LIMIT },
-            { signal },
-          );
-          // The API returns the images in the radius in no particular order.
-          const metres = (record) => {
-            const [lon2, lat2] = (record.computed_geometry || record.geometry)
-              ?.coordinates || [NaN, NaN];
-            const d = metresBetween({ lon, lat }, { lon: lon2, lat: lat2 });
-            return Number.isFinite(d) ? d : Infinity;
-          };
-          const byDistance = [...images].sort((a, b) => metres(a) - metres(b));
-          const filter = context.getFilter();
-          const hit = byDistance.find((record) =>
-            passesImageryFilter(
-              {
-                isPano: record.is_pano === true,
-                capturedAt: Number(record.captured_at) || 0,
-              },
-              filter,
-            ),
-          );
-          return hit ? String(hit.id) : null;
-        },
-
-        viewer,
+        viewer:
+          photoViewer ||
+          createMapillaryViewer({ source, render: context.services?.render }),
       };
     },
   });

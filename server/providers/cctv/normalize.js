@@ -377,6 +377,17 @@ export function isLikelyCalgaryCoordinate(lat, lon) {
   );
 }
 
+/** Florida statewide, Key West to Georgia state line, with slack at each edge */
+export function isLikelyFloridaCoordinate(lat, lon) {
+  return (
+    isPlausibleLatLon(lat, lon) &&
+    lat >= 24.3 &&
+    lat <= 31.1 &&
+    lon >= -87.7 &&
+    lon <= -79.8
+  );
+}
+
 /** New York City's five boroughs, with slack for the harbor and city line. */
 export function isLikelyNycCoordinate(lat, lon) {
   return (
@@ -385,6 +396,17 @@ export function isLikelyNycCoordinate(lat, lon) {
     lat <= 40.95 &&
     lon >= -74.3 &&
     lon <= -73.65
+  );
+}
+
+/** Hong Kong SAR extent, with slack for the outlying islands. */
+export function isLikelyHongKongCoordinate(lat, lon) {
+  return (
+    isPlausibleLatLon(lat, lon) &&
+    lat >= 22.15 &&
+    lat <= 22.6 &&
+    lon >= 113.8 &&
+    lon <= 114.45
   );
 }
 

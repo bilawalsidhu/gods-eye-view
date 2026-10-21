@@ -27,6 +27,7 @@
 import { feedProvenanceEnvelope } from './layerSnapshot.js';
 import { pointInRing } from './naturalEarthRegions.js';
 import { VOICE_LAYER_MANIFEST, voiceLayer } from '../voice/layerManifest.js';
+import { greatCircleKm } from '../geoDistance.js';
 
 /**
  * Layers the engine understands, with the fields queries may reference,
@@ -98,17 +99,9 @@ function toEpochMs(value) {
   return Date.parse(text);
 }
 
-const EARTH_R_KM = 6371;
-
-/** Great-circle distance in km. */
+/** @deprecated Use geoDistance.greatCircleKm with `{ lat, lon }` points. */
 export function haversineKm(lat1, lon1, lat2, lon2) {
-  const d2r = Math.PI / 180;
-  const dLat = (lat2 - lat1) * d2r;
-  const dLon = (lon2 - lon1) * d2r;
-  const a =
-    Math.sin(dLat / 2) ** 2 +
-    Math.cos(lat1 * d2r) * Math.cos(lat2 * d2r) * Math.sin(dLon / 2) ** 2;
-  return 2 * EARTH_R_KM * Math.asin(Math.min(1, Math.sqrt(a)));
+  return greatCircleKm({ lat: lat1, lon: lon1 }, { lat: lat2, lon: lon2 });
 }
 
 /**
@@ -888,6 +881,7 @@ export function createAnalystEngine(providers) {
       followUp && !spec.scope ? lastResult.distanceOf || null : null;
     let resolvedScope = null;
     let scopeNote = rememberedScope?.coverage || 'anywhere';
+    let scopeSource = rememberedScope?.source || null;
     // Human phrasing for the same scope, so every spoken count can name what it
     // measured ("8 in view", "about 30 within 250 km of Austin") instead of
     // arriving as a bare number that contradicts the panel.
@@ -897,8 +891,16 @@ export function createAnalystEngine(providers) {
     // further when a new scope is given.
     const scope = spec.scope || { kind: followUp ? 'anywhere' : 'view' };
     if (scope.kind === 'region') {
-      const region = await providers.resolveRegionRing(scope.name, signal);
-      if (!isCurrent()) return cancelled();
+      let region;
+      try {
+        region = await providers.resolveRegionRing(scope.name, signal);
+      } catch (error) {
+        // Cancellation belongs to the query owner, not an error's name: a
+        // resource-local AbortError from a current lookup still propagates.
+        if (signal?.aborted || !isCurrent()) return cancelled();
+        throw error;
+      }
+      if (signal?.aborted || !isCurrent()) return cancelled();
       if (region?.error === 'region-timeout') {
         return {
           ok: false,
@@ -917,6 +919,7 @@ export function createAnalystEngine(providers) {
       }
       resolvedScope = region;
       scopeNote = `region:${region.name}`;
+      scopeSource = region.source || null;
       scopeLabel = `over ${region.name}`;
       scopeDetail = scopeLabel;
     } else if (scope.kind === 'radius') {
@@ -1056,6 +1059,7 @@ export function createAnalystEngine(providers) {
         layersQueried,
         records: totals,
         scope: scopeNote,
+        ...(scopeSource ? { scopeSource } : {}),
         ...(rememberedScope?.note ? { note: rememberedScope.note } : {}),
         ...(queriedSnapshots.length
           ? { feedProvenance: feedProvenanceEnvelope(queriedSnapshots) }
@@ -1088,6 +1092,7 @@ export function createAnalystEngine(providers) {
         label: memoryOverride?.scopeLabel || result.scopeLabel,
         detail: memoryOverride?.scopeDetail || result.display.scope,
         coverage: committedCoverage.scope,
+        source: committedCoverage.scopeSource || null,
         note: committedCoverage.note || null,
       },
     };
