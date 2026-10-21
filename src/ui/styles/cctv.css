@@ -129,26 +129,6 @@ html:not([lang='en']) .cctv-controls .scene-btn {
   background: rgba(0, 212, 255, 0.08);
 }
 
-.cctv-cal-input {
-  width: 58px;
-  font-family: var(--font-mono);
-  font-size: 9px;
-  letter-spacing: 0.7px;
-  color: var(--text-primary);
-  background: rgba(0, 212, 255, 0.1);
-  border: 1px solid rgba(0, 212, 255, 0.5);
-  border-radius: 4px;
-  padding: 1px 3px;
-  outline: none;
-  -moz-appearance: textfield;
-}
-
-.cctv-cal-input::-webkit-outer-spin-button,
-.cctv-cal-input::-webkit-inner-spin-button {
-  -webkit-appearance: none;
-  margin: 0;
-}
-
 .cctv-calibration-actions {
   margin-top: 8px;
 }
@@ -162,26 +142,9 @@ html:not([lang='en']) .cctv-controls .scene-btn {
 #cctv-camera-select {
   flex: 1;
   min-width: 0;
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  border-radius: 7px;
-  color: var(--text-primary);
-  padding: 6px 8px;
-  font-family: var(--font-sans);
-  font-size: 12px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  outline: none;
-}
-
-#cctv-camera-select:focus-visible {
-  outline: 2px solid var(--text-primary);
-  outline-offset: -3px;
-}
-
-#cctv-camera-select:disabled {
-  opacity: 0.45;
 }
 
 #cctv-enable-btn.active,

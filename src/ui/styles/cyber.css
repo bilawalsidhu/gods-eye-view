@@ -171,6 +171,7 @@
     .dock-tray-toggle,
     .dock-popover,
     .scene-btn,
+    .gev-action-button:not(.gev-action-button--compact),
     .context-mode-button,
     .map-stack-chip,
     .key-setup-chip,
@@ -506,11 +507,13 @@
     0 0 12px rgba(196, 84, 84, 0.14);
 }
 
+:root[data-ui-theme='cyber'] .gev-segmented,
 :root[data-ui-theme='cyber'] .pp-mode-seg {
   border-color: rgba(206, 222, 226, 0.24);
   border-radius: 1px;
 }
 
+:root[data-ui-theme='cyber'] .gev-segment[aria-checked='true'],
 :root[data-ui-theme='cyber'] .pp-mode-btn.active {
   background: var(--cyber-red);
   color: #f7f8f7;
