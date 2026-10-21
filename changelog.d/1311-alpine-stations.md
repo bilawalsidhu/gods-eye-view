@@ -7,4 +7,4 @@
   blanks the others. Per-network capability is explicit, so a network that
   cannot supply a measurement honestly does not claim it: SwissMetNet
   contributes no snow depth and GeoSphere no sea-level pressure. Replaces #58
-  (darrendignam, #0000).
+  (darrendignam, #1311).
