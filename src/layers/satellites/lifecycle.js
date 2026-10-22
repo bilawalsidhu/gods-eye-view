@@ -1,4 +1,3 @@
-import * as Cesium from 'cesium';
 import { ISS_OVERLAY_SOURCE_ID } from './policy.js';
 
 export function createLifecycle({
@@ -6,6 +5,7 @@ export function createLifecycle({
   services,
   parts,
   source,
+  getRenderer,
 }) {
   const { clearFocusTarget } = services.focus;
   const { holdContinuousRender, releaseContinuousRender } = services.render;
@@ -14,10 +14,13 @@ export function createLifecycle({
   const methods = {
     // Catalog data refresh; propagation remains preRender-owned.
 
-    async init(viewer) {
+    async init(viewer, { engine = null } = {}) {
       parts.catalog._abortActiveUpdates();
       clearFocusTarget('satellites');
-      layerState._viewer = viewer;
+      layerState._engine = engine;
+      layerState._renderer?.destroy();
+      layerState._renderer = services.renderer.create({ viewer, engine });
+      layerState._viewer = layerState._renderer.view;
       layerState._catalog = new Map();
       layerState._points = new Map();
       layerState._detectionObjects = new Map();
@@ -46,14 +49,13 @@ export function createLifecycle({
       layerState._catalogRevision++;
 
       // Point primitives for satellite dots
-      layerState._pointCollection = new Cesium.PointPrimitiveCollection();
-      viewer.scene.primitives.add(layerState._pointCollection);
+      layerState._pointCollection = getRenderer().createPoints();
 
       parts.interaction._installClickHandler(viewer);
 
       // Pre-render listener for real-time position updates
       // (fleet propagation + tracked per-frame dot + orbit ring GMST rotation)
-      layerState._preRenderListener = viewer.scene.preRender.addEventListener(
+      layerState._preRenderListener = getRenderer().onFrame(
         parts.rendering._preRenderTick,
       );
 
@@ -84,8 +86,8 @@ export function createLifecycle({
         const norad = Number(pickedId);
         return Number.isFinite(norad) && layerState._points.has(norad);
       });
-      if (!layerState._preRenderListener && viewer) {
-        layerState._preRenderListener = viewer.scene.preRender.addEventListener(
+      if (!layerState._preRenderListener && layerState._viewer) {
+        layerState._preRenderListener = getRenderer().onFrame(
           parts.rendering._preRenderTick,
         );
       }
@@ -142,12 +144,12 @@ export function createLifecycle({
       layerState._overlayHost.clearSource(ISS_OVERLAY_SOURCE_ID);
       layerState._overlayHost.setVisible(ISS_OVERLAY_SOURCE_ID, false);
       if (layerState._pointCollection) {
-        viewer.scene.primitives.remove(layerState._pointCollection);
+        getRenderer().removePoints(layerState._pointCollection);
         layerState._pointCollection = null;
       }
       // Orbit ring primitives are removed (and destroyed) here
       for (const path of layerState._orbitPaths.values()) {
-        viewer.scene.primitives.remove(path.primitive);
+        getRenderer().removeOrbit(path.primitive);
       }
       layerState._points.clear();
       layerState._detectionObjects.clear();
@@ -171,6 +173,9 @@ export function createLifecycle({
         status: 'destroyed',
         failedGroups: [],
       };
+      layerState._renderer?.destroy();
+      layerState._renderer = null;
+      layerState._engine = null;
       layerState._viewer = null;
     },
   };

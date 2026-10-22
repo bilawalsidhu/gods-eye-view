@@ -1,3 +1,4 @@
+import { appClock } from '../../time/clock.js';
 import * as geo from '../../geo/index.js';
 import { satelliteClassLabel } from '../../data/satelliteClass.js';
 import { ISS_NORAD } from './policy.js';
@@ -77,7 +78,7 @@ export function createRecords({ state, parts }) {
     const limit = Number.isFinite(maxCount)
       ? Math.max(1, Math.floor(maxCount))
       : 2000;
-    const now = new Date();
+    const now = new Date(appClock.now());
     const result = [];
     const emit = (noradId, sat) => {
       if (result.length >= limit) return false;

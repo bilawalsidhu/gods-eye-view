@@ -27,6 +27,7 @@ import { APPLICATION_LAYER_DIRECTORY } from './directory.js';
 import { createFlightsCesiumRenderer } from '../../layers/flights/render/cesium.js';
 import { createMilitaryCesiumRenderer } from '../../layers/military/render/cesium.js';
 import { createLocalAdsbCesiumRenderer } from '../../layers/localAdsb/render/cesium.js';
+import { createSatellitesCesiumRenderer } from '../../layers/satellites/render/cesium.js';
 import { createVesselsCesiumRenderer } from '../../layers/vessels/render/cesium.js';
 
 const ENGINE_KINDS = new Set(['cesium', 'navara']);
@@ -87,6 +88,7 @@ export const layerAvailableOn = (layerId, engineKind) =>
 
 /** Cesium renderers extracted from their layers (render/cesium.js). */
 export const CESIUM_LAYER_RENDERERS = Object.freeze({
+  satellites: createSatellitesCesiumRenderer,
   flights: createFlightsCesiumRenderer,
   military: createMilitaryCesiumRenderer,
   'local-adsb': createLocalAdsbCesiumRenderer,

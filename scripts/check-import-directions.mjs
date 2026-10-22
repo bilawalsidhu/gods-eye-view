@@ -38,10 +38,13 @@ const RENDERED_LAYER_DIRS = [
   'src/layers/military/',
   'src/layers/localAdsb/',
   'src/layers/vessels/',
+  'src/layers/satellites/',
   'src/layers/aircraft/',
   'src/layers/shared/',
 ];
 const renderedLayer = (file) =>
+  file === 'src/celestialRing.js' ||
+  file.startsWith('src/celestialRing/') ||
   RENDERED_LAYER_DIRS.some((dir) => file.startsWith(dir));
 const cesiumLayerRenderer = (file) => /\/render\/cesium[^/]*\.js$/.test(file);
 const navaraLayerRenderer = (file) => /\/render\/navara[^/]*\.js$/.test(file);

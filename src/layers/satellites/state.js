@@ -45,6 +45,8 @@ export function createState({ services }) {
   state._denseLoadController = null;
 
   state._viewer = null;
+  state._renderer = null;
+  state._engine = null;
 
   state._preRenderListener = null;
 

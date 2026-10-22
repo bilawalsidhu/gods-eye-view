@@ -1,4 +1,5 @@
-import * as Cesium from 'cesium';
+import * as geo from '../../geo/index.js';
+import { constantRgba } from '../shared/color.js';
 import { appClock } from '../../time/clock.js';
 import { satelliteClassLabel } from '../../data/satelliteClass.js';
 import {
@@ -9,7 +10,15 @@ import {
   TRACK_VIEW_FROM_LEO,
 } from './policy.js';
 
-export function createTracking({ state: layerState, services, parts, source }) {
+const YELLOW = constantRgba(1, 1, 0);
+
+export function createTracking({
+  state: layerState,
+  services,
+  parts,
+  source,
+  getRenderer,
+}) {
   const { clearFocusTarget, publishFocusTargetFromCachedPosition } =
     services.focus;
   const {
@@ -111,9 +120,9 @@ export function createTracking({ state: layerState, services, parts, source }) {
       parts.rendering._hideOrbitPath(layerState._trackedNorad);
     }
     if (layerState._viewer && !skipViewerUntrack)
-      layerState._viewer.trackedEntity = undefined;
+      getRenderer().follow.release();
     if (layerState._trackedEntity) {
-      layerState._viewer.entities.remove(layerState._trackedEntity);
+      getRenderer().removeTracked(layerState._trackedEntity);
       layerState._trackedEntity = null;
     }
     layerState._trackedNorad = null;
@@ -159,7 +168,7 @@ export function createTracking({ state: layerState, services, parts, source }) {
       );
       if (!pos) return layerState._trackedFrameGeo; // propagation hiccup — keep last good sample
       layerState._trackedFrameGeo = pos;
-      Cesium.Cartesian3.fromDegrees(
+      geo.cartesian3.fromDegrees(
         pos.longitude,
         pos.latitude,
         pos.altitude,
@@ -410,15 +419,15 @@ export function createTracking({ state: layerState, services, parts, source }) {
     point.show = false;
 
     // Show orbital path
-    parts.rendering._showOrbitPath(noradId, Cesium.Color.YELLOW);
+    parts.rendering._showOrbitPath(noradId, YELLOW);
 
     // Tracked entity position propagates per evaluation through the per-frame
     // cache (WS-D2) — dot, host readout, and camera share one SGP4 epoch per frame.
     // Falls back to the point primitive's 1s-throttled position if SGP4 fails.
-    const positionProperty = new Cesium.CallbackProperty(() => {
+    const position = () => {
       const pos = _getTrackedFramePosition();
       return pos ? layerState._trackedFrameCartesian : point.position;
-    }, false);
+    };
 
     const name = sat.name.trim();
 
@@ -433,22 +442,15 @@ export function createTracking({ state: layerState, services, parts, source }) {
       initialPos && initialPos.altitude > HIGH_ORBIT_ALTITUDE_M
         ? TRACK_VIEW_FROM_HIGH_SCALE
         : 1;
-    const viewFrom = Cesium.Cartesian3.multiplyByScalar(
+    const viewFrom = geo.cartesian3.multiplyByScalar(
       TRACK_VIEW_FROM_LEO,
       viewScale,
-      new Cesium.Cartesian3(),
+      geo.cartesian3.create(),
     );
 
-    layerState._trackedEntity = layerState._viewer.entities.add({
-      position: positionProperty,
+    layerState._trackedEntity = getRenderer().createTracked({
+      position,
       viewFrom,
-      point: {
-        pixelSize: 14,
-        color: Cesium.Color.YELLOW,
-        outlineColor: Cesium.Color.WHITE,
-        outlineWidth: 2,
-        disableDepthTestDistance: Number.POSITIVE_INFINITY,
-      },
     });
     layerState._trackedEntity.gevSelectionOrigin = origin;
     layerState._trackedEntity.gevTrackedId = `satellites:${noradId}`;
@@ -459,13 +461,13 @@ export function createTracking({ state: layerState, services, parts, source }) {
       layerId: 'satellites',
       id: noradId,
       label: name,
-      position: Cesium.Cartesian3.clone(point.position),
+      position: geo.cartesian3.clone(point.position),
       origin,
     });
     selectTrackedSubjectContext(_contextSubjectMetadata(noradId, initialPos));
     layerState._contextRefreshedAtMs = Date.now();
 
-    layerState._viewer.trackedEntity = layerState._trackedEntity;
+    getRenderer().follow.start(layerState._trackedEntity);
     console.log(`[Data:Satellites] Tracking ${name} (NORAD ${noradId})`);
   }
   return {
