@@ -285,9 +285,6 @@
  *   - launches: the replay timeline (replay.js, Date.now/performance.now),
  *     the mission orbit's GMST frame (orbitRendering.js new Date()), launch
  *     pad and panel throttles (phase 3 Task 15a);
- *   - satellites: the point cloud's SGP4 propagation and orbit bake
- *     (rendering.js new Date()/Date.now) (Task 14a); only the tracked
- *     satellite reads the app clock;
  *   - wall-clock throttles and feed receipt stamps everywhere (they measure
  *     real elapsed time, not scene time).
  * @property {() => number} now The current app time.
@@ -321,8 +318,9 @@
  *   each sprite is a square of sizePx CSS px times its scale, times the
  *   NearFarScalar [nearM, nearScale, farM, farScale] when given (Cesium's
  *   interpolation: over the squared camera distance, eased by ^0.2).
- * @property {{ sizePx: number, outlinePx?: number, scaleByDistance?: number[] }} [point]
- *   A filled disc of sizePx CSS px diameter with a dark outline.
+ * @property {{ sizePx: number, outlinePx?: number, outlineColor?: number[], scaleByDistance?: number[] }} [point]
+ *   A filled disc of sizePx CSS px diameter plus outlinePx on each side;
+ *   outlineColor is rgba in 0..1 (opaque black by default).
  * @property {{ url: string, minimumPixelSize?: number, maximumScale?: number,
  *   colorBlend?: { mode: 'mix'|'replace', amount: number }, unlit?: boolean }} [model]
  *   A glTF drawn per instance in metres, at least minimumPixelSize px.

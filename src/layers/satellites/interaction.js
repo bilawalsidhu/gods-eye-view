@@ -31,8 +31,11 @@ export function createInteraction({
           if (
             layerState._trackedNorad &&
             layerState._viewer &&
-            getRenderer().follow.current() &&
-            getRenderer().follow.current() !== layerState._trackedEntity
+            ((getRenderer().follow.current() &&
+              getRenderer().follow.current() !== layerState._trackedEntity) ||
+              (getRenderer().kind === 'navara' &&
+                !getRenderer().follow.current() &&
+                !getRenderer().follow.releasing()))
           ) {
             parts.tracking._clearTracking(true, {
               origin:
@@ -56,8 +59,7 @@ export function createInteraction({
             return;
 
           // Check if it's a satellite point (id is NORAD catalog number)
-          const prim = picked.primitive;
-          if (prim && prim.id != null) {
+          if (Number.isFinite(getRenderer().pickedNorad(picked))) {
             const noradId = getRenderer().pickedNorad(picked);
             if (!isNaN(noradId) && layerState._catalog.has(noradId)) {
               parts.tracking._cancelPendingTrackingRestore();

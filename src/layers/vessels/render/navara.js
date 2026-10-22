@@ -15,7 +15,7 @@
 
 import * as geo from '../../../geo/index.js';
 import { createMoverBank } from '../../aircraft/render/navara.js';
-import { createNavaraLayerView } from '../../shared/render/navaraView.js';
+import { createEngineLayerView } from '../../shared/render/engineView.js';
 import { SPRITE_LAYER_ORDER } from '../../../data/spriteOrder.js';
 import { allVesselChevronIcons, VESSEL_ICON_PX } from '../icons.js';
 
@@ -125,7 +125,7 @@ export function createVesselsNavaraRenderer(
   };
 
   // --- the view --------------------------------------------------------------
-  const layerView = createNavaraLayerView(engine, {
+  const layerView = createEngineLayerView(engine, {
     layerId: LAYER_ID,
     wrap: inFrameDo,
     isDestroyed: () => destroyed,

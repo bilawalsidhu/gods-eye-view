@@ -236,3 +236,31 @@ test('a set is ready() once what it draws has loaded, never once destroyed', () 
     'an engine part without ready() draws at once',
   );
 });
+
+test('point outline RGBA is validated and copied independently of the caller', () => {
+  const color = [1, 0.5, 0, 0.3];
+  const options = normalizeMoverSetOptions({
+    id: 'outlined',
+    kind: 'point',
+    capacity: 1,
+    point: { sizePx: 14, outlinePx: 2, outlineColor: color },
+  });
+  color[0] = 0;
+  assert.deepEqual(options.point.outlineColor, [1, 0.5, 0, 0.3]);
+  assert.ok(Object.isFrozen(options.point.outlineColor));
+  for (const outlineColor of [
+    [1, 0, 0],
+    [1, 0, 0, 2],
+    [NaN, 0, 0, 1],
+  ])
+    assert.throws(
+      () =>
+        normalizeMoverSetOptions({
+          id: 'bad',
+          kind: 'point',
+          capacity: 1,
+          point: { sizePx: 14, outlineColor },
+        }),
+      TypeError,
+    );
+});

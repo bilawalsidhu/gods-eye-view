@@ -22,7 +22,7 @@ import {
   aircraftIconCells,
   drawAircraftIconAtlas,
 } from '../../../data/aircraftIcons.js';
-import { createNavaraLayerView } from '../../shared/render/navaraView.js';
+import { createEngineLayerView } from '../../shared/render/engineView.js';
 
 const BASE_SIZE_PX = 20;
 
@@ -251,7 +251,7 @@ export function createAircraftNavaraRenderer({
   };
 
   // --- the view ------------------------------------------------------------
-  const layerView = createNavaraLayerView(engine, {
+  const layerView = createEngineLayerView(engine, {
     layerId,
     wrap: (run) => inFrameDo(run),
     isDestroyed: () => destroyed,

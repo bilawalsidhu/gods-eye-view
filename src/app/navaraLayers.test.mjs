@@ -17,13 +17,19 @@ test('the Navara mode registers the aircraft layers’ and vessels’ renderers,
     registerNavaraLayerRenderers(),
   ]);
   await registerNavaraLayerRenderers();
-  for (const id of ['flights', 'military', 'local-adsb', 'ais-live-vessels'])
+  for (const id of [
+    'flights',
+    'military',
+    'local-adsb',
+    'satellites',
+    'ais-live-vessels',
+  ])
     assert.equal(layerAvailableOn(id, 'navara'), true, id);
   assert.deepEqual(
     createLayerAvailability('navara')
       .available()
       .map(({ id }) => id),
-    ['flights', 'military', 'local-adsb', 'ais-live-vessels'],
+    ['flights', 'military', 'local-adsb', 'satellites', 'ais-live-vessels'],
   );
-  assert.equal(rendererFor('satellites', { kind: 'navara' }), null);
+  assert.equal(layerAvailableOn('satellites', 'navara'), true);
 });

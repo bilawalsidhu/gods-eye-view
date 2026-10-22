@@ -59,6 +59,7 @@ export function createRendering({
 
     layerState._orbitPaths.set(noradId, {
       primitive,
+      basePositions,
       // Same Date object as computeOrbitPath's internal fixedGmst → identical
       // GMST value (gstime is pure), so delta starts at exactly 0 and the
       // initial identity modelMatrix is correct until the first ring tick.

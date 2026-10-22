@@ -2609,8 +2609,10 @@
       "src/layers/vessels/render/cesium.js",
       "src/layers/localAdsb/render/navara.js",
       "src/layers/vessels/render/navara.js",
-      "src/layers/shared/render/navaraView.js",
+      "src/layers/satellites/render/navara.js",
+      "src/layers/shared/render/engineView.js",
       "src/celestialRing/render/cesium.js",
+      "src/celestialRing/view.js",
       "src/layers/satellites/render/cesium.js"
     ],
     "external": [
@@ -3193,6 +3195,8 @@
       "src/layers/localAdsb/render/cesium.js",
       "src/layers/vessels/render/cesium.js",
       "src/celestialRing/render/cesium.js",
+      "src/celestialRing/view.js",
+      "src/layers/shared/render/engineView.js",
       "src/layers/satellites/render/cesium.js"
     ],
     "external": [
@@ -3690,6 +3694,8 @@
       "src/cyberSonar.js",
       "src/app/sourceSlot.js",
       "src/celestialRing.js",
+      "src/celestialRing/view.js",
+      "src/layers/shared/render/engineView.js",
       "src/data/cameraSensitivity.js",
       "src/data/contactPlayback.js",
       "src/data/contactTrailRenderer.js",

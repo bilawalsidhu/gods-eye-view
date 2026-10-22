@@ -77,9 +77,13 @@ function moverRadius(options, scale, distance, modelRadiusPx = null) {
         ? options.point
         : null;
   const size = style
-    ? style.sizePx * distanceScale(style.scaleByDistance, distance)
+    ? (style.sizePx * scale +
+        (options.kind === 'point' ? 2 * style.outlinePx : 0)) *
+      distanceScale(style.scaleByDistance, distance)
     : Math.max(options.model.minimumPixelSize, 24);
-  return Math.max((size * scale) / 2, PICK_RADIUS_PX) + PICK_RADIUS_PX;
+  return (
+    Math.max((style ? size : size * scale) / 2, PICK_RADIUS_PX) + PICK_RADIUS_PX
+  );
 }
 
 function transformed(matrix, flat, index, result) {

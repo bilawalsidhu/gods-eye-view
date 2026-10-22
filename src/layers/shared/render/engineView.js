@@ -1,5 +1,5 @@
-// The view a layer renderer on the Navara engine gives its logic (shared by
-// the aircraft and vessel renderers): `camera` camera-shaped and `scene`
+// An engine-contract view shared by layer renderers and the celestial HUD:
+// `camera` camera-shaped and `scene`
 // scene-shaped adapters over engine.camera.pose() (refreshed once per frame,
 // and whenever the camera moved), with the engine registered for the scene
 // (engineFromViewer) so the shared helpers (iconOrientation, focus) project
@@ -16,7 +16,7 @@ import { registerViewerEngine } from '../../../globe/cesium/engineFromViewer.js'
  *   (the renderer's frame commit scope).
  * @returns {{ view: object, freshCamera: () => object, destroy: () => void }}
  */
-export function createNavaraLayerView(
+export function createEngineLayerView(
   engine,
   { layerId, wrap = (run) => run(), isDestroyed = () => false },
 ) {

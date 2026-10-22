@@ -54,7 +54,8 @@ export function createSatellitesCesiumRenderer(engine, { viewer } = {}) {
     createTracked({ position, viewFrom }) {
       return viewer.entities.add({
         position: new Cesium.CallbackProperty(position, false),
-        viewFrom,
+        viewFrom: new Cesium.Cartesian3(viewFrom.x, viewFrom.y, viewFrom.z),
+        trackingReferenceFrame: Cesium.TrackingReferenceFrame.ENU,
         point: {
           pixelSize: 14,
           color: Cesium.Color.YELLOW,
@@ -64,13 +65,26 @@ export function createSatellitesCesiumRenderer(engine, { viewer } = {}) {
         },
       });
     },
+    trackedPosition: (entity) =>
+      entity?.position?.getValue(viewer.clock.currentTime),
     removeTracked: (entity) => viewer?.entities.remove(entity),
     follow: {
       start: (entity) => {
-        viewer.trackedEntity = entity;
+        if (engine) {
+          engine.camera.follow({
+            native: entity,
+            position: () => entity.position.getValue(viewer.clock.currentTime),
+            viewFrom: () => entity.viewFrom.getValue(viewer.clock.currentTime),
+          });
+        } else {
+          viewer.camera?.cancelFlight();
+          viewer.trackedEntity = entity;
+        }
       },
       release: () => {
-        if (viewer) viewer.trackedEntity = undefined;
+        const current = engine?.camera.following();
+        if (current && current.native === viewer?.trackedEntity) current.stop();
+        else if (viewer) viewer.trackedEntity = undefined;
       },
       current: () => viewer?.trackedEntity,
       onChanged: (listener) =>
