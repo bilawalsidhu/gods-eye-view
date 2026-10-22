@@ -32,6 +32,7 @@ import {
   INFRA_LOD_ACTIVE_MIN,
   INFRA_LOD_ACTIVE_MAX,
 } from '../src/data/localGeojsonLod.js';
+import { resolveChromeExecutable } from './qa-browser.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(__dirname, '..');
@@ -59,9 +60,10 @@ function report(name, detail) {
   console.log(`  [MEAS] ${name} — ${JSON.stringify(detail)}`);
 }
 
+const chromeExecutable = await resolveChromeExecutable(puppeteer);
 const browser = await puppeteer.launch({
   headless: HEADFUL ? false : 'new',
-  executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined,
+  ...(chromeExecutable ? { executablePath: chromeExecutable } : {}),
   protocolTimeout: 300_000,
   args: [
     '--no-sandbox',

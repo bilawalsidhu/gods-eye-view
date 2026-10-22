@@ -11,6 +11,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import puppeteer from 'puppeteer';
+import { resolveChromeExecutable } from './qa-browser.mjs';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 const url = new URL(process.argv[2] || 'http://127.0.0.1:4189');
@@ -27,14 +28,10 @@ url.searchParams.set('welcome', '0');
 url.searchParams.set('setup', '1');
 const output = path.join(root, '.gev-logs', 'voice-auth');
 fs.mkdirSync(output, { recursive: true });
-const executablePath =
-  process.env.PUPPETEER_EXECUTABLE_PATH ||
-  (fs.existsSync('/Applications/Google Chrome.app/Contents/MacOS/Google Chrome')
-    ? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'
-    : puppeteer.executablePath());
+const executablePath = await resolveChromeExecutable(puppeteer);
 const browser = await puppeteer.launch({
   headless: true,
-  executablePath,
+  ...(executablePath ? { executablePath } : {}),
   args: [
     '--no-sandbox',
     '--disable-setuid-sandbox',

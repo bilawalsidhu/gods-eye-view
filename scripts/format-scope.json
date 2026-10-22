@@ -1003,6 +1003,8 @@
   "scripts/qa-street-level.mjs",
   "src/tooling/streetLevelQa.test.mjs",
   "scripts/qa-browserEvidence.mjs",
+  "scripts/qa-browser.mjs",
+  "src/tooling/qaBrowser.test.mjs",
   "scripts/qa-chrome.mjs",
   "src/qaChrome.test.mjs",
   "scripts/fixtures/street-level/mapillaryGraph.mjs",

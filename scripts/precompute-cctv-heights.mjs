@@ -1,7 +1,7 @@
 import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { chromeExecutablePath } from './qa-chrome.mjs';
+import { chromeExecutablePath } from './qa-browser.mjs';
 import {
   planeSupportPoints,
   poseHash,
