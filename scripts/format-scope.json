@@ -1138,5 +1138,10 @@
   "scripts/qa-flights-engines.mjs",
   "src/bench/w1Feeds.js",
   "scripts/qa-map-switch.mjs",
-  "scripts/qa-engine-notice.mjs"
+  "scripts/qa-engine-notice.mjs",
+  "src/bench/satelliteFixture.js",
+  "src/bench/satelliteFixture.test.mjs",
+  "src/layers/satellites/render/cesium.js",
+  "src/celestialRing/render/cesium.js",
+  "scripts/qa-satellites.mjs"
 ]

@@ -1146,7 +1146,8 @@
       "src/geo/check.js",
       "src/geo/debug.js",
       "src/geo/developerError.js",
-      "src/time/clock.js"
+      "src/time/clock.js",
+      "src/layers/shared/color.js"
     ],
     "external": ["cesium", "satellite.js"]
   },
@@ -2608,7 +2609,9 @@
       "src/layers/vessels/render/cesium.js",
       "src/layers/localAdsb/render/navara.js",
       "src/layers/vessels/render/navara.js",
-      "src/layers/shared/render/navaraView.js"
+      "src/layers/shared/render/navaraView.js",
+      "src/celestialRing/render/cesium.js",
+      "src/layers/satellites/render/cesium.js"
     ],
     "external": [
       "hls.js",
@@ -3188,7 +3191,9 @@
       "src/layers/military/render/cesium.js",
       "src/layers/aircraft/qaDrawn.js",
       "src/layers/localAdsb/render/cesium.js",
-      "src/layers/vessels/render/cesium.js"
+      "src/layers/vessels/render/cesium.js",
+      "src/celestialRing/render/cesium.js",
+      "src/layers/satellites/render/cesium.js"
     ],
     "external": [
       "hls.js",
@@ -3753,7 +3758,8 @@
       "src/geo/debug.js",
       "src/geo/developerError.js",
       "src/time/clock.js",
-      "src/globe/surfaceDetail.js"
+      "src/globe/surfaceDetail.js",
+      "src/celestialRing/render/cesium.js"
     ],
     "external": ["cesium", "egm96-universal", "pbf"]
   },

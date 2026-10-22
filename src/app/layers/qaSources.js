@@ -8,6 +8,7 @@
 //   military:synthetic[:count]  readsb rows, `count` aircraft (1 000); the
 //                               first 25 are also synthetic civil flights
 //   vessels:fixture             12 000 AIS rows, or those within an area
+//   satellites:fixture         839 core TLEs + 6000 dense points
 //   local-adsb:fixture          the local receivers' answer (server format,
 //                               /api/local-receivers/aircraft): 40 aircraft
 //                               near JFK, 1090 MHz and 978 MHz UAT
@@ -23,12 +24,15 @@ import {
   syntheticMilitary,
   syntheticVessels,
 } from '../../bench/w1Feeds.js';
+import { satelliteFixture } from '../../bench/satelliteFixture.js';
+import { createSatelliteSource } from '../../layers/satellites/source.js';
 import { createLocalReceiverFeeds } from '../../layers/localAdsb/feeds.js';
 
 const KINDS = Object.freeze({
   flights: new Set(['synthetic']),
   military: new Set(['synthetic']),
   vessels: new Set(['fixture']),
+  satellites: new Set(['fixture']),
   'local-adsb': new Set(['fixture']),
 });
 
@@ -44,7 +48,7 @@ export function parseQaFeed(search = '') {
       (count !== null && !(Number.isInteger(count) && count > 0))
     )
       throw new TypeError(
-        `qaFeed: unknown entry "${item}" (flights:synthetic[:count], military:synthetic[:count], vessels:fixture, local-adsb:fixture)`,
+        `qaFeed: unknown entry "${item}" (flights:synthetic[:count], military:synthetic[:count], vessels:fixture, satellites:fixture, local-adsb:fixture)`,
       );
     return { layer, kind, count };
   });
@@ -60,6 +64,11 @@ const json = (payload) =>
 export function createQaSources(entries, { now = () => Date.now() } = {}) {
   const sources = {};
   for (const { layer, count } of entries) {
+    if (layer === 'satellites')
+      sources.satellites = createSatelliteSource({
+        fetchImpl: async (url) =>
+          new Response(satelliteFixture(String(url).split('/').at(-1))),
+      });
     if (layer === 'flights')
       sources.flights = createFlightSource({
         now,

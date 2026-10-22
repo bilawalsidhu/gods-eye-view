@@ -1,4 +1,6 @@
-import * as Cesium from 'cesium';
+import * as geo from '../../geo/index.js';
+import { appClock } from '../../time/clock.js';
+import { nearFarScale } from '../shared/color.js';
 import { twoline2satrec } from 'satellite.js';
 import {
   DENSE_REFRESH_FRAMES,
@@ -31,7 +33,7 @@ export function createCatalog({ state: layerState, services, parts, source }) {
       1,
       Math.ceil(layerState._denseIds.length / DENSE_REFRESH_FRAMES),
     );
-    const now = new Date();
+    const now = new Date(appClock.now());
     for (let i = 0; i < perFrame; i++) {
       if (layerState._denseCursor >= layerState._denseIds.length)
         layerState._denseCursor = 0;
@@ -42,7 +44,7 @@ export function createCatalog({ state: layerState, services, parts, source }) {
       if (!sat || !point) continue;
       const pos = parts.orbits.propagatePosition(sat.satrec, now);
       if (pos) {
-        point.position = Cesium.Cartesian3.fromDegrees(
+        point.position = geo.cartesian3.fromDegrees(
           pos.longitude,
           pos.latitude,
           pos.altitude,
@@ -96,7 +98,7 @@ export function createCatalog({ state: layerState, services, parts, source }) {
 
       const entries = parts.orbits.parseTLE(text);
       const style = POINT_STYLES.dense;
-      const now = new Date();
+      const now = new Date(appClock.now());
       let added = 0;
 
       for (let start = 0; start < entries.length; start += DENSE_CREATE_CHUNK) {
@@ -124,7 +126,7 @@ export function createCatalog({ state: layerState, services, parts, source }) {
             group: 'dense',
           });
           const point = layerState._pointCollection.add({
-            position: Cesium.Cartesian3.fromDegrees(
+            position: geo.cartesian3.fromDegrees(
               pos.longitude,
               pos.latitude,
               pos.altitude,
@@ -133,7 +135,7 @@ export function createCatalog({ state: layerState, services, parts, source }) {
             color: style.color,
             outlineColor: style.outlineColor,
             outlineWidth: style.outlineWidth,
-            scaleByDistance: new Cesium.NearFarScalar(1e6, 1.5, 2e7, 0.6),
+            scaleByDistance: nearFarScale(1e6, 1.5, 2e7, 0.6),
             id: noradId,
           });
           layerState._points.set(noradId, point);

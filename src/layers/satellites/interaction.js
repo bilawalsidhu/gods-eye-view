@@ -1,4 +1,3 @@
-import * as Cesium from 'cesium';
 import { isPointerFree } from '../../data/inputOwnership.js';
 
 export function createInteraction({
@@ -6,6 +5,7 @@ export function createInteraction({
   services,
   parts,
   source,
+  getRenderer,
 }) {
   const { resolvePickId, isOwnedByOtherLayer } = services.picking;
 
@@ -25,63 +25,64 @@ export function createInteraction({
     // new owner controls it). Guarded so our OWN switch (viewer.trackedEntity
     // briefly undefined mid-_trackSatellite) doesn't self-clear.
     if (!layerState._trackedEntityChangedRemove) {
-      layerState._trackedEntityChangedRemove =
-        viewer.trackedEntityChanged.addEventListener(() => {
+      layerState._trackedEntityChangedRemove = getRenderer().follow.onChanged(
+        () => {
           if (!layerState._enabled) return;
           if (
             layerState._trackedNorad &&
             layerState._viewer &&
-            layerState._viewer.trackedEntity &&
-            layerState._viewer.trackedEntity !== layerState._trackedEntity
+            getRenderer().follow.current() &&
+            getRenderer().follow.current() !== layerState._trackedEntity
           ) {
             parts.tracking._clearTracking(true, {
               origin:
-                layerState._viewer.trackedEntity?.gevSelectionOrigin ||
+                getRenderer().follow.current()?.gevSelectionOrigin ||
                 'programmatic',
             });
           }
-        });
+        },
+      );
     }
 
-    layerState._clickHandler = new Cesium.ScreenSpaceEventHandler(
-      viewer.scene.canvas,
-    );
-    layerState._clickHandler.setInputAction((click) => {
-      // A tool owns the pointer (src/data/inputOwnership.js): yield the click.
-      if (!isPointerFree()) return;
-      if (!layerState._enabled) return;
-      const picked = viewer.scene.pick(click.position);
+    layerState._clickHandler = getRenderer().listenClick(
+      ({ picked }) => {
+        // A tool owns the pointer (src/data/inputOwnership.js): yield the click.
+        if (!isPointerFree()) return;
+        if (!layerState._enabled) return;
 
-      if (picked) {
-        // Clicking tracked entity itself — ignore
-        if (picked.id === layerState._trackedEntity) return;
-
-        // Check if it's a satellite point (id is NORAD catalog number)
-        const prim = picked.primitive;
-        if (prim && prim.id != null) {
-          const noradId = Number(prim.id);
-          if (!isNaN(noradId) && layerState._catalog.has(noradId)) {
-            parts.tracking._cancelPendingTrackingRestore();
-            parts.tracking._trackSatellite(noradId, { origin: 'user' });
+        if (picked) {
+          // Clicking tracked entity itself — ignore
+          if (getRenderer().isTrackedPick(picked, layerState._trackedEntity))
             return;
+
+          // Check if it's a satellite point (id is NORAD catalog number)
+          const prim = picked.primitive;
+          if (prim && prim.id != null) {
+            const noradId = getRenderer().pickedNorad(picked);
+            if (!isNaN(noradId) && layerState._catalog.has(noradId)) {
+              parts.tracking._cancelPendingTrackingRestore();
+              parts.tracking._trackSatellite(noradId, { origin: 'user' });
+              return;
+            }
           }
         }
-      }
 
-      // A pick that belongs to a sibling layer (plane, vessel, station, CCTV
-      // camera…) is not "empty space" — leave OUR tracking (and crucially
-      // viewer.trackedEntity, which that sibling may have JUST set) alone (H2).
-      if (picked) {
-        const pickedId = resolvePickId(picked);
-        if (pickedId && isOwnedByOtherLayer('satellites', pickedId)) return;
-      }
+        // A pick that belongs to a sibling layer (plane, vessel, station, CCTV
+        // camera…) is not "empty space" — leave OUR tracking (and crucially
+        // viewer.trackedEntity, which that sibling may have JUST set) alone (H2).
+        if (picked) {
+          const pickedId = resolvePickId(picked);
+          if (pickedId && isOwnedByOtherLayer('satellites', pickedId)) return;
+        }
 
-      // Clicked empty space — deselect
-      if (layerState._trackedNorad) {
-        parts.tracking._cancelPendingTrackingRestore();
-        parts.tracking._clearTracking(false, { origin: 'user' });
-      }
-    }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
+        // Clicked empty space — deselect
+        if (layerState._trackedNorad) {
+          parts.tracking._cancelPendingTrackingRestore();
+          parts.tracking._clearTracking(false, { origin: 'user' });
+        }
+      },
+      { enabled: () => layerState._enabled },
+    );
 
     document.addEventListener('keydown', _onKeyDown);
   }

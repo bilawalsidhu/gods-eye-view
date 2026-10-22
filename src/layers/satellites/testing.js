@@ -1,7 +1,13 @@
-import * as Cesium from 'cesium';
+import * as geo from '../../geo/index.js';
 import { ISS_NORAD, ISS_OVERLAY_SOURCE_ID } from './policy.js';
 
-export function createTesting({ state: layerState, services, parts, source }) {
+export function createTesting({
+  state: layerState,
+  services,
+  parts,
+  source,
+  getRenderer,
+}) {
   /**
    * Seed a single tracked satellite so tests can invoke the exact production
    * pre-render callback without constructing a WebGL viewer.
@@ -27,6 +33,8 @@ export function createTesting({ state: layerState, services, parts, source }) {
     // control satellite that must NOT be treated as part of it).
     neighbours = [],
   }) {
+    layerState._renderer = null;
+    layerState._engine = null;
     layerState._viewer = viewer;
     layerState._catalog = new Map([
       [noradId, { name, satrec, group: 'stations' }],
@@ -168,6 +176,8 @@ export function createTesting({ state: layerState, services, parts, source }) {
     overlayHost,
     preservePending = false,
   }) {
+    layerState._renderer = null;
+    layerState._engine = null;
     layerState._viewer = viewer;
     layerState._catalog = new Map([
       [ISS_NORAD, { name: 'ISS (ZARYA)', satrec, group: 'stations' }],
@@ -177,7 +187,7 @@ export function createTesting({ state: layerState, services, parts, source }) {
       [
         ISS_NORAD,
         {
-          primitive: { show: true, modelMatrix: new Cesium.Matrix4() },
+          primitive: { show: true, modelMatrix: geo.matrix4.create() },
           gmstAtBake: 0,
         },
       ],

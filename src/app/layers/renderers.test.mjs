@@ -56,8 +56,9 @@ test('the default registry: every layer on Cesium, none yet on Navara', () => {
   }
 });
 
-test('the aircraft layers and vessels have extracted Cesium renderers; the others still draw themselves', () => {
+test('the aircraft, vessels and satellites have extracted Cesium renderers; the others still draw themselves', () => {
   assert.deepEqual(Object.keys(CESIUM_LAYER_RENDERERS), [
+    'satellites',
     'flights',
     'military',
     'local-adsb',
@@ -78,7 +79,7 @@ test('the aircraft layers and vessels have extracted Cesium renderers; the other
   const military = rendererFor('military', { kind: 'cesium' }, { viewer });
   assert.equal(military.kind, 'cesium');
   assert.equal(military.viewer, viewer);
-  assert.equal(rendererFor('satellites', { kind: 'cesium' }), null);
+  assert.equal(rendererFor('satellites', { kind: 'cesium' }).kind, 'cesium');
 });
 
 test('the layer availability API: engine, isAvailable, available, unavailable', () => {

@@ -17,7 +17,15 @@ export function createSatellitesLayer({ services, source }) {
     throw new TypeError('A satellites source is required');
   const state = createState({ services });
   const parts = {};
-  const context = { state, services, parts, source };
+  const getRenderer = () => {
+    if (!state._renderer || state._renderer.view !== state._viewer)
+      state._renderer = services.renderer.create({
+        viewer: state._viewer,
+        engine: state._engine,
+      });
+    return state._renderer;
+  };
+  const context = { state, services, parts, source, getRenderer };
   parts.controls = createControls(context);
   parts.catalog = createCatalog(context);
   parts.labels = createLabels(context);
