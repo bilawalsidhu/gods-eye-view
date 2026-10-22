@@ -411,3 +411,26 @@ test('a model hit is checked against its projected position within its drawn rad
   assert.equal(picking.drillPick({ x: 121, y: 100 })[0]?.id, 'jet');
   assert.equal(picking.drillPick({ x: 125, y: 100 }).length, 0);
 });
+
+test('stale GPU model hits cannot select hidden or removed instances', async () => {
+  const view = fakeView();
+  const model = modelSet('models', [[100, 100, 50, 'jet']], null);
+  const picking = createNavaraPicking({
+    view,
+    projector,
+    camera,
+    movers: () => [model],
+    lines: () => [],
+    resolveBatch: () => ({ set: 'models', instance: 0, pickId: 'jet' }),
+    ...timers(),
+  });
+  model.store.set(0, { show: false });
+  const hidden = picking.clickPick({ x: 100, y: 100 });
+  view.emit('featureClick', { batchId: 1 });
+  assert.equal(await hidden, undefined);
+  model.store.setCount(0);
+  const removed = picking.clickPick({ x: 100, y: 100 });
+  view.emit('featureClick', { batchId: 1 });
+  assert.equal(await removed, undefined);
+  picking.destroy();
+});

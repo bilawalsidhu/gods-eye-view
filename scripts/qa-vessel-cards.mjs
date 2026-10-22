@@ -215,7 +215,7 @@ async function main() {
   console.log(`  Tag     : ${TAG}`);
   console.log(`  Engine  : ${ENGINE ?? 'viewer (Cesium)'}`);
   console.log(`  Data    : ${DATA_MODE}`);
-  console.log(`  Browser : ${HEADFUL ? 'headful (hardware renderer requested)' : 'headless (SwiftShader)'}`);
+  console.log(`  Browser : ${HEADFUL ? 'headful (hardware renderer requested)' : 'headless (Metal)'}`);
   console.log(`  Ports   : ${PORT_KEYS.join(', ')}\n`);
   for (const line of vesselCardProvenanceLines(DATA_MODE)) console.log(`  ${line}`);
   console.log('');
@@ -238,7 +238,7 @@ async function main() {
     args: [
       '--no-sandbox',
       '--disable-setuid-sandbox',
-      ...(!HEADFUL ? ['--use-gl=angle', '--use-angle=swiftshader'] : []),
+      '--use-angle=metal',
       '--disable-dev-shm-usage',
       '--disable-background-timer-throttling',
       '--disable-renderer-backgrounding',

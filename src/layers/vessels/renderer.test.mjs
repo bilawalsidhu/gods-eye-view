@@ -286,3 +286,48 @@ test('vessels on the Navara renderer: one always-on-top chevron bank, MMSI picks
     globalThis.document = previousDocument;
   }
 });
+
+test('a vessel bank commits rows arriving after its empty visibility commit and after growth', async () => {
+  const { createMoverBank } = await import('../aircraft/render/navara.js');
+  let commits = 0;
+  let pending = null;
+  const bank = createMoverBank(
+    {
+      movers: {
+        createSet: () => ({
+          set() {},
+          setCount() {},
+          destroy() {},
+          commit() {
+            commits++;
+          },
+        }),
+      },
+    },
+    {
+      options: (capacity) => ({ capacity }),
+      write() {},
+      onCommit: (next) => {
+        pending = next;
+      },
+    },
+  );
+  const flush = () => {
+    const next = pending;
+    pending = null;
+    next?.commit();
+  };
+  bank.setVisible(true);
+  flush();
+  bank.add({});
+  assert.equal(pending, bank, 'first rows schedule their GPU upload');
+  flush();
+  assert.equal(commits, 1);
+  for (let i = 1; i < 1024; i++) bank.add({});
+  flush();
+  bank.add({});
+  assert.equal(pending, bank, 'capacity growth schedules its GPU upload');
+  flush();
+  assert.equal(commits, 3);
+  bank.destroy();
+});

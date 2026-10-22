@@ -223,7 +223,7 @@ async function main() {
       '--no-sandbox',
       '--disable-setuid-sandbox',
       '--use-gl=angle',
-      '--use-angle=swiftshader',
+      '--use-angle=metal',
       '--disable-dev-shm-usage',
       '--disable-background-timer-throttling',
       '--disable-renderer-backgrounding',
