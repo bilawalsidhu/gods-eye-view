@@ -85,12 +85,17 @@ export function orientationVectors(position, heading, pitch, roll) {
  * Cesium's camera heading/pitch/roll getters: heading and roll in [0, 2π);
  * within 1e-3 of straight up or down roll is 0 and heading follows `up`.
  */
-export function headingPitchRoll(position, direction, up) {
+export function headingPitchRoll(
+  position,
+  direction,
+  up,
+  verticalEpsilon = 1e-3,
+) {
   const axes = localAxes(position);
   const d = toLocal(axes, direction);
   const u = toLocal(axes, up);
   const r = toLocal(axes, cross(direction, up));
-  const vertical = Math.abs(Math.abs(d.u) - 1) <= 1e-3;
+  const vertical = Math.abs(Math.abs(d.u) - 1) <= verticalEpsilon;
   const raw = vertical
     ? Math.atan2(u.n, u.e) - math.PI_OVER_TWO
     : Math.atan2(d.n, d.e) - math.PI_OVER_TWO;
@@ -109,7 +114,12 @@ export function headingPitchRoll(position, direction, up) {
  */
 export function navaraPose(position, direction, up) {
   const place = cartographic.fromCartesian(position, WGS84);
-  const angles = headingPitchRoll(position, direction, up);
+  // Navara orients its camera in the surface ENU frame at lng/lat. Cesium's
+  // Cartesian ENU normal at a high-altitude eye differs from that frame.
+  const surface = cartesian3.fromRadians(place.longitude, place.latitude, 0);
+  // Keep near-nadir tilt when serializing; the public pose keeps Cesium's
+  // wider singularity tolerance, which would discard it here.
+  const angles = headingPitchRoll(surface, direction, up, 1e-14);
   let roll = math.toDegrees(angles.roll);
   if (roll > 180) roll -= 360;
   return {

@@ -18,6 +18,9 @@ import {
 } from '../renderGovernor.js';
 import { initGevVoiceCommands } from '../voice/gevRealtime.js';
 
+// Native mesh capability stays at the composition boundary.
+const navaraViews = new WeakMap();
+
 /** The Navara globe module, loaded on demand. */
 const loadNavaraGlobeModule = async () =>
   (await import('../globe/navara/index.js')).createNavaraGlobe;
@@ -55,6 +58,15 @@ const SHELL_CREDIT_KEYS = new Set([
  */
 export async function registerNavaraLayerRenderers() {
   const loaders = {
+    'rocket-launches': async () => {
+      const { createLaunchesNavaraRenderer } =
+        await import('../layers/launches/render/navara.js');
+      return (engine, options) =>
+        createLaunchesNavaraRenderer(engine, {
+          ...options,
+          ...navaraViews.get(engine),
+        });
+    },
     satellites: async () =>
       (await import('../layers/satellites/render/navara.js'))
         .createSatellitesNavaraRenderer,
@@ -112,6 +124,8 @@ export async function createNavaraScene({
   });
   defer(() => globe.destroy());
   const { engine } = globe;
+  navaraViews.set(engine, { view: globe.view, MeshDesc: globe.MeshDesc });
+  defer(() => navaraViews.delete(engine));
   // The layers drawn on Navara (their render/navara.js), before the catalog
   // asks the registry which layers this engine shows.
   await registerNavaraLayerRenderers();

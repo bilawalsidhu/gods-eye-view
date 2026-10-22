@@ -3,6 +3,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import puppeteer from 'puppeteer';
+import sharp from 'sharp';
 import { LAUNCH_FIXTURE_EPOCH } from '../src/bench/launchFixture.js';
 const arg = (name) =>
   process.argv.find((v) => v.startsWith(`--${name}=`))?.slice(name.length + 3);
@@ -92,6 +93,130 @@ try {
       p.id.startsWith('rocket-launch:'),
     ).length === 3,
   );
+  report.views = {};
+  for (const [name, height] of [
+    ['global', 24000000],
+    ['city', 200000],
+    ['orbit', 3000000],
+  ]) {
+    await page.evaluate(async (height) => {
+      const { engine } = window.__godsEyeView;
+      const geo = await import('/src/geo/index.js');
+      engine.camera.setView({
+        destination: geo.cartesian3.fromDegrees(-80.604333, 28.608389, height),
+        orientation: { heading: 0, pitch: -Math.PI / 2, roll: 0 },
+      });
+      engine.render.request('qa-launch-view');
+    }, height);
+    await new Promise((r) => setTimeout(r, 350));
+    report.views[name] = await page.evaluate(() => {
+      const { engine, layers } = window.__godsEyeView;
+      const drawn = layers.drawn('rocket-launches');
+      return {
+        camera: engine.camera.pose(),
+        points: drawn.points.map((p) => ({
+          ...p,
+          screen: engine.projector.worldToWindow(p.position) ?? null,
+        })),
+        paths: drawn.paths,
+        rings: drawn.rings,
+      };
+    });
+    const screenshot = await page.screenshot({
+      path: out.replace(/\.json$/, `-view-${name}.png`),
+    });
+    const { data, info } = await sharp(screenshot)
+      .ensureAlpha()
+      .raw()
+      .toBuffer({ resolveWithObject: true });
+    report.views[name].pixels = report.views[name].points
+      .filter(
+        (p) =>
+          p.show &&
+          p.screen &&
+          p.screen.x > 350 &&
+          p.screen.x < 950 &&
+          p.screen.y > 200 &&
+          p.screen.y < 650,
+      )
+      .map((p) => {
+        let distance = Infinity;
+        for (
+          let y = Math.floor(p.screen.y) - 5;
+          y <= Math.ceil(p.screen.y) + 5;
+          y++
+        )
+          for (
+            let x = Math.floor(p.screen.x) - 5;
+            x <= Math.ceil(p.screen.x) + 5;
+            x++
+          ) {
+            const offset = (y * info.width + x) * 4;
+            distance = Math.min(
+              distance,
+              Math.hypot(
+                data[offset] - p.color[0] * 255,
+                data[offset + 1] - p.color[1] * 255,
+                data[offset + 2] - p.color[2] * 255,
+              ),
+            );
+          }
+        return { id: p.id, colorDistance: distance };
+      });
+  }
+  await page.evaluate(
+    (pose) =>
+      window.__godsEyeView.engine.camera.setView({
+        destination: pose.position,
+        orientation: { direction: pose.direction, up: pose.up },
+      }),
+    report.snapshots.all.camera,
+  );
+  await new Promise((r) => setTimeout(r, 350));
+  check(
+    'marker class colors present in actual pixels',
+    Object.values(report.views).every(
+      (v) =>
+        v.pixels.length > 0 && v.pixels.every((p) => p.colorDistance <= 60),
+    ),
+    Object.fromEntries(
+      Object.entries(report.views).map(([k, v]) => [k, v.pixels]),
+    ),
+  );
+  check(
+    'supplied stage paths rendered separately',
+    report.views.global.paths.filter((p) =>
+      p.id.startsWith('rocket-trajectory:'),
+    ).length === 2,
+  );
+  report.voice = await page.evaluate(async () => {
+    const { createGevActionRunner } = await import('/src/voice/gevActions.js');
+    const app = window.__godsEyeView;
+    const run = createGevActionRunner(app);
+    try {
+      return {
+        records: app.dataManager.layers
+          .get('rocket-launches')
+          .module.getAnalystRecords(),
+        answer: await run('analyst_query', {
+          layers: ['rocket-launches'],
+          scope: { kind: 'anywhere' },
+          limit: 5,
+        }),
+      };
+    } finally {
+      run.dispose();
+    }
+  });
+  check(
+    'mission analyst query through runner',
+    report.voice.answer.ok && report.voice.answer.items?.length === 3,
+    {
+      ok: report.voice.answer.ok,
+      code: report.voice.answer.code,
+      count: report.voice.answer.items?.length,
+    },
+  );
   const screen = await page.evaluate(() => {
     const { engine, layers } = window.__godsEyeView;
     const p = layers
@@ -112,6 +237,12 @@ try {
         .getElementById('space-mission-panel')
         ?.textContent.includes('ISS (ZARYA)'),
     ),
+  );
+  await page.mouse.click(420, 600);
+  await page.keyboard.press('Escape');
+  check(
+    'empty click and Escape retain legacy mission selection',
+    (await read()).drawn.selected === 'qa-iss',
   );
   await page.screenshot({ path: out.replace(/\.json$/, '-selected.png') });
   await page.evaluate(() =>
@@ -168,6 +299,16 @@ try {
             camera: p,
             replay: drawn.replay,
             pad: drawn.padVisible,
+            glyph: (() => {
+              const e = document.querySelector(
+                '.mission-replay-vehicle-overlay',
+              );
+              return {
+                hidden: e?.hidden,
+                mode: e?.dataset.mode,
+                svg: Boolean(e?.querySelector('svg')),
+              };
+            })(),
           });
           index++;
         }
@@ -195,6 +336,17 @@ try {
     checkpoints.length === 12 &&
       checkpoints.slice(2, 6).every((s) => s.replay.ascending) &&
       checkpoints.slice(6).every((s) => !s.replay.ascending),
+  );
+  check(
+    'replay vehicle overlay visible in ascent and orbit',
+    checkpoints
+      .slice(2, 6)
+      .every(
+        (p) => !p.glyph.hidden && p.glyph.svg && p.glyph.mode === 'ascent',
+      ) &&
+      checkpoints
+        .slice(6)
+        .some((p) => !p.glyph.hidden && p.glyph.mode === 'orbit'),
   );
   report.snapshots.orbit = await read();
   await page.screenshot({ path: out.replace(/\.json$/, '-orbit.png') });
@@ -234,6 +386,181 @@ try {
     !(await page.evaluate(() =>
       window.__godsEyeView.dataManager.isEnabled('satellites'),
     )),
+  );
+  const shareHash = await page.evaluate(async () => {
+    const { layers, engine, styleManager } = window.__godsEyeView;
+    await layers.enable('rocket-launches');
+    engine.camera.cancelFlight();
+    return styleManager.shareLinkManager._buildHashParams().toString();
+  });
+  report.share = {};
+  for (const opened of [kind, kind === 'cesium' ? 'navara' : 'cesium']) {
+    const context = await browser.createBrowserContext();
+    try {
+      const shared = await context.newPage();
+      await shared.setViewport({ width: 1280, height: 800 });
+      await shared.evaluateOnNewDocument(() =>
+        localStorage.setItem('gev:first-run-mission:v1', 'suppressed'),
+      );
+      const destination = new URL(url);
+      destination.searchParams.set('engine', opened);
+      destination.hash = shareHash;
+      await shared.goto(destination.href, { waitUntil: 'domcontentloaded' });
+      await shared.waitForFunction(
+        () => Boolean(window.__godsEyeView?.layers),
+        { timeout: 180000 },
+      );
+      await shared.evaluate(
+        () => window.__godsEyeView.styleManager.initialRestorePromise,
+      );
+      const restored = await shared
+        .waitForFunction(
+          () =>
+            window.__godsEyeView.dataManager.isEnabled('rocket-launches') &&
+            window.__godsEyeView.layers.drawn('rocket-launches')?.records
+              .length === 3,
+          { timeout: 60000 },
+        )
+        .then(() => true)
+        .catch(() => false);
+      report.share[opened] = { restored };
+      check(`share restores enabled missions on ${opened}`, restored);
+    } finally {
+      await context.close();
+    }
+  }
+  await page.evaluate(() =>
+    window.__godsEyeView.layers.disable('rocket-launches'),
+  );
+  report.cycles = await page.evaluate(async () => {
+    const { layers, engine, dataManager, styleManager, viewer } =
+      window.__godsEyeView;
+    const samples = [];
+    for (let i = 0; i < 10; i++) {
+      await layers.enable('rocket-launches');
+      engine.camera.cancelFlight();
+      await new Promise((r) => setTimeout(r, 80));
+      await layers.disable('rocket-launches');
+      await new Promise((r) => setTimeout(r, 30));
+      samples.push({
+        sets: engine.movers.list().length,
+        movers: engine.movers.list().reduce((n, s) => n + s.count, 0),
+        lines: engine.lines.list().length,
+        shownLines: engine.lines.list().filter((s) => s.shown).length,
+        primitives: viewer?.scene.primitives.length ?? null,
+        sources: viewer?.dataSources.length ?? null,
+      });
+    }
+    styleManager.orbitController.stop();
+    engine.camera.cancelFlight();
+    return samples;
+  });
+  check(
+    'ten cycles keep resource counts bounded',
+    report.cycles.every(
+      (s) => JSON.stringify(s) === JSON.stringify(report.cycles[0]),
+    ),
+    report.cycles,
+  );
+  check(
+    'disabled movers and paths are hidden',
+    report.cycles.every((s) => s.movers === 0 && s.shownLines === 0),
+  );
+  await page.evaluate(async () => {
+    const { appClock } = await import('/src/time/clock.js');
+    appClock.resume();
+  });
+  await new Promise((r) => setTimeout(r, 5000));
+  report.idle = await page.evaluate(async () => {
+    const { layers, engine, getRenderGovernorDiagnostics } =
+      window.__godsEyeView;
+    const before = layers.framesDrawn();
+    await new Promise((r) => setTimeout(r, 2000));
+    return {
+      frames: layers.framesDrawn() - before,
+      governor: getRenderGovernorDiagnostics(),
+      continuous: engine.render.isContinuous(),
+    };
+  });
+  check(
+    'disabled layer releases continuous rendering',
+    !report.idle.continuous,
+    report.idle,
+  );
+  check(
+    'settled disabled view draws zero frames in two seconds',
+    report.idle.frames === 0,
+    report.idle.frames,
+  );
+  await page.evaluate(async () => {
+    const { layers, dataManager } = window.__godsEyeView;
+    await layers.enable('satellites');
+    dataManager.setLayerParams(
+      'satellites',
+      { catalog: 'core', showPoints: true, showOrbits: true },
+      { origin: 'user' },
+    );
+  });
+  await page.waitForFunction(
+    () =>
+      window.__godsEyeView.dataManager.layers
+        .get('satellites')
+        .module.getStats().count === 839,
+    { timeout: 60000 },
+  );
+  report.satelliteHandoff = await page.evaluate(async () => {
+    const { layers, dataManager, engine } = window.__godsEyeView;
+    const satellite = dataManager.layers.get('satellites').module;
+    const tracked = satellite.trackById(25544);
+    await new Promise((r) => setTimeout(r, 300));
+    await layers.enable('rocket-launches');
+    engine.camera.cancelFlight();
+    await new Promise((r) => setTimeout(r, 300));
+    const during = {
+      params: satellite.getParams(),
+      tracked: satellite.getTrackedInfo(),
+      following: Boolean(engine.camera.following()),
+    };
+    await layers.disable('rocket-launches');
+    await new Promise((r) => setTimeout(r, 500));
+    const after = {
+      enabled: dataManager.isEnabled('satellites'),
+      params: satellite.getParams(),
+      tracked: satellite.getTrackedInfo(),
+    };
+    await layers.disable('satellites');
+    return { tracked, during, after };
+  });
+  check(
+    'mission camera releases existing satellite tracking',
+    report.satelliteHandoff.tracked &&
+      !report.satelliteHandoff.during.tracked &&
+      !report.satelliteHandoff.during.following,
+    report.satelliteHandoff.during,
+  );
+  check(
+    'Context restores satellite visibility, palette and target',
+    report.satelliteHandoff.after.enabled &&
+      report.satelliteHandoff.after.params.catalog === 'core' &&
+      report.satelliteHandoff.after.params.showPoints &&
+      report.satelliteHandoff.after.params.showOrbits &&
+      report.satelliteHandoff.after.params.selectedSatTrackingId === 25544,
+    report.satelliteHandoff.after,
+  );
+  report.destroy = await page.evaluate(async () => {
+    const { dataManager, engine, viewer } = window.__godsEyeView;
+    await dataManager.layers.get('rocket-launches').module.destroy(viewer);
+    await dataManager.layers.get('satellites').module.destroy(viewer);
+    await Promise.resolve();
+    return {
+      movers: engine.movers.list().length,
+      lines: engine.lines.list().length,
+    };
+  });
+  check(
+    'destroy releases mover sets and lines',
+    report.destroy.movers === 0 && report.destroy.lines === 0,
+    report.destroy,
   );
   check('no runtime errors', errors.length === 0, {
     count: errors.length,

@@ -51,7 +51,7 @@ function createFakePort() {
       port.drawn = {
         position,
         ...orientationVectors(
-          position,
+          cartesian3.fromDegrees(pose.lng, pose.lat, 0),
           math.toRadians(pose.heading),
           math.toRadians(pitch),
           math.toRadians(pose.roll),
@@ -127,8 +127,14 @@ test('setView updates the pose at once and pushes the Navara pose in degrees', (
   near(pose.roll, 0.05, 1e-12, 'roll');
   const pushed = port.applied.at(-1);
   near(pushed.lng, -70, 1e-9, 'lng');
-  near(pushed.heading, math.toDegrees(1.2), 1e-9, 'heading (deg)');
-  near(pushed.roll, math.toDegrees(0.05), 1e-9, 'roll (deg)');
+  port.update();
+  near(
+    cartesian3.distance(port.drawn.direction, pose.direction),
+    0,
+    1e-12,
+    'drawn direction',
+  );
+  near(cartesian3.distance(port.drawn.up, pose.up), 0, 1e-12, 'drawn up');
   assert.ok(port.frames > 0, 'no frame was requested');
 });
 

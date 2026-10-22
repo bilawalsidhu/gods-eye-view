@@ -214,7 +214,20 @@ test("the camera starts from Navara's drawn camera and pushes poses with setCame
   engine.camera.setView({ destination: cartesian3.fromDegrees(20, 10, 1e6) });
   const [, pose] = view.calls.findLast(([name]) => name === 'setCamera');
   near(pose.lng, 20, 1e-9, 'lng');
-  near(pose.pitch, -90, 1e-9, 'pitch');
+  const drawn = orientationVectors(
+    cartesian3.fromDegrees(pose.lng, pose.lat, 0),
+    math.toRadians(pose.heading),
+    math.toRadians(pose.pitch),
+    math.toRadians(pose.roll),
+  );
+  const desired = engine.camera.pose();
+  near(
+    cartesian3.distance(drawn.direction, desired.direction),
+    0,
+    1e-12,
+    'world direction',
+  );
+  near(cartesian3.distance(drawn.up, desired.up), 0, 1e-12, 'world up');
 });
 
 test("Navara's fov follows Cesium's vertical fov, also after a resize", () => {

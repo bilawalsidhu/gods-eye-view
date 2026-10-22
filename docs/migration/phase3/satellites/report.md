@@ -31,3 +31,12 @@ Full validation on the final ENU implementation: Node24 **7113 total, 7112 pass,
 Idle: Navara records three consecutive zero-frame 2.1s windows after disable. A Cesium callsite trace records 0/17/0/0/0 frames with no continuous-render holds and zero layer entries; its transient requests come from `ResizeObserver.markLayoutDirty → invalidateHost → world-overlay` during UI layout changes. Once layout settles it records three consecutive zero-frame windows. The trace distinguishes that UI repaint from a satellite hold or mover leak; no product code or tolerance was changed to suppress it.
 
 Evidence: reviewed global/city/orbit/tracked/celestial JPG pairs here; complete JSON/snapshots in `qa-artifacts/t14/*-accepted.*`, `comparison.json`, `idle-settled.json`; final logs `/tmp/gev-t14b-*.log`. Earlier failed harness runs are retained. No pushes or publications. T14 implementation and targeted acceptance are complete; the shared cross-shell failures above remain open.
+
+
+## T15 integration recheck — 2026-10-23
+
+The shared gate previously left open is now green: shell C23/23, N25/25, cross4/4; Austin maximum height delta1.04m, transferred/side-by-side poses0m/0degrees, no tile errors in this pass. Contracts C73/73 and N79/79 pass. Historical503/height failures above remain recorded; filters/tolerances are unchanged.
+
+Launch integration exposed a native Cesium tracker orphan on external null follow, now cleared with guarded own start/release transitions (including proxy takeover). Mission dependency state is captured before its camera flight can clear the previous target; a focused behavioral test and actual browser handoff restore ISS plus the prior visibility/palette on both engines. Final launch acceptance30/30 each; satellite rerun30/30 each, with0m fixed ECEF, ≤2.90e-13px orbit/point anchors and ≤3.26e-7m/6.0e-12degree camera differences. Current dense work p95 C3.8/3.3/3.9ms, N4.7/4.9/4.6ms, informational. Satellite cycle idle probe C1/N0 frames; separate settled launch-off probes0frames/2s on both engines, with running physical time on Navara. The earlier UI repaint trace remains applicable evidence, not a relaxed threshold.
+
+Final Node24:7131 total,7130pass,1skip,0fail plus15 allocation checks; boundaries,format1541,app/panel builds and main composition pass (2905378raw/903307gzip, no Navara/three initially). Final evidence and reviewed launch/glyph pairs: `../launches/evidence.json`, `../launches/report.md`. T14/T15 are accepted; T16 and later waves remain outside this completion.

@@ -90,7 +90,35 @@ export function launchFixture() {
                 ]
               : [],
         },
-        trajectory: [],
+        trajectory:
+          i === 2
+            ? [
+                {
+                  latitude: lat,
+                  longitude: lon,
+                  altitude: 0,
+                  stage: 'Stage 1',
+                },
+                {
+                  latitude: lat + 0.2,
+                  longitude: lon + 0.5,
+                  altitude: 40000,
+                  stage: 'Stage 1',
+                },
+                {
+                  latitude: lat + 0.4,
+                  longitude: lon + 1,
+                  altitude: 80000,
+                  stage: 'Stage 2',
+                },
+                {
+                  latitude: lat + 0.8,
+                  longitude: lon + 2,
+                  altitude: 180000,
+                  stage: 'Stage 2',
+                },
+              ]
+            : [],
       }),
     ),
   };
