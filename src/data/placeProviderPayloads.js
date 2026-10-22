@@ -13,8 +13,10 @@ function approximateDistanceM(latA, lonA, latB, lonB) {
     return Number.MAX_SAFE_INTEGER;
   const latitudeScale = 111320;
   const longitudeScale = latitudeScale * Math.cos((latA * Math.PI) / 180);
+  const deltaLon = lonB - lonA;
+  const localDeltaLon = deltaLon - 360 * Math.round(deltaLon / 360);
   return Math.round(
-    Math.hypot((latB - latA) * latitudeScale, (lonB - lonA) * longitudeScale),
+    Math.hypot((latB - latA) * latitudeScale, localDeltaLon * longitudeScale),
   );
 }
 

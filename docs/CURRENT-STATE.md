@@ -107,6 +107,10 @@ Windows/Claude Desktop Cowork confirmation remains outstanding (#927).
 
 ## Tools and local MCP server — October 1, 2026
 
+Google Places nearby and text-search distances use the short longitude span
+across ±180°, so nearby landmarks across the antimeridian retain local distances
+and nearby results of the same context priority rank by their local proximity.
+
 Tool argument string lengths follow JSON Schema Unicode code-point counts, so supplementary characters count once rather than as two UTF-16 units.
 
 Query timestamps outside the representable Date range are reported as null, preserving the rest of the result row.
