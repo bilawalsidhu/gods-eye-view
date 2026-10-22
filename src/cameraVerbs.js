@@ -4,7 +4,7 @@
  *
  * One motion at a time, driven per clock tick. `once` = bounded eased nudge;
  * `continuous` runs until move_camera{stop}, ANY manual camera input on the
- * canvas (pointerdown/wheel — the cancelFlight reflex), or a navigation tool
+ * canvas (pointerdown/wheel/touchstart — the cancelFlight reflex), or a navigation tool
  * starts (the shared UI navigation policy releases this owner before the new
  * destination mutates the camera). fly_route is a
  * continuous motion in the same slot: a cinematic dolly along an existing
@@ -1595,7 +1595,7 @@ export function moveCamera(args = {}, runNavigation = null) {
         action: 'move_camera',
         reason: canReset ? 'globe-view-required' : 'globe-reset-unavailable',
         error: canReset
-          ? 'Zoom out to globe view first.'
+          ? 'Globe rotation isn’t available from this view. You can say ‘Reset to Globe View and rotate the globe.’'
           : 'Zoom out further to fit the globe inside the keyhole; the Globe View preset does not fit this viewport.',
       };
     }

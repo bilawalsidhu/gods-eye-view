@@ -658,7 +658,10 @@ test('close-up refusal preserves an inherited target frame', (t) => {
   const result = moveCamera({ motion: 'rotate_globe' }, () => {
     calls++;
   });
-  assert.equal(result.error, 'Zoom out to globe view first.');
+  assert.equal(
+    result.error,
+    'Globe rotation isn’t available from this view. You can say ‘Reset to Globe View and rotate the globe.’',
+  );
   assert.equal(calls, 0);
   assert.ok(Cesium.Matrix4.equals(camera.transform, transform));
   samePose(camera, before);
@@ -881,7 +884,10 @@ for (const owner of ['tracking', 'cockpit', 'close-up'])
     samePose(camera, before);
     if (owner === 'close-up') {
       assert.equal(result.reason, 'globe-view-required');
-      assert.equal(result.error, 'Zoom out to globe view first.');
+      assert.equal(
+        result.error,
+        'Globe rotation isn’t available from this view. You can say ‘Reset to Globe View and rotate the globe.’',
+      );
     }
   });
 
@@ -997,7 +1003,10 @@ test('keyhole overlap refuses without a camera handoff or pose change', (t) => {
     handoffs++;
   });
   assert.equal(result.reason, 'globe-view-required');
-  assert.equal(result.error, 'Zoom out to globe view first.');
+  assert.equal(
+    result.error,
+    'Globe rotation isn’t available from this view. You can say ‘Reset to Globe View and rotate the globe.’',
+  );
   assert.equal(handoffs, 0);
   samePose(h.camera, before);
 });
@@ -1116,7 +1125,10 @@ for (const latitude of [0, 90])
       const before = pose(h.camera);
       const result = moveCamera({ motion: 'rotate_globe' });
       assert.equal(result.reason, 'globe-view-required');
-      assert.equal(result.error, 'Zoom out to globe view first.');
+      assert.equal(
+        result.error,
+        'Globe rotation isn’t available from this view. You can say ‘Reset to Globe View and rotate the globe.’',
+      );
       samePose(h.camera, before);
     });
 

@@ -40,8 +40,9 @@ test('the complete Realtime tool payload pins the manifest-generated layer relea
     // Street Level and GNSS extend the manifest; tracked and analyst aircraft describe broadcasts.
     // Air quality (ECCC AQHI) extends the manifest.
     // Globe rotation adds one motion; visual keyhole fit and explicit
-    // reset permission/defaults update only move_camera and mode descriptions.
-    '79c17bc9e1a18eb3d52abd06f9ff8e702a2d7630c9f115bd76bc8d3ed99b46be',
+    // reset guidance/defaults update only move_camera and mode descriptions.
+    // Manual recovery wording narrows only zoom_to_globe and move_camera descriptions.
+    'fe2b853113d71f5b9241cffc465ee4d156cd6b730e99774806a6ca2aa2061a64',
   );
 });
 
@@ -216,12 +217,14 @@ test('the benchmark still rejects an empty track_entity although the model-facin
   );
 });
 
-test('globe reset guidance waits for explicit permission after the refused request', () => {
+test('globe reset guidance requires a separate explicit command after refusal', () => {
   const paragraph = realtimeInstructions()
     .split('\n')
     .find((line) => line.includes('globe-view-required'));
   assert.ok(paragraph);
-  assert.match(paragraph, /rotate_globe first/);
-  assert.match(paragraph, /next explicit yes before zoom_to_globe/);
-  assert.match(paragraph, /new request cancels/);
+  assert.match(paragraph, /calls only move_camera motion rotate_globe/);
+  assert.match(paragraph, /explicit user Reset\/Show Globe View/);
+  assert.match(paragraph, /never from your own plan/);
+  assert.match(paragraph, /bare yes\/ok/);
+  assert.match(paragraph, /Do not ask a question/);
 });
