@@ -153,14 +153,6 @@
 #scene-select {
   flex: 1;
   min-width: 0;
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  border-radius: 7px;
-  color: var(--text-primary);
-  padding: 6px 8px;
-  font-family: var(--font-sans);
-  font-size: 12px;
-  outline: none;
 }
 
 /* A translated scene name needs the width: the select takes its own row,
@@ -184,21 +176,6 @@ html:not([lang='en']) #scene-panel .scene-controls .scene-btn {
 }
 
 .scene-btn {
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  border-radius: 7px;
-  color: var(--text-secondary);
-  font-family: var(--font-mono);
-  font-size: 9px;
-  letter-spacing: 1.2px;
-  padding: 6px 9px;
-  cursor: pointer;
-  transition:
-    background-color var(--transition-fast),
-    border-color var(--transition-fast),
-    color var(--transition-fast),
-    opacity var(--transition-fast);
-  white-space: nowrap;
   flex: 1;
   min-width: 72px;
 }
@@ -293,49 +270,6 @@ html:not([lang='en']) #scene-panel .scene-controls .scene-btn {
 .scene-shot-actions {
   display: flex;
   gap: 6px;
-}
-
-.scene-shot-btn {
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  border-radius: 6px;
-  background: rgba(255, 255, 255, 0.05);
-  color: var(--text-secondary);
-  font-family: var(--font-mono);
-  font-size: 8px;
-  letter-spacing: 0.8px;
-  padding: 4px 6px;
-  cursor: pointer;
-  transition:
-    background-color var(--transition-fast),
-    border-color var(--transition-fast),
-    color var(--transition-fast);
-}
-
-.scene-shot-btn:hover {
-  color: var(--text-primary);
-  border-color: var(--glass-border-hover);
-}
-
-.scene-shot-btn.scene-shot-danger:hover {
-  color: #ff7e7e;
-  border-color: #ff7e7e;
-}
-
-.scene-btn:hover:not(:disabled) {
-  color: var(--accent);
-  border-color: var(--accent);
-  background: rgba(0, 212, 255, 0.14);
-}
-
-.scene-btn:disabled {
-  opacity: 0.45;
-  cursor: default;
-}
-
-.scene-btn-danger:hover:not(:disabled) {
-  color: #ff7272;
-  border-color: #ff7272;
-  background: rgba(255, 88, 88, 0.15);
 }
 
 .scene-progress {

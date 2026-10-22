@@ -881,6 +881,7 @@ export function createAnalystEngine(providers) {
       followUp && !spec.scope ? lastResult.distanceOf || null : null;
     let resolvedScope = null;
     let scopeNote = rememberedScope?.coverage || 'anywhere';
+    let scopeSource = rememberedScope?.source || null;
     // Human phrasing for the same scope, so every spoken count can name what it
     // measured ("8 in view", "about 30 within 250 km of Austin") instead of
     // arriving as a bare number that contradicts the panel.
@@ -890,8 +891,16 @@ export function createAnalystEngine(providers) {
     // further when a new scope is given.
     const scope = spec.scope || { kind: followUp ? 'anywhere' : 'view' };
     if (scope.kind === 'region') {
-      const region = await providers.resolveRegionRing(scope.name, signal);
-      if (!isCurrent()) return cancelled();
+      let region;
+      try {
+        region = await providers.resolveRegionRing(scope.name, signal);
+      } catch (error) {
+        // Cancellation belongs to the query owner, not an error's name: a
+        // resource-local AbortError from a current lookup still propagates.
+        if (signal?.aborted || !isCurrent()) return cancelled();
+        throw error;
+      }
+      if (signal?.aborted || !isCurrent()) return cancelled();
       if (region?.error === 'region-timeout') {
         return {
           ok: false,
@@ -910,6 +919,7 @@ export function createAnalystEngine(providers) {
       }
       resolvedScope = region;
       scopeNote = `region:${region.name}`;
+      scopeSource = region.source || null;
       scopeLabel = `over ${region.name}`;
       scopeDetail = scopeLabel;
     } else if (scope.kind === 'radius') {
@@ -1049,6 +1059,7 @@ export function createAnalystEngine(providers) {
         layersQueried,
         records: totals,
         scope: scopeNote,
+        ...(scopeSource ? { scopeSource } : {}),
         ...(rememberedScope?.note ? { note: rememberedScope.note } : {}),
         ...(queriedSnapshots.length
           ? { feedProvenance: feedProvenanceEnvelope(queriedSnapshots) }
@@ -1081,6 +1092,7 @@ export function createAnalystEngine(providers) {
         label: memoryOverride?.scopeLabel || result.scopeLabel,
         detail: memoryOverride?.scopeDetail || result.display.scope,
         coverage: committedCoverage.scope,
+        source: committedCoverage.scopeSource || null,
         note: committedCoverage.note || null,
       },
     };
