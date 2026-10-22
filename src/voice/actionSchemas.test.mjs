@@ -38,7 +38,8 @@ test('the complete Realtime tool payload pins the manifest-generated layer relea
     // requested radius and center authority in descriptions only.
     // Street Level and GNSS extend the manifest; tracked and analyst aircraft describe broadcasts.
     // Air quality (ECCC AQHI) extends the manifest.
-    '775ba323384b4c1b62fb8415bac52aecc3fc668e20bedcfa57e426dcd1da3969',
+    // Local ADS-B adds altitude quality, observation time and source field hints.
+    '13595e14cd3837b48ff5a3aa52b287cf98dcf8a47e2aac7ccf9d57bd4d48e51c',
   );
 });
 

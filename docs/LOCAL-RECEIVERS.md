@@ -18,6 +18,26 @@ smoothly between fixes, while local receiver aircraft are shown as heard. An
 aircraft in both layers therefore draws twice, the magenta local marker ahead
 of the public one; both markers are drawn on purpose.
 
+Airborne altitude changes are checked against the last accepted value and a
+vertical-rate allowance. A refused value holds the accepted altitude for the
+marker, card and model. Browser SDR recovery counts actual altitude frames;
+identification and velocity messages cannot make a held altitude look new.
+
+Decoder feeds have no altitude measurement timestamp. Their changed values
+are estimates; recovery after a refusal requires at least five seconds and
+three advancing source snapshots with increasing aircraft message counts
+from the same receiver, with coherent altitude changes. Repeated cached
+snapshots and transport delays do not count. This recovery is inferred, so a
+stable corrupt feed can still qualify. Feeds missing progression metadata
+cannot automatically recover a held value, and fresh positions can keep that
+held altitude alive. The rate check caps its elapsed allowance at 60 seconds
+for feeds; there is no absolute altitude ceiling.
+
+Context and analyst records include `altitudeQuality`, `altitudeObservedAt`
+and `altitudeSource`. Held values retain the accepted value's source and
+measurement time; feed measurement times are null. Ground reports clear the
+airborne reference and its quality metadata.
+
 ## Which to use
 
 - **One plain RTL-SDR dongle, desktop Chrome or Edge:** use the browser SDR.

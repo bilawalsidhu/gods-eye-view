@@ -384,6 +384,7 @@ async function readFeed(
   // naturally, without trusting a receiver clock that runs ahead of ours.
   const records = normalizeDump1090Aircraft(json, receivedAt - ageMs, {
     band: feed.band,
+    feedId: feed.id,
   });
   return {
     status: { ...summary, status, aircraft: records.length, ageMs },

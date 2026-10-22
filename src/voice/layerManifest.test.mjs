@@ -112,3 +112,14 @@ test('spoken aliases resolve to real layers, keep every legacy phrase and never 
       claimed.set(alias, entry.id);
     }
 });
+
+test('local ADS-B analyst fields distinguish altitude quality, time and source', () => {
+  const fields = VOICE_LAYER_MANIFEST.find((entry) => entry.id === 'local-adsb')
+    .query.fields;
+  assert.deepEqual(fields.altitudeQuality, { type: 'text' });
+  assert.deepEqual(fields.altitudeObservedAt, { type: 'time' });
+  assert.deepEqual(fields.altitudeSource, { type: 'text' });
+  assert.ok(ANALYST_LAYERS['local-adsb'].text.includes('altitudeQuality'));
+  assert.ok(ANALYST_LAYERS['local-adsb'].text.includes('altitudeSource'));
+  assert.ok(ANALYST_LAYERS['local-adsb'].time.includes('altitudeObservedAt'));
+});

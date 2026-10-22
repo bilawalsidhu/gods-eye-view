@@ -120,6 +120,13 @@ function record(overrides = {}) {
     rssiDbfs: null,
     band: '1090',
     source: 'webusb',
+    ...(overrides.source !== 'feed' && overrides.altitudeFt !== null
+      ? {
+          altitudeObservedAt: 100_000,
+          altitudeSequence: 1,
+          altitudeSessionAt: 100_000,
+        }
+      : {}),
     ...overrides,
   };
 }
@@ -397,6 +404,245 @@ test('an implausible jump in a feed record is ignored by the display', async (t)
   );
   assert.ok(lat < 0.001, `stayed on its track (${lat})`);
   assert.equal(layer.getStats().rejectedPositions, 1);
+});
+
+test('a corrupt altitude reaches neither the marker height nor the card', async (t) => {
+  const receiver = fakeReceiver({ mode: 'adsb', connected: true });
+  const clock = { now: 100_000 };
+  const { layer, sources, calls } = await enabledLayer(receiver, clock);
+  t.after(() => layer.destroy());
+  const entity = () => sources[0].entities.getById('local-adsb:abc123');
+  const heightM = () =>
+    Cesium.Cartographic.fromCartesian(entity().position.getValue()).height;
+  const altitudeLine = () =>
+    entity().gevLabelModel.details.find((line) => line.startsWith('ALT '));
+  const provenance = () => {
+    const { altitudeQuality, altitudeObservedAt, altitudeSource } =
+      calls.registered.at(-1).properties;
+    return { altitudeQuality, altitudeObservedAt, altitudeSource };
+  };
+  receiver.set({ aircraft: [record()] });
+  await layer.update();
+  const cruiseM = heightM();
+  assert.match(altitudeLine(), /^ALT 10,000 FT/);
+  assert.deepEqual(provenance(), {
+    altitudeQuality: 'accepted',
+    altitudeObservedAt: 100_000,
+    altitudeSource: 'webusb',
+  });
+
+  clock.now = 101_000;
+  receiver.set({
+    aircraft: [
+      record({
+        altitudeFt: 108_800,
+        altitudeObservedAt: 101_000,
+        altitudeSequence: 2,
+        lastPositionAt: 101_000,
+        lastMessageAt: 101_000,
+      }),
+    ],
+  });
+  await layer.update();
+  await layer.update();
+  assert.ok(
+    Math.abs(heightM() - cruiseM) < 1,
+    `held at cruise (${heightM()} m vs ${cruiseM} m)`,
+  );
+  assert.match(altitudeLine(), /^ALT 10,000 FT/);
+  assert.equal(layer.getStats().rejectedAltitudes, 1, 'counted once');
+  assert.deepEqual(provenance(), {
+    altitudeQuality: 'held-after-rejection',
+    altitudeObservedAt: 100_000,
+    altitudeSource: 'webusb',
+  });
+
+  // New callsign/velocity messages retain the refused altitude observation.
+  for (const messageAt of [101_250, 101_500]) {
+    clock.now = messageAt;
+    receiver.set({
+      aircraft: [
+        record({
+          altitudeFt: 108_800,
+          altitudeObservedAt: 101_000,
+          altitudeSequence: 2,
+          lastPositionAt: 101_000,
+          lastMessageAt: messageAt,
+          messageCount: 13,
+        }),
+      ],
+    });
+    await layer.update();
+    assert.match(altitudeLine(), /^ALT 10,000 FT/);
+    assert.ok(Math.abs(heightM() - cruiseM) < 1);
+    assert.equal(layer.getStats().rejectedAltitudes, 1);
+  }
+
+  clock.now = 102_000;
+  receiver.set({
+    aircraft: [
+      record({
+        altitudeFt: 10_100,
+        altitudeObservedAt: 102_000,
+        altitudeSequence: 3,
+        lastPositionAt: 102_000,
+        lastMessageAt: 102_000,
+      }),
+    ],
+  });
+  await layer.update();
+  assert.match(altitudeLine(), /^ALT 10,100 FT/);
+  assert.equal(layer.getStats().rejectedAltitudes, 1);
+  assert.deepEqual(provenance(), {
+    altitudeQuality: 'accepted',
+    altitudeObservedAt: 102_000,
+    altitudeSource: 'webusb',
+  });
+  assert.equal(layer.getAnalystRecords()[0].altitudeQuality, 'accepted');
+  assert.equal(layer.getAnalystRecords()[0].altitudeObservedAt, 102_000);
+});
+
+test('held altitude keeps its accepted feed provenance until a browser correction', async (t) => {
+  const receiver = fakeReceiver({ mode: 'adsb', connected: true });
+  const clock = { now: 100_000 };
+  const { layer, calls } = await enabledLayer(receiver, clock);
+  t.after(() => layer.destroy());
+  const provenance = (value) => ({
+    altitudeQuality: value.altitudeQuality,
+    altitudeObservedAt: value.altitudeObservedAt,
+    altitudeSource: value.altitudeSource,
+  });
+  receiver.set({ aircraft: [record({ source: 'feed' })] });
+  await layer.update();
+  const estimate = {
+    altitudeQuality: 'feed-estimate',
+    altitudeObservedAt: null,
+    altitudeSource: 'feed',
+  };
+  assert.deepEqual(provenance(calls.registered.at(-1).properties), estimate);
+  assert.deepEqual(provenance(layer.getAnalystRecords()[0]), estimate);
+
+  clock.now = 101_000;
+  receiver.set({
+    aircraft: [
+      record({
+        altitudeFt: 108_800,
+        altitudeObservedAt: 101_000,
+        altitudeSequence: 2,
+        lastPositionAt: clock.now,
+        lastMessageAt: clock.now,
+      }),
+    ],
+  });
+  await layer.update();
+  const held = { ...estimate, altitudeQuality: 'held-after-rejection' };
+  assert.deepEqual(provenance(calls.registered.at(-1).properties), held);
+  const [row] = layer.getAnalystRecords();
+  assert.equal(row.altitudeM, 3_048);
+  assert.deepEqual(provenance(row), held);
+
+  clock.now = 102_000;
+  receiver.set({
+    aircraft: [
+      record({
+        altitudeFt: 10_100,
+        altitudeObservedAt: clock.now,
+        altitudeSequence: 3,
+        lastPositionAt: clock.now,
+        lastMessageAt: clock.now,
+      }),
+    ],
+  });
+  await layer.update();
+  const accepted = {
+    altitudeQuality: 'accepted',
+    altitudeObservedAt: clock.now,
+    altitudeSource: 'webusb',
+  };
+  assert.deepEqual(provenance(calls.registered.at(-1).properties), accepted);
+  assert.deepEqual(provenance(layer.getAnalystRecords()[0]), accepted);
+});
+
+test('missing altitude publishes no quality claim in context or analyst records', async (t) => {
+  const receiver = fakeReceiver({ mode: 'adsb', connected: true });
+  const clock = { now: 100_000 };
+  const { layer, calls } = await enabledLayer(receiver, clock);
+  t.after(() => layer.destroy());
+  receiver.set({ aircraft: [record({ altitudeFt: null })] });
+  await layer.update();
+  const [row] = layer.getAnalystRecords();
+  assert.equal(row.altitudeM, null);
+  for (const value of [row, calls.registered.at(-1).properties]) {
+    for (const key of [
+      'altitudeQuality',
+      'altitudeObservedAt',
+      'altitudeSource',
+    ])
+      assert.equal(Object.hasOwn(value, key), false, key);
+  }
+});
+
+test('feed recovery uses the layer clock and publishes an inferred altitude', async (t) => {
+  const receiver = fakeReceiver({ mode: 'adsb', connected: true });
+  const clock = { now: 100_000 };
+  const feeds = fakeFeeds({ configured: true });
+  const { layer, calls, sources } = await enabledLayer(receiver, clock, feeds);
+  t.after(() => layer.destroy());
+  const heard = (altitudeFt, snapshotAt, messageAt, messageCount) =>
+    record({
+      source: 'feed',
+      altitudeFt,
+      altitudeObservedAt: null,
+      feedId: 'feed-1',
+      feedSnapshotAt: snapshotAt,
+      lastPositionAt: snapshotAt,
+      lastMessageAt: messageAt,
+      messageCount,
+    });
+  feeds.set({ records: [heard(108_800, clock.now, 99_000, 12)] });
+  await layer.update();
+  assert.equal(layer.getAnalystRecords()[0].altitudeQuality, 'feed-estimate');
+
+  // Source message times advance slowly; the five-second recovery uses the
+  // injected layer clock, not those message times or real wall-clock time.
+  for (const [at, messageAt, messageCount] of [
+    [101_000, 100_000, 13],
+    [103_000, 100_500, 14],
+  ]) {
+    clock.now = at;
+    feeds.set({ records: [heard(10_000, at, messageAt, messageCount)] });
+    await layer.update();
+    assert.equal(layer.getAnalystRecords()[0].altitudeM, 33_162);
+    assert.equal(
+      layer.getAnalystRecords()[0].altitudeQuality,
+      'held-after-rejection',
+    );
+  }
+  clock.now = 106_000;
+  feeds.set({ records: [heard(10_000, clock.now, 101_000, 15)] });
+  await layer.update();
+  const [row] = layer.getAnalystRecords();
+  assert.equal(row.altitudeM, 3_048);
+  assert.equal(row.altitudeQuality, 'inferred-reanchor');
+  assert.equal(row.altitudeObservedAt, null);
+  assert.equal(row.altitudeSource, 'feed');
+  const properties = calls.registered.at(-1).properties;
+  assert.equal(properties.altitudeQuality, row.altitudeQuality);
+  assert.equal(properties.altitudeObservedAt, null);
+  assert.equal(properties.altitudeSource, 'feed');
+  assert.equal(layer.getStats().rejectedAltitudes, 1);
+
+  clock.now = 107_000;
+  await layer.update();
+  const entity = sources[0].entities.getById('local-adsb:abc123');
+  assert.match(
+    entity.gevLabelModel.details.find((line) => line.startsWith('ALT ')),
+    /^ALT 10,000 FT/,
+  );
+  const heightM = Cesium.Cartographic.fromCartesian(
+    entity.position.getValue(),
+  ).height;
+  assert.ok(Math.abs(heightM - 3_048) < 1, `recovered height ${heightM}`);
 });
 
 test('selecting an aircraft draws a magenta trail of the fixes the receiver heard', async (t) => {

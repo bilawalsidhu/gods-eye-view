@@ -91,6 +91,10 @@ const layers = [
     query: {
       fields: {
         altitudeM: ['n', 'm'],
+        // Quality describes the altitude value; feeds have no measurement time.
+        altitudeQuality: ['t'],
+        altitudeObservedAt: ['ms'],
+        altitudeSource: ['t'],
         speedKts: ['n', 'kn'],
         heading: ['n', 'deg'],
         callsign: ['t'],

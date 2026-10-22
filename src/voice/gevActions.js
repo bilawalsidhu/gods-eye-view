@@ -4452,6 +4452,34 @@ function unwrapProperties(value) {
   return out;
 }
 
+const LOCAL_ADSB_ALTITUDE_METADATA_KEYS = new Set([
+  'altitudeQuality',
+  'altitudeObservedAt',
+  'altitudeSource',
+]);
+const LOCAL_ADSB_ALTITUDE_QUALITIES = new Set([
+  'accepted',
+  'held-after-rejection',
+  'feed-estimate',
+  'inferred-reanchor',
+]);
+
+/** Keep the value's provenance, including an explicitly unknown measurement time. */
+function localAdsbAltitudeMetadata(record) {
+  if (
+    !LOCAL_ADSB_ALTITUDE_QUALITIES.has(record.altitudeQuality) ||
+    (record.altitudeSource !== 'webusb' && record.altitudeSource !== 'feed') ||
+    (record.altitudeObservedAt !== null &&
+      !Number.isFinite(record.altitudeObservedAt))
+  )
+    return {};
+  return {
+    altitudeQuality: record.altitudeQuality,
+    altitudeObservedAt: record.altitudeObservedAt,
+    altitudeSource: record.altitudeSource,
+  };
+}
+
 function compactProperties(props) {
   const preferredKeys = [
     'name',
@@ -4470,14 +4498,22 @@ function compactProperties(props) {
     ...props,
     ...(props.tags && typeof props.tags === 'object' ? props.tags : {}),
   };
-  const result = {};
+  const result = Number.isFinite(flat.altitudeFt)
+    ? localAdsbAltitudeMetadata(flat)
+    : {};
   for (const key of preferredKeys) {
+    if (Object.keys(result).length >= 12) break;
     const value = cleanText(flat[key]);
     if (value) result[key] = value;
   }
   for (const [key, value] of Object.entries(flat)) {
     if (Object.keys(result).length >= 12) break;
-    if (key === 'tags' || result[key] !== undefined) continue;
+    if (
+      key === 'tags' ||
+      LOCAL_ADSB_ALTITUDE_METADATA_KEYS.has(key) ||
+      result[key] !== undefined
+    )
+      continue;
     const text = cleanText(value);
     if (text) result[key] = text;
   }
@@ -4665,8 +4701,15 @@ function compactAnalystItem(r) {
     compact.lon = Math.round(r.lon * 1e4) / 1e4;
   }
   if (present(r.distanceKm)) compact.distanceKm = r.distanceKm;
+  if (r.layerKey === 'local-adsb' && Number.isFinite(r.altitudeM))
+    Object.assign(compact, localAdsbAltitudeMetadata(r));
   const fields = voiceLayer(r.layerKey)?.query?.fields || {};
   for (const [key, spec] of Object.entries(fields)) {
+    if (
+      r.layerKey === 'local-adsb' &&
+      LOCAL_ADSB_ALTITUDE_METADATA_KEYS.has(key)
+    )
+      continue;
     if (!present(r[key]) || key in compact) continue;
     if (spec.type === 'time') {
       const ms = Number(r[key]);

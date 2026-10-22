@@ -180,6 +180,42 @@ test('live feeds are read in parallel and labelled with their band', async () =>
   // Ages are anchored at the feed's own `now`.
   assert.equal(shinr[0].lastPositionAt, FIXTURE_NOW_MS - 34_600);
   assert.equal(shinr[0].lat, 30.269662);
+  assert.equal(
+    shinr[0].altitudeObservedAt,
+    null,
+    'feed has no altitude measurement time',
+  );
+  assert.equal(
+    shinr[0].feedSnapshotAt,
+    FIXTURE_NOW_MS,
+    'source clock is not rebased',
+  );
+  assert.equal(typeof shinr[0].feedId, 'string');
+  assert.notEqual(
+    shinr[0].feedId,
+    shinr[1].feedId,
+    'each receiver has a distinct opaque id',
+  );
+  assert.ok(!JSON.stringify(json).includes(FEED_1090));
+  assert.ok(!JSON.stringify(json).includes(FEED_978));
+});
+
+test('a decoder without a source clock cannot supply inferred altitude progress', async () => {
+  const handler = createLocalReceiversHandler({
+    feedsValue: `1090=${FEED_1090}`,
+    logger: quietLogger(),
+    now: () => 1_000,
+    fetchImpl: async () =>
+      respond(
+        200,
+        JSON.stringify({
+          aircraft: [{ hex: 'abc123', alt_baro: 35_000, messages: 5 }],
+        }),
+      ),
+  });
+  const { json } = await call(handler);
+  assert.equal(json.records[0].feedSnapshotAt, null);
+  assert.equal(json.records[0].altitudeObservedAt, null);
 });
 
 test('a feed whose own now is over 10 s old is stale; failures are unreachable', async () => {

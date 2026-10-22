@@ -3931,3 +3931,227 @@ test('analyst-only lookup distinguishes duplicate names and uses canonical aircr
   assert.equal(plane.ok, true);
   assert.equal(plane.latitude, 36, 'canonical ID resolves the current position, not old coordinates');
 });
+
+test('altitude-focused analyst queries retain local ADS-B quality and nullable measurement time', async (t) => {
+  const previousWindow = globalThis.window;
+  globalThis.window = { clearTimeout, setTimeout, requestIdleCallback: null };
+  t.after(() => {
+    globalThis.window = previousWindow;
+  });
+  const provenance = [
+    {
+      altitudeQuality: 'accepted',
+      altitudeObservedAt: 100_000,
+      altitudeSource: 'webusb',
+    },
+    {
+      altitudeQuality: 'held-after-rejection',
+      altitudeObservedAt: 99_000,
+      altitudeSource: 'webusb',
+    },
+    {
+      altitudeQuality: 'feed-estimate',
+      altitudeObservedAt: null,
+      altitudeSource: 'feed',
+    },
+    {
+      altitudeQuality: 'held-after-rejection',
+      altitudeObservedAt: null,
+      altitudeSource: 'feed',
+    },
+    {
+      altitudeQuality: 'inferred-reanchor',
+      altitudeObservedAt: null,
+      altitudeSource: 'feed',
+    },
+  ];
+  const rows = provenance.map((metadata, index) => ({
+    id: `LOCAL${index}`,
+    icao24: `abc12${index}`,
+    lat: 30,
+    lon: -97,
+    altitudeM: 3_048 + index,
+    ...metadata,
+    altitudeSequence: index,
+  }));
+  const module = {
+    getStats: () => ({ count: rows.length, lastUpdate: Date.now() }),
+    getAnalystRecords: () => rows,
+  };
+  const { runner } = manifestRunner({ 'local-adsb': module });
+  const result = await runner('analyst_query', {
+    layers: ['local-adsb'],
+    scope: { kind: 'anywhere' },
+    filters: [{ field: 'altitudeM', op: 'gte', value: 3_000 }],
+    sortBy: 'altitudeM',
+    sortDir: 'asc',
+    limit: 5,
+  });
+  assert.equal(result.ok, true);
+  assert.equal(result.count, rows.length);
+  assert.deepEqual(
+    result.items.map((item) => item.id),
+    rows.map((row) => row.id),
+  );
+  result.items.forEach((item, index) => {
+    const { altitudeQuality, altitudeObservedAt, altitudeSource } = item;
+    assert.deepEqual(
+      { altitudeQuality, altitudeObservedAt, altitudeSource },
+      provenance[index],
+    );
+    assert.equal(
+      Object.hasOwn(item, 'altitudeObservedAt'),
+      true,
+      'unknown measurement time remains explicit',
+    );
+    assert.equal(
+      Object.hasOwn(item, 'time'),
+      false,
+      'measurement time keeps its own name and epoch-ms unit',
+    );
+    assert.equal(
+      Object.hasOwn(item, 'altitudeSequence'),
+      false,
+      'internal observation tokens stay out of the tool payload',
+    );
+  });
+  const heldOnly = await runner('analyst_query', {
+    layers: ['local-adsb'],
+    scope: { kind: 'anywhere' },
+    filters: [
+      { field: 'altitudeQuality', op: 'eq', value: 'held-after-rejection' },
+    ],
+  });
+  assert.equal(heldOnly.count, 2);
+  assert.ok(
+    heldOnly.items.every(
+      (item) => item.altitudeQuality === 'held-after-rejection',
+    ),
+  );
+  const beforeFirstMeasurement = await runner('analyst_query', {
+    layers: ['local-adsb'],
+    scope: { kind: 'anywhere' },
+    filters: [{ field: 'altitudeObservedAt', op: 'lte', value: 1 }],
+  });
+  assert.equal(
+    beforeFirstMeasurement.count,
+    0,
+    'unknown feed measurement times do not become epoch zero',
+  );
+
+  rows.splice(0, rows.length, {
+    id: 'MISSING',
+    lat: 30,
+    lon: -97,
+    altitudeM: null,
+    ...provenance[0],
+  });
+  const missing = await runner('analyst_query', {
+    layers: ['local-adsb'],
+    scope: { kind: 'anywhere' },
+  });
+  assert.equal(missing.items[0].altitudeM, undefined);
+  for (const key of ['altitudeQuality', 'altitudeObservedAt', 'altitudeSource'])
+    assert.equal(
+      Object.hasOwn(missing.items[0], key),
+      false,
+      `${key} needs a finite altitude`,
+    );
+});
+
+test('selected local ADS-B context preserves altitude provenance within its 12-property budget', async (t) => {
+  const previousWindow = globalThis.window;
+  globalThis.window = { clearTimeout, setTimeout, requestIdleCallback: null };
+  t.after(() => {
+    globalThis.window = previousWindow;
+  });
+  const { viewer, styleManager } = createVoiceNavigationHarness();
+  // A global view needs no geocoding or nearby-place requests.
+  viewer.camera.positionWC = Cesium.Cartesian3.fromDegrees(0, 0, 40_000_000);
+  viewer.camera.positionCartographic = Cesium.Cartographic.fromCartesian(
+    viewer.camera.positionWC,
+  );
+  viewer.camera.pickEllipsoid = () => undefined;
+  const dataManager = {
+    layers: new Map([['local-adsb', { module: {} }]]),
+    isEnabled: (id) => id === 'local-adsb',
+    getAll: () => [{ id: 'local-adsb', enabled: true, stats: { count: 1 } }],
+  };
+  const runner = createGevActionRunner({ viewer, styleManager, dataManager });
+  const store = getContextStore();
+  const provenance = [
+    {
+      altitudeQuality: 'accepted',
+      altitudeObservedAt: 100_000,
+      altitudeSource: 'webusb',
+    },
+    {
+      altitudeQuality: 'held-after-rejection',
+      altitudeObservedAt: 99_000,
+      altitudeSource: 'webusb',
+    },
+    {
+      altitudeQuality: 'feed-estimate',
+      altitudeObservedAt: null,
+      altitudeSource: 'feed',
+    },
+    {
+      altitudeQuality: 'held-after-rejection',
+      altitudeObservedAt: null,
+      altitudeSource: 'feed',
+    },
+    {
+      altitudeQuality: 'inferred-reanchor',
+      altitudeObservedAt: null,
+      altitudeSource: 'feed',
+    },
+  ];
+  for (const metadata of provenance) {
+    const record = registerEntityContext(
+      {},
+      {
+        id: 'local-adsb:abc123',
+        layerId: 'local-adsb',
+        label: 'LOCAL1',
+        latitude: 30,
+        longitude: -97,
+        properties: {
+          icao: 'abc123',
+          callsign: 'LOCAL1',
+          category: 'A3',
+          aircraftClass: 'airliner',
+          typeCode: 'DC9',
+          altitudeFt: 10_000,
+          ...metadata,
+          groundSpeedKt: 180,
+          trackDeg: 0,
+          verticalRateFpm: 0,
+          lastPositionAt: 101_000,
+          messageCount: 13,
+          receiverSource: 'webusb',
+          bands: ['1090'],
+          sources: ['webusb', 'feed'],
+        },
+      },
+    );
+    store.selectedEntityId = record.id;
+    const result = await runner('get_entity_context', { scope: 'selected' });
+    assert.equal(result.ok, true);
+    const properties = result.selected.properties;
+    const { altitudeQuality, altitudeObservedAt, altitudeSource } = properties;
+    assert.deepEqual(
+      { altitudeQuality, altitudeObservedAt, altitudeSource },
+      metadata,
+    );
+    assert.equal(properties.altitudeFt, '10000');
+    assert.ok(Object.keys(properties).length <= 12);
+  }
+  store.entities.get(store.selectedEntityId).properties.altitudeFt = null;
+  const missing = await runner('get_entity_context', { scope: 'selected' });
+  for (const key of ['altitudeQuality', 'altitudeObservedAt', 'altitudeSource'])
+    assert.equal(
+      Object.hasOwn(missing.selected.properties, key),
+      false,
+      `${key} needs a finite altitude`,
+    );
+});

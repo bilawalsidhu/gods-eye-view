@@ -5833,6 +5833,46 @@ on purpose:
   Refused fixes are counted (`positionsRejected` in the SDR state; the layer
   applies the same check to merged feed records and reports the total as
   `rejectedPositions` in its stats). Three refusals in a row re-anchor.
+- **Altitude filter.** A corrupt frame can pass CRC, and a decoder feed can
+  relay one: a DC-9 was logged at 108,800 ft. The browser decoder cannot
+  produce that value, since it decodes only 25 ft (Q=1) altitudes and those
+  stop at 50,175 ft, so the check runs in the layer where both paths merge
+  (`gateLocalAdsbAltitude` in `src/sources/adsbRecords.js`). Each new report
+  must be reachable from the last accepted altitude at 1.5 × the larger
+  reported vertical rate + 2,000 ft/min (12,500 ft/min without a rate) over
+  the elapsed time + 1 s, plus 300 ft. A refused report holds the last
+  accepted altitude for the marker height, the card, the model ceiling and
+  route plausibility alike, and is counted as `rejectedAltitudes` in the
+  layer stats. Browser tracks carry the altitude frame's own receive time,
+  sequence and track start: identification/velocity messages and renderer
+  re-reads never refresh an accepted altitude or recount a refusal. Equal
+  altitudes in distinct frames are real observations, including frames from
+  one USB block with the same timestamp. Three observed refusals in a row
+  re-anchor; a sequence gap counts as only one observed report.
+  Decoder feeds expose no altitude-specific measurement age. A changed value
+  is judged once and keeps its receipt-time reference through unrelated
+  messages. Feed allowance is capped at a 60 s relative gap, since fresh
+  positions can keep an old altitude alive indefinitely. Recovery from an
+  implausible feed value requires a coherent candidate stream for at least
+  5 s and three advancing source snapshots with increasing aircraft message
+  counts from one receiver. Cached snapshots and transport jitter cannot
+  supply that progress. Each receiver keeps separate recovery progress when
+  the freshest position alternates between inputs; a new accepted altitude
+  resets pending recovery against the old reference. This is
+  an inference: a stable corrupt feed can also satisfy it. Without source
+  clock/count/identity metadata, automatic feed recovery is disabled, so a
+  held altitude can persist while positions remain fresh. A surface report
+  clears the airborne reference, because a feed's `ground` is 0 and not a
+  barometric reading. The next airborne value seeds a new reference, just
+  like the first observation of a new aircraft. There is no absolute ceiling:
+  balloons really do fly above 100,000 ft.
+  Accepted/held records carry `altitudeQuality` (`accepted`,
+  `held-after-rejection`, `feed-estimate` or `inferred-reanchor`),
+  `altitudeObservedAt` (the actual browser measurement time, null for feeds),
+  and `altitudeSource` (the accepted value's source, which can differ from the
+  position source). These accompany altitude through context metadata and
+  final analyst items, including altitude-only queries. Missing/surface
+  altitudes carry no airborne quality claim.
 - **Trail.** A selected aircraft draws a magenta trail of the positions the
   receiver heard (up to 10 minutes / 600 fixes, dropped with the aircraft),
   with the tracked-flight trail look and a live head segment. No network
@@ -5851,10 +5891,12 @@ aircraft join detection boxes, labelled only with a decoded callsign.
 
 Receivers publish one record shape from `src/sources/adsbRecords.js`
 (`icao`, `callsign`, `category`, `onGround`, `lat`, `lon`, `altitudeFt`,
+`altitudeObservedAt`, browser `altitudeSequence`/`altitudeSessionAt`, feed
+`feedId`/`feedSnapshotAt`,
 `groundSpeedKt`, `trackDeg`, `verticalRateFpm`, `lastPositionAt`,
 `lastMessageAt`, `messageCount`, `rssiDbfs`, `band`, `source`). `band` is `1090` or `978`; `source` is
 `webusb` (browser SDR) or `feed` (decoder feed).
-`normalizeDump1090Aircraft(json, nowMs, { band })` maps a dump1090/readsb/
+`normalizeDump1090Aircraft(json, nowMs, { band, feedId })` maps a dump1090/readsb/
 skyaware978 `aircraft.json` document into the same records. Voice
 `set_layer_visibility` accepts `local-adsb` ("local ADS-B", "my receiver",
 "my antenna").
@@ -5879,6 +5921,8 @@ second only while the layer is enabled and only while the route reports
 `configured`; the Local RTL-SDR card makes one probe request at startup to show
 its read-only "Decoder feeds: 1090 live · 978 live" line. Feed records are
 rebased to the browser clock and kept up to 60 s after their last message.
+The opaque configured `feedId` and raw `feedSnapshotAt` source clock are
+preserved without rebasing; neither exposes the receiver URL.
 `mergeLocalAdsbRecords` merges both inputs by ICAO, keeping the newest position
 (tie: newest message) and the bands/sources heard in the last 60 s; the card's
 receiver line names them ("Heard by your receiver · 1090 MHz + 978 MHz UAT ·
