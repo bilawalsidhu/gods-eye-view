@@ -39,6 +39,17 @@
   "src/data/adminBoundaries.test.mjs",
   "scripts/build-admin-packs.mjs",
   "scripts/qa-admin-outlines.mjs",
+  "src/annotations/geofenceTool.js",
+  "src/annotations/geofenceRenderer.js",
+  "src/annotations/geofenceModel.test.mjs",
+  "src/annotations/geofenceMonitor.js",
+  "src/annotations/geofenceIntersection.test.mjs",
+  "src/annotations/geofenceStateTracker.test.mjs",
+  "src/annotations/geofenceWebhook.test.mjs",
+  "src/annotations/geofenceWebhook.js",
+  "src/annotations/geofenceStateTracker.js",
+  "src/annotations/geofenceIntersection.js",
+  "src/annotations/geofenceModel.js",
   "src/data/inputOwnership.test.mjs",
   "docs/CODE-BOUNDARIES.md",
   "src/main.js",
@@ -1088,5 +1099,7 @@
   "src/ui/statusBadge.test.mjs",
   "src/ui/cctvBadges.test.mjs",
   "scripts/qa-status-badges.mjs",
-  "src/dockerTrustedPeers.test.mjs"
+  "src/dockerTrustedPeers.test.mjs",
+  "src/annotations/geofenceAlert.js",
+  "src/annotations/geofenceAlert.test.mjs"
 ]

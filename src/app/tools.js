@@ -4,7 +4,14 @@ import { initDrawTool } from '../annotations/drawTool.js';
 import { initGeoFileImport } from '../ui/geoFileImport.js';
 import { initImageryBoxTool } from '../ui/imageryBoxTool.js';
 import { createRecentImageryPanel } from '../ui/recentImagery.js';
+import { initGeofenceTool } from '../annotations/geofenceTool.js';
+import { initGeofenceMonitor } from '../annotations/geofenceMonitor.js';
+import {
+  createGeofenceAlert,
+  formatBreachMessage,
+} from '../annotations/geofenceAlert.js';
 import { initGevVoiceCommands } from '../voice/gevRealtime.js';
+import { t } from '../i18n/index.js';
 import { installViews, isEmbeddedInline } from './embed.js';
 import { installScopeMask, destroyScopeMask } from '../scopeMask.js';
 import {
@@ -104,6 +111,76 @@ export function createApplicationTools({
       imageryBoxTool?.destroy();
     });
   }
+  // Geofence: click-to-draw closed polygon with boundary + fill, edit + clear.
+  const geofenceTool = initGeofenceTool({ viewer });
+  defer(() => geofenceTool?.destroy());
+  // Geofence monitor: spatial intersection on every live position update.
+  const geofenceMonitor = initGeofenceMonitor({ geofenceTool, dataManager });
+  defer(() => geofenceMonitor?.destroy());
+  // Webhook URL config input -> monitor
+  const webhookInput = document.getElementById('geofence-webhook-url');
+  const onWebhookInput = () => {
+    const val = webhookInput?.value || '';
+    const ok = geofenceMonitor?.setWebhookUrl(val);
+    if (webhookInput) {
+      webhookInput.setAttribute(
+        'aria-invalid',
+        String(!ok && val.trim().length > 0),
+      );
+      webhookInput.title =
+        ok || !val.trim()
+          ? t('Target URL for breach POST')
+          : t('Invalid URL — must be an https:// URL');
+    }
+  };
+  webhookInput?.addEventListener('input', onWebhookInput);
+  webhookInput?.addEventListener('change', onWebhookInput);
+  defer(() => {
+    webhookInput?.removeEventListener('input', onWebhookInput);
+    webhookInput?.removeEventListener('change', onWebhookInput);
+  });
+
+  // Visual breach alert
+  const geofenceAlert = createGeofenceAlert();
+  defer(() => geofenceAlert.destroy());
+  const unsubEnterAlert = geofenceMonitor?.onEnter?.((entity) => {
+    geofenceAlert.show(formatBreachMessage(entity));
+  });
+  defer(() => unsubEnterAlert?.());
+
+  // Test toggle: dispatch mock payload to verify webhook connectivity
+  const testBtn = document.getElementById('geofence-test-webhook');
+  const testHint = document.getElementById('geofence-test-hint');
+  const onTestWebhook = async () => {
+    if (!testBtn) return;
+    const url = geofenceMonitor?.getWebhookUrl?.();
+    if (!url) {
+      if (testHint) testHint.textContent = t('Set webhook URL first.');
+      return;
+    }
+    testBtn.disabled = true;
+    if (testHint) testHint.textContent = t('Sending…');
+    try {
+      await geofenceMonitor.sendTestPayload();
+      const sent = t('Test POST sent ✓');
+      if (testHint) testHint.textContent = sent;
+      geofenceAlert.show(t('GEOFENCE TEST — mock payload sent'));
+      setTimeout(() => {
+        if (testHint && testHint.textContent === sent)
+          testHint.textContent = '';
+      }, 4000);
+    } catch (err) {
+      if (testHint)
+        testHint.textContent = t('Failed: {error}', {
+          error: err?.message || err,
+        });
+    } finally {
+      testBtn.disabled = false;
+    }
+  };
+  testBtn?.addEventListener('click', onTestWebhook);
+  defer(() => testBtn?.removeEventListener('click', onTestWebhook));
+
   if (startChrome)
     defer(startChrome({ loadingScreen, styleManager, dataManager, signal }));
   // Idle render governor: flips the scene into requestRenderMode whenever
@@ -161,6 +238,8 @@ export function createApplicationTools({
     sceneDirector,
     mapStackController,
     annotations,
+    geofenceTool,
+    geofenceMonitor,
     weatherEffects,
     cockpitCloudEffects,
     getRenderGovernorDiagnostics,
@@ -199,5 +278,11 @@ export function createApplicationTools({
       signal,
     }),
   );
-  return { sceneDirector, annotations, voiceCommands };
+  return {
+    sceneDirector,
+    annotations,
+    geofenceTool,
+    geofenceMonitor,
+    voiceCommands,
+  };
 }
