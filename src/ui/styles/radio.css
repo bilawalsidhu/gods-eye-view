@@ -49,13 +49,15 @@
   min-height: 36px;
 }
 #radio-filter {
-  min-width: 0;
+  /* Radio owns its compact density and arrow space; shared fields paint the
+     palette and disabled state, including this intentional theme exception. */
   padding: 7px 24px 7px 8px;
-  border: 1px solid rgba(65, 220, 231, 0.28);
   border-radius: 5px;
-  color: #c5faff;
-  background: rgba(5, 24, 31, 0.88);
   font: 9px/1.2 var(--font-mono);
+  --gev-field-border-color: rgba(65, 220, 231, 0.28);
+  --gev-field-color: #c5faff;
+  --gev-field-background: rgba(5, 24, 31, 0.88);
+  --gev-field-disabled-opacity: 0.42;
 }
 .radio-station-card {
   display: grid;
@@ -273,9 +275,11 @@ html:not([lang='en']) .radio-transport button {
   color: #fff;
   outline: none;
 }
-.radio-transport button:disabled,
-#radio-filter:disabled {
+.radio-transport button:disabled {
   opacity: 0.42;
+  cursor: not-allowed;
+}
+#radio-filter:disabled {
   cursor: not-allowed;
 }
 #radio-play-btn.active {

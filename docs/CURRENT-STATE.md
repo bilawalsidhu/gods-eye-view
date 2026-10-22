@@ -1,5 +1,14 @@
 # God's Eye View Current State
 
+Analyst region queries resolve unique Natural Earth names offline without
+geocoding, so Gold Coast and Ivory Coast name the West African natural regions.
+Duplicate names require a geocoded containment anchor; when several entries for
+the same name contain that anchor, the lookup stays unresolved rather than
+selecting the largest entry. Natural outlines try exact names before aliases and
+broader suffix variants. Follow-ups retain boundary provenance, and cancelled
+lookups preserve the previous analyst cohort and boundary source. Navigation
+search keeps a successful geocode, with no search or view-based region recovery.
+
 Shared distance checks use `src/geoDistance.js` with `{ lat, lon }` points and
 the IUGG mean spherical Earth radius, 6371.0088 km. `greatCircleKm` is
 canonical; `greatCircleMeters` is its exact metre conversion. Missing,
@@ -20,6 +29,16 @@ snapshot with zero raw rows, a healthy transport and a positive last-message
 time. This clears obsolete contacts and settles startup without manufacturing
 position timestamps. Stale, incomplete and malformed empty results retain the
 existing recovery behavior.
+
+Every `/api` response on the dev and preview servers carries
+`Content-Security-Policy: default-src 'none'; sandbox` and
+`X-Content-Type-Options: nosniff`. `apiResponseHeadersPlugin` sets them ahead of
+the Host check and matches `/api` the way the router mounts it (any letter case, a
+`/` or `.` boundary, absolute-form targets), so errors, partial responses, Host
+refusals and unknown routes are covered too; a route's own policy is sent as an
+additional policy, never in place of it. The app document's policy is unchanged.
+The GBFS proxy relays only bodies that parse as JSON, re-serialized as
+`application/json; charset=utf-8`; anything else answers 502.
 
 Catalog source contracts and their consuming layers are declared in
 `src/app/sourceComposition.js`. Omitted or null acquisition sources preserve layer
@@ -112,7 +131,14 @@ perimeters, terrain height, military installations and map features, plus a
 combined situation brief, military awareness around a point, the app's heads-up display caption, and a link that
 opens the app over an area. Tools reuse the layers' portable source factories, take a
 shared `area` argument (place name, bounding box, or point and radius) and cap
-lists at 25 rows by default. Voice offers the same queries next to its app
+lists at 25 rows by default. `aircraft_in_area` and `vessels_in_area` can also
+count every match by a field (`group_by`: airline, read from the ICAO
+designator in the callsign, or operator, country or type for aircraft; type or
+destination for ships; the ten largest groups, then other and unknown counts;
+the summary says when a feed reports none of the field) and summarize airborne
+altitude and speed (`stats`: count, min, median, mean, max).
+Both cover all matches, not just the rows returned; voice leaves these two
+tools out, so they reach MCP clients only. Voice offers the same queries next to its app
 actions: the session lists them, and the browser runs them through the same
 catalog, loaded on first use. See [tools and the MCP server](TOOLS.md).
 Aircraft altitude-band queries require a reported barometric or geometric altitude
@@ -489,6 +515,11 @@ to layer toggles, fly_to_location, frame_overhead, select_nearest_aircraft,
 get_entity_context, annotate_map and analyst_query. Analyst speech and the card
 share one deterministic count/scope headline; lower bounds use "At least" and
 partial answers name the unanswered layers. `get_current_view_state` lists enabled layers only.
+The model-free `gods-eye-view/agent/world-packet` export exposes
+`getWorldPacket({ viewer, styleManager, dataManager, sceneDirector })` to
+non-voice consumers. It reads the same enabled-only state and feed
+provenance before voice adds speech/card fields, with no new network requests
+or mutations.
 The voice card nested in the mic control (`voiceCard.js`) shows captions, plan
 steps and the result. `resultDisplay.js` is the one adapter from a result to
 the card: builder results show as built, and analyst results show a title
@@ -606,9 +637,19 @@ Reference feed construction is exported through `sources/reference`; the cable s
 
 Source factories have dedicated `layers/<family>/source` exports. ALPR and earthquake record normalization and CCTV source policy no longer pull rendering into source consumers. Catalog construction and voice feed reads use their focused owners; compatibility entries remain available. Settings filesystem hardening lives under `server/standalone/`. Import-direction checks complement export ownership checks; source behavior, settings policy and rendering are unchanged.
 
-Voice controls bind to a protocol-independent session factory. The default WebRTC adapter preserves the existing Realtime connection, push-to-talk, cost controls and radio handoff. Session subscriptions expose state, transcript, action call/progress/result, interruption, completion and turn-metrics events; stopping or replacing a session cancels pending actions. Alternate adapters can use the same controls and action runner.
+Voice controls bind to a protocol-independent session factory. The default WebRTC adapter preserves the existing Realtime connection, push-to-talk, cost controls and radio handoff. Session subscriptions expose state, transcript, action call/progress/result, interruption, completion and turn-metrics events; stopping or replacing a session cancels pending actions. An active session's normal Stop publishes one idle transition, including adapters that emit their own terminal state; a restart triggered by that transition keeps ownership of its new startup state. Alternate adapters can use the same controls and action runner.
+
+The standalone app offers OpenAI and Gemini Live through an explicit provider chooser. Gemini keeps its permanent API key on the local server and mints a short-lived, single-use credential with server-owned instructions and the standalone action catalog. Its native WebSocket adapter supports open microphone and push-to-talk input, streaming audio, captions and the existing action runner. In push-to-talk, a tool call that arrives with no input, reply or tool result outstanding is answered with a failure and never runs, and neither does any other call in the reply it starts; open-microphone turns start on Gemini's server-side activity detection, which reports no boundary to check. Switching providers ends the old conversation and releases its microphone and connection; only the input mode carries over. Gemini uses bounded shutdown draining and explicit manual restart, without automatic reconnection or a promise of uninterrupted session duration. Hosts that do not opt into the provider facade retain their existing default or custom adapter.
 
 Voice action argument schemas have one portable owner under `src/voice/actionSchemas.js`. The Realtime provider builds 30 tools using separate description-only metadata. Description customization cannot replace argument types, enum values or required fields.
+
+`createGevActionRunner` routes `control_cctv` enable/disable through the shared
+layer visibility lifecycle. Results distinguish successful changes from
+manager-reported failures or cancellation and report enabled state and lifecycle
+uncertainty. A caller-supplied abort signal reaches the manager; a late abort
+preserves an already committed change. Missing-layer errors and other CCTV
+actions retain their existing behavior. The exported `controlCctv` helper refuses direct
+enable/disable requests and directs callers to `set_layer_visibility`.
 
 `src/voice/layerManifest.js` declares each catalog layer's voice capabilities: spoken aliases, `toggle`, in-view `context`, `track`, and analyst `query` fields with type and unit, or `noQuery` with the reason. The `set_layer_visibility`, `show_data_layers_menu`, `get_entity_context` and `analyst_query` layer enums, the runner's alias table and the analyst field hints are generated from it. `src/voice/layerManifest.test.mjs` fails when a catalog layer is neither listed nor named in `VOICE_OFF_LAYERS` (today only the two scene-driven Bhote Koshi layers). Global Context is listed with `toggle: false`; `set_context_mode` reaches it. `set_panel_open` also opens `weather-panel` and `recent-imagery-panel`.
 
@@ -637,7 +678,7 @@ The UI facade composes separate owners for navigation authority, share restorati
 visual settings and panel chrome. Navigation owns request generations and follow
 handoff; restoration owns its coordinator, deferred notices, gestures and timer;
 visual settings own style/detection overrides and sensor cleanup; panel chrome
-owns disclosure, docking and Cockpit panel snapshots. Each takes explicit
+owns disclosure and Cockpit panel snapshots. Each takes explicit
 operations and reads instead of the complete shell. Existing controls, share
 formats and one-application-per-page behavior are preserved.
 
@@ -781,6 +822,15 @@ standalone entry supplies application-owned scene, ground and activation service
 Each layer owns its state and visibility listener; destruction cancels source
 reads and pending initialization. Malformed health responses retain prior health.
 Existing catalog fallback, camera poses, frame pacing and coverage controls remain.
+CCTV frames and the Street View fallback accept only JPEG, PNG, GIF, WebP and
+AVIF, sent under the canonical type; any other type falls through to the next
+fallback. Live media must match its feed kind (`video/mp4`, `video/webm`, or
+`multipart/x-mixed-replace` with a boundary) before health reports it connected,
+and follows redirects only on the camera's origin. Catalog image URLs, and
+redirects on those hosts, are pinned by parsed URL to the agency's image
+directory. Every `/api/cctv` route refuses cross-site browser requests but
+accepts forwarding headers, so cameras work behind a reverse proxy; a forwarded
+request skips the key-bearing Street View fallback and gets the placeholder.
 
 Traffic owns its rendered-surface observer only while enabled, removes it on disable/destroy, and caches surface identity without allocating on unchanged frames.
 
@@ -803,7 +853,11 @@ Viewport limits, saturation retry, placement, query caps and controls are retain
 
 Satellite and mission layers expose separate factories through `./layers/satellites`
 and `./layers/launches`. Each owns its catalog, render state, tracking, interaction
-and teardown. Source adapters retain the existing CelesTrak and Launch Library
+and teardown. Satellite core and dense catalogs retain upstream stale-cache
+provenance only for admitted records; duplicate or invalid entries cannot taint
+a fresh winning record. Dense removal clears only its own provenance, and a
+fresh core rebuild or lifecycle reset replaces the corresponding ownership.
+Source adapters retain the existing CelesTrak and Launch Library
 endpoints; standalone entries provide scene services and the satellite dependency.
 The mission factory separates paths, replay, camera, panel, overlays and placement.
 Launch Library pad coordinates retain unknown values: missing fields use the
@@ -812,7 +866,11 @@ position stay off the map. Genuine zero coordinates remain valid. Undisclosed
 stage coordinates, downrange distance and flight numbers remain unknown; the
 mission panel omits the flight-number label when no number was reported.
 Pending mission requests abort on disable/destruction and malformed launch
-snapshots preserve the last accepted display. Catalog groups, propagation cadence,
+snapshots preserve the last accepted display. A Launch Library stale-cache fallback
+retains its missions but reports STALE in Data Layers; a fresh snapshot clears that
+provenance. Hiding retained missions does not relabel them as fresh, and teardown
+clears the instance state. Injected getLaunches-only sources remain supported.
+Catalog groups, propagation cadence,
 tracking intent, replay timing, controls and source attribution remain unchanged.
 
 The fire layer now exposes `./layers/firms`: an instance factory with separate
@@ -959,10 +1017,9 @@ start with current state, isolate listener failures and stop on disposal.
 
 The standalone entry composes the UI with the application's existing layer,
 terrain, navigation and rendering operations. The shell receives those instances
-and assembles the controls. Panel layout scheduling, position preferences and
-active drags, loading notices, recording presentation and DOM lookup have focused
+and assembles the controls. Panel layout scheduling, loading notices, recording presentation and DOM lookup have focused
 owners. Disposal revokes queued presentation and listeners before asynchronous
-Context restoration, cancels an unfinished drag without saving it, restores the
+Context restoration, restores the
 recording HUD and releases status decoration without replacing accessible text.
 The ordinary control snapshot includes the current 3D model toggle and mode.
 
@@ -1075,6 +1132,26 @@ The images are periodically updated road-condition photographs, not continuous
 video; camera poses use the existing low-confidence heading prior.
 `CCTV_LITHUANIA_MAX_SOURCES` sets its cap (default 400, bounded to 1–1000).
 
+## Taiwan CCTV source pack
+
+The CCTV catalog includes Taiwan national freeway cameras from the Freeway
+Bureau, MOTC. One keyless request reads the daily MOTC 2.0 `CCTV.xml` table
+(~1,800 cameras); the request refuses redirects, has a 15-second deadline and a
+6 MiB response cap, and uses the shared 15-minute cache and fair catalog
+allocation. A failed download serves the last good table (up to a day old),
+or an empty pack, and is not retried for an hour: the catalog host does not
+answer from some networks outside Taiwan, and without the backoff every refresh
+there would wait out the connect timeout. The table
+publishes MJPEG stream URLs; each is mapped to the same camera server's
+single-JPEG path for the same camera number, and only those exact HTTPS pairs
+on the four `freeway.gov.tw` camera servers are registered with the frame
+proxy. Camera keys come from the server and camera number, because published
+CCTV IDs contain Chinese place names and a few repeat across cameras. Poses use
+the low-confidence heading prior. `CCTV_TAIWAN_ENABLED=0` disables the pack;
+`CCTV_TAIWAN_MAX_SOURCES` sets its cap (default 600, bounded to 1–2000), and
+`CCTV_TAIWAN_URL` overrides the table URL.
+Gate: `src/data/cctvTaiwan.test.mjs`.
+
 ## DriveBC CCTV source pack
 
 The CCTV catalog adds DriveBC highway cameras for British Columbia alongside the
@@ -1121,6 +1198,24 @@ snapshots, lifecycle actions and row descriptors. Remount and teardown remove
 listeners and row subscriptions; obsolete completions do not repaint old rows.
 The clear control presents busy state while its existing action owns the transaction.
 
+## Sky background
+
+`src/sky/starrySky.js` fills Cesium's `Scene#skyBox` slot with 9,096 Yale
+Bright Star Catalogue stars and a soft ESO/S. Brunier Milky Way. Both layers
+rotate from ICRF/J2000 into the Earth-fixed frame at the scene clock, with
+a TEME fallback while Cesium's IAU 2006 tables load. Bundled assets and
+their provenance are documented in `src/data/local_data/sky/README.md`.
+
+Anime fades out the Milky Way with its style intensity to avoid cel-shaded
+bands; the catalogue stars remain. A separate black 1×1 cube map preserves
+model environment lighting independently of the visible sky. The adapter
+is validated against Cesium 1.138.0 and must be revalidated on upgrades.
+
+`scripts/qa-anime-sky.mjs` checks asset readiness, visible Normal sky and
+Anime band coverage against a Vite dev server.
+`scripts/qa-sky-model-lighting.mjs` compares a lit `airplane.glb` against
+black and white environment maps in isolated scenes.
+
 ## Model atmosphere on Apple Metal
 
 Cesium's per-vertex model atmosphere is kept out of the pipeline on devices
@@ -1166,6 +1261,84 @@ The application supplies actions and retains effect settings, restore claims and
 rendering. Native keyboard editing, model modes and current defaults are preserved.
 Destroying the UI removes these listeners before asynchronous teardown.
 
+Ordinary sliders share the native range component in `ui/slider.js` and the
+`gev-quantitative-slider` surface in `ui/styles/slider.css`. Display, shader
+parameters, volume, replay speed, weather settings/history, imagery opacity and
+Street View's date filter use the same rail, thumb, value styling, keyboard focus and disabled state.
+Generated controls use `createSlider`; static templates apply the same class.
+Feature owners retain bounds, steps, formatted values, input/change timing and
+listener cleanup. The radio tuning dial, imagery comparison divider and event
+comparison/progression controls keep their specialized presentation and behavior.
+
+## Shared control CSS ownership
+
+Shared styles own ordinary control surfaces and interaction states; feature CSS
+owns surrounding layout and context-specific sizing. CCTV's calibration editor
+width lives in `ui/styles/cctv.css`, while the shared inline field variant owns
+only density and spinner treatment. Radio supplies its field palette and disabled
+opacity through the `--gev-field-*` variables, retaining compact typography and
+arrow space locally. Cyber supplies shared-field palette variables explicitly;
+its legacy native-field palette rules exclude `.gev-field`. These ownership
+boundaries preserve the current Tactical/Cyber appearance and native behavior.
+
+## Ordinary status badges
+
+CCTV source/frame labels, calibration provenance and Weather coverage labels use
+`ui/statusBadge.js` and the `gev-status-badge` CSS surface. The listener-free
+adapter accepts already-translated `label` and `hidden` values; pill, box and plain
+appearances describe shape/density only. Static CCTV markup uses the same classes
+as generated rail-card badges. Repeated identical updates do not rewrite text or
+replace nodes. Empty coverage remains hidden.
+
+Feature owners retain the status rules, machine-state attributes, translations
+and announcement policy. CCTV frame acquisition (`idle/loading/error/ready`)
+remains separate from provider status: retained pixels do not imply a healthy
+feed. Calibration still distinguishes manually saved, catalog-curated and raw
+prior poses; unsaved edits override the label until save/reset. Coverage labels
+remain geographic scope, not health claims. Existing colors and the source
+badge's polite live region are preserved; coverage and calibration do not gain
+live regions. Interactive layer toggles, progress indicators and world overlays
+retain their specialized ownership. Vue can reuse the view contract and CSS while
+replacing DOM construction. Browser acceptance:
+`QA_BASE_URL=http://127.0.0.1:4189 node scripts/qa-status-badges.mjs`.
+
+## Ordinary action buttons
+
+Scene panel actions, shot LOAD/DEL actions, the EDIT DETAILS / SHARE SCENE
+bar and one-shot CCTV actions use `ui/actionButton.js` and the shared
+`gev-action-button` surface in `ui/styles/action-button.css`. Static templates
+apply the same classes as generated buttons. The native builder accepts translated
+text, default/danger variants, default/compact sizes and disabled/accessibility
+properties; it installs no listeners and owns no application state. Feature
+controllers retain callbacks, enable/disable rules, confirmation prompts,
+persistence and teardown. The smaller shot actions retain their existing sizing
+and hover treatment. Feature CSS still owns panel layout and translated wrapping.
+
+CCTV enable, coverage, auto-hop, projection and adjustment toggles, editable
+calibration-value chips and the scene authoring dialogs retain their specialized
+controls. Existing `scene-btn` hooks remain compatible with Street Level and
+legacy toggles. The shared CSS, explicit input/action boundary and behavior tests
+can carry to a Vue view while Vue replaces native DOM construction.
+Browser acceptance: `QA_BASE_URL=http://127.0.0.1:4179 node scripts/qa-action-buttons.mjs`;
+`qa-scene-controls.mjs` also covers real Scene authoring/playback with native Space capture.
+
+## Segmented selectors
+
+Segmented selectors use the controlled DOM adapter in `ui/segmentedControl.js`
+and the shared `gev-segmented` / `gev-segment` surface. Model coverage, label
+allocation, drawing shape, Street View fit/panorama filters and imagery mode keep
+their feature-owned values, actions and persistence. Painting a restored value
+does not emit a change or move focus. Existing keyboard policies remain explicit:
+Street View uses arrows/Home/End with one tab stop, imagery mode uses arrows from
+its controlled selection, and Display keeps its existing native button behavior.
+Pure value navigation is separate from DOM rendering for reuse by a future view.
+Segments keep their word minimum width: compact inline groups such as FIT/FILL
+and ALL/360°/FLAT must not break short labels mid-word. Collapsed Weather follows
+the same exclusive-rail hiding rule as the other readouts.
+The imagery mode row reserves 26px for the 24px buttons and group borders so
+the complete button and inset keyboard-focus outline remain visible.
+Browser acceptance: `QA_BASE_URL=http://127.0.0.1:4173 node scripts/qa-segmented-controls.mjs`.
+
 ## Application shortcuts and shader parameter controls
 
 `ui/input` supplies the bubbling application shortcut listener and generated
@@ -1192,6 +1365,10 @@ Automatic collapse remains presentation only, prioritizes the latest explicit
 panel, and honors keyboard focus on the right. Mobile layout still releases
 desktop allocation styles. Stable Display allocation avoids unnecessary style
 writes. This extraction does not change panel positions or layout defaults.
+Context expansion through the panel owner or adaptive right-rail restoration
+closes an open compact Radio disclosure before Context/Space Missions becomes
+visible. The mini remains available while Context is collapsed. This fixes the
+Radio-overlap path reported in #804 without changing z-index or layout policy.
 The right rail skips panels hidden by other CSS (computed `display: none`), but
 keeps the collapsed panels its own exclusive presentation hides, so automatic
 collapse can still be undone.
@@ -1441,6 +1618,18 @@ an empty dock. Explicit zero and caller-supplied numeric fallbacks remain valid.
 
 ## Terrain height cache bound
 
+The `/api/terrain/heights` route refuses cross-site browser requests before
+rate limiting, cache access or upstream work: a `Sec-Fetch-Site` other than
+`same-origin`/`none` (an `<img>` on another page), or a foreign or opaque
+`Origin`, gets `403`. The per-client limiter keys on the socket address, which
+for such a request is the visitor's own browser, so without the gate any page
+could spend the visitor's 90/min quota and leave the app's own lookups on
+`429`. Unlike the cost-bearing routes, the terrain gate does not refuse
+reverse-proxy forwarding headers: terrain is keyless and needed for rendering,
+and a `403` there would send every chunk to the geoid fallback for an instance
+served behind the documented reverse proxy. Same-origin app requests,
+non-browser local callers and proxied same-origin requests keep working.
+
 The terrain proxy parser rejects finite longitudes outside [-180, 180] and
 latitudes outside [-90, 90] for every client before upstream resolution. One
 out-of-range point rejects the whole batch; inclusive WGS84 bounds remain valid.
@@ -1477,6 +1666,14 @@ request coalescing and optional LL2 server token retain existing behavior.
 The Node-only `gods-eye-view/server/providers/space` export supplies factories;
 `sources/space` supplies fixed upstream URL builders with no I/O or environment
 access. Callers retain validation, transport and response policy.
+
+LL2 recent-launch requests use UTC minute-aligned bounds over the same 30-day
+window, so installations refreshing in the same minute share an upstream cache
+key. The upper bound trails the current time by less than one minute. Requests
+identify the app and repository through User-Agent; the existing 15-minute local
+cache, stale fallback and optional server-only Authorization remain unchanged.
+Provider Settings identifies LL2 tokens as optional paid higher-rate upgrades:
+standard public access needs no key, and its field can remain blank.
 
 The shared TLE text parser skips incomplete named sets and resumes at the next
 complete set. A missing orbital line does not discard the later satellites in
@@ -2664,6 +2861,17 @@ down | auth-failed` (plus the unchanged `missing-key`/`unsupported`) with
 >   tunings. Ambient overlap includes each sprite's own rendered extent. The
 >   gated AIS, CCTV, and satellite passes retain an active-emphasis count so a
 >   settled dim contact always completes its release after tracking ends.
+> - **Terrain-height bounds:** because every distinct 5-decimal point is its own
+>   cache key, its own line in `.gev-cache/terrain-heights.json`, and its own
+>   upstream call, four limits bound what a caller can grow. Coordinates outside
+>   WGS-84 range are rejected with `400` at parse (finite is not the same as on
+>   Earth); the point cache holds at most 50,000 entries, evicting oldest-first
+>   — terrain does not move, so an evicted point costs one refetch and never a
+>   wrong answer; a cache file above 24 MB is not read back into memory (the
+>   ceiling `rocketLaunchesProxy` already applies); and the route carries an
+>   always-on limiter of 90 requests/minute/client, 270 global. That cap is an
+>   order of magnitude above measured demand — a full `npm run test:track` run
+>   drove 10 requests, peaking at 8/min.
 > - **Terrain-height resilience:** `/api/terrain/heights` caches canonical
 >   5-decimal points individually, reconstructs reordered/overlapping batches
 >   in exact request order, and refreshes only missing or stale points. Upstream
@@ -2680,11 +2888,16 @@ down | auth-failed` (plus the unchanged `missing-key`/`unsupported`) with
 >   first later successful fetch. Smaller chunks reduce timeout risk; complete
 >   camera batches still wait for their sequential requests, and unresolved
 >   placement continues to use the existing prior until real heights arrive.
-> - **Overpass cache admission:** `/api/overpass` parses and sanitizes requests,
->   then checks fresh memory, identical in-flight work, and fresh disk entries
->   before invoking its local 90/min limiter. Cache and single-flight responses
->   therefore do not spend quota; upstream-bound misses retain the existing
->   limiter, configured-upstream, stale, and sanitization behavior. An unconfigured transport serves dated stale data or a non-retryable capability error.
+> - **Overpass cache admission:** `/api/overpass` refuses cross-site and forwarded
+>   POSTs through the shared local-request gate, then limits requests to 300/min
+>   per socket peer and 900/min globally before reading or validating bodies.
+>   Tag-filter brackets are scanned once; nested or unmatched brackets return 400.
+>   It then checks fresh memory, identical in-flight work, and fresh disk entries
+>   before invoking its separate local 90/min upstream limiter. Cache and
+>   single-flight responses therefore do not spend upstream quota; upstream-bound
+>   misses retain the existing limiter, configured-upstream, stale, and sanitization
+>   behavior. An unconfigured transport serves dated stale data or a non-retryable
+>   capability error.
 > - **CCTV world-click focus:** clicking an in-world CCTV icon or ambient card
 >   activates it and routes the camera flight through the panel FOCUS policy.
 >   Aircraft/satellite tracking releases outside cockpit; cockpit retains the
@@ -2933,6 +3146,13 @@ down | auth-failed` (plus the unchanged `missing-key`/`unsupported`) with
 >   position getter reads only `_trackedDisplayCached`, the same authoritative
 >   Cartesian already consumed by the tracked visual and camera, and never
 >   advances dead reckoning from the host frame.
+> - **Scheduled route plausibility:** Aircraft route labels and selected-route
+>   context reject the distant backwards, forwards and antipodal extensions of
+>   an airport pair's great circle. The existing 130 km endpoint admission and
+>   200 km cross-track tolerance remain; a projected fix outside the finite
+>   origin-to-destination minor arc also has a generous 200 km extension at
+>   either end. Missing coordinates and coincident or antipodal endpoint pairs
+>   retain their loose, unjudgeable behavior; vertical-trend checks are unchanged.
 > - **Aircraft label convention (both flight layers, 2026-08-18):** every civil
 >   and military label surface resolves **callsign → registration → icao24**
 >   (`_contactLabel()` in `flights.js`; the same chain inline in
@@ -3395,7 +3615,7 @@ its criteria cannot be silently ignored.
 | Satellites             | CelesTrak                                                                                                                                                                                       | `src/data/satellites.js`                              | `/api/celestrak`                                         | 120s                                                                              |
 | Space Missions (30d)   | Launch Library 2 + CelesTrak                                                                                                                                                                    | `src/data/rocketLaunches.js`                          | `/api/launches` + `/api/celestrak/active`                | 5 min                                                                             |
 | Traffic | Selectable TomTom / OpenStreetMap / Hybrid roads; optional TomTom flow (BYOK) | `src/data/traffic.js` | browser-direct OpenFreeMap tiles; `/api/tomtom` for flow | viewport-driven; capped tile cache |
-| CCTV                   | Austin + Caltrans (CA) + TfL London + Ontario 511 + Fintraffic (FI) + DriveBC (BC) + TxDOT (TX) + Estonia (Tallinn, Tarktee) + Live Traffic NSW + Open Calgary Open Data + Statens vegvesen (NO, stills + live HLS) + King County (WA) Open Data + WSDOT (WA) Open Data + NYC DOT TMC (opt-in) + City of Toronto RESCU + Catalonia (Servei Català de Trànsit) + Street View fallback | `src/data/cctv.js`                                    | `/api/cctv`                                              | 10s (active)                                                                      |
+| CCTV                   | Austin + Caltrans (CA) + TfL London + Ontario 511 + Fintraffic (FI) + DriveBC (BC) + TxDOT (TX) + Estonia (Tallinn, Tarktee) + Live Traffic NSW + Open Calgary Open Data + Statens vegvesen (NO, stills + live HLS, Kartverket ground heights) + King County (WA) Open Data + WSDOT (WA) Open Data + NYC DOT TMC (opt-in) + City of Toronto RESCU + Catalonia (Servei Català de Trànsit) + Hong Kong Transport Department + FL511 (FL, opt-in) + Freeway Bureau, MOTC (Taiwan) + Street View fallback | `src/data/cctv.js`                                    | `/api/cctv`                                              | 10s (active)                                                                      |
 | Radio                  | Radio Browser (public-domain station directory)                                                                                                                                                 | `src/data/radio.js`                                   | `/api/radio/stations`, `/api/radio/click/:uuid`          | 45 min directory refresh                                                          |
 | Transit 🚌             | Operator GTFS-Realtime VehiclePositions (7 keyless regions, `src/data/transitFeeds.js`)                                                                                                         | `src/layers/transit/` via `src/app/layers/transit.js` | `/api/transit`                                           | 15s (poll + delayed playback)                                                     |
 | Bikeshare 🚲           | GBFS (Lyft + BCycle + Social Bicycles + PBSC incl. Bike Share Toronto, Bike Itaú (Brazil), Bicing (Barcelona) and seven other Spanish cities + Urban Sharing, Entur, JCDecaux (Lillestrøm, Valencia, Seville) + nextbike (AMBici))                                                                                                                                        | `src/data/bikeshare.js`                               | `/api/gbfs`                                              | 60s                                                                               |
@@ -3404,7 +3624,7 @@ its criteria cannot be silently ignored.
 | Dams ▰                 | OpenInfraMap/OSM extract (bundled)                                                                                                                                                              | `src/data/localLayers.js`                             | —                                                        | static                                                                            |
 | Submarine Cables ◠     | TeleGeography public map (bundled)                                                                                                                                                              | `src/data/telegeographySubmarineCables.js`            | —                                                        | static                                                                            |
 | FIRMS Active Fires ▲   | NASA FIRMS live (VIIRS ×3 NRT + MODIS NRT, trailing 24h)                                                                                                                                        | `src/data/firmsHeatmap.js`                            | `/api/firms` (`FIRMS_MAP_KEY`)                           | 10 min (proxy TTL 30 min)                                                         |
-| Street Level 📷 | Street-level imagery; Mapillary is the first provider (vector tiles, Graph API, MapillaryJS) | `src/layers/streetLevel/` via `src/app/layers/streetLevel.js` | `/api/mapillary/status`, `/api/mapillary/tiles/coverage/{z}/{x}/{y}` (`MAPILLARY_CLIENT_TOKEN`) | camera-driven (320 ms debounce, ≤9 tiles, cached 24 h) |
+| Street Level 📷 | Mapillary street-level imagery (vector tiles, Graph API, MapillaryJS) | `src/layers/streetLevel/` via `src/app/layers/streetLevel.js` | `/api/mapillary/status`, `/api/mapillary/tiles/coverage/{z}/{x}/{y}` (`MAPILLARY_CLIENT_TOKEN`) | camera-driven (320 ms debounce, ≤9 tiles, server memory cache 24 h) |
 | Wind 🌬                 | NOAA GFS 10 m wind (keyless, 0.25°→1° grid; animated particles)                                                                                                                                 | `src/data/wind.js`                                    | `/api/wind`                                              | 1 h (forecast cycle)                                                              |
 | GNSS Integrity 📡 (`gnss-integrity`) | adsb.lol point snapshot, low navigation accuracy binned per 0.5° cell (GEV NIC/NACp threshold + gpsjam.org formula and bands, keyless, ODbL) | `src/layers/gnss/` via `src/app/layers/gnss.js` | `/api/gnss-integrity` | camera-driven (600 ms debounce, minimum 2.5 s between reads) + 60s poll (server cache 60 s; 30 min rolling window) |
 | Fire Perimeters 🔥 | NIFC WFIGS current interagency perimeters (keyless, paged past the 2000-record cap); InciWeb catalog + incident page origin and update time checks for verified incident-page links | `src/layers/perimeters/` via `src/app/layers/perimeters.js` | `/api/fire-perimeters` + `/api/fire-perimeters/inciweb/*` | 5 min (server caches: catalog 1 h; publication 30 min) |
@@ -3436,8 +3656,8 @@ by `scripts/qa-emergency-squawk.mjs`. Both accept `--timeout-ms` for slow boot.
 
 Fire Perimeters uses capped, timed server reads with stale-on-error caching and a per-client limit. Unchanged snapshots retain geometry; link checks cancel on disable or selection change, and the row legend shows reported containment.
 
-Street Level is a collapsible right-rail panel (`#street-level-panel`, layer
-token `0`, option owner `street-level`, panel `ui` token `t`) that starts
+Street Level is a docked, collapsible right-rail panel (`#street-level-panel`,
+layer token `0`, option owner `street-level`, panel `ui` token `t`) that starts
 collapsed. It opens itself only when the user, voice or a tool switches the
 layer on or a photo opens, never on a restore, and those opens are not stored.
 Like the iD editor's photo overlay, it has one chip per registered provider,
@@ -3449,31 +3669,30 @@ sequence is GEV cyan. Share options: `m` (Mapillary), `r` (the other providers' 
 e.g. `google-1` for Street View), `p` (`a`/`p`/`f` panoramas), `s` (since, days). Mapillary, Google
 Street View, KartaView and Panoramax are registered. Without
 `MAPILLARY_CLIENT_TOKEN` the panel reads KEY REQUIRED and the controls are
-disabled. With it, coverage draws as z0–5 overview points from orbit and z11–14
-sequence lines below 60 km; the proxy strips the unused `image` layer from z14
+disabled. With it, coverage draws as z11–14 sequence lines below 60 km; the proxy strips the unused `image` layer from z14
 tiles (12 MB → ~80 KB) and shares one upstream fetch between concurrent
 requests for a tile.
 
-Mapillary coverage ranks unique tile addresses before applying the 16-tile
-overview budget. Overlapping dateline halves in a polar view therefore do not
-waste overview slots on the same tile; loading already skips duplicate keys.
+Coverage is z11–14 sequence lines below 60 km; above that nothing is drawn and
+the panel says to zoom in. Tiles come from the visible ground within range of
+the camera, nearest first, at most 9 (the halves of a view across
+the date line count a shared tile once). Lines are draped
+`GroundPolylinePrimitive`s (`ClassificationType.BOTH`), so they follow terrain
+and Google 3D tiles alike; cones and the photo marker are ground-clamped
+billboards with a horizon cull. Without `MAPILLARY_CLIENT_TOKEN` the panel
+reads KEY REQUIRED, says which key to add and disables the filters; a rejected
+key reads KEY REJECTED and stops tile requests until the layer goes off; a 429
+pauses them for its Retry-After.
 
-On Google 3D (`photoreal`) at street zoom (in below 1,400 m above ground, out
-above 1,800 m) the surface mode switches from `draped` to `terrain`: draped
-lines land on roofs and tree tops, so `groundCast.js` instead places lines,
-cones and the marker 2 m above the bare earth from `/api/terrain/heights`, and
-the mesh hides what is behind buildings and trees. A tile is drawn draped until
-its heights arrive; a geoid fallback leaves it draped. Within 900 m of the
-camera, `meshSampler.js` samples the rendered surface (`scene.sampleHeight`,
-~11 m cells, nearest first, 6 ms idle budget) so lines also follow trenches,
-steep streets and roads under trees. It uses the mesh floor's rules (the
-visible tileset has finished streaming, a real bare-earth prior, the shared
-mesh window) and probes a cell again once the camera is half as far from it,
-down to 40 m, so coarse early samples are replaced as finer tiles load. A
-failed probe keeps the last good sample and distance and is retried after the
-miss cooldown. Roads on elevated decks are still drawn at
-ground level. Framing a photo ignores mesh samples far below the bare earth
-(unloaded tiles).
+The server proxy (`server/providers/mapillary.js`) adds the token to
+coverage-tile requests (the browser holds it too, for MapillaryJS and the Graph
+API), serves only z11–14 coverage, refuses upstream redirects, strips the
+unused `image` layer, shares one fetch per tile, runs at most six at once
+(cancelling those every client has left) and keeps tiles in memory for 24 h
+(a body too big to be a trimmed tile is served but not kept). While Mapillary
+rate-limits, the proxy answers 429 itself until the Retry-After (seconds or an
+HTTP date, at most 10 minutes) is over, so the rest of a view does not go on
+asking.
 
 The header pill is the layer switch. Lighting a chip swaps the source;
 clicking the lit chip turns the layer off. A chip without a usable key
@@ -3484,19 +3703,18 @@ their keys but a switched-off one would draw with a key already set (no
 Mapillary token, Street View on Google 3D with a Google key), the layer
 reports it (`keyAlternatives`), and the panel's KEY REQUIRED, its coverage
 line and the layer row's tooltip say to light it. The
-viewer sits under the header with EXPAND, FIT/FILL, FOLLOW and close above the
-image. FOLLOW needs the Google 3D map stack (`attachMapStackController`) and
-stops when the stack changes. Camera moves go through the application's
-navigation (`attachNavigation`), which releases aircraft and satellite tracking
-and is refused in the cockpit: turning FOLLOW on claims the camera at once, and
-FOLLOW stops when another feature takes it; a photo takes a deferred ticket
-when it starts opening and frames only if nothing newer took the camera while
-it loaded. SINCE is a stepped slider whose readout names the
-cut-off date. The panel is portable (`street-level-panel` spec, minimum
-320 × 280, `dockOnCollapse`): a floating window gives spare height to the
-viewer, and collapsing it, double-clicking the header or SHRINK after EXPAND
-docks it. At phone width (≤720 px) the viewer height is derived from the rail
-band so the whole photo fits.
+viewer sits under the header with EXPAND, FIT/FILL and close above the
+image. SINCE is a stepped slider whose readout names the cut-off date.
+
+MapillaryJS loads on the first photo. Opening one frames it with a single
+camera flight through the application's deferred navigation (`begin` /
+`reassert`): it releases tracking, is refused in the cockpit, and is skipped
+if newer navigation took the camera while the photo loaded; closing the photo
+cancels it. EXPAND is the browser's Fullscreen API on the viewer element; on
+iPhone, which has no element fullscreen, the viewer opens as a top-layer
+popover instead (hidden where neither API exists). Clean View, recording and
+the cockpit take an expanded photo out of full screen. At phone width the
+viewer height comes from the rail band so the whole photo fits.
 
 Providers implement the contract in `src/layers/streetLevel/registry.js`. The
 core routes clicks by pick prefix, swaps viewer adapters in the one host,
@@ -3505,9 +3723,10 @@ add a provider: implement the definition, register it in
 `src/app/layers/streetLevel.js` and add its modules to
 `scripts/package-boundaries.json`; its share switch travels in `r` by id.
 A provider with line coverage builds it on `lineCoverage.js` (camera-driven
-XYZ tiles, draped or cast to bare earth, selection recolouring) and its cones
+XYZ tiles near the ground, draped, the selected sequence drawn again over
+them) and its cones
 on `sequenceCones.js`, passing its tile fetch, zoom ladder, colours and pick
-prefixes; Mapillary's `coverage.js` and `sequences.js` are such wrappers. With providers on different keys the
+prefixes; Mapillary, KartaView and Panoramax all do. With providers on different keys the
 layer's `requiresKeyId` is null and each chip reports its own key.
 
 Google Street View (`providers/google/`) runs on the Maps JavaScript API with
@@ -3516,7 +3735,7 @@ on first use (`mapsLoader.js`, CSP `script-src https://maps.googleapis.com`).
 Its chip starts off (`defaultOn: false`; a link without its switch keeps it off) because every
 panorama load is billed to the key. Google's terms forbid Street View beside
 non-Google maps, so the provider declares `requiresMapStack: 'photoreal'`:
-off Google 3D it does not appear at all (no chip, legend swatch, globe
+off Google 3D it does not appear at all (no chip, globe
 credit, layer source or button, and Google's script is not loaded), lookups
 and opens skip it, and leaving Google 3D closes its panorama; the share
 option keeps the user's choice for when Google 3D returns. Google offers no coverage layer
@@ -3538,9 +3757,8 @@ marker is a Google-blue view cone (`marker: {kind: 'view-cone'}`) in place
 of GEV's amber pin. Its
 panoramas are all 360° and it draws no coverage, so it declares `filters: []`
 (a provider's `filters` default to both `pano` and `since`): lookups ignore
-the IMAGERY and SINCE filters, the panel hides each filter row no lit provider
-honours (`filterControls`), and the legend lists only providers that draw
-lines, with "Selected" only beside one of them. The viewer is Google's `StreetViewPanorama` in its own
+the IMAGERY and SINCE filters, and the panel hides each filter row no lit provider
+honours (`filterControls`). The viewer is Google's `StreetViewPanorama` in its own
 element in the viewer host, without Google's fullscreen, close and address
 controls (the address goes in the caption); a pose goes out at once and
 again when the panorama's month, photographer and address arrive (one
@@ -3567,8 +3785,7 @@ are no KartaView photos in it. A tile's lines are OSM way segments with
 photos and carry no sequence, date or projection, so `decode.js` chains
 segments that meet end to start (about four times fewer lines; linear time,
 at most 20,000 segments a tile and 5,000 points a line), they are
-drawn as `kv:line:<z/x/y/n>`, up to 1,600 per tile, and never highlighted
-(`highlightsSequence: false`, so the legend has no "Selected"), and the
+drawn as `kv:line:<z/x/y/n>`, up to 1,600 per tile, and never highlighted, and the
 provider declares `filters: ['pano', 'since']` and `coverageLabel` ("N
 streets in view · click a line for its nearest photo"). KartaView filters
 coverage only in its PNG tiles (`/sequence/tiles/{x}/{y}/{z}.png?fieldOfView=360|plane&startDate=YYYY-MM-DD`;
@@ -3577,8 +3794,7 @@ asked for), so a filtered tile is drawn from the cached JSON segments that
 lie on the filtered PNG's drawn pixels (`maskedSegments`: at least half the
 points sampled every 2 px have a drawn pixel within one; on Jakarta's 360°
 filter, 332 of 1,041 segments lie on it, 676 miss it, 33 fall between).
-A filter change reloads the lines (`lineCoverage.reload`: the drawn ones show
-until the new ones are in), keeps the JSON segments, and caches masks per
+A filter change reloads the lines (`lineCoverage.reload`), keeps the JSON segments, and caches masks per
 filter and tile. A dense filtered PNG can take KartaView over a minute the
 first time (it answers 504 at 60 s and keeps drawing), so a timeout or 5xx is
 asked again 4 s later, four tries in all; then the panel says it did not
@@ -3589,8 +3805,8 @@ lookup asks the photo API for the projection (`SPHERE`/`PLANE`; it ignores
 `fieldOfView`) and upload date and checks each answer the same way (when
 photos are near but none passes, the panel says so), and the cones pass on
 each photo's projection and upload date. The provider declares
-`sinceBasis: 'upload'`, so while it is lit the panel shows "KartaView: by
-upload date" under the SINCE slider (`sinceNote` in the UI state). Tiles come uncompressed and
+`sinceBasis: 'upload'`, so while it is lit the panel shows "(by
+upload date)" beside the SINCE value, as ANY DATE (by upload date) (`sinceNote` in the UI state). Tiles come uncompressed and
 uncacheable, so the last 24 decoded tiles are kept for 10 minutes while
 KartaView is lit (`createTileCache`, dropped when it is switched off); one
 that does not answer in 20 s is asked once more, and one that is not a line
@@ -3605,7 +3821,7 @@ remembered; a storage timeout or 5xx is asked again. The open photo's
 sequence draws as cones from the 250-photo page holding it
 (`/2.0/sequence/{id}/photos`); the panel counts the drive's own photos
 (`countActivePhotos`, asked once per sequence). The camera direction (the
-marker, cones, FOLLOW, and a panorama's centre) is the direction of travel
+marker, cones and a panorama's centre) is the direction of travel
 to the next photo a few metres on (`assignCourses`): KartaView is dashcam
 imagery, while its `heading` is the device compass, which reads 0 for whole
 drives without one and can sit a steady 110° off inside a car. Until the
@@ -3662,23 +3878,18 @@ to 30 km and z10 to 60 km, as Mapillary's (a dense z10 tile over Paris is
 line (Douglas–Peucker to the segment, 4 units of a 4,096 tile: about a
 pixel where it is drawn, 6–10% of a GPS track's points), and the tiles in
 view draw their longest lines within 90,000 points (`maxPoints`,
-`keepOrder`), shared out once loading settles so a sparse tile keeps all
-it has and a dense one (a city centre) takes the rest; the selected
-sequence is always drawn. Every point becomes ~8 ground-line vertices:
+`keepOrder`), split evenly between the tiles in view (10,000 points
+each). Every point becomes ~8 ground-line vertices:
 unsimplified, the lines hung the tab. Decoded tiles are kept while the
-provider is on (16, ten minutes, `tileCache.js`, shared with KartaView),
-and above
-60 km the `grid` layer's 0.1°
-density cells, binned to at most 96×96 points a tile (a z0 tile holds
-~70,000 cells) and not counted as sequences: the panel says to zoom in.
+provider is on (16, ten minutes, `tileCache.js`, shared with KartaView).
+Above 60 km nothing is drawn and the panel says to zoom in.
 A tile decodes in slices of about 8 ms, the page getting a turn between
 them (a 2 MB z10 tile is ~200 ms of work). A busy API (429/503) holds the
 tiles back for its Retry-After, which the browser cannot read here (the API
 exposes no headers), so the wait doubles from 5 s to 5 minutes until it
 answers; an answer may take as long as it keeps arriving (silent for 15 s
 is given up), so a slow link still gets its megabyte tiles. Both
-filters apply: lines carry their day and camera type, and a cell stays while
-it holds pictures of the kind asked for (cells are undated). A click on a
+filters apply: lines carry their day and camera type. A click on a
 line asks the core (`actions.openNearest`) for that sequence's picture
 nearest the click, within the camera height / 100 (50–400 m: from high up
 a click lands well off a line), without framing, then any sequence's within
@@ -3727,8 +3938,9 @@ runs against real Mapillary and needs `MAPILLARY_CLIENT_TOKEN`. `npm run
 qa:street-level:fixtures -- --url <server>` answers every Mapillary request
 from fixtures (`providers/mapillary/coverageFixture.mjs`,
 `scripts/fixtures/street-level/`), and KartaView's and Panoramax's too, so it
-needs no network and covers the whole photo flow. CI runs the fixture gate and `qa:panel-resize`
-against a production build served by `vite preview` with a dummy token.
+needs no network. It opens and closes a photo from Mapillary, KartaView and
+Panoramax; stepping, EXPAND, FIT/FILL, the filters and Street View stay with
+the unit tests. CI runs the fixture gate against a production build served by `vite preview` with a dummy token.
 
 Directions is a keyless front end to the routing the voice agent already
 uses. Its row chips are the whole interface: DRIVE / WALK / BIKE pick the
@@ -4366,7 +4578,7 @@ silently demoting every later lookup for the session.
 - **FIRMS**: no ground clamping (zero 3D-tiles height sampling), ≤18 screen-decluttered ambient labels, click-to-inspect detail card, 2.5k/3k sprite budgets viewport-clipped by FRP.
 - **CCTV v2 foundation:** a pitched
   frustum wireframe (4 corner rays + far-cap rectangle) with a monitor plane at the frustum's
-  far cap, retargeting the existing video/canvas texture pipeline. Manual calibration only —
+  far cap, retargeting the existing video/canvas texture pipeline. Stills are drawn at their source aspect, centered on the placeholder dark (`#01070c`), instead of being stretched to the 16:9 canvas. Manual calibration only —
   auto-calibration and the drape mesh pipeline are deleted. A one-shot activation obstruction
   probe (`pickFromRay` on camera activation, clamping the plane short of the first hit) remains;
   ground placement is superseded by the shared-floor v3 behavior below. Calibration persists to
@@ -4384,12 +4596,14 @@ silently demoting every later lookup for the session.
   ground clamp now lifts the cap _center_ only so the wireframe stays a true pyramid welded to
   the plane (was a flattened fan / the ~47.5 m divergence — RESOLVED), re-selecting the active
   camera is a no-op (killed a click-flash), and texture swaps gate on canvas content (killed a
-  periodic white flash). Coverage is now **metro-wide: 250 cameras** (`CCTV_AUSTIN_MAX_SOURCES`
+  periodic white flash). Camera icons are cyan for stills, violet for cameras with a video feed, and amber for the active camera. Coverage is now **metro-wide: 250 cameras** (`CCTV_AUSTIN_MAX_SOURCES`
   default 36 → 250, hard bound 300), filtered to `camera_status === TURNED_ON` (~815 live of
   1,003 rows). City packs (2026-07-04): Caltrans (districts 4/7/11/3 — SF, LA, San Diego,
   Sacramento; cap 300) and TfL London JamCams (cap 250) join Austin (cap 250) as keyless default
-  sources. Ontario 511 (2026-09-12) adds keyless highway cameras including Kitchener-area routes
-  (cap 1,000, all enabled rows from the current ~944-camera catalog). All sources are RAW PRIOR
+  sources. Ontario 511 (2026-09-12) adds highway cameras including Kitchener-area routes
+  (cap 1,000, all enabled rows from the current ~944-camera catalog). The 511on.ca API now
+  requires a developer key, so the pack needs `ONTARIO_511_API_KEY` and is skipped without one
+  (#1228). All sources are RAW PRIOR
   poses, and the layer is stills-first.
   sources. Fintraffic Finland road weather cameras (2026-09-13; cap 300, `CCTV_FINTRAFFIC_MAX_SOURCES`,
   kill switch `CCTV_FINTRAFFIC_ENABLED=0`) are the fourth pack: one keyless GeoJSON station list
@@ -4397,7 +4611,18 @@ silently demoting every later lookup for the session.
   GATHERING stations carry 2,256 in-collection presets, prioritized to 300 against seven anchors
   on the main road spine. `CCTV_MAX_SOURCES` is a 4,000 catalog-wide ceiling shared round-robin
   across packs, so a lower global cap thins every region instead of starving the last pack.
-  ~1,100 cameras total, all RAW PRIOR poses, stills-first.
+  ~1,100 cameras total, all RAW PRIOR poses, stills-first. The catalog lives for 15 minutes; once
+  it expires, `/api/cctv` keeps answering from it while one background refresh reloads every
+  pack, so only the very first load waits for the slowest pack (a live first load took about
+  22 s, and is bounded by Tarktee's 30 s). A background refresh that fails or comes back
+  empty keeps the old catalog and is retried after another 15 minutes, not on the next
+  request. Estonia's Tarktee DATEX feeds, which answer in 2 to 16.6 s, get 30 s
+  (`TARKTEE_FETCH_TIMEOUT_MS`) where other packs get 15 s.
+  Both Tarktee XML catalogs refuse redirects and have a 4 MiB per-document
+  limit, enforced against declared length and streamed bytes. A rejected fetch,
+  unsuccessful response, or body-read failure releases both available response
+  bodies; read failures also cancel an active sibling reader. Cameras sharing
+  an image number are deduplicated before the Tarktee pack cap is applied.
 - **CCTV v3 UX — viewshed + calibration gizmo** (built 2026-07-05 and field
   validated 2026-07-21): the COVERAGE toggle is a
   tri-state cycle `OFF → ON → VIEWSHED`; viewshed mode renders each visible camera's frustum
@@ -4487,6 +4712,12 @@ Retry-After; absent delays back off from 30 seconds to five minutes. Empty
 `elements` is a valid answer. Existing byte, query, concurrency and cache caps
 remain. Malformed capability-probe responses remain unknown and are retried after the existing 30-second backoff; valid configured decisions remain memoized.
 Consumer capability misses never schedule automatic retries.
+
+Keyless browser validation also probes the optional Google tiles-token route.
+The token client cancels rejected response bodies before returning unavailable,
+so they do not remain pending in browser network observation. The Overpass gate
+accepts only that same-origin route's expected 404 console diagnostic; other
+HTTP and JavaScript errors still fail acceptance.
 
 Operator-configured Overpass area and focus-footprint queries use body-level
 `out geom` (with `center` for focus), preserving relation member outlines.
@@ -4714,7 +4945,7 @@ and unreachable upstream (502/504) separately from road geometry.
   - **Every selectable layer writes that one slot** (2026-08-21). The tracking layers — flights, military, satellites — publish selection on their own awareness lane (`gev:awareness-subject-selected`, consumed by the readout card and the Contacts panel) and for the life of the voice tools never wrote the shared slot, so `scope:'selected'` silently answered `in_view` with a contact plainly selected on screen. They now call `selectTrackedSubjectContext` / `refreshTrackedSubjectContext` / `clearTrackedSubjectContext` (`src/data/contextStore.js`) on select / poll / deselect. **Invariants: (a)** that write path must NOT dispatch `gev:entity-selected` — tracking layers already own an event lane and a second one makes two surfaces fight over one subject; **(b)** exactly one record per tracking layer, because a frozen snapshot of a moved contact must never reach the visible-entity scan; **(c)** precedence is recency, not layer — one slot, last selection wins, so clicking an overlay entity supersedes a tracked plane as the voice subject while the plane stays tracked. Satellites refresh on the 1 s propagation beat, not per frame.
   - **Context-mode vocabulary is symmetric** (2026-08-21). `set_context_mode` accepts `contacts`; the internal id is `flights`. Every model-readable field (`mode`, `entering`, `priorMode`, nested `context`/`contextRollback`, and the transition diagnostic text) is reported in the accepted vocabulary, with the internal id preserved as `<field>Internal`; an absent secondary mode stays `null` rather than claiming to be `off`. Mapping lives in `src/contextModePolicy.js` so UI text and voice payloads cannot drift. Reporting the internal id made the model read `mode:'flights'` as "Contacts is off" and refuse to answer from the `contactsWindow` counts in the same payload.
   - **Analyst → track handoff carries a key, not just a label** (2026-08-21). `analyst_query` items include `icao24`/`mmsi` alongside the display `id`, and contact lookup uses the shared tiered ranking in `src/data/contactMatch.js`: hex exact → callsign exact → registration exact → callsign prefix → registration prefix → callsign substring → registration substring. The tiers keep an exact callsign ahead of a colliding registration regardless of feed order, and registrations compare separator-insensitively (`G-ABCD`/`GABCD`, `05-8152`/`058152`, `N123AB`/`N-123AB`).
-  - **A typed command supersedes the turn it interrupts** (2026-08-21). `sendTextCommand` defers its `response.create` behind an active response instead of colliding with it, marks that response superseded so a late function call from it is refused rather than dispatched, and drops the old turn's queued follow-up. A refused call is still ANSWERED — a terminal `{ok:false, superseded:true}` `function_call_output` — because an unanswered `function_call` strands a pending call and deadlocks the model; the refusal creates no response of its own. A burst of typed commands coalesces into one response while keeping both conversation items.
+  - **A typed command supersedes the turn it interrupts** (2026-08-21; hardened 2026-10-17). `sendTextCommand` defers its `response.create` behind an active response instead of colliding with it, marks that response superseded so a late function call from it is refused rather than dispatched, and drops the old turn's queued follow-up. A refused call is still ANSWERED — a terminal `{ok:false, superseded:true}` `function_call_output` — because an unanswered `function_call` strands a pending call and deadlocks the model; the refusal creates no response of its own. A burst of typed commands coalesces into one response while keeping both conversation items. If the local channel rejects the user item, that command requests no response and adds no deferred answer; earlier accepted deferred input remains queued. Interruption and pointer preparation still happen before the send attempt.
   - **Subject reconciliation across satellite catalog rebuilds** (2026-08-21). A dense↔core toggle or TLE refresh clears and repopulates the catalog, so the published subject is re-resolved against the new satrec; a subject that did NOT survive releases the slot. The per-frame refresh cannot do this itself — `_getTrackedFramePosition` returns early once the satellite has no catalog entry — so the reconcile runs at rebuild completion. An empty catalog is a rebuild in flight, not a disappearance.
   - **One aircraft-proximity snapshot** (2026-08-22; hardened 2026-09-30). `collectAircraftProximityWindow` (`src/data/militaryAwareness.js`) computes the Contacts panel cohort once. The voice analyst reads the exact retained snapshot and evaluation timestamp instead of re-scanning live layers, so the panel readout and spoken count for one centre cannot cross snapshots. **Invariant: do not re-derive a proximity count anywhere else.** Each layer retains 20,000 rows and samples one row beyond the cap; a saturated cohort reports `complete:false`, `truncated:true`, and is spoken as a lower bound. They diverged before because the panel read live billboard positions while the analyst used last-fix coordinates over a 2,000-record slice — 111 on screen, 15 spoken. Explicit regions, arbitrary points, and a radius different from the panel radius deliberately keep the general record engine. Entity-centred results carry `window: {engine:'contacts-window', centeredOn, radiusKm, flights, military, aircraft, complete, evaluatedAt}`.
   - **Centre precedence for nearby asks**: explicit place in the question > Contacts subject (a selected non-contact entity never silently becomes the centre) > an entity the user names > the current view, said aloud. Contacts active with no subject uses the view rather than reading an empty panel.
@@ -4936,7 +5167,7 @@ pins and share links already supply complete boxes.
 - Fleet model eligibility is distance-based with on-screen priority and hard caps (`MODEL_MAX`, `MODEL_MAX_ALL`) to avoid draw-call explosions. Each model owns its own `modelMatrix`; shared scratch matrices are forbidden because they caused stacking/flicker.
 - Tracked aircraft use standalone model primitives driven from the already-settled dead-reckoned display position, while the tracked Cesium entity remains billboard-backed so `viewer.trackedEntity` always has a ready bounding sphere.
 - Flights and military layers mirror the same tracking invariants: no warm-up freeze/jump, altitude-scaled framing, trail head glued to the displayed plane, no pull-out when switching targets, and no cross-layer orphan when switching between commercial and military tracks.
-- Regression surface: `npm run test:track` drives the real app headless with synthetic aircraft feeds and asserts the tracking invariants without depending on live OpenSky/adsb data. `src/data/trackedModelRegime.test.mjs` pins the tracked contact's threshold math, the enter/exit asymmetry, and the default-on / cockpit / TR-3B / deselect wiring in both layers.
+- Regression surface: `npm run test:track` drives the real app headless with synthetic aircraft feeds and asserts the tracking invariants without depending on live OpenSky/adsb data. Arrival-rotation checks observe the first reveal within a bounded wall-clock window before the one-second idle fallback, rather than assuming the 80 ms fleet cadence fits inside four rendered frames; an incorrect first orientation fails immediately. `src/data/trackedModelRegime.test.mjs` pins the tracked contact's threshold math, the enter/exit asymmetry, and the default-on / cockpit / TR-3B / deselect wiring in both layers.
 
 ### TR-3B conversion Easter egg (August 2026)
 
@@ -5021,7 +5252,7 @@ pins and share links already supply complete boxes.
   Pixel-mode pinch deltas receive bounded amplification before reaching the
   canvas; ordinary wheel, line/page-mode and native touch-pinch paths are left
   unchanged. The application scene owns and removes the relay listener.
-- Z ladder: panels promote within 100–139 (renormalized on wrap), voice pill 150, toast 200, clean-view exit 300.
+- Z ladder: panels around 100, voice pill 150, toast 200, clean-view exit 300.
 - Panel POSITION keys are versioned `v8` (`godsEyeView.v8.panelPos.<id>`); collapsed-state keys remain `v6`. The one-time position reset clears stale DISPLAY placements that could overlap the Context rail.
 - Map Source lives in the bottom Visual Presets tray. The left accordion contains no MAP STACK panel, and the `k` panel token that addressed it is gone from the share registry, so legacy `ui=k...` state takes the ordinary unknown-token skip.
 - A dock popover (Visual Presets, Location) auto-dismisses on mouse-away unless pinned. Focus inside the tray defers that dismissal only when the browser reports `:focus-visible` — keyboard focus and typed-into fields hold the tray open; a mouse-clicked tile does not, because Chromium focuses a `<button>` on press.
@@ -5232,8 +5463,8 @@ easier to meet (detection is now on more often), but does not create it.
   samples and constant elevation during E/N drag; one shared-floor resolution on
   release; late one-shot shared-cell work is permitted during viewshed idle. The
   A+B harness intentionally excludes citywide LOD assertions.
-- Panel positions have a versioned storage name, `godsEyeView.v8.panelPos.<panel-id>`. Docked panels store nothing; a portable panel (CCTV, Street Level) stores `{ left, top, width, height, floating: true }` once a header drag lifts it out of the rail, and a header double-click removes it. Double presses are detected in the header's `pointerdown` handler, because its `preventDefault()` suppresses native `dblclick`. Collapsed state persists for every panel at `godsEyeView.v6.panelCollapsed.<panel-id>` (`'0'` open, `'1'` closed, absent means the panel's own default).
-- Legacy draggable-panel position keys may remain in local storage for backward compatibility, but the map-mode right rail ignores them unless they describe a portable panel's floating window; collapsed states still persist at `godsEyeView.v6.panelCollapsed.<panel-id>`.
+- Panel positions have a versioned storage name, `godsEyeView.v8.panelPos.<panel-id>`, but the current rails lay panels out adaptively and write none. Collapsed state does persist for every panel at `godsEyeView.v6.panelCollapsed.<panel-id>` (`'0'` open, `'1'` closed, absent means the panel's own default).
+- Legacy draggable-panel position keys may remain in local storage for backward compatibility, but the map-mode right rail ignores them; collapsed states still persist at `godsEyeView.v6.panelCollapsed.<panel-id>`.
 - Flight/military tracked entities cache dead-reckoned positions per frame to avoid callback desync flicker.
 - Aircraft 3D-model and tracking invariants are covered by `npm run test:track`; run this before touching `flights.js`, `militaryFlights.js`, `detection.js`, or `trackedReadout.js`.
 - Annotation resolver behavior is pinned by `src/annotations/annotationResolver.test.mjs`; re-run that suite before changing place-resolution scoring.
@@ -5807,3 +6038,20 @@ datacenters, dams and the Nepal locator retain that shared credit while displaye
 
 Military fragments stitch by source identity. Different mapped parcels merge only
 when their footprints touch or contain one another, never across a seam tolerance gap.
+
+### Shared native dropdowns and numeric fields
+
+- Scene and CCTV selects share the default `gev-field` surface. HUD layout and
+  draw colour retain compact density. Radio filter, tuner gain and FM frequency
+  use the same base while retaining their feature-specific skins and layout.
+- The CCTV inline number editor uses `createNumberInput` with its existing
+  precision and inline density. Enter/blur commit, Escape cancellation, frozen
+  camera base, camera-switch guards and disposal remain with CCTV controls.
+- Options, values, native keyboard/typeahead, disabled attributes and browser
+  validity remain native. Frequency bounds, tuner commit timing and calibration
+  parsing are unchanged. Specialized tuner graphics and calibration chips
+  retain their own controls. Provider settings and scene-authoring dialogs are
+  outside this change.
+- `scripts/qa-form-fields.mjs` exercises native selections, number validity,
+  calibration commit/cancel and stale-camera/disposal guards against an installed
+  controller with fixture ports, plus default/Cyber and narrow translated layouts.

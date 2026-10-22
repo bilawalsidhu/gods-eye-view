@@ -1,3 +1,5 @@
+import { createSegmentedControl } from './segmentedControl.js';
+
 /**
  * Bind Display controls to application actions. Inputs remain native DOM controls;
  * the caller owns settings and effect state. Destroy before replacing the view.
@@ -44,12 +46,25 @@ export function bindDisplayControls({ elements, actions }) {
     listen(elements[name], 'input', action, integer);
   for (const el of elements.styleButtons || [])
     listen(el, 'click', 'setStyle', (el) => el.dataset.style);
-  for (const el of elements.allocationButtons || [])
-    listen(el, 'click', 'setAllocation', (el) => el.dataset.allocation);
-  for (const el of elements.modelModeButtons || [])
-    listen(el, 'click', 'setModelsMode', (el) =>
-      el.dataset.mode === 'all' ? 'all' : 'proximity',
-    );
+  for (const [buttons, valueOf, action] of [
+    [
+      elements.allocationButtons || [],
+      (el) => el.dataset.allocation,
+      'setAllocation',
+    ],
+    [
+      elements.modelModeButtons || [],
+      (el) => (el.dataset.mode === 'all' ? 'all' : 'proximity'),
+      'setModelsMode',
+    ],
+  ]) {
+    const control = createSegmentedControl({
+      buttons,
+      valueOf,
+      onChange: (value) => actions[action](value),
+    });
+    removers.push(() => control.destroy());
+  }
   for (const el of elements.fadeSliders || []) listen(el, 'input', 'setFade');
   return {
     destroy() {
