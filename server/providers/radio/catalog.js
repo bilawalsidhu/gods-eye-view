@@ -1,3 +1,4 @@
+import { normalizeRadioCountryInput } from '../../../src/data/radioCountry.js';
 import { lookup as lookupDns } from 'node:dns/promises';
 import { randomUUID } from 'node:crypto';
 
@@ -26,6 +27,32 @@ import {
   RADIO_UUID_RE,
   RADIO_FALLBACK_MIRRORS,
 } from './constants.js';
+const PRIORITY_COUNTRY_LIMIT = 8;
+const COUNTRY_QUERY_LIMIT = 200;
+const COUNTRY_RESERVED_STATIONS = 40;
+const REFRESH_RETRY_MS = 60_000;
+const MAX_MIRROR_ATTEMPTS = 3;
+
+/** Validate an operator-owned list; malformed configuration must not silently widen queries. */
+export function parseRadioPriorityCountries(value = '') {
+  const entries = Array.isArray(value) ? value : String(value).split(',');
+  const countries = [];
+  for (const entry of entries) {
+    const code = String(entry).trim().toUpperCase();
+    if (!code) continue;
+    if (!/^[A-Z]{2}$/.test(code) || !normalizeRadioCountryInput(code).valid)
+      throw new TypeError(
+        'RADIO_PRIORITY_COUNTRIES requires ISO alpha-2 country codes',
+      );
+    if (!countries.includes(code)) countries.push(code);
+  }
+  if (countries.length > PRIORITY_COUNTRY_LIMIT)
+    throw new RangeError(
+      'RADIO_PRIORITY_COUNTRIES supports at most eight countries',
+    );
+  return countries;
+}
+
 export async function mapRadioConcurrent(values, concurrency, mapper) {
   const results = new Array(values.length);
   let cursor = 0;
@@ -48,7 +75,9 @@ export function createRadioProxyMiddleware({
   fetchImpl = null,
   lookupImpl = lookupDns,
   now = Date.now,
+  priorityCountries = [],
 } = {}) {
+  const countries = parseRadioPriorityCountries(priorityCountries);
   let mirrorCache = { origins: [...RADIO_FALLBACK_MIRRORS], cachedAt: 0 };
   let mirrorPromise = null;
   let catalogCache = null;
@@ -60,6 +89,9 @@ export function createRadioProxyMiddleware({
   const catalogInstance = randomUUID();
   let servedStationIds = new Set();
   let refreshPromise = null;
+  let retryAfter = 0;
+  let partialCatalog = null;
+  let refreshError = null;
 
   async function fetchJson(url, maxBytes = RADIO_RESPONSE_MAX_BYTES) {
     const destination = radioProxyDestination(url);
@@ -138,7 +170,7 @@ export function createRadioProxyMiddleware({
 
   async function fetchPath(pathname) {
     let lastError = null;
-    for (const origin of await mirrors()) {
+    for (const origin of (await mirrors()).slice(0, MAX_MIRROR_ATTEMPTS)) {
       try {
         return await fetchJson(`${origin}${pathname}`);
       } catch (error) {
@@ -159,20 +191,27 @@ export function createRadioProxyMiddleware({
       'aviation',
       'marine',
       'traffic',
-    ];
+    ].map((tag) => ({ tag }));
+    const baseQueryCount = queries.length;
+    queries.push(...countries.map((country) => ({ country })));
     const outcomes = await mapRadioConcurrent(
       queries,
       3,
-      async (tag, index) => {
+      async ({ tag, country }, index) => {
         const params = new URLSearchParams({
           has_geo_info: 'true',
           is_https: 'true',
           hidebroken: 'true',
           order: 'clickcount',
           reverse: 'true',
-          limit: index === 0 ? '1800' : '220',
+          limit: country
+            ? String(COUNTRY_QUERY_LIMIT)
+            : index === 0
+              ? '1800'
+              : '220',
         });
         if (tag) params.set('tag', tag);
+        if (country) params.set('countrycode', country);
         try {
           const rows = await fetchPath(`/json/stations/search?${params}`);
           if (!Array.isArray(rows))
@@ -194,7 +233,12 @@ export function createRadioProxyMiddleware({
             );
           const stations = rows
             .map(normalizeRadioBrowserStation)
-            .filter(Boolean);
+            .filter(
+              (station) =>
+                station && (!country || station.countryCode === country),
+            );
+          if (country && rows.length > COUNTRY_QUERY_LIMIT)
+            throw new Error('Radio Browser exceeded the country query limit');
           const requestedTag = cleanRadioText(tag, 80)
             .toLocaleLowerCase()
             .replace(/[_-]+/g, ' ')
@@ -210,10 +254,12 @@ export function createRadioProxyMiddleware({
               ),
             );
           return {
-            // Query coverage is based on accepted rows, not merely a payload that
-            // happens to match the upstream schema. Specialist responses must
-            // also contain an accepted station tagged for the requested category.
-            succeeded: stations.length > 0 && requestedTagCovered,
+            // A valid country response can contain no playable stations. Country
+            // coverage is advisory; only broad/specialist queries gate health.
+            // Specialist responses need an accepted station with matching tags.
+            succeeded: country
+              ? true
+              : stations.length > 0 && requestedTagCovered,
             stations,
           };
         } catch {
@@ -235,9 +281,24 @@ export function createRadioProxyMiddleware({
       seen.add(station.id);
       selected.push(station);
     };
+    // Reserve country slots first; low-click regional stations cannot lose all
+    // representation to the global charts. Keep room for all eight specialist
+    // seeds (8 * 45) and global fill even at the eight-country limit (8 * 40).
+    for (const rows of resultSets.slice(baseQueryCount)) {
+      const ranked = [...rows].sort(
+        (a, b) => b.clickCount - a.clickCount || a.id.localeCompare(b.id),
+      );
+      let added = 0;
+      for (const station of ranked) {
+        if (seen.has(station.id)) continue;
+        take(station);
+        if (++added >= COUNTRY_RESERVED_STATIONS) break;
+      }
+    }
     // Seed specialist station-tag queries before popularity fill so operational
     // categories remain represented even when global click charts skew musical.
-    for (const rows of resultSets.slice(1)) rows.slice(0, 45).forEach(take);
+    for (const rows of resultSets.slice(1, baseQueryCount))
+      rows.slice(0, 45).forEach(take);
     resultSets
       .flat()
       .sort(
@@ -245,9 +306,9 @@ export function createRadioProxyMiddleware({
       )
       .forEach(take);
     const timestamp = now();
-    const successfulQueries = outcomes.filter(
-      (outcome) => outcome.succeeded,
-    ).length;
+    const successfulQueries = outcomes
+      .slice(0, baseQueryCount)
+      .filter((outcome) => outcome.succeeded).length;
     const broadQueryHealthy =
       outcomes[0].succeeded && outcomes[0].stations.length > 0;
     const healthReasons = [];
@@ -259,7 +320,18 @@ export function createRadioProxyMiddleware({
     const degraded = healthReasons.length > 0;
     const coverage = {
       successfulQueries,
-      totalQueries: queries.length,
+      totalQueries: baseQueryCount,
+      ...(countries.length
+        ? {
+            priorityCountries: countries.map((country, index) => ({
+              countryCode: country,
+              succeeded: outcomes[baseQueryCount + index].succeeded,
+              stationCount: selected.filter(
+                (station) => station.countryCode === country,
+              ).length,
+            })),
+          }
+        : {}),
       stationCount: selected.length,
       healthyStationMinimum: RADIO_CATALOG_HEALTHY_MIN_STATIONS,
     };
@@ -310,7 +382,24 @@ export function createRadioProxyMiddleware({
       return { ...catalogCache, stale: false };
     }
     if (!refreshPromise) {
-      refreshPromise = refreshCatalog().finally(() => {
+      refreshPromise = (async () => {
+        if (now() < retryAfter) {
+          if (refreshError) throw refreshError;
+          return partialCatalog;
+        }
+        try {
+          const catalog = await refreshCatalog();
+          refreshError = null;
+          partialCatalog = catalog.degraded ? catalog : null;
+          retryAfter = catalog.degraded ? now() + REFRESH_RETRY_MS : 0;
+          return catalog;
+        } catch (error) {
+          refreshError = error;
+          partialCatalog = null;
+          retryAfter = now() + REFRESH_RETRY_MS;
+          throw error;
+        }
+      })().finally(() => {
         refreshPromise = null;
       });
     }

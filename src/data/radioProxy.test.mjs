@@ -533,3 +533,161 @@ test('a mirror answering an invalid reason phrase rejects instead of crashing', 
   const crashed = mockMirrorStatus(t, 200, 'OK\x7f');
   await assert.rejects(Promise.race([fetchMirror(), crashed]), TypeError);
 });
+
+test('priority-country configuration is bounded, normalized and validated before requests', async () => {
+  const { parseRadioPriorityCountries } = await import('../../server/providers/radio/catalog.js');
+  assert.deepEqual(parseRadioPriorityCountries(' in, PL,in, '), ['IN', 'PL']);
+  assert.deepEqual(parseRadioPriorityCountries(''), []);
+  for (const value of ['ZZ', 'India', 'IN&limit=9999', 'US,CA,IN,PL,DE,FR,GB,JP,AU']) {
+    assert.throws(() => createProxy({ priorityCountries: value }), /RADIO_PRIORITY_COUNTRIES/);
+  }
+});
+
+test('low-click country stations survive a full global catalog, with bounded cached queries and deduplication', async () => {
+  const calls = [];
+  let active = 0;
+  let peak = 0;
+  const middleware = createProxy({
+    priorityCountries: 'IN,PL',
+    fetchImpl: async (url) => {
+      const parsed = new URL(url);
+      calls.push(parsed);
+      if (parsed.pathname === '/json/servers') return responseJson([{ name: 'de1.api.radio-browser.info' }]);
+      if (parsed.pathname.startsWith('/json/url/')) return responseJson({ ok: true });
+      peak = Math.max(peak, ++active);
+      await new Promise((resolve) => setTimeout(resolve, 1));
+      active--;
+      const country = parsed.searchParams.get('countrycode');
+      if (country) {
+        assert.equal(parsed.searchParams.get('limit'), '200');
+        assert.equal(parsed.searchParams.get('is_https'), 'true');
+        const rows = catalogRows(country === 'IN' ? '10000000' : '20000000', 'community', 60)
+          .map((row) => ({ ...row, countrycode: country, clickcount: 0 }));
+        return responseJson([rows[0], ...rows]);
+      }
+      return responseJson(catalogRows('30000000', queryTag(url) || 'news', 900));
+    },
+  });
+  const responses = await Promise.all([invoke(middleware, '/stations'), invoke(middleware, '/stations')]);
+  const body = JSON.parse(responses[0].body);
+  assert.equal(body.degraded, false);
+  assert.equal(body.stations.length, 750);
+  assert.equal(new Set(body.stations.map((row) => row.id)).size, 750);
+  for (const country of ['IN', 'PL'])
+    assert.ok(body.stations.filter((row) => row.countryCode === country).length >= 40);
+  assert.ok(body.stations.some((row) => row.countryCode === 'US'));
+  assert.equal(calls.filter((url) => url.pathname.includes('/stations/')).length, 11);
+  assert.ok(peak <= 3);
+  const count = calls.length;
+  await invoke(middleware, '/stations');
+  assert.equal(calls.length, count, 'country queries share the 45-minute cache');
+  const id = body.stations.find((row) => row.countryCode === 'IN').id;
+  assert.equal((await invoke(middleware, `/click/${id}`, 'POST')).status, 204);
+});
+
+test('country failures never block cold or warm global catalog admission, even after seven days', async () => {
+  for (const coldFailure of [false, true]) {
+    let clock = 4_000_000;
+    let fail = coldFailure;
+    let calls = 0;
+    const middleware = createProxy({
+      priorityCountries: ['IN'], now: () => clock,
+      fetchImpl: async (url) => {
+        calls++;
+        if (String(url).includes('/json/servers')) return responseJson([{ name: 'de1.api.radio-browser.info' }]);
+        if (new URL(url).searchParams.has('countrycode')) {
+          if (fail) throw new Error('offline');
+          return responseJson([station({ countrycode: 'IN', country: 'India', tags: 'community' })]);
+        }
+        return responseJson(healthyRowsForQuery(url));
+      },
+    });
+    let generation = 0;
+    for (const elapsed of [0, 46 * 60 * 1000, 8 * 24 * 60 * 60 * 1000]) {
+      clock += elapsed;
+      if (elapsed) fail = true;
+      const response = await invoke(middleware, '/stations');
+      const body = JSON.parse(response.body);
+      assert.equal(response.status, 200);
+      assert.equal(body.stale, false);
+      assert.equal(body.degraded, false);
+      assert.ok(body.acceptedGeneration > generation);
+      generation = body.acceptedGeneration;
+      assert.equal(body.coverage.priorityCountries[0].succeeded, !fail);
+      assert.equal(body.coverage.priorityCountries[0].stationCount, fail ? 0 : 1);
+      const count = calls;
+      clock += 60_001;
+      assert.deepEqual(JSON.parse((await invoke(middleware, '/stations')).body), body);
+      assert.equal(calls, count, 'country failure does not shorten the healthy cache');
+    }
+  }
+});
+
+test('valid countries with no eligible stations are accepted and cached; malformed country responses stay isolated', async () => {
+  for (const mode of ['wrong', 'oversized', 'empty', 'ineligible', 'malformed']) {
+    let clock = 4_000_000;
+    let calls = 0;
+    const middleware = createProxy({
+      priorityCountries: ['IN'], now: () => clock,
+      fetchImpl: async (url) => {
+        calls++;
+        if (String(url).includes('/json/servers')) return responseJson([{ name: 'de1.api.radio-browser.info' }]);
+        if (new URL(url).searchParams.has('countrycode')) {
+          const rows = {
+            empty: [], wrong: [station()], malformed: [{ name: 'missing fields' }],
+            oversized: catalogRows('10000000', 'community', 201).map((row) => ({ ...row, countrycode: 'IN' })),
+            ineligible: [{ hls: 1 }, { codec: 'OGG' }, { codec: 'OPUS' }, { url_resolved: 'https://127.0.0.1/live.mp3' }]
+              .map((overrides) => station({ countrycode: 'IN', ...overrides })),
+          };
+          return responseJson(rows[mode]);
+        }
+        return responseJson(healthyRowsForQuery(url));
+      },
+    });
+    const response = await invoke(middleware, '/stations');
+    const body = JSON.parse(response.body);
+    assert.equal(response.status, 200, mode);
+    assert.equal(body.degraded, false, mode);
+    assert.ok(body.acceptedGeneration > 0, mode);
+    assert.equal(body.coverage.priorityCountries[0].stationCount, 0, mode);
+    assert.equal(body.coverage.priorityCountries[0].succeeded, !['oversized', 'malformed'].includes(mode), mode);
+    const count = calls;
+    clock += 44 * 60 * 1000;
+    assert.deepEqual(JSON.parse((await invoke(middleware, '/stations')).body), body);
+    assert.equal(calls, count, `${mode} country response preserves the 45-minute cache`);
+  }
+});
+
+for (const priorityCountries of ['', 'IN']) {
+  test(`cold failures coalesce, bound mirrors and back off with priority countries ${priorityCountries || 'unset'}`, async () => {
+    let clock = Date.UTC(2026, 0, 1);
+    let calls = 0;
+    let offline = true;
+    const middleware = createProxy({
+      priorityCountries, now: () => clock,
+      fetchImpl: async (url) => {
+        calls++;
+        if (String(url).includes('/json/servers')) return responseJson([{ name: 'de1.api.radio-browser.info' }]);
+        if (offline) throw new Error('offline');
+        if (new URL(url).searchParams.has('countrycode')) return responseJson([]);
+        return responseJson(healthyRowsForQuery(url));
+      },
+    });
+    const responses = await Promise.all([invoke(middleware, '/stations'), invoke(middleware, '/stations')]);
+    assert.ok(responses.every((response) => response.status === 503));
+    const initial = calls;
+    assert.equal(initial, 1 + (priorityCountries ? 10 : 9) * 3, 'one discovery and at most three mirrors per query');
+    offline = false;
+    clock += 59_999;
+    assert.equal((await invoke(middleware, '/stations')).status, 503);
+    assert.equal(calls, initial);
+    clock += 2;
+    const recovered = await invoke(middleware, '/stations');
+    assert.equal(recovered.status, 200);
+    assert.equal(JSON.parse(recovered.body).degraded, false);
+    assert.ok(calls > initial);
+    const afterRecovery = calls;
+    await invoke(middleware, '/stations');
+    assert.equal(calls, afterRecovery);
+  });
+}
