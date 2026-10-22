@@ -39,6 +39,7 @@ const RENDERED_LAYER_DIRS = [
   'src/layers/localAdsb/',
   'src/layers/vessels/',
   'src/layers/satellites/',
+  'src/layers/launches/',
   'src/layers/aircraft/',
   'src/layers/shared/',
 ];

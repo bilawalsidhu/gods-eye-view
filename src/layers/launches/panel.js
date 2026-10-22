@@ -1,4 +1,3 @@
-import * as Cesium from 'cesium';
 import { appClock } from '../../time/clock.js';
 import * as geo from '../../geo/index.js';
 import {
@@ -6,7 +5,13 @@ import {
   MISSION_GLOBE_VIEW_RANGE_M,
 } from './policy.js';
 
-export function createPanel({ state: layerState, services, parts, source }) {
+export function createPanel({
+  state: layerState,
+  services,
+  parts,
+  source,
+  getRenderer,
+}) {
   /**
    * Preserve the user's globe scale for roster previews while avoiding an
    * accidental surface-level fly-to when the list is opened from a close view.
@@ -359,10 +364,7 @@ export function createPanel({ state: layerState, services, parts, source }) {
       `rocket-satellite:${layerState._selectedLaunchId}`,
     );
     const position = satellite?.position?.getValue(
-      Cesium.JulianDate.fromDate(
-        new Date(appClock.now()),
-        layerState._declutterTime,
-      ),
+      getRenderer().time(appClock.now()),
     );
     const altitudeM = position
       ? geo.cartographic.fromCartesian(position)?.height

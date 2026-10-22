@@ -1,4 +1,3 @@
-import * as Cesium from 'cesium';
 import { appClock } from '../../time/clock.js';
 import * as geo from '../../geo/index.js';
 import { MISSION_GLOBE_VIEW_RANGE_M, MISSION_FOCUS_RANGE_M } from './policy.js';
@@ -8,6 +7,7 @@ export function createSelection({
   services,
   parts,
   source,
+  getRenderer,
 }) {
   const { getKeyholeGeometry } = services.geometry;
 
@@ -46,7 +46,7 @@ export function createSelection({
         roll: 0,
       },
       duration,
-      easingFunction: Cesium.EasingFunction.CUBIC_IN_OUT,
+      easingFunction: getRenderer().easing,
     });
   }
 
@@ -70,7 +70,7 @@ export function createSelection({
       stopMissionZoomAnchor();
     layerState._selectedLaunchId = launchId;
     layerState._explicitSelection = Boolean(launchId && isolate);
-    if (launchId) layerState._animationStarts.set(launchId, Date.now());
+    if (launchId) layerState._animationStarts.set(launchId, appClock.now());
     if (!launchId && layerState._viewer) {
       stopMissionZoomAnchor();
       layerState._viewer.selectedEntity = undefined;
@@ -93,7 +93,7 @@ export function createSelection({
     layerState._missionZoomAnchorRemover = null;
     layerState._missionZoomAnchorId = null;
     if (layerState._viewer?.camera && !layerState._replayCameraLaunchId) {
-      layerState._viewer.camera.lookAtTransform(Cesium.Matrix4.IDENTITY);
+      layerState._viewer.camera.lookAtTransform(geo.matrix4.IDENTITY);
     }
   }
 
@@ -109,11 +109,7 @@ export function createSelection({
     layerState._missionZoomAnchorId = launch.id;
     layerState._viewer.camera.lookAt(
       target,
-      new Cesium.HeadingPitchRange(
-        0,
-        parts.camera.missionZoomPitch(range),
-        range,
-      ),
+      getRenderer().range(0, parts.camera.missionZoomPitch(range), range),
     );
   }
 
@@ -127,7 +123,7 @@ export function createSelection({
       `rocket-orbit:${launch.id}`,
     );
     const orbitPositions = orbitEntity?.polyline?.positions?.getValue(
-      Cesium.JulianDate.fromDate(new Date(appClock.now())),
+      getRenderer().time(appClock.now()),
     );
     const launchPosition = geo.cartesian3.fromDegrees(launch.lon, launch.lat);
     let range = 18000000;
@@ -202,15 +198,15 @@ export function createSelection({
       `rocket-launch:${launch.id}`,
     );
     layerState._viewer.camera.flyToBoundingSphere(
-      new Cesium.BoundingSphere(launchPosition, 0),
+      geo.boundingSphere.create(launchPosition, 0),
       {
-        offset: new Cesium.HeadingPitchRange(
+        offset: getRenderer().range(
           0,
           geo.math.toRadians(-42),
           MISSION_FOCUS_RANGE_M,
         ),
         duration: 1.4,
-        easingFunction: Cesium.EasingFunction.CUBIC_IN_OUT,
+        easingFunction: getRenderer().easing,
         complete: () => {
           if (layerState._selectedLaunchId === launch.id) {
             startMissionZoomAnchor(launch, MISSION_FOCUS_RANGE_M);

@@ -1,4 +1,4 @@
-import * as Cesium from 'cesium';
+import { appClock } from '../../time/clock.js';
 import * as geo from '../../geo/index.js';
 import {
   REPLAY_ASCENT_FALLBACK_SEC,
@@ -14,7 +14,13 @@ import {
   REPLAY_INITIAL_RANGE_M,
 } from './policy.js';
 
-export function createReplay({ state: layerState, services, parts, source }) {
+export function createReplay({
+  state: layerState,
+  services,
+  parts,
+  source,
+  getRenderer,
+}) {
   /**
    * Rotate an upright screen-space rocket so its nose follows a projected path.
    * @param {{x: number, y: number}} from Current screen point.
@@ -125,7 +131,7 @@ export function createReplay({ state: layerState, services, parts, source }) {
     orbitDurationSec,
     orbitPeriodSec,
     speed = 1,
-    nowMs = Date.now(),
+    nowMs = appClock.now(),
     preCountdownDurationSec = 0,
     loop = true,
   ) {
@@ -136,7 +142,8 @@ export function createReplay({ state: layerState, services, parts, source }) {
       Number(preCountdownDurationSec) || 0,
     );
     const preCountdownActive =
-      preCountdownDuration > 0 && realSecondsSinceStart < -preCountdownDuration;
+      preCountdownDuration > 0 &&
+      realSecondsSinceStart < -REPLAY_COUNTDOWN_DURATION_SEC;
     const countdownActive = realSecondsSinceStart < 0 && !preCountdownActive;
     const countdownSeconds = countdownActive
       ? Math.ceil(-realSecondsSinceStart)
@@ -273,7 +280,7 @@ export function createReplay({ state: layerState, services, parts, source }) {
     const now =
       layerState._replayPaused && Number.isFinite(layerState._replayPausedAtMs)
         ? layerState._replayPausedAtMs
-        : Date.now();
+        : appClock.now();
     for (const [launchId, startedAt] of layerState._animationStarts) {
       if (!Number.isFinite(startedAt)) continue;
       const elapsedMissionMs = (now - startedAt) * previousSpeed;
@@ -294,13 +301,13 @@ export function createReplay({ state: layerState, services, parts, source }) {
     ) {
       return layerState._replayPausedAtMs;
     }
-    return Date.now();
+    return appClock.now();
   }
 
   function pauseMissionReplay() {
     if (!layerState._replayCameraLaunchId || layerState._replayPaused)
       return false;
-    layerState._replayPausedAtMs = Date.now();
+    layerState._replayPausedAtMs = appClock.now();
     layerState._replayPaused = true;
     syncReplayButton();
     return true;
@@ -314,7 +321,7 @@ export function createReplay({ state: layerState, services, parts, source }) {
     ) {
       return false;
     }
-    const resumedAt = Date.now();
+    const resumedAt = appClock.now();
     const startedAt = layerState._animationStarts.get(
       layerState._replayCameraLaunchId,
     );
@@ -341,12 +348,12 @@ export function createReplay({ state: layerState, services, parts, source }) {
     layerState._replayCameraRemover = null;
     layerState._viewer?.camera?.cancelFlight();
     if (layerState._viewer?.camera)
-      layerState._viewer.camera.lookAtTransform(Cesium.Matrix4.IDENTITY);
+      layerState._viewer.camera.lookAtTransform(geo.matrix4.IDENTITY);
     layerState._replayCameraLaunchId = null;
     layerState._replayPaused = false;
     layerState._replayPausedAtMs = null;
     if (stoppedLaunchId)
-      layerState._animationStarts.set(stoppedLaunchId, Date.now());
+      layerState._animationStarts.set(stoppedLaunchId, appClock.now());
     syncReplayButton();
     parts.overlays.syncMissionOverlayEntries();
   }
@@ -381,7 +388,7 @@ export function createReplay({ state: layerState, services, parts, source }) {
     layerState._viewer.camera.cancelFlight();
     layerState._animationStarts.set(
       launchId,
-      Date.now() +
+      appClock.now() +
         (REPLAY_TILE_SETTLE_DELAY_SEC + REPLAY_COUNTDOWN_DURATION_SEC) * 1000,
     );
     let cameraReady = false;
@@ -423,7 +430,7 @@ export function createReplay({ state: layerState, services, parts, source }) {
           orbitBlend,
         );
         if (state.ascending) track.orbitCameraWorldFrame = false;
-        const nowMs = performance.now();
+        const nowMs = appClock.now();
         const frameDurationMs = Number.isFinite(lastCameraUpdateMs)
           ? geo.math.clamp(nowMs - lastCameraUpdateMs, 4, 50)
           : 1000 / 60;
@@ -458,7 +465,7 @@ export function createReplay({ state: layerState, services, parts, source }) {
         if (state.ascending) {
           layerState._viewer.camera.lookAt(
             cameraTarget,
-            new Cesium.HeadingPitchRange(
+            getRenderer().range(
               track.lastCameraHeading,
               cameraView.pitch,
               cameraRange,
@@ -488,9 +495,7 @@ export function createReplay({ state: layerState, services, parts, source }) {
           );
           if (orbitPose) {
             if (!track.orbitCameraWorldFrame) {
-              layerState._viewer.camera.lookAtTransform(
-                Cesium.Matrix4.IDENTITY,
-              );
+              layerState._viewer.camera.lookAtTransform(geo.matrix4.IDENTITY);
               track.orbitCameraWorldFrame = true;
             }
             layerState._viewer.camera.setView({
@@ -511,15 +516,15 @@ export function createReplay({ state: layerState, services, parts, source }) {
       });
 
     layerState._viewer.camera.flyToBoundingSphere(
-      new Cesium.BoundingSphere(track.ascentPath[0], 0),
+      geo.boundingSphere.create(track.ascentPath[0], 0),
       {
-        offset: new Cesium.HeadingPitchRange(
+        offset: getRenderer().range(
           initialHeading,
           geo.math.toRadians(-20),
           REPLAY_INITIAL_RANGE_M,
         ),
         duration: 1.4,
-        easingFunction: Cesium.EasingFunction.CUBIC_IN_OUT,
+        easingFunction: getRenderer().easing,
         complete: () => {
           cameraReady = true;
         },

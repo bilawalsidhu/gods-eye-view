@@ -1,61 +1,54 @@
-import * as Cesium from 'cesium';
-import { isPointerFree } from '../../data/inputOwnership.js';
-
 export function createLifecycle({
   state: layerState,
   services,
   parts,
   source,
+  getRenderer,
 }) {
   const { holdContinuousRender, releaseContinuousRender } = services.render;
 
   const methods = {
-    init(viewer) {
-      layerState._viewer = viewer;
+    init(viewer, { engine = null } = {}) {
+      layerState._engine = engine;
+      layerState._renderer = services.renderer.create({ viewer, engine });
+      layerState._viewer = layerState._renderer.view;
+      layerState._declutterOccluder = getRenderer().occluder();
       layerState._enabled = false;
       parts.panel.createMissionPanel();
       parts.overlays.createReplayVehicleOverlay();
-      layerState._dataSource = new Cesium.CustomDataSource('rocket-launches');
-      layerState._dataSource.show = false;
-      viewer.dataSources.add(layerState._dataSource);
+      layerState._dataSource = getRenderer().createDataSource();
       layerState._count = 0;
       layerState._lastUpdate = null;
       layerState._lastError = null;
       layerState._orbitMatches = 0;
       parts.overlays.clearMissionOverlaySources();
-      layerState._clickHandler = new Cesium.ScreenSpaceEventHandler(
-        viewer.scene.canvas,
+      const enabled = () => layerState._enabled && layerState._dataSource?.show;
+      layerState._clickHandler = getRenderer().listenClick(
+        layerState._dataSource,
+        (entity) => {
+          const launchId = parts.selection.entityLaunchId(entity);
+          if (!launchId) return;
+          parts.selection.setSelectedMission(launchId);
+          parts.selection.focusMission(
+            layerState._launches.find((l) => l.id === launchId),
+          );
+        },
+        { enabled },
       );
-      layerState._clickHandler.setInputAction((movement) => {
-        // A tool owns the pointer (src/data/inputOwnership.js): yield the click.
-        if (!isPointerFree()) return;
-        if (!layerState._enabled || !layerState._dataSource?.show) return;
-        const entity = viewer.scene
-          .drillPick(movement.position, 12)
-          .map((picked) => picked?.id)
-          .find((candidate) => parts.selection.entityLaunchId(candidate));
-        const launchId = parts.selection.entityLaunchId(entity);
-        if (!launchId) return;
-        parts.selection.setSelectedMission(launchId);
-        parts.selection.focusMission(
-          layerState._launches.find((launch) => launch.id === launchId),
-        );
-      }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
-      layerState._moveHandler = new Cesium.ScreenSpaceEventHandler(
-        viewer.scene.canvas,
+      layerState._moveHandler = getRenderer().listenMove(
+        layerState._dataSource,
+        (entity) => {
+          layerState._viewer.scene.canvas.style.cursor = entity
+            ? 'pointer'
+            : '';
+        },
+        { enabled },
       );
-      layerState._moveHandler.setInputAction((movement) => {
-        if (!layerState._enabled || !layerState._dataSource?.show) return;
-        const missionEntity = viewer.scene
-          .drillPick(movement.endPosition, 12)
-          .map((picked) => picked?.id)
-          .find((candidate) => parts.selection.entityLaunchId(candidate));
-        viewer.scene.canvas.style.cursor = missionEntity ? 'pointer' : '';
-      }, Cesium.ScreenSpaceEventType.MOUSE_MOVE);
       // Apply horizon visibility before Cesium traverses and picks the scene.
       // A postRender write is one frame late and can remain visibly stale when
       // request-on-demand rendering stops after a globe camera move.
-      layerState._declutterHandler = viewer.scene.preRender.addEventListener(
+      layerState._declutterHandler = getRenderer().on(
+        'preRender',
         parts.rendering.updateMissionFrame,
       );
       parts.launchPad.initLaunchPadZonePrimitive();
@@ -153,9 +146,8 @@ export function createLifecycle({
       }
       layerState._missionRosterPreviewOwnership = null;
       layerState._missionRoster = null;
-      layerState._viewer = null;
       if (layerState._dataSource)
-        viewer.dataSources.remove(layerState._dataSource, true);
+        getRenderer().removeDataSource(layerState._dataSource);
       layerState._dataSource = null;
       layerState._count = 0;
       layerState._orbitMatches = 0;
@@ -168,6 +160,10 @@ export function createLifecycle({
       layerState._satelliteStateBeforeMission = null;
       layerState._satelliteActivationPromise = null;
       layerState._dataManager = null;
+      layerState._renderer?.destroy();
+      layerState._renderer = null;
+      layerState._engine = null;
+      layerState._viewer = null;
     },
   };
 

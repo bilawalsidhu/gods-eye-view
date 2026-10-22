@@ -1149,5 +1149,11 @@
   "src/layers/satellites/render/navara.js",
   "src/layers/satellites/render/navara.test.mjs",
   "src/layers/satellites/render/cesium.test.mjs",
-  "src/geo/ellipsoidGeodesic.test.mjs"
+  "src/geo/ellipsoidGeodesic.test.mjs",
+  "src/bench/launchFixture.js",
+  "src/layers/launches/replayClock.test.mjs",
+  "scripts/qa-launches.mjs",
+  "src/geo/boundingSphere.test.mjs",
+  "src/layers/launches/render/cesium.js",
+  "src/layers/launches/launchPadFrame.test.mjs"
 ]

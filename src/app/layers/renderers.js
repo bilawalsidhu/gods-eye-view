@@ -1,3 +1,4 @@
+import { createLaunchesCesiumRenderer } from '../../layers/launches/render/cesium.js';
 // Which engine draws which layer: the layer renderer registry (plan, "layer
 // renderer interface") and the layer availability API built on it.
 //
@@ -88,6 +89,7 @@ export const layerAvailableOn = (layerId, engineKind) =>
 
 /** Cesium renderers extracted from their layers (render/cesium.js). */
 export const CESIUM_LAYER_RENDERERS = Object.freeze({
+  'rocket-launches': createLaunchesCesiumRenderer,
   satellites: createSatellitesCesiumRenderer,
   flights: createFlightsCesiumRenderer,
   military: createMilitaryCesiumRenderer,

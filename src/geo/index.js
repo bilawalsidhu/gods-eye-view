@@ -15,3 +15,4 @@ export * as quaternion from './quaternion.js';
 export * as transforms from './transforms.js';
 
 export * as ellipsoidGeodesic from './ellipsoidGeodesic.js';
+export * as boundingSphere from './boundingSphere.js';
