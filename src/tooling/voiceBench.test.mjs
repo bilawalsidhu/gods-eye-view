@@ -234,6 +234,13 @@ test('typed argument checks feed full-call accuracy without changing the legacy 
   const inMeters = gradeCore(altitude, [{ name: 'analyst_query', args: { layers: ['flights'], filters: [{ field: 'altitudeM', op: 'gt', value: 12192 }] } }]);
   assert.equal(inMeters.fullCallOk, true);
   assert.equal(where('set_hud', (a) => a.visible === 'off')({ name: 'set_hud', args: { visible: 'off' } }), true);
+  const globe = byPhrase('Keep spinning the Earth slowly to the left');
+  const globeArgs = { motion: 'rotate_globe', direction: 'left', speed: 'slow' };
+  for (const mode of [undefined, 'continuous', 'once', null]) {
+    assert.equal(gradeCore(globe, [{ name: 'move_camera', args: { ...globeArgs, mode } }]).fullCallOk, mode === undefined || mode === 'continuous');
+  }
+  assert.equal(gradeCore(globe, [{ name: 'move_camera', args: { ...globeArgs, direction: 'right' } }]).fullCallOk, false);
+  assert.equal(gradeCore(globe, [{ name: 'move_camera', args: { ...globeArgs, speed: 'normal' } }]).fullCallOk, false);
 });
 
 test('gradeDialogue scores turn 2 in the context of turn 1', () => {

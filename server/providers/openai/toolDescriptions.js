@@ -81,7 +81,7 @@ export const ACTION_DESCRIPTIONS = {
   },
   zoom_to_globe: {
     description:
-      "Set absolute full-Earth Globe View (~18,000 km), keeping the current region centered. Only this turn's explicit user request: Globe View/reset to Globe View, whole Earth, see the planet or zoom all the way out. Plain/repeated rotation or your reset advice is not consent. Relative adjust_camera_zoom cannot do this.",
+      'Pull the camera out to an ABSOLUTE full-Earth globe view (~18,000 km altitude, the whole planet in frame), keeping the current region centered. Use for "globe view", "whole earth", "see the planet", "zoom all the way out". Never use adjust_camera_zoom for these — its relative steps cannot reach the globe.',
     $position: 1,
   },
   set_layer_visibility: {
@@ -511,7 +511,7 @@ export const ACTION_DESCRIPTIONS = {
   },
   move_camera: {
     description:
-      "Orbit the current target, pan, tilt, local rotate, or rotate_globe. Use once for a nudge or continuous until Stop, manual camera input or navigation. Confirm the resulting state. rotate_globe defaults continuous right; explicit direction/mode/speed win. It checks fit and may refuse. Never reset for plain rotation; only the user's explicit reset-and-rotate permits that sequence.",
+      'Direct the camera like a drone operator: orbit the current view target, pan, tilt, or rotate — one bounded nudge (mode=once) or continuous motion until stopped (mode=continuous). Continuous motion also stops on any manual camera input or when a navigation tool runs. Say the RESULTING state when confirming ("Orbiting slowly"). Globe rotation (rotate_globe) spins Earth right continuously by default; explicit direction, mode and speed take precedence. It checks fit and may refuse.',
     $position: 1,
     parameters: {
       properties: {

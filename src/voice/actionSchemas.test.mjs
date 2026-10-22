@@ -41,8 +41,8 @@ test('the complete Realtime tool payload pins the manifest-generated layer relea
     // Air quality (ECCC AQHI) extends the manifest.
     // Globe rotation adds one motion; visual keyhole fit and explicit
     // reset guidance/defaults update only move_camera and mode descriptions.
-    // Manual recovery wording narrows only zoom_to_globe and move_camera descriptions.
-    'fe2b853113d71f5b9241cffc465ee4d156cd6b730e99774806a6ca2aa2061a64',
+    // Restore base descriptions; append only globe-rotation defaults and fit guidance.
+    '967b5a043b812e2f8c1e190fc571cf12b960c9d4486df736902221aab4d99cf6',
   );
 });
 

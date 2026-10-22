@@ -334,7 +334,7 @@ Thirty tools, four jobs — the commands below come straight from the product's 
 **🎥 Direct it** — drone-operator camera verbs:
 
 “Rotate the globe” spins Earth to the right continuously; ask for left, a speed,
-or stop. Close-up views instruct you to reset to Globe View, then ask to rotate;
+or stop. If it refuses, follow its reset-and-rotate or further-zoom guidance;
 camera input stops rotation.
 
 > 🗣️ _"Take me to Tokyo."_ · _"Orbit around this area slowly."_ · _"Draw the walking route from the Capitol to Zilker Park."_ → _"Fly the route we just drew."_ · _"Zoom out to a globe view."_
