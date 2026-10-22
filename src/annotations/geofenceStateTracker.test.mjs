@@ -89,6 +89,189 @@ test('monitor: internal enter only on initial outside->inside, no duplicates', (
   monitor.destroy();
 });
 
+test('tracker: seed sets the baseline without a transition', () => {
+  const t = createGeofenceStateTracker();
+  t.seed('a', true);
+  assert.equal(t.isInside('a'), true);
+  // Already inside -> no entered, no duplicate
+  assert.equal(t.update('a', true), null);
+  assert.equal(t.update('a', false), 'exited');
+  t.seed('b', false);
+  assert.equal(t.isInside('b'), false);
+  assert.equal(t.update('b', true), 'entered');
+});
+
+test('monitor: drawing over existing records seeds inside, fires nothing', async () => {
+  const square = [
+    { lon: 0, lat: 0 },
+    { lon: 1, lat: 0 },
+    { lon: 1, lat: 1 },
+    { lon: 0, lat: 1 },
+  ];
+  // Static records already inside when the fence is drawn.
+  const records = [
+    { id: 'quake-1', lat: 0.5, lon: 0.5 },
+    { id: 'fire-1', lat: 0.2, lon: 0.2 },
+    { id: 'plane-1', lat: 5, lon: 5 },
+  ];
+  const calls = [];
+  const fakeManager = {
+    layers: new Map([
+      [
+        'mixed',
+        { enabled: true, module: { getAnalystRecords: () => records } },
+      ],
+    ]),
+    subscribeActivity: () => () => {},
+    subscribe: () => () => {},
+  };
+  let polygon = null;
+  const monitor = createGeofenceMonitor({
+    getPolygon: () => polygon,
+    dataManager: fakeManager,
+    fetchImpl: async (url, opts) => {
+      calls.push(JSON.parse(opts.body));
+      return { ok: true };
+    },
+  });
+  monitor.setWebhookUrl('https://example.com/breach');
+  let enters = 0;
+  monitor.onEnter(() => enters++);
+
+  // Draw the fence over the existing records: silent baseline, no POST storm.
+  polygon = square;
+  monitor.notifyPolygonChanged();
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(enters, 0);
+  assert.equal(calls.length, 0);
+  assert.equal(monitor.getInsideCount(), 2);
+  assert.ok(monitor.isInside('mixed', 'quake-1'));
+
+  // Later movement across the boundary still breaches.
+  records[2].lat = 0.5;
+  records[2].lon = 0.5;
+  monitor.evaluateAll();
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(enters, 1);
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].entityId, 'plane-1');
+
+  monitor.destroy();
+});
+
+test('monitor: idle with no fence — pulls no records, keeps no state', () => {
+  let pulls = 0;
+  const fakeManager = {
+    layers: new Map([
+      [
+        'flights',
+        {
+          enabled: true,
+          module: {
+            getAnalystRecords: () => {
+              pulls += 1;
+              return [{ icao24: 'A1', lat: 0.5, lon: 0.5 }];
+            },
+          },
+        },
+      ],
+    ]),
+    subscribeActivity: () => () => {},
+    subscribe: () => () => {},
+  };
+  const monitor = createGeofenceMonitor({
+    getPolygon: () => null,
+    dataManager: fakeManager,
+  });
+  let evaluations = 0;
+  monitor.subscribe((evt) => {
+    if (evt?.type === 'evaluation') evaluations += 1;
+  });
+  monitor.evaluateAll();
+  monitor.evaluateAll();
+  assert.equal(pulls, 0);
+  assert.equal(monitor.getTracker().size, 0);
+  assert.equal(monitor.getInsideCount(), 0);
+  // Nothing to report, so no evaluation noise either.
+  assert.equal(evaluations, 0);
+  monitor.destroy();
+});
+
+test('monitor: tracker entries for records that left the feed are pruned', () => {
+  const square = [
+    { lon: 0, lat: 0 },
+    { lon: 1, lat: 0 },
+    { lon: 1, lat: 1 },
+    { lon: 0, lat: 1 },
+  ];
+  let records = [
+    { icao24: 'A1', lat: 0.5, lon: 0.5 },
+    { icao24: 'A2', lat: 5, lon: 5 },
+  ];
+  const fakeManager = {
+    layers: new Map([
+      [
+        'flights',
+        { enabled: true, module: { getAnalystRecords: () => records } },
+      ],
+    ]),
+    subscribeActivity: () => () => {},
+    subscribe: () => () => {},
+  };
+  const monitor = createGeofenceMonitor({
+    getPolygon: () => square,
+    dataManager: fakeManager,
+  });
+  monitor.evaluateAll();
+  assert.equal(monitor.getTracker().size, 2);
+  // A1 leaves the feed (landed, filtered, layer disabled): its state goes.
+  records = [{ icao24: 'A2', lat: 5, lon: 5 }];
+  monitor.evaluateAll();
+  assert.equal(monitor.getTracker().size, 1);
+  assert.equal(monitor.getTracker().get('flights:A1'), null);
+  monitor.destroy();
+});
+
+test('monitor: records without any id are skipped, never alert', () => {
+  const square = [
+    { lon: 0, lat: 0 },
+    { lon: 1, lat: 0 },
+    { lon: 1, lat: 1 },
+    { lon: 0, lat: 1 },
+  ];
+  // No icao24/mmsi/id/icao anywhere: untrackable, even mid-fence.
+  const records = [
+    { lat: 0.5, lon: 0.5 },
+    { lat: 0.6, lon: 0.6, id: '' },
+    { lat: 0.7, lon: 0.7, id: null },
+  ];
+  const fakeManager = {
+    layers: new Map([
+      [
+        'mystery',
+        { enabled: true, module: { getAnalystRecords: () => records } },
+      ],
+    ]),
+    subscribeActivity: () => () => {},
+    subscribe: () => () => {},
+  };
+  const monitor = createGeofenceMonitor({
+    getPolygon: () => square,
+    dataManager: fakeManager,
+  });
+  let enters = 0;
+  monitor.onEnter(() => enters++);
+  monitor.evaluateAll();
+  // The records drift: with coordinate keys each update would re-alert.
+  records[0].lat = 0.55;
+  records[1].lon = 0.65;
+  monitor.evaluateAll();
+  assert.equal(enters, 0);
+  assert.equal(monitor.getTracker().size, 0);
+  assert.equal(monitor.getInsideCount(), 0);
+  monitor.destroy();
+});
+
 test('monitor: updateEntity dedupes single position updates', () => {
   const square = [
     { lon: 0, lat: 0 },

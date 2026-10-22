@@ -75,18 +75,17 @@ test('evaluateBatch: splits inside/outside, no polygon = all outside', () => {
 
 test('monitor: evaluates on demand and tracks enter/exit', () => {
   let polygon = [...square];
+  let records = [
+    { icao24: 'a1', lat: 0.5, lon: 0.5 },
+    { icao24: 'b1', lat: 5, lon: 5 },
+  ];
   const fakeManager = {
     layers: new Map([
       [
         'flights',
         {
           enabled: true,
-          module: {
-            getAnalystRecords: () => [
-              { icao24: 'a1', lat: 0.5, lon: 0.5 },
-              { icao24: 'b1', lat: 5, lon: 5 },
-            ],
-          },
+          module: { getAnalystRecords: () => records },
         },
       ],
     ]),
@@ -102,8 +101,9 @@ test('monitor: evaluates on demand and tracks enter/exit', () => {
   assert.equal(r1.outside.length, 1);
   assert.equal(monitor.getInsideCount(), 1);
 
-  // Move polygon so previous inside is now outside -> exit
-  let transitions = [];
+  // Move the fence: the boundary moved, not the entities, so this
+  // re-baselines silently instead of firing exits.
+  const transitions = [];
   monitor.subscribe((evt) => {
     if (evt.type === 'transition') transitions.push(evt);
   });
@@ -116,10 +116,20 @@ test('monitor: evaluates on demand and tracks enter/exit', () => {
   monitor.notifyPolygonChanged();
   const r2 = monitor.evaluateAll();
   assert.equal(r2.inside.length, 0);
-  // exited should contain a1
-  const lastTrans = transitions[transitions.length - 1];
+  assert.equal(transitions.length, 0);
+  assert.equal(monitor.getInsideCount(), 0);
+
+  // An entity crossing the new boundary still transitions.
+  records = [
+    { icao24: 'a1', lat: 10.5, lon: 10.5 },
+    { icao24: 'b1', lat: 5, lon: 5 },
+  ];
+  monitor.evaluateAll();
+  assert.equal(transitions.length, 1);
   assert.ok(
-    lastTrans.exited.some((e) => e.id === 'a1' || e._raw?.icao24 === 'a1'),
+    transitions[0].entered.some(
+      (e) => e.id === 'a1' || e._raw?.icao24 === 'a1',
+    ),
   );
 
   monitor.destroy();

@@ -9,6 +9,10 @@
  *   point-in-polygon.
  * - In-memory state tracker prevents duplicate alerts: internal `geofence:enter`
  *   fires only on initial outside->inside transition.
+ * - Drawing or editing the fence re-baselines silently: entities already
+ *   inside start as inside instead of firing one breach each.
+ * - With no fence drawn the monitor is idle: it pulls no records and keeps
+ *   no state. Tracker entries for entities that left the feed are pruned.
  * - Also exposes evaluatePoint() for single-position checks.
  */
 import { pointInPolygon, evaluateBatch } from './geofenceIntersection.js';
@@ -48,10 +52,29 @@ export function createGeofenceMonitor({
     }
   };
 
+  /** Stable identity, or null when the record has none. Records without an
+   * id are untrackable: keying them by coordinates would re-alert on every
+   * position update as the coordinates change, so they are skipped. */
+  const stableId = (...candidates) => {
+    for (const c of candidates) {
+      if (c === null || c === undefined) continue;
+      if (typeof c === 'string' && c.trim() === '') continue;
+      return c;
+    }
+    return null;
+  };
+
   const entityKey = (layerKey, e) => {
-    const id =
-      e.icao24 ?? e.mmsi ?? e.id ?? e.icao ?? JSON.stringify([e.lon, e.lat]);
-    return `${layerKey}:${id}`;
+    const id = stableId(
+      e.icao24,
+      e.mmsi,
+      e.id,
+      e.icao,
+      e._raw?.icao24,
+      e._raw?.mmsi,
+      e._raw?.id,
+    );
+    return id === null ? null : `${layerKey}:${id}`;
   };
 
   const collectLiveEntities = () => {
@@ -69,9 +92,11 @@ export function createGeofenceMonitor({
           const lon = r.lon ?? r.longitude ?? r.lng;
           const lat = r.lat ?? r.latitude;
           if (!Number.isFinite(lon) || !Number.isFinite(lat)) continue;
+          const id = stableId(r.icao24, r.mmsi, r.id, r.icao);
+          if (id === null) continue;
           all.push({
             layerKey,
-            id: r.icao24 ?? r.mmsi ?? r.id,
+            id,
             lon,
             lat,
             _raw: r,
@@ -107,15 +132,26 @@ export function createGeofenceMonitor({
     return true;
   };
 
+  // Fire-and-forget. Never rejects: a failed POST is recorded for
+  // diagnostics and swallowed, so a dead webhook cannot surface as an
+  // unhandled rejection on every breach.
   const dispatchWebhookForEnter = (entity) => {
     if (!webhookUrl) return Promise.resolve(null);
-    const payload = buildBreachPayload(entity, { now });
-    // Fire-and-forget, but capture errors for diagnostics
-    return dispatchBreach(webhookUrl, payload, fetchImpl).catch((err) => {
+    let payload;
+    try {
+      payload = buildBreachPayload(entity, { now });
+    } catch (err) {
       lastWebhookError = String(err?.message || err);
-      console.warn('[Geofence] webhook POST failed:', err);
-      throw err;
-    });
+      return Promise.resolve(null);
+    }
+    return dispatchBreach(webhookUrl, payload, fetchImpl).then(
+      () => null,
+      (err) => {
+        lastWebhookError = String(err?.message || err);
+        console.warn('[Geofence] webhook POST failed:', err);
+        return null;
+      },
+    );
   };
 
   const sendTestPayload = async () => {
@@ -176,45 +212,43 @@ export function createGeofenceMonitor({
   const evaluateAll = () => {
     if (destroyed) return { inside: [], outside: [], entered: [], exited: [] };
     const polygon = getActivePolygon();
-    const entities = collectLiveEntities();
 
-    // No polygon: everything outside, clear tracker to prevent stale inside
+    // No fence: stay idle. Pulling every layer's records on each
+    // data-updated just to track entities against nothing wastes work and
+    // grows the tracker without bound, so skip the collection entirely.
     if (!polygon) {
-      const inside = [];
-      const outside = entities;
-      // Mark all previously inside as exited in tracker (no enter events)
-      for (const e of entities) {
-        const k = entityKey(e.layerKey, e);
-        const res = tracker.update(k, false);
-        if (res === 'exited') {
-          insideEntities.delete(k);
-        }
-      }
+      const had =
+        tracker.size > 0 || insideEntities.size > 0 || lastInsideCount > 0;
+      tracker.clear();
+      insideEntities = new Map();
       lastInsideCount = 0;
       lastEvaluation = {
         at: Date.now(),
-        total: entities.length,
+        total: 0,
         inside: 0,
-        outside: outside.length,
+        outside: 0,
         entered: 0,
         exited: 0,
       };
-      notify({
-        type: 'evaluation',
-        inside,
-        outside,
-        total: entities.length,
-        polygon: null,
-      });
+      if (had) {
+        notify({
+          type: 'evaluation',
+          inside: [],
+          outside: [],
+          total: 0,
+          polygon: null,
+        });
+      }
       return {
-        inside,
-        outside,
+        inside: [],
+        outside: [],
         entered: [],
         exited: [],
-        total: entities.length,
+        total: 0,
       };
     }
 
+    const entities = collectLiveEntities();
     const { inside, outside } = evaluateBatch(
       entities.map((e) => ({ ...e, lon: e.lon, lat: e.lat })),
       polygon,
@@ -223,10 +257,13 @@ export function createGeofenceMonitor({
     const entered = [];
     const exited = [];
     const nextInsideMap = new Map();
+    const seen = new Set();
 
     // Use state tracker to dedupe: only initial outside->inside triggers enter
     for (const e of inside) {
       const k = entityKey(e.layerKey, e);
+      if (k === null) continue;
+      seen.add(k);
       const transition = tracker.update(k, true);
       nextInsideMap.set(k, e);
       if (transition === 'entered') {
@@ -240,9 +277,20 @@ export function createGeofenceMonitor({
     }
     for (const e of outside) {
       const k = entityKey(e.layerKey, e);
+      if (k === null) continue;
+      seen.add(k);
       const transition = tracker.update(k, false);
       if (transition === 'exited') {
         exited.push(e);
+        insideEntities.delete(k);
+      }
+    }
+
+    // Drop state for entities that left the feed: without pruning, every
+    // record ever seen lingers in the tracker and the inside map forever.
+    for (const k of tracker.getAll().keys()) {
+      if (!seen.has(k)) {
+        tracker.remove(k);
         insideEntities.delete(k);
       }
     }
@@ -310,6 +358,54 @@ export function createGeofenceMonitor({
     return pointInPolygon(lon, lat, polygon);
   };
 
+  // Re-baseline when the fence itself is drawn or edited: the boundary
+  // moved, not the entities, so everything already inside starts as inside
+  // without firing enter events or webhooks. Only later movement across the
+  // boundary counts as a breach.
+  const seedFromLiveEntities = (polygon) => {
+    const entities = collectLiveEntities();
+    const { inside, outside } = evaluateBatch(
+      entities.map((e) => ({ ...e, lon: e.lon, lat: e.lat })),
+      polygon,
+    );
+    tracker.clear();
+    insideEntities = new Map();
+    for (const e of inside) {
+      const k = entityKey(e.layerKey, e);
+      if (k === null) continue;
+      tracker.seed(k, true);
+      insideEntities.set(k, e);
+    }
+    for (const e of outside) {
+      const k = entityKey(e.layerKey, e);
+      if (k === null) continue;
+      tracker.seed(k, false);
+    }
+    lastInsideCount = insideEntities.size;
+    lastEvaluation = {
+      at: Date.now(),
+      total: entities.length,
+      inside: insideEntities.size,
+      outside: outside.length,
+      entered: 0,
+      exited: 0,
+    };
+    notify({
+      type: 'evaluation',
+      inside: [...insideEntities.values()],
+      outside,
+      total: entities.length,
+      polygon: [...polygon],
+    });
+    return {
+      inside: [...insideEntities.values()],
+      outside,
+      entered: [],
+      exited: [],
+      total: entities.length,
+    };
+  };
+
   // Re-evaluate when polygon changes (draw/edit/clear)
   const notifyPolygonChanged = () => {
     if (destroyed) return;
@@ -345,8 +441,9 @@ export function createGeofenceMonitor({
       });
       return;
     }
-    // Polygon changed: re-evaluate immediately against current live data
-    evaluateAll();
+    // Polygon drawn or edited: seed the baseline silently instead of
+    // treating every covered record as a fresh breach.
+    seedFromLiveEntities(poly);
   };
 
   // Single-entity update helper for direct position updates (deduped)
@@ -476,7 +573,9 @@ export function createGeofenceMonitor({
       insideCount: lastInsideCount,
       listeners: listeners.size,
       lastEvaluation,
-      webhookUrl,
+      // The URL itself is a secret (Slack-style webhook tokens ride in the
+      // path), so diagnostics report only whether one is configured.
+      hasWebhookUrl: Boolean(webhookUrl),
       lastWebhookError,
     }),
   };

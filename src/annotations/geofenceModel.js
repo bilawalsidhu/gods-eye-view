@@ -12,6 +12,8 @@
  * - closeRing() returns a CLOSED ring (first == last) for rendering/GeoJSON.
  */
 
+import { t, tn } from '../i18n/index.js';
+
 export const MIN_VERTICES = 3;
 export const MAX_VERTICES = 512;
 export const MIN_VERTEX_SEPARATION_M = 0.5;
@@ -180,18 +182,27 @@ export function fromGeoJSON(feature) {
 }
 
 export function geofenceHint(session, { hasGeofence = false } = {}) {
-  if (!session) return 'Press Geofence to start drawing.';
+  if (!session) return t('Press Geofence to start drawing.');
   const n = session.vertices.length;
   if (n === 0)
     return hasGeofence
-      ? 'Geofence active — Edit to move vertices, Clear to remove.'
-      : 'Click on the globe to add points.';
+      ? t('Geofence active — Edit to move vertices, Clear to remove.')
+      : t('Click on the globe to add points.');
   const need = MIN_VERTICES - n;
   if (need > 0)
-    return `Click ${need} more point${need === 1 ? '' : 's'} to close.`;
+    return tn(
+      need,
+      'Click {count} more point to close.',
+      'Click {count} more points to close.',
+    );
   if (finishReason(session) === 'degenerate')
-    return 'Those points are in a line — move one off it to enclose an area.';
-  return `${formatArea(session)} · double-click or Finish to close, Backspace undoes, Esc cancels.`;
+    return t(
+      'Those points are in a line — move one off it to enclose an area.',
+    );
+  return t(
+    '{area} · double-click or Finish to close, Backspace undoes, Esc cancels.',
+    { area: formatArea(session) },
+  );
 }
 
 export function formatArea(session) {

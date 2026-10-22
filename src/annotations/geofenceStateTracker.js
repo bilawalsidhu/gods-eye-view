@@ -27,6 +27,15 @@ export function createGeofenceStateTracker() {
     return next ? 'entered' : 'exited';
   }
 
+  /**
+   * Record a known state without reporting a transition. Used when the
+   * fence itself is drawn or edited: everything already inside starts as
+   * inside, so the first evaluation is a baseline, not a wave of breaches.
+   */
+  function seed(id, isInside) {
+    states.set(normalizeId(id), Boolean(isInside));
+  }
+
   function get(id) {
     const v = states.get(normalizeId(id));
     return v === undefined ? null : v;
@@ -56,6 +65,7 @@ export function createGeofenceStateTracker() {
 
   return {
     update,
+    seed,
     get,
     isInside,
     remove,

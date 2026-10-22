@@ -27,6 +27,7 @@ import {
   geofenceHint,
 } from './geofenceModel.js';
 import { createGeofenceRenderer } from './geofenceRenderer.js';
+import { t } from '../i18n/index.js';
 
 export const GEOFENCE_POINTER_OWNER = 'geofence';
 
@@ -85,15 +86,21 @@ export function initGeofenceTool({ viewer }) {
     } else if (editing) {
       setHint(
         geofence
-          ? `Editing — drag a handle to move it. ${geofence.vertices.length} points. Done to finish.`
-          : 'No geofence to edit.',
+          ? t(
+              'Editing — drag a handle to move it. {count} points. Done to finish.',
+              { count: geofence.vertices.length },
+            )
+          : t('No geofence to edit.'),
       );
     } else if (geofence) {
       setHint(
-        `Geofence closed — ${geofence.vertices.length} points. Edit to adjust, Clear to remove.`,
+        t(
+          'Geofence closed — {count} points. Edit to adjust, Clear to remove.',
+          { count: geofence.vertices.length },
+        ),
       );
     } else {
-      setHint('Press Geofence, then click the globe to draw.');
+      setHint(t('Press Geofence, then click the globe to draw.'));
     }
   };
 
@@ -136,7 +143,11 @@ export function initGeofenceTool({ viewer }) {
     if (lease) return true;
     lease = claimPointer(GEOFENCE_POINTER_OWNER);
     if (!lease) {
-      setHint(`${pointerOwner()} is using the pointer — close it first.`);
+      setHint(
+        t('{owner} is using the pointer — close it first.', {
+          owner: pointerOwner(),
+        }),
+      );
       return false;
     }
     return true;
@@ -238,7 +249,7 @@ export function initGeofenceTool({ viewer }) {
     if (destroyed || next === editing) return editing;
     if (next) {
       if (!geofence) {
-        setHint('Draw a geofence first.');
+        setHint(t('Draw a geofence first.'));
         return editing;
       }
       if (!ensurePointer()) return editing;
@@ -312,7 +323,7 @@ export function initGeofenceTool({ viewer }) {
     if (!active) return;
     const p = worldAt(event.position);
     if (!p) {
-      setHint('That point is off the globe — click on the world.');
+      setHint(t('That point is off the globe — click on the world.'));
       return;
     }
     const { added, reason } = addVertex(session, p);
@@ -321,9 +332,9 @@ export function initGeofenceTool({ viewer }) {
       return;
     }
     if (reason === 'full')
-      setHint('512-point limit reached — finish or press Backspace.');
+      setHint(t('512-point limit reached — finish or press Backspace.'));
     else if (reason === 'invalid')
-      setHint('That point is off the globe — click on the world.');
+      setHint(t('That point is off the globe — click on the world.'));
   }
 
   function onMove(event) {

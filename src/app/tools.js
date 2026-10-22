@@ -11,6 +11,7 @@ import {
   formatBreachMessage,
 } from '../annotations/geofenceAlert.js';
 import { initGevVoiceCommands } from '../voice/gevRealtime.js';
+import { t } from '../i18n/index.js';
 import { installViews, isEmbeddedInline } from './embed.js';
 import { installScopeMask, destroyScopeMask } from '../scopeMask.js';
 import {
@@ -128,8 +129,8 @@ export function createApplicationTools({
       );
       webhookInput.title =
         ok || !val.trim()
-          ? 'Target URL for breach POST'
-          : 'Invalid URL — must be http(s)';
+          ? t('Target URL for breach POST')
+          : t('Invalid URL — must be an https:// URL');
     }
   };
   webhookInput?.addEventListener('input', onWebhookInput);
@@ -154,23 +155,27 @@ export function createApplicationTools({
     if (!testBtn) return;
     const url = geofenceMonitor?.getWebhookUrl?.();
     if (!url) {
-      if (testHint) testHint.textContent = 'Set webhook URL first.';
+      if (testHint) testHint.textContent = t('Set webhook URL first.');
       return;
     }
     testBtn.disabled = true;
-    if (testHint) testHint.textContent = 'Sending…';
+    if (testHint) testHint.textContent = t('Sending…');
     try {
       await geofenceMonitor.sendTestPayload();
-      if (testHint) testHint.textContent = 'Test POST sent ✓';
-      geofenceAlert.show('GEOFENCE TEST — mock payload sent');
-    } catch (err) {
-      if (testHint) testHint.textContent = `Failed: ${err?.message || err}`;
-    } finally {
-      testBtn.disabled = false;
+      const sent = t('Test POST sent ✓');
+      if (testHint) testHint.textContent = sent;
+      geofenceAlert.show(t('GEOFENCE TEST — mock payload sent'));
       setTimeout(() => {
-        if (testHint && testHint.textContent.startsWith('Test POST'))
+        if (testHint && testHint.textContent === sent)
           testHint.textContent = '';
       }, 4000);
+    } catch (err) {
+      if (testHint)
+        testHint.textContent = t('Failed: {error}', {
+          error: err?.message || err,
+        });
+    } finally {
+      testBtn.disabled = false;
     }
   };
   testBtn?.addEventListener('click', onTestWebhook);
