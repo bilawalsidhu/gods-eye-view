@@ -3004,5 +3004,35 @@
   "Gemini access was refused. Check the API key and model access.": "Доступ к Gemini запрещён. Проверьте ключ API и доступ к модели.",
   "Gemini Live is unavailable for the configured model.": "Gemini Live недоступен для выбранной модели.",
   "Token request is too large": "Запрос токена слишком велик",
-  "Use an empty JSON token request": "Используйте запрос токена с пустым объектом JSON"
+  "Use an empty JSON token request": "Используйте запрос токена с пустым объектом JSON",
+  "S2 GhostMaps": "S2 GhostMaps",
+  "Intel Picture": "Разведкартина",
+  "Kinetic 30d": "Боевые 30 дн.",
+  "Border Crisis": "Кризис на границе",
+  "Iran Picture": "Иран: картина",
+  "Iran Kinetic": "Иран: боевые",
+  "Yemen FLOT": "Йемен: линия фронта",
+  "Latest Drop": "Новый выпуск",
+  "GhostMaps file could not be read": "Не удалось прочитать файл GhostMaps",
+  "GhostMaps catalog unavailable": "Каталог GhostMaps недоступен",
+  "Malformed GhostMaps catalog": "Повреждённый каталог GhostMaps",
+  "{count} source links ↗ · click card to open the first": {
+    "one": "{count} ссылка на источник ↗ · нажмите на карточку, чтобы открыть",
+    "few": "{count} ссылки на источники ↗ · нажмите на карточку, чтобы открыть первую",
+    "many": "{count} ссылок на источники ↗ · нажмите на карточку, чтобы открыть первую",
+    "other": "{count} ссылки на источники ↗ · нажмите на карточку, чтобы открыть первую"
+  },
+  "S2 · {name}": "S2 · {name}",
+  "Report": "Сводка",
+  "Open the source for {title}": "Открыть источник: {title}",
+  "LIVE · GitHub {commit} · {message} · checked every {seconds}s": "В ЭФИРЕ · GitHub {commit} · {message} · проверка каждые {seconds} с",
+  "GitHub {commit} · {message} · reconnecting for live updates": "GitHub {commit} · {message} · переподключение для обновлений в реальном времени",
+  "Connecting to the S2 GhostMaps repository…": "Подключение к репозиторию S2 GhostMaps…",
+  "{count} placemarks": {
+    "one": "{count} метка",
+    "few": "{count} метки",
+    "many": "{count} меток",
+    "other": "{count} метки"
+  },
+  "S2 Underground publishes these KMZ products to GitHub. New uploads are detected within seconds and replace the previous edition automatically. Click a marker for its report.": "S2 Underground публикует эти продукты KMZ на GitHub. Новые файлы обнаруживаются за секунды и автоматически заменяют предыдущий выпуск. Нажмите на метку, чтобы открыть её сводку."
 }

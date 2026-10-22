@@ -1040,7 +1040,13 @@ export function detachImportedTime(dataSource) {
   return dataSource;
 }
 
-function parseXml(text, what) {
+/**
+ * Parse KML or GPX text with the namespace repairs Cesium applies.
+ * @param {string} text
+ * @param {string} what Format name for the error message.
+ * @returns {Document}
+ */
+export function parseXml(text, what) {
   // Match the namespace repairs Cesium applies to ordinary exported KML.
   if (what !== 'GPX')
     text = String(text).replace(/<kml\b[^>]*>/i, (root) => {
@@ -1073,7 +1079,8 @@ function parseXml(text, what) {
   return doc;
 }
 
-function decodeXml(bytes) {
+/** Decode XML bytes, honouring a UTF-16 byte-order mark. */
+export function decodeXml(bytes) {
   const encoding =
     bytes[0] === 0xff && bytes[1] === 0xfe
       ? 'utf-16le'

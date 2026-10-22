@@ -449,6 +449,14 @@ export const DATA_CREDITS = [
       'part of NASA’s Earth Observing System Data and Information System (EOSDIS)',
   },
   {
+    key: 's2-ghostmaps',
+    html:
+      'S2 GhostMaps intel products: S2 Underground © by S2A1, ' +
+      '<a href="https://github.com/s2underground/GhostMaps" target="_blank" rel="noopener">github.com/s2underground/GhostMaps</a>, ' +
+      'licensed under <a href="https://creativecommons.org/licenses/by-nc-sa/4.0/" target="_blank" rel="noopener">CC BY-NC-SA 4.0</a>. ' +
+      'Shown as published; reports are S2 assessments, not verified fact.',
+  },
+  {
     key: 'drivebc-cctv',
     html:
       'CCTV cameras &amp; frames (British Columbia): ' +

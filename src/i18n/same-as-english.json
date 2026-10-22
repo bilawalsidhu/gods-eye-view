@@ -74,6 +74,8 @@
     "Radio",
     "Reggae",
     "Rock",
+    "S2 GhostMaps",
+    "S2 · {name}",
     "SAR",
     "SE",
     "SECTOR {lat} {lon}",
@@ -131,6 +133,8 @@
     "NVG",
     "R&B",
     "REC",
+    "S2 GhostMaps",
+    "S2 · {name}",
     "VS",
     "WHOT/BHOT"
   ]

@@ -58,6 +58,20 @@ const layers = [
     noQuery: 'navigation-integrity cells; no countable analyst records',
   },
   {
+    id: 's2-ghostmaps',
+    aliases: [
+      's2 ghostmaps',
+      'ghost maps',
+      'ghostmaps',
+      's2 underground',
+      's2 intel',
+      'intel picture',
+      'common intelligence picture',
+    ],
+    context: false,
+    noQuery: 'published third-party intel placemarks; not analyst records',
+  },
+  {
     id: 'flights',
     track: true,
     aliases: ['planes', 'aircraft', 'air traffic'],
