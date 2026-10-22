@@ -26,6 +26,8 @@ const FEED_ERRORS = new Set([
   msg('OpenSky auth required'),
   msg('OpenSky auth invalid'),
   msg('OpenSky auth failed'),
+  // Alpine station proxy failure (src/layers/alpineStations/index.js).
+  msg('Alpine station source unavailable'),
 ]);
 const FEED_ERROR_PATTERNS = [
   // Street Level provider errors (providers/{kartaview,panoramax}/source.js),

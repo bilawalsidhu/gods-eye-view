@@ -1,6 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { setLocale } from '../i18n/index.js';
+import { readFileSync } from 'node:fs';
+import { runInNewContext } from 'node:vm';
 import { createWeatherPanel } from './weatherPanel.js';
 import { railFixture } from './railTestFixture.mjs';
 import { createAirQualityLayer } from '../layers/airQuality/index.js';
@@ -751,4 +753,40 @@ test('air-quality readout renders its band legend, Canada coverage and worst-fir
   );
   view.destroy();
   layer.destroy();
+});
+
+test('the Alpine card is in the weather order but not in the observed group', () => {
+  // OBSERVED used to be ORDER.slice(2), so inserting any card into the middle
+  // of the order silently enrolled it in the timeline. It is named now, and
+  // this pins that: an observed card is driven by the clock and reports a
+  // frame time, which a station network does not have.
+  const source = readFileSync(
+    new URL('./weatherPanel.js', import.meta.url),
+    'utf8',
+  );
+  const declarations = source.slice(
+    source.indexOf('const ORDER ='),
+    source.indexOf('const utc ='),
+  );
+  const { order, observed } = JSON.parse(
+    runInNewContext(
+      `${declarations}\nJSON.stringify({ order: ORDER, observed: [...OBSERVED] })`,
+    ),
+  );
+  assert.deepEqual(order, [
+    'weather-cyclones',
+    'wind',
+    'alpine-stations',
+    'weather-radar',
+    'weather-satellite',
+    'weather-lightning',
+    'air-quality',
+  ]);
+  assert.deepEqual(observed, [
+    'weather-radar',
+    'weather-satellite',
+    'weather-lightning',
+  ]);
+  for (const id of observed) assert.ok(order.includes(id), id);
+  assert.ok(!observed.includes('alpine-stations'));
 });

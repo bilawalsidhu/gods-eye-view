@@ -1,3 +1,4 @@
+import { createAlpineStationSource } from '../layers/alpineStations/source.js';
 import { createUsgsEarthquakeSource } from '../layers/earthquakes/source.js';
 import { createEcccAirQualitySource } from '../layers/airQuality/source.js';
 import { createWfigsPerimeterSource } from '../layers/perimeters/source.js';
@@ -7,6 +8,7 @@ import { createAdsbGnssSource } from '../layers/gnss/source.js';
 /** Construct the existing reference feeds independently of application setup. */
 export function createReferenceSources() {
   return {
+    'alpine-stations': createAlpineStationSource(),
     earthquakes: createUsgsEarthquakeSource(),
     'air-quality': createEcccAirQualitySource(),
     'fire-perimeters': createWfigsPerimeterSource(),

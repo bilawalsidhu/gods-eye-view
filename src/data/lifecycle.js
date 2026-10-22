@@ -20,6 +20,10 @@ const VALID_LAYER_SERIALIZATION_DISPOSITIONS = new Set([
   'enabled+mirrored-options',
   // Registered but never serialized (for example hardware-local layers).
   'local-only',
+  // Registered and drawable, but holding no share-link token yet. The token
+  // namespace is allocated by the maintainers, so a new layer runs without one
+  // rather than claiming a letter; see PENDING_SHARE_TOKEN_LAYER_METADATA.
+  'pending-share-token',
 ]);
 
 function isAbortError(error) {

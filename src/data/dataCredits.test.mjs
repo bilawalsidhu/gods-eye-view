@@ -1,6 +1,13 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { DATA_CREDITS, NYC_DOT_DISCLAIMER } from './dataCredits.js';
+import {
+  ALPINE_STATIONS_INLINE_CREDIT,
+  DATA_CREDITS,
+  NYC_DOT_DISCLAIMER,
+  hideAlpineStationsCredit,
+  showAlpineStationsCredit,
+} from './dataCredits.js';
+import { ALPINE_NETWORKS } from '../layers/alpineStations/networks.js';
 
 test('every credit carries a unique key and some markup to render', () => {
   const keys = DATA_CREDITS.map((entry) => entry.key);
@@ -140,4 +147,82 @@ test('every Street Level imagery source is in the attribution lightbox', () => {
       DATA_CREDITS.some((entry) => entry.key === key),
       `${key} has no credit`,
     );
+});
+
+test('every Alpine station network is credited, with its licence and caveat', () => {
+  // CC BY is a licence condition, not a courtesy: the credit lightbox is the
+  // app's canonical attribution surface, so a network on screen without an
+  // entry here is a licence breach rather than a cosmetic gap.
+  const credit = DATA_CREDITS.find((entry) => entry.key === 'alpine-stations');
+  assert.ok(credit, 'the layer has no attribution entry');
+  for (const network of ALPINE_NETWORKS) {
+    assert.ok(
+      credit.html.includes(network.attribution),
+      `${network.id} is not credited`,
+    );
+    assert.ok(credit.html.includes(network.homepage), `${network.id} homepage`);
+  }
+  assert.match(credit.html, /creativecommons\.org\/licenses\/by\/4\.0/);
+  assert.match(credit.html, /CC BY 4\.0/);
+  // Snow depth is a measurement; the operators' avalanche bulletins are a
+  // separate product this layer does not reproduce.
+  assert.match(credit.html, /not avalanche danger ratings/);
+  for (const link of credit.html.matchAll(/<a [^>]*>/g))
+    assert.match(link[0], /rel="noopener"/, link[0]);
+});
+
+test('the credited networks are exactly the ones the layer can draw', () => {
+  const credit = DATA_CREDITS.find((entry) => entry.key === 'alpine-stations');
+  const mentioned = ALPINE_NETWORKS.filter((network) =>
+    credit.html.includes(network.attribution),
+  );
+  assert.equal(mentioned.length, ALPINE_NETWORKS.length);
+});
+
+test('the Alpine credit rides the globe, is idempotent, and is released', () => {
+  // SLF's terms require a clearly visible, linked reference while the data is
+  // displayed. The lightbox entry stays; this is the on-globe half.
+  const added = [];
+  const removed = [];
+  const viewer = {
+    creditDisplay: {
+      addStaticCredit: (credit) => added.push(credit),
+      removeStaticCredit: (credit) => removed.push(credit),
+    },
+    scene: { requestRender() {} },
+  };
+  assert.equal(showAlpineStationsCredit(viewer), true);
+  assert.equal(added.length, 1);
+  assert.equal(
+    showAlpineStationsCredit(viewer),
+    false,
+    'idempotent per viewer',
+  );
+  assert.equal(added.length, 1);
+  assert.equal(hideAlpineStationsCredit(viewer), true);
+  assert.deepEqual(removed, added);
+  assert.equal(hideAlpineStationsCredit(viewer), false);
+  // Two viewers keep their own credit.
+  const other = {
+    creditDisplay: { addStaticCredit: () => {}, removeStaticCredit: () => {} },
+  };
+  assert.equal(showAlpineStationsCredit(other), true);
+  assert.equal(showAlpineStationsCredit(viewer), true);
+  assert.equal(showAlpineStationsCredit(null), false, 'no viewer, no credit');
+});
+
+test('the on-globe credit links every operator, and names SLF in full', () => {
+  // "a clearly visible reference to the data source (WSL Institute for Snow
+  // and Avalanche Research SLF), in the case of digital products as link
+  // (www.slf.ch)" — the wording is the requirement, so it is pinned.
+  assert.match(
+    ALPINE_STATIONS_INLINE_CREDIT,
+    /WSL Institute for Snow and Avalanche Research SLF/,
+  );
+  assert.match(ALPINE_STATIONS_INLINE_CREDIT, /href="https:\/\/www\.slf\.ch\//);
+  for (const operator of ['MeteoSwiss', 'GeoSphere Austria'])
+    assert.ok(ALPINE_STATIONS_INLINE_CREDIT.includes(operator), operator);
+  assert.match(ALPINE_STATIONS_INLINE_CREDIT, /CC BY 4\.0/);
+  for (const link of ALPINE_STATIONS_INLINE_CREDIT.matchAll(/<a [^>]*>/g))
+    assert.match(link[0], /rel="noopener"/, link[0]);
 });

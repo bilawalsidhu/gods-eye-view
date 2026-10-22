@@ -1,0 +1,464 @@
+# Alpine Stations layer
+
+Design notes and traps for `src/layers/alpineStations/`, its adapters under
+`src/layers/alpineStations/networks/`, and the proxy in
+`server/providers/alpine-stations.js`.
+
+Everything below was learned by hitting it against live data. Several of these
+look like bugs in your new code when they are not, so read this before changing
+the layer or adding a network.
+
+## What the layer is
+
+About 650 automatic weather stations across the Swiss and Austrian Alps, drawn
+as simple markers coloured by one selected measurement, with the readings, the
+legend and the nearest stations in view in a card in the WEATHER rail.
+
+Three networks, one adapter each. All three are keyless and CC BY 4.0, which is
+the condition of inclusion: the layer works on a fresh clone with no
+credentials, like USGS earthquakes rather than like TomTom.
+
+| Network | Stations | Cadence | Publishes |
+|---|---|---|---|
+| SLF IMIS (CH) | ~200 | 30 min | snow, wind, temperature |
+| SwissMetNet (CH) | 159 | 10 min | wind, temperature, precipitation, pressure |
+| GeoSphere TAWES (AT) | ~285 | 10 min | snow, wind, temperature, precipitation |
+
+## The shape of it
+
+```
+src/layers/alpineStations/
+├── networks.js          the registry: who, where, licence, WHAT EACH PUBLISHES
+├── parameters.js        the five views, their bands, units and staleness rules
+├── records.js           the canonical record, merge, summary, nearest
+├── cardText.js          the card and label text, in the reader's language
+├── networks/slf.js      \
+├── networks/smn.js       }  pure adapters: payload in, canonical records out
+├── networks/tawes.js    /
+├── model.js             marker colour/size and ambient labels (no Cesium)
+├── source.js            the browser read of /api/alpine-stations
+└── index.js             the Cesium layer and the rail card descriptor
+
+server/providers/alpine-stations.js      caching, coalescing, throttle, envelope
+                                         (identity and status only: no prose,
+                                          no copy of ALPINE_NETWORKS)
+server/providers/alpine-stations/
+├── upstreams.js         every fixed URL with its own read cap
+└── fetchers.js          one fetch step per network
+```
+
+Nothing downstream of an adapter is network-aware. The adapters are pure, so
+both the proxy and the browser import the same normalisation and it is tested
+under `node --test` rather than only in a browser.
+
+## The registration points
+
+A layer is not "added" until all of these are done. Missing one fails quietly,
+in a different way each time:
+
+1. `src/sources/reference.js` — construct the source.
+2. `src/app/sourceComposition.js` — a `CATALOG_SOURCE_CONTRACTS` entry naming
+   the layer ids the source feeds and the methods it must have. Without one an
+   omitted source is neither validated nor made inert, so the layer reaches for
+   an undefined feed instead of reporting itself unavailable.
+3. `src/app/constructCatalog.js` — the instance and a metadata entry.
+   `constructCatalog.test.mjs` and `sourceComposition.test.mjs` both pin the
+   layer count.
+4. `src/ui/layerPanel.js` — the Weather group **and** the subscription list in
+   `_refreshWeatherPanel`. Two separate lists; a layer in one and not the other
+   either never refreshes its card or refreshes a card it has no row for.
+5. `src/ui/weatherPanel.js` — `ORDER`. A card whose legend is named bands
+   rather than a numeric scale declares `legendCategorical: true` in its own
+   row controls; the panel reads the flag, so no list of ids is kept here.
+6. `src/data/dataCredits.js` — attribution, or the credit never appears, which
+   is a licence breach rather than a cosmetic gap.
+7. `DATA_SOURCES.md` — licence and attribution text.
+8. `src/voice/layerManifest.js` — or `layerManifest.test.mjs` fails.
+9. `src/ui/layerNames.js` — `LAYER_NAME_KEYS`, so the panel and the HUD show
+   the layer's name translated. `layer.name` itself stays English: it is data
+   that reaches share links and the AI tool schemas.
+10. `src/ui/statusText.js` — any error text the layer assigns, in
+    `FEED_ERRORS`, or the row shows it in English whatever the language.
+11. `scripts/package-boundaries.json` — every new module, in every group that
+    transitively reaches it. `npm run check:boundaries` names them one at a
+    time.
+12. `scripts/format-scope.json` — the layer's tests, fixtures and qa script.
+    Runtime code under src and server is discovered; these are adopted by name.
+13. `src/i18n/locales/{es,ru}.json` — every string the layer shows.
+    `node scripts/i18n.mjs` lists what is missing and what is unmarked.
+
+## Which module may translate
+
+`networks.js`, `parameters.js`, `records.js` and the adapters are imported by
+`server/providers/alpine-stations.js`, so they must not load the translation
+catalogs. They mark their text with `msg()` from `src/i18n/marker.js` and it
+stays English there.
+
+`cardText.js`, `model.js` and `index.js` are browser-only and translate with
+`t()` where the text is shown. That split is why the card copy lives in
+`cardText.js` rather than beside the records it describes, and why readings are
+formatted with `formatQuantity` rather than a local template: the decimal
+separator and the non-breaking space before the unit follow the reader's
+language.
+
+The same split is why **the proxy writes no prose at all**. It reports each
+network's `status` and the layer composes the sentence from those statuses in
+`networkReach()`. A `reason` string built server-side cannot be translated by
+anything downstream: `translateFeedError` matches a catalog entry or a known
+shape, and an English sentence assembled from a count matches neither, so it
+reached a Spanish reader in English. Status is data; the sentence is UI.
+
+Both ends of the card's range line go through `cardText.js` for the same
+reason: `readingNumber()` for the open end and `localizedReading()` for the end
+that carries the unit. They share `parameterDecimals(view)`, so the two
+ends cannot disagree. Formatting the open end with a bare `formatNumber`
+printed `1,005.4 to 1025 hPa` in one line.
+
+## The share-link token
+
+This layer has **no token**, by request: the namespace is the maintainers' to
+allocate (see #658). It is registered with `disposition: 'pending-share-token'`,
+a valid serialization disposition meaning "registered and drawable, never
+serialized". The only consequence is that its enabled state and its selected
+parameter do not travel in a share link.
+
+Completing it is one change: move the entry from
+`PENDING_SHARE_TOKEN_LAYER_METADATA` into `LAYER_STATE_REGISTRY` with a token
+and an `OPTION_GROUPS` entry for `parameter`. Note the trap recorded on the
+earlier branch: **`optionOwner` must be a registered LAYER id**.
+`encodeLayerStateParams` resolves the owner through `REGISTRY_BY_ID` to find its
+token, and an owner named anything else passes every registry test and then
+throws on the first share link generated.
+
+## Traps
+
+### GeoSphere aligns `data` to a UNION of timestamps
+
+This is the big one. `timestamps` is the union of observation times across every
+station in the request, ascending, and each station's `data` arrays align to it
+positionally while carrying a value at only **one** index: its own latest.
+
+Reading `data[0]` therefore returns null for almost every station. Measured
+live, 275 of 285 stations sat at the last index and `data[0]` was non-null for
+exactly one of them. `tawesReadingIndex` discovers the index per station; a null
+at the chosen index then means a genuinely absent sensor rather than a stale
+slot, which is how per-station staleness comes out for free.
+
+It also means the observation call cannot be flattened before it is read: an
+index is only meaningful against the `timestamps` array of the response it
+arrived in. `tawesReadings` reads each chunked response before anything merges.
+
+### A time without an offset is refused, not guessed at
+
+`isoOrNull` rejects `2026-10-08T23:30` and takes `...Z` or `...+02:00`.
+`Date.parse` reads an offsetless datetime in the HOST zone, so one payload
+would land two hours out on a European container and on time in UTC. Against
+the 90-minute staleness floor that is enough to report a whole working national
+network as late, from nothing but the server's timezone. GeoSphere publishes
+naked `valid_from`/`valid_to` beside the offsets this reads, so the shape is
+already in the feed; `parseSmnTimestamp` does its own round-trip check on top,
+because VQHA80 carries no offset at all and is known to be Swiss local time.
+
+### Pressure is QFF, and two of the three networks cannot supply it
+
+Station-level pressure (QFE) is a map of ALTITUDE, not of weather. Measured
+across SwissMetNet, `prestas0` spanned 663-991 hPa on a day whose real synoptic
+spread was under 3 hPa.
+
+- **SwissMetNet**: use `pp0qffs0` only. `pp0qnhs0` (QNH) has better coverage but
+  reduces through the ICAO standard atmosphere, so it carries an altitude bias;
+  it is not an acceptable substitute. The price is coverage — roughly a third of
+  the network publishes QFF and the rest correctly render as "no reading".
+- **GeoSphere**: neither column is usable. `PRED` looks like a sea-level
+  reduction and is one for low stations, but Wien/Hohe Warte at 198 m reads
+  P 991.7 against PRED 1016.4 while Sonnblick at 3109 m reads P 696.7 against
+  PRED 707.7 — an 11 hPa correction over three kilometres. Nothing in the
+  payload says which regime applies. `pressure` is absent from that network's
+  registry entry and a test pins the exclusion.
+
+### SwissMetNet wind is km/h in one column family and m/s in another
+
+`fu3010z0`/`fu3010z1` are **km/h**; `fkl010z0` is m/s. Both exist for the same
+quantity. VQHA80 carries the `fu3` family, canonical records store m/s, so the
+adapter converts. Passing them through overstates every Swiss wind by 3.6×.
+
+### The SwissMetNet metadata CSV is ISO-8859-1, not UTF-8
+
+`Response.text()` assumes UTF-8 and mangles `Oberägeri`, `Bière`,
+`Lötschental` and `Château-d'Oex`. The proxy reads bytes
+(`readResponseBytesCapped`) and decodes with `new TextDecoder('iso-8859-1')`.
+
+### SwissMetNet timestamps are `YYYYMMDDHHMM` in UTC
+
+Both halves are traps: `new Date(text)` cannot read the layout, and any
+local-time reading is one or two hours out in Switzerland, which is enough to
+make a current reading look stale. Use `parseSmnTimestamp`.
+
+Separately, GeoSphere's `valid_from`/`valid_to` carry **no zone** and parse as
+local time. Nothing reads them; do not start.
+
+### `stats.stale` is a reserved feed-level boolean
+
+`layerFeedState()` renders the whole row as **STALE** on any truthy
+`stats.stale`. Reporting a count of late stations there made a healthy
+157-station feed read STALE. Two separate things:
+
+- `stale` — the proxy served a cached payload after an upstream failure.
+- `staleStations` — how many individual stations are behind.
+
+### Absent is not zero
+
+0 cm, 0 mm and 0 °C are all real, common readings, and a station without a
+sensor leaves its column empty. The two must never be conflated: an absent
+reading stays `null` end to end, and a measured zero stays zero.
+
+Snow depth is the one reading that is floored rather than relayed as published.
+An ultrasonic head ranges to the snow surface from a fixed mount, so a bare
+station drifts either side of its calibrated ground reference — Dornbirn
+(TAWES) published **-1.0 cm** measured live. Below zero the sensor is reading
+its own baseline, not a snowpack, and the depth there is bare ground, so
+`alpineStationRecord` floors it at 0. Left alone it reached the card as "Snow
+depth across the network: -1 to 66 cm". An absent snow reading is untouched by
+the floor: no sensor is still no sensor, not bare ground.
+
+Every band table keeps an **open floor** at its quiet end rather than `min: 0`,
+so every finite reading matches a band and no working sensor can drop out of
+the scale and render identically to a station with no sensor at all.
+
+Three marker states exist for the same reason, and collapsing them would assert
+readings that were never made: a current value, `unmeasured` (the station is
+reporting, but not this parameter), and `offline` (silent, or too old to
+present).
+
+### Quiet markers have to RECEDE, not merely differ
+
+Coverage is uneven by nature, and the thin views are thin: only 175 of ~650
+stations carry a snow sensor, and only 59 publish a sea-level pressure. So in
+those views MOST markers are quiet ones.
+
+Drawn at the same weight as a reading they bury the stations that actually have
+one, and on a light basemap several hundred dark discs read as smudges over the
+map — which is exactly how this was found, on the OSM stack where the first
+tuning (chosen against dark satellite imagery) fell apart. A quiet marker is
+therefore 4 px at low alpha with no outline, against 6-15 px fully opaque and
+outlined for a reading. An outline is most of a 4 px dot, which is why only a
+reading carries one.
+
+They are not dropped. A station that exists but cannot answer is a different
+thing from no station at all, and the network is part of the picture.
+
+**Tune these against the light basemap, not only the dark one.** `osm` is the
+hardest case for anything grey.
+
+### A silent station is not a stale station
+
+It has no reading to be out of date. They read differently on the card and
+`isStale` returns false for a station with no `measuredAt` at all.
+
+### Staleness is per network
+
+SLF publishes every 30 minutes and the other two every 10, so one global window
+is wrong for at least one of them. `staleAfterMs` takes six cycles of the
+network's own cadence with a 90-minute floor. A cutoff is not optional: one
+SwissMetNet station was last seen seven days back while otherwise reporting
+normally, and without one it rendered as a healthy reading.
+
+### Fixtures must be cut from live responses
+
+An invented SwissMetNet fixture on the earlier branch hid that the live STAC
+item publishes no `station_name` and no elevation ordinate. Every test stayed
+green while every station rendered as its bare code with no altitude.
+`src/testSupport/alpineStationFixtures.mjs` is cut from real payloads, and the
+one thing arranged rather than captured (which timestamp slot each GeoSphere
+station reports in) is called out in its header.
+
+## Attribution is on the globe, not only in the lightbox
+
+CC BY is a condition of using all three networks, and SLF's data-service terms
+go further: *"when displaying, processing or otherwise using the data, there
+must be a clearly visible reference to the data source (WSL Institute for Snow
+and Avalanche Research SLF), in the case of digital products as link
+(www.slf.ch)"*.
+
+A lightbox the reader has to open first is a weaker reading of "clearly
+visible" than this layer should rely on, so the credit rides the on-globe
+credit line for exactly as long as the layer is enabled, the way Mapillary's
+CC BY-SA credit does. `showAlpineStationsCredit` / `hideAlpineStationsCredit`
+are driven from the layer's `enable`, `disable` and `destroy`, injected by the
+application wrapper so the layer itself needs no Cesium credit plumbing. The
+`DATA_CREDITS` lightbox entry stays, and carries the fuller text and the
+not-a-danger-rating caveat. The browser gate checks both, and checks that the
+on-globe credit leaves with the layer.
+
+## Rendering
+
+Geometry is **static**, following the earthquakes layer. Points are written only
+when a poll brings new data or the selected parameter changes; there is no
+`CallbackProperty` and no continuous-render hold, so an open map with this layer
+on costs nothing per frame. `LayerPresentation` already requests a render on
+layer activity, so the layer does not call the render governor itself.
+
+A parameter change **recolours in place**. 650 entities are cheap to tint and
+expensive to reconstruct, and reconstructing them would discard the scene's
+picking and labelling work for no reason.
+
+The camera is read only on `moveEnd`, and only to recompute the card's six-row
+"nearest in view" list — never geometry. The layer compares the new membership
+against the old and publishes nothing when it has not changed, so panning within
+one valley does not rewrite the rail on every gesture.
+
+### Wind arrows
+
+In the wind view a station that has something to say about direction draws an
+arrowhead instead of a dot. Four things must all hold, and each omission is
+deliberate: this is the wind view, the station has a current reading, it has a
+working vane, and the air is actually moving above `WIND_ARROW_CALM_FLOOR_MS`.
+A vane in still air is reporting noise, and pointing an arrow with it would
+assert a direction the station never really measured.
+
+**The arrow points downwind.** All three networks publish the direction the
+wind blows FROM, per the WMO convention, so the arrow is the reverse of the
+published figure. The card and the ambient label keep the meteorological
+reading: "22 km/h W" is wind FROM the west, drawn as an arrow pointing east.
+
+**Orientation is screen-space, and that is not optional.** A billboard is a
+camera-facing quad, so a world bearing has to be resolved against the camera.
+This follows the repo's established approach — `alignedAxis: Cartesian3.ZERO`
+with a `rotation` from `screenProjectedRotation`, as the flight and vessel
+layers do. Do NOT reach for `alignedAxis`: `src/data/iconOrientation.js`
+records why that approach was abandoned.
+
+Two consequences worth knowing:
+
+- Arrows are re-aimed on camera **settle**, never per frame. Re-aiming writes
+  one number per visible arrow; it creates, destroys and re-tessellates
+  nothing, so the layer still builds no geometry in response to the camera and
+  still takes no continuous-render hold. `stabilizeScreenRotation` holds
+  through sub-degree projection noise so a settled camera does not jitter
+  hundreds of arrows against their own rounding.
+- **Aim with the cartesian, not `entity.position`.** Cesium wraps an entity
+  position in a `PositionProperty`, and handing one to the projection yields
+  no rotation at all — the arrows then sit at a fixed screen angle that looks
+  plausible and means nothing. This shipped briefly and was caught by the
+  browser gate, not by unit tests, because the test fixture was handing back a
+  plain cartesian where Cesium hands back a property. The fixture now models
+  the wrapper and a test pins it.
+
+A station carries BOTH a `point` and a `billboard` and shows one, so switching
+parameter swaps the symbol without replacing the entity. The dot follows
+whether an arrow was actually attached rather than whether one was wanted:
+without a canvas there is no arrow image, and a station must never end up with
+neither symbol.
+
+The arrow texture is a memoised data URL, not a canvas. `Billboard.image`
+assigns a fresh texture-atlas id to every non-string source, so handing the
+same canvas to hundreds of billboards still makes Cesium upload and repack
+hundreds of identical textures; `cockpitContactDotImage` records the same
+finding. One white arrowhead is tinted per station through `billboard.color`.
+
+### Ambient labels
+
+Ambient overlay entries are `variant: 'label'` carrying just the reading
+(`"22 km/h W"`, `"-3.5 °C"`). One `variant: 'card'` per station was the first
+cut of this on the earlier branch and it buried the map: at Alpine zoom the
+detail boxes covered the country. Labels are dropped past
+`ALPINE_OVERLAY_MAX_DISTANCE_M`; the markers keep rendering, so the network
+stays visible as a network while the numbers stop competing for space.
+
+### Size is continuous in the value, never quantised by band
+
+Marker size reads as "how much", so it varies with the reading itself.
+
+The first cut sized by band INDEX, and it was wrong in a way that is obvious
+the moment two labelled stations sit side by side: 1 cm and 9 cm of snow drew
+identical discs because both are `trace`, while 9 cm and 13 cm differed because
+they straddle a boundary. Worse, on an ordinary high-pressure day the whole
+country sits inside one 10 hPa band, so all 59 stations publishing QFF drew at
+exactly the same size and the encoding carried nothing at all.
+
+`parameterProminence` now reads a per-view `size` domain, in one of two shapes:
+
+- `from-zero` for wind, snow and rain, which have a real floor and a long
+  tail. The square-root curve gives the crowded low end room; linearly, every
+  October snow depth rounds to the minimum.
+- `diverging` for temperature and pressure, which are remarkable in both
+  directions from an ordinary value. `quiet` is the radius around `centre` that
+  still draws at minimum size, because ordinary is a range, not a point.
+
+Colour still comes from the bands, so the legend remains a legend. Tests pin
+both halves: a bigger reading is a bigger marker even inside one band, and
+equal readings are equal markers.
+
+Snow depth is drawn as **colour and size, not as a vertical stem**. The earlier branch
+drew stems scaled to camera altitude, which required rebuilding geometry on
+every camera settle. That is what the current design exists to avoid.
+
+## Adding a network
+
+1. Check the terms. Keyless and redistributable, or it does not belong here.
+2. Add an entry to `ALPINE_NETWORKS`, listing only the parameters it can supply
+   **honestly** — see the pressure trap above for what dishonest looks like.
+   `cadenceMinutes` is load-bearing: it sets both the staleness window and the
+   proxy's refresh window, so a wrong figure either reports a working network as
+   late or re-reads a payload the operator has not republished.
+3. Write a pure adapter in `networks/` that returns canonical records. Cut its
+   fixture from a live response.
+4. Add its fixed URLs and read caps to `server/providers/alpine-stations/upstreams.js`
+   and a fetch step to `fetchers.js`, then name it in `FETCHERS`.
+5. Add it to the credit entry in `src/data/dataCredits.js` and to
+   `DATA_SOURCES.md`.
+
+Nothing else changes. The views, the bands, the card, the markers and the
+summary are all network-neutral.
+
+## Verifying
+
+```bash
+npm test                      # unit suite, including the live-cut fixtures
+npm run build
+npm run check:boundaries
+node scripts/qa-alpine-stations.mjs           # live browser gate
+```
+
+The QA gate drives the real layer in the real app: it enables the layer, waits
+for the proxy, and asserts the markers, the rail card, the legend, the nearest
+list and a parameter change that recolours without rebuilding.
+
+Headless Chrome needs `--use-gl=angle --use-angle=swiftshader`; plain
+`--use-gl=swiftshader` fails to create a WebGL context.
+
+### Markers look soft on a HiDPI display, and that is not this layer
+
+Cesium runs with `useBrowserRecommendedResolution: true` (its default, and the
+app sets nothing else), so the globe canvas renders at CSS resolution and the
+browser upsamples it on a HiDPI screen. Canvas-drawn markers therefore look
+softer than the DOM-rendered labels beside them, which are crisp at native
+density. It affects every Cesium-drawn layer equally, not just this one; judge
+marker tuning at `deviceScaleFactor: 1`, or the blur will be mistaken for a
+sizing or colour problem. It was, once.
+
+### A new `/api` route needs a container restart
+
+Vite reads its config once at boot, and inside the container the config watcher
+does not fire across the bind mount. A newly added route returns `index.html`
+through the SPA fallback, so the browser reports
+`Unexpected token '<', "<!DOCTYPE "... is not valid JSON` and the row shows
+UNAVAILABLE while every pre-existing proxy keeps working.
+
+```bash
+docker restart gods-eye-view-gev-1
+curl -s -o /dev/null -w '%{content_type}\n' http://localhost:4173/api/alpine-stations
+# text/html => middleware not registered; application/json => good
+```
+
+## Not in this change
+
+- **Map-click selection.** Selecting a station is the rail card's list. The
+  click path the cyclones layer uses is about a hundred lines of competing
+  overlay and pointer-ownership handling, and it is a separate change.
+- **A share-link token.** See above; the namespace is the maintainers'.
+- **Avalanche bulletins.** A danger rating is a different product with
+  different authority, and this layer must never read as one. Note for anyone
+  who tries: `aws.slf.ch/api/bulletin/caaml` and `aws.slf.ch/api/warningregion/`
+  both return HTML rather than data when fetched directly, despite being cited
+  on SLF's own data-service page. Find the real endpoints first.
