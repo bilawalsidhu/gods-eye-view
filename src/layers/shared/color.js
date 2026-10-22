@@ -44,6 +44,13 @@ export class Rgba {
     );
   }
 
+  /** Cesium's CSS form, including its float-to-byte conversion. */
+  toCssColorString() {
+    const byte = (v) => (v === 1 ? 255 : (v * 256) | 0);
+    const rgb = `${byte(this.red)},${byte(this.green)},${byte(this.blue)}`;
+    return this.alpha === 1 ? `rgb(${rgb})` : `rgba(${rgb},${this.alpha})`;
+  }
+
   /** `[red, green, blue, alpha]`, 0..1. */
   rgba() {
     return [this.red, this.green, this.blue, this.alpha];

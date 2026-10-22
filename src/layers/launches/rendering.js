@@ -1,4 +1,5 @@
-import * as Cesium from 'cesium';
+import { rgbaFromCss } from '../shared/color.js';
+import * as geo from '../../geo/index.js';
 import { appClock } from '../../time/clock.js';
 import {
   TRAJECTORY_STAGE_COLORS,
@@ -12,6 +13,7 @@ export function createRendering({
   services,
   parts,
   source,
+  getRenderer,
 }) {
   const { getSatelliteOrbitTrack, findSatelliteOrbitTrackInTle } =
     services.satellites;
@@ -34,10 +36,8 @@ export function createRendering({
     }
     parts.panel.updateMissionTelemetry();
     // The app clock's now, as the JulianDate Cesium's entity properties take.
-    const time = Cesium.JulianDate.fromDate(
-      new Date(appClock.now()),
-      layerState._declutterTime,
-    );
+    const time = getRenderer().time(appClock.now());
+    layerState._declutterTime = time;
     layerState._declutterOccluder.cameraPosition =
       layerState._viewer.scene.camera.positionWC;
     parts.overlays.updateReplayVehicleOverlay(layerState._declutterOccluder);
@@ -77,7 +77,7 @@ export function createRendering({
   }
 
   function addLaunchEntity(launch, activeTleText = layerState._activeTleText) {
-    const position = Cesium.Cartesian3.fromDegrees(launch.lon, launch.lat);
+    const position = geo.cartesian3.fromDegrees(launch.lon, launch.lat);
     const overlayRecord = {
       launch,
       anchorPosition: position,
@@ -114,7 +114,7 @@ export function createRendering({
       );
     });
     if (satelliteTrack) layerState._orbitMatches++;
-    const entity = layerState._dataSource.entities.add({
+    const entity = getRenderer().addEntity(layerState._dataSource, {
       id: `rocket-launch:${launch.id}`,
       position,
       point: {
@@ -129,8 +129,8 @@ export function createRendering({
         width: 24,
         height: 24,
         show: false,
-        horizontalOrigin: Cesium.HorizontalOrigin.CENTER,
-        verticalOrigin: Cesium.VerticalOrigin.CENTER,
+        horizontalOrigin: 0,
+        verticalOrigin: 0,
         disableDepthTestDistance: Number.POSITIVE_INFINITY,
       },
       properties: {
@@ -147,6 +147,10 @@ export function createRendering({
         noradId: satelliteTrack?.noradId || '',
       },
     });
+    // Publish the same anchor representation held by the active renderer.
+    overlayRecord.anchorPosition = entity.position.getValue(
+      getRenderer().time(appClock.now()),
+    );
     const points = launch.trajectory
       .filter(
         (point) =>
@@ -161,7 +165,7 @@ export function createRendering({
             point.stageName ||
             'trajectory',
         ),
-        position: Cesium.Cartesian3.fromDegrees(
+        position: geo.cartesian3.fromDegrees(
           Number(point.longitude),
           Number(point.latitude),
           Number(point.altitude || 0),
@@ -177,16 +181,16 @@ export function createRendering({
       });
       segments.forEach((segment, index) => {
         if (segment.positions.length < 2) return;
-        layerState._dataSource.entities.add({
+        getRenderer().addEntity(layerState._dataSource, {
           id: `rocket-trajectory:${launch.id}:${index}`,
           polyline: {
             positions: parts.paths.surfaceSafePath(segment.positions),
             width: 2,
-            material: Cesium.Color.fromCssColorString(
+            material: rgbaFromCss(
               TRAJECTORY_STAGE_COLORS[index % TRAJECTORY_STAGE_COLORS.length],
             ).withAlpha(0.8),
             clampToGround: false,
-            arcType: Cesium.ArcType.NONE,
+            arc: 'none',
           },
           properties: {
             launchId: launch.id,
@@ -224,7 +228,7 @@ export function createRendering({
           new Date(insertionEpochMs),
         );
         if (propagatedInsertion) {
-          insertionReference = Cesium.Cartesian3.fromDegrees(
+          insertionReference = geo.cartesian3.fromDegrees(
             propagatedInsertion.longitude,
             propagatedInsertion.latitude,
             propagatedInsertion.altitude,
@@ -237,7 +241,7 @@ export function createRendering({
         // ascent duration, and join the forward orbit tangent. Using the UTC
         // epoch as phase sent some ascents toward the far side of Earth and
         // forced a visible 180-degree corrective hook before insertion.
-        const insertionProgress = Cesium.Math.clamp(
+        const insertionProgress = geo.math.clamp(
           insertionDurationSec / orbitPeriodSec,
           1 / 96,
           0.16,
@@ -259,14 +263,14 @@ export function createRendering({
       );
       // Cesium can evaluate CallbackProperty values multiple times while it
       // traverses one frame. Camera tracking and the HTML replay overlay must
-      // use the exact same replay epoch as those callbacks; sampling Date.now()
+      // use the exact same replay epoch as those callbacks; sampling appClock.now()
       // independently made the vehicle advance relative to the camera and then
       // snap back on the next frame.
       let replayStateForFrame = null;
       const sampleReplayState = () =>
         parts.replay.replayState(
           launch,
-          layerState._animationStarts.get(launch.id) || Date.now(),
+          layerState._animationStarts.get(launch.id) || appClock.now(),
           ascentDurationSec,
           REPLAY_ORBIT_DURATION_SEC,
           orbitPeriodSec,
@@ -304,22 +308,22 @@ export function createRendering({
         if (path.length < 2) return;
         const reentryIndex = parts.paths.atmosphericReentryIndex(path);
         const reentryPath = path.slice(reentryIndex);
-        const color = Cesium.Color.fromCssColorString(
+        const color = rgbaFromCss(
           TRAJECTORY_STAGE_COLORS[
             (stageIndex + 1) % TRAJECTORY_STAGE_COLORS.length
           ],
         );
-        layerState._dataSource.entities.add({
+        getRenderer().addEntity(layerState._dataSource, {
           id: `rocket-reentry-recovery:${launch.id}:${stageIndex}`,
           polyline: {
             positions: path,
             width: 2,
-            material: new Cesium.PolylineDashMaterialProperty({
+            material: getRenderer().dash({
               color: color.withAlpha(0.82),
               dashLength: 12,
               dashPattern: 0xaaaa,
             }),
-            arcType: Cesium.ArcType.NONE,
+            arc: 'none',
           },
           properties: {
             launchId: launch.id,
@@ -330,18 +334,17 @@ export function createRendering({
           },
         });
         if (reentryPath.length > 1) {
-          layerState._dataSource.entities.add({
+          getRenderer().addEntity(layerState._dataSource, {
             id: `rocket-reentry:${launch.id}:${stageIndex}`,
             polyline: {
               positions: reentryPath,
               width: 2.5,
-              material: new Cesium.PolylineDashMaterialProperty({
-                color:
-                  Cesium.Color.fromCssColorString('#ffd166').withAlpha(0.9),
+              material: getRenderer().dash({
+                color: rgbaFromCss('#ffd166').withAlpha(0.9),
                 dashLength: 8,
                 dashPattern: 0xf0f0,
               }),
-              arcType: Cesium.ArcType.NONE,
+              arc: 'none',
             },
             properties: {
               launchId: launch.id,
@@ -363,7 +366,7 @@ export function createRendering({
             }),
           );
         }
-        layerState._dataSource.entities.add({
+        getRenderer().addEntity(layerState._dataSource, {
           id: `rocket-recovery-end:${launch.id}:${stageIndex}`,
           position: path.at(-1),
           point: {
@@ -394,12 +397,12 @@ export function createRendering({
         lastOverlayWindowPosition: null,
         lastOverlayMode: null,
       });
-      let livePosition = Cesium.Cartesian3.fromDegrees(
+      let livePosition = geo.cartesian3.fromDegrees(
         orbitCurrent.longitude,
         orbitCurrent.latitude,
         orbitCurrent.altitude,
       );
-      const liveTime = new Date();
+      const liveTime = new Date(appClock.now());
       const liveTelemetry = { speedMps: null };
       layerState._satelliteTelemetry.set(launch.id, liveTelemetry);
       let liveFrameNumber = -1;
@@ -410,13 +413,13 @@ export function createRendering({
           layerState._viewer?.scene?.frameState?.frameNumber ?? -1;
         if (frameNumber !== -1 && frameNumber === liveFrameNumber) return;
         liveFrameNumber = frameNumber;
-        const nowMs = Date.now();
+        const nowMs = appClock.now();
         liveTime.setTime(nowMs);
         if (satelliteTrack) {
           const propagated =
             satelliteTrack.positionAt?.(liveTime) || satelliteTrack.current;
           if (propagated) {
-            Cesium.Cartesian3.fromDegrees(
+            geo.cartesian3.fromDegrees(
               propagated.longitude,
               propagated.latitude,
               propagated.altitude,
@@ -438,17 +441,15 @@ export function createRendering({
             ) || livePosition;
         }
       };
-      layerState._dataSource.entities.add({
+      getRenderer().addEntity(layerState._dataSource, {
         id: `rocket-satellite:${launch.id}`,
-        position: new Cesium.CallbackProperty(() => {
+        position: getRenderer().callback(() => {
           updateLiveState();
           return livePosition;
         }, false),
         point: {
           pixelSize: 6,
-          color: Cesium.Color.fromCssColorString(
-            satelliteTrack ? '#7bed9f' : '#ffd166',
-          ),
+          color: rgbaFromCss(satelliteTrack ? '#7bed9f' : '#ffd166'),
           outlineWidth: 0,
           disableDepthTestDistance: Number.POSITIVE_INFINITY,
         },
@@ -488,18 +489,17 @@ export function createRendering({
         satelliteTrack,
       );
       if (!primitiveOrbitAdded) {
-        layerState._dataSource.entities.add({
+        getRenderer().addEntity(layerState._dataSource, {
           id: `rocket-orbit:${launch.id}`,
           polyline: {
             positions: orbitPath,
             // The 3 px canvas gives the periodic dot room to read as round; the
             // shader masks the ten intervening dashes down to a thin center stroke.
             width: 3,
-            material:
-              new parts.orbitRendering.MissionOrbitPatternMaterialProperty(
-                Cesium.Color.fromCssColorString('#c084fc').withAlpha(0.95),
-              ),
-            arcType: Cesium.ArcType.NONE,
+            material: getRenderer().patternMaterial(
+              rgbaFromCss('#c084fc').withAlpha(0.95),
+            ),
+            arc: 'none',
           },
           properties: {
             launchId: launch.id,
@@ -514,10 +514,10 @@ export function createRendering({
       const primitivePath = layerState._missionOrbitPrimitives.get(launch.id);
       if (primitivePath) {
         primitivePath.labelBakePosition = orbitLabelBakePosition;
-        primitivePath.labelPosition = Cesium.Matrix4.multiplyByPoint(
+        primitivePath.labelPosition = geo.matrix4.multiplyByPoint(
           primitivePath.primitive.modelMatrix,
           orbitLabelBakePosition,
-          new Cesium.Cartesian3(),
+          geo.cartesian3.create(),
         );
         orbitLabelPosition = () => primitivePath.labelPosition;
       }
@@ -531,13 +531,13 @@ export function createRendering({
           gapPx: 8,
         }),
       );
-      const replayPosition = new Cesium.CallbackProperty(() => {
+      const replayPosition = getRenderer().callback(() => {
         const state = getReplayState();
         return state.ascending
           ? parts.paths.samplePath(ascentPath, state.phaseProgress)
           : parts.paths.samplePath(animatedOrbitPath, state.phaseProgress);
       }, false);
-      layerState._dataSource.entities.add({
+      getRenderer().addEntity(layerState._dataSource, {
         id: `rocket-vehicle:${launch.id}`,
         position: replayPosition,
         properties: {
@@ -549,7 +549,7 @@ export function createRendering({
             : 'Approximate trajectory animation',
         },
       });
-      layerState._dataSource.entities.add({
+      getRenderer().addEntity(layerState._dataSource, {
         id: `rocket-transfer:${launch.id}`,
         polyline: {
           positions: ascentPath,
@@ -557,9 +557,9 @@ export function createRendering({
           // The animated vehicle uses Cartesian interpolation between these
           // exact samples. Prevent Cesium from replacing each segment with a
           // geodesic arc, which would visually separate the dot from the line.
-          arcType: Cesium.ArcType.NONE,
-          material: new Cesium.PolylineDashMaterialProperty({
-            color: Cesium.Color.fromCssColorString('#7bed9f').withAlpha(0.8),
+          arc: 'none',
+          material: getRenderer().dash({
+            color: rgbaFromCss('#7bed9f').withAlpha(0.8),
             dashLength: 24,
             dashPattern: 0xf0f0,
           }),

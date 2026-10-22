@@ -75,3 +75,16 @@ test('Cesium billboards and models take an Rgba as their colour', () => {
   assert.notEqual(billboard.color, CYAN, 'the billboard keeps its own copy');
   collection.destroy();
 });
+
+test('CSS serialization keeps native byte rounding and alpha formatting', async () => {
+  const { constantRgba } = await import('./color.js');
+  for (const values of [
+    [0.1, 0.5, 1, 1],
+    [1, 0, 0.3, 0.42],
+    [0, 0, 0, 0],
+  ])
+    assert.equal(
+      constantRgba(...values).toCssColorString(),
+      new Cesium.Color(...values).toCssColorString(),
+    );
+});

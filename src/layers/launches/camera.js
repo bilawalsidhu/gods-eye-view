@@ -1,4 +1,3 @@
-import * as Cesium from 'cesium';
 import * as geo from '../../geo/index.js';
 import {
   REPLAY_ASCENT_CAMERA_OFFSET_RAD,
@@ -14,7 +13,13 @@ import {
   REPLAY_ORBIT_FRAME_CENTER_BLEND,
 } from './policy.js';
 
-export function createCamera({ state: layerState, services, parts, source }) {
+export function createCamera({
+  state: layerState,
+  services,
+  parts,
+  source,
+  getRenderer,
+}) {
   function cameraHeadingForPath(path, progress, fallback = Math.PI) {
     if (!path?.length) return fallback;
     const current = parts.paths.samplePath(path, progress);
@@ -26,7 +31,7 @@ export function createCamera({ state: layerState, services, parts, source }) {
       const nextCartographic =
         geo.ellipsoid.WGS84.cartesianToCartographic(next);
       if (!nextCartographic) continue;
-      const geodesic = new Cesium.EllipsoidGeodesic(
+      const geodesic = geo.ellipsoidGeodesic.create(
         currentCartographic,
         nextCartographic,
       );
@@ -308,17 +313,13 @@ export function createCamera({ state: layerState, services, parts, source }) {
    */
 
   function replayOrbitFrameSphere(orbitPath = []) {
-    const earth = new Cesium.BoundingSphere(
+    const earth = geo.boundingSphere.create(
       geo.cartesian3.ZERO,
       geo.ellipsoid.WGS84.maximumRadius,
     );
     if (!Array.isArray(orbitPath) || orbitPath.length < 2) return earth;
-    const orbit = Cesium.BoundingSphere.fromPoints(orbitPath);
-    return Cesium.BoundingSphere.union(
-      earth,
-      orbit,
-      new Cesium.BoundingSphere(),
-    );
+    const orbit = geo.boundingSphere.fromPoints(orbitPath);
+    return geo.boundingSphere.union(earth, orbit, geo.boundingSphere.create());
   }
 
   /**

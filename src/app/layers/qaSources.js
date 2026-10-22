@@ -8,6 +8,7 @@
 //   military:synthetic[:count]  readsb rows, `count` aircraft (1 000); the
 //                               first 25 are also synthetic civil flights
 //   vessels:fixture             12 000 AIS rows, or those within an area
+//   launches:fixture          three LL2 missions; also supplies the satellite dependency
 //   satellites:fixture         839 core TLEs + 6000 dense points
 //   local-adsb:fixture          the local receivers' answer (server format,
 //                               /api/local-receivers/aircraft): 40 aircraft
@@ -24,6 +25,8 @@ import {
   syntheticMilitary,
   syntheticVessels,
 } from '../../bench/w1Feeds.js';
+import { launchFixture } from '../../bench/launchFixture.js';
+import { createLaunchSource } from '../../layers/launches/source.js';
 import { satelliteFixture } from '../../bench/satelliteFixture.js';
 import { createSatelliteSource } from '../../layers/satellites/source.js';
 import { createLocalReceiverFeeds } from '../../layers/localAdsb/feeds.js';
@@ -33,6 +36,7 @@ const KINDS = Object.freeze({
   military: new Set(['synthetic']),
   vessels: new Set(['fixture']),
   satellites: new Set(['fixture']),
+  launches: new Set(['fixture']),
   'local-adsb': new Set(['fixture']),
 });
 
@@ -48,7 +52,7 @@ export function parseQaFeed(search = '') {
       (count !== null && !(Number.isInteger(count) && count > 0))
     )
       throw new TypeError(
-        `qaFeed: unknown entry "${item}" (flights:synthetic[:count], military:synthetic[:count], vessels:fixture, satellites:fixture, local-adsb:fixture)`,
+        `qaFeed: unknown entry "${item}" (flights:synthetic[:count], military:synthetic[:count], vessels:fixture, satellites:fixture, launches:fixture, local-adsb:fixture)`,
       );
     return { layer, kind, count };
   });
@@ -64,6 +68,18 @@ const json = (payload) =>
 export function createQaSources(entries, { now = () => Date.now() } = {}) {
   const sources = {};
   for (const { layer, count } of entries) {
+    if (layer === 'launches') {
+      sources.launches = createLaunchSource({
+        fetchImpl: async (url) =>
+          String(url).includes('/celestrak/')
+            ? new Response(satelliteFixture('stations'))
+            : json(launchFixture()),
+      });
+      sources.satellites ??= createSatelliteSource({
+        fetchImpl: async (url) =>
+          new Response(satelliteFixture(String(url).split('/').at(-1))),
+      });
+    }
     if (layer === 'satellites')
       sources.satellites = createSatelliteSource({
         fetchImpl: async (url) =>
