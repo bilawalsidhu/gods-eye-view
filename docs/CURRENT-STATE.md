@@ -9,6 +9,15 @@ broader suffix variants. Follow-ups retain boundary provenance, and cancelled
 lookups preserve the previous analyst cohort and boundary source. Navigation
 search keeps a successful geocode, with no search or view-based region recovery.
 
+Docker Compose forwards `GEV_KEY_SETUP_TRUSTED_PEERS` and `GEV_ALLOWED_HOSTS`
+from the shell or project `.env` before `scripts/docker-start.mjs` runs; shell
+values take precedence. The launcher's `none` policy resolves to an empty trusted
+peer list and is assigned before importing Vite, preventing later dotenv loading
+from replacing it. Unset or blank values retain automatic gateway discovery.
+Startup logs distinguish an explicit `none` policy from a missing default route.
+This changes neither loopback-only port publishing nor the Provider Settings
+Host, Origin, proxy-header and sharing checks.
+
 Shared distance checks use `src/geoDistance.js` with `{ lat, lon }` points and
 the IUGG mean spherical Earth radius, 6371.0088 km. `greatCircleKm` is
 canonical; `greatCircleMeters` is its exact metre conversion. Missing,
@@ -3538,7 +3547,7 @@ test:track` 43 tracking invariants · headless QA harnesses under
 
 ### Interface localization (October 2026)
 
-Shipped locales: **en** (source and fallback), **es** and **ru**. The code lives in
+Shipped locales: **en** (source and fallback), **es**, **ru** and **zh-CN**. The code lives in
 `src/i18n/`. How to mark UI text: [`docs/I18N.md`](./I18N.md); translator workflow:
 [`docs/TRANSLATORS.md`](./TRANSLATORS.md).
 
@@ -3549,7 +3558,8 @@ Shipped locales: **en** (source and fallback), **es** and **ru**. The code lives
   value). English has no catalog; every other locale is
   `src/i18n/locales/<code>.json`, and a missing entry falls back to English.
 - **Locale choice.** `?lang=` → stored choice (`gev:locale:v1`) →
-  `navigator.languages` → English. `?lang=` is not stored, and share links drop
+  `navigator.languages` → English. Chinese tags map to `zh-CN`; tags containing
+  `Hant`, `TW`, `HK` or `MO` are skipped. `?lang=` is not stored, and share links drop
   it, so a recipient keeps their own language. The globe picker in the
   bottom-right corner (`src/ui/localePicker.js`) stores the choice, drops
   `?lang=` (keeps it only when storage is blocked) and reloads. It asks first
