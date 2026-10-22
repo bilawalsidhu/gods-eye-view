@@ -69,7 +69,7 @@ test('focusable controls do not animate the global outline', () => {
     '#top-center-actions button {',
     '.data-toggle-chip {',
     '.scene-btn {',
-    '.scene-shot-btn {',
+    '.gev-action-button--compact {',
   ]) {
     assert.doesNotMatch(
       ruleBody(selector),

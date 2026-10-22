@@ -184,8 +184,8 @@
   max-height: 100%;
   pointer-events: auto;
 }
-#right-context-rail > #weather-panel,
-/* Collapsed, it must stay hideable by the rail's exclusive layout. */
+/* Collapsed readouts must stay hideable by the rail's exclusive layout. */
+#right-context-rail > #weather-panel:not(.collapsed),
 #right-context-rail > #recent-imagery-panel:not(.collapsed) {
   display: flex;
   flex-direction: column;
