@@ -81,6 +81,7 @@ const ANNOTATION_COLORS = Object.freeze([
   'green',
   'red',
 ]);
+const ANNOTATION_ROUTE_MODES = Object.freeze(['walk', 'car', 'bike']);
 const MAX_ANNOTATIONS = 24;
 const MAX_ANNOTATION_PARAM_CHARS = 6000;
 const ANNOTATION_PARAM = 'an';
@@ -155,6 +156,11 @@ export const VIEW_PROPERTIES = Object.freeze({
             additionalProperties: false,
           },
         },
+        mode: {
+          type: 'string',
+          enum: [...ANNOTATION_ROUTE_MODES],
+          description: 'Travel mode for a route; omitted means walking.',
+        },
         label: { type: 'string', maxLength: 120 },
         color: { type: 'string', enum: [...ANNOTATION_COLORS] },
       },
@@ -227,6 +233,10 @@ function annotationOf(input) {
       toLatitude: toLat,
       toLongitude: toLon,
       points: points.length >= 2 ? points : undefined,
+      mode:
+        input.type === 'route' && ANNOTATION_ROUTE_MODES.includes(input.mode)
+          ? input.mode
+          : undefined,
       label: text(input.label, 120),
       color: ANNOTATION_COLORS.includes(input.color) ? input.color : undefined,
     }).filter(([, value]) => value !== undefined),

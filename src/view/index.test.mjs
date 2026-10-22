@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   STYLE_URL_NAMES,
+  VIEW_PROPERTIES,
   createView,
   viewFromParams,
   viewToParams,
@@ -126,3 +127,132 @@ test('annotations travel in the link, keeping only what the app draws', async ()
   // Too long for a link: the view keeps them, the link leaves them out.
   assert.equal(viewToParams(many).has('an'), false);
 });
+
+// Routes already accept these modes in the annotation engine. The shared view
+// codec must retain that choice before any renderer or routing service sees it.
+for (const mode of ['walk', 'car', 'bike']) {
+  test(`route mode ${mode} is admitted by tools`, async () => {
+    const { validateValue } = await import('../tools/schema.js');
+    const annotation = {
+      type: 'route',
+      label: 'Road corridor',
+      mode,
+      points: [
+        { latitude: 33.513, longitude: 36.292 },
+        { latitude: 36.202, longitude: 37.134 },
+      ],
+    };
+    assert.deepEqual(
+      validateValue(VIEW_PROPERTIES.annotations, [annotation]),
+      [],
+    );
+  });
+  test(`route mode ${mode} survives a share link`, () => {
+    const annotation = {
+      type: 'route',
+      mode,
+      points: [
+        { latitude: 33.513, longitude: 36.292 },
+        { latitude: 36.202, longitude: 37.134 },
+      ],
+    };
+    const view = createView({
+      camera: { lat: 35, lon: 37 },
+      annotations: [annotation],
+    });
+    const restored = viewFromParams(viewToParams(view));
+    assert.deepEqual(restored.annotations, [annotation]);
+  });
+}
+
+test('route mode remains optional and unsupported link values are discarded', async () => {
+  const { validateValue } = await import('../tools/schema.js');
+  const route = {
+    type: 'route',
+    points: [
+      { latitude: 33.513, longitude: 36.292 },
+      { latitude: 36.202, longitude: 37.134 },
+    ],
+  };
+  for (const mode of [undefined, 'fly', '', null, 1]) {
+    const annotation = mode === undefined ? route : { ...route, mode };
+    const view = createView({
+      camera: { lat: 35, lon: 37 },
+      annotations: [annotation],
+    });
+    assert.deepEqual(viewFromParams(viewToParams(view)).annotations, [route]);
+    assert.equal(
+      validateValue(VIEW_PROPERTIES.annotations, [annotation]).length === 0,
+      mode === undefined,
+    );
+  }
+});
+
+test('a mode on another annotation kind does not enter its share link', () => {
+  const pin = { type: 'pin', latitude: 35, longitude: 37, label: 'A place' };
+  const view = createView({
+    camera: { lat: 35, lon: 37 },
+    annotations: [{ ...pin, mode: 'car' }],
+  });
+  assert.deepEqual(viewFromParams(viewToParams(view)).annotations, [pin]);
+});
+
+for (const [mode, routedMode, word] of [
+  ['car', 'car', 'drive'],
+  ['bike', 'bike', 'ride'],
+  ['walk', 'foot', 'walk'],
+  [undefined, 'foot', 'walk'],
+]) {
+  test(`shared route mode ${mode ?? 'default'} reaches the router and label`, async (t) => {
+    const { createAnnotationEngine } =
+      await import('../annotations/annotationEngine.js');
+    const { _resetRenderGovernorForTest } =
+      await import('../renderGovernor.js');
+    const oldFrame = globalThis.requestAnimationFrame;
+    const oldCancel = globalThis.cancelAnimationFrame;
+    globalThis.requestAnimationFrame = () => 1;
+    globalThis.cancelAnimationFrame = () => {};
+    t.after(() => {
+      if (oldFrame === undefined) delete globalThis.requestAnimationFrame;
+      else globalThis.requestAnimationFrame = oldFrame;
+      if (oldCancel === undefined) delete globalThis.cancelAnimationFrame;
+      else globalThis.cancelAnimationFrame = oldCancel;
+      _resetRenderGovernorForTest();
+    });
+    const points = [
+      { latitude: 33.513, longitude: 36.292 },
+      { latitude: 36.202, longitude: 37.134 },
+    ];
+    const modes = [];
+    const engine = createAnnotationEngine({
+      viewer: {},
+      renderer: { add() {}, remove() {}, update() {}, sync() {} },
+      resolveTarget: async ({ latitude, longitude }) => ({
+        lat: latitude,
+        lon: longitude,
+        height: 0,
+      }),
+      placeSearch: {
+        async route(coordinates, actualMode) {
+          modes.push(actualMode);
+          return { geometry: coordinates, distanceM: 556000, durationS: 3600 };
+        },
+      },
+    });
+    const route = { type: 'route', points, label: 'Road corridor' };
+    if (mode !== undefined) route.mode = mode;
+    const view = createView({
+      camera: { lat: 35, lon: 37 },
+      annotations: [route],
+    });
+    const restored = viewFromParams(viewToParams(view));
+    const result = await engine.annotate(restored.annotations);
+    assert.equal(result.drawn, 1);
+    assert.deepEqual(modes, [routedMode]);
+    assert.equal(
+      engine.list()[0].label,
+      `Road corridor — 556 km · 60 min ${word}`,
+    );
+    engine.clear();
+  });
+}
