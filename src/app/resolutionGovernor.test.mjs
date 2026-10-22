@@ -7,7 +7,9 @@ import {
   installResolutionGovernor,
   msaaSamplesForRatio,
   pixelRatioCeiling,
+  pixelRatioFloor,
   readMaxPixelRatio,
+  textureLimitedRatio,
 } from './resolutionGovernor.js';
 
 const SLOW = 33.3;
@@ -50,14 +52,75 @@ test('the ceiling follows the screen, the cap, and never drops below 1', () => {
 
 test('the pixel budget caps large canvases on the 0.25 grid', () => {
   // Laptop screens keep their full 2x.
-  assert.equal(pixelRatioCeiling(2, 2, 1512 * 982), 2);
-  assert.equal(pixelRatioCeiling(2, 2, 1728 * 1117), 2);
+  assert.equal(pixelRatioCeiling(2, 2, { cssWidth: 1512, cssHeight: 982 }), 2);
+  assert.equal(pixelRatioCeiling(2, 2, { cssWidth: 1728, cssHeight: 1117 }), 2);
   // A 4K frame exactly fits; a full-screen 5K display draws at 1.5.
-  assert.equal(pixelRatioCeiling(2, 2, 1920 * 1080), 2);
-  assert.equal(pixelRatioCeiling(2, 2, 2560 * 1440), 1.5);
+  assert.equal(pixelRatioCeiling(2, 2, { cssWidth: 1920, cssHeight: 1080 }), 2);
+  assert.equal(
+    pixelRatioCeiling(2, 2, { cssWidth: 2560, cssHeight: 1440 }),
+    1.5,
+  );
   // Never below the old 1x, even past the budget.
-  assert.equal(pixelRatioCeiling(2, 2, 5120 * 2880), 1);
-  assert.equal(pixelRatioCeiling(2, 2, 0), 2, 'no size yet');
+  assert.equal(pixelRatioCeiling(2, 2, { cssWidth: 5120, cssHeight: 2880 }), 1);
+  assert.equal(pixelRatioCeiling(2, 2, {}), 2, 'no size yet');
+});
+
+test('the GPU texture limit caps both sides, below 1x if it must (#905)', () => {
+  // 2560 x 1440 on a 2048 GPU: 1x already throws in Cesium, so 0.8.
+  assert.equal(textureLimitedRatio(2560, 1440, 2048), 0.8);
+  assert.equal(pixelRatioFloor(2560, 1440, 2048), 0.8);
+  const fhd = { cssWidth: 2560, cssHeight: 1440, maxTextureSize: 2048 };
+  assert.equal(pixelRatioCeiling(2, 2, fhd), 0.8);
+  assert.ok(2560 * pixelRatioCeiling(2, 2, fhd) <= 2048);
+  // The longer side decides, portrait included.
+  assert.equal(
+    pixelRatioCeiling(2, 2, {
+      cssWidth: 900,
+      cssHeight: 1400,
+      maxTextureSize: 2048,
+    }),
+    2048 / 1400,
+  );
+  // A 1200 px window at 2x needs 2400: a 2048 GPU gets 1.71, a 16k GPU 2.
+  const laptop = { cssWidth: 1200, cssHeight: 800 };
+  assert.equal(
+    pixelRatioCeiling(2, 2, { ...laptop, maxTextureSize: 2048 }),
+    2048 / 1200,
+  );
+  assert.equal(
+    pixelRatioCeiling(2, 2, { ...laptop, maxTextureSize: 16384 }),
+    2,
+  );
+  // Unknown limit or size: no texture cap, the floor stays the old 1x.
+  assert.equal(pixelRatioFloor(2560, 1440, 0), 1);
+  assert.equal(pixelRatioFloor(0, 0, 2048), 1);
+});
+
+test('the policy never steps above the texture limit or below its floor', () => {
+  const policy = createResolutionPolicy({
+    devicePixelRatio: 2,
+    cssWidth: 2560,
+    cssHeight: 1440,
+    maxTextureSize: 2048,
+  });
+  assert.equal(policy.ratio, 0.8);
+  assert.equal(policy.floor, 0.8);
+  assert.deepEqual(
+    run(policy, SLOW, 20_000).changes,
+    [],
+    'nothing to give back',
+  );
+  // Shrinking the window lifts both: the floor back to 1x, the ceiling with it.
+  policy.setViewport({ cssWidth: 1600, cssHeight: 900 });
+  assert.equal(policy.floor, 1);
+  assert.equal(
+    policy.ratio,
+    2048 / 1600,
+    'follows the ceiling, which the texture limit sets exactly',
+  );
+  // Growing it again clamps a ratio that would no longer fit.
+  policy.setViewport({ cssWidth: 2560, cssHeight: 1440 });
+  assert.equal(policy.ratio, 0.8);
 });
 
 test('MSAA drops to 2 samples once the ratio supplies the coverage', () => {
@@ -208,18 +271,19 @@ test('a devicePixelRatio change restarts at the new ceiling', () => {
 test('a resize keeps a stepped-down ratio and follows an unthrottled one', () => {
   const policy = createResolutionPolicy({
     devicePixelRatio: 2,
-    cssPixels: 1440 * 900,
+    cssWidth: 1440,
+    cssHeight: 900,
   });
   assert.equal(policy.ratio, 2);
-  policy.setViewport({ cssPixels: 2560 * 1440 });
+  policy.setViewport({ cssWidth: 2560, cssHeight: 1440 });
   assert.equal(policy.ratio, 1.5, 'follows the budget down');
-  policy.setViewport({ cssPixels: 1440 * 900 });
+  policy.setViewport({ cssWidth: 1440, cssHeight: 900 });
   assert.equal(policy.ratio, 2, 'and back up while not throttled');
   run(policy, SLOW, 5_000);
   assert.equal(policy.ratio, 1.5);
-  policy.setViewport({ cssPixels: 1400 * 900 });
+  policy.setViewport({ cssWidth: 1400, cssHeight: 900 });
   assert.equal(policy.ratio, 1.5, 'a throttled ratio stays put');
-  policy.setViewport({ cssPixels: 3000 * 1600 });
+  policy.setViewport({ cssWidth: 3000, cssHeight: 1600 });
   assert.equal(policy.ratio, 1.25, 'but never above the new ceiling');
 });
 
@@ -398,6 +462,26 @@ test('a canvas resize past the pixel budget lowers the ratio', () => {
   assert.equal(viewer.resolutionScale, 0.75);
   assert.equal(viewer.canvas.style.imageRendering, 'auto');
   assert.equal(getResolutionDiagnostics(viewer).ceiling, 1.5);
+});
+
+test('install keeps the drawing buffer inside the texture limit', () => {
+  const viewer = makeViewer();
+  viewer.canvas.clientWidth = 2560;
+  viewer.canvas.clientHeight = 1440;
+  const clock = { t: 0 };
+  installResolutionGovernor(viewer, {
+    windowRef: { devicePixelRatio: 1 },
+    maxTextureSize: 2048,
+    now: () => clock.t,
+  });
+  assert.equal(viewer.resolutionScale, 0.8);
+  assert.ok(2560 * viewer.resolutionScale <= 2048);
+  assert.equal(getResolutionDiagnostics(viewer).floor, 0.8);
+  // A narrower window gets the old 1x back.
+  viewer.canvas.clientWidth = 1920;
+  viewer.canvas.clientHeight = 1080;
+  frames(viewer, clock, ON_TIME, ON_TIME);
+  assert.equal(viewer.resolutionScale, 1);
 });
 
 test('install rejects a non-viewer and replaces an earlier governor', () => {

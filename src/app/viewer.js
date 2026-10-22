@@ -155,7 +155,14 @@ export function createApplicationViewer({
     // atmosphere fails to LINK on Apple's Metal backend and kills the
     // render loop. See app/atmosphereCompat.js.
     applyModelAtmosphereWorkaround(viewer.scene);
-    installResolutionGovernor(viewer, { maxPixelRatio });
+    // Framebuffer sides above the GPU limit throw and stop rendering (#905).
+    installResolutionGovernor(viewer, {
+      maxPixelRatio,
+      maxTextureSize: Math.min(
+        Cesium.ContextLimits.maximumTextureSize,
+        Cesium.ContextLimits.maximumRenderbufferSize,
+      ),
+    });
     viewer.scene.globe.show = false;
     viewer.scene.skyAtmosphere.show = true;
     viewer.scene.skyAtmosphere.atmosphereLightIntensity = 18;

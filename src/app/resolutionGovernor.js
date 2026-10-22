@@ -7,11 +7,15 @@
  * frame and lines look stair-stepped. The viewer now draws at `ratio` device
  * pixels per CSS pixel, where
  *
- *   1 <= ratio <= ceiling = max(1, min(devicePixelRatio, maxPixelRatio,
- *                                      sqrt(maxDrawingPixels / CSS pixels)))
+ *   floor <= ratio <= ceiling = max(floor, min(devicePixelRatio,
+ *     maxPixelRatio, sqrt(maxDrawingPixels / CSS pixels), textureLimit))
  *
- * The floor is the old behaviour, so no screen ever draws fewer pixels than
- * before. The pixel budget bounds framebuffer memory on large displays. Tile
+ * where textureLimit = maxTextureSize / the longer CSS side, and
+ * floor = min(1, textureLimit). The floor is the old behaviour wherever the
+ * GPU can hold it. Below that, Cesium throws "Width must be less than or equal
+ * to the maximum texture size" and stops rendering (#905), so the texture
+ * limit wins over the floor. The pixel budget bounds framebuffer memory on
+ * large displays. Tile
  * detail does not change with the ratio: Cesium divides screen-space error by
  * `frameState.pixelRatio`.
  *
@@ -32,8 +36,9 @@
  * - A step up that is followed by a step down failed: the wait doubles, up
  *   to `maxRecoverMs`. A full on-time wait resets it.
  * - A devicePixelRatio change (window moved to another screen, browser zoom)
- *   restarts at the new ceiling. A resize keeps the current ratio inside the
- *   new ceiling, and follows the ceiling when it was not stepped down.
+ *   restarts at the new ceiling. A resize keeps the current ratio between the
+ *   new floor and ceiling, and follows the ceiling when it was not stepped
+ *   down.
  *
  * The governor has no timers. Its listeners live on the viewer's scene and
  * camera and end with the viewer.
@@ -76,27 +81,61 @@ export function readMaxPixelRatio(
 }
 
 /**
- * Highest ratio the screen, the cap and the pixel budget allow. Never below
- * 1, the ratio the viewer drew at before this governor.
+ * Largest ratio whose drawing buffer fits the GPU's texture limit on both
+ * sides. Infinity when the size or the limit is unknown.
+ * @param {number} cssWidth
+ * @param {number} cssHeight
+ * @param {number} [maxTextureSize]
+ * @returns {number}
+ */
+export function textureLimitedRatio(cssWidth, cssHeight, maxTextureSize = 0) {
+  const side = Math.max(Number(cssWidth) || 0, Number(cssHeight) || 0);
+  return side > 0 && maxTextureSize > 0 ? maxTextureSize / side : Infinity;
+}
+
+/**
+ * Lowest ratio the governor steps to: the old 1x, unless the GPU's texture
+ * limit cannot hold even that.
+ * @param {number} cssWidth
+ * @param {number} cssHeight
+ * @param {number} [maxTextureSize]
+ * @returns {number}
+ */
+export function pixelRatioFloor(cssWidth, cssHeight, maxTextureSize = 0) {
+  return Math.min(1, textureLimitedRatio(cssWidth, cssHeight, maxTextureSize));
+}
+
+/**
+ * Highest ratio the screen, the cap, the pixel budget and the texture limit
+ * allow. Never below `pixelRatioFloor`.
  * @param {number} devicePixelRatio
  * @param {number} maxPixelRatio
- * @param {number} [cssPixels] Canvas CSS width × height; 0 skips the budget.
- * @param {number} [maxDrawingPixels]
+ * @param {{cssWidth?: number, cssHeight?: number, maxDrawingPixels?: number,
+ *   maxTextureSize?: number}} [viewport] An unknown size skips the budget.
  * @returns {number}
  */
 export function pixelRatioCeiling(
   devicePixelRatio,
   maxPixelRatio,
-  cssPixels = 0,
-  maxDrawingPixels = RESOLUTION_POLICY.maxDrawingPixels,
+  {
+    cssWidth = 0,
+    cssHeight = 0,
+    maxDrawingPixels = RESOLUTION_POLICY.maxDrawingPixels,
+    maxTextureSize = 0,
+  } = {},
 ) {
   const dpr = Number(devicePixelRatio) > 0 ? Number(devicePixelRatio) : 1;
+  const cssPixels = cssWidth * cssHeight;
   // Whole steps keep the budgeted ratio on the governor's 0.25 grid.
   const budget =
     cssPixels > 0
       ? Math.floor(Math.sqrt(maxDrawingPixels / cssPixels) * 4) / 4
       : Infinity;
-  return Math.max(1, Math.min(dpr, maxPixelRatio, budget));
+  const texture = textureLimitedRatio(cssWidth, cssHeight, maxTextureSize);
+  return Math.max(
+    pixelRatioFloor(cssWidth, cssHeight, maxTextureSize),
+    Math.min(dpr, maxPixelRatio, budget, texture),
+  );
 }
 
 /**
@@ -112,21 +151,25 @@ export function msaaSamplesForRatio(ratio) {
 
 /**
  * Pure step policy. Feed it back-to-back frame intervals; read `ratio`.
- * @param {{devicePixelRatio?: number, cssPixels?: number,
- *   maxPixelRatio?: number}} [options]
+ * @param {{devicePixelRatio?: number, cssWidth?: number, cssHeight?: number,
+ *   maxPixelRatio?: number, maxTextureSize?: number}} [options]
  *   Plus any `RESOLUTION_POLICY` field, for tests.
  */
 export function createResolutionPolicy(options = {}) {
-  const config = { ...RESOLUTION_POLICY, ...options };
+  const config = { maxTextureSize: 0, ...RESOLUTION_POLICY, ...options };
   let devicePixelRatio = Number(options.devicePixelRatio) || 1;
-  let cssPixels = Number(options.cssPixels) || 0;
+  let cssWidth = Number(options.cssWidth) || 0;
+  let cssHeight = Number(options.cssHeight) || 0;
+  const floorFor = () =>
+    pixelRatioFloor(cssWidth, cssHeight, config.maxTextureSize);
   const ceilingFor = () =>
-    pixelRatioCeiling(
-      devicePixelRatio,
-      config.maxPixelRatio,
-      cssPixels,
-      config.maxDrawingPixels,
-    );
+    pixelRatioCeiling(devicePixelRatio, config.maxPixelRatio, {
+      cssWidth,
+      cssHeight,
+      maxDrawingPixels: config.maxDrawingPixels,
+      maxTextureSize: config.maxTextureSize,
+    });
+  let floor = floorFor();
   let ceiling = ceilingFor();
   let ratio = ceiling;
   // Sampled frame time: advances only by accepted intervals.
@@ -152,6 +195,9 @@ export function createResolutionPolicy(options = {}) {
     get ceiling() {
       return ceiling;
     },
+    get floor() {
+      return floor;
+    },
     /**
      * Record one frame interval.
      * @param {number} intervalMs Time since the previous back-to-back frame.
@@ -171,10 +217,10 @@ export function createResolutionPolicy(options = {}) {
       if (smoothed > config.onTimeMs) onTimeSince = null;
       if (smoothed > config.budgetMs) {
         slowSince ??= now;
-        if (now - slowSince < config.slowMs || ratio <= 1) return false;
+        if (now - slowSince < config.slowMs || ratio <= floor) return false;
         if (probing) recoverMs = Math.min(recoverMs * 2, config.maxRecoverMs);
         probing = false;
-        ratio = Math.max(1, ratio - config.step);
+        ratio = Math.max(floor, ratio - config.step);
         stepsDown++;
         restartWindows();
         return true;
@@ -201,7 +247,8 @@ export function createResolutionPolicy(options = {}) {
     },
     /**
      * Follow a screen or canvas change.
-     * @param {{devicePixelRatio?: number, cssPixels?: number}} next
+     * @param {{devicePixelRatio?: number, cssWidth?: number,
+     *   cssHeight?: number}} next
      * @returns {boolean} True when `ratio` changed.
      */
     setViewport(next) {
@@ -209,13 +256,21 @@ export function createResolutionPolicy(options = {}) {
         Number(next.devicePixelRatio) > 0
           ? Number(next.devicePixelRatio)
           : devicePixelRatio;
-      const pixels = next.cssPixels ?? cssPixels;
-      if (dpr === devicePixelRatio && pixels === cssPixels) return false;
+      const width = next.cssWidth ?? cssWidth;
+      const height = next.cssHeight ?? cssHeight;
+      if (
+        dpr === devicePixelRatio &&
+        width === cssWidth &&
+        height === cssHeight
+      )
+        return false;
       const previous = ratio;
       const wasAtCeiling = ratio >= ceiling;
       const screenChanged = dpr !== devicePixelRatio;
       devicePixelRatio = dpr;
-      cssPixels = pixels;
+      cssWidth = width;
+      cssHeight = height;
+      floor = floorFor();
       ceiling = ceilingFor();
       if (screenChanged) {
         ratio = ceiling;
@@ -223,17 +278,22 @@ export function createResolutionPolicy(options = {}) {
         probing = false;
         restartWindows();
       } else {
-        ratio = wasAtCeiling ? ceiling : Math.min(ratio, ceiling);
+        ratio = wasAtCeiling
+          ? ceiling
+          : Math.max(floor, Math.min(ratio, ceiling));
       }
       return ratio !== previous;
     },
     diagnostics() {
       return {
         ratio,
+        floor,
         ceiling,
         devicePixelRatio,
-        cssPixels,
+        cssWidth,
+        cssHeight,
         maxPixelRatio: config.maxPixelRatio,
+        maxTextureSize: config.maxTextureSize,
         smoothedMs: smoothed,
         recoverMs,
         stepsDown,
@@ -249,14 +309,16 @@ const installed = new WeakMap();
  * Drive `viewer.resolutionScale` and `scene.msaaSamples` from the policy.
  * The viewer must be created with `useBrowserRecommendedResolution: false`.
  * @param {object} viewer Cesium viewer.
- * @param {{maxPixelRatio?: number, windowRef?: {devicePixelRatio?: number},
- *   now?: () => number}} [options]
+ * @param {{maxPixelRatio?: number, maxTextureSize?: number,
+ *   windowRef?: {devicePixelRatio?: number}, now?: () => number}} [options]
+ *   `maxTextureSize` is the GPU's limit for a framebuffer side; 0 skips it.
  * @returns {() => void} Disposer.
  */
 export function installResolutionGovernor(
   viewer,
   {
     maxPixelRatio = RESOLUTION_POLICY.maxPixelRatio,
+    maxTextureSize = 0,
     windowRef = globalThis.window,
     now = () => performance.now(),
   } = {},
@@ -266,15 +328,17 @@ export function installResolutionGovernor(
   if (!scene?.postRender || !camera?.moveStart)
     throw new TypeError('installResolutionGovernor requires a Cesium viewer');
   const readDpr = () => Number(windowRef?.devicePixelRatio) || 1;
-  const readCssPixels = () =>
-    (Number(viewer.canvas?.clientWidth) || 0) *
-    (Number(viewer.canvas?.clientHeight) || 0);
+  const readWidth = () => Number(viewer.canvas?.clientWidth) || 0;
+  const readHeight = () => Number(viewer.canvas?.clientHeight) || 0;
   let dpr = readDpr();
-  let cssPixels = readCssPixels();
+  let cssWidth = readWidth();
+  let cssHeight = readHeight();
   const policy = createResolutionPolicy({
     devicePixelRatio: dpr,
-    cssPixels,
+    cssWidth,
+    cssHeight,
     maxPixelRatio,
+    maxTextureSize,
   });
 
   // Cesium asks for nearest-neighbour upscaling. That is exact at a
@@ -308,11 +372,17 @@ export function installResolutionGovernor(
     scene.postRender.addEventListener(() => {
       const at = now();
       const nextDpr = readDpr();
-      const nextCssPixels = readCssPixels();
-      if (nextDpr !== dpr || nextCssPixels !== cssPixels) {
+      const nextWidth = readWidth();
+      const nextHeight = readHeight();
+      if (
+        nextDpr !== dpr ||
+        nextWidth !== cssWidth ||
+        nextHeight !== cssHeight
+      ) {
         dpr = nextDpr;
-        cssPixels = nextCssPixels;
-        policy.setViewport({ devicePixelRatio: dpr, cssPixels });
+        cssWidth = nextWidth;
+        cssHeight = nextHeight;
+        policy.setViewport({ devicePixelRatio: dpr, cssWidth, cssHeight });
         lastFrameAt = null;
         apply();
         return;

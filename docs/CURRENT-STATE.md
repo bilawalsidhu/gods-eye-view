@@ -1244,7 +1244,13 @@ installs `src/app/resolutionGovernor.js`. The drawing ratio is at most
 `min(devicePixelRatio, 2)`, and at most a 3840 × 2160 drawing buffer (rounded
 down to a 0.25 step), and never below 1. A DPR 1 screen draws exactly as
 before; every laptop screen gets its full 2x; a full-screen 2560 × 1440 CSS
-window on a 5K display draws at 1.5. Framebuffer memory grows about 150 bytes
+window on a 5K display draws at 1.5.
+
+Neither drawing-buffer side may exceed
+`min(ContextLimits.maximumTextureSize, maximumRenderbufferSize)`: past it Cesium
+throws `Width must be less than or equal to the maximum texture size` and stops
+rendering (#905). That limit wins over the 1x floor, so a 2560 px window on a
+2048-limit GPU draws at 0.8 instead of crashing. Framebuffer memory grows about 150 bytes
 per drawn pixel (`docs/PERFORMANCE.md`), which is what the budget bounds. Tile
 detail does not change with the ratio: Cesium divides screen-space error by the
 pixel ratio.
