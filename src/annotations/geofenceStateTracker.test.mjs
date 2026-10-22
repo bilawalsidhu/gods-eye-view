@@ -21,8 +21,11 @@ test('tracker: inside->outside triggers exited, re-enter triggers again', () => 
   assert.equal(t.update('b', true), 'entered');
 });
 
-test('tracker: unknown->inside counts as entered (initial transition)', () => {
+test('tracker: first sighting seeds state without a transition', () => {
   const t = createGeofenceStateTracker();
+  assert.equal(t.update('c', true), null);
+  assert.equal(t.isInside('c'), true);
+  assert.equal(t.update('c', false), 'exited');
   assert.equal(t.update('c', true), 'entered');
 });
 
@@ -31,7 +34,8 @@ test('tracker: clear resets', () => {
   t.update('a', true);
   t.clear();
   assert.equal(t.get('a'), null);
-  assert.equal(t.update('a', true), 'entered');
+  // After a clear the next sighting is a first sighting again.
+  assert.equal(t.update('a', true), null);
 });
 
 test('monitor: internal enter only on initial outside->inside, no duplicates', () => {
@@ -297,4 +301,94 @@ test('monitor: updateEntity dedupes single position updates', () => {
   assert.equal(monitor.updateEntity('flights', 'x1', 0.6, 0.6), null);
   assert.equal(enters, 1);
   monitor.destroy();
+});
+
+function layerRig() {
+  const square = [
+    { lon: 0, lat: 0 },
+    { lon: 1, lat: 0 },
+    { lon: 1, lat: 1 },
+    { lon: 0, lat: 1 },
+  ];
+  const layers = new Map();
+  const calls = [];
+  const monitor = createGeofenceMonitor({
+    getPolygon: () => square,
+    dataManager: {
+      layers,
+      subscribeActivity: () => () => {},
+      subscribe: () => () => {},
+    },
+    fetchImpl: async (url, opts) => {
+      calls.push(JSON.parse(opts.body));
+      return { ok: true };
+    },
+  });
+  monitor.setWebhookUrl('https://example.com/breach');
+  let enters = 0;
+  monitor.onEnter(() => enters++);
+  const setLayer = (key, records, enabled = true) =>
+    layers.set(key, {
+      enabled,
+      module: { getAnalystRecords: () => records },
+    });
+  const flush = () => new Promise((resolve) => setImmediate(resolve));
+  return { monitor, setLayer, calls, flush, enters: () => enters };
+}
+
+test('monitor: enabling a layer after the fence fires nothing for records already inside', async () => {
+  const r = layerRig();
+  r.monitor.notifyPolygonChanged();
+  const quakes = [
+    { id: 'q1', lat: 0.5, lon: 0.5 },
+    { id: 'q2', lat: 0.2, lon: 0.7 },
+  ];
+  r.setLayer('earthquakes', quakes);
+  r.monitor.evaluateAll();
+  await r.flush();
+  assert.equal(r.enters(), 0);
+  assert.equal(r.calls.length, 0);
+  assert.equal(r.monitor.getInsideCount(), 2);
+  r.monitor.destroy();
+});
+
+test('monitor: toggling a layer off and on does not re-alert its records', async () => {
+  const r = layerRig();
+  const quakes = [
+    { id: 'q1', lat: 0.5, lon: 0.5 },
+    { id: 'q2', lat: 0.2, lon: 0.7 },
+  ];
+  r.setLayer('earthquakes', quakes);
+  r.monitor.notifyPolygonChanged();
+  r.setLayer('earthquakes', quakes, false);
+  r.monitor.evaluateAll();
+  r.setLayer('earthquakes', quakes, true);
+  r.monitor.evaluateAll();
+  await r.flush();
+  assert.equal(r.enters(), 0);
+  assert.equal(r.calls.length, 0);
+  r.monitor.destroy();
+});
+
+test('monitor: a record that drops out of the feed and returns does not re-alert', async () => {
+  const r = layerRig();
+  const plane = { icao24: 'abc123', lat: 5, lon: 5 };
+  const feed = [plane];
+  r.setLayer('flights', feed);
+  r.monitor.notifyPolygonChanged();
+  // Genuine crossing still breaches once.
+  plane.lat = 0.5;
+  plane.lon = 0.5;
+  r.monitor.evaluateAll();
+  await r.flush();
+  assert.equal(r.calls.length, 1);
+  // Missing from one update (pruned), then back while still inside.
+  feed.length = 0;
+  r.monitor.evaluateAll();
+  feed.push(plane);
+  r.monitor.evaluateAll();
+  await r.flush();
+  assert.equal(r.enters(), 1);
+  assert.equal(r.calls.length, 1);
+  r.monitor.destroy();
 });

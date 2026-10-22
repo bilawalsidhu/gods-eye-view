@@ -1,7 +1,7 @@
 /**
  * In-memory state tracker for geofence enter/exit.
- * Prevents duplicate alerts: internal `enter` event fires only on
- * initial outside->inside transition.
+ * Prevents duplicate alerts: internal `enter` event fires only on an
+ * observed outside->inside transition. A first sighting only seeds state.
  *
  * Pure, no DOM, no Cesium — node-testable.
  */
@@ -17,10 +17,13 @@ export function createGeofenceStateTracker() {
     const prev = states.get(key);
     const next = Boolean(isInside);
 
-    // First sighting: treat unknown as outside, so unknown->inside = entered
+    // First sighting seeds the state without a transition. A breach needs
+    // an observed outside->inside move: a record that is first seen inside
+    // (the fence was drawn over it, its layer was just enabled, or it came
+    // back into the feed after being pruned) did not cross the boundary.
     if (prev === undefined) {
       states.set(key, next);
-      return next ? 'entered' : null;
+      return null;
     }
     if (prev === next) return null; // no transition -> no duplicate
     states.set(key, next);

@@ -8,7 +8,9 @@
  *   enabled layers are polled and each entity's lon/lat is tested with
  *   point-in-polygon.
  * - In-memory state tracker prevents duplicate alerts: internal `geofence:enter`
- *   fires only on initial outside->inside transition.
+ *   fires only on an observed outside->inside transition. A record first seen
+ *   inside (a layer enabled after the fence, a record back in its feed after
+ *   pruning) seeds as inside without a breach.
  * - Drawing or editing the fence re-baselines silently: entities already
  *   inside start as inside instead of firing one breach each.
  * - With no fence drawn the monitor is idle: it pulls no records and keeps
