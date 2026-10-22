@@ -37,6 +37,16 @@ time. This clears obsolete contacts and settles startup without manufacturing
 position timestamps. Stale, incomplete and malformed empty results retain the
 existing recovery behavior.
 
+Every `/api` response on the dev and preview servers carries
+`Content-Security-Policy: default-src 'none'; sandbox` and
+`X-Content-Type-Options: nosniff`. `apiResponseHeadersPlugin` sets them ahead of
+the Host check and matches `/api` the way the router mounts it (any letter case, a
+`/` or `.` boundary, absolute-form targets), so errors, partial responses, Host
+refusals and unknown routes are covered too; a route's own policy is sent as an
+additional policy, never in place of it. The app document's policy is unchanged.
+The GBFS proxy relays only bodies that parse as JSON, re-serialized as
+`application/json; charset=utf-8`; anything else answers 502.
+
 Catalog source contracts and their consuming layers are declared in
 `src/app/sourceComposition.js`. Omitted or null acquisition sources preserve layer
 registration and serialization, report unavailable, and are refused by the existing
@@ -819,6 +829,15 @@ standalone entry supplies application-owned scene, ground and activation service
 Each layer owns its state and visibility listener; destruction cancels source
 reads and pending initialization. Malformed health responses retain prior health.
 Existing catalog fallback, camera poses, frame pacing and coverage controls remain.
+CCTV frames and the Street View fallback accept only JPEG, PNG, GIF, WebP and
+AVIF, sent under the canonical type; any other type falls through to the next
+fallback. Live media must match its feed kind (`video/mp4`, `video/webm`, or
+`multipart/x-mixed-replace` with a boundary) before health reports it connected,
+and follows redirects only on the camera's origin. Catalog image URLs, and
+redirects on those hosts, are pinned by parsed URL to the agency's image
+directory. Every `/api/cctv` route refuses cross-site browser requests but
+accepts forwarding headers, so cameras work behind a reverse proxy; a forwarded
+request skips the key-bearing Street View fallback and gets the placeholder.
 
 Traffic owns its rendered-surface observer only while enabled, removes it on disable/destroy, and caches surface identity without allocating on unchanged frames.
 
@@ -3622,7 +3641,7 @@ test:track` 43 tracking invariants · headless QA harnesses under
 
 ### Interface localization (October 2026)
 
-Shipped locales: **en** (source and fallback), **es** and **ru**. The code lives in
+Shipped locales: **en** (source and fallback), **es**, **ru** and **zh-CN**. The code lives in
 `src/i18n/`. How to mark UI text: [`docs/I18N.md`](./I18N.md); translator workflow:
 [`docs/TRANSLATORS.md`](./TRANSLATORS.md).
 
@@ -3633,7 +3652,8 @@ Shipped locales: **en** (source and fallback), **es** and **ru**. The code lives
   value). English has no catalog; every other locale is
   `src/i18n/locales/<code>.json`, and a missing entry falls back to English.
 - **Locale choice.** `?lang=` → stored choice (`gev:locale:v1`) →
-  `navigator.languages` → English. `?lang=` is not stored, and share links drop
+  `navigator.languages` → English. Chinese tags map to `zh-CN`; tags containing
+  `Hant`, `TW`, `HK` or `MO` are skipped. `?lang=` is not stored, and share links drop
   it, so a recipient keeps their own language. The globe picker in the
   bottom-right corner (`src/ui/localePicker.js`) stores the choice, drops
   `?lang=` (keeps it only when storage is blocked) and reloads. It asks first

@@ -3,7 +3,10 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { normalizeSourceItem } from '../../server/providers/cctv/normalize.js';
 import { allocateSourceCap } from '../../server/providers/cctv/cap.js';
-import { fetchWithinHost } from '../../server/providers/cctv/media.js';
+import {
+  fetchWithinHost,
+  fetchCctvImageFromUpstream,
+} from '../../server/providers/cctv/media.js';
 
 const read = (path) =>
   JSON.parse(readFileSync(new URL(path, import.meta.url), 'utf8'));
@@ -353,4 +356,32 @@ test('survey dispositions preserve the original leads and resolve only active fe
     }
   }
   assert.deepEqual(dispositions, survey.resolutionSummary.dispositions);
+});
+
+test('IPCamLive redirect exception still enforces raster MIME validation', async () => {
+  const alias =
+    'https://ipcamlive.com/player/snapshot.php?alias=telecabina1500';
+  const target = 'https://s12.ipcamlive.com/streams/abc123/snapshot.jpg';
+  for (const type of [
+    'image/jpeg',
+    'image/svg+xml',
+    'text/html',
+    'application/octet-stream',
+    '',
+  ]) {
+    const requests = [];
+    const result = await fetchCctvImageFromUpstream(alias, {
+      fetchImpl: async (url) => {
+        requests.push(url);
+        return url === alias
+          ? new Response(null, { status: 302, headers: { location: target } })
+          : new Response('fixture', { headers: { 'content-type': type } });
+      },
+    });
+    assert.deepEqual(requests, [alias, target]);
+    assert.equal(
+      result?.contentType ?? null,
+      type === 'image/jpeg' ? type : null,
+    );
+  }
 });

@@ -121,6 +121,7 @@
   "server/providers/cctv/normalize.js",
   "src/data/cctvMissingNumbers.test.mjs",
   "server/providers/cctv/sources.js",
+  "src/data/cctvSourcePins.test.mjs",
   "server/providers/radio.js",
   "server/providers/radio/catalog.js",
   "server/providers/radio/constants.js",
