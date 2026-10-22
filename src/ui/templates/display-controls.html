@@ -162,7 +162,7 @@
         <span class="pp-label" data-i18n>Celestial</span>
       </button>
     </div>
-    <button class="pp-toggle-btn" id="clean-view-toggle" title="Hide UI chrome" data-i18n-title>
+    <button class="pp-toggle-btn" id="clean-view-toggle" title="Hide UI chrome" aria-pressed="false" data-i18n-title>
       <span class="pp-icon">&#x25A1;</span>
       <span class="pp-label" data-i18n>Clean UI</span>
     </button>
@@ -189,3 +189,6 @@
   </div>
   </div>
   <button id="clean-view-exit" title="Return UI controls" data-i18n-title data-i18n>EXIT CLEAN VIEW</button>
+  <button id="clean-view-eye" type="button" aria-pressed="false" aria-label="Clean view: hide the controls" title="Clean view: hide the controls (V)" data-i18n-aria-label data-i18n-title>
+    <span class="clean-view-eye-icon" aria-hidden="true"></span>
+  </button>

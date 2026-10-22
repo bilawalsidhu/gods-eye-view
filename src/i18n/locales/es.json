@@ -2943,5 +2943,9 @@
   "hemisphere|E": "E",
   "hemisphere|W": "O",
   "OK": "OK",
-  "{category} ({count})": "{category} ({count})"
+  "{category} ({count})": "{category} ({count})",
+  "Clean view: hide the controls": "Vista limpia: ocultar los controles",
+  "Exit clean view: show the controls": "Salir de vista limpia: mostrar los controles",
+  "Clean view: hide the controls (V)": "Vista limpia: ocultar los controles (V)",
+  "{label} (V)": "{label} (V)"
 }

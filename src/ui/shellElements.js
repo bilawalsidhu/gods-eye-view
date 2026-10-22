@@ -56,6 +56,7 @@ export function readShellElements(document = globalThis.document) {
     _mapStackStatus: document.getElementById('map-stack-status'),
     _cleanViewBtn: document.getElementById('clean-view-toggle'),
     _cleanViewExitBtn: document.getElementById('clean-view-exit'),
+    _cleanViewEyeBtn: document.getElementById('clean-view-eye'),
     _dataPanel: document.getElementById('data-panel'),
     _scenePanel: document.getElementById('scene-panel'),
     _cctvPanel: document.getElementById('cctv-panel'),

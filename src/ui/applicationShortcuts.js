@@ -31,10 +31,12 @@ export function bindApplicationShortcuts({
 
     if (STYLE_KEYS[event.key]) actions.setStyle(STYLE_KEYS[event.key]);
     if (event.key === 'Escape') actions.dismissSearch();
+    // Escape also leaves clean view; a held V toggles it once, not per repeat.
+    if (event.key === 'Escape' && !isFormControl) actions.exitCleanView?.();
     const key = event.key.toLowerCase();
     if (key === 'h') actions.toggleHud();
     if (key === 'o') actions.toggleOrbit();
-    if (key === 'v') actions.toggleCleanView();
+    if (key === 'v' && !event.repeat) actions.toggleCleanView();
     if (key === 'f') actions.toggleLayers();
     if (key === 'd') actions.cycleDetection();
     if (key === 'c') actions.toggleCctv();

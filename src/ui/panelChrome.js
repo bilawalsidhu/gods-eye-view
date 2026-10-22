@@ -284,6 +284,11 @@ export class PanelChrome {
     return this._panelLayout._scheduleLeftPanelLayout(options0);
   }
 
+  /** Clean view hides both rails: hold their layout until it ends. */
+  holdPanelLayout(held) {
+    return this._panelLayout.setLayoutHeld(held);
+  }
+
   _syncRailPanelCollapseButton(panelEl) {
     // Adaptive rail layout may directly restore an auto-collapsed Context
     // without invoking setPanelCollapsed(). Enforce Radio ownership there too.

@@ -2,6 +2,12 @@
 import { layoutLeftPanelRail, layoutRightPanelRail } from './panelRails.js';
 import { syncRadioPanelPlacement } from './radioPanelPlacement.js';
 const COCKPIT_LAYOUT_SETTLE_MS = 240;
+// Leaving clean view fades the chrome back in (0.4 s HUD/dock transitions).
+// Rails measured mid-fade would size against half-shown obstacles, so the
+// hold ends once those transitions are done (re-checked, then capped).
+const LAYOUT_RELEASE_SETTLE_MS = 450;
+const LAYOUT_RELEASE_RETRY_MS = 150;
+const LAYOUT_RELEASE_MAX_MS = 2000;
 /**
  * Fixed UI regions that can occupy the left accordion's vertical lane.
  * Rectangles are filtered at runtime for visibility and horizontal overlap,
@@ -61,6 +67,15 @@ const RIGHT_STACK_OBSTACLE_SELECTOR = [
   '#command-dock',
   '#gev-voice-control',
 ].join(', ');
+/** Is a CSS transition (the chrome fading back in) still running? */
+function chromeTransitionRunning() {
+  const animations = globalThis.document?.getAnimations?.() ?? [];
+  return animations.some(
+    (animation) =>
+      animation.playState === 'running' &&
+      typeof animation.transitionProperty === 'string',
+  );
+}
 export class PanelLayoutController {
   constructor({
     readHud,
@@ -91,6 +106,10 @@ export class PanelLayoutController {
     this._rightStackResizeObserver = null;
     this._cockpitLayoutFrame = null;
     this._cockpitLayoutTimer = null;
+    this._layoutHeld = false;
+    this._layoutReleaseTimer = null;
+    this._leftStackLayoutDeferred = false;
+    this._rightStackLayoutDeferred = false;
     this._leftPanelStack = document.getElementById('left-panel-stack');
     this._rightPanelStack = document.getElementById('right-context-rail');
     this._ppToggles = document.getElementById('pp-toggles');
@@ -101,6 +120,63 @@ export class PanelLayoutController {
     this._sliderPanel = document.getElementById('param-slider-panel');
     this._detectionBtn = document.getElementById('detection-toggle');
   }
+  /**
+   * Holds both rail layouts while clean view hides the rails. Hidden rails
+   * keep the geometry they had when clean view started, so toggling clean
+   * view neither re-measures nor resizes them, and leaving it shows that
+   * same layout again. The hold ends after the exit fade has settled; work
+   * requested while held (a resize or rotation) then runs once. A frame that
+   * was already queued is carried over to the release.
+   * @param {boolean} held - True while clean view is on.
+   * @returns {void}
+   */
+  setLayoutHeld(held) {
+    if (this.destroyed) return;
+    if (held) {
+      clearTimeout(this._layoutReleaseTimer);
+      this._layoutReleaseTimer = null;
+      if (this._layoutHeld) return;
+      this._layoutHeld = true;
+      if (this._leftStackLayoutFrame !== null) {
+        cancelAnimationFrame(this._leftStackLayoutFrame);
+        this._leftStackLayoutFrame = null;
+        this._leftStackLayoutDeferred = true;
+      }
+      if (this._rightStackLayoutFrame !== null) {
+        cancelAnimationFrame(this._rightStackLayoutFrame);
+        this._rightStackLayoutFrame = null;
+        this._rightStackLayoutDeferred = true;
+      }
+      return;
+    }
+    if (!this._layoutHeld || this._layoutReleaseTimer !== null) return;
+    const startedAt = Date.now();
+    const release = (delay) => {
+      this._layoutReleaseTimer = setTimeout(() => {
+        this._layoutReleaseTimer = null;
+        if (this.destroyed || !this._layoutHeld) return;
+        if (
+          chromeTransitionRunning() &&
+          Date.now() - startedAt < LAYOUT_RELEASE_MAX_MS
+        ) {
+          release(LAYOUT_RELEASE_RETRY_MS);
+          return;
+        }
+        this._releaseLayout();
+      }, delay);
+    };
+    release(LAYOUT_RELEASE_SETTLE_MS);
+  }
+
+  _releaseLayout() {
+    this._layoutHeld = false;
+    const left = this._leftStackLayoutDeferred;
+    const right = this._rightStackLayoutDeferred;
+    this._leftStackLayoutDeferred = this._rightStackLayoutDeferred = false;
+    if (left) this._scheduleLeftPanelLayout();
+    if (right) this._scheduleRightPanelLayout();
+  }
+
   _scheduleAdaptivePanelLayout({ settle = false } = {}) {
     if (this.destroyed) return;
     this._scheduleLeftPanelLayout({ reconsiderAutoCollapse: true });
@@ -277,6 +353,10 @@ export class PanelLayoutController {
   _scheduleRightPanelLayout({ reconsiderAutoCollapse = false } = {}) {
     if (this.destroyed) return;
     if (reconsiderAutoCollapse) this._rightStackReconsiderAutoCollapse = true;
+    if (this._layoutHeld) {
+      this._rightStackLayoutDeferred = true;
+      return;
+    }
     if (!this._rightPanelStack || this._rightStackLayoutFrame !== null) return;
     this._rightStackLayoutFrame = requestAnimationFrame(() => {
       if (this.destroyed) return;
@@ -412,6 +492,10 @@ export class PanelLayoutController {
   _scheduleLeftPanelLayout({ reconsiderAutoCollapse = false } = {}) {
     if (this.destroyed) return;
     if (reconsiderAutoCollapse) this._leftStackReconsiderAutoCollapse = true;
+    if (this._layoutHeld) {
+      this._leftStackLayoutDeferred = true;
+      return;
+    }
     if (!this._leftPanelStack || this._leftStackLayoutFrame !== null) return;
     this._leftStackLayoutFrame = requestAnimationFrame(() => {
       if (this.destroyed) return;
@@ -456,7 +540,9 @@ export class PanelLayoutController {
     }
     clearTimeout(this._adaptivePanelSettleTimer);
     clearTimeout(this._cockpitLayoutTimer);
+    clearTimeout(this._layoutReleaseTimer);
     this._adaptivePanelSettleTimer = this._cockpitLayoutTimer = null;
+    this._layoutReleaseTimer = null;
     for (const field of [
       '_commandDockTrayObserver',
       '_leftStackResizeObserver',
