@@ -414,21 +414,15 @@ export class StyleManager extends ShellFacade {
       exitPanels: () => this._panelChrome.exitCockpit(),
     });
 
-    // Full-globe sun/moon ring. It is a crisp screen-space overlay above the
-    // Cesium canvas but below the HUD/detection/readout z ladder.
-    // Viewer-bound modules (the ring, cockpit) are not created without a
-    // viewer (the experimental Navara engine); detection and the tracked
-    // readout are the engine's.
-    this.celestialRing = viewer
-      ? new CelestialRing(viewer, {
-          enabled: false,
-          onAutoDisable: () =>
-            this.setCelestialRingEnabled(false, {
-              syncShare: !!this.shareLinkManager,
-              focus: false,
-            }),
-        })
-      : null;
+    // Full-globe sun/moon ring on either engine, below the HUD/readout.
+    this.celestialRing = new CelestialRing(viewer ?? engine, {
+      enabled: false,
+      onAutoDisable: () =>
+        this.setCelestialRingEnabled(false, {
+          syncShare: !!this.shareLinkManager,
+          focus: false,
+        }),
+    });
 
     // Share Link Manager
     this.shareLinkManager = new ShareLinkManager(engine, {

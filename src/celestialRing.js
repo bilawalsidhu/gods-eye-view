@@ -1,4 +1,5 @@
 import * as geo from './geo/index.js';
+import { createCelestialView } from './celestialRing/view.js';
 import { engineFromViewer } from './globe/cesium/engineFromViewer.js';
 import {
   createCelestialEphemeris,
@@ -394,7 +395,8 @@ export class CelestialRing {
    * @param {{enabled?:boolean,onAutoDisable?:Function}} [options]
    */
   constructor(viewer, { enabled = true, onAutoDisable = null } = {}) {
-    this.viewer = viewer;
+    this._engineView = viewer?.kind ? createCelestialView(viewer) : null;
+    this.viewer = this._engineView?.view ?? viewer;
     this.enabled = !!enabled;
     this.visible = false;
     this._onAutoDisable =
@@ -420,7 +422,7 @@ export class CelestialRing {
     this._ephemeris = createCelestialEphemeris();
 
     this._buildDOM();
-    this._removePostRender = viewer.scene.postRender.addEventListener(() =>
+    this._removePostRender = this.viewer.scene.postRender.addEventListener(() =>
       this._draw(),
     );
     // Pre-existing staleness fix (perf wave 2 review): the ephemeris was
@@ -825,5 +827,6 @@ export class CelestialRing {
     if (this._removePostRender) this._removePostRender();
     this._removePostRender = null;
     this._root?.remove();
+    this._engineView?.destroy();
   }
 }

@@ -55,6 +55,9 @@ const SHELL_CREDIT_KEYS = new Set([
  */
 export async function registerNavaraLayerRenderers() {
   const loaders = {
+    satellites: async () =>
+      (await import('../layers/satellites/render/navara.js'))
+        .createSatellitesNavaraRenderer,
     flights: async () =>
       (await import('../layers/flights/render/navara.js'))
         .createFlightsNavaraRenderer,

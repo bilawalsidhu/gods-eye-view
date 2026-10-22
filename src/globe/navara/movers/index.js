@@ -76,10 +76,12 @@ const frameCamera = {
   cameraHeight: 0,
   fovDeg: 60,
   viewportHeightPx: 0,
+  pixelRatio: 1,
 };
 function updateMover(view, ctx, mover) {
   const raw = view.camera.raw;
-  const height = ctx?.getRenderer().domElement.clientHeight;
+  const renderer = ctx?.getRenderer();
+  const height = renderer?.domElement.clientHeight;
   if (!raw || !(height > 0)) return;
   raw.updateMatrixWorld();
   const e = raw.matrixWorld.elements;
@@ -97,6 +99,7 @@ function updateMover(view, ctx, mover) {
     Math.hypot(position.x, position.y, position.z) - EARTH_RADIUS_M;
   frameCamera.fovDeg = raw.fov;
   frameCamera.viewportHeightPx = height;
+  frameCamera.pixelRatio = renderer.getPixelRatio?.() ?? 1;
   mover.update(frameCamera);
 }
 

@@ -104,7 +104,17 @@ export function normalizeMoverSetOptions(options) {
   } else if (kind === 'point') {
     const point = options.point;
     if (!isObject(point)) fail('a point set needs point options');
+    const outlineColor = point.outlineColor ?? [0, 0, 0, 1];
+    if (
+      !Array.isArray(outlineColor) ||
+      outlineColor.length !== 4 ||
+      !outlineColor.every(
+        (value) => isFiniteNumber(value) && value >= 0 && value <= 1,
+      )
+    )
+      fail('point.outlineColor must be [r, g, b, a] in 0..1');
     normalized.point = {
+      outlineColor: Object.freeze([...outlineColor]),
       sizePx: positive(point.sizePx, 'point.sizePx'),
       outlinePx: nonNegative(point.outlinePx, 'point.outlinePx', 0),
       scaleByDistance: scaleByDistanceOf(point.scaleByDistance),

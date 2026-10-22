@@ -449,6 +449,7 @@ export function createTracking({
     );
 
     layerState._trackedEntity = getRenderer().createTracked({
+      id: noradId,
       position,
       viewFrom,
     });

@@ -366,7 +366,7 @@
   "src/layers/vessels/render/contract.js",
   "src/layers/vessels/renderer.test.mjs",
   "src/layers/vessels/render/navara.js",
-  "src/layers/shared/render/navaraView.js",
+  "src/layers/shared/render/engineView.js",
   "scripts/qa-vessels-engines.mjs",
   "src/layers/vessels/evidence.js",
   "src/layers/vessels/index.js",
@@ -1143,5 +1143,10 @@
   "src/bench/satelliteFixture.test.mjs",
   "src/layers/satellites/render/cesium.js",
   "src/celestialRing/render/cesium.js",
-  "scripts/qa-satellites.mjs"
+  "scripts/qa-satellites.mjs",
+  "scripts/qa-satellites-compare.mjs",
+  "src/celestialRing/view.js",
+  "src/layers/satellites/render/navara.js",
+  "src/layers/satellites/render/navara.test.mjs",
+  "src/layers/satellites/render/cesium.test.mjs"
 ]

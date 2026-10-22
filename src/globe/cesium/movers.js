@@ -158,7 +158,7 @@ function pointPart(options, store, factories, requestRender, owners) {
   const { point, depthTest } = options;
   const style = {
     outlineWidth: point.outlinePx,
-    outlineColor: Cesium.Color.BLACK,
+    outlineColor: new Cesium.Color(...point.outlineColor),
     scaleByDistance: nearFar(point.scaleByDistance),
     disableDepthTestDistance: depthTestDistance(depthTest),
   };

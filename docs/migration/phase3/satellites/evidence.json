@@ -1,0 +1,1083 @@
+{
+  "comparison": {
+    "ok": true,
+    "errors": [],
+    "ringMaxPx": 2.8984570199058825e-13,
+    "pointMaxPx": 2.5421149729252077e-13,
+    "positionMaxM": 0,
+    "cameraMaxM": 3.2549723982810974e-07,
+    "cameraMaxDegrees": 5.903109488796287e-12,
+    "visible": 482,
+    "denseP95": {
+      "cesium": [
+        {
+          "frames": 480,
+          "workP95Ms": 3.299999952316284,
+          "intervalP95Ms": 19.299999952316284
+        },
+        {
+          "frames": 480,
+          "workP95Ms": 3.3999998569488525,
+          "intervalP95Ms": 19
+        },
+        {
+          "frames": 480,
+          "workP95Ms": 3.8999998569488525,
+          "intervalP95Ms": 19.399999856948853
+        }
+      ],
+      "navara": [
+        {
+          "frames": 480,
+          "workP95Ms": 4.400000095367432,
+          "intervalP95Ms": 18.799999952316284
+        },
+        {
+          "frames": 480,
+          "workP95Ms": 4.5,
+          "intervalP95Ms": 18.700000047683716
+        },
+        {
+          "frames": 480,
+          "workP95Ms": 4.700000047683716,
+          "intervalP95Ms": 18.899999856948853
+        }
+      ]
+    }
+  },
+  "idleSettled": {
+    "cesium": {
+      "samples": [
+        0,
+        14,
+        0
+      ],
+      "tilesLoaded": true,
+      "continuous": false,
+      "movers": [],
+      "lines": []
+    },
+    "navara": {
+      "samples": [
+        0,
+        0,
+        0
+      ],
+      "tilesLoaded": true,
+      "continuous": false,
+      "movers": [
+        {
+          "count": 0
+        },
+        {
+          "count": 0
+        },
+        {
+          "count": 0
+        },
+        {
+          "count": 0
+        }
+      ],
+      "lines": [
+        {
+          "shown": false
+        }
+      ]
+    }
+  },
+  "cesium": {
+    "checks": [
+      {
+        "name": "core catalog",
+        "ok": true
+      },
+      {
+        "name": "points project",
+        "ok": true
+      },
+      {
+        "name": "ISS label painted by overlay host",
+        "ok": true,
+        "detail": {
+          "painted": true,
+          "entries": {
+            "tracked": 0,
+            "satellites-iss": 1
+          },
+          "paintedBySource": {
+            "satellites-iss": 1
+          },
+          "screen": {
+            "x": 640,
+            "y": 400.00713871584435
+          },
+          "params": {
+            "catalog": "core",
+            "showPoints": true,
+            "showOrbits": true,
+            "selectedSatTrackingId": null
+          },
+          "camera": {
+            "x": -19362277.153666954,
+            "y": 9062346.224193014,
+            "z": -29055.785530639107
+          },
+          "iss": {
+            "x": -6152973.341151453,
+            "y": 2879845.9129164917,
+            "z": -9193.721221959531
+          },
+          "enabled": true
+        }
+      },
+      {
+        "name": "dense catalog",
+        "ok": true
+      },
+      {
+        "name": "dense excluded from voice/detection",
+        "ok": true
+      },
+      {
+        "name": "core restores",
+        "ok": true
+      },
+      {
+        "name": "isolated point available for real click",
+        "ok": true
+      },
+      {
+        "name": "real click selects satellite",
+        "ok": true,
+        "detail": {
+          "id": 30008
+        }
+      },
+      {
+        "name": "clean empty canvas point available",
+        "ok": true
+      },
+      {
+        "name": "empty click clears satellite",
+        "ok": true
+      },
+      {
+        "name": "focus dims other points at 300 and 600ms",
+        "ok": true,
+        "detail": [
+          {
+            "minAlpha": 0.3153510277777778,
+            "maxAlpha": 1
+          },
+          {
+            "minAlpha": 0.2532680277777777,
+            "maxAlpha": 1
+          }
+        ]
+      },
+      {
+        "name": "tracked identity",
+        "ok": true
+      },
+      {
+        "name": "follow active",
+        "ok": true
+      },
+      {
+        "name": "neighbor-owned click keeps satellite tracking",
+        "ok": true
+      },
+      {
+        "name": "tracked GPU pixels stable for five seconds",
+        "ok": true,
+        "detail": {
+          "samples": [
+            {
+              "count": 164,
+              "x": 9.5,
+              "y": 10.182926829268293
+            },
+            {
+              "count": 164,
+              "x": 9.5,
+              "y": 10.182926829268293
+            },
+            {
+              "count": 164,
+              "x": 9.5,
+              "y": 10.182926829268293
+            },
+            {
+              "count": 164,
+              "x": 9.5,
+              "y": 10.182926829268293
+            },
+            {
+              "count": 164,
+              "x": 9.5,
+              "y": 10.182926829268293
+            },
+            {
+              "count": 164,
+              "x": 9.5,
+              "y": 10.182926829268293
+            },
+            {
+              "count": 164,
+              "x": 9.5,
+              "y": 10.182926829268293
+            },
+            {
+              "count": 164,
+              "x": 9.5,
+              "y": 10.182926829268293
+            }
+          ],
+          "spanPx": 0
+        }
+      },
+      {
+        "name": "moving ISS stable for five seconds",
+        "ok": true,
+        "detail": {
+          "frames": 309,
+          "maxReadoutErrorM": 0,
+          "spanPx": 0.46355645561719366,
+          "travelM": 38095.66254891923,
+          "maxCenterPx": 0.46355645562602366
+        }
+      },
+      {
+        "name": "tracked dot and readout share the SGP4 epoch",
+        "ok": true,
+        "detail": {
+          "maxM": 0
+        }
+      },
+      {
+        "name": "Escape clears tracking",
+        "ok": true
+      },
+      {
+        "name": "foreign follow releases only satellite state",
+        "ok": true,
+        "detail": {
+          "satellite": null,
+          "otherStillFollows": true
+        }
+      },
+      {
+        "name": "track high orbit 40000",
+        "ok": true
+      },
+      {
+        "name": "track high orbit 45000",
+        "ok": true
+      },
+      {
+        "name": "nextSatellitePass through runner",
+        "ok": true,
+        "detail": {
+          "ok": true,
+          "action": "next_satellite_pass"
+        }
+      },
+      {
+        "name": "share restores GEO on cesium",
+        "ok": true,
+        "detail": {
+          "selected": 45000,
+          "params": {
+            "catalog": "core",
+            "showPoints": true,
+            "showOrbits": true,
+            "selectedSatTrackingId": 45000
+          },
+          "follow": true
+        }
+      },
+      {
+        "name": "share restores GEO on navara",
+        "ok": true,
+        "detail": {
+          "selected": 45000,
+          "params": {
+            "catalog": "core",
+            "showPoints": true,
+            "showOrbits": true,
+            "selectedSatTrackingId": 45000
+          },
+          "follow": true
+        }
+      },
+      {
+        "name": "celestial ring visible",
+        "ok": true,
+        "detail": {
+          "enabled": true,
+          "visible": true
+        }
+      },
+      {
+        "name": "hidden points leave detection",
+        "ok": true
+      },
+      {
+        "name": "disable releases follow",
+        "ok": true
+      },
+      {
+        "name": "ten visibility cycles release follow and retain bounded pools",
+        "ok": true,
+        "detail": {
+          "baseline": {
+            "movers": 0,
+            "lines": 0
+          },
+          "samples": [
+            {
+              "movers": 0,
+              "lines": 0,
+              "follow": false,
+              "activePoints": 0,
+              "activeLines": 0
+            },
+            {
+              "movers": 0,
+              "lines": 0,
+              "follow": false,
+              "activePoints": 0,
+              "activeLines": 0
+            },
+            {
+              "movers": 0,
+              "lines": 0,
+              "follow": false,
+              "activePoints": 0,
+              "activeLines": 0
+            },
+            {
+              "movers": 0,
+              "lines": 0,
+              "follow": false,
+              "activePoints": 0,
+              "activeLines": 0
+            },
+            {
+              "movers": 0,
+              "lines": 0,
+              "follow": false,
+              "activePoints": 0,
+              "activeLines": 0
+            },
+            {
+              "movers": 0,
+              "lines": 0,
+              "follow": false,
+              "activePoints": 0,
+              "activeLines": 0
+            },
+            {
+              "movers": 0,
+              "lines": 0,
+              "follow": false,
+              "activePoints": 0,
+              "activeLines": 0
+            },
+            {
+              "movers": 0,
+              "lines": 0,
+              "follow": false,
+              "activePoints": 0,
+              "activeLines": 0
+            },
+            {
+              "movers": 0,
+              "lines": 0,
+              "follow": false,
+              "activePoints": 0,
+              "activeLines": 0
+            },
+            {
+              "movers": 0,
+              "lines": 0,
+              "follow": false,
+              "activePoints": 0,
+              "activeLines": 0
+            }
+          ],
+          "idleFrames": 1
+        }
+      },
+      {
+        "name": "destroy releases all mover sets and lines",
+        "ok": true,
+        "detail": {
+          "movers": 0,
+          "lines": 0
+        }
+      },
+      {
+        "name": "no page errors",
+        "ok": true,
+        "detail": {
+          "count": 0,
+          "messages": []
+        }
+      }
+    ],
+    "motion": {
+      "frames": 309,
+      "maxReadoutErrorM": 0,
+      "spanPx": 0.46355645561719366,
+      "travelM": 38095.66254891923,
+      "maxCenterPx": 0.46355645562602366
+    },
+    "focus": [
+      {
+        "minAlpha": 0.3153510277777778,
+        "maxAlpha": 1
+      },
+      {
+        "minAlpha": 0.2532680277777777,
+        "maxAlpha": 1
+      }
+    ],
+    "views": {
+      "city": {
+        "points": 0
+      },
+      "orbit": {
+        "points": 2
+      }
+    },
+    "share": {
+      "cesium": {
+        "selected": 45000,
+        "params": {
+          "catalog": "core",
+          "showPoints": true,
+          "showOrbits": true,
+          "selectedSatTrackingId": 45000
+        },
+        "follow": true
+      },
+      "navara": {
+        "selected": 45000,
+        "params": {
+          "catalog": "core",
+          "showPoints": true,
+          "showOrbits": true,
+          "selectedSatTrackingId": 45000
+        },
+        "follow": true
+      }
+    },
+    "cycles": {
+      "baseline": {
+        "movers": 0,
+        "lines": 0
+      },
+      "samples": [
+        {
+          "movers": 0,
+          "lines": 0,
+          "follow": false,
+          "activePoints": 0,
+          "activeLines": 0
+        },
+        {
+          "movers": 0,
+          "lines": 0,
+          "follow": false,
+          "activePoints": 0,
+          "activeLines": 0
+        },
+        {
+          "movers": 0,
+          "lines": 0,
+          "follow": false,
+          "activePoints": 0,
+          "activeLines": 0
+        },
+        {
+          "movers": 0,
+          "lines": 0,
+          "follow": false,
+          "activePoints": 0,
+          "activeLines": 0
+        },
+        {
+          "movers": 0,
+          "lines": 0,
+          "follow": false,
+          "activePoints": 0,
+          "activeLines": 0
+        },
+        {
+          "movers": 0,
+          "lines": 0,
+          "follow": false,
+          "activePoints": 0,
+          "activeLines": 0
+        },
+        {
+          "movers": 0,
+          "lines": 0,
+          "follow": false,
+          "activePoints": 0,
+          "activeLines": 0
+        },
+        {
+          "movers": 0,
+          "lines": 0,
+          "follow": false,
+          "activePoints": 0,
+          "activeLines": 0
+        },
+        {
+          "movers": 0,
+          "lines": 0,
+          "follow": false,
+          "activePoints": 0,
+          "activeLines": 0
+        },
+        {
+          "movers": 0,
+          "lines": 0,
+          "follow": false,
+          "activePoints": 0,
+          "activeLines": 0
+        }
+      ],
+      "idleFrames": 1
+    },
+    "destroy": {
+      "movers": 0,
+      "lines": 0
+    },
+    "densePerformance": [
+      {
+        "frames": 480,
+        "workP95Ms": 3.299999952316284,
+        "intervalP95Ms": 19.299999952316284
+      },
+      {
+        "frames": 480,
+        "workP95Ms": 3.3999998569488525,
+        "intervalP95Ms": 19
+      },
+      {
+        "frames": 480,
+        "workP95Ms": 3.8999998569488525,
+        "intervalP95Ms": 19.399999856948853
+      }
+    ]
+  },
+  "navara": {
+    "checks": [
+      {
+        "name": "core catalog",
+        "ok": true
+      },
+      {
+        "name": "points project",
+        "ok": true
+      },
+      {
+        "name": "ISS label painted by overlay host",
+        "ok": true,
+        "detail": {
+          "painted": true,
+          "entries": {
+            "tracked": 0,
+            "satellites-iss": 1
+          },
+          "paintedBySource": {
+            "satellites-iss": 1
+          },
+          "screen": {
+            "x": 640,
+            "y": 400.0071387158441
+          },
+          "params": {
+            "catalog": "core",
+            "showPoints": true,
+            "showOrbits": true,
+            "selectedSatTrackingId": null
+          },
+          "camera": {
+            "x": -19362277.153666954,
+            "y": 9062346.224193014,
+            "z": -29055.785530639107
+          },
+          "iss": {
+            "x": -6152973.341151453,
+            "y": 2879845.9129164917,
+            "z": -9193.721221959531
+          },
+          "enabled": true
+        }
+      },
+      {
+        "name": "dense catalog",
+        "ok": true
+      },
+      {
+        "name": "dense excluded from voice/detection",
+        "ok": true
+      },
+      {
+        "name": "core restores",
+        "ok": true
+      },
+      {
+        "name": "isolated point available for real click",
+        "ok": true
+      },
+      {
+        "name": "real click selects satellite",
+        "ok": true,
+        "detail": {
+          "id": 30008
+        }
+      },
+      {
+        "name": "clean empty canvas point available",
+        "ok": true
+      },
+      {
+        "name": "empty click clears satellite",
+        "ok": true
+      },
+      {
+        "name": "focus dims other points at 300 and 600ms",
+        "ok": true,
+        "detail": [
+          {
+            "minAlpha": 0.29448925000000004,
+            "maxAlpha": 1
+          },
+          {
+            "minAlpha": 0.25129599999999996,
+            "maxAlpha": 1
+          }
+        ]
+      },
+      {
+        "name": "tracked identity",
+        "ok": true
+      },
+      {
+        "name": "follow active",
+        "ok": true
+      },
+      {
+        "name": "neighbor-owned click keeps satellite tracking",
+        "ok": true
+      },
+      {
+        "name": "tracked GPU pixels stable for five seconds",
+        "ok": true,
+        "detail": {
+          "samples": [
+            {
+              "count": 152,
+              "x": 10.243421052631579,
+              "y": 10.243421052631579
+            },
+            {
+              "count": 152,
+              "x": 10.243421052631579,
+              "y": 10.243421052631579
+            },
+            {
+              "count": 152,
+              "x": 10.243421052631579,
+              "y": 10.243421052631579
+            },
+            {
+              "count": 152,
+              "x": 10.243421052631579,
+              "y": 10.243421052631579
+            },
+            {
+              "count": 152,
+              "x": 10.243421052631579,
+              "y": 10.243421052631579
+            },
+            {
+              "count": 152,
+              "x": 10.243421052631579,
+              "y": 10.243421052631579
+            },
+            {
+              "count": 153,
+              "x": 10.241830065359476,
+              "y": 10.196078431372548
+            },
+            {
+              "count": 152,
+              "x": 10.243421052631579,
+              "y": 10.243421052631579
+            }
+          ],
+          "spanPx": 0.047369346925791506
+        }
+      },
+      {
+        "name": "moving ISS stable for five seconds",
+        "ok": true,
+        "detail": {
+          "frames": 312,
+          "maxReadoutErrorM": 0,
+          "spanPx": 4.099037227506403e-13,
+          "travelM": 38125.006558043715,
+          "maxCenterPx": 2.2737367544323206e-13
+        }
+      },
+      {
+        "name": "tracked dot and readout share the SGP4 epoch",
+        "ok": true,
+        "detail": {
+          "maxM": 0
+        }
+      },
+      {
+        "name": "Escape clears tracking",
+        "ok": true
+      },
+      {
+        "name": "foreign follow releases only satellite state",
+        "ok": true,
+        "detail": {
+          "satellite": null,
+          "otherStillFollows": true
+        }
+      },
+      {
+        "name": "track high orbit 40000",
+        "ok": true
+      },
+      {
+        "name": "track high orbit 45000",
+        "ok": true
+      },
+      {
+        "name": "nextSatellitePass through runner",
+        "ok": true,
+        "detail": {
+          "ok": true,
+          "action": "next_satellite_pass"
+        }
+      },
+      {
+        "name": "share restores GEO on cesium",
+        "ok": true,
+        "detail": {
+          "selected": 45000,
+          "params": {
+            "catalog": "core",
+            "showPoints": true,
+            "showOrbits": true,
+            "selectedSatTrackingId": 45000
+          },
+          "follow": true
+        }
+      },
+      {
+        "name": "share restores GEO on navara",
+        "ok": true,
+        "detail": {
+          "selected": 45000,
+          "params": {
+            "catalog": "core",
+            "showPoints": true,
+            "showOrbits": true,
+            "selectedSatTrackingId": 45000
+          },
+          "follow": true
+        }
+      },
+      {
+        "name": "celestial ring visible",
+        "ok": true,
+        "detail": {
+          "enabled": true,
+          "visible": true
+        }
+      },
+      {
+        "name": "hidden points leave detection",
+        "ok": true
+      },
+      {
+        "name": "disable releases follow",
+        "ok": true
+      },
+      {
+        "name": "ten visibility cycles release follow and retain bounded pools",
+        "ok": true,
+        "detail": {
+          "baseline": {
+            "movers": 5,
+            "lines": 1
+          },
+          "samples": [
+            {
+              "movers": 5,
+              "lines": 1,
+              "follow": false,
+              "activePoints": 0,
+              "activeLines": 0
+            },
+            {
+              "movers": 5,
+              "lines": 1,
+              "follow": false,
+              "activePoints": 0,
+              "activeLines": 0
+            },
+            {
+              "movers": 5,
+              "lines": 1,
+              "follow": false,
+              "activePoints": 0,
+              "activeLines": 0
+            },
+            {
+              "movers": 5,
+              "lines": 1,
+              "follow": false,
+              "activePoints": 0,
+              "activeLines": 0
+            },
+            {
+              "movers": 5,
+              "lines": 1,
+              "follow": false,
+              "activePoints": 0,
+              "activeLines": 0
+            },
+            {
+              "movers": 5,
+              "lines": 1,
+              "follow": false,
+              "activePoints": 0,
+              "activeLines": 0
+            },
+            {
+              "movers": 5,
+              "lines": 1,
+              "follow": false,
+              "activePoints": 0,
+              "activeLines": 0
+            },
+            {
+              "movers": 5,
+              "lines": 1,
+              "follow": false,
+              "activePoints": 0,
+              "activeLines": 0
+            },
+            {
+              "movers": 5,
+              "lines": 1,
+              "follow": false,
+              "activePoints": 0,
+              "activeLines": 0
+            },
+            {
+              "movers": 5,
+              "lines": 1,
+              "follow": false,
+              "activePoints": 0,
+              "activeLines": 0
+            }
+          ],
+          "idleFrames": 0
+        }
+      },
+      {
+        "name": "destroy releases all mover sets and lines",
+        "ok": true,
+        "detail": {
+          "movers": 0,
+          "lines": 0
+        }
+      },
+      {
+        "name": "no page errors",
+        "ok": true,
+        "detail": {
+          "count": 0,
+          "messages": []
+        }
+      }
+    ],
+    "motion": {
+      "frames": 312,
+      "maxReadoutErrorM": 0,
+      "spanPx": 4.099037227506403e-13,
+      "travelM": 38125.006558043715,
+      "maxCenterPx": 2.2737367544323206e-13
+    },
+    "focus": [
+      {
+        "minAlpha": 0.29448925000000004,
+        "maxAlpha": 1
+      },
+      {
+        "minAlpha": 0.25129599999999996,
+        "maxAlpha": 1
+      }
+    ],
+    "views": {
+      "city": {
+        "points": 0
+      },
+      "orbit": {
+        "points": 2
+      }
+    },
+    "share": {
+      "cesium": {
+        "selected": 45000,
+        "params": {
+          "catalog": "core",
+          "showPoints": true,
+          "showOrbits": true,
+          "selectedSatTrackingId": 45000
+        },
+        "follow": true
+      },
+      "navara": {
+        "selected": 45000,
+        "params": {
+          "catalog": "core",
+          "showPoints": true,
+          "showOrbits": true,
+          "selectedSatTrackingId": 45000
+        },
+        "follow": true
+      }
+    },
+    "cycles": {
+      "baseline": {
+        "movers": 5,
+        "lines": 1
+      },
+      "samples": [
+        {
+          "movers": 5,
+          "lines": 1,
+          "follow": false,
+          "activePoints": 0,
+          "activeLines": 0
+        },
+        {
+          "movers": 5,
+          "lines": 1,
+          "follow": false,
+          "activePoints": 0,
+          "activeLines": 0
+        },
+        {
+          "movers": 5,
+          "lines": 1,
+          "follow": false,
+          "activePoints": 0,
+          "activeLines": 0
+        },
+        {
+          "movers": 5,
+          "lines": 1,
+          "follow": false,
+          "activePoints": 0,
+          "activeLines": 0
+        },
+        {
+          "movers": 5,
+          "lines": 1,
+          "follow": false,
+          "activePoints": 0,
+          "activeLines": 0
+        },
+        {
+          "movers": 5,
+          "lines": 1,
+          "follow": false,
+          "activePoints": 0,
+          "activeLines": 0
+        },
+        {
+          "movers": 5,
+          "lines": 1,
+          "follow": false,
+          "activePoints": 0,
+          "activeLines": 0
+        },
+        {
+          "movers": 5,
+          "lines": 1,
+          "follow": false,
+          "activePoints": 0,
+          "activeLines": 0
+        },
+        {
+          "movers": 5,
+          "lines": 1,
+          "follow": false,
+          "activePoints": 0,
+          "activeLines": 0
+        },
+        {
+          "movers": 5,
+          "lines": 1,
+          "follow": false,
+          "activePoints": 0,
+          "activeLines": 0
+        }
+      ],
+      "idleFrames": 0
+    },
+    "destroy": {
+      "movers": 0,
+      "lines": 0
+    },
+    "densePerformance": [
+      {
+        "frames": 480,
+        "workP95Ms": 4.400000095367432,
+        "intervalP95Ms": 18.799999952316284
+      },
+      {
+        "frames": 480,
+        "workP95Ms": 4.5,
+        "intervalP95Ms": 18.700000047683716
+      },
+      {
+        "frames": 480,
+        "workP95Ms": 4.700000047683716,
+        "intervalP95Ms": 18.899999856948853
+      }
+    ]
+  },
+  "idleTrace": {
+    "cesium": {
+      "samples": [
+        0,
+        17,
+        0,
+        0,
+        0
+      ],
+      "continuous": false,
+      "holds": [],
+      "requestCount": 21,
+      "caller": "ResizeObserver.markLayoutDirty \u2192 invalidateHost \u2192 world-overlay",
+      "entryCount": 0
+    }
+  }
+}

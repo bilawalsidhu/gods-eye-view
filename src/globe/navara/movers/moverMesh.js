@@ -40,15 +40,18 @@ uniform vec4 uGevScaleByDistance;
 uniform float uGevHasScaleByDistance;
 uniform float uGevDisableWithinM;
 uniform float uGevOutlinePx;
+uniform float uGevPixelRatio;
 varying vec4 vGevColor;
 varying vec2 vGevLocal;
 varying float vGevOutline;
+varying float vGevPixelDistance;
 ${OVERLAY_DEPTH_VERTEX}
 `;
 
 const VERTEX_PROJECT = /* glsl */ `
 vec4 mvCenter = modelViewMatrix * instanceMatrix * vec4(0.0, 0.0, 0.0, 1.0);
 float gevScale = gevStyle.y;
+float gevDistanceScale = 1.0;
 float gevDistance = length(mvCenter.xyz);
 if (uGevHasScaleByDistance > 0.5) {
   // Cesium's czm_nearFarScalar: over the squared distance, eased by ^0.2.
@@ -60,9 +63,21 @@ if (uGevHasScaleByDistance > 0.5) {
     1.0
   );
   t = pow(t, 0.2);
-  gevScale *= mix(uGevScaleByDistance.y, uGevScaleByDistance.w, t);
+  gevDistanceScale = mix(uGevScaleByDistance.y, uGevScaleByDistance.w, t);
+  gevScale *= gevDistanceScale;
 }
 float gevSizePx = uGevSizePx * gevScale;
+vGevOutline = 0.0;
+vGevPixelDistance = 0.0;
+#ifdef GEV_POINT
+float gevBorderPx = 2.0 * uGevOutlinePx * gevDistanceScale;
+float gevOutlinedSize = gevSizePx + gevBorderPx;
+vGevOutline = gevBorderPx / max(gevOutlinedSize, 1e-3);
+// Cesium reserves three physical pixels for the point's smooth edge.
+gevSizePx = gevOutlinedSize + 3.0 / uGevPixelRatio;
+vGevPixelDistance = 2.0 / max(gevSizePx * uGevPixelRatio, 1e-3);
+if (gevStyle.y <= 0.0) gevSizePx = 0.0;
+#endif
 float gevCos = cos(gevStyle.x);
 float gevSin = sin(gevStyle.x);
 vec2 gevCorner = position.xy;
@@ -75,7 +90,6 @@ mvPosition.xy += gevTurned * gevSizePx * uGevFootprint * max(-mvCenter.z, 0.0);
 gl_Position = projectionMatrix * mvPosition;
 vGevColor = gevColor;
 vGevLocal = gevCorner;
-vGevOutline = uGevOutlinePx / max(gevSizePx, 1e-3);
 vGevDepthFree = gevDistance < uGevDisableWithinM ? 1.0 : 0.0;
 `;
 
@@ -87,9 +101,11 @@ vMapUv = mix(gevUv.xy, gevUv.zw, uv);
 `;
 
 const FRAGMENT_HEAD = /* glsl */ `
+uniform vec4 uGevOutlineColor;
 varying vec4 vGevColor;
 varying vec2 vGevLocal;
 varying float vGevOutline;
+varying float vGevPixelDistance;
 ${OVERLAY_DEPTH_FRAGMENT}
 `;
 
@@ -103,8 +119,14 @@ const fragmentColor = (point) =>
 if (gevOverlayHidden()) discard;
 float gevRadius = length(vGevLocal) * 2.0;
 if (gevRadius > 1.0) discard;
-diffuseColor *= sRGBTransferEOTF(vGevColor);
-if (gevRadius > 1.0 - vGevOutline) diffuseColor.rgb = vec3(0.0);
+float gevMaxDistance = max(0.0, 0.5 - vGevPixelDistance);
+float gevDistanceToCenter = gevRadius * 0.5;
+float gevWholeAlpha = 1.0 - smoothstep(gevMaxDistance, 0.5, gevDistanceToCenter);
+float gevInner = 1.0 - vGevOutline;
+float gevInnerAlpha = 1.0 - smoothstep(gevMaxDistance * gevInner, 0.5 * gevInner, gevDistanceToCenter);
+diffuseColor *= sRGBTransferEOTF(mix(uGevOutlineColor, vGevColor, gevInnerAlpha));
+diffuseColor.a *= gevWholeAlpha;
+if (diffuseColor.a < 0.005) discard;
 `
     : /* glsl */ `
 #include <color_fragment>
@@ -129,7 +151,7 @@ export function patchMoverShader(shader, uniforms, { point = false } = {}) {
   let vertex = replace(
     shader.vertexShader,
     'void main() {',
-    `${VERTEX_HEAD}\nvoid main() {`,
+    `${point ? '#define GEV_POINT\n' : ''}${VERTEX_HEAD}\nvoid main() {`,
   );
   vertex = replace(vertex, '#include <project_vertex>', VERTEX_PROJECT);
   vertex = replace(vertex, '#include <uv_vertex>', VERTEX_UV);
@@ -212,6 +234,10 @@ export function createMoverMesh(
       value: typeof depthTest === 'object' ? depthTest.disableWithinM : -1,
     },
     uGevOutlinePx: { value: point ? options.point.outlinePx : 0 },
+    uGevOutlineColor: {
+      value: point ? [...options.point.outlineColor] : [0, 0, 0, 1],
+    },
+    uGevPixelRatio: { value: 1 },
     uGevDepthMode: {
       value:
         depthTest === 'always'
@@ -232,7 +258,7 @@ export function createMoverMesh(
           onTextureLoad();
         }),
     transparent: true,
-    alphaTest: 0.02,
+    alphaTest: point ? 0.005 : 0.02,
     // Drawn after tone mapping, with no depth buffer: the shader tests the
     // scene depth itself (overlayDepth.js).
     depthTest: false,
@@ -299,7 +325,14 @@ export function createMoverMesh(
      * origin moved to the camera when it has gone too far (a full rewrite).
      * Returns true when it rewrote the instances.
      */
-    update({ cameraPosition, cameraHeight, fovDeg, viewportHeightPx }) {
+    update({
+      cameraPosition,
+      cameraHeight,
+      fovDeg,
+      viewportHeightPx,
+      pixelRatio = 1,
+    }) {
+      uniforms.uGevPixelRatio.value = pixelRatio;
       uniforms.uGevFootprint.value = footprintPerDepth(
         fovDeg,
         viewportHeightPx,
