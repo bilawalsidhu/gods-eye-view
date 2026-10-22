@@ -412,6 +412,14 @@ async function runFleet({
       event.addEventListener = add;
     };
   };
+  const times = [];
+  // Each frame's own work (its preRender to its postRender: the layer's
+  // frame listeners and the draw), apart from the time between frames.
+  const works = [];
+  let frameStart = null;
+  const removePre = engine.frames.preRender.addEventListener(() => {
+    frameStart = performance.now();
+  });
   const untime = [
     timed(engine.frames.preRender),
     ...(viewer?.scene?.preRender ? [timed(viewer.scene.preRender)] : []),
@@ -433,14 +441,16 @@ async function runFleet({
     else if (loadedSince == null) loadedSince = performance.now();
     else if (performance.now() - loadedSince >= 1500) break;
   }
-  const times = [];
-  // Each frame's own work (its preRender to its postRender: the layer's
-  // frame listeners and the draw), apart from the time between frames.
-  const works = [];
-  let frameStart = null;
-  const removePre = engine.frames.preRender.addEventListener(() => {
-    frameStart = performance.now();
-  });
+  // Keep all 12k contacts resident at every pose; viewport filtering in the
+  // fixture source would otherwise benchmark only a few hundred near port.
+  if (layerId === 'ais-live-vessels') {
+    const { syntheticVessels } = await import('/src/bench/w1Feeds.js');
+    const seeded = flights.__focusEvidence.setVessels(
+      syntheticVessels({ nowMs: Date.now() }).rows,
+    );
+    if (!seeded.ok || seeded.count !== 12000)
+      throw new Error(`Expected 12000 vessels, got ${seeded.count}`);
+  }
   const removeFrame = engine.frames.postRender.addEventListener(() => {
     const now = performance.now();
     times.push(now);
@@ -472,6 +482,10 @@ async function runFleet({
       fleetTicksMs: [...(window.__gevFleetTicks ?? [])],
       objects: flights.getAllPositions(1_000_000).length,
     };
+    if (layerId === 'ais-live-vessels' && result.objects !== 12000)
+      throw new Error(
+        `Vessel population changed during measurement: ${result.objects}`,
+      );
     if (hold) {
       holding = true;
       removeFrame();
@@ -941,7 +955,7 @@ try {
       return {
         cesium,
         navara,
-        ratio: cesium && navara ? round(navara / cesium, 2) : null,
+        ratio: cesium > 0 && Number.isFinite(navara) ? navara / cesium : null,
       };
     };
     report.gate = Object.fromEntries(
@@ -986,6 +1000,7 @@ try {
         ];
       }),
     );
+    failed += Object.values(report.gate).filter(({ pass }) => !pass).length;
     console.log(
       `[gate] ${
         VSYNC

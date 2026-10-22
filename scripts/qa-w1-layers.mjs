@@ -118,6 +118,32 @@ function compare(files) {
     differences.push(
       `5 queries: ${JSON.stringify(qa)} vs ${JSON.stringify(qb)}`,
     );
+  if (
+    a.layer === 'ais-live-vessels' &&
+    a.sections?.[2]?.target?.id === b.sections?.[2]?.target?.id
+  ) {
+    const left = a.sections?.[3]?.pose;
+    const right = b.sections?.[3]?.pose;
+    if (left && right) {
+      const metres = Math.hypot(
+        left.position.x - right.position.x,
+        left.position.y - right.position.y,
+        left.position.z - right.position.z,
+      );
+      const degrees = Math.max(
+        Math.abs(left.heading - right.heading),
+        Math.abs(left.pitch - right.pitch),
+      );
+      if (metres > 1 || degrees > 0.1)
+        differences.push(
+          `3 focus: camera differs by ${metres} m / ${degrees} degrees`,
+        );
+      else
+        console.log(
+          `[w1-layers] focus parity: ${metres.toFixed(6)} m / ${degrees.toFixed(6)} degrees`,
+        );
+    }
+  }
   for (const line of differences) console.log(`[w1-layers] DIFF ${line}`);
   console.log(
     `[w1-layers] ${a.engine} vs ${b.engine} (${a.layer}): ${
@@ -154,7 +180,10 @@ const check = (name, pass, detail) => {
 };
 const report = { layer, engine: engineKind, feed, view: {}, sections: {} };
 
-const browser = await puppeteer.launch({ headless: true });
+const browser = await puppeteer.launch({
+  headless: true,
+  args: ['--use-angle=metal'],
+});
 try {
   const page = await browser.newPage();
   await page.setViewport({ width: 1280, height: 800 });
@@ -889,6 +918,7 @@ try {
       section.target = targets.target;
       if (targets.target) {
         const id = targets.target.id;
+        const beforeFocus = await cameraPose();
         await page.mouse.click(
           targets.target.screen.x,
           targets.target.screen.y,
@@ -921,8 +951,14 @@ try {
         );
         report.sections[3] = { pose: focusPose, vesselScreen };
         check(
-          '3 focus: select-and-show flies the camera to the vessel (it is on screen)',
-          Boolean(vesselScreen),
+          '3 focus: select-and-show flies the camera to the vessel',
+          Boolean(vesselScreen) &&
+            Math.hypot(
+              focusPose.position.x - beforeFocus.position.x,
+              focusPose.position.y - beforeFocus.position.y,
+              focusPose.position.z - beforeFocus.position.z,
+            ) > 1000 &&
+            Math.abs(focusPose.pitch + 30) < 0.1,
           JSON.stringify({ ...focusPose, position: undefined, vesselScreen }),
         );
         await page.keyboard.press('Escape');
@@ -1216,6 +1252,24 @@ try {
     console.log(
       `  [INFO] 8 idle: ${idleFrames} frames in 2 s with ${layer} on`,
     );
+    if (layer === 'ais-live-vessels') {
+      const holds = await page.evaluate(async (id) => {
+        const { getRenderGovernorDiagnostics } =
+          await import('/src/renderGovernor.js');
+        const before =
+          getRenderGovernorDiagnostics().holds.includes('ais-vessels');
+        await window.__godsEyeView.layers.disable(id);
+        return {
+          before,
+          after: getRenderGovernorDiagnostics().holds.includes('ais-vessels'),
+        };
+      }, layer);
+      report.sections[8].holds = holds;
+      check(
+        '8 idle: vessels hold rendering only while enabled',
+        holds.before && !holds.after,
+      );
+    }
     // 9. on/off 10 times: no mover sets left behind.
     const leftover = await page.evaluate(async (id) => {
       const { layers } = window.__godsEyeView;

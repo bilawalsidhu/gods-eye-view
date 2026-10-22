@@ -152,3 +152,21 @@ test('weather shell supplies live imagery hosts to wind and observations and rel
   owner.disconnect();
   for (const id of ids) assert.equal(attached.get(id), null);
 });
+
+
+test('world focus uses the engine when the shell has no Cesium viewer', async (t) => {
+  const { requestWorldFocus } = await import('../worldFocus.js');
+  replaceWindow(t, new EventTarget());
+  const engine = createFakeEngine();
+  let target;
+  engine.camera.flyToSphere = (sphere) => { target = sphere.center; };
+  const owner = new LayerBindings({
+    viewer: null, engine, services: {}, readControls: () => ({}),
+    operations: { _runExplicitWorldFocus: (_detail, fly) => fly() },
+  });
+  owner.observeCamera();
+  const position = { x: 6378137, y: 0, z: 0 };
+  requestWorldFocus({ kind: 'vessel', id: '111', position });
+  assert.deepEqual(target, position);
+  owner.stop();
+});

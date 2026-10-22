@@ -327,14 +327,20 @@ function centreColour({ data, width, channels }, { x, y }) {
 // A browser per engine: after Cesium's models the same browser sometimes
 // never brought up the Navara page (its WebGL context).
 const capturedOn = async (engineKind) => {
-  const own = await puppeteer.launch({ headless: true });
+  const own = await puppeteer.launch({
+    headless: true,
+    args: ['--use-angle=metal'],
+  });
   try {
     return await capture(own, engineKind);
   } finally {
     await own.close();
   }
 };
-const browser = await puppeteer.launch({ headless: true });
+const browser = await puppeteer.launch({
+  headless: true,
+  args: ['--use-angle=metal'],
+});
 let report;
 try {
   const cesium = await capturedOn('cesium');

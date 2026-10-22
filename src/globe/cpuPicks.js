@@ -196,10 +196,11 @@ export function createCpuPicker({ projector, camera, movers, lines }) {
     const found = movers().find(({ options }) => options.id === owner);
     if (!found) return true;
     const { options, store, pickRadiusPx } = found;
+    if (instance < 0 || instance >= store.count || store.shows[instance] !== 1)
+      return false;
     const modelRadius =
       options.kind === 'model' ? (pickRadiusPx?.(instance) ?? null) : null;
     if (options.kind === 'model' && modelRadius == null) return true;
-    if (instance >= store.count) return false;
     geo.cartesian3.fromElements(
       store.positions[instance * 3],
       store.positions[instance * 3 + 1],

@@ -83,7 +83,6 @@ export function createMoverBank(engine, { options, write, onCommit }) {
     capacity = wanted;
     handles.forEach((handle, index) => write(handle, set, index));
     set.setCount(visible ? handles.length : 0);
-    dirty = true;
   };
   const bank = {
     handles,

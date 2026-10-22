@@ -264,6 +264,7 @@ export class StyleManager extends ShellFacade {
 
     this._layerBindings = new LayerBindings({
       viewer,
+      engine,
       services: {
         imageryHost: () =>
           resolveImageryHost({

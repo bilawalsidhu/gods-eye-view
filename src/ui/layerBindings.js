@@ -13,6 +13,7 @@ import { registerNavigationAuthorityListener } from '../navigationPolicy.js';
 export class LayerBindings {
   constructor({
     viewer,
+    engine,
     services,
     readControls,
     operations,
@@ -23,6 +24,7 @@ export class LayerBindings {
       this,
       {
         viewer,
+        engine,
         services,
         readControls,
         _feedback: feedback,
@@ -71,7 +73,7 @@ export class LayerBindings {
       routeWorldFocusRequest(
         event,
         (detail, fly) => this._runExplicitWorldFocus(detail, fly),
-        (detail) => flyToWorldTarget(this.viewer, detail),
+        (detail) => flyToWorldTarget(this.engine ?? this.viewer, detail),
       );
     this._removeWorldRequestFocusListener = registerWorldFocusRequestListener(
       window,
