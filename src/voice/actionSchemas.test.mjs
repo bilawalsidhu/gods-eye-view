@@ -38,7 +38,8 @@ test('the complete Realtime tool payload pins the manifest-generated layer relea
     // requested radius and center authority in descriptions only.
     // Street Level and GNSS extend the manifest; tracked and analyst aircraft describe broadcasts.
     // Air quality (ECCC AQHI) extends the manifest.
-    '775ba323384b4c1b62fb8415bac52aecc3fc668e20bedcfa57e426dcd1da3969',
+    // The magnetosphere adds its toggle enum value and alias hint.
+    '58fa818cca50742163c2b273f009a55cbc5b1773e8824d7413bc7c337b02506d',
   );
 });
 
