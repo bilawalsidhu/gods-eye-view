@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { VisualEffects } from './visualEffects.js';
+import { MILKY_WAY_INTENSITY, StarrySky } from '../sky/starrySky.js';
 import {
   GLOBAL_POST_DEFAULTS,
   STYLE_PRESET_DEFAULTS,
@@ -36,7 +37,9 @@ function fixture() {
     },
   };
   const effects = new VisualEffects({
-    viewer: { scene: { postProcessStages: pipeline } },
+    viewer: {
+      scene: { postProcessStages: pipeline, skyBox: { milkyWayVisibility: 1 } },
+    },
     requestRender: (reason) => requests.push(reason),
     holdRender: (reason) => holds.add(reason),
     releaseRender: (reason) => holds.delete(reason),
@@ -157,6 +160,38 @@ test('direct Cockpit intensity writes are reconciled before rendering', () => {
   assert.equal(f.effects.stages.thermal.enabled, false);
   f.effects.destroy();
 });
+
+test('the anime stage fades the Milky Way out with its own intensity', () => {
+  const f = fixture();
+  const sky = new StarrySky({ requestRender: () => {} });
+  const glow = () => sky._milkyWayUniforms.u_intensity();
+  f.effects.viewer.scene.skyBox = sky;
+  f.effects.initStyles();
+  f.effects.setStageIntensity(f.effects.stages.thermal, 1);
+  assert.equal(glow(), MILKY_WAY_INTENSITY, 'other styles keep the glow');
+  f.effects.setStageIntensity(f.effects.stages.anime, 0.25);
+  assert.equal(glow(), MILKY_WAY_INTENSITY * 0.75);
+  f.effects.setStageIntensity(f.effects.stages.anime, 1);
+  assert.equal(glow(), 0);
+  f.effects.setStageIntensity(f.effects.stages.anime, 0);
+  assert.equal(glow(), MILKY_WAY_INTENSITY);
+  sky.destroy();
+  f.effects.destroy();
+});
+
+for (const skyBox of [undefined, null, {}]) {
+  test(`anime works without StarrySky (${JSON.stringify(skyBox)})`, () => {
+    const f = fixture();
+    f.effects.viewer.scene.skyBox = skyBox;
+    f.effects.initStyles();
+    f.effects.setStageIntensity(f.effects.stages.anime, 1);
+    assert.equal(f.effects.stages.anime.enabled, true);
+    f.effects.setStageIntensity(f.effects.stages.anime, 0);
+    assert.equal(f.effects.stages.anime.enabled, false);
+    if (skyBox) assert.equal('milkyWayVisibility' in skyBox, false);
+    f.effects.destroy();
+  });
+}
 
 test('bloom retains its dead zone, normalized intensity and independent toggle', () => {
   const f = fixture();

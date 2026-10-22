@@ -73,16 +73,14 @@ export function filterControls(providers) {
 }
 
 /**
- * The note under SINCE when a lit provider dates its imagery by upload,
- * e.g. "KartaView: by upload date", or null.
+ * The note beside the SINCE value when a lit provider dates its imagery by
+ * upload, "(by upload date)", or null. One source is lit at a time, so the
+ * note needs no provider name.
  * @param {Array<ProviderSnapshot>} providers
  */
 export function sinceNote(providers) {
-  const names = providers
-    .filter((p) => p.on && p.sinceBasis === 'upload')
-    .map((p) => p.name);
-  return names.length
-    ? t('{names}: by upload date', { names: names.join(', ') })
+  return providers.some((p) => p.on && p.sinceBasis === 'upload')
+    ? t('(by upload date)')
     : null;
 }
 

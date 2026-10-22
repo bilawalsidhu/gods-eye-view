@@ -981,9 +981,9 @@ test('a note under SINCE says what date it compares, only while one is given', (
     const { layer } = stubPanel(dom, state);
     const note = () => dom.root.querySelector('#sl-since-note');
     assert.equal(note().hidden, true, 'none for Mapillary');
-    layer.publish({ ...state, sinceNote: 'KartaView: by upload date' });
+    layer.publish({ ...state, sinceNote: '(by upload date)' });
     assert.equal(note().hidden, false);
-    assert.equal(note().textContent, 'KartaView: by upload date');
+    assert.equal(note().textContent, '(by upload date)');
     layer.publish(state);
     assert.equal(note().hidden, true);
     // The panel's own markup has it, read out with the slider.
