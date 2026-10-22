@@ -239,7 +239,8 @@ export const DATA_CREDITS = [
     html:
       'CCTV cameras &amp; frames (Ontario): ' +
       '<a href="https://511on.ca/" target="_blank" rel="noopener">Ontario 511</a> ' +
-      '(<a href="https://www.ontario.ca/page/open-government-licence-ontario" target="_blank" rel="noopener">Open Government Licence - Ontario</a>)',
+      '(<a href="https://www.ontario.ca/page/open-government-licence-ontario" target="_blank" rel="noopener">Open Government Licence - Ontario</a>) ' +
+      '· provided as is, without warranty; actual road conditions may differ',
   },
   {
     key: 'fintraffic-cctv',
@@ -256,6 +257,14 @@ export const DATA_CREDITS = [
       // conditions: attribution, reuse on the same terms).
       'Road-camera stills (Lithuania, when enabled): ' +
       '<a href="https://eismoinfo.lt/" target="_blank" rel="noopener">Via Lietuva / Eismoinfo</a>; periodically updated images',
+  },
+  {
+    key: 'taiwan-cctv',
+    html:
+      'Freeway camera stills (Taiwan): ' +
+      '<a href="https://www.freeway.gov.tw/" target="_blank" rel="noopener">Freeway Bureau, MOTC</a>, ' +
+      'CCTV static data (MOTC 2.0), released under the ' +
+      '<a href="https://data.gov.tw/license" target="_blank" rel="noopener">Open Government Data License, Taiwan (Version 1.0)</a>',
   },
   {
     key: 'calgary-cctv',
@@ -289,6 +298,13 @@ export const DATA_CREDITS = [
       'Partner-city cameras hosted on the county image handler (e.g. Newcastle) name their owner in the CCTV panel.',
   },
   {
+    key: 'hk-cctv',
+    html:
+      'Traffic snapshot cameras (Hong Kong): ' +
+      '<a href="https://data.gov.hk/en-data/dataset/hk-td-tis_2-traffic-snapshot-images" target="_blank" rel="noopener">Transport Department / DATA.GOV.HK</a> ' +
+      '(<a href="https://data.gov.hk/en/terms-and-conditions" target="_blank" rel="noopener">Terms of Use</a> — attribution required)',
+  },
+  {
     key: 'vegvesen-cctv',
     html:
       'Road cameras (Norway): contains data under the ' +
@@ -310,6 +326,22 @@ export const DATA_CREDITS = [
     html:
       'Traffic cameras (Toronto): contains information licensed under the ' +
       '<a href="https://www.toronto.ca/city-government/data-research-maps/open-data/open-data-licence/" target="_blank" rel="noopener">Open Government Licence – Toronto</a>',
+  },
+  {
+    key: 'mapillary',
+    html: 'Street Level: imagery © <a href="https://www.mapillary.com" target="_blank" rel="noopener">Mapillary</a> contributors, <a href="https://creativecommons.org/licenses/by-sa/4.0/" target="_blank" rel="noopener">CC BY-SA 4.0</a>',
+  },
+  {
+    key: 'google-street-view',
+    html: 'Street Level: Street View imagery © <a href="https://www.google.com/streetview/" target="_blank" rel="noopener">Google</a>',
+  },
+  {
+    key: 'kartaview',
+    html: 'Street Level: imagery © <a href="https://kartaview.org" target="_blank" rel="noopener">KartaView</a> contributors, <a href="https://creativecommons.org/licenses/by-sa/4.0/" target="_blank" rel="noopener">CC BY-SA 4.0</a>',
+  },
+  {
+    key: 'panoramax',
+    html: 'Street Level: imagery © <a href="https://panoramax.fr" target="_blank" rel="noopener">Panoramax</a> contributors, licence per picture',
   },
   {
     key: 'gbfs',
@@ -397,6 +429,13 @@ export const DATA_CREDITS = [
       'ECMWF does not accept any liability whatsoever for any error or omission in the data, their availability, or for any loss or damage arising from their use.',
   },
   // ── Bundled snapshots ───────────────────────────────────────────
+  {
+    key: 'sky-background',
+    html:
+      'Stars: <a href="https://cdsarc.cds.unistra.fr/viz-bin/cat/V/50" target="_blank" rel="noopener">Yale Bright Star Catalogue</a> ' +
+      '(Hoffleit &amp; Warren, via CDS). Milky Way: <a href="https://www.eso.org/public/images/eso0932a/" target="_blank" rel="noopener">ESO/S. Brunier</a> ' +
+      '(<a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a>; stars removed, blurred and reprojected)',
+  },
   {
     key: 'dams',
     html: 'Dams: Open Infrastructure Map',
