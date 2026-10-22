@@ -398,6 +398,23 @@ export function createSafeSpotFleetEngine(options = {}) {
     }
   }
 
+  // Via-way restrictions (OSM relations whose via member is a way, present in
+  // the graph since SafeSpotSG #44): leaving way `via` onto way `to` is
+  // forbidden when `via` was entered from way `from`. Only `no_*` types apply,
+  // mirroring SafeSpotSG's router (#45). Keyed by the via way for cheap lookups.
+  const viaWayRestrictionsByVia = new Map();
+  let viaWayRestrictionCount = 0;
+  for (const r of raw.viaWayRestrictions ?? []) {
+    if (typeof r.type !== 'string' || !r.type.startsWith('no_')) continue;
+    let set = viaWayRestrictionsByVia.get(r.viaWayId);
+    if (!set) {
+      set = new Set();
+      viaWayRestrictionsByVia.set(r.viaWayId, set);
+    }
+    set.add(`${r.fromWayId}|${r.toWayId}`);
+    viaWayRestrictionCount++;
+  }
+
   const CALIBRATED_TURN_DELAYS = loadCalibratedTurnDelays();
   const totalDrivableEdges = mainEdgeList.length;
 
@@ -415,20 +432,27 @@ export function createSafeSpotFleetEngine(options = {}) {
       if (edgeIsMain[outgoingEdgeIds[j]]) candidates.push(outgoingEdgeIds[j]);
     }
     const scratch = new Uint8Array(M);
+    const scratchEntered = new Int32Array(M);
     const edgeQueue = new Int32Array(M);
     for (const start of candidates) {
       scratch.fill(0);
       let head = 0;
       let tail = 0;
       scratch[start] = 1;
+      scratchEntered[start] = -1;
       edgeQueue[tail++] = start;
       while (head < tail) {
         const e = edgeQueue[head++];
         const via = edgeTo[e];
+        const entered = scratchEntered[e];
         for (let j = outgoingOffsets[via]; j < outgoingOffsets[via + 1]; j++) {
           const nid = outgoingEdgeIds[j];
-          if (scratch[nid] || !edgeIsMain[nid] || isTurnForbidden(e, nid)) continue;
+          if (scratch[nid] || !edgeIsMain[nid]) continue;
+          // Same one-label-per-edge approximation of via-way rules as the search,
+          // so "reachable" here means what the search can actually reach.
+          if (isTurnForbidden(e, nid) || isViaWayForbidden(entered, e, nid)) continue;
           scratch[nid] = 1;
+          scratchEntered[nid] = nextEnteredFromWay(entered, e, nid);
           edgeQueue[tail++] = nid;
         }
       }
@@ -645,11 +669,31 @@ export function createSafeSpotFleetEngine(options = {}) {
     return vehicleType !== 'BUS' || !edgeIsMotorway[eid];
   }
 
-  function isLegalTransition(curEdge, nextEdge, vehicleType) {
+  /**
+   * Via-way restriction check. `enteredFromWay` is the way the vehicle was on
+   * before it entered the current edge's way (-1 when unknown, e.g. at spawn
+   * or right after a relocation, which disables the check for that move).
+   */
+  function isViaWayForbidden(enteredFromWay, curEdge, nextEdge) {
+    if (enteredFromWay < 0) return false;
+    const curWay = edgeWayId[curEdge];
+    const nextWay = edgeWayId[nextEdge];
+    if (curWay === nextWay) return false;
+    const set = viaWayRestrictionsByVia.get(curWay);
+    return set !== undefined && set.has(`${enteredFromWay}|${nextWay}`);
+  }
+
+  /** The entered-from way that applies once the vehicle moves from `curEdge` onto `nextEdge`. */
+  function nextEnteredFromWay(enteredFromWay, curEdge, nextEdge) {
+    return edgeWayId[nextEdge] === edgeWayId[curEdge] ? enteredFromWay : edgeWayId[curEdge];
+  }
+
+  function isLegalTransition(curEdge, nextEdge, vehicleType, enteredFromWay = -1) {
     return (
       edgeIsMain[nextEdge] === 1 &&
       vehicleMayUse(nextEdge, vehicleType) &&
-      !isTurnForbidden(curEdge, nextEdge)
+      !isTurnForbidden(curEdge, nextEdge) &&
+      !isViaWayForbidden(enteredFromWay, curEdge, nextEdge)
     );
   }
 
@@ -703,6 +747,7 @@ export function createSafeSpotFleetEngine(options = {}) {
   const bestCost = new Float64Array(M);
   const bestEpoch = new Int32Array(M);
   const prevEdge = new Int32Array(M);
+  const labelEnteredFrom = new Int32Array(M);
   let currentEpoch = 0;
   const LAT_DEG_M = 111320;
   const LNG_DEG_M = 111320 * Math.cos(rad(1.35));
@@ -714,7 +759,7 @@ export function createSafeSpotFleetEngine(options = {}) {
    * when nothing acceptable is reachable, or `undefined` when the search budget
    * ran out before an answer was found.
    */
-  function searchPath(startEdge, vehicleType, model, accept, targetEdge = -1) {
+  function searchPath(startEdge, vehicleType, model, accept, targetEdge = -1, enteredFromWay = -1) {
     currentEpoch++;
     if (currentEpoch === 2147483647) {
       bestEpoch.fill(0);
@@ -741,6 +786,9 @@ export function createSafeSpotFleetEngine(options = {}) {
     bestCost[startEdge] = 0;
     bestEpoch[startEdge] = epoch;
     prevEdge[startEdge] = -1;
+    // One label per edge, with the entered-from way riding on the best label
+    // (SafeSpotSG's approximation; exact would need (edge, enteredFromWay) state).
+    labelEnteredFrom[startEdge] = enteredFromWay;
     heap.push(startEdge, 0);
 
     let settled = 0;
@@ -759,14 +807,16 @@ export function createSafeSpotFleetEngine(options = {}) {
       }
       const elapsed = bestCost[cur];
       const via = edgeTo[cur];
+      const enteredCur = labelEnteredFrom[cur];
       for (let j = outgoingOffsets[via]; j < outgoingOffsets[via + 1]; j++) {
         const nid = outgoingEdgeIds[j];
-        if (!isLegalTransition(cur, nid, vehicleType)) continue;
+        if (!isLegalTransition(cur, nid, vehicleType, enteredCur)) continue;
         const cost = elapsed + turnDelaySec(cur, nid, model) + edgeDurationSec(nid, model, vehicleType);
         if (bestEpoch[nid] !== epoch || cost < bestCost[nid]) {
           bestCost[nid] = cost;
           bestEpoch[nid] = epoch;
           prevEdge[nid] = cur;
+          labelEnteredFrom[nid] = nextEnteredFromWay(enteredCur, cur, nid);
           heap.push(nid, cost + heuristic(nid));
         }
       }
@@ -829,13 +879,13 @@ export function createSafeSpotFleetEngine(options = {}) {
   }
 
   /** Legal outgoing edge that is uncovered and unclaimed; straight-through before U-turns. */
-  function greedyNextEdge(curEdge, vehicleType) {
+  function greedyNextEdge(curEdge, vehicleType, enteredFromWay) {
     const u = edgeTo[curEdge];
     const prevNode = edgeFrom[curEdge];
     let uTurnOption = -1;
     for (let j = outgoingOffsets[u]; j < outgoingOffsets[u + 1]; j++) {
       const cand = outgoingEdgeIds[j];
-      if (!isLegalTransition(curEdge, cand, vehicleType)) continue;
+      if (!isLegalTransition(curEdge, cand, vehicleType, enteredFromWay)) continue;
       if (edgeCovered[cand] !== 0 || edgeClaimed[cand] !== 0) continue;
       if (edgeTo[cand] === prevNode) {
         if (uTurnOption < 0) uTurnOption = cand;
@@ -847,14 +897,14 @@ export function createSafeSpotFleetEngine(options = {}) {
   }
 
   /** Any legal outgoing edge, rotating among forward options so patrols do not loop. */
-  function anyLegalNextEdge(curEdge, vehicleType, rotation) {
+  function anyLegalNextEdge(curEdge, vehicleType, rotation, enteredFromWay) {
     const u = edgeTo[curEdge];
     const prevNode = edgeFrom[curEdge];
     const forward = [];
     let uTurnOption = -1;
     for (let j = outgoingOffsets[u]; j < outgoingOffsets[u + 1]; j++) {
       const cand = outgoingEdgeIds[j];
-      if (!isLegalTransition(curEdge, cand, vehicleType)) continue;
+      if (!isLegalTransition(curEdge, cand, vehicleType, enteredFromWay)) continue;
       if (edgeTo[cand] === prevNode) {
         if (uTurnOption < 0) uTurnOption = cand;
         continue;
@@ -871,18 +921,32 @@ export function createSafeSpotFleetEngine(options = {}) {
    * `'ok'`, `'budget'` (stop early, retry next step), or `'relocate'` with a
    * `target` when no uncovered edge is legally reachable from here.
    */
+  /** The entered-from way in force at the last edge of the vehicle's planned route. */
+  function enteredFromWayAtRouteEnd(veh) {
+    let entered = veh.enteredFromWay;
+    for (let i = 1; i < veh.route.length; i++) {
+      entered = nextEnteredFromWay(entered, veh.route[i - 1], veh.route[i]);
+    }
+    return entered;
+  }
+
   function planExtension(veh, fromEdge, minHops) {
     const vehicleType = veh.vehicleType;
     const model = activeRoutingModel;
     const out = [];
     let cur = fromEdge;
+    let entered = enteredFromWayAtRouteEnd(veh);
     let rotation = veh.index;
+    const advance = (next) => {
+      entered = nextEnteredFromWay(entered, cur, next);
+      cur = next;
+    };
     while (out.length < minHops) {
-      const greedy = greedyNextEdge(cur, vehicleType);
+      const greedy = greedyNextEdge(cur, vehicleType, entered);
       if (greedy >= 0) {
         out.push(greedy);
         claimEdge(greedy);
-        cur = greedy;
+        advance(greedy);
         continue;
       }
 
@@ -891,10 +955,10 @@ export function createSafeSpotFleetEngine(options = {}) {
       if (nothingLeft || inRetryWindow) {
         // Nothing (reachable) left to cover right now: patrol legally over
         // covered roads and look again once the retry window elapses.
-        const next = anyLegalNextEdge(cur, vehicleType, rotation++);
+        const next = anyLegalNextEdge(cur, vehicleType, rotation++, entered);
         if (next < 0) return { edges: out, outcome: out.length ? 'ok' : 'relocate', target: -1 };
         out.push(next);
-        cur = next;
+        advance(next);
         continue;
       }
 
@@ -904,12 +968,21 @@ export function createSafeSpotFleetEngine(options = {}) {
         // reachable edge that accepts any free edge it meets on the way. The
         // search only ever returns edges reached through legal transitions.
         const aim = nearestFreeReachableBySpace(cur, vehicleType);
-        const path = searchPath(cur, vehicleType, model, (eid) => isFreeUncovered(eid, vehicleType), aim);
+        const path = searchPath(
+          cur,
+          vehicleType,
+          model,
+          (eid) => isFreeUncovered(eid, vehicleType),
+          aim,
+          entered
+        );
         if (path === undefined) return { edges: out, outcome: 'budget' };
         if (path && path.length > 0) {
-          for (const eid of path) claimEdge(eid);
-          out.push(...path);
-          cur = path[path.length - 1];
+          for (const eid of path) {
+            claimEdge(eid);
+            out.push(eid);
+            advance(eid);
+          }
           continue;
         }
         // Null: this vehicle sits in a pocket or dead end that cannot reach the
@@ -957,6 +1030,7 @@ export function createSafeSpotFleetEngine(options = {}) {
       route: [startEdge],
       routeIdx: 0,
       edgeProgressSec: 0,
+      enteredFromWay: -1,
       pendingRelocation: -1,
       relocatedThisStep: false,
       retryTargetsAtSim: 0,
@@ -1002,6 +1076,7 @@ export function createSafeSpotFleetEngine(options = {}) {
     if (targetEdge < 0 || !edgeIsMain[targetEdge]) return;
     veh.route = [targetEdge];
     veh.routeIdx = 0;
+    veh.enteredFromWay = -1;
     // A redeploy is not free: the vehicle sits at the start of the target edge
     // for the dwell before it moves (negative progress reads as "not started").
     veh.edgeProgressSec = -RELOCATION_DWELL_SEC;
@@ -1031,6 +1106,9 @@ export function createSafeSpotFleetEngine(options = {}) {
           veh.status = 'waiting';
           veh.waitingSec += remaining;
           return;
+        } else {
+          // Extended from the anchor: the vehicle now moves anchor -> route[1].
+          veh.enteredFromWay = nextEnteredFromWay(veh.enteredFromWay, veh.route[0], veh.route[1]);
         }
         continue;
       }
@@ -1044,6 +1122,9 @@ export function createSafeSpotFleetEngine(options = {}) {
         if (markEdgeCovered(eid, veh.vehicleType)) veh.edgesCovered++;
         veh.routeIdx++;
         veh.edgeProgressSec = 0;
+        if (veh.routeIdx < veh.route.length) {
+          veh.enteredFromWay = nextEnteredFromWay(veh.enteredFromWay, eid, veh.route[veh.routeIdx]);
+        }
       } else {
         veh.edgeProgressSec += remaining;
         remaining = 0;
@@ -1104,6 +1185,7 @@ export function createSafeSpotFleetEngine(options = {}) {
       status: veh.status,
       waypoints: buildWaypoints(veh),
       progressSec: Number(veh.edgeProgressSec.toFixed(2)),
+      enteredFromWay: veh.enteredFromWay,
       routeVersion: veh.routeVersion,
       relocated: veh.relocatedThisStep,
       relocations: veh.relocations,
@@ -1231,11 +1313,15 @@ export function createSafeSpotFleetEngine(options = {}) {
     totalDrivableEdges,
     reachableEdges,
     droppedRestrictions,
+    viaWayRestrictionCount,
     edgeFrom: (eid) => edgeFrom[eid],
     edgeTo: (eid) => edgeTo[eid],
+    edgeWayId: (eid) => edgeWayId[eid],
     isMain: (eid) => edgeIsMain[eid] === 1,
     isCovered: (eid) => edgeCovered[eid] !== 0,
     isTurnForbidden,
+    isViaWayForbidden,
+    nextEnteredFromWay,
     vehicleMayUse,
   });
 

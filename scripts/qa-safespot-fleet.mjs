@@ -25,7 +25,7 @@ const SPEED = Number(args.speed || 250);
 const t0 = Date.now();
 const engine = createSafeSpotFleetEngine();
 console.log(
-  `graph loaded in ${Date.now() - t0}ms: ${engine.graph.edgeCount} edges, ${engine.graph.totalDrivableEdges} drivable, ${engine.graph.reachableEdges} legally reachable from core, ${engine.graph.droppedRestrictions} unsatisfiable only_* restrictions dropped`
+  `graph loaded in ${Date.now() - t0}ms: ${engine.graph.edgeCount} edges, ${engine.graph.totalDrivableEdges} drivable, ${engine.graph.reachableEdges} legally reachable from core, ${engine.graph.droppedRestrictions} unsatisfiable only_* restrictions dropped, ${engine.graph.viaWayRestrictionCount} via-way restrictions`
 );
 
 let now = 1_000_000;
@@ -37,6 +37,7 @@ let totalStepMs = 0;
 function checkTracks(s) {
   for (const veh of s.vehicles) {
     const wps = veh.waypoints;
+    let entered = Number.isFinite(veh.enteredFromWay) ? veh.enteredFromWay : -1;
     for (let i = 1; i < wps.length; i++) {
       const prev = wps[i - 1].edgeId;
       const cur = wps[i].edgeId;
@@ -46,7 +47,11 @@ function checkTracks(s) {
       } else if (engine.graph.isTurnForbidden(prev, cur)) {
         violations++;
         console.error(`FORBIDDEN TURN ${veh.id} wp${i}: ${prev} -> ${cur}`);
+      } else if (engine.graph.isViaWayForbidden(entered, prev, cur)) {
+        violations++;
+        console.error(`FORBIDDEN VIA-WAY TURN ${veh.id} wp${i}: from way ${entered} via ${prev} -> ${cur}`);
       }
+      entered = engine.graph.nextEnteredFromWay(entered, prev, cur);
       if (!engine.graph.vehicleMayUse(cur, veh.vehicleType)) {
         violations++;
         console.error(`CLASS VIOLATION ${veh.id} on edge ${cur}`);

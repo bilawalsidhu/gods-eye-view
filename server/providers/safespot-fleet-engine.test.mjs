@@ -126,3 +126,62 @@ test('turn restrictions are obeyed and unreachable pockets are reported as reloc
   assert.ok(state.coverage.relocations >= 1, 'pocket edges need a reported relocation');
   assert.equal(sawRelocation, true);
 });
+
+test('via-way restrictions are obeyed and an entry-only pocket is reached by relocation', () => {
+  // Ring 0 -A-> 1 -B-> 2 -B-> 3 -D-> 5 -F-> 0 with a side exit 3 -C-> 4 -E-> 0.
+  // Way B is a two-segment via way. `no_right_turn` from A via B to C forbids
+  // A,B,B,C, and since B can only be entered from A, way C is never legal.
+  const base = { lat: 1.3327, lng: 103.8479 };
+  const nodes = [0, 1, 2, 3, 4, 5].map((id) => ({
+    id,
+    lat: base.lat + (id % 2) * 0.001,
+    lng: base.lng + id * 0.001,
+  }));
+  const mk = (from, to, wayId) => ({
+    from, to, wayId, length: 110, seconds: 20, maxspeed: 50, highway: 'residential', name: `way ${wayId}`,
+  });
+  const edges = [mk(0, 1, 10), mk(1, 2, 20), mk(2, 3, 20), mk(3, 4, 30), mk(3, 5, 40), mk(4, 0, 50), mk(5, 0, 60)];
+  const graph = {
+    nodes,
+    edges,
+    turnRestrictions: [],
+    viaWayRestrictions: [{ type: 'no_right_turn', fromWayId: 10, viaWayId: 20, toWayId: 30 }],
+    trafficSignalNodes: [],
+  };
+  const engine = createSafeSpotFleetEngine({ graph, now: () => T0 });
+  const [A, B1, B2, C, D] = [0, 1, 2, 3, 4];
+  assert.equal(engine.graph.viaWayRestrictionCount, 1);
+  assert.equal(engine.graph.isViaWayForbidden(10, B2, C), true, 'A,B,B,C is forbidden');
+  assert.equal(engine.graph.isViaWayForbidden(10, B2, D), false);
+  assert.equal(engine.graph.isViaWayForbidden(-1, B2, C), false, 'unknown history disables the check');
+  assert.equal(engine.graph.nextEnteredFromWay(-1, A, B1), 10);
+  assert.equal(engine.graph.nextEnteredFromWay(10, B1, B2), 10, 'same way inherits');
+
+  let now = T0;
+  let state = engine.stepCoverage({ nowMs: now, speedMultiplier: 250 });
+  for (let i = 0; i < 300 && !state.coverage.isComplete; i++) {
+    now += 15_000;
+    state = engine.stepCoverage({ nowMs: now });
+    assertContiguous(engine, state);
+    for (const veh of state.vehicles) {
+      const ids = veh.waypoints.map((w) => w.edgeId);
+      let entered = veh.enteredFromWay;
+      for (let k = 1; k < ids.length; k++) {
+        assert.equal(
+          engine.graph.isViaWayForbidden(entered, ids[k - 1], ids[k]),
+          false,
+          `${veh.id} plans a via-way forbidden turn at waypoint ${k}`
+        );
+        entered = engine.graph.nextEnteredFromWay(entered, ids[k - 1], ids[k]);
+      }
+      for (let k = 3; k < ids.length; k++) {
+        assert.ok(
+          !(ids[k - 3] === A && ids[k - 2] === B1 && ids[k - 1] === B2 && ids[k] === C),
+          `${veh.id} drives the forbidden A,B,B,C sequence`
+        );
+      }
+    }
+  }
+  assert.equal(state.coverage.isComplete, true);
+  assert.ok(state.coverage.relocations >= 1, 'way C is only reachable by relocation');
+});
