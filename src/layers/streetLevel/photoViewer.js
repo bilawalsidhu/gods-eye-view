@@ -6,6 +6,16 @@ import {
 import { imageSize } from './imageSize.js';
 import { msg, t } from '../../i18n/index.js';
 
+/**
+ * EXPAND puts the viewer's wrap full screen, or (iPhone) opens it as a
+ * popover. Each is tried on its own: a browser that cannot parse one
+ * (Safari before 16.4) throws on the selector.
+ */
+const EXPANDED_SELECTORS = [
+  '.sl-viewer-wrap:fullscreen',
+  '.sl-viewer-wrap:popover-open',
+];
+
 /** A photo download (tens of kilobytes to a few megabytes). */
 export const IMAGE_TIMEOUT_MS = 15_000;
 
@@ -535,14 +545,14 @@ export function createPhotoViewer({
   /**
    * Docked, Esc anywhere in the viewer's box (the photo, its toolbar, its
    * caption) is the provider's before the panel's, which would collapse;
-   * expanded, the dialog's own Esc shrinks it.
+   * expanded, the panel's own Esc shrinks it.
    */
   function onEscapeKey(event) {
     if (
       event.key !== 'Escape' ||
       event.shiftKey ||
       event.defaultPrevented ||
-      root?.closest?.('.sl-viewer-wrap-expanded') ||
+      isExpanded() ||
       !onEscape()
     )
       return;
@@ -739,9 +749,15 @@ export function createPhotoViewer({
     }
   }
 
-  /** The viewer is the expanded dialog, not docked in the panel. */
+  /** The viewer is expanded (full screen, or the iPhone popover), not docked in the panel. */
   function isExpanded() {
-    return Boolean(root?.closest?.('.sl-viewer-wrap-expanded'));
+    return EXPANDED_SELECTORS.some((selector) => {
+      try {
+        return Boolean(root?.closest?.(selector));
+      } catch {
+        return false;
+      }
+    });
   }
 
   /** Another photo, or none: a sharper panorama still on its way is not needed. */

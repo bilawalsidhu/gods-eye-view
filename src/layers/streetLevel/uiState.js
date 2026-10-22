@@ -1,6 +1,5 @@
-import { COLORS } from './policy.js';
-
 import { msg, t } from '../../i18n/index.js';
+
 /**
  * @typedef {object} ProviderSnapshot
  * @property {string} id
@@ -19,7 +18,6 @@ import { msg, t } from '../../i18n/index.js';
  * @property {boolean} [groundClick]
  * @property {Array<'pano'|'since'>} [filters]
  * @property {{noun: string, action: string}|null} [coverageLabel]
- * @property {boolean} [highlightsSequence]   Its lines turn cyan when their sequence is selected.
  * @property {'capture'|'upload'} [sinceBasis]   What its SINCE compares.
  */
 
@@ -75,23 +73,20 @@ export function filterControls(providers) {
 }
 
 /**
- * The note under SINCE when a lit provider dates its imagery by upload,
- * e.g. "KartaView: by upload date", or null.
+ * The note beside the SINCE value when a lit provider dates its imagery by
+ * upload, "(by upload date)", or null. One source is lit at a time, so the
+ * note needs no provider name.
  * @param {Array<ProviderSnapshot>} providers
  */
 export function sinceNote(providers) {
-  const names = providers
-    .filter((p) => p.on && p.sinceBasis === 'upload')
-    .map((p) => p.name);
-  return names.length
-    ? t('{names}: by upload date', { names: names.join(', ') })
+  return providers.some((p) => p.on && p.sinceBasis === 'upload')
+    ? t('(by upload date)')
     : null;
 }
 
 /**
- * The panel snapshot from core state and provider snapshots. The legend has
- * one swatch per active source that draws coverage lines, then Selected.
- * @param {{enabled: boolean, filter: object, providers: Array<ProviderSnapshot>, street: object, sequence: object}} input
+ * The panel snapshot from core state and provider snapshots.
+ * @param {{enabled: boolean, groundClickReady?: boolean, filter: object, providers: Array<ProviderSnapshot>, street: object, sequence: object}} input
  */
 export function composeUIState({
   enabled,
@@ -100,30 +95,9 @@ export function composeUIState({
   providers,
   street,
   sequence,
-  surface = 'draped',
 }) {
-  const active = providers.filter((p) => p.on);
   const { keyRequired, keyRejected, ...coverage } =
     summarizeCoverage(providers);
-  const legend = active
-    .filter((provider) => provider.groundClick !== true)
-    .map((provider) => ({
-      key: provider.id,
-      label: provider.name,
-      color: provider.color,
-    }));
-  // "Selected" only beside a source whose lines turn cyan when selected.
-  if (
-    active.some(
-      (provider) =>
-        provider.groundClick !== true && provider.highlightsSequence !== false,
-    )
-  )
-    legend.push({
-      key: 'selected',
-      label: t('Selected'),
-      color: COLORS.selected,
-    });
   return {
     enabled,
     groundClickReady: groundClickReady === true,
@@ -135,9 +109,7 @@ export function composeUIState({
     sinceNote: sinceNote(providers),
     providers: providers.map((p) => ({ ...p })),
     coverage,
-    legend,
     sequence: { ...sequence },
     street: { ...street },
-    surface,
   };
 }
