@@ -1008,10 +1008,11 @@ test('the voice TOOL SCHEMA matches the pinned contract — the mission mapping 
   // Globe rotation adds one camera motion and its descriptions; Globe View
   // framing/default guidance updates only move_camera and mode descriptions.
   // Radio markup and the complete production-request comparison pin locality.
-  assert.equal(block.length, 30848, 'serialized tool schema length drifted');
+  // The reviewed prompt-budget edit shortens only Globe View and camera descriptions.
+  assert.equal(block.length, 30775, 'serialized tool schema length drifted');
   assert.equal(
     crypto.createHash('sha256').update(block).digest('hex'),
-    'b83af371bcf34d9b8b997a7a749f8b698d239c79d87ebde9f2a0f6912c2fbe5a',
+    '4314f7c5230393377214c28116b869a03379b2f6ed5ca7043b599e9508489df1',
     'the first-run missions must ride EXISTING tools: no schema edit, no cache bust',
   );
   const instructions = fs.readFileSync(
