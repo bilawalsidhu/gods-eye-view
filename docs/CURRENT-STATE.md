@@ -9,10 +9,11 @@ broader suffix variants. Follow-ups retain boundary provenance, and cancelled
 lookups preserve the previous analyst cohort and boundary source. Navigation
 search keeps a successful geocode, with no search or view-based region recovery.
 
-Share links and structured views accept only own keys in their style registries.
-Inherited names such as `constructor` and `__proto__` fall back to the existing
-normal/null defaults without interrupting other restored fields. Programmatic
-visual-style calls ignore unknown or non-string values before mutating state.
+Photon search unwraps antimeridian-crossing viewport bounds before computing its
+longitude bias, then wraps the midpoint back onto the globe. Invalid coordinates
+produce no bias. Nominatim omits a crossing viewbox because one ordinary box
+cannot describe that interval; the search still runs without a geographic bias.
+The annotation resolver uses the same Photon adapter and camera-subpoint proximity.
 
 Shared distance checks use `src/geoDistance.js` with `{ lat, lon }` points and
 the IUGG mean spherical Earth radius, 6371.0088 km. `greatCircleKm` is
