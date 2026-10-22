@@ -387,3 +387,19 @@ export function fromDegreesArrayHeights(coordinates, ellipsoid, result) {
   }
   return result;
 }
+
+const angleBetweenScratch = create();
+const angleBetweenScratch2 = create();
+export function angleBetween(left, right) {
+  if (DEBUG) {
+    Check.typeOf.object('left', left);
+    Check.typeOf.object('right', right);
+  }
+  normalize(left, angleBetweenScratch);
+  normalize(right, angleBetweenScratch2);
+  const cosine = dot(angleBetweenScratch, angleBetweenScratch2);
+  const sine = magnitude(
+    cross(angleBetweenScratch, angleBetweenScratch2, angleBetweenScratch),
+  );
+  return Math.atan2(sine, cosine);
+}

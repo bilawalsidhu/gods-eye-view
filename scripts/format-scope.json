@@ -1148,5 +1148,6 @@
   "src/celestialRing/view.js",
   "src/layers/satellites/render/navara.js",
   "src/layers/satellites/render/navara.test.mjs",
-  "src/layers/satellites/render/cesium.test.mjs"
+  "src/layers/satellites/render/cesium.test.mjs",
+  "src/geo/ellipsoidGeodesic.test.mjs"
 ]
