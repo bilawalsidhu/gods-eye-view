@@ -204,7 +204,8 @@ const PLANS = {
   minimal: () => ({
     pluginDefault: false,
     meshes: [{ sky: {} }, { stars: {} }],
-    lights: [{ skyLightProbe: {} }, { sun: {} }],
+    // Match cinematic: Google tiles already carry baked sunlight.
+    lights: [{ skyLightProbe: {} }, { sun: { castShadow: false } }],
     effects: [],
     globeLighting: false,
     atmosphereLuminance: 1,

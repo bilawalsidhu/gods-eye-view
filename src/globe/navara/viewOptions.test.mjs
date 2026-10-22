@@ -70,7 +70,7 @@ test('cinematic is the default look; photoreal is the default plugin scene; mini
   assert.deepEqual(navaraScenePlan('minimal'), {
     pluginDefault: false,
     meshes: [{ sky: {} }, { stars: {} }],
-    lights: [{ skyLightProbe: {} }, { sun: {} }],
+    lights: [{ skyLightProbe: {} }, { sun: { castShadow: false } }],
     effects: [],
     globeLighting: false,
     atmosphereLuminance: 1,
