@@ -14,18 +14,25 @@
  *
  * Spec records are vendored verbatim from the CCTV Camera Database
  * (https://github.com/ch-bas/cctv-camera-database, CC0-1.0) — an open dataset
- * of 28,000+ camera models transcribed from manufacturer datasheets (84% with
- * FOV, as of v2.26.0). This module vendors the records that the currently integrated public
+ * of 29,000+ camera models transcribed from manufacturer datasheets (76% with
+ * FOV, as of v2.29.0). This module vendors the records that the currently integrated public
  * catalogs publish hardware for — King County WA (Cohu, Bosch AUTODOME, Axis
  * Q6135-LE), plus the Bosch AUTODOME and Axis PTZ/multisensor models that
- * appear in Sarasota County FL and Sioux Falls SD open data; packs that
- * publish other hardware models can grow it, or vendor the full extract.
+ * appear in Sarasota County FL and Sioux Falls SD open data, and the Bosch MIC
+ * PTZs in the City of Amsterdam camera register; packs that publish other
+ * hardware models can grow it, or vendor the full extract.
  *
  * Scope guardrail: records describe camera PRODUCTS (optics, resolution,
  * night vision) — never endpoints, stream paths, or access/config data.
  */
 
-/** Verbatim records from the dataset's model-enrichment extract (v2.26.0). */
+/**
+ * Verbatim records from the dataset's model-enrichment extract (v2.26.0; the
+ * Bosch MIC records from v2.29.0). Bosch MIC order codes end in a colour
+ * letter (B black, G grey, W white) on one shared datasheet; those siblings,
+ * and the `x` wildcard registries write for the colour letter, are listed as
+ * aliases of the one vendored record.
+ */
 const RECORDS = [
   {
     id: 'axis-q6135-le',
@@ -263,6 +270,56 @@ const RECORDS = [
     ptz: true,
     autotracking: true,
     environment: ['outdoor'],
+  },
+  {
+    id: 'bosch-mic-7130-pb4',
+    brand: 'Bosch',
+    model: 'MIC-7130-PB4',
+    type: 'ptz',
+    url: 'https://www.cctv-database.com/camera/bosch-mic-7130-pb4/',
+    aliases: [
+      'MIC IP starlight 7000 HD',
+      'MIC-7130-PG4',
+      'MIC-7130-PW4',
+      'MIC-7130-Px4',
+    ],
+    fov_deg: '2.1-59',
+    resolution: { mp: 1, w: 1280, h: 720, label: '720p' },
+    ptz: true,
+    autotracking: true,
+    varifocal: true,
+    environment: ['outdoor'],
+  },
+  {
+    id: 'bosch-mic-7502-z30b',
+    brand: 'Bosch',
+    model: 'MIC-7502-Z30B',
+    type: 'ptz',
+    url: 'https://www.cctv-database.com/camera/bosch-mic-7502-z30b/',
+    aliases: ['MIC-7502-Z30G', 'MIC-7502-Z30W', 'MIC-7502-Z30x'],
+    fov_deg: '2.3-63.7',
+    resolution: { mp: 2.13, w: 1920, h: 1080, label: '1080p' },
+    ptz: true,
+    autotracking: true,
+    varifocal: true,
+    night_vision: { type: 'color' },
+    environment: ['outdoor'],
+  },
+  {
+    id: 'bosch-mic-7522-z30b',
+    brand: 'Bosch',
+    model: 'MIC-7522-Z30B',
+    type: 'ptz',
+    url: 'https://www.cctv-database.com/camera/bosch-mic-7522-z30b/',
+    aliases: ['MIC-7522-Z30G', 'MIC-7522-Z30W', 'MIC-7522-Z30x'],
+    fov_deg: '2.1-58.3',
+    // i18n-ignore: datasheet label
+    resolution: { mp: 2, w: 1920, h: 1080, label: '1080p HD' },
+    ptz: true,
+    varifocal: true,
+    night_vision: { type: 'color' },
+    environment: ['outdoor'],
+    ndaa_compliant: true,
   },
   {
     id: 'cohu-3920-idome',

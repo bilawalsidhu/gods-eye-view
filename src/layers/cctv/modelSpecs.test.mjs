@@ -245,6 +245,34 @@ test('King County snapshot model strings still resolve', () => {
   );
 });
 
+test('Amsterdam camera register model strings resolve', () => {
+  // The register writes the Bosch MIC colour letter as `x`.
+  assert.equal(
+    lookupModelSpec('Bosch MIC-7522-Z30x')?.id,
+    'bosch-mic-7522-z30b',
+  );
+  assert.equal(
+    lookupModelSpec('Bosch MIC-7502-Z30x')?.id,
+    'bosch-mic-7502-z30b',
+  );
+  assert.equal(lookupModelSpec('Bosch MIC-7130-Px4')?.id, 'bosch-mic-7130-pb4');
+  assert.equal(lookupModelSpec('MIC-7522-Z30W')?.id, 'bosch-mic-7522-z30b');
+  // Its ANPR units are not in the table: unknown, never a guess.
+  assert.equal(lookupModelSpec('CSG-8800'), null);
+  // The MIC and AUTODOME starlight 7000 HD (code-less names, so the brand
+  // is needed) stay apart.
+  assert.equal(
+    lookupModelSpec('MIC IP starlight 7000 HD', 'Bosch')?.id,
+    'bosch-mic-7130-pb4',
+  );
+  assert.equal(
+    lookupModelSpec('AUTODOME IP starlight 7000 HD', 'Bosch')?.id,
+    'bosch-autodome-ip-starlight-7000-hd',
+  );
+  // The MIC datasheets state FOV without an axis, so no horizontal range.
+  assert.equal(horizontalFovRangeDeg(lookupModelSpec('MIC-7522-Z30B')), null);
+});
+
 test('catalog never overwrites an explicit FOV or a curated pose', () => {
   const [explicit, curated, cohu, pelco] =
     browserCatalog().buildCatalogFromSources([

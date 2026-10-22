@@ -208,7 +208,7 @@ The [Bhote Koshi event pack](public/events/bhote-koshi-2026/README.md), under `p
 | **Yale Bright Star Catalogue** (9,096 stars, sky background)                | `sky/`                            | **Public domain**                                                                                         | ✅ (no restrictions)                             | "Yale Bright Star Catalogue (Hoffleit & Warren, via CDS)" (courtesy credit) |
 | **ESO Milky Way panorama** (eso0932a, blurred cube map, sky background)     | `sky/`                            | **CC BY 4.0**                                                                                             | ✅ (attribution; changes stated)                 | "ESO/S. Brunier"                                                            |
 | **CCTV ground heights** (3,445 cameras)                                     | `cctv_ground_heights/`            | Precomputed camera placement heights, aligned to work with Google Photorealistic 3D Tiles (folder README) | —                                                | —                                                                           |
-| **CCTV Camera Database** model-enrichment extract v2.26.0 (17 camera-model records) | `src/layers/cctv/modelSpecs.js` | **CC0-1.0** (public domain dedication) | ✅ (no restrictions) | "Specs: cctv-database.com" (courtesy — not legally required) |
+| **CCTV Camera Database** model-enrichment extract v2.26.0 + v2.29.0 (20 camera-model records) | `src/layers/cctv/modelSpecs.js` | **CC0-1.0** (public domain dedication) | ✅ (no restrictions) | "Specs: cctv-database.com" (courtesy — not legally required) |
 
 ### ⚠️ TeleGeography is bundled but NonCommercial
 
@@ -236,11 +236,12 @@ fixtures retain their provenance in `src/data/fixtures/README.md`.
 
 ### CCTV Camera Database (`src/layers/cctv/modelSpecs.js`)
 
-The CCTV layer's hardware-model specs are a small verbatim extract (v2.26.0) of the
+The CCTV layer's hardware-model specs are a small verbatim extract (v2.26.0, plus the Bosch MIC
+records from v2.29.0) of the
 [CCTV Camera Database](https://github.com/ch-bas/cctv-camera-database), an open dataset of
 camera models transcribed from manufacturer datasheets, dedicated to the public domain under
 **CC0-1.0**. Only the records for hardware that the integrated public catalogs name (King
-County, Sarasota County and Sioux Falls) are bundled, compiled into the module. Nothing is
+County, Sarasota County, Sioux Falls and the City of Amsterdam register) are bundled, compiled into the module. Nothing is
 fetched at runtime. The records describe camera products (optics, resolution, night vision)
 only, never endpoints, stream paths or access data. CC0 requires no attribution; the CCTV HUD
 credits it anyway as `SPECS: CCTV-DATABASE.COM` beside any spec line it renders.
