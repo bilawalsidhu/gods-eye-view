@@ -20,6 +20,7 @@ const SOURCE_KIND_LABELS = Object.freeze({
 });
 
 const SOURCE_STATUS_LABELS = Object.freeze({
+  ok: msg('OK'),
   degraded: msg('DEGRADED'),
   error: msg('ERROR'),
   unknown: msg('UNKNOWN'),
@@ -52,7 +53,7 @@ export function cctvSourceKindLabel(kind) {
     : key.toUpperCase();
 }
 
-/** "DEGRADED" / "ПЕРЕБОИ"; OK and unknown codes stay as uppercase codes. */
+/** "DEGRADED" / "ПЕРЕБОИ"; unknown codes stay as uppercase codes. */
 export function cctvSourceStatusLabel(status) {
   const key = String(status || 'unknown').toLowerCase();
   return SOURCE_STATUS_LABELS[key]
