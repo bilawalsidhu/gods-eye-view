@@ -98,8 +98,8 @@ export async function createGoogleTokenTileset(Cesium, tokens) {
   });
   // The settings Cesium's Google helper applies to the key route.
   return Cesium.Cesium3DTileset.fromUrl(resource, {
-    cacheBytes: 1536 * 1024 * 1024,
-    maximumCacheOverflowBytes: 1024 * 1024 * 1024,
+    cacheBytes: 512 * 1024 * 1024,
+    maximumCacheOverflowBytes: 256 * 1024 * 1024,
     enableCollision: true,
     // Tiles keep drawing their own texture while draped weather loads.
     asynchronouslyLoadImagery: true,
@@ -121,8 +121,8 @@ export async function createGoogleIonTileset(
   signal?.throwIfAborted();
   // Match the installed SDK's Google helper rendering/cache defaults.
   return Cesium.Cesium3DTileset.fromUrl(resource, {
-    cacheBytes: 1536 * 1024 * 1024,
-    maximumCacheOverflowBytes: 1024 * 1024 * 1024,
+    cacheBytes: 512 * 1024 * 1024,
+    maximumCacheOverflowBytes: 256 * 1024 * 1024,
     enableCollision: true,
     // Tiles keep drawing their own texture while draped weather loads.
     asynchronouslyLoadImagery: true,

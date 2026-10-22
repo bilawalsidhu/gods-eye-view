@@ -129,17 +129,11 @@ export const SHARPEN_SHADER = /* glsl */ `
     vec2 uv = v_textureCoordinates;
     vec2 texel = 1.0 / colorTextureDimensions;
     vec4 center = texture(colorTexture, uv);
-    vec4 blur = (
-      texture(colorTexture, uv + vec2(-texel.x, -texel.y)) +
-      texture(colorTexture, uv + vec2( 0.0,     -texel.y)) +
-      texture(colorTexture, uv + vec2( texel.x, -texel.y)) +
-      texture(colorTexture, uv + vec2(-texel.x,  0.0))     +
-      center +
-      texture(colorTexture, uv + vec2( texel.x,  0.0))     +
-      texture(colorTexture, uv + vec2(-texel.x,  texel.y)) +
-      texture(colorTexture, uv + vec2( 0.0,      texel.y)) +
-      texture(colorTexture, uv + vec2( texel.x,  texel.y))
-    ) / 9.0;
+    vec4 tc = texture(colorTexture, uv + vec2(0.0, -texel.y));
+    vec4 bc = texture(colorTexture, uv + vec2(0.0,  texel.y));
+    vec4 ml = texture(colorTexture, uv + vec2(-texel.x, 0.0));
+    vec4 mr = texture(colorTexture, uv + vec2( texel.x, 0.0));
+    vec4 blur = (tc + bc + ml + mr + center) / 5.0;
     vec4 sharpened = center + (center - blur) * amount;
     out_FragColor = vec4(clamp(sharpened.rgb, 0.0, 1.0), center.a);
   }

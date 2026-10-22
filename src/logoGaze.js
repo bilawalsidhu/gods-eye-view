@@ -67,6 +67,7 @@ export function initLogoGaze(root = document) {
   const states = logos.map((element) => ({
     element,
     parts: [],
+    cachedRect: null,
     currentX: 0,
     currentY: 0,
     targetX: 0,
@@ -74,6 +75,10 @@ export function initLogoGaze(root = document) {
   }));
   let animationFrame = 0;
   let disposed = false;
+
+  const invalidateRects = () => {
+    for (const state of states) state.cachedRect = null;
+  };
 
   const applyTransform = (state) => {
     const transform = `translate(${state.currentX.toFixed(2)} ${state.currentY.toFixed(2)})`;
@@ -148,10 +153,13 @@ export function initLogoGaze(root = document) {
   const onPointerMove = (event) => {
     if (reducedMotion || event.pointerType === 'touch') return;
     for (const state of states) {
+      if (!state.cachedRect) {
+        state.cachedRect = state.element.getBoundingClientRect();
+      }
       const gaze = calculateLogoGaze(
         event.clientX,
         event.clientY,
-        state.element.getBoundingClientRect(),
+        state.cachedRect,
       );
       state.targetX = gaze.x;
       state.targetY = gaze.y;
@@ -168,12 +176,16 @@ export function initLogoGaze(root = document) {
   };
 
   window.addEventListener('pointermove', onPointerMove, { passive: true });
+  window.addEventListener('resize', invalidateRects, { passive: true });
+  window.addEventListener('scroll', invalidateRects, { passive: true });
   window.addEventListener('blur', resetGaze);
   document.documentElement.addEventListener('pointerleave', resetGaze);
 
   return () => {
     disposed = true;
     window.removeEventListener('pointermove', onPointerMove);
+    window.removeEventListener('resize', invalidateRects);
+    window.removeEventListener('scroll', invalidateRects);
     window.removeEventListener('blur', resetGaze);
     document.documentElement.removeEventListener('pointerleave', resetGaze);
     if (animationFrame) window.cancelAnimationFrame(animationFrame);

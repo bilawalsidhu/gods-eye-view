@@ -72,7 +72,7 @@
         <button id="location-bar-toggle" class="dock-tray-toggle" type="button" data-dock-toggle-target="location-bar" aria-controls="location-bar-popover" aria-expanded="false" aria-label="Expand LOCATION" title="Expand LOCATION" data-i18n-aria-label data-i18n-title>
           <span class="location-toolbar-label" data-i18n-runtime><span class="dock-label-icon dock-label-icon-location" aria-hidden="true"></span>LOCATION</span>
         </button>
-        <button class="panel-collapse-btn" data-collapse-target="location-bar" title="Collapse panel" data-i18n-title>+</button>
+        <button class="panel-collapse-btn" data-collapse-target="location-bar" aria-expanded="false" aria-controls="location-bar-popover" aria-label="Expand LOCATION" title="Collapse panel" data-i18n-aria-label data-i18n-title>+</button>
       </div>
       <div id="location-mini-status" class="location-mini-status" aria-live="polite">
         <div id="location-mini-city" class="location-mini-city" data-i18n>📍 Location: --</div>
@@ -85,8 +85,8 @@
         <div class="location-city-row">
           <div id="location-pills" class="location-pills"></div>
           <div class="location-search-wrap">
-            <button id="search-toggle" class="search-toggle-btn" title="Search any location" data-i18n-title>
-              <span>&#x1F50E;</span>
+            <button id="search-toggle" class="search-toggle-btn" type="button" aria-label="Search any location" aria-expanded="false" aria-controls="location-search" title="Search any location" data-i18n-aria-label data-i18n-title>
+              <span aria-hidden="true">&#x1F50E;</span>
             </button>
             <input type="text" id="location-search" placeholder="Search any location..." autocomplete="off" spellcheck="false" aria-label="Search location by name or coordinates" data-i18n-aria-label data-i18n-placeholder />
           </div>

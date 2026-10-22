@@ -22,8 +22,9 @@ export async function checkPackageBoundaries(root) {
       'Every package export must belong to exactly one boundary group',
     );
   }
+  const entries = Object.entries(groups);
   const reports = [];
-  for (const [name, group] of Object.entries(groups)) {
+  const checkGroup = async ([name, group]) => {
     const node = group.runtime === 'node';
     if (group.runtime && !['browser', 'node'].includes(group.runtime)) {
       throw new Error(`Invalid boundary runtime: ${name}`);
@@ -131,7 +132,13 @@ export async function checkPackageBoundaries(root) {
         },
       },
     });
-    reports.push({ name, exports: input.length, modules: seen.size });
+    return { name, exports: input.length, modules: seen.size };
+  };
+  const batchSize = 4;
+  for (let i = 0; i < entries.length; i += batchSize) {
+    const batch = entries.slice(i, i + batchSize);
+    const batchReports = await Promise.all(batch.map(checkGroup));
+    reports.push(...batchReports);
   }
   return reports;
 }

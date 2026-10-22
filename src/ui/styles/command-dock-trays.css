@@ -166,6 +166,15 @@
   transform: translateY(-0.12rem);
 }
 
+/* 44px accessible touch target expansion (WCAG 2.5.5) */
+#command-dock .dock-pin-btn::before {
+  content: '';
+  position: absolute;
+  inset: -8px;
+  border-radius: inherit;
+  pointer-events: auto;
+}
+
 #command-dock #location-bar:not(.collapsed) .dock-pin-btn,
 #command-dock #control-panel:not(.collapsed) .dock-pin-btn {
   display: grid;

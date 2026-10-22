@@ -1,0 +1,192 @@
+{
+  "generatedAt": "2026-10-21T22:31:54.559Z",
+  "targetRelease": "SafeSpotSG Fix H Drop-In Parameter Bundle",
+  "models": {
+    "baseline": {
+      "name": "Baseline Heuristic (Phase 2)",
+      "train": {
+        "maePct": 10.07,
+        "msePct": -5.13,
+        "rmseSec": 286.6,
+        "ci95Mae": [
+          4.67,
+          14.47
+        ],
+        "medianLatencyMs": 21.5,
+        "p95LatencyMs": 37.8
+      },
+      "holdout": {
+        "maePct": 7.05,
+        "msePct": 2.78,
+        "rmseSec": 215.4,
+        "ci95Mae": [
+          5.98,
+          8.37
+        ],
+        "medianLatencyMs": 50.3,
+        "p95LatencyMs": 68.6
+      },
+      "medianLatencyMs": 25.5,
+      "p95LatencyMs": 68.6
+    },
+    "calibrated": {
+      "name": "Calibrated Parametric Optimizer",
+      "train": {
+        "maePct": 8.17,
+        "msePct": -6.33,
+        "rmseSec": 291.4,
+        "ci95Mae": [
+          4.11,
+          14.68
+        ],
+        "medianLatencyMs": 16.5,
+        "p95LatencyMs": 25.9
+      },
+      "holdout": {
+        "maePct": 6.46,
+        "msePct": 2.59,
+        "rmseSec": 201.4,
+        "ci95Mae": [
+          5.65,
+          8.09
+        ],
+        "medianLatencyMs": 38,
+        "p95LatencyMs": 67
+      },
+      "medianLatencyMs": 17.2,
+      "p95LatencyMs": 57.2
+    },
+    "speedband": {
+      "name": "LTA SpeedBand Hybrid",
+      "train": {
+        "maePct": 10.3,
+        "msePct": -9.69,
+        "rmseSec": 298.8,
+        "ci95Mae": [
+          5.78,
+          15.43
+        ],
+        "medianLatencyMs": 18.5,
+        "p95LatencyMs": 30
+      },
+      "holdout": {
+        "maePct": 5.6,
+        "msePct": -1.25,
+        "rmseSec": 202.3,
+        "ci95Mae": [
+          3.83,
+          7.51
+        ],
+        "medianLatencyMs": 52.1,
+        "p95LatencyMs": 78.1
+      },
+      "medianLatencyMs": 21.3,
+      "p95LatencyMs": 77
+    }
+  },
+  "slices": {
+    "timeOfDay": {
+      "03:23": {
+        "baselineMae": 42.9,
+        "calibratedMae": 14.4,
+        "speedbandMae": 14.4
+      },
+      "07:30": {
+        "baselineMae": 6.2,
+        "calibratedMae": 5.6,
+        "speedbandMae": 5.6
+      },
+      "08:30": {
+        "baselineMae": 8.1,
+        "calibratedMae": 7.2,
+        "speedbandMae": 7
+      },
+      "11:00": {
+        "baselineMae": 6.3,
+        "calibratedMae": 4.7,
+        "speedbandMae": 4.4
+      },
+      "18:30": {
+        "baselineMae": 4.4,
+        "calibratedMae": 8.9,
+        "speedbandMae": 5
+      },
+      "22:00": {
+        "baselineMae": 8.3,
+        "calibratedMae": 6.6,
+        "speedbandMae": 5.7
+      }
+    },
+    "corridors": {
+      "ang-mo-kio-to-punggol": {
+        "baselineMae": 9.8,
+        "calibratedMae": 7.5,
+        "speedbandMae": 6
+      },
+      "novena-to-mbs": {
+        "baselineMae": 10.8,
+        "calibratedMae": 12.2,
+        "speedbandMae": 15.2
+      },
+      "toa-payoh-to-raffles-place": {
+        "baselineMae": 17.7,
+        "calibratedMae": 20.9,
+        "speedbandMae": 21.4
+      }
+    }
+  },
+  "parameters": {
+    "freeFlowSpeedAssumptions": {
+      "motorway": 68,
+      "motorway_link": 55,
+      "trunk": 46,
+      "trunk_link": 35,
+      "primary": 26,
+      "primary_link": 24,
+      "secondary": 24,
+      "secondary_link": 22,
+      "tertiary": 24,
+      "tertiary_link": 20,
+      "unclassified": 22,
+      "residential": 20,
+      "living_street": 15
+    },
+    "turnDelays": {
+      "delayStraightSec": 1.8,
+      "delayLeftSec": 3.8,
+      "delayRightSec": 12,
+      "delayUturnSec": 20,
+      "delaySignalSec": 5
+    },
+    "temporalMultipliers": {
+      "morningPeak": {
+        "expresswayInbound": 0.7,
+        "expresswayOutbound": 0.88,
+        "arterialInbound": 0.64,
+        "arterialOutbound": 0.85,
+        "other": 0.85
+      },
+      "eveningPeak": {
+        "expresswayOutbound": 0.58,
+        "expresswayInbound": 0.78,
+        "arterialOutbound": 0.62,
+        "arterialInbound": 0.85,
+        "other": 0.88
+      },
+      "nightOffPeak": {
+        "accelerationMultiplier": 1.25,
+        "description": "Applied during Slot 0-23 (00:00 - 06:00 SGT) eliminating the 03:23 SGT slow bias"
+      }
+    },
+    "shrinkage": {
+      "priorWeightN0": 8,
+      "description": "Empirical Bayes confidence weight alpha = N / (N + 8)"
+    }
+  },
+  "shadowAudit": {
+    "totalRecords": 34,
+    "usableRecords": 0,
+    "status": "EXCLUDED_FROM_TRAINING",
+    "reason": "All 34 local records fail isUsable(r) validation (12 HTTP 400 future-time errors, 12 simulated test rows, 10 unverified legacy rows). Handled strictly without data fabrication."
+  }
+}

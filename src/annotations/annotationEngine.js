@@ -3,6 +3,7 @@ import { defaultGeospatial } from '../search/defaults.js';
 import * as Cesium from 'cesium';
 import { greatCircleMeters } from '../geoDistance.js';
 import {
+  governorRequestRender,
   holdContinuousRender,
   releaseContinuousRender,
 } from '../renderGovernor.js';
@@ -190,7 +191,12 @@ export function createAnnotationEngine({
   // live colors, camera-scaled rings, route-flow uniforms in the renderer),
   // so the scene must render continuously while any mark exists. (perf wave 2)
   function syncAnnotationHold() {
-    if (annotations.size > 0) holdContinuousRender('annotations');
+    if (annotations.size === 0 && tickHandle !== null) {
+      cancelAnimationFrame(tickHandle);
+      tickHandle = null;
+    }
+    if (annotations.size > 0 && tickHandle !== null)
+      holdContinuousRender('annotations');
     else releaseContinuousRender('annotations');
   }
 
@@ -214,7 +220,10 @@ export function createAnnotationEngine({
   }
 
   function ensureTicking() {
-    if (destroyed || tickHandle != null) return;
+    if (destroyed || tickHandle != null) {
+      syncAnnotationHold();
+      return;
+    }
     const tick = () => {
       const now = performance.now();
       let changed = false;
@@ -236,6 +245,7 @@ export function createAnnotationEngine({
       if (changed) {
         renderer.sync(annotations);
         syncAnnotationHold();
+        governorRequestRender('annotations');
       }
       // Stop once the board is STABLE — persistent marks (persist=true is the default)
       // finish fading in after ~260ms and never change again, so without this the loop
@@ -244,11 +254,14 @@ export function createAnnotationEngine({
       if (annotations.size === 0 || !pending) {
         cancelAnimationFrame(tickHandle);
         tickHandle = null;
+        syncAnnotationHold();
+        governorRequestRender('annotations');
         return;
       }
       tickHandle = requestAnimationFrame(tick);
     };
     tickHandle = requestAnimationFrame(tick);
+    syncAnnotationHold();
   }
 
   /**
@@ -725,6 +738,7 @@ export function createAnnotationEngine({
         }
       }
       renderer.sync(annotations);
+      governorRequestRender('annotations');
       // Final outcome → the voice layer (place names ride as structured DATA fields).
       // 'failed' covers both the definitive no-polygon and an exhausted transient
       // retry — either way the mark honestly stays a point.
@@ -970,6 +984,7 @@ export function createAnnotationEngine({
     annotations.clear();
     renderer.sync(annotations);
     syncAnnotationHold();
+    governorRequestRender('annotations');
   }
 
   /** Begin a graceful fade-out of everything, then remove. */

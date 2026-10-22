@@ -28,6 +28,7 @@ import { firePerimetersProxy } from './firePerimeters.js';
 import { gnssIntegrityProxy } from './gnssIntegrity.js';
 import { cycloneProxy } from './cyclones.js';
 import { windProxy } from './wind.js';
+import { safeSpotProxy } from './safespot.js';
 
 /**
  * Construct the local provider plugins in their established order.
@@ -64,6 +65,7 @@ function localProviderPlugins({ realtime, gemini } = {}) {
     mapillaryProxy(),
     firePerimetersProxy(),
     gnssIntegrityProxy(),
+    safeSpotProxy(),
     keySetupEndpoint(),
   ];
 }
@@ -113,3 +115,9 @@ export { validMilitaryInstallationBox } from './military-installations/query.js'
 export { militaryInstallationFailureReason } from './military-installations/query.js';
 export { validRegionalPoint } from './regional/query.js';
 export { regionalBriefHasAnySource } from './regional/briefing.js';
+export {
+  safeSpotProxy,
+  calculateCrossTrackDistance,
+  computeCorridorDivergence,
+  evaluatePickupCandidates,
+} from './safespot.js';

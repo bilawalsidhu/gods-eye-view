@@ -78,6 +78,7 @@
     "SE",
     "SECTOR {lat} {lon}",
     "SIG",
+    "SPEEDBAND",
     "SQUAWK {code} · {status}",
     "SRC {value}",
     "SSE",
@@ -86,6 +87,7 @@
     "Sector",
     "Sonar",
     "Soul",
+    "SpeedBand {value}",
     "Techno",
     "Trance",
     "USB {rate} msg/s",
@@ -131,6 +133,8 @@
     "NVG",
     "R&B",
     "REC",
+    "SPEEDBAND",
+    "SpeedBand {value}",
     "VS",
     "WHOT/BHOT"
   ]

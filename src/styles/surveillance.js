@@ -191,8 +191,8 @@ export const nightVisionShader = {
       // Bloom around bright sources — wider kernel for realistic halos
       float bloomAccum = 0.0;
       float bloomW = 0.0;
-      for (int y = -5; y <= 5; y++) {
-        for (int x = -5; x <= 5; x++) {
+      for (int y = -4; y <= 4; y += 2) {
+        for (int x = -4; x <= 4; x += 2) {
           vec2 offset = vec2(float(x), float(y)) * texel * 4.0;
           float sLuma = dot(texture(colorTexture, distUV + offset).rgb, vec3(0.299, 0.587, 0.114));
           float bright = smoothstep(0.4, 0.9, sLuma * gainLevel);

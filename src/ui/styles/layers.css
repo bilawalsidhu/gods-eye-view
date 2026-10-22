@@ -125,7 +125,7 @@
 }
 
 .data-toggle-row {
-  padding: 8px 10px 6px;
+  padding: 6px 10px 5px;
   border-radius: 8px;
   transition: background var(--transition-fast);
 }
@@ -233,8 +233,10 @@
   #global-context-panel:not(.collapsed)
   .global-context-panel-inner {
   max-height: 100%;
+  overflow-x: hidden;
   overflow-y: auto;
-  scrollbar-gutter: stable;
+  scrollbar-gutter: auto;
+  scrollbar-width: thin;
 }
 #right-context-rail #global-context-panel.collapsed {
   width: var(--right-context-collapsed-width);

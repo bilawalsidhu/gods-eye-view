@@ -178,6 +178,8 @@
     width: auto;
     max-height: none;
     overflow-y: auto;
+    scrollbar-gutter: auto;
+    scrollbar-width: thin;
   }
 
   #right-context-rail {
@@ -195,6 +197,8 @@
     width: auto;
     max-height: none;
     overflow-y: auto;
+    scrollbar-gutter: auto;
+    scrollbar-width: thin;
   }
 
   /* Both stacks are scroll containers at this width (overflow-y above), which
@@ -229,7 +233,7 @@
     width: 100%;
   }
   .context-radio-mini {
-    right: -38px;
+    right: 0;
     width: min(244px, calc(100vw - 32px));
   }
 
@@ -261,12 +265,35 @@
 @media (max-width: 520px) {
   /* 16px keeps the Radio broadcast waves (15px above the logo) on-screen. */
   #title-bar {
-    top: 16px;
-    left: 16px;
+    top: max(12px, env(safe-area-inset-top));
+    left: 12px;
   }
 
   #title-bar h1 > span:last-child,
   #title-bar .subtitle {
     display: none;
+  }
+
+  #top-center-actions {
+    top: max(12px, env(safe-area-inset-top));
+    right: 12px;
+    gap: 4px;
+  }
+
+  #top-center-actions button {
+    width: 34px;
+    height: 34px;
+    min-width: 34px;
+    min-height: 34px;
+  }
+
+  #command-dock {
+    width: calc(100vw - 16px);
+    max-width: calc(100vw - 16px);
+    left: 8px;
+    right: 8px;
+    transform: none;
+    bottom: max(8px, env(safe-area-inset-bottom));
+    box-sizing: border-box;
   }
 }

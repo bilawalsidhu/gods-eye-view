@@ -2848,3 +2848,30 @@
     padding: 10px 12px 18px 18px;
   }
 }
+
+/* Roomy left rail. The Cyber rail normally parks below the mission card and
+   above the lower-left telemetry, which on a 720px-tall window leaves ~270px:
+   one or two layer rows. While a left panel is open it is the thing being
+   read, so the two decorative cards step aside and the rail reclaims their
+   lanes. Attribution stays put; the rail stops above its logo row. */
+@media (min-width: 961px) and (min-height: 650px) {
+  :root[data-ui-theme='cyber']
+    body:not(.cockpit-mode)
+    #left-panel-stack:has(
+      > :is(#data-panel, #cctv-panel, #scene-panel):not(.collapsed)
+    ) {
+    top: max(14vh, 136px) !important;
+    bottom: calc(2vh + 8.25rem);
+  }
+
+  :root[data-ui-theme='cyber']
+    body:not(.cockpit-mode):has(
+      #left-panel-stack
+        > :is(#data-panel, #cctv-panel, #scene-panel):not(.collapsed)
+    )
+    #intel-hud[data-variant='cyber']
+    :is(.hud-top-left, .hud-bottom-left) {
+    opacity: 0;
+    visibility: hidden;
+  }
+}

@@ -89,6 +89,9 @@ export function createBrowserViteConfig({
     server: {
       host: host || 'localhost',
       port: parseInt(port, 10) || 4173,
+      watch: {
+        ignored: ['**/server/data/safespot/**', '**/.agents/**', '**/.gev-cache/**'],
+      },
       // A wildcard bind only chooses interfaces; it never disables Vite's
       // Host-header check. LAN hostnames are added explicitly (see
       // build/allowedHosts.js); IP addresses are always accepted.
@@ -113,6 +116,22 @@ export function createBrowserViteConfig({
         mapillaryToken ?? '',
       ),
     },
-    build: { chunkSizeWarningLimit: 1500 },
+    build: {
+      target: 'es2022',
+      chunkSizeWarningLimit: 1500,
+      rollupOptions: {
+        output: {
+          manualChunks(id) {
+            if (!id.includes('node_modules')) return undefined;
+            if (id.includes('mapillary-js')) return 'vendor-mapillary';
+            if (id.includes('hls.js')) return 'vendor-hls';
+            if (id.includes('satellite.js')) return 'vendor-satellite';
+            if (id.includes('egm96-universal')) return 'vendor-egm96';
+            if (id.includes('@jtarrio')) return 'vendor-sdr';
+            return undefined;
+          },
+        },
+      },
+    },
   };
 }

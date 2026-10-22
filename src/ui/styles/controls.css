@@ -100,6 +100,7 @@ html:not([lang='en'])
 }
 
 .panel-collapse-btn {
+  position: relative;
   width: 22px;
   height: 22px;
   border-radius: 6px;
@@ -110,10 +111,22 @@ html:not([lang='en'])
   font-size: 13px;
   line-height: 1;
   cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   transition:
     background-color var(--transition-fast),
     border-color var(--transition-fast),
     color var(--transition-fast);
+}
+
+/* 44x44px accessible touch envelope (WCAG 2.5.5 / Impeccable Tier 2) */
+.panel-collapse-btn::before {
+  content: '';
+  position: absolute;
+  inset: -11px;
+  border-radius: inherit;
+  pointer-events: auto;
 }
 
 /* A long translated title must not squeeze the toggle into a sliver. */
@@ -534,10 +547,9 @@ html:not([lang='en']) .panel-collapse-btn {
   flex: 1;
   -webkit-appearance: none;
   appearance: none;
-  height: 3px;
-  background: rgba(255, 255, 255, 0.08);
+  height: 4px;
+  background: rgba(255, 255, 255, 0.12);
   border-radius: 2px;
-  outline: none;
   cursor: pointer;
   min-width: 60px;
 }
@@ -545,22 +557,33 @@ html:not([lang='en']) .panel-collapse-btn {
 .pp-slider::-webkit-slider-thumb {
   -webkit-appearance: none;
   appearance: none;
-  width: 10px;
-  height: 10px;
+  width: 16px;
+  height: 16px;
   border-radius: 50%;
   background: var(--accent);
-  box-shadow: 0 0 6px var(--accent-glow);
+  border: 2px solid #0a0e17;
+  box-shadow: 0 0 8px var(--accent-glow);
   cursor: pointer;
+  transition: transform var(--transition-fast);
 }
 
 .pp-slider::-moz-range-thumb {
-  width: 10px;
-  height: 10px;
+  width: 16px;
+  height: 16px;
   border-radius: 50%;
   background: var(--accent);
-  border: none;
-  box-shadow: 0 0 6px var(--accent-glow);
+  border: 2px solid #0a0e17;
+  box-shadow: 0 0 8px var(--accent-glow);
   cursor: pointer;
+}
+
+.pp-slider:focus-visible::-webkit-slider-thumb {
+  box-shadow: 0 0 0 2px var(--text-primary), 0 0 10px var(--accent);
+  transform: scale(1.15);
+}
+
+.pp-slider:focus-visible::-moz-range-thumb {
+  box-shadow: 0 0 0 2px var(--text-primary), 0 0 10px var(--accent);
 }
 
 .pp-slider-value {

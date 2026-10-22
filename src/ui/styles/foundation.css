@@ -12,8 +12,9 @@
   --accent-dim: rgba(0, 212, 255, 0.15);
   --accent-glow: rgba(0, 212, 255, 0.4);
   --text-primary: #e8eaed;
-  --text-secondary: rgba(232, 234, 237, 0.5);
-  --text-dim: rgba(232, 234, 237, 0.3);
+  --text-secondary: rgba(232, 234, 237, 0.72);
+  --text-dim: rgba(232, 234, 237, 0.56);
+  --text-disabled: rgba(232, 234, 237, 0.28);
   /* Opaque surface for browser-painted menus, which cannot use --glass-bg. */
   --menu-bg: #12121c;
   --font-mono: 'JetBrains Mono', 'SF Mono', 'Fira Code', monospace;
@@ -91,6 +92,101 @@ select option:disabled {
   color: var(--text-dim);
 }
 
+:is(
+  [data-rail-scroller],
+  .data-panel-inner,
+  .scene-panel-inner,
+  .cctv-panel-inner,
+  .weather-panel-inner,
+  .recent-imagery-panel-inner,
+  .street-level-panel-inner,
+  .global-context-panel-inner,
+  .cyber-panel-body,
+  #military-awareness-panel,
+  #left-panel-stack,
+  #right-context-rail,
+  .dock-popover-content
+) {
+  color-scheme: dark;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(0, 212, 255, 0.35) rgba(10, 14, 23, 0.4);
+}
+
+:is(
+  [data-rail-scroller],
+  .data-panel-inner,
+  .scene-panel-inner,
+  .cctv-panel-inner,
+  .weather-panel-inner,
+  .recent-imagery-panel-inner,
+  .street-level-panel-inner,
+  .global-context-panel-inner,
+  .cyber-panel-body,
+  #military-awareness-panel,
+  #left-panel-stack,
+  #right-context-rail,
+  .dock-popover-content
+)::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+
+:is(
+  [data-rail-scroller],
+  .data-panel-inner,
+  .scene-panel-inner,
+  .cctv-panel-inner,
+  .weather-panel-inner,
+  .recent-imagery-panel-inner,
+  .street-level-panel-inner,
+  .global-context-panel-inner,
+  .cyber-panel-body,
+  #military-awareness-panel,
+  #left-panel-stack,
+  #right-context-rail,
+  .dock-popover-content
+)::-webkit-scrollbar-track {
+  background: rgba(10, 14, 23, 0.35);
+  border-radius: 999px;
+}
+
+:is(
+  [data-rail-scroller],
+  .data-panel-inner,
+  .scene-panel-inner,
+  .cctv-panel-inner,
+  .weather-panel-inner,
+  .recent-imagery-panel-inner,
+  .street-level-panel-inner,
+  .global-context-panel-inner,
+  .cyber-panel-body,
+  #military-awareness-panel,
+  #left-panel-stack,
+  #right-context-rail,
+  .dock-popover-content
+)::-webkit-scrollbar-thumb {
+  background: rgba(0, 212, 255, 0.35);
+  border-radius: 999px;
+}
+
+:is(
+  [data-rail-scroller],
+  .data-panel-inner,
+  .scene-panel-inner,
+  .cctv-panel-inner,
+  .weather-panel-inner,
+  .recent-imagery-panel-inner,
+  .street-level-panel-inner,
+  .global-context-panel-inner,
+  .cyber-panel-body,
+  #military-awareness-panel,
+  #left-panel-stack,
+  #right-context-rail,
+  .dock-popover-content
+)::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 212, 255, 0.6);
+}
+
 html,
 body {
   width: 100%;
@@ -147,6 +243,17 @@ body {
      ring rode above the in-scene scope artifact. Detection (z5) and the
      overlay root (z6) stay above both. */
   z-index: 1;
+  opacity: 0.36;
+  -webkit-mask-image: radial-gradient(
+    ellipse 74% 68% at 50% 50%,
+    transparent 52%,
+    rgba(0, 0, 0, 0.85) 100%
+  );
+  mask-image: radial-gradient(
+    ellipse 74% 68% at 50% 50%,
+    transparent 52%,
+    rgba(0, 0, 0, 0.85) 100%
+  );
   pointer-events: none;
 }
 
@@ -518,7 +625,7 @@ body.cockpit-mode #cockpit-cloud-effects.active {
   font-weight: 600;
   letter-spacing: 8px;
   color: var(--text-primary);
-  text-shadow: 0 0 30px var(--accent-glow);
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.7), 0 0 14px var(--accent-dim);
   position: relative;
 }
 
@@ -650,6 +757,19 @@ body.cockpit-mode #cockpit-cloud-effects.active {
   letter-spacing: 5px;
   color: var(--accent);
   margin-top: 4px;
-  text-shadow: 0 0 20px var(--accent-glow);
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.6), 0 0 10px var(--accent-dim);
   transition: var(--transition-smooth);
 }
+
+/* Global Reduced-Motion Safety Net (WCAG 2.2.2 / Impeccable-CX Tier 7) */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+

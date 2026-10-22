@@ -279,7 +279,7 @@
 }
 
 .hud-left-edge {
-  left: 36px;
+  left: 14px;
   top: 50%;
   transform: translateY(-50%) rotate(-90deg);
   transform-origin: left center;
@@ -289,7 +289,7 @@
 }
 
 .hud-right-edge {
-  right: 36px;
+  right: 14px;
   top: 50%;
   transform: translateY(-50%) rotate(90deg);
   transform-origin: right center;

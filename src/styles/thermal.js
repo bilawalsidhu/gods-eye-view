@@ -170,8 +170,8 @@ export const thermalShader = {
       // ── Soft IR blur (thermal cameras have lower resolution / diffraction) ──
       vec3 blurred = vec3(0.0);
       float totalWeight = 0.0;
-      for (int y = -2; y <= 2; y++) {
-        for (int x = -2; x <= 2; x++) {
+      for (int y = -1; y <= 1; y++) {
+        for (int x = -1; x <= 1; x++) {
           float w = exp(-0.5 * float(x * x + y * y) / 2.0);
           blurred += texture(colorTexture, uv + vec2(float(x), float(y)) * texel * 1.5).rgb * w;
           totalWeight += w;
@@ -211,8 +211,8 @@ export const thermalShader = {
       // Sample a wider area for bloom on bright spots
       float bloomSample = 0.0;
       float bloomWeight = 0.0;
-      for (int y = -4; y <= 4; y++) {
-        for (int x = -4; x <= 4; x++) {
+      for (int y = -4; y <= 4; y += 2) {
+        for (int x = -4; x <= 4; x += 2) {
           vec2 offset = vec2(float(x), float(y)) * texel * 3.0;
           float sLuma = dot(texture(colorTexture, uv + offset).rgb, vec3(0.299, 0.587, 0.114));
           float sMapped = clamp((sLuma - (0.5 - sens * 0.5)) / sens, 0.0, 1.0);

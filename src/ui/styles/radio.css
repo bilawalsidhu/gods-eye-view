@@ -250,15 +250,24 @@
   gap: 5px;
 }
 .radio-transport button {
-  min-height: 30px;
+  position: relative;
+  min-height: 34px;
   padding: 6px 3px;
   border: 1px solid rgba(65, 220, 231, 0.28);
   border-radius: 5px;
   color: #8feaf2;
   background: rgba(14, 69, 78, 0.14);
-  font: 8px/1 var(--font-mono);
+  font: 10px/1.2 var(--font-mono);
   letter-spacing: 0.06em;
   cursor: pointer;
+}
+/* 44px touch target expansion */
+.radio-transport button::before {
+  content: '';
+  position: absolute;
+  inset: -5px;
+  border-radius: inherit;
+  pointer-events: auto;
 }
 /* A longer translated action stays on one line, cut with an ellipsis. */
 html:not([lang='en']) .radio-transport button {
@@ -267,11 +276,15 @@ html:not([lang='en']) .radio-transport button {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.radio-transport button:hover:not(:disabled),
-.radio-transport button:focus-visible:not(:disabled) {
+.radio-transport button:hover:not(:disabled) {
   border-color: #65f7ff;
-  color: #fff;
-  outline: none;
+  color: var(--text-primary);
+}
+.radio-transport button:focus-visible:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--text-primary);
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 .radio-transport button:disabled,
 #radio-filter:disabled {
@@ -329,6 +342,8 @@ html:not([lang='en']) .radio-transport button {
   width: 100%;
   min-height: 0;
   overflow: auto;
+  scrollbar-gutter: auto;
+  scrollbar-width: thin;
   box-sizing: border-box;
   padding: 2px 1px 0;
   color: #dceeff;

@@ -336,12 +336,14 @@ export class IntelHUD {
   _startTimers() {
     // Timestamp — every second
     this._timestampInterval = setInterval(() => {
+      if (!this._visible) return;
       const el = document.getElementById('hud-timestamp');
       if (el) el.textContent = this._formatUTC();
     }, 1000);
 
     // REC blink — every 800ms
     this._recBlinkInterval = setInterval(() => {
+      if (!this._visible) return;
       this._recBlinkState = !this._recBlinkState;
       const dot = document.getElementById('hud-rec-dot');
       if (dot)

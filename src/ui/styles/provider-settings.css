@@ -42,7 +42,8 @@
     rgba(9, 18, 28, 0.93)
   );
   border-color: rgba(54, 220, 255, 0.7);
-  outline: none;
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
   transform: translateY(-1px);
 }
 

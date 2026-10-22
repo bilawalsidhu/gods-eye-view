@@ -69,10 +69,10 @@ export const MODEL_SCALE = 1;
 // airplane.glb is transform-applied and baked to real-world meters
 // Per-mode caps. Each model is its own draw call (no instancing yet), so these bound the frame cost.
 
-export const MODEL_MAX = 150;
+export const MODEL_MAX = 50;
 // 'proximity' cap (the planes immediately around you)
 
-export const MODEL_MAX_ALL = 350;
+export const MODEL_MAX_ALL = 100;
 // 'all' cap (everything out to ~the horizon)
 // Per-mode ADD / KEEP radii. The two modes differ by RADIUS, not just cap — otherwise they look
 // IDENTICAL whenever fewer than a cap's worth of planes are in range (field bug: Proximity and All
@@ -200,7 +200,7 @@ export const LANDED_SPEED_MAX_MPS = 23;
 
 /** @constant {number} Fleet dead-reckoning tick interval (ms) — ~12Hz, not per-frame. */
 
-export const FLEET_DR_INTERVAL_MS = 80;
+export const FLEET_DR_INTERVAL_MS = 120;
 
 /** @constant {number} Max ms between rotation passes while the camera is idle. */
 
