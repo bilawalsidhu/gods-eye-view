@@ -80,6 +80,8 @@ export function createLifecycle({
       layerState._updateDirty = false;
       if (layerState._dataSource) layerState._dataSource.show = true;
       parts.orbitRendering.syncMissionOrbitPrimitiveVisibility();
+      // Snapshot the existing follow before the mission flight releases it.
+      await parts.ingestion.captureSatelliteDependency();
       parts.selection.focusFullGlobe(layerState._viewer);
       document.getElementById('cockpit-context')?.setAttribute('hidden', '');
       if (layerState._selectedLaunchId)
@@ -88,7 +90,6 @@ export function createLifecycle({
           layerState._explicitSelection,
         );
       else parts.selection.setSelectedMission(null, false);
-      await parts.ingestion.captureSatelliteDependency();
     },
 
     async disable() {

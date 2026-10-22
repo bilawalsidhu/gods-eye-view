@@ -21,6 +21,7 @@ test('the Navara mode registers the aircraft layers’ and vessels’ renderers,
     'flights',
     'military',
     'local-adsb',
+    'rocket-launches',
     'satellites',
     'ais-live-vessels',
   ])
@@ -29,7 +30,14 @@ test('the Navara mode registers the aircraft layers’ and vessels’ renderers,
     createLayerAvailability('navara')
       .available()
       .map(({ id }) => id),
-    ['flights', 'military', 'local-adsb', 'satellites', 'ais-live-vessels'],
+    [
+      'flights',
+      'military',
+      'local-adsb',
+      'satellites',
+      'rocket-launches',
+      'ais-live-vessels',
+    ],
   );
   assert.equal(layerAvailableOn('satellites', 'navara'), true);
 });

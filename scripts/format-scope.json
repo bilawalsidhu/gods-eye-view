@@ -1155,5 +1155,10 @@
   "scripts/qa-launches.mjs",
   "src/geo/boundingSphere.test.mjs",
   "src/layers/launches/render/cesium.js",
-  "src/layers/launches/launchPadFrame.test.mjs"
+  "src/layers/launches/launchPadFrame.test.mjs",
+  "src/layers/launches/render/navara.js",
+  "src/layers/launches/render/navara.test.mjs",
+  "scripts/qa-launches-compare.mjs",
+  "src/layers/satellites/interaction.test.mjs",
+  "src/layers/launches/lifecycleSnapshot.test.mjs"
 ]

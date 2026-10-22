@@ -69,6 +69,7 @@ export function createOrbitRendering({
       new Date(appClock.now()),
       collection.modelMatrix,
     );
+    getRenderer().commitOrbit(collection);
     layerState._missionOrbitPrimitives.set(launch.id, {
       primitive: collection,
       basePositions: orbitPath,

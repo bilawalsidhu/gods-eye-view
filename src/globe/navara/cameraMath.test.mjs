@@ -116,12 +116,11 @@ test('navaraPose gives Navara setCamera degrees in the same convention', () => {
   near(pose.lng, -70, 1e-9, 'lng');
   near(pose.lat, 45, 1e-9, 'lat');
   near(pose.height, 25000, 1e-6, 'height');
-  near(pose.heading, math.toDegrees(1.2), 1e-9, 'heading (deg)');
-  near(pose.pitch, math.toDegrees(-0.6), 1e-9, 'pitch (deg)');
-  near(pose.roll, math.toDegrees(-0.05), 1e-9, 'roll (deg) in (−180, 180]');
-  // Back through the same convention, the basis is unchanged.
+  assert.ok(pose.heading >= 0 && pose.heading <= 360);
+  assert.ok(pose.roll > -180 && pose.roll <= 180);
+  // Navara uses the surface frame at lng/lat to reconstruct the basis.
   const back = orientationVectors(
-    camera.position,
+    cartesian3.fromDegrees(pose.lng, pose.lat, 0),
     math.toRadians(pose.heading),
     math.toRadians(pose.pitch),
     math.toRadians(pose.roll),
@@ -357,4 +356,25 @@ test("horizonVisible agrees with Cesium's EllipsoidalOccluder, also at the limb"
   const lifted = cartesian3.fromDegrees(horizonDeg + 0.02, 0, 100);
   assert.equal(horizonVisible(eye, buried), false);
   assert.equal(horizonVisible(eye, lifted), true);
+});
+
+test('Navara high-orbit angles reconstruct the exact requested world basis', () => {
+  for (const height of [0, 25000, 420000, 2e7, 4.5e7])
+    for (const lat of [-70, -45, 15, 45, 70]) {
+      const camera = cameraAt(-70, lat, height, 1.2, -1.4, -0.05);
+      const pose = navaraPose(camera.position, camera.direction, camera.up);
+      const back = orientationVectors(
+        cartesian3.fromDegrees(pose.lng, pose.lat, 0),
+        math.toRadians(pose.heading),
+        math.toRadians(pose.pitch),
+        math.toRadians(pose.roll),
+      );
+      near(
+        cartesian3.distance(back.direction, camera.direction),
+        0,
+        1e-12,
+        'high orbit direction',
+      );
+      near(cartesian3.distance(back.up, camera.up), 0, 1e-12, 'high orbit up');
+    }
 });

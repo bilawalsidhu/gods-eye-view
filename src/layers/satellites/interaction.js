@@ -33,8 +33,7 @@ export function createInteraction({
             layerState._viewer &&
             ((getRenderer().follow.current() &&
               getRenderer().follow.current() !== layerState._trackedEntity) ||
-              (getRenderer().kind === 'navara' &&
-                !getRenderer().follow.current() &&
+              (!getRenderer().follow.current() &&
                 !getRenderer().follow.releasing()))
           ) {
             parts.tracking._clearTracking(true, {

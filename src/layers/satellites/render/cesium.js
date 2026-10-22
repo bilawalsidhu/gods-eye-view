@@ -1,8 +1,10 @@
-// Satellite drawing and native follow, extracted unchanged from the layer.
+// Satellite drawing and guarded native follow.
 import * as Cesium from 'cesium';
 import { isPointerFree } from '../../../data/inputOwnership.js';
 
 export function createSatellitesCesiumRenderer(engine, { viewer } = {}) {
+  let releasing = false;
+  let starting = null;
   return {
     kind: 'cesium',
     engine,
@@ -70,23 +72,37 @@ export function createSatellitesCesiumRenderer(engine, { viewer } = {}) {
     removeTracked: (entity) => viewer?.entities.remove(entity),
     follow: {
       start: (entity) => {
-        if (engine) {
-          engine.camera.follow({
-            native: entity,
-            position: () => entity.position.getValue(viewer.clock.currentTime),
-            viewFrom: () => entity.viewFrom.getValue(viewer.clock.currentTime),
-          });
-        } else {
-          viewer.camera?.cancelFlight();
-          viewer.trackedEntity = entity;
+        starting = entity;
+        try {
+          if (engine) {
+            engine.camera.follow({
+              native: entity,
+              position: () =>
+                entity.position.getValue(viewer.clock.currentTime),
+              viewFrom: () =>
+                entity.viewFrom.getValue(viewer.clock.currentTime),
+            });
+          } else {
+            viewer.camera?.cancelFlight();
+            viewer.trackedEntity = entity;
+          }
+        } finally {
+          starting = null;
         }
       },
       release: () => {
-        const current = engine?.camera.following();
-        if (current && current.native === viewer?.trackedEntity) current.stop();
-        else if (viewer) viewer.trackedEntity = undefined;
+        releasing = true;
+        try {
+          const current = engine?.camera.following();
+          if (current && current.native === viewer?.trackedEntity)
+            current.stop();
+          else if (viewer) viewer.trackedEntity = undefined;
+        } finally {
+          releasing = false;
+        }
       },
-      current: () => viewer?.trackedEntity,
+      current: () => starting ?? viewer?.trackedEntity,
+      releasing: () => releasing,
       onChanged: (listener) =>
         viewer.trackedEntityChanged.addEventListener(listener),
     },

@@ -132,6 +132,7 @@ export function createRocketLaunchesLayer({ services, source }) {
               }
             : null,
           padVisible: state._launchPadZonePrimitive?.show === true,
+          padHeightM: state._launchPadZonePrimitive?.heightM ?? null,
         };
       },
       satelliteParamsForSpaceMissions:
