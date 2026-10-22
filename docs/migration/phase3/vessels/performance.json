@@ -1031,5 +1031,1038 @@
         "pass": false
       }
     }
+  },
+  "minimal-no-shadow-city": {
+    "engines": {
+      "cesium": {
+        "runs": [
+          {
+            "scenes": {
+              "city": {
+                "frames": 2575,
+                "fps": 257.4,
+                "p50": 3.6,
+                "p95": 5,
+                "max": 13.1,
+                "longFrames33": 0,
+                "workP95": 4.5,
+                "longFrames50": 0,
+                "fleetTicks": 28,
+                "fleetTickP50": 0.1,
+                "fleetTickP95": 7.6,
+                "objects": 12000,
+                "startTilesMs": 3642
+              }
+            }
+          },
+          {
+            "scenes": {
+              "city": {
+                "frames": 2485,
+                "fps": 248.4,
+                "p50": 3.8,
+                "p95": 5.3,
+                "max": 11.6,
+                "longFrames33": 0,
+                "workP95": 4.6,
+                "longFrames50": 0,
+                "fleetTicks": 31,
+                "fleetTickP50": 0.1,
+                "fleetTickP95": 6.8,
+                "objects": 12000,
+                "startTilesMs": 3764
+              }
+            }
+          },
+          {
+            "scenes": {
+              "city": {
+                "frames": 2444,
+                "fps": 244.3,
+                "p50": 3.9,
+                "p95": 5.4,
+                "max": 12.6,
+                "longFrames33": 0,
+                "workP95": 4.8,
+                "longFrames50": 0,
+                "fleetTicks": 39,
+                "fleetTickP50": 0.1,
+                "fleetTickP95": 7,
+                "objects": 12000,
+                "startTilesMs": 3561
+              }
+            }
+          }
+        ],
+        "median": {
+          "city": {
+            "p50": 3.8,
+            "p95": 5.3,
+            "max": 12.6,
+            "fps": 248.4,
+            "heapPostGcMB": null,
+            "heapSlopeMBPerMin": null,
+            "heapSlopeSecondHalfMBPerMin": null,
+            "fleetTickP95": 7,
+            "longFrames33": 0,
+            "workP95": 4.6,
+            "longFrames50": 0
+          }
+        }
+      },
+      "navara": {
+        "runs": [
+          {
+            "scenes": {
+              "city": {
+                "frames": 1817,
+                "fps": 181.5,
+                "p50": 5.3,
+                "p95": 6.8,
+                "max": 131.4,
+                "longFrames33": 1,
+                "workP95": 5,
+                "longFrames50": 1,
+                "fleetTicks": 35,
+                "fleetTickP50": 0.1,
+                "fleetTickP95": 11,
+                "objects": 12000,
+                "startTilesMs": 1887
+              }
+            }
+          },
+          {
+            "scenes": {
+              "city": {
+                "frames": 1847,
+                "fps": 184.5,
+                "p50": 5.2,
+                "p95": 6.6,
+                "max": 72.7,
+                "longFrames33": 1,
+                "workP95": 4.9,
+                "longFrames50": 1,
+                "fleetTicks": 43,
+                "fleetTickP50": 0.1,
+                "fleetTickP95": 11.6,
+                "objects": 12000,
+                "startTilesMs": 2009
+              }
+            }
+          },
+          {
+            "scenes": {
+              "city": {
+                "frames": 1925,
+                "fps": 192.4,
+                "p50": 5,
+                "p95": 6.3,
+                "max": 58.9,
+                "longFrames33": 1,
+                "workP95": 4.9,
+                "longFrames50": 1,
+                "fleetTicks": 36,
+                "fleetTickP50": 0.1,
+                "fleetTickP95": 11.7,
+                "objects": 12000,
+                "startTilesMs": 2703
+              }
+            }
+          }
+        ],
+        "median": {
+          "city": {
+            "p50": 5.2,
+            "p95": 6.6,
+            "max": 72.7,
+            "fps": 184.5,
+            "heapPostGcMB": null,
+            "heapSlopeMBPerMin": null,
+            "heapSlopeSecondHalfMBPerMin": null,
+            "fleetTickP95": 11.6,
+            "longFrames33": 1,
+            "workP95": 4.9,
+            "longFrames50": 1
+          }
+        }
+      }
+    },
+    "gate": {
+      "city": {
+        "mode": "uncapped",
+        "work": {
+          "cesium": 4.6,
+          "navara": 4.9,
+          "ratio": 1.065217391304348
+        },
+        "intervalInformative": {
+          "cesium": 5.3,
+          "navara": 6.6,
+          "ratio": 1.2452830188679245
+        },
+        "pass": true
+      }
+    }
+  },
+  "minimal-no-shadow-uncapped": {
+    "engines": {
+      "cesium": {
+        "runs": [
+          {
+            "scenes": {
+              "global": {
+                "frames": 1920,
+                "fps": 191.9,
+                "p50": 5.3,
+                "p95": 6.4,
+                "max": 14.5,
+                "longFrames33": 0,
+                "workP95": 5.9,
+                "longFrames50": 0,
+                "fleetTicks": 21,
+                "fleetTickP50": 6.1,
+                "fleetTickP95": 8,
+                "objects": 12000,
+                "startTilesMs": 101
+              },
+              "city": {
+                "frames": 2427,
+                "fps": 242.5,
+                "p50": 4,
+                "p95": 5.4,
+                "max": 17.6,
+                "longFrames33": 0,
+                "workP95": 4.7,
+                "longFrames50": 0,
+                "fleetTicks": 30,
+                "fleetTickP50": 0.1,
+                "fleetTickP95": 4.8,
+                "objects": 12000,
+                "startTilesMs": 4303
+              },
+              "orbit": {
+                "frames": 1676,
+                "fps": 167.4,
+                "p50": 5.7,
+                "p95": 7,
+                "max": 13.6,
+                "longFrames33": 0,
+                "workP95": 6.6,
+                "longFrames50": 0,
+                "fleetTicks": 17,
+                "fleetTickP50": 4.5,
+                "fleetTickP95": 5,
+                "objects": 12000,
+                "startTilesMs": 911
+              }
+            }
+          },
+          {
+            "scenes": {
+              "global": {
+                "frames": 1895,
+                "fps": 189.3,
+                "p50": 5.3,
+                "p95": 6.5,
+                "max": 12.6,
+                "longFrames33": 0,
+                "workP95": 6,
+                "longFrames50": 0,
+                "fleetTicks": 33,
+                "fleetTickP50": 0.1,
+                "fleetTickP95": 10.3,
+                "objects": 12000,
+                "startTilesMs": 103
+              },
+              "city": {
+                "frames": 2429,
+                "fps": 242.7,
+                "p50": 4,
+                "p95": 5.6,
+                "max": 18.5,
+                "longFrames33": 0,
+                "workP95": 5,
+                "longFrames50": 0,
+                "fleetTicks": 34,
+                "fleetTickP50": 0.1,
+                "fleetTickP95": 4.6,
+                "objects": 12000,
+                "startTilesMs": 5163
+              },
+              "orbit": {
+                "frames": 1721,
+                "fps": 172,
+                "p50": 5.6,
+                "p95": 6.8,
+                "max": 8.3,
+                "longFrames33": 0,
+                "workP95": 6.4,
+                "longFrames50": 0,
+                "fleetTicks": 18,
+                "fleetTickP50": 4.7,
+                "fleetTickP95": 5.5,
+                "objects": 12000,
+                "startTilesMs": 916
+              }
+            }
+          },
+          {
+            "scenes": {
+              "global": {
+                "frames": 1952,
+                "fps": 195.2,
+                "p50": 5.2,
+                "p95": 6.1,
+                "max": 11.9,
+                "longFrames33": 0,
+                "workP95": 5.7,
+                "longFrames50": 0,
+                "fleetTicks": 23,
+                "fleetTickP50": 7.9,
+                "fleetTickP95": 10.1,
+                "objects": 12000,
+                "startTilesMs": 201
+              },
+              "city": {
+                "frames": 2487,
+                "fps": 248.5,
+                "p50": 3.9,
+                "p95": 5.4,
+                "max": 10.7,
+                "longFrames33": 0,
+                "workP95": 4.8,
+                "longFrames50": 0,
+                "fleetTicks": 29,
+                "fleetTickP50": 0.1,
+                "fleetTickP95": 5.9,
+                "objects": 12000,
+                "startTilesMs": 6239
+              },
+              "orbit": {
+                "frames": 1717,
+                "fps": 171.7,
+                "p50": 5.6,
+                "p95": 6.8,
+                "max": 8.9,
+                "longFrames33": 0,
+                "workP95": 6.4,
+                "longFrames50": 0,
+                "fleetTicks": 20,
+                "fleetTickP50": 5.1,
+                "fleetTickP95": 5.9,
+                "objects": 12000,
+                "startTilesMs": 822
+              }
+            }
+          }
+        ],
+        "median": {
+          "global": {
+            "p50": 5.3,
+            "p95": 6.4,
+            "max": 12.6,
+            "fps": 191.9,
+            "heapPostGcMB": null,
+            "heapSlopeMBPerMin": null,
+            "heapSlopeSecondHalfMBPerMin": null,
+            "fleetTickP95": 10.1,
+            "longFrames33": 0,
+            "workP95": 5.9,
+            "longFrames50": 0
+          },
+          "city": {
+            "p50": 4,
+            "p95": 5.4,
+            "max": 17.6,
+            "fps": 242.7,
+            "heapPostGcMB": null,
+            "heapSlopeMBPerMin": null,
+            "heapSlopeSecondHalfMBPerMin": null,
+            "fleetTickP95": 4.8,
+            "longFrames33": 0,
+            "workP95": 4.8,
+            "longFrames50": 0
+          },
+          "orbit": {
+            "p50": 5.6,
+            "p95": 6.8,
+            "max": 8.9,
+            "fps": 171.7,
+            "heapPostGcMB": null,
+            "heapSlopeMBPerMin": null,
+            "heapSlopeSecondHalfMBPerMin": null,
+            "fleetTickP95": 5.5,
+            "longFrames33": 0,
+            "workP95": 6.4,
+            "longFrames50": 0
+          }
+        }
+      },
+      "navara": {
+        "runs": [
+          {
+            "scenes": {
+              "global": {
+                "frames": 1951,
+                "fps": 195,
+                "p50": 5.3,
+                "p95": 5.9,
+                "max": 13,
+                "longFrames33": 0,
+                "workP95": 5.1,
+                "longFrames50": 0,
+                "fleetTicks": 29,
+                "fleetTickP50": 0.1,
+                "fleetTickP95": 10.3,
+                "objects": 12000,
+                "startTilesMs": 1967
+              },
+              "city": {
+                "frames": 1935,
+                "fps": 193.4,
+                "p50": 4.9,
+                "p95": 6.2,
+                "max": 12.6,
+                "longFrames33": 0,
+                "workP95": 5,
+                "longFrames50": 0,
+                "fleetTicks": 27,
+                "fleetTickP50": 0.1,
+                "fleetTickP95": 8.8,
+                "objects": 12000,
+                "startTilesMs": 3831
+              },
+              "orbit": {
+                "frames": 1850,
+                "fps": 184.8,
+                "p50": 5.2,
+                "p95": 6.4,
+                "max": 13.4,
+                "longFrames33": 0,
+                "workP95": 5.3,
+                "longFrames50": 0,
+                "fleetTicks": 28,
+                "fleetTickP50": 0.1,
+                "fleetTickP95": 10.2,
+                "objects": 12000,
+                "startTilesMs": 1730
+              }
+            }
+          },
+          {
+            "scenes": {
+              "global": {
+                "frames": 1984,
+                "fps": 198.2,
+                "p50": 5.2,
+                "p95": 5.9,
+                "max": 12.4,
+                "longFrames33": 0,
+                "workP95": 5.1,
+                "longFrames50": 0,
+                "fleetTicks": 27,
+                "fleetTickP50": 0.1,
+                "fleetTickP95": 9.6,
+                "objects": 12000,
+                "startTilesMs": 1818
+              },
+              "city": {
+                "frames": 2010,
+                "fps": 200.8,
+                "p50": 4.8,
+                "p95": 6.1,
+                "max": 18.6,
+                "longFrames33": 0,
+                "workP95": 5,
+                "longFrames50": 0,
+                "fleetTicks": 27,
+                "fleetTickP50": 0.1,
+                "fleetTickP95": 7.4,
+                "objects": 12000,
+                "startTilesMs": 4629
+              },
+              "orbit": {
+                "frames": 1860,
+                "fps": 186,
+                "p50": 5.2,
+                "p95": 6.4,
+                "max": 15.4,
+                "longFrames33": 0,
+                "workP95": 5.3,
+                "longFrames50": 0,
+                "fleetTicks": 33,
+                "fleetTickP50": 0.1,
+                "fleetTickP95": 8,
+                "objects": 12000,
+                "startTilesMs": 1835
+              }
+            }
+          },
+          {
+            "scenes": {
+              "global": {
+                "frames": 1951,
+                "fps": 195.1,
+                "p50": 5.2,
+                "p95": 6.1,
+                "max": 13.5,
+                "longFrames33": 0,
+                "workP95": 5.1,
+                "longFrames50": 0,
+                "fleetTicks": 20,
+                "fleetTickP50": 9.2,
+                "fleetTickP95": 11.2,
+                "objects": 12000,
+                "startTilesMs": 1905
+              },
+              "city": {
+                "frames": 1999,
+                "fps": 199.7,
+                "p50": 4.9,
+                "p95": 6.1,
+                "max": 14.2,
+                "longFrames33": 0,
+                "workP95": 5,
+                "longFrames50": 0,
+                "fleetTicks": 24,
+                "fleetTickP50": 7.2,
+                "fleetTickP95": 9.5,
+                "objects": 12000,
+                "startTilesMs": 3087
+              },
+              "orbit": {
+                "frames": 1826,
+                "fps": 182.4,
+                "p50": 5.6,
+                "p95": 6.7,
+                "max": 54.4,
+                "longFrames33": 1,
+                "workP95": 5.4,
+                "longFrames50": 1,
+                "fleetTicks": 25,
+                "fleetTickP50": 8.6,
+                "fleetTickP95": 11,
+                "objects": 12000,
+                "startTilesMs": 1910
+              }
+            }
+          }
+        ],
+        "median": {
+          "global": {
+            "p50": 5.2,
+            "p95": 5.9,
+            "max": 13,
+            "fps": 195.1,
+            "heapPostGcMB": null,
+            "heapSlopeMBPerMin": null,
+            "heapSlopeSecondHalfMBPerMin": null,
+            "fleetTickP95": 10.3,
+            "longFrames33": 0,
+            "workP95": 5.1,
+            "longFrames50": 0
+          },
+          "city": {
+            "p50": 4.9,
+            "p95": 6.1,
+            "max": 14.2,
+            "fps": 199.7,
+            "heapPostGcMB": null,
+            "heapSlopeMBPerMin": null,
+            "heapSlopeSecondHalfMBPerMin": null,
+            "fleetTickP95": 8.8,
+            "longFrames33": 0,
+            "workP95": 5,
+            "longFrames50": 0
+          },
+          "orbit": {
+            "p50": 5.2,
+            "p95": 6.4,
+            "max": 15.4,
+            "fps": 184.8,
+            "heapPostGcMB": null,
+            "heapSlopeMBPerMin": null,
+            "heapSlopeSecondHalfMBPerMin": null,
+            "fleetTickP95": 10.2,
+            "longFrames33": 0,
+            "workP95": 5.3,
+            "longFrames50": 0
+          }
+        }
+      }
+    },
+    "gate": {
+      "global": {
+        "mode": "uncapped",
+        "work": {
+          "cesium": 5.9,
+          "navara": 5.1,
+          "ratio": 0.8644067796610169
+        },
+        "intervalInformative": {
+          "cesium": 6.4,
+          "navara": 5.9,
+          "ratio": 0.921875
+        },
+        "pass": true
+      },
+      "city": {
+        "mode": "uncapped",
+        "work": {
+          "cesium": 4.8,
+          "navara": 5,
+          "ratio": 1.0416666666666667
+        },
+        "intervalInformative": {
+          "cesium": 5.4,
+          "navara": 6.1,
+          "ratio": 1.1296296296296295
+        },
+        "pass": true
+      },
+      "orbit": {
+        "mode": "uncapped",
+        "work": {
+          "cesium": 6.4,
+          "navara": 5.3,
+          "ratio": 0.8281249999999999
+        },
+        "intervalInformative": {
+          "cesium": 6.8,
+          "navara": 6.4,
+          "ratio": 0.9411764705882354
+        },
+        "pass": true
+      }
+    }
+  },
+  "minimal-no-shadow-vsync": {
+    "engines": {
+      "cesium": {
+        "runs": [
+          {
+            "scenes": {
+              "global": {
+                "frames": 600,
+                "fps": 60,
+                "p50": 16.7,
+                "p95": 17.8,
+                "max": 26.7,
+                "longFrames33": 0,
+                "workP95": 2.1,
+                "longFrames50": 0,
+                "fleetTicks": 21,
+                "fleetTickP50": 7.9,
+                "fleetTickP95": 8.6,
+                "objects": 12000,
+                "startTilesMs": 102
+              },
+              "city": {
+                "frames": 600,
+                "fps": 60,
+                "p50": 16.7,
+                "p95": 18.3,
+                "max": 22.6,
+                "longFrames33": 0,
+                "workP95": 4.4,
+                "longFrames50": 0,
+                "fleetTicks": 19,
+                "fleetTickP50": 4.4,
+                "fleetTickP95": 5.3,
+                "objects": 12000,
+                "startTilesMs": 2851
+              },
+              "orbit": {
+                "frames": 600,
+                "fps": 60,
+                "p50": 16.7,
+                "p95": 17.9,
+                "max": 26,
+                "longFrames33": 0,
+                "workP95": 2.4,
+                "longFrames50": 0,
+                "fleetTicks": 13,
+                "fleetTickP50": 6.2,
+                "fleetTickP95": 7.2,
+                "objects": 12000,
+                "startTilesMs": 513
+              }
+            }
+          },
+          {
+            "scenes": {
+              "global": {
+                "frames": 600,
+                "fps": 60,
+                "p50": 16.6,
+                "p95": 17.9,
+                "max": 29,
+                "longFrames33": 0,
+                "workP95": 2,
+                "longFrames50": 0,
+                "fleetTicks": 17,
+                "fleetTickP50": 10.6,
+                "fleetTickP95": 11.2,
+                "objects": 12000,
+                "startTilesMs": 101
+              },
+              "city": {
+                "frames": 600,
+                "fps": 60,
+                "p50": 16.7,
+                "p95": 17.7,
+                "max": 21.2,
+                "longFrames33": 0,
+                "workP95": 3.6,
+                "longFrames50": 0,
+                "fleetTicks": 19,
+                "fleetTickP50": 3.8,
+                "fleetTickP95": 4.1,
+                "objects": 12000,
+                "startTilesMs": 2841
+              },
+              "orbit": {
+                "frames": 600,
+                "fps": 60,
+                "p50": 16.6,
+                "p95": 17.5,
+                "max": 22.7,
+                "longFrames33": 0,
+                "workP95": 2.4,
+                "longFrames50": 0,
+                "fleetTicks": 22,
+                "fleetTickP50": 4.7,
+                "fleetTickP95": 5.3,
+                "objects": 12000,
+                "startTilesMs": 411
+              }
+            }
+          },
+          {
+            "scenes": {
+              "global": {
+                "frames": 600,
+                "fps": 60,
+                "p50": 16.7,
+                "p95": 17.8,
+                "max": 27.8,
+                "longFrames33": 0,
+                "workP95": 1.8,
+                "longFrames50": 0,
+                "fleetTicks": 21,
+                "fleetTickP50": 8.7,
+                "fleetTickP95": 10.8,
+                "objects": 12000,
+                "startTilesMs": 101
+              },
+              "city": {
+                "frames": 600,
+                "fps": 60,
+                "p50": 16.7,
+                "p95": 17.8,
+                "max": 21,
+                "longFrames33": 0,
+                "workP95": 3.4,
+                "longFrames50": 0,
+                "fleetTicks": 18,
+                "fleetTickP50": 3.4,
+                "fleetTickP95": 3.9,
+                "objects": 12000,
+                "startTilesMs": 3147
+              },
+              "orbit": {
+                "frames": 600,
+                "fps": 60,
+                "p50": 16.7,
+                "p95": 17.6,
+                "max": 22.4,
+                "longFrames33": 0,
+                "workP95": 2.4,
+                "longFrames50": 0,
+                "fleetTicks": 20,
+                "fleetTickP50": 4.4,
+                "fleetTickP95": 4.8,
+                "objects": 12000,
+                "startTilesMs": 504
+              }
+            }
+          }
+        ],
+        "median": {
+          "global": {
+            "p50": 16.7,
+            "p95": 17.8,
+            "max": 27.8,
+            "fps": 60,
+            "heapPostGcMB": null,
+            "heapSlopeMBPerMin": null,
+            "heapSlopeSecondHalfMBPerMin": null,
+            "fleetTickP95": 10.8,
+            "longFrames33": 0,
+            "workP95": 2,
+            "longFrames50": 0
+          },
+          "city": {
+            "p50": 16.7,
+            "p95": 17.8,
+            "max": 21.2,
+            "fps": 60,
+            "heapPostGcMB": null,
+            "heapSlopeMBPerMin": null,
+            "heapSlopeSecondHalfMBPerMin": null,
+            "fleetTickP95": 4.1,
+            "longFrames33": 0,
+            "workP95": 3.6,
+            "longFrames50": 0
+          },
+          "orbit": {
+            "p50": 16.7,
+            "p95": 17.6,
+            "max": 22.7,
+            "fps": 60,
+            "heapPostGcMB": null,
+            "heapSlopeMBPerMin": null,
+            "heapSlopeSecondHalfMBPerMin": null,
+            "fleetTickP95": 5.3,
+            "longFrames33": 0,
+            "workP95": 2.4,
+            "longFrames50": 0
+          }
+        }
+      },
+      "navara": {
+        "runs": [
+          {
+            "scenes": {
+              "global": {
+                "frames": 600,
+                "fps": 60,
+                "p50": 16.7,
+                "p95": 18,
+                "max": 30.6,
+                "longFrames33": 0,
+                "workP95": 1.4,
+                "longFrames50": 0,
+                "fleetTicks": 22,
+                "fleetTickP50": 9.2,
+                "fleetTickP95": 11.9,
+                "objects": 12000,
+                "startTilesMs": 1771
+              },
+              "city": {
+                "frames": 600,
+                "fps": 60,
+                "p50": 16.7,
+                "p95": 18,
+                "max": 24.2,
+                "longFrames33": 0,
+                "workP95": 1.6,
+                "longFrames50": 0,
+                "fleetTicks": 18,
+                "fleetTickP50": 5.4,
+                "fleetTickP95": 6.5,
+                "objects": 12000,
+                "startTilesMs": 3417
+              },
+              "orbit": {
+                "frames": 600,
+                "fps": 60,
+                "p50": 16.6,
+                "p95": 18.1,
+                "max": 25.6,
+                "longFrames33": 0,
+                "workP95": 1.9,
+                "longFrames50": 0,
+                "fleetTicks": 23,
+                "fleetTickP50": 5.5,
+                "fleetTickP95": 7.5,
+                "objects": 12000,
+                "startTilesMs": 3132
+              }
+            }
+          },
+          {
+            "scenes": {
+              "global": {
+                "frames": 600,
+                "fps": 60,
+                "p50": 16.6,
+                "p95": 17.9,
+                "max": 29.6,
+                "longFrames33": 0,
+                "workP95": 1.3,
+                "longFrames50": 0,
+                "fleetTicks": 19,
+                "fleetTickP50": 8,
+                "fleetTickP95": 11.3,
+                "objects": 12000,
+                "startTilesMs": 1758
+              },
+              "city": {
+                "frames": 596,
+                "fps": 59.6,
+                "p50": 16.7,
+                "p95": 17.9,
+                "max": 109.4,
+                "longFrames33": 1,
+                "workP95": 1.4,
+                "longFrames50": 1,
+                "fleetTicks": 17,
+                "fleetTickP50": 4.4,
+                "fleetTickP95": 8.2,
+                "objects": 12000,
+                "startTilesMs": 2211
+              },
+              "orbit": {
+                "frames": 600,
+                "fps": 60,
+                "p50": 16.7,
+                "p95": 18,
+                "max": 27.2,
+                "longFrames33": 0,
+                "workP95": 1.8,
+                "longFrames50": 0,
+                "fleetTicks": 25,
+                "fleetTickP50": 6.1,
+                "fleetTickP95": 8.3,
+                "objects": 12000,
+                "startTilesMs": 1846
+              }
+            }
+          },
+          {
+            "scenes": {
+              "global": {
+                "frames": 600,
+                "fps": 60,
+                "p50": 16.7,
+                "p95": 17.9,
+                "max": 28.5,
+                "longFrames33": 0,
+                "workP95": 1.3,
+                "longFrames50": 0,
+                "fleetTicks": 17,
+                "fleetTickP50": 9.3,
+                "fleetTickP95": 10.5,
+                "objects": 12000,
+                "startTilesMs": 1560
+              },
+              "city": {
+                "frames": 600,
+                "fps": 59.9,
+                "p50": 16.7,
+                "p95": 17.8,
+                "max": 44,
+                "longFrames33": 2,
+                "workP95": 1.5,
+                "longFrames50": 0,
+                "fleetTicks": 24,
+                "fleetTickP50": 4.2,
+                "fleetTickP95": 6.2,
+                "objects": 12000,
+                "startTilesMs": 1938
+              },
+              "orbit": {
+                "frames": 600,
+                "fps": 60,
+                "p50": 16.7,
+                "p95": 18,
+                "max": 25.2,
+                "longFrames33": 0,
+                "workP95": 1.9,
+                "longFrames50": 0,
+                "fleetTicks": 23,
+                "fleetTickP50": 5.8,
+                "fleetTickP95": 7.7,
+                "objects": 12000,
+                "startTilesMs": 1584
+              }
+            }
+          }
+        ],
+        "median": {
+          "global": {
+            "p50": 16.7,
+            "p95": 17.9,
+            "max": 29.6,
+            "fps": 60,
+            "heapPostGcMB": null,
+            "heapSlopeMBPerMin": null,
+            "heapSlopeSecondHalfMBPerMin": null,
+            "fleetTickP95": 11.3,
+            "longFrames33": 0,
+            "workP95": 1.3,
+            "longFrames50": 0
+          },
+          "city": {
+            "p50": 16.7,
+            "p95": 17.9,
+            "max": 44,
+            "fps": 59.9,
+            "heapPostGcMB": null,
+            "heapSlopeMBPerMin": null,
+            "heapSlopeSecondHalfMBPerMin": null,
+            "fleetTickP95": 6.5,
+            "longFrames33": 1,
+            "workP95": 1.5,
+            "longFrames50": 0
+          },
+          "orbit": {
+            "p50": 16.7,
+            "p95": 18,
+            "max": 25.6,
+            "fps": 60,
+            "heapPostGcMB": null,
+            "heapSlopeMBPerMin": null,
+            "heapSlopeSecondHalfMBPerMin": null,
+            "fleetTickP95": 7.7,
+            "longFrames33": 0,
+            "workP95": 1.9,
+            "longFrames50": 0
+          }
+        }
+      }
+    },
+    "gate": {
+      "global": {
+        "mode": "vsync",
+        "interval": {
+          "cesium": 17.8,
+          "navara": 17.9,
+          "ratio": 1.0056179775280898
+        },
+        "longFrames33": {
+          "cesium": 0,
+          "navara": 0
+        },
+        "pass": true
+      },
+      "city": {
+        "mode": "vsync",
+        "interval": {
+          "cesium": 17.8,
+          "navara": 17.9,
+          "ratio": 1.0056179775280898
+        },
+        "longFrames33": {
+          "cesium": 0,
+          "navara": 1
+        },
+        "pass": true
+      },
+      "orbit": {
+        "mode": "vsync",
+        "interval": {
+          "cesium": 17.6,
+          "navara": 18,
+          "ratio": 1.0227272727272727
+        },
+        "longFrames33": {
+          "cesium": 0,
+          "navara": 0
+        },
+        "pass": true
+      }
+    }
   }
 }
