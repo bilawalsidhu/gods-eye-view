@@ -2943,5 +2943,12 @@
   "hemisphere|E": "E",
   "hemisphere|W": "O",
   "OK": "OK",
-  "{category} ({count})": "{category} ({count})"
+  "{category} ({count})": "{category} ({count})",
+  "Approximate location; coverage not calibrated.": "Ubicación aproximada; cobertura sin calibrar.",
+  "LOCATION · APPROXIMATE": "UBICACIÓN · APROXIMADA",
+  "Open official camera page ↗": "Abrir la página oficial de la cámara ↗",
+  "PLAYER IN PANEL": "REPRODUCTOR EN EL PANEL",
+  "PUBLIC PLAYER · EXTERNAL": "REPRODUCTOR PÚBLICO · EXTERNO",
+  "{camera} — public player": "{camera} — reproductor público",
+  "{city} CCTV · {name} · PUBLIC PLAYER · APPROXIMATE LOCATION · COVERAGE NOT CALIBRATED": "{city} CCTV · {name} · REPRODUCTOR PÚBLICO · UBICACIÓN APROXIMADA · COBERTURA SIN CALIBRAR"
 }

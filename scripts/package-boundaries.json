@@ -215,7 +215,8 @@
       "src/data/cctvFootprint.js",
       "src/sources/cctvTypes.js",
       "src/sources/httpBody.js",
-      "src/i18n/marker.js"
+      "src/i18n/marker.js",
+      "src/sources/youtube.js"
     ],
     "external": []
   },
@@ -568,6 +569,9 @@
       "src/i18n/locales/ru.json",
       "src/i18n/locales/zh-CN.json",
       "src/ui/unitLabels.js",
+      "src/sources/cctvTypes.js",
+      "src/sources/youtube.js",
+      "src/ui/cctvEmbed.js",
       "src/ui/statusBadge.js"
     ],
     "external": []
@@ -800,6 +804,9 @@
       "src/ui/keyGuidance.js",
       "src/ui/layerNames.js",
       "src/ui/statusText.js",
+      "src/sources/cctvTypes.js",
+      "src/sources/youtube.js",
+      "src/ui/cctvEmbed.js",
       "src/ui/statusBadge.js"
     ],
     "external": ["cesium"]
@@ -1416,6 +1423,8 @@
       "src/i18n/locale.js",
       "src/i18n/locales/es.json",
       "src/i18n/locales/ru.json",
+      "src/sources/cctvTypes.js",
+      "src/sources/youtube.js",
       "src/i18n/locales/zh-CN.json"
     ],
     "external": ["hls.js", "cesium"]
@@ -2555,6 +2564,9 @@
       "src/layers/airQuality/model.js",
       "src/layers/airQuality/source.js",
       "src/ui/statusText.js",
+      "src/sources/cctvTypes.js",
+      "src/sources/youtube.js",
+      "src/ui/cctvEmbed.js",
       "src/layers/streetLevel/providers/mapillary/policy.js",
       "src/voice/providerCommands.js",
       "src/voice/providerCapabilities.js",
@@ -3129,6 +3141,8 @@
       "src/layers/airQuality/source.js",
       "src/ui/statusText.js",
       "src/ui/layerNames.js",
+      "src/sources/cctvTypes.js",
+      "src/sources/youtube.js",
       "src/layers/streetLevel/providers/mapillary/policy.js"
     ],
     "external": [
@@ -3409,7 +3423,7 @@
   },
   "cctv-types-source": {
     "exports": ["./sources/cctv-types"],
-    "modules": ["src/sources/cctvTypes.js"],
+    "modules": ["src/sources/cctvTypes.js", "src/sources/youtube.js"],
     "external": []
   },
   "regional-source": {

@@ -2809,5 +2809,12 @@
   "Gemini voice sessions have a time limit. When a session expires, start voice again for a new conversation.": "Gemini 语音会话有时长限制。会话到期后，请重新启动语音以开始新对话。",
   "Show the street-level view full screen (Esc shrinks it)": "全屏显示街景视图（按 Esc 缩小）",
   "OK": "正常",
-  "{category} ({count})": "{category}（{count}）"
+  "{category} ({count})": "{category}（{count}）",
+  "{city} CCTV · {name} · PUBLIC PLAYER · APPROXIMATE LOCATION · COVERAGE NOT CALIBRATED": "{city} CCTV · {name} · 公共播放器 · 大致位置 · 覆盖范围未校准",
+  "{camera} — public player": "{camera} — 公共播放器",
+  "Open official camera page ↗": "打开摄像头官方页面 ↗",
+  "PUBLIC PLAYER · EXTERNAL": "公共播放器 · 外部",
+  "PLAYER IN PANEL": "面板内播放器",
+  "LOCATION · APPROXIMATE": "位置 · 大致",
+  "Approximate location; coverage not calibrated.": "大致位置；覆盖范围未校准。"
 }
