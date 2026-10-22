@@ -241,6 +241,12 @@ test('typed argument checks feed full-call accuracy without changing the legacy 
   }
   assert.equal(gradeCore(globe, [{ name: 'move_camera', args: { ...globeArgs, direction: 'right' } }]).fullCallOk, false);
   assert.equal(gradeCore(globe, [{ name: 'move_camera', args: { ...globeArgs, speed: 'normal' } }]).fullCallOk, false);
+  const right = byPhrase('Rotate the globe to the right');
+  assert.equal(gradeCore(right, [{ name: 'move_camera', args: { motion: 'rotate_globe' } }]).fullCallOk, true);
+  for (const direction of ['right', 'left', null]) {
+    assert.equal(gradeCore(right, [{ name: 'move_camera', args: { motion: 'rotate_globe', direction } }]).fullCallOk, direction === 'right');
+  }
+  assert.equal(gradeCore(right, [{ name: 'move_camera', args: { motion: 'rotate', direction: 'right' } }]).fullCallOk, false);
 });
 
 test('gradeDialogue scores turn 2 in the context of turn 1', () => {
