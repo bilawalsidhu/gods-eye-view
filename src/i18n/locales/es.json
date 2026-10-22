@@ -945,7 +945,7 @@
   "Image by {creator}": "Imagen de {creator}",
   "zoom in to see KartaView coverage": "acércate para ver la cobertura de KartaView",
   "no KartaView photos in view": "no hay fotos de KartaView a la vista",
-  "{names}: by upload date": "{names}: por fecha de subida",
+  "(by upload date)": "(por fecha de subida)",
   "{n} streets in view · click a line for its nearest photo": {
     "one": "{n} calle a la vista · haz clic en una línea para su foto más cercana",
     "many": "{n} calles a la vista · haz clic en una línea para su foto más cercana",

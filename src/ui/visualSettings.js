@@ -1,4 +1,5 @@
 import { STYLE_STATUS_LABELS } from './visualPresets.js';
+import { syncSegmentedControl } from './segmentedControl.js';
 import { t } from '../i18n/index.js';
 import { UiLifetime } from './uiLifetime.js';
 import {
@@ -557,11 +558,9 @@ export class VisualSettings {
     const normalized = normalizeAllocationStrategy(raw);
     this._detectionAllocationPreference = normalized;
     setDetectionTuning({ allocationStrategy: normalized });
-    for (const button of this._detectionAllocationBtns) {
-      const active = button.dataset.allocation === normalized;
-      button.classList.toggle('active', active);
-      button.setAttribute('aria-checked', String(active));
-    }
+    syncSegmentedControl(this._detectionAllocationBtns, normalized, {
+      valueOf: (button) => button.dataset.allocation,
+    });
     if (persist) {
       try {
         localStorage.setItem(DETECTION_ALLOCATION_STORAGE_KEY, normalized);
