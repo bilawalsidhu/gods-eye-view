@@ -25,6 +25,12 @@ const STILL_ALIAS = {
   feedType: 'jpg',
   url: 'https://cams.upstream.invalid/alias.jpg',
 };
+const VARITECH = {
+  ...STILL,
+  id: 'varitech-cam003',
+  sourceKind: 'varitech-webcam',
+  url: 'https://varitech.ar/cameras/cam003/latest.jpg',
+};
 const VIDEO = {
   id: 'video-fixture',
   name: 'Video fixture',
@@ -115,6 +121,7 @@ function mount(t, respond) {
   process.env.CCTV_SOURCES_JSON = JSON.stringify([
     STILL,
     STILL_ALIAS,
+    VARITECH,
     VIDEO,
     WEBM,
     MJPEG,
@@ -183,7 +190,7 @@ test('a still camera is refused by /media without any upstream request', async (
           body: '',
         }),
   );
-  for (const camera of [STILL, STILL_ALIAS]) {
+  for (const camera of [STILL, STILL_ALIAS, VARITECH]) {
     const res = await app.call(`/media/${camera.id}`);
     assert.equal(res.statusCode, 404, camera.id);
     assert.equal(res.headers['Content-Type'], 'application/json');

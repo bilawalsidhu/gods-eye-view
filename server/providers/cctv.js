@@ -1,4 +1,5 @@
 import { createCctvCatalog } from './cctv/catalog.js';
+import { createVaritechSnapshotFetcher } from './cctv/varitech.js';
 import {
   normalizeFeedType,
   isVideoFeedType,
@@ -39,6 +40,7 @@ export { CCTV_FRAME_FETCH_TIMEOUT_MS, fetchCctvImageFromUpstream };
  */
 export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
   const getCctvSources = createCctvCatalog({ sourceRoot });
+  const fetchVaritechSnapshot = createVaritechSnapshotFetcher();
   /** @type {Map<string,{id:string,status:string,sourceKind:string,label:string,message:string,updatedAt:number}>} */
   const health = new Map();
   /** Cap on health map entries to prevent unbounded growth. Sized to the
@@ -532,7 +534,9 @@ export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
         const upstreamImage =
           source?.sourceKind === 'txdot-its'
             ? await fetchTxdotSnapshot(upstreamCandidate)
-            : await fetchCctvImageFromUpstream(upstreamCandidate);
+            : source?.sourceKind === 'varitech-webcam'
+              ? await fetchVaritechSnapshot(upstreamCandidate)
+              : await fetchCctvImageFromUpstream(upstreamCandidate);
         if (upstreamImage?.ok) {
           setHealth(cameraId, {
             status: 'ok',

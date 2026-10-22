@@ -1,5 +1,17 @@
 # God's Eye View Current State
 
+CCTV offers eleven opt-in Varitech JPEG webcams in Cerro Catedral, Chapelco and La Hoya.
+The pack is off by default. The deployment operator must first establish permission
+for automated retrieval, caching and display to its users, then set
+`CCTV_VARITECH_ENABLED=1` in the server environment and restart. Activation or
+acceptance of GEV terms does not grant or verify provider permission; see the
+[activation and authorization guide](../DATA_SOURCES.md#varitech-ski-resort-webcams-argentina).
+Requested frames use the existing
+snapshot path and a five-minute cache; `/api/cctv/media` returns 404 for stills. Names and per-camera credits
+identify approximate resort-area coordinates; low-confidence bearings keep the
+existing estimated-heading presentation. No camera images are bundled. Provider
+terms and geographic provenance are recorded in DATA_SOURCES.md and the catalog.
+
 Analyst region queries resolve unique Natural Earth names offline without
 geocoding, so Gold Coast and Ivory Coast name the West African natural regions.
 Duplicate names require a geocoded containment anchor; when several entries for
@@ -3616,7 +3628,7 @@ its criteria cannot be silently ignored.
 | Satellites             | CelesTrak                                                                                                                                                                                       | `src/data/satellites.js`                              | `/api/celestrak`                                         | 120s                                                                              |
 | Space Missions (30d)   | Launch Library 2 + CelesTrak                                                                                                                                                                    | `src/data/rocketLaunches.js`                          | `/api/launches` + `/api/celestrak/active`                | 5 min                                                                             |
 | Traffic | Selectable TomTom / OpenStreetMap / Hybrid roads; optional TomTom flow (BYOK) | `src/data/traffic.js` | browser-direct OpenFreeMap tiles; `/api/tomtom` for flow | viewport-driven; capped tile cache |
-| CCTV                   | Austin + Caltrans (CA) + TfL London + Ontario 511 + Fintraffic (FI) + DriveBC (BC) + TxDOT (TX) + Estonia (Tallinn, Tarktee) + Live Traffic NSW + Open Calgary Open Data + Statens vegvesen (NO, stills + live HLS, Kartverket ground heights) + King County (WA) Open Data + WSDOT (WA) Open Data + NYC DOT TMC (opt-in) + City of Toronto RESCU + Catalonia (Servei Català de Trànsit) + Hong Kong Transport Department + FL511 (FL, opt-in) + Freeway Bureau, MOTC (Taiwan) + Street View fallback | `src/data/cctv.js`                                    | `/api/cctv`                                              | 10s (active)                                                                      |
+| CCTV                   | Austin + Caltrans (CA) + TfL London + Ontario 511 + Fintraffic (FI) + DriveBC (BC) + TxDOT (TX) + Estonia (Tallinn, Tarktee) + Live Traffic NSW + Open Calgary Open Data + Statens vegvesen (NO, stills + live HLS, Kartverket ground heights) + King County (WA) Open Data + WSDOT (WA) Open Data + NYC DOT TMC (opt-in) + City of Toronto RESCU + Catalonia (Servei Català de Trànsit) + Hong Kong Transport Department + FL511 (FL, opt-in) + Freeway Bureau, MOTC (Taiwan) + Varitech Argentina ski-resort stills (off by default, approximate locations; see [activation and authorization](../DATA_SOURCES.md#varitech-ski-resort-webcams-argentina)) + Street View fallback | `src/data/cctv.js`                                    | `/api/cctv`                                              | 10s (active)                                                                      |
 | Radio                  | Radio Browser (public-domain station directory)                                                                                                                                                 | `src/data/radio.js`                                   | `/api/radio/stations`, `/api/radio/click/:uuid`          | 45 min directory refresh                                                          |
 | Transit 🚌             | Operator GTFS-Realtime VehiclePositions (7 keyless regions, `src/data/transitFeeds.js`)                                                                                                         | `src/layers/transit/` via `src/app/layers/transit.js` | `/api/transit`                                           | 15s (poll + delayed playback)                                                     |
 | Bikeshare 🚲           | GBFS (Lyft + BCycle + Social Bicycles + PBSC incl. Bike Share Toronto, Bike Itaú (Brazil), Bicing (Barcelona) and seven other Spanish cities + Urban Sharing, Entur, JCDecaux (Lillestrøm, Valencia, Seville) + nextbike (AMBici))                                                                                                                                        | `src/data/bikeshare.js`                               | `/api/gbfs`                                              | 60s                                                                               |
