@@ -4585,6 +4585,10 @@ silently demoting every later lookup for the session.
   multi-sensor datasheets publish a capability range, not the lens's current zoom, so those
   cameras keep their estimate and show `SPEC FOV min–max° (CAPABILITY)` beside it. Public
   camera state carries `fovSource`, `specFovMinDeg`, `specFovMaxDeg` and `spec` (#452).
+  The table also includes Bosch MIC-7130, MIC-7502 and MIC-7522 records for the Amsterdam
+  register proposed in #251, including its `x` colour aliases (#1319). Their axis-less
+  datasheet FOV does not supply a horizontal capability range or replace the estimated
+  FOV. Adding these records does not enable the proposed source pack.
 - **FIRMS**: no ground clamping (zero 3D-tiles height sampling), ≤18 screen-decluttered ambient labels, click-to-inspect detail card, 2.5k/3k sprite budgets viewport-clipped by FRP.
 - **CCTV v2 foundation:** a pitched
   frustum wireframe (4 corner rays + far-cap rectangle) with a monitor plane at the frustum's

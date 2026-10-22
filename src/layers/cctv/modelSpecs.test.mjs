@@ -273,6 +273,47 @@ test('Amsterdam camera register model strings resolve', () => {
   assert.equal(horizontalFovRangeDeg(lookupModelSpec('MIC-7522-Z30B')), null);
 });
 
+test('Bosch MIC colour aliases resolve without accepting unknown variants', () => {
+  for (const [pattern, id] of [
+    ['MIC-7130-P?4', 'bosch-mic-7130-pb4'],
+    ['MIC-7502-Z30?', 'bosch-mic-7502-z30b'],
+    ['MIC-7522-Z30?', 'bosch-mic-7522-z30b'],
+  ]) {
+    for (const colour of ['B', 'G', 'W', 'x']) {
+      const model = pattern.replace('?', colour);
+      assert.equal(lookupModelSpec(model)?.id, id, model);
+      assert.equal(lookupModelSpec(`bosch ${model.toLowerCase()}`)?.id, id);
+      assert.equal(lookupModelSpec(model, 'Bosch')?.id, id);
+      assert.equal(lookupModelSpec(model, 'Axis'), null);
+      assert.equal(lookupModelSpec(`${model}-UNKNOWN`), null);
+    }
+    assert.equal(lookupModelSpec(pattern.replace('?', 'R')), null);
+  }
+});
+
+test('Bosch MIC catalog enrichment preserves estimated and explicit optics', () => {
+  for (const model of [
+    'Bosch MIC-7130-Px4',
+    'Bosch MIC-7502-Z30x',
+    'Bosch MIC-7522-Z30x',
+  ]) {
+    for (const pose of [{}, { fovDeg: 44 }, { poseSource: 'curated' }]) {
+      const [camera] = browserCatalog().buildCatalogFromSources([
+        { id: 'amsterdam-mic', lat: 52.37, lon: 4.9, model, ...pose },
+      ]);
+      assert.ok(camera.spec, model);
+      assert.equal(camera.fovDeg, pose.fovDeg ?? 74, model);
+      assert.equal(camera.fovSource, undefined);
+      assert.equal(camera.specFovMinDeg, undefined);
+      assert.equal(camera.specFovMaxDeg, undefined);
+      assert.equal(horizontalFovRangeDeg(camera.spec), null);
+      assert.equal(fixedHorizontalFovDeg(camera.spec), null);
+      assert.equal(specFovCapabilityToken(camera), null);
+      assert.match(specSummary(camera.spec), /^Bosch MIC-.* · PTZ$/);
+    }
+  }
+});
+
 test('catalog never overwrites an explicit FOV or a curated pose', () => {
   const [explicit, curated, cohu, pelco] =
     browserCatalog().buildCatalogFromSources([
