@@ -3525,5 +3525,9 @@
   "Reset view reloads the app without the view restored from the address bar.": "「重置視圖」會重新加載應用，不使用從地址欄恢復的視圖。",
   "Reload": "重新加載",
   "Retry": "重試",
-  "Reset view": "重置視圖"
+  "Reset view": "重置視圖",
+  "Clean view: hide the controls": "簡潔檢視：隱藏控制項",
+  "Exit clean view: show the controls": "結束簡潔檢視：顯示控制項",
+  "Clean view: hide the controls (V)": "簡潔檢視：隱藏控制項 (V)",
+  "{label} (V)": "{label} (V)"
 }
