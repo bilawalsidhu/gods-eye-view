@@ -4155,5 +4155,9 @@
     "other": "显示{place}的{what}（{count} 个）"
   },
   "Go there": "前往该地点",
-  "Open draw options": "打开绘制选项"
+  "Open draw options": "打开绘制选项",
+  "Clean view: hide the controls": "简洁视图：隐藏控件",
+  "Exit clean view: show the controls": "退出简洁视图：显示控件",
+  "Clean view: hide the controls (V)": "简洁视图：隐藏控件 (V)",
+  "{label} (V)": "{label} (V)"
 }
