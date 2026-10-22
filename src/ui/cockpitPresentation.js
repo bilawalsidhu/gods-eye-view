@@ -1,5 +1,5 @@
 /** Pure formatting and fixed presentation constants used by Cockpit components. */
-import { formatNumber, t, msg } from '../i18n/index.js';
+import { formatNumber, getLocale, t, msg } from '../i18n/index.js';
 import { formatQuantity } from './unitLabels.js';
 
 export const COCKPIT_HEADING_SLEW_DPS = 28;
@@ -145,10 +145,11 @@ export function formatCockpitCoordinate(value, positive, negative) {
  */
 export function formatCockpitDistance(distanceM) {
   const digits = distanceM < 10000 ? 1 : 0;
-  return formatQuantity(distanceM / 1000, 'km', {
+  const distance = formatQuantity(distanceM / 1000, 'km', {
     minimumFractionDigits: digits,
     maximumFractionDigits: digits,
-  }).toUpperCase();
+  });
+  return getLocale() === 'zh-CN' ? distance : distance.toUpperCase();
 }
 
 export function formatCockpitWindDirection(value) {

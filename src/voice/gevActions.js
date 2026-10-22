@@ -1092,6 +1092,18 @@ export function createGevActionRunner({
     }
 
     if (name === 'control_cctv') {
+      const action = String(args.action || '').toLowerCase();
+      if (
+        (action === 'enable' || action === 'disable') &&
+        dataManager.layers.get('cctv')?.module
+      ) {
+        const result = await runGevAction(
+          'set_layer_visibility',
+          { layerId: 'cctv', enabled: action === 'enable' },
+          runOptions,
+        );
+        return { ...result, action: 'control_cctv' };
+      }
       return controlCctv(dataManager, args, styleManager);
     }
 
@@ -1432,13 +1444,10 @@ export async function controlCctv(dataManager, args = {}, styleManager = null) {
   }
 
   if (action === 'enable' || action === 'disable') {
-    await dataManager.setEnabled('cctv', action === 'enable', {
-      origin: 'voice',
-    });
     return {
-      ok: true,
+      ok: false,
       action: 'control_cctv',
-      enabled: dataManager.isEnabled('cctv'),
+      error: 'Enable or disable CCTV through set_layer_visibility',
     };
   }
   if (!dataManager.isEnabled('cctv')) {

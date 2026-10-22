@@ -399,6 +399,17 @@ export function isLikelyNycCoordinate(lat, lon) {
   );
 }
 
+/** Hong Kong SAR extent, with slack for the outlying islands. */
+export function isLikelyHongKongCoordinate(lat, lon) {
+  return (
+    isPlausibleLatLon(lat, lon) &&
+    lat >= 22.15 &&
+    lat <= 22.6 &&
+    lon >= 113.8 &&
+    lon <= 114.45
+  );
+}
+
 /** Mainland Norway, with slack for the coast and the Finnmark border. */
 export function isLikelyNorwayCoordinate(lat, lon) {
   return (
@@ -647,4 +658,39 @@ export function isLikelyTorontoCoordinate(lat, lon) {
     lon >= -79.7 &&
     lon <= -79.1
   );
+}
+
+/**
+ * A camera URL under a pinned directory, by parsed URL rather than string
+ * prefix: the same scheme and exact host as `prefix`, no credentials, the
+ * default port, and a normalized path inside the prefix's directory. Dot
+ * segments (including encoded ones) and backslashes are resolved before the
+ * path is compared, and an encoded slash or backslash is refused.
+ *
+ * @param {string} raw - Camera URL from a catalog or redirect.
+ * @param {string} prefix - Pinned origin and directory, ending in `/`.
+ * @returns {string|null} The normalized URL, or null when it is not pinned.
+ */
+export function pinnedCameraUrl(raw, prefix) {
+  let url;
+  let pin;
+  try {
+    url = new URL(String(raw ?? '').trim());
+    pin = new URL(prefix);
+  } catch {
+    return null;
+  }
+  if (
+    url.protocol !== pin.protocol ||
+    url.hostname !== pin.hostname ||
+    url.username ||
+    url.password ||
+    url.port ||
+    !url.pathname.startsWith(
+      pin.pathname.endsWith('/') ? pin.pathname : `${pin.pathname}/`,
+    ) ||
+    /%2f|%5c/i.test(url.pathname)
+  )
+    return null;
+  return url.href;
 }
