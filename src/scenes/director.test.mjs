@@ -12,7 +12,6 @@ import { readShellSource } from '../testSupport/readShellSource.mjs';
 // cancellable — an AbortSignal for the data manager, a liveness predicate for
 // the visual commit. Several of these assert exactly that plumbing.
 import assert from 'node:assert/strict';
-import fs from 'node:fs';
 import test from 'node:test';
 
 import { SceneDirector } from './director.js';
@@ -1265,7 +1264,7 @@ test('applyVisualState gates the map-stack switch on both sides of its await', (
   // switch would otherwise stand on the globe.
   const source = readShellSource();
   const method = source.match(/\n {2}async applyVisualState\([\s\S]*?\n {2}\}\n/);
-  assert.ok(method, 'applyVisualState is missing from ui.js');
+  assert.ok(method, 'applyVisualState is missing from the UI shell source');
   assert.match(method[0], /async applyVisualState\(state = \{\}, \{ isCurrent = null \} = \{\}\)/);
 
   const mapStackBlock = method[0].match(/if \(state\.mapStack\) \{[\s\S]*?\n {4}\}/);

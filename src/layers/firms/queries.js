@@ -61,15 +61,23 @@ export function createQueries({
      */
     getStats() {
       const now = Date.now();
-      const staleAge = layerState._lastUpdate
-        ? components.model.formatAge(now - layerState._lastUpdate) || '<1h'
-        : '';
-      const staleText = staleAge
-        ? t('STALE · cached {age}', { age: staleAge })
-        : t('STALE');
+      const staleDelta = layerState._lastUpdate
+        ? now - layerState._lastUpdate
+        : null;
+      const staleText =
+        staleDelta != null
+          ? t('STALE · cached {age}', {
+              age:
+                components.model.formatAgeLabel(staleDelta) ||
+                t('<1h', { context: 'age' }),
+            })
+          : t('STALE');
       // `error` is English data (voice, analyst); the Layers panel shows it
       // in the UI language (ui/statusText.js).
-      const staleError = staleAge ? `STALE · cached ${staleAge}` : msg('STALE');
+      const staleError =
+        staleDelta != null
+          ? `STALE · cached ${components.model.formatAge(staleDelta) || '<1h'}`
+          : msg('STALE');
       let loadingLabel = '';
       if (layerState._loading) {
         loadingLabel = layerState._fires.length

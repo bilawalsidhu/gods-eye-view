@@ -112,6 +112,13 @@ export class VisualEffects {
     if (this.stopped || !stage) return;
     stage.uniforms.intensity = value;
     stage.enabled = value > 0.001;
+    // Anime's bands turn the faint Milky Way into blotches, and depth cannot
+    // tell the sky from far geometry, so the glow fades with the style.
+    if (
+      stage === this.stages.anime &&
+      this.viewer.scene.skyBox?.milkyWayVisibility !== undefined
+    )
+      this.viewer.scene.skyBox.milkyWayVisibility = 1 - value;
     if (stage.enabled && stage.uniforms.time !== undefined)
       this.startAnimationLoop();
     this.requestRender('style-stage');

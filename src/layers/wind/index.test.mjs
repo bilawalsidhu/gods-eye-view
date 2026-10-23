@@ -97,7 +97,7 @@ const complete = (model, extra = {}) => ({
 });
 test('local appearance and units reuse the loaded field; optional scalar requests remain separate', async () => {
   const requests = [];
-  const { layer, calls } = harness({
+  const { layer } = harness({
     getSnapshot: async (args) => {
       requests.push(args);
       return complete(
@@ -411,4 +411,37 @@ test('wind unit chips appear only alongside a speed legend, including canvas tra
   imageryError = 'Unavailable'; assert.deepEqual(unitChips(), []); imageryError = null;
   for (const overlay of ['pressure', 'temperature', 'none']) { layer.setParams({ overlay }); assert.deepEqual(unitChips(), []); }
   layer.destroy();
+});
+
+test('a parameter replacement during manager enable does not roll the layer back', async () => {
+  const { LayerLifecycle } = await import('../../data/lifecycle.js');
+  const pending = [];
+  const rendering = Object.fromEntries(
+    ['attach', 'start', 'stop', 'clear', 'destroy', 'setField'].map((name) => [
+      name,
+      () => {},
+    ]),
+  );
+  const layer = createWindLayer({
+    feed: {
+      getSnapshot: (args) =>
+        new Promise((resolve) => pending.push({ ...args, resolve })),
+    },
+    createRendering: () => rendering,
+  });
+  const manager = new LayerLifecycle({ container: {} });
+  manager.register(layer);
+  const enabled = manager.setEnabled('wind', true);
+  for (let i = 0; i < 20 && !pending.length; i++) await Promise.resolve();
+  layer.setParams({ model: 'ifs' });
+  await Promise.resolve();
+  pending[0].resolve(snapshot('gfs'));
+  assert.equal(await enabled, true);
+  assert.equal(manager.isEnabled('wind'), true);
+  assert.equal(layer.getStats().loading, true);
+  pending[1].resolve(snapshot('ifs'));
+  for (let i = 0; i < 10; i++) await Promise.resolve();
+  assert.equal(layer.getStats().model, 'IFS');
+  assert.equal(layer.getStats().count, 4);
+  await manager.destroyAll();
 });

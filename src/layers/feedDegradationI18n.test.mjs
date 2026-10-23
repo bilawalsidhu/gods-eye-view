@@ -94,7 +94,11 @@ const AIS_CASES = [
     'AISSTREAM_API_KEY not set',
     () => t('AISSTREAM_API_KEY not set'),
   ],
-  [{ status: 'connecting' }, 'connecting to feed…', () => t('connecting to feed…')],
+  [
+    { status: 'connecting' },
+    'connecting to feed…',
+    () => t('connecting to feed…'),
+  ],
   [{ status: 'closed' }, 'feed disconnected', () => t('feed disconnected')],
   [{ status: 'error' }, 'feed down', () => t('feed down')],
   [
@@ -170,11 +174,14 @@ for (const locale of ['es', 'ru']) {
     _setVesselStateForTest({ viewer: {}, records: [] });
     try {
       _beginAisSessionForTest();
-      _applyAisFeedSnapshotForTest({}, {
-        status: 'open',
-        lastMessageAt: 5,
-        rows: [],
-      });
+      _applyAisFeedSnapshotForTest(
+        {},
+        {
+          status: 'open',
+          lastMessageAt: 5,
+          rows: [],
+        },
+      );
       nowMs += AIS_FIRST_CONNECT_GRACE_MS;
       assertEnglishAndShown(
         locale,
@@ -239,7 +246,11 @@ for (const locale of ['es', 'ru']) {
     );
     assert.equal(
       inLocale(locale, () => methods.getStats().loadingLabel),
-      inLocale(locale, () => t('STALE · cached {age}', { age: '3h' })),
+      inLocale(locale, () =>
+        t('STALE · cached {age}', {
+          age: t('{count}h', { context: 'age', count: 3 }),
+        }),
+      ),
     );
   });
 }

@@ -1745,8 +1745,9 @@ async function runBehaviorLayer() {
       'behavior: analyst follow-up re-filters the remembered set',
       `count=${r?.count} followUp=${r?.coverage?.followUp}`,
     );
-    // A marine region resolves from the bundled Natural Earth pack in the page,
-    // without the slower geocode fallback.
+    // Require the bundled boundary source and the existing whole-query limit.
+    // This elapsed time includes record acquisition and filtering; the region
+    // resolver has its own separate fallback budget.
     const gulfStarted = Date.now();
     r = await run('analyst_query', {
       layers: ['flights'],
@@ -1757,9 +1758,10 @@ async function runBehaviorLayer() {
     report(
       r?.ok === true &&
         String(r?.coverage?.scope || '').includes('Gulf of Mexico') &&
+        r?.coverage?.scopeSource === 'natural-earth' &&
         gulfMs < 3000,
       'behavior: analyst resolves the Gulf of Mexico from the bundled pack',
-      `scope=${r?.coverage?.scope} ms=${gulfMs} err=${r?.error || ''}`,
+      `scope=${r?.coverage?.scope} source=${r?.coverage?.scopeSource} ms=${gulfMs} err=${r?.error || ''}`,
     );
 
     // (5) zoom_to_globe is ABSOLUTE full-earth (>12,000 km band)
