@@ -41,12 +41,12 @@ page.on('console', (message) => {
 page.on('pageerror', (error) => consoleErrors.push(error.message));
 page.on('response', (response) => {
   const url = new URL(response.url());
-  const expectedOptionalTrackMiss = response.status() === 404
-    && url.pathname === '/api/flights/track';
+  const expectedOptionalMiss = response.status() === 404
+    && ['/api/flights/track', '/api/google/tiles-token'].includes(url.pathname);
   if (
     url.origin === new URL(appUrl).origin
     && response.status() >= 400
-    && !expectedOptionalTrackMiss
+    && !expectedOptionalMiss
   ) {
     localHttpErrors.push(`${response.status()} ${url.pathname}`);
   }
@@ -66,7 +66,7 @@ try {
     // live orbit accuracy. Reuse the tracking suite's fixed element sets so
     // CelesTrak outages cannot invalidate an otherwise clean UI run.
     if (url.origin === new URL(appUrl).origin
-      && ['/api/celestrak/active', '/api/celestrak/starlink'].includes(url.pathname)) {
+      && url.pathname.startsWith('/api/celestrak/')) {
       const dense = url.pathname.endsWith('/starlink');
       request.respond({
         status: 200,
@@ -129,6 +129,22 @@ try {
         status: 200,
         contentType: 'application/json',
         body: JSON.stringify({ msg: 'No error', now: Date.now(), ac: [] }),
+      });
+      return;
+    }
+    // Layout and lifecycle checks need persistent contacts, not live traffic
+    // that can leave coverage or land halfway through the browser journey.
+    if (url.origin === new URL(appUrl).origin && url.pathname === '/api/flights') {
+      const now = Math.floor(Date.now() / 1000);
+      request.respond({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ time: now, states: [0, 1, 2].map((index) => [
+          ['aaa051', 'aaa052', 'aaa053'][index], 'QA' + (51 + index), 'Synthetic',
+          now, now, -97.7431 + index * 0.15, 30.2672 + index * 0.1,
+          9000 + index * 500, false, 230, 90, 0, null,
+          9000 + index * 500, null, false, 0,
+        ]) }),
       });
       return;
     }
@@ -666,7 +682,7 @@ try {
       tracked: Boolean(airborne && layer.trackById?.(airborne.id)),
     };
   });
-  check('real airborne flight is tracked before Contacts activation', tracked.tracked, JSON.stringify(tracked));
+  check('fixture airborne flight is tracked before Contacts activation', tracked.tracked, JSON.stringify(tracked));
   await page.waitForFunction(
     () => Boolean(window.__godsEyeView.viewer.trackedEntity?.position),
     { timeout: 10_000 },
@@ -1567,6 +1583,101 @@ try {
     manager._setCockpitDisclosure('radio', false);
   });
 
+  const dmhLocalInfo = await page.evaluate(() => {
+    const cockpit = window.__godsEyeView.styleManager.cockpitView;
+    const previous = cockpit.regionalBrief;
+    const previousPage = cockpit.briefPageIndex;
+    const info = { latitude: -25.28, longitude: -57.63 };
+    const fixture = {
+      status: 'partial', articles: [], place: { label: 'DMH QA' },
+      weather: { temperatureC: 24, weatherCode: 3 },
+      stationObservation: {
+        stationName: 'ASUNCION QA', distanceM: 1234,
+        observedAt: new Date().toISOString(),
+        temperatureC: 0, humidityPct: 0, windKph: 0, windDirectionDeg: 0,
+      },
+    };
+    try {
+      cockpit.regionalBrief = fixture;
+      cockpit.renderRegionalBrief(fixture, info);
+      cockpit.showBriefPage(2);
+      const station = document.getElementById('cockpit-local-observation');
+      const observed = !station.hidden
+        && station.textContent.includes('DMH / DINAC')
+        && station.textContent.includes('ASUNCION QA · 1.2 KM')
+        && station.textContent.includes('0.0°C · RH 0% · WIND 0 KM/H')
+        && station.textContent.includes('UTC')
+        && document.getElementById('cockpit-local-temperature').textContent === '24°C';
+      cockpit.renderRegionalBrief({ ...fixture, stationObservation: {
+        ...fixture.stationObservation,
+        observedAt: new Date(Date.now() - 91 * 60000).toISOString(),
+      } }, info);
+      const expired = station.hidden && !station.textContent;
+      cockpit.renderRegionalBrief(fixture, info);
+      cockpit.renderRegionalBriefStatus('loading', info);
+      return { observed, expired, cleared: station.hidden && !station.textContent };
+    } finally {
+      cockpit.regionalBrief = previous;
+      if (previous) cockpit.renderRegionalBrief(previous, previous.coordinates || info);
+      else cockpit.renderRegionalBriefStatus('loading', info);
+      cockpit.showBriefPage(previousPage);
+    }
+  });
+  check('Local Info separates DMH observations and clears expired or previous-subject readings',
+    dmhLocalInfo.observed && dmhLocalInfo.expired && dmhLocalInfo.cleared, dmhLocalInfo);
+
+  const smnLocalInfo = await page.evaluate(() => {
+    const cockpit = window.__godsEyeView.styleManager.cockpitView;
+    const previous = cockpit.regionalBrief;
+    const previousPage = cockpit.briefPageIndex;
+    const info = { latitude: -27.37, longitude: -55.9 };
+    const text = (id) => document.getElementById(id)?.textContent || '';
+    const fixture = {
+      status: 'partial', articles: [], place: { label: 'SMN QA' },
+      stationObservation: {
+        stationName: 'ENCARNACION QA', distanceM: 2000,
+        observedAt: new Date().toISOString(), temperatureC: 0, humidityPct: 0, windKph: 0,
+      },
+      weather: {
+        source: 'smn', temperatureC: 18.5, conditionText: 'Cubierto',
+        reportedAt: '2026-10-15T03:00',
+        station: { id: '87178', name: 'POSADAS AERO', distanceKm: 6.747 },
+      },
+    };
+    try {
+      cockpit.regionalBrief = fixture;
+      cockpit.renderRegionalBrief(fixture, info);
+      cockpit.showBriefPage(2);
+      const station = document.getElementById('cockpit-local-weather-station');
+      const observed = station && !station.hidden
+        && station.textContent.includes('POSADAS AERO · 6.7 KM FROM QUERY')
+        && station.href === 'https://www.smn.gob.ar/descarga-de-datos'
+        && text('cockpit-local-weather-time').includes('TIME ZONE UNSPECIFIED')
+        && !text('cockpit-local-weather-time').includes('UTC')
+        && text('cockpit-local-precipitation') === '—'
+        && text('cockpit-brief-source').includes('SMN STATION OBSERVATION')
+        && text('cockpit-brief-source').includes('DMH / DINAC')
+        && text('cockpit-local-observation').includes('ENCARNACION QA')
+        && text('cockpit-local-observation').includes('0.0°C');
+      cockpit.renderRegionalBrief({ ...fixture, weather: { temperatureC: 20, weatherCode: 0 } }, info);
+      const fallback = station.hidden && !station.textContent
+        && text('cockpit-local-weather-source') === 'OPEN-METEO'
+        && !document.getElementById('cockpit-local-observation').hidden
+        && text('cockpit-local-observation').includes('ENCARNACION QA');
+      cockpit.renderRegionalBriefStatus('loading', info);
+      return { observed, fallback, cleared: text('cockpit-local-temperature') === '—'
+        && document.getElementById('cockpit-local-observation').hidden
+        && !text('cockpit-local-observation') };
+    } finally {
+      cockpit.regionalBrief = previous;
+      if (previous) cockpit.renderRegionalBrief(previous, previous.coordinates || info);
+      else cockpit.renderRegionalBriefStatus('loading', info);
+      cockpit.showBriefPage(previousPage);
+    }
+  });
+  check('Local Info keeps SMN and DMH independent through model fallback and subject change',
+    smnLocalInfo.observed && smnLocalInfo.fallback && smnLocalInfo.cleared, smnLocalInfo);
+
   const visionCycle = await page.evaluate(async () => {
     const manager = window.__godsEyeView.styleManager;
     const cockpit = manager.cockpitView;
@@ -2057,7 +2168,16 @@ try {
     JSON.stringify(cyberStyleStates));
   for (const height of [987, 720, 640, 900]) {
     await page.setViewport({ width: 1440, height, deviceScaleFactor: 1 });
-    await new Promise((resolve) => setTimeout(resolve, 400));
+    // Software rendering may need more than one frame to settle the resize.
+    // Keep the geometry assertions below authoritative if the wait expires.
+    await page.waitForFunction(() => {
+      const signal = document.getElementById('cockpit-signal-stream');
+      const utility = document.querySelector('#cockpit-utility-controls .cockpit-utility-control.is-expanded');
+      if (!signal || !utility) return false;
+      const s = signal.getBoundingClientRect();
+      const u = utility.getBoundingClientRect();
+      return u.bottom <= s.top - 7 && s.bottom < innerHeight;
+    }, { timeout: 10_000 }).catch(() => {});
     const geometry = await page.evaluate(() => {
       const signal = document.getElementById('cockpit-signal-stream');
       const utility = document.getElementById('cockpit-utility-controls');

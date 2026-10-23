@@ -190,9 +190,22 @@ export class CockpitViewController {
     );
     this.localCondition = document.getElementById('cockpit-local-condition');
     this.localCloud = document.getElementById('cockpit-local-cloud');
+    this.localObservation = document.getElementById(
+      'cockpit-local-observation',
+    );
     this.localPrecipitation = document.getElementById(
       'cockpit-local-precipitation',
     );
+    this.localWeatherSource = document.getElementById(
+      'cockpit-local-weather-source',
+    );
+    this.localWeatherStation = document.getElementById(
+      'cockpit-local-weather-station',
+    );
+    this.localWeatherTime = document.getElementById(
+      'cockpit-local-weather-time',
+    );
+    this.localWeatherCredit = document.getElementById('cockpit-weather-credit');
     this.signalCollapsed = false;
     this.signalUserCollapsed = false;
     this.signalItems = [];

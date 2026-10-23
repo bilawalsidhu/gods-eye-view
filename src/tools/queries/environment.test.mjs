@@ -101,6 +101,44 @@ test('the regional brief returns place, weather and at most ten headlines', asyn
   });
 });
 
+test('regional station observations retain provenance and do not acquire an invented UTC timestamp', async () => {
+  const regional = {
+    getBrief: async () => ({
+      weather: {
+        source: 'smn',
+        sourceUrl: 'https://www.smn.gob.ar/descarga-de-datos',
+        kind: 'station-observation',
+        temperatureC: 18.5,
+        conditionText: 'Nublado',
+        reportedAt: '2026-10-15T03:00',
+        timeZone: null,
+        station: {
+          id: '87178',
+          name: 'POSADAS AERO',
+          latitude: -27.383,
+          longitude: -55.967,
+          distanceKm: 6.747,
+        },
+        humidityPct: 92,
+        stationPressureHpa: 998.5,
+      },
+    }),
+  };
+  const result = await catalogWith({ regional }).call('get_regional_brief', {
+    location: { lat: -27.37, lon: -55.9 },
+  });
+  assert.equal(result.data.weather.source, 'smn');
+  assert.equal(result.data.weather.observed_at, null);
+  assert.equal(result.data.weather.time_zone, null);
+  assert.equal(result.data.weather.reported_at, '2026-10-15T03:00');
+  assert.equal(result.data.weather.station.distance_km, 6.7);
+  assert.equal(result.data.weather.conditions, 'Nublado');
+  assert.equal(result.data.weather.weather_code, null);
+  assert.equal(result.data.weather.precipitation_mm, null);
+  assert.match(result.summary, /SMN station POSADAS AERO, 6.7 km from query/);
+  assert.match(result.summary, /time zone unspecified/);
+});
+
 const storm = (id, name, latitude, longitude, windKt) => ({
   id,
   name,
@@ -870,4 +908,65 @@ test('installation names wait for the name pack, briefly', async (t) => {
   assert.equal(slow.data.rows[0].name, 'Military area');
   assert.equal(slow.data.names_pending, true);
   assert.match(slow.summary, /site names are still loading\)\.$/);
+});
+
+test('regional briefs preserve DMH station attribution separately from forecast weather', async () => {
+  const observation = {
+    source: 'DMH / DINAC',
+    stationName: 'Fixture',
+    distanceM: 2500,
+    observedAt: '2026-10-15T06:00:00Z',
+    temperatureC: 20,
+  };
+  const regional = {
+    getBrief: async () => ({
+      weather: conditions,
+      stationObservation: observation,
+      stationObservationStatus: 'ready',
+      articles: [],
+    }),
+  };
+  const result = await catalogWith({ regional }).call('get_regional_brief', {
+    location: { lat: -25.3, lon: -57.6 },
+  });
+  assert.equal(result.data.weather.temperature_c, 26.3);
+  assert.deepEqual(result.data.station_observation, observation);
+  assert.equal(result.data.station_observation_status, 'ready');
+});
+
+test('regional tool preserves both SMN and DMH provenance without mixing values or clocks', async () => {
+  const stationObservation = {
+    source: 'DMH / DINAC',
+    stationName: 'ENCARNACION',
+    distanceM: 2000,
+    observedAt: '2026-10-17T12:00:00Z',
+    temperatureC: 0,
+  };
+  const result = await catalogWith({
+    regional: {
+      getBrief: async () => ({
+        weather: {
+          source: 'smn',
+          kind: 'station-observation',
+          temperatureC: 18,
+          reportedAt: '2026-10-17T09:00',
+          observedAt: null,
+          timeZone: null,
+          station: { id: '87178', name: 'POSADAS AERO', distanceKm: 6.7 },
+        },
+        stationObservation,
+        stationObservationStatus: 'ready',
+        articles: [],
+      }),
+    },
+  }).call('get_regional_brief', { location: { lat: -27.37, lon: -55.9 } });
+  assert.equal(result.data.weather.source, 'smn');
+  assert.equal(result.data.weather.temperature_c, 18);
+  assert.equal(result.data.weather.reported_at, '2026-10-17T09:00');
+  assert.equal(result.data.weather.observed_at, null);
+  assert.equal(result.data.weather.time_zone, null);
+  assert.deepEqual(result.data.station_observation, stationObservation);
+  assert.equal(result.data.station_observation_status, 'ready');
+  assert.match(result.summary, /SMN station POSADAS AERO/);
+  assert.match(result.summary, /time zone unspecified/);
 });

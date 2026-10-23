@@ -436,7 +436,7 @@
   "MILITARY FLIGHT": "ВОЕННЫЙ РЕЙС",
   "COMMERCIAL FLIGHT": "ГРАЖДАНСКИЙ РЕЙС",
   "{aircraftClass} · {distance}": "{aircraftClass} · {distance}",
-  "DISTANCE UNKNOWN": "ДИСТАНЦИЯ НЕИЗВЕСТНА",
+  "DISTANCE UNKNOWN": "РАССТОЯНИЕ НЕИЗВЕСТНО",
   "{count} INPUTS UNKNOWN": {
     "one": "{count} ИСТОЧНИК ДАННЫХ НЕИЗВЕСТЕН",
     "few": "{count} ИСТОЧНИКА ДАННЫХ НЕИЗВЕСТНЫ",
@@ -3010,5 +3010,20 @@
   "hemisphere|E": "В",
   "hemisphere|W": "З",
   "OK": "НОРМА",
-  "{category} ({count})": "{category} ({count})"
+  "{category} ({count})": "{category} ({count})",
+  "NATURAL EARTH · OPEN-METEO · UTC": "NATURAL EARTH · OPEN-METEO · ВРЕМЯ UTC",
+  "RH {percent}%": "ОВ {percent}%",
+  "DMH / DINAC · STATION OBSERVATION": "DMH / DINAC · НАБЛЮДЕНИЕ СТАНЦИИ",
+  "{station} · {distance} KM FROM LOCATION": "{station} · В {distance} КМ ОТ ТОЧКИ",
+  "{distance} KM FROM QUERY": "В {distance} КМ ОТ ТОЧКИ ЗАПРОСА",
+  "MODEL {time} UTC": "МОДЕЛЬ {time} UTC",
+  "REPORTED {time} · TIME ZONE UNSPECIFIED": "СООБЩЕНО {time} · ЧАСОВОЙ ПОЯС НЕ УКАЗАН",
+  "WIND {speed} KM/H {direction}": "ВЕТЕР {speed} КМ/Ч {direction}",
+  "UNKNOWN STATION": "НЕИЗВЕСТНАЯ СТАНЦИЯ",
+  "Ground station {id}; conditions may differ at the selected position and flight altitude.": "Наземная станция {id}; условия в выбранной точке и на высоте полёта могут отличаться.",
+  "SMN OBS": "НАБЛ. SMN",
+  "NATURAL EARTH · WEATHER UNAVAILABLE": "NATURAL EARTH · МЕТЕОДАННЫЕ НЕДОСТУПНЫ",
+  "Atmospheric model by Open-Meteo.com": "Атмосферная модель Open-Meteo.com",
+  "NATURAL EARTH · SMN STATION OBSERVATION": "NATURAL EARTH · НАБЛЮДЕНИЕ СТАНЦИИ SMN",
+  "SMN · {station} · {distance}": "SMN · Станция {station} · {distance}"
 }
