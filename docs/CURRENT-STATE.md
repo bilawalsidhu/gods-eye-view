@@ -1379,6 +1379,32 @@ The right rail skips panels hidden by other CSS (computed `display: none`), but
 keeps the collapsed panels its own exclusive presentation hides, so automatic
 collapse can still be undone.
 
+## Phone layout
+
+At 720px and narrower, `src/ui/mobileShell.js` keeps the globe full screen and
+shows a bottom tab bar: Layers (Data Layers, with Scenes collapsed below),
+Cameras (CCTV and Street Level), Context (Global Context, plus Weather and
+Recent Imagery when shown), Search (Location) and More (Visual Presets and Map
+Source above Display). A tab opens one bottom sheet; the same tab, the backdrop
+or Escape closes it, and focus moves into the sheet and back to its tab. Panels
+are not moved in the DOM: `styles/mobile-shell.css` presents the rails and dock
+as the sheet, and the dock's Location and Presets trays render inline. The voice
+control floats above the tab bar while no sheet is open.
+
+Sheets borrow panels. Opening one expands its panels without persisting them or
+claiming a user choice, and share links keep reporting each borrowed panel's
+state from before the sheet; closing puts back what opening changed, while a
+panel the user changed inside the sheet stays as they left it. Escape closes the
+sheet before a panel's own Escape handling, and the dock's hover auto-close does
+not apply inside a sheet.
+Cockpit, recording and clean view close the sheet and hide the tab bar; scene
+playback keeps both so its STOP control in the Scenes panel stays reachable. The
+right rail neither hides collapsed siblings nor applies Cyber's one-panel
+accordion at these widths, since the sheet chooses what shows. The Cesium and Google attribution stays visible above the
+voice control, and above an open sheet. The page draws under the notch and
+system bars (`viewport-fit=cover`) and the shell's chrome uses safe-area insets.
+Wider viewports are unchanged, and crossing to them closes any open sheet.
+
 ## Surface keyboard lifecycle
 
 Surface Tab cycling excludes controls with a negative tabindex, native disabled
