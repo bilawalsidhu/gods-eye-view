@@ -2,6 +2,7 @@
  * Browser Geolocation helpers for one-shot fly-to and optional live follow.
  * Uses navigator.geolocation only — no Google / Cesium ion keys required.
  */
+import { t } from './i18n/index.js';
 
 export const GEOLOCATION_UNAVAILABLE = 'unavailable';
 export const GEOLOCATION_DENIED = 'denied';
@@ -60,15 +61,15 @@ export function classifyGeolocationError(err) {
 export function geolocationErrorMessage(code) {
   switch (code) {
     case GEOLOCATION_UNAVAILABLE:
-      return 'Location not supported in this browser';
+      return t('Location not supported in this browser');
     case GEOLOCATION_DENIED:
-      return 'Location permission denied';
+      return t('Location permission denied');
     case GEOLOCATION_TIMEOUT:
-      return 'Location request timed out';
+      return t('Location request timed out');
     case GEOLOCATION_POSITION_UNAVAILABLE:
-      return 'Location unavailable';
+      return t('Location unavailable');
     default:
-      return 'Could not get your location';
+      return t('Could not get your location');
   }
 }
 

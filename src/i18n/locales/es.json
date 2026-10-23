@@ -2897,5 +2897,8 @@
   "Following you — your position is added to the link (hold to stop)": "Siguiéndote — tu posición se añade al enlace (mantén pulsado para detener)",
   "Following your location": "Siguiendo tu ubicación",
   "My location (click: go there; hold: follow) — your position is added to the link": "Mi ubicación (clic: ir allí; mantener pulsado: seguir) — tu posición se añade al enlace",
-  "My location": "Mi ubicación"
+  "My location": "Mi ubicación",
+  "Location permission denied": "Permiso de ubicación denegado",
+  "Location request timed out": "La petición de ubicación agotó el tiempo de espera",
+  "Location unavailable": "Ubicación no disponible"
 }

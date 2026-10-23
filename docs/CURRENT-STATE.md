@@ -4,8 +4,10 @@ Browser "My location" is keyboard accessible and honors camera ownership: follow
 stops when any newer navigation, Cockpit entry or tracking hand-off takes the
 camera, frames against sampled ground height, and pauses its live watch while the
 tab is hidden. Fly-to is Enter/Space; follow is Shift+Enter/Space. The "You"
-marker label renders through the world-overlay host. Your position is sent to
-the share link when you copy it while following.
+marker label renders through the world-overlay host. While following, each fix
+moves the camera and the share link manager rewrites the address bar with the
+camera position, so your location is in the live URL and in any copied link,
+not only when you copy it.
 
 Vessel sources can report healthy empty coverage using a current, complete
 snapshot with zero raw rows, a healthy transport and a positive last-message

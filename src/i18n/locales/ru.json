@@ -2964,5 +2964,8 @@
   "Following you — your position is added to the link (hold to stop)": "Следим за вами — ваша позиция добавляется в ссылку (удерживайте, чтобы остановить)",
   "Following your location": "Следим за вашим местоположением",
   "My location (click: go there; hold: follow) — your position is added to the link": "Моё местоположение (нажатие: перелёт туда; удержание: слежка) — ваша позиция добавляется в ссылку",
-  "My location": "Моё местоположение"
+  "My location": "Моё местоположение",
+  "Location permission denied": "Доступ к местоположению запрещён",
+  "Location request timed out": "Истекло время ожидания запроса местоположения",
+  "Location unavailable": "Местоположение недоступно"
 }

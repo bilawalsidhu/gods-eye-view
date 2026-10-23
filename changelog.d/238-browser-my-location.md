@@ -3,5 +3,6 @@
   while the tab is hidden. Insecure contexts disable the button, keyboard users
   reach fly-to (Enter/Space) and follow (Shift+Enter/Space), and the "You" label
   renders through the world-overlay host instead of Cesium labels. Denials stop
-  follow; timeouts toast once and keep watching. The followed position is
-  included when you copy the share link (hemna, #238).
+  follow; timeouts toast once and keep watching. The followed position, like
+  any camera position, is written into the address bar on each camera change,
+  so the live URL and any copied or bookmarked link carry it (hemna, #238).
