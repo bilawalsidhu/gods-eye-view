@@ -1959,6 +1959,7 @@
   "temperature-layer": {
     "exports": ["./layers/temperature"],
     "modules": [
+      "src/i18n/locales/zh-CN.json",
       "src/i18n/index.js",
       "src/i18n/locales/ru.json",
       "src/i18n/locales/es.json",
