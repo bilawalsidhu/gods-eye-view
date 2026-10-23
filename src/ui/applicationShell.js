@@ -864,7 +864,36 @@ export class StyleManager extends ShellFacade {
       setPanelCollapsed: (panelId, collapsed, options) =>
         this._panelChrome.setPanelCollapsed(panelId, collapsed, options),
       onSheetsClosed: () => this._syncShareState(),
+      onTabOpened: (sheet) => {
+        void this._onMobileTabOpened(sheet);
+      },
     });
+  }
+
+  /** Reveal a tracked aircraft through Contacts when its phone tab is opened. */
+  async _onMobileTabOpened(sheet) {
+    const context = this.getContextModeState();
+    if (
+      sheet !== 'context' ||
+      this._disposed ||
+      !context ||
+      context.mode ||
+      context.changing ||
+      context.entering ||
+      !this.getAircraftTrackingTarget()
+    )
+      return false;
+    try {
+      const result = await this.setContextMode('contacts');
+      if (result?.ok) return true;
+      if (result?.cancelled || this._disposed) return false;
+    } catch {
+      if (this._disposed) return false;
+    }
+    this._showToast(
+      t('Contacts could not complete the requested transition; try again'),
+    );
+    return false;
   }
 
   /**

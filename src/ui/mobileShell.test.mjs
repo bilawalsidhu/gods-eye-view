@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
+import { StyleManager } from './applicationShell.js';
+import { ContextControls } from './contextControls.js';
 import {
   MOBILE_SHEET_PANELS,
   MOBILE_TABS,
@@ -21,6 +23,8 @@ function element(tag, document) {
     textContent: '',
     className: '',
     parent: null,
+    scrollTop: 0,
+    parentElement: null,
     classList: {
       add: (...names) => names.forEach((name) => classes.add(name)),
       remove: (...names) => names.forEach((name) => classes.delete(name)),
@@ -41,6 +45,7 @@ function element(tag, document) {
     append(...children) {
       for (const child of children) {
         child.parent = node;
+        child.parentElement = node;
         node.children.push(child);
         if (child.id) document.ids.set(child.id, child);
       }
@@ -56,9 +61,20 @@ function element(tag, document) {
       return false;
     },
     closest(selector) {
-      for (let current = node; current; current = current.parent)
+      for (let current = node; current; current = current.parent) {
+        if (
+          selector.startsWith('button, a') &&
+          (['BUTTON', 'A', 'INPUT', 'SELECT', 'TEXTAREA', 'LABEL'].includes(
+            current.tagName,
+          ) ||
+            ['slider', 'button'].includes(current.getAttribute('role')) ||
+            (current.getAttribute('contenteditable') !== null &&
+              current.getAttribute('contenteditable') !== 'false'))
+        )
+          return current;
         if (selector === '[data-mobile-sheet]' && current.dataset.mobileSheet)
           return current;
+      }
       return null;
     },
     querySelectorAll(selector) {
@@ -94,7 +110,11 @@ function element(tag, document) {
 
 const PANEL_IDS = [...new Set(Object.values(MOBILE_SHEET_PANELS).flat())];
 
-function fixture({ mobile = true, expanded = [] } = {}) {
+function fixture({
+  mobile = true,
+  expanded = [],
+  onTabOpened = () => {},
+} = {}) {
   const document = new EventTarget();
   document.ids = new Map();
   document.createElement = (tag) => element(tag, document);
@@ -112,6 +132,12 @@ function fixture({ mobile = true, expanded = [] } = {}) {
   const search = element('input', document);
   search.id = 'location-search';
   document.body.append(search);
+  const rails = {};
+  for (const id of ['left-panel-stack', 'right-context-rail', 'command-dock']) {
+    rails[id] = element('div', document);
+    rails[id].id = id;
+    document.body.append(rails[id]);
+  }
   for (const id of PANEL_IDS) {
     const panel = element('section', document);
     panel.id = id;
@@ -123,7 +149,13 @@ function fixture({ mobile = true, expanded = [] } = {}) {
     const collapse = element('button', document);
     collapse.className = 'panel-collapse-btn';
     panel.append(toggle, collapse, element('button', document));
-    document.body.append(panel);
+    const root =
+      id === 'data-panel'
+        ? 'left-panel-stack'
+        : ['location-bar', 'control-panel'].includes(id)
+          ? 'command-dock'
+          : 'right-context-rail';
+    rails[root].append(panel);
   }
 
   const media = new EventTarget();
@@ -143,6 +175,7 @@ function fixture({ mobile = true, expanded = [] } = {}) {
   }
   const shell = initMobileShell({
     documentRef: document,
+    onTabOpened,
     matchMedia: () => media,
     MutationObserverImpl: FakeMutationObserver,
     ResizeObserverImpl: null,
@@ -480,4 +513,353 @@ test('the phone shell keeps the required attribution visible', () => {
   );
   assert.ok(z(sheetCredit) > z(openDock));
   assert.ok(z(sheetCredit) > z(railSheet));
+});
+
+function touchEvent(
+  document,
+  type,
+  target,
+  { x = 10, y = 10, count = 1, id = 1, cancelable = true } = {},
+) {
+  const event = new Event(type, { cancelable });
+  const touch = { identifier: id, clientX: x, clientY: y };
+  Object.defineProperty(event, 'target', { value: target });
+  event.touches =
+    type === 'touchend' || type === 'touchcancel'
+      ? []
+      : Array.from({ length: count }, (_, i) => ({
+          ...touch,
+          identifier: id + i,
+        }));
+  event.changedTouches = [touch];
+  document.dispatchEvent(event);
+  return event;
+}
+
+test('downward sheet pull closes through borrowed-panel lifecycle and returns tab focus', () => {
+  for (const sheet of Object.keys(MOBILE_SHEET_PANELS)) {
+    const phone = fixture();
+    const { document, shell, press, tab } = phone;
+    press(sheet);
+    const target = document.getElementById(MOBILE_SHEET_PANELS[sheet][0]);
+    touchEvent(document, 'touchstart', target);
+    const move = touchEvent(document, 'touchmove', target, { y: 90 });
+    assert.equal(move.defaultPrevented, true);
+    assert.equal(shell.getSheet(), sheet, 'waits until finger lifts');
+    touchEvent(document, 'touchend', target, { y: 90 });
+    assert.equal(shell.getSheet(), null);
+    assert.equal(phone.closedCount(), 1);
+    assert.equal(document.activeElement, tab(sheet));
+    for (const id of MOBILE_SHEET_PANELS[sheet])
+      assert.equal(phone.collapsed(id), true);
+    assert.ok(
+      phone.calls.every(
+        (call) => call.persist === false && call.syncShare === false,
+      ),
+    );
+    shell.destroy();
+  }
+});
+
+test('content scroll stays native, including a scroll that reaches the top mid-gesture', () => {
+  for (const nested of [false, true]) {
+    const { document, shell, press } = fixture();
+    press('layers');
+    const panel = document.getElementById('data-panel');
+    const scroller = nested
+      ? panel
+      : document.getElementById('left-panel-stack');
+    scroller.scrollTop = 40;
+    touchEvent(document, 'touchstart', panel);
+    scroller.scrollTop = 0;
+    assert.equal(
+      touchEvent(document, 'touchmove', panel, { y: 120 }).defaultPrevented,
+      false,
+    );
+    touchEvent(document, 'touchend', panel, { y: 120 });
+    assert.equal(shell.getSheet(), 'layers');
+    shell.destroy();
+  }
+});
+
+test('taps, short pulls, upward and horizontal gestures never dismiss', () => {
+  for (const path of [
+    [],
+    [{ x: 12, y: 14 }],
+    [{ y: 40 }],
+    [{ y: -30 }, { y: 120 }],
+    [{ x: 60, y: 12 }, { y: 120 }],
+  ]) {
+    const { document, shell, press } = fixture();
+    press('layers');
+    const panel = document.getElementById('data-panel');
+    touchEvent(document, 'touchstart', panel);
+    for (const point of path) touchEvent(document, 'touchmove', panel, point);
+    touchEvent(document, 'touchend', panel, path.at(-1) ?? {});
+    assert.equal(shell.getSheet(), 'layers');
+    shell.destroy();
+  }
+});
+
+test('native controls and custom sliders keep touch gestures', () => {
+  for (const tag of [
+    'button',
+    'a',
+    'input',
+    'select',
+    'textarea',
+    'label',
+    'slider',
+    'editable',
+  ]) {
+    const { document, shell, press } = fixture();
+    press('more');
+    const control = document.createElement(
+      ['slider', 'editable'].includes(tag) ? 'div' : tag,
+    );
+    if (tag === 'slider') control.setAttribute('role', 'slider');
+    if (tag === 'editable') control.setAttribute('contenteditable', 'true');
+    const child = document.createElement('span');
+    control.append(child);
+    document.getElementById('control-panel').append(control);
+    touchEvent(document, 'touchstart', child);
+    assert.equal(
+      touchEvent(document, 'touchmove', child, { y: 120 }).defaultPrevented,
+      false,
+    );
+    touchEvent(document, 'touchend', child, { y: 120 });
+    assert.equal(shell.getSheet(), 'more');
+    shell.destroy();
+  }
+});
+
+test('multitouch, cancellation, sheet changes and desktop transitions abandon the gesture', () => {
+  for (const cancel of [
+    'multitouch',
+    'cancel',
+    'sheet',
+    'desktop',
+    'noncancelable',
+  ]) {
+    const { document, shell, press, resize } = fixture();
+    press('layers');
+    const panel = document.getElementById('data-panel');
+    touchEvent(document, 'touchstart', panel);
+    if (cancel === 'multitouch')
+      touchEvent(document, 'touchstart', document.body, { count: 2 });
+    if (cancel === 'cancel') touchEvent(document, 'touchcancel', panel);
+    if (cancel === 'sheet') press('context');
+    if (cancel === 'desktop') {
+      resize(false);
+      resize(true);
+      press('layers');
+    }
+    if (cancel === 'noncancelable')
+      touchEvent(document, 'touchmove', panel, { y: 30, cancelable: false });
+    assert.equal(
+      touchEvent(document, 'touchmove', panel, { y: 120 }).defaultPrevented,
+      false,
+    );
+    touchEvent(document, 'touchend', panel, { y: 120 });
+    assert.equal(shell.getSheet(), cancel === 'sheet' ? 'context' : 'layers');
+    shell.destroy();
+  }
+});
+
+test('touches outside the active sheet and destroyed listeners cannot dismiss or claim a gesture', () => {
+  const { document, shell, press } = fixture();
+  press('layers');
+  const hiddenPanel = document.getElementById('global-context-panel');
+  touchEvent(document, 'touchstart', hiddenPanel);
+  assert.equal(
+    touchEvent(document, 'touchmove', hiddenPanel, { y: 120 }).defaultPrevented,
+    false,
+  );
+  touchEvent(document, 'touchend', hiddenPanel, { y: 120 });
+  assert.equal(shell.getSheet(), 'layers');
+  const panel = document.getElementById('data-panel');
+  touchEvent(document, 'touchstart', panel);
+  shell.destroy();
+  assert.equal(
+    touchEvent(document, 'touchmove', panel, { y: 120 }).defaultPrevented,
+    false,
+  );
+  touchEvent(document, 'touchend', panel, { y: 120 });
+  assert.equal(shell.getSheet(), null);
+});
+
+test('the tab-open callback reports only a successful manual opening', () => {
+  const opened = [];
+  const phone = fixture({ onTabOpened: (sheet) => opened.push(sheet) });
+  phone.shell.setSheet('context');
+  assert.deepEqual(opened, []);
+  phone.press('context');
+  assert.deepEqual(opened, [], 'closing is not a new context request');
+  phone.press('context');
+  assert.deepEqual(opened, ['context']);
+  phone.setBodyClass('cockpit-mode');
+  phone.press('context');
+  assert.deepEqual(
+    opened,
+    ['context'],
+    'blocked sheets cannot activate a mode',
+  );
+  phone.shell.destroy();
+});
+
+test('manual Context opens the existing transaction without disabling the tracked aircraft', async () => {
+  const calls = [];
+  const tracked = { layerId: 'flights', icao24: 'abc123', callsign: 'EJA225' };
+  const viewer = { trackedEntity: { gevTrackedId: 'flights:abc123' } };
+  const entity = viewer.trackedEntity;
+  const enabled = new Set(['flights', 'weather']);
+  const controls = new ContextControls({
+    elements: {},
+    installations: {},
+    actions: {
+      getCockpit: () => null,
+      claimVisualAuthority: () => calls.push('claim'),
+      syncDetection() {},
+      scheduleLayout() {},
+      showToast() {},
+    },
+  });
+  controls.connect({
+    layers: new Map(
+      ['flights', 'weather', 'military-awareness'].map((id) => [id, {}]),
+    ),
+    getEnabledLayerIds: () => [...enabled],
+    getLayerParams: () => ({}),
+    isEffectivelyEnabled: (id) => enabled.has(id),
+    isEnabled: (id) => enabled.has(id),
+    setLayerParams: (id, params) => calls.push({ id, params }),
+    setEnabled: async (id, value) => {
+      calls.push({ id, value });
+      if (!value) enabled.delete(id);
+      if (id === 'flights' && !value) viewer.trackedEntity = null;
+      return true;
+    },
+    _setEnabledWithIntent: (id, value) => {
+      calls.push({ id, value });
+      enabled.add(id);
+      return { intentEpoch: 1, promise: Promise.resolve(true) };
+    },
+  });
+  const shell = {
+    cockpitView: {
+      readAircraftInfo: () => (viewer.trackedEntity ? tracked : null),
+    },
+    getAircraftTrackingTarget: StyleManager.prototype.getAircraftTrackingTarget,
+    getContextModeState: () => controls.getContextModeState(),
+    setContextMode: (mode) => controls.setContextMode(mode),
+    _showToast: () => assert.fail('successful entry must not report a failure'),
+  };
+  try {
+    assert.equal(
+      await StyleManager.prototype._onMobileTabOpened.call(shell, 'context'),
+      true,
+    );
+    assert.equal(controls.getContextModeState().mode, 'flights');
+    assert.equal(viewer.trackedEntity, entity);
+    assert.deepEqual(shell.getAircraftTrackingTarget(), {
+      layerId: 'flights',
+      id: 'abc123',
+    });
+    assert.ok(enabled.has('flights'));
+    assert.ok(
+      calls.some(
+        (call) => call.id === 'military-awareness' && call.value === true,
+      ),
+    );
+    assert.ok(!calls.some((call) => call.id === 'flights'));
+    const count = calls.length;
+    assert.equal(
+      await StyleManager.prototype._onMobileTabOpened.call(shell, 'context'),
+      false,
+    );
+    assert.equal(
+      calls.length,
+      count,
+      'an already active Contacts session is not restarted',
+    );
+  } finally {
+    controls.stop();
+    controls.disconnect();
+  }
+});
+
+test('manual Context respects Space Missions, busy transitions, missing tracks and disposal', async () => {
+  for (const state of [
+    { mode: 'space-missions' },
+    { mode: 'flights' },
+    { changing: true },
+    { entering: 'space-missions' },
+    { noTrack: true },
+    { disposed: true },
+    { sheet: 'layers' },
+  ]) {
+    const shell = {
+      _disposed: state.disposed,
+      getContextModeState: () => state,
+      getAircraftTrackingTarget: () =>
+        state.noTrack ? null : { layerId: 'flights', id: 'abc123' },
+      setContextMode: () =>
+        assert.fail('guarded tab must not mutate Context or tracking'),
+    };
+    assert.equal(
+      await StyleManager.prototype._onMobileTabOpened.call(
+        shell,
+        state.sheet || 'context',
+      ),
+      false,
+    );
+  }
+});
+
+test('failed mobile Contacts entry uses the existing notice and cancelled/disposed entries stay quiet', async () => {
+  for (const outcome of ['failure', 'throw', 'cancelled', 'disposed']) {
+    const notices = [];
+    const shell = {
+      getContextModeState: () => ({ mode: null }),
+      getAircraftTrackingTarget: () => ({ layerId: 'flights', id: 'abc123' }),
+      setContextMode: async () => {
+        if (outcome === 'throw') throw new Error('source unavailable');
+        if (outcome === 'disposed') shell._disposed = true;
+        return { ok: false, cancelled: outcome === 'cancelled' };
+      },
+      _showToast: (message) => notices.push(message),
+    };
+    assert.equal(
+      await StyleManager.prototype._onMobileTabOpened.call(shell, 'context'),
+      false,
+    );
+    assert.equal(
+      notices.length,
+      ['failure', 'throw'].includes(outcome) ? 1 : 0,
+    );
+  }
+});
+
+test('a slow downward pull is claimed before Android native scroll takes ownership', () => {
+  const { document, shell, press } = fixture();
+  press('layers');
+  const panel = document.getElementById('data-panel');
+  touchEvent(document, 'touchstart', panel, { y: 100 });
+  assert.equal(
+    touchEvent(document, 'touchmove', panel, { y: 102 }).defaultPrevented,
+    false,
+    'tap jitter is left native',
+  );
+  assert.equal(
+    touchEvent(document, 'touchmove', panel, { y: 109.3 }).defaultPrevented,
+    true,
+    'cancel the first directional move while Android still allows it',
+  );
+  assert.equal(
+    touchEvent(document, 'touchmove', panel, { y: 131 }).defaultPrevented,
+    true,
+  );
+  touchEvent(document, 'touchend', panel, { y: 175 });
+  assert.equal(shell.getSheet(), null);
+  shell.destroy();
 });

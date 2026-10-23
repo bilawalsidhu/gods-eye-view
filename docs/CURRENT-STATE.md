@@ -1399,10 +1399,25 @@ shows a bottom tab bar: Layers (Data Layers, with Scenes collapsed below),
 Cameras (CCTV and Street Level), Context (Global Context, plus Weather and
 Recent Imagery when shown), Search (Location) and More (Visual Presets and Map
 Source above Display). A tab opens one bottom sheet; the same tab, the backdrop
-or Escape closes it, and focus moves into the sheet and back to its tab. Panels
+or Escape closes it, and focus moves into the sheet and back to its tab. A
+downward swipe of at least 64px on non-control sheet content also closes it,
+when every scroll container under the finger starts at the top. Ordinary
+vertical scrolling, horizontal gestures, controls and multitouch stay native;
+a cancelled gesture or a sheet/viewport change cannot dismiss another sheet. Panels
 are not moved in the DOM: `styles/mobile-shell.css` presents the rails and dock
 as the sheet, and the dock's Location and Presets trays render inline. The voice
 control floats above the tab bar while no sheet is open.
+
+The phone logo is 58px wide (about 39px high), aligned with the top controls.
+The shared contact picker preserves exact picks. For a coarse primary pointer
+that misses onto the map surface, it searches at most eight hits in a 14px square
+and accepts the first registered layer hit, stopping at non-map objects. Civil
+and military aircraft and vessels share this rule; fine pointers stay exact.
+
+Manually opening Context with a tracked civilian or military aircraft enters
+the existing Contacts mode when Context is off. Contacts adopts that aircraft
+without restarting its tracking; an active or entering Space Missions mode is
+left alone. Programmatic sheet changes and closing the tab do not activate a mode.
 
 Sheets borrow panels. Opening one expands its panels without persisting them or
 claiming a user choice, and share links keep reporting each borrowed panel's
