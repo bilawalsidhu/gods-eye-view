@@ -5,6 +5,6 @@
   ICAO · IATA · operator and civil/military type. New Bodø Airport, under
   construction, is drawn in amber: site, 2,750 m runway and terminal, with
   Avinor's planned 2029 opening. `scripts/build-airports-norway.py` rebuilds
-  or `--verify`s the file from a pinned Geofabrik extract. Voice and the
-  analyst know the layer as `local-airports`; its share-link token is `5`
-  (trygvehhh, #955).
+  the file from Geofabrik's current Norway extract and records its name.
+  Voice and the analyst know the layer as `local-airports`; its share-link
+  token is `5` (trygvehhh, #955).
