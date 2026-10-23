@@ -397,7 +397,7 @@
   "configured externally": "configurata esternamente",
   "Supplied by your environment, Keychain, or launcher — change it where it was set": "Fornita dal tuo ambiente, dal Portachiavi o dal launcher — modificala dove è stata impostata",
   "MANAGE ↗": "GESTISCI ↗",
-  "GET KEY ↗": "OTTIENI CHIAVE ↗",
+  "GET KEY ↗": "CHIAVE ↗",
   "{envVar} saved — paste to replace": "{envVar} salvata — incolla per sostituirla",
   "paste {envVar}": "incolla {envVar}",
   "REMOVE": "RIMUOVI",
