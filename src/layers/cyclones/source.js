@@ -44,22 +44,31 @@ const position = (value) => {
 function officialLink(value, outlook = false) {
   if (value === null) return null;
   const url = new URL(text(value, 256));
-  if (
-    url.origin !== 'https://www.nhc.noaa.gov' ||
-    url.username ||
-    url.password ||
-    url.hash
-  )
-    throw malformed();
+  if (url.username || url.password || url.hash) throw malformed();
+  const nhc = url.origin === 'https://www.nhc.noaa.gov';
+  const cwa =
+    url.origin === 'https://opendata.cwa.gov.tw' &&
+    url.pathname === '/dataset/forecast/W-C0034-005' &&
+    !url.search;
   if (
     outlook
-      ? !/^\/gtwo\.php\?basin=(?:atlc|epac|cpac)&fdays=7$/.test(
+      ? !nhc ||
+        !/^\/gtwo\.php\?basin=(?:atlc|epac|cpac)&fdays=7$/.test(
           url.pathname + url.search,
         )
-      : url.search || !/^\/text\/[A-Z0-9]+\.shtml$/.test(url.pathname)
+      : !cwa &&
+        (!nhc ||
+          (url.search &&
+            url.href !== 'https://www.nhc.noaa.gov/CurrentStorms.json') ||
+          (url.pathname !== '/CurrentStorms.json' &&
+            !/^\/text\/[A-Z0-9]+\.shtml$/.test(url.pathname)))
   )
     throw malformed();
   return url.href;
+}
+
+function nullableText(value, max = 160) {
+  return value === null ? null : text(value, max);
 }
 
 function geometry(value, kind, budget) {
@@ -110,6 +119,7 @@ export function validateCycloneSnapshot(value) {
     !value ||
     value.schemaVersion !== 1 ||
     typeof value.stale !== 'boolean' ||
+    typeof value.partial !== 'boolean' ||
     typeof value.unavailable !== 'boolean' ||
     !Array.isArray(value.storms) ||
     value.storms.length > 32
@@ -117,40 +127,104 @@ export function validateCycloneSnapshot(value) {
     throw malformed();
   const seen = new Set(),
     budget = { coordinates: 0, points: 0 };
+  if (
+    !value.providers ||
+    !['available', 'degraded', 'unavailable'].includes(value.providers.nhc) ||
+    !['available', 'degraded', 'unavailable', 'not_configured'].includes(
+      value.providers.cwa,
+    )
+  )
+    throw malformed();
   const storms = value.storms.map((raw) => {
     if (
-      !/^(?:al|ep|cp)\d{6}$/.test(raw?.id) ||
+      !/^(?:(?:al|ep|cp)\d{6}|cwa-\d{4}-(?:td|ty)\d{1,2})$/.test(raw?.id) ||
       seen.has(raw.id) ||
+      !['nhc', 'cwa'].includes(raw.provider) ||
       !['current', 'pending', 'unavailable'].includes(raw.geometryStatus)
     )
       throw malformed();
     seen.add(raw.id);
-    const advisoryNumber = advisory(raw.advisoryNumber);
+    if (
+      (raw.provider === 'nhc' && raw.source !== 'NOAA NHC / CPHC') ||
+      (raw.provider === 'cwa' &&
+        raw.source !== 'Taiwan Central Weather Administration (CWA)')
+    )
+      throw malformed();
+    const advisoryNumber =
+      raw.advisoryNumber === null ? null : advisory(raw.advisoryNumber);
+    const cycleId = raw.cycleId === null ? null : text(raw.cycleId, 120);
+    const advisoryId = nullableText(raw.advisoryId, 120);
     const geometryAdvisoryNumber =
       raw.geometryAdvisoryNumber === null
         ? null
         : advisory(raw.geometryAdvisoryNumber);
+    const geometryCycleId =
+      raw.geometryCycleId === null ? null : text(raw.geometryCycleId, 120);
+    if (raw.geometryStatus === 'current') {
+      if (raw.provider === 'nhc' && geometryAdvisoryNumber !== advisoryNumber)
+        throw malformed();
+      if (
+        raw.provider === 'cwa' &&
+        (!cycleId || geometryCycleId !== cycleId || advisoryNumber !== null)
+      )
+        throw malformed();
+      if (raw.provider === 'nhc' && cycleId !== `${raw.id}-${advisoryNumber}`)
+        throw malformed();
+    }
     if (
-      raw.geometryStatus === 'current' &&
-      geometryAdvisoryNumber !== advisoryNumber
+      !['provided', 'not_provided', 'pending', 'unavailable'].includes(
+        raw.coneStatus,
+      )
     )
       throw malformed();
+    if (raw.provider === 'cwa' && raw.coneStatus !== 'not_provided')
+      throw malformed();
+    if (
+      raw.provider === 'cwa' &&
+      (advisoryNumber !== null ||
+        raw.windKt !== null ||
+        raw.windAveragingMinutes !== null)
+    )
+      throw malformed();
+    if (raw.provider === 'cwa' && advisoryId === null) throw malformed();
+    const positionAt = time(raw.positionAt);
     if (
       !Array.isArray(raw.forecastPoints) ||
       (budget.points += raw.forecastPoints.length) > 500
     )
       throw malformed();
     const taus = new Set();
+    let priorTau = -Infinity;
+    let priorValidAt = -Infinity;
     const forecastPoints = raw.forecastPoints.map((point) => {
       const tauHours = number(point.tauHours, 0, 168);
-      if (tauHours === null || taus.has(tauHours)) throw malformed();
+      if (tauHours === null || taus.has(tauHours) || tauHours < priorTau)
+        throw malformed();
       taus.add(tauHours);
+      priorTau = tauHours;
       if (++budget.coordinates > 25_000) throw malformed();
+      const validAt = point.validAt == null ? null : time(point.validAt);
+      if (raw.provider === 'cwa') {
+        const validMs = validAt === null ? NaN : Date.parse(validAt);
+        if (
+          validMs <= Date.parse(positionAt) ||
+          validMs <= priorValidAt ||
+          point.windKt !== null ||
+          point.gustKt !== null
+        )
+          throw malformed();
+        priorValidAt = validMs;
+      } else if (validAt !== null) throw malformed();
       return {
         position: position(point.position),
         tauHours,
         windKt: number(point.windKt, 0, 300),
         gustKt: number(point.gustKt, 0, 350),
+        validAt,
+        windMs: number(point.windMs ?? null, 0, 150),
+        gustMs: number(point.gustMs ?? null, 0, 180),
+        pressureHpa: number(point.pressureHpa ?? null, 800, 1100),
+        probabilityRadiusKm: number(point.probabilityRadiusKm ?? null, 0, 3000),
       };
     });
     const track = geometry(raw.track, 'track', budget),
@@ -160,31 +234,53 @@ export function validateCycloneSnapshot(value) {
       (track || cone || forecastPoints.length)
     )
       throw malformed();
+    if (raw.geometryStatus === 'current') {
+      if (!track || !forecastPoints.length) throw malformed();
+      if (raw.provider === 'nhc' && (!cone || !advisoryNumber))
+        throw malformed();
+      if (raw.provider === 'cwa' && cone) throw malformed();
+    }
     if (
-      raw.geometryStatus === 'current' &&
-      (!track || !cone || !forecastPoints.length)
+      (raw.provider === 'nhc' &&
+        raw.basin !== raw.id.slice(0, 2).toUpperCase()) ||
+      (raw.provider === 'cwa' &&
+        (!raw.id.startsWith('cwa-') || raw.basin !== 'WP'))
     )
       throw malformed();
-    if (raw.basin !== raw.id.slice(0, 2).toUpperCase()) throw malformed();
     return {
       id: raw.id,
+      provider: raw.provider,
+      source: text(raw.source),
+      sourceUrl: officialLink(raw.sourceUrl),
       name: text(raw.name, 80),
       classification: text(raw.classification, 16),
       basin: raw.basin,
       position: position(raw.position),
-      positionAt: time(raw.positionAt),
+      positionAt,
       advisoryNumber,
+      advisoryId,
+      cycleId,
       issuedAt: time(raw.issuedAt),
       windKt: number(raw.windKt, 0, 300),
+      windMs: number(raw.windMs ?? null, 0, 150),
+      windAveragingMinutes: number(raw.windAveragingMinutes ?? null, 1, 120),
       pressureHpa: number(raw.pressureHpa, 800, 1100),
       movement: {
         directionDegrees: number(raw.movement?.directionDegrees, 0, 360),
         speedKt: number(raw.movement?.speedKt, 0, 200),
+        speedKmh: number(raw.movement?.speedKmh ?? null, 0, 500),
+        direction:
+          raw.movement?.direction === null ||
+          raw.movement?.direction === undefined
+            ? null
+            : text(raw.movement.direction, 40),
       },
       advisoryUrl: officialLink(raw.advisoryUrl),
       outlookUrl: officialLink(raw.outlookUrl, true),
       geometryStatus: raw.geometryStatus,
       geometryAdvisoryNumber,
+      geometryCycleId,
+      coneStatus: raw.coneStatus,
       forecastPoints,
       track,
       cone,
@@ -198,7 +294,9 @@ export function validateCycloneSnapshot(value) {
     coverage: text(value.coverage, 240),
     fetchedAt: number(value.fetchedAt, 0, Number.MAX_SAFE_INTEGER),
     stale: value.stale,
+    partial: value.partial,
     unavailable: value.unavailable,
+    providers: { nhc: value.providers.nhc, cwa: value.providers.cwa },
     reason: value.reason === null ? null : text(value.reason, 240),
     storms,
   };

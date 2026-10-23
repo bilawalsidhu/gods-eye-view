@@ -30,7 +30,7 @@ const utc = (value) =>
     ? `${formatUtcDayMonth(value).replace('-', '-\u2060')}\u00a0${value.slice(11, 16)}\u00a0UTC`
     : t('Unavailable');
 const COVERAGE = msg(
-  'Atlantic and eastern/central North Pacific; not worldwide cyclone coverage.',
+  'NOAA NHC/CPHC: North Atlantic and eastern/central North Pacific; Taiwan CWA: western North Pacific and South China Sea when configured. North Indian, Southern Hemisphere and Australian-region forecasts are not covered.',
 );
 // The server sends the same English coverage (server/providers/cyclones.js);
 // data stays English and is translated here, where it is shown.
@@ -38,7 +38,10 @@ const coverageText = (coverage) =>
   !coverage || coverage === COVERAGE ? t(COVERAGE) : translateKnown(coverage);
 const ADVISORIES_UNAVAILABLE = msg('Cyclone advisories unavailable');
 // Reason the server gives with an unavailable snapshot, translated when shown.
-const SERVER_REASONS = new Set([msg('Cyclone data unavailable')]);
+const SERVER_REASONS = new Set([
+  msg('Cyclone data unavailable'),
+  msg('Some cyclone sources unavailable or degraded'),
+]);
 const errorText = (error) =>
   error && (SERVER_REASONS.has(error) ? t(error) : translateKnown(error));
 const CLASSIFICATION_NAMES = Object.freeze({
@@ -340,21 +343,31 @@ export function createCyclonesLayer({
       const geometry =
         storm &&
         (coherentCycloneGeometry(storm)
-          ? t('Track and cone match this advisory')
+          ? storm.cone
+            ? t('Official forecast track and cone match this advisory')
+            : storm.forecastPoints.some(
+                  (point) => point.probabilityRadiusKm > 0,
+                )
+              ? t(
+                  'Official forecast track; 70% probability radii where supplied',
+                )
+              : t('Official forecast track; uncertainty cone not provided')
           : storm.geometryStatus === 'pending'
             ? t('Track/cone awaiting advisory {number}', {
                 number: storm.advisoryNumber,
               })
-            : t('Track/cone unavailable'));
+            : t('Official forecast track unavailable'));
       const status =
         errorText(error) ||
         (snapshot?.stale
           ? t('Cached advisory · stale source')
-          : loading
-            ? t('Loading advisories…')
-            : storm && !coherentCycloneGeometry(storm)
-              ? geometry
-              : null);
+          : snapshot?.partial
+            ? t('Some cyclone sources unavailable')
+            : loading
+              ? t('Loading advisories…')
+              : storm && !coherentCycloneGeometry(storm)
+                ? geometry
+                : null);
       const stormCount = snapshot?.storms.length || 0;
       const activeStorms = tn(
         stormCount,
@@ -365,20 +378,43 @@ export function createCyclonesLayer({
         ? t('Position as of {time}', { time: utc(storm.positionAt) })
         : '';
       const intensity = storm
-        ? t('Maximum sustained wind: {wind} · Pressure: {pressure}', {
-            wind: number(storm.windKt, 'kt'),
-            pressure: number(storm.pressureHpa, 'hPa'),
-          })
+        ? `${t(
+            storm.windKt === null
+              ? 'Maximum wind speed: {wind} · Pressure: {pressure}'
+              : 'Maximum sustained wind: {wind} · Pressure: {pressure}',
+            {
+              wind:
+                storm.windKt !== null
+                  ? number(storm.windKt, 'kt')
+                  : number(storm.windMs, 'm/s'),
+              pressure: number(storm.pressureHpa, 'hPa'),
+            },
+          )}${
+            storm.windKt === null && storm.windMs !== null
+              ? ` · ${t('Wind averaging period unavailable')}`
+              : ''
+          }`
         : '';
       const detail = storm
-        ? t('{name} · {classification} · Advisory {number} · issued {time}', {
-            name: storm.name,
-            classification: classificationName(storm.classification),
-            number: storm.advisoryNumber,
-            time: utc(storm.issuedAt),
-          })
+        ? `${
+            storm.advisoryNumber === null
+              ? t('{name} · {classification} · product issued {time}', {
+                  name: storm.name,
+                  classification: classificationName(storm.classification),
+                  time: utc(storm.issuedAt),
+                })
+              : t(
+                  '{name} · {classification} · Advisory {number} · issued {time}',
+                  {
+                    name: storm.name,
+                    classification: classificationName(storm.classification),
+                    number: storm.advisoryNumber,
+                    time: utc(storm.issuedAt),
+                  },
+                )
+          } · ${storm.source}`
         : empty
-          ? t('No active NHC/CPHC systems')
+          ? t('No active cyclones in supported sources')
           : stormCount
             ? activeStorms
             : loading
@@ -387,8 +423,10 @@ export function createCyclonesLayer({
       const controls = {
         readout: true,
         summary: {
-          label: t('Cyclones · NHC / CPHC'),
-          coverage: t('Atlantic · E/C Pacific'),
+          label: t('Cyclone advisories · NOAA + CWA'),
+          coverage: t(
+            'North Atlantic · E/C Pacific · W Pacific when configured',
+          ),
           compact: stormCount
             ? storm
               ? t('{storms} · {name} selected', {
@@ -401,7 +439,7 @@ export function createCyclonesLayer({
             ? [
                 {
                   id: 'advisory',
-                  label: t('Official advisory ↗'),
+                  label: t('Official source ↗'),
                   href: storm.advisoryUrl,
                 },
               ]
@@ -426,12 +464,12 @@ export function createCyclonesLayer({
           units: 'kt',
         },
         list: {
-          ariaLabel: t('Active NHC and CPHC cyclone advisories'),
+          ariaLabel: t('Active cyclone advisories'),
           items: (snapshot?.storms || []).map((item, index) => ({
             id: item.id,
             ordinal: index + 1,
             lead: item.basin,
-            text: `${item.name} · ${classificationName(item.classification)} · ${item.windKt === null ? t('Wind unavailable') : formatQuantity(item.windKt, 'kt')}`,
+            text: `${item.name} · ${classificationName(item.classification)} · ${item.windKt !== null ? formatQuantity(item.windKt, 'kt') : item.windMs !== null ? `${formatQuantity(item.windMs, 'm/s')} ${t('Wind averaging period unavailable')}` : t('Wind unavailable')}`,
             active: item.id === selectedId,
             params: { stormId: item.id, focus: true },
           })),
@@ -444,17 +482,31 @@ export function createCyclonesLayer({
                 label: t('Advisory center / forecast track'),
                 color: '#7fe6ed',
               },
-              {
-                label: t('Center-track uncertainty cone'),
-                color: '#7fe6ed44',
-              },
+              ...(storm.cone
+                ? [
+                    {
+                      label: t('Center-track uncertainty cone'),
+                      color: '#7fe6ed44',
+                    },
+                  ]
+                : []),
+              ...(storm.forecastPoints.some(
+                (point) => point.probabilityRadiusKm > 0,
+              )
+                ? [
+                    {
+                      label: t('Source-supplied 70% position radius'),
+                      color: '#7fe6ed33',
+                    },
+                  ]
+                : []),
             ]
           : [],
         info: storm
           ? `${detail}\n${position}\n${intensity}\n${geometry}${status && status !== geometry ? '\n' + status : ''}\n${coverageText(snapshot.coverage)}`
           : `${detail}${status ? '\n' + status : ''}\n${coverageText(snapshot?.coverage)}`,
         infoTitle: t(
-          'Select a storm on the map, or choose a storm in the list to select it and move the camera. Click empty map space to clear the selection. NOAA NHC/CPHC advisory context. The cone describes forecast center-track uncertainty, not storm size or the full hazard area. Forecast point labels are source lead hours, not times computed from advisory issuance. Geometry follows the surface; height is not weather altitude. Consult the official advisory.',
+          'Select a storm on the map, or choose a storm in the list to select it and move the camera. Click empty map space to clear the selection. Forecast tracks and timestamps come from the named issuing source. Uncertainty cones and probability radii appear only when that source supplies them; they do not describe storm size or the full hazard area. Geometry follows the surface; height is not weather altitude. Consult the official source.',
         ),
       };
       return controls;

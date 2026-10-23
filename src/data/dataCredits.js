@@ -406,7 +406,7 @@ export const DATA_CREDITS = [
   },
   {
     key: 'weather-cyclones',
-    html: 'Cyclone advisories: <a href="https://www.nhc.noaa.gov/" target="_blank" rel="noopener">NOAA/NWS NHC / CPHC</a> · Atlantic and eastern/central North Pacific. Forecast center uncertainty, not storm size.',
+    html: 'Cyclone advisories: <a href="https://www.nhc.noaa.gov/" target="_blank" rel="noopener">NOAA/NWS NHC / CPHC</a> · North Atlantic and eastern/central North Pacific; <a href="https://opendata.cwa.gov.tw/dataset/forecast/W-C0034-005" target="_blank" rel="noopener">Taiwan Central Weather Administration (CWA)</a> · western North Pacific and South China Sea when configured. Source-supplied forecast uncertainty only; not storm size.',
   },
   {
     key: 'weather-lightning',

@@ -171,8 +171,8 @@ export const getCyclones = defineTool({
   name: 'get_cyclones',
   title: 'Tropical cyclones',
   description:
-    'Active tropical cyclones from the NOAA National Hurricane Center and ' +
-    'Central Pacific Hurricane Center, optionally limited to an area.',
+    'Active tropical cyclones from NOAA NHC/CPHC and the configured Taiwan CWA ' +
+    'forecast product, optionally limited to an area.',
   inputSchema: {
     type: 'object',
     properties: { area: AREA_SCHEMA },
@@ -200,18 +200,35 @@ export const getCyclones = defineTool({
       )
       .map((storm) => ({
         id: storm.id,
+        provider: storm.provider ?? null,
+        source: storm.source ?? snapshot.source ?? null,
+        source_url: storm.sourceUrl ?? null,
         name: storm.name,
         classification: storm.classification,
         basin: storm.basin,
         lat: storm.position.latitude,
         lon: storm.position.longitude,
         position_at: storm.positionAt,
-        wind_kt: storm.windKt,
-        pressure_hpa: storm.pressureHpa,
+        wind_kt: storm.windKt ?? null,
+        wind_ms: storm.windMs ?? null,
+        wind_averaging_minutes: storm.windAveragingMinutes ?? null,
+        pressure_hpa: storm.pressureHpa ?? null,
         movement: storm.movement ?? null,
         advisory: storm.advisoryNumber,
+        advisory_id: storm.advisoryId ?? null,
+        forecast_cycle_id: storm.cycleId ?? null,
         issued_at: storm.issuedAt,
         advisory_url: storm.advisoryUrl,
+        forecast_track: (storm.forecastPoints ?? []).map((point) => ({
+          valid_at: point.validAt,
+          lead_hours: point.tauHours,
+          lat: point.position.latitude,
+          lon: point.position.longitude,
+          wind_kt: point.windKt,
+          wind_ms: point.windMs,
+          pressure_hpa: point.pressureHpa,
+          probability_radius_km: point.probabilityRadiusKm,
+        })),
       }))
       .sort((a, b) => (b.wind_kt ?? 0) - (a.wind_kt ?? 0));
     const where = area ? ` in ${area.label}` : '';
@@ -219,7 +236,13 @@ export const getCyclones = defineTool({
       summary:
         `${countNoun(storms.length, 'active tropical cyclone')}${where}` +
         (storms[0]
-          ? `; strongest ${storms[0].name} at ${storms[0].wind_kt} kt.`
+          ? `; strongest ${storms[0].name} at ${
+              storms[0].wind_kt !== null
+                ? `${storms[0].wind_kt} kt`
+                : storms[0].wind_ms !== null
+                  ? `${storms[0].wind_ms} m/s`
+                  : 'unknown intensity'
+            }.`
           : '.'),
       data: {
         view: suggestView(
@@ -237,6 +260,8 @@ export const getCyclones = defineTool({
         source: snapshot.source ?? null,
         attribution: snapshot.attribution ?? null,
         stale: snapshot.stale === true,
+        partial: snapshot.partial === true,
+        providers: snapshot.providers ?? null,
       },
     };
   },
