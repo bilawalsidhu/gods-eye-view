@@ -10,7 +10,7 @@ export const MARKER_LIFT_M = 2.5;
 
 export const SELECTED_LIFT_M = 5;
 
-export const RADIO_PICK_TOLERANCE_PX = 8;
+const RADIO_PICK_TOLERANCE_PX = 8;
 
 export const RADIO_TUNER_DIRECTORY_LIMIT = 750;
 

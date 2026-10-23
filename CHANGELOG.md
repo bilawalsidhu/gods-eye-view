@@ -317,9 +317,8 @@
   [NotProniss](https://github.com/NotProniss) (#1084).
 
 - Street Level: Panoramax is the fourth provider, keyless. Light its chip
-  (orange; off by default, one provider at a time): from orbit dots show
-  where the federated commons has pictures, and below about 60 km its
-  sequences draw as lines from `api.panoramax.xyz` vector tiles. A click on a
+  (orange; off by default, one provider at a time): below about 60 km the
+  federated commons' sequences draw as lines from `api.panoramax.xyz` vector tiles. A click on a
   line opens that sequence's picture nearest the click without moving the
   camera, flat or 360°, with cones along the sequence around it and ‹ › /
   ← → following the picture's own links. The 360° and since filters apply,
@@ -377,10 +376,10 @@
   Maps JavaScript API) and click a street, or press OPEN STREET VIEW, to
   open Google's own panorama in
   the panel, with its arrows, the address and month in the caption, a link
-  to Google Maps and FOLLOW. Share links carry it in the provider switches
+  to Google Maps. Share links carry it in the provider switches
   (`r.google-1`). One provider is lit at a time (lighting one switches the
   other off), Mapillary by default since it is free. Street View's panoramas
-  are all 360°, so the IMAGERY and SINCE filters and the legend apply to
+  are all 360°, so the IMAGERY and SINCE filters apply to
   Mapillary only and hide while GOOGLE STREET VIEW is lit; its globe marker
   is a Google-blue view cone.
 
@@ -419,21 +418,16 @@
   proposed diagnosis in #927, and [kvnloo](https://github.com/kvnloo) for identifying
   the repair race. Windows/Claude Desktop Cowork confirmation remains outstanding.
 
-- Street Level: a street-level imagery layer modelled on the iD editor's photo
-  overlay, with Mapillary as its first provider (free client token, CC BY-SA 4.0
-  imagery). One right-rail panel holds a chip per provider, shared 360°/flat and
-  captured-since filters, and an embedded viewer with EXPAND, FIT/FILL and
-  FOLLOW (Google 3D only). Coverage lines and image cones are drawn from orbit
-  down to a single street; on Google 3D they sit on the bare earth, refined
-  against the rendered mesh near the camera, so trees and buildings hide them.
-  Share links carry the provider switches, the filters and the panel's collapsed
-  state. A server proxy caches Mapillary coverage tiles (24 h, 1 GiB on disk),
-  refuses cross-site requests, rate-limits per IP and backs off when Mapillary
-  rejects the token or rate-limits.
-
-- The CCTV and Street Level panels are portable: drag the header to float the
-  panel, resize it from any edge or corner, and double-click the header to dock
-  it again. The position persists across reloads.
+- Street Level: street-level imagery from providers, Mapillary first (free
+  client token, CC BY-SA 4.0). A right-rail panel holds a chip per provider,
+  360°/flat and captured-since filters and an embedded viewer with EXPAND and
+  FIT/FILL. Coverage lines (below 60 km) and image cones drape on terrain and
+  Google 3D tiles; opening a photo frames it with one camera flight. Share
+  links carry the provider switches, the filters and the panel's collapsed
+  state. A server proxy adds the token to Mapillary coverage tiles, trims and
+  caches them for 24 h, refuses cross-site requests and redirects, and limits
+  load per IP and upstream. The panel reads KEY REQUIRED without a token and
+  KEY REJECTED when Mapillary refuses it.
 
 - Add Norway's city bikes to the Bike Share layer: Oslo, Bergen and
   Trondheim Bysykkel (Urban Sharing), Kolumbus Bysykkel in Stavanger and
