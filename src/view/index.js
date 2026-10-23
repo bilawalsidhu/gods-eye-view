@@ -370,7 +370,9 @@ export function viewFromParams(params) {
       pitch_deg: number('pitch'),
     },
     layers: state?.enabledLayerIds ?? [],
-    style: STYLES_BY_URL_NAME[params.get('style')] ?? null,
+    style: Object.hasOwn(STYLES_BY_URL_NAME, params.get('style'))
+      ? STYLES_BY_URL_NAME[params.get('style')]
+      : null,
     map: VIEW_MAPS.includes(map) ? map : null,
     follow,
     annotations: annotationsFromParams(params),
