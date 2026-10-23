@@ -972,6 +972,24 @@ one name, so `resolveTrackedAircraftInfo` returns a single shape for either laye
 rate is reported, never derived: a blank poll keeps the last transmitted value and an
 absent rate stays null rather than reading as level flight.
 
+## Pattern Watch
+
+Pattern Watch is a derived layer: it makes no network requests and reads the
+in-memory records from enabled Civil Flights and Military Flights. It maintains a
+rolling 12-minute track per aircraft, keyed by ICAO24 rather than its mutable display
+callsign. It flags only tracks spanning at least four minutes with two same-direction
+turns inside an 8 km radius; displacements under 150 m do not contribute a bearing.
+The sweep requests the complete analyst record set so the flights layers' default
+2,000-record query cap cannot silently leave aircraft untracked. Tracks crossing
+the antimeridian use wrapped longitude and spherical distance/center calculations.
+An exactly half-turn between samples has no recoverable direction and is ignored
+rather than assigned a direction by angle-wrap tie-breaking.
+
+The coral ground ring and label describe an observed path, not intent. Training,
+traffic watch, survey work and airport holding stacks also circle. Share links
+reserve token `5` for `flight-patterns`; the layer appears in the Movement panel and
+is available to voice as Pattern Watch, patterns, or circling aircraft.
+
 ## Transponder emergency highlighting
 
 `src/data/aircraftEmergency.js` derives one status per poll from the Mode A

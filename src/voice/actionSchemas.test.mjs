@@ -29,6 +29,7 @@ test('the complete Realtime tool payload pins the manifest-generated layer relea
       ),
     )
     .digest('hex');
+  // Re-pinned for the Pattern Watch layer enums.
   assert.equal(
     digest,
     // Re-derived for the voice layer manifest (generated layer enums and
@@ -38,7 +39,7 @@ test('the complete Realtime tool payload pins the manifest-generated layer relea
     // requested radius and center authority in descriptions only.
     // Street Level and GNSS extend the manifest; tracked and analyst aircraft describe broadcasts.
     // Air quality (ECCC AQHI) extends the manifest.
-    '775ba323384b4c1b62fb8415bac52aecc3fc668e20bedcfa57e426dcd1da3969',
+    '57fc6682385d1000df415f4c11b8abc06b24b898659bb1dba2e7a3477addd831',
   );
 });
 
