@@ -5,9 +5,9 @@ import { createImportedPins } from './geoImportPins.js';
 import { msg } from '../i18n/marker.js';
 
 /** Largest file accepted, in bytes. */
-export const MAX_IMPORT_BYTES = 50 * 1024 * 1024;
+const MAX_IMPORT_BYTES = 50 * 1024 * 1024;
 /** Largest total a KMZ may inflate to — a zip bomb stops here. */
-export const MAX_KMZ_INFLATED_BYTES = 120 * 1024 * 1024;
+const MAX_KMZ_INFLATED_BYTES = 120 * 1024 * 1024;
 /** Most files on the globe at once. */
 export const MAX_IMPORTED_FILES = 12;
 /** Most entities one file may create before it is refused. */
@@ -15,9 +15,9 @@ export const MAX_IMPORT_ENTITIES = 20_000;
 /** Most vertices (points of every line, ring and marker) in one file. */
 export const MAX_IMPORT_POSITIONS = 250_000;
 /** Most normalized style definitions and local image links in one KML/KMZ. */
-export const MAX_KML_LINKS = 2_000;
+const MAX_KML_LINKS = 2_000;
 /** Longest plain-text name kept from a file's features. */
-export const MAX_IMPORT_NAME_LENGTH = 120;
+const MAX_IMPORT_NAME_LENGTH = 120;
 /** What the file picker offers. */
 export const GEO_FILE_ACCEPT = '.geojson,.json,.kml,.kmz,.gpx';
 

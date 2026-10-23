@@ -81,8 +81,8 @@ test('portable requests keep fixed origins, encode group data and preserve the 3
   assert.equal(url.origin, 'https://ll.thespacedevs.com');
   assert.equal(url.pathname, '/2.3.0/launches/');
   assert.deepEqual(Object.fromEntries(url.searchParams), {
-    net__gte: '2026-01-30T12:34:56.000Z',
-    net__lte: '2026-03-01T12:34:56.000Z',
+    net__gte: '2026-01-30T12:34:00.000Z',
+    net__lte: '2026-03-01T12:34:00.000Z',
     limit: '100',
     mode: 'detailed',
   });

@@ -4,6 +4,7 @@ import { isHeadingEstimated } from './headingConfidence.js';
 import {
   ACTIVE_CAMERA_COLOR,
   IDLE_CAMERA_COLOR,
+  LIVE_CAMERA_COLOR,
   ACTIVE_COVERAGE_CENTER,
   IDLE_COVERAGE_CENTER_MUTED,
   ACTIVE_COVERAGE_CENTER_DEPTHFAIL,
@@ -18,6 +19,15 @@ export function createRendering({
   parts,
   source,
 }) {
+  /** Icon color: active wins, then live-capable video feeds, then idle stills. */
+  function cameraColorFor(record) {
+    if (record.camera.id === layerState._activeCameraId)
+      return ACTIVE_CAMERA_COLOR;
+    if (parts.model.isVideoFeedType(record.camera.feedType))
+      return LIVE_CAMERA_COLOR;
+    return IDLE_CAMERA_COLOR;
+  }
+
   const {
     focusNowMs,
     getFocusTarget,
@@ -58,10 +68,7 @@ export function createRendering({
         ),
       cameraDistanceFor: (position) =>
         Cesium.Cartesian3.distance(camera.positionWC, position),
-      baseColorFor: (record) =>
-        record.camera.id === layerState._activeCameraId
-          ? ACTIVE_CAMERA_COLOR
-          : IDLE_CAMERA_COLOR,
+      baseColorFor: cameraColorFor,
     });
     layerState._activeFocusStyleCount = result.activeCount;
   }
@@ -208,9 +215,7 @@ export function createRendering({
     for (const record of layerState._records) {
       const isActive = record.camera.id === activeId;
       if (record.billboard) {
-        record.billboard.color = isActive
-          ? ACTIVE_CAMERA_COLOR
-          : IDLE_CAMERA_COLOR;
+        record.billboard.color = cameraColorFor(record);
         record.billboard.scale = isActive ? 1.25 : 1.0;
         // disableDepthTestDistance stays POSITIVE_INFINITY for every billboard
         // (set at creation) — see the field-test far-zoom submerge fix there.

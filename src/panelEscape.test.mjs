@@ -2,11 +2,8 @@ import { readShellSource } from './testSupport/readShellSource.mjs';
 import { onKeyDown as cockpitKeyDown } from './ui/cockpitInput.js';
 import { readFileSync as readRadioSource } from 'node:fs';
 const radioBindings = readRadioSource(new URL('./ui/radioBindings.js', import.meta.url), 'utf8');
-const radioPresentation = readRadioSource(new URL('./ui/radioPresentation.js', import.meta.url), 'utf8');
-const radioControlsSource = readRadioSource(new URL('./ui/radioControls.js', import.meta.url), 'utf8');
 import { bindPanelDisclosure, collapsePanelOnEscape } from './ui/panelDisclosure.js';
 import assert from 'node:assert/strict';
-import fs from 'node:fs';
 import test from 'node:test';
 
 const source = readShellSource();

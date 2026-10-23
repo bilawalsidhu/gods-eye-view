@@ -316,7 +316,7 @@ export function createCalibrationGizmo({
     }
     const mount = positions.mount;
     const axes = enuAxes(mount);
-    const { forwardHoriz, right, view } = viewAxesFor(
+    const { forwardHoriz } = viewAxesFor(
       camera.headingDeg,
       camera.pitchDeg,
       axes,

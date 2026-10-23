@@ -1,4 +1,3 @@
-import { readShellSource } from './testSupport/readShellSource.mjs';
 import { readStylesheet } from './testSupport/readStylesheet.mjs';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -8,7 +7,6 @@ import { fileURLToPath } from 'node:url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const css = readStylesheet(path.join(ROOT, 'style.css'));
-const ui = readShellSource();
 
 /*
  * Required-attribution keep-out pin.
@@ -247,6 +245,9 @@ function ownBoxEntries() {
       const compound = lastCompound(part);
       if (!ELEMENT_KEYS.some((key) => compound.includes(key))) continue;
       if (compound.includes('::')) continue; // a pseudo-element is its own box
+      // The phone shell is its own layout; mobileShell.test.mjs pins its
+      // attribution clearance.
+      if (part.startsWith('body.mobile-shell')) continue;
       entries.push({ rule, part });
     }
   }
