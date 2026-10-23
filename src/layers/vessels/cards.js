@@ -12,8 +12,6 @@ export function createCards({
   layer,
   options,
 }) {
-  const { state } = vesselState;
-
   function updateSelectedVesselHud(record) {
     const el = document.getElementById('hud-ais-vessel');
     if (!el) return;

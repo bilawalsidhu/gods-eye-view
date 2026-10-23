@@ -38,12 +38,12 @@ const READ_PIPELINE_DEPTH = 4;
 const RATE_WINDOW_MS = 1_000;
 // A bulk read that has not completed in this long is treated as a stalled
 // USB transfer: the session is torn down instead of waiting forever.
-export const SDR_READ_STALL_MS = 5_000;
+const SDR_READ_STALL_MS = 5_000;
 // Decoder admission. Every block sent to the worker is numbered and must be
 // acknowledged; past these bounds the receiver stops with an overload error
 // rather than queueing raw IQ the decoder cannot keep up with. Eight 16 ms
 // blocks is 128 ms of input, about forty times the measured decode cost.
-export const SDR_WORKER_ADMISSION = Object.freeze({
+const SDR_WORKER_ADMISSION = Object.freeze({
   maxBlocks: 8,
   maxBytes: 8 * 65_536,
   maxAgeMs: 1_000,
@@ -66,7 +66,7 @@ const DECODER_WINDOW_SAMPLES = 256;
 // raw USB device is closed directly, which aborts any pending transfer. The
 // raw close is bounded by the same deadline, so a teardown settles within
 // twice this even when `USBDevice.close()` itself never settles.
-export const SDR_CLOSE_TIMEOUT_MS = 2_000;
+const SDR_CLOSE_TIMEOUT_MS = 2_000;
 
 /** Tuning presets per receiver mode; gain is a separate per-mode setting. */
 export const SDR_RECEIVER_PRESETS = Object.freeze({
@@ -1912,9 +1912,3 @@ function formatMhz(hz) {
 function positiveModulo(value, divisor) {
   return ((value % divisor) + divisor) % divisor;
 }
-
-export const SDR_FM_BAND = Object.freeze({
-  minHz: FM_MIN_HZ,
-  maxHz: FM_MAX_HZ,
-});
-export const SDR_ADSB_FREQUENCY_HZ = ADSB_FREQUENCY_HZ;
