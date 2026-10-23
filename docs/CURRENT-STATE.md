@@ -402,13 +402,27 @@ reuse native wind geometry when the model, issue/valid time, grid and U/V values
 are identical; new or revised wind still rebuilds. Source and renderer clocks
 remain independent of the shared Cesium clock.
 
-Weather also offers default-off lightning density and cyclone advisories.
+Weather also offers default-off lightning density, cyclone advisories and
+Weather Warnings (Norway).
 Lightning uses NOAA/NWS nowCOAST's public derived 15-minute density product from
 Vaisala NLDN/GLD360, with ten-minute metadata refresh and exact source times.
 Coverage is the Americas/Pacific (110°E across the dateline to 0°, 25°S–80°N),
 not worldwide detections; units are strikes/km²/min ×10³. It is neither raw GLM
 flashes nor a live strike counter. Weather imagery orders scalar context below
 satellite, radar and lightning consistently across enable and history order.
+
+Weather Warnings shows the official warnings in effect now for Norway, yellow
+and above: MET Norway's MetAlerts (land and sea areas, polygons from the feed),
+NVE's flood and landslide warnings drawn over the warned municipalities
+(Kartverket outlines from `ws.geonorge.no`, simplified to about 250 m and cached
+for seven days) and Varsom avalanche danger levels 2–5 by forecast region
+(outlines cached for a day). The same-origin `/api/weather-warnings` fetches
+each feed keyless with an identifying User-Agent and caches it separately (MET
+5 minutes, NVE and Varsom 10 minutes), so one failing provider leaves the
+others shown. Row chips switch the four families on and off; a selected area's
+card gives level, area, validity, the warning text and advice, and links to MET
+Norway or Varsom. The chips, legend and card follow the UI language. Share
+links carry the layer as token `5`.
 
 Cyclones combine fixed NHC/CPHC status and summary GIS endpoints through a bounded
 same-origin provider. The status endpoint lacks browser CORS; each installation
