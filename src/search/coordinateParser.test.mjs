@@ -79,6 +79,9 @@ test('malformed and ambiguous coordinates are refused, never guessed', () => {
     // The reviewer's case: trailing text must not be discarded.
     '12junk, 34oops',
     '12junk,34',
+    '12junk 34',
+    '1e3 5',
+    '40 26 46 N 79 58 56 W',
     '43.1731, -79.0384x',
     'abc, def',
     'Paris',
