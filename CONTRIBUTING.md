@@ -54,9 +54,8 @@ head -40 scripts/qa-radio.mjs  # what this runnable gate proves and how to run i
 Runnable gate entrypoints document what they assert and how to invoke them.
 Most need a dev server; some also need a specific provider key or port. Follow
 the entrypoint's header rather than assuming every matching file accepts the
-same arguments. Five have an `npm run` alias: `qa:map-source-tray`,
-`qa:panel-resize`, `qa:street-level`, `qa:street-level:fixtures` and
-`qa:transit`.
+same arguments. Four have an `npm run` alias: `qa:map-source-tray`,
+`qa:street-level`, `qa:street-level:fixtures` and `qa:transit`.
 
 If you aren't sure which gate covers your change, search `docs/CURRENT-STATE.md`
 for the feature: it names the gate for many of them, and it's the authoritative
@@ -66,11 +65,10 @@ gate for the feature you changed.
 
 > **CI covers only two of these for you.** The workflow runs the setup policy
 > checks, the formatting and package-boundary checks, the unit suite and the
-> production build, plus a Windows onboarding job, and against the built preview
-> it runs `qa:street-level:fixtures` and `qa:panel-resize`. It does not run
-> `npm run test:track` or any other `qa-*.mjs` gate — those need a live dev
-> server and a browser. Include the applicable local run in your PR's
-> validation evidence.
+> production build, plus a Windows onboarding job. It runs neither
+> `npm run test:track` nor any `qa-*.mjs` gate except the Street Level fixture
+> gate (`street-level-browser` job) — they need a live dev server and a
+> browser. Include the applicable local run in your PR's validation evidence.
 
 ## Share-link layer tokens
 
@@ -118,7 +116,7 @@ The highest-leverage places to jump in:
 ## Architecture in one minute
 
 - **No framework.** Vanilla JS + [CesiumJS](https://cesium.com/platform/cesiumjs/) + [Vite](https://vitejs.dev/).
-- **Assembly lives in `src/app/`; standalone defaults live in `src/standalone/`.** UI controllers live in `src/ui/`, layer factories in `src/layers/`, portable sources in `src/sources/`, and application operations in `src/services/`. Existing `src/ui.js` and `src/data/<layer>.js` entries retain compatibility; new code belongs with its focused owner.
+- **Assembly lives in `src/app/`; standalone defaults live in `src/standalone/`.** UI controllers live in `src/ui/`, layer factories in `src/layers/`, portable sources in `src/sources/`, and application operations in `src/services/`. Existing `src/data/<layer>.js` entries retain compatibility; new code belongs with its focused owner.
 - Sources acquire records; renderers own Cesium resources. Import `gods-eye-view/layers/<family>/source` when only a source factory is needed. Common voice controls consume the session interface; protocol adapters own connection details.
 - **Secrets stay server-side.** Anything needing a private key goes through a local proxy under `server/providers/`. The browser only ever sees the Google Maps key (which you restrict) and ephemeral tokens.
 - `docs/CURRENT-STATE.md` is the authoritative runtime reference — read it first.

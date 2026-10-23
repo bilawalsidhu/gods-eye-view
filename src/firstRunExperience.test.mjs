@@ -373,10 +373,6 @@ test('one ESC does one thing — the radio disclosure stops the launcher outrigh
     new URL('./ui/radioBindings.js', import.meta.url),
     'utf8',
   );
-  const module = fs.readFileSync(
-    new URL('./firstRunExperience.js', import.meta.url),
-    'utf8',
-  );
 
   // stopPropagation() does NOT stop later listeners on the SAME document, so the
   // disclosure's earlier capture handler closed the disclosure and the launcher

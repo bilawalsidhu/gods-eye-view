@@ -15,9 +15,9 @@ import * as Cesium from 'cesium';
 import { announceNavigationAuthority } from '../navigationPolicy.js';
 import { annotationsFromParams, createView } from '../view/index.js';
 
-export const EMBED_VIEW_MESSAGE = 'gev:view';
-export const EMBED_APPLIED_MESSAGE = 'gev:view-applied';
-export const EMBED_READY_MESSAGE = 'gev:ready';
+const EMBED_VIEW_MESSAGE = 'gev:view';
+const EMBED_APPLIED_MESSAGE = 'gev:view-applied';
+const EMBED_READY_MESSAGE = 'gev:ready';
 
 const FOLLOW_LAYERS = {
   aircraft: 'flights',

@@ -1779,7 +1779,6 @@ test('voice playback confirmation waits for playing and requires a hard duck', a
 });
 
 test('voice playback confirmation accepts fallback buffering but times out safely', async () => {
-  let listener = () => {};
   const state = {
     audioState: 'loading',
     playingStationId: 'fallback',
@@ -1789,9 +1788,8 @@ test('voice playback confirmation accepts fallback buffering but times out safel
   const confirmed = await confirmRadioPlayback({
     startPlayback: async () => false,
     subscribe: (next) => {
-      listener = next;
       next(state);
-      return () => { listener = () => {}; };
+      return () => {};
     },
     getState: () => state,
     timeoutMs: 10,

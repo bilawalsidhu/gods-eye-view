@@ -171,6 +171,7 @@
     .dock-tray-toggle,
     .dock-popover,
     .scene-btn,
+    .gev-action-button:not(.gev-action-button--compact),
     .context-mode-button,
     .map-stack-chip,
     .key-setup-chip,
@@ -506,11 +507,13 @@
     0 0 12px rgba(196, 84, 84, 0.14);
 }
 
+:root[data-ui-theme='cyber'] .gev-segmented,
 :root[data-ui-theme='cyber'] .pp-mode-seg {
   border-color: rgba(206, 222, 226, 0.24);
   border-radius: 1px;
 }
 
+:root[data-ui-theme='cyber'] .gev-segment[aria-checked='true'],
 :root[data-ui-theme='cyber'] .pp-mode-btn.active {
   background: var(--cyber-red);
   color: #f7f8f7;
@@ -541,10 +544,19 @@
   text-shadow: none;
 }
 
-:root[data-ui-theme='cyber'] :where(.pp-select, select, input, textarea) {
+:root[data-ui-theme='cyber']
+  :where(.pp-select, select, input, textarea):where(:not(.gev-field)) {
   border-color: rgba(206, 222, 226, 0.24);
   background-color: rgba(26, 35, 39, 0.96);
   color: var(--text-primary);
+}
+
+/* Shared fields consume theme palettes through their own surface rule.
+   Feature palettes (Radio) retain precedence without restyling native fields. */
+:root[data-ui-theme='cyber'] .gev-field {
+  --gev-field-border-color: rgba(206, 222, 226, 0.24);
+  --gev-field-background: rgba(26, 35, 39, 0.96);
+  --gev-field-color: var(--text-primary);
 }
 
 :root[data-ui-theme='cyber']
