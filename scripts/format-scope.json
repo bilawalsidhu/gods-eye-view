@@ -861,8 +861,10 @@
   "src/layers/weather/imageryOrder.js",
   "src/layers/weather/imageryOrder.test.mjs",
   "server/providers/cyclones.js",
+  "server/providers/cycloneCwa.js",
   "server/providers/firePerimeters.js",
   "src/data/cyclonesProxy.test.mjs",
+  "src/data/cycloneCwa.test.mjs",
   "src/data/firePerimetersProxy.test.mjs",
   "server/providers/gnssIntegrity.js",
   "src/data/gnssIntegrityProxy.test.mjs",
@@ -1087,5 +1089,6 @@
   "src/ui/styles/status-badge.css",
   "src/ui/statusBadge.test.mjs",
   "src/ui/cctvBadges.test.mjs",
-  "scripts/qa-status-badges.mjs"
+  "scripts/qa-status-badges.mjs",
+  "scripts/qa-cyclone-fixture.mjs"
 ]

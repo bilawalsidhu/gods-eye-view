@@ -1,4 +1,6 @@
 import { readResponseTextCapped } from './common/http.js';
+import { fetchCwaCyclones, pruneCwaForecasts } from './cycloneCwa.js';
+import { sameSiteGated } from './common/same-site.js';
 
 const STATUS_URL = 'https://www.nhc.noaa.gov/CurrentStorms.json';
 const GIS =
@@ -6,8 +8,8 @@ const GIS =
 const HOUR = 3600_000;
 // Data, not UI copy: src/layers/cyclones/index.js keeps the same English in
 // msg() and translates it when shown (likewise 'Cyclone data unavailable').
-const COVERAGE =
-  'Atlantic and eastern/central North Pacific; not worldwide cyclone coverage.';
+export const COVERAGE =
+  'NOAA NHC/CPHC: North Atlantic and eastern/central North Pacific; Taiwan CWA: western North Pacific and South China Sea when configured. North Indian, Southern Hemisphere and Australian-region forecasts are not covered.';
 const LAYERS = [
   { id: 5, cap: 512 * 1024, count: 500, kind: 'points' },
   { id: 6, cap: 512 * 1024, count: 32, kind: 'track' },
@@ -109,14 +111,21 @@ export function parseCycloneStatus(payload, now = Date.now()) {
     const positionAt = iso(raw.lastUpdate, now);
     return {
       id: raw.id,
+      provider: 'nhc',
+      source: 'NOAA NHC / CPHC',
+      sourceUrl: officialLink(forecast.url) ?? STATUS_URL,
       name: text(raw.name),
       classification: text(raw.classification, 16),
       basin: raw.id.slice(0, 2).toUpperCase(),
       position: position([raw.longitudeNumeric, raw.latitudeNumeric]),
       positionAt,
       advisoryNumber,
+      advisoryId: `${raw.id}-${advisoryNumber}`,
+      cycleId: `${raw.id}-${advisoryNumber}`,
       issuedAt,
       windKt: number(raw.intensity, 0, 300),
+      windMs: null,
+      windAveragingMinutes: 1,
       pressureHpa: number(raw.pressure, 800, 1100),
       movement: {
         directionDegrees: number(raw.movementDir, 0, 360),
@@ -130,6 +139,8 @@ export function parseCycloneStatus(payload, now = Date.now()) {
           : 'https://www.nhc.noaa.gov/gtwo.php?basin=epac&fdays=7',
       geometryStatus: 'pending',
       geometryAdvisoryNumber: null,
+      geometryCycleId: null,
+      coneStatus: 'pending',
       forecastPoints: [],
       track: null,
       cone: null,
@@ -245,6 +256,8 @@ export function attachCycloneGeometry(storms, collections) {
       ...storm,
       geometryStatus: 'current',
       geometryAdvisoryNumber: storm.advisoryNumber,
+      geometryCycleId: storm.cycleId,
+      coneStatus: 'provided',
       forecastPoints,
       track: groups[1][0].geometry,
       cone: groups[2][0].geometry,
@@ -252,13 +265,27 @@ export function attachCycloneGeometry(storms, collections) {
   });
 }
 
+/** Merge only identical stable ids; storm names alone are not identities. */
+export function mergeCycloneProviders(nhc = [], cwa = []) {
+  const merged = new Map();
+  for (const storm of [...nhc, ...cwa]) {
+    const prior = merged.get(storm.id);
+    if (!prior || storm.provider === 'nhc') merged.set(storm.id, storm);
+  }
+  return [...merged.values()];
+}
+
 /** Fixed official endpoints; one shared bounded refresh, no user destinations. */
 export function cycloneProxy({
   fetchImpl = fetch,
   now = () => Date.now(),
+  cwaApiKey = process.env.CWA_API_KEY,
   timeoutMs = 12_000,
 } = {}) {
+  const cwaConfigured =
+    typeof cwaApiKey === 'string' && cwaApiKey.trim().length > 0;
   let cache = null;
+  const lastGood = { nhc: null, cwa: null };
   let operation = null;
   let attemptedAt = -Infinity;
   async function upstream(url, cap, signal) {
@@ -281,11 +308,12 @@ export function cycloneProxy({
     signal.throwIfAborted();
     return result;
   }
-  async function refresh(signal) {
+  async function refreshNHC(signal) {
     let storms = parseCycloneStatus(
       await upstream(STATUS_URL, 128 * 1024, signal),
       now(),
     );
+    let degraded = false;
     if (storms.length) {
       try {
         const results = await Promise.allSettled(
@@ -312,14 +340,85 @@ export function cycloneProxy({
           results.map((result) => result.value),
         );
       } catch {
+        degraded = true;
         storms = storms.map((storm) => ({
           ...storm,
           geometryStatus: 'unavailable',
+          geometryAdvisoryNumber: null,
+          geometryCycleId: null,
+          coneStatus: 'unavailable',
         }));
       }
     }
+    return { storms, fetchedAt: now(), degraded };
+  }
+  function goodProvider(entry, provider) {
+    if (!entry || now() - entry.fetchedAt > 12 * HOUR) return null;
+    const storms =
+      provider === 'cwa'
+        ? pruneCwaForecasts(entry.storms, now())
+        : entry.storms.filter(
+            (storm) => now() - Date.parse(storm.issuedAt) <= 12 * HOUR,
+          );
+    return { ...entry, storms };
+  }
+  async function refresh(signal) {
+    const [nhcResult, cwaResult] = await Promise.allSettled([
+      refreshNHC(signal),
+      cwaConfigured
+        ? fetchCwaCyclones({
+            apiKey: cwaApiKey,
+            fetchImpl,
+            now,
+            signal,
+            timeoutMs,
+          })
+        : Promise.resolve({ configured: false, storms: [], fetchedAt: null }),
+    ]);
     signal.throwIfAborted();
-    cache = { storms, fetchedAt: now() };
+
+    if (nhcResult.status === 'fulfilled') lastGood.nhc = nhcResult.value;
+    if (cwaResult.status === 'fulfilled' && cwaResult.value.configured)
+      lastGood.cwa = cwaResult.value;
+
+    const nhcFresh = nhcResult.status === 'fulfilled';
+    const cwaFresh =
+      cwaResult.status === 'fulfilled' && cwaResult.value.configured;
+    const nhc = goodProvider(nhcFresh ? nhcResult.value : lastGood.nhc, 'nhc');
+    const cwa = cwaConfigured
+      ? goodProvider(cwaFresh ? cwaResult.value : lastGood.cwa, 'cwa')
+      : null;
+    if (!nhc && !cwa) throw new Error('cyclone_sources_unavailable');
+
+    const nhcStale = !nhcFresh && Boolean(nhc);
+    const cwaStale = cwaConfigured && !cwaFresh && Boolean(cwa);
+    const nhcDegraded = nhcFresh && nhcResult.value.degraded;
+    const nhcState = !nhc
+      ? 'unavailable'
+      : nhcStale || nhcDegraded
+        ? 'degraded'
+        : 'available';
+    const cwaState = !cwaConfigured
+      ? 'not_configured'
+      : !cwa
+        ? 'unavailable'
+        : cwaStale
+          ? 'degraded'
+          : 'available';
+    const partial =
+      nhcState !== 'available' || (cwaConfigured && cwaState !== 'available');
+    const storms = mergeCycloneProviders(nhc?.storms ?? [], cwa?.storms ?? []);
+    const fetchedAt =
+      Math.max(nhc?.fetchedAt ?? 0, cwa?.fetchedAt ?? 0) || null;
+    cache = {
+      storms,
+      fetchedAt,
+      stale: nhcStale || cwaStale,
+      partial,
+      providers: { nhc: nhcState, cwa: cwaState },
+      cwaConfigured,
+      unavailable: !nhc && !cwa,
+    };
     return cache;
   }
   async function acquire(signal) {
@@ -358,20 +457,29 @@ export function cycloneProxy({
     }
   }
   function describe(value, stale = false) {
+    const configured = value?.cwaConfigured ?? cwaConfigured;
     return {
       schemaVersion: 1,
-      source: 'NOAA NHC / CPHC',
-      attribution:
-        'NOAA/NWS National Hurricane Center / Central Pacific Hurricane Center',
+      source: configured ? 'NOAA NHC / CPHC + Taiwan CWA' : 'NOAA NHC / CPHC',
+      attribution: configured
+        ? 'NOAA/NWS National Hurricane Center / Central Pacific Hurricane Center; Taiwan Central Weather Administration (CWA)'
+        : 'NOAA/NWS National Hurricane Center / Central Pacific Hurricane Center',
       coverage: COVERAGE,
       fetchedAt: value?.fetchedAt ?? null,
-      stale: stale || !value,
-      unavailable: !value,
+      stale: stale || value?.stale === true || !value,
+      partial: value?.partial === true,
+      unavailable: !value || value.unavailable === true,
+      providers: value?.providers ?? {
+        nhc: 'unavailable',
+        cwa: configured ? 'unavailable' : 'not_configured',
+      },
       reason: !value
         ? 'Cyclone data unavailable'
-        : stale
+        : stale || value.stale
           ? 'Cached cyclone advisory; upstream unavailable'
-          : null,
+          : value.partial
+            ? 'Some cyclone sources unavailable or degraded'
+            : null,
       storms: value?.storms ?? [],
     };
   }
@@ -403,7 +511,17 @@ export function cycloneProxy({
           cache.storms.every(
             (storm) => now() - Date.parse(storm.issuedAt) <= 12 * HOUR,
           );
-        json(200, describe(usable ? cache : null, true));
+        const fallback = usable
+          ? {
+              ...cache,
+              storms: cache.storms.flatMap((storm) =>
+                storm.provider === 'cwa'
+                  ? pruneCwaForecasts([storm], now())
+                  : [storm],
+              ),
+            }
+          : null;
+        json(200, describe(fallback, true));
       }
     } finally {
       res.removeListener?.('close', close);
@@ -412,10 +530,16 @@ export function cycloneProxy({
   return {
     name: 'cyclones',
     configureServer({ middlewares }) {
-      middlewares.use('/api/cyclones', handler);
+      middlewares.use(
+        '/api/cyclones',
+        cwaConfigured ? sameSiteGated(handler) : handler,
+      );
     },
     configurePreviewServer({ middlewares }) {
-      middlewares.use('/api/cyclones', handler);
+      middlewares.use(
+        '/api/cyclones',
+        cwaConfigured ? sameSiteGated(handler) : handler,
+      );
     },
   };
 }

@@ -531,6 +531,7 @@ test('static entities preserve polygon parts, holes and geographic seam coordina
     tracks: 1,
     cones: 2,
     forecastPoints: 1,
+    probabilityRadii: 0,
     dataSources: 1,
     entities: 8,
     selectedId: null,
@@ -546,6 +547,68 @@ test('static entities preserve polygon parts, holes and geographic seam coordina
   h.rendering.destroy();
   assert.equal(h.sources.length, 0);
   assert.equal(h.rendering.getDiagnostics().entities, 0);
+});
+test('CWA forecast positions render without a cone and show only supplied probability radii', async () => {
+  const h = harness();
+  const cycleId = 'cwa-2026-td1:2026-10-23T06:00:00.000Z';
+  const cwa = {
+    id: 'cwa-2026-td1',
+    provider: 'cwa',
+    name: 'CHAMPI',
+    classification: 'Tropical cyclone',
+    basin: 'WP',
+    advisoryNumber: null,
+    geometryAdvisoryNumber: null,
+    geometryStatus: 'current',
+    cycleId,
+    geometryCycleId: cycleId,
+    position: { longitude: 121.5, latitude: 20 },
+    forecastPoints: [
+      {
+        position: { longitude: 123, latitude: 22 },
+        tauHours: 12,
+        validAt: '2026-10-23T18:00:00.000Z',
+        probabilityRadiusKm: 150,
+      },
+    ],
+    track: {
+      type: 'LineString',
+      coordinates: [
+        [121.5, 20],
+        [123, 22],
+      ],
+    },
+    cone: null,
+  };
+  await h.rendering.setSnapshot({ storms: [cwa] });
+  h.rendering.setSelection(cwa.id);
+  const entities = h.sources[0].entities.values;
+  const forecast = entities.find((entity) => entity.id.endsWith(':forecast:0'));
+  assert.ok(entities.some((entity) => entity.id.endsWith(':center')));
+  assert.ok(
+    entities.some((entity) =>
+      entity.id.startsWith('cyclone:cwa-2026-td1:track:'),
+    ),
+  );
+  assert.equal(
+    entities.some((entity) => entity.polygon),
+    false,
+  );
+  assert.equal(forecast.ellipse.semiMajorAxis, 150_000);
+  assert.equal(forecast.ellipse.semiMinorAxis, 150_000);
+  assert.deepEqual(h.overlay.entry('lead:cwa-2026-td1:12').details, [
+    '2026-10-23T18:00:00.000Z',
+  ]);
+  assert.deepEqual(
+    {
+      tracks: h.rendering.getDiagnostics().tracks,
+      cones: h.rendering.getDiagnostics().cones,
+      forecastPoints: h.rendering.getDiagnostics().forecastPoints,
+      probabilityRadii: h.rendering.getDiagnostics().probabilityRadii,
+    },
+    { tracks: 1, cones: 0, forecastPoints: 1, probabilityRadii: 1 },
+  );
+  h.rendering.destroy();
 });
 test('pending or mismatched advisory geometry never renders even when supplied', async () => {
   for (const changed of [

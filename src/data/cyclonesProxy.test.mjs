@@ -74,7 +74,7 @@ function collections(adv = '10') {
 }
 function install(options = {}, preview = false) {
   let handler;
-  const plugin = cycloneProxy({ now: () => NOW, ...options });
+  const plugin = cycloneProxy({ now: () => NOW, cwaApiKey: '', ...options });
   plugin[preview ? 'configurePreviewServer' : 'configureServer']({
     middlewares: {
       use(path, callback) {
@@ -296,7 +296,7 @@ test('dev and preview serve only fixed bounded NOAA queries, caching a complete 
     const snapshot = body(await request());
     assert.equal(snapshot.unavailable, false);
     assert.equal(snapshot.stale, false);
-    assert.match(snapshot.coverage, /not worldwide/);
+    assert.match(snapshot.coverage, /not covered/);
     assert.equal(snapshot.storms[0].geometryStatus, 'current');
     assert.equal(snapshot.fetchedAt, NOW);
     assert.equal(calls.length, 4);

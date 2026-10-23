@@ -100,7 +100,7 @@ export function cycloneLeadEntry(stormId, point) {
     position: point.position,
     variant: 'card',
     title: `${point.tauHours} h`,
-    details: [],
+    details: point.validAt ? [point.validAt] : [],
     accent: CYCLONE_ACCENT,
     selected: false,
     protected: false,

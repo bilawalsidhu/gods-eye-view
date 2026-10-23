@@ -19,7 +19,8 @@ How to read this:
 | **ECMWF IFS (wind)** (`data.ecmwf.int/forecasts`, ECMWF Open Data) | The alternative Wind model: 10 m wind, optional 2 m temperature and mean sea-level pressure. Keyless; latest 6-hourly 0.25° run, byte-range GRIB2 reads, cached for an hour | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) plus the [ECMWF Terms of Use](https://apps.ecmwf.int/datasets/licences/general/) | "This service is based on data and products of the European Centre for Medium-Range Weather Forecasts (ECMWF)", with the CC BY 4.0 link, the modification notice and ECMWF's liability disclaimer — shown in-app |
 | **NOAA nowCOAST observed weather** (`nowcoast.noaa.gov/geoserver/observations/{weather_radar,satellite}/ows`, WMS 1.1.1) | Rain radar (MRMS base reflectivity, contiguous US, about 4-minute updates) and Satellite clouds (GOES-19/18 Band 14 regional infrared, about 5-minute updates; global infrared mosaic, hourly). Keyless; layer metadata refreshed every 2 minutes, exact-time images cached for up to 24 hours | [NOAA disclaimer](https://oceanservice.noaa.gov/disclaimer.html) | "NOAA nowCOAST · NWS/OAR MRMS radar; NESDIS GOES and global satellite partners" |
 | **NOAA nowCOAST lightning density** (`nowcoast.noaa.gov/geoserver/observations/lightning_detection/ows`) | Lightning density: 15-minute accumulated strike density on an approximately 8 km grid, Americas and Pacific. Keyless; layer metadata refreshed every 10 minutes, exact-time images cached for up to 24 hours | NOAA Level-5 derived product from Vaisala NLDN/GLD360; the [product description](https://ocean.weather.gov/lightning/lightning_pdd.php) permits public distribution of this density product, not of raw Vaisala detections | "NOAA/NWS nowCOAST; derived from Vaisala NLDN/GLD360" |
-| **NOAA NHC / CPHC advisories** (`www.nhc.noaa.gov/CurrentStorms.json` + the `mapservices.weather.noaa.gov` tropical weather summary MapServer) | Cyclone advisories: storm positions, forecast tracks, points and cones for the Atlantic and eastern/central North Pacific. Keyless through `/api/cyclones`; cached for 5 minutes | [NWS public-data terms](https://www.weather.gov/disclaimer); no endorsement implied | "NOAA/NWS NHC / CPHC" |
+| **NOAA NHC / CPHC advisories** (`www.nhc.noaa.gov/CurrentStorms.json` + the `mapservices.weather.noaa.gov` tropical weather summary MapServer) | Cyclone advisories: storm positions, forecast tracks, points and cones for the North Atlantic and eastern/central North Pacific. Keyless through `/api/cyclones`; cached for 5 minutes | [NWS public-data terms](https://www.weather.gov/disclaimer); no endorsement implied | "NOAA/NWS NHC / CPHC" |
+| **Taiwan CWA W-C0034-005** (`opendata.cwa.gov.tw/api/v1/rest/datastore/W-C0034-005`) | Active tropical-cyclone analysis and dated forecast positions for the western North Pacific and South China Sea; optional through `/api/cyclones` when `CWA_API_KEY` is configured; cached with the cyclone snapshot for 5 minutes | Dataset is subject to the [CWA Open Data platform terms](https://opendata.cwa.gov.tw/dataset/forecast/W-C0034-005); API key required; attribute Taiwan CWA | "Taiwan Central Weather Administration (CWA)" |
 | **Mapillary** (vector tiles, Graph API, MapillaryJS) | Street Level: coverage lines, image cones and the embedded viewer. Coverage tiles kept in server memory for 24 h | Imagery [CC BY-SA 4.0](https://www.mapillary.com/terms); API under the Mapillary terms with a client token | "© Mapillary contributors, CC BY-SA 4.0", shown on the globe while the provider is on |
 | **Google Street View** (Maps JavaScript API) | Street Level, on the Google 3D map only (Google's terms): Google's panorama viewer and nearest-panorama lookups; panorama dates and addresses kept for the session only | Google Maps Platform ToS (your own key + billing; every panorama load is billed) | "Street View imagery © Google" on the globe while the provider is on, and Google's logo and terms in the viewer |
 | **KartaView** (`api.kartaview.org` coverage tiles and photo API, `cdn.kartaview.org` image proxy, `storage*.openstreetcam.org` photos) | Street Level: coverage lines (z13–14 JSON tiles; with the imagery filter on, KartaView's filtered PNG tiles as a mask), nearest-photo lookups, the photo's sequence and the photo itself, fetched by the browser. Keyless; nothing cached beyond the session | Imagery [CC BY-SA 4.0](https://kartaview.org/terms) (KartaView terms §4); the public API needs no token | "© KartaView contributors, CC BY-SA 4.0", shown on the globe while the provider is on |
@@ -392,20 +393,41 @@ Community context: [#85](https://github.com/bilawalsidhu/gods-eye-view/issues/85
 This implementation is original; those contributions have not been merged here.
 
 
-### Weather: NHC/CPHC cyclone advisories
+### Weather: tropical cyclone advisories
 
-- **Sources:** [NHC current tropical cyclone status](https://www.nhc.noaa.gov/CurrentStorms.json) and
-  [NOAA tropical weather summary GIS](https://mapservices.weather.noaa.gov/tropical/rest/services/tropical/NHC_tropical_weather_summary/MapServer).
-- **Rights/credit:** NOAA/NWS National Hurricane Center / Central Pacific Hurricane Center;
-  [NWS public-data terms](https://www.weather.gov/disclaimer). Fetch official products at runtime;
-  no bundled advisory archive and no NOAA endorsement implied.
-- **Coverage/meaning:** Atlantic and eastern/central North Pacific, not global cyclone coverage.
-  Status position time and advisory issue time remain separate. Forecast track, points and cone
-  require matching advisory numbers across all GIS parts. Cone means uncertainty in the
-  forecast center track, not storm size or a complete hazard boundary.
-- **Delivery:** keyless same-origin `/api/cyclones`, five-minute singleflight cache,
-  fixed upstream endpoints, bounded bodies/geometry/deadline, explicit unavailable/stale states.
-  Direct status fetching is unsuitable in browsers because NHC does not advertise CORS.
+- **NOAA NHC/CPHC:** [current storm status](https://www.nhc.noaa.gov/CurrentStorms.json) and
+  [tropical weather summary GIS](https://mapservices.weather.noaa.gov/tropical/rest/services/tropical/NHC_tropical_weather_summary/MapServer).
+  Official position, forecast positions, and cone products cover the North Atlantic and
+  eastern/central North Pacific. Rights and credit follow the
+  [NWS public-data terms](https://www.weather.gov/disclaimer); no NOAA endorsement is implied.
+- **Taiwan CWA:** [W-C0034-005 dataset](https://opendata.cwa.gov.tw/dataset/forecast/W-C0034-005)
+  and its [product specification](https://opendata.cwa.gov.tw/opendatadoc/Warning/W-C0034-005.pdf).
+  CWA describes an operational product for active western North Pacific and South China Sea
+  cyclones, with analysis fixes and dated future positions. It updates every six hours during
+  cyclone activity and every three hours during a typhoon warning. The product supplies 70%
+  forecast-position probability radii in kilometres, not a forecast-cone polygon. The adapter
+  draws only those source-supplied radii and never builds a cone from them.
+- **Rights/credit:** CWA dataset use is subject to the CWA Open Data platform terms shown on the
+  dataset page; users need free platform membership and an API key. Display credit is
+  “Taiwan Central Weather Administration (CWA)”. Do not redistribute the key. NOAA records
+  retain NOAA/NWS attribution and use the NWS public-data terms above.
+- **Coverage limits:** North Atlantic and eastern/central North Pacific use NOAA NHC/CPHC;
+  western North Pacific and South China Sea use CWA only when the operator configures
+  `CWA_API_KEY`. North Indian, Southern Indian, Australian-region, and South Pacific operational
+  forecasts are unsupported. GDACS was not selected because its documented event API exposes
+  global event context, while the retrieved product records did not establish a verified,
+  timestamped future forecast track suitable for this layer. JMA RSMC publishes western Pacific
+  forecast products, but its experimental CAP feed is explicitly not operational and no stable,
+  documented machine-readable operational API was verified for this integration. Historical
+  best-track datasets are not used as forecasts.
+- **Normalization and delivery:** both providers are fetched through fixed same-origin
+  `/api/cyclones` upstreams, with five-minute singleflight caching, bounded response sizes and
+  geometry, request deadlines, no redirects, separate issue/position/forecast-valid times,
+  cycle checks, partial-provider status, and age-limited last-good fallback. CWA's key is sent in
+  the server-only `Authorization` header. The reviewed CWA API manual did not state a numeric
+  request quota; successful snapshots cache for five minutes and failed refreshes have a
+  sixty-second retry cooldown. NOAA remains keyless when CWA is unconfigured or down.
+  Direct NHC status fetching is unsuitable in browsers because NHC does not advertise CORS.
 
 ### Weather: observed lightning density
 
