@@ -27,7 +27,7 @@ export function sameFilter(a, b) {
 
 /**
  * Stored filter (relative days, stable in share links) to the absolute form
- * providers compare capture times against.
+ * coverage, cones and lookups compare capture times against.
  * @returns {{pano: string, sinceMs: number|null}}
  */
 export function resolveFilter(filter, now = Date.now()) {

@@ -26,7 +26,7 @@ import {
 export const LOCAL_ADSB_HISTORY_MS = 10 * 60_000;
 export const LOCAL_ADSB_HISTORY_POINTS = 600;
 /** A display correction larger than this snaps instead of sliding. */
-export const LOCAL_ADSB_SNAP_M = 3_000;
+const LOCAL_ADSB_SNAP_M = 3_000;
 /** Chord course uses the newest fix at least this much older than the anchor. */
 const CHORD_BASELINE_MS = 2_000;
 /** Turn rate is estimated over this window of heard fixes. */

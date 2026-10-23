@@ -39,6 +39,10 @@ export function createVoiceControl({ reset = false } = {}) {
     root.dataset.status = 'idle';
     root.dataset.speaker = 'idle';
     root.innerHTML = `
+      <label id="gev-voice-provider-field" class="gev-voice-provider-field" hidden>
+        <span>${t('Voice provider')}</span>
+        <select id="gev-voice-provider" aria-label="${t('Voice provider')}" title="${t('Changing provider reconnects voice if it is on.')}"></select>
+      </label>
       <div class="gev-voice-heading">
         <div class="gev-voice-kicker">${t('AI AGENT')}</div>
         <div id="gev-voice-status">${voiceStatusLabel('idle')}</div>
@@ -110,6 +114,8 @@ export function createVoiceControl({ reset = false } = {}) {
   }
   return {
     root,
+    providerField: root.querySelector('#gev-voice-provider-field'),
+    providerSelect: root.querySelector('#gev-voice-provider'),
     button: root.querySelector('#gev-voice-button'),
     buttonLabel: root.querySelector('.gev-mic-label'),
     status: root.querySelector('#gev-voice-status'),

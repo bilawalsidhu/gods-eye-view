@@ -14,7 +14,7 @@ export const RETICLE_MAX_MS = 10000;
 export const RETICLE_LINGER_MS = 1500;
 
 /** Tools that move the camera away from the pointed spot. */
-export const CAMERA_TOOLS = new Set([
+const CAMERA_TOOLS = new Set([
   'fly_to_location',
   'track_entity',
   'zoom_to_globe',
