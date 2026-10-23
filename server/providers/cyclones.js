@@ -1,6 +1,6 @@
 import { readResponseTextCapped } from './common/http.js';
 import { fetchCwaCyclones, pruneCwaForecasts } from './cycloneCwa.js';
-import { sameSiteGated } from './common/same-site.js';
+import { sameSiteKeylessGated } from './common/same-site.js';
 
 const STATUS_URL = 'https://www.nhc.noaa.gov/CurrentStorms.json';
 const GIS =
@@ -532,13 +532,13 @@ export function cycloneProxy({
     configureServer({ middlewares }) {
       middlewares.use(
         '/api/cyclones',
-        cwaConfigured ? sameSiteGated(handler) : handler,
+        cwaConfigured ? sameSiteKeylessGated(handler) : handler,
       );
     },
     configurePreviewServer({ middlewares }) {
       middlewares.use(
         '/api/cyclones',
-        cwaConfigured ? sameSiteGated(handler) : handler,
+        cwaConfigured ? sameSiteKeylessGated(handler) : handler,
       );
     },
   };
