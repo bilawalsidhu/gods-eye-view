@@ -2,8 +2,10 @@ import { createAssetDirectorySource } from '../director/packs/source.js';
 import { createApplicationTools } from '../app/tools.js';
 import { startStandaloneChrome } from './startupChrome.js';
 import { loadToolCatalog } from './toolCatalog.js';
+import { createWorldMonitorBriefing } from '../ui/worldMonitorBriefing.js';
 export function createStandaloneTools(options) {
-  return createApplicationTools({
+  const worldMonitor = Boolean(options?.worldMonitor?.enabled);
+  const tools = createApplicationTools({
     startChrome: startStandaloneChrome,
     sceneDataPacks: {
       sources: {
@@ -19,8 +21,16 @@ export function createStandaloneTools(options) {
     ...options,
     voice: {
       supportedProviders: ['openai', 'gemini'],
-      toolCatalog: loadToolCatalog,
+      toolCatalog: () => loadToolCatalog({ worldMonitor }),
       ...options?.voice,
     },
   });
+  if (worldMonitor) {
+    const briefing = createWorldMonitorBriefing({
+      container: document.body,
+      signal: options.signal,
+    });
+    options.defer(() => briefing?.destroy());
+  }
+  return tools;
 }
