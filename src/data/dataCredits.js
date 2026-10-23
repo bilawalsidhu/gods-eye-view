@@ -437,6 +437,13 @@ export const DATA_CREDITS = [
   },
   // ── Bundled snapshots ───────────────────────────────────────────
   {
+    key: 'sky-background',
+    html:
+      'Stars: <a href="https://cdsarc.cds.unistra.fr/viz-bin/cat/V/50" target="_blank" rel="noopener">Yale Bright Star Catalogue</a> ' +
+      '(Hoffleit &amp; Warren, via CDS). Milky Way: <a href="https://www.eso.org/public/images/eso0932a/" target="_blank" rel="noopener">ESO/S. Brunier</a> ' +
+      '(<a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a>; stars removed, blurred and reprojected)',
+  },
+  {
     key: 'dams',
     html: 'Dams: Open Infrastructure Map',
   },
