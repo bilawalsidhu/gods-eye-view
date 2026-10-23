@@ -437,6 +437,7 @@
       "src/i18n/index.js",
       "src/i18n/locale.js",
       "src/i18n/locales/es.json",
+      "src/i18n/locales/it.json",
       "src/i18n/locales/ru.json",
       "src/i18n/locales/zh-CN.json"
     ],
@@ -463,6 +464,7 @@
       "src/i18n/index.js",
       "src/i18n/locale.js",
       "src/i18n/locales/es.json",
+      "src/i18n/locales/it.json",
       "src/i18n/locales/ru.json",
       "src/i18n/locales/zh-CN.json"
     ],
@@ -480,6 +482,7 @@
       "src/i18n/index.js",
       "src/i18n/locale.js",
       "src/i18n/locales/es.json",
+      "src/i18n/locales/it.json",
       "src/i18n/locales/ru.json",
       "src/i18n/locales/zh-CN.json"
     ],
@@ -509,6 +512,7 @@
       "src/i18n/index.js",
       "src/i18n/locale.js",
       "src/i18n/locales/es.json",
+      "src/i18n/locales/it.json",
       "src/i18n/locales/ru.json",
       "src/i18n/locales/zh-CN.json",
       "src/ui/unitLabels.js",
@@ -530,6 +534,7 @@
       "src/i18n/index.js",
       "src/i18n/locale.js",
       "src/i18n/locales/es.json",
+      "src/i18n/locales/it.json",
       "src/i18n/locales/ru.json",
       "src/i18n/locales/zh-CN.json"
     ],
@@ -546,6 +551,7 @@
       "src/i18n/index.js",
       "src/i18n/locale.js",
       "src/i18n/locales/es.json",
+      "src/i18n/locales/it.json",
       "src/i18n/locales/ru.json",
       "src/i18n/locales/zh-CN.json"
     ],
@@ -565,6 +571,7 @@
       "src/i18n/index.js",
       "src/i18n/locale.js",
       "src/i18n/locales/es.json",
+      "src/i18n/locales/it.json",
       "src/i18n/locales/ru.json",
       "src/i18n/locales/zh-CN.json",
       "src/ui/unitLabels.js",
@@ -591,6 +598,7 @@
       "src/i18n/index.js",
       "src/i18n/locale.js",
       "src/i18n/locales/es.json",
+      "src/i18n/locales/it.json",
       "src/i18n/locales/ru.json",
       "src/i18n/locales/zh-CN.json",
       "src/ui/layerNames.js"
@@ -625,6 +633,7 @@
       "src/i18n/index.js",
       "src/i18n/locale.js",
       "src/i18n/locales/es.json",
+      "src/i18n/locales/it.json",
       "src/i18n/locales/ru.json",
       "src/i18n/locales/zh-CN.json",
       "src/ui/unitLabels.js"
@@ -641,6 +650,7 @@
       "src/i18n/index.js",
       "src/i18n/locale.js",
       "src/i18n/locales/es.json",
+      "src/i18n/locales/it.json",
       "src/i18n/locales/ru.json",
       "src/i18n/locales/zh-CN.json",
       "src/ui/unitLabels.js"
@@ -796,6 +806,7 @@
       "src/i18n/index.js",
       "src/i18n/locale.js",
       "src/i18n/locales/es.json",
+      "src/i18n/locales/it.json",
       "src/i18n/locales/ru.json",
       "src/i18n/locales/zh-CN.json",
       "src/ui/unitLabels.js",
@@ -916,6 +927,7 @@
       "src/i18n/index.js",
       "src/i18n/locale.js",
       "src/i18n/locales/es.json",
+      "src/i18n/locales/it.json",
       "src/i18n/locales/ru.json",
       "src/i18n/locales/zh-CN.json",
       "src/ui/unitLabels.js"
@@ -982,6 +994,7 @@
       "src/i18n/index.js",
       "src/i18n/locale.js",
       "src/i18n/locales/es.json",
+      "src/i18n/locales/it.json",
       "src/i18n/locales/ru.json",
       "src/i18n/locales/zh-CN.json",
       "src/ui/unitLabels.js"
@@ -1029,6 +1042,7 @@
       "src/i18n/index.js",
       "src/i18n/locale.js",
       "src/i18n/locales/es.json",
+      "src/i18n/locales/it.json",
       "src/i18n/locales/ru.json",
       "src/i18n/locales/zh-CN.json"
     ],
@@ -1090,6 +1104,7 @@
       "src/i18n/index.js",
       "src/i18n/locale.js",
       "src/i18n/locales/es.json",
+      "src/i18n/locales/it.json",
       "src/i18n/locales/ru.json",
       "src/i18n/locales/zh-CN.json"
     ],
@@ -1119,6 +1134,7 @@
       "src/i18n/index.js",
       "src/i18n/locale.js",
       "src/i18n/locales/es.json",
+      "src/i18n/locales/it.json",
       "src/i18n/locales/ru.json",
       "src/i18n/locales/zh-CN.json",
       "src/ui/unitLabels.js",
@@ -1149,6 +1165,7 @@
       "src/i18n/index.js",
       "src/i18n/locale.js",
       "src/i18n/locales/es.json",
+      "src/i18n/locales/it.json",
       "src/i18n/locales/ru.json",
       "src/i18n/locales/zh-CN.json"
     ],
@@ -1180,6 +1197,7 @@
       "src/i18n/index.js",
       "src/i18n/locale.js",
       "src/i18n/locales/es.json",
+      "src/i18n/locales/it.json",
       "src/i18n/locales/ru.json",
       "src/i18n/locales/zh-CN.json",
       "src/ui/unitLabels.js"
@@ -1213,6 +1231,7 @@
       "src/i18n/index.js",
       "src/i18n/locale.js",
       "src/i18n/locales/es.json",
+      "src/i18n/locales/it.json",
       "src/i18n/locales/ru.json",
       "src/i18n/locales/zh-CN.json"
     ],
@@ -1255,6 +1274,7 @@
       "src/i18n/index.js",
       "src/i18n/locale.js",
       "src/i18n/locales/es.json",
+      "src/i18n/locales/it.json",
       "src/i18n/locales/ru.json",
       "src/i18n/locales/zh-CN.json",
       "src/layers/installations/classLabel.js"
@@ -1290,6 +1310,7 @@
       "src/i18n/index.js",
       "src/i18n/locale.js",
       "src/i18n/locales/es.json",
+      "src/i18n/locales/it.json",
       "src/i18n/locales/ru.json",
       "src/i18n/locales/zh-CN.json",
       "src/ui/unitLabels.js"
@@ -1340,6 +1361,7 @@
       "src/i18n/index.js",
       "src/i18n/locale.js",
       "src/i18n/locales/es.json",
+      "src/i18n/locales/it.json",
       "src/i18n/locales/ru.json",
       "src/i18n/locales/zh-CN.json"
     ],
@@ -1369,6 +1391,7 @@
       "src/i18n/index.js",
       "src/i18n/locale.js",
       "src/i18n/locales/es.json",
+      "src/i18n/locales/it.json",
       "src/i18n/locales/ru.json",
       "src/i18n/locales/zh-CN.json"
     ],
@@ -1417,6 +1440,7 @@
       "src/i18n/index.js",
       "src/i18n/locale.js",
       "src/i18n/locales/es.json",
+      "src/i18n/locales/it.json",
       "src/i18n/locales/ru.json",
       "src/i18n/locales/zh-CN.json"
     ],
@@ -1478,6 +1502,7 @@
       "src/i18n/index.js",
       "src/i18n/locale.js",
       "src/i18n/locales/es.json",
+      "src/i18n/locales/it.json",
       "src/i18n/locales/ru.json",
       "src/i18n/locales/zh-CN.json",
       "src/layers/streetLevel/providers/mapillary/policy.js"
@@ -1507,6 +1532,7 @@
       "src/i18n/index.js",
       "src/i18n/locale.js",
       "src/i18n/locales/es.json",
+      "src/i18n/locales/it.json",
       "src/i18n/locales/ru.json",
       "src/i18n/locales/zh-CN.json"
     ],
@@ -1547,6 +1573,7 @@
       "src/i18n/index.js",
       "src/i18n/locale.js",
       "src/i18n/locales/es.json",
+      "src/i18n/locales/it.json",
       "src/i18n/locales/ru.json",
       "src/i18n/locales/zh-CN.json"
     ],
@@ -1569,6 +1596,7 @@
       "src/i18n/index.js",
       "src/i18n/locale.js",
       "src/i18n/locales/es.json",
+      "src/i18n/locales/it.json",
       "src/i18n/locales/ru.json",
       "src/i18n/locales/zh-CN.json"
     ],
@@ -1625,6 +1653,7 @@
       "src/i18n/index.js",
       "src/i18n/locale.js",
       "src/i18n/locales/es.json",
+      "src/i18n/locales/it.json",
       "src/i18n/locales/ru.json",
       "src/i18n/locales/zh-CN.json"
     ],
@@ -1681,6 +1710,7 @@
       "src/i18n/index.js",
       "src/i18n/locale.js",
       "src/i18n/locales/es.json",
+      "src/i18n/locales/it.json",
       "src/i18n/locales/ru.json",
       "src/i18n/locales/zh-CN.json",
       "src/ui/statusText.js",
@@ -2545,6 +2575,7 @@
       "src/i18n/index.js",
       "src/i18n/locale.js",
       "src/i18n/locales/es.json",
+      "src/i18n/locales/it.json",
       "src/i18n/locales/ru.json",
       "src/i18n/locales/zh-CN.json",
       "src/ui/unitLabels.js",
@@ -3121,6 +3152,7 @@
       "src/i18n/index.js",
       "src/i18n/locale.js",
       "src/i18n/locales/es.json",
+      "src/i18n/locales/it.json",
       "src/i18n/locales/ru.json",
       "src/i18n/locales/zh-CN.json",
       "src/ui/unitLabels.js",
@@ -3228,6 +3260,7 @@
       "src/data/cameraArrival.js",
       "src/i18n/locale.js",
       "src/i18n/locales/es.json",
+      "src/i18n/locales/it.json",
       "src/i18n/locales/ru.json",
       "src/i18n/locales/zh-CN.json",
       "src/i18n/index.js"
@@ -3250,6 +3283,7 @@
       "src/i18n/index.js",
       "src/i18n/locale.js",
       "src/i18n/locales/es.json",
+      "src/i18n/locales/it.json",
       "src/i18n/locales/ru.json",
       "src/i18n/locales/zh-CN.json"
     ],
@@ -3285,6 +3319,7 @@
       "src/i18n/index.js",
       "src/i18n/locale.js",
       "src/i18n/locales/es.json",
+      "src/i18n/locales/it.json",
       "src/i18n/locales/ru.json",
       "src/i18n/locales/zh-CN.json"
     ],
@@ -3309,6 +3344,7 @@
       "src/i18n/index.js",
       "src/i18n/locale.js",
       "src/i18n/locales/es.json",
+      "src/i18n/locales/it.json",
       "src/i18n/locales/ru.json",
       "src/i18n/locales/zh-CN.json"
     ],
@@ -3400,6 +3436,7 @@
       "src/i18n/index.js",
       "src/i18n/locale.js",
       "src/i18n/locales/es.json",
+      "src/i18n/locales/it.json",
       "src/i18n/locales/ru.json",
       "src/i18n/locales/zh-CN.json",
       "src/ui/unitLabels.js"
@@ -3455,6 +3492,7 @@
       "src/i18n/index.js",
       "src/i18n/locale.js",
       "src/i18n/locales/es.json",
+      "src/i18n/locales/it.json",
       "src/i18n/locales/ru.json",
       "src/i18n/locales/zh-CN.json",
       "src/ui/statusText.js",
@@ -3709,6 +3747,7 @@
       "src/i18n/index.js",
       "src/i18n/locale.js",
       "src/i18n/locales/es.json",
+      "src/i18n/locales/it.json",
       "src/i18n/locales/ru.json",
       "src/i18n/locales/zh-CN.json"
     ],
@@ -3752,6 +3791,7 @@
       "src/i18n/index.js",
       "src/i18n/locale.js",
       "src/i18n/locales/es.json",
+      "src/i18n/locales/it.json",
       "src/i18n/locales/ru.json",
       "src/i18n/locales/zh-CN.json"
     ],
@@ -3805,6 +3845,7 @@
       "src/i18n/index.js",
       "src/i18n/locale.js",
       "src/i18n/locales/es.json",
+      "src/i18n/locales/it.json",
       "src/i18n/locales/ru.json",
       "src/i18n/locales/zh-CN.json"
     ],
@@ -3821,6 +3862,7 @@
       "src/i18n/index.js",
       "src/i18n/locale.js",
       "src/i18n/locales/es.json",
+      "src/i18n/locales/it.json",
       "src/i18n/locales/ru.json",
       "src/i18n/locales/zh-CN.json",
       "src/ui/statusText.js",
@@ -4014,6 +4056,7 @@
       "src/i18n/index.js",
       "src/i18n/locale.js",
       "src/i18n/locales/es.json",
+      "src/i18n/locales/it.json",
       "src/i18n/locales/ru.json",
       "src/i18n/locales/zh-CN.json",
       "src/ui/statusText.js",
