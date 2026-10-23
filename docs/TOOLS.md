@@ -290,7 +290,7 @@ and the development server's internal routes. See SECURITY.md.
 | `find_infrastructure` | `infrastructure` | OpenStreetMap datacenters or dams in an area, nearest first (ODbL) |
 | `get_bhote_koshi_flood` | `events` | The 2026 Bhote Koshi flood: evidence trail in story order, flood path and imagery dates (CC BY-NC 4.0) |
 | `get_regional_brief` | `regional` | What and where a location is, its weather and recent headlines |
-| `get_cyclones` | `cyclones` | Active NHC/CPHC tropical cyclones, optionally in an area |
+| `get_cyclones` | `cyclones` | Active NOAA NHC/CPHC and configured Taiwan CWA tropical cyclones, optionally in an area; includes source and forecast timestamps |
 | `get_fire_perimeters` | `perimeters` | Mapped WFIGS wildfire perimeters in an area, largest first |
 | `get_terrain_height` | `terrain` | Ground, geoid and ellipsoid heights at up to 20 points |
 | `find_military_installations` | `installations` | OpenStreetMap military sites in an area of at most 10° per side |

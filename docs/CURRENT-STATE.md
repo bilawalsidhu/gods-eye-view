@@ -410,24 +410,28 @@ not worldwide detections; units are strikes/km²/min ×10³. It is neither raw G
 flashes nor a live strike counter. Weather imagery orders scalar context below
 satellite, radar and lightning consistently across enable and history order.
 
-Cyclones combine fixed NHC/CPHC status and summary GIS endpoints through a bounded
-same-origin provider. The status endpoint lacks browser CORS; each installation
-fetches keyless public sources at runtime, with no centralized ingestion service.
-The five-minute snapshot covers Atlantic and eastern/central North Pacific only.
-Current positions, advisory issue time and position time stay distinct. NHC may
-release an advisory before its nominal time (routinely up to about 30 minutes,
-rarely about an hour), so advisory issue and position times up to and including
-90 minutes ahead of the server clock are accepted; 90 minutes is this app's
-tolerance, not an NHC limit. Later, non-canonical, or more than 12-hour-old
-times still reject the status snapshot. Tracks,
-forecast lead-hour points and cones render only when all source parts match the
-status advisory; a newer status shows its position with geometry pending rather
-than relabeling older geometry. The cone represents forecast center uncertainty,
-not storm size or the full hazard area. Successful empty and unavailable states
-are distinct. One owned native Cesium data source preserves polygon holes and
-geographic seams and releases on disable; forecast animation is not implied.
-Cyclone markers, labels, tracks and cones are hidden beyond the horizon on every map source.
-Consult the linked official advisory for safety decisions.
+Cyclones combine NOAA NHC/CPHC status and summary GIS products with the optional
+Taiwan CWA W-C0034-005 product through one bounded same-origin `/api/cyclones`
+endpoint. NOAA stays keyless. CWA adds western North Pacific and South China Sea
+analysis fixes and dated future positions when the server has `CWA_API_KEY`; the
+key is sent only in a fixed server-side request. CWA updates every six hours during
+cyclone activity and every three hours during a typhoon warning. No North Indian,
+Southern Hemisphere, or Australian-region operational coverage is claimed.
+Current positions, issue times, and forecast valid times remain separate. CWA
+records retain their product identifier, forecast cycle, original m/s winds,
+unknown wind-averaging convention, and per-point valid time. Its 70% probability
+radii are displayed only where supplied; no cone polygon is fabricated. NOAA
+tracks and cones still require matching advisory numbers across all GIS parts.
+NHC may release an advisory before its nominal time (routinely up to about 30
+minutes, rarely about an hour), so issue and position times up to 90 minutes
+ahead are accepted; 90 minutes is this app's tolerance, not an NHC limit. Both
+providers have bounded bodies, fixed endpoints, five-minute shared caching,
+deadlines, and age-limited last-good fallback; the response reports partial and
+stale provider states. Successful empty and unavailable states remain distinct.
+One owned native Cesium data source preserves polygon holes and geographic seams
+and releases on disable; forecast animation is not implied. Cyclone markers,
+labels, tracks, cones, and source-supplied probability radii are hidden beyond the
+horizon on every map source. Consult the linked issuing source for safety decisions.
 
 Voice and HUD snapshots reuse the existing feedState classifier. Analyst follow-ups retain their original data provenance; current-view results append provenance without replacing legacy fields. HUD context and deterministic telemetry include non-nominal feed state.
 

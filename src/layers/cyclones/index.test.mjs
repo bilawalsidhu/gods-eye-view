@@ -11,6 +11,8 @@ import { isOwnedByOtherLayer } from '../../data/pickRegistry.js';
 const time = '2026-09-16T03:00:00.000Z';
 const storm = (id = 'ep152026') => ({
   id,
+  provider: 'nhc',
+  source: 'NOAA NHC / CPHC',
   name: id === 'ep152026' ? 'Fifteen-E' : 'Another system',
   classification: 'PTC',
   basin: 'EP',
@@ -547,16 +549,19 @@ test('advisory selection uses accessible row descriptors and shared camera hando
   const controls = h.layer.getRowControls();
   assert.equal(controls.readout, true);
   assert.deepEqual(controls.chips, []);
-  assert.equal(controls.summary.coverage, 'Atlantic · E/C Pacific');
+  assert.equal(
+    controls.summary.coverage,
+    'North Atlantic · E/C Pacific · W Pacific when configured',
+  );
   assert.equal(controls.summary.actions[0].href, storm().advisoryUrl);
   assert.equal(controls.summary.lines.length, 3);
   assert.deepEqual(controls.summary.settings, []);
   assert.deepEqual(controls.summary.actions, [
-    { id: 'advisory', label: 'Official advisory ↗', href: storm().advisoryUrl },
+    { id: 'advisory', label: 'Official source ↗', href: storm().advisoryUrl },
   ]);
   assert.match(controls.summary.compact, /2 active storms · .* selected/);
   assert.equal(controls.summary.sections, undefined);
-  assert.match(controls.list.ariaLabel, /NHC/);
+  assert.match(controls.list.ariaLabel, /cyclone/i);
   assert.equal(controls.list.items.length, 2);
   assert.equal(controls.list.items[0].active, true);
   assert.match(controls.info, /awaiting advisory 10/);
@@ -568,7 +573,7 @@ test('advisory selection uses accessible row descriptors and shared camera hando
   // No line break inside the date: a word joiner holds the hyphen.
   assert.match(controls.info, /issued 09-\u206016\u00a003:00\u00a0UTC/);
   assert.match(controls.info, /: 25\u00a0kt · .*: 1006\u00a0hPa/);
-  assert.match(controls.infoTitle, /not storm size/);
+  assert.match(controls.infoTitle, /do not describe storm size/);
   assert.match(controls.infoTitle, /follows the surface/);
   assert.equal(controls.list.items[1].params.focus, true);
   assert.equal(
@@ -598,7 +603,10 @@ test('empty successful coverage, unavailable source and stale advisory are diffe
   h.layer.enable();
   await h.layer.update();
   assert.equal(h.layer.getStats().empty, true);
-  assert.match(h.layer.getRowControls().summary.detail, /No active NHC\/CPHC/);
+  assert.match(
+    h.layer.getRowControls().summary.detail,
+    /No active cyclones in supported sources/,
+  );
   next = { ...snapshot(), stale: true };
   await h.layer.update();
   assert.match(h.layer.getRowControls().summary.status, /stale/);

@@ -154,6 +154,73 @@ test('cyclones are listed strongest first and can be limited to an area', async 
   );
 });
 
+test('CWA cyclone results retain source, forecast valid times, and wind units', async () => {
+  const result = await catalogWith({
+    cyclones: {
+      getSnapshot: async () => ({
+        source: 'NOAA NHC / CPHC + Taiwan CWA',
+        attribution: 'NOAA/NWS; Taiwan CWA',
+        coverage: 'supported basins',
+        stale: false,
+        partial: false,
+        unavailable: false,
+        providers: { nhc: 'available', cwa: 'available' },
+        storms: [
+          {
+            id: 'cwa-2026-td1',
+            provider: 'cwa',
+            source: 'Taiwan Central Weather Administration (CWA)',
+            sourceUrl:
+              'https://opendata.cwa.gov.tw/dataset/forecast/W-C0034-005',
+            name: 'CHAMPI',
+            classification: 'Tropical cyclone',
+            basin: 'WP',
+            position: { latitude: 20, longitude: 121.5 },
+            positionAt: '2026-10-23T06:00:00.000Z',
+            windKt: null,
+            windMs: 30,
+            windAveragingMinutes: null,
+            pressureHpa: 990,
+            movement: { speedKmh: 20 },
+            advisoryNumber: null,
+            advisoryId: 'CWA-TropicalCyclone_20261023142605:cwa-2026-td1',
+            cycleId: 'cwa-cycle',
+            issuedAt: '2026-10-23T06:26:05.000Z',
+            advisoryUrl:
+              'https://opendata.cwa.gov.tw/dataset/forecast/W-C0034-005',
+            forecastPoints: [
+              {
+                validAt: '2026-10-23T18:00:00.000Z',
+                tauHours: 12,
+                position: { latitude: 22, longitude: 124 },
+                windKt: null,
+                windMs: 32,
+                pressureHpa: 985,
+                probabilityRadiusKm: 150,
+              },
+            ],
+          },
+        ],
+      }),
+    },
+  }).call('get_cyclones', {});
+  assert.equal(
+    result.summary,
+    '1 active tropical cyclone; strongest CHAMPI at 30 m/s.',
+  );
+  assert.equal(
+    result.data.storms[0].source,
+    'Taiwan Central Weather Administration (CWA)',
+  );
+  assert.equal(result.data.storms[0].wind_kt, null);
+  assert.equal(result.data.storms[0].wind_ms, 30);
+  assert.equal(
+    result.data.storms[0].forecast_track[0].valid_at,
+    '2026-10-23T18:00:00.000Z',
+  );
+  assert.equal(result.data.providers.cwa, 'available');
+});
+
 test('fire perimeters are placed by their outline and sorted by size', async () => {
   const ring = (lon, lat) => [
     [
