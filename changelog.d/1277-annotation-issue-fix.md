@@ -1,0 +1,1 @@
+- Cull and budget surface height sampling (asturksever, #1277).

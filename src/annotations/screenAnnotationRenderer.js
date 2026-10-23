@@ -83,6 +83,20 @@ export function createScreenAnnotationRenderer(
   const heightCache = new Map();
   const HEIGHT_CACHE_SOFT = 600; // target size; over this we evict keys not used this frame
   const HEIGHT_CACHE_HARD = 8000; // absolute ceiling (one big ring + others) — never exceeded
+  // Accepted surface-height range; samples outside it are treated as misses.
+  const MIN_SURFACE_HEIGHT = -430;
+  const MAX_SURFACE_HEIGHT = 9000;
+  const HEIGHT_SAMPLE_BUDGET = 32; // clampToHeight calls per projection pass
+  const HEIGHT_RETRY_MS = 1000; // minimum interval between misses per anchor
+  let cullingVolume = null;
+  const heightBounds = new Cesium.BoundingSphere(new Cesium.Cartesian3(), 9500);
+  // Fair sampling: keys refused by an exhausted budget queue in arrival order,
+  // and each pass reserves budget for the oldest queued keys first, so a fixed
+  // iteration order cannot starve anchors beyond the first budget's worth.
+  let heightQueue = new Set(); // keys refused in earlier passes, oldest first
+  let heightReserved = new Set(); // queued keys this pass serves first
+  let heightRefused = new Set(); // keys refused during this pass
+  let heightBudget = HEIGHT_SAMPLE_BUDGET; // unreserved slots left this pass
   let projGen = 0; // bumped each projection frame; entries used this frame are "hot"
   function trimHeightCache() {
     if (heightCache.size <= HEIGHT_CACHE_SOFT) return;
@@ -110,10 +124,20 @@ export function createScreenAnnotationRenderer(
     return PALETTE[anno.color] || PALETTE.primary;
   }
 
+  function clearHeights() {
+    heightCache.clear();
+    heightQueue.clear();
+  }
+
+  function heightKey(lon, lat) {
+    return `${lon.toFixed(5)},${lat.toFixed(5)}`;
+  }
+
   // Best-effort surface height under a coordinate (clamps onto the 3D tiles).
   // Returns 0 until the tile loads, then caches the validated height.
-  function groundHeight(lon, lat) {
-    const key = `${lon.toFixed(5)},${lat.toFixed(5)}`;
+  // canSample=false returns the cached height (or 0) without surface sampling.
+  function groundHeight(lon, lat, canSample = true) {
+    const key = heightKey(lon, lat);
     const cached = heightCache.get(key);
     if (cached && cached.settled) {
       // Mark hot for this frame + bump to most-recently-used so heights for live
@@ -122,6 +146,20 @@ export function createScreenAnnotationRenderer(
       heightCache.delete(key);
       heightCache.set(key, cached);
       return cached.h;
+    }
+    const now = Date.now();
+    if (cached && (!canSample || now < cached.nextAttempt)) {
+      cached.gen = projGen;
+      return cached.h;
+    }
+    if (!canSample) return 0;
+    if (heightReserved.has(key)) {
+      heightReserved.delete(key);
+    } else if (heightBudget > 0) {
+      heightBudget--;
+    } else {
+      heightRefused.add(key);
+      return cached?.h || 0;
     }
     try {
       if (
@@ -133,7 +171,11 @@ export function createScreenAnnotationRenderer(
         );
         if (c) {
           const h = Cesium.Cartographic.fromCartesian(c).height;
-          if (Number.isFinite(h) && h > -430 && h < 9000) {
+          if (
+            Number.isFinite(h) &&
+            h > MIN_SURFACE_HEIGHT &&
+            h < MAX_SURFACE_HEIGHT
+          ) {
             heightCache.set(key, { h, settled: true, gen: projGen });
             trimHeightCache();
             return h;
@@ -144,7 +186,12 @@ export function createScreenAnnotationRenderer(
       /* tiles not ready */
     }
     const fallback = cached ? cached.h : 0;
-    heightCache.set(key, { h: fallback, settled: false, gen: projGen });
+    heightCache.set(key, {
+      h: fallback,
+      settled: false,
+      gen: projGen,
+      nextAttempt: now + HEIGHT_RETRY_MS,
+    });
     trimHeightCache();
     return fallback;
   }
@@ -310,7 +357,7 @@ export function createScreenAnnotationRenderer(
       } catch {
         /* never inserted */
       }
-      if (records.size === 0) heightCache.clear();
+      if (records.size === 0) clearHeights();
       throw error;
     }
   }
@@ -362,11 +409,30 @@ export function createScreenAnnotationRenderer(
     // Anchor at the real surface height (cached + validated), so marks sit on
     // the ground/building instead of at sea level. The settle-once cache keeps
     // it stable (no per-frame jitter that earlier broke nearby projections).
-    const world = Cesium.Cartesian3.fromDegrees(
-      lon,
-      lat,
-      groundHeight(lon, lat),
-    );
+    // A settled height is tested as the actual point below. An unknown height
+    // is rejected before GPU-backed surface sampling only when the whole
+    // accepted height range is proven hidden by one constraint.
+    let height;
+    if (heightCache.get(heightKey(lon, lat))?.settled) {
+      height = groundHeight(lon, lat);
+    } else {
+      if (heightRangeHidden(lon, lat)) return null;
+      // The frustum restricts sampling only; an endpoint outside it still
+      // projects (at its cached or zero height) so a partly visible arrow,
+      // route or ring keeps its on-screen connector and label.
+      Cesium.Cartesian3.fromDegrees(
+        lon,
+        lat,
+        0,
+        undefined,
+        heightBounds.center,
+      );
+      const inFrustum =
+        cullingVolume?.computeVisibility(heightBounds) !==
+        Cesium.Intersect.OUTSIDE;
+      height = groundHeight(lon, lat, inFrustum);
+    }
+    const world = Cesium.Cartesian3.fromDegrees(lon, lat, height);
     // Reject points behind the camera (they produce wrapped/extreme coords).
     Cesium.Cartesian3.subtract(world, scene.camera.positionWC, scratchDir);
     if (Cesium.Cartesian3.dot(scratchDir, scene.camera.directionWC) <= 0)
@@ -384,6 +450,21 @@ export function createScreenAnnotationRenderer(
     const h = scene.canvas.clientHeight || scene.canvas.height;
     if (win.x < -w || win.x > 2 * w || win.y < -h || win.y > 2 * h) return null;
     return { x: win.x, y: win.y };
+  }
+
+  // Points along one surface normal are linear in height, and each rejection
+  // region (behind the camera plane; the occluder's cone beyond the horizon
+  // plane) is convex. So when both height-range endpoints fail the SAME test,
+  // every intermediate height fails it too. Mixed failures prove nothing.
+  function heightRangeHidden(lon, lat) {
+    const low = Cesium.Cartesian3.fromDegrees(lon, lat, MIN_SURFACE_HEIGHT);
+    const high = Cesium.Cartesian3.fromDegrees(lon, lat, MAX_SURFACE_HEIGHT);
+    const behind = (point) => {
+      Cesium.Cartesian3.subtract(point, scene.camera.positionWC, scratchDir);
+      return Cesium.Cartesian3.dot(scratchDir, scene.camera.directionWC) <= 0;
+    };
+    if (behind(low) && behind(high)) return true;
+    return !occluder.isPointVisible(low) && !occluder.isPointVisible(high);
   }
 
   // Tracked-entity z-order: the tracked aircraft is a Cesium billboard in the
@@ -467,6 +548,20 @@ export function createScreenAnnotationRenderer(
 
   function projectAll() {
     if (!records.size) return;
+    // Serve the oldest refused keys first; the rest of the budget is open.
+    heightReserved = new Set();
+    for (const key of heightQueue) {
+      if (heightReserved.size >= HEIGHT_SAMPLE_BUDGET) break;
+      heightReserved.add(key);
+    }
+    heightBudget = HEIGHT_SAMPLE_BUDGET - heightReserved.size;
+    heightRefused = new Set();
+    cullingVolume =
+      scene.camera.frustum?.computeCullingVolume?.(
+        scene.camera.positionWC,
+        scene.camera.directionWC,
+        scene.camera.upWC,
+      ) || null;
     projGen += 1; // new frame: entries touched below are "hot" and survive trimming
     const trackedRect = trackedEntityRect();
     occluder.cameraPosition = scene.camera.positionWC;
@@ -613,6 +708,13 @@ export function createScreenAnnotationRenderer(
         }
       }
     }
+    // Still-refused queued keys keep their place; new refusals join the back.
+    // Keys no longer requesting a sample (settled, culled, removed) drop out.
+    const nextQueue = new Set();
+    for (const key of heightQueue)
+      if (heightRefused.has(key)) nextQueue.add(key);
+    for (const key of heightRefused) nextQueue.add(key);
+    heightQueue = nextQueue;
 
     // Keep clustered callouts readable.
     const placed = [];
@@ -693,7 +795,7 @@ export function createScreenAnnotationRenderer(
     }, 360);
     records.delete(anno.id);
     // Board emptied → drop accumulated height samples (natural reset point).
-    if (records.size === 0) heightCache.clear();
+    if (records.size === 0) clearHeights();
   }
 
   function sync() {
@@ -713,7 +815,7 @@ export function createScreenAnnotationRenderer(
       /* gone */
     }
     records.clear();
-    heightCache.clear();
+    clearHeights();
   }
 
   return { add, update, remove, sync, destroy };
