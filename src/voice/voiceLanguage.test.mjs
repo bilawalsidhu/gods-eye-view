@@ -21,6 +21,17 @@ test('only a shipped non-English locale is a voice language', () => {
   assert.match(voiceLanguageInstruction('ru'), /Speak Russian,/);
 });
 
+test('a voice language is the canonical shipped code, as the app resolves ?lang=', () => {
+  for (const value of ['zh-CN', 'zh-cn', 'ZH-CN', 'zh', 'zh_CN'])
+    assert.equal(resolveVoiceLanguage(value), 'zh-CN', value);
+  // Traditional Chinese readers are not given Simplified, as in locale.js.
+  for (const value of ['zh-Hant', 'zh-TW', 'zh-HK'])
+    assert.equal(resolveVoiceLanguage(value), null, value);
+  assert.equal(resolveVoiceLanguage('es-MX'), 'es');
+  assert.equal(resolveVoiceLanguage('en-GB'), null);
+  assert.match(voiceLanguageInstruction('zh-CN'), /Speak Chinese/);
+});
+
 test('session instructions only gain a closing LANGUAGE line for a voice language', () => {
   const english = realtimeInstructions();
   assert.equal(realtimeInstructions(undefined, {}), english);

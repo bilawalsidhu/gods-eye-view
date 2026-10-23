@@ -6,7 +6,7 @@
  * cannot drift.
  */
 
-import { DEFAULT_LOCALE, LOCALES } from '../i18n/locale.js';
+import { DEFAULT_LOCALE, normalizeLocale } from '../i18n/locale.js';
 
 /**
  * A shipped non-English locale code, or null: English, an unshipped code or
@@ -16,11 +16,10 @@ import { DEFAULT_LOCALE, LOCALES } from '../i18n/locale.js';
  * @returns {string|null}
  */
 export function resolveVoiceLanguage(code) {
-  if (typeof code !== 'string') return null;
-  const normalized = code.trim().toLowerCase();
-  return normalized !== DEFAULT_LOCALE && LOCALES.includes(normalized)
-    ? normalized
-    : null;
+  // The app's own resolver: case-insensitive, canonical code back (`zh-CN`,
+  // not `zh-cn`), the same zh-Hant refusal as ?lang= and the browser locale.
+  const locale = normalizeLocale(code);
+  return locale && locale !== DEFAULT_LOCALE ? locale : null;
 }
 
 /** The language's English name ("Japanese"), or '' when Intl cannot name it. */
