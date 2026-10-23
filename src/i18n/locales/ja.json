@@ -2809,5 +2809,9 @@
   "Gemini interrupted input exceeded its buffer or wait limit. Start voice again.": "Geminiの中断された入力がバッファーまたは待機時間の上限を超えました。音声をもう一度開始してください。",
   "Gemini Live connection is expiring. Start voice again for a new conversation.": "Gemini Liveの接続がまもなく期限切れになります。新しい会話を始めるには、音声をもう一度開始してください。",
   "Gemini voice sessions have a time limit. When a session expires, start voice again for a new conversation.": "Geminiの音声セッションには時間制限があります。セッションが期限切れになったら、音声をもう一度開始して新しい会話を始めてください。",
-  "Show the street-level view full screen (Esc shrinks it)": "ストリートレベルの画像を全画面で表示（Escで縮小）"
+  "Show the street-level view full screen (Esc shrinks it)": "ストリートレベルの画像を全画面で表示（Escで縮小）",
+  "Layers": "レイヤー",
+  "Search": "検索",
+  "More": "その他",
+  "Panels": "パネル"
 }
