@@ -38,6 +38,11 @@ test('every live basemap is reachable by its own id — no enum value without a 
   }
   // The Esri phrasings the voice prompt promises must also resolve.
   assert.equal(normalizeStackId('Esri'), 'esri-imagery');
+  // Kartverket's maps cover Norway only: generic names do not pick them.
+  assert.equal(normalizeStackId('topographic map'), null);
+  assert.equal(normalizeStackId('nautical chart'), null);
+  assert.equal(normalizeStackId('Norwegian topographic map'), 'kartverket-topo');
+  assert.equal(normalizeStackId('sjøkart'), 'kartverket-nautical');
   assert.equal(normalizeStackId('esri imagery'), 'esri-imagery');
   // And the voice tool's enum must equal the set of live ids — no drift either way.
   const enumIds = GEV_REALTIME_TOOLS.find(tool => tool.name === 'set_map_stack').parameters.properties.stack.enum;
