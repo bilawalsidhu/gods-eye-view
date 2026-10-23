@@ -185,6 +185,50 @@ test('CWA analysis and dated future forecasts preserve source cycles, units, and
       assert.ok(Math.abs(part[i][0] - part[i - 1][0]) <= 180);
 });
 
+test('CWA analysis timestamps reject impossible calendar dates and preserve valid leap days and offsets', () => {
+  const cases = [
+    {
+      at: '2026-02-29T14:00:00+08:00',
+      now: Date.parse('2026-03-01T06:00:00.000Z'),
+      valid: false,
+    },
+    {
+      at: '2026-04-31T14:00:00+08:00',
+      now: Date.parse('2026-05-01T06:00:00.000Z'),
+      valid: false,
+    },
+    {
+      at: '2024-02-29T14:00:00+08:00',
+      now: Date.parse('2024-02-29T06:00:00.000Z'),
+      valid: true,
+      expected: '2024-02-29T06:00:00.000Z',
+    },
+    {
+      at: '2026-05-01T14:00:00+08:00',
+      now: Date.parse('2026-05-01T06:00:00.000Z'),
+      valid: true,
+      expected: '2026-05-01T06:00:00.000Z',
+    },
+  ];
+
+  for (const scenario of cases) {
+    const value = structuredClone(product());
+    const root = value.cwaopendata;
+    root.Sent = new Date(scenario.now).toISOString();
+    const [storm] = root.Dataset.TropicalCyclones.TropicalCyclone;
+    root.Dataset.TropicalCyclones.TropicalCyclone = [storm];
+    storm.AnalysisData.Fix = [fix(scenario.at, 121.5, 20)];
+    delete storm.ForecastData;
+
+    if (scenario.valid) {
+      const [parsed] = parseCwaCyclones(value, scenario.now);
+      assert.equal(parsed.positionAt, scenario.expected);
+    } else {
+      assert.throws(() => parseCwaCyclones(value, scenario.now));
+    }
+  }
+});
+
 test('provider merge uses stable ids, keeps NOAA priority on an identity match, and ignores name collisions', () => {
   const nhc = { id: 'shared-id', provider: 'nhc', name: 'CHAMPI' };
   const duplicate = { id: 'shared-id', provider: 'cwa', name: 'CHAMPI' };
