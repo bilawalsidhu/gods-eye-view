@@ -18,12 +18,16 @@ const WINDOWS_ACL_VERIFY_SCRIPT = [
   '$acl = Get-Acl -LiteralPath $env:GEV_ACL_FILE',
   'if (-not $acl.AreAccessRulesProtected) { exit 2 }',
   "$allowed = @($env:GEV_ACL_USER_SID, 'S-1-5-18', 'S-1-5-32-544')",
+  // An untrusted owner can change the DACL even without an allow ACE.
+  '$owner = $acl.GetOwner([System.Security.Principal.SecurityIdentifier]).Value',
+  'if ($allowed -notcontains $owner) { exit 10 }',
   '$seen = @{}',
   '$rules = @($acl.GetAccessRules($true, $true, [System.Security.Principal.SecurityIdentifier]))',
   'if ($rules.Count -ne 3) { exit 7 }',
   'foreach ($rule in $rules) {',
   '  $ruleSid = $rule.IdentityReference.Value',
   '  if ($rule.IsInherited) { exit 3 }',
+  '  if ($rule.PropagationFlags -ne [System.Security.AccessControl.PropagationFlags]::None) { exit 11 }',
   '  if ($rule.AccessControlType -ne [System.Security.AccessControl.AccessControlType]::Allow) { exit 4 }',
   '  if ($allowed -notcontains $ruleSid) { exit 5 }',
   '  if ($seen.ContainsKey($ruleSid)) { exit 8 }',
@@ -139,6 +143,30 @@ export function hardenCredentialFile(
     }
   }
 
+  return windowsCredentialAcl(filepath, {
+    architecture,
+    spawn,
+    fileSystem,
+    environment,
+    apply: true,
+  });
+}
+
+/** Verify a Windows file or directory without repairing its existing ACL. */
+export function verifyWindowsCredentialAcl(filepath, options = {}) {
+  return windowsCredentialAcl(filepath, { ...options, apply: false });
+}
+
+function windowsCredentialAcl(
+  filepath,
+  {
+    architecture = process.arch,
+    spawn = spawnSync,
+    fileSystem = fs,
+    environment = process.env,
+    apply = false,
+  },
+) {
   const tools = resolveWindowsNativeTools(
     environment,
     fileSystem,
@@ -153,25 +181,29 @@ export function hardenCredentialFile(
     const whoami = spawn(tools.whoami, ['/user', '/fo', 'csv', '/nh'], {
       encoding: 'utf8',
       windowsHide: true,
+      timeout: 10_000,
+      maxBuffer: 16 * 1024,
     });
     const sid = commandCompletedSuccessfully(whoami)
       ? parseWindowsUserSid(whoami.stdout)
       : null;
     if (!sid) return false;
 
-    const applied = spawn(
-      tools.icacls,
-      [
-        filepath,
-        '/inheritance:r',
-        '/grant:r',
-        `*${sid}:F`,
-        '*S-1-5-18:F',
-        '*S-1-5-32-544:F',
-      ],
-      { stdio: 'ignore', windowsHide: true },
-    );
-    if (!commandCompletedSuccessfully(applied)) return false;
+    if (apply) {
+      const applied = spawn(
+        tools.icacls,
+        [
+          filepath,
+          '/inheritance:r',
+          '/grant:r',
+          `*${sid}:F`,
+          '*S-1-5-18:F',
+          '*S-1-5-32-544:F',
+        ],
+        { stdio: 'ignore', windowsHide: true, timeout: 10_000 },
+      );
+      if (!commandCompletedSuccessfully(applied)) return false;
+    }
 
     // Command success is not proof of the resulting DACL. Query it back and
     // accept only three explicit FullControl allow principals, with inheritance
@@ -198,7 +230,10 @@ export function hardenCredentialFile(
     // every spelling before setting the trusted one.
     const verifyEnvironment = Object.fromEntries(
       Object.entries(environment).filter(
-        ([name]) => name.toLowerCase() !== 'psmodulepath',
+        ([name]) =>
+          !['psmodulepath', 'gev_acl_file', 'gev_acl_user_sid'].includes(
+            name.toLowerCase(),
+          ),
       ),
     );
     const verified = spawn(
@@ -213,6 +248,7 @@ export function hardenCredentialFile(
         },
         stdio: 'ignore',
         windowsHide: true,
+        timeout: 10_000,
       },
     );
     return commandCompletedSuccessfully(verified);

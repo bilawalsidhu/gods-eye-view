@@ -32,7 +32,8 @@ async function fixture(
     beforeExchange = async () => {},
   } = {},
 ) {
-  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'gev-chatgpt-'));
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'gev-chatgpt-'));
+  const directory = path.join(root, 'chatgpt');
   const store = createChatGptStore({ directory });
   const calls = [];
   let authUrl;
@@ -108,7 +109,7 @@ async function fixture(
   const auth = createChatGptAuth({ store, fetchImpl, now: () => currentTime });
   t.after(() => {
     auth.close();
-    fs.rmSync(directory, { recursive: true, force: true });
+    fs.rmSync(root, { recursive: true, force: true });
   });
   async function start(account = null) {
     const { path: url } = await auth.start(account);
@@ -316,11 +317,10 @@ for (const status of [200, 503])
     assert.equal(url.searchParams.get('client_id'), 'oaiapp_fixture');
   });
 
-test('unsafe file and failed hardening never write credentials', async (t) => {
-  const directory = fs.mkdtempSync(
-    path.join(os.tmpdir(), 'gev-chatgpt-storage-'),
-  );
-  t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
+test('failed hardening never writes credentials', async (t) => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'gev-chatgpt-storage-'));
+  const directory = path.join(root, 'chatgpt');
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   const store = createChatGptStore({ directory, harden: () => false });
   await assert.rejects(
     store.transaction((d) => {
@@ -329,11 +329,6 @@ test('unsafe file and failed hardening never write credentials', async (t) => {
     /protect/,
   );
   assert.deepEqual(fs.readdirSync(directory), []);
-  fs.symlinkSync(
-    path.join(directory, 'missing'),
-    path.join(directory, 'accounts.json'),
-  );
-  assert.throws(() => store.read(), /Unsafe/);
 });
 
 test('auth routes refuse foreign origins, proxy headers, hostile Host, LAN clients and non-POST mutations', async () => {

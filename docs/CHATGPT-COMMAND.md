@@ -41,11 +41,76 @@ a different private directory outside the repository. Do not copy credentials
 from Codex or set an OAuth token as `OPENAI_API_KEY`. Nothing in this feature
 reads or updates Codex's `auth.json` or changes the existing Realtime integration.
 
-Writes use a fresh hardened file, fsync and atomic rename. Unix credentials are
-owner-only; Windows reuses Provider Settings' verified DACL hardener. The directory
-and file must not be symlinks. A lock serializes token refresh across processes;
+Writes use a fresh hardened file, fsync and atomic rename. Unix credentials and
+their directory must be owned by the current user with no group/other permissions.
+Windows reuses Provider Settings' DACL hardener and a non-mutating verifier:
+every read checks the directory and account file; transactions also recheck the
+lock and destination after an awaited update. Existing unsafe or unverifiable
+permissions are rejected, not silently repaired. Newly created directories,
+empty lock files and empty temporary files are hardened before use. The directory
+and file must not be symlinks, and credential files must not have hard-link aliases.
+A lock serializes token refresh across processes;
 after an abnormal termination, stop all GEV instances before removing a stranded
 `accounts.lock`. Never remove the lock while an instance may be refreshing.
+
+### Windows storage review (2026-10-23)
+
+The review found a defense-in-depth gap: the original Windows writer checked its
+temporary file's DACL, but `read()` checked only file type and size on Windows.
+A later ACL change could therefore leave a store readable or writable by another
+local principal while GEV continued using it. No remote exploit or cross-user
+token theft was demonstrated by this review. Exploitability depends on the
+effective permissions, directory ancestry and privileges on the actual machine.
+
+| Condition | Storage behavior after this change |
+| --- | --- |
+| Existing account file or directory has an unsafe/unverifiable Windows ACL | Reject before reading token bytes or invoking the transaction callback; do not repair permissions. |
+| A new directory, lock or empty temporary file cannot be hardened | Reject; never write credentials to that temporary file. |
+| Permissions change while a transaction awaits refresh | Recheck before committing; reject and retain the previous committed account file. A remotely rotated token may then require a new sign-in. |
+| Temporary-file verification, write, fsync or rename fails | Reject; attempt cleanup and preserve the previously committed store. |
+| A held lock is replaced | Refuse the commit and leave the replacement lock in place. |
+| A competing process holds the lock | Wait up to the configured deadline, then reject; do not steal the lock. |
+
+The Windows verifier requires inheritance disabled and exactly three explicit
+FullControl allow entries: the current process user's SID, SYSTEM and the local
+Administrators group. It rejects inherited entries, extra principals, denials,
+missing/reduced grants and propagation-only entries. The owner must also be one
+of these trusted principals: an otherwise restricted DACL does not protect a
+file whose untrusted owner can rewrite that DACL. The same policy applies to the
+store directory, because a writable directory can allow entry replacement or
+lock deletion independently of the child file's write permissions.
+
+The verifier shares the hardener's canonical, absolute Windows tool resolution
+and isolated PowerShell module environment. It never invokes `icacls` to repair
+an existing ACL. Ambiguous tool paths, identity/ACL query errors, nonzero exits,
+signals and timeouts fail closed. Case-insensitive environment aliases cannot
+override the verification target, expected SID or trusted module path.
+
+Reads use an open descriptor and compare it with the pathname around ACL
+verification and reading; transactions recheck their held lock before writing.
+These checks detect ordinary replacements and in-place changes. A reader racing
+an atomic commit can receive a storage error and retry, instead of accepting
+inconsistent data. These are **not atomic Windows handle-based ACL checks** and
+do not claim to eliminate all adversarial TOCTOU races. The configured directory
+must be on a local filesystem that supports the checked Windows ACLs, beneath
+trusted parent directories; this implementation does not audit all ancestors.
+Malware running as the user, SYSTEM or an administrator remains outside this
+storage boundary, as do privileged backups and already-open foreign handles.
+ACLs are access control, not encryption at rest.
+
+**Existing Windows installations:** a directory created by an earlier build may
+still use inherited ACLs and will now be refused, even if its account file passes.
+If storage is refused, stop GEV, inspect the directory and its parents, and revoke
+GEV's authorization in ChatGPT Settings if exposure is possible. Reauthorization
+in a fresh private GEV directory is preferable to trusting possibly modified
+records. Select an absent final directory via `GEV_CHATGPT_AUTH_DIR` so GEV can
+create and harden it. Remove only obsolete GEV account data after resolving any
+exposure; do not remove Codex's `auth.json` or API-key configuration. Fixing an ACL
+cannot retract credentials already copied or prove that saved data was unaltered.
+
+Microsoft documents [file access checks and security descriptors](https://learn.microsoft.com/en-us/windows/win32/fileio/file-security-and-access-rights),
+[directory deletion and DACL/owner rights](https://learn.microsoft.com/en-us/windows/win32/wmisdk/file-and-directory-access-rights-constants),
+and [owner access rights](https://learn.microsoft.com/en-us/windows-hardware/drivers/ifs/access-mask).
 
 Commands, relevant tool results and conversation context are sent to OpenAI.
 The conversation and encrypted reasoning continuation remain in browser memory,
@@ -82,6 +147,29 @@ with a dev server, plus `node scripts/qa-agent-console.mjs --offline` for consol
 chrome. `--offline` does not certify inference. The focused tests use temporary
 credential stores, locally signed fixture JWTs and synthetic Responses streams.
 They never require real credentials or make a paid model call.
+
+For storage-specific validation, run:
+
+```sh
+node --test src/keySetupHardening.test.mjs server/providers/common/credential-file.test.mjs server/providers/agent/chatgpt/store.test.mjs
+```
+
+Portable regressions cover simulated Windows ACL rejection, read-before-verify
+prevention, hardening/query failures, temporary-file cleanup, changes during
+awaited updates, lock replacement, timeout, queue recovery, and concurrent writes
+from independent store objects and separate Node processes. POSIX mode checks run
+on POSIX hosts. Simulated ACL outcomes do not execute or certify PowerShell/NTFS.
+The native-only tests use synthetic files and real Windows tools to apply the
+policy and then broaden a file/directory DACL, enable inheritance or add a deny
+entry; those tests are skipped outside Windows. The existing Windows onboarding
+CI job now runs both storage test files in addition to the shared hardener tests.
+
+Native Windows execution remains a release gate until a successful run is
+recorded. It should also include a second non-administrator account attempting
+read/write/delete, ordinary and elevated launches, a 32-bit caller where
+supported, and a custom path under trusted parents. Review unexpected ownership,
+reparse points and filesystem ACL support there. CI being `action_required` means
+execution needs authorization; it is not evidence that these tests passed or failed.
 
 Before marking this integration ready, test with an eligible account: first
 registration, returning sign-in, model discovery, a tool/result round trip,

@@ -111,6 +111,14 @@ GEV registers its own public OAuth client with PKCE, state and nonce; verifies
 ID-token signature/issuer/audience/expiry/identity with `jose`; and requires the
 plan-use scopes. Its private, atomically written account store is independent of
 Codex. A file lock serializes rotating refresh tokens across processes.
+Windows reads verify the existing file and directory DACLs without repairing
+them; missing ACL tools, unexpected owners or unsafe permissions refuse use.
+New directories, locks and temporary files are hardened before use, and updates
+recheck permissions after awaiting refresh. Descriptor/path identity checks reject
+replaced files or locks, and a replaced lock is not deleted by its former holder.
+Existing Windows directories with inherited ACLs require explicit recovery;
+native Windows execution remains a release gate. See the storage review and
+recovery instructions in [ChatGPT commands](CHATGPT-COMMAND.md).
 Credentials and identity registrations remain separate for accounts/workspaces,
 even when their email matches. Logout attempts remote revocation, cancels
 requests, removes local tokens and retains the registration for reauthorization.

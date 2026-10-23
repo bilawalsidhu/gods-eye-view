@@ -2,3 +2,8 @@
   GEV COMMAND console, with separate account storage, model discovery, cancellation
   and fail-closed tool dispatch. Builds on darrendignam's #976; voice and HUD Summary
   remain separate (radianx, #1331).
+- Reverify Windows ChatGPT credential and directory ACLs on reads, reject unsafe
+  permissions without repair, and harden locks with checks after awaited updates.
+  Add failure, replacement and cross-process concurrency regressions plus native
+  Windows CI coverage; document recovery and the remaining native release gate
+  (radianx, #1331).
