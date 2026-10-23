@@ -388,6 +388,27 @@ test('a cloudy tile overlapping the box by a sliver counts for its sliver', () =
     assert.ok(boxCloud(candidate, BOX) <= 20, 'the day is still clear');
     assert.equal(rankLatest([candidate], { box: BOX }).reason, 'clear');
   }
+  // A 12% day stays clear with 90% slivers along one edge, or two.
+  const northSliver = [
+    [west - 1, north - 0.001],
+    [east + 1, north - 0.001],
+    [east + 1, north + 1],
+    [west - 1, north + 1],
+  ];
+  const westSliver = [
+    [west - 1, BOX.south - 1],
+    [west + 0.001, BOX.south - 1],
+    [west + 0.001, north + 1],
+    [west - 1, north + 1],
+  ];
+  for (const slivers of [[northSliver], [northSliver, westSliver]]) {
+    const candidate = day([
+      { cloud: 12, footprint: square(west - 1, BOX.south - 1, 3) },
+      ...slivers.map((footprint) => ({ cloud: 90, footprint })),
+    ]);
+    assert.equal(boxCloud(candidate, BOX), 12);
+    assert.equal(rankLatest([candidate], { box: BOX }).reason, 'clear');
+  }
   // A cloudy tile over half the box makes it cloudy.
   const half = day([
     { cloud: 5, footprint: square(west - 1, BOX.south - 1, 3) },

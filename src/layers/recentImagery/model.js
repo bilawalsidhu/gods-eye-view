@@ -522,14 +522,18 @@ export function granulesOverBox(candidate, box) {
 /** Points per side of the grid that weighs each granule by its share of the box. */
 const AREA_GRID = 9;
 
-/** An AREA_GRID × AREA_GRID grid of [lon, lat] points over the box, edges included. */
+/**
+ * The centres of an AREA_GRID × AREA_GRID split of the box, as [lon, lat]:
+ * each point stands for an equal share of its area (points on the edges would
+ * give a sliver along an edge a whole row's weight).
+ */
 function areaGrid({ west, south, east, north }) {
   const points = [];
   for (let i = 0; i < AREA_GRID; i++)
     for (let j = 0; j < AREA_GRID; j++)
       points.push([
-        west + ((east - west) * i) / (AREA_GRID - 1),
-        south + ((north - south) * j) / (AREA_GRID - 1),
+        west + ((east - west) * (i + 0.5)) / AREA_GRID,
+        south + ((north - south) * (j + 0.5)) / AREA_GRID,
       ]);
   return points;
 }
