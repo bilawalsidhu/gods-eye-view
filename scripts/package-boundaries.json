@@ -1430,7 +1430,9 @@
       "./layers/street-level",
       "./layers/street-level/mapillary",
       "./layers/street-level/mapillary/source",
-      "./layers/street-level/google"
+      "./layers/street-level/google",
+      "./layers/street-level/kartaview",
+      "./layers/street-level/panoramax"
     ],
     "modules": [
       "src/layers/streetLevel/index.js",
