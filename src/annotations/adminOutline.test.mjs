@@ -120,6 +120,93 @@ test('Georgia resolves from camera geography without a geocoder', async () => {
   assert.deepEqual(geocodes, []);
 });
 
+test('Gold Coast in Australia cannot acquire its West African namesake outline', async () => {
+  for (const types of [['locality', 'political'], ['natural_feature']]) {
+    const { resolve, geocodes } = harness({
+      lat: -28.0167,
+      lng: 153.4,
+      label: 'Gold Coast, Australia',
+      name: 'Gold Coast',
+      types,
+    });
+    const resolved = await resolve('Gold Coast', viewerAt(-28.0167, 153.4));
+    assert.equal(resolved?.source, 'geocode');
+    assert.equal(resolved.lat, -28.0167);
+    assert.equal(resolved.lon, 153.4);
+    assert.equal(resolved.naturalRegion, undefined);
+    const outline = await resolved.resolveOutline();
+    assert.equal(outline?.naturalRegion, undefined);
+    assert.deepEqual(geocodes, ['Gold Coast']);
+  }
+});
+
+test('natural annotation outlines require a geocoded anchor', async () => {
+  for (const viewer of [AUSTIN, {}, viewerAt(46.5, 10, 248_000)]) {
+    const miss = harness();
+    assert.equal(await miss.resolve('the Alps', viewer), null);
+    assert.ok(miss.geocodes.includes('the Alps'));
+  }
+  const anchored = harness({
+    lat: 46.5,
+    lng: 10,
+    label: 'Alps',
+    name: 'Alps',
+    types: ['natural_feature'],
+  });
+  const resolved = await anchored.resolve('the Alps', {});
+  assert.equal(resolved.source, 'geocode');
+  const outline = await resolved.resolveOutline();
+  assert.equal(outline.naturalRegion, 'Alps');
+  assert.ok(outline.ring.length >= 8);
+});
+
+test('overlapping natural candidates continue through geocoding without choosing a ring', async () => {
+  const { resolve, geocodes } = harness({
+    lat: 45.6336,
+    lng: -74.86493,
+    label: 'Canadian Shield',
+    name: 'Canadian Shield',
+    types: ['natural_feature'],
+  });
+  const resolved = await resolve(
+    'Canadian Shield',
+    viewerAt(45.6336, -74.86493),
+  );
+  assert.equal(resolved?.source, 'geocode');
+  assert.equal((await resolved.resolveOutline())?.naturalRegion, undefined);
+  assert.deepEqual(geocodes, ['Canadian Shield']);
+});
+
+test('geocoded natural outlines respect district and around intent', async () => {
+  for (const extra of [
+    { entityKind: 'district' },
+    { intent: 'around_the_thing' },
+  ]) {
+    const { resolve, geocodes } = harness({
+      lat: 46.5,
+      lng: 10,
+      label: 'Alps',
+      name: 'Alps',
+      types:
+        extra.entityKind === 'district' ? ['locality'] : ['natural_feature'],
+    });
+    const resolved = await resolve('the Alps', viewerAt(46.5, 10), extra);
+    assert.ok(geocodes.includes('the Alps'));
+    assert.equal((await resolved.resolveOutline())?.naturalRegion, undefined);
+  }
+});
+
+test('cancellation while a bundled admin lookup is pending cannot publish an annotation', async () => {
+  const controller = new AbortController();
+  const { resolve, geocodes } = harness();
+  const pending = resolve('the Alps', viewerAt(46.5, 10), {
+    signal: controller.signal,
+  });
+  controller.abort();
+  await assert.rejects(pending, { name: 'AbortError' });
+  assert.deepEqual(geocodes, []);
+});
+
 test('country asks and geocoded country scopes use the bundled outline', async () => {
   const direct = harness();
   for (const name of ['Switzerland', 'Iran', 'France', 'Japan']) {

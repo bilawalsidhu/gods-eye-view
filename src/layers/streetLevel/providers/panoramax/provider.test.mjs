@@ -2,7 +2,6 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   createPanoramaxProvider,
-  overviewPointSize,
   panoramaxZoomFor,
   passesCoverage,
   pictureTilesAround,
@@ -10,8 +9,8 @@ import {
 import {
   FILTERED_HINT,
   NO_COVERAGE_HINT,
-  OVERVIEW_HINT,
   PICK_PREFIX,
+  ZOOM_IN_HINT,
 } from './policy.js';
 import { validateProviders } from '../../registry.js';
 import { tileBounds } from '../../tileMath.js';
@@ -95,9 +94,6 @@ function fakeContext({ filter = { pano: 'all', sinceMs: null } } = {}) {
       services: {},
       getFilter: () => filter,
       isActive: () => true,
-      groundCaster: null,
-      meshSampler: null,
-      getSurface: () => 'draped',
       notify() {},
       actions: {
         openImage: async (id, options) => {
@@ -152,19 +148,17 @@ test('Panoramax registers keyless and off by default, with both filters and its 
   assert.doesNotThrow(() => validateProviders([definition]));
 });
 
-test('lines at z10–14 below 60 km, as Mapillary’s; density points from z5 down to z0 above', () => {
-  assert.deepEqual(panoramaxZoomFor(500), { zoom: 14, kind: 'sequence' });
-  assert.deepEqual(panoramaxZoomFor(1_800), { zoom: 14, kind: 'sequence' });
-  assert.deepEqual(panoramaxZoomFor(4_000), { zoom: 13, kind: 'sequence' });
-  assert.deepEqual(panoramaxZoomFor(12_000), { zoom: 12, kind: 'sequence' });
-  assert.deepEqual(panoramaxZoomFor(25_000), { zoom: 11, kind: 'sequence' });
-  assert.deepEqual(panoramaxZoomFor(30_000), { zoom: 11, kind: 'sequence' });
-  assert.deepEqual(panoramaxZoomFor(30_001), { zoom: 10, kind: 'sequence' });
-  assert.deepEqual(panoramaxZoomFor(60_000), { zoom: 10, kind: 'sequence' });
-  assert.deepEqual(panoramaxZoomFor(60_001), { zoom: 5, kind: 'overview' });
-  assert.deepEqual(panoramaxZoomFor(100_000), { zoom: 5, kind: 'overview' });
-  assert.deepEqual(panoramaxZoomFor(2_000_000), { zoom: 3, kind: 'overview' });
-  assert.deepEqual(panoramaxZoomFor(20_000_000), { zoom: 0, kind: 'overview' });
+test('lines at z10–14 below 60 km, as Mapillary’s; nothing above', () => {
+  assert.equal(panoramaxZoomFor(500), 14);
+  assert.equal(panoramaxZoomFor(1_800), 14);
+  assert.equal(panoramaxZoomFor(4_000), 13);
+  assert.equal(panoramaxZoomFor(12_000), 12);
+  assert.equal(panoramaxZoomFor(25_000), 11);
+  assert.equal(panoramaxZoomFor(30_000), 11);
+  assert.equal(panoramaxZoomFor(30_001), 10);
+  assert.equal(panoramaxZoomFor(60_000), 10);
+  assert.equal(panoramaxZoomFor(60_001), null);
+  assert.equal(panoramaxZoomFor(20_000_000), null);
   assert.equal(panoramaxZoomFor(NaN), null);
 });
 
@@ -182,7 +176,7 @@ test('a line with no camera type or no day passes the filters: a click finds out
   );
 });
 
-test('the imagery filter: lines by type and day, density cells by what they hold', () => {
+test('the imagery filter: lines by type and day', () => {
   const old = Date.UTC(2020, 0, 1);
   const since = { pano: 'all', sinceMs: Date.UTC(2024, 0, 1) };
   assert.equal(
@@ -199,11 +193,7 @@ test('the imagery filter: lines by type and day, density cells by what they hold
     ),
     true,
   );
-  const cell = { hasPano: false, hasFlat: true, capturedAt: null };
-  assert.equal(passesCoverage(cell, { pano: 'pano', sinceMs: null }), false);
-  assert.equal(passesCoverage(cell, { pano: 'flat', sinceMs: null }), true);
-  assert.equal(passesCoverage(cell, since), true, 'cells are undated: kept');
-  assert.equal(passesCoverage(cell, null), true);
+  assert.equal(passesCoverage({ isPano: false, capturedAt: old }, null), true);
 });
 
 test('cones read the z15 tile around a picture, and its neighbours near an edge', () => {
@@ -249,7 +239,7 @@ test('a click on a line opens that sequence’s picture nearest the click, not a
   ];
   const { instance, actions, source } = setup({ items });
   assert.equal(
-    instance.handlePick(`${PICK_PREFIX.sequence}clicked~1`, {
+    instance.handlePick(`${PICK_PREFIX.sequence}clicked`, {
       groundPoint: () => east(1),
     }),
     true,
@@ -569,8 +559,13 @@ test('a broken neighbour z15 tile only thins the cones; an unreadable home tile 
   await withCones(t, env2);
   await env2.instance.viewer.open('c-0');
   await env2.instance.selectSequence('c');
-  assert.ok(await until(() => env2.actions.errors.some(Boolean)));
-  assert.match(env2.actions.errors.filter(Boolean).at(-1), /could not be read/);
+  assert.ok(await until(() => env2.instance.sequenceStats().error));
+  assert.match(env2.instance.sequenceStats().error, /could not be read/);
+  assert.deepEqual(
+    env2.actions.errors.filter(Boolean),
+    [],
+    'a sequence error is the sequence’s, not the viewer’s',
+  );
 });
 
 test('cones re-centred into tiles already read do not read them again', async (t) => {
@@ -629,16 +624,13 @@ test('the cones re-centre when › walks into another z15 tile', async (t) => {
 });
 
 /** The provider drawing coverage on a stand-in viewer above one z14 tile. */
-function coverageSetup(
-  t,
-  { sequences = [], grid = [], filter, height = 900 } = {},
-) {
+function coverageSetup(t, { sequences = [], filter, height = 900 } = {}) {
   const centre = tileCentre(ORIGIN.lon, ORIGIN.lat);
   let hold = null;
   const env = setup(
     {
       tiles: (tile) => {
-        const bytes = encodePanoramaxTile(tile, { sequences, grid });
+        const bytes = encodePanoramaxTile(tile, { sequences });
         return hold ? hold.then(() => bytes) : bytes;
       },
     },
@@ -682,8 +674,8 @@ test('sequence lines draw near the ground, and the imagery filter thins them', a
   });
   env.instance.activate(env.viewer);
   assert.ok(await until(() => env.instance.coverageStats().count === 2));
-  assert.equal(env.instance.coverageStats().kind, 'sequence');
   assert.equal(env.instance.coverageStats().keyRequired, false);
+  assert.equal(env.instance.coverageStats().error, null);
   env.instance.deactivate();
 
   const filtered = coverageSetup(t, {
@@ -697,6 +689,18 @@ test('sequence lines draw near the ground, and the imagery filter thins them', a
   assert.ok(await until(() => filtered.instance.coverageStats().count === 1));
 });
 
+test('the selected sequence’s line is drawn again over the coverage, and goes with it', async (t) => {
+  const env = coverageSetup(t, { sequences: [line('a'), line('b')] });
+  env.instance.activate(env.viewer);
+  assert.ok(await until(() => env.instance.coverageStats().count === 2));
+  const ground = env.viewer.scene.groundPrimitives.items;
+  const drawn = ground.size;
+  await env.instance.selectSequence('a');
+  assert.equal(ground.size, drawn + 1, 'one highlight over the lines');
+  env.instance.clearSequence();
+  assert.equal(ground.size, drawn);
+});
+
 test('coverage hints: nothing while loading, “no pictures” once an empty view has loaded', async (t) => {
   const env = coverageSetup(t);
   const release = env.holdTiles();
@@ -708,19 +712,16 @@ test('coverage hints: nothing while loading, “no pictures” once an empty vie
   assert.equal(env.instance.coverageStats().hint, NO_COVERAGE_HINT);
 });
 
-test('from high up the density grid draws points, not counted as sequences, and the panel says to zoom in', async (t) => {
-  const env = coverageSetup(t, {
-    height: 200_000,
-    grid: [{ lon: ORIGIN.lon, lat: ORIGIN.lat, pano: 2, flat: 3 }],
-  });
+test('from high up nothing is drawn or fetched, and the panel says to zoom in', async (t) => {
+  const env = coverageSetup(t, { height: 200_000, sequences: [line('a')] });
   env.instance.activate(env.viewer);
   assert.ok(
-    await until(() => env.instance.coverageStats().kind === 'overview'),
+    await until(() => env.instance.coverageStats().hint === ZOOM_IN_HINT),
   );
-  assert.ok(await until(() => !env.instance.coverageStats().loading));
-  assert.equal(env.instance.coverageStats().zoom, 5);
-  assert.equal(env.instance.coverageStats().count, 0, 'dots are not sequences');
-  assert.equal(env.instance.coverageStats().hint, OVERVIEW_HINT);
+  assert.equal(env.instance.coverageStats().count, 0);
+  assert.equal(env.instance.coverageStats().loading, false);
+  assert.deepEqual(env.source.calls.tiles, []);
+  assert.equal(env.viewer.scene.groundPrimitives.items.size, 0);
 });
 
 test('switching off clears the cones and forgets a pending line click', async (t) => {
@@ -748,38 +749,9 @@ test('lines in view that the filter hides all of say so, not that there is nothi
   });
   env.instance.activate(env.viewer);
   assert.ok(
-    await until(
-      () =>
-        !env.instance.coverageStats().loading &&
-        env.instance.coverageStats().zoom !== null,
-    ),
-  );
-  assert.ok(
     await until(() => env.instance.coverageStats().hint === FILTERED_HINT),
   );
   assert.equal(env.instance.coverageStats().count, 0);
-});
-
-test('from high up over empty sea the panel says there is nothing, not to zoom in', async (t) => {
-  const env = coverageSetup(t, { height: 200_000, grid: [] });
-  env.instance.activate(env.viewer);
-  assert.ok(
-    await until(() => env.instance.coverageStats().kind === 'overview'),
-  );
-  assert.ok(
-    await until(() => env.instance.coverageStats().hint === NO_COVERAGE_HINT),
-  );
-});
-
-test('density dots grow with the pictures they stand for', () => {
-  assert.equal(overviewPointSize({ weight: 1 }), 2.5);
-  assert.equal(overviewPointSize({ weight: 100 }), 4.5);
-  assert.equal(overviewPointSize({ weight: 1e9 }), 8);
-  assert.equal(overviewPointSize({}), 2.5);
-  assert.ok(
-    overviewPointSize({ weight: 50_000 }) >
-      overviewPointSize({ weight: 50 }) + 2,
-  );
 });
 
 test('Esc in the docked viewer clears the selected sequence before the panel can collapse', async (t) => {
@@ -890,42 +862,7 @@ test('cones re-centre on a picture that opens while they are still loading', asy
   );
 });
 
-test('a filter that hides every density dot says so', async (t) => {
-  const env = coverageSetup(t, {
-    height: 200_000,
-    filter: { pano: 'pano', sinceMs: null },
-    grid: [{ lon: ORIGIN.lon, lat: ORIGIN.lat, pano: 0, flat: 5 }],
-  });
-  env.instance.activate(env.viewer);
-  assert.ok(
-    await until(() => env.instance.coverageStats().hint === FILTERED_HINT),
-  );
-});
-
-test('dots are drawn at their own sizes, and the busiest is the biggest', async (t) => {
-  const env = coverageSetup(t, {
-    height: 200_000,
-    grid: [
-      { lon: ORIGIN.lon, lat: ORIGIN.lat, pano: 0, flat: 1 },
-      { lon: ORIGIN.lon + 3, lat: ORIGIN.lat, pano: 30_000, flat: 20_000 },
-    ],
-  });
-  env.instance.activate(env.viewer);
-  const sizes = () => {
-    const out = [];
-    for (const primitive of env.viewer.scene.primitives.items)
-      for (let i = 0; i < (primitive.length ?? 0); i++)
-        if (primitive.get(i).pixelSize) out.push(primitive.get(i).pixelSize);
-    return out.sort((a, b) => a - b);
-  };
-  assert.ok(await until(() => sizes().length === 2));
-  assert.deepEqual(sizes(), [
-    overviewPointSize({ weight: 1 }),
-    overviewPointSize({ weight: 50_000 }),
-  ]);
-});
-
-test('lines keep the decoded (longest-first) order under a budget of points', async () => {
+test('lines keep the decoded (longest-first) order under a cap on points', async () => {
   const { COVERAGE_TUNING } = await import('./policy.js');
   assert.equal(COVERAGE_TUNING.keepOrder, true);
   assert.ok(COVERAGE_TUNING.maxPoints > 0);
@@ -943,15 +880,16 @@ test('a coverage tile decoded a moment ago is not fetched again; switched off, t
   assert.ok(await until(() => env.instance.coverageStats().count === 1));
   const z14 = asked.length;
   // Up a zoom band and back down: the z14 tile comes from memory.
+  // (Activating again refreshes at once, without the camera debounce.)
   env.viewer.view.height = 3_000;
-  env.instance.refreshCoverage();
-  assert.ok(await until(() => env.instance.coverageStats().zoom === 13));
-  assert.ok(await until(() => !env.instance.coverageStats().loading));
+  env.instance.activate(env.viewer);
+  assert.ok(await until(() => asked.some((key) => key.startsWith('13/'))));
+  assert.ok(await until(() => env.instance.coverageStats().count === 1));
   const withZ13 = asked.length;
   env.viewer.view.height = 900;
-  env.instance.refreshCoverage();
-  assert.ok(await until(() => env.instance.coverageStats().zoom === 14));
+  env.instance.activate(env.viewer);
   assert.ok(await until(() => env.instance.coverageStats().count === 1));
+  await new Promise((resolve) => setTimeout(resolve, 10));
   assert.equal(asked.length, withZ13, 'nothing fetched again');
   assert.ok(z14 > 0);
   // Off and on: the memory went back, so the tile is fetched again.
@@ -1240,7 +1178,7 @@ test('a busy or timed-out tile keeps its own message; only a body that is not a 
     await withCones(t, env);
     await env.instance.viewer.open('s-0');
     await env.instance.selectSequence('s');
-    assert.ok(await until(() => env.actions.errors.some(Boolean)));
-    assert.equal(env.actions.errors.filter(Boolean).at(-1), failure.message);
+    assert.ok(await until(() => env.instance.sequenceStats().error));
+    assert.equal(env.instance.sequenceStats().error, failure.message);
   }
 });

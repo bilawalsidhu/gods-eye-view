@@ -49,11 +49,6 @@ export function resetKartaViewFixture() {
   nearestLookups = 0;
 }
 
-/** Nearest lookups answered since the last reset (the first got a 429). */
-export function kartaViewLookups() {
-  return nearestLookups;
-}
-
 /** The drive's photos, south to north; every tenth is 360°, every odd one archived. */
 export function kartaViewPhotos() {
   const step = KV_SPACING_M / METRES_PER_DEG_LAT;

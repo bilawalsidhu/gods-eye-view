@@ -66,7 +66,8 @@ try {
       );
     }),
   );
-  await page.click('#scene-capture-btn');
+  await page.focus('#scene-capture-btn');
+  await page.keyboard.press('Space');
   await page.waitForFunction(
     () => document.querySelectorAll('.scene-shot-row').length === 1,
   );
