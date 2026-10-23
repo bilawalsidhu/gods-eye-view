@@ -32,7 +32,7 @@ export function createInfrastructureLayers(services) {
       name: 'Dams',
       color: '#0088ff', // Blue
       icon: '▰',
-      source: 'USACE',
+      source: 'OpenStreetMap / OpenInfraMap',
       osmDerived: true,
       labels: true,
       labelMax: 900,
