@@ -743,7 +743,6 @@
   "server/providers/openai/toolDescriptions.js",
   "src/voice/session.js",
   "src/voice/sessionCommands.js",
-  "src/cameraGlobeRotation.test.mjs",
   "src/voice/realtimeSession.js",
   "src/voice/realtimeEvents.js",
   "src/voice/session.test.mjs",
@@ -1089,5 +1088,7 @@
   "src/ui/statusBadge.test.mjs",
   "src/ui/cctvBadges.test.mjs",
   "scripts/qa-status-badges.mjs",
+  "src/dockerTrustedPeers.test.mjs",
+  "src/cameraGlobeRotation.test.mjs",
   "src/voice/globeResetConfirmation.test.mjs"
 ]
