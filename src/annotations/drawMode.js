@@ -20,6 +20,8 @@ import { t, tn } from '../i18n/index.js';
  * `drawTool.js`.
  */
 
+import { greatCircleMeters } from '../geoDistance.js';
+
 export const DRAW_SHAPES = Object.freeze(['area', 'line', 'pin']);
 export const MIN_VERTICES = Object.freeze({ area: 3, line: 2, pin: 1 });
 /**
@@ -29,10 +31,10 @@ export const MIN_VERTICES = Object.freeze({ area: 3, line: 2, pin: 1 });
  */
 export const MAX_VERTICES = 512;
 /** Two clicks closer than this are one vertex: a double-click to finish must not add a stray point. */
-export const MIN_VERTEX_SEPARATION_M = 0.5;
+const MIN_VERTEX_SEPARATION_M = 0.5;
 /** A line shorter than this, or an area thinner than this, is a mis-click rather than a shape. */
-export const MIN_PATH_LENGTH_M = 1;
-export const MIN_AREA_M2 = 1;
+const MIN_PATH_LENGTH_M = 1;
+const MIN_AREA_M2 = 1;
 
 /** @param {string} shape @returns {'area'|'line'|'pin'} */
 export function normalizeShape(shape) {
@@ -48,15 +50,8 @@ export function createDrawSession(shape = 'area') {
 }
 
 /** Great-circle distance in metres between two {lon, lat} points. */
-export function greatCircleM(a, b) {
-  const R = 6371000;
-  const toRad = (d) => (d * Math.PI) / 180;
-  const dLat = toRad(b.lat - a.lat);
-  const dLon = toRad(b.lon - a.lon);
-  const h =
-    Math.sin(dLat / 2) ** 2 +
-    Math.cos(toRad(a.lat)) * Math.cos(toRad(b.lat)) * Math.sin(dLon / 2) ** 2;
-  return 2 * R * Math.asin(Math.sqrt(Math.min(1, h)));
+function greatCircleM(a, b) {
+  return greatCircleMeters(a, b);
 }
 
 /**

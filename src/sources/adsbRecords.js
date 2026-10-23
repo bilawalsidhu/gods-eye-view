@@ -41,12 +41,12 @@ const CATEGORY_PATTERN = /^[A-D][0-7]$/;
 /** A previous accepted fix older than this is no reference for a new one. */
 export const LOCAL_ADSB_REFERENCE_MAX_AGE_MS = 10 * 60_000;
 /** Speed limit (kt) for an aircraft that has not reported a ground speed. */
-export const LOCAL_ADSB_UNKNOWN_SPEED_LIMIT_KT = 1_000;
+const LOCAL_ADSB_UNKNOWN_SPEED_LIMIT_KT = 1_000;
 /** Tighter limit (kt) for light aircraft and rotorcraft without a speed. */
-export const LOCAL_ADSB_SLOW_CATEGORY_LIMIT_KT = 350;
+const LOCAL_ADSB_SLOW_CATEGORY_LIMIT_KT = 350;
 /** Reported ground speed is multiplied by this, plus the margin below. */
-export const LOCAL_ADSB_SPEED_FACTOR = 1.5;
-export const LOCAL_ADSB_SPEED_MARGIN_KT = 50;
+const LOCAL_ADSB_SPEED_FACTOR = 1.5;
+const LOCAL_ADSB_SPEED_MARGIN_KT = 50;
 /** Distance always allowed between two fixes (CPR and reception error). */
 export const LOCAL_ADSB_POSITION_MARGIN_M = 500;
 /**

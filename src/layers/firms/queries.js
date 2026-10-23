@@ -64,7 +64,8 @@ export function createQueries({
       const staleText = layerState._lastUpdate
         ? t('STALE · cached {age}', {
             age:
-              components.model.formatAge(now - layerState._lastUpdate) || '<1h',
+              components.model.formatAgeLabel(now - layerState._lastUpdate) ||
+              t('<1h', { context: 'age' }),
           })
         : t('STALE');
       let loadingLabel = '';
