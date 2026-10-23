@@ -1,4 +1,5 @@
 import { t, tn } from '../i18n/index.js';
+import { createActionButton } from './actionButton.js';
 
 /** Small owned modal for scene authoring and import review; text never becomes markup. */
 export function createSceneDialog(title, onClose) {
@@ -185,10 +186,7 @@ export function mountSceneSharing(
   ];
   const removers = [];
   for (const [text, fn] of entries) {
-    const b = document.createElement('button');
-    b.type = 'button';
-    b.textContent = text;
-    b.className = 'scene-btn';
+    const b = createActionButton({ label: text, className: 'scene-btn' });
     b.addEventListener('click', fn);
     removers.push(() => b.removeEventListener('click', fn));
     bar.append(b);

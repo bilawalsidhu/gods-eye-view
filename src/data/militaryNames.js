@@ -7,7 +7,7 @@ import { createRetryableLoader } from './retryableLoad.js';
 export const MILITARY_POINT_CAP = 512;
 export const MILITARY_LABEL_CAP = 24;
 
-export const MILITARY_NAMES_TIMEOUT_MS = 10_000;
+const MILITARY_NAMES_TIMEOUT_MS = 10_000;
 
 /** Map a pack row (optionally carrying a Wikidata item) onto a display record. */
 function nameRecord(classes, row) {

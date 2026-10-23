@@ -20,15 +20,15 @@
  */
 
 /** Movement below this many CSS pixels is still the same dwell. */
-export const POINTER_DWELL_PX = 12;
+const POINTER_DWELL_PX = 12;
 /** Stillness that makes a dwell point. */
 export const POINTER_DWELL_MS = 250;
 /** A resting pointer stays a referent this long after it last moved. */
 export const POINTER_FRESH_MS = 30000;
 /** Pixels from the canvas edge that count as "parked", never a referent. */
-export const POINTER_EDGE_PX = 8;
+const POINTER_EDGE_PX = 8;
 /** A dwell pick is reused by a snapshot only while this recent (contacts move). */
-export const POINTER_DWELL_REUSE_MS = 1000;
+const POINTER_DWELL_REUSE_MS = 1000;
 /**
  * Open mic has no gesture, so the pointer only counts when it moved or
  * settled on the map this recently: a cursor resting there for minutes is
@@ -76,7 +76,7 @@ export function cameraPoseKey(viewer) {
 }
 
 /** Bound and de-control a label before it goes to the model or the card. */
-export function pointerLabel(value, max = LABEL_MAX) {
+function pointerLabel(value, max = LABEL_MAX) {
   const clean = String(value ?? '')
     .replace(/[\p{Cc}\p{Cf}]+/gu, ' ')
     .replace(/\s+/g, ' ')
@@ -180,6 +180,63 @@ export function pointerChip(snapshot) {
     kind: 'here',
     label: `${snapshot.lat.toFixed(2)}, ${snapshot.lon.toFixed(2)}`,
   };
+}
+
+/** Dedupe key of the clearing pointer_context item. */
+export const POINTER_NONE_KEY = 'none';
+
+/**
+ * The voice-card event for a turn's pointer: a gesture reveals its target at
+ * once; open-mic and typed turns reveal it only through announcePointer.
+ * @param {object|null} snapshot
+ * @param {boolean} gesture
+ * @returns {{announced: object|null, pointer: object|null}}
+ */
+export function pointerTurnEvent(snapshot, gesture) {
+  const chip = gesture ? pointerChip(snapshot) : null;
+  return chip
+    ? { announced: snapshot, pointer: { ...chip, screenPx: snapshot.screenPx } }
+    : { announced: null, pointer: null };
+}
+
+/**
+ * The pointer_context item a turn should send, or null when there is nothing
+ * new. Without a gesture the model learns only what kind of thing is pointed
+ * at, never which. Losing a sent pointer produces one clearing item.
+ * @param {object|null} snapshot
+ * @param {{at: string, gesture: boolean, sentKey: string|null}} turn
+ * @returns {{item: object, key: string}|null}
+ */
+export function pointerTurnContext(snapshot, { at, gesture, sentKey }) {
+  const chip = pointerChip(snapshot);
+  const item = !chip
+    ? sentKey && sentKey !== POINTER_NONE_KEY
+      ? { type: 'pointer_context', at, target: 'none' }
+      : null
+    : gesture
+      ? pointerContextItem(snapshot)
+      : {
+          type: 'pointer_context',
+          at,
+          pointing: snapshot.entity?.kind || 'ground',
+        };
+  if (!item) return null;
+  const { at: _at, ...content } = item;
+  const key = chip ? JSON.stringify(content) : POINTER_NONE_KEY;
+  return key === sentKey ? null : { item, key };
+}
+
+/**
+ * The voice-card event revealing a pointer a tool resolved, once per snapshot.
+ * @param {object|null} snapshot
+ * @param {object|null} announced Snapshot already shown.
+ * @returns {object|null}
+ */
+export function pointerAnnouncement(snapshot, announced) {
+  const chip = pointerChip(snapshot);
+  return chip && snapshot !== announced
+    ? { ...chip, screenPx: snapshot.screenPx }
+    : null;
 }
 
 /**
@@ -330,7 +387,14 @@ export function createPointerTracker({
      * (open mic only when it moved recently: `recentMs`). The result becomes
      * the turn's referent (null when stale).
      */
-    beginTurn(at, { recentMs = POINTER_FRESH_MS } = {}) {
+    beginTurn(at, { recentMs = POINTER_FRESH_MS, capturedSnapshot } = {}) {
+      // Delayed admitted audio keeps its capture's pointer without replacing a
+      // newer physical hold. Undefined preserves existing caller behavior.
+      if (capturedSnapshot !== undefined) {
+        const snapshot = destroyed ? { fresh: false, at } : capturedSnapshot;
+        active = snapshot?.fresh ? snapshot : null;
+        return snapshot;
+      }
       const reuse =
         at !== 'text' && held && now() - held.heldAt <= POINTER_HOLD_MS;
       const snapshot = reuse ? held.snapshot : capture(at, { recentMs });
