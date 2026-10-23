@@ -1,4 +1,5 @@
 import { formatNumber, t } from '../i18n/index.js';
+import { createSlider } from './slider.js';
 
 /** A slider value in the UI language: 0.85 in English, 0,85 in Spanish. */
 const formatParam = (value, digits) =>
@@ -41,14 +42,15 @@ export function createStyleParameters({
         const label = documentRef.createElement('span');
         label.className = 'param-label';
         label.textContent = t(metadata.label);
-        const slider = documentRef.createElement('input');
-        slider.type = 'range';
-        slider.className = 'param-slider';
-        slider.setAttribute('aria-label', t(metadata.label));
-        slider.min = metadata.min;
-        slider.max = metadata.max;
-        slider.step = metadata.max <= 1 ? '0.01' : '0.1';
-        slider.value = readValue(name);
+        const slider = createSlider({
+          documentRef,
+          className: 'param-slider',
+          ariaLabel: t(metadata.label),
+          min: metadata.min,
+          max: metadata.max,
+          step: metadata.max <= 1 ? '0.01' : '0.1',
+          value: readValue(name),
+        });
         const digits = metadata.max <= 1 ? 2 : 1;
         const valueDisplay = documentRef.createElement('span');
         valueDisplay.className = 'param-value';

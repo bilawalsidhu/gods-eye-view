@@ -1155,11 +1155,7 @@ export function isOverlayPointVisible(
  * Return true when a rectangle intersects any cached UI exclusion box.
  * `count` lets pooled buffers expose a live prefix without truncating.
  */
-export function overlayRectIntersectsAny(
-  rect,
-  exclusions,
-  count = exclusions.length,
-) {
+function overlayRectIntersectsAny(rect, exclusions, count = exclusions.length) {
   for (let i = 0; i < count; i++) {
     const other = exclusions[i];
     if (
@@ -1177,7 +1173,7 @@ export function overlayRectIntersectsAny(
  * Like `overlayRectIntersectsAny`, but only against exclusions that composite
  * BELOW the host — the ones a placement may never overlap at any cost.
  */
-export function overlayRectIntersectsAnyHard(
+function overlayRectIntersectsAnyHard(
   rect,
   exclusions,
   count = exclusions.length,
