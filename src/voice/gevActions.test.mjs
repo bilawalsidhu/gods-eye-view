@@ -3931,3 +3931,56 @@ test('analyst-only lookup distinguishes duplicate names and uses canonical aircr
   assert.equal(plane.ok, true);
   assert.equal(plane.latitude, 36, 'canonical ID resolves the current position, not old coordinates');
 });
+
+
+test('analyst item display strings are single-line and bounded for voice', async () => {
+  globalThis.window = globalThis.window || { clearTimeout, setTimeout, requestIdleCallback: null };
+  const rows = [{ id: 'stable-id', name: 'Şehir\n' + 'x'.repeat(3000), label: 'Town\tStation', operator: 'City\nPD', lat: 30, lon: -97 }];
+  const { runner } = manifestRunner({ bikeshare: { getStats: () => ({ count: 1, lastUpdate: Date.now() }), getAnalystRecords: () => rows } });
+  const result = await runner('analyst_query', { layers: ['bikeshare'], scope: { kind: 'anywhere' }, limit: 1 });
+  assert.equal(result.ok, true);
+  assert.equal(result.items[0].name.length, 180);
+  assert.equal(result.items[0].label, 'Town Station');
+  assert.equal(result.items[0].id, 'stable-id');
+  for (const value of Object.values(result.items[0])) if (typeof value === 'string') assert.doesNotMatch(value, /[\r\n\t]/);
+});
+
+test('analyst_query keeps canonical IDs raw so numbered references still fly to the station', async () => {
+  globalThis.window = globalThis.window || { clearTimeout, setTimeout, requestIdleCallback: null };
+  const { viewer, styleManager } = createVoiceNavigationHarness();
+  const referents = createReferentRegistry();
+  const longName = 'Station ' + 'é'.repeat(200);
+  const spaced = 'Congress  Ave   & 2nd';
+  const stations = [
+    { id: spaced, name: spaced, lat: 30.2672, lon: -97.7431 },
+    { id: longName, name: longName, lat: 30.2711, lon: -97.7437 },
+  ];
+  const bikeshare = { getStats: () => ({ count: stations.length, lastUpdate: Date.now() }), getAnalystRecords: () => stations };
+  const runner = createActionRunner({
+    viewer, styleManager,
+    dataManager: {
+      layers: new Map([['bikeshare', { module: bikeshare }]]),
+      isEnabled: () => true,
+      getAll: () => [{ id: 'bikeshare', name: 'bikeshare', enabled: true, stats: bikeshare.getStats() }],
+    },
+    deixis: { referents },
+  });
+  const listed = await runner('analyst_query', { layers: ['bikeshare'], scope: { kind: 'anywhere' }, limit: 2 });
+  assert.equal(listed.ok, true);
+  const bySpaced = listed.items.find((item) => item.id === spaced);
+  const byLong = listed.items.find((item) => item.id === longName);
+  assert.ok(bySpaced && byLong, 'compact items keep the raw station-name IDs');
+  assert.equal(bySpaced.name, 'Congress Ave & 2nd', 'display name is still normalized');
+  assert.equal(byLong.name.length, 180, 'display name is still bounded');
+  assert.equal(byLong.id.length, longName.length);
+  const registered = referents.list();
+  assert.equal(registered.length, 2, 'the analyst result became the numbered list');
+  for (const ref of registered) {
+    const station = stations.find((row) => row.id === ref.id);
+    assert.ok(station, `referent ${ref.n} keeps the canonical ID`);
+    const flown = await runner('fly_to_location', { referent: ref.n });
+    assert.equal(flown.ok, true, `referent ${ref.n} resolves instead of "no longer loaded"`);
+    assert.equal(flown.latitude, station.lat);
+    assert.equal(flown.longitude, station.lon);
+  }
+});
