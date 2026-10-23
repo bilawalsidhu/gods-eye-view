@@ -15,7 +15,9 @@ export function hudQuantity(value, unit, digits = 0) {
     minimumFractionDigits: digits,
     maximumFractionDigits: digits,
   });
-  return `${number}${unitLabel(unit).toUpperCase()}`;
+  const label = unitLabel(unit);
+  if (getLocale() === 'zh-CN') return label ? `${number} ${label}` : number;
+  return `${number}${label.toUpperCase()}`;
 }
 
 /** One hemisphere-tagged coordinate, e.g. `21.33N` / `21,33С`. */
@@ -35,7 +37,16 @@ export const LOCALIZED_LOCALITY = Object.freeze({
     }),
   sector: ({ latDeg, lonDeg }) =>
     t('SECTOR {lat} {lon}', {
-      lat: hudCoordinate(latDeg, t('N'), t('S')),
-      lon: hudCoordinate(lonDeg, t('E'), t('W')),
+      // Hemisphere letters, not compass words: 21.33N, never 21.33北.
+      lat: hudCoordinate(
+        latDeg,
+        t('N', { context: 'hemisphere' }),
+        t('S', { context: 'hemisphere' }),
+      ),
+      lon: hudCoordinate(
+        lonDeg,
+        t('E', { context: 'hemisphere' }),
+        t('W', { context: 'hemisphere' }),
+      ),
     }),
 });

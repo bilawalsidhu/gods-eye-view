@@ -11,7 +11,7 @@ export const BIKESHARE_SELECTED_OVERLAY_SOURCE_OPTIONS = Object.freeze({
 // --- Activation / display thresholds ---
 /** Altitude (m) at which bikeshare layer becomes eligible for display. */
 
-export const ACTIVATION_ALTITUDE_M = 50000;
+const ACTIVATION_ALTITUDE_M = 50000;
 
 /** Hysteresis enter threshold — layer activates when camera drops below this. */
 

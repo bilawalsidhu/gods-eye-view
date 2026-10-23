@@ -259,7 +259,7 @@ export function createRendering({
     layerState._horizonScanCount += 1;
     const occluder = horizonOccluder(layerState._viewer.camera);
     let visibilityChanged = false;
-    for (const [id, record] of layerState._renderById) {
+    for (const record of layerState._renderById.values()) {
       const matches = parts.categories.stationMatchesRadioCategory(
         record.station,
         layerState._filter,
