@@ -412,14 +412,18 @@ const IMAGERY_LABEL_NAMES = Object.freeze([
   [/^(\d{4}) POST-EVENT$/, msg('{year} POST-EVENT')],
 ]);
 
-/** Day, short month and year in the active language: 16 OCT 2021, 16 ОКТ. 2021. */
+/** Day, short month and year in the active language: 16 OCT 2021, 16 ОКТ. 2021, 2021年10月16日. */
 function imageryDateText(observedAt) {
   const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(observedAt || ''));
   if (!match) return '';
   const date = new Date(Date.UTC(+match[1], +match[2] - 1, +match[3]));
   if (Number.isNaN(date.getTime())) return '';
   const part = (options) => formatDate(date, { timeZone: 'UTC', ...options });
-  return `${part({ day: 'numeric' })} ${part({ month: 'short' })} ${part({ year: 'numeric' })}`.toUpperCase();
+  const year = part({ year: 'numeric' });
+  // Year-first languages (2021年10月16日) keep their own order and units.
+  const whole = part({ day: 'numeric', month: 'short', year: 'numeric' });
+  if (whole.startsWith(year)) return whole;
+  return `${part({ day: 'numeric' })} ${part({ month: 'short' })} ${year}`.toUpperCase();
 }
 
 /**
@@ -1029,7 +1033,7 @@ function createPanel(event, handlers) {
       <span>${escapeMarkup(t('GEOLOCATIONS · {credit}', { credit: 'GEO GEORGE SHADRACH' }))}</span>
       <button type="button" data-action="geolocation-map">${escapeMarkup(t('↗ OPEN PUBLIC MAP'))}</button>
     </div>
-    <p class="bhote-event-caveat"><span data-role="caveat"></span><span data-role="imagery-cloud-note"> ${escapeMarkup(t('Clouds are preserved from the source imagery.'))}</span></p>
+    <p class="bhote-event-caveat"><span data-role="caveat"></span><span data-role="imagery-cloud-note">${escapeMarkup(t(' Clouds are preserved from the source imagery.'))}</span></p>
   `;
 
   const refs = collectPanelReferences(panel);

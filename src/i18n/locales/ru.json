@@ -1100,7 +1100,6 @@
   "FIELD REPORTS · {count}": "СООБЩЕНИЯ С МЕСТА · {count}",
   "GEOLOCATIONS · {credit}": "ГЕОЛОКАЦИИ · {credit}",
   "↗ OPEN PUBLIC MAP": "↗ ОТКРЫТЬ ПУБЛИЧНУЮ КАРТУ",
-  "Clouds are preserved from the source imagery.": "Облака оставлены такими, как на исходных снимках.",
   "Show the Nepal context callout without a border or country fill": "Показать выноску с контекстом Непала без границы и заливки страны",
   "Introduce Nepal, draw its border, then reveal the Bhote Koshi incident": "Представить Непал, нарисовать его границу, затем показать инцидент на Bhote Koshi",
   "CITIES": "ГОРОДА",
@@ -3004,5 +3003,12 @@
   "Gemini access was refused. Check the API key and model access.": "Доступ к Gemini запрещён. Проверьте ключ API и доступ к модели.",
   "Gemini Live is unavailable for the configured model.": "Gemini Live недоступен для выбранной модели.",
   "Token request is too large": "Запрос токена слишком велик",
-  "Use an empty JSON token request": "Используйте запрос токена с пустым объектом JSON"
+  "Use an empty JSON token request": "Используйте запрос токена с пустым объектом JSON",
+  " Clouds are preserved from the source imagery.": " Облака оставлены такими, как на исходных снимках.",
+  "hemisphere|N": "С",
+  "hemisphere|S": "Ю",
+  "hemisphere|E": "В",
+  "hemisphere|W": "З",
+  "OK": "НОРМА",
+  "{category} ({count})": "{category} ({count})"
 }
