@@ -70,3 +70,4 @@ These stay as written in English and are listed under `de` in `src/i18n/same-as-
 | board (Draw tool) / fallback / bike share     | Zeichenfläche / Ersatz / Leihräder                        |
 | cyclone advisory / range (firing)             | Wirbelsturmvorhersage / Schießplatz                       |
 | voice / assistant / analyst                   | Sprache / Assistent / Analyst                             |
+| Street Level (layer) / street-level view      | Straßenebene / Straßenansicht                             |
