@@ -94,9 +94,9 @@ export const TRACK_VIEW_FROM_HIGH_SCALE = 4;
  * attribute, so classification costs nothing per frame.
  */
 
-export const POINT_OUTLINE = Cesium.Color.WHITE.withAlpha(0.3);
+const POINT_OUTLINE = Cesium.Color.WHITE.withAlpha(0.3);
 
-export const _classColor = (group) =>
+const _classColor = (group) =>
   Cesium.Color.fromCssColorString(satelliteClassColor(group));
 
 export const POINT_STYLES = {

@@ -72,7 +72,7 @@ export const FLAP_STAGGER_MS = 26;
  */
 export const FLAP_MAX_TOTAL_MS = 620;
 /** Slack after the last character lands before the cells are stripped. */
-export const FLAP_SETTLE_SLACK_MS = 60;
+const FLAP_SETTLE_SLACK_MS = 60;
 /**
  * Fraction of a character's flip at which the outgoing glyph has rotated
  * away and the incoming one takes over as what the eye reads. MUST track the

@@ -99,7 +99,7 @@ export const VISIBILITY_REFRESH_MS = 250;
  * on screen. Generous on purpose: a vehicle that crosses the edge mid-glide
  * should already have been moving, not pop into motion at the border.
  */
-export const VIEW_MARGIN_RATIO = 0.6;
+const VIEW_MARGIN_RATIO = 0.6;
 
 /**
  * Whether a vehicle is close enough to the camera's look-at area to be worth
@@ -516,10 +516,10 @@ export function createTransitSelectedOverlayEntry(key, position, copy, mode) {
 }
 
 /** Modes that ordinarily run below the street, drawn on the surface above themselves. */
-export const UNDERGROUND_MODES = new Set(['subway']);
+const UNDERGROUND_MODES = new Set(['subway']);
 
 /** The mode in plain words, for a card a person reads rather than scans. */
-export const TRANSIT_MODE_WORD = Object.freeze({
+const TRANSIT_MODE_WORD = Object.freeze({
   bus: msg('Bus'),
   tram: msg('Tram'),
   subway: msg('Subway'),
@@ -529,7 +529,7 @@ export const TRANSIT_MODE_WORD = Object.freeze({
 });
 
 /** Short, fixed-width mode word for the detection card's class field. */
-export const TRANSIT_MODE_ABBR = Object.freeze({
+const TRANSIT_MODE_ABBR = Object.freeze({
   bus: 'BUS',
   tram: 'TRAM',
   subway: 'METRO',
@@ -588,7 +588,7 @@ export function transitDetectionId(record, feed = null) {
 }
 
 /** Longest route text the single-line detection label can carry. */
-export const DETECTION_ID_MAX_CHARS = 14;
+const DETECTION_ID_MAX_CHARS = 14;
 
 /**
  * Cut long route text with an ellipsis, so a reader can see it was cut.
@@ -600,7 +600,7 @@ export const DETECTION_ID_MAX_CHARS = 14;
  * @param {string} text
  * @returns {string} Uppercase, at most DETECTION_ID_MAX_CHARS characters.
  */
-export function elideRouteText(text) {
+function elideRouteText(text) {
   const value = String(text || '').toUpperCase();
   if (value.length <= DETECTION_ID_MAX_CHARS) return value;
   return `${value.slice(0, DETECTION_ID_MAX_CHARS - 1)}\u2026`;
@@ -659,6 +659,6 @@ export function transitDetectionMetric(
  * @param {number} [nowMs]
  * @returns {string}
  */
-export function transitVehicleState(entry, nowMs = Date.now()) {
+function transitVehicleState(entry, nowMs = Date.now()) {
   return displayMotion(entry, nowMs).word;
 }
