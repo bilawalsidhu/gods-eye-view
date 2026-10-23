@@ -17,6 +17,8 @@ import {
   createGeminiLiveConfig,
 } from '../server/providers/gemini/config.js';
 import { GEV_REALTIME_TOOLS } from '../server/providers/openai/tools.js';
+import { realtimeInstructions } from '../server/providers/openai/instructions.js';
+import { voiceLanguageInstruction } from './voice/voiceLanguage.js';
 import { PROXY_SIGNALS } from './localRequestGate.mjs';
 
 const API_KEY = 'private-gemini-test-key-never-return';
@@ -245,6 +247,32 @@ test('mint locks canonical action schemas and server instructions with no perman
     model: 'models/gemini-3.8-live',
     ...data.config,
   });
+});
+
+test('the interface language from ?lang= closes the locked Gemini instructions', async (t) => {
+  const f = await fixture(t);
+  const instructionsFor = async (path) => {
+    const response = await fetch(`${f.origin}${path}`, {
+      method: 'POST',
+      body: '{}',
+      headers: { Origin: f.origin, 'Content-Type': 'application/json' },
+    });
+    assert.equal(response.status, 200, path);
+    const request = JSON.parse(f.calls.at(-1)[1].body);
+    return request.bidiGenerateContentSetup.systemInstruction.parts[0].text;
+  };
+  const english = realtimeInstructions();
+  assert.equal(await instructionsFor('/'), english);
+  assert.equal(await instructionsFor('/?lang=en'), english);
+  assert.equal(await instructionsFor('/?lang=fr'), english);
+  assert.equal(
+    await instructionsFor('/?lang=es'),
+    `${english}\n${voiceLanguageInstruction('es')}`,
+  );
+  assert.equal(
+    await instructionsFor('/?lang=zh-cn'),
+    `${english}\n${voiceLanguageInstruction('zh-CN')}`,
+  );
 });
 
 test('missing key and malformed model fail without an upstream request', async (t) => {
