@@ -1538,6 +1538,11 @@ export class VisualSettings {
       preserveCyberRestore = false,
     } = {},
   ) {
+    if (
+      typeof styleName !== 'string' ||
+      (styleName !== 'normal' && !Object.hasOwn(STYLES, styleName))
+    )
+      return;
     const { setDetectionStyle } = this.services;
     if (!restore) this.shareLinkManager?.claimRestoreLane?.('visual');
     if (this.hud.getVariant() === 'cyber') {
