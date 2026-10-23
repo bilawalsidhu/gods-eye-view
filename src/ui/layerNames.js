@@ -40,6 +40,7 @@ export const LAYER_NAME_KEYS = Object.freeze({
   'weather-lightning': msg('Lightning density'),
   'weather-cyclones': msg('Cyclone advisories'),
   'air-quality': msg('Air quality'),
+  'surface-temperature': msg('Surface Temperature'),
   directions: msg('Directions'),
   'alpr-cameras': msg('ALPR Cameras'),
 });
@@ -117,6 +118,7 @@ const SOURCE_LABEL_KEYS = new Map(
     msg('OSM routing'),
     msg('Mapped camera locations'),
     msg('OpenStreetMap · community mapped'),
+    msg('NASA GIBS · MODIS Terra land surface temperature'),
   ].map((key) => [key, key]),
 );
 

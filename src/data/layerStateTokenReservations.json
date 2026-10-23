@@ -22,6 +22,7 @@
   ["rocket-launches", "x"],
   ["satellites", "s"],
   ["street-level", "0"],
+  ["surface-temperature", "5"],
   ["telegeography-submarine-cables", "u"],
   ["traffic", "t"],
   ["transit", "j"],

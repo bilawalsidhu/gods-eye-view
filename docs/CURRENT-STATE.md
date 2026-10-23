@@ -1,5 +1,45 @@
 # God's Eye View Current State
 
+Surface Temperature is a keyless NASA GIBS layer that plays back MODIS Terra
+monthly land-surface-temperature means a year at a time. On enable it probes for
+the newest published month and plays that year; the year's months are probed
+first, so an unpublished month drops out rather than playing blank. All of a
+year's months are added at once as transparent imagery layers: Cesium streams
+tiles for a shown, transparent layer without drawing it, so the year loads once
+(bounded by a timeout, so a busy globe cannot stall it) and every step afterwards
+is an alpha change. A newly chosen year loads the same way underneath the one on
+screen and replaces it only once loaded, keeping the month. The playhead is
+continuous and animation-frame driven; each month holds, then eases into the
+next, and the blending pair's alphas are solved so the overlay's total opacity
+stays at the operator's setting. Tiles come from the EPSG:3857 endpoint, because
+the GIBS geographic matrix sets are not power-of-two pyramids and Cesium
+mispositions them; every GIBS tile URL, here and in Recent Imagery, is built by
+`src/maps/gibs.js`. Availability is resolved by image probe: an unpublished
+month answers 404, and an image load reads that the same way whether or not
+GIBS sends CORS headers on its 404s (it has not always).
+
+Playback is driven from an on-map panel; the layer row carries no controls. The
+panel names the month most on screen, holds the play/pause control, shows NASA's
+colour scale as one gradient bar with each published stop at its own
+temperature (so a tick placed by temperature lands on the tiles' colour for it),
+and has a year scale from 2000 and a month scale with a playhead that moves as
+frames blend; unpublished months are disabled, and a clicked month glides to
+its frame the short way round the year. A pinned reading appears on the colour
+scale as a marker in its published colour.
+
+Clicking the globe with Surface Temperature on reads that point's value. The
+sample comes from the published tile pixel, not the rendered canvas: the canvas
+carries the overlay at the operator's opacity over a basemap under lighting and
+a post-process shader, so reading it would measure the screenshot. The pixel's
+colour is looked up in NASA's colour map document, which makes the reading the
+product's own quantised range rather than an estimate; the map's catch-all end
+stops are reported as bounds. A transparent pixel is cloud, water or unretrieved
+and reports no value rather than a temperature. The readout states the quantity,
+the source product's measurement grid (MOD11C3, 0.05°, about 5.6 km; never the
+finer display tile pixel, which GIBS resamples to) and the month it came from, lives on its own data source
+so clearing it never disturbs the overlay, and re-reads whenever the month on
+screen changes. The click yields to the shared pointer lease.
+## Cyber HUD — September 23, 2026
 Analyst region queries resolve unique Natural Earth names offline without
 geocoding, so Gold Coast and Ivory Coast name the West African natural regions.
 Duplicate names require a geocoded containment anchor; when several entries for

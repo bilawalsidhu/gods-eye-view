@@ -185,6 +185,15 @@ export const DATA_CREDITS = [
     html: 'Keyless place search: <a href="https://photon.komoot.io" target="_blank" rel="noopener">Photon</a> (komoot)',
   },
   {
+    key: 'nasa-gibs-surface-temperature',
+    html:
+      'Surface temperature: We acknowledge the use of imagery provided by services from ' +
+      "NASA's Global Imagery Browse Services (GIBS), part of NASA's Earth Science " +
+      'Data and Information System (ESDIS). ' +
+      '<a href="https://gibs.earthdata.nasa.gov" target="_blank" rel="noopener">gibs.earthdata.nasa.gov</a> · ' +
+      'MODIS Terra land surface temperature, monthly mean (MOD11C3)',
+  },
+  {
     key: 'open-meteo',
     html:
       'Cockpit current conditions: ' +

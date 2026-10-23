@@ -269,6 +269,18 @@ const layers = [
     },
   },
   {
+    id: 'surface-temperature',
+    // Not bare "temperature": the wind layer's 2 m air temperature overlay is
+    // a different quantity, and the alias must not pick one silently.
+    aliases: [
+      'surface temperature',
+      'land surface temperature',
+      'ground temperature',
+    ],
+    context: false,
+    noQuery: 'map overlay; no countable records',
+  },
+  {
     id: 'traffic',
     aliases: ['street traffic', 'road traffic', 'congestion'],
     context: false,

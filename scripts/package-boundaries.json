@@ -836,6 +836,7 @@
       "src/ui/styles/first-run.css",
       "src/ui/styles/provider-settings.css",
       "src/ui/styles/weather.css",
+      "src/ui/styles/temperature.css",
       "src/ui/styles/recent-imagery.css"
     ],
     "external": []
@@ -1111,6 +1112,7 @@
   "recent-imagery": {
     "exports": ["./layers/recent-imagery"],
     "modules": [
+      "src/maps/gibs.js",
       "src/i18n/marker.js",
       "src/layers/recentImagery/index.js",
       "src/layers/recentImagery/source.js",
@@ -1263,6 +1265,38 @@
       "src/layers/installations/classLabel.js"
     ],
     "external": ["cesium", "@mapbox/vector-tile", "pbf"]
+  },
+  "temperature-layer": {
+    "exports": ["./layers/temperature"],
+    "modules": [
+      "src/i18n/locales/zh-CN.json",
+      "src/i18n/index.js",
+      "src/i18n/locales/ru.json",
+      "src/i18n/locales/es.json",
+      "src/i18n/locale.js",
+      "src/i18n/marker.js",
+      "src/layers/temperature/labels.js",
+      "src/maps/gibs.js",
+      "src/layers/temperature/controls.js",
+      "src/layers/temperature/dates.js",
+      "src/layers/temperature/index.js",
+      "src/layers/temperature/ingestion.js",
+      "src/layers/temperature/lifecycle.js",
+      "src/layers/temperature/playback.js",
+      "src/layers/temperature/filmstrip.js",
+      "src/layers/temperature/indicator.js",
+      "src/layers/temperature/policy.js",
+      "src/layers/temperature/source.js",
+      "src/layers/temperature/state.js",
+      "src/maps/imagery.js",
+      "src/layers/temperature/scale.js",
+      "src/layers/temperature/colormap.js",
+      "src/layers/temperature/sampler.js",
+      "src/layers/temperature/sampling.js",
+      "src/layers/temperature/tiles.js",
+      "src/data/inputOwnership.js"
+    ],
+    "external": ["cesium"]
   },
   "awareness-layer": {
     "exports": ["./layers/awareness"],
@@ -1720,6 +1754,8 @@
       "./standalone/catalog"
     ],
     "modules": [
+      "src/layers/temperature/labels.js",
+      "src/maps/gibs.js",
       "src/ui/placeNames.js",
       "src/cyberSonarScene.js",
       "src/cyberSonar.js",
@@ -2570,7 +2606,25 @@
       "src/voice/geminiSession.js",
       "src/voice/geminiAudio.js",
       "src/voice/geminiCaptureWorklet.js",
-      "src/ui/statusBadge.js"
+      "src/ui/statusBadge.js",
+      "src/app/layers/temperature.js",
+      "src/layers/temperature/controls.js",
+      "src/layers/temperature/dates.js",
+      "src/layers/temperature/index.js",
+      "src/layers/temperature/ingestion.js",
+      "src/layers/temperature/lifecycle.js",
+      "src/layers/temperature/playback.js",
+      "src/layers/temperature/filmstrip.js",
+      "src/layers/temperature/indicator.js",
+      "src/layers/temperature/policy.js",
+      "src/layers/temperature/source.js",
+      "src/layers/temperature/state.js",
+      "src/layers/temperature/probe.js",
+      "src/layers/temperature/scale.js",
+      "src/layers/temperature/colormap.js",
+      "src/layers/temperature/sampler.js",
+      "src/layers/temperature/sampling.js",
+      "src/layers/temperature/tiles.js"
     ],
     "external": [
       "hls.js",
@@ -2592,6 +2646,8 @@
   "application-layer-construction": {
     "exports": ["./application/layers"],
     "modules": [
+      "src/layers/temperature/labels.js",
+      "src/maps/gibs.js",
       "src/cyberSonar.js",
       "src/data/approxDistance.js",
       "src/data/bhoteKoshiEvent.js",
@@ -3138,7 +3194,26 @@
       "src/layers/airQuality/source.js",
       "src/ui/statusText.js",
       "src/ui/layerNames.js",
-      "src/layers/streetLevel/providers/mapillary/policy.js"
+      "src/layers/streetLevel/providers/mapillary/policy.js",
+      "src/app/layers/temperature.js",
+      "src/layers/temperature/controls.js",
+      "src/layers/temperature/dates.js",
+      "src/layers/temperature/index.js",
+      "src/layers/temperature/ingestion.js",
+      "src/layers/temperature/lifecycle.js",
+      "src/layers/temperature/playback.js",
+      "src/layers/temperature/filmstrip.js",
+      "src/layers/temperature/indicator.js",
+      "src/layers/temperature/policy.js",
+      "src/layers/temperature/source.js",
+      "src/layers/temperature/state.js",
+      "src/maps/imagery.js",
+      "src/layers/temperature/probe.js",
+      "src/layers/temperature/scale.js",
+      "src/layers/temperature/colormap.js",
+      "src/layers/temperature/sampler.js",
+      "src/layers/temperature/sampling.js",
+      "src/layers/temperature/tiles.js"
     ],
     "external": [
       "hls.js",
@@ -3388,6 +3463,7 @@
   "recent-imagery-source": {
     "exports": ["./layers/recent-imagery/source"],
     "modules": [
+      "src/maps/gibs.js",
       "src/layers/recentImagery/source.js",
       "src/layers/recentImagery/catalog.js",
       "src/layers/recentImagery/model.js"
@@ -3526,6 +3602,17 @@
       "src/data/retryableLoad.js"
     ],
     "external": ["@mapbox/vector-tile", "pbf"]
+  },
+  "temperature-source": {
+    "exports": ["./layers/temperature/source"],
+    "modules": [
+      "src/i18n/marker.js",
+      "src/maps/gibs.js",
+      "src/layers/temperature/dates.js",
+      "src/layers/temperature/policy.js",
+      "src/layers/temperature/source.js"
+    ],
+    "external": []
   },
   "launches-source": {
     "exports": ["./layers/launches/source"],
@@ -3930,6 +4017,7 @@
   "tools-services": {
     "exports": ["./tools/services"],
     "modules": [
+      "src/maps/gibs.js",
       "src/tools/services.js",
       "src/layers/bikeshare/registry.js",
       "src/layers/bikeshare/source.js",
