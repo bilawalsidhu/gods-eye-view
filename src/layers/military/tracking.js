@@ -593,7 +593,7 @@ export function createTracking({
   }
 
   /**
-   * Fire-and-forget adsb.lol readsb trace backfill (PRD F2). Trace points are
+   * Fire-and-forget optional source history backfill (PRD F2). Trace points are
    * stride-thinned to the remaining vertex budget, then spliced strictly older
    * than the oldest seeded fix AHEAD of the locally accumulated fine segment,
    * capped at TRAIL_MAX_POINTS (newest kept). Any failure (404/timeout/
