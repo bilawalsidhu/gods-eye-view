@@ -52,6 +52,19 @@ test('hemisphere letters fix the axis, in either order', () => {
     label: '40.0000° N, 74.0000° W',
   });
   assert.deepEqual(parseCoordinateQuery('40° N, 74° W')?.lat, 40);
+  // Written the way a coordinate is usually pasted, with no comma.
+  assert.deepEqual(parseCoordinateQuery('40.7128 N 74.0060 W'), {
+    lat: 40.7128,
+    lon: -74.006,
+    label: '40.7128° N, 74.0060° W',
+  });
+  assert.deepEqual(parseCoordinateQuery('40.7128° N 74.0060° W')?.lon, -74.006);
+  assert.deepEqual(parseCoordinateQuery('N 40.7128 W 74.0060'), {
+    lat: 40.7128,
+    lon: -74.006,
+    label: '40.7128° N, 74.0060° W',
+  });
+  assert.deepEqual(parseCoordinateQuery('74.0060 W 40.7128 N')?.lat, 40.7128);
   // One letter is enough: it fixes its own axis, the other takes what is left.
   assert.deepEqual(parseCoordinateQuery('40 N, -74')?.lon, -74);
   assert.deepEqual(parseCoordinateQuery('-74, 40 N'), {
