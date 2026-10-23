@@ -98,7 +98,7 @@ test('standalone composition mounts every extracted provider exactly once withou
     assert.equal(plugins.filter((p) => p.name === factory().name).length, 1);
 });
 
-test('terrain middleware chunks missing points and reconstructs repeated/reordered requests from cache', async (t) => {
+test('terrain middleware bounds missing points and reconstructs repeated/reordered requests from cache', async (t) => {
   isolate(t);
   let calls = 0;
   const sizes = [];
@@ -116,25 +116,23 @@ test('terrain middleware chunks missing points and reconstructs repeated/reorder
     });
   });
   const request = install(terrainHeightsProxy());
-  const points = Array.from({ length: 257 }, (_, i) => `${i / 100},1`);
+  const points = Array.from({ length: 64 }, (_, i) => `${i / 100},1`);
   const res = await request('/?points=' + points.join(';'));
   assert.equal(res.status, 200);
-  // Tracks UPSTREAM_CHUNK in server/providers/terrain.js (64): 257 points
-  // split into four full chunks and a remainder.
-  assert.deepEqual(sizes, [64, 64, 64, 64, 1]);
-  const reordered = await request('/?points=2.56,1;0,1;2.56,1');
+  assert.deepEqual(sizes, [64]);
+  const reordered = await request('/?points=0.63,1;0,1;0.63,1');
   assert.deepEqual(json(reordered), {
-    results: [{ ellipsoid: 102.56 }, { ellipsoid: 100 }, { ellipsoid: 102.56 }],
+    results: [{ ellipsoid: 100.63 }, { ellipsoid: 100 }, { ellipsoid: 100.63 }],
   });
-  // Five chunks for the first batch; the reordered request is fully cached.
-  assert.equal(calls, 5);
+  // One bounded batch; the reordered request is fully cached.
+  assert.equal(calls, 1);
   assert.equal((await request('/?points=invalid')).status, 400);
   assert.equal(
     (await request('/?points=' + Array(2001).fill('0,1').join(';'))).status,
-    500,
+    413,
   );
-  // Rejected requests add no upstream calls: still the five from the first batch.
-  assert.equal(calls, 5);
+  // Rejected requests add no upstream calls.
+  assert.equal(calls, 1);
 });
 
 test('terrain middleware migrates valid legacy disk points without fabricating omitted heights', async (t) => {
@@ -388,21 +386,26 @@ test('terrain middleware retains successful chunks around a failure and retries 
   });
   const request = install(terrainHeightsProxy());
   const points = Array.from({ length: 130 }, (_, i) => `${i / 100},1`);
-  const url = '/?points=' + points.join(';');
-  assert.equal((await request(url)).status, 502);
+  const urls = [0, 64, 128].map(
+    (start) => '/?points=' + points.slice(start, start + 64).join(';'),
+  );
   assert.deepEqual(
-    requests.map((p) => p.length),
-    [64, 64, 2],
+    await Promise.all(urls.map(async (url) => (await request(url)).status)),
+    [200, 502, 200],
+  );
+  assert.deepEqual(
+    requests.map((p) => p.length).sort((a, b) => a - b),
+    [2, 64, 64],
   );
   fail = false;
-  const recovered = await request(url);
-  assert.equal(recovered.status, 200);
+  const recovered = await Promise.all(urls.map((url) => request(url)));
+  assert.ok(recovered.every((response) => response.status === 200));
   assert.deepEqual(
     requests[3],
     Array.from({ length: 64 }, (_, i) => [(i + 64) / 100, 1]),
   );
   assert.deepEqual(
-    json(recovered).results,
+    recovered.flatMap((response) => json(response).results),
     Array.from({ length: 130 }, (_, i) => ({ ellipsoid: i / 100 + 100 })),
   );
   assert.equal(requests.length, 4);

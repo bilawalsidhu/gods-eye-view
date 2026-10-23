@@ -954,7 +954,7 @@
   "Image by {creator}": "Автор снимка: {creator}",
   "zoom in to see KartaView coverage": "приблизьтесь, чтобы увидеть покрытие KartaView",
   "no KartaView photos in view": "фотографий KartaView в зоне видимости нет",
-  "{names}: by upload date": "{names}: по дате загрузки",
+  "(by upload date)": "(по дате загрузки)",
   "{n} streets in view · click a line for its nearest photo": {
     "one": "{n} улица в кадре · щёлкните линию, чтобы открыть ближайшую фотографию",
     "few": "{n} улицы в кадре · щёлкните линию, чтобы открыть ближайшую фотографию",
@@ -1100,7 +1100,6 @@
   "FIELD REPORTS · {count}": "СООБЩЕНИЯ С МЕСТА · {count}",
   "GEOLOCATIONS · {credit}": "ГЕОЛОКАЦИИ · {credit}",
   "↗ OPEN PUBLIC MAP": "↗ ОТКРЫТЬ ПУБЛИЧНУЮ КАРТУ",
-  "Clouds are preserved from the source imagery.": "Облака оставлены такими, как на исходных снимках.",
   "Show the Nepal context callout without a border or country fill": "Показать выноску с контекстом Непала без границы и заливки страны",
   "Introduce Nepal, draw its border, then reveal the Bhote Koshi incident": "Представить Непал, нарисовать его границу, затем показать инцидент на Bhote Koshi",
   "CITIES": "ГОРОДА",
@@ -3011,5 +3010,16 @@
   "PLAYER IN PANEL": "ПРОИГРЫВАТЕЛЬ В ПАНЕЛИ",
   "PUBLIC PLAYER · EXTERNAL": "ОБЩЕДОСТУПНЫЙ ПРОИГРЫВАТЕЛЬ · ВНЕШНИЙ",
   "{camera} — public player": "{camera} — общедоступный проигрыватель",
-  "{city} CCTV · {name} · PUBLIC PLAYER · APPROXIMATE LOCATION · COVERAGE NOT CALIBRATED": "{city} CCTV · {name} · ОБЩЕДОСТУПНЫЙ ПРОИГРЫВАТЕЛЬ · ПРИБЛИЗИТЕЛЬНОЕ МЕСТОПОЛОЖЕНИЕ · ЗОНА ОБЗОРА НЕ ОТКАЛИБРОВАНА"
+  "{city} CCTV · {name} · PUBLIC PLAYER · APPROXIMATE LOCATION · COVERAGE NOT CALIBRATED": "{city} CCTV · {name} · ОБЩЕДОСТУПНЫЙ ПРОИГРЫВАТЕЛЬ · ПРИБЛИЗИТЕЛЬНОЕ МЕСТОПОЛОЖЕНИЕ · ЗОНА ОБЗОРА НЕ ОТКАЛИБРОВАНА",
+  " Clouds are preserved from the source imagery.": " Облака оставлены такими, как на исходных снимках.",
+  "hemisphere|N": "С",
+  "hemisphere|S": "Ю",
+  "hemisphere|E": "В",
+  "hemisphere|W": "З",
+  "OK": "НОРМА",
+  "{category} ({count})": "{category} ({count})",
+  "Layers": "Слои",
+  "Search": "Поиск",
+  "More": "Ещё",
+  "Panels": "Панели"
 }

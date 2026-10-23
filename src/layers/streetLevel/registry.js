@@ -1,6 +1,6 @@
 import { encodeIdSwitches } from '../../data/idSwitches.js';
 
-export const IMAGERY_FILTERS = Object.freeze(['pano', 'since']);
+const IMAGERY_FILTERS = Object.freeze(['pano', 'since']);
 
 export function filtersOf(provider) {
   return provider?.filters ?? IMAGERY_FILTERS;
@@ -23,7 +23,7 @@ export function filtersOf(provider) {
  * @property {{kind: 'view-cone', color: string}} [marker]   Default: GEV's pin.
  * @property {Array<'pano'|'since'>} [filters]   Filters it honours (default both).
  * @property {{noun: string, action: string}} [coverageLabel]   How the panel counts its lines and says what a click does (default: sequences, "click a line for its photos").
- * @property {'capture'|'upload'} [sinceBasis]   What SINCE compares (default 'capture'); 'upload' puts a note under the slider while the provider is lit.
+ * @property {'capture'|'upload'} [sinceBasis]   What SINCE compares (default 'capture'); 'upload' notes "(by upload date)" beside the SINCE value while the provider is lit.
  * @property {(context: ProviderContext) => ProviderInstance} create
  *
  * @typedef {object} ProviderContext   Handed to `create()` once by the core.
