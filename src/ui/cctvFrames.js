@@ -1,3 +1,4 @@
+import { updateStatusBadge } from './statusBadge.js';
 import { msg, t } from '../i18n/index.js';
 
 /**
@@ -19,6 +20,7 @@ const SOURCE_KIND_LABELS = Object.freeze({
 });
 
 const SOURCE_STATUS_LABELS = Object.freeze({
+  ok: msg('OK'),
   degraded: msg('DEGRADED'),
   error: msg('ERROR'),
   unknown: msg('UNKNOWN'),
@@ -44,14 +46,14 @@ const SOURCE_LABELS = Object.freeze({
 });
 
 /** "SNAPSHOT" / "СНИМОК"; unknown codes (HLS, MJPEG…) stay as uppercase codes. */
-export function cctvSourceKindLabel(kind) {
+function cctvSourceKindLabel(kind) {
   const key = String(kind || 'unknown').toLowerCase();
   return SOURCE_KIND_LABELS[key]
     ? t(SOURCE_KIND_LABELS[key])
     : key.toUpperCase();
 }
 
-/** "DEGRADED" / "ПЕРЕБОИ"; OK and unknown codes stay as uppercase codes. */
+/** "DEGRADED" / "ПЕРЕБОИ"; unknown codes stay as uppercase codes. */
 export function cctvSourceStatusLabel(status) {
   const key = String(status || 'unknown').toLowerCase();
   return SOURCE_STATUS_LABELS[key]
@@ -164,19 +166,21 @@ export function _settleCctvFrame(token, src, ok) {
 export function _syncCctvSourceBadge(activeCamera, enabled) {
   if (!this._cctvSourceBadge) return;
   if (!enabled || !activeCamera) {
-    this._cctvSourceBadge.textContent = t('SOURCE · UNKNOWN');
+    updateStatusBadge(this._cctvSourceBadge, { label: t('SOURCE · UNKNOWN') });
     this._cctvSourceBadge.dataset.frameState = 'idle';
     return;
   }
   const hasDisplayedFrame =
     this._cctvFrameWrap?.classList.contains('has-frame');
   if (this._cctvFrame?.dataset.loading === 'true' && !hasDisplayedFrame) {
-    this._cctvSourceBadge.textContent = t('FRAME · LOADING');
+    updateStatusBadge(this._cctvSourceBadge, { label: t('FRAME · LOADING') });
     this._cctvSourceBadge.dataset.frameState = 'loading';
     return;
   }
   if (this._cctvFrame?.dataset.error === 'true' && !hasDisplayedFrame) {
-    this._cctvSourceBadge.textContent = t('FRAME · UNAVAILABLE');
+    updateStatusBadge(this._cctvSourceBadge, {
+      label: t('FRAME · UNAVAILABLE'),
+    });
     this._cctvSourceBadge.dataset.frameState = 'error';
     return;
   }
@@ -184,6 +188,6 @@ export function _syncCctvSourceBadge(activeCamera, enabled) {
     activeCamera.sourceKind || activeCamera.feedType || 'unknown',
   );
   const status = cctvSourceStatusLabel(activeCamera.sourceStatus || 'unknown');
-  this._cctvSourceBadge.textContent = `${kind} · ${status}`;
+  updateStatusBadge(this._cctvSourceBadge, { label: `${kind} · ${status}` });
   this._cctvSourceBadge.dataset.frameState = 'ready';
 }

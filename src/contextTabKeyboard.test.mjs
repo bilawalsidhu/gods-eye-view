@@ -1,4 +1,3 @@
-import { readShellSource } from './testSupport/readShellSource.mjs';
 import { expandApplicationHtml } from '../build/application-html.js';
 import { readStylesheet } from './testSupport/readStylesheet.mjs';
 import { _selectContextMode } from './ui/contextTransactions.js';
@@ -8,13 +7,11 @@ import { clearSelectedLayers } from './ui/contextActions.js';
 import { readFileSync as readRadioSource } from 'node:fs';
 const radioBindings = readRadioSource(new URL('./ui/radioBindings.js', import.meta.url), 'utf8');
 const radioPresentation = readRadioSource(new URL('./ui/radioPresentation.js', import.meta.url), 'utf8');
-const radioControlsSource = readRadioSource(new URL('./ui/radioControls.js', import.meta.url), 'utf8');
 import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 const html = expandApplicationHtml(readFileSync(new URL('../index.html', import.meta.url), 'utf8'));
-const ui = readShellSource();
 const css = readStylesheet(new URL('../style.css', import.meta.url));
 
 test('Contacts and Space Missions both participate in the ordinary Tab sequence', () => {
@@ -32,8 +29,6 @@ test('Contacts and Space Missions both participate in the ordinary Tab sequence'
 });
 
 test('Context transition state preserves focus and Tab availability until settle', () => {
-  const syncSource = _syncContextModeButtons.toString();
-
   const attributes = () => new Map();
   const makeButton = () => {
     const attrs = attributes();
