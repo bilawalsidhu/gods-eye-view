@@ -125,6 +125,7 @@ export function createRetention({ state, parts }) {
       count++;
     }
     state._count = count;
+    parts.animation.syncRenderDemand?.();
   }
   function reconcile(roads, height, replace) {
     altitude = height;
@@ -241,6 +242,29 @@ export function createRetention({ state, parts }) {
       road.heightMoving = moving;
     }
   }
+  /**
+   * Settle every retained road on its corrected heights at once. Easing only
+   * runs inside the held animation frame, so once nothing is left to animate
+   * the remaining correction would otherwise stay pending indefinitely.
+   * Published roads whose record was just dropped are settled too, so a later
+   * held frame cannot revive their correction.
+   */
+  function finishHeights() {
+    const roads = new Set(state._roads);
+    for (const record of records.values()) roads.add(record.road);
+    for (const road of roads) {
+      if (!road.heightMoving) continue;
+      for (let i = 0; i < road.waypoints.length; i++)
+        Cesium.Cartesian3.clone(road.targetWaypoints[i], road.waypoints[i]);
+      for (let i = 0; i < road.segmentDist.length; i++)
+        road.segmentDist[i] = Cesium.Cartesian3.distance(
+          road.waypoints[i],
+          road.waypoints[i + 1],
+        );
+      road.heightMoving = false;
+    }
+    state._heightPending = false;
+  }
   function clear() {
     if (timer !== null) {
       if (typeof cancelAnimationFrame === 'function')
@@ -252,5 +276,5 @@ export function createRetention({ state, parts }) {
     state._populationPending = false;
     state._heightPending = false;
   }
-  return { reconcile, easeHeights, clear, refreshCounts };
+  return { reconcile, easeHeights, finishHeights, clear, refreshCounts };
 }

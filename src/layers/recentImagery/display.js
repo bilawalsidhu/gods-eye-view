@@ -3,7 +3,12 @@
  * day's readout. The model (`model.js`) stays English and i18n-free because AI
  * tool services import it outside the browser; this module is page-only.
  */
-import { formatDate, formatRelativeTime, t } from '../../i18n/index.js';
+import {
+  formatDate,
+  formatRelativeTime,
+  getLocale,
+  t,
+} from '../../i18n/index.js';
 import { formatQuantity } from '../../ui/unitLabels.js';
 import { dayTime } from './model.js';
 
@@ -26,7 +31,10 @@ export const displayMetres = (value) => formatQuantity(value, 'm');
 /** The readout's words in the page's language; the model keeps them English. */
 export const READOUT_WORDS = Object.freeze({
   date: (day) => displayDay(day, LONG_DAY),
-  daysAgo: (delta) => formatRelativeTime(delta > 0 ? -delta : 0, 'day'),
+  daysAgo: (delta) => {
+    const text = formatRelativeTime(delta > 0 ? -delta : 0, 'day');
+    return getLocale() === 'zh-CN' ? text.replace(/(\d)(?=天)/g, '$1 ') : text;
+  },
   // "Sentinel-2" never breaks at its hyphen: a word joiner follows it
   // (JetBrains Mono has no U+2011 non-breaking hyphen).
   sensor: (sensor) =>
