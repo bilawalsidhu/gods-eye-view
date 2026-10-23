@@ -64,7 +64,7 @@ export function toFiniteNumber(value, fallback = NaN) {
  * @param {string} text
  * @returns {string}
  */
-export function normalizeKey(text) {
+function normalizeKey(text) {
   return String(text || '')
     .trim()
     .toLowerCase()
@@ -80,7 +80,7 @@ export function normalizeKey(text) {
  * @param {string} value
  * @returns {{lat:number, lon:number}}
  */
-export function parsePointString(value) {
+function parsePointString(value) {
   const match = String(value || '').match(
     /POINT\s*\(\s*(-?\d+(?:\.\d+)?)\s+(-?\d+(?:\.\d+)?)\s*\)/i,
   );
@@ -100,7 +100,7 @@ export function parsePointString(value) {
  * @param {string|object|null} value
  * @returns {{lat:number, lon:number}}
  */
-export function coerceLatLon(value) {
+function coerceLatLon(value) {
   if (!value) return { lat: NaN, lon: NaN };
 
   if (typeof value === 'string') {

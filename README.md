@@ -492,7 +492,7 @@ How the globe handles live data:
 ```
 src/
 ├── main.js                 # Bootstrap: Google 3D tiles, layer registration
-├── ui.js                   # Runtime UI — panels, HUD, styles, control facade
+├── ui/                     # Runtime UI — panels, HUD, styles, controls
 ├── hud.js                  # Intelligence HUD + AI scene summary
 ├── keySetup.js             # POWER UP panel — in-app provider keys (dev server only)
 ├── mapStackController.js   # Basemap switching — Google 3D / Esri / OSM / ion stacks

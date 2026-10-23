@@ -1,10 +1,4 @@
-export {
-  FRAME_ENDPOINT,
-  SOURCE_ENDPOINT,
-  HEALTH_ENDPOINT,
-  MEDIA_ENDPOINT,
-  ACTIVE_FRAME_REFRESH_MS,
-} from './sourcePolicy.js';
+export { ACTIVE_FRAME_REFRESH_MS } from './sourcePolicy.js';
 import * as Cesium from 'cesium';
 import { CCTV_CARD_FETCH_BURST_SPACING_MS } from '../../data/cctvCards.js';
 import { CCTV_AMBIENT_CARD_MAX } from '../../data/cctvLod.js';
@@ -89,9 +83,6 @@ export const CCTV_CALIBRATION_STORAGE_KEY_V2 =
 // object reference).
 
 export const PROJECTION_TEXTURE_SWAP_MS = 1000;
-
-export const PROJECTION_VERT_ASPECT =
-  PROJECTION_CANVAS_WIDTH / PROJECTION_CANVAS_HEIGHT;
 
 // V2 frustum geometry (design §2a/§6): the far-cap center + corners never sink
 // below groundAlt + this clearance, so a fabricated pitch (-24°) cannot bury

@@ -12,7 +12,7 @@
  * passed with the painter stubbed out — the number was right and nothing was
  * drawn. Every assertion here now comes from the RENDERED path instead:
  *
- *   ids/counts — `styleManager.getDetectionDiagnostics()` (src/ui.js), the
+ *   ids/counts — `styleManager.getDetectionDiagnostics()` (src/ui/shellFacade.js), the
  *     overlay's own published `visibleCount` / `labeledKeys`, so a contact only
  *     counts once the sweep, the arbiter and the placement solve have all run.
  *   plate scale — tapped off `CanvasRenderingContext2D` while the frame paints.

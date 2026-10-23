@@ -109,7 +109,7 @@ export function createRendering({
       );
     });
     if (satelliteTrack) layerState._orbitMatches++;
-    const entity = layerState._dataSource.entities.add({
+    layerState._dataSource.entities.add({
       id: `rocket-launch:${launch.id}`,
       position,
       point: {

@@ -3,6 +3,7 @@ import { ShellFacade } from './shellFacade.js';
 import { AircraftDisplay } from './aircraftDisplay.js';
 import { LayerBindings } from './layerBindings.js';
 import { PanelChrome } from './panelChrome.js';
+import { initMobileShell } from './mobileShell.js';
 import { VisualSettings } from './visualSettings.js';
 import { NavigationController } from './navigationController.js';
 import { ShareRestoration } from './shareRestoration.js';
@@ -124,6 +125,8 @@ export class StyleManager extends ShellFacade {
       readInitialShare: () => this._initialShareState,
       readScrollRestoreOwner: () => this._displayPortalScrollRestoreOwner,
       readDisplayScrollTop: () => this._standardDisplayScrollTop,
+      readSharedCollapsed: (panelId) =>
+        this._mobileShell?.sharedCollapsed(panelId),
     });
     this._feedback = new ShellFeedback({
       readLayers: () => this._dataManager?.getAll?.() || [],
@@ -589,6 +592,7 @@ export class StyleManager extends ShellFacade {
     this._initStreetLevelPanel();
     this._initGlobalContextPanel();
     this._initLocationBar();
+    this._initMobileShell();
     this._initShareButton();
     this._initCameraOrientationControls();
     this._initClearSelectedLayersButton();
@@ -848,6 +852,19 @@ export class StyleManager extends ShellFacade {
     if (briefKicker) {
       this._setHeaderText(briefKicker, ` ${t('LIVE SIGNALS')}`);
     }
+  }
+
+  /**
+   * Phone layout: a bottom tab bar presenting one panel sheet at a time
+   * (src/ui/mobileShell.js). Inactive above 720px.
+   * @returns {void}
+   */
+  _initMobileShell() {
+    this._mobileShell = initMobileShell({
+      setPanelCollapsed: (panelId, collapsed, options) =>
+        this._panelChrome.setPanelCollapsed(panelId, collapsed, options),
+      onSheetsClosed: () => this._syncShareState(),
+    });
   }
 
   /**
@@ -1709,6 +1726,7 @@ export class StyleManager extends ShellFacade {
     this._localePicker?.destroy();
     this._localePicker = null;
     this._recording.destroy();
+    this._mobileShell?.destroy();
     this._panelChrome.destroy();
     this._feedback.destroy();
 

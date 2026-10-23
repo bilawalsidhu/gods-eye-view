@@ -2,12 +2,10 @@ import { DisplayBindings } from './ui/displayBindings.js';
 import { LocationNavigation } from './ui/locationNavigation.js';
 import { VisualSettings } from './ui/visualSettings.js';
 import { readShellSource, shellMethod } from './testSupport/readShellSource.mjs';
-import { StyleManager } from './ui/applicationShell.js';
 import { _claimContextVisualAuthority, setContextMode } from './ui/contextActions.js';
 import { _initGlobalContextPanel } from './ui/contextBindings.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import fs from 'node:fs';
 import { ShareLinkManager, decodeShareCreatedAtMs } from './sharelink.js';
 import { createDefaultLayerState } from './data/layerState.js';
 

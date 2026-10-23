@@ -10,7 +10,6 @@ import {
   MILITARY_DETECTION_PRESET,
 } from './effects.js';
 import { createStyleParameters } from './visualInput.js';
-import * as Cesium from 'cesium';
 import {
   BLOOM_SCALE_VERSION,
   clampBloomIntensity,
