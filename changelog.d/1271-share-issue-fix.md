@@ -1,0 +1,1 @@
+- Reject inherited style keys during restore (asturksever, #1271).

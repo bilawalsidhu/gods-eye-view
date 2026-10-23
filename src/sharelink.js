@@ -175,7 +175,9 @@ export class ShareLinkManager {
       parseOr(params.get('dd'), 50),
       50,
     );
-    const style = URL_TO_STYLE[params.get('style')] || 'normal';
+    const style = Object.hasOwn(URL_TO_STYLE, params.get('style'))
+      ? URL_TO_STYLE[params.get('style')]
+      : 'normal';
     const decodedLayerState = decodeLayerStateParams(params);
     const state = {
       lat,

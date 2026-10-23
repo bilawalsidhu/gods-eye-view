@@ -3,7 +3,7 @@
 // (perimeters/index.js). cards.test.mjs pins the English card.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { setLocale, t } from '../../i18n/index.js';
+import { formatDate, formatNumber, setLocale, t } from '../../i18n/index.js';
 import { buildIncidentCard } from './cards.js';
 import { translateFeedError } from '../../ui/statusText.js';
 
@@ -40,7 +40,7 @@ test('en: the fire card keeps its English wording', () => {
   assert.equal(card.accessibilityLabel, 'Open FIRE · Lake on InciWeb');
 });
 
-for (const locale of ['es', 'ru']) {
+for (const locale of ['es', 'ru', 'zh-CN']) {
   test(`${locale}: selected fire card follows the UI language`, () => {
     setLocale(locale);
     try {
@@ -74,8 +74,8 @@ for (const locale of ['es', 'ru']) {
           `${locale}: English "${english}" in ${text}`,
         );
       assert.ok(
-        !text.includes('1,200'),
-        `${locale}: en-US grouping in ${text}`,
+        text.includes(formatNumber(1200)),
+        `${locale}: locale-aware grouping in ${text}`,
       );
     } finally {
       setLocale('en');
@@ -150,7 +150,7 @@ test('en: compact costs keep the dollar prefix', () => {
   assert.equal(cost(1_300_000_000), '$1.3B to date');
 });
 
-for (const locale of ['es', 'ru']) {
+for (const locale of ['es', 'ru', 'zh-CN']) {
   test(`${locale}: INFONA estimates and partial-source warnings are localized`, () => {
     setLocale(locale);
     try {
@@ -165,7 +165,34 @@ for (const locale of ['es', 'ru']) {
       );
       assert.ok(!card.title.includes('FIRE ESTIMATE'));
       assert.ok(!card.details.join(' ').includes('grouped thermal detections'));
-      assert.ok(!card.details.join(' ').includes('1,234.5'));
+      assert.ok(card.details[0].includes(formatNumber(1234.5)));
+      assert.ok(
+        card.details[3].includes(
+          formatDate(now, {
+            year: 'numeric',
+            month: 'short',
+            day: 'numeric',
+            timeZone: 'UTC',
+          }),
+        ),
+      );
+      assert.doesNotMatch(
+        [card.title, ...card.details].join(' '),
+        /\{[A-Za-z0-9_]+\}/,
+      );
+      const unknown = buildIncidentCard(
+        {
+          stableId: 'infona-unknown',
+          geometryKind: 'estimated-active-fire-area',
+        },
+        now,
+      );
+      assert.equal(unknown.details[0], t('Estimated area unknown'));
+      assert.equal(unknown.details[3], t('Report date unavailable'));
+      if (locale === 'zh-CN') {
+        assert.equal(card.title, '火区估算 · Paraguay');
+        assert.equal(card.details[0], '估算面积 1,234.5 ha');
+      }
       for (const status of ['stale', 'unavailable', 'truncated']) {
         assert.notEqual(
           translateFeedError(`WFIGS: ${status} · INFONA: ${status}`),
