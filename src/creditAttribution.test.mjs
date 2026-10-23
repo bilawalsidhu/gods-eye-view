@@ -245,6 +245,9 @@ function ownBoxEntries() {
       const compound = lastCompound(part);
       if (!ELEMENT_KEYS.some((key) => compound.includes(key))) continue;
       if (compound.includes('::')) continue; // a pseudo-element is its own box
+      // The phone shell is its own layout; mobileShell.test.mjs pins its
+      // attribution clearance.
+      if (part.startsWith('body.mobile-shell')) continue;
       entries.push({ rule, part });
     }
   }

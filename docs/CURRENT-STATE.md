@@ -9,10 +9,23 @@ broader suffix variants. Follow-ups retain boundary provenance, and cancelled
 lookups preserve the previous analyst cohort and boundary source. Navigation
 search keeps a successful geocode, with no search or view-based region recovery.
 
+KML namespace repair locates the opening token once and scans its quoted tag
+delimiter once, skipping prolog and DOCTYPE comments and processing
+instructions whole. The scanner is a boundary check only: an opening KML tag
+that never closes, or one with raw markup starting inside it, fails before DOM
+parsing, so a file of repeated incomplete `<kml` prefixes cannot trigger
+quadratic regex rescans. All other XML grammar, including attribute syntax
+inside a complete root tag, is left to DOMParser. Namespace declarations are
+recognized only as whole root attributes, never inside quoted values; duplicate
+namespace repair and missing xsi declarations remain supported. GPX continues
+through its existing XML parsing path.
+
 Terrain height requests accept at most 64 points, matching the browser service's
 existing batch size and one bounded upstream chunk. Larger requests return HTTP
 413 before disk-cache loading or upstream work; malformed coordinates remain 400.
 The browser continues to split larger workloads into sequential 64-point requests.
+
+Traffic holds continuous rendering only while enabled with animated dots or a pulsing jam heat-line. Empty and high-altitude views release the hold. A failed load leaves no hold only when no animated content is retained: if an earlier load succeeded, ingestion keeps its animated points and the hold stays. Population admission reacquires the hold and resets animation time. Clear, disable, and destroy also release it. Retained fading dots keep animation alive until they are removed. When the last point leaves mid height correction, the correction is settled at once, before the hold is released, so it cannot keep the layer reporting loading.
 
 Shared distance checks use `src/geoDistance.js` with `{ lat, lon }` points and
 the IUGG mean spherical Earth radius, 6371.0088 km. `greatCircleKm` is
@@ -1378,6 +1391,32 @@ Radio-overlap path reported in #804 without changing z-index or layout policy.
 The right rail skips panels hidden by other CSS (computed `display: none`), but
 keeps the collapsed panels its own exclusive presentation hides, so automatic
 collapse can still be undone.
+
+## Phone layout
+
+At 720px and narrower, `src/ui/mobileShell.js` keeps the globe full screen and
+shows a bottom tab bar: Layers (Data Layers, with Scenes collapsed below),
+Cameras (CCTV and Street Level), Context (Global Context, plus Weather and
+Recent Imagery when shown), Search (Location) and More (Visual Presets and Map
+Source above Display). A tab opens one bottom sheet; the same tab, the backdrop
+or Escape closes it, and focus moves into the sheet and back to its tab. Panels
+are not moved in the DOM: `styles/mobile-shell.css` presents the rails and dock
+as the sheet, and the dock's Location and Presets trays render inline. The voice
+control floats above the tab bar while no sheet is open.
+
+Sheets borrow panels. Opening one expands its panels without persisting them or
+claiming a user choice, and share links keep reporting each borrowed panel's
+state from before the sheet; closing puts back what opening changed, while a
+panel the user changed inside the sheet stays as they left it. Escape closes the
+sheet before a panel's own Escape handling, and the dock's hover auto-close does
+not apply inside a sheet.
+Cockpit, recording and clean view close the sheet and hide the tab bar; scene
+playback keeps both so its STOP control in the Scenes panel stays reachable. The
+right rail neither hides collapsed siblings nor applies Cyber's one-panel
+accordion at these widths, since the sheet chooses what shows. The Cesium and Google attribution stays visible above the
+voice control, and above an open sheet. The page draws under the notch and
+system bars (`viewport-fit=cover`) and the shell's chrome uses safe-area insets.
+Wider viewports are unchanged, and crossing to them closes any open sheet.
 
 ## Surface keyboard lifecycle
 
@@ -4686,7 +4725,7 @@ silently demoting every later lookup for the session.
   A selected mission renders its orbit as four repeating tactical sectors, each containing one prominent cyan dot followed by one hundred thin translucent dashes. The bright dots act as orbit anchors while the subdued dash field remains depth-tested against the globe and is shown only for the selected mission.
   Close selected-pad views add one static 500 m-radius cyan launch-zone ring with a low-opacity translucent fill over the sampled photoreal launch-site surface. The single scene primitive is created only for the visible selected site and is otherwise dormant. It appears during Focus, sufficiently close manual zoom, and the replay countdown, but is suppressed above 120 km camera altitude, beyond 180 km direct camera-to-pad range, for unselected missions, and whenever Space Missions is inactive. Focus establishes a launch-site-centered camera transform once; subsequent manual heading and pitch changes remain centered on that site without an automated per-frame correction. Surface mission markers and labels use an additional conservative globe-limb margin before the exact ellipsoid occluder boundary, preventing near-horizon visibility from alternating between frames.
 - **AIS vessels**: chevron symbology (naval cyan base, type tints), world-space headings, MMSI-keyed reconciliation (selection survives refreshes; pinned 3 refreshes with STALE marker when absent), detection-overlay integration (`type: 'SEA'`), contextStore registration for voice Q&A. Empty-space clicks, id-less photorealistic-tile picks, and Escape dismiss the vessel card/HUD/context and clear its trail; picks owned by another layer (including `gev-trail:*`) and raw vessel-record picks without a live MMSI key are no-ops for vessel selection. Click and key handlers detach while the layer is disabled and reinstall on enable. Selecting another vessel replaces the selection and trail, and reconciliation clears a trail if its owning vessel is evicted.
-- **Track trails**: server accumulates per-MMSI ring buffers (`/api/vessels/track?mmsi=`, Float32+Uint32, 64 samples, 30s/25m thinning); aircraft backfill proxies `/api/flights/track` (OAuth, own credit bucket) and `/api/military/track` (tar1090 readsb, ~24h history, ODbL — credit adsb.lol).
+- **Track trails**: server accumulates per-MMSI ring buffers (`/api/vessels/track?mmsi=`, Float32+Uint32, 64 samples, 30s/25m thinning); aircraft backfill proxies `/api/flights/track` (OAuth, own credit bucket). Military aircraft keep only their locally accumulated trails: `/api/military/track` validates the hex, then answers `503 history_unavailable` without an upstream request.
 - Shared `src/data/pickRegistry.js` stops the two flight layers' click handlers from fighting over the camera.
 
 ### Optional Overpass configuration
@@ -5250,7 +5289,7 @@ pins and share links already supply complete boxes.
 - `/api/overpass` is bounded by body/response caps, per-client/global rate limits, concurrency limits, operator-configured upstreams, in-flight dedupe, cache bounds, and static validation that every selector is spatially bounded.
 - `/api/military-installations` uses an independent limiter with the same 90-per-client/300-global one-minute bounds, so viewport installation refreshes never consume `/api/overpass` annotation capacity.
 - `/api/route` proxies bounded OSRM route requests for annotation routes, with profile allowlisting, distance caps, response caps, caching, and sanitized "no route found" errors.
-- Track endpoints: `/api/vessels/track?mmsi=` (server-accumulated ring buffers; sub-route handled before the rows snapshot), `/api/flights/track?icao24=` (OAuth, 60s cache, sanitized errors, independent OpenSky credit bucket), `/api/military/track?hex=` (60s cache, 5MB cap, ODbL attribution required in UI).
+- Track endpoints: `/api/vessels/track?mmsi=` (server-accumulated ring buffers; sub-route handled before the rows snapshot), `/api/flights/track?icao24=` (OAuth, 60s cache, sanitized errors, independent OpenSky credit bucket), `/api/military/track?hex=` (400 for an invalid hex, otherwise `503 history_unavailable` with `Retry-After: 1800` and `Cache-Control: no-store`, no upstream request; military tracking uses its locally accumulated trail).
 - Realtime debug logs redact API keys, bearer tokens, client secrets, and image data URLs before writing to disk; request bodies are size-capped.
 - `/api/realtime/debug-log` enforces an always-on 120-per-client/400-global one-minute limiter (not the opt-in `GEV_RATELIMIT_OPENAI_PER_MIN` bucket the cost-bearing OpenAI routes share), appends asynchronously through a serialized queue, and rotates `realtime-conversations.jsonl` at 32 MB keeping one prior generation, so the sink is bounded at twice that regardless of session length. A malformed record answers 400 and a failed write 500, both with a fixed message.
 
