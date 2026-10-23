@@ -89,6 +89,8 @@ export function createEmscEarthquakeSource({
           const response = await fetchImpl(emscQueryUrl(nowMs, page), {
             signal: request.signal,
           });
+          // No (more) events: FDSN answers 204 with an empty body.
+          if (response.status === 204) break;
           if (!response.ok) throw new Error(`EMSC HTTP ${response.status}`);
           const payload = await response.json();
           request.signal.throwIfAborted();

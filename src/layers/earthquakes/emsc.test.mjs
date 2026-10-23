@@ -218,6 +218,26 @@ test('the EMSC source reads further pages while a page is full', async () => {
   assert.equal(rows.length, EMSC_PAGE_SIZE + 2);
 });
 
+test('an empty page (204) ends the EMSC paging without losing rows', async () => {
+  const page = (count) =>
+    Array.from({ length: count }, (_, index) =>
+      emscFeature({ unid: `e${index}` }),
+    );
+  const source = createEmscEarthquakeSource({
+    now: () => Date.parse('2026-10-11T12:00:00Z'),
+    // Exactly one full page, then nothing: FDSN's 204 with no body.
+    fetchImpl: async (url) =>
+      new URL(url).searchParams.get('offset')
+        ? new Response(null, { status: 204 })
+        : Response.json({ features: page(EMSC_PAGE_SIZE) }),
+  });
+  assert.equal((await source.getSnapshot()).length, EMSC_PAGE_SIZE);
+  const none = createEmscEarthquakeSource({
+    fetchImpl: async () => new Response(null, { status: 204 }),
+  });
+  assert.deepEqual(await none.getSnapshot(), []);
+});
+
 test('a stalled EMSC gives up and leaves the USGS snapshot', async () => {
   const usgsRow = { stableId: 'us1', lon: 0, lat: 0, mag: 3, time: 0 };
   const stalled = createEmscEarthquakeSource({
