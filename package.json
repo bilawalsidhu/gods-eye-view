@@ -241,6 +241,7 @@
     "./layers/bikeshare/source": "./src/layers/bikeshare/source.js",
     "./layers/cctv/source": "./src/layers/cctv/source.js",
     "./layers/air-quality/source": "./src/layers/airQuality/source.js",
+    "./layers/ev-charging/source": "./src/layers/evCharging/source.js",
     "./layers/earthquakes/source": "./src/layers/earthquakes/source.js",
     "./layers/perimeters/source": "./src/layers/perimeters/source.js",
     "./layers/gnss/source": "./src/layers/gnss/source.js",

@@ -4031,6 +4031,22 @@
     ],
     "external": []
   },
+  "ev-charging-source": {
+    "exports": ["./layers/ev-charging/source"],
+    "modules": [
+      "src/layers/evCharging/records.js",
+      "src/layers/evCharging/source.js",
+      "src/data/tomtomTiles.js",
+      "src/sources/openFreeMap.js",
+      "src/sources/vectorTiles.js",
+      "src/sources/phaseTiming.js",
+      "src/sources/httpBody.js",
+      "src/sources/militaryTileGeometry.js",
+      "src/data/installationNames.js",
+      "src/i18n/marker.js"
+    ],
+    "external": ["@mapbox/vector-tile", "pbf"]
+  },
   "agent-world-packet": {
     "exports": ["./agent/world-packet"],
     "modules": [
