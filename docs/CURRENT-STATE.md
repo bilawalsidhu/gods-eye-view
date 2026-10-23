@@ -1449,13 +1449,14 @@ request. Text search also requires a nonblank query. Keyless requests retain
 their `configured: false` response.
 
 The cost-bearing proxies are throttled per client IP without configuration:
-`/api/realtime/token` and `/api/openai/hud-summary` (whichever provider
-answers it) share 30 requests per minute per IP, `/api/google/nearby-places` and `/api/google/text-search` share
-120 — the caps the Pinokio build already sets, so the packaged app is
-unaffected. `GEV_RATELIMIT_OPENAI_PER_MIN` and `GEV_RATELIMIT_GOOGLE_PER_MIN` override
-those; exactly `0` disables the limiter, while a value that cannot be read as a
-number falls back to the default rather than to unlimited. Over-limit requests
-receive a sanitized `429` with `Retry-After: 5` and never reach the provider.
+`/api/realtime/token` and `/api/openai/hud-summary` (whichever provider answers
+it) share 30 requests per minute per IP, `/api/google/nearby-places` and
+`/api/google/text-search` share 120 — the caps the Pinokio build already sets,
+so the packaged app is unaffected. `GEV_RATELIMIT_OPENAI_PER_MIN` and
+`GEV_RATELIMIT_GOOGLE_PER_MIN` override those; exactly `0` disables the limiter,
+while a value that cannot be read as a number falls back to the default rather
+than to unlimited. Over-limit requests receive a sanitized `429` with
+`Retry-After: 5` and never reach the provider.
 The client key is the socket peer address only — a forwarded-for header is not
 trusted, so a proxied deployment shares one bucket per upstream hop.
 
