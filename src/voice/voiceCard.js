@@ -5,7 +5,7 @@ import {
 } from './voiceCardPresentation.js';
 
 /** Hide an idle card this long after its last update. */
-export const VOICE_CARD_IDLE_MS = 14000;
+const VOICE_CARD_IDLE_MS = 14000;
 
 const ELEMENT_IDS = Object.freeze({
   card: 'gev-voice-card',

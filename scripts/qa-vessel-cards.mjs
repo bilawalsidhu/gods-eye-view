@@ -295,7 +295,7 @@ async function main() {
       );
 
       // Wait for the photoreal tileset and at least one vessel refresh.
-      const settled = await page
+      await page
         .waitForFunction(() => {
           const gev = window.__godsEyeView;
           const t = gev.tileset;

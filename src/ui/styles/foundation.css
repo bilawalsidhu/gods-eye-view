@@ -381,7 +381,7 @@ body.cockpit-mode #cockpit-cloud-effects.active {
   position: fixed;
   right: 36px;
   bottom: 36px;
-  /* Z ladder: panels 100-139, voice pill 150, toast 200, clean-view-exit 300 */
+  /* Z ladder: panels ~100, voice pill 150, toast 200, clean-view-exit 300 */
   z-index: 150;
   display: flex;
   align-items: center;

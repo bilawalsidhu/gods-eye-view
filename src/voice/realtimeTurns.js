@@ -14,7 +14,7 @@ import { narrationLabel } from './speech.js';
 import { voiceLanguageInstruction } from './voiceLanguage.js';
 
 /** Out-of-band progress responses carry this metadata tag. */
-export const PROGRESS_RESPONSE_TAG = 'progress';
+const PROGRESS_RESPONSE_TAG = 'progress';
 
 /**
  * Speaks one code-authored progress line out of band. The line travels as
@@ -138,7 +138,7 @@ export class RealtimeTurns {
         content: [{ type: 'input_text', text: cleanText }],
       },
     };
-    this.sendRealtimeEvent(itemEvent, 'client.user_text');
+    if (!this.sendRealtimeEvent(itemEvent, 'client.user_text')) return;
     this.requestUserTextResponse();
   }
 

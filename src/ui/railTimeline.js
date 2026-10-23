@@ -1,4 +1,5 @@
 import { formatUtcDayMonth, t } from '../i18n/index.js';
+import { createSlider } from './slider.js';
 const set = (node, key, value) => {
   if (node[key] !== value) node[key] = value;
 };
@@ -43,14 +44,15 @@ export function createRailTimeline({
     return node;
   };
   const previous = makeButton('‹', t('Earlier observation'), row);
-  const slider = document.createElement('input');
-  slider.type = 'range';
-  slider.className = `gev-quantitative-slider${sliderClassName ? ` ${sliderClassName}` : ''}`;
-  slider.min = '0';
-  slider.max = '0';
-  slider.step = '1';
-  slider.value = '0';
-  slider.setAttribute('aria-label', t('Observed history'));
+  const slider = createSlider({
+    documentRef: document,
+    className: sliderClassName,
+    min: '0',
+    max: '0',
+    step: '1',
+    value: '0',
+    ariaLabel: t('Observed history'),
+  });
   row.appendChild(slider);
   const next = makeButton('›', t('Later observation'), row);
   const controls = document.createElement('div');

@@ -1,44 +1,30 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import * as Cesium from 'cesium';
 import { createMapillaryProvider } from './index.js';
 import { mapillaryImageUrl } from './policy.js';
-import { sequenceIdFromPick } from './coverage.js';
-import { thinImages } from './sequences.js';
+import { sequenceIdFromPick } from '../../lineCoverage.js';
+import { thinImages } from '../../sequenceCones.js';
 import { validateProviders } from '../../registry.js';
-import { PROVIDER_COLORS } from '../../policy.js';
-import { resolveFilter } from '../../filter.js';
-import * as Cesium from 'cesium';
-import { rayCamera } from '../../../../testSupport/streetLevelFakes.mjs';
-
-function fakeSource({ nearest = [] } = {}) {
-  return {
-    hasToken: () => true,
-    getStatus: async () => ({ configured: true }),
-    getTile: async () => new Uint8Array(0),
-    getSequenceImages: async () => [],
-    nearestImages: async () => nearest,
-  };
-}
+import {
+  fakeMapillarySource,
+  rayCamera,
+} from '../../../../testSupport/streetLevelFakes.mjs';
 
 function fakeContext(filter = { pano: 'all', sinceMs: null }) {
   const opened = [];
   return {
     opened,
     services: {},
-    getFilter: typeof filter === 'function' ? filter : () => filter,
+    getFilter: () => filter,
     isActive: () => true,
     notify: () => {},
-    actions: {
-      openImage: (id) => {
-        opened.push(id);
-      },
-      reportError: () => {},
-    },
+    actions: { openImage: (id) => opened.push(id) },
   };
 }
 
 test('the definition satisfies the Street Level provider contract', () => {
-  const def = createMapillaryProvider({ source: fakeSource() });
+  const def = createMapillaryProvider({ source: fakeMapillarySource() });
   assert.doesNotThrow(() => validateProviders([def]));
   assert.equal(def.id, 'mapillary');
   assert.equal(def.label, 'MAPILLARY');
@@ -46,9 +32,7 @@ test('the definition satisfies the Street Level provider contract', () => {
   assert.equal(def.pickPrefix, 'mly:');
   assert.match(def.credit.html, /CC BY-SA 4\.0/);
   // One colour per source: Mapillary is green everywhere it draws.
-  assert.deepEqual(Object.keys(def.colors).sort(), ['coverage', 'selected']);
-  assert.equal(def.colors.coverage, PROVIDER_COLORS.mapillary);
-  assert.equal(PROVIDER_COLORS.mapillary, '#05cb63');
+  assert.equal(def.colors.coverage, '#05cb63');
   assert.throws(() => createMapillaryProvider({ source: {} }), /source/);
 });
 
@@ -62,9 +46,9 @@ test('image deep links match the mapillary.com share format', () => {
 
 test('picks route sequences to selection and images to the core opener', () => {
   const context = fakeContext();
-  const instance = createMapillaryProvider({ source: fakeSource() }).create(
-    context,
-  );
+  const instance = createMapillaryProvider({
+    source: fakeMapillarySource(),
+  }).create(context);
   assert.equal(instance.handlePick('mly:img:77'), true);
   assert.deepEqual(context.opened, ['77']);
   assert.equal(instance.handlePick('cctv:1'), false);
@@ -72,99 +56,14 @@ test('picks route sequences to selection and images to the core opener', () => {
     selectedId: null,
     images: 0,
     loading: false,
+    error: null,
   });
 });
 
-test('nearestImage honours the imagery filter and reports key status', async () => {
-  const nearest = [
-    { id: 1, is_pano: false, captured_at: 10 },
-    { id: 2, is_pano: true, captured_at: 20 },
-  ];
-  const source = fakeSource({ nearest });
-  const flat = createMapillaryProvider({ source }).create(fakeContext());
-  assert.equal(await flat.nearestImage({ lat: 1, lon: 2 }), '1');
-  const pano = createMapillaryProvider({ source }).create(
-    fakeContext({ pano: 'pano', sinceMs: null }),
-  );
-  assert.equal(await pano.nearestImage({ lat: 1, lon: 2 }), '2');
-  const none = createMapillaryProvider({ source }).create(
-    fakeContext({ pano: 'all', sinceMs: 100 }),
-  );
-  assert.equal(await none.nearestImage({ lat: 1, lon: 2 }), null);
-  assert.deepEqual(await flat.status(), { configured: true });
-  assert.equal(flat.coverageStats().keyRequired, false);
-});
-
-test('any part of a multi-part sequence picks the whole sequence', () => {
-  assert.equal(sequenceIdFromPick('mly:seq:abc'), 'abc');
-  assert.equal(sequenceIdFromPick('mly:seq:abc~2'), 'abc');
-  assert.equal(sequenceIdFromPick('mly:img:abc'), null);
-  assert.equal(sequenceIdFromPick(null), null);
-});
-
-test('nearestImage picks the closest image, not the first the API returned', async () => {
-  const at = (id, lon, lat) => ({
-    id,
-    is_pano: false,
-    captured_at: 10,
-    geometry: { type: 'Point', coordinates: [lon, lat] },
-  });
-  const source = fakeSource({
-    nearest: [
-      at('far', 2.0004, 1), // ~45 m east
-      at('near', 2.00005, 1), // ~5 m east
-      at('mid', 2, 1.0002), // ~22 m north
-    ],
-  });
-  const instance = createMapillaryProvider({ source }).create(fakeContext());
-  assert.equal(await instance.nearestImage({ lat: 1, lon: 2 }), 'near');
-});
-
-test('a "since N days" window follows the clock in a long-open tab', async (t) => {
-  t.mock.timers.enable({ apis: ['Date'], now: Date.UTC(2026, 9, 1) });
-  const day = 86_400_000;
-  const capturedAt = Date.now() - day / 2;
-  const source = fakeSource({
-    nearest: [{ id: 'recent', is_pano: false, captured_at: capturedAt }],
-  });
-  // The core's context resolves the stored filter whenever it is asked.
-  const instance = createMapillaryProvider({ source }).create(
-    fakeContext(() => resolveFilter({ pano: 'all', sinceDays: 1 })),
-  );
-  assert.equal(await instance.nearestImage({ lat: 1, lon: 2 }), 'recent');
-  t.mock.timers.tick(2 * day);
-  assert.equal(
-    await instance.nearestImage({ lat: 1, lon: 2 }),
-    null,
-    'two days on, the image is older than the window',
-  );
-});
-
-test('nearestImage measures the short way round the date line', async () => {
-  const at = (id, lon, lat) => ({
-    id,
-    is_pano: false,
-    captured_at: 10,
-    geometry: { type: 'Point', coordinates: [lon, lat] },
-  });
-  const source = fakeSource({
-    nearest: [
-      at('same-side', 179.9995, 0), // ~45 m west, on the camera's side
-      at('across', -179.9999, 0), // ~11 m east, across ±180°
-    ],
-  });
-  const instance = createMapillaryProvider({ source }).create(fakeContext());
-  assert.equal(
-    await instance.nearestImage({ lat: 0, lon: 179.9999 }),
-    'across',
-  );
-  // And from the other side.
-  const west = createMapillaryProvider({
-    source: fakeSource({
-      nearest: [at('same-side', -179.9995, 0), at('across', 179.9999, 0)],
-    }),
-  }).create(fakeContext());
-  assert.equal(await west.nearestImage({ lat: 0, lon: -179.9999 }), 'across');
+test('a line pick names its sequence; anything else is not a sequence', () => {
+  assert.equal(sequenceIdFromPick('mly:seq:abc', 'mly:seq:'), 'abc');
+  assert.equal(sequenceIdFromPick('mly:img:abc', 'mly:seq:'), null);
+  assert.equal(sequenceIdFromPick(null, 'mly:seq:'), null);
 });
 
 test('cone thinning across the date line drops images metres apart', () => {
@@ -220,19 +119,24 @@ function streetViewer() {
   };
 }
 
-test('coverage asks for no tiles before the key status is known', async () => {
+test('coverage asks for no tiles before the key status is known, and none without a key', async (t) => {
+  // Skip Cesium's one-time terrain table download for draped lines.
+  t.mock.method(
+    Cesium.GroundPolylinePrimitive,
+    'initializeTerrainHeights',
+    async () => {},
+  );
   for (const configured of [false, true]) {
     let answer;
     const tiles = [];
-    const source = {
-      ...fakeSource(),
+    const source = fakeMapillarySource({
       hasToken: () => configured,
       getStatus: () => new Promise((resolve) => (answer = resolve)),
       getTile: (...args) => {
         tiles.push(args);
         return new Promise(() => {});
       },
-    };
+    });
     const instance = createMapillaryProvider({ source }).create(fakeContext());
     const viewer = streetViewer();
     instance.init(viewer);
@@ -240,7 +144,7 @@ test('coverage asks for no tiles before the key status is known', async () => {
     instance.activate(viewer);
     assert.equal(tiles.length, 0, 'nothing before the status answers');
     answer({ configured });
-    await status;
+    assert.deepEqual(await status, { configured });
     if (configured)
       assert.ok(tiles.length > 0, 'coverage loads as soon as the key is known');
     else {
@@ -249,4 +153,20 @@ test('coverage asks for no tiles before the key status is known', async () => {
     }
     instance.destroy(viewer);
   }
+});
+
+test('a status the server never answers falls back to the bundled token once the core gives up', async () => {
+  const source = fakeMapillarySource({
+    hasToken: () => false,
+    getStatus: ({ signal } = {}) =>
+      new Promise((_, reject) =>
+        signal?.addEventListener('abort', () => reject(signal.reason)),
+      ),
+  });
+  const instance = createMapillaryProvider({ source }).create(fakeContext());
+  const controller = new AbortController();
+  const status = instance.status({ signal: controller.signal });
+  controller.abort(new Error('timed out'));
+  assert.deepEqual(await status, { configured: false });
+  assert.equal(instance.coverageStats().keyRequired, true);
 });

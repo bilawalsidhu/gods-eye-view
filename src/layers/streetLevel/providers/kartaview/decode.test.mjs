@@ -13,7 +13,7 @@ const at = (lng, lat) => ({ lat: String(lat), lng: String(lng) });
 const TILE = { x: 4412, y: 6061, z: 14 };
 
 test('segments that meet end to start chain into one line', () => {
-  const { sequences, overview } = decodeCoverageTile(
+  const { sequences } = decodeCoverageTile(
     {
       lines: [
         { track: [at(1, 1), at(2, 1)], matched: '1' },
@@ -23,7 +23,6 @@ test('segments that meet end to start chain into one line', () => {
     },
     TILE,
   );
-  assert.deepEqual(overview, []);
   assert.equal(sequences.length, 2);
   assert.deepEqual(sequences[0].parts, [
     [

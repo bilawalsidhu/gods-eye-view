@@ -14,7 +14,7 @@ import { BHOTE_KOSHI_FLOOD_PATH } from './bhoteKoshiFloodPath.js';
 import { INCIDENT_OVERVIEW_PLACES } from './bhoteKoshiIncidentPlaces.js';
 import { t, msg, getLocale } from '../i18n/index.js';
 
-export const BHOTE_KOSHI_LOCATOR_LAYER_ID = 'bhote-koshi-locator';
+const BHOTE_KOSHI_LOCATOR_LAYER_ID = 'bhote-koshi-locator';
 export const BHOTE_KOSHI_LOCATOR_OVERLAY_SOURCE_ID =
   'bhote-koshi-locator-callout';
 export const NEPAL_CONTEXT_PRESENTATION = 'nepal-context';
@@ -35,7 +35,6 @@ const BORDER_START_DELAY_MS = 700;
 const INCIDENT_CALLOUT_GAP_MS = 200;
 const CALLOUT_REVEAL_DURATION_MS = 1200;
 const CALLOUT_PULSE_DURATION_MS = 1800;
-const CALLOUT_DOT_SIZE_PX = 7;
 const CALLOUT_RING_MIN_SIZE_PX = 16;
 const CALLOUT_RING_SIZE_RANGE_PX = 14;
 const CITY_CALLOUT_START_DELAY_MS = 350;
@@ -1248,6 +1247,3 @@ export function createBhoteKoshiLocatorLayer({
     },
   };
 }
-
-const bhoteKoshiLocatorLayer = createBhoteKoshiLocatorLayer();
-export default bhoteKoshiLocatorLayer;
