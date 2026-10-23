@@ -25,6 +25,7 @@
   "src/data/aircraftEmergencyAnalyst.test.mjs",
   "scripts/qa-emergency-squawk.mjs",
   "src/data/infrastructure.test.mjs",
+  "src/data/damsNorway.test.mjs",
   "src/data/localGeojsonCore.js",
   "src/data/localGeojsonLod.js",
   "src/data/inputOwnership.js",

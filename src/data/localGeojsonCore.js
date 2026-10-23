@@ -42,13 +42,59 @@ export const GROUND_SAMPLE_MAX_ARMED_RETRIES = 30;
 export const LOCAL_STEM_TIP_EPSILON_M = 0.5;
 const LOCAL_STEM_TIP_EPSILON_SQ = LOCAL_STEM_TIP_EPSILON_M ** 2;
 
+// This package loads no catalogs: the application passes its t() as the
+// `translate` service, and without one the card stays English.
+const msg = (text) => text;
+const englishText = (text, values = {}) =>
+  text.replace(/\{(\w+)\}/g, (all, key) =>
+    key in values ? String(values[key]) : all,
+  );
+
+// NVE's purposes and dam types as the build script writes them (English);
+// a value not listed shows as it came.
+const NVE_PURPOSES = new Set([
+  msg('Hydropower'),
+  msg('Water supply'),
+  msg('Aquaculture (hatchery)'),
+  msg('Aquaculture'),
+  msg('Irrigation'),
+  msg('Recreation'),
+  msg('Flood control'),
+  msg('Former timber floating'),
+  msg('Former ice production'),
+  msg('Former hydropower'),
+  msg('Tailings'),
+  msg('Sedimentation'),
+  msg('Snowmaking'),
+  msg('Other'),
+  msg('Unknown'),
+]);
+const NVE_DAM_TYPES = Object.freeze({
+  Aluminium: msg('aluminium dam'),
+  Other: msg('other dam'),
+  Concrete: msg('concrete dam'),
+  'Fibre cement': msg('fibre cement dam'),
+  Earthfill: msg('earthfill dam'),
+  'Lightweight aggregate': msg('lightweight aggregate dam'),
+  Masonry: msg('masonry dam'),
+  Rockfill: msg('rockfill dam'),
+  Timber: msg('timber dam'),
+});
+const BUILT = msg('built {year}');
+const POWER_PLANT = msg('{plant} power plant');
+
 /**
  * Build the owner-approved local-infrastructure card copy.
  * @param {object} properties Unwrapped GeoJSON feature properties.
  * @param {string} layerId Local layer id.
+ * @param {(text: string, values?: object) => string} [translate] The UI's t().
  * @returns {{title:string,details:string[]}}
  */
-export function localInfrastructureOverlayCopy(properties, layerId) {
+export function localInfrastructureOverlayCopy(
+  properties,
+  layerId,
+  translate = englishText,
+) {
   const props = unwrapProperties(properties) || {};
   const tags = props.tags || {};
   const title = featureLabelFromProperties(props, layerId);
@@ -76,6 +122,38 @@ export function localInfrastructureOverlayCopy(properties, layerId) {
       .join(' · ');
     if (line) details.push(clampCardLine(line));
   } else if (layerId === 'local-dams') {
+    // Norwegian register dams (NVE): purpose · type · year, then plant · place.
+    const nve = props.nve && typeof props.nve === 'object' ? props.nve : null;
+    if (nve) {
+      const purpose = Array.isArray(nve.purpose)
+        ? firstClean([
+            nve.purpose
+              .map((value) =>
+                NVE_PURPOSES.has(value) ? translate(value) : value,
+              )
+              .join(', '),
+          ])
+        : null;
+      const damType = firstClean([nve.damType]);
+      const built = Number.isFinite(nve.built)
+        ? translate(BUILT, { year: String(nve.built) })
+        : null;
+      const facts = [
+        purpose,
+        damType &&
+          (NVE_DAM_TYPES[damType]
+            ? translate(NVE_DAM_TYPES[damType])
+            : `${damType.toLocaleLowerCase('en')} dam`),
+        built,
+      ].filter(Boolean);
+      if (facts.length) details.push(clampCardLine(facts.join(' · ')));
+      const plant = firstClean([nve.powerPlant]);
+      const place = [
+        plant && translate(POWER_PLANT, { plant }),
+        firstClean([nve.municipality]),
+      ].filter(Boolean);
+      if (place.length) details.push(clampCardLine(place.join(' · ')));
+    }
     const river = firstClean([
       tags.associated_river,
       props.associated_river,
@@ -101,6 +179,7 @@ export function localInfrastructureOverlayCopy(properties, layerId) {
  * @param {object} options.properties Unwrapped feature properties.
  * @param {number} options.priority Source-owned importance score.
  * @param {string} options.accent Source accent color.
+ * @param {(text: string, values?: object) => string} [options.translate] The UI's t().
  * @returns {object}
  */
 export function createLocalInfrastructureOverlayEntry({
@@ -110,8 +189,9 @@ export function createLocalInfrastructureOverlayEntry({
   properties,
   priority,
   accent,
+  translate,
 }) {
-  const copy = localInfrastructureOverlayCopy(properties, layerId);
+  const copy = localInfrastructureOverlayCopy(properties, layerId, translate);
   return createInfrastructureOverlayEntry({
     id,
     source: layerId,
@@ -317,6 +397,7 @@ export function createLocalGeoJsonLayer(
   },
   {
     overlayHost,
+    translate = englishText,
     registerEntityContext,
     selectEntityContext,
     clearSelectedEntityContextForLayer,
@@ -586,18 +667,23 @@ export function createLocalGeoJsonLayer(
             try {
               let features = _cachedFeatures;
               if (!features) {
-                const response = await fetch(url, {
-                  signal: _loadController.signal,
-                });
-                if (_destroyed) return;
-                // A 404 returns an HTML body that would otherwise die in JSON.parse
-                // one line later, reported as a parse error for a missing file.
-                if (!response.ok) {
-                  throw new Error(`HTTP ${response.status ?? '?'}`);
+                // A layer may span several files (a main file plus regional
+                // supplements); all must load or the layer reports the error.
+                features = [];
+                for (const fileUrl of Array.isArray(url) ? url : [url]) {
+                  const response = await fetch(fileUrl, {
+                    signal: _loadController.signal,
+                  });
+                  if (_destroyed) return;
+                  // A 404 returns an HTML body that would otherwise die in JSON.parse
+                  // one line later, reported as a parse error for a missing file.
+                  if (!response.ok) {
+                    throw new Error(`HTTP ${response.status ?? '?'}`);
+                  }
+                  const text = await response.text();
+                  if (_destroyed) return;
+                  features.push(...parseGeojsonLines(text));
                 }
-                const text = await response.text();
-                if (_destroyed) return;
-                features = parseGeojsonLines(text);
                 _cachedFeatures = features;
               }
 
@@ -750,6 +836,7 @@ export function createLocalGeoJsonLayer(
                         properties,
                         priority,
                         accent: color,
+                        translate,
                       })
                     : null,
                 });

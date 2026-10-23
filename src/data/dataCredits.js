@@ -438,7 +438,10 @@ export const DATA_CREDITS = [
   },
   {
     key: 'dams',
-    html: 'Dams: Open Infrastructure Map',
+    html:
+      'Dams: Open Infrastructure Map · Norway: ' +
+      '<a href="https://www.nve.no/" target="_blank" rel="noopener">NVE</a>' +
+      ' (<a href="https://data.norge.no/nlod/no/1.0" target="_blank" rel="noopener">NLOD</a>)',
   },
   {
     key: 'firms',

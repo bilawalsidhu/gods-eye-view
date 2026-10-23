@@ -18,6 +18,25 @@ export const INFRASTRUCTURE_DATA_URLS = Object.freeze({
   },
 });
 
+/**
+ * Regional files loaded after a layer's main file, each under its own
+ * licence: Norway's dams come from NVE's register (NLOD), not OpenStreetMap.
+ */
+export const INFRASTRUCTURE_SUPPLEMENT_URLS = Object.freeze({
+  get 'local-dams'() {
+    return [
+      new URL('../data/local_data/dams/norway.geojsonl', import.meta.url).href,
+    ];
+  },
+});
+
+/** Every data file of a local infrastructure layer, main file first. */
+export function infrastructureDataUrls(layerId) {
+  const main = INFRASTRUCTURE_DATA_URLS[layerId];
+  if (!main) return [];
+  return [main, ...(INFRASTRUCTURE_SUPPLEMENT_URLS[layerId] ?? [])];
+}
+
 /** Parse GeoJSON Lines: one Feature per non-empty line. */
 export function parseGeojsonLines(text) {
   return String(text)
@@ -102,6 +121,25 @@ export function mapAnalystRecord(raw, layerId = '') {
     capacity,
     river,
     output,
+    ...(layerId === 'local-dams' ? nveDamFields(props.nve, text, num) : {}),
+  };
+}
+
+/**
+ * Register facts for a Norwegian (NVE) dam, null elsewhere so every dam
+ * record keeps one shape.
+ */
+function nveDamFields(nve, text, num) {
+  const facts = nve && typeof nve === 'object' ? nve : {};
+  const purposes = Array.isArray(facts.purpose)
+    ? facts.purpose.map(text).filter(Boolean)
+    : [];
+  return {
+    purpose: purposes.length ? purposes.join(', ') : null,
+    built: num(facts.built),
+    damType: text(facts.damType),
+    powerPlant: text(facts.powerPlant),
+    municipality: text(facts.municipality),
   };
 }
 
@@ -135,29 +173,32 @@ export function createInfrastructureSource({
   const cache = new Map();
   return {
     async getRecords(layerId, { signal } = {}) {
-      const url = INFRASTRUCTURE_DATA_URLS[layerId];
-      if (!url) throw new TypeError(`Unknown infrastructure layer: ${layerId}`);
+      const urls = infrastructureDataUrls(layerId);
+      if (!urls.length)
+        throw new TypeError(`Unknown infrastructure layer: ${layerId}`);
       if (!cache.has(layerId)) {
-        signal?.throwIfAborted();
-        const response = await fetchImpl(url, { signal });
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
-        const records = parseGeojsonLines(await response.text()).flatMap(
-          (feature) => {
-            const point = featurePoint(feature);
-            return point
-              ? [
-                  mapAnalystRecord(
-                    {
-                      id: feature.properties?.osm_id ?? feature.id,
-                      ...point,
-                      properties: feature.properties,
-                    },
-                    layerId,
-                  ),
-                ]
-              : [];
-          },
-        );
+        const features = [];
+        for (const url of urls) {
+          signal?.throwIfAborted();
+          const response = await fetchImpl(url, { signal });
+          if (!response.ok) throw new Error(`HTTP ${response.status}`);
+          features.push(...parseGeojsonLines(await response.text()));
+        }
+        const records = features.flatMap((feature) => {
+          const point = featurePoint(feature);
+          return point
+            ? [
+                mapAnalystRecord(
+                  {
+                    id: feature.properties?.osm_id ?? feature.id,
+                    ...point,
+                    properties: feature.properties,
+                  },
+                  layerId,
+                ),
+              ]
+            : [];
+        });
         cache.set(layerId, records);
       }
       return cache.get(layerId);
