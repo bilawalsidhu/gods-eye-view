@@ -231,8 +231,10 @@ test('a view too wide for the tile cap asks to zoom in and clears the markers', 
   const h = harness(async () => reply);
   try {
     await h.layer.update();
+    h.click('ev-charging:a');
     reply = snapshot([], { zoomIn: true, observedAt: null });
     await h.layer.update();
+    assert.equal(h.selected, null, 'the card closes with its marker');
     const stats = h.layer.getStats();
     assert.equal(stats.status, 'zoom-in');
     assert.equal(stats.count, 0);
@@ -338,6 +340,33 @@ test('a click selects a station and shows its card; empty map releases it', asyn
     h.click(null);
     assert.equal(h.selected, null);
     assert.equal(unnamed.point.pixelSize.getValue(), 9);
+  } finally {
+    h.layer.destroy();
+    h.restore();
+  }
+});
+
+test('a read without the selected station closes its card', async () => {
+  // Flying from one city to another replaces every record; a card left on
+  // the shared selection would point at a station no longer drawn.
+  let reads = 0;
+  const h = harness(async () =>
+    snapshot(
+      (reads += 1) === 1
+        ? [station('a', 52.37, 4.89, 'Amsterdam')]
+        : [station('b', 10.78, 106.7, 'Saigon')],
+    ),
+  );
+  try {
+    await h.layer.update();
+    h.click('ev-charging:a');
+    assert.equal(h.selected?.id, 'ev-charging:a');
+    await h.layer.update();
+    assert.equal(h.selected, null);
+    assert.equal(
+      h.added[0].entities.getById('ev-charging:b').point.pixelSize.getValue(),
+      9,
+    );
   } finally {
     h.layer.destroy();
     h.restore();

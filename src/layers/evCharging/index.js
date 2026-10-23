@@ -172,8 +172,11 @@ export function createEvChargingLayer({ source, services } = {}) {
     entities.resumeEvents();
     removeEntityContextsForLayer(LAYER_ID, { retainIds: new Set(next.keys()) });
     state.records = next;
-    if (state.selectedId && !next.has(state.selectedId))
+    // A read without the selected station also closes its card.
+    if (state.selectedId && !next.has(state.selectedId)) {
       state.selectedId = null;
+      clearSelectedEntityContextForLayer(LAYER_ID);
+    }
     // The on-map credit follows displayed stations, not loading or prompts.
     if (next.size)
       services.credits?.showOsmCredit?.(state.viewer, LAYER_ID, {
@@ -186,6 +189,7 @@ export function createEvChargingLayer({ source, services } = {}) {
   function clearRendered() {
     state.dataSource?.entities.removeAll();
     state.records = new Map();
+    if (state.selectedId) clearSelectedEntityContextForLayer(LAYER_ID);
     state.selectedId = null;
     removeEntityContextsForLayer(LAYER_ID);
     services.credits?.hideOsmCredit?.(state.viewer, LAYER_ID);
