@@ -180,6 +180,7 @@
     "./layers/directions/source": "./src/layers/directions/source.js",
     "./layers/cctv": "./src/layers/cctv/index.js",
     "./layers/air-quality": "./src/layers/airQuality/index.js",
+    "./layers/ev-charging": "./src/layers/evCharging/index.js",
     "./layers/alpr": "./src/layers/alpr/index.js",
     "./layers/radio": "./src/layers/radio/index.js",
     "./layers/submarine-cables": "./src/layers/submarineCables/index.js",
