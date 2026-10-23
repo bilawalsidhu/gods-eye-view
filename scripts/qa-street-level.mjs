@@ -30,7 +30,6 @@ import {
 import {
   answerKartaViewRequest,
   describeKartaViewCall,
-  KV_LINE,
   KV_SEQUENCE_ID,
   kartaViewPhotos,
   resetKartaViewFixture,

@@ -4,7 +4,7 @@ import { readResponseJsonCapped } from '../../sources/httpBody.js';
 // the weather layer translates them where it shows them (t / translateKnown).
 const msg = (text) => text;
 
-export const WEATHER_PRODUCTS = Object.freeze([
+const WEATHER_PRODUCTS = Object.freeze([
   'radar',
   'clouds',
   'clouds-regional',

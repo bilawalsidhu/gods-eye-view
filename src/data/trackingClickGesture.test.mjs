@@ -1,7 +1,6 @@
 import { readLayerSource } from '../testSupport/readLayerSource.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
 import {
   bindTrackingClickGesture,
   isTrackingClickGesture,

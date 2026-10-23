@@ -177,6 +177,16 @@ Publishing it wider is the [Sharing an instance](#-sharing-an-instance) opt-in, 
 
 When you widen the publish, also set `GEV_KEY_SETUP_TRUSTED_PEERS=none` so the launcher trusts no gateway address.
 
+```bash
+GEV_KEY_SETUP_TRUSTED_PEERS=none docker compose up
+```
+
+Compose forwards `GEV_KEY_SETUP_TRUSTED_PEERS` and `GEV_ALLOWED_HOSTS` from your
+shell or the project's `.env`; an exported shell value takes precedence. You can
+also put `GEV_KEY_SETUP_TRUSTED_PEERS=none` in `.env` for a persistent setting.
+Unset or blank trusted peers retain automatic gateway discovery; `none` explicitly
+disables it. The startup log confirms that no additional peers are trusted.
+
 <details>
 <summary>Running on Linux, a NAS, or behind a reverse proxy</summary>
 
@@ -478,7 +488,7 @@ How the globe handles live data:
 ```
 src/
 ├── main.js                 # Bootstrap: Google 3D tiles, layer registration
-├── ui.js                   # Runtime UI — panels, HUD, styles, control facade
+├── ui/                     # Runtime UI — panels, HUD, styles, controls
 ├── hud.js                  # Intelligence HUD + AI scene summary
 ├── keySetup.js             # POWER UP panel — in-app provider keys (dev server only)
 ├── mapStackController.js   # Basemap switching — Google 3D / Esri / OSM / ion stacks

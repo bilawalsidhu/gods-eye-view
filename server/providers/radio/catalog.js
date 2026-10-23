@@ -26,7 +26,7 @@ import {
   RADIO_UUID_RE,
   RADIO_FALLBACK_MIRRORS,
 } from './constants.js';
-export async function mapRadioConcurrent(values, concurrency, mapper) {
+async function mapRadioConcurrent(values, concurrency, mapper) {
   const results = new Array(values.length);
   let cursor = 0;
   const workers = Array.from(

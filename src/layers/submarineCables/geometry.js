@@ -33,7 +33,7 @@ export function featureReference(feature) {
   };
 }
 
-export function coordsFromProperty(value) {
+function coordsFromProperty(value) {
   if (!Array.isArray(value) || value.length < 2) return null;
   const lon = Number(value[0]);
   const lat = Number(value[1]);
@@ -41,7 +41,7 @@ export function coordsFromProperty(value) {
   return [lon, lat];
 }
 
-export function coordsFromPoint(value) {
+function coordsFromPoint(value) {
   if (!Array.isArray(value) || value.length < 2) return null;
   const lon = Number(value[0]);
   const lat = Number(value[1]);
@@ -49,7 +49,7 @@ export function coordsFromPoint(value) {
   return [lon, lat];
 }
 
-export function collectLonLat(value, out) {
+function collectLonLat(value, out) {
   if (!Array.isArray(value)) return;
   if (typeof value[0] === 'number' && typeof value[1] === 'number') {
     const lon = Number(value[0]);

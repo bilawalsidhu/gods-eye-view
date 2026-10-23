@@ -4369,46 +4369,6 @@ function dominantValue(values) {
   };
 }
 
-function summarizeEntity(viewer, entity, { includeProperties = false } = {}) {
-  const now = Cesium.JulianDate.now();
-  if (entity.__gevContextId) {
-    const store = window.__gevContextStore;
-    const record = store?.entities?.get(entity.__gevContextId);
-    if (record) return summarizeContextRecord(record, { includeProperties });
-  }
-  const props = propertyObject(entity);
-  const layerId = entity.__localLayerId || props.layerId || null;
-  const tags = props.tags || {};
-  const label = cleanText(
-    props.name ||
-      tags.name ||
-      tags['name:en'] ||
-      tags.official_name ||
-      tags.operator ||
-      props.operator ||
-      entity.name ||
-      layerTitle(layerId),
-  );
-  const position =
-    entity.__localBaseCartesian ||
-    entity.position?.getValue?.(now) ||
-    polygonCenter(entity, now);
-  const carto = position ? Cesium.Cartographic.fromCartesian(position) : null;
-  return {
-    id: String(entity.id || ''),
-    name: label || layerTitle(layerId),
-    layerId,
-    layerName: layerTitle(layerId),
-    latitude: carto
-      ? Number(Cesium.Math.toDegrees(carto.latitude).toFixed(6))
-      : null,
-    longitude: carto
-      ? Number(Cesium.Math.toDegrees(carto.longitude).toFixed(6))
-      : null,
-    properties: includeProperties ? compactProperties(props) : undefined,
-  };
-}
-
 function summarizeContextRecord(record, { includeProperties = false } = {}) {
   return {
     id: String(record.id || ''),
@@ -4425,31 +4385,6 @@ function summarizeContextRecord(record, { includeProperties = false } = {}) {
       : undefined,
     active: isContextRecordActive(record),
   };
-}
-
-function polygonCenter(entity, now) {
-  const hierarchy = entity.polygon?.hierarchy?.getValue?.(now);
-  const positions = hierarchy?.positions;
-  if (!positions?.length) return null;
-  return Cesium.BoundingSphere.fromPoints(positions).center;
-}
-
-function propertyObject(entity) {
-  const raw = entity?.properties?.getValue?.(Cesium.JulianDate.now()) || {};
-  return unwrapProperties(raw);
-}
-
-function unwrapProperties(value) {
-  if (!value || typeof value !== 'object') return value;
-  if (Array.isArray(value)) return value.map(unwrapProperties);
-  const out = {};
-  for (const [key, entry] of Object.entries(value)) {
-    out[key] =
-      entry && typeof entry.getValue === 'function'
-        ? unwrapProperties(entry.getValue(Cesium.JulianDate.now()))
-        : unwrapProperties(entry);
-  }
-  return out;
 }
 
 function compactProperties(props) {

@@ -114,13 +114,14 @@ export function renderRadioState(state) {
         ...state.categories.map((category) => {
           const option = document.createElement('option');
           option.value = category.id;
-          option.textContent = `● ${category.label} (${category.count})`;
+          const label = t('{category} ({count})', {
+            category: category.label,
+            count: category.count,
+          });
+          option.textContent = `● ${label}`;
           option.dataset.radioColor = category.color;
           option.style.color = category.color;
-          option.setAttribute(
-            'aria-label',
-            `${category.label} (${category.count})`,
-          );
+          option.setAttribute('aria-label', label);
           return option;
         }),
       );
