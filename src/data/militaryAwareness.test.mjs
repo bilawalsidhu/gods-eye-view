@@ -1,7 +1,6 @@
 import { readLayerSource } from '../testSupport/readLayerSource.mjs';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import fs from 'node:fs';
 import * as Cesium from 'cesium';
 import militaryAwarenessLayer, {
   _getAwarenessNavigationStateForTest,
