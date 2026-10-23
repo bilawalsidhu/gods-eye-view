@@ -694,7 +694,11 @@ test('superseding a pending stage preserves the newer manifest loading state', a
   await flush();
   const newer = h.layer.update();
   await flush();
-  assert.equal(await old, false);
+  assert.equal(
+    await old,
+    true,
+    'replacement is accepted by the enable lifecycle',
+  );
   assert.equal(
     h.layer.getStats().loading,
     true,
@@ -2311,3 +2315,44 @@ for (const product of ['radar', 'clouds-regional', 'lightning']) {
     assert.equal(h.viewer.camera.moveEnd.size, 0);
   });
 }
+
+test('a product replacement accepts supersession but never paints the obsolete first response', async () => {
+  const pending = [];
+  const h = layerHarness({
+    id: 'weather-satellite',
+    feed: {
+      getSnapshot: (args) => {
+        const task = deferred();
+        pending.push({ ...args, ...task });
+        return task.promise;
+      },
+    },
+  });
+  const first = h.layer.update();
+  h.layer.setParams({ product: 'clouds' });
+  assert.equal(pending.length, 2);
+  pending[0].resolve({ ...snapshot, product: 'clouds-regional' });
+  assert.equal(await first, true);
+  assert.equal(h.stages.length, 0);
+  pending[1].resolve({ ...snapshot, product: 'clouds' });
+  await flush();
+  h.stages.at(-1).finish();
+  await flush();
+  assert.equal(h.layer.getParams().product, 'clouds');
+  h.layer.destroy();
+});
+
+test('disabled weather releases its camera listener and re-enabling binds only once', () => {
+  const h = layerHarness();
+  h.layer.disable();
+  assert.equal(h.moveEnd.size, 0, 'disabled layers own no active camera work');
+  h.layer.enable();
+  h.layer.enable();
+  assert.equal(h.moveEnd.size, 1);
+  h.layer.disable();
+  assert.equal(h.moveEnd.size, 0);
+  h.layer.enable();
+  assert.equal(h.moveEnd.size, 1);
+  h.layer.destroy();
+  assert.equal(h.moveEnd.size, 0);
+});

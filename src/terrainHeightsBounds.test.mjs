@@ -366,3 +366,24 @@ test('a second client keeps its own quota', async (t) => {
   });
   assert.notEqual(neighbour.statusCode, 429);
 });
+
+test('one 64-point chunk is accepted; larger batches fail before cache or upstream work', async (t) => {
+  const root = await mkdtemp(path.join(tmpdir(), 'terrain-batch-limit-'));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const asked = stubTerrainUpstream(t);
+  const route = install(
+    terrainHeightsProxy({ cachePath: path.join(root, 'cache.json') }),
+  ).get('/api/terrain/heights');
+  const points = (count) =>
+    Array.from({ length: count }, (_, i) => `${i / 1000},30`).join(';');
+  for (const count of [65, 2001]) {
+    const response = await request(route, { url: `/?points=${points(count)}` });
+    assert.equal(response.statusCode, 413);
+    assert.match(response.body.error, /max 64/);
+    assert.equal(asked.length, 0);
+  }
+  const response = await request(route, { url: `/?points=${points(64)}` });
+  assert.equal(response.statusCode, 200);
+  assert.equal(response.body.results.length, 64);
+  assert.equal(asked.length, 64);
+});

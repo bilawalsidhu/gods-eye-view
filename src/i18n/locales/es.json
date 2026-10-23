@@ -1086,7 +1086,6 @@
   "FIELD REPORTS · {count}": "INFORMES DE CAMPO · {count}",
   "GEOLOCATIONS · {credit}": "GEOLOCALIZACIONES · {credit}",
   "↗ OPEN PUBLIC MAP": "↗ ABRIR MAPA PÚBLICO",
-  "Clouds are preserved from the source imagery.": "Las nubes provienen de las imágenes de origen.",
   "Show the Nepal context callout without a border or country fill": "Muestra la etiqueta de contexto de Nepal sin frontera ni relleno del país",
   "Introduce Nepal, draw its border, then reveal the Bhote Koshi incident": "Presenta Nepal, dibuja su frontera y luego revela el incidente del Bhote Koshi",
   "CITIES": "CIUDADES",
@@ -2937,5 +2936,12 @@
   "Gemini access was refused. Check the API key and model access.": "Se denegó el acceso a Gemini. Comprueba la clave de API y el acceso al modelo.",
   "Gemini Live is unavailable for the configured model.": "Gemini Live no está disponible para el modelo configurado.",
   "Token request is too large": "La solicitud de credencial es demasiado grande",
-  "Use an empty JSON token request": "Usa una solicitud de credencial con un objeto JSON vacío"
+  "Use an empty JSON token request": "Usa una solicitud de credencial con un objeto JSON vacío",
+  " Clouds are preserved from the source imagery.": " Las nubes provienen de las imágenes de origen.",
+  "hemisphere|N": "N",
+  "hemisphere|S": "S",
+  "hemisphere|E": "E",
+  "hemisphere|W": "O",
+  "OK": "OK",
+  "{category} ({count})": "{category} ({count})"
 }
