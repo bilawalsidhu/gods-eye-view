@@ -44,7 +44,7 @@ export async function loadInfrastructureFeatures(
 ) {
   signal?.throwIfAborted();
   const batches = await Promise.allSettled(
-    urls.map(async (url) => {
+    [...new Set(urls)].map(async (url) => {
       const response = await fetchImpl(url, { signal });
       if (!response.ok) throw new Error(`HTTP ${response.status ?? '?'}`);
       const text = await response.text();
@@ -148,6 +148,10 @@ export function mapAnalystRecord(raw, layerId = '') {
   const osmId =
     text(props.osm_id) ||
     (/^-?\d+$/.test(String(raw?.id)) ? text(raw.id) : null);
+  // #1009 keeps the NVE register separate from OSM. Its stable feature id
+  // also distinguishes dams sharing a register number; never use the name
+  // or the bare number as a cross-source deduplication key.
+  const nve = props.source === 'nve';
   return {
     id: name || text(raw?.id) || layerTitle(layerId),
     name,
@@ -161,12 +165,15 @@ export function mapAnalystRecord(raw, layerId = '') {
       ? {
           source:
             text(props.data_source) ||
+            (nve ? 'NVE' : null) ||
             (osmId ? 'OpenStreetMap / OpenInfraMap' : null),
-          sourceFeatureId: text(props.source_feature_id) || osmId,
+          sourceFeatureId:
+            text(props.source_feature_id) || (nve ? text(raw?.id) : osmId),
           retrievedAt: text(props.retrieved_at),
           sourceUpdatedAt: text(props.source_updated_at),
           attribution:
             text(props.attribution) ||
+            (nve ? 'Norway: NVE (NLOD)' : null) ||
             (osmId
               ? '© OpenStreetMap contributors (ODbL 1.0), via Open Infrastructure Map'
               : null),

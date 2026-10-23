@@ -21,7 +21,10 @@ const osm = parseGeojsonLines(
   ),
 );
 const packed = parseGeojsonLines(read('dams.geojsonl'));
-const expectedAnalystCount = [...osm, ...packed].filter(featurePoint).length;
+const allFeatures = infrastructureDataUrls('local-dams').flatMap((url) =>
+  parseGeojsonLines(readFileSync(new URL(url), 'utf8')),
+);
+const expectedAnalystCount = allFeatures.filter(featurePoint).length;
 
 test('the pinned IGN snapshot reproduces 121 additions and audits exclusions and uncertain pairs', () => {
   const result = buildSupplement(original, osm, metadata);
@@ -137,7 +140,7 @@ test('renderer acquisition and analyst source include the same separate IGN pack
     },
   );
   assert.equal(error, null);
-  assert.equal(features.length, osm.length + packed.length);
+  assert.deepEqual(features, allFeatures);
   assert.equal(await source.getRecords('local-dams'), records);
 });
 
@@ -151,8 +154,12 @@ test('a missing supplement keeps OSM available and is retried before caching the
     }),
   });
   const partial = await source.getRecords('local-dams');
-  assert.equal(partial.length, osm.filter(featurePoint).length);
-  assert.ok(partial.every((r) => r.source === 'OpenStreetMap / OpenInfraMap'));
+  assert.equal(partial.length, expectedAnalystCount - packed.length);
+  assert.ok(partial.every((r) => r.source !== 'IGN Argentina · Dique'));
+  assert.equal(
+    partial.filter((r) => r.source === 'OpenStreetMap / OpenInfraMap').length,
+    osm.filter(featurePoint).length,
+  );
   fail = false;
   const complete = await source.getRecords('local-dams');
   assert.equal(complete.length, expectedAnalystCount);

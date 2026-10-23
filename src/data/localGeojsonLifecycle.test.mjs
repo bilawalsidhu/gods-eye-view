@@ -66,6 +66,28 @@ test('a failed supplement preserves the main layer and is retried after a toggle
   assert.equal(env.sources.size, 1);
 });
 
+for (const failed of ['/nve.geojsonl', '/ign.geojsonl']) {
+  test(`three-source renderer preserves the healthy sibling when ${failed} fails and recovers on toggle`, async t => {
+    const urls = ['/dams.geojsonl', '/nve.geojsonl', '/ign.geojsonl'];
+    const env = harness(t, urls);
+    let fail = true;
+    t.mock.method(globalThis, 'fetch', async url => ({
+      ok: !(fail && url === failed), status: 404,
+      text: async () => dataset.replace('"id":"dam"', `"id":"${url}"`),
+    }));
+    await env.layer.enable(env.viewer);
+    assert.equal(env.layer.getStats().count, 2);
+    assert.ok(env.layer.getStats().error);
+    assert.equal(env.sources.size, 1);
+    fail = false;
+    env.layer.disable(env.viewer);
+    await env.layer.enable(env.viewer);
+    assert.equal(env.layer.getStats().count, 3);
+    assert.equal(env.layer.getStats().error, null);
+    assert.equal(env.sources.size, 1, 'recovery replaces, rather than duplicates, the rendered data source');
+  });
+}
+
 test('destroy removes context records and permits a fresh replacement', async t => {
   const env = harness(t);
   t.mock.method(globalThis, 'fetch', async () => response());
@@ -183,4 +205,23 @@ test('a toggle-off frees the entities and a toggle-on rebuilds them from the cac
   assert.equal(getContextStore().entities.size, 1);
   assert.equal(fetchMock.mock.callCount(), 1, 'no second fetch for a bundled dataset');
   assert.equal(env.layer.getLodDiagnostics().total, 1);
+});
+
+test('renderer analyst records and selected contexts preserve each provider', async t => {
+  const urls = ['/osm', '/nve', '/ign'];
+  const env = harness(t, urls);
+  const rows = [
+    { id: 42, properties: { osm_id: 42, name: 'Same name' } },
+    { id: 'nve-dam-42', properties: { source: 'nve', name: 'Same name', nve: { damNumber: 42 } } },
+    { id: 'ign-ar-dique-42', properties: { data_source: 'IGN Argentina · Dique', source_feature_id: 'dique.42', name: 'Same name' } },
+  ];
+  t.mock.method(globalThis, 'fetch', async url => ({
+    ok: true, text: async () => JSON.stringify({ ...JSON.parse(dataset), ...rows[urls.indexOf(url)] }),
+  }));
+  await env.layer.enable(env.viewer);
+  const records = env.layer.getAnalystRecords();
+  const sources = ['OpenStreetMap / OpenInfraMap', 'NVE', 'IGN Argentina · Dique'];
+  assert.deepEqual(records.map(r => r.source), sources);
+  assert.deepEqual(records.map(r => r.sourceFeatureId), ['42', 'nve-dam-42', 'dique.42']);
+  assert.deepEqual([...getContextStore().entities.values()].map(r => r.source), sources);
 });

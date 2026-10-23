@@ -5,3 +5,4 @@
   returned rows contribute attribution. A missing IGN supplement preserves OSM
   and remains retryable. Keep IGN reuse terms separate.
   (radianx, #1149).
+- Preserve independent NVE provenance when composing regional packs, load repeated URLs once, and test three-source attribution and partial-failure isolation. Document the independent landing order and snapshot count matrix.

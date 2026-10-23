@@ -690,7 +690,9 @@ export function createLocalGeoJsonLayer(
                   id: `${id}:${recordId}`,
                   layerId: id,
                   layerName: name,
-                  source: properties.data_source || source,
+                  source:
+                    mapAnalystRecord({ id: recordId, properties }, id).source ||
+                    source,
                   dataSource: loaded,
                   label: featureLabelFromProperties(properties, id),
                   properties,

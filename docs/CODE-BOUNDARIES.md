@@ -374,6 +374,15 @@ renderer, persistence or services. The facade retains panel visibility, share
 restore claims and render scheduling. Both controls are destroyed before the
 facade's asynchronous teardown can yield.
 
+## Ordinary action buttons
+
+`src/ui/actionButton.js` is a native, listener-free view helper used by Scene
+presentation and sharing-toolbar owners. It receives translated text and explicit
+presentation/accessibility properties. Feature controllers own action dispatch,
+state, persistence and cleanup. Static Scenes/CCTV templates use the same CSS
+surface and preserve IDs and layout hooks. The helper imports no application,
+renderer, storage or services; it belongs to the consuming package closures.
+
 ## Display controls
 
 `ui/display` owns Display button, selector and slider subscriptions. It receives
@@ -729,3 +738,32 @@ sources supply `{records, droppedCount, status, saturated}`; viewport filtering,
 exact-bound retry and rendering stay in the layer. Legacy cache saturation is
 decoded in the source. Source and geometry modules remain independent of Cesium,
 DOM and platform middleware.
+
+### Native form fields
+
+`src/ui/formField.js` constructs native numeric inputs without listeners or
+application state. Static selects and number inputs use the same `gev-field`
+surface, with explicit compact and inline densities. Feature owners retain
+option identity/order, bounds, parsing, draft values, input/change timing and
+teardown. CCTV effective-pose conversion and tuner/device operations remain
+feature responsibilities. A Vue replacement can reuse this contract and CSS;
+it replaces DOM construction, rather than adding a second state owner.
+
+The shared stylesheet owns field surfaces and disabled opacity; feature and theme
+palettes use `--gev-field-background`, `--gev-field-border-color`,
+`--gev-field-color` and `--gev-field-disabled-opacity`. Radio retains its own
+compact density and arrow space. CCTV owns calibration editor width in
+`cctv.css`; the shared inline density does not impose a feature-specific width.
+Cyber supplies a shared-field palette explicitly and keeps its legacy native
+field rules separate, so Radio's palette remains an intentional exception.
+
+### Read-only status badges
+
+`src/ui/statusBadge.js` constructs/updates ordinary badges without listeners,
+status inference or live-region policy. It consumes translated text and controlled
+visibility; appearance variants share CSS rather than mapping machine states to
+universal severity. CCTV owns frame/source and calibration rules and their data
+attributes, while Weather owns coverage labels. The keyed rail-card owner keeps
+node identity, header focus, disclosure and teardown. The shared adapter never
+creates another state store or announces all card updates. A Vue view can replace
+this adapter and retain these presentation inputs and styles.

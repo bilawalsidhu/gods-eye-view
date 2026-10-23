@@ -60,3 +60,9 @@ No NVE data or implementation is included here.
 PR #1152 adds two OSM geometries. Rebuild this audit after that data change and
 update the displayed combined counts. IGN analyst-count tests derive totals from
 the input geometries rather than assuming a fixed OSM count.
+
+The original OSM relation 19953989 has both Polygon and MultiLineString
+representations with the same source ID. Preserve both geometries; the analyst
+source returns its supported Polygon once. Do not collapse geometries by ID.
+Selected map contexts and renderer analyst records retain each provider, just
+as `find_infrastructure` does.
