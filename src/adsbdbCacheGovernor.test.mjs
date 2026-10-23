@@ -164,9 +164,9 @@ test('a caller enumerating the keyspace is refused, and refusal costs nothing', 
 
   let refused = null;
   let served = 0;
-  // The browser cannot exceed 300/min (ENRICH_DISPATCH_GAP_MS is 200 ms), so
-  // an enumerating caller runs out well before a real session would.
-  for (let i = 0; i < 400 && !refused; i += 1) {
+  // Each client queue drips one lookup per ENRICH_DISPATCH_GAP_MS (200 ms),
+  // and one tab runs two (Flights and Local ADS-B): 600/min must fit.
+  for (let i = 0; i < 1000 && !refused; i += 1) {
     const res = await request(handler, { url: `/type/${hex(i)}` });
     if (res.statusCode === 429) refused = res;
     else served += 1;
@@ -176,8 +176,8 @@ test('a caller enumerating the keyspace is refused, and refusal costs nothing', 
   assert.equal(refused.body.error, 'Rate limit exceeded');
   assert.equal(refused.headers['retry-after'], '10');
   assert.ok(
-    served >= 300,
-    `a real session's ceiling of 300/min must fit; served ${served}`,
+    served >= 600,
+    `both client queues together (600/min) must fit; served ${served}`,
   );
   assert.equal(
     asked.length,
@@ -192,18 +192,47 @@ test('a different client keeps its own budget', async (t) => {
   const handler = routes.get('/api/adsbdb');
 
   let noisy = 0;
-  for (let i = 0; i < 400; i += 1) {
+  for (let i = 0; i < 1000; i += 1) {
     const res = await request(handler, {
       url: `/type/${hex(i)}`,
       remoteAddress: '10.0.0.1',
     });
     if (res.statusCode === 200) noisy += 1;
   }
-  assert.ok(noisy > 0 && noisy < 400, 'the noisy client was throttled');
+  assert.ok(noisy > 0 && noisy < 1000, 'the noisy client was throttled');
 
   const quiet = await request(handler, {
     url: '/type/ffffff',
     remoteAddress: '10.0.0.2',
   });
   assert.equal(quiet.statusCode, 200, 'a quiet client is not collateral');
+});
+
+test('GEV_RATELIMIT_ADSBDB_PER_MIN sets the cap, and 0 turns it off', async (t) => {
+  stubUpstream(t);
+  const original = process.env.GEV_RATELIMIT_ADSBDB_PER_MIN;
+  t.after(() => {
+    if (original === undefined) delete process.env.GEV_RATELIMIT_ADSBDB_PER_MIN;
+    else process.env.GEV_RATELIMIT_ADSBDB_PER_MIN = original;
+  });
+
+  process.env.GEV_RATELIMIT_ADSBDB_PER_MIN = '5';
+  const tight = install(adsbdbProxy({ cachePath: scratchCachePath() })).get(
+    '/api/adsbdb',
+  );
+  const statuses = [];
+  for (let i = 0; i < 6; i += 1)
+    statuses.push(
+      (await request(tight, { url: `/type/${hex(i)}` })).statusCode,
+    );
+  assert.deepEqual(statuses, [200, 200, 200, 200, 200, 429]);
+
+  process.env.GEV_RATELIMIT_ADSBDB_PER_MIN = '0';
+  const open = install(adsbdbProxy({ cachePath: scratchCachePath() })).get(
+    '/api/adsbdb',
+  );
+  for (let i = 0; i < 1500; i += 1) {
+    const res = await request(open, { url: `/type/${hex(i)}` });
+    assert.equal(res.statusCode, 200, `request ${i} with the limiter off`);
+  }
 });
