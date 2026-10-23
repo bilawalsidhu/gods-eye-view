@@ -976,6 +976,9 @@ export function publicTransitCatalog() {
     region: feed.region,
     center: { ...feed.center },
     loadRadiusKm: feed.loadRadiusKm,
+    ...(feed.coverage
+      ? { coverage: feed.coverage.map((circle) => ({ ...circle })) }
+      : {}),
     license: feed.license,
     licenseUrl: feed.licenseUrl,
     attribution: feed.attribution,
