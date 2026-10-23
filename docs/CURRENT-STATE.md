@@ -1907,10 +1907,14 @@ policy, fallback behavior, response shapes and rendering remain unchanged.
 
 ### ADSBDB enrichment bounds
 
-`/api/adsbdb` admits 360 requests/minute per client address, with a global
-backstop of three times that; a refused request answers 429 with `Retry-After`
-and reaches neither the cache nor api.adsbdb.com. The browser's own enrichment
-drip cannot exceed 300/minute, so an ordinary session never meets the limit.
+`/api/adsbdb` admits 720 requests/minute per client address
+(`GEV_RATELIMIT_ADSBDB_PER_MIN`; `0` disables), with a global backstop of three
+times that; a refused request answers 429 with `Retry-After` and reaches
+neither the cache nor api.adsbdb.com. Each browser enrichment queue drips at
+most 300/minute and one tab runs two (Flights and Local ADS-B), so an ordinary
+session never meets the limit. When a lookup is refused anyway, both queues
+make that key askable again after the refusal's retry-after rather than
+treating the 429 as an answer.
 
 Both enrichment caches hold at most 20,000 entries each, dropping the
 least-recently-written first, and entries past their 24-hour TTL are discarded
@@ -1918,7 +1922,7 @@ when `.gev-cache/adsbdb.json` is read back. A cache file above 16 MB is skipped
 rather than parsed. An evicted key costs one upstream request the next time it
 is asked for; cached answers are otherwise unchanged.
 
-Updated: September 21, 2026
+Updated: October 23, 2026
 
 ## Control names for assistive technology
 

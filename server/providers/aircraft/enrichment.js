@@ -1,6 +1,10 @@
 import path from 'node:path';
 import { promises as fsp } from 'node:fs';
-import { makeRateLimiter, clientKey } from '../common/rate-limit.js';
+import {
+  makeRateLimiter,
+  clientKey,
+  resolvePerMinuteCap,
+} from '../common/rate-limit.js';
 import { readResponseJsonCapped } from '../common/http.js';
 
 /** Route and aircraft lookups are a few hundred bytes; 1 MiB is a hard bound. */
@@ -39,17 +43,27 @@ export function adsbdbProxy(options = {}) {
   const CACHE_MAX_ENTRIES = cacheMaxEntries;
   const CACHE_MAX_DISK_BYTES = cacheMaxDiskBytes;
   /**
-   * Requests/minute/IP. The browser cannot exceed 300 by construction —
-   * `ENRICH_DISPATCH_GAP_MS` (200 ms) drips at most five enrichment lookups a
-   * second — so 360 leaves the real client untouched while still capping an
-   * enumerating caller. The global backstop is the usual generous multiple.
+   * Requests/minute/IP (`GEV_RATELIMIT_ADSBDB_PER_MIN`; unset takes the
+   * default, `0` disables). Each browser queue drips at most five lookups a
+   * second (`ENRICH_DISPATCH_GAP_MS`, 200 ms), and one tab can run two — the
+   * Flights layer's and Local ADS-B's — so a real session tops out at 600.
+   * The assistant's aviation tools look up through the same source, unqueued
+   * but one at a time per tool call. 720 leaves all of that untouched while
+   * still capping an enumerating caller. The global backstop is the usual
+   * generous multiple.
    */
-  const RATE_PER_MIN = 360;
-  const allow = makeRateLimiter({
-    windowMs: 60_000,
-    max: RATE_PER_MIN,
-    globalMax: RATE_PER_MIN * 3,
-  });
+  const RATE_PER_MIN = resolvePerMinuteCap(
+    process.env.GEV_RATELIMIT_ADSBDB_PER_MIN,
+    720,
+  );
+  const allow =
+    RATE_PER_MIN > 0
+      ? makeRateLimiter({
+          windowMs: 60_000,
+          max: RATE_PER_MIN,
+          globalMax: RATE_PER_MIN * 3,
+        })
+      : () => true;
   // Maps, not plain objects: `size` is O(1), so the ceiling can be enforced on
   // every write, and iteration is true insertion order (an all-digit callsign
   // like "1234" would sort ahead of everything else as an object key).
