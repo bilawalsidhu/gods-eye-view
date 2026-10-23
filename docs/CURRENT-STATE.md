@@ -1,5 +1,27 @@
 # God's Eye View Current State
 
+Avalanches is a keyless layer for Norway and Switzerland that plays Varsom and
+SLF danger forecasts and regObs observed avalanches over a ten-day window: seven
+observed days, the anchor day and two forecast days. `/api/avalanches` routes
+each operation through one provider module per country
+(`server/providers/avalanches/{norway,switzerland}.js`) and merges what answers:
+a country that fails is named in `unavailable` and kept only briefly in cache,
+and only a total failure is an error. Norway supplies forecasts, observations,
+weekly season counts and EAWS outlines (ids match Varsom's); Switzerland
+supplies SLF bulletins, read one day at a time at midday UTC, and SLF warning
+regions. Only openly licensed services are used. The playhead is continuous and
+animation-frame driven; region fills hold each day's rating and blend into the
+next, and an avalanche appears at its reported time, a front runs from release
+to runout over part of a day, and the path fades with age to a floor. Geometry is
+built once per window: every animated quantity is a colour, a `show` flag or a
+point position, so playback never rebuilds ground geometry. The on-map panel
+names the day and whether it is observed or forecast, holds play/pause and the
+day scale, and carries the danger-scale key. Off-season (no rating and no
+avalanche) it offers a replay of the last season, opening on the week with the
+most reported avalanches, with the season shown as a bar per week. Avalanche
+markers join the pick-ownership registry; region fills deliberately do not, so
+other layers' markers stay clickable over the mountains. Cards go through the
+world-overlay host, and an avalanche card links to its regObs report.
 Analyst region queries resolve unique Natural Earth names offline without
 geocoding, so Gold Coast and Ivory Coast name the West African natural regions.
 Duplicate names require a geocoded containment anchor; when several entries for

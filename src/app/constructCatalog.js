@@ -27,6 +27,7 @@ import { createApplicationEarthquakes } from './layers/earthquakes.js';
 import { createApplicationAirQuality } from './layers/airQuality.js';
 import { createApplicationFirePerimeters } from './layers/perimeters.js';
 import { createApplicationGnssIntegrity } from './layers/gnss.js';
+import { createApplicationAvalanches } from './layers/avalanches.js';
 import { createApplicationCables } from './layers/submarineCables.js';
 import { createApplicationStreetLevel } from './layers/streetLevel.js';
 import { createInfrastructureLayers } from '../data/infrastructure.js';
@@ -126,6 +127,7 @@ export function createApplicationCatalog({
         createApplicationGnssIntegrity({
           source: sources['gnss-integrity'],
         }),
+        createApplicationAvalanches({ source: sources.avalanches }),
         createApplicationAlpr({ surface, source: sources.alpr }),
         createApplicationStreetLevel({
           surface,
