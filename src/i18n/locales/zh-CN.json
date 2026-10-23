@@ -2809,5 +2809,9 @@
   "Gemini voice sessions have a time limit. When a session expires, start voice again for a new conversation.": "Gemini 语音会话有时长限制。会话到期后，请重新启动语音以开始新对话。",
   "Show the street-level view full screen (Esc shrinks it)": "全屏显示街景视图（按 Esc 缩小）",
   "OK": "正常",
-  "{category} ({count})": "{category}（{count}）"
+  "{category} ({count})": "{category}（{count}）",
+  "Layers": "图层",
+  "Search": "搜索",
+  "More": "更多",
+  "Panels": "面板"
 }

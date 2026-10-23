@@ -210,7 +210,7 @@ export function formatRelativeTime(value, unit = 'second', options) {
 }
 
 /** Collapse markup whitespace so a message reads the same in HTML and JS. */
-export function normalizeMarkupText(text) {
+function normalizeMarkupText(text) {
   return String(text ?? '')
     .replace(/\s+/g, ' ')
     .trim();

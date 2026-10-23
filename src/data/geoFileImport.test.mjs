@@ -1,9 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { deflateRawSync } from 'node:zlib';
+import { spawnSync } from 'node:child_process';
 import * as Cesium from 'cesium';
 import {
   GeoImportError,
+  repairKmlRootNamespaces,
   loadGeoFile,
   MAX_IMPORT_POSITIONS,
   MAX_IMPORT_ENTITIES,
@@ -1170,4 +1172,93 @@ test('a dated import exposes no clock and draws for all time', () => {
   assert.equal(track.polyline.positions, recorded);
   assert.equal(recorded.getValue(Cesium.JulianDate.now()).length, 2);
   assert.ok(track.polyline.clampToGround.getValue());
+});
+
+test('KML root namespace repair respects quoted delimiters and preserves the document tail', () => {
+  const text =
+    '<KML note="a > b" xmlns:x="first" xmlns:x="second"><Placemark xsi:type="test"/></KML>';
+  const result = repairKmlRootNamespaces(text);
+  assert.match(result, /note="a > b"/);
+  assert.match(result, /xmlns:x="first"/);
+  assert.doesNotMatch(result, /second/);
+  assert.match(
+    result,
+    /xmlns:xsi="http:\/\/www.w3.org\/2001\/XMLSchema-instance"/,
+  );
+  assert.ok(result.endsWith('<Placemark xsi:type="test"/></KML>'));
+  assert.match(
+    repairKmlRootNamespaces('<kml xsi:type="test"/>'),
+    /XMLSchema-instance"\/>$/,
+  );
+  for (const malformed of ['<kml ', '<kml name="unterminated>', '<kml <kml >'])
+    assert.throws(() => repairKmlRootNamespaces(malformed), GeoImportError);
+});
+
+test('repeated incomplete KML roots finish within an isolated process deadline', () => {
+  const source = `import { repairKmlRootNamespaces } from ${JSON.stringify(new URL('./geoFileImport.js', import.meta.url).href)};
+    try { repairKmlRootNamespaces('<kml '.repeat(1000000)); process.exit(1); }
+    catch (error) { if (error.name !== 'GeoImportError') throw error; }
+    try { repairKmlRootNamespaces('<!DOCTYPE kml [' + ${JSON.stringify("<!-- ' --><?pi ' ?>")}.repeat(100000) + ']><kml '); process.exit(1); }
+    catch (error) { if (error.name !== 'GeoImportError') throw error; }
+    const wide = '<kml' + ${JSON.stringify(` xmlns:gx="a" note='xmlns:gx="b"'`)}.repeat(20000) + '/>';
+    if (repairKmlRootNamespaces(wide).split('xmlns:gx="a"').length !== 2) process.exit(1);`;
+  const child = spawnSync(
+    process.execPath,
+    ['--input-type=module', '-e', source],
+    { timeout: 5000, encoding: 'utf8' },
+  );
+  assert.ifError(child.error);
+  assert.equal(child.status, 0, child.stderr);
+});
+
+test('KML root repair ignores incomplete tag text inside preamble comments', () => {
+  const input =
+    '<?xml version="1.0"?><!-- example <kml incomplete -->\n<kml xmlns:gx="a" xmlns:gx="b"><Document/></kml>';
+  assert.equal(
+    repairKmlRootNamespaces(input),
+    input.replace(' xmlns:gx="b"', ''),
+  );
+});
+
+test('KML namespace repair follows a doctype with a quoted root-like entity', () => {
+  const input =
+    '<!DOCTYPE kml [<!ENTITY example "<kml incomplete >">]><kml xmlns:gx="a" xmlns:gx="b"/>';
+  assert.equal(
+    repairKmlRootNamespaces(input),
+    input.replace(' xmlns:gx="b"', ''),
+  );
+});
+
+test('KML namespace repair skips doctype comments and processing instructions whole', () => {
+  for (const prolog of [
+    "<!DOCTYPE kml [<!-- don't count this quote -->]>",
+    '<!DOCTYPE kml [<!-- a ] or > here --><!ENTITY x "y">]>',
+    "<!DOCTYPE kml [<?note it's ] > fine?>]>",
+    '<!DOCTYPE kml [<!ENTITY x "<!-- \' -->">]>',
+  ]) {
+    const input = `${prolog}<kml xmlns:gx="a" xmlns:gx="b"><Placemark xsi:type="t"/></kml>`;
+    assert.equal(
+      repairKmlRootNamespaces(input),
+      input.replace(
+        ' xmlns:gx="b">',
+        ' xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">',
+      ),
+      prolog,
+    );
+  }
+  const unterminated = '<!DOCTYPE kml [<!-- open <kml xmlns:gx="a">';
+  assert.equal(repairKmlRootNamespaces(unterminated), unterminated);
+});
+
+test('KML namespace repair ignores declaration text inside quoted attribute values', () => {
+  const input =
+    '<kml note=\'a > b xmlns:gx="fake"\' xmlns:gx="http://www.google.com/kml/ext/2.2" xmlns:gx="dup"><gx:Track/></kml>';
+  const result = repairKmlRootNamespaces(input);
+  assert.equal(result, input.replace(' xmlns:gx="dup"', ''));
+  assert.match(result, /\sxmlns:gx="http:\/\/www.google.com\/kml\/ext\/2.2"/);
+  const xsi = '<kml note="xmlns:xsi=\'x\'"><Placemark xsi:type="t"/></kml>';
+  assert.match(
+    repairKmlRootNamespaces(xsi),
+    /note="xmlns:xsi='x'" xmlns:xsi="http:\/\/www.w3.org\/2001\/XMLSchema-instance">/,
+  );
 });

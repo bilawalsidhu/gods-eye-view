@@ -272,6 +272,8 @@
     "./layers/street-level/mapillary": "./src/layers/streetLevel/providers/mapillary/index.js",
     "./layers/street-level/mapillary/source": "./src/layers/streetLevel/providers/mapillary/source.js",
     "./layers/street-level/google": "./src/layers/streetLevel/providers/google/index.js",
+    "./layers/street-level/kartaview": "./src/layers/streetLevel/providers/kartaview/index.js",
+    "./layers/street-level/panoramax": "./src/layers/streetLevel/providers/panoramax/index.js",
     "./tools": "./src/tools/index.js",
     "./tools/mcp": "./src/tools/mcp/index.js",
     "./tools/panel": "./src/tools/panel.js",

@@ -97,7 +97,7 @@ const complete = (model, extra = {}) => ({
 });
 test('local appearance and units reuse the loaded field; optional scalar requests remain separate', async () => {
   const requests = [];
-  const { layer, calls } = harness({
+  const { layer } = harness({
     getSnapshot: async (args) => {
       requests.push(args);
       return complete(

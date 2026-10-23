@@ -14,7 +14,7 @@ export const KARTAVIEW_LABEL = 'KARTAVIEW';
  */
 export const KARTAVIEW_API_HOST = 'https://api.kartaview.org';
 /** KartaView's image proxy: resizes a photo given its base64url address. */
-export const KARTAVIEW_CDN_HOST = 'https://cdn.kartaview.org';
+const KARTAVIEW_CDN_HOST = 'https://cdn.kartaview.org';
 
 /** Stable id prefixes for picked primitives; every one starts with `kv:`. */
 export const PICK_PREFIX = Object.freeze({
@@ -140,8 +140,6 @@ export const MASK_SLOW_MESSAGE = msg(
 export const FILTERED_OUT_MESSAGE = msg(
   'None of KartaView’s photos here pass the imagery filter',
 );
-/** Under the SINCE slider while KartaView is lit. */
-export const SINCE_NOTE = '(by upload date)';
 
 /** The UTC calendar day of `ms`, as KartaView's startDate reads it. */
 function utcDay(ms) {
