@@ -637,6 +637,7 @@ export function createModel({
     formatLatLon,
     formatFrp,
     formatAge,
+    formatAgeLabel,
     formatAgoMinutes,
     confidenceBucket,
   };

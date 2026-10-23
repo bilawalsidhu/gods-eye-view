@@ -1,0 +1,50 @@
+/* Native selects and numeric inputs. This file owns the field surface/states;
+   features and themes supply palette variables and retain their own layout. */
+.gev-field {
+  min-width: 0;
+  background: var(--gev-field-background, rgba(255, 255, 255, 0.06));
+  border: 1px solid var(--gev-field-border-color, rgba(255, 255, 255, 0.14));
+  border-radius: 7px;
+  color: var(--gev-field-color, var(--text-primary));
+  padding: 6px 8px;
+  font-family: var(--font-sans);
+  font-size: 12px;
+  outline: none;
+}
+
+.gev-field:focus-visible {
+  outline: 2px solid var(--text-primary);
+  outline-offset: -3px;
+}
+
+.gev-field:disabled {
+  opacity: var(--gev-field-disabled-opacity, 0.45);
+}
+
+.gev-field--compact {
+  height: 24px;
+  border-radius: 6px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.6px;
+  padding: 2px 6px;
+}
+
+/* Compact inline editors share density and hide native number spinners.
+   Their containing feature sets width to fit the surrounding readout. */
+.gev-field--inline {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.7px;
+  --gev-field-background: rgba(0, 212, 255, 0.1);
+  --gev-field-border-color: rgba(0, 212, 255, 0.5);
+  border-radius: 4px;
+  padding: 1px 3px;
+  -moz-appearance: textfield;
+}
+
+.gev-field--inline::-webkit-outer-spin-button,
+.gev-field--inline::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}

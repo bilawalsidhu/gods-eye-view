@@ -1,6 +1,10 @@
 import { isExplicitLayerStateOrigin } from '../data/layerState.js';
 import { syncChipGroup } from './chipGroup.js';
 import {
+  createSegmentedControl,
+  syncSegmentedControl,
+} from './segmentedControl.js';
+import {
   presentStreetLevelPanel,
   SINCE_STOPS,
 } from './streetLevelPresentation.js';
@@ -9,12 +13,6 @@ import { t, translateKnown } from '../i18n/index.js';
 const RENDER_MODE_KEY = 'gev:street-level:render-mode';
 /** <body> classes of the modes that hide every panel; an expanded photo leaves with them. */
 const PANEL_HIDING_MODES = ['ui-clean-view', 'recording-mode', 'cockpit-mode'];
-const RADIO_STEPS = Object.freeze({
-  ArrowRight: 1,
-  ArrowDown: 1,
-  ArrowLeft: -1,
-  ArrowUp: -1,
-});
 
 // Renders run on every layer notification, and the rail's MutationObserver
 // relays out on each attribute write: write only what changed.
@@ -106,13 +104,13 @@ export class StreetLevelControls {
       }
       this._toggleProvider(button.dataset.chipId);
     });
-    for (const button of el.panoButtons) {
-      this.listen(button, 'click', () =>
-        this._setParams({ pano: button.dataset.slPano }),
-      );
-    }
-    this._bindRadioGroup(el.panoButtons);
-    this._bindRadioGroup(el.renderButtons);
+    createSegmentedControl({
+      buttons: el.panoButtons,
+      valueOf: (button) => button.dataset.slPano,
+      onChange: (pano) => this._setParams({ pano }),
+      keyboard: 'radio',
+      listen: (target, type, handler) => this.listen(target, type, handler),
+    });
     // The readout follows the thumb; coverage is rebuilt once, on release.
     const sinceDays = () =>
       SINCE_STOPS[Number(el.sinceRange?.value) || 0]?.days ?? 0;
@@ -160,17 +158,20 @@ export class StreetLevelControls {
         this._exitExpanded();
       });
     } else setProp(el.viewerExpand, 'hidden', true);
-    for (const button of el.renderButtons) {
-      this.listen(button, 'click', () => {
-        const mode = button.dataset.slRender;
+    createSegmentedControl({
+      buttons: el.renderButtons,
+      valueOf: (button) => button.dataset.slRender,
+      keyboard: 'radio',
+      listen: (target, type, handler) => this.listen(target, type, handler),
+      onChange: (mode) => {
         this.layer.setViewerRenderMode?.(mode);
         try {
           localStorage.setItem(RENDER_MODE_KEY, mode);
         } catch {
           /* storage unavailable */
         }
-      });
-    }
+      },
+    });
     try {
       const stored = localStorage.getItem(RENDER_MODE_KEY);
       if (stored === 'fill' || stored === 'letterbox')
@@ -183,24 +184,6 @@ export class StreetLevelControls {
       this._resizeObserver = new ResizeObserver(() => this._requestResize());
       this._resizeObserver.observe(el.viewer);
     }
-  }
-
-  /** ARIA radio keys. Selecting clicks the radio, so keys and pointer share a path. */
-  _bindRadioGroup(buttons) {
-    buttons.forEach((button, index) => {
-      this.listen(button, 'keydown', (event) => {
-        let next = null;
-        if (event.key in RADIO_STEPS) {
-          const count = buttons.length;
-          next = buttons[(index + RADIO_STEPS[event.key] + count) % count];
-        } else if (event.key === 'Home') next = buttons[0];
-        else if (event.key === 'End') next = buttons[buttons.length - 1];
-        if (!next) return;
-        event.preventDefault();
-        next.focus();
-        if (next !== button) next.click();
-      });
-    });
   }
 
   /**
@@ -416,15 +399,6 @@ export class StreetLevelControls {
     setProp(el.errorText, 'textContent', view.error || '');
   }
 
-  _renderRadios(buttons, isChecked) {
-    for (const button of buttons) {
-      const checked = isChecked(button);
-      button.classList.toggle('is-active', checked);
-      setAttr(button, 'aria-checked', String(checked));
-      setAttr(button, 'tabindex', checked ? '0' : '-1');
-    }
-  }
-
   _renderFilters(view) {
     const el = this._elements;
     const shows = view.filterControls || { pano: true, since: true };
@@ -434,10 +408,11 @@ export class StreetLevelControls {
     setProp(el.sinceNote, 'textContent', view.sinceNote || '');
     setProp(el.sinceNote, 'hidden', !view.sinceNote);
     setProp(el.controls, 'hidden', !shows.pano && !shows.since);
-    this._renderRadios(
-      el.panoButtons,
-      (button) => button.dataset.slPano === view.filter.pano,
-    );
+    syncSegmentedControl(el.panoButtons, view.filter.pano, {
+      valueOf: (button) => button.dataset.slPano,
+      activeClass: 'is-active',
+      rovingFocus: true,
+    });
     if (el.sinceRange) {
       // Never move the thumb under the user's hand; once the committed value
       // matches the thumb, show the full readout with its cut-off date.
@@ -467,10 +442,11 @@ export class StreetLevelControls {
       setProp(wrap, 'hidden', !viewer.open);
     }
     setProp(el.viewerPlaceholder, 'hidden', !viewer.loading);
-    this._renderRadios(
-      el.renderButtons,
-      (button) => button.dataset.slRender === viewer.renderMode,
-    );
+    syncSegmentedControl(el.renderButtons, viewer.renderMode, {
+      valueOf: (button) => button.dataset.slRender,
+      activeClass: 'is-active',
+      rovingFocus: true,
+    });
     // Google's viewer always fills its frame: no FIT/FILL to offer.
     const renderGroup = el.renderButtons[0]?.parentElement;
     if (renderGroup) setProp(renderGroup, 'hidden', !viewer.renderModes);

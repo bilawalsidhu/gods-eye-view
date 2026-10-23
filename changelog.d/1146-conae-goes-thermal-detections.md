@@ -7,3 +7,5 @@
   retaining available FIRMS detections. CONAE failures log their network/HTTP
   or parsing reason and retain the existing stale-cache/backoff policy.
   (radianx, #1146).
+
+Includes Simplified Chinese UI copy and locale regressions, preserving source attribution, interpolation and locale-specific number/date formatting.

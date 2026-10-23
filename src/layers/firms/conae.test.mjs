@@ -1,5 +1,5 @@
 import test from 'node:test';
-import { setLocale } from '../../i18n/index.js';
+import { formatNumber, setLocale, t } from '../../i18n/index.js';
 import { translateFeedError } from '../../ui/statusText.js';
 import assert from 'node:assert/strict';
 import { adaptFirmsRecords } from '../../data/firmsAdapt.js';
@@ -152,7 +152,7 @@ test('keyless CONAE ingestion exposes partial provider failures and correct sele
   assert.match(context.label, /Thermal detection/);
 });
 
-for (const locale of ['es', 'ru']) {
+for (const locale of ['es', 'ru', 'zh-CN']) {
   test(`${locale}: CONAE labels and unknown measurements follow the selected language`, () => {
     setLocale(locale);
     try {
@@ -165,13 +165,29 @@ for (const locale of ['es', 'ru']) {
           'unavailable',
         ),
       );
-      for (const count of [1, 2, 5]) {
+      for (const count of [0, 1, 2, 5, 21, 1000]) {
         const cell = model.buildCellCard(
           { cell: { count, maxFrp: null, hasConae: true }, position: {} },
           NOW,
         );
         assert.ok(!cell.title.includes('DETECTION'));
+        assert.ok(cell.title.includes(formatNumber(count)));
+        if (locale === 'zh-CN')
+          assert.equal(cell.title, `${formatNumber(count)} 次探测`);
       }
+      const measured = model.buildSelectedFireCard({ ...fire, frp: 4.9 }, NOW);
+      assert.ok(
+        measured.title.includes(t('{value} MW', { value: formatNumber(4.9) })),
+      );
+      assert.ok(
+        card.details.includes(
+          t('CONAE GOES · thermal anomaly, not a confirmed wildfire'),
+        ),
+      );
+      assert.doesNotMatch(
+        [card.title, ...card.details].join(' '),
+        /\{[A-Za-z0-9_]+\}/,
+      );
       assert.equal(model.mapAnalystRecord(fire).source, 'CONAE GOES');
     } finally {
       setLocale('en');
