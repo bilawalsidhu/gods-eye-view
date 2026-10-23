@@ -15,6 +15,8 @@ import {
 } from '../renderGovernor.js';
 import { describeError } from './errors.js';
 import { t } from '../i18n/index.js';
+import { NightLightsOverlay } from '../nightLightsOverlay.js';
+import { resolveImageryHost } from '../maps/imageryHost.js';
 
 /** Construct the application globe using the caller's local configuration. */
 export async function createApplicationScene({
@@ -53,7 +55,16 @@ export async function createApplicationScene({
     container: 'cesiumContainer',
     creditContainer,
   });
+  let mapStackController = null;
+  const nightLights = new NightLightsOverlay(viewer, {
+    getHost: () =>
+      resolveImageryHost({
+        viewer,
+        tileset: mapStackController?.getImageryHostTileset(),
+      }),
+  });
   defer(() => {
+    nightLights.destroy();
     uninstallRenderGovernor(viewer);
     if (!viewer.isDestroyed()) viewer.destroy();
   });
@@ -103,7 +114,7 @@ export async function createApplicationScene({
 
   loaderStatus.textContent = t('Initializing systems...');
 
-  const mapStackController = new MapController(viewer, {
+  mapStackController = new MapController(viewer, {
     requestRender: governorRequestRender,
     ...mapOptions,
     googleTileset: tileset,
@@ -127,5 +138,5 @@ export async function createApplicationScene({
   });
 
   signal.throwIfAborted();
-  return { viewer, tileset, mapStackController, operations };
+  return { viewer, tileset, mapStackController, operations, nightLights };
 }

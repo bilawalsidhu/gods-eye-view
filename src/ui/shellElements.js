@@ -49,6 +49,7 @@ export function readShellElements(document = globalThis.document) {
     ),
     _detectionOpacityValue: document.getElementById('detection-opacity-value'),
     _celestialBtn: document.getElementById('celestial-toggle'),
+    _nightLightsBtn: document.getElementById('night-lights-toggle'),
     _scopeBtn: document.getElementById('scope-toggle'),
     _scopeFeatherSlider: document.getElementById('scope-feather-slider'),
     _scopeFeatherValue: document.getElementById('scope-feather-value'),

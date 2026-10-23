@@ -48,6 +48,14 @@ export class DisplayBindings {
     return this.readState()._detectionAllocationBtns;
   }
   _initUI() {
+    const syncNightLightsButton = () => {
+      const enabled = this.services.nightLights?.isEnabled() ?? false;
+      this._nightLightsBtn?.classList.toggle('active', enabled);
+      this._nightLightsBtn?.setAttribute('aria-pressed', String(enabled));
+      if (this._nightLightsBtn)
+        this._nightLightsBtn.disabled = !this.services.nightLights;
+    };
+    syncNightLightsButton();
     const {
       cycleDetectionMode,
       setScopeMaskEnabled,
@@ -117,10 +125,16 @@ export class DisplayBindings {
         allocationButtons: this._detectionAllocationBtns,
         fadeSliders: [this._detectionFadeSlider, this._detectionOpacitySlider],
         celestialButton: this._celestialBtn,
+        nightLightsButton: this._nightLightsBtn,
         modelsButton: this._models3dBtn,
         modelModeButtons: this._models3dBtn ? this._models3dModeBtns : [],
       },
       actions: {
+        toggleNightLights: () => {
+          const effect = this.services.nightLights;
+          effect?.setEnabled(!effect.isEnabled());
+          syncNightLightsButton();
+        },
         setStyle: (style) => this.setStyle(style, { userInitiated: true }),
         toggleBloom: () => {
           this.shareLinkManager?.claimRestoreLane?.('visual');

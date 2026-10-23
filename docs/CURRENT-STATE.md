@@ -1,5 +1,19 @@
 # God's Eye View Current State
 
+The globe has an optional solar-direction night presentation. At globe scale,
+the bundled NASA Black Marble 2023 annual independent-lights texture is draped
+below data imagery and evaluated against Cesium's sun direction in the GPU:
+the night hemisphere receives a muted blue-purple tint and city lights use a
+warm gold mask through a smooth twilight band. It is independent of the
+date-selected NASA imagery layer and does not claim live or scientific
+radiance. The Display panel toggle is persisted locally; the layer fades in and
+out over 360 ms with hysteresis, follows globe and Google 3D Tiles imagery
+hosts, and is destroyed with the scene. Cesium 1.138 private shader contracts
+are guarded; unsupported hosts leave the normal map usable and log a local
+degradation. The primary 8K asset is reduced to the hardware maximum (with a
+2016 VIIRS fallback), and the source, preparation and memory notes live in
+`public/assets/night-lights/README.md`.
+
 Analyst region queries resolve unique Natural Earth names offline without
 geocoding, so Gold Coast and Ivory Coast name the West African natural regions.
 Duplicate names require a geocoded containment anchor; when several entries for

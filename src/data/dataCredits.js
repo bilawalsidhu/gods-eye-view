@@ -153,11 +153,19 @@ export const DATA_CREDITS = [
   {
     key: 'nasa-gibs',
     html:
-      'Recent imagery: We acknowledge the use of imagery provided by services from ' +
+      'Recent imagery and fallback globe night lights: We acknowledge the use of imagery provided by services from ' +
       "NASA's Global Imagery Browse Services (GIBS), part of NASA's Earth Science " +
       'Data and Information System (ESDIS). ' +
       '<a href="https://gibs.earthdata.nasa.gov" target="_blank" rel="noopener">gibs.earthdata.nasa.gov</a> · ' +
+      '<a href="https://doi.org/10.5067/VIIRS/VNP46A4.002" target="_blank" rel="noopener">VNP46A4 night-light product</a> · ' +
       '<a href="https://lpdaac.usgs.gov/products/hlss30v002/" target="_blank" rel="noopener">HLS product page</a>',
+  },
+  {
+    key: 'nasa-svs-night-lights',
+    html:
+      'Bundled 2023 annual night lights: NASA Black Marble; visualization by Kel Elkins, ' +
+      '<a href="https://svs.gsfc.nasa.gov/5276/" target="_blank" rel="noopener">NASA Scientific Visualization Studio</a> ' +
+      '(independent-lights visualization, adapted to a geographic texture)',
   },
   {
     key: 'wfigs',

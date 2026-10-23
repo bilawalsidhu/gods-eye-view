@@ -6,7 +6,7 @@ import { t } from '../i18n/index.js';
 
 /** Construct the existing controls and camera presentation. */
 export function createApplicationControls({
-  scene: { viewer, mapStackController, operations },
+  scene: { viewer, mapStackController, operations, nightLights },
   loaderStatus,
   Controls = StyleManager,
   services,
@@ -23,6 +23,7 @@ export function createApplicationControls({
       fetchRegionalBrief: (...args) =>
         operations.requests.regional.getBrief(...args),
       ...catalogControlServices(catalog),
+      nightLights,
     },
     requestServices: operations.requests,
     mapStackController,

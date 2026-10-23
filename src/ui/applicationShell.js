@@ -505,6 +505,7 @@ export class StyleManager extends ShellFacade {
         setScopeMaskEnabled: services.setScopeMaskEnabled,
         isScopeMaskEnabled: services.isScopeMaskEnabled,
         setScopeMaskFeather: services.setScopeMaskFeather,
+        nightLights: services.nightLights,
       },
       elements: {
         _locationSearch: this._locationSearch,
@@ -529,6 +530,7 @@ export class StyleManager extends ShellFacade {
         _detectionFadeSlider: this._detectionFadeSlider,
         _detectionOpacitySlider: this._detectionOpacitySlider,
         _celestialBtn: this._celestialBtn,
+        _nightLightsBtn: this._nightLightsBtn,
         _models3dBtn: this._models3dBtn,
         _scopeFeatherValue: this._scopeFeatherValue,
         _sharpenSliderValue: this._sharpenSliderValue,
