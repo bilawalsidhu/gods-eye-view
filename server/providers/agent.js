@@ -1,3 +1,5 @@
+import { createChatGptAuth } from './agent/chatgpt/auth.js';
+import { createChatGptAuthHandler } from './agent/chatgpt/routes.js';
 import { sameSiteGated } from './common/same-site.js';
 import {
   createAgentCommandHandler,
@@ -20,25 +22,33 @@ import {
  * @param {{annotationGuidance?: string}} [options]
  */
 function typedAgentProxy({ annotationGuidance } = {}) {
+  const chatgpt = createChatGptAuth();
   function install(middlewares) {
+    middlewares.use('/api/agent/chatgpt', createChatGptAuthHandler(chatgpt));
     middlewares.use(
       '/api/agent/config',
-      sameSiteGated(createAgentConfigHandler()),
+      sameSiteGated(createAgentConfigHandler({ chatgpt })),
     );
     middlewares.use(
       '/api/agent/models',
-      sameSiteGated(createAgentModelsHandler()),
+      sameSiteGated(createAgentModelsHandler({ chatgpt })),
     );
     middlewares.use(
       '/api/agent/command',
-      sameSiteGated(createAgentCommandHandler({ annotationGuidance })),
+      sameSiteGated(createAgentCommandHandler({ annotationGuidance, chatgpt })),
     );
   }
 
   return {
     name: 'typed-agent-proxy',
-    configureServer: (server) => install(server.middlewares),
-    configurePreviewServer: (server) => install(server.middlewares),
+    configureServer: (server) => {
+      install(server.middlewares);
+      server.httpServer?.once('close', () => chatgpt.close());
+    },
+    configurePreviewServer: (server) => {
+      install(server.middlewares);
+      server.httpServer?.once('close', () => chatgpt.close());
+    },
   };
 }
 

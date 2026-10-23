@@ -3,7 +3,8 @@
 GEV COMMAND is a second transport for the agent voice already drives. It takes
 typed commands, runs the same 30 app actions through the same action runner,
 and reaches any OpenAI-compatible `/v1/chat/completions` endpoint — OpenAI,
-OpenRouter, or a local Ollama.
+OpenRouter, or a local Ollama. The optional [ChatGPT plan provider](CHATGPT-COMMAND.md)
+uses its own OAuth authorization and the public Responses API.
 
 Voice is untouched. The two transports run side by side and share the
 operating manual, the tool schemas and the action runner.
@@ -63,7 +64,7 @@ and uses `OPENAI_API_KEY`, the same credential voice uses.
 
 | Variable | Effect |
 |---|---|
-| `GEV_AGENT_PROVIDER` | Provider selected on first open (`openai`, `openrouter`, `ollama`). Unrecognised values fall back to `openai`. |
+| `GEV_AGENT_PROVIDER` | Provider selected on first open (`openai`, `openrouter`, `ollama`, `chatgpt`). Unrecognised values fall back to `openai`. |
 | `GEV_AGENT_MODEL` | Default model for every provider. |
 | `GEV_AGENT_MODEL_<PROVIDER>` | Default model for one provider, e.g. `GEV_AGENT_MODEL_OLLAMA`. |
 | `GEV_AGENT_MODELS` | Comma-separated allowlist of model ids a request may run. |

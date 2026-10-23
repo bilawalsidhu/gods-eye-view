@@ -1,3 +1,4 @@
+import { mountChatGptControls } from './chatgptControls.js';
 import { msg, t } from '../i18n/index.js';
 import { createSurfaceKeyboard } from '../ui/surfaceKeyboard.js';
 import { attachConsoleBox } from './consoleBox.js';
@@ -90,6 +91,7 @@ function describeToolResult(result) {
  * @returns {string}
  */
 function providerOptionLabel(provider) {
+  if (provider.authType === 'oauth') return t('ChatGPT plan');
   if (provider.configured) return provider.label;
   return `${provider.label} (needs ${provider.apiKeyEnv})`;
 }
@@ -243,6 +245,7 @@ function mountAgentConsole({
   const form = root.getElementById('agent-form');
   const input = root.getElementById('agent-input');
   const sendButton = root.getElementById('agent-send');
+  const stopButton = root.getElementById('agent-stop');
   const closeButton = root.getElementById('agent-console-close');
   const statusEl = root.getElementById('agent-status');
   const costEl = root.getElementById('agent-cost');
@@ -255,6 +258,28 @@ function mountAgentConsole({
     model: null,
   };
   let configLoaded = null;
+  let binding = null;
+  const chatgptControls = mountChatGptControls({
+    root,
+    view,
+    readJson,
+    onChanging: () => {
+      session.abort();
+      session.reset();
+      transcript.replaceChildren();
+      input.disabled = true;
+      sendButton.disabled = true;
+      modelSelect.disabled = true;
+    },
+    onError: (error) => append(ENTRY_KIND.ERROR, error),
+    onChange: async () => {
+      if (providerSelect.value !== 'chatgpt') return;
+      session.abort();
+      session.reset();
+      transcript.replaceChildren();
+      await loadModels('chatgpt');
+    },
+  });
 
   function append(kind, text) {
     const entry = root.createElement('li');
@@ -278,9 +303,14 @@ function mountAgentConsole({
   }
 
   function refreshCost() {
-    costEl.textContent = formatCommandCostUsd(
-      currentModel()?.costPerCommandUsd,
-    );
+    costEl.title =
+      providerSelect.value === 'chatgpt'
+        ? t('ChatGPT plan limits')
+        : t('Estimated cost per command');
+    costEl.textContent =
+      providerSelect.value === 'chatgpt'
+        ? t('ChatGPT plan limits')
+        : formatCommandCostUsd(currentModel()?.costPerCommandUsd);
   }
 
   function setBusy(busy) {
@@ -310,6 +340,8 @@ function mountAgentConsole({
 
     modelSelect.replaceChildren();
     models = [];
+    binding = null;
+    chatgptControls.setVisible(providerId === 'chatgpt');
     refreshCost();
 
     // The select is empty until the listing lands, and submitting in that
@@ -323,10 +355,23 @@ function mountAgentConsole({
       setStatus(AGENT_STATUS.UNAVAILABLE, t('no provider'));
       return;
     }
+    if (provider.authType === 'oauth') {
+      try {
+        const status = await chatgptControls.refresh();
+        if (superseded()) return;
+        provider.configured = Boolean(status?.configured);
+      } catch (error) {
+        if (superseded()) return;
+        provider.configured = false;
+        append(ENTRY_KIND.ERROR, error.message);
+      }
+    }
     if (!provider.configured) {
       setStatus(
         AGENT_STATUS.UNAVAILABLE,
-        t('set {envVar}', { envVar: provider.apiKeyEnv }),
+        provider.authType === 'oauth'
+          ? t('Sign in to use your ChatGPT plan.')
+          : t('set {envVar}', { envVar: provider.apiKeyEnv }),
       );
       return;
     }
@@ -337,6 +382,7 @@ function mountAgentConsole({
         `/api/agent/models?provider=${encodeURIComponent(providerId)}`,
       );
       if (superseded()) return;
+      binding = data.binding || null;
       models = Array.isArray(data.models) ? data.models : [];
       for (const model of models) {
         const option = root.createElement('option');
@@ -430,15 +476,20 @@ function mountAgentConsole({
     input.value = '';
     setBusy(true);
     setStatus(AGENT_STATUS.THINKING);
+    chatgptControls.setBusy(true);
+    if (stopButton) stopButton.disabled = false;
     try {
       // handleEvent already renders the error entry; appending result.error
       // here as well would show every failure twice.
       await session.send(text, {
         provider: providerSelect.value,
         model: modelSelect.value,
+        binding,
         onEvent: handleEvent,
       });
     } finally {
+      chatgptControls.setBusy(false);
+      if (stopButton) stopButton.disabled = true;
       setBusy(false);
       setStatus(AGENT_STATUS.READY);
       input.focus();
@@ -519,6 +570,8 @@ function mountAgentConsole({
 
   chip.hidden = false;
   setStatus(AGENT_STATUS.READY);
+  const stop = () => session.abort();
+  stopButton?.addEventListener('click', stop);
   form.addEventListener('submit', submit);
   providerSelect.addEventListener('change', onProviderChange);
   modelSelect.addEventListener('change', onModelChange);
@@ -531,6 +584,8 @@ function mountAgentConsole({
     open,
     close,
     destroy() {
+      chatgptControls.destroy();
+      stopButton?.removeEventListener('click', stop);
       form.removeEventListener('submit', submit);
       providerSelect.removeEventListener('change', onProviderChange);
       modelSelect.removeEventListener('change', onModelChange);

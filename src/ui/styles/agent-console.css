@@ -347,3 +347,43 @@ body.scene-playback-mode #agent-console {
 #agent-console.agent-console-resizing .agent-resize-grip {
   opacity: 1;
 }
+
+.agent-chatgpt {
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--panel-border, #33404c);
+  font-size: 11px;
+  line-height: 1.5;
+}
+.agent-chatgpt[hidden] {
+  display: none;
+}
+.agent-chatgpt select {
+  max-width: 100%;
+}
+.agent-chatgpt p {
+  margin: 4px 0;
+  overflow-wrap: anywhere;
+}
+.agent-chatgpt a {
+  color: inherit;
+  text-decoration: underline;
+}
+
+/* Account settings share the existing resizable window with the transcript. */
+.agent-chatgpt {
+  flex: 0 0 auto;
+  max-height: 50%;
+  min-height: 0;
+  overflow: auto;
+}
+#agent-console:has(.agent-chatgpt:not([hidden])) #agent-transcript {
+  min-height: 2rem;
+}
+.agent-console-form,
+.agent-console-status {
+  flex-shrink: 0;
+}
+#agent-stop {
+  font-size: 0.58rem;
+  letter-spacing: 0.08rem;
+}

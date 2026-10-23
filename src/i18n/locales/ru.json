@@ -3033,5 +3033,18 @@
   "no usable models": "нет подходящих моделей",
   "Could not list models": "Не удалось получить список моделей",
   "Agent backend unavailable": "Бэкенд агента недоступен",
-  "Select a model before sending a command.": "Выберите модель перед отправкой команды."
+  "Select a model before sending a command.": "Выберите модель перед отправкой команды.",
+  "Add a ChatGPT account": "Добавить аккаунт ChatGPT",
+  "Complete sign-in in your browser.": "Завершите вход в браузере.",
+  "ChatGPT account connected": "Аккаунт ChatGPT подключён",
+  "Sign in to use your ChatGPT plan.": "Войдите, чтобы использовать свой план ChatGPT.",
+  "Could not start ChatGPT sign-in.": "Не удалось начать вход в ChatGPT.",
+  "Continue with ChatGPT": "Продолжить с ChatGPT",
+  "Signed out locally. Remote revocation was not confirmed; disconnect this app in ChatGPT Settings.": "Локальный сеанс завершён. Отзыв доступа на сервере не подтверждён; отключите это приложение в настройках ChatGPT.",
+  "ChatGPT plan": "План ChatGPT",
+  "ChatGPT plan limits": "Лимиты плана ChatGPT",
+  "ChatGPT account": "Аккаунт ChatGPT",
+  "Sign out / cancel sign-in": "Выйти / отменить вход",
+  "Uses your ChatGPT plan limits. Commands and tool results are sent to OpenAI.": "Расходует лимиты вашего плана ChatGPT. Команды и результаты инструментов отправляются в OpenAI.",
+  "ChatGPT Settings": "Настройки ChatGPT"
 }

@@ -1,4 +1,12 @@
 import {
+  admitChatGptRequest,
+  isLocalChatGptRequest,
+} from './chatgpt/routes.js';
+import {
+  fetchChatGptModels,
+  requestChatGptCompletion,
+} from './chatgpt/responses.js';
+import {
   buildRequestMessages,
   toolResultMessage,
 } from '../../../src/agent/conversation.js';
@@ -98,7 +106,7 @@ function requestedProviderId(req) {
  *
  * @returns {{provider: object, baseUrl: string, apiKey: string|null}|null}
  */
-function resolveRequestProvider(requestedId, res, env) {
+function resolveRequestProvider(requestedId, res, env, req, chatgpt) {
   const provider = requestedId
     ? resolveProvider(requestedId)
     : resolveConfiguredProvider(env);
@@ -107,6 +115,14 @@ function resolveRequestProvider(requestedId, res, env) {
       error: `Unknown provider "${String(requestedId).slice(0, 40)}"`,
     });
     return null;
+  }
+  if (provider.authType === 'oauth') {
+    if (!admitChatGptRequest(req, res)) return null;
+    if (!chatgpt) {
+      sendJson(res, 503, { error: 'ChatGPT sign-in is unavailable.' });
+      return null;
+    }
+    return { provider };
   }
   if (!isProviderConfigured(provider, env)) {
     sendJson(res, 503, {
@@ -130,14 +146,30 @@ function resolveRequestProvider(requestedId, res, env) {
  */
 function createAgentConfigHandler({
   env = process.env,
+  chatgpt = null,
   limiter = agentRateLimiter,
 } = {}) {
   return (req, res) => {
     if (!requireMethod(req, res, 'GET')) return;
     if (!enforceRateLimit(limiter(env), req, res)) return;
     const configured = resolveConfiguredProvider(env);
+    let chatgptConfigured = false;
+    if (chatgpt && isLocalChatGptRequest(req)) {
+      try {
+        chatgptConfigured = chatgpt.status().configured;
+      } catch {
+        /* Other providers remain usable. */
+      }
+    }
     sendJson(res, 200, {
-      providers: describeProviders(env),
+      providers: describeProviders(env)
+        .filter(
+          (p) =>
+            p.authType !== 'oauth' || (chatgpt && isLocalChatGptRequest(req)),
+        )
+        .map((p) =>
+          p.authType === 'oauth' ? { ...p, configured: chatgptConfigured } : p,
+        ),
       defaultProvider: configured.id,
       defaultModel: resolveConfiguredModel(configured, env),
       toolCount: GEV_REALTIME_TOOLS.length,
@@ -155,6 +187,7 @@ function createAgentConfigHandler({
  */
 function createAgentModelsHandler({
   env = process.env,
+  chatgpt = null,
   fetchImpl = (...args) => fetch(...args),
   limiter = agentRateLimiter,
 } = {}) {
@@ -162,10 +195,32 @@ function createAgentModelsHandler({
     if (!requireMethod(req, res, 'GET')) return;
     if (!enforceRateLimit(limiter(env), req, res)) return;
 
-    const resolved = resolveRequestProvider(requestedProviderId(req), res, env);
+    const resolved = resolveRequestProvider(
+      requestedProviderId(req),
+      res,
+      env,
+      req,
+      chatgpt,
+    );
     if (!resolved) return;
 
-    const listing = await fetchModels({ ...resolved, fetchImpl });
+    let listing;
+    try {
+      listing =
+        resolved.provider.id === 'chatgpt'
+          ? await fetchChatGptModels({
+              auth: chatgpt,
+              binding: chatgpt.status().binding,
+              fetchImpl,
+            })
+          : await fetchModels({ ...resolved, fetchImpl });
+    } catch (error) {
+      sendJson(res, error.status || 502, {
+        error: error.status ? error.message : 'ChatGPT model listing failed.',
+        models: [],
+      });
+      return;
+    }
     if (!listing.ok) {
       sendJson(res, 502, {
         error: listing.error,
@@ -182,7 +237,11 @@ function createAgentModelsHandler({
     });
     sendJson(res, 200, {
       provider: resolved.provider.id,
-      models: sortModelsForPicker(usable).map((model) => ({
+      ...(listing.binding ? { binding: listing.binding } : {}),
+      models: (resolved.provider.id === 'chatgpt'
+        ? usable
+        : sortModelsForPicker(usable)
+      ).map((model) => ({
         ...model,
         costPerCommandUsd: estimateCommandCostUsd(model, { prefixTokens }),
       })),
@@ -263,6 +322,7 @@ function messageWithPairingIds(message, prepared) {
  */
 function createAgentCommandHandler({
   env = process.env,
+  chatgpt = null,
   fetchImpl = (...args) => fetch(...args),
   limiter = agentRateLimiter,
   annotationGuidance,
@@ -272,152 +332,188 @@ function createAgentCommandHandler({
     if (!requireMethod(req, res, 'POST')) return;
     if (!enforceRateLimit(limiter(env), req, res)) return;
 
-    let payload;
+    const controller = new AbortController();
+    const onAborted = () => controller.abort();
+    const onClose = () => {
+      if (!res.writableEnded) controller.abort();
+    };
+    req.on?.('aborted', onAborted);
+    res.on?.('close', onClose);
     try {
-      payload = JSON.parse((await readRequestBody(req, maxBytes)) || '{}');
-      // `null` and `[]` are valid JSON, so the parse succeeds and every field
-      // read after it throws past this catch with no reply sent.
-      if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
-        throw new SyntaxError('Request body is not a JSON object');
-      }
-    } catch (error) {
-      const tooLarge = error?.code === 'BODY_TOO_LARGE';
-      sendJson(res, tooLarge ? 413 : 400, {
-        error: tooLarge
-          ? 'Command transcript is too large. Clear the console and retry.'
-          : 'Malformed request body',
-      });
-      return;
-    }
-
-    const resolved = resolveRequestProvider(payload.provider, res, env);
-    if (!resolved) return;
-
-    // Server-side model policy: the console picks from a listing this server
-    // produced, but a malformed, over-long or disallowed id degrades to the
-    // configured default rather than reaching the upstream verbatim.
-    const selection = resolveRequestedModel(
-      payload.model,
-      resolved.provider,
-      env,
-    );
-    if (!selection.model) {
-      sendJson(res, 400, {
-        error: selection.fallback
-          ? `That model is not available for ${resolved.provider.label}. Pick one from the list.`
-          : `No model selected for ${resolved.provider.label}. Pick one, or set GEV_AGENT_MODEL.`,
-        provider: resolved.provider.id,
-      });
-      return;
-    }
-    const model = selection.model;
-    res.setHeader('X-GEV-Agent-Model', model);
-    if (selection.fallback) res.setHeader('X-GEV-Agent-Model-Fallback', '1');
-
-    const messages = buildRequestMessages({
-      instructions: buildAgentInstructions({ annotationGuidance }),
-      messages: payload.messages,
-    });
-
-    // Correction loop: a rejected tool call is answered with its own error so
-    // the model can restate it, without that exchange reaching the browser.
-    const corrections = [];
-    for (let attempt = 0; attempt <= MAX_TOOL_CORRECTIONS; attempt += 1) {
-      const completion = await requestChatCompletion({
-        ...resolved,
-        model,
-        messages: [...messages, ...corrections],
-        tools: chatTools(),
-        fetchImpl,
-      });
-
-      if (!completion.ok) {
-        // Only a 4xx is worth relaying as-is. A failure can carry a 2xx
-        // status - a 200 whose body holds no message is one - and relaying
-        // that answers a failure with a success the client cannot detect.
-        const status =
-          completion.status >= 400 && completion.status < 500
-            ? completion.status
-            : 502;
-        sendJson(res, status, {
-          error: completion.error,
-          provider: resolved.provider.id,
+      let payload;
+      try {
+        payload = JSON.parse((await readRequestBody(req, maxBytes)) || '{}');
+        // `null` and `[]` are valid JSON, so the parse succeeds and every field
+        // read after it throws past this catch with no reply sent.
+        if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+          throw new SyntaxError('Request body is not a JSON object');
+        }
+      } catch (error) {
+        const tooLarge = error?.code === 'BODY_TOO_LARGE';
+        sendJson(res, tooLarge ? 413 : 400, {
+          error: tooLarge
+            ? 'Command transcript is too large. Clear the console and retry.'
+            : 'Malformed request body',
         });
         return;
       }
 
-      const prepared = prepareCalls(completion.message);
-      const invalid = prepared.filter((entry) => !entry.result.ok);
+      const resolved = resolveRequestProvider(
+        payload.provider,
+        res,
+        env,
+        req,
+        chatgpt,
+      );
+      if (!resolved) return;
 
-      // Heuristic health checks on the FIRST turn only: a correction turn
-      // legitimately carries a different shape and token count.
-      const warnings = corrections.length
-        ? []
-        : diagnoseToolTurn({
-            usage: completion.usage,
-            message: completion.message,
-            provider: resolved.provider,
-            model: completion.model,
-            toolCallCount: prepared.length,
-            finishReason: completion.finishReason,
+      // Server-side model policy: the console picks from a listing this server
+      // produced, but a malformed, over-long or disallowed id degrades to the
+      // configured default rather than reaching the upstream verbatim.
+      const selection = resolveRequestedModel(
+        payload.model,
+        resolved.provider,
+        env,
+      );
+      if (!selection.model) {
+        sendJson(res, 400, {
+          error: selection.fallback
+            ? `That model is not available for ${resolved.provider.label}. Pick one from the list.`
+            : `No model selected for ${resolved.provider.label}. Pick one, or set GEV_AGENT_MODEL.`,
+          provider: resolved.provider.id,
+        });
+        return;
+      }
+      const model = selection.model;
+      res.setHeader('X-GEV-Agent-Model', model);
+      if (selection.fallback) res.setHeader('X-GEV-Agent-Model-Fallback', '1');
+
+      const messages = buildRequestMessages({
+        instructions: buildAgentInstructions({ annotationGuidance }),
+        messages: payload.messages,
+      });
+
+      // Correction loop: a rejected tool call is answered with its own error so
+      // the model can restate it, without that exchange reaching the browser.
+      const corrections = [];
+      for (let attempt = 0; attempt <= MAX_TOOL_CORRECTIONS; attempt += 1) {
+        if (controller.signal.aborted) return;
+        const complete =
+          resolved.provider.id === 'chatgpt'
+            ? requestChatGptCompletion
+            : requestChatCompletion;
+        const completion = await complete({
+          auth: chatgpt,
+          binding: payload.binding,
+          signal: controller.signal,
+          ...resolved,
+          model,
+          messages: [...messages, ...corrections],
+          tools: chatTools(),
+          fetchImpl,
+        });
+
+        if (controller.signal.aborted) return;
+        if (!completion.ok) {
+          // Only a 4xx is worth relaying as-is. A failure can carry a 2xx
+          // status - a 200 whose body holds no message is one - and relaying
+          // that answers a failure with a success the client cannot detect.
+          const status =
+            completion.status >= 400 && completion.status < 500
+              ? completion.status
+              : 502;
+          sendJson(res, status, {
+            error: completion.error,
+            provider: resolved.provider.id,
           });
+          return;
+        }
 
-      if (!invalid.length) {
-        sendJson(res, 200, {
-          provider: resolved.provider.id,
-          model: completion.model,
-          message: prepared.length
-            ? messageWithPairingIds(completion.message, prepared)
-            : { role: 'assistant', content: completion.message.content || '' },
-          toolCalls: prepared.map((entry) => ({
-            id: entry.id,
-            name: entry.result.name,
-            args: entry.result.args,
-          })),
-          usage: completion.usage,
-          corrections: attempt,
-          modelFallback: selection.fallback,
-          warnings,
-        });
-        return;
-      }
+        const prepared = prepareCalls(completion.message);
+        const invalid = prepared.filter((entry) => !entry.result.ok);
 
-      if (attempt === MAX_TOOL_CORRECTIONS) {
-        sendJson(res, 200, {
-          provider: resolved.provider.id,
-          model: completion.model,
-          message: {
-            role: 'assistant',
-            content: `I could not form a valid command for that. ${invalid[0].result.error}`,
-          },
-          toolCalls: [],
-          usage: completion.usage,
-          corrections: attempt,
-          modelFallback: selection.fallback,
-          toolCallFailed: true,
-          warnings,
-        });
-        return;
-      }
+        // Heuristic health checks on the FIRST turn only: a correction turn
+        // legitimately carries a different shape and token count.
+        const warnings = corrections.length
+          ? []
+          : diagnoseToolTurn({
+              usage: completion.usage,
+              message: completion.message,
+              provider: resolved.provider,
+              model: completion.model,
+              toolCallCount: prepared.length,
+              finishReason: completion.finishReason,
+            });
 
-      // The same pairing the answer path applies: the correction prompt sends
-      // this message back alongside a tool result per call, and an upstream
-      // rejects the pair outright when the result's id matches no call.
-      corrections.push(messageWithPairingIds(completion.message, prepared));
-      for (const entry of prepared) {
-        corrections.push(
-          toolResultMessage(
-            entry.id,
-            entry.result.ok
-              ? {
-                  ok: false,
-                  error:
-                    'Not run: another tool call in the same turn was invalid. Reissue both.',
-                }
-              : { ok: false, error: entry.result.error },
-          ),
-        );
+        if (!invalid.length) {
+          sendJson(res, 200, {
+            provider: resolved.provider.id,
+            model: completion.model,
+            message: prepared.length
+              ? messageWithPairingIds(completion.message, prepared)
+              : {
+                  role: 'assistant',
+                  content: completion.message.content || '',
+                  ...(completion.message.response_reasoning
+                    ? {
+                        response_reasoning:
+                          completion.message.response_reasoning,
+                      }
+                    : {}),
+                },
+            toolCalls: prepared.map((entry) => ({
+              id: entry.id,
+              name: entry.result.name,
+              args: entry.result.args,
+            })),
+            usage: completion.usage,
+            corrections: attempt,
+            modelFallback: selection.fallback,
+            warnings,
+          });
+          return;
+        }
+
+        if (attempt === MAX_TOOL_CORRECTIONS) {
+          sendJson(res, 200, {
+            provider: resolved.provider.id,
+            model: completion.model,
+            message: {
+              role: 'assistant',
+              content: `I could not form a valid command for that. ${invalid[0].result.error}`,
+            },
+            toolCalls: [],
+            usage: completion.usage,
+            corrections: attempt,
+            modelFallback: selection.fallback,
+            toolCallFailed: true,
+            warnings,
+          });
+          return;
+        }
+
+        // The same pairing the answer path applies: the correction prompt sends
+        // this message back alongside a tool result per call, and an upstream
+        // rejects the pair outright when the result's id matches no call.
+        corrections.push(messageWithPairingIds(completion.message, prepared));
+        for (const entry of prepared) {
+          corrections.push(
+            toolResultMessage(
+              entry.id,
+              entry.result.ok
+                ? {
+                    ok: false,
+                    error:
+                      'Not run: another tool call in the same turn was invalid. Reissue both.',
+                  }
+                : { ok: false, error: entry.result.error },
+            ),
+          );
+        }
       }
+    } finally {
+      req.removeListener?.('aborted', onAborted);
+      res.removeListener?.('close', onClose);
     }
   };
 }

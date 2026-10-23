@@ -1,10 +1,9 @@
 /**
  * Provider registry for the typed agent.
  *
- * Three back ends reach the same OpenAI-compatible `/v1/chat/completions`
- * surface, so the only real differences are the base URL, whether a key is
- * required, and how each one reports what its models can do. Adding a fourth
- * is a table entry plus a normalizer, not another panel or tool loop.
+ * API-key and local providers use OpenAI-compatible chat completions. The
+ * ChatGPT plan provider has a separate OAuth/Responses transport and catalog,
+ * while sharing the same console, manual, tool validation and action loop.
  *
  * Everything here is pure and takes `env` as an argument, so the whole module
  * runs under `node --test` without a network, a key or a live `process.env`.
@@ -53,11 +52,21 @@ function toolContextFloor(prefixTokens) {
 }
 
 /**
- * Provider definitions. `apiKeyEnv: null` means the provider is reachable
- * without a credential, which is what makes a local daemon usable with no
- * signup at all.
+ * Provider definitions. OAuth configuration is resolved by the account manager.
+ * Only providers without authType or apiKeyEnv are credential-free.
  */
 const AGENT_PROVIDERS = Object.freeze({
+  chatgpt: Object.freeze({
+    id: 'chatgpt',
+    label: 'ChatGPT plan',
+    kind: 'hosted',
+    authType: 'oauth',
+    defaultBaseUrl: 'https://api.openai.com/v1',
+    baseUrlEnv: null,
+    apiKeyEnv: null,
+    modelsPath: '/models',
+    defaultModel: null,
+  }),
   openai: Object.freeze({
     id: 'openai',
     label: 'OpenAI',
@@ -160,6 +169,7 @@ function providerApiKey(provider, env = {}) {
  */
 function isProviderConfigured(provider, env = {}) {
   if (!provider) return false;
+  if (provider.authType === 'oauth') return false;
   if (!provider.apiKeyEnv) return true;
   return providerApiKey(provider, env) !== null;
 }
@@ -298,6 +308,7 @@ function describeProviders(env = {}) {
       id,
       label: provider.label,
       kind: provider.kind,
+      ...(provider.authType ? { authType: provider.authType } : {}),
       configured: isProviderConfigured(provider, env),
       requiresKey: Boolean(provider.apiKeyEnv),
       apiKeyEnv: provider.apiKeyEnv,

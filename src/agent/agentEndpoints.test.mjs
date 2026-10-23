@@ -47,8 +47,9 @@ function response() {
   };
 }
 
-test('the plugin registers the three endpoints on dev and on preview', () => {
+test('the plugin registers the command and account endpoints on dev and on preview', () => {
   const expected = [
+    '/api/agent/chatgpt',
     '/api/agent/config',
     '/api/agent/models',
     '/api/agent/command',

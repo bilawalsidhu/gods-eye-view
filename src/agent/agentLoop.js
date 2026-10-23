@@ -128,7 +128,7 @@ function createAgentSession({
   let inFlight = null;
 
   /** POST one turn, trimming the transcript to fit the request body first. */
-  async function postTurn({ provider, model, signal, onEvent }) {
+  async function postTurn({ provider, model, binding, signal, onEvent }) {
     const fitted = fitHistoryToBytes(messages, { maxBytes: maxRequestBytes });
     if (fitted.dropped) {
       // The console keeps showing the whole exchange; only what the model is
@@ -145,7 +145,12 @@ function createAgentSession({
     const response = await fetchImpl(endpoint, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ provider, model, messages }),
+      body: JSON.stringify({
+        provider,
+        model,
+        messages,
+        ...(binding ? { binding } : {}),
+      }),
       signal,
     });
     const data = await response.json().catch(() => null);
@@ -198,7 +203,7 @@ function createAgentSession({
      *   onEvent?: (event: object) => void}} [options]
      * @returns {Promise<{ok: boolean, content: string, rounds: number, error?: string}>}
      */
-    async send(text, { provider, model, onEvent = () => {} } = {}) {
+    async send(text, { provider, model, binding, onEvent = () => {} } = {}) {
       const command = typeof text === 'string' ? text.trim() : '';
       if (!command)
         return { ok: false, content: '', rounds: 0, error: 'Empty command' };
@@ -227,6 +232,7 @@ function createAgentSession({
           const data = await postTurn({
             provider,
             model,
+            binding,
             signal: controller.signal,
             onEvent,
           });

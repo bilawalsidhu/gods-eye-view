@@ -247,19 +247,19 @@ async function requestUpstreamJson({
   init,
   timeoutMs,
   maxBytes = MAX_RESPONSE_BYTES,
+  signal,
 }) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
+  const combined = signal
+    ? AbortSignal.any([signal, controller.signal])
+    : controller.signal;
   try {
     const response = await fetchImpl(url, {
       ...init,
-      signal: controller.signal,
+      signal: combined,
     });
-    const text = await readResponseTextCapped(
-      response,
-      maxBytes,
-      controller.signal,
-    );
+    const text = await readResponseTextCapped(response, maxBytes, combined);
     let data = null;
     try {
       data = text ? JSON.parse(text) : null;
@@ -428,11 +428,15 @@ async function requestChatCompletion({
   tools,
   fetchImpl,
   timeoutMs,
+  signal,
 }) {
   const budget = Number.isFinite(timeoutMs)
     ? timeoutMs
     : completionTimeoutFor(provider);
-  const body = { model, messages };
+  const body = {
+    model,
+    messages: messages.map(({ response_reasoning, ...message }) => message),
+  };
   if (Array.isArray(tools) && tools.length) body.tools = tools;
 
   let reply;
@@ -447,6 +451,7 @@ async function requestChatCompletion({
         body: JSON.stringify(body),
       },
       timeoutMs: budget,
+      signal,
     });
   } catch (error) {
     return {

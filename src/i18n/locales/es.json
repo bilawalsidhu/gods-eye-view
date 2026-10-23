@@ -2966,5 +2966,18 @@
   "no usable models": "sin modelos utilizables",
   "Could not list models": "No se pudieron listar los modelos",
   "Agent backend unavailable": "El backend del agente no está disponible",
-  "Select a model before sending a command.": "Selecciona un modelo antes de enviar un comando."
+  "Select a model before sending a command.": "Selecciona un modelo antes de enviar un comando.",
+  "Add a ChatGPT account": "Añadir una cuenta de ChatGPT",
+  "Complete sign-in in your browser.": "Completá el inicio de sesión en tu navegador.",
+  "ChatGPT account connected": "Cuenta de ChatGPT conectada",
+  "Sign in to use your ChatGPT plan.": "Iniciá sesión para usar tu plan de ChatGPT.",
+  "Could not start ChatGPT sign-in.": "No se pudo iniciar la conexión con ChatGPT.",
+  "Continue with ChatGPT": "Continuar con ChatGPT",
+  "Signed out locally. Remote revocation was not confirmed; disconnect this app in ChatGPT Settings.": "Sesión local cerrada. No se confirmó la revocación remota; desconectá esta aplicación en la configuración de ChatGPT.",
+  "ChatGPT plan": "Plan de ChatGPT",
+  "ChatGPT plan limits": "Límites del plan de ChatGPT",
+  "ChatGPT account": "Cuenta de ChatGPT",
+  "Sign out / cancel sign-in": "Cerrar sesión / cancelar acceso",
+  "Uses your ChatGPT plan limits. Commands and tool results are sent to OpenAI.": "Utiliza los límites de tu plan de ChatGPT. Los comandos y los resultados de herramientas se envían a OpenAI.",
+  "ChatGPT Settings": "Configuración de ChatGPT"
 }

@@ -1101,5 +1101,9 @@
   "src/agent/registry.test.mjs",
   "src/agent/routes.test.mjs",
   "src/agent/toolSchema.test.mjs",
-  "src/agent/upstream.test.mjs"
+  "src/agent/upstream.test.mjs",
+  "server/providers/agent/chatgpt/auth.test.mjs",
+  "server/providers/agent/chatgpt/responses.test.mjs",
+  "src/agent/chatgptControls.test.mjs",
+  "scripts/qa-agent-chatgpt.mjs"
 ]

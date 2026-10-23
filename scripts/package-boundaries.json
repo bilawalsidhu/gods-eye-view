@@ -371,7 +371,8 @@
       "server/standalone/key-setup.js",
       "src/keySetupCore.mjs",
       "src/localRequestGate.mjs",
-      "server/standalone/key-setup-hardening.mjs"
+      "server/standalone/key-setup-hardening.mjs",
+      "server/providers/common/credential-file.mjs"
     ],
     "external": []
   },
@@ -2571,7 +2572,9 @@
       "src/voice/geminiSession.js",
       "src/voice/geminiAudio.js",
       "src/voice/geminiCaptureWorklet.js",
-      "src/ui/statusBadge.js"
+      "src/ui/statusBadge.js",
+      "src/agent/chatgptControls.js",
+      "src/agent/responseReasoning.js"
     ],
     "external": [
       "hls.js",

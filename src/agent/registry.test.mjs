@@ -112,12 +112,16 @@ test('describeProviders never leaks a key or a hosted base URL', () => {
   assert.deepEqual(
     described.map((entry) => [entry.id, entry.configured]),
     [
+      ['chatgpt', false],
       ['openai', true],
       ['openrouter', false],
       ['ollama', true],
     ],
   );
-  assert.equal(described[1].apiKeyEnv, 'OPENROUTER_API_KEY');
+  assert.equal(
+    described.find((p) => p.id === 'openrouter').apiKeyEnv,
+    'OPENROUTER_API_KEY',
+  );
 });
 
 test('the requested model is accepted only in a shape a provider uses', () => {

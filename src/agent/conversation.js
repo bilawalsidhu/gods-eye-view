@@ -1,3 +1,5 @@
+import { normalizeResponseReasoning } from './responseReasoning.js';
+
 /**
  * Shapes the message array that crosses the wire on every typed command.
  *
@@ -195,6 +197,8 @@ function sanitizeMessage(raw, { maxContentChars = MAX_CONTENT_CHARS } = {}) {
     if (!content && !toolCalls.length) return null;
     const message = { role: 'assistant', content };
     if (toolCalls.length) message.tool_calls = toolCalls;
+    const reasoning = normalizeResponseReasoning(raw.response_reasoning);
+    if (reasoning.length) message.response_reasoning = reasoning;
     return message;
   }
 

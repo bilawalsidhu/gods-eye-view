@@ -97,6 +97,47 @@ The custom switch field is bounded to 256 characters;
 provider registration rejects compositions that cannot fit rather than truncating
 identities. A malformed or duplicate entry invalidates the complete custom-switch
 field. Existing whole-link size limits still apply.
+## ChatGPT plan usage in GEV COMMAND — October 23, 2026
+
+The `chatgpt` provider adds the official Sign in with ChatGPT open-source flow
+inside the existing GEV COMMAND console. It is a follow-on to darrendignam's
+PR #976; it does not add another console, action runner, voice session or HUD
+Summary provider. API-key OpenAI/OpenRouter and local Ollama retain their
+existing transports. See [ChatGPT commands](CHATGPT-COMMAND.md).
+
+Only loopback clients with a local Host and the existing same-site request gate
+may list ChatGPT accounts, authorize, fetch models or spend this plan's allowance.
+GEV registers its own public OAuth client with PKCE, state and nonce; verifies
+ID-token signature/issuer/audience/expiry/identity with `jose`; and requires the
+plan-use scopes. Its private, atomically written account store is independent of
+Codex. A file lock serializes rotating refresh tokens across processes.
+Credentials and identity registrations remain separate for accounts/workspaces,
+even when their email matches. Logout attempts remote revocation, cancels
+requests, removes local tokens and retains the registration for reauthorization.
+
+The account's `/v1/models` catalog supplies visible choices in server order.
+`/v1/responses` uses `store:false`, `stream:true`, the shared manual in
+`instructions`, and GEV function tools in a namespace. Full bounded history and
+opaque encrypted reasoning are replayed without `previous_response_id`.
+Only `response.completed` produces a tool turn; partial, failed, interrupted,
+oversized and quota-limited responses never dispatch tools for that response.
+There is no automatic API-key fallback. The console shows plan limits, not a
+zero-dollar estimate, and explains that commands/tool results go to OpenAI.
+
+Account changes clear the console conversation and refresh models. Each command
+pins the account binding across every tool round; an old tab receives a conflict
+rather than sending its history to another account. STOP aborts the request,
+propagates browser disconnect to upstream inference, and preserves #976's
+queued-action cancellation checks. Already completed actions are not undone.
+
+Deterministic authentication, transport and UI regressions live in
+`server/providers/agent/chatgpt/*.test.mjs` and
+`src/agent/chatgptControls.test.mjs`. `node scripts/qa-agent-chatgpt.mjs`
+checks the actual template/controller/styles with fixture responses in four
+languages and two viewport sizes. A real eligible-account sign-in, refresh,
+revocation and model tool round trip remain required before release; fixtures
+are not evidence of account entitlement or live service availability.
+
 ## GEV COMMAND — the typed agent — October 8, 2026
 
 A second transport for the agent voice already drives. The **GEV COMMAND** chip

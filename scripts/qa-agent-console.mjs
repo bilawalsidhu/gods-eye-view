@@ -358,7 +358,7 @@ async function main() {
     // Resize from the corner grip.
     const grip = await page.evaluate(() => {
       const rect = document
-        .querySelector('#agent-console .panel-resize-grip')
+        .querySelector('#agent-console .agent-resize-grip')
         .getBoundingClientRect();
       return {
         x: Math.round(rect.left + rect.width / 2),
