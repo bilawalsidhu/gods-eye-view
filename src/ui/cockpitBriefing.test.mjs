@@ -55,7 +55,7 @@ test('Local Info labels station observations separately from modeled weather and
   assert.equal(context.localTemperature.textContent, '24°C');
   assert.equal(context.localCondition.textContent, 'OVERCAST');
   assert.equal(context.localPrecipitation.textContent, '0.1');
-  for (const locale of ['es', 'ru']) {
+  for (const locale of ['es', 'ru', 'zh-CN']) {
     setLocale(locale);
     try {
       renderRegionalBrief.call(context, payload, {});
