@@ -1,7 +1,7 @@
 // DOM stand-ins for the KartaView viewer's tests (no browser in Node).
 
 /** A DOM element with what the viewer touches: children, events, attributes. */
-export function fakeElement(tag) {
+function fakeElement(tag) {
   const listeners = new Map();
   const element = {
     tagName: tag.toUpperCase(),

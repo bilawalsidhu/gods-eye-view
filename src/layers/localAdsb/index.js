@@ -36,18 +36,8 @@ import {
 } from './policy.js';
 import { localAdsbStatus } from './status.js';
 
-export {
-  LAYER_ID as LOCAL_ADSB_LAYER_ID,
-  HEARD_BY_RECEIVER,
-} from './policy.js';
-export {
-  localAdsbCardModel,
-  localAdsbClassLine,
-  localAdsbIsUat,
-  localAdsbReceiverLine,
-  localAdsbTitle,
-} from './card.js';
-export { localAdsbClass } from './enrichment.js';
+export { HEARD_BY_RECEIVER } from './policy.js';
+export { localAdsbCardModel, localAdsbReceiverLine } from './card.js';
 export { localAdsbStatus } from './status.js';
 
 const FEET_TO_METERS = 0.3048;

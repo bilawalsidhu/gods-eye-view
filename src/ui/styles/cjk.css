@@ -1,0 +1,51 @@
+/* Tight tracking keeps Chinese labels readable; preserve Latin tracking for
+   intel HUD readouts and content marked translate="no", including its containers. */
+html:lang(zh)
+  body
+  :not(
+    #intel-hud,
+    #intel-hud *,
+    [translate='no'],
+    [translate='no'] *,
+    :has([translate='no'])
+  ) {
+  letter-spacing: 0.02em !important;
+}
+
+/* Keep small Chinese labels legible at a minimum of 9px. */
+html:lang(zh) #command-dock .gev-mic-label,
+html:lang(zh) #command-dock #gev-voice-detail,
+html:lang(zh) .gev-voice-tier-btn,
+html:lang(zh) .panel-layer-toggle {
+  font-size: 9px;
+}
+
+/* A two-glyph button label must not break between its glyphs. */
+html:lang(zh) .pp-mode-btn {
+  white-space: nowrap;
+}
+
+/* Keep unit symbols in their catalog case, including the cockpit readouts. */
+html:lang(zh) #intel-hud *,
+html:lang(zh) #cockpit-hud * {
+  text-transform: none;
+}
+
+/* Move short travel modes (步行 / 骑行) to the next line as whole words. */
+html:lang(zh) [data-layer-id='directions'] .data-toggle-meta {
+  word-break: keep-all;
+  overflow-wrap: break-word;
+}
+
+/* Leave room for the complete sensor name and resolution on two lines. */
+html:lang(zh) .recent-imagery-readout .ri-strip {
+  height: 131px;
+}
+html:lang(zh) .recent-imagery-readout .ri-card {
+  height: 123px;
+  grid-template-rows: 42px 13px 22px 11px 18px;
+}
+html:lang(zh) .recent-imagery-readout .ri-card-sensor {
+  white-space: normal;
+  text-overflow: clip;
+}

@@ -6,8 +6,8 @@ import {
   WIND_NARROW_PATH_LIMIT,
 } from './streamlines.js';
 
-export const WIND_FADE_LOW_METERS = 15000;
-export const WIND_FADE_HIGH_METERS = 60000;
+const WIND_FADE_LOW_METERS = 15000;
+const WIND_FADE_HIGH_METERS = 60000;
 
 // Original material: a persistent fine curve plus a moving, tapered highlight.
 // The integer part of s identifies a path; its fractional part follows the wind.
