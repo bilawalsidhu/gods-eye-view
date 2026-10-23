@@ -6,10 +6,8 @@ import {
   isPlausibleLatLon,
   prioritizeSources,
 } from './normalize.js';
-import {
-  readResponseJsonCapped,
-  readResponseTextCapped,
-} from '../common/http.js';
+import { readResponseTextCapped } from '../common/http.js';
+import { applyKartverketGroundHeights } from './sources.js';
 
 /** MET Norway's public webcam list: one keyless HTML page, marked for free
  * use outside MET's firewall, with each camera's site id, place, position
@@ -29,135 +27,36 @@ const ANCHORS = [
   { lat: 78.2232, lon: 15.6267 }, // Longyearbyen
 ];
 
-/** Kartverket's keyless point-height API (CC BY 4.0): terrain height above
- * sea level (NN2000). The MET list gives 2D positions, and its cameras run
- * from sea level to Haukeliseter at ~990 m, so a flat prior leaves mountain
- * cameras far below the terrain wherever the client's ground snap does not
- * resolve. It covers mainland Norway only; the Svalbard and Jan Mayen
- * cameras stand within ~25 m of sea level and keep the client's 0 m. */
-export const KARTVERKET_HEIGHT_URL =
-  'https://ws.geonorge.no/hoydedata/v1/punkt';
-/** Above ~20 points the API answers the extra ones from contour lines or
- * not at all; at 20 they resolve from the 1 m terrain model. */
-const HEIGHT_POINTS_PER_REQUEST = 20;
-/** One lookup's deadline, inside the catalog's per-pack fetch timeout. */
-const HEIGHT_TIMEOUT_MS = 8 * 1000;
-const HEIGHT_MAX_RESPONSE_BYTES = 256 * 1024;
-/** A point Kartverket has no height for is not asked about again for this
- * long; heights themselves are kept for the life of the process. */
-const HEIGHT_MISS_TTL_MS = 6 * 60 * 60 * 1000;
-/** After a failed lookup, none starts again for this long. */
-const HEIGHT_BACKOFF_MS = 10 * 60 * 1000;
-/** Plausible Norwegian terrain; anything outside is treated as no height. */
-const HEIGHT_RANGE_M = { min: -20, max: 2500 };
-
-/** key → { z, until } (z NaN for a miss). */
-const heightCache = new Map();
-let heightBackoffUntil = 0;
-
-export function clearMetHeightCache() {
-  heightCache.clear();
-  heightBackoffUntil = 0;
-}
-
-const heightKey = (lon, lat) => `${lon.toFixed(6)},${lat.toFixed(6)}`;
-
-/** One API point → metres, or NaN. Water answers with the sea-floor depth
- * (`dybdekurver`), so those become the water surface. */
-function pointHeight(point) {
-  const raw = point?.z;
-  // `z: null` means no height there; Number(null) would read 0.
-  let z = raw === null || raw === undefined || raw === '' ? NaN : Number(raw);
-  if (!Number.isFinite(z)) return NaN;
-  if (point?.datakilde === 'dybdekurver' || point?.terreng === 'Havflate') {
-    z = 0;
-  }
-  return z >= HEIGHT_RANGE_M.min && z <= HEIGHT_RANGE_M.max
-    ? Math.max(0, z)
-    : NaN;
-}
-
-async function fetchHeights(batch, signal, now) {
-  const asked = new Set(batch.map((c) => heightKey(c.lon, c.lat)));
-  const url = new URL(KARTVERKET_HEIGHT_URL);
-  url.searchParams.set(
-    'punkter',
-    JSON.stringify(
-      batch.map((c) => [Number(c.lon.toFixed(6)), Number(c.lat.toFixed(6))]),
-    ),
-  );
-  url.searchParams.set('koordsys', '4258');
-  const resp = await fetch(url, {
-    headers: { Accept: 'application/json' },
-    redirect: 'manual',
-    signal,
-  });
-  if (!resp.ok) {
-    await resp.body?.cancel().catch(() => {});
-    throw new Error(`Kartverket HTTP ${resp.status}`);
-  }
-  const payload = await readResponseJsonCapped(resp, HEIGHT_MAX_RESPONSE_BYTES);
-  for (const point of Array.isArray(payload?.punkter) ? payload.punkter : []) {
-    const x = Number(point?.x);
-    const y = Number(point?.y);
-    if (!Number.isFinite(x) || !Number.isFinite(y)) continue;
-    const key = heightKey(x, y);
-    // Only points this request asked about can enter the cache.
-    if (!asked.delete(key)) continue;
-    const z = pointHeight(point);
-    heightCache.set(key, {
-      z,
-      until: Number.isFinite(z) ? Infinity : now + HEIGHT_MISS_TTL_MS,
-    });
-  }
-  for (const key of asked) {
-    heightCache.set(key, { z: NaN, until: now + HEIGHT_MISS_TTL_MS });
-  }
-}
+/** How long the pack waits for a cold height lookup, inside the catalog's
+ * per-pack fetch timeout; a slower lookup fills the cache for the next
+ * refresh. */
+const HEIGHT_WAIT_MS = 8 * 1000;
 
 /**
- * Set `groundElevationM` on the mainland cameras from Kartverket, asking only
- * about points not already cached. Any failure leaves the remaining cameras
- * without a height (the client's fallback) and pauses lookups for a while; it
- * never fails the pack.
+ * Set `groundElevationM` on the mainland cameras from Kartverket's keyless
+ * point-height API (CC BY 4.0), through the lookup the Statens vegvesen pack
+ * uses (applyKartverketGroundHeights): one cache, one backoff and one lookup
+ * at a time for both packs. The list gives 2D positions, and its cameras run
+ * from sea level to ~1,000 m, so a flat prior leaves mountain cameras below
+ * the terrain wherever the client's ground snap does not resolve. Kartverket
+ * covers mainland Norway only; the Svalbard and Jan Mayen cameras stand within
+ * ~25 m of sea level and keep the client's 0 m. Never throws, and never fails
+ * the pack. CCTV_MET_HEIGHTS=0 skips it.
  *
  * @param {Array<object>} cameras - Sources from metCameraToSource, mutated.
- * @returns {Promise<void>}
+ * @param {{waitMs?: number, now?: () => number, timeoutMs?: number}} [options]
+ * @returns {Promise<number>} How many cameras got a terrain height.
  */
-export async function applyMetGroundHeights(cameras, now = Date.now()) {
-  if (String(process.env.CCTV_MET_HEIGHTS || '1').trim() === '0') return;
-  const mainland = cameras.filter((c) =>
-    isLikelyNorwayCoordinate(c.lat, c.lon),
+export function applyMetGroundHeights(cameras, options = {}) {
+  return applyKartverketGroundHeights(
+    cameras.filter((c) => isLikelyNorwayCoordinate(c.lat, c.lon)),
+    {
+      waitMs: HEIGHT_WAIT_MS,
+      ...options,
+      label: 'MET Norway',
+      envFlag: 'CCTV_MET_HEIGHTS',
+    },
   );
-  const missing = [
-    ...new Map(
-      mainland
-        .filter((c) => !(heightCache.get(heightKey(c.lon, c.lat))?.until > now))
-        .map((c) => [heightKey(c.lon, c.lat), c]),
-    ).values(),
-  ];
-  if (missing.length && now >= heightBackoffUntil) {
-    const signal = AbortSignal.timeout(HEIGHT_TIMEOUT_MS);
-    try {
-      for (let i = 0; i < missing.length; i += HEIGHT_POINTS_PER_REQUEST) {
-        await fetchHeights(
-          missing.slice(i, i + HEIGHT_POINTS_PER_REQUEST),
-          signal,
-          now,
-        );
-      }
-    } catch (error) {
-      heightBackoffUntil = now + HEIGHT_BACKOFF_MS;
-      console.warn(
-        '[CCTV] MET camera heights unavailable:',
-        error?.message || error,
-      );
-    }
-  }
-  for (const camera of mainland) {
-    const z = heightCache.get(heightKey(camera.lon, camera.lat))?.z;
-    if (Number.isFinite(z)) camera.groundElevationM = Math.round(z * 10) / 10;
-  }
 }
 
 /** Mainland Norway plus Svalbard and Jan Mayen, where most MET cameras are. */

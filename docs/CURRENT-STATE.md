@@ -1153,9 +1153,10 @@ video; camera poses use the existing low-confidence heading prior.
 
 ## MET Norway CCTV source pack
 
-The CCTV catalog can include MET Norway's weather-station webcams (about a dozen,
-from Haukeliseter and the Hurum weather radar to Bjørnøya, Hopen and Jan
-Mayen) in the same "Norway" picker category as the Statens vegvesen pack. The
+The CCTV catalog can include MET Norway's weather-station webcams (six operating
+on 2026-10-23, from the Hurum weather radar and two Finnmark sites to Bjørnøya,
+Hopen and Jan Mayen; the list has more in test) in the same "Norway" picker
+category as the Statens vegvesen pack. The
 list is MET's keyless public webcam page, marked for free use; one request
 reads it with redirects refused, a 15-second deadline and a 512 KB cap, under
 the shared 15-minute catalog cache. Only each camera's own
@@ -1163,7 +1164,9 @@ the shared 15-minute catalog cache. Only each camera's own
 cameras whose image cell is empty are dropped. The place text's compass word
 ("mot øst") sets an 8-point heading; otherwise the low-confidence prior is
 used. Mainland cameras get their ground height from Kartverket's keyless
-point-height API (CC BY 4.0) in one bounded, cached request; Svalbard and Jan
+point-height API (CC BY 4.0) through the Statens vegvesen pack's lookup
+(`applyKartverketGroundHeights`: one cache, one backoff and one lookup at a
+time for both packs, waiting at most 8 s on a cold cache); Svalbard and Jan
 Mayen are outside its coverage and keep the client's 0 m, within ~25 m of
 their true height. `CCTV_MET_HEIGHTS=0` skips the lookup. The pack is off unless
 `CCTV_MET_ENABLED=1`: MET's licensing page covers its official data but does not

@@ -3028,8 +3028,11 @@ export async function fetchKartverketHeights(
 }
 
 /**
- * Give each Vegvesen camera its own terrain height as the ground prior, in
- * place. Waits at most `waitMs` for positions it has no answer for, and only
+ * Give each camera of a Norwegian pack its own terrain height as the ground
+ * prior, in place. Every pack shares one cache, one backoff and one lookup at a
+ * time: a pack whose positions are missing while another pack's lookup runs
+ * queues its own behind it, so two packs never back off separately against
+ * the same API. Waits at most `waitMs` for positions it has no answer for, and only
  * when more than KARTVERKET_WAIT_MISSING_SHARE of the cameras are missing
  * (a cold cache); a few new cameras or expired misses are looked up in the
  * background. A lookup still running when the wait ends keeps filling the
@@ -3039,38 +3042,36 @@ export async function fetchKartverketHeights(
  * one attempt per backoff, not one per refresh. A lookup cut short only by its
  * shared deadline is resumed on the next refresh without a backoff. Cameras
  * without finite coordinates are skipped. Never throws.
- * CCTV_VEGVESEN_HEIGHTS=0 turns it off.
+ * `envFlag`=0 (CCTV_VEGVESEN_HEIGHTS, CCTV_MET_HEIGHTS) turns it off for that
+ * pack.
  *
- * @param {Array<object>} cameras - Sources from vegvesenCameraToSource().
- * @param {{waitMs?: number, now?: () => number, timeoutMs?: number}} [options]
- *   `timeoutMs` is the lookup's shared deadline.
+ * @param {Array<object>} cameras - Sources inside Kartverket's coverage.
+ * @param {{label?: string, envFlag?: string, waitMs?: number, now?: () => number, timeoutMs?: number}} [options]
+ *   `label` names the pack in the log; `timeoutMs` is the lookup's shared
+ *   deadline.
  * @returns {Promise<number>} How many cameras got a terrain height.
  */
-export async function applyVegvesenGroundHeights(
+export async function applyKartverketGroundHeights(
   cameras,
   {
+    label = 'Vegvesen',
+    envFlag = 'CCTV_VEGVESEN_HEIGHTS',
     waitMs = KARTVERKET_CATALOG_WAIT_MS,
     now = Date.now,
     timeoutMs = KARTVERKET_LOOKUP_TIMEOUT_MS,
   } = {},
 ) {
-  if (String(process.env.CCTV_VEGVESEN_HEIGHTS || '1').trim() === '0') return 0;
+  if (String(process.env[envFlag] || '1').trim() === '0') return 0;
   const list = (Array.isArray(cameras) ? cameras : []).filter(
     (c) => Number.isFinite(c?.lon) && Number.isFinite(c?.lat),
   );
   const startedAt = now();
-  const missing = list.filter((c) => {
+  const unknown = (c, at) => {
     const entry = kartverketHeightCache.get(kartverketKey(c.lon, c.lat));
-    return !entry || entry.expires <= startedAt;
-  });
-  if (
-    missing.length &&
-    !kartverketPending &&
-    startedAt >= kartverketBackoffUntil
-  ) {
-    if (kartverketHeightCache.size + missing.length > KARTVERKET_CACHE_LIMIT) {
-      kartverketHeightCache.clear();
-    }
+    return !entry || entry.expires <= at;
+  };
+  const missing = list.filter((c) => unknown(c, startedAt));
+  if (missing.length && startedAt >= kartverketBackoffUntil) {
     const generation = kartverketGeneration;
     const current = () => generation === kartverketGeneration;
     const sink = {
@@ -3082,13 +3083,26 @@ export async function applyVegvesenGroundHeights(
         });
       },
     };
-    const pending = fetchKartverketHeights(missing, { into: sink, timeoutMs })
-      .then(({ failure }) => {
-        if (failure && !failure.deadline && current()) {
-          kartverketBackoffUntil =
-            now() + kartverketBackoffMs(failure.retryAfter, now());
-        }
-      })
+    // Run once any lookup ahead of it has finished, asking only about what
+    // that one left unknown, and not at all inside a backoff it set.
+    const lookup = () => {
+      const at = now();
+      const still = missing.filter((c) => unknown(c, at));
+      if (!current() || !still.length || at < kartverketBackoffUntil) return;
+      if (kartverketHeightCache.size + still.length > KARTVERKET_CACHE_LIMIT) {
+        kartverketHeightCache.clear();
+      }
+      return fetchKartverketHeights(still, { into: sink, timeoutMs }).then(
+        ({ failure }) => {
+          if (failure && !failure.deadline && current()) {
+            kartverketBackoffUntil =
+              now() + kartverketBackoffMs(failure.retryAfter, now());
+          }
+        },
+      );
+    };
+    const pending = (kartverketPending ?? Promise.resolve())
+      .then(lookup)
       .catch((error) => {
         if (current()) {
           kartverketBackoffUntil = now() + KARTVERKET_FAILURE_BACKOFF_MS;
@@ -3126,10 +3140,26 @@ export async function applyVegvesenGroundHeights(
   }
   if (list.length) {
     console.log(
-      `[CCTV] Kartverket ground heights: ${applied}/${list.length} Vegvesen cameras`,
+      `[CCTV] Kartverket ground heights: ${applied}/${list.length} ${label} cameras`,
     );
   }
   return applied;
+}
+
+/**
+ * Kartverket terrain heights for Statens vegvesen cameras (see
+ * applyKartverketGroundHeights). CCTV_VEGVESEN_HEIGHTS=0 turns it off.
+ *
+ * @param {Array<object>} cameras - Sources from vegvesenCameraToSource().
+ * @param {{waitMs?: number, now?: () => number, timeoutMs?: number}} [options]
+ * @returns {Promise<number>} How many cameras got a terrain height.
+ */
+export function applyVegvesenGroundHeights(cameras, options = {}) {
+  return applyKartverketGroundHeights(cameras, {
+    ...options,
+    label: 'Vegvesen',
+    envFlag: 'CCTV_VEGVESEN_HEIGHTS',
+  });
 }
 
 const NYC_BOROUGHS = new Set([

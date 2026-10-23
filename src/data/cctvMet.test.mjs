@@ -2,17 +2,20 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
-  KARTVERKET_HEIGHT_URL,
   MET_IMAGE_ORIGIN,
   MET_WEBCAM_CATALOG_URL,
   applyMetGroundHeights,
-  clearMetHeightCache,
   loadMetSources,
   metCameraToSource,
   metFacingToHeading,
   parseMetWebcamList,
 } from '../../server/providers/cctv/met.js';
 import { createCctvCatalog } from '../../server/providers/cctv/catalog.js';
+import { KARTVERKET_HEIGHT_URL } from '../../server/providers/cctv/constants.js';
+import {
+  applyVegvesenGroundHeights,
+  clearKartverketHeightCache,
+} from '../../server/providers/cctv/sources.js';
 
 /** One camera row, shaped like the live obs-view.met.no/obswebcam/ page. */
 const row = ({
@@ -142,7 +145,7 @@ test('cameras without an image, off-path frames and bad rows are dropped', () =>
 });
 
 test('the loader dedupes, and failures degrade to an empty pack', async (t) => {
-  clearMetHeightCache();
+  clearKartverketHeightCache();
   t.mock.method(console, 'log', () => {});
   t.mock.method(console, 'warn', () => {});
   const requested = [];
@@ -201,8 +204,9 @@ test('the loader dedupes, and failures degrade to an empty pack', async (t) => {
 });
 
 test('mainland cameras get Kartverket heights; the Arctic ones keep none', async (t) => {
-  clearMetHeightCache();
+  clearKartverketHeightCache();
   t.mock.method(console, 'warn', () => {});
+  t.mock.method(console, 'log', () => {});
   const requested = [];
   t.mock.method(globalThis, 'fetch', async (url) => {
     requested.push(String(url));
@@ -221,7 +225,7 @@ test('mainland cameras get Kartverket heights; the Arctic ones keep none', async
   const bjornoya = camera(74.50384, 18.996419);
   const janMayen = camera(70.922686, -8.715629);
   const cameras = [haukeliseter, buholmsrasa, noHeight, bjornoya, janMayen];
-  await applyMetGroundHeights(cameras, 1000);
+  await applyMetGroundHeights(cameras, { now: () => 1000 });
   assert.equal(requested.length, 1);
   const url = new URL(requested[0]);
   assert.equal(`${url.origin}${url.pathname}`, KARTVERKET_HEIGHT_URL);
@@ -236,10 +240,10 @@ test('mainland cameras get Kartverket heights; the Arctic ones keep none', async
 
   // Heights are cached; a miss is asked about again only after its TTL.
   const again = [camera(59.81186, 7.213865), camera(68.0, 16.0)];
-  await applyMetGroundHeights(again, 2000);
+  await applyMetGroundHeights(again, { now: () => 2000 });
   assert.equal(requested.length, 1);
   assert.equal(again[0].groundElevationM, 986);
-  await applyMetGroundHeights(again, 1000 + 7 * 60 * 60 * 1000);
+  await applyMetGroundHeights(again, { now: () => 1000 + 7 * 60 * 60 * 1000 });
   assert.equal(requested.length, 2);
   assert.equal(
     JSON.parse(new URL(requested[1]).searchParams.get('punkter')).length,
@@ -248,24 +252,55 @@ test('mainland cameras get Kartverket heights; the Arctic ones keep none', async
 });
 
 test('a failed height lookup leaves cameras without heights and backs off', async (t) => {
-  clearMetHeightCache();
+  clearKartverketHeightCache();
   t.mock.method(console, 'warn', () => {});
   let calls = 0;
   t.mock.method(globalThis, 'fetch', async () => {
     calls += 1;
     return new Response('busy', { status: 429 });
   });
+  t.mock.method(console, 'log', () => {});
   const cameras = [camera(59.81186, 7.213865)];
-  await applyMetGroundHeights(cameras, 1000);
+  await applyMetGroundHeights(cameras, { now: () => 1000 });
   assert.equal(cameras[0].groundElevationM, undefined);
-  await applyMetGroundHeights(cameras, 1000 + 60 * 1000);
+  // The shared backoff (30 min without Retry-After) outlasts a refresh.
+  await applyMetGroundHeights(cameras, { now: () => 1000 + 15 * 60 * 1000 });
   assert.equal(calls, 1);
-  await applyMetGroundHeights(cameras, 1000 + 11 * 60 * 1000);
+  await applyMetGroundHeights(cameras, { now: () => 1000 + 31 * 60 * 1000 });
   assert.equal(calls, 2);
 });
 
+test('MET and Vegvesen share one height cache and one backoff', async (t) => {
+  clearKartverketHeightCache();
+  t.mock.method(console, 'warn', () => {});
+  t.mock.method(console, 'log', () => {});
+  let calls = 0;
+  t.mock.method(globalThis, 'fetch', async () => {
+    calls += 1;
+    return new Response('busy', { status: 503 });
+  });
+  // Vegvesen's failure backs both packs off: MET asks nothing.
+  await applyVegvesenGroundHeights([camera(60.0, 9.0)], { now: () => 1000 });
+  assert.equal(calls, 1);
+  const met = [camera(59.81186, 7.213865)];
+  await applyMetGroundHeights(met, { now: () => 2000 });
+  assert.equal(calls, 1);
+  // A height one pack fetched serves the other at the same position.
+  clearKartverketHeightCache();
+  t.mock.method(globalThis, 'fetch', async (url) =>
+    heightAnswer(url, () => ({ z: 986.04, datakilde: 'dtm1' })),
+  );
+  await applyVegvesenGroundHeights([camera(59.81186, 7.213865)]);
+  const fetchMock = t.mock.method(globalThis, 'fetch', async () => {
+    throw new Error('unexpected');
+  });
+  await applyMetGroundHeights(met);
+  assert.equal(fetchMock.mock.callCount(), 0);
+  assert.equal(met[0].groundElevationM, 986);
+});
+
 test('CCTV_MET_HEIGHTS=0 skips the lookup', async (t) => {
-  clearMetHeightCache();
+  clearKartverketHeightCache();
   const fetchMock = t.mock.method(globalThis, 'fetch', async () => {
     throw new Error('unexpected');
   });
