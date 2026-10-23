@@ -6,6 +6,7 @@ import {
 } from '../../server/providers/cctv/cap.js';
 import {
   CCTV_MAX_SOURCES_CEILING,
+  CCTV_SOURCE_CACHE_MS,
   DEFAULT_CCTV_MAX_SOURCES,
 } from '../../server/providers/cctv/constants.js';
 import { createCctvCatalog } from '../../server/providers/cctv/catalog.js';
@@ -159,4 +160,225 @@ test('a pack trimmed to its nearest cameras reports how many it offered', async 
   );
   assert.equal(kept.available, 5);
   assert.deepEqual(kept.region, { west: 0, south: 0, east: 0, north: 4 });
+});
+
+/** A CCTV_SOURCES_JSON value with `count` cameras named `<prefix>-<i>`. */
+const envSources = (prefix, count = 3) =>
+  JSON.stringify(
+    Array.from({ length: count }, (_, i) => ({
+      id: `${prefix}-${i}`,
+      name: `${prefix} ${i}`,
+      lat: 30 + i * 0.01,
+      lon: -97,
+      url: `https://example.test/${prefix}-${i}.jpg`,
+    })),
+  );
+
+/** Let a background refresh that needs no timers run to completion. */
+const settle = () => new Promise((resolve) => setTimeout(resolve, 10));
+
+/** Restore process.env to a snapshot taken with `{ ...process.env }`. */
+const restoreEnv = (saved) => {
+  for (const key of Object.keys(process.env)) {
+    if (!(key in saved)) delete process.env[key];
+  }
+  Object.assign(process.env, saved);
+};
+
+test('an expired catalog is served at once while a slow pack refreshes in the background', async (t) => {
+  const saved = { ...process.env };
+  try {
+    // Live packs run alongside the env pack, so one slow upstream can hold
+    // the refresh open.
+    process.env.CCTV_FORCE_AUSTIN = '1';
+    process.env.CCTV_SOURCES_FILE = '/nonexistent/cctv.json';
+    process.env.CCTV_SOURCES_JSON = envSources('old');
+    let now = 1_000_000;
+    t.mock.method(Date, 'now', () => now);
+    t.mock.method(console, 'warn', () => {});
+    t.mock.method(console, 'log', () => {});
+    const hung = [];
+    let hang = false;
+    t.mock.method(globalThis, 'fetch', () =>
+      hang
+        ? new Promise((_, reject) => {
+            hung.push(() => reject(new Error('upstream gave up')));
+          })
+        : Promise.reject(new Error('offline')),
+    );
+    const getSources = createCctvCatalog({ sourceRoot: '/nonexistent' });
+    assert.deepEqual(
+      (await getSources()).map((s) => s.id),
+      ['old-0', 'old-1', 'old-2'],
+    );
+
+    // Past the TTL, with every live pack's upstream hanging.
+    now += CCTV_SOURCE_CACHE_MS + 1;
+    hang = true;
+    process.env.CCTV_SOURCES_JSON = envSources('new');
+    let timer;
+    const served = await Promise.race([
+      getSources(),
+      new Promise((resolve) => {
+        timer = setTimeout(() => resolve('waited'), 200);
+      }),
+    ]);
+    clearTimeout(timer);
+    assert.notEqual(
+      served,
+      'waited',
+      'a stale request waited for the background refresh',
+    );
+    assert.deepEqual(
+      served.map((s) => s.id),
+      ['old-0', 'old-1', 'old-2'],
+    );
+
+    // Requests during the refresh share it rather than starting another.
+    const pause = () => new Promise((resolve) => setTimeout(resolve, 50));
+    await pause();
+    const inFlight = hung.length;
+    assert.ok(inFlight > 0, 'the refresh reached the hanging upstreams');
+    await getSources();
+    await getSources();
+    await pause();
+    assert.equal(hung.length, inFlight, 'only one refresh ran');
+
+    // When the slow pack gives up, the refreshed catalog replaces the old one.
+    hang = false;
+    for (const giveUp of hung) giveUp();
+    for (let i = 0; i < 50; i += 1) {
+      const ids = (await getSources()).map((s) => s.id);
+      if (ids[0] === 'new-0') break;
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    assert.deepEqual(
+      (await getSources()).map((s) => s.id),
+      ['new-0', 'new-1', 'new-2'],
+    );
+  } finally {
+    restoreEnv(saved);
+  }
+});
+
+test('a failed background refresh keeps the catalog, warns once, and waits a TTL to retry', async (t) => {
+  const saved = { ...process.env };
+  const unhandled = [];
+  const onUnhandled = (reason) => unhandled.push(reason);
+  process.on('unhandledRejection', onUnhandled);
+  try {
+    process.env.CCTV_PREFER_AUSTIN = '0';
+    process.env.CCTV_SOURCES_FILE = '/nonexistent/cctv.json';
+    process.env.CCTV_SOURCES_JSON = envSources('old', 9);
+    process.env.CCTV_MAX_SOURCES = '8';
+    let now = 1_000_000;
+    t.mock.method(Date, 'now', () => now);
+    // Nine cameras over a cap of eight make every refresh warn; throwing from
+    // that warning is how this test makes a refresh reject.
+    let failRefresh = false;
+    let failedRefreshes = 0;
+    const warnings = [];
+    t.mock.method(console, 'warn', (...args) => {
+      const text = args.join(' ');
+      if (failRefresh && text.includes('exceeds cap')) {
+        failedRefreshes += 1;
+        throw new Error('refresh broke');
+      }
+      warnings.push(text);
+    });
+    const getSources = createCctvCatalog({ sourceRoot: '/nonexistent' });
+    const old = await getSources();
+    assert.equal(old.length, 8);
+
+    // Past the TTL the refresh throws: the old catalog is still served.
+    now += CCTV_SOURCE_CACHE_MS + 1;
+    failRefresh = true;
+    assert.equal(await getSources(), old);
+    await settle();
+    assert.equal(failedRefreshes, 1);
+    assert.equal(
+      warnings.filter((w) => w.includes('background catalog refresh failed'))
+        .length,
+      1,
+    );
+
+    // The failure is not retried on every request until the next TTL.
+    assert.equal(await getSources(), old);
+    assert.equal(await getSources(), old);
+    await settle();
+    assert.equal(failedRefreshes, 1, 'a failed refresh was retried at once');
+
+    // After it, a refresh that works replaces the catalog. With no live packs
+    // the refresh finishes before the request that started it returns.
+    now += CCTV_SOURCE_CACHE_MS + 1;
+    failRefresh = false;
+    process.env.CCTV_SOURCES_JSON = envSources('new');
+    await getSources();
+    await settle();
+    const fresh = await getSources();
+    assert.deepEqual(
+      fresh.map((s) => s.id),
+      ['new-0', 'new-1', 'new-2'],
+    );
+    // Trim notes stay with the list they describe, so a request served the
+    // old list during the refresh never reports the new list's notes.
+    assert.deepEqual(
+      getSources.trimmedPacks(old).map((p) => [p.pack, p.available, p.served]),
+      [['env', 9, 8]],
+    );
+    assert.deepEqual(getSources.trimmedPacks(fresh), []);
+    assert.deepEqual(getSources.trimmedPacks(), []);
+    assert.deepEqual(unhandled, []);
+  } finally {
+    process.off('unhandledRejection', onUnhandled);
+    restoreEnv(saved);
+  }
+});
+
+test('an empty background refresh keeps the catalog and waits a TTL before fetching again', async (t) => {
+  const saved = { ...process.env };
+  try {
+    process.env.CCTV_FORCE_AUSTIN = '1';
+    process.env.CCTV_SOURCES_FILE = '/nonexistent/cctv.json';
+    process.env.CCTV_SOURCES_JSON = envSources('old');
+    let now = 1_000_000;
+    t.mock.method(Date, 'now', () => now);
+    t.mock.method(console, 'log', () => {});
+    const warnings = [];
+    t.mock.method(console, 'warn', (...args) => warnings.push(args.join(' ')));
+    let fetches = 0;
+    t.mock.method(globalThis, 'fetch', () => {
+      fetches += 1;
+      return Promise.reject(new Error('offline'));
+    });
+    const getSources = createCctvCatalog({ sourceRoot: '/nonexistent' });
+    const old = await getSources();
+
+    // Past the TTL every pack comes back empty, as in an upstream outage.
+    now += CCTV_SOURCE_CACHE_MS + 1;
+    process.env.CCTV_SOURCES_JSON = '[]';
+    assert.equal(await getSources(), old);
+    for (let i = 0; i < 50; i += 1) {
+      if (warnings.some((w) => w.includes('source refresh returned empty')))
+        break;
+      await settle();
+    }
+    assert.ok(
+      warnings.some((w) => w.includes('serving 3 stale cameras')),
+      'the empty refresh kept the old catalog',
+    );
+
+    // Until the next TTL, requests are served without touching any upstream.
+    const fetchesAfterRefresh = fetches;
+    assert.equal(await getSources(), old);
+    assert.equal(await getSources(), old);
+    await settle();
+    assert.equal(
+      fetches,
+      fetchesAfterRefresh,
+      'an empty refresh reran at once',
+    );
+  } finally {
+    restoreEnv(saved);
+  }
 });

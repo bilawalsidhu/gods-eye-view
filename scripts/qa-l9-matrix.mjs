@@ -1884,7 +1884,7 @@ async function runBrowserGroup(record) {
 
   await step('C15', async () => {
     // CRT/NVG/FLIR are DISPLAY LABELS; the real style ids are retro /
-    // surveillance / thermal (src/ui.js STYLE_STATUS_LABELS). Passing the
+    // surveillance / thermal (src/ui/visualPresets.js STYLE_STATUS_LABELS). Passing the
     // labels made every call a silent no-op that still "passed" — so assert
     // the returned visual state actually changed to the requested style.
     const wanted = [['retro', 'CRT'], ['surveillance', 'NVG'], ['thermal', 'FLIR'], ['normal', 'Normal']];

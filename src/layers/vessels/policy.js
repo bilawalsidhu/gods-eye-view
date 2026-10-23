@@ -1,8 +1,3 @@
-export {
-  PARTIAL_RETENTION_MS,
-  SELECTED_PIN_REFRESHES,
-  AIS_FIRST_CONNECT_LABEL,
-} from './recordPolicy.js';
 import { VESSEL_LABEL_GRID_PX } from '../../data/vesselLabels.js';
 import { msg } from '../../i18n/index.js';
 
