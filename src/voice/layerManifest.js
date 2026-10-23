@@ -233,6 +233,13 @@ const layers = [
     noQuery: 'map overlay; no countable records',
   },
   {
+    id: 'severe-weather-outlooks',
+    aliases: ['severe weather outlooks', 'spc outlooks', 'tornado outlook'],
+    context: false,
+    noQuery:
+      'forecast polygon overlay; not active warnings or observed tornadoes',
+  },
+  {
     id: 'weather-satellite',
     aliases: ['weather satellite', 'clouds', 'cloud imagery'],
     context: false,

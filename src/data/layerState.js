@@ -298,6 +298,13 @@ function satelliteFilterOption() {
 }
 
 const OPTION_GROUPS = Object.freeze({
+  'severe-weather-outlooks': Object.freeze([
+    enumOption('day', 'd', 'day1', ['day1', 'day2'], { day1: '1', day2: '2' }),
+    enumOption('type', 't', 'categorical', ['categorical', 'tornado'], {
+      categorical: 'c',
+      tornado: 't',
+    }),
+  ]),
   traffic: Object.freeze([
     enumOption('roadMode', 'r', null, ['tomtom', 'osm', 'hybrid'], {
       tomtom: 't',
@@ -660,6 +667,12 @@ export const LAYER_STATE_REGISTRY = Object.freeze([
     token: 's',
     disposition: 'enabled+options',
     optionOwner: 'satellites',
+  }),
+  Object.freeze({
+    id: 'severe-weather-outlooks',
+    token: '5',
+    disposition: 'enabled+options',
+    optionOwner: 'severe-weather-outlooks',
   }),
   Object.freeze({
     id: 'street-level',

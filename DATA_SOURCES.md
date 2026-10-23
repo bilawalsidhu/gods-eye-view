@@ -20,6 +20,7 @@ How to read this:
 | **NOAA nowCOAST observed weather** (`nowcoast.noaa.gov/geoserver/observations/{weather_radar,satellite}/ows`, WMS 1.1.1) | Rain radar (MRMS base reflectivity, contiguous US, about 4-minute updates) and Satellite clouds (GOES-19/18 Band 14 regional infrared, about 5-minute updates; global infrared mosaic, hourly). Keyless; layer metadata refreshed every 2 minutes, exact-time images cached for up to 24 hours | [NOAA disclaimer](https://oceanservice.noaa.gov/disclaimer.html) | "NOAA nowCOAST · NWS/OAR MRMS radar; NESDIS GOES and global satellite partners" |
 | **NOAA nowCOAST lightning density** (`nowcoast.noaa.gov/geoserver/observations/lightning_detection/ows`) | Lightning density: 15-minute accumulated strike density on an approximately 8 km grid, Americas and Pacific. Keyless; layer metadata refreshed every 10 minutes, exact-time images cached for up to 24 hours | NOAA Level-5 derived product from Vaisala NLDN/GLD360; the [product description](https://ocean.weather.gov/lightning/lightning_pdd.php) permits public distribution of this density product, not of raw Vaisala detections | "NOAA/NWS nowCOAST; derived from Vaisala NLDN/GLD360" |
 | **NOAA NHC / CPHC advisories** (`www.nhc.noaa.gov/CurrentStorms.json` + the `mapservices.weather.noaa.gov` tropical weather summary MapServer) | Cyclone advisories: storm positions, forecast tracks, points and cones for the Atlantic and eastern/central North Pacific. Keyless through `/api/cyclones`; cached for 5 minutes | [NWS public-data terms](https://www.weather.gov/disclaimer); no endorsement implied | "NOAA/NWS NHC / CPHC" |
+| **NOAA SPC outlooks** ([FeatureServer](https://mapservices.weather.noaa.gov/vector/rest/services/outlooks/SPC_wx_outlks/FeatureServer)) | Day 1/2 categorical and tornado-probability forecast polygons; keyless through `/api/spc-outlooks/{product}`, five-minute cache | U.S. government public-domain data; [NWS terms/disclaimer](https://www.weather.gov/disclaimer). Fetch at runtime; no endorsement implied | "NOAA/NWS Storm Prediction Center"; translucent forecast outlook, not active NWS warnings |
 | **Mapillary** (vector tiles, Graph API, MapillaryJS) | Street Level: coverage lines, image cones and the embedded viewer. Coverage tiles kept in server memory for 24 h | Imagery [CC BY-SA 4.0](https://www.mapillary.com/terms); API under the Mapillary terms with a client token | "© Mapillary contributors, CC BY-SA 4.0", shown on the globe while the provider is on |
 | **Google Street View** (Maps JavaScript API) | Street Level, on the Google 3D map only (Google's terms): Google's panorama viewer and nearest-panorama lookups; panorama dates and addresses kept for the session only | Google Maps Platform ToS (your own key + billing; every panorama load is billed) | "Street View imagery © Google" on the globe while the provider is on, and Google's logo and terms in the viewer |
 | **KartaView** (`api.kartaview.org` coverage tiles and photo API, `cdn.kartaview.org` image proxy, `storage*.openstreetcam.org` photos) | Street Level: coverage lines (z13–14 JSON tiles; with the imagery filter on, KartaView's filtered PNG tiles as a mask), nearest-photo lookups, the photo's sequence and the photo itself, fetched by the browser. Keyless; nothing cached beyond the session | Imagery [CC BY-SA 4.0](https://kartaview.org/terms) (KartaView terms §4); the public API needs no token | "© KartaView contributors, CC BY-SA 4.0", shown on the globe while the provider is on |
@@ -420,6 +421,60 @@ This implementation is original; those contributions have not been merged here.
 - **Coverage:** 110°E across the Pacific/Americas to 0°, 25°S–80°N. Display exact advertised
   observations; ten-minute metadata refresh, source-matched colors, bounded shared imagery cache.
 
+### Severe weather outlooks: NOAA SPC
+
+
+- **Existing capability:** Weather → Severe Weather Outlooks offers Day 1/2
+  categorical and tornado-probability bands for the contiguous U.S. The weather
+  card shows the legend, selected area's hazard/risk, UTC issue and valid period,
+  and an [official SPC outlook](https://www.spc.noaa.gov/products/outlook/) link.
+  Tornado probability means a tornado within 25 miles of a point, not a current
+  tornado or warning. Significant-tornado hatching is not included.
+- **Delivery:** four allowlisted products (`day1-categorical`, `day1-tornado`,
+  `day2-categorical`, `day2-tornado`), fixed NOAA origin, GET only, no query
+  passthrough or redirects. Five-minute polling/cache, coalesced requests,
+  15-second upstream deadline, 4 MiB response cap, 2,000 features/100,000 vertices
+  maximum. Failed requests back off for 30 seconds; stale fallback is labelled,
+  limited to 30 minutes since successful retrieval, and never beyond expiry.
+  Expired geometry is removed even between polls. Invalid/truncated snapshots
+  fail closed rather than imply no risk. Empty means no polygons reported,
+  not an assurance of safe weather; an empty collection carries no issue times.
+- **Rendering:** NOAA's official FeatureServer color conventions, translucent
+  fills, and exterior/interior boundaries classified on terrain and 3D tiles.
+  The service supplies risk bands with holes; preserving those holes prevents
+  nested areas from accumulating risk colors. Only one day/type is displayed.
+- **Validated observation (2026-10-21, 08:07 UTC):** live service metadata confirmed
+  layers 1/3/9/11, polygon geometry, `JSON, geoJSON, PBF`, native NAD83 (4269),
+  and maxRecordCount 2,000. Queries explicitly request `outSR=4326&f=geojson`.
+  All returned HTTP 200 GeoJSON FeatureCollections, longitude/latitude geometry
+  without a CRS member, including Polygon, MultiPolygon and interior rings.
+
+  | Product / layer       | Features | Uncompressed bytes | Issue (UTC)  | Valid period (UTC)          |
+  | --------------------- | -------: | -----------------: | ------------ | --------------------------- |
+  | Day 1 categorical / 1 |        4 |              9,721 | Oct 21 05:51 | Oct 21 12:00 – Oct 22 12:00 |
+  | Day 1 tornado / 3     |        2 |              4,414 | Oct 21 05:51 | Oct 21 12:00 – Oct 22 12:00 |
+  | Day 2 categorical / 9 |        3 |              7,049 | Oct 21 05:47 | Oct 22 12:00 – Oct 23 12:00 |
+  | Day 2 tornado / 11    |        2 |              2,489 | Oct 21 05:47 | Oct 22 12:00 – Oct 23 12:00 |
+
+  These sizes include all properties (`outFields=*`), not only the runtime fields.
+  Sample properties: `dn:3`, `label:"MRGL"`, `issue:"202610210551"`,
+  `valid:"202610211200"`, `expire:"202610221200"`, `fill:"#66A366"`,
+  `stroke:"#005500"`. Timestamp fields are compact UTC strings, not epoch dates;
+  `idp_filedate`/`idp_ingestdate` are separate epoch-millisecond ingest metadata.
+  Responses advertised `max-age=0,must-revalidate` and ETags. An Origin-header
+  request returned matching CORS permission; a proxy is not needed for keys or
+  basic CORS, but bounds public-service traffic and centralizes failures.
+
+- **Publication cadence:** the [service metadata](https://mapservices.weather.noaa.gov/vector/rest/services/outlooks/SPC_wx_outlks/FeatureServer?f=pjson)
+  lists Day 1 updates at 01/06/13/16:30/20 UTC and Day 2 at 06/17 UTC.
+  Five-minute polling is not a claim that forecasts are issued every five minutes.
+  No documented quota or availability SLA was established; no load testing was
+  performed. See [SPC GIS](https://www.spc.noaa.gov/gis/) for authoritative products.
+- **Browser validation:** the SPC smoke gate passed against both live NOAA and
+  synthetic fixtures on Esri and OSM using headless software WebGL. Fixtures
+  additionally verify real map picking and an unfilled polygon hole. Google
+  Photorealistic 3D remains unverified without a configured, loaded Google mesh;
+  the renderer explicitly requests Cesium `ClassificationType.BOTH`.
 ### Community weather prior art
 
 The weather design builds on Gustavo Beneduzi's retained GFS/ECMWF contribution

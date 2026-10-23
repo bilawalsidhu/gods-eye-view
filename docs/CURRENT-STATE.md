@@ -1,5 +1,31 @@
 # God's Eye View Current State
 
+## SPC severe weather outlooks
+
+Weather includes an opt-in, free/keyless **Severe Weather Outlooks** layer:
+NOAA SPC Day 1/2 categorical and tornado-probability polygons. Shared weather-card
+controls select day/type, show official colors, UTC issue/validity, source link,
+and selected forecast details (map click or accessible area list). This is a
+forecast outlook, not an active NWS warning; risk areas are not additive.
+Significant-tornado hatching is outside this initial feature.
+
+The fixed-origin `/api/spc-outlooks/{product}` proxy caches/coalesces for five
+minutes; the layer follows manager polling and cancellation. Loading, empty,
+expired, stale and unavailable states remain distinct. Stale context is bounded
+to 30 minutes from successful retrieval and removed at expiry. Geometry preserves
+NOAA's risk-band holes and drapes on terrain and 3D tiles via Cesium ground
+classification. Tornado fills use 70% opacity so the brown 5% band remains
+distinguishable over desert imagery; categorical fills remain at 35%. Ground
+boundaries draw in risk order so an outer band's hole line cannot cover the
+higher-risk boundary. Day/type restore through v2 shares and saved state (provisional
+token `5`; rerun the allocation check after rebasing). No key, database or new
+dependency is required. See [source validation and limits](../DATA_SOURCES.md#severe-weather-outlooks-noaa-spc).
+Focused browser gate: `node scripts/qa-spc-outlooks.mjs --url http://localhost:4173`.
+SPC selector labels sit above their buttons so long English and translated labels
+cannot overlap the controls. Fixture mode checks nested 2%/5% tornado areas,
+unfilled holes, and actual text bounds at desktop and mobile widths in English,
+Spanish and Russian.
+
 Analyst region queries resolve unique Natural Earth names offline without
 geocoding, so Gold Coast and Ivory Coast name the West African natural regions.
 Duplicate names require a geocoded containment anchor; when several entries for

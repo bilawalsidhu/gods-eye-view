@@ -345,6 +345,21 @@ html:not([lang='en']) .rail-card-setting {
 .rail-card-setting .rail-card-chips {
   margin-top: 0;
 }
+/* SPC's descriptive labels do not fit the compact weather-label column. */
+.weather-card[data-card-id='severe-weather-outlooks'] .rail-card-settings {
+  display: block;
+}
+.weather-card[data-card-id='severe-weather-outlooks'] .rail-card-setting {
+  grid-column: auto;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: start;
+  gap: 4px;
+}
+.weather-card[data-card-id='severe-weather-outlooks'] .rail-card-setting-label {
+  min-width: 0;
+  white-space: normal;
+  line-height: 1.4;
+}
 .rail-card-setting-range-row {
   display: flex;
   grid-column: 2;
