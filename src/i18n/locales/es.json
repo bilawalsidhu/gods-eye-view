@@ -663,8 +663,6 @@
   "STALE · cached {age}": "DESACTUALIZADO · en caché hace {age}",
   "LIVE · updated {age}": "EN VIVO · actualizado {age}",
   "<1m ago": "hace <1 min",
-  "FIRE · {frp} MW": "INCENDIO · {frp} MW",
-  "▲ {frp} MW": "▲ {frp} MW",
   "FIRE": "INCENDIO",
   "FIRES": "INCENDIOS",
   "{value} conf": "confianza {value}",
@@ -1226,7 +1224,6 @@
   "Routing timed out": "El cálculo de la ruta agotó el tiempo de espera",
   "Routing unavailable — no response from the routing service": "Rutas no disponibles — sin respuesta del servicio de rutas",
   "Routing unavailable": "Rutas no disponibles",
-  "Fire · FRP {frp} MW": "Incendio · FRP {frp} MW",
   "Not contained or unknown": "Sin contener o desconocido",
   "Under 50% contained": "Contenido por debajo del 50%",
   "50–99% contained": "Contenido al 50–99%",
@@ -2943,5 +2940,23 @@
   "hemisphere|E": "E",
   "hemisphere|W": "O",
   "OK": "OK",
-  "{category} ({count})": "{category} ({count})"
+  "{category} ({count})": "{category} ({count})",
+  "THERMAL DETECTION · {frp}": "DETECCIÓN TÉRMICA · {frp}",
+  "{value} MW": "{value} MW",
+  "confidence n/a": "confianza n/d",
+  "▲ {frp}": "▲ {frp}",
+  "Thermal detection · {frp}": "Detección térmica · {frp}",
+  "PARTIAL · {sources} unavailable": "PARCIAL · {sources} no disponible",
+  "FIRE · {frp}": "INCENDIO · {frp}",
+  "CONAE GOES · thermal anomaly, not a confirmed wildfire": "CONAE GOES · anomalía térmica, incendio forestal no confirmado",
+  "Fire · {frp}": "Incendio · {frp}",
+  "FRP {value}": "FRP {value}",
+  "{count} DETECTIONS": {
+    "one": "{count} DETECCIÓN",
+    "many": "{count} DE DETECCIONES",
+    "other": "{count} DETECCIONES"
+  },
+  "confidence not published": "confianza no publicada",
+  "THERMAL DETECTION": "DETECCIÓN TÉRMICA",
+  "FRP n/a": "FRP n/d"
 }

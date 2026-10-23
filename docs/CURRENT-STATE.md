@@ -1,5 +1,16 @@
 # God's Eye View Current State
 
+Active Fires optionally includes CONAE’s `FocosGOES_24hs` WFS product when
+`CONAE_GOES_ENABLED=1`. It uses the existing `/api/firms` snapshot and map layer,
+with an independent 10-minute memory cache, fixed upstream URL, bounded reads,
+single-flight refresh and failure backoff. FIRMS retains its key, quota and
+30-minute memory/disk cache. Either provider can run alone; partial failures
+and stale data remain visible. CONAE acquisition dates explicitly identify
+UTC-3 and are converted to UTC. Missing GOES confidence remains null in cards,
+selection context and analyst records. These are thermal observations, not
+confirmed wildfire incidents. See [CONAE-GOES.md](CONAE-GOES.md) for the source
+contract, implementation rationale and live-source verification limits.
+
 Analyst region queries resolve unique Natural Earth names offline without
 geocoding, so Gold Coast and Ivory Coast name the West African natural regions.
 Duplicate names require a geocoded containment anchor; when several entries for
@@ -6062,3 +6073,5 @@ when their footprints touch or contain one another, never across a seam toleranc
 - `scripts/qa-form-fields.mjs` exercises native selections, number validity,
   calibration commit/cancel and stale-camera/disposal guards against an installed
   controller with fixture ports, plus default/Cyber and narrow translated layouts.
+
+The CONAE GOES thermal detections, mixed-source counts and partial-source warnings support English, Spanish, Russian and Simplified Chinese (`zh-CN`). Provider and station names remain unchanged; numbers and dates follow the selected UI locale.
