@@ -495,6 +495,7 @@ test('containment legend uses the existing thresholds, colours and incident coun
       ['#ff7a00', 2],
       ['#ffb300', 2],
       ['#8bc34a', 2],
+      ['#b388ff', 0],
     ],
   );
   assert.ok(
@@ -502,14 +503,11 @@ test('containment legend uses the existing thresholds, colours and incident coun
       ({ label }) => typeof label === 'string' && label.length,
     ),
   );
-  assert.equal(
-    controls.legend[0].blurb,
-    'Colour shows reported containment. Perimeters are simplified to about 100 m.',
-  );
+  assert.match(controls.legend[0].blurb, /estimated areas.*INFONA/);
   h.layer.destroy();
   assert.deepEqual(
     h.layer.getRowControls().legend.map(({ count }) => count),
-    [0, 0, 0, 0],
+    [0, 0, 0, 0, 0],
   );
 });
 
@@ -552,3 +550,67 @@ for (const action of ['disable', 'destroy', 'selection']) {
     if (action !== 'destroy') h.layer.destroy();
   });
 }
+
+test('INFONA estimates stay selectable, separate from containment counts, with partial coverage warnings', async () => {
+  const estimate = {
+    ...row,
+    stableId: 'infona-fixture',
+    source: 'INFONA',
+    geometryKind: 'estimated-active-fire-area',
+    hectares: 7.36,
+    containedPct: null,
+  };
+  const h = harness(
+    {
+      getSnapshot: async () => [estimate],
+      getStatus: () => ({
+        infona: { status: 'ok' },
+        wfigs: { status: 'unavailable' },
+      }),
+    },
+    { pick: () => ({ id: 'fire-perimeter:infona-fixture:0' }) },
+  );
+  await h.layer.update();
+  assert.deepEqual(
+    h.layer.getRowControls().legend.map((b) => b.count),
+    [0, 0, 0, 0, 1],
+  );
+  assert.match(h.layer.getStats().error, /WFIGS: unavailable/);
+  h.clicks.handler({ position: { x: 10, y: 10 } });
+  assert.match(
+    h.overlay.entries.get('fire-perimeters')[0].title,
+    /^FIRE ESTIMATE/,
+  );
+  await h.layer.update();
+  assert.match(h.layer.getStats().error, /WFIGS: unavailable/);
+  h.layer.destroy();
+});
+
+test('INFONA geometry refreshes when its report date and area stay unchanged', async () => {
+  let estimate = {
+    ...row,
+    stableId: 'infona-same-day',
+    source: 'INFONA',
+    geometryKind: 'estimated-active-fire-area',
+    reportTime: Date.UTC(2026, 9, 15),
+    updatedTime: null,
+    hectares: 7.36,
+  };
+  const h = harness({ getSnapshot: async () => [estimate] });
+  await h.layer.update();
+  const original = h.sources[0].entities.values[0];
+  const before = h.layer.getAnalystRecords()[0];
+  await h.layer.update();
+  assert.equal(h.sources[0].entities.values[0], original);
+
+  estimate = {
+    ...estimate,
+    polygons: [[ring.map(([lon, lat]) => [lon + 0.01, lat])]],
+  };
+  await h.layer.update();
+  assert.notEqual(h.sources[0].entities.values[0], original);
+  assert.ok(
+    Math.abs(h.layer.getAnalystRecords()[0].lon - before.lon - 0.01) < 1e-8,
+  );
+  h.layer.destroy();
+});

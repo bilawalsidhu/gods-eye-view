@@ -28,6 +28,15 @@ const FEED_ERRORS = new Set([
   msg('OpenSky auth failed'),
 ]);
 const FEED_ERROR_PATTERNS = [
+  [
+    /^(WFIGS|INFONA): (stale|unavailable|truncated)$/,
+    ([, source, status]) =>
+      status === 'stale'
+        ? t('{source}: stale', { source })
+        : status === 'truncated'
+          ? t('{source}: truncated', { source })
+          : t('{source}: unavailable', { source }),
+  ],
   // Street Level provider errors (providers/{kartaview,panoramax}/source.js),
   // ahead of the generic "<source> HTTP <status>".
   [

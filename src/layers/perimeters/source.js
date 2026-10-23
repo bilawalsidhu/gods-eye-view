@@ -8,7 +8,9 @@ const msg = (text) => text;
 export function createWfigsPerimeterSource({
   fetchImpl = (...args) => globalThis.fetch(...args),
 } = {}) {
+  let status = null;
   return {
+    getStatus: () => status,
     async getSnapshot({ signal } = {}) {
       signal?.throwIfAborted();
       const response = await fetchImpl('/api/fire-perimeters', { signal });
@@ -21,6 +23,7 @@ export function createWfigsPerimeterSource({
       signal?.throwIfAborted();
       if (!Array.isArray(payload?.rows))
         throw new Error(msg('Malformed perimeter snapshot'));
+      status = payload.sources ?? null;
       return payload.rows;
     },
   };

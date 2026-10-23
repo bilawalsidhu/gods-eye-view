@@ -1248,7 +1248,6 @@
   "Under 50% contained": "Локализован менее чем на 50%",
   "50–99% contained": "Локализован на 50–99%",
   "Fully contained": "Полностью локализован",
-  "Colour shows reported containment. Perimeters are simplified to about 100 m.": "Цвет показывает заявленную степень локализации. Контуры упрощены примерно до 100 м.",
   "MORE DETAIL · 30 m": "БОЛЬШЕ ДЕТАЛЕЙ · 30 м",
   "Sentinel-2 and Landsat via HLS, 30 m, every 2–6 days": "Sentinel‑2 и Landsat через HLS, 30 м, каждые 2–6 дней",
   "DAILY OVERVIEW · 250 m": "ЕЖЕДНЕВНЫЙ ОБЗОР · 250 м",
@@ -3010,5 +3009,16 @@
   "hemisphere|E": "В",
   "hemisphere|W": "З",
   "OK": "НОРМА",
-  "{category} ({count})": "{category} ({count})"
+  "{category} ({count})": "{category} ({count})",
+  "FIRE ESTIMATE · {name}": "ОЦЕНКА ПОЖАРА · {name}",
+  "US colours show reported containment. Purple: estimated areas from grouped thermal detections in Paraguay (INFONA), with no containment measurement. Boundaries are simplified to about 100 m.": "Цвета для США показывают заявленную локализацию пожара. Фиолетовый: оценочные площади по сгруппированным тепловым аномалиям в Парагвае (INFONA), без данных о локализации. Границы упрощены примерно до 100 м.",
+  "Estimated area unknown": "Оценочная площадь неизвестна",
+  "{source}: unavailable": "{source}: недоступен",
+  "INFONA · grouped thermal detections": "INFONA · сгруппированные тепловые аномалии",
+  "{source}: stale": "{source}: устаревшие данные",
+  "{area} ha estimated": "Оценочная площадь: {area} га",
+  "Report date: {date}": "Дата отчёта: {date}",
+  "{source}: truncated": "{source}: неполные данные",
+  "Report date unavailable": "Дата отчёта недоступна",
+  "Estimated fire area (INFONA)": "Оценочная площадь пожара (INFONA)"
 }

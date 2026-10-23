@@ -885,7 +885,6 @@
   "Under 50% contained": "控制低于 50%",
   "50–99% contained": "控制 50–99%",
   "Fully contained": "已全部控制",
-  "Colour shows reported containment. Perimeters are simplified to about 100 m.": "颜色表示报告的控制比例。周界简化至约 100 m。",
   "Malformed perimeter snapshot": "周界快照格式错误",
   "radio tag|All": "全部",
   "News": "新闻",
@@ -2809,5 +2808,16 @@
   "Gemini voice sessions have a time limit. When a session expires, start voice again for a new conversation.": "Gemini 语音会话有时长限制。会话到期后，请重新启动语音以开始新对话。",
   "Show the street-level view full screen (Esc shrinks it)": "全屏显示街景视图（按 Esc 缩小）",
   "OK": "正常",
-  "{category} ({count})": "{category}（{count}）"
+  "{category} ({count})": "{category}（{count}）",
+  "FIRE ESTIMATE · {name}": "火区估算 · {name}",
+  "{area} ha estimated": "估算面积 {area} ha",
+  "Estimated area unknown": "估算面积未知",
+  "INFONA · grouped thermal detections": "INFONA · 聚合热异常探测",
+  "Report date: {date}": "报告日期：{date}",
+  "Report date unavailable": "报告日期不可用",
+  "Estimated fire area (INFONA)": "估算火区（INFONA）",
+  "US colours show reported containment. Purple: estimated areas from grouped thermal detections in Paraguay (INFONA), with no containment measurement. Boundaries are simplified to about 100 m.": "美国区域的颜色表示报告的火势控制程度。紫色：巴拉圭基于聚合热异常探测估算的区域（INFONA），无火势控制程度测量数据。边界已按约 100 m 简化。",
+  "{source}: stale": "{source}：过期",
+  "{source}: truncated": "{source}：数据不完整",
+  "{source}: unavailable": "{source}：不可用"
 }
