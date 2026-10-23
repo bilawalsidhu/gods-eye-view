@@ -559,11 +559,12 @@ export class IntelHUD {
    * @returns {string} Formatted DMS string, e.g. `"38°53'23.10"N"`.
    */
   _toDMS(decimal, type) {
-    const abs = Math.abs(decimal);
-    const deg = Math.floor(abs);
-    const minFloat = (abs - deg) * 60;
-    const min = Math.floor(minFloat);
-    const sec = ((minFloat - min) * 60).toFixed(2);
+    // Round once, in hundredths of a second, so a value that rounds up to
+    // 60.00" carries into the minutes and degrees instead of printing 60.
+    const hundredths = Math.round(Math.abs(decimal) * 360000);
+    const deg = Math.floor(hundredths / 360000);
+    const min = Math.floor(hundredths / 6000) % 60;
+    const sec = ((hundredths % 6000) / 100).toFixed(2);
 
     let dir;
     if (type === 'lat') dir = decimal >= 0 ? 'N' : 'S';

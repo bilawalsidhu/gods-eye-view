@@ -1,5 +1,11 @@
 # God's Eye View Current State
 
+The HUD's LAT/LON degrees-minutes-seconds readout rounds the coordinate once, to
+hundredths of a second, and then splits it. A value within 0.005" of the next
+whole minute carries into the minutes and degrees, so `-122.35` reads
+`122°21'00.00"W` rather than `122°20'60.00"W`. The field widths and hemisphere
+letters are unchanged.
+
 Analyst region queries resolve unique Natural Earth names offline without
 geocoding, so Gold Coast and Ivory Coast name the West African natural regions.
 Duplicate names require a geocoded containment anchor; when several entries for
