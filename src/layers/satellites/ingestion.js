@@ -36,7 +36,12 @@ export function createIngestion({
               if (!res.ok) return { ...groupDef, entries: [], ok: false };
               const entries = parts.orbits.parseTLE(res.text);
               updateSignal.throwIfAborted();
-              return { ...groupDef, entries, ok: entries.length > 0 };
+              return {
+                ...groupDef,
+                entries,
+                ok: entries.length > 0,
+                stale: Boolean(res.stale),
+              };
             } catch (error) {
               if (updateSignal.aborted || error?.name === 'AbortError')
                 throw error;
@@ -91,6 +96,7 @@ export function createIngestion({
         // catalog or those labels stay stale for the life of the session.
         layerState._detectionObjects.clear();
         layerState._denseIds = [];
+        layerState._denseStale = false;
         layerState._denseCursor = 0;
         layerState._denseLoadController?.abort();
         layerState._denseLoadController = null;
@@ -102,11 +108,13 @@ export function createIngestion({
         // Process all TLE entries in CATALOG_GROUPS order
         const allEntries = [];
         for (const r of results) {
-          for (const e of r.entries) allEntries.push({ ...e, group: r.tag });
+          for (const e of r.entries)
+            allEntries.push({ ...e, group: r.tag, stale: r.stale });
         }
 
         // Deduplicate by NORAD ID — first (most specific) group tag wins
         const seen = new Set();
+        let coreStale = false;
 
         for (const entry of allEntries) {
           const satrec = twoline2satrec(entry.line1, entry.line2);
@@ -122,6 +130,8 @@ export function createIngestion({
             satrec,
             group: entry.group,
           });
+
+          coreStale ||= entry.stale;
 
           // Propagate initial position
           const pos = parts.orbits.propagatePosition(satrec, now);
@@ -157,6 +167,7 @@ export function createIngestion({
           parts.labels._syncIssOverlay();
         }
 
+        layerState._coreStale = coreStale;
         layerState._count = layerState._points.size;
         layerState._catalogRevision++;
         layerState._lastUpdate = Date.now();

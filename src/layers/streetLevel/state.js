@@ -2,12 +2,11 @@ import { FILTER_DEFAULT } from './policy.js';
 
 /**
  * The per-image fields of `state.street` with no image open; closing resets
- * exactly these (host, render mode and follow availability outlive an image).
+ * exactly these (host and render mode outlive an image).
  */
 export function freshStreet() {
   return {
     open: false,
-    follow: false,
     providerId: null,
     providerName: null,
     providerLabel: null,
@@ -39,19 +38,15 @@ export function createState({ services }) {
     services,
     viewer: null,
     enabled: false,
-    initialized: false,
-    destroyed: false,
     listeners: new Set(),
     notify: null,
     /** Shared imagery filter, in the stored (relative-days) form. */
     filter: { ...FILTER_DEFAULT },
-    /** @type {Map<string, {def: object, instance: object, on: boolean}>} */
+    /** @type {Map<string, {def: object, instance: object, on: boolean, status: object|null}>} */
     providers: new Map(),
 
     street: {
       host: null,
-      /** Whether the active map stack allows following (Google 3D only). */
-      followAvailable: false,
       /** 'letterbox' shows the whole image; 'fill' crops it to the frame. */
       renderMode: 'letterbox',
       ...freshStreet(),
@@ -59,9 +54,6 @@ export function createState({ services }) {
 
     /** Whether the camera is low enough for a ground click to open an image. */
     groundClickReady: false,
-
-    /** 'terrain' on Google 3D at street zoom (overlays on the bare earth), else 'draped'. */
-    surface: 'draped',
 
     marker: { collection: null, billboard: null, look: null },
     clickHandler: null,

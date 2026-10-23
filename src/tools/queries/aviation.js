@@ -11,9 +11,12 @@ import {
 } from '../area.js';
 import {
   LIMIT_SCHEMA,
+  breakdown,
+  breakdownPhrase,
   capRows,
   countNoun,
   isoTime,
+  numericSummary,
   thinEvenly,
 } from '../results.js';
 
@@ -32,6 +35,31 @@ const MILITARY_SCHEMA = Object.freeze({
   description: 'Use the military aircraft feed instead of the general feed.',
 });
 const MAX_TRACK_POINTS = 200;
+const GROUP_LABELS = Object.freeze({
+  airline: 'airline',
+  operator: 'operator',
+  origin_country: 'country',
+  type_code: 'type',
+});
+
+/**
+ * The ICAO airline designator a callsign flies under: three letters, then a
+ * flight number that starts with a digit, seven characters at most (SWA1234,
+ * UAL12A, BAW1). Registrations used as callsigns (N123AB, GABCD) have no
+ * designator; Philippine RP-C1234 and Cuban CU-T1240, which read like one
+ * without their hyphen, are excluded too.
+ */
+export function airlineDesignator(callsign) {
+  const text = String(callsign ?? '')
+    .trim()
+    .toUpperCase();
+  if (/^(?:RPC|CUT)\d{4}$/.test(text)) return null;
+  const match = /^([A-Z]{3})\d[0-9A-Z]{0,3}$/.exec(text);
+  return match ? match[1] : null;
+}
+
+const groupValue = (field) =>
+  field === 'airline' ? (row) => airlineDesignator(row.callsign) : undefined;
 
 const round = (value, digits) =>
   Number.isFinite(value) ? Number(value.toFixed(digits)) : null;
@@ -82,7 +110,11 @@ export const aircraftInArea = defineTool({
   title: 'Aircraft in an area',
   description:
     'Aircraft currently reported inside an area, nearest the center first. ' +
-    'Optionally military aircraft only, airborne only, or within an altitude band.',
+    'Optionally military aircraft only, airborne only, or within an altitude band. ' +
+    'group_by counts every matched aircraft by airline (the ICAO designator ' +
+    'in its callsign), operator, country or type, and ' +
+    'stats summarizes airborne altitude and speed; both cover all matches, not ' +
+    'just the rows returned.',
   inputSchema: {
     type: 'object',
     properties: {
@@ -91,6 +123,18 @@ export const aircraftInArea = defineTool({
       airborne_only: { type: 'boolean' },
       min_altitude_m: { type: 'number', minimum: -500, maximum: 30000 },
       max_altitude_m: { type: 'number', minimum: -500, maximum: 30000 },
+      group_by: {
+        type: 'string',
+        enum: Object.keys(GROUP_LABELS),
+        description:
+          'Count matched aircraft by this field, largest first. Feeds that do not ' +
+          'report the field count those aircraft as unknown.',
+      },
+      stats: {
+        type: 'boolean',
+        description:
+          'Summarize airborne altitude and speed over matched aircraft.',
+      },
       limit: LIMIT_SCHEMA,
     },
     required: ['area'],
@@ -128,9 +172,14 @@ export const aircraftInArea = defineTool({
       ...(regional ? [`regional feed: ${snapshot.coverage}`] : []),
       ...(snapshot.freshness === 'stale' ? ['data may be stale'] : []),
     ];
+    const groups = args.group_by
+      ? breakdown(rows, args.group_by, groupValue(args.group_by))
+      : null;
+    const airborne = rows.filter((row) => !row.on_ground);
     return {
       summary:
         `${rows.length} ${kind} in ${area.label}` +
+        (groups ? breakdownPhrase(groups, GROUP_LABELS[args.group_by]) : '') +
         (notes.length ? ` (${notes.join('; ')}).` : '.'),
       data: {
         view: suggestView(services, {
@@ -138,6 +187,16 @@ export const aircraftInArea = defineTool({
           layers: [args.military ? 'military' : 'flights'],
         }),
         ...capRows(rows, args.limit),
+        ...(groups ? { breakdown: groups } : {}),
+        ...(args.stats
+          ? {
+              // Parked aircraft would pull both figures toward zero.
+              stats: {
+                altitude_m: numericSummary(airborne, 'altitude_m'),
+                speed_mps: numericSummary(airborne, 'speed_mps'),
+              },
+            }
+          : {}),
         ...snapshotInfo(snapshot),
       },
     };

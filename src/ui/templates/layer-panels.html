@@ -27,25 +27,25 @@
         <img id="cctv-frame" alt="CCTV feed frame" />
         <canvas id="cctv-video" class="cctv-frame" hidden></canvas>
       </div>
-      <div id="cctv-source-badge" role="status" aria-live="polite" data-i18n>SOURCE · UNKNOWN</div>
+      <div id="cctv-source-badge" class="gev-status-badge" role="status" aria-live="polite" data-i18n>SOURCE · UNKNOWN</div>
       <div id="cctv-meta" data-i18n>Enable CCTV to load camera intersections</div>
       <div class="cctv-controls">
         <button id="cctv-enable-btn" class="scene-btn" data-i18n>CCTV OFF</button>
-        <button id="cctv-nearest-btn" class="scene-btn" data-i18n>NEAREST</button>
+        <button id="cctv-nearest-btn" type="button" class="gev-action-button scene-btn" data-i18n>NEAREST</button>
       </div>
       <div class="cctv-controls">
-        <button id="cctv-prev-btn" class="scene-btn" data-i18n>PREV</button>
-        <select id="cctv-camera-select" aria-label="CCTV camera" data-i18n-aria-label></select>
-        <button id="cctv-next-btn" class="scene-btn" data-i18n>NEXT</button>
+        <button id="cctv-prev-btn" type="button" class="gev-action-button scene-btn" data-i18n>PREV</button>
+        <select class="gev-field" id="cctv-camera-select" aria-label="CCTV camera" data-i18n-aria-label></select>
+        <button id="cctv-next-btn" type="button" class="gev-action-button scene-btn" data-i18n>NEXT</button>
       </div>
       <div class="cctv-controls">
-        <button id="cctv-focus-btn" class="scene-btn" data-i18n>FOCUS</button>
+        <button id="cctv-focus-btn" type="button" class="gev-action-button scene-btn" data-i18n>FOCUS</button>
         <button id="cctv-coverage-btn" class="scene-btn" data-i18n>COVERAGE OFF</button>
         <button id="cctv-auto-hop-btn" class="scene-btn" data-i18n>AUTO HOP OFF</button>
       </div>
       <div class="cctv-controls">
         <button id="cctv-projection-btn" class="scene-btn" data-i18n>PROJECTION ON</button>
-        <span id="cctv-quality-chip" data-i18n-runtime>CAL · --</span>
+        <span id="cctv-quality-chip" class="gev-status-badge gev-status-badge--box" data-i18n-runtime>CAL · --</span>
       </div>
       <div class="cctv-calibration-block">
         <div class="cctv-calibration-header">
@@ -62,8 +62,8 @@
           <button class="cctv-cal-value" data-cal-field="east" title="East offset from catalog position (m) — click to type" data-i18n-title>ΔE --</button>
         </div>
         <div class="cctv-controls cctv-calibration-actions">
-          <button id="cctv-calib-save-btn" class="scene-btn" data-i18n>SAVE CAL</button>
-          <button id="cctv-calib-reset-btn" class="scene-btn" data-i18n>RESET CAL</button>
+          <button id="cctv-calib-save-btn" type="button" class="gev-action-button scene-btn" data-i18n>SAVE CAL</button>
+          <button id="cctv-calib-reset-btn" type="button" class="gev-action-button scene-btn" data-i18n>RESET CAL</button>
         </div>
       </div>
       <div class="cctv-summary-label" data-i18n>SCENE SUMMARY</div>
@@ -83,64 +83,60 @@
         <button class="panel-collapse-btn" data-collapse-target="street-level-panel" title="Expand panel" data-i18n-title>◀</button>
       </div>
       <div id="sl-body" class="sl-body">
-        <div class="sl-main">
-          <div id="sl-viewer-wrap" class="sl-viewer-wrap" hidden>
-            <div class="sl-viewer-bar">
-              <div class="sl-viewer-tools">
-                <button id="sl-viewer-expand" class="scene-btn" type="button" aria-pressed="false" title="Expand the street-level view (Esc shrinks it)" data-i18n-title><span class="sl-btn-icon" aria-hidden="true">⤢</span><span class="sl-btn-text" data-i18n>EXPAND</span></button>
-                <div class="sl-seg" role="radiogroup" aria-label="Image fit" data-i18n-aria-label>
-                  <button type="button" class="sl-seg-btn is-active" data-sl-render="letterbox" role="radio" aria-checked="true" title="Fit: show the whole photo, with dark bars where its shape differs from the frame" data-i18n-title data-i18n>FIT</button>
-                  <button type="button" class="sl-seg-btn" data-sl-render="fill" role="radio" aria-checked="false" tabindex="-1" title="Fill: fill the frame edge to edge, cropping the photo" data-i18n-title data-i18n>FILL</button>
-                </div>
-                <button id="sl-follow-btn" class="scene-btn" type="button" aria-pressed="false" aria-label="Camera follows view" title="Camera follows view: move the globe camera wherever the street-level view looks" data-i18n-aria-label data-i18n-title><span class="sl-btn-icon" aria-hidden="true">⌖</span><span class="sl-btn-text" data-i18n>FOLLOW</span></button>
-              </div>
-              <div class="sl-viewer-tools sl-viewer-tools-right">
-                <button id="sl-viewer-close" class="sl-viewer-x" type="button" title="Close the image and deselect it on the map" aria-label="Close the street-level image" data-i18n-title data-i18n-aria-label>×</button>
+        <div id="sl-viewer-wrap" class="sl-viewer-wrap" hidden>
+          <div class="sl-viewer-bar">
+            <div class="sl-viewer-tools">
+              <button id="sl-viewer-expand" class="scene-btn" type="button" aria-pressed="false" title="Show the street-level view full screen (Esc shrinks it)" data-i18n-title><span class="sl-btn-icon" aria-hidden="true">⤢</span><span class="sl-btn-text" data-i18n>EXPAND</span></button>
+              <div class="gev-segmented sl-seg" role="radiogroup" aria-label="Image fit" data-i18n-aria-label>
+                <button type="button" class="gev-segment sl-seg-btn is-active" data-sl-render="letterbox" role="radio" aria-checked="true" title="Fit: show the whole photo, with dark bars where its shape differs from the frame" data-i18n-title data-i18n>FIT</button>
+                <button type="button" class="gev-segment sl-seg-btn" data-sl-render="fill" role="radio" aria-checked="false" tabindex="-1" title="Fill: fill the frame edge to edge, cropping the photo" data-i18n-title data-i18n>FILL</button>
               </div>
             </div>
-            <div class="sl-viewer-stage">
-              <div id="sl-viewer-placeholder" class="sl-viewer-placeholder" hidden></div>
-              <div id="sl-viewer" class="sl-viewer" aria-label="Street-level viewer" data-i18n-aria-label></div>
-            </div>
-            <div id="sl-image-meta" class="sl-image-meta">
-              <span id="sl-image-by" class="sl-image-by"></span>
-              <span class="sl-image-right">
-                <span id="sl-image-when" class="sl-image-when"></span>
-                <a id="sl-image-link" class="sl-image-link" href="#" target="_blank" rel="noopener noreferrer" title="Open this image on the provider's site" data-i18n-title hidden></a>
-              </span>
+            <div class="sl-viewer-tools sl-viewer-tools-right">
+              <button id="sl-viewer-close" class="sl-viewer-x" type="button" title="Close the image and deselect it on the map" aria-label="Close the street-level image" data-i18n-title data-i18n-aria-label>×</button>
             </div>
           </div>
-          <div class="sl-settings">
-            <div class="sl-providers" role="group" aria-label="Imagery providers" data-i18n-aria-label>
-              <span class="cctv-summary-label" data-i18n>PROVIDERS</span>
-              <div id="sl-provider-chips" class="sl-chips"></div>
-            </div>
-            <div id="sl-error" class="sl-error" role="alert" hidden><span aria-hidden="true">⚠</span> <span id="sl-error-text"></span></div>
-            <!-- A missing key gates the filters only: the chips above stay
-                 focusable so their tooltip can say how to add the key. -->
-            <fieldset id="sl-controls" class="sl-controls">
-              <div id="sl-pano-row" class="sl-filters" role="group" aria-label="Imagery filters" data-i18n-aria-label>
-                <span class="cctv-summary-label" data-i18n>IMAGERY</span>
-                <div class="sl-seg" role="radiogroup" aria-label="Panorama filter" data-i18n-aria-label>
-                  <button type="button" class="sl-seg-btn is-active" data-sl-pano="all" role="radio" aria-checked="true" data-i18n>ALL</button>
-                  <button type="button" class="sl-seg-btn" data-sl-pano="pano" role="radio" aria-checked="false" tabindex="-1">360°</button>
-                  <button type="button" class="sl-seg-btn" data-sl-pano="flat" role="radio" aria-checked="false" tabindex="-1" data-i18n>FLAT</button>
-                </div>
-              </div>
-              <div id="sl-since-row" class="sl-since">
-                <label class="cctv-summary-label" for="sl-since" data-i18n>SINCE</label>
-                <input id="sl-since" class="sl-range" type="range" min="0" max="8" step="1" value="0" aria-valuetext="ANY DATE" aria-describedby="sl-since-label sl-since-note" />
-                <output id="sl-since-label" class="sl-since-label" for="sl-since" data-i18n>ANY DATE</output>
-                <small id="sl-since-note" class="sl-since-note" hidden></small>
-              </div>
-            </fieldset>
-            <ul id="sl-legend" class="sl-legend" aria-label="Coverage colours" data-i18n-aria-label></ul>
-            <!-- The hint says how to open imagery; the button does it without a pointer. -->
-            <div class="sl-meta-row">
-              <div id="sl-coverage-meta" class="sl-meta"></div>
-              <button id="sl-nearest-btn" class="scene-btn sl-nearest-btn" type="button" hidden data-i18n-runtime>OPEN STREET VIEW</button>
+          <div class="sl-viewer-stage">
+            <div id="sl-viewer-placeholder" class="sl-viewer-placeholder" hidden></div>
+            <div id="sl-viewer" class="sl-viewer" aria-label="Street-level viewer" data-i18n-aria-label></div>
+          </div>
+          <div id="sl-image-meta" class="sl-image-meta">
+            <span id="sl-image-by" class="sl-image-by"></span>
+            <span class="sl-image-right">
+              <span id="sl-image-when" class="sl-image-when"></span>
+              <a id="sl-image-link" class="sl-image-link" href="#" target="_blank" rel="noopener noreferrer" title="Open this image on the provider's site" data-i18n-title hidden></a>
+            </span>
+          </div>
+        </div>
+        <div class="sl-providers" role="group" aria-label="Imagery providers" data-i18n-aria-label>
+          <span class="cctv-summary-label" data-i18n>PROVIDERS</span>
+          <div id="sl-provider-chips" class="sl-chips"></div>
+        </div>
+        <div id="sl-error" class="sl-error" role="alert" hidden><span aria-hidden="true">⚠</span> <span id="sl-error-text"></span></div>
+        <!-- A missing key gates the filters only: the chips above stay
+             focusable so their tooltip can say how to add the key. -->
+        <fieldset id="sl-controls" class="sl-controls">
+          <div id="sl-pano-row" class="sl-filters" role="group" aria-label="Imagery filters" data-i18n-aria-label>
+            <span class="cctv-summary-label" data-i18n>IMAGERY</span>
+            <div class="gev-segmented sl-seg" role="radiogroup" aria-label="Panorama filter" data-i18n-aria-label>
+              <button type="button" class="gev-segment sl-seg-btn is-active" data-sl-pano="all" role="radio" aria-checked="true" data-i18n>ALL</button>
+              <button type="button" class="gev-segment sl-seg-btn" data-sl-pano="pano" role="radio" aria-checked="false" tabindex="-1">360°</button>
+              <button type="button" class="gev-segment sl-seg-btn" data-sl-pano="flat" role="radio" aria-checked="false" tabindex="-1" data-i18n>FLAT</button>
             </div>
           </div>
+          <div id="sl-since-row" class="sl-since">
+            <label class="cctv-summary-label" for="sl-since" data-i18n>SINCE</label>
+            <input id="sl-since" class="sl-range" type="range" min="0" max="8" step="1" value="0" aria-valuetext="ANY DATE" aria-describedby="sl-since-label sl-since-note" />
+            <span class="sl-since-value">
+              <output id="sl-since-label" class="sl-since-label" for="sl-since" data-i18n>ANY DATE</output>
+              <small id="sl-since-note" class="sl-since-note" hidden></small>
+            </span>
+          </div>
+        </fieldset>
+        <!-- The hint says how to open imagery; the button does it without a pointer. -->
+        <div class="sl-meta-row">
+          <div id="sl-coverage-meta" class="sl-meta"></div>
+          <button id="sl-nearest-btn" class="scene-btn sl-nearest-btn" type="button" hidden data-i18n-runtime>OPEN STREET VIEW</button>
         </div>
       </div>
     </div>
@@ -156,24 +152,24 @@
         <button class="panel-collapse-btn" data-collapse-target="scene-panel" title="Collapse panel" data-i18n-title>+</button>
       </div>
       <div class="scene-controls">
-        <select id="scene-select" aria-label="Scene recipe" data-i18n-aria-label></select>
-        <button id="scene-new-btn" class="scene-btn" data-i18n>NEW</button>
-        <button id="scene-delete-btn" class="scene-btn scene-btn-danger" data-i18n>DEL</button>
+        <select class="gev-field" id="scene-select" aria-label="Scene recipe" data-i18n-aria-label></select>
+        <button id="scene-new-btn" type="button" class="gev-action-button scene-btn" data-i18n>NEW</button>
+        <button id="scene-delete-btn" type="button" class="gev-action-button gev-action-button--danger scene-btn scene-btn-danger" data-i18n>DEL</button>
       </div>
       <div class="scene-controls">
-        <button id="scene-capture-btn" class="scene-btn" data-i18n>CAPTURE SHOT</button>
-        <button id="scene-update-shot-btn" class="scene-btn" data-i18n>UPDATE SHOT</button>
+        <button id="scene-capture-btn" type="button" class="gev-action-button scene-btn" data-i18n>CAPTURE SHOT</button>
+        <button id="scene-update-shot-btn" type="button" class="gev-action-button scene-btn" data-i18n>UPDATE SHOT</button>
       </div>
       <div id="scene-shot-list" class="scene-shot-list"></div>
       <div class="scene-controls">
-        <button id="scene-start-btn" class="scene-btn" data-i18n>START</button>
-        <button id="scene-stop-btn" class="scene-btn scene-btn-danger" data-i18n>STOP</button>
-        <button id="scene-next-btn" class="scene-btn" data-i18n>NEXT</button>
+        <button id="scene-start-btn" type="button" class="gev-action-button scene-btn" data-i18n>START</button>
+        <button id="scene-stop-btn" type="button" class="gev-action-button gev-action-button--danger scene-btn scene-btn-danger" data-i18n>STOP</button>
+        <button id="scene-next-btn" type="button" class="gev-action-button scene-btn" data-i18n>NEXT</button>
       </div>
       <div class="scene-controls">
-        <button id="scene-export-btn" class="scene-btn" data-i18n>EXPORT PRESETS</button>
-        <button id="scene-import-btn" class="scene-btn" data-i18n>IMPORT</button>
-        <button id="scene-download-btn" class="scene-btn" data-i18n>RUN LOG</button>
+        <button id="scene-export-btn" type="button" class="gev-action-button scene-btn" data-i18n>EXPORT PRESETS</button>
+        <button id="scene-import-btn" type="button" class="gev-action-button scene-btn" data-i18n>IMPORT</button>
+        <button id="scene-download-btn" type="button" class="gev-action-button scene-btn" data-i18n>RUN LOG</button>
         <input type="file" id="scene-import-file" accept="application/json,.json" hidden />
       </div>
       <div class="scene-progress">

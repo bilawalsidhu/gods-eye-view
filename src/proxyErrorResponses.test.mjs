@@ -27,6 +27,9 @@ function fixture(name, overrides = {}, preview = false) {
     // The rate-limited proxies reach for these; give them the real ones so a
     // fixture request is throttled exactly as production would be.
     makeRateLimiter, clientKey,
+    // terrain.js gates cross-site requests first; fixture requests carry no
+    // browser headers, so admit them like a loopback tool.
+    admitSameSiteKeyless: () => false,
     path, process: { cwd: () => '/fixture', env: {} },
     fsp: {
       readFile: async () => { throw new Error('cache absent'); },

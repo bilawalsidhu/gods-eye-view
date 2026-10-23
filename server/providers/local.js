@@ -19,6 +19,7 @@ import { adsbLolProxy } from './aircraft/adsb-lol.js';
 import { aisLiveProxy } from './vessels/ais-live.js';
 import { trackBackfillProxies } from './aircraft/tracks.js';
 import { openAiRealtimeProxy } from './openai.js';
+import { geminiLiveProxy } from './gemini.js';
 import { googlePlacesContextProxy } from './places.js';
 import { mapillaryProxy } from './mapillary.js';
 import { keySetupEndpoint } from '../standalone/key-setup.js';
@@ -30,9 +31,9 @@ import { windProxy } from './wind.js';
 
 /**
  * Construct the local provider plugins in their established order.
- * `realtime` configures the voice session token endpoint.
+ * `realtime` configures OpenAI; `gemini` explicitly opts into Gemini Live.
  */
-function localProviderPlugins({ realtime } = {}) {
+function localProviderPlugins({ realtime, gemini } = {}) {
   return [
     openSkyProxy(),
     celestrakProxy(),
@@ -55,6 +56,7 @@ function localProviderPlugins({ realtime } = {}) {
     aisLiveProxy(),
     trackBackfillProxies(),
     openAiRealtimeProxy({ realtime }),
+    ...(gemini ? [geminiLiveProxy({ realtime: gemini })] : []),
     googlePlacesContextProxy(),
     windProxy(),
     weatherProxy(),
