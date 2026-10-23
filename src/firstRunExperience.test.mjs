@@ -247,6 +247,10 @@ test('no storage is touched from a default parameter position', () => {
 
 test('the JS and CSS lists of screen-claiming surfaces stay in step', () => {
   const module = fs.readFileSync(
+    new URL('./exclusiveSurfaces.js', import.meta.url),
+    'utf8',
+  );
+  const firstRun = fs.readFileSync(
     new URL('./firstRunExperience.js', import.meta.url),
     'utf8',
   );
@@ -279,6 +283,8 @@ test('the JS and CSS lists of screen-claiming surfaces stay in step', () => {
     module,
     /export const EXCLUSIVE_SURFACE_CLASSES = Object\.freeze\(\[/,
   );
+  // First run keeps exporting the one shared list (the phone shell reads it too).
+  assert.match(firstRun, /export \{ EXCLUSIVE_SURFACE_CLASSES \};/);
 });
 
 test('exclusiveSurfaceActive reads the live body classes', () => {
@@ -371,10 +377,6 @@ test('an overlay with NO class to watch still disarms the launcher', () => {
 test('one ESC does one thing — the radio disclosure stops the launcher outright', () => {
   const ui = fs.readFileSync(
     new URL('./ui/radioBindings.js', import.meta.url),
-    'utf8',
-  );
-  const module = fs.readFileSync(
-    new URL('./firstRunExperience.js', import.meta.url),
     'utf8',
   );
 

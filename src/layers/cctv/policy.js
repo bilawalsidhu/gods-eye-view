@@ -1,10 +1,4 @@
-export {
-  FRAME_ENDPOINT,
-  SOURCE_ENDPOINT,
-  HEALTH_ENDPOINT,
-  MEDIA_ENDPOINT,
-  ACTIVE_FRAME_REFRESH_MS,
-} from './sourcePolicy.js';
+export { ACTIVE_FRAME_REFRESH_MS } from './sourcePolicy.js';
 import * as Cesium from 'cesium';
 import { CCTV_CARD_FETCH_BURST_SPACING_MS } from '../../data/cctvCards.js';
 import { CCTV_AMBIENT_CARD_MAX } from '../../data/cctvLod.js';
@@ -34,6 +28,9 @@ export const PROJECTION_IDLE_REFRESH_MS = 60000;
 export const PROJECTION_CANVAS_WIDTH = 1920;
 
 export const PROJECTION_CANVAS_HEIGHT = 1080;
+
+/** Matte behind fitted stills; the placeholder gradient's dark end. */
+export const PROJECTION_MATTE_COLOR = '#01070c';
 
 // Downsample grid for the unchanged-frame signature (drawProjectionFrame).
 // 64x36 keeps the 16:9 aspect and reads ~9 KB per check versus the 8.3 MB a
@@ -86,9 +83,6 @@ export const CCTV_CALIBRATION_STORAGE_KEY_V2 =
 // object reference).
 
 export const PROJECTION_TEXTURE_SWAP_MS = 1000;
-
-export const PROJECTION_VERT_ASPECT =
-  PROJECTION_CANVAS_WIDTH / PROJECTION_CANVAS_HEIGHT;
 
 // V2 frustum geometry (design §2a/§6): the far-cap center + corners never sink
 // below groundAlt + this clearance, so a fabricated pitch (-24°) cannot bury
@@ -409,6 +403,9 @@ export const IDLE_CAMERA_COLOR =
 
 export const ACTIVE_CAMERA_COLOR =
   Cesium.Color.fromCssColorString('#ffd97a').withAlpha(0.95);
+
+export const LIVE_CAMERA_COLOR =
+  Cesium.Color.fromCssColorString('#b48cff').withAlpha(0.88);
 
 export const IDLE_COVERAGE_COLOR =
   Cesium.Color.fromCssColorString('#2fe0ff').withAlpha(0.24);

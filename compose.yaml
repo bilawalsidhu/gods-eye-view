@@ -5,6 +5,11 @@ services:
     # lands in the bind-mounted repo, so run as you, not root. UID/GID are
     # unset on Docker Desktop, where the 1000 fallback is ignored anyway.
     user: "${UID:-1000}:${GID:-1000}"
+    # Forward explicit shell/.env policy before the launcher discovers a gateway.
+    # Unset values stay unset so the default loopback-only install still works.
+    environment:
+      - GEV_KEY_SETUP_TRUSTED_PEERS
+      - GEV_ALLOWED_HOSTS
     ports:
       # Publish to loopback only. Docker's default ("4173:4173") would bind
       # every host interface, which quietly turns the LAN warning in the README

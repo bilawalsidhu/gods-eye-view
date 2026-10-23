@@ -3,34 +3,24 @@ import { GROUND_CLICK_MAX_HEIGHT_M } from './policy.js';
 import { cameraHeightAboveGround } from './view.js';
 
 /** Whether the camera is low enough for a click on the ground to mean a street. */
-export function groundClickHeightOk(viewer, groundAt) {
+export function groundClickHeightOk(viewer) {
   if (!viewer?.camera?.positionCartographic) return false;
-  return (
-    cameraHeightAboveGround(viewer, { groundAt }) <= GROUND_CLICK_MAX_HEIGHT_M
-  );
+  return cameraHeightAboveGround(viewer) <= GROUND_CLICK_MAX_HEIGHT_M;
 }
 
 /**
  * A click on the map itself at street zoom opens the nearest image of the
  * active `groundClick` providers, without moving the camera. The height is
  * measured at the click, not read from the cached flag.
- * @param {{state: object, openNearest: Function, isAvailable: (entry: object) => boolean, groundAt?: Function}} options
+ * @param {{state: object, openNearest: Function, isAvailable: (entry: object) => boolean}} options
  * @returns {(screenPosition: {x: number, y: number}, picked?: object) => Promise<boolean>|false}
  */
-export function createGroundClick({
-  state,
-  openNearest,
-  isAvailable,
-  groundAt = null,
-}) {
+export function createGroundClick({ state, openNearest, isAvailable }) {
   return function openAtGround(screenPosition, picked) {
     const scenePick = state.services.scenePick;
     if (!state.enabled || !state.viewer || !scenePick?.pickGroundPosition)
       return false;
-    if (
-      !scenePick.isSurfacePick(picked) ||
-      !groundClickHeightOk(state.viewer, groundAt)
-    )
+    if (!scenePick.isSurfacePick(picked) || !groundClickHeightOk(state.viewer))
       return false;
     const providerIds = [...state.providers.values()]
       .filter(

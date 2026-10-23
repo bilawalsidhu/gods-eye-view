@@ -121,7 +121,7 @@
             <div class="radio-directory-row">
               <button id="radio-enable-btn" class="panel-layer-toggle" type="button" aria-pressed="false" data-i18n>ENABLE</button>
               <label class="radio-filter-label" for="radio-filter" data-i18n>STATION TAG</label>
-              <select id="radio-filter" aria-label="Filter stations by station tag" disabled data-i18n-aria-label>
+              <select class="gev-field" id="radio-filter" aria-label="Filter stations by station tag" disabled data-i18n-aria-label>
                 <option value="all" data-i18n>All</option>
               </select>
             </div>
@@ -180,7 +180,7 @@
               </div>
               <div class="sdr-gain-row">
                 <label for="sdr-gain-select" data-i18n>GAIN</label>
-                <select id="sdr-gain-select" aria-label="RTL-SDR tuner gain for the current mode" data-i18n-aria-label>
+                <select class="gev-field" id="sdr-gain-select" aria-label="RTL-SDR tuner gain for the current mode" data-i18n-aria-label>
                   <option value="auto" data-i18n>AUTO</option>
                   <option value="0.0" translate="no">0.0 dB</option>
                   <option value="0.9" translate="no">0.9 dB</option>
@@ -221,7 +221,7 @@
               </div>
               <div class="sdr-frequency-row">
                 <label for="sdr-frequency-input" data-i18n>FM MHZ</label>
-                <input id="sdr-frequency-input" type="number" min="87.5" max="108" step="0.1" value="98.5" inputmode="decimal" />
+                <input class="gev-field" id="sdr-frequency-input" type="number" min="87.5" max="108" step="0.1" value="98.5" inputmode="decimal" />
                 <button id="sdr-tune-btn" type="button" data-i18n>TUNE</button>
               </div>
               <div class="sdr-seek-row" role="group" aria-label="Seek broadcast FM stations" data-i18n-aria-label>

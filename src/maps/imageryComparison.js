@@ -1,5 +1,5 @@
 /** Basemap that before/after imagery comparisons are read against. */
-export const IMAGERY_COMPARISON_STACK_ID = 'esri-imagery';
+const IMAGERY_COMPARISON_STACK_ID = 'esri-imagery';
 
 const SWITCH_POLICIES = new Set(['preserve', 'esri', 'esri-if-photoreal']);
 const leases = new WeakMap();
