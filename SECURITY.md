@@ -100,6 +100,11 @@ The dev server is a **key broker**: every server-side key above is spendable by 
   `compose.yaml` publishes on `127.0.0.1`: **widen that mapping and every LAN
   client arrives from the same gateway address, which hands them Provider
   Settings too.** Treat publishing beyond loopback as the LAN opt-in above.
+  Compose forwards `GEV_KEY_SETUP_TRUSTED_PEERS` and `GEV_ALLOWED_HOSTS` from
+  the shell or project `.env` before the launcher runs. Set trusted peers to
+  `none` when widening the publish: it becomes an explicit empty list before
+  Vite loads configuration, so the gateway cannot regain Provider Settings
+  access. Unset or blank values preserve automatic gateway discovery.
 - **Provider-side budgets are the real backstop.** For hard spend protection, configure limits where the money is: OpenAI platform usage limits, Google Cloud budget alerts + per-API quotas, and equivalent controls for any other keyed provider.
 - **Pinokio LAN and Cloudflare sharing are refused.** The current supported
   Pinokio release re-reads sharing state when an app registers its Open URL and

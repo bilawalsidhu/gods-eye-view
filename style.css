@@ -32,4 +32,5 @@
 @import './src/ui/styles/weather.css';
 @import './src/ui/styles/panel-surfaces.css';
 @import './src/ui/styles/segmented-control.css';
+@import './src/ui/styles/cjk.css';
 @import './src/ui/styles/cyber.css';
