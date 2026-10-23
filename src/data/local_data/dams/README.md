@@ -30,3 +30,14 @@ Each feature preserves the OSM name/tags and records its source URL, parent
 object version and retrieval date. Relation IDs retain the extract's negative-ID
 convention. Node metadata and contributor identifiers are not bundled. This is
 a static map inventory, not live generation, reservoir level or dam status.
+
+## Regional integration
+
+The 706 OSM features produce 705 analyst records: existing relation 19953989
+(`HE Podlubnik - Centrala`) is a MultiLineString without a supported query point.
+Keep #1009's NVE file and #1149's IGN file separate from this ODbL dataset.
+The proposed landing order is #1009 → #1152 → #1149; after predecessors land,
+reconcile the shared source label and docs without replacing the regional list.
+Together the snapshots contain 706 OSM + 4,141 NVE + 121 IGN = 4,968 source
+features and 4,967 analyst records. Those are combined expectations, not the
+contents of this standalone OSM-only branch.

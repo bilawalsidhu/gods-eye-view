@@ -141,7 +141,7 @@ export const FILTERED_OUT_MESSAGE = msg(
   'None of KartaView’s photos here pass the imagery filter',
 );
 /** Under the SINCE slider while KartaView is lit. */
-export const SINCE_NOTE = 'KartaView: by upload date';
+export const SINCE_NOTE = '(by upload date)';
 
 /** The UTC calendar day of `ms`, as KartaView's startDate reads it. */
 function utcDay(ms) {
