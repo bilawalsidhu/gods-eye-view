@@ -1,5 +1,6 @@
 import { makeRateLimiter, clientKey } from './common/rate-limit.js';
 import { readRequestBodyCapped } from './common/request.js';
+import { admitSameSite } from './common/same-site.js';
 import {
   OVERPASS_MAX_BODY_BYTES,
   OVERPASS_MAX_CONCURRENT,
@@ -27,6 +28,14 @@ import { allowedMethods } from './common/methods.js';
 const _overpassInFlight = new Map();
 
 let _overpassConcurrent = 0;
+
+// Bound body-reading and validation work, including malformed requests and
+// cache hits. Keep the tighter upstream budget below independent of this gate.
+const _overpassRequestLimiter = makeRateLimiter({
+  windowMs: 60_000,
+  max: 300,
+  globalMax: 900,
+});
 
 const _overpassRateLimiter = makeRateLimiter({
   windowMs: 60_000,
@@ -99,6 +108,17 @@ function overpassProxy({ routing = {} } = {}) {
             'Content-Type': 'application/json',
           });
           res.end(JSON.stringify({ error: 'Method Not Allowed' }));
+          return;
+        }
+
+        if (admitSameSite(req, res)) return;
+        if (!_overpassRequestLimiter(clientKey(req))) {
+          res.writeHead(429, {
+            'Content-Type': 'application/json',
+            'Cache-Control': 'no-store',
+            'Retry-After': '60',
+          });
+          res.end(JSON.stringify({ error: 'Rate limit exceeded' }));
           return;
         }
 

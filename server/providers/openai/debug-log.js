@@ -159,4 +159,4 @@ function createDebugLogHandler({
   };
 }
 
-export { createDebugLogHandler, omitVoiceContent };
+export { createDebugLogHandler };
