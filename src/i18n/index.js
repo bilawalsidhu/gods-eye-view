@@ -16,11 +16,12 @@ import {
   normalizeLocale,
   writeStoredLocale,
 } from './locale.js';
+import de from './locales/de.json' with { type: 'json' };
 import es from './locales/es.json' with { type: 'json' };
 import ru from './locales/ru.json' with { type: 'json' };
 import zhCN from './locales/zh-CN.json' with { type: 'json' };
 
-const CATALOGS = Object.freeze({ es, ru, 'zh-CN': zhCN });
+const CATALOGS = Object.freeze({ de, es, ru, 'zh-CN': zhCN });
 
 let currentLocale = DEFAULT_LOCALE;
 
