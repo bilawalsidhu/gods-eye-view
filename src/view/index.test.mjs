@@ -126,3 +126,20 @@ test('annotations travel in the link, keeping only what the app draws', async ()
   // Too long for a link: the view keeps them, the link leaves them out.
   assert.equal(viewToParams(many).has('an'), false);
 });
+
+test('inherited and unknown style keys do not corrupt a restored view', () => {
+  for (const style of [
+    'constructor',
+    '__proto__',
+    'toString',
+    'hasOwnProperty',
+    'unknown',
+  ]) {
+    const view = viewFromParams(
+      new URLSearchParams({ lat: '10', lon: '20', style, map: 'osm' }),
+    );
+    assert.equal(view.style, null);
+    assert.equal(view.map, 'osm');
+    assert.equal(view.camera.lat, 10);
+  }
+});

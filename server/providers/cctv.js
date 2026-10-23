@@ -1,11 +1,9 @@
 import { createCctvCatalog } from './cctv/catalog.js';
-import {
-  normalizeFeedType,
-  isVideoFeedType,
-  toFiniteNumber,
-} from './cctv/normalize.js';
+import { normalizeFeedType, isVideoFeedType } from './cctv/normalize.js';
 import {
   buildSyntheticCctvSvg,
+  cctvLiveMediaType,
+  cctvRasterImageType,
   proxyMediaResponse,
   fetchCctvImageFromUpstream,
   fetchTxdotSnapshot,
@@ -17,6 +15,8 @@ import {
   CCTV_MAX_SOURCES_CEILING,
 } from './cctv/constants.js';
 import { sanitizeCctvRangeHeader } from './cctv/range.js';
+import { admitSameSiteKeyless } from './common/same-site.js';
+import { PROXY_SIGNALS } from '../../src/localRequestGate.mjs';
 import { createHlsPuller } from './cctv/stream.js';
 import {
   createStreetViewFrameCache,
@@ -119,8 +119,15 @@ export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
         headers: { 'User-Agent': 'gods-eye-view-cctv-proxy/1.0' },
         signal: AbortSignal.timeout(CCTV_FRAME_FETCH_TIMEOUT_MS),
       });
-      const svType = svResp.headers.get('content-type') || '';
-      if (!svResp.ok || !svType.startsWith('image/')) return null;
+      const svType = cctvRasterImageType(svResp.headers.get('content-type'));
+      if (!svResp.ok || !svType) {
+        try {
+          await svResp.body?.cancel();
+        } catch {
+          /* no-op */
+        }
+        return null;
+      }
 
       return {
         ok: true,
@@ -138,15 +145,19 @@ export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
     });
     server.middlewares.use('/api/cctv', async (req, res) => {
       try {
+        const url = new URL(req.url || '/', 'http://localhost');
+        // Refuse cross-site requests before any catalog or upstream work. The
+        // keyless gate keeps the routes reachable behind a reverse proxy; the
+        // key-bearing Street View fallback below has its own check.
+        if (admitSameSiteKeyless(req, res)) return;
         const sources = await getCctvSources();
         const sourceById = new Map(
           sources.map((source) => [source.id, source]),
         );
-        const url = new URL(req.url || '/', 'http://localhost');
 
         if (url.pathname === '/sources') {
           const body = {
-            trimmedPacks: getCctvSources.trimmedPacks?.() ?? [],
+            trimmedPacks: getCctvSources.trimmedPacks?.(sources) ?? [],
             sources: sources.map((source) => ({
               id: source.id,
               pack: source.pack,
@@ -220,8 +231,8 @@ export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
           const mediaUrl = source?.url || '';
           const feedType = normalizeFeedType(source?.feedType || 'image');
           // Live feeds only. A still camera is served by /frame, whose fetch
-          // keeps redirects on the registered origin, accepts only image/* and
-          // caps the body; relaying it here would bypass all three.
+          // keeps redirects on the registered origin, accepts only raster
+          // images and caps the body; relaying it here would bypass all three.
           if (!isVideoFeedType(feedType) && feedType !== 'mjpeg') {
             res.writeHead(404, {
               'Content-Type': 'application/json',
@@ -385,7 +396,6 @@ export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
               }
               return;
             }
-            const contentType = upstream.headers.get('content-type') || '';
             if (!upstream.ok) {
               try {
                 await upstream.body?.cancel();
@@ -410,31 +420,42 @@ export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
               return;
             }
 
-            if (
-              isVideoFeedType(feedType) &&
-              !(
-                contentType.startsWith('video/') ||
-                contentType.includes('mpegurl')
-              )
-            ) {
+            // The relayed type is the feed kind's own, checked before the
+            // camera counts as healthy and before any byte is relayed.
+            const contentType = cctvLiveMediaType(
+              feedType,
+              upstream.headers.get('content-type'),
+            );
+            if (!contentType) {
+              try {
+                await upstream.body?.cancel();
+              } catch {
+                /* already closed */
+              }
               setHealth(cameraId, {
                 status: 'degraded',
                 sourceKind: 'upstream',
                 label: source?.provider || 'Configured source',
-                message: `Unexpected media type ${contentType || 'unknown'}`,
+                message: 'Unexpected media type',
               });
-            } else {
-              setHealth(cameraId, {
-                status: 'ok',
-                sourceKind: isVideoFeedType(feedType) ? 'live' : 'snapshot',
-                label: source?.provider || 'Configured source',
-                message: isVideoFeedType(feedType)
-                  ? 'Live stream connected'
-                  : 'Snapshot feed connected',
+              res.writeHead(502, {
+                'Content-Type': 'application/json',
+                'Cache-Control': 'no-store',
               });
+              res.end(JSON.stringify({ error: 'Media proxy failed' }));
+              return;
             }
+            setHealth(cameraId, {
+              status: 'ok',
+              sourceKind: isVideoFeedType(feedType) ? 'live' : 'snapshot',
+              label: source?.provider || 'Configured source',
+              message: isVideoFeedType(feedType)
+                ? 'Live stream connected'
+                : 'Snapshot feed connected',
+            });
 
             await proxyMediaResponse(res, upstream, {
+              contentType,
               sourceHeader: isVideoFeedType(feedType)
                 ? 'live-media'
                 : 'upstream-image',
@@ -547,7 +568,15 @@ export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
         // Both wait on a configured key: removing the key is how an operator
         // turns Street View off, so it switches off the cached frames too,
         // and a keyless request has nothing to spend that budget on.
-        const streetViewTarget = resolveStreetViewTarget(source);
+        // A forwarded request (whose client this server cannot see) gets the
+        // placeholder, as if no key were configured: no cached frame and no
+        // Google spend. Any forwarding header counts, even an empty one.
+        const forwarded = PROXY_SIGNALS.some(
+          (name) => req.headers?.[name] !== undefined,
+        );
+        const streetViewTarget = forwarded
+          ? null
+          : resolveStreetViewTarget(source);
         let sv = null;
         if (streetViewTarget && googleServerApiKey()) {
           const pose = streetViewPose({ heading, fov, pitch });

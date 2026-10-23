@@ -2,6 +2,7 @@ import { createVoiceControl, voiceStatusLabel } from './control.js';
 import { createVoiceSession } from './session.js';
 import { VoiceCardControls } from './voiceCard.js';
 import { PointerReticle } from './pointerReticle.js';
+import { VOICE_PROVIDERS } from './providerCapabilities.js';
 import { msg, registerUnsavedWork, t } from '../i18n/index.js';
 
 function createDefaultReticle(pointer) {
@@ -25,12 +26,18 @@ export function createVoiceCommands({
   signal,
   debugSink,
   createControl = createVoiceControl,
+  resetExisting = true,
+  disposeRunner = true,
+  provider,
+  supportedProviders,
+  onProviderChange,
+  onSessionEvent,
   createCard = (options) => new VoiceCardControls(options),
   pointer = null,
   referents = null,
   createReticle = createDefaultReticle,
 }) {
-  window.__gevVoiceCommands?.stop?.({ removeUi: true });
+  if (resetExisting) window.__gevVoiceCommands?.stop?.({ removeUi: true });
   const ui = createControl({ reset: true });
   const session = createVoiceSession({
     runner,
@@ -50,6 +57,34 @@ export function createVoiceCommands({
   });
   const adapter = session.adapter;
   const capabilities = adapter.capabilities || {};
+  const providerHandler = () => onProviderChange?.(ui.providerSelect.value);
+  if (ui.providerSelect && onProviderChange) {
+    if (supportedProviders && ui.providerSelect.replaceChildren) {
+      const doc = ui.providerSelect.ownerDocument;
+      ui.providerSelect.replaceChildren(
+        ...supportedProviders.map((name) => {
+          const option = doc.createElement('option');
+          option.value = name;
+          option.textContent = VOICE_PROVIDERS[name].label;
+          return option;
+        }),
+      );
+    }
+    ui.providerSelect.value = provider;
+    ui.providerSelect.title = [
+      t('Changing provider reconnects voice if it is on.'),
+      capabilities.advisoryLimit,
+    ]
+      .filter(Boolean)
+      .join(' ');
+    ui.providerSelect.addEventListener('change', providerHandler);
+    ui.root.dataset.provider = provider;
+  }
+  const hasProviderChoice = Boolean(
+    onProviderChange && supportedProviders?.length > 1,
+  );
+  if (ui.providerField) ui.providerField.hidden = !hasProviderChoice;
+  ui.root.dataset.providerChoice = String(hasProviderChoice);
   if (ui.tierButton) ui.tierButton.hidden = !capabilities.costControls;
   if (ui.costValue) ui.costValue.hidden = !capabilities.costControls;
   if (!capabilities.pushToTalk) {
@@ -60,6 +95,7 @@ export function createVoiceCommands({
   // Retain the existing controller's inspection surface for browser tools.
   const controls = adapter.controller || session;
   controls.session = session;
+  controls.ui = ui;
   const updateStatus = session.subscribe((event) => {
     if (event.type !== 'state') return;
     ui.root.dataset.status = event.state;
@@ -101,6 +137,10 @@ export function createVoiceCommands({
   });
   controls.pointer = pointer;
   controls.referents = referents;
+  // Forward last: a host observer may synchronously replace or stop this mount.
+  const forwardEvents = onSessionEvent
+    ? session.subscribe(onSessionEvent)
+    : null;
   const annotationUnsubscribe = annotations?.onOutlineEvent?.((event) => {
     card?.outline(event);
     session.sendMapEvent({ type: 'map_annotation_outline', ...event });
@@ -115,34 +155,26 @@ export function createVoiceCommands({
     else void session.start({ pushToTalk: false });
   };
   ui.button.addEventListener('click', buttonHandler);
-  session.signal.addEventListener(
-    'abort',
-    () => {
-      ui.button.removeEventListener('click', buttonHandler);
-      unregisterUnsavedWork();
-      annotationUnsubscribe?.();
-      updateStatus();
-      updateCard?.();
-      updatePointer();
-      reticle?.destroy();
-      card?.destroy();
-      runner.dispose?.();
-      ui.root.remove();
-    },
-    { once: true },
-  );
-  if (session.disposed) {
+  let cleaned = false;
+  const cleanup = () => {
+    if (cleaned) return;
+    cleaned = true;
     ui.button.removeEventListener('click', buttonHandler);
+    ui.providerSelect?.removeEventListener('change', providerHandler);
     unregisterUnsavedWork();
     annotationUnsubscribe?.();
     updateStatus();
     updateCard?.();
     updatePointer();
+    forwardEvents?.();
     reticle?.destroy();
     card?.destroy();
-    runner.dispose?.();
+    if (disposeRunner) runner.dispose?.();
     ui.root.remove();
-  } else adapter.bindControls?.();
+  };
+  session.signal.addEventListener('abort', cleanup, { once: true });
+  if (session.disposed) cleanup();
+  else adapter.bindControls?.();
   window.__gevVoiceCommands = controls;
   return controls;
 }

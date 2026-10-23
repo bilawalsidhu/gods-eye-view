@@ -43,11 +43,7 @@ try {
     const fpsReadout = document.querySelector('.frame-rate-readout');
     const fpsWasVisible = fpsReadout && !fpsReadout.hidden;
     const watchObserver = (name) => {
-      const owner =
-        name === '_draggableResizeObserver'
-          ? ui._panelPosition
-          : ui._panelLayout;
-      const observer = owner[name];
+      const observer = ui._panelLayout[name];
       if (!observer) return false;
       const disconnect = observer.disconnect.bind(observer);
       counts[name] = 0;
@@ -59,7 +55,6 @@ try {
     };
     const observed = [
       '_commandDockTrayObserver',
-      '_draggableResizeObserver',
       '_leftStackResizeObserver',
       '_rightStackResizeObserver',
       '_leftStackMutationObserver',
@@ -139,7 +134,6 @@ try {
       const focusBefore = document.activeElement;
       const stoppedBeforeRestoration =
         ui._panelLayout.destroyed &&
-        ui._panelPosition.destroyed &&
         ui._feedback.destroyed &&
         ui._recording.destroyed &&
         cockpit.destroyed &&
@@ -194,11 +188,7 @@ try {
               counts[field] === 1 && ui._contextControls[field] === null,
           ),
         observersReleased: observed.every(
-          (name) =>
-            counts[name] === 1 &&
-            (name === '_draggableResizeObserver'
-              ? ui._panelPosition
-              : ui._panelLayout)[name] === null,
+          (name) => counts[name] === 1 && ui._panelLayout[name] === null,
         ),
         subscriptionReleased:
           counts.cctv === 1 && ui._cctvControls._cctvUnsubscribe === null,

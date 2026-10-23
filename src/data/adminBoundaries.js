@@ -123,7 +123,7 @@ export function decodeRing(encoded, decimals) {
 }
 
 /** Even-odd point-in-ring test; ring is [[lon, lat], …], open or closed. */
-export function pointInRing(ring, lat, lon) {
+function pointInRing(ring, lat, lon) {
   if (!Array.isArray(ring) || ring.length < 3) return false;
   let inside = false;
   for (let i = 0, j = ring.length - 1; i < ring.length; j = i, i += 1) {
