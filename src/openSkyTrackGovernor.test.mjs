@@ -1,27 +1,26 @@
 // OPENSKY TRACK BACKFILL — the credit budget the per-icao cache does not guard.
 //
-// `/api/flights/track` spends 4 OpenSky credits per call against the same
-// ~4000/day account as `/api/flights`. Its 60s per-icao cache bounds MEMORY,
-// not spend: `icao24` is six hex digits, so a caller that varies it walks past
-// the cache into a live, credit-consuming call every time.
+// `/api/flights/track` spends 4 OpenSky credits per call from the `/tracks/*`
+// bucket. OpenSky keeps three independent daily buckets (`/states/*`,
+// `/tracks/*`, `/flights/*`), so this route neither spends nor is blocked by
+// the `/states/all` budget `/api/flights` governs. Its 60s per-icao cache
+// bounds MEMORY, not spend: `icao24` is six hex digits, so a caller that varies
+// it walks past the cache into a live, credit-consuming call every time.
 //
 // These cases drive the real exported route handlers. No network: `fetch` is
 // stubbed per test and restored afterwards, so a case that reaches upstream
 // fails loudly rather than making a request.
 //
-// NOTE: the 429 cooldown is module-scoped state in `opensky.js` and, once set,
-// stays set for the life of the process (bounded 30s…30min). The case that
-// arms it therefore runs LAST, and nothing after it may assume a clear
-// governor. Node runs each test file in its own process, so this is contained.
+// NOTE: the `/states/all` cooldown is module-scoped state in `opensky.js` and,
+// once set, stays set for the life of the process (bounded 30s…30min). The case
+// that arms it therefore runs LAST. The tracks cooldown lives in each
+// `trackBackfillProxies()` instance, so every test gets a clear one.
 //
 // Run with: npm test
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { trackBackfillProxies } from '../server/providers/aircraft/tracks.js';
-import {
-  openSkyProxy,
-  openSkyCooldownRemainingMs,
-} from '../server/providers/aircraft/opensky.js';
+import { openSkyProxy } from '../server/providers/aircraft/opensky.js';
 
 /** Collect a plugin's routes into a path → handler map. */
 function install(plugin) {
@@ -109,9 +108,10 @@ test('a caller cycling icao24 cannot walk past the per-icao cache unthrottled', 
   const refused = await request(track, { url: '/?icao24=4affff' });
   assert.equal(refused.statusCode, 429, 'the 31st distinct lookup is refused');
   assert.deepEqual(refused.body, { error: 'Rate limit exceeded' });
-  assert.ok(
-    Number(refused.headers['retry-after']) >= 1,
-    'a refusal tells the caller when to come back',
+  assert.equal(
+    refused.headers['retry-after'],
+    '60',
+    'a refusal names the limiter window, not a shorter guess',
   );
   assert.equal(
     upstreamCalls,
@@ -156,6 +156,89 @@ test('adsb.lol traces are metered too, for the operator IP reputation', async (t
   assert.equal(refused.statusCode, 429);
 });
 
+test('the two routes meter separately, since they spend different upstreams', async (t) => {
+  stubFetch(t, async (url) =>
+    String(url).includes('adsb.lol')
+      ? new Response('{"trace":[]}', { status: 200 })
+      : trackOk(),
+  );
+  const routes = install(trackBackfillProxies());
+  const track = routes.get('/api/flights/track');
+  const trace = routes.get('/api/military/track');
+
+  for (let i = 0; i < 30; i += 1)
+    await request(track, { url: `/?icao24=${(0x610000 + i).toString(16)}` });
+  assert.equal(
+    (await request(track, { url: '/?icao24=61ffff' })).statusCode,
+    429,
+  );
+  const military = await request(trace, { url: '/?hex=62aaaa' });
+  assert.equal(
+    military.statusCode,
+    200,
+    'spending the OpenSky quota leaves the adsb.lol one untouched',
+  );
+});
+
+test('a 429 from /tracks stands every other icao24 down until it clears', async (t) => {
+  let upstreamCalls = 0;
+  stubFetch(t, async () => {
+    upstreamCalls += 1;
+    return new Response('{}', {
+      status: 429,
+      headers: { 'x-rate-limit-retry-after-seconds': '120' },
+    });
+  });
+  const track = install(trackBackfillProxies()).get('/api/flights/track');
+
+  const first = await request(track, { url: '/?icao24=71a001' });
+  assert.equal(first.statusCode, 429);
+  assert.equal(upstreamCalls, 1);
+
+  // A DIFFERENT key: the per-icao cache cannot see it, only the cooldown can.
+  const second = await request(track, { url: '/?icao24=71a002' });
+  assert.equal(second.statusCode, 429, 'refused locally');
+  assert.equal(
+    upstreamCalls,
+    1,
+    'the /tracks bucket is empty, so no further credits are asked for',
+  );
+  const retryAfter = Number(second.headers['retry-after']);
+  assert.ok(
+    retryAfter > 60 && retryAfter <= 120,
+    `the refusal carries OpenSky's remaining cooldown (got ${retryAfter})`,
+  );
+});
+
+test('a cached track is still served while /tracks is cooling', async (t) => {
+  let cooling = false;
+  stubFetch(t, async () =>
+    cooling
+      ? new Response('{}', {
+          status: 429,
+          headers: { 'x-rate-limit-retry-after-seconds': '120' },
+        })
+      : trackOk(),
+  );
+  const track = install(trackBackfillProxies()).get('/api/flights/track');
+
+  assert.equal(
+    (await request(track, { url: '/?icao24=72b001' })).statusCode,
+    200,
+  );
+  cooling = true;
+  assert.equal(
+    (await request(track, { url: '/?icao24=72b002' })).statusCode,
+    429,
+  );
+  const replay = await request(track, { url: '/?icao24=72b001' });
+  assert.equal(
+    replay.statusCode,
+    200,
+    'replaying a fetched body costs nothing',
+  );
+});
+
 test('a malformed icao24 is still rejected before any upstream call', async (t) => {
   let upstreamCalls = 0;
   stubFetch(t, async () => {
@@ -168,21 +251,11 @@ test('a malformed icao24 is still rejected before any upstream call', async (t) 
   assert.equal(upstreamCalls, 0);
 });
 
-test('the governor is clear until OpenSky says otherwise', () => {
-  assert.equal(openSkyCooldownRemainingMs(), 0);
-  // Injectable clock: a cooldown in the past never reads as active.
-  assert.equal(openSkyCooldownRemainingMs(Date.now() + 60_000), 0);
-});
-
-// --- LAST: arming the cooldown is one-way for this process (see file header).
-test('while /api/flights is in its credit cooldown, track backfill stands down', async (t) => {
+// --- LAST: arming the /states/all cooldown is one-way for this process.
+test('a /states/all 429 does not block track backfill: separate OpenSky buckets', async (t) => {
   let trackUpstreamCalls = 0;
   stubFetch(t, async (url) => {
-    if (
-      String(url).includes('/api/states/all') ||
-      String(url).includes('states/all')
-    ) {
-      // OpenSky refusing for budget: this is what arms the shared governor.
+    if (String(url).includes('states/all')) {
       return new Response('{}', {
         status: 429,
         headers: { 'x-rate-limit-retry-after-seconds': '120' },
@@ -194,25 +267,13 @@ test('while /api/flights is in its credit cooldown, track backfill stands down',
 
   const states = install(openSkyProxy()).get('/api/flights');
   await request(states, { url: '/' });
-  assert.ok(
-    openSkyCooldownRemainingMs() > 0,
-    'the 429 from OpenSky arms the shared cooldown',
-  );
 
   const track = install(trackBackfillProxies()).get('/api/flights/track');
-  const refused = await request(track, { url: '/?icao24=7a1b2c' });
+  const backfill = await request(track, { url: '/?icao24=7a1b2c' });
   assert.equal(
-    refused.statusCode,
-    429,
-    'a cold backfill during the cooldown is refused, not minted',
+    backfill.statusCode,
+    200,
+    'the /tracks bucket still has credits, so the trail is fetched',
   );
-  assert.ok(
-    Number(refused.headers['retry-after']) > 1,
-    'the refusal carries the remaining cooldown, not a fixed guess',
-  );
-  assert.equal(
-    trackUpstreamCalls,
-    0,
-    'no credits are spent while the account is already out of budget',
-  );
+  assert.equal(trackUpstreamCalls, 1);
 });
