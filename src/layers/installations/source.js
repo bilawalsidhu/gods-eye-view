@@ -233,11 +233,11 @@ export function createInstallationSource({
         .flatMap((tile) => tile.military)
         .map((record) => nameMilitaryFragment(record, names));
       const retrievedAt = new Date().toISOString();
-      // Tiles carry only mapped areas; a named site with none would vanish
       const merged = mergeMilitaryFragments(
         fragments.slice(0, 2048),
         installationIds,
       );
+      // Tiles carry only mapped areas; a named site with none would vanish
       // on zooming in, so its own position joins the close view.
       return {
         records: [...merged, ...standaloneNamedSites(names, box, merged)].map(
