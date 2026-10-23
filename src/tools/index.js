@@ -36,6 +36,7 @@ import {
 } from './queries/maritime.js';
 import {
   getBikeShare,
+  getBcRoadConditions,
   getTrafficFlow,
   getTransitVehicles,
 } from './queries/mobility.js';
@@ -105,6 +106,7 @@ export const coreTools = Object.freeze([
   planRoute,
   getBikeShare,
   getTransitVehicles,
+  getBcRoadConditions,
   getTrafficFlow,
   getWeather,
   getWeatherMap,

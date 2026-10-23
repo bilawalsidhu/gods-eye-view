@@ -2947,5 +2947,18 @@
   "Layers": "Capas",
   "Search": "Buscar",
   "More": "Más",
-  "Panels": "Paneles"
+  "Panels": "Paneles",
+  "Showing a recent cached DriveBC snapshot": "Se muestra una instantánea reciente de DriveBC almacenada en caché",
+  "DriveBC data unavailable": "Datos de DriveBC no disponibles",
+  "DriveBC road event details": "Detalles del incidente vial de DriveBC",
+  "Close DriveBC event details": "Cerrar los detalles del incidente vial de DriveBC",
+  "Open DriveBC event details ↗": "Abrir los detalles del incidente vial de DriveBC ↗",
+  "BC road event": "Incidente vial de Columbia Británica",
+  "Unspecified": "Sin especificar",
+  "Update time unavailable": "Hora de actualización no disponible",
+  "No additional event description.": "No hay una descripción adicional del incidente.",
+  "Critical": "Crítico",
+  "Major": "Grave",
+  "Minor": "Leve",
+  "DriveBC Road Conditions": "Estado de las carreteras de DriveBC"
 }

@@ -3014,5 +3014,18 @@
   "Layers": "Слои",
   "Search": "Поиск",
   "More": "Ещё",
-  "Panels": "Панели"
+  "Panels": "Панели",
+  "Showing a recent cached DriveBC snapshot": "Показан недавний снимок DriveBC из кэша",
+  "DriveBC data unavailable": "Данные DriveBC недоступны",
+  "DriveBC road event details": "Сведения о дорожном происшествии DriveBC",
+  "Close DriveBC event details": "Закрыть сведения о дорожном происшествии DriveBC",
+  "Open DriveBC event details ↗": "Открыть сведения о дорожном происшествии DriveBC ↗",
+  "BC road event": "Дорожное происшествие в Британской Колумбии",
+  "Unspecified": "Не указано",
+  "Update time unavailable": "Время обновления недоступно",
+  "No additional event description.": "Дополнительное описание происшествия отсутствует.",
+  "Critical": "Критический",
+  "Major": "Серьёзный",
+  "Minor": "Незначительный",
+  "DriveBC Road Conditions": "Состояние дорог DriveBC"
 }

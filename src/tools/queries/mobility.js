@@ -387,6 +387,115 @@ async function readFlow(traffic, area, signal) {
   );
 }
 
+export const getBcRoadConditions = defineTool({
+  name: 'get_bc_road_conditions',
+  title: 'BC road conditions',
+  description:
+    'Active road events in British Columbia from DriveBC Open511, including closures, incidents, construction and road conditions. This feed covers BC only.',
+  inputSchema: {
+    type: 'object',
+    properties: { area: AREA_SCHEMA, limit: LIMIT_SCHEMA },
+    required: ['area'],
+    additionalProperties: false,
+  },
+  requires: ['drivebc'],
+  async run(args, { services, signal }) {
+    const area = await resolveArea(args.area, { services, signal });
+    const snapshot = await services.drivebc.getSnapshot({ signal });
+    const inArea = (geometry) => {
+      const lines =
+        geometry.type === 'Point'
+          ? [[geometry.coordinates]]
+          : geometry.type === 'LineString'
+            ? [geometry.coordinates]
+            : geometry.coordinates;
+      for (const line of lines) {
+        for (let index = 0; index < line.length; index += 1) {
+          const [lon, lat] = line[index];
+          if (areaContains(area, { lon, lat })) return true;
+          if (index === 0) continue;
+          const [previousLon, previousLat] = line[index - 1];
+          for (let step = 1; step < 8; step += 1) {
+            const ratio = step / 8;
+            if (
+              areaContains(area, {
+                lon: previousLon + (lon - previousLon) * ratio,
+                lat: previousLat + (lat - previousLat) * ratio,
+              })
+            )
+              return true;
+          }
+        }
+      }
+      return false;
+    };
+    const matched = snapshot.events.filter(({ geometry }) => inArea(geometry));
+    const capped = capRows(
+      matched.map((event) => {
+        const lines =
+          event.geometry.type === 'Point'
+            ? [[event.geometry.coordinates]]
+            : event.geometry.type === 'LineString'
+              ? [event.geometry.coordinates]
+              : event.geometry.coordinates;
+        const points = lines.flat();
+        const location = points.length
+          ? {
+              lat: round(
+                points.reduce((sum, point) => sum + point[1], 0) /
+                  points.length,
+                5,
+              ),
+              lon: round(
+                points.reduce((sum, point) => sum + point[0], 0) /
+                  points.length,
+                5,
+              ),
+            }
+          : null;
+        return {
+          id: event.id,
+          headline: event.headline || event.eventType || 'Road event',
+          event_type: event.eventType,
+          subtypes: event.subtypes,
+          severity: event.severity,
+          description: event.description,
+          updated: event.updated,
+          url: event.url,
+          geometry_type: event.geometry.type,
+          location,
+        };
+      }),
+      args.limit,
+    );
+    const count = capped.total;
+    const summary = count
+      ? `${countNoun(count, 'active BC road event')} in ${area.label}.`
+      : `No active BC road events are reported in ${area.label}.`;
+    return {
+      summary:
+        summary +
+        (snapshot.partial
+          ? ' The source page limit was reached; results may be incomplete.'
+          : '') +
+        (snapshot.stale
+          ? ' DriveBC could not be refreshed; showing a recent cached snapshot.'
+          : ''),
+      data: {
+        source: 'DriveBC Open511 (British Columbia)',
+        area: area.label,
+        partial: snapshot.partial,
+        stale: snapshot.stale === true,
+        fetched_at: isoTime(snapshot.fetchedAt),
+        total: capped.total,
+        returned: capped.returned,
+        truncated: capped.truncated,
+        rows: capped.rows,
+      },
+    };
+  },
+});
+
 export const getTrafficFlow = defineTool({
   name: 'get_traffic_flow',
   title: 'Traffic flow',

@@ -368,6 +368,129 @@
   bottom: calc(12vh + 4rem);
 }
 
+/* DriveBC feature details appear at the picked road, above the globe but below
+   the application HUD. */
+.drivebc-event-popup {
+  position: absolute;
+  z-index: 8;
+  width: min(304px, calc(100% - 16px));
+  max-height: min(42vh, 320px);
+  overflow: auto;
+  padding: 12px;
+  border: 1px solid rgba(255, 176, 32, 0.55);
+  border-radius: 8px;
+  color: var(--text-primary);
+  background: rgba(7, 12, 18, 0.94);
+  box-shadow:
+    0 10px 34px rgba(0, 0, 0, 0.62),
+    0 0 18px rgba(255, 176, 32, 0.1);
+  backdrop-filter: blur(10px);
+  pointer-events: auto;
+}
+
+.drivebc-event-popup[hidden] {
+  display: none;
+}
+
+.drivebc-event-popup-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.drivebc-event-popup-title {
+  margin: 0;
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.4;
+  letter-spacing: 0.7px;
+}
+
+.drivebc-event-popup-close {
+  flex: none;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 4px;
+  padding: 0 6px;
+  color: var(--text-secondary);
+  background: rgba(255, 255, 255, 0.04);
+  font-size: 18px;
+  line-height: 20px;
+  cursor: pointer;
+}
+
+.drivebc-event-popup-close:focus-visible,
+.drivebc-event-link:focus-visible {
+  outline: 2px solid var(--text-primary);
+  outline-offset: 2px;
+}
+
+.drivebc-event-severity {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  margin-top: 8px;
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.8px;
+}
+
+.drivebc-event-severity-swatch {
+  width: 8px;
+  height: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  border-radius: 50%;
+}
+
+.drivebc-event-fields {
+  display: grid;
+  gap: 4px;
+  margin-top: 9px;
+}
+
+.drivebc-event-field {
+  display: flex;
+  gap: 8px;
+  font-size: 10px;
+  line-height: 1.4;
+}
+
+.drivebc-event-field-label {
+  flex: none;
+  color: var(--text-dim);
+  font-family: var(--font-mono);
+  font-size: 8px;
+  letter-spacing: 0.7px;
+}
+
+.drivebc-event-field-value,
+.drivebc-event-description {
+  color: var(--text-secondary);
+  overflow-wrap: anywhere;
+}
+
+.drivebc-event-description {
+  margin: 8px 0 0;
+  font-size: 11px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+}
+
+.drivebc-event-link {
+  display: inline-block;
+  margin-top: 9px;
+  color: #ffd166;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  text-decoration: none;
+}
+
+.drivebc-event-link:hover {
+  text-decoration: underline;
+}
+
 #intel-hud[data-variant='minimal'] .hud-summary-wrap {
   max-width: 280px;
 }

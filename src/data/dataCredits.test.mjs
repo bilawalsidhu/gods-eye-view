@@ -56,6 +56,14 @@ test('OpenStreetMap has one generic data credit with separate tile and names dis
   );
 });
 
+test('DriveBC road events have an in-app source and British Columbia licence credit', () => {
+  const credit = DATA_CREDITS.find((entry) => entry.key === 'drivebc-open511');
+  assert.ok(credit);
+  assert.match(credit.html, /DriveBC Open511/);
+  assert.match(credit.html, /open511\.gov\.bc\.ca\/help/);
+  assert.match(credit.html, /Open Government Licence/);
+});
+
 test('inline OSM attribution persists until its last display owner leaves', async (t) => {
   const { showOsmCredit, hideOsmCredit } = await import('./dataCredits.js');
   t.mock.timers.enable({ apis: ['setTimeout'] });

@@ -26,6 +26,7 @@ test('panel presentation places Transit between Street Traffic and Bike Share in
       'local-adsb',
       'ais-live-vessels',
       'traffic',
+      'drivebc-road-conditions',
       'transit',
       'bikeshare',
     ],

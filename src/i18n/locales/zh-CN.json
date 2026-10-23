@@ -2813,5 +2813,18 @@
   "Layers": "图层",
   "Search": "搜索",
   "More": "更多",
-  "Panels": "面板"
+  "Panels": "面板",
+  "Showing a recent cached DriveBC snapshot": "正在显示最近缓存的 DriveBC 快照",
+  "DriveBC data unavailable": "DriveBC 数据不可用",
+  "DriveBC road event details": "DriveBC 道路事件详情",
+  "Close DriveBC event details": "关闭 DriveBC 道路事件详情",
+  "Open DriveBC event details ↗": "打开 DriveBC 道路事件详情 ↗",
+  "BC road event": "不列颠哥伦比亚省道路事件",
+  "Unspecified": "未指定",
+  "Update time unavailable": "更新时间不可用",
+  "No additional event description.": "暂无其他事件描述。",
+  "Critical": "严重",
+  "Major": "重大",
+  "Minor": "轻微",
+  "DriveBC Road Conditions": "DriveBC 路况"
 }
