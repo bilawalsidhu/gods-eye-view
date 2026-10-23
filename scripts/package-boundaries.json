@@ -2555,6 +2555,9 @@
       "src/layers/airQuality/model.js",
       "src/layers/airQuality/source.js",
       "src/ui/statusText.js",
+      "src/layers/trafficEnforcement/index.js",
+      "src/layers/trafficEnforcement/source.js",
+      "src/layers/trafficEnforcement/records.js",
       "src/layers/streetLevel/providers/mapillary/policy.js",
       "src/voice/providerCommands.js",
       "src/voice/providerCapabilities.js",
@@ -3129,6 +3132,9 @@
       "src/layers/airQuality/source.js",
       "src/ui/statusText.js",
       "src/ui/layerNames.js",
+      "src/layers/trafficEnforcement/index.js",
+      "src/layers/trafficEnforcement/source.js",
+      "src/layers/trafficEnforcement/records.js",
       "src/layers/streetLevel/providers/mapillary/policy.js"
     ],
     "external": [

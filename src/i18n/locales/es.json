@@ -2943,5 +2943,8 @@
   "hemisphere|E": "E",
   "hemisphere|W": "O",
   "OK": "OK",
-  "{category} ({count})": "{category} ({count})"
+  "{category} ({count})": "{category} ({count})",
+  "CABA inventory unavailable": "Inventario de CABA no disponible",
+  "CABA Traffic Enforcement": "Fiscalización de tránsito de CABA",
+  "Buenos Aires Data · location inventory": "Buenos Aires Data · inventario de ubicaciones"
 }

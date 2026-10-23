@@ -1,5 +1,16 @@
 # God's Eye View Current State
 
+CABA Traffic Enforcement adds a default-off Infrastructure inventory layer for
+Buenos Aires Data's published fixed traffic enforcement locations. The local
+provider downloads the official CSV on demand with a 24-hour cache, decoding UTF-8 or the CDN's legacy Windows-1252 bytes without losing accents; the browser
+retains its loaded snapshot for the layer lifetime. Points expose address, device
+type, license and catalog retrieval time. Operating status and imagery are not
+provided by the source. Cameras enforcing exclusive public-transport lanes or
+entry to restricted areas are outside its declared coverage. See [CABA traffic enforcement](CABA-TRAFFIC-ENFORCEMENT.md) for acquisition,
+limits and validation; `scripts/qa-caba-traffic.mjs` covers the browser contract.
+The provisional share token is `5`; air quality retains published `4` and GNSS
+retains published `3`. Reallocate the provisional token against merge-time main.
+
 Analyst region queries resolve unique Natural Earth names offline without
 geocoding, so Gold Coast and Ivory Coast name the West African natural regions.
 Duplicate names require a geocoded containment anchor; when several entries for
@@ -6062,3 +6073,5 @@ when their footprints touch or contain one another, never across a seam toleranc
 - `scripts/qa-form-fields.mjs` exercises native selections, number validity,
   calibration commit/cancel and stale-camera/disposal guards against an installed
   controller with fixture ports, plus default/Cyber and narrow translated layouts.
+
+The CABA traffic enforcement layer and source labels support English, Spanish, Russian and Simplified Chinese (`zh-CN`). Provider and station names remain unchanged; numbers and dates follow the selected UI locale.

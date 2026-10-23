@@ -3010,5 +3010,8 @@
   "hemisphere|E": "В",
   "hemisphere|W": "З",
   "OK": "НОРМА",
-  "{category} ({count})": "{category} ({count})"
+  "{category} ({count})": "{category} ({count})",
+  "CABA inventory unavailable": "Реестр CABA недоступен",
+  "CABA Traffic Enforcement": "Контроль дорожного движения CABA",
+  "Buenos Aires Data · location inventory": "Buenos Aires Data · реестр местоположений"
 }
