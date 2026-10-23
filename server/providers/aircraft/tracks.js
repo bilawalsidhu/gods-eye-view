@@ -1,16 +1,17 @@
-import { getOpenSkyToken, openSkyCooldownRemainingMs } from './opensky.js';
+import { getOpenSkyToken, openSkyRateLimitCooldownMs } from './opensky.js';
 import { readCappedResponseText } from '../common/http.js';
 import { makeRateLimiter, clientKey } from '../common/rate-limit.js';
 /**
  * Vite plugin: aircraft track-history backfill proxies (PRD WS-F F1/F2).
  *
  * /api/flights/track?icao24=<hex6> — OpenSky GET /tracks/all (experimental;
- *   own credit bucket, 4 credits per call on the free tier). OAuth via the
+ *   4 credits per call from the `/tracks/*` bucket, which OpenSky keeps
+ *   separate from the `/states/*` one `/api/flights` spends). OAuth via the
  *   shared coalesced token. 60s per-icao cache; 404/429 forwarded so the
- *   client can fall back to its accumulated trail silently. Both routes are
- *   rate-limited per IP, and the OpenSky one additionally stands down while
- *   `/api/flights` is in its 429 credit cooldown — the per-icao cache bounds
- *   memory, not spend, since a different `icao24` is simply a different key.
+ *   client can fall back to its accumulated trail silently. Each route has
+ *   its own per-IP limiter, and a 429 from /tracks starts a cooldown for that
+ *   bucket — the per-icao cache bounds memory, not spend, since a different
+ *   `icao24` is simply a different key.
  * /api/military/track?hex=<hex> — adsb.lol tar1090 readsb trace
  *   (undocumented but live; no browser CORS, hence this proxy). Up to ~24h
  *   of real history per aircraft. Treat as best-effort; data is ODbL —
@@ -28,16 +29,36 @@ export function trackBackfillProxies() {
    * Sized against demand, not guessed: a backfill is issued once per aircraft
    * the operator SELECTS (`_backfillTrail`, fired from the tracked-contact
    * path in the flights, military and vessels layers), and re-selecting the
-   * same aircraft inside a minute is served from cache. 30/min is a target
-   * switch every two seconds, sustained — well clear of any human, and the
-   * same band `/api/geocode` and `/api/regional-brief` already use.
+   * same aircraft inside a minute is served from cache. The assistant's
+   * `get_aircraft_track` tool asks once per call, a handful per turn. 30/min
+   * is a target switch every two seconds, sustained — well clear of either,
+   * and the same band `/api/geocode` and `/api/regional-brief` already use.
+   * Each route gets its own limiter: they spend different upstreams.
    */
   const TRACK_RATE_PER_MIN = 30;
-  const allow = makeRateLimiter({
-    windowMs: 60_000,
-    max: TRACK_RATE_PER_MIN,
-    globalMax: TRACK_RATE_PER_MIN * 3,
-  });
+  const TRACK_RATE_WINDOW_MS = 60_000;
+  const trackLimiter = () =>
+    makeRateLimiter({
+      windowMs: TRACK_RATE_WINDOW_MS,
+      max: TRACK_RATE_PER_MIN,
+      globalMax: TRACK_RATE_PER_MIN * 3,
+    });
+  const allowOpenSky = trackLimiter();
+  const allowAdsbLol = trackLimiter();
+  /**
+   * `/tracks/*` credit governor: a 429 from /tracks/all means that bucket is
+   * empty for every `icao24`, so no upstream call is made until OpenSky's
+   * retry-after passes. The `/states/*` cooldown in opensky.js is a different
+   * bucket and does not apply here.
+   */
+  let openSkyTracksCooldownUntil = 0;
+  const openSkyTracksGovernor = {
+    remainingMs: () => Math.max(0, openSkyTracksCooldownUntil - Date.now()),
+    arm(upstream) {
+      openSkyTracksCooldownUntil =
+        Date.now() + openSkyRateLimitCooldownMs(upstream);
+    },
+  };
   /** @type {Map<string, {at:number,status:number,body:string}>} */
   const cache = new Map();
 
@@ -59,10 +80,13 @@ export function trackBackfillProxies() {
   }
 
   /**
-   * @param {number} [blockedMs] - When > 0 the upstream must not be called;
-   *   an already-fetched body may still be served (it costs nothing further).
+   * @param {{remainingMs: () => number, arm: (upstream: Response) => void}} [governor]
+   *   Credit cooldown for a metered upstream. While it is cooling the upstream
+   *   is not called, though an already-fetched body may still be served (it
+   *   costs nothing further); an upstream 429 arms it.
    */
-  async function proxyJson(res, key, upstreamUrl, headers = {}, blockedMs = 0) {
+  async function proxyJson(res, key, upstreamUrl, headers = {}, governor) {
+    const blockedMs = governor?.remainingMs() ?? 0;
     const cached = cache.get(key);
     const fresh = cached && Date.now() - cached.at < TRACK_CACHE_MS;
     // Serve-stale while the account is cooling, the way `/api/flights` does:
@@ -83,6 +107,7 @@ export function trackBackfillProxies() {
       headers,
       signal: AbortSignal.timeout(12000),
     });
+    if (upstream.status === 429) governor?.arm(upstream);
     const { tooLarge, text } = await readCappedResponseText(
       upstream,
       RESPONSE_CAP_BYTES,
@@ -110,8 +135,8 @@ export function trackBackfillProxies() {
   function install(middlewares) {
     middlewares.use('/api/flights/track', async (req, res) => {
       try {
-        if (!allow(clientKey(req))) {
-          refuse(res, 10);
+        if (!allowOpenSky(clientKey(req))) {
+          refuse(res, TRACK_RATE_WINDOW_MS / 1000);
           return;
         }
         const incoming = new URL(req.url || '', 'http://localhost');
@@ -126,17 +151,17 @@ export function trackBackfillProxies() {
           );
           return;
         }
-        // This route spends the SAME daily credit budget as `/api/flights`
-        // (4 credits per call), so it honors that proxy's 429 cooldown. While
-        // the account is cooling, do not mint a token and do not call upstream.
-        const coolingMs = openSkyCooldownRemainingMs();
-        const token = coolingMs > 0 ? null : await getOpenSkyToken();
+        // While the /tracks bucket is cooling, do not mint a token either.
+        const token =
+          openSkyTracksGovernor.remainingMs() > 0
+            ? null
+            : await getOpenSkyToken();
         await proxyJson(
           res,
           `osky:${icao24}`,
           `https://opensky-network.org/api/tracks/all?icao24=${icao24}&time=0`,
           token ? { Authorization: `Bearer ${token}` } : {},
-          coolingMs,
+          openSkyTracksGovernor,
         );
       } catch (error) {
         res.statusCode = 502;
@@ -150,8 +175,8 @@ export function trackBackfillProxies() {
         // adsb.lol is free and unmetered, so no credit governor applies here —
         // the limiter is for the operator's own IP reputation with a community
         // service, the same reason `/api/overpass` carries one.
-        if (!allow(clientKey(req))) {
-          refuse(res, 10);
+        if (!allowAdsbLol(clientKey(req))) {
+          refuse(res, TRACK_RATE_WINDOW_MS / 1000);
           return;
         }
         const incoming = new URL(req.url || '', 'http://localhost');

@@ -35,11 +35,13 @@ const OPENSKY_STATES_MAX_RESPONSE_BYTES = 8 * 1024 * 1024;
 
 /**
  * Credit-governor cooldown for a 429: OpenSky's retry-after bounded to
- * 30 s … 30 min, or 2 min when the header is absent.
+ * 30 s … 30 min, or 2 min when the header is absent. Exported for the
+ * `/tracks/*` governor in tracks.js, which reads the same header for its own
+ * bucket.
  * @param {Response} upstream Rate-limited response.
  * @returns {number} Cooldown (ms).
  */
-function openSkyRateLimitCooldownMs(upstream) {
+export function openSkyRateLimitCooldownMs(upstream) {
   // headers.get() gives null when absent, and Number(null) is 0, not NaN.
   const header = upstream.headers.get('x-rate-limit-retry-after-seconds');
   const retryAfterSec =
@@ -120,21 +122,6 @@ let _openskyTtlMs = OPENSKY_CACHE_MS;
 let _openskyCooldownUntil = 0;
 let _openskyCooldownStatus = 429;
 const _openskySnapshotInFlight = new Map();
-/**
- * Milliseconds left on the 429 cooldown, or 0 when upstream may be called.
- *
- * Read-only view of lever 2 above, exported so the OTHER routes that spend the
- * same daily credit budget can honor it. `/api/flights/track` costs 4 credits
- * per call against this account just as `/states/all` does, so minting one
- * while this proxy is cooling would spend budget the account has already been
- * told it does not have. Only this module writes the cooldown.
- *
- * @param {number} [now] - Epoch-ms; injectable so tests need no clock control.
- * @returns {number} Remaining cooldown in ms (0 when clear).
- */
-export function openSkyCooldownRemainingMs(now = Date.now()) {
-  return Math.max(0, _openskyCooldownUntil - now);
-}
 /**
  * Picks the cache TTL from the remaining daily credit budget.
  * Client polls every 30 s, so tiers ≤30 s cost the same 480 credits/h; the
