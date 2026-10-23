@@ -156,14 +156,50 @@ const pressTabs = async (count, backwards = false) => {
   // The row scrolls smoothly when native Tab brings an edge button into view.
   await new Promise((resolve) => setTimeout(resolve, 250));
 };
+// Phones (≤720px) present the dock's Presets inline in the More tab's sheet.
+// It opens from the keyboard, as a keyboard user would, so the focus it moves
+// into the sheet shows a ring.
+const openPhoneMoreSheet = async () => {
+  const tab = '#mobile-tab-bar [data-mobile-sheet="more"]';
+  if (await page.evaluate(() => document.body.dataset.mobileSheet === 'more')) {
+    await page.focus(tab);
+    await page.keyboard.press('Enter');
+  }
+  await page.focus(tab);
+  await page.keyboard.press('Enter');
+  await page.evaluate(() => new Promise((resolve) => {
+    requestAnimationFrame(() => requestAnimationFrame(resolve));
+  }));
+};
+
+// Media-query changes reach the page on a rendering step; wait until the
+// phone shell agrees with the viewport before measuring.
+const waitForShellSettled = () => page.waitForFunction(() => (
+  document.body.classList.contains('mobile-shell')
+    === matchMedia('(max-width: 720px)').matches
+), { timeout: 10_000, polling: 100 });
+
+// The dock slides back into place when the layout leaves the phone shell.
+const waitForDockSettled = () => page.waitForFunction(() => (
+  !document.getElementById('command-dock').getAnimations({ subtree: true })
+    .some((animation) => animation.playState === 'running')
+), { timeout: 5_000 });
+
 const checkResponsiveStyleFocus = async (width) => {
   // The disclosure is only the starting boundary. Every style target below is
   // reached by actual Tab events, never by focusing the style under test.
   const selectedMapBefore = await page.evaluate(() => (
     window.__godsEyeView.styleManager.mapStackController.getActiveId()
   ));
-  await page.focus('#control-panel-toggle');
-  await pressTabs(2); // disclosure -> pin -> Normal
+  if (width <= 720) {
+    // Phones show Presets in the More tab's sheet, which focuses its first
+    // visible control (Normal) when it opens; the tray toggle and pin are
+    // desktop chrome there.
+    await openPhoneMoreSheet();
+  } else {
+    await page.focus('#control-panel-toggle');
+    await pressTabs(2); // disclosure -> pin -> Normal
+  }
   for (const [index, style] of ['normal', 'thermal', 'snow'].entries()) {
     if (index) await pressTabs(3);
     const state = await styleFocusMetrics();
@@ -215,7 +251,16 @@ const layerFocusState = async (id) => ({
   ...await page.evaluate((layerId) => {
     const manager = window.__godsEyeView.dataManager;
     const button = document.querySelector(`[data-layer-id="${layerId}"] .data-toggle-btn`);
-    const list = document.getElementById('data-toggles');
+    // The list scrolls on its own on desktop; in a phone sheet the sheet
+    // scrolls instead. Measure whichever container actually scrolls.
+    let list = document.getElementById('data-toggles');
+    for (let node = list; node; node = node.parentElement) {
+      const overflow = getComputedStyle(node).overflowY;
+      if ((overflow === 'auto' || overflow === 'scroll') && node.scrollHeight > node.clientHeight) {
+        list = node;
+        break;
+      }
+    }
     return {
       lifecycle: manager.getLayerLifecycleState(layerId),
       feedState: button?.dataset.feedState, label: button?.textContent.trim(),
@@ -1146,6 +1191,8 @@ try {
 
   await page.setViewport({ width: 620, height: 900, deviceScaleFactor: 1 });
   await new Promise((resolve) => setTimeout(resolve, 180));
+  await waitForShellSettled();
+  await openPhoneMoreSheet();
   const at620 = await trayMetrics();
   check(
     '620 px tray uses two rows without clipping',
@@ -1179,7 +1226,13 @@ try {
   await page.screenshot({ path: path.join(shotsDir, '480-open.png') });
   await checkResponsiveStyleFocus(480);
 
+  // Pinning and the compact wing are the narrow desktop dock (721–900 px);
+  // phones use the tab bar instead.
+  await page.setViewport({ width: 800, height: 900, deviceScaleFactor: 1 });
+  await waitForShellSettled();
+  await waitForDockSettled();
   await page.click('.dock-pin-btn[data-pin-target="control-panel"]');
+  await waitForDockSettled();
   await page.click('#control-panel-toggle');
   const cdp = await page.createCDPSession();
   await cdp.send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 1 });
@@ -1374,6 +1427,27 @@ try {
 
     for (const width of [1000, 620, 480]) {
       await page.setViewport({ width, height: 900, deviceScaleFactor: 1 });
+      await waitForShellSettled();
+      if (width <= 720) {
+        // Phones present Location as the Search tab's sheet: the keyboard opens
+        // it onto the field, and Escape returns focus to the tab.
+        const searchTab = '#mobile-tab-bar [data-mobile-sheet="search"]';
+        await page.focus(searchTab);
+        await page.keyboard.press('Enter');
+        await new Promise((resolve) => setTimeout(resolve, 250));
+        const field = await focusMetrics('#location-search');
+        check(`Search: ${width} px keyboard opens the sheet on the location field`,
+          field.focusedId === 'location-search' && field.visible && field.insideViewport,
+          JSON.stringify(field));
+        await page.screenshot({ path: path.join(shotsDir, `${width}-search-open.png`) });
+        await page.keyboard.press('Escape');
+        await new Promise((resolve) => setTimeout(resolve, 250));
+        const tab = await focusMetrics(searchTab);
+        const closedSheet = await page.evaluate(() => !document.body.dataset.mobileSheet);
+        check(`Search: ${width} px Escape closes the sheet with a visible ring on its tab`,
+          closedSheet && hasVisibleControlFocus(tab), JSON.stringify({ closedSheet, tab }));
+        continue;
+      }
       await page.evaluate(() => {
         const manager = window.__godsEyeView.styleManager;
         manager.setPanelCollapsed('control-panel', true, { persist: false, syncShare: false });
@@ -1489,6 +1563,12 @@ try {
     if (dataSetup.ready) {
       for (const width of [1000, 620, 480]) {
         await page.setViewport({ width, height: 900, deviceScaleFactor: 1 });
+        await waitForShellSettled();
+        if (width <= 720 && !(await page.evaluate(() => document.body.dataset.mobileSheet === 'layers'))) {
+          // Phones present Data Layers in the Layers tab's sheet.
+          await page.focus('#mobile-tab-bar [data-mobile-sheet="layers"]');
+          await page.keyboard.press('Enter');
+        }
         await page.evaluate(() => window.__godsEyeView.styleManager.setPanelCollapsed('data-panel', false, { persist: false, syncShare: false }));
         // Resizing schedules rail placement on animation frames. Wait for that
         // pass and its CSS transitions before comparing a focus rectangle with
@@ -1549,6 +1629,7 @@ try {
       )));
 
       await page.setViewport({ width: 1000, height: 900, deviceScaleFactor: 1 });
+      await waitForShellSettled();
       await page.evaluate(() => window.__godsEyeView.styleManager.setPanelCollapsed('data-panel', false, { persist: false, syncShare: false }));
       await page.focus('#data-panel .panel-collapse-btn');
       const transitionTab = await tabTo(`[data-layer-id="${dataSetup.transitionId}"] .data-toggle-btn`);

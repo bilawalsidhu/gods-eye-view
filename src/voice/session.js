@@ -147,8 +147,9 @@ export function createVoiceSession({ createAdapter, runner, signal }) {
     },
     async start(options) {
       if (disposed || !['idle', 'error'].includes(state)) return;
-      emit({ type: 'state', state: 'connecting' });
       const attempt = ++startAttempt;
+      emit({ type: 'state', state: 'connecting' });
+      if (disposed || attempt !== startAttempt) return;
       try {
         await adapter.start(options);
       } catch (error) {
@@ -164,12 +165,17 @@ export function createVoiceSession({ createAdapter, runner, signal }) {
     stop(options = {}) {
       if (options.removeUi) return dispose();
       if (disposed) return;
-      startAttempt++;
+      const attempt = ++startAttempt;
       cancelActions();
       try {
         adapter.stop(options);
       } finally {
-        if (!options.preserveStatus)
+        if (
+          !options.preserveStatus &&
+          !disposed &&
+          attempt === startAttempt &&
+          state !== 'idle'
+        )
           emit({ type: 'state', state: 'idle', detail: 'Voice off' });
       }
     },

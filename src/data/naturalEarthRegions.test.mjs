@@ -33,12 +33,20 @@ test('marquee ranges resolve with sane areas (owner acceptance: Alps + Rockies)'
 });
 
 test('aliases and articles: "the Alps", "Rockies", "Sahara Desert", "Himalaya"', async () => {
-  assert.equal((await findNaturalRegion('the Alps'))?.name, 'Alps');
+  const alps = await findNaturalRegion('the Alps');
+  assert.equal(alps?.name, 'Alps');
+  assert.equal(alps?.candidates, 1);
+  assert.equal((await findNaturalRegion('Alps mountains'))?.name, 'Alps');
   assert.equal((await findNaturalRegion('Rockies'))?.name, 'Rocky Mountains');
   assert.equal((await findNaturalRegion('the Rockies'))?.name, 'Rocky Mountains');
   assert.equal((await findNaturalRegion('Sahara Desert'))?.name, 'Sahara');
   assert.equal((await findNaturalRegion('Himalaya'))?.name, 'Himalayas');
   assert.equal((await findNaturalRegion('  THE ALPS  '))?.name, 'Alps');
+});
+
+test('duplicate natural-region names expose ambiguity instead of claiming uniqueness', async () => {
+  assert.ok((await findNaturalRegion('Cordillera Oriental'))?.candidates > 1);
+  assert.ok((await findNaturalRegion('Canadian Shield'))?.candidates > 1);
 });
 
 test('major deserts/ranges resolve with sane areas', async () => {
@@ -122,22 +130,53 @@ test('listRegions() enumerates both kinds for diagnostics', async () => {
 });
 
 // ── lookupNaturalRegionOutline (resolver first-rung contract) ──────
-test('outline lookup: Alps ring via containment anchor', async () => {
+test('outline lookup: containing exact names win over broader suffix variants', async () => {
   const r = await lookupNaturalRegionOutline('the Alps', 46.5, 10.0);
   assert.ok(r, 'Alps must resolve with an inside anchor');
   assert.equal(r.name, 'Alps');
   assert.ok(r.ring.length >= 8, 'range-scale ring');
   assert.ok(r.areaKm2 > 100000 && r.areaKm2 < 400000, `sane Alps area, got ${r.areaKm2}`);
+  const range = await lookupNaturalRegionOutline('Alaska Range', 63.14, -148.71);
+  assert.equal(range?.name, 'Alaska Range');
+  assert.ok(pointInRing(range.ring, 63.14, -148.71));
+  assert.equal((await lookupNaturalRegionOutline('Alaska', 63.14, -148.71))?.name, 'Alaska');
 });
 
 test('outline lookup: duplicate names disambiguate by anchor containment', async () => {
   const us = await lookupNaturalRegionOutline('Sierra Nevada', 37.2, -119.0);
   assert.ok(us, 'US anchor must match a Sierra Nevada');
   assert.ok(pointInRing(us.ring, 37.2, -119.0), 'returned ring contains the US anchor');
+  const colombia = await lookupNaturalRegionOutline('Cordillera Oriental', 5, -73);
+  assert.ok(colombia, 'a single containing candidate resolves a duplicate name');
+  assert.ok(pointInRing(colombia.ring, 5, -73));
+});
+
+test('outline lookup: overlapping duplicate candidates remain unresolved', async () => {
+  assert.equal(await lookupNaturalRegionOutline('Canadian Shield', 45.6336, -74.86493), null);
 });
 
 test('outline lookup: anchor outside every ring → null (wrong-place guard)', async () => {
   assert.equal(await lookupNaturalRegionOutline('the Alps', 30.26, -97.77), null);
+});
+
+test('outline lookup: a unique physical-region name does not override an outside contemporary place', async () => {
+  for (const [name, lat, lon] of [
+    ['Gold Coast', -28, 153.4],
+    ['Santa Cruz', 37, -122],
+    ['Isabela', 17, 122],
+    ['India', 28, 95], // Northeast India lies outside the physical peninsula.
+    ['Korea', 33.5, 126.5], // Jeju lies outside the physical peninsula.
+  ]) {
+    assert.equal((await findNaturalRegion(name))?.candidates, 1, `${name} has a unique physical namesake`);
+    assert.equal(await lookupNaturalRegionOutline(name, lat, lon), null, `${name} requires containment`);
+  }
+});
+
+test('outline lookup: aliases retain containment checks', async () => {
+  const alps = await lookupNaturalRegionOutline('Alps mountains', 46.5, 10);
+  assert.equal(alps?.name, 'Alps');
+  assert.ok(pointInRing(alps.ring, 46.5, 10));
+  assert.equal(await lookupNaturalRegionOutline('Alps mountains', -28, 153.4), null);
 });
 
 test('outline lookup: non-region names never match', async () => {

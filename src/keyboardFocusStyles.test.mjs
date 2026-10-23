@@ -1,7 +1,6 @@
 import { readStylesheet } from './testSupport/readStylesheet.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
 
 const css = readStylesheet(new URL('../style.css', import.meta.url));
 
@@ -69,7 +68,7 @@ test('focusable controls do not animate the global outline', () => {
     '#top-center-actions button {',
     '.data-toggle-chip {',
     '.scene-btn {',
-    '.scene-shot-btn {',
+    '.gev-action-button--compact {',
   ]) {
     assert.doesNotMatch(
       ruleBody(selector),

@@ -53,7 +53,7 @@ export const CATALOG_SOURCE_CONTRACTS = Object.freeze({
 });
 
 /** An omitted provider is unavailable, never an authoritative empty dataset. */
-export class SourceUnavailableError extends Error {
+class SourceUnavailableError extends Error {
   constructor(name) {
     super(`Data source not configured: ${name}`);
     this.name = 'SourceUnavailableError';
