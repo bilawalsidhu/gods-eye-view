@@ -1237,21 +1237,26 @@ export class RealtimeTurns {
       this.dc.readyState !== 'open'
     )
       return;
-    // A response's instructions replace the session's, so the language
-    // line travels with every tool follow-up too.
-    const instructions = [
-      this.pendingResponseInstructions,
-      voiceLanguageInstruction(getLocale()),
-    ]
-      .filter(Boolean)
-      .join(' ');
+    const pending = this.pendingResponseInstructions;
+    const response =
+      typeof pending === 'string' ? { instructions: pending } : pending;
     this.pendingResponseInstructions = null;
     this.responseCreatePending = true;
     const sent = this.sendRealtimeEvent(
       {
         type: 'response.create',
-        response:
-          typeof instructions === 'string' ? { instructions } : instructions,
+        // A response's instructions replace the session's, so the language
+        // line travels with every tool follow-up too. Only the text is
+        // extended; fields such as tool_choice pass through unchanged.
+        response: {
+          ...response,
+          instructions: [
+            response.instructions,
+            voiceLanguageInstruction(getLocale()),
+          ]
+            .filter(Boolean)
+            .join(' '),
+        },
       },
       'client.response_create.tool_followup',
     );

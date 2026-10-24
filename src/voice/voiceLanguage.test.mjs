@@ -65,7 +65,7 @@ test('the token request names the interface language only when it is not English
   ]);
 });
 
-function followUpInstructions(locale) {
+function followUpResponses(locale, followUp = 'Say the result.') {
   const sent = [];
   const turns = new RealtimeTurns({
     readChannel: () => ({ readyState: 'open' }),
@@ -79,15 +79,31 @@ function followUpInstructions(locale) {
     },
   });
   setLocale(locale);
-  turns.queueResponseCreate('Say the result.');
-  return sent.map((event) => event.response?.instructions);
+  turns.queueResponseCreate(followUp);
+  return sent.map((event) => event.response);
 }
 
 test('tool follow-ups keep the voice language, since they replace the session instructions', (t) => {
   t.after(() => setLocale('en'));
-  assert.deepEqual(followUpInstructions('en'), ['Say the result.']);
-  assert.deepEqual(followUpInstructions('es'), [
-    `Say the result. ${voiceLanguageInstruction('es')}`,
+  assert.deepEqual(followUpResponses('en'), [
+    { instructions: 'Say the result.' },
+  ]);
+  assert.deepEqual(followUpResponses('es'), [
+    { instructions: `Say the result. ${voiceLanguageInstruction('es')}` },
+  ]);
+});
+
+test('a follow-up that disables tools keeps that restriction in every language', (t) => {
+  t.after(() => setLocale('en'));
+  // Globe refusals queue a response object, not a string; the language line
+  // joins its text and must not drop tool_choice.
+  const refusal = { instructions: 'Ask for a reset.', tool_choice: 'none' };
+  assert.deepEqual(followUpResponses('en', refusal), [refusal]);
+  assert.deepEqual(followUpResponses('es', refusal), [
+    {
+      instructions: `Ask for a reset. ${voiceLanguageInstruction('es')}`,
+      tool_choice: 'none',
+    },
   ]);
 });
 
