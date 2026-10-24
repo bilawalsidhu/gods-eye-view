@@ -416,6 +416,8 @@ export const VOICE_OFF_LAYERS = Object.freeze({
   'sea-state': 'global wave forecast field; Realtime prompt budget is full',
   'ocean-currents':
     'global ocean forecast field; Realtime prompt budget is full',
+  'sea-surface-temperature':
+    'global satellite ocean field; Realtime prompt budget is full',
 });
 
 const TYPE_NAMES = Object.freeze({

@@ -428,6 +428,13 @@ export const DATA_CREDITS = [
       'Modified: resampled 10 m IFS forecast vectors and animated display; IFS wave-model significant wave height and ocean-model surface currents resampled to 0.5° and land-masked; wave heights banded, current speed shaded and drawn as flow lines. ' +
       'ECMWF does not accept any liability whatsoever for any error or omission in the data, their availability, or for any loss or damage arising from their use.',
   },
+  {
+    key: 'noaa-crw-coraltemp',
+    html:
+      'Sea surface temperature: <a href="https://coralreefwatch.noaa.gov/satellite/coraltemp.php" target="_blank" rel="noopener">NOAA Coral Reef Watch CoralTemp v3.1</a> ' +
+      'via <a href="https://coastwatch.noaa.gov/erddap/griddap/noaacrwsstDaily.html" target="_blank" rel="noopener">NOAA CoastWatch ERDDAP</a>. ' +
+      'Daily night-time satellite analysis, every tenth 0.05° cell shown.',
+  },
   // ── Bundled snapshots ───────────────────────────────────────────
   {
     key: 'sky-background',

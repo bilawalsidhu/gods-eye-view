@@ -22,6 +22,7 @@ import { createApplicationLaunches } from './layers/rocketLaunches.js';
 import { createApplicationAlpr } from './layers/alprCameras.js';
 import { createApplicationSeaState } from './layers/seaState.js';
 import { createApplicationOceanCurrents } from './layers/oceanCurrents.js';
+import { createApplicationSeaSurfaceTemperature } from './layers/seaSurfaceTemperature.js';
 import { createApplicationLocalAdsb } from './layers/localAdsb.js';
 import { createApplicationAwareness } from './layers/militaryAwareness.js';
 import { createApplicationFirms } from './layers/firms.js';
@@ -131,6 +132,9 @@ export function createApplicationCatalog({
         createApplicationSeaState({ source: sources['sea-state'] }),
         createApplicationOceanCurrents({
           source: sources['ocean-currents'],
+        }),
+        createApplicationSeaSurfaceTemperature({
+          source: sources['sea-surface-temperature'],
         }),
         createApplicationAlpr({ surface, source: sources.alpr }),
         createApplicationStreetLevel({

@@ -2971,5 +2971,13 @@
   "{speed} m/s": "{speed} m/s",
   "Ocean currents network error": "Error de red de las corrientes oceánicas",
   "Malformed ocean currents response": "Respuesta de corrientes oceánicas mal formada",
-  "Ocean currents": "Corrientes oceánicas"
+  "Ocean currents": "Corrientes oceánicas",
+  "Sea surface temperature unavailable": "Temperatura superficial del mar no disponible",
+  "Max {temperature} °C": "Máx. {temperature} °C",
+  "Observed {date}": "Observado el {date}",
+  "Night-time sea surface temperature from NOAA Coral Reef Watch CoralTemp, a daily gap-free satellite analysis at 0.05°, shown at 0.5°. Each day appears about a day after the night it describes. Water under sea ice reads near -1.8 °C. Land is left clear.": "Temperatura nocturna de la superficie del mar de CoralTemp de NOAA Coral Reef Watch, un análisis satelital diario sin huecos a 0,05°, mostrado a 0,5°. Cada día aparece aproximadamente un día después de la noche que describe. El agua bajo el hielo marino marca cerca de -1,8 °C. La tierra queda transparente.",
+  "{temperature} °C": "{temperature} °C",
+  "Sea surface temperature network error": "Error de red de la temperatura superficial del mar",
+  "Malformed sea surface temperature response": "Respuesta de temperatura superficial del mar mal formada",
+  "Sea surface temperature": "Temperatura superficial del mar"
 }

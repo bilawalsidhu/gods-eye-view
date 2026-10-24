@@ -672,6 +672,11 @@ export const LAYER_STATE_REGISTRY = Object.freeze([
     disposition: 'enabled-only',
   }),
   Object.freeze({
+    id: 'sea-surface-temperature',
+    token: '7',
+    disposition: 'enabled-only',
+  }),
+  Object.freeze({
     id: 'street-level',
     token: '0',
     disposition: 'enabled+options',

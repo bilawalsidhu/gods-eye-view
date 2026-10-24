@@ -30,6 +30,7 @@ import { cycloneProxy } from './cyclones.js';
 import { windProxy } from './wind.js';
 import { seaStateProxy } from './seaState.js';
 import { oceanCurrentsProxy } from './oceanCurrents.js';
+import { seaSurfaceTemperatureProxy } from './seaSurfaceTemperature.js';
 
 /**
  * Construct the local provider plugins in their established order.
@@ -63,6 +64,7 @@ function localProviderPlugins({ realtime, gemini } = {}) {
     windProxy(),
     seaStateProxy(),
     oceanCurrentsProxy(),
+    seaSurfaceTemperatureProxy(),
     weatherProxy(),
     cycloneProxy(),
     mapillaryProxy(),

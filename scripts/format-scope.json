@@ -1113,5 +1113,14 @@
   "src/layers/oceanCurrents/model.test.mjs",
   "src/layers/oceanCurrents/source.test.mjs",
   "src/layers/oceanCurrents/layer.test.mjs",
-  "src/app/layers/oceanCurrents.js"
+  "src/app/layers/oceanCurrents.js",
+  "server/providers/seaSurfaceTemperature.js",
+  "server/providers/seaSurfaceTemperature.test.mjs",
+  "src/layers/seaSurfaceTemperature/model.js",
+  "src/layers/seaSurfaceTemperature/source.js",
+  "src/layers/seaSurfaceTemperature/index.js",
+  "src/layers/seaSurfaceTemperature/model.test.mjs",
+  "src/layers/seaSurfaceTemperature/source.test.mjs",
+  "src/layers/seaSurfaceTemperature/layer.test.mjs",
+  "src/app/layers/seaSurfaceTemperature.js"
 ]

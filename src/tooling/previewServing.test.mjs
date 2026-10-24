@@ -13,6 +13,7 @@ test('data providers have both hooks; credential editing stays development-only'
   assert.ok(plugins.some(({ name }) => name === 'gnss-integrity'));
   assert.ok(plugins.some(({ name }) => name === 'sea-state'));
   assert.ok(plugins.some(({ name }) => name === 'ocean-currents'));
+  assert.ok(plugins.some(({ name }) => name === 'sea-surface-temperature'));
   for (const plugin of plugins) {
     if (plugin.name === 'gev-key-setup') {
       assert.equal(plugin.configurePreviewServer, undefined);
@@ -109,6 +110,7 @@ test('real dev and built-preview servers serve provider JSON and terminate unkno
         ['/api/gnss-integrity?lat=invalid', 400],
         ['/api/sea-state/grid/unknown.bin', 404],
         ['/api/ocean-currents/grid/unknown.bin', 404],
+        ['/api/sea-surface-temperature/grid/unknown.bin', 404],
         ['/api/terrain/heights?points=invalid', 400],
         ['/api/overpass', 405],
         ['/api/overpass/status', 200],
@@ -141,7 +143,8 @@ test('real dev and built-preview servers serve provider JSON and terminate unkno
           assert.equal(body.sources[0].id, 'fixture');
         if (
           route.startsWith('/api/sea-state') ||
-          route.startsWith('/api/ocean-currents')
+          route.startsWith('/api/ocean-currents') ||
+          route.startsWith('/api/sea-surface-temperature')
         )
           assert.deepEqual(body, { error: 'unknown_grid' }, route);
         if (route === '/api/mapillary/status')

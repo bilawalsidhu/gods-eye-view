@@ -17,6 +17,7 @@ import { createLaunchSource } from '../layers/launches/source.js';
 import { createAlprTileSource } from '../layers/alpr/source.js';
 import { createSeaStateSource } from '../layers/seaState/source.js';
 import { createOceanCurrentsSource } from '../layers/oceanCurrents/source.js';
+import { createSeaSurfaceTemperatureSource } from '../layers/seaSurfaceTemperature/source.js';
 import { createWeatherSource } from '../layers/weather/source.js';
 import { createCycloneSource } from '../layers/cyclones/source.js';
 import { createWindSource } from '../layers/wind/source.js';
@@ -53,6 +54,7 @@ export function createStandaloneLayerSources(overrides = {}) {
     alpr: createAlprTileSource(),
     'sea-state': createSeaStateSource(),
     'ocean-currents': createOceanCurrentsSource(),
+    'sea-surface-temperature': createSeaSurfaceTemperatureSource(),
     firms: createFirmsSource(),
     wind: createWindSource(),
     weather: createWeatherSource(),
