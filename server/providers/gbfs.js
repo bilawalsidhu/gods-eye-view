@@ -1,4 +1,5 @@
 import { readResponseTextCapped } from './common/http.js';
+import { allowedMethods } from './common/methods.js';
 import { makeRateLimiter, clientKey } from './common/rate-limit.js';
 import {
   isAllowedGbfsHost,
@@ -146,6 +147,7 @@ export function gbfsProxy({ ratePerMinute = GBFS_RATE_PER_MIN } = {}) {
       try {
         if (req.method !== 'GET') {
           res.writeHead(405, {
+            Allow: allowedMethods('GET'),
             'Content-Type': 'application/json',
             'Cache-Control': 'no-store',
           });

@@ -22,6 +22,7 @@ import {
   overpassNotConfigured,
 } from './overpass/transport.js';
 import { installRouteMiddleware } from './places/routes.js';
+import { allowedMethods } from './common/methods.js';
 
 /** @type {Map<string,Promise>} In-flight Overpass requests keyed by normalized query body. */
 const _overpassInFlight = new Map();
@@ -85,7 +86,8 @@ function overpassProxy({ routing = {} } = {}) {
       let cacheKey = null;
       try {
         // Capability probe: lets clients skip queries when nothing is configured.
-        if (req.method === 'GET' && req.url?.split('?')[0] === '/status') {
+        const isStatusProbe = req.url?.split('?')[0] === '/status';
+        if (req.method === 'GET' && isStatusProbe) {
           res.writeHead(200, {
             'Content-Type': 'application/json',
             'Cache-Control': 'no-store',
@@ -98,7 +100,13 @@ function overpassProxy({ routing = {} } = {}) {
           return;
         }
         if (req.method !== 'POST') {
-          res.writeHead(405, { 'Content-Type': 'application/json' });
+          res.writeHead(405, {
+            // /status also answers GET; every path accepts POST queries.
+            Allow: isStatusProbe
+              ? allowedMethods('GET', 'POST')
+              : allowedMethods('POST'),
+            'Content-Type': 'application/json',
+          });
           res.end(JSON.stringify({ error: 'Method Not Allowed' }));
           return;
         }
