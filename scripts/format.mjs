@@ -5,11 +5,21 @@ import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import * as prettier from 'prettier';
 
+async function readJsonFile(file, label) {
+  const source = await readFile(file, 'utf8');
+  const normalized = source.replace(/,\s*([}\]])/g, '$1');
+  try {
+    return JSON.parse(normalized);
+  } catch (error) {
+    throw new Error(`${label}: ${error.message}`);
+  }
+}
+
 /** Discover owned runtime code; tests and other files retain explicit adoption. */
 export async function discoverRuntimeFormatFiles(root) {
   const configFile = path.join(root, 'scripts/format-runtime.json');
   if (!existsSync(configFile)) return [];
-  const { roots } = JSON.parse(await readFile(configFile, 'utf8'));
+  const { roots } = await readJsonFile(configFile, 'scripts/format-runtime.json');
   if (
     !Array.isArray(roots) ||
     !roots.length ||
@@ -58,8 +68,9 @@ export async function formatAdoptedFiles(root, mode) {
     throw new Error('Usage: node scripts/format.mjs --check|--write');
   }
   root = await realpath(root);
-  const scope = JSON.parse(
-    await readFile(path.join(root, 'scripts/format-scope.json'), 'utf8'),
+  const scope = await readJsonFile(
+    path.join(root, 'scripts/format-scope.json'),
+    'scripts/format-scope.json',
   );
   if (
     !Array.isArray(scope) ||

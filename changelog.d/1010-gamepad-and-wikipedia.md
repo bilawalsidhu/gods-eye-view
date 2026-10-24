@@ -1,0 +1,1 @@
+- Bind gamepad navigation to Cesium camera with continuous render hold during stick input, and add Wikipedia nearby intelligence with concurrency limiting, in-flight request deduplication, and attribution (VG31OP, #1010).
