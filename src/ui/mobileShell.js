@@ -125,6 +125,8 @@ function buildChrome(documentRef) {
  * @param {(callback: () => void) => number} [input.requestFrame]
  * @param {() => void} [input.onSheetsClosed] Runs after the last sheet closes
  *   and its panels are put back (e.g. to refresh the share link).
+ * @param {(sheet: string) => void} [input.onTabOpened] Runs only when the user
+ *   opens a sheet from its tab, never on close or programmatic presentation.
  * @returns {{ destroy: () => void, setSheet: (sheet: string|null) => void, getSheet: () => string|null, sharedCollapsed: (panelId: string) => boolean|undefined }}
  */
 export function initMobileShell({
@@ -135,6 +137,7 @@ export function initMobileShell({
   ResizeObserverImpl = globalThis.ResizeObserver,
   requestFrame = globalThis.requestAnimationFrame?.bind(globalThis),
   onSheetsClosed = () => {},
+  onTabOpened = () => {},
 } = {}) {
   const body = documentRef.body;
   const { backdrop, tabBar } = buildChrome(documentRef);
@@ -159,6 +162,7 @@ export function initMobileShell({
    */
   let borrowed = null;
   let returnFocus = null;
+  let swipe = null;
   const written = new Map();
 
   const writeVar = (name, value) => {
@@ -259,6 +263,7 @@ export function initMobileShell({
   };
 
   const setSheet = (requested) => {
+    swipe = null;
     if (!body.classList.contains(MOBILE_SHELL_CLASS)) return;
     const sheet = sheetBlocked(body) ? null : requested;
     const previous = currentSheetOf(body);
@@ -348,8 +353,123 @@ export function initMobileShell({
     // Closing from the tab bar returns focus to the tab that was pressed.
     if (!sheet) returnFocus = button;
     setSheet(sheet);
+    if (sheet && currentSheetOf(body) === sheet) onTabOpened(sheet);
   });
   listen(backdrop, 'click', () => setSheet(null));
+  // Touch events let native scrolling continue until a downward pull at the
+  // top is intentional. Pointer capture/touch-action:none would also seize
+  // ordinary vertical scrolling inside the borrowed panels.
+  const sheetRoot = (target, sheet) => {
+    const roots =
+      sheet === 'layers'
+        ? [element('left-panel-stack')]
+        : sheet === 'search'
+          ? [dock]
+          : sheet === 'more'
+            ? [element('right-context-rail'), dock]
+            : [element('right-context-rail')];
+    return roots.find((root) => root?.contains(target));
+  };
+  const scrolled = (target, root) => {
+    for (let node = target; node; node = node.parentElement) {
+      if (node.scrollTop > 0) return true;
+      if (node === root) break;
+    }
+    return false;
+  };
+  listen(
+    documentRef,
+    'touchstart',
+    (event) => {
+      swipe = null;
+      const sheet = currentSheetOf(body);
+      const target = event.target;
+      if (
+        !sheet ||
+        !body.classList.contains(MOBILE_SHELL_CLASS) ||
+        event.defaultPrevented ||
+        event.touches.length !== 1 ||
+        target?.closest?.(
+          'button, a, input, select, textarea, label, [contenteditable]:not([contenteditable="false"]), [role="slider"], [role="button"]',
+        )
+      )
+        return;
+      const root = sheetRoot(target, sheet);
+      if (!root || scrolled(target, root)) return;
+      const touch = event.touches[0];
+      swipe = {
+        sheet,
+        target,
+        root,
+        id: touch.identifier,
+        x: touch.clientX,
+        y: touch.clientY,
+        claimed: false,
+      };
+    },
+    { passive: true },
+  );
+  listen(
+    documentRef,
+    'touchmove',
+    (event) => {
+      if (!swipe) return;
+      const touch = event.touches[0];
+      if (
+        event.defaultPrevented ||
+        event.touches.length !== 1 ||
+        touch.identifier !== swipe.id ||
+        currentSheetOf(body) !== swipe.sheet ||
+        scrolled(swipe.target, swipe.root)
+      ) {
+        swipe = null;
+        return;
+      }
+      const dx = touch.clientX - swipe.x;
+      const dy = touch.clientY - swipe.y;
+      if (!swipe.claimed) {
+        // Claim direction before the browser crosses its native scroll slop.
+        // Android can make the next move non-cancelable after a ~9px first move.
+        if (Math.max(Math.abs(dx), Math.abs(dy)) < 4) return;
+        if (dy <= Math.abs(dx) * 1.25 || !event.cancelable) {
+          swipe = null;
+          return;
+        }
+        swipe.claimed = true;
+      }
+      // Cancelling only the claimed pull leaves taps, sliders and normal scroll
+      // native, and suppresses the synthetic click at the end of a dismissal.
+      event.preventDefault();
+    },
+    { passive: false },
+  );
+  listen(
+    documentRef,
+    'touchend',
+    (event) => {
+      const pull = swipe;
+      swipe = null;
+      if (!pull?.claimed || event.touches.length) return;
+      const touch = [...event.changedTouches].find(
+        (item) => item.identifier === pull.id,
+      );
+      if (!touch || currentSheetOf(body) !== pull.sheet) return;
+      const dx = Math.abs(touch.clientX - pull.x);
+      const dy = touch.clientY - pull.y;
+      if (dy < 64 || dy <= dx * 1.25) return;
+      returnFocus = tabFor(pull.sheet) ?? returnFocus;
+      setSheet(null);
+    },
+    { passive: true },
+  );
+  listen(
+    documentRef,
+    'touchcancel',
+    () => {
+      swipe = null;
+    },
+    { passive: true },
+  );
   // Bubble phase, so fields cancelling an edit, lightboxes, viewers and tools
   // take Escape first; panels yield it to the sheet (PanelChrome), and an open
   // dialog keeps its own native close.

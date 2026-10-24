@@ -47,7 +47,7 @@ export function createTracking({
   const { ensureGeoidReady, geoidHeight } = services.geoid;
   const { clearFocusTarget } = services.focus;
   const { applyTrackedCameraFrame } = services.camera;
-  const { resolvePickId, isOwnedByOtherLayer } = services.picking;
+  const { resolvePickId, isOwnedByOtherLayer, pickContact } = services.picking;
 
   function _emitAwarenessEvent(type, detail) {
     if (
@@ -593,7 +593,7 @@ export function createTracking({
   }
 
   /**
-   * Fire-and-forget adsb.lol readsb trace backfill (PRD F2). Trace points are
+   * Fire-and-forget optional source history backfill (PRD F2). Trace points are
    * stride-thinned to the remaining vertex budget, then spliced strictly older
    * than the oldest seeded fix AHEAD of the locally accumulated fine segment,
    * capped at TRAIL_MAX_POINTS (newest kept). Any failure (404/timeout/
@@ -1079,7 +1079,9 @@ export function createTracking({
       // first-person reference. Empty globe clicks are inert until the user
       // exits with C, Escape, or the dedicated button.
       if (document.body.classList.contains('cockpit-mode')) return;
-      const picked = viewer.scene.pick(click.position);
+      const picked = pickContact
+        ? pickContact(viewer.scene, click.position)
+        : viewer.scene.pick(click.position);
 
       if (picked) {
         // Clicking the tracked entity itself -- ignore (don't deselect)
