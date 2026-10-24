@@ -35,11 +35,13 @@ const OPENSKY_STATES_MAX_RESPONSE_BYTES = 8 * 1024 * 1024;
 
 /**
  * Credit-governor cooldown for a 429: OpenSky's retry-after bounded to
- * 30 s … 30 min, or 2 min when the header is absent.
+ * 30 s … 30 min, or 2 min when the header is absent. Exported for the
+ * `/tracks/*` governor in tracks.js, which reads the same header for its own
+ * bucket.
  * @param {Response} upstream Rate-limited response.
  * @returns {number} Cooldown (ms).
  */
-function openSkyRateLimitCooldownMs(upstream) {
+export function openSkyRateLimitCooldownMs(upstream) {
   // headers.get() gives null when absent, and Number(null) is 0, not NaN.
   const header = upstream.headers.get('x-rate-limit-retry-after-seconds');
   const retryAfterSec =
