@@ -29,7 +29,7 @@ import { unavailablePlaceSearch } from '../search/placeSearch.js';
 import { isPickedWorldPosition } from '../data/scenePick.js';
 
 /** Ms the analyst region lookup waits on geocode + admin boundary. */
-export const REGION_FALLBACK_BUDGET_MS = 3_000;
+const REGION_FALLBACK_BUDGET_MS = 3_000;
 
 /** Entity facts that rule out a state/county reading of the ask. */
 const NON_ADMIN_ENTITY_KINDS = new Set([
@@ -101,18 +101,6 @@ export function createAnnotationResolver({
     if (signal?.aborted) return; // superseded — never cache
     if (!definitive) return; // transient upstream failure — allow a retry
     cacheWrite(cache, key, null);
-  }
-
-  /** Wire an external AbortSignal to a local controller; returns a detach fn. */
-  function linkAbort(controller, externalSignal) {
-    if (!externalSignal) return () => {};
-    if (externalSignal.aborted) {
-      controller.abort();
-      return () => {};
-    }
-    const onAbort = () => controller.abort();
-    externalSignal.addEventListener('abort', onAbort, { once: true });
-    return () => externalSignal.removeEventListener('abort', onAbort);
   }
 
   /**

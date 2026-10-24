@@ -283,6 +283,7 @@ export class LocationNavigation {
       return;
     }
 
+    this.services.interruptGlobeRotation?.('orbit-intent');
     const isActive = this.orbitController.toggle(this._currentTarget, {
       radius: this._currentPoi?.alt || 500,
       pitch: this._currentPoi?.pitch || -30,

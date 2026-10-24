@@ -1,3 +1,4 @@
+import { interruptGlobeRotation } from '../cameraVerbs.js';
 import {
   layerSnapshot,
   feedProvenanceEnvelope,
@@ -262,7 +263,9 @@ export function createGevActionRunner({
       }),
     ));
   installViewTargetPrewarm(viewer);
-  initCameraVerbs(viewer, getViewTargetCartesian);
+  initCameraVerbs(viewer, getViewTargetCartesian, {
+    isCockpitActive: () => Boolean(styleManager?.getCockpitState?.()?.active),
+  });
   // Nested calls (select_nearest_aircraft composing layer + flight) use the
   // raw runner; only the outer call gets a voice envelope.
   const runGevAction = async function runGevAction(
@@ -298,6 +301,7 @@ export function createGevActionRunner({
     // Zoom during an active orbit adjusts the orbit RADIUS (spiral in/out) —
     // a straight camera move would be snapped back by the per-frame lookAt.
     if (name === 'adjust_camera_zoom') {
+      interruptGlobeRotation('voice-zoom-intent');
       const zoomOut = String(args.direction || '').toLowerCase() === 'out';
       const amt = String(args.amount || 'medium').toLowerCase();
       const factor = { little: 1.25, medium: 1.6, lot: 2.4 }[amt] || 1.6;
@@ -4369,46 +4373,6 @@ function dominantValue(values) {
   };
 }
 
-function summarizeEntity(viewer, entity, { includeProperties = false } = {}) {
-  const now = Cesium.JulianDate.now();
-  if (entity.__gevContextId) {
-    const store = window.__gevContextStore;
-    const record = store?.entities?.get(entity.__gevContextId);
-    if (record) return summarizeContextRecord(record, { includeProperties });
-  }
-  const props = propertyObject(entity);
-  const layerId = entity.__localLayerId || props.layerId || null;
-  const tags = props.tags || {};
-  const label = cleanText(
-    props.name ||
-      tags.name ||
-      tags['name:en'] ||
-      tags.official_name ||
-      tags.operator ||
-      props.operator ||
-      entity.name ||
-      layerTitle(layerId),
-  );
-  const position =
-    entity.__localBaseCartesian ||
-    entity.position?.getValue?.(now) ||
-    polygonCenter(entity, now);
-  const carto = position ? Cesium.Cartographic.fromCartesian(position) : null;
-  return {
-    id: String(entity.id || ''),
-    name: label || layerTitle(layerId),
-    layerId,
-    layerName: layerTitle(layerId),
-    latitude: carto
-      ? Number(Cesium.Math.toDegrees(carto.latitude).toFixed(6))
-      : null,
-    longitude: carto
-      ? Number(Cesium.Math.toDegrees(carto.longitude).toFixed(6))
-      : null,
-    properties: includeProperties ? compactProperties(props) : undefined,
-  };
-}
-
 function summarizeContextRecord(record, { includeProperties = false } = {}) {
   return {
     id: String(record.id || ''),
@@ -4425,31 +4389,6 @@ function summarizeContextRecord(record, { includeProperties = false } = {}) {
       : undefined,
     active: isContextRecordActive(record),
   };
-}
-
-function polygonCenter(entity, now) {
-  const hierarchy = entity.polygon?.hierarchy?.getValue?.(now);
-  const positions = hierarchy?.positions;
-  if (!positions?.length) return null;
-  return Cesium.BoundingSphere.fromPoints(positions).center;
-}
-
-function propertyObject(entity) {
-  const raw = entity?.properties?.getValue?.(Cesium.JulianDate.now()) || {};
-  return unwrapProperties(raw);
-}
-
-function unwrapProperties(value) {
-  if (!value || typeof value !== 'object') return value;
-  if (Array.isArray(value)) return value.map(unwrapProperties);
-  const out = {};
-  for (const [key, entry] of Object.entries(value)) {
-    out[key] =
-      entry && typeof entry.getValue === 'function'
-        ? unwrapProperties(entry.getValue(Cesium.JulianDate.now()))
-        : unwrapProperties(entry);
-  }
-  return out;
 }
 
 function compactProperties(props) {
