@@ -1493,3 +1493,24 @@ test('a repeated move inside an outstanding query keeps the displayed marker set
     h.restore();
   }
 });
+
+test('ALPR display tags collapse controls and cap final text without erasing Unicode', () => {
+  const record = normalizeAlprNode({
+    type: 'node',
+    id: 1,
+    lat: 30,
+    lon: -97,
+    tags: {
+      'surveillance:type': 'ALPR',
+      operator: '  Şehir\n\u0000 PD  ',
+      manufacturer: '😀'.repeat(200),
+      'camera:type': null,
+      'surveillance:zone': '\t traffic   zone ',
+    },
+  });
+  assert.equal(record.operator, 'Şehir PD');
+  assert.equal(record.manufacturer.length, 180);
+  assert.equal(record.manufacturer, '😀'.repeat(90));
+  assert.equal(record.cameraType, null);
+  assert.equal(record.zone, 'traffic zone');
+});

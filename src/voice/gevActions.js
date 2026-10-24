@@ -1,4 +1,4 @@
-import { interruptGlobeRotation } from '../cameraVerbs.js';
+import { normalizeDisplayText } from '../data/displayText.js';
 import {
   layerSnapshot,
   feedProvenanceEnvelope,
@@ -4301,13 +4301,7 @@ function uniqueStrings(values) {
  * @returns {string} Sanitized single-line label (max 120 chars).
  */
 function sanitizeLabel(value) {
-  const text = String(value || '');
-  let out = '';
-  for (const ch of text) {
-    const code = ch.codePointAt(0);
-    out += code < 0x20 || code === 0x7f ? ' ' : ch; // drop control chars incl. newlines
-  }
-  return out.replace(/\s+/g, ' ').trim().slice(0, 120);
+  return normalizeDisplayText(value, 120);
 }
 
 function cachePrecision(service) {
@@ -4424,10 +4418,8 @@ function compactProperties(props) {
 }
 
 function cleanText(value) {
-  if (value == null || typeof value === 'object') return '';
-  const text = String(value).trim();
-  if (!text || text === 'undefined' || text === 'null') return '';
-  return text.length > 180 ? `${text.slice(0, 177)}...` : text;
+  const text = normalizeDisplayText(value);
+  return text === 'undefined' || text === 'null' ? '' : text;
 }
 
 function layerTitle(layerId) {
@@ -4582,6 +4574,21 @@ const ANALYST_IDENTITY_FIELDS = Object.freeze([
 ]);
 
 /**
+ * Analyst item keys that identify a record rather than describe it: the
+ * referent registry, track_entity and locateLayerEntity match on them, so
+ * display-text normalization must leave them byte-for-byte unchanged.
+ */
+const ANALYST_CANONICAL_FIELDS = new Set([
+  'layerKey',
+  'id',
+  'icao24',
+  'mmsi',
+  'noradId',
+  'registration',
+  'callsign',
+]);
+
+/**
  * Compact one analyst record for the voice payload: identity, position (so a
  * follow-up can fly to it), distance, and that layer's manifest fields with
  * times as ISO text. The full record set stays engine-side for follow-ups.
@@ -4618,6 +4625,13 @@ function compactAnalystItem(r) {
     } else compact[key] = r[key];
   }
   if (present(r.ageHours)) compact.ageHours = r.ageHours;
+  // Display text only: canonical keys are lookup identities (bikeshare uses
+  // the raw station name as its id), so the referent registry and
+  // locateLayerEntity must see them exactly as the layer reports them.
+  for (const key of Object.keys(compact)) {
+    if (typeof compact[key] === 'string' && !ANALYST_CANONICAL_FIELDS.has(key))
+      compact[key] = normalizeDisplayText(compact[key]);
+  }
   return compact;
 }
 

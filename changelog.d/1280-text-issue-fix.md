@@ -1,0 +1,1 @@
+- Bound untrusted display text at output boundaries (asturksever, #1280).
