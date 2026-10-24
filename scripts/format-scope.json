@@ -1090,5 +1090,11 @@
   "src/cameraGlobeRotation.test.mjs",
   "src/voice/globeResetConfirmation.test.mjs",
   "server/providers/seaState.js",
-  "server/providers/seaState.test.mjs"
+  "server/providers/seaState.test.mjs",
+  "src/layers/seaState/model.js",
+  "src/layers/seaState/source.js",
+  "src/layers/seaState/index.js",
+  "src/layers/seaState/model.test.mjs",
+  "src/layers/seaState/source.test.mjs",
+  "src/layers/seaState/layer.test.mjs"
 ]
