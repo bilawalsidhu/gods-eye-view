@@ -33,6 +33,8 @@ export const KEY_SETUP_APPEND_HEADER =
  * 'paid' (🔴) is an optional paid higher-rate token.
  * `clientExposed` marks the keys that are injected into the browser
  * bundle by design (restrict them at the provider, per SECURITY.md).
+ * Cesium ion and Mapillary tokens stay on the server (see
+ * server/providers/keyIsolation), so they are not client-exposed.
  * `hidden` keeps advanced configuration out of the panel and missing-key count.
  */
 export const KEY_SETUP_KEYS = Object.freeze([
@@ -104,7 +106,6 @@ export const KEY_SETUP_KEYS = Object.freeze([
     getUrl: 'https://ion.cesium.com/tokens',
     envVars: Object.freeze(['CESIUM_ION_TOKEN']),
     tier: 'free',
-    clientExposed: true,
   }),
   Object.freeze({
     id: 'opensky',
@@ -123,7 +124,6 @@ export const KEY_SETUP_KEYS = Object.freeze([
     getUrl: 'https://www.mapillary.com/dashboard/developers',
     envVars: Object.freeze(['MAPILLARY_CLIENT_TOKEN']),
     tier: 'free',
-    clientExposed: true,
   }),
   Object.freeze({
     id: 'launch-library',
