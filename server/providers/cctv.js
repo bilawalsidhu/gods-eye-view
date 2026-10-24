@@ -18,7 +18,14 @@ import { sanitizeCctvRangeHeader } from './cctv/range.js';
 import { admitSameSiteKeyless } from './common/same-site.js';
 import { PROXY_SIGNALS } from '../../src/localRequestGate.mjs';
 import { createHlsPuller } from './cctv/stream.js';
-import { googleServerApiKey } from './places/google-key.js';
+import {
+  createStreetViewFrameCache,
+  resolveStreetViewTarget,
+  streetViewCacheKey,
+  streetViewPose,
+} from './cctv/streetview.js';
+import { clientKey } from './common/rate-limit.js';
+import { googleRateLimiter, googleServerApiKey } from './places/google-key.js';
 export { CCTV_FRAME_FETCH_TIMEOUT_MS, fetchCctvImageFromUpstream };
 /**
  * Vite plugin: CCTV camera proxy with source registry, frame/media serving,
@@ -35,6 +42,9 @@ export { CCTV_FRAME_FETCH_TIMEOUT_MS, fetchCctvImageFromUpstream };
  */
 export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
   const getCctvSources = createCctvCatalog({ sourceRoot });
+  // Held per plugin instance rather than per module so the frames belong to
+  // the server that is actually serving, the way the catalog above does.
+  const streetViewFrames = createStreetViewFrameCache();
   /** @type {Map<string,{id:string,status:string,sourceKind:string,label:string,message:string,updatedAt:number}>} */
   const health = new Map();
   /** Cap on health map entries to prevent unbounded growth. Sized to the
@@ -96,18 +106,11 @@ export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
       const sv = new URL('https://maps.googleapis.com/maps/api/streetview');
       sv.searchParams.set('size', '960x540');
       sv.searchParams.set('location', `${lat},${lon}`);
-      sv.searchParams.set(
-        'heading',
-        String(Number.isFinite(heading) ? heading : 0),
-      );
-      sv.searchParams.set(
-        'fov',
-        String(Number.isFinite(fov) ? Math.max(20, Math.min(120, fov)) : 80),
-      );
-      sv.searchParams.set(
-        'pitch',
-        String(Number.isFinite(pitch) ? Math.max(-40, Math.min(20, pitch)) : 0),
-      );
+      // Already clamped (fov, pitch) and wrapped (heading) by
+      // `streetViewPose`, which is also what the frame cache keys on.
+      sv.searchParams.set('heading', String(heading));
+      sv.searchParams.set('fov', String(fov));
+      sv.searchParams.set('pitch', String(pitch));
       sv.searchParams.set('source', 'outdoor');
       sv.searchParams.set('return_error_code', 'true');
       sv.searchParams.set('key', streetViewKey);
@@ -509,8 +512,10 @@ export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
         const source = sourceById.get(cameraId);
         const label = url.searchParams.get('label') || source?.name || cameraId;
         const city = url.searchParams.get('city') || source?.city || '';
-        const lat = Number(url.searchParams.get('lat') || source?.lat);
-        const lon = Number(url.searchParams.get('lon') || source?.lon);
+        // `lat`/`lon` are still sent by the browser on every frame, but they
+        // are no longer read: the registered pose in `source` is the only
+        // thing a billable Street View lookup is aimed at. See
+        // `resolveStreetViewTarget`.
         const heading = Number(
           url.searchParams.get('heading') || source?.headingDeg,
         );
@@ -545,22 +550,45 @@ export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
           return;
         }
 
-        // The Street View fallback spends the Google key, so a forwarded
-        // request (whose client this server cannot see) gets the placeholder,
-        // as if no key were configured. Any forwarding header counts, even an
-        // empty one.
+        // Street View is the only metered step in this chain, so a frame
+        // reaches it for a camera the catalog actually serves, at the pose
+        // that catalog recorded, and only within the per-IP Google budget it
+        // shares with the Places and geocoding routes. A refusal is not
+        // something the viewer can act on, and the synthetic card
+        // below is already this route's answer for "no frame available", so a
+        // refused lookup takes that same exit rather than breaking the <img>
+        // element with a 429 the page has no way to render.
+        //
+        // A frame already bought for this exact camera and pose is served
+        // from memory first, before the Google budget is consulted: the 10 s
+        // card refresh would otherwise buy the same still every time, and a
+        // cached answer costs nothing, so it does not spend the viewer's
+        // allowance.
+        //
+        // Both wait on a configured key: removing the key is how an operator
+        // turns Street View off, so it switches off the cached frames too,
+        // and a keyless request has nothing to spend that budget on.
+        // A forwarded request (whose client this server cannot see) gets the
+        // placeholder, as if no key were configured: no cached frame and no
+        // Google spend. Any forwarding header counts, even an empty one.
         const forwarded = PROXY_SIGNALS.some(
           (name) => req.headers?.[name] !== undefined,
         );
-        const sv = forwarded
+        const streetViewTarget = forwarded
           ? null
-          : await streetViewFallback({
-              lat,
-              lon,
-              heading,
-              fov,
-              pitch,
-            });
+          : resolveStreetViewTarget(source);
+        let sv = null;
+        if (streetViewTarget && googleServerApiKey()) {
+          const pose = streetViewPose({ heading, fov, pitch });
+          const cacheKey = streetViewCacheKey(cameraId, streetViewTarget, pose);
+          sv = streetViewFrames.get(cacheKey);
+          // Null only for the explicit GEV_RATELIMIT_GOOGLE_PER_MIN=0 opt-out.
+          const allowGoogle = googleRateLimiter();
+          if (!sv && (!allowGoogle || allowGoogle(clientKey(req)))) {
+            sv = await streetViewFallback({ ...streetViewTarget, ...pose });
+            if (sv?.ok) streetViewFrames.set(cacheKey, sv);
+          }
+        }
         if (sv?.ok) {
           setHealth(cameraId, {
             status: 'degraded',

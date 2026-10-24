@@ -1,9 +1,10 @@
 import {
+  googleRateLimiter,
   googleServerApiKey,
   keylessGooglePlacesResponse,
   keylessGoogleGeocodeResponse,
 } from './google-key.js';
-import { makeCostRateLimiter, clientKey } from '../common/rate-limit.js';
+import { clientKey } from '../common/rate-limit.js';
 import { admitSameSite } from '../common/same-site.js';
 import { readResponseJsonCapped } from '../common/http.js';
 import {
@@ -11,31 +12,7 @@ import {
   projectTextSearchPlaces,
 } from '../../../src/data/placeProviderPayloads.js';
 
-// Construct lazily after the standalone environment has loaded.
-// undefined = not built yet; null = the explicit 0 opt-out; fn = active limiter
-let _googleRateLimiter;
-
-/**
- * Requests/min/IP applied when GEV_RATELIMIT_GOOGLE_PER_MIN is unset. This is
- * the value the Pinokio build already ships (pinokio/_ENVIRONMENT), so the
- * packaged app keeps behaving exactly as it does today and only an
- * unconfigured server changes — from unlimited to what the product already
- * runs with. Places calls are user-driven (a search, a nearby lookup, an
- * installation probe) rather than polled, so this sits far above what the app
- * generates and bites only a caller enumerating the endpoint. `.env.example`
- * suggests a tighter 60 when the host is not localhost; that still applies.
- */
-export const GOOGLE_DEFAULT_PER_MIN = 120;
-
-/** Google cost endpoints (nearby-places, text-search, geocoding). Null only when set to 0. */
-function googleRateLimiter() {
-  if (_googleRateLimiter === undefined)
-    _googleRateLimiter = makeCostRateLimiter(
-      process.env.GEV_RATELIMIT_GOOGLE_PER_MIN,
-      GOOGLE_DEFAULT_PER_MIN,
-    );
-  return _googleRateLimiter;
-}
+export { GOOGLE_DEFAULT_PER_MIN } from './google-key.js';
 
 /** Validate raw lat/lon presence and WGS84 bounds before consuming request quota. */
 export function validatePlacesCoordinates(searchParams) {
