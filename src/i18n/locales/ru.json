@@ -3014,5 +3014,72 @@
   "Layers": "Слои",
   "Search": "Поиск",
   "More": "Ещё",
-  "Panels": "Панели"
+  "Panels": "Панели",
+  "action {stage}": "готовность {stage}",
+  "minor {stage}": "слабое {stage}",
+  "moderate {stage}": "умеренное {stage}",
+  "major {stage}": "сильное {stage}",
+  "Stage {value}": "Уровень {value}",
+  "Flow {value}": "Расход {value}",
+  "Flood stages ({unit}): {stages}": "Уровни затопления ({unit}): {stages}",
+  "RIVER GAUGE · NWS {lid}": "ГИДРОПОСТ · NWS {lid}",
+  "{reading} · observed {age}": "{reading} · измерено {age}",
+  "No current reading": "Нет текущих показаний",
+  "Forecast {reading} · {category} · {when}": "Прогноз {reading} · {category} · {when}",
+  "Loading flood stages…": "Загрузка уровней затопления…",
+  "Flood stages unavailable": "Уровни затопления недоступны",
+  "Out of service": "Не работает",
+  "No flood stages defined": "Уровни затопления не заданы",
+  "Recent crest {stage} on {date}": "Недавний пик {stage}, {date}",
+  "Highest crest {stage} on {date}": "Наивысший пик {stage}, {date}",
+  "USGS site {id}": "Станция USGS {id}",
+  "NWPS gauge page ↗ · click card to open": "Страница гидропоста NWPS ↗ · нажмите на карточку, чтобы открыть",
+  "Open {name} on the NWPS gauge page": "Открыть {name} на странице гидропоста NWPS",
+  "NOAA NWPS · OBSERVED": "NOAA NWPS · НАБЛЮДЕНИЕ",
+  "River gauge source unavailable": "Источник данных гидропостов недоступен",
+  "SHOW MOST SEVERE": "ПОКАЗАТЬ САМЫЙ ОПАСНЫЙ",
+  "Stop following the current object before navigating to a gauge": "Прекратите следовать за текущим объектом, прежде чем переходить к гидропосту",
+  "Move to the most severe flooding gauge and show its details": "Перейти к гидропосту с самым сильным затоплением и показать сведения о нём",
+  "Colour shows the NWS flood category of the latest reading. Categories come from NOAA; they are not flood warnings. Click a gauge for its flood stages and crests.": "Цвет показывает категорию затопления NWS по последнему измерению. Категории даёт NOAA; это не предупреждения о наводнении. Нажмите на гидропост, чтобы увидеть уровни затопления и пики.",
+  "{count} major": {
+    "one": "{count} с сильным затоплением",
+    "few": "{count} с сильным затоплением",
+    "many": "{count} с сильным затоплением",
+    "other": "{count} с сильным затоплением"
+  },
+  "{count} moderate": {
+    "one": "{count} с умеренным затоплением",
+    "few": "{count} с умеренным затоплением",
+    "many": "{count} с умеренным затоплением",
+    "other": "{count} с умеренным затоплением"
+  },
+  "{count} minor": {
+    "one": "{count} со слабым затоплением",
+    "few": "{count} со слабым затоплением",
+    "many": "{count} со слабым затоплением",
+    "other": "{count} со слабым затоплением"
+  },
+  "{count} at action": {
+    "one": "{count} на уровне готовности",
+    "few": "{count} на уровне готовности",
+    "many": "{count} на уровне готовности",
+    "other": "{count} на уровне готовности"
+  },
+  "{count} gauges": {
+    "one": "{count} гидропост",
+    "few": "{count} гидропоста",
+    "many": "{count} гидропостов",
+    "other": "{count} гидропоста"
+  },
+  "none in flood": "затоплений нет",
+  "building the national gauge snapshot": "сборка общенационального снимка гидропостов",
+  "Some regions not refreshed": "Некоторые регионы не обновлены",
+  "Major flooding": "Сильное затопление",
+  "Moderate flooding": "Умеренное затопление",
+  "Minor flooding": "Слабое затопление",
+  "Near flood stage (action)": "Близко к уровню затопления (готовность)",
+  "Below low-water threshold": "Ниже порога маловодья",
+  "Below flood stage": "Ниже уровня затопления",
+  "Reading not current": "Показания устарели",
+  "River Flood Gauges": "Речные гидропосты"
 }

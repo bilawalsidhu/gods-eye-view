@@ -213,6 +213,21 @@ const layers = [
     },
   },
   {
+    id: 'river-gauges',
+    aliases: ['flood gauges', 'river flooding'],
+    context: false,
+    query: {
+      fields: {
+        name: ['t'],
+        state: ['t'],
+        category: ['t'],
+        stageFt: ['n', 'ft'],
+        flowKcfs: ['n', 'kcfs'],
+        observedMs: ['ms'],
+      },
+    },
+  },
+  {
     id: 'weather-cyclones',
     aliases: ['cyclones', 'hurricanes', 'typhoons', 'tropical storms'],
     context: false,

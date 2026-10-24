@@ -103,6 +103,7 @@ test('spoken aliases resolve to real layers, keep every legacy phrase and never 
     'street level': 'street-level', mapillary: 'street-level',
     wind: 'wind', directions: 'directions', 'fire perimeters': 'fire-perimeters',
     'wildfire perimeters': 'fire-perimeters', 'burn areas': 'fire-perimeters',
+    'flood gauges': 'river-gauges', 'river flooding': 'river-gauges',
   };
   for (const [phrase, id] of Object.entries(added)) assert.equal(aliases.get(phrase), id, phrase);
   const claimed = new Map();

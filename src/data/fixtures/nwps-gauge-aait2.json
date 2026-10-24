@@ -1,0 +1,131 @@
+{
+  "lid": "AAIT2",
+  "usgsId": "08158930",
+  "reachId": "5781731",
+  "name": "Williamson Creek at Manchaca Road at Austin",
+  "description": "",
+  "rfc": {
+    "abbreviation": "WGRFC",
+    "name": "West Gulf River Forecast Center"
+  },
+  "wfo": {
+    "abbreviation": "EWX",
+    "name": "New Braunfels"
+  },
+  "state": {
+    "abbreviation": "TX",
+    "name": "Texas"
+  },
+  "county": "Travis",
+  "timeZone": "CST6CDT",
+  "latitude": 30.221111111111,
+  "longitude": -97.793333333333,
+  "pedts": {
+    "observed": "HGIRG",
+    "forecast": ""
+  },
+  "status": {
+    "observed": {
+      "primary": 1.9,
+      "primaryUnit": "ft",
+      "secondary": 0.001,
+      "secondaryUnit": "kcfs",
+      "floodCategory": "no_flooding",
+      "validTime": "2026-10-24T01:25:00Z"
+    },
+    "forecast": {
+      "primary": -999,
+      "primaryUnit": "",
+      "secondary": -999,
+      "secondaryUnit": "",
+      "floodCategory": "fcst_not_current",
+      "validTime": "0001-01-01T00:00:00Z"
+    }
+  },
+  "flood": {
+    "stageUnits": "ft",
+    "flowUnits": "cfs",
+    "categories": {
+      "major": {
+        "stage": 18,
+        "flow": -9999
+      },
+      "moderate": {
+        "stage": 14,
+        "flow": -9999
+      },
+      "minor": {
+        "stage": 13,
+        "flow": -9999
+      },
+      "action": {
+        "stage": -9999,
+        "flow": -9999
+      }
+    },
+    "lro": null,
+    "crests": {
+      "historic": [
+        {
+          "occurredTime": "2015-10-30T16:12:00Z",
+          "stage": 16.1,
+          "flow": 11293,
+          "preliminary": "O",
+          "olddatum": false
+        },
+        {
+          "occurredTime": "2019-05-04T03:10:00Z",
+          "stage": 14.94,
+          "flow": 8402,
+          "preliminary": "O",
+          "olddatum": false
+        }
+      ],
+      "recent": [
+        {
+          "occurredTime": "2019-05-04T03:10:00Z",
+          "stage": 14.94,
+          "flow": 8402,
+          "preliminary": "O",
+          "olddatum": false
+        },
+        {
+          "occurredTime": "2015-10-30T16:12:00Z",
+          "stage": 16.1,
+          "flow": 11293,
+          "preliminary": "O",
+          "olddatum": false
+        }
+      ]
+    },
+    "lowWaters": {
+      "historic": []
+    },
+    "impacts": []
+  },
+  "dataAttribution": [
+    {
+      "abbrev": "US Geological Survey",
+      "text": "USGS--Water Resources of the United States",
+      "title": "US Geological Survey",
+      "url": "https://waterdata.usgs.gov/monitoring-location/08158930/#dataTypeId=continuous-00065-0&period=P7D"
+    },
+    {
+      "abbrev": "USGS",
+      "text": "08158930",
+      "title": "Observations courtesy of U.S. Geological Survey",
+      "url": "https://waterdata.usgs.gov/nwis/inventory/?site_no=08158930"
+    }
+  ],
+  "normalThreshold": null,
+  "upstreamLid": "",
+  "downstreamLid": "",
+  "inService": {
+    "enabled": true,
+    "message": ""
+  },
+  "lowThreshold": null,
+  "forecastReliability": "Graphical forecasts are not available during times of high water, forecast crest information can be found in the local WFO web page.",
+  "ObservedFloodCategory": "no_flooding",
+  "ForecastFloodCategory": "fcst_not_current"
+}

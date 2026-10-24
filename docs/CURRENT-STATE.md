@@ -3686,6 +3686,7 @@ its criteria cannot be silently ignored.
 | Wind 🌬                 | NOAA GFS 10 m wind (keyless, 0.25°→1° grid; animated particles)                                                                                                                                 | `src/data/wind.js`                                    | `/api/wind`                                              | 1 h (forecast cycle)                                                              |
 | GNSS Integrity 📡 (`gnss-integrity`) | adsb.lol point snapshot, low navigation accuracy binned per 0.5° cell (GEV NIC/NACp threshold + gpsjam.org formula and bands, keyless, ODbL) | `src/layers/gnss/` via `src/app/layers/gnss.js` | `/api/gnss-integrity` | camera-driven (600 ms debounce, minimum 2.5 s between reads) + 60s poll (server cache 60 s; 30 min rolling window) |
 | Fire Perimeters 🔥 | NIFC WFIGS current interagency perimeters (keyless, paged past the 2000-record cap); InciWeb catalog + incident page origin and update time checks for verified incident-page links | `src/layers/perimeters/` via `src/app/layers/perimeters.js` | `/api/fire-perimeters` + `/api/fire-perimeters/inciweb/*` | 5 min (server caches: catalog 1 h; publication 30 min) |
+| River Flood Gauges ≋ (`river-gauges`) | NOAA NWPS gauge list (seven regional boxes) and per-gauge records (keyless) | `src/layers/riverGauges/` via `src/app/layers/riverGauges.js` | `/api/nwps/gauges`, `/api/nwps/gauge/<lid>` | 5 min poll; server snapshot at most every 15 min, detail cached 15 min |
 
 GNSS Integrity samples a 250 nm circle around the Earth point under the screen
 centre. Camera reads debounce for 600 ms with a monotonic 2.5 s minimum gap;
@@ -3711,6 +3712,39 @@ MLAT-positioned GPS loss, derived-field exclusions and the NIC 0 exception.
 anchors, recovery, keyboard and mobile states; emergency repainting is covered
 by `scripts/qa-emergency-squawk.mjs`. Both accept `--timeout-ms` for slow boot.
 
+River Flood Gauges (Events group, share token `5`) shows the NWS flood category
+of about 13,000 NOAA NWPS river gauges. NWPS answers its gauge list by bounding
+box, a national box runs into its 60 s gateway timeout, and the list allows 10
+requests per 5 minutes per client, so `server/providers/nwps.js` builds one
+national snapshot from seven fixed boxes (five CONUS columns split at 107°,
+94°, 86° and 80°W, Alaska, and a 17–23°N strip with Hawaii, Puerto Rico and
+the U.S. Virgin Islands), one in flight, at most every 15 minutes and only on
+request.
+It stops at 8 list requests per 5 minutes and asks nothing after a 429 until
+NWPS's window has passed. Requests
+during a rebuild get the previous snapshot; a box that fails keeps its previous
+gauges and marks the snapshot stale; with no snapshot the route answers 503
+with `Retry-After: 120`, and a failed build is not retried for 5 minutes. Each
+gauge is trimmed to id, name, position, state, forecast office, and observed
+and forecast stage, flow, category and time (`-999`/`-9999` and NWPS's
+`0001-01-01` time become null; stage and flow are told apart by unit), and the
+snapshot is served gzip-encoded when the client accepts it.
+`/api/nwps/gauge/<lid>` accepts only the four-letters-and-a-digit NWS id
+(checked before any request) and returns flood stages, the three highest and
+three most recent crests, the USGS site id and service state, cached for 15
+minutes and served stale when a re-read fails.
+The browser draws every gauge as one point primitive coloured by category
+(action yellow, minor orange, moderate red, major purple, below flood stage a
+quiet green, undefined or not-current readings grey and dimmed), larger and on
+top while in flood; points beyond the globe's horizon are hidden on camera
+change. A click opens a card with the latest reading and its age, a current
+forecast, then the flood stages, crests and USGS id once the detail arrives; a
+click on the card opens the gauge's `water.noaa.gov` page. **SHOW MOST
+SEVERE** selects the worst flooding gauge nearest the camera. The row counts
+gauges and those at each flood stage; failures read `NWPS HTTP <status>`,
+`NWPS network error` or `Malformed NWPS response`, and gauges already shown
+stay up as stale. `getStats().observedAt` is the newest observation time.
+Categories are NOAA's and are not flood warnings.
 
 Fire Perimeters uses capped, timed server reads with stale-on-error caching and a per-client limit. Unchanged snapshots retain geometry; link checks cancel on disable or selection change, and the row legend shows reported containment.
 

@@ -409,6 +409,10 @@ export const DATA_CREDITS = [
     html: 'Cyclone advisories: <a href="https://www.nhc.noaa.gov/" target="_blank" rel="noopener">NOAA/NWS NHC / CPHC</a> · Atlantic and eastern/central North Pacific. Forecast center uncertainty, not storm size.',
   },
   {
+    key: 'noaa-nwps',
+    html: 'River gauges: <a href="https://water.noaa.gov/" target="_blank" rel="noopener">NOAA/NWS National Water Prediction Service</a> · flood categories, flood stages, crests and river forecasts; observations courtesy of USGS and other gauge operators. U.S. public domain (<a href="https://www.weather.gov/disclaimer" target="_blank" rel="noopener">NWS disclaimer</a>). Not a flood warning.',
+  },
+  {
     key: 'weather-lightning',
     html: 'Lightning density: NOAA/NWS nowCOAST · derived from Vaisala NLDN/GLD360. <a href="https://ocean.weather.gov/lightning/lightning_pdd.php" target="_blank" rel="noopener">Public derived density product</a>, not raw detections.',
   },

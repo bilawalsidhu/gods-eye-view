@@ -38,6 +38,7 @@ How to read this:
 | **Environment and Climate Change Canada** (MSC GeoMet OGC API) | Air quality (AQHI) — Canadian station observations | [ECCC Data Servers End-use Licence](https://eccc-msc.github.io/open-data/licence/readme_en/) (open, attribution required, no endorsement implied) | "Contains information licensed under the Environment and Climate Change Canada Data Servers End-use Licence" |
 | **NASA GIBS** (WMTS tiles + Worldview Snapshots) and **NASA CMR** (granule catalog) | Recent Imagery layer: HLS S30/L30 (Sentinel-2, Landsat 8/9) and VIIRS true-colour tiles draped on the map, per-day thumbnails and PNG exports; the HLS granule catalog (dates, cloud, footprints) for a selected box | U.S. public domain (NASA data); keyless, browser-direct (CORS `*`); no bulk use — one 30-day catalog query per box, tiles bounded to the box, six tile requests in flight | "We acknowledge the use of imagery provided by services from NASA's Global Imagery Browse Services (GIBS), part of NASA's Earth Science Data and Information System (ESDIS)." — [gibs.earthdata.nasa.gov](https://gibs.earthdata.nasa.gov), [HLS](https://lpdaac.usgs.gov/products/hlss30v002/) |
 | **NIFC WFIGS** (Wildland Fire Interagency Geospatial Services, ArcGIS feature service) | Fire Perimeters layer: current interagency wildfire incident perimeters, containment, and incident facts | U.S. public domain (interagency wildland-fire data published through the [NIFC Open Data portal](https://data-nifc.opendata.arcgis.com/)); fetched keyless through `/api/fire-perimeters` (5-minute server cache) with `exceededTransferLimit` paging | "Wildfire perimeters: National Interagency Fire Center (WFIGS)" |
+| **NOAA NWPS** (National Water Prediction Service API, `api.water.noaa.gov/nwps/v1`) | River Flood Gauges layer: the NWS flood category, latest observed stage and flow and current river forecast at about 13,000 gauges; on selection, the gauge's flood stages, highest and most recent crests, and USGS site id | U.S. federal government work, public domain ([NWS disclaimer](https://www.weather.gov/disclaimer)); keyless. Fetched only by the server through `/api/nwps/gauges` (seven regional reads, one at a time, at most every 15 minutes, under NWPS's limit of 10 list requests per 5 minutes) and `/api/nwps/gauge/<id>` (15-minute cache). Not a flood warning; no NWS endorsement implied | "River gauges: NOAA/NWS National Water Prediction Service; observations courtesy of USGS and other gauge operators" |
 | **InciWeb** (inciweb.wildfire.gov)                                    | Per-incident "InciWeb ↗" card links to official incident pages (narratives, evacuation/closure notices) | U.S. government public incident information. Links are matched best-effort by incident name and state, with incident page origin and update times checked on selection. Same-origin `/api/fire-perimeters/inciweb` routes cache the catalog for 1 hour and publication metadata for 30 minutes; linked pages remain InciWeb content | "Incident information: InciWeb (inciweb.wildfire.gov)" |
 | **OpenFreeMap / OpenMapTiles** | Vector tiles | OpenStreetMap data under ODbL 1.0 | OpenFreeMap © OpenMapTiles |
 | **Overture Maps Foundation** | Military area names pack | [ODbL 1.0](https://opendatacommons.org/licenses/odbl/1-0/) | Overture Maps Foundation |
@@ -407,6 +408,36 @@ This implementation is original; those contributions have not been merged here.
   fixed upstream endpoints, bounded bodies/geometry/deadline, explicit unavailable/stale states.
   Direct status fetching is unsuitable in browsers because NHC does not advertise CORS.
 
+### River Flood Gauges: NOAA NWPS
+
+- **Source:** the [National Water Prediction Service API](https://api.water.noaa.gov/nwps/v1/docs/)
+  (`/gauges` by bounding box, `/gauges/{lid}` for one gauge), keyless.
+- **Rights/credit:** NOAA/NWS National Water Prediction Service. NWS information is
+  in the public domain and may be used for any lawful purpose provided it is not
+  presented as the user's own, as implying NWS endorsement, or, once modified, as
+  official government material ([NWS disclaimer](https://www.weather.gov/disclaimer)).
+  The layer shows NWPS values as published and links each gauge to its
+  [water.noaa.gov](https://water.noaa.gov/) page; its own colours and wording
+  are not official products. Many observations are courtesy of the USGS and
+  other gauge operators, as each gauge's NWPS record states.
+- **Meaning:** the flood category NWS assigns to the latest observation (action,
+  minor, moderate, major) against that gauge's own flood stages. It is not a flood
+  watch or warning; those come from NWS forecast offices.
+- **Delivery and request budget:** the national list is too slow for a browser (a
+  CONUS-wide box takes about a minute; no box times out at the gateway after
+  60 s) and NWPS allows 10 gauge-list requests per 5 minutes per client (its
+  published 429 message). The server reads seven fixed regional boxes (five
+  CONUS columns split at 107°, 94°, 86° and 80°W, Alaska, and one 17–23°N strip
+  with Hawaii, Puerto Rico and the U.S. Virgin Islands; NWPS lists no gauges for
+  Guam or American Samoa), one at a time because two parallel column reads both
+  ran past the 60 s gateway limit, at most every 15 minutes, and
+  only while someone has the layer on. It counts its own list requests and stops
+  at 8 per 5 minutes; after a 429 it asks nothing until NWPS's window has
+  passed. A box that fails keeps its previous gauges; with no snapshot at all
+  the route answers 503 with `Retry-After`.
+  A gauge's detail is read once per selection and cached for 15 minutes.
+  The browser never calls NWPS and never supplies a URL; gauge ids are checked
+  against the four-letters-and-a-digit NWS form before any request.
 ### Weather: observed lightning density
 
 - **Source:** [NOAA nowCOAST lightning detection WMS](https://nowcoast.noaa.gov/geoserver/observations/lightning_detection/ows),
