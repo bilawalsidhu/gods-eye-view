@@ -2047,10 +2047,18 @@ fetching, trailing-24-hour filtering and partial-success caching are unchanged.
 > `localStorage['gev:first-run-mission:v1'] === 'suppressed'`, written **only**
 > by the "Don't show this again" checkbox → the per-session
 > `sessionStorage['gev:first-run-mission-session:v1'] === 'dismissed'`, written
-> by **every** close path (mission, Explore, ESC). So it returns each fresh
-> browser session until the visitor ticks the box; clearing storage un-ticks it,
-> which is accepted. Both stores fail open — an unreadable store still shows the
-> launcher rather than silently swallowing first launch.
+> by **every** close path (mission, Explore, ESC, the footer dismiss button). So
+> it returns each fresh browser session until the visitor ticks the box; clearing
+> storage un-ticks it, which is accepted. Both stores fail open — an unreadable
+> store still shows the launcher rather than silently swallowing first launch.
+>
+> **The footer dismiss button is the keyboardless ESC.** Phones and tablets have
+> no ESC key, so the footer hint is a `data-first-run-dismiss` button that calls
+> the same `dismiss()` as ESC. It stays visible at every width (phones used to
+> hide it, leaving a mission as the only way out) and reads DISMISS on a
+> `(hover: none) and (pointer: coarse)` screen, "ESC to dismiss" otherwise. Its
+> 44px touch target is a `::before` outside the layout, so the footer row keeps
+> its one-line height.
 >
 > **What a mission may persist (do not "simplify" this).** Layer enablement is
 > durable in this app (`gev:layer-state:v2`, written by

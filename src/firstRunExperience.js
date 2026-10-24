@@ -543,6 +543,10 @@ export function initFirstRunExperience({
   });
 
   for (const button of buttons) button.addEventListener('click', onChoice);
+  // The same dismissal as ESC, for screens without a keyboard.
+  root
+    .querySelector('[data-first-run-dismiss]')
+    ?.addEventListener('click', () => dismiss());
   suppressBox?.addEventListener('change', onSuppressChange);
   // Capture phase: the app binds its own global hotkeys (including bare letters
   // that cycle detection and styles), and the launcher owns the keyboard first.
