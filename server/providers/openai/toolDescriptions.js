@@ -91,7 +91,7 @@ export const ACTION_DESCRIPTIONS = {
     parameters: {
       properties: {
         layerId: {
-          description: `Spoken names: ${voiceLayerAliasHint()}.`,
+          description: `Names: ${voiceLayerAliasHint()}.`,
           $position: 1,
         },
       },
