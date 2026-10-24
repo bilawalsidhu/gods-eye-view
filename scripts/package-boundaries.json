@@ -3674,6 +3674,7 @@
       "src/data/labelArbiter.js",
       "src/data/meshFloorSampler.js",
       "src/data/pickRegistry.js",
+      "src/data/scenePick.js",
       "src/data/spriteOrder.js",
       "src/data/terrainHeights.js",
       "src/data/transit.js",
