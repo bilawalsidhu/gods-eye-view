@@ -2759,13 +2759,16 @@ async function main() {
       const beforeSpace = radio.getUIState().audioState;
       // Simulate an already-started hold-Space session; click-started open mic
       // deliberately ignores Space takeover, and short taps never claim voice.
-      const priorPushToTalkMode = voice.pushToTalkMode;
-      voice.pushToTalkMode = true;
+      // The provider facade forwards reads, not writes. Set the mounted
+      // controller's input owner; assigning on the facade only shadows it.
+      const controller = voice.session.adapter.controller;
+      const priorPushToTalkMode = controller.pushToTalkMode;
+      controller.pushToTalkMode = true;
       document.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, cancelable: true, code: 'Space', key: ' ' }));
       await new Promise((resolve) => setTimeout(resolve, 700));
       const afterSpace = radio.getUIState().audioState;
       document.dispatchEvent(new KeyboardEvent('keyup', { bubbles: true, cancelable: true, code: 'Space', key: ' ' }));
-      voice.pushToTalkMode = priorPushToTalkMode;
+      controller.pushToTalkMode = priorPushToTalkMode;
       await radio.play();
       voice.setVoiceSpeaker('ai');
       return { beforeSpace, afterSpace, afterAi: radio.getUIState().audioState };

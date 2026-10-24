@@ -11,6 +11,8 @@
  * that belong to someone else and leave them alone.
  */
 
+import { isSurfacePick } from './scenePick.js';
+
 /** @type {Map<string, (pickedId: string) => boolean>} layerId -> ownership predicate */
 const _owners = new Map();
 
@@ -99,4 +101,37 @@ export function isOwnedByOtherLayer(layerId, pickedId) {
     }
   }
   return false;
+}
+
+/**
+ * Resolve a moving-contact click without letting map tiles hide a nearby touch
+ * target. Exact picks always win; only a coarse primary pointer may expand a
+ * surface miss. Every consumer uses the same ordered, bounded scene hits, so sibling layers
+ * do not each choose their own contact under one tap.
+ * Unowned non-surface objects remain barriers, not permission to pick through.
+ *
+ * @param {object} scene Cesium scene with pick and optional drillPick.
+ * @param {{x: number, y: number}} position Screen position in CSS pixels.
+ * @returns {object|null|undefined} Original pick or the first registered touch hit.
+ */
+export function pickContact(scene, position) {
+  const picked = scene.pick(position);
+  if (
+    !globalThis.matchMedia?.('(pointer: coarse)').matches ||
+    findPickOwner(resolvePickId(picked)) ||
+    !isSurfacePick(picked) ||
+    typeof scene.drillPick !== 'function'
+  )
+    return picked;
+  let hits;
+  try {
+    hits = scene.drillPick(position, 8, 14, 14) || [];
+  } catch {
+    return picked;
+  }
+  for (const hit of hits.slice(0, 8)) {
+    if (findPickOwner(resolvePickId(hit))) return hit;
+    if (!isSurfacePick(hit)) break;
+  }
+  return picked;
 }
