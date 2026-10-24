@@ -1105,6 +1105,7 @@
   "src/layers/weather/fieldTexture.js",
   "src/layers/weather/maskedGrid.js",
   "src/layers/weather/ifsFieldSource.js",
+  "src/layers/weather/ifsFieldSource.test.mjs",
   "src/layers/oceanCurrents/model.js",
   "src/layers/oceanCurrents/source.js",
   "src/layers/oceanCurrents/index.js",

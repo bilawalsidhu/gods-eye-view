@@ -3,8 +3,8 @@ import {
   readResponseJsonCapped,
 } from '../../sources/httpBody.js';
 
-/** 2 × 1440 × 721 float32, the largest grid an IFS field route can advertise. */
-const MAX_GRID_BYTES = 2 * 1440 * 721 * 4;
+/** One 0.25° global float32 grid, the largest a route advertises per component. */
+const COMPONENT_BYTES = 1440 * 721 * 4;
 
 /**
  * Read one global IFS field through its same-origin route: the manifest, then
@@ -14,7 +14,8 @@ const MAX_GRID_BYTES = 2 * 1440 * 721 * 4;
  * @param {{route: string, errorPrefix: string, networkError: string,
  *   malformed: string, parse: (payload: unknown) => object|null,
  *   decode: (buffer: ArrayBuffer, grid: object) => object|null,
- *   fetchImpl?: Function}} options
+ *   components?: number, fetchImpl?: Function}} options
+ *   `components` is how many grids the response carries; it bounds the read.
  */
 export function createIfsFieldSource({
   route,
@@ -23,6 +24,7 @@ export function createIfsFieldSource({
   malformed,
   parse,
   decode,
+  components = 1,
   fetchImpl = (...args) => globalThis.fetch(...args),
 }) {
   function httpError(status) {
@@ -66,7 +68,7 @@ export function createIfsFieldSource({
       try {
         const bytes = await readResponseBytesCapped(
           gridResponse,
-          MAX_GRID_BYTES,
+          components * COMPONENT_BYTES,
           signal,
         );
         values = decode(

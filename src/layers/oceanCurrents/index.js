@@ -7,19 +7,25 @@ import { createWindGpuRendering } from '../wind/gpuRendering.js';
 import {
   CURRENT_SPEED_STOPS,
   createCurrentSpeedRaster,
+  sampleCurrentVector,
   sampleOceanCurrent,
 } from './model.js';
 export * from './model.js';
 export { createOceanCurrentsSource } from './source.js';
 
-/** Below the wind and weather scalar context, which order at 0. */
-const IMAGERY_PRIORITY = -1;
+/**
+ * Below the wind and weather scalar context (0) and sea state (-1), matching
+ * the shell order over 3D tiles, whatever order the layers were enabled in.
+ */
+const IMAGERY_PRIORITY = -2;
 
 /**
  * Ocean currents drawn with the wind streamline renderer. Currents run at
  * 0.05–2 m/s against wind's 1–30, so a path step covers six hours of field
  * time instead of half an hour; lines float just above the sea, not at 12 km,
- * and are near white so they read over the speed colours.
+ * stay visible down to a few kilometres of camera height for coastal
+ * currents, sample only sea corners so they reach the coast, and are near
+ * white so they read over the speed colours.
  */
 export const OCEAN_CURRENT_FLOW_PROFILE = Object.freeze({
   materialType: 'GevOceanCurrentStreamline',
@@ -29,10 +35,11 @@ export const OCEAN_CURRENT_FLOW_PROFILE = Object.freeze({
     stepSeconds: 6 * 3600,
     maxStepSeconds: 6 * 3600,
     minSpeed: 0.05,
+    sample: sampleCurrentVector,
   }),
   displayHeightMeters: 1000,
-  fadeLowMeters: 15000,
-  fadeHighMeters: 60000,
+  fadeLowMeters: 2000,
+  fadeHighMeters: 8000,
   baseColor: Object.freeze([0.86, 0.93, 0.96]),
   tipColor: Object.freeze([1, 1, 1]),
 });
@@ -73,6 +80,7 @@ export function createOceanCurrentsLayer({
   let flowActive = false;
   let flowVisible = false;
   let flowTime = 0;
+  let flowNarrow = false;
   let lastTime = null;
   let frame = null;
   let removers = [];
@@ -95,6 +103,11 @@ export function createOceanCurrentsLayer({
       collection: viewer?.imageryLayers ?? viewer?.scene?.imageryLayers,
       kind: 'globe',
     };
+  /** The renderer's own narrow-screen test, which picks its path budget. */
+  const narrow = () => {
+    const width = viewer?.scene?.canvas?.clientWidth;
+    return width > 0 && width < 700;
+  };
   const still = () =>
     media?.matches === true || globalThis.document?.hidden === true;
 
@@ -122,6 +135,8 @@ export function createOceanCurrentsLayer({
   function viewChanged() {
     const camera = viewer?.scene?.camera;
     if (!flowActive || !camera) return;
+    // Rebake when the window crosses the renderer's narrow-screen budget.
+    if (narrow() !== flowNarrow) return installFlow();
     flowVisible = flow.updateVisibility(camera);
     if (flowVisible) schedule();
     else cancel();
@@ -129,6 +144,7 @@ export function createOceanCurrentsLayer({
   function motionChanged() {
     cancel();
     flow.setOptions({ paused: still() });
+    viewer?.scene?.requestRender?.();
     viewChanged();
   }
 
@@ -170,6 +186,7 @@ export function createOceanCurrentsLayer({
   }
   function installFlow() {
     cancel();
+    flowNarrow = narrow();
     flowActive =
       Boolean(enabled && field && viewer) &&
       flow.setField({ ...field.grid, u: field.u, v: field.v });

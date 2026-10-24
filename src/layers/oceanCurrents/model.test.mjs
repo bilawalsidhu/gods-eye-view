@@ -1,11 +1,13 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { bakeWindStreamlines } from '../wind/streamlines.js';
 import {
   CURRENT_SPEED_STOPS,
   createCurrentSpeedRaster,
   currentSpeedColor,
   decodeOceanCurrentsGrid,
   parseOceanCurrentsManifest,
+  sampleCurrentVector,
   sampleOceanCurrent,
 } from './model.js';
 
@@ -136,4 +138,36 @@ test('the raster colours fast water, leaves slow water and land clear, and is nu
     v: new Float32Array(12),
   };
   assert.equal(createCurrentSpeedRaster(still, 8, 4), null);
+});
+
+test('flow lines baked with the current sampler run up to the coast', () => {
+  // 2° global grid flowing east at 0.5 m/s, with land from 0° to 20°E.
+  const nx = 180;
+  const ny = 91;
+  const u = new Float32Array(nx * ny).fill(0.5);
+  const v = new Float32Array(nx * ny);
+  for (let y = 0; y < ny; y += 1)
+    for (let x = 0; x <= 10; x += 1) u[y * nx + x] = v[y * nx + x] = NaN;
+  const flat = { nx, ny, lo1: 0, la1: 90, dx: 2, dy: 2, u, v };
+  assert.ok(Number.isNaN(sampleCurrentVector(flat, 10, 0).u), 'inland');
+  assert.equal(sampleCurrentVector(flat, -1, 0).u, 0.5, 'coast cell');
+  const bake = (options) =>
+    bakeWindStreamlines(flat, {
+      count: 2000,
+      stepSeconds: 6 * 3600,
+      maxStepSeconds: 6 * 3600,
+      minSpeed: 0.05,
+      ...options,
+    });
+  // Closest approach to the land's western edge (0°) from the west.
+  const reach = (paths) =>
+    Math.max(
+      ...paths.flatMap(({ coordinates }) =>
+        coordinates.map(([lon]) => (lon < 0 && lon > -30 ? lon : -Infinity)),
+      ),
+    );
+  const plain = reach(bake({}));
+  const masked = reach(bake({ sample: sampleCurrentVector }));
+  assert.ok(plain < -1.5, `plain bilinear stops a cell short (${plain})`);
+  assert.ok(masked > -0.5, `masked reaches the coast (${masked})`);
 });

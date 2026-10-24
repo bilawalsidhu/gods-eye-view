@@ -14,6 +14,7 @@ export function createOceanCurrentsSource({ fetchImpl } = {}) {
     malformed: msg('Malformed ocean currents response'),
     parse: parseOceanCurrentsManifest,
     decode: decodeOceanCurrentsGrid,
+    components: 2,
     fetchImpl,
   });
   return {

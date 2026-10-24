@@ -3,6 +3,7 @@ import test from 'node:test';
 import {
   createOceanCurrentsLayer,
   OCEAN_CURRENT_FLOW_PROFILE,
+  sampleCurrentVector,
 } from './index.js';
 
 function fakeCesium() {
@@ -96,11 +97,13 @@ function setup(getSnapshot) {
     requestFrame: (callback) => frames.push(callback),
     cancelFrame: () => {},
   });
+  const renders = { count: 0 };
   const viewer = {
     imageryLayers: collection,
     scene: {
       camera: {},
-      requestRender() {},
+      canvas: { clientWidth: 1200 },
+      requestRender: () => (renders.count += 1),
       preRender: {
         addEventListener(callback) {
           preRender = callback;
@@ -113,6 +116,8 @@ function setup(getSnapshot) {
   return {
     collection,
     flow,
+    viewer,
+    renders,
     frames,
     layer,
     preRender: () => preRender?.(),
@@ -126,6 +131,11 @@ test('a loaded field draws one speed texture and bakes flow lines with the ocean
   assert.equal(await layer.update(), true);
   assert.equal(collection.layers.length, 1);
   assert.equal(flow.calls.profile, OCEAN_CURRENT_FLOW_PROFILE);
+  assert.equal(
+    OCEAN_CURRENT_FLOW_PROFILE.bake.sample,
+    sampleCurrentVector,
+    'lines bake with the sea-only sampler',
+  );
   const [field] = flow.calls.fields;
   assert.equal(field.nx, 4, 'the renderer gets a flat grid');
   assert.equal(field.u[4], Math.fround(1.2));
@@ -198,4 +208,31 @@ test('a late answer after disable draws nothing', async () => {
   assert.equal(collection.layers.length, 0);
   assert.equal(flow.calls.fields.length, 0);
   assert.equal(layer.getRowControls(), null);
+});
+
+test('crossing the narrow-screen width rebakes, and a motion change repaints', async () => {
+  const { flow, layer, preRender, viewer, renders } = setup(async () =>
+    snapshot(),
+  );
+  const listeners = {};
+  globalThis.matchMedia = () => ({
+    matches: false,
+    addEventListener: (event, callback) => (listeners[event] = callback),
+    removeEventListener() {},
+  });
+  try {
+    layer.enable();
+    await layer.update();
+    preRender();
+    assert.equal(flow.calls.fields.length, 1, 'same width, no rebake');
+    viewer.scene.canvas.clientWidth = 500;
+    preRender();
+    assert.equal(flow.calls.fields.length, 2, 'narrow budget rebaked');
+    const before = renders.count;
+    listeners.change();
+    assert.ok(renders.count > before, 'the paused look is drawn at once');
+  } finally {
+    delete globalThis.matchMedia;
+    layer.disable();
+  }
 });

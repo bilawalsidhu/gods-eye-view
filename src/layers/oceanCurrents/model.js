@@ -123,6 +123,16 @@ export function sampleOceanCurrent(field, lon, lat) {
 }
 
 /**
+ * Flow-line sampler for a flat current grid (`nx`…`dy`, `u`, `v`): blends only
+ * the sea corners, so baked lines run up to the coast. Writes NaN on land.
+ */
+export function sampleCurrentVector(field, lon, lat, result = {}) {
+  result.u = sampleMaskedGrid(field, field?.u, lon, lat) ?? NaN;
+  result.v = sampleMaskedGrid(field, field?.v, lon, lat) ?? NaN;
+  return result;
+}
+
+/**
  * One geographic texture of current speed for the whole field, pixel centres
  * covering -180..180 and 90..-90. Land, no data and slow water stay
  * transparent. Returns null when nothing would be drawn.
