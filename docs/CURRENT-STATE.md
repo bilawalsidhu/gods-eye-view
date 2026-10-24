@@ -1051,6 +1051,10 @@ Shot selection updates the highlight without replacing the row, preserving
 native double-click rename. Replacing rows revokes their old listeners. Disposal stops controls immediately;
 late file and failed-action completions cannot update removed presentation.
 
+Director clock listeners, interaction observers and scene release failures no
+longer leave the director inconsistent, and a phase error is kept when cleanup
+also fails.
+
 ## Cockpit component ownership
 
 Cockpit presentation is separated from its camera/controller behavior. Existing
