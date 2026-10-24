@@ -331,6 +331,17 @@ const layers = [
     },
   },
   {
+    id: 'ev-charging',
+    aliases: [
+      'charging stations',
+      'ev chargers',
+      'chargers',
+      'ev charging stations',
+    ],
+    context: true,
+    noQuery: 'charging-station records are not loaded for queries',
+  },
+  {
     id: 'radio',
     aliases: ['internet radio', 'radio stations'],
     context: false,

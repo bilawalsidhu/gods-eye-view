@@ -1,5 +1,6 @@
 // The DATA LAYERS row shows the English status texts that GNSS, Transit,
-// CelesTrak and AQHI produce in the UI language.
+// CelesTrak, AQHI and EV charging (with Open Charge Map) produce in the UI
+// language.
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { setLocale } from '../i18n/index.js';
@@ -70,6 +71,26 @@ const cases = [
       lastUpdate: now,
     },
     'request timed out',
+  ],
+  [
+    'ev-charging',
+    {
+      count: 0,
+      error: 'OpenFreeMap network error',
+      source: 'OpenStreetMap · community mapped',
+      lastUpdate: now,
+    },
+    'network error',
+  ],
+  [
+    'ev-charging',
+    {
+      count: 3,
+      error: 'Open Charge Map rate limited',
+      source: 'OpenStreetMap + Open Charge Map',
+      lastUpdate: now,
+    },
+    'rate limited',
   ],
 ];
 

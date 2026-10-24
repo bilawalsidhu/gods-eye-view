@@ -2813,5 +2813,42 @@
   "Layers": "图层",
   "Search": "搜索",
   "More": "更多",
-  "Panels": "面板"
+  "Panels": "面板",
+  "EV Charging": "电动汽车充电",
+  "EV charging station": "电动汽车充电站",
+  "EV CHARGING · OSM MAPPED": "电动汽车充电 · OSM 标注",
+  "EV charging source unavailable": "充电站数据源不可用",
+  "Stop following the current object before navigating to a charging station": "请先停止跟踪当前目标，再前往充电站",
+  "Move to the nearest loaded charging station and show its details": "前往最近已加载的充电站并显示详情",
+  "Charging stations": "充电站",
+  "Stations mapped in OpenStreetMap turn white when selected. The map data names them; it carries no sockets, power or live availability.": "OpenStreetMap 中标注的充电站选中后变为白色。地图数据只提供名称，不含接口、功率或实时空闲情况。",
+  "loading charging stations": "正在加载充电站",
+  "Zoom in to load charging stations": "放大以加载充电站",
+  "No charging stations mapped in this area": "此区域没有地图标注的充电站",
+  "Status unknown": "状态未知",
+  "Available (automated status)": "空闲（自动状态）",
+  "In use (automated status)": "使用中（自动状态）",
+  "Temporarily unavailable": "暂时不可用",
+  "Operational": "正常运营",
+  "Partly operational": "部分运营",
+  "Not operational": "停止运营",
+  "Planned": "规划中",
+  "EV CHARGING · OPEN CHARGE MAP": "电动汽车充电 · OPEN CHARGE MAP",
+  "EV CHARGING · OSM MAPPED · OPEN CHARGE MAP": "电动汽车充电 · OSM 标注 · OPEN CHARGE MAP",
+  "{status} · updated {date}": "{status} · 更新于 {date}",
+  "Connector": "接口",
+  "{power} kW": "{power} kW",
+  "{count} charge points": {
+    "other": "{count} 个充电桩"
+  },
+  "Cost: {cost}": "费用：{cost}",
+  "{provider} via Open Charge Map": "{provider}（经 Open Charge Map）",
+  "Stations mapped in OpenStreetMap turn white when selected. Where Open Charge Map lists a site within 50 m, the card adds its connectors, power, operator and reported status; that status is what contributors last reported, not live availability.": "OpenStreetMap 中标注的充电站选中后变为白色。若 Open Charge Map 在 50 米内收录了站点，卡片会补充其接口、功率、运营商和报告状态；该状态是贡献者最近一次报告的情况，并非实时空闲情况。",
+  "Open Charge Map only": "仅 Open Charge Map 收录",
+  "Sites Open Charge Map lists with no OpenStreetMap station within 50 m. Only openly licensed records are shown, credited to their data provider.": "Open Charge Map 收录、但 50 米内没有 OpenStreetMap 充电站的站点。仅显示开放许可的记录，并注明其数据提供方。",
+  "OpenStreetMap + Open Charge Map": "OpenStreetMap + Open Charge Map",
+  "EV charger connectors, power and reported status (keyless shows OpenStreetMap stations only)": "电动汽车充电桩的接口、功率和报告状态（无密钥时仅显示 OpenStreetMap 充电站）",
+  "+{count} more connector types": {
+    "other": "另有 {count} 种接口"
+  }
 }

@@ -553,6 +553,43 @@ export function transitFeedCredit(feed) {
   };
 }
 
+/**
+ * Per-provider Open Charge Map credit, registered the first time a site from
+ * that DataProvider renders on the EV Charging layer. The provider name,
+ * licence text and website come from OCM's reference data through the local
+ * proxy (server/providers/openChargeMap.js), which keeps only open-licensed
+ * providers; they are escaped here and the link is http(s) only.
+ * @param {{ id: number, name: ?string, licenceText: ?string, url: ?string }} provider
+ * @returns {{ key: string, html: string }|null}
+ */
+export function openChargeMapCredit(provider) {
+  if (!Number.isInteger(provider?.id)) return null;
+  const escape = (text) =>
+    String(text)
+      .replaceAll('&', '&amp;')
+      .replaceAll('<', '&lt;')
+      .replaceAll('>', '&gt;')
+      .replaceAll('"', '&quot;');
+  let href = null;
+  try {
+    const url = new URL(String(provider.url));
+    if (url.protocol === 'https:' || url.protocol === 'http:') href = url.href;
+  } catch {
+    href = null;
+  }
+  const name = escape(provider.name || `provider ${provider.id}`);
+  return {
+    key: `open-charge-map-${provider.id}`,
+    html:
+      'EV charging sites from ' +
+      '<a href="https://openchargemap.org" target="_blank" rel="noopener">Open Charge Map</a>: ' +
+      (href
+        ? `<a href="${escape(href)}" target="_blank" rel="noopener">${name}</a>`
+        : name) +
+      (provider.licenceText ? ` (${escape(provider.licenceText)})` : ''),
+  };
+}
+
 /** Registered when the Bhote Koshi event reconstruction activates. */
 export const BHOTE_KOSHI_CREDIT = {
   key: 'bhote-koshi-2026',
