@@ -324,7 +324,7 @@ test('viewport discovery prioritizes focus, coalesces, and resumes unchecked sta
   ]);
   assert.equal(a, b);
   assert.equal(new URL(calls[0].url).searchParams.get('bbox'), '13,-39,23,-29');
-  assert.equal(new URL(calls[1].url).searchParams.get('bbox'), '0,-40,50,10');
+  assert.match(calls[1].url, /\/latest\?/); // Observations before another catalog page.
   assert.equal(a.scope, 'viewport');
   assert.equal(a.checked, 1);
   assert.equal(a.partial, true);
@@ -350,7 +350,12 @@ test('viewport antimeridian queries split; empty coverage is complete only after
   const first = await source.getSnapshot({ view });
   assert.equal(first.partial, true);
   clock += 61_000;
-  const next = await source.getSnapshot({ view });
+  let next;
+  for (let i = 0; i < 4; i++) {
+    next = await source.getSnapshot({ view });
+    if (!next.partial) break;
+    clock += 8001;
+  }
   assert.equal(next.partial, false);
   assert.equal(next.readings.length, 0);
   assert.ok(
@@ -420,7 +425,7 @@ test('viewport latest acquisition chooses nearest stations before catalog ID ord
   assert.deepEqual(ids, ['/v3/locations/2/latest']);
 });
 
-test('viewport changes share one request budget and evict old view caches', async () => {
+test('catalog reuse survives view eviction and navigation cannot bypass one shared budget', async () => {
   let count = 0;
   const source = createOpenAqAcquisition({
     getKey: () => 'fixture',
@@ -430,18 +435,19 @@ test('viewport changes share one request budget and evict old view caches', asyn
       return Response.json({ results: [] });
     },
   });
-  const view = (i) => [i, -10, i + 20, 10, i + 10, 0];
+  const view = (i) => [i, -1, i + 1, 1, i + 0.5, 0];
   await source.getSnapshot({ view: view(0) });
   for (let i = 1; i <= 8; i++) await source.getSnapshot({ view: view(i) });
   const before = count;
   await source.getSnapshot({ view: view(0) });
-  assert.equal(count, before + 2, 'ninth view evicts oldest cache');
-  for (let i = 9; i < 30; i++) await source.getSnapshot({ view: view(i) });
+  assert.equal(count, before, 'catalog reused after exact-view LRU eviction');
+  for (let i = 9; i < 50; i++) await source.getSnapshot({ view: view(i) });
   assert.equal(count, 45, 'navigation cannot bypass per-minute budget');
-  const limited = await source.getSnapshot({ view: view(31) });
+  const limited = await source.getSnapshot({ view: view(51) });
   assert.equal(limited.partial, true);
   assert.equal(limited.stale, true);
   assert.equal(limited.failureStatus, 429);
+  assert.equal(limited.retryAt, start + 60_000);
 });
 
 test('overlapping views reuse recent station checks and refresh them after expiry', async () => {
@@ -454,13 +460,13 @@ test('overlapping views reuse recent station checks and refresh them after expir
   const next = await source.getSnapshot({ view: [1, -10, 39, 10, 21, 0] });
   assert.equal(latestCount(), 3);
   assert.equal(next.checked, 3);
-  assert.equal(next.partial, false);
+  assert.equal(next.stale, false);
   clock += 21 * 60_000;
   await source.getSnapshot({ view: [1, -10, 39, 10, 21, 0] });
   assert.equal(latestCount(), 6);
 });
 
-test('four new globe views can discover observations within one minute', async () => {
+test('eight new globe regions can discover observations within one minute', async () => {
   let calls = 0;
   let region = 0;
   const source = createOpenAqAcquisition({
@@ -474,6 +480,7 @@ test('four new globe views can discover observations within one minute', async (
           results: Array.from({ length: 30 }, (_, i) => ({
             ...locations[0],
             id: region * 100 + i + 1,
+            coordinates: { latitude: 0, longitude: region * 40 - 140 },
             sensors: [
               {
                 id: region * 100 + i + 1,
@@ -496,11 +503,11 @@ test('four new globe views can discover observations within one minute', async (
       });
     },
   });
-  for (region = 0; region < 4; region++) {
+  for (region = 0; region < 8; region++) {
     const snapshot = await source.getSnapshot({
-      view: [-180, -90, 180, 90, region * 40, 0],
+      view: [region * 40 - 145, -5, region * 40 - 135, 5, region * 40 - 140, 0],
     });
-    assert.equal(snapshot.readings.length, 8);
+    assert.equal(snapshot.readings.length, 4);
     assert.equal(snapshot.stale, false);
     assert.equal(snapshot.partial, true);
   }
@@ -509,9 +516,10 @@ test('four new globe views can discover observations within one minute', async (
 
 test('a failed wider catalog page does not suppress available focus observations', async () => {
   let catalogs = 0;
+  let clock = start;
   const source = createOpenAqAcquisition({
     getKey: () => 'fixture',
-    now: () => start,
+    now: () => clock,
     fetchImpl: async (raw) => {
       if (new URL(raw).pathname === '/v3/locations') {
         if (++catalogs === 2) return new Response('', { status: 503 });
@@ -529,9 +537,10 @@ test('a failed wider catalog page does not suppress available focus observations
       });
     },
   });
-  const result = await source.getSnapshot({
-    view: [-180, -90, 180, 90, 20, 0],
-  });
+  const request = { view: [-180, -90, 180, 90, 20, 0] };
+  assert.equal((await source.getSnapshot(request)).readings.length, 1);
+  clock += 8001;
+  const result = await source.getSnapshot(request);
   assert.equal(result.readings.length, 1);
   assert.equal(result.stale, true);
   assert.equal(result.failureStatus, 503);
@@ -592,4 +601,252 @@ test('parameter-scoped views acquire hourly means with independent caches and no
     source.getSnapshot({ parameter: 'PM10' }),
     (e) => e.status === 400,
   );
+});
+
+test('small pans reuse rounded catalog regions and hourly results', async () => {
+  const { source, calls } = fixture();
+  for (let i = 0; i < 10; i++) {
+    const offset = i / 100;
+    const result = await source.getSnapshot({
+      view: [19.1 + offset, -0.9, 20.1 + offset, 0.9, 20, 0],
+    });
+    assert.equal(result.readings.length, 3);
+  }
+  assert.equal(calls.filter((c) => c.url.includes('/locations?')).length, 1);
+  assert.equal(calls.length, 4);
+});
+
+test('returning to an evicted view during provider cooldown retains cached readings and retries at reset', async () => {
+  let clock = start,
+    limited = false;
+  const { source, calls } = fixture({
+    now: () => clock,
+    fail: () => (limited ? 429 : 0),
+  });
+  const firstView = [19, -1, 21, 1, 20, 0];
+  assert.equal(
+    (await source.getSnapshot({ view: firstView })).readings.length,
+    3,
+  );
+  limited = true;
+  for (let i = 0; i < 9; i++)
+    await source.getSnapshot({ view: [i, -1, i + 1, 1, i + 0.5, 0] });
+  const before = calls.length;
+  const cached = await source.getSnapshot({ view: [18, -2, 22, 2, 20, 0] });
+  assert.equal(cached.readings.length, 3);
+  assert.equal(cached.failureStatus, 429);
+  assert.equal(cached.retryAt, start + 120_000);
+  assert.equal(calls.length, before, 'no upstream retry while blocked');
+  clock += 120_001;
+  limited = false;
+  const recovered = await source.getSnapshot({ view: [18, -2, 22, 2, 20, 0] });
+  assert.equal(recovered.readings.length, 3);
+  assert.equal(recovered.stale, false);
+  assert.ok(calls.length > before);
+});
+
+test('abandoned views cancel upstream work; a coalesced active consumer is preserved', async () => {
+  for (const shared of [false, true]) {
+    let release,
+      upstreamSignal,
+      observations = 0;
+    const source = createOpenAqAcquisition({
+      getKey: () => 'fixture',
+      now: () => start,
+      fetchImpl: async (url, { signal }) => {
+        if (url.includes('/locations?')) {
+          upstreamSignal = signal;
+          return new Promise((resolve, reject) => {
+            release = () =>
+              resolve(Response.json({ results: locations.slice(0, 1) }));
+            signal.addEventListener('abort', () => reject(signal.reason), {
+              once: true,
+            });
+          });
+        }
+        observations++;
+        return Response.json({ results: [] });
+      },
+    });
+    const controller = new AbortController();
+    const view = [19, -1, 21, 1, 20, 0];
+    const abandoned = source.getSnapshot({ view, signal: controller.signal });
+    const rejection = assert.rejects(abandoned, (e) => e.name === 'AbortError');
+    const active = shared ? source.getSnapshot({ view }) : null;
+    controller.abort();
+    await rejection;
+    assert.equal(upstreamSignal.aborted, !shared);
+    if (shared) {
+      release();
+      await active;
+    }
+    assert.equal(observations, shared ? 1 : 0);
+  }
+});
+
+test('background enrichment yields budget to a new region', async () => {
+  let clock = start,
+    count = 0;
+  const source = createOpenAqAcquisition({
+    getKey: () => 'fixture',
+    now: () => clock,
+    fetchImpl: async (raw) => {
+      count++;
+      const url = new URL(raw);
+      if (url.pathname === '/v3/locations') {
+        const west = Number(url.searchParams.get('bbox').split(',')[0]);
+        const offset = west > 40 ? 100 : 0;
+        return Response.json({
+          results: Array.from({ length: 40 }, (_, i) => ({
+            ...locations[0],
+            id: offset + i + 1,
+            coordinates: { latitude: 0, longitude: offset ? 50 : 20 },
+            sensors: [
+              {
+                id: offset + i + 1,
+                parameter: { name: 'pm25', units: 'µg/m³' },
+              },
+            ],
+          })),
+        });
+      }
+      const id = Number(url.pathname.split('/')[3]);
+      return Response.json({
+        results: [
+          {
+            locationsId: id,
+            sensorsId: id,
+            value: 10,
+            datetime: { utc: new Date(start).toISOString() },
+          },
+        ],
+      });
+    },
+  });
+  const view = [19, -1, 21, 1, 20, 0];
+  let snapshot;
+  for (let i = 0; i < 8; i++) {
+    snapshot = await source.getSnapshot({ view });
+    clock += 8001; // Stay long enough for progressive batches, without panning.
+  }
+  assert.ok(snapshot.readings.length >= 24);
+  assert.ok(count <= 33);
+  const next = await source.getSnapshot({ view: [49, -1, 51, 1, 50, 0] });
+  assert.equal(next.readings.length, 4);
+  assert.equal(next.stale, false);
+});
+
+test('observations remain available beyond check TTL during cooldown, but expire after six hours', async () => {
+  let clock = start,
+    limited = false;
+  const { source } = fixture({
+    now: () => clock,
+    fail: () => (limited ? 429 : 0),
+  });
+  await source.getSnapshot({ view: [19, -1, 21, 1, 20, 0] });
+  clock += 21 * 60_000;
+  limited = true;
+  const cached = await source.getSnapshot({ view: [18, -2, 22, 2, 20, 0] });
+  assert.equal(cached.readings.length, 3);
+  assert.equal(cached.stale, true);
+  clock += 6 * 3600_000;
+  const expired = await source.getSnapshot({ view: [17, -3, 23, 3, 20, 0] });
+  assert.equal(expired.readings.length, 0);
+});
+
+test('browser disconnect propagates through the proxy to the upstream request', async () => {
+  const { EventEmitter } = await import('node:events');
+  let handler, upstreamSignal;
+  openAqProxy({
+    getKey: () => 'fixture',
+    now: () => start,
+    fetchImpl: async (_, { signal }) => {
+      upstreamSignal = signal;
+      return new Promise((_, reject) =>
+        signal.addEventListener('abort', () => reject(signal.reason), {
+          once: true,
+        }),
+      );
+    },
+  }).configureServer({
+    middlewares: {
+      use(_, fn) {
+        handler = fn;
+      },
+    },
+  });
+  const response = Object.assign(new EventEmitter(), {
+    destroyed: false,
+    writableEnded: false,
+    writeHead() {
+      assert.fail('Disconnected responses must not be written');
+    },
+    end() {
+      assert.fail('Disconnected responses must not be written');
+    },
+  });
+  const pending = handler(
+    { method: 'GET', url: '/?view=19,-1,21,1,20,0&parameter=PM2.5' },
+    response,
+  );
+  response.destroyed = true;
+  response.emit('close');
+  assert.equal(upstreamSignal.aborted, true);
+  await pending;
+  assert.equal(response.listenerCount('close'), 0);
+});
+
+test('cancellation before consumer registration is handled without abandoning the job rejection', async () => {
+  const controller = new AbortController();
+  const source = createOpenAqAcquisition({
+    getKey: () => 'fixture',
+    now: () => start,
+    fetchImpl: async (_, { signal }) => {
+      controller.abort();
+      signal.throwIfAborted();
+      return Response.json({ results: [] });
+    },
+  });
+  await assert.rejects(
+    source.getSnapshot({
+      view: [19, -1, 21, 1, 20, 0],
+      signal: controller.signal,
+    }),
+    (e) => e.name === 'AbortError',
+  );
+  await new Promise((resolve) => setImmediate(resolve));
+});
+
+test('provider cooldown takes precedence over the nearby progressive refresh deadline', async () => {
+  let limited = false;
+  const source = createOpenAqAcquisition({
+    getKey: () => 'fixture',
+    now: () => start,
+    batchSize: 1,
+    fetchImpl: async (raw) => {
+      const url = new URL(raw);
+      if (limited)
+        return new Response('', {
+          status: 429,
+          headers: { 'Retry-After': '120' },
+        });
+      if (url.pathname === '/v3/locations')
+        return Response.json({ results: locations });
+      return Response.json({
+        results: [
+          {
+            locationsId: 1,
+            sensorsId: 100,
+            value: 10,
+            datetime: { utc: new Date(start).toISOString() },
+          },
+        ],
+      });
+    },
+  });
+  await source.getSnapshot({ view: [0, -10, 40, 10, 20, 0] });
+  limited = true;
+  const next = await source.getSnapshot({ view: [1, -10, 39, 10, 20, 0] });
+  assert.equal(next.readings.length, 1);
+  assert.equal(next.retryAt, start + 120_000);
 });

@@ -140,3 +140,22 @@ test('injected viewport travels through the fixed snapshot route without exposin
   assert.ok(source.definitions.find((p) => p.id === 'openaq').viewDriven);
   assert.ok(!source.definitions.find((p) => p.id === 'saaqis').viewDriven);
 });
+
+test('snapshot adapter carries bounded cooldown metadata and tolerates malformed rate-limit responses', async () => {
+  const { createAirQualitySnapshotSource } = await import('./providers.js');
+  for (const [body, expected] of [
+    [JSON.stringify({ retryAt: now + 120_000 }), now + 120_000],
+    [JSON.stringify({ retryAt: now + 1e12 }), now + 24 * 3600_000],
+    ['upstream busy', now + 60_000],
+  ]) {
+    const source = createAirQualitySnapshotSource({
+      endpoint: '/api/air-quality/openaq',
+      now: () => now,
+      fetchImpl: async () => new Response(body, { status: 429 }),
+    });
+    await assert.rejects(
+      source.getSnapshot(),
+      (error) => error.retryAt === expected,
+    );
+  }
+});

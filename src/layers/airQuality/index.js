@@ -47,10 +47,32 @@ export function createAirQualityLayer({ source, overlayHost } = {}) {
   let overlayEntries = [];
   let removeMoveEnd = null;
   let moveTimer = null;
+  let retryTimer = null;
+  let retryAt = null;
   let loading = false;
   let requestedView = null;
 
   const notify = () => rowControlsListener?.();
+  const cancelRetry = () => {
+    clearTimeout(retryTimer);
+    retryTimer = null;
+    retryAt = null;
+  };
+  const scheduleRetry = (at) => {
+    cancelRetry();
+    if (!definition().viewDriven || !_enabled || !Number.isFinite(at)) return;
+    retryAt = Math.min(
+      Date.now() + 24 * 3600_000,
+      Math.max(Date.now() + 1000, at),
+    );
+    retryTimer = setTimeout(
+      () => {
+        retryTimer = null;
+        void layer.update();
+      },
+      retryAt - Date.now() + 100,
+    );
+  };
 
   /** The camera's lon/lat rectangle in degrees, or null when unresolvable. */
   const viewRectangle = () => {
@@ -116,6 +138,7 @@ export function createAirQualityLayer({ source, overlayHost } = {}) {
             loading = true;
             coverage = null;
             _lastError = null;
+            cancelRetry();
             clearTimeout(moveTimer);
             moveTimer = setTimeout(() => {
               moveTimer = null;
@@ -147,6 +170,7 @@ export function createAirQualityLayer({ source, overlayHost } = {}) {
       // Abort in flight: a response arriving after disable must not redraw.
       _request?.abort();
       _request = null;
+      cancelRetry();
       clearTimeout(moveTimer);
       moveTimer = null;
       loading = false;
@@ -173,6 +197,7 @@ export function createAirQualityLayer({ source, overlayHost } = {}) {
       if (nextProvider === providerId && nextParameter === parameter) return;
       _request?.abort();
       _request = null;
+      cancelRetry();
       clearTimeout(moveTimer);
       moveTimer = null;
       loading = false;
@@ -195,6 +220,7 @@ export function createAirQualityLayer({ source, overlayHost } = {}) {
       _request?.abort();
       const request = new AbortController();
       _request = request;
+      cancelRetry();
       clearTimeout(moveTimer);
       moveTimer = null;
       const view = definition().viewDriven ? currentView() : null;
@@ -202,6 +228,12 @@ export function createAirQualityLayer({ source, overlayHost } = {}) {
       loading = true;
       _lastError = null;
       notify();
+      // A camera that is still restoring its share-link position has no useful
+      // viewport yet. Never turn that transient state into a global API sweep.
+      if (definition().viewDriven && !view) {
+        _request = null;
+        return true;
+      }
       try {
         const readings = await source.getSnapshot({
           signal: request.signal,
@@ -217,6 +249,7 @@ export function createAirQualityLayer({ source, overlayHost } = {}) {
           return _enabled;
         _readings = readings;
         coverage = source.getCoverage?.() ?? null;
+        scheduleRetry(coverage?.retryAt);
         this._render();
         _count = _readings.length;
         _lastUpdate = Date.now();
@@ -231,9 +264,10 @@ export function createAirQualityLayer({ source, overlayHost } = {}) {
             : '') ||
           error?.message ||
           msg('Air quality request failed');
+        scheduleRetry(error?.retryAt);
         console.warn('[Data:AirQuality] Refresh failed:', _lastError);
         notify();
-        return false;
+        return retryAt !== null;
       } finally {
         if (_request === request) {
           _request = null;
@@ -340,6 +374,7 @@ export function createAirQualityLayer({ source, overlayHost } = {}) {
     destroy(viewer = _viewer) {
       _request?.abort();
       _request = null;
+      cancelRetry();
       clearTimeout(moveTimer);
       moveTimer = null;
       loading = false;
@@ -569,6 +604,19 @@ export function createAirQualityLayer({ source, overlayHost } = {}) {
                               checked: coverage.checked,
                               eligible: coverage.eligible,
                               countries: coverage.countriesReporting || 0,
+                            },
+                          ),
+                        },
+                      ]
+                    : []),
+                  ...(retryAt
+                    ? [
+                        {
+                          id: 'retry',
+                          text: t(
+                            'Next automatic update at {time}. Cached observations remain visible.',
+                            {
+                              time: new Date(retryAt).toLocaleTimeString(),
                             },
                           ),
                         },

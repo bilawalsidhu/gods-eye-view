@@ -6118,6 +6118,15 @@ Loading and partial discovery are distinct from completed searches with no recen
 observations. The shared Weather card supplies provider/pollutant selection. The OpenAQ
 fixture gate is `scripts/qa-openaq.mjs`; live coverage requires the operator's key.
 SAAQIS retains its source-reported index and ECCC retains AQHI semantics.
+OpenAQ navigation reuses stable catalog regions and recent station observations.
+Each pass fetches at most one new catalog page and four nearby station hours;
+nearby enrichment waits eight seconds and yields capacity to new regions.
+Cancelling the last view consumer aborts upstream work. Cached observations survive
+view eviction and provider cooldowns. Provider remaining/reset and Retry-After
+headers govern automatic recovery; the card displays the next update time.
+An unresolved camera never launches a global scan. All views share conservative
+45/minute and 1,800/hour process limits; a shared key's other clients still count.
+
 
 OpenAQ's selected pollutant uses explicit sensor hourly averages, with period,
 coverage and quality checks. Supported PM2.5, PM10, NO2, O3 and SO2 measurements

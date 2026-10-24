@@ -5,4 +5,7 @@
   users navigate, distinguish loading from completed empty searches, and make
   coverage gaps, stale data and unavailable indexes explicit. Compare verified OpenAQ hourly means with labelled EEA pollutant
   categories, guidance and numeric legends while preserving Canada's default
-  AQHI view (khanmjk, #1291).
+  AQHI view. Reuse OpenAQ catalog regions and station observations across
+  navigation, cancel abandoned upstream work, reserve capacity for new regions,
+  and recover automatically from provider cooldowns with cached markers and a
+  visible retry time (khanmjk, #1291).

@@ -459,6 +459,9 @@ hours remain unrated. The scale is a health-context comparison, not regulatory
 compliance or a locally issued index. Standard access is rate-limited;
 GEV prioritizes station discovery and recent observations in the visible map area,
 then continues pagination within process-wide budgets and bounded view caches.
+Stable catalog regions and recent station readings are reused across navigation;
+small progressive batches reserve capacity for the next region. Provider reset
+headers schedule automatic retries, while cached observations remain available.
 Calls without a viewport retain progressive bulk acquisition.
 Original data-provider terms still apply. No downloaded observation archive is
 bundled in the repository. References: [API](https://docs.openaq.org/),

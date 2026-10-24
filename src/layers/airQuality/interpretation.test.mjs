@@ -134,7 +134,17 @@ test('readout leads with the highest selected-pollutant category and distinguish
     source: { definitions: [definition], getSnapshot: async () => rows },
     overlayHost: { setEntries() {}, setVisible() {}, clearSource() {} },
   });
-  layer.init({ dataSources: { add() {}, remove() {} } });
+  layer.init({
+    dataSources: { add() {}, remove() {} },
+    camera: {
+      computeViewRectangle: () => ({
+        west: -0.1,
+        south: -0.1,
+        east: 0.1,
+        north: 0.1,
+      }),
+    },
+  });
   layer.enable();
   await layer.update();
   const controls = layer.getRowControls();

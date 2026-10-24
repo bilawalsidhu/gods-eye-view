@@ -3078,5 +3078,6 @@
   "Layers": "Слои",
   "Search": "Поиск",
   "More": "Ещё",
-  "Panels": "Панели"
+  "Panels": "Панели",
+  "Next automatic update at {time}. Cached observations remain visible.": "Следующее автоматическое обновление в {time}. Сохранённые наблюдения остаются видимыми."
 }

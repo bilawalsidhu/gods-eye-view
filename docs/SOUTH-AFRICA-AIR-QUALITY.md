@@ -176,16 +176,29 @@ The standalone defaults offer Canada, South Africa and worldwide OpenAQ. The
 OpenAQ default has no country, city or station allowlist. The map requests the
 visible geographic bounds and focus point through the fixed local proxy. OpenAQ
 location discovery starts within five degrees of the focus, then paginates the
-whole visible rectangle, splitting dateline crossings. Each refresh discovers up
-to two catalog pages and checks up to 24 recent stations, nearest unchecked ones
-first, with four concurrent latest-observation requests. Camera movement is
-debounced by 400 ms; superseded browser requests are cancelled and cannot redraw.
+whole visible rectangle, splitting dateline crossings. Each pass spends at most
+one uncached catalog request and checks up to four nearby stations (two concurrent
+hourly requests). Stable geographic catalog regions, including completed covering
+regions, are reused for one hour, with at most 64 cached pages. Nearby pans reuse
+observations and wait at least eight seconds before further enrichment. Progressive
+refreshes yield when 16 requests remain in the minute budget so a new region can
+still get initial readings. Camera movement is debounced by 400 ms. Cancelling the
+last consumer of a view cancels its upstream work; coalesced active consumers keep
+running. An unresolved camera waits for geographic bounds instead of triggering a
+global scan.
+
 The server coalesces identical views, retains up to eight view caches for one hour,
 and permits at most two distinct view acquisitions concurrently. A bounded cache
-of up to 5,000 station checks reuses results for 20 minutes across overlapping views. View caches and
-background/global callers share the same request budget. The card distinguishes
-loading, partial discovery, failed/stale refreshes, and a completed search with no
-recent readings. Explicit Canada and South Africa selections remain national.
+of up to 5,000 station checks reuses results for 20 minutes across overlapping views,
+and supplies known observations even after view-cache eviction or during cooldown.
+View caches and background/global callers share a conservative 45/minute,
+1,800/hour process budget. Provider remaining/reset headers and numeric or HTTP-date
+Retry-After can impose an earlier stop or longer cooldown. Other clients using the
+same key still consume its provider quota. The card shows the next automatic update
+time, retains cached observations, and retries when the cooldown expires. Timers
+are cancelled on navigation, provider changes, disable and destroy. Loading,
+partial discovery, failed/stale refreshes, and completed searches with no recent
+readings remain distinct. Explicit Canada and South Africa selections stay national.
 
 Hosts calling the proxy without a viewport retain global acquisition. Its locations
 catalog is paginated incrementally (eight pages per refresh), with cursor state
@@ -207,7 +220,7 @@ allow up to 64 MiB; each upstream page remains capped at 8 MiB.
 
 The card reports stations with observations, recent catalog stations, countries
 reporting and incomplete loading. Discovery is demand-driven while the layer is
-enabled; an in-flight batch may finish after disabling it. Transient errors expose
+enabled; disabling the viewport layer cancels its remaining acquisition. Transient errors expose
 last-good data as stale. Observations older than six hours are removed. Worldwide
 availability does not mean every country or city has a current monitor.
 

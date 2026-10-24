@@ -47,12 +47,28 @@ export function createAirQualitySnapshotSource({
           throw Object.assign(new Error(msg('Provider API key required')), {
             code: 'no_key',
           });
-        if (response.status === 429)
-          throw new Error(
-            msg(
-              'Provider request budget reached. Cached data will refresh later.',
+        if (response.status === 429) {
+          const body = await readResponseJsonCapped(
+            response,
+            8192,
+            requestSignal,
+          ).catch(() => null);
+          signal?.throwIfAborted();
+          const retryAt = Number.isFinite(body?.retryAt)
+            ? Math.min(
+                now() + 24 * 3600_000,
+                Math.max(now() + 1000, body.retryAt),
+              )
+            : now() + 60_000;
+          throw Object.assign(
+            new Error(
+              msg(
+                'Provider request budget reached. Cached data will refresh later.',
+              ),
             ),
+            { retryAt },
           );
+        }
         throw new Error(msg('Air quality provider unavailable'));
       }
       const payload = await readResponseJsonCapped(

@@ -3011,5 +3011,6 @@
   "Layers": "Capas",
   "Search": "Buscar",
   "More": "Más",
-  "Panels": "Paneles"
+  "Panels": "Paneles",
+  "Next automatic update at {time}. Cached observations remain visible.": "Próxima actualización automática a las {time}. Las observaciones en caché siguen visibles."
 }

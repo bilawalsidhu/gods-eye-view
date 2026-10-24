@@ -2877,5 +2877,6 @@
   "Worldwide · available OpenAQ stations": "全球 · 可用的 OpenAQ 监测站",
   "Available monitoring stations worldwide. Unmonitored areas have no measured coverage.": "全球可用监测站。未监测区域没有实测覆盖。",
   "GEV compares the selected pollutant with EEA hourly bands. This is not an overall station AQI or a local official index.": "GEV 将所选污染物与欧洲环境署的小时分级标准进行对照。这不是监测站的综合空气质量指数，也不是当地官方指数。",
-  "Unknown air quality provider": "未知的空气质量数据提供方"
+  "Unknown air quality provider": "未知的空气质量数据提供方",
+  "Next automatic update at {time}. Cached observations remain visible.": "下次自动更新于 {time}。缓存的观测数据仍然可见。"
 }

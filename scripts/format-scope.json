@@ -1099,5 +1099,6 @@
   "src/layers/airQuality/interpretation.test.mjs",
   "src/dockerTrustedPeers.test.mjs",
   "src/cameraGlobeRotation.test.mjs",
-  "src/voice/globeResetConfirmation.test.mjs"
+  "src/voice/globeResetConfirmation.test.mjs",
+  "server/providers/openAqBudget.test.mjs"
 ]

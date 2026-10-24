@@ -101,7 +101,10 @@ try {
                   stations: selected,
                   partial: incomplete,
                 }
-              : { error: 'no_key' },
+              : {
+                  error: status === 429 ? 'rate_limited' : 'no_key',
+                  retryAt: status === 429 ? Date.now() + 1500 : null,
+                },
           ),
         ).toString('base64'),
       })
@@ -213,6 +216,34 @@ try {
   assert.ok(requestedViews.every((view) => view?.length === 6));
   console.log(
     'PASS: camera navigation automatically loads South Africa, Brazil and Japan with geographic queries and visible loading state',
+  );
+  status = 429;
+  await page.evaluate(() =>
+    window.__godsEyeView.dataManager.layers.get('air-quality').module.update(),
+  );
+  const cooldown = await page.evaluate(() => {
+    const m = window.__godsEyeView.dataManager.layers.get('air-quality').module;
+    return { count: m.getStats().count, summary: m.getRowControls().summary };
+  });
+  assert.equal(cooldown.count, 1);
+  assert.match(cooldown.summary.status, /request budget reached/);
+  assert.ok(cooldown.summary.lines.some((line) => line.id === 'retry'));
+  const beforeRetry = requestedViews.length;
+  status = 200;
+  await page.waitForFunction(
+    () => {
+      const m =
+        window.__godsEyeView.dataManager.layers.get('air-quality').module;
+      return (
+        /PM2.5/.test(m.getRowControls().summary.status) &&
+        m.getStats().count === 1
+      );
+    },
+    { timeout: 10000 },
+  );
+  assert.equal(requestedViews.length, beforeRetry + 1);
+  console.log(
+    'PASS: rate limits retain cached markers, show the retry time and recover automatically',
   );
   incomplete = true;
   await navigate(0, -140);
