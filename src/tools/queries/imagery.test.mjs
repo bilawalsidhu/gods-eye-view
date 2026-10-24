@@ -51,6 +51,29 @@ test('the most recent clear image is returned with its date and sensor', async (
   });
 });
 
+test('a cloudy pick is named the least cloudy image, not the most recent', async () => {
+  const catalog = composeCatalog({
+    tools: coreTools,
+    services: {
+      imagery: imagery({
+        candidate: {
+          product: 'S30',
+          day: '2026-09-22',
+          cloud: { min: 8, max: 30 },
+          coverage: 'full',
+        },
+        reason: 'cloudy',
+        certain: true,
+        errors: [],
+      }),
+    },
+  });
+  assert.equal(
+    (await catalog.call('get_recent_imagery', { area: austin })).summary,
+    'Least cloudy recent image of the requested box: Sentinel-2 (30 m), 2026-09-22, cloudy, 8–30% cloud.',
+  );
+});
+
 test('overview fallback, empty results and invalid areas are reported', async () => {
   const overview = composeCatalog({
     tools: coreTools,
