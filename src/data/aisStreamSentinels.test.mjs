@@ -63,3 +63,39 @@ test('the fastest encodable reading below the unavailable code is kept', () => {
   assert.equal(row.speed, 102.2);
   assert.equal(row.course, 359.9);
 });
+
+test('a static data report keeps the motion and fix time of a tracked vessel', () => {
+  ingestAisStreamEnvelope(
+    positionReport('244690000', { Sog: 12.4, Cog: 86.7, TrueHeading: 87 }),
+  );
+  // AISStream's MetaData carries the last known position on every message,
+  // static data included.
+  assert.equal(
+    ingestAisStreamEnvelope({
+      MessageType: 'ShipStaticData',
+      Message: {
+        ShipStaticData: {
+          UserID: 244690000,
+          Name: 'EXAMPLE VESSEL',
+          Type: 70,
+          Destination: 'ROTTERDAM',
+          ImoNumber: 9876543,
+        },
+      },
+      MetaData: {
+        MMSI: '244690000',
+        latitude: 53.40879,
+        longitude: 6.19741,
+        time_utc: '2026-09-17 20:05:00.000000000 +0000 UTC',
+      },
+    }),
+    true,
+  );
+  const row = rowFor('244690000');
+  assert.equal(row.speed, 12.4);
+  assert.equal(row.course, 86.7);
+  assert.equal(row.heading, 87);
+  assert.equal(row.last_position_UTC, '2026-09-17T20:00:00.000Z');
+  assert.equal(row.destination, 'ROTTERDAM');
+  assert.equal(row.imo, '9876543');
+});

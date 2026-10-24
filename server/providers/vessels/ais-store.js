@@ -51,6 +51,11 @@ export function ingestAisStreamEnvelope(envelope) {
     };
     _aisStreamStatic.set(mmsi, staticData);
     mergeAisStaticIntoLiveVessel(mmsi, staticData);
+    // AISStream repeats the last known position in a static message's
+    // MetaData, but the message has no speed, course or heading and is not a
+    // new fix. Rebuilding a tracked vessel from it would blank its motion and
+    // restamp its position time, so only merge the static fields.
+    if (_aisStreamVessels.has(mmsi)) return true;
   }
 
   const lat = numberValue(
