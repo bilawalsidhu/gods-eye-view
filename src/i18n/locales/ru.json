@@ -3014,5 +3014,19 @@
   "Layers": "Слои",
   "Search": "Поиск",
   "More": "Ещё",
-  "Panels": "Панели"
+  "Panels": "Панели",
+  "Recent speech": "Недавняя речь",
+  "Voice Settings": "Настройки голоса",
+  "Preview": "Предпросмотр",
+  "Settings": "Настройки",
+  "Close voice panel": "Закрыть голосовую панель",
+  "Show Voice Preview": "Показывать предпросмотр голоса",
+  "Voice inactivity timeout": "Тайм-аут бездействия голоса",
+  "Custom": "Другое",
+  "Minutes": "Минуты",
+  "These preferences stay in this browser.": "Эти настройки сохраняются в этом браузере.",
+  "Your choice applies now, but could not be saved.": "Ваш выбор применён, но сохранить его не удалось.",
+  "Voice replies appear here.": "Здесь появляются голосовые ответы.",
+  "Preview is off.": "Предпросмотр отключён.",
+  "Automatic stop is unavailable for this voice connection.": "Автоматическая остановка недоступна для этого голосового подключения."
 }

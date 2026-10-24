@@ -2947,5 +2947,19 @@
   "Layers": "Capas",
   "Search": "Buscar",
   "More": "Más",
-  "Panels": "Paneles"
+  "Panels": "Paneles",
+  "Recent speech": "Habla reciente",
+  "Voice Settings": "Ajustes de voz",
+  "Preview": "Vista previa",
+  "Settings": "Ajustes",
+  "Close voice panel": "Cerrar panel de voz",
+  "Show Voice Preview": "Mostrar vista previa de voz",
+  "Voice inactivity timeout": "Tiempo de inactividad de voz",
+  "Custom": "Personalizado",
+  "Minutes": "Minutos",
+  "These preferences stay in this browser.": "Estas preferencias se guardan en este navegador.",
+  "Your choice applies now, but could not be saved.": "Tu elección se aplica ahora, pero no se pudo guardar.",
+  "Voice replies appear here.": "Las respuestas de voz aparecen aquí.",
+  "Preview is off.": "La vista previa está desactivada.",
+  "Automatic stop is unavailable for this voice connection.": "La parada automática no está disponible para esta conexión de voz."
 }

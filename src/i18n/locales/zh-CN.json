@@ -2813,5 +2813,19 @@
   "Layers": "图层",
   "Search": "搜索",
   "More": "更多",
-  "Panels": "面板"
+  "Panels": "面板",
+  "Recent speech": "最近语音",
+  "Voice Settings": "语音设置",
+  "Preview": "预览",
+  "Settings": "设置",
+  "Close voice panel": "关闭语音面板",
+  "Show Voice Preview": "显示语音预览",
+  "Voice inactivity timeout": "语音空闲超时",
+  "Custom": "自定义",
+  "Minutes": "分钟",
+  "These preferences stay in this browser.": "这些偏好设置仅保存在此浏览器中。",
+  "Your choice applies now, but could not be saved.": "选择已生效，但无法保存。",
+  "Voice replies appear here.": "语音回复显示在此处。",
+  "Preview is off.": "预览已关闭。",
+  "Automatic stop is unavailable for this voice connection.": "此语音连接不支持自动停止。"
 }

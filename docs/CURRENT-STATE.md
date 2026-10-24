@@ -517,6 +517,25 @@ replacement session; audio meters release failed initialization and reject revok
 frames. Delayed action results and post-capture continuations cannot resume a
 stopped conversation or send output into a replacement. See [voice ownership](VOICE-OWNERSHIP.md).
 
+The opt-in voice panel shares Preview and Voice Settings, with browser-local
+Preview and inactivity preferences. Voice-requested timeout changes apply directly
+without a confirmation question; results distinguish a live change from a saved
+browser preference. `set_voice_inactivity_timeout` accepts integer minutes from 1–60,
+or 0 for None. Named `voice-settings` and `voice-preview` panel targets exit
+Cockpit before opening the requested voice UI. `control_cockpit` also accepts
+`voicePanel: "preview" | "settings"` for an explicit exit-and-show request.
+Newer manual choices, Stop and provider replacement prevent an older operation
+from revealing its UI. Ambiguous requests to open settings ask whether the user
+means Voice Settings or Provider Settings before opening either panel. Named
+Voice Settings applies directly; Provider Settings opens the existing local
+provider dialog when available. Visual Presets targets the visual controls tray,
+while Scenes targets saved scenes. Selecting Preview does not enable a disabled
+Preview preference. Unverified speech captions use the localized Recent
+speech label; ordinary user captions retain YOU. Caption attribution does not
+control tool dispatch.
+
+Automatic Voice Preview uses output from the active mounted provider, including late replies that may answer an older request. Manual panel choices remain until genuine local input rearms automatic presentation. Preview stays off when disabled, remains hidden in Cockpit, and retires on Stop or provider replacement. Display events do not grant command authority.
+
 Contacts nearest-aircraft follow-ups retain the snapshot's distance basis even
 after the camera moves. An explicit new scope replaces that basis. Provider
 instructions require an analyst query for requested lists and use the requested
