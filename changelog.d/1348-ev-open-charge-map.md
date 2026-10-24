@@ -8,4 +8,4 @@
   reported status to its card; sites with no match appear in amber as Open
   Charge Map stations, credited to their provider. An Open Charge Map failure
   leaves the OpenStreetMap stations up, and without a key the layer is
-  unchanged (daikaginza, #PR).
+  unchanged (daikaginza, #1348).
