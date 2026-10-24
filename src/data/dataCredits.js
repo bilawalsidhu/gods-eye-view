@@ -167,6 +167,14 @@ export const DATA_CREDITS = [
       ' · Incident information: ' +
       '<a href="https://inciweb.wildfire.gov/" target="_blank" rel="noopener">InciWeb</a>',
   },
+  {
+    key: 'wzdx',
+    html:
+      'US work zones (WZDx, CC0 1.0): Minnesota DOT · Indiana DOT · Kansas DOT · ' +
+      'North Dakota DOT · Maryland DOT SHA · Kentucky Transportation Cabinet · ' +
+      'Mississippi DOT · Maricopa County DOT · ' +
+      '<a href="https://github.com/usdot-jpo-ode/wzdx" target="_blank" rel="noopener">WZDx specification (USDOT)</a>',
+  },
   OSM_CREDIT,
   OPENMAPTILES_CREDIT,
   {

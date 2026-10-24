@@ -219,7 +219,11 @@ export function getActiveTrackedReadoutId() {
 }
 
 /** Static-context layers whose click selection publishes the readout card. */
-const READOUT_CONTEXT_LAYERS = new Set(['alpr-cameras', 'local-adsb']);
+const READOUT_CONTEXT_LAYERS = new Set([
+  'alpr-cameras',
+  'local-adsb',
+  'work-zones',
+]);
 
 /**
  * Initialize the model bridge and selection listeners. No render listener is
