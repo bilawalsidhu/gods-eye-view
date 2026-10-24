@@ -2570,7 +2570,22 @@
       "src/voice/geminiSession.js",
       "src/voice/geminiAudio.js",
       "src/voice/geminiCaptureWorklet.js",
-      "src/ui/statusBadge.js"
+      "src/ui/statusBadge.js",
+      "src/layers/seaState/index.js",
+      "src/layers/seaState/model.js",
+      "src/layers/seaState/source.js",
+      "src/app/layers/seaState.js",
+      "src/layers/weather/fieldTexture.js",
+      "src/layers/weather/maskedGrid.js",
+      "src/layers/weather/globalFieldSource.js",
+      "src/app/layers/oceanCurrents.js",
+      "src/layers/oceanCurrents/index.js",
+      "src/layers/oceanCurrents/model.js",
+      "src/layers/oceanCurrents/source.js",
+      "src/app/layers/seaSurfaceTemperature.js",
+      "src/layers/seaSurfaceTemperature/index.js",
+      "src/layers/seaSurfaceTemperature/model.js",
+      "src/layers/seaSurfaceTemperature/source.js"
     ],
     "external": [
       "hls.js",
@@ -3138,7 +3153,22 @@
       "src/layers/airQuality/source.js",
       "src/ui/statusText.js",
       "src/ui/layerNames.js",
-      "src/layers/streetLevel/providers/mapillary/policy.js"
+      "src/layers/streetLevel/providers/mapillary/policy.js",
+      "src/layers/seaState/index.js",
+      "src/layers/seaState/model.js",
+      "src/layers/seaState/source.js",
+      "src/app/layers/seaState.js",
+      "src/layers/weather/fieldTexture.js",
+      "src/layers/weather/maskedGrid.js",
+      "src/layers/weather/globalFieldSource.js",
+      "src/app/layers/oceanCurrents.js",
+      "src/layers/oceanCurrents/index.js",
+      "src/layers/oceanCurrents/model.js",
+      "src/layers/oceanCurrents/source.js",
+      "src/app/layers/seaSurfaceTemperature.js",
+      "src/layers/seaSurfaceTemperature/index.js",
+      "src/layers/seaSurfaceTemperature/model.js",
+      "src/layers/seaSurfaceTemperature/source.js"
     ],
     "external": [
       "hls.js",
@@ -3840,6 +3870,126 @@
       "src/sources/httpBody.js",
       "src/i18n/marker.js",
       "src/layers/gnss/source.js"
+    ],
+    "external": []
+  },
+  "sea-state": {
+    "exports": ["./layers/sea-state"],
+    "modules": [
+      "src/layers/seaState/index.js",
+      "src/i18n/index.js",
+      "src/i18n/locale.js",
+      "src/i18n/locales/es.json",
+      "src/i18n/locales/ru.json",
+      "src/i18n/locales/zh-CN.json",
+      "src/ui/statusText.js",
+      "src/ui/layerNames.js",
+      "src/layers/weather/fieldTexture.js",
+      "src/layers/weather/imageryOrder.js",
+      "src/layers/weather/imageryHost.js",
+      "src/layers/weather/shellRendering.js",
+      "src/layers/weather/infraredImage.js",
+      "src/sources/httpBody.js",
+      "src/i18n/marker.js",
+      "src/layers/weather/source.js",
+      "src/layers/weather/infraredAlpha.js",
+      "src/layers/seaState/model.js",
+      "src/layers/weather/maskedGrid.js",
+      "src/layers/seaState/source.js",
+      "src/layers/weather/globalFieldSource.js"
+    ],
+    "external": ["cesium"]
+  },
+  "sea-state-source": {
+    "exports": ["./layers/sea-state/source"],
+    "modules": [
+      "src/layers/seaState/source.js",
+      "src/i18n/marker.js",
+      "src/layers/weather/globalFieldSource.js",
+      "src/sources/httpBody.js",
+      "src/layers/seaState/model.js",
+      "src/layers/weather/maskedGrid.js"
+    ],
+    "external": []
+  },
+  "ocean-currents": {
+    "exports": ["./layers/ocean-currents"],
+    "modules": [
+      "src/layers/oceanCurrents/index.js",
+      "src/i18n/index.js",
+      "src/i18n/locale.js",
+      "src/i18n/locales/es.json",
+      "src/i18n/locales/ru.json",
+      "src/i18n/locales/zh-CN.json",
+      "src/ui/statusText.js",
+      "src/ui/layerNames.js",
+      "src/layers/weather/fieldTexture.js",
+      "src/layers/weather/imageryOrder.js",
+      "src/layers/weather/imageryHost.js",
+      "src/layers/weather/shellRendering.js",
+      "src/layers/weather/infraredImage.js",
+      "src/sources/httpBody.js",
+      "src/i18n/marker.js",
+      "src/layers/weather/source.js",
+      "src/layers/weather/infraredAlpha.js",
+      "src/layers/wind/gpuRendering.js",
+      "src/layers/wind/streamlines.js",
+      "src/layers/wind/model.js",
+      "src/layers/oceanCurrents/model.js",
+      "src/layers/weather/maskedGrid.js",
+      "src/layers/oceanCurrents/source.js",
+      "src/layers/weather/globalFieldSource.js"
+    ],
+    "external": ["cesium"]
+  },
+  "ocean-currents-source": {
+    "exports": ["./layers/ocean-currents/source"],
+    "modules": [
+      "src/layers/oceanCurrents/source.js",
+      "src/i18n/marker.js",
+      "src/layers/weather/globalFieldSource.js",
+      "src/sources/httpBody.js",
+      "src/layers/oceanCurrents/model.js",
+      "src/layers/weather/maskedGrid.js"
+    ],
+    "external": []
+  },
+  "sea-surface-temperature": {
+    "exports": ["./layers/sea-surface-temperature"],
+    "modules": [
+      "src/layers/seaSurfaceTemperature/index.js",
+      "src/i18n/index.js",
+      "src/i18n/locale.js",
+      "src/i18n/locales/es.json",
+      "src/i18n/locales/ru.json",
+      "src/i18n/locales/zh-CN.json",
+      "src/ui/statusText.js",
+      "src/ui/layerNames.js",
+      "src/layers/weather/fieldTexture.js",
+      "src/layers/weather/imageryOrder.js",
+      "src/layers/weather/imageryHost.js",
+      "src/layers/weather/shellRendering.js",
+      "src/layers/weather/infraredImage.js",
+      "src/sources/httpBody.js",
+      "src/i18n/marker.js",
+      "src/layers/weather/source.js",
+      "src/layers/weather/infraredAlpha.js",
+      "src/layers/seaSurfaceTemperature/model.js",
+      "src/layers/weather/maskedGrid.js",
+      "src/layers/seaSurfaceTemperature/source.js",
+      "src/layers/weather/globalFieldSource.js"
+    ],
+    "external": ["cesium"]
+  },
+  "sea-surface-temperature-source": {
+    "exports": ["./layers/sea-surface-temperature/source"],
+    "modules": [
+      "src/layers/seaSurfaceTemperature/source.js",
+      "src/i18n/marker.js",
+      "src/layers/weather/globalFieldSource.js",
+      "src/sources/httpBody.js",
+      "src/layers/seaSurfaceTemperature/model.js",
+      "src/layers/weather/maskedGrid.js"
     ],
     "external": []
   },
