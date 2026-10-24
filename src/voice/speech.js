@@ -956,24 +956,29 @@ export function progressStepLabel(step, label) {
 /**
  * Spoken progress line for a slow tool's current step, or null when the step
  * should stay silent. Lines are code-authored: no hedges, no invented facts.
+ * They are spoken verbatim, so they are in the interface language.
  */
 export function progressLine(step, label) {
   const place = spokenLabel(label, 32);
   switch (step) {
     case 'resolve':
-      return place ? `Finding ${place} on the map.` : 'Finding those places.';
+      return place
+        ? t('Finding {place} on the map.', { place })
+        : t('Finding those places.');
     case 'search':
-      return place ? `Looking up ${place}.` : null;
+      return place ? t('Looking up {place}.', { place }) : null;
     case 'fly':
-      return place ? `Heading to ${place}.` : null;
+      return place ? t('Heading to {place}.', { place }) : null;
     case 'layer':
-      return place ? `Turning on ${place}.` : null;
+      return place ? t('Turning on {place}.', { place }) : null;
     case 'refresh':
-      return 'Loading aircraft there.';
+      return t('Loading aircraft there.');
     case 'nearest':
-      return 'Picking the nearest aircraft.';
+      return t('Picking the nearest aircraft.');
     case 'still':
-      return place ? `Still working on ${place}.` : 'Still working on it.';
+      return place
+        ? t('Still working on {place}.', { place })
+        : t('Still working on it.');
     default:
       return null;
   }

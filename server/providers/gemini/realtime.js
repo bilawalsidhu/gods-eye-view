@@ -1,4 +1,5 @@
 import { waitForSignal } from '../../../src/sources/requestDeadline.js';
+import { resolveVoiceLanguage } from '../../../src/voice/voiceLanguage.js';
 import { clientKey, makeCostRateLimiter } from '../common/rate-limit.js';
 import { readResponseJsonCapped } from '../../../src/sources/httpBody.js';
 import {
@@ -104,6 +105,13 @@ export function createGeminiTokenHandler({
         annotationGuidance,
         inputMode,
         tools,
+        {
+          language: resolveVoiceLanguage(
+            new URL(req.url || '/', 'http://localhost').searchParams.get(
+              'lang',
+            ),
+          ),
+        },
       );
       const issuedAt = now();
       // REST uses bidiGenerateContentSetup. liveConnectConstraints is the SDK

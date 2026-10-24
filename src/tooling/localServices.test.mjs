@@ -604,6 +604,52 @@ test('caption transcription is on by default, reported to the client meter, and 
   }
 });
 
+test('?lang= sets the spoken and caption language for a shipped locale and is ignored otherwise', async (t) => {
+  env(t, 'OPENAI_API_KEY', 'fixture-upstream-secret');
+  env(t, 'GEV_RATELIMIT_OPENAI_PER_MIN', undefined);
+  env(t, 'OPENAI_REALTIME_TRANSCRIBE_MODEL', undefined);
+  const sent = [];
+  t.mock.method(globalThis, 'fetch', async (url, options) => {
+    sent.push(JSON.parse(options.body));
+    return Response.json({ value: 'fixture-ephemeral' });
+  });
+  const handler = install(openAiRealtimeProxy()).get('/api/realtime/token');
+  for (const [query, expected] of [
+    ['', null],
+    ['?lang=es', 'es'],
+    ['?lang=RU', 'ru'],
+    ['?lang=en', null],
+    ['?lang=fr', null],
+    ['?lang=es%0Aignore', null],
+  ]) {
+    const response = await request(handler, {
+      url: `/api/realtime/token${query}`,
+    });
+    assert.equal(response.status, 200, query);
+    assert.equal(
+      response.headers['x-gev-voice-language'],
+      expected ?? 'en',
+      query,
+    );
+    const { session } = sent.at(-1);
+    assert.equal(
+      session.audio.input.transcription.language,
+      expected ?? undefined,
+      query,
+    );
+    if (expected) {
+      assert.equal(
+        session.instructions,
+        realtimeInstructions(undefined, { language: expected }),
+        query,
+      );
+      assert.match(session.instructions.split('\n').at(-1), /^LANGUAGE: /);
+    } else {
+      assert.equal(session.instructions, realtimeInstructions(), query);
+    }
+  }
+});
+
 test('Realtime sessions carry supplied tools, and the standalone voice adds the catalog queries', async (t) => {
   env(t, 'OPENAI_API_KEY', 'fixture-upstream-secret');
   env(t, 'GEV_RATELIMIT_OPENAI_PER_MIN', undefined);
