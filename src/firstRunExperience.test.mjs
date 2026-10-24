@@ -1011,10 +1011,11 @@ test('the voice TOOL SCHEMA matches the pinned contract — the mission mapping 
   // framing/default guidance updates only move_camera and mode descriptions.
   // Radio markup and the complete production-request comparison pin locality.
   // Restore the base camera/Globe View wording with the globe-rotation append.
-  assert.equal(block.length, 30878, 'serialized tool schema length drifted');
+  // River flood gauges (NOAA NWPS) extend the manifest.
+  assert.equal(block.length, 31038, 'serialized tool schema length drifted');
   assert.equal(
     crypto.createHash('sha256').update(block).digest('hex'),
-    '7b95f0f4258896fe5c3316265a19f3a6602809d4e7e681ee7ecd8f2df514ef1f',
+    'acb3da02878f363f64a4a90d2ce5c19c69b93eaa96710cda4922e1e99ddbd4dd',
     'the first-run missions must ride EXISTING tools: no schema edit, no cache bust',
   );
   const instructions = fs.readFileSync(

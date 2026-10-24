@@ -42,6 +42,7 @@ export const LAYER_NAME_KEYS = Object.freeze({
   'air-quality': msg('Air quality'),
   directions: msg('Directions'),
   'alpr-cameras': msg('ALPR Cameras'),
+  'river-gauges': msg('River Flood Gauges'),
 });
 
 /** The layer panel's own English names, where they differ from the module's. */
@@ -117,6 +118,7 @@ const SOURCE_LABEL_KEYS = new Map(
     msg('OSM routing'),
     msg('Mapped camera locations'),
     msg('OpenStreetMap · community mapped'),
+    msg('NOAA NWPS · OBSERVED'),
   ].map((key) => [key, key]),
 );
 
