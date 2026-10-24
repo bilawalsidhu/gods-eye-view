@@ -388,15 +388,15 @@ const layers = [
   },
   {
     id: 'local-airports',
-    aliases: ['airports', 'airfields', 'norwegian airports'],
+    // The id already names the layer; no spoken aliases keeps the prompt
+    // under its size ceiling.
+    aliases: [],
     context: true,
     query: {
       fields: {
         name: ['t'],
-        operator: ['t'],
         icao: ['t'],
         iata: ['t'],
-        kind: ['t'],
         status: ['t'],
       },
     },
