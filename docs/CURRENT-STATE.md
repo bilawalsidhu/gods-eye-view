@@ -5959,6 +5959,15 @@ three Cesium data sources; enabling rebuilds from the accepted parsed cache,
 and destroying clears it. Load ownership prevents cancelled work from adding
 entities after teardown.
 
+Multipart cable and landing-point geometry retains its source feature on every
+Cesium entity, including generated IDs and IDs that collide with Cesium's
+multipart suffixes. Each segment receives its own feature's styling, click
+destination and horizon-culling reference; each source feature has one reference
+stem. Source collections and their properties are not modified. The copied input
+adds `__gevSourceFeatureIndex`, which remains observable in Cesium properties
+and default descriptions. The application viewer disables the Cesium info box,
+so those default descriptions are not shown in the app.
+
 Natural Earth regions and neighborhood polygon lookup are package exports.
 Their existing lazy loaders, retry behavior, bundled datasets and attribution
 are unchanged. The cable dataset remains CC BY-NC-SA 3.0 and is not covered by
