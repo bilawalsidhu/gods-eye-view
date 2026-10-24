@@ -202,12 +202,39 @@ test('a temperature answer that lands after the switch to the anomaly is dropped
   const first = layer.update();
   layer.setParams({ view: 'anomaly' });
   releases[0]();
-  assert.equal(await first, false);
+  // Superseded by the layer's own switch, not rejected: the lifecycle turns
+  // a layer off when its first update answers false.
+  assert.equal(await first, true);
   assert.equal(collection.layers.length, 0);
   releases[1]();
   await new Promise((resolve) => setTimeout(resolve, 0));
   assert.equal(collection.layers.length, 1);
   assert.equal(layer.getRowControls().chips[1].active, true);
+  assert.deepEqual(layer.getParams(), { view: 'anomaly' });
+});
+
+test('an update cancelled by its caller still answers false, and a failed superseded one too', async () => {
+  const releases = [];
+  const { layer } = setup(
+    ({ view }) =>
+      new Promise((resolve, reject) =>
+        releases.push({ ok: () => resolve(snapshot({ view })), fail: reject }),
+      ),
+  );
+  layer.enable();
+  const caller = new AbortController();
+  const cancelled = layer.update(undefined, { signal: caller.signal });
+  caller.abort();
+  releases[0].ok();
+  assert.equal(await cancelled, false, 'cancelled by the lifecycle');
+  const failing = layer.update();
+  layer.setParams({ view: 'anomaly' });
+  releases[1].fail(new Error('Sea surface temperature HTTP 502'));
+  assert.equal(await failing, true, 'superseded, so not a rejection');
+  assert.equal(layer.getStats().error, null, 'the old error is not shown');
+  layer.disable();
+  const late = layer.update();
+  assert.equal(await late, false, 'disabled');
 });
 
 test('a view set while disabled is used on the next enable', async () => {
@@ -221,4 +248,41 @@ test('a view set while disabled is used on the next enable', async () => {
   layer.enable();
   await layer.update();
   assert.deepEqual(asked, ['anomaly']);
+});
+
+test('through the layer manager, a view switch during the first load keeps the layer on', async (t) => {
+  const { DataLayerManager } = await import('../../data/manager.js');
+  const releases = [];
+  const { layer } = setup(
+    ({ view }) =>
+      new Promise((resolve) =>
+        releases.push(() => resolve(snapshot({ view }))),
+      ),
+  );
+  const manager = new DataLayerManager({});
+  t.after(() => manager.destroyAll());
+  manager.register(layer);
+  const enabling = manager.toggle('sea-surface-temperature', {
+    origin: 'user',
+  });
+  const waitFor = async (ready) => {
+    for (let i = 0; i < 500 && !ready(); i += 1)
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    assert.ok(ready(), 'the layer asked for a field');
+  };
+  await waitFor(() => releases.length === 1);
+  manager.setLayerParams(
+    'sea-surface-temperature',
+    { view: 'anomaly' },
+    {
+      origin: 'user',
+    },
+  );
+  await waitFor(() => releases.length === 2);
+  releases[0]();
+  releases[1]();
+  assert.equal(await enabling, true);
+  assert.equal(manager.isEnabled('sea-surface-temperature'), true);
+  assert.equal(layer.getStats().count, 1);
+  assert.deepEqual(layer.getParams(), { view: 'anomaly' });
 });

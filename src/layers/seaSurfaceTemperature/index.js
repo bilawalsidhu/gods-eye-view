@@ -132,13 +132,17 @@ export function createSeaSurfaceTemperatureLayer({
           signal: controller.signal,
           view,
         });
-        if (!enabled || request !== controller) return false;
+        // Superseded by this layer's own newer request (a view switch) is not
+        // a failure: the lifecycle would read false as a rejected enable.
+        if (!enabled || controller.signal.aborted || request !== controller)
+          return enabled && !signal?.aborted && request !== controller;
         field = snapshot;
         error = null;
         install();
         return true;
       } catch (cause) {
-        if (controller.signal.aborted || request !== controller) return false;
+        if (controller.signal.aborted || request !== controller)
+          return enabled && !signal?.aborted && request !== controller;
         // A failed refresh keeps the field already on the globe.
         error =
           cause?.message ||
@@ -168,6 +172,9 @@ export function createSeaSurfaceTemperatureLayer({
       notify();
       if (enabled) void layer.update(viewer);
       return true;
+    },
+    getParams() {
+      return { view };
     },
     setRowControlsListener(listener) {
       rowControlsListener = typeof listener === 'function' ? listener : null;
@@ -217,7 +224,9 @@ export function createSeaSurfaceTemperatureLayer({
           params: { view: value },
           title:
             value === 'anomaly'
-              ? t('Difference from the long-term mean for this day of year')
+              ? t(
+                  "Difference from Coral Reef Watch's daily climatology for this day of year",
+                )
               : t('Sea surface temperature in °C'),
         })),
         info:

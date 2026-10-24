@@ -2983,7 +2983,7 @@
   "Sea surface temperature anomaly unavailable": "Anomalía de temperatura superficial del mar no disponible",
   "Max {anomaly} °C from normal": "Máx. {anomaly} °C respecto a lo normal",
   "Anomaly": "Anomalía",
-  "Difference from the long-term mean for this day of year": "Diferencia respecto a la media a largo plazo para este día del año",
+  "Difference from Coral Reef Watch's daily climatology for this day of year": "Diferencia respecto a la climatología diaria de Coral Reef Watch para este día del año",
   "Sea surface temperature in °C": "Temperatura superficial del mar en °C",
   "Night-time sea surface temperature minus the Coral Reef Watch daily climatology for the same place and day of year, from NOAA Coral Reef Watch, shown at 0.5°. Its baseline is 1985–1990 plus 1993, cooler than recent decades, so most of the ocean reads somewhat warm; marine heatwaves stand out from about +2 °C. Each day appears one to two days after the night it describes. Land and sea ice are left clear.": "Temperatura nocturna de la superficie del mar menos la climatología diaria de Coral Reef Watch para el mismo lugar y día del año, de NOAA Coral Reef Watch, mostrada a 0,5°. Su referencia es 1985–1990 más 1993, más fría que las últimas décadas, por lo que la mayor parte del océano aparece algo cálida; las olas de calor marinas destacan a partir de unos +2 °C. Cada día aparece entre uno y dos días después de la noche que describe. La tierra y el hielo marino quedan transparentes.",
   "Sea surface temperature anomaly": "Anomalía de temperatura superficial del mar",
