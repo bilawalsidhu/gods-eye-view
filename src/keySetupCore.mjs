@@ -68,7 +68,9 @@ export const KEY_SETUP_KEYS = Object.freeze([
   Object.freeze({
     id: 'gemini',
     title: 'GEMINI', // i18n-ignore: provider product name
-    unlocks: msg('Gemini Live voice control'),
+    unlocks: msg(
+      'Gemini Live voice control + AI HUD summary when no OpenAI key is set',
+    ),
     getUrl: 'https://aistudio.google.com/apikey',
     envVars: Object.freeze(['GEMINI_API_KEY']),
     tier: 'metered',

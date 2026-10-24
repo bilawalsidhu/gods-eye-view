@@ -2991,7 +2991,7 @@
   "Gemini interrupted input exceeded its buffer or wait limit. Start voice again.": "Прерванный ввод Gemini превысил лимит буфера или ожидания. Запустите голосовой режим заново.",
   "Gemini Live connection is expiring. Start voice again for a new conversation.": "Соединение с Gemini Live истекает. Запустите голосовой режим заново для нового разговора.",
   "Gemini voice sessions have a time limit. When a session expires, start voice again for a new conversation.": "Время голосовых сеансов Gemini ограничено. Когда сеанс истечёт, запустите голосовой режим заново для нового разговора.",
-  "Gemini Live voice control": "Голосовое управление через Gemini Live",
+  "Gemini Live voice control + AI HUD summary when no OpenAI key is set": "Голосовое управление через Gemini Live + ИИ-сводка HUD, если ключ OpenAI не задан",
   "Voice provider": "Поставщик голосового сервиса",
   "Changing provider reconnects voice if it is on.": "Смена поставщика переподключает голосовой режим, если он включён.",
   "Gemini voice could not connect. Try again.": "Не удалось подключить голосовой режим Gemini. Повторите попытку.",

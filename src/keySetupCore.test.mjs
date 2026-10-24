@@ -393,3 +393,12 @@ test('key guidance can offer another source that works with a key already set', 
   );
   assert.equal(keySetupWithAlternatives('Needs X', []), 'Needs X');
 });
+
+test('every registry row has its own id and its own env vars', () => {
+  // Two PRs adding a row for the same provider must end as one row: a
+  // duplicate id or env var would show one key twice in Provider Settings.
+  const ids = KEY_SETUP_KEYS.map((key) => key.id);
+  const vars = KEY_SETUP_KEYS.flatMap((key) => key.envVars);
+  assert.equal(new Set(ids).size, ids.length, ids.join(','));
+  assert.equal(new Set(vars).size, vars.length, vars.join(','));
+});
