@@ -8,6 +8,8 @@ FROM node:24.14.0-slim@sha256:d8e448a56fc63242f70026718378bd4b00f8c82e78d20eefb1
 
 # Puppeteer is only used by the QA scripts; skip its ~150MB Chromium download.
 ENV PUPPETEER_SKIP_DOWNLOAD=1
+# Electron is only the `npm start` desktop shell; the container serves a browser.
+ENV ELECTRON_SKIP_BINARY_DOWNLOAD=1
 
 # `npm test` builds fixtures with `git init`, so the suite cannot run in a
 # container without it (71 failures on node:24-slim, all ENOENT on git).
