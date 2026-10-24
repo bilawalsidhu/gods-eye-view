@@ -867,3 +867,35 @@ test('traffic separates API and public tile transports, including the default ti
   assert.ok(publicUrls.length >= 4);
   assert.ok(apiUrls.length >= 4);
 });
+
+test('flow detail reports stale proxy tiles and the oldest tile time, also from its cache', async () => {
+  const fetchedAt = Date.UTC(2026, 9, 16, 8);
+  const reply = (status, at) => async () =>
+    new Response(fixture, {
+      headers: { 'x-tomtom-cache': status, 'x-tomtom-fetched-at': String(at) },
+    });
+  const stale = createTrafficSource({
+    fetchImpl: reply('STALE-BUDGET', fetchedAt),
+  });
+  const first = await stale.fetchFlowDetail(bounds);
+  assert.ok(first.segments.length > 0);
+  assert.equal(first.stale, true);
+  assert.equal(first.oldestTileAt, fetchedAt);
+  // The decoded tile is served from cache now, and keeps its mark.
+  const again = await stale.fetchFlowDetail(bounds);
+  assert.equal(stale.getFlowSessionStats().tilesFetched, 1);
+  assert.equal(again.stale, true);
+  assert.equal(again.oldestTileAt, fetchedAt);
+
+  const fresh = createTrafficSource({ fetchImpl: reply('MISS', fetchedAt) });
+  const live = await fresh.fetchFlowDetail(bounds);
+  assert.equal(live.stale, false);
+  assert.equal(live.oldestTileAt, fetchedAt);
+
+  const unmarked = createTrafficSource({
+    fetchImpl: async () => new Response(fixture),
+  });
+  const plain = await unmarked.fetchFlowDetail(bounds);
+  assert.equal(plain.stale, false);
+  assert.equal(plain.oldestTileAt, null);
+});
