@@ -59,3 +59,23 @@ test('a missing, unreadable or incomplete credentials file means no client', () 
   assert.equal(openSkyClientCredentials(env, file('not json')), null);
   assert.equal(openSkyClientCredentials(env, file('{"clientId":"cid"}')), null);
 });
+
+test('credential file warnings never expose file contents or read errors', async (t) => {
+  const warnings = [];
+  t.mock.method(console, 'warn', (message) => warnings.push(message));
+  for (const contents of [
+    '{"clientId":"id","clientSecret":FAKE_SECRET_123}',
+    new Error('could not read FAKE_SECRET_123'),
+  ]) {
+    const { openSkyClientCredentials: resolve } = await import(
+      `./opensky.js?warning=${warnings.length}`
+    );
+    const env = { OPENSKY_CREDENTIALS_FILE: '/synthetic/credentials.json' };
+    assert.equal(resolve(env, file(contents)), null);
+    assert.equal(resolve(env, file(contents)), null);
+  }
+  assert.deepEqual(warnings, [
+    '[OpenSky] OPENSKY_CREDENTIALS_FILE could not be read or parsed as JSON.',
+    '[OpenSky] OPENSKY_CREDENTIALS_FILE could not be read or parsed as JSON.',
+  ]);
+});

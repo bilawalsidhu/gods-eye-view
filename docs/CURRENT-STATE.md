@@ -1904,6 +1904,10 @@ Updated: September 23, 2026
 
 ## Aircraft and vessel server modules
 
+OpenSky credential-file failures emit a fixed warning once per process; neither
+JSON parser excerpts nor filesystem error messages are logged. The environment
+example uses an absolute path compatible with the macOS launchers.
+
 Standalone aircraft routes now live in `server/providers/aircraft/`: OpenSky
 state vectors and regional fallback, adsb.lol military positions, ADSBDB
 enrichment and track backfill. Vessel routes and websocket/watchdog setup live

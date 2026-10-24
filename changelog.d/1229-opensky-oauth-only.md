@@ -4,3 +4,5 @@
   launcher, and no longer sends retired username/password Basic auth:
   `OPENSKY_AUTH_MODE=basic` loads anonymously with one warning saying what to
   set instead (quanticsoul4772, #1229).
+- Credential-file warnings omit parser excerpts and filesystem error details;
+  the path example also works with the macOS launchers.

@@ -186,10 +186,10 @@ export function openSkyClientCredentials(
   let raw;
   try {
     raw = JSON.parse(readFile(path));
-  } catch (error) {
+  } catch {
     if (!_openskyCredentialsFileWarned) {
       console.warn(
-        `[OpenSky] OPENSKY_CREDENTIALS_FILE could not be read: ${error.code || error.message}`,
+        '[OpenSky] OPENSKY_CREDENTIALS_FILE could not be read or parsed as JSON.',
       );
       _openskyCredentialsFileWarned = true;
     }
