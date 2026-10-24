@@ -5,6 +5,8 @@ import { msg } from '../../i18n/index.js';
 
 /** Metres above the ellipsoid. Lower shells draw first, so lightning draws last. */
 export const WEATHER_SHELL_HEIGHTS = Object.freeze({
+  'ocean-currents': 4_000,
+  'sea-state': 4_500,
   wind: 5_000,
   clouds: 5_500,
   'clouds-regional': 5_800,

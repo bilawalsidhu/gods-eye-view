@@ -11,6 +11,8 @@ test('data providers have both hooks; credential editing stays development-only'
   const plugins = localProviderPlugins();
   assert.ok(plugins.some(({ name }) => name === 'fire-perimeters'));
   assert.ok(plugins.some(({ name }) => name === 'gnss-integrity'));
+  assert.ok(plugins.some(({ name }) => name === 'sea-state'));
+  assert.ok(plugins.some(({ name }) => name === 'ocean-currents'));
   for (const plugin of plugins) {
     if (plugin.name === 'gev-key-setup') {
       assert.equal(plugin.configurePreviewServer, undefined);
@@ -105,6 +107,8 @@ test('real dev and built-preview servers serve provider JSON and terminate unkno
         ['/api/firms/status', 200],
         ['/api/fire-perimeters/inciweb/publication/invalid', 400],
         ['/api/gnss-integrity?lat=invalid', 400],
+        ['/api/sea-state/grid/unknown.bin', 404],
+        ['/api/ocean-currents/grid/unknown.bin', 404],
         ['/api/terrain/heights?points=invalid', 400],
         ['/api/overpass', 405],
         ['/api/overpass/status', 200],
@@ -135,6 +139,11 @@ test('real dev and built-preview servers serve provider JSON and terminate unkno
         const body = await response.json();
         if (route === '/api/cctv/sources')
           assert.equal(body.sources[0].id, 'fixture');
+        if (
+          route.startsWith('/api/sea-state') ||
+          route.startsWith('/api/ocean-currents')
+        )
+          assert.deepEqual(body, { error: 'unknown_grid' }, route);
         if (route === '/api/mapillary/status')
           assert.deepEqual(body, { configured: false }, route);
         if (route.startsWith('/api/mapillary/tiles'))

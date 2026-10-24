@@ -425,7 +425,7 @@ export const DATA_CREDITS = [
       'This service is based on data and products of the European Centre for Medium-Range Weather Forecasts (ECMWF). ' +
       '<a href="https://www.ecmwf.int/en/forecasts/datasets/open-data" target="_blank" rel="noopener">ECMWF Open Data</a> · ' +
       '<a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a>. ' +
-      'Modified: resampled 10 m IFS forecast vectors and animated display. ' +
+      'Modified: resampled 10 m IFS forecast vectors and animated display; IFS wave-model significant wave height and ocean-model surface currents resampled to 0.5° and land-masked; wave heights banded, current speed shaded and drawn as flow lines. ' +
       'ECMWF does not accept any liability whatsoever for any error or omission in the data, their availability, or for any loss or damage arising from their use.',
   },
   // ── Bundled snapshots ───────────────────────────────────────────

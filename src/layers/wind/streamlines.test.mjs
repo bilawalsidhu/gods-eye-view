@@ -64,6 +64,33 @@ test('bake stops at poles, seams, missing and calm data without invalid geometry
   }
 });
 
+test('slow flows bake only with a lower calm speed, and longer steps carry them farther', () => {
+  assert.equal(bakeWindStreamlines(field(0.1), { count: 50 }).length, 0);
+  const span = (paths) =>
+    Math.max(
+      ...paths.map(
+        ({ coordinates }) => coordinates.at(-1)[0] - coordinates[0][0],
+      ),
+    );
+  const short = bakeWindStreamlines(field(0.1), {
+    count: 50,
+    minSpeed: 0.05,
+    stepSeconds: 21600,
+  });
+  const long = bakeWindStreamlines(field(0.1), {
+    count: 50,
+    minSpeed: 0.05,
+    stepSeconds: 21600,
+    maxStepSeconds: 21600,
+  });
+  assert.equal(short.length, 50);
+  assert.ok(span(short) > 0);
+  assert.ok(
+    span(long) > span(short) * 5,
+    'the default one-hour ceiling still applies unless raised',
+  );
+});
+
 test('midpoint integration bends paths with a changing northward component', () => {
   const snapshot = field(20, 0);
   snapshot.v = new Float32Array([

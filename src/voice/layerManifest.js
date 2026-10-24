@@ -410,6 +410,12 @@ const layers = [
 export const VOICE_OFF_LAYERS = Object.freeze({
   'bhote-koshi-2026': 'scene-driven event layer (control_scene)',
   'bhote-koshi-locator': 'scene-driven event layer (control_scene)',
+  // An alias-free entry measured 51,996 of the 52,000-character Realtime
+  // prompt ceiling (src/voice/pointAndAsk.test.mjs); the toggle stays in the
+  // Layers panel.
+  'sea-state': 'global wave forecast field; Realtime prompt budget is full',
+  'ocean-currents':
+    'global ocean forecast field; Realtime prompt budget is full',
 });
 
 const TYPE_NAMES = Object.freeze({
