@@ -616,19 +616,29 @@ test('Live Contacts and Space Missions go through the one setContextMode facade'
   }
 });
 
-test('Environmental enables BOTH its feeds and pulls out to the globe', async () => {
+test('Environmental enables all hazard feeds and pulls out to the globe', async () => {
   const spy = missionSpy();
   const outcome = await runFirstRunChoice('environmental', spy.deps);
   assert.equal(outcome.ok, true);
-  assert.deepEqual(spy.calls.layerIds, ['earthquakes', 'local-firms']);
+  assert.deepEqual(spy.calls.layerIds, ['earthquakes', 'local-firms', 'fire-perimeters']);
   assert.equal(spy.calls.globeFlights, 1);
 });
 
-test('the tile is the FULLY CONFIGURED experience: quakes and fires together', () => {
-  // Owner ruling, 2026-08-23: the launcher optimizes for the configured app, so
-  // ENVIRONMENTAL means live USGS earthquakes AND NASA FIRMS active fires.
+test('the tile is the FULLY CONFIGURED experience: quakes, fires, and perimeters', () => {
+  // The configured launcher offers earthquakes, active fires, and wildfire
+  // perimeters together, without pretending every provider is keyless.
   const environmental = FIRST_RUN_MISSIONS.environmental;
-  assert.deepEqual(environmental.layerIds, ['earthquakes', 'local-firms']);
+  assert.deepEqual(environmental.layerIds, ['earthquakes', 'local-firms', 'fire-perimeters']);
+  const welcome = fs.readFileSync(
+    new URL('./ui/templates/welcome.html', import.meta.url),
+    'utf8',
+  );
+  assert.match(welcome, /Live earthquakes, active fires, and wildfire perimeters/);
+  const moduleText = fs.readFileSync(
+    new URL('./firstRunExperience.js', import.meta.url),
+    'utf8',
+  );
+  assert.match(moduleText, /'Live earthquakes, active fires, and wildfire perimeters'/);
 
   // Keyless, the honest surface is the LAYER ROW ("KEY REQUIRED"), which the
   // FIRMS layer already reports. The misleading part is the GLOBAL chip folding
@@ -649,14 +659,14 @@ test('the tile is the FULLY CONFIGURED experience: quakes and fires together', (
 });
 
 test('every visitor gets the same tile — there is no degraded keyless variant', async () => {
-  // The mission does not branch on configuration: it asks for both layers for
+  // The mission does not branch on configuration: it asks for all layers for
   // everyone, and a keyless FIRMS reports its own state at its own row rather
   // than changing what the tile does.
   const spy = missionSpy({ layerResult: () => true });
   const outcome = await runFirstRunChoice('environmental', spy.deps);
   assert.equal(outcome.ok, true);
   assert.deepEqual(outcome.failedLayerIds, []);
-  assert.deepEqual(spy.calls.layerIds, ['earthquakes', 'local-firms']);
+  assert.deepEqual(spy.calls.layerIds, ['earthquakes', 'local-firms', 'fire-perimeters']);
   const module = fs.readFileSync(
     new URL('./firstRunExperience.js', import.meta.url),
     'utf8',
