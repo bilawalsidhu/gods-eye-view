@@ -165,6 +165,44 @@ test('the point cache stops growing, and an evicted point is simply refetched', 
   assert.equal(asked[4], point(1));
 });
 
+test('a refetched point counts as new when the cache evicts', async (t) => {
+  const root = await mkdtemp(path.join(tmpdir(), 'terrain-evict-order-'));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const cachePath = path.join(root, 'cache.json');
+  const day = 24 * 3600_000;
+  const now = Date.now();
+  const point = (i) => `-97.7${i}000,30.26000`;
+  const entry = (at) => ({ at, result: { ellipsoid: 150 } });
+  // Written newest first: the file's order is not the age order. Point 1 is
+  // past the 30-day TTL, so the next request for it refetches.
+  await writeFile(
+    cachePath,
+    JSON.stringify({
+      version: 2,
+      points: {
+        [point(3)]: entry(now - 3600_000),
+        [point(2)]: entry(now - day),
+        [point(1)]: entry(now - 31 * day),
+      },
+    }),
+  );
+  const asked = stubTerrainUpstream(t);
+  const route = install(
+    terrainHeightsProxy({ cacheMaxEntries: 3, cachePath }),
+  ).get('/api/terrain/heights');
+
+  await request(route, { url: `/?points=${point(1)}` });
+  assert.deepEqual(asked, [point(1)], 'the stale point is refetched');
+  await request(route, { url: `/?points=${point(4)}` });
+  assert.equal(asked.length, 2);
+
+  // Point 2 is now the oldest fetch; point 1 was just refreshed.
+  await request(route, { url: `/?points=${point(1)};${point(3)}` });
+  assert.equal(asked.length, 2, 'the refreshed and the recent point stay');
+  await request(route, { url: `/?points=${point(2)}` });
+  assert.deepEqual(asked.slice(2), [point(2)], 'the oldest fetch was evicted');
+});
+
 test('an over-large cache file is not read back into memory', async (t) => {
   const asked = stubTerrainUpstream(t);
   const point = '-97.74000,30.26000';
