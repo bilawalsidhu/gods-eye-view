@@ -5850,6 +5850,11 @@ reception does not interrupt internet radio.
   Changes apply to the open receiver without reconnecting.
 - **Receiver stats (ADS-B).** CRC-valid messages per second, aircraft heard,
   aircraft with a fresh position and the IQ level.
+- **Error text.** A receiver error sets two fields (`errorState()` in
+  `src/sdr/controller.js`): `message` is the UI language for the Radio card,
+  `errorText` is the English text the Local ADS-B layer reports as its stats
+  `error` (`localAdsbStatus()`, falling back to `message` when a receiver sets
+  none); the Layers panel translates it where it shows it.
 - **Devices.** An already-authorized receiver opens without the WebUSB
   picker. ADS-B prefers a device whose product name matches ADS-B or 1090 (the
   1090 MHz channel of a dual-channel board); FM avoids ADS-B/UAT channels.
