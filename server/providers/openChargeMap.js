@@ -245,10 +245,12 @@ export const OCM_MAX_SPAN_DEG = 0.5;
 
 /**
  * Providers dropped even though OCM marks them open data:
+ * 7 Mobie.pt is "Public Data redistributed by agreement", an agreement with
+ * OCM that does not extend to this application's users;
  * 26 Oplaadpalen.nl publishes under CC BY-NC-SA 3.0, a non-commercial licence
  * this MIT application cannot pass on to its users.
  */
-export const OCM_EXCLUDED_PROVIDER_IDS = Object.freeze(new Set([26]));
+export const OCM_EXCLUDED_PROVIDER_IDS = Object.freeze(new Set([7, 26]));
 
 /** StatusType ids for listings OCM keeps only as history. */
 const OCM_REMOVED_STATUS_IDS = new Set([200, 210]);

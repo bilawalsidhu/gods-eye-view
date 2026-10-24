@@ -268,6 +268,9 @@ test('the licence filter keeps only open, non-excluded providers', () => {
   assert.equal(byId(26).IsOpenDataLicensed, true);
   assert.equal(OCM_EXCLUDED_PROVIDER_IDS.has(26), true);
   assert.equal(ocmProviderIsOpen(byId(26)), false);
+  // Mobie.pt is flagged open, but only "redistributed by agreement" with OCM.
+  assert.equal(byId(7).IsOpenDataLicensed, true);
+  assert.equal(ocmProviderIsOpen(byId(7)), false);
   // CarStations.com (false) and e-Laad (null) are not open data.
   assert.equal(byId(15).IsOpenDataLicensed, false);
   assert.equal(ocmProviderIsOpen(byId(15)), false);
@@ -283,7 +286,7 @@ test('the licence filter keeps only open, non-excluded providers', () => {
   const as = (DataProviderID) => trimOcmSite({ ...base, DataProviderID }, refs);
   assert.equal(as(1)?.id, 46230);
   assert.equal(as(19)?.provider.name, 'NOBIL');
-  for (const id of [26, 15, 14, 999, undefined, null])
+  for (const id of [7, 26, 15, 14, 999, undefined, null])
     assert.equal(as(id), null, `provider ${id}`);
 });
 

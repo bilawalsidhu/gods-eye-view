@@ -3715,8 +3715,8 @@ snaps the box outward to a 0.01° grid, refuses one wider than 0.5°, builds the
 only upstream URL itself (`/v3/poi` with `compact=true`, `verbose=false`,
 `opendata=true`, at most 500 results; key in `X-API-Key`), resolves ids through
 `/v3/referencedata` (cached a day) and keeps a site only when its DataProvider
-is flagged `IsOpenDataLicensed === true` and is not Oplaadpalen.nl (26,
-CC BY-NC-SA). Answers are cached 10 min per box with single-flight refresh and
+is flagged `IsOpenDataLicensed === true` and is neither Mobie.pt (7, by
+agreement) nor Oplaadpalen.nl (26, CC BY-NC-SA). Answers are cached 10 min per box with single-flight refresh and
 serve-stale on failure, behind the same-site gate and a 30-a-minute upstream
 ceiling. In the browser (`merge.js`) an OCM site within 50 m of an OSM station
 enriches it, nearest pair first and one-to-one; the station keeps its OSM id,
