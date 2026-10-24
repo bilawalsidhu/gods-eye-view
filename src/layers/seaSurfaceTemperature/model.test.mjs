@@ -1,12 +1,14 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
+  SSTA_STOPS,
   SST_STOPS,
   createSeaSurfaceTemperatureRaster,
   decodeSeaSurfaceTemperatureGrid,
   parseSeaSurfaceTemperatureManifest,
   sampleSeaSurfaceTemperature,
   seaSurfaceTemperatureColor,
+  seaSurfaceTemperatureStops,
 } from './model.js';
 
 test('temperature blends between the stops, is held past the ends and is null with no value', () => {
@@ -137,4 +139,69 @@ test('the raster colours every sea pixel, leaves land clear, and is null when al
   };
   const islandRaster = createSeaSurfaceTemperatureRaster(island, 4, 2);
   assert.ok(islandRaster.rgba.some((value, i) => i % 4 === 3 && value === 0));
+});
+
+test('the anomaly ramp diverges around zero and is drawn from the field view', () => {
+  assert.deepEqual(
+    SSTA_STOPS.map(({ min }) => min),
+    [-4, -2, -1, 0, 1, 2, 4],
+  );
+  assert.deepEqual(seaSurfaceTemperatureStops('anomaly'), SSTA_STOPS);
+  assert.deepEqual(seaSurfaceTemperatureStops(), SST_STOPS);
+  assert.deepEqual(
+    seaSurfaceTemperatureColor(0, 'anomaly'),
+    [0xf4, 0xf1, 0xea, 191],
+  );
+  // Halfway from +2 °C (#e2643a) to +4 °C (#9e1f3c).
+  assert.deepEqual(seaSurfaceTemperatureColor(3, 'anomaly'), [
+    Math.round((0xe2 + 0x9e) / 2),
+    Math.round((0x64 + 0x1f) / 2),
+    Math.round((0x3a + 0x3c) / 2),
+    191,
+  ]);
+  assert.deepEqual(
+    seaSurfaceTemperatureColor(-9, 'anomaly'),
+    seaSurfaceTemperatureColor(-4, 'anomaly'),
+  );
+  assert.notDeepEqual(
+    seaSurfaceTemperatureColor(0, 'anomaly'),
+    seaSurfaceTemperatureColor(0),
+  );
+  const anomaly = { ...field, view: 'anomaly' };
+  const raster = createSeaSurfaceTemperatureRaster(anomaly, 8, 4);
+  assert.deepEqual(
+    Array.from(raster.rgba.slice(0, 4)),
+    seaSurfaceTemperatureColor(
+      sampleSeaSurfaceTemperature(field, -157.5, 67.5),
+      'anomaly',
+    ),
+  );
+});
+
+test('each view accepts only its own field kind and grid route', () => {
+  const anomaly = manifest({
+    field: { kind: 'sea-surface-temperature-anomaly', units: 'degC' },
+    gridUrl: '/api/sea-surface-temperature-anomaly/grid/crwa-20261022-0.5.bin',
+  });
+  assert.equal(
+    parseSeaSurfaceTemperatureManifest(anomaly, 'anomaly').view,
+    'anomaly',
+  );
+  assert.equal(
+    parseSeaSurfaceTemperatureManifest(manifest()).view,
+    'temperature',
+  );
+  assert.equal(parseSeaSurfaceTemperatureManifest(anomaly), null);
+  assert.equal(parseSeaSurfaceTemperatureManifest(manifest(), 'anomaly'), null);
+  assert.equal(
+    parseSeaSurfaceTemperatureManifest(
+      { ...anomaly, gridUrl: '/api/sea-surface-temperature/grid/a.bin' },
+      'anomaly',
+    ),
+    null,
+  );
+  assert.equal(
+    parseSeaSurfaceTemperatureManifest(manifest(), 'salinity'),
+    null,
+  );
 });

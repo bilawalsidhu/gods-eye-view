@@ -5,10 +5,35 @@ import { createGlobalFieldRoute } from './globalFieldRoute.js';
 // a daily, gap-free, night-only satellite sea surface temperature analysis
 // at 0.05°, published a day or two after the night it describes. Keyless;
 // everything from 2002 on (NOAA Geo-Polar Blended: reanalysis to 2016, near
-// real time since 2017) is free to use with credit to NOAA Coral Reef Watch. ERDDAP serves every 10th cell (0.5°)
-// of one day as ESRI ASCII, about 2 MB; land is its nodata value.
-const ERDDAP = 'https://coastwatch.noaa.gov/erddap/griddap/noaacrwsstDaily';
-/** The dataset's first cell centres; its latitude axis runs south to north. */
+// real time since 2017) is free to use with credit to NOAA Coral Reef Watch.
+// ERDDAP serves every 10th cell (0.5°) of one day as ESRI ASCII, about 2 MB;
+// land is its nodata value. The SST anomaly from the same suite shares the
+// grid, the nodata value and the licence: the day's SST minus CRW's daily
+// climatology for that pixel and day of year.
+const ERDDAP = 'https://coastwatch.noaa.gov/erddap/griddap';
+/**
+ * Each served product: its ERDDAP dataset, variable, valid range and
+ * latitude axis order. The two datasets store latitude in opposite orders
+ * and ERDDAP strides from the first value asked for, so each asks in its
+ * own axis order for the same cells: centres -89.975 to 89.525 every 0.5°.
+ */
+export const CORALTEMP_PRODUCTS = Object.freeze({
+  temperature: Object.freeze({
+    dataset: 'noaacrwsstDaily',
+    variable: 'analysed_sst',
+    validMin: -2,
+    validMax: 50,
+    northFirst: false,
+  }),
+  anomaly: Object.freeze({
+    dataset: 'noaacrwsstanomalyDaily',
+    variable: 'sea_surface_temperature_anomaly',
+    validMin: -15,
+    validMax: 15,
+    northFirst: true,
+  }),
+});
+/** The southernmost and westernmost cell centres of the grid served. */
 const FIRST_LAT = -89.975;
 const FIRST_LON = -179.975;
 const STRIDE = 10;
@@ -18,9 +43,6 @@ const NY = 360;
 const MAX_TIME_BYTES = 4 * 1024;
 /** 720 × 360 values of up to eight characters each, plus the header. */
 const MAX_GRID_BYTES = 4 * 1024 * 1024;
-/** The dataset's valid range; anything else counts as missing. */
-const VALID_MIN = -2;
-const VALID_MAX = 50;
 /** Daily data: refresh every three hours, serve the last day for three. */
 const TTL_MS = 3 * 3600_000;
 const STALE_LIMIT_MS = 72 * 3600_000;
@@ -28,13 +50,20 @@ const STALE_LIMIT_MS = 72 * 3600_000;
 /**
  * ERDDAP URLs: the newest time step, and one day's grid at 0.5°.
  * @param {string} [timeIso] - A time step from the dataset.
+ * @param {object} [product] - One of CORALTEMP_PRODUCTS.
  */
-export function coralTempUrls(timeIso) {
-  const range = (first) => `(${first}):${STRIDE}:(${-first})`;
+export function coralTempUrls(
+  timeIso,
+  { dataset, variable, northFirst } = CORALTEMP_PRODUCTS.temperature,
+) {
+  const range = (first, last) => `(${first}):${STRIDE}:(${last})`;
+  const lat = northFirst
+    ? range(FIRST_LAT + (NY - 1) * DX, FIRST_LAT)
+    : range(FIRST_LAT, -FIRST_LAT);
   return {
-    latest: `${ERDDAP}.csv?time${encodeURIComponent('[(last)]')}`,
-    grid: `${ERDDAP}.esriAscii?analysed_sst${encodeURIComponent(
-      `[(${timeIso})][${range(FIRST_LAT)}][${range(FIRST_LON)}]`,
+    latest: `${ERDDAP}/${dataset}.csv?time${encodeURIComponent('[(last)]')}`,
+    grid: `${ERDDAP}/${dataset}.esriAscii?${variable}${encodeURIComponent(
+      `[(${timeIso})][${lat}][${range(FIRST_LON, -FIRST_LON)}]`,
     )}`,
   };
 }
@@ -49,12 +78,17 @@ export function parseLatestTime(text) {
 
 /**
  * Parse an ESRI ASCII grid into a north-to-south grid of cell centres, with
- * the nodata value and values outside the valid range as NaN.
+ * the nodata value and values outside the product's valid range as NaN.
+ * @param {string} text
+ * @param {{validMin: number, validMax: number}} [product]
  * @returns {{nx: number, ny: number, lo1: number, la1: number, dx: number,
  *   dy: number, values: Float32Array, valid: number, min: number,
  *   max: number}}
  */
-export function parseEsriAsciiGrid(text) {
+export function parseEsriAsciiGrid(
+  text,
+  { validMin, validMax } = CORALTEMP_PRODUCTS.temperature,
+) {
   const tokens = String(text).trim().split(/\s+/);
   const header = {};
   let i = 0;
@@ -88,7 +122,7 @@ export function parseEsriAsciiGrid(text) {
     const value = Number(tokens[i + k]);
     if (Number.isNaN(value))
       throw new Error('Malformed sea surface temperature grid');
-    if (value === nodata || value < VALID_MIN || value > VALID_MAX) {
+    if (value === nodata || value < validMin || value > validMax) {
       values[k] = NaN;
       continue;
     }
@@ -121,22 +155,32 @@ async function getText(url, maxBytes, fetchImpl, signal) {
 }
 
 /**
- * Fetch the newest CoralTemp day at 0.5°. The grid must have exactly the
- * requested geometry, or it is refused.
- * @param {{fetchImpl?: Function, signal?: AbortSignal}} [options]
+ * Fetch the newest CoralTemp day of one product at 0.5°. The grid must have
+ * exactly the requested geometry, or it is refused.
+ * @param {{fetchImpl?: Function, signal?: AbortSignal, product?: object}} [options]
  * @returns {Promise<{cycle: {date: string, validIso: string}, grid: object}>}
  */
-export async function fetchCoralTempSst({ fetchImpl = fetch, signal } = {}) {
+export async function fetchCoralTempSst({
+  fetchImpl = fetch,
+  signal,
+  product = CORALTEMP_PRODUCTS.temperature,
+} = {}) {
   const validIso = parseLatestTime(
-    await getText(coralTempUrls().latest, MAX_TIME_BYTES, fetchImpl, signal),
+    await getText(
+      coralTempUrls(undefined, product).latest,
+      MAX_TIME_BYTES,
+      fetchImpl,
+      signal,
+    ),
   );
   const grid = parseEsriAsciiGrid(
     await getText(
-      coralTempUrls(validIso.replace('.000Z', 'Z')).grid,
+      coralTempUrls(validIso.replace('.000Z', 'Z'), product).grid,
       MAX_GRID_BYTES,
       fetchImpl,
       signal,
     ),
+    product,
   );
   if (
     grid.nx !== NX ||
@@ -173,6 +217,38 @@ export function seaSurfaceTemperatureProxy({
     load,
     describe: ({ grid }) => ({
       field: { kind: 'sea-surface-temperature', units: 'degC' },
+      oceanCells: grid.valid,
+      minValue: round(grid.min),
+      maxValue: round(grid.max),
+    }),
+    gridOf: ({ grid }) => grid.values,
+    fetchImpl,
+    now,
+  });
+}
+
+/**
+ * Bounded, single-flight, global sea surface temperature anomaly for dev and
+ * preview: the same day, grid and cache rules as the temperature route.
+ */
+export function seaSurfaceTemperatureAnomalyProxy({
+  fetchImpl = (...args) => globalThis.fetch(...args),
+  now = () => Date.now(),
+  load = (options) =>
+    fetchCoralTempSst({ ...options, product: CORALTEMP_PRODUCTS.anomaly }),
+} = {}) {
+  const round = (value) => Math.round(value * 100) / 100;
+  return createGlobalFieldRoute({
+    name: 'sea-surface-temperature-anomaly',
+    path: '/api/sea-surface-temperature-anomaly',
+    errorCode: 'sea_surface_temperature_anomaly_unavailable',
+    source: 'noaa-crw-ssta',
+    gridId: ({ cycle, grid }) => `crwa-${cycle.date}-${grid.dx}`,
+    ttlMs: TTL_MS,
+    staleLimitMs: STALE_LIMIT_MS,
+    load,
+    describe: ({ grid }) => ({
+      field: { kind: 'sea-surface-temperature-anomaly', units: 'degC' },
       oceanCells: grid.valid,
       minValue: round(grid.min),
       maxValue: round(grid.max),

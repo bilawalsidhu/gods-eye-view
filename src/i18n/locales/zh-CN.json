@@ -2845,5 +2845,14 @@
   "{temperature} °C": "{temperature} °C",
   "Sea surface temperature network error": "海表温度网络错误",
   "Malformed sea surface temperature response": "海表温度响应格式错误",
-  "Sea surface temperature": "海表温度"
+  "Sea surface temperature": "海表温度",
+  "Sea surface temperature anomaly unavailable": "海表温度距平不可用",
+  "Max {anomaly} °C from normal": "最大距平 {anomaly} °C",
+  "Anomaly": "距平",
+  "Difference from the long-term mean for this day of year": "与一年中该日长期平均值的差",
+  "Sea surface temperature in °C": "海表温度（°C）",
+  "Night-time sea surface temperature minus the Coral Reef Watch daily climatology for the same place and day of year, from NOAA Coral Reef Watch, shown at 0.5°. Its baseline is 1985–1990 plus 1993, cooler than recent decades, so most of the ocean reads somewhat warm; marine heatwaves stand out from about +2 °C. Each day appears one to two days after the night it describes. Land and sea ice are left clear.": "夜间海表温度减去 Coral Reef Watch 同一地点、同一年内日期的逐日气候态，数据来自 NOAA Coral Reef Watch，以 0.5° 显示。其基准期为 1985–1990 年加 1993 年，比近几十年更冷，因此大部分海洋显示为略偏暖；海洋热浪从约 +2 °C 起较为突出。每一天的数据在所描述的夜晚之后一到两天发布。陆地和海冰保持透明。",
+  "Sea surface temperature anomaly": "海表温度距平",
+  "Sea surface temperature anomaly network error": "海表温度距平网络错误",
+  "Malformed sea surface temperature anomaly response": "海表温度距平响应格式错误"
 }

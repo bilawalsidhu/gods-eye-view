@@ -2856,3 +2856,29 @@ test('explicit provider switches reach durable state without adopting unrelated 
     coordinator.destroy();
   }
 });
+
+test('the sea surface temperature view travels in a share link and defaults to temperature', () => {
+  const state = createDefaultLayerState();
+  state.enabledLayerIds = ['sea-surface-temperature'];
+  assert.equal(state.options['sea-surface-temperature'].view, 'temperature');
+  const plain = encodeLayerStateParams(new URLSearchParams('v=2'), state);
+  const tokens = (search) => (search.get('lo') || '').split('_');
+  assert.ok(
+    !tokens(plain).some((token) => token.startsWith('7.')),
+    'the default view is omitted',
+  );
+  state.options['sea-surface-temperature'].view = 'anomaly';
+  const params = encodeLayerStateParams(new URLSearchParams('v=2'), state);
+  assert.ok(tokens(params).includes('7.v.a'));
+  const restored = decodeLayerStateParams(params);
+  assert.deepEqual(restored.enabledLayerIds, ['sea-surface-temperature']);
+  assert.equal(restored.options['sea-surface-temperature'].view, 'anomaly');
+  assert.equal(
+    normalizeLayerState({
+      ...state,
+      options: { 'sea-surface-temperature': { view: 'salinity' } },
+    }).options['sea-surface-temperature'].view,
+    'temperature',
+    'an unknown view falls back to the default',
+  );
+});

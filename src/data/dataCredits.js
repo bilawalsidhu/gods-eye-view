@@ -432,7 +432,9 @@ export const DATA_CREDITS = [
     key: 'noaa-crw-coraltemp',
     html:
       'Sea surface temperature: <a href="https://coralreefwatch.noaa.gov/satellite/coraltemp.php" target="_blank" rel="noopener">NOAA Coral Reef Watch CoralTemp v3.1</a> ' +
-      'via <a href="https://coastwatch.noaa.gov/erddap/griddap/noaacrwsstDaily.html" target="_blank" rel="noopener">NOAA CoastWatch ERDDAP</a>. ' +
+      'and its <a href="https://coralreefwatch.noaa.gov/product/5km/index_5km_ssta.php" target="_blank" rel="noopener">SST Anomaly</a> ' +
+      'via NOAA CoastWatch ERDDAP (<a href="https://coastwatch.noaa.gov/erddap/griddap/noaacrwsstDaily.html" target="_blank" rel="noopener">temperature</a>, ' +
+      '<a href="https://coastwatch.noaa.gov/erddap/griddap/noaacrwsstanomalyDaily.html" target="_blank" rel="noopener">anomaly</a>). ' +
       'Daily night-time satellite analysis, every tenth 0.05° cell shown. ' +
       'Skirving et al. (2020), <a href="https://doi.org/10.3390/rs12233856" target="_blank" rel="noopener">doi:10.3390/rs12233856</a>.',
   },

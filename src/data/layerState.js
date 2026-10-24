@@ -298,6 +298,12 @@ function satelliteFilterOption() {
 }
 
 const OPTION_GROUPS = Object.freeze({
+  'sea-surface-temperature': Object.freeze([
+    enumOption('view', 'v', 'temperature', ['temperature', 'anomaly'], {
+      temperature: 't',
+      anomaly: 'a',
+    }),
+  ]),
   traffic: Object.freeze([
     enumOption('roadMode', 'r', null, ['tomtom', 'osm', 'hybrid'], {
       tomtom: 't',
@@ -674,7 +680,8 @@ export const LAYER_STATE_REGISTRY = Object.freeze([
   Object.freeze({
     id: 'sea-surface-temperature',
     token: '7',
-    disposition: 'enabled-only',
+    disposition: 'enabled+options',
+    optionOwner: 'sea-surface-temperature',
   }),
   Object.freeze({
     id: 'street-level',

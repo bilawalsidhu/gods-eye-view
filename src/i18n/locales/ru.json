@@ -3046,5 +3046,14 @@
   "{temperature} °C": "{temperature} °C",
   "Sea surface temperature network error": "Сетевая ошибка температуры поверхности моря",
   "Malformed sea surface temperature response": "Некорректный ответ о температуре поверхности моря",
-  "Sea surface temperature": "Температура поверхности моря"
+  "Sea surface temperature": "Температура поверхности моря",
+  "Sea surface temperature anomaly unavailable": "Аномалия температуры поверхности моря недоступна",
+  "Max {anomaly} °C from normal": "Макс. {anomaly} °C от нормы",
+  "Anomaly": "Аномалия",
+  "Difference from the long-term mean for this day of year": "Отклонение от многолетнего среднего для этого дня года",
+  "Sea surface temperature in °C": "Температура поверхности моря в °C",
+  "Night-time sea surface temperature minus the Coral Reef Watch daily climatology for the same place and day of year, from NOAA Coral Reef Watch, shown at 0.5°. Its baseline is 1985–1990 plus 1993, cooler than recent decades, so most of the ocean reads somewhat warm; marine heatwaves stand out from about +2 °C. Each day appears one to two days after the night it describes. Land and sea ice are left clear.": "Ночная температура поверхности моря за вычетом суточной климатологии Coral Reef Watch для того же места и дня года, по данным NOAA Coral Reef Watch, с шагом 0,5°. Базовый период — 1985–1990 годы и 1993 год, он холоднее последних десятилетий, поэтому большая часть океана выглядит немного теплее нормы; морские волны тепла выделяются примерно от +2 °C. Каждый день публикуется через один-два дня после описываемой ночи. Суша и морской лёд остаются прозрачными.",
+  "Sea surface temperature anomaly": "Аномалия температуры поверхности моря",
+  "Sea surface temperature anomaly network error": "Сетевая ошибка аномалии температуры поверхности моря",
+  "Malformed sea surface temperature anomaly response": "Некорректный ответ аномалии температуры поверхности моря"
 }

@@ -151,3 +151,74 @@ test('a map source without imagery reports why the field is hidden, and a globe 
   layer.rehome();
   assert.equal(collection.layers.length, 1);
 });
+
+test('switching to the anomaly drops the temperature day, reads the anomaly route and shows its ramp', async () => {
+  const asked = [];
+  const { collection, layer } = setup(async ({ view }) => {
+    asked.push(view);
+    return view === 'anomaly'
+      ? snapshot({ view, minValue: -3.1, maxValue: 4.26 })
+      : snapshot({ view });
+  });
+  layer.enable();
+  await layer.update();
+  const chips = layer.getRowControls().chips;
+  assert.deepEqual(
+    chips.map(({ id, active }) => [id, active]),
+    [
+      ['view-temperature', true],
+      ['view-anomaly', false],
+    ],
+  );
+  assert.deepEqual(chips[1].params, { view: 'anomaly' });
+  assert.equal(layer.setParams({ view: 'anomaly' }), true);
+  assert.equal(collection.layers.length, 0, 'the old view is not left drawn');
+  assert.equal(layer.getStats().count, 0);
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.deepEqual(asked, ['temperature', 'anomaly']);
+  assert.equal(collection.layers.length, 1);
+  assert.equal(layer.getStats().countLabel, 'Max +4.3 °C from normal');
+  const controls = layer.getRowControls();
+  assert.equal(controls.chips[1].active, true);
+  assert.equal(controls.legend.length, 7);
+  assert.equal(controls.legend[0].label, '+4 °C');
+  assert.equal(controls.legend[3].label, '0 °C');
+  assert.equal(controls.legend.at(-1).label, '-4 °C');
+  assert.match(controls.infoTitle, /1985–1990 plus 1993/);
+  assert.equal(layer.setParams({ view: 'anomaly' }), true, 'same view');
+  assert.equal(layer.setParams({ view: 'salinity' }), true, 'ignored');
+  assert.deepEqual(asked, ['temperature', 'anomaly']);
+});
+
+test('a temperature answer that lands after the switch to the anomaly is dropped', async () => {
+  const releases = [];
+  const { collection, layer } = setup(
+    ({ view }) =>
+      new Promise((resolve) =>
+        releases.push(() => resolve(snapshot({ view }))),
+      ),
+  );
+  layer.enable();
+  const first = layer.update();
+  layer.setParams({ view: 'anomaly' });
+  releases[0]();
+  assert.equal(await first, false);
+  assert.equal(collection.layers.length, 0);
+  releases[1]();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.equal(collection.layers.length, 1);
+  assert.equal(layer.getRowControls().chips[1].active, true);
+});
+
+test('a view set while disabled is used on the next enable', async () => {
+  const asked = [];
+  const { layer } = setup(async ({ view }) => {
+    asked.push(view);
+    return snapshot({ view });
+  });
+  layer.setParams({ view: 'anomaly' });
+  assert.deepEqual(asked, [], 'no request while disabled');
+  layer.enable();
+  await layer.update();
+  assert.deepEqual(asked, ['anomaly']);
+});

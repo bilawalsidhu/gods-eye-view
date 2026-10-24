@@ -14,6 +14,9 @@ test('data providers have both hooks; credential editing stays development-only'
   assert.ok(plugins.some(({ name }) => name === 'sea-state'));
   assert.ok(plugins.some(({ name }) => name === 'ocean-currents'));
   assert.ok(plugins.some(({ name }) => name === 'sea-surface-temperature'));
+  assert.ok(
+    plugins.some(({ name }) => name === 'sea-surface-temperature-anomaly'),
+  );
   for (const plugin of plugins) {
     if (plugin.name === 'gev-key-setup') {
       assert.equal(plugin.configurePreviewServer, undefined);
@@ -111,6 +114,8 @@ test('real dev and built-preview servers serve provider JSON and terminate unkno
         ['/api/sea-state/grid/unknown.bin', 404],
         ['/api/ocean-currents/grid/unknown.bin', 404],
         ['/api/sea-surface-temperature/grid/unknown.bin', 404],
+        // A longer path that shares the prefix reaches its own route.
+        ['/api/sea-surface-temperature-anomaly/grid/unknown.bin', 404],
         ['/api/terrain/heights?points=invalid', 400],
         ['/api/overpass', 405],
         ['/api/overpass/status', 200],

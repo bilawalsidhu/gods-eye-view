@@ -116,3 +116,36 @@ test('an aborted read rejects with the abort, not as a malformed answer', async 
   });
   assert.deepEqual(asked, []);
 });
+
+test('the anomaly view reads its own route and refuses a temperature manifest', async () => {
+  const anomaly = {
+    ...MANIFEST,
+    source: 'noaa-crw-ssta',
+    field: { kind: 'sea-surface-temperature-anomaly', units: 'degC' },
+    gridUrl: '/api/sea-surface-temperature-anomaly/grid/b.bin',
+  };
+  const { asked, feed } = source({
+    '/api/sea-surface-temperature-anomaly': Response.json(anomaly),
+    '/api/sea-surface-temperature-anomaly/grid/b.bin': new Response(
+      gridBytes([1.5, NaN, -0.5, 2]),
+    ),
+  });
+  const snapshot = await feed.getSnapshot({ view: 'anomaly' });
+  assert.deepEqual(asked, [
+    '/api/sea-surface-temperature-anomaly',
+    '/api/sea-surface-temperature-anomaly/grid/b.bin',
+  ]);
+  assert.equal(snapshot.view, 'anomaly');
+  assert.equal(snapshot.values[0], 1.5);
+  const mixed = source({
+    '/api/sea-surface-temperature-anomaly': Response.json(MANIFEST),
+  });
+  await assert.rejects(
+    mixed.feed.getSnapshot({ view: 'anomaly' }),
+    /^Error: Malformed sea surface temperature anomaly response$/,
+  );
+  await assert.rejects(
+    mixed.feed.getSnapshot({ view: 'salinity' }),
+    /Unknown sea surface temperature view/,
+  );
+});

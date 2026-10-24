@@ -21,37 +21,78 @@ export const SST_STOPS = Object.freeze(
   ].map((stop) => Object.freeze(stop)),
 );
 
-const SST_ALPHA = 0.75;
-
-const STOP_RGB = SST_STOPS.map(({ color }) =>
-  color.match(/\w\w/g).map((value) => parseInt(value, 16)),
+/**
+ * Sea surface temperature anomaly stops in °C: a diverging ramp, blue below
+ * the climatology, near white at it, red above. CRW's baseline is 1985–1990
+ * plus 1993, cooler than today's ocean, so most of the sea reads slightly
+ * warm and marine heatwaves stand out from +2 °C.
+ */
+export const SSTA_STOPS = Object.freeze(
+  [
+    { min: -4, color: '#2b3a8c' },
+    { min: -2, color: '#3d7cc2' },
+    { min: -1, color: '#9bc6e3' },
+    { min: 0, color: '#f4f1ea' },
+    { min: 1, color: '#f6bd84' },
+    { min: 2, color: '#e2643a' },
+    { min: 4, color: '#9e1f3c' },
+  ].map((stop) => Object.freeze(stop)),
 );
 
+/** What the layer can show: the day's temperature, or its anomaly. */
+export const SST_VIEWS = Object.freeze(['temperature', 'anomaly']);
+
+const SST_ALPHA = 0.75;
+
+const toRgb = (stops) =>
+  stops.map(({ color }) =>
+    color.match(/\w\w/g).map((value) => parseInt(value, 16)),
+  );
+const RAMPS = Object.freeze({
+  temperature: { stops: SST_STOPS, rgb: toRgb(SST_STOPS) },
+  anomaly: { stops: SSTA_STOPS, rgb: toRgb(SSTA_STOPS) },
+});
+
+/** The legend stops of one view. */
+export function seaSurfaceTemperatureStops(view = 'temperature') {
+  return (RAMPS[view] ?? RAMPS.temperature).stops;
+}
+
 /**
- * RGBA (0–255) for a temperature, blended between the stops and held at the
- * ends, or null for no value (land, no data).
+ * RGBA (0–255) for a value of one view, blended between its stops and held
+ * at the ends, or null for no value (land, no data).
  */
-export function seaSurfaceTemperatureColor(celsius) {
+export function seaSurfaceTemperatureColor(celsius, view = 'temperature') {
   if (!Number.isFinite(celsius)) return null;
-  const last = SST_STOPS.length - 1;
+  const { stops, rgb } = RAMPS[view] ?? RAMPS.temperature;
+  const last = stops.length - 1;
   let i = 0;
-  while (i < last && celsius > SST_STOPS[i + 1].min) i += 1;
+  while (i < last && celsius > stops[i + 1].min) i += 1;
   const next = Math.min(last, i + 1);
   const f =
     i === last
       ? 0
       : Math.max(
           0,
-          (celsius - SST_STOPS[i].min) /
-            (SST_STOPS[next].min - SST_STOPS[i].min),
+          (celsius - stops[i].min) / (stops[next].min - stops[i].min),
         );
   return [
-    ...STOP_RGB[i].map((value, k) =>
-      Math.round(value + (STOP_RGB[next][k] - value) * f),
-    ),
+    ...rgb[i].map((value, k) => Math.round(value + (rgb[next][k] - value) * f)),
     Math.round(255 * SST_ALPHA),
   ];
 }
+
+/** Each view's route and the field kind its manifest must name. */
+const VIEW_FIELDS = Object.freeze({
+  temperature: Object.freeze({
+    kind: 'sea-surface-temperature',
+    grids: '/api/sea-surface-temperature/grid/',
+  }),
+  anomaly: Object.freeze({
+    kind: 'sea-surface-temperature-anomaly',
+    grids: '/api/sea-surface-temperature-anomaly/grid/',
+  }),
+});
 
 /** Largest grid the route can serve: 0.25° global. */
 const MAX_CELLS = 1440 * 721;
@@ -60,11 +101,16 @@ const MAX_CELLS = 1440 * 721;
  * Validate the route's manifest. Returns null when any field the layer reads
  * is missing or out of range, so a malformed answer is never drawn.
  */
-export function parseSeaSurfaceTemperatureManifest(payload) {
+export function parseSeaSurfaceTemperatureManifest(
+  payload,
+  view = 'temperature',
+) {
   const grid = payload?.grid;
+  const expected = VIEW_FIELDS[view];
   if (
+    !expected ||
     payload?.schemaVersion !== 1 ||
-    payload.field?.kind !== 'sea-surface-temperature' ||
+    payload.field?.kind !== expected.kind ||
     payload.field.units !== 'degC' ||
     !grid ||
     !Number.isInteger(grid.nx) ||
@@ -76,7 +122,7 @@ export function parseSeaSurfaceTemperatureManifest(payload) {
     grid.dx <= 0 ||
     grid.dy <= 0 ||
     typeof payload.gridUrl !== 'string' ||
-    !payload.gridUrl.startsWith('/api/sea-surface-temperature/grid/') ||
+    !payload.gridUrl.startsWith(expected.grids) ||
     !Number.isFinite(Date.parse(payload.cycle?.validIso)) ||
     !Number.isFinite(payload.ageMs) ||
     payload.ageMs < 0
@@ -84,6 +130,7 @@ export function parseSeaSurfaceTemperatureManifest(payload) {
     return null;
   const finite = (value) => (Number.isFinite(value) ? value : null);
   return {
+    view,
     grid: {
       nx: grid.nx,
       ny: grid.ny,
@@ -116,7 +163,7 @@ export function decodeSeaSurfaceTemperatureGrid(buffer, grid) {
 }
 
 /**
- * Sea surface temperature at a point in °C: the bilinear blend of the valid
+ * Sea surface temperature (or anomaly) at a point in °C: the bilinear blend of the valid
  * grid corners around it, or null on land and off the data.
  */
 export function sampleSeaSurfaceTemperature(field, lon, lat) {
@@ -125,8 +172,8 @@ export function sampleSeaSurfaceTemperature(field, lon, lat) {
 
 /**
  * One geographic texture for the whole field, pixel centres covering
- * -180..180 and 90..-90. Land and no data stay transparent. Returns null
- * when nothing would be drawn.
+ * -180..180 and 90..-90, coloured on the ramp of the field's view. Land and
+ * no data stay transparent. Returns null when nothing would be drawn.
  */
 export function createSeaSurfaceTemperatureRaster(
   field,
@@ -151,6 +198,7 @@ export function createSeaSurfaceTemperatureRaster(
       const lon = -180 + ((x + 0.5) / width) * 360;
       const color = seaSurfaceTemperatureColor(
         sampleSeaSurfaceTemperature(field, lon, lat),
+        field.view,
       );
       if (!color) continue;
       rgba.set(color, (y * width + x) * 4);

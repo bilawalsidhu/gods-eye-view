@@ -1,10 +1,12 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
+  CORALTEMP_PRODUCTS,
   coralTempUrls,
   fetchCoralTempSst,
   parseEsriAsciiGrid,
   parseLatestTime,
+  seaSurfaceTemperatureAnomalyProxy,
   seaSurfaceTemperatureProxy,
 } from './seaSurfaceTemperature.js';
 
@@ -43,14 +45,18 @@ function asciiGrid(cells = {}, header = {}) {
 }
 
 /** ERDDAP serving one day: the time query, then that day's grid. */
-function erddap({ grid = asciiGrid({ '0,0': 4.5 }), status = 200 } = {}) {
+function erddap({
+  grid = asciiGrid({ '0,0': 4.5 }),
+  status = 200,
+  product = CORALTEMP_PRODUCTS.temperature,
+} = {}) {
   const calls = [];
   const fetchImpl = async (url, options) => {
     calls.push({ url, redirect: options?.redirect });
     if (status !== 200) return new Response('', { status });
-    if (url === coralTempUrls().latest)
+    if (url === coralTempUrls(undefined, product).latest)
       return new Response(`time\nUTC\n${DAY}\n`);
-    if (url === coralTempUrls(DAY).grid) return new Response(grid);
+    if (url === coralTempUrls(DAY, product).grid) return new Response(grid);
     return new Response('', { status: 404 });
   };
   return { calls, fetchImpl };
@@ -75,6 +81,29 @@ test('the newest day is asked for first, then that exact day at every 10th cell'
   assert.equal(grid.lo1, -179.975);
   assert.equal(grid.values[0], 4.5, 'the first text row is the north row');
   assert.equal(grid.valid, 1);
+});
+
+test('the anomaly is read from its own dataset and variable, with its own valid range', async () => {
+  const product = CORALTEMP_PRODUCTS.anomaly;
+  const upstream = erddap({
+    product,
+    grid: asciiGrid({ '0,0': -3.25, '0,1': 14.5, '0,2': 15.5, '0,3': -16 }),
+  });
+  const { grid } = await fetchCoralTempSst({ ...upstream, product });
+  assert.deepEqual(
+    upstream.calls.map(({ url }) => decodeURIComponent(url)),
+    [
+      'https://coastwatch.noaa.gov/erddap/griddap/noaacrwsstanomalyDaily.csv?time[(last)]',
+      // Its latitude axis runs north to south: asked from the north row down.
+      'https://coastwatch.noaa.gov/erddap/griddap/noaacrwsstanomalyDaily.esriAscii?sea_surface_temperature_anomaly[(2026-10-22T12:00:00Z)][(89.525):10:(-89.975)][(-179.975):10:(179.975)]',
+    ],
+  );
+  // -2 °C is below the temperature range but a normal cold anomaly.
+  assert.equal(grid.values[0], -3.25);
+  assert.equal(grid.values[1], 14.5);
+  assert.ok(Number.isNaN(grid.values[2]), 'above +15 °C');
+  assert.ok(Number.isNaN(grid.values[3]), 'below -15 °C');
+  assert.equal(grid.valid, 2);
 });
 
 test('an ESRI ASCII grid reads north to south, with nodata and out-of-range values missing', () => {
@@ -214,5 +243,54 @@ test('daily data refreshes every three hours and is served stale for three days'
   assert.equal(gone.status, 502);
   assert.deepEqual(gone.body, {
     error: 'sea_surface_temperature_unavailable',
+  });
+});
+
+test('the anomaly route has its own path, grid ids, field and error', async () => {
+  let now = NOW;
+  let fail = false;
+  const plugin = seaSurfaceTemperatureAnomalyProxy({
+    now: () => now,
+    load: async () => {
+      if (fail) throw new Error('ERDDAP 502');
+      return snapshot();
+    },
+  });
+  assert.equal(plugin.name, 'sea-surface-temperature-anomaly');
+  let mounted;
+  let handler;
+  plugin.configureServer({
+    middlewares: { use: (path, h) => ((mounted = path), (handler = h)) },
+  });
+  assert.equal(mounted, '/api/sea-surface-temperature-anomaly');
+  const get = async (url = '/') => {
+    const res = {
+      writeHead(status, headers) {
+        this.status = status;
+        this.headers = headers;
+      },
+      end(body) {
+        this.raw = body;
+      },
+    };
+    await handler({ url, method: 'GET' }, res);
+    return { ...res, body: JSON.parse(res.raw) };
+  };
+  const { body } = await get();
+  assert.equal(body.source, 'noaa-crw-ssta');
+  assert.deepEqual(body.field, {
+    kind: 'sea-surface-temperature-anomaly',
+    units: 'degC',
+  });
+  assert.equal(
+    body.gridUrl,
+    '/api/sea-surface-temperature-anomaly/grid/crwa-20261022-0.5.bin',
+  );
+  fail = true;
+  now += 72 * 3600_000 + 1;
+  const gone = await get();
+  assert.equal(gone.status, 502);
+  assert.deepEqual(gone.body, {
+    error: 'sea_surface_temperature_anomaly_unavailable',
   });
 });
