@@ -73,6 +73,46 @@ const POINTER_CROP_MAX_AGE_MS = 20000;
 const POINTER_CROP_SCALES = new Set(['local', 'city']);
 
 /**
+ * Reason-coded explanation of the existing visual escalation policy.
+ * Pointer crops remain a separate path from full-frame screenshots.
+ * These reasons are static diagnostics, never model-generated claims.
+ */
+export function viewportContextDecision(result, { channelOpen = true } = {}) {
+  if (result?.action !== 'get_entity_context')
+    return { send: false, reason: 'not-entity-context' };
+  if (!channelOpen) return { send: false, reason: 'channel-closed' };
+  const viewScale = result.scene?.basemap?.viewScale ?? null;
+  if (result.scope === 'pointer') {
+    if (result.selected)
+      return { send: false, reason: 'pointer-identity-present', viewScale };
+    if (!result.pointer)
+      return { send: false, reason: 'pointer-missing', viewScale };
+    if (!POINTER_CROP_SCALES.has(viewScale))
+      return { send: false, reason: 'pointer-scale-not-useful', viewScale };
+    return {
+      send: true,
+      kind: 'crop',
+      reason: 'pointer-ground-crop',
+      viewScale,
+    };
+  }
+  if (!shouldSendViewportImage(viewScale))
+    return { send: false, reason: 'view-scale-not-local', viewScale };
+  if (hasStructuredViewIdentity(result))
+    return {
+      send: false,
+      reason: 'structured-identity-sufficient',
+      viewScale,
+    };
+  return {
+    send: true,
+    kind: 'viewport',
+    reason: 'structured-identity-missing',
+    viewScale,
+  };
+}
+
+/**
  * Square source rectangle around a canvas point, clamped inside the canvas,
  * in drawing-buffer pixels, plus where the point lands in the output image.
  * Pure; exported for tests.
@@ -331,21 +371,17 @@ export class RealtimeViewport {
   }
 
   async sendVisualContextIfUseful(result) {
-    if (
-      result?.action !== 'get_entity_context' ||
-      !this.dc ||
-      this.dc.readyState !== 'open'
-    )
-      return false;
-    const viewScale = result.scene?.basemap?.viewScale;
-    // Point-and-ask on bare ground: the crop around the pointer replaces the
-    // whole-frame screenshot, and is pulled only when nothing was named.
-    if (result.scope === 'pointer') {
-      if (result.selected || !result.pointer) return false;
-      return this.sendPointerCrop(this.readPointer(), { viewScale });
-    }
-    if (!shouldSendViewportImage(viewScale)) return false;
-    if (hasStructuredViewIdentity(result)) return false;
+    const channel = this.dc;
+    const decision = viewportContextDecision(result, {
+      channelOpen: channel?.readyState === 'open',
+    });
+    this.debugLog?.('viewport_context.decision', decision);
+    if (!decision.send) return false;
+    // #837's pointer crop is separate from the full viewport: preserve it.
+    if (decision.kind === 'crop')
+      return this.sendPointerCrop(this.readPointer(), {
+        viewScale: decision.viewScale,
+      });
     return this.sendRetainedImage(
       () => this.capture(),
       "Current God's Eye View viewport screenshot. Read any clearly visible street, building, and place labels in the image and combine them with the structured nearbyPlaces, streetLabels, and scene context. Do not invent labels that are not legible.",
@@ -400,15 +436,24 @@ export class RealtimeViewport {
     const captured = await captureImage();
     const imageUrl =
       typeof captured === 'string' ? captured : captured?.dataUrl || null;
+    if (!imageUrl) {
+      this.debugLog?.('viewport_context.skipped', {
+        reason: 'capture-unavailable',
+      });
+      return false;
+    }
     if (
-      !imageUrl ||
       generation !== this.generation ||
       request !== this.captureSeq ||
       this.dc !== channel ||
       channel.readyState !== 'open' ||
       (typeof frame.valid === 'function' && !frame.valid())
-    )
+    ) {
+      this.debugLog?.('viewport_context.skipped', {
+        reason: 'capture-invalidated',
+      });
       return false;
+    }
 
     // Keep at most one viewport screenshot in context. Images are the single
     // most expensive item (re-billed every turn they linger), so we proactively
@@ -469,6 +514,9 @@ export class RealtimeViewport {
           cameraKey: this.readCameraKey(),
         }
       : null;
+    this.debugLog?.('viewport_context.result', {
+      reason: sent ? 'sent' : 'data-channel-send-failed',
+    });
     return sent;
   }
 
