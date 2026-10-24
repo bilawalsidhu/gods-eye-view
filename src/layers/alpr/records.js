@@ -89,6 +89,8 @@ export function normalizeAlprNode(el) {
     longitude: el.lon,
     operator: textTag(tags.operator),
     manufacturer: textTag(tags.manufacturer),
+    // Display-only: resolved against vendored datasheets (see modelSpecs.js).
+    model: textTag(tags.model),
     cameraType: textTag(tags['camera:type']),
     zone: textTag(tags['surveillance:zone']),
     // Only numeric bearings are parsed; compass-word directions ("N"/"NE")
