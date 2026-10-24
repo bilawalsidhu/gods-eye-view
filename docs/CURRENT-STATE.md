@@ -3672,6 +3672,7 @@ its criteria cannot be silently ignored.
 | Military Flights 🎖️    | adsb.lol /v2/mil                                                                                                                                                                                | `src/data/militaryFlights.js`                         | `/api/military`                                       | 15s                                                                               |
 | Live AIS Vessels 🚢    | AISStream websocket                                                                                                                                                                             | `src/data/aisLiveVessels.js`                          | `/api/vessels`                                          | 60s (+800ms visibility pass)                                                      |
 | Mapped Installations ⌖ | OpenFreeMap military areas; optional configured Overpass names and Google Places search | `src/data/militaryInstallations.js` | OpenFreeMap tiles, `/api/military-installations`, `/api/google/text-search` | viewport-driven; transient errors back off, missing capability switches to tiles |
+| EV Charging 🔌 (`ev-charging`) | OpenFreeMap OpenMapTiles `poi` charging stations (OpenStreetMap, ODbL; keyless) | `src/layers/evCharging/` via `src/app/layers/evCharging.js` | browser-direct OpenFreeMap tiles | viewport-driven; z14 only, at most 16 tiles per view |
 | Earthquakes            | USGS                                                                                                                                                                                            | `src/data/earthquakes.js`                             | —                                                        | 60s                                                                               |
 | Air quality            | ECCC MSC GeoMet OGC API (AQHI, Canada only)                                                                                                                                                      | `src/layers/airQuality/`                              | —                                                        | 20 min readings, 12 h station catalog                                             |
 | Satellites             | CelesTrak                                                                                                                                                                                       | `src/data/satellites.js`                              | `/api/celestrak`                                         | 120s                                                                              |
@@ -3714,6 +3715,26 @@ MLAT-positioned GPS loss, derived-field exclusions and the NIC 0 exception.
 `scripts/qa-gnss.mjs` covers live freshness, bands, built primitives, camera/globe
 anchors, recovery, keyboard and mobile states; emergency repainting is covered
 by `scripts/qa-emergency-squawk.mjs`. Both accept `--timeout-ms` for slow boot.
+
+EV Charging (Infrastructure group, share token `5`) shows OpenStreetMap
+charging stations from the OpenMapTiles `poi` layer of OpenFreeMap's planet
+tiles: features with `subclass` `charging_station`; petrol stations share the
+`fuel` class and are excluded. OpenMapTiles carries them only at z14, so a view
+reads z14 tiles around the ground at the screen centre, sized by the camera
+range, and asks to zoom in instead of sampling when that needs more than 16
+tiles. Decoded tiles are cached, so a pan over tiles already read makes no
+request; each station belongs to the tile that contains it, never to a
+neighbour's buffer.
+Past 2,000 stations the nearest to the view centre are kept and the row says
+coverage is limited; a tile that fails leaves the read `partial`. Points are
+lime, white when selected; a click or **SHOW NEAREST** opens a card with the
+name as mapped (unnamed stations say so), coordinates and the OpenStreetMap
+credit. The tiles carry no sockets, power, operator or availability, and the
+layer claims none. `getStats().observedAt` is the planet build time named in
+the tile path, not the fetch time. Failures read `OpenFreeMap HTTP <status>`,
+`OpenFreeMap rate limited`, `OpenFreeMap network error` or `Malformed
+OpenFreeMap response`; stations already shown stay up as stale. Overpass is
+never used.
 
 
 Fire Perimeters uses capped, timed server reads with stale-on-error caching and a per-client limit. Unchanged snapshots retain geometry; link checks cancel on disable or selection change, and the row legend shows reported containment.
