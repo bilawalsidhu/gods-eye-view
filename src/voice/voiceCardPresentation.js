@@ -1,4 +1,9 @@
-import { planStepLabel, progressStepLabel, spokenLabel } from './speech.js';
+import {
+  planStepLabel,
+  progressStepLabel,
+  shownEntityLabel,
+  spokenLabel,
+} from './speech.js';
 import { presentResult } from './resultDisplay.js';
 import { MAX_DISPLAYED_REFERENTS, normalizeReferents } from './referents.js';
 
@@ -132,7 +137,7 @@ export function reduceVoiceCard(state, event) {
       return reveal({
         ...state,
         pointer,
-        announce: `${kind}: ${spokenLabel(pointer.label, 32)}`,
+        announce: `${kind}: ${spokenLabel(shownEntityLabel(pointer.label), 32)}`,
       });
     }
     case 'transcript': {
@@ -288,7 +293,7 @@ export function voiceCardView(state) {
     pointer: {
       visible: Boolean(state.pointer),
       kind: state.pointer?.kind === 'here' ? t('HERE') : t('THIS'),
-      text: spokenLabel(state.pointer?.label || '', 32),
+      text: spokenLabel(shownEntityLabel(state.pointer?.label || ''), 32),
     },
     assistant: {
       visible: Boolean(state.assistant),
