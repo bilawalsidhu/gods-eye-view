@@ -64,7 +64,7 @@ export function toFiniteNumber(value, fallback = NaN) {
  * @param {string} text
  * @returns {string}
  */
-export function normalizeKey(text) {
+function normalizeKey(text) {
   return String(text || '')
     .trim()
     .toLowerCase()
@@ -80,7 +80,7 @@ export function normalizeKey(text) {
  * @param {string} value
  * @returns {{lat:number, lon:number}}
  */
-export function parsePointString(value) {
+function parsePointString(value) {
   const match = String(value || '').match(
     /POINT\s*\(\s*(-?\d+(?:\.\d+)?)\s+(-?\d+(?:\.\d+)?)\s*\)/i,
   );
@@ -100,7 +100,7 @@ export function parsePointString(value) {
  * @param {string|object|null} value
  * @returns {{lat:number, lon:number}}
  */
-export function coerceLatLon(value) {
+function coerceLatLon(value) {
   if (!value) return { lat: NaN, lon: NaN };
 
   if (typeof value === 'string') {
@@ -658,4 +658,39 @@ export function isLikelyTorontoCoordinate(lat, lon) {
     lon >= -79.7 &&
     lon <= -79.1
   );
+}
+
+/**
+ * A camera URL under a pinned directory, by parsed URL rather than string
+ * prefix: the same scheme and exact host as `prefix`, no credentials, the
+ * default port, and a normalized path inside the prefix's directory. Dot
+ * segments (including encoded ones) and backslashes are resolved before the
+ * path is compared, and an encoded slash or backslash is refused.
+ *
+ * @param {string} raw - Camera URL from a catalog or redirect.
+ * @param {string} prefix - Pinned origin and directory, ending in `/`.
+ * @returns {string|null} The normalized URL, or null when it is not pinned.
+ */
+export function pinnedCameraUrl(raw, prefix) {
+  let url;
+  let pin;
+  try {
+    url = new URL(String(raw ?? '').trim());
+    pin = new URL(prefix);
+  } catch {
+    return null;
+  }
+  if (
+    url.protocol !== pin.protocol ||
+    url.hostname !== pin.hostname ||
+    url.username ||
+    url.password ||
+    url.port ||
+    !url.pathname.startsWith(
+      pin.pathname.endsWith('/') ? pin.pathname : `${pin.pathname}/`,
+    ) ||
+    /%2f|%5c/i.test(url.pathname)
+  )
+    return null;
+  return url.href;
 }

@@ -36,16 +36,29 @@ async function readJsonOrThrow(response, label) {
   return payload;
 }
 
+/** `endpoint` with exactly one trailing slash, or '' when unset. */
+function endpointBase(endpoint) {
+  const text = String(endpoint || '').trim();
+  return text ? text.replace(/\/*$/, '/') : '';
+}
+
 /**
  * Mapillary network access: tiles via the local proxy, which adds the token
  * and caches; Graph API lookups direct with the client token, as MapillaryJS.
- * @param {{token?: string, fetchImpl?: Function, endpoints?: object}} options
+ * With `graphEndpoint` (a Graph API base that adds the token itself, such as
+ * a same-origin proxy), the source's Graph lookups go there through
+ * `fetchImpl` instead, and the photo viewer sends its own lookups there too;
+ * no token is sent or needed.
+ * @param {{token?: string, fetchImpl?: Function, endpoints?: object,
+ *   graphEndpoint?: string}} options
  */
 export function createMapillarySource({
   token = '',
   fetchImpl = (...args) => globalThis.fetch(...args),
   endpoints = {},
+  graphEndpoint = '',
 } = {}) {
+  const graphBase = endpointBase(graphEndpoint);
   const urls = {
     status: '/api/mapillary/status',
     tiles: '/api/mapillary/tiles',
@@ -54,6 +67,13 @@ export function createMapillarySource({
   };
 
   async function graph(path, params = {}, { signal } = {}) {
+    if (graphBase) {
+      const search = new URLSearchParams(params);
+      const response = await fetchImpl(`${graphBase}${path}?${search}`, {
+        signal,
+      });
+      return readJsonOrThrow(response, 'Mapillary graph');
+    }
     if (!token)
       throw new MapillarySourceError('Mapillary token not configured', {
         status: 503,
@@ -69,6 +89,10 @@ export function createMapillarySource({
   return {
     get token() {
       return token;
+    },
+    /** The Graph API base that adds the token itself, or '' (direct). */
+    get graphEndpoint() {
+      return graphBase;
     },
     hasToken: () => Boolean(token),
 

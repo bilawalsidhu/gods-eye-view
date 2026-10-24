@@ -317,7 +317,7 @@ test('a rejected key stops coverage requests until the layer goes off', async ()
 
 test('a rate limit keeps the drawn tiles and asks again once the wait is over', async (t) => {
   t.mock.timers.enable({ apis: ['setTimeout', 'Date'] });
-  const { viewer, source, state, coverage } = setup();
+  const { viewer, source, coverage } = setup();
   coverage.refresh();
   source.calls[0].reject(
     Object.assign(new Error('rate limited'), { retryAfterSec: 30 }),
@@ -593,7 +593,7 @@ test('a tile that fails before the terrain table loads is reported at once, neve
 });
 
 test('the selected sequence is drawn and highlighted even past the per-tile cap', async () => {
-  const { state, source, coverage, centre, viewer } = setup();
+  const { state, source, coverage, centre } = setup();
   const line = (n) => [
     [
       [centre.lon - 0.001, centre.lat + n * 1e-6],

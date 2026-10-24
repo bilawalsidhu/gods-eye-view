@@ -3,6 +3,8 @@ import test from 'node:test';
 import { composeCatalog, coreTools } from '../index.js';
 import { airlineDesignator } from './aviation.js';
 import { LiveSourceError } from '../../sources/live/contract.js';
+import { createMcpServer } from '../mcp/index.js';
+import { createToolServices } from '../services.js';
 
 const record = (id, latitude, longitude, extra = {}) => ({
   id,
@@ -240,6 +242,61 @@ test('tracks are ordered and thinned to 200 points', async () => {
     down.call('get_aircraft_track', { icao24: 'abcdef' }),
     (error) => error.code === 'unavailable',
   );
+});
+
+test('military track history is unsupported by the default composition and kept for custom sources', async () => {
+  const requests = [];
+  const services = createToolServices({
+    fetchImpl: async (url) => {
+      requests.push(String(url));
+      throw new Error('no request expected');
+    },
+    appUrl: 'http://localhost:5173',
+  });
+  const catalog = composeCatalog({ tools: coreTools, services });
+  await assert.rejects(
+    catalog.call('get_aircraft_track', { icao24: 'AE0001', military: true }),
+    (error) =>
+      error.name === 'ToolError' &&
+      error.code === 'unsupported' &&
+      /military/.test(error.message),
+  );
+  const server = createMcpServer({ catalog, name: 'test', version: '1.0.0' });
+  const { result } = await server.handle({
+    jsonrpc: '2.0',
+    id: 1,
+    method: 'tools/call',
+    params: {
+      name: 'get_aircraft_track',
+      arguments: { icao24: 'ae0001', military: true },
+    },
+  });
+  assert.equal(result.isError, true);
+  assert.equal(result.structuredContent.error, 'unsupported');
+  assert.doesNotMatch(result.content[0].text, /try again|later/i);
+  assert.deepEqual(requests, []);
+
+  const track = [
+    {
+      latitude: 37.6,
+      longitude: -122.3,
+      observedAtMs: Date.UTC(2026, 0, 1),
+      baroAltitudeM: 3000,
+      onGround: false,
+    },
+  ];
+  const custom = feed(military, { track });
+  const withHistory = composeCatalog({
+    tools: coreTools,
+    services: { aircraft: feed(civil), military: custom },
+  });
+  const kept = await withHistory.call('get_aircraft_track', {
+    icao24: 'AE0001',
+    military: true,
+  });
+  assert.equal(custom.calls[0], 'ae0001');
+  assert.equal(kept.data.total, 1);
+  assert.equal(kept.data.view.follow.kind, 'military_aircraft');
 });
 
 test('aircraft info combines type and route lookups', async () => {
