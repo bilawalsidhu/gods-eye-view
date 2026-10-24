@@ -120,12 +120,12 @@ export async function fetchIfsWaveHeight({
 } = {}) {
   const nowMs = now();
   // Six hours after a run its files can still be missing (both streams
-  // answered 404 at 6 h 54 min on 2026-10-24), so fall back one cycle once.
+  // answered 404 at 6 h 54 min on 2026-10-24), and an index can be posted
+  // before its GRIB file is served, so fall back one cycle once on either.
   let cycle;
   let runMs;
   let forecastHour;
-  let urls;
-  let index;
+  let bytes;
   for (const lagHours of [6, 12]) {
     cycle = selectLatestIfsCycle(nowMs, {
       availabilityLagMs: lagHours * 3600_000,
@@ -139,27 +139,26 @@ export async function fetchIfsWaveHeight({
     // The wave stream publishes the same steps as `oper` (checked 2026-10-24:
     // 3-hourly to f144, then 6-hourly to f360 on 00/12z only).
     forecastHour = nearestIfsStep((nowMs - runMs) / 3600_000, cycle.hour);
-    urls = ifsWaveObjectUrls({ ...cycle, step: forecastHour });
+    const urls = ifsWaveObjectUrls({ ...cycle, step: forecastHour });
     try {
-      index = await fetchText({ url: urls.index, fetchImpl, signal });
+      const index = await fetchText({ url: urls.index, fetchImpl, signal });
+      const entry = parseIfsIndex(index.toString()).find(
+        (item) => item.param === 'swh',
+      );
+      if (!entry) throw new Error('missing swh');
+      bytes = await fetchRange({
+        url: urls.grib,
+        start: entry.offset,
+        end: entry.offset + entry.length - 1,
+        fetchImpl,
+        signal,
+      });
       break;
     } catch (error) {
       if (lagHours === 12 || signal?.aborted) throw error;
     }
   }
-  const entry = parseIfsIndex(index.toString()).find(
-    (item) => item.param === 'swh',
-  );
-  if (!entry) throw new Error('missing swh');
-  const field = await decodeImpl(
-    await fetchRange({
-      url: urls.grib,
-      start: entry.offset,
-      end: entry.offset + entry.length - 1,
-      fetchImpl,
-      signal,
-    }),
-  );
+  const field = await decodeImpl(bytes);
   signal?.throwIfAborted();
   if (field?.shortName !== 'swh' || field.units !== 'm')
     throw new Error('Unexpected sea-state field');

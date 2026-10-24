@@ -4,8 +4,9 @@
 /**
  * WMO sea-state bands (WMO-No. 306 Manual on Codes, code table 3700, the
  * Douglas scale) by significant wave height in metres. Each band holds
- * heights from its `min` up to the next band's `min`. Calm water is left
- * transparent so the basemap reads through open, quiet sea.
+ * heights above its `min` up to and including the next band's `min`: the
+ * table assigns an exact bounding height to the lower code (4 m is Rough).
+ * Calm water is left transparent so the basemap reads through open, quiet sea.
  */
 export const SEA_STATE_BANDS = Object.freeze(
   [
@@ -42,9 +43,9 @@ export const SEA_STATE_BANDS = Object.freeze(
 /** The WMO band a height falls in, or null for no value (land, no data). */
 export function seaStateBand(metres) {
   if (!Number.isFinite(metres) || metres < 0) return null;
-  for (let i = SEA_STATE_BANDS.length - 1; i >= 0; i -= 1)
-    if (metres >= SEA_STATE_BANDS[i].min) return SEA_STATE_BANDS[i];
-  return null;
+  for (let i = SEA_STATE_BANDS.length - 1; i > 0; i -= 1)
+    if (metres > SEA_STATE_BANDS[i].min) return SEA_STATE_BANDS[i];
+  return SEA_STATE_BANDS[0];
 }
 
 /** Largest grid the route can serve: 0.25° global. */

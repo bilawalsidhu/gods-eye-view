@@ -252,7 +252,7 @@ export function createSeaStateLayer({
           .map((band) => ({
             label: BAND_NAMES[band.code]?.() ?? band.name,
             color: band.color,
-            blurb: t('From {height} m', {
+            blurb: t('Above {height} m', {
               height: formatNumber(band.min),
             }),
           })),

@@ -131,6 +131,25 @@ test('a run not yet published falls back one cycle, and only the swh bytes are f
   assert.equal(grid.max, 2);
 });
 
+test('an index posted before its GRIB file is served also falls back one cycle', async () => {
+  const upstream = waveUpstream({ cycle: '20261023/18z' });
+  const served = upstream.fetchImpl;
+  upstream.fetchImpl = async (url, options) =>
+    url.includes('/20261024/00z/') && url.endsWith('.index')
+      ? served(url.replace('/20261024/00z/', '/20261023/18z/'), options)
+      : served(url, options);
+  const { cycle } = await fetchIfsWaveHeight({
+    ...upstream,
+    now: () => NOW,
+    targetDx: 90,
+  });
+  assert.equal(cycle.hour, 18);
+  assert.deepEqual(
+    upstream.calls.map((call) => call.url.split('/forecasts/')[1].slice(0, 12)),
+    ['20261023/18z', '20261024/00z', '20261023/18z', '20261023/18z'],
+  );
+});
+
 test('two missing cycles fail rather than reach further back', async () => {
   const upstream = waveUpstream({ cycle: '20261023/12z' });
   await assert.rejects(

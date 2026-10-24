@@ -9,11 +9,13 @@ import {
   seaStateBand,
 } from './model.js';
 
-test('heights fall in the WMO code table 3700 bands, boundaries belonging to the higher band', () => {
+test('heights fall in the WMO code table 3700 bands, an exact boundary belonging to the lower band', () => {
   const code = (metres) => seaStateBand(metres)?.code ?? null;
   assert.deepEqual(
-    [0, 0.09, 0.1, 0.5, 1.24, 1.25, 2.5, 4, 6, 8.99, 9, 14, 30].map(code),
-    [1, 1, 2, 3, 3, 4, 5, 6, 7, 7, 8, 9, 9],
+    [0, 0.09, 0.1, 0.11, 0.5, 1.25, 1.26, 2.5, 4, 4.01, 6, 9, 14, 14.01].map(
+      code,
+    ),
+    [1, 1, 1, 2, 2, 3, 4, 4, 5, 6, 6, 7, 8, 9],
   );
   assert.equal(code(NaN), null);
   assert.equal(code(-0.1), null);
