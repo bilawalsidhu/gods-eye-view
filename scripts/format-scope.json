@@ -1107,5 +1107,7 @@
   "src/agent/chatgptControls.test.mjs",
   "scripts/qa-agent-chatgpt.mjs",
   "server/providers/agent/chatgpt/store.test.mjs",
-  "server/providers/common/credential-file.test.mjs"
+  "server/providers/common/credential-file.test.mjs",
+  "src/cameraGlobeRotation.test.mjs",
+  "src/voice/globeResetConfirmation.test.mjs"
 ]
