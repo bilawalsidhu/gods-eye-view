@@ -2858,3 +2858,20 @@ test('explicit provider switches reach durable state without adopting unrelated 
     coordinator.destroy();
   }
 });
+
+test('South African provider options round-trip while old air-quality links remain Canada', () => {
+  const state = normalizeLayerState({ enabledLayerIds: ['air-quality'], options: {
+    'air-quality': { provider: 'saaqis', parameter: 'CO2' },
+  } });
+  assert.deepEqual(decodeLayerStateParams(new URLSearchParams(encode(state))), state);
+  assert.deepEqual(decodeLayerStateParams(new URLSearchParams('v=2&l=4')).options['air-quality'], {
+    provider: 'eccc', parameter: 'PM2.5',
+  });
+});
+
+test('OpenAQ and injected provider identities round-trip without changing old aliases', () => {
+  for (const provider of ['openaq', 'community-network', 'constructor']) {
+    const state = normalizeLayerState({enabledLayerIds:['air-quality'],options:{'air-quality':{provider,parameter:'NO2'}}});
+    assert.deepEqual(decodeLayerStateParams(new URLSearchParams(encode(state))),state);
+  }
+});

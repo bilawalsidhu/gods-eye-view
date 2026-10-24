@@ -1,3 +1,4 @@
+import { createStatusBadge, updateStatusBadge } from './statusBadge.js';
 const set = (node, key, value) => {
   if (node[key] !== value) node[key] = value;
 };
@@ -48,6 +49,24 @@ export function syncRowList(container, list) {
     const bodyText = String(item.text ?? '');
     if (lead && lead.textContent !== leadText) lead.textContent = leadText;
     if (text && text.textContent !== bodyText) text.textContent = bodyText;
+    let badge = button.querySelector('.data-row-list-badge');
+    if (item.badge && !badge) {
+      badge = createStatusBadge({
+        documentRef: document,
+        appearance: 'box',
+        className: 'data-row-list-badge',
+      });
+      button.appendChild(badge);
+    }
+    if (badge) {
+      updateStatusBadge(badge, {
+        label: String(item.badge || ''),
+        hidden: !item.badge,
+      });
+      badge.style.color = /^#[0-9a-f]{6}$/i.test(item.badgeColor || '')
+        ? item.badgeColor
+        : '';
+    }
     set(button, 'disabled', Boolean(item.disabled));
     set(
       button,

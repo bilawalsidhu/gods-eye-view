@@ -139,7 +139,11 @@ test('a superseded refresh does not clobber the newer one', async () => {
   const first = layer.update();
   const second = layer.update();
   const [firstResult, secondResult] = await Promise.all([first, second]);
-  assert.equal(firstResult, false, 'the superseded call reports no update');
+  assert.equal(
+    firstResult,
+    true,
+    'supersession is not a failed lifecycle enable; the newer request owns data',
+  );
   assert.equal(secondResult, true);
   assert.equal(layer.getAnalystRecords()[0].name, 'call-2');
 });

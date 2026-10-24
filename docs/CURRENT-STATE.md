@@ -3673,7 +3673,7 @@ its criteria cannot be silently ignored.
 | Live AIS Vessels 🚢    | AISStream websocket                                                                                                                                                                             | `src/data/aisLiveVessels.js`                          | `/api/vessels`                                          | 60s (+800ms visibility pass)                                                      |
 | Mapped Installations ⌖ | OpenFreeMap military areas; optional configured Overpass names and Google Places search | `src/data/militaryInstallations.js` | OpenFreeMap tiles, `/api/military-installations`, `/api/google/text-search` | viewport-driven; transient errors back off, missing capability switches to tiles |
 | Earthquakes            | USGS                                                                                                                                                                                            | `src/data/earthquakes.js`                             | —                                                        | 60s                                                                               |
-| Air quality            | ECCC MSC GeoMet OGC API (AQHI, Canada only)                                                                                                                                                      | `src/layers/airQuality/`                              | —                                                        | 20 min readings, 12 h station catalog                                             |
+| Air quality            | ECCC AQHI (Canada); SAAQIS (South Africa); OpenAQ hourly observations (worldwide, optional key)                                                                                                                                                      | `src/layers/airQuality/`                              | —                                                        | 20 min readings, 12 h station catalog                                             |
 | Satellites             | CelesTrak                                                                                                                                                                                       | `src/data/satellites.js`                              | `/api/celestrak`                                         | 120s                                                                              |
 | Space Missions (30d)   | Launch Library 2 + CelesTrak                                                                                                                                                                    | `src/data/rocketLaunches.js`                          | `/api/launches` + `/api/celestrak/active`                | 5 min                                                                             |
 | Traffic | Selectable TomTom / OpenStreetMap / Hybrid roads; optional TomTom flow (BYOK) | `src/data/traffic.js` | browser-direct OpenFreeMap tiles; `/api/tomtom` for flow | viewport-driven; capped tile cache |
@@ -6105,6 +6105,52 @@ datacenters, dams and the Nepal locator retain that shared credit while displaye
 
 Military fragments stitch by source identity. Different mapped parcels merge only
 when their footprints touch or contain one another, never across a seam tolerance gap.
+
+### South African air-quality observations
+
+Weather → Air quality supports provider and pollutant selection. Canada remains
+the historical default; South Africa discovers the national SAAQIS catalog with
+no municipal allowlist. Observations retain original units and channel timestamps,
+with neutral markers rather than inferred AQI bands. No reporting station in the
+view is displayed as a coverage gap. See [the source audit and adapter contract](SOUTH-AFRICA-AIR-QUALITY.md).
+The deterministic real-app gate is `scripts/qa-south-africa-air-quality.mjs`;
+`--live` performs a separate national/Western Cape coverage audit.
+
+Air quality now accepts injected provider definitions through its source
+composition. Standalone defaults add optional worldwide OpenAQ to ECCC and SAAQIS.
+OpenAQ uses the existing Provider Settings registry (`OPENAQ_API_KEY`, server-only)
+and a fixed local proxy, with bounded progressive acquisition across all available
+countries/areas, explicit incomplete coverage and source attribution.
+Camera movement triggers debounced viewport discovery, starting near the
+map focus and continuing through the visible bounds (including dateline crossings).
+Loading and partial discovery are distinct from completed searches with no recent
+observations. The shared Weather card supplies provider/pollutant selection. The OpenAQ
+fixture gate is `scripts/qa-openaq.mjs`; live coverage requires the operator's key.
+SAAQIS retains its source-reported index and ECCC retains AQHI semantics.
+OpenAQ navigation reuses stable catalog regions and recent station observations.
+Each pass fetches at most one new catalog page and four nearby station hours;
+nearby enrichment waits eight seconds and yields capacity to new regions.
+Cancelling the last view consumer aborts upstream work. Cached observations survive
+view eviction and provider cooldowns. Provider remaining/reset and Retry-After
+headers govern automatic recovery; the card displays the next update time.
+An unresolved camera never launches a global scan. All views share conservative
+45/minute and 1,800/hour process limits; a shared key's other clients still count.
+
+
+OpenAQ's selected pollutant uses explicit sensor hourly averages, with period,
+coverage and quality checks. Supported PM2.5, PM10, NO2, O3 and SO2 measurements
+receive a clearly labelled GEV comparison against the EEA hourly pollutant bands:
+Good, Fair, Moderate, Poor, Very poor or Extremely poor. This is a per-pollutant
+comparison, not an overall station AQI or a local official index. Unknown periods,
+incomplete or flagged hours, unsupported units and unclassified pollutants remain
+neutral and explain why. CO2 concentration is never described as emissions.
+The Weather card leads with the highest category among reporting stations in view,
+plain-language activity guidance and its observation-time scope. Shared status
+badges, matching map colours, numeric legend ranges and station details expose
+the method, observation age and provenance. Hourly acquisition replaces the latest
+request within the existing per-view request budget; caches are pollutant-scoped.
+The summary excludes stations beyond the globe's horizon, and failed/stale
+refreshes suppress activity guidance instead of reassuring from cached readings.
 
 ### Shared native dropdowns and numeric fields
 
