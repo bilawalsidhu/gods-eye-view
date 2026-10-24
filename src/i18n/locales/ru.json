@@ -3014,5 +3014,60 @@
   "Layers": "Слои",
   "Search": "Поиск",
   "More": "Ещё",
-  "Panels": "Панели"
+  "Panels": "Панели",
+  "Parking": "Парковки",
+  "30% or more free": "Свободно 30 % и больше",
+  "10–30% free": "Свободно 10–30 %",
+  "Under 10% free": "Свободно меньше 10 %",
+  "No live count": "Нет данных в реальном времени",
+  "UNDERGROUND GARAGE": "ПОДЗЕМНЫЙ ПАРКИНГ",
+  "MULTI-STOREY CAR PARK": "МНОГОУРОВНЕВЫЙ ПАРКИНГ",
+  "SURFACE CAR PARK": "ОТКРЫТАЯ ПАРКОВКА",
+  "PARKING": "ПАРКОВКА",
+  "{free} FREE OF {capacity}": "СВОБОДНО {free} ИЗ {capacity}",
+  "{free} FREE": "СВОБОДНО {free}",
+  "LIVE · UPDATED {age}": "В РЕАЛЬНОМ ВРЕМЕНИ · ОБНОВЛЕНО {age}",
+  "{count} SPACES · NO LIVE COUNT": {
+    "one": "{count} МЕСТО · НЕТ ДАННЫХ В РЕАЛЬНОМ ВРЕМЕНИ",
+    "few": "{count} МЕСТА · НЕТ ДАННЫХ В РЕАЛЬНОМ ВРЕМЕНИ",
+    "many": "{count} МЕСТ · НЕТ ДАННЫХ В РЕАЛЬНОМ ВРЕМЕНИ",
+    "other": "{count} МЕСТА · НЕТ ДАННЫХ В РЕАЛЬНОМ ВРЕМЕНИ"
+  },
+  "NO LIVE COUNT": "НЕТ ДАННЫХ В РЕАЛЬНОМ ВРЕМЕНИ",
+  "{count} DISABLED SPACES": {
+    "one": "{count} МЕСТО ДЛЯ ИНВАЛИДОВ",
+    "few": "{count} МЕСТА ДЛЯ ИНВАЛИДОВ",
+    "many": "{count} МЕСТ ДЛЯ ИНВАЛИДОВ",
+    "other": "{count} МЕСТА ДЛЯ ИНВАЛИДОВ"
+  },
+  "{count} CHARGING SPACES": {
+    "one": "{count} МЕСТО С ЗАРЯДКОЙ",
+    "few": "{count} МЕСТА С ЗАРЯДКОЙ",
+    "many": "{count} МЕСТ С ЗАРЯДКОЙ",
+    "other": "{count} МЕСТА С ЗАРЯДКОЙ"
+  },
+  "Parking site": "Парковка",
+  "Parking source unavailable": "Источник данных о парковках недоступен",
+  "parking|SHOW NEAREST": "ПОКАЗАТЬ БЛИЖАЙШУЮ",
+  "Stop following the current object before navigating to a parking site": "Прекратите следовать за текущим объектом, прежде чем переходить к парковке",
+  "Move to the nearest loaded parking site and show its details": "Перейти к ближайшей загруженной парковке и показать её данные",
+  "OPERATOR PAGE": "СТРАНИЦА ОПЕРАТОРА",
+  "Open the selected site's page from its operator": "Открыть страницу оператора выбранной парковки",
+  "Select a parking site that publishes a page": "Выберите парковку, у которой есть страница",
+  "Car parks and garages published by ParkAPI, mostly in Baden-Württemberg. Colour is the share of spaces free where the operator reports a live count; grey sites publish only their capacity. Kerbside street parking is not shown.": "Парковки и паркинги, опубликованные в ParkAPI, в основном в Баден-Вюртемберге. Цвет показывает долю свободных мест там, где оператор передаёт данные в реальном времени; серые точки публикуют только вместимость. Парковка на улице не показывается.",
+  "{count} sites · {live} live": {
+    "one": "{count} парковка · {live} в реальном времени",
+    "few": "{count} парковки · {live} в реальном времени",
+    "many": "{count} парковок · {live} в реальном времени",
+    "other": "{count} парковки · {live} в реальном времени"
+  },
+  "{count} sites": {
+    "one": "{count} парковка",
+    "few": "{count} парковки",
+    "many": "{count} парковок",
+    "other": "{count} парковки"
+  },
+  "loading parking sites": "загрузка парковок",
+  "Zoom in to load parking sites": "Приблизьте карту, чтобы загрузить парковки",
+  "No ParkAPI coverage in this view": "ParkAPI не охватывает эту область"
 }
