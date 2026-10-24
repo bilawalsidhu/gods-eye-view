@@ -199,6 +199,7 @@ The [Bhote Koshi event pack](public/events/bhote-koshi-2026/README.md), under `p
 | --------------------------------------------------------------------------- | --------------------------------- | --------------------------------------------------------------------------------------------------------- | ------------------------------------------------ | --------------------------------------------------------------------------- |
 | **Datacenters** (4,351) | `datacenters/` | **ODbL 1.0** (OpenStreetMap extract) | ✅ (attribution + share-alike on data) | © OpenStreetMap contributors (shared credit) |
 | **Dams** (704) | `dams/` | **ODbL 1.0** (OpenInfraMap / OSM extract) | ✅ (attribution + share-alike on data) | © OpenStreetMap contributors (shared credit) + Open Infrastructure Map |
+| **Argentina dams — IGN Dique** (121 additional points) | `argentina_dams/` | [IGN reuse terms](https://www.ign.gob.ar/descargas/tyc1.html), not MIT/ODbL; free redistribution, retained metadata | Derived products only under IGN terms | FUENTE: Instituto Geográfico Nacional de la República Argentina |
 | **Military area names** (36,466) | `osm_military_names/` | **ODbL 1.0** (OpenStreetMap, via Overture Maps) | ✅ (attribution + share-alike on data) | © OpenStreetMap contributors (shared credit) + Overture Maps Foundation |
 | **TeleGeography Submarine Cable Map** (712 cables + 1,917 landing points)   | `telegeography_submarine_cables/` | **CC BY-NC-SA 3.0**                                                                                       | ❌ **NonCommercial — remove for commercial use** | "© TeleGeography — submarinecablemap.com"                                   |
 | **Natural Earth physical regions** (1,046 land + 292 marine named polygons) | `natural_earth/`                  | **Public domain**                                                                                         | ✅ (no restrictions)                             | "Made with Natural Earth" (courtesy credit — not legally required)          |
@@ -209,6 +210,17 @@ The [Bhote Koshi event pack](public/events/bhote-koshi-2026/README.md), under `p
 | **ESO Milky Way panorama** (eso0932a, blurred cube map, sky background)     | `sky/`                            | **CC BY 4.0**                                                                                             | ✅ (attribution; changes stated)                 | "ESO/S. Brunier"                                                            |
 | **CCTV ground heights** (3,445 cameras)                                     | `cctv_ground_heights/`            | Precomputed camera placement heights, aligned to work with Google Photorealistic 3D Tiles (folder README) | —                                                | —                                                                           |
 | **CCTV Camera Database** model-enrichment extract v2.26.0 (17 camera-model records) | `src/layers/cctv/modelSpecs.js` | **CC0-1.0** (public domain dedication) | ✅ (no restrictions) | "Specs: cctv-database.com" (courtesy — not legally required) |
+
+### Argentina dams supplement
+
+The original 704 OSM/OpenInfraMap records are unchanged. The Dams layer and
+`find_infrastructure` also load a separate 121-point IGN supplement. Original
+Dique WFS response: 125 points, retrieved 2026-10-15; source update date is not
+supplied. Two points overlapping existing OSM dams, a source-typed
+flood-defense embankment and a wetland are excluded with an audit trail. Two nearby unnamed
+pairs remain separately recorded with unverified distinctness in that audit. The pack preserves the original compilation metadata and makes no live
+operational or generating-capacity claim. Rebuild, source checksum and reuse
+conditions are in `src/data/local_data/argentina_dams/README.md`.
 
 ### ⚠️ TeleGeography is bundled but NonCommercial
 

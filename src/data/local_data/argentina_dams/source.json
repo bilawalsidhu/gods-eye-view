@@ -1,0 +1,13 @@
+{
+  "source": "Instituto Geográfico Nacional de la República Argentina",
+  "layer": "ign:puntos_de_aguas_continentales_BH051",
+  "url": "https://wms.ign.gob.ar/geoserver/ign/ows?service=WFS&version=1.0.0&request=GetFeature&typeName=ign%3Apuntos_de_aguas_continentales_BH051&outputFormat=application%2Fjson&srsName=EPSG%3A4326",
+  "retrievedAt": "2026-10-15",
+  "sourceUpdatedAt": null,
+  "wfsResponseTime": "2026-10-15T05:48:06.016Z",
+  "sourceSha256": "a823bc835dcb1ddb063e4bcf0a78a9025357cc6c9a257907a3a1fee1754ea75e",
+  "featureCount": 125,
+  "license": "IGN reuse terms (not MIT or ODbL)",
+  "licenseUrl": "https://www.ign.gob.ar/descargas/tyc1.html",
+  "attribution": "FUENTE: Instituto Geográfico Nacional de la República Argentina"
+}
