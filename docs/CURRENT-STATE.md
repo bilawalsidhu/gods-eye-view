@@ -3734,10 +3734,11 @@ with `Retry-After` when nothing is left to show. The layer takes the highest
 `river_discharge` day from the proxy's UTC today over seven days: below p90 is
 blue, at or above p90 amber, at or above p99 red. A click opens a card with the
 river name, the peak and its day, today's value, the ensemble's middle half and
-highest member on the peak day, the point's percentiles and the line "Model
+highest member on the peak day (when the members disagree), the point's percentiles and the line "Model
 outlook, not an observed flood or an official warning". While points are shown
 the globe carries the linked Open-Meteo credit and the CEMS notice for modified
-GloFAS information. Failures read `Open-Meteo HTTP <status>`, `Open-Meteo rate
+GloFAS information. Points beyond the horizon are hidden by an ellipsoid
+occluder, because the app usually hides Cesium's globe. Failures read `Open-Meteo HTTP <status>`, `Open-Meteo rate
 limited`, `Open-Meteo network error` or `Malformed Open-Meteo response`;
 points already shown stay up as stale. Percentiles of daily flow are not
 return periods or local flood stages, and the layer claims neither. Voice does

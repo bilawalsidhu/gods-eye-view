@@ -20,6 +20,8 @@ const PIXEL_SIZE = Object.freeze({
   normal: 7,
   unknown: 6,
 });
+/** Height the far-side cull tests a point at, so limb points stay drawn. */
+const CULL_LIFT_M = 20_000;
 const WORLD = Object.freeze({ south: -90, west: -180, north: 90, east: 180 });
 
 /** m³/s in the UI language, three significant figures at most. */
@@ -63,6 +65,8 @@ export function createRiverDischargeLayer({ source, services } = {}) {
     loading: false,
     debounceTimer: null,
     moveEndRemove: null,
+    preRenderRemove: null,
+    occluder: null,
     clickHandler: null,
     lastUpdate: null,
     observedAt: null,
@@ -135,6 +139,26 @@ export function createRiverDischargeLayer({ source, services } = {}) {
     });
   }
 
+  /**
+   * Hide points on the far side of the Earth. The app usually hides Cesium's
+   * globe (Google 3D Tiles draw the planet), so nothing writes far-side depth
+   * and always-on-top points would shine through it; an ellipsoid occluder
+   * decides instead, as for flights, CCTV and FIRMS.
+   */
+  function cullFarSide() {
+    const camera = state.viewer?.camera;
+    if (!state.enabled || !state.dataSource || !camera?.positionWC) return;
+    state.occluder ??= new Cesium.EllipsoidalOccluder(
+      Cesium.Ellipsoid.WGS84,
+      camera.positionWC,
+    );
+    state.occluder.cameraPosition = camera.positionWC;
+    for (const entity of state.dataSource.entities.values) {
+      const visible = state.occluder.isPointVisible(entity.gevCullPosition);
+      if (entity.show !== visible) entity.show = visible;
+    }
+  }
+
   function renderRecords(records) {
     const next = new Map(records.map((record) => [record.point.id, record]));
     const entities = state.dataSource.entities;
@@ -158,10 +182,17 @@ export function createRiverDischargeLayer({ source, services } = {}) {
         });
       }
       entity.gevRiverRecord = record;
+      // Lifted so a point on the limb is not culled by its own ellipsoid.
+      entity.gevCullPosition ??= Cesium.Cartesian3.fromDegrees(
+        record.point.lon,
+        record.point.lat,
+        CULL_LIFT_M,
+      );
       setAppearance(entity, record, record.point.id === state.selectedId);
       registerContext(entity, record);
     }
     entities.resumeEvents();
+    cullFarSide();
     removeEntityContextsForLayer(LAYER_ID, { retainIds: new Set(next.keys()) });
     state.records = next;
     if (state.selectedId && !next.has(state.selectedId)) {
@@ -214,7 +245,14 @@ export function createRiverDischargeLayer({ source, services } = {}) {
         t('Today {value} {unit}', { value: discharge(outlook.today), unit }),
       );
     const ensemble = outlook.ensemble;
-    if (ensemble && ensemble.p25 !== null && ensemble.p75 !== null)
+    // Today's members all start from one analysis; a spread of zero says
+    // nothing, so the line appears only when the members disagree.
+    if (
+      ensemble &&
+      ensemble.p25 !== null &&
+      ensemble.p75 !== null &&
+      Math.max(ensemble.p75, ensemble.max ?? 0) > ensemble.p25
+    )
       lines.push(
         t(
           'Ensemble on peak day: middle half {low}–{high}, highest member {max} {unit}',
@@ -377,6 +415,8 @@ export function createRiverDischargeLayer({ source, services } = {}) {
       viewer.dataSources.add(state.dataSource);
       state.moveEndRemove =
         viewer.camera.moveEnd.addEventListener(scheduleLoad);
+      state.preRenderRemove =
+        viewer.scene.preRender?.addEventListener?.(cullFarSide) || null;
       for (const event of [
         'gev:entity-selected',
         'gev:entity-selection-cleared',
@@ -432,6 +472,9 @@ export function createRiverDischargeLayer({ source, services } = {}) {
       this.disable();
       state.moveEndRemove?.();
       state.moveEndRemove = null;
+      state.preRenderRemove?.();
+      state.preRenderRemove = null;
+      state.occluder = null;
       for (const event of [
         'gev:entity-selected',
         'gev:entity-selection-cleared',

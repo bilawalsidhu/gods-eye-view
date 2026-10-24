@@ -56,6 +56,7 @@ function harness(getOutlook) {
     trackedEntity: null,
     camera: {
       moveEnd: new Cesium.Event(),
+      positionWC: Cesium.Cartesian3.fromDegrees(10, 40, 12_000_000),
       computeViewRectangle: () => Cesium.Rectangle.fromDegrees(-20, 10, 40, 60),
     },
     scene: {
@@ -248,6 +249,49 @@ test('a failed refresh keeps earlier points as stale; disable clears them and th
     h.layer.disable();
     assert.equal(h.count(), 0);
     assert.equal(h.credits.has('river-discharge'), false);
+  } finally {
+    h.restore();
+  }
+});
+
+test('points on the far side of the Earth are hidden, near ones drawn', async () => {
+  const h = harness(async () =>
+    snapshot([
+      point('48.175_16.425', 'Danube', 200),
+      point('-38.025_-62.025', 'Far', 200),
+    ]),
+  );
+  try {
+    await h.layer.update();
+    assert.equal(h.entity('48.175_16.425').show, true);
+    assert.equal(h.entity('-38.025_-62.025').show, false);
+  } finally {
+    h.restore();
+  }
+});
+
+test('a peak on the analysis day, where members cannot disagree, shows no spread line', async () => {
+  const flat = point('48.175_16.425', 'Danube', 100);
+  const values = [100, 900, 300, 200, 150, 120, 110, 100, 90];
+  flat.series = {
+    time: days,
+    discharge: values,
+    median: values,
+    min: values,
+    max: values,
+    p25: values,
+    p75: values,
+  };
+  const h = harness(async () => snapshot([flat]));
+  try {
+    await h.layer.update();
+    h.click('48.175_16.425');
+    const details = h.entity('48.175_16.425').gevLabelModel.details;
+    assert.ok(details.includes('7-day forecast peak 900 m³/s on 2026-10-24'));
+    assert.equal(
+      details.some((line) => line.startsWith('Ensemble')),
+      false,
+    );
   } finally {
     h.restore();
   }
