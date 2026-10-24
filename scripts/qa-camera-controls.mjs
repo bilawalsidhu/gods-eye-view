@@ -68,7 +68,7 @@ const check = (name, ok, detail) => {
 let delayCameraA = false;
 const delayedFrames = new Set();
 try {
-  await page.setViewport({ width: 1440, height: 900 });
+  await page.setViewport({ width: 1440, height: 900, hasTouch: true });
   await page.setRequestInterception(true);
   page.on('request', (request) => {
     if (answerEmbedRequest(request)) return;
@@ -135,6 +135,13 @@ try {
       document.getElementById('loading-screen')?.classList.contains('hidden'),
     { timeout: 60000 },
   );
+  // Lower only the globe render resolution on software GPUs; DOM layout,
+  // viewport sizes, touch input and provider media remain at their real sizes.
+  if (process.env.QA_GLOBE_RESOLUTION_SCALE) {
+    await page.evaluate((scale) => {
+      window.__godsEyeView.viewer.resolutionScale = scale;
+    }, Number(process.env.QA_GLOBE_RESOLUTION_SCALE));
+  }
   await page.$eval('[data-collapse-target="cctv-panel"]', (button) =>
     button.click(),
   );
@@ -391,7 +398,7 @@ try {
   });
   await new Promise((resolve) => setTimeout(resolve, 700));
   await page.screenshot({ path: 'qa-shots/camera-controls/angle.png' });
-  await page.setViewport({ width: 390, height: 844 });
+  await page.setViewport({ width: 390, height: 844, hasTouch: true });
   await new Promise((resolve) => setTimeout(resolve, 700));
   // Phones present CCTV in the Cameras tab's sheet.
   await page.click('#mobile-tab-bar [data-mobile-sheet="cameras"]');

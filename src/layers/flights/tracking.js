@@ -47,7 +47,7 @@ export function createTracking({
   const { isMilitaryLayerActive, isMilitaryIcao } = services.militaryRegistry;
   const { trackedLabelModelFromText, refreshTrackedReadout } = services.readout;
   const { applyTrackedCameraFrame } = services.camera;
-  const { resolvePickId, isOwnedByOtherLayer } = services.picking;
+  const { resolvePickId, isOwnedByOtherLayer, pickContact } = services.picking;
   const flightsLayer = layer;
 
   function _emitAwarenessEvent(type, detail) {
@@ -1174,7 +1174,9 @@ export function createTracking({
       // first-person reference. A globe click must not fall through to the
       // normal empty-space deselection path; cockpit has explicit exit controls.
       if (document.body.classList.contains('cockpit-mode')) return;
-      const picked = viewer.scene.pick(click.position);
+      const picked = pickContact
+        ? pickContact(viewer.scene, click.position)
+        : viewer.scene.pick(click.position);
 
       if (picked) {
         // Clicking the tracked entity itself — ignore (don't deselect)

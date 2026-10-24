@@ -1011,6 +1011,34 @@ test('vessel interaction wire: flights-owned pick preserves vessel selection', (
   }
 });
 
+test('vessel touch interaction yields to the first nearby flight behind map tiles', () => {
+  const previous = Object.getOwnPropertyDescriptor(globalThis, 'matchMedia');
+  Object.defineProperty(globalThis, 'matchMedia', {
+    configurable: true,
+    value: () => ({ matches: true }),
+  });
+  registerPickOwner('flights', (pickedId) => pickedId === 'a1b2c3');
+  const tile = { primitive: { isCesium3DTileset: true } };
+  const harness = installWireHarness(tile);
+  let drills = 0;
+  harness.viewer.scene.drillPick = (_position, limit, width, height) => {
+    drills++;
+    assert.deepEqual([limit, width, height], [8, 14, 14]);
+    return [tile, { id: 'a1b2c3' }];
+  };
+  try {
+    harness.handler.click({ position: { x: 10, y: 20 } });
+    assert.equal(drills, 1);
+    assert.equal(aisLiveVesselsLayer.getSelectedInfo()?.mmsi, harness.record.mmsi);
+    assert.equal(harness.trail.clearCalls, 0);
+  } finally {
+    harness.cleanup();
+    unregisterPickOwner('flights');
+    if (previous) Object.defineProperty(globalThis, 'matchMedia', previous);
+    else delete globalThis.matchMedia;
+  }
+});
+
 test('vessel interaction wire: CCTV-owned pick preserves vessel selection', () => {
   registerPickOwner('cctv', (pickedId) => pickedId === 'atx-cam-3');
   const harness = installWireHarness({ id: 'atx-cam-3' });

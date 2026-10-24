@@ -71,7 +71,7 @@ export async function checkCameraEmbeds(page, check) {
         ),
     );
   const resize = async (width, height) => {
-    await page.setViewport({ width, height });
+    await page.setViewport({ width, height, hasTouch: true });
     await page.waitForFunction(
       (phone) => document.body.classList.contains('mobile-shell') === phone,
       {},
@@ -136,6 +136,151 @@ export async function checkCameraEmbeds(page, check) {
     check(
       `${label}: selected fixture accepts Play inside the provider iframe`,
       await frame.$eval('body', (body) => body.dataset.state === 'playing'),
+    );
+  };
+  const touch = await page.createCDPSession();
+  const gesture = async (selector, dx, dy, cancel = false) => {
+    const point = await page.$eval(selector, (node) => {
+      const rect = node.getBoundingClientRect();
+      return { x: rect.left + Math.min(rect.width / 2, 100), y: rect.top + 8 };
+    });
+    await touch.send('Input.dispatchTouchEvent', {
+      type: 'touchStart',
+      touchPoints: [{ ...point, id: 1 }],
+    });
+    // Small first move claims direction before Chromium's native scroll slop.
+    for (let step = 1; step <= 16; step++) {
+      await touch.send('Input.dispatchTouchEvent', {
+        type: 'touchMove',
+        touchPoints: [
+          {
+            x: point.x + (dx * step) / 16,
+            y: point.y + (dy * step) / 16,
+            id: 1,
+          },
+        ],
+      });
+    }
+    await touch.send('Input.dispatchTouchEvent', {
+      type: cancel ? 'touchCancel' : 'touchEnd',
+      touchPoints: [],
+    });
+    await settle();
+  };
+  const resetScroll = () =>
+    page.$eval('#right-context-rail', (rail) => {
+      for (const node of [rail, ...rail.querySelectorAll('*')]) {
+        if (node.scrollTop) node.scrollTop = 0;
+      }
+    });
+  const stillPlaying = async () => {
+    const handle = await iframe();
+    if (!handle) return false;
+    const frame = await handle.contentFrame();
+    return frame.$eval(
+      'video',
+      (video) => !video.paused && video.currentTime > 0,
+    );
+  };
+  const swipeCases = async (source, width) => {
+    const label = `${source.provider} ${width}px`;
+    await resetScroll();
+    await remember();
+    const handle = await iframe();
+    const oldFrame = await handle.contentFrame();
+    // Retain a media handle so destruction is checked beyond DOM removal.
+    const oldVideo = await oldFrame.$('video');
+    const unchanged = async (name) =>
+      check(
+        `${label}: ${name}`,
+        (await page.evaluate(
+          () =>
+            document.body.dataset.mobileSheet === 'cameras' &&
+            document.querySelector('#cctv-panel iframe') ===
+              window.__qaPreviousPlayer,
+        )) && (await stillPlaying()),
+      );
+    const title = '#cctv-panel .panel-title';
+    await gesture(title, 90, 8);
+    await unchanged('horizontal gesture keeps the same playing iframe');
+    await gesture(title, 0, 48);
+    await unchanged('pull below 64px keeps Cameras open');
+    await gesture(title, 0, 80, true);
+    await unchanged('cancelled downward pull keeps Cameras open');
+    // The provider button is a real control in the cross-origin document.
+    await oldFrame.tap('#play');
+    await unchanged('tapping a provider control keeps Cameras open');
+    for (let i = 0; i < 3; i++) await page.tap('#cctv-coverage-btn');
+    await unchanged('tapping panel controls keeps Cameras open');
+    await resetScroll();
+    await gesture('#cctv-panel .panel-collapse-btn', 0, 80, true);
+    await unchanged(
+      'cancelled gesture on a panel control does not close Cameras',
+    );
+
+    // Controlled nested overflow tests native scrolling inside the borrowed
+    // panel, with the real shell listeners and no synthetic DOM touch events.
+    await page.$eval('#cctv-panel .panel-header', (header) => {
+      const scroller = document.createElement('div');
+      scroller.id = 'qa-camera-scroll';
+      scroller.style.cssText = 'height:100px;overflow:auto;flex:none';
+      scroller.innerHTML =
+        '<div style="height:500px">Camera scroll fixture</div>';
+      header.after(scroller);
+    });
+    await gesture('#qa-camera-scroll', 0, -80);
+    check(
+      `${label}: upward content gesture scrolls natively`,
+      await page.$eval('#qa-camera-scroll', (node) => node.scrollTop > 0),
+    );
+    await unchanged('scrolling content keeps the player alive');
+    await page.$eval('#qa-camera-scroll', (node) => {
+      node.scrollTop = 120;
+    });
+    await gesture('#qa-camera-scroll', 0, 80);
+    check(
+      `${label}: downward gesture from scrolled content scrolls toward the top`,
+      await page.$eval('#qa-camera-scroll', (node) => node.scrollTop < 120),
+    );
+    await unchanged('downward content scroll does not dismiss Cameras');
+    await page.$eval('#qa-camera-scroll', (node) => node.remove());
+    await resetScroll();
+    await gesture(title, 0, 80);
+    await page.waitForFunction(
+      () => !document.querySelector('#cctv-panel iframe'),
+    );
+    await absent(`${label}: downward swipe removes the active iframe`);
+    check(
+      `${label}: swipe detaches the provider browsing context`,
+      oldFrame.detached,
+    );
+    let released = false;
+    try {
+      await oldVideo.evaluate((video) => video.currentTime);
+    } catch {
+      released = true;
+    }
+    check(
+      `${label}: removed player media context is no longer executable`,
+      released,
+    );
+    await oldVideo.dispose();
+    check(
+      `${label}: swipe preserves selection, preferences and returns focus`,
+      (await activeId()) === source.id &&
+        JSON.stringify(await panelState()) === JSON.stringify(initialPanels) &&
+        (await page.$eval(
+          camerasTab,
+          (tab) =>
+            document.activeElement === tab &&
+            tab.getAttribute('aria-expanded') === 'false',
+        )),
+    );
+    await sheet('cameras');
+    await play(`${label} after swipe`);
+    check(
+      `${label}: reopening creates exactly one fresh selected player`,
+      (await replaced()) && (await activeId()) === source.id,
     );
   };
   const fits = () =>
@@ -257,8 +402,13 @@ export async function checkCameraEmbeds(page, check) {
     await page.screenshot({
       path: `qa-shots/camera-controls/phone-${source.provider}.png`,
     });
+    const tabClosedFrame = await (await iframe()).contentFrame();
     await sheet('cameras');
     await absent(`${source.provider}: closing Cameras removes the iframe`);
+    check(
+      `${source.provider}: tab closure destroys the provider context`,
+      tabClosedFrame.detached,
+    );
     check(
       `${source.provider}: closing Cameras preserves selection and panel preferences`,
       (await activeId()) === source.id &&
@@ -279,6 +429,7 @@ export async function checkCameraEmbeds(page, check) {
       `${source.provider}: reopening replaces the removed player exactly once`,
       await replaced(),
     );
+    await swipeCases(source, 390);
   }
 
   await remember();
@@ -353,6 +504,31 @@ export async function checkCameraEmbeds(page, check) {
   await absent('the 720px boundary closes the player with the phone sheet');
   await sheet('cameras');
   await play('720px phone boundary');
+  for (const source of embedSources) {
+    await page.select('#cctv-camera-select', source.id);
+    await play(`720px ${source.provider}`);
+    await swipeCases(source, 720);
+    await remember();
+    await resize(721, 844);
+    await resetScroll();
+    await gesture('#cctv-panel .panel-title', 0, 80);
+    check(
+      `${source.provider} 721px: touch pull leaves desktop player intact`,
+      (await page.evaluate(
+        () =>
+          !document.body.classList.contains('mobile-shell') &&
+          !document.body.hasAttribute('data-mobile-sheet') &&
+          document.querySelector('#cctv-panel iframe') ===
+            window.__qaPreviousPlayer,
+      )) && (await stillPlaying()),
+    );
+    await resize(720, 844);
+    await absent(
+      `${source.provider}: returning from 721px removes hidden player`,
+    );
+    await sheet('cameras');
+    await play(`720px restored ${source.provider}`);
+  }
   await resize(390, 844);
   check(
     'resizing within phone layout keeps Cameras open and inside the viewport',

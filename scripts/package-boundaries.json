@@ -103,6 +103,9 @@
     "modules": [
       "server/providers/space.js",
       "server/providers/space/celestrak.js",
+      "server/providers/common/same-site.js",
+      "src/localRequestGate.mjs",
+      "server/providers/space/cooldown.js",
       "server/providers/space/launch-library.js",
       "server/providers/common/http.js",
       "src/data/spaceProviderRequests.js",
@@ -1436,7 +1439,9 @@
       "./layers/street-level",
       "./layers/street-level/mapillary",
       "./layers/street-level/mapillary/source",
-      "./layers/street-level/google"
+      "./layers/street-level/google",
+      "./layers/street-level/kartaview",
+      "./layers/street-level/panoramax"
     ],
     "modules": [
       "src/layers/streetLevel/index.js",
@@ -3681,6 +3686,7 @@
       "src/data/labelArbiter.js",
       "src/data/meshFloorSampler.js",
       "src/data/pickRegistry.js",
+      "src/data/scenePick.js",
       "src/data/spriteOrder.js",
       "src/data/terrainHeights.js",
       "src/data/transit.js",
