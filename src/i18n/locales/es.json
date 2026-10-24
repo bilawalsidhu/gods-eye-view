@@ -3714,8 +3714,6 @@
   "Hide ocean cells, where the signal is mostly sea level": "Ocultar las celdas oceánicas, donde la señal es sobre todo nivel del mar",
   "Land + ocean": "Tierra + océano",
   "Show every cell, oceans included": "Mostrar todas las celdas, océanos incluidos",
-  "−40 cm loss": "−40 cm pérdida",
-  "+40 cm gain": "+40 cm ganancia",
   "Centimetres of equivalent water against the 2004–2009 mean. About 300 km resolution: regional trends, not single wells or glaciers.": "Centímetros de agua equivalente frente a la media de 2004–2009. Resolución de unos 300 km: tendencias regionales, no pozos ni glaciares concretos.",
   "Click the map to chart a point": "Haz clic en el mapa para trazar un punto",
   "ocean": "océano",
@@ -3723,5 +3721,7 @@
   "History unavailable": "Historial no disponible",
   "Months, playback and point history on the Mass change card": "Meses, reproducción e historial de puntos en la tarjeta Cambio de masa",
   "MASS CHANGE": "CAMBIO DE MASA",
-  "Land mask unavailable · showing every cell": "Máscara de tierra no disponible · se muestran todas las celdas"
+  "Land mask unavailable · showing every cell": "Máscara de tierra no disponible · se muestran todas las celdas",
+  "Loss, cm": "Pérdida, cm",
+  "Gain, cm": "Ganancia, cm"
 }
