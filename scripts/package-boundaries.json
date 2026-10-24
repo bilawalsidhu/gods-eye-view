@@ -2570,7 +2570,11 @@
       "src/voice/geminiSession.js",
       "src/voice/geminiAudio.js",
       "src/voice/geminiCaptureWorklet.js",
-      "src/ui/statusBadge.js"
+      "src/ui/statusBadge.js",
+      "src/layers/workZones/index.js",
+      "src/layers/workZones/presentation.js",
+      "src/layers/workZones/source.js",
+      "src/app/layers/workZones.js"
     ],
     "external": [
       "hls.js",
@@ -3138,7 +3142,11 @@
       "src/layers/airQuality/source.js",
       "src/ui/statusText.js",
       "src/ui/layerNames.js",
-      "src/layers/streetLevel/providers/mapillary/policy.js"
+      "src/layers/streetLevel/providers/mapillary/policy.js",
+      "src/layers/workZones/index.js",
+      "src/layers/workZones/presentation.js",
+      "src/layers/workZones/source.js",
+      "src/app/layers/workZones.js"
     ],
     "external": [
       "hls.js",
