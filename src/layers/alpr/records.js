@@ -1,11 +1,11 @@
 import { QUERY_LIMIT, QUERY_SNAP_DEGREES } from './policy.js';
 
-export function textTag(value) {
+function textTag(value) {
   const t = String(value ?? '').trim();
   return t || null;
 }
 
-export function numTag(value) {
+function numTag(value) {
   // `Number('')` and `Number('   ')` are 0, not NaN — a blank or whitespace-only
   // tag value must read as missing, never as a due-north bearing.
   if (value == null) return null;
@@ -102,7 +102,7 @@ export function normalizeAlprNode(el) {
   };
 }
 
-export function normalizeDirection(value) {
+function normalizeDirection(value) {
   const degrees = numTag(value);
   return degrees != null && degrees >= 0 && degrees <= 360
     ? degrees % 360
