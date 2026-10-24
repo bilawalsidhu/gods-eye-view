@@ -187,6 +187,19 @@ const layers = [
     },
   },
   {
+    id: 'transmission',
+    context: false,
+    noQuery:
+      'Regional dated OSM overlay; transmission topology and outage queries are not supported.',
+    aliases: [
+      'transmission infrastructure',
+      'transmission lines',
+      'power lines',
+      'substations',
+      'energy grid',
+    ],
+  },
+  {
     id: 'fire-perimeters',
     aliases: [
       'fire perimeters',
@@ -511,6 +524,7 @@ const SELF_EVIDENT_IDS = new Set([
   'radio',
   'wind',
   'directions',
+  'transmission',
 ]);
 
 /**
