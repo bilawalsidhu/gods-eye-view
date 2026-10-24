@@ -458,6 +458,7 @@ test('CCTV catalog merges Catalonia cameras and CCTV_CATALONIA_ENABLED=0 skips t
     CCTV_TFL_ENABLED: undefined,
     CCTV_CATALONIA_ENABLED: undefined,
     CCTV_CATALONIA_MAX_SOURCES: undefined,
+    CCTV_MONTE_HERMOSO_ENABLED: '0',
   });
   const requested = [];
   t.mock.method(globalThis, 'fetch', async (url, init) => {

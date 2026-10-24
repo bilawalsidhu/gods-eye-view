@@ -191,6 +191,7 @@ test('an expired catalog is served at once while a slow pack refreshes in the ba
     // Live packs run alongside the env pack, so one slow upstream can hold
     // the refresh open.
     process.env.CCTV_FORCE_AUSTIN = '1';
+    process.env.CCTV_MONTE_HERMOSO_ENABLED = '0';
     process.env.CCTV_SOURCES_FILE = '/nonexistent/cctv.json';
     process.env.CCTV_SOURCES_JSON = envSources('old');
     let now = 1_000_000;
@@ -339,6 +340,7 @@ test('an empty background refresh keeps the catalog and waits a TTL before fetch
   const saved = { ...process.env };
   try {
     process.env.CCTV_FORCE_AUSTIN = '1';
+    process.env.CCTV_MONTE_HERMOSO_ENABLED = '0';
     process.env.CCTV_SOURCES_FILE = '/nonexistent/cctv.json';
     process.env.CCTV_SOURCES_JSON = envSources('old');
     let now = 1_000_000;

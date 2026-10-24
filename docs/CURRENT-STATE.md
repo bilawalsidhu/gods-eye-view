@@ -1,5 +1,11 @@
 # God's Eye View Current State
 
+CCTV includes Montevisión's public Peatonal Dufaur camera in Monte Hermoso,
+Argentina, as published by Noticias Monte Hermoso. The pack uses the existing
+HLS MPEG-TS relay and is disabled with `CCTV_MONTE_HERMOSO_ENABLED=0`.
+Its label and credit identify an approximate pedestrian-area map reference,
+and the synthetic bearing retains the estimated-heading presentation.
+
 Analyst region queries resolve unique Natural Earth names offline without
 geocoding, so Gold Coast and Ivory Coast name the West African natural regions.
 Duplicate names require a geocoded containment anchor; when several entries for

@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import { loadMonteHermosoSources } from './monteHermoso.js';
 import { DEFAULT_CCTV_SOURCE_FILE, CCTV_SOURCE_CACHE_MS } from './constants.js';
 import { allocateSourceCap, resolveCatalogCap } from './cap.js';
 import { loadGroundHeights, joinGroundHeights } from './groundHeights.js';
@@ -102,6 +103,11 @@ const LIVE_PACKS = [
     name: 'calgary',
     enabled: () => envEnabled('CCTV_CALGARY_ENABLED'),
     load: loadCalgarySourcesFromOpenData,
+  },
+  {
+    name: 'monte-hermoso',
+    enabled: () => envEnabled('CCTV_MONTE_HERMOSO_ENABLED'),
+    load: loadMonteHermosoSources,
   },
   {
     name: 'catalonia',
