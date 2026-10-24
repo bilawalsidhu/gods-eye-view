@@ -514,6 +514,17 @@ export const TOMTOM_CREDIT = {
     '<a href="https://www.tomtom.com" target="_blank" rel="noopener">TomTom</a>',
 };
 
+/**
+ * Registered when the Parking layer first shows sites: the bundled MobiData BW
+ * dataset is published under Datenlizenz Deutschland – Namensnennung 2.0.
+ */
+export const PARKING_CREDIT = {
+  key: 'mobidata-bw-parkapi',
+  html:
+    'Parking: <a href="https://www.mobidata-bw.de/dataset/gebuendelte-parkdaten-bw" target="_blank" rel="noopener">MobiData BW</a> · ParkAPI ' +
+    '(<a href="https://www.govdata.de/dl-de/by-2-0" target="_blank" rel="noopener">dl-de/by-2-0</a>)',
+};
+
 /** Registered when the first Natural Earth region or state/province outline
  * resolves (public domain — no attribution required; credited as a courtesy). */
 export const NATURAL_EARTH_CREDIT = {

@@ -1,5 +1,5 @@
 // The DATA LAYERS row shows the English status texts that GNSS, Transit,
-// CelesTrak and AQHI produce in the UI language.
+// CelesTrak, AQHI and Parking produce in the UI language.
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { setLocale } from '../i18n/index.js';
@@ -70,6 +70,27 @@ const cases = [
       lastUpdate: now,
     },
     'request timed out',
+  ],
+  [
+    'parking',
+    {
+      count: 0,
+      error: 'ParkAPI network error',
+      source: 'MobiData BW · ParkAPI',
+      lastUpdate: now,
+    },
+    'network error',
+  ],
+  [
+    'parking',
+    {
+      count: 3,
+      status: 'empty',
+      loadingLabel: 'No ParkAPI coverage in this view',
+      source: 'MobiData BW · ParkAPI',
+      lastUpdate: now,
+    },
+    'coverage in this view',
   ],
 ];
 
