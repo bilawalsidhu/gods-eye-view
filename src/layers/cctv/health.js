@@ -1,4 +1,4 @@
-import { HEALTH_SYNC_INTERVAL_MS, HEALTH_ENDPOINT } from './policy.js';
+import { HEALTH_SYNC_INTERVAL_MS } from './policy.js';
 
 export function createHealth({ state: layerState, services, parts, source }) {
   /**
