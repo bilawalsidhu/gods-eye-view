@@ -32,3 +32,24 @@ export function nearestGfsStep(hours) {
   const step = value <= 120 ? Math.round(value) : Math.round(value / 3) * 3;
   return Math.max(0, Math.min(384, step));
 }
+
+export function selectGfsForecast(nowMs) {
+  const issue = selectLatestGfsCycle(nowMs);
+  const runMs = Date.UTC(
+    Number(issue.date.slice(0, 4)),
+    Number(issue.date.slice(4, 6)) - 1,
+    Number(issue.date.slice(6, 8)),
+    issue.hour,
+  );
+  const forecastHour = nearestGfsStep((nowMs - runMs) / 3600_000);
+  const cycle = {
+    ...issue,
+    forecastHour,
+    runIso: new Date(runMs).toISOString(),
+    validIso: new Date(runMs + forecastHour * 3600_000).toISOString(),
+  };
+  return {
+    cycle,
+    base: `https://${GFS_BUCKET}.s3.amazonaws.com/${gfsObjectKey(cycle)}`,
+  };
+}
