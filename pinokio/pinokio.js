@@ -22,8 +22,11 @@ module.exports = {
     if (starting) {
       const local = info.local('start.js');
       if (local?.url) {
+        // The app sends X-Frame-Options: DENY / frame-ancestors 'none' (build/vite.js) so
+        // Provider Settings cannot be clickjacked, and Pinokio's tab is an iframe, so the
+        // app opens in the system browser instead.
         return [
-          { default: true, icon: 'fa-solid fa-earth-americas', text: 'Open God\'s Eye View', href: local.url },
+          { default: true, icon: 'fa-solid fa-earth-americas', text: 'Open God\'s Eye View', href: local.url, popout: true },
           { icon: 'fa-solid fa-terminal', text: 'Server', href: 'start.js' },
         ];
       }
