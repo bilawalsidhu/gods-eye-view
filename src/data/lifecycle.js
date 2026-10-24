@@ -74,11 +74,25 @@ function refreshFailureFromStats(stats, label) {
  * for real-time data overlays on the CesiumJS globe.
  */
 export class LayerLifecycle {
+  /**
+   * @param {object} viewer
+   * @param {object} [options]
+   * @param {boolean} [options.allowQaRegistration]
+   * @param {Function} [options.getSourceAvailability]
+   * @param {{isHidden(): boolean, subscribe(callback: Function): Function}|null} [options.pageVisibility]
+   *   Whether the page is hidden, and a visibilitychange subscription. With
+   *   it, polled refreshes pause in a hidden page; without it they always run.
+   */
   constructor(
     viewer,
-    { allowQaRegistration = false, getSourceAvailability } = {},
+    {
+      allowQaRegistration = false,
+      getSourceAvailability,
+      pageVisibility = null,
+    } = {},
   ) {
     this._catalogSourceAvailability = getSourceAvailability;
+    this._pageVisibility = pageVisibility;
     this.viewer = viewer;
     this._activityListeners = new Set();
     this.layers = new Map(); // id → { module, enabled, initialized, intervalId, lifecycleState, lifecycleUncertain }
@@ -130,6 +144,10 @@ export class LayerLifecycle {
       enabled: false,
       initialized: false,
       intervalId: null,
+      // A periodic refresh that fell due while the page was hidden; it runs
+      // once when the page is visible again (see _armUpdateLoop).
+      updateDue: false,
+      pageResume: null,
       // Periodic data refreshes are manager-owned work, independent from the
       // authoritative enable/disable lifecycle above. Every registered layer
       // receives the same normalized presentation contract even when its own
@@ -538,15 +556,41 @@ export class LayerLifecycle {
           ? updateInterval
           : 0;
     if (refreshInterval > 0) {
+      // A hidden tab shows nobody the result, so polled feeds (flights,
+      // quakes, weather...) skip their refresh while hidden and catch up
+      // with one refresh when the page is shown again.
+      const page = this._pageVisibility;
+      const pageHidden = () => page?.isHidden?.() === true;
       entry.intervalId = setInterval(() => {
+        if (pageHidden()) {
+          entry.updateDue = true;
+          return;
+        }
         void this._runPeriodicUpdate(layerId, entry);
       }, refreshInterval);
+      if (typeof page?.subscribe === 'function')
+        entry.pageResume = page.subscribe(() => {
+          if (pageHidden() || !entry.updateDue || !entry.intervalId) return;
+          entry.updateDue = false;
+          void this._runPeriodicUpdate(layerId, entry);
+        });
     } else if (updateInterval === 0) {
       entry.intervalId = setInterval(() => {
         if (!entry.enabled) return;
         this._publishActivity({ type: 'status' });
       }, entry.module.statsRefreshInterval || 1000);
     }
+  }
+
+  /** Stop a layer's update loop and its page-visibility catch-up. */
+  _clearUpdateLoop(entry) {
+    if (entry.intervalId) {
+      clearInterval(entry.intervalId);
+      entry.intervalId = null;
+    }
+    entry.updateDue = false;
+    if (typeof entry.pageResume === 'function') entry.pageResume();
+    entry.pageResume = null;
   }
 
   toggle(layerId, { origin = 'programmatic', notificationToken = null } = {}) {
@@ -771,10 +815,7 @@ export class LayerLifecycle {
         entry.enabled = compensated || !cleanupConfirmed;
         entry.lifecycleUncertain = !compensated && !cleanupConfirmed;
         settleLifecycle();
-        if (!entry.enabled && entry.intervalId) {
-          clearInterval(entry.intervalId);
-          entry.intervalId = null;
-        }
+        if (!entry.enabled) this._clearUpdateLoop(entry);
         this._publishActivity({ type: 'status' });
         if (!compensated) {
           recordVisibilityFailure(
@@ -832,10 +873,7 @@ export class LayerLifecycle {
         return false;
       }
       if (signal?.aborted) return finishCancelledDisable('disable');
-      if (entry.intervalId) {
-        clearInterval(entry.intervalId);
-        entry.intervalId = null;
-      }
+      this._clearUpdateLoop(entry);
       entry.enabled = false;
       entry.lifecycleUncertain = false;
       if (!settleLifecycle() || signal?.aborted)
@@ -844,10 +882,7 @@ export class LayerLifecycle {
       // Enable
       let abortCleanup = null;
       const cancelEnable = () => {
-        if (entry.intervalId) {
-          clearInterval(entry.intervalId);
-          entry.intervalId = null;
-        }
+        this._clearUpdateLoop(entry);
         // Disable immediately so modules with their own AbortController (Radio)
         // cancel pending update work at the same turn boundary. A second
         // disable after the current lifecycle await settles closes the race
@@ -875,10 +910,7 @@ export class LayerLifecycle {
         // aborting the caller's signal. Release that signal's listener now so
         // a later abort cannot revoke a successful retry.
         signal?.removeEventListener('abort', cancelEnable);
-        if (entry.intervalId) {
-          clearInterval(entry.intervalId);
-          entry.intervalId = null;
-        }
+        this._clearUpdateLoop(entry);
         await abortCleanup;
         let cleanupConfirmed = false;
         try {
@@ -917,10 +949,7 @@ export class LayerLifecycle {
         return false;
       };
       const finishFailedEnable = async (phase, error) => {
-        if (entry.intervalId) {
-          clearInterval(entry.intervalId);
-          entry.intervalId = null;
-        }
+        this._clearUpdateLoop(entry);
         let cleanupConfirmed = false;
         try {
           cleanupConfirmed =
@@ -1028,10 +1057,7 @@ export class LayerLifecycle {
 
       // Always clear any stale interval before assigning a new one, so we never
       // orphan a running timer and end up double-polling.
-      if (entry.intervalId) {
-        clearInterval(entry.intervalId);
-        entry.intervalId = null;
-      }
+      this._clearUpdateLoop(entry);
 
       // Manager-owned periodic refresh work has one normalized loading/error
       // contract. Camera-driven layers may keep updateInterval=0 and opt into
@@ -2157,10 +2183,7 @@ export class LayerLifecycle {
         this._publishActivity({ type: 'status' });
         return false;
       }
-      if (entry.intervalId) {
-        clearInterval(entry.intervalId);
-        entry.intervalId = null;
-      }
+      this._clearUpdateLoop(entry);
       entry.enabled = false;
     }
     if (typeof entry.module.destroy === 'function') {

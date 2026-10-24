@@ -14,6 +14,15 @@ export function createApplicationData({
   const dataManager = new LayerLifecycle(viewer, {
     allowQaRegistration,
     getSourceAvailability: catalog?.getSourceAvailability,
+    // Polled layers skip refreshes while the tab is hidden and catch up
+    // once when it is shown again.
+    pageVisibility: {
+      isHidden: () => document.visibilityState === 'hidden',
+      subscribe(callback) {
+        document.addEventListener('visibilitychange', callback);
+        return () => document.removeEventListener('visibilitychange', callback);
+      },
+    },
   });
   defer(async () => {
     await dataManager.destroyAll();

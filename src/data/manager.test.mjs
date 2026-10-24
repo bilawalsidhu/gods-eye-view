@@ -568,6 +568,55 @@ test('setEnabled is idempotent and serializes with toggle', async () => {
   assert.equal(entry.intervalId, null, 'stats interval cleared on disable');
 });
 
+test('polled layers skip refreshes in a hidden tab and catch up once when shown', async () => {
+  const listeners = new Set();
+  let state = 'visible';
+  const pageVisibility = {
+    isHidden: () => state === 'hidden',
+    subscribe(fn) {
+      listeners.add(fn);
+      return () => listeners.delete(fn);
+    },
+  };
+  const setVisibility = (next) => {
+    state = next;
+    for (const fn of [...listeners]) fn();
+  };
+  const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+  {
+    const mgr = new DataLayerManager({}, { pageVisibility });
+    const layer = makeSlowLayer('flights', { updateInterval: 40 });
+    mgr.register(layer.module);
+    await mgr.setEnabled('flights', true);
+    assert.equal(listeners.size, 1, 'one catch-up listener while polling');
+
+    setVisibility('hidden');
+    const hiddenStart = layer.calls.update;
+    await sleep(130);
+    assert.equal(layer.calls.update, hiddenStart, 'no refresh while hidden');
+    assert.equal(mgr.layers.get('flights').updateDue, true);
+
+    // Each listener call while still hidden must not refresh either.
+    setVisibility('hidden');
+    assert.equal(layer.calls.update, hiddenStart);
+
+    setVisibility('visible');
+    assert.equal(layer.calls.update, hiddenStart + 1, 'one catch-up refresh on show');
+    assert.equal(mgr.layers.get('flights').updateDue, false);
+    setVisibility('visible');
+    assert.equal(layer.calls.update, hiddenStart + 1, 'no second catch-up');
+
+    await mgr.setEnabled('flights', false);
+    assert.equal(mgr.layers.get('flights').intervalId, null);
+    assert.equal(listeners.size, 0, 'disable removes the catch-up listener');
+
+    await mgr.setEnabled('flights', true);
+    assert.equal(listeners.size, 1);
+    await mgr.destroyLayer('flights');
+    assert.equal(listeners.size, 0, 'destroy removes the catch-up listener');
+  }
+});
+
 test('idempotent absolute intent publishes its newer origin without rerunning lifecycle', async () => {
   const mgr = new DataLayerManager({});
   const layer = makeSlowLayer('rocket-launches', { updateInterval: -1 });
