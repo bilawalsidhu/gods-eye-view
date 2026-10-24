@@ -147,7 +147,12 @@ test('each client gets its own quota rather than sharing one bucket', async (t) 
 });
 
 test('the retired military route is not metered, so the OpenSky limiter never reaches it', async (t) => {
-  stubFetch(t, async () => trackOk());
+  let militaryUpstreamCalls = 0;
+  stubFetch(t, async (url) => {
+    if (String(url).includes('/tracks/all')) return trackOk();
+    militaryUpstreamCalls += 1;
+    return new Response('{"trace":[]}', { status: 200 });
+  });
   const routes = install(trackBackfillProxies());
   const track = routes.get('/api/flights/track');
   const trace = routes.get('/api/military/track');
@@ -166,6 +171,7 @@ test('the retired military route is not metered, so the OpenSky limiter never re
     });
     assert.equal(military.statusCode, 503);
   }
+  assert.equal(militaryUpstreamCalls, 0, 'the refusal makes no upstream call');
 });
 
 test('a 429 from /tracks stands every other icao24 down until it clears', async (t) => {
