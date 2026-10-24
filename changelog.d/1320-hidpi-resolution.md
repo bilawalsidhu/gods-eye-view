@@ -7,4 +7,4 @@
   below 1x if it must, so large windows on GPUs with a 2048 limit no longer stop
   rendering (#905). DPR 1 screens are otherwise unchanged. Sharpen and the
   pixel-sized styles keep their look; `?maxPixelRatio=1` restores the old
-  drawing (jasas1, #0000).
+  drawing (jasas1, #1320).
