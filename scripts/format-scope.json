@@ -767,6 +767,7 @@
   "server/providers/transitHistory.test.mjs",
   "src/data/transitFeeds.js",
   "src/data/transitFeeds.test.mjs",
+  "src/spatialQuery.test.mjs",
   "src/data/transitProxy.js",
   "src/data/transitProxy.test.mjs",
   "src/data/gtfsRealtime.js",
