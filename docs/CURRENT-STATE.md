@@ -3690,6 +3690,7 @@ its criteria cannot be silently ignored.
 | Wind 🌬                 | NOAA GFS 10 m wind (keyless, 0.25°→1° grid; animated particles)                                                                                                                                 | `src/data/wind.js`                                    | `/api/wind`                                              | 1 h (forecast cycle)                                                              |
 | GNSS Integrity 📡 (`gnss-integrity`) | adsb.lol point snapshot, low navigation accuracy binned per 0.5° cell (GEV NIC/NACp threshold + gpsjam.org formula and bands, keyless, ODbL) | `src/layers/gnss/` via `src/app/layers/gnss.js` | `/api/gnss-integrity` | camera-driven (600 ms debounce, minimum 2.5 s between reads) + 60s poll (server cache 60 s; 30 min rolling window) |
 | Fire Perimeters 🔥 | NIFC WFIGS current interagency perimeters (keyless, paged past the 2000-record cap); InciWeb catalog + incident page origin and update time checks for verified incident-page links | `src/layers/perimeters/` via `src/app/layers/perimeters.js` | `/api/fire-perimeters` + `/api/fire-perimeters/inciweb/*` | 5 min (server caches: catalog 1 h; publication 30 min) |
+| Sea level stations ≈ (`sea-level-stations`) | IOC Sea Level Station Monitoring Facility station list (one primary water-level sensor per station) and per-station 72 h series (keyless, CC BY-NC 4.0, raw) | `src/layers/seaLevel/` via `src/app/layers/seaLevel.js`; server `server/providers/seaLevel.js` | `/api/sea-level/stations`, `/api/sea-level/station/<code>` | 10 min poll; server list cached 10 min (stale up to 6 h), series cached 10 min |
 
 GNSS Integrity samples a 250 nm circle around the Earth point under the screen
 centre. Camera reads debounce for 600 ms with a monotonic 2.5 s minimum gap;
@@ -3715,6 +3716,31 @@ MLAT-positioned GPS loss, derived-field exclusions and the NIC 0 exception.
 anchors, recovery, keyboard and mobile states; emergency repainting is covered
 by `scripts/qa-emergency-squawk.mjs`. Both accept `--timeout-ms` for slow boot.
 
+
+Sea level stations (Weather group, share token `5`) shows measured water level
+at the IOC Sea Level Station Monitoring Facility's tide gauges. The facility's
+station list has one row per sensor; `server/providers/seaLevel.js` reads it at
+most every 10 minutes (single flight, 16 MB cap, `redirect: 'error'`) and keeps
+one entry per station: the water-level sensor (not `bat` or `atm`, units `M`
+or `F`) with the most recent reading, ties broken by a fixed sensor order
+(radar first). Times are UTC without a zone mark and are parsed as UTC; a
+reading is a time and a value, so a `-999` value or a time over an hour ahead
+counts as no reading. A failed read serves the previous list with `X-Data-Stale` for up to
+6 hours, then `503 {error: 'sea_level_unavailable'}` with `Retry-After: 60`;
+a failed read is not retried for a minute. `/api/sea-level/station/<code>`
+accepts only letters and digits (lower-cased, checked before any request),
+reads the last 72 hours, keeps the sensor with the newest reading, and returns
+low, high and latest from every raw reading plus 10-minute means, cached for 10
+minutes in a 256-entry LRU and served stale when a re-read fails. Each answer
+carries ages measured on the server's clock, so the browser never compares
+clocks. The browser draws every station as one point primitive coloured by
+freshness (within 3 h, 3 to 24 h, silent beyond), never by level: each gauge
+has its own datum. A click opens a card with the last reading, its UTC time and
+sensor, a one-line plot of the last 72 hours, low and high, and where the
+latest reading sits in that range; a click on the card opens the station's
+IOC page. The row counts reporting stations. Data is raw and not quality
+controlled, and the card says so. The layer is outside voice
+(`VOICE_OFF_LAYERS`).
 
 Fire Perimeters uses capped, timed server reads with stale-on-error caching and a per-client limit. Unchanged snapshots retain geometry; link checks cancel on disable or selection change, and the row legend shows reported containment.
 

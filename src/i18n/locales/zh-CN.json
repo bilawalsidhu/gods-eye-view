@@ -2813,5 +2813,32 @@
   "Layers": "图层",
   "Search": "搜索",
   "More": "更多",
-  "Panels": "面板"
+  "Panels": "面板",
+  "Loading the last 72 hours…": "正在加载最近 72 小时…",
+  "Last 72 hours unavailable": "最近 72 小时数据不可用",
+  "No readings in the last 72 hours": "最近 72 小时无读数",
+  "Last 72 h: low {min} · high {max}": "最近 72 小时：最低 {min} · 最高 {max}",
+  "Level flat over the last 72 hours": "最近 72 小时水位无变化",
+  "Latest {value} is at {percent}% of that range": "最新读数 {value} 位于该范围的 {percent}%",
+  "SEA LEVEL STATION · IOC {code}": "海平面站 · IOC {code}",
+  "Last reading {value} · {age}": "最新读数 {value} · {age}",
+  "No reading reported": "未报告读数",
+  "Sensor {sensor} · {time} UTC": "传感器 {sensor} · {time} UTC",
+  "Levels are against this gauge’s own datum; never compare stations": "水位以该验潮站自身的基准面为准；请勿在站点之间比较",
+  "Raw data, not quality controlled": "原始数据，未经质量控制",
+  "IOC station page ↗ · click card to open": "IOC 站点页面 ↗ · 点击卡片打开",
+  "Open {name} on the IOC station page": "在 IOC 站点页面打开 {name}",
+  "IOC / VLIZ · RAW": "IOC / VLIZ · 原始",
+  "Sea level source unavailable": "海平面数据源不可用",
+  "Colour shows how recently each tide gauge reported, never the level: every gauge has its own datum. Raw data, not quality controlled. Click a station for its last 72 hours.": "颜色表示各验潮站最近一次报告的时间，而非水位：每个验潮站都有自己的基准面。原始数据，未经质量控制。点击站点查看其最近 72 小时。",
+  "{count} reporting": {
+    "other": "{count} 个在报"
+  },
+  "{count} stations": {
+    "other": "{count} 个站点"
+  },
+  "Reporting (within 3 h)": "在报（3 小时内）",
+  "Late (3 to 24 h)": "延迟（3 至 24 小时）",
+  "Silent (over 24 h)": "静默（超过 24 小时）",
+  "Sea level stations": "海平面站"
 }

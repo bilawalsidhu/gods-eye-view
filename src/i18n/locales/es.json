@@ -2947,5 +2947,36 @@
   "Layers": "Capas",
   "Search": "Buscar",
   "More": "Más",
-  "Panels": "Paneles"
+  "Panels": "Paneles",
+  "Loading the last 72 hours…": "Cargando las últimas 72 horas…",
+  "Last 72 hours unavailable": "Últimas 72 horas no disponibles",
+  "No readings in the last 72 hours": "Sin lecturas en las últimas 72 horas",
+  "Last 72 h: low {min} · high {max}": "Últimas 72 h: mínimo {min} · máximo {max}",
+  "Level flat over the last 72 hours": "Nivel constante en las últimas 72 horas",
+  "Latest {value} is at {percent}% of that range": "La última lectura, {value}, está al {percent}% de ese rango",
+  "SEA LEVEL STATION · IOC {code}": "ESTACIÓN DE NIVEL DEL MAR · IOC {code}",
+  "Last reading {value} · {age}": "Última lectura {value} · {age}",
+  "No reading reported": "Sin lecturas notificadas",
+  "Sensor {sensor} · {time} UTC": "Sensor {sensor} · {time} UTC",
+  "Levels are against this gauge’s own datum; never compare stations": "Los niveles se refieren al datum propio de este mareógrafo; no compare estaciones",
+  "Raw data, not quality controlled": "Datos brutos, sin control de calidad",
+  "IOC station page ↗ · click card to open": "Página de la estación en IOC ↗ · haga clic en la tarjeta para abrirla",
+  "Open {name} on the IOC station page": "Abrir {name} en la página de estaciones de IOC",
+  "IOC / VLIZ · RAW": "IOC / VLIZ · BRUTO",
+  "Sea level source unavailable": "Fuente de nivel del mar no disponible",
+  "Colour shows how recently each tide gauge reported, never the level: every gauge has its own datum. Raw data, not quality controlled. Click a station for its last 72 hours.": "El color indica cuándo informó cada mareógrafo por última vez, nunca el nivel: cada mareógrafo tiene su propio datum. Datos brutos, sin control de calidad. Haga clic en una estación para ver sus últimas 72 horas.",
+  "{count} reporting": {
+    "one": "{count} informando",
+    "many": "{count} informando",
+    "other": "{count} informando"
+  },
+  "{count} stations": {
+    "one": "{count} estación",
+    "many": "{count} de estaciones",
+    "other": "{count} estaciones"
+  },
+  "Reporting (within 3 h)": "Informando (en 3 h)",
+  "Late (3 to 24 h)": "Con retraso (de 3 a 24 h)",
+  "Silent (over 24 h)": "Sin datos (más de 24 h)",
+  "Sea level stations": "Estaciones de nivel del mar"
 }
