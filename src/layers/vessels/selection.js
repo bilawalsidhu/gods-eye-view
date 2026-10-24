@@ -10,7 +10,7 @@ export function createSelection({
   options,
 }) {
   const { state } = vesselState;
-  const { resolvePickId, isOwnedByOtherLayer } = services.picking;
+  const { resolvePickId, isOwnedByOtherLayer, pickContact } = services.picking;
   const { requestWorldFocus } = services.worldFocus;
   const {
     selectEntityContext,
@@ -37,7 +37,9 @@ export function createSelection({
       // A tool owns the pointer (src/data/inputOwnership.js): yield the click.
       if (!isPointerFree()) return;
       if (!state.feed.enabled) return;
-      const picked = viewer.scene.pick(click.position);
+      const picked = pickContact
+        ? pickContact(viewer.scene, click.position)
+        : viewer.scene.pick(click.position);
       const pickedId = resolvePickId(picked);
       let record = pickedId ? state.records.byMmsi.get(pickedId) : null;
       const rawId = picked?.id ?? picked?.primitive?.id;
