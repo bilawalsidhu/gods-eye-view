@@ -2943,5 +2943,9 @@
   "hemisphere|E": "E",
   "hemisphere|W": "O",
   "OK": "OK",
-  "{category} ({count})": "{category} ({count})"
+  "{category} ({count})": "{category} ({count})",
+  "Layers": "Capas",
+  "Search": "Buscar",
+  "More": "Más",
+  "Panels": "Paneles"
 }

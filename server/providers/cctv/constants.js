@@ -18,7 +18,7 @@ export const CCTV_MAX_SOURCES_CEILING = 5000;
 export const AUSTIN_DOWNTOWN = { lat: 30.2672, lon: -97.7431 };
 /** Caltrans CCTV: one JSON feed per district, identical schema statewide. */
 /** TxDOT ITS: one keyless JSON catalog per district (25 districts statewide). */
-export const TXDOT_ORIGIN = 'https://its.txdot.gov';
+const TXDOT_ORIGIN = 'https://its.txdot.gov';
 export const TXDOT_CCTV_STATUS_URL = (district) =>
   `${TXDOT_ORIGIN}/its/DistrictIts/GetCctvStatusListByDistrict?districtCode=${encodeURIComponent(district)}`;
 /** Per-camera frame. Returns JSON `{snippet:<base64 jpeg>}`, not an image body;
