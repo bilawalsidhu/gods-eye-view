@@ -4,6 +4,7 @@ import {
   createApplicationViewer,
   installTrackpadPinchZoom,
 } from '../app/viewer.js';
+import { readMaxPixelRatio } from './resolutionGovernor.js';
 import { registerDataCredits } from '../data/dataCredits.js';
 import { configureCreditKeyboardAccess } from '../creditKeyboard.js';
 import { MapStackController } from '../mapStackController.js';
@@ -52,6 +53,8 @@ export async function createApplicationScene({
   const viewer = createApplicationViewer({
     container: 'cesiumContainer',
     creditContainer,
+    // `?maxPixelRatio=1` restores one drawing pixel per CSS pixel.
+    maxPixelRatio: readMaxPixelRatio(),
   });
   defer(() => {
     uninstallRenderGovernor(viewer);

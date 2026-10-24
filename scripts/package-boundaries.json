@@ -28,7 +28,8 @@
       "src/sky/starrySky.js",
       "src/sky/stars.js",
       "src/data/bundledJson.js",
-      "src/renderGovernor.js"
+      "src/renderGovernor.js",
+      "src/app/resolutionGovernor.js"
     ],
     "external": ["cesium"]
   },
@@ -1779,6 +1780,7 @@
       "src/sky/starrySky.js",
       "src/sky/stars.js",
       "src/app/atmosphereCompat.js",
+      "src/app/resolutionGovernor.js",
       "src/bloom.js",
       "src/camera.js",
       "src/cameraGroundGuard.js",

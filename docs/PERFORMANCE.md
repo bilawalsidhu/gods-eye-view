@@ -114,6 +114,87 @@ must not be compared directly with the foreground-controlled scenes above.
 These populations change continuously. A future comparison must record the
 live counts again and match the focus conditions.
 
+## Device pixel ratio 2
+
+The globe draws in device pixels on high-DPI screens (`docs/CURRENT-STATE.md`,
+Drawing resolution). This comparison was captured on 21 October 2026 against
+`main` at 2da8ced6. It is a separate capture from the 22 August baseline above.
+
+| Setting | Value |
+| --- | --- |
+| Renderer | Apple M2 Max, ANGLE Metal |
+| Browser | Chrome 155, fresh puppeteer profile, 60 Hz display |
+| Viewport | 1200 x 886 CSS pixels at device pixel ratio 1 and 2 |
+| Basemap | Keyless globe (no Google key) |
+
+### Matched route
+
+`node scripts/qa-weather-perf.mjs --states off,wind --dpr <1|2>`. Every route
+window holds render demand constant at the display's vsync.
+
+| Build | DPR | Drawing buffer | MSAA | Route windows | Idle renders |
+| --- | ---: | --- | ---: | --- | --- |
+| main | 1 | 1200 x 886 | 4 | 57.7–60 FPS; one 43.4 FPS window | 0–6.9 FPS |
+| branch | 1 | 1200 x 886 | 4 | 59.7–60 FPS | 0–7.5 FPS |
+| main | 2 | 1200 x 886 | 4 | 59.9–60.1 FPS | 0–3.5 FPS |
+| branch | 2 | 2400 x 1772 | 2 | 59.4–60 FPS | 0–3.2 FPS |
+
+The one 43.4 FPS window (`main`, DPR 1, wind zoom-out) had six long tasks while
+wind data loaded. The idle windows match: the governor adds no renders. At
+vsync this GPU shows no difference, so the next table removes the cap.
+
+### Frame time without vsync
+
+Chrome ran with `--disable-gpu-vsync --disable-frame-rate-limit` and
+`viewer.targetFrameRate` cleared. A 4-second orbit at the route's globe
+(17,368 km) and close (1.2 km) poses, median of three runs; milliseconds per
+frame as mean / p95.
+
+| Build | DPR | Drawing | MSAA | Globe | Close |
+| --- | ---: | --- | ---: | ---: | ---: |
+| main | 1 | 1x | 4 | 3.09 / 5.7 | 3.65 / 6.3 |
+| branch | 1 | 1x | 4 | 3.56 / 5.9 | 3.16 / 4.7 |
+| branch, repeat | 1 | 1x | 4 | 3.01 / 5.6 | 2.70 / 4.3 |
+| main, repeat | 1 | 1x | 4 | 3.09 / 5.7 | 2.92 / 4.6 |
+| main | 2 | 1x | 4 | 3.17 / 6.0 | 3.80 / 6.1 |
+| branch | 2 | 2x | 2 | 8.92 / 10.9 | 7.76 / 15.0 |
+| branch, forced | 2 | 2x | 4 | 11.70 / 20.9 | 9.32 / 14.6 |
+| branch, forced | 2 | 1.5x | 2 | 6.24 / 9.3 | 5.34 / 8.7 |
+| branch, forced | 2 | 1x | 4 | 3.73 / 5.9 | 4.49 / 7.7 |
+
+DPR 1 runs differ by ±0.5 ms between repeats in either direction, so they show
+no regression. At 2x, two MSAA samples cost 17–24% less than four.
+
+### GPU memory
+
+The Chrome GPU process's `phys_footprint` (macOS `footprint`), largest of three
+reads after a 4-second orbit.
+
+| Build | DPR | CSS viewport | Drawing buffer | MSAA | GPU process |
+| --- | ---: | --- | --- | ---: | ---: |
+| main | 1 | 1200 x 886 | 1200 x 886 | 4 | 717 MB |
+| branch | 1 | 1200 x 886 | 1200 x 886 | 4 | 690 MB |
+| main | 2 | 1200 x 886 | 1200 x 886 | 4 | 839 MB |
+| branch | 2 | 1200 x 886 | 2400 x 1772 | 2 | 1,353 MB |
+| branch, forced | 2 | 1200 x 886 | 2400 x 1772 | 4 | 1,472 MB |
+| main | 2 | 2560 x 1440 | 2560 x 1440 | 4 | 2,181 MB |
+| branch | 2 | 2560 x 1440 | 3840 x 2160 | 2 | 2,887 MB |
+
+Each extra drawn pixel costs about 150 bytes (scene, globe-depth, pick,
+translucency and post-process targets). Without the 3840 x 2160 budget, the
+2560 x 1440 window would draw 5120 x 2880 and add about 1.7 GB instead of
+0.7 GB.
+
+### Governor under load
+
+At DPR 3 with `?maxPixelRatio=3` and a 1600 x 1000 viewport, the budget starts
+the ratio at 2.25. Under constant camera motion with the FLIR style, it stepped
+down to 1 within 19 seconds. It held there while frames stayed slow (46–58 FPS
+at 1x, CPU-bound), and climbed to 1.75 once frames were on time. That was five
+steps down and three up in 180 seconds. An earlier run, before the budget and
+the 18 ms on-time threshold, stepped from 3 to 2.5. Its failed step-up waits
+doubled from 8 to 16 to 32 seconds.
+
 ## Controls for a future capture
 
 Use the same controls before attributing a difference to the application:
@@ -121,6 +202,8 @@ Use the same controls before attributing a difference to the application:
 1. Record the exact GPU renderer and reject software-rendered or unavailable GPU
    strings.
 2. Use a 1440 x 900 viewport at device pixel ratio 1 and keep the page focused.
+   For high-DPI work, also run at device pixel ratio 2 (`--dpr 2` in
+   `scripts/qa-weather-perf.mjs`), and compare builds only at the same ratio.
 3. Measure cache-disabled startup separately from cold layer activation and warm
    option switching.
 4. Repeat startup three times and compare medians.

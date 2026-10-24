@@ -116,7 +116,7 @@ export const STYLE_PRESET_DEFAULTS = {
 
 /**
  * GLSL fragment shader implementing an unsharp-mask sharpening filter.
- * Samples a 3x3 neighborhood, computes box blur, then adds the
+ * Samples a 3x3 neighborhood (CSS-pixel spacing), computes box blur, then adds the
  * difference (center - blur) scaled by `amount` for edge enhancement.
  */
 export const SHARPEN_SHADER = /* glsl */ `
@@ -127,7 +127,8 @@ export const SHARPEN_SHADER = /* glsl */ `
 
   void main() {
     vec2 uv = v_textureCoordinates;
-    vec2 texel = 1.0 / colorTextureDimensions;
+    // One CSS pixel, so the default strength holds at any drawing ratio.
+    vec2 texel = czm_pixelRatio / colorTextureDimensions;
     vec4 center = texture(colorTexture, uv);
     vec4 blur = (
       texture(colorTexture, uv + vec2(-texel.x, -texel.y)) +
