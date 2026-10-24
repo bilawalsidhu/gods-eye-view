@@ -18,6 +18,7 @@ import {
   GTFS_INCREMENTALITY_FULL_DATASET,
   decodeVehiclePositions,
 } from './gtfsRealtime.js';
+import { decodeEnturVehicles } from './enturVehicles.js';
 import { getTransitFeed } from './transitFeeds.js';
 
 /** Fresh window: a snapshot younger than this is served without refetching. */
@@ -114,7 +115,13 @@ export function transitUpstreamHeaders(feed, validators = null) {
   return {
     'User-Agent':
       'gods-eye-view-transit-proxy/1.0 (+https://github.com/bilawalsidhu/gods-eye-view)',
-    Accept: 'application/x-protobuf, application/octet-stream;q=0.9, */*;q=0.1',
+    Accept:
+      feed?.format === 'entur-vehicles'
+        ? 'application/json'
+        : 'application/x-protobuf, application/octet-stream;q=0.9, */*;q=0.1',
+    ...(feed?.request?.contentType
+      ? { 'Content-Type': feed.request.contentType }
+      : {}),
     'Accept-Encoding': 'gzip',
     ...(validators?.etag ? { 'If-None-Match': validators.etag } : {}),
     ...(validators?.lastModified
@@ -233,14 +240,20 @@ export function repairVehicleTimestamps(vehicles, headerTimestamp, fetchedAtS) {
  * not implemented, so the honest answer is to decline the feed, not to render
  * a wrong one.
  *
+ * A feed registered with `format: 'entur-vehicles'` is Entur's Vehicles
+ * GraphQL answer rather than protobuf, and decodes to the same shape.
+ *
  * @param {object} feed Registry entry.
- * @param {Uint8Array|ArrayBuffer} bytes Raw GTFS-RT FeedMessage.
+ * @param {Uint8Array|ArrayBuffer} bytes Raw GTFS-RT FeedMessage (or Entur JSON).
  * @param {number} [now=Date.now()] Fetch time (ms epoch).
  * @returns {{ feedId: string, name: string, fetchedAt: number, feedTimestamp: number|null,
  *   version: string|null, entityCount: number, truncated: boolean, count: number, vehicles: object[] }}
  */
 export function buildTransitSnapshot(feed, bytes, now = Date.now()) {
-  const decoded = decodeVehiclePositions(bytes);
+  const decoded =
+    feed?.format === 'entur-vehicles'
+      ? decodeEnturVehicles(bytes)
+      : decodeVehiclePositions(bytes);
   if (decoded.incrementality !== GTFS_INCREMENTALITY_FULL_DATASET) {
     throw new TransitFeedShapeError(
       `feed is differential (incrementality ${decoded.incrementality})`,
