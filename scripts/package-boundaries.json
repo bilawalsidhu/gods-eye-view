@@ -796,6 +796,8 @@
       "src/layers/localAdsb/feedNames.js",
       "src/ui/localSdrPresentation.js",
       "src/data/cameraArrival.js",
+      "src/providerHealth.js",
+      "src/ui/providerHealthPanel.js"
       "src/i18n/index.js",
       "src/i18n/locale.js",
       "src/i18n/locales/es.json",
@@ -2547,6 +2549,8 @@
       "src/voice/actionSchemas.js",
       "src/view/index.js",
       "src/app/embed.js",
+      "src/providerHealth.js",
+      "src/ui/providerHealthPanel.js"
       "src/i18n/index.js",
       "src/i18n/locale.js",
       "src/i18n/locales/es.json",
