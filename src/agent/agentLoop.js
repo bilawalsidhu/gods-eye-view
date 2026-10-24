@@ -73,9 +73,13 @@ function addUsage(total, usage) {
  * failure honestly, and it can only do that if the failure reaches it as a
  * result rather than as a dead session.
  */
-async function runActionSafely(runAction, name, args) {
+async function runActionSafely(runAction, name, args, signal) {
   try {
-    const result = await runAction(name, args);
+    signal.throwIfAborted();
+    const result = await runAction(name, args, {
+      signal,
+      isCurrent: () => !signal.aborted,
+    });
     return result === undefined ? { ok: true, action: name } : result;
   } catch (error) {
     return {
@@ -84,6 +88,21 @@ async function runActionSafely(runAction, name, args) {
       error: error?.message || 'Action threw an unexpected error',
     };
   }
+}
+
+// End this typed request locally on a globe refusal. Another model round
+// could otherwise turn the suggested reset command into fresh tool intent.
+// Use fixed text, never tool-supplied strings as instructions.
+function cameraRefusalReply(name, args, result) {
+  if (name === 'zoom_to_globe' && (result?.ok !== true || result.cancelled))
+    return 'The Globe View reset did not finish. No further actions were run for this request.';
+  if (name !== 'move_camera' || args?.motion !== 'rotate_globe') return null;
+  if (result?.ok === true && !result.cancelled) return null;
+  if (result?.reason === 'globe-reset-unavailable')
+    return 'The requested globe rotation did not start. Zoom out further; the Globe View preset does not fit this viewport. No further actions were run for this request.';
+  if (result?.reason === 'globe-view-required')
+    return 'Globe rotation isn’t available from this view. You can type “Reset to Globe View and rotate the globe.” No further actions were run for this request.';
+  return 'The requested globe rotation did not start. Check the camera tool result. No further actions were run for this request.';
 }
 
 /**
@@ -237,14 +256,21 @@ function createAgentSession({
             onEvent,
           });
           usage = addUsage(usage, data.usage);
-          messages.push(data.message);
+          const toolCalls = Array.isArray(data.toolCalls) ? data.toolCalls : [];
+          if (!toolCalls.length) controller.signal.throwIfAborted();
+          const cameraCalls = toolCalls.some((call) =>
+            ['move_camera', 'zoom_to_globe'].includes(call.name),
+          );
+          // Camera narration before execution may claim a move that is refused.
+          messages.push(
+            cameraCalls ? { ...data.message, content: '' } : data.message,
+          );
           for (const warning of Array.isArray(data.warnings)
             ? data.warnings
             : []) {
             onEvent({ type: AGENT_EVENTS.WARNING, warning });
           }
 
-          const toolCalls = Array.isArray(data.toolCalls) ? data.toolCalls : [];
           if (!toolCalls.length) {
             const content = data.message?.content || '';
             onEvent({
@@ -257,13 +283,18 @@ function createAgentSession({
 
           // The model may narrate alongside a call; surface it so the console
           // is not silent while several tools run.
-          if (data.message?.content) {
+          if (
+            data.message?.content &&
+            !cameraCalls &&
+            !controller.signal.aborted
+          ) {
             onEvent({
               type: AGENT_EVENTS.MESSAGE,
               message: { role: 'assistant', content: data.message.content },
             });
           }
 
+          let cameraReply = null;
           for (const [index, call] of toolCalls.entries()) {
             // Checked at the top of every iteration, so this covers both the
             // first dispatch and the gap after each action's await: an abort
@@ -290,17 +321,35 @@ function createAgentSession({
               name: call.name,
               args: call.args,
             });
-            const result = await runActionSafely(
-              runAction,
-              call.name,
-              call.args,
-            );
+            const result = cameraReply
+              ? {
+                  ok: false,
+                  action: call.name,
+                  skipped: true,
+                  error:
+                    'Not run: the camera request was refused or its reset failed.',
+                }
+              : await runActionSafely(
+                  runAction,
+                  call.name,
+                  call.args,
+                  controller.signal,
+                );
+            cameraReply ||= cameraRefusalReply(call.name, call.args, result);
             onEvent({
               type: AGENT_EVENTS.TOOL_RESULT,
               name: call.name,
               result,
             });
             messages.push(toolResultMessage(call.id, result));
+          }
+          controller.signal.throwIfAborted();
+          if (cameraReply) {
+            const message = { role: 'assistant', content: cameraReply };
+            messages.push(message);
+            onEvent({ type: AGENT_EVENTS.MESSAGE, message });
+            onEvent({ type: AGENT_EVENTS.DONE, rounds: round + 1 });
+            return { ok: false, content: cameraReply, rounds: round + 1 };
           }
         }
 

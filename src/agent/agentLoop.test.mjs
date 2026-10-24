@@ -663,3 +663,53 @@ test('a long session trims its own transcript instead of failing on the body cap
     if (message.role === 'tool') assert.ok(answered.has(message.tool_call_id));
   }
 });
+
+test('a late prose reply after STOP is neither displayed nor retained', async () => {
+  let session;
+  const events = [];
+  session = createAgentSession({
+    runAction: async () => {
+      throw new Error('must not dispatch');
+    },
+    fetchImpl: async () => {
+      session.abort();
+      return {
+        ok: true,
+        json: async () => answerTurn('Rotating now.').payload,
+      };
+    },
+  });
+  const reply = await session.send('rotate', {
+    onEvent: (event) => events.push(event),
+  });
+  assert.equal(reply.error, 'Command cancelled.');
+  assert.deepEqual(
+    session.transcript.map((m) => m.role),
+    ['user'],
+  );
+  assert.ok(!events.some((e) => e.message?.content === 'Rotating now.'));
+});
+
+test('STOP at tool-start prevents dispatch and preserves complete tool results', async () => {
+  const ran = [];
+  const session = createAgentSession({
+    runAction: async (name) => {
+      ran.push(name);
+      return { ok: true };
+    },
+    fetchImpl: stubRelay([
+      toolTurn([
+        { id: 'r', name: 'move_camera', args: { motion: 'rotate_globe' } },
+        { id: 'z', name: 'zoom_to_globe' },
+      ]),
+    ]),
+  });
+  const reply = await session.send('rotate', {
+    onEvent: (event) => {
+      if (event.type === AGENT_EVENTS.TOOL_START) session.abort();
+    },
+  });
+  assert.equal(reply.error, 'Command cancelled.');
+  assert.deepEqual(ran, []);
+  assert.equal(session.transcript.filter((m) => m.role === 'tool').length, 2);
+});

@@ -7,3 +7,7 @@
   Add failure, replacement and cross-process concurrency regressions plus native
   Windows CI coverage; document recovery and the remaining native release gate
   (radianx, #1331).
+- Integrate upstream globe rotation into GEV COMMAND, block subsequent text
+  actions after camera refusal or reset failure, and forward command cancellation
+  to the shared runner. Add camera geometry, console and cancellation regressions
+  without changing the upstream voice behavior (radianx, #1331).

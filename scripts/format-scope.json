@@ -1109,5 +1109,7 @@
   "server/providers/agent/chatgpt/store.test.mjs",
   "server/providers/common/credential-file.test.mjs",
   "src/cameraGlobeRotation.test.mjs",
-  "src/voice/globeResetConfirmation.test.mjs"
+  "src/voice/globeResetConfirmation.test.mjs",
+  "src/agent/cameraIntegration.test.mjs",
+  "scripts/qa-agent-camera.mjs"
 ]

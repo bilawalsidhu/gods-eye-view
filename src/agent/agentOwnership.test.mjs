@@ -22,7 +22,7 @@ test('the console runs the same action runner voice and views already drive', ()
   // runner rather than constructing an action runner of its own.
   assert.match(
     appTools,
-    /mountAgentConsole\(\{\s*runAction: \(name, args\) => voiceCommands\.runner\(name, args, \{ signal \}\),/,
+    /mountAgentConsole\(\{\s*runAction: \(name, args, options = \{\}\) =>\s*voiceCommands\.runner\(name, args,/,
   );
   assert.doesNotMatch(consoleSource, /createGevActionRunner/);
   assert.doesNotMatch(loopSource, /createGevActionRunner/);

@@ -195,7 +195,13 @@ export function createApplicationTools({
   // and the same one installViews drives below. It owns one dialog and holds
   // no app state, so it mounts last and tears down first.
   const agentConsole = mountAgentConsole({
-    runAction: (name, args) => voiceCommands.runner(name, args, { signal }),
+    runAction: (name, args, options = {}) =>
+      voiceCommands.runner(name, args, {
+        ...options,
+        signal: options.signal
+          ? AbortSignal.any([signal, options.signal])
+          : signal,
+      }),
   });
   if (agentConsole) {
     debug.agentConsole = agentConsole;

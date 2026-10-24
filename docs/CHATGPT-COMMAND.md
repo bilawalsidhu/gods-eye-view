@@ -53,6 +53,47 @@ A lock serializes token refresh across processes;
 after an abnormal termination, stop all GEV instances before removing a stranded
 `accounts.lock`. Never remove the lock while an instance may be refreshing.
 
+### Globe rotation integration (2026-10-23)
+
+The branch merges upstream main at `9d3548c2`, including #1225 via
+`b2fb4a26`. #1225 remains an independent upstream camera feature; #1331 still
+builds on #976 and keeps its commits and attribution.
+
+Typed commands reuse the shared camera schema, instructions and action runner.
+“Rotate the globe” defaults to right/continuous; explicit direction and speed
+replace that motion. “Stop moving the camera” dispatches `move_camera` with
+`motion: stop`. Manual camera input and supported navigation interrupt rotation.
+
+The text loop adds channel-specific guards:
+
+- A refused globe rotation or failed/cancelled/thrown Globe View reset ends the
+  current typed request locally. Remaining sibling calls get explicit skipped
+  results, preserving complete tool-call/result history. No follow-up inference
+  can turn reset guidance into an unrequested reset or retry. A fresh explicit
+  user command can try again.
+- Reset-and-rotate executes sequentially; rotation is never dispatched after a
+  failed reset. A successful reset does not prove the view has settled or fits:
+  the real rotation admission check still decides.
+- Camera preambles are withheld until tool execution. Fixed refusal replies
+  distinguish a view requiring reset from a viewport requiring further zoom.
+  Successful follow-up prose still comes from the selected model and must follow
+  the shared resulting-state guidance.
+- STOP propagates the command abort signal and freshness check to the existing
+  action runner, combined with application teardown. It blocks queued dispatch
+  and ignores late prose. Tools that honor cancellation can stop pending work;
+  an admitted continuous motion can keep running. STOP does not rewind the
+  camera or replace an explicit camera-stop command.
+
+Reproduce the focused integration checks with
+`node --test src/agent/cameraIntegration.test.mjs src/agent/agentLoop.test.mjs`.
+They drive the shipped runner with real Cesium camera geometry and scripted model
+responses, including insufficient framing, direction/speed, navigation, explicit
+stop, reset failure and cancellation races. `node scripts/qa-agent-camera.mjs`
+drives the actual console and a rendered Cesium viewer with scripted relay
+responses and no external imagery. Set `PUPPETEER_EXECUTABLE_PATH` if needed.
+Neither gate proves live ChatGPT interpretation or OAuth eligibility; the real
+account release gate below remains open.
+
 ### Windows storage review (2026-10-23)
 
 The review found a defense-in-depth gap: the original Windows writer checked its
