@@ -1087,6 +1087,8 @@
   "src/ui/cctvBadges.test.mjs",
   "scripts/qa-status-badges.mjs",
   "src/dockerTrustedPeers.test.mjs",
+  "src/cameraGlobeRotation.test.mjs",
+  "src/voice/globeResetConfirmation.test.mjs",
   "server/providers/gemini/interactions.js",
   "src/geminiInteractions.test.mjs",
   "src/hudSummaryProvider.test.mjs"
