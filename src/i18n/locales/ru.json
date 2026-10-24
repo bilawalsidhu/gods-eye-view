@@ -3031,5 +3031,12 @@
   "Above {height} m": "Выше {height} м",
   "Sea state network error": "Сетевая ошибка данных о волнении",
   "Malformed sea state response": "Некорректный ответ данных о волнении",
-  "Sea state": "Волнение моря"
+  "Sea state": "Волнение моря",
+  "Ocean currents unavailable": "Данные о течениях недоступны",
+  "Max {speed} m/s": "Макс. {speed} м/с",
+  "Surface sea water velocity from the ocean model coupled to ECMWF IFS, at 0.25°, shown at 0.5°. Color is speed; moving lines follow the flow. A model forecast, not an observation. Land and water slower than 0.1 m/s are left clear.": "Скорость поверхностных течений по океанской модели, связанной с ECMWF IFS, с шагом 0,25°, показана с шагом 0,5°. Цвет показывает скорость, движущиеся линии — направление течения. Это модельный прогноз, а не наблюдение. Суша и вода со скоростью меньше 0,1 м/с остаются прозрачными.",
+  "{speed} m/s": "{speed} м/с",
+  "Ocean currents network error": "Сетевая ошибка данных о течениях",
+  "Malformed ocean currents response": "Некорректный ответ данных о течениях",
+  "Ocean currents": "Океанские течения"
 }

@@ -1,3 +1,5 @@
+import { sampleMaskedGrid } from '../weather/maskedGrid.js';
+
 // Imported by the source and by tests without the catalog: band names stay
 // English data; the layer translates them as marine terms (index.js).
 
@@ -118,34 +120,7 @@ export function decodeSeaStateGrid(buffer, grid) {
  * corners around it, or null on land and off the data.
  */
 export function sampleSeaState(field, lon, lat) {
-  const grid = field?.grid;
-  const values = field?.values;
-  if (!grid || !values || !Number.isFinite(lon) || !Number.isFinite(lat))
-    return null;
-  const { nx, ny, lo1, la1, dx, dy } = grid;
-  const x = ((((lon - lo1) % 360) + 360) % 360) / dx;
-  const y = Math.max(0, Math.min(ny - 1, (la1 - lat) / dy));
-  const x0 = Math.floor(x) % nx;
-  const x1 = (x0 + 1) % nx;
-  const y0 = Math.floor(y);
-  const y1 = Math.min(ny - 1, y0 + 1);
-  const fx = x - Math.floor(x);
-  const fy = y - y0;
-  let sum = 0;
-  let weight = 0;
-  for (const [index, w] of [
-    [y0 * nx + x0, (1 - fx) * (1 - fy)],
-    [y0 * nx + x1, fx * (1 - fy)],
-    [y1 * nx + x0, (1 - fx) * fy],
-    [y1 * nx + x1, fx * fy],
-  ]) {
-    const value = values[index];
-    if (w > 0 && Number.isFinite(value)) {
-      sum += value * w;
-      weight += w;
-    }
-  }
-  return weight > 0 ? sum / weight : null;
+  return sampleMaskedGrid(field?.grid, field?.values, lon, lat);
 }
 
 const BAND_RGB = SEA_STATE_BANDS.map(({ color }) =>

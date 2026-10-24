@@ -2964,5 +2964,12 @@
   "Above {height} m": "Más de {height} m",
   "Sea state network error": "Error de red del estado del mar",
   "Malformed sea state response": "Respuesta del estado del mar mal formada",
-  "Sea state": "Estado del mar"
+  "Sea state": "Estado del mar",
+  "Ocean currents unavailable": "Corrientes oceánicas no disponibles",
+  "Max {speed} m/s": "Máx. {speed} m/s",
+  "Surface sea water velocity from the ocean model coupled to ECMWF IFS, at 0.25°, shown at 0.5°. Color is speed; moving lines follow the flow. A model forecast, not an observation. Land and water slower than 0.1 m/s are left clear.": "Velocidad del agua en superficie del modelo oceánico acoplado al ECMWF IFS, a 0,25°, mostrada a 0,5°. El color indica la velocidad; las líneas en movimiento siguen el flujo. Es un pronóstico del modelo, no una observación. La tierra y el agua más lenta que 0,1 m/s quedan transparentes.",
+  "{speed} m/s": "{speed} m/s",
+  "Ocean currents network error": "Error de red de las corrientes oceánicas",
+  "Malformed ocean currents response": "Respuesta de corrientes oceánicas mal formada",
+  "Ocean currents": "Corrientes oceánicas"
 }

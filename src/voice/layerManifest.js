@@ -414,6 +414,8 @@ export const VOICE_OFF_LAYERS = Object.freeze({
   // prompt ceiling (src/voice/pointAndAsk.test.mjs); the toggle stays in the
   // Layers panel.
   'sea-state': 'global wave forecast field; Realtime prompt budget is full',
+  'ocean-currents':
+    'global ocean forecast field; Realtime prompt budget is full',
 });
 
 const TYPE_NAMES = Object.freeze({

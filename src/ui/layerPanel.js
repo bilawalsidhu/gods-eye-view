@@ -85,6 +85,7 @@ const PANEL_GROUPS = [
       'weather-lightning',
       'weather-cyclones',
       'sea-state',
+      'ocean-currents',
     ],
   },
   {

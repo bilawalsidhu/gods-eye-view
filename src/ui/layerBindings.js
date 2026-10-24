@@ -131,6 +131,7 @@ export class LayerBindings {
       'weather-lightning',
       'weather-cyclones',
       'sea-state',
+      'ocean-currents',
     ]) {
       const layer = this._dataManager?.layers?.get(id)?.module;
       if (typeof layer?.attachShellServices !== 'function') continue;

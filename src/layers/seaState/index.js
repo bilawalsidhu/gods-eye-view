@@ -1,12 +1,8 @@
 import * as Cesium from 'cesium';
 import { formatNumber, msg, t } from '../../i18n/index.js';
 import { translateFeedError } from '../../ui/statusText.js';
-import { orderWeatherImagery } from '../weather/imageryOrder.js';
-import { NO_IMAGERY_HOST } from '../weather/imageryHost.js';
-import {
-  WEATHER_SHELL_HEIGHTS,
-  createShellSurface,
-} from '../weather/shellRendering.js';
+import { createGlobeFieldTexture } from '../weather/fieldTexture.js';
+import { WEATHER_SHELL_HEIGHTS } from '../weather/shellRendering.js';
 import {
   SEA_STATE_BANDS,
   createSeaStateRaster,
@@ -63,11 +59,13 @@ export function createSeaStateLayer({
   let imageryError = null;
   let loading = false;
   let imageryHost = null;
-  let imagery = null;
-  let imageryCollection = null;
-  let shell = null;
-  let installedKind = null;
   let rowControlsListener = null;
+  const texture = createGlobeFieldTexture({
+    cesium,
+    createCanvas,
+    priority: IMAGERY_PRIORITY,
+    shellHeight: WEATHER_SHELL_HEIGHTS['sea-state'],
+  });
   const notify = () => rowControlsListener?.();
 
   const host = () =>
@@ -76,62 +74,16 @@ export function createSeaStateLayer({
       kind: 'globe',
     };
 
-  function removeImagery() {
-    if (imagery && imageryCollection && !imageryCollection.isDestroyed?.())
-      imageryCollection.remove(imagery, true);
-    imagery = null;
-    imageryCollection = null;
-    shell?.destroy();
-    shell = null;
-    installedKind = null;
-  }
-
   function install() {
-    removeImagery();
+    texture.remove();
     imageryError = null;
     if (!enabled || !field || !viewer) return;
-    const { collection, kind } = host();
-    if (kind === 'none') {
-      imageryError = NO_IMAGERY_HOST;
-      return;
-    }
-    const raster = createSeaStateRaster(field);
-    if (!raster) return; // a flat-calm world draws nothing, which is correct
-    try {
-      const texture = createCanvas();
-      texture.width = raster.width;
-      texture.height = raster.height;
-      const ctx = texture.getContext('2d');
-      const pixels = ctx.createImageData(raster.width, raster.height);
-      pixels.data.set(raster.rgba);
-      ctx.putImageData(pixels, 0, 0);
-      if (kind === 'tileset') {
-        shell = createShellSurface({
-          viewer,
-          cesium,
-          rectangle: cesium.Rectangle.MAX_VALUE,
-          height: WEATHER_SHELL_HEIGHTS['sea-state'],
-        });
-        shell.setImage(texture);
-        shell.setAlpha(1);
-        shell.setShow(true);
-      } else {
-        const provider = new cesium.SingleTileImageryProvider({
-          url: texture.toDataURL('image/png'),
-          tileWidth: raster.width,
-          tileHeight: raster.height,
-          rectangle: cesium.Rectangle.MAX_VALUE,
-        });
-        imagery = collection.addImageryProvider(provider);
-        orderWeatherImagery(collection, imagery, IMAGERY_PRIORITY);
-        imageryCollection = collection;
-      }
-      installedKind = kind;
-      viewer.scene?.requestRender?.();
-    } catch {
-      removeImagery();
-      imageryError = msg('Globe field image unavailable');
-    }
+    // A flat-calm world has no raster and draws nothing, which is correct.
+    imageryError = texture.install({
+      viewer,
+      ...host(),
+      raster: createSeaStateRaster(field),
+    });
   }
 
   const layer = {
@@ -153,7 +105,7 @@ export function createSeaStateLayer({
     /** Move the texture when the map source changes between globe and tiles. */
     rehome() {
       if (!enabled || !field) return;
-      if (host().kind !== installedKind) install();
+      if (host().kind !== texture.kind) install();
     },
     enable() {
       enabled = true;
@@ -167,7 +119,7 @@ export function createSeaStateLayer({
       field = null;
       error = null;
       imageryError = null;
-      removeImagery();
+      texture.remove();
     },
     async update(nextViewer, { signal } = {}) {
       if (!enabled) return false;
