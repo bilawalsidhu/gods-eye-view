@@ -5,6 +5,8 @@
   /* KartaView's purple for lines; a lighter one where it is text (WCAG AA). */
   --sl-kartaview: #635bff;
   --sl-kartaview-text: #8f8aff;
+  --sl-vegbilder: #ec4899;
+  --sl-vegbilder-text: #f472b6;
   /* Panoramax's orange; the darker one sits behind white text. */
   --sl-panoramax: #ff6f00;
   --sl-panoramax-fill: #b84e00;
@@ -160,6 +162,9 @@
 /* #635bff text on its own tint is 3.7:1 at this size; the lighter one is ~6:1. */
 .sl-chips .data-toggle-chip.active[data-chip-id='kartaview'] {
   color: var(--sl-kartaview-text);
+}
+.sl-chips .data-toggle-chip.active[data-chip-id='vegbilder'] {
+  color: var(--sl-vegbilder-text);
 }
 
 .sl-chips .data-toggle-chip.active::before {
@@ -492,7 +497,7 @@ html:not([lang='en']) .sl-meta-row .sl-nearest-btn {
   aspect-ratio: auto;
 }
 
-/* ── Photo viewer (KartaView, Panoramax) ─────────────────────────────────── */
+/* ── Photo viewer (KartaView, Panoramax, Vegbilder) ─────────────────────────────────── */
 .sl-photo-viewer {
   /* The lit source's colour: a focus ring, and behind the white ‹ › glyphs. */
   --sl-photo-ring: var(--sl-kartaview-text);
@@ -523,6 +528,11 @@ html:not([lang='en']) .sl-meta-row .sl-nearest-btn {
 .sl-photo-viewer[data-provider='panoramax'] {
   --sl-photo-ring: var(--sl-panoramax);
   --sl-photo-fill: var(--sl-panoramax-fill);
+}
+
+.sl-photo-viewer[data-provider='vegbilder'] {
+  --sl-photo-ring: var(--sl-vegbilder-text);
+  --sl-photo-fill: color-mix(in srgb, var(--sl-vegbilder) 85%, transparent);
 }
 
 .sl-photo-flat,

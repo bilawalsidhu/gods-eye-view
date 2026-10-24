@@ -946,6 +946,10 @@
   "zoom in to see KartaView coverage": "acércate para ver la cobertura de KartaView",
   "no KartaView photos in view": "no hay fotos de KartaView a la vista",
   "(by upload date)": "(por fecha de subida)",
+  "zoom in to see Vegbilder coverage": "acércate para ver la cobertura de Vegbilder",
+  "no Vegbilder photos in view": "no hay fotos de Vegbilder a la vista",
+  "Statens vegvesen is limiting requests — they resume on their own": "Statens vegvesen está limitando las solicitudes; se reanudarán solas",
+  "Statens vegvesen has no file for this photo": "Statens vegvesen no tiene el archivo de esta foto",
   "{n} streets in view · click a line for its nearest photo": {
     "one": "{n} calle a la vista · haz clic en una línea para su foto más cercana",
     "many": "{n} calles a la vista · haz clic en una línea para su foto más cercana",
