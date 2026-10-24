@@ -3,8 +3,14 @@ import test from 'node:test';
 import * as Cesium from 'cesium';
 import { createEvChargingLayer } from './index.js';
 import { layerFeedState } from '../../data/feedState.js';
+import { tileToBBox } from '../../data/tomtomTiles.js';
+import { encodePoiTile } from './poiTileFixture.mjs';
+import { createChargingSource } from './source.js';
+import { createOpenChargeMapClient } from './openChargeMap.js';
 
 const BUILD_TIME = Date.UTC(2026, 9, 18, 8, 0, 1);
+const POI_TEMPLATE =
+  'https://tiles.openfreemap.org/planet/20261018_080001_pt/{z}/{x}/{y}.pbf';
 const station = (id, latitude = 59.91, longitude = 10.75, name = id) => ({
   id: `ev-charging:${id}`,
   name,
@@ -33,6 +39,7 @@ function harness(getStations) {
   globalThis.document = { addEventListener() {}, removeEventListener() {} };
   const added = [];
   const credits = new Set();
+  const dynamicCredits = [];
   const owners = new Map();
   const contexts = new Map();
   let selected = null;
@@ -93,6 +100,8 @@ function harness(getStations) {
       credits: {
         showOsmCredit: (_viewer, owner) => credits.add(owner),
         hideOsmCredit: (_viewer, owner) => credits.delete(owner),
+        registerDynamicCredit: (_viewer, credit) => dynamicCredits.push(credit),
+        openChargeMapCredit: (provider) => ({ key: `ocm-${provider.id}` }),
       },
       groundFloor: { cachedGroundFloor: () => 12 },
     },
@@ -117,6 +126,7 @@ function harness(getStations) {
     viewer,
     added,
     credits,
+    dynamicCredits,
     owners,
     contexts,
     flights,
@@ -425,6 +435,278 @@ test('destroy releases the data source, listeners, pick owner and source cache',
     assert.equal(h.added.length, 1);
     h.layer.destroy();
   } finally {
+    h.restore();
+  }
+});
+
+/** A trimmed Open Charge Map site as the proxy returns it. */
+const ocmSite = (id, latitude, longitude, extra = {}) => ({
+  id,
+  latitude,
+  longitude,
+  title: `OCM ${id}`,
+  operator: 'Charge & Drive (Fortum - NO)',
+  address: 'Jernbanetorget 1, Oslo',
+  status: { id: 50, operational: true },
+  lastStatusUpdate: Date.UTC(2026, 5, 22),
+  connections: [
+    { type: 'Type 2 (Socket Only)', powerKw: 22, quantity: 4, status: null },
+    { type: 'CCS (Type 2)', powerKw: 150, quantity: null, status: null },
+    { type: 'Type 2 (Socket Only)', powerKw: 22, quantity: 2, status: null },
+    { type: 'CCS (Type 2)', powerKw: 150, quantity: null, status: null },
+    { type: null, powerKw: null, quantity: null, status: null },
+    { type: 'CHAdeMO', powerKw: 50, quantity: 1, status: null },
+    { type: 'Tesla (Model S/X)', powerKw: 120, quantity: 1, status: null },
+  ],
+  numberOfPoints: 8,
+  usageCost: 'NOK 4/kWh',
+  provider: {
+    id: 1,
+    name: 'Open Charge Map Contributors',
+    licence: 'CC BY 4.0',
+    licenceText: 'CC BY 4.0',
+    url: 'http://openchargemap.org/',
+  },
+  ...extra,
+});
+const enrichment = (extra = {}) => ({
+  source: 'ocm',
+  error: null,
+  matched: 1,
+  added: 1,
+  saturated: false,
+  stale: false,
+  ...extra,
+});
+
+test('without a key the layer, its row and its card are what they were', async () => {
+  // The real source over the same injected tiles, once without an Open Charge
+  // Map client and once with one whose local server has no key.
+  const tileFetchImpl = async (url) => {
+    if (url === 'https://tiles.openfreemap.org/planet')
+      return Response.json({ tiles: [POI_TEMPLATE] });
+    const [z, x, y] = url
+      .match(/(\d+)\/(\d+)\/(\d+)\.pbf$/)
+      .slice(1)
+      .map(Number);
+    const box = tileToBBox(z, x, y);
+    return new Response(
+      encodePoiTile({ z, x, y }, [
+        {
+          lon: (box.west + box.east) / 2,
+          lat: (box.south + box.north) / 2,
+          class: 'fuel',
+          subclass: 'charging_station',
+          name: `Station ${x}/${y}`,
+        },
+      ]),
+    );
+  };
+  const ocmCalls = [];
+  const sources = [
+    createChargingSource({ tileFetchImpl }),
+    createChargingSource({
+      tileFetchImpl,
+      ocm: createOpenChargeMapClient({
+        fetchImpl: async (url) => {
+          ocmCalls.push(url);
+          return url === '/api/ocm/status'
+            ? Response.json({ hasKey: false })
+            : Response.json({ error: 'no_key' }, { status: 503 });
+        },
+      }),
+    }),
+  ];
+  const views = [];
+  for (const source of sources) {
+    const h = harness((box, options) => source.getStations(box, options));
+    try {
+      await h.layer.update();
+      await h.layer.update();
+      const [first] = h.entities();
+      h.click(first.id);
+      const { lastUpdate, ...stats } = h.layer.getStats();
+      assert.ok(lastUpdate > 0);
+      const { chips, legend } = h.layer.getRowControls();
+      views.push({
+        ids: h.entities().map((entity) => entity.id),
+        stats,
+        legend,
+        chip: chips.map(({ onClick, ...chip }) => chip),
+        card: first.gevLabelModel,
+        selected: h.selected?.id,
+        source: h.contexts.get(first.id).source,
+        credits: [...h.credits],
+        dynamicCredits: h.dynamicCredits.length,
+      });
+    } finally {
+      h.layer.destroy();
+      h.restore();
+    }
+  }
+  assert.ok(views[0].ids.length > 0);
+  assert.deepEqual(views[1], views[0]);
+  assert.equal(views[0].stats.source, undefined);
+  assert.equal(views[0].legend.length, 1);
+  assert.equal(views[0].card.details[0], 'EV CHARGING · OSM MAPPED');
+  assert.equal(views[0].dynamicCredits, 0);
+  // One status question for the session, and never a POI read.
+  assert.deepEqual(ocmCalls, ['/api/ocm/status']);
+});
+
+test('an enriched station card adds connectors, power, status, operator and the OCM credit', async () => {
+  const h = harness(async () => ({
+    ...snapshot([
+      {
+        ...station('a', 59.91, 10.75, 'Oslo S P-hus'),
+        ocm: ocmSite(68766, 59.9101, 10.7501),
+      },
+      {
+        id: 'ev-charging:ocm:46188',
+        name: 'Filmmuseet, Oslo',
+        latitude: 59.90947,
+        longitude: 10.74532,
+        origin: 'ocm',
+        ocm: ocmSite(46188, 59.90947, 10.74532, {
+          operator: null,
+          address: 'Dronningens gate 13, OSLO',
+          status: null,
+          connections: [
+            {
+              type: 'CEE 7/4 - Schuko - Type F',
+              powerKw: 3.7,
+              quantity: null,
+              status: null,
+            },
+          ],
+          numberOfPoints: 2,
+          usageCost: null,
+          provider: {
+            id: 19,
+            name: 'NOBIL',
+            licence: 'CC BY 4.0',
+            licenceText: 'NOBIL by Enova is licensed under CC BY 4.0',
+            url: 'https://nobil.no/',
+          },
+        }),
+      },
+    ]),
+    enrichment: enrichment(),
+  }));
+  try {
+    await h.layer.update();
+    h.click('ev-charging:a');
+    const matched = h.added[0].entities.getById('ev-charging:a');
+    // The OpenStreetMap name and position stay; OCM adds the detail.
+    assert.equal(matched.gevLabelModel.title, 'Oslo S P-hus');
+    assert.deepEqual(matched.gevLabelModel.details, [
+      'EV CHARGING · OSM MAPPED · OPEN CHARGE MAP',
+      'Charge & Drive (Fortum - NO)',
+      'Operational · updated 2026-06-22',
+      '6× Type 2 (Socket Only) 22 kW',
+      '2× CCS (Type 2) 150 kW',
+      'Connector',
+      '+2 more connector types',
+      '8 charge points',
+      'Cost: NOK 4/kWh',
+      '59.91000°N 10.75000°E',
+      '© OpenStreetMap contributors',
+      '© Open Charge Map contributors · CC BY 4.0',
+    ]);
+    assert.equal(matched.gevLabelModel.accent, '#9dff5c');
+
+    h.click('ev-charging:ocm:46188');
+    const added = h.added[0].entities.getById('ev-charging:ocm:46188');
+    assert.equal(added.gevLabelModel.title, 'Filmmuseet, Oslo');
+    assert.deepEqual(added.gevLabelModel.details, [
+      'EV CHARGING · OPEN CHARGE MAP',
+      'Dronningens gate 13, OSLO',
+      'CEE 7/4 - Schuko - Type F 3.7 kW',
+      '2 charge points',
+      '59.90947°N 10.74532°E',
+      'NOBIL via Open Charge Map · CC BY 4.0',
+    ]);
+    // An OCM-only site is amber and names Open Charge Map as its source.
+    assert.equal(added.gevLabelModel.accent, '#ffb347');
+    assert.equal(
+      h.contexts.get('ev-charging:ocm:46188').source,
+      'Open Charge Map',
+    );
+    h.click();
+    assert.equal(added.point.color.getValue().toCssHexString(), '#ffb347');
+    // Each provider shown is credited in the attribution popover.
+    assert.deepEqual(
+      h.dynamicCredits.map((credit) => credit.key),
+      ['ocm-1', 'ocm-19'],
+    );
+
+    const stats = h.layer.getStats();
+    assert.equal(stats.source, 'OpenStreetMap + Open Charge Map');
+    assert.equal(stats.error, null);
+    assert.equal(layerFeedState(stats), 'nominal');
+    const legend = h.layer.getRowControls().legend;
+    assert.deepEqual(
+      legend.map(({ label, count, color }) => [label, count, color]),
+      [
+        ['Charging stations', 1, '#9dff5c'],
+        ['Open Charge Map only', 1, '#ffb347'],
+      ],
+    );
+  } finally {
+    h.layer.destroy();
+    h.restore();
+  }
+});
+
+test('a failed Open Charge Map read keeps the stations and reports the fixed form', async () => {
+  const h = harness(async () => ({
+    ...snapshot([station('a'), station('b', 59.915, 10.76)]),
+    enrichment: enrichment({
+      error: 'Open Charge Map HTTP 403',
+      matched: 0,
+      added: 0,
+    }),
+  }));
+  try {
+    assert.equal(await h.layer.update(), true);
+    assert.equal(h.entities().length, 2);
+    const stats = h.layer.getStats();
+    assert.equal(stats.status, 'ready');
+    assert.equal(stats.stale, false);
+    assert.equal(stats.error, 'Open Charge Map HTTP 403');
+    // Stations are shown, the enrichment is missing: degraded, not down.
+    assert.equal(layerFeedState(stats), 'degraded');
+    h.click('ev-charging:a');
+    assert.equal(
+      h.added[0].entities.getById('ev-charging:a').gevLabelModel.details[0],
+      'EV CHARGING · OSM MAPPED',
+    );
+  } finally {
+    h.layer.destroy();
+    h.restore();
+  }
+});
+
+test('only Open Charge Map sites in view keep the OpenStreetMap credit off', async () => {
+  const h = harness(async () => ({
+    ...snapshot([
+      {
+        id: 'ev-charging:ocm:1',
+        name: 'OCM 1',
+        latitude: 59.91,
+        longitude: 10.75,
+        origin: 'ocm',
+        ocm: ocmSite(1, 59.91, 10.75),
+      },
+    ]),
+    enrichment: enrichment({ matched: 0 }),
+  }));
+  try {
+    await h.layer.update();
+    assert.equal(h.credits.has('ev-charging'), false);
+    assert.equal(h.layer.getStats().count, 1);
+  } finally {
+    h.layer.destroy();
     h.restore();
   }
 });

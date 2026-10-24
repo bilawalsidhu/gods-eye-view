@@ -6,6 +6,7 @@ import {
   decodeChargingTile,
   planetBuildTime,
 } from './records.js';
+import { mergeOcmSites } from './merge.js';
 // A portable export (package.json): it marks text and loads no catalogs. The
 // layer row translates the source label and the fixed error forms below.
 import { msg } from '../../i18n/marker.js';
@@ -63,6 +64,10 @@ function chargingFeedError(error) {
  * @param {object} [options]
  * @param {Function} [options.tileFetchImpl] Injected fetch, for tests.
  * @param {object} [options.mapTiles] Injected vector tile source, for tests.
+ * @param {?{isConfigured: Function, getSites: Function}} [options.ocm]
+ *   Optional Open Charge Map client (openChargeMap.js). When the local server
+ *   reports a key, its sites enrich matching stations and add the rest; when
+ *   it does not, reads are exactly the OpenStreetMap reads.
  * @returns {{getStations: Function, destroy: Function, label: string,
  *   attribution: object}} Source.
  */
@@ -73,7 +78,33 @@ export function createChargingSource({
     decode: decodeChargingTile,
     maxTiles: CHARGING_MAX_TILES,
   }),
+  ocm = null,
 } = {}) {
+  /**
+   * The Open Charge Map read for `box`: null without a key, else its sites or
+   * the fixed error that replaced them. Rejects only on abort, so a failed
+   * enrichment can never fail the OpenStreetMap read.
+   */
+  async function readOcm(box, signal) {
+    if (!ocm || !(await ocm.isConfigured({ signal }))) return null;
+    try {
+      const read = await ocm.getSites(box, { signal });
+      return read.unkeyed ? null : { ...read, error: null };
+    } catch (error) {
+      if (error?.name === 'AbortError' || signal?.aborted) throw error;
+      return {
+        sites: [],
+        saturated: false,
+        stale: false,
+        error: /^(Open Charge Map |Malformed Open Charge Map )/.test(
+          error?.message,
+        )
+          ? error.message
+          : 'Open Charge Map network error',
+      };
+    }
+  }
+
   return {
     /**
      * @param {{south:number, west:number, north:number, east:number}} box View box.
@@ -95,6 +126,9 @@ export function createChargingSource({
           saturated: false,
           observedAt: null,
         };
+      // Started alongside the tiles; awaited only once they have succeeded.
+      const ocmRead = readOcm(box, signal);
+      ocmRead.catch(() => {});
       let metadata, result;
       try {
         metadata = await mapTiles.getMetadata(signal);
@@ -124,12 +158,28 @@ export function createChargingSource({
           .sort((a, b) => distance(a) - distance(b))
           .slice(0, CHARGING_STATION_LIMIT);
       }
-      return {
+      const snapshot = {
         records,
         zoomIn: false,
         partial: result.partial,
         saturated,
         observedAt: planetBuildTime(metadata?.template),
+      };
+      const enrichment = await ocmRead;
+      signal?.throwIfAborted();
+      if (!enrichment) return snapshot;
+      const merged = mergeOcmSites(records, enrichment.sites);
+      return {
+        ...snapshot,
+        records: merged.records,
+        enrichment: {
+          source: 'ocm',
+          error: enrichment.error,
+          matched: merged.matched,
+          added: merged.added,
+          saturated: enrichment.saturated,
+          stale: enrichment.stale,
+        },
       };
     },
     destroy() {

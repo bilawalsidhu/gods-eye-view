@@ -2958,5 +2958,35 @@
   "Stations mapped in OpenStreetMap turn white when selected. The map data names them; it carries no sockets, power or live availability.": "Las estaciones mapeadas en OpenStreetMap se vuelven blancas al seleccionarlas. Los datos del mapa dan su nombre, pero no sus conectores, su potencia ni su disponibilidad en tiempo real.",
   "loading charging stations": "cargando estaciones de carga",
   "Zoom in to load charging stations": "Acércate para cargar las estaciones de carga",
-  "No charging stations mapped in this area": "No hay estaciones de carga mapeadas en esta zona"
+  "No charging stations mapped in this area": "No hay estaciones de carga mapeadas en esta zona",
+  "Status unknown": "Estado desconocido",
+  "Available (automated status)": "Disponible (estado automático)",
+  "In use (automated status)": "En uso (estado automático)",
+  "Temporarily unavailable": "No disponible temporalmente",
+  "Operational": "Operativa",
+  "Partly operational": "Parcialmente operativa",
+  "Not operational": "Fuera de servicio",
+  "Planned": "Prevista",
+  "EV CHARGING · OPEN CHARGE MAP": "CARGA DE VE · OPEN CHARGE MAP",
+  "EV CHARGING · OSM MAPPED · OPEN CHARGE MAP": "CARGA DE VE · MAPEADO EN OSM · OPEN CHARGE MAP",
+  "{status} · updated {date}": "{status} · actualizado el {date}",
+  "Connector": "Conector",
+  "{power} kW": "{power} kW",
+  "{count} charge points": {
+    "one": "{count} punto de carga",
+    "many": "{count} de puntos de carga",
+    "other": "{count} puntos de carga"
+  },
+  "Cost: {cost}": "Precio: {cost}",
+  "{provider} via Open Charge Map": "{provider} a través de Open Charge Map",
+  "Stations mapped in OpenStreetMap turn white when selected. Where Open Charge Map lists a site within 50 m, the card adds its connectors, power, operator and reported status; that status is what contributors last reported, not live availability.": "Las estaciones mapeadas en OpenStreetMap se vuelven blancas al seleccionarlas. Si Open Charge Map registra un punto a menos de 50 m, la ficha añade sus conectores, su potencia, su operador y el estado notificado; ese estado es el último que comunicaron los colaboradores, no la disponibilidad en tiempo real.",
+  "Open Charge Map only": "Solo en Open Charge Map",
+  "Sites Open Charge Map lists with no OpenStreetMap station within 50 m. Only openly licensed records are shown, credited to their data provider.": "Puntos que Open Charge Map registra sin ninguna estación de OpenStreetMap a menos de 50 m. Solo se muestran registros con licencia abierta, atribuidos a su proveedor de datos.",
+  "OpenStreetMap + Open Charge Map": "OpenStreetMap + Open Charge Map",
+  "EV charger connectors, power and reported status (keyless shows OpenStreetMap stations only)": "Conectores, potencia y estado notificado de los cargadores de VE (sin clave solo se ven las estaciones de OpenStreetMap)",
+  "+{count} more connector types": {
+    "one": "+{count} tipo de conector más",
+    "many": "+{count} de tipos de conector más",
+    "other": "+{count} tipos de conector más"
+  }
 }

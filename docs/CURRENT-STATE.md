@@ -3643,7 +3643,7 @@ its criteria cannot be silently ignored.
 | Military Flights 🎖️    | adsb.lol /v2/mil                                                                                                                                                                                | `src/data/militaryFlights.js`                         | `/api/military`                                       | 15s                                                                               |
 | Live AIS Vessels 🚢    | AISStream websocket                                                                                                                                                                             | `src/data/aisLiveVessels.js`                          | `/api/vessels`                                          | 60s (+800ms visibility pass)                                                      |
 | Mapped Installations ⌖ | OpenFreeMap military areas; optional configured Overpass names and Google Places search | `src/data/militaryInstallations.js` | OpenFreeMap tiles, `/api/military-installations`, `/api/google/text-search` | viewport-driven; transient errors back off, missing capability switches to tiles |
-| EV Charging 🔌 (`ev-charging`) | OpenFreeMap OpenMapTiles `poi` charging stations (OpenStreetMap, ODbL; keyless) | `src/layers/evCharging/` via `src/app/layers/evCharging.js` | browser-direct OpenFreeMap tiles | viewport-driven; z14 only, at most 16 tiles per view |
+| EV Charging 🔌 (`ev-charging`) | OpenFreeMap OpenMapTiles `poi` charging stations (OpenStreetMap, ODbL; keyless); optional Open Charge Map enrichment (BYOK, open-licensed records only) | `src/layers/evCharging/` via `src/app/layers/evCharging.js` | browser-direct OpenFreeMap tiles; `/api/ocm` (`OPEN_CHARGE_MAP_API_KEY`) | viewport-driven; z14 only, at most 16 tiles per view; OCM answers cached 10 min per 0.01° box |
 | Earthquakes            | USGS                                                                                                                                                                                            | `src/data/earthquakes.js`                             | —                                                        | 60s                                                                               |
 | Air quality            | ECCC MSC GeoMet OGC API (AQHI, Canada only)                                                                                                                                                      | `src/layers/airQuality/`                              | —                                                        | 20 min readings, 12 h station catalog                                             |
 | Satellites             | CelesTrak                                                                                                                                                                                       | `src/data/satellites.js`                              | `/api/celestrak`                                         | 120s                                                                              |
@@ -3706,6 +3706,30 @@ the tile path, not the fetch time. Failures read `OpenFreeMap HTTP <status>`,
 `OpenFreeMap rate limited`, `OpenFreeMap network error` or `Malformed
 OpenFreeMap response`; stations already shown stay up as stale. Overpass is
 never used.
+
+With `OPEN_CHARGE_MAP_API_KEY` set, the same read also asks the local
+`/api/ocm/poi` proxy (`server/providers/openChargeMap.js`) for the view box;
+the browser learns that a key exists from `/api/ocm/status` (`{hasKey}`), asked
+once per session, and never sees the key. The proxy validates the four bounds,
+snaps the box outward to a 0.01° grid, refuses one wider than 0.5°, builds the
+only upstream URL itself (`/v3/poi` with `compact=true`, `verbose=false`,
+`opendata=true`, at most 500 results; key in `X-API-Key`), resolves ids through
+`/v3/referencedata` (cached a day) and keeps a site only when its DataProvider
+is flagged `IsOpenDataLicensed === true` and is not Oplaadpalen.nl (26,
+CC BY-NC-SA). Answers are cached 10 min per box with single-flight refresh and
+serve-stale on failure, behind the same-site gate and a 30-a-minute upstream
+ceiling. In the browser (`merge.js`) an OCM site within 50 m of an OSM station
+enriches it, nearest pair first and one-to-one; the station keeps its OSM id,
+name and position and its card adds operator, status with its last update,
+connectors and power, charge points, cost and the provider credit. Unmatched
+sites inside the view become amber stations of their own marked as Open Charge
+Map, and each provider shown is registered in the Data attribution popover.
+An OCM failure never fails the read: the OSM stations render and the row reads
+DEGRADED with `Open Charge Map HTTP <status>`, `Open Charge Map rate limited`,
+`Open Charge Map network error` or `Malformed Open Charge Map response`.
+Without a key (or with no `/api/ocm` route, as on a static host) reads,
+markers, card and row are exactly the keyless ones; only the one status
+request is added.
 
 
 Fire Perimeters uses capped, timed server reads with stale-on-error caching and a per-client limit. Unchanged snapshots retain geometry; link checks cancel on disable or selection change, and the row legend shows reported containment.

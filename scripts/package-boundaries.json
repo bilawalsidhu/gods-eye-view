@@ -2569,6 +2569,8 @@
       "src/layers/evCharging/index.js",
       "src/layers/evCharging/records.js",
       "src/layers/evCharging/source.js",
+      "src/layers/evCharging/merge.js",
+      "src/layers/evCharging/openChargeMap.js",
       "src/app/layers/evCharging.js"
     ],
     "external": [
@@ -3142,6 +3144,8 @@
       "src/layers/evCharging/index.js",
       "src/layers/evCharging/records.js",
       "src/layers/evCharging/source.js",
+      "src/layers/evCharging/merge.js",
+      "src/layers/evCharging/openChargeMap.js",
       "src/app/layers/evCharging.js"
     ],
     "external": [
@@ -4046,6 +4050,8 @@
       "src/layers/evCharging/index.js",
       "src/layers/evCharging/records.js",
       "src/layers/evCharging/source.js",
+      "src/layers/evCharging/merge.js",
+      "src/layers/evCharging/openChargeMap.js",
       "src/data/tomtomTiles.js",
       "src/sources/openFreeMap.js",
       "src/sources/vectorTiles.js",
@@ -4070,6 +4076,8 @@
     "modules": [
       "src/layers/evCharging/records.js",
       "src/layers/evCharging/source.js",
+      "src/layers/evCharging/merge.js",
+      "src/layers/evCharging/openChargeMap.js",
       "src/data/tomtomTiles.js",
       "src/sources/openFreeMap.js",
       "src/sources/vectorTiles.js",

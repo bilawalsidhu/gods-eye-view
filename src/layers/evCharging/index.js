@@ -9,11 +9,34 @@ export {
   CHARGING_MAX_TILES,
   CHARGING_STATION_LIMIT,
 } from './source.js';
+export { createOpenChargeMapClient } from './openChargeMap.js';
+export {
+  mergeOcmSites,
+  groundDistanceM,
+  OCM_MATCH_DISTANCE_M,
+} from './merge.js';
 
 const LAYER_ID = 'ev-charging';
 const REQUEST_DEBOUNCE_MS = 300;
 /** Lime marks power, apart from the cyan ALPR badges and data centers. */
 const EV_COLOR = '#9dff5c';
+/** Amber marks a site only Open Charge Map lists. */
+const OCM_ONLY_COLOR = '#ffb347';
+/** OCM StatusType ids, in the app's words. */
+const OCM_STATUS_LABELS = Object.freeze({
+  0: msg('Status unknown'),
+  10: msg('Available (automated status)'),
+  20: msg('In use (automated status)'),
+  30: msg('Temporarily unavailable'),
+  50: msg('Operational'),
+  75: msg('Partly operational'),
+  100: msg('Not operational'),
+  150: msg('Planned'),
+});
+/** Connector lines a card lists before summarising the rest. */
+const CARD_CONNECTOR_LINES = 3;
+/** DataProvider 1: records Open Charge Map's own contributors entered. */
+const OCM_CONTRIBUTORS_PROVIDER = 1;
 /** Ground plausibility window for a card anchor read from the floor cache. */
 const MIN_FLOOR_M = -500;
 const MAX_FLOOR_M = 10_000;
@@ -58,6 +81,8 @@ export function createEvChargingLayer({ source, services } = {}) {
     stale: false,
     partial: false,
     saturated: false,
+    /** The last read's Open Charge Map summary, or null without a key. */
+    enrichment: null,
   };
 
   /**
@@ -113,11 +138,14 @@ export function createEvChargingLayer({ source, services } = {}) {
     return box.east > box.west ? box : null;
   }
 
+  const colorFor = (record) =>
+    record?.origin === 'ocm' ? OCM_ONLY_COLOR : EV_COLOR;
+
   function setAppearance(entity, selected) {
     entity.point.pixelSize = selected ? 13 : 9;
     entity.point.color = selected
       ? Cesium.Color.WHITE
-      : Cesium.Color.fromCssColorString(EV_COLOR);
+      : Cesium.Color.fromCssColorString(colorFor(entity.gevChargingRecord));
   }
 
   function registerContext(entity, record) {
@@ -126,7 +154,10 @@ export function createEvChargingLayer({ source, services } = {}) {
       layerId: LAYER_ID,
       dataSource: state.dataSource,
       layerName: 'EV Charging',
-      source: source.attribution?.description || source.label,
+      source:
+        record.origin === 'ocm'
+          ? 'Open Charge Map' // i18n-ignore: provider name
+          : source.attribution?.description || source.label,
       label: record.name || t('EV charging station'),
       latitude: record.latitude,
       longitude: record.longitude,
@@ -154,7 +185,7 @@ export function createEvChargingLayer({ source, services } = {}) {
           point: {
             pixelSize: 9,
             heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
-            color: Cesium.Color.fromCssColorString(EV_COLOR),
+            color: Cesium.Color.fromCssColorString(colorFor(record)),
             outlineColor: Cesium.Color.BLACK.withAlpha(0.8),
             outlineWidth: 1,
             disableDepthTestDistance: Number.POSITIVE_INFINITY,
@@ -168,6 +199,11 @@ export function createEvChargingLayer({ source, services } = {}) {
       }
       entity.gevChargingRecord = record;
       registerContext(entity, record);
+      if (record.ocm?.provider)
+        services.credits?.registerDynamicCredit?.(
+          state.viewer,
+          services.credits.openChargeMapCredit?.(record.ocm.provider),
+        );
     }
     entities.resumeEvents();
     removeEntityContextsForLayer(LAYER_ID, { retainIds: new Set(next.keys()) });
@@ -177,8 +213,9 @@ export function createEvChargingLayer({ source, services } = {}) {
       state.selectedId = null;
       clearSelectedEntityContextForLayer(LAYER_ID);
     }
-    // The on-map credit follows displayed stations, not loading or prompts.
-    if (next.size)
+    // The on-map credit follows displayed OpenStreetMap stations, not loading
+    // or prompts.
+    if (records.some((record) => record.origin !== 'ocm'))
       services.credits?.showOsmCredit?.(state.viewer, LAYER_ID, {
         openMapTiles: true,
       });
@@ -224,13 +261,15 @@ export function createEvChargingLayer({ source, services } = {}) {
     // The name stays as published; only the app's own words translate.
     entity.gevLabelModel = {
       title: record.name || t('EV charging station'),
-      details: [
-        t('EV CHARGING · OSM MAPPED'),
-        `${formatCockpitCoordinate(record.latitude, 'N', 'S', 5)} ${formatCockpitCoordinate(record.longitude, 'E', 'W', 5)}`,
-        // i18n-ignore: attribution text is shown as the licensor requires
-        '© OpenStreetMap contributors',
-      ],
-      accent: EV_COLOR,
+      details: record.ocm
+        ? ocmCardDetails(record)
+        : [
+            t('EV CHARGING · OSM MAPPED'),
+            coordinateLine(record),
+            // i18n-ignore: attribution text is shown as the licensor requires
+            '© OpenStreetMap contributors',
+          ],
+      accent: colorFor(record),
       cardStyle: 'tactical',
       selected: true,
       leaderStyle: 'elbow',
@@ -240,6 +279,93 @@ export function createEvChargingLayer({ source, services } = {}) {
     selectEntityContext(entity);
     governorRequestRender('ev-charging-selection');
     return true;
+  }
+
+  function coordinateLine(record) {
+    return `${formatCockpitCoordinate(record.latitude, 'N', 'S', 5)} ${formatCockpitCoordinate(record.longitude, 'E', 'W', 5)}`;
+  }
+
+  /**
+   * Card lines for a station Open Charge Map describes. Operator, address,
+   * connector names and cost are shown as published; status, counts and the
+   * frame are the app's words.
+   */
+  function ocmCardDetails(record) {
+    const site = record.ocm;
+    const ocmOnly = record.origin === 'ocm';
+    const lines = [
+      ocmOnly
+        ? t('EV CHARGING · OPEN CHARGE MAP')
+        : t('EV CHARGING · OSM MAPPED · OPEN CHARGE MAP'),
+    ];
+    if (site.operator) lines.push(site.operator);
+    if (ocmOnly && site.address) lines.push(site.address);
+    const status = OCM_STATUS_LABELS[site.status?.id];
+    if (status)
+      lines.push(
+        Number.isFinite(site.lastStatusUpdate)
+          ? t('{status} · updated {date}', {
+              status: t(status),
+              date: new Date(site.lastStatusUpdate).toISOString().slice(0, 10),
+            })
+          : t(status),
+      );
+    // One line per connector type and power; OCM lists a connection per row,
+    // and a row without a quantity counts as one connector.
+    const groups = new Map();
+    for (const connection of site.connections || []) {
+      const key = `${connection.type ?? ''}|${connection.powerKw ?? ''}`;
+      const group = groups.get(key) ?? {
+        ...connection,
+        count: 0,
+        given: false,
+      };
+      group.count += connection.quantity ?? 1;
+      group.given ||= Number.isInteger(connection.quantity);
+      groups.set(key, group);
+    }
+    const connectors = [...groups.values()].map((group) =>
+      [
+        group.count > 1 || group.given ? `${group.count}×` : '',
+        group.type || t('Connector'),
+        group.powerKw
+          ? t('{power} kW', { power: Math.round(group.powerKw * 10) / 10 })
+          : '',
+      ]
+        .filter(Boolean)
+        .join(' '),
+    );
+    lines.push(...connectors.slice(0, CARD_CONNECTOR_LINES));
+    if (connectors.length > CARD_CONNECTOR_LINES)
+      lines.push(
+        tn(
+          connectors.length - CARD_CONNECTOR_LINES,
+          '+{count} more connector type',
+          '+{count} more connector types',
+        ),
+      );
+    if (site.numberOfPoints)
+      lines.push(
+        tn(
+          site.numberOfPoints,
+          '{count} charge point',
+          '{count} charge points',
+        ),
+      );
+    if (site.usageCost) lines.push(t('Cost: {cost}', { cost: site.usageCost }));
+    lines.push(coordinateLine(record));
+    // i18n-ignore: attribution text is shown as the licensor requires
+    if (!ocmOnly) lines.push('© OpenStreetMap contributors');
+    lines.push(ocmAttribution(site.provider));
+    return lines;
+  }
+
+  function ocmAttribution(provider) {
+    const licence = provider?.licence ? ` · ${provider.licence}` : '';
+    return provider?.id === OCM_CONTRIBUTORS_PROVIDER
+      ? // i18n-ignore: attribution text is shown as the licensor requires
+        `© Open Charge Map contributors${licence}`
+      : `${t('{provider} via Open Charge Map', { provider: provider?.name || '?' })}${licence}`;
   }
 
   /** Drop this layer's selection; another layer's newer one stays intact. */
@@ -295,6 +421,7 @@ export function createEvChargingLayer({ source, services } = {}) {
     clearRendered();
     state.status = 'zoom-in';
     state.error = null;
+    state.enrichment = null;
     state.stale = false;
     state.partial = false;
     state.saturated = false;
@@ -341,10 +468,14 @@ export function createEvChargingLayer({ source, services } = {}) {
       renderRecords(snapshot.records);
       state.lastUpdate = Date.now();
       state.observedAt = snapshot.observedAt ?? null;
-      state.error = null;
+      state.enrichment = snapshot.enrichment ?? null;
+      // A failed Open Charge Map read leaves the OpenStreetMap stations up and
+      // names the enrichment's fault in its fixed form.
+      state.error = state.enrichment?.error ?? null;
       state.stale = false;
       state.partial = snapshot.partial === true;
-      state.saturated = snapshot.saturated === true;
+      state.saturated =
+        snapshot.saturated === true || state.enrichment?.saturated === true;
       state.status = state.records.size ? 'ready' : 'empty';
       return true;
     } catch (error) {
@@ -432,6 +563,7 @@ export function createEvChargingLayer({ source, services } = {}) {
       if (state.dataSource) state.dataSource.show = false;
       state.status = 'idle';
       state.error = null;
+      state.enrichment = null;
       state.stale = false;
       state.partial = false;
       state.saturated = false;
@@ -463,6 +595,12 @@ export function createEvChargingLayer({ source, services } = {}) {
 
     getRowControls() {
       const count = state.records.size;
+      const enrichment = state.enrichment;
+      const ocmOnly = enrichment
+        ? [...state.records.values()].filter(
+            (record) => record.origin === 'ocm',
+          ).length
+        : 0;
       return {
         chips: [
           {
@@ -480,22 +618,44 @@ export function createEvChargingLayer({ source, services } = {}) {
             onClick: focusNearest,
           },
         ],
-        legend: [
-          {
-            label: t('Charging stations'),
-            color: EV_COLOR,
-            count,
-            blurb: t(
-              'Stations mapped in OpenStreetMap turn white when selected. The map data names them; it carries no sockets, power or live availability.',
-            ),
-          },
-        ],
+        legend: enrichment
+          ? [
+              {
+                label: t('Charging stations'),
+                color: EV_COLOR,
+                count: count - ocmOnly,
+                blurb: t(
+                  'Stations mapped in OpenStreetMap turn white when selected. Where Open Charge Map lists a site within 50 m, the card adds its connectors, power, operator and reported status; that status is what contributors last reported, not live availability.',
+                ),
+              },
+              {
+                label: t('Open Charge Map only'),
+                color: OCM_ONLY_COLOR,
+                count: ocmOnly,
+                blurb: t(
+                  'Sites Open Charge Map lists with no OpenStreetMap station within 50 m. Only openly licensed records are shown, credited to their data provider.',
+                ),
+              },
+            ]
+          : [
+              {
+                label: t('Charging stations'),
+                color: EV_COLOR,
+                count,
+                blurb: t(
+                  'Stations mapped in OpenStreetMap turn white when selected. The map data names them; it carries no sockets, power or live availability.',
+                ),
+              },
+            ],
       };
     },
 
     getStats() {
       const count = state.records.size;
       return {
+        ...(state.enrichment
+          ? { source: msg('OpenStreetMap + Open Charge Map') }
+          : {}),
         count,
         countLabel:
           state.enabled && state.status !== 'zoom-in'
