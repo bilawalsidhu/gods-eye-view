@@ -2813,5 +2813,9 @@
   "Layers": "图层",
   "Search": "搜索",
   "More": "更多",
-  "Panels": "面板"
+  "Panels": "面板",
+  "NO PUBLIC FEED": "无公开画面",
+  "POSITION ONLY": "仅位置",
+  "No public media published for this camera": "该摄像头未发布公开画面",
+  "Position-only register": "仅位置登记册"
 }

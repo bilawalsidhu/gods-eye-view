@@ -7,6 +7,10 @@ import {
   specFovCapabilityToken,
   isDatasheetFov,
 } from './modelSpecs.js';
+import {
+  normalizeMediaAvailability,
+  isPositionOnlySource,
+} from '../../sources/cctvTypes.js';
 
 export function createPresentation({
   state: layerState,
@@ -178,8 +182,16 @@ export function createPresentation({
       calBadge: parts.calibration.deriveCalBadge(camera),
       poseSource: camera.poseSource || null,
       basePose: camera.basePose ? { ...camera.basePose } : null,
-      frameUrl: parts.frames.frameUrlFor(camera, refreshMs),
-      mediaUrl: parts.frames.mediaUrlFor(camera),
+      mediaAvailability: normalizeMediaAvailability(camera.mediaAvailability),
+      // A position-only camera advertises NO media URLs: the proxy answers 409
+      // for both, and the panel renders the no-public-feed state instead of a
+      // pending preview that can never resolve.
+      frameUrl: isPositionOnlySource(camera)
+        ? null
+        : parts.frames.frameUrlFor(camera, refreshMs),
+      mediaUrl: isPositionOnlySource(camera)
+        ? null
+        : parts.frames.mediaUrlFor(camera),
     };
   }
 

@@ -36,6 +36,7 @@ function applyModelEnrichment(camera, hardware, clamp) {
   }
   camera.spec = spec;
 }
+import { normalizeMediaAvailability } from '../../sources/cctvTypes.js';
 
 export function createCatalog({ state: layerState, services, parts, source }) {
   const { CITY_POIS } = services.locations;
@@ -227,6 +228,11 @@ export function createCatalog({ state: layerState, services, parts, source }) {
         ).toLowerCase(),
         feedType,
         feedConfigured: typeof source.url === 'string' && !!source.url.trim(),
+        // 'position-only' means the OPERATOR publishes no imagery for this
+        // installation — a permanent, documented state, not an outage. The
+        // layer refuses the live-frame fallback for it rather than showing a
+        // Street View still as a degraded camera (see cctvTypes.js).
+        mediaAvailability: normalizeMediaAvailability(source.mediaAvailability),
         lat,
         lon,
         headingDeg,

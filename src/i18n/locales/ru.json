@@ -3014,5 +3014,9 @@
   "Layers": "Слои",
   "Search": "Поиск",
   "More": "Ещё",
-  "Panels": "Панели"
+  "Panels": "Панели",
+  "NO PUBLIC FEED": "НЕТ ПУБЛИЧНОГО ПОТОКА",
+  "POSITION ONLY": "ТОЛЬКО ПОЗИЦИЯ",
+  "No public media published for this camera": "Для этой камеры не публикуется общедоступное изображение",
+  "Position-only register": "Реестр только позиций"
 }
