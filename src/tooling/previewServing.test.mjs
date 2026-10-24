@@ -104,6 +104,7 @@ test('real dev and built-preview servers serve provider JSON and terminate unkno
         ['/api/adsbdb/type/invalid', 400],
         ['/api/firms/status', 200],
         ['/api/fire-perimeters/inciweb/publication/invalid', 400],
+        ['/api/nwps/gauge/invalid', 400],
         ['/api/gnss-integrity?lat=invalid', 400],
         ['/api/terrain/heights?points=invalid', 400],
         ['/api/overpass', 405],
