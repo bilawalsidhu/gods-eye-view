@@ -1,6 +1,6 @@
 import { normalizeRoadMode } from './roadModes.js';
 import * as Cesium from 'cesium';
-import { FLOW_BUCKET_COLORS, TRAFFIC_TIMING_ENABLED } from './policy.js';
+import { FLOW_BUCKET_COLORS } from './policy.js';
 
 export function createState({ services }) {
   const layerState = {};

@@ -7,7 +7,7 @@ import { createRetryableLoader } from './retryableLoad.js';
 export const MILITARY_POINT_CAP = 512;
 export const MILITARY_LABEL_CAP = 24;
 
-export const MILITARY_NAMES_TIMEOUT_MS = 10_000;
+const MILITARY_NAMES_TIMEOUT_MS = 10_000;
 
 /** Share a bounded acquisition; failed assets become retryable after cooldown. */
 export function createMilitaryNamesLoader({

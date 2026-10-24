@@ -52,7 +52,7 @@ import {
 
 import { msg, registerUnsavedWork, t, translateKnown } from '../i18n/index.js';
 /** The id this tool claims the pointer under. */
-export const DRAW_POINTER_OWNER = 'draw';
+const DRAW_POINTER_OWNER = 'draw';
 const PREVIEW_DATA_SOURCE_NAME = 'gev-draw-preview';
 
 const COLORS = ['primary', 'amber', 'cyan', 'green', 'red'];

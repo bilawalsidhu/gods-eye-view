@@ -1086,7 +1086,6 @@
   "FIELD REPORTS · {count}": "INFORMES DE CAMPO · {count}",
   "GEOLOCATIONS · {credit}": "GEOLOCALIZACIONES · {credit}",
   "↗ OPEN PUBLIC MAP": "↗ ABRIR MAPA PÚBLICO",
-  "Clouds are preserved from the source imagery.": "Las nubes provienen de las imágenes de origen.",
   "Show the Nepal context callout without a border or country fill": "Muestra la etiqueta de contexto de Nepal sin frontera ni relleno del país",
   "Introduce Nepal, draw its border, then reveal the Bhote Koshi incident": "Presenta Nepal, dibuja su frontera y luego revela el incidente del Bhote Koshi",
   "CITIES": "CIUDADES",
@@ -3001,5 +3000,16 @@
   "Not rated": "Sin clasificar",
   "Calculated comparison": "Comparación calculada",
   "Older observation": "Observación anterior",
-  "GEV compares the selected pollutant with EEA hourly bands. This is not an overall station AQI or a local official index.": "GEV compara el contaminante seleccionado con las categorías horarias de la AEMA. No es un ICA global de la estación ni un índice oficial local."
+  "GEV compares the selected pollutant with EEA hourly bands. This is not an overall station AQI or a local official index.": "GEV compara el contaminante seleccionado con las categorías horarias de la AEMA. No es un ICA global de la estación ni un índice oficial local.",
+  " Clouds are preserved from the source imagery.": " Las nubes provienen de las imágenes de origen.",
+  "hemisphere|N": "N",
+  "hemisphere|S": "S",
+  "hemisphere|E": "E",
+  "hemisphere|W": "O",
+  "OK": "OK",
+  "{category} ({count})": "{category} ({count})",
+  "Layers": "Capas",
+  "Search": "Buscar",
+  "More": "Más",
+  "Panels": "Paneles"
 }

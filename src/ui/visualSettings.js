@@ -10,7 +10,6 @@ import {
   MILITARY_DETECTION_PRESET,
 } from './effects.js';
 import { createStyleParameters } from './visualInput.js';
-import * as Cesium from 'cesium';
 import {
   BLOOM_SCALE_VERSION,
   clampBloomIntensity,
@@ -1538,6 +1537,11 @@ export class VisualSettings {
       preserveCyberRestore = false,
     } = {},
   ) {
+    if (
+      typeof styleName !== 'string' ||
+      (styleName !== 'normal' && !Object.hasOwn(STYLES, styleName))
+    )
+      return;
     const { setDetectionStyle } = this.services;
     if (!restore) this.shareLinkManager?.claimRestoreLane?.('visual');
     if (this.hud.getVariant() === 'cyber') {

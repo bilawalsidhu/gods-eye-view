@@ -1,7 +1,6 @@
 import * as Cesium from 'cesium';
 import { createFrustumVolumePrimitive } from '../../data/cctvViewshed.js';
 import {
-  PROJECTION_VERT_ASPECT,
   FRUSTUM_GROUND_CLEARANCE_M,
   PROBE_MIN_RANGE_M,
   PROBE_CLEARANCE_M,

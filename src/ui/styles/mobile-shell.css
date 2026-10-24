@@ -1,0 +1,419 @@
+/* ── Phone shell (≤720px, body.mobile-shell; src/ui/mobileShell.js) ─────────
+ * The globe is full screen. A bottom tab bar opens one sheet; the sheet shows
+ * the panels of that tab from the rails or dock, everything else stays hidden.
+ */
+:root {
+  --mobile-tab-height: 58px;
+  --mobile-bottom-inset: env(safe-area-inset-bottom, 0px);
+  --mobile-top-inset: env(safe-area-inset-top, 0px);
+  --mobile-tab-space: calc(
+    var(--mobile-tab-height) + var(--mobile-bottom-inset)
+  );
+  --mobile-sheet-max-height: min(62vh, calc(100vh - 168px));
+  --mobile-dock-sheet-max-height: 34vh;
+  --mobile-rail-under-dock-max-height: 40vh;
+}
+
+/* Dynamic viewport units keep sheets inside the area a mobile browser's
+   toolbars leave visible. */
+@supports (height: 1dvh) {
+  :root {
+    --mobile-sheet-max-height: min(62dvh, calc(100dvh - 168px));
+    --mobile-dock-sheet-max-height: 34dvh;
+    --mobile-rail-under-dock-max-height: 40dvh;
+  }
+}
+
+#mobile-tab-bar,
+#mobile-sheet-backdrop {
+  display: none;
+}
+
+body.mobile-shell #mobile-tab-bar {
+  position: fixed;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 170;
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  height: var(--mobile-tab-space);
+  padding: 0 max(4px, env(safe-area-inset-right, 0px))
+    var(--mobile-bottom-inset) max(4px, env(safe-area-inset-left, 0px));
+  background: rgba(8, 14, 22, 0.94);
+  border-top: 1px solid var(--glass-border);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+}
+
+body.mobile-shell .mobile-tab {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  min-width: 0;
+  padding: 6px 0 4px;
+  color: var(--text-secondary);
+  background: none;
+  border: 0;
+  font: 500 10px/1.2 var(--font-sans);
+  letter-spacing: 0.04em;
+  -webkit-tap-highlight-color: transparent;
+}
+
+body.mobile-shell .mobile-tab-icon {
+  font-size: 24px;
+  line-height: 1;
+}
+
+body.mobile-shell .mobile-tab[aria-expanded='true'] {
+  color: var(--accent);
+}
+
+body.mobile-shell .mobile-tab:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -4px;
+}
+
+body.mobile-shell[data-mobile-sheet] #mobile-sheet-backdrop:not([hidden]) {
+  position: fixed;
+  inset: 0 0 var(--mobile-tab-space);
+  z-index: 155;
+  display: block;
+  background: rgba(0, 0, 0, 0.18);
+}
+
+/* ── Top bar: logo left, globe actions right ───────────────────────────── */
+body.mobile-shell #title-bar {
+  top: calc(var(--mobile-top-inset) + 10px);
+  left: 14px;
+}
+
+body.mobile-shell #title-bar .title-logo {
+  width: 58px;
+}
+
+body.mobile-shell #title-bar h1 > :not(.title-logo),
+body.mobile-shell #title-bar .subtitle {
+  display: none;
+}
+
+body.mobile-shell #top-center-actions {
+  top: calc(var(--mobile-top-inset) + 10px);
+  right: 12px;
+}
+
+/* ── HUD: one compact readout under the top bar ────────────────────────── */
+body.mobile-shell #intel-hud .hud-edge,
+body.mobile-shell #intel-hud .hud-corner,
+body.mobile-shell #intel-hud .hud-top-bar,
+body.mobile-shell #intel-hud .hud-bottom-bar {
+  display: none;
+}
+
+body.mobile-shell #intel-hud .hud-bottom-left {
+  top: calc(var(--mobile-top-inset) + 62px);
+  bottom: auto;
+  left: 16px;
+  font-size: 9px;
+  opacity: 0.8;
+}
+
+/* ── Panels: hidden unless their tab's sheet is open ───────────────────── */
+body.mobile-shell #left-panel-stack,
+body.mobile-shell #right-context-rail {
+  display: none;
+}
+
+body.mobile-shell[data-mobile-sheet='layers'] #left-panel-stack,
+body.mobile-shell[data-mobile-sheet='cameras'] #right-context-rail,
+body.mobile-shell[data-mobile-sheet='context'] #right-context-rail,
+body.mobile-shell[data-mobile-sheet='more'] #right-context-rail {
+  position: fixed;
+  top: auto;
+  right: 0;
+  bottom: var(--mobile-tab-space);
+  left: 0;
+  z-index: 160;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+  width: auto;
+  max-width: none;
+  max-height: var(--mobile-sheet-max-height);
+  padding: 14px 10px 10px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  pointer-events: auto;
+  background: rgba(8, 14, 22, 0.96);
+  border: 1px solid var(--glass-border);
+  border-bottom: 0;
+  border-radius: 18px 18px 0 0;
+  transform: none;
+}
+
+body.mobile-shell #left-panel-stack > *,
+body.mobile-shell #right-context-rail > *,
+/* Rail rules show expanded Weather and Recent Imagery by id; on phones they
+   belong to the Context sheet only. */
+body.mobile-shell #right-context-rail > #weather-panel,
+body.mobile-shell #right-context-rail > #recent-imagery-panel {
+  display: none;
+}
+
+/* Rail-scoped ids so a rail's own hiding rules (for example the Tactical HUD
+   hiding collapsed siblings) never take a panel out of an open sheet. */
+body.mobile-shell[data-mobile-sheet='layers'] #left-panel-stack > #data-panel,
+body.mobile-shell[data-mobile-sheet='layers'] #left-panel-stack > #scene-panel,
+body.mobile-shell[data-mobile-sheet='cameras']
+  #right-context-rail
+  > #cctv-panel,
+body.mobile-shell[data-mobile-sheet='cameras']
+  #right-context-rail
+  > #street-level-panel,
+body.mobile-shell[data-mobile-sheet='context']
+  #right-context-rail
+  > #global-context-panel,
+body.mobile-shell[data-mobile-sheet='context']
+  #right-context-rail
+  > #weather-panel:not([hidden]),
+body.mobile-shell[data-mobile-sheet='context']
+  #right-context-rail
+  > #recent-imagery-panel:not([hidden]),
+body.mobile-shell[data-mobile-sheet='more'] #right-context-rail > #pp-toggles {
+  position: relative;
+  inset: auto;
+  display: block;
+  width: 100%;
+  max-width: none;
+  margin: 0;
+  transform: none;
+}
+
+/* ── Dock: voice floats above the tab bar; search and presets are sheets ─ */
+body.mobile-shell #command-dock {
+  /* The dock's tray rules size voice by this basis; a column makes it a height. */
+  --dock-voice-width: auto;
+  top: auto;
+  bottom: calc(var(--mobile-tab-space) + 10px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  height: auto;
+  min-height: 0;
+  max-height: none;
+  padding: 0 10px;
+  pointer-events: none;
+  background: none;
+  border: 0;
+  box-shadow: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+/* The desktop dock centres itself with left: 50% and a translate under
+   :has() selectors that outrank any phone selector; on phones it spans the
+   width, so these few geometry properties must win. */
+body.mobile-shell #command-dock {
+  right: 0 !important;
+  left: 0 !important;
+  width: auto !important;
+  max-width: none !important;
+  transform: none !important;
+  translate: none !important;
+}
+
+body.mobile-shell #command-dock > * {
+  pointer-events: auto;
+}
+
+body.mobile-shell #location-bar,
+body.mobile-shell #control-panel {
+  display: none;
+}
+
+body.mobile-shell[data-mobile-sheet] #command-dock {
+  z-index: 165;
+  bottom: calc(var(--mobile-tab-space) + var(--mobile-sheet-height, 0px) + 8px);
+}
+
+body.mobile-shell[data-mobile-sheet='search'] #command-dock > #location-bar,
+body.mobile-shell[data-mobile-sheet='more'] #command-dock > #control-panel {
+  position: relative;
+  inset: auto;
+  display: flex;
+  flex: none;
+  width: 100%;
+  max-width: none;
+  margin: 0;
+  transform: none;
+}
+
+/* Search and More: the dock becomes the top of the sheet, flush with the rail
+   sheet below it (More) or alone above the tab bar (Search). */
+body.mobile-shell[data-mobile-sheet='search'] #command-dock,
+body.mobile-shell[data-mobile-sheet='more'] #command-dock {
+  bottom: calc(var(--mobile-tab-space) + var(--mobile-sheet-height, 0px));
+  align-items: stretch;
+  max-height: var(--mobile-dock-sheet-max-height);
+  padding: 14px 10px 8px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  pointer-events: auto;
+  background: rgba(8, 14, 22, 0.96);
+  border: 1px solid var(--glass-border);
+  border-bottom: 0;
+  border-radius: 18px 18px 0 0;
+}
+
+body.mobile-shell[data-mobile-sheet='more'] #right-context-rail {
+  max-height: var(--mobile-rail-under-dock-max-height);
+  padding-top: 4px;
+  border-top: 0;
+  border-radius: 0;
+}
+
+/* Presets and Location show their popover inline instead of as a floating
+   tray; the dock scrolls, so a tray above it would be clipped. */
+body.mobile-shell[data-mobile-sheet='more']
+  #command-dock
+  #control-panel
+  .panel-inner,
+body.mobile-shell[data-mobile-sheet='more']
+  #command-dock
+  #control-panel-popover,
+body.mobile-shell[data-mobile-sheet='search']
+  #command-dock
+  #location-bar
+  .location-inner,
+body.mobile-shell[data-mobile-sheet='search']
+  #command-dock
+  #location-bar-popover {
+  position: static;
+  inset: auto;
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  max-width: none;
+  max-height: none;
+  margin: 0;
+  opacity: 1;
+  visibility: visible;
+  transform: none;
+  pointer-events: auto;
+}
+
+/* The tab names the sheet; the tray toggle and pin have nothing to do here. */
+body.mobile-shell[data-mobile-sheet='more'] #command-dock #control-panel-toggle,
+body.mobile-shell[data-mobile-sheet='more']
+  #command-dock
+  #control-panel
+  .dock-pin-btn,
+body.mobile-shell[data-mobile-sheet='search']
+  #command-dock
+  #location-bar-toggle,
+body.mobile-shell[data-mobile-sheet='search']
+  #command-dock
+  #location-bar
+  .panel-collapse-btn,
+body.mobile-shell[data-mobile-sheet='search']
+  #command-dock
+  #location-bar
+  .dock-pin-btn {
+  display: none;
+}
+
+body.mobile-shell[data-mobile-sheet='more'] #style-buttons {
+  flex-wrap: wrap;
+}
+
+/* Search: the field takes the full width; the place pills scroll beneath it. */
+body.mobile-shell[data-mobile-sheet='search'] #location-bar .location-city-row {
+  flex-wrap: wrap;
+  row-gap: 8px;
+}
+
+body.mobile-shell[data-mobile-sheet='search']
+  #location-bar
+  .location-search-wrap {
+  flex: 1 1 100%;
+}
+
+body.mobile-shell[data-mobile-sheet='search'] #location-search {
+  flex: 1 1 auto;
+  width: 100%;
+  min-width: 0;
+}
+
+body.mobile-shell[data-mobile-sheet='search'] #location-bar .location-pills {
+  flex: 1 1 100%;
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+/* With a sheet open, voice steps aside; Search and More own the dock. */
+body.mobile-shell[data-mobile-sheet] #command-dock > #gev-voice-control {
+  display: none;
+}
+
+body.mobile-shell #command-dock #gev-voice-control {
+  position: relative;
+  inset: auto;
+  flex: none;
+  align-self: center;
+  width: min(280px, 80vw);
+  height: 5.35rem;
+  margin: 0;
+  transform: none;
+}
+
+/* ── Credits and corner chips clear the tab bar ────────────────────────── */
+/* While the tab bar shows, the credit line sits above the voice bar. The
+   dock's placements (including the Minimal HUD's :has() variant) outrank any
+   phone selector, so the offset must win. Clean view keeps its own corner. */
+body.mobile-shell:not(.recording-mode):not(.cockpit-mode):not(.ui-clean-view)
+  #cesium-credits {
+  right: auto;
+  bottom: calc(var(--mobile-tab-space) + 106px) !important;
+  left: 10px;
+  max-width: calc(100vw - 20px);
+  transform-origin: left bottom;
+  scale: 0.8;
+}
+
+/* An open sheet lifts the required attribution above everything it covers. */
+body.mobile-shell[data-mobile-sheet]:not(.recording-mode):not(
+    .cockpit-mode
+  ):not(.ui-clean-view)
+  #cesium-credits {
+  bottom: calc(var(--mobile-sheet-cover, 0px) + 6px) !important;
+  z-index: 166;
+}
+
+/* The view switcher clears the tab bar and the voice bar, opposite the credit. */
+body.mobile-shell:not(.cockpit-mode) #view-switcher {
+  right: 12px;
+  bottom: calc(var(--mobile-tab-space) + 106px);
+}
+
+body.mobile-shell #corner-actions {
+  top: calc(var(--mobile-top-inset) + 60px);
+  right: 12px;
+  bottom: auto;
+}
+
+/* Full-screen modes hide the phone chrome like the desktop chrome. Scene
+   playback keeps it: the Scenes panel (Layers tab) holds its STOP control. */
+body.mobile-shell.ui-clean-view #mobile-tab-bar,
+body.mobile-shell.recording-mode #mobile-tab-bar,
+body.mobile-shell.cockpit-mode #mobile-tab-bar {
+  display: none;
+}
+
+body.mobile-shell.ui-clean-view #command-dock,
+body.mobile-shell.cockpit-mode #command-dock {
+  bottom: calc(var(--mobile-bottom-inset) + 10px);
+}

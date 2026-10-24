@@ -1100,7 +1100,6 @@
   "FIELD REPORTS · {count}": "СООБЩЕНИЯ С МЕСТА · {count}",
   "GEOLOCATIONS · {credit}": "ГЕОЛОКАЦИИ · {credit}",
   "↗ OPEN PUBLIC MAP": "↗ ОТКРЫТЬ ПУБЛИЧНУЮ КАРТУ",
-  "Clouds are preserved from the source imagery.": "Облака оставлены такими, как на исходных снимках.",
   "Show the Nepal context callout without a border or country fill": "Показать выноску с контекстом Непала без границы и заливки страны",
   "Introduce Nepal, draw its border, then reveal the Bhote Koshi incident": "Представить Непал, нарисовать его границу, затем показать инцидент на Bhote Koshi",
   "CITIES": "ГОРОДА",
@@ -3068,5 +3067,16 @@
   "Not rated": "Без оценки",
   "Calculated comparison": "Расчётное сравнение",
   "Older observation": "Более старое наблюдение",
-  "GEV compares the selected pollutant with EEA hourly bands. This is not an overall station AQI or a local official index.": "GEV сравнивает выбранный загрязнитель с почасовыми категориями ЕАОС. Это не общий индекс станции и не местный официальный индекс."
+  "GEV compares the selected pollutant with EEA hourly bands. This is not an overall station AQI or a local official index.": "GEV сравнивает выбранный загрязнитель с почасовыми категориями ЕАОС. Это не общий индекс станции и не местный официальный индекс.",
+  " Clouds are preserved from the source imagery.": " Облака оставлены такими, как на исходных снимках.",
+  "hemisphere|N": "С",
+  "hemisphere|S": "Ю",
+  "hemisphere|E": "В",
+  "hemisphere|W": "З",
+  "OK": "НОРМА",
+  "{category} ({count})": "{category} ({count})",
+  "Layers": "Слои",
+  "Search": "Поиск",
+  "More": "Ещё",
+  "Panels": "Панели"
 }

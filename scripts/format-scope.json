@@ -285,8 +285,6 @@
   "src/ui/sceneControls.test.mjs",
   "scripts/qa-scene-controls.mjs",
   "scripts/qa-action-buttons.mjs",
-  "src/ui.js",
-  "src/standalone/ui.js",
   "src/ui/applicationShell.js",
   "src/ui/panelLayoutController.js",
   "src/ui/panelPositionControls.js",
@@ -1098,5 +1096,8 @@
   "src/ui/cctvBadges.test.mjs",
   "scripts/qa-status-badges.mjs",
   "src/layers/airQuality/interpretation.js",
-  "src/layers/airQuality/interpretation.test.mjs"
+  "src/layers/airQuality/interpretation.test.mjs",
+  "src/dockerTrustedPeers.test.mjs",
+  "src/cameraGlobeRotation.test.mjs",
+  "src/voice/globeResetConfirmation.test.mjs"
 ]
