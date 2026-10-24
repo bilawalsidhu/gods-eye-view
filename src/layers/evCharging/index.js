@@ -18,6 +18,8 @@ export {
 
 const LAYER_ID = 'ev-charging';
 const REQUEST_DEBOUNCE_MS = 300;
+/** The layer's own poll, which retries a failed view. */
+export const EV_POLL_MS = 300_000;
 /** Lime marks power, apart from the cyan ALPR badges and data centers. */
 const EV_COLOR = '#9dff5c';
 /** Amber marks a site only Open Charge Map lists. */
@@ -71,6 +73,7 @@ export function createEvChargingLayer({ source, services } = {}) {
     request: null,
     loading: false,
     debounceTimer: null,
+    pollTimer: null,
     moveEndRemove: null,
     clickHandler: null,
     lastUpdate: null,
@@ -507,9 +510,11 @@ export function createEvChargingLayer({ source, services } = {}) {
     icon: '🔌',
     // English in layer state; the layer row translates it.
     source: source.label || msg('OpenStreetMap · community mapped'),
-    // Camera moves drive requests. The poll retries a failed view; tiles
-    // already read answer from the cache without a request.
-    updateInterval: 300_000,
+    // Camera moves drive requests and the layer's own poll (EV_POLL_MS)
+    // retries a failed view; tiles already read answer from the cache without
+    // a request. With no manager interval the manager ticks the row every
+    // second, so a camera-driven read shows without waiting for a poll.
+    updateInterval: 0,
     statsRefreshInterval: 1000,
 
     init(viewer) {
@@ -545,6 +550,8 @@ export function createEvChargingLayer({ source, services } = {}) {
       if (state.enabled) return;
       state.enabled = true;
       registerPickOwner(LAYER_ID, (id) => state.records.has(id));
+      clearInterval(state.pollTimer);
+      state.pollTimer = setInterval(loadStations, EV_POLL_MS);
       if (state.dataSource) state.dataSource.show = true;
       // DataLayerManager calls update() right after enable(); it owns the first fetch.
     },
@@ -557,6 +564,8 @@ export function createEvChargingLayer({ source, services } = {}) {
       state.loading = false;
       clearTimeout(state.debounceTimer);
       state.debounceTimer = null;
+      clearInterval(state.pollTimer);
+      state.pollTimer = null;
       unregisterPickOwner(LAYER_ID);
       releaseSelection();
       clearRendered();
