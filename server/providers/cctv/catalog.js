@@ -5,6 +5,7 @@ import { allocateSourceCap, resolveCatalogCap } from './cap.js';
 import { loadGroundHeights, joinGroundHeights } from './groundHeights.js';
 import { cameraRegion, normalizeSourceItem } from './normalize.js';
 import { loadLithuaniaSources } from './lithuania.js';
+import { loadMetSources } from './met.js';
 import { loadTaiwanSources } from './taiwan.js';
 import {
   loadAustinSourcesFromOpenData,
@@ -132,6 +133,13 @@ const LIVE_PACKS = [
     name: 'vegvesen',
     enabled: () => envEnabled('CCTV_VEGVESEN_ENABLED'),
     load: loadVegvesenSourcesFromOpenData,
+  },
+  {
+    name: 'met',
+    // MET's licensing page covers its official data, not the webcam images:
+    // opt-in until MET confirms they may be reused.
+    enabled: () => envOptIn('CCTV_MET_ENABLED'),
+    load: loadMetSources,
   },
   {
     // NYC DOT requires a data-sharing agreement for this feed, so the pack is
