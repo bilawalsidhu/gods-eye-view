@@ -3574,7 +3574,7 @@ test('actual Traffic, Bikeshare and Transit lifecycles retain sensitivity in eve
     source: {},
     parts: {
       flow: { ensureFlowStatus: noop },
-      animation: { animate: noop, clearDots: noop },
+      animation: { animate: noop, clearDots: noop, syncRenderDemand: noop },
       viewport: { onCameraChanged: noop },
       ingestion: { cancelActiveFetch: noop },
     },

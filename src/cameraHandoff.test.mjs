@@ -223,7 +223,7 @@ test('validated voice camera destinations share the UI navigation authority faca
     'move camera',
   );
   ordered(move, [
-    "if (!['orbit', 'pan', 'tilt', 'rotate'].includes(motion))",
+    "if (!['orbit', 'pan', 'tilt', 'rotate', 'rotate_globe'].includes(motion))",
     'const start = () => {',
     /const preserveCameraFlight =\s*motion === 'orbit'/,
     'runNavigation(start, { preserveCameraFlight })',
