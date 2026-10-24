@@ -20,6 +20,7 @@ import { createApplicationInstallations } from './layers/militaryInstallations.j
 import { createApplicationSatellites } from './layers/satellites.js';
 import { createApplicationLaunches } from './layers/rocketLaunches.js';
 import { createApplicationAlpr } from './layers/alprCameras.js';
+import { createApplicationRiverDischarge } from './layers/riverDischarge.js';
 import { createApplicationLocalAdsb } from './layers/localAdsb.js';
 import { createApplicationAwareness } from './layers/militaryAwareness.js';
 import { createApplicationFirms } from './layers/firms.js';
@@ -125,6 +126,9 @@ export function createApplicationCatalog({
         }),
         createApplicationGnssIntegrity({
           source: sources['gnss-integrity'],
+        }),
+        createApplicationRiverDischarge({
+          source: sources['river-discharge'],
         }),
         createApplicationAlpr({ surface, source: sources.alpr }),
         createApplicationStreetLevel({

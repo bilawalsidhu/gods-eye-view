@@ -192,6 +192,15 @@ export const DATA_CREDITS = [
       '(CC BY 4.0)',
   },
   {
+    key: 'open-meteo-flood',
+    html:
+      'River discharge outlook: ' +
+      '<a href="https://open-meteo.com/" target="_blank" rel="noopener">River discharge data by Open-Meteo.com</a> ' +
+      '(<a href="https://open-meteo.com/en/licence" target="_blank" rel="noopener">CC BY 4.0</a>); ' +
+      'contains modified Copernicus Emergency Management Service information ' +
+      '(<a href="https://cds.climate.copernicus.eu/licences/cems-floods" target="_blank" rel="noopener">GloFAS</a>)',
+  },
+  {
     key: 'google-news-rss',
     html:
       'Cockpit regional headlines: ' +
@@ -513,6 +522,49 @@ export const TOMTOM_CREDIT = {
     'Traffic flow data © ' +
     '<a href="https://www.tomtom.com" target="_blank" rel="noopener">TomTom</a>',
 };
+
+/**
+ * The linked credit Open-Meteo's licence asks for beside displayed data,
+ * with the Copernicus EMS notice for GloFAS-derived values. Shown on the
+ * globe while the River discharge outlook draws points.
+ * @param {number} year Year of the information, as the CEMS notice states it.
+ * @returns {string} Credit markup.
+ */
+export function riverDischargeCreditHtml(year) {
+  const y = Number.isInteger(year) ? year : new Date().getUTCFullYear();
+  return (
+    '<a href="https://open-meteo.com/" target="_blank" rel="noopener">River discharge data by Open-Meteo.com</a> · ' +
+    `<a href="https://cds.climate.copernicus.eu/licences/cems-floods" target="_blank" rel="noopener">Contains modified Copernicus Emergency Management Service information ${y}</a>`
+  );
+}
+
+const onScreenCredits = new WeakMap();
+
+/** Keep one on-globe credit for `owner` while it displays data. */
+export function showOnScreenCredit(viewer, owner, html) {
+  if (!viewer?.creditDisplay?.addStaticCredit || !owner || !html) return false;
+  let owners = onScreenCredits.get(viewer);
+  if (!owners) onScreenCredits.set(viewer, (owners = new Map()));
+  const previous = owners.get(owner);
+  if (previous?.html === html) return false;
+  if (previous) viewer.creditDisplay.removeStaticCredit(previous.credit);
+  const credit = new Cesium.Credit(html, true);
+  owners.set(owner, { html, credit });
+  viewer.creditDisplay.addStaticCredit(credit);
+  viewer.scene?.requestRender?.();
+  return true;
+}
+
+/** Remove `owner`'s on-globe credit, if it shows one. */
+export function hideOnScreenCredit(viewer, owner) {
+  const owners = onScreenCredits.get(viewer);
+  const previous = owners?.get(owner);
+  if (!previous) return false;
+  owners.delete(owner);
+  viewer.creditDisplay.removeStaticCredit(previous.credit);
+  viewer.scene?.requestRender?.();
+  return true;
+}
 
 /** Registered when the first Natural Earth region or state/province outline
  * resolves (public domain — no attribution required; credited as a courtesy). */

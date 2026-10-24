@@ -3014,5 +3014,31 @@
   "Layers": "Слои",
   "Search": "Поиск",
   "More": "Ещё",
-  "Panels": "Панели"
+  "Panels": "Панели",
+  "River discharge outlook": "Прогноз речного стока",
+  "m³/s": "м³/с",
+  "RIVER DISCHARGE OUTLOOK · MODELLED": "ПРОГНОЗ СТОКА · МОДЕЛЬ",
+  "{days}-day forecast peak {value} {unit} on {day}": "Пик прогноза на {days} дн.: {value} {unit}, {day}",
+  "Today {value} {unit}": "Сегодня {value} {unit}",
+  "Ensemble on peak day: middle half {low}–{high}, highest member {max} {unit}": "Ансамбль в день пика: средняя половина {low}–{high}, максимум участника {max} {unit}",
+  "{from}–{to} daily flow: median {p50} · 90th {p90} · 99th {p99} {unit}": "Суточный сток {from}–{to}: медиана {p50} · 90-й {p90} · 99-й {p99} {unit}",
+  "Model outlook, not an observed flood or an official warning": "Модельный прогноз, а не наблюдаемый паводок и не официальное предупреждение",
+  "River discharge outlook unavailable": "Прогноз речного стока недоступен",
+  "Open-Meteo · GloFAS model": "Open-Meteo · модель GloFAS",
+  "Modelled GloFAS outlook at {count} river points · not observed flooding or an official warning": "Модельный прогноз GloFAS в речных точках: {count} · не наблюдаемые паводки и не официальные предупреждения",
+  "Each point is a GloFAS river cell on a major river. Its colour compares the highest daily discharge forecast over the next 7 days with that cell’s own reanalysis flow over ten years. Model output can miss or overstate floods; follow your national hydrological service for warnings.": "Каждая точка — речная ячейка GloFAS на крупной реке. Цвет сравнивает наибольший суточный расход по прогнозу на 7 дней с реанализом стока этой же ячейки за десять лет. Модель может пропустить или преувеличить паводок; предупреждения смотрите у национальной гидрологической службы.",
+  "Percentiles of the point’s own daily flow over ten years of GloFAS reanalysis. Above the 99th is a flow reached on about 4 days a year.": "Процентили суточного стока самой точки за десять лет реанализа GloFAS. Выше 99-го — расход, который бывает примерно 4 дня в году.",
+  "{count} river points": {
+    "one": "{count} речная точка",
+    "few": "{count} речные точки",
+    "many": "{count} речных точек",
+    "other": "{count} речной точки"
+  },
+  "loading river discharge outlook": "загрузка прогноза речного стока",
+  "Showing an earlier forecast": "Показан более ранний прогноз",
+  "No river outlook points in this view": "В этом виде нет точек прогноза стока",
+  "Below the 90th percentile": "Ниже 90-го процентиля",
+  "Above the 90th percentile": "Выше 90-го процентиля",
+  "Above the 99th percentile": "Выше 99-го процентиля",
+  "No forecast": "Нет прогноза"
 }
