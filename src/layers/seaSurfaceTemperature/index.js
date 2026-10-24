@@ -184,7 +184,7 @@ export function createSeaSurfaceTemperatureLayer({
           (day ? t('Observed {date}', { date: day }) : '') +
           (error ? `${day ? ' · ' : ''}${translateFeedError(error)}` : ''),
         infoTitle: t(
-          'Night-time sea surface temperature from NOAA Coral Reef Watch CoralTemp, a daily gap-free satellite analysis at 0.05°, shown at 0.5°. Each day appears about a day after the night it describes. Water under sea ice reads near -1.8 °C. Land is left clear.',
+          'Night-time sea surface temperature from NOAA Coral Reef Watch CoralTemp, a daily gap-free satellite analysis at 0.05°, shown at 0.5°. Each day appears one to two days after the night it describes. Water under sea ice reads near -1.8 °C. Land is left clear.',
         ),
         legend: [...SST_STOPS].reverse().map((stop) => ({
           label: t('{temperature} °C', {

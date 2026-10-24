@@ -4,8 +4,8 @@ import { createGlobalFieldRoute } from './globalFieldRoute.js';
 // NOAA Coral Reef Watch CoralTemp v3.1 through the NOAA CoastWatch ERDDAP:
 // a daily, gap-free, night-only satellite sea surface temperature analysis
 // at 0.05°, published a day or two after the night it describes. Keyless;
-// the near-real-time part (NOAA Geo-Polar Blended, 2002 on) is free to use
-// with credit to NOAA Coral Reef Watch. ERDDAP serves every 10th cell (0.5°)
+// everything from 2002 on (NOAA Geo-Polar Blended: reanalysis to 2016, near
+// real time since 2017) is free to use with credit to NOAA Coral Reef Watch. ERDDAP serves every 10th cell (0.5°)
 // of one day as ESRI ASCII, about 2 MB; land is its nodata value.
 const ERDDAP = 'https://coastwatch.noaa.gov/erddap/griddap/noaacrwsstDaily';
 /** The dataset's first cell centres; its latitude axis runs south to north. */

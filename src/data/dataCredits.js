@@ -433,7 +433,8 @@ export const DATA_CREDITS = [
     html:
       'Sea surface temperature: <a href="https://coralreefwatch.noaa.gov/satellite/coraltemp.php" target="_blank" rel="noopener">NOAA Coral Reef Watch CoralTemp v3.1</a> ' +
       'via <a href="https://coastwatch.noaa.gov/erddap/griddap/noaacrwsstDaily.html" target="_blank" rel="noopener">NOAA CoastWatch ERDDAP</a>. ' +
-      'Daily night-time satellite analysis, every tenth 0.05° cell shown.',
+      'Daily night-time satellite analysis, every tenth 0.05° cell shown. ' +
+      'Skirving et al. (2020), <a href="https://doi.org/10.3390/rs12233856" target="_blank" rel="noopener">doi:10.3390/rs12233856</a>.',
   },
   // ── Bundled snapshots ───────────────────────────────────────────
   {
