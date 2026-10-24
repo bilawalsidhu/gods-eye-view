@@ -22,6 +22,7 @@ import { createSurfaceKeyboard } from './ui/surfaceKeyboard.js';
 // is enthusiasm, not "never show me this again".
 
 import { t, msg } from './i18n/index.js';
+import { EXCLUSIVE_SURFACE_CLASSES } from './exclusiveSurfaces.js';
 
 /** Durable suppression. Written ONLY by the "Don't show this again" checkbox. */
 export const FIRST_RUN_STORAGE_KEY = 'gev:first-run-mission:v1';
@@ -305,12 +306,7 @@ export async function runFirstRunChoice(
  * hides the launcher in CSS, and the observer below turns that into a yield —
  * see the ESC ARBITRATION note on initFirstRunExperience.
  */
-export const EXCLUSIVE_SURFACE_CLASSES = Object.freeze([
-  'cockpit-mode',
-  'scene-playback-mode',
-  'recording-mode',
-  'ui-clean-view',
-]);
+export { EXCLUSIVE_SURFACE_CLASSES };
 
 /**
  * Is some other surface currently claiming the screen?

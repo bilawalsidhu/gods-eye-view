@@ -1,9 +1,6 @@
 export const AIRCRAFT_DEPENDENCIES = ['flights', 'military'];
 
-export const DEFERRED_DEPENDENCIES = [
-  'ais-live-vessels',
-  'military-installations',
-];
+const DEFERRED_DEPENDENCIES = ['ais-live-vessels', 'military-installations'];
 
 export const DEPENDENCIES = [
   ...AIRCRAFT_DEPENDENCIES,

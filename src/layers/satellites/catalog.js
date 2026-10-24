@@ -1,5 +1,6 @@
 import * as Cesium from 'cesium';
 import { twoline2satrec } from 'satellite.js';
+import { noradIdFromSatnum } from '../../sources/tle.js';
 import {
   DENSE_REFRESH_FRAMES,
   DENSE_GROUP_PATH,
@@ -113,7 +114,7 @@ export function createCatalog({ state: layerState, services, parts, source }) {
           const entry = entries[i];
           const satrec = twoline2satrec(entry.line1, entry.line2);
           if (!satrec || satrec.error !== 0) continue;
-          const noradId = Number(satrec.satnum);
+          const noradId = noradIdFromSatnum(satrec.satnum);
           if (layerState._catalog.has(noradId)) continue; // core catalog keeps priority
           const pos = parts.orbits.propagatePosition(satrec, now);
           if (!pos) continue;
@@ -138,6 +139,7 @@ export function createCatalog({ state: layerState, services, parts, source }) {
           });
           layerState._points.set(noradId, point);
           layerState._denseIds.push(noradId);
+          layerState._denseStale ||= Boolean(res.stale);
           added++;
         }
         // Yield to the event loop between chunks.
@@ -225,6 +227,7 @@ export function createCatalog({ state: layerState, services, parts, source }) {
       layerState._catalog.delete(noradId);
     }
     layerState._denseIds = [];
+    layerState._denseStale = false;
     layerState._denseCursor = 0;
     layerState._count = layerState._points.size;
     layerState._catalogRevision++;

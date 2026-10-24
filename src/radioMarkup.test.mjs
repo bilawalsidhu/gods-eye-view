@@ -209,6 +209,35 @@ test('no unchanged Realtime tool definition drifts silently', () => {
   const hudLayout = unchanged.find((tool) => tool.name === 'set_hud').parameters.properties.layout;
   assert.deepEqual(hudLayout.enum, ['tactical', 'operator', 'minimal', 'cyber']);
   hudLayout.enum = hudLayout.enum.filter((layout) => layout !== 'cyber');
+  // Globe rotation adds one motion and clarifies the two affected descriptions.
+  // Check those edits explicitly, then keep the legacy pin for every other field.
+  const camera = unchanged.find((tool) => tool.name === 'move_camera');
+  assert.deepEqual(camera.parameters.properties.motion.enum, [
+    'orbit',
+    'pan',
+    'tilt',
+    'rotate',
+    'rotate_globe',
+    'stop',
+  ]);
+  assert.equal(
+    camera.description,
+    'Direct the camera like a drone operator: orbit the current view target, pan, tilt, or rotate — one bounded nudge (mode=once) or continuous motion until stopped (mode=continuous). Continuous motion also stops on any manual camera input or when a navigation tool runs. Say the RESULTING state when confirming ("Orbiting slowly"). Globe rotation (rotate_globe) spins Earth right continuously by default; explicit direction, mode and speed take precedence. It checks fit and may refuse.',
+  );
+  assert.equal(
+    camera.parameters.properties.direction.description,
+    'Required for pan/tilt/rotate; orbit/rotate_globe default right.',
+  );
+  assert.equal(camera.parameters.properties.mode.description, 'once = bounded eased nudge; continuous = until stop/manual input. rotate_globe defaults continuous; other motions default once.');
+  camera.parameters.properties.mode.description = 'once = bounded eased nudge (default); continuous = until stop/manual input.';
+  camera.parameters.properties.motion.enum =
+    camera.parameters.properties.motion.enum.filter(
+      (motion) => motion !== 'rotate_globe',
+    );
+  camera.description =
+    'Direct the camera like a drone operator: orbit the current view target, pan, tilt, or rotate — one bounded nudge (mode=once) or continuous motion until stopped (mode=continuous). Continuous motion also stops on any manual camera input or when a navigation tool runs. Say the RESULTING state when confirming ("Orbiting slowly").';
+  camera.parameters.properties.direction.description =
+    'Required except for orbit (defaults right/clockwise) and stop.';
   assert.equal(unchanged.length, 14);
   const digest = createHash('sha256')
     .update(JSON.stringify(unchanged))
