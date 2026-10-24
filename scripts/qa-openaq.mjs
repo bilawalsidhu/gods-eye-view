@@ -3,6 +3,7 @@
  */
 import assert from 'node:assert/strict';
 import puppeteer from 'puppeteer';
+import { interpretHourly } from '../src/layers/airQuality/interpretation.js';
 const base = process.env.QA_BASE_URL || 'http://127.0.0.1:4173';
 const fixtures = [
   ['KE', 'Nairobi', -1.28, 36.82],
@@ -27,6 +28,9 @@ const readings = fixtures.map(([country, name, lat, lon], i) => ({
   observedMs: Date.now(),
   kind: 'observation',
   rating: null,
+  averagingMinutes: 60,
+  coveragePercent: 100,
+  qualityFlagged: false,
   band: null,
   risk: null,
   color: '#8cb4ce',
@@ -34,6 +38,7 @@ const readings = fixtures.map(([country, name, lat, lon], i) => ({
   network: 'Fixture',
   zone: country,
 }));
+for (const row of readings) Object.assign(row, interpretHourly(row));
 const payload = {
   schemaVersion: 1,
   stations: readings,
@@ -147,11 +152,19 @@ try {
     new Set(fixtures.map((r) => r[0])),
   );
   assert.equal(state.controls.summary.settings[0].chips.length, 3);
-  assert.ok(
-    state.controls.list.items.every((r) => r.badge === 'Index unavailable'),
-  );
+  assert.ok(state.controls.list.items.every((r) => r.badge === 'Fair'));
   console.log(
     'PASS: existing Provider Settings has a masked, empty OpenAQ field; worldwide fixture renders through shared layer',
+  );
+  assert.equal(state.controls.legend.length, 7);
+  assert.ok(
+    state.controls.summary.overview.some((line) =>
+      line.text.includes('Most people:'),
+    ),
+  );
+  assert.ok(await page.$('.data-row-list-badge.gev-status-badge'));
+  console.log(
+    'PASS: hourly comparison shows category, guidance, numeric legend and shared status badges',
   );
   scoped = true;
   async function navigate(lat, lon) {
@@ -238,6 +251,15 @@ try {
           .module.getStats().error,
     ),
     /Provider Settings/,
+  );
+  assert.deepEqual(
+    await page.evaluate(
+      () =>
+        window.__godsEyeView.dataManager.layers
+          .get('air-quality')
+          .module.getRowControls().summary.overview,
+    ),
+    [],
   );
   console.log(
     'PASS: missing key gives Provider Settings guidance, without replacing data with fake readings',

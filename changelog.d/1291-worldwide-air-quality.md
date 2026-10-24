@@ -3,4 +3,5 @@
   private OpenAQ key, show provider-reported SAAQIS status badges and map-relative
   station details. Prioritize OpenAQ discovery around the current map view as
   users navigate, distinguish loading from completed empty searches, and make coverage gaps, stale data and unavailable indexes
-  explicit while preserving Canada's default AQHI view (khanmjk, #1291).
+  explicit. Compare verified OpenAQ hourly means with labelled EEA pollutant
+  categories, guidance and numeric legends while preserving Canada's default AQHI view (khanmjk, #1291).

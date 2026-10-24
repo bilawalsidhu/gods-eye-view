@@ -2532,6 +2532,7 @@
       "src/voice/geminiCaptureWorklet.js",
       "src/layers/airQuality/providers.js",
       "src/layers/airQuality/southAfrica.js",
+      "src/layers/airQuality/interpretation.js",
       "src/layers/airQuality/openAq.js",
       "src/ui/statusBadge.js"
     ],
@@ -3103,6 +3104,7 @@
       "src/layers/streetLevel/providers/mapillary/policy.js",
       "src/layers/airQuality/providers.js",
       "src/layers/airQuality/southAfrica.js",
+      "src/layers/airQuality/interpretation.js",
       "src/layers/airQuality/openAq.js",
       "src/ui/keyGuidance.js",
       "src/keySetupCore.mjs",
@@ -3541,6 +3543,7 @@
       "src/layers/airQuality/source.js",
       "src/layers/airQuality/providers.js",
       "src/layers/airQuality/southAfrica.js",
+      "src/layers/airQuality/interpretation.js",
       "src/layers/airQuality/openAq.js"
     ],
     "external": []
@@ -3985,6 +3988,7 @@
       "src/ui/layerNames.js",
       "src/layers/airQuality/providers.js",
       "src/layers/airQuality/southAfrica.js",
+      "src/layers/airQuality/interpretation.js",
       "src/layers/airQuality/openAq.js",
       "src/ui/keyGuidance.js",
       "src/keySetupCore.mjs",
@@ -4001,6 +4005,7 @@
       "src/i18n/marker.js",
       "src/layers/airQuality/providers.js",
       "src/layers/airQuality/southAfrica.js",
+      "src/layers/airQuality/interpretation.js",
       "src/layers/airQuality/openAq.js"
     ],
     "external": []

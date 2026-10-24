@@ -1,4 +1,5 @@
-/** Portable OpenAQ v3 normalization. No AQI is inferred from concentrations. */
+/** Portable OpenAQ normalization; latest values remain unclassified. */
+import { interpretHourly } from './interpretation.js';
 export const OPENAQ_POLLUTANTS = Object.freeze([
   'PM2.5',
   'PM10',
@@ -120,4 +121,56 @@ export function normalizeOpenAqLatest(station, results, now = Date.now()) {
     });
   }
   return [...records.values()];
+}
+
+/** Normalize an explicit sensor's hourly aggregates, retaining coverage/flags.
+ * Never infer an hour from a latest-value timestamp or reporting cadence.
+ */
+export function normalizeOpenAqHours(
+  station,
+  sensor,
+  results,
+  now = Date.now(),
+) {
+  const hours = results
+    .filter((row) => {
+      const from = Date.parse(row.period?.datetimeFrom?.utc);
+      const to = Date.parse(row.period?.datetimeTo?.utc);
+      return (
+        row.period?.interval === '01:00:00' &&
+        to - from === 3600_000 &&
+        to <= now &&
+        OPENAQ_PARAMETER_NAMES[row.parameter?.name] === sensor.parameter &&
+        row.parameter?.units === sensor.units
+      );
+    })
+    .sort(
+      (a, b) =>
+        Date.parse(b.period.datetimeTo.utc) -
+        Date.parse(a.period.datetimeTo.utc),
+    );
+  if (!hours.length) return [];
+  const hour = hours[0];
+  return normalizeOpenAqLatest(
+    station,
+    [
+      {
+        locationsId: Number(station.stationId),
+        sensorsId: sensor.id,
+        value: hour.value,
+        datetime: hour.period.datetimeTo,
+      },
+    ],
+    now,
+  ).map((reading) =>
+    interpretHourly({
+      ...reading,
+      averagingMinutes: 60,
+      periodStart: hour.period.datetimeFrom.utc,
+      periodEnd: hour.period.datetimeTo.utc,
+      coveragePercent: hour.coverage?.percentCoverage ?? null,
+      qualityFlagged: hour.flagInfo?.hasFlags !== false,
+      note: 'OpenAQ hourly mean; GEV comparison against EEA pollutant bands; not an overall AQI or emissions estimate.',
+    }),
+  );
 }

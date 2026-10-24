@@ -451,7 +451,12 @@ Optional OpenAQ v3 access uses a private, free-account `OPENAQ_API_KEY` entered
 through Provider Settings. Global discovery has no country or city allowlist.
 Station coverage depends on contributing networks and may overlap SAAQIS.
 Concentrations preserve source units, time, network and licence attribution;
-OpenAQ measurements are not presented as an AQI. Standard access is rate-limited;
+OpenAQ measurements are not presented as an overall AQI. For the selected
+pollutant, verified complete, unflagged hourly averages are compared with the
+[EEA hourly pollutant bands](https://airindex.eea.europa.eu/AQI/), with the result
+labelled as GEV-calculated. Unsupported pollutants or units and incomplete/flagged
+hours remain unrated. The scale is a health-context comparison, not regulatory
+compliance or a locally issued index. Standard access is rate-limited;
 GEV prioritizes station discovery and recent observations in the visible map area,
 then continues pagination within process-wide budgets and bounded view caches.
 Calls without a viewport retain progressive bulk acquisition.

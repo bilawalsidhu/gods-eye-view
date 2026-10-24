@@ -2,6 +2,7 @@ import { msg } from '../../i18n/marker.js';
 import { createEcccAirQualitySource } from './source.js';
 import { AIR_QUALITY_PROVIDERS, AIR_QUALITY_BANDS } from './model.js';
 import { SA_POLLUTANTS, SA_INDEX_BANDS } from './southAfrica.js';
+import { hourlyLegend, interpretHourly } from './interpretation.js';
 import { OPENAQ_POLLUTANTS } from './openAq.js';
 import { readResponseJsonCapped } from '../../sources/httpBody.js';
 
@@ -19,6 +20,7 @@ export const ECCC_DEFINITION = Object.freeze({
 /** Fixed-route snapshot adapter; caller supplies the acquisition endpoint. */
 export function createAirQualitySnapshotSource({
   endpoint,
+  hourly = false,
   fetchImpl = (...args) => globalThis.fetch(...args),
   now = Date.now,
 } = {}) {
@@ -32,7 +34,7 @@ export function createAirQualitySnapshotSource({
       ]);
       const response = await fetchImpl(
         view
-          ? `${endpoint}?view=${encodeURIComponent(view.join(','))}`
+          ? `${endpoint}?view=${encodeURIComponent(view.join(','))}${hourly ? `&parameter=${encodeURIComponent(parameter)}` : ''}`
           : endpoint,
         { signal: requestSignal },
       );
@@ -73,6 +75,7 @@ export function createAirQualitySnapshotSource({
             row.observedMs <= now() + 300_000 &&
             now() - row.observedMs <= 6 * 3600_000,
         )
+        .map((row) => (hourly ? interpretHourly(row) : row))
         .sort(
           (a, b) => a.name.localeCompare(b.name) || a.id.localeCompare(b.id),
         );
@@ -129,17 +132,19 @@ export function createDefaultAirQualityProviders({
       observation: true,
       parameters: OPENAQ_POLLUTANTS,
       requiresKeyId: 'openaq',
-      averagingLabel: msg('Source averaging period unspecified'),
+      averagingLabel: msg('Hourly average'),
+      getLegend: hourlyLegend,
       indexLabel: msg('Index unavailable'),
       coverageNote: msg(
         'Available monitoring stations worldwide. Unmonitored areas have no measured coverage.',
       ),
       interpretation: msg(
-        'OpenAQ supplies concentrations, not a health index. Source networks may also appear in SAAQIS.',
+        'GEV compares the selected pollutant with EEA hourly bands. This is not an overall station AQI or a local official index.',
       ),
       legend: [{ color: '#8cb4ce', label: msg('Index unavailable') }],
       source: createAirQualitySnapshotSource({
         endpoint: '/api/air-quality/openaq',
+        hourly: true,
         fetchImpl,
         now,
       }),

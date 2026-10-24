@@ -216,8 +216,34 @@ scope as South Africa](https://www.gov.za/news/media-statements/south-african-ai
 Its adapter already discovers all returned regions, not a Western Cape allowlist.
 No worldwide SAAQIS network was found.
 
-OpenAQ supplies concentrations, not ratings. Records retain original units,
-network/owner, licences, observation time and unknown averaging duration. A
+OpenAQ supplies concentrations, not ratings. Viewport requests now include the
+selected pollutant and fetch `/sensors/{id}/hours` for that sensor instead of an
+unqualified latest value. The same eight-station acquisition cap applies; this
+replaces the latest request rather than adding a second request per station.
+Caches include the pollutant so changing tabs cannot reuse another pollutant's
+observations. Records retain original units, network/owner, licences and the
+explicit hour start/end, coverage and quality flag.
+
+GEV compares valid hourly means for PM2.5, PM10, NO2, O3 and SO2 with the
+[revised EEA hourly pollutant bands](https://airindex.eea.europa.eu/AQI/).
+This is a **calculated comparison for one pollutant**, not an EEA station index,
+local official index, regulatory compliance test or a claim about an entire city.
+Decimal concentrations use inclusive upper bounds without rounding down; only
+mass-unit conversions (mg/m³ to µg/m³) are performed. Gas volume units require
+additional conversion conditions and remain unrated. GEV requires a closed
+one-hour period, 100% hourly coverage and an explicit unflagged source result;
+missing quality/coverage, unsupported pollutants and unknown averaging periods
+remain neutral with an explanation. Readings older than six hours are excluded;
+readings older than two hours are visibly marked older observations.
+
+The shared Weather card leads with the highest **selected-pollutant** category
+among visible reporting stations, general and sensitive-population guidance,
+then sorted station details and a numeric legend. Categories appear as text and
+colour in the existing map overlays and shared status badge component. The
+portable `interpretation.js` module keeps thresholds and per-pollutant semantics
+out of the generic UI. Provider descriptors can supply their own legend; ECCC
+AQHI and provider-reported SAAQIS ratings retain their established scales.
+CO2 concentration is explicitly distinguished from an emissions rate. A
 SAAQIS station may also be distributed through OpenAQ: providers are alternatives,
 not summed together or advertised as independent coverage. Actual overlap needs
 an authenticated audit; no heuristic merges unrelated stations by proximity.

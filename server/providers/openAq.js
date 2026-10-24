@@ -2,6 +2,7 @@ import { readResponseJsonCapped } from './common/http.js';
 import {
   normalizeOpenAqLocations,
   normalizeOpenAqLatest,
+  normalizeOpenAqHours,
   OPENAQ_PARAMETER_NAMES,
 } from '../../src/layers/airQuality/openAq.js';
 
@@ -126,8 +127,8 @@ export function createOpenAqAcquisition({
   const views = new Map(),
     viewCache = new Map(),
     viewPending = new Map();
-  async function acquireView(get, view) {
-    const id = view.join(',');
+  async function acquireView(get, view, parameter) {
+    const id = `${view.join(',')}|${parameter || ''}`;
     let state = views.get(id);
     if (!state || now() - state.at > HOUR) state = createViewState(view, now());
     views.delete(id);
@@ -167,12 +168,17 @@ export function createOpenAqAcquisition({
       }
     }
     const eligible = [...state.stations.values()].filter(
-      (s) => !s.lastObservedMs || now() - s.lastObservedMs <= 6 * HOUR,
+      (s) =>
+        (!s.lastObservedMs || now() - s.lastObservedMs <= 6 * HOUR) &&
+        (!parameter ||
+          s.sensors.some((sensor) => sensor.parameter === parameter)),
     );
     // Overlapping pans/zooms reuse recent station checks without spending the
     // shared request budget again. Only stations discovered in this view join.
     for (const station of eligible) {
-      const previous = viewLatest.get(station.stationId);
+      const previous = viewLatest.get(
+        `${station.stationId}:${parameter || ''}`,
+      );
       if (previous && now() - previous.at < 20 * 60_000) {
         state.readings.set(station.stationId, previous.readings);
         state.checked.set(station.stationId, previous.at);
@@ -201,18 +207,25 @@ export function createOpenAqAcquisition({
       const results = await Promise.allSettled(
         due.slice(i, i + 4).map(async (station) => {
           try {
+            const sensor =
+              parameter &&
+              station.sensors.find((s) => s.parameter === parameter);
             const data = await get(
-              `locations/${station.stationId}/latest?limit=1000&page=1`,
+              sensor
+                ? `sensors/${sensor.id}/hours?limit=24&page=1&datetime_from=${encodeURIComponent(new Date(now() - 6 * HOUR).toISOString())}&datetime_to=${encodeURIComponent(new Date(now()).toISOString())}`
+                : `locations/${station.stationId}/latest?limit=1000&page=1`,
             );
-            if (data.results.length === 1000)
+            if (data.results.length >= (sensor ? 24 : 1000))
               throw error(503, 'OpenAQ station exceeds acquisition limit');
             state.readings.set(
               station.stationId,
-              normalizeOpenAqLatest(station, data.results, now()),
+              sensor
+                ? normalizeOpenAqHours(station, sensor, data.results, now())
+                : normalizeOpenAqLatest(station, data.results, now()),
             );
             state.checked.set(station.stationId, now());
-            viewLatest.delete(station.stationId);
-            viewLatest.set(station.stationId, {
+            viewLatest.delete(`${station.stationId}:${parameter || ''}`);
+            viewLatest.set(`${station.stationId}:${parameter || ''}`, {
               at: now(),
               readings: state.readings.get(station.stationId),
             });
@@ -377,7 +390,7 @@ export function createOpenAqAcquisition({
       stale: failed,
     };
   }
-  async function acquire(key, view) {
+  async function acquire(key, view, parameter) {
     const signal = AbortSignal.timeout(40_000);
     async function get(path) {
       const time = now();
@@ -413,7 +426,7 @@ export function createOpenAqAcquisition({
         throw error(503, 'Malformed OpenAQ response');
       return data;
     }
-    if (view) return acquireView(get, view);
+    if (view) return acquireView(get, view, parameter);
     if (scope.countries === null) return acquireGlobal(get);
     if (!catalog || now() - catalogAt > HOUR) {
       const countries = await get('countries?limit=1000&page=1');
@@ -503,7 +516,12 @@ export function createOpenAqAcquisition({
     };
   }
   return {
-    async getSnapshot({ view } = {}) {
+    async getSnapshot({ view, parameter } = {}) {
+      if (
+        parameter !== undefined &&
+        (!view || !Object.values(OPENAQ_PARAMETER_NAMES).includes(parameter))
+      )
+        throw error(400, 'Invalid pollutant');
       if (view) view = parseOpenAqView(view.join(','));
       const key = getKey().trim();
       if (!key) throw error(428, 'OpenAQ key required');
@@ -528,13 +546,13 @@ export function createOpenAqAcquisition({
         checked.clear();
       }
       if (view) {
-        const id = view.join(',');
+        const id = `${view.join(',')}|${parameter || ''}`;
         const previous = viewCache.get(id);
         if (previous && now() - previous.fetchedAt < 60_000) return previous;
         if (viewPending.has(id)) return viewPending.get(id);
         if (viewPending.size >= 2)
           throw error(429, 'OpenAQ viewport requests busy');
-        const job = acquire(key, view)
+        const job = acquire(key, view, parameter)
           .then((value) => {
             if (views.has(id)) viewCache.set(id, value);
             return value;
@@ -585,14 +603,23 @@ export function openAqProxy(options = {}) {
       const url = new URL(req.url || '/', 'http://localhost');
       if (
         url.pathname !== '/' ||
-        [...url.searchParams.keys()].some((k) => k !== 'view') ||
-        url.searchParams.getAll('view').length > 1
+        [...url.searchParams.keys()].some(
+          (k) => !['view', 'parameter'].includes(k),
+        ) ||
+        url.searchParams.getAll('view').length > 1 ||
+        url.searchParams.getAll('parameter').length > 1
       )
         return send(400, { error: 'invalid_air_quality_query' });
       const view = url.searchParams.has('view')
         ? parseOpenAqView(url.searchParams.get('view'))
         : undefined;
-      send(200, await source.getSnapshot({ view }));
+      send(
+        200,
+        await source.getSnapshot({
+          view,
+          parameter: url.searchParams.get('parameter') ?? undefined,
+        }),
+      );
     } catch (e) {
       send(e.status || 503, {
         error: e.status === 428 ? 'no_key' : 'OpenAQ unavailable',

@@ -536,3 +536,60 @@ test('a failed wider catalog page does not suppress available focus observations
   assert.equal(result.stale, true);
   assert.equal(result.failureStatus, 503);
 });
+
+test('parameter-scoped views acquire hourly means with independent caches and no extra latest call', async () => {
+  const paths = [];
+  const source = createOpenAqAcquisition({
+    getKey: () => 'fixture',
+    now: () => start,
+    fetchImpl: async (raw) => {
+      const url = new URL(raw);
+      paths.push(url.pathname);
+      if (url.pathname === '/v3/locations')
+        return Response.json({
+          results: [
+            {
+              ...locations[0],
+              sensors: [
+                { id: 100, parameter: { name: 'pm25', units: 'µg/m³' } },
+                { id: 200, parameter: { name: 'pm10', units: 'µg/m³' } },
+              ],
+            },
+          ],
+        });
+      assert.ok(url.searchParams.get('datetime_from'));
+      const name = url.pathname.includes('/100/') ? 'pm25' : 'pm10';
+      return Response.json({
+        results: [
+          {
+            value: 12,
+            parameter: { name, units: 'µg/m³' },
+            flagInfo: { hasFlags: false },
+            coverage: { percentCoverage: 100 },
+            period: {
+              interval: '01:00:00',
+              datetimeFrom: { utc: new Date(start - 3600000).toISOString() },
+              datetimeTo: { utc: new Date(start).toISOString() },
+            },
+          },
+        ],
+      });
+    },
+  });
+  const view = [10, -10, 30, 10, 20, 0];
+  const a = await source.getSnapshot({ view, parameter: 'PM2.5' });
+  assert.equal(a.readings[0].assessment.label, 'Fair');
+  const b = await source.getSnapshot({ view, parameter: 'PM10' });
+  assert.equal(b.readings[0].assessment.label, 'Good');
+  assert.equal(await source.getSnapshot({ view, parameter: 'PM2.5' }), a);
+  assert.equal(paths.filter((p) => p.endsWith('/hours')).length, 2);
+  assert.ok(!paths.some((p) => p.endsWith('/latest')));
+  await assert.rejects(
+    source.getSnapshot({ view, parameter: 'invalid' }),
+    (e) => e.status === 400,
+  );
+  await assert.rejects(
+    source.getSnapshot({ parameter: 'PM10' }),
+    (e) => e.status === 400,
+  );
+});

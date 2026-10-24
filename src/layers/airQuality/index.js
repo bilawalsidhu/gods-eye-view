@@ -293,6 +293,7 @@ export function createAirQualityLayer({ source, overlayHost } = {}) {
               risk: reading.risk,
               observedMs: reading.observedMs,
               note: reading.note,
+              assessment: reading.assessment,
               lat: reading.lat,
               lon: reading.lon,
             },
@@ -302,7 +303,7 @@ export function createAirQualityLayer({ source, overlayHost } = {}) {
           createAirQualityOverlayEntry({
             id: reading.id,
             position,
-            title: `${reading.name} ${reading.label}`,
+            title: `${reading.name} ${reading.label}${reading.assessment?.label || reading.rating ? ` · ${t(reading.assessment?.label || reading.rating.label)}` : ''}`,
             accent: reading.color,
             value: observation() ? 0 : reading.value,
           }),
@@ -373,16 +374,81 @@ export function createAirQualityLayer({ source, overlayHost } = {}) {
         ...definition(),
         scale: isObservation ? parameter : definition().scale,
       };
+      const rectangle = viewRectangle();
+      const ellipsoid = _viewer?.scene?.globe?.ellipsoid;
+      const cameraPosition = _viewer?.camera?.positionWC;
+      const occluder =
+        ellipsoid && cameraPosition
+          ? new Cesium.EllipsoidalOccluder(ellipsoid, cameraPosition)
+          : null;
       const visible = readingsInView(
         _readings,
-        viewRectangle(),
+        rectangle,
         _readings.length,
+      ).filter(
+        (reading) =>
+          !occluder ||
+          (rectangle &&
+            occluder.isPointVisible(
+              Cesium.Cartesian3.fromDegrees(
+                reading.lon,
+                reading.lat,
+                0,
+                ellipsoid,
+              ),
+            )),
       );
       const inView = (
         isObservation
-          ? visible.sort((a, b) => a.name.localeCompare(b.name))
+          ? visible.sort(
+              (a, b) =>
+                (b.assessment?.severity ?? b.rating?.score ?? -1) -
+                  (a.assessment?.severity ?? a.rating?.score ?? -1) ||
+                a.name.localeCompare(b.name),
+            )
           : visible
       ).slice(0, READOUT_LIMIT);
+      const worst = inView.find((row) => row.assessment?.label || row.rating);
+      const category = worst?.assessment?.label || worst?.rating?.label;
+      const assessment = worst?.assessment;
+      const assessmentLines =
+        !loading && !_lastError && !coverage?.stale && worst
+          ? [
+              {
+                id: 'health-summary',
+                text: t(
+                  'Highest {pollutant} category in view: {category} · {station}',
+                  {
+                    pollutant: parameter,
+                    category: t(category),
+                    station: worst.name,
+                  },
+                ),
+              },
+              ...(assessment?.general
+                ? [
+                    {
+                      id: 'general-guidance',
+                      text: t('Most people: {advice}', {
+                        advice: t(assessment.general),
+                      }),
+                    },
+                    {
+                      id: 'sensitive-guidance',
+                      text: t('Heart or breathing conditions: {advice}', {
+                        advice: t(assessment.sensitive),
+                      }),
+                    },
+                    {
+                      id: 'assessment-scope',
+                      text: t(
+                        'At the observation time, for this pollutant only. Other pollutants and unmonitored areas may differ.',
+                      ),
+                    },
+                  ]
+                : []),
+            ]
+          : [];
       const newest = _readings.reduce(
         (max, reading) => Math.max(max, reading.observedMs || 0),
         0,
@@ -407,18 +473,21 @@ export function createAirQualityLayer({ source, overlayHost } = {}) {
                   )
                 : coverage?.stale
                   ? t('Air quality provider unavailable')
-                  : coverage?.partial
-                    ? t('Partial coverage · discovery continues')
-                    : _count === 0
-                      ? _lastUpdate === null
-                        ? t('No readings available')
-                        : t('No current readings')
-                      : tn(
-                          _count,
-                          '{count} station reporting',
-                          '{count} stations reporting',
-                        ),
+                  : category
+                    ? `${parameter} · ${t(category)}`
+                    : coverage?.partial
+                      ? t('Partial coverage · discovery continues')
+                      : _count === 0
+                        ? _lastUpdate === null
+                          ? t('No readings available')
+                          : t('No current readings')
+                        : tn(
+                            _count,
+                            '{count} station reporting',
+                            '{count} stations reporting',
+                          ),
           units: provider.scale,
+          overview: assessmentLines,
           settings: [
             {
               id: 'provider',
@@ -468,7 +537,18 @@ export function createAirQualityLayer({ source, overlayHost } = {}) {
                     text: loading
                       ? t('Loading observations for this view…')
                       : visible.length
-                        ? t(provider.interpretation || '')
+                        ? t(
+                            provider.getLegend &&
+                              !provider.getLegend(parameter).length
+                              ? parameter === 'CO2'
+                                ? msg(
+                                    'CO₂ concentration is not an emissions rate and has no category on this scale.',
+                                  )
+                                : msg(
+                                    'This pollutant has no category on the EEA hourly scale.',
+                                  )
+                              : provider.interpretation || '',
+                          )
                         : _lastError || coverage?.stale
                           ? t('Observations unavailable; retrying on refresh.')
                           : coverage?.partial
@@ -518,7 +598,13 @@ export function createAirQualityLayer({ source, overlayHost } = {}) {
               }
             : {}),
         },
-        legend: (provider.legend || []).map((band) => ({
+        legend: (provider.getLegend
+          ? [
+              ...provider.getLegend(parameter),
+              { color: '#8cb4ce', label: msg('Not rated') },
+            ]
+          : (provider.legend ?? [])
+        ).map((band) => ({
           color: band.color,
           label: `${t(band.label)}${band.range ? ` ${band.range}` : ''}`,
         })),
@@ -535,12 +621,16 @@ export function createAirQualityLayer({ source, overlayHost } = {}) {
               ? {
                   badge: reading.rating
                     ? `${t(reading.rating.label)} · ${reading.rating.score}/10`
-                    : t('Index unavailable'),
+                    : reading.assessment?.label
+                      ? t(reading.assessment.label)
+                      : reading.assessment
+                        ? t('Not rated')
+                        : t('Index unavailable'),
                   badgeColor: reading.color,
                 }
               : {}),
             text: isObservation
-              ? `${reading.name} · ${reading.zone} · ${reading.owner || provider.network} · ${t(provider.averagingLabel || 'Source averaging period unspecified')} · ${new Date(reading.observedMs).toISOString()} · ${reading.rating ? t(provider.indexLabel || 'Index unavailable') : t('Index unavailable')} · ${t('Provisional data')} · ${reading.network || provider.network} · ${(reading.licenses || []).map((item) => item.attribution || item.name).join(', ')}`
+              ? `${reading.name} · ${reading.zone} · ${reading.owner || provider.network} · ${t(reading.averagingMinutes === 60 ? msg('Hourly average') : msg('Source averaging period unspecified'))} · ${new Date(reading.observedMs).toISOString()} · ${reading.assessment?.label ? `${t('Calculated comparison')} · ${t(reading.assessment.method)} · ${reading.assessment.range}` : reading.assessment?.reason ? t(reading.assessment.reason) : reading.rating ? t(provider.indexLabel || 'Index unavailable') : t('Index unavailable')} · ${Date.now() - reading.observedMs > 2 * 3600_000 ? `${t('Older observation')} · ` : ''}${t('Provisional data')} · ${reading.network || provider.network} · ${(reading.licenses || []).map((item) => item.attribution || item.name).join(', ')}`
               : `${reading.name} · ${t(reading.risk)}`,
             accent: reading.color,
           })),

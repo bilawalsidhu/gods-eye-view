@@ -411,6 +411,7 @@ export function mapAnalystRecord(raw, index = 0) {
           country: text(raw.country),
           owner: text(raw.owner),
           note: text(raw.note),
+          assessment: raw.assessment ?? null,
         }
       : {}),
   };

@@ -6053,13 +6053,28 @@ Air quality now accepts injected provider definitions through its source
 composition. Standalone defaults add optional worldwide OpenAQ to ECCC and SAAQIS.
 OpenAQ uses the existing Provider Settings registry (`OPENAQ_API_KEY`, server-only)
 and a fixed local proxy, with bounded progressive acquisition across all available
-countries/areas, explicit incomplete coverage, source attribution and no inferred
-AQI. Camera movement triggers debounced viewport discovery, starting near the
+countries/areas, explicit incomplete coverage and source attribution.
+Camera movement triggers debounced viewport discovery, starting near the
 map focus and continuing through the visible bounds (including dateline crossings).
 Loading and partial discovery are distinct from completed searches with no recent
 observations. The shared Weather card supplies provider/pollutant selection. The OpenAQ
 fixture gate is `scripts/qa-openaq.mjs`; live coverage requires the operator's key.
 SAAQIS retains its source-reported index and ECCC retains AQHI semantics.
+
+OpenAQ's selected pollutant uses explicit sensor hourly averages, with period,
+coverage and quality checks. Supported PM2.5, PM10, NO2, O3 and SO2 measurements
+receive a clearly labelled GEV comparison against the EEA hourly pollutant bands:
+Good, Fair, Moderate, Poor, Very poor or Extremely poor. This is a per-pollutant
+comparison, not an overall station AQI or a local official index. Unknown periods,
+incomplete or flagged hours, unsupported units and unclassified pollutants remain
+neutral and explain why. CO2 concentration is never described as emissions.
+The Weather card leads with the highest category among reporting stations in view,
+plain-language activity guidance and its observation-time scope. Shared status
+badges, matching map colours, numeric legend ranges and station details expose
+the method, observation age and provenance. Hourly acquisition replaces the latest
+request within the existing per-view request budget; caches are pollutant-scoped.
+The summary excludes stations beyond the globe's horizon, and failed/stale
+refreshes suppress activity guidance instead of reassuring from cached readings.
 
 ### Shared native dropdowns and numeric fields
 
