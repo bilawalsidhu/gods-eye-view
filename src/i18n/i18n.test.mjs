@@ -35,12 +35,16 @@ test('normalizeLocale folds regional variants and rejects unshipped tags', () =>
   assert.equal(normalizeLocale(' RU '), 'ru');
   assert.equal(normalizeLocale('en_GB'), 'en');
   assert.equal(normalizeLocale('xx'), null);
-  // Simplified Chinese by default; Traditional tags wait for zh-TW.
+  // Explicit script tags take precedence over regional defaults.
   assert.equal(normalizeLocale('zh'), 'zh-CN');
   assert.equal(normalizeLocale('zh-CN'), 'zh-CN');
   assert.equal(normalizeLocale('zh-Hans-SG'), 'zh-CN');
-  assert.equal(normalizeLocale('zh-TW'), null);
-  assert.equal(normalizeLocale('zh-Hant-HK'), null);
+  assert.equal(normalizeLocale('zh-TW'), 'zh-TW');
+  assert.equal(normalizeLocale('zh-Hant-HK'), 'zh-TW');
+  assert.equal(normalizeLocale('zh-Hans-TW'), 'zh-CN');
+  assert.equal(normalizeLocale('zh-Hant-CN'), 'zh-TW');
+  assert.equal(normalizeLocale('zh_HK'), 'zh-TW');
+  assert.equal(normalizeLocale('zh-MO'), 'zh-TW');
   assert.equal(normalizeLocale(undefined), null);
 });
 

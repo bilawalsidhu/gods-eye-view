@@ -40,7 +40,7 @@ test('the current language comes first, the rest by their own names', () => {
         nativeNames: LOCALE_NAMES,
       }),
     ),
-    ['ru', 'en', 'es', 'zh-CN'],
+    ['ru', 'en', 'es', 'zh-CN', 'zh-TW'],
   );
   assert.deepEqual(
     codes(
@@ -50,7 +50,7 @@ test('the current language comes first, the rest by their own names', () => {
         nativeNames: LOCALE_NAMES,
       }),
     ),
-    ['es', 'en', 'ru', 'zh-CN'],
+    ['es', 'en', 'ru', 'zh-CN', 'zh-TW'],
   );
   assert.deepEqual(
     codes(
@@ -60,7 +60,7 @@ test('the current language comes first, the rest by their own names', () => {
         nativeNames: LOCALE_NAMES,
       }),
     ),
-    ['en', 'es', 'ru', 'zh-CN'],
+    ['en', 'es', 'ru', 'zh-CN', 'zh-TW'],
   );
   const rows = buildLocaleOptions({
     locales: MANY,
@@ -263,7 +263,7 @@ test('keyboard model: open on the current language, move, choose, close', () => 
   assert.deepEqual(model.keydown({ key: 'ArrowDown' }), { handled: true });
   assert.equal(model.activeOption.code, 'en');
   model.keydown({ key: 'End' });
-  assert.equal(model.activeOption.code, 'zh-CN');
+  assert.equal(model.activeOption.code, 'zh-TW');
   model.keydown({ key: 'Home' });
   assert.equal(model.activeOption.code, 'ru');
   model.keydown({ key: 'ArrowUp' });
