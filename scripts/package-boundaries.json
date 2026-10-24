@@ -1237,6 +1237,7 @@
       "src/layers/installations/rendering.js",
       "src/layers/installations/selection.js",
       "src/layers/installations/source.js",
+      "src/data/approxDistance.js",
       "src/layers/installations/state.js",
       "src/layers/installations/viewport.js",
       "src/data/inputOwnership.js",
@@ -1251,6 +1252,7 @@
       "src/data/militaryNames.js",
       "src/sources/requestDeadline.js",
       "src/data/local_data/osm_military_names/names.json",
+      "src/data/local_data/osm_military_names/norway.json",
       "src/data/bundledJson.js",
       "src/data/retryableLoad.js",
       "src/layers/installations/namedMarkers.js",
@@ -2540,6 +2542,7 @@
       "src/layers/alpr/floors.js",
       "src/data/militaryNames.js",
       "src/data/local_data/osm_military_names/names.json",
+      "src/data/local_data/osm_military_names/norway.json",
       "src/layers/installations/namedMarkers.js",
       "src/data/infrastructureOverlayEntry.js",
       "src/sources/infrastructureData.js",
@@ -3120,6 +3123,7 @@
       "src/layers/alpr/floors.js",
       "src/data/militaryNames.js",
       "src/data/local_data/osm_military_names/names.json",
+      "src/data/local_data/osm_military_names/norway.json",
       "src/layers/installations/namedMarkers.js",
       "src/data/infrastructureOverlayEntry.js",
       "src/sources/infrastructureData.js",
@@ -3509,6 +3513,7 @@
     "exports": ["./layers/installations/source"],
     "modules": [
       "src/layers/installations/source.js",
+      "src/data/approxDistance.js",
       "src/data/militaryInstallationData.js",
       "src/data/installationNames.js",
       "src/data/tomtomTiles.js",
@@ -3522,6 +3527,7 @@
       "src/data/militaryNames.js",
       "src/sources/requestDeadline.js",
       "src/data/local_data/osm_military_names/names.json",
+      "src/data/local_data/osm_military_names/norway.json",
       "src/data/bundledJson.js",
       "src/data/retryableLoad.js"
     ],
@@ -3931,6 +3937,7 @@
   "tools-services": {
     "exports": ["./tools/services"],
     "modules": [
+      "src/data/approxDistance.js",
       "src/tools/services.js",
       "src/layers/bikeshare/registry.js",
       "src/layers/bikeshare/source.js",
@@ -3949,6 +3956,7 @@
       "src/data/bundledJson.js",
       "src/data/retryableLoad.js",
       "src/data/local_data/osm_military_names/names.json",
+      "src/data/local_data/osm_military_names/norway.json",
       "src/sources/openFreeMap.js",
       "src/data/installationNames.js",
       "src/sources/vectorTiles.js",
