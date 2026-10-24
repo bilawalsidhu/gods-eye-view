@@ -2947,5 +2947,22 @@
   "Layers": "Capas",
   "Search": "Buscar",
   "More": "Más",
-  "Panels": "Paneles"
+  "Panels": "Paneles",
+  "sea state|Calm": "Calma",
+  "sea state|Smooth": "Marejadilla",
+  "sea state|Slight": "Marejada",
+  "sea state|Moderate": "Fuerte marejada",
+  "sea state|Rough": "Gruesa",
+  "sea state|Very rough": "Muy gruesa",
+  "sea state|High": "Arbolada",
+  "sea state|Very high": "Montañosa",
+  "sea state|Phenomenal": "Enorme",
+  "Sea state unavailable": "Estado del mar no disponible",
+  "Max {height} m": "Máx. {height} m",
+  "Forecast valid {time}": "Pronóstico válido {time}",
+  "Significant wave height, the mean of the highest third of waves, from the ECMWF IFS wave model at 0.25°, shown at 0.5°. A model forecast, not an observation. Bands follow the WMO sea-state scale. Land and calm water are left clear.": "Altura significativa de ola, la media del tercio más alto de las olas, del modelo de oleaje ECMWF IFS a 0,25°, mostrada a 0,5°. Es un pronóstico del modelo, no una observación. Las bandas siguen la escala de estado del mar de la OMM. La tierra y el agua en calma quedan transparentes.",
+  "From {height} m": "Desde {height} m",
+  "Sea state network error": "Error de red del estado del mar",
+  "Malformed sea state response": "Respuesta del estado del mar mal formada",
+  "Sea state": "Estado del mar"
 }

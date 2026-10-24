@@ -1,7 +1,5 @@
-import { msg } from '../../i18n/marker.js';
-
 // Imported by the source and by tests without the catalog: band names stay
-// English data and the layer shows them translated.
+// English data; the layer translates them as marine terms (index.js).
 
 /**
  * WMO sea-state bands (WMO-No. 306 Manual on Codes, code table 3700, the
@@ -11,30 +9,30 @@ import { msg } from '../../i18n/marker.js';
  */
 export const SEA_STATE_BANDS = Object.freeze(
   [
-    { code: 1, min: 0, label: msg('Calm'), color: '#1d3b5a', alpha: 0 },
-    { code: 2, min: 0.1, label: msg('Smooth'), color: '#24618c', alpha: 0.3 },
-    { code: 3, min: 0.5, label: msg('Slight'), color: '#2f8fb0', alpha: 0.45 },
+    { code: 1, min: 0, name: 'Calm', color: '#1d3b5a', alpha: 0 },
+    { code: 2, min: 0.1, name: 'Smooth', color: '#24618c', alpha: 0.3 },
+    { code: 3, min: 0.5, name: 'Slight', color: '#2f8fb0', alpha: 0.45 },
     {
       code: 4,
       min: 1.25,
-      label: msg('Moderate'),
+      name: 'Moderate',
       color: '#4bb8a9',
       alpha: 0.55,
     },
-    { code: 5, min: 2.5, label: msg('Rough'), color: '#a8d36b', alpha: 0.65 },
+    { code: 5, min: 2.5, name: 'Rough', color: '#a8d36b', alpha: 0.65 },
     {
       code: 6,
       min: 4,
-      label: msg('Very rough'),
+      name: 'Very rough',
       color: '#f2cf4a',
       alpha: 0.72,
     },
-    { code: 7, min: 6, label: msg('High'), color: '#f08a3c', alpha: 0.8 },
-    { code: 8, min: 9, label: msg('Very high'), color: '#d9443a', alpha: 0.85 },
+    { code: 7, min: 6, name: 'High', color: '#f08a3c', alpha: 0.8 },
+    { code: 8, min: 9, name: 'Very high', color: '#d9443a', alpha: 0.85 },
     {
       code: 9,
       min: 14,
-      label: msg('Phenomenal'),
+      name: 'Phenomenal',
       color: '#9c1f5e',
       alpha: 0.9,
     },

@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { setLocale } from '../../i18n/index.js';
 import { createSeaStateLayer } from './index.js';
 
 /** Just enough of Cesium for the globe path: one imagery collection. */
@@ -151,4 +152,20 @@ test('a newer update supersedes an older one still in flight', async () => {
   assert.equal(await first, false);
   assert.equal(layer.getStats().countLabel, 'Max 5 m');
   assert.equal(collection.layers.length, 1);
+});
+
+test('the legend names bands as marine terms, not the air-quality words of the same English', async () => {
+  const { layer } = setup(async () => snapshot());
+  layer.enable();
+  await layer.update();
+  try {
+    setLocale('es');
+    const labels = layer.getRowControls().legend.map(({ label }) => label);
+    assert.equal(labels[0], 'Enorme');
+    assert.equal(labels.at(-1), 'Marejadilla');
+    assert.ok(labels.includes('Arbolada'), 'High is a sea, not Alta');
+    assert.ok(labels.includes('Fuerte marejada'), 'Moderate is not Moderada');
+  } finally {
+    setLocale('en');
+  }
 });

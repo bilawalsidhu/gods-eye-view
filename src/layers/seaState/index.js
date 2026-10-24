@@ -18,6 +18,22 @@ export { createSeaStateSource } from './source.js';
 /** Below the wind and weather scalar context, which order at 0. */
 const IMAGERY_PRIORITY = -1;
 
+/**
+ * Band names as marine terms. Moderate and High already name air-quality
+ * bands, so each takes the `sea state` context and its own translation.
+ */
+const BAND_NAMES = Object.freeze({
+  1: () => t('Calm', { context: 'sea state' }),
+  2: () => t('Smooth', { context: 'sea state' }),
+  3: () => t('Slight', { context: 'sea state' }),
+  4: () => t('Moderate', { context: 'sea state' }),
+  5: () => t('Rough', { context: 'sea state' }),
+  6: () => t('Very rough', { context: 'sea state' }),
+  7: () => t('High', { context: 'sea state' }),
+  8: () => t('Very high', { context: 'sea state' }),
+  9: () => t('Phenomenal', { context: 'sea state' }),
+});
+
 /** `YYYY-MM-DD HH:MM UTC`, or null for an unreadable time. */
 function utcMinute(iso) {
   const ms = Date.parse(iso);
@@ -234,7 +250,7 @@ export function createSeaStateLayer({
         legend: SEA_STATE_BANDS.filter(({ alpha }) => alpha > 0)
           .reverse()
           .map((band) => ({
-            label: t(band.label),
+            label: BAND_NAMES[band.code]?.() ?? band.name,
             color: band.color,
             blurb: t('From {height} m', {
               height: formatNumber(band.min),
