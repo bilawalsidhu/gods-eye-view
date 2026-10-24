@@ -330,7 +330,7 @@ test('production registry is exact, canonical, and rejects incomplete contracts'
   const beforeLastDigit = { ...digitsExhausted };
   delete beforeLastDigit['prior-9'];
   delete beforeLastDigit['wildlife-sightings'];
-  delete beforeLastDigit['surface-temperature'];
+  delete beforeLastDigit['temperature'];
   assert.equal(
     validateLayerStateAllocations(beforeLastDigit, {
       ...beforeLastDigit,

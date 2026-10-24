@@ -119,6 +119,25 @@ judged by the pose voice's release of the follow camera will leave, before that
 release, so a refused turn keeps the tracking.
 
 Surface Temperature is a keyless NASA GIBS layer that plays back MODIS Terra
+## Temperature
+
+**Temperature** is one Weather layer (`temperature`, share token `5`) with four
+modes: **Land surface** (default), **Sea surface**, **Sea anomaly** and
+**Air (2 m)**. `src/layers/temperatureModes/` owns the mode and delegates to the
+land (`src/layers/temperature/`), ocean (`src/layers/oceanTemperature/`) and air
+(`src/layers/airTemperature/`) controllers. Only the controller for the chosen
+mode is enabled, so two colour fields never stack; switching modes disables one
+and refreshes the other. The card keeps the chosen controller's legend, timing,
+readout and settings under a `SHOW` mode picker; the land mode keeps its own
+on-map timeline, and its card shows that timeline's status. Share links store
+mode, units, date and Niño 3.4 box visibility. The layer is available only when
+the land, air and ocean sources are all configured. The air ramp and the GIBS
+palettes stay separate: the land and sea modes show NASA's published colours so
+point readings remain exact.
+
+### Land surface
+
+The Land surface mode is a keyless NASA GIBS layer that plays back MODIS Terra
 monthly land-surface-temperature means a year at a time. On enable it probes for
 the newest published month and plays that year; the year's months are probed
 first, so an unpublished month drops out rather than playing blank. All of a
@@ -145,7 +164,7 @@ frames blend; unpublished months are disabled, and a clicked month glides to
 its frame the short way round the year. A pinned reading appears on the colour
 scale as a marker in its published colour.
 
-Clicking the globe with Surface Temperature on reads that point's value. The
+Clicking the globe in Land surface mode reads that point's value. The
 sample comes from the published tile pixel, not the rendered canvas: the canvas
 carries the overlay at the operator's opacity over a basemap under lighting and
 a post-process shader, so reading it would measure the screenshot. The pixel's
@@ -158,6 +177,40 @@ finer display tile pixel, which GIBS resamples to) and the month it came from, l
 so clearing it never disturbs the overlay, and re-reads whenever the month on
 screen changes. The click yields to the shared pointer lease.
 
+### Sea surface and Sea anomaly
+
+`src/layers/oceanTemperature/` provides the Sea anomaly and Sea surface modes.
+It parses NASA GIBS MUR25 daily availability with gaps, discovers v1.3
+colormaps and Web Mercator tile matrices, maps exact opaque palette pixels to
+published intervals, and defines the closed Nino 3.4 box (5S-5N, 170W-120W).
+Tile URLs come from the shared `src/maps/gibs.js` helper. Its palette parser
+stays separate from the land mode's `colormap.js`: the MUR25 palettes are in
+°C with signed and open-ended (`-INF`/`+INF`) intervals, and a sea reading is
+an exact colour match rather than the nearest stop. Its package entry is
+`gods-eye-view/layers/ocean-temperature/source`. See `DATA_SOURCES.md` for the
+verbatim PO.DAAC citation and 2003-2014 climatology baseline.
+
+The sea modes render Web Mercator tiles over globe imagery at 0.6 opacity. On
+photorealistic 3D maps they reproject a level-2 tile mosaic onto a raised
+geographic shell, also at 0.6 opacity. The shell is a coarse overview, not
+added scientific resolution. Point inspection samples the native advertised
+maximum-level tile and reports exact published color intervals, with saturated
+anomaly ends at below -3 and at least +3 °C, and no value for
+transparent/unknown colors. Product switches and previous/next controls use
+advertised dates, skipping gaps. The palette legend comes from GIBS metadata. A
+labelled Niño 3.4 box is optional; it is geographic context, not an ENSO index
+or classification. The independent daily date selection does not follow the
+observed-weather history clock.
+
+### Air (2 m)
+
+The Air mode shows NOAA GFS 2 m air temperature forecasts, served as cached,
+quantised grids by the local server and drawn on the globe and tiles shells with
+a freezing-centred ramp over -40 to 45 °C. A click reads the forecast at that
+point in °C and °F, with the model cycle and forecast hour; it is a model
+forecast on a 1° grid, not a station measurement.
+
+## Cyber HUD — September 23, 2026
 Analyst region queries resolve unique Natural Earth names offline without
 geocoding, so Gold Coast and Ivory Coast name the West African natural regions.
 Duplicate names require a geocoded containment anchor; when several entries for

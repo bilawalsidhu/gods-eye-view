@@ -93,6 +93,7 @@
     "ws": "^8.21.0"
   },
   "exports": {
+    "./layers/ocean-temperature/source": "./src/layers/oceanTemperature/source.js",
     "./infrastructure": "./src/data/infrastructure.js",
     "./infrastructure/geojson": "./src/data/localGeojsonCore.js",
     "./infrastructure/lod": "./src/data/localGeojsonLod.js",

@@ -295,18 +295,6 @@ const layers = [
     },
   },
   {
-    id: 'surface-temperature',
-    // Not bare "temperature": the wind layer's 2 m air temperature overlay is
-    // a different quantity, and the alias must not pick one silently.
-    aliases: [
-      'surface temperature',
-      'land surface temperature',
-      'ground temperature',
-    ],
-    context: false,
-    noQuery: 'map overlay; no countable records',
-  },
-  {
     id: 'traffic',
     aliases: ['street traffic', 'road traffic', 'congestion'],
     context: false,
@@ -480,6 +468,7 @@ export const VOICE_OFF_LAYERS = Object.freeze({
   'wildlife-sightings':
     'community observation layer; no room in the prompt budget',
   rail: 'train layer; no room in the prompt budget, and "trains" still names transit',
+  temperature: 'gridded temperature layer; no room in the prompt budget',
 });
 
 const TYPE_NAMES = Object.freeze({

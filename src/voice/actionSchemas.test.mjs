@@ -43,7 +43,6 @@ test('the complete Realtime tool payload pins the manifest-generated layer relea
     // requested radius and center authority in descriptions only.
     // Street Level and GNSS extend the manifest; tracked and analyst aircraft describe broadcasts.
     // Air quality (ECCC AQHI) extends the manifest.
-    // Surface temperature extends the manifest.
     // Globe rotation adds one motion; visual keyhole fit and explicit
     // reset guidance/defaults update only move_camera and mode descriptions.
     // S2 GhostMaps extends the generated layer enums.

@@ -34,8 +34,8 @@ export const CATALOG_SOURCE_CONTRACTS = Object.freeze({
     ['military-installations'],
     ['getMappedSites', 'searchNearby'],
   ),
-  temperature: contract(
-    ['surface-temperature'],
+  'land-temperature': contract(
+    ['temperature'],
     ['resolveLatest', 'resolveYear', 'sample'],
   ),
   satellites: contract(['satellites'], ['readGroup']),
@@ -43,6 +43,11 @@ export const CATALOG_SOURCE_CONTRACTS = Object.freeze({
   alpr: contract(['alpr-cameras'], ['fetch']),
   firms: contract(['local-firms'], ['getSnapshot']),
   wind: contract(['wind'], ['getSnapshot']),
+  'air-temperature': contract(['temperature'], ['getSnapshot']),
+  'ocean-temperature': contract(
+    ['temperature'],
+    ['metadata', 'palette', 'tileUrl'],
+  ),
   weather: contract(
     ['weather-radar', 'weather-satellite', 'weather-lightning'],
     ['getSnapshot'],
@@ -106,6 +111,8 @@ export function resolveCatalogSources(supplied = {}) {
         for (const id of ids) {
           const layer = byId.get(id);
           if (!layer) throw new Error(`Missing source consumer: ${id}`);
+          // A layer fed by several sources needs every one of them.
+          if (availability.get(id)?.available === false) continue;
           availability.set(
             id,
             Object.freeze({

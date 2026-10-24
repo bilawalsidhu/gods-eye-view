@@ -8,6 +8,15 @@ import {
 } from './dataCredits.js';
 import { getTransitFeed } from './transitFeeds.js';
 
+test('air temperature credits NOAA and distinguishes forecasts from stations', () => {
+  const credit = DATA_CREDITS.find((entry) => entry.key === 'air-temperature');
+  assert.match(credit.html, /NOAA Global Forecast System/);
+  assert.match(credit.html, /2 m air temperature/);
+  assert.match(credit.html, /U.S. public domain/);
+  assert.match(credit.html, /not station measurements/);
+  assert.match(credit.html, /no endorsement implied/);
+});
+
 test('every credit carries a unique key and some markup to render', () => {
   const keys = DATA_CREDITS.map((entry) => entry.key);
   assert.equal(
