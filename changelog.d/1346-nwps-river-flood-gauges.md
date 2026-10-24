@@ -8,4 +8,4 @@
   national snapshot from seven regional NWPS reads, one at a time, at most every
   15 minutes and within NWPS's limit of 10 list requests per 5 minutes, keeps a
   failed region's previous gauges, and answers 503 with `Retry-After` until it
-  has data. Categories are NOAA's, not flood warnings (daikaginza, #PR).
+  has data. Categories are NOAA's, not flood warnings (daikaginza, #1346).
