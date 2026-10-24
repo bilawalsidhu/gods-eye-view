@@ -56,6 +56,36 @@ const FEED_ERROR_PATTERNS = [
     /^Vector tiles unavailable \(HTTP (\d+)\)$/,
     ([, status]) => t('Vector tiles unavailable (HTTP {status})', { status }),
   ],
+  // Feed states with a number or a reason in them: NASA FIRMS
+  // (firms/queries.js), AIS vessels (vessels/queries.js) and Street Traffic
+  // (traffic/model.js).
+  [
+    /^STALE · cached (.+)$/,
+    ([, age]) => t('STALE · cached {age}', { age: feedAgeText(age) }),
+  ],
+  [
+    /^feed silent (\d+)s — no AIS data$/,
+    ([, seconds]) => t('feed silent {seconds}s — no AIS data', { seconds }),
+  ],
+  [
+    /^feed down — retrying slowly \(attempt (\d+)\)$/,
+    ([, attempt]) =>
+      t('feed down — retrying slowly (attempt {attempt})', { attempt }),
+  ],
+  [
+    /^reconnecting to feed… \(attempt (\d+)\)$/,
+    ([, attempt]) =>
+      t('reconnecting to feed… (attempt {attempt})', { attempt }),
+  ],
+  [
+    /^feed unavailable \((.+)\)$/,
+    ([, detail]) => `${t('feed unavailable')} (${detail})`,
+  ],
+  [
+    /^SIMULATED — (.+)$/,
+    ([, reason]) =>
+      t('SIMULATED — {reason}', { reason: translateKnown(reason) }),
+  ],
   // Layer statuses with a number or a feed name in them: GNSS
   // (gnss/source.js), CelesTrak groups (satellites/ingestion.js) and transit
   // feeds (transit/ingestion.js).
@@ -215,6 +245,21 @@ function statusPatternText(piece) {
     if (match) return format(match);
   }
   return null;
+}
+
+/**
+ * A compact feed age as `formatAge` writes it (`<1h`, `5h`, `3d`) in the UI
+ * language, the way `formatAgeLabel` (firms/model.js) shows it; anything else
+ * as it came.
+ */
+function feedAgeText(age) {
+  if (age === '<1h') return t('<1h', { context: 'age' });
+  const match = /^(\d+)([hd])$/.exec(age);
+  if (!match) return age;
+  const count = Number(match[1]);
+  return match[2] === 'h'
+    ? t('{count}h', { context: 'age', count })
+    : t('{count}d', { context: 'age', count });
 }
 
 /** One piece of a status line in the UI language, or as it came. */
