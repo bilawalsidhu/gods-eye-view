@@ -86,8 +86,12 @@ body.mobile-shell[data-mobile-sheet] #mobile-sheet-backdrop:not([hidden]) {
 
 /* ── Top bar: logo left, globe actions right ───────────────────────────── */
 body.mobile-shell #title-bar {
-  top: calc(var(--mobile-top-inset) + 12px);
+  top: calc(var(--mobile-top-inset) + 10px);
   left: 14px;
+}
+
+body.mobile-shell #title-bar .title-logo {
+  width: 58px;
 }
 
 body.mobile-shell #title-bar h1 > :not(.title-logo),
