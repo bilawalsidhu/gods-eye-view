@@ -202,8 +202,8 @@ function encode(state) {
 
 test('production registry is exact, canonical, and rejects incomplete contracts', async () => {
   assert.equal(validateLayerStateRegistry(), true);
-  assert.equal(REGISTERED_LAYER_IDS.length, 31);
-  assert.equal(new Set(REGISTERED_LAYER_IDS).size, 31);
+  assert.equal(REGISTERED_LAYER_IDS.length, 34);
+  assert.equal(new Set(REGISTERED_LAYER_IDS).size, 34);
   assert.ok(REGISTERED_LAYER_IDS.includes('transit'));
   assert.deepEqual(REGISTERED_LAYER_IDS, [...REGISTERED_LAYER_IDS].sort());
   assert.deepEqual(LEGACY_LAYER_STATE_TOKENS, {
@@ -242,20 +242,18 @@ test('production registry is exact, canonical, and rejects incomplete contracts'
   for (const [id, token] of Object.entries(LEGACY_LAYER_STATE_TOKENS)) {
     assert.equal(LAYER_STATE_TOKEN_RESERVATIONS[id], token);
   }
-  assert.equal(nextLayerStateToken(), '5');
+  assert.equal(nextLayerStateToken(), '8');
   assert.equal(
     nextLayerStateToken({
       ...LAYER_STATE_TOKEN_RESERVATIONS,
-      alpha: '5',
-      bravo: '6',
+      alpha: '8',
+      bravo: '9',
     }),
-    '7',
+    '00',
   );
   const digitsExhausted = {
     ...LAYER_STATE_TOKEN_RESERVATIONS,
-    ...Object.fromEntries(
-      [...'56789'].map((digit) => [`prior-${digit}`, digit]),
-    ),
+    ...Object.fromEntries([...'89'].map((digit) => [`prior-${digit}`, digit])),
   };
   assert.equal(nextLayerStateToken(digitsExhausted), '00');
   assert.equal(
@@ -307,8 +305,8 @@ test('production registry is exact, canonical, and rejects incomplete contracts'
   assert.equal(
     validateLayerStateAllocations(LAYER_STATE_TOKEN_RESERVATIONS, {
       ...LAYER_STATE_TOKEN_RESERVATIONS,
-      future: '5',
-      next: '6',
+      future: '8',
+      next: '9',
     }),
     true,
   );
@@ -318,7 +316,7 @@ test('production registry is exact, canonical, and rejects incomplete contracts'
         ...LAYER_STATE_TOKEN_RESERVATIONS,
         future: '00',
       }),
-    /next free token 5/,
+    /next free token 8/,
   );
   const beforeLastDigit = { ...digitsExhausted };
   delete beforeLastDigit['prior-9'];
@@ -341,10 +339,10 @@ test('production registry is exact, canonical, and rejects incomplete contracts'
   assert.throws(
     () =>
       validateLayerStateAllocations(
-        { ...LAYER_STATE_TOKEN_RESERVATIONS, merged: '5' },
-        { ...LAYER_STATE_TOKEN_RESERVATIONS, merged: '5', competing: '5' },
+        { ...LAYER_STATE_TOKEN_RESERVATIONS, merged: '8' },
+        { ...LAYER_STATE_TOKEN_RESERVATIONS, merged: '8', competing: '8' },
       ),
-    /next free token 6/,
+    /next free token 9/,
   );
   assert.throws(
     () => validateLayerStateAllocations({ future: '00' }, { future: '01' }),
@@ -2857,4 +2855,30 @@ test('explicit provider switches reach durable state without adopting unrelated 
   } finally {
     coordinator.destroy();
   }
+});
+
+test('the sea surface temperature view travels in a share link and defaults to temperature', () => {
+  const state = createDefaultLayerState();
+  state.enabledLayerIds = ['sea-surface-temperature'];
+  assert.equal(state.options['sea-surface-temperature'].view, 'temperature');
+  const plain = encodeLayerStateParams(new URLSearchParams('v=2'), state);
+  const tokens = (search) => (search.get('lo') || '').split('_');
+  assert.ok(
+    !tokens(plain).some((token) => token.startsWith('7.')),
+    'the default view is omitted',
+  );
+  state.options['sea-surface-temperature'].view = 'anomaly';
+  const params = encodeLayerStateParams(new URLSearchParams('v=2'), state);
+  assert.ok(tokens(params).includes('7.v.a'));
+  const restored = decodeLayerStateParams(params);
+  assert.deepEqual(restored.enabledLayerIds, ['sea-surface-temperature']);
+  assert.equal(restored.options['sea-surface-temperature'].view, 'anomaly');
+  assert.equal(
+    normalizeLayerState({
+      ...state,
+      options: { 'sea-surface-temperature': { view: 'salinity' } },
+    }).options['sea-surface-temperature'].view,
+    'temperature',
+    'an unknown view falls back to the default',
+  );
 });
