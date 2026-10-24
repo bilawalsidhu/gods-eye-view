@@ -1,7 +1,11 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import * as Cesium from 'cesium';
-import { createRiverDischargeLayer, RIVER_OUTLOOK_COLORS } from './index.js';
+import {
+  createRiverDischargeLayer,
+  RIVER_DISCHARGE_POLL_MS,
+  RIVER_OUTLOOK_COLORS,
+} from './index.js';
 
 const days = Array.from({ length: 9 }, (_, i) =>
   new Date(Date.UTC(2026, 9, 23 + i)).toISOString().slice(0, 10),
@@ -251,6 +255,48 @@ test('a failed refresh keeps earlier points as stale; disable clears them and th
     assert.equal(h.credits.has('river-discharge'), false);
   } finally {
     h.restore();
+  }
+});
+
+test('the layer refreshes on its own poll until disabled, so the manager ticks its row', async (t) => {
+  t.mock.timers.enable({ apis: ['setInterval'] });
+  // Count the intervals the layer holds; a poll left running after disable
+  // only shows up here, because a disabled layer's read is a no-op.
+  const live = new Set();
+  const { setInterval: arm, clearInterval: disarm } = globalThis;
+  globalThis.setInterval = (...args) => {
+    const id = arm(...args);
+    live.add(id);
+    return id;
+  };
+  globalThis.clearInterval = (id) => {
+    live.delete(id);
+    return disarm(id);
+  };
+  let reads = 0;
+  const h = harness(async () => {
+    reads += 1;
+    return snapshot([point('30.025_31.225', 'Nile', 300)]);
+  });
+  try {
+    assert.equal(live.size, 1, 'enable arms one poll');
+    await h.layer.update();
+    assert.equal(reads, 1);
+    t.mock.timers.tick(RIVER_DISCHARGE_POLL_MS);
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(reads, 2);
+    h.layer.disable();
+    assert.equal(live.size, 0, 'disable releases the poll');
+    t.mock.timers.tick(RIVER_DISCHARGE_POLL_MS * 2);
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(reads, 2, 'no poll after disable');
+    // DataLayerManager ticks a row's stats every second only for a layer
+    // without an interval; with one, a camera-driven count waits for the poll.
+    assert.equal(h.layer.updateInterval, 0);
+  } finally {
+    h.restore();
+    globalThis.setInterval = arm;
+    globalThis.clearInterval = disarm;
   }
 });
 

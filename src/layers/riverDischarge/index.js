@@ -12,6 +12,8 @@ export { createRiverDischargeSource } from './source.js';
 
 const LAYER_ID = 'river-discharge';
 const REQUEST_DEBOUNCE_MS = 800;
+/** The layer's own poll; GloFAS publishes once a day. */
+export const RIVER_DISCHARGE_POLL_MS = 1_800_000;
 /** The levels a card and the legend name, most severe first. */
 const LEGEND_LEVELS = Object.freeze(['very-high', 'high', 'normal']);
 const PIXEL_SIZE = Object.freeze({
@@ -64,6 +66,7 @@ export function createRiverDischargeLayer({ source, services } = {}) {
     request: null,
     loading: false,
     debounceTimer: null,
+    pollTimer: null,
     moveEndRemove: null,
     preRenderRemove: null,
     occluder: null,
@@ -402,8 +405,11 @@ export function createRiverDischargeLayer({ source, services } = {}) {
     // English in layer state; the layer row translates it.
     source: source.label || msg('Open-Meteo · GloFAS model'),
     // GloFAS publishes once a day and the proxy holds each point for three
-    // hours; camera moves drive the reads in between.
-    updateInterval: 1_800_000,
+    // hours; camera moves drive the reads in between and the layer's own poll
+    // (RIVER_DISCHARGE_POLL_MS) refreshes the view. With no manager interval
+    // the manager ticks the row every second, so a camera-driven read shows
+    // without waiting for a poll.
+    updateInterval: 0,
     statsRefreshInterval: 1000,
 
     init(viewer) {
@@ -439,6 +445,8 @@ export function createRiverDischargeLayer({ source, services } = {}) {
       if (state.enabled) return;
       state.enabled = true;
       registerPickOwner(LAYER_ID, (id) => state.records.has(id));
+      clearInterval(state.pollTimer);
+      state.pollTimer = setInterval(loadOutlook, RIVER_DISCHARGE_POLL_MS);
       if (state.dataSource) state.dataSource.show = true;
     },
 
@@ -449,6 +457,8 @@ export function createRiverDischargeLayer({ source, services } = {}) {
       state.loading = false;
       clearTimeout(state.debounceTimer);
       state.debounceTimer = null;
+      clearInterval(state.pollTimer);
+      state.pollTimer = null;
       unregisterPickOwner(LAYER_ID);
       releaseSelection();
       clearRendered();
