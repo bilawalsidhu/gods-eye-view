@@ -146,22 +146,8 @@ test('each client gets its own quota rather than sharing one bucket', async (t) 
   );
 });
 
-test('adsb.lol traces are metered too, for the operator IP reputation', async (t) => {
-  stubFetch(t, async () => new Response('{"trace":[]}', { status: 200 }));
-  const trace = install(trackBackfillProxies()).get('/api/military/track');
-
-  for (let i = 0; i < 30; i += 1)
-    await request(trace, { url: `/?hex=${(0x600000 + i).toString(16)}` });
-  const refused = await request(trace, { url: '/?hex=6affff' });
-  assert.equal(refused.statusCode, 429);
-});
-
-test('the two routes meter separately, since they spend different upstreams', async (t) => {
-  stubFetch(t, async (url) =>
-    String(url).includes('adsb.lol')
-      ? new Response('{"trace":[]}', { status: 200 })
-      : trackOk(),
-  );
+test('the retired military route is not metered, so the OpenSky limiter never reaches it', async (t) => {
+  stubFetch(t, async () => trackOk());
   const routes = install(trackBackfillProxies());
   const track = routes.get('/api/flights/track');
   const trace = routes.get('/api/military/track');
@@ -172,12 +158,14 @@ test('the two routes meter separately, since they spend different upstreams', as
     (await request(track, { url: '/?icao24=61ffff' })).statusCode,
     429,
   );
-  const military = await request(trace, { url: '/?hex=62aaaa' });
-  assert.equal(
-    military.statusCode,
-    200,
-    'spending the OpenSky quota leaves the adsb.lol one untouched',
-  );
+  // It answers a fixed refusal without any upstream call, so a limiter would
+  // only turn that refusal into a different one.
+  for (let i = 0; i < 31; i += 1) {
+    const military = await request(trace, {
+      url: `/?hex=${(0x620000 + i).toString(16)}`,
+    });
+    assert.equal(military.statusCode, 503);
+  }
 });
 
 test('a 429 from /tracks stands every other icao24 down until it clears', async (t) => {

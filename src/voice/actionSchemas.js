@@ -729,7 +729,7 @@ const schemas = [
       properties: {
         motion: {
           type: 'string',
-          enum: ['orbit', 'pan', 'tilt', 'rotate', 'stop'],
+          enum: ['orbit', 'pan', 'tilt', 'rotate', 'rotate_globe', 'stop'],
         },
         direction: {
           type: 'string',

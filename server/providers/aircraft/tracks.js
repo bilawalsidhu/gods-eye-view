@@ -8,14 +8,13 @@ import { makeRateLimiter, clientKey } from '../common/rate-limit.js';
  *   4 credits per call from the `/tracks/*` bucket, which OpenSky keeps
  *   separate from the `/states/*` one `/api/flights` spends). OAuth via the
  *   shared coalesced token. 60s per-icao cache; 404/429 forwarded so the
- *   client can fall back to its accumulated trail silently. Each route has
- *   its own per-IP limiter, and a 429 from /tracks starts a cooldown for that
+ *   client can fall back to its accumulated trail silently. It has its own
+ *   per-IP limiter, and a 429 from /tracks starts a cooldown for that
  *   bucket — the per-icao cache bounds memory, not spend, since a different
  *   `icao24` is simply a different key.
- * /api/military/track?hex=<hex> — adsb.lol tar1090 readsb trace
- *   (undocumented but live; no browser CORS, hence this proxy). Up to ~24h
- *   of real history per aircraft. Treat as best-effort; data is ODbL —
- *   credit "adsb.lol (ODbL)" in the UI.
+ * /api/military/track?hex=<hex> — compatibility refusal for the retired,
+ *   undocumented ADSB.lol trace route. The standalone military source uses
+ *   locally accumulated trails; provider-supplied history remains optional.
  */
 export function trackBackfillProxies() {
   const TRACK_CACHE_MS = 60000;
@@ -28,23 +27,19 @@ export function trackBackfillProxies() {
    *
    * Sized against demand, not guessed: a backfill is issued once per aircraft
    * the operator SELECTS (`_backfillTrail`, fired from the tracked-contact
-   * path in the flights, military and vessels layers), and re-selecting the
+   * path in the flights layer), and re-selecting the
    * same aircraft inside a minute is served from cache. The assistant's
    * `get_aircraft_track` tool asks once per call, a handful per turn. 30/min
    * is a target switch every two seconds, sustained — well clear of either,
    * and the same band `/api/geocode` and `/api/regional-brief` already use.
-   * Each route gets its own limiter: they spend different upstreams.
    */
   const TRACK_RATE_PER_MIN = 30;
   const TRACK_RATE_WINDOW_MS = 60_000;
-  const trackLimiter = () =>
-    makeRateLimiter({
-      windowMs: TRACK_RATE_WINDOW_MS,
-      max: TRACK_RATE_PER_MIN,
-      globalMax: TRACK_RATE_PER_MIN * 3,
-    });
-  const allowOpenSky = trackLimiter();
-  const allowAdsbLol = trackLimiter();
+  const allowOpenSky = makeRateLimiter({
+    windowMs: TRACK_RATE_WINDOW_MS,
+    max: TRACK_RATE_PER_MIN,
+    globalMax: TRACK_RATE_PER_MIN * 3,
+  });
   /**
    * `/tracks/*` credit governor: a 429 from /tracks/all means that bucket is
    * empty for every `icao24`, so no upstream call is made until OpenSky's
@@ -172,13 +167,6 @@ export function trackBackfillProxies() {
 
     middlewares.use('/api/military/track', async (req, res) => {
       try {
-        // adsb.lol is free and unmetered, so no credit governor applies here —
-        // the limiter is for the operator's own IP reputation with a community
-        // service, the same reason `/api/overpass` carries one.
-        if (!allowAdsbLol(clientKey(req))) {
-          refuse(res, TRACK_RATE_WINDOW_MS / 1000);
-          return;
-        }
         const incoming = new URL(req.url || '', 'http://localhost');
         const hex = String(incoming.searchParams.get('hex') || '')
           .trim()
@@ -191,10 +179,16 @@ export function trackBackfillProxies() {
           );
           return;
         }
-        await proxyJson(
-          res,
-          `lol:${hex}`,
-          `https://adsb.lol/data/traces/${hex.slice(-2)}/trace_full_${hex}.json`,
+        res.statusCode = 503;
+        res.setHeader('Content-Type', 'application/json');
+        res.setHeader('Cache-Control', 'no-store');
+        res.setHeader('Retry-After', '1800');
+        res.end(
+          JSON.stringify({
+            error:
+              'Military history unavailable; locally accumulated trails remain available',
+            code: 'history_unavailable',
+          }),
         );
       } catch (error) {
         res.statusCode = 502;
