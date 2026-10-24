@@ -1,3 +1,4 @@
+import { interruptGlobeRotation } from '../cameraVerbs.js';
 import {
   layerSnapshot,
   feedProvenanceEnvelope,
@@ -262,7 +263,9 @@ export function createGevActionRunner({
       }),
     ));
   installViewTargetPrewarm(viewer);
-  initCameraVerbs(viewer, getViewTargetCartesian);
+  initCameraVerbs(viewer, getViewTargetCartesian, {
+    isCockpitActive: () => Boolean(styleManager?.getCockpitState?.()?.active),
+  });
   // Nested calls (select_nearest_aircraft composing layer + flight) use the
   // raw runner; only the outer call gets a voice envelope.
   const runGevAction = async function runGevAction(
@@ -298,6 +301,7 @@ export function createGevActionRunner({
     // Zoom during an active orbit adjusts the orbit RADIUS (spiral in/out) —
     // a straight camera move would be snapped back by the per-frame lookAt.
     if (name === 'adjust_camera_zoom') {
+      interruptGlobeRotation('voice-zoom-intent');
       const zoomOut = String(args.direction || '').toLowerCase() === 'out';
       const amt = String(args.amount || 'medium').toLowerCase();
       const factor = { little: 1.25, medium: 1.6, lot: 2.4 }[amt] || 1.6;
