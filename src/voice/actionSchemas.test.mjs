@@ -37,14 +37,34 @@ test('the complete Realtime tool payload pins the manifest-generated layer relea
     // consolidated tool wording (each policy stated once); model-facing tools
     // omit top-level anyOf (OpenAI rejects it). Contacts list routing preserves
     // requested radius and center authority in descriptions only.
-    // Street Level and GNSS extend the manifest; tracked and analyst aircraft describe broadcasts.
-    // Air quality (ECCC AQHI) extends the manifest.
-    // Globe rotation adds one motion; visual keyhole fit and explicit
-    // reset guidance/defaults update only move_camera and mode descriptions.
-    // Restore base descriptions; append only globe-rotation defaults and fit guidance.
+    // Street Level, GNSS and air quality (ECCC AQHI) extend the manifest;
+    // tracked and analyst aircraft describe broadcasts; globe rotation adds
+    // one motion; show_street_level (map, source, photo) is the only change
+    // on top of main.
+    SHOW_STREET_LEVEL_PAYLOAD_DIGEST,
+  );
+  // Every shipped tool is byte-identical to the previous release: the new
+  // tool is the whole difference, so a later edit cannot hide in a re-pin.
+  const shipped = createHash('sha256')
+    .update(
+      JSON.stringify(
+        stable(
+          GEV_REALTIME_TOOLS.filter(
+            (tool) =>
+              !['set_cyber_sonar', 'show_street_level'].includes(tool.name),
+          ),
+        ),
+      ),
+    )
+    .digest('hex');
+  assert.equal(
+    shipped,
     '967b5a043b812e2f8c1e190fc571cf12b960c9d4486df736902221aab4d99cf6',
   );
 });
+
+const SHOW_STREET_LEVEL_PAYLOAD_DIGEST =
+  '5730cd99966a696771b62edb8b29e7a84cda685958a14889e84a0a93f7653ce3';
 
 test('descriptions customize wording without changing immutable shared arguments', () => {
   const descriptions = {
@@ -100,7 +120,10 @@ test('metadata cannot add tools, fields, types or enum values', () => {
 
 test('all legacy action arguments are byte-identical after removing the deliberate additions', () => {
   const legacy = structuredClone(GEV_ACTION_SCHEMAS).filter(
-    (tool) => !['next_satellite_pass', 'set_cyber_sonar'].includes(tool.name),
+    (tool) =>
+      !['next_satellite_pass', 'set_cyber_sonar', 'show_street_level'].includes(
+        tool.name,
+      ),
   );
   // Layer enums are generated from the voice layer manifest and pinned by
   // layerManifest.test.mjs; the two shipped right-rail panels are additive.

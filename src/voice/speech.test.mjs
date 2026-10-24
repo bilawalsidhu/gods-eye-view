@@ -459,3 +459,151 @@ test('labels are bounded and cleaned before they are spoken', () => {
     'background steps stay on screen',
   );
 });
+
+test('street-level speech names the source and the place, and says which step failed', () => {
+  const ok = envelope('show_street_level', {
+    ok: true,
+    action: 'show_street_level',
+    provider: 'google',
+    providerName: 'Google Street View',
+    label: '10th Street, Sacramento',
+    title: '1000 10th St, Sacramento, CA',
+    capturedAt: Date.UTC(2024, 4, 1), // Google dates: the first of the month, UTC
+  });
+  assert.equal(ok.say, 'Google Street View at 1000 10th St, Sacramento, CA.');
+  assertSpeakable(ok.say);
+  assert.equal(ok.display.title, 'Google Street View');
+  assert.equal(ok.display.lines[1], 'Captured May 2024');
+
+  const stages = {
+    location: "Couldn't find Nowhere.",
+    map: "Google Street View needs the Google 3D map, which isn't available.",
+    key: 'Google Street View needs its key.',
+    layer: "Couldn't turn on Street Level.",
+    imagery: 'No Google Street View imagery near Nowhere.',
+  };
+  for (const [stage, say] of Object.entries(stages)) {
+    const out = envelope('show_street_level', {
+      ok: false,
+      stage,
+      label: 'Nowhere',
+      providerName: 'Google Street View',
+      error: 'detail',
+    });
+    assert.equal(out.say, say, stage);
+    assertSpeakable(out.say);
+    assert.deepEqual(out.display.lines, ['detail']);
+  }
+  const armed = envelope('show_street_level', {
+    ok: true,
+    armed: true,
+    providerName: 'Google Street View',
+    label: '10th St, Sacramento',
+  });
+  assert.equal(armed.say, 'Google Street View is ready at 10th St, Sacramento: press OPEN to load it.');
+  assertSpeakable(armed.say);
+  assert.deepEqual(armed.display.lines, ['10th St, Sacramento', 'Press OPEN to load the photo']);
+  const unfound = envelope('show_street_level', {
+    ok: false,
+    stage: 'location',
+    location: { ok: false, action: 'fly_to_location', label: 'Nowhere Town' },
+  });
+  assert.equal(unfound.say, "Couldn't find Nowhere Town.");
+  assert.equal(unfound.display.title, 'Street Level');
+  const refused = envelope('show_street_level', {
+    ok: false,
+    stage: 'key',
+    keyRejected: true,
+    providerName: 'Google Street View',
+  });
+  assert.equal(refused.say, 'Google Street View refused its key.');
+  assert.equal(
+    envelope('show_street_level', { ok: false, cancelled: true }).say,
+    undefined,
+  );
+  assert.equal(
+    planStepLabel('show_street_level', {
+      query: 'Eiffel Tower',
+      provider: 'google',
+    }),
+    'Street View at Eiffel Tower',
+  );
+  assert.equal(
+    planStepLabel('show_street_level', {
+      query: 'Times Square',
+      provider: 'mapillary',
+    }),
+    'Mapillary at Times Square',
+  );
+  assert.equal(
+    progressStepLabel('imagery', 'Eiffel Tower'),
+    'Opening imagery: Eiffel Tower',
+  );
+  assert.equal(progressLine('map', 'photoreal'), 'Switching to Google 3D.');
+  assert.equal(
+    progressLine('imagery', 'Eiffel Tower'),
+    'Looking for imagery at Eiffel Tower.',
+  );
+});
+
+test('the capture month is a UTC month whatever the timezone, and labels name the place', async () => {
+  const { execFileSync } = await import('node:child_process');
+  const speech = new URL('./speech.js', import.meta.url).href;
+  // Google dates a panorama 2024-05 as the first of the month, UTC. West of
+  // Greenwich that instant is still April; the card must still say May.
+  const out = execFileSync(
+    process.execPath,
+    [
+      '--input-type=module',
+      '-e',
+      `import { attachVoiceResult } from ${JSON.stringify(speech)};
+       const r = attachVoiceResult('show_street_level', { ok: true, providerName: 'Google Street View', label: 'x', capturedAt: Date.UTC(2024, 4, 1) });
+       process.stdout.write(r.display.lines[1]);`,
+    ],
+    { env: { ...process.env, TZ: 'America/Los_Angeles' }, encoding: 'utf8' },
+  );
+  assert.equal(out, 'Captured May 2024');
+  const { narrationLabel } = await import('./speech.js');
+  assert.equal(narrationLabel('show_street_level', { query: 'Eiffel Tower' }), 'Eiffel Tower');
+  assert.equal(narrationLabel('show_street_level', {}), '');
+  assert.equal(
+    planStepLabel('show_street_level', { latitude: 1, longitude: 2 }),
+    'Street level at this spot',
+  );
+  assert.equal(planStepLabel('show_street_level', {}), 'Street level at the view centre');
+});
+
+test('the plan step names KartaView as a source', () => {
+  assert.equal(
+    planStepLabel('show_street_level', {
+      query: 'Alexanderplatz',
+      provider: 'kartaview',
+    }),
+    'KartaView at Alexanderplatz',
+  );
+});
+
+test('an empty street-level search names the imagery filter that hid the photos', () => {
+  const out = envelope('show_street_level', {
+    ok: false,
+    stage: 'imagery',
+    label: 'Alexanderplatz',
+    providerName: 'KartaView',
+    filter: { pano: 'pano', label: '360° filter' },
+  });
+  assert.equal(
+    out.say,
+    'No KartaView imagery near Alexanderplatz with the 360° filter on.',
+  );
+  assertSpeakable(out.say);
+});
+
+test('the plan step names Panoramax as a source', () => {
+  assert.equal(
+    planStepLabel('show_street_level', {
+      query: 'Montmartre',
+      provider: 'panoramax',
+    }),
+    'Panoramax at Montmartre',
+  );
+});

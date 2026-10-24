@@ -1,5 +1,8 @@
+import { NEAREST_RADIUS_M } from '../../policy.js';
 import {
   MAPILLARY_GRAPH_HOST,
+  NEAREST_IMAGE_FIELDS,
+  NEAREST_LIMIT,
   SEQUENCE_IMAGE_FIELDS,
   SEQUENCE_IMAGES_LIMIT,
 } from './policy.js';
@@ -142,6 +145,25 @@ export function createMapillarySource({
           sequence_ids: String(sequenceId),
           fields: SEQUENCE_IMAGE_FIELDS,
           limit: String(limit),
+        },
+        { signal },
+      );
+      return Array.isArray(payload?.data) ? payload.data : [];
+    },
+
+    /** Images within `radius` metres of a point, in no particular order. */
+    async nearestImages(
+      { lat, lon, radius = NEAREST_RADIUS_M, limit = NEAREST_LIMIT },
+      { signal } = {},
+    ) {
+      const payload = await graph(
+        'images',
+        {
+          lat: String(lat),
+          lng: String(lon),
+          radius: String(Math.min(50, Math.max(1, radius))),
+          limit: String(Math.min(100, Math.max(1, limit))),
+          fields: NEAREST_IMAGE_FIELDS,
         },
         { signal },
       );

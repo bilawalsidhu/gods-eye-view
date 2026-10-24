@@ -46,6 +46,15 @@ const VIEWPORT = { width: 1440, height: 900 };
 /** Over downtown Sacramento, above the fixture photo line, looking down. */
 const PARK = { lon: PHOTO_LINE.lon, lat: 38.5816, height: 900, pitch: -1.3 };
 const DAY_MS = 86_400_000;
+/** A Sacramento street with Street View, for the sl=google link step. */
+const STREET_VIEW_STREET = Object.freeze({ lon: -121.49372, lat: 38.57986 });
+/**
+ * What a Street View lookup and load cost: the Maps JS API's
+ * SingleImageSearch (the nearest lookup), GetMetadata and the panorama tiles.
+ * Script loads are not counted.
+ */
+const STREET_VIEW_REQUEST =
+  /MapsJsInternalService\/(SingleImageSearch|GetMetadata)|GeoPhotoService|streetviewpixels-pa\.googleapis\.com/;
 
 /**
  * Coverage for any street-zoom tile: a grid of 360°/flat, recent/old
@@ -233,6 +242,28 @@ async function boot(page, url) {
       el.remove();
   });
 }
+
+/**
+ * Open a share link as a fresh document. Changing only the hash of a live
+ * page and reloading races the app's share-link writer, which can put its own
+ * state back in the hash before the reload reads it. The page's fixtures (a
+ * CDP session on the page) carry over.
+ */
+async function bootLink(page, link) {
+  await page.goto('about:blank');
+  await boot(page, link);
+}
+
+/** The camera's position in degrees and metres. */
+const cameraAt = (page) =>
+  page.evaluate(() => {
+    const c = window.__godsEyeView.viewer.camera.positionCartographic;
+    return {
+      lon: (c.longitude * 180) / Math.PI,
+      lat: (c.latitude * 180) / Math.PI,
+      height: c.height,
+    };
+  });
 
 /** Run `test(uiState, arg)` in the page until it is true. */
 const uiUntil = (page, test, arg = null, timeout = 30_000) =>
@@ -749,6 +780,215 @@ async function main() {
       await press(page, '#sl-provider-chips [data-chip-id="mapillary"]');
       await uiUntil(page, litAlone, 'mapillary');
       await park(page);
+
+      const base = url.split('#')[0];
+      await fixtureStep(
+        'a link to street-level photos (sl=) opens the photo at its point once the link restores',
+        async () => {
+          const photo = fixture.images[0];
+          // The camera sits ~330 m north of the photo: the lookup must use
+          // the link's point, not the view centre.
+          const cameraLat = Number((photo.lat + 0.003).toFixed(6));
+          await bootLink(
+            page,
+            `${base}#v=2&lat=${cameraLat}&lon=${photo.lon}&alt=600&heading=0&pitch=-60&roll=0&sl=mapillary,${photo.lat},${photo.lon}`,
+          );
+          await uiUntil(
+            page,
+            (u) => (u.street.imageId && !u.street.loading) || u.street.error,
+            null,
+            90_000,
+          );
+          const { street } = await getUI(page);
+          assert.equal(street.error, null, `viewer error: ${street.error}`);
+          assert.equal(street.providerId, 'mapillary');
+          assert.equal(
+            street.imageId,
+            photo.id,
+            `the photo at the link's point, not the one nearest the camera: ${street.imageId}`,
+          );
+          assert.equal(
+            await page.evaluate(() => location.hash.includes('sl=')),
+            false,
+            'the rewritten link no longer carries the one-shot request',
+          );
+        },
+      );
+
+      await fixtureStep(
+        'the show_street_level action opens the nearest photo at a point without a pointer',
+        async () => {
+          await page.evaluate(() =>
+            window.__godsEyeView.dataManager.layers
+              .get('street-level')
+              .module.closeViewer(),
+          );
+          const photo = fixture.images[0];
+          const result = await page.evaluate(
+            (at) =>
+              window.__godsEyeView.voiceCommands.runner('show_street_level', {
+                latitude: at.lat,
+                longitude: at.lon,
+                provider: 'mapillary',
+                fly: false,
+              }),
+            { lat: photo.lat, lon: photo.lon },
+          );
+          assert.equal(
+            result.ok,
+            true,
+            `action failed: ${result.stage} ${result.error}`,
+          );
+          assert.equal(result.provider, 'mapillary');
+          assert.ok(
+            fixture.images.some((image) => image.id === result.imageId),
+            `a fixture photo opened: ${result.imageId}`,
+          );
+          assert.match(result.say || '', /^Mapillary at /);
+        },
+      );
+
+      await step(
+        'an sl=google link never loads a photo by itself: keyless it stops at the key, keyed it arms and waits for OPEN',
+        async ({ skipped }) => {
+          const point = STREET_VIEW_STREET;
+          // ~330 m north of the street: a flight would move the camera, and a
+          // press that ignored the armed point would open something else.
+          const cameraLat = Number((point.lat + 0.003).toFixed(6));
+          const googleRequests = [];
+          const onRequest = (request) => {
+            if (STREET_VIEW_REQUEST.test(request.url()))
+              googleRequests.push(request.url());
+          };
+          page.on('request', onRequest);
+          try {
+            await bootLink(
+              page,
+              `${base}#v=2&lat=${cameraLat}&lon=${point.lon}&alt=600&heading=0&pitch=-60&roll=0&map=osm&sl=google,${point.lat},${point.lon}`,
+            );
+            await page.waitForFunction(
+              (want) => {
+                const c =
+                  window.__godsEyeView.viewer.camera.positionCartographic;
+                return Math.abs((c.latitude * 180) / Math.PI - want) < 0.0005;
+              },
+              { timeout: 60_000 },
+              cameraLat,
+            );
+            const googleKey = await page.evaluate(() =>
+              Boolean(window.__GOOGLE_MAPS_API_KEY__),
+            );
+            if (!googleKey) {
+              // Without a key the action stops at the key, before any flight,
+              // map switch or source change, and the direct call says why.
+              const direct = await page.evaluate(
+                (at) =>
+                  window.__godsEyeView.voiceCommands.runner(
+                    'show_street_level',
+                    {
+                      latitude: at.lat,
+                      longitude: at.lon,
+                      provider: 'google',
+                      fly: false,
+                      autoOpen: false,
+                    },
+                  ),
+                point,
+              );
+              assert.equal(direct.ok, false);
+              assert.equal(
+                direct.stage,
+                'key',
+                `${direct.stage} ${direct.error}`,
+              );
+              const after = await page.evaluate(() => {
+                const m =
+                  window.__godsEyeView.dataManager.layers.get(
+                    'street-level',
+                  ).module;
+                const u = m.getUIState();
+                return {
+                  stack: window.__godsEyeView.mapStackController.getActiveId(),
+                  google: m.getParams().google === true,
+                  armed: u.street.armed,
+                  open: u.street.open,
+                };
+              });
+              assert.deepEqual(
+                after,
+                { stack: 'osm', google: false, armed: null, open: false },
+                'a keyless Street View link changes nothing',
+              );
+              const still = await cameraAt(page);
+              assert.ok(
+                Math.abs(still.lat - cameraLat) < 0.0005,
+                `the camera did not fly: ${still.lat}`,
+              );
+              assert.deepEqual(googleRequests, [], 'no Street View request');
+              return;
+            }
+            const photoreal = await page.evaluate(() =>
+              window.__godsEyeView.mapStackController.isStackAvailable(
+                'photoreal',
+              ),
+            );
+            if (!photoreal) return skipped('no Google 3D');
+            await uiUntil(
+              page,
+              (u) =>
+                u.street.armed !== null &&
+                u.providers.some((p) => p.id === 'google' && p.on),
+              null,
+              90_000,
+            );
+            const beforePress = googleRequests.length;
+            const waiting = await getUI(page);
+            assert.equal(
+              waiting.street.open,
+              false,
+              'nothing open without a click',
+            );
+            assert.equal(waiting.street.imageId, null);
+            assert.deepEqual(
+              waiting.street.armed.point,
+              { lat: point.lat, lon: point.lon },
+              'armed at the link point',
+            );
+            assert.equal(
+              beforePress,
+              0,
+              'no Street View request before the press',
+            );
+            await expandPanel(page);
+            await press(page, '#sl-nearest-btn');
+            await uiUntil(
+              page,
+              (u) => (u.street.imageId && !u.street.loading) || u.street.error,
+              null,
+              90_000,
+            );
+            const { street } = await getUI(page);
+            assert.equal(street.error, null, `viewer error: ${street.error}`);
+            assert.equal(street.providerId, 'google');
+            assert.ok(
+              googleRequests.length >= 1,
+              'the press made the Street View request',
+            );
+            const metres = Math.hypot(
+              (street.position.lat - point.lat) * 111_320,
+              (street.position.lon - point.lon) *
+                111_320 *
+                Math.cos((point.lat * Math.PI) / 180),
+            );
+            assert.ok(
+              metres <= 250,
+              `within 250 m of the link point: ${Math.round(metres)} m`,
+            );
+          } finally {
+            page.off('request', onRequest);
+          }
+        },
+      );
 
       await fixtureStep(
         'keyless server (second page): KEY REQUIRED gates the controls',

@@ -101,11 +101,26 @@ action draws (pins, highlights, areas, arrows, routes and labels at a place
 name or coordinates). Links carry them in the `an` parameter, and the app
 draws them once the link has been restored.
 
+A view can open street-level photos too: `street_level` names a source
+(`google` for Street View, `mapillary`, `kartaview`, `panoramax`, or none for
+whichever the panel has lit) and a point, which defaults to the spot the camera looks at. Street View
+shows only on the Google 3D map, so a `google` source sets `map` to
+`photoreal` and any other map is refused; a view cannot both follow an entity
+and open photos. The `street-level` layer is turned on. Links carry it as
+`sl=<source>,<lat>,<lon>`; once the link has restored, the app runs its
+`show_street_level` action, which flies to the point at street framing and
+opens the nearest photo. A plain link with a `google` source stops before the
+billed load: the panel is armed and OPEN GOOGLE STREET VIEW is one click away.
+A view posted into the embedded app, or the panel page's own opening link,
+opens the photo, since it is the client's own request; `?embed=1` on a
+published link does not. Mapillary, KartaView and Panoramax links open the
+photo at once; none of them bills per image. A link that follows an entity ignores `sl`.
+
 Tools take a view as `VIEW_ARGUMENTS`: an `area` to frame from above, or a
-`camera`, plus `layers`, `style`, `map`, `follow` and `annotations`. A
-tilted camera over an area looks at its center from behind; camera fields
-given with an area override its framing. `resolveViewArguments` turns them
-into a view.
+`camera`, plus `layers`, `style`, `map`, `follow`, `annotations` and
+`street_level`. A tilted camera over an area looks at its center from behind;
+camera fields given with an area override its framing. `resolveViewArguments`
+turns them into a view.
 
 ### The God's Eye View panel
 
@@ -298,5 +313,5 @@ and the development server's internal routes. See SECURITY.md.
 | `situation_brief` | `weather` | Weather, earthquakes, fires, aircraft, ships and cyclones for an area, by section |
 | `military_awareness` | `military` | Military and other aircraft, ships and military installations within 250 km of a point, by section |
 | `get_hud_caption` | `weather`, `summary` | The app's heads-up display caption for an area |
-| `show_in_gods_eye_view` | `app` | A view in God's Eye View: the live panel in clients with MCP Apps, and a link everywhere; takes another answer's view or an area or camera, layers, style, map, marks and something to follow |
+| `show_in_gods_eye_view` | `app` | A view in God's Eye View: the live panel in clients with MCP Apps, and a link everywhere; takes another answer's view or an area or camera, layers, style, map, marks, something to follow, or street-level photos (Street View or Mapillary) at a place |
 | `panel_request` | `app` | Panel only: loads a path from the app's server for the God's Eye View panel |

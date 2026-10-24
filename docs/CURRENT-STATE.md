@@ -657,7 +657,7 @@ Voice controls bind to a protocol-independent session factory. The default WebRT
 
 The standalone app offers OpenAI and Gemini Live through an explicit provider chooser. Gemini keeps its permanent API key on the local server and mints a short-lived, single-use credential with server-owned instructions and the standalone action catalog. Its native WebSocket adapter supports open microphone and push-to-talk input, streaming audio, captions and the existing action runner. In push-to-talk, a tool call that arrives with no input, reply or tool result outstanding is answered with a failure and never runs, and neither does any other call in the reply it starts; open-microphone turns start on Gemini's server-side activity detection, which reports no boundary to check. Switching providers ends the old conversation and releases its microphone and connection; only the input mode carries over. Gemini uses bounded shutdown draining and explicit manual restart, without automatic reconnection or a promise of uninterrupted session duration. Hosts that do not opt into the provider facade retain their existing default or custom adapter.
 
-Voice action argument schemas have one portable owner under `src/voice/actionSchemas.js`. The Realtime provider builds 30 tools using separate description-only metadata. Description customization cannot replace argument types, enum values or required fields.
+Voice action argument schemas have one portable owner under `src/voice/actionSchemas.js`. The Realtime provider builds 31 tools using separate description-only metadata. Description customization cannot replace argument types, enum values or required fields.
 
 `createGevActionRunner` routes `control_cctv` enable/disable through the shared
 layer visibility lifecycle. Results distinguish successful changes from
@@ -3991,6 +3991,53 @@ core's lookups alone. The MCP globe panel allows the meta-catalogue and the
 three biggest instances; a picture on another instance shows only in the
 app.
 
+**"Show me X on Street View."** The `show_street_level` assistant action
+(voice and typed; `src/voice/gevActions.js`) is one call: it checks the
+source has its key (a keyless source explains itself and changes nothing, as
+a chip does), flies to the place at street framing and waits for arrival (a
+name, coordinates, a pointed spot, a numbered item, or nothing for the view
+centre), switches to the map the source needs (Google Street View: Google 3D),
+lights that source through `setLayerParams` with origin `voice` (one source at
+a time, kept in the share link like a chip click), turns the layer on and
+calls `openNearest`. `provider` is `google` for "Street View", `mapillary`,
+`kartaview` or `panoramax` by name, else the lit source. Stages fail separately (`location`, `map`,
+`provider`, `layer`, `key`, `imagery`; an empty `imagery` result names a
+narrowing 360°/flat or SINCE filter the source honours, as `filter`) and a
+newer turn retires the lookup
+(`openNearest`'s `signal` option), so nothing opens after the user moved on.
+For a source without a coverage layer the lookup widens to 250 m
+(`NEAREST_RADIUS_MAX_M`; Google honours it, Mapillary's API caps at 50 m);
+clicks keep 50 m. The layer exposes `requiredMapStack(id)` and
+`providerStatus(id)` for callers that must decide before the panel lists a
+source, and `coverageLines(id)` (the lines a provider draws now, current and
+stale tiles, as `[lon, lat]` parts) for diagnostics and the browser gate,
+which aims its line clicks at that geometry, waits for the asynchronous
+ground primitives to be ready, and clicks in the same JavaScript turn as the
+pick so a rebuilt frame cannot come between them. Views carry the same request as `street_level` (`src/view/index.js`:
+source and point, defaulting to where the camera looks; a `google` source
+brings `map: photoreal` and refuses another map; not with `follow`), links as
+`sl=<source>,<lat>,<lon>`; `show_in_gods_eye_view` accepts it, the globe panel
+applies it through the action, and a plain link runs the action once restored
+(one shot: the rewritten hash drops `sl`). In embed mode the rail holding the
+panel is hidden, so an open photo moves to an overlay on the globe
+(`sl-viewer-wrap-embed`) and back when it closes; Esc closes it (in full
+screen, Esc leaves full screen first). A caller's abort is
+honoured through the viewer's mount and load, not just the lookup, and only
+the lookup that still owns the panel may change its spinner or error. A
+passive link's photos stand down if anyone navigated (a gesture, a search,
+the assistant) while the link waited behind its own marks. A plain
+link never loads a photo from a source that bills every load
+(`billedPerImage` on the provider; Google): the action runs with
+`autoOpen: false`, arms the lookup on the layer (`armNearest`: the link's
+point and radius, consumed only by the next OPEN press (`aim:
+'screen-centre'`); any other lookup, open, close, disable, its source
+switched off or its map leaving drops it), opens the panel and a toast
+points at OPEN GOOGLE STREET VIEW. Only the panel page's own link (inline
+embed) and posted views open the photo; `?embed=1` on a published link only
+arms, without the panel nudge or toast (the rail is hidden in a frame). A link that follows an entity ignores `sl`.
+The look-at default applies below 20 km, at a pitch steeper than -5° and
+within 10 km ahead; otherwise the camera's own point is used.
+
 Street Level has two browser gates. `npm run qa:street-level -- --url <server>`
 runs against real Mapillary and needs `MAPILLARY_CLIENT_TOKEN`. `npm run
 qa:street-level:fixtures -- --url <server>` answers every Mapillary request
@@ -4983,7 +5030,7 @@ and unreachable upstream (502/504) separately from road geometry.
 
 - **Token flow**: browser fetches a short-lived client secret from `/api/realtime/token`; the Vite middleware uses `OPENAI_API_KEY` by default, or the signed-in local ChatGPT/Codex OAuth access token when OAuth was explicitly selected in Provider Settings, and posts the full session config (instructions, tool schemas, VAD, truncation) to `api.openai.com/v1/realtime/client_secrets`. Both long-lived credentials stay server-side; OAuth minting is loopback-only. SDP exchange goes directly to `api.openai.com/v1/realtime/calls` with the ephemeral token.
 - **Session defaults** (env-tunable): model `gpt-realtime-2` (or `gpt-realtime-2.1-mini` when the MINI tier is selected — see the model-tier entry below), voice `marin`, reasoning effort `low`, semantic VAD with low eagerness, no response interruption, context window truncated to ~3,000 post-instruction tokens with 0.5 retention ratio — the conversational window stays short because map state is fetched live per turn.
-- **Thirty tools** (argument schemas in `src/voice/actionSchemas.js`, served with their descriptions by `server/providers/openai/tools.js`, executed client-side in `src/voice/gevActions.js`): `fly_to_location`, `select_nearest_aircraft`, `adjust_camera_zoom`, `zoom_to_globe`, `set_layer_visibility`, `show_data_layers_menu`, `set_panel_open`, `set_visual_style`, `get_entity_context`, `get_current_view_state`, `set_hud`, `set_cyber_sonar`, `set_detection`, `set_map_stack`, `set_post_processing`, `control_scene`, `control_cctv`, `set_context_mode`, `control_cockpit`, `control_radio`, `track_entity`, `stop_tracking`, `frame_overhead`, `annotate_map`, `clear_annotations`, `move_camera`, `fly_route`, `analyst_query`, `next_iss_pass`, and `next_satellite_pass`.
+- **Thirty-one tools** (argument schemas in `src/voice/actionSchemas.js`, served with their descriptions by `server/providers/openai/tools.js`, executed client-side in `src/voice/gevActions.js`): `fly_to_location`, `select_nearest_aircraft`, `show_street_level`, `adjust_camera_zoom`, `zoom_to_globe`, `set_layer_visibility`, `show_data_layers_menu`, `set_panel_open`, `set_visual_style`, `get_entity_context`, `get_current_view_state`, `set_hud`, `set_cyber_sonar`, `set_detection`, `set_map_stack`, `set_post_processing`, `control_scene`, `control_cctv`, `set_context_mode`, `control_cockpit`, `control_radio`, `track_entity`, `stop_tracking`, `frame_overhead`, `annotate_map`, `clear_annotations`, `move_camera`, `fly_route`, `analyst_query`, `next_iss_pass`, and `next_satellite_pass`.
 
 > **Reading `npm test` totals:** the count depends on the Node major. The two
 > GC-bracketed allocation microbenchmarks (`src/data/focusAllocations.test.mjs`

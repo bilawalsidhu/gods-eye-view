@@ -526,6 +526,9 @@ export function createPanoramaxProvider({
           cones.clearSelection();
           drawn = null;
         },
+        // The lines drawn now (current and stale tiles), as [lon, lat]
+        // parts, for diagnostics and the browser gate's line clicks.
+        coverageLines: () => coverage.drawnLines(),
         sequenceStats: () => ({
           selectedId: state.sequence.selectedId,
           images: state.sequence.images.length,
