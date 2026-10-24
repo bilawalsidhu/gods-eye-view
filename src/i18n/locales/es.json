@@ -2937,6 +2937,7 @@
   "Gemini Live is unavailable for the configured model.": "Gemini Live no está disponible para el modelo configurado.",
   "Token request is too large": "La solicitud de credencial es demasiado grande",
   "Use an empty JSON token request": "Usa una solicitud de credencial con un objeto JSON vacío",
+  "Shared layer selection could not be restored": "No se pudo restaurar la selección de capas del enlace compartido",
   " Clouds are preserved from the source imagery.": " Las nubes provienen de las imágenes de origen.",
   "hemisphere|N": "N",
   "hemisphere|S": "S",

@@ -3004,6 +3004,7 @@
   "Gemini Live is unavailable for the configured model.": "Gemini Live недоступен для выбранной модели.",
   "Token request is too large": "Запрос токена слишком велик",
   "Use an empty JSON token request": "Используйте запрос токена с пустым объектом JSON",
+  "Shared layer selection could not be restored": "Не удалось восстановить выбор слоёв из общей ссылки",
   " Clouds are preserved from the source imagery.": " Облака оставлены такими, как на исходных снимках.",
   "hemisphere|N": "С",
   "hemisphere|S": "Ю",

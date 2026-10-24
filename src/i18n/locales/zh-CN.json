@@ -2033,6 +2033,7 @@
   "entity": "实体",
   "Shared {subject} follow expired": "分享的 {subject} 跟随已过期",
   "Shared {subject} could not be restored — feed unavailable": "无法恢复分享的 {subject}——数据源不可用",
+  "Shared layer selection could not be restored": "无法恢复分享链接中的图层选择",
   "Shared {subject} is unavailable": "分享的 {subject} 不可用",
   "ACQUIRING": "获取中",
   "SHARED {subject}": "分享的 {subject}",
