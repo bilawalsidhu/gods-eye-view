@@ -2,7 +2,13 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { createApplication } from './application.js';
-import { installTrackpadPinchZoom } from './viewer.js';
+import {
+  installTrackpadPinchZoom,
+  clampResolutionToTextureLimits,
+  installTextureLimitGuard,
+  setRequestedResolutionScale,
+  getRequestedResolutionScale,
+} from './viewer.js';
 
 const phases = ['Scene', 'Controls', 'Data', 'Tools'];
 function fixture(overrides = {}) {
@@ -340,4 +346,180 @@ test('trackpad pinch falls back to the original event when relay construction fa
   assert.equal(event.defaultPrevented, false);
   assert.equal(event.propagationStopped, false);
   assert.equal(f.relayed.length, 0);
+});
+
+test('clampResolutionToTextureLimits constrains resolutionScale on high-res displays (#905)', () => {
+  const getLimit = () => 2048;
+
+  // Case 1: 2560x1440 screen on a GPU with 2048 maxTextureSize (Issue #905 exact repro)
+  const viewer = {
+    resolutionScale: 1.0,
+    canvas: { clientWidth: 2560, clientHeight: 1440 },
+  };
+  clampResolutionToTextureLimits(viewer, { getLimit });
+  assert.equal(viewer.resolutionScale, 2048 / 2560);
+  assert.equal(viewer.canvas.clientWidth * viewer.resolutionScale, 2048);
+
+  // Case 2: Display within limit remains at requested scale (1.0)
+  const viewer1080p = {
+    resolutionScale: 1.0,
+    canvas: { clientWidth: 1920, clientHeight: 1080 },
+  };
+  clampResolutionToTextureLimits(viewer1080p, { getLimit });
+  assert.equal(viewer1080p.resolutionScale, 1.0);
+
+  // Case 3: Resizing smaller restores resolutionScale back to requested scale (1.0)
+  viewer.canvas.clientWidth = 1920;
+  viewer.canvas.clientHeight = 1080;
+  clampResolutionToTextureLimits(viewer, { getLimit });
+  assert.equal(viewer.resolutionScale, 1.0);
+
+  // Case 4: A deliberately lower requested scale (e.g. 0.75 preset) stays put when window shrinks
+  const viewerPreset = {
+    resolutionScale: 0.75,
+    canvas: { clientWidth: 3840, clientHeight: 2160 },
+  };
+  // On 4K with 2048 limit: maxAllowedScale = 2048 / 3840
+  clampResolutionToTextureLimits(viewerPreset, { getLimit });
+  assert.equal(viewerPreset.resolutionScale, 2048 / 3840);
+  // Shrinking window to 1080p restores requested preset 0.75, staying put
+  viewerPreset.canvas.clientWidth = 1920;
+  viewerPreset.canvas.clientHeight = 1080;
+  clampResolutionToTextureLimits(viewerPreset, { getLimit });
+  assert.equal(viewerPreset.resolutionScale, 0.75);
+
+  // Case 5: When useBrowserRecommendedResolution is false, accounts for devicePixelRatio
+  const viewerRetina = {
+    resolutionScale: 1.0,
+    useBrowserRecommendedResolution: false,
+    canvas: { clientWidth: 1600, clientHeight: 900 },
+  };
+  clampResolutionToTextureLimits(viewerRetina, {
+    getLimit,
+    getPixelRatio: () => 2.0,
+  });
+  // 1600 * 2.0 = 3200 > 2048 => 2048 / 3200 = 0.64
+  assert.equal(viewerRetina.resolutionScale, 2048 / 3200);
+
+  // Case 6: Safe with incomplete viewer or missing limits
+  clampResolutionToTextureLimits(null);
+  clampResolutionToTextureLimits({});
+  clampResolutionToTextureLimits(
+    { canvas: { clientWidth: 100 } },
+    { getLimit: () => 0 },
+  );
+});
+
+test('installTextureLimitGuard registers and cleans up window resize listeners', () => {
+  let resizeHandler = null;
+  const mockWindow = {
+    addEventListener(type, handler) {
+      if (type === 'resize') resizeHandler = handler;
+    },
+    removeEventListener(type, handler) {
+      if (type === 'resize' && resizeHandler === handler) resizeHandler = null;
+    },
+  };
+  let preRenderHandler = null;
+  const viewer = {
+    resolutionScale: 1.0,
+    canvas: { clientWidth: 2560, clientHeight: 1440 },
+    scene: {
+      preRender: {
+        addEventListener(handler) {
+          preRenderHandler = handler;
+        },
+        removeEventListener(handler) {
+          if (preRenderHandler === handler) preRenderHandler = null;
+        },
+      },
+    },
+  };
+  const uninstall = installTextureLimitGuard(viewer, {
+    getLimit: () => 2048,
+    windowTarget: mockWindow,
+  });
+  assert.equal(viewer.resolutionScale, 2048 / 2560);
+  assert.equal(typeof resizeHandler, 'function');
+  assert.equal(typeof preRenderHandler, 'function');
+
+  // Changing canvas size triggers recalculation on resize event
+  viewer.canvas.clientWidth = 3840;
+  resizeHandler();
+  assert.equal(viewer.resolutionScale, 2048 / 3840);
+
+  // Pre-render also recalculates
+  viewer.canvas.clientWidth = 2560;
+  preRenderHandler();
+  assert.equal(viewer.resolutionScale, 2048 / 2560);
+
+  // Disposing uninstalls listeners
+  uninstall();
+  assert.equal(resizeHandler, null);
+  assert.equal(preRenderHandler, null);
+});
+
+test('setRequestedResolutionScale records requested scale and preserves it across resizes (#905, #1017)', () => {
+  const viewer = {
+    resolutionScale: 1.0,
+    canvas: { clientWidth: 2560, clientHeight: 1440 },
+  };
+  const getLimit = () => 2048;
+
+  // At 2560, initial 1.0 clamps to 0.8 (2048 / 2560)
+  clampResolutionToTextureLimits(viewer, { getLimit });
+  assert.equal(viewer.resolutionScale, 2048 / 2560);
+
+  // Explicitly set scale to 0.8 via setRequestedResolutionScale
+  setRequestedResolutionScale(viewer, 0.8, { getLimit });
+  assert.equal(viewer.resolutionScale, 0.8);
+
+  // Shrink the window to 1080p: requested 0.8 stays 0.8 rather than reverting to 1.0
+  viewer.canvas.clientWidth = 1920;
+  viewer.canvas.clientHeight = 1080;
+  clampResolutionToTextureLimits(viewer, { getLimit });
+  assert.equal(viewer.resolutionScale, 0.8);
+
+  // Set scale to 1.0 again
+  setRequestedResolutionScale(viewer, 1.0, { getLimit });
+  assert.equal(viewer.resolutionScale, 1.0);
+});
+
+test('getRequestedResolutionScale and requestedResolutionScale getter preserve unconstrained value across save/restore (#1017)', () => {
+  const viewer = {
+    resolutionScale: 1.0,
+    canvas: { clientWidth: 2560, clientHeight: 1440 },
+  };
+  const getLimit = () => 2048;
+
+  const uninstall = installTextureLimitGuard(viewer, { getLimit });
+  // At 2560 wide, resolutionScale clamps to 0.8
+  assert.equal(viewer.resolutionScale, 2048 / 2560);
+  // Requested scale getter returns the unconstrained 1.0
+  assert.equal(getRequestedResolutionScale(viewer), 1.0);
+  assert.equal(viewer.getRequestedResolutionScale(), 1.0);
+  assert.equal(viewer.requestedResolutionScale, 1.0);
+
+  // Save / set / restore pattern:
+  const saved = viewer.requestedResolutionScale;
+  assert.equal(saved, 1.0);
+
+  // Temporarily set a lower scale (e.g. 0.5 for capture/perf)
+  viewer.requestedResolutionScale = 0.5;
+  assert.equal(viewer.resolutionScale, 0.5);
+  assert.equal(viewer.requestedResolutionScale, 0.5);
+
+  // Restore saved scale:
+  viewer.requestedResolutionScale = saved;
+  assert.equal(viewer.resolutionScale, 0.8); // Still clamped at 2560 wide
+  assert.equal(viewer.requestedResolutionScale, 1.0);
+
+  // Window shrinks to 1080p: scale cleanly restores to 1.0 rather than being stuck at 0.8
+  viewer.canvas.clientWidth = 1920;
+  viewer.canvas.clientHeight = 1080;
+  clampResolutionToTextureLimits(viewer, { getLimit });
+  assert.equal(viewer.resolutionScale, 1.0);
+
+  uninstall();
+  assert.equal(viewer.requestedResolutionScale, undefined);
 });

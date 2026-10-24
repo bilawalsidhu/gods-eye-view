@@ -1277,6 +1277,13 @@ The application supplies actions and retains effect settings, restore claims and
 rendering. Native keyboard editing, model modes and current defaults are preserved.
 Destroying the UI removes these listeners before asynchronous teardown.
 
+The standard application viewer (`src/app/viewer.js`) clamps `viewer.resolutionScale`
+to the WebGL hardware limit (`Cesium.ContextLimits.maximumTextureSize`) on high-resolution
+displays, keeping drawing buffer dimensions within bounds for framebuffer depth/color
+textures and restoring requested scaling when the window shrinks. Code that
+changes the scale (presets, battery saver) should read and set
+`viewer.requestedResolutionScale`, the value before clamping; saving and
+restoring `viewer.resolutionScale` captures the clamped value instead.
 Ordinary sliders share the native range component in `ui/slider.js` and the
 `gev-quantitative-slider` surface in `ui/styles/slider.css`. Display, shader
 parameters, volume, replay speed, weather settings/history, imagery opacity and
