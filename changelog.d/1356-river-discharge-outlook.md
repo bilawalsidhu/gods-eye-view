@@ -9,4 +9,4 @@
   the river and gives the peak and its day, today's flow, the ensemble spread
   and the percentiles. It is a modelled outlook, not observed flooding or an
   official warning, and the free Open-Meteo API is non-commercial
-  (daikaginza, #PR).
+  (daikaginza, #1356).
