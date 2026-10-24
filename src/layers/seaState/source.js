@@ -1,10 +1,10 @@
 import { msg } from '../../i18n/marker.js';
-import { createIfsFieldSource } from '../weather/ifsFieldSource.js';
+import { createGlobalFieldSource } from '../weather/globalFieldSource.js';
 import { decodeSeaStateGrid, parseSeaStateManifest } from './model.js';
 
 /** Read the global significant-wave-height field through the same-origin route. */
 export function createSeaStateSource({ fetchImpl } = {}) {
-  return createIfsFieldSource({
+  return createGlobalFieldSource({
     route: '/api/sea-state',
     errorPrefix: 'Sea state',
     networkError: msg('Sea state network error'),

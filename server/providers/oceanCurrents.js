@@ -1,10 +1,11 @@
 import { decodeWindGribMessage } from './wind/decode.js';
 import { ifsObjectUrls } from './wind/ifs.js';
 import {
-  createIfsFieldRoute,
   fetchIfsCycleMessages,
+  ifsFieldGridId,
   resampleMaskedGrid,
 } from './ifsOcean.js';
+import { createGlobalFieldRoute } from './globalFieldRoute.js';
 
 // ECMWF IFS open data, `oper` stream: eastward and northward surface sea water
 // velocity (`sve`, `svn`, m/s) from the coupled ocean model, on the same 0.25°
@@ -90,10 +91,12 @@ export function oceanCurrentsProxy({
   decodeImpl = decodeWindGribMessage,
   load = fetchIfsSurfaceCurrents,
 } = {}) {
-  return createIfsFieldRoute({
+  return createGlobalFieldRoute({
     name: 'ocean-currents',
     path: '/api/ocean-currents',
     errorCode: 'ocean_currents_unavailable',
+    source: 'ecmwf-ifs',
+    gridId: ifsFieldGridId,
     load,
     describe: ({ grid }) => ({
       field: {

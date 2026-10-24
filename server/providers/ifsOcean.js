@@ -4,23 +4,11 @@ import {
   parseIfsIndex,
   selectLatestIfsCycle,
 } from './wind/ifs.js';
-import { coalesceProxyRequest } from './common/http.js';
 
 // Shared by the ocean fields read from ECMWF IFS open data (sea state from
 // the `wave` stream, surface currents from `oper`): one global field per
-// cycle step, read by byte range, resampled with land masked, and served as
-// a small JSON manifest plus a little-endian float32 grid.
-
-/** One global field per cycle step, so the cache needs one entry. */
-const CACHE_KEY = 'field';
-const TTL_MS = 3600_000;
-/** A failed refresh is not retried sooner than this. */
-const RETRY_MS = 60_000;
-/** An older field is not served, even marked stale. */
-const STALE_LIMIT_MS = 24 * 3600_000;
-const TIMEOUT_MS = 40_000;
-/** The issued grid and the one before it, to cover a manifest/grid rollover. */
-const GRID_HISTORY = 2;
+// cycle step, read by byte range and resampled with land masked. The route
+// that serves them is server/providers/globalFieldRoute.js.
 
 /**
  * Resample a north-to-south source grid with missing points onto a global
@@ -168,145 +156,7 @@ export async function fetchIfsCycleMessages({
   }
 }
 
-/**
- * A bounded, single-flight, global IFS field route for dev and preview:
- * `<path>` answers a JSON manifest and `<path>/grid/<id>.bin` the grid bytes.
- * A fresh field is served from memory for an hour; a failed refresh waits a
- * minute before the next try and keeps serving the last field, marked stale,
- * for up to a day; with nothing to serve the route answers 502 `errorCode`.
- * @param {{name: string, path: string, errorCode: string,
- *   load: (options: object) => Promise<{cycle: object}>,
- *   describe: (snapshot: object) => object,
- *   gridOf: (snapshot: object) => Float32Array,
- *   fetchImpl?: Function, now?: () => number, decodeImpl?: Function}} options
- */
-export function createIfsFieldRoute({
-  name,
-  path: routePath,
-  errorCode,
-  load,
-  describe,
-  gridOf,
-  fetchImpl,
-  now,
-  decodeImpl,
-}) {
-  const inFlight = new Map();
-  const grids = new Map();
-  let current = null;
-  let lastAttempt = -Infinity;
-
-  async function refresh() {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
-    try {
-      const snapshot = await load({
-        fetchImpl,
-        now,
-        decodeImpl,
-        signal: controller.signal,
-      });
-      const { cycle } = snapshot;
-      const id = `ifs-${cycle.date}-${cycle.hour}-f${cycle.forecastHour}-${snapshot.grid.dx}`;
-      const state = { id, snapshot, fetchedAt: now() };
-      grids.set(id, state);
-      while (grids.size > GRID_HISTORY) grids.delete(grids.keys().next().value);
-      current = state;
-      return state;
-    } finally {
-      clearTimeout(timer);
-    }
-  }
-
-  async function acquire() {
-    if (current && now() - current.fetchedAt < TTL_MS)
-      return { state: current, stale: false };
-    // Join a refresh already running; start one only outside the retry gap.
-    if (inFlight.has(CACHE_KEY) || now() - lastAttempt >= RETRY_MS) {
-      try {
-        const { promise } = coalesceProxyRequest(inFlight, CACHE_KEY, () => {
-          lastAttempt = now();
-          return refresh();
-        });
-        return { state: await promise, stale: false };
-      } catch {
-        /* fall through to the last good field */
-      }
-    }
-    const kept = current && now() - current.fetchedAt <= STALE_LIMIT_MS;
-    return kept ? { state: current, stale: true } : null;
-  }
-
-  function manifest({ id, snapshot, fetchedAt }, stale) {
-    const { grid } = snapshot;
-    return {
-      schemaVersion: 1,
-      source: 'ecmwf-ifs',
-      ...describe(snapshot),
-      cycle: snapshot.cycle,
-      grid: {
-        nx: grid.nx,
-        ny: grid.ny,
-        lo1: grid.lo1,
-        la1: grid.la1,
-        dx: grid.dx,
-        dy: grid.dy,
-      },
-      ageMs: Math.max(0, now() - fetchedAt),
-      stale,
-      gridUrl: `${routePath}/grid/${id}.bin`,
-    };
-  }
-
-  async function handler(req, res) {
-    const json = (status, value, extra = {}) => {
-      if (res.destroyed) return;
-      res.writeHead(status, {
-        'Content-Type': 'application/json',
-        'Cache-Control': 'no-store',
-        ...(status === 405 ? { Allow: 'GET' } : {}),
-        ...extra,
-      });
-      res.end(JSON.stringify(value));
-    };
-    if (req.method !== 'GET') return json(405, { error: 'method_not_allowed' });
-    const path = (req.url || '/').split('?')[0];
-    if (path.startsWith('/grid/')) {
-      const match = /^\/grid\/([\w.-]+)\.bin$/.exec(path);
-      const state = match && grids.get(match[1]);
-      if (!state) return json(404, { error: 'unknown_grid' });
-      const values = gridOf(state.snapshot);
-      res.writeHead(200, {
-        'Content-Type': 'application/octet-stream',
-        'Cache-Control': 'public, max-age=3600, immutable',
-      });
-      return res.end(
-        Buffer.from(values.buffer, values.byteOffset, values.byteLength),
-      );
-    }
-    if (path !== '/' && path !== '')
-      return json(404, { error: 'unknown_route' });
-    const result = await acquire();
-    if (!result)
-      return json(
-        502,
-        { error: errorCode },
-        { 'Retry-After': String(RETRY_MS / 1000) },
-      );
-    json(
-      200,
-      manifest(result.state, result.stale),
-      result.stale ? { 'X-Data-Stale': 'true' } : {},
-    );
-  }
-
-  return {
-    name,
-    configureServer({ middlewares }) {
-      middlewares.use(routePath, handler);
-    },
-    configurePreviewServer({ middlewares }) {
-      middlewares.use(routePath, handler);
-    },
-  };
+/** Grid id of an IFS field: run date and hour, forecast step, spacing. */
+export function ifsFieldGridId({ cycle, grid }) {
+  return `ifs-${cycle.date}-${cycle.hour}-f${cycle.forecastHour}-${grid.dx}`;
 }

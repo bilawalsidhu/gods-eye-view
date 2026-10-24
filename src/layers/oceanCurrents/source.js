@@ -1,5 +1,5 @@
 import { msg } from '../../i18n/marker.js';
-import { createIfsFieldSource } from '../weather/ifsFieldSource.js';
+import { createGlobalFieldSource } from '../weather/globalFieldSource.js';
 import {
   decodeOceanCurrentsGrid,
   parseOceanCurrentsManifest,
@@ -7,7 +7,7 @@ import {
 
 /** Read the global surface-current field through the same-origin route. */
 export function createOceanCurrentsSource({ fetchImpl } = {}) {
-  const source = createIfsFieldSource({
+  const source = createGlobalFieldSource({
     route: '/api/ocean-currents',
     errorPrefix: 'Ocean currents',
     networkError: msg('Ocean currents network error'),

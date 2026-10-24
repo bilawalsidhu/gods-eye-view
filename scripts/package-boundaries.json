@@ -2577,7 +2577,7 @@
       "src/app/layers/seaState.js",
       "src/layers/weather/fieldTexture.js",
       "src/layers/weather/maskedGrid.js",
-      "src/layers/weather/ifsFieldSource.js",
+      "src/layers/weather/globalFieldSource.js",
       "src/app/layers/oceanCurrents.js",
       "src/layers/oceanCurrents/index.js",
       "src/layers/oceanCurrents/model.js",
@@ -3156,7 +3156,7 @@
       "src/app/layers/seaState.js",
       "src/layers/weather/fieldTexture.js",
       "src/layers/weather/maskedGrid.js",
-      "src/layers/weather/ifsFieldSource.js",
+      "src/layers/weather/globalFieldSource.js",
       "src/app/layers/oceanCurrents.js",
       "src/layers/oceanCurrents/index.js",
       "src/layers/oceanCurrents/model.js",
@@ -3888,7 +3888,7 @@
       "src/layers/seaState/model.js",
       "src/layers/weather/maskedGrid.js",
       "src/layers/seaState/source.js",
-      "src/layers/weather/ifsFieldSource.js"
+      "src/layers/weather/globalFieldSource.js"
     ],
     "external": ["cesium"]
   },
@@ -3897,7 +3897,7 @@
     "modules": [
       "src/layers/seaState/source.js",
       "src/i18n/marker.js",
-      "src/layers/weather/ifsFieldSource.js",
+      "src/layers/weather/globalFieldSource.js",
       "src/sources/httpBody.js",
       "src/layers/seaState/model.js",
       "src/layers/weather/maskedGrid.js"
@@ -3930,7 +3930,7 @@
       "src/layers/oceanCurrents/model.js",
       "src/layers/weather/maskedGrid.js",
       "src/layers/oceanCurrents/source.js",
-      "src/layers/weather/ifsFieldSource.js"
+      "src/layers/weather/globalFieldSource.js"
     ],
     "external": ["cesium"]
   },
@@ -3939,7 +3939,7 @@
     "modules": [
       "src/layers/oceanCurrents/source.js",
       "src/i18n/marker.js",
-      "src/layers/weather/ifsFieldSource.js",
+      "src/layers/weather/globalFieldSource.js",
       "src/sources/httpBody.js",
       "src/layers/oceanCurrents/model.js",
       "src/layers/weather/maskedGrid.js"

@@ -1,9 +1,10 @@
 import { decodeWindGribMessage } from './wind/decode.js';
 import {
-  createIfsFieldRoute,
   fetchIfsCycleMessages,
+  ifsFieldGridId,
   resampleMaskedGrid,
 } from './ifsOcean.js';
+import { createGlobalFieldRoute } from './globalFieldRoute.js';
 
 // ECMWF IFS open data, wave stream: significant height of combined wind waves
 // and swell (`swh`, metres) on the same 0.25° grid and cycles as the `oper`
@@ -59,10 +60,12 @@ export function seaStateProxy({
   decodeImpl = decodeWindGribMessage,
   load = fetchIfsWaveHeight,
 } = {}) {
-  return createIfsFieldRoute({
+  return createGlobalFieldRoute({
     name: 'sea-state',
     path: '/api/sea-state',
     errorCode: 'sea_state_unavailable',
+    source: 'ecmwf-ifs',
+    gridId: ifsFieldGridId,
     load,
     describe: ({ grid }) => ({
       field: { kind: 'significant-wave-height', units: 'm' },

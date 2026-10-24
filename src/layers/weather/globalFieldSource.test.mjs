@@ -1,13 +1,13 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { createIfsFieldSource } from './ifsFieldSource.js';
+import { createGlobalFieldSource } from './globalFieldSource.js';
 
 const GRID_BYTES = 1440 * 721 * 4;
 
 /** A source whose grid response declares `declared` bytes. */
 function sourceWith(components, declared) {
   const decoded = [];
-  const feed = createIfsFieldSource({
+  const feed = createGlobalFieldSource({
     route: '/api/field',
     errorPrefix: 'Field',
     networkError: 'Field network error',

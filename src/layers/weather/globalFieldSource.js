@@ -7,8 +7,8 @@ import {
 const COMPONENT_BYTES = 1440 * 721 * 4;
 
 /**
- * Read one global IFS field through its same-origin route: the manifest, then
- * the grid it names. Failures are English data in the shapes ui/statusText.js
+ * Read one global gridded field through its same-origin route: the manifest,
+ * then the grid it names. Failures are English data in the shapes ui/statusText.js
  * translates: `<errorPrefix> HTTP <status>`, plus the network and malformed
  * texts the caller passes as literals so the catalogs see them.
  * @param {{route: string, errorPrefix: string, networkError: string,
@@ -17,7 +17,7 @@ const COMPONENT_BYTES = 1440 * 721 * 4;
  *   components?: number, fetchImpl?: Function}} options
  *   `components` is how many grids the response carries; it bounds the read.
  */
-export function createIfsFieldSource({
+export function createGlobalFieldSource({
   route,
   errorPrefix,
   networkError,
