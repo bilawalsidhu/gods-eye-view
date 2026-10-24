@@ -295,6 +295,35 @@ html:not([lang='en']) .cctv-controls .scene-btn {
   display: none;
 }
 
+.cctv-embed {
+  display: block;
+  width: 100%;
+  min-width: 200px;
+  min-height: 200px;
+  height: auto;
+  aspect-ratio: 16 / 9;
+  border: 0;
+  background: #000;
+}
+
+.cctv-embed-source {
+  display: block;
+  padding: 8px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-secondary);
+}
+
+/* Twitch requires a 400-by-300 viewport; narrow panels can scroll its controls. */
+.cctv-embed-twitch {
+  min-width: 400px;
+  min-height: 300px;
+}
+
+.cctv-frame-wrap:has(.cctv-embed-twitch) {
+  overflow-x: auto;
+}
+
 #cctv-meta {
   font-family: var(--font-mono);
   font-size: 9px;

@@ -1,5 +1,15 @@
 # Data Sources & Attribution
 
+Public CCTV players may also use the operator's Twitch channel, Angelcam
+broadcast iframe or Roundshot panorama. These provider-owned players retain
+controls, attribution and access rules; their video/image resources are not
+extracted or proxied. Public accessibility is not an open media license. Only
+independently public operator links belong in a catalog, excluding operators
+that expressly restrict republication. Twitch requires the actual embedding
+hostname ([official embed documentation](https://dev.twitch.tv/docs/embed/video-and-clips/));
+Angelcam uses its [public broadcast iframe](https://help.angelcam.com/en/articles/1160742-working-with-broadcasting-embed-codes).
+The separate Argentina catalog supplies its own source and verification evidence.
+
 God's Eye View's **code** is [MIT](LICENSE)-licensed. **The MIT grant covers the source code only — it does NOT extend to third-party data or visual assets.** Every third-party source keeps its own license and terms. This file documents the live and bundled data sources; bundled 3D-model provenance is recorded in [`public/models/README.md`](public/models/README.md).
 
 How to read this:
@@ -103,6 +113,10 @@ How to read this:
 The optional Local ADS-B layer and the broadcast-FM receiver use radio you receive yourself: a USB RTL-SDR opened in the browser through WebUSB, or the `aircraft.json` of a decoder you run on your own machine or network (`LOCAL_RECEIVER_FEEDS`). Radio samples, audio and the optional receiver location stay in the browser. Decoder feeds are read by your local GEV server and relayed only to your browser, with about a second of in-memory caching. When you select a local aircraft, its ICAO address (and an airline-style callsign) is looked up, and aircraft that qualify for a 3D model are looked up by ICAO address, through the same adsbdb proxy the public flight layers use; your server caches those answers on disk and treats them as fresh for 24 hours. Received radio data is not stored or redistributed. ADS-B is an unauthenticated public broadcast and may be incomplete, delayed, spoofed or decoded in error; it is not suitable for navigation or operational use.
 
 ### Notes on the live sources
+
+- **Other public CCTV players.** Selecting Twitch, Angelcam or Roundshot loads that provider's third-party player, which may use cookies and analytics under its own terms. YouTube alone uses the privacy-enhanced host. The separate official-page link remains available outside the iframe sandbox.
+
+- **YouTube CCTV examples (Argentina, opt-in).** `config/cctv_sources.youtube.json` contains public player links for [Argentina News' Obelisco view](https://www.youtube.com/watch?v=r8Busmkpsh8) and [UADE's Campus Buenos Aires view](https://www.youtube.com/watch?v=NfsyRx50gAI). Discovered on SkylineWebcams' [Obelisco](https://www.skylinewebcams.com/es/webcam/argentina/buenos-aires/buenos-aires/obelisco.html) and [panorama](https://www.skylinewebcams.com/es/webcam/argentina/buenos-aires/buenos-aires/panorama.html) pages on 2026-10-15; YouTube's public oEmbed metadata identifies the original channels. [UADE's own homepage](https://www.uade.edu.ar/) embeds the same video and gives the campus address, Lima 757. Rounded anchors identify the Obelisco area and UADE campus, not verified camera positions; [OpenStreetMap / Nominatim](https://www.openstreetmap.org/copyright) supplies the landmark/campus locations (UADE node 12920363173), under ODbL. The Obelisco landmark is also identified by [Buenos Aires' official tourism page](https://turismo.buenosaires.gob.ar/es/otros-establecimientos/obelisco). Original channel credits appear in the camera panel. Playback uses [YouTube's official iframe](https://developers.google.com/youtube/player_parameters) in privacy-enhanced mode, subject to the uploader's embedding permission and YouTube's access rules. No open video license is asserted; no video, thumbnail, expiring stream URL or restricted token is copied, proxied or recorded. Video IDs may change when broadcasts restart. Skyline's [FAQ](https://www.skylinewebcams.com/es/support/faq.html) restricts embedding its own live streams to camera hosts; those streams are excluded. ArgosAtlas's private/paywalled catalog is not a data source for this feature.
 
 - **Air quality (ECCC AQHI).** Keyless. Read from the MSC GeoMet OGC API (`api.weather.gc.ca`): the `aqhi-stations` catalog plus `aqhi-observations-realtime`. **Coverage is Canada only** — ECCC is the single registered provider, and the layer row and readout card both say so. Roughly 134 stations across ECCC's five administrative zones (Atlantic, Quebec, Ontario, Prairies & North, Pacific & Yukon). AQHI publishes hourly, so readings poll every 20 minutes and the station catalog, which changes a few times a year, is refetched only every 12 hours. Observations are requested with `latest=true`; without it the collection returns the full history, roughly 2,000 rows nationally. Readings older than six hours are dropped rather than displayed as current.
 

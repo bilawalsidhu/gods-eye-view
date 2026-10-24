@@ -1,5 +1,9 @@
 import { CAMERA_SEEDS } from './policy.js';
 import {
+  normalizeCctvEmbedUrl,
+  normalizeCctvSourcePageUrl,
+} from '../../sources/cctvTypes.js';
+import {
   lookupModelSpec,
   horizontalFovRangeDeg,
   fixedHorizontalFovDeg,
@@ -226,6 +230,9 @@ export function createCatalog({ state: layerState, services, parts, source }) {
             (source.url ? 'configured' : 'seed'),
         ).toLowerCase(),
         feedType,
+        embedUrl: normalizeCctvEmbedUrl(source.embedUrl),
+        sourcePageUrl: normalizeCctvSourcePageUrl(source.sourcePageUrl),
+        locationNote: String(source.locationNote || ''),
         feedConfigured: typeof source.url === 'string' && !!source.url.trim(),
         lat,
         lon,

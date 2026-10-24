@@ -1,7 +1,17 @@
 #!/usr/bin/env node
-/** Camera-panel browser acceptance with controlled sources, images and terrain. */
+/**
+ * Camera-panel browser acceptance with controlled sources, images and terrain.
+ * Run npm run build and npm run preview, then node scripts/qa-camera-controls.mjs
+ * Use a built preview so dev-server HMR cannot reload a suspended page.
+ * Provider pages are intercepted fixtures, not evidence of live availability.
+ */
 import fs from 'node:fs';
 import puppeteer from 'puppeteer';
+import {
+  answerEmbedRequest,
+  checkCameraEmbeds,
+  embedSources,
+} from './qa-camera-embeds.mjs';
 const origin = process.env.QA_BASE_URL || 'http://localhost:4173';
 const selectAllModifier = process.platform === 'darwin' ? 'Meta' : 'Control';
 const sources = [
@@ -33,6 +43,10 @@ const sources = [
 }));
 const browser = await puppeteer.launch({
   headless: true,
+  pipe: true,
+  ...(process.env.PUPPETEER_EXECUTABLE_PATH
+    ? { executablePath: process.env.PUPPETEER_EXECUTABLE_PATH }
+    : {}),
   args: [
     '--no-sandbox',
     ...(process.platform === 'darwin'
@@ -42,6 +56,7 @@ const browser = await puppeteer.launch({
 });
 const page = await browser.newPage();
 const errors = [];
+const embeddedNativeRequests = [];
 page.on('pageerror', (error) => errors.push(error.message));
 let failures = 0;
 const check = (name, ok, detail) => {
@@ -53,10 +68,17 @@ const check = (name, ok, detail) => {
 let delayCameraA = false;
 const delayedFrames = new Set();
 try {
-  await page.setViewport({ width: 1440, height: 900 });
+  await page.setViewport({ width: 1440, height: 900, hasTouch: true });
   await page.setRequestInterception(true);
   page.on('request', (request) => {
+    if (answerEmbedRequest(request)) return;
     const url = new URL(request.url());
+    if (
+      /^\/api\/cctv\/(frame|media|stream|thumbnail)\//.test(url.pathname) &&
+      embedSources.some(({ id }) => url.pathname.includes(id))
+    ) {
+      embeddedNativeRequests.push(url.pathname);
+    }
     if (url.origin !== new URL(origin).origin) return void request.continue();
     const json = (body) =>
       request.respond({
@@ -64,7 +86,8 @@ try {
         contentType: 'application/json',
         body: JSON.stringify(body),
       });
-    if (url.pathname === '/api/cctv/sources') return void json({ sources });
+    if (url.pathname === '/api/cctv/sources')
+      return void json({ sources: [...sources, ...embedSources] });
     if (url.pathname === '/api/cctv/health')
       return void json({
         cameras: sources.map((camera) => ({
@@ -112,6 +135,13 @@ try {
       document.getElementById('loading-screen')?.classList.contains('hidden'),
     { timeout: 60000 },
   );
+  // Lower only the globe render resolution on software GPUs; DOM layout,
+  // viewport sizes, touch input and provider media remain at their real sizes.
+  if (process.env.QA_GLOBE_RESOLUTION_SCALE) {
+    await page.evaluate((scale) => {
+      window.__godsEyeView.viewer.resolutionScale = scale;
+    }, Number(process.env.QA_GLOBE_RESOLUTION_SCALE));
+  }
   await page.$eval('[data-collapse-target="cctv-panel"]', (button) =>
     button.click(),
   );
@@ -119,17 +149,18 @@ try {
   await page.waitForFunction(
     () =>
       window.__godsEyeView.dataManager.layers.get('cctv').module.getUIState()
-        .cameras.length === 2 &&
+        .cameras.length === 6 &&
       !document.getElementById('cctv-camera-select').disabled,
     { timeout: 30000 },
   );
   check(
-    'CCTV enable uses the supplied two-camera catalog',
+    'CCTV enable uses the supplied snapshot and external-player catalog',
     await page.$eval(
       '#cctv-camera-select',
-      (select) => select.options.length === 2 && !select.disabled,
+      (select) => select.options.length === 6 && !select.disabled,
     ),
   );
+  fs.mkdirSync('qa-shots/camera-controls', { recursive: true });
   await page.select('#cctv-camera-select', 'qa-camera-a');
   await page.waitForFunction(
     () =>
@@ -354,7 +385,6 @@ try {
   await page.$eval('#cctv-frame', (image) =>
     image.scrollIntoView({ block: 'nearest' }),
   );
-  fs.mkdirSync('qa-shots/camera-controls', { recursive: true });
   await page.screenshot({ path: 'qa-shots/camera-controls/desktop.png' });
   await page.evaluate(() => {
     const camera = window.__godsEyeView.viewer.camera;
@@ -368,7 +398,7 @@ try {
   });
   await new Promise((resolve) => setTimeout(resolve, 700));
   await page.screenshot({ path: 'qa-shots/camera-controls/angle.png' });
-  await page.setViewport({ width: 390, height: 844 });
+  await page.setViewport({ width: 390, height: 844, hasTouch: true });
   await new Promise((resolve) => setTimeout(resolve, 700));
   // Phones present CCTV in the Cameras tab's sheet.
   await page.click('#mobile-tab-bar [data-mobile-sheet="cameras"]');
@@ -381,6 +411,7 @@ try {
       return rect.width > 0 && rect.left >= 0 && rect.right <= innerWidth + 1;
     }),
   );
+  await checkCameraEmbeds(page, check);
   check(
     'rebuilding Radio preserves the active camera controller and subscription',
     await page.evaluate(() => {
@@ -403,6 +434,15 @@ try {
     await page.evaluate(
       () => window.__godsEyeView.styleManager._cctvControls.destroyed,
     ),
+  );
+  check(
+    'UI disposal removes the last external player and official-page link',
+    (await page.$('#cctv-panel iframe, .cctv-embed-source')) === null,
+  );
+  check(
+    'external players never request native CCTV media',
+    embeddedNativeRequests.length === 0,
+    embeddedNativeRequests,
   );
   check(
     'camera controls produce no uncaught browser errors',
