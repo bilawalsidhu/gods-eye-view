@@ -2111,6 +2111,16 @@ fetching, trailing-24-hour filtering and partial-success caching are unchanged.
 > always exits non-zero, `1` meaning the control is healthy and `2` meaning it
 > is not. Plus the unit pins above.
 
+> **2026-10-24 — a turned-off layer's memory is released:** Cesium 1.138
+> keeps the draw commands past each frame's count in the opaque and other
+> per-pass arrays (`View.frustumCommandsList`) and in the offscreen pick view,
+> so a turned-off layer's entities stayed reachable (Data Centers kept 116
+> MiB). `src/sceneCommandRelease.js`, installed in `src/app/tools.js`,
+> requests one frame through `governorRequestRender` after every layer
+> disable and then trims those arrays. It reads private Cesium fields;
+> `src/sceneCommandRelease.test.mjs` pins them and fails if Cesium renames
+> them or changes which passes it truncates.
+
 > **2026-08-08 — performance waves 1+2:** the app idles via an explicit render
 > governor (`src/renderGovernor.js` — hold/release from every per-frame
 > animator; discrete mutators call `governorRequestRender`). Any NEW
