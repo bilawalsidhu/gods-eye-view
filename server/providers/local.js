@@ -18,6 +18,7 @@ import { transitProxy } from './transit.js';
 import { adsbLolProxy } from './aircraft/adsb-lol.js';
 import { aisLiveProxy } from './vessels/ais-live.js';
 import { trackBackfillProxies } from './aircraft/tracks.js';
+import { aeroApiProxy } from './aircraft/aeroapi.js';
 import { openAiRealtimeProxy } from './openai.js';
 import { geminiLiveProxy } from './gemini.js';
 import { googlePlacesContextProxy } from './places.js';
@@ -55,6 +56,8 @@ function localProviderPlugins({ realtime, gemini } = {}) {
     adsbLolProxy(),
     aisLiveProxy(),
     trackBackfillProxies(),
+    aeroApiProxy(),
+    openAiRealtimeProxy(),
     openAiRealtimeProxy({ realtime }),
     ...(gemini ? [geminiLiveProxy({ realtime: gemini })] : []),
     googlePlacesContextProxy(),
