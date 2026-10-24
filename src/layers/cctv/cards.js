@@ -131,9 +131,12 @@ export function createCards({ state: layerState, services, parts, source }) {
           record.camera.lon,
         ),
         inView,
-        isVideo: parts.model.isVideoFeedType(
-          parts.model.normalizeFeedType(record.camera.feedType),
-        ),
+        // Location-only cameras (feedType 'none') never get an
+        // ambient card, same as video feeds.
+        isVideo:
+          parts.model.isVideoFeedType(
+            parts.model.normalizeFeedType(record.camera.feedType),
+          ) || parts.model.isNoFeedType(record.camera.feedType),
         sx,
         sy,
       });
