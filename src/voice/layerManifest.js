@@ -410,6 +410,9 @@ const layers = [
 export const VOICE_OFF_LAYERS = Object.freeze({
   'bhote-koshi-2026': 'scene-driven event layer (control_scene)',
   'bhote-koshi-locator': 'scene-driven event layer (control_scene)',
+  // Even an alias-free entry would push the Realtime prompt past its ceiling
+  // (src/voice/pointAndAsk.test.mjs); the toggle stays in the Layers panel.
+  'river-discharge': 'modelled outlook points; Realtime prompt budget is full',
 });
 
 const TYPE_NAMES = Object.freeze({

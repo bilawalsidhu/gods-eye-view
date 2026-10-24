@@ -2570,7 +2570,11 @@
       "src/voice/geminiSession.js",
       "src/voice/geminiAudio.js",
       "src/voice/geminiCaptureWorklet.js",
-      "src/ui/statusBadge.js"
+      "src/ui/statusBadge.js",
+      "src/layers/riverDischarge/index.js",
+      "src/layers/riverDischarge/records.js",
+      "src/layers/riverDischarge/source.js",
+      "src/app/layers/riverDischarge.js"
     ],
     "external": [
       "hls.js",
@@ -3138,7 +3142,11 @@
       "src/layers/airQuality/source.js",
       "src/ui/statusText.js",
       "src/ui/layerNames.js",
-      "src/layers/streetLevel/providers/mapillary/policy.js"
+      "src/layers/streetLevel/providers/mapillary/policy.js",
+      "src/layers/riverDischarge/index.js",
+      "src/layers/riverDischarge/records.js",
+      "src/layers/riverDischarge/source.js",
+      "src/app/layers/riverDischarge.js"
     ],
     "external": [
       "hls.js",
@@ -4032,6 +4040,33 @@
     "modules": [
       "src/layers/airQuality/model.js",
       "src/layers/airQuality/source.js",
+      "src/sources/httpBody.js",
+      "src/i18n/marker.js"
+    ],
+    "external": []
+  },
+  "river-discharge": {
+    "exports": ["./layers/river-discharge"],
+    "modules": [
+      "src/layers/riverDischarge/index.js",
+      "src/layers/riverDischarge/records.js",
+      "src/layers/riverDischarge/source.js",
+      "src/sources/httpBody.js",
+      "src/i18n/marker.js",
+      "src/data/inputOwnership.js",
+      "src/i18n/index.js",
+      "src/i18n/locale.js",
+      "src/i18n/locales/es.json",
+      "src/i18n/locales/ru.json",
+      "src/i18n/locales/zh-CN.json"
+    ],
+    "external": ["cesium"]
+  },
+  "river-discharge-source": {
+    "exports": ["./layers/river-discharge/source"],
+    "modules": [
+      "src/layers/riverDischarge/records.js",
+      "src/layers/riverDischarge/source.js",
       "src/sources/httpBody.js",
       "src/i18n/marker.js"
     ],

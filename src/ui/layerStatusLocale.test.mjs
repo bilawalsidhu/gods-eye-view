@@ -1,5 +1,5 @@
 // The DATA LAYERS row shows the English status texts that GNSS, Transit,
-// CelesTrak and AQHI produce in the UI language.
+// CelesTrak, AQHI and the river discharge outlook produce in the UI language.
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { setLocale } from '../i18n/index.js';
@@ -70,6 +70,26 @@ const cases = [
       lastUpdate: now,
     },
     'request timed out',
+  ],
+  [
+    'river-discharge',
+    {
+      count: 0,
+      error: 'Open-Meteo network error',
+      source: 'Open-Meteo · GloFAS model',
+      lastUpdate: now,
+    },
+    'network error',
+  ],
+  [
+    'river-discharge',
+    {
+      count: 0,
+      error: 'Malformed Open-Meteo response',
+      source: 'Open-Meteo · GloFAS model',
+      lastUpdate: now,
+    },
+    'Malformed',
   ],
 ];
 

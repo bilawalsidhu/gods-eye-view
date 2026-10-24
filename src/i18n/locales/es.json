@@ -2947,5 +2947,30 @@
   "Layers": "Capas",
   "Search": "Buscar",
   "More": "Más",
-  "Panels": "Paneles"
+  "Panels": "Paneles",
+  "River discharge outlook": "Previsión de caudal fluvial",
+  "m³/s": "m³/s",
+  "RIVER DISCHARGE OUTLOOK · MODELLED": "PREVISIÓN DE CAUDAL · MODELO",
+  "{days}-day forecast peak {value} {unit} on {day}": "Pico previsto a {days} días: {value} {unit} el {day}",
+  "Today {value} {unit}": "Hoy {value} {unit}",
+  "Ensemble on peak day: middle half {low}–{high}, highest member {max} {unit}": "Conjunto el día del pico: mitad central {low}–{high}, miembro más alto {max} {unit}",
+  "{from}–{to} daily flow: median {p50} · 90th {p90} · 99th {p99} {unit}": "Caudal diario {from}–{to}: mediana {p50} · percentil 90 {p90} · percentil 99 {p99} {unit}",
+  "Model outlook, not an observed flood or an official warning": "Previsión de un modelo, no una inundación observada ni un aviso oficial",
+  "River discharge outlook unavailable": "Previsión de caudal fluvial no disponible",
+  "Open-Meteo · GloFAS model": "Open-Meteo · modelo GloFAS",
+  "Modelled GloFAS outlook at {count} river points · not observed flooding or an official warning": "Previsión del modelo GloFAS en {count} puntos fluviales · no son inundaciones observadas ni avisos oficiales",
+  "Each point is a GloFAS river cell on a major river. Its colour compares the highest daily discharge forecast over the next 7 days with that cell’s own reanalysis flow over ten years. Model output can miss or overstate floods; follow your national hydrological service for warnings.": "Cada punto es una celda fluvial de GloFAS en un río principal. Su color compara el mayor caudal diario previsto para los próximos 7 días con el caudal de reanálisis de esa misma celda durante diez años. Un modelo puede pasar por alto o exagerar una crecida; consulta al servicio hidrológico nacional para los avisos.",
+  "Percentiles of the point’s own daily flow over ten years of GloFAS reanalysis. Above the 99th is a flow reached on about 4 days a year.": "Percentiles del caudal diario del propio punto en diez años de reanálisis de GloFAS. Por encima del percentil 99 es un caudal que se alcanza unos 4 días al año.",
+  "{count} river points": {
+    "one": "{count} punto fluvial",
+    "many": "{count} de puntos fluviales",
+    "other": "{count} puntos fluviales"
+  },
+  "loading river discharge outlook": "cargando la previsión de caudal fluvial",
+  "Showing an earlier forecast": "Se muestra una previsión anterior",
+  "No river outlook points in this view": "No hay puntos de previsión fluvial en esta vista",
+  "Below the 90th percentile": "Por debajo del percentil 90",
+  "Above the 90th percentile": "Por encima del percentil 90",
+  "Above the 99th percentile": "Por encima del percentil 99",
+  "No forecast": "Sin previsión"
 }
