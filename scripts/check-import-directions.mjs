@@ -13,6 +13,7 @@ const entry = (file) =>
   file === 'src/main.js' || file.startsWith('src/standalone/');
 const tests = (file) =>
   file.endsWith('.test.mjs') ||
+  file.endsWith('.fixtures.mjs') ||
   file.startsWith('src/testSupport/') ||
   file.startsWith('src/tooling/') ||
   file === 'src/overlays/worldOverlayAllocation.worker.mjs';

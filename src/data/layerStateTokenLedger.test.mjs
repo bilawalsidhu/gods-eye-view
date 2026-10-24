@@ -99,7 +99,7 @@ function withPublishedBase(
 
 // Ledger rows as published before the newest layers took '9' and '00'.
 const preWildlifeRows = reservationRows.filter(
-  ([id]) => id !== 'wildlife-sightings' && id !== 'surface-temperature',
+  ([id]) => id !== 'wildlife-sightings' && id !== 'temperature',
 );
 
 function writeCodecFixture(cwd, rows, entries) {
@@ -110,7 +110,7 @@ function writeCodecFixture(cwd, rows, entries) {
     readFileSync(new URL('./idSwitches.js', import.meta.url)),
   );
   let source = readFileSync(CODEC_SOURCE_PATH, 'utf8');
-  for (const id of ['wildlife-sightings', 'surface-temperature'])
+  for (const id of ['wildlife-sightings', 'temperature'])
     if (!rows.some(([row]) => row === id))
       source = source.replace(
         new RegExp(
@@ -154,7 +154,7 @@ test('reservation ledger is complete, pinned, and rejects duplicate or malformed
       'ski-pistes': '7',
       'drone-airspace': '8',
       'wildlife-sightings': '9',
-      'surface-temperature': '00',
+      temperature: '00',
     },
   );
   assert.throws(
