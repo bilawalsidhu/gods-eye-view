@@ -31,10 +31,10 @@ export const MIN_VERTICES = Object.freeze({ area: 3, line: 2, pin: 1 });
  */
 export const MAX_VERTICES = 512;
 /** Two clicks closer than this are one vertex: a double-click to finish must not add a stray point. */
-export const MIN_VERTEX_SEPARATION_M = 0.5;
+const MIN_VERTEX_SEPARATION_M = 0.5;
 /** A line shorter than this, or an area thinner than this, is a mis-click rather than a shape. */
-export const MIN_PATH_LENGTH_M = 1;
-export const MIN_AREA_M2 = 1;
+const MIN_PATH_LENGTH_M = 1;
+const MIN_AREA_M2 = 1;
 
 /** @param {string} shape @returns {'area'|'line'|'pin'} */
 export function normalizeShape(shape) {
@@ -50,7 +50,7 @@ export function createDrawSession(shape = 'area') {
 }
 
 /** Great-circle distance in metres between two {lon, lat} points. */
-export function greatCircleM(a, b) {
+function greatCircleM(a, b) {
   return greatCircleMeters(a, b);
 }
 

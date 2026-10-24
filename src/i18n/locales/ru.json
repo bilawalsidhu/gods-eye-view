@@ -3010,5 +3010,9 @@
   "hemisphere|E": "В",
   "hemisphere|W": "З",
   "OK": "НОРМА",
-  "{category} ({count})": "{category} ({count})"
+  "{category} ({count})": "{category} ({count})",
+  "Layers": "Слои",
+  "Search": "Поиск",
+  "More": "Ещё",
+  "Panels": "Панели"
 }
