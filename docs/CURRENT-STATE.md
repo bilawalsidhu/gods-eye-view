@@ -6122,3 +6122,24 @@ when their footprints touch or contain one another, never across a seam toleranc
 - `scripts/qa-form-fields.mjs` exercises native selections, number validity,
   calibration commit/cancel and stale-camera/disposal guards against an installed
   controller with fixture ports, plus default/Cyber and narrow translated layouts.
+
+## Optional World Monitor intelligence
+
+`WORLD_MONITOR_API_BASE` connects a World Monitor backend on this machine or LAN
+([WORLD_MONITOR.md](WORLD_MONITOR.md)). Only then does the standalone server
+mount `/api/worldmonitor`, the page show the **Intelligence** button and its
+Country briefing panel, and the voice session, browser catalog and HTTP MCP
+server offer `world_monitor_country_headlines`, `world_monitor_country_brief` and
+`world_monitor_feed_digest`. Unset, every surface is unchanged. The stdio MCP
+entry reads its own environment for the same switch.
+
+- Results distinguish retrieval time from source time and report `complete`,
+  `partial`, `stale` or `unavailable` coverage. Missing risk is unavailable,
+  never zero.
+- Credentials and the backend address stay server-side; the browser receives
+  only the enabled switch. Credentials go only to loopback or private
+  addresses, with DNS pinned to the checked address and redirects refused.
+- The routes share the MCP local gate (`src/localMcpGate.mjs`): direct
+  same-host requests only, no forwarding headers, cross-origin browsers or
+  launcher sharing.
+- The panel's text goes through `t()` with es, ru and zh-CN entries.

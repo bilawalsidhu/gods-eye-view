@@ -438,6 +438,19 @@ NOAA density imagery with the raw GLM product.
 
 ---
 
+## Optional World Monitor backend
+
+When an operator configures `WORLD_MONITOR_API_BASE`, God's Eye View reads
+country headlines, risk context and a news digest from that local World Monitor
+backend ([docs/WORLD_MONITOR.md](docs/WORLD_MONITOR.md)). Headlines keep their
+publisher links and publication times, and risk keeps its computation times and
+missing-data states. No World Monitor source or provider content is copied into
+this repository; World Monitor's license and source notices and each
+publisher's terms still apply. The backend is not bundled or enabled by default,
+so it has no entry in the in-app credit list.
+
+---
+
 ## In-app attribution
 
 The required Google Maps / Cesium credit renders on the on-globe credit line (`#cesium-credits`, bottom-left) and must stay visible — including in clean-view and recording modes (the whole line, logo + "Google Maps" + the "Data attribution" link, stays on screen; only the GEV panels/HUD fade). The layer-specific credits (adsb.lol, adsbdb, TeleGeography, OSM datacenters/dams/roads, NASA FIRMS, CelesTrak, USGS, City of Austin, Fintraffic, GBFS, Radio Browser, OpenSky, AISStream) are registered into the expandable **"Data attribution"** popover on that credit line via `viewer.creditDisplay.addStaticCredit(new Cesium.Credit(html, /* showOnScreen */ false))` — see `src/data/dataCredits.js`. When you add a new data source, add its license and attribution to this file **and** append an entry to `DATA_CREDITS` in `src/data/dataCredits.js` so it surfaces in the app.

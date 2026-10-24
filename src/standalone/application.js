@@ -19,6 +19,7 @@ export function createStandaloneApplication({
   cesiumToken,
   geospatial = {},
   voice = {},
+  worldMonitor = {},
   sources = {},
   streetLevelProviders,
   allowQaRegistration = false,
@@ -84,6 +85,12 @@ export function createStandaloneApplication({
     createData: (context) =>
       createStandaloneData({ ...context, allowQaRegistration, catalog }),
     createTools: (context) =>
-      createStandaloneTools({ ...context, loadingScreen, placeSearch, voice }),
+      createStandaloneTools({
+        ...context,
+        loadingScreen,
+        placeSearch,
+        voice,
+        worldMonitor,
+      }),
   });
 }
