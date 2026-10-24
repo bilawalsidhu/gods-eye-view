@@ -146,11 +146,28 @@
 .gravity-chart-low {
   bottom: 2px;
 }
+.gravity-legend-ticks {
+  position: relative;
+  height: 1.45em;
+  font-variant-numeric: tabular-nums;
+}
+.gravity-legend-ticks > span {
+  position: absolute;
+  top: 0;
+  transform: translateX(-50%);
+  white-space: nowrap;
+}
+.gravity-legend-ticks > span:first-child {
+  transform: none;
+}
+.gravity-legend-ticks > span:last-child {
+  transform: translateX(-100%);
+}
 .gravity-legend-scale {
   display: flex;
   justify-content: space-between;
   gap: 8px;
-  font-variant-numeric: tabular-nums;
+  color: var(--text-dim);
 }
 .gravity-ramp {
   height: 6px;

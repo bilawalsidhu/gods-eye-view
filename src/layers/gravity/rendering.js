@@ -74,6 +74,40 @@ function taps(cells, upsample, wrap) {
   return { first, second, weight };
 }
 
+const coverageCache = new WeakMap();
+/**
+ * How much land surrounds each mask pixel, 0 to 1: a 1-2-1 blur each way, so
+ * a coastline fades over about one pixel instead of stepping at 0.25°. Columns
+ * wrap at the antimeridian and rows clamp at the poles, like the field. The
+ * mask is static, so each one is blurred once.
+ */
+function maskCoverage(mask, width, height) {
+  const cached = coverageCache.get(mask);
+  if (cached) return cached;
+  const across = new Float32Array(width * height);
+  for (let y = 0; y < height; y++) {
+    const row = y * width;
+    for (let x = 0; x < width; x++) {
+      const left = row + ((x + width - 1) % width);
+      const right = row + ((x + 1) % width);
+      across[row + x] =
+        ((mask[left] === 1) + 2 * (mask[row + x] === 1) + (mask[right] === 1)) /
+        4;
+    }
+  }
+  const coverage = new Float32Array(width * height);
+  for (let y = 0; y < height; y++) {
+    const up = Math.max(0, y - 1) * width;
+    const down = Math.min(height - 1, y + 1) * width;
+    const row = y * width;
+    for (let x = 0; x < width; x++)
+      coverage[row + x] =
+        (across[up + x] + 2 * across[row + x] + across[down + x]) / 4;
+  }
+  coverageCache.set(mask, coverage);
+  return coverage;
+}
+
 /**
  * One field as an image at 0.25°: each pixel blends its four nearest grid
  * cells, so the one-degree steps become gradients. This is presentation only;
@@ -82,8 +116,9 @@ function taps(cells, upsample, wrap) {
  * orientation.
  * @param {Int16Array} field Stored counts.
  * @param {{nx: number, ny: number, scaleCm: number, noData: number}} format
- * @param {{mask?: ?Uint8Array, upsample?: number}} [options] `mask` keeps
- *   only pixels whose byte is 1 (the land-only view), at the image size.
+ * @param {{mask?: ?Uint8Array, upsample?: number}} [options] `mask` is the
+ *   land-only view at the image size (1 is land). Inland pixels draw in full,
+ *   open sea not at all, and the coastline fades across about one pixel.
  */
 export function createGravityRaster(
   field,
@@ -97,6 +132,7 @@ export function createGravityRaster(
   const rows = taps(ny, upsample, false);
   const cols = taps(nx, upsample, true);
   const lut = colorLut();
+  const coverage = mask ? maskCoverage(mask, width, height) : null;
   const rgba = new Uint8ClampedArray(width * height * 4);
   for (let y = 0; y < height; y++) {
     const top = rows.first[y] * nx;
@@ -104,7 +140,8 @@ export function createGravityRaster(
     const fy = rows.weight[y];
     for (let x = 0; x < width; x++) {
       const pixel = y * width + x;
-      if (mask && mask[pixel] !== 1) continue;
+      const cover = coverage ? coverage[pixel] : 1;
+      if (cover === 0) continue;
       const left = cols.first[x];
       const right = cols.second[x];
       const fx = cols.weight[x];
@@ -125,7 +162,7 @@ export function createGravityRaster(
       rgba[pixel * 4] = lut[entry];
       rgba[pixel * 4 + 1] = lut[entry + 1];
       rgba[pixel * 4 + 2] = lut[entry + 2];
-      rgba[pixel * 4 + 3] = lut[entry + 3];
+      rgba[pixel * 4 + 3] = Math.round(lut[entry + 3] * cover);
     }
   }
   return { width, height, rgba };

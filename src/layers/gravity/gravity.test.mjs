@@ -25,6 +25,7 @@ import {
   GRAVITY_COLORS,
 } from './rendering.js';
 import { createGravitySource, validateGravityIndex } from './source.js';
+import { gravityScalePosition } from './display.js';
 
 const CELLS = 360 * 180;
 const GRID = { nx: 360, ny: 180, lo1: -179.5, la1: 89.5, dx: 1, dy: 1 };
@@ -97,6 +98,20 @@ const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
 test('colours run red for loss and blue for gain, clamp at the ends, and hide no-data', () => {
   assert.deepEqual(gravityColor(-1000), GRAVITY_COLORS[0][1]);
   assert.deepEqual(gravityColor(1000), GRAVITY_COLORS.at(-1)[1]);
+  // Past 40 cm the colour keeps deepening instead of stopping, so ice loss
+  // of a metre or more is not one flat patch.
+  const deepen = [-40, -100, -250, -400].map((cm) => gravityColor(cm));
+  for (let i = 1; i < deepen.length; i++)
+    assert.ok(
+      deepen[i][0] + deepen[i][1] + deepen[i][2] <
+        deepen[i - 1][0] + deepen[i - 1][1] + deepen[i - 1][2],
+      'loss darkens all the way to 400 cm',
+    );
+  assert.deepEqual(
+    gravityColor(-40),
+    [103, 0, 31, 225],
+    'the core is as before',
+  );
   assert.equal(gravityColor(0)[3], 0, 'zero change is transparent');
   const loss = gravityColor(-15);
   const gain = gravityColor(15);
@@ -125,21 +140,29 @@ test('the raster is drawn at 0.25° and blends between cell centres', () => {
   assert.deepEqual(at(403, 360), gravityColor(-25));
   assert.deepEqual(at(405, 360), gravityColor(-5));
   // A no-data neighbour drops out of the blend instead of pulling towards 0.
-  assert.deepEqual(at(2, 0), GRAVITY_COLORS[0][1]);
+  assert.deepEqual(at(2, 0), gravityColor(-40));
 });
 
-test('the land mask cuts the raster at 0.25°, not at whole cells', () => {
+test('the land mask cuts the raster at 0.25° with a one-pixel soft coastline', () => {
   const format = { nx: 360, ny: 180, scaleCm: 0.5, noData: -32768 };
   const field = new Int16Array(CELLS).fill(-80);
   const mask = MASK;
   const raster = createGravityRaster(field, format, { mask });
+  const full = gravityColor(-40)[3];
+  const alpha = (x, y) => raster.rgba[(y * 1440 + x) * 4 + 3];
+  // The synthetic coast runs down 0° longitude: column 719 is the last land
+  // pixel and column 720 the first sea pixel.
+  assert.equal(alpha(700, 360), full, 'inland draws in full');
+  assert.equal(alpha(719, 360), Math.round(full * 0.75), 'the coast fades');
+  assert.equal(alpha(720, 360), Math.round(full * 0.25), 'into the sea');
+  assert.equal(alpha(722, 360), 0, 'open sea stays clear');
   let drawn = 0;
   let land = 0;
   for (let i = 0; i < mask.length; i++) {
     land += mask[i];
-    if (raster.rgba[i * 4 + 3] > 0) drawn++;
+    if (raster.rgba[i * 4 + 3] === full) drawn++;
   }
-  assert.equal(drawn, land, 'exactly the land pixels are drawn');
+  assert.ok(drawn < land && drawn > land * 0.99, 'all but the coast in full');
   // The edge falls inside a grid cell: India's cell is part land, part sea.
   const cell = [];
   for (let dy = 0; dy < 4; dy++)
@@ -150,6 +173,17 @@ test('the land mask cuts the raster at 0.25°, not at whole cells', () => {
     () => createGravityRaster(field, format, { mask: new Uint8Array(4) }),
     /mask/,
   );
+});
+
+test('the legend gives the ±40 cm core 60% of the ramp and the tails 20% each', () => {
+  assert.equal(gravityScalePosition(0), 0.5);
+  assert.ok(Math.abs(gravityScalePosition(-40) - 0.2) < 1e-9);
+  assert.ok(Math.abs(gravityScalePosition(40) - 0.8) < 1e-9);
+  assert.equal(gravityScalePosition(-400), 0);
+  assert.equal(gravityScalePosition(400), 1);
+  assert.equal(gravityScalePosition(-5000), 0, 'clamps past the end');
+  // Logarithmic tails: 126 cm (40 × √10) sits halfway along its tail.
+  assert.ok(Math.abs(gravityScalePosition(40 * Math.sqrt(10)) - 0.9) < 1e-9);
 });
 
 test('a position reads the one-degree cell that holds it', () => {

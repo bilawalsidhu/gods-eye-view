@@ -7,11 +7,17 @@
 import { t } from '../i18n/index.js';
 import {
   GRAVITY_COLORS,
+  GRAVITY_CORE_CM,
   formatGravityCm,
   gravityMonthLabel,
+  gravityScalePosition,
 } from '../layers/gravity/display.js';
 
 const LAYER_ID = 'gravity';
+
+/** A legend tick: a signed whole number with a true minus sign. */
+const formatGravityTick = (cm) =>
+  `${cm > 0 ? '+' : cm < 0 ? '−' : ''}${Math.abs(cm)}`;
 const SVG = 'http://www.w3.org/2000/svg';
 const CHART = Object.freeze({ width: 300, height: 96, pad: 4 });
 // Consecutive solutions further apart than this are not joined: the
@@ -237,16 +243,20 @@ export function createGravityPanel({
 
   const legend = make('div', 'gravity-legend', root);
   const ramp = make('div', 'rail-card-ramp gravity-ramp', legend);
-  const first = GRAVITY_COLORS[0][0];
-  const span = GRAVITY_COLORS.at(-1)[0] - first;
+  const percent = (cm) => `${(gravityScalePosition(cm) * 100).toFixed(1)}%`;
   ramp.style.background = `linear-gradient(to right, ${GRAVITY_COLORS.map(
-    ([value, [r, g, b]]) =>
-      `rgb(${r},${g},${b}) ${(((value - first) / span) * 100).toFixed(1)}%`,
+    ([value, [r, g, b]]) => `rgb(${r},${g},${b}) ${percent(value)}`,
   ).join(', ')})`;
+  // Ticks sit where their values fall: the ±40 cm core is wider than the tails.
+  const ticks = make('div', 'gravity-legend-ticks', legend);
+  const end = GRAVITY_COLORS.at(-1)[0];
+  for (const cm of [-end, -GRAVITY_CORE_CM, 0, GRAVITY_CORE_CM, end]) {
+    const tick = make('span', '', ticks, formatGravityTick(cm));
+    tick.style.left = percent(cm);
+  }
   const legendScale = make('div', 'gravity-legend-scale', legend);
-  make('span', '', legendScale, t('−40 cm loss'));
-  make('span', '', legendScale, '0');
-  make('span', '', legendScale, t('+40 cm gain'));
+  make('span', '', legendScale, t('Loss, cm'));
+  make('span', '', legendScale, t('Gain, cm'));
   make(
     'p',
     'gravity-note',
