@@ -2947,5 +2947,7 @@
   "Layers": "Capas",
   "Search": "Buscar",
   "More": "Más",
-  "Panels": "Paneles"
+  "Panels": "Paneles",
+  "HW {label}": "HW {label}",
+  "{maker} (PTZ)": "{maker} (PTZ)"
 }

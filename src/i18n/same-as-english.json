@@ -120,7 +120,9 @@
     "{value} KM/S",
     "ΔE",
     "ΔN",
-    "▲ {frp} MW"
+    "▲ {frp} MW",
+    "HW {label}",
+    "{maker} (PTZ)"
   ],
   "ru": [
     "AIS: --",
@@ -136,7 +138,8 @@
     "R&B",
     "REC",
     "VS",
-    "WHOT/BHOT"
+    "WHOT/BHOT",
+    "{maker} (PTZ)"
   ],
   "zh-CN": [
     "1090 MHz",
@@ -191,6 +194,7 @@
     "{value} KM/S",
     "ΔE",
     "ΔN",
-    "▲ {frp} MW"
+    "▲ {frp} MW",
+    "{maker} (PTZ)"
   ]
 }

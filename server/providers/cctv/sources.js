@@ -129,6 +129,7 @@ import {
   extractAustinCameraId,
   extractAustinName,
   extractAustinHeading,
+  extractAustinManufacturer,
   isLikelyAustinCoordinate,
   fallbackHeadingFromId,
   isLikelyFinlandCoordinate,
@@ -229,6 +230,9 @@ export async function loadAustinSourcesFromOpenData() {
         snapshotUrl: `https://cctv.austinmobility.io/image/${encodeURIComponent(cameraId)}.jpg`,
         sourceKind: 'austin-open-data',
         license: 'Public city traffic camera frame',
+        // The dataset names each camera's maker or product line, not its
+        // model: enough to label the hardware family, never to look up specs.
+        manufacturer: extractAustinManufacturer(record) || undefined,
       });
     }
 

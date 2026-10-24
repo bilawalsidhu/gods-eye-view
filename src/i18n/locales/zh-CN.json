@@ -2813,5 +2813,7 @@
   "Layers": "图层",
   "Search": "搜索",
   "More": "更多",
-  "Panels": "面板"
+  "Panels": "面板",
+  "HW {label}": "硬件 {label}",
+  "{maker} (PTZ)": "{maker} (PTZ)"
 }
