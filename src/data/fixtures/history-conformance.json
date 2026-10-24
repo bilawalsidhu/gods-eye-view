@@ -1,0 +1,2979 @@
+{
+  "$comment": [
+    "Conformance cases for a recorded-history store (src/data/historyRecords.js). Language-neutral: any store, in any language, should pass every case.",
+    "Fields named t, receivedAt, fromMs, toMs and now given as strings are ISO 8601 times (\"NaN\" stands for NaN) and become epoch milliseconds. null is an absent optional number. {\"$repeat\": s, \"times\": n} is s repeated n times.",
+    "Steps: write (expect: counts, rejected by index, coverage counts), query (read every page with pageSize, default 1000, and compare the concatenation), coverage, queryError (expect a code), cursorReuse (take the first page's cursor and pass it to another query; code 'none' means it must be accepted), prune (expect droppedDays). A case's open options go to the store."
+  ],
+  "version": 1,
+  "cases": [
+    {
+      "name": "round-trip",
+      "clause": "Every field of an accepted record reads back unchanged; absent optional numbers read back absent; negative zero, in any field, reads back as zero.",
+      "now": "2026-10-25T12:00:00.000Z",
+      "steps": [
+        {
+          "write": {
+            "records": [
+              {
+                "source": "adsb",
+                "key": "a1b2c3",
+                "t": "2026-10-25T10:00:00.250Z",
+                "lat": 30.28567612345679,
+                "lon": -97.77513498765433,
+                "heightM": 10668.5,
+                "bearingDeg": 271.25,
+                "receivedAt": "2026-10-25T10:00:01.125Z",
+                "timeKind": "vehicle",
+                "provenance": "observed",
+                "flags": 0
+              },
+              {
+                "source": "adsb",
+                "key": "a1b2c4",
+                "t": "2026-10-25T10:00:00.250Z",
+                "lat": -0.0,
+                "lon": -0.0,
+                "heightM": -0.0,
+                "bearingDeg": -0.0,
+                "receivedAt": -0.0,
+                "timeKind": "vehicle",
+                "provenance": "observed",
+                "flags": 0
+              }
+            ]
+          },
+          "expect": {
+            "accepted": 2,
+            "repeats": 0,
+            "conflicts": 0,
+            "rejected": []
+          }
+        },
+        {
+          "query": {
+            "source": "adsb",
+            "fromMs": "2026-10-25T00:00:00Z",
+            "toMs": "2026-10-25T23:59:59.999Z"
+          },
+          "expect": {
+            "records": [
+              {
+                "source": "adsb",
+                "key": "a1b2c3",
+                "t": "2026-10-25T10:00:00.250Z",
+                "lat": 30.28567612345679,
+                "lon": -97.77513498765433,
+                "heightM": 10668.5,
+                "bearingDeg": 271.25,
+                "receivedAt": "2026-10-25T10:00:01.125Z",
+                "timeKind": "vehicle",
+                "provenance": "observed",
+                "flags": 0
+              },
+              {
+                "source": "adsb",
+                "key": "a1b2c4",
+                "t": "2026-10-25T10:00:00.250Z",
+                "lat": 0,
+                "lon": 0,
+                "heightM": 0,
+                "bearingDeg": 0,
+                "receivedAt": 0,
+                "timeKind": "vehicle",
+                "provenance": "observed",
+                "flags": 0
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "time-kind",
+      "clause": "The clock a time was read from is kept with it.",
+      "now": "2026-10-25T12:00:00.000Z",
+      "steps": [
+        {
+          "write": {
+            "records": [
+              {
+                "source": "adsb",
+                "key": "k-vehicle",
+                "t": "2026-10-25T10:00:00Z",
+                "lat": 30.0,
+                "lon": -97.0,
+                "heightM": null,
+                "bearingDeg": null,
+                "receivedAt": null,
+                "timeKind": "vehicle",
+                "provenance": "observed",
+                "flags": 0
+              },
+              {
+                "source": "adsb",
+                "key": "k-feed",
+                "t": "2026-10-25T10:00:00Z",
+                "lat": 30.0,
+                "lon": -97.0,
+                "heightM": null,
+                "bearingDeg": null,
+                "receivedAt": null,
+                "timeKind": "feed",
+                "provenance": "observed",
+                "flags": 0
+              },
+              {
+                "source": "adsb",
+                "key": "k-receipt",
+                "t": "2026-10-25T10:00:00Z",
+                "lat": 30.0,
+                "lon": -97.0,
+                "heightM": null,
+                "bearingDeg": null,
+                "receivedAt": null,
+                "timeKind": "receipt",
+                "provenance": "observed",
+                "flags": 0
+              }
+            ]
+          },
+          "expect": {
+            "accepted": 3
+          }
+        },
+        {
+          "query": {
+            "source": "adsb",
+            "fromMs": "2026-10-25T10:00:00Z",
+            "toMs": "2026-10-25T10:00:00Z"
+          },
+          "expect": {
+            "records": [
+              {
+                "source": "adsb",
+                "key": "k-feed",
+                "t": "2026-10-25T10:00:00Z",
+                "lat": 30.0,
+                "lon": -97.0,
+                "heightM": null,
+                "bearingDeg": null,
+                "receivedAt": null,
+                "timeKind": "feed",
+                "provenance": "observed",
+                "flags": 0
+              },
+              {
+                "source": "adsb",
+                "key": "k-receipt",
+                "t": "2026-10-25T10:00:00Z",
+                "lat": 30.0,
+                "lon": -97.0,
+                "heightM": null,
+                "bearingDeg": null,
+                "receivedAt": null,
+                "timeKind": "receipt",
+                "provenance": "observed",
+                "flags": 0
+              },
+              {
+                "source": "adsb",
+                "key": "k-vehicle",
+                "t": "2026-10-25T10:00:00Z",
+                "lat": 30.0,
+                "lon": -97.0,
+                "heightM": null,
+                "bearingDeg": null,
+                "receivedAt": null,
+                "timeKind": "vehicle",
+                "provenance": "observed",
+                "flags": 0
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "provenance",
+      "clause": "A query returns observed records unless it names other provenances, so derived and simulated positions never pass as observed.",
+      "now": "2026-10-25T12:00:00.000Z",
+      "steps": [
+        {
+          "write": {
+            "records": [
+              {
+                "source": "adsb",
+                "key": "k-observed",
+                "t": "2026-10-25T10:00:00Z",
+                "lat": 30.0,
+                "lon": -97.0,
+                "heightM": null,
+                "bearingDeg": null,
+                "receivedAt": null,
+                "timeKind": "vehicle",
+                "provenance": "observed",
+                "flags": 0
+              },
+              {
+                "source": "adsb",
+                "key": "k-derived",
+                "t": "2026-10-25T10:00:00Z",
+                "lat": 30.0,
+                "lon": -97.0,
+                "heightM": null,
+                "bearingDeg": null,
+                "receivedAt": null,
+                "timeKind": "vehicle",
+                "provenance": "derived",
+                "flags": 0
+              },
+              {
+                "source": "adsb",
+                "key": "k-simulated",
+                "t": "2026-10-25T10:00:00Z",
+                "lat": 30.0,
+                "lon": -97.0,
+                "heightM": null,
+                "bearingDeg": null,
+                "receivedAt": null,
+                "timeKind": "vehicle",
+                "provenance": "simulated",
+                "flags": 0
+              }
+            ]
+          },
+          "expect": {
+            "accepted": 3
+          }
+        },
+        {
+          "query": {
+            "source": "adsb",
+            "fromMs": "2026-10-25T00:00:00Z",
+            "toMs": "2026-10-25T23:00:00Z"
+          },
+          "expect": {
+            "records": [
+              {
+                "source": "adsb",
+                "key": "k-observed",
+                "t": "2026-10-25T10:00:00Z",
+                "lat": 30.0,
+                "lon": -97.0,
+                "heightM": null,
+                "bearingDeg": null,
+                "receivedAt": null,
+                "timeKind": "vehicle",
+                "provenance": "observed",
+                "flags": 0
+              }
+            ]
+          }
+        },
+        {
+          "query": {
+            "source": "adsb",
+            "fromMs": "2026-10-25T00:00:00Z",
+            "toMs": "2026-10-25T23:00:00Z",
+            "provenance": ["simulated"]
+          },
+          "expect": {
+            "records": [
+              {
+                "source": "adsb",
+                "key": "k-simulated",
+                "t": "2026-10-25T10:00:00Z",
+                "lat": 30.0,
+                "lon": -97.0,
+                "heightM": null,
+                "bearingDeg": null,
+                "receivedAt": null,
+                "timeKind": "vehicle",
+                "provenance": "simulated",
+                "flags": 0
+              }
+            ]
+          }
+        },
+        {
+          "query": {
+            "source": "adsb",
+            "fromMs": "2026-10-25T00:00:00Z",
+            "toMs": "2026-10-25T23:00:00Z",
+            "provenance": ["simulated", "observed", "derived"]
+          },
+          "expect": {
+            "records": [
+              {
+                "source": "adsb",
+                "key": "k-derived",
+                "t": "2026-10-25T10:00:00Z",
+                "lat": 30.0,
+                "lon": -97.0,
+                "heightM": null,
+                "bearingDeg": null,
+                "receivedAt": null,
+                "timeKind": "vehicle",
+                "provenance": "derived",
+                "flags": 0
+              },
+              {
+                "source": "adsb",
+                "key": "k-observed",
+                "t": "2026-10-25T10:00:00Z",
+                "lat": 30.0,
+                "lon": -97.0,
+                "heightM": null,
+                "bearingDeg": null,
+                "receivedAt": null,
+                "timeKind": "vehicle",
+                "provenance": "observed",
+                "flags": 0
+              },
+              {
+                "source": "adsb",
+                "key": "k-simulated",
+                "t": "2026-10-25T10:00:00Z",
+                "lat": 30.0,
+                "lon": -97.0,
+                "heightM": null,
+                "bearingDeg": null,
+                "receivedAt": null,
+                "timeKind": "vehicle",
+                "provenance": "simulated",
+                "flags": 0
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "repeat-and-conflict",
+      "clause": "A record identical to a stored one is a repeat; a different record for a stored source, key and time is a conflict and the stored record stays.",
+      "now": "2026-10-25T12:00:00.000Z",
+      "steps": [
+        {
+          "write": {
+            "records": [
+              {
+                "source": "adsb",
+                "key": "dup",
+                "t": "2026-10-25T10:00:00Z",
+                "lat": 30.1,
+                "lon": -97.1,
+                "heightM": null,
+                "bearingDeg": null,
+                "receivedAt": null,
+                "timeKind": "vehicle",
+                "provenance": "observed",
+                "flags": 0
+              },
+              {
+                "source": "adsb",
+                "key": "dup",
+                "t": "2026-10-25T10:00:00Z",
+                "lat": 30.1,
+                "lon": -97.1,
+                "heightM": null,
+                "bearingDeg": null,
+                "receivedAt": null,
+                "timeKind": "vehicle",
+                "provenance": "observed",
+                "flags": 0
+              }
+            ]
+          },
+          "expect": {
+            "accepted": 1,
+            "repeats": 1,
+            "conflicts": 0
+          }
+        },
+        {
+          "write": {
+            "records": [
+              {
+                "source": "adsb",
+                "key": "dup",
+                "t": "2026-10-25T10:00:00Z",
+                "lat": 30.1,
+                "lon": -97.1,
+                "heightM": null,
+                "bearingDeg": null,
+                "receivedAt": null,
+                "timeKind": "vehicle",
+                "provenance": "observed",
+                "flags": 0
+              },
+              {
+                "source": "adsb",
+                "key": "dup",
+                "t": "2026-10-25T10:00:00Z",
+                "lat": 30.2,
+                "lon": -97.1,
+                "heightM": null,
+                "bearingDeg": null,
+                "receivedAt": null,
+                "timeKind": "vehicle",
+                "provenance": "observed",
+                "flags": 0
+              },
+              {
+                "source": "adsb",
+                "key": "dup",
+                "t": "2026-10-25T10:00:00Z",
+                "lat": 30.1,
+                "lon": -97.1,
+                "heightM": null,
+                "bearingDeg": null,
+                "receivedAt": null,
+                "timeKind": "receipt",
+                "provenance": "observed",
+                "flags": 0
+              },
+              {
+                "source": "adsb",
+                "key": "dup",
+                "t": "2026-10-25T10:00:00Z",
+                "lat": 30.1,
+                "lon": -97.1,
+                "heightM": 100,
+                "bearingDeg": null,
+                "receivedAt": null,
+                "timeKind": "vehicle",
+                "provenance": "observed",
+                "flags": 0
+              }
+            ]
+          },
+          "expect": {
+            "accepted": 0,
+            "repeats": 1,
+            "conflicts": 3
+          }
+        },
+        {
+          "query": {
+            "source": "adsb",
+            "fromMs": "2026-10-25T00:00:00Z",
+            "toMs": "2026-10-25T23:00:00Z"
+          },
+          "expect": {
+            "records": [
+              {
+                "source": "adsb",
+                "key": "dup",
+                "t": "2026-10-25T10:00:00Z",
+                "lat": 30.1,
+                "lon": -97.1,
+                "heightM": null,
+                "bearingDeg": null,
+                "receivedAt": null,
+                "timeKind": "vehicle",
+                "provenance": "observed",
+                "flags": 0
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "sources-isolated",
+      "clause": "The same key and time in two sources are two records; a query sees one source.",
+      "now": "2026-10-25T12:00:00.000Z",
+      "steps": [
+        {
+          "write": {
+            "records": [
+              {
+                "source": "adsb",
+                "key": "same",
+                "t": "2026-10-25T10:00:00Z",
+                "lat": 1,
+                "lon": 1,
+                "heightM": null,
+                "bearingDeg": null,
+                "receivedAt": null,
+                "timeKind": "vehicle",
+                "provenance": "observed",
+                "flags": 0
+              },
+              {
+                "source": "ais",
+                "key": "same",
+                "t": "2026-10-25T10:00:00Z",
+                "lat": 2,
+                "lon": 2,
+                "heightM": null,
+                "bearingDeg": null,
+                "receivedAt": null,
+                "timeKind": "vehicle",
+                "provenance": "observed",
+                "flags": 0
+              }
+            ]
+          },
+          "expect": {
+            "accepted": 2
+          }
+        },
+        {
+          "query": {
+            "source": "ais",
+            "fromMs": "2026-10-25T00:00:00Z",
+            "toMs": "2026-10-25T23:00:00Z"
+          },
+          "expect": {
+            "records": [
+              {
+                "source": "ais",
+                "key": "same",
+                "t": "2026-10-25T10:00:00Z",
+                "lat": 2,
+                "lon": 2,
+                "heightM": null,
+                "bearingDeg": null,
+                "receivedAt": null,
+                "timeKind": "vehicle",
+                "provenance": "observed",
+                "flags": 0
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "midnight",
+      "clause": "A track that crosses UTC midnight reads back in time order across the boundary, a page at a time; a time exactly at midnight belongs to the new day; both query bounds are inclusive.",
+      "now": "2026-10-25T12:00:00.000Z",
+      "steps": [
+        {
+          "write": {
+            "records": [
+              {
+                "source": "adsb",
+                "key": "m",
+                "t": "2026-10-24T23:59:50Z",
+                "lat": 30.0,
+                "lon": -97.0,
+                "heightM": null,
+                "bearingDeg": null,
+                "receivedAt": null,
+                "timeKind": "vehicle",
+                "provenance": "observed",
+                "flags": 0
+              },
+              {
+                "source": "adsb",
+                "key": "m",
+                "t": "2026-10-25T00:00:00.000Z",
+                "lat": 30.0,
+                "lon": -97.0,
+                "heightM": null,
+                "bearingDeg": null,
+                "receivedAt": null,
+                "timeKind": "vehicle",
+                "provenance": "observed",
+                "flags": 0
+              },
+              {
+                "source": "adsb",
+                "key": "m",
+                "t": "2026-10-25T00:00:10Z",
+                "lat": 30.0,
+                "lon": -97.0,
+                "heightM": null,
+                "bearingDeg": null,
+                "receivedAt": null,
+                "timeKind": "vehicle",
+                "provenance": "observed",
+                "flags": 0
+              },
+              {
+                "source": "adsb",
+                "key": "m",
+                "t": "2026-10-24T23:59:59.999Z",
+                "lat": 30.0,
+                "lon": -97.0,
+                "heightM": null,
+                "bearingDeg": null,
+                "receivedAt": null,
+                "timeKind": "vehicle",
+                "provenance": "observed",
+                "flags": 0
+              }
+            ]
+          },
+          "expect": {
+            "accepted": 4
+          }
+        },
+        {
+          "query": {
+            "source": "adsb",
+            "fromMs": "2026-10-24T23:00:00Z",
+            "toMs": "2026-10-25T01:00:00Z"
+          },
+          "pageSize": 1,
+          "expect": {
+            "records": [
+              {
+                "source": "adsb",
+                "key": "m",
+                "t": "2026-10-24T23:59:50Z",
+                "lat": 30.0,
+                "lon": -97.0,
+                "heightM": null,
+                "bearingDeg": null,
+                "receivedAt": null,
+                "timeKind": "vehicle",
+                "provenance": "observed",
+                "flags": 0
+              },
+              {
+                "source": "adsb",
+                "key": "m",
+                "t": "2026-10-24T23:59:59.999Z",
+                "lat": 30.0,
+                "lon": -97.0,
+                "heightM": null,
+                "bearingDeg": null,
+                "receivedAt": null,
+                "timeKind": "vehicle",
+                "provenance": "observed",
+                "flags": 0
+              },
+              {
+                "source": "adsb",
+                "key": "m",
+                "t": "2026-10-25T00:00:00.000Z",
+                "lat": 30.0,
+                "lon": -97.0,
+                "heightM": null,
+                "bearingDeg": null,
+                "receivedAt": null,
+                "timeKind": "vehicle",
+                "provenance": "observed",
+                "flags": 0
+              },
+              {
+                "source": "adsb",
+                "key": "m",
+                "t": "2026-10-25T00:00:10Z",
+                "lat": 30.0,
+                "lon": -97.0,
+                "heightM": null,
+                "bearingDeg": null,
+                "receivedAt": null,
+                "timeKind": "vehicle",
+                "provenance": "observed",
+                "flags": 0
+              }
+            ]
+          }
+        },
+        {
+          "query": {
+            "source": "adsb",
+            "fromMs": "2026-10-25T00:00:00Z",
+            "toMs": "2026-10-25T00:00:00Z"
+          },
+          "expect": {
+            "records": [
+              {
+                "source": "adsb",
+                "key": "m",
+                "t": "2026-10-25T00:00:00.000Z",
+                "lat": 30.0,
+                "lon": -97.0,
+                "heightM": null,
+                "bearingDeg": null,
+                "receivedAt": null,
+                "timeKind": "vehicle",
+                "provenance": "observed",
+                "flags": 0
+              }
+            ]
+          }
+        },
+        {
+          "query": {
+            "source": "adsb",
+            "fromMs": "2026-10-24T23:59:59.999Z",
+            "toMs": "2026-10-25T00:00:10Z"
+          },
+          "expect": {
+            "records": [
+              {
+                "source": "adsb",
+                "key": "m",
+                "t": "2026-10-24T23:59:59.999Z",
+                "lat": 30.0,
+                "lon": -97.0,
+                "heightM": null,
+                "bearingDeg": null,
+                "receivedAt": null,
+                "timeKind": "vehicle",
+                "provenance": "observed",
+                "flags": 0
+              },
+              {
+                "source": "adsb",
+                "key": "m",
+                "t": "2026-10-25T00:00:00.000Z",
+                "lat": 30.0,
+                "lon": -97.0,
+                "heightM": null,
+                "bearingDeg": null,
+                "receivedAt": null,
+                "timeKind": "vehicle",
+                "provenance": "observed",
+                "flags": 0
+              },
+              {
+                "source": "adsb",
+                "key": "m",
+                "t": "2026-10-25T00:00:10Z",
+                "lat": 30.0,
+                "lon": -97.0,
+                "heightM": null,
+                "bearingDeg": null,
+                "receivedAt": null,
+                "timeKind": "vehicle",
+                "provenance": "observed",
+                "flags": 0
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "utf8-key-order",
+      "clause": "Records at one time are ordered by key in UTF-8 byte order, which puts U+FF5E before U+1F600 (UTF-16 order would not).",
+      "now": "2026-10-25T12:00:00.000Z",
+      "steps": [
+        {
+          "write": {
+            "records": [
+              {
+                "source": "adsb",
+                "key": "b",
+                "t": "2026-10-25T10:00:00Z",
+                "lat": 30.0,
+                "lon": -97.0,
+                "heightM": null,
+                "bearingDeg": null,
+                "receivedAt": null,
+                "timeKind": "vehicle",
+                "provenance": "observed",
+                "flags": 0
+              },
+              {
+                "source": "adsb",
+                "key": "～",
+                "t": "2026-10-25T10:00:00Z",
+                "lat": 30.0,
+                "lon": -97.0,
+                "heightM": null,
+                "bearingDeg": null,
+                "receivedAt": null,
+                "timeKind": "vehicle",
+                "provenance": "observed",
+                "flags": 0
+              },
+              {
+                "source": "adsb",
+                "key": "a",
+                "t": "2026-10-25T10:00:00Z",
+                "lat": 30.0,
+                "lon": -97.0,
+                "heightM": null,
+                "bearingDeg": null,
+                "receivedAt": null,
+                "timeKind": "vehicle",
+                "provenance": "observed",
+                "flags": 0
+              },
+              {
+                "source": "adsb",
+                "key": "😀",
+                "t": "2026-10-25T10:00:00Z",
+                "lat": 30.0,
+                "lon": -97.0,
+                "heightM": null,
+                "bearingDeg": null,
+                "receivedAt": null,
+                "timeKind": "vehicle",
+                "provenance": "observed",
+                "flags": 0
+              },
+              {
+                "source": "adsb",
+                "key": "A",
+                "t": "2026-10-25T10:00:00Z",
+                "lat": 30.0,
+                "lon": -97.0,
+                "heightM": null,
+                "bearingDeg": null,
+                "receivedAt": null,
+                "timeKind": "vehicle",
+                "provenance": "observed",
+                "flags": 0
+              }
+            ]
+          },
+          "expect": {
+            "accepted": 5
+          }
+        },
+        {
+          "query": {
+            "source": "adsb",
+            "fromMs": "2026-10-25T10:00:00Z",
+            "toMs": "2026-10-25T10:00:00Z"
+          },
+          "pageSize": 2,
+          "expect": {
+            "records": [
+              {
+                "source": "adsb",
+                "key": "A",
+                "t": "2026-10-25T10:00:00Z",
+                "lat": 30.0,
+                "lon": -97.0,
+                "heightM": null,
+                "bearingDeg": null,
+                "receivedAt": null,
+                "timeKind": "vehicle",
+                "provenance": "observed",
+                "flags": 0
+              },
+              {
+                "source": "adsb",
+                "key": "a",
+                "t": "2026-10-25T10:00:00Z",
+                "lat": 30.0,
+                "lon": -97.0,
+                "heightM": null,
+                "bearingDeg": null,
+                "receivedAt": null,
+                "timeKind": "vehicle",
+                "provenance": "observed",
+                "flags": 0
+              },
+              {
+                "source": "adsb",
+                "key": "b",
+                "t": "2026-10-25T10:00:00Z",
+                "lat": 30.0,
+                "lon": -97.0,
+                "heightM": null,
+                "bearingDeg": null,
+                "receivedAt": null,
+                "timeKind": "vehicle",
+                "provenance": "observed",
+                "flags": 0
+              },
+              {
+                "source": "adsb",
+                "key": "～",
+                "t": "2026-10-25T10:00:00Z",
+                "lat": 30.0,
+                "lon": -97.0,
+                "heightM": null,
+                "bearingDeg": null,
+                "receivedAt": null,
+                "timeKind": "vehicle",
+                "provenance": "observed",
+                "flags": 0
+              },
+              {
+                "source": "adsb",
+                "key": "😀",
+                "t": "2026-10-25T10:00:00Z",
+                "lat": 30.0,
+                "lon": -97.0,
+                "heightM": null,
+                "bearingDeg": null,
+                "receivedAt": null,
+                "timeKind": "vehicle",
+                "provenance": "observed",
+                "flags": 0
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "paging-ties",
+      "clause": "Paging through records that share a time, across a day boundary, returns each record exactly once whatever the page size.",
+      "now": "2026-10-25T12:00:00.000Z",
+      "steps": [
+        {
+          "write": {
+            "records": [
+              {
+                "source": "adsb",
+                "key": "k0",
+                "t": "2026-10-24T23:59:59.999Z",
+                "lat": 30.0,
+                "lon": -97.0,
+                "heightM": null,
+                "bearingDeg": null,
+                "receivedAt": null,
+                "timeKind": "vehicle",
+                "provenance": "observed",
+                "flags": 0
+              },
+              {
+                "source": "adsb",
+                "key": "k1",
+                "t": "2026-10-24T23:59:59.999Z",
+                "lat": 30.0,
+                "lon": -97.0,
+                "heightM": null,
+                "bearingDeg": null,
+                "receivedAt": null,
+                "timeKind": "vehicle",
+                "provenance": "observed",
+                "flags": 0
+              },
+              {
+                "source": "adsb",
+                "key": "k2",
+                "t": "2026-10-24T23:59:59.999Z",
+                "lat": 30.0,
+                "lon": -97.0,
+                "heightM": null,
+                "bearingDeg": null,
+                "receivedAt": null,
+                "timeKind": "vehicle",
+                "provenance": "observed",
+                "flags": 0
+              },
+              {
+                "source": "adsb",
+                "key": "k0",
+                "t": "2026-10-25T00:00:00Z",
+                "lat": 30.0,
+                "lon": -97.0,
+                "heightM": null,
+                "bearingDeg": null,
+                "receivedAt": null,
+                "timeKind": "vehicle",
+                "provenance": "observed",
+                "flags": 0
+              },
+              {
+                "source": "adsb",
+                "key": "k1",
+                "t": "2026-10-25T00:00:00Z",
+                "lat": 30.0,
+                "lon": -97.0,
+                "heightM": null,
+                "bearingDeg": null,
+                "receivedAt": null,
+                "timeKind": "vehicle",
+                "provenance": "observed",
+                "flags": 0
+              },
+              {
+                "source": "adsb",
+                "key": "k2",
+                "t": "2026-10-25T00:00:00Z",
+                "lat": 30.0,
+                "lon": -97.0,
+                "heightM": null,
+                "bearingDeg": null,
+                "receivedAt": null,
+                "timeKind": "vehicle",
+                "provenance": "observed",
+                "flags": 0
+              },
+              {
+                "source": "adsb",
+                "key": "k3",
+                "t": "2026-10-25T00:00:00Z",
+                "lat": 30.0,
+                "lon": -97.0,
+                "heightM": null,
+                "bearingDeg": null,
+                "receivedAt": null,
+                "timeKind": "vehicle",
+                "provenance": "observed",
+                "flags": 0
+              },
+              {
+                "source": "adsb",
+                "key": "z",
+                "t": "2026-10-25T00:00:01Z",
+                "lat": 30.0,
+                "lon": -97.0,
+                "heightM": null,
+                "bearingDeg": null,
+                "receivedAt": null,
+                "timeKind": "vehicle",
+                "provenance": "observed",
+                "flags": 0
+              }
+            ]
+          },
+          "expect": {
+            "accepted": 8
+          }
+        },
+        {
+          "query": {
+            "source": "adsb",
+            "fromMs": "2026-10-24T00:00:00Z",
+            "toMs": "2026-10-25T12:00:00Z"
+          },
+          "pageSize": 1,
+          "expect": {
+            "records": [
+              {
+                "source": "adsb",
+                "key": "k0",
+                "t": "2026-10-24T23:59:59.999Z",
+                "lat": 30.0,
+                "lon": -97.0,
+                "heightM": null,
+                "bearingDeg": null,
+                "receivedAt": null,
+                "timeKind": "vehicle",
+                "provenance": "observed",
+                "flags": 0
+              },
+              {
+                "source": "adsb",
+                "key": "k1",
+                "t": "2026-10-24T23:59:59.999Z",
+                "lat": 30.0,
+                "lon": -97.0,
+                "heightM": null,
+                "bearingDeg": null,
+                "receivedAt": null,
+                "timeKind": "vehicle",
+                "provenance": "observed",
+                "flags": 0
+              },
+              {
+                "source": "adsb",
+                "key": "k2",
+                "t": "2026-10-24T23:59:59.999Z",
+                "lat": 30.0,
+                "lon": -97.0,
+                "heightM": null,
+                "bearingDeg": null,
+                "receivedAt": null,
+                "timeKind": "vehicle",
+                "provenance": "observed",
+                "flags": 0
+              },
+              {
+                "source": "adsb",
+                "key": "k0",
+                "t": "2026-10-25T00:00:00Z",
+                "lat": 30.0,
+                "lon": -97.0,
+                "heightM": null,
+                "bearingDeg": null,
+                "receivedAt": null,
+                "timeKind": "vehicle",
+                "provenance": "observed",
+                "flags": 0
+              },
+              {
+                "source": "adsb",
+                "key": "k1",
+                "t": "2026-10-25T00:00:00Z",
+                "lat": 30.0,
+                "lon": -97.0,
+                "heightM": null,
+                "bearingDeg": null,
+                "receivedAt": null,
+                "timeKind": "vehicle",
+                "provenance": "observed",
+                "flags": 0
+              },
+              {
+                "source": "adsb",
+                "key": "k2",
+                "t": "2026-10-25T00:00:00Z",
+                "lat": 30.0,
+                "lon": -97.0,
+                "heightM": null,
+                "bearingDeg": null,
+                "receivedAt": null,
+                "timeKind": "vehicle",
+                "provenance": "observed",
+                "flags": 0
+              },
+              {
+                "source": "adsb",
+                "key": "k3",
+                "t": "2026-10-25T00:00:00Z",
+                "lat": 30.0,
+                "lon": -97.0,
+                "heightM": null,
+                "bearingDeg": null,
+                "receivedAt": null,
+                "timeKind": "vehicle",
+                "provenance": "observed",
+                "flags": 0
+              },
+              {
+                "source": "adsb",
+                "key": "z",
+                "t": "2026-10-25T00:00:01Z",
+                "lat": 30.0,
+                "lon": -97.0,
+                "heightM": null,
+                "bearingDeg": null,
+                "receivedAt": null,
+                "timeKind": "vehicle",
+                "provenance": "observed",
+                "flags": 0
+              }
+            ]
+          }
+        },
+        {
+          "query": {
+            "source": "adsb",
+            "fromMs": "2026-10-24T00:00:00Z",
+            "toMs": "2026-10-25T12:00:00Z"
+          },
+          "pageSize": 2,
+          "expect": {
+            "records": [
+              {
+                "source": "adsb",
+                "key": "k0",
+                "t": "2026-10-24T23:59:59.999Z",
+                "lat": 30.0,
+                "lon": -97.0,
+                "heightM": null,
+                "bearingDeg": null,
+                "receivedAt": null,
+                "timeKind": "vehicle",
+                "provenance": "observed",
+                "flags": 0
+              },
+              {
+                "source": "adsb",
+                "key": "k1",
+                "t": "2026-10-24T23:59:59.999Z",
+                "lat": 30.0,
+                "lon": -97.0,
+                "heightM": null,
+                "bearingDeg": null,
+                "receivedAt": null,
+                "timeKind": "vehicle",
+                "provenance": "observed",
+                "flags": 0
+              },
+              {
+                "source": "adsb",
+                "key": "k2",
+                "t": "2026-10-24T23:59:59.999Z",
+                "lat": 30.0,
+                "lon": -97.0,
+                "heightM": null,
+                "bearingDeg": null,
+                "receivedAt": null,
+                "timeKind": "vehicle",
+                "provenance": "observed",
+                "flags": 0
+              },
+              {
+                "source": "adsb",
+                "key": "k0",
+                "t": "2026-10-25T00:00:00Z",
+                "lat": 30.0,
+                "lon": -97.0,
+                "heightM": null,
+                "bearingDeg": null,
+                "receivedAt": null,
+                "timeKind": "vehicle",
+                "provenance": "observed",
+                "flags": 0
+              },
+              {
+                "source": "adsb",
+                "key": "k1",
+                "t": "2026-10-25T00:00:00Z",
+                "lat": 30.0,
+                "lon": -97.0,
+                "heightM": null,
+                "bearingDeg": null,
+                "receivedAt": null,
+                "timeKind": "vehicle",
+                "provenance": "observed",
+                "flags": 0
+              },
+              {
+                "source": "adsb",
+                "key": "k2",
+                "t": "2026-10-25T00:00:00Z",
+                "lat": 30.0,
+                "lon": -97.0,
+                "heightM": null,
+                "bearingDeg": null,
+                "receivedAt": null,
+                "timeKind": "vehicle",
+                "provenance": "observed",
+                "flags": 0
+              },
+              {
+                "source": "adsb",
+                "key": "k3",
+                "t": "2026-10-25T00:00:00Z",
+                "lat": 30.0,
+                "lon": -97.0,
+                "heightM": null,
+                "bearingDeg": null,
+                "receivedAt": null,
+                "timeKind": "vehicle",
+                "provenance": "observed",
+                "flags": 0
+              },
+              {
+                "source": "adsb",
+                "key": "z",
+                "t": "2026-10-25T00:00:01Z",
+                "lat": 30.0,
+                "lon": -97.0,
+                "heightM": null,
+                "bearingDeg": null,
+                "receivedAt": null,
+                "timeKind": "vehicle",
+                "provenance": "observed",
+                "flags": 0
+              }
+            ]
+          }
+        },
+        {
+          "query": {
+            "source": "adsb",
+            "fromMs": "2026-10-24T00:00:00Z",
+            "toMs": "2026-10-25T12:00:00Z"
+          },
+          "pageSize": 3,
+          "expect": {
+            "records": [
+              {
+                "source": "adsb",
+                "key": "k0",
+                "t": "2026-10-24T23:59:59.999Z",
+                "lat": 30.0,
+                "lon": -97.0,
+                "heightM": null,
+                "bearingDeg": null,
+                "receivedAt": null,
+                "timeKind": "vehicle",
+                "provenance": "observed",
+                "flags": 0
+              },
+              {
+                "source": "adsb",
+                "key": "k1",
+                "t": "2026-10-24T23:59:59.999Z",
+                "lat": 30.0,
+                "lon": -97.0,
+                "heightM": null,
+                "bearingDeg": null,
+                "receivedAt": null,
+                "timeKind": "vehicle",
+                "provenance": "observed",
+                "flags": 0
+              },
+              {
+                "source": "adsb",
+                "key": "k2",
+                "t": "2026-10-24T23:59:59.999Z",
+                "lat": 30.0,
+                "lon": -97.0,
+                "heightM": null,
+                "bearingDeg": null,
+                "receivedAt": null,
+                "timeKind": "vehicle",
+                "provenance": "observed",
+                "flags": 0
+              },
+              {
+                "source": "adsb",
+                "key": "k0",
+                "t": "2026-10-25T00:00:00Z",
+                "lat": 30.0,
+                "lon": -97.0,
+                "heightM": null,
+                "bearingDeg": null,
+                "receivedAt": null,
+                "timeKind": "vehicle",
+                "provenance": "observed",
+                "flags": 0
+              },
+              {
+                "source": "adsb",
+                "key": "k1",
+                "t": "2026-10-25T00:00:00Z",
+                "lat": 30.0,
+                "lon": -97.0,
+                "heightM": null,
+                "bearingDeg": null,
+                "receivedAt": null,
+                "timeKind": "vehicle",
+                "provenance": "observed",
+                "flags": 0
+              },
+              {
+                "source": "adsb",
+                "key": "k2",
+                "t": "2026-10-25T00:00:00Z",
+                "lat": 30.0,
+                "lon": -97.0,
+                "heightM": null,
+                "bearingDeg": null,
+                "receivedAt": null,
+                "timeKind": "vehicle",
+                "provenance": "observed",
+                "flags": 0
+              },
+              {
+                "source": "adsb",
+                "key": "k3",
+                "t": "2026-10-25T00:00:00Z",
+                "lat": 30.0,
+                "lon": -97.0,
+                "heightM": null,
+                "bearingDeg": null,
+                "receivedAt": null,
+                "timeKind": "vehicle",
+                "provenance": "observed",
+                "flags": 0
+              },
+              {
+                "source": "adsb",
+                "key": "z",
+                "t": "2026-10-25T00:00:01Z",
+                "lat": 30.0,
+                "lon": -97.0,
+                "heightM": null,
+                "bearingDeg": null,
+                "receivedAt": null,
+                "timeKind": "vehicle",
+                "provenance": "observed",
+                "flags": 0
+              }
+            ]
+          }
+        },
+        {
+          "query": {
+            "source": "adsb",
+            "fromMs": "2026-10-24T00:00:00Z",
+            "toMs": "2026-10-25T12:00:00Z"
+          },
+          "pageSize": 7,
+          "expect": {
+            "records": [
+              {
+                "source": "adsb",
+                "key": "k0",
+                "t": "2026-10-24T23:59:59.999Z",
+                "lat": 30.0,
+                "lon": -97.0,
+                "heightM": null,
+                "bearingDeg": null,
+                "receivedAt": null,
+                "timeKind": "vehicle",
+                "provenance": "observed",
+                "flags": 0
+              },
+              {
+                "source": "adsb",
+                "key": "k1",
+                "t": "2026-10-24T23:59:59.999Z",
+                "lat": 30.0,
+                "lon": -97.0,
+                "heightM": null,
+                "bearingDeg": null,
+                "receivedAt": null,
+                "timeKind": "vehicle",
+                "provenance": "observed",
+                "flags": 0
+              },
+              {
+                "source": "adsb",
+                "key": "k2",
+                "t": "2026-10-24T23:59:59.999Z",
+                "lat": 30.0,
+                "lon": -97.0,
+                "heightM": null,
+                "bearingDeg": null,
+                "receivedAt": null,
+                "timeKind": "vehicle",
+                "provenance": "observed",
+                "flags": 0
+              },
+              {
+                "source": "adsb",
+                "key": "k0",
+                "t": "2026-10-25T00:00:00Z",
+                "lat": 30.0,
+                "lon": -97.0,
+                "heightM": null,
+                "bearingDeg": null,
+                "receivedAt": null,
+                "timeKind": "vehicle",
+                "provenance": "observed",
+                "flags": 0
+              },
+              {
+                "source": "adsb",
+                "key": "k1",
+                "t": "2026-10-25T00:00:00Z",
+                "lat": 30.0,
+                "lon": -97.0,
+                "heightM": null,
+                "bearingDeg": null,
+                "receivedAt": null,
+                "timeKind": "vehicle",
+                "provenance": "observed",
+                "flags": 0
+              },
+              {
+                "source": "adsb",
+                "key": "k2",
+                "t": "2026-10-25T00:00:00Z",
+                "lat": 30.0,
+                "lon": -97.0,
+                "heightM": null,
+                "bearingDeg": null,
+                "receivedAt": null,
+                "timeKind": "vehicle",
+                "provenance": "observed",
+                "flags": 0
+              },
+              {
+                "source": "adsb",
+                "key": "k3",
+                "t": "2026-10-25T00:00:00Z",
+                "lat": 30.0,
+                "lon": -97.0,
+                "heightM": null,
+                "bearingDeg": null,
+                "receivedAt": null,
+                "timeKind": "vehicle",
+                "provenance": "observed",
+                "flags": 0
+              },
+              {
+                "source": "adsb",
+                "key": "z",
+                "t": "2026-10-25T00:00:01Z",
+                "lat": 30.0,
+                "lon": -97.0,
+                "heightM": null,
+                "bearingDeg": null,
+                "receivedAt": null,
+                "timeKind": "vehicle",
+                "provenance": "observed",
+                "flags": 0
+              }
+            ]
+          }
+        },
+        {
+          "query": {
+            "source": "adsb",
+            "fromMs": "2026-10-24T00:00:00Z",
+            "toMs": "2026-10-25T12:00:00Z"
+          },
+          "pageSize": 8,
+          "expect": {
+            "records": [
+              {
+                "source": "adsb",
+                "key": "k0",
+                "t": "2026-10-24T23:59:59.999Z",
+                "lat": 30.0,
+                "lon": -97.0,
+                "heightM": null,
+                "bearingDeg": null,
+                "receivedAt": null,
+                "timeKind": "vehicle",
+                "provenance": "observed",
+                "flags": 0
+              },
+              {
+                "source": "adsb",
+                "key": "k1",
+                "t": "2026-10-24T23:59:59.999Z",
+                "lat": 30.0,
+                "lon": -97.0,
+                "heightM": null,
+                "bearingDeg": null,
+                "receivedAt": null,
+                "timeKind": "vehicle",
+                "provenance": "observed",
+                "flags": 0
+              },
+              {
+                "source": "adsb",
+                "key": "k2",
+                "t": "2026-10-24T23:59:59.999Z",
+                "lat": 30.0,
+                "lon": -97.0,
+                "heightM": null,
+                "bearingDeg": null,
+                "receivedAt": null,
+                "timeKind": "vehicle",
+                "provenance": "observed",
+                "flags": 0
+              },
+              {
+                "source": "adsb",
+                "key": "k0",
+                "t": "2026-10-25T00:00:00Z",
+                "lat": 30.0,
+                "lon": -97.0,
+                "heightM": null,
+                "bearingDeg": null,
+                "receivedAt": null,
+                "timeKind": "vehicle",
+                "provenance": "observed",
+                "flags": 0
+              },
+              {
+                "source": "adsb",
+                "key": "k1",
+                "t": "2026-10-25T00:00:00Z",
+                "lat": 30.0,
+                "lon": -97.0,
+                "heightM": null,
+                "bearingDeg": null,
+                "receivedAt": null,
+                "timeKind": "vehicle",
+                "provenance": "observed",
+                "flags": 0
+              },
+              {
+                "source": "adsb",
+                "key": "k2",
+                "t": "2026-10-25T00:00:00Z",
+                "lat": 30.0,
+                "lon": -97.0,
+                "heightM": null,
+                "bearingDeg": null,
+                "receivedAt": null,
+                "timeKind": "vehicle",
+                "provenance": "observed",
+                "flags": 0
+              },
+              {
+                "source": "adsb",
+                "key": "k3",
+                "t": "2026-10-25T00:00:00Z",
+                "lat": 30.0,
+                "lon": -97.0,
+                "heightM": null,
+                "bearingDeg": null,
+                "receivedAt": null,
+                "timeKind": "vehicle",
+                "provenance": "observed",
+                "flags": 0
+              },
+              {
+                "source": "adsb",
+                "key": "z",
+                "t": "2026-10-25T00:00:01Z",
+                "lat": 30.0,
+                "lon": -97.0,
+                "heightM": null,
+                "bearingDeg": null,
+                "receivedAt": null,
+                "timeKind": "vehicle",
+                "provenance": "observed",
+                "flags": 0
+              }
+            ]
+          }
+        },
+        {
+          "query": {
+            "source": "adsb",
+            "fromMs": "2026-10-24T00:00:00Z",
+            "toMs": "2026-10-25T12:00:00Z"
+          },
+          "pageSize": 9,
+          "expect": {
+            "records": [
+              {
+                "source": "adsb",
+                "key": "k0",
+                "t": "2026-10-24T23:59:59.999Z",
+                "lat": 30.0,
+                "lon": -97.0,
+                "heightM": null,
+                "bearingDeg": null,
+                "receivedAt": null,
+                "timeKind": "vehicle",
+                "provenance": "observed",
+                "flags": 0
+              },
+              {
+                "source": "adsb",
+                "key": "k1",
+                "t": "2026-10-24T23:59:59.999Z",
+                "lat": 30.0,
+                "lon": -97.0,
+                "heightM": null,
+                "bearingDeg": null,
+                "receivedAt": null,
+                "timeKind": "vehicle",
+                "provenance": "observed",
+                "flags": 0
+              },
+              {
+                "source": "adsb",
+                "key": "k2",
+                "t": "2026-10-24T23:59:59.999Z",
+                "lat": 30.0,
+                "lon": -97.0,
+                "heightM": null,
+                "bearingDeg": null,
+                "receivedAt": null,
+                "timeKind": "vehicle",
+                "provenance": "observed",
+                "flags": 0
+              },
+              {
+                "source": "adsb",
+                "key": "k0",
+                "t": "2026-10-25T00:00:00Z",
+                "lat": 30.0,
+                "lon": -97.0,
+                "heightM": null,
+                "bearingDeg": null,
+                "receivedAt": null,
+                "timeKind": "vehicle",
+                "provenance": "observed",
+                "flags": 0
+              },
+              {
+                "source": "adsb",
+                "key": "k1",
+                "t": "2026-10-25T00:00:00Z",
+                "lat": 30.0,
+                "lon": -97.0,
+                "heightM": null,
+                "bearingDeg": null,
+                "receivedAt": null,
+                "timeKind": "vehicle",
+                "provenance": "observed",
+                "flags": 0
+              },
+              {
+                "source": "adsb",
+                "key": "k2",
+                "t": "2026-10-25T00:00:00Z",
+                "lat": 30.0,
+                "lon": -97.0,
+                "heightM": null,
+                "bearingDeg": null,
+                "receivedAt": null,
+                "timeKind": "vehicle",
+                "provenance": "observed",
+                "flags": 0
+              },
+              {
+                "source": "adsb",
+                "key": "k3",
+                "t": "2026-10-25T00:00:00Z",
+                "lat": 30.0,
+                "lon": -97.0,
+                "heightM": null,
+                "bearingDeg": null,
+                "receivedAt": null,
+                "timeKind": "vehicle",
+                "provenance": "observed",
+                "flags": 0
+              },
+              {
+                "source": "adsb",
+                "key": "z",
+                "t": "2026-10-25T00:00:01Z",
+                "lat": 30.0,
+                "lon": -97.0,
+                "heightM": null,
+                "bearingDeg": null,
+                "receivedAt": null,
+                "timeKind": "vehicle",
+                "provenance": "observed",
+                "flags": 0
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "cursor-binding",
+      "clause": "A cursor continues only the query that issued it (same source, range, provenance and keys; the page size may change); another query, or text that is not a cursor, is refused.",
+      "now": "2026-10-25T12:00:00.000Z",
+      "steps": [
+        {
+          "write": {
+            "records": [
+              {
+                "source": "adsb",
+                "key": "k0",
+                "t": "2026-10-24T23:59:59.999Z",
+                "lat": 30.0,
+                "lon": -97.0,
+                "heightM": null,
+                "bearingDeg": null,
+                "receivedAt": null,
+                "timeKind": "vehicle",
+                "provenance": "observed",
+                "flags": 0
+              },
+              {
+                "source": "adsb",
+                "key": "k1",
+                "t": "2026-10-24T23:59:59.999Z",
+                "lat": 30.0,
+                "lon": -97.0,
+                "heightM": null,
+                "bearingDeg": null,
+                "receivedAt": null,
+                "timeKind": "vehicle",
+                "provenance": "observed",
+                "flags": 0
+              },
+              {
+                "source": "adsb",
+                "key": "k2",
+                "t": "2026-10-24T23:59:59.999Z",
+                "lat": 30.0,
+                "lon": -97.0,
+                "heightM": null,
+                "bearingDeg": null,
+                "receivedAt": null,
+                "timeKind": "vehicle",
+                "provenance": "observed",
+                "flags": 0
+              },
+              {
+                "source": "adsb",
+                "key": "k0",
+                "t": "2026-10-25T00:00:00Z",
+                "lat": 30.0,
+                "lon": -97.0,
+                "heightM": null,
+                "bearingDeg": null,
+                "receivedAt": null,
+                "timeKind": "vehicle",
+                "provenance": "observed",
+                "flags": 0
+              },
+              {
+                "source": "adsb",
+                "key": "k1",
+                "t": "2026-10-25T00:00:00Z",
+                "lat": 30.0,
+                "lon": -97.0,
+                "heightM": null,
+                "bearingDeg": null,
+                "receivedAt": null,
+                "timeKind": "vehicle",
+                "provenance": "observed",
+                "flags": 0
+              },
+              {
+                "source": "adsb",
+                "key": "k2",
+                "t": "2026-10-25T00:00:00Z",
+                "lat": 30.0,
+                "lon": -97.0,
+                "heightM": null,
+                "bearingDeg": null,
+                "receivedAt": null,
+                "timeKind": "vehicle",
+                "provenance": "observed",
+                "flags": 0
+              },
+              {
+                "source": "adsb",
+                "key": "k3",
+                "t": "2026-10-25T00:00:00Z",
+                "lat": 30.0,
+                "lon": -97.0,
+                "heightM": null,
+                "bearingDeg": null,
+                "receivedAt": null,
+                "timeKind": "vehicle",
+                "provenance": "observed",
+                "flags": 0
+              },
+              {
+                "source": "adsb",
+                "key": "z",
+                "t": "2026-10-25T00:00:01Z",
+                "lat": 30.0,
+                "lon": -97.0,
+                "heightM": null,
+                "bearingDeg": null,
+                "receivedAt": null,
+                "timeKind": "vehicle",
+                "provenance": "observed",
+                "flags": 0
+              }
+            ]
+          }
+        },
+        {
+          "cursorReuse": {
+            "query": {
+              "source": "adsb",
+              "fromMs": "2026-10-24T00:00:00Z",
+              "toMs": "2026-10-25T12:00:00Z",
+              "limit": 2
+            },
+            "with": {
+              "source": "adsb",
+              "fromMs": "2026-10-24T00:00:00Z",
+              "toMs": "2026-10-25T11:00:00Z",
+              "limit": 2
+            }
+          },
+          "expect": {
+            "code": "cursor_mismatch"
+          }
+        },
+        {
+          "cursorReuse": {
+            "query": {
+              "source": "adsb",
+              "fromMs": "2026-10-24T00:00:00Z",
+              "toMs": "2026-10-25T12:00:00Z",
+              "limit": 2
+            },
+            "with": {
+              "source": "adsb",
+              "fromMs": "2026-10-24T00:00:00Z",
+              "toMs": "2026-10-25T12:00:00Z",
+              "limit": 2,
+              "keys": ["k0"]
+            }
+          },
+          "expect": {
+            "code": "cursor_mismatch"
+          }
+        },
+        {
+          "cursorReuse": {
+            "query": {
+              "source": "adsb",
+              "fromMs": "2026-10-24T00:00:00Z",
+              "toMs": "2026-10-25T12:00:00Z",
+              "limit": 2
+            },
+            "with": {
+              "source": "adsb",
+              "fromMs": "2026-10-24T00:00:00Z",
+              "toMs": "2026-10-25T12:00:00Z",
+              "limit": 2,
+              "provenance": ["derived"]
+            }
+          },
+          "expect": {
+            "code": "cursor_mismatch"
+          }
+        },
+        {
+          "cursorReuse": {
+            "query": {
+              "source": "adsb",
+              "fromMs": "2026-10-24T00:00:00Z",
+              "toMs": "2026-10-25T12:00:00Z",
+              "limit": 2
+            },
+            "with": {
+              "source": "ais",
+              "fromMs": "2026-10-24T00:00:00Z",
+              "toMs": "2026-10-25T12:00:00Z",
+              "limit": 2
+            }
+          },
+          "expect": {
+            "code": "cursor_mismatch"
+          }
+        },
+        {
+          "cursorReuse": {
+            "query": {
+              "source": "adsb",
+              "fromMs": "2026-10-24T00:00:00Z",
+              "toMs": "2026-10-25T12:00:00Z",
+              "limit": 2
+            },
+            "with": {
+              "source": "adsb",
+              "fromMs": "2026-10-24T00:00:00Z",
+              "toMs": "2026-10-25T12:00:00Z",
+              "limit": 5
+            }
+          },
+          "expect": {
+            "code": "none"
+          }
+        },
+        {
+          "queryError": {
+            "source": "adsb",
+            "fromMs": "2026-10-24T00:00:00Z",
+            "toMs": "2026-10-25T12:00:00Z",
+            "cursor": "not a cursor"
+          },
+          "expect": {
+            "code": "invalid_cursor"
+          }
+        }
+      ]
+    },
+    {
+      "name": "keys-filter",
+      "clause": "A query naming keys returns only those keys, in the usual order.",
+      "now": "2026-10-25T12:00:00.000Z",
+      "steps": [
+        {
+          "write": {
+            "records": [
+              {
+                "source": "adsb",
+                "key": "k0",
+                "t": "2026-10-24T23:59:59.999Z",
+                "lat": 30.0,
+                "lon": -97.0,
+                "heightM": null,
+                "bearingDeg": null,
+                "receivedAt": null,
+                "timeKind": "vehicle",
+                "provenance": "observed",
+                "flags": 0
+              },
+              {
+                "source": "adsb",
+                "key": "k1",
+                "t": "2026-10-24T23:59:59.999Z",
+                "lat": 30.0,
+                "lon": -97.0,
+                "heightM": null,
+                "bearingDeg": null,
+                "receivedAt": null,
+                "timeKind": "vehicle",
+                "provenance": "observed",
+                "flags": 0
+              },
+              {
+                "source": "adsb",
+                "key": "k2",
+                "t": "2026-10-24T23:59:59.999Z",
+                "lat": 30.0,
+                "lon": -97.0,
+                "heightM": null,
+                "bearingDeg": null,
+                "receivedAt": null,
+                "timeKind": "vehicle",
+                "provenance": "observed",
+                "flags": 0
+              },
+              {
+                "source": "adsb",
+                "key": "k0",
+                "t": "2026-10-25T00:00:00Z",
+                "lat": 30.0,
+                "lon": -97.0,
+                "heightM": null,
+                "bearingDeg": null,
+                "receivedAt": null,
+                "timeKind": "vehicle",
+                "provenance": "observed",
+                "flags": 0
+              },
+              {
+                "source": "adsb",
+                "key": "k1",
+                "t": "2026-10-25T00:00:00Z",
+                "lat": 30.0,
+                "lon": -97.0,
+                "heightM": null,
+                "bearingDeg": null,
+                "receivedAt": null,
+                "timeKind": "vehicle",
+                "provenance": "observed",
+                "flags": 0
+              },
+              {
+                "source": "adsb",
+                "key": "k2",
+                "t": "2026-10-25T00:00:00Z",
+                "lat": 30.0,
+                "lon": -97.0,
+                "heightM": null,
+                "bearingDeg": null,
+                "receivedAt": null,
+                "timeKind": "vehicle",
+                "provenance": "observed",
+                "flags": 0
+              },
+              {
+                "source": "adsb",
+                "key": "k3",
+                "t": "2026-10-25T00:00:00Z",
+                "lat": 30.0,
+                "lon": -97.0,
+                "heightM": null,
+                "bearingDeg": null,
+                "receivedAt": null,
+                "timeKind": "vehicle",
+                "provenance": "observed",
+                "flags": 0
+              },
+              {
+                "source": "adsb",
+                "key": "z",
+                "t": "2026-10-25T00:00:01Z",
+                "lat": 30.0,
+                "lon": -97.0,
+                "heightM": null,
+                "bearingDeg": null,
+                "receivedAt": null,
+                "timeKind": "vehicle",
+                "provenance": "observed",
+                "flags": 0
+              }
+            ]
+          }
+        },
+        {
+          "query": {
+            "source": "adsb",
+            "fromMs": "2026-10-24T00:00:00Z",
+            "toMs": "2026-10-25T12:00:00Z",
+            "keys": ["z", "k1", "k1", "absent"]
+          },
+          "pageSize": 1,
+          "expect": {
+            "records": [
+              {
+                "source": "adsb",
+                "key": "k1",
+                "t": "2026-10-24T23:59:59.999Z",
+                "lat": 30.0,
+                "lon": -97.0,
+                "heightM": null,
+                "bearingDeg": null,
+                "receivedAt": null,
+                "timeKind": "vehicle",
+                "provenance": "observed",
+                "flags": 0
+              },
+              {
+                "source": "adsb",
+                "key": "k1",
+                "t": "2026-10-25T00:00:00Z",
+                "lat": 30.0,
+                "lon": -97.0,
+                "heightM": null,
+                "bearingDeg": null,
+                "receivedAt": null,
+                "timeKind": "vehicle",
+                "provenance": "observed",
+                "flags": 0
+              },
+              {
+                "source": "adsb",
+                "key": "z",
+                "t": "2026-10-25T00:00:01Z",
+                "lat": 30.0,
+                "lon": -97.0,
+                "heightM": null,
+                "bearingDeg": null,
+                "receivedAt": null,
+                "timeKind": "vehicle",
+                "provenance": "observed",
+                "flags": 0
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "validation",
+      "clause": "A malformed record is refused by index with the field that is wrong, and the rest of the batch is written. Keys of 256 UTF-8 bytes are accepted, 258 refused; a key with a lone surrogate (no UTF-8 form) and a fractional millisecond are refused.",
+      "now": "2026-10-25T12:00:00.000Z",
+      "steps": [
+        {
+          "write": {
+            "records": [
+              {
+                "source": "adsb",
+                "key": "ok",
+                "t": "2026-10-25T10:00:00Z",
+                "lat": 30.0,
+                "lon": -97.0,
+                "heightM": null,
+                "bearingDeg": null,
+                "receivedAt": null,
+                "timeKind": "vehicle",
+                "provenance": "observed",
+                "flags": 0
+              },
+              {
+                "source": "adsb",
+                "key": "ok",
+                "t": "2026-10-25T10:00:00Z",
+                "lat": 91,
+                "lon": -97.0,
+                "heightM": null,
+                "bearingDeg": null,
+                "receivedAt": null,
+                "timeKind": "vehicle",
+                "provenance": "observed",
+                "flags": 0
+              },
+              {
+                "source": "adsb",
+                "key": "ok",
+                "t": "2026-10-25T10:00:00Z",
+                "lat": 30.0,
+                "lon": -180.5,
+                "heightM": null,
+                "bearingDeg": null,
+                "receivedAt": null,
+                "timeKind": "vehicle",
+                "provenance": "observed",
+                "flags": 0
+              },
+              {
+                "source": "adsb",
+                "key": "ok",
+                "t": "NaN",
+                "lat": 30.0,
+                "lon": -97.0,
+                "heightM": null,
+                "bearingDeg": null,
+                "receivedAt": null,
+                "timeKind": "vehicle",
+                "provenance": "observed",
+                "flags": 0
+              },
+              {
+                "source": "adsb",
+                "key": "ok",
+                "t": -1,
+                "lat": 30.0,
+                "lon": -97.0,
+                "heightM": null,
+                "bearingDeg": null,
+                "receivedAt": null,
+                "timeKind": "vehicle",
+                "provenance": "observed",
+                "flags": 0
+              },
+              {
+                "source": "adsb",
+                "key": "ok",
+                "t": "2026-10-25T13:00:00Z",
+                "lat": 30.0,
+                "lon": -97.0,
+                "heightM": null,
+                "bearingDeg": null,
+                "receivedAt": null,
+                "timeKind": "vehicle",
+                "provenance": "observed",
+                "flags": 0
+              },
+              {
+                "source": "adsb",
+                "key": "ok",
+                "t": "2026-10-25T10:00:00Z",
+                "lat": 30.0,
+                "lon": -97.0,
+                "heightM": null,
+                "bearingDeg": null,
+                "receivedAt": null,
+                "timeKind": null,
+                "provenance": "observed",
+                "flags": 0
+              },
+              {
+                "source": "adsb",
+                "key": "ok",
+                "t": "2026-10-25T10:00:00Z",
+                "lat": 30.0,
+                "lon": -97.0,
+                "heightM": null,
+                "bearingDeg": null,
+                "receivedAt": null,
+                "timeKind": "vehicle",
+                "provenance": "guessed",
+                "flags": 0
+              },
+              {
+                "source": "adsb",
+                "key": "",
+                "t": "2026-10-25T10:00:00Z",
+                "lat": 30.0,
+                "lon": -97.0,
+                "heightM": null,
+                "bearingDeg": null,
+                "receivedAt": null,
+                "timeKind": "vehicle",
+                "provenance": "observed",
+                "flags": 0
+              },
+              {
+                "source": "adsb",
+                "key": {
+                  "$repeat": "ñ",
+                  "times": 129
+                },
+                "t": "2026-10-25T10:00:00Z",
+                "lat": 30.0,
+                "lon": -97.0,
+                "heightM": null,
+                "bearingDeg": null,
+                "receivedAt": null,
+                "timeKind": "vehicle",
+                "provenance": "observed",
+                "flags": 0
+              },
+              {
+                "source": null,
+                "key": "ok",
+                "t": "2026-10-25T10:00:00Z",
+                "lat": 30.0,
+                "lon": -97.0,
+                "heightM": null,
+                "bearingDeg": null,
+                "receivedAt": null,
+                "timeKind": "vehicle",
+                "provenance": "observed",
+                "flags": 0
+              },
+              {
+                "source": "adsb",
+                "key": "ok",
+                "t": "2026-10-25T10:00:00Z",
+                "lat": 30.0,
+                "lon": -97.0,
+                "heightM": null,
+                "bearingDeg": 360,
+                "receivedAt": null,
+                "timeKind": "vehicle",
+                "provenance": "observed",
+                "flags": 0
+              },
+              {
+                "source": "adsb",
+                "key": "ok",
+                "t": "2026-10-25T10:00:00Z",
+                "lat": 30.0,
+                "lon": -97.0,
+                "heightM": "high",
+                "bearingDeg": null,
+                "receivedAt": null,
+                "timeKind": "vehicle",
+                "provenance": "observed",
+                "flags": 0
+              },
+              {
+                "source": "adsb",
+                "key": "ok",
+                "t": "2026-10-25T10:00:00Z",
+                "lat": 30.0,
+                "lon": -97.0,
+                "heightM": null,
+                "bearingDeg": null,
+                "receivedAt": -5,
+                "timeKind": "vehicle",
+                "provenance": "observed",
+                "flags": 0
+              },
+              {
+                "source": "adsb",
+                "key": "ok",
+                "t": "2026-10-25T10:00:00Z",
+                "lat": "30",
+                "lon": -97.0,
+                "heightM": null,
+                "bearingDeg": null,
+                "receivedAt": null,
+                "timeKind": "vehicle",
+                "provenance": "observed",
+                "flags": 0
+              },
+              {
+                "source": "adsb",
+                "key": "ok",
+                "t": "2026-10-25T10:00:00Z",
+                "lat": 30.0,
+                "lon": -97.0,
+                "heightM": null,
+                "bearingDeg": null,
+                "receivedAt": null,
+                "timeKind": "vehicle",
+                "provenance": "observed",
+                "flags": -1
+              },
+              {
+                "source": "adsb",
+                "key": "\ud800",
+                "t": "2026-10-25T10:00:00Z",
+                "lat": 30.0,
+                "lon": -97.0,
+                "heightM": null,
+                "bearingDeg": null,
+                "receivedAt": null,
+                "timeKind": "vehicle",
+                "provenance": "observed",
+                "flags": 0
+              },
+              {
+                "source": "adsb",
+                "key": "ok",
+                "t": 1792922400000.5,
+                "lat": 30.0,
+                "lon": -97.0,
+                "heightM": null,
+                "bearingDeg": null,
+                "receivedAt": null,
+                "timeKind": "vehicle",
+                "provenance": "observed",
+                "flags": 0
+              },
+              {
+                "source": "adsb",
+                "key": "ok",
+                "t": "2026-10-25T10:00:00Z",
+                "lat": 30.0,
+                "lon": -97.0,
+                "heightM": null,
+                "bearingDeg": null,
+                "receivedAt": 1792922400000.25,
+                "timeKind": "vehicle",
+                "provenance": "observed",
+                "flags": 0
+              },
+              {
+                "source": "adsb",
+                "key": {
+                  "$repeat": "ñ",
+                  "times": 128
+                },
+                "t": "2026-10-25T10:00:00Z",
+                "lat": 30.0,
+                "lon": -97.0,
+                "heightM": null,
+                "bearingDeg": null,
+                "receivedAt": null,
+                "timeKind": "vehicle",
+                "provenance": "observed",
+                "flags": 0
+              }
+            ]
+          },
+          "expect": {
+            "accepted": 2,
+            "repeats": 0,
+            "conflicts": 0,
+            "rejected": [
+              {
+                "index": 1,
+                "reason": "lat"
+              },
+              {
+                "index": 2,
+                "reason": "lon"
+              },
+              {
+                "index": 3,
+                "reason": "t"
+              },
+              {
+                "index": 4,
+                "reason": "t"
+              },
+              {
+                "index": 5,
+                "reason": "future"
+              },
+              {
+                "index": 6,
+                "reason": "timeKind"
+              },
+              {
+                "index": 7,
+                "reason": "provenance"
+              },
+              {
+                "index": 8,
+                "reason": "key"
+              },
+              {
+                "index": 9,
+                "reason": "key"
+              },
+              {
+                "index": 10,
+                "reason": "source"
+              },
+              {
+                "index": 11,
+                "reason": "bearingDeg"
+              },
+              {
+                "index": 12,
+                "reason": "heightM"
+              },
+              {
+                "index": 13,
+                "reason": "receivedAt"
+              },
+              {
+                "index": 14,
+                "reason": "lat"
+              },
+              {
+                "index": 15,
+                "reason": "flags"
+              },
+              {
+                "index": 16,
+                "reason": "key"
+              },
+              {
+                "index": 17,
+                "reason": "t"
+              },
+              {
+                "index": 18,
+                "reason": "receivedAt"
+              }
+            ]
+          }
+        },
+        {
+          "query": {
+            "source": "adsb",
+            "fromMs": "2026-10-25T00:00:00Z",
+            "toMs": "2026-10-25T23:00:00Z"
+          },
+          "expect": {
+            "records": [
+              {
+                "source": "adsb",
+                "key": "ok",
+                "t": "2026-10-25T10:00:00Z",
+                "lat": 30.0,
+                "lon": -97.0,
+                "heightM": null,
+                "bearingDeg": null,
+                "receivedAt": null,
+                "timeKind": "vehicle",
+                "provenance": "observed",
+                "flags": 0
+              },
+              {
+                "source": "adsb",
+                "key": {
+                  "$repeat": "ñ",
+                  "times": 128
+                },
+                "t": "2026-10-25T10:00:00Z",
+                "lat": 30.0,
+                "lon": -97.0,
+                "heightM": null,
+                "bearingDeg": null,
+                "receivedAt": null,
+                "timeKind": "vehicle",
+                "provenance": "observed",
+                "flags": 0
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "query-errors",
+      "clause": "A query with a reversed or fractional range, bad limit, empty provenance or key list, a key or source with no UTF-8 form, or no source is refused with a stable code.",
+      "now": "2026-10-25T12:00:00.000Z",
+      "steps": [
+        {
+          "queryError": {
+            "source": "adsb",
+            "fromMs": "2026-10-25T02:00:00Z",
+            "toMs": "2026-10-25T01:00:00Z"
+          },
+          "expect": {
+            "code": "invalid_range"
+          }
+        },
+        {
+          "queryError": {
+            "source": "adsb",
+            "fromMs": "2026-10-25T00:00:00Z",
+            "toMs": "2026-10-25T01:00:00Z",
+            "limit": 0
+          },
+          "expect": {
+            "code": "invalid_limit"
+          }
+        },
+        {
+          "queryError": {
+            "source": "adsb",
+            "fromMs": "2026-10-25T00:00:00Z",
+            "toMs": "2026-10-25T01:00:00Z",
+            "limit": 10001
+          },
+          "expect": {
+            "code": "invalid_limit"
+          }
+        },
+        {
+          "queryError": {
+            "source": "adsb",
+            "fromMs": "2026-10-25T00:00:00Z",
+            "toMs": "2026-10-25T01:00:00Z",
+            "provenance": []
+          },
+          "expect": {
+            "code": "invalid_provenance"
+          }
+        },
+        {
+          "queryError": {
+            "source": "adsb",
+            "fromMs": "2026-10-25T00:00:00Z",
+            "toMs": "2026-10-25T01:00:00Z",
+            "provenance": ["guessed"]
+          },
+          "expect": {
+            "code": "invalid_provenance"
+          }
+        },
+        {
+          "queryError": {
+            "source": "adsb",
+            "fromMs": "2026-10-25T00:00:00Z",
+            "toMs": "2026-10-25T01:00:00Z",
+            "keys": []
+          },
+          "expect": {
+            "code": "invalid_keys"
+          }
+        },
+        {
+          "queryError": {
+            "source": "",
+            "fromMs": "2026-10-25T00:00:00Z",
+            "toMs": "2026-10-25T01:00:00Z"
+          },
+          "expect": {
+            "code": "invalid_source"
+          }
+        },
+        {
+          "queryError": {
+            "source": "adsb",
+            "fromMs": "2026-10-25T00:00:00Z",
+            "toMs": "NaN"
+          },
+          "expect": {
+            "code": "invalid_range"
+          }
+        },
+        {
+          "queryError": {
+            "source": "\ud800",
+            "fromMs": "2026-10-25T00:00:00Z",
+            "toMs": "2026-10-25T01:00:00Z"
+          },
+          "expect": {
+            "code": "invalid_source"
+          }
+        },
+        {
+          "queryError": {
+            "source": "adsb",
+            "fromMs": "2026-10-25T00:00:00Z",
+            "toMs": "2026-10-25T01:00:00Z",
+            "keys": ["ok", "\ud800"]
+          },
+          "expect": {
+            "code": "invalid_keys"
+          }
+        },
+        {
+          "queryError": {
+            "source": "adsb",
+            "fromMs": 1792886400000.5,
+            "toMs": "2026-10-25T01:00:00Z"
+          },
+          "expect": {
+            "code": "invalid_range"
+          }
+        },
+        {
+          "query": {
+            "source": "adsb",
+            "fromMs": "2026-10-25T00:00:00Z",
+            "toMs": "2026-10-25T01:00:00Z"
+          },
+          "expect": {
+            "records": []
+          }
+        }
+      ]
+    },
+    {
+      "name": "flags",
+      "clause": "BREAK and FLOOR are kept; LIVE, time-kind bits and unknown bits are not stored.",
+      "now": "2026-10-25T12:00:00.000Z",
+      "steps": [
+        {
+          "write": {
+            "records": [
+              {
+                "source": "adsb",
+                "key": "f",
+                "t": "2026-10-25T10:00:00Z",
+                "lat": 30.0,
+                "lon": -97.0,
+                "heightM": null,
+                "bearingDeg": null,
+                "receivedAt": null,
+                "timeKind": "vehicle",
+                "provenance": "observed",
+                "flags": 121
+              }
+            ]
+          }
+        },
+        {
+          "query": {
+            "source": "adsb",
+            "fromMs": "2026-10-25T00:00:00Z",
+            "toMs": "2026-10-25T23:00:00Z"
+          },
+          "expect": {
+            "records": [
+              {
+                "source": "adsb",
+                "key": "f",
+                "t": "2026-10-25T10:00:00Z",
+                "lat": 30.0,
+                "lon": -97.0,
+                "heightM": null,
+                "bearingDeg": null,
+                "receivedAt": null,
+                "timeKind": "vehicle",
+                "provenance": "observed",
+                "flags": 24
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "coverage",
+      "clause": "Coverage intervals that touch merge; a recorder outage stays a hole; an interval across midnight reads back whole; the answer is clipped to the query; bad intervals are refused.",
+      "now": "2026-10-25T12:00:00.000Z",
+      "steps": [
+        {
+          "write": {
+            "coverage": [
+              {
+                "source": "adsb",
+                "fromMs": "2026-10-25T10:05:00Z",
+                "toMs": "2026-10-25T10:10:00Z"
+              },
+              {
+                "source": "adsb",
+                "fromMs": "2026-10-25T10:00:00Z",
+                "toMs": "2026-10-25T10:05:00Z"
+              },
+              {
+                "source": "adsb",
+                "fromMs": "2026-10-25T10:20:00Z",
+                "toMs": "2026-10-25T10:30:00Z"
+              },
+              {
+                "source": "adsb",
+                "fromMs": "2026-10-24T23:55:00Z",
+                "toMs": "2026-10-25T00:05:00Z"
+              },
+              {
+                "source": "ais",
+                "fromMs": "2026-10-25T10:00:00Z",
+                "toMs": "2026-10-25T11:00:00Z"
+              },
+              {
+                "source": "adsb",
+                "fromMs": "2026-10-25T10:10:00Z",
+                "toMs": "2026-10-25T10:00:00Z"
+              },
+              {
+                "source": "adsb",
+                "fromMs": "2026-10-24T09:00:00Z",
+                "toMs": "2026-10-25T09:00:00.001Z"
+              },
+              {
+                "source": "adsb",
+                "fromMs": "2026-10-25T11:00:00Z",
+                "toMs": "2026-10-25T13:00:00Z"
+              },
+              {
+                "source": "adsb",
+                "fromMs": 1792922400000.5,
+                "toMs": 1792922460000
+              }
+            ]
+          },
+          "expect": {
+            "coverage": {
+              "accepted": 5,
+              "rejected": [
+                {
+                  "index": 5,
+                  "reason": "order"
+                },
+                {
+                  "index": 6,
+                  "reason": "span"
+                },
+                {
+                  "index": 7,
+                  "reason": "future"
+                },
+                {
+                  "index": 8,
+                  "reason": "time"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "coverage": {
+            "source": "adsb",
+            "fromMs": "2026-10-24T00:00:00Z",
+            "toMs": "2026-10-25T23:00:00Z"
+          },
+          "expect": {
+            "intervals": [
+              {
+                "fromMs": "2026-10-24T23:55:00Z",
+                "toMs": "2026-10-25T00:05:00Z"
+              },
+              {
+                "fromMs": "2026-10-25T10:00:00Z",
+                "toMs": "2026-10-25T10:10:00Z"
+              },
+              {
+                "fromMs": "2026-10-25T10:20:00Z",
+                "toMs": "2026-10-25T10:30:00Z"
+              }
+            ]
+          }
+        },
+        {
+          "coverage": {
+            "source": "adsb",
+            "fromMs": "2026-10-25T10:07:00Z",
+            "toMs": "2026-10-25T10:25:00Z"
+          },
+          "expect": {
+            "intervals": [
+              {
+                "fromMs": "2026-10-25T10:07:00Z",
+                "toMs": "2026-10-25T10:10:00Z"
+              },
+              {
+                "fromMs": "2026-10-25T10:20:00Z",
+                "toMs": "2026-10-25T10:25:00Z"
+              }
+            ]
+          }
+        },
+        {
+          "coverage": {
+            "source": "adsb",
+            "fromMs": "2026-10-25T10:11:00Z",
+            "toMs": "2026-10-25T10:19:00Z"
+          },
+          "expect": {
+            "intervals": []
+          }
+        }
+      ]
+    },
+    {
+      "name": "retention",
+      "clause": "Pruning with a retention of N days drops whole UTC days older than the newest N, today included, with their records and coverage.",
+      "now": "2026-10-25T12:00:00.000Z",
+      "open": {
+        "retentionDays": 2
+      },
+      "steps": [
+        {
+          "write": {
+            "records": [
+              {
+                "source": "adsb",
+                "key": "r",
+                "t": "2026-10-22T12:00:00Z",
+                "lat": 30.0,
+                "lon": -97.0,
+                "heightM": null,
+                "bearingDeg": null,
+                "receivedAt": null,
+                "timeKind": "vehicle",
+                "provenance": "observed",
+                "flags": 0
+              },
+              {
+                "source": "adsb",
+                "key": "r",
+                "t": "2026-10-23T12:00:00Z",
+                "lat": 30.0,
+                "lon": -97.0,
+                "heightM": null,
+                "bearingDeg": null,
+                "receivedAt": null,
+                "timeKind": "vehicle",
+                "provenance": "observed",
+                "flags": 0
+              },
+              {
+                "source": "adsb",
+                "key": "r",
+                "t": "2026-10-24T12:00:00Z",
+                "lat": 30.0,
+                "lon": -97.0,
+                "heightM": null,
+                "bearingDeg": null,
+                "receivedAt": null,
+                "timeKind": "vehicle",
+                "provenance": "observed",
+                "flags": 0
+              },
+              {
+                "source": "adsb",
+                "key": "r",
+                "t": "2026-10-25T12:00:00Z",
+                "lat": 30.0,
+                "lon": -97.0,
+                "heightM": null,
+                "bearingDeg": null,
+                "receivedAt": null,
+                "timeKind": "vehicle",
+                "provenance": "observed",
+                "flags": 0
+              }
+            ],
+            "coverage": [
+              {
+                "source": "adsb",
+                "fromMs": "2026-10-23T20:00:00Z",
+                "toMs": "2026-10-24T04:00:00Z"
+              }
+            ]
+          },
+          "expect": {
+            "accepted": 4
+          }
+        },
+        {
+          "prune": {},
+          "expect": {
+            "droppedDays": ["2026-10-22", "2026-10-23"]
+          }
+        },
+        {
+          "query": {
+            "source": "adsb",
+            "fromMs": "2026-10-20T00:00:00Z",
+            "toMs": "2026-10-25T23:00:00Z"
+          },
+          "expect": {
+            "records": [
+              {
+                "source": "adsb",
+                "key": "r",
+                "t": "2026-10-24T12:00:00Z",
+                "lat": 30.0,
+                "lon": -97.0,
+                "heightM": null,
+                "bearingDeg": null,
+                "receivedAt": null,
+                "timeKind": "vehicle",
+                "provenance": "observed",
+                "flags": 0
+              },
+              {
+                "source": "adsb",
+                "key": "r",
+                "t": "2026-10-25T12:00:00Z",
+                "lat": 30.0,
+                "lon": -97.0,
+                "heightM": null,
+                "bearingDeg": null,
+                "receivedAt": null,
+                "timeKind": "vehicle",
+                "provenance": "observed",
+                "flags": 0
+              }
+            ]
+          }
+        },
+        {
+          "coverage": {
+            "source": "adsb",
+            "fromMs": "2026-10-20T00:00:00Z",
+            "toMs": "2026-10-25T23:00:00Z"
+          },
+          "expect": {
+            "intervals": [
+              {
+                "fromMs": "2026-10-24T00:00:00Z",
+                "toMs": "2026-10-24T04:00:00Z"
+              }
+            ]
+          }
+        },
+        {
+          "prune": {},
+          "expect": {
+            "droppedDays": []
+          }
+        }
+      ]
+    }
+  ]
+}

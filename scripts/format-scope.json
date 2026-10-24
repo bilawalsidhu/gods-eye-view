@@ -1088,5 +1088,13 @@
   "scripts/qa-status-badges.mjs",
   "src/dockerTrustedPeers.test.mjs",
   "src/cameraGlobeRotation.test.mjs",
-  "src/voice/globeResetConfirmation.test.mjs"
+  "src/voice/globeResetConfirmation.test.mjs",
+  "src/data/historyRecords.js",
+  "src/data/historyRecords.test.mjs",
+  "src/data/fixtures/history-conformance.json",
+  "src/testSupport/historyConformance.mjs",
+  "src/testSupport/historyMemoryStore.mjs",
+  "server/providers/history/dayStore.js",
+  "server/providers/history/dayStore.test.mjs",
+  "docs/RECORDED-HISTORY.md"
 ]
