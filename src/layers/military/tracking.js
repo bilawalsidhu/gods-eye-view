@@ -47,7 +47,7 @@ export function createTracking({
   const { ensureGeoidReady, geoidHeight } = services.geoid;
   const { clearFocusTarget } = services.focus;
   const { applyTrackedCameraFrame } = services.camera;
-  const { resolvePickId, isOwnedByOtherLayer } = services.picking;
+  const { resolvePickId, isOwnedByOtherLayer, pickContact } = services.picking;
 
   function _emitAwarenessEvent(type, detail) {
     if (
@@ -1079,7 +1079,9 @@ export function createTracking({
       // first-person reference. Empty globe clicks are inert until the user
       // exits with C, Escape, or the dedicated button.
       if (document.body.classList.contains('cockpit-mode')) return;
-      const picked = viewer.scene.pick(click.position);
+      const picked = pickContact
+        ? pickContact(viewer.scene, click.position)
+        : viewer.scene.pick(click.position);
 
       if (picked) {
         // Clicking the tracked entity itself -- ignore (don't deselect)
