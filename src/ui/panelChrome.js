@@ -311,6 +311,7 @@ export class PanelChrome {
       'cctv-panel',
       'weather-panel',
       'recent-imagery-panel',
+      'replay-panel',
       'street-level-panel',
       'global-context-panel',
     ].includes(panelEl?.id);

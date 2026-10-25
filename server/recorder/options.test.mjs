@@ -1,0 +1,242 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { parseDuration, recorderConfig } from './config.js';
+import { exportPoints, summarizeTrack } from './exporters.js';
+import { createRecorder } from './recorder.js';
+
+const pt = (o) => ({
+  id: 'a',
+  layer: 'air',
+  lat: 10,
+  lon: 10,
+  alt: 100,
+  heading: 90,
+  speed: 100,
+  ts: 1000,
+  ...o,
+});
+
+test('retention accepts hours, days, weeks and months', () => {
+  assert.equal(parseDuration('6h'), 21600);
+  assert.equal(parseDuration('14d'), 14 * 86400);
+  assert.equal(parseDuration('8w'), 8 * 604800);
+  assert.equal(parseDuration('3m'), 3 * 2592000);
+  assert.equal(parseDuration('5'), 5 * 86400);
+  assert.equal(parseDuration('0'), 0);
+  assert.equal(parseDuration(undefined), 7 * 86400);
+  assert.throws(() => parseDuration('soon'));
+});
+
+test('config reads layers, size cap and interval, with safe defaults', () => {
+  const c = recorderConfig({
+    GEV_HISTORY_RETENTION: '12h',
+    GEV_RECORDER_LAYERS: 'air,bogus,mil',
+    GEV_HISTORY_MAX_MB: '50',
+    GEV_RECORDER_INTERVAL: '10',
+  });
+  assert.deepEqual(c.layers, ['air', 'mil']);
+  assert.equal(c.retentionSec, 43200);
+  assert.equal(c.maxBytes, 50 * 1048576);
+  assert.equal(c.intervalSec, 10);
+  const d = recorderConfig({});
+  assert.equal(d.layers.length, 4);
+  assert.equal(d.maxBytes, 0);
+  assert.equal(d.intervalSec, 30);
+});
+
+test('recorder skips layers it was not asked to record', () => {
+  const rec = createRecorder({ file: ':memory:', layers: ['mil'] });
+  rec.ingestMany([pt({ layer: 'air' }), pt({ id: 'm', layer: 'mil' })]);
+  rec.flush();
+  assert.deepEqual(
+    rec.store.window({ from: 0, to: 9999 }).map((p) => p.id),
+    ['m'],
+  );
+  rec.close();
+});
+
+test('recorder drops the oldest positions when over the size cap', async () => {
+  const rec = createRecorder({ file: ':memory:', maxBytes: 1 });
+  rec.ingestMany(
+    Array.from({ length: 50 }, (_, i) => pt({ id: `c${i}`, ts: 1000 + i })),
+  );
+  rec.flush();
+  await rec.enforceCap();
+  assert.ok(rec.store.range().count < 50);
+  rec.close();
+});
+
+test('track summary reports first, last and gaps', () => {
+  const s = summarizeTrack(
+    [pt({ ts: 100 }), pt({ ts: 160 }), pt({ ts: 900 })],
+    300,
+  );
+  assert.equal(s.first.ts, 100);
+  assert.equal(s.last.ts, 900);
+  assert.deepEqual(s.gaps, [{ from: 160, to: 900 }]);
+  assert.equal(summarizeTrack([]).first, null);
+});
+
+test('exports csv, geojson and gpx', () => {
+  const points = [pt({ ts: 100 }), pt({ ts: 200, lat: 11 })];
+  const csv = exportPoints(points, 'csv');
+  assert.equal(csv.body.split('\n').length, 3);
+  assert.match(csv.body, /^ts,id,layer/);
+  const geo = JSON.parse(exportPoints(points, 'geojson').body);
+  assert.equal(geo.features[0].geometry.coordinates.length, 2);
+  const gpx = exportPoints(points, 'gpx').body;
+  assert.match(gpx, /<trkpt lat="11" lon="10">/);
+  assert.equal(JSON.parse(exportPoints(points, 'json').body).points.length, 2);
+});
+
+test('csv neutralises spreadsheet formulas and escapes quotes', () => {
+  const body = exportPoints(
+    [pt({ id: '=1+1' }), pt({ id: 'a"b,c' })],
+    'csv',
+  ).body;
+  assert.match(body, /,'=1\+1,/);
+  assert.match(body, /"a""b,c"/);
+});
+
+test('gpx escapes markup in contact ids', () => {
+  const gpx = exportPoints([pt({ id: '<x>&' })], 'gpx').body;
+  assert.ok(!gpx.includes('<x>'));
+});
+
+test('pinned contacts survive retention and the size cap', async () => {
+  const rec = createRecorder({ file: ':memory:', maxBytes: 1 });
+  rec.store.addPin('keep', 1);
+  rec.ingestMany([
+    pt({ id: 'keep', ts: 100 }),
+    pt({ id: 'drop', ts: 100 }),
+    pt({ id: 'drop2', ts: 101 }),
+  ]);
+  rec.flush();
+  rec.store.purgeBefore(5000);
+  assert.deepEqual(
+    rec.store.window({ from: 0, to: 9999 }).map((p) => p.id),
+    ['keep'],
+  );
+  await rec.enforceCap();
+  assert.equal(rec.store.range().count, 1);
+  assert.equal(rec.store.removePin('keep'), 1);
+  rec.close();
+});
+
+test('the settings file supplies defaults and the environment wins', async () => {
+  const { mkdtempSync, writeFileSync } = await import('node:fs');
+  const { tmpdir } = await import('node:os');
+  const path = await import('node:path');
+  const { loadConfigFile, mergedSettings } = await import('./config.js');
+  const dir = mkdtempSync(path.join(tmpdir(), 'gev-cfg-'));
+  assert.deepEqual(loadConfigFile(dir, {}), {});
+  writeFileSync(
+    path.join(dir, 'recorder.config.json'),
+    JSON.stringify({
+      enabled: true,
+      retention: '2w',
+      maxMb: 100,
+      layers: ['air', 'mil'],
+      interval: 20,
+      database: '',
+      file: 'db/h.sqlite',
+    }),
+  );
+  const fromFile = mergedSettings(dir, {});
+  assert.equal(fromFile.GEV_RECORDER, '1');
+  assert.equal(fromFile.GEV_HISTORY_RETENTION, '2w');
+  assert.equal(fromFile.GEV_RECORDER_LAYERS, 'air,mil');
+  assert.equal(fromFile.GEV_HISTORY_FILE, path.join(dir, 'db', 'h.sqlite'));
+  assert.ok(!('GEV_HISTORY_DB' in fromFile));
+  const both = mergedSettings(dir, {
+    GEV_HISTORY_RETENTION: '6h',
+    GEV_RECORDER: '0',
+  });
+  assert.equal(both.GEV_HISTORY_RETENTION, '6h');
+  assert.equal(both.GEV_RECORDER, '0');
+  assert.equal(recorderConfig(fromFile).retentionSec, 14 * 86400);
+  writeFileSync(path.join(dir, 'recorder.config.json'), '{ nope');
+  assert.throws(() => loadConfigFile(dir, {}), /Cannot read/);
+});
+
+test('a parked contact still gets a point every few minutes', async () => {
+  const { createThinner } = await import('./thin.js');
+  const keep = createThinner({ minGapSec: 30 });
+  const at = (ts) => pt({ ts, lat: 10, lon: 10, heading: 90 });
+  assert.equal(keep(at(0)), true);
+  assert.equal(keep(at(100)), false);
+  assert.equal(keep(at(250)), true, 'heartbeat before replay sees a gap');
+});
+
+test('csv keeps negative numbers and neutralises text formulas', () => {
+  const out = exportPoints(
+    [pt({ id: '-2+3', lat: -33.5, lon: -70.1 }), pt({ id: '=cmd' })],
+    'csv',
+  ).body;
+  assert.match(out, /'-2\+3,air,-33.5,-70.1/);
+  assert.match(out, /'=cmd/);
+});
+
+test('an area across the antimeridian finds both sides', async () => {
+  const { openHistoryStore } = await import('./store.js');
+  const store = openHistoryStore(':memory:');
+  store.insertMany([
+    pt({ id: 'east', lon: 179, ts: 1000 }),
+    pt({ id: 'west', lon: -179, ts: 1000 }),
+    pt({ id: 'far', lon: 0, ts: 1000 }),
+  ]);
+  const bbox = { west: 170, south: 0, east: -170, north: 20 };
+  const ids = (list) => list.map((p) => p.id).sort();
+  assert.deepEqual(ids(store.window({ from: 0, to: 2000, bbox })), [
+    'east',
+    'west',
+  ]);
+  assert.deepEqual(ids(store.at({ time: 1500, bbox })), ['east', 'west']);
+});
+
+test('the store counts positions per layer', async () => {
+  const { openHistoryStore } = await import('./store.js');
+  const store = openHistoryStore(':memory:');
+  store.insertMany([
+    pt({ id: 'a', layer: 'air' }),
+    pt({ id: 'b', layer: 'air', ts: 2000 }),
+    pt({ id: 'c', layer: 'sat' }),
+  ]);
+  assert.deepEqual(store.layerCounts(), { air: 2, sat: 1 });
+});
+
+test('contacts are found by callsign, ship name or id, best match first', async () => {
+  const { openHistoryStore } = await import('./store.js');
+  const { aircraftPoints, vesselPoints } = await import('./extract.js');
+  const store = openHistoryStore(':memory:');
+  const rec = createRecorder({ store, layers: null });
+  rec.ingestMany(
+    aircraftPoints(
+      {
+        states: [
+          ['a1b2c3', 'UAL123  ', 'US', 5, 0, 8.5, 47.5, 100, false, 200, 270, 0, null, 120],
+          ['d4e5f6', 'UAL1234 ', 'US', 5, 0, 9.5, 47.5, 100, false, 200, 270, 0, null, 120],
+        ],
+      },
+      5,
+    ),
+  );
+  rec.ingestMany(
+    vesselPoints(
+      [
+        { mmsi: '366123456', name: 'Ever Given', lat: 1, lon: 2, speed: 3, course: 4 },
+        { mmsi: '999', name: 'MMSI 999', lat: 1, lon: 2, speed: 3, course: 4 },
+      ],
+      5,
+    ),
+  );
+  await rec.flush();
+  const first = (q) => store.findContacts(q).map((c) => c.id);
+  assert.deepEqual(first('ual123'), ['a1b2c3', 'd4e5f6'], 'exact name before a longer one');
+  assert.deepEqual(first('ever'), ['366123456']);
+  assert.deepEqual(first('A1B2'), ['a1b2c3'], 'ids are searchable too');
+  assert.deepEqual(first('999'), [], 'a placeholder name is not saved');
+  assert.deepEqual(first('100%'), [], 'wildcards are plain text');
+  assert.deepEqual(first(''), []);
+  await rec.close();
+});

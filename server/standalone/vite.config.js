@@ -4,6 +4,7 @@ import { resolveAllowedHosts } from '../../build/allowedHosts.js';
 import { createBrowserViteConfig } from '../../build/vite.js';
 import { localProviderPlugins } from '../providers/local.js';
 import { localMcpPlugin } from '../mcp/plugin.js';
+import { recorderPlugin } from '../recorder/plugin.js';
 import { apiNotFoundPlugin } from './api-not-found.js';
 import { standaloneVoiceTools } from './voiceTools.js';
 import { unwatchedRuntimeDirsPlugin } from './unwatched-cache.js';
@@ -19,6 +20,7 @@ export default defineConfig(({ command, mode }) => {
   const tools = standaloneVoiceTools();
   return createBrowserViteConfig({
     plugins: [
+      recorderPlugin(), // GEV recorder: mounted before providers to observe feeds
       ...localProviderPlugins({ realtime: { tools }, gemini: { tools } }),
       localMcpPlugin(),
       apiNotFoundPlugin(),
