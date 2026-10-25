@@ -2949,6 +2949,7 @@
   "Open official camera page ↗": "Abrir la página oficial de la cámara ↗",
   "PLAYER IN PANEL": "REPRODUCTOR EN EL PANEL",
   "PUBLIC PLAYER · EXTERNAL": "REPRODUCTOR PÚBLICO · EXTERNO",
+  "NO PUBLIC FEED": "SIN IMAGEN PÚBLICA",
   "{camera} — public player": "{camera} — reproductor público",
   "{city} CCTV · {name} · PUBLIC PLAYER · APPROXIMATE LOCATION · COVERAGE NOT CALIBRATED": "{city} CCTV · {name} · REPRODUCTOR PÚBLICO · UBICACIÓN APROXIMADA · COBERTURA SIN CALIBRAR"
 }

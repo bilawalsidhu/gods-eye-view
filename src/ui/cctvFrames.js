@@ -179,7 +179,7 @@ export function _syncCctvSourceBadge(activeCamera, enabled) {
   }
   if (activeCamera.noFeed || activeCamera.feedType === 'none') {
     updateStatusBadge(this._cctvSourceBadge, {
-      label: cctvSourceStatusLabel('no public feed'),
+      label: t('NO PUBLIC FEED'),
     });
     this._cctvSourceBadge.dataset.frameState = 'no-feed';
     return;

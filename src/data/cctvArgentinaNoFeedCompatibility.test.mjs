@@ -147,3 +147,12 @@ test('protected active card skips location-only cameras', () => {
   cards.fetchCardFrame(record, {}, 1000);
   assert.equal(entries.length, 0);
 });
+
+test('location-only source badge has translations in every supported locale', () => {
+  for (const lang of ['es', 'ru', 'zh-CN']) {
+    const messages = JSON.parse(
+      readFileSync(new URL(`../i18n/locales/${lang}.json`, import.meta.url)),
+    );
+    assert.ok(messages['NO PUBLIC FEED']);
+  }
+});
