@@ -5191,8 +5191,13 @@ HTTP refusals and outages remain retryable. Searches share a 12-second total
 deadline, with Photon requests capped at six seconds each. Caller/application
 cancellation stops retries and late cache writes. Replacing a location search
 cancels the previous lookup; disposing its controls cancels the active lookup. Photon uses a soft proximity bias, up to five
-candidates, and an unbiased retry for name mismatches. Invalid/wrapped bounds
+candidates, and an unbiased retry for name mismatches. Invalid or wrapped bounds returned by providers
 are omitted rather than framing the wrong part of the globe.
+
+For request viewport bias, Photon unwraps antimeridian-crossing longitude bounds
+before computing their midpoint, then wraps that midpoint back into ±180 degrees.
+Malformed viewport bounds add no proximity bias. Nominatim omits a crossing
+request viewbox and continues searching without that geographic preference.
 
 ### Map Stack Switcher (June 2026)
 
