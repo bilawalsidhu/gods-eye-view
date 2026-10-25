@@ -237,6 +237,12 @@ test('whitespace boundaries preserve degree signs and hemisphere ownership', () 
 });
 
 test('a signed plain component leaves a spaced letter with the other component', () => {
-  assert.deepEqual(parseCoordinateQuery('-40 N 74'), parseCoordinateQuery('-40, N 74'));
-  assert.deepEqual(parseCoordinateQuery('40 N -74'), parseCoordinateQuery('40 N, -74'));
+  assert.deepEqual(
+    parseCoordinateQuery('-40 N 74'),
+    parseCoordinateQuery('-40, N 74'),
+  );
+  assert.deepEqual(
+    parseCoordinateQuery('40 N -74'),
+    parseCoordinateQuery('40 N, -74'),
+  );
 });
