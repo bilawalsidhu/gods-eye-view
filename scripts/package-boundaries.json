@@ -2574,7 +2574,11 @@
       "src/voice/geminiSession.js",
       "src/voice/geminiAudio.js",
       "src/voice/geminiCaptureWorklet.js",
-      "src/ui/statusBadge.js"
+      "src/ui/statusBadge.js",
+      "src/layers/seaState/index.js",
+      "src/layers/seaState/model.js",
+      "src/layers/seaState/source.js",
+      "src/app/layers/seaState.js"
     ],
     "external": [
       "hls.js",
@@ -3143,7 +3147,11 @@
       "src/layers/airQuality/source.js",
       "src/ui/statusText.js",
       "src/ui/layerNames.js",
-      "src/layers/streetLevel/providers/mapillary/policy.js"
+      "src/layers/streetLevel/providers/mapillary/policy.js",
+      "src/layers/seaState/index.js",
+      "src/layers/seaState/model.js",
+      "src/layers/seaState/source.js",
+      "src/app/layers/seaState.js"
     ],
     "external": [
       "hls.js",
@@ -3845,6 +3853,40 @@
       "src/sources/httpBody.js",
       "src/i18n/marker.js",
       "src/layers/gnss/source.js"
+    ],
+    "external": []
+  },
+  "sea-state": {
+    "exports": ["./layers/sea-state"],
+    "modules": [
+      "src/layers/seaState/index.js",
+      "src/layers/seaState/source.js",
+      "src/layers/seaState/model.js",
+      "src/i18n/marker.js",
+      "src/sources/httpBody.js",
+      "src/layers/weather/shellRendering.js",
+      "src/i18n/index.js",
+      "src/i18n/locales/zh-CN.json",
+      "src/i18n/locales/ru.json",
+      "src/i18n/locales/es.json",
+      "src/i18n/locale.js",
+      "src/layers/weather/source.js",
+      "src/layers/weather/imageryHost.js",
+      "src/layers/weather/infraredImage.js",
+      "src/layers/weather/infraredAlpha.js",
+      "src/layers/weather/imageryOrder.js",
+      "src/ui/statusText.js",
+      "src/ui/layerNames.js"
+    ],
+    "external": ["cesium"]
+  },
+  "sea-state-source": {
+    "exports": ["./layers/sea-state/source"],
+    "modules": [
+      "src/layers/seaState/source.js",
+      "src/layers/seaState/model.js",
+      "src/i18n/marker.js",
+      "src/sources/httpBody.js"
     ],
     "external": []
   },
