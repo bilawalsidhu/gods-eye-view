@@ -1,0 +1,1 @@
+- Throttle mission hover picks with a trailing check for the last pointer position, and clear stale cursors (asturksever, #1279).

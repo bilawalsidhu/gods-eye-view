@@ -6,6 +6,7 @@
   "scripts/qa-form-fields.mjs",
   "scripts/package-boundaries.json",
   "scripts/format.mjs",
+  "scripts/qa-layer-visibility.mjs",
   "scripts/next-layer-state-token.mjs",
   "scripts/check-layer-state-tokens.mjs",
   "scripts/qa-layer-token-twochar.mjs",
@@ -1086,5 +1087,7 @@
   "src/ui/statusBadge.test.mjs",
   "src/ui/cctvBadges.test.mjs",
   "scripts/qa-status-badges.mjs",
-  "src/dockerTrustedPeers.test.mjs"
+  "src/dockerTrustedPeers.test.mjs",
+  "src/cameraGlobeRotation.test.mjs",
+  "src/voice/globeResetConfirmation.test.mjs"
 ]

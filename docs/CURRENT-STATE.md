@@ -9,16 +9,7 @@ broader suffix variants. Follow-ups retain boundary provenance, and cancelled
 lookups preserve the previous analyst cohort and boundary source. Navigation
 search keeps a successful geocode, with no search or view-based region recovery.
 
-KML namespace repair locates the opening token once and scans its quoted tag
-delimiter once, skipping prolog and DOCTYPE comments and processing
-instructions whole. The scanner is a boundary check only: an opening KML tag
-that never closes, or one with raw markup starting inside it, fails before DOM
-parsing, so a file of repeated incomplete `<kml` prefixes cannot trigger
-quadratic regex rescans. All other XML grammar, including attribute syntax
-inside a complete root tag, is left to DOMParser. Namespace declarations are
-recognized only as whole root attributes, never inside quoted values; duplicate
-namespace repair and missing xsi declarations remain supported. GPX continues
-through its existing XML parsing path.
+Manager-owned periodic network updates pause while the document is hidden. Returning to a visible tab runs one overdue update per enabled layer without overlapping an active refresh and restarts that layer's polling schedule from the return, so the next poll follows one interval later whether or not the catch-up update succeeds; explicit refresh requests remain available. Transit also defers camera-driven feed admission while hidden and rechecks coverage on return. Visibility listeners are released with their polling intervals.
 
 Terrain height requests accept at most 64 points, matching the browser service's
 existing batch size and one bounded upstream chunk. Larger requests return HTTP
@@ -1399,10 +1390,25 @@ shows a bottom tab bar: Layers (Data Layers, with Scenes collapsed below),
 Cameras (CCTV and Street Level), Context (Global Context, plus Weather and
 Recent Imagery when shown), Search (Location) and More (Visual Presets and Map
 Source above Display). A tab opens one bottom sheet; the same tab, the backdrop
-or Escape closes it, and focus moves into the sheet and back to its tab. Panels
+or Escape closes it, and focus moves into the sheet and back to its tab. A
+downward swipe of at least 64px on non-control sheet content also closes it,
+when every scroll container under the finger starts at the top. Ordinary
+vertical scrolling, horizontal gestures, controls and multitouch stay native;
+a cancelled gesture or a sheet/viewport change cannot dismiss another sheet. Panels
 are not moved in the DOM: `styles/mobile-shell.css` presents the rails and dock
 as the sheet, and the dock's Location and Presets trays render inline. The voice
 control floats above the tab bar while no sheet is open.
+
+The phone logo is 58px wide (about 39px high), aligned with the top controls.
+The shared contact picker preserves exact picks. For a coarse primary pointer
+that misses onto the map surface, it searches at most eight hits in a 14px square
+and accepts the first registered layer hit, stopping at non-map objects. Civil
+and military aircraft and vessels share this rule; fine pointers stay exact.
+
+Manually opening Context with a tracked civilian or military aircraft enters
+the existing Contacts mode when Context is off. Contacts adopts that aircraft
+without restarting its tracking; an active or entering Space Missions mode is
+left alone. Programmatic sheet changes and closing the tab do not activate a mode.
 
 Sheets borrow panels. Opening one expands its panels without persisting them or
 claiming a user choice, and share links keep reporting each borrowed panel's
@@ -1903,6 +1909,10 @@ Launch payloads with missing records now say PAYLOAD DATA UNAVAILABLE. Missing n
 Updated: September 23, 2026
 
 ## Aircraft and vessel server modules
+
+OpenSky credential-file failures emit a fixed warning once per process; neither
+JSON parser excerpts nor filesystem error messages are logged. The environment
+example uses an absolute path compatible with the macOS launchers.
 
 Standalone aircraft routes now live in `server/providers/aircraft/`: OpenSky
 state vectors and regional fallback, adsb.lol military positions, ADSBDB
@@ -4205,6 +4215,8 @@ animation. Polls, surface completions and trail fades request individual renders
 Disable clears vehicles, detection references, requests, timers and holds;
 destruction also releases collections and registrations.
 
+The `scripts/qa-layer-visibility.mjs` gate uses the development-only registration seam and real browser tab visibility to prove periodic work pauses while hidden, explicit refresh still works, resume performs one overdue refresh, and disabled layers stay stopped.
+
 **Acceptance harness.** Run against an already running development server:
 
 ```sh
@@ -4982,7 +4994,7 @@ and unreachable upstream (502/504) separately from road geometry.
 > branch: **2,281 on Node 25.6.1** (allocation suites skipped) = 2,255 on
 > `main` + 26 route pins; the same tree on Node 24 reports 2,295.
 
-- **Camera verbs** (`src/cameraVerbs.js`) — one motion slot, driven per clock tick. `move_camera` orbits/pans/tilts/rotates; `fly_route` is a cinematic dolly along an existing route annotation.
+- **Camera verbs** (`src/cameraVerbs.js`) — one motion slot, driven per clock tick. `move_camera` orbits/pans/tilts/rotates; `fly_route` is a cinematic dolly along an existing route annotation. `rotate_globe` rotates the world-space camera rigidly around Earth's center using its screen-up axis, preserving geocentric range and framing. Left/right describe visible globe motion, while `rotate` turns the camera in place. Omitted globe direction/mode default to right/continuous; explicit values prevail. Other camera motions keep their once default. Admission requires 3D, no Cockpit/tracking owner and the whole globe inside the existing keyhole circle, using the shared keyhole/projection geometry and vertical camera FOV with a rotation-local bounding-sphere cone for off-axis containment. Canvas-edge clipping alone does not block a rigid rotation or its unchanged Globe View preset. There is no altitude cutoff. An already smaller, fully framed globe rotates directly; repeated nudges, direction and speed changes recheck current framing without demanding a reset merely because ellipsoid altitude varied. A close-up or overlap refuses without moving the camera. When the unchanged Globe View preset fits, voice says “Globe rotation isn’t available from this view. You can say ‘Reset to Globe View and rotate the globe.’” without asking a permission question or automatically resetting. Explicit Reset/Show Globe View commands remain direct; an explicit reset-and-rotate request waits for reset success before requesting rotation. If OpenAI dispatches both tools together, rotation waits for earlier same-response resets and is skipped if any fails or is cancelled. OpenAI rejects later tool calls in the same response after a globe refusal, including calls arriving while globe admission is pending, and preserves response-scoped `tool_choice: none` for the refusal follow-up; Gemini rejects further tool execution, including queued sibling calls, until fresh typed input or admitted speech. Model interruption, advisory captions and microphone toggles do not release that guard. There is no pending Yes/No offer. Outside the refused response, explicit-command interpretation and avoiding repeated resets remain model-guided; a distinct model-issued reset call is not an app-enforced proof of user intent. A failed standalone reset can still be retried by the model, and a reset result does not guarantee the camera has fully settled. Before suggesting a reset, a cloned camera checks the unchanged Globe View destination against the same keyhole/depth rules without moving the live camera. If that preset cannot fit, `globe-reset-unavailable` asks for further zoom and the refusal instructs further zoom instead of a reset; this also covers ultrawide views. Unsupported view geometry or non-WGS84 projection assumptions fail closed without the closer-zoom instruction. Supported camera inputs/navigation intents cancel rotation before their action. Finite radius greater than the ellipsoid's maximum radius proves whole-arc clearance at constant centre-distance; no low-altitude swept solver is needed. The unchanged Globe View reset preset remains 18,000,000 m. Terrain and buildings remain outside the guarantee.
   - **The route dolly is shaped, not linear** (2026-08-20). A trapezoid speed profile (smoothstep up, cruise, smoothstep down, distance taken as the closed-form integral) eases both ends without changing the pace — duration is still `totalM / ROUTE_M_S[speed]`, with one exception: a 0.5 s minimum keeps a degenerate route from being an instant teleport, so routes under 10 m (slow) / 20 m (normal) / 45 m (fast) fly SLOWER than the speed word, never faster. Turns bank up to **10°** (a 90° street corner settles near 7.5°), measured as a triangular pulse over a 4 s window centred on the camera so the roll leads in and unwinds after. Altitude breathes ±20 m around the 260 m mean and lifts up to 26 m into turns. Pitch is LOCKED at −32°; heading comes from a gaze that leads the path by 6.5 s of travel. `prefers-reduced-motion` zeroes the roll and the altitude shaping and keeps the easing.
   - **Invariants — do not "fix" these.** (1) **Every** release levels the roll: completion unwinds it through the ease-out envelope, and `interruptCameraMotion` zeroes it synchronously (heading/pitch/position preserved). Cesium keeps the last up vector it was handed, so skipping this leaves the user holding a tilted horizon. (2) Heading is interpolated as an ANGLE about the local up, never as a Cartesian lerp — a lerp cannot cross an antipodal pair, so an out-and-back route looked backwards for the entire return leg; `signedTurnRad` branches the exact-180° case deterministically because the cross product's sign there is a floating-point coin toss. (3) A COLD floor cell is missing data, not flat ground: route vertices carry height 0, so trusting them flew a mountain corridor at 260 m above the ELLIPSOID. The corridor warm is fire-and-forget, so the dolly ARMS — camera untouched, no teleport onto the route — for up to 1.2 s waiting for real floor data, falls back to a rendered-mesh probe (`scene.sampleHeight`) when the DEM stays cold — latched to ONE firing per flight, for exactly the cells the cache could not answer, so a route costs at most 8 `sampleHeight` calls however long it arms — and otherwise holds the launch altitude for the whole route. A corridor is only RESOLVED when every cell is accounted for: one warm cell says nothing about the ground under the other seven, and treating it as an answer let the dolly descend to 460 m over a 1,600 m rendered surface. The probe reads the rendered surface at the current LOD (rooftops and primitives included) — a better estimate than nothing, not a guaranteed upper bound. Never descend blind. The floor is SMOOTHED in both directions for the ride while the hard clearance clamp reads the RAW sample, so a cell boundary cannot pop the eye but a cliff is still cleared on the frame it is seen. A pre-departure floor is adopted whole; one arriving mid-flight is eased onto, and the eye's descent rate is capped.
   - Pins: `src/routeCinematics.test.mjs` (26 tests), with `scripts/qa-flyroute-mutations.mjs` reverting each fix individually to prove they are load-bearing (19 named defects); rendered proof `scripts/qa-flyroute-cinema.mjs` (drives the real voice runner, measures the real Cesium camera every frame, writes a labelled contact sheet).
@@ -5503,6 +5515,11 @@ easier to meet (detection is now on more often), but does not create it.
   short-way-round longitude span and wraps the padded edges, so a dateline-
   crossing box stays its true width. Raw subtraction inflated a 0.41° metro box
   to 86.7° and a 60° territory to 132°.
+- **Point distances take the short way round 180°.** The annotation
+  resolver's `approximateDistanceM` (voice "point out" proximity checks) and
+  `places_nearby` distances wrap the longitude difference. Raw subtraction put
+  Savusavu 38,148 km from a camera over the Lau Islands, so the proximity check
+  refused it, and sorted a place 2 km across 180° last.
 - CCTV calibration persists at `godsEyeView.cctv.calibration.v2` (v2 rebuild;
   the store was wiped clean, no import from the old `v1` key).
 - CCTV v3 floor QA pins are: zero samples for heading-only edits; zero transient
