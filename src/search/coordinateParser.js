@@ -60,27 +60,20 @@ function splitComponents(query) {
     const trimmed = text.split(/[,;]/).map((part) => part.trim());
     return trimmed.length === 2 && trimmed.every(Boolean) ? trimmed : null;
   }
-  const token = /[NSEW]|[+-]?(?:\d+(?:\.\d+)?|\.\d+)°?/gi;
-  const parts = [];
-  let cursor = 0;
-  for (const match of text.matchAll(token)) {
-    if (!/^[\s°]*$/.test(text.slice(cursor, match.index))) return null;
-    cursor = match.index + match[0].length;
-    const raw = match[0].replace(/°$/, '');
-    const letter = /^[NSEW]$/i.test(raw);
-    const previous = parts[parts.length - 1];
-    if (letter && previous && !/[NSEW]/i.test(previous)) {
-      parts[parts.length - 1] = `${previous}${raw}`;
-      continue;
-    }
-    if (!letter && previous && /^[NSEW]$/i.test(previous)) {
-      parts[parts.length - 1] = `${previous}${raw}`;
-      continue;
-    }
-    parts.push(raw);
+  const words = text.split(/\s+/);
+  // Each component has at most a number, a degree sign and one hemisphere.
+  if (words.length > 6) return null;
+  // Prefer a suffix letter on the first number when a space could also put
+  // that letter before the second number (`40 N 74`). Keep every character:
+  // extracting tokens would turn `1e3` or `1.2.3` into invented coordinates.
+  for (let boundary = words.length - 1; boundary > 0; boundary -= 1) {
+    const parts = [
+      words.slice(0, boundary).join(' '),
+      words.slice(boundary).join(' '),
+    ];
+    if (parts.every((part) => readComponent(part))) return parts;
   }
-  if (!/^[\s°]*$/.test(text.slice(cursor))) return null;
-  return parts.length === 2 ? parts : null;
+  return null;
 }
 
 /** Present a parsed pair the way a coordinate is normally written. */

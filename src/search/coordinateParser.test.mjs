@@ -81,6 +81,15 @@ test('malformed and ambiguous coordinates are refused, never guessed', () => {
     '12junk,34',
     '12junk 34',
     '1e3 5',
+    '1e3',
+    '1E3',
+    '1e-3',
+    '1.2.3',
+    '12-34',
+    '40 NW 74',
+    '°40 74',
+    '40°° 74',
+    '40 74°°',
     '40 26 46 N 79 58 56 W',
     '43.1731, -79.0384x',
     'abc, def',
@@ -210,5 +219,16 @@ test('malformed or unsupported geo URIs are refused without losing their meaning
     'https://example.com/geo:39.7392,-104.9903',
   ]) {
     assert.equal(parseCoordinateQuery(query), null, query);
+  }
+});
+
+test('whitespace boundaries preserve degree signs and hemisphere ownership', () => {
+  for (const query of ['40 ° 74', '40° 74', '40 N 74', 'N 40 74']) {
+    assert.equal(parseCoordinateQuery(query)?.lat, 40, query);
+    assert.equal(parseCoordinateQuery(query)?.lon, 74, query);
+  }
+  for (const query of ['40 ° N 74 ° W', 'N 40 ° W 74 °', '40\tN\n74\tW']) {
+    assert.equal(parseCoordinateQuery(query)?.lat, 40, query);
+    assert.equal(parseCoordinateQuery(query)?.lon, -74, query);
   }
 });
