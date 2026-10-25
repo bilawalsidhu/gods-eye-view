@@ -1,4 +1,42 @@
 import { resolveGoogleServerKey } from '../../../scripts/google-server-key.mjs';
+import { makeCostRateLimiter } from '../common/rate-limit.js';
+
+// Construct lazily after the standalone environment has loaded.
+// undefined = not built yet; null = the explicit 0 opt-out; fn = active limiter
+let _googleRateLimiter;
+
+/**
+ * Requests/min/IP applied when GEV_RATELIMIT_GOOGLE_PER_MIN is unset. This is
+ * the value the Pinokio build already ships (pinokio/_ENVIRONMENT), so the
+ * packaged app keeps behaving exactly as it does today and only an
+ * unconfigured server changes — from unlimited to what the product already
+ * runs with. Places calls are user-driven (a search, a nearby lookup, an
+ * installation probe) rather than polled. The CCTV Street View fallback is
+ * polled, but its frames are cached per camera and pose, so a card refreshing
+ * every 10 seconds reaches this limiter once per cache lifetime rather than
+ * six times a minute. Both therefore sit far below this cap, which bites only
+ * a caller enumerating an endpoint. `.env.example` suggests a tighter 60 when
+ * the host is not localhost; that still applies.
+ */
+export const GOOGLE_DEFAULT_PER_MIN = 120;
+
+/**
+ * The one per-IP budget for every server-side call billed to the Google key
+ * below: nearby-places, text-search, geocoding and the CCTV Street View
+ * fallback. They share one limiter because they share one key and one bill,
+ * so GEV_RATELIMIT_GOOGLE_PER_MIN bounds what a client can spend on it in
+ * total rather than per route. Null only when that variable is set to 0.
+ *
+ * @returns {((key:string)=>boolean)|null}
+ */
+export function googleRateLimiter() {
+  if (_googleRateLimiter === undefined)
+    _googleRateLimiter = makeCostRateLimiter(
+      process.env.GEV_RATELIMIT_GOOGLE_PER_MIN,
+      GOOGLE_DEFAULT_PER_MIN,
+    );
+  return _googleRateLimiter;
+}
 
 /**
  * Optional Google place context is an empty capability when no key is present,

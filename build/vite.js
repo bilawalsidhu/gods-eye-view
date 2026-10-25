@@ -165,7 +165,19 @@ export function createBrowserViteConfig({
       // build/allowedHosts.js); IP addresses are always accepted.
       allowedHosts: [...allowedHosts],
       fs: {
-        deny: ['.env', '.env.*', '*.{crt,pem}', '**/.git/**', '**/ENVIRONMENT'],
+        deny: [
+          '.env',
+          '.env.*',
+          '*.{crt,pem}',
+          '**/.git/**',
+          '**/ENVIRONMENT',
+          // Runtime output, never source: the voice debug log keeps transcripts
+          // and tool results, and provider caches keep upstream payloads. The
+          // dev server answers localhost origins with CORS, so a file it serves
+          // is readable by any page on this machine, not only by the app.
+          '**/.gev-logs/**',
+          '**/.gev-cache/**',
+        ],
       },
       // These headers protect the document containing Provider Settings and
       // give the whole page a real Content-Security-Policy (BROWSER_CSP).
