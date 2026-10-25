@@ -35,12 +35,31 @@ follows it. REPLAY switches the live aircraft, military and vessel layers
 off, and moves the slider's time onto the globe. Play and the 1×/10×/100×
 chips run it; AIR, MIL and SEA choose layers; Latest returns to live.
 
+## Local receivers
+
+If you run your own ADS-B receivers (`LOCAL_RECEIVER_FEEDS`, see
+[LOCAL-RECEIVERS.md](LOCAL-RECEIVERS.md)), their aircraft are recorded on a
+`local` layer and replay with the LOCAL chip. They are your own data, so they
+are the best candidate for long recordings.
+
+## Watched areas (geofences)
+
+A fence is a named box that logs an event when a recorded contact enters or
+leaves it. Only positions newer than the fence count, so a new fence does not
+report everything already inside. Fences and events live in the same database,
+and the panel lists the newest events. Manage them through the MCP tools
+`geofence_add`, `geofence_list`, `geofence_events` and `geofence_remove`, or the
+routes below. Changing fences needs a JSON request from this origin, which stops
+other web pages from editing them.
+
 ## History API (loopback only)
 
 - `GET /api/history/status` — range plus position count, retention days and file size.
 - `GET /api/history/range` — earliest and latest recorded time (epoch s).
-- `GET /api/history/window?from&to&bbox=west,south,east,north&layers=air,mil,vessel`
+- `GET /api/history/window?from&to&bbox=west,south,east,north&layers=air,mil,vessel,local`
 - `GET /api/history/track/:id?from&to` — one contact's path.
+- `GET|POST /api/history/fences`, `DELETE /api/history/fences/:id` — watched areas.
+- `GET /api/history/events?since&fence&limit` — enter and exit events, newest first.
 - `GET /api/history/at?to=<epoch s>&bbox&layers` — last position of each
   contact within 10 minutes before `to`.
 

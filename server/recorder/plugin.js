@@ -2,7 +2,12 @@ import { statSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { aisStreamRows } from '../providers/vessels/ais-store.js';
-import { aircraftPoints, militaryPoints, vesselPoints } from './extract.js';
+import {
+  aircraftPoints,
+  localReceiverPoints,
+  militaryPoints,
+  vesselPoints,
+} from './extract.js';
 import { createRecorder } from './recorder.js';
 
 const root = fileURLToPath(new URL('../../', import.meta.url));
@@ -14,6 +19,39 @@ function sendJson(res, status, body) {
   res.setHeader('Content-Type', 'application/json; charset=utf-8');
   res.setHeader('Cache-Control', 'no-store');
   res.end(JSON.stringify(body));
+}
+
+/** A browser page on another origin must not change fences. */
+function sameOrigin(req) {
+  const origin = req.headers.origin;
+  if (!origin) return true;
+  try {
+    return new URL(origin).host === req.headers.host;
+  } catch {
+    return false;
+  }
+}
+
+function readJson(req, res, handle) {
+  if (
+    !sameOrigin(req) ||
+    !/^application\/json/i.test(req.headers['content-type'] || '')
+  )
+    return sendJson(res, 403, { error: 'JSON from this origin only' });
+  const chunks = [];
+  let size = 0;
+  req.on('data', (c) => {
+    size += c.length;
+    if (size > 16384) req.destroy();
+    else chunks.push(c);
+  });
+  req.on('end', () => {
+    try {
+      handle(JSON.parse(Buffer.concat(chunks).toString('utf8')));
+    } catch (error) {
+      sendJson(res, 400, { error: error?.message || 'Bad request' });
+    }
+  });
 }
 
 const intParam = (v) => (v == null || v === '' ? null : Math.floor(Number(v)));
@@ -39,6 +77,7 @@ export function recorderPlugin(env = process.env) {
     for (const [mount, extract] of [
       ['/api/flights', aircraftPoints],
       ['/api/military', militaryPoints],
+      ['/api/local-receivers/aircraft', localReceiverPoints],
     ]) {
       server.middlewares.use(mount, (req, res, next) => {
         const pathname = new URL(req.url || '/', 'http://localhost').pathname;
@@ -98,6 +137,30 @@ export function recorderPlugin(env = process.env) {
             bytes,
           });
         }
+        if (url.pathname === '/fences') {
+          if (req.method === 'POST')
+            return readJson(req, res, (body) => {
+              const id = recorder.addFence(body);
+              return sendJson(res, 201, { id });
+            });
+          return sendJson(res, 200, { fences: recorder.store.listFences() });
+        }
+        if (url.pathname.startsWith('/fences/') && req.method === 'DELETE') {
+          if (!sameOrigin(req))
+            return sendJson(res, 403, {
+              error: 'Cross-origin request refused',
+            });
+          const removed = recorder.removeFence(Number(url.pathname.slice(8)));
+          return sendJson(res, removed ? 200 : 404, { removed });
+        }
+        if (url.pathname === '/events')
+          return sendJson(res, 200, {
+            events: recorder.store.events({
+              since: intParam(q.get('since')) ?? 0,
+              fenceId: intParam(q.get('fence')),
+              limit: Math.min(1000, intParam(q.get('limit')) ?? 200),
+            }),
+          });
         if (url.pathname === '/range')
           return sendJson(res, 200, recorder.store.range());
         if (url.pathname.startsWith('/track/')) {

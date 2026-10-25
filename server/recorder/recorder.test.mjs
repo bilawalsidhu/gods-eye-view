@@ -139,3 +139,121 @@ test('history tools call the recorder API and cap rows', async () => {
     /GEV_RECORDER=1/,
   );
 });
+
+test('local receiver records become positions on the local layer', async () => {
+  const { localReceiverPoints } = await import('./extract.js');
+  const body = {
+    records: [
+      {
+        icao: 'abc123',
+        lat: 1,
+        lon: 2,
+        altitudeFt: 1000,
+        groundSpeedKt: 100,
+        trackDeg: 90,
+        lastPositionAt: 5000,
+      },
+      { icao: 'nopos', lat: null, lon: null },
+    ],
+  };
+  const [p] = localReceiverPoints(body, 9);
+  assert.equal(localReceiverPoints(body, 9).length, 1);
+  assert.equal(p.layer, 'local');
+  assert.equal(p.ts, 5);
+  assert.ok(Math.abs(p.alt - 304.8) < 0.01);
+});
+
+test('fences report enter and exit, honour layers and ignore older positions', async () => {
+  const { insideFence, cleanFence } = await import('./fences.js');
+  assert.equal(
+    insideFence(
+      { west: 170, east: -170, south: -5, north: 5 },
+      { lat: 0, lon: 175 },
+    ),
+    true,
+  );
+  assert.equal(
+    insideFence(
+      { west: 170, east: -170, south: -5, north: 5 },
+      { lat: 0, lon: 0 },
+    ),
+    false,
+  );
+  assert.throws(
+    () => cleanFence({ name: 'x', west: 0, south: 5, east: 1, north: 1 }),
+    /south/,
+  );
+  assert.throws(
+    () => cleanFence({ west: 0, south: 0, east: 1, north: 1 }),
+    /name/,
+  );
+
+  const rec = createRecorder({
+    file: ':memory:',
+    retentionDays: 0,
+    now: () => 1000 * 1000,
+  });
+  const id = rec.addFence({
+    name: 'Box',
+    west: 0,
+    south: 0,
+    east: 10,
+    north: 10,
+    layers: ['air'],
+  });
+  rec.ingestMany([
+    pt({ ts: 500, lat: 5, lon: 5 }), // before the fence existed
+    pt({ ts: 1001, lat: 5, lon: 5 }), // enter
+    pt({ ts: 1002, lat: 6, lon: 6 }), // still inside
+    pt({ ts: 1003, lat: 50, lon: 50 }), // exit
+    pt({ id: 'v', layer: 'vessel', ts: 1004, lat: 5, lon: 5 }), // wrong layer
+  ]);
+  rec.flush();
+  const events = rec.store.events({ fenceId: id });
+  assert.deepEqual(events.map((e) => e.kind).reverse(), ['enter', 'exit']);
+  assert.equal(events[0].fence, 'Box');
+  assert.equal(rec.removeFence(id), 1);
+  rec.close();
+});
+
+test('geofence tools call the history API', async () => {
+  const { historyTools } = await import('./tools.js');
+  const calls = [];
+  const services = {
+    app: {
+      fetch: async (url, init) => {
+        calls.push([url, init.method]);
+        return Response.json(
+          init.method === 'POST'
+            ? { id: 3 }
+            : {
+                fences: [],
+                events: [
+                  {
+                    ts: 100,
+                    fence: 'Box',
+                    fence_id: 3,
+                    id: 'a',
+                    layer: 'air',
+                    kind: 'enter',
+                    lat: 1,
+                    lon: 2,
+                  },
+                ],
+              },
+        );
+      },
+    },
+  };
+  const tool = (name) => historyTools.find((t) => t.name === name);
+  const add = await tool('geofence_add').run(
+    { name: 'Box', bbox: { west: 0, south: 0, east: 1, north: 1 } },
+    { services },
+  );
+  assert.equal(add.data.id, 3);
+  assert.deepEqual(calls[0], ['/api/history/fences', 'POST']);
+  const events = await tool('geofence_events').run({}, { services });
+  assert.equal(events.data.rows[0].kind, 'enter');
+  await tool('geofence_remove').run({ id: 3 }, { services });
+  assert.deepEqual(calls.at(-1), ['/api/history/fences/3', 'DELETE']);
+});

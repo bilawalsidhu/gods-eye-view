@@ -5,7 +5,10 @@ const LAYER_LABELS = [
   ['air', msg('AIR')],
   ['mil', msg('MIL')],
   ['vessel', msg('SEA')],
+  ['local', msg('LOCAL')],
 ];
+const ENTERED = msg('{contact} entered {fence}');
+const LEFT = msg('{contact} left {fence}');
 const set = (node, key, value) => {
   if (node[key] !== value) node[key] = value;
 };
@@ -66,9 +69,11 @@ export function createReplayPanel({ container, controller } = {}) {
       controller.toggleLayer(id),
     ),
   ]);
+  const alerts = document.createElement('div');
+  alerts.className = 'replay-alerts';
   const timelineHost = document.createElement('div');
   timelineHost.className = 'weather-timeline-block';
-  root.append(status, chips, layerRow, timelineHost);
+  root.append(status, chips, layerRow, alerts, timelineHost);
   container.appendChild(root);
 
   const timeline = createRailTimeline({
@@ -85,7 +90,12 @@ export function createReplayPanel({ container, controller } = {}) {
 
   const render = (state) => {
     const ready = state.active && state.ticks.length > 1;
-    if (panel) set(panel, 'hidden', !state.range && !state.active);
+    if (panel)
+      set(
+        panel,
+        'hidden',
+        !state.range && !state.active && !state.events.length,
+      );
     if (count)
       set(count, 'textContent', state.active ? t('REPLAY') : t('LIVE'));
     set(
@@ -123,6 +133,24 @@ export function createReplayPanel({ container, controller } = {}) {
         'className',
         `data-toggle-chip${state.layers.includes(id) ? ' active' : ''}`,
       );
+    const lines = state.events.map((e) =>
+      t(e.kind === 'enter' ? ENTERED : LEFT, {
+        contact: e.id,
+        fence: e.fence || '',
+      }),
+    );
+    const shown = lines.join('\n');
+    if (alerts.dataset.shown !== shown) {
+      alerts.dataset.shown = shown;
+      alerts.replaceChildren(
+        ...lines.map((line) => {
+          const row = document.createElement('div');
+          row.textContent = line;
+          return row;
+        }),
+      );
+    }
+    set(alerts, 'hidden', !lines.length);
     timeline.update({
       ticks: state.ticks,
       index: state.index,

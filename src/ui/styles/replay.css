@@ -54,6 +54,14 @@
   flex-direction: column;
   gap: 8px;
 }
+.replay-alerts {
+  font: 9px var(--font-mono);
+  letter-spacing: 0.5px;
+  color: var(--text-secondary);
+}
+.replay-alerts[hidden] {
+  display: none;
+}
 .replay-chips {
   display: flex;
   flex-wrap: wrap;

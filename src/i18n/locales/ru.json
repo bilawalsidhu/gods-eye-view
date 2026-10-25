@@ -3028,5 +3028,7 @@
   "Fly to the replayed contacts": "Перелететь к воспроизводимым объектам",
   "Time window": "Временное окно",
   "{count} contacts": "Объектов: {count}",
-  "{count} positions recorded · kept {days} days": "Записано позиций: {count} · хранятся дней: {days}"
+  "{count} positions recorded · kept {days} days": "Записано позиций: {count} · хранятся дней: {days}",
+  "{contact} entered {fence}": "{contact} вошёл в {fence}",
+  "{contact} left {fence}": "{contact} покинул {fence}"
 }

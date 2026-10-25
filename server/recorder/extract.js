@@ -75,3 +75,21 @@ export function vesselPoints(rows, nowSec) {
   }
   return out;
 }
+
+/** Positions from /api/local-receivers/aircraft (the operator's own receivers). */
+export function localReceiverPoints(body, nowSec) {
+  const out = [];
+  for (const r of Array.isArray(body?.records) ? body.records : []) {
+    if (!r || num(r.lat) === null || num(r.lon) === null) continue;
+    const ts =
+      num(r.lastPositionAt) === null
+        ? nowSec
+        : Math.floor(r.lastPositionAt / 1000);
+    const alt = num(r.altitudeFt) === null ? null : r.altitudeFt * 0.3048;
+    const speed =
+      num(r.groundSpeedKt) === null ? null : r.groundSpeedKt * 0.514444;
+    const p = point('local', r.icao, r.lat, r.lon, alt, r.trackDeg, speed, ts);
+    if (p) out.push(p);
+  }
+  return out;
+}

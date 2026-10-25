@@ -2827,5 +2827,7 @@
   "Fly to the replayed contacts": "飞往回放的目标",
   "Time window": "时间窗口",
   "{count} contacts": "{count} 个目标",
-  "{count} positions recorded · kept {days} days": "已录制 {count} 个位置 · 保留 {days} 天"
+  "{count} positions recorded · kept {days} days": "已录制 {count} 个位置 · 保留 {days} 天",
+  "{contact} entered {fence}": "{contact} 进入 {fence}",
+  "{contact} left {fence}": "{contact} 离开 {fence}"
 }

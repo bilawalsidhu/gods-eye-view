@@ -2961,5 +2961,7 @@
   "Fly to the replayed contacts": "Volar a los contactos reproducidos",
   "Time window": "Ventana de tiempo",
   "{count} contacts": "{count} contactos",
-  "{count} positions recorded · kept {days} days": "{count} posiciones grabadas · se conservan {days} días"
+  "{count} positions recorded · kept {days} days": "{count} posiciones grabadas · se conservan {days} días",
+  "{contact} entered {fence}": "{contact} entró en {fence}",
+  "{contact} left {fence}": "{contact} salió de {fence}"
 }

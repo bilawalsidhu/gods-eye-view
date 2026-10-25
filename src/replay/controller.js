@@ -6,6 +6,7 @@ const LAYER_COLORS = {
   air: '#00d4ff',
   mil: '#ffb000',
   vessel: '#4dff9a',
+  local: '#c77dff',
 };
 const TRAIL_SECONDS = 600;
 const SPEEDS = [1, 10, 100];
@@ -38,7 +39,8 @@ export function createReplayController({
   let rawRange = null;
   let status = null;
   let contacts = 0;
-  const layers = new Set(['air', 'mil', 'vessel']);
+  let events = [];
+  const layers = new Set(['air', 'mil', 'vessel', 'local']);
 
   const state = () => ({
     active,
@@ -50,6 +52,7 @@ export function createReplayController({
     layers: [...layers],
     range,
     status,
+    events,
     contacts,
     windowHours,
     windows: WINDOW_HOURS,
@@ -86,9 +89,11 @@ export function createReplayController({
     try {
       status = await getJson('/api/history/status');
       rawRange = status;
+      events = (await getJson('/api/history/events?limit=5')).events;
       range = replayWindow(rawRange, windowHours);
     } catch {
       status = rawRange = range = null;
+      events = [];
     }
     notify();
     return range;
