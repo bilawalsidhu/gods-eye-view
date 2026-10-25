@@ -2,25 +2,40 @@
 
 let pending = null;
 
-export function loadToolCatalog() {
+/** `worldMonitor` adds the World Monitor tools, for a configured local backend. */
+export function loadToolCatalog({ worldMonitor = false } = {}) {
   pending ??= Promise.all([
     import('../tools/index.js'),
     import('../tools/services.js'),
+    worldMonitor ? import('../tools/queries/worldmonitor.js') : null,
+    worldMonitor ? import('../tools/worldmonitorService.js') : null,
   ]).then(
     ([
       { composeCatalog, coreTools, catalogForSurface },
       { createToolServices },
-    ]) =>
-      catalogForSurface(
+      queries,
+      service,
+    ]) => {
+      const fetchImpl = (...args) => globalThis.fetch(...args);
+      const services = createToolServices({
+        fetchImpl,
+        appUrl: new URL(globalThis.document.baseURI).origin,
+      });
+      return catalogForSurface(
         composeCatalog({
-          tools: coreTools,
-          services: createToolServices({
-            fetchImpl: (...args) => globalThis.fetch(...args),
-            appUrl: new URL(globalThis.document.baseURI).origin,
-          }),
+          tools: queries
+            ? [...coreTools, ...queries.worldMonitorTools]
+            : coreTools,
+          services: service
+            ? {
+                ...services,
+                worldmonitor: service.createWorldMonitorService({ fetchImpl }),
+              }
+            : services,
         }),
         'voice',
-      ),
+      );
+    },
   );
   pending.catch(() => {
     pending = null;

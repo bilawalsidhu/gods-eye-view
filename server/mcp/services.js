@@ -6,6 +6,7 @@
 import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { createToolServices } from '../../src/tools/services.js';
+import { createWorldMonitorService } from '../../src/tools/worldmonitorService.js';
 
 // Bundled data some sources read by module-relative URL.
 const BUNDLED_DATA = new URL('../../src/data/local_data/', import.meta.url);
@@ -56,9 +57,13 @@ async function readBundled(url) {
 
 /** Construct every service Core's tools read, backed by the local server. */
 export function createLocalToolServices(options = {}) {
-  return createToolServices({
-    fetchImpl: createApiFetch(options),
-    appUrl: options.apiBase ?? DEFAULT_API_BASE,
-    panelKey: options.panelKey,
-  });
+  const fetchImpl = createApiFetch(options);
+  return {
+    ...createToolServices({
+      fetchImpl,
+      appUrl: options.apiBase ?? DEFAULT_API_BASE,
+      panelKey: options.panelKey,
+    }),
+    worldmonitor: createWorldMonitorService({ fetchImpl }),
+  };
 }

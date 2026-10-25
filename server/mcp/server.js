@@ -13,6 +13,10 @@ import {
 } from '../../src/tools/panel.js';
 import { createMcpServer } from '../../src/tools/mcp/index.js';
 import { DEFAULT_API_BASE, createLocalToolServices } from './services.js';
+import {
+  isWorldMonitorConfigured,
+  worldMonitorTools,
+} from '../../src/tools/queries/worldmonitor.js';
 
 const INSTRUCTIONS =
   "Tools answer questions from God's Eye View's live public data. Location " +
@@ -28,6 +32,7 @@ export function createLocalMcpServer({
   apiBase = DEFAULT_API_BASE,
   fetchImpl,
   panelKey = randomBytes(32).toString('base64url'),
+  worldMonitor = isWorldMonitorConfigured(process.env),
 } = {}) {
   const { version } = JSON.parse(
     readFileSync(new URL('../../package.json', import.meta.url), 'utf8'),
@@ -40,7 +45,7 @@ export function createLocalMcpServer({
   return createMcpServer({
     catalog: catalogForSurface(
       composeCatalog({
-        tools: coreTools,
+        tools: worldMonitor ? [...coreTools, ...worldMonitorTools] : coreTools,
         services: createLocalToolServices({ apiBase, fetchImpl, panelKey }),
       }),
       'mcp',

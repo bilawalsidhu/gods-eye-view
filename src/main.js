@@ -6,6 +6,7 @@ const application = createStandaloneApplication({
   googleApiKey: import.meta.env.GOOGLE_MAPS_API_KEY,
   cesiumToken: import.meta.env.CESIUM_ION_TOKEN,
   allowQaRegistration: import.meta.env.DEV,
+  worldMonitor: { enabled: import.meta.env.GEV_WORLD_MONITOR_ENABLED },
 });
 
 application.start().catch((error) => {

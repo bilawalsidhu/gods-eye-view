@@ -7,6 +7,8 @@ import { localMcpPlugin } from '../mcp/plugin.js';
 import { apiNotFoundPlugin } from './api-not-found.js';
 import { standaloneVoiceTools } from './voiceTools.js';
 import { unwatchedRuntimeDirsPlugin } from './unwatched-cache.js';
+import { worldMonitorProxy } from '../providers/worldmonitor.js';
+import { isWorldMonitorConfigured } from '../../src/tools/queries/worldmonitor.js';
 
 const root = fileURLToPath(new URL('../../', import.meta.url));
 
@@ -17,8 +19,10 @@ export default defineConfig(({ command, mode }) => {
     if (process.env[key] === undefined) process.env[key] = value;
   }
   const tools = standaloneVoiceTools();
-  return createBrowserViteConfig({
+  const worldMonitor = isWorldMonitorConfigured(process.env);
+  const config = createBrowserViteConfig({
     plugins: [
+      ...(worldMonitor ? [worldMonitorProxy()] : []),
       ...localProviderPlugins({ realtime: { tools }, gemini: { tools } }),
       localMcpPlugin(),
       apiNotFoundPlugin(),
@@ -32,4 +36,9 @@ export default defineConfig(({ command, mode }) => {
     allowedHosts: resolveAllowedHosts(process.env.GEV_ALLOWED_HOSTS),
     command,
   });
+  // Only the switch reaches the browser; the World Monitor address and
+  // credentials stay on this server.
+  config.define['import.meta.env.GEV_WORLD_MONITOR_ENABLED'] =
+    JSON.stringify(worldMonitor);
+  return config;
 });
