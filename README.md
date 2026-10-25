@@ -343,6 +343,10 @@ Thirty tools, four jobs — the commands below come straight from the product's 
 
 **🎥 Direct it** — drone-operator camera verbs:
 
+“Rotate the globe” spins Earth to the right continuously; ask for left, a speed,
+or stop. If it refuses, follow its reset-and-rotate or further-zoom guidance;
+camera input stops rotation.
+
 > 🗣️ _"Take me to Tokyo."_ · _"Orbit around this area slowly."_ · _"Draw the walking route from the Capitol to Zilker Park."_ → _"Fly the route we just drew."_ · _"Zoom out to a globe view."_
 
 **🖊️ Annotate it** — a whiteboard over the real world:
@@ -488,7 +492,7 @@ How the globe handles live data:
 ```
 src/
 ├── main.js                 # Bootstrap: Google 3D tiles, layer registration
-├── ui.js                   # Runtime UI — panels, HUD, styles, control facade
+├── ui/                     # Runtime UI — panels, HUD, styles, controls
 ├── hud.js                  # Intelligence HUD + AI scene summary
 ├── keySetup.js             # POWER UP panel — in-app provider keys (dev server only)
 ├── mapStackController.js   # Basemap switching — Google 3D / Esri / OSM / ion stacks

@@ -32,6 +32,7 @@ const FEED_ERROR_PATTERNS = [
     /^PARTIAL · (.+) unavailable$/,
     ([, sources]) => t('PARTIAL · {sources} unavailable', { sources }),
   ],
+
   // Street Level provider errors (providers/{kartaview,panoramax}/source.js),
   // ahead of the generic "<source> HTTP <status>".
   [
@@ -222,7 +223,7 @@ function statusPatternText(piece) {
 }
 
 /** One piece of a status line in the UI language, or as it came. */
-export function translateStatusPiece(piece) {
+function translateStatusPiece(piece) {
   const known = translateKnown(piece);
   if (known !== piece) return known;
   return statusPatternText(piece) ?? piece;

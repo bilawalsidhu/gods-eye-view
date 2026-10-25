@@ -79,7 +79,6 @@ moves it. Do not label all ingestion modules platform-independent by filename.
 
 | Retained entry                                      | Owner and current reason                                                                                           |
 | --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
-| `src/ui.js`                                         | UI facade; direct callers retain standalone StyleManager defaults. Normal assembly uses `src/ui/composition.js`    |
 | `src/data/manager.js`                               | Lifecycle/panel compatibility and existing tests; normal assembly constructs lifecycle and presentation separately |
 | `src/data/<layer>.js`                               | Legacy default instances; new assembly calls layer factories with supplied sources                                 |
 | `src/data/localGeojson.js`                          | Infrastructure compatibility factories; catalog imports services from `src/app/localGeojsonServices.js` directly   |
@@ -87,9 +86,8 @@ moves it. Do not label all ingestion modules platform-independent by filename.
 | `src/app/sources.js`, `src/services/application.js` | Existing default/override API; current application construction supplies its own instances                         |
 | `server/providers/local.js`                         | Existing Node composition barrel and provider helper re-exports                                                    |
 
-The two exact standalone-import exceptions are `src/ui.js` to
-`src/standalone/catalog.js` and `server/providers/local.js` to
-`server/standalone/key-setup.js`. They do not authorize new compatibility
+The one exact standalone-import exception is `server/providers/local.js` to
+`server/standalone/key-setup.js`. It does not authorize new compatibility
 back-edges. Voice actions use plain `src/data/feedState.js`, not the manager
 facade. Settings filesystem hardening belongs in
 `server/standalone/key-setup-hardening.mjs`; its settings policy is unchanged.
@@ -237,7 +235,7 @@ DOM elements and callbacks; importing it creates no browser state. `destroy()`
 removes owned listeners and cancels pending work without changing saved state
 or moving focus. Call it before removing or replacing the controls.
 
-`src/ui.js` retains panel layout, persistence, share restoration and application
+`src/ui/applicationShell.js` retains panel layout, persistence, share restoration and application
 reactions to state changes. Map Source selection and Location draft cleanup are
 provided through callbacks. The component imports no globe, data, application
 or server modules. Package checks and scoped formatting cover this entry.
@@ -470,8 +468,8 @@ release listeners; pending action feedback is limited to its current owner.
 ## UI assembly and styles
 
 `ui/shell` assembles controls from supplied existing layer, navigation, terrain,
-rendering, HUD and share operations. `src/standalone/ui.js` provides the running
-application's instances; `src/ui.js` remains the compatibility entry. The shell
+rendering, HUD and share operations. `src/standalone/controls.js` provides the running
+application's instances. The shell
 imports no standalone bootstrap or concrete live layer implementation.
 Panel layout, position/drag, notices, recording and deferred UI work have separate
 owners with synchronous cleanup. Existing scene, share and HUD engines retain
