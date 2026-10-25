@@ -62,6 +62,15 @@ export function openHistoryStore(file) {
         throw error;
       }
     },
+    /** Number of saved positions per layer. */
+    layerCounts() {
+      return Object.fromEntries(
+        db
+          .prepare('SELECT layer, COUNT(*) AS n FROM positions GROUP BY layer')
+          .all()
+          .map((r) => [r.layer, Number(r.n)]),
+      );
+    },
     range() {
       return db
         .prepare(

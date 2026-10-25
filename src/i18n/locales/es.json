@@ -2994,5 +2994,16 @@
   "Keep this contact history past the retention period": "Conservar el historial de este contacto más allá del período de retención",
   "Could not change the pin": "No se pudo cambiar la fijación",
   "Solid dot: recorded position. Ring: estimated between recordings. Gaps over 5 minutes are left blank.": "Punto sólido: posición grabada. Anillo: estimada entre grabaciones. Los huecos de más de 5 minutos se dejan en blanco.",
-  "SAT": "SATÉL."
+  "SAT": "SATÉL.",
+  "STORAGE": "ALMACENAMIENTO",
+  "CAP": "LÍMITE",
+  "DISK": "DISCO",
+  "{used} of {total} used": "{used} de {total} usados",
+  "{used} used": "{used} usados",
+  "{free} free": "{free} libres",
+  "About {rate} per hour": "Unos {rate} por hora",
+  "Settles near {size} at this rate": "Se estabiliza cerca de {size} a este ritmo",
+  "Full in about {time} at this rate": "Se llena en unos {time} a este ritmo",
+  "Nearly full. The oldest positions are being dropped.": "Casi lleno. Se están eliminando las posiciones más antiguas.",
+  "Disk nearly full. Lower retention or set a size cap.": "Disco casi lleno. Reduce la retención o fija un límite de tamaño."
 }

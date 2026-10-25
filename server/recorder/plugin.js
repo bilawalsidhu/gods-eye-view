@@ -1,4 +1,4 @@
-import { readFileSync, statSync } from 'node:fs';
+import { readFileSync, statSync, statfsSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { aisStreamRows } from '../providers/vessels/ais-store.js';
@@ -213,8 +213,20 @@ export function recorderPlugin(env = process.env) {
           } catch {
             // The file appears with the first flush.
           }
+          // Free space on the disk holding the SQLite file; PostgreSQL's disk
+          // is not ours to measure.
+          let diskFree = null;
+          if (!config.databaseUrl)
+            try {
+              const fsInfo = statfsSync(path.dirname(file));
+              diskFree = Number(fsInfo.bavail) * Number(fsInfo.bsize);
+            } catch {
+              // Leave it unknown.
+            }
           return sendJson(res, 200, {
             ...(await recorder.store.range()),
+            layer_counts: await recorder.store.layerCounts(),
+            disk_free_bytes: diskFree,
             recording: true,
             retention_days: config.retentionSec / 86400,
             retention_sec: config.retentionSec,

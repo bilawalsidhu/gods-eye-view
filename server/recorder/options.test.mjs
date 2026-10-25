@@ -193,3 +193,14 @@ test('an area across the antimeridian finds both sides', async () => {
   ]);
   assert.deepEqual(ids(store.at({ time: 1500, bbox })), ['east', 'west']);
 });
+
+test('the store counts positions per layer', async () => {
+  const { openHistoryStore } = await import('./store.js');
+  const store = openHistoryStore(':memory:');
+  store.insertMany([
+    pt({ id: 'a', layer: 'air' }),
+    pt({ id: 'b', layer: 'air', ts: 2000 }),
+    pt({ id: 'c', layer: 'sat' }),
+  ]);
+  assert.deepEqual(store.layerCounts(), { air: 2, sat: 1 });
+});

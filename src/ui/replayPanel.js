@@ -1,4 +1,5 @@
 import { msg, t, translateKnown } from '../i18n/index.js';
+import { formatBytes, formatSpan, storageUse } from '../replay/model.js';
 import { createRailTimeline, utcClock } from './railTimeline.js';
 
 const LAYER_LABELS = [
@@ -8,6 +9,7 @@ const LAYER_LABELS = [
   ['local', msg('LOCAL')],
   ['sat', msg('SAT')],
 ];
+const BASIS = { cap: msg('CAP'), disk: msg('DISK') };
 const ENTERED = msg('{contact} entered {fence}');
 const LEFT = msg('{contact} left {fence}');
 const set = (node, key, value) => {
@@ -148,6 +150,41 @@ export function createReplayPanel({ container, controller } = {}) {
         link.click();
       },
     );
+  // Storage: a bar that is green, then orange, then red as it fills.
+  const storage = document.createElement('div');
+  storage.className = 'replay-storage';
+  const storageHead = document.createElement('div');
+  storageHead.className = 'replay-storage-head';
+  const storageLabel = document.createElement('span');
+  const storagePercent = document.createElement('span');
+  storageHead.append(storageLabel, storagePercent);
+  const bar = document.createElement('div');
+  bar.className = 'replay-bar';
+  bar.setAttribute('role', 'progressbar');
+  bar.setAttribute('aria-valuemin', '0');
+  bar.setAttribute('aria-valuemax', '100');
+  const barFill = document.createElement('div');
+  barFill.className = 'replay-bar-fill';
+  bar.appendChild(barFill);
+  const storageNumbers = document.createElement('div');
+  storageNumbers.className = 'replay-storage-numbers';
+  const storageUsed = document.createElement('span');
+  const storageFree = document.createElement('span');
+  storageNumbers.append(storageUsed, storageFree);
+  const storageNote = document.createElement('div');
+  storageNote.className = 'replay-alerts';
+  const storageLayers = document.createElement('div');
+  storageLayers.className = 'replay-alerts';
+  const storageWarn = document.createElement('div');
+  storageWarn.className = 'replay-storage-warn';
+  storage.append(
+    storageHead,
+    bar,
+    storageNumbers,
+    storageNote,
+    storageLayers,
+    storageWarn,
+  );
   const legend = document.createElement('div');
   legend.className = 'replay-alerts';
   legend.textContent = t(
@@ -161,6 +198,7 @@ export function createReplayPanel({ container, controller } = {}) {
   timelineHost.className = 'weather-timeline-block';
   root.append(
     status,
+    storage,
     chips,
     speedRow,
     layerRow,
@@ -186,6 +224,74 @@ export function createReplayPanel({ container, controller } = {}) {
     onLatest: () => controller.exit(),
     onPlay: () => controller.togglePlay(),
   });
+
+  const renderStorage = (s) => {
+    set(storage, 'hidden', !s);
+    if (!s) return;
+    const use = storageUse(s);
+    const percent = Math.round(use.fraction * 100);
+    storage.dataset.level = use.basis === 'none' ? 'none' : use.level;
+    set(
+      storageLabel,
+      'textContent',
+      use.basis === 'none'
+        ? t('STORAGE')
+        : `${t('STORAGE')} · ${t(BASIS[use.basis])}`,
+    );
+    set(storagePercent, 'textContent', use.total ? `${percent}%` : '');
+    barFill.style.width = `${use.total ? Math.max(percent, 1) : 0}%`;
+    bar.setAttribute('aria-valuenow', String(percent));
+    set(bar, 'hidden', !use.total);
+    set(
+      storageUsed,
+      'textContent',
+      use.total
+        ? t('{used} of {total} used', {
+            used: formatBytes(use.used),
+            total: formatBytes(use.total),
+          })
+        : t('{used} used', { used: formatBytes(use.used) }),
+    );
+    set(
+      storageFree,
+      'textContent',
+      use.total ? t('{free} free', { free: formatBytes(use.free) }) : '',
+    );
+    const note =
+      use.fullInSec !== null
+        ? t('Full in about {time} at this rate', {
+            time: formatSpan(use.fullInSec),
+          })
+        : use.settlesAt !== null
+          ? t('Settles near {size} at this rate', {
+              size: formatBytes(use.settlesAt),
+            })
+          : use.perHour
+            ? t('About {rate} per hour', { rate: formatBytes(use.perHour) })
+            : '';
+    set(storageNote, 'textContent', note);
+    set(storageNote, 'hidden', !note);
+    const counts = Object.entries(s.layer_counts || {});
+    const names = Object.fromEntries(
+      LAYER_LABELS.map(([id, label]) => [id, t(label)]),
+    );
+    set(
+      storageLayers,
+      'textContent',
+      counts
+        .map(([id, n]) => `${names[id] || id} ${n.toLocaleString()}`)
+        .join(' · '),
+    );
+    set(storageLayers, 'hidden', !counts.length);
+    const warn =
+      use.level !== 'red' || !use.total
+        ? ''
+        : use.basis === 'cap'
+          ? t('Nearly full. The oldest positions are being dropped.')
+          : t('Disk nearly full. Lower retention or set a size cap.');
+    set(storageWarn, 'textContent', warn);
+    set(storageWarn, 'hidden', !warn);
+  };
 
   const render = (state) => {
     const ready = state.active && state.ticks.length > 1;
@@ -213,6 +319,7 @@ export function createReplayPanel({ container, controller } = {}) {
                 })
               : t('No recording')),
     );
+    renderStorage(state.status);
     set(start, 'disabled', state.loading || !state.range);
     set(fit, 'disabled', !state.active || !state.contacts);
     set(jump, 'disabled', state.loading || !state.range);

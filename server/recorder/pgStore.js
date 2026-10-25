@@ -134,6 +134,15 @@ export function createPgStore(url, { loadPg = () => import('pg') } = {}) {
         ],
         points,
       ),
+    async layerCounts() {
+      return Object.fromEntries(
+        (
+          await rows(
+            'SELECT layer, COUNT(*) AS n FROM positions GROUP BY layer',
+          )
+        ).map((r) => [r.layer, Number(r.n)]),
+      );
+    },
     async range() {
       const [r] = await rows(
         'SELECT MIN(ts) AS from_ts, MAX(ts) AS to_ts, COUNT(*) AS count FROM positions',

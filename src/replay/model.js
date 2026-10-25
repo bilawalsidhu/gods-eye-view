@@ -73,3 +73,73 @@ export function nearestDeltaMs(timesMs, ms) {
   const after = Math.abs(timesMs[lo] - ms);
   return lo > 0 ? Math.min(after, Math.abs(timesMs[lo - 1] - ms)) : after;
 }
+
+const UNITS = ['B', 'KB', 'MB', 'GB', 'TB'];
+
+/** 1536 -> "1.5 KB"; one decimal below 10, none above. */
+export function formatBytes(bytes) {
+  let value = Math.max(0, Number(bytes) || 0);
+  let unit = 0;
+  while (value >= 1024 && unit < UNITS.length - 1) {
+    value /= 1024;
+    unit += 1;
+  }
+  const text = unit === 0 || value >= 10 ? Math.round(value) : value.toFixed(1);
+  return `${text} ${UNITS[unit]}`;
+}
+
+/** Seconds as "40min", "6.5h" or "12d". */
+export function formatSpan(seconds) {
+  const s = Math.max(0, Number(seconds) || 0);
+  if (s < 3600) return `${Math.max(1, Math.round(s / 60))}min`;
+  const trim = (v) => (v >= 10 ? Math.round(v) : Number(v.toFixed(1)));
+  if (s < 86400) return `${trim(s / 3600)}h`;
+  return `${trim(s / 86400)}d`;
+}
+
+export const STORAGE_ORANGE = 0.6;
+export const STORAGE_RED = 0.85;
+
+/**
+ * What the storage bar shows, from the recorder's status. The bar is measured
+ * against the size cap when one is set, otherwise against the disk (what is
+ * stored plus what is free). With neither, only the size is known.
+ */
+export function storageUse(status) {
+  const used = Number(status?.bytes) || 0;
+  const cap = Number(status?.max_bytes) || 0;
+  const free = Number.isFinite(status?.disk_free_bytes)
+    ? status.disk_free_bytes
+    : null;
+  const total = cap > 0 ? cap : free === null ? 0 : used + free;
+  const fraction = total ? Math.min(1, used / total) : 0;
+  const level =
+    fraction >= STORAGE_RED
+      ? 'red'
+      : fraction >= STORAGE_ORANGE
+        ? 'orange'
+        : 'green';
+  // Growth: what is stored so far over the time it covers.
+  const span = Number(status?.to_ts) - Number(status?.from_ts);
+  const perHour = span >= 600 ? used / (span / 3600) : null;
+  const retention = Number(status?.retention_sec) || 0;
+  const settles =
+    perHour && retention > 0 ? (perHour * retention) / 3600 : null;
+  let fullInSec = null;
+  let settlesAt = null;
+  if (perHour && total) {
+    if (settles !== null && settles <= total * 0.98) settlesAt = settles;
+    else if (used < total) fullInSec = ((total - used) / perHour) * 3600;
+  }
+  return {
+    basis: cap > 0 ? 'cap' : total ? 'disk' : 'none',
+    used,
+    total,
+    free: total ? Math.max(0, total - used) : null,
+    fraction,
+    level,
+    perHour,
+    settlesAt,
+    fullInSec,
+  };
+}

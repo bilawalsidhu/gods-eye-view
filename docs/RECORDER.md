@@ -107,6 +107,18 @@ follows it. REPLAY switches the live aircraft, military and vessel layers
 off, and moves the slider's time onto the globe. Play and the 0.5× to 60×
 chips run it; CSV, GEOJSON, GPX and JSON download what is shown; `● REC` in the header shows the recorder is on; AIR, MIL, SEA, LOCAL and SAT choose layers; Latest returns to live.
 
+**Storage bar.** Under the status line, a bar shows how full the recording is:
+green below 60%, orange from 60%, red from 85%. It is measured against the size
+cap (`maxMb`) when one is set, otherwise against the disk (what is stored plus
+what is free). Under it are the size used and free, a projection from the
+growth so far ("Settles near 1.6 GB at this rate", or "Full in about 2d at this
+rate" when the retention period would not fit), and the saved positions per
+layer. In the red a warning says what happens next: with a cap the oldest
+positions are being dropped; without one, lower the retention or set a cap.
+With PostgreSQL the disk is not measured, so only the size and the per-layer
+counts show unless a cap is set. The same numbers are in `/api/history/status`
+(`bytes`, `max_bytes`, `disk_free_bytes`, `layer_counts`).
+
 A solid dot on the globe is a recorded position; a faint ring is an
 estimate between two recordings (within 15 s of a recording it shows solid).
 Stretches where nothing was recorded for more than five minutes are not

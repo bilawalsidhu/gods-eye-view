@@ -3061,5 +3061,16 @@
   "Keep this contact history past the retention period": "Хранить историю этого объекта дольше срока хранения",
   "Could not change the pin": "Не удалось изменить закрепление",
   "Solid dot: recorded position. Ring: estimated between recordings. Gaps over 5 minutes are left blank.": "Сплошная точка: записанная позиция. Кольцо: оценка между записями. Пропуски более 5 минут оставлены пустыми.",
-  "SAT": "СПУТН."
+  "SAT": "СПУТН.",
+  "STORAGE": "ХРАНИЛИЩЕ",
+  "CAP": "ЛИМИТ",
+  "DISK": "ДИСК",
+  "{used} of {total} used": "{used} из {total} занято",
+  "{used} used": "{used} занято",
+  "{free} free": "{free} свободно",
+  "About {rate} per hour": "Около {rate} в час",
+  "Settles near {size} at this rate": "Стабилизируется около {size} при таком темпе",
+  "Full in about {time} at this rate": "Заполнится примерно через {time} при таком темпе",
+  "Nearly full. The oldest positions are being dropped.": "Почти заполнено. Самые старые позиции удаляются.",
+  "Disk nearly full. Lower retention or set a size cap.": "Диск почти заполнен. Сократите срок хранения или задайте лимит размера."
 }

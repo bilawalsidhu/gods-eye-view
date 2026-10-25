@@ -126,3 +126,70 @@
   width: var(--right-display-collapsed-width);
   margin-left: auto;
 }
+
+/* Storage bar: green below 60%, orange to 85%, red above. The faint track
+   shows the three zones so the thresholds are visible before they are hit. */
+.replay-storage {
+  --bar: #4dff9a;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font: 9px var(--font-mono);
+  letter-spacing: 0.5px;
+  color: var(--text-secondary);
+}
+.replay-storage[hidden] {
+  display: none;
+}
+.replay-storage[data-level='orange'] {
+  --bar: #ffb000;
+}
+.replay-storage[data-level='red'] {
+  --bar: #ff5c5c;
+}
+.replay-storage-head,
+.replay-storage-numbers {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+.replay-storage-head span:last-child {
+  color: var(--bar);
+  font-weight: 700;
+}
+.replay-bar {
+  height: 8px;
+  border-radius: 4px;
+  overflow: hidden;
+  background: linear-gradient(
+    90deg,
+    rgba(77, 255, 154, 0.16) 0 60%,
+    rgba(255, 176, 0, 0.16) 60% 85%,
+    rgba(255, 92, 92, 0.16) 85% 100%
+  );
+}
+.replay-bar[hidden] {
+  display: none;
+}
+.replay-bar-fill {
+  height: 100%;
+  border-radius: 4px;
+  background: var(--bar);
+  transition:
+    width 0.4s ease,
+    background-color 0.4s ease;
+}
+.replay-storage-numbers span:first-child {
+  color: var(--text-primary, #e6f6ff);
+}
+.replay-storage-warn {
+  color: #ff5c5c;
+}
+.replay-storage-warn[hidden] {
+  display: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .replay-bar-fill {
+    transition: none;
+  }
+}

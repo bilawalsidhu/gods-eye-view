@@ -2860,5 +2860,16 @@
   "Keep this contact history past the retention period": "超过保留期后仍保留此目标的历史",
   "Could not change the pin": "无法更改固定状态",
   "Solid dot: recorded position. Ring: estimated between recordings. Gaps over 5 minutes are left blank.": "实心点:已记录位置。圆环:两次记录之间的估算位置。超过 5 分钟的空档留空。",
-  "SAT": "卫星"
+  "SAT": "卫星",
+  "STORAGE": "存储",
+  "CAP": "上限",
+  "DISK": "磁盘",
+  "{used} of {total} used": "已用 {used} / {total}",
+  "{used} used": "已用 {used}",
+  "{free} free": "剩余 {free}",
+  "About {rate} per hour": "约每小时 {rate}",
+  "Settles near {size} at this rate": "按此速度将稳定在约 {size}",
+  "Full in about {time} at this rate": "按此速度约 {time} 后写满",
+  "Nearly full. The oldest positions are being dropped.": "即将写满，正在删除最旧的位置记录。",
+  "Disk nearly full. Lower retention or set a size cap.": "磁盘即将写满。请缩短保留时间或设置大小上限。"
 }
