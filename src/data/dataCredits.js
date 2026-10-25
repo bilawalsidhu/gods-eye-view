@@ -425,8 +425,18 @@ export const DATA_CREDITS = [
       'This service is based on data and products of the European Centre for Medium-Range Weather Forecasts (ECMWF). ' +
       '<a href="https://www.ecmwf.int/en/forecasts/datasets/open-data" target="_blank" rel="noopener">ECMWF Open Data</a> · ' +
       '<a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a>. ' +
-      'Modified: resampled 10 m IFS forecast vectors and animated display. ' +
+      'Modified: resampled 10 m IFS forecast vectors and animated display; IFS wave-model significant wave height and ocean-model surface currents resampled to 0.5° and land-masked; wave heights banded, current speed shaded and drawn as flow lines. ' +
       'ECMWF does not accept any liability whatsoever for any error or omission in the data, their availability, or for any loss or damage arising from their use.',
+  },
+  {
+    key: 'noaa-crw-coraltemp',
+    html:
+      'Sea surface temperature: <a href="https://coralreefwatch.noaa.gov/satellite/coraltemp.php" target="_blank" rel="noopener">NOAA Coral Reef Watch CoralTemp v3.1</a> ' +
+      'and its <a href="https://coralreefwatch.noaa.gov/product/5km/index_5km_ssta.php" target="_blank" rel="noopener">SST Anomaly</a> ' +
+      'via NOAA CoastWatch ERDDAP (<a href="https://coastwatch.noaa.gov/erddap/griddap/noaacrwsstDaily.html" target="_blank" rel="noopener">temperature</a>, ' +
+      '<a href="https://coastwatch.noaa.gov/erddap/griddap/noaacrwsstanomalyDaily.html" target="_blank" rel="noopener">anomaly</a>). ' +
+      'Daily night-time satellite analysis, every tenth 0.05° cell shown. ' +
+      'Skirving et al. (2020), <a href="https://doi.org/10.3390/rs12233856" target="_blank" rel="noopener">doi:10.3390/rs12233856</a>.',
   },
   // ── Bundled snapshots ───────────────────────────────────────────
   {
