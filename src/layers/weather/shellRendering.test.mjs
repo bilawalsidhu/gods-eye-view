@@ -122,6 +122,12 @@ async function show(h, time, options) {
 
 test('shell heights stack every product with lightning highest', () => {
   assert.deepEqual(WEATHER_SHELL_HEIGHTS, {
+    // Ocean fields are surface context, so they draw under every weather
+    // shell. Sea surface temperature fills every sea cell, so it goes lowest;
+    // currents sit above it and under sea state, so each stays readable.
+    'sea-surface-temperature': 3_500,
+    'ocean-currents': 4_000,
+    'sea-state': 4_500,
     wind: 5_000,
     clouds: 5_500,
     'clouds-regional': 5_800,
