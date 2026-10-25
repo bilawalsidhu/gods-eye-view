@@ -233,6 +233,9 @@ export async function resolveTerrainHeightRequest({
       for (let i = 0; i < missing.length; i += 1) {
         const result = fetched[i];
         if (validTerrainResult(result)) {
+          // Re-insert rather than overwrite: a Map keeps an existing key in
+          // its old position, and the proxy evicts from the front.
+          cache.delete(missing[i].key);
           cache.set(missing[i].key, { at: fetchedAt, result });
           cacheChanged = true;
         } else if (absentTerrainDatum(result)) {

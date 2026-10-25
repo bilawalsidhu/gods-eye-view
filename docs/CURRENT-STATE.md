@@ -1,5 +1,21 @@
 # God's Eye View Current State
 
+Aircraft detection candidates reuse normalized display text until callsign or
+registration changes, including in-place enrichment. Each candidate resolves its
+fleet model once per collection. Positions, model ownership and tracked-aircraft
+anchors remain live on every collection; contact admission is unchanged.
+
+Civil aircraft share one delayed render timestamp per fleet update. Extrapolated
+fixes reuse their local coordinate frame until their coordinates change, including
+in-place ground-height corrections. Update cadence, contact counts, interpolation,
+turn rates and tracked-aircraft motion are unchanged. Cached frames are weakly
+keyed by each position fix and do not retain retired history.
+
+Touch-first devices use three times the default Cesium zoom sensitivity, so
+pinching traverses globe and street scales with fewer gestures. Cesium retains
+its distance-aware zoom, collision handling and minimum/maximum distance limits.
+Fine-pointer desktop mouse and trackpad sensitivity is unchanged.
+
 Analyst region queries resolve unique Natural Earth names offline without
 geocoding, so Gold Coast and Ivory Coast name the West African natural regions.
 Duplicate names require a geocoded containment anchor; when several entries for
@@ -9,13 +25,7 @@ broader suffix variants. Follow-ups retain boundary provenance, and cancelled
 lookups preserve the previous analyst cohort and boundary source. Navigation
 search keeps a successful geocode, with no search or view-based region recovery.
 
-Overpass reserves each normalized query before its disk-cache lookup. The
-initial disk lookup, upstream quota admission, fetching and memory publication
-are coalesced under that reservation. A caller that joined a reservation
-rejected by another client's quota retries admission with its own quota.
-Stale fallback runs per response after the reservation is released, and disk
-writes finish asynchronously. Settled and rejected reservations are removed
-only while they still own their map entry.
+Manager-owned periodic network updates pause while the document is hidden. Returning to a visible tab runs one overdue update per enabled layer without overlapping an active refresh and restarts that layer's polling schedule from the return, so the next poll follows one interval later whether or not the catch-up update succeeds; explicit refresh requests remain available. Transit also defers camera-driven feed admission while hidden and rechecks coverage on return. Visibility listeners are released with their polling intervals.
 
 Terrain height requests accept at most 64 points, matching the browser service's
 existing batch size and one bounded upstream chunk. Larger requests return HTTP
@@ -411,6 +421,9 @@ Cyclones combine fixed NHC/CPHC status and summary GIS endpoints through a bound
 same-origin provider. The status endpoint lacks browser CORS; each installation
 fetches keyless public sources at runtime, with no centralized ingestion service.
 The five-minute snapshot covers Atlantic and eastern/central North Pacific only.
+Classification labels follow NHC status codes: `PC` is a potential tropical
+cyclone, `PTC` a post-tropical cyclone, and `STS`/`STD` a subtropical
+storm/depression. Unknown codes remain visible unchanged.
 Current positions, advisory issue time and position time stay distinct. NHC may
 release an advisory before its nominal time (routinely up to about 30 minutes,
 rarely about an hour), so advisory issue and position times up to and including
@@ -423,6 +436,8 @@ than relabeling older geometry. The cone represents forecast center uncertainty,
 not storm size or the full hazard area. Successful empty and unavailable states
 are distinct. One owned native Cesium data source preserves polygon holes and
 geographic seams and releases on disable; forecast animation is not implied.
+NHC movement speed is converted from miles per hour to rounded knots by the
+proxy; advisory wind intensity is already in knots and is passed through.
 Cyclone markers, labels, tracks and cones are hidden beyond the horizon on every map source.
 Consult the linked official advisory for safety decisions.
 
@@ -458,6 +473,14 @@ and vessel cards, the HUD and analyst queries show a missing measurement rather
 than a reading. Heading keeps its existing separate check for its own sentinel.
 Genuine readings are unchanged, including a stopped vessel's zero and the
 highest speed and course the fields can encode.
+
+For an already tracked vessel, AISStream static messages update name, type,
+destination and IMO without changing its position, motion, fix timestamps,
+position freshness or trail. Non-empty static values replace earlier values;
+omitted, empty or unavailable fields retain known metadata across Class B's
+separate reports and in the cache used by the next position update. Position
+reports still prefer their own metadata name. Invalid Class B parts are ignored;
+absent fields prefer the latest live value over the static cache.
 
 Native `<select>` controls declare a dark colour scheme and explicit option
 colours, so the browser-painted option list matches the panel it drops out of.
@@ -749,6 +772,12 @@ Realtime token and SDP requests live in a configurable backend, with independent
 transports and cancellation through response parsing. Stop and application
 teardown abort pending connections; reconnect requests a new client secret.
 Microphone, radio handoff, tool schemas and default model behavior are preserved.
+
+Coordinate search accepts whitespace-separated decimal degrees with prefix or
+suffix hemisphere letters, including `40.7128 N 74.0060 W`. Components require
+an actual separator and an unambiguous hemisphere assignment; malformed numeric
+fragments and scientific notation fall through to geocoders instead of becoming
+exact coordinate results.
 
 Geospatial lookups are composed through `src/search`: forward/reverse geocoding,
 text/nearby search and routing use configurable providers/endpoints. Annotation,
@@ -1922,6 +1951,10 @@ Launch payloads with missing records now say PAYLOAD DATA UNAVAILABLE. Missing n
 Updated: September 23, 2026
 
 ## Aircraft and vessel server modules
+
+OpenSky credential-file failures emit a fixed warning once per process; neither
+JSON parser excerpts nor filesystem error messages are logged. The environment
+example uses an absolute path compatible with the macOS launchers.
 
 Standalone aircraft routes now live in `server/providers/aircraft/`: OpenSky
 state vectors and regional fallback, adsb.lol military positions, ADSBDB
@@ -3738,6 +3771,10 @@ disabled. With it, coverage draws as z11–14 sequence lines below 60 km; the pr
 tiles (12 MB → ~80 KB) and shares one upstream fetch between concurrent
 requests for a tile.
 
+Line coverage accepts a provider’s numeric `zoomFor` result or its legacy
+`{zoom, kind}` shape. Overview levels and invalid zooms show the zoom-in hint
+instead of silently requesting no tiles.
+
 Coverage is z11–14 sequence lines below 60 km; above that nothing is drawn and
 the panel says to zoom in. Tiles come from the visible ground within range of
 the camera, nearest first, at most 9 (the halves of a view across
@@ -4196,7 +4233,9 @@ to 0.45 at two minutes, 0.20 at ten minutes and 0.08 at fifteen minutes.
 
 **Cards and DETECT.** The card presents route, mode/operator, displayed motion,
 display delay and newest-report age, reported speed/stop, vehicle ID, and
-available trail duration. Its anchor follows the rendered marker; text is
+available trail duration. Report age is rounded to whole seconds and stays in seconds while that rounded
+count is below 90; otherwise it shows completed minutes calculated from the
+rounded second count. Its anchor follows the rendered marker; text is
 checked at 4 Hz and published when it changes. DETECT labels retain route,
 mode and motion, with the selected label suppressed beside its fuller card.
 Candidate membership changes on revisions, coalesced at 4 Hz; paints read
@@ -4223,6 +4262,8 @@ frame. The transit render hold exists only for visible positional or orientation
 animation. Polls, surface completions and trail fades request individual renders.
 Disable clears vehicles, detection references, requests, timers and holds;
 destruction also releases collections and registrations.
+
+The `scripts/qa-layer-visibility.mjs` gate uses the development-only registration seam and real browser tab visibility to prove periodic work pauses while hidden, explicit refresh still works, resume performs one overdue refresh, and disabled layers stay stopped.
 
 **Acceptance harness.** Run against an already running development server:
 
@@ -4640,7 +4681,7 @@ silently demoting every later lookup for the session.
   multi-sensor datasheets publish a capability range, not the lens's current zoom, so those
   cameras keep their estimate and show `SPEC FOV min–max° (CAPABILITY)` beside it. Public
   camera state carries `fovSource`, `specFovMinDeg`, `specFovMaxDeg` and `spec` (#452).
-- **FIRMS**: no ground clamping (zero 3D-tiles height sampling), ≤18 screen-decluttered ambient labels, click-to-inspect detail card, 2.5k/3k sprite budgets viewport-clipped by FRP.
+- **FIRMS**: no ground clamping (zero 3D-tiles height sampling), ≤18 screen-decluttered ambient labels, click-to-inspect detail card, 2.5k/3k sprite budgets viewport-clipped by FRP. Fire-power labels share display rounding before localization: one decimal below the rounded 10 MW boundary, then whole megawatts (for example, 9.96 MW reads 10 MW).
 - **CCTV v2 foundation:** a pitched
   frustum wireframe (4 corner rays + far-cap rectangle) with a monitor plane at the frustum's
   far cap, retargeting the existing video/canvas texture pipeline. Stills are drawn at their source aspect, centered on the placeholder dark (`#01070c`), instead of being stretched to the 16:9 canvas. Manual calibration only —
@@ -5394,7 +5435,7 @@ pins and share links already supply complete boxes.
 - **Cockpit left-panel clearance:** the Cockpit Contact card and peripheral HUD participate in the adaptive left accordion's live obstacle measurements, including live viewport-height changes. Expanding Layers or Scenes keeps the active panel in the available upper-left corridor with internal scrolling; it does not cover the Contact card, lower Cockpit controls, or Cesium credit line. Outside Cockpit the hidden card does not alter the normal corridor.
 - **Cockpit Context scope:** the 250 km radius applies to the air/sea proximity cohorts. Installation counts come only from the currently loaded viewport and are labeled `CURRENT VIEWPORT ONLY` in the cockpit as well as the normal Context panel; neither surface presents them as a complete 250 km installation survey.
 - **Cockpit camera anchor:** first-person mode does not write feed-boundary corrections directly into the camera. A cockpit-only inertial anchor advances from the selected aircraft's displayed course and speed, then converges toward the authoritative delayed track with correction capped below forward motion. The displayed kinematics are derived from the same consecutive fix segment as the rendered position, with raw feed speed/course used only as fallback; a transient zero/missing feed speed therefore cannot freeze a visibly moving aircraft after layer enable or a map/cockpit handoff. Rendered altitude continues to come from that interpolated track position. Late ADS-B fixes and short render stalls can remove drift without accelerating or reversing the view. Camera placement runs before scene update/culling at a bounded 20 Hz so a moving cockpit does not force Photoreal 3D Tiles to retraverse on every display frame; textual instruments update at 10 Hz and context/layout work at 4 Hz. Every far Cockpit contact pip shares one stable Cesium texture-atlas entry and skips unused screen-projected course calculations, while only in-range 2D aircraft silhouettes pay the screen-projected rotation cost; ambient glTF collections are hidden/retained rather than synchronously destroyed at cockpit entry, and context rails lay out only on explicit content/state changes and viewport resize. The deliberate 15/30-second layer interpolation delays and per-Cesium-frame position caches remain unchanged.
-- **Cockpit route, vision, and view controls:** visible on-screen `COCKPIT`, `RESET`, and `EXIT COCKPIT` controls replace reliance on the `C` shortcut. RESET uses the same canonical globe route as the map and voice actions, exits Cockpit, and releases its camera ownership rather than exposing the hidden map-style top action. When the tracked commercial flight has a plausible ADSBDB route, the top of the right briefing rail shows a compact `FROM → TO` airport strip and the visor shows a centered estimated-destination chevron with its relative bearing; absent or implausible route data hides the strip and cue rather than guessing. The cockpit-local vision control is an interactive `PREV / CURRENT / NEXT` carousel over `NORMAL`, `CRT`, `NVG`, `FLIR`, `ANIME`, `NOIR`, and `SNOW`; its previous/next actions wrap, and activating the current value advances to the next style. Cockpit enters on the active map preset, so a Cyber FLIR map opens Cockpit on FLIR while Normal remains a distinct option instead of producing a second FLIR entry. Cockpit choices temporarily activate the existing Cesium post-process stages, while exiting Cockpit through either EXIT or RESET restores the pre-entry map style. The regional-news page uses a free Google News RSS locality query first, with the existing GDELT query retained only as a fail-soft fallback; linked headlines remain reporting, not verified incidents or risk intelligence.
+- **Cockpit route, vision, and view controls:** visible on-screen `COCKPIT`, `RESET`, and `EXIT COCKPIT` controls replace reliance on the `C` shortcut. RESET uses the same canonical globe route as the map and voice actions, exits Cockpit, and releases its camera ownership rather than exposing the hidden map-style top action. When the tracked commercial flight has a plausible ADSBDB route, the top of the right briefing rail shows a compact `FROM → TO` airport strip and the visor shows a centered estimated-destination chevron with its relative bearing; its destination label rounds to whole degrees in 000–359, wrapping rounded north to 000° while the chevron continues to use the relative bearing independently of label rounding; absent or implausible route data hides the strip and cue rather than guessing. The cockpit-local vision control is an interactive `PREV / CURRENT / NEXT` carousel over `NORMAL`, `CRT`, `NVG`, `FLIR`, `ANIME`, `NOIR`, and `SNOW`; its previous/next actions wrap, and activating the current value advances to the next style. Cockpit enters on the active map preset, so a Cyber FLIR map opens Cockpit on FLIR while Normal remains a distinct option instead of producing a second FLIR entry. Cockpit choices temporarily activate the existing Cesium post-process stages, while exiting Cockpit through either EXIT or RESET restores the pre-entry map style. The regional-news page uses a free Google News RSS locality query first, with the existing GDELT query retained only as a fail-soft fallback; linked headlines remain reporting, not verified incidents or risk intelligence.
 - **Cockpit missing observations:** missing local weather observations remain unknown rather than being converted to zero or clear skies, in the briefing and in the cloud effects; a missing temperature drops the whole local weather record, including its wind and condition.
 - **Cockpit weather status:** the earlier multi-canvas atmospheric compositor remains fail-closed and is not attached to the live viewer. Cockpit clouds are a separate transparent WebGL pass with a capped 520×320 framebuffer, 24 ray steps, three FBM octaves, and a 12 FPS ceiling. It defaults off and starts only when local storage explicitly contains the persisted `WX ON` opt-in (`'1'`). When opted in, observations refresh after five minutes or 25 km of aircraft movement, fail transparent when unavailable or clear, and stop on exit or disable. `WX OFF` governs atmospheric rendering only: the briefing still fetches source-backed Natural Earth region, headline, and Open-Meteo local-information data, aborting and replacing any in-flight request when the selected aircraft changes. No weather effect runs in map mode and no synthetic fallback is shown.
 - **Cockpit trail visibility:** entering cockpit hides the selected aircraft's trail body and head so they cannot cross the first-person view; exit restores them. This cockpit-only presentation change does not alter the normal map-mode invariant that aircraft trails render through terrain using their depth-fail material.
@@ -5522,6 +5563,11 @@ easier to meet (detection is now on more often), but does not create it.
   short-way-round longitude span and wraps the padded edges, so a dateline-
   crossing box stays its true width. Raw subtraction inflated a 0.41° metro box
   to 86.7° and a 60° territory to 132°.
+- **Point distances take the short way round 180°.** The annotation
+  resolver's `approximateDistanceM` (voice "point out" proximity checks) and
+  `places_nearby` distances wrap the longitude difference. Raw subtraction put
+  Savusavu 38,148 km from a camera over the Lau Islands, so the proximity check
+  refused it, and sorted a place 2 km across 180° last.
 - CCTV calibration persists at `godsEyeView.cctv.calibration.v2` (v2 rebuild;
   the store was wiped clean, no import from the old `v1` key).
 - CCTV v3 floor QA pins are: zero samples for heading-only edits; zero transient
@@ -6018,7 +6064,7 @@ closed. Performance and live agency reliability require recorded validation.
 
 ## Wind forecast models
 
-Wind supports selectable GFS/IFS models with persisted model choice. Each fetch chooses the available cycle and forecast step nearest the current time; rows show both issue and valid UTC timestamps. Grid identities include model, cycle, forecast step and any requested scalar field. The six model/field cache slots each retain the last two issued grids for manifest/grid rollover, coalesce concurrent requests, retain last-good data on failures and retry no faster than once per minute. Model changes clear the old field immediately, cancel old acquisition and ignore superseded results.
+Wind supports selectable GFS/IFS models with persisted model choice. Each fetch chooses the available cycle and forecast step nearest the current time; rows show both issue and valid UTC timestamps. Grid identities include model, cycle, forecast step and any requested scalar field. The six model/field cache slots each retain the last two issued grids for manifest/grid rollover, coalesce concurrent requests, retain last-good data on failures and retry no faster than once per minute. Model changes clear the old field immediately, cancel old acquisition and ignore superseded results. Last-good data is marked stale; the wind row shows it, and `get_wind` returns `stale` and adds "(forecast may be stale)" to its summary.
 
 ### Local Weather review candidate
 

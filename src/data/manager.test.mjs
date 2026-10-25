@@ -3492,3 +3492,92 @@ test('refreshLayerStats reaches presentation through the bare lifecycle', async 
   lifecycle.refreshLayerStats();
   assert.deepEqual(changes, ['status']);
 });
+
+test('periodic polls pause hidden, catch up once when due, and dispose visibility listeners', async (t) => {
+  const listeners = new Set();
+  const doc = {
+    hidden: false,
+    addEventListener: (_name, fn) => listeners.add(fn),
+    removeEventListener: (_name, fn) => listeners.delete(fn),
+  };
+  t.mock.timers.enable({ apis: ['setInterval', 'Date'], now: 1000 });
+  const { LayerLifecycle } = await import('./lifecycle.js');
+  const manager = new LayerLifecycle({}, { visibilityTarget: doc });
+  const { module, calls } = makeSlowLayer('hidden-poll');
+  manager.register(module);
+  await manager.setEnabled('hidden-poll', true);
+  assert.equal(calls.update, 1);
+  doc.hidden = true;
+  t.mock.timers.tick(10000);
+  assert.equal(calls.update, 1);
+  assert.equal(await manager.refreshLayer('hidden-poll'), true);
+  assert.equal(calls.update, 2, 'explicit refresh remains allowed');
+  doc.hidden = false;
+  for (const fn of listeners) fn();
+  for (const fn of listeners) fn();
+  assert.equal(calls.update, 3);
+  await Promise.resolve();
+  await Promise.resolve();
+  await manager.destroyAll();
+  assert.equal(listeners.size, 0);
+  t.mock.timers.tick(10000);
+  assert.equal(calls.update, 3);
+});
+
+async function resumeBetweenTicks(t, { failResume = false } = {}) {
+  const listeners = new Set();
+  const doc = {
+    hidden: false,
+    addEventListener: (_name, fn) => listeners.add(fn),
+    removeEventListener: (_name, fn) => listeners.delete(fn),
+  };
+  t.mock.timers.enable({ apis: ['setInterval', 'Date'], now: 1000 });
+  const { LayerLifecycle } = await import('./lifecycle.js');
+  const manager = new LayerLifecycle({}, { visibilityTarget: doc });
+  const { module, calls } = makeSlowLayer('resume-poll');
+  const updates = [];
+  module.update = async () => {
+    calls.update++;
+    updates.push(Date.now());
+    await Promise.resolve();
+    if (failResume && updates.length === 2) throw new Error('resume failed');
+  };
+  manager.register(module);
+  await manager.setEnabled('resume-poll', true);
+  assert.deepEqual(updates, [1000]);
+  doc.hidden = true;
+  t.mock.timers.tick(1000); // 2000: due tick skipped while hidden
+  t.mock.timers.tick(500); // 2500: return between ticks
+  doc.hidden = false;
+  for (const fn of listeners) fn();
+  assert.deepEqual(updates, [1000, 2500], 'overdue poll runs once on return');
+  await Promise.resolve();
+  await Promise.resolve();
+  await Promise.resolve();
+  const managerRefreshError = manager.layers.get('resume-poll').managerRefreshError;
+  if (failResume) assert.equal(managerRefreshError, 'resume failed');
+  else assert.equal(managerRefreshError, null);
+  t.mock.timers.tick(999); // 3499: the old 3000 phase must not fire
+  assert.deepEqual(updates, [1000, 2500]);
+  t.mock.timers.tick(1); // 3500: one interval after the resume poll
+  assert.deepEqual(updates, [1000, 2500, 3500]);
+  await Promise.resolve();
+  await Promise.resolve();
+  await Promise.resolve();
+  t.mock.timers.tick(1000);
+  assert.deepEqual(updates, [1000, 2500, 3500, 4500], 'new phase keeps one interval');
+  await Promise.resolve();
+  await Promise.resolve();
+  await manager.destroyAll();
+  assert.equal(listeners.size, 0);
+  t.mock.timers.tick(5000);
+  assert.equal(updates.length, 4);
+}
+
+test('periodic polls realign to the deadline after a between-ticks resume', async (t) => {
+  await resumeBetweenTicks(t);
+});
+
+test('periodic polls realign to the deadline after a failed resume refresh', async (t) => {
+  await resumeBetweenTicks(t, { failResume: true });
+});
