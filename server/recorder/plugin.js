@@ -1,3 +1,4 @@
+import { statSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { aisStreamRows } from '../providers/vessels/ais-store.js';
@@ -84,6 +85,19 @@ export function recorderPlugin(env = process.env) {
         const q = url.searchParams;
         const from = intParam(q.get('from')) ?? 0;
         const to = intParam(q.get('to')) ?? nowSec();
+        if (url.pathname === '/status') {
+          let bytes = 0;
+          try {
+            bytes = statSync(file).size;
+          } catch {
+            // The file appears with the first flush.
+          }
+          return sendJson(res, 200, {
+            ...recorder.store.range(),
+            retention_days: retentionDays,
+            bytes,
+          });
+        }
         if (url.pathname === '/range')
           return sendJson(res, 200, recorder.store.range());
         if (url.pathname.startsWith('/track/')) {

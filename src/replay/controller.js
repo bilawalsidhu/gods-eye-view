@@ -9,6 +9,7 @@ const LAYER_COLORS = {
 };
 const TRAIL_SECONDS = 600;
 const SPEEDS = [1, 10, 100];
+const WINDOW_HOURS = [1, 6, 24];
 const NOTIFY_MS = 250;
 
 /**
@@ -33,6 +34,10 @@ export function createReplayController({
   let savedClock = null;
   let lastNotify = 0;
   let destroyed = false;
+  let windowHours = 6;
+  let rawRange = null;
+  let status = null;
+  let contacts = 0;
   const layers = new Set(['air', 'mil', 'vessel']);
 
   const state = () => ({
@@ -44,6 +49,10 @@ export function createReplayController({
     speeds: SPEEDS,
     layers: [...layers],
     range,
+    status,
+    contacts,
+    windowHours,
+    windows: WINDOW_HOURS,
     playing: active && viewer.clock.shouldAnimate,
     index: active ? tickIndexAt(ticks, currentMs()) : ticks.length - 1,
     timeMs: active ? currentMs() : Date.now(),
@@ -75,9 +84,11 @@ export function createReplayController({
   /** Ask the recorder what it holds; resolves to the replay window, or null. */
   async function refreshRange() {
     try {
-      range = replayWindow(await getJson('/api/history/range'));
+      status = await getJson('/api/history/status');
+      rawRange = status;
+      range = replayWindow(rawRange, windowHours);
     } catch {
-      range = null;
+      status = rawRange = range = null;
     }
     notify();
     return range;
@@ -167,6 +178,7 @@ export function createReplayController({
       }
       if (source) viewer.dataSources.remove(source, true);
       source = buildEntities(points);
+      contacts = source.entities.values.length;
       await viewer.dataSources.add(source);
       ticks = buildTicks(window.fromSec * 1000, window.toSec * 1000);
       const c = viewer.clock;
@@ -238,6 +250,18 @@ export function createReplayController({
       if (!c.shouldAnimate && currentMs() >= Date.parse(ticks.at(-1))) seek(0);
       c.shouldAnimate = !c.shouldAnimate;
       notify();
+    },
+    /** Fly the camera to the replayed contacts. */
+    fit() {
+      if (source?.entities.values.length)
+        viewer.flyTo(source, { duration: 1.5 });
+    },
+    async setWindowHours(hours) {
+      if (!WINDOW_HOURS.includes(hours)) return;
+      windowHours = hours;
+      range = replayWindow(rawRange, windowHours);
+      if (active) await enter();
+      else notify();
     },
     setSpeed(value) {
       if (!SPEEDS.includes(value)) return;

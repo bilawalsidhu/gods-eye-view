@@ -3020,10 +3020,13 @@
   "Replay recorded history": "Воспроизвести записанную историю",
   "Playback speed": "Скорость воспроизведения",
   "Show or hide this layer": "Показать или скрыть этот слой",
-  "Recorded history available": "Записанная история доступна",
   "No recording": "Нет записи",
   "Replay state": "Состояние повтора",
   "Replay failed": "Повтор не удался",
   "AIR": "ВОЗД",
-  "SEA": "МОРЕ"
+  "SEA": "МОРЕ",
+  "Fly to the replayed contacts": "Перелететь к воспроизводимым объектам",
+  "Time window": "Временное окно",
+  "{count} contacts": "Объектов: {count}",
+  "{count} positions recorded · kept {days} days": "Записано позиций: {count} · хранятся дней: {days}"
 }

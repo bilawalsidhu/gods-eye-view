@@ -39,12 +39,23 @@ export function createReplayPanel({ container, controller } = {}) {
   const start = makeChip(chips, t('REPLAY'), t('Replay recorded history'), () =>
     controller.enter(),
   );
+  const fit = makeChip(chips, t('FIT'), t('Fly to the replayed contacts'), () =>
+    controller.fit(),
+  );
   const speedChips = controller
     .state()
     .speeds.map((value) => [
       value,
       makeChip(chips, `${value}×`, t('Playback speed'), () =>
         controller.setSpeed(value),
+      ),
+    ]);
+  const windowChips = controller
+    .state()
+    .windows.map((hours) => [
+      hours,
+      makeChip(chips, `${hours}h`, t('Time window'), () =>
+        controller.setWindowHours(hours),
       ),
     ]);
   const layerRow = document.createElement('div');
@@ -84,12 +95,22 @@ export function createReplayPanel({ container, controller } = {}) {
         (state.loading
           ? t('Loading')
           : state.active
-            ? utcClock(new Date(state.timeMs).toISOString())
+            ? `${utcClock(new Date(state.timeMs).toISOString())} · ${t('{count} contacts', { count: state.contacts })}`
             : state.range
-              ? t('Recorded history available')
+              ? t('{count} positions recorded · kept {days} days', {
+                  count: state.status.count.toLocaleString(),
+                  days: state.status.retention_days || '∞',
+                })
               : t('No recording')),
     );
     set(start, 'disabled', state.loading || !state.range);
+    set(fit, 'disabled', !state.active || !state.contacts);
+    for (const [hours, node] of windowChips)
+      set(
+        node,
+        'className',
+        `data-toggle-chip${hours === state.windowHours ? ' active' : ''}`,
+      );
     for (const [value, node] of speedChips)
       set(
         node,

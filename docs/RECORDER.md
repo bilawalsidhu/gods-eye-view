@@ -13,11 +13,11 @@ private.
 GEV_RECORDER=1 npm run dev
 ```
 
-| Variable           | Default               | Meaning                          |
-| ------------------ | --------------------- | -------------------------------- |
-| `GEV_RECORDER`     | off                   | Set to `1` to record             |
-| `GEV_HISTORY_FILE` | `data/history.sqlite` | Where the database lives         |
-| `GEV_HISTORY_DAYS` | `7`                   | Days kept; `0` keeps everything  |
+| Variable           | Default               | Meaning                         |
+| ------------------ | --------------------- | ------------------------------- |
+| `GEV_RECORDER`     | off                   | Set to `1` to record            |
+| `GEV_HISTORY_FILE` | `data/history.sqlite` | Where the database lives        |
+| `GEV_HISTORY_DAYS` | `7`                   | Days kept; `0` keeps everything |
 
 Positions are recorded only while the app is open and polling, and only for
 times the server was running with the recorder on. Aircraft are captured from
@@ -27,13 +27,17 @@ moved 25 m or turned 10°.
 
 ## Replay panel
 
-When history exists, a REPLAY panel appears on the right rail. REPLAY loads
-the newest six hours, switches the live aircraft, military and vessel layers
+When history exists, a REPLAY panel appears on the right rail. Its status line
+shows how many positions are recorded and how long they are kept. The 1h, 6h
+and 24h chips choose how much of the newest history REPLAY loads (six hours by
+default); FIT flies the camera to the replayed contacts; clicking a contact
+follows it. REPLAY switches the live aircraft, military and vessel layers
 off, and moves the slider's time onto the globe. Play and the 1×/10×/100×
 chips run it; AIR, MIL and SEA choose layers; Latest returns to live.
 
 ## History API (loopback only)
 
+- `GET /api/history/status` — range plus position count, retention days and file size.
 - `GET /api/history/range` — earliest and latest recorded time (epoch s).
 - `GET /api/history/window?from&to&bbox=west,south,east,north&layers=air,mil,vessel`
 - `GET /api/history/track/:id?from&to` — one contact's path.

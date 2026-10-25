@@ -2819,10 +2819,13 @@
   "Replay recorded history": "回放已录制的历史",
   "Playback speed": "播放速度",
   "Show or hide this layer": "显示或隐藏此图层",
-  "Recorded history available": "有可用的录制历史",
   "No recording": "无录制",
   "Replay state": "回放状态",
   "Replay failed": "回放失败",
   "AIR": "空中",
-  "SEA": "海上"
+  "SEA": "海上",
+  "Fly to the replayed contacts": "飞往回放的目标",
+  "Time window": "时间窗口",
+  "{count} contacts": "{count} 个目标",
+  "{count} positions recorded · kept {days} days": "已录制 {count} 个位置 · 保留 {days} 天"
 }

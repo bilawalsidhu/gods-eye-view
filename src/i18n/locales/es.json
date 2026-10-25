@@ -2953,10 +2953,13 @@
   "Replay recorded history": "Reproducir el historial grabado",
   "Playback speed": "Velocidad de reproducción",
   "Show or hide this layer": "Mostrar u ocultar esta capa",
-  "Recorded history available": "Historial grabado disponible",
   "No recording": "Sin grabación",
   "Replay state": "Estado de la repetición",
   "Replay failed": "Falló la repetición",
   "AIR": "AIRE",
-  "SEA": "MAR"
+  "SEA": "MAR",
+  "Fly to the replayed contacts": "Volar a los contactos reproducidos",
+  "Time window": "Ventana de tiempo",
+  "{count} contacts": "{count} contactos",
+  "{count} positions recorded · kept {days} days": "{count} posiciones grabadas · se conservan {days} días"
 }
