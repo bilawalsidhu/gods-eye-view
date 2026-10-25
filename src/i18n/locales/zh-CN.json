@@ -2814,5 +2814,16 @@
   "Layers": "图层",
   "Search": "搜索",
   "More": "更多",
-  "Panels": "面板"
+  "Panels": "面板",
+  "EV Charging": "电动汽车充电",
+  "EV charging station": "电动汽车充电站",
+  "EV CHARGING · OSM MAPPED": "电动汽车充电 · OSM 标注",
+  "EV charging source unavailable": "充电站数据源不可用",
+  "Stop following the current object before navigating to a charging station": "请先停止跟踪当前目标，再前往充电站",
+  "Move to the nearest loaded charging station and show its details": "前往最近已加载的充电站并显示详情",
+  "Charging stations": "充电站",
+  "Stations mapped in OpenStreetMap turn white when selected. The map data names them; it carries no sockets, power or live availability.": "OpenStreetMap 中标注的充电站选中后变为白色。地图数据只提供名称，不含接口、功率或实时空闲情况。",
+  "loading charging stations": "正在加载充电站",
+  "Zoom in to load charging stations": "放大以加载充电站",
+  "No charging stations mapped in this area": "此区域没有地图标注的充电站"
 }

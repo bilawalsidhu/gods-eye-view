@@ -2948,5 +2948,16 @@
   "Layers": "Capas",
   "Search": "Buscar",
   "More": "Más",
-  "Panels": "Paneles"
+  "Panels": "Paneles",
+  "EV Charging": "Carga de vehículos eléctricos",
+  "EV charging station": "Estación de carga para vehículos eléctricos",
+  "EV CHARGING · OSM MAPPED": "CARGA DE VE · MAPEADO EN OSM",
+  "EV charging source unavailable": "Fuente de estaciones de carga no disponible",
+  "Stop following the current object before navigating to a charging station": "Deja de seguir el objeto actual antes de ir a una estación de carga",
+  "Move to the nearest loaded charging station and show its details": "Ir a la estación de carga cargada más cercana y mostrar sus detalles",
+  "Charging stations": "Estaciones de carga",
+  "Stations mapped in OpenStreetMap turn white when selected. The map data names them; it carries no sockets, power or live availability.": "Las estaciones mapeadas en OpenStreetMap se vuelven blancas al seleccionarlas. Los datos del mapa dan su nombre, pero no sus conectores, su potencia ni su disponibilidad en tiempo real.",
+  "loading charging stations": "cargando estaciones de carga",
+  "Zoom in to load charging stations": "Acércate para cargar las estaciones de carga",
+  "No charging stations mapped in this area": "No hay estaciones de carga mapeadas en esta zona"
 }

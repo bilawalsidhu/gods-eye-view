@@ -116,12 +116,15 @@ export function compassPointLabel(code) {
     : code;
 }
 
-/** `30.203°N` in the active language: `30,203° с. ш.` in Russian. */
-export function formatCockpitCoordinate(value, positive, negative) {
+/**
+ * `30.203°N` in the active language: `30,203° с. ш.` in Russian. Three
+ * decimals by default; a map card naming one point may ask for more.
+ */
+export function formatCockpitCoordinate(value, positive, negative, digits = 3) {
   const amount = formatNumber(Math.abs(value), {
     useGrouping: false,
-    minimumFractionDigits: 3,
-    maximumFractionDigits: 3,
+    minimumFractionDigits: digits,
+    maximumFractionDigits: digits,
   });
   const code = value >= 0 ? positive : negative;
   // Not «30,203°С»: after a degree sign «С» reads as Celsius.

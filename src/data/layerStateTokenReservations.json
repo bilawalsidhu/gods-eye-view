@@ -8,6 +8,7 @@
   ["cctv", "c"],
   ["directions", "n"],
   ["earthquakes", "e"],
+  ["ev-charging", "5"],
   ["fire-perimeters", "2"],
   ["flights", "f"],
   ["gnss-integrity", "3"],
