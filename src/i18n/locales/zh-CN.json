@@ -2750,7 +2750,7 @@
   "hemisphere|S": "S",
   "hemisphere|E": "E",
   "hemisphere|W": "W",
-  "Gemini Live voice control": "Gemini Live 语音控制",
+  "Gemini Live voice control + AI HUD summary when no OpenAI key is set": "Gemini Live 语音控制 + 未设置 OpenAI 密钥时的 AI HUD 摘要",
   "Zoom in to see street-level coverage": "放大地图以查看街景覆盖范围",
   "Point the camera at the ground for street-level coverage": "将相机朝向地面以查看街景覆盖范围",
   "Sequence images unavailable": "序列影像不可用",

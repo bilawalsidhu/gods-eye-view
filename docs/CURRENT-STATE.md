@@ -1506,13 +1506,14 @@ request. Text search also requires a nonblank query. Keyless requests retain
 their `configured: false` response.
 
 The cost-bearing proxies are throttled per client IP without configuration:
-`/api/realtime/token` and `/api/openai/hud-summary` share 30 requests per
-minute per IP, `/api/google/nearby-places` and `/api/google/text-search` share
-120 — the caps the Pinokio build already sets, so the packaged app is
-unaffected. `GEV_RATELIMIT_OPENAI_PER_MIN` and `GEV_RATELIMIT_GOOGLE_PER_MIN` override
-those; exactly `0` disables the limiter, while a value that cannot be read as a
-number falls back to the default rather than to unlimited. Over-limit requests
-receive a sanitized `429` with `Retry-After: 5` and never reach the provider.
+`/api/realtime/token` and `/api/openai/hud-summary` (whichever provider answers
+it) share 30 requests per minute per IP, `/api/google/nearby-places` and
+`/api/google/text-search` share 120 — the caps the Pinokio build already sets,
+so the packaged app is unaffected. `GEV_RATELIMIT_OPENAI_PER_MIN` and
+`GEV_RATELIMIT_GOOGLE_PER_MIN` override those; exactly `0` disables the limiter,
+while a value that cannot be read as a number falls back to the default rather
+than to unlimited. Over-limit requests receive a sanitized `429` with
+`Retry-After: 5` and never reach the provider.
 The client key is the socket peer address only — a forwarded-for header is not
 trusted, so a proxied deployment shares one bucket per upstream hop.
 
@@ -5098,6 +5099,7 @@ and unreachable upstream (502/504) separately from road geometry.
 ### AI HUD Summary (June 2026)
 
 - HUD `SUMMARY` readout requests a five-word intelligence-style summary from `/api/openai/hud-summary` (model `OPENAI_HUD_SUMMARY_MODEL`, default `gpt-5-nano`, minimal reasoning).
+- With no `OPENAI_API_KEY` the same route asks Gemini instead (`GEMINI_API_KEY`; model `GEMINI_HUD_SUMMARY_MODEL`, default `gemini-3.5-flash-lite`, `thinking_level: minimal`) through one stateless Interactions API call (`POST /v1beta/interactions`, `store: false`, key in `x-goog-api-key`, 5 s server timeout). `GEV_HUD_SUMMARY_PROVIDER=openai|gemini` pins one provider; a pinned provider without its key gets the keyless response, never the other account. Only a `completed` interaction counts, so a budget-truncated `incomplete` fragment falls back like any other failure. Both providers share the route's per-IP throttle and its fixed error text.
 - Input is the live basemap label context (place/street/nearby-place labels + enabled layers) — the model is instructed not to infer from coordinates.
 - Output is sanitized to exactly five words; falls back to the deterministic telemetry summary on error/timeout (5s abort); typewriter animation on update.
 
