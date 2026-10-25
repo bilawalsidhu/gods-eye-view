@@ -36,7 +36,8 @@ registerHooks({
       return {
         format: 'module',
         shortCircuit: true,
-        source: 'export function forward() { return "10SEG55776339"; }\nexport default { forward };\n',
+        source:
+          'export function forward() { return "10SEG55776339"; }\nexport default { forward };\n',
       };
     }
     return next(url, context);
@@ -62,8 +63,17 @@ const SFO_ELLIPSOIDAL_M = -15;
  */
 function installHudEnvironment() {
   const elements = new Map(
-    ['hud-alt', 'hud-summary', 'hud-mgrs', 'hud-latlon', 'hud-bottom-line', 'hud-gsd', 'hud-coll', 'hud-ona', 'hud-mode']
-      .map((id) => [id, { textContent: '' }]),
+    [
+      'hud-alt',
+      'hud-summary',
+      'hud-mgrs',
+      'hud-latlon',
+      'hud-bottom-line',
+      'hud-gsd',
+      'hud-coll',
+      'hud-ona',
+      'hud-mode',
+    ].map((id) => [id, { textContent: '' }]),
   );
   const previousDocument = globalThis.document;
   const cameraListeners = {};
@@ -109,7 +119,9 @@ function installHudEnvironment() {
 
 test('hud.js corrects the camera height to MSL through the geoid module', () => {
   assert.equal(
-    has(/import \{[^}]*\bellipsoidalToMslDisplayM\b[^}]*\} from '\.\/data\/geoid\.js';/s),
+    has(
+      /import \{[^}]*\bellipsoidalToMslDisplayM\b[^}]*\} from '\.\/data\/geoid\.js';/s,
+    ),
     true,
     'hud.js must take the datum correction from ./data/geoid.js, not re-derive one',
   );
@@ -124,7 +136,9 @@ test('hud.js corrects the camera height to MSL through the geoid module', () => 
     'the ~2.7 MB grid must be requested once, on demand — not at HUD construction',
   );
   assert.equal(
-    has(/\.catch\(\(\) => \{\s*\/\* readout falls back to the uncorrected height \*\/\s*\}\)/),
+    has(
+      /\.catch\(\(\) => \{\s*\/\* readout falls back to the uncorrected height \*\/\s*\}\)/,
+    ),
     true,
     'a failed geoid load must leave the readout uncorrected, not unhandled',
   );
@@ -157,7 +171,9 @@ test('the summary ALT tag agrees with the corner readout', () => {
   // Both are on screen together; a viewer reading "ALT -15M" in one corner and
   // "ALT: 17m" in the other has found a bug, not a distinction.
   assert.equal(
-    has(/const altDisplayM = Number\.isFinite\(m\.altMslM\) \? m\.altMslM : m\.altM;/),
+    has(
+      /const altDisplayM = Number\.isFinite\(m\.altMslM\) \? m\.altMslM : m\.altM;/,
+    ),
     true,
     'the summary altitude tag must prefer the MSL datum and fall back to the raw height',
   );
@@ -204,7 +220,11 @@ test('a cold tick paints both readouts uncorrected, and resolving flips both in 
     // Tick 1 — cold. This is also the tick that requests the grid.
     hud._updateCameraData();
     assert.match(alt(), /^ALT: -15m/, `cold corner readout, got ${alt()}`);
-    assert.match(summary(), /\| ALT -15M \|/, `cold summary tag, got ${summary()}`);
+    assert.match(
+      summary(),
+      /\| ALT -15M \|/,
+      `cold summary tag, got ${summary()}`,
+    );
 
     // The HUD registered its own continuation on this same shared promise
     // during tick 1, and it registered first, so awaiting here means its
@@ -377,6 +397,66 @@ test('a request the camera leaves paints nothing: aborted, failed, or its contex
     await hud._updateSummary(false, true);
     assert.equal(element.textContent, 'shown before the move');
   } finally {
+    hud?.destroy();
+    if (previousWindow === undefined) delete globalThis.window;
+    else globalThis.window = previousWindow;
+    env.restore();
+  }
+});
+
+test('a cancelled summary retries the same context but completed answers stay reusable', async () => {
+  const env = installHudEnvironment();
+  const previousWindow = globalThis.window;
+  globalThis.window = globalThis;
+  const pending = [];
+  const summaryService = {
+    summarize: (context, { signal }) =>
+      new Promise((resolve, reject) => {
+        pending.push({
+          context,
+          reply: (summary) =>
+            resolve({ ok: true, status: 200, data: { summary } }),
+        });
+        signal.addEventListener('abort', () =>
+          reject(Object.assign(new Error('aborted'), { name: 'AbortError' })),
+        );
+      }),
+  };
+  let hud;
+  try {
+    hud = new IntelHUD(env.viewer, { summaryService });
+    hud._summaryContext = async () => ({ place: 'San Francisco' });
+    hud._updateCameraData();
+    const settle = () => new Promise((resolve) => setImmediate(resolve));
+    const first = hud._updateSummary(false);
+    await settle();
+    assert.equal(pending.length, 1);
+    env.cameraListeners.moveStart();
+    await first;
+
+    // An orbit can leave all semantic place/layer labels unchanged. The next
+    // periodic tick must retry even though its context equals the aborted one.
+    const retry = hud._updateSummary(false);
+    await settle();
+    assert.equal(
+      pending.length,
+      2,
+      'the cancelled signature cannot suppress a retry',
+    );
+    assert.deepEqual(pending[1].context, pending[0].context);
+    pending[1].reply('San Francisco Bay Urban Landscape');
+    await retry;
+    assert.equal(
+      env.elements.get('hud-summary').textContent,
+      'San Francisco Bay Urban Landscape',
+    );
+
+    // Movement without an active request must not discard a completed answer.
+    env.cameraListeners.moveStart();
+    await hud._updateSummary(false);
+    assert.equal(pending.length, 2, 'completed context still deduplicates');
+  } finally {
+    for (const request of pending) request.reply('');
     hud?.destroy();
     if (previousWindow === undefined) delete globalThis.window;
     else globalThis.window = previousWindow;

@@ -230,7 +230,11 @@ export class IntelHUD {
     // the next periodic tick asks about the view the camera has moved to.
     this._onCameraMoveStart = () => {
       this._markSummaryDirty();
-      this._summaryRequest?.abort();
+      if (this._summaryRequest) {
+        // A cancelled request never supplied a reusable answer for its context.
+        this._lastSummarySignature = null;
+        this._summaryRequest.abort();
+      }
     };
     this._onCameraMoveEnd = () => {
       this._markSummaryDirty();
