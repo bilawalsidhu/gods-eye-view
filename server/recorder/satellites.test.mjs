@@ -45,3 +45,12 @@ test('satellites are opt-in', () => {
   assert.deepEqual(c.layers, ['air', 'sat']);
   assert.deepEqual(c.satGroups, ['stations', 'gps-ops']);
 });
+
+test('an Alpha-5 catalogue number is named by its NORAD number', () => {
+  const src = createSatelliteSource({ groups: ['visual'] });
+  const alpha = TLE.replace('ISS (ZARYA)', 'NEW OBJECT')
+    .replace('1 25544U', '1 A0057U')
+    .replace('2 25544 ', '2 A0057 ');
+  assert.equal(src.learn('visual', alpha), 1);
+  assert.equal(src.points(EPOCH)[0].id, 'SAT-100057');
+});

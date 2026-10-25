@@ -6,7 +6,7 @@ import {
   propagate,
   twoline2satrec,
 } from 'satellite.js';
-import { parseTleText } from '../../src/sources/tle.js';
+import { parseTleText, tleCatalogNumber } from '../../src/sources/tle.js';
 
 /** Groups too large to record by default (Starlink alone is thousands of objects). */
 export const DEFAULT_SAT_GROUPS = ['stations', 'visual', 'gps-ops', 'galileo'];
@@ -32,7 +32,11 @@ export function createSatelliteSource({
         try {
           const satrec = twoline2satrec(line1, line2);
           if (!satrec || satrec.error) continue;
-          sats.push({ id: `SAT-${line1.slice(2, 7).trim()}`, name, satrec });
+          // Decoded, so an Alpha-5 field such as A0057 becomes 100057, the
+          // number NORAD and N2YO use.
+          const norad = tleCatalogNumber(line1);
+          if (norad === null) continue;
+          sats.push({ id: `SAT-${norad}`, name, satrec });
         } catch {
           // A bad element set must not stop the rest.
         }
