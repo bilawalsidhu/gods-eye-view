@@ -105,9 +105,14 @@ function fetchReturning(...responses) {
 
 const ok = () => new Response(EXPORT, { status: 200 });
 
-/** Let background work run until `check` holds (bounded). */
+/**
+ * Let background work run until `check` holds, for at most 5 s. Bounded by
+ * time, not turns: the disk copy is inflated on the thread pool, which can
+ * outlast any fixed number of event-loop turns on a loaded runner.
+ */
 async function waitFor(check) {
-  for (let i = 0; i < 200 && !check(); i += 1)
+  const deadline = Date.now() + 5_000;
+  while (!check() && Date.now() < deadline)
     await new Promise((resolve) => setImmediate(resolve));
   assert.ok(check(), 'background work did not finish');
 }
