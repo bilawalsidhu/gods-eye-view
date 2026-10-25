@@ -39,6 +39,7 @@ export function createMemoryHistoryStore({
     typeof value === 'string' &&
     value.length > 0 &&
     value.isWellFormed() &&
+    !value.includes('\0') &&
     Buffer.byteLength(value) <= 256;
   const checkRange = ({ source, fromMs, toMs }) => {
     if (!identifier(source)) fail('invalid_source');

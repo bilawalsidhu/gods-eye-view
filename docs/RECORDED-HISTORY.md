@@ -32,6 +32,25 @@ read route and a replay UI are separate work that builds on these.
 - A record identical to a stored one is a **repeat**; a different one for a
   stored `(source, key, t)` is a **conflict**, and the stored record stays.
 
+A record that breaks a rule is refused by index with the first field that is
+wrong, in this order, and the rest of the batch is written:
+
+| Field                    | Rule                                                             | Reason       |
+| ------------------------ | ---------------------------------------------------------------- | ------------ |
+| `source`, `key`          | Well-formed string, 1 to 256 UTF-8 bytes, no NUL                 | field name   |
+| `t`                      | Integer ms, 0 to 9999-12-31T23:59:59.999Z                        | `t`          |
+| `t`                      | Not more than `futureToleranceMs` (10 s) after the store's clock | `future`     |
+| `lat`, `lon`             | Number, \|lat\| ≤ 90, \|lon\| ≤ 180                              | field name   |
+| `timeKind`, `provenance` | One of the names above                                           | field name   |
+| `heightM`                | Finite, or absent                                                | `heightM`    |
+| `bearingDeg`             | 0 ≤ value < 360, or absent                                       | `bearingDeg` |
+| `receivedAt`             | A valid time as `t`, or absent                                   | `receivedAt` |
+| `flags`                  | Non-negative integer; only BREAK (16) and FLOOR (8) are kept     | `flags`      |
+
+Absent is `null`, `undefined` or NaN. A coverage interval is refused with
+`source`, `time` (a bound that is not a valid time), `order` (from after to),
+`span` (more than a day) or `future`.
+
 ## Coverage
 
 Coverage intervals say when the recorder was running for a source, at most a
@@ -41,6 +60,18 @@ storage. Where there is no coverage there is no information:
 `historyPlaybackFixes` puts a BREAK on the first fix after any span that
 coverage does not hold whole, so `contactPlayback` holds the last position
 through an outage (`motion: 'unknown'`) instead of drawing a line across it.
+
+Coverage is on the recorder's clock, so the span checked between two fixes is
+between their `receivedAt` times (`t` when a record has none). A fix reported
+at 12:00:00 and received 30 s later was recorded at 12:00:30; judging coverage
+on report times would hide an outage that falls inside the latency, and would
+break a track that starts recording after its first report time.
+
+For replay, create the track with `createTrack({policy: HISTORY_REPLAY_POLICY})`: the live
+policy calls every recorded motion stale, because it measures age against the
+wall clock. `mergeHistory` keeps the newest 128 fixes of a track, so a longer
+track is replayed through windows of the store (a query per window around the
+playback time), not merged whole.
 
 ## Queries
 
@@ -72,9 +103,15 @@ range. `prune()` applies retention and returns `{droppedDays}`.
   the clock steps back). Deleting a day's rows from one large database instead took
   9.5 s per million rows and left the file its old size.
 - WAL mode: one writer per directory and any number of `readOnly` openers,
-  including from another process. Writes are atomic per day file.
-  `synchronous = NORMAL`: an application crash loses nothing committed; a power
-  loss may lose the last transactions.
+  including from another process. The writer holds an exclusive lock on
+  `writer.lock` in the directory; a second writer, in this process or another,
+  is refused with `locked`, and the lock goes when the process ends, however
+  it ends. `synchronous = NORMAL`: an application crash loses nothing
+  committed; a power loss may lose the last transactions.
+- Writes are atomic per day file. A storage error (disk full, a file that
+  cannot be opened) is thrown: the days written before it stay, the failed
+  day's batch is rolled back whole, and later days are not written. Since a
+  stored record sent again is a repeat, the whole batch can be resent.
 - A day file that is not a database of this schema, version and day (corrupt,
   another SQLite database, a later `schema_version`, or a day file renamed to
   another day) is reported in `unreadableDays`, skipped by reads and never
@@ -106,10 +143,17 @@ A store in another language reads `history-conformance.json` directly; its
 `$comment` explains the notation. The day store's tests add a differential
 test (random writes, queries with random page sizes, and pruning, compared with
 the reference store over 40 seeds) and replay a recorded ADS-B capture through
-`contactPlayback` across a simulated recorder outage.
+`contactPlayback` across a simulated recorder outage. A writer is killed while
+writing to show that committed batches survive whole, and
+`src/data/fixtures/history-day-v1.sql` is a day file as version 1 wrote it,
+which later versions must still read.
 
 ## Export
 
 `historyMovingFeatures(records, {coverage})` writes one contact as an OGC
 Moving Features JSON 1.0 FeatureCollection: one linear MovingPoint per
 continuous segment, split where playback would break.
+A segment of one fix is a one-instant `Discrete` MovingPoint, as the
+standard's text allows (OGC 19-045r3, 7.2.1); the published JSON schema asks
+for two coordinates per MovingPoint and one feature per collection, so a
+validator built on it refuses that segment and an empty export.

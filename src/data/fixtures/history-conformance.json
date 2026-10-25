@@ -2121,7 +2121,7 @@
     },
     {
       "name": "validation",
-      "clause": "A malformed record is refused by index with the field that is wrong, and the rest of the batch is written. Keys of 256 UTF-8 bytes are accepted, 258 refused; a key with a lone surrogate (no UTF-8 form) and a fractional millisecond are refused.",
+      "clause": "A malformed record is refused by index with the field that is wrong, and the rest of the batch is written. Keys of 256 UTF-8 bytes are accepted, 258 refused; a key with a lone surrogate (no UTF-8 form) or a NUL, and a fractional millisecond, are refused.",
       "now": "2026-10-25T12:00:00.000Z",
       "steps": [
         {
@@ -2392,6 +2392,19 @@
                 "timeKind": "vehicle",
                 "provenance": "observed",
                 "flags": 0
+              },
+              {
+                "source": "adsb",
+                "key": "a\u0000b",
+                "t": "2026-10-25T10:00:00Z",
+                "lat": 30.0,
+                "lon": -97.0,
+                "heightM": null,
+                "bearingDeg": null,
+                "receivedAt": null,
+                "timeKind": "vehicle",
+                "provenance": "observed",
+                "flags": 0
               }
             ]
           },
@@ -2471,6 +2484,10 @@
               {
                 "index": 18,
                 "reason": "receivedAt"
+              },
+              {
+                "index": 20,
+                "reason": "key"
               }
             ]
           }
@@ -2519,7 +2536,7 @@
     },
     {
       "name": "query-errors",
-      "clause": "A query with a reversed or fractional range, bad limit, empty provenance or key list, a key or source with no UTF-8 form, or no source is refused with a stable code.",
+      "clause": "A query with a reversed or fractional range, bad limit, empty provenance or key list, a key or source with no UTF-8 form or with a NUL, or no source is refused with a stable code.",
       "now": "2026-10-25T12:00:00.000Z",
       "steps": [
         {
@@ -2623,6 +2640,17 @@
             "fromMs": "2026-10-25T00:00:00Z",
             "toMs": "2026-10-25T01:00:00Z",
             "keys": ["ok", "\ud800"]
+          },
+          "expect": {
+            "code": "invalid_keys"
+          }
+        },
+        {
+          "queryError": {
+            "source": "adsb",
+            "fromMs": "2026-10-25T00:00:00Z",
+            "toMs": "2026-10-25T01:00:00Z",
+            "keys": ["a\u0000b"]
           },
           "expect": {
             "code": "invalid_keys"

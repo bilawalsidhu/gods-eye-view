@@ -2,22 +2,22 @@ import { mkdirSync, readdirSync, statSync, unlinkSync } from 'node:fs';
 import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import {
-  HISTORY_IDENTIFIER_BYTES,
   HISTORY_PROVENANCES,
   HISTORY_TIME_KINDS,
   compareUtf8,
   mergeHistoryCoverage,
   normalizeHistoryCoverage,
   normalizeHistoryRecord,
+  validHistoryIdentifier,
   validHistoryTime,
 } from '../../../src/data/historyRecords.js';
 
 // A recorded-history store on node:sqlite with one database file per UTC day,
 // `YYYY-MM-DD.sqlite`. Retention deletes whole files: dropping a day is a file
 // removal, while deleting a day's rows from one large database takes seconds
-// and leaves the file its old size. WAL mode, one writer per directory, any
-// number of read-only openers (another process may read while a recorder
-// writes). Writes are atomic per day file.
+// and leaves the file its old size. WAL mode, one writer per directory (held
+// by a lock on `writer.lock`), any number of read-only openers (another
+// process may read while a recorder writes). Writes are atomic per day file.
 
 const DAY_MS = 86_400_000;
 const DAY_FILE = /^(\d{4})-(\d\d)-(\d\d)\.sqlite$/;
@@ -26,6 +26,9 @@ const TIME_KINDS = Object.keys(HISTORY_TIME_KINDS);
 const MAX_LIMIT = 10_000;
 const MAX_KEYS = 1_000;
 const MAX_STATEMENTS = 64;
+const LOCK_FILE = 'writer.lock';
+/** SQLITE_BUSY: another connection holds the lock. */
+const BUSY = 5;
 /** SQLITE_CORRUPT and SQLITE_NOTADB: the file is damaged or not a database. */
 const DAMAGED = new Set([11, 26]);
 const damaged = (error) => DAMAGED.has(error?.errcode & 0xff);
@@ -132,15 +135,6 @@ function decodeCursor(cursor, query) {
   return value;
 }
 
-function validIdentifier(value) {
-  return (
-    typeof value === 'string' &&
-    value.length > 0 &&
-    value.isWellFormed() &&
-    Buffer.byteLength(value) <= HISTORY_IDENTIFIER_BYTES
-  );
-}
-
 /**
  * Open (or, unless read-only, create) a day-partitioned history store.
  * @param {object} options
@@ -170,6 +164,26 @@ export function openHistoryDayStore({
     throw new RangeError('maxOpenDays must be a positive integer');
   const root = path.resolve(dir);
   if (!readOnly) mkdirSync(root, { recursive: true });
+  // One writer per directory: a second would prune files the first has
+  // open. The lock is an exclusive transaction on an empty SQLite file, so
+  // the operating system releases it when the process dies.
+  let lock = null;
+  if (!readOnly) {
+    lock = new DatabaseSync(path.join(root, LOCK_FILE));
+    try {
+      lock.exec(
+        'PRAGMA busy_timeout = 0; PRAGMA locking_mode = EXCLUSIVE; BEGIN EXCLUSIVE',
+      );
+    } catch (error) {
+      lock.close();
+      if ((error?.errcode & 0xff) === BUSY)
+        throw new HistoryStoreError(
+          'locked',
+          `Another writer has ${root} open`,
+        );
+      throw error;
+    }
+  }
   /** day → {db, statements} for open, readable day databases, LRU order. */
   const open = new Map();
   /** day → reason, for files found damaged after they opened. */
@@ -297,7 +311,6 @@ export function openHistoryDayStore({
       } catch {
         // Already closed.
       }
-      // A busy or unwritable file is not a damaged one: report it as it is.
       // Another SQLite database, without this schema's tables.
       if (/no such table/.test(error?.message)) return { unreadable: 'schema' };
       // A busy or unwritable file is not a damaged one: report it as it is.
@@ -398,7 +411,8 @@ export function openHistoryDayStore({
   }
 
   function checkQuery({ source, fromMs, toMs }) {
-    if (!validIdentifier(source)) throw new HistoryStoreError('invalid_source');
+    if (!validHistoryIdentifier(source))
+      throw new HistoryStoreError('invalid_source');
     if (!validHistoryTime(fromMs) || !validHistoryTime(toMs) || fromMs > toMs)
       throw new HistoryStoreError('invalid_range');
   }
@@ -533,7 +547,7 @@ export function openHistoryDayStore({
         (!Array.isArray(keys) ||
           !keys.length ||
           keys.length > MAX_KEYS ||
-          !keys.every(validIdentifier))
+          !keys.every(validHistoryIdentifier))
       )
         throw new HistoryStoreError('invalid_keys');
       const kinds = [...new Set(provenance)]
@@ -651,6 +665,7 @@ export function openHistoryDayStore({
     close() {
       if (closed) return;
       for (const day of [...open.keys()]) release(day);
+      lock?.close();
       closed = true;
     },
   };

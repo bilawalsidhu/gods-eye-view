@@ -35,6 +35,13 @@ export const HISTORY_PROVENANCES = Object.freeze([
 export const HISTORY_STORED_FLAGS = FIX_FLAGS.BREAK | FIX_FLAGS.FLOOR;
 /** One coverage interval spans at most a day. */
 export const HISTORY_COVERAGE_MAX_SPAN_MS = 86_400_000;
+/**
+ * A `createTrack` policy for replaying recorded history. `advance` marks
+ * motion stale when the newest report is more than `staleMs` behind the
+ * wall clock, which every recorded track is; a replay judges gaps by BREAK
+ * instead.
+ */
+export const HISTORY_REPLAY_POLICY = Object.freeze({ staleMs: Infinity });
 /** Source and key are at most this many UTF-8 bytes. */
 export const HISTORY_IDENTIFIER_BYTES = 256;
 /** 9999-12-31T23:59:59.999Z: every record time has a four-digit UTC year. */
@@ -49,7 +56,8 @@ const optional = (value, valid) =>
       ? value
       : undefined;
 
-function identifier(value) {
+/** Whether `value` may be a source or key: see the record contract. */
+export function validHistoryIdentifier(value) {
   return (
     typeof value === 'string' &&
     value.length > 0 &&
@@ -77,8 +85,8 @@ export function validHistoryTime(ms) {
  */
 export function normalizeHistoryRecord(input, { notAfterMs = Infinity } = {}) {
   if (!input || typeof input !== 'object') return { reason: 'malformed' };
-  if (!identifier(input.source)) return { reason: 'source' };
-  if (!identifier(input.key)) return { reason: 'key' };
+  if (!validHistoryIdentifier(input.source)) return { reason: 'source' };
+  if (!validHistoryIdentifier(input.key)) return { reason: 'key' };
   const t = input.t;
   if (typeof t !== 'number' || !validHistoryTime(t)) return { reason: 't' };
   if (t > notAfterMs) return { reason: 'future' };
@@ -126,7 +134,7 @@ export function normalizeHistoryCoverage(
   { notAfterMs = Infinity } = {},
 ) {
   if (!input || typeof input !== 'object') return { reason: 'malformed' };
-  if (!identifier(input.source)) return { reason: 'source' };
+  if (!validHistoryIdentifier(input.source)) return { reason: 'source' };
   if (!validHistoryTime(input.fromMs) || !validHistoryTime(input.toMs))
     return { reason: 'time' };
   if (input.fromMs > input.toMs) return { reason: 'order' };
@@ -186,11 +194,24 @@ export function compareHistoryRecords(a, b) {
 }
 
 /**
+ * When the recorder had a record in hand: its receipt time, or its own time
+ * when it has none. Coverage is kept on this clock, the recorder's, not on
+ * the vehicle's clock that `t` may be on.
+ */
+const receiptClock = (record) =>
+  Number.isFinite(record.receivedAt) ? record.receivedAt : record.t;
+
+/**
  * Turn one contact's records into fixes for `mergeHistory`. Each fix carries
  * its time kind as a flag, and BREAK where the store said so or where the
- * span since the previous fix is not wholly inside the recorder's coverage,
- * so playback holds the last position through a recorder outage instead of
- * drawing a straight line across it.
+ * recorder was not running throughout the span between receiving the
+ * previous fix and receiving this one, so playback holds the last position
+ * through a recorder outage instead of drawing a straight line across it.
+ *
+ * The span is taken on the receipt clock because coverage is: a feed that
+ * reports 30 s late delivers, after a 20 s outage, a fix whose own time
+ * falls before the outage, while the fixes from the outage itself were never
+ * received.
  * @param {object[]} records - One source, one key, one provenance.
  * @param {{coverage?: {fromMs: number, toMs: number}[], toleranceMs?: number}} [options]
  *   Without coverage every record starts a new segment.
@@ -213,7 +234,10 @@ export function historyPlaybackFixes(
   const sorted = [...records].sort((a, b) => a.t - b.t);
   return sorted.map((record, i) => {
     const previous = sorted[i - 1];
-    const gap = previous && !historyCovers(merged, previous.t, record.t);
+    const a = previous && receiptClock(previous),
+      b = receiptClock(record);
+    const gap =
+      previous && !historyCovers(merged, Math.min(a, b), Math.max(a, b));
     return {
       t: record.t,
       lat: record.lat,

@@ -154,6 +154,74 @@ test('playback fixes break where the recorder was not running', () => {
   assert.ok(stored[1].flags & FIX_FLAGS.BREAK);
 });
 
+test('coverage is judged on the receipt clock, where the recorder ran', () => {
+  const s = 1000;
+  const late = (dt, received) =>
+    record(T0 + dt * s, { receivedAt: T0 + received * s });
+  const breaks = (records, coverage) =>
+    historyPlaybackFixes(records, {
+      coverage: coverage.map(([from, to]) => ({
+        fromMs: T0 + from * s,
+        toMs: T0 + to * s,
+      })),
+    }).map((f) => Boolean(f.flags & FIX_FLAGS.BREAK));
+  // A feed 30 s late; the recorder was down 40-60 s. The fixes timed 6-30 s
+  // were never received, although both remaining times fall before the
+  // outage: the gap must show.
+  assert.deepEqual(
+    breaks(
+      [late(5, 35), late(31, 61)],
+      [
+        [-60, 40],
+        [60, 120],
+      ],
+    ),
+    [false, true],
+  );
+  // One session from 60 s; both fixes received in it, timed before it began.
+  assert.deepEqual(breaks([late(32, 62), late(42, 72)], [[60, 120]]), [
+    false,
+    false,
+  ]);
+  // Delivered out of order: the receipt span is still the one between them.
+  assert.deepEqual(breaks([late(10, 70), late(20, 65)], [[60, 120]]), [
+    false,
+    false,
+  ]);
+  assert.deepEqual(
+    breaks(
+      [late(10, 30), late(20, 70)],
+      [
+        [0, 40],
+        [60, 120],
+      ],
+    ),
+    [false, true],
+  );
+  // The earlier fix heard after the outage, the later one before it.
+  assert.deepEqual(
+    breaks(
+      [late(10, 70), late(20, 30)],
+      [
+        [0, 40],
+        [60, 120],
+      ],
+    ),
+    [false, true],
+  );
+  // Without a receipt time the record's own time stands in.
+  assert.deepEqual(
+    breaks(
+      [record(T0 + 10 * s), record(T0 + 50 * s)],
+      [
+        [0, 40],
+        [45, 120],
+      ],
+    ),
+    [false, true],
+  );
+});
+
 test('playback fixes refuse to mix contacts or provenances', () => {
   for (const other of [
     { key: 'other' },
