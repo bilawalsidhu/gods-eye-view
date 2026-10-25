@@ -21,8 +21,9 @@ function csvCell(v) {
   if (v == null) return '';
   const s = String(v);
   // A leading = + - @ would run as a formula in a spreadsheet.
-  const safe = /^[=+@]/.test(s) ? `'${s}` : s;
-  return /[",\n]/.test(safe) ? `"${safe.replace(/"/g, '""')}"` : safe;
+  // Numbers are left alone so a negative coordinate keeps its sign.
+  const safe = typeof v === 'string' && /^[=+\-@\t\r]/.test(s) ? `'${s}` : s;
+  return /[",\r\n]/.test(safe) ? `"${safe.replace(/"/g, '""')}"` : safe;
 }
 
 function byContact(points) {

@@ -16,6 +16,7 @@ import { DEFAULT_SAT_GROUPS, createSatelliteSource } from './satellites.js';
 
 const root = fileURLToPath(new URL('../../', import.meta.url));
 const VESSEL_POLL_MS = 30000;
+const WINDOW_LIMIT = 200000; // the stores' default row limit for /window
 const LOOPBACK = new Set(['127.0.0.1', '::1', '::ffff:127.0.0.1']);
 
 function sendJson(res, status, body) {
@@ -133,7 +134,8 @@ export function recorderPlugin(env = process.env) {
         try {
           const cached = JSON.parse(
             readFileSync(
-              path.join(root, '.gev-cache', `celestrak-${group}.json`),
+              // Same folder the CelesTrak proxy writes to.
+              path.join(process.cwd(), '.gev-cache', `celestrak-${group}.json`),
               'utf8',
             ),
           );
@@ -166,16 +168,15 @@ export function recorderPlugin(env = process.env) {
         };
         next();
       });
-      satPoll = setInterval(
-        () => {
-          try {
-            recorder.ingestMany(sats.points(nowSec()));
-          } catch {
-            // Keep polling.
-          }
-        },
-        Math.max(config.intervalSec, 30) * 1000,
-      );
+      const step = Math.max(config.intervalSec, 30);
+      satPoll = setInterval(() => {
+        try {
+          // Whole steps, so timer jitter never makes a sample look too soon.
+          recorder.ingestMany(sats.points(Math.round(nowSec() / step) * step));
+        } catch {
+          // Keep polling.
+        }
+      }, step * 1000);
       satPoll.unref?.();
     }
 
@@ -189,7 +190,13 @@ export function recorderPlugin(env = process.env) {
     poll.unref?.();
 
     server.middlewares.use('/api/history', async (req, res) => {
-      if (!LOOPBACK.has(req.socket?.remoteAddress))
+      // A reverse proxy on this machine makes every request look like loopback,
+      // so a request that was forwarded is treated as remote.
+      const forwarded =
+        req.headers['x-forwarded-for'] ||
+        req.headers['x-real-ip'] ||
+        req.headers.forwarded;
+      if (forwarded || !LOOPBACK.has(req.socket?.remoteAddress))
         return sendJson(res, 403, { error: 'History is local only' });
       try {
         await recorder.flush();
@@ -271,7 +278,12 @@ export function recorderPlugin(env = process.env) {
         if (url.pathname === '/range')
           return sendJson(res, 200, await recorder.store.range());
         if (url.pathname.startsWith('/track/')) {
-          const id = decodeURIComponent(url.pathname.slice(7));
+          let id;
+          try {
+            id = decodeURIComponent(url.pathname.slice(7));
+          } catch {
+            return sendJson(res, 400, { error: 'Bad contact id' });
+          }
           const points = await recorder.store.track(id, from, to);
           return sendJson(res, 200, {
             id,
@@ -300,10 +312,19 @@ export function recorderPlugin(env = process.env) {
           );
           return res.end(out.body);
         }
-        if (url.pathname === '/window')
-          return sendJson(res, 200, {
-            points: await recorder.store.window({ from, to, bbox, layers }),
+        if (url.pathname === '/window') {
+          const points = await recorder.store.window({
+            from,
+            to,
+            bbox,
+            layers,
           });
+          // The store stops at its row limit; say so rather than look complete.
+          return sendJson(res, 200, {
+            points,
+            truncated: points.length >= WINDOW_LIMIT,
+          });
+        }
         if (url.pathname === '/at')
           return sendJson(res, 200, {
             time: to,

@@ -87,6 +87,13 @@ export function createPgStore(url, { loadPg = () => import('pg') } = {}) {
       add,
       bbox(box, usePostgis) {
         if (!box) return;
+        // West above east means the box crosses the antimeridian.
+        if (box.west > box.east) {
+          where.push(
+            `lat BETWEEN ${add(box.south)} AND ${add(box.north)} AND (lon >= ${add(box.west)} OR lon <= ${add(box.east)})`,
+          );
+          return;
+        }
         where.push(
           usePostgis
             ? `geom && ST_MakeEnvelope(${add(box.west)}, ${add(box.south)}, ${add(box.east)}, ${add(box.north)}, 4326)`
@@ -164,7 +171,9 @@ export function createPgStore(url, { loadPg = () => import('pg') } = {}) {
         const n = inner.args.length;
         inner.args.push(bbox.south, bbox.north, bbox.west, bbox.east);
         outer.where.push(
-          `lat BETWEEN $${n + 1} AND $${n + 2} AND lon BETWEEN $${n + 3} AND $${n + 4}`,
+          bbox.west <= bbox.east
+            ? `lat BETWEEN $${n + 1} AND $${n + 2} AND lon BETWEEN $${n + 3} AND $${n + 4}`
+            : `lat BETWEEN $${n + 1} AND $${n + 2} AND (lon >= $${n + 3} OR lon <= $${n + 4})`,
         );
       }
       return rows(

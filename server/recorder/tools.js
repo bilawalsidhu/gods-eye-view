@@ -21,7 +21,7 @@ const BBOX = {
 const LAYER_LIST = {
   type: 'array',
   description:
-    'Layers to include: air, mil (military), vessel or local (your own ADS-B receivers). Default all.',
+    'Layers to include: air, mil (military), vessel, local (your own ADS-B receivers) or sat (satellites, if recorded). Default all recorded.',
   items: { type: 'string', enum: LAYERS },
   maxItems: LAYERS.length,
 };

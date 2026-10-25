@@ -2,6 +2,9 @@ const MIN_GAP_SEC = 30;
 const MIN_MOVE_M = 25;
 const MIN_TURN_DEG = 10;
 const MAX_TRACKED = 100000;
+// A parked aircraft or anchored ship still gets a point this often, so replay
+// (which treats five minutes of silence as a gap) keeps showing it.
+const HEARTBEAT_SEC = 240;
 
 function metersBetween(lat1, lon1, lat2, lon2) {
   const k = Math.PI / 180;
@@ -26,7 +29,8 @@ export function createThinner({ minGapSec = MIN_GAP_SEC } = {}) {
     if (
       prev &&
       (p.ts - prev.ts < minGapSec ||
-        (metersBetween(prev.lat, prev.lon, p.lat, p.lon) < MIN_MOVE_M &&
+        (p.ts - prev.ts < HEARTBEAT_SEC &&
+          metersBetween(prev.lat, prev.lon, p.lat, p.lon) < MIN_MOVE_M &&
           turnDeg(prev.heading, p.heading) < MIN_TURN_DEG))
     )
       return false;

@@ -158,3 +158,38 @@ test('the settings file supplies defaults and the environment wins', async () =>
   writeFileSync(path.join(dir, 'recorder.config.json'), '{ nope');
   assert.throws(() => loadConfigFile(dir, {}), /Cannot read/);
 });
+
+test('a parked contact still gets a point every few minutes', async () => {
+  const { createThinner } = await import('./thin.js');
+  const keep = createThinner({ minGapSec: 30 });
+  const at = (ts) => pt({ ts, lat: 10, lon: 10, heading: 90 });
+  assert.equal(keep(at(0)), true);
+  assert.equal(keep(at(100)), false);
+  assert.equal(keep(at(250)), true, 'heartbeat before replay sees a gap');
+});
+
+test('csv keeps negative numbers and neutralises text formulas', () => {
+  const out = exportPoints(
+    [pt({ id: '-2+3', lat: -33.5, lon: -70.1 }), pt({ id: '=cmd' })],
+    'csv',
+  ).body;
+  assert.match(out, /'-2\+3,air,-33.5,-70.1/);
+  assert.match(out, /'=cmd/);
+});
+
+test('an area across the antimeridian finds both sides', async () => {
+  const { openHistoryStore } = await import('./store.js');
+  const store = openHistoryStore(':memory:');
+  store.insertMany([
+    pt({ id: 'east', lon: 179, ts: 1000 }),
+    pt({ id: 'west', lon: -179, ts: 1000 }),
+    pt({ id: 'far', lon: 0, ts: 1000 }),
+  ]);
+  const bbox = { west: 170, south: 0, east: -170, north: 20 };
+  const ids = (list) => list.map((p) => p.id).sort();
+  assert.deepEqual(ids(store.window({ from: 0, to: 2000, bbox })), [
+    'east',
+    'west',
+  ]);
+  assert.deepEqual(ids(store.at({ time: 1500, bbox })), ['east', 'west']);
+});

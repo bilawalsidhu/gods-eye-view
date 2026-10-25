@@ -104,3 +104,25 @@
 .replay-input:focus {
   outline: 1px solid rgba(0, 212, 255, 0.6);
 }
+
+.replay-track-first {
+  color: #4dff9a;
+}
+.replay-track-last {
+  color: #ff5c5c;
+}
+
+/* The rail passes clicks through; each panel opts back in, as the weather
+   panel does. */
+#right-context-rail > #replay-panel {
+  position: relative;
+  inset: auto;
+  flex: 0 0 auto;
+  width: 100%;
+  max-height: 100%;
+  pointer-events: auto;
+}
+#right-context-rail > #replay-panel.collapsed {
+  width: var(--right-display-collapsed-width);
+  margin-left: auto;
+}

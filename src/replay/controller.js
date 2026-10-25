@@ -11,7 +11,13 @@ import {
   tickIndexAt,
 } from './model.js';
 
-const LIVE_LAYERS = ['flights', 'military', 'ais-live-vessels', 'satellites'];
+// Live layer id -> recorded layer that replaces it.
+const LIVE_LAYERS = {
+  flights: 'air',
+  military: 'mil',
+  'ais-live-vessels': 'vessel',
+  satellites: 'sat',
+};
 const LAYER_COLORS = {
   air: '#00d4ff',
   mil: '#ffb000',
@@ -119,11 +125,16 @@ export function createReplayController({
   /** Ask the recorder what it holds; resolves to the replay window, or null. */
   async function refreshRange() {
     try {
-      status = await getJson('/api/history/status');
-      rawRange = status;
-      events = (await getJson('/api/history/events?limit=5')).events;
-      fences = (await getJson('/api/history/fences')).fences;
-      pins = (await getJson('/api/history/pins')).pins.map((p) => p.id);
+      const [s, e, f, p] = await Promise.all([
+        getJson('/api/history/status'),
+        getJson('/api/history/events?limit=5'),
+        getJson('/api/history/fences'),
+        getJson('/api/history/pins'),
+      ]);
+      status = rawRange = s;
+      events = e.events;
+      fences = f.fences;
+      pins = p.pins.map((x) => x.id);
       drawFences();
       range = replayWindow(rawRange, windowHours);
     } catch {
@@ -277,18 +288,11 @@ export function createReplayController({
       ])
         trackSource.entities.add({
           id: `replay-track:${key}`,
+          name: label,
           position: at(p),
           point: {
             pixelSize: 9,
             color: Cesium.Color.fromCssColorString(color),
-          },
-          label: {
-            text: label,
-            font: '11px monospace',
-            pixelOffset: new Cesium.Cartesian2(0, -16),
-            fillColor: Cesium.Color.WHITE,
-            outlineWidth: 2,
-            style: Cesium.LabelStyle.FILL_AND_OUTLINE,
           },
         });
     }
@@ -385,8 +389,12 @@ export function createReplayController({
 
   async function setLive(on) {
     if (on) {
-      hidden = LIVE_LAYERS.filter(
-        (id) => dataManager?.layers?.get(id)?.enabled,
+      // Satellites stay live unless they are being recorded too.
+      const recorded = status?.layers;
+      hidden = Object.keys(LIVE_LAYERS).filter(
+        (id) =>
+          dataManager?.layers?.get(id)?.enabled &&
+          (!Array.isArray(recorded) || recorded.includes(LIVE_LAYERS[id])),
       );
       await Promise.all(hidden.map((id) => dataManager.setEnabled(id, false)));
     } else {
@@ -396,8 +404,14 @@ export function createReplayController({
     }
   }
 
+  let again = false;
   async function enter() {
-    if (destroyed || loading) return;
+    if (destroyed) return;
+    if (loading) {
+      // A filter changed mid-load: run once more when this load finishes.
+      again = true;
+      return;
+    }
     loading = true;
     error = '';
     notify();
@@ -456,9 +470,19 @@ export function createReplayController({
       viewer.scene.requestRender?.();
     } catch {
       error = 'failed';
+      // Do not leave the live layers hidden when replay never started.
+      if (!active) {
+        viewer.clock.onTick.removeEventListener(onTick);
+        viewer.selectedEntityChanged.removeEventListener(onSelect);
+        await setLive(false).catch(() => {});
+      }
     } finally {
       loading = false;
       notify();
+    }
+    if (again) {
+      again = false;
+      await enter();
     }
   }
 

@@ -232,13 +232,31 @@ export function createReplayPanel({ container, controller } = {}) {
     );
     const tr = state.track;
     const stamp = (p) => utcClock(new Date(p.ts * 1000).toISOString());
-    set(
-      trackLine,
-      'textContent',
-      tr
-        ? `${tr.id} · ${t('{count} points', { count: tr.count })} · ${t('first')} ${stamp(tr.first)} · ${t('last')} ${stamp(tr.last)} · ${t('{count} gaps', { count: tr.gaps.length })}`
-        : '',
-    );
+    // The first and last fixes are coloured dots on the globe, so the words
+    // carry the same colours instead of a map label.
+    const trackKey = tr
+      ? `${tr.id}|${tr.count}|${tr.first.ts}|${tr.last.ts}|${tr.gaps.length}`
+      : '';
+    if (trackLine.dataset.key !== trackKey) {
+      trackLine.dataset.key = trackKey;
+      const part = (text, className) => {
+        const node = document.createElement('span');
+        node.className = className;
+        node.textContent = text;
+        return node;
+      };
+      trackLine.replaceChildren(
+        ...(tr
+          ? [
+              `${tr.id} · ${t('{count} points', { count: tr.count })} · `,
+              part(`● ${t('first')} ${stamp(tr.first)}`, 'replay-track-first'),
+              ' · ',
+              part(`● ${t('last')} ${stamp(tr.last)}`, 'replay-track-last'),
+              ` · ${t('{count} gaps', { count: tr.gaps.length })}`,
+            ]
+          : []),
+      );
+    }
     set(trackLine, 'hidden', !tr);
     for (const [hours, node] of windowChips)
       set(

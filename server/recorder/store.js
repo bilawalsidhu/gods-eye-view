@@ -4,6 +4,18 @@ import { DatabaseSync } from 'node:sqlite';
 
 const COLUMNS = 'ts, id, layer, lat, lon, alt, heading, speed';
 
+/** Adds an area test; a box with west above east crosses the antimeridian. */
+function addBox(where, args, bbox) {
+  if (!bbox) return;
+  if (bbox.west <= bbox.east) {
+    where.push('lat BETWEEN ? AND ? AND lon BETWEEN ? AND ?');
+    args.push(bbox.south, bbox.north, bbox.west, bbox.east);
+  } else {
+    where.push('lat BETWEEN ? AND ? AND (lon >= ? OR lon <= ?)');
+    args.push(bbox.south, bbox.north, bbox.west, bbox.east);
+  }
+}
+
 /** SQLite position history. `file` may be ':memory:'. */
 export function openHistoryStore(file) {
   if (file !== ':memory:') mkdirSync(path.dirname(file), { recursive: true });
@@ -67,10 +79,7 @@ export function openHistoryStore(file) {
     window({ from, to, bbox, layers, limit = 200000 }) {
       const where = ['ts BETWEEN ? AND ?'];
       const args = [from, to];
-      if (bbox) {
-        where.push('lat BETWEEN ? AND ? AND lon BETWEEN ? AND ?');
-        args.push(bbox.south, bbox.north, bbox.west, bbox.east);
-      }
+      addBox(where, args, bbox);
       if (layers?.length) {
         where.push(`layer IN (${layers.map(() => '?').join(',')})`);
         args.push(...layers);
@@ -85,10 +94,7 @@ export function openHistoryStore(file) {
     at({ time, lookback = 600, bbox, layers, limit = 50000 }) {
       const where = ['ts BETWEEN ? AND ?'];
       const args = [time - lookback, time];
-      if (bbox) {
-        where.push('lat BETWEEN ? AND ? AND lon BETWEEN ? AND ?');
-        args.push(bbox.south, bbox.north, bbox.west, bbox.east);
-      }
+      addBox(where, args, bbox);
       if (layers?.length) {
         where.push(`layer IN (${layers.map(() => '?').join(',')})`);
         args.push(...layers);
