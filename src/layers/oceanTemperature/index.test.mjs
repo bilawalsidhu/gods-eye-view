@@ -281,15 +281,23 @@ test('tiles host builds a geographic shell at 0.6 opacity and never adds tileset
     }
     fetchImage(options) {
       requests++;
-      assert.match(this.url, /\/2\/[0-3]\/[0-3]\.png$/);
+      assert.match(this.url, /\/3\/[0-7]\/[0-7]\.png$/);
       assert.equal(options.flipY, false);
       assert.equal(options.preferImageBitmap, false);
       return Promise.resolve({});
     }
   }
+  let smoothed = 0;
   const document = {
     createElement: () => ({
-      getContext: () => ({ drawImage: (...args) => draws.push(args) }),
+      getContext: () => ({
+        drawImage: (...args) => draws.push(args),
+        getImageData: (x, y, w, h) => ({
+          data: new Uint8ClampedArray(w * h * 4),
+        }),
+        createImageData: (w, h) => ({ data: new Uint8ClampedArray(w * h * 4) }),
+        putImageData: () => smoothed++,
+      }),
     }),
   };
   const rendering = createOceanRendering({
@@ -320,13 +328,16 @@ test('tiles host builds a geographic shell at 0.6 opacity and never adds tileset
     },
   });
   await rendering.setField(product('anomaly'), dates.at(-1));
-  assert.equal(requests, 16);
+  // Level 3: 64 tiles, each smoothed with its neighbours, into a 2048 px
+  // square mosaic and a 2048 x 1024 equirectangular image.
+  assert.equal(requests, 64);
+  assert.equal(smoothed, 64);
   assert.equal(surfaces.length, 1);
   assert.equal(surfaces[0].alpha, 0.6);
-  assert.equal(surfaces[0].image.width, 1024);
-  assert.equal(surfaces[0].image.height, 512);
+  assert.equal(surfaces[0].image.width, 2048);
+  assert.equal(surfaces[0].image.height, 1024);
   assert.equal(rendering.getDiagnostics().host, 'shell');
-  assert.ok(draws.length > 490);
+  assert.ok(draws.length > 960);
   rendering.destroy();
   assert.equal(surfaces[0].destroyed, true);
 });

@@ -4,9 +4,13 @@ import { NO_IMAGERY_HOST } from '../weather/imageryHost.js';
 import { buildTileUrl } from './source.js';
 import { gibsTileTemplate } from '../../maps/gibs.js';
 import { msg } from '../../i18n/index.js';
-import { smoothGibsProvider } from '../../maps/gibsSmoothing.js';
+import {
+  smoothGibsProvider,
+  smoothGibsTile,
+} from '../../maps/gibsSmoothing.js';
 
 const TILE_RETRIES = 2;
+const SHELL_LEVEL = 3;
 
 export function createOceanProvider(
   cesium,
@@ -98,19 +102,21 @@ export function createOceanRendering({
           onChange();
         });
       } else {
-        const mosaic = document.createElement('canvas');
-        mosaic.width = mosaic.height = 1024;
-        const context = mosaic.getContext('2d');
-        const images = await Promise.all(
-          Array.from({ length: 16 }, async (_, index) => {
-            const x = index % 4;
-            const y = Math.floor(index / 4);
+        // The raised shell takes one whole-globe image. Level 3 (2048 px
+        // square) keeps its pixels finer than the 0.25° grid, and each tile
+        // is smoothed with its neighbours like the globe path's tiles.
+        const n = 2 ** SHELL_LEVEL;
+        const size = n * 256;
+        const tiles = await Promise.all(
+          Array.from({ length: n * n }, async (_, index) => {
+            const x = index % n;
+            const y = Math.floor(index / n);
             // ImageryProvider image bitmaps are flipped for WebGL upload, not
             // for canvas mosaics. Request north-up source pixels explicitly.
             const url = buildTileUrl({
               ...field.product,
               date: field.date,
-              z: 2,
+              z: SHELL_LEVEL,
               x,
               y,
             });
@@ -119,25 +125,48 @@ export function createOceanRendering({
               flipY: false,
             });
             if (!image) throw new Error('Ocean tile request deferred');
-            return { image, x, y };
+            const canvas = document.createElement('canvas');
+            canvas.width = canvas.height = 256;
+            const context = canvas.getContext('2d', {
+              willReadFrequently: true,
+            });
+            context.drawImage(image, 0, 0);
+            return context.getImageData(0, 0, 256, 256).data;
           }),
         );
         if (current !== generation) return;
-        for (const { image, x, y } of images)
-          context.drawImage(image, x * 256, y * 256);
+        const mosaic = document.createElement('canvas');
+        mosaic.width = mosaic.height = size;
+        const context = mosaic.getContext('2d');
+        const tileAt = (x, y) =>
+          y < 0 || y >= n ? null : tiles[y * n + ((x + n) % n)];
+        for (let y = 0; y < n; y++) {
+          for (let x = 0; x < n; x++) {
+            const rgba = smoothGibsTile(
+              (dx, dy) => tileAt(x + dx, y + dy),
+              SHELL_LEVEL,
+              y,
+              0.25,
+            );
+            const image = context.createImageData(256, 256);
+            image.data.set(rgba);
+            context.putImageData(image, x * 256, y * 256);
+          }
+        }
+        // Mercator rows to equirectangular rows, one output row per sample.
         const texture = document.createElement('canvas');
-        texture.width = 1024;
-        texture.height = 512;
+        texture.width = size;
+        texture.height = size / 2;
         const target = texture.getContext('2d');
         target.imageSmoothingEnabled = false;
-        for (let row = 0; row < 512; row++) {
-          const lat = 90 - ((row + 0.5) / 512) * 180;
+        for (let row = 0; row < size / 2; row++) {
+          const lat = 90 - ((row + 0.5) / (size / 2)) * 180;
           if (Math.abs(lat) > 85.0511287798066) continue;
           const sin = Math.sin((lat * Math.PI) / 180);
           const y = Math.floor(
-            (0.5 - Math.log((1 + sin) / (1 - sin)) / (4 * Math.PI)) * 1024,
+            (0.5 - Math.log((1 + sin) / (1 - sin)) / (4 * Math.PI)) * size,
           );
-          target.drawImage(mosaic, 0, y, 1024, 1, 0, row, 1024, 1);
+          target.drawImage(mosaic, 0, y, size, 1, 0, row, size, 1);
         }
         shell = createShell({
           viewer: getViewer(),
