@@ -3060,5 +3060,6 @@
   "PIN": "ЗАКРЕПИТЬ",
   "Keep this contact history past the retention period": "Хранить историю этого объекта дольше срока хранения",
   "Could not change the pin": "Не удалось изменить закрепление",
-  "Solid dot: recorded position. Ring: estimated between recordings. Gaps over 5 minutes are left blank.": "Сплошная точка: записанная позиция. Кольцо: оценка между записями. Пропуски более 5 минут оставлены пустыми."
+  "Solid dot: recorded position. Ring: estimated between recordings. Gaps over 5 minutes are left blank.": "Сплошная точка: записанная позиция. Кольцо: оценка между записями. Пропуски более 5 минут оставлены пустыми.",
+  "SAT": "СПУТН."
 }

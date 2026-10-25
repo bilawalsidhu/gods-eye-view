@@ -4,6 +4,7 @@
   "maxMb": 0,
   "layers": ["air", "mil", "vessel", "local"],
   "interval": 30,
+  "satelliteGroups": ["stations", "visual"],
   "database": "",
   "file": "data/history.sqlite"
 }

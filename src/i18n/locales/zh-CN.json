@@ -2859,5 +2859,6 @@
   "PIN": "固定",
   "Keep this contact history past the retention period": "超过保留期后仍保留此目标的历史",
   "Could not change the pin": "无法更改固定状态",
-  "Solid dot: recorded position. Ring: estimated between recordings. Gaps over 5 minutes are left blank.": "实心点:已记录位置。圆环:两次记录之间的估算位置。超过 5 分钟的空档留空。"
+  "Solid dot: recorded position. Ring: estimated between recordings. Gaps over 5 minutes are left blank.": "实心点:已记录位置。圆环:两次记录之间的估算位置。超过 5 分钟的空档留空。",
+  "SAT": "卫星"
 }

@@ -2993,5 +2993,6 @@
   "PIN": "FIJAR",
   "Keep this contact history past the retention period": "Conservar el historial de este contacto más allá del período de retención",
   "Could not change the pin": "No se pudo cambiar la fijación",
-  "Solid dot: recorded position. Ring: estimated between recordings. Gaps over 5 minutes are left blank.": "Punto sólido: posición grabada. Anillo: estimada entre grabaciones. Los huecos de más de 5 minutos se dejan en blanco."
+  "Solid dot: recorded position. Ring: estimated between recordings. Gaps over 5 minutes are left blank.": "Punto sólido: posición grabada. Anillo: estimada entre grabaciones. Los huecos de más de 5 minutos se dejan en blanco.",
+  "SAT": "SATÉL."
 }

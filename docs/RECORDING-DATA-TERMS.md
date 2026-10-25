@@ -14,6 +14,7 @@ reason.
 | `mil`    | adsb.lol                                                   |
 | `vessel` | AISStream (needs your own key)                             |
 | `local`  | Your own ADS-B receivers                                   |
+| `sat`    | CelesTrak orbital elements (opt-in)                        |
 
 The recorder cannot tell whether an `air` position came from OpenSky or from
 the adsb.lol fallback, so treat `air` as if the stricter OpenSky terms apply.
@@ -36,6 +37,11 @@ https://www.adsb.lol/docs/open-data/api/
 or sharing the data, so assume nothing. Read the terms for your account at
 https://aisstream.io before turning on `vessel`, and leave it out of
 `layers` until you have.
+
+**CelesTrak (`sat`).** Satellite positions are calculated on your machine from
+CelesTrak orbital elements, not copied from a position feed. CelesTrak asks
+clients not to fetch more than about every two hours, and the app already
+respects that. Check https://celestrak.org before sharing recordings.
 
 **Your own receivers (`local`).** These are your own observations, so the
 source's terms do not apply. Local law may still limit what you may receive,

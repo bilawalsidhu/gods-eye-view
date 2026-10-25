@@ -6,6 +6,7 @@ const LAYER_LABELS = [
   ['mil', msg('MIL')],
   ['vessel', msg('SEA')],
   ['local', msg('LOCAL')],
+  ['sat', msg('SAT')],
 ];
 const ENTERED = msg('{contact} entered {fence}');
 const LEFT = msg('{contact} left {fence}');

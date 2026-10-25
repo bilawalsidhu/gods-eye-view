@@ -1,7 +1,7 @@
 import { defineTool, ToolError } from '../../src/tools/catalog.js';
 import { LIMIT_SCHEMA, capRows } from '../../src/tools/results.js';
 
-const LAYERS = ['air', 'mil', 'vessel', 'local'];
+const LAYERS = ['air', 'mil', 'vessel', 'local', 'sat'];
 const TIME = {
   type: 'string',
   description: 'ISO 8601 time, e.g. 2026-10-25T14:00:00Z.',

@@ -1,4 +1,4 @@
-import { statSync } from 'node:fs';
+import { readFileSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { aisStreamRows } from '../providers/vessels/ais-store.js';
@@ -12,6 +12,7 @@ import { mergedSettings, recorderConfig } from './config.js';
 import { exportPoints, summarizeTrack } from './exporters.js';
 import { createPgStore } from './pgStore.js';
 import { createRecorder } from './recorder.js';
+import { DEFAULT_SAT_GROUPS, createSatelliteSource } from './satellites.js';
 
 const root = fileURLToPath(new URL('../../', import.meta.url));
 const VESSEL_POLL_MS = 30000;
@@ -119,6 +120,63 @@ export function recorderPlugin(env = process.env) {
         };
         next();
       });
+    }
+
+    let satPoll = null;
+    if (config.layers.includes('sat')) {
+      const satGroups = config.satGroups.length
+        ? config.satGroups
+        : DEFAULT_SAT_GROUPS;
+      const sats = createSatelliteSource({ groups: satGroups });
+      // Start from the proxy's disk cache so recording does not wait for the browser.
+      for (const group of satGroups)
+        try {
+          const cached = JSON.parse(
+            readFileSync(
+              path.join(root, '.gev-cache', `celestrak-${group}.json`),
+              'utf8',
+            ),
+          );
+          sats.learn(group, cached.body);
+        } catch {
+          // No cache yet: the first browser request fills it.
+        }
+      server.middlewares.use('/api/celestrak', (req, res, next) => {
+        const group = String(req.url || '')
+          .replace(/^\//, '')
+          .split('?')[0];
+        if (req.method !== 'GET' || !satGroups.includes(group)) return next();
+        const chunks = [];
+        const end = res.end;
+        res.end = function (chunk, ...rest) {
+          if (chunk && typeof chunk !== 'function')
+            chunks.push(Buffer.from(chunk));
+          try {
+            if (res.statusCode === 200)
+              sats.learn(group, Buffer.concat(chunks).toString('utf8'));
+          } catch {
+            // Recording must never break the feed.
+          }
+          return end.call(this, chunk, ...rest);
+        };
+        const write = res.write;
+        res.write = function (chunk, ...rest) {
+          if (chunk) chunks.push(Buffer.from(chunk));
+          return write.call(this, chunk, ...rest);
+        };
+        next();
+      });
+      satPoll = setInterval(
+        () => {
+          try {
+            recorder.ingestMany(sats.points(nowSec()));
+          } catch {
+            // Keep polling.
+          }
+        },
+        Math.max(config.intervalSec, 30) * 1000,
+      );
+      satPoll.unref?.();
     }
 
     const poll = setInterval(() => {
@@ -259,6 +317,7 @@ export function recorderPlugin(env = process.env) {
 
     server.httpServer?.on('close', () => {
       clearInterval(poll);
+      if (satPoll) clearInterval(satPoll);
       recorder.close();
     });
   }

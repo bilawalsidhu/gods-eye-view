@@ -11,12 +11,13 @@ import {
   tickIndexAt,
 } from './model.js';
 
-const LIVE_LAYERS = ['flights', 'military', 'ais-live-vessels'];
+const LIVE_LAYERS = ['flights', 'military', 'ais-live-vessels', 'satellites'];
 const LAYER_COLORS = {
   air: '#00d4ff',
   mil: '#ffb000',
   vessel: '#4dff9a',
   local: '#c77dff',
+  sat: '#ff5ea8',
 };
 const TRAIL_SECONDS = 600;
 const SPEEDS = [0.5, 1, 2, 5, 10, 30, 60];
@@ -64,7 +65,7 @@ export function createReplayController({
   viewer.dataSources.add(trackSource);
   const fenceSource = new Cesium.CustomDataSource('replay-fences');
   viewer.dataSources.add(fenceSource);
-  const layers = new Set(['air', 'mil', 'vessel', 'local']);
+  const layers = new Set(['air', 'mil', 'vessel', 'local', 'sat']);
 
   const state = () => ({
     active,

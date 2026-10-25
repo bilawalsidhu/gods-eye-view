@@ -50,6 +50,7 @@ one-off switch without a file.
   "retention": "7d",
   "maxMb": 0,
   "layers": ["air", "mil", "vessel", "local"],
+  "satelliteGroups": ["stations", "visual"],
   "interval": 30,
   "database": "",
   "file": "data/history.sqlite"
@@ -61,7 +62,8 @@ one-off switch without a file.
 | `enabled`   | `false`               | `true` turns recording on                                             |
 | `retention` | `"7d"`                | How long to keep: `6h`, `14d`, `8w`, `3m`, `1y`; `0` keeps everything |
 | `maxMb`     | off (`0`)             | Size cap; the oldest positions are dropped to stay under it           |
-| `layers`    | all                   | Which to record: `air`, `mil`, `vessel`, `local`                      |
+| `layers`    | all                   | Which to record: `air`, `mil`, `vessel`, `local`, and `sat` (off unless named) |
+| `satelliteGroups` | `stations`, `visual`, `gps-ops`, `galileo` | CelesTrak groups to record when `sat` is on |
 | `interval`  | `30`                  | Minimum seconds between saved points for one contact                  |
 | `file`      | `data/history.sqlite` | Where the SQLite file lives                                           |
 | `database`  | off                   | Advanced: a `postgres://` address (see below)                         |
@@ -103,7 +105,7 @@ and 24h chips choose how much of the newest history REPLAY loads (six hours by
 default); FIT flies the camera to the replayed contacts; clicking a contact
 follows it. REPLAY switches the live aircraft, military and vessel layers
 off, and moves the slider's time onto the globe. Play and the 0.5× to 60×
-chips run it; CSV, GEOJSON, GPX and JSON download what is shown; `● REC` in the header shows the recorder is on; AIR, MIL and SEA choose layers; Latest returns to live.
+chips run it; CSV, GEOJSON, GPX and JSON download what is shown; `● REC` in the header shows the recorder is on; AIR, MIL, SEA, LOCAL and SAT choose layers; Latest returns to live.
 
 A solid dot on the globe is a recorded position; a faint ring is an
 estimate between two recordings (within 15 s of a recording it shows solid).
@@ -122,6 +124,21 @@ point count, first and last times and gap count.
 PIN (shown after a search) keeps that contact's history past the retention
 period and the size cap, until you press it again. Pins are also available at
 `GET|POST /api/history/pins` and `DELETE /api/history/pins/:id`.
+
+## Satellites (opt-in)
+
+The browser works out satellite positions itself, so the recorder repeats the
+sums on the server from the same CelesTrak orbital elements. Add `"sat"` to
+`layers` to turn it on. It saves one position per satellite every `interval`
+seconds (at least 30), as `SAT-<NORAD number>`, with height and speed.
+
+Only the groups in `satelliteGroups` are recorded (default `stations`,
+`visual`, `gps-ops`, `galileo`; also `GEV_RECORDER_SAT_GROUPS`). `starlink` and
+`active` are thousands of objects each, so name them only if you have the disk
+for it. Element sets come from the app's own CelesTrak cache, so open the app
+once with the satellites layer on to fill it. Positions are calculated, not
+observed, so an old element set drifts: the recording is only as good as the
+orbital elements behind it.
 
 ## Local receivers
 
@@ -144,7 +161,7 @@ other web pages from editing them.
 
 - `GET /api/history/status` — range plus position count, retention days and file size.
 - `GET /api/history/range` — earliest and latest recorded time (epoch s).
-- `GET /api/history/window?from&to&bbox=west,south,east,north&layers=air,mil,vessel,local`
+- `GET /api/history/window?from&to&bbox=west,south,east,north&layers=air,mil,vessel,local,sat`
 - `GET /api/history/track/:id?from&to` — one contact's path, with its first and last point and the gaps (over 5 minutes) with no observations.
 - `GET /api/history/export?format=csv|geojson|gpx|json&from&to&bbox&layers&id` — download recorded points (one contact with `id`). The panel's CSV, GEOJSON, GPX and JSON chips download the current window.
 - `GET|POST /api/history/fences`, `DELETE /api/history/fences/:id` — watched areas.

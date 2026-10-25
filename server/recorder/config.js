@@ -2,7 +2,9 @@ import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 
 const UNITS = { h: 3600, d: 86400, w: 604800, m: 2592000, y: 31536000 };
-export const ALL_LAYERS = ['air', 'mil', 'vessel', 'local'];
+export const DEFAULT_LAYERS = ['air', 'mil', 'vessel', 'local'];
+/** Satellites are opt-in: they add thousands of objects. */
+export const ALL_LAYERS = [...DEFAULT_LAYERS, 'sat'];
 
 /** "6h", "14d", "8w", "3m", "1y" or a bare number of days -> seconds; 0 = forever. */
 export function parseDuration(text, fallbackDays = 7) {
@@ -43,6 +45,10 @@ export function loadConfigFile(root, env = process.env) {
   set('GEV_HISTORY_MAX_MB', raw.maxMb);
   set('GEV_RECORDER_LAYERS', [].concat(raw.layers ?? []).join(','));
   set('GEV_RECORDER_INTERVAL', raw.interval);
+  set(
+    'GEV_RECORDER_SAT_GROUPS',
+    [].concat(raw.satelliteGroups ?? []).join(','),
+  );
   set('GEV_HISTORY_DB', raw.database);
   if (raw.file) out.GEV_HISTORY_FILE = path.resolve(root, String(raw.file));
   return out;
@@ -68,7 +74,11 @@ export function recorderConfig(env = process.env) {
   const interval = Number(env.GEV_RECORDER_INTERVAL ?? 30);
   return {
     retentionSec: parseDuration(retention, 7),
-    layers: layers.length ? layers : ALL_LAYERS,
+    layers: layers.length ? layers : DEFAULT_LAYERS,
+    satGroups: String(env.GEV_RECORDER_SAT_GROUPS || '')
+      .split(',')
+      .map((g) => g.trim())
+      .filter(Boolean),
     maxBytes: Number.isFinite(maxMb) && maxMb > 0 ? maxMb * 1048576 : 0,
     intervalSec: Number.isFinite(interval) && interval >= 1 ? interval : 30,
     databaseUrl: String(env.GEV_HISTORY_DB || '').trim(),
