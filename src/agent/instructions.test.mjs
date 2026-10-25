@@ -118,7 +118,6 @@ test('adaptDirectives tolerates a non-array input', () => {
   assert.deepEqual(adaptDirectives(null).directives, []);
 });
 
-
 test('typed instructions label feed text as untrusted without claiming injection immunity', () => {
   const instructions = buildAgentInstructions();
   assert.match(instructions, /UNTRUSTED TOOL DATA/);
