@@ -1,6 +1,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { buildTicks, groupTracks, replayWindow, tickIndexAt } from './model.js';
+import {
+  buildTicks,
+  groupTracks,
+  nearestDeltaMs,
+  replayWindow,
+  splitAtGaps,
+  tickIndexAt,
+} from './model.js';
 
 test('buildTicks spaces ticks evenly and refuses an empty span', () => {
   const ticks = buildTicks(0, 3000, 4);
@@ -38,4 +45,26 @@ test('tickIndexAt finds the last tick at or before a time', () => {
   assert.equal(tickIndexAt(ticks, 1500), 1);
   assert.equal(tickIndexAt(ticks, -5), 0);
   assert.equal(tickIndexAt(ticks, 9999), 3);
+});
+
+test('splitAtGaps breaks a track where recording stopped', () => {
+  const p = (ts) => ({ ts });
+  const parts = splitAtGaps([p(0), p(60), p(120), p(1000), p(1060)], 300);
+  assert.deepEqual(
+    parts.map((s) => s.map((x) => x.ts)),
+    [
+      [0, 60, 120],
+      [1000, 1060],
+    ],
+  );
+  assert.deepEqual(splitAtGaps([], 300), []);
+});
+
+test('nearestDeltaMs tells recorded moments from estimated ones', () => {
+  const times = [1000, 31000, 61000];
+  assert.equal(nearestDeltaMs(times, 31000), 0);
+  assert.equal(nearestDeltaMs(times, 33000), 2000);
+  assert.equal(nearestDeltaMs(times, 16000), 15000);
+  assert.equal(nearestDeltaMs(times, 90000), 29000);
+  assert.equal(nearestDeltaMs([], 5), Infinity);
 });

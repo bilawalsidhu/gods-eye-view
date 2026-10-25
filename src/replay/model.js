@@ -45,3 +45,31 @@ export function tickIndexAt(ticks, timeMs) {
   }
   return found;
 }
+
+export const GAP_SECONDS = 300;
+export const OBSERVED_WINDOW_MS = 15000;
+
+/** Split one contact's points where there is more than `gapSec` between them. */
+export function splitAtGaps(points, gapSec = GAP_SECONDS) {
+  const segments = [];
+  for (const p of points) {
+    const last = segments[segments.length - 1];
+    if (last && p.ts - last[last.length - 1].ts <= gapSec) last.push(p);
+    else segments.push([p]);
+  }
+  return segments;
+}
+
+/** Distance in ms from `ms` to the closest recorded time in sorted `timesMs`. */
+export function nearestDeltaMs(timesMs, ms) {
+  let lo = 0;
+  let hi = timesMs.length - 1;
+  if (hi < 0) return Infinity;
+  while (lo < hi) {
+    const mid = (lo + hi) >> 1;
+    if (timesMs[mid] < ms) lo = mid + 1;
+    else hi = mid;
+  }
+  const after = Math.abs(timesMs[lo] - ms);
+  return lo > 0 ? Math.min(after, Math.abs(timesMs[lo - 1] - ms)) : after;
+}

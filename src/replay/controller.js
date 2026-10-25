@@ -1,7 +1,15 @@
 import * as Cesium from 'cesium';
 import { msg, t } from '../i18n/index.js';
 import { initImageryBoxTool } from '../ui/imageryBoxTool.js';
-import { buildTicks, groupTracks, replayWindow, tickIndexAt } from './model.js';
+import {
+  buildTicks,
+  groupTracks,
+  nearestDeltaMs,
+  OBSERVED_WINDOW_MS,
+  replayWindow,
+  splitAtGaps,
+  tickIndexAt,
+} from './model.js';
 
 const LIVE_LAYERS = ['flights', 'military', 'ais-live-vessels'];
 const LAYER_COLORS = {
@@ -329,21 +337,39 @@ export function createReplayController({
       const color = Cesium.Color.fromCssColorString(
         LAYER_COLORS[track.layer] || '#ffffff',
       );
+      // A solid dot means a recorded position; a faint ring means the spot is
+      // estimated between two recordings. Stretches with no recording are not
+      // drawn at all, rather than bridged.
+      const times = track.points.map((p) => p.ts * 1000);
+      const faint = color.withAlpha(0.15);
+      const dot = new Cesium.CallbackProperty(
+        (time) =>
+          nearestDeltaMs(times, Cesium.JulianDate.toDate(time).getTime()) <=
+          OBSERVED_WINDOW_MS
+            ? color
+            : faint,
+        false,
+      );
+      const spans = splitAtGaps(track.points).map(
+        (part) =>
+          new Cesium.TimeInterval({
+            start: Cesium.JulianDate.fromDate(new Date(part[0].ts * 1000)),
+            stop: Cesium.JulianDate.fromDate(
+              new Date(part[part.length - 1].ts * 1000),
+            ),
+          }),
+      );
       next.entities.add({
         id: `replay:${track.layer}:${track.id}`,
         name: track.id,
-        availability: new Cesium.TimeIntervalCollection([
-          new Cesium.TimeInterval({
-            start: Cesium.JulianDate.fromDate(
-              new Date(track.points[0].ts * 1000),
-            ),
-            stop: Cesium.JulianDate.fromDate(
-              new Date(track.points.at(-1).ts * 1000),
-            ),
-          }),
-        ]),
+        availability: new Cesium.TimeIntervalCollection(spans),
         position,
-        point: { pixelSize: 5, color },
+        point: {
+          pixelSize: 6,
+          color: dot,
+          outlineColor: color,
+          outlineWidth: 1.5,
+        },
         path: {
           resolution: 30,
           trailTime: TRAIL_SECONDS,
@@ -496,8 +522,29 @@ export function createReplayController({
     },
     /** Fly the camera to the replayed contacts. */
     fit() {
-      if (source?.entities.values.length)
-        viewer.flyTo(source, { duration: 1.5 });
+      if (!source) return;
+      // Cesium cannot frame a contact that has no position at the clock time
+      // (a jump can start just before its first fix), so use each contact's
+      // position now, or its first recorded one.
+      const time = viewer.clock.currentTime;
+      const points = [];
+      for (const entity of source.entities.values) {
+        const at =
+          entity.position?.getValue(time) ??
+          (entity.availability?.start &&
+            entity.position?.getValue(entity.availability.start));
+        if (at) points.push(at);
+      }
+      if (!points.length) return;
+      const sphere = Cesium.BoundingSphere.fromPoints(points);
+      viewer.camera.flyToBoundingSphere(sphere, {
+        duration: 1.5,
+        offset: new Cesium.HeadingPitchRange(
+          0,
+          -Math.PI / 4,
+          Math.max(sphere.radius * 2.5, 20000),
+        ),
+      });
     },
     async setWindowHours(hours) {
       if (!WINDOW_HOURS.includes(hours)) return;

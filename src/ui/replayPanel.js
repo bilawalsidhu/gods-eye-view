@@ -147,6 +147,11 @@ export function createReplayPanel({ container, controller } = {}) {
         link.click();
       },
     );
+  const legend = document.createElement('div');
+  legend.className = 'replay-alerts';
+  legend.textContent = t(
+    'Solid dot: recorded position. Ring: estimated between recordings. Gaps over 5 minutes are left blank.',
+  );
   const fenceList = document.createElement('div');
   fenceList.className = 'replay-fences';
   const alerts = document.createElement('div');
@@ -159,6 +164,7 @@ export function createReplayPanel({ container, controller } = {}) {
     speedRow,
     layerRow,
     jumpRow,
+    legend,
     findRow,
     trackLine,
     exportRow,
@@ -209,6 +215,7 @@ export function createReplayPanel({ container, controller } = {}) {
     set(start, 'disabled', state.loading || !state.range);
     set(fit, 'disabled', !state.active || !state.contacts);
     set(jump, 'disabled', state.loading || !state.range);
+    set(legend, 'hidden', !state.active);
     set(find, 'disabled', !state.range);
     set(pin, 'hidden', !state.track);
     set(
