@@ -34,7 +34,8 @@ export function localAdsbClass(record, meta = null) {
  * session, at most four requests are in flight and dispatches are dripped
  * 200 ms apart. Only the selected aircraft (type + route) and aircraft that
  * are about to render as 3D models (type) are ever looked up — never one
- * request per contact per tick.
+ * request per contact per tick. A rate-limit refusal is not an answer: the key
+ * becomes askable again once the refusal's retry-after has passed.
  * @param {object} options
  * @param {{getEnrichment?: Function}|null} options.source Flights source.
  * @param {() => void} options.onChange Called when metadata arrives.
@@ -52,6 +53,7 @@ export function createLocalAdsbEnrichment({
   let active = 0;
   let lastDispatchAt = -Infinity;
   let dripTimer = null;
+  const retryTimers = new Set();
   let lifetime = new AbortController();
 
   function entry(icao) {
@@ -67,7 +69,7 @@ export function createLocalAdsbEnrichment({
   function enqueue(key, query, apply, priority) {
     if (typeof source?.getEnrichment !== 'function' || seen.has(key)) return;
     seen.add(key);
-    const job = { query, apply };
+    const job = { key, query, apply };
     if (priority) queue.unshift(job);
     else queue.push(job);
     drain();
@@ -96,8 +98,10 @@ export function createLocalAdsbEnrichment({
             onChange?.();
           }
         })
-        .catch(() => {
-          /* enrichment never surfaces errors */
+        .catch((error) => {
+          // Enrichment never surfaces errors; a 429 only defers the key.
+          if (error?.code === 'limited')
+            forgetLater(job.key, error.retryAfterMs);
         })
         .finally(() => {
           if (signal.aborted) return;
@@ -105,6 +109,14 @@ export function createLocalAdsbEnrichment({
           drain();
         });
     }
+  }
+
+  function forgetLater(key, delayMs) {
+    const timer = setTimeout(() => {
+      retryTimers.delete(timer);
+      seen.delete(key);
+    }, delayMs);
+    retryTimers.add(timer);
   }
 
   return {
@@ -159,6 +171,8 @@ export function createLocalAdsbEnrichment({
       lifetime = new AbortController();
       clearTimeout(dripTimer);
       dripTimer = null;
+      for (const timer of retryTimers) clearTimeout(timer);
+      retryTimers.clear();
       queue.length = 0;
       active = 0;
     },

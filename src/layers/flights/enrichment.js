@@ -21,7 +21,7 @@ export function createEnrichment({
     if (flightState.lifetime.signal.aborted) return;
     if (flightState._enrichSeen.has(key)) return;
     flightState._enrichSeen.add(key);
-    const job = { query, onData };
+    const job = { key, query, onData };
     // Priority (tracked / model-eligible) goes to the FRONT so a deep ambient
     // backlog can never delay the plane the user just clicked or zoomed into.
     if (priority) flightState._enrichQueue.unshift(job);
@@ -64,8 +64,14 @@ export function createEnrichment({
         .then((data) => {
           if (!lifetime.signal.aborted && data && data.found) job.onData(data);
         })
-        .catch(() => {
-          /* enrichment never surfaces errors */
+        .catch((error) => {
+          // Enrichment never surfaces errors. A 429 is not an answer, though:
+          // the key becomes askable again once the refusal has passed.
+          if (error?.code === 'limited')
+            setTimeout(() => {
+              if (!lifetime.signal.aborted)
+                flightState._enrichSeen.delete(job.key);
+            }, error.retryAfterMs);
         })
         .finally(() => {
           if (lifetime.signal.aborted) return;
