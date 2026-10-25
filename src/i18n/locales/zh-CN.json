@@ -2855,5 +2855,8 @@
   "FIRST": "起点",
   "LAST": "终点",
   "No recorded track for that identifier": "该标识符没有记录的轨迹",
-  "Search failed": "搜索失败"
+  "Search failed": "搜索失败",
+  "PIN": "固定",
+  "Keep this contact history past the retention period": "超过保留期后仍保留此目标的历史",
+  "Could not change the pin": "无法更改固定状态"
 }

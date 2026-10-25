@@ -3056,5 +3056,8 @@
   "FIRST": "ПЕРВАЯ",
   "LAST": "ПОСЛЕДНЯЯ",
   "No recorded track for that identifier": "Нет записанного пути для этого идентификатора",
-  "Search failed": "Поиск не удался"
+  "Search failed": "Поиск не удался",
+  "PIN": "ЗАКРЕПИТЬ",
+  "Keep this contact history past the retention period": "Хранить историю этого объекта дольше срока хранения",
+  "Could not change the pin": "Не удалось изменить закрепление"
 }

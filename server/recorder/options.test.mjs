@@ -102,3 +102,23 @@ test('gpx escapes markup in contact ids', () => {
   const gpx = exportPoints([pt({ id: '<x>&' })], 'gpx').body;
   assert.ok(!gpx.includes('<x>'));
 });
+
+test('pinned contacts survive retention and the size cap', () => {
+  const rec = createRecorder({ file: ':memory:', maxBytes: 1 });
+  rec.store.addPin('keep', 1);
+  rec.ingestMany([
+    pt({ id: 'keep', ts: 100 }),
+    pt({ id: 'drop', ts: 100 }),
+    pt({ id: 'drop2', ts: 101 }),
+  ]);
+  rec.flush();
+  rec.store.purgeBefore(5000);
+  assert.deepEqual(
+    rec.store.window({ from: 0, to: 9999 }).map((p) => p.id),
+    ['keep'],
+  );
+  rec.enforceCap();
+  assert.equal(rec.store.range().count, 1);
+  assert.equal(rec.store.removePin('keep'), 1);
+  rec.close();
+});

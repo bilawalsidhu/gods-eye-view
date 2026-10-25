@@ -88,6 +88,12 @@ export function createReplayPanel({ container, controller } = {}) {
   ident.addEventListener('keydown', (e) => {
     if (e.key === 'Enter') controller.findTrack(ident.value);
   });
+  const pin = makeChip(
+    findRow,
+    t('PIN'),
+    t('Keep this contact history past the retention period'),
+    () => controller.togglePin(),
+  );
   const clearFind = makeChip(findRow, '✕', t('Clear the path'), () => {
     ident.value = '';
     controller.findTrack('');
@@ -204,6 +210,12 @@ export function createReplayPanel({ container, controller } = {}) {
     set(fit, 'disabled', !state.active || !state.contacts);
     set(jump, 'disabled', state.loading || !state.range);
     set(find, 'disabled', !state.range);
+    set(pin, 'hidden', !state.track);
+    set(
+      pin,
+      'className',
+      `data-toggle-chip${state.track && state.pins.includes(state.track.id) ? ' active' : ''}`,
+    );
     set(clearFind, 'hidden', !state.track && !ident.value);
     set(
       region,

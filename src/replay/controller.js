@@ -50,6 +50,7 @@ export function createReplayController({
   let region = null;
   let customFromSec = null;
   let track = null;
+  let pins = [];
   let trackPoints = [];
   const trackSource = new Cesium.CustomDataSource('replay-track');
   viewer.dataSources.add(trackSource);
@@ -72,6 +73,7 @@ export function createReplayController({
     drawing,
     region,
     track,
+    pins,
     customFromSec,
     hint,
     contacts,
@@ -112,6 +114,7 @@ export function createReplayController({
       rawRange = status;
       events = (await getJson('/api/history/events?limit=5')).events;
       fences = (await getJson('/api/history/fences')).fences;
+      pins = (await getJson('/api/history/pins')).pins.map((p) => p.id);
       drawFences();
       range = replayWindow(rawRange, windowHours);
     } catch {
@@ -510,6 +513,25 @@ export function createReplayController({
       await enter();
     },
     findTrack,
+    /** Keep (or stop keeping) the searched contact's history past retention. */
+    async togglePin() {
+      if (!track) return;
+      const id = track.id;
+      try {
+        if (pins.includes(id))
+          await sendJson(`/api/history/pins/${encodeURIComponent(id)}`, {
+            method: 'DELETE',
+          });
+        else
+          await sendJson('/api/history/pins', {
+            method: 'POST',
+            body: JSON.stringify({ id }),
+          });
+      } catch {
+        hint = msg('Could not change the pin');
+      }
+      await refreshRange();
+    },
     /** Limit replay to a drawn box; a second call clears it. */
     region() {
       if (region) return setRegion(null);

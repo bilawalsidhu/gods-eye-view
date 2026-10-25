@@ -166,6 +166,28 @@ export function recorderPlugin(env = process.env) {
           const removed = recorder.removeFence(Number(url.pathname.slice(8)));
           return sendJson(res, removed ? 200 : 404, { removed });
         }
+        if (url.pathname === '/pins') {
+          if (req.method === 'POST')
+            return readJson(req, res, (body) => {
+              const id = String(body?.id ?? '')
+                .trim()
+                .slice(0, 64);
+              if (!id) throw new TypeError('id is required');
+              recorder.store.addPin(id, nowSec());
+              return sendJson(res, 201, { id });
+            });
+          return sendJson(res, 200, { pins: recorder.store.listPins() });
+        }
+        if (url.pathname.startsWith('/pins/') && req.method === 'DELETE') {
+          if (!sameOrigin(req))
+            return sendJson(res, 403, {
+              error: 'Cross-origin request refused',
+            });
+          const removed = recorder.store.removePin(
+            decodeURIComponent(url.pathname.slice(6)),
+          );
+          return sendJson(res, removed ? 200 : 404, { removed });
+        }
         if (url.pathname === '/events')
           return sendJson(res, 200, {
             events: recorder.store.events({

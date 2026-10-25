@@ -2989,5 +2989,8 @@
   "FIRST": "PRIMERO",
   "LAST": "ÚLTIMO",
   "No recorded track for that identifier": "No hay ruta grabada para ese identificador",
-  "Search failed": "La búsqueda falló"
+  "Search failed": "La búsqueda falló",
+  "PIN": "FIJAR",
+  "Keep this contact history past the retention period": "Conservar el historial de este contacto más allá del período de retención",
+  "Could not change the pin": "No se pudo cambiar la fijación"
 }

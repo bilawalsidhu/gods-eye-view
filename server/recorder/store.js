@@ -23,7 +23,8 @@ export function openHistoryStore(file) {
     CREATE TABLE IF NOT EXISTS fence_events(
       ts INTEGER NOT NULL, fence_id INTEGER NOT NULL, id TEXT NOT NULL,
       layer TEXT NOT NULL, kind TEXT NOT NULL, lat REAL, lon REAL);
-    CREATE INDEX IF NOT EXISTS fence_events_ts ON fence_events(ts);`);
+    CREATE INDEX IF NOT EXISTS fence_events_ts ON fence_events(ts);
+    CREATE TABLE IF NOT EXISTS pins(id TEXT PRIMARY KEY, created_ts INTEGER NOT NULL);`);
   const insert = db.prepare(
     `INSERT INTO positions(${COLUMNS}) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
   );
@@ -168,7 +169,8 @@ export function openHistoryStore(file) {
         db
           .prepare(
             `DELETE FROM positions WHERE rowid IN
-             (SELECT rowid FROM positions ORDER BY ts LIMIT ?)`,
+             (SELECT rowid FROM positions
+              WHERE id NOT IN (SELECT id FROM pins) ORDER BY ts LIMIT ?)`,
           )
           .run(cut).changes,
       );
@@ -176,8 +178,26 @@ export function openHistoryStore(file) {
     purgeBefore(ts) {
       db.prepare('DELETE FROM fence_events WHERE ts < ?').run(ts);
       return Number(
-        db.prepare('DELETE FROM positions WHERE ts < ?').run(ts).changes,
+        db
+          .prepare(
+            'DELETE FROM positions WHERE ts < ? AND id NOT IN (SELECT id FROM pins)',
+          )
+          .run(ts).changes,
       );
+    },
+    /** Pinned contacts keep their history past retention and the size cap. */
+    addPin(id, createdTs) {
+      db.prepare(
+        'INSERT OR IGNORE INTO pins(id, created_ts) VALUES (?, ?)',
+      ).run(id, createdTs);
+    },
+    removePin(id) {
+      return Number(
+        db.prepare('DELETE FROM pins WHERE id = ?').run(id).changes,
+      );
+    },
+    listPins() {
+      return db.prepare('SELECT id, created_ts FROM pins ORDER BY id').all();
     },
     close() {
       db.close();

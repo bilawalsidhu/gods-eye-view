@@ -47,6 +47,10 @@ contact's whole recorded path in gold, with FIRST and LAST markers and any gap
 of more than five minutes as a red dashed line; the summary line gives its
 point count, first and last times and gap count.
 
+PIN (shown after a search) keeps that contact's history past the retention
+period and the size cap, until you press it again. Pins are also available at
+`GET|POST /api/history/pins` and `DELETE /api/history/pins/:id`.
+
 ## Local receivers
 
 If you run your own ADS-B receivers (`LOCAL_RECEIVER_FEEDS`, see
