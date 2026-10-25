@@ -9,7 +9,7 @@ const FLOW_TILE_PATH = (z, x, y) => `/api/tomtom/flow/${z}/${x}/${y}.pbf`;
 /**
  * Whether the proxy answered a tile from its cache past the refresh window
  * (STALE-BUDGET once the daily budget is spent, STALE-ERROR when TomTom
- * fails), and when TomTom produced it.
+ * fails), and when the proxy fetched it.
  */
 function tileFreshness(response) {
   const status = response.headers?.get?.('x-tomtom-cache') || '';
@@ -36,8 +36,9 @@ export function createFlowTileSource({
       // Take the mark before decoding, so a tile that fails to decode
       // leaves nothing behind.
       const path = FLOW_TILE_PATH(z, x, y);
-      const mark = pending.get(path);
-      pending.delete(path);
+      const entry = pending.get(path);
+      const mark = entry?.mark;
+      entry?.release();
       const segments = decodeFlowTile(bytes, z, x, y, { strict: true })
         .filter(isDrivableFlowSegment)
         .flatMap((segment) =>
@@ -51,7 +52,21 @@ export function createFlowTileSource({
     },
     fetchImpl: async (url, init) => {
       const response = await fetchImpl(url, init);
-      if (response.ok) pending.set(String(url), tileFreshness(response));
+      if (response.ok && !init.signal.aborted) {
+        const path = String(url);
+        const entry = {
+          mark: tileFreshness(response),
+          release() {
+            if (pending.get(path) === entry) pending.delete(path);
+            init.signal.removeEventListener('abort', entry.release);
+          },
+        };
+        pending.get(path)?.release();
+        pending.set(path, entry);
+        // The vector source aborts this signal for failed/cancelled body reads,
+        // including size-limit failures that never reach decode.
+        init.signal.addEventListener('abort', entry.release, { once: true });
+      }
       return response;
     },
     ttlMs: 120_000,
@@ -61,7 +76,7 @@ export function createFlowTileSource({
   /**
    * Flow segments for bounds, with whether any covering tile failed to load
    * for this request, whether any came from the proxy's stale cache, and when
-   * the oldest tile was produced.
+   * the oldest tile was fetched.
    */
   async function fetchFlowDetail(bounds, { signal, zoom = 12 } = {}) {
     const result = await tiles.fetchBounds(bounds, {
@@ -96,7 +111,7 @@ export function createFlowTileSource({
     },
     getFlowSessionStats: () => ({ ...tiles.getStats(), partial }),
     resetFlowTileCache: () => {
-      pending.clear();
+      for (const entry of pending.values()) entry.release();
       tiles.clear();
     },
   };

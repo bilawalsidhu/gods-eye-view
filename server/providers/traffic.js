@@ -182,7 +182,7 @@ export function tomtomProxy() {
         });
         res.end(JSON.stringify(obj));
       };
-      // x-tomtom-fetched-at is when TomTom produced the tile (ms since the
+      // x-tomtom-fetched-at is when the proxy fetched the tile (ms since the
       // epoch), so a client handed a STALE-* copy can say how old it is.
       const sendTile = (entry, cacheStatus) => {
         if (res.headersSent) return;
