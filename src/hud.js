@@ -224,12 +224,13 @@ export class IntelHUD {
     // session, so this flips once — and both altitude readouts have to move
     // together when it does (see the repaint in _updateCameraData).
     this._geoidCorrectionApplied = false;
-    // A summary built for one view must not land on the next: a reply in
-    // flight when the camera starts moving is dropped (the revision moves),
-    // and the summary is marked dirty so the next periodic tick asks about
-    // the view the camera has moved to.
+    // A summary built for one view must not land on the next: a request in
+    // flight when the camera starts moving is aborted and nothing it ends
+    // with paints (the revision moves), and the summary is marked dirty so
+    // the next periodic tick asks about the view the camera has moved to.
     this._onCameraMoveStart = () => {
       this._markSummaryDirty();
+      this._summaryRequest?.abort();
     };
     this._onCameraMoveEnd = () => {
       this._markSummaryDirty();
@@ -824,8 +825,10 @@ export class IntelHUD {
     } catch (error) {
       console.warn('[HUD] summary context unavailable:', error);
       // Left dirty on purpose: the next periodic tick retries instead of
-      // sticking on the fallback line for the rest of the session.
-      this._setSummaryText(fallbackText, animate);
+      // sticking on the fallback line for the rest of the session. The
+      // fallback was composed for this view; a moved camera keeps its own.
+      if (revision === this._summaryRevision)
+        this._setSummaryText(fallbackText, animate);
       return;
     }
     if (revision !== this._summaryRevision) return;
@@ -870,7 +873,8 @@ export class IntelHUD {
         this._lastSummarySignature = null;
         this._summaryDirty = true;
       }
-      this._setSummaryText(fallbackText, animate);
+      if (revision === this._summaryRevision)
+        this._setSummaryText(fallbackText, animate);
     } finally {
       window.clearTimeout(timeout);
       if (this._summaryRequest === controller) this._summaryRequest = null;

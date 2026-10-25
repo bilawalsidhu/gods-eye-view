@@ -322,3 +322,64 @@ test('a summary asked for one view is dropped once the camera moves', async () =
     env.restore();
   }
 });
+
+test('a request the camera leaves paints nothing: aborted, failed, or its context build throws', async () => {
+  const env = installHudEnvironment();
+  const previousWindow = globalThis.window;
+  globalThis.window = globalThis;
+  const pending = [];
+  // Like fetch: an abort rejects with an AbortError, unless `ignoreAbort`.
+  let ignoreAbort = false;
+  const summaryService = {
+    summarize: (context, { signal }) =>
+      new Promise((resolve, reject) => {
+        pending.push({ signal, reject });
+        if (!ignoreAbort)
+          signal.addEventListener('abort', () =>
+            reject(Object.assign(new Error('aborted'), { name: 'AbortError' })),
+          );
+      }),
+  };
+  let hud;
+  try {
+    hud = new IntelHUD(env.viewer, { summaryService });
+    hud._summaryContext = async () => ({ place: 'Yellowstone' });
+    const element = env.elements.get('hud-summary');
+    const settle = () => new Promise((resolve) => setImmediate(resolve));
+    hud._updateCameraData();
+
+    // The move aborts the request in flight, and the abort paints nothing.
+    let update = hud._updateSummary(false, true);
+    await settle();
+    element.textContent = 'shown before the move';
+    env.cameraListeners.moveStart();
+    assert.equal(pending[0].signal.aborted, true, 'the request is aborted');
+    await update;
+    assert.equal(element.textContent, 'shown before the move');
+
+    // A request that fails after the move (an error, the 5 s timeout) does
+    // not paint the old view's fallback line either.
+    ignoreAbort = true;
+    update = hud._updateSummary(false, true);
+    await settle();
+    element.textContent = 'shown before the move';
+    env.cameraListeners.moveStart();
+    pending[1].reject(new Error('network'));
+    await update;
+    assert.equal(element.textContent, 'shown before the move');
+
+    // Nor does a context build that throws once the camera has moved.
+    hud._summaryContext = async () => {
+      env.cameraListeners.moveStart();
+      throw new Error('view target unavailable');
+    };
+    element.textContent = 'shown before the move';
+    await hud._updateSummary(false, true);
+    assert.equal(element.textContent, 'shown before the move');
+  } finally {
+    hud?.destroy();
+    if (previousWindow === undefined) delete globalThis.window;
+    else globalThis.window = previousWindow;
+    env.restore();
+  }
+});
