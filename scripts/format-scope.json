@@ -1089,5 +1089,7 @@
   "scripts/qa-status-badges.mjs",
   "src/dockerTrustedPeers.test.mjs",
   "src/cameraGlobeRotation.test.mjs",
-  "src/voice/globeResetConfirmation.test.mjs"
+  "src/voice/globeResetConfirmation.test.mjs",
+  "src/data/audioOwnership.js",
+  "src/data/audioOwnership.test.mjs"
 ]
