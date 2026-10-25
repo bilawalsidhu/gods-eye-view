@@ -130,7 +130,8 @@ export function routeDistanceText(meters) {
  */
 export function routeDurationText(seconds) {
   if (!Number.isFinite(seconds) || seconds < 0) return '';
-  if (seconds < 60) return formatQuantity(Math.round(seconds), 's');
+  const wholeSeconds = Math.round(seconds);
+  if (wholeSeconds < 60) return formatQuantity(wholeSeconds, 's');
   const minutes = Math.round(seconds / 60);
   if (minutes < 60) return formatQuantity(minutes, 'min');
   const hours = formatQuantity(Math.floor(minutes / 60), 'h');
