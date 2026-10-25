@@ -15,6 +15,7 @@ import { createInstallationSource } from '../layers/installations/source.js';
 import { createSatelliteSource } from '../layers/satellites/source.js';
 import { createLaunchSource } from '../layers/launches/source.js';
 import { createAlprTileSource } from '../layers/alpr/source.js';
+import { createWorkZoneSource } from '../layers/workZones/source.js';
 import { createWeatherSource } from '../layers/weather/source.js';
 import { createCycloneSource } from '../layers/cyclones/source.js';
 import { createWindSource } from '../layers/wind/source.js';
@@ -49,6 +50,7 @@ export function createStandaloneLayerSources(overrides = {}) {
     satellites: createSatelliteSource(),
     launches: createLaunchSource(),
     alpr: createAlprTileSource(),
+    'work-zones': createWorkZoneSource(),
     firms: createFirmsSource(),
     wind: createWindSource(),
     weather: createWeatherSource(),

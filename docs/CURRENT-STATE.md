@@ -3730,6 +3730,7 @@ its criteria cannot be silently ignored.
 | Transit 🚌             | Operator GTFS-Realtime VehiclePositions (7 keyless regions, `src/data/transitFeeds.js`)                                                                                                         | `src/layers/transit/` via `src/app/layers/transit.js` | `/api/transit`                                           | 15s (poll + delayed playback)                                                     |
 | Bikeshare 🚲           | GBFS (Lyft + BCycle + Social Bicycles + PBSC incl. Bike Share Toronto, Bike Itaú (Brazil), Bicing (Barcelona) and seven other Spanish cities + Urban Sharing, Entur, JCDecaux (Lillestrøm, Valencia, Seville) + nextbike (AMBici))                                                                                                                                        | `src/data/bikeshare.js`                               | `/api/gbfs`                                              | 60s                                                                               |
 | Directions 🧭          | OSRM on FOSSGIS servers (OpenStreetMap)                                                                                                                                                         | `src/data/directions.js`                              | `/api/route` (`steps=1`)                                 | on placement / mode change                                                        |
+| US Work Zones 🚧 (`work-zones`) | WZDx 4.0–4.2 feeds of eight US state and county DOTs (CC0, keyless) | `src/layers/workZones/` via `src/app/layers/workZones.js` | `/api/wzdx/events` | one shared server snapshot, rebuilt at most every 5 min |
 | Datacenters ▣          | OSM extract (bundled)                                                                                                                                                                           | `src/data/infrastructure.js`                          | —                                                        | static                                                                            |
 | Dams ▰                 | OpenInfraMap/OSM extract (bundled)                                                                                                                                                              | `src/data/infrastructure.js`                          | —                                                        | static                                                                            |
 | Submarine Cables ◠     | TeleGeography public map (bundled)                                                                                                                                                              | `src/data/telegeographySubmarineCables.js`            | —                                                        | static                                                                            |
@@ -3763,6 +3764,32 @@ MLAT-positioned GPS loss, derived-field exclusions and the NIC 0 exception.
 anchors, recovery, keyboard and mobile states; emergency repainting is covered
 by `scripts/qa-emergency-squawk.mjs`. Both accept `--timeout-ms` for slow boot.
 
+
+US Work Zones (Movement group, share token `5`) shows current WZDx work zones
+and detours from a fixed list of eight keyless, CC0 feeds: Minnesota, Indiana,
+Kansas, North Dakota, Maryland, Kentucky, Mississippi and Maricopa County (AZ).
+`server/providers/wzdx.js` reads them into one snapshot shared by every client,
+rebuilt at most every five minutes; concurrent requests share a rebuild and an
+existing snapshot answers at once while a due one runs behind it. Each feed
+read has a 30 s timeout, a 16 MB cap and no redirects. `records.js` accepts
+WZDx 4.0 (`road_event_feed_info`), 4.1 and 4.2 (`feed_info`) and refuses other
+versions; it drops events whose end has passed or that start more than seven
+days ahead, keeps a reused feature id as a second record, flattens any GeoJSON
+geometry, validates every vertex, and simplifies lines (Douglas–Peucker, about
+11 m; 200 vertices per line, 600 per event, 60,000 per snapshot). A failed feed
+keeps its last good events for six hours as `stale`, then reads `unavailable`;
+with no data at all the route answers 503 with `Retry-After` and waits 60 s
+before reading again. Per-feed failures leave the browser as fixed codes
+(`http_<status>`, `timeout`, `network`, `too_large`, `invalid`,
+`unsupported_version`). The snapshot (about 1.7 MB, 250 KB gzipped) is sent
+gzipped when the client accepts it. Lines are ground-clamped and markers sit at
+line midpoints or the first point; colour is lane impact, not speed: road
+closed red, lanes closed orange, alternating/flagging/signal yellow, open or
+shifted lanes faint blue, unreported impact faint grey, detours violet dashed.
+A click opens a card with road, direction, impact, dates, worker presence, the
+description as text, update age and the publisher. The row reads `PARTIAL` with
+a feed line ("7 feeds live · feed Kansas unreachable") when a feed fails, and
+`STALE` when no feed is live. The layer is voice-off for now.
 
 Fire Perimeters uses capped, timed server reads with stale-on-error caching and a per-client limit. Unchanged snapshots retain geometry; link checks cancel on disable or selection change, and the row legend shows reported containment.
 
