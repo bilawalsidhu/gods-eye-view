@@ -48,6 +48,52 @@ export function createReplayPanel({ container, controller } = {}) {
   const watch = makeChip(chips, t('WATCH'), t('Draw an area to watch'), () =>
     controller.watch(),
   );
+  const region = makeChip(
+    chips,
+    t('REGION'),
+    t('Limit replay to a drawn area'),
+    () => controller.region(),
+  );
+  const makeInput = (parent, type, label) => {
+    const node = document.createElement('input');
+    node.type = type;
+    node.className = 'replay-input';
+    node.setAttribute('aria-label', label);
+    node.title = label;
+    parent.appendChild(node);
+    return node;
+  };
+  const jumpRow = document.createElement('div');
+  jumpRow.className = 'replay-chips';
+  const when = makeInput(jumpRow, 'datetime-local', t('Date and time (UTC)'));
+  const jump = makeChip(
+    jumpRow,
+    t('JUMP'),
+    t('Replay from this UTC time'),
+    () => {
+      const ms = Date.parse(`${when.value}:00Z`);
+      if (Number.isFinite(ms)) controller.jumpTo(ms);
+    },
+  );
+  const findRow = document.createElement('div');
+  findRow.className = 'replay-chips';
+  const ident = makeInput(findRow, 'text', t('Identifier'));
+  ident.placeholder = t('Callsign, hex or MMSI');
+  const find = makeChip(
+    findRow,
+    t('FIND'),
+    t('Show the recorded path of a contact'),
+    () => controller.findTrack(ident.value),
+  );
+  ident.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') controller.findTrack(ident.value);
+  });
+  const clearFind = makeChip(findRow, '✕', t('Clear the path'), () => {
+    ident.value = '';
+    controller.findTrack('');
+  });
+  const trackLine = document.createElement('div');
+  trackLine.className = 'replay-alerts';
   const speedRow = document.createElement('div');
   speedRow.className = 'replay-chips';
   const speedChips = controller
@@ -106,6 +152,9 @@ export function createReplayPanel({ container, controller } = {}) {
     chips,
     speedRow,
     layerRow,
+    jumpRow,
+    findRow,
+    trackLine,
     exportRow,
     fenceList,
     alerts,
@@ -153,6 +202,24 @@ export function createReplayPanel({ container, controller } = {}) {
     );
     set(start, 'disabled', state.loading || !state.range);
     set(fit, 'disabled', !state.active || !state.contacts);
+    set(jump, 'disabled', state.loading || !state.range);
+    set(find, 'disabled', !state.range);
+    set(clearFind, 'hidden', !state.track && !ident.value);
+    set(
+      region,
+      'className',
+      `data-toggle-chip${state.region ? ' active' : ''}`,
+    );
+    const tr = state.track;
+    const stamp = (p) => utcClock(new Date(p.ts * 1000).toISOString());
+    set(
+      trackLine,
+      'textContent',
+      tr
+        ? `${tr.id} · ${t('{count} points', { count: tr.count })} · ${t('first')} ${stamp(tr.first)} · ${t('last')} ${stamp(tr.last)} · ${t('{count} gaps', { count: tr.gaps.length })}`
+        : '',
+    );
+    set(trackLine, 'hidden', !tr);
     for (const [hours, node] of windowChips)
       set(
         node,

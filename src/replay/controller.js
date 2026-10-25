@@ -1,5 +1,5 @@
 import * as Cesium from 'cesium';
-import { msg } from '../i18n/index.js';
+import { msg, t } from '../i18n/index.js';
 import { initImageryBoxTool } from '../ui/imageryBoxTool.js';
 import { buildTicks, groupTracks, replayWindow, tickIndexAt } from './model.js';
 
@@ -46,6 +46,13 @@ export function createReplayController({
   let drawing = false;
   let hint = '';
   let boxTool = null;
+  let boxMode = 'fence';
+  let region = null;
+  let customFromSec = null;
+  let track = null;
+  let trackPoints = [];
+  const trackSource = new Cesium.CustomDataSource('replay-track');
+  viewer.dataSources.add(trackSource);
   const fenceSource = new Cesium.CustomDataSource('replay-fences');
   viewer.dataSources.add(fenceSource);
   const layers = new Set(['air', 'mil', 'vessel', 'local']);
@@ -63,6 +70,9 @@ export function createReplayController({
     events,
     fences,
     drawing,
+    region,
+    track,
+    customFromSec,
     hint,
     contacts,
     windowHours,
@@ -193,6 +203,116 @@ export function createReplayController({
     await refreshRange();
   }
 
+  const REGION_COLOR = '#ffb000';
+  const regionSource = new Cesium.CustomDataSource('replay-region');
+  viewer.dataSources.add(regionSource);
+
+  async function setRegion(box) {
+    region = box;
+    regionSource.entities.removeAll();
+    if (box)
+      regionSource.entities.add({
+        id: 'replay-region',
+        rectangle: {
+          coordinates: Cesium.Rectangle.fromDegrees(
+            box.west,
+            box.south,
+            box.east,
+            box.north,
+          ),
+          material:
+            Cesium.Color.fromCssColorString(REGION_COLOR).withAlpha(0.1),
+          outline: false,
+          classificationType: Cesium.ClassificationType.BOTH,
+        },
+      });
+    viewer.scene.requestRender?.();
+    if (active) await enter();
+    else notify();
+  }
+
+  /** Draw a contact's whole recorded path, its first and last fix, and gaps. */
+  function drawTrack() {
+    trackSource.entities.removeAll();
+    if (track) {
+      const at = (p) => Cesium.Cartesian3.fromDegrees(p.lon, p.lat, p.alt || 0);
+      const gold = Cesium.Color.fromCssColorString('#ffd24d');
+      const red = Cesium.Color.fromCssColorString('#ff5c5c');
+      trackSource.entities.add({
+        id: 'replay-track:path',
+        polyline: { positions: trackPoints.map(at), width: 3, material: gold },
+      });
+      const byTs = new Map(trackPoints.map((p) => [p.ts, p]));
+      track.gaps.forEach((gap, i) => {
+        const a = byTs.get(gap.from);
+        const b = byTs.get(gap.to);
+        if (a && b)
+          trackSource.entities.add({
+            id: `replay-track:gap:${i}`,
+            polyline: {
+              positions: [at(a), at(b)],
+              width: 3,
+              material: new Cesium.PolylineDashMaterialProperty({
+                color: red,
+                dashLength: 10,
+              }),
+            },
+          });
+      });
+      for (const [key, p, label, color] of [
+        ['first', track.first, t('FIRST'), '#4dff9a'],
+        ['last', track.last, t('LAST'), '#ff5c5c'],
+      ])
+        trackSource.entities.add({
+          id: `replay-track:${key}`,
+          position: at(p),
+          point: {
+            pixelSize: 9,
+            color: Cesium.Color.fromCssColorString(color),
+          },
+          label: {
+            text: label,
+            font: '11px monospace',
+            pixelOffset: new Cesium.Cartesian2(0, -16),
+            fillColor: Cesium.Color.WHITE,
+            outlineWidth: 2,
+            style: Cesium.LabelStyle.FILL_AND_OUTLINE,
+          },
+        });
+    }
+    viewer.scene.requestRender?.();
+  }
+
+  async function findTrack(rawId) {
+    const id = String(rawId ?? '').trim();
+    track = null;
+    trackPoints = [];
+    hint = '';
+    if (id) {
+      try {
+        const to = Math.floor(Date.now() / 1000) + 60;
+        const data = await getJson(
+          `/api/history/track/${encodeURIComponent(id)}?from=0&to=${to}`,
+        );
+        if (data.points.length) {
+          trackPoints = data.points;
+          track = {
+            id,
+            count: data.count,
+            first: data.first,
+            last: data.last,
+            gaps: data.gaps,
+          };
+        } else hint = msg('No recorded track for that identifier');
+      } catch {
+        hint = msg('Search failed');
+      }
+    }
+    drawTrack();
+    if (track) viewer.flyTo(trackSource, { duration: 1.5 });
+    notify();
+  }
+
   function buildEntities(points) {
     const next = new Cesium.CustomDataSource('replay');
     for (const track of groupTracks(points).values()) {
@@ -252,13 +372,28 @@ export function createReplayController({
     error = '';
     notify();
     try {
-      const window = (await refreshRange()) || null;
+      let window = (await refreshRange()) || null;
       if (!window) throw new Error('Nothing recorded yet');
+      if (customFromSec != null) {
+        const fromSec = Math.max(
+          rawRange.from_ts,
+          Math.min(customFromSec, rawRange.to_ts - 60),
+        );
+        window = {
+          fromSec,
+          toSec: Math.min(rawRange.to_ts, fromSec + windowHours * 3600),
+        };
+      }
       const query = new URLSearchParams({
         from: String(Math.floor(window.fromSec)),
         to: String(Math.floor(window.toSec)),
         layers: [...layers].join(','),
       });
+      if (region)
+        query.set(
+          'bbox',
+          [region.west, region.south, region.east, region.north].join(','),
+        );
       const { points } = await getJson(`/api/history/window?${query}`);
       if (destroyed) return;
       if (!active) {
@@ -298,6 +433,7 @@ export function createReplayController({
   }
 
   async function exit() {
+    customFromSec = null;
     if (!active) return;
     active = false;
     viewer.clock.onTick.removeEventListener(onTick);
@@ -367,11 +503,24 @@ export function createReplayController({
       if (active) await enter();
       else notify();
     },
+    /** Replay from this time (epoch ms) instead of the newest history. */
+    async jumpTo(ms) {
+      if (!Number.isFinite(ms) || !rawRange?.from_ts) return;
+      customFromSec = ms / 1000;
+      await enter();
+    },
+    findTrack,
+    /** Limit replay to a drawn box; a second call clears it. */
+    region() {
+      if (region) return setRegion(null);
+      return this.watch('region');
+    },
     /** Draw a box on the globe to watch; a second call cancels. */
-    watch() {
+    watch(mode = 'fence') {
+      boxMode = mode;
       boxTool ??= initImageryBoxTool({
         viewer,
-        onBox: (box) => addFence(box),
+        onBox: (box) => (boxMode === 'region' ? setRegion(box) : addFence(box)),
         onCancel: (_reason, message) => {
           hint = message || '';
           notify();
@@ -411,6 +560,8 @@ export function createReplayController({
       clearInterval(poll);
       await boxTool?.destroy();
       viewer.dataSources.remove(fenceSource, true);
+      viewer.dataSources.remove(trackSource, true);
+      viewer.dataSources.remove(regionSource, true);
       await exit();
       listeners.clear();
     },

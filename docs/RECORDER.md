@@ -39,6 +39,14 @@ follows it. REPLAY switches the live aircraft, military and vessel layers
 off, and moves the slider's time onto the globe. Play and the 0.5× to 60×
 chips run it; CSV, GEOJSON, GPX and JSON download what is shown; `● REC` in the header shows the recorder is on; AIR, MIL and SEA choose layers; Latest returns to live.
 
+Pick a UTC date and time and press JUMP to replay from that moment (the window
+length still comes from 1h, 6h or 24h). REGION lets you drag a box on the
+globe so only contacts inside it are replayed; press it again to clear. Type a
+callsign, hex code or MMSI into the search box and press FIND to draw that
+contact's whole recorded path in gold, with FIRST and LAST markers and any gap
+of more than five minutes as a red dashed line; the summary line gives its
+point count, first and last times and gap count.
+
 ## Local receivers
 
 If you run your own ADS-B receivers (`LOCAL_RECEIVER_FEEDS`, see

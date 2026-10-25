@@ -88,3 +88,19 @@
 .replay-fence-remove {
   padding: 0 6px;
 }
+
+.replay-input {
+  flex: 1 1 120px;
+  min-width: 0;
+  box-sizing: border-box;
+  padding: 4px 8px;
+  border: 1px solid var(--glass-border);
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.3);
+  color: var(--text-primary, #e6f6ff);
+  font: 10px var(--font-mono);
+  color-scheme: dark;
+}
+.replay-input:focus {
+  outline: 1px solid rgba(0, 212, 255, 0.6);
+}
