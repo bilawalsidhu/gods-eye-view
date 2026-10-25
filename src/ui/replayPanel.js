@@ -48,11 +48,13 @@ export function createReplayPanel({ container, controller } = {}) {
   const watch = makeChip(chips, t('WATCH'), t('Draw an area to watch'), () =>
     controller.watch(),
   );
+  const speedRow = document.createElement('div');
+  speedRow.className = 'replay-chips';
   const speedChips = controller
     .state()
     .speeds.map((value) => [
       value,
-      makeChip(chips, `${value}×`, t('Playback speed'), () =>
+      makeChip(speedRow, `${value}×`, t('Playback speed'), () =>
         controller.setSpeed(value),
       ),
     ]);
@@ -72,13 +74,43 @@ export function createReplayPanel({ container, controller } = {}) {
       controller.toggleLayer(id),
     ),
   ]);
+  const exportRow = document.createElement('div');
+  exportRow.className = 'replay-chips';
+  for (const format of ['csv', 'geojson', 'gpx', 'json'])
+    makeChip(
+      exportRow,
+      format.toUpperCase(),
+      t('Download recorded history'),
+      () => {
+        const { status: s, windowHours, layers } = controller.state();
+        if (!s?.to_ts) return;
+        const query = new URLSearchParams({
+          format,
+          from: String(Math.floor(s.to_ts - windowHours * 3600)),
+          to: String(s.to_ts),
+          layers: layers.join(','),
+        });
+        const link = document.createElement('a');
+        link.href = `/api/history/export?${query}`;
+        link.click();
+      },
+    );
   const fenceList = document.createElement('div');
   fenceList.className = 'replay-fences';
   const alerts = document.createElement('div');
   alerts.className = 'replay-alerts';
   const timelineHost = document.createElement('div');
   timelineHost.className = 'weather-timeline-block';
-  root.append(status, chips, layerRow, fenceList, alerts, timelineHost);
+  root.append(
+    status,
+    chips,
+    speedRow,
+    layerRow,
+    exportRow,
+    fenceList,
+    alerts,
+    timelineHost,
+  );
   container.appendChild(root);
 
   const timeline = createRailTimeline({
@@ -97,7 +129,11 @@ export function createReplayPanel({ container, controller } = {}) {
     const ready = state.active && state.ticks.length > 1;
     if (panel) set(panel, 'hidden', !state.status && !state.active);
     if (count)
-      set(count, 'textContent', state.active ? t('REPLAY') : t('LIVE'));
+      set(
+        count,
+        'textContent',
+        `${state.status?.recording ? `● ${t('REC')} · ` : ''}${state.active ? t('REPLAY') : t('LIVE')}`,
+      );
     set(
       status,
       'textContent',

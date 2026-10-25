@@ -17,7 +17,7 @@ function turnDeg(a, b) {
 }
 
 /** Decides which positions are worth saving, per contact. */
-export function createThinner() {
+export function createThinner({ minGapSec = MIN_GAP_SEC } = {}) {
   /** @type {Map<string,{ts:number,lat:number,lon:number,heading:number|null}>} */
   const last = new Map();
   return function keep(p) {
@@ -25,7 +25,7 @@ export function createThinner() {
     const prev = last.get(key);
     if (
       prev &&
-      (p.ts - prev.ts < MIN_GAP_SEC ||
+      (p.ts - prev.ts < minGapSec ||
         (metersBetween(prev.lat, prev.lon, p.lat, p.lon) < MIN_MOVE_M &&
           turnDeg(prev.heading, p.heading) < MIN_TURN_DEG))
     )

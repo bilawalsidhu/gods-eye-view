@@ -2969,5 +2969,7 @@
   "Drag a box on the globe": "Arrastra un recuadro sobre el globo",
   "Draw an area to watch": "Dibuja un área para vigilar",
   "Stop watching this area": "Dejar de vigilar esta área",
-  "WATCH": "VIGILAR"
+  "WATCH": "VIGILAR",
+  "REC": "GRABANDO",
+  "Download recorded history": "Descargar el historial grabado"
 }

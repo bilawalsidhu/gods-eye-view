@@ -12,10 +12,15 @@ const PURGE_MS = 60 * 60 * 1000;
 export function createRecorder({
   file,
   retentionDays = 7,
+  retentionSec = retentionDays * 86400,
+  layers = null,
+  maxBytes = 0,
+  intervalSec = 30,
   now = () => Date.now(),
 }) {
   const store = openHistoryStore(file);
-  const keep = createThinner();
+  const keep = createThinner({ minGapSec: intervalSec });
+  const wanted = layers ? new Set(layers) : null;
   let buffer = [];
   let eventBuffer = [];
   const tracker = createFenceTracker();
@@ -34,13 +39,20 @@ export function createRecorder({
     store.addEvents(batch);
   }
   function purge() {
-    if (retentionDays > 0)
-      store.purgeBefore(Math.floor(now() / 1000) - retentionDays * 86400);
+    if (retentionSec > 0)
+      store.purgeBefore(Math.floor(now() / 1000) - retentionSec);
+  }
+  /** Keeps the file under maxBytes by dropping the oldest positions. */
+  function enforceCap() {
+    if (!maxBytes) return;
+    for (let i = 0; i < 20 && store.usedBytes() > maxBytes; i++)
+      if (!store.dropOldest(0.1)) break;
   }
   const timers = [
     setInterval(() => {
       flush();
       flushEvents();
+      enforceCap();
     }, FLUSH_MS),
     setInterval(purge, PURGE_MS),
   ];
@@ -51,6 +63,7 @@ export function createRecorder({
     store,
     /** Accepts one point: { id, layer, lat, lon, alt, heading, speed, ts }. */
     ingest(point) {
+      if (wanted && !wanted.has(point.layer)) return;
       eventBuffer.push(...tracker.check(point));
       if (keep(point)) buffer.push(point);
     },
@@ -72,6 +85,7 @@ export function createRecorder({
       flush();
       flushEvents();
     },
+    enforceCap,
     close() {
       for (const t of timers) clearInterval(t);
       flush();

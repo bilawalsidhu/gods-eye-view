@@ -152,6 +152,27 @@ export function openHistoryStore(file) {
         )
         .all(...[since, ...(fenceId == null ? [] : [fenceId]), limit]);
     },
+    /** Bytes of live data in the file (free pages excluded). */
+    usedBytes() {
+      const n = (sql) => Object.values(db.prepare(sql).get())[0];
+      return (
+        (n('PRAGMA page_count') - n('PRAGMA freelist_count')) *
+        n('PRAGMA page_size')
+      );
+    },
+    /** Deletes the oldest `fraction` of positions; returns how many. */
+    dropOldest(fraction) {
+      const total = db.prepare('SELECT COUNT(*) AS n FROM positions').get().n;
+      const cut = Math.max(1, Math.floor(total * fraction));
+      return Number(
+        db
+          .prepare(
+            `DELETE FROM positions WHERE rowid IN
+             (SELECT rowid FROM positions ORDER BY ts LIMIT ?)`,
+          )
+          .run(cut).changes,
+      );
+    },
     purgeBefore(ts) {
       db.prepare('DELETE FROM fence_events WHERE ts < ?').run(ts);
       return Number(

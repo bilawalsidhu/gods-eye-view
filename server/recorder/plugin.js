@@ -8,6 +8,8 @@ import {
   militaryPoints,
   vesselPoints,
 } from './extract.js';
+import { recorderConfig } from './config.js';
+import { exportPoints, summarizeTrack } from './exporters.js';
 import { createRecorder } from './recorder.js';
 
 const root = fileURLToPath(new URL('../../', import.meta.url));
@@ -66,11 +68,17 @@ export function recorderPlugin(env = process.env) {
   const enabled = env.GEV_RECORDER === '1';
   const file =
     env.GEV_HISTORY_FILE || path.join(root, 'data', 'history.sqlite');
-  const retentionDays = Number(env.GEV_HISTORY_DAYS ?? 7);
+  const config = enabled ? recorderConfig(env) : null;
 
   function install(server) {
     if (!enabled) return;
-    const recorder = createRecorder({ file, retentionDays });
+    const recorder = createRecorder({
+      file,
+      retentionSec: config.retentionSec,
+      layers: config.layers,
+      maxBytes: config.maxBytes,
+      intervalSec: config.intervalSec,
+    });
     const nowSec = () => Math.floor(Date.now() / 1000);
 
     // Mounted ahead of the providers so their responses can be observed.
@@ -133,7 +141,12 @@ export function recorderPlugin(env = process.env) {
           }
           return sendJson(res, 200, {
             ...recorder.store.range(),
-            retention_days: retentionDays,
+            recording: true,
+            retention_days: config.retentionSec / 86400,
+            retention_sec: config.retentionSec,
+            layers: config.layers,
+            interval_sec: config.intervalSec,
+            max_bytes: config.maxBytes,
             bytes,
           });
         }
@@ -165,9 +178,11 @@ export function recorderPlugin(env = process.env) {
           return sendJson(res, 200, recorder.store.range());
         if (url.pathname.startsWith('/track/')) {
           const id = decodeURIComponent(url.pathname.slice(7));
+          const points = recorder.store.track(id, from, to);
           return sendJson(res, 200, {
             id,
-            points: recorder.store.track(id, from, to),
+            points,
+            ...summarizeTrack(points),
           });
         }
         const [west, south, east, north] = (q.get('bbox') || '')
@@ -177,6 +192,20 @@ export function recorderPlugin(env = process.env) {
           ? { west, south, east, north }
           : null;
         const layers = (q.get('layers') || '').split(',').filter(Boolean);
+        if (url.pathname === '/export') {
+          const id = q.get('id');
+          const points = id
+            ? recorder.store.track(id, from, to)
+            : recorder.store.window({ from, to, bbox, layers });
+          const out = exportPoints(points, q.get('format') || 'json');
+          res.statusCode = 200;
+          res.setHeader('Content-Type', out.type);
+          res.setHeader(
+            'Content-Disposition',
+            `attachment; filename="gev-history.${out.ext}"`,
+          );
+          return res.end(out.body);
+        }
         if (url.pathname === '/window')
           return sendJson(res, 200, {
             points: recorder.store.window({ from, to, bbox, layers }),

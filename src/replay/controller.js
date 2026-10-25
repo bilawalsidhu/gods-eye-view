@@ -11,7 +11,7 @@ const LAYER_COLORS = {
   local: '#c77dff',
 };
 const TRAIL_SECONDS = 600;
-const SPEEDS = [1, 10, 100];
+const SPEEDS = [0.5, 1, 2, 5, 10, 30, 60];
 const WINDOW_HOURS = [1, 6, 24];
 const NOTIFY_MS = 250;
 
@@ -32,7 +32,7 @@ export function createReplayController({
   let active = false;
   let loading = false;
   let error = '';
-  let speed = SPEEDS[1];
+  let speed = 10;
   let hidden = [];
   let savedClock = null;
   let lastNotify = 0;

@@ -13,11 +13,15 @@ private.
 GEV_RECORDER=1 npm run dev
 ```
 
-| Variable           | Default               | Meaning                         |
-| ------------------ | --------------------- | ------------------------------- |
-| `GEV_RECORDER`     | off                   | Set to `1` to record            |
-| `GEV_HISTORY_FILE` | `data/history.sqlite` | Where the database lives        |
-| `GEV_HISTORY_DAYS` | `7`                   | Days kept; `0` keeps everything |
+| Variable                | Default               | Meaning                                                               |
+| ----------------------- | --------------------- | --------------------------------------------------------------------- |
+| `GEV_RECORDER`          | off                   | Set to `1` to record                                                  |
+| `GEV_HISTORY_FILE`      | `data/history.sqlite` | Where the database lives                                              |
+| `GEV_HISTORY_RETENTION` | `7d`                  | How long to keep: `6h`, `14d`, `8w`, `3m`, `1y`; `0` keeps everything |
+| `GEV_HISTORY_DAYS`      | `7`                   | Older form of the above, in days                                      |
+| `GEV_HISTORY_MAX_MB`    | off                   | Size cap; the oldest positions are dropped to stay under it           |
+| `GEV_RECORDER_LAYERS`   | all                   | Comma list of `air,mil,vessel,local` to record                        |
+| `GEV_RECORDER_INTERVAL` | `30`                  | Minimum seconds between saved points per contact                      |
 
 Positions are recorded only while the app is open and polling, and only for
 times the server was running with the recorder on. Aircraft are captured from
@@ -32,8 +36,8 @@ shows how many positions are recorded and how long they are kept. The 1h, 6h
 and 24h chips choose how much of the newest history REPLAY loads (six hours by
 default); FIT flies the camera to the replayed contacts; clicking a contact
 follows it. REPLAY switches the live aircraft, military and vessel layers
-off, and moves the slider's time onto the globe. Play and the 1×/10×/100×
-chips run it; AIR, MIL and SEA choose layers; Latest returns to live.
+off, and moves the slider's time onto the globe. Play and the 0.5× to 60×
+chips run it; CSV, GEOJSON, GPX and JSON download what is shown; `● REC` in the header shows the recorder is on; AIR, MIL and SEA choose layers; Latest returns to live.
 
 ## Local receivers
 
@@ -57,7 +61,8 @@ other web pages from editing them.
 - `GET /api/history/status` — range plus position count, retention days and file size.
 - `GET /api/history/range` — earliest and latest recorded time (epoch s).
 - `GET /api/history/window?from&to&bbox=west,south,east,north&layers=air,mil,vessel,local`
-- `GET /api/history/track/:id?from&to` — one contact's path.
+- `GET /api/history/track/:id?from&to` — one contact's path, with its first and last point and the gaps (over 5 minutes) with no observations.
+- `GET /api/history/export?format=csv|geojson|gpx|json&from&to&bbox&layers&id` — download recorded points (one contact with `id`). The panel's CSV, GEOJSON, GPX and JSON chips download the current window.
 - `GET|POST /api/history/fences`, `DELETE /api/history/fences/:id` — watched areas.
 - `GET /api/history/events?since&fence&limit` — enter and exit events, newest first.
 - `GET /api/history/at?to=<epoch s>&bbox&layers` — last position of each

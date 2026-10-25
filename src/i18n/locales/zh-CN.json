@@ -2835,5 +2835,7 @@
   "Drag a box on the globe": "在地球上拖出一个方框",
   "Draw an area to watch": "绘制要监视的区域",
   "Stop watching this area": "停止监视此区域",
-  "WATCH": "监视"
+  "WATCH": "监视",
+  "REC": "录制中",
+  "Download recorded history": "下载已录制的历史"
 }
