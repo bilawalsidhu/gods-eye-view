@@ -225,11 +225,11 @@ export class IntelHUD {
     // together when it does (see the repaint in _updateCameraData).
     this._geoidCorrectionApplied = false;
     // A summary built for one view must not land on the next: a reply in
-    // flight when the camera starts moving is dropped (the revision moves).
-    // Requests during motion still go out on the normal cadence, so a
-    // follow camera or a continuous orbit keeps naming where it is.
+    // flight when the camera starts moving is dropped (the revision moves),
+    // and the summary is marked dirty so the next periodic tick asks about
+    // the view the camera has moved to.
     this._onCameraMoveStart = () => {
-      this._summaryRevision++;
+      this._markSummaryDirty();
     };
     this._onCameraMoveEnd = () => {
       this._markSummaryDirty();

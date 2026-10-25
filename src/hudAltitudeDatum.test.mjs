@@ -289,8 +289,10 @@ test('a summary asked for one view is dropped once the camera moves', async () =
     const settle = () => new Promise((resolve) => setImmediate(resolve));
     hud._updateCameraData();
 
-    // Asked over Yellowstone; the camera leaves before the reply lands.
-    const first = hud._updateSummary(false, true);
+    // The periodic tick's call (force=false): it asks only for a dirty
+    // summary. Asked over Yellowstone; the camera leaves before the reply
+    // lands.
+    const first = hud._updateSummary(false);
     await settle();
     assert.equal(pending.length, 1);
     env.cameraListeners.moveStart();
@@ -302,12 +304,12 @@ test('a summary asked for one view is dropped once the camera moves', async () =
       'a reply for the old view is dropped',
     );
 
-    // A camera that keeps moving (a follow camera, an orbit) still asks on
-    // the normal cadence, and a reply that lands while it moves is painted.
+    // The next tick, with the camera still moving (a follow camera or an
+    // orbit emits no moveEnd), asks about where it is now and paints it.
     place = 'Atlantic';
-    const moving = hud._updateSummary(false, true);
+    const moving = hud._updateSummary(false);
     await settle();
-    assert.equal(pending.length, 2, 'requests continue while moving');
+    assert.equal(pending.length, 2, 'the move marked the summary dirty');
     assert.deepEqual(pending[1].context, { place: 'Atlantic' });
     pending[1].reply('North Atlantic Ocean');
     await moving;
