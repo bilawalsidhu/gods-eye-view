@@ -55,13 +55,13 @@ test('recorder skips layers it was not asked to record', () => {
   rec.close();
 });
 
-test('recorder drops the oldest positions when over the size cap', () => {
+test('recorder drops the oldest positions when over the size cap', async () => {
   const rec = createRecorder({ file: ':memory:', maxBytes: 1 });
   rec.ingestMany(
     Array.from({ length: 50 }, (_, i) => pt({ id: `c${i}`, ts: 1000 + i })),
   );
   rec.flush();
-  rec.enforceCap();
+  await rec.enforceCap();
   assert.ok(rec.store.range().count < 50);
   rec.close();
 });
@@ -103,7 +103,7 @@ test('gpx escapes markup in contact ids', () => {
   assert.ok(!gpx.includes('<x>'));
 });
 
-test('pinned contacts survive retention and the size cap', () => {
+test('pinned contacts survive retention and the size cap', async () => {
   const rec = createRecorder({ file: ':memory:', maxBytes: 1 });
   rec.store.addPin('keep', 1);
   rec.ingestMany([
@@ -117,7 +117,7 @@ test('pinned contacts survive retention and the size cap', () => {
     rec.store.window({ from: 0, to: 9999 }).map((p) => p.id),
     ['keep'],
   );
-  rec.enforceCap();
+  await rec.enforceCap();
   assert.equal(rec.store.range().count, 1);
   assert.equal(rec.store.removePin('keep'), 1);
   rec.close();

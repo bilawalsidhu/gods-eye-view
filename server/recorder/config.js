@@ -27,5 +27,6 @@ export function recorderConfig(env = process.env) {
     layers: layers.length ? layers : ALL_LAYERS,
     maxBytes: Number.isFinite(maxMb) && maxMb > 0 ? maxMb * 1048576 : 0,
     intervalSec: Number.isFinite(interval) && interval >= 1 ? interval : 30,
+    databaseUrl: String(env.GEV_HISTORY_DB || '').trim(),
   };
 }

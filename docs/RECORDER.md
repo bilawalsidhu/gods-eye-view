@@ -13,21 +13,35 @@ private.
 GEV_RECORDER=1 npm run dev
 ```
 
-| Variable                | Default               | Meaning                                                               |
-| ----------------------- | --------------------- | --------------------------------------------------------------------- |
-| `GEV_RECORDER`          | off                   | Set to `1` to record                                                  |
-| `GEV_HISTORY_FILE`      | `data/history.sqlite` | Where the database lives                                              |
-| `GEV_HISTORY_RETENTION` | `7d`                  | How long to keep: `6h`, `14d`, `8w`, `3m`, `1y`; `0` keeps everything |
-| `GEV_HISTORY_DAYS`      | `7`                   | Older form of the above, in days                                      |
-| `GEV_HISTORY_MAX_MB`    | off                   | Size cap; the oldest positions are dropped to stay under it           |
-| `GEV_RECORDER_LAYERS`   | all                   | Comma list of `air,mil,vessel,local` to record                        |
-| `GEV_RECORDER_INTERVAL` | `30`                  | Minimum seconds between saved points per contact                      |
+| Variable                | Default               | Meaning                                                                  |
+| ----------------------- | --------------------- | ------------------------------------------------------------------------ |
+| `GEV_RECORDER`          | off                   | Set to `1` to record                                                     |
+| `GEV_HISTORY_FILE`      | `data/history.sqlite` | Where the database lives                                                 |
+| `GEV_HISTORY_RETENTION` | `7d`                  | How long to keep: `6h`, `14d`, `8w`, `3m`, `1y`; `0` keeps everything    |
+| `GEV_HISTORY_DAYS`      | `7`                   | Older form of the above, in days                                         |
+| `GEV_HISTORY_MAX_MB`    | off                   | Size cap; the oldest positions are dropped to stay under it              |
+| `GEV_RECORDER_LAYERS`   | all                   | Comma list of `air,mil,vessel,local` to record                           |
+| `GEV_HISTORY_DB`        | off                   | A `postgres://` address; stores in PostgreSQL instead of the SQLite file |
+| `GEV_RECORDER_INTERVAL` | `30`                  | Minimum seconds between saved points per contact                         |
 
 Positions are recorded only while the app is open and polling, and only for
 times the server was running with the recorder on. Aircraft are captured from
 the `/api/flights` and `/api/military` responses; vessels are sampled from the
 AIS store every 30 s. A point is kept when 30 s have passed and the contact
 moved 25 m or turned 10°.
+
+## PostgreSQL and PostGIS (optional)
+
+Set `GEV_HISTORY_DB=postgres://user:password@host:5432/database` and the
+recorder keeps everything (positions, watched areas, events, pins) in
+PostgreSQL instead of the SQLite file. It needs the `pg` package once:
+`npm install pg`. Without that package the app still runs on SQLite and the
+history API says what is missing. The tables are created on first use. If the
+server has PostGIS, a point column with a GiST index is added and area queries
+use it; plain PostgreSQL works without PostGIS. Retention, the size cap
+(measured as the positions table size), pins and export all work the same.
+The history API stays loopback-only. Use a database that only this app can
+reach, and keep the password out of shell history where you can.
 
 ## Replay panel
 

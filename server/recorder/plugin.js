@@ -10,6 +10,7 @@ import {
 } from './extract.js';
 import { recorderConfig } from './config.js';
 import { exportPoints, summarizeTrack } from './exporters.js';
+import { createPgStore } from './pgStore.js';
 import { createRecorder } from './recorder.js';
 
 const root = fileURLToPath(new URL('../../', import.meta.url));
@@ -48,11 +49,11 @@ function readJson(req, res, handle) {
     else chunks.push(c);
   });
   req.on('end', () => {
-    try {
-      handle(JSON.parse(Buffer.concat(chunks).toString('utf8')));
-    } catch (error) {
-      sendJson(res, 400, { error: error?.message || 'Bad request' });
-    }
+    Promise.resolve()
+      .then(() => handle(JSON.parse(Buffer.concat(chunks).toString('utf8'))))
+      .catch((error) =>
+        sendJson(res, 400, { error: error?.message || 'Bad request' }),
+      );
   });
 }
 
@@ -78,6 +79,7 @@ export function recorderPlugin(env = process.env) {
       layers: config.layers,
       maxBytes: config.maxBytes,
       intervalSec: config.intervalSec,
+      store: config.databaseUrl ? createPgStore(config.databaseUrl) : undefined,
     });
     const nowSec = () => Math.floor(Date.now() / 1000);
 
@@ -123,11 +125,11 @@ export function recorderPlugin(env = process.env) {
     }, VESSEL_POLL_MS);
     poll.unref?.();
 
-    server.middlewares.use('/api/history', (req, res) => {
+    server.middlewares.use('/api/history', async (req, res) => {
       if (!LOOPBACK.has(req.socket?.remoteAddress))
         return sendJson(res, 403, { error: 'History is local only' });
       try {
-        recorder.flush();
+        await recorder.flush();
         const url = new URL(req.url || '/', 'http://localhost');
         const q = url.searchParams;
         const from = intParam(q.get('from')) ?? 0;
@@ -135,15 +137,18 @@ export function recorderPlugin(env = process.env) {
         if (url.pathname === '/status') {
           let bytes = 0;
           try {
-            bytes = statSync(file).size;
+            bytes = config.databaseUrl
+              ? await recorder.store.usedBytes()
+              : statSync(file).size;
           } catch {
             // The file appears with the first flush.
           }
           return sendJson(res, 200, {
-            ...recorder.store.range(),
+            ...(await recorder.store.range()),
             recording: true,
             retention_days: config.retentionSec / 86400,
             retention_sec: config.retentionSec,
+            backend: config.databaseUrl ? 'postgres' : 'sqlite',
             layers: config.layers,
             interval_sec: config.intervalSec,
             max_bytes: config.maxBytes,
@@ -152,55 +157,59 @@ export function recorderPlugin(env = process.env) {
         }
         if (url.pathname === '/fences') {
           if (req.method === 'POST')
-            return readJson(req, res, (body) => {
-              const id = recorder.addFence(body);
+            return readJson(req, res, async (body) => {
+              const id = await recorder.addFence(body);
               return sendJson(res, 201, { id });
             });
-          return sendJson(res, 200, { fences: recorder.store.listFences() });
+          return sendJson(res, 200, {
+            fences: await recorder.store.listFences(),
+          });
         }
         if (url.pathname.startsWith('/fences/') && req.method === 'DELETE') {
           if (!sameOrigin(req))
             return sendJson(res, 403, {
               error: 'Cross-origin request refused',
             });
-          const removed = recorder.removeFence(Number(url.pathname.slice(8)));
+          const removed = await recorder.removeFence(
+            Number(url.pathname.slice(8)),
+          );
           return sendJson(res, removed ? 200 : 404, { removed });
         }
         if (url.pathname === '/pins') {
           if (req.method === 'POST')
-            return readJson(req, res, (body) => {
+            return readJson(req, res, async (body) => {
               const id = String(body?.id ?? '')
                 .trim()
                 .slice(0, 64);
               if (!id) throw new TypeError('id is required');
-              recorder.store.addPin(id, nowSec());
+              await recorder.store.addPin(id, nowSec());
               return sendJson(res, 201, { id });
             });
-          return sendJson(res, 200, { pins: recorder.store.listPins() });
+          return sendJson(res, 200, { pins: await recorder.store.listPins() });
         }
         if (url.pathname.startsWith('/pins/') && req.method === 'DELETE') {
           if (!sameOrigin(req))
             return sendJson(res, 403, {
               error: 'Cross-origin request refused',
             });
-          const removed = recorder.store.removePin(
+          const removed = await recorder.store.removePin(
             decodeURIComponent(url.pathname.slice(6)),
           );
           return sendJson(res, removed ? 200 : 404, { removed });
         }
         if (url.pathname === '/events')
           return sendJson(res, 200, {
-            events: recorder.store.events({
+            events: await recorder.store.events({
               since: intParam(q.get('since')) ?? 0,
               fenceId: intParam(q.get('fence')),
               limit: Math.min(1000, intParam(q.get('limit')) ?? 200),
             }),
           });
         if (url.pathname === '/range')
-          return sendJson(res, 200, recorder.store.range());
+          return sendJson(res, 200, await recorder.store.range());
         if (url.pathname.startsWith('/track/')) {
           const id = decodeURIComponent(url.pathname.slice(7));
-          const points = recorder.store.track(id, from, to);
+          const points = await recorder.store.track(id, from, to);
           return sendJson(res, 200, {
             id,
             points,
@@ -217,8 +226,8 @@ export function recorderPlugin(env = process.env) {
         if (url.pathname === '/export') {
           const id = q.get('id');
           const points = id
-            ? recorder.store.track(id, from, to)
-            : recorder.store.window({ from, to, bbox, layers });
+            ? await recorder.store.track(id, from, to)
+            : await recorder.store.window({ from, to, bbox, layers });
           const out = exportPoints(points, q.get('format') || 'json');
           res.statusCode = 200;
           res.setHeader('Content-Type', out.type);
@@ -230,12 +239,12 @@ export function recorderPlugin(env = process.env) {
         }
         if (url.pathname === '/window')
           return sendJson(res, 200, {
-            points: recorder.store.window({ from, to, bbox, layers }),
+            points: await recorder.store.window({ from, to, bbox, layers }),
           });
         if (url.pathname === '/at')
           return sendJson(res, 200, {
             time: to,
-            points: recorder.store.at({ time: to, bbox, layers }),
+            points: await recorder.store.at({ time: to, bbox, layers }),
           });
         return sendJson(res, 404, { error: 'Unknown history route' });
       } catch (error) {

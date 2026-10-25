@@ -193,7 +193,7 @@ test('fences report enter and exit, honour layers and ignore older positions', a
     retentionDays: 0,
     now: () => 1000 * 1000,
   });
-  const id = rec.addFence({
+  const id = await rec.addFence({
     name: 'Box',
     west: 0,
     south: 0,
@@ -212,7 +212,7 @@ test('fences report enter and exit, honour layers and ignore older positions', a
   const events = rec.store.events({ fenceId: id });
   assert.deepEqual(events.map((e) => e.kind).reverse(), ['enter', 'exit']);
   assert.equal(events[0].fence, 'Box');
-  assert.equal(rec.removeFence(id), 1);
+  assert.equal(await rec.removeFence(id), 1);
   rec.close();
 });
 
