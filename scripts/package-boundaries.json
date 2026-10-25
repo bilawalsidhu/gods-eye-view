@@ -3844,6 +3844,7 @@
       "src/i18n/locale.js",
       "src/i18n/locales/es.json",
       "src/i18n/locales/ru.json",
+      "src/i18n/locales/zh-CN.json",
       "src/ui/statusText.js",
       "src/ui/layerNames.js"
     ],
