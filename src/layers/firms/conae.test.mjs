@@ -152,6 +152,98 @@ test('keyless CONAE ingestion exposes partial provider failures and correct sele
   assert.match(context.label, /Thermal detection/);
 });
 
+
+test('mixed-source invalid FIRMS time stays unknown in cards, selection and analyst queries', () => {
+  const [untimed, goes] = adaptFirmsRecords([
+    {
+      lat: -27.5,
+      lon: -55.8,
+      provider: 'firms',
+      frp: 8,
+      confidence: 'n',
+      instrument: 'VIIRS',
+      satellite: 'N20',
+      acqDate: '2026-02-30',
+      acqTime: '1200',
+    },
+    raw,
+  ]);
+  assert.equal(untimed.acqMs, 0);
+  assert.equal(goes.acqMs, NOW - 60_000);
+  assert.notEqual(fireDetectionKey(untimed), fireDetectionKey(goes));
+
+  const selectedCard = model.buildSelectedFireCard(untimed, NOW);
+  const ambientCard = model.buildFireCard({ fire: untimed, position: {} }, NOW);
+  const cellCard = model.buildCellCard(
+    { cell: { count: 1, maxFrp: 8, newestAcqMs: 0 }, position: {} },
+    NOW,
+  );
+  assert.doesNotMatch(selectedCard.details[0], /ago/);
+  assert.doesNotMatch(ambientCard.details[0], /\d+[hdm]|<1h/);
+  assert.doesNotMatch(cellCard.details[0], /new /);
+  assert.equal(model.mapAnalystRecord(untimed).acqTime, null);
+  assert.equal(model.mapAnalystRecord(goes).acqTime, raw.acqMs);
+  assert.match(model.buildSelectedFireCard(goes, NOW).details[0], /ago/);
+  assert.match(
+    model.buildSelectedFireCard(goes, NOW).details.join(' '),
+    /thermal anomaly, not a confirmed wildfire/,
+  );
+
+  const layerState = {
+    _enabled: true,
+    _selectedFire: untimed,
+    _fires: [untimed, goes],
+    _firesByFrp: [untimed, goes],
+    _contextIds: new Set(),
+    _sources: [
+      { source: 'NASA FIRMS', ok: false, count: 1 },
+      { source: 'CONAE GOES', ok: true, count: 1 },
+    ],
+    _count: 2,
+    _cellCount: 0,
+    _lastUpdate: NOW,
+    _loading: false,
+    _stale: false,
+    _keyRequired: false,
+    _error: 'PARTIAL · NASA FIRMS unavailable',
+  };
+  const config = { id: 'local-firms', name: 'Active Fires', source: 'NASA FIRMS' };
+  const queries = createQueries({
+    layerState,
+    services: {},
+    components: { model },
+    config,
+  }).methods;
+  assert.equal(queries.getSelectedInfo().observedAt, null);
+  assert.equal(queries.getSelectedInfo().source, 'VIIRS');
+  assert.deepEqual(
+    queries.getAnalystRecords(10).map((item) => item.acqTime),
+    [null, raw.acqMs],
+  );
+  assert.equal(queries.getStats().count, 2);
+  assert.equal(queries.getStats().keyRequired, false);
+  assert.match(queries.getStats().error, /PARTIAL.*NASA FIRMS/);
+
+  let context;
+  createSelection({
+    layerState,
+    services: {
+      picking: {},
+      focus: {},
+      context: {
+        registerEntityContext(_entity, record) {
+          context = record;
+        },
+      },
+    },
+    components: { model },
+    config,
+  }).registerFireContext(untimed);
+  assert.equal(context.properties.age, 'unknown');
+  assert.equal(context.source, 'NASA FIRMS');
+  assert.equal(context.label.startsWith('Fire'), true);
+});
+
 for (const locale of ['es', 'ru', 'zh-CN']) {
   test(`${locale}: CONAE labels and unknown measurements follow the selected language`, () => {
     setLocale(locale);
