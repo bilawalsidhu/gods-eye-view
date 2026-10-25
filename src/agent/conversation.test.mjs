@@ -359,13 +359,18 @@ test('byte length counts UTF-8, not code units', () => {
       messagesByteLength([{ role: 'user', content: 'ab' }]),
   );
 });
-
+ 
 test('oversize analyst output retains a navigable prefix with byte-exact identity', () => {
   const spacedId = 'Congress  Ave   & 2nd';
   const longId = 'Station ' + 'é'.repeat(330);
   const items = Array.from({ length: 12 }, (_, index) => ({
     layerKey: 'bikeshare',
-    id: index === 0 ? spacedId : index === 1 ? longId : `station-${index}-` + 'é'.repeat(350),
+    id:
+      index === 0
+        ? spacedId
+        : index === 1
+          ? longId
+          : `station-${index}-` + 'é'.repeat(350),
     name: index === 0 ? 'Congress Ave & 2nd' : `Station ${index}`,
     operator: 'City PD',
     lat: 30 + index / 100,
@@ -387,14 +392,34 @@ test('oversize analyst output retains a navigable prefix with byte-exact identit
   const parsed = JSON.parse(wire.content);
   assert.equal(parsed.ok, true);
   assert.equal(parsed.count, 12);
-  assert.ok(Array.isArray(parsed.items), 'items should not be replaced by an omission marker');
-  assert.ok(parsed.items.length >= 2, 'the first two numbered referents remain navigable');
-  assert.ok(parsed.items.length <= 5, 'large lists are trimmed to the numbered referent window');
+  assert.ok(
+    Array.isArray(parsed.items),
+    'items should not be replaced by an omission marker',
+  );
+  assert.ok(
+    parsed.items.length >= 2,
+    'the first two numbered referents remain navigable',
+  );
+  assert.ok(
+    parsed.items.length <= 5,
+    'large lists are trimmed to the numbered referent window',
+  );
   assert.equal(parsed.itemsOmitted, items.length - parsed.items.length);
-  assert.equal(parsed.items[0].id, spacedId, 'spaces in the canonical key must not collapse');
-  assert.equal(parsed.items[1].id, longId, 'long Unicode IDs must not be shortened');
+  assert.equal(
+    parsed.items[0].id,
+    spacedId,
+    'spaces in the canonical key must not collapse',
+  );
+  assert.equal(
+    parsed.items[1].id,
+    longId,
+    'long Unicode IDs must not be shortened',
+  );
   assert.equal(parsed.items[0].name, 'Congress Ave & 2nd');
-  assert.deepEqual(parsed.items.map((item) => item.id), items.slice(0, parsed.items.length).map((item) => item.id));
+  assert.deepEqual(
+    parsed.items.map((item) => item.id),
+    items.slice(0, parsed.items.length).map((item) => item.id),
+  );
 });
 
 test('an impossibly long canonical ID is omitted whole rather than corrupted', () => {
