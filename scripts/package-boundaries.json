@@ -3867,6 +3867,7 @@
       "src/i18n/locale.js",
       "src/i18n/locales/es.json",
       "src/i18n/locales/ru.json",
+      "src/i18n/locales/zh-CN.json",
       "src/data/iconOrientation.js",
       "src/layers/wildlife/records.js",
       "src/i18n/marker.js",
