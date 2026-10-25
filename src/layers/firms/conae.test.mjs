@@ -153,7 +153,7 @@ test('keyless CONAE ingestion exposes partial provider failures and correct sele
 });
 
 
-test('mixed-source invalid FIRMS time stays unknown in cards, selection and analyst queries', () => {
+test('mixed FIRMS/CONAE timestamps remain honest across consumers', () => {
   const [untimed, goes] = adaptFirmsRecords([
     {
       lat: -27.5,
@@ -173,7 +173,10 @@ test('mixed-source invalid FIRMS time stays unknown in cards, selection and anal
   assert.notEqual(fireDetectionKey(untimed), fireDetectionKey(goes));
 
   const selectedCard = model.buildSelectedFireCard(untimed, NOW);
-  const ambientCard = model.buildFireCard({ fire: untimed, position: {} }, NOW);
+  const ambientCard = model.buildFireCard(
+    { fire: untimed, position: {} },
+    NOW,
+  );
   const cellCard = model.buildCellCard(
     { cell: { count: 1, maxFrp: 8, newestAcqMs: 0 }, position: {} },
     NOW,
@@ -207,7 +210,11 @@ test('mixed-source invalid FIRMS time stays unknown in cards, selection and anal
     _keyRequired: false,
     _error: 'PARTIAL · NASA FIRMS unavailable',
   };
-  const config = { id: 'local-firms', name: 'Active Fires', source: 'NASA FIRMS' };
+  const config = {
+    id: 'local-firms',
+    name: 'Active Fires',
+    source: 'NASA FIRMS',
+  };
   const queries = createQueries({
     layerState,
     services: {},

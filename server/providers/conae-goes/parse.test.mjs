@@ -109,7 +109,7 @@ test('invalid positions, missing time and impossible dates fail closed, includin
   }
 });
 
-test('CONAE leap days and local midnight retain exact UTC-3 instants; impossible clock fields fail', () => {
+test('CONAE leap day, midnight and invalid clocks use UTC-3 correctly', () => {
   const leapNow = Date.parse('2024-03-01T04:00:00Z');
   const [leap] = parseConaeGoes(
     collection([feature({ 'Fecha_Local_UTC-3': '2024-02-29 23:59:59' })]),
@@ -131,9 +131,7 @@ test('CONAE leap days and local midnight retain exact UTC-3 instants; impossible
     '2026-10-14 23:59:60',
     '',
   ]) {
-    assert.throws(
-      () => parseConaeGoes(collection([feature({ 'Fecha_Local_UTC-3': value })]), NOW),
-      value,
-    );
+    const payload = collection([feature({ 'Fecha_Local_UTC-3': value })]);
+    assert.throws(() => parseConaeGoes(payload, NOW), value);
   }
 });
