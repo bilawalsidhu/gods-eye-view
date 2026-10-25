@@ -125,7 +125,7 @@ test('fires need an area and report a missing key as unavailable', async () => {
     result.data.rows.map((row) => row.frp_mw),
     [40, 12],
   );
-  assert.equal(result.data.rows[1].acquired, '2026-01-01 0130');
+  assert.equal(result.data.rows[1].acquired, '2026-01-01T01:30:00.000Z');
 
   const keyless = composeCatalog({
     tools: coreTools,
