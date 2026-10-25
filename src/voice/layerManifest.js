@@ -523,6 +523,7 @@ const SELF_EVIDENT_IDS = new Set([
   'radio',
   'wind',
   'directions',
+  'wildlife',
 ]);
 
 /**

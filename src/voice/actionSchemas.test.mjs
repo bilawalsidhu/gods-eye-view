@@ -42,7 +42,8 @@ test('the complete Realtime tool payload pins the manifest-generated layer relea
     // Globe rotation adds one motion; visual keyhole fit and explicit
     // reset guidance/defaults update only move_camera and mode descriptions.
     // Restore base descriptions; append only globe-rotation defaults and fit guidance.
-    '967b5a043b812e2f8c1e190fc571cf12b960c9d4486df736902221aab4d99cf6',
+    // Wildlife extends the manifest (toggle only; a self-evident id, no alias hint).
+    '71604b6c505cb32ddc0dc7b4c7692fd2f76158e41047945069f89b460568d0f3',
   );
 });
 
