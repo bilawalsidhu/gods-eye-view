@@ -8,7 +8,7 @@ import {
   militaryPoints,
   vesselPoints,
 } from './extract.js';
-import { recorderConfig } from './config.js';
+import { mergedSettings, recorderConfig } from './config.js';
 import { exportPoints, summarizeTrack } from './exporters.js';
 import { createPgStore } from './pgStore.js';
 import { createRecorder } from './recorder.js';
@@ -66,13 +66,18 @@ const intParam = (v) => (v == null || v === '' ? null : Math.floor(Number(v)));
  * stay on this machine; the history API answers loopback requests only.
  */
 export function recorderPlugin(env = process.env) {
-  const enabled = env.GEV_RECORDER === '1';
+  const settings = mergedSettings(root, env);
+  const enabled = settings.GEV_RECORDER === '1';
   const file =
-    env.GEV_HISTORY_FILE || path.join(root, 'data', 'history.sqlite');
-  const config = enabled ? recorderConfig(env) : null;
+    settings.GEV_HISTORY_FILE || path.join(root, 'data', 'history.sqlite');
+  const config = enabled ? recorderConfig(settings) : null;
 
   function install(server) {
     if (!enabled) return;
+    server.config?.logger?.info(
+      `[gev-recorder] recording to ${config.databaseUrl ? 'PostgreSQL' : file}. ` +
+        'Some feeds restrict storing their data: read docs/RECORDING-DATA-TERMS.md',
+    );
     const recorder = createRecorder({
       file,
       retentionSec: config.retentionSec,

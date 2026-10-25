@@ -29,3 +29,4 @@ pinokio/.installed
 # Transient: a release interrupted mid-assembly (npm run changelog recovers it)
 changelog.d/.assembling/
 data/
+recorder.config.json

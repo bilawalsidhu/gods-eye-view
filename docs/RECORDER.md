@@ -1,47 +1,99 @@
 # Recorder and replay
 
 The recorder saves aircraft, military and vessel positions that pass through
-this server to a local SQLite file, so you can replay them on the globe.
-It is off by default. Recordings stay on your machine: the history API answers
-loopback requests only, and nothing is shared. Several feeds (OpenSky,
-AISStream) restrict storing or redistributing their data, so keep recordings
-private.
+this server, so you can replay them on the globe later. **It is optional and
+off by default.** God's Eye View works exactly as before without it, and you
+do not need to install or set up anything to keep using the live globe.
 
-## Turn it on
+Recordings stay on your machine: the history API answers loopback requests
+only, and nothing is shared. Some feeds restrict storing their data. Read
+[RECORDING-DATA-TERMS.md](RECORDING-DATA-TERMS.md) before you turn it on.
 
+## Quick start (about two minutes)
+
+You need Node 24 and a normal God's Eye View checkout. That is all: the
+default storage is a SQLite file, which is built into Node. No database
+server, no extra packages.
+
+1. Copy the example settings file and keep the defaults:
+
+   ```
+   copy recorder.config.example.json recorder.config.json      (Windows)
+   cp recorder.config.example.json recorder.config.json        (Mac, Linux)
+   ```
+
+   This is the only file you edit. It is already in `.gitignore`.
+
+2. Start the app as usual:
+
+   ```
+   npm run dev
+   ```
+
+   The terminal prints `[gev-recorder] recording to ...` when it is on.
+
+3. Leave it running for a few minutes, then reload the page. A REPLAY panel
+   appears on the right rail once something has been recorded.
+
+No file, no recording: delete `recorder.config.json` (or set `"enabled": false`)
+and the app is back to live only. Setting `GEV_RECORDER=1` still works as a
+one-off switch without a file.
+
+## The settings file
+
+`recorder.config.json` in the project folder (or the path in
+`GEV_RECORDER_CONFIG`). Every line is optional; leave out what you do not need.
+
+```json
+{
+  "enabled": true,
+  "retention": "7d",
+  "maxMb": 0,
+  "layers": ["air", "mil", "vessel", "local"],
+  "interval": 30,
+  "database": "",
+  "file": "data/history.sqlite"
+}
 ```
-GEV_RECORDER=1 npm run dev
-```
 
-| Variable                | Default               | Meaning                                                                  |
-| ----------------------- | --------------------- | ------------------------------------------------------------------------ |
-| `GEV_RECORDER`          | off                   | Set to `1` to record                                                     |
-| `GEV_HISTORY_FILE`      | `data/history.sqlite` | Where the database lives                                                 |
-| `GEV_HISTORY_RETENTION` | `7d`                  | How long to keep: `6h`, `14d`, `8w`, `3m`, `1y`; `0` keeps everything    |
-| `GEV_HISTORY_DAYS`      | `7`                   | Older form of the above, in days                                         |
-| `GEV_HISTORY_MAX_MB`    | off                   | Size cap; the oldest positions are dropped to stay under it              |
-| `GEV_RECORDER_LAYERS`   | all                   | Comma list of `air,mil,vessel,local` to record                           |
-| `GEV_HISTORY_DB`        | off                   | A `postgres://` address; stores in PostgreSQL instead of the SQLite file |
-| `GEV_RECORDER_INTERVAL` | `30`                  | Minimum seconds between saved points per contact                         |
+| Setting     | Default               | Meaning                                                               |
+| ----------- | --------------------- | --------------------------------------------------------------------- |
+| `enabled`   | `false`               | `true` turns recording on                                             |
+| `retention` | `"7d"`                | How long to keep: `6h`, `14d`, `8w`, `3m`, `1y`; `0` keeps everything |
+| `maxMb`     | off (`0`)             | Size cap; the oldest positions are dropped to stay under it           |
+| `layers`    | all                   | Which to record: `air`, `mil`, `vessel`, `local`                      |
+| `interval`  | `30`                  | Minimum seconds between saved points for one contact                  |
+| `file`      | `data/history.sqlite` | Where the SQLite file lives                                           |
+| `database`  | off                   | Advanced: a `postgres://` address (see below)                         |
 
-Positions are recorded only while the app is open and polling, and only for
-times the server was running with the recorder on. Aircraft are captured from
-the `/api/flights` and `/api/military` responses; vessels are sampled from the
-AIS store every 30 s. A point is kept when 30 s have passed and the contact
-moved 25 m or turned 10°.
+Environment variables do the same job and win over the file:
+`GEV_RECORDER` (`1` or `0`), `GEV_HISTORY_RETENTION` (older form
+`GEV_HISTORY_DAYS`), `GEV_HISTORY_MAX_MB`, `GEV_RECORDER_LAYERS` (comma list),
+`GEV_RECORDER_INTERVAL`, `GEV_HISTORY_FILE`, `GEV_HISTORY_DB`.
 
-## PostgreSQL and PostGIS (optional)
+Positions are recorded only while the app is open and polling. Aircraft are
+captured from the `/api/flights` and `/api/military` responses; vessels are
+sampled from the AIS store every 30 s. A point is kept when the interval has
+passed and the contact moved 25 m or turned 10°.
 
-Set `GEV_HISTORY_DB=postgres://user:password@host:5432/database` and the
-recorder keeps everything (positions, watched areas, events, pins) in
-PostgreSQL instead of the SQLite file. It needs the `pg` package once:
-`npm install pg`. Without that package the app still runs on SQLite and the
-history API says what is missing. The tables are created on first use. If the
-server has PostGIS, a point column with a GiST index is added and area queries
-use it; plain PostgreSQL works without PostGIS. Retention, the size cap
-(measured as the positions table size), pins and export all work the same.
-The history API stays loopback-only. Use a database that only this app can
-reach, and keep the password out of shell history where you can.
+## Advanced: PostgreSQL and PostGIS (not needed for normal use)
+
+Most people should stay on the default SQLite file. Use PostgreSQL only if you
+already run a server, want several tools to read the data, or expect very
+large recordings.
+
+1. Have a PostgreSQL 12 or newer database that only this app can reach.
+   PostGIS is optional: if it is installed, area queries use it.
+2. In the God's Eye View folder, run `npm install pg` once.
+3. Put the address in the settings file, for example
+   `"database": "postgres://user:password@127.0.0.1:5432/gev"`, or set
+   `GEV_HISTORY_DB`.
+
+The tables are created on first use. Retention, the size cap (measured as the
+positions table size), pins, watched areas and export work the same as on
+SQLite. If `pg` is not installed the history API says so. The settings file
+holds the password in plain text, so keep it out of git (it is ignored by
+default) and out of shared folders.
 
 ## Replay panel
 

@@ -122,3 +122,39 @@ test('pinned contacts survive retention and the size cap', async () => {
   assert.equal(rec.store.removePin('keep'), 1);
   rec.close();
 });
+
+test('the settings file supplies defaults and the environment wins', async () => {
+  const { mkdtempSync, writeFileSync } = await import('node:fs');
+  const { tmpdir } = await import('node:os');
+  const path = await import('node:path');
+  const { loadConfigFile, mergedSettings } = await import('./config.js');
+  const dir = mkdtempSync(path.join(tmpdir(), 'gev-cfg-'));
+  assert.deepEqual(loadConfigFile(dir, {}), {});
+  writeFileSync(
+    path.join(dir, 'recorder.config.json'),
+    JSON.stringify({
+      enabled: true,
+      retention: '2w',
+      maxMb: 100,
+      layers: ['air', 'mil'],
+      interval: 20,
+      database: '',
+      file: 'db/h.sqlite',
+    }),
+  );
+  const fromFile = mergedSettings(dir, {});
+  assert.equal(fromFile.GEV_RECORDER, '1');
+  assert.equal(fromFile.GEV_HISTORY_RETENTION, '2w');
+  assert.equal(fromFile.GEV_RECORDER_LAYERS, 'air,mil');
+  assert.equal(fromFile.GEV_HISTORY_FILE, path.join(dir, 'db', 'h.sqlite'));
+  assert.ok(!('GEV_HISTORY_DB' in fromFile));
+  const both = mergedSettings(dir, {
+    GEV_HISTORY_RETENTION: '6h',
+    GEV_RECORDER: '0',
+  });
+  assert.equal(both.GEV_HISTORY_RETENTION, '6h');
+  assert.equal(both.GEV_RECORDER, '0');
+  assert.equal(recorderConfig(fromFile).retentionSec, 14 * 86400);
+  writeFileSync(path.join(dir, 'recorder.config.json'), '{ nope');
+  assert.throws(() => loadConfigFile(dir, {}), /Cannot read/);
+});

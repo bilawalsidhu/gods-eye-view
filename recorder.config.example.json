@@ -1,0 +1,9 @@
+{
+  "enabled": true,
+  "retention": "7d",
+  "maxMb": 0,
+  "layers": ["air", "mil", "vessel", "local"],
+  "interval": 30,
+  "database": "",
+  "file": "data/history.sqlite"
+}
