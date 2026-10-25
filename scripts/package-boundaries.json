@@ -571,7 +571,8 @@
       "src/i18n/locales/ru.json",
       "src/i18n/locales/zh-CN.json",
       "src/ui/unitLabels.js",
-      "src/ui/statusBadge.js"
+      "src/ui/statusBadge.js",
+      "src/sources/cctvTypes.js"
     ],
     "external": []
   },
@@ -805,7 +806,8 @@
       "src/ui/keyGuidance.js",
       "src/ui/layerNames.js",
       "src/ui/statusText.js",
-      "src/ui/statusBadge.js"
+      "src/ui/statusBadge.js",
+      "src/sources/cctvTypes.js"
     ],
     "external": ["cesium"]
   },
@@ -1421,7 +1423,8 @@
       "src/i18n/locale.js",
       "src/i18n/locales/es.json",
       "src/i18n/locales/ru.json",
-      "src/i18n/locales/zh-CN.json"
+      "src/i18n/locales/zh-CN.json",
+      "src/sources/cctvTypes.js"
     ],
     "external": ["hls.js", "cesium"]
   },
@@ -2570,7 +2573,8 @@
       "src/voice/geminiSession.js",
       "src/voice/geminiAudio.js",
       "src/voice/geminiCaptureWorklet.js",
-      "src/ui/statusBadge.js"
+      "src/ui/statusBadge.js",
+      "src/sources/cctvTypes.js"
     ],
     "external": [
       "hls.js",
@@ -3138,7 +3142,8 @@
       "src/layers/airQuality/source.js",
       "src/ui/statusText.js",
       "src/ui/layerNames.js",
-      "src/layers/streetLevel/providers/mapillary/policy.js"
+      "src/layers/streetLevel/providers/mapillary/policy.js",
+      "src/sources/cctvTypes.js"
     ],
     "external": [
       "hls.js",

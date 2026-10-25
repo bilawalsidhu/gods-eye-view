@@ -1,5 +1,6 @@
 import { updateStatusBadge } from './statusBadge.js';
 import { msg, t } from '../i18n/index.js';
+import { isPositionOnlySource } from '../sources/cctvTypes.js';
 
 /**
  * Display text for the CCTV source health the server reports
@@ -16,6 +17,8 @@ const SOURCE_KIND_LABELS = Object.freeze({
   configured: msg('CONFIGURED'),
   seed: msg('SEED'),
   image: msg('IMAGE'),
+  // The operator publishes no imagery for this camera at all.
+  'position-only': msg('NO PUBLIC FEED'),
   unknown: msg('UNKNOWN'),
 });
 
@@ -23,6 +26,7 @@ const SOURCE_STATUS_LABELS = Object.freeze({
   ok: msg('OK'),
   degraded: msg('DEGRADED'),
   error: msg('ERROR'),
+  'position-only': msg('POSITION ONLY'),
   unknown: msg('UNKNOWN'),
 });
 
@@ -37,12 +41,16 @@ const SOURCE_MESSAGES = Object.freeze({
   'Fallback Street View frame': msg('Fallback Street View frame'),
   'Upstream unavailable': msg('Upstream unavailable'),
   'No source configured': msg('No source configured'),
+  'No public media published for this camera': msg(
+    'No public media published for this camera',
+  ),
 });
 
 const SOURCE_LABELS = Object.freeze({
   'Configured source': msg('Configured source'),
   'Configured Source': msg('Configured Source'),
   'Synthetic fallback': msg('Synthetic fallback'),
+  'Position-only register': msg('Position-only register'),
 });
 
 /** "SNAPSHOT" / "СНИМОК"; unknown codes (HLS, MJPEG…) stay as uppercase codes. */
@@ -168,6 +176,14 @@ export function _syncCctvSourceBadge(activeCamera, enabled) {
   if (!enabled || !activeCamera) {
     updateStatusBadge(this._cctvSourceBadge, { label: t('SOURCE · UNKNOWN') });
     this._cctvSourceBadge.dataset.frameState = 'idle';
+    return;
+  }
+  // A position-only camera publishes no imagery at all, so the badge says so
+  // outright. The loading/unavailable states below describe a feed in trouble;
+  // this one is not in trouble, it was never a feed.
+  if (isPositionOnlySource(activeCamera)) {
+    this._cctvSourceBadge.textContent = `${cctvSourceKindLabel('position-only')} · ${cctvSourceStatusLabel('position-only')}`;
+    this._cctvSourceBadge.dataset.frameState = 'position-only';
     return;
   }
   const hasDisplayedFrame =

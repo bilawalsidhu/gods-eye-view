@@ -28,6 +28,7 @@ import {
   loadNycSourcesFromOpenData,
   loadTorontoSourcesFromOpenData,
   loadFloridaSourcesFromOpenData,
+  loadAmsterdamSourcesFromOpenData,
 } from './sources.js';
 
 /** Env kill switch: unset or anything but "0" means enabled. */
@@ -164,6 +165,20 @@ const LIVE_PACKS = [
     name: 'taiwan',
     enabled: () => envEnabled('CCTV_TAIWAN_ENABLED'),
     load: loadTaiwanSources,
+  },
+  {
+    // Position-only: a register of where Amsterdam's public traffic and ANPR
+    // cameras stand, with no public imagery behind any row. The pack declares
+    // mediaAvailability:'position-only' and the proxy refuses the live-frame
+    // fallback chain for it.
+    //
+    // Opt-in: the dataset's own licence field reads "openbaar, tenzij anders
+    // aangegeven" (public, unless indicated otherwise) with a "behoudens
+    // uitzonderingen" carve-out, rather than a named open licence, so an unset
+    // flag never reaches the upstream (see DATA_SOURCES.md).
+    name: 'amsterdam',
+    enabled: () => envOptIn('CCTV_AMSTERDAM_ENABLED'),
+    load: loadAmsterdamSourcesFromOpenData,
   },
 ];
 /**

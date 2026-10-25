@@ -2948,5 +2948,9 @@
   "Layers": "Capas",
   "Search": "Buscar",
   "More": "Más",
-  "Panels": "Paneles"
+  "Panels": "Paneles",
+  "NO PUBLIC FEED": "SIN SEÑAL PÚBLICA",
+  "POSITION ONLY": "SOLO POSICIÓN",
+  "No public media published for this camera": "No se publica ningún contenido público para esta cámara",
+  "Position-only register": "Registro de solo posiciones"
 }
