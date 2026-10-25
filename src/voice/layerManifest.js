@@ -410,6 +410,10 @@ const layers = [
 export const VOICE_OFF_LAYERS = Object.freeze({
   'bhote-koshi-2026': 'scene-driven event layer (control_scene)',
   'bhote-koshi-locator': 'scene-driven event layer (control_scene)',
+  // The Realtime prompt sits close to its 52,000-character ceiling
+  // (src/voice/pointAndAsk.test.mjs); the toggle stays in the Layers panel.
+  'sea-level-stations':
+    'raw tide gauge readings on local datums; Realtime prompt budget is full',
 });
 
 const TYPE_NAMES = Object.freeze({

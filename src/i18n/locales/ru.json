@@ -3015,5 +3015,38 @@
   "Layers": "Слои",
   "Search": "Поиск",
   "More": "Ещё",
-  "Panels": "Панели"
+  "Panels": "Панели",
+  "Loading the last 72 hours…": "Загрузка последних 72 часов…",
+  "Last 72 hours unavailable": "Последние 72 часа недоступны",
+  "No readings in the last 72 hours": "Нет показаний за последние 72 часа",
+  "Last 72 h: low {min} · high {max}": "За 72 ч: минимум {min} · максимум {max}",
+  "Level flat over the last 72 hours": "Уровень не менялся последние 72 часа",
+  "Latest {value} is at {percent}% of that range": "Последнее показание {value} — на {percent}% этого диапазона",
+  "SEA LEVEL STATION · IOC {code}": "СТАНЦИЯ УРОВНЯ МОРЯ · IOC {code}",
+  "Last reading {value} · {age}": "Последнее показание {value} · {age}",
+  "No reading reported": "Показаний не поступало",
+  "Sensor {sensor} · {time} UTC": "Датчик {sensor} · {time} UTC",
+  "Levels are against this gauge’s own datum; never compare stations": "Уровни отсчитываются от собственного нуля этого мареографа; станции между собой не сравнивайте",
+  "Raw data, not quality controlled": "Сырые данные без контроля качества",
+  "IOC station page ↗ · click card to open": "Страница станции IOC ↗ · нажмите на карточку, чтобы открыть",
+  "Open {name} on the IOC station page": "Открыть {name} на странице станции IOC",
+  "IOC / VLIZ · RAW": "IOC / VLIZ · СЫРЫЕ",
+  "Sea level source unavailable": "Источник уровня моря недоступен",
+  "Colour shows how recently each tide gauge reported, never the level: every gauge has its own datum. Raw data, not quality controlled. Click a station for its last 72 hours.": "Цвет показывает, как давно мареограф передавал данные, а не уровень: у каждого мареографа свой нуль отсчёта. Сырые данные без контроля качества. Нажмите на станцию, чтобы увидеть последние 72 часа.",
+  "{count} reporting": {
+    "one": "передаёт: {count}",
+    "few": "передают: {count}",
+    "many": "передают: {count}",
+    "other": "передают: {count}"
+  },
+  "{count} stations": {
+    "one": "{count} станция",
+    "few": "{count} станции",
+    "many": "{count} станций",
+    "other": "{count} станции"
+  },
+  "Reporting (within 3 h)": "Передаёт (за 3 ч)",
+  "Late (3 to 24 h)": "С задержкой (от 3 до 24 ч)",
+  "Silent (over 24 h)": "Молчит (более 24 ч)",
+  "Sea level stations": "Станции уровня моря"
 }

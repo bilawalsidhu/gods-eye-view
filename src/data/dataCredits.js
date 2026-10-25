@@ -409,6 +409,14 @@ export const DATA_CREDITS = [
     html: 'Cyclone advisories: <a href="https://www.nhc.noaa.gov/" target="_blank" rel="noopener">NOAA/NWS NHC / CPHC</a> · Atlantic and eastern/central North Pacific. Forecast center uncertainty, not storm size.',
   },
   {
+    key: 'ioc-sea-level',
+    html:
+      'Sea level stations: Flanders Marine Institute (VLIZ); Intergovernmental Oceanographic Commission (IOC): ' +
+      '<a href="https://www.ioc-sealevelmonitoring.org" target="_blank" rel="noopener">Sea level station monitoring facility</a>, ' +
+      'accessed live at VLIZ. DOI: <a href="https://doi.org/10.14284/482" target="_blank" rel="noopener">10.14284/482</a> ' +
+      '(CC BY-NC 4.0 — non-commercial). Raw data, not quality controlled; each gauge has its own datum.',
+  },
+  {
     key: 'weather-lightning',
     html: 'Lightning density: NOAA/NWS nowCOAST · derived from Vaisala NLDN/GLD360. <a href="https://ocean.weather.gov/lightning/lightning_pdd.php" target="_blank" rel="noopener">Public derived density product</a>, not raw detections.',
   },

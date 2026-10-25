@@ -26,6 +26,7 @@ import { createApplicationFirms } from './layers/firms.js';
 import { createApplicationEarthquakes } from './layers/earthquakes.js';
 import { createApplicationAirQuality } from './layers/airQuality.js';
 import { createApplicationFirePerimeters } from './layers/perimeters.js';
+import { createApplicationSeaLevel } from './layers/seaLevel.js';
 import { createApplicationGnssIntegrity } from './layers/gnss.js';
 import { createApplicationCables } from './layers/submarineCables.js';
 import { createApplicationStreetLevel } from './layers/streetLevel.js';
@@ -126,6 +127,7 @@ export function createApplicationCatalog({
         createApplicationGnssIntegrity({
           source: sources['gnss-integrity'],
         }),
+        createApplicationSeaLevel({ source: sources['sea-level-stations'] }),
         createApplicationAlpr({ surface, source: sources.alpr }),
         createApplicationStreetLevel({
           surface,

@@ -1,5 +1,5 @@
 // The DATA LAYERS row shows the English status texts that GNSS, Transit,
-// CelesTrak and AQHI produce in the UI language.
+// CelesTrak, AQHI and IOC sea level produce in the UI language.
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { setLocale } from '../i18n/index.js';
@@ -70,6 +70,27 @@ const cases = [
       lastUpdate: now,
     },
     'request timed out',
+  ],
+  [
+    'sea-level-stations',
+    {
+      count: 0,
+      error: 'IOC network error',
+      source: 'IOC / VLIZ · RAW',
+      lastUpdate: now,
+    },
+    'network error',
+  ],
+  [
+    'sea-level-stations',
+    {
+      count: 12,
+      countLabel: '',
+      stale: true,
+      source: 'IOC / VLIZ · RAW',
+      lastUpdate: now,
+    },
+    'RAW',
   ],
 ];
 
