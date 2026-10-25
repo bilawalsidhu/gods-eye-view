@@ -120,20 +120,34 @@ export function createOceanRendering({
               x,
               y,
             });
-            const image = await new cesium.Resource({ url }).fetchImage({
-              preferImageBitmap: false,
-              flipY: false,
-            });
-            if (!image) throw new Error('Ocean tile request deferred');
-            const canvas = document.createElement('canvas');
-            canvas.width = canvas.height = 256;
-            const context = canvas.getContext('2d', {
-              willReadFrequently: true,
-            });
-            context.drawImage(image, 0, 0);
-            return context.getImageData(0, 0, 256, 256).data;
+            // GIBS fails the odd tile with a 500: retry it, and leave a tile
+            // that still fails transparent rather than losing the globe.
+            for (let attempt = 0; attempt <= TILE_RETRIES; attempt++) {
+              try {
+                const image = await new cesium.Resource({ url }).fetchImage({
+                  preferImageBitmap: false,
+                  flipY: false,
+                });
+                if (!image) throw new Error('Ocean tile request deferred');
+                const canvas = document.createElement('canvas');
+                canvas.width = canvas.height = 256;
+                const context = canvas.getContext('2d', {
+                  willReadFrequently: true,
+                });
+                context.drawImage(image, 0, 0);
+                return context.getImageData(0, 0, 256, 256).data;
+              } catch {
+                if (attempt < TILE_RETRIES)
+                  await new Promise((done) =>
+                    setTimeout(done, 500 * (attempt + 1)),
+                  );
+              }
+            }
+            return null;
           }),
         );
+        if (tiles.filter((tile) => !tile).length > (n * n) / 4)
+          throw new Error('Ocean tiles unavailable');
         if (current !== generation) return;
         const mosaic = document.createElement('canvas');
         mosaic.width = mosaic.height = size;
@@ -148,6 +162,7 @@ export function createOceanRendering({
               y,
               0.25,
             );
+            if (!rgba) continue;
             const image = context.createImageData(256, 256);
             image.data.set(rgba);
             context.putImageData(image, x * 256, y * 256);

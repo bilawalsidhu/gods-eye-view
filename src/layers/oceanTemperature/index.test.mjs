@@ -341,3 +341,82 @@ test('tiles host builds a geographic shell at 0.6 opacity and never adds tileset
   rendering.destroy();
   assert.equal(surfaces[0].destroyed, true);
 });
+
+test('the shell retries a failing GIBS tile and survives one that keeps failing', async () => {
+  const attempts = new Map();
+  const draws = [];
+  const surfaces = [];
+  let requests = 0;
+  class Provider {
+    constructor({ url }) {
+      this.url = url;
+    }
+    fetchImage(options) {
+      requests++;
+      const tile = this.url
+        .match(/\/3\/(\d)\/(\d)\.png$/)
+        .slice(1)
+        .join('/');
+      attempts.set(tile, (attempts.get(tile) ?? 0) + 1);
+      // 6/7 fails once then loads; 7/7 always fails (a GIBS 500).
+      if (tile === '6/7' && attempts.get(tile) === 1)
+        return Promise.reject(new Error('500'));
+      if (tile === '7/7') return Promise.reject(new Error('500'));
+      assert.match(this.url, /\/3\/[0-7]\/[0-7]\.png$/);
+      assert.equal(options.flipY, false);
+      assert.equal(options.preferImageBitmap, false);
+      return Promise.resolve({});
+    }
+  }
+  let smoothed = 0;
+  const document = {
+    createElement: () => ({
+      getContext: () => ({
+        drawImage: (...args) => draws.push(args),
+        getImageData: (x, y, w, h) => ({
+          data: new Uint8ClampedArray(w * h * 4),
+        }),
+        createImageData: (w, h) => ({ data: new Uint8ClampedArray(w * h * 4) }),
+        putImageData: () => smoothed++,
+      }),
+    }),
+  };
+  const rendering = createOceanRendering({
+    cesium: { ...Cesium, Resource: Provider },
+    document,
+    getViewer: () => ({ scene: { requestRender() {} } }),
+    getHost: () => ({ kind: 'tileset', collection: {} }),
+    onChange() {},
+    eventTarget: null,
+    createShell: (options) => {
+      const surface = {
+        options,
+        setImage(image) {
+          this.image = image;
+        },
+        setAlpha(alpha) {
+          this.alpha = alpha;
+        },
+        setShow(show) {
+          this.show = show;
+        },
+        destroy() {
+          this.destroyed = true;
+        },
+      };
+      surfaces.push(surface);
+      return surface;
+    },
+  });
+  await rendering.setField(product('anomaly'), dates.at(-1));
+  assert.equal(attempts.get('6/7'), 2);
+  assert.equal(attempts.get('7/7'), 3);
+  assert.equal(requests, 64 + 1 + 2);
+  // Every tile is drawn: the one that never loaded keeps only the edges its
+  // neighbours smooth into it, and is otherwise transparent.
+  assert.equal(smoothed, 64);
+  assert.equal(surfaces.length, 1);
+  assert.equal(rendering.getDiagnostics().imageryError, null);
+  rendering.destroy();
+  assert.equal(surfaces[0].destroyed, true);
+});
