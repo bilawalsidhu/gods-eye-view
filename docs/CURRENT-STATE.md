@@ -4133,6 +4133,9 @@ and as the last line of the list, because the arrival step is among the ones
 dropped. A route of exactly 200 is complete, and a roundabout exit after the
 200th keeps folding into it.
 
+Route duration labels select their unit after rounding seconds, switching to
+minutes at 59.5 seconds; a 59.6-second leg displays as `1 min`, rather than `60 s`.
+
 A step's card opens from its dot on the globe or from its line in the list, and
 the list covers every step including departure and arrival, which have no dot.
 What a card needs is a resolved ground anchor: a step whose ground cell has not
@@ -5097,7 +5100,7 @@ and unreachable upstream (502/504) separately from road geometry.
 - HUD `SUMMARY` readout requests a five-word intelligence-style summary from `/api/openai/hud-summary` (model `OPENAI_HUD_SUMMARY_MODEL`, default `gpt-5-nano`, minimal reasoning).
 - Input is the live basemap label context (place/street/nearby-place labels + enabled layers) — the model is instructed not to infer from coordinates.
 - Output is sanitized to exactly five words; falls back to the deterministic telemetry summary on error/timeout (5s abort); typewriter animation on update.
-- A summary asked for before the camera starts moving never paints over the next view: `moveStart` marks the summary dirty and bumps its revision, as `moveEnd` does, and aborts the request in flight; neither its reply nor its fallback line (on an error, the 5 s timeout, the abort, or a failed context build) paints once the revision has moved. Cancelling an active request also invalidates its pending context signature, so the next 15 s tick retries even when the place and layer labels remain unchanged; completed answers remain reusable.
+- A summary asked for before the camera starts moving never paints over the next view: `moveStart` marks the summary dirty and bumps its revision, as `moveEnd` does, aborts the request in flight and stops a reply still typing; neither a reply nor a fallback line (on an error, the 5 s timeout, the abort, or a failed context build) paints once the revision has moved. A dropped request forgets its signature and a timeout counts as a failure, so the next 15 s tick asks again even over the same place. An interrupted typewriter reply also forgets its signature; fully displayed answers remain reusable.
 
 ### Place-search providers
 

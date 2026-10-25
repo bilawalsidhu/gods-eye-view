@@ -463,3 +463,115 @@ test('a cancelled summary retries the same context but completed answers stay re
     env.restore();
   }
 });
+
+test('after a dropped or timed-out request the next tick asks again, and a move stops typing', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout', 'setInterval'] });
+  const env = installHudEnvironment();
+  const previousWindow = globalThis.window;
+  globalThis.window = globalThis;
+  const pending = [];
+  const summaryService = {
+    summarize: (context, { signal }) =>
+      new Promise((resolve, reject) => {
+        pending.push({ resolve });
+        signal.addEventListener('abort', () =>
+          reject(Object.assign(new Error('aborted'), { name: 'AbortError' })),
+        );
+      }),
+  };
+  let hud;
+  try {
+    hud = new IntelHUD(env.viewer, { summaryService });
+    // The same place before and after: a slow follow camera, a small pan.
+    hud._summaryContext = async () => ({ place: 'Lisboa' });
+    const element = env.elements.get('hud-summary');
+    const settle = () => new Promise((resolve) => setImmediate(resolve));
+    hud._updateCameraData();
+
+    // A move aborts the request; the next tick over the same place asks again.
+    let update = hud._updateSummary(false);
+    await settle();
+    env.cameraListeners.moveStart();
+    await update;
+    update = hud._updateSummary(false);
+    await settle();
+    assert.equal(pending.length, 2, 'asked again after the abort');
+
+    // That one times out at 5 s: retried like any failure.
+    t.mock.timers.tick(5_000);
+    await update;
+    update = hud._updateSummary(false);
+    await settle();
+    assert.equal(pending.length, 3, 'asked again after the timeout');
+    pending[2].resolve({
+      ok: true,
+      status: 200,
+      data: { summary: 'Lisboa Rua Augusta', error: null },
+    });
+    await update;
+
+    // A reply still typing stops when the camera starts moving.
+    hud._typeSummary('Canyon Junction Wyoming Yellowstone National Park');
+    t.mock.timers.tick(48);
+    const typed = element.textContent;
+    env.cameraListeners.moveStart();
+    t.mock.timers.tick(2_000);
+    assert.equal(
+      element.textContent,
+      typed,
+      'no more characters after the move',
+    );
+  } finally {
+    hud?.destroy();
+    if (previousWindow === undefined) delete globalThis.window;
+    else globalThis.window = previousWindow;
+    env.restore();
+  }
+});
+
+test('a summary interrupted while typing can retry unchanged context', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout', 'setInterval'] });
+  const env = installHudEnvironment();
+  const previousWindow = globalThis.window;
+  globalThis.window = globalThis;
+  let calls = 0;
+  const text = 'San Francisco Bay Urban Landscape';
+  const summaryService = {
+    summarize: async () => {
+      calls++;
+      return { ok: true, status: 200, data: { summary: text } };
+    },
+  };
+  let hud;
+  try {
+    hud = new IntelHUD(env.viewer, { summaryService });
+    hud._summaryContext = async () => ({ place: 'San Francisco' });
+    hud._updateCameraData();
+    await hud._updateSummary(true);
+    t.mock.timers.tick(48);
+    const element = env.elements.get('hud-summary');
+    assert.notEqual(element.textContent, text, 'the answer is still typing');
+    assert.equal(
+      hud._summaryRequest,
+      null,
+      'the network request already finished',
+    );
+    env.cameraListeners.moveStart();
+    assert.equal(hud._summaryTypingInterval, null);
+    await hud._updateSummary(false);
+    assert.equal(
+      calls,
+      2,
+      'a partially displayed answer must not suppress retry',
+    );
+    assert.equal(element.textContent, text);
+    env.cameraListeners.moveStart();
+    await hud._updateSummary(false);
+    assert.equal(calls, 2, 'the fully displayed answer remains reusable');
+  } finally {
+    hud?.destroy();
+    if (previousWindow === undefined) delete globalThis.window;
+    else globalThis.window = previousWindow;
+    env.restore();
+  }
+});

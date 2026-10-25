@@ -226,15 +226,17 @@ export class IntelHUD {
     this._geoidCorrectionApplied = false;
     // A summary built for one view must not land on the next: a request in
     // flight when the camera starts moving is aborted and nothing it ends
-    // with paints (the revision moves), and the summary is marked dirty so
-    // the next periodic tick asks about the view the camera has moved to.
+    // with paints (the revision moves), a reply still typing stops, and the
+    // summary is marked dirty so the next periodic tick asks about the view
+    // the camera has moved to.
     this._onCameraMoveStart = () => {
       this._markSummaryDirty();
-      if (this._summaryRequest) {
-        // A cancelled request never supplied a reusable answer for its context.
+      if (this._summaryRequest || this._summaryTypingInterval) {
+        // Cancelled requests and partially typed replies are not reusable answers.
         this._lastSummarySignature = null;
-        this._summaryRequest.abort();
       }
+      this._summaryRequest?.abort();
+      this._stopSummaryTyping();
     };
     this._onCameraMoveEnd = () => {
       this._markSummaryDirty();
@@ -779,6 +781,12 @@ export class IntelHUD {
     return provenance ? `${line} | ${provenance}` : line;
   }
 
+  /** Stop a summary still typing out, leaving what it has typed so far. */
+  _stopSummaryTyping() {
+    clearInterval(this._summaryTypingInterval);
+    this._summaryTypingInterval = null;
+  }
+
   /**
    * Animate the summary text into the DOM using a typewriter effect
    * (2 characters every 24ms).
@@ -847,7 +855,11 @@ export class IntelHUD {
     this._summaryDirty = false;
     this._lastSummarySignature = signature;
     const controller = new AbortController();
-    const timeout = window.setTimeout(() => controller.abort(), 5000);
+    let timedOut = false;
+    const timeout = window.setTimeout(() => {
+      timedOut = true;
+      controller.abort();
+    }, 5000);
     this._summaryRequest = controller;
     try {
       this.summaryPolicy.onRequest?.();
@@ -870,18 +882,24 @@ export class IntelHUD {
         animate,
       );
     } catch (error) {
-      if (error?.name !== 'AbortError') {
+      // The 5 s timeout is a failure like any other; a move's abort (or
+      // destroy's) is not.
+      const moved = revision !== this._summaryRevision;
+      if (error?.name !== 'AbortError' || timedOut) {
         console.warn('[HUD] AI summary unavailable:', error);
         // Invalidate the committed signature so the next periodic tick
         // retries instead of sticking on the fallback line forever.
         this._lastSummarySignature = null;
         this._summaryDirty = true;
       }
-      if (revision === this._summaryRevision)
-        this._setSummaryText(fallbackText, animate);
+      if (!moved) this._setSummaryText(fallbackText, animate);
     } finally {
       window.clearTimeout(timeout);
       if (this._summaryRequest === controller) this._summaryRequest = null;
+      // A request whose answer was dropped (aborted by a move, or a reply
+      // that came back after one) committed a signature it never painted;
+      // forget it, or the next tick over the same place would skip asking.
+      if (revision !== this._summaryRevision) this._lastSummarySignature = null;
     }
   }
 
@@ -890,6 +908,8 @@ export class IntelHUD {
       this._typeSummary(text);
       return;
     }
+    // A plain paint replaces any reply still typing.
+    this._stopSummaryTyping();
     const el = document.getElementById('hud-summary');
     if (el) el.textContent = text;
   }
