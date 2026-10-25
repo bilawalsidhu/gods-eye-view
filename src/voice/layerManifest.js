@@ -251,6 +251,25 @@ const layers = [
     noQuery: 'map overlay; no countable records',
   },
   {
+    id: 'temperature',
+    aliases: [
+      'temperature',
+      'temperature map',
+      'surface temperature',
+      'land surface temperature',
+      'ground temperature',
+      'air temperature',
+      'ocean temperature',
+      'sea surface temperature',
+      'sst',
+      'ocean anomalies',
+      'el nino',
+    ],
+    context: false,
+    noQuery:
+      'map overlay with land surface, sea surface, sea anomaly and air modes; no countable records; Niño 3.4 box is not an ENSO index',
+  },
+  {
     id: 'air-quality',
     aliases: ['air quality', 'aqhi', 'smog', 'air pollution'],
     context: false,

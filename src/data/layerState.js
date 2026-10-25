@@ -157,6 +157,24 @@ function trackingIdOption(key, token, defaultValue = null) {
   });
 }
 
+/** A UTC calendar day, YYYY-MM-DD; anything else restores as unset. */
+function dateOption(key, token, defaultValue = null) {
+  const day = (value) =>
+    typeof value === 'string' &&
+    /^\d{4}-\d{2}-\d{2}$/.test(value) &&
+    Number.isFinite(Date.parse(`${value}T00:00:00Z`))
+      ? value
+      : null;
+  return Object.freeze({
+    key,
+    token,
+    defaultValue,
+    normalize: day,
+    encode: (value) => String(value),
+    decode: day,
+  });
+}
+
 function enumOption(
   key,
   token,
@@ -347,6 +365,17 @@ const OPTION_GROUPS = Object.freeze({
       mph: 'i',
     }),
     booleanOption('paused', 'p', false),
+  ]),
+  temperature: Object.freeze([
+    enumOption('mode', 'm', 'land', ['land', 'sst', 'anomaly', 'air'], {
+      land: 'l',
+      sst: 's',
+      anomaly: 'a',
+      air: 't',
+    }),
+    enumOption('units', 'u', '°C', ['°C', '°F'], { '°C': 'c', '°F': 'f' }),
+    booleanOption('showNino34', 'n', false),
+    dateOption('date', 'd'),
   ]),
   flights: Object.freeze([
     // Owner directive 2026-08-22: the fleet's 3D models are DEFAULT-ON in
@@ -671,6 +700,12 @@ export const LAYER_STATE_REGISTRY = Object.freeze([
     id: 'telegeography-submarine-cables',
     token: 'u',
     disposition: 'enabled-only',
+  }),
+  Object.freeze({
+    id: 'temperature',
+    token: '5',
+    disposition: 'enabled+options',
+    optionOwner: 'temperature',
   }),
   Object.freeze({
     id: 'traffic',

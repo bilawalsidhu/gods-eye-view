@@ -185,6 +185,15 @@ export const DATA_CREDITS = [
     html: 'Keyless place search: <a href="https://photon.komoot.io" target="_blank" rel="noopener">Photon</a> (komoot)',
   },
   {
+    key: 'nasa-gibs-surface-temperature',
+    html:
+      'Surface temperature: We acknowledge the use of imagery provided by services from ' +
+      "NASA's Global Imagery Browse Services (GIBS), part of NASA's Earth Science " +
+      'Data and Information System (ESDIS). ' +
+      '<a href="https://gibs.earthdata.nasa.gov" target="_blank" rel="noopener">gibs.earthdata.nasa.gov</a> · ' +
+      'MODIS Terra land surface temperature, monthly mean (MOD11C3)',
+  },
+  {
     key: 'open-meteo',
     html:
       'Cockpit current conditions: ' +
@@ -405,6 +414,10 @@ export const DATA_CREDITS = [
     html: 'Observed weather: <a href="https://nowcoast.noaa.gov/" target="_blank" rel="noopener">NOAA nowCOAST</a> · NWS/OAR MRMS radar; NESDIS GOES and global satellite partners. <a href="https://oceanservice.noaa.gov/disclaimer.html" target="_blank" rel="noopener">Source disclaimer</a>.',
   },
   {
+    key: 'ocean-temperature',
+    html: 'Ocean Temperature: JPL MUR MEaSUREs Project / NASA JPL PO.DAAC; imagery served by NASA GIBS. <a href="https://doi.org/10.5067/GHM25-4FJ42" target="_blank" rel="noopener">MUR25 v4.2</a>. Daily 0.25° blended analysis; anomalies use the 2003–2014 climatology.',
+  },
+  {
     key: 'weather-cyclones',
     html: 'Cyclone advisories: <a href="https://www.nhc.noaa.gov/" target="_blank" rel="noopener">NOAA/NWS NHC / CPHC</a> · Atlantic and eastern/central North Pacific. Forecast center uncertainty, not storm size.',
   },
@@ -418,6 +431,13 @@ export const DATA_CREDITS = [
       'Wind: resampled NOAA Global Forecast System (GFS) 10 m wind via ' +
       '<a href="https://registry.opendata.aws/noaa-gfs-bdp-pds/" target="_blank" rel="noopener">NOAA Open Data on AWS</a> ' +
       '(U.S. public domain; forecast, not observations)',
+  },
+  {
+    key: 'air-temperature',
+    html:
+      'Air Temperature: resampled NOAA Global Forecast System (GFS) 2 m air temperature via ' +
+      '<a href="https://registry.opendata.aws/noaa-gfs-bdp-pds/" target="_blank" rel="noopener">NOAA Open Data on AWS</a> ' +
+      '(U.S. public domain; model analysis/forecast, not station measurements; no endorsement implied)',
   },
   {
     key: 'ecmwf-ifs',

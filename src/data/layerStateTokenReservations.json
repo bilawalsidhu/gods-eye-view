@@ -23,6 +23,7 @@
   ["satellites", "s"],
   ["street-level", "0"],
   ["telegeography-submarine-cables", "u"],
+  ["temperature", "5"],
   ["traffic", "t"],
   ["transit", "j"],
   ["weather-cyclones", "y"],

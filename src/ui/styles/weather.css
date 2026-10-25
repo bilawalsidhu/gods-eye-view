@@ -266,8 +266,6 @@ body.recording-mode .gev-wind-inspection-marker {
   transform: translateX(-50%);
   font: 9px/1.45 var(--font-mono);
   color: var(--text-dim);
-}
-html:not([lang='en']) .rail-card-zero::after {
   white-space: nowrap;
 }
 

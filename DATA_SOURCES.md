@@ -13,6 +13,52 @@ How to read this:
 
 ## Live sources (fetched at runtime — not stored in this repo)
 
+### Ocean Temperature
+
+These are the Sea anomaly and Sea surface modes of the Temperature layer. The portable source in `src/layers/oceanTemperature/source.js` supports the
+GHRSST MUR25 daily SST and anomaly imagery published by NASA GIBS. The Weather
+layer uses globe imagery or a raised 3D-map shell with native-tile palette point
+inspection. No data, tiles or colormaps are bundled.
+
+PO.DAAC's [MUR25 product page](https://podaac.jpl.nasa.gov/dataset/MUR25-JPL-L4-GLOB-v04.2)
+gives this citation verbatim:
+
+> JPL MUR MEaSUREs Project. 2019. GHRSST Level 4 MUR 0.25 deg Global Foundation Sea Surface Temperature Analysis. Ver. 4.2. PO.DAAC, CA, USA. Dataset accessed [YYYY-MM-DD] at https://doi.org/10.5067/GHM25-4FJ42
+
+Source verification/access date for this work: 2026-10-21. The same page states:
+
+> The dataset also contains an additional SST anomaly variable derived from a MUR climatology (average between 2003 and 2014).
+
+This is a daily satellite/in-situ blended analysis on a 0.25-degree grid, not an
+ENSO index or category. The 2km GIBS tile-matrix name does not imply 2km scientific
+resolution. NASA Earth science data are openly available; the code's MIT license
+does not replace NASA's [data use and citation guidance](https://www.earthdata.nasa.gov/engage/open-data-services-and-software/data-and-information-policy).
+Credit: JPL MUR MEaSUREs Project / NASA JPL PO.DAAC; imagery served by NASA GIBS.
+
+Both geographic (`epsg4326`, `2km`, 512px) and Web Mercator (`epsg3857`,
+`GoogleMapsCompatible_Level6`, 256px) products were rechecked. The source helper
+uses the latter to avoid incorrectly treating geographic GIBS matrices as a
+standard power-of-two Cesium geographic tiling scheme. Capabilities are downloaded
+once per source instance and their advertised intervals are expanded without
+filling gaps. Both products advertised 2026-10-20 as their latest day.
+
+The live anomaly colormap has 63 entries including no-data and extends to
+unbounded bins below -3 and at/above +3 degrees C. Its labelled ticks at -2 and
++2 are **not** the palette's saturation endpoints. `anomalyReadout` deliberately
+supports conservative reporting at +/-2 without claiming those are the true
+endpoints. Interior pixels retain published value intervals; no midpoint or
+nearest-color estimate is manufactured. SST has 216 entries including no-data,
+with unbounded bins below 0 and at/above 32 degrees C. No-data/unknown colors and
+non-opaque pixels return no value.
+
+Colormaps are discovered from capabilities, currently
+[anomaly](https://gibs.earthdata.nasa.gov/colormaps/v1.3/GHRSST_Sea_Surface_Temperature_Anomalies.xml)
+and [SST](https://gibs.earthdata.nasa.gov/colormaps/v1.3/GHRSST_Sea_Surface_Temperature.xml).
+The verified anomaly tile response returned `Access-Control-Allow-Origin: *`;
+there is no server proxy or credential requirement.
+
+### Source Inventory
+
 | Source                                                                | Used for                                                                                                                            | License / terms                                                                                                                                                                                                                                                                                                                                       | Attribution                                                                                                                                 |
 | --------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
 | **NOAA GFS (wind)** (`noaa-gfs-bdp-pds.s3.amazonaws.com`) | Global 10 m wind, optional 2 m temperature and mean sea-level pressure for Wind. Keyless; latest 6-hourly 0.25° cycle, byte-range GRIB2 reads, cached for an hour | U.S. public domain (NOAA); keyless via NOAA Open Data on AWS | "NOAA Global Forecast System (GFS)" (courtesy; not an endorsement) |
@@ -43,6 +89,7 @@ How to read this:
 | **Overture Maps Foundation** | Military area names pack | [ODbL 1.0](https://opendatacommons.org/licenses/odbl/1-0/) | Overture Maps Foundation |
 | **TomTom Traffic API** (flow vector tiles)                            | Traffic roads and live congestion (optional, BYOK)                                                                     | [TomTom for Developers terms](https://docs.tomtom.com/legal/terms-and-conditions) (proprietary, your own key; free tier currently 200K tile requests/month — see [current pricing](https://docs.tomtom.com/pricing/))                                                                                                                                                       | "Traffic flow data © TomTom" — registered when live mode activates                                                                          |
 | **Photon** (komoot)                                                   | Keyless place search — the fallback when no Google Maps key is configured, or when Google declines the Geocoding request            | Service: free public instance, [fair use](https://photon.komoot.io) (no bulk/heavy use); underlying data: **ODbL 1.0**                                                                                                                                                                                                                                | "Photon (komoot)"                                                                                          |
+| **NASA GIBS** (Global Imagery Browse Services)                        | Surface-temperature playback: MODIS Terra land-surface temperature, monthly means (MOD11C3, 0.05° grid) | U.S. public domain / open access; no key, no registration. [GIBS citation guidance](https://nasa-gibs.github.io/gibs-api-docs/) | "We acknowledge the use of imagery provided by services from NASA's Global Imagery Browse Services (GIBS), part of NASA's Earth Science Data and Information System (ESDIS)." — carried on the layer credit |
 | **Open-Meteo**                                                        | Current weather in the cockpit Local Info page and cockpit-local dynamic atmospheric effects                                        | [CC BY 4.0 data licence and adjacent-link attribution requirement](https://open-meteo.com/en/licence)                                                                                                                                                                                                                                                 | Linked "Weather data by Open-Meteo.com" beside the displayed local data                                                                     |
 | **Google News RSS**                                                   | Primary locality-matched headlines in the cockpit Regional News page                                                                | [Google News Terms of Service](https://www.google.com/intl/en_us/terms_google_news.html) restrict use to personal, noncommercial use; linked articles remain third-party publisher content and retain publisher terms                                                                                                                                 | "Google News RSS" plus each article's linked publisher/domain                                                                               |
 | **GDELT Project DOC 2.0**                                             | Fail-soft fallback for location-matched cockpit headlines                                                                           | [GDELT Terms of Use](https://www.gdeltproject.org/about.html#termsofuse): unrestricted academic/commercial/governmental dataset use, with citation and link required; linked articles retain publisher terms                                                                                                                                          | "GDELT Project" plus each article's linked publisher/domain                                                                                 |
@@ -260,6 +307,32 @@ transaction quota. Requires a free `FIRMS_MAP_KEY`
 (https://firms.modaps.eosdis.nasa.gov/api/map_key/); the layer is empty without it.
 The former bundled 2026-05-25 snapshot was removed 2026-07-16.
 
+### NASA GIBS surface temperature
+
+Tiles are fetched live from GIBS at runtime; nothing is stored in this repo.
+These properties are surfaced in the app rather than left to the reader:
+
+- **It is a monthly average, not a current reading.** Frames are
+  `MODIS_Terra_L3_Land_Surface_Temp_Monthly_Day` means, each labelled with its
+  month; the panel names the month on screen. A month fills the swath and cloud
+  gaps a single day leaves. The product, MOD11C3, is a 0.05° Climate Modeling
+  Grid, about 5.6 km at the equator, and the readout states that grid. GIBS
+  serves it on the Level6 Web Mercator matrix set, whose tile pixel is finer
+  (about 2.4 km), but a finer PNG pixel is not a finer measurement.
+- **It is a clear-sky land retrieval.** Water and persistently cloudy areas
+  carry no value and render transparent; a gap is missing data, not a mild
+  temperature.
+- **The colour ramp is NASA's, baked into the tiles.** The client does not map
+  values to colours, so the scale is the published one rather than one invented
+  here.
+- **Click-to-read inverts that same published ramp.** Clicking a point reads the
+  pixel from the tile and looks its colour up in NASA's colour map document
+  (`colormaps/v1.0/MODIS_Land_Surface_Temp.xml`, `units="K"`, 252 stops), so the
+  reading is the product's own value range, not an estimate. It is reported as a
+  range because the product quantises into 0.6 K buckets, and the map's
+  catch-all end stops are reported as bounds rather than as ranges starting at
+  0.02 K.
+
 ### Natural Earth physical regions (`natural_earth/`)
 
 Curated from the **Natural Earth 10m physical vectors** (https://www.naturalearthdata.com/ —
@@ -308,6 +381,32 @@ Douglas-Peucker simplification, 6-decimal rounding).
 ### ECMWF IFS wind
 
 Wind also offers ECMWF IFS 10 m forecasts from the keyless [ECMWF Open Data](https://www.ecmwf.int/en/forecasts/datasets/open-data) service. The proxy reads its JSON Lines inventory and byte-range fetches 10u/10v GRIB messages, optionally adding 2t (2 m temperature) or msl (mean sea-level pressure) from the same run and forecast time. It resamples these fields to the approximately 1° display grid. Data is licensed under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). The [ECMWF Terms of Use](https://apps.ecmwf.int/datasets/licences/general/) also apply. In-app attribution identifies this service as based on ECMWF data and products, links the CC BY 4.0 licence, identifies resampling and animation as modifications, and retains the required ECMWF liability disclaimer. Both model issue time and the selected forecast valid time appear in the WEATHER panel. These are model forecasts, not observations.
+
+### NOAA GFS air temperature
+
+The Air (2 m) mode of the **Temperature** layer under Weather uses NOAA GFS `TMP`
+at `2 m above ground`, not land-surface temperature or station observations.
+`/api/air-temperature/manifest` and its immutable binary grid route reuse Wind's
+GFS cycle/forecast-step selection, inventory parser, bounded byte-range download,
+ecCodes decoder and bilinear resampling. Only the single 2 m TMP GRIB2 message
+is downloaded from the NOAA Open Data AWS bucket; no third-party data is vendored.
+Kelvin is converted to Celsius on a 360 x 181, approximately 1-degree global grid
+and transmitted as signed little-endian int16 values at 0.01-degree Celsius
+increments (130,320 bytes). Quantization precision is not forecast accuracy.
+
+The one-hour server cache coalesces requests and retains the last two binary
+generations. Upstream failure retains last-good data explicitly marked stale;
+it does not silently substitute a different variable or a station measurement.
+Issue time, forecast hour and valid time identify the fixed model field. This
+layer does not replay the observed-weather timeline. Both globe imagery and a
+raised photorealistic 3D Tiles shell show the same freezing-centered diverging
+palette; shell height is only a rendering aid. Center and point-click readouts
+bilinearly interpolate the model field, with Celsius/Fahrenheit display.
+
+Source: [NOAA Global Forecast System (GFS), NOAA Open Data on AWS](https://registry.opendata.aws/noaa-gfs-bdp-pds/).
+NOAA GFS is U.S.-government public-domain data. The in-app attribution is a
+courtesy, not an endorsement. Broad model analysis/forecast patterns are not
+street-level or station measurements and must not be used for safety decisions.
 
 ### NOAA GFS wind
 

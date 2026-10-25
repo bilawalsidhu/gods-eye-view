@@ -1048,15 +1048,17 @@ test('the voice TOOL SCHEMA matches the pinned contract — the mission mapping 
   // schema, which may not carry top-level anyOf), and Contacts requested-radius
   // list descriptions; the missions still ride existing tools.
   // Street Level and GNSS extend the manifest; broadcast caveats describe tracked and analyst aircraft.
+  // Air quality (ECCC AQHI) and Temperature extend the manifest.
   // Air quality (ECCC AQHI) extends the manifest.
+  // Surface temperature extends the manifest.
   // Globe rotation adds one camera motion and its descriptions; Globe View
   // framing/default guidance updates only move_camera and mode descriptions.
   // Radio markup and the complete production-request comparison pin locality.
   // Restore the base camera/Globe View wording with the globe-rotation append.
-  assert.equal(block.length, 30878, 'serialized tool schema length drifted');
+  assert.equal(block.length, 30947, 'serialized tool schema length drifted');
   assert.equal(
     crypto.createHash('sha256').update(block).digest('hex'),
-    '7b95f0f4258896fe5c3316265a19f3a6602809d4e7e681ee7ecd8f2df514ef1f',
+    '324ee6d168114412905df8baba9a2b6d993a1818596b27c927456c55b81b5bd6',
     'the first-run missions must ride EXISTING tools: no schema edit, no cache bust',
   );
   const instructions = fs.readFileSync(
