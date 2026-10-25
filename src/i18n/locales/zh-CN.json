@@ -2814,5 +2814,28 @@
   "Layers": "图层",
   "Search": "搜索",
   "More": "更多",
-  "Panels": "面板"
+  "Panels": "面板",
+  "River discharge outlook": "河流流量展望",
+  "m³/s": "立方米/秒",
+  "RIVER DISCHARGE OUTLOOK · MODELLED": "河流流量展望 · 模型",
+  "{days}-day forecast peak {value} {unit} on {day}": "{days} 天预报峰值 {value} {unit}（{day}）",
+  "Today {value} {unit}": "今日 {value} {unit}",
+  "Ensemble on peak day: middle half {low}–{high}, highest member {max} {unit}": "峰值日集合预报：中间一半 {low}–{high}，最高成员 {max} {unit}",
+  "{from}–{to} daily flow: median {p50} · 90th {p90} · 99th {p99} {unit}": "{from}–{to} 日流量：中位数 {p50} · 第 90 百分位 {p90} · 第 99 百分位 {p99} {unit}",
+  "Model outlook, not an observed flood or an official warning": "模型展望，并非观测到的洪水或官方预警",
+  "River discharge outlook unavailable": "河流流量展望不可用",
+  "Open-Meteo · GloFAS model": "Open-Meteo · GloFAS 模型",
+  "Modelled GloFAS outlook at {count} river points · not observed flooding or an official warning": "GloFAS 模型在 {count} 个河流点的展望 · 并非观测到的洪水或官方预警",
+  "Each point is a GloFAS river cell on a major river. Its colour compares the highest daily discharge forecast over the next 7 days with that cell’s own reanalysis flow over ten years. Model output can miss or overstate floods; follow your national hydrological service for warnings.": "每个点都是主要河流上的一个 GloFAS 河流网格。颜色将未来 7 天预报的最大日流量与该网格自身十年的再分析流量进行比较。模型可能漏报或高估洪水；预警请以本国水文部门为准。",
+  "Percentiles of the point’s own daily flow over ten years of GloFAS reanalysis. Above the 99th is a flow reached on about 4 days a year.": "该点自身十年 GloFAS 再分析日流量的百分位数。高于第 99 百分位的流量一年约出现 4 天。",
+  "{count} river points": {
+    "other": "{count} 个河流点"
+  },
+  "loading river discharge outlook": "正在加载河流流量展望",
+  "Showing an earlier forecast": "显示的是较早的预报",
+  "No river outlook points in this view": "此视图中没有河流展望点",
+  "Below the 90th percentile": "低于第 90 百分位",
+  "Above the 90th percentile": "高于第 90 百分位",
+  "Above the 99th percentile": "高于第 99 百分位",
+  "No forecast": "无预报"
 }

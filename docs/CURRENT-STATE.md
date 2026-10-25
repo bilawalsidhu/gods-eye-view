@@ -3722,6 +3722,7 @@ its criteria cannot be silently ignored.
 | Mapped Installations ⌖ | OpenFreeMap military areas; optional configured Overpass names and Google Places search | `src/data/militaryInstallations.js` | OpenFreeMap tiles, `/api/military-installations`, `/api/google/text-search` | viewport-driven; transient errors back off, missing capability switches to tiles |
 | Earthquakes            | USGS                                                                                                                                                                                            | `src/data/earthquakes.js`                             | —                                                        | 60s                                                                               |
 | Air quality            | ECCC MSC GeoMet OGC API (AQHI, Canada only)                                                                                                                                                      | `src/layers/airQuality/`                              | —                                                        | 20 min readings, 12 h station catalog                                             |
+| River discharge outlook 🌊 (`river-discharge`) | Open-Meteo Flood API (GloFAS v4 forecast; keyless, free tier non-commercial) over bundled points with GloFAS v4 reanalysis percentiles | `src/layers/riverDischarge/` via `src/app/layers/riverDischarge.js` | `/api/river-discharge` | 30 min poll + camera moves; proxy caches each point 3 h, stale ≤ 36 h |
 | Satellites             | CelesTrak                                                                                                                                                                                       | `src/data/satellites.js`                              | `/api/celestrak`                                         | 120s                                                                              |
 | Space Missions (30d)   | Launch Library 2 + CelesTrak                                                                                                                                                                    | `src/data/rocketLaunches.js`                          | `/api/launches` + `/api/celestrak/active`                | 5 min                                                                             |
 | Traffic | Selectable TomTom / OpenStreetMap / Hybrid roads; optional TomTom flow (BYOK) | `src/data/traffic.js` | browser-direct OpenFreeMap tiles; `/api/tomtom` for flow | viewport-driven; capped tile cache |
@@ -3763,6 +3764,39 @@ MLAT-positioned GPS loss, derived-field exclusions and the NIC 0 exception.
 anchors, recovery, keyboard and mobile states; emergency repainting is covered
 by `scripts/qa-emergency-squawk.mjs`. Both accept `--timeout-ms` for slow boot.
 
+
+River discharge outlook (Weather group, share token `5`) colours 187
+bundled points on major rivers by GloFAS's 7-day discharge forecast against
+each point's own reanalysis climatology. The points come from
+`scripts/build-river-discharge-points.mjs`, run by maintainers: named Natural
+Earth 10m `River` centrelines at scalerank ≤ 5, a point every 800 km and none
+within 400 km of another; each point is snapped to the GloFAS cell with the
+largest mean flow in its 3×3 neighbourhood (the API's nearest cell was a
+tributary or a dry cell in 5 of 6 probes on major rivers), then p50, p90 and
+p99 of its daily GloFAS v4 reanalysis discharge from 2012-08-01 to 2022-07-31
+are stored in `src/data/local_data/river_discharge/points.json`. The build
+costs 9 + 26.1 weighted Open-Meteo calls per point, paces itself under the
+free tier's limits and resumes from its cache.
+At runtime the browser sends the visible rectangle (the whole world when the
+view leaves the globe) to `/api/river-discharge`, which selects bundled points
+in it, reads their forecasts in batches of 50 at the cell centres (one weighted
+call per point), caches each point 3 hours, serves older forecasts marked stale
+for up to 36 hours, keeps an own ceiling of 600 calls an hour and answers 503
+with `Retry-After` when nothing is left to show. The layer takes the highest
+`river_discharge` day from the proxy's UTC today over seven days: below p90 is
+blue, at or above p90 amber, at or above p99 red. A click opens a card with the
+river name, the peak and its day, today's value, the ensemble's middle half and
+highest member on the peak day (when the members disagree), the point's percentiles and the line "Model
+outlook, not an observed flood or an official warning". While points are shown
+the globe carries the linked Open-Meteo credit and the CEMS notice for modified
+GloFAS information. Points beyond the horizon are hidden by an ellipsoid
+occluder, because the app usually hides Cesium's globe. Failures read `Open-Meteo HTTP <status>`, `Open-Meteo rate
+limited`, `Open-Meteo network error` or `Malformed Open-Meteo response`;
+points already shown stay up as stale. Percentiles of daily flow are not
+return periods or local flood stages, and the layer claims neither. Voice does
+not reach it: it is listed in `VOICE_OFF_LAYERS`, because even an alias-free
+manifest entry would take the Realtime prompt past the 52,000-character ceiling
+pinned in `src/voice/pointAndAsk.test.mjs`.
 
 Fire Perimeters uses capped, timed server reads with stale-on-error caching and a per-client limit. Unchanged snapshots retain geometry; link checks cancel on disable or selection change, and the row legend shows reported containment.
 
