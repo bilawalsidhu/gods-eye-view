@@ -1301,6 +1301,8 @@ Stopping the controller revokes animation before asynchronous UI teardown; final
 destruction removes its stages and restores the borrowed bloom configuration.
 Snow's sideways sway stays within a fixed range at any session age; Wind scales
 its amplitude.
+Sharpen runs only when enabled with intensity above 0.001. At slider zero its
+stage is disabled; raising the slider resumes it when sharpen is enabled.
 
 ## Display control ownership
 
@@ -1531,7 +1533,11 @@ camera is refused there with a JSON 404 and is served solely through
 ## GBFS upstream bounds
 
 Station information is normalized in `src/sources/gbfsStations.js` for both the
-globe layer and `get_bike_share`. Names accept legacy strings or GBFS v3 Localized
+globe layer and `get_bike_share`. Stations with missing, blank, nonnumeric or
+out-of-range coordinates (latitude outside ±90, longitude outside ±180) are
+skipped. Numbers and nonblank numeric strings are accepted, including genuine
+zero and the `latitude`/`longitude` aliases; other JSON types are rejected.
+Names accept legacy strings or GBFS v3 Localized
 String arrays regardless of the reported feed version. Nonempty English text
 (including regional `en-*` tags, case-insensitive) takes precedence, then the first
 usable translation. An unusable `name` falls back to `short_name` with the same
