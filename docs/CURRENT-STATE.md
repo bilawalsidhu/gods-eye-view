@@ -416,6 +416,9 @@ Cyclones combine fixed NHC/CPHC status and summary GIS endpoints through a bound
 same-origin provider. The status endpoint lacks browser CORS; each installation
 fetches keyless public sources at runtime, with no centralized ingestion service.
 The five-minute snapshot covers Atlantic and eastern/central North Pacific only.
+Classification labels follow NHC status codes: `PC` is a potential tropical
+cyclone, `PTC` a post-tropical cyclone, and `STS`/`STD` a subtropical
+storm/depression. Unknown codes remain visible unchanged.
 Current positions, advisory issue time and position time stay distinct. NHC may
 release an advisory before its nominal time (routinely up to about 30 minutes,
 rarely about an hour), so advisory issue and position times up to and including
@@ -3755,6 +3758,10 @@ Street View, KartaView and Panoramax are registered. Without
 disabled. With it, coverage draws as z11–14 sequence lines below 60 km; the proxy strips the unused `image` layer from z14
 tiles (12 MB → ~80 KB) and shares one upstream fetch between concurrent
 requests for a tile.
+
+Line coverage accepts a provider’s numeric `zoomFor` result or its legacy
+`{zoom, kind}` shape. Overview levels and invalid zooms show the zoom-in hint
+instead of silently requesting no tiles.
 
 Coverage is z11–14 sequence lines below 60 km; above that nothing is drawn and
 the panel says to zoom in. Tiles come from the visible ground within range of
