@@ -95,7 +95,7 @@ try {
   await server.listen();
   browser = await puppeteer.launch({
     executablePath:
-      process.env.PUPPETEER_EXECUTABLE_PATH || puppeteer.executablePath(),
+      process.env.PUPPETEER_EXECUTABLE_PATH || (await puppeteer.executablePath()),
     headless: true,
     args: [
       '--no-sandbox',
