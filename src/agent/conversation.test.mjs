@@ -359,7 +359,7 @@ test('byte length counts UTF-8, not code units', () => {
       messagesByteLength([{ role: 'user', content: 'ab' }]),
   );
 });
- 
+
 test('oversize analyst output retains a navigable prefix with byte-exact identity', () => {
   const spacedId = 'Congress  Ave   & 2nd';
   const longId = 'Station ' + 'é'.repeat(330);
