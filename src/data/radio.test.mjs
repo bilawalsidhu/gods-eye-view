@@ -119,8 +119,8 @@ test('Radio globe labels are compact and frequency-first without misreading name
   const truncated = radioGlobeLabel({ name: 'Christian Power Praise Dot Net Worldwide Service' });
   assert.equal(truncated.length, 30);
   assert.ok(truncated.endsWith('…'));
-  const unicodeTruncated = radioGlobeLabel({ name: `${'a'.repeat(28)}📻 more` });
-  assert.equal(unicodeTruncated, `${'a'.repeat(28)}📻…`);
+  const unicodeTruncated = radioGlobeLabel({ name: `${'a'.repeat(28)}\u{1F4FB} more` });
+  assert.equal(unicodeTruncated, `${'a'.repeat(28)}\u{1F4FB}…`);
   assert.doesNotMatch(unicodeTruncated, /�/);
 });
 

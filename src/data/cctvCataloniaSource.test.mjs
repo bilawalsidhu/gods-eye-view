@@ -219,7 +219,10 @@ test('normalizeCataloniaImageUrl accepts only a bare image filename as the SCT s
 
 test('decodeNumericEntities decodes decimal and hex references and leaves invalid ones as written', () => {
   assert.equal(decodeNumericEntities('Llu&#237;s'), 'Lluís');
-  assert.equal(decodeNumericEntities('Llu&#xED;s &#x1F6A6;'), 'Lluís 🚦');
+  assert.equal(
+    decodeNumericEntities('Llu&#xED;s &#x1F6A6;'),
+    'Lluís \u{1F6A6}',
+  );
   assert.equal(decodeNumericEntities('Llu&#XeD;s'), 'Lluís');
   for (const raw of [
     'a&#99999999999999999999999;b',

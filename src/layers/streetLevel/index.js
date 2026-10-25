@@ -24,6 +24,7 @@ import {
   POSITION_PICK_ID,
   STREET_LEVEL_LAYER_ID,
 } from './policy.js';
+import { ICONS } from '../../icons.js';
 
 export { STREET_LEVEL_LAYER_ID } from './policy.js';
 
@@ -449,7 +450,8 @@ export function createStreetLevelLayer({
   const layer = {
     id: STREET_LEVEL_LAYER_ID,
     name: 'Street Level',
-    icon: '📷',
+    icon: '',
+    iconSvg: ICONS.camera,
     /** The sources usable on this map (Street View only on Google 3D). */
     get source() {
       return listedEntries()

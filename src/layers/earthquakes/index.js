@@ -8,6 +8,7 @@ import {
   selectEarthquakeOverlayCohort,
   mapAnalystRecord,
 } from './model.js';
+import { ICONS } from '../../icons.js';
 export * from './model.js';
 export { createUsgsEarthquakeSource } from './source.js';
 
@@ -31,7 +32,8 @@ export function createEarthquakesLayer({ source, overlayHost } = {}) {
   const layer = {
     id: 'earthquakes',
     name: 'Earthquakes (24h)',
-    icon: '🌋',
+    icon: '',
+    iconSvg: ICONS.volcano,
     source: 'USGS',
     updateInterval: 60000,
 
