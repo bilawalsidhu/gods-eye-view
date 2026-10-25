@@ -115,8 +115,17 @@ function boundedResultJson(
   }
 
   const bounded = { ...value };
+  // An analyst_query creates the numbered referents held by the action runner.
+  // Removing the entire 'items' array leaves the typed model unable to name
+  // or navigate those referents, although the browser still remembers them.
+  // Keep a prefix in its original order, with canonical IDs byte-for-byte
+  // intact. Only the first five rows can be referred to by number.
+  const analystItems =
+    bounded.action === 'analyst_query' && Array.isArray(bounded.items)
+      ? bounded.items
+      : null;
   const sheddable = Object.keys(bounded)
-    .filter((key) => !essentialKeys.includes(key))
+    .filter((key) => !essentialKeys.includes(key) && !(analystItems && key === 'items'))
     .map((key) => ({ key, size: (JSON.stringify(bounded[key]) ?? '').length }))
     .sort((a, b) => b.size - a.size);
 
@@ -124,6 +133,18 @@ function boundedResultJson(
     bounded[key] = describeShedValue(value[key]);
     json = JSON.stringify(bounded);
     if (json.length <= maxChars) return json;
+  }
+
+  if (analystItems) {
+    // Drop the tail, not individual fields or prefixes of canonical IDs.
+    // A result may contain more entries than the five numbered referents.
+    for (let retained = Math.min(5, analystItems.length); retained >= 0; retained--) {
+      const candidate = { ...bounded, items: analystItems.slice(0, retained) };
+      if (retained < analystItems.length)
+        candidate.itemsOmitted = analystItems.length - retained;
+      json = JSON.stringify(candidate);
+      if (json.length <= maxChars) return json;
+    }
   }
 
   // Every sheddable field is a marker and it still does not fit, which means
