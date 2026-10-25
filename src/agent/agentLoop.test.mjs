@@ -740,9 +740,7 @@ test('typed analyst query registers raw referents and navigates the second resul
     toolTurn([
       { id: 'list1', name: 'analyst_query', args: { layers: ['bikeshare'] } },
     ]),
-    toolTurn([
-      { id: 'fly1', name: 'fly_to_location', args: { referent: 2 } },
-    ]),
+    toolTurn([{ id: 'fly1', name: 'fly_to_location', args: { referent: 2 } }]),
     answerTurn('Navigated to the second station.'),
   ]);
   const session = createAgentSession({
