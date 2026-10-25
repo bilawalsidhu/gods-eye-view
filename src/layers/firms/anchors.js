@@ -1,15 +1,15 @@
-// src/data/fireAnchors.js — DEM ground anchors for rendered FIRMS detections
+// src/data/fireAnchors.js - DEM ground anchors for rendered FIRMS detections
 // (owner field finding 2026-07-21: at close/oblique zoom over high country,
 // fire dots anchored at ellipsoid height 0 read as buried inside the terrain
 // ~1-2 km below the visible surface).
 //
 // The fix rides the height-datum ship's machinery end to end: anchors read
 // the SAME shared ground floor every other ground-adjacent consumer uses
-// (groundFloor.cachedGroundFloor — rendered-mesh cell ?? real Re:Earth DEM
+// (groundFloor.cachedGroundFloor - rendered-mesh cell ?? real Re:Earth DEM
 // cell), and cold cells warm through the same batched, chunked, cached
 // resolver. No 3D-Tiles sampling happens here (zero steady-state raycasts);
 // fires are static, and floor cells latch warm for the session, so each
-// rendered detection costs at most one DEM lookup EVER — and detections
+// rendered detection costs at most one DEM lookup EVER - and detections
 // sharing a ~111 m coarse cell share that lookup.
 
 /** @constant {number} Metres above the resolved floor for a fire anchor.
@@ -20,7 +20,7 @@ export const FIRE_ANCHOR_LIFT_M = 5;
 
 /**
  * Synchronous anchor height for one detection: shared ground floor + lift
- * when the floor is warm, else 0 (the pre-fix ellipsoid anchor — dots render
+ * when the floor is warm, else 0 (the pre-fix ellipsoid anchor - dots render
  * exactly as before until their floor lands). Warm-cache read only; never
  * triggers network or sampling.
  * @param {number} lat
@@ -36,7 +36,7 @@ export function createFireAnchors({
     return floor != null ? floor + FIRE_ANCHOR_LIFT_M : 0;
   }
 
-  /** @type {?Promise<boolean>} Tail of the batch chain — batches run strictly
+  /** @type {?Promise<boolean>} Tail of the batch chain - batches run strictly
    *  sequentially so overlapping renders can't stack concurrent requests on
    *  the single dev-server proxy (same courtesy as terrainHeights' sequential
    *  chunking). Each queued batch re-filters against the warm cache when it
@@ -46,7 +46,7 @@ export function createFireAnchors({
   /**
    * Batched warm of the ground-floor cells behind a rendered detection set.
    * Fire-and-forget safe (never rejects). Resolves `true` only when at least
-   * one requested point actually gained a warm floor — a failed resolve (proxy
+   * one requested point actually gained a warm floor - a failed resolve (proxy
    * down caches only geoid fallbacks, which do NOT count as a floor) resolves
    * `false`, so a render → warm → re-render chain terminates instead of
    * looping; the next natural rebuild retries and the cache self-heals.

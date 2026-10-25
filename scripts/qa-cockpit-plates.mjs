@@ -9,18 +9,18 @@
  *
  * WHAT THIS ASSERTS, AND WHY IT IS NOT A UNIT TEST IN DISGUISE. An earlier
  * version of this harness called `skyBackdropFactor` directly and would have
- * passed with the painter stubbed out — the number was right and nothing was
+ * passed with the painter stubbed out - the number was right and nothing was
  * drawn. Every assertion here now comes from the RENDERED path instead:
  *
- *   ids/counts — `styleManager.getDetectionDiagnostics()` (src/ui/shellFacade.js), the
+ *   ids/counts - `styleManager.getDetectionDiagnostics()` (src/ui/shellFacade.js), the
  *     overlay's own published `visibleCount` / `labeledKeys`, so a contact only
  *     counts once the sweep, the arbiter and the placement solve have all run.
- *   plate scale — tapped off `CanvasRenderingContext2D` while the frame paints.
+ *   plate scale - tapped off `CanvasRenderingContext2D` while the frame paints.
  *     `paintDetectionCallout` fills the plate at `alpha * plateScale` and the
  *     accent bar at `alpha`, in that order, then draws the callsign, so the
  *     ratio of the two fills IS the plate scale and the callsign attributes it
  *     to a named contact. Nothing is recomputed; this reads what was painted.
- *   pixels — the plate rect comes from the same tap (`roundRect` immediately
+ *   pixels - the plate rect comes from the same tap (`roundRect` immediately
  *     precedes its `fill`), and the harness reads back mean alpha inside that
  *     rect on `#world-overlay-canvas`, the real compositing surface.
  *
@@ -29,14 +29,14 @@
  * the plate-scale and pixel checks must go RED. Run it after any change here.
  *
  * Three poses over one synthetic contact field:
- *   level        — cockpit on the ramp, nose on the horizon. This is the frame
+ *   level        - cockpit on the ramp, nose on the horizon. This is the frame
  *                  the owner shot: approach traffic against open sky.
- *   tilted-down  — same cockpit, pitched down over the apron. Asserts that NO
+ *   tilted-down  - same cockpit, pitched down over the apron. Asserts that NO
  *                  ground contact is labelled, which is not this fix's doing:
  *                  from a camera under the ellipsoid Cesium's
  *                  `EllipsoidalOccluder` culls every point below the local
  *                  horizontal before detection ever sees it.
- *   lifted       — the same view a moment after rotate, at +40 m of ellipsoid
+ *   lifted       - the same view a moment after rotate, at +40 m of ellipsoid
  *                  height. The apron contacts are back, and they keep their
  *                  FULL plates: the proof that sky selectivity did not quietly
  *                  become "no plates anywhere".
@@ -146,7 +146,7 @@ const CHROME_CANDIDATES = [
 const results = [];
 function record(name, ok, detail) {
   results.push({ name, ok, detail });
-  console.log(`  [${ok ? '\x1b[32mPASS\x1b[0m' : '\x1b[31mFAIL\x1b[0m'}] ${name}${detail ? ` — ${detail}` : ''}`);
+  console.log(`  [${ok ? '\x1b[32mPASS\x1b[0m' : '\x1b[31mFAIL\x1b[0m'}] ${name}${detail ? ` - ${detail}` : ''}`);
 }
 
 const stubJson = (body) => ({
@@ -199,7 +199,7 @@ function installPaintTap(teeth) {
 
 async function main() {
   const backend = SWIFTSHADER ? 'software GL (SwiftShader)' : 'real GPU (ANGLE/Metal)';
-  console.log('\nCockpit Plate Backdrop QA — rendered path');
+  console.log('\nCockpit Plate Backdrop QA - rendered path');
   console.log(`  App URL : ${APP_URL}`);
   console.log(`  Tag     : ${TAG}${TEETH ? '  (TEETH: painter stubbed, expect RED)' : ''}`);
   console.log(`  Backend : ${backend}\n`);
@@ -329,7 +329,7 @@ async function main() {
     }, { lon: JFK_LON, lat: JFK_LAT, mPerDegLat: M_PER_DEG_LAT, contacts: CONTACTS });
 
     for (const pose of POSES) {
-      console.log(`\n  — pose "${pose.name}" (${pose.note})`);
+      console.log(`\n  - pose "${pose.name}" (${pose.note})`);
       await page.evaluate((payload) => {
         const { viewer } = window.__godsEyeView;
         const Cartesian3 = viewer.camera.position.constructor;
@@ -349,7 +349,7 @@ async function main() {
         //
         // This harness enables no data layer and never enters real Cockpit (which
         // takes its own hold), so nothing in the scene animates. It used to get
-        // its frames for free from detection's continuous-render hold — and that
+        // its frames for free from detection's continuous-render hold - and that
         // hold was itself the bug: it pinned every idle tab at 60 fps, which is
         // why it was removed (see src/data/detectionRenderDemand.js). The scene is
         // now correctly idle during the tap window, so a measurement of PAINT
@@ -501,7 +501,7 @@ async function main() {
     }
 
     // Cross-pose pixel comparison: the same theme, the same canvas, the same
-    // painter — only the backdrop differs, so sky plates must be lighter.
+    // painter - only the backdrop differs, so sky plates must be lighter.
     const skyInk = perPose.find((entry) => entry.pose === 'level')?.plated || [];
     const groundInk = perPose.find((entry) => entry.pose === 'lifted')?.plated || [];
     const meanOf = (rows) => (rows.length
@@ -544,8 +544,8 @@ async function main() {
     // assertions do not depend on the painter and the harness is decorative.
     const ok = failed.length > 0;
     console.log(ok
-      ? `  \x1b[32mTEETH OK\x1b[0m — ${failed.length} check(s) went red with the painter stubbed:\n    ${failed.map((entry) => entry.name).join('\n    ')}\n`
-      : '  \x1b[31mTEETH FAILED\x1b[0m — every check passed with the painter stubbed; the harness proves nothing.\n');
+      ? `  \x1b[32mTEETH OK\x1b[0m - ${failed.length} check(s) went red with the painter stubbed:\n    ${failed.map((entry) => entry.name).join('\n    ')}\n`
+      : '  \x1b[31mTEETH FAILED\x1b[0m - every check passed with the painter stubbed; the harness proves nothing.\n');
     process.exit(ok ? 0 : 1);
   }
   process.exit(failed.length === 0 ? 0 : 1);

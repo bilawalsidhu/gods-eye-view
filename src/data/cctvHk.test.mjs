@@ -85,7 +85,7 @@ test('an HK row maps to a source on the pinned HTTPS frame host', () => {
   assert.equal(source.sourceKind, 'hk-td-open-data');
   assert.equal(
     source.license,
-    'Hong Kong Transport Department / DATA.GOV.HK — attribution required',
+    'Hong Kong Transport Department / DATA.GOV.HK - attribution required',
   );
   assert.equal(source.headingConfidence, 'low');
   assert.ok(Number.isFinite(source.headingDeg));

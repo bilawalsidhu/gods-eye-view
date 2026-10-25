@@ -109,7 +109,7 @@ export function createLifecycle({
           flightState._cockpitModeListener,
         );
       }
-      // Fresh session — full bucket, anchor re-seeded on the first sweep.
+      // Fresh session - full bucket, anchor re-seeded on the first sweep.
       flightState._enrichAmbientBudget =
         parts.enrichment._ambientBudgetKnobs().ceil;
       flightState._enrichAmbientRefillAnchorMs = 0;
@@ -144,7 +144,7 @@ export function createLifecycle({
       );
       // Height-datum fix: warm the geoid grid once per layer-enable. The poll loop
       // only reads geoidHeight() synchronously after this resolves (guarded by
-      // _geoidReady) — never awaited per-aircraft, never blocking a poll tick.
+      // _geoidReady) - never awaited per-aircraft, never blocking a poll tick.
       if (!flightState.records.geoidReady) {
         const lifetime = flightState.lifetime;
         ensureGeoidReady()
@@ -152,7 +152,7 @@ export function createLifecycle({
             if (!lifetime.signal.aborted) flightState.records.geoidReady = true;
           })
           .catch(() => {
-            /* geoid grid failed to load — baro path stays un-geoid-corrected until retried */
+            /* geoid grid failed to load - baro path stays un-geoid-corrected until retried */
           });
       }
       parts.tracking._installClickHandler(viewer);
@@ -176,12 +176,12 @@ export function createLifecycle({
         // Arrival polish (field test 2026-07-03: "planes look weird when you first
         // come to them"): when a camera move SETTLES (voice fly-to, fast pan
         // release), force a full rotation pass on the very next frame. The
-        // pose-signature gate alone can eat the settle — the final easing frames
+        // pose-signature gate alone can eat the settle - the final easing frames
         // of a flight land inside one quantization bucket (10 m / 0.06°), leaving
         // every icon wearing its last mid-flight rotation for up to
         // ROTATION_REFRESH_MS. Zeroing the tick throttle too means the pass runs
         // on the next preRender, not up to FLEET_DR_INTERVAL_MS later. Cost: one
-        // extra rotation pass per completed camera gesture — nothing per-frame.
+        // extra rotation pass per completed camera gesture - nothing per-frame.
         flightState._moveEndRemove = viewer.camera.moveEnd.addEventListener(
           () => {
             flightState._lastCamPoseSig = '';
@@ -235,7 +235,7 @@ export function createLifecycle({
     },
 
     /**
-     * Fully tear down the flights layer — remove primitives, handlers,
+     * Fully tear down the flights layer - remove primitives, handlers,
      * tracked entities, and clear all internal state maps.
      * @param {Cesium.Viewer} viewer
      */

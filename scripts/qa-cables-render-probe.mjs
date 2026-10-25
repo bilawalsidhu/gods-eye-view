@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * qa-cables-render-probe — replicates the owner-side perf probe methodology
+ * qa-cables-render-probe - replicates the owner-side perf probe methodology
  * for the cables layer (relative numbers; SwiftShader when run headless):
  *
  *  1. PARKED: timed full `viewer.render()` loop (40 calls) with cables ON,

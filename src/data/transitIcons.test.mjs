@@ -42,7 +42,7 @@ test('a haloed glyph draws the dark ring under the shipped white body', () => {
   assert.match(plain, /stroke-width="9\.60"/, 'normal has a one-pixel halo');
 });
 
-test('the raster cache is bounded by kind, size and halo — never by call count', () => {
+test('the raster cache is bounded by kind, size and halo - never by call count', () => {
   const before = transitIconCacheSize();
   for (let i = 0; i < 50; i += 1) {
     transitIcon('tram', 48, { haloScreenPx: 2 });

@@ -222,8 +222,8 @@ test('camera-only, partial, and malformed panel shares remain valid incoming sta
 });
 
 // Both `bing-road` and the `k` panel token belonged to the retired left Map
-// Stack panel. Nothing is owed to a link that carried them — no build with
-// either one ever shipped publicly — so the parser no longer knows them, and
+// Stack panel. Nothing is owed to a link that carried them - no build with
+// either one ever shipped publicly - so the parser no longer knows them, and
 // each takes the ordinary unknown path: an unrecognized panel token is skipped,
 // and an unrecognized stack id lands on the controller's photoreal fallback
 // (pinned live in `scripts/qa-map-source-tray.mjs`). The camera half of such a
@@ -365,8 +365,8 @@ test('keyhole fade controls default and round-trip as normalized percentages', (
 // ── `sce` is a BAND, not a free number (review round 2) ───────────────────────
 //
 // The terminus is documented and supported as 94..100. Parsing clamped to
-// 0..100, so `sce=0` produced an unsupported sub-94 terminus — a hole in the
-// mask, not a scope — and the next hash write serialized it straight back out.
+// 0..100, so `sce=0` produced an unsupported sub-94 terminus - a hole in the
+// mask, not a scope - and the next hash write serialized it straight back out.
 
 test('sce is clamped into the supported 94..100 band on the way in', () => {
   assert.equal(makeManager('#lat=10&lon=20&sce=97').parseInitialHash().scopeTerminusPct, 97);
@@ -384,7 +384,7 @@ test('sce is clamped into the supported 94..100 band on the way in', () => {
 test('an absent or non-numeric sce stays adaptive, never a pinned value', () => {
   assert.equal(makeManager('#lat=10&lon=20').parseInitialHash().scopeTerminusPct, null);
   assert.equal(makeManager('#lat=10&lon=20&sce=abc').parseInitialHash().scopeTerminusPct, null,
-    'junk is not a pin — absent semantics win');
+    'junk is not a pin - absent semantics win');
   assert.equal(makeManager('#lat=10&lon=20&sce=').parseInitialHash().scopeTerminusPct, null);
 });
 

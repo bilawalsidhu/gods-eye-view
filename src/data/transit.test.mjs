@@ -140,7 +140,7 @@ test('selection copy reads like a transit card and never leaks nulls', () => {
     'bus',
     now,
   );
-  assert.equal(full.title, '🚌 Route 17');
+  assert.equal(full.title, 'Route 17');
   assert.deepEqual(full.details, [
     // The mode is said in words: a glyph and a route number do not tell a
     // reader whether the dot on the street is a bus or a subway train.
@@ -151,7 +151,7 @@ test('selection copy reads like a transit card and never leaks nulls', () => {
     'reported 40 km/h · reported hdg 248°',
     // The operator's claim is kept as a REPORT, not as the live state. It
     // describes the moment of the report, which the display may not have
-    // reached yet — presenting it as "now" is what put STOPPED on a metro
+    // reached yet - presenting it as "now" is what put STOPPED on a metro
     // gliding across the owner's screen.
     'Last report: stopped at stop 57458 · few seats available',
     'Vehicle 1557',
@@ -200,7 +200,7 @@ test('selection copy reads like a transit card and never leaks nulls', () => {
     now,
     now - 120_000,
   );
-  assert.equal(sparse.title, '🚆 Vehicle abc');
+  assert.equal(sparse.title, 'Vehicle abc');
   assert.deepEqual(sparse.details, [
     'Train · Metro Transit · Minneapolis–St Paul, MN',
     'Reported 2 min ago (feed time)',

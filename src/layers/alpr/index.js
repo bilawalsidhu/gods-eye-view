@@ -15,6 +15,7 @@ import {
 } from './model.js';
 import { createAlprPresentation } from './presentation.js';
 import { t, tn, msg } from '../../i18n/index.js';
+import { ICONS } from '../../icons.js';
 
 /**
  * Own one layer's requests, records, display and viewer subscriptions.
@@ -51,7 +52,7 @@ export function createAlprCamerasLayer({ source, services } = {}) {
     error: null,
     status: 'idle',
     stale: false,
-    /** Whether the query hit QUERY_LIMIT — the view likely holds more cameras than shown. */
+    /** Whether the query hit QUERY_LIMIT - the view likely holds more cameras than shown. */
     saturated: false,
     loading: false,
     abort: null,
@@ -287,7 +288,8 @@ export function createAlprCamerasLayer({ source, services } = {}) {
   const alprCamerasLayer = {
     id: LAYER_ID,
     name: 'ALPR Cameras',
-    icon: '📷',
+    icon: '',
+    iconSvg: ICONS.camera,
     // English in layer state; the layer row translates it.
     source: source.label || msg('Mapped camera locations'),
     updateInterval: 0,
@@ -460,19 +462,19 @@ export function createAlprCamerasLayer({ source, services } = {}) {
             ? t('retrying mapped ALPR cameras')
             : t('loading mapped ALPR cameras')
           : state.noCoverage
-            ? t('No ALPR data for this area — US and Canada only')
+            ? t('No ALPR data for this area - US and Canada only')
             : state.status === 'zoom-in'
               ? t('Zoom in to load mapped cameras')
               : [
                   state.stale ? t('Showing cached locations') : '',
                   state.saturated || state.renderSaturated
-                    ? t('Coverage limited — zoom in')
+                    ? t('Coverage limited - zoom in')
                     : '',
                   state.status === 'empty'
                     ? t('No ALPR data for this area')
                     : '',
                   state.status === 'ready' && state.onScreen === 0
-                    ? t('None on screen — nearby cameras are outside the view')
+                    ? t('None on screen - nearby cameras are outside the view')
                     : '',
                 ]
                   .filter(Boolean)

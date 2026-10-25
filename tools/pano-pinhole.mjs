@@ -4,7 +4,7 @@
  *
  * Reprojects an equirectangular panorama image into a pinhole camera view.
  * Uses inverse mapping (iterates output pixels) so every output pixel gets
- * a bilinear-interpolated sample from the panorama — no holes possible.
+ * a bilinear-interpolated sample from the panorama - no holes possible.
  *
  * Usage:
  *   node tools/pano-pinhole.mjs --input output/panorama_30.266476_-97.73719.jpg --heading 270 --pitch -10 --hfov 90

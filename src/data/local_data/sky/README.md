@@ -8,7 +8,7 @@ place of Cesium's blocky Tycho-2 sky box.
 | `bright_stars.json` | 9,096 stars: J2000 RA/Dec, V magnitude, B−V | 235 KB |
 | `milkyway_{px,nx,py,ny,pz,nz}.webp` | Milky Way glow, six 1024² cube faces, no stars | 62 KB |
 
-## Stars — Yale Bright Star Catalogue
+## Stars - Yale Bright Star Catalogue
 
 **Source:** 5th Revised Edition (Hoffleit & Warren 1991), CDS catalogue
 [V/50](https://cdsarc.cds.unistra.fr/viz-bin/cat/V/50), file
@@ -23,7 +23,7 @@ attribution" popover carries it.
 records without a J2000 position; rounds RA/Dec to 0.001° and magnitudes to
 0.01.
 
-## Milky Way — ESO/S. Brunier
+## Milky Way - ESO/S. Brunier
 
 **Source:** ESO image [eso0932a](https://www.eso.org/public/images/eso0932a/),
 `https://cdn.eso.org/images/original/eso0932a.tif` (6000×3000 sRGB TIFF, sha256

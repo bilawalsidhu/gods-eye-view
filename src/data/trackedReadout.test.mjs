@@ -70,7 +70,7 @@ test('tracked position source reads only gevDisplayPosition and never entity.pos
 
 test('the tracked card anchors to the visual position without repurposing the display accessor', () => {
   // A grounded aircraft's 3D model rides a ground snap while its billboard stays
-  // at the reported (buried) altitude — ~100 m apart. The card must follow the
+  // at the reported (buried) altitude - ~100 m apart. The card must follow the
   // model you can see, while `gevDisplayPosition` keeps returning the cached
   // dead-reckoned value the follow camera settled on (anti-jitter contract).
   const display = { x: 1, y: 2, z: 3 };

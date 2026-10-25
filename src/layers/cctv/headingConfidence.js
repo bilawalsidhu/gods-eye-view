@@ -6,8 +6,8 @@ import { t } from '../../i18n/index.js';
  * Consumers for the catalog's per-camera `headingConfidence` flag (#639).
  *
  * Packs whose feed publishes no facing get a synthetic bearing from
- * `fallbackHeadingFromId` — a hash of the id string, with no geographic
- * input — and are marked `headingConfidence: 'low'`. Until now nothing read
+ * `fallbackHeadingFromId` - a hash of the id string, with no geographic
+ * input - and are marked `headingConfidence: 'low'`. Until now nothing read
  * the flag, so a guessed bearing rendered exactly like a surveyed one. These
  * helpers make the guess visible: the HUD heading token gains an
  * `(ESTIMATED)` tag and the coverage wireframe draws dashed instead of solid.
@@ -38,7 +38,7 @@ export function isHeadingEstimated(camera) {
 
 /**
  * HUD heading token: `HDG 194°`, tagged `(ESTIMATED)` when the bearing is
- * synthetic — so a hash can never read as a surveyed facing.
+ * synthetic - so a hash can never read as a surveyed facing.
  * @param {{headingDeg?: number, headingConfidence?: string|null,
  *   calSource?: string|null, poseSource?: string|null}} camera
  * @returns {string}

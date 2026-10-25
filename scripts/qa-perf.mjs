@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * qa-perf — render-governor regression gate (perf wave 2).
+ * qa-perf - render-governor regression gate (perf wave 2).
  *
  * Asserts the governor's observable contract with RELATIVE frame-count
  * assertions (SwiftShader-safe; no wall-clock GPU numbers):
@@ -19,7 +19,7 @@
  *
  * The idle checks (1 and 5) measure the STEADY-STATE floor: what a parked scene
  * costs once it has settled. They do not measure how long settling takes, so the
- * counted window has to begin AFTER settling — and "after" is a stronger
+ * counted window has to begin AFTER settling - and "after" is a stronger
  * condition than "nothing is happening right now".
  *
  * That distinction became load-bearing when detection stopped holding the render
@@ -37,8 +37,8 @@
  * new summary and TYPES it in with a typewriter animation; the growing text
  * reflows `.hud-corner.hud-top-left`, an occluder, and the host turns that
  * reflow into a handful of frames. Two instrumented runs (150 s and 180 s
- * watches) agree to the second: the teardown lands at 15 s, the burst at 31 s —
- * seven frames in that one second — which is 16 s after the teardown and 4 s
+ * watches) agree to the second: the teardown lands at 15 s, the burst at 31 s -
+ * seven frames in that one second - which is 16 s after the teardown and 4 s
  * INTO the window the old settle had already started counting. Neither run then
  * saw a single further render, across 146 s and 176 s respectively. It is a
  * one-shot: the tick that fetches also clears the summary's dirty flag and
@@ -50,21 +50,21 @@
  * run resets on any activity. Quiet then means something stronger and checkable:
  * a complete refresh period has elapsed in which the app looked at its new state
  * and found nothing to do. The length is derived from the app's own cadence
- * rather than tuned against a flake rate — if that interval changes, this moves
+ * rather than tuned against a flake rate - if that interval changes, this moves
  * with it.
  *
  * The threshold inside the window (≤4 fires / 5 s) is untouched. The teeth live
  * in the WAIT, not the threshold: a scene rendering every frame never produces an
  * empty second at all, so the bounded wait expires and FAILS. Quiet that never
  * arrives IS the failure, which is why the timeout is an assertion rather than a
- * fall-through — and it is what keeps this honest if the churn ever stops being a
+ * fall-through - and it is what keeps this honest if the churn ever stops being a
  * one-shot. It would: when `/api/openai/hud-summary` is unreachable the summary
  * stays dirty and re-types every 15 s, so that machine gets a loud repeatable
  * failure here rather than a coin flip.
  *
  * The underlying fix belongs to the host, not to this harness: an active lane
  * with nothing to place is not paint work and should not be honoured with a
- * frame. That is worldOverlay surgery — see the post-launch ledger entry
+ * frame. That is worldOverlay surgery - see the post-launch ledger entry
  * "world-overlay honours occluder churn as paint work" in
  * the project roadmap.
  *
@@ -81,7 +81,7 @@ const results = [];
 function check(name, pass, detail) {
   results.push({ name, pass });
   const tag = pass ? 'PASS' : 'FAIL';
-  console.log(`  [${tag}] ${name}${detail ? ` — ${JSON.stringify(detail)}` : ''}`);
+  console.log(`  [${tag}] ${name}${detail ? ` - ${JSON.stringify(detail)}` : ''}`);
 }
 
 const browser = await puppeteer.launch({
@@ -91,7 +91,7 @@ const browser = await puppeteer.launch({
     '--no-sandbox',
     '--disable-setuid-sandbox',
     '--window-size=1440,900',
-    // Never let background/occlusion throttling freeze rAF or timers — the
+    // Never let background/occlusion throttling freeze rAF or timers - the
     // measurements below depend on an honest frame clock.
     '--disable-backgrounding-occluded-windows',
     '--disable-renderer-backgrounding',
@@ -146,7 +146,7 @@ try {
   /**
    * The HUD's semantic summary refreshes on this cadence (`src/hud.js`,
    * `HUD_SUMMARY_INTERVAL_MS`). A layer-visibility change marks it dirty, and
-   * the tick that picks that up types the new text in — reflowing an occluder
+   * the tick that picks that up types the new text in - reflowing an occluder
    * and, with a paint lane active, costing frames. Mirrored rather than
    * imported because this harness runs against the built app, not the module.
    */
@@ -156,11 +156,11 @@ try {
 
   /**
    * Wait until the scene is genuinely settled, and report whether it ever was.
-   * This is the START of the idle windows below — see the header.
+   * This is the START of the idle windows below - see the header.
    *
    * Requires a CONSECUTIVE RUN of empty one-second windows at least one full
    * summary refresh period long, and resets that run on any activity. One empty
-   * window — or three — proves nothing here: the scene is genuinely idle for the
+   * window - or three - proves nothing here: the scene is genuinely idle for the
    * whole gap between a teardown and the tick that notices it, so a short
    * confirmation happily reports "quiet" moments before the typewriter fires.
    * A run longer than the period cannot straddle that gap: it either contains
@@ -168,7 +168,7 @@ try {
    *
    * `quiet: false` is a FAILURE, not a fall-through: a scene rendering every
    * frame never produces an empty window at all, so this is what catches a real
-   * hot loop — and equally a contaminant that has stopped being a one-shot. The
+   * hot loop - and equally a contaminant that has stopped being a one-shot. The
    * bound stays comfortably longer than settling takes and comfortably shorter
    * than forever: worst case is one interrupted run, the burst itself, then a
    * clean run (~55 s), against a 120 s ceiling.
@@ -190,7 +190,7 @@ try {
       }
     }
     // A failure here reads as "never held N empty seconds in a row, best run was
-    // M, restarted R times, busiest window was B" — enough to tell a hot loop
+    // M, restarted R times, busiest window was B" - enough to tell a hot loop
     // from a contaminant that has stopped being a one-shot.
     return { quiet: false, windows, busiest, restarts, ranFor: consecutive, needRun: requiredConsecutive };
   };
@@ -199,7 +199,7 @@ try {
   const idleSettle = await settleUntilQuiet();
   const idle = await countFrames(5_000);
   const d1 = await diag();
-  // Quiet that never arrives is the hot-loop failure — assert it, do not skip it.
+  // Quiet that never arrives is the hot-loop failure - assert it, do not skip it.
   check('the parked scene holds a settled quiet run before the idle window is counted', idleSettle.quiet, idleSettle);
   check('governor reports idle mode with zero layers', d1?.mode === 'idle', d1);
   check('idle parked scene stops rendering (≤4 fires / 5s)', idle.renders <= 4, idle);
@@ -207,7 +207,7 @@ try {
   // ── 1b. detection at its FIRST-RUN DEFAULT must not hold the parked scene ─
   //
   // Detection became ON by default on 2026-08-22. It used to take an
-  // unconditional continuous-render hold whenever it was on — nobody felt that
+  // unconditional continuous-render hold whenever it was on - nobody felt that
   // while it defaulted OFF, but as a DEFAULT it would pin every idle first-run
   // tab at 60 fps forever, defeating this governor outright. The hold is gone
   // (`src/data/detectionRenderDemand.js`): detection repaints on change and asks
@@ -270,7 +270,7 @@ try {
     detectMove,
   );
   // A render count alone proves the SCENE rendered, not that the detection
-  // painter ran — a painter disabled outright would score a perfect idle and
+  // painter ran - a painter disabled outright would score a perfect idle and
   // sail through every check above. Count the painter's own frames across the
   // same kind of motion, so the teeth reach the thing this change touched.
   const detectPainted = await page.evaluate(() => new Promise((resolve) => {
@@ -331,7 +331,7 @@ try {
   // Returning to normal keeps detection ON by design (it is the default, and
   // detection persists across style switches). Since 2026-08-22 detection holds
   // nothing, so this asserts the strictly harder thing: the scene returns to
-  // idle with detection still ON — where before it could only go idle by also
+  // idle with detection still ON - where before it could only go idle by also
   // turning detection off.
   await page.evaluate(() => { window.__godsEyeView.styleManager.setStyle('normal'); });
   await new Promise((r) => setTimeout(r, 1_500)); // fade out + loop self-stop
@@ -393,7 +393,7 @@ try {
     await window.__godsEyeView.dataManager.setEnabled('flights', false, { origin: 'user' });
   });
   // Deselect flows, fades, and the chrome churn the overlay host re-evaluates
-  // its occluders against all have to drain first — and this teardown, like the
+  // its occluders against all have to drain first - and this teardown, like the
   // one in the setup above, marks the HUD summary dirty, so the same deferred
   // typewriter is still ahead of us. Same rule: hold a quiet run longer than one
   // refresh period before counting anything.

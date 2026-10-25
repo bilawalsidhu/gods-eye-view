@@ -249,7 +249,7 @@ export class NavigationController {
       disposed: this._disposed,
       showToast: (text) => this.showToast(text),
       // Reached only once the handoff is granted, immediately before the
-      // deferred flight starts — so a lookup that failed, was superseded, or
+      // deferred flight starts - so a lookup that failed, was superseded, or
       // was refused by the cockpit leaves the old readout standing.
       release: () => {
         this.clearLocation();

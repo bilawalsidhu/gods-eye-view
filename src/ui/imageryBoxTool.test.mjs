@@ -130,7 +130,7 @@ test('a held pointer refuses the session and nothing is borrowed', async () => {
   const lease = claimPointer('draw');
   assert.equal(f.tool.start(), false);
   assert.deepEqual(f.cancels, [
-    ['pointer-busy', 'draw is using the pointer — close it first'],
+    ['pointer-busy', 'draw is using the pointer - close it first'],
   ]);
   assert.equal(f.stockAction('LEFT_CLICK'), f.originalClick);
   assert.equal(f.handler(), null);

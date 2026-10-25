@@ -12,7 +12,7 @@ import {
  * terrain pass applies.
  * Classifying against just the active surface halves the batched
  * GroundPolylinePrimitive's emitted command sets. BOTH is the safe fallback
- * for an unknown stack — it renders on every surface, exactly the shipped
+ * for an unknown stack - it renders on every surface, exactly the shipped
  * pre-optimization behavior.
  * @param {string|null|undefined} activeId MapStackController stack id.
  * @returns {Cesium.ClassificationType}
@@ -107,13 +107,13 @@ export function commitTranslucentMarkerBlend(probe) {
  * a SHAPE INVARIANT the caller must honor loudly: the constructor
  * pre-assigns `_billboardCollection`/`_pointCollection` (= undefined until a
  * visualizer lazily creates them), so a missing PROPERTY means Cesium's
- * shape changed — report `invariantFailed` and never touch anything —
+ * shape changed - report `invariantFailed` and never touch anything -
  * while a present-but-undefined value only means "not created yet"
  * (`pending`). Wrong instance types also fail the invariant. The cables
  * sources never enable clustering, so created collections persist.
  * VALIDATE-ALL-THEN-MUTATE-ALL: every field/type check runs before the first
  * assignment, so a failure anywhere leaves BOTH collections on Cesium's
- * default blend — the fallback this helper promises.
+ * default blend - the fallback this helper promises.
  * @param {Cesium.DataSource|null|undefined} dataSource
  * @returns {{applied:number,pending:number,invariantFailed:boolean}}
  */

@@ -1,5 +1,5 @@
 /**
- * Key setup ("POWER UP") — the pure core.
+ * Key setup ("POWER UP") - the pure core.
  *
  * One registry and pure functions; it imports only the proxy-header check
  * shared with the other local gates (localRequestGate.mjs) and the msg()
@@ -8,7 +8,7 @@
  * are both thin shells over this module, so what a key is called, what it
  * unlocks, and how a .env line is written each live in exactly one place.
  *
- * Nothing here touches the filesystem, the network, or process.env — callers
+ * Nothing here touches the filesystem, the network, or process.env - callers
  * pass environments in and write text out, which is also what makes every
  * behavior below unit-testable.
  */
@@ -27,10 +27,10 @@ export const KEY_SETUP_APPEND_HEADER =
   '# Keys added by the in-app POWER UP panel';
 
 /**
- * Provider credentials, in display order — most magic per
- * minute first. `tier` mirrors the README's color legend: 'metered' (🔴) is a
- * billing-enabled account, 'free' (🟡) is a register-and-paste key, and
- * 'paid' (🔴) is an optional paid higher-rate token.
+ * Provider credentials, in display order - most magic per
+ * minute first. `tier` mirrors the README's color legend: 'metered' (red dot)
+ * is a billing-enabled account, 'free' (yellow dot) is a register-and-paste
+ * key, and 'paid' (red dot) is an optional paid higher-rate token.
  * `clientExposed` marks the keys that are injected into the browser
  * bundle by design (restrict them at the provider, per SECURITY.md).
  * `hidden` keeps advanced configuration out of the panel and missing-key count.
@@ -47,7 +47,7 @@ export const KEY_SETUP_KEYS = Object.freeze([
   }),
   Object.freeze({
     id: 'google-maps-server',
-    title: 'GOOGLE MAPS — SERVER', // i18n-ignore: provider product name; row is hidden
+    title: 'GOOGLE MAPS - SERVER', // i18n-ignore: provider product name; row is hidden
     unlocks: msg(
       'Places context + Street View fallback; optional separate key',
     ),
@@ -60,7 +60,7 @@ export const KEY_SETUP_KEYS = Object.freeze([
   Object.freeze({
     id: 'openai',
     title: 'OPENAI', // i18n-ignore: provider product name
-    unlocks: msg('Voice control — API key or ChatGPT OAuth'),
+    unlocks: msg('Voice control - API key or ChatGPT OAuth'),
     getUrl: 'https://platform.openai.com/api-keys',
     envVars: Object.freeze(['OPENAI_API_KEY']),
     tier: 'metered',
@@ -258,12 +258,12 @@ export function isSharingEnabled(env = {}) {
 }
 
 /**
- * The admission gate for the Provider Settings endpoints — pure, exported so
+ * The admission gate for the Provider Settings endpoints - pure, exported so
  * every refusal below is pinned by a unit assertion rather than a review note.
  *
  * Why each check exists:
  *  - sharing signals: any tunnel/LAN sharing mode disables the surface
- *    outright — a credential-writing endpoint has no business existing on a
+ *    outright - a credential-writing endpoint has no business existing on a
  *    shared instance, and tunnel traffic reaches the server FROM loopback, so
  *    the socket check below cannot carry that boundary alone;
  *  - loopback socket: refuses LAN peers when the server is bound wide. The
@@ -294,7 +294,7 @@ export function admitKeySetupRequest({
 } = {}) {
   // A request carrying reverse-proxy / CDN forwarding headers did not originate
   // on this machine, whatever its socket says. Refuse them outright as defense
-  // in depth — the shipped tunnel (Pinokio) is force-closed at boot, so these
+  // in depth - the shipped tunnel (Pinokio) is force-closed at boot, so these
   // only appear when someone has deliberately fronted the dev server.
   if (hasProxySignals(proxyHeaders)) {
     return {
@@ -305,11 +305,11 @@ export function admitKeySetupRequest({
     };
   }
   // Every sharing signal the launcher recognizes (scripts/pinokio-preflight.mjs)
-  // also disables this surface — so the gate's set is complete, not a subset the
+  // also disables this surface - so the gate's set is complete, not a subset the
   // two files could drift apart on. One DELIBERATE divergence: preflight is a
   // boot check that treats an empty PINOKIO_SHARE_VAR as sharing-on (fail closed
   // before Start), but here an empty/unset value is the NORMAL git-clone and
-  // Pinokio state — treating it as sharing would disable Provider Settings for
+  // Pinokio state - treating it as sharing would disable Provider Settings for
   // every ordinary launch. So a bare/sentinel value is not sharing; only a real
   // tunnel var is. This is defense in depth regardless: the loopback+Host checks
   // below independently refuse LAN/tunnel traffic, and under Pinokio the launcher
@@ -422,7 +422,7 @@ export function keySetupRequirementEnvVars(id) {
 export function keySetupRequirement(id) {
   const entry = KEY_SETUP_KEYS.find((candidate) => candidate.id === id);
   if (!entry || entry.hidden) return '';
-  return `Needs ${entry.envVars.join(' + ')} — add it in Provider Settings`;
+  return `Needs ${entry.envVars.join(' + ')} - add it in Provider Settings`;
 }
 
 /**
@@ -495,8 +495,8 @@ export function keySetupStatus(env = {}) {
 
 /**
  * Validate a POST body into a clean {ENV_VAR: value} map, or say exactly why
- * not. Values must be single-line printable ASCII with no spaces — every real
- * provider credential is — which is also what makes the raw `KEY=value` line
+ * not. Values must be single-line printable ASCII with no spaces - every real
+ * provider credential is - which is also what makes the raw `KEY=value` line
  * below safe to write without quoting rules. A `null` value means REMOVE:
  * the writer comments the assignment back out, returning the file to its
  * template state for that key.
@@ -570,7 +570,7 @@ export function validateKeySetupUpdates(body) {
     }
     // Reject the dotenv metacharacters that would round-trip WRONG when written
     // unquoted (# starts a comment, quotes redelimit, $ expands, backslash and
-    // backtick are escapes) — so a saved value can never differ from what Node's
+    // backtick are escapes) - so a saved value can never differ from what Node's
     // parseEnv and Vite's expansion read back. Real provider keys never contain
     // these; they are base64url / hex / JWT alphabets.
     if (/[#"'$\\`]/.test(value)) {
@@ -593,8 +593,8 @@ export function validateKeySetupUpdates(body) {
  * is what dotenv parsing lets win); failing that, the last commented-out
  * assignment is uncommented in place, so a file copied from .env.example
  * keeps its curated shape; failing both, the line is appended at the end
- * under one shared header. Every untouched line — comments, blanks, other
- * keys — survives byte for byte, and the result always ends in a newline.
+ * under one shared header. Every untouched line - comments, blanks, other
+ * keys - survives byte for byte, and the result always ends in a newline.
  *
  * A `null` value REMOVES: every active assignment for that key is commented
  * back out (`# KEY=`), returning the file to its template shape; a key with

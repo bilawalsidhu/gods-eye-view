@@ -45,7 +45,7 @@ function gbfsRedirectHost(location, requestUrl) {
  * body cap enforced while the response streams.
  *
  * The middleware validates the target before calling this; the network step
- * lives apart from it so a unit test can stand in for a hostile upstream — the
+ * lives apart from it so a unit test can stand in for a hostile upstream - the
  * host allowlist keeps the real handler from being pointed at a local server.
  * `redirect: 'manual'` makes fetch() return a 3xx response instead of
  * following it, so an allowlisted operator that redirects cannot steer the

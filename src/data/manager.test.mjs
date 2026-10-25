@@ -1,7 +1,7 @@
 // Re-entrancy contract for DataLayerManager.toggle() (audit M1 ⊗).
 //
 // The bug: toggle() awaits the layer's init() + first update() before arming the
-// polling interval. A second toggle during that window used to interleave — the
+// polling interval. A second toggle during that window used to interleave - the
 // disable branch ran mid-enable, the interval was armed AFTER the user turned the
 // layer off, and a subsequent enable armed a SECOND interval → 2× poll → OpenSky
 // 429. The fix serializes toggles per-entry and re-checks enabled after the awaits.
@@ -522,7 +522,7 @@ test('double-toggle during the awaited enable leaves the layer OFF with no leake
   const layer = makeSlowLayer('flights');
   mgr.register(layer.module);
 
-  // Fire two toggles back-to-back WITHOUT awaiting the first — the classic
+  // Fire two toggles back-to-back WITHOUT awaiting the first - the classic
   // voice+click / double-click race.
   const p1 = mgr.toggle('flights'); // enable
   const p2 = mgr.toggle('flights'); // should be treated as the disable
@@ -540,14 +540,14 @@ test('serialized toggles never arm two intervals (2× poll → 429 guard)', asyn
   const layer = makeSlowLayer('military');
   mgr.register(layer.module);
 
-  // enable, disable, enable — rapid-fire, unawaited.
+  // enable, disable, enable - rapid-fire, unawaited.
   const ps = [mgr.toggle('military'), mgr.toggle('military'), mgr.toggle('military')];
   await Promise.all(ps);
 
   assert.equal(mgr.isEnabled('military'), true, 'odd number of toggles ends enabled');
   const entry = mgr.layers.get('military');
   assert.notEqual(entry.intervalId, null, 'exactly one interval should be armed');
-  // enable ran twice, disable once — and only one interval survives.
+  // enable ran twice, disable once - and only one interval survives.
   assert.ok(layer.calls.enable >= 1, 'enable was called');
   clearInterval(entry.intervalId); // don't leak the timer out of the test
 });
@@ -2131,7 +2131,7 @@ test('layer parameter snapshots are detached from module-owned nested state', ()
 
 test('feed state: guidance statuses are normal operation, not faults', () => {
   // The Military Installations wide-view prompt: zoom/search guidance must
-  // never read DEGRADED — waiting for user action is instruction, not fault.
+  // never read DEGRADED - waiting for user action is instruction, not fault.
   assert.equal(layerFeedState({ status: 'zoom-in', error: 'zoom in to search', count: 12 }), 'nominal');
   assert.equal(layerFeedState({ status: 'idle' }), 'nominal');
   assert.equal(layerFeedState({ status: 'empty', error: 'no records in view' }), 'nominal');
@@ -2439,7 +2439,7 @@ test('re-entrant setEnabled from a blocked-adoption listener supersedes the comp
   ));
 
   // The moment the blocked event is announced, a listener re-enters with a
-  // newer absolute intent — this used to land in the unregistered-compensation
+  // newer absolute intent - this used to land in the unregistered-compensation
   // window and starve, or orphan the transitional presentation.
   let reentrantResult = null;
   const effectiveDuringBlocked = [];
@@ -3017,7 +3017,7 @@ test('a layer that declares row controls renders its chips and color legend', as
     const row = container.querySelector('[data-layer-id="satellites"]');
     const controls = row.querySelector('.data-toggle-controls');
     assert.ok(controls, 'the row gained a controls block');
-    // Disabled layers stay quiet — no chip, no legend.
+    // Disabled layers stay quiet - no chip, no legend.
     assert.equal(controls.hidden, true);
 
     assert.equal(await mgr.setEnabled('satellites', true), true);
@@ -3142,7 +3142,7 @@ test('keyboard focus on a chip survives the refresh its own click triggers', asy
     mgr._refreshTogglePanel();
     assert.equal(globalThis.document.activeElement, chip,
       'repeated refreshes never steal focus');
-    // Legend entries hold no focus, so they may be replaced — never duplicated.
+    // Legend entries hold no focus, so they may be replaced - never duplicated.
     assert.equal(collectByClass(controls, 'data-toggle-legend-item').length, 2);
 
     // ...and a chip that genuinely goes away still releases focus.
@@ -3213,7 +3213,7 @@ test('an async layer pushes its own row refresh, and a busy chip refuses clicks'
     controls.listeners.click({ target: chip });
     assert.equal(writes, 0, 'a disabled chip is inert');
 
-    // The layer settles and pushes its own refresh — no panel poll involved.
+    // The layer settles and pushes its own refresh - no panel poll involved.
     settled = true;
     module._listener();
     mgr._layerPanel._flushRowControlsRefresh();

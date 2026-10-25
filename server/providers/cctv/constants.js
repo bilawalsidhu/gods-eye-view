@@ -167,7 +167,7 @@ export const DIGITRAFFIC_USER = 'gods-eye-view';
 export const DEFAULT_FINTRAFFIC_MAX_SOURCES = 300;
 /** Ground-elevation prior, in metres, for stations that report no altitude.
  * 228 of 809 stations carry a real metre value (median 94 m); the rest report
- * 0, which means "not reported" rather than sea level — Kouvola (~80 m of real
+ * 0, which means "not reported" rather than sea level - Kouvola (~80 m of real
  * elevation) reports 0. The observed median stands in for those. */
 export const FINTRAFFIC_GROUND_ELEVATION_M = 90;
 /** Prioritization anchors: the population centres strung along Finland's main
@@ -263,7 +263,7 @@ export const CALGARY_MAX_CATALOG_BYTES = 4 * 1024 * 1024;
  * Catalonia traffic cameras (Servei Català de Trànsit): one keyless WFS/GML
  * XML list (verified 2026-09-15, hourly catalog refresh), fetched over https
  * (verified 2026-09-27: same 200 body, no redirect). The feed carries a
- * `font` field naming the actual publisher per camera — SCT's own highway
+ * `font` field naming the actual publisher per camera - SCT's own highway
  * cameras plus hotlinked Barcelona (IMI) and Terrassa municipal cameras are
  * kept, each confirmed to return a real frame. Frame URLs are checked
  * against a host allowlist rather than one pinned origin, since each
@@ -415,7 +415,7 @@ export const KARTVERKET_USER_AGENT = 'gods-eye-view-cctv-proxy/1.0';
 
 /** NYC DOT Traffic Management Center cameras: one keyless JSON list for the
  * five boroughs (~980 cameras). Frames are stills synthesized from each
- * camera UUID on the city's webcam host — never taken from the payload. */
+ * camera UUID on the city's webcam host - never taken from the payload. */
 export const NYC_CAMERAS_URL = 'https://webcams.nyctmc.org/api/cameras';
 /** The only origin NYC camera frames may come from. The catalog's `imageUrl`
  * is ignored; the registered path is always this origin plus a validated
@@ -475,7 +475,7 @@ export const KING_COUNTY_ANCHORS = [{ lat: 47.4829, lon: -122.2171 }];
 export const KING_COUNTY_MAX_CATALOG_BYTES = 1024 * 1024;
 /**
  * City of Toronto RESCU traffic cameras: the municipal network the province's
- * 511 pack does not cover — downtown arterials plus the Gardiner, DVP, Allen
+ * 511 pack does not cover - downtown arterials plus the Gardiner, DVP, Allen
  * and Lake Shore. One keyless list for the whole city (~336 cameras), from the
  * City's open data portal. It is fetched on every catalog refresh, but the
  * upstream file is not updated often and may lag the live camera network.
@@ -508,7 +508,7 @@ export const TORONTO_GROUND_ELEVATION_M = 116;
  * be buffered without limit. */
 export const TORONTO_MAX_CATALOG_BYTES = 4 * 1024 * 1024;
 /** WSDOT Travel Center cameras (Washington State): keyless Esri JSON on the
- * official open-data host — ~1,700 point features in EPSG:3857 (Web Mercator),
+ * official open-data host - ~1,700 point features in EPSG:3857 (Web Mercator),
  * ETag/Last-Modified served. WSDOT's metadata marks the feed "low volume" use;
  * the catalog is fetched once per CCTV_SOURCE_CACHE_MS refresh. */
 export const WSDOT_CAMERAS_URL =
@@ -532,7 +532,7 @@ export const WSDOT_ANCHORS = [
 export const CCTV_SOURCE_CACHE_MS = 15 * 60 * 1000;
 /** Per-provider catalog-fetch timeout. Bounds the worst-case refresh so one
  * stalled upstream can't leave getCctvSources (and thus every CCTV route)
- * pending forever — a hung fetch aborts, the loader returns [], and
+ * pending forever - a hung fetch aborts, the loader returns [], and
  * serve-stale/other packs take over. */
 export const CCTV_SOURCE_FETCH_TIMEOUT_MS = 15 * 1000;
 /** Tarktee's two DATEX feeds (120 and 160 KB) answered in 2 to 16.6 s across

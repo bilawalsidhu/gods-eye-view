@@ -90,7 +90,7 @@ test('every detection theme carries a callout plate inside the ambient band', ()
       `${name} callout plate ${plate} outside the ambient band`,
     );
     // The owner's spec: satellites read over the lit Earth disc, so the space
-    // tier pops slightly harder — but never as heavy as the tracked card.
+    // tier pops slightly harder - but never as heavy as the tracked card.
     assert.ok(space > plate, `${name} space plate must exceed the base plate`);
     assert.ok(space < CARD_PLATE_ALPHA, `${name} space plate must stay under the card`);
     // The scanline wash is a separate token and must not have been repurposed.
@@ -271,8 +271,8 @@ test('edge-clamped CCTV placements keep leaders vertical unless the anchor is ou
   })[0];
   // RE-SCOPED 2026-08-03. The old contract was `leadToX === 4` here: an anchor
   // outside the (edge-clamped) card rect pulled the leader endpoint to the card,
-  // making the stub diagonal. That is branch-new — the shipped leader ran from
-  // the anchor's sx to the card edge at the SAME sx, unconditionally — and a
+  // making the stub diagonal. That is branch-new - the shipped leader ran from
+  // the anchor's sx to the card edge at the SAME sx, unconditionally - and a
   // slanted stub is exactly what reads as "this card is not attached to that
   // camera". Vertical always, even when the card has been clamped sideways off
   // its anchor.
@@ -580,7 +580,7 @@ const CALLOUT_FIXTURE = Object.freeze({
 test('a sky-backed callout feathers its PLATE and nothing else', () => {
   // The owner's call: against the horizon the plate reads as a dark box on an
   // empty sky and the pre-plate bare text was better. Feathering must land on
-  // the backing only — the callsign, the tier bar and the leader are the
+  // the backing only - the callsign, the tier bar and the leader are the
   // callout's identity and keep the composed fades.
   const ground = alphaProbe();
   paintDetectionCallout(ground.ctx, { ...CALLOUT_FIXTURE, plateScale: 1 }, 0.8);

@@ -16,7 +16,7 @@ export function createGeometryQueue({
 }) {
   /**
    * Stops the staggered geometry-load queue and optionally clears progress
-   * counters (kept when pausing mid-flight is not needed — we always clear).
+   * counters (kept when pausing mid-flight is not needed - we always clear).
    * @param {boolean} [clearProgress=true]
    */
 
@@ -238,7 +238,7 @@ export function createGeometryQueue({
           layerState._geoLoadDone = layerState._geoLoadTotal;
           if (layerState._enabled) {
             parts.rendering.refreshCoverageStyles();
-            // Geometry refinement may have replaced record.position objects — the
+            // Geometry refinement may have replaced record.position objects - the
             // one-shot drain completion re-anchors the card entries (event-driven,
             // not a per-frame or timer pass).
             parts.cards.refreshAmbientCards();
@@ -264,7 +264,7 @@ export function createGeometryQueue({
    * the batch timer if idle. Used by update()'s ONE-SHOT tiles-ready completion
    * pass (records left `!groundResolved` by an enable-time drain that ran while
    * tiles were still streaming) so it shares the same stagger machinery as the
-   * initial load. Fires at most once per enable — never on a recurring timer.
+   * initial load. Fires at most once per enable - never on a recurring timer.
    * @param {Object[]} records - Camera records needing geometry refresh.
    */
 

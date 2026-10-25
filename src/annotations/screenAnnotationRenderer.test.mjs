@@ -263,8 +263,8 @@ test('annotation fade consumes the actual tracked host paint rectangle after lay
 //
 // add() inserts the group and records it, then does more live-document work
 // (draw-on wiring, the first projection pass). A throw in that tail used to
-// leave an ORPHANED <g> plus a record nobody owned — the engine's rollback only
-// deletes its own map entry — so re-annotating the same place stacked a second
+// leave an ORPHANED <g> plus a record nobody owned - the engine's rollback only
+// deletes its own map entry - so re-annotating the same place stacked a second
 // mark over the corpse.
 
 test('an add that throws after inserting its group unwinds instead of orphaning it', (t) => {
@@ -304,7 +304,7 @@ test('an add that throws after inserting its group unwinds instead of orphaning 
   };
 
   // The group is in the document and recorded by the time add() reaches its
-  // first projection pass — so a throw there is real partial state, not a
+  // first projection pass - so a throw there is real partial state, not a
   // clean bail-out.
   Cesium.SceneTransforms.worldToWindowCoordinates = () => { throw new Error('projection failed'); };
   assert.throws(() => renderer.add(anno), /projection failed/);

@@ -141,7 +141,7 @@ export function createHoverDisclosure({
   // Focus inside the tray defers the unpinned auto-dismiss, but only for the
   // KEYBOARD: the disclosure hands focus to a Map Source tile on Enter/Space,
   // and closing the tray out from under that focus would strand the caret.
-  // Plain `document.activeElement` is the wrong test — Chromium focuses a
+  // Plain `document.activeElement` is the wrong test - Chromium focuses a
   // <button> on mouse press, so once Map Source moved into this tray a tile
   // CLICK left focus parked inside and the popover never dismissed on
   // mouse-away (owner field report; Location, whose input is genuinely

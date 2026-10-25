@@ -4,7 +4,7 @@ export const AISSTREAM_STALE_MS = 30 * 60 * 1000;
 // Per-MMSI recent-path ring buffers (PRD WS-F F3). Float32 lat/lon (~1m
 // precision, fine for 25m thinning) + Uint32 epoch seconds ≈ 12B/sample;
 // 64 samples × 50k MMSIs worst case ≈ 38MB. Tracks exist only while the dev
-// server runs — this is "recent path", not voyage history.
+// server runs - this is "recent path", not voyage history.
 const AIS_TRACK_SAMPLES = 64;
 const AIS_TRACK_MIN_GAP_SEC = 30;
 const AIS_TRACK_MIN_MOVE_M = 25;
@@ -22,7 +22,7 @@ const _aisStreamTrackPending = new Map();
  *
  * The return value is the feed's ONLY liveness proof, so it is true strictly
  * when the envelope carried a real AIS record. Malformed frames and error
- * envelopes never reach here — the adapter classifies those — and a JSON
+ * envelopes never reach here - the adapter classifies those - and a JSON
  * object without an MMSI proves nothing about the feed.
  *
  * @param {Object} envelope Parsed, non-error AIS envelope.
@@ -119,7 +119,7 @@ export function ingestAisStreamEnvelope(envelope) {
     last_position_UTC: normalizeAisTimestamp(
       metadata.time_utc ?? metadata.TimeUtc,
     ),
-    // Use the AIS message's own report time, not server ingest wall-clock —
+    // Use the AIS message's own report time, not server ingest wall-clock -
     // trail spacing and dead reckoning depend on true fix epochs.
     last_position_epoch: aisEpochSeconds(metadata.time_utc ?? metadata.TimeUtc),
     _updatedAt: Date.now(),
@@ -221,7 +221,7 @@ export function readAisTrack(mmsi) {
   return samples;
 }
 
-/** Equirectangular distance approximation — plenty for 25m thinning. */
+/** Equirectangular distance approximation - plenty for 25m thinning. */
 function approxMetersBetween(lat1, lon1, lat2, lon2) {
   const dLat = (lat2 - lat1) * 111320;
   const dLon =

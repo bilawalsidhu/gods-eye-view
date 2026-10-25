@@ -9,7 +9,7 @@ export function createTesting({
   resolveAsset,
 }) {
   /** Test seam for the display-floor clamp (unit-tested against real Cesium math
-   *  with seeded mesh cells — the drift mechanism is otherwise only reachable
+   *  with seeded mesh cells - the drift mechanism is otherwise only reachable
    *  through a live poll + render loop). */
 
   function _floorGroundedDisplayPositionForTest(
@@ -29,7 +29,7 @@ export function createTesting({
   }
 
   /** Test hook: drops the per-contact display-floor state (hysteresis + rebuild
-   *  cache) so each case starts clean. There is no cross-contact state to reset —
+   *  cache) so each case starts clean. There is no cross-contact state to reset -
    *  the clamp is per-contact all the way down. */
 
   function _clearDisplayFloorStateForTest() {

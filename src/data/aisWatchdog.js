@@ -1,8 +1,8 @@
 // Pure state machine for the AISStream live-feed watchdog.
 //
 // Liveness is judged by DATA, not by socket state. AISStream can complete the
-// websocket handshake and then deliver nothing at all — no frames, no error,
-// no close — so `readyState === OPEN` proves only that a handshake once
+// websocket handshake and then deliver nothing at all - no frames, no error,
+// no close - so `readyState === OPEN` proves only that a handshake once
 // succeeded. Every health verdict here is derived from when a valid AIS
 // message last arrived. A handshake, a malformed frame, and an error envelope
 // are all explicitly NOT liveness.
@@ -23,7 +23,7 @@
 // ACTIONS for a transport adapter to perform, which keeps the entire policy
 // exercisable by the offline node:test suite.
 //
-// The only teardown action is 'terminate' — never 'close'. Node's built-in
+// The only teardown action is 'terminate' - never 'close'. Node's built-in
 // WebSocket has no terminate(), and its close() parks a black-holed socket in
 // CLOSING indefinitely (measured: no close event after 30s, TCP slot never
 // released), which is exactly how the reverted watchdog wedged. The adapter
@@ -61,7 +61,7 @@ export function isLiveAisStatus(status) {
  * Strictly interpret an AISSTREAM_SILENCE_TIMEOUT_MS-style override.
  *
  * Deliberately not `Number(raw)`: an exported-but-empty or whitespace value
- * coerces to 0, which would silently disable the watchdog — a failure mode
+ * coerces to 0, which would silently disable the watchdog - a failure mode
  * that hides itself, because the feature it disables is the one that reports
  * failure. Only a literal 0 is the kill switch; anything unparseable falls
  * back to the default and says so once.
@@ -133,7 +133,7 @@ export function createAisWatchdog(options = {}) {
   let status = 'idle';
   /**
    * Monotonic id for every socket the adapter is told to open. Seeded from the
-   * caller's high-water mark and never reset — a recycled generation would let
+   * caller's high-water mark and never reset - a recycled generation would let
    * a pre-disposal handler act on its successor's socket.
    */
   let generation = Math.max(0, Number(options.startGeneration) || 0);
@@ -141,7 +141,7 @@ export function createAisWatchdog(options = {}) {
   let owned = null;
   /** Monotonic ms at which the current silence window began (connect or data). */
   let silenceSinceMono = 0;
-  /** Last DATA message. 0 = never — a handshake does not count. */
+  /** Last DATA message. 0 = never - a handshake does not count. */
   let lastMessageWall = 0;
   /** Consecutive failed sessions since data last flowed. */
   let reconnectAttempt = 0;
@@ -170,7 +170,7 @@ export function createAisWatchdog(options = {}) {
   function scheduleRetry(kind, retryAfterMs) {
     const monoNow = clock.mono();
     // While the key is being refused, NO outcome of a probe may return the
-    // feed to the fast ladder — not a close, not a transport error, not
+    // feed to the fast ladder - not a close, not a transport error, not
     // silence. A probe that dies for any reason still leaves the credential
     // unproven, and hammering on an unproven key is the behaviour this whole
     // state exists to prevent. Only valid data or a key rotation leaves
@@ -250,7 +250,7 @@ export function createAisWatchdog(options = {}) {
       keyFingerprint !== null && nextFingerprint !== keyFingerprint;
     keyFingerprint = nextFingerprint;
     if (credentialChanged) {
-      // Any socket in flight belongs to the OLD key — it subscribed with that
+      // Any socket in flight belongs to the OLD key - it subscribed with that
       // credential, so its eventual rejection says nothing about the new one.
       // Terminating it here also releases the generation, which is what makes
       // every later event from that socket an orphan: without this, an
@@ -264,7 +264,7 @@ export function createAisWatchdog(options = {}) {
       return actions;
     }
 
-    // Key/transport just arrived — clear the terminal state and allow an
+    // Key/transport just arrived - clear the terminal state and allow an
     // immediate attempt rather than waiting out a stale backoff.
     if (status === 'missing-key' || status === 'unsupported') {
       status = 'idle';
@@ -279,7 +279,7 @@ export function createAisWatchdog(options = {}) {
    * Advance time. Returns the actions the adapter must perform, in order.
    *
    * A 'connect' is never returned while a socket is owned, and the machine
-   * releases the slot in the same step it emits a 'terminate' — so a reconnect
+   * releases the slot in the same step it emits a 'terminate' - so a reconnect
    * can only ever follow a terminate, never race it.
    *
    * @returns {Array<Object>} actions
@@ -291,14 +291,14 @@ export function createAisWatchdog(options = {}) {
     if (owned !== null) {
       // AUTH-FAILED is STICKY against staleness processing. Relabelling the
       // state to 'stale' at the 120s mark would put the next close, error,
-      // rate limit or recycle OUTSIDE the auth coercion in scheduleRetry —
+      // rate limit or recycle OUTSIDE the auth coercion in scheduleRetry -
       // laundering a refused key onto the fast ladder purely by the passage of
       // time. While the key is refused the hourly probe cadence is the only
       // clock that runs; the state leaves auth-failed exclusively via valid
       // data (onMessage) or a key rotation (configure).
       if (status === 'auth-failed') {
-        // The probe is still bounded — on the auth cadence, not the silence
-        // budget — so a probe that opens and then says nothing cannot pin the
+        // The probe is still bounded - on the auth cadence, not the silence
+        // budget - so a probe that opens and then says nothing cannot pin the
         // one-connection-per-key slot indefinitely.
         if (monoNow - silenceSinceMono >= authProbeMs) {
           const actions = terminateOwned('auth-probe-expired');
@@ -360,7 +360,7 @@ export function createAisWatchdog(options = {}) {
   }
 
   /**
-   * A VALID AIS message arrived — the only event that proves the feed works.
+   * A VALID AIS message arrived - the only event that proves the feed works.
    * The adapter must call this only after the frame has decoded and been
    * recognised as an AIS payload; malformed frames and error envelopes are
    * never liveness.
@@ -404,7 +404,7 @@ export function createAisWatchdog(options = {}) {
       ? detail.kind
       : 'transport';
     // A probe dying of some unrelated fault while the key is refused keeps the
-    // credential message — surfacing "ECONNRESET" would send the operator
+    // credential message - surfacing "ECONNRESET" would send the operator
     // chasing the network instead of the key.
     if (!(status === 'auth-failed' && kind !== 'auth')) {
       error = detail.message || defaultFailureMessage(kind);
@@ -429,7 +429,7 @@ export function createAisWatchdog(options = {}) {
     return actions;
   }
 
-  /** Highest generation ever issued — the seed for any replacement machine. */
+  /** Highest generation ever issued - the seed for any replacement machine. */
   function highWaterGeneration() {
     return generation;
   }

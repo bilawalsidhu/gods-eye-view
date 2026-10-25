@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * qa-firstrun — the mission launcher's contract, proved in the real app.
+ * qa-firstrun - the mission launcher's contract, proved in the real app.
  *
  * The unit suite pins the show policy and the mission table against fakes. This
  * harness answers the questions only a running app can: does a mission actually
@@ -46,14 +46,14 @@ const results = [];
 let currentSection = 'setup';
 function record(name, ok, detail) {
   results.push({ name, ok, detail, section: currentSection });
-  console.log(`  [${ok ? '\x1b[32mPASS\x1b[0m' : '\x1b[31mFAIL\x1b[0m'}] ${name}${detail ? ` — ${detail}` : ''}`);
+  console.log(`  [${ok ? '\x1b[32mPASS\x1b[0m' : '\x1b[31mFAIL\x1b[0m'}] ${name}${detail ? ` - ${detail}` : ''}`);
 }
 
 /**
  * Run one independent section.
  *
  * Sections are isolated on purpose. The first version of this harness ran as a
- * single straight line, so the FIRST throw ended the run — under `--teeth` that
+ * single straight line, so the FIRST throw ended the run - under `--teeth` that
  * meant it stopped at 9 of 38 checks and never exercised the mission, viewport
  * or console assertions at all, while still claiming the control had teeth. A
  * throw now fails its own section and the rest still run, which is what makes
@@ -143,8 +143,8 @@ const appState = (page) => page.evaluate(() => {
  */
 /**
  * Start recording every state the GLOBAL loading chip passes through. The chip
- * is transient — sampling it once after a mission would miss a failure banner
- * that flashed and cleared — so this watches it continuously instead.
+ * is transient - sampling it once after a mission would miss a failure banner
+ * that flashed and cleared - so this watches it continuously instead.
  */
 async function watchLoadingChip(page) {
   await page.evaluate(() => {
@@ -200,13 +200,13 @@ const EXPECTED_SECTIONS = [
  * `console` is a hygiene check, not a launcher check: with the launcher removed
  * the page legitimately still logs nothing, so demanding a red there would be
  * demanding a false failure. Everything else exists to test the launcher and
- * must collapse without it. This list is deliberately tiny and named — it is the
+ * must collapse without it. This list is deliberately tiny and named - it is the
  * one place a section can be excused, so an unjustified entry is visible.
  */
 const HYGIENE_SECTIONS = ['console'];
 
 /**
- * ESC arbitration — the two defects that motivated the yield design, plus the
+ * ESC arbitration - the two defects that motivated the yield design, plus the
  * yield itself. Driven through the real body classes, because that is exactly
  * what Cockpit and the Scene director set.
  */
@@ -241,13 +241,13 @@ async function runArbitrationSection(page, { shots, consoleErrors }) {
     record(
       'a scene taking the screen makes the launcher YIELD, not just hide',
       beforeScene.onScreen && !duringScene.classVisible,
-      `onScreen=${duringScene.onScreen} classVisible=${duringScene.classVisible} — a hidden card that kept "visible" is the defect`,
+      `onScreen=${duringScene.onScreen} classVisible=${duringScene.classVisible} - a hidden card that kept "visible" is the defect`,
     );
     record('yielding is session-scoped, like any other dismissal',
       duringScene.session === 'dismissed', `session=${duringScene.session}`);
 
     // The key that used to dismiss an invisible launcher must now do nothing
-    // to it — proven by the scene class still being set afterwards.
+    // to it - proven by the scene class still being set afterwards.
     await page.keyboard.press('Escape');
     await sleep(300);
     const afterEsc = await page.evaluate(() => ({
@@ -274,7 +274,7 @@ async function runArbitrationSection(page, { shots, consoleErrors }) {
     record(
       'cockpit engaging makes the launcher YIELD before it can contest ESC',
       beforeCockpit.onScreen && !duringCockpit.classVisible,
-      `classVisible=${duringCockpit.classVisible} — cockpit registers its capture listener first, so stacking must never arise`,
+      `classVisible=${duringCockpit.classVisible} - cockpit registers its capture listener first, so stacking must never arise`,
     );
     await page.evaluate(() => document.body.classList.remove('cockpit-mode'));
     await sleep(200);
@@ -314,7 +314,7 @@ async function runArbitrationSection(page, { shots, consoleErrors }) {
     record(
       'an unclassed overlay leaves the card MEASURABLE but no longer topmost',
       buried.onScreen && !buried.topmost,
-      `onScreen=${buried.onScreen} topmost=${buried.topmost} — the class watch cannot see this surface at all`,
+      `onScreen=${buried.onScreen} topmost=${buried.topmost} - the class watch cannot see this surface at all`,
     );
 
     await page.keyboard.press('Escape');
@@ -324,7 +324,7 @@ async function runArbitrationSection(page, { shots, consoleErrors }) {
     record(
       'ESC under the lightbox never lands on the buried launcher',
       beforeLightbox.onScreen && escUnderLightbox.classVisible,
-      `classVisible=${escUnderLightbox.classVisible} — the card was up, covered, and must stay up`,
+      `classVisible=${escUnderLightbox.classVisible} - the card was up, covered, and must stay up`,
     );
     record(
       'that ESC does not burn the session flag either',
@@ -360,7 +360,7 @@ async function runArbitrationSection(page, { shots, consoleErrors }) {
     // ── Blocker repro: a control that claims only the KEY ───────────────────
     // The compact Radio disclosure closes on ESC from a capture listener bound
     // long before this module exists. It called stopPropagation(), which does
-    // NOT stop later listeners on the same document — so one key closed the
+    // NOT stop later listeners on the same document - so one key closed the
     // disclosure AND dismissed the launcher. The card is not hiding behind this
     // one and must not yield to it: the key is simply already spoken for.
     await open(page, { query: "?welcome=1", errorSink: consoleErrors });
@@ -374,7 +374,7 @@ async function runArbitrationSection(page, { shots, consoleErrors }) {
     record('the compact Radio disclosure opens', radioOpened);
     const withRadio = await launcherState();
     record(
-      'a small disclosure is a key contest, not a screen takeover — no yield',
+      'a small disclosure is a key contest, not a screen takeover - no yield',
       withRadio.classVisible && withRadio.topmost,
       `classVisible=${withRadio.classVisible} topmost=${withRadio.topmost}`,
     );
@@ -391,7 +391,7 @@ async function runArbitrationSection(page, { shots, consoleErrors }) {
       'that SAME ESC does not also dismiss the launcher',
       beforeRadio.onScreen && launcherAfterRadioEsc.classVisible
         && launcherAfterRadioEsc.session !== 'dismissed',
-      `classVisible=${launcherAfterRadioEsc.classVisible} session=${launcherAfterRadioEsc.session} — one key, one action`,
+      `classVisible=${launcherAfterRadioEsc.classVisible} session=${launcherAfterRadioEsc.session} - one key, one action`,
     );
     // ...and the NEXT press is the launcher's, so nothing was permanently taken.
     await page.keyboard.press('Escape');
@@ -475,7 +475,7 @@ async function shoot(page, name) {
 async function main() {
   console.log('\nFirst-Run Mission Launcher QA');
   console.log(`  App URL : ${APP_URL}`);
-  console.log(`  Mode    : ${TEETH ? 'TEETH (launcher suppressed — expect RED)' : 'normal'}\n`);
+  console.log(`  Mode    : ${TEETH ? 'TEETH (launcher suppressed - expect RED)' : 'normal'}\n`);
 
   try {
     const response = await fetch(`${APP_URL}/`);
@@ -535,7 +535,7 @@ async function main() {
       // The card is a flex column (so its list can scroll on short viewports),
       // and an author `display` on this id outranks the UA's `[hidden]` rule.
       // Prove the attribute still hides it, or it sits in the a11y tree from
-      // page parse until reveal — and on a share link, until removal.
+      // page parse until reveal - and on a share link, until removal.
       const hiddenHonored = await page.evaluate((sel) => {
         const node = document.querySelector(sel);
         if (!node) return null;
@@ -554,7 +554,7 @@ async function main() {
         tiles.join(' · '),
       );
 
-      // ESC dismisses. Stated as a TRANSITION (was up, now gone) — "not visible"
+      // ESC dismisses. Stated as a TRANSITION (was up, now gone) - "not visible"
       // alone passes vacuously whenever the launcher never appeared at all.
       await page.keyboard.press('Escape');
       await sleep(600);
@@ -635,15 +635,15 @@ async function main() {
      * on what this server actually has rather than pretending one answer fits
      * both. The branch is reported, so a green run always says which one it was.
      *
-     *   KEYED   — both datasets must actually arrive, and a failure banner in
+     *   KEYED   - both datasets must actually arrive, and a failure banner in
      *             that state is a real defect, so the chip IS asserted.
-     *   KEYLESS — only the LAYER ROW is asserted: FIRMS reports KEY REQUIRED,
+     *   KEYLESS - only the LAYER ROW is asserted: FIRMS reports KEY REQUIRED,
      *             which is the honest surface a keyless visitor is judged on.
      *             The GLOBAL chip is deliberately NOT asserted in either
      *             direction here: it has no key-required terminal state and
      *             folds that row into a misleading LOAD FAILED. That
      *             aggregation is a defect in the shared state machine
-     *             (`src/loadingFeedback.js`), LEDGERED post-launch — it is not
+     *             (`src/loadingFeedback.js`), LEDGERED post-launch - it is not
      *             a desirable outcome and not this tile's contract.
      */
     const keyless = state.firmsError === 'KEY REQUIRED';
@@ -669,7 +669,7 @@ async function main() {
       const chip = await readLoadingChip(page);
       const failed = chip.filter((entry) => /LOAD FAILED/i.test(entry));
       // A STALE served-from-cache FIRMS payload is degraded, not failed, and it
-      // still carries data — so the failure test is the banner, not any
+      // still carries data - so the failure test is the banner, not any
       // non-empty error string.
       record(
         'KEYED: no unexpected global failure while the mission runs',
@@ -797,7 +797,7 @@ async function main() {
       );
 
       // Every tile plus the checkbox must still be reachable by Tab when the
-      // list scrolls — and reaching one must bring it into view.
+      // list scrolls - and reaching one must bring it into view.
       const reach = await page.evaluate(async (sel) => {
         const node = document.querySelector(sel);
         if (!node) return null;
@@ -869,15 +869,15 @@ async function main() {
    * version checked neither properly: it exited ZERO after a single throw ended
    * the run at 9 of 38 checks, so most assertions were never even reached.
    *
-   *   (a) the harness must REPORT FAILURE under the stub — a run with the
+   *   (a) the harness must REPORT FAILURE under the stub - a run with the
    *       launcher removed is a failing run, and it exits non-zero like one;
-   *   (b) EVERY section must produce at least one red — a section that stays
+   *   (b) EVERY section must produce at least one red - a section that stays
    *       fully green without the launcher is not testing the launcher.
    *
    * Because (a) means the process always exits non-zero here, the control's own
    * verdict is carried in the exit CODE: 1 = healthy, 2 = the control is broken.
    */
-  console.log('  TEETH — per-section reachability (each section must go red):');
+  console.log('  TEETH - per-section reachability (each section must go red):');
   for (const row of tally) {
     const hygiene = HYGIENE_SECTIONS.includes(row.name);
     const ok = row.red > 0 || hygiene;

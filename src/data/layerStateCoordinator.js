@@ -209,7 +209,7 @@ export class LayerStateCoordinator {
       }
       return;
     }
-    // A layer that goes away takes its latch with it, at ANY origin — a
+    // A layer that goes away takes its latch with it, at ANY origin - a
     // programmatic disable or teardown never reaches the explicit-intent path
     // below, so revoke here before that early return.
     if (
@@ -436,7 +436,7 @@ export class LayerStateCoordinator {
   /**
    * `atMs` is the moment the subject was first found ABSENT, not the moment the
    * verdict is delivered. Waiting out the pending window must not by itself
-   * push a fresh link into the "expired" wording — that word describes the
+   * push a fresh link into the "expired" wording - that word describes the
    * SHARE's age, not how long this client watched for the subject.
    */
   _classifyMissingTrackingTarget(selected, atMs = this.now()) {
@@ -486,7 +486,7 @@ export class LayerStateCoordinator {
    * left the timer alive: the controller has already settled by the time the
    * watch exists, so the abort was a no-op and the orphaned timer went on to
    * announce "Shared … unavailable" for a subject whose latch had been
-   * cancelled — a notice about work no longer being attempted.
+   * cancelled - a notice about work no longer being attempted.
    */
   _revokePendingTrackingWatch(reason) {
     this._trackingRestoreController?.abort(reason);
@@ -514,12 +514,12 @@ export class LayerStateCoordinator {
    * Hold a not-yet-arrived shared subject PENDING instead of declaring it gone.
    *
    * A recipient's first authoritative refresh routinely lands without a given
-   * contact — the feed is polled, coverage is partial, and rendering trails the
+   * contact - the feed is polled, coverage is partial, and rendering trails the
    * snapshot by a poll. Reload-from-local already survives this: its restore
    * arms the layer's own deferred-restore latch, which re-attempts on every
    * later poll. The shared path used to decide on that single refresh, clear
    * the subject from durable state AND from the URL, then post a failure notice
-   * seconds into startup — so the same link healed on reload but never on the
+   * seconds into startup - so the same link healed on reload but never on the
    * share.
    *
    * Arm the SAME latch, then watch it in the background: the caller is never
@@ -607,7 +607,7 @@ export class LayerStateCoordinator {
         return;
       }
       if (this.now() >= deadline) {
-        // The window really has elapsed — only now does the verdict apply.
+        // The window really has elapsed - only now does the verdict apply.
         const classification =
           probe.status === 'missing'
             ? this._classifyMissingTrackingTarget(selected, absentAtMs)

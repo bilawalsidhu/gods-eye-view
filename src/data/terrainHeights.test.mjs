@@ -1,4 +1,4 @@
-// src/data/terrainHeights.test.mjs — batched, cached client terrain-height
+// src/data/terrainHeights.test.mjs - batched, cached client terrain-height
 // resolver (docs/plans/2026-07-05-entity-height-datum-fix.md Task 3).
 //
 // Locks the module's public interface (Task 5/6 call it verbatim):
@@ -11,7 +11,7 @@
 // fake and restores the original in a `finally` so injection never leaks
 // across test files (node:test runs this file's tests sequentially, but the
 // module-level in-memory cache in terrainHeights.js DOES persist across
-// tests within this file — tests below use distinct coordinates per case to
+// tests within this file - tests below use distinct coordinates per case to
 // avoid cross-test cache contamination, except the dedicated cache tests
 // which rely on that persistence deliberately).
 import { test } from 'node:test';
@@ -82,7 +82,7 @@ test('resolveEllipsoidalGround: happy path maps results IN ORDER', async () => {
 test('resolveEllipsoidalGround: a 300-point input issues exactly 5 fetches (chunked at <=64/request) AND preserves order across the chunk boundary', async () => {
   // Each coord carries a DISTINGUISHABLE lat/lon derived from its index so
   // the oracle below can be an independent function of the point's INPUT
-  // identity — not an echo of whatever the request happened to send. This is
+  // identity - not an echo of whatever the request happened to send. This is
   // what makes the positional assertions able to catch an index-shift or a
   // within-chunk reversal in fetchChunk's zip (chunk[i].key vs
   // body.results[i]); the brief's guard is "point[250] must map to

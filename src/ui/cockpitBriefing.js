@@ -264,12 +264,12 @@ export function renderRegionalBrief(payload, info) {
   if (this.localTemperature) {
     this.localTemperature.textContent = Number.isFinite(weather?.temperatureC)
       ? `${Math.round(weather.temperatureC)}°C`
-      : '—';
+      : '-';
   }
   if (this.localWind) {
     this.localWind.textContent = Number.isFinite(weather?.windKph)
       ? t('{value} KM/H', { value: Math.round(weather.windKph) })
-      : '—';
+      : '-';
   }
   if (this.localWindDirection) {
     this.localWindDirection.textContent = formatCockpitWindDirection(
@@ -299,7 +299,7 @@ export function renderRegionalBrief(payload, info) {
           minimumFractionDigits: 1,
           maximumFractionDigits: 1,
         })
-      : '—';
+      : '-';
   }
   if (this.signalStream)
     this.signalStream.dataset.regionalStatus = payload?.status || 'partial';

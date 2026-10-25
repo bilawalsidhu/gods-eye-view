@@ -114,7 +114,7 @@ test('the comparison directions never become a camera heading', () => {
   // D1-D4 are the city's *comparison image* directions (static 2016 reference
   // stills served from ComparisonImages/), not a facing for the live frame:
   // these cameras pan. The letters read like a compass and map trivially onto
-  // one (n -> 0, w -> 270), so the temptation to wire them up is real — and a
+  // one (n -> 0, w -> 270), so the temptation to wire them up is real - and a
   // heading derived from them would be confidently wrong for every camera in
   // the city. Nobody may "fix" this.
   const base = torontoCameraToSource(row());

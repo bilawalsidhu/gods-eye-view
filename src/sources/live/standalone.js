@@ -193,7 +193,7 @@ export function createVesselSource({
         const error = httpError(response, 'Vessels');
         const reasons = {
           'missing-key': 'AISSTREAM_API_KEY not set',
-          'auth-failed': 'API key rejected — check AISSTREAM_API_KEY',
+          'auth-failed': 'API key rejected - check AISSTREAM_API_KEY',
           unsupported: 'live feed unsupported',
           error: 'feed down',
           closed: 'feed disconnected',

@@ -56,7 +56,7 @@ export function classifyNodeVersion(version = process.versions.node) {
   }
   // NEWER than this release has verified is a warning, never a refusal: a
   // future Node must not brick a no-terminal install with advice its user
-  // cannot follow. Too-old stays an error above — old runtimes genuinely fail.
+  // cannot follow. Too-old stays an error above - old runtimes genuinely fail.
   return { level: 'warn', summary: 'newer than this release has verified; Node 24.14.x or 26.x is the tested path' };
 }
 

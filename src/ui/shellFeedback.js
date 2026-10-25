@@ -190,7 +190,7 @@ export class ShellFeedback {
           immediate: !presentation.busy,
         },
       );
-    // Written on every change INCLUDING the empty settled value — the reducer
+    // Written on every change INCLUDING the empty settled value - the reducer
     // clears the progress number once the sync lands, and a truthiness guard
     // here would strand the last "..." beside the settled label.
     if (this._trafficSyncProgress.textContent !== presentation.progressText) {
@@ -240,7 +240,7 @@ export class ShellFeedback {
     // Split-flap the LABEL only ("LOADING LIVE DATA" -> "LOAD COMPLETE").
     // setSplitFlapText is a no-op when the text is unchanged, which matters
     // here: this runs on every 60 ms and 500 ms tick. The detail line is the
-    // live layer roster inside an ellipsised, width-capped span — flapping a
+    // live layer roster inside an ellipsised, width-capped span - flapping a
     // list that churns as layers join would be noise, not delight.
     setSplitFlapText(this._globalLoadingLabel, localized.label);
     this._globalLoadingDetail.textContent = localized.detail;
@@ -279,7 +279,7 @@ export class ShellFeedback {
     // Never arm behind a hidden tab: the reducer cannot usefully advance a
     // chip nobody can see, and the old `return` INSIDE the interval left the
     // 60ms timer scheduled for the entire hidden period (a batch completing
-    // while hidden could never clear it — the idle check sat behind the
+    // while hidden could never clear it - the idle check sat behind the
     // hidden guard). visibilitychange resamples and re-arms on return.
     if (this._loadingFeedbackTicker || document.hidden) return;
     this._loadingFeedbackTicker = setInterval(() => {

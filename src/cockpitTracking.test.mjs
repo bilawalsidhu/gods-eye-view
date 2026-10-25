@@ -62,7 +62,7 @@ test('voice Cockpit entry stamps camera authority on every mutating path', () =>
 
 test('a refused Cockpit entry still stamps for the tracker it already moved', () => {
   // The adoption happens before enter() can refuse. The mutation is real, so
-  // the stamp must be real too — otherwise a pending deferred flight would
+  // the stamp must be real too - otherwise a pending deferred flight would
   // resolve against a camera owner that changed underneath it.
   const world = stampingWorld({ entryAllowed: false });
   const selectedLayer = world.makeLayer('flights');

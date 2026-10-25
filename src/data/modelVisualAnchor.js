@@ -28,7 +28,7 @@ export const MODEL_VISUAL_CENTER_NATIVE = Object.freeze({
  *
  *   ON THE HULL. This is the correction that matters. The previous round put
  *       the anchor ON the AABB corner itself, reasoning that an anchor aft of
- *       every vertex makes non-intersection geometric. It does — but an AABB
+ *       every vertex makes non-intersection geometric. It does - but an AABB
  *       corner is EMPTY SPACE, and on these airframes it is a long way from
  *       any of them: 4.80 m out for airplane.glb and 6.14 m for jet.glb in
  *       native units, which at the 450 m framing is a visible gap between the
@@ -37,7 +37,7 @@ export const MODEL_VISUAL_CENTER_NATIVE = Object.freeze({
  *
  *   AFT. The head segment is drawn from a point behind the aircraft to this
  *       anchor, so an anchor near the middle makes the segment enter at the
- *       tail and stop mid-fuselage — a line drawn through the airframe. These
+ *       tail and stop mid-fuselage - a line drawn through the airframe. These
  *       sit at 83–96 % of each model's aft extreme, on the aft-most hull the
  *       centreline has.
  *
@@ -46,17 +46,17 @@ export const MODEL_VISUAL_CENTER_NATIVE = Object.freeze({
  *       rather than out of the roof. On most assets that is a frank belly
  *       point; on jet.glb the aft centreline profile has swept up into the
  *       tail cone by then, so the anchor sits just above the model's vertical
- *       centre (+0.13 native on a 5.63 m half-height) at the exhaust — which
+ *       centre (+0.13 native on a 5.63 m half-height) at the exhaust - which
  *       is where a fast jet's wake leaves it anyway.
  *
- * Y stays on the centreline — the profile is sliced at y = 0 rather than taking
- * the nearest surface point in the round — so the attachment cannot drift
+ * Y stays on the centreline - the profile is sliced at y = 0 rather than taking
+ * the nearest surface point in the round - so the attachment cannot drift
  * screen-left or screen-right as the aircraft turns. (The unconstrained nearest
  * point would put jet.glb's anchor 1.29 m off-axis.) Values are native model
  * units; callers scale them by Cesium's effective `computedScale`.
  *
  * Locked against the shipped GLBs by modelScale.test.mjs, which re-reads the
- * POSITION buffers and re-derives every property above — re-measure, never
+ * POSITION buffers and re-derives every property above - re-measure, never
  * re-guess, when an asset changes.
  */
 export const MODEL_TRAIL_ANCHOR_NATIVE = Object.freeze({
@@ -94,7 +94,7 @@ const _chainScratch = new Cesium.Matrix4();
  * correction: with the `fromGltfAsync` defaults it also applies Z_UP_TO_X_UP,
  * and the full correction maps raw glTF `[x, y, z]` -> `[z, x, y]`. The
  * aircraft's longitudinal axis is raw glTF X, so the old conversion put the
- * aft offset on the RENDERED model's lateral axis — a 90-degree disagreement.
+ * aft offset on the RENDERED model's lateral axis - a 90-degree disagreement.
  * Because `modelMatrix` carries the heading, both frames rotated together and
  * the offset came out sideways in world space, flipping which side it appeared
  * on as the course changed. Measured on the live rig at N/E/S/W plus a
@@ -103,7 +103,7 @@ const _chainScratch = new Cesium.Matrix4();
  * cross.
  *
  * The anchors are therefore stored in RAW glTF coordinates and transformed
- * here, so exactly one transform — Cesium's own — stands between the table and
+ * here, so exactly one transform - Cesium's own - stands between the table and
  * the world, and there is no second convention to drift.
  *
  * @param {object} model Cesium Model (needs modelMatrix, computedScale, sceneGraph).
@@ -163,7 +163,7 @@ export function trailAnchorForModel(url) {
  * anchor. On a moving contact that point is a poll interval behind, so the
  * segment arrives from open air and terminates ON the hull, which is what it
  * should do. On a PARKED one it sits where the aircraft is: the segment
- * degenerates into a line from inside the model out to its own anchor — a stick
+ * degenerates into a line from inside the model out to its own anchor - a stick
  * through half the fuselage on an aeroplane going nowhere. Grounded tracking
  * starts a trail unconditionally, so every parked selection drew one.
  *
@@ -172,7 +172,7 @@ export function trailAnchorForModel(url) {
  *
  *  - Testing segment LENGTH against the radius hid real trail. With
  *    `airplane.glb`'s 34.41 m radius and 24.09 m tail anchor, a prior fix 58 m
- *    aft gives a 33.98 m segment — under the radius, so suppressed — even
+ *    aft gives a 33.98 m segment - under the radius, so suppressed - even
  *    though ~23.6 m of it is in open air behind the aircraft. It also made the
  *    whole segment pop in at once on crossing ~58.4 m.
  *  - CLIPPING the segment at the envelope boundary and keeping only what lay
@@ -180,8 +180,8 @@ export function trailAnchorForModel(url) {
  *    sphere encloses a lot of empty space around a slender airframe, so
  *    trimming at sphere entry stops the trail visibly SHORT of the aircraft it
  *    is attached to. The head end is never cut. That end is the whole point.
- *  - CONTAINMENT — the whole segment when the start is outside the envelope,
- *    nothing when it is inside — kept both of those ends honest but decided it
+ *  - CONTAINMENT - the whole segment when the start is outside the envelope,
+ *    nothing when it is inside - kept both of those ends honest but decided it
  *    with a BOOLEAN, and a boolean at a 34.41 m boundary is a 10.33 m flash.
  *    Moving the start from 34.40 m to 34.42 m turned the entire segment on at
  *    once, and a contact whose next fix landed back inside turned it off again.
@@ -197,7 +197,7 @@ export function trailAnchorForModel(url) {
  *     the anchor, into the fuselage. Nothing is drawn. A parked contact sits at
  *     exactly zero here, which is the case this whole guard exists for.
  *   - the ENVELOPE, `radiusM`. At and beyond it the segment is drawn in full,
- *     bit-identical to the containment rule it replaces — so every contact that
+ *     bit-identical to the containment rule it replaces - so every contact that
  *     has moved more than its own size (any airborne contact: 30 s of flight is
  *     kilometres) is completely unaffected by any of this.
  *
@@ -205,13 +205,13 @@ export function trailAnchorForModel(url) {
  * creeping across the boundary reveals its trail a few centimetres at a time
  * and an in/out/in flap costs a few centimetres each way instead of ten metres.
  *
- * Scale-free rather than tuned: both ends of that shell come from the model —
+ * Scale-free rather than tuned: both ends of that shell come from the model -
  * `radiusM` carries Cesium's `computedScale`, so it tracks whatever
  * `minimumPixelSize` inflated the model to, and the station comes from the
  * anchor being drawn to.
  *
  * @param {{x:number,y:number,z:number}} start Segment start (last trail point).
- * @param {{x:number,y:number,z:number}|null} anchor Segment end, world space —
+ * @param {{x:number,y:number,z:number}|null} anchor Segment end, world space -
  *   the aft-belly attachment point actually being drawn to.
  * @param {{x:number,y:number,z:number}|null} center Model origin, world space.
  * @param {number} radiusM Rendered bounding radius (nativeRadiusM x computedScale).
@@ -222,7 +222,7 @@ export function trailAnchorForModel(url) {
 export function trailHeadStart(start, anchor, center, radiusM, result) {
   if (!start) return null;
   // No envelope to judge against (no model drawing this contact, a radius we
-  // cannot trust, or nowhere to put the answer) — draw it all rather than lose
+  // cannot trust, or nowhere to put the answer) - draw it all rather than lose
   // a real trail.
   if (!anchor || !center || !result) return start;
   if (!Number.isFinite(radiusM) || radiusM <= 0) return start;
@@ -237,7 +237,7 @@ export function trailHeadStart(start, anchor, center, radiusM, result) {
     anchor.y - center.y,
     anchor.z - center.z,
   );
-  // A degenerate shell (an anchor at or outside the envelope — no shipped asset
+  // A degenerate shell (an anchor at or outside the envelope - no shipped asset
   // has one, since every anchor is a measured hull point) leaves nothing to
   // ramp across; fall back to the containment verdict rather than divide by it.
   if (!(radiusM > anchorD)) return null;

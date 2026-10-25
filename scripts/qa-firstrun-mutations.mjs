@@ -3,8 +3,8 @@
  * Are the first-run launcher's pins actually load-bearing?
  *
  * A pin that only goes red when you delete the whole feature proves very little.
- * This reverts each decision INDIVIDUALLY — the smallest edit that reintroduces
- * the original defect or contradicts the owner's ruling — and requires
+ * This reverts each decision INDIVIDUALLY - the smallest edit that reintroduces
+ * the original defect or contradicts the owner's ruling - and requires
  * src/firstRunExperience.test.mjs to go red for it. Every entry names what it
  * restores, so the count is reproducible rather than asserted in a commit
  * message.
@@ -16,7 +16,7 @@
  * NOTE: two mutations edit the server voice tools/instructions, and a running dev server watches those
  * files and restarts on every write. Writes are therefore content-guarded below
  * so the file is touched exactly twice per mutation instead of on every
- * iteration — enough that a dev server survives, but expect it to restart. If
+ * iteration - enough that a dev server survives, but expect it to restart. If
  * you are mid-QA on a live server, run this before or after, not during.
  */
 import { execFileSync } from 'node:child_process';
@@ -262,8 +262,8 @@ const MUTATIONS = [
   {
     defect: "the owner-authored first-run line is quietly rewritten",
     file: 'html',
-    from: 'It feels like a forbidden cockpit—then you realize the sources are public and the data is real.',
-    to: "It feels like a forbidden cockpit. It isn't — every feed is public, and every contact is live.",
+    from: 'It feels like a forbidden cockpit - then you realize the sources are public and the data is real.',
+    to: "It feels like a forbidden cockpit. It isn't - every feed is public, and every contact is live.",
   },
   {
     defect: 'the ledgered global-chip defect loses its pointer to the real fix',
@@ -485,11 +485,11 @@ process.on('exit', restoreAll);
 let caught = 0;
 const missed = [];
 
-console.log(`\nFirst-run launcher pin strength — ${MUTATIONS.length} individual reverts\n`);
+console.log(`\nFirst-run launcher pin strength - ${MUTATIONS.length} individual reverts\n`);
 for (const { defect, file, from, to } of MUTATIONS) {
   const original = originals.get(file);
   if (!original.includes(from)) {
-    missed.push(`${defect} (ANCHOR MISSING — the mutation no longer applies)`);
+    missed.push(`${defect} (ANCHOR MISSING - the mutation no longer applies)`);
     console.log(`  \x1b[31mSTALE\x1b[0m ${defect}`);
     continue;
   }

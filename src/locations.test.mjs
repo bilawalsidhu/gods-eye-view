@@ -1,6 +1,6 @@
 import { createStandalonePlaceSearch } from './standalone/placeSearch.js';
 // Camera-framing mode contract for fly_to_location (field test 8 + rootcause doc §3):
-// parks/lakes/campuses and streets are NOT precise POIs — flying to "Zilker Park" at
+// parks/lakes/campuses and streets are NOT precise POIs - flying to "Zilker Park" at
 // building range (250 m) lands on a random rooftop. Pure mapping tests, no network.
 //
 // Run with: npm test   (node --test)
@@ -81,14 +81,14 @@ function flownRectangleDegrees(viewer, index = 0) {
     west: Cesium.Math.toDegrees(rectangle.west),
     east: Cesium.Math.toDegrees(rectangle.east),
     // Cesium's own width, which adds a full turn when the box crosses the
-    // antimeridian — the number the camera actually frames.
+    // antimeridian - the number the camera actually frames.
     widthDeg: Cesium.Math.toDegrees(rectangle.width),
     crossesAntimeridian: rectangle.east < rectangle.west,
   };
 }
 
 test('parks / lakes / campuses frame as area-overview, not precise-place', () => {
-  // Zilker Park — the field-test rooftop bug.
+  // Zilker Park - the field-test rooftop bug.
   assert.equal(geocodeNavigationMode(['park', 'tourist_attraction', 'point_of_interest', 'establishment']), 'area-overview');
   // Lady Bird Lake.
   assert.equal(geocodeNavigationMode(['natural_feature', 'establishment']), 'area-overview');
@@ -96,7 +96,7 @@ test('parks / lakes / campuses frame as area-overview, not precise-place', () =>
   assert.equal(geocodeNavigationMode(['airport']), 'area-overview');
 });
 
-test('streets frame as street-corridor (rootcause doc §3 — Sixth Street)', () => {
+test('streets frame as street-corridor (rootcause doc §3 - Sixth Street)', () => {
   assert.equal(geocodeNavigationMode(['route']), 'street-corridor');
   assert.equal(geocodeNavigationMode(['intersection']), 'street-corridor');
 });
@@ -118,7 +118,7 @@ test('admin types win over area types when both present', () => {
 });
 
 // Natural-region framing heuristic (owner field test 2026-07-23): "take me to the
-// Rocky Mountains" geocodes as natural_feature with a ~2,700 km viewport — framing
+// Rocky Mountains" geocodes as natural_feature with a ~2,700 km viewport - framing
 // the whole box flies the camera to space. Region-scale viewports get a capped
 // oblique swath instead; ordinary parks/lakes keep full-viewport framing.
 
@@ -130,7 +130,7 @@ test('regionFramingPlan: Rocky-Mountains-scale viewport gets a capped oblique sw
   });
   assert.equal(plan.mode, 'swath');
   assert.ok(plan.spanKm > 2000, `span should be huge, got ${plan.spanKm}`);
-  // Camera range is CAPPED at regional scale — never the multi-thousand-km bbox fit.
+  // Camera range is CAPPED at regional scale - never the multi-thousand-km bbox fit.
   assert.ok(plan.rangeM <= 400000, `rangeM must stay regional, got ${plan.rangeM}`);
   assert.ok(plan.rangeM >= 150000, `rangeM must still read as a region, got ${plan.rangeM}`);
   // Oblique cinematic angle, not straight down.
@@ -315,12 +315,12 @@ test('regionFramingPlan: antimeridian-crossing viewport measured the short way r
 // ── Off-centre viewport sanity gate (2026-08-20 QA hunt) ────────────────────
 // Free-text "Tokyo" flew the camera ~977 km out over the open Pacific. Tokyo
 // geocodes as the PREFECTURE (administrative_area_level_1), and Tokyo Metropolis
-// owns the Izu/Ogasawara chains ~1,000 km out to sea — so its bounding box is
+// owns the Izu/Ogasawara chains ~1,000 km out to sea - so its bounding box is
 // mostly ocean and its centroid is nowhere near the city. "Hawaii" behaves the
 // same way via the Northwestern Hawaiian Islands.
 //
 // EVERY fixture below is SYNTHETIC geometry, constructed here. Google Maps
-// content — geocodes included — may not be cached, stored, rehosted, or
+// content - geocodes included - may not be cached, stored, rehosted, or
 // committed (DATA_SOURCES.md), so no captured API response appears in this repo.
 // The fixtures reproduce the SHAPES that matter instead: an oversized box whose
 // place sits in one corner, an oversized box centred on its place, the same
@@ -389,7 +389,7 @@ test('placeFramingViewport: an off-centre admin box collapses to a metro box on 
   );
   const centerLat = (framed.southwest.lat + framed.northeast.lat) / 2;
   const centerLng = (framed.southwest.lng + framed.northeast.lng) / 2;
-  // Centred on the place — NOT the box centroid, which is ~1,350 km away.
+  // Centred on the place - NOT the box centroid, which is ~1,350 km away.
   assert.ok(Math.abs(centerLat - OFF_CENTRE_ADMIN_ANCHOR.lat) < 1e-6, `centred on the place, got ${centerLat}`);
   assert.ok(Math.abs(centerLng - OFF_CENTRE_ADMIN_ANCHOR.lng) < 1e-6, `centred on the place, got ${centerLng}`);
   // And it is metro-sized: ~40 km on a side, well inside the gate.
@@ -501,7 +501,7 @@ test('a well-centred region search still frames its whole bounds', async () => {
   const result = await runSearch(viewer, {}, { result: CENTRED_REGION_RESULT, query: 'Centred Province' });
   assert.equal(result.navigationMode, 'region-overview');
   const flown = flownRectangleDegrees(viewer);
-  // The region's own bounds, plus flyToViewportBounds' 12% padding — never a metro box.
+  // The region's own bounds, plus flyToViewportBounds' 12% padding - never a metro box.
   assert.ok(flown.south <= 30 && flown.north >= 40, `must span the region N-S, got ${flown.south}..${flown.north}`);
   assert.ok(flown.west <= -10 && flown.east >= 0, `must span the region E-W, got ${flown.west}..${flown.east}`);
 });
@@ -546,7 +546,7 @@ test('an explicit overview ask still reaches a well-centred region unchanged', a
 // straddling the dateline subtracts to -359.6, whose 12% padding alone is 43
 // degrees, and the camera framed ~86.7 degrees of ocean.
 test('a metro fallback straddling the antimeridian frames a metro box, not a hemisphere', async () => {
-  // Oversized box crossing the dateline whose place sits at 179.9 — the gate
+  // Oversized box crossing the dateline whose place sits at 179.9 - the gate
   // fires and produces a metro box that straddles +/-180.
   const bounds = boxOf(10, 161, 30, -159);
   const result = resultOf(['administrative_area_level_1', 'political'], bounds, 29, 179.9, 'Dateline Prefecture');
@@ -594,7 +594,7 @@ test('regionFramingPlan: invalid viewports return null', () => {
 });
 
 // Globe-view preset (owner field test 2026-07-23): "zoom out to a globe view" needs an
-// ABSOLUTE full-earth framing — the relative zoom tool can never reach it. The preset
+// ABSOLUTE full-earth framing - the relative zoom tool can never reach it. The preset
 // must sit inside the app's own 'global' view-scale band (>12,000 km camera height,
 // classifyViewScale in gevActions.js) and under the fly_to rangeM ceiling (20,000 km).
 test('GLOBE_VIEW preset height sits in the global view band', () => {
@@ -606,7 +606,7 @@ test('GLOBE_VIEW preset height sits in the global view band', () => {
 
 // The globe flight's callbacks are what resolves Reset Globe / zoom_to_globe.
 // They were published under this module's OWN option names (`onComplete` /
-// `onCancel`), which Cesium's Camera.flyTo ignores — so neither ever fired and
+// `onCancel`), which Cesium's Camera.flyTo ignores - so neither ever fired and
 // every caller resolved off its ~4.2 s watchdog timeout instead of the flight.
 test('the globe flight publishes its callbacks under Cesium\'s own option names', () => {
   const viewer = stubViewer();
@@ -621,8 +621,8 @@ test('the globe flight publishes its callbacks under Cesium\'s own option names'
   assert.equal(typeof flight.cancel, 'function', 'Cesium reports supersession through `cancel`');
   // Not merely present under both spellings: the ignored names must be gone,
   // or a later reader can "fix" the wrong one back.
-  assert.equal('onComplete' in flight, false, 'Cesium ignores onComplete — do not publish it');
-  assert.equal('onCancel' in flight, false, 'Cesium ignores onCancel — do not publish it');
+  assert.equal('onComplete' in flight, false, 'Cesium ignores onComplete - do not publish it');
+  assert.equal('onCancel' in flight, false, 'Cesium ignores onCancel - do not publish it');
 
   flight.complete();
   flight.cancel();

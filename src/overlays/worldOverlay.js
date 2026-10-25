@@ -80,8 +80,8 @@ const PAINT_LANE_INDEX = new Map(
  * service caches their rectangles and observes layout/visibility changes.
  *
  * These rectangles are a PLACEMENT policy, never a paint mask. Every element
- * listed here composites ABOVE the overlay host — map chrome sits at z90–z1000
- * and the cockpit HUD at z145, against this host's z5/z6 — so the browser
+ * listed here composites ABOVE the overlay host - map chrome sits at z90–z1000
+ * and the cockpit HUD at z145, against this host's z5/z6 - so the browser
  * already keeps overlay pixels off it and no canvas needs clipping. What the
  * inventory buys is readability: a card placed under solid chrome is simply
  * lost, so the solver PREFERS placements clear of it. When nothing is clear the
@@ -89,8 +89,8 @@ const PAINT_LANE_INDEX = new Map(
  * host existed.
  *
  * The list therefore holds only chrome dense enough to swallow a card. The
- * cockpit's thin translucent line art — rims, arcs, rails, tapes, toplines,
- * readouts — is deliberately ABSENT under the owner's AR-HUD ruling:
+ * cockpit's thin translucent line art - rims, arcs, rails, tapes, toplines,
+ * readouts - is deliberately ABSENT under the owner's AR-HUD ruling:
  * world-space overlay content renders beneath the cockpit's screen-space HUD,
  * which paints over it by z-order. Those elements are also enormous (the
  * altitude rim is keyhole-tall, the topline viewport-wide), and excluding them
@@ -122,7 +122,7 @@ export const WORLD_OVERLAY_OCCLUDER_SELECTORS = Object.freeze([
   '#bhote-koshi-event-panel',
   // Cockpit: solid backdrop-filled windows only (both bounded to
   // `min(340px, 28vw)` wide and `min(42vh, 410px)` tall, both `hidden` until
-  // toggled). Every other cockpit selector was removed — see the block comment.
+  // toggled). Every other cockpit selector was removed - see the block comment.
   '#cockpit-context',
   '#cockpit-signal-stream',
 ]);
@@ -354,7 +354,7 @@ function zeroDemandEntry(value, key, map) {
  * Amortized prune for a keyed index that is rebuilt every frame but only
  * grows when a source publishes new identities. Clearing unconditionally
  * reallocates the backing hash table per domain per frame, so the index is
- * dropped only once it dwarfs the live cohort — the same policy the arbiter
+ * dropped only once it dwarfs the live cohort - the same policy the arbiter
  * applies to its per-solve key stamps.
  * @param {Map<string, object>} index
  * @param {number} liveCount
@@ -402,7 +402,7 @@ export function paintLaneForOverlayEntry(entry = {}) {
  * Resolved exactly ONCE per setEntries and never re-read on the paint path:
  * - the property is read a single time, so an accessor-backed field is
  *   invoked once rather than once per validated component;
- * - a throwing accessor is contained here — it degrades that one entry to
+ * - a throwing accessor is contained here - it degrades that one entry to
  *   "no cull anchor" instead of aborting normalization for the whole source;
  * - the components are copied into a fresh Cartesian3, so a caller mutating
  *   or recycling its own vector after publishing cannot feed NaN (or a moved
@@ -1171,7 +1171,7 @@ function overlayRectIntersectsAny(rect, exclusions, count = exclusions.length) {
 
 /**
  * Like `overlayRectIntersectsAny`, but only against exclusions that composite
- * BELOW the host — the ones a placement may never overlap at any cost.
+ * BELOW the host - the ones a placement may never overlap at any cost.
  */
 function overlayRectIntersectsAnyHard(
   rect,
@@ -1242,7 +1242,7 @@ function ensureOverlayDom() {
   // which only reaches the WebGL scene while no ancestor between the surface
   // and the Cesium canvas forms a stacking context (an isolated blending
   // group). `#cesiumContainer` is `position:absolute; z-index:auto` and does
-  // not; `#world-overlay-root` is `z-index:6` and does — parenting here made
+  // not; `#world-overlay-root` is `z-index:6` and does - parenting here made
   // the browser silently discard the blend while the CSS string stayed
   // `'screen'`. Paint order is expressed purely by z-index: this surface is
   // z5, the shared card canvas inside the root is z6.
@@ -1353,7 +1353,7 @@ function ensureCanvasSize() {
 /**
  * Only chrome the user can actually see may exclude anything. A collapsed or
  * hidden panel must contribute nothing, including when the reason it is
- * invisible lives on an ANCESTOR — a child of a `display:none` container keeps
+ * invisible lives on an ANCESTOR - a child of a `display:none` container keeps
  * its own computed `display`, so the local style test alone cannot see it.
  * `checkVisibility` resolves the whole chain; the local test is the fallback.
  */
@@ -1394,8 +1394,8 @@ const HOST_TOP_Z_INDEX = 6;
  * Effective stacking level of an element relative to the page root.
  *
  * Paint order against the host is decided by the OUTERMOST positioned ancestor
- * carrying a z-index — that is the stacking context which actually competes with
- * `#world-overlay-root` — so the walk keeps overwriting as it climbs and returns
+ * carrying a z-index - that is the stacking context which actually competes with
+ * `#world-overlay-root` - so the walk keeps overwriting as it climbs and returns
  * the last one found. An element with no positioned z-indexed ancestor stacks at
  * the root's own level, which is below the host.
  */
@@ -1418,7 +1418,7 @@ function elementStackLevel(element) {
  *
  * This is the justification for treating exclusion as a soft preference: chrome
  * that paints over the host hides an unplaceable card harmlessly. Chrome that
- * paints UNDER the host does not — a card kept there renders ON TOP of it, which
+ * paints UNDER the host does not - a card kept there renders ON TOP of it, which
  * violates the absolute rule that labels never cover the UI. `#intel-hud` is z2,
  * i.e. below both host surfaces, so its corners and bars need a HARD veto.
  */
@@ -1479,7 +1479,7 @@ function refreshUiOccluders(timestamp, force = false) {
   // Each element keeps its OWN rectangle. The inventory used to be reduced to
   // transitive bounding UNIONS of overlapping rects, which is only a
   // requirement for even-odd canvas holes (overlapping holes toggle pixels back
-  // on) — and the host no longer punches holes in anything. As placement
+  // on) - and the host no longer punches holes in anything. As placement
   // geometry the unions were actively wrong: a chain of pairwise-overlapping
   // panels collapsed into one enormous rectangle that swept unrelated world
   // space, jumped in size whenever a panel expanded, and in cockpit coalesced
@@ -1506,7 +1506,7 @@ function markOccludersDirty() {
  * Occluder-element attribute observation is deliberately NOT `subtree`: the
  * inventory only reads each occluder's own border box and visibility, and a
  * descendant cannot change either without the element's ResizeObserver seeing
- * it. Subtree scope added nothing — but it delivered every ticking descendant
+ * it. Subtree scope added nothing - but it delivered every ticking descendant
  * (the REC-dot blink, chip internals) as an invalidation, which held a parked
  * camera at ~12 requestRender/s for every live overlay source.
  */
@@ -1544,7 +1544,7 @@ function childListTouchesChrome(nodes) {
 
 /**
  * Shared MutationObserver callback for both observation scopes. Body-level
- * childList records are DISCOVERY only — they matter solely when the churn
+ * childList records are DISCOVERY only - they matter solely when the churn
  * adds or removes inventory chrome, so a ticking clock's text swaps and other
  * non-chrome element churn are dropped here. Attribute records can only
  * originate from an occluder element itself (element-scoped observation), so
@@ -1554,7 +1554,7 @@ function childListTouchesChrome(nodes) {
 function handleChromeMutations(records) {
   if (!overlayHasPaintWork()) {
     // Dormant host: keep the pre-filter flag semantics without paying selector
-    // checks — the first frame with real paint work force-refreshes anyway.
+    // checks - the first frame with real paint work force-refreshes anyway.
     _occludersDirty = true;
     return;
   }
@@ -1803,8 +1803,8 @@ function resetFrameDomains() {
     // `candidateMap` keeps its table across frames; membership is expressed by
     // `candidate.frameStamp`, and demand tallies are zeroed rather than cleared
     // because `Map#clear` reallocates the backing hash table every call. Stale
-    // keys still have to go somewhere, so the index is pruned here — before the
-    // frame republishes it — against the previous frame's live cohort.
+    // keys still have to go somewhere, so the index is pruned here - before the
+    // frame republishes it - against the previous frame's live cohort.
     pruneKeyedIndex(domain.candidateMap, domain.candidateCount);
     domain.candidateCount = 0;
     domain.protectedCount = 0;
@@ -2034,8 +2034,8 @@ function snapshotAndProject(entry, source, viewProjection, keyhole) {
   // what left cockpit with nothing. Keeping the placement is safe only when the
   // chrome paints over the card anyway.
   //
-  // That justification fails for chrome UNDER the host — `#intel-hud` is z2,
-  // below both host surfaces — where a kept placement would render ON TOP of the
+  // That justification fails for chrome UNDER the host - `#intel-hud` is z2,
+  // below both host surfaces - where a kept placement would render ON TOP of the
   // HUD text. Labels never cover the UI, so those rects keep the absolute veto.
   let softClear = 0;
   for (let i = 0; i < record.placements.length; i++) {
@@ -2330,8 +2330,8 @@ function solveDomains(timestamp) {
         continue;
       // No second UI veto here. The placement already went through the
       // exclusion preference at projection; re-testing it meant that a panel
-      // expanding over a settled card evicted the card outright — it popped
-      // out and then had to fade back in — instead of simply sliding beneath
+      // expanding over a settled card evicted the card outright - it popped
+      // out and then had to fade back in - instead of simply sliding beneath
       // the chrome that composites above this host anyway.
       addPaintItem(
         record,
@@ -2450,7 +2450,7 @@ function paintCustomLane(lane) {
       // chrome, while brackets, labels, the focus ring, the banner and the
       // scanline wash cover the whole field. Clipping this surface punched
       // hard-edged rectangular voids through the detection field, and in
-      // cockpit — where the exclusions coalesced to nearly the full viewport —
+      // cockpit - where the exclusions coalesced to nearly the full viewport -
       // blanked Panoptic entirely while it was still solving and painting.
       record.painter(_customPaintFrame);
       if (detectionTarget) _detectionSurfaceNeedsClear = true;

@@ -421,7 +421,7 @@ export function createIngestion({
         layerState._tileCache.set(cacheKey, cache);
       } else cache = { major: null, full: null };
 
-      // Fast path: full road set already cached — render and return.
+      // Fast path: full road set already cached - render and return.
       // Flow is (re)applied even on cache hits: roads cache for the session,
       // but congestion data has a 120s shelf life. Locally grounded roads
       // paint independently; late flow recolors in place.
@@ -591,7 +591,7 @@ export function createIngestion({
             ? e.message
             : roadRequestError(null, e).message;
       if (generation === layerState._loadGeneration && renderedSomething) {
-        layerState._detailError = `Detailed roads unavailable — ${e instanceof RoadRequestError ? e.message : roadRequestError(null, e).message}`;
+        layerState._detailError = `Detailed roads unavailable - ${e instanceof RoadRequestError ? e.message : roadRequestError(null, e).message}`;
         layerState._roadPartial = true;
       }
       console.warn('[Data:Traffic] Fetch error:', e);
@@ -634,11 +634,11 @@ export function createIngestion({
   }
   const methods = {
     /**
-     * No-op — traffic updates are entirely camera-driven, not timer-driven.
+     * No-op - traffic updates are entirely camera-driven, not timer-driven.
      * @returns {Promise<void>}
      */
     async update() {
-      // No-op — updates are camera-driven
+      // No-op - updates are camera-driven
     },
   };
 

@@ -89,7 +89,7 @@ export function createMilitaryRegistry({ source, now = Date.now } = {}) {
 
   /**
    * Replaces/extends the known-military set from a fresh poll.
-   * Adds only — transient dropouts from one poll must not declassify an
+   * Adds only - transient dropouts from one poll must not declassify an
    * aircraft mid-session (the set stays small: a few hundred hexes).
    * @param {Iterable<string>} icaos - ICAO24 hexes from a /v2/mil response.
    * @returns {void}

@@ -192,7 +192,7 @@ export async function loadAustinSourcesFromOpenData() {
       if (!cameraId) continue;
 
       // Only live cameras: the dataset carries DESIRED (planned, not built),
-      // REMOVED and VOID rows whose frame URLs never resolve — those cameras
+      // REMOVED and VOID rows whose frame URLs never resolve - those cameras
       // would render as permanent Street View / synthetic fallbacks. Tolerate
       // a missing column (keep the row) so a schema change fails open.
       const status = String(record.camera_status || '')
@@ -266,7 +266,7 @@ export async function loadAustinSourcesFromOpenData() {
  * coords and a cwwp2.dot.ca.gov https image URL are kept (the image-URL origin check
  * is defense-in-depth: the proxy only ever fetches catalog URLs, and this pins the
  * catalog to the official host). Districts fetch in parallel and fail independently
- * (Promise.allSettled) — one district outage never darkens the others.
+ * (Promise.allSettled) - one district outage never darkens the others.
  *
  * @returns {Promise<Array<object>>} Normalized camera source objects.
  */
@@ -349,10 +349,10 @@ export async function loadCaltransSourcesFromOpenData() {
         rangeM: hasHeading ? 210 : 145,
         mountHeightM: hasHeading ? 10 : 8,
         // loc.elevation is reported in FEET (verified: D3 maxes at 7427 ft ≈
-        // 2264 m for the Sierra passes — as metres that would top Mt Whitney).
+        // 2264 m for the Sierra passes - as metres that would top Mt Whitney).
         // Convert to metres and clamp to a sane CA-roads range so an occasional
         // garbage upstream value can't fling a camera kilometres up. Prior only:
-        // the client one-shot snap corrects it on 3D-tile stacks — but on a
+        // the client one-shot snap corrects it on 3D-tile stacks - but on a
         // no-tileset stack (keyless OSM) the snap misses and this height freezes,
         // so it must be right-ish on its own.
         groundElevationM: (() => {
@@ -668,7 +668,7 @@ export async function loadOntarioSourcesFromOpenData(
  * Fetch Fintraffic road weather cameras (all of Finland) from Digitraffic.
  * Keyless; one GeoJSON station list per refresh (~37 KB gzipped, 809 stations
  * / 2,275 presets), identifying itself with the `Digitraffic-User` header the
- * service asks for. One PRESET — one fixed view of a station — is one camera
+ * service asks for. One PRESET - one fixed view of a station - is one camera
  * here; the presets of a station share its position, and the id-hash fallback
  * heading fans their gizmos apart instead of stacking them on one bearing.
  *
@@ -1519,7 +1519,7 @@ export function nswCameraToSource(feature) {
     url,
     snapshotUrl: url,
     sourceKind: 'nsw-livetraffic',
-    license: 'Live Traffic NSW — Transport for NSW, CC BY 4.0',
+    license: 'Live Traffic NSW - Transport for NSW, CC BY 4.0',
     code: cameraDisplayCode(String(props.title || '').toUpperCase() || rawId),
   };
 }
@@ -1640,8 +1640,8 @@ export function calgaryCameraName(record, cameraId) {
  * NO HEADING IS DERIVED FROM THE RECORD, and the fields that look like one are
  * not. Every row carries a `quadrant` ("NE"/"NW"/"SE"/"SW", and combinations
  * like "NW/NE") and a `camera_location` ending in the same token ("9 Avenue /
- * 3 Street SE"). That is Calgary's address grid — the quarter of the city the
- * intersection sits in — not a camera bearing. Handing either to
+ * 3 Street SE"). That is Calgary's address grid - the quarter of the city the
+ * intersection sits in - not a camera bearing. Handing either to
  * directionToHeading() returns a confident compass bearing for every row and
  * every one would be wrong. Headings therefore use the shared id-hash fallback
  * at low confidence, exactly as headingless TfL and Fintraffic cameras do, and
@@ -1762,7 +1762,7 @@ export async function loadCalgarySourcesFromOpenData() {
 
 /**
  * Parse the Catalonia (`cameres.xml`) WFS/GML feed into raw feature records.
- * Regex-based rather than a full XML parser — the feed is small (~160
+ * Regex-based rather than a full XML parser - the feed is small (~160
  * features) and this avoids a new dependency for one field set per feature.
  *
  * @param {string} xml
@@ -1805,24 +1805,24 @@ export function parseCataloniaXml(xml) {
  * host allowlist (CATALONIA_IMAGE_HOSTS), upgrading to https. Rejects
  * anything else, including a host that merely resembles an allowed one, any
  * URL carrying userinfo (`https://user:pass@www.bcn.cat/...`) or an explicit
- * port — the hostname check alone would pass either, letting catalog data
+ * port - the hostname check alone would pass either, letting catalog data
  * inject credentials or steer the server-side frame request to another
- * service on that host — and any path outside the host's frame directory.
+ * service on that host - and any path outside the host's frame directory.
  *
  * SCT's own `RenderService` frame link is a special case, for two stacked
  * reasons (both verified 2026-09-15):
  *  1. It always 302s to `TransitCamera`, on a Location the upstream
  *     hardcodes as plain http even when RenderService itself was requested
  *     over https. fetchWithinHost (media.js) only follows same-origin
- *     redirects — same scheme included, by design, to stop an upstream
- *     steering a host-pinned request into a plaintext downgrade — so that
+ *     redirects - same scheme included, by design, to stop an upstream
+ *     steering a host-pinned request into a plaintext downgrade - so that
  *     hop is refused and the camera would render as a placeholder.
  *  2. mct.gencat.cat's TLS setup itself does not complete a handshake with
  *     Node's fetch/OpenSSL (`ERR_SSL_WRONG_SIGNATURE_TYPE`) even though it
- *     is reachable over https from other clients (e.g. curl) — an upstream
+ *     is reachable over https from other clients (e.g. curl) - an upstream
  *     server misconfiguration this proxy cannot route around.
  * TransitCamera answers the frame directly over **http**, no redirect, and
- * that is the only transport this host actually serves to this runtime — so
+ * that is the only transport this host actually serves to this runtime - so
  * this builds that URL itself from RenderService's `sctidcam` id instead of
  * registering the (https, then-redirecting) RenderService link. The
  * `sctidcam` id must be a bare image filename (CATALONIA_SCT_CAMERA_FILE_RE).
@@ -1906,7 +1906,7 @@ export function cataloniaCameraName(carretera, municipi) {
  * Fetch Catalonia traffic cameras (Servei Català de Trànsit), keyless: one
  * WFS/GML XML list. The feed carries a `font` field naming the real
  * publisher per camera; only SCT's own highway cameras and the hotlinked
- * Barcelona (IMI) and Terrassa municipal cameras are kept — the publishers
+ * Barcelona (IMI) and Terrassa municipal cameras are kept - the publishers
  * whose frame links were confirmed to serve images. Frame URLs are checked
  * against a host allowlist (CATALONIA_IMAGE_HOSTS), so a row from any other
  * publisher is dropped. The feed carries no camera status, so a camera its
@@ -1987,7 +1987,7 @@ export async function loadCataloniaSourcesFromOpenData() {
         snapshotUrl: imageUrl,
         sourceKind: 'catalonia-open-data',
         license:
-          "Generalitat de Catalunya — Llicència oberta d'ús d'informació",
+          "Generalitat de Catalunya - Llicència oberta d'ús d'informació",
         credit: CATALONIA_FONT_CREDIT[font] || '',
       });
     }
@@ -2033,7 +2033,7 @@ function hkXmlTag(body, tag) {
  * Parse the Transport Department English camera-locations XML into rows.
  *
  * Schema-specific: each `<image>` carries key, description, lat/lon and a
- * still URL. No XML dependency — same regex style as the Tarktee DATEX parser.
+ * still URL. No XML dependency - same regex style as the Tarktee DATEX parser.
  *
  * @param {string} xml
  * @returns {Array<object>}
@@ -2162,7 +2162,7 @@ export function hkCameraToSource(record) {
     snapshotUrl: imageUrl,
     sourceKind: 'hk-td-open-data',
     license:
-      'Hong Kong Transport Department / DATA.GOV.HK — attribution required',
+      'Hong Kong Transport Department / DATA.GOV.HK - attribution required',
     code: cameraDisplayCode(name.toUpperCase()),
   };
 }
@@ -2257,7 +2257,7 @@ export async function loadDelDOTSourcesFromOpenData() {
       const lat = toFiniteNumber(row?.lat);
       const lon = toFiniteNumber(row?.lon);
       if (!Number.isFinite(lat) || !Number.isFinite(lon)) continue;
-      // Delaware bounding box — a bad upstream coord can't place a camera out of state.
+      // Delaware bounding box - a bad upstream coord can't place a camera out of state.
       if (lat < 38.4 || lat > 39.9 || lon < -75.85 || lon > -75.0) continue;
 
       // Prefer the catalog's HTTPS HLS transport; no subprocess is required.
@@ -2283,7 +2283,7 @@ export async function loadDelDOTSourcesFromOpenData() {
 
       // Title carries an unambiguous travel token for ~1 in 5 cameras
       // ("US 13 SB @ ..."). directionToHeading (allowBare=false) matches only
-      // NB/SB/EB/WB, never a bare "W"/"N" street prefix — "W NORTH ST" yields
+      // NB/SB/EB/WB, never a bare "W"/"N" street prefix - "W NORTH ST" yields
       // no heading and falls back.
       const heading = directionToHeading(title);
       const hasHeading = Number.isFinite(heading);
@@ -2375,7 +2375,7 @@ function kingCountyModel(raw) {
  * hash at low confidence.
  *
  * Uniquely among the packs, the county publishes each camera's hardware
- * `Manufacturer`/`Model`; the model string (whitespace-collapsed — the feed
+ * `Manufacturer`/`Model`; the model string (whitespace-collapsed - the feed
  * carries stray newlines) rides along as the source's `model` for
  * identified-hardware consumers. Vendor-generic strings ("PTZ", "PTZ IP",
  * "BOSCH/PTZ") name no model and are treated as absent.
@@ -2504,7 +2504,7 @@ export async function loadKingCountySourcesFromOpenData() {
 }
 
 /** WSDOT `CompassDirection` codes as headings in degrees. The live feed sends
- * single cardinals (N/E/S/W), `B` (both directions — most rows), `O`, and
+ * single cardinals (N/E/S/W), `B` (both directions - most rows), `O`, and
  * null; the diagonals are mapped in case they appear. `B`, `O`, null, and any
  * other code carry no single facing and fall through to the id hash. */
 const WSDOT_COMPASS_HEADINGS = Object.freeze({
@@ -2550,7 +2550,7 @@ function isLikelyWashingtonCoordinate(lat, lon) {
  * Center map consumes; a keyed Traveler Information API serves the identical
  * population for higher-volume use). Only cameras with a positive integer id,
  * finite in-state coordinates, and a frame on WSDOT's own image host are
- * kept — the catalog's ~70 partner cameras (Oregon DOT, City of Seattle,
+ * kept - the catalog's ~70 partner cameras (Oregon DOT, City of Seattle,
  * lodges, airports) are skipped rather than proxied under someone else's
  * terms. A single-facing `CompassDirection` (a cardinal) gives a
  * high-confidence heading; `B` (both directions), `O`, and null fall back to
@@ -3279,15 +3279,15 @@ export async function loadNycSourcesFromOpenData() {
 
 /**
  * The JSONP envelope the City of Toronto wraps its camera list in. Anchored at
- * both ends, so only that exact callback is unwrapped — a payload that merely
+ * both ends, so only that exact callback is unwrapped - a payload that merely
  * contains the name somewhere is not treated as the list.
  */
 const RESCU_JSONP = /^jsonTMCEarthCamerasCallback\(([\s\S]*)\)\s*;?$/;
 
 /**
  * Unwrap the RESCU camera list. The portal serves the list as JSONP; should it
- * ever drop the wrapper, the bare JSON document still parses. Anything else —
- * a foreign callback, a truncated body, an error page — yields no cameras
+ * ever drop the wrapper, the bare JSON document still parses. Anything else -
+ * a foreign callback, a truncated body, an error page - yields no cameras
  * rather than a thrown loader.
  *
  * @param {string} text - Raw response body.
@@ -3312,7 +3312,7 @@ export function parseRescuCameraList(text) {
  * The row carries no URL: the frame URL is built from the documented
  * `loc####.jpg` convention and a camera number validated as plain digits, so
  * the frame proxy is pinned to the city origin by construction and no upstream
- * field — present or planted — can steer it.
+ * field - present or planted - can steer it.
  *
  * No compass heading exists in this dataset. `D1`-`D4` are the directions of
  * the *comparison* images (static reference stills captured in 2016, served

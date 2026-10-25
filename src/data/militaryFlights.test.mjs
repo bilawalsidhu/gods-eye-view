@@ -1,6 +1,6 @@
 // src/data/militaryFlights.test.mjs
 // Focused tests for the pure analyst-record mapper (analyst query engine seam).
-// Pure function — no viewer/DOM needed; imported directly.
+// Pure function - no viewer/DOM needed; imported directly.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import * as Cesium from 'cesium';
@@ -653,7 +653,7 @@ test('real military track path creates no native label and publishes every cache
 /**
  * The tool instructions tell the model to look a contact up with analyst_query
  * and then hand that identity to track_entity. The analyst's `id` is a DISPLAY
- * label — callsign, else registration, else hex — while the lookup matched
+ * label - callsign, else registration, else hex - while the lookup matched
  * callsigns and hex only, so a callsign-less contact came back as its tail
  * number and "Nothing matched" (owner field session 2026-08-21, 23:48: three
  * failed retries before a fallback stuck).
@@ -796,7 +796,7 @@ test('two contacts matching at the same strength resolve deterministically', () 
     klass: 'turboprop',
     onGround: false,
   };
-  // Both registrations begin with QQ7 — a same-tier prefix tie. Registered
+  // Both registrations begin with QQ7 - a same-tier prefix tie. Registered
   // highest-hex first so insertion order would pick the wrong one.
   _addMilitaryTrackingCandidateForTest({
     icao24: 'aef002',
@@ -839,7 +839,7 @@ test('the military tracked descriptor publishes the reported vertical rate', () 
   // Shape parity with the civil layer's getTrackedInfo(). The two layers store
   // the rate under different record keys (`verticalRateMps` here,
   // `verticalRate` there), so `resolveTrackedAircraftInfo` only hands back one
-  // shape if BOTH descriptors map it — a consumer that reads the field off the
+  // shape if BOTH descriptors map it - a consumer that reads the field off the
   // civil seam and finds it missing on the military one would silently treat
   // every military contact as level flight.
   const seedRate = (verticalRateMps) =>

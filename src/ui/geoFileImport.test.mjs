@@ -1,6 +1,6 @@
 // Behavioral tests for DISPLAY ▸ Import: the controller is driven against
 // fake DOM and viewer doubles with an injected loader, and its observable
-// effects are asserted — data sources added and removed, list rows, the hint,
+// effects are asserted - data sources added and removed, list rows, the hint,
 // drop handling, the file limit, and what destroy() gives back. Real parsing
 // and rendering run in `scripts/qa-geo-import.mjs`.
 import test from 'node:test';

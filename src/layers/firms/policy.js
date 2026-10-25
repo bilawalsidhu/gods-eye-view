@@ -10,7 +10,7 @@ export const REFRESH_INTERVAL_MS = 600_000;
  * ground-clamped heat rectangles; `detections` bands (< ~750km plus the
  * local band) render individual fire detections as glow-sprite billboards.
  * Labels in every band go through the shared screen-space greedy declutter
- * (hard cap MAX_AMBIENT_LABELS) — there are no per-band label knobs.
+ * (hard cap MAX_AMBIENT_LABELS) - there are no per-band label knobs.
  */
 
 export const LOD_LEVELS = [
@@ -77,7 +77,7 @@ export const LABEL_VIEW_MARGIN_PX = 16;
  * (never for rendering). Mirrors the flights layer's `cullPosition` idiom
  * (`renderAltitudeM < 10` → test at 12 m): `fireAnchorHeight` is ground floor
  * + lift, and in negative-geoid coastal regions that lands a few tens of
- * metres BELOW the WGS84 ellipsoid — EllipsoidalOccluder then judges such a
+ * metres BELOW the WGS84 ellipsoid - EllipsoidalOccluder then judges such a
  * point "beyond the horizon" while its true-surface neighbours stay visible,
  * so near-limb fires would blink out for a datum reason.
  */

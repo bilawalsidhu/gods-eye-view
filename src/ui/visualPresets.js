@@ -25,13 +25,13 @@ export const STYLES = {
  * Owner playtest 2026-08-18: "detection mode… 75% weighted, with the 16% fade
  * and 5% outside, whatever we had. I want that as the default. It should just
  * happen." Fade and outside opacity live in GLOBAL_POST_DEFAULTS, so "whatever
- * we had" still needs nothing here — but they are 7% and 1% now, the outside
+ * we had" still needs nothing here - but they are 7% and 1% now, the outside
  * default having moved 5 → 3 → 1 as the owner locked final tuning after field trials (2026-08-24). What the quote asked for is the
  * baseline of the day, not the two numbers it happened to name.
  *
  * ONE object, shared by the first-load baseline below, by every military style,
  * AND by the Contacts context mode (which OWNS detection while active and
- * restores the prior state on exit — see contactsDetectionPolicy.js). Cockpit
+ * restores the prior state on exit - see contactsDetectionPolicy.js). Cockpit
  * deliberately does NOT touch detection: entering it with SPARSE selected leaves
  * SPARSE. Declared ahead of GLOBAL_POST_DEFAULTS because that baseline now reads
  * from it.
@@ -54,7 +54,7 @@ export const GLOBAL_POST_DEFAULTS = {
   //
   // This is a first-LOAD baseline, not an override: `_applyGlobalPostDefaults`
   // runs before any share-link restore, so a link's `dm`/`dd` still lands on top
-  // of it. It also deliberately leaves `_detectionUserOverridden` alone — the
+  // of it. It also deliberately leaves `_detectionUserOverridden` alone - the
   // flag means the OPERATOR hand-edited detection, and a factory default is not
   // that. Turning detection off by hand therefore still sets the flag and still
   // suppresses the military-style auto-enable for the rest of the session.

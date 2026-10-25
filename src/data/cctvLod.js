@@ -15,7 +15,7 @@
  * docs/superpowers/specs/2026-07-29-cctv-ambient-cards-design.md).
  */
 
-// Ambient-card budgets (owner round 2, item C: raised 16/24/32 → 20/28/40 —
+// Ambient-card budgets (owner round 2, item C: raised 16/24/32 → 20/28/40 -
 // "a lot of empty space"). Owner-tunable as a set, together with the card
 // scale waypoints (1,800/6,000/9,500 m, cctvCards.js) and
 // CCTV_CARD_MIN_SEP_PX: budgets say how many cameras HOLD cards, the
@@ -39,7 +39,7 @@ const PROVIDER_STATIC_REFRESH_MS = Object.freeze({
   // re-fetches the same JPEG.
   fintraffic: 10 * 60 * 1000,
   // Measured empirically (2026-09-15): polling the same SCT/Terrassa frame
-  // every 20s showed no change inside 64s but a new frame by ~90-150s later —
+  // every 20s showed no change inside 64s but a new frame by ~90-150s later -
   // matches the other highway packs' 3-minute cadence.
   'servei català de trànsit': 3 * 60 * 1000,
 });
@@ -68,7 +68,7 @@ export function cctvLodBudgets(cameraHeightM) {
 /**
  * Selection-level incumbency (owner field-test finding 4, 2026-07-29): a
  * camera currently holding a card ranks with its distance discounted by this
- * factor, so a small camera move never batch-swaps the ring — a non-carded
+ * factor, so a small camera move never batch-swaps the ring - a non-carded
  * camera displaces a carded one only when it is meaningfully (>20%) closer.
  */
 export const CCTV_CARD_INCUMBENT_FACTOR = 0.8;
@@ -166,7 +166,7 @@ export function blendCenterRankKm(
   return (1 - w) * km + w * spread * fraction;
 }
 
-// Screen-distribution grid (owner round 2, item C — "a lot of empty space"):
+// Screen-distribution grid (owner round 2, item C - "a lot of empty space"):
 // pure nearest-first selection clusters winners at screen center (nearest ==
 // most central at typical view pitch) and leaves the periphery bare. The
 // viewport is bucketed into this grid and every occupied cell gets its best
@@ -179,12 +179,12 @@ const CCTV_CARD_GRID_ROWS = 4;
  * Screen-space distribution pass (owner round 2, item C). Buckets the
  * viewport into a CCTV_CARD_GRID_COLS × CCTV_CARD_GRID_ROWS grid, assigns
  * each candidate to its cell (anchors just outside the viewport clamp to
- * the edge cells), ranks within cells by effective distance (`rankKm` —
+ * the edge cells), ranks within cells by effective distance (`rankKm` -
  * incumbency discount already applied by the caller), then takes each
- * occupied cell's best — nearest cell-winners first, so an under-budget cut
- * stays deterministic — until the budget is filled; leftover budget goes to
+ * occupied cell's best - nearest cell-winners first, so an under-budget cut
+ * stays deterministic - until the budget is filled; leftover budget goes to
  * the remaining candidates in global rank order. Empty cells are skipped.
- * Pure and allocation-honest: decides only WHICH cameras hold cards — the
+ * Pure and allocation-honest: decides only WHICH cameras hold cards - the
  * per-frame draw-pass declutter stays authoritative over what paints.
  *
  * @param {Array<{id:string,sx:number,sy:number,rankKm:number}>} candidates
@@ -265,7 +265,7 @@ export function distributeCctvCards(
 /**
  * Selects the ambient card cameras from already projected in-view
  * candidates: nearest-first up to the zoom budget. Static image cameras
- * only — video cameras stay icon-only until explicitly activated (the frame
+ * only - video cameras stay icon-only until explicitly activated (the frame
  * endpoint pacing is built for stills), and the ACTIVE camera is excluded
  * upstream by the caller (its monitor plane is the richer representation).
  * Cameras in `incumbentIds` (current card holders) rank with the 20%
@@ -280,7 +280,7 @@ export function distributeCctvCards(
  * @param {Object} [options]
  * @param {number} [options.cameraHeightM]
  * @param {Iterable<string>|Set<string>} [options.incumbentIds]
- * @param {number} [options.viewW] - Viewport width (CSS px) — enables the
+ * @param {number} [options.viewW] - Viewport width (CSS px) - enables the
  *   screen-distribution pass.
  * @param {number} [options.viewH] - Viewport height (CSS px).
  * @returns {{cardIds:string[],budgets:{cardLimit:number}}}
@@ -387,7 +387,7 @@ export function selectCctvLod(
   let cardIds;
   // Item C: screen-distributed fill. Candidates lacking screen anchors are
   // dropped by the distribution pass; top up from the ranked pool
-  // (defensive — cctv.js always projects anchors for in-view candidates).
+  // (defensive - cctv.js always projects anchors for in-view candidates).
   cardIds = distributeCctvCards(stills, {
     budget: budgets.cardLimit,
     viewW,
@@ -432,7 +432,7 @@ export const CCTV_LOD_GRACE_MS = 5_000;
  * Raw per-pass selection has no memory: a camera sitting at the edge of the
  * card budget churns in/out on every small camera move, blinking its card
  * while orbiting. This planner keeps an already-built card alive for a short
- * grace window after it falls out of the selection — it is only dropped once
+ * grace window after it falls out of the selection - it is only dropped once
  * it STAYS unselected for `gracePasses` consecutive selection passes or
  * `graceMs` of wall time, whichever is crossed first. A newly selected
  * camera always enters immediately, and the hard `cardLimit` cap is never
@@ -444,7 +444,7 @@ export const CCTV_LOD_GRACE_MS = 5_000;
  *
  * @param {Object} [input]
  * @param {string[]} [input.selectedIds] - This pass's selected card ids
- *   (already budget-capped, nearest-first — `selectCctvLod().cardIds` after
+ *   (already budget-capped, nearest-first - `selectCctvLod().cardIds` after
  *   declutter).
  * @param {string[]} [input.builtIds] - Ids that currently have a live card.
  * @param {Map<string,{misses:number,since:number}>} [input.graceState] - Prior

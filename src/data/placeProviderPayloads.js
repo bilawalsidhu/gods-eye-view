@@ -76,7 +76,7 @@ export function projectTextSearchPlaces(data, latitude, longitude) {
             ? place.types.slice(0, 8)
             : [];
           // Places returns a lat/lng bounding box (low/high corners) framing the
-          // place — no polygon, but enough to SIZE a fallback grounds disc to the
+          // place - no polygon, but enough to SIZE a fallback grounds disc to the
           // real feature instead of a blind constant. Normalize to plain numbers.
           const vp = place.viewport;
           const viewport =

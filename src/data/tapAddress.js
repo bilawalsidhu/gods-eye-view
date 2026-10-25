@@ -15,7 +15,7 @@
  * - Meshtastic (#6) reads a fixed public broker (`mqtt.meshtastic.org`).
  * - WiGLE (#11) reads a fixed public API behind a token.
  * - TAK (#7) takes its host from operator-set env config, not from the
- *   browser, and a TAK server is frequently a legitimate REMOTE host — a
+ *   browser, and a TAK server is frequently a legitimate REMOTE host - a
  *   private-only rule would break it.
  *
  * This module is the single place that constraint lives, so taps cannot each
@@ -24,7 +24,7 @@
  *   A tap may address the loopback interface or an RFC1918 private network,
  *   plus the `localhost` and `*.local` (mDNS) names. Nothing else.
  *
- * That is the whole point of a tap — it reads *your* device on *your* network.
+ * That is the whole point of a tap - it reads *your* device on *your* network.
  * A tap pointed at a public address is either a mistake or someone using the
  * proxy as a confused deputy, and both deserve the same answer.
  *
@@ -45,7 +45,7 @@
  * Lives in `src/data/` rather than under `server/providers/` because both
  * sides need the same answer: the server as a trust boundary, the browser to
  * give immediate feedback on a typed address without a round trip. Sharing one
- * module means they cannot drift — the same reason #274 exists about eight
+ * module means they cannot drift - the same reason #274 exists about eight
  * copies of haversine. `server/providers/gbfs.js` importing
  * `src/data/gbfsSource.js` is the established direction for this.
  *
@@ -99,7 +99,7 @@ export function isLocalIpv4(host) {
  * @param {unknown} raw e.g. `"192.168.1.1:8080"`, `"localhost:8080"`.
  * @returns {{host: string, port: number, origin: string}|null} null when the
  *   address is malformed or not local. Callers must treat null as a 400 and
- *   must not fall back to a default host — a tap with no valid address has
+ *   must not fall back to a default host - a tap with no valid address has
  *   nothing to read.
  */
 export function parseTapAddress(raw) {

@@ -1,13 +1,13 @@
 /**
- * Bundled neighborhood-polygon lookup — a reliable, deterministic, offline source for
+ * Bundled neighborhood-polygon lookup - a reliable, deterministic, offline source for
  * neighborhood boundaries that OSM tags as label-nodes-only (Chinatown, the Marina, the
  * Mission, …). It sits AHEAD of the live-Overpass / synthesis path in the resolver, so
  * covered neighborhoods resolve instantly to a REAL boundary with no network dependency
- * (the live-Overpass path is slow/flaky for neighborhoods — see docs/field-test-2-analysis.md).
+ * (the live-Overpass path is slow/flaky for neighborhoods - see docs/field-test-2-analysis.md).
  *
  * Source-agnostic: each city is a `{name, geometry}` GeoJSON file in
  * `local_data/neighborhoods/`. Swap the file (e.g. to public-domain DataSF) without
- * touching this module — see `local_data/neighborhoods/SOURCE.md`.
+ * touching this module - see `local_data/neighborhoods/SOURCE.md`.
  */
 
 import { loadBundledJson } from './bundledJson.js';
@@ -45,7 +45,7 @@ function normalize(s) {
 /**
  * Normalized-query aliases for names DataSF's taxonomy renamed or absorbed.
  * "Downtown/Civic Center" was split across Tenderloin/Hayes Valley/etc. and
- * deliberately has NO alias — a wrong confident polygon is worse than the
+ * deliberately has NO alias - a wrong confident polygon is worse than the
  * live resolver ladder ("Downtown" alone colloquially means FiDi, so it maps).
  */
 const NAME_ALIASES = new Map([
@@ -94,7 +94,7 @@ function containingOuterRing(feature, lon, lat) {
   return null;
 }
 
-/** Largest outer ring (by vertex count) — used when the name matches but the point is just outside. */
+/** Largest outer ring (by vertex count) - used when the name matches but the point is just outside. */
 function largestOuterRing(geom) {
   let best = null;
   for (const poly of toPolygons(geom)) {
@@ -121,7 +121,7 @@ async function loadCity(city) {
     return await cityLoader(city)();
   } catch (error) {
     // The caller falls back to the live resolver ladder, which looks exactly
-    // like "no bundled coverage" — say so once, out loud, instead.
+    // like "no bundled coverage" - say so once, out loud, instead.
     console.warn(
       `[neighborhoods] ${city.id} pack unavailable:`,
       error?.message || error,
@@ -153,14 +153,14 @@ export async function lookupNeighborhoodRing(lat, lon, matchName) {
   // Old/colloquial names whose DataSF taxonomy equivalent has a longer name
   // (P0-2 swap): the word-subset matcher requires every feature-name word in
   // the query, so "Financial District" can never match "Financial
-  // District/South Beach" without this. Exact-normalized-key aliases only —
+  // District/South Beach" without this. Exact-normalized-key aliases only -
   // no fuzzy aliasing.
   const q = normalize(matchName);
   const aliased = NAME_ALIASES.get(q) || q;
   const qWords = new Set(aliased.split(' ').filter(Boolean));
   if (!qWords.size) return null;
 
-  // A NAME match is REQUIRED — there is NO name-less point-in-polygon fallback. A SF point
+  // A NAME match is REQUIRED - there is NO name-less point-in-polygon fallback. A SF point
   // in an UNbundled neighborhood (Hayes Valley, Tenderloin, …) would otherwise fall inside a
   // neighbor's bundled polygon and be returned as a confident WRONG boundary, blocking the
   // OSM/synthesis ladder. Word-level match (every feature-name word must be in the query) so

@@ -124,7 +124,7 @@ export function createCalibration({
    *
    * v2 entries carry provenance: `{ values: <7-field offsets>, source: 'manual',
    * savedAt: <epoch ms> }`. The v1 key (`CCTV_CALIBRATION_STORAGE_KEY_V1`) is
-   * NEVER read here — owner decision #3 (§9.3): wipe clean, no legacy import.
+   * NEVER read here - owner decision #3 (§9.3): wipe clean, no legacy import.
    *
    * @param {{getItem:function}|null} [storage] - Injectable storage (defaults
    *   to `window.localStorage`); lets the unit suite test this pure of a DOM.
@@ -197,8 +197,8 @@ export function createCalibration({
 
   /**
    * Loads the v2 calibration store. `_calibrationById` holds these entries
-   * directly (`{values, source:'manual', savedAt}`) — never bare offset values
-   * — so it round-trips straight back through `writeCalibrationStoreV2`.
+   * directly (`{values, source:'manual', savedAt}`) - never bare offset values
+   * - so it round-trips straight back through `writeCalibrationStoreV2`.
    * @returns {Map<string, {values:Object, source:string, savedAt:number}>}
    */
 
@@ -214,15 +214,15 @@ export function createCalibration({
 
   /**
    * Derives the panel CAL badge state for a camera (design §3b, as amended by
-   * the LOCKED §9.2 — panel-only, no in-world tint).
+   * the LOCKED §9.2 - panel-only, no in-world tint).
    *
    * Three states:
-   *  - 'calibrated' — a human explicitly saved a v2 calibration (`source:'manual'`).
-   *  - 'curated'    — no manual save, but the catalog entry was hand-authored
+   *  - 'calibrated' - a human explicitly saved a v2 calibration (`source:'manual'`).
+   *  - 'curated'    - no manual save, but the catalog entry was hand-authored
    *                   (`poseSource:'curated'`, file/env sources only).
-   *  - 'raw-prior'  — everything else (all Austin Open Data today).
+   *  - 'raw-prior'  - everything else (all Austin Open Data today).
    *
-   * Pure — no scoring math, no raycasts. `confidenceFromScore` and score-based
+   * Pure - no scoring math, no raycasts. `confidenceFromScore` and score-based
    * quality seeding are retired; this replaces them.
    * @param {{calSource?: string|null, poseSource?: string|null}} camera
    * @returns {'calibrated'|'curated'|'raw-prior'}
@@ -236,11 +236,11 @@ export function createCalibration({
 
   /**
    * Applies a calibration patch to a record's IN-MEMORY pose (save-gated
-   * persistence, design §3e: no localStorage write here — only the explicit
+   * persistence, design §3e: no localStorage write here - only the explicit
    * `calibration.save` action persists).
    *
    * Transient grade (gizmo mid-drag): recompute pose + frustum geometry only
-   * (the cheap v2 path) with throttled notify — no ground re-arm, no frame
+   * (the cheap v2 path) with throttled notify - no ground re-arm, no frame
    * re-fetch, no store touch.
    * Commit grade (drag end, numeric entry, voice): only an E/N anchor move
    * resolves a new shared floor; all other edits keep the frozen reference.
@@ -258,7 +258,7 @@ export function createCalibration({
       ...patch,
     });
     parts.model.ensureCameraPose(record.camera);
-    // §9.1: touching range takes manual control — clear the activation clamp.
+    // §9.1: touching range takes manual control - clear the activation clamp.
     if ('rangeScale' in patch) {
       record.probeClampRangeM = null;
     }
@@ -298,7 +298,7 @@ export function createCalibration({
 
   function ensureGizmo() {
     if (layerState._gizmo || !layerState._viewer) return;
-    // Both patch callbacks receive the gizmo's PINNED drag record — never
+    // Both patch callbacks receive the gizmo's PINNED drag record - never
     // re-resolve the active camera here: a mid-drag voice select or auto-hop
     // would route the captured offsets onto a camera with a different basePose.
     const liveRecord = (record) =>

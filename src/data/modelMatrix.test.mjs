@@ -1,11 +1,11 @@
-// Regression test for the 3D-aircraft matrix-sharing bug — the "flickering like mad" + all-models-
+// Regression test for the 3D-aircraft matrix-sharing bug - the "flickering like mad" + all-models-
 // stacked-on-one-plane regression.
 //
 // The fleet/military layers build each aircraft's world transform with
 //   Transforms.headingPitchRollToFixedFrame(pos, hpr, ellipsoid, undefined, RESULT)
 // and assign it to `model.modelMatrix`. Cesium's Model.modelMatrix is a PLAIN FIELD (no cloning
 // setter); Cesium clones it per frame in updateModelMatrix() by VALUE. So if every model is handed
-// the SAME `result` object, they all end up rendering the LAST-written transform — every model
+// the SAME `result` object, they all end up rendering the LAST-written transform - every model
 // stacked on one plane. Once the tracked model started writing that shared scratch EVERY frame
 // (standalone-primitive change), the stack point oscillated frame-to-frame: the flicker.
 //
@@ -25,7 +25,7 @@ const frame = (pos, result) =>
 test('THE BUG: one shared scratch matrix stacks every model on the last-written position', () => {
   const scratch = new Matrix4();
   const a = frame(SF, scratch); // "model A" handed the shared scratch
-  const b = frame(LA, scratch); // "model B" handed the same scratch — overwrites it in place
+  const b = frame(LA, scratch); // "model B" handed the same scratch - overwrites it in place
   assert.equal(a, b);                  // same object reference (the shared-scratch bug)
   assert.ok(Matrix4.equals(a, b));     // therefore same value -> A renders on top of B (stacking)
 });
@@ -38,7 +38,7 @@ test('THE FIX: each model writing into its OWN matrix yields distinct transforms
   assert.notEqual(a, b);               // distinct objects
   assert.equal(a, matA);               // wrote in place into A's own matrix
   assert.equal(b, matB);
-  assert.ok(!Matrix4.equals(a, b));    // distinct transforms — no stacking
+  assert.ok(!Matrix4.equals(a, b));    // distinct transforms - no stacking
   const ta = Matrix4.getTranslation(matA, new Cartesian3());
   const tb = Matrix4.getTranslation(matB, new Cartesian3());
   assert.ok(Cartesian3.distance(ta, tb) > 500000); // ~560 km SF->LA, not zero

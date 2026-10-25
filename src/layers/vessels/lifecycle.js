@@ -171,7 +171,7 @@ export function createLifecycle({
       components.rendering.setVisible(true);
       // Height-datum fix: warm the geoid grid once per layer-enable, never
       // blocking a poll. The first refresh may land pre-resolve (N = 0), and
-      // the next is up to 60 s out — so re-floor in place on resolve. A load
+      // the next is up to 60 s out - so re-floor in place on resolve. A load
       // failure leaves N = 0 forever, which is safe: sprites are depth-test-
       // free, so vessels stay visible either way.
       if (!vesselState._geoidReady) {
@@ -184,7 +184,7 @@ export function createLifecycle({
             components.tracking.refloorVesselRecords();
           })
           .catch(() => {
-            /* grid failed to load — anchors stay at ellipsoid 0 */
+            /* grid failed to load - anchors stay at ellipsoid 0 */
           });
       }
       // Pick-ownership (H2): vessel picks carry the record OBJECT as their id;

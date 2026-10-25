@@ -46,7 +46,7 @@ async function networkAvailable() {
 
 if (!(await networkAvailable())) {
   console.log(
-    'SKIP: cmr.earthdata.nasa.gov is unreachable — the live Recent Imagery gate needs network access.',
+    'SKIP: cmr.earthdata.nasa.gov is unreachable - the live Recent Imagery gate needs network access.',
   );
   process.exit(0);
 }
@@ -76,7 +76,7 @@ let checks = 0;
 function check(name, passed, detail = '') {
   checks += 1;
   console.log(
-    `[${passed ? 'PASS' : 'FAIL'}] ${name}${detail ? ` — ${detail}` : ''}`,
+    `[${passed ? 'PASS' : 'FAIL'}] ${name}${detail ? ` - ${detail}` : ''}`,
   );
   if (!passed) failures++;
 }
@@ -254,7 +254,7 @@ const pressOnStrip = async (key) => {
   await page.keyboard.press(key);
 };
 
-/** Average colour of the canvas centre — the inside of a centred 10 km box. */
+/** Average colour of the canvas centre - the inside of a centred 10 km box. */
 async function probe() {
   const base64 = await page.screenshot({
     clip: { x: 540, y: 330, width: 200, height: 200 },
@@ -389,7 +389,7 @@ try {
   const onPhotorealOnly = (name, passed, detail) =>
     photoreal
       ? check(name, passed, detail)
-      : console.log(`[SKIP] ${name} — the boot stack is ${initialStack}`);
+      : console.log(`[SKIP] ${name} - the boot stack is ${initialStack}`);
 
   // ── enable: the panel in the rail, per the rail readout pattern ─────────
   const layerToggle = '[data-layer-id="recent-imagery"] .data-toggle-btn';
@@ -1218,7 +1218,7 @@ try {
       );
       await setStack(initialStack);
     } else {
-      console.log('[SKIP] map-switch rebind — no second map stack available');
+      console.log('[SKIP] map-switch rebind - no second map stack available');
     }
   }
 

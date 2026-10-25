@@ -47,11 +47,11 @@ export function createVoiceControl({ reset = false } = {}) {
         <div class="gev-voice-kicker">${t('AI AGENT')}</div>
         <div id="gev-voice-status">${voiceStatusLabel('idle')}</div>
         <div class="gev-voice-cost">
-          <button id="gev-voice-tier" class="gev-voice-tier-btn" type="button" aria-pressed="false" title="${t('Voice model tier — applies next session')}">${t('STD')}</button>
+          <button id="gev-voice-tier" class="gev-voice-tier-btn" type="button" aria-pressed="false" title="${t('Voice model tier - applies next session')}">${t('STD')}</button>
           <span id="gev-voice-cost-value" class="gev-voice-cost-value" data-level="ok" title="${t('Estimated session cost')}">~$0.00</span>
         </div>
       </div>
-      <button id="gev-voice-button" type="button" aria-label="${t('Voice control — activate to toggle voice; hold Space to speak')}" aria-describedby="gev-voice-help">
+      <button id="gev-voice-button" type="button" aria-label="${t('Voice control - activate to toggle voice; hold Space to speak')}" aria-describedby="gev-voice-help">
         <span class="gev-mic-orbit"><img src="/mic.svg" alt="" /></span>
         <span class="gev-mic-label">${t('ON/OFF')}</span>
       </button>

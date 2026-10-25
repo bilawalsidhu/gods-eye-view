@@ -16,11 +16,11 @@ export function createFlightState({ source, services }) {
    *  military contacts should read as their WEIGHT CLASS, always in this layer's
    *  amber). Real Hangar GLBs serve the classes they cover (meters, nose −X →
    *  180° offset); airliner/quadjet/glider get the shared 747 silhouette
-   *  (airplane.glb — C-5M/RC-135-style heavies stop rendering as bizjets);
+   *  (airplane.glb - C-5M/RC-135-style heavies stop rendering as bizjets);
    *  fastjet and unknown keep jet.glb with the same 180° offset. The MIX tint stays
-   *  dominant everywhere — military is amber, tracked is TRACKED_ICON_COLOR,
+   *  dominant everywhere - military is amber, tracked is TRACKED_ICON_COLOR,
    *  and the tint must dominate any livery (owner: "stays yellow"). Specs are
-   *  static per class — memoized (the fleet pass asks at 12 Hz per model). */
+   *  static per class - memoized (the fleet pass asks at 12 Hz per model). */
 
   flightState._specCache = new Map();
 
@@ -55,7 +55,7 @@ export function createFlightState({ source, services }) {
   flightState._modelEpoch = 0;
 
   /** DEFAULT-ON in PROXIMITY (owner directive 2026-08-22). A fresh boot never runs
-   *  layer-state restoration, so this initializer — not the codec — is what the app
+   *  layer-state restoration, so this initializer - not the codec - is what the app
    *  actually starts with; it must stay in lockstep with the `models3d` default in
    *  `layerState.js` and `this._models3dEnabled` in ui.js, or the DISPLAY rail would
    *  light a button the layer has not armed. */
@@ -70,7 +70,7 @@ export function createFlightState({ source, services }) {
   // The tracked entity's billboard goes transparent (rather than hidden) once the model takes
   // over, so it keeps supplying a bounding sphere for follow-camera framing. We only drop its
   // alpha after the GLB is preloaded so the model is ready to render the instant the billboard
-  // fades — no gap, no double-image. Preloaded once at init; the instance is retained (not
+  // fades - no gap, no double-image. Preloaded once at init; the instance is retained (not
   // destroyed) purely to keep Cesium's glTF cache warm for fast tracked-model instantiation.
 
   flightState._planeModelLoaded = false;
@@ -129,7 +129,7 @@ export function createFlightState({ source, services }) {
 
   flightState._trackedCameraFrameStop = null;
 
-  /** @type {Cesium.Model|null} Standalone 3D model for the tracked aircraft — NOT a graphic on
+  /** @type {Cesium.Model|null} Standalone 3D model for the tracked aircraft - NOT a graphic on
    *  _trackedEntity, so viewer.trackedEntity's follow-camera always has a ready bounding sphere
    *  (a model graphic reports PENDING until loaded, which freezes the centering on 3D-toggle). */
 
@@ -179,7 +179,7 @@ export function createFlightState({ source, services }) {
 
   flightState._trailPositions = [];
 
-  /** @type {number} Monotonic token — invalidates in-flight backfill responses */
+  /** @type {number} Monotonic token - invalidates in-flight backfill responses */
 
   flightState._trailBackfillToken = 0;
 
@@ -244,7 +244,7 @@ export function createFlightState({ source, services }) {
 
   flightState._cachedDRFrame = -1;
 
-  /** Course (deg) of the position `_deadReckon` most recently returned — set on
+  /** Course (deg) of the position `_deadReckon` most recently returned - set on
    *  every branch of `_deadReckon`, read IMMEDIATELY by the caller (same
    *  synchronous flow; module-scratch idiom, like the Cartesian scratches). */
 
@@ -252,7 +252,7 @@ export function createFlightState({ source, services }) {
 
   /** Sibling scratches of _drCourseDeg: the displayed ground speed of the motion
    *  `_deadReckon` just returned, and whether that motion is too slow for ANY
-   *  course source to be trusted (hover/GPS drift — consumers HOLD their
+   *  course source to be trusted (hover/GPS drift - consumers HOLD their
    *  previous display course instead of chasing noise). */
 
   flightState._drSpeedMps = null;
@@ -269,18 +269,18 @@ export function createFlightState({ source, services }) {
 
   flightState._cachedDRHold = false;
 
-  /** Wall-clock of the tracked course limiter's last advance (dt source only —
+  /** Wall-clock of the tracked course limiter's last advance (dt source only -
    *  the course VALUE lives in the shared per-icao _displayCourse map below). */
 
   flightState._trackedCourseMs = 0;
 
-  /** Per-aircraft smoothed display course — the SINGLE source of truth for the
+  /** Per-aircraft smoothed display course - the SINGLE source of truth for the
    *  nose direction an aircraft displays (mirror of flights.js, 2026-07-03
    *  field fix). The fleet pass reads/writes it at tick cadence for untracked
    *  planes; _trackedDisplayCourse reads/writes the SAME entry per frame for
    *  the tracked plane (the fleet pass skips the tracked icao, so exactly one
-   *  writer owns an entry at a time). Sharing the entry — including its slew
-   *  state — keeps the tracked↔fleet handoff seamless (separate states froze
+   *  writer owns an entry at a time). Sharing the entry - including its slew
+   *  state - keeps the tracked↔fleet handoff seamless (separate states froze
    *  the fleet entry while tracked → nose flip on click / click-away). */
 
   flightState._displayCourse = new Map();
@@ -330,17 +330,17 @@ export function createFlightState({ source, services }) {
 
   flightState._trackedModelRetryAtMs = 0;
 
-  /** IR hot-target mode — mirror of flights.js: under the luminance-mapped
+  /** IR hot-target mode - mirror of flights.js: under the luminance-mapped
    *  NVG/FLIR post-styles every model renders flat white (hottest); the dominant
    *  amber/tracked tint restores on style exit. */
 
   flightState._irBoost = false;
 
-  /** Boosted models render UNLIT — mirror of flights.js (owner cockpit-FLIR
+  /** Boosted models render UNLIT - mirror of flights.js (owner cockpit-FLIR
    *  field rounds): material-stage tint still sun-shades, so side-on planes
    *  read near-black under a high sun; UNLIT emits flat white regardless.
    *  customShader on a READY model is a silent no-op (field-verified), so the
-   *  boost flips by release-and-reload — creation-time options carry it. */
+   *  boost flips by release-and-reload - creation-time options carry it. */
 
   flightState._IR_UNLIT_SHADER = new Cesium.CustomShader({
     lightingModel: Cesium.LightingModel.UNLIT,

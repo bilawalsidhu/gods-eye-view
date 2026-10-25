@@ -196,7 +196,7 @@
         }
 
         // ---------------------------------------------------------------
-        // Phase 1: Overhead — get ground height
+        // Phase 1: Overhead - get ground height
         // ---------------------------------------------------------------
         // Use target coords for overhead + ground sampling (same as camera
         // in direct mode, but the actual target in lookat mode).
@@ -226,7 +226,7 @@
         console.log('Ground: ' + groundHeight.toFixed(1) + 'm  Camera: ' + (groundHeight + height).toFixed(1) + 'm');
 
         // ---------------------------------------------------------------
-        // Phase 2: Street-level — progressive SSE refinement
+        // Phase 2: Street-level - progressive SSE refinement
         // ---------------------------------------------------------------
         console.log('Phase 2: street-level tile loading...');
         setCamera(groundHeight);
@@ -241,7 +241,7 @@
         for (const s of uniqueSteps) {
           tileset.maximumScreenSpaceError = s;
           console.log('  SSE=' + s + '...');
-          // Give lower SSE levels more time — they need more tiles
+          // Give lower SSE levels more time - they need more tiles
           const maxWait = s <= 2 ? 90000 : s <= 4 ? 60000 : 30000;
           const stable = await waitStable(3000, maxWait);
           const stats = tileset._statistics || {};

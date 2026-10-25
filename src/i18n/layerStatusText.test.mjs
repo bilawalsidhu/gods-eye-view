@@ -17,7 +17,7 @@ const SITES = [
   ['../layers/satellites/ingestion.js', 'CelesTrak unreachable'],
   [
     '../layers/streetLevel/providers/mapillary/policy.js',
-    'Coverage requests are being rate-limited — they resume on their own',
+    'Coverage requests are being rate-limited - they resume on their own',
   ],
   ['../layers/alpr/index.js', 'Camera source temporarily unavailable'],
   ['../layers/perimeters/index.js', 'Perimeter source unavailable'],

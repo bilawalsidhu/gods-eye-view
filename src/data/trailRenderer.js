@@ -6,7 +6,7 @@
  * One trail = one ENTITY polyline. Round 6 replaced the faded per-vertex
  * Primitive for two owner directives from the field:
  *  - "the line must ALWAYS be visible": the Primitive's depthFailAppearance
- *    did not reliably render segments below the photoreal mesh — entity
+ *    did not reliably render segments below the photoreal mesh - entity
  *    polylines with `depthFailMaterial` DO (in-repo proof: CCTV's frustum
  *    wireframes read through geometry with exactly this), so occluded
  *    segments now draw dimmed instead of vanishing.
@@ -26,7 +26,7 @@ import { registerPickOwner } from './pickRegistry.js';
 // allowPicking:false). A trail hugs its aircraft, so an unclaimed pick would
 // read as "empty space" in every layer's click handler and deselect the very
 // plane being tracked. Claiming the 'gev-trail:' id namespace makes
-// isOwnedByOtherLayer() true for every layer — clicking a trail is a no-op
+// isOwnedByOtherLayer() true for every layer - clicking a trail is a no-op
 // everywhere. Registered once at module load; the predicate is pure.
 registerPickOwner('trails', (pickedId) =>
   String(pickedId).startsWith('gev-trail:'),
@@ -37,7 +37,7 @@ let _trailSeq = 0;
 
 /** @constant {number} Alpha where the trail passes the depth test. */
 const TRAIL_ALPHA = 0.85;
-/** @constant {number} Alpha where the trail is behind/below scene geometry —
+/** @constant {number} Alpha where the trail is behind/below scene geometry -
  *  visible (owner: never vanish) but readable as occluded. */
 const TRAIL_OCCLUDED_ALPHA = 0.4;
 /** @constant {number} Squared distance (m^2) below which consecutive points are merged. */
@@ -69,16 +69,16 @@ export function createTrail(viewer, { color, width = 2.5 }) {
       id: `gev-trail:${++_trailSeq}`,
       show: visible,
       polyline: {
-        // CallbackProperty so a positions swap never rebuilds the entity —
+        // CallbackProperty so a positions swap never rebuilds the entity -
         // Cesium re-reads on change; `false` marks it non-constant.
         positions: new Cesium.CallbackProperty(() => current, false),
         width,
         material: baseColor.withAlpha(TRAIL_ALPHA),
         // The owner-locked rule (round 6): a segment below the photoreal
-        // mesh renders dimmed — it must never disappear into the ground.
+        // mesh renders dimmed - it must never disappear into the ground.
         depthFailMaterial: baseColor.withAlpha(TRAIL_OCCLUDED_ALPHA),
         // Round 8 (owner: UAL1104's Pacific trail "cutting through the
-        // globe"): NONE draws straight 3D chords between waypoints — over a
+        // globe"): NONE draws straight 3D chords between waypoints - over a
         // sparse trans-oceanic trace a single segment spans hundreds of km
         // and tunnels through the planet. GEODESIC subdivides each segment
         // along the curved surface (heights interpolated), so long legs hug

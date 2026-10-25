@@ -279,7 +279,7 @@ export function createRendering({
     }
     scheduleRadioOverlayPublish();
     // The horizon timer can commit AFTER the camera settles and the governor
-    // parks the scene — a changed show flag needs one frame. (perf wave 2 fix)
+    // parks the scene - a changed show flag needs one frame. (perf wave 2 fix)
     if (visibilityChanged) governorRequestRender('radio-horizon');
   }
 

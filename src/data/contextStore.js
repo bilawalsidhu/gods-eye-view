@@ -58,7 +58,7 @@ export function selectEntityContext(entity) {
  * Publish the live subject of a TRACKING layer (aircraft) into the shared
  * selection slot.
  *
- * Selecting a contact is a click-selection like any other — voice's
+ * Selecting a contact is a click-selection like any other - voice's
  * `scope:'selected'` and the Cockpit's selected-target lookup both read this
  * one slot, so a tracking layer that stays out of it is invisible to them
  * even while its readout card is on screen.
@@ -69,7 +69,7 @@ export function selectEntityContext(entity) {
  * click would make those two surfaces fight over one subject.
  *
  * A tracking layer has at most one subject, so any earlier record it left
- * behind is dropped — its feed refreshes continuously and a frozen snapshot
+ * behind is dropped - its feed refreshes continuously and a frozen snapshot
  * must never reach the visible-entity scan.
  *
  * @param {object} metadata Record fields; `id` and `layerId` required.
@@ -180,7 +180,7 @@ export function removeEntityContextsForLayer(layerId, { retainIds } = {}) {
   if (store.selectedEntityId && !store.entities.has(store.selectedEntityId)) {
     store.selectedEntityId = null;
     store.selectedAt = null;
-    // A viewport refresh dropped the record out from under the selection —
+    // A viewport refresh dropped the record out from under the selection -
     // the user did not deselect anything.
     window.dispatchEvent(
       new CustomEvent('gev:entity-selection-cleared', {

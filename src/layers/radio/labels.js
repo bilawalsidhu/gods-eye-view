@@ -24,7 +24,7 @@ export function createLabels({ state: layerState, services, parts, source }) {
 
   function cleanRadioLabelName(value) {
     return String(value || '')
-      .replace(/^[\s|:·\-–—]+|[\s|:·\-–—]+$/g, '')
+      .replace(/^[\s|:·\-\u2013\u2014]+|[\s|:·\-\u2013\u2014]+$/g, '')
       .replace(/\s+/g, ' ')
       .replace(/\s+\([^()]{1,40}\)$/, '')
       .replace(/\s+FM$/i, '')
@@ -59,12 +59,14 @@ export function createLabels({ state: layerState, services, parts, source }) {
       // Infer only a leading decimal in the conventional FM band. Integers such
       // as "80's" or "100 GREATEST" and domains such as "1.fm" stay names.
       const leading = fullName.match(
-        /^(\d{2,3}\.\d{1,2})(?:\s+|\s*[-–—]\s*)(.+)$/,
+        /^(\d{2,3}\.\d{1,2})(?:\s+|\s*[-\u2013\u2014]\s*)(.+)$/,
       );
       const value = Number(leading?.[1]);
       if (leading && value >= 87.5 && value <= 108) {
         frequency = leading[1];
-        labelName = cleanRadioLabelName(leading[2].split(/\s+[-–—]\s+/)[0]);
+        labelName = cleanRadioLabelName(
+          leading[2].split(/\s+[-\u2013\u2014]\s+/)[0],
+        );
       }
     }
 
@@ -73,7 +75,7 @@ export function createLabels({ state: layerState, services, parts, source }) {
     const prefix = `${frequency} FM`;
     if (!labelName) return prefix;
     const nameBudget = RADIO_GLOBE_LABEL_MAX_CHARS - prefix.length - 3;
-    return `${prefix} — ${compactRadioLabelText(labelName, nameBudget)}`;
+    return `${prefix} - ${compactRadioLabelText(labelName, nameBudget)}`;
   }
 
   /** Build the protected selected-station text published through WorldOverlay. */

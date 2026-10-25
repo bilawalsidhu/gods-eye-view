@@ -16,7 +16,7 @@ export function createEsriImagery() {
     'https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer',
     {
       credit:
-        'Powered by Esri — Source: Esri, Maxar, Earthstar Geographics, and the GIS User Community',
+        'Powered by Esri - Source: Esri, Maxar, Earthstar Geographics, and the GIS User Community',
       enablePickFeatures: false,
     },
   );

@@ -19,7 +19,7 @@ function embed(writer, tag, build) {
 
 /**
  * Hand-encode one FeedEntity carrying a VehiclePosition, from the proto field
- * numbers — the same contract the decoder reads, written independently.
+ * numbers - the same contract the decoder reads, written independently.
  */
 function writeVehicleEntity(
   writer,
@@ -280,7 +280,7 @@ test('an implausibly long string drops the whole record rather than truncating a
       },
     ]),
   );
-  // The entity is still counted — the decoder had to walk past it — but it is
+  // The entity is still counted - the decoder had to walk past it - but it is
   // never rendered, because half an id is a different vehicle.
   assert.equal(decoded.entityCount, 3);
   assert.deepEqual(

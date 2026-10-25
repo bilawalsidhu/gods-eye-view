@@ -423,7 +423,7 @@ export function createRendering({
               : null;
           }
         } else {
-          // In-place write keeps one Cartesian3 for the mission's lifetime —
+          // In-place write keeps one Cartesian3 for the mission's lifetime -
           // the estimated branch previously reallocated per propagation.
           livePosition =
             parts.paths.samplePath(

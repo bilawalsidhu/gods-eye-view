@@ -483,7 +483,7 @@ test('leaving a Context transaction re-publishes the settled state to the funnel
 
 test('the teardown guard re-publishes on the way out, so a mid-flight exit is not stranded', async () => {
   // The field case: destroying a Contacts dependency layer exits the session
-  // inside the guard — the sync it calls there is gated out — and only the
+  // inside the guard - the sync it calls there is gated out - and only the
   // guard's own settle can let a settle-gated consumer see mode === null.
   const observed = [];
   const owner = {

@@ -35,11 +35,11 @@ export function layerTitle(layerId) {
 
 /**
  * Map one local infrastructure feature to a JSON-safe analyst record
- * (analyst query engine seam). Pure — no Cesium types. Missing/unknown
+ * (analyst query engine seam). Pure - no Cesium types. Missing/unknown
  * fields are null, never NaN/undefined. Layer-specific fields that do not
  * apply (river/output on datacenters, capacity on dams) stay null so a
  * shared compact payload can copy them without inventing values.
- * Names are unclamped — overlay cards shorten for paint; queries need the
+ * Names are unclamped - overlay cards shorten for paint; queries need the
  * full source string ("Usina Hidrelétrica de Itaipu").
  * @param {Object|null|undefined} raw - {id, lat, lon, properties}.
  * @param {string} [layerId] Local layer id (`local-datacenters` / `local-dams`).

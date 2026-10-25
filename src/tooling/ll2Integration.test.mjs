@@ -104,13 +104,13 @@ test('actual setup rendering distinguishes optional paid LL2 from unrelated free
     );
     const free = rows.children.find((row) => row.dataset.keyId === 'mapillary');
     const tier = (row) =>
-      row.children[0].children.find(
-        (child) => child.className === 'key-setup-tier',
+      row.children[0].children.find((child) =>
+        String(child.className || '').startsWith('key-setup-tier'),
       );
     assert.match(tier(ll2).title, /optional paid token/i);
     assert.match(ll2.children[1].textContent, /leave blank/i);
     assert.match(ll2.children[1].textContent, /no key/i);
-    assert.equal(tier(free).title, 'Free key — register, paste, done');
+    assert.equal(tier(free).title, 'Free key - register, paste, done');
     const serialized = JSON.stringify(status);
     assert.ok(!serialized.includes('owned-fixture-token'));
   } finally {

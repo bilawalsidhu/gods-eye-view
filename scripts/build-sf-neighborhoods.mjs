@@ -11,8 +11,8 @@
  *                     https://data.sfgov.org/api/views/j2bu-swwd.json)
  *
  * Transform (deterministic):
- *   1. `properties.nhood` → `properties.name` (no renames — DataSF names kept verbatim).
- *   2. Douglas-Peucker simplification per ring, tolerance 2e-5° (~2 m) — shaves
+ *   1. `properties.nhood` → `properties.name` (no renames - DataSF names kept verbatim).
+ *   2. Douglas-Peucker simplification per ring, tolerance 2e-5° (~2 m) - shaves
  *      hyper-detailed shoreline vertices without visibly moving boundaries.
  *   3. Coordinates rounded to 6 decimals (~0.1 m); consecutive duplicates dropped;
  *      rings re-closed; rings that collapse below 4 points dropped.
@@ -35,7 +35,7 @@ const OUT = path.join(path.dirname(fileURLToPath(import.meta.url)),
 const TOLERANCE = 2e-5; // degrees, ~2 m
 const DECIMALS = 6;
 
-/** Perpendicular distance from point p to segment a-b (in degrees, planar — fine at this scale). */
+/** Perpendicular distance from point p to segment a-b (in degrees, planar - fine at this scale). */
 function segDist(p, a, b) {
   let [x, y] = p; const [x1, y1] = a; const [x2, y2] = b;
   let dx = x2 - x1; let dy = y2 - y1;
@@ -134,7 +134,7 @@ async function main() {
   const out = {
     type: 'FeatureCollection',
     city: 'San Francisco',
-    source: 'DataSF "Analysis Neighborhoods" (dataset j2bu-swwd, map view p5b7-5n3h) — PDDL 1.0 (public domain); see SOURCE.md',
+    source: 'DataSF "Analysis Neighborhoods" (dataset j2bu-swwd, map view p5b7-5n3h) - PDDL 1.0 (public domain); see SOURCE.md',
     features,
   };
   fs.writeFileSync(OUT, `${JSON.stringify(out)}\n`);

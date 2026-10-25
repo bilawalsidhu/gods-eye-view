@@ -34,8 +34,8 @@ export function createLifecycle({ state, parts, source, mapStackEventTarget }) {
       if (!state._preRenderRemover) {
         state._preRenderRemover = viewer.scene.preRender.addEventListener(
           () => {
-            // The camera is handed to the gate so tracked/orbit cameras — which
-            // never emit moveEnd — reach the motion fallback. No render is
+            // The camera is handed to the gate so tracked/orbit cameras - which
+            // never emit moveEnd - reach the motion fallback. No render is
             // requested for a fallback sweep: it only fires while the camera is
             // already moving, so frames are flowing by construction.
             if (
@@ -96,7 +96,7 @@ export function createLifecycle({ state, parts, source, mapStackEventTarget }) {
       state._cachedCableJson = null;
       state._cachedLandingJson = null;
       // hide() clears every published host entry and goes invisible while
-      // keeping the publisher reusable — the legacy layer supported re-init
+      // keeping the publisher reusable - the legacy layer supported re-init
       // after destroy, and hidden publishers already drop late publishes.
       // Pinned by the direct-destroy host test: removing this line leaves a
       // visible overlay source with orphan labels.

@@ -465,7 +465,7 @@ export function advanceProjectedSpriteFocus(
   spriteHalfWidthPx = 0,
   spriteHalfHeightPx = spriteHalfWidthPx,
 ) {
-  // Common case: nothing tracked and this sprite holds no dimming state —
+  // Common case: nothing tracked and this sprite holds no dimming state -
   // advanceSpriteFocus would return identity without reading the projection,
   // so skip the worldToWindowCoordinates round trip entirely (it was N
   // wasted projections per fleet tick with nothing tracked). Sprites still

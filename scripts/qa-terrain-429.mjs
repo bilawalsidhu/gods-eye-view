@@ -7,7 +7,7 @@
  * A zoom-out burst asks for a few dozen shallow tiles at once and the upstream
  * answers HTTP 429 for most of them. This harness drives that burst, counts the
  * throttled responses, keeps the first 429's headers as evidence, and then
- * checks whether every throttled tile eventually loaded — the contract the
+ * checks whether every throttled tile eventually loaded - the contract the
  * client-side retry in `src/maps/terrain.js` provides.
  *
  * Run against a keyless dev server (no Google or ion credentials):
@@ -353,8 +353,8 @@ try {
   }
   console.log(
     failures.length
-      ? `FAIL — ${failures.length}/${summaries.length} round(s) left throttled terrain tiles unloaded`
-      : `PASS — every throttled terrain tile recovered in ${summaries.length} round(s)`,
+      ? `FAIL - ${failures.length}/${summaries.length} round(s) left throttled terrain tiles unloaded`
+      : `PASS - every throttled terrain tile recovered in ${summaries.length} round(s)`,
   );
   process.exitCode = failures.length ? 1 : 0;
 } finally {

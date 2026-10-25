@@ -98,7 +98,7 @@ test('the checkbox writes and clears durable suppression, and a storage reset un
     true,
   );
 
-  // A cleared/hard-reset profile shows it again — an accepted, documented cost.
+  // A cleared/hard-reset profile shows it again - an accepted, documented cost.
   setFirstRunSuppressed(true, storage);
   assert.equal(
     shouldShowFirstRun({
@@ -138,7 +138,7 @@ test('welcome params work in both directions and outrank both suppressions', () 
   );
 });
 
-test('a share link never sees the launcher — its author already chose the view', () => {
+test('a share link never sees the launcher - its author already chose the view', () => {
   assert.equal(shouldShowFirstRun({ hasShareState: true, ...fresh() }), false);
 });
 
@@ -162,7 +162,7 @@ test('privacy-restricted storage fails open and every write stays best-effort', 
   assert.doesNotThrow(() => rememberFirstRunSessionDismissed(blocked));
 });
 
-test('a THROWING storage getter still fails open — Safari private mode', () => {
+test('a THROWING storage getter still fails open - Safari private mode', () => {
   // The harder case, and the one a default parameter cannot survive: it is not
   // getItem that throws, it is reading `globalThis.localStorage` AT ALL. A
   // default like `storage = globalThis.localStorage` evaluates that getter
@@ -263,7 +263,7 @@ test('the JS and CSS lists of screen-claiming surfaces stay in step', () => {
     'ui-clean-view',
   ]);
   // A surface that hides the card in CSS but is missing from the JS list would
-  // leave an invisible launcher holding the ESC handler — blocker 2 exactly.
+  // leave an invisible launcher holding the ESC handler - blocker 2 exactly.
   const hideRule = css.slice(
     css.indexOf('body.ui-clean-view #first-run-launcher'),
     css.indexOf(
@@ -350,7 +350,7 @@ test('an overlay with NO class to watch still disarms the launcher', () => {
   const launcher = css.slice(css.indexOf('#first-run-launcher {'));
   assert.match(launcher.slice(0, launcher.indexOf('}')), /z-index: 175/);
 
-  // Answered generically — a hit test at the card's own centre, NOT one more
+  // Answered generically - a hit test at the card's own centre, NOT one more
   // class to keep in step with one more overlay.
   const covered = module.slice(
     module.indexOf('const coveredByOverlay = () => {'),
@@ -374,7 +374,7 @@ test('an overlay with NO class to watch still disarms the launcher', () => {
   assert.match(covered, /\} catch \{\s*\n\s*return false;\s*\n\s*\}/);
 });
 
-test('one ESC does one thing — the radio disclosure stops the launcher outright', () => {
+test('one ESC does one thing - the radio disclosure stops the launcher outright', () => {
   const ui = fs.readFileSync(
     new URL('./ui/radioBindings.js', import.meta.url),
     'utf8',
@@ -383,7 +383,7 @@ test('one ESC does one thing — the radio disclosure stops the launcher outrigh
   // stopPropagation() does NOT stop later listeners on the SAME document, so the
   // disclosure's earlier capture handler closed the disclosure and the launcher
   // dismissed itself off the same key. The earlier listener is the only one that
-  // can stop the later one — and only the immediate form does it.
+  // can stop the later one - and only the immediate form does it.
   const radioEsc = ui.slice(ui.indexOf("event.key !== 'Escape' ||"));
   const claim = radioEsc.slice(0, radioEsc.indexOf('setRadioDisclosure(false'));
   assert.match(claim, /event\.preventDefault\(\);/);
@@ -430,7 +430,7 @@ test('a refused write takes the tick back instead of promising "never again"', (
   };
   assert.equal(setFirstRunSuppressed(true, blocked), false);
   assert.equal(setFirstRunSuppressed(false, blocked), false);
-  // No storage area at all is a refusal too — nothing was persisted either way.
+  // No storage area at all is a refusal too - nothing was persisted either way.
   assert.equal(setFirstRunSuppressed(true, null), false);
   assert.equal(setFirstRunSuppressed(false, null), false);
   // ...and a working store still reports success, or the checkbox would revert
@@ -467,7 +467,7 @@ test('a surface class that never clears is an ACCEPTED no-show, not a timer', ()
   );
 
   // A "reveal anyway after N seconds" would trade a benign no-show for the card
-  // punching through a recording in progress — recordings run long, and none of
+  // punching through a recording in progress - recordings run long, and none of
   // the four classes is restored at startup, so a blocked init is an error path.
   // The slice deliberately spans the note AND the function it governs: a pin
   // that stopped at the comment would let a timer be added one line below the
@@ -543,7 +543,7 @@ test('the launcher yields on engage and waits when a surface is already up', () 
   );
   // Yielding is session-scoped and must not steal focus from the new surface.
   assert.match(module, /dismiss\(\{ restoreFocus: false \}\)/);
-  // A cheap attribute watch, not a per-frame poll — the render governor must
+  // A cheap attribute watch, not a per-frame poll - the render governor must
   // not see a new hold because of onboarding chrome.
   assert.match(module, /attributes: true,\s*attributeFilter: \['class'\]/);
   assert.match(module, /surfaceObserver\?\.disconnect\(\)/);
@@ -610,7 +610,7 @@ test('Live Contacts and Space Missions go through the one setContextMode facade'
     const outcome = await runFirstRunChoice(choice, spy.deps);
     assert.equal(outcome.ok, true);
     assert.deepEqual(spy.calls.contextModes, [mode]);
-    // A Context mission owns no layers and no camera of its own — the facade does.
+    // A Context mission owns no layers and no camera of its own - the facade does.
     assert.deepEqual(spy.calls.layerIds, []);
     assert.equal(spy.calls.globeFlights, 0);
   }
@@ -632,7 +632,7 @@ test('the tile is the FULLY CONFIGURED experience: quakes and fires together', (
 
   // Keyless, the honest surface is the LAYER ROW ("KEY REQUIRED"), which the
   // FIRMS layer already reports. The misleading part is the GLOBAL chip folding
-  // that row into LOAD FAILED — a defect in the shared state machine, ledgered
+  // that row into LOAD FAILED - a defect in the shared state machine, ledgered
   // post-launch, and the note must stay where the next editor will read it
   // rather than being re-discovered as a launcher bug.
   const module = fs.readFileSync(
@@ -648,7 +648,7 @@ test('the tile is the FULLY CONFIGURED experience: quakes and fires together', (
   assert.match(table, /LEDGERED post-launch/);
 });
 
-test('every visitor gets the same tile — there is no degraded keyless variant', async () => {
+test('every visitor gets the same tile - there is no degraded keyless variant', async () => {
   // The mission does not branch on configuration: it asks for both layers for
   // everyone, and a keyless FIRMS reports its own state at its own row rather
   // than changing what the tile does.
@@ -758,7 +758,7 @@ test('no mission writes a preference the visitor did not choose by picking it', 
   }
 
   // The only durable panel write is the Context reveal, and only on the Context
-  // missions — the globe missions open no panel at all.
+  // missions - the globe missions open no panel at all.
   const panelWrites = code.match(/setPanelCollapsed/g) || [];
   assert.equal(
     panelWrites.length,
@@ -816,7 +816,7 @@ test('markup, startup ordering and accessibility remain pinned', () => {
   );
   assert.match(html, /<input type="checkbox" data-first-run-suppress \/>/);
   assert.match(html, /<strong data-first-run-environmental-title>/);
-  // Subcopy must name BOTH feeds the tile turns on — a tile that promised only
+  // Subcopy must name BOTH feeds the tile turns on - a tile that promised only
   // half of what it does is the defect this replaced. Only the VISIBLE <small>
   // text counts; the comment beside it naturally says the words too.
   const envTile = html.slice(
@@ -834,12 +834,13 @@ test('markup, startup ordering and accessibility remain pinned', () => {
   );
 
   // The card's one persuasive line is OWNER-AUTHORED and pinned verbatim,
-  // unspaced em dash included. This is copy, not prose to be improved in a
-  // passing edit — changing it needs the owner, not a nicer-sounding rewrite.
+  // spaced hyphen included (em dashes are banned repo-wide). This is copy, not
+  // prose to be improved in a passing edit - changing it needs the owner, not
+  // a nicer-sounding rewrite.
   assert.ok(
     html.includes(
       '<p id="first-run-description" data-i18n-runtime>It feels like a forbidden cockpit' +
-        '—then you realize the sources are public and the data is real.</p>',
+        ' - then you realize the sources are public and the data is real.</p>',
     ),
     'the owner-authored first-run line must ship exactly as written',
   );
@@ -900,7 +901,7 @@ test('markup, startup ordering and accessibility remain pinned', () => {
     /#first-run-launcher\.visible \{[\s\S]*?pointer-events: auto/,
   );
   // The card is a flex column so its mission list can scroll on a short
-  // viewport — and an AUTHOR `display` on this id outranks the UA's
+  // viewport - and an AUTHOR `display` on this id outranks the UA's
   // `[hidden] { display: none }`, which would strand the card in the
   // accessibility tree until it is revealed or removed.
   assert.match(base, /display: flex/);
@@ -945,7 +946,7 @@ test('the DISPLAY rail starts collapsed on a first run, and a stored choice wins
     'utf8',
   );
   // The rail opened by default to advertise HUD / DETECT / 3D. Those default ON
-  // now, so it was opening to offer controls for things already happening —
+  // now, so it was opening to offer controls for things already happening -
   // while competing with the mission card for the one first impression there is.
   assert.match(
     ui,
@@ -970,7 +971,7 @@ test('the DISPLAY rail starts collapsed on a first run, and a stored choice wins
 
 // ── Voice: instruction-only, tool schema unchanged ─────────────────────
 
-test('the voice TOOL SCHEMA matches the pinned contract — the mission mapping is instructions only', () => {
+test('the voice TOOL SCHEMA matches the pinned contract - the mission mapping is instructions only', () => {
   // Analyst layers and the separate satellite-pass tool deliberately extend the schema.
   // Canonical serialization pins every tool name, description, property and
   // ordering while allowing source formatting. Derived from the unchanged
@@ -1011,10 +1012,11 @@ test('the voice TOOL SCHEMA matches the pinned contract — the mission mapping 
   // framing/default guidance updates only move_camera and mode descriptions.
   // Radio markup and the complete production-request comparison pin locality.
   // Restore the base camera/Globe View wording with the globe-rotation append.
+  // Em dashes were removed from all descriptions repo-wide (U+2014 ban).
   assert.equal(block.length, 30878, 'serialized tool schema length drifted');
   assert.equal(
     crypto.createHash('sha256').update(block).digest('hex'),
-    '7b95f0f4258896fe5c3316265a19f3a6602809d4e7e681ee7ecd8f2df514ef1f',
+    '222b241367787722c5c7f729e0869e8d907f68c6445623f45008c2c2d8b515dc',
     'the first-run missions must ride EXISTING tools: no schema edit, no cache bust',
   );
   const instructions = fs.readFileSync(
@@ -1024,7 +1026,7 @@ test('the voice TOOL SCHEMA matches the pinned contract — the mission mapping 
 
   // ...and the mapping that makes them reachable by voice is one instruction
   // string, whose rollback is deleting that string. Anchored to a LIVE array
-  // entry — a quote at the start of its own line — so commenting the paragraph
+  // entry - a quote at the start of its own line - so commenting the paragraph
   // out reads as the removal it is, not as a passing substring match.
   assert.match(
     instructions,

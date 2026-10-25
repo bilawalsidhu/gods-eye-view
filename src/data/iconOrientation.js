@@ -9,7 +9,7 @@
  * space. The previous approach mixed two regimes (surface-normal alignedAxis
  * at oblique pitch, camera-heading compensation at nadir) and broke in
  * tracked-entity orbit mode, where camera.heading is expressed in the
- * entity's reference frame — the tracked icon stayed glued to the viewport.
+ * entity's reference frame - the tracked icon stayed glued to the viewport.
  *
  * THE FIX: transform the local course vector into world space, then project it
  * directly onto the camera's right/up basis. This stays valid when a forward
@@ -26,7 +26,7 @@ import * as Cesium from 'cesium';
 /** Meters used to give the course vector a stable projection magnitude. */
 const FORWARD_PROBE_M = 2000;
 /**
- * Minimum camera-plane component before we trust the angle — below this the
+ * Minimum camera-plane component before we trust the angle - below this the
  * course points almost exactly into/out of the screen and the angle is noise.
  */
 const MIN_SCREEN_COMPONENT_M = 0.5;
@@ -123,7 +123,7 @@ const _occluder = new Cesium.EllipsoidalOccluder(
 /**
  * Half-width of the crossfade band centred on the ellipsoid silhouette, in
  * radians. ~1.1° per side: at the product's default 60° frustum on a 1280×800
- * viewport that is roughly 30 px of screen crossfade — wide enough that a
+ * viewport that is roughly 30 px of screen crossfade - wide enough that a
  * contact drifting across the horizon never pops, narrow enough that a label
  * plainly over ground still gets its full treatment.
  */
@@ -141,7 +141,7 @@ const _wgs84OneOverRadii = Cesium.Ellipsoid.WGS84.oneOverRadii;
  * ABOVE the ellipsoid the horizon is the tangent silhouette and the test is a
  * genuine ray/ellipsoid hit test: 1 means the view ray through the point misses
  * the planet entirely. Here the function is the exact complement of
- * {@link horizonOccluder} — the occluder asks whether the planet is in FRONT of
+ * {@link horizonOccluder} - the occluder asks whether the planet is in FRONT of
  * a point (cull it), this asks whether it is BEHIND (what a screen-space label
  * anchored there is read against). For any point the occluder keeps, a ray that
  * hits the ellipsoid must hit it beyond the point, so the hit/miss test alone
@@ -149,7 +149,7 @@ const _wgs84OneOverRadii = Cesium.Ellipsoid.WGS84.oneOverRadii;
  *
  * AT OR BELOW the ellipsoid there is no tangent cone, and the test is NOT a ray
  * hit test. It is an EYE-PLANE convention: 1 means the point sits above the
- * camera's local geodetic horizontal. The two genuinely differ — from a camera
+ * camera's local geodetic horizontal. The two genuinely differ - from a camera
  * 18 m under the surface, the ray to a contact 900 m up and a few km out
  * CROSSES the ellipsoid on the way there, and the answer is still sky. That is
  * deliberate. A sub-ellipsoid camera is an artifact of the geoid/ellipsoid
@@ -160,12 +160,12 @@ const _wgs84OneOverRadii = Cesium.Ellipsoid.WGS84.oneOverRadii;
  * nobody asked; what a label is read against is decided instead by whether it
  * sits above or below the viewer's eye level. Cesium's `EllipsoidalOccluder`
  * takes the same convention below the surface, so the two stay sign-consistent
- * — the complementarity above survives as agreement here.
+ * - the complementarity above survives as agreement here.
  *
  * The regimes MEET rather than being switched between: the horizon dip
  * acos(R/(R+h)) falls to zero as the camera settles onto the surface, so the
  * tangent cone opens continuously to the horizontal plane, and clamping the
- * cone's sine at 1 (half-angle 90°) IS that limit — not a special case.
+ * cone's sine at 1 (half-angle 90°) IS that limit - not a special case.
  *
  * Computed in scaled space, where WGS84 becomes a unit sphere. That map is
  * affine, so both regimes stay exact: above the surface ray-surface
@@ -179,7 +179,7 @@ const _wgs84OneOverRadii = Cesium.Ellipsoid.WGS84.oneOverRadii;
  * Deliberately geometric, not photometric, in BOTH regimes: sampling rendered
  * pixels behind every label would be correct about mountains and towers that
  * rise above the horizon, and would also cost a readback per label per frame.
- * The band absorbs that approximation — a contact just above the horizon lands
+ * The band absorbs that approximation - a contact just above the horizon lands
  * mid-blend, which is the honest answer when the backdrop is part sky.
  *
  * @param {Cesium.Cartesian3} cameraPosition World camera position.
@@ -200,8 +200,8 @@ export function skyBackdropFactor(
   const cz = cameraPosition.z * s.z;
   const cameraMag = Math.sqrt(cx * cx + cy * cy + cz * cz);
   // Only the planet's exact centre (or a non-finite camera) has no local
-  // vertical to measure against. Everything else — including the sub-ellipsoid
-  // cameras that coastal ground level actually produces — gets a real answer.
+  // vertical to measure against. Everything else - including the sub-ellipsoid
+  // cameras that coastal ground level actually produces - gets a real answer.
   // `> 0` already rejects NaN and negatives; the finite check also rejects an
   // infinite coordinate, which would otherwise normalize to NaN below and slip
   // a NaN plate alpha into the paint.
@@ -276,8 +276,8 @@ const _scratchWindowAt = new Cesium.Cartesian2();
 const _scratchWindowAhead = new Cesium.Cartesian2();
 
 /**
- * Billboard rotation for a SURFACE contact, projected exactly — perspective
- * division included — instead of through the camera-basis approximation.
+ * Billboard rotation for a SURFACE contact, projected exactly - perspective
+ * division included - instead of through the camera-basis approximation.
  *
  * `screenProjectedRotation` above deliberately projects the course vector onto
  * the camera's right/up basis, which is orthographic: exact at the viewport
@@ -293,7 +293,7 @@ const _scratchWindowAhead = new Cesium.Cartesian2();
  *
  * So this projects two nearby world points through the actual view-projection
  * and reads the angle between them on screen. When either point cannot be
- * projected — behind the camera, off the frustum, degenerate — it falls back to
+ * projected - behind the camera, off the frustum, degenerate - it falls back to
  * the camera-basis answer rather than inventing one.
  *
  * @param {Cesium.Scene} scene The scene (projection source).

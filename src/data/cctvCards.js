@@ -13,17 +13,17 @@
  *
  * Division of labor mirrors vesselLabels: cctv.js OWNS selection and frame
  * fetching (moveEnd-driven LOD + grace + the policy-gated pacer: cold-fill
- * burst, then the 1-fetch/s steady gate — never per
+ * burst, then the 1-fetch/s steady gate - never per
  * frame); this module owns the pure card policy helpers (declutter, frame
  * persistence, retry pacing, cache pruning) and supplies ready-to-draw stable
  * frame-slot references to the host.
  *
  * Zero-flicker contract (owner requirement):
  * - An AMBIENT entry whose frame slot has no drawn frame yet (`stamp === 0`)
- *   renders NOTHING — no placeholder, no chip. The camera icon alone carries
+ *   renders NOTHING - no placeholder, no chip. The camera icon alone carries
  *   it. Sole documented exception (owner round 2, item B): a PINNED entry
- *   (hover-summoned, `entry.pinned === true`) paints its chrome immediately —
- *   explicit user gesture wants instant feedback — with an empty thumb area
+ *   (hover-summoned, `entry.pinned === true`) paints its chrome immediately -
+ *   explicit user gesture wants instant feedback - with an empty thumb area
  *   until its fast-tracked frame lands.
  * - Entries hold a LIVE reference to their per-camera frame slot; when a
  *   fetched frame lands (applyFrameResult assigned onto the stable slot) the
@@ -32,7 +32,7 @@
  *
  * Edge fade consistency (owner note): cards fade toward the screen edges via
  * the SAME radial keyhole ramp the detection overlay uses
- * (keyholeLabelAlphaFromGeometry — opaque inside the central keyhole, linear
+ * (keyholeLabelAlphaFromGeometry - opaque inside the central keyhole, linear
  * feather outward), multiplied with the shared distance ramp (cardAlpha).
  */
 
@@ -95,7 +95,7 @@ export const CCTV_THUMBNAIL_ALTITUDE_SCALE = Object.freeze({
   smoothToMid: true,
 });
 
-// ─── Pure helpers (exported for unit tests — no Cesium, no DOM) ────────────
+// ─── Pure helpers (exported for unit tests - no Cesium, no DOM) ────────────
 
 /**
  * Returns whether an ambient card anchor is outside the protected top HUD
@@ -171,13 +171,13 @@ export function declutterCctvCards(
 
 /**
  * Altitude-driven card scale + opacity (owner field-test finding 5,
- * 2026-07-29 — curve constants above). Piecewise, monotonic non-increasing
+ * 2026-07-29 - curve constants above). Piecewise, monotonic non-increasing
  * in both channels:
  *   - ≤1,800 m: full size, fully opaque.
  *   - 1,800→6,000 m: smoothstep shrink 1.0 → 0.45 (opaque).
  *   - 6,000→9,500 m: slight continued linear shrink 0.45 → 0.35; opaque
  *     until 7,500 m, then a linear alpha fade to 0 at 9,500 m.
- *   - ≥9,500 m: fully hidden (alpha 0) — entries may persist, nothing paints.
+ *   - ≥9,500 m: fully hidden (alpha 0) - entries may persist, nothing paints.
  * @param {number} cameraHeightM - Viewer camera height above the ellipsoid.
  * @returns {{scale:number, alpha:number}}
  */
@@ -188,7 +188,7 @@ export function cardScaleForAltitude(cameraHeightM) {
     const t =
       (h - CCTV_CARD_SCALE_FULL_M) /
       (CCTV_CARD_SCALE_MID_M - CCTV_CARD_SCALE_FULL_M);
-    const s = t * t * (3 - 2 * t); // smoothstep — no visible kink at either end
+    const s = t * t * (3 - 2 * t); // smoothstep - no visible kink at either end
     return { scale: 1 + (CCTV_CARD_SCALE_AT_MID - 1) * s, alpha: 1 };
   }
   const t = Math.min(
@@ -215,7 +215,7 @@ export function cardScaleForAltitude(cameraHeightM) {
  * `CCTV_CARD_FETCH_BURST_LIMIT` fetches may be in flight with
  * `CCTV_CARD_FETCH_BURST_SPACING_MS` between launches; once every selected
  * card has a first frame the layer drops back to the steady-state global
- * gate (single in-flight fetch, one launch per second — an in-flight fetch
+ * gate (single in-flight fetch, one launch per second - an in-flight fetch
  * still blocks the tick, so slow responses only lower the rate).
  * @param {Object} [input]
  * @param {boolean} [input.coldFill] - A selected card lacks its first frame.
@@ -244,7 +244,7 @@ export function cardFetchPolicy({
 }
 
 /**
- * Creates an empty per-camera frame slot. Slots are STABLE objects — card
+ * Creates an empty per-camera frame slot. Slots are STABLE objects - card
  * entries reference them directly, and fetch results are Object.assign-ed
  * onto them (via applyFrameResult) so the renderer sees new frames without
  * an entry rebuild.
@@ -396,7 +396,7 @@ export function createCctvThumbnailOverlayEntry({
     // the frame the geometry said so, and above/below was re-decided from
     // geometry every frame with no memory. Opting out of the shared arbiter's
     // min-lifetime, re-entry cooldown, fades and sticky corner restores that
-    // feel — the hysteresis is what produced sticky mid-screen below-placements
+    // feel - the hysteresis is what produced sticky mid-screen below-placements
     // and the ~1.5 s delay before a card could come back after a nadir sweep.
     stateless: true,
     // The shipped per-frame pass rejected cards whose ANCHORS were closer than

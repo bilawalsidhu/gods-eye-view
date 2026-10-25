@@ -1,11 +1,11 @@
 /**
- * @file Pure styling helpers for live traffic flow — level → bucket/color/
+ * @file Pure styling helpers for live traffic flow - level → bucket/color/
  * speed/density. Cesium-free so thresholds are unit-testable; the traffic
  * layer maps buckets to Cesium colors at spawn time.
  *
  * `level` is TomTom's `traffic_level`: current speed / free-flow speed,
  * 0..1 where 1 = free flow. Non-finite input degrades to free-flow/neutral
- * everywhere — a road with unusable data must render like the simulation,
+ * everywhere - a road with unusable data must render like the simulation,
  * never as a phantom traffic jam.
  *
  * @module data/trafficFlowStyle
@@ -60,11 +60,11 @@ export function flowSpeedScale(level) {
 }
 
 /**
- * Dot density multiplier for a traffic level — congestion means more cars on
+ * Dot density multiplier for a traffic level - congestion means more cars on
  * the road, so slower roads pack more dots: 1/max(level, 0.4), capped at 2.5.
  *
  * With `jamBoost` (the jamViz density prototype) the same curve keeps
- * climbing through deep jams — 1/max(level, 0.25), capped at 4.0 — so
+ * climbing through deep jams - 1/max(level, 0.25), capped at 4.0 - so
  * gridlock gets visibly denser while ordinary jams barely change. The two
  * curves are identical for level ≥ 0.4.
  *

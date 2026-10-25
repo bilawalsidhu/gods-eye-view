@@ -109,7 +109,7 @@ export function worstFeedState(states) {
 /**
  * One honest layer snapshot for voice/HUD narration.
  *
- * Disabled layers report `feedState: 'off'` — the same reading the chips use —
+ * Disabled layers report `feedState: 'off'` - the same reading the chips use -
  * even if leftover stats would otherwise classify as stale. Counts and errors
  * still travel so a disabled layer with a last-known error is inspectable.
  *

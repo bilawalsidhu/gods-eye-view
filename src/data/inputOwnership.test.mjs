@@ -35,7 +35,7 @@ test('the pointer starts free and a claim hands back a lease', () => {
   assert.equal(isLeaseCurrent(lease), true);
 });
 
-test('a claim is never stolen — not even by the same tool name', () => {
+test('a claim is never stolen - not even by the same tool name', () => {
   const first = claimPointer('draw');
   assert.ok(first);
 

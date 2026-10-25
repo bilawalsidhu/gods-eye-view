@@ -28,7 +28,7 @@ await fs.mkdir(SHOTS, { recursive: true });
 let failures = 0;
 const lines = [];
 const check = (name, passed, detail = '') => {
-  const text = `[${passed ? 'PASS' : 'FAIL'}] ${name}${detail ? ` — ${detail}` : ''}`;
+  const text = `[${passed ? 'PASS' : 'FAIL'}] ${name}${detail ? ` - ${detail}` : ''}`;
   console.log(text);
   lines.push(text);
   if (!passed) failures += 1;
@@ -478,7 +478,7 @@ try {
   // These stub the proxy's RESPONSE, so they test this layer's handling of it
   // and nothing about the proxy itself. What the proxy actually answers for a
   // routing-service rate limit, a redirect, an over-long route and a full
-  // outbound queue is covered where it can be observed — the provider tests in
+  // outbound queue is covered where it can be observed - the provider tests in
   // src/tooling/placeProviders.test.mjs. The bodies below are the ones those
   // tests pin, so the two halves meet. ─────────────────────────────────────
   const cdp = await page.target().createCDPSession();
@@ -537,7 +537,7 @@ try {
       name: 'our own outbound queue is full (429)',
       stub: {
         status: 429,
-        body: '{"ok":false,"error":"routing busy — too many routes at once"}',
+        body: '{"ok":false,"error":"routing busy - too many routes at once"}',
       },
       wait: 3500,
       expect: /routing busy/i,
@@ -723,7 +723,7 @@ try {
       });
       check('Denver has maneuver dots', denver.dots > 0, `${denver.dots} dots`);
       check(
-        'every Denver dot resolved its ground cell — none left hidden',
+        'every Denver dot resolved its ground cell - none left hidden',
         denver.dots > 0 && denver.shown === denver.dots,
         `${denver.shown} of ${denver.dots} shown`,
       );

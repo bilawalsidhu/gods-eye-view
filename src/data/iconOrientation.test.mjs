@@ -119,7 +119,7 @@ const tangentLonDeg = Cesium.Math.toDegrees(
 test('a contact above the silhouette is read against sky', () => {
   // Another aircraft at the same flight level 200 km ahead. The chord between
   // two points at equal altitude bends below them, so it exits above the
-  // horizon rather than into the planet — which is why a cruising contact
+  // horizon rather than into the planet - which is why a cruising contact
   // appears against sky and not against ground.
   const ahead = Cesium.Cartesian3.fromDegrees(200_000 / 111_320, 0, CRUISE_M);
   assert.equal(skyBackdropFactor(cruiseCamera, ahead), 1);
@@ -149,8 +149,8 @@ test('the silhouette itself lands exactly mid-band', () => {
 
 /**
  * A contact 100 km ahead, climbing from the deck to above the camera. Only
- * altitude can carry a contact across the silhouette — a point at height zero
- * is on the planet and can never be in front of sky — so this, not a ground
+ * altitude can carry a contact across the silhouette - a point at height zero
+ * is on the planet and can never be in front of sky - so this, not a ground
  * track, is the sweep that exercises the band.
  */
 function climbSweep(step = 500) {
@@ -224,7 +224,7 @@ const DEG_PER_M_LAT = 1 / 110_574;
 
 test('below the ellipsoid, a contact against open sky still reads as sky', () => {
   // The owner's cockpit view: traffic on approach, 8 km out and 900 m up, is
-  // ~6.5° above eye level — the whole band is 1.09° per side, so this is not a
+  // ~6.5° above eye level - the whole band is 1.09° per side, so this is not a
   // near call. Before the fix a sub-ellipsoid camera fell into the degenerate
   // guard and every one of these came back 0: a row of dark boxes on empty sky.
   const approach = Cesium.Cartesian3.fromDegrees(
@@ -246,8 +246,8 @@ test('below the ellipsoid, a contact against open sky still reads as sky', () =>
 
 test('below the ellipsoid, a contact on the ramp still keeps its plate', () => {
   // Sky selectivity must not become "no plates at ground level". An aircraft
-  // 150 m ahead on the ramp sits 12 m below the cockpit — 4.6° under eye level,
-  // four band-widths down — so it is read against apron and keeps the full
+  // 150 m ahead on the ramp sits 12 m below the cockpit - 4.6° under eye level,
+  // four band-widths down - so it is read against apron and keeps the full
   // plate that holds mono text off bright concrete.
   const ramp = Cesium.Cartesian3.fromDegrees(
     JFK_LON,
@@ -273,7 +273,7 @@ test('at the surface the horizon is exactly eye level, geodetic not geocentric',
   // With no altitude there is no horizon dip, so the honest silhouette is the
   // local horizontal plane through the camera and a contact ON that plane is
   // the 50% crossing. The plane that matters is the GEODETIC tangent plane, and
-  // at 40°N the geodetic normal misses the geocentric radial by ~0.19° — about
+  // at 40°N the geodetic normal misses the geocentric radial by ~0.19° - about
   // a sixth of the 1.09° half-band, so a spherical stand-in would land visibly
   // off centre rather than at 0.5, which is what the second half of this test
   // measures.
@@ -322,8 +322,8 @@ test('at the surface the horizon is exactly eye level, geodetic not geocentric',
 });
 
 /**
- * A fixed contact on the deck 30 km east along the equator — where the WGS84
- * cross-section is a true circle, so the sweep's geometry is exact — read from
+ * A fixed contact on the deck 30 km east along the equator - where the WGS84
+ * cross-section is a true circle, so the sweep's geometry is exact - read from
  * a camera climbing from 50 m under the surface to 50 m over it. The contact
  * sits just under the horizon the whole way, so the factor is mid-band and
  * genuinely varying: this sweep measures the crossover itself, not a saturated
@@ -345,7 +345,7 @@ test('the answer stays continuous as the camera rises through the surface', () =
   // acos(R/(R+h)) goes to zero as the camera settles onto the ellipsoid, so the
   // cone opens continuously to the horizontal plane and the two regimes meet
   // with no seam. A hard fail-closed under the surface put a full step into the
-  // middle of that climb — plates snapping on as the camera touched down.
+  // middle of that climb - plates snapping on as the camera touched down.
   const samples = surfaceCrossingSweep();
   let worst = 0;
   for (let i = 1; i < samples.length; i++) {
@@ -394,8 +394,8 @@ test('a sub-surface camera carries real information, not one frozen answer', () 
 
 /**
  * The formula this fix replaced, verbatim, kept only as the differential
- * reference below. The clamp is supposed to be the IDENTITY above the surface —
- * `1 / cameraMag` is already under 1 there, so `Math.min` cannot round it — and
+ * reference below. The clamp is supposed to be the IDENTITY above the surface -
+ * `1 / cameraMag` is already under 1 there, so `Math.min` cannot round it - and
  * that claim is worth a permanent pin rather than a one-off measurement, because
  * a future edit to the shared lines could drift the cruise answer while every
  * sub-surface test stayed green.
@@ -438,7 +438,7 @@ function seededRandom(seed) {
 
 test('above the surface the answer is bit-identical to the formula it replaced', () => {
   // Every camera the product has ever rendered from is above the ellipsoid, so
-  // this fix must be provably invisible there — not "close", identical. Object.is
+  // this fix must be provably invisible there - not "close", identical. Object.is
   // rather than a tolerance: a tolerance would let a real drift hide under it.
   const random = seededRandom(0x5eed_1234);
   let compared = 0;
@@ -478,8 +478,8 @@ test('below the surface the backdrop test agrees with the occluder beside it', (
   // a point, this asks what is BEHIND it, and the docstring's invariant is that
   // for any point the occluder KEEPS, a ray that hits the ellipsoid hits it
   // beyond the point. Cesium resolves a sub-ellipsoid camera by culling
-  // everything under the local horizontal plane — eye level, the same limit
-  // adopted here — so the invariant survives under the surface only if both
+  // everything under the local horizontal plane - eye level, the same limit
+  // adopted here - so the invariant survives under the surface only if both
   // halves use that plane. The old fail-closed broke exactly this: the occluder
   // kept a contact against sky and the backdrop test called it ground.
   const camera = Cesium.Cartesian3.fromDegrees(JFK_LON, JFK_LAT, -18);
@@ -522,7 +522,7 @@ test('below the surface the backdrop test agrees with the occluder beside it', (
 
 test('a degenerate camera or contact reports ground rather than throwing', () => {
   // A plate that stays is a cosmetic miss; a plate that vanishes on a frame
-  // where the inputs go bad is a flicker. Fail toward the plate — but only for
+  // where the inputs go bad is a flicker. Fail toward the plate - but only for
   // inputs that are genuinely unanswerable, never for an ordinary low camera.
   assert.equal(skyBackdropFactor(null, cruiseCamera), 0);
   assert.equal(skyBackdropFactor(cruiseCamera, null), 0);
@@ -569,7 +569,7 @@ import {
  * A scene the exact projector accepts: 3D mode, a canvas, and a camera with a
  * real view matrix and perspective frustum. The camera sits `altitudeM` above
  * the origin and looks north, pitched down by `pitchDeg`, with world east as
- * screen right — the oblique street-level pose where the camera-basis answer
+ * screen right - the oblique street-level pose where the camera-basis answer
  * is wrong off-centre and the exact one is not.
  */
 function obliqueScene(
@@ -672,8 +672,8 @@ test('the perspective helper is continuous through the sub-pixel band, not a 23�
   // The rotation jumped 23° → 0° between two adjacent altitudes. The exact
   // and camera-basis answers now blend across a band, the short way round.
   //
-  // The contact keeps the SAME screen position across the walk — its ground
-  // offsets scale with the altitude — so the two answers disagree by the
+  // The contact keeps the SAME screen position across the walk - its ground
+  // offsets scale with the altitude - so the two answers disagree by the
   // same twenty-odd degrees at every altitude while the separation alone
   // walks from well above the band to well below it.
   const course = 0; // northbound
@@ -712,7 +712,7 @@ test('the perspective helper is continuous through the sub-pixel band, not a 23�
     `the walk crosses the whole band (${below.length}/${inBand.length}/${above.length})`,
   );
 
-  // Off-centre and oblique, the two answers genuinely disagree — that is the
+  // Off-centre and oblique, the two answers genuinely disagree - that is the
   // divergence the exact projection exists to fix.
   const disagreement = Math.abs(
     wrappedDelta(above[0].rotation, above[0].basis),

@@ -1,15 +1,15 @@
 #!/usr/bin/env node
 /**
- * qa-traffic-preset-ab.mjs — A/B screenshot capture for preset-aware
+ * qa-traffic-preset-ab.mjs - A/B screenshot capture for preset-aware
  * traffic dot styling (owner field finding 2026-07-23: NVG/FLIR/CRT
  * post-FX crush the green/amber/red congestion coding).
  *
  * For each view, settles the live traffic layer ONCE, then for each
  * post-FX style (normal / surveillance=NVG / thermal=FLIR / retro=CRT)
  * drives the REAL StyleManager.setStyle path and captures:
- *   A — presetDots 'off' (shipped palette under that preset), and
- *   B — presetDots 'on'  (preset-aware luminance/size encoding),
- * at identical framing with the identical dot set — the kill switch
+ *   A - presetDots 'off' (shipped palette under that preset), and
+ *   B - presetDots 'on'  (preset-aware luminance/size encoding),
+ * at identical framing with the identical dot set - the kill switch
  * restyles in place, no refetch, so the pair is a true A/B.
  *
  * Views: Mumbai Western Express Hwy (live rush window for jam coverage)
@@ -40,26 +40,26 @@ const APP_URL = getOpt('--url', 'http://localhost:4390');
 const OUT_DIR = path.resolve(REPO_ROOT, getOpt('--out', 'qa-shots/preset-traffic'));
 
 // Framing note: at shallow oblique pitch the camera sits 5+ km from the
-// roads — free/slow dots (2 km depth punch) cull under the mesh and the
+// roads - free/slow dots (2 km depth punch) cull under the mesh and the
 // rest fade to ~2 px, so no styling is judgeable there. Both views keep the
 // camera close/steep enough that every bucket renders (same reason
 // qa-traffic's proof shot is near-nadir).
 const VIEWS = [
   {
     id: 'i35-close',
-    label: 'Austin I-35 jam cluster — close queue read',
+    label: 'Austin I-35 jam cluster - close queue read',
     lon: -97.7365, lat: 30.252, height: 1400, heading: 8, pitch: -65,
   },
   {
     id: 'i35-nadir',
-    label: 'Austin I-35 corridor — near-nadir city scale',
+    label: 'Austin I-35 corridor - near-nadir city scale',
     lon: -97.7365, lat: 30.25, height: 2400, heading: 8, pitch: -70,
   },
 ];
 /**
  * StyleManager preset names with owner-facing labels + expected profile.
  * `ironbow` flips the thermal palette uniform (0 = grayscale WHOT,
- * 1 = Ironbow "Predator" ramp) — round 2 requires the dots to read in both.
+ * 1 = Ironbow "Predator" ramp) - round 2 requires the dots to read in both.
  */
 const STYLES = [
   { id: 'normal', name: 'normal', label: 'Normal', profile: 'normal' },
@@ -74,7 +74,7 @@ const CHROME_EXECUTABLE_CANDIDATES = [
   // Prefer puppeteer's version-pinned Chrome-for-Testing over the system
   // Chrome: /Applications auto-updates underneath the harnesses, and its
   // software-GL behavior shifts across majors (system Chrome 150 blew the
-  // tile-gated drain budget under SwiftShader on 2026-07-30 — six
+  // tile-gated drain budget under SwiftShader on 2026-07-30 - six
   // false-negative qa-cctv-v2 runs against a healthy build). A deterministic
   // pinned browser beats the newest one for regression harnesses.
   await puppeteer.executablePath().catch(() => null),
@@ -123,7 +123,7 @@ function settleTraffic(page, view, { minCount = 100, timeoutS = 45 } = {}) {
     });
     let s = null;
     // `renderSettled` separates a real settle from a timeout returning the
-    // last (stale, possibly still-loading) sample — without it a capture of
+    // last (stale, possibly still-loading) sample - without it a capture of
     // the previous view's dots passes.
     let renderSettled = false;
     for (let i = 0; i < tS; i++) {
@@ -155,7 +155,7 @@ async function main() {
   }
   const status = await fetch(`${APP_URL}/api/tomtom/status`).then((r) => r.json()).catch(() => null);
   if (!status?.hasKey) {
-    console.error('Server has no TomTom key — the A/B needs live flow.');
+    console.error('Server has no TomTom key - the A/B needs live flow.');
     process.exitCode = 2;
     return;
   }
@@ -191,7 +191,7 @@ async function main() {
       const settled = await settleTraffic(page, view);
       // `mode` only says a TomTom key is configured; `error` says whether the
       // flow feed is actually up. A degraded run renders simulated white dots
-      // and must not pass as a live styling capture — and a wait that timed
+      // and must not pass as a live styling capture - and a wait that timed
       // out never rendered this view at all.
       if (!settled || !settled.renderSettled || settled.count === 0
           || settled.mode !== 'live' || settled.error) {
@@ -216,7 +216,7 @@ async function main() {
         await sleep(1800); // 500 ms intensity lerp + settle
 
         // Round 2 legs: dots alone (DETECT off) vs dots + bucket-colored
-        // brackets (DENSE) — presetDots stays at its default 'on'.
+        // brackets (DENSE) - presetDots stays at its default 'on'.
         for (const detect of ['off', 'on']) {
           await page.evaluate((d) => {
             window.__godsEyeView.styleManager._setDetectionMode(d === 'on' ? 'DENSE' : 'OFF');
@@ -256,7 +256,7 @@ async function main() {
             styleProfile: final.stats.styleProfile,
             coveragePct: final.stats.flowCoveragePct,
             // A rejected capture must look rejected in the manifest too, not
-            // just in the console verdict — record the gating fields.
+            // just in the console verdict - record the gating fields.
             ok,
             loading: final.stats.loading,
             error: final.stats.error || null,

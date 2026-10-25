@@ -1,5 +1,5 @@
 /**
- * qa-journey-recorder.mjs — shared support for journey QA gates (not a gate).
+ * qa-journey-recorder.mjs - shared support for journey QA gates (not a gate).
  *
  * - `createScreencast(page, dir)` records CDP `Page.startScreencast` frames
  *   (every compositor frame) with their real timestamps and builds

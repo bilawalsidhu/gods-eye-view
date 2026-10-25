@@ -135,7 +135,7 @@ export function createRendering({
 
   function ensureCityPoints(cityId, stationMap) {
     // Deferred debounce/fetch completions mutate point primitives after the
-    // camera settled — each commit needs one frame in idle mode. (perf wave 2 fix)
+    // camera settled - each commit needs one frame in idle mode. (perf wave 2 fix)
     governorRequestRender('bikeshare-points');
     const runtime = ensureCityRuntime(cityId);
 

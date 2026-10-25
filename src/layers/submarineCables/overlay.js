@@ -65,7 +65,7 @@ export function cableReferencePriority(distanceM) {
  * Build one shared-host ambient label for a cable or landing-point reference.
  * The entry stays attached to the record's mutable stem-tip Cartesian and is
  * created once per record; only `priority` is refreshed per sweep.
- * `interactive: false` follows the infrastructure precedent — the depth-tested
+ * `interactive: false` follows the infrastructure precedent - the depth-tested
  * native point/stem/line remains the click surface, and a non-interactive
  * label keeps the host's per-frame accessibility/hit sync allocation-free.
  * @param {object} record Reference record ({ id, kind, label, tip }).
@@ -108,7 +108,7 @@ export function createCableOverlayEntry(record) {
  * Bind the cable layer's host visibility and entry lifecycle to the shared
  * world overlay (same contract as the infrastructure publisher). The layer
  * supports re-init after destroy (legacy contract), so its teardown path is
- * hide() — clear the published source and go invisible while staying
+ * hide() - clear the published source and go invisible while staying
  * reusable. There is deliberately no permanent-destroy method: a hidden
  * publisher already drops late publishes until the next show().
  * @param {object} [options]
@@ -157,7 +157,7 @@ export function createCableOverlayPublisher({
  *    path re-sized stems while frames were flowing, and every re-size
  *    rebuilt the 2,629-instance batched translucent stem primitive
  *    (measured: 12 rebuilds in 6 s with the replacement primitive unready
- *    for 46/360 frames — the felt hitch). Stem lengths are therefore
+ *    for 46/360 frames - the felt hitch). Stem lengths are therefore
  *    deliberately stale mid-drag/mid-flight and settle on release;
  *    reference visibility and label winners go stale the same way, and the
  *    shared host keeps reprojecting the published positions per frame.
@@ -175,7 +175,7 @@ export function createCableOverlayPublisher({
  * camera nor sub-epsilon numeric jitter ever accumulates into a sweep, and
  * the per-frame cost of the fallback is one clock read plus one subtraction.
  * Position is the only motion channel because it is the only camera input the
- * sweep consumes — the horizon occluder, the reference distances, the stem
+ * sweep consumes - the horizon occluder, the reference distances, the stem
  * sizing, and the winner ranks all derive from `positionWC` alone, so a
  * heading-only rotation cannot change a single sweep output and deliberately
  * does not spend one.

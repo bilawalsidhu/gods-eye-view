@@ -11,11 +11,11 @@ import { VectorTile } from '@mapbox/vector-tile';
  * for matching congestion onto OpenStreetMap roads.
  *
  * Segment shape: `{coords: [[lon,lat],…], trafficLevel: 0..1, roadType: string,
- * closure: boolean}` — `trafficLevel` is TomTom's current/free-flow speed
+ * closure: boolean}` - `trafficLevel` is TomTom's current/free-flow speed
  * ratio (1 = free flow). Features with a missing/non-finite `traffic_level`
  * are skipped unless `road_closure` is true (closures decode with level 0).
  *
- * Deps: `pbf@5` (PbfReader) + `@mapbox/vector-tile@3` — both tiny and
+ * Deps: `pbf@5` (PbfReader) + `@mapbox/vector-tile@3` - both tiny and
  * tree-shakeable; decoding happens client-side so the proxy stays a dumb
  * binary cache.
  *
@@ -51,7 +51,7 @@ export function decodeFlowTile(data, z, x, y, { strict = false } = {}) {
       props.road_closure === true || props.road_closure === 'true';
     const rawLevel = props.traffic_level;
     const hasLevel = typeof rawLevel === 'number' && Number.isFinite(rawLevel);
-    // Skip features we can't color — unless closed (closures render dot-free
+    // Skip features we can't color - unless closed (closures render dot-free
     // regardless of level, so they stay useful without one).
     if (!hasLevel && !closure) continue;
     const trafficLevel = hasLevel ? Math.min(1, Math.max(0, rawLevel)) : 0;

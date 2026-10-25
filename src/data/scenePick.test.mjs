@@ -46,7 +46,7 @@ test('the guard is an Earth-sized band, not just a non-zero check', () => {
       false,
       `must reject ${describe(position)}`,
     );
-    // Each one converts WITHOUT throwing — that is exactly what makes it dangerous.
+    // Each one converts WITHOUT throwing - that is exactly what makes it dangerous.
     const carto = Cesium.Cartographic.fromCartesian(position);
     assert.ok(carto, `Cesium converts ${describe(position)} without complaint`);
     assert.ok(
@@ -123,7 +123,7 @@ test('the guard rejects each way Cesium mishandles a degenerate pick', () => {
   // This pins the REASON for the guard, so it cannot drift into cargo cult.
   // Cesium fails three different ways, and only one of them is loud.
 
-  // 1. Non-finite components throw — the uncaught DeveloperError on the demo path.
+  // 1. Non-finite components throw - the uncaught DeveloperError on the demo path.
   for (const position of [
     new Cesium.Cartesian3(Number.NaN, Number.NaN, Number.NaN),
     new Cesium.Cartesian3(Number.POSITIVE_INFINITY, 0, 0),
@@ -137,7 +137,7 @@ test('the guard rejects each way Cesium mishandles a degenerate pick', () => {
     assert.equal(isPickedWorldPosition(position), false);
   }
 
-  // 2. Exactly the center returns undefined — silent, and a TypeError at any
+  // 2. Exactly the center returns undefined - silent, and a TypeError at any
   //    call site that reads `.latitude` off the result.
   const center = new Cesium.Cartesian3(0, 0, 0);
   assert.equal(Cesium.Cartographic.fromCartesian(center), undefined);

@@ -1,4 +1,4 @@
-// The AIS degradation chip and the traffic "SIMULATED — <reason>" text read in
+// The AIS degradation chip and the traffic "SIMULATED - <reason>" text read in
 // the UI language; English keeps its wording.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -12,14 +12,14 @@ test('AIS degraded-feed reasons are localized in es', () => {
     const cases = [
       [
         { status: 'down', reconnectAttempt: 3 },
-        'feed down — retrying slowly (attempt 3)',
+        'feed down - retrying slowly (attempt 3)',
       ],
       [{ status: 'missing-key' }, 'AISSTREAM_API_KEY not set'],
       [
         { status: 'stale', silentForMs: 90000 },
-        'feed silent 90s — no AIS data',
+        'feed silent 90s - no AIS data',
       ],
-      [{ status: 'auth-failed' }, 'API key rejected — check AISSTREAM_API_KEY'],
+      [{ status: 'auth-failed' }, 'API key rejected - check AISSTREAM_API_KEY'],
       [{ status: 'connecting' }, 'connecting to feed…'],
       [{ status: 'closed' }, 'feed disconnected'],
     ];
@@ -33,7 +33,7 @@ test('AIS degraded-feed reasons are localized in es', () => {
   }
 });
 
-test('traffic "SIMULATED — <reason>" is localized in es', () => {
+test('traffic "SIMULATED - <reason>" is localized in es', () => {
   setLocale('es');
   try {
     const { trafficFeedPresentation } = createModel({
@@ -47,7 +47,7 @@ test('traffic "SIMULATED — <reason>" is localized in es', () => {
       flowError: 'TomTom daily budget reached',
     });
     const shown = translateKnown(degraded.error);
-    assert.notEqual(shown, 'SIMULATED — TomTom daily budget reached');
+    assert.notEqual(shown, 'SIMULATED - TomTom daily budget reached');
     assert.ok(!shown.startsWith('SIMULATED'), `still English: ${shown}`);
   } finally {
     setLocale('en');
@@ -58,7 +58,7 @@ test('English degraded-feed wording is unchanged', () => {
   setLocale('en');
   assert.equal(
     deriveAisFeedError({ status: 'down', reconnectAttempt: 3 }, 0),
-    'feed down — retrying slowly (attempt 3)',
+    'feed down - retrying slowly (attempt 3)',
   );
   assert.equal(
     deriveAisFeedError({ status: 'reconnecting' }, 0),
@@ -79,6 +79,6 @@ test('English degraded-feed wording is unchanged', () => {
       liveMode: true,
       flowError: 'TomTom daily budget reached',
     }).error,
-    'SIMULATED — TomTom daily budget reached',
+    'SIMULATED - TomTom daily budget reached',
   );
 });

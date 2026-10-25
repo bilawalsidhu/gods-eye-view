@@ -27,8 +27,8 @@ const EXPECTED = {
     standard: 'STANDARD applies next session',
   },
   ru: {
-    mini: 'МИНИ — со следующей сессии',
-    standard: 'СТАНДАРТ — со следующей сессии',
+    mini: 'МИНИ - со следующей сессии',
+    standard: 'СТАНДАРТ - со следующей сессии',
   },
   es: {
     mini: 'MINI desde la próxima sesión',

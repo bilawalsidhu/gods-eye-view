@@ -1,15 +1,15 @@
 import { msg } from '../i18n/index.js';
 
 /**
- * CRT Terminal — Dynamic CRT Monitor Aesthetic
+ * CRT Terminal - Dynamic CRT Monitor Aesthetic
  * Pixelation + Bayer dithering + barrel distortion + scanlines +
  * chromatic aberration + vignette + phosphor persistence/ghosting +
  * horizontal jitter + flicker + glitch lines + RGB shadow mask subpixels
  *
  * Exposed uniforms:
- *   pixelation (1-10)  — pixel grid size
- *   distortion (0-1)   — CRT barrel/lens bulge strength
- *   instability (0-1)  — jitter, flicker, glitch frequency
+ *   pixelation (1-10)  - pixel grid size
+ *   distortion (0-1)   - CRT barrel/lens bulge strength
+ *   instability (0-1)  - jitter, flicker, glitch frequency
  */
 export const retroShader = {
   name: 'retro',
@@ -85,7 +85,7 @@ export const retroShader = {
                            0.008 * instability * jitterActive * intensity;
       vec2 jitteredUV = distUV + vec2(jitterAmount, 0.0);
 
-      // ── Chromatic aberration — slight RGB channel offset ──
+      // ── Chromatic aberration - slight RGB channel offset ──
       vec2 centered = jitteredUV - 0.5;
       float caStrength = length(centered) * 0.008 * intensity;
       float r = texture(colorTexture, jitteredUV + centered * caStrength).r;
@@ -135,7 +135,7 @@ export const retroShader = {
 
       vec3 result = withSubpixels * edgeFactor;
 
-      // ── Horizontal scanlines — rolling CRT refresh ──────
+      // ── Horizontal scanlines - rolling CRT refresh ──────
       float scanY = distUV.y * dims.y;
       float scanline = sin(scanY * 1.0 + time * 2.5) * 0.5 + 0.5;
       scanline = pow(scanline, 1.5);
@@ -168,7 +168,7 @@ export const retroShader = {
       vec3 warmTint = result * vec3(1.02, 1.0, 0.94);
       result = mix(result, warmTint, 0.4 * intensity);
 
-      // ── Edge vignette (darker corners — CRT curvature) ──
+      // ── Edge vignette (darker corners - CRT curvature) ──
       vec2 vigUV = distUV * (1.0 - distUV);
       float vig = vigUV.x * vigUV.y * 20.0;
       vig = clamp(pow(vig, 0.25 + 0.15 * intensity), 0.0, 1.0);

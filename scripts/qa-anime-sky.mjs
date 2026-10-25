@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * qa-anime-sky — the anime style must leave the sky without bands.
+ * qa-anime-sky - the anime style must leave the sky without bands.
  *
  * Anime's luminance bands turn the faint Milky Way into blotches, so
  * src/ui/visualEffects.js fades the glow out with the style. Headless against

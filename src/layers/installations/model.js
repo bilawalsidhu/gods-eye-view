@@ -97,7 +97,7 @@ export function createModel({ state: layerState, services, parts, source }) {
    *    these would drop large bases whose centre sits just outside.
    *  - A way or relation WITHOUT a footprint is KEPT. Relations carry geometry on
    *    their members and ways beyond MAX_FOOTPRINT_POINTS are normalized without
-   *    one, so their true extent is unknown here — and Overpass already proved
+   *    one, so their true extent is unknown here - and Overpass already proved
    *    they intersect the queried bbox. Centre-testing them would erase exactly
    *    the biggest installations. The honest cost is slight over-inclusion,
    *    bounded by one snap cell (~5.5 km) around the viewport.

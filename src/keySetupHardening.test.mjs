@@ -173,7 +173,7 @@ test('Windows hardening isolates the verify PowerShell from a pwsh7-polluted PSM
   assert.ok(verify, 'the ACL verify powershell must be spawned');
   const modulePath = verify.options.env.PSModulePath;
   // Fail closed: the verification interpreter must never inherit pwsh7's
-  // module trees — a 7.x Microsoft.PowerShell.Security manifest cannot be
+  // module trees - a 7.x Microsoft.PowerShell.Security manifest cannot be
   // autoloaded by 5.1, and an untrusted tree must not shadow Get-Acl at all.
   assert.ok(!/Documents\\PowerShell\\Modules/i.test(modulePath), 'user pwsh7 module tree must be stripped');
   assert.ok(!/Program Files\\PowerShell\\Modules/i.test(modulePath), 'Program Files pwsh7 module tree must be stripped');

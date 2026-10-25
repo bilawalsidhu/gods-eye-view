@@ -205,7 +205,7 @@ export function createModel({ state: layerState, services, parts, source }) {
    * calibration deltas to the frozen base pose.
    *
    * Note: the old score-based quality system (`confidenceFromScore`, seeded
-   * `camera.quality.score`) is retired — panel trust signal is now the 3-state
+   * `camera.quality.score`) is retired - panel trust signal is now the 3-state
    * CAL badge (`deriveCalBadge`, driven by `calSource`/`poseSource`), not a
    * fabricated confidence score.
    *
@@ -367,7 +367,7 @@ export function createModel({ state: layerState, services, parts, source }) {
    * not permanently blocked.
    *
    * Task 5 (review correction, spec §2): a HIDDEN tileset (`show === false`,
-   * i.e. a globe stack is active) must NOT report ready — Cesium 1.138's
+   * i.e. a globe stack is active) must NOT report ready - Cesium 1.138's
    * the shared sampler can only inspect *visible* 3D tilesets, so a sample taken
    * against the hidden Google tileset would silently miss.
    *
@@ -402,7 +402,7 @@ export function createModel({ state: layerState, services, parts, source }) {
    * normal, pointing BACK along the view axis toward the mount so the textured
    * front face reads correctly from the natural viewpoint (focusCamera flies the
    * viewer to look along the camera heading). Local +X = viewer-right, +Y =
-   * frame-up, so the 16:9 texture maps upright and unmirrored. Static geometry —
+   * frame-up, so the 16:9 texture maps upright and unmirrored. Static geometry -
    * computed only on slider/save/activation, never per frame (§2b).
    * @param {Object} camera - Camera pose.
    * @param {Cesium.Cartesian3} capCenterPos - Plane center in ECEF.
@@ -437,7 +437,7 @@ export function createModel({ state: layerState, services, parts, source }) {
    */
   /**
    * The projection rAF has real work only while a camera is actively projected
-   * or a focus fade is in flight — otherwise it burned a wakeup + style poll
+   * or a focus fade is in flight - otherwise it burned a wakeup + style poll
    * every rendered frame for the whole enabled lifetime of the layer. The tick
    * self-stops when idle; every state edge that creates work re-arms it
    * (enable, setActiveCamera, showProjection, focus-target appearance).
@@ -458,12 +458,12 @@ export function createModel({ state: layerState, services, parts, source }) {
   /**
    * Card-frame pacer tick (owner finding 3): launches AT MOST one fetch per
    * tick, with cardFetchPolicy deciding whether a launch is allowed. Cold fill
-   * — any selected card still missing its FIRST frame — bursts up to 4
+   * - any selected card still missing its FIRST frame - bursts up to 4
    * in-flight fetches at 250 ms spacing so arriving in a new area populates
    * in a few seconds instead of 16-32 s; once every selected card has a first
    * frame the layer drops back to the salvaged steady-state gate (single
    * flight, one request per second). Priority: frameless cards first in ring
-   * order (nearest-first — they're what makes a card appear at all), then the
+   * order (nearest-first - they're what makes a card appear at all), then the
    * stalest refresh-overdue card by its source cadence (staticFrameRefreshMs).
    * Failures back off per camera (frameFetchDue) instead of hammering a dead
    * source, so a dead upstream never eats the burst slots.
@@ -527,7 +527,7 @@ export function createModel({ state: layerState, services, parts, source }) {
 
   /**
    * Hidden-state gate (perf wave 2): detach in-flight card frame decodes when
-   * the document hides — a hidden canvas has no reader, and image decode is
+   * the document hides - a hidden canvas has no reader, and image decode is
    * the expensive half. New fetches are gated at fetchCardFrame; the steady
    * pacer refills naturally on return. Owned by the initialized layer and detached on destruction.
    */

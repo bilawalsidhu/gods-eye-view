@@ -20,7 +20,7 @@ export function createSelection({ state, services, parts }) {
 
   /**
    * The card's anchor: the selected marker's CURRENT position, read by the
-   * overlay host on every paint. A getter, not a clone — the host accepts one
+   * overlay host on every paint. A getter, not a clone - the host accepts one
    * (the tracked-aircraft readout uses the same), so the anchor moves with the
    * sprite at frame rate, through poll arrivals, settling, a late floor and a
    * reset alike, with no per-frame work here. Null when there is nothing to

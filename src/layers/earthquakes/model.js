@@ -73,7 +73,7 @@ export function selectEarthquakeOverlayCohort(
 
 /**
  * Map one earthquake's raw plain values to a JSON-safe analyst record
- * (analyst query engine seam). Pure — no Cesium types. Missing/unknown
+ * (analyst query engine seam). Pure - no Cesium types. Missing/unknown
  * fields are null, never NaN/undefined. Falls back to an index-based id
  * when the USGS event id is absent.
  * @param {Object|null|undefined} raw - Plain values pulled off the entity:

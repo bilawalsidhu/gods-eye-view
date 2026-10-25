@@ -5,7 +5,7 @@
  * loaded once per session and memoized. Memoizing the *promise* is the cheap
  * way to do that, but it silently turns one transient failure into a
  * session-long outage: every later call re-returns the same rejection, and
- * the callers — which `.catch(() => null)` — report it to the user as "no
+ * the callers - which `.catch(() => null)` - report it to the user as "no
  * such region" rather than "the data pack didn't load".
  *
  * This keeps the memoization and drops it on rejection, so a later caller

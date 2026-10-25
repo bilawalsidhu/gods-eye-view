@@ -50,7 +50,7 @@ test('a failed load is not cached, but retries wait out a cooldown', async () =>
   assert.equal(calls, 1);
 
   // Inside the cooldown a looping caller replays the recorded reason and
-  // never touches the loader — one broken pack must not become a hot loop.
+  // never touches the loader - one broken pack must not become a hot loop.
   clock.advance(RETRY_COOLDOWN_MS - 1);
   await assert.rejects(load(), /pack unavailable/);
   await assert.rejects(load(), /pack unavailable/);
@@ -102,7 +102,7 @@ test('consecutive failures back off, capped at the ceiling', async () => {
 });
 
 test('a falsy rejection still counts as a failure and still gets a cooldown', async () => {
-  // The cooldown gate keys off an explicit flag, not the rejection value —
+  // The cooldown gate keys off an explicit flag, not the rejection value -
   // a loader rejecting with null/0/'' must not slip past it.
   for (const reason of [null, undefined, 0, '']) {
     const clock = fakeClock();

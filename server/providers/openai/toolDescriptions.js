@@ -81,7 +81,7 @@ export const ACTION_DESCRIPTIONS = {
   },
   zoom_to_globe: {
     description:
-      'Pull the camera out to an ABSOLUTE full-Earth globe view (~18,000 km altitude, the whole planet in frame), keeping the current region centered. Use for "globe view", "whole earth", "see the planet", "zoom all the way out". Never use adjust_camera_zoom for these — its relative steps cannot reach the globe.',
+      'Pull the camera out to an ABSOLUTE full-Earth globe view (~18,000 km altitude, the whole planet in frame), keeping the current region centered. Use for "globe view", "whole earth", "see the planet", "zoom all the way out". Never use adjust_camera_zoom for these - its relative steps cannot reach the globe.',
     $position: 1,
   },
   set_layer_visibility: {
@@ -250,7 +250,7 @@ export const ACTION_DESCRIPTIONS = {
       properties: {
         stack: {
           description:
-            'photoreal = Google 3D. Use bing-aerial only when the user explicitly says "Bing aerial" — "satellite(s)" never means a basemap; only the explicit phrase "Esri" / "Esri imagery" means esri-imagery.',
+            'photoreal = Google 3D. Use bing-aerial only when the user explicitly says "Bing aerial" - "satellite(s)" never means a basemap; only the explicit phrase "Esri" / "Esri imagery" means esri-imagery.',
           $position: 2,
         },
       },
@@ -314,7 +314,7 @@ export const ACTION_DESCRIPTIONS = {
   },
   control_radio: {
     description:
-      'Control Internet Radio playback without moving the map. Use select whenever the request includes a station category, name, country, coordinates, or nearby place—even when the user says play. Use play only for an unqualified "turn on/start the radio" request so the current or nearest station begins. Enable only reveals the Radio layer/markers without audio. Also supports disable, resume, pause, stop, next/previous, volume, and status.',
+      'Control Internet Radio playback without moving the map. Use select whenever the request includes a station category, name, country, coordinates, or nearby place-even when the user says play. Use play only for an unqualified "turn on/start the radio" request so the current or nearest station begins. Enable only reveals the Radio layer/markers without audio. Also supports disable, resume, pause, stop, next/previous, volume, and status.',
     $position: 1,
     parameters: {
       properties: {
@@ -493,7 +493,7 @@ export const ACTION_DESCRIPTIONS = {
         },
         flyTo: {
           description:
-            'Also move the camera to frame the first annotation. Default false — leave false if the user is already looking at the spot.',
+            'Also move the camera to frame the first annotation. Default false - leave false if the user is already looking at the spot.',
           $position: 1,
         },
         persist: {
@@ -506,12 +506,12 @@ export const ACTION_DESCRIPTIONS = {
   },
   clear_annotations: {
     description:
-      'Erase ALL map annotations previously drawn with annotate_map. Call this ONLY when the user EXPLICITLY asks to clear or reset the map. Annotations accumulate and persist across navigation and topic changes by design — never clear on your own initiative.',
+      'Erase ALL map annotations previously drawn with annotate_map. Call this ONLY when the user EXPLICITLY asks to clear or reset the map. Annotations accumulate and persist across navigation and topic changes by design - never clear on your own initiative.',
     $position: 1,
   },
   move_camera: {
     description:
-      'Direct the camera like a drone operator: orbit the current view target, pan, tilt, or rotate — one bounded nudge (mode=once) or continuous motion until stopped (mode=continuous). Continuous motion also stops on any manual camera input or when a navigation tool runs. Say the RESULTING state when confirming ("Orbiting slowly"). Globe rotation (rotate_globe) spins Earth right continuously by default; explicit direction, mode and speed take precedence. It checks fit and may refuse.',
+      'Direct the camera like a drone operator: orbit the current view target, pan, tilt, or rotate - one bounded nudge (mode=once) or continuous motion until stopped (mode=continuous). Continuous motion also stops on any manual camera input or when a navigation tool runs. Say the RESULTING state when confirming ("Orbiting slowly"). Globe rotation (rotate_globe) spins Earth right continuously by default; explicit direction, mode and speed take precedence. It checks fit and may refuse.',
     $position: 1,
     parameters: {
       properties: {
@@ -530,7 +530,7 @@ export const ACTION_DESCRIPTIONS = {
   },
   fly_route: {
     description:
-      'Cinematic dolly along an EXISTING route annotation (drawn earlier with annotate_map type=route) — flies the street-following path from start to end. Omit label for the newest route. If no route is drawn, this fails with guidance: draw the route first.',
+      'Cinematic dolly along an EXISTING route annotation (drawn earlier with annotate_map type=route) - flies the street-following path from start to end. Omit label for the newest route. If no route is drawn, this fails with guidance: draw the route first.',
     $position: 1,
     parameters: {
       properties: {
@@ -543,7 +543,7 @@ export const ACTION_DESCRIPTIONS = {
   },
   analyst_query: {
     description:
-      'Counts, lists, superlatives and attribute filters over records loaded by ENABLED layers — "how many flights over Texas", "biggest fire near LA", "ships headed to Oakland", "next rocket launch". A requested list or ranking requires this tool even after set_context_mode returned a Contacts count; that count alone has no requested items. complete:false means the count is a floor ("at least") and rankings cover the records examined; partial names unanswered layers. Items carry lat/lon for a follow-up fly_to_location. ok:false codes: LAYER_OFF (offer to enable), NOT_READY (loading), FOLLOW_UP_MISMATCH (ask again without followUp), UNKNOWN_FIELD/UNKNOWN_SCOPE/BAD_VALUE (retry with the allowed values). Aircraft emergency fields describe broadcasts, not confirmed incidents: narrate emergencyBroadcast with emergencySource. emergencyKind values are general, unlawful, nordo, downed, minfuel and lifeguard; GEV treats the last two as priorities (emergency:false). lastContactAtMs says when the transponder was last heard, not when the status arrived.',
+      'Counts, lists, superlatives and attribute filters over records loaded by ENABLED layers - "how many flights over Texas", "biggest fire near LA", "ships headed to Oakland", "next rocket launch". A requested list or ranking requires this tool even after set_context_mode returned a Contacts count; that count alone has no requested items. complete:false means the count is a floor ("at least") and rankings cover the records examined; partial names unanswered layers. Items carry lat/lon for a follow-up fly_to_location. ok:false codes: LAYER_OFF (offer to enable), NOT_READY (loading), FOLLOW_UP_MISMATCH (ask again without followUp), UNKNOWN_FIELD/UNKNOWN_SCOPE/BAD_VALUE (retry with the allowed values). Aircraft emergency fields describe broadcasts, not confirmed incidents: narrate emergencyBroadcast with emergencySource. emergencyKind values are general, unlawful, nordo, downed, minfuel and lifeguard; GEV treats the last two as priorities (emergency:false). lastContactAtMs says when the transponder was last heard, not when the status arrived.',
     $position: 1,
     parameters: {
       properties: {
@@ -575,7 +575,7 @@ export const ACTION_DESCRIPTIONS = {
           },
         },
         filters: {
-          description: `ANDed; values keep their type (numbers, true/false). Altitude is meters (40,000 ft = 12192). Time fields take ISO; ageHours = hours ago. Every layer has id, lat, lon. Fields — ${voiceQueryFieldHint()}.`,
+          description: `ANDed; values keep their type (numbers, true/false). Altitude is meters (40,000 ft = 12192). Time fields take ISO; ageHours = hours ago. Every layer has id, lat, lon. Fields - ${voiceQueryFieldHint()}.`,
           $position: 1,
         },
         sortBy: {

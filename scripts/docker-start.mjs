@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Docker launcher — the container's entry point (see Dockerfile).
+ * Docker launcher - the container's entry point (see Dockerfile).
  *
  * `compose.yaml` publishes the port on the host's loopback, but Docker still
  * delivers the host's own browser to the container FROM the container
@@ -24,7 +24,7 @@ const ROUTE_TABLE = '/proc/net/route';
  * Extract the IPv4 default gateway from Linux `/proc/net/route` text. The
  * addresses there are little-endian hex and only the default route (a
  * destination of 00000000 on an interface flagged up) names a gateway.
- * Returns null when there is none — the `--network none` case, which must
+ * Returns null when there is none - the `--network none` case, which must
  * never fabricate an address.
  * @param {string} text Raw routing-table contents.
  * @returns {string|null} Dotted-quad gateway, or null.

@@ -4,7 +4,7 @@ import { ISS_NORAD } from './policy.js';
 
 /**
  * Map one CelesTrak catalog satellite to a JSON-safe analyst record
- * (analyst query engine seam). Pure — no Cesium types. Missing/unknown
+ * (analyst query engine seam). Pure - no Cesium types. Missing/unknown
  * fields are null, never NaN/undefined. `id` is the display name (same
  * convention as vessels); `noradId` is the track_entity key.
  * @param {Object|null|undefined} raw - {noradId, name, group, lat, lon, altitudeM, speedMps}.

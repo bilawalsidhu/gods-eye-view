@@ -251,7 +251,7 @@ export function createViewport({ state: layerState, services, parts, source }) {
     }, CAMERA_DEBOUNCE_MS);
   }
 
-  /** Camera change event handler — triggers a debounced proximity check. */
+  /** Camera change event handler - triggers a debounced proximity check. */
 
   function onCameraChanged() {
     if (!layerState._enabled) return;

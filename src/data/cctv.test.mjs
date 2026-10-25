@@ -1,8 +1,8 @@
-// src/data/cctv.test.mjs — CCTV v2 pure frustum geometry (computeFrustumGeometry).
+// src/data/cctv.test.mjs - CCTV v2 pure frustum geometry (computeFrustumGeometry).
 //
 // Locks the §2a math of docs/plans/2026-07-03-cctv-v2-design.md:
 //   - the far-cap (monitor plane) corners lie ON the plane through capCenter
-//     perpendicular to the frustum view axis (ε < 0.5 m) — this is the geometric
+//     perpendicular to the frustum view axis (ε < 0.5 m) - this is the geometric
 //     invariant that welds the wireframe corner rays to the plane entity;
 //   - vFov = 2·atan(tan(hFov/2) / (16/9)) (same 16:9 derivation the projection
 //     frame used);
@@ -163,7 +163,7 @@ const UNCLAMPED_CAMERA = {
 const UNCLAMPED_GROUND = 0;
 
 // Austin's fabricated prior personality (design §1a): pitch -24° at 210 m puts
-// the unclamped cap ~85 m below the mount — underground vs groundAlt 150.
+// the unclamped cap ~85 m below the mount - underground vs groundAlt 150.
 const AUSTIN_FABRICATED_CAMERA = {
   lat: 30.2672,
   lon: -97.7431,
@@ -514,7 +514,7 @@ test('cap rectangle spans 2·halfW × 2·halfH (ε < 0.5 m)', () => {
     Math.abs(height - 2 * g.halfH) < 0.5,
     `left height ${height} vs ${2 * g.halfH}`,
   );
-  // Bottom edge too — the rectangle is a rectangle, not a trapezoid.
+  // Bottom edge too - the rectangle is a rectangle, not a trapezoid.
   const widthBottom = mag(sub(enu(m, g.corners.br), enu(m, g.corners.bl)));
   assert.ok(
     Math.abs(widthBottom - 2 * g.halfW) < 0.5,
@@ -601,7 +601,7 @@ test('measured ground under a far support raises the plane further, still rigidl
 
 test('clamped pose keeps corner/plane coincidence and the rigid 2·halfW × 2·halfH span', () => {
   // The wireframe corner rays must terminate exactly on the monitor plane's
-  // corners AT THE DEFAULT AUSTIN POSE — this is the case that diverged by
+  // corners AT THE DEFAULT AUSTIN POSE - this is the case that diverged by
   // ~47.5 m under per-corner clamping (owner field test 2026-07-04).
   const g = computeFrustumGeometry(AUSTIN_FABRICATED_CAMERA, AUSTIN_GROUND);
   const d = viewDir(41, -24);
@@ -1488,7 +1488,7 @@ test('heading wrap: heading 350° produces a symmetric cap (left/right corners e
 });
 
 // ---------------------------------------------------------------------------
-// Task 5 — calibration v2 store + CAL badge (design §3b/§3c as amended by the
+// Task 5 - calibration v2 store + CAL badge (design §3b/§3c as amended by the
 // LOCKED owner decisions §9.2/§9.3: wipe-clean v2 store, panel-only badge).
 // ---------------------------------------------------------------------------
 
@@ -1566,7 +1566,7 @@ test('calibration v2: removing an entry (reset) then re-writing produces an empt
   writeCalibrationStoreV2(entry, storage);
   assert.ok(readCalibrationStoreV2(storage).has('sf-market-5th'));
 
-  // Reset removes the entry from the map, then persists the now-empty map —
+  // Reset removes the entry from the map, then persists the now-empty map -
   // this is the shape setParams({calibration:{reset:true}}) drives.
   entry.delete('sf-market-5th');
   writeCalibrationStoreV2(entry, storage);
@@ -1618,19 +1618,19 @@ test('calibration v2: a corrupt v1 key never leaks into the v2 store (v1 is dead
       },
     }),
   });
-  // v2 key is untouched/empty — v1's presence must have zero effect.
+  // v2 key is untouched/empty - v1's presence must have zero effect.
   const restored = readCalibrationStoreV2(storage);
   assert.equal(
     restored.size,
     0,
-    'v2 store must start empty — no legacy import (owner decision #3, §9.3)',
+    'v2 store must start empty - no legacy import (owner decision #3, §9.3)',
   );
   assert.ok(!restored.has('austin-42'));
 });
 
 test('deriveCalBadge: CALIBRATED when the camera carries a manual v2 calibration', () => {
   const camera = { calSource: 'manual', poseSource: 'curated' };
-  // Manual calibration wins over curated — a human explicitly tuned this pose.
+  // Manual calibration wins over curated - a human explicitly tuned this pose.
   assert.equal(deriveCalBadge(camera), 'calibrated');
 });
 

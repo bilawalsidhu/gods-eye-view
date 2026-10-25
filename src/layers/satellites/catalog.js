@@ -21,7 +21,7 @@ export function createCatalog({ state: layerState, services, parts, source }) {
    * Re-propagate a small per-frame slice of the dense extras (round-robin).
    * Budget: the full dense set completes one pass every ~DENSE_REFRESH_FRAMES
    * frames (~5s at 60fps ≈ 1/5 of the core cadence), so per-frame cost stays
-   * ~35 propagations (~0.1 ms) even with 10K+ Starlink sats — spreading the
+   * ~35 propagations (~0.1 ms) even with 10K+ Starlink sats - spreading the
    * work per frame avoids the once-per-second spike a tick-sized chunk
    * (~2K props ≈ 4ms) would cause.
    */
@@ -147,7 +147,7 @@ export function createCatalog({ state: layerState, services, parts, source }) {
         loadSignal.throwIfAborted();
       }
 
-      // A 200 that yields nothing usable is still a failed load — an empty body,
+      // A 200 that yields nothing usable is still a failed load - an empty body,
       // an HTML error page the proxy passed through, or a feed of TLEs the core
       // catalog already owns. Treating it as success is the same lie as treating
       // a 502 as success, just through a different door.
@@ -169,7 +169,7 @@ export function createCatalog({ state: layerState, services, parts, source }) {
         `[Data:Satellites] Dense catalog: +${added} ${DENSE_GROUP_PATH} (points only)`,
       );
       // The panel would otherwise keep the pre-load count and legend until the
-      // next natural refresh — up to the 5-minute catalog interval.
+      // next natural refresh - up to the 5-minute catalog interval.
       parts.controls._notifyRowControls();
       parts.tracking._applyPendingTrackingRestore();
       return { status: 'ready', added };
@@ -192,13 +192,13 @@ export function createCatalog({ state: layerState, services, parts, source }) {
   /**
    * Settle a failed dense load: drop any partial chunk, return the layer to the
    * core catalog, and leave the reason on the chip. Reverting the param is the
-   * point — a chip that reads ACTIVE over an empty sky is a lie.
+   * point - a chip that reads ACTIVE over an empty sky is a lie.
    * @param {number} token The load token that failed.
    * @param {string} reason Short operator-facing cause.
    */
 
   function _denseLoadFailed(token, reason) {
-    // A newer load (or a mode flip) already owns the state — say nothing.
+    // A newer load (or a mode flip) already owns the state - say nothing.
     if (token !== layerState._denseLoadToken) return;
     layerState._params.catalog = 'core';
     _removeDenseCatalog();

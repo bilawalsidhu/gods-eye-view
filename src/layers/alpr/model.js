@@ -3,7 +3,7 @@ import { EARTH_MEAN_RADIUS_M } from './policy.js';
 export * from './records.js';
 
 /**
- * Great-circle destination point — used only to draw the short
+ * Great-circle destination point - used only to draw the short
  * facing-direction line when a node carries `camera:direction`/`direction`.
  * @param {number} latDeg @param {number} lonDeg
  * @param {number} bearingDeg Compass bearing, degrees clockwise from north.

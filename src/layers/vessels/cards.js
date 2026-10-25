@@ -45,9 +45,9 @@ export function createCards({
   }
 
   /**
-   * Card model for an ambient (decluttered-in) vessel — name title plus one
+   * Card model for an ambient (decluttered-in) vessel - name title plus one
    * compact type/speed/heading detail line, anchored at the record's current
-   * rendered position (height-datum caveat: no datum work here). Pure —
+   * rendered position (height-datum caveat: no datum work here). Pure -
    * exported for unit tests.
    * @param {Object} record - Vessel record.
    * @returns {Object} vesselLabels entry.
@@ -77,9 +77,9 @@ export function createCards({
   }
 
   /**
-   * Card model for the click-selected vessel — the full-detail card, drawn last
+   * Card model for the click-selected vessel - the full-detail card, drawn last
    * (on top) and never distance-faded by the overlay. Pinned-but-vanished
-   * vessels carry a STALE marker (mirrors the HUD readout). Pure — exported
+   * vessels carry a STALE marker (mirrors the HUD readout). Pure - exported
    * for unit tests.
    * @param {Object} record - Selected vessel record.
    * @returns {Object} vesselLabels entry.

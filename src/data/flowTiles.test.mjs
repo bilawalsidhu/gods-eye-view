@@ -58,7 +58,7 @@ test('fixture decode: segment shape is {coords, trafficLevel, roadType, closure}
     assert.equal(typeof s.roadType, 'string');
     assert.equal(typeof s.closure, 'boolean');
   }
-  // The fixture carries real closures — closure decoding is exercised, not vacuous.
+  // The fixture carries real closures - closure decoding is exercised, not vacuous.
   assert.ok(segments.some((s) => s.closure === true), 'expected at least one closure in fixture');
 });
 

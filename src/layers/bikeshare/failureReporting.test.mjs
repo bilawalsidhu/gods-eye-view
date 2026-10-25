@@ -1,9 +1,9 @@
-// BIKESHARE FAILURE REPORTING — one dead city is not a dead layer.
+// BIKESHARE FAILURE REPORTING - one dead city is not a dead layer.
 //
 // City feeds are fetched independently, but the layer reported failure through
 // a single flag. A city whose operator had retired its feed set that flag on
 // every proximity check, and the only code that cleared it ran on a successful
-// *activation* — which an already-loaded city never repeats. The result was a
+// *activation* - which an already-loaded city never repeats. The result was a
 // permanent LOAD FAILED over a map drawing a thousand live stations.
 //
 // These cases pin the rule that replaced it: the layer reports failure only

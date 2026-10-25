@@ -6,17 +6,17 @@
  *
  *   1. Dedicated direction fields (Caltrans `location.direction`, Austin
  *      `travel_direction`/`facing`, …) hold a real facing value. There, bare
- *      cardinal words ("West", "North") ARE the answer — pass `allowBare=true`.
+ *      cardinal words ("West", "North") ARE the answer - pass `allowBare=true`.
  *
  *   2. Free-form name/description text ("5TH ST / WEST AVE", "N LAMAR BLVD") is
  *      full of STREET names that merely contain a cardinal word. Reading a bare
  *      "West" there as a facing direction mis-orients the camera with false
- *      confidence (59 of ~1000 Austin cameras hit this — owner adversarial review
- *      2026-07-04). There, only explicit travel forms ("WESTBOUND"/"WB") count —
+ *      confidence (59 of ~1000 Austin cameras hit this - owner adversarial review
+ *      2026-07-04). There, only explicit travel forms ("WESTBOUND"/"WB") count -
  *      leave `allowBare=false` (the default).
  *
- * Recognizes full travel words ("NORTHBOUND"), abbreviations ("NB"), and —
- * only when `allowBare` is set — bare cardinals ("NORTH").
+ * Recognizes full travel words ("NORTHBOUND"), abbreviations ("NB"), and -
+ * only when `allowBare` is set - bare cardinals ("NORTH").
  *
  * @param {string} value - Direction text (case-insensitive).
  * @param {boolean} [allowBare=false] - Match bare cardinal words. Use ONLY for

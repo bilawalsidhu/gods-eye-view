@@ -1,10 +1,10 @@
-// CITY PRESETS — the destination table, checked as data.
+// CITY PRESETS - the destination table, checked as data.
 //
 // CITY_POIS is written by hand and read directly by the camera, so a malformed
 // row is not a crash: the pill lights up, the camera flies, and it frames the
-// wrong thing. These checks are structural. They say a row is well formed —
+// wrong thing. These checks are structural. They say a row is well formed -
 // present keys, finite numbers, coordinates on Earth, a camera angle a camera
-// can hold, a landmark inside the rectangle its own destination opens on — and
+// can hold, a landmark inside the rectangle its own destination opens on - and
 // say nothing about whether a destination is framed well.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';

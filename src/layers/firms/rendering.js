@@ -79,7 +79,7 @@ export function createRendering({
         const latCell = Math.floor(fire.lat / gridDegrees) * gridDegrees;
         const lonCell = Math.floor(fire.lon / gridDegrees) * gridDegrees;
         const key = `${latCell.toFixed(3)}:${lonCell.toFixed(3)}`;
-        // confidence is normalized 0..1 — weight ×4 preserves the old 0..100×0.04 scale.
+        // confidence is normalized 0..1 - weight ×4 preserves the old 0..100×0.04 scale.
         const intensity = Math.max(
           1,
           fire.frp * 0.18 + fire.confidence * 4 + fire.brightness * 0.01,
@@ -120,7 +120,7 @@ export function createRendering({
 
   /**
    * Render aggregated heat cells (global/regional bands) as ground-clamped
-   * rectangles. Cell labels do NOT live on the entities anymore — they go
+   * rectangles. Cell labels do NOT live on the entities anymore - they go
    * through the same unclamped, screen-space-decluttered label pipeline as
    * detections (see {@link rebuildAmbientLabels}).
    * @param {Array<Object>} cells - Aggregated cells, heat-sorted descending.
@@ -193,7 +193,7 @@ export function createRendering({
    * per point; instead, the CLOSE band (where terrain parallax is actually
    * visible) batch-warms the shared cached DEM floor for its rendered
    * subset and re-renders once floors land, so anchors sit on the terrain
-   * (firePosition). The local band keeps cold anchors at height 0 — at
+   * (firePosition). The local band keeps cold anchors at height 0 - at
    * ≥750 km camera height the divergence is invisible and warming a
    * continent-wide viewport would waste the DEM proxy.
    * Labels are not built here; candidates feed {@link rebuildAmbientLabels}.
@@ -211,7 +211,7 @@ export function createRendering({
 
     let candidates;
     if (bounds) {
-      // Walk the pre-sorted FRP index and early-exit at the cap — the old
+      // Walk the pre-sorted FRP index and early-exit at the cap - the old
       // collect-then-sort touched and sorted every in-view detection per
       // rebuild (tens of thousands mid-zoom; field-test round 1 chug).
       candidates = [];
@@ -269,7 +269,7 @@ export function createRendering({
     if (lod.id === 'close') {
       // Batched (chunked ≤200, sequential, session-cached) DEM warm for the
       // rendered subset; fires are static so each coarse cell resolves once
-      // ever. Re-render ONLY when a floor actually landed — a failed resolve
+      // ever. Re-render ONLY when a floor actually landed - a failed resolve
       // reports false, so this chain terminates instead of looping against a
       // down proxy (the next camera-driven rebuild retries).
       warmFireAnchorFloors(candidates).then((warmed) => {
@@ -329,8 +329,8 @@ export function createRendering({
   /**
    * Hide detection sprites that sit beyond the ellipsoid horizon (see
    * {@link applyHorizonCull}). Runs on the cadences that already exist in this
-   * layer — the throttled LOD preRender watcher (camera-moved only), camera
-   * moveEnd, and each detection rebuild — never as a new per-frame pass.
+   * layer - the throttled LOD preRender watcher (camera-moved only), camera
+   * moveEnd, and each detection rebuild - never as a new per-frame pass.
    * No-ops in the `cells` bands, where the collection is empty.
    */
 

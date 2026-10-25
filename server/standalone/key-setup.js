@@ -15,7 +15,7 @@ import { randomUUID } from 'node:crypto';
 import { hardenCredentialFile } from './key-setup-hardening.mjs';
 
 /**
- * Which launcher started this process, captured at MODULE LOAD — before the
+ * Which launcher started this process, captured at MODULE LOAD - before the
  * config factory's loadEnv() copies dotenv files into process.env. Provider
  * Settings uses this to decide which credential store it owns, so it must
  * reflect the real launcher (scripts/pinokio-start.mjs sets it) and never a
@@ -54,7 +54,7 @@ const DEV_FRESH_EXTERNAL_KEYS_AT_BOOT = new Set(
 );
 
 /**
- * In-app key setup ("POWER UP" panel) — dev-server only.
+ * In-app key setup ("POWER UP" panel) - dev-server only.
  *
  * GET  /api/setup/status → which keys are configured, as presence plus a
  *   source classification. Never a value or suffix. The panel renders itself entirely from
@@ -62,7 +62,7 @@ const DEV_FRESH_EXTERNAL_KEYS_AT_BOOT = new Set(
  * POST /api/setup/keys → validate {ENV_VAR: value} pairs and upsert them into
  *   the repo-root .env (created if absent), set process.env live, then restart
  *   the dev server so the client-exposed defines re-inject and the page
- *   reloads itself. Pasting a key in the app IS the whole setup — no
+ *   reloads itself. Pasting a key in the app IS the whole setup - no
  *   hand-edited env files.
  *
  * Loopback-only on purpose: with HOST=0.0.0.0 the app can be shared on a LAN,
@@ -88,7 +88,7 @@ function keySetupEndpoint({ sourceRoot = defaultSourceRoot } = {}) {
   // writes the repo-root .env that Vite's loadEnv reads. The panel never
   // touches a store some other workflow owns.
   // The launcher marker is read from the BOOT environment captured before
-  // Vite's loadEnv merges dotenv files into process.env — otherwise a stray
+  // Vite's loadEnv merges dotenv files into process.env - otherwise a stray
   // `GEV_LAUNCHER=pinokio` line in someone's .env would silently redirect a
   // plain `npm run dev` to write the Pinokio store it never loaded.
   const pinokioManaged = () => LAUNCHER_AT_BOOT === 'pinokio';
@@ -100,8 +100,8 @@ function keySetupEndpoint({ sourceRoot = defaultSourceRoot } = {}) {
       ...(pinokioManaged() ? ['pinokio', 'ENVIRONMENT'] : ['.env']),
     );
   // Read the store, distinguishing "no store yet" from "cannot read this
-  // store". Only ENOENT means empty. Every other failure — a permission error,
-  // an I/O fault, an undecodable file — must ABORT the save: upserting into a
+  // store". Only ENOENT means empty. Every other failure - a permission error,
+  // an I/O fault, an undecodable file - must ABORT the save: upserting into a
   // wrongly-empty string and atomically replacing the file would destroy every
   // other provider key the user had configured.
   const readStore = () => {
@@ -122,7 +122,7 @@ function keySetupEndpoint({ sourceRoot = defaultSourceRoot } = {}) {
       throw unreadable;
     }
   };
-  // Status must never fail because the store is unreadable — it reports the
+  // Status must never fail because the store is unreadable - it reports the
   // LIVE environment, and an unreadable store only costs file/external
   // attribution. Persistence uses readStore() directly and refuses instead.
   const storeValues = () => {
@@ -133,7 +133,7 @@ function keySetupEndpoint({ sourceRoot = defaultSourceRoot } = {}) {
     }
   };
   // The gate itself is pure and unit-tested (admitKeySetupRequest in
-  // src/keySetupCore.mjs) — this just feeds it the request.
+  // src/keySetupCore.mjs) - this just feeds it the request.
   // `code`/`params` pick the panel's sentence (src/keySetup.js); `error` is for logs.
   const refusal = ({ error, code, params }) => ({ error, code, params });
   const admit = (req) =>
@@ -168,7 +168,7 @@ function keySetupEndpoint({ sourceRoot = defaultSourceRoot } = {}) {
     for (const key of status.keys) {
       // 'file' = this panel's own store holds exactly this value (replace/remove
       // offered); 'external' = supplied by env/Keychain/another workflow
-      // (read-only — the panel must never rewrite or delete it).
+      // (read-only - the panel must never rewrite or delete it).
       key.managed = key.set
         ? key.envVars.some((name) => isExternallyManaged(name, inStore))
           ? 'external'
@@ -191,7 +191,7 @@ function keySetupEndpoint({ sourceRoot = defaultSourceRoot } = {}) {
         );
       }
     } catch (error) {
-      if (error.code !== 'ENOENT') throw error; // absent is fine — first save.
+      if (error.code !== 'ENOENT') throw error; // absent is fine - first save.
     }
     // Random suffix, not the pid: a stale temp from a failed rename would
     // otherwise make every later save in this process fail EEXIST forever.
@@ -204,11 +204,11 @@ function keySetupEndpoint({ sourceRoot = defaultSourceRoot } = {}) {
     try {
       // Restrict the EMPTY temp file BEFORE the secret touches it. On Windows
       // a fresh file inherits the directory's ACL (world-readable under a
-      // C:-rooted Pinokio home) and the 0600 open mode is a no-op — and NTFS
+      // C:-rooted Pinokio home) and the 0600 open mode is a no-op - and NTFS
       // renames carry the file object's ACL with it, so hardening the temp IS
       // hardening the final file. Ordering this before the write means a
       // hardening failure aborts with the previous store fully intact and the
-      // secret never on disk unprotected — no rollback path to get wrong.
+      // secret never on disk unprotected - no rollback path to get wrong.
       if (!hardenCredentialFile(tmp)) {
         const error = new Error(
           'could not restrict the credential file to your account; nothing was saved',
@@ -242,7 +242,7 @@ function keySetupEndpoint({ sourceRoot = defaultSourceRoot } = {}) {
     // serve AND not preview: `vite preview` resolves with command 'serve' too,
     // so a bare apply:'serve' would still configure under preview. The endpoints
     // only install via configureServer (never configurePreviewServer), so they
-    // are absent from preview today — but pinning apply here makes that a
+    // are absent from preview today - but pinning apply here makes that a
     // guarantee rather than an accident of which hook a future edit uses.
     apply: (_config, { command, isPreview }) =>
       command === 'serve' && !isPreview,
@@ -295,7 +295,7 @@ function keySetupEndpoint({ sourceRoot = defaultSourceRoot } = {}) {
           if (!verdict.ok) return respond(res, 400, refusal(verdict));
           // Neither a replace NOR a removal may touch an externally-supplied
           // credential (shell env, Keychain, another workflow). This backs the
-          // UI's read-only "configured externally" state with a real contract —
+          // UI's read-only "configured externally" state with a real contract -
           // and it must guard replace too, not just remove: a clickjacked or
           // scripted same-origin POST could otherwise overwrite the live value.
           const inStore = storeValues();
@@ -311,7 +311,7 @@ function keySetupEndpoint({ sourceRoot = defaultSourceRoot } = {}) {
           try {
             persistStore(upsertDotenvValues(readStore(), verdict.updates));
           } catch (error) {
-            // The hardening failure carries its own honest, path-free message —
+            // The hardening failure carries its own honest, path-free message -
             // "saved world-readable" must never be reported as a generic write
             // error. Everything else returns a fixed message (a raw filesystem
             // error can carry an absolute path; that stays in the server log).

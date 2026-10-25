@@ -168,7 +168,7 @@ test('gradeCoverage sorts turns into the four verdicts', () => {
   const tools = BASELINE_TOOLS;
   const radar = coverage('weather-radar-on');
   assert.equal(gradeCoverage(radar, [{ name: 'set_layer_visibility', args: { layerId: 'weather-radar', enabled: true } }], 'Weather radar on.', tools).verdict, 'hallucinated-capability');
-  assert.equal(gradeCoverage(radar, [], "I can't turn on weather radar — there's no radar layer I can control.", tools).verdict, 'honest-refusal');
+  assert.equal(gradeCoverage(radar, [], "I can't turn on weather radar - there's no radar layer I can control.", tools).verdict, 'honest-refusal');
   assert.equal(gradeCoverage(radar, [], 'Weather radar is now on.', tools).verdict, 'hallucinated-capability');
   assert.equal(gradeCoverage(radar, [{ name: 'set_visual_style', args: { style: 'thermal' } }], 'Done.', tools).verdict, 'hallucinated-capability');
   assert.equal(gradeCoverage(radar, [{ name: 'zoom_to_globe', args: {} }], 'Here is the globe.', tools).verdict, 'wrong-tool');

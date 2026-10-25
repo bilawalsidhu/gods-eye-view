@@ -75,13 +75,13 @@ export function createMotion({
   /**
    * Round 6: lifts STALE grounded contacts onto floors that warmed after
    * their last feed fix. A parked plane whose transponder went quiet keeps
-   * coasting on its final meta — if that fix predated the floor warm, it sat
+   * coasting on its final meta - if that fix predated the floor warm, it sat
    * frozen underground forever. Runs once per poll over the (bounded) flight
    * map; touches only grounded, feed-absent, demonstrably-below-floor
    * contacts, and patches the stored fix + billboard in place (zero-velocity
    * DR renders the patched fix verbatim).
    * @param {Set<string>} currentIcaos - Contacts present in THIS poll (already
-   *   floored by the live path — skipped here).
+   *   floored by the live path - skipped here).
    */
 
   function _refloorStaleGroundedContacts(currentIcaos) {
@@ -161,7 +161,7 @@ export function createMotion({
         flightState._scratchRenderTime,
       );
 
-    // Bracketing pair: interpolate — no extrapolation error, no snap-back.
+    // Bracketing pair: interpolate - no extrapolation error, no snap-back.
     for (let i = history.length - 1; i >= 1; i--) {
       const a = history[i - 1];
       const b = history[i];
@@ -178,7 +178,7 @@ export function createMotion({
         // segment covers real ground (at hover its direction is GPS jitter; on a
         // slow tight turn it STEPS the whole per-segment turn at each boundary),
         // so it is blended against the reported per-fix track by displayed
-        // ground speed — and the track is TIME-INTERPOLATED between the fixes so
+        // ground speed - and the track is TIME-INTERPOLATED between the fixes so
         // a slow turner's nose advances continuously through the segment instead
         // of snapping once per poll. Helicopters always use the reported track
         // (rotorcraft chords are noise-dominated at their typical speeds).
@@ -211,8 +211,8 @@ export function createMotion({
     if (elapsedSec <= 0) {
       // Warm-up: renderTime predates ALL history (freshly seen / just-started-tracking
       // aircraft, before RENDER_DELAY_SEC of history has accumulated, so no bracketing
-      // pair exists yet). Render at the DELAYED renderTime — preserving the 30s-behind
-      // invariant — by extrapolating the OLDEST fix BACKWARD to renderTime. As history
+      // pair exists yet). Render at the DELAYED renderTime - preserving the 30s-behind
+      // invariant - by extrapolating the OLDEST fix BACKWARD to renderTime. As history
       // fills, renderTime advances toward the first fix and the icon glides FORWARD into
       // the bracketing interpolation above with NO freeze and NO backward snap. (Holding
       // the oldest fix froze the icon; extrapolating the NEWEST fix to wall-clock now made
@@ -261,7 +261,7 @@ export function createMotion({
    * Dead-reckon a fix along its own velocity/track by `dt` seconds, integrating a
    * constant-rate-turn arc when `turnRateDps` is significant (straight line
    * otherwise). Positive `dt` projects FORWARD (after the fix); negative `dt`
-   * projects BACKWARD (before the fix) — used for warm-up, estimating where the
+   * projects BACKWARD (before the fix) - used for warm-up, estimating where the
    * aircraft was before its first observed fix. ENU frame: east = +X, north = +Y,
    * up = +Z; heading 0 deg = north, 90 deg = east. Sets `_drCourseDeg` to the
    * arc's instantaneous end course on every path.
@@ -282,7 +282,7 @@ export function createMotion({
       flightState._drCourseDeg = heading;
       return Cesium.Cartesian3.clone(fix.position, out);
     }
-    // Constant-rate-turn arc (straight line when turnRateDps ≈ 0) — a plane in a
+    // Constant-rate-turn arc (straight line when turnRateDps ≈ 0) - a plane in a
     // standard-rate turn is ~90° of arc wrong per 30 s if extrapolated straight.
     arcOffsetEnu(speed, heading, turnRateDps, dt, flightState._scratchArc);
     flightState._drCourseDeg = flightState._scratchArc.endCourseDeg;
@@ -321,7 +321,7 @@ export function createMotion({
 
   /**
    * True while the tracked aircraft's delayed display time (now − RENDER_DELAY_SEC)
-   * predates its oldest real fix — i.e. _deadReckon is extrapolating backward, with no
+   * predates its oldest real fix - i.e. _deadReckon is extrapolating backward, with no
    * real history yet sitting BEHIND the displayed icon. The trail must draw nothing in
    * this window (every accumulated point is ahead of the icon).
    * @returns {boolean}
@@ -424,7 +424,7 @@ export function createMotion({
       // Plausible single-frame motion (m): real velocity × frame Δt, ×4 slack + 25 m base.
       const plausible = speed * dtSec * 4 + 25;
       if (Cesium.Cartesian3.distance(raw, flightState._drPrevRaw) > plausible) {
-        // Discontinuity — re-anchor so the DISPLAYED position stays continuous, then decay.
+        // Discontinuity - re-anchor so the DISPLAYED position stays continuous, then decay.
         Cesium.Cartesian3.subtract(
           flightState._drPrevDisplay,
           raw,
@@ -446,14 +446,14 @@ export function createMotion({
       flightState._trackedPosHolder,
     );
     Cesium.Cartesian3.add(raw, display, display);
-    // Same display floor the fleet pass applies — otherwise selecting a correctly
+    // Same display floor the fleet pass applies - otherwise selecting a correctly
     // floored grounded billboard swapped it for an unfloored tracked entity and
     // dropped the cyan target back under the mesh. Applied HERE, at the single
     // point every VISUAL consumer's per-frame position is computed, so the
     // readout anchor, detection bracket, trail head and follow-camera all read
     // the one floored value (the anti-jitter contract forbids recomputing per
     // consumer). NOT the single point for DATA: `_describeFlight` deliberately
-    // reports sensor truth — see the note there. Skipped while a tracked 3D model
+    // reports sensor truth - see the note there. Skipped while a tracked 3D model
     // owns the visual: it rides groundSnap's one-shot sample and moving its input
     // would force a re-sample (T7).
     display = _floorGroundedDisplayPosition(
@@ -488,7 +488,7 @@ export function createMotion({
     return display;
   }
 
-  /** The tracked plane's current display position WITHOUT recomputing — the exact value the
+  /** The tracked plane's current display position WITHOUT recomputing - the exact value the
    *  follow-camera already settled on this frame (in the Viewer _onTick). getDetectableObjects + the
    *  readout run in postRender at a LATER frameNumber, so calling _trackedDisplayPosition there would
    *  re-run the dead-reckon on a fresh sample and double-advance the reconciliation → the label jitters
@@ -503,17 +503,17 @@ export function createMotion({
   }
 
   /**
-   * The position the tracked aircraft is VISUALLY at this frame — the translation its
+   * The position the tracked aircraft is VISUALLY at this frame - the translation its
    * 3D model is actually rendering with when the model owns the visual, otherwise the
    * cached dead-reckoned position the billboard uses.
    *
    * This exists because a grounded plane's model rides a one-shot ground snap while its
-   * billboard deliberately stays at the reported (buried) altitude — a ~100 m vertical
+   * billboard deliberately stays at the reported (buried) altitude - a ~100 m vertical
    * split at an inland airport. Anything anchored to the display position while the model
    * is what you can see drifts below the aircraft and only converges as the coarse floor
    * cell warms ("the buoy"), sometimes never.
    *
-   * It reads `modelMatrix`, which `_updateTrackedModel` already wrote this frame — no
+   * It reads `modelMatrix`, which `_updateTrackedModel` already wrote this frame - no
    * sampling, no `_modelDisplayPosition` call from postRender, and no new dead reckoning,
    * so the follow-camera anti-jitter contract on `gevDisplayPosition` is untouched.
    */
@@ -542,7 +542,7 @@ export function createMotion({
    * the visual centre; only the trail moves to the model's lower-centre hardpoint. */
   /** The tracked model's rendered bounding radius (m), or 0 when no model of this
    *  contact is drawing. Carries Cesium's effective `computedScale`, which may be
-   *  above `scale` to satisfy minimumPixelSize — the trail head has to be judged
+   *  above `scale` to satisfy minimumPixelSize - the trail head has to be judged
    *  against the size the operator SEES, not the nominal one. */
   /** World-space origin of the tracked model, or null when no model of this
    *  contact is drawing. This is the centre the rendered bounding sphere is
@@ -586,7 +586,7 @@ export function createMotion({
         flightState.records.data.get(flightState._trackedIcao)?.klass,
       );
       // Through the model's OWN render chain (modelVisualAnchor's hand-rolled
-      // half-correction put this offset on the lateral axis — see
+      // half-correction put this offset on the lateral axis - see
       // modelAnchorWorld).
       return modelAnchorWorld(
         flightState._trackedModel,
@@ -598,14 +598,14 @@ export function createMotion({
   }
 
   /** Smoothed world course for the tracked aircraft this frame. Reads the
-   *  frame-cached course (set by _trackedDisplayPosition — the follow-camera's
+   *  frame-cached course (set by _trackedDisplayPosition - the follow-camera's
    *  own computation), NEVER re-runs _deadReckon. Safe to call more than once
    *  per frame: the second call sees dt≈0 and the limiter is a no-op.
    *
    *  The smoothed value lives in the SHARED per-icao _displayCourse entry (see
    *  its declaration): on click the limiter continues from whatever nose the
    *  fleet pass was displaying, and on untrack the fleet pass continues from
-   *  whatever nose this path last wrote — the tracked and fleet consumers of
+   *  whatever nose this path last wrote - the tracked and fleet consumers of
    *  the same aircraft can never disagree across the handoff. */
 
   function _trackedDisplayCourse() {
@@ -626,7 +626,7 @@ export function createMotion({
     flightState._trackedCourseMs = nowMs;
     const prev = flightState._displayCourse.get(flightState._trackedIcao);
     // Hover hold: at near-zero displayed speed both the chord and the reported
-    // track are noise — keep the last stable nose direction instead of chasing.
+    // track are noise - keep the last stable nose direction instead of chasing.
     if (cacheValid && flightState._cachedDRHold && prev != null) return prev;
     const cap = courseSlewCapDps(
       cacheValid
@@ -661,14 +661,14 @@ export function createMotion({
    * Owner directive (2026-08-21, after a Re:Earth outage buried a parked contact
    * at a Texas field): "hold the last known altitude until a fresh one comes in.
    * Never render otherwise." Two tiers, strongest first:
-   *  own — a floor this contact's OWN cell resolved to while it stood there.
+   *  own - a floor this contact's OWN cell resolved to while it stood there.
    *        Nothing weaker can improve on it, and its cell warming again is picked
    *        up by the live read, not here. Valid only within
    *        HELD_FLOOR_MAX_DRIFT_KM of where it was measured.
-   *  neighbor — the LOWEST of at least two resolved ADJACENT cells (~111 m away,
+   *  neighbor - the LOWEST of at least two resolved ADJACENT cells (~111 m away,
    *        the same apron). Two at least, because one reading cannot be checked
    *        against anything, and the LOWEST because a high reading beside a cold
-   *        cell is as likely to be a terminal roof as ground — see neighborFloorM.
+   *        cell is as likely to be a terminal roof as ground - see neighborFloorM.
    *
    * BOTH are validated measurements out of the shared floor cache. A third tier
    * that read the rendered mesh directly, where no DEM existed to check it, was
@@ -678,15 +678,15 @@ export function createMotion({
    *
    * A neighbour hold keeps re-probing at the throttle so it can UPGRADE: a parked
    * contact that first answered from one neighbour would otherwise keep it after
-   * a better one warmed. A held value is never dropped for nothing — a failed
-   * probe leaves the previous answer standing — and a re-probe that lands LOWER
+   * a better one warmed. A held value is never dropped for nothing - a failed
+   * probe leaves the previous answer standing - and a re-probe that lands LOWER
    * eases rather than steps (see the ease note in the clamp below).
    *
    * A REHYDRATED SEED is the one exception to the tier order. A floor parked by
    * `_retireDisplayFloorState` and picked back up on a later re-ground was
    * measured while the contact stood somewhere it no longer necessarily is: it is
    * a memory, not a reading, and it outranks nothing. So `seeded` demotes an
-   * `own` floor below the neighbour tier — when two fresh adjacent cells can
+   * `own` floor below the neighbour tier - when two fresh adjacent cells can
    * answer, they answer, and the seed is discarded. It serves only while nothing
    * fresh contradicts it, which is exactly the flap case it exists for (a rotation
    * outruns its own cells, so nothing nearby is warm either). Without this a
@@ -756,8 +756,8 @@ export function createMotion({
    *  ONE judgement, asked from BOTH sides of the park, because neither side sees
    *  the whole story on its own. While the contact keeps reporting, the retire
    *  path asks it and drops the entry. But a contact can be parked and then make
-   *  no calls at all — off the poll for a long-haul cruise, out of the corridor
-   *  radius, tab hidden — and then re-ground; nothing ran in between, so an
+   *  no calls at all - off the poll for a long-haul cruise, out of the corridor
+   *  radius, tab hidden - and then re-ground; nothing ran in between, so an
    *  expiry checked only on the retire path never fires and an arbitrarily old
    *  measurement walks back in (measured: parked 198 s, still reused). The
    *  rehydration side therefore asks the same question against the wall clock
@@ -771,7 +771,7 @@ export function createMotion({
   }
 
   /** Retires a contact's display-floor state. Called the moment it stops being a
-   *  grounded billboard — airborne, model-owned, or gone.
+   *  grounded billboard - airborne, model-owned, or gone.
    *
    *  The floor itself is kept as a rehydration seed for FLOOR_SEED_GRACE_MS (see
    *  above) and MARKED as one; everything that describes the contact's CURRENT
@@ -803,14 +803,14 @@ export function createMotion({
    *
    * `renderAltitudeM` is chosen once per poll from the floor of the FIX's coarse
    * cell. The position that renders is the dead-reckoned one, which drifts away
-   * from that fix for the whole segment — and for up to 300 s / several hundred
+   * from that fix for the whole segment - and for up to 300 s / several hundred
    * metres while a ground contact coasts through its stale-feed grace. Across a
    * graded apron (KAUS spans ~119–140 m ellipsoidal) that drift buries the
    * sprite under the mesh it is now over; `scripts/qa-floor-verify.mjs` measured
    * −15.5 m. A second, smaller share comes from the fix-time floor itself: a
    * taxiing contact whose current cell is still cold falls back to the PREVIOUS
    * fix's cell (see the grounded `surfaceM` chain) and nothing revisits that
-   * height once the cell warms — the stale re-floor sweep deliberately skips
+   * height once the cell warms - the stale re-floor sweep deliberately skips
    * contacts present in the poll. Both are cured by reading the floor at the
    * coordinate actually being displayed.
    *
@@ -818,7 +818,7 @@ export function createMotion({
    *  - READ-ONLY against the shared floor cache. No latch, no heal, no sampling.
    *    Keeping cold cells rare is `_collectDisplayCorridorCells`'s job, not this
    *    one's. A cold cell used to mean NO clamp at all, which was only safe while
-   *    the un-clamped height was a real reading — and for a grounded contact with
+   *    the un-clamped height was a real reading - and for a grounded contact with
    *    no altitude data it is not: the poll path's last resort is the geoid, tens
    *    of metres under the mesh at an inland field. When the cell cannot answer,
    *    `_heldDisplayFloorM` holds the last floor that DID (owner, 2026-08-21).
@@ -827,7 +827,7 @@ export function createMotion({
    *  - Grounded contacts only. Airborne heights are the fix-time clamp's job.
    *  - NEVER when a 3D model owns the visual (T7): the model rides groundSnap's
    *    one-shot tileset sample and the billboard hides behind it, so clamping the
-   *    hidden billboard would put a SECOND ground chain on one contact — and the
+   *    hidden billboard would put a SECOND ground chain on one contact - and the
    *    one the operator is not looking at. (The original rationale was narrower:
    *    lifting the datum dragged groundSnap's input past its 50 m
    *    move-invalidation and forced a re-sample every frame. groundSnap now
@@ -842,7 +842,7 @@ export function createMotion({
    * @param {number} [nowMs] - Tick clock, passed by both callers so the release
    *   ease advances on the same clock the rest of the tick uses.
    * @returns {Cesium.Cartesian3|null} `pos` itself when nothing moves (the common
-   *   case — no allocation, no rebuild), otherwise the lifted position.
+   *   case - no allocation, no rebuild), otherwise the lifted position.
    */
 
   function _floorGroundedDisplayPosition(
@@ -896,7 +896,7 @@ export function createMotion({
     next.retiredMs = null;
     // The floor to clamp against: this cell when it has one, otherwise the last
     // one that resolved for this contact (never the geoid the poll path fell to).
-    // Snapshot what the contact was standing on BEFORE the chain overwrites it —
+    // Snapshot what the contact was standing on BEFORE the chain overwrites it -
     // the ease decision below needs the previous value, and `_heldDisplayFloorM`
     // adopts into the same fields.
     const wasHeld = next.heldActive;
@@ -915,7 +915,7 @@ export function createMotion({
     //  - the real floor arrives below the hold (releasing the hold);
     //  - a re-probe finds a LOWER neighbour than the one being held, which the
     //    12 m spread bound can make a large step on a mesa edge (200 m held, a
-    //    120 m neighbour warms, the bounded answer is 132 m) — and can happen
+    //    120 m neighbour warms, the bounded answer is 132 m) - and can happen
     //    AGAIN while the first approach is still running.
     // Scoped to a borrowed floor on purpose: an ordinary cell-to-cell change
     // between two resolved floors is the existing path and keeps its timing.
@@ -963,7 +963,7 @@ export function createMotion({
     // floor let a parked contact whose cell never warmed return a memoized
     // unresolved answer forever, so an adjacent-cell floor warming later was
     // never adopted. One owned entry per grounded
-    // contact — O(grounded), dropped on eviction, on destroy, and the moment the
+    // contact - O(grounded), dropped on eviction, on destroy, and the moment the
     // contact stops being a grounded billboard.
     if (
       state &&
@@ -1005,10 +1005,10 @@ export function createMotion({
    *
    * The corridor therefore follows the direction the display is actually MOVING,
    * which is not always toward the fix:
-   *  - INTERPOLATING between two fixes — the display is walking to the newest
+   *  - INTERPOLATING between two fixes - the display is walking to the newest
    *    fix, so that fix is the endpoint (exact, no projection error).
-   *  - EXTRAPOLATING — coasting past the newest fix on a stale feed, or the
-   *    pre-history warm-up — the display travels along its course AWAY from that
+   *  - EXTRAPOLATING - coasting past the newest fix on a stale feed, or the
+   *    pre-history warm-up - the display travels along its course AWAY from that
    *    fix. Aiming at the fix here warms the BACKTRAIL while the contact stays
    *    one sampling cycle ahead and buried, so the endpoint is the position its
    *    own kinematics put it at two poll intervals from now.
@@ -1017,7 +1017,7 @@ export function createMotion({
    * `warmGroundFloor` skips cells that already have a real DEM, but the mesh
    * sampler needs to see a cell again AFTER its DEM prior lands, since a sample
    * without that prior is rejected. Offering a cell once would leave it DEM-only
-   * for the session — at fields where the photogrammetric mesh sits well above
+   * for the session - at fields where the photogrammetric mesh sits well above
    * bare earth that is still metres of burial.
    *
    * Budgeting is need-ranked and dedupe-first: cells this poll already collected
@@ -1083,7 +1083,7 @@ export function createMotion({
           displayLon: lon,
           courseDeg,
           speedMps,
-          // Same turn the dead-reckon integrates — a sustained-turn taxi leaves a
+          // Same turn the dead-reckon integrates - a sustained-turn taxi leaves a
           // straight tangent within a few hundred metres.
           turnRateDps: info.turnRateDps || 0,
           fixLat: info.rawLat,

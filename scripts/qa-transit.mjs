@@ -62,8 +62,8 @@ let failures = 0;
 let unexercised = 0;
 /**
  * A check has three outcomes. PASS and FAIL are what they say. UNEXERCISED
- * means the run could not put the claim to the test — a parked fleet has no
- * motion to judge — and it is reported as its own word rather than as a
+ * means the run could not put the claim to the test - a parked fleet has no
+ * motion to judge - and it is reported as its own word rather than as a
  * pass, because a pass that proved nothing is how a broken interpolation
  * sailed through this harness once.
  */
@@ -74,7 +74,7 @@ const check = (
   { unexercised: idle = false } = {},
 ) => {
   const word = idle ? 'UNEXERCISED' : passed ? 'PASS' : 'FAIL';
-  console.log(`[${word}] ${name}${detail ? ` — ${detail}` : ''}`);
+  console.log(`[${word}] ${name}${detail ? ` - ${detail}` : ''}`);
   if (idle) {
     unexercised += 1;
     failures += 1;
@@ -297,7 +297,7 @@ const shot = (name, caption) =>
     type: 'jpeg',
     quality: 82,
   }).then(() => {
-    console.log(`  shot ${name} — ${caption}`);
+    console.log(`  shot ${name} - ${caption}`);
   });
 
 const view = (city) =>
@@ -440,7 +440,7 @@ try {
     );
     await shot(
       `${TAG}-${city.id}-00-fleet.jpg`,
-      `${city.label} from 3.5 km — ${fleet.count} vehicles across the metro`,
+      `${city.label} from 3.5 km - ${fleet.count} vehicles across the metro`,
     );
 
     // Street level: 600 m up, 45 degrees down, framed on a real vehicle so the
@@ -491,12 +491,12 @@ try {
       return {
         count: state._vehicles.size,
         stats: layer.getStats(),
-        // The RENDERED primitive position, read back through Cesium — not the
+        // The RENDERED primitive position, read back through Cesium - not the
         // fix the layer is aiming at. A layer that never moved a point would
         // still show two different `entry.to` values, so comparing those would
         // prove the data changed, not that anything on screen did.
         // VISIBLE markers only. Off-screen vehicles take their newest fix
-        // directly — that is the whole point of the view gate — so sampling
+        // directly - that is the whole point of the view gate - so sampling
         // them would let a layer whose visible interpolation is broken pass
         // this check on the strength of hidden vehicles snapping.
         sample: [...state._vehicles.values()]
@@ -514,7 +514,7 @@ try {
     });
 
     // Click a vehicle that is actually on screen, recomputing its position
-    // immediately before each attempt — these dots are gliding.
+    // immediately before each attempt - these dots are gliding.
     let selected = null;
     for (let attempt = 0; attempt < 6 && !selected; attempt += 1) {
       const target = await page.evaluate((skip) => {
@@ -555,7 +555,7 @@ try {
         if (!key) return null;
         // A selected key is bookkeeping. The claim is that the user SEES a
         // card, and these cards are painted onto the shared overlay CANVAS
-        // rather than built from DOM nodes — so the proof is the operator's own
+        // rather than built from DOM nodes - so the proof is the operator's own
         // words the layer published, plus pixels that actually landed there.
         const published = window.__gevTransitCards?.get(key) || null;
         const canvas = document.getElementById('world-overlay-canvas');
@@ -588,7 +588,7 @@ try {
         cardLines.some((line) => /Reported /.test(line)) &&
         selected.painted > 0,
       selected
-        ? `${selected.key} — "${cardLines.slice(0, 4).join(' / ')}" over ${selected.painted} painted overlay samples`
+        ? `${selected.key} - "${cardLines.slice(0, 4).join(' / ')}" over ${selected.painted} painted overlay samples`
         : 'no vehicle card became visible',
     );
     // DETECT is on by default at DENSE. Prove the overlay actually boxes and
@@ -651,7 +651,7 @@ try {
 
     await shot(
       `${TAG}-${city.id}-01-vehicles.jpg`,
-      `${city.label} at 600 m, 45° pitch — ${first.count} vehicles in the layer, selected card on the one in frame`,
+      `${city.label} at 600 m, 45° pitch - ${first.count} vehicles in the layer, selected card on the one in frame`,
     );
 
     // ---- Rendered appearance under the sensor presets (first active live city) --------
@@ -714,7 +714,7 @@ try {
         const rendered = await sampleRendered(page);
         await shot(
           `${TAG}-boston-style-${preset.name}.jpg`,
-          `${city.label} at street level under ${preset.name}, DETECT on — ${rendered.length} isolated sprites sampled (style set via ${how})`,
+          `${city.label} at street level under ${preset.name}, DETECT on - ${rendered.length} isolated sprites sampled (style set via ${how})`,
         );
         const modes = new Set(rendered.map((r) => r.mode));
         if (preset.hot) {
@@ -901,12 +901,12 @@ try {
       const Cartographic = app.viewer.camera.positionCartographic.constructor;
       return {
         count: state._vehicles.size,
-        // The RENDERED primitive position, read back through Cesium — not the
+        // The RENDERED primitive position, read back through Cesium - not the
         // fix the layer is aiming at. A layer that never moved a point would
         // still show two different `entry.to` values, so comparing those would
         // prove the data changed, not that anything on screen did.
         // VISIBLE markers only. Off-screen vehicles take their newest fix
-        // directly — that is the whole point of the view gate — so sampling
+        // directly - that is the whole point of the view gate - so sampling
         // them would let a layer whose visible interpolation is broken pass
         // this check on the strength of hidden vehicles snapping.
         sample: [...state._vehicles.values()]
@@ -983,7 +983,7 @@ try {
     // Orientation, measured the only way that settles it: where the sprite
     // points against where the sprite actually travelled on screen. The
     // projection is perspective-exact, so an off-centre vehicle at an oblique
-    // pitch must agree too — that is precisely the case the orthographic
+    // pitch must agree too - that is precisely the case the orthographic
     // approximation got wrong by twenty-odd degrees.
     //
     // Only sprites that visibly moved can testify, and a keyless Austin view
@@ -1029,7 +1029,7 @@ try {
 
     await shot(
       `${TAG}-${city.id}-02-thirty-seconds-later.jpg`,
-      `${city.label} deterministic fixture 30 s later — ${second.count} vehicles, ${moved}/${matched} moved`,
+      `${city.label} deterministic fixture 30 s later - ${second.count} vehicles, ${moved}/${matched} moved`,
     );
   }
 
@@ -1175,9 +1175,9 @@ try {
   // ---- Deterministic playback and card anchor (synthetic feed) -----------
   // The live feeds prove the layer against reality; they cannot prove it
   // against a script. For the next two minutes the MBTA response is replaced
-  // at the network layer by six scripted vehicles near the Boston view —
+  // at the network layer by six scripted vehicles near the Boston view -
   // straight travel, a corner, a genuine stop, a ninety-second silence, a
-  // late packet and a feed that only refreshes every thirty seconds — and
+  // late packet and a feed that only refreshes every thirty seconds - and
   // every rendered frame is sampled.
   if (runs('playback')) {
     console.log('\n== deterministic playback ==');
@@ -1509,7 +1509,7 @@ try {
     );
     const gap = judge('gap');
     scenarioCheck(
-      'a ninety-second silence holds at the newest fix — no extrapolation, no reset — and resumes',
+      'a ninety-second silence holds at the newest fix - no extrapolation, no reset - and resumes',
       {
         'gap.resets === 0': gap.resets === 0,
         'gap.worstJump <= SIM.gap.speed * 1.5 + 2':
@@ -1893,7 +1893,7 @@ try {
   );
   await shot(
     `${TAG}-disabled.jpg`,
-    'Transit off — same view, nothing rendered',
+    'Transit off - same view, nothing rendered',
   );
   await wait(25_000);
   check(

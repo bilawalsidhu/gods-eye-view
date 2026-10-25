@@ -507,7 +507,7 @@ test('local infrastructure creates no native labels or per-frame geometry callba
 // install. Before this contract the catch only logged: a dead layer and an
 // empty one both reported {count: 0} and the manager painted a green ON chip.
 
-/** Build the failing layer alone — the harness above owns the happy path. */
+/** Build the failing layer alone - the harness above owns the happy path. */
 async function enableLayerWithFetch(fetchImpl, { dataSources, windowStub } = {}) {
   const originalFetch = globalThis.fetch;
   const originalWindow = globalThis.window;
@@ -621,7 +621,7 @@ function asyncDataSources({ rejectAdd = false } = {}) {
   };
 }
 
-/** A window whose context store throws once — an exception during post-processing. */
+/** A window whose context store throws once - an exception during post-processing. */
 function windowThatFailsOnce() {
   let armed = true;
   let store;
@@ -697,7 +697,7 @@ test('a loaded dataset is distinguishable from a dead one', async () => {
 // else ever asks for a frame. The stem grounding retry lives in preRender: if
 // the first sample fails (tiles not yet sampleable) and no frame is scheduled,
 // a parked camera never produces the retry frame and the stem stays at
-// ellipsoid height — buried in, or floating over, the photoreal mesh until the
+// ellipsoid height - buried in, or floating over, the photoreal mesh until the
 // user happens to move. main retried continuously; under the governor the
 // retry must schedule its own frame. (perf rebase 2026-08-17)
 
@@ -795,7 +795,7 @@ test('a failed ground sample schedules the retry frame the idle governor would n
   });
 
   // Close enough that a retry could succeed, on a scene that CAN sample but
-  // whose tiles are not sampleable yet — a camera parked over a dam while the
+  // whose tiles are not sampleable yet - a camera parked over a dam while the
   // photoreal mesh is still streaming in.
   setCameraAltitude(env, 20_000);
   env.preRender.raise();
@@ -811,7 +811,7 @@ test('a failed ground sample schedules the retry frame the idle governor would n
   );
 });
 
-test('a far camera arms no retry render — the governor stays fully idle', async (t) => {
+test('a far camera arms no retry render - the governor stays fully idle', async (t) => {
   const env = await createRealLocalLayerHarness({ sampleHeightSupported: true });
   _resetRenderGovernorForTest();
   installRenderGovernor({ scene: { requestRender() {} } });
@@ -886,7 +886,7 @@ function runArmedRetryChain(env, t, clock, cycles) {
   }
 }
 
-/** Height of the (mutated-in-place) stem base — 0 until a sample lands. */
+/** Height of the (mutated-in-place) stem base - 0 until a sample lands. */
 function baseHeightM(env) {
   const entity = env.dataSources[0].entities.values[0];
   return Cesium.Cartographic.fromCartesian(entity.__localBaseCartesian).height;
@@ -908,7 +908,7 @@ function countDistanceCalls(t) {
   return calls;
 }
 
-test('a scene that cannot sample heights never arms a retry — not even once', async (t) => {
+test('a scene that cannot sample heights never arms a retry - not even once', async (t) => {
   // Keyless/no-sampleable-surface scene: sampleHeightSupported === false, so a
   // retry can NEVER succeed. Arming here re-armed forever (one 2 s timer per
   // requested frame) and quietly defeated the idle governor.
@@ -944,12 +944,12 @@ test('a scene that cannot sample heights never arms a retry — not even once', 
     0,
     'nor spend a single per-record distance on a retry that cannot succeed',
   );
-  assert.equal(baseHeightM(env), 0, 'records stay at ellipsoid height — the pre-perf behavior');
+  assert.equal(baseHeightM(env), 0, 'records stay at ellipsoid height - the pre-perf behavior');
 });
 
 test('a sampleable scene still measures the retry distance it needs', async (t) => {
   // The mirror of the guard above: the capability check must gate the work, not
-  // remove it — a scene that CAN sample still pays one distance per walk.
+  // remove it - a scene that CAN sample still pays one distance per walk.
   const env = await createRealLocalLayerHarness({ sampleHeightSupported: true });
   _resetRenderGovernorForTest();
   installRenderGovernor({ scene: { requestRender() {} } });
@@ -974,7 +974,7 @@ test('a sampleable scene still measures the retry distance it needs', async (t) 
 test('capability arriving late re-opens a spent budget without camera motion', async (t) => {
   // WebGL context restore / a tileset that only becomes sampleable later. A
   // parked camera has no moveEnd to re-open the budget, so the false→true edge
-  // must do it — otherwise the layer stays permanently given-up.
+  // must do it - otherwise the layer stays permanently given-up.
   const env = await createRealLocalLayerHarness({ sampleHeightSupported: true });
   _resetRenderGovernorForTest();
   const governorScene = { renders: 0, requestRender() { this.renders += 1; } };
@@ -992,7 +992,7 @@ test('capability arriving late re-opens a spent budget without camera motion', a
   runArmedRetryChain(env, t, clock, GROUND_SAMPLE_MAX_ARMED_RETRIES + 2);
   assert.equal(governorScene.renders, GROUND_SAMPLE_MAX_ARMED_RETRIES, 'budget spent');
 
-  // Context lost, then restored — with the camera never touched.
+  // Context lost, then restored - with the camera never touched.
   env.viewer.scene.sampleHeightSupported = false;
   runArmedRetryChain(env, t, clock, 2);
   assert.equal(governorScene.renders, GROUND_SAMPLE_MAX_ARMED_RETRIES, 'no arming while unsupported');
@@ -1030,7 +1030,7 @@ test('a sampleable scene that keeps failing gives up after a bounded run of arms
   );
 
   // Budget spent: further parked frames retry the sample (free) but ask for
-  // nothing more — the idle governor is allowed to sleep.
+  // nothing more - the idle governor is allowed to sleep.
   runArmedRetryChain(env, t, clock, 10);
   assert.equal(
     governorScene.renders,
@@ -1084,7 +1084,7 @@ test('after the cap a camera-motion frame still samples, and re-opens the budget
 //
 // createLocalGeoJsonLayer used to give every feature a live stem and walk all
 // of them (geometry trig + Cesium property writes) on every camera move. With
-// three bundled-infra layers that is ~5,700 records on a full-earth view — the
+// three bundled-infra layers that is ~5,700 records on a full-earth view - the
 // frame-rate cliff that got the INFRASTRUCTURE first-run tile cut. The walk
 // now asks src/data/localGeojsonLod.js which records may carry a stem, sized to
 // the camera-height budget, and skips all per-frame cost for the rest.
@@ -1298,7 +1298,7 @@ test('globe-LOD re-selects during continuous motion, without ever seeing a moveE
   // moves the camera indefinitely without emitting moveEnd. Before the motion
   // fallback the active set stayed pinned to the region the camera left, and
   // the walk hid those records as they passed behind the globe while admitting
-  // nothing newly visible — the layer bled down to sparse-or-empty until the
+  // nothing newly visible - the layer bled down to sparse-or-empty until the
   // motion stopped.
   const env = await createMultiFeatureLodHarness({ featureCount: 150, cameraHeightM: 9_000_000 });
   const clock = installFakeClock(t);

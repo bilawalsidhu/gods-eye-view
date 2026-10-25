@@ -39,8 +39,8 @@ export class RealtimeCost {
    * Paint the tier toggle + running cost readout.
    *
    * Two DIFFERENT sources on purpose: the toggle shows the PENDING preference
-   * (`this.voiceTier` — what the next session will use), while the cost readout
-   * shows the LIVE session meter (`this.costTracker` — bound to the model this
+   * (`this.voiceTier` - what the next session will use), while the cost readout
+   * shows the LIVE session meter (`this.costTracker` - bound to the model this
    * session actually connected with). During a session those two can legitimately
    * disagree, which is exactly what "applies next session" means.
    */
@@ -57,12 +57,12 @@ export class RealtimeCost {
       const pendingId = resolveVoiceModel(pendingTier).id;
       this.ui.tierButton.title =
         this.isActive() && state.modelId !== pendingId
-          ? t('Next session: {pendingId} — this session stays on {modelId}', {
+          ? t('Next session: {pendingId} - this session stays on {modelId}', {
               pendingId,
               modelId: state.modelId,
             })
           : t(
-              'Voice model: {pendingId} — click to switch to {target}; applies next session',
+              'Voice model: {pendingId} - click to switch to {target}; applies next session',
               {
                 pendingId,
                 target: isMini ? t('standard') : t('mini'),
@@ -98,7 +98,7 @@ export class RealtimeCost {
       this.ui.costValue.dataset.level = state.level;
       this.ui.costValue.title =
         t(
-          'Estimated session cost on {modelId} — {responses} response(s). Warns at {warn}, ends the session at {cap}.',
+          'Estimated session cost on {modelId} - {responses} response(s). Warns at {warn}, ends the session at {cap}.',
           {
             modelId: state.modelId,
             responses: state.responses,
@@ -111,7 +111,7 @@ export class RealtimeCost {
         (state.incomplete
           ? ' ' +
             t(
-              'Estimate is incomplete — a response was still in flight when the session ended, so its usage was never reported.',
+              'Estimate is incomplete - a response was still in flight when the session ended, so its usage was never reported.',
             )
           : '');
     }
@@ -134,12 +134,12 @@ export class RealtimeCost {
   /**
    * Set the voice model tier and persist it as the NEXT-session preference.
    *
-   * INVARIANT — the cost tracker's lifetime is the SESSION's lifetime, and its
+   * INVARIANT - the cost tracker's lifetime is the SESSION's lifetime, and its
    * model binding is immutable from start() to stop(). Rebuilding it here would
    * erase accrued spend, re-price later usage against a model the session is
    * not running on, and let repeated toggles reset the meter past the cap
    * indefinitely. So unless the session is FULLY SETTLED (see
-   * isVoiceSessionSettled — no session AND no transport, which excludes the
+   * isVoiceSessionSettled - no session AND no transport, which excludes the
    * error state that still holds a live channel) this writes the preference
    * ONLY. Once settled there is no session meter to protect, so the provisional
    * tracker is refreshed to preview the newly selected model.
@@ -168,7 +168,7 @@ export class RealtimeCost {
    * Update the spend thresholds ({warnUsd, capUsd}) and persist them.
    * Exposed for the settings surface and for tests; no new panel.
    *
-   * Like the tier, this does not rebuild a LIVE session's tracker — that would
+   * Like the tier, this does not rebuild a LIVE session's tracker - that would
    * discard accrued spend. New limits arm at the next session start.
    */
   setVoiceCostLimits(limits) {
@@ -230,14 +230,14 @@ export class RealtimeCost {
   applyCost(state) {
     this.syncCostUi();
     if (state.warnCrossed) {
-      // Exactly one line — the latch in the tracker guarantees it.
+      // Exactly one line - the latch in the tracker guarantees it.
       console.warn(
         `[GEV voice] session cost ${state.display} crossed the ${formatCostUsd(
           state.warnUsd,
         )} warning threshold (model ${state.modelId}); hard cap ${formatCostUsd(state.capUsd)}.`,
       );
     }
-    // NOTE: field names avoid /token|secret|key/ — the debug-log sanitizer
+    // NOTE: field names avoid /token|secret|key/ - the debug-log sanitizer
     // redacts values under any such key, which would blank the usage numbers.
     this.debugLog('voice.cost', {
       costUsd: Number(state.totalUsd.toFixed(6)),
@@ -251,7 +251,7 @@ export class RealtimeCost {
   }
 
   /**
-   * Hard cap reached — end the session gracefully. Uses the ordinary stop path
+   * Hard cap reached - end the session gracefully. Uses the ordinary stop path
    * (data channel closed, peer connection closed, mic tracks stopped) so the
    * mic is genuinely released, then overrides the status line with the reason.
    * `preserveStatus` keeps stop() from writing its own "Voice off" over it.
@@ -262,7 +262,7 @@ export class RealtimeCost {
     console.warn(
       `[GEV voice] session cost ${state.display} reached the ${formatCostUsd(
         state.capUsd,
-      )} cap — ending the voice session.`,
+      )} cap - ending the voice session.`,
     );
     this.debugLog('voice.cost.cap', {
       costUsd: Number(state.totalUsd.toFixed(6)),
@@ -275,7 +275,7 @@ export class RealtimeCost {
     } finally {
       this.setStatus(
         'idle',
-        t('Session ended — cost cap {cost}', { cost: state.display }),
+        t('Session ended - cost cap {cost}', { cost: state.display }),
       );
       this.syncCostUi();
     }

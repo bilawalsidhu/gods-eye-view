@@ -11,6 +11,7 @@ import {
   isCurrentPublication,
 } from './inciweb.js';
 import { msg, t } from '../../i18n/index.js';
+import { ICONS } from '../../icons.js';
 export { normalizeFirePerimeterSnapshot } from './records.js';
 export { createWfigsPerimeterSource } from './source.js';
 export * from './cards.js';
@@ -79,7 +80,7 @@ export function createFirePerimetersLayer({
 
   /**
    * Refresh the InciWeb catalog off the render path: a hanging or failed
-   * fetch only costs the link line, never the perimeter refresh — the
+   * fetch only costs the link line, never the perimeter refresh - the
    * catalog is consumed solely by the selected card.
    */
   function refreshInciwebIndex(signal) {
@@ -95,7 +96,7 @@ export function createFirePerimetersLayer({
         if (_selectedId) publishSelectedCard();
       })
       .catch(() => {
-        // Catalog unavailable — cards stay linkless until the next attempt.
+        // Catalog unavailable - cards stay linkless until the next attempt.
       })
       .finally(() => {
         _indexFetchInFlight = false;
@@ -104,7 +105,7 @@ export function createFirePerimetersLayer({
 
   /**
    * Verify that a matched publication describes the current incident, not
-   * an archived same-name fire — the catalog is all-time. Async: the card
+   * an archived same-name fire - the catalog is all-time. Async: the card
    * republishes with the link once (and only if) the check passes.
    */
   function verifyLink(link, row) {
@@ -188,7 +189,7 @@ export function createFirePerimetersLayer({
     // layers yield to owned picks before their own overlay-card hit-tests,
     // so claiming these large ground polygons would make FIRMS/vessel/CCTV
     // cards inert anywhere over a perimeter. Unowned, our picks read as
-    // "empty space" to siblings — the pre-existing behavior for the globe.
+    // "empty space" to siblings - the pre-existing behavior for the globe.
     _clickHandler = screenSpaceEventHandlerFactory(_viewer);
     _clickHandler.setInputAction((click) => {
       if (pointer && !pointer.isPointerFree()) return;
@@ -212,7 +213,7 @@ export function createFirePerimetersLayer({
         return;
       }
       // A pick that belongs to a sibling layer (e.g. an aircraft) is not
-      // "empty space" — leave the selection alone and let that layer handle it.
+      // "empty space" - leave the selection alone and let that layer handle it.
       if (picked) {
         const pickId = picking.resolvePickId(picked);
         if (pickId && picking.isOwnedByOtherLayer(layer.id, pickId)) return;
@@ -246,7 +247,8 @@ export function createFirePerimetersLayer({
   const layer = {
     id: 'fire-perimeters',
     name: 'Fire Perimeters',
-    icon: '🔥',
+    icon: '',
+    iconSvg: ICONS.flame,
     source: 'NIFC WFIGS',
     updateInterval: 300000,
 

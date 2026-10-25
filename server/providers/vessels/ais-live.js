@@ -41,7 +41,7 @@ const AISSTREAM_DOWN_RETRY_MS = 900_000;
 /**
  * Probe cadence while AISStream is rejecting the key. Retrying cannot fix a
  * bad credential, so this exists only to recover from an upstream-side
- * mistake — it must never approach the ladder's pace.
+ * mistake - it must never approach the ladder's pace.
  */
 const AISSTREAM_AUTH_PROBE_MS = 3_600_000;
 /** How often the watchdog re-evaluates without request traffic. */
@@ -77,7 +77,7 @@ export function aisLiveProxy() {
         ensureAisStreamConnection();
         const incoming = new URL(req.url || '', 'http://localhost');
 
-        // Track sub-route MUST be handled before the rows snapshot — this
+        // Track sub-route MUST be handled before the rows snapshot - this
         // mount prefix-matches every subpath, so without this branch
         // /api/vessels/track would be silently answered with vessel rows.
         if (
@@ -208,7 +208,7 @@ function aisWebSocketImpl() {
  * Resolve the watchdog policy from the environment, once.
  *
  * Read lazily because module evaluation happens before Vite's loadEnv() copies
- * .env into process.env — the reverted watchdog read these at import time and
+ * .env into process.env - the reverted watchdog read these at import time and
  * silently ignored every .env value, including its own kill switch.
  *
  * A custom subscription (one harbor, one message type) can be legitimately
@@ -280,7 +280,7 @@ function aisWatchdogBudgets() {
 
 /**
  * Fingerprint the credential so a key change can clear the terminal
- * auth-failed state. Only a truncated digest is kept — never the key.
+ * auth-failed state. Only a truncated digest is kept - never the key.
  */
 function aisKeyFingerprint() {
   const key = process.env.AISSTREAM_API_KEY;

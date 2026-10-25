@@ -52,7 +52,7 @@ export function createState({ services }) {
   /**
    * The vehicles currently mid-glide. The per-frame pass walks THIS, not the
    * whole fleet, and the render hold is derived from it together with the
-   * height queue — so both track work that exists rather than a window of time
+   * height queue - so both track work that exists rather than a window of time
    * the layer hoped would contain some.
    * @type {Set<object>}
    */
@@ -96,8 +96,8 @@ export function createState({ services }) {
   /** The card text last published, so an unchanged card is not re-sent. */
   state._selectedCardText = null;
   /**
-   * Bumped whenever the set of vehicles DETECT may see could have changed —
-   * a poll, a visibility sweep, a removal, a selection — so the candidate
+   * Bumped whenever the set of vehicles DETECT may see could have changed -
+   * a poll, a visibility sweep, a removal, a selection - so the candidate
    * list is rebuilt on change rather than on every paint.
    */
   state._detectRevision = 0;

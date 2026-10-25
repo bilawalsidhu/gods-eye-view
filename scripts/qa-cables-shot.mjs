@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * qa-cables-shot — capture the cables layer at two fixed cameras for
+ * qa-cables-shot - capture the cables layer at two fixed cameras for
  * before/after visual-identity comparison. Writes to gitignored qa-shots/.
  * Usage: node scripts/qa-cables-shot.mjs [--url http://localhost:4214] [--tag before]
  */

@@ -1,13 +1,13 @@
-// src/data/geoid.test.mjs — EGM96 geoid-undulation lookup (docs/plans/2026-07-05-entity-height-datum-fix.md Task 1).
+// src/data/geoid.test.mjs - EGM96 geoid-undulation lookup (docs/plans/2026-07-05-entity-height-datum-fix.md Task 1).
 //
-// Locks the module's public interface (later tasks — aircraft altitude
-// correction, CCTV terrain fallback — call this verbatim):
+// Locks the module's public interface (later tasks - aircraft altitude
+// correction, CCTV terrain fallback - call this verbatim):
 //   ensureGeoidReady(): Promise<void>   lazy-loads the grid on first call
 //   geoidHeight(latDeg, lonDeg): number N in metres; throws if not ready
 //   orthometricToEllipsoidal(hMslM, latDeg, lonDeg): number  hMslM + N
 //
 // Tolerance is loose (±2.5 m) by design: the bundled grid is EGM96 while the
-// plan's "Verified facts" reference values are Re:Earth's EGM2008 — the two
+// plan's "Verified facts" reference values are Re:Earth's EGM2008 - the two
 // models differ by up to ~1 m, and the brief's own tolerance absorbs that
 // spread rather than asserting exact agreement.
 import { test } from 'node:test';
@@ -25,7 +25,7 @@ const LONDON = { lat: 51.5072, lon: -0.1275, nExpected: 46.1 };
 const AUSTIN = { lat: 30.2672, lon: -97.7431, nExpected: -26.9 };
 const SF = { lat: 37.7749, lon: -122.4194, nExpected: -32.2 };
 const DENVER = { lat: 39.7392, lon: -104.9903, nExpected: -17.3 };
-/** SFO runway 28R touchdown area — the cockpit/OSD field report's coordinates. */
+/** SFO runway 28R touchdown area - the cockpit/OSD field report's coordinates. */
 const SFO = { lat: 37.616, lon: -122.368 };
 
 test('geoidHeight throws before ensureGeoidReady() has resolved', () => {
@@ -74,7 +74,7 @@ test('geoidHeight wraps longitude consistently (359.87 === -0.13)', async () => 
   // Both longitudes name the same physical point (360° apart); the
   // underlying grid lookup takes different floating-point paths to get
   // there (mod-2π normalization), so equality is asserted to FP epsilon
-  // rather than bit-for-bit — this is the "consistent," not "identical
+  // rather than bit-for-bit - this is the "consistent," not "identical
   // bit pattern," invariant the brief calls for.
   assert.ok(
     Math.abs(wrapped - normal) < 1e-9,
@@ -82,7 +82,7 @@ test('geoidHeight wraps longitude consistently (359.87 === -0.13)', async () => 
   );
 });
 
-// ── ellipsoidalToMslDisplayM — the ALT-readout datum correction ─────────────
+// ── ellipsoidalToMslDisplayM - the ALT-readout datum correction ─────────────
 //
 // Field report (2026-08-22, cockpit parked at SFO): the camera OSD read
 // "ALT: -15M" because Cesium's camera height is ELLIPSOIDAL and San Francisco
@@ -108,7 +108,7 @@ test('the reported SFO cockpit OSD height turns into a small positive MSL number
   );
 });
 
-test('a positive undulation lowers the readout — the correction subtracts N', async () => {
+test('a positive undulation lowers the readout - the correction subtracts N', async () => {
   await ensureGeoidReady();
   const n = geoidHeight(LONDON.lat, LONDON.lon);
   assert.ok(n > 40, `London undulation should be strongly positive, got ${n}`);

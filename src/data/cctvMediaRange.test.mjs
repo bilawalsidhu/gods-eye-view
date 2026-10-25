@@ -539,7 +539,7 @@ test('a folded CR/LF range never reaches the upstream through a real client', as
   });
 
   // Either Node's parser refuses the request outright, or it reaches the route
-  // and the route drops the value — but it must never be forwarded.
+  // and the route drops the value - but it must never be forwarded.
   const reachedRoute = app.requests.length > 0;
   assert.match(raw, /^HTTP\/1\.1 (200|400)/);
   if (reachedRoute) {

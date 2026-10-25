@@ -7,7 +7,7 @@ import {
  * Vite plugin: adsb.lol military aircraft proxy with 12 s response cache.
  *
  * Serves GET /api/military from https://api.adsb.lol/v2/mil. When upstream
- * fails — a thrown fetch OR a non-OK status such as 429 — the proxy serves its
+ * fails - a thrown fetch OR a non-OK status such as 429 - the proxy serves its
  * cached body as STALE instead of relaying the failure, and it backs off from
  * upstream for the Retry-After period (bounded) so a rate limit is never
  * hammered mid-cooldown. A failure with nothing cached is relayed as-is.

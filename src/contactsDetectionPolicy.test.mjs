@@ -5,7 +5,7 @@ import { _syncContextModeButtons } from './ui/contextPresentation.js';
 // or in third-person tracking inside Contacts").
 //
 // These drive the REAL detection engine (src/data/detection.js) through the
-// REAL transition function ui.js calls — no stand-in for the engine. The one
+// REAL transition function ui.js calls - no stand-in for the engine. The one
 // thing a Node test cannot boot is the context-mode transaction itself (Cesium
 // plus the data-manager intent lanes); that wiring is pinned by source
 // assertions here and driven for real in scripts/qa-cockpit-utility.mjs.
@@ -112,7 +112,7 @@ test('a density-only difference is still a restore worth making', () => {
 
 test('activating Contacts lands on the tactical preset, not the last profile used', () => {
   // Owner playtest: the Contacts default is the military look, and it "should
-  // just happen" — so a SPARSE session does NOT drag SPARSE into Contacts.
+  // just happen" - so a SPARSE session does NOT drag SPARSE into Contacts.
   setDetectionTuning({ densityPct: 25 });
   startAt('SPARSE');
   startAt('OFF');
@@ -140,7 +140,7 @@ test('the Contacts preset is the very object the military styles apply', () => {
   );
 });
 
-test('the shared preset applier ignores the style override flag — the caller owns it', () => {
+test('the shared preset applier ignores the style override flag - the caller owns it', () => {
   const applier = shellMethod('_applyDetectionPreset').toString();
   assert.ok(applier.length > 0);
   assert.doesNotMatch(applier, /_detectionUserOverridden/);
@@ -162,7 +162,7 @@ test('activating Contacts leaves an already-on profile untouched', () => {
 test('detection survives cockpit enter and exit inside a Contacts session', () => {
   // The owner's actual bug: "when I leave the Cockpit, detections go off".
   // Cockpit is a move WITHIN Contacts and must not touch detection at all, so
-  // the only transitions here are the Contacts ones — repeated syncs while the
+  // the only transitions here are the Contacts ones - repeated syncs while the
   // session stays active.
   startAt('OFF');
   let { restore } = transition(true);
@@ -223,7 +223,7 @@ test('re-activating Contacts re-enables after a session-scoped off', () => {
 test('a style chosen DURING the session keeps its auto-enable instead of the snapshot', () => {
   // Cross-check that the military-style auto-Panoptic path still composes: the
   // preset is already on, so the style is not fighting Contacts, and on the way
-  // out the style rule — younger than the snapshot — wins.
+  // out the style rule - younger than the snapshot - wins.
   startAt('OFF');
   const { restore } = transition(true);
   setDetectionModeByLabel('DENSE'); // _applyStylePresetDefaults('surveillance')
@@ -296,7 +296,7 @@ test('detection is wired to the Contacts transaction, and cockpit no longer touc
     'called from _syncContextModeButtons, the funnel every _contextMode mutation routes through',
   );
   assert.match(uiSource, /syncDetection: \(\) => this\._syncContactsDetection\(\)/);
-  // The cockpit vision hook — the old trigger — must be out of the detection
+  // The cockpit vision hook - the old trigger - must be out of the detection
   // business entirely, or leaving the cockpit turns detections off again.
   const visionHook = uiSource.slice(
     uiSource.indexOf('_setCockpitVision(mode, active, { revealParameters = false } = {}) {'),
@@ -321,7 +321,7 @@ test('share serialization publishes the operator preference, not the Contacts ov
   );
 
   // Contacts active: the live values are forced Dense @ 75%, but the author's
-  // own OFF @ 50% is what deactivation restores — and what the link must carry.
+  // own OFF @ 50% is what deactivation restores - and what the link must carry.
   assert.deepEqual(
     shareableDetectionState({
       owned: { mode: 'OFF', densityPct: 50 },
@@ -356,7 +356,7 @@ test('the share cache is healed whenever Contacts ownership changes, engine or n
 
   // The regression: exiting Contacts while a MILITARY STYLE owns detection
   // produces changed:false (the style preset already matches what is drawn),
-  // but ownership was just released — so serialization flips from the saved
+  // but ownership was just released - so serialization flips from the saved
   // snapshot to live state and the cached link is now wrong.
   assert.equal(
     shareCacheNeedsHeal({ changed: false, hadOwnership: true, hasOwnership: false }),

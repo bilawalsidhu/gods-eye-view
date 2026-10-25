@@ -29,9 +29,9 @@ export class PanoramaxSourceError extends Error {
   }
 }
 
-const NO_ANSWER = msg('Panoramax did not answer in time — try again');
+const NO_ANSWER = msg('Panoramax did not answer in time - try again');
 const UNREACHABLE = msg(
-  'Panoramax could not be reached — check the connection',
+  'Panoramax could not be reached - check the connection',
 );
 
 /**

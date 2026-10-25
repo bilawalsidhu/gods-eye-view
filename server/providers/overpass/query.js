@@ -10,7 +10,7 @@ import {
 
 /**
  * Whether a normalized Overpass query is BOUNDARY-class (admin `is_in` lookups
- * and area→relation pivots) — the static, expensive geometry that earns the
+ * and area→relation pivots) - the static, expensive geometry that earns the
  * 30-day disk TTL. The enclosing-compound sweep and road fetches keep the
  * default TTL. Exported for tests.
  */
@@ -78,8 +78,8 @@ function sanitizeOverpassBody(rawBody) {
     return { ok: false, error: 'Malformed Overpass tag filter' };
   }
 
-  // Reject oversized radii in EVERY around form — point `around:r,lat,lon` AND the
-  // input-set form `around.set:r` — and parse the full numeric token so scientific
+  // Reject oversized radii in EVERY around form - point `around:r,lat,lon` AND the
+  // input-set form `around.set:r` - and parse the full numeric token so scientific
   // notation (`5e7`) can't slip a planet-scale radius past the cap.
   for (const m of stripped.matchAll(/around(?:\.\w+)?:\s*([\d.eE+-]+)/gi)) {
     const radius = Number(m[1]);
@@ -103,13 +103,13 @@ function sanitizeOverpassBody(rawBody) {
     }
   }
 
-  // Reject control-flow constructs the app never uses — their set/bound semantics
+  // Reject control-flow constructs the app never uses - their set/bound semantics
   // are hard to validate statically. The app only uses plain selectors + is_in /
   // area / pivot / recursion, so this denylist closes loop/transform escape hatches.
   if (/\b(?:foreach|complete|retro|compare|convert|make)\b/i.test(stripped)) {
     return { ok: false, error: 'Unsupported Overpass construct' };
   }
-  // `poly:` has unchecked extent and the app never uses it — reject outright
+  // `poly:` has unchecked extent and the app never uses it - reject outright
   // (position-independent, so tag filters can't hide it).
   if (/\bpoly\s*:/i.test(stripped)) {
     return { ok: false, error: 'Overpass poly filter not allowed' };
@@ -153,8 +153,8 @@ function sanitizeOverpassBody(rawBody) {
     const directBound =
       /around:\s*\d/.test(probe) ||
       OVERPASS_BBOX_RE.test(probe) ||
-      /is_in\s*\(/.test(probe) || // is_in(lat,lon) — the function form only
-      /\barea\s*\(/.test(probe); // area(id) — bounded as a set definition
+      /is_in\s*\(/.test(probe) || // is_in(lat,lon) - the function form only
+      /\barea\s*\(/.test(probe); // area(id) - bounded as a set definition
 
     const setBound = inputSets.some((s) => boundedSets.has(s));
     const bounded = directBound || setBound;

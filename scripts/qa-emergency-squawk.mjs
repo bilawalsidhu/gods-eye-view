@@ -1,22 +1,22 @@
 #!/usr/bin/env node
 /**
- * qa-emergency-squawk.mjs — headless proof for transponder emergency highlighting.
+ * qa-emergency-squawk.mjs - headless proof for transponder emergency highlighting.
  *
  * Drives the REAL app in headless Chromium against a dev server (keyless).
  * `/api/flights` and `/api/military` are stubbed in the page so the codes
  * are deterministic; everything downstream (normalizers, records, rendering,
  * Cockpit HUD) is production code.
  *
- *   (i)   TINT — a civil 7600 and a military ADS-B `general` emergency are
+ *   (i)   TINT - a civil 7600 and a military ADS-B `general` emergency are
  *         drawn red; a normal civil flight stays white, a normal military
  *         flight stays amber, and a military `minfuel` priority stays amber.
  *         POLL/MODELS verify existing untracked billboards and 3D models
  *         repaint when emergency status starts and clears.
- *   (ii)  HUD — tracking the military emergency and entering Cockpit names
+ *   (ii)  HUD - tracking the military emergency and entering Cockpit names
  *         the broadcast code on the aircraft-meta line, in red.
- *   (iii) CLEAR — the next poll drops the code: the HUD line returns to its
+ *   (iii) CLEAR - the next poll drops the code: the HUD line returns to its
  *         normal wording (the status is not sticky).
- *   (iv)  RELEASE — the code returns and tracking stops: the restored fleet
+ *   (iv)  RELEASE - the code returns and tracking stops: the restored fleet
  *         billboard is red, not the plain military amber.
  *
  * Screenshots saved to qa-shots/emergency-*.png (gitignored).
@@ -49,7 +49,7 @@ const results = [];
 function record(name, ok, detail) {
   results.push({ name, ok, detail });
   const tag = ok ? '\x1b[32mPASS\x1b[0m' : '\x1b[31mFAIL\x1b[0m';
-  console.log(`  [${tag}] ${name}${detail ? `  — ${detail}` : ''}`);
+  console.log(`  [${tag}] ${name}${detail ? `  - ${detail}` : ''}`);
 }
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -281,7 +281,7 @@ async function main() {
     );
 
     // ── (i) TINT ──────────────────────────────────────────────────────────
-    console.log('(i) TINT — emergency codes through the real layers...');
+    console.log('(i) TINT - emergency codes through the real layers...');
     await page.evaluate(async () => {
       const dm = window.__godsEyeView.dataManager;
       await dm.setEnabled('flights', true, { origin: 'user' });
@@ -399,7 +399,7 @@ async function main() {
       await dm.refreshLayer('military');
     });
     // ── (ii) HUD ──────────────────────────────────────────────────────────
-    console.log('\n(ii) HUD — track the emergency and enter Cockpit...');
+    console.log('\n(ii) HUD - track the emergency and enter Cockpit...');
     const tracked = await page.evaluate(() =>
       Boolean(
         window.__godsEyeView.dataManager.layers
@@ -476,7 +476,7 @@ async function main() {
     await shoot(page, 'cockpit-hud');
 
     // ── (iii) CLEAR ───────────────────────────────────────────────────────
-    console.log('\n(iii) CLEAR — the next poll drops the code...');
+    console.log('\n(iii) CLEAR - the next poll drops the code...');
     await page.evaluate(async () => {
       window.__squawkQaPhase = 'cleared';
       await window.__godsEyeView.dataManager.refreshLayer('military');
@@ -504,7 +504,7 @@ async function main() {
     await shoot(page, 'cockpit-cleared');
 
     // ── (iv) RELEASE ──────────────────────────────────────────────────────
-    console.log('\n(iv) RELEASE — the code returns, then tracking stops...');
+    console.log('\n(iv) RELEASE - the code returns, then tracking stops...');
     await page.evaluate(async () => {
       window.__squawkQaPhase = 'emergency';
       const dm = window.__godsEyeView.dataManager;

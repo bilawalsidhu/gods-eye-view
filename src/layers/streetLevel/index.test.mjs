@@ -1005,7 +1005,7 @@ test('with no Mapillary token, the layer points at Street View, on Google 3D onl
 test('a failed lookup’s error goes when another source is lit; a provider can open an image without framing', async (t) => {
   const failing = fakeProvider({
     nearestImage: async () => {
-      throw new Error('KartaView did not answer in time — try again');
+      throw new Error('KartaView did not answer in time - try again');
     },
   });
   const other = fakeProvider({ id: 'other', pickPrefix: 'oth:' });
@@ -1098,7 +1098,7 @@ test('switching source by params (the chip path) stops a running lookup and clea
 test('switching source by params clears a failed lookup’s error; reapplying the same switches does not', async (t) => {
   const failing = fakeProvider({
     nearestImage: async () => {
-      throw new Error('KartaView did not answer in time — try again');
+      throw new Error('KartaView did not answer in time - try again');
     },
   });
   const { layer: second } = await enabledLayer(t, [

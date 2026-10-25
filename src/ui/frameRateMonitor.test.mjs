@@ -80,7 +80,7 @@ test('FPS measures rendered frames only while shown and releases its resources',
   now = 3000;
   t.mock.timers.tick(1000);
   f.press();
-  assert.equal(f.readout().textContent, 'FPS —');
+  assert.equal(f.readout().textContent, 'FPS -');
   f.monitor.destroy();
   f.monitor.destroy();
   assert.equal(f.frames.size, 0);

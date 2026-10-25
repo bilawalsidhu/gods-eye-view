@@ -3,8 +3,8 @@
  * Are the fly_route pins actually load-bearing?
  *
  * A pin that is red only when you delete the whole feature proves very little.
- * This reverts each fix INDIVIDUALLY — the smallest edit that reintroduces the
- * original defect — and requires src/routeCinematics.test.mjs to go red for it.
+ * This reverts each fix INDIVIDUALLY - the smallest edit that reintroduces the
+ * original defect - and requires src/routeCinematics.test.mjs to go red for it.
  * Every entry names the defect it restores, so the count is reproducible rather
  * than asserted in a commit message.
  *
@@ -126,10 +126,10 @@ const missed = [];
 
 process.on('exit', () => fs.writeFileSync(SOURCE, original));
 
-console.log(`\nfly_route pin strength — ${MUTATIONS.length} individual reverts\n`);
+console.log(`\nfly_route pin strength - ${MUTATIONS.length} individual reverts\n`);
 for (const { defect, from, to } of MUTATIONS) {
   if (!original.includes(from)) {
-    missed.push(`${defect} (ANCHOR MISSING — the mutation no longer applies)`);
+    missed.push(`${defect} (ANCHOR MISSING - the mutation no longer applies)`);
     console.log(`  \x1b[31mSTALE\x1b[0m ${defect}`);
     continue;
   }

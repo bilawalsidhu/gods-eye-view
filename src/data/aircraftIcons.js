@@ -7,15 +7,15 @@
  * 48,48) instead of the old 32×32. The billboards themselves are still added at
  * width/height 20 (24 tracked) in flights.js / militaryFlights.js, so Cesium
  * DOWN-samples this larger, higher-precision source to the same on-screen
- * footprint — crisp anti-aliased edges instead of an upscaled 32px bitmap. The
+ * footprint - crisp anti-aliased edges instead of an upscaled 32px bitmap. The
  * on-screen size is unchanged and CLASS_SCALE_2D is untouched (no scale
  * compensation needed: the billboard's explicit width/height, not the SVG's,
- * sets the pixel size — the intrinsic SVG size only controls raster fidelity).
+ * sets the pixel size - the intrinsic SVG size only controls raster fidelity).
  *
  * All glyphs are nose-up (nose toward -Y at rotation 0; the screen-projected
  * rotation pipeline in iconOrientation.js spins the whole glyph). Fill is white
  * with a subtle dark hairline stroke so the tint pipeline (billboard.color =
- * white / cyan-tracked / amber-military, plus .withAlpha fades) keeps working —
+ * white / cyan-tracked / amber-military, plus .withAlpha fades) keeps working -
  * no per-glyph hardcoded colors that would fight the tint.
  *
  * MIXED-SET UPDATE (2026-08-15, owner Hangar picks): airliner/widebody/
@@ -32,7 +32,7 @@
  */
 
 const VIEW = 96;
-const C = VIEW / 2; // 48 — glyph centre
+const C = VIEW / 2; // 48 - glyph centre
 
 // Hairline dark edge (scaled for the 96 box: ~1.5u ≈ the old 0.5u at 32).
 const STROKE =
@@ -40,7 +40,7 @@ const STROKE =
 // Heavier edge for the chart-symbol ("bold") glyphs adopted 2026-08-15.
 const STROKE_BOLD =
   'stroke="rgba(0,0,0,0.38)" stroke-width="2" stroke-linejoin="round"';
-// Softer white for translucent detail (prop discs, rotor disc) — still white so
+// Softer white for translucent detail (prop discs, rotor disc) - still white so
 // the tint multiplies cleanly; only the alpha differs.
 const DISC = 'fill="white" fill-opacity="0.5"';
 
@@ -74,7 +74,7 @@ const BODIES = {
     <path d="M-2,35.5 L 2,35.5 L 2,42.5 L -2,42.5 Z" fill="white"/>`,
 
   // ── Quadjet: the widest swept jet, with FOUR bold underwing engine pods (two
-  //    per wing) that hang well below the trailing edge — the wing reads as a
+  //    per wing) that hang well below the trailing edge - the wing reads as a
   //    4-lumped bar even when the individual pods blur together at ~20px.
   quadjet: `
     <path d="M0,-45 C 7,-42 9,-34 9,-25 L 9,-11
@@ -87,7 +87,7 @@ const BODIES = {
     <rect x="10" y="4.5" width="7" height="12" rx="2" fill="white"/>
     <rect x="24" y="9" width="7" height="12" rx="2" fill="white"/>`,
 
-  // ── Turboprop: bold STRAIGHT (unswept) wings — thicker chord than a jet — two
+  // ── Turboprop: bold STRAIGHT (unswept) wings - thicker chord than a jet - two
   //    fat nacelles that jut ahead of the leading edge, each capped by a solid
   //    prop disc. Reads as "straight wing with two lumps + discs" at ~20px.
   turboprop: `
@@ -103,7 +103,7 @@ const BODIES = {
     <path d="M15.5,-19 h4 v5 h-4 Z" fill="white"/>
     <path d="M-1.7,31.5 L 1.7,31.5 L 1.7,38.5 L -1.7,38.5 Z" fill="white"/>`,
 
-  // ── Light GA: small and CHUNKY — short, DEEP-chord straight wings and a fat
+  // ── Light GA: small and CHUNKY - short, DEEP-chord straight wings and a fat
   //    stubby fuselage make it read as a solid little block (not a thin cross),
   //    with a bold nose prop disc. The short deep wing is the anti-glider cue.
   light: `
@@ -120,7 +120,7 @@ const BODIES = {
     <ellipse cx="0" cy="-29" rx="12" ry="3.8" ${DISC}/>`,
 
   // ── Glider: VERY long, high-aspect TAPERED wings (fat root → thin tips) on a
-  //    slim fuselage with a T-tail. The extreme span is the whole identity — it
+  //    slim fuselage with a T-tail. The extreme span is the whole identity - it
   //    reads as "the wide skinny one" against light's short stubby wings.
   glider: `
     <path d="M0,-35 C 2.4,-33 3,-29 3,-25 L 3,-14
@@ -163,7 +163,7 @@ const BODIES = {
   // 2026-08-15 Hangar additions: two NEW classes shipped with the real-model
   // fleet (CLASS_MODEL_REAL). Same contract as the set above: 96×96 nose-up,
   // white fill, hairline stroke, tint-safe.
-  // Business jet — slender fuselage, modest swept wing, aft engines, T-tail.
+  // Business jet - slender fuselage, modest swept wing, aft engines, T-tail.
   bizjet: `
     <path d="M0,-42
              L 2.6,-36 L 3.4,-26 L 3.4,-8
@@ -176,7 +176,7 @@ const BODIES = {
              L -3.8,25 L -8,26 L -8,18 L -3.6,16
              L -3.6,6 L -27,13 L -27,8 L -3.4,-8
              L -3.4,-26 L -2.6,-36 Z" fill="white" ${STROKE}/>`,
-  // ── TR-3B (hidden 9th kind, Easter egg — NOT a classifyAircraft() output).
+  // ── TR-3B (hidden 9th kind, Easter egg - NOT a classifyAircraft() output).
   //    The canonical black-triangle silhouette: a dark isosceles delta with a
   //    light at each corner and a dimmer one at the centre. Reached only by
   //    explicit user conversion (see tr3bRegistry.js), never by classification.
@@ -184,7 +184,7 @@ const BODIES = {
   //    DELIBERATE BREAK from the white-fill contract above: this glyph is a
   //    SHADOW, so it carries its own near-black fill. The billboard tint still
   //    multiplies (white fleet / cyan tracked / amber military), which darkens
-  //    rather than lightens — the triangle stays a silhouette in every layer,
+  //    rather than lightens - the triangle stays a silhouette in every layer,
   //    and the corner lights pick the tint up as their hue.
   tr3b: `
     <path d="M0,-38 L 40,30 L -40,30 Z"
@@ -223,7 +223,7 @@ const BODIES = {
     <circle cx="28" cy="21" r="5.2" fill="#ffffff"/>
     <circle cx="0" cy="6" r="3.6" fill="#ffffff" fill-opacity="0.82"/>`,
 
-  // Large UAV (Reaper-class) — bulbous sensor nose, very long slender
+  // Large UAV (Reaper-class) - bulbous sensor nose, very long slender
   // straight wings, slim tail boom, canted V-tail.
   uav: `
     <path d="M0,-40
@@ -247,7 +247,7 @@ const _b64 = (s) =>
 
 /** Fleet raster: billboards render at ~40–58 DEVICE px (width 20–24 CSS ×
  *  Retina × class scale). Cesium's billboard atlas has no mipmaps, so a big
- *  texture gets GPU-minified into mush (192 px ÷ 40 = 4.8× — the owner's
+ *  texture gets GPU-minified into mush (192 px ÷ 40 = 4.8× - the owner's
  *  "soft" glyphs; the pre-2026-08-15 96 px raster aliased instead). Rastering
  *  NEAR the display size lets the browser's SVG AA do the work: crisp AND
  *  smooth. 64 covers the 40–58 px fleet band with ≤1.6× minification. */

@@ -1,12 +1,12 @@
 #!/usr/bin/env node
 /**
- * qa-vessel-datum.mjs — assertion harness for the AIS vessel vertical-datum
+ * qa-vessel-datum.mjs - assertion harness for the AIS vessel vertical-datum
  * pass (docs/superpowers/specs/2026-07-27-vessel-datum-design.md).
  *
  * Drives the REAL app in headless Chromium against the LIVE AISStream feed
  * and asserts, per port:
  *   1. every vessel billboard is depth-test-free
- *      (disableDepthTestDistance === Infinity — locked principle #2), and
+ *      (disableDepthTestDistance === Infinity - locked principle #2), and
  *   2. near-port anchors sit at the SEA SURFACE, not the ellipsoid: median
  *      ellipsoidal height within the EGM96 band (N + 3 m lift):
  *      Rotterdam N ≈ +43.7 → ≈ +46.7 m, Houston N ≈ −28.4 → ≈ −25.4 m.
@@ -58,7 +58,7 @@ const CHROME_EXECUTABLE_CANDIDATES = [
   // Prefer puppeteer's version-pinned Chrome-for-Testing over the system
   // Chrome: /Applications auto-updates underneath the harnesses, and its
   // software-GL behavior shifts across majors (system Chrome 150 blew the
-  // tile-gated drain budget under SwiftShader on 2026-07-30 — six
+  // tile-gated drain budget under SwiftShader on 2026-07-30 - six
   // false-negative qa-cctv-v2 runs against a healthy build). A deterministic
   // pinned browser beats the newest one for regression harnesses.
   await puppeteer.executablePath().catch(() => null),
@@ -77,7 +77,7 @@ function findChromeExecutable() {
 }
 
 /**
- * In-page probe: locate the vessel BillboardCollection (duck-typed — its
+ * In-page probe: locate the vessel BillboardCollection (duck-typed - its
  * billboards carry the vessel record as `id`, so `id.mmsi` exists), then
  * report depth-test flags across a sample and ellipsoidal heights of
  * near-port billboards.
@@ -133,7 +133,7 @@ function probeVessels({ portLat, portLon, nearDeg, sampleCap }) {
 }
 
 async function main() {
-  console.log(`\nAIS Vessel Datum — assertion harness`);
+  console.log(`\nAIS Vessel Datum - assertion harness`);
   console.log(`  App URL : ${APP_URL}`);
   console.log(`  Ports   : ${PORT_KEYS.join(', ')}\n`);
 
@@ -219,7 +219,7 @@ async function main() {
         await new Promise((r) => setTimeout(r, 2000));
       }
 
-      const fmt = (v) => (v === null || v === undefined ? '—' : v.toFixed ? v.toFixed(1) : String(v));
+      const fmt = (v) => (v === null || v === undefined ? '-' : v.toFixed ? v.toFixed(1) : String(v));
       if (!probe || probe.error) {
         console.error(`    [\x1b[31mFAIL\x1b[0m] probe error: ${probe?.error || 'no probe result'}`);
         failures += 1;
@@ -243,7 +243,7 @@ async function main() {
         if (!heightOk) failures += 1;
       }
 
-      // Visual proof — re-assert the framing (the app's intro flight can land
+      // Visual proof - re-assert the framing (the app's intro flight can land
       // mid-probe on slow runs), wait for the photoreal tileset, screenshot.
       await page.evaluate((p) => {
         const v = window.__godsEyeView.viewer;
@@ -261,7 +261,7 @@ async function main() {
       }, port);
       await page
         .waitForFunction(() => window.__godsEyeView?.tileset?.tilesLoaded, { timeout: 60000, polling: 500 })
-        .catch(() => console.log('    (tileset settle timeout — screenshotting anyway)'));
+        .catch(() => console.log('    (tileset settle timeout - screenshotting anyway)'));
       await new Promise((r) => setTimeout(r, 2500));
       const outPath = path.join(OUT_DIR, `vessel-datum-${key}.png`);
       await page.screenshot({ path: outPath });

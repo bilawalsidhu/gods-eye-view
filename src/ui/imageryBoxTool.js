@@ -1,8 +1,8 @@
 /**
  * Box selection for the Recent Imagery layer: press on the world, drag, and
  * release to hand the layer a degrees box. Follows the draw tool's ownership
- * rules — the pointer is claimed for the session, the viewer's own click
- * actions are borrowed and given back, and `destroy()` returns everything —
+ * rules - the pointer is claimed for the session, the viewer's own click
+ * actions are borrowed and given back, and `destroy()` returns everything -
  * and freezes the camera only while a drag is in progress.
  */
 import * as Cesium from 'cesium';
@@ -240,7 +240,7 @@ export function initImageryBoxTool({
       if (!lease) {
         onCancel?.(
           'pointer-busy',
-          `${pointerOwner()} is using the pointer — close it first`,
+          `${pointerOwner()} is using the pointer - close it first`,
         );
         return active;
       }

@@ -49,7 +49,7 @@ for (const layer of LAYERS) {
     // Extra suppressions are allowed (the TR-3B Easter egg shares this guard,
     // pinned in tr3bRegistry.test.mjs); the cockpit exclusion is what this test
     // owns. The tracked regime is DEFAULT-ON by camera distance (2026-08-19), so
-    // it no longer routes through the toggle-gated `_modelRegimeActive` — the
+    // it no longer routes through the toggle-gated `_modelRegimeActive` - the
     // suppression is now an explicit early return.
     const regime = /^([ \t]*)function _trackedModelRegimeActive\b[\s\S]*?\n\1\}/m.exec(source)?.[0];
     assert.ok(regime, '_trackedModelRegimeActive is defined');
@@ -86,7 +86,7 @@ for (const layer of LAYERS) {
     assert.match(source, /isCockpitContact && !isCockpitNear[\s\S]*cockpitContactDotImage\(\)/,
       'only out-of-range Cockpit contacts become dots');
     // `_iconKind` is identity for every unconverted contact (see
-    // tr3bRegistry.test.mjs) — it only swaps the glyph for a contact the
+    // tr3bRegistry.test.mjs) - it only swaps the glyph for a contact the
     // operator explicitly converted into a TR-3B.
     assert.match(source, /bb\.image\s*=\s*aircraftIcon\(\s*_iconKind\(\s*icao24,\s*meta\?\.klass,?\s*\)(,\s*bb\._gevIconLarge\s*\?\s*TRACKED_ICON_PX\s*:\s*undefined)?,?\s*\)/,
       'near contacts and model fallbacks retain the class-derived aircraft silhouette');

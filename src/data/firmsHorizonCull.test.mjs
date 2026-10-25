@@ -17,7 +17,7 @@ import { unregisterSpriteCollection } from './spriteOrder.js';
 import { isOverlayPointVisible, normalizeOverlayEntry } from '../overlays/worldOverlay.js';
 
 const AUSTIN = { lon: -97.7, lat: 30.2 };
-/** Antipode of Austin — as far behind the limb as a point on Earth can be. */
+/** Antipode of Austin - as far behind the limb as a point on Earth can be. */
 const ANTIPODE = { lon: 82.3, lat: -30.2 };
 const TOKYO = { lon: 139.7, lat: 35.7 };
 /** Reported repro altitude for the through-the-globe defect. */
@@ -273,7 +273,7 @@ test('normalizeOverlayEntry: an accessor-backed cullPosition is read exactly onc
     },
   };
   const normalized = normalizeOverlayEntry('firms', entry);
-  assert.equal(reads, 1, 'one property read — not one per validated component');
+  assert.equal(reads, 1, 'one property read - not one per validated component');
   assert.deepEqual(
     [normalized.cullPosition.x, normalized.cullPosition.y, normalized.cullPosition.z],
     [4, 5, 6],
@@ -442,7 +442,7 @@ test('layer: a detection rebuild culls its own freshly-added sprites', async () 
   try {
     harness.layer.init(harness.viewer);
     await harness.layer.enable(harness.viewer);
-    // No camera event has fired — only renderDetections ran.
+    // No camera event has fired - only renderDetections ran.
     const show = harness.showById();
     assert.equal(show.size, 3, 'all three detections were rendered');
     assert.equal(show.get('firms-0'), true, 'the Austin fire under the camera is visible');
@@ -485,7 +485,7 @@ test('layer: the throttled preRender watcher re-culls on a camera move', async (
     harness.moveCameraTo(TOKYO.lon, TOKYO.lat);
     // The watcher is throttled to LOD_CHECK_MS (650 ms) against
     // performance.now(), whose value at this point depends on process
-    // start-up — so emit, wait out the full throttle window, and emit again.
+    // start-up - so emit, wait out the full throttle window, and emit again.
     // Whichever tick passes the gate, one of them must run the pass.
     harness.preRender.emit();
     await new Promise((resolve) => { setTimeout(resolve, 700); });

@@ -101,26 +101,26 @@ test('cluster badges lead with a readable count and concise dominant category', 
 test('Radio globe labels are compact and frequency-first without misreading names', () => {
   assert.equal(
     radioGlobeLabel({ name: 'La Zeta (Hermosillo) - 93.9 FM - XHHY - Uniradio' }),
-    '93.9 FM — La Zeta',
+    '93.9 FM - La Zeta',
   );
   assert.equal(
     radioGlobeLabel({ name: '100.3 The River - WQRV - Meridianville/Huntsville, AL' }),
-    '100.3 FM — The River',
+    '100.3 FM - The River',
   );
   assert.equal(radioGlobeLabel({ name: "80's New Wave Radio" }), "80's New Wave Radio");
   assert.equal(radioGlobeLabel({ name: "100 GREATEST OF THE 80'S" }), "100 GREATEST OF THE 80'S");
   assert.doesNotMatch(radioGlobeLabel({ name: 'Movie Soundtracks Hits Radio @ 1.fm' }), /^1 FM/);
   assert.equal(
     radioGlobeLabel({ name: '  La   Zeta - 93.9 fm - XHHY  ' }),
-    '93.9 FM — La Zeta',
+    '93.9 FM - La Zeta',
   );
   assert.equal(radioGlobeLabel({ name: '93.9 FM ---' }), '93.9 FM');
-  assert.equal(radioGlobeLabel({ name: 'Radio One 93.9 FM / 94.1 FM' }), '93.9 FM — Radio One');
+  assert.equal(radioGlobeLabel({ name: 'Radio One 93.9 FM / 94.1 FM' }), '93.9 FM - Radio One');
   const truncated = radioGlobeLabel({ name: 'Christian Power Praise Dot Net Worldwide Service' });
   assert.equal(truncated.length, 30);
   assert.ok(truncated.endsWith('…'));
-  const unicodeTruncated = radioGlobeLabel({ name: `${'a'.repeat(28)}📻 more` });
-  assert.equal(unicodeTruncated, `${'a'.repeat(28)}📻…`);
+  const unicodeTruncated = radioGlobeLabel({ name: `${'a'.repeat(28)}\u{1F4FB} more` });
+  assert.equal(unicodeTruncated, `${'a'.repeat(28)}\u{1F4FB}…`);
   assert.doesNotMatch(unicodeTruncated, /�/);
 });
 
@@ -1352,7 +1352,7 @@ test('accepted snapshots allowlist station fields and never regress generation i
     assert.equal(getRadioUIState().error, null);
 
     // Same generation NUMBER as the pre-restart snapshot from yet another
-    // instance must also fully reconcile — equal numbers across instances are
+    // instance must also fully reconcile - equal numbers across instances are
     // different catalogs, not "unchanged".
     const secondRestartStation = {
       ...station,
@@ -1543,7 +1543,7 @@ test('Radio text uses protected selected and bounded ambient WorldOverlay entrie
   assert.equal(selected.selected, true);
   assert.equal(selected.protected, true);
   assert.equal(selected.paintLane, 'selected');
-  assert.equal(selected.title, '93.9 FM — Austin News');
+  assert.equal(selected.title, '93.9 FM - Austin News');
   assert.equal(selected.position, position);
   assert.equal(selected.maxDistance, RADIO_GLOBE_INTERACTION_MAX_DISTANCE_M);
 
@@ -1573,7 +1573,7 @@ test('Radio text uses protected selected and bounded ambient WorldOverlay entrie
     priority: 1.5,
   });
   assert.equal(singleton.id, 'station:station-b');
-  assert.equal(singleton.title, '100.3 FM — The River');
+  assert.equal(singleton.title, '100.3 FM - The River');
   assert.equal(singleton.paintLane, 'ambient-label');
   assert.equal(singleton.collisionGroup, 'ambient-label');
   assert.equal(singleton.interactive, false);

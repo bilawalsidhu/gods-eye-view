@@ -12,7 +12,7 @@ import {
 import { STYLE_URL_NAMES } from './view/index.js';
 
 /**
- * Share Links — URL Hash State Management
+ * Share Links - URL Hash State Management
  *
  * Encodes camera position + style into the URL hash so links can be shared.
  * Format: #lat=37.77&lon=-122.42&alt=800&heading=0&pitch=-35&style=nvg&bloom=1&bi=84&bv=2&sharpen=0&si=65&hud=tactical&hv=1&dm=BALANCED&dd=50&da=elastic&kf=16&ko=0&cr=0&map=photoreal
@@ -113,7 +113,7 @@ export class ShareLinkManager {
     this._celestialRingEnabled = false;
     this._scopeEnabled = true;
     // Feather opens on a soft 11% scope-mask edge (owner final lock 2026-08-24,
-    // superseding the 08-22 hard-crop and 08-23 8% rulings) — mirrors
+    // superseding the 08-22 hard-crop and 08-23 8% rulings) - mirrors
     // SCOPE_FEATHER_RATIO_DEFAULT in scopeMask.js and the slider's markup value.
     this._scopeFeatherPct = 11;
     // null = the altitude-adaptive terminus (the default). A number pins the
@@ -208,7 +208,7 @@ export class ShareLinkManager {
       // as `scf` below: this is the PARSE fallback for a link that predates
       // `ko`, and such a link was authored when 5 was what its author saw. Every
       // link since carries `ko` explicitly, because the generator always writes
-      // the field — so nothing from the 5 % era depends on this number either
+      // the field - so nothing from the 5 % era depends on this number either
       // way. The first-run default is a different question, answered in
       // celestialRing.js.
       detectionOutsideOpacityPct: Math.max(
@@ -220,7 +220,7 @@ export class ShareLinkManager {
       // Deliberately still 35 through both later default moves (0 on
       // 2026-08-22, 8 on 2026-08-23). This is the PARSE fallback for a link that
       // predates `scf` entirely, and such a link was authored when 35 was what
-      // its author saw — restoring their view is the point of a share link. A
+      // its author saw - restoring their view is the point of a share link. A
       // link from the feather-0 era is unaffected either way: it carries
       // `scf=0` explicitly, because the generator always writes the field. The
       // first-run default is a different question, answered in scopeMask.js.
@@ -233,8 +233,8 @@ export class ShareLinkManager {
       ),
       // Absent (or non-numeric) `sce` = adaptive (null), the default behavior;
       // a value pins the terminus opacity percent, clamped into the SUPPORTED
-      // 94..100 band. `sce=0` used to survive as a sub-94 terminus — a hole in
-      // the mask — and then got written straight back out on the next update.
+      // 94..100 band. `sce=0` used to survive as a sub-94 terminus - a hole in
+      // the mask - and then got written straight back out on the next update.
       scopeTerminusPct: params.has('sce')
         ? clampScopeTerminusPct(params.get('sce'))
         : null,
@@ -583,7 +583,7 @@ export class ShareLinkManager {
     params.set('cr', this._celestialRingEnabled ? '1' : '0');
     params.set('sc', this._scopeEnabled ? '1' : '0');
     params.set('scf', Math.round(this._scopeFeatherPct).toString());
-    // Only written when pinned — an absent `sce` IS the adaptive default, so a
+    // Only written when pinned - an absent `sce` IS the adaptive default, so a
     // shared link never freezes the ramp for the recipient by accident. The
     // same 94..100 clamp applies on the way OUT, so a link can never carry an
     // unsupported terminus even if the field was set from somewhere else.

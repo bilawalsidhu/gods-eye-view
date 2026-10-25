@@ -26,7 +26,7 @@ export const ALLOCATION_STRATEGIES = Object.freeze([
 export const AIRCRAFT_BRACKET_ALPHA_FLOOR = 0.35;
 
 /**
- * Mirror of celestialRing's KEYHOLE_OUTSIDE_OPACITY_DEFAULT — the OUTSIDE
+ * Mirror of celestialRing's KEYHOLE_OUTSIDE_OPACITY_DEFAULT - the OUTSIDE
  * setting the bracket look is calibrated at, so `AIRCRAFT_BRACKET_ALPHA_FLOOR`
  * lands EXACTLY at the shipped default. Mirrored rather than imported so this
  * stays a pure policy module with no Cesium dependency; detectionPolicy.test.mjs
@@ -36,7 +36,7 @@ export const AIRCRAFT_BRACKET_ALPHA_FLOOR = 0.35;
  * That pin is the tripwire
  * for exactly this change, and the decision it forces is which of two things the
  * approval attaches to: the bracket BRIGHTNESS, or the slider POSITION. It is
- * the brightness — the floor exists so side aircraft brackets stay readable at
+ * the brightness - the floor exists so side aircraft brackets stay readable at
  * whatever the default is, and the owner's directive moved the label default,
  * not the bracket look. Holding the anchor at 0.05 instead would dim brackets to
  * 0.07 on a first run at the 1% default, which is the dead-zone complaint in
@@ -53,12 +53,12 @@ export const AIRCRAFT_BRACKET_FLOOR_ANCHOR = 0.01;
  *   slider 0    → 0     off means off; the operator's zero stays authoritative
  *   slider 0.01 → 0.35  EXACTLY the shipped constant at the default, so the
  *                       approved look is reproduced unchanged (above the
- *                       anchor the floor rises smoothly — 0.05 ≈ 0.376)
+ *                       anchor the floor rises smoothly - 0.05 ≈ 0.376)
  *   slider 1.0  → 1.0   the boost decays to nothing: at full opacity the floor
  *                       equals the label alpha and stops overriding at all
  *
  * Strictly increasing, so every step of the slider changes the picture and
- * there is no dead zone at either end — which was the whole complaint.
+ * there is no dead zone at either end - which was the whole complaint.
  *
  * A non-finite input falls back to the anchor: an unreadable setting should
  * reproduce the approved default, never silently blank the brackets.

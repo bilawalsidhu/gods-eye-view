@@ -1,7 +1,7 @@
 // Transport adapter for the AISStream watchdog.
 //
-// Extracted from vite.config.js so the socket lifecycle — the part that has
-// historically carried the defects — can be exercised offline with mock
+// Extracted from vite.config.js so the socket lifecycle - the part that has
+// historically carried the defects - can be exercised offline with mock
 // sockets. The adapter owns sockets and translates watchdog ACTIONS into
 // transport calls; the watchdog owns policy and owns no I/O.
 //
@@ -54,7 +54,7 @@ export function parseRetryAfterMs(raw, nowMs = Date.now()) {
  * Classify a transport or upstream failure.
  *
  * Only 'transport' may walk the fast backoff ladder. An auth rejection cannot
- * be fixed by retrying, and a rate limit must honour the server's own pacing —
+ * be fixed by retrying, and a rate limit must honour the server's own pacing -
  * treating either as a generic error is how a watchdog turns into a hammer.
  *
  * @param {{httpStatus?: number|string, message?: string,
@@ -105,7 +105,7 @@ export function classifyAisFailure(input = {}) {
  *
  * This exists to keep the message pipeline synchronous for every shape `ws`
  * actually delivers. An await inside the pipeline is a suspension point, and a
- * 'close' event arriving in the same tick would otherwise overtake the frame —
+ * 'close' event arriving in the same tick would otherwise overtake the frame -
  * which for an auth error envelope means the rejection is dropped and the
  * generic transport ladder runs instead.
  *
@@ -152,7 +152,7 @@ export const AIS_MAX_FRAME_BYTES = 1_000_000;
 
 /**
  * Approximate a frame's size without decoding it. String length is in code
- * units rather than UTF-8 bytes, which only ever under-counts — fine for a
+ * units rather than UTF-8 bytes, which only ever under-counts - fine for a
  * rejection threshold.
  * @param {*} data
  * @returns {number}
@@ -177,7 +177,7 @@ export function aisFrameByteLength(data) {
  * AddressedBinaryMessage, DataLinkManagementMessageData and UnknownMessage for
  * exactly that reason.
  *
- * If AISStream adds a type, add it here — do not infer it.
+ * If AISStream adds a type, add it here - do not infer it.
  */
 export const AIS_RECOGNIZED_MESSAGE_TYPES = Object.freeze(
   new Set([
@@ -224,7 +224,7 @@ function aisEnvelopeMmsi(envelope, body = {}) {
 }
 
 /**
- * Is this envelope real AIS traffic — the feed's only liveness proof?
+ * Is this envelope real AIS traffic - the feed's only liveness proof?
  *
  * Requires a recognised MessageType, a body filed under that type, AND an
  * MMSI. An envelope carrying nothing but an MMSI is not evidence the feed
@@ -275,7 +275,7 @@ export function parseAisEnvelope(text) {
  * @param {() => string} options.resolveUrl Upstream URL, read per connect.
  * @param {() => Object} options.buildSubscription Subscription payload.
  * @param {(envelope: Object) => boolean} options.ingestEnvelope Returns true
- *   only when the envelope was a real AIS record — the sole liveness proof.
+ *   only when the envelope was a real AIS record - the sole liveness proof.
  * @param {{wall: function, mono: function}} [options.clock]
  * @param {(message: string) => void} [options.warn]
  * @returns {Object} adapter handle
@@ -391,7 +391,7 @@ export function createAisStreamAdapter(options) {
 
     // `ws` emitter semantics only. The built-in WebSocket's addEventListener
     // hands the handler an Event rather than the frame data, so accepting it
-    // here would silently mis-decode every frame — and it cannot be used
+    // here would silently mis-decode every frame - and it cannot be used
     // anyway, having no terminate().
     if (typeof socket.on !== 'function') {
       sockets.delete(generation);
@@ -412,7 +412,7 @@ export function createAisStreamAdapter(options) {
       const actions = owner.onOpen(generation);
       if (actions.length) {
         runActions(owner, actions);
-        return; // orphan — hung up, never subscribed
+        return; // orphan - hung up, never subscribed
       }
       try {
         socket.send(JSON.stringify(buildSubscription()));
@@ -537,7 +537,7 @@ export function createAisStreamAdapter(options) {
     }
 
     const accepted = Boolean(ingestEnvelope(parsed.envelope));
-    if (!accepted) return; // valid JSON, but no AIS record — proves nothing
+    if (!accepted) return; // valid JSON, but no AIS record - proves nothing
     runActions(owner, owner.onMessage(generation));
   }
 

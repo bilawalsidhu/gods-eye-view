@@ -51,7 +51,7 @@ When a word next to a number cannot agree in every form, move the number after a
 | Scope (circular viewport mask)              | прицел                                                             |
 | heading / altitude / ground speed           | курс / высота / путевая скорость                                   |
 | HDG / BRG / CRS / FOV / DEST / SPD / RANGE  | КУРС / ПЕЛ. / ПУТЬ / ОБЗОР / НАЗН. / СКОР / ДАЛЬН.                 |
-| advisory (NHC/CPHC cyclone)                 | сводка (не «бюллетень»); Advisory center — центр циклона по сводке |
+| advisory (NHC/CPHC cyclone)                 | сводка (не «бюллетень»); Advisory center - центр циклона по сводке |
 | Street View (Google)                        | Просмотр улиц (как в русских Google Картах)                        |
 | CONUS (NOAA region code)                    | CONUS, без перевода                                                |
 | WHOT/BHOT, Ironbow (thermal modes, palette) | без перевода                                                       |

@@ -151,7 +151,7 @@ test('liveness is data, not socket state: silence past staleMs reports stale', (
   assert.deepEqual(h.types(), ['connect:1'], 'reporting stale must not touch the socket');
 });
 
-test('reporting is fast but recycling is slow — no reconnect at the stale threshold', () => {
+test('reporting is fast but recycling is slow - no reconnect at the stale threshold', () => {
   const h = goLive(harness());
   h.advance(AIS_WATCHDOG_DEFAULTS.staleMs + 1_000);
   h.tick();
@@ -170,7 +170,7 @@ test('reporting is fast but recycling is slow — no reconnect at the stale thre
 test('a late handshake does NOT reset the silence clock', () => {
   const h = harness();
   h.configure();
-  h.tick(); // connect:1 — the silence budget starts here
+  h.tick(); // connect:1 - the silence budget starts here
 
   // The socket opens just before the recycle deadline.
   h.advance(AIS_WATCHDOG_DEFAULTS.recycleAfterMs - 1_000);
@@ -257,7 +257,7 @@ test('single-socket invariant: a reconnect always terminates the old socket firs
   }
 });
 
-test('the machine never emits a graceful close — only terminate', () => {
+test('the machine never emits a graceful close - only terminate', () => {
   const h = goLive(harness());
   for (let round = 0; round < 4; round += 1) {
     h.advance(AIS_WATCHDOG_DEFAULTS.recycleAfterMs + 1);
@@ -333,7 +333,7 @@ test('the DOWN chip does not flicker hopeful while the slow retry runs behind it
   assert.equal(h.snapshot().status, 'down', 'a retry attempt must not read as recovery');
 
   h.open(h.watchdog.debugState().owned);
-  assert.equal(h.snapshot().status, 'down', 'a handshake proves nothing — still DOWN');
+  assert.equal(h.snapshot().status, 'down', 'a handshake proves nothing - still DOWN');
 });
 
 test('DOWN clears only when data actually flows again', () => {
@@ -435,7 +435,7 @@ test('a transport error terminates immediately and walks the ladder', () => {
   assert.equal(snap.nextAttemptAt - h.time.wall, AIS_WATCHDOG_DEFAULTS.backoffMs[0]);
 });
 
-test('an auth failure is terminal — no ladder, only a very slow probe', () => {
+test('an auth failure is terminal - no ladder, only a very slow probe', () => {
   const h = goLive(harness());
   h.fail(1, { kind: 'auth', message: 'AISStream rejected the API key (HTTP 401)' });
 
@@ -667,7 +667,7 @@ test('a silent probe is recycled on the auth cadence, never the silence budget',
   assert.equal(h.types().length, before, 'the silence budget does not apply while auth-failed');
   assert.equal(h.snapshot().status, 'auth-failed');
 
-  // It IS bounded, though — the probe is hung up on the auth cadence.
+  // It IS bounded, though - the probe is hung up on the auth cadence.
   h.advance(AIS_WATCHDOG_DEFAULTS.authProbeMs);
   h.tick();
   assert.equal(h.types().length, before + 1, 'the probe is still terminated, on its own clock');
@@ -732,7 +732,7 @@ test('a rate limit without Retry-After enters at the SLOWEST rung', () => {
 
 /**
  * Simulate an hour of unbroken failure with the watchdog ticked once a second
- * — far more often than either the 15s interval or the 60s browser poll — and
+ * - far more often than either the 15s interval or the 60s browser poll - and
  * count connection attempts. Steady-state failure must cost single digits.
  */
 function attemptsPerHour(kind, detail = {}) {

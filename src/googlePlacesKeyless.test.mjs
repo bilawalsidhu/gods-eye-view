@@ -69,8 +69,8 @@ test('keyless Places routes stay successful after the Google quota is exhausted'
     assert.equal(typeof textSearch, 'function');
 
     // The limiter allows one request per minute; a keyless capability response
-    // must never consume that quota, so every request on both routes — well
-    // past the limit — stays the same deliberate 200.
+    // must never consume that quota, so every request on both routes - well
+    // past the limit - stays the same deliberate 200.
     for (let attempt = 0; attempt < 3; attempt += 1) {
       const nearbyResponse = await invokeRoute(nearby, { url: '/?lat=30.27&lon=-97.74' });
       assert.equal(nearbyResponse.statusCode, 200);

@@ -93,7 +93,7 @@ export function celestrakProxy() {
       CELESTRAK_MAX_RESPONSE_BYTES,
       signal,
     );
-    // An upstream error page parses to zero TLEs — treat as failure, keep cache.
+    // An upstream error page parses to zero TLEs - treat as failure, keep cache.
     if (!/^1 /m.test(body)) throw new Error('no TLE lines in response');
     return { at: Date.now(), body };
   }
@@ -172,7 +172,7 @@ export function celestrakProxy() {
                 if (Date.now() >= cooldownUntil)
                   cooldownUntil = Date.now() + 60000;
                 console.warn(
-                  '[celestrak-proxy] refresh failed — serving cache if any',
+                  '[celestrak-proxy] refresh failed - serving cache if any',
                 );
                 return null;
               })
@@ -183,7 +183,7 @@ export function celestrakProxy() {
         if (fresh) {
           send(200, fresh.body, 'MISS', fresh);
         } else if (entry) {
-          send(200, entry.body, 'STALE-ERROR', entry); // upstream down — stale beats empty
+          send(200, entry.body, 'STALE-ERROR', entry); // upstream down - stale beats empty
         } else {
           send(502, 'celestrak fetch failed and no cache available', 'NONE');
         }

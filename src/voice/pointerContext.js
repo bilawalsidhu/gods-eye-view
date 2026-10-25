@@ -2,12 +2,12 @@
  * Point-and-ask: what the cursor is on when the user starts to speak.
  *
  * The tracker listens to pointer movement over the globe canvas and keeps only
- * the latest position plus a dwell anchor — no per-move picking. A pick runs
+ * the latest position plus a dwell anchor - no per-move picking. A pick runs
  * lazily: once when the pointer settles (a dwell) and once at a snapshot, and
  * the snapshot reuses the dwell's pick when the pointer has not moved since.
  *
- * Snapshots are taken when the user decides to ask — Space keydown for
- * push-to-talk, speech start for open mic — not when they finish talking,
+ * Snapshots are taken when the user decides to ask - Space keydown for
+ * push-to-talk, speech start for open mic - not when they finish talking,
  * because people point before or while they speak. A push-to-talk keydown
  * snapshot is HELD and reused by every speech start inside that hold.
  *

@@ -33,7 +33,7 @@ export function createLifecycle({
         // was not being listened to, and the preRender watcher is inert while
         // disabled AND while the (untimed) refetch below is in flight. So the
         // retained per-sprite show flags describe the OLD viewpoint. Re-cull
-        // BEFORE the collection becomes visible — otherwise re-enabling at a
+        // BEFORE the collection becomes visible - otherwise re-enabling at a
         // new location flashes far-side fires through the planet (and keeps
         // near-side ones hidden) until the fetch resolves.
         components.rendering.refreshHorizonCulling();

@@ -1,5 +1,5 @@
 /**
- * @file Queue-spawn helpers for jammed roads — platoon position math only.
+ * @file Queue-spawn helpers for jammed roads - platoon position math only.
  * Cesium-free so bumper-to-bumper spacing is unit-testable; the traffic
  * layer maps the returned distances onto Cartesian3 waypoints at spawn time.
  *
@@ -13,9 +13,9 @@
 const PLATOON_MIN = 4;
 /** @const {number} Random extra cars per platoon (0–4 → sizes 4–8). */
 const PLATOON_SPREAD = 5;
-/** @const {number} Meters — minimum bumper-to-bumper gap inside a platoon. */
+/** @const {number} Meters - minimum bumper-to-bumper gap inside a platoon. */
 const GAP_MIN_M = 6;
-/** @const {number} Meters — random extra gap (6–12 m total). */
+/** @const {number} Meters - random extra gap (6–12 m total). */
 const GAP_SPREAD_M = 6;
 
 /**
@@ -57,7 +57,7 @@ export function queuePlatoons(totalLen, count, rng = Math.random) {
 }
 
 /**
- * Flat variant of {@link queuePlatoons} — platoon structure discarded.
+ * Flat variant of {@link queuePlatoons} - platoon structure discarded.
  *
  * @param {number} totalLen - Road length in meters.
  * @param {number} count    - Dots to place.

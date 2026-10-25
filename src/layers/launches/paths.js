@@ -149,7 +149,7 @@ export function createPaths({ state: layerState, services, parts, source }) {
 
   function samplePath(path, progress, result) {
     if (!path?.length) return undefined;
-    // Degenerate returns clone into `result` when provided — handing back a
+    // Degenerate returns clone into `result` when provided - handing back a
     // path vertex would let an in-place caller mutate the path geometry.
     if (path.length === 1)
       return result ? Cesium.Cartesian3.clone(path[0], result) : path[0];

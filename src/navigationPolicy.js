@@ -52,7 +52,7 @@ function cockpitRefusal(noun) {
  * Aircraft focus reaches the stamp for free: it assigns `viewer.trackedEntity`,
  * and the UI stamps on `trackedEntityChanged`. Vessel and installation focus
  * fly the camera WITHOUT ever setting a tracked entity, so they have no such
- * seam — an earlier deferred geocode would still match the generation it
+ * seam - an earlier deferred geocode would still match the generation it
  * captured and could resolve on top of the new Context focus. This is that
  * missing seam, kept explicit so the flight and the stamp cannot drift apart.
  * @param {string} reason Diagnostic label for the taking path.

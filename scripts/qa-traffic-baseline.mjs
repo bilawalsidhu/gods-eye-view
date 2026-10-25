@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * qa-traffic-baseline.mjs — Traffic Phase 0 causal-chain capture.
+ * qa-traffic-baseline.mjs - Traffic Phase 0 causal-chain capture.
  *
  * Drives four client/cache conditions and prints the User Timing segments
  * emitted by `src/data/traffic.js` when `?trafficDebug=1` is present:
@@ -171,7 +171,7 @@ async function captureState(page, name, view, setDelay) {
 
 /** Format a duration without hiding zero-duration measurements. */
 function ms(value) {
-  return Number.isFinite(value) ? value.toFixed(1) : '—';
+  return Number.isFinite(value) ? value.toFixed(1) : '-';
 }
 
 /** Find one segment for the same trace/pass as a render measure. */
@@ -246,25 +246,25 @@ function rowsForCapture(capture) {
     const metadata = response?.detail || sample?.detail || render.detail || {};
     return {
       State: capture.name,
-      Pass: render.detail?.pass || '—',
-      Source: render.detail?.source || '—',
-      'Proxy cache': metadata.proxyCache || '—',
-      Upstream: metadata.proxyUpstream || '—',
+      Pass: render.detail?.pass || '-',
+      Source: render.detail?.source || '-',
+      'Proxy cache': metadata.proxyCache || '-',
+      Upstream: metadata.proxyUpstream || '-',
       'Last change→fetch ms': ms(fetchStart?.duration),
       'Fetch→response ms': ms(response?.duration),
       'response.json ms': ms(responseJson?.duration),
       'Flow race ms': ms(flowRace?.duration),
       'sampleHeight ms': ms(sample?.duration),
-      Calls: sample?.detail?.sampleHeightCalls ?? '—',
+      Calls: sample?.detail?.sampleHeightCalls ?? '-',
       'Mean/call ms': ms(sample?.detail?.sampleHeightMeanMs),
-      Cells: sample?.detail?.distinctCells ?? '—',
+      Cells: sample?.detail?.distinctCells ?? '-',
       'Waypoints ms': ms(materialize?.duration),
       'Dots ms': ms(render.duration),
       'Heat lines ms': ms(heatLines?.duration),
       'Render→postRender ms': ms(postRender?.duration),
       'Last change→visible ms': ms(visible?.duration),
-      Roads: render.detail?.roadCount ?? sample?.detail?.roadCount ?? '—',
-      Dots: render.detail?.dotCount ?? '—',
+      Roads: render.detail?.roadCount ?? sample?.detail?.roadCount ?? '-',
+      Dots: render.detail?.dotCount ?? '-',
     };
   });
 }
@@ -283,7 +283,7 @@ function readRenderer(page) {
 
 async function main() {
   const url = debugUrl(APP_URL);
-  console.log('\nTraffic Phase 0 — causal-chain baseline capture');
+  console.log('\nTraffic Phase 0 - causal-chain baseline capture');
   console.log(`  App URL          : ${url}`);
   console.log(`  Browser mode     : ${HEADFUL ? 'headful (real GPU expected)' : 'headless SwiftShader (relative-only)'}`);
   console.log(`  Degraded delay   : ${DEGRADED_DELAY_MS ? `${DEGRADED_DELAY_MS} ms/request` : 'skipped'}`);
@@ -423,7 +423,7 @@ async function main() {
       throw new Error(`no visible render captured for: ${missingStates.map((capture) => capture.name).join(', ')}`);
     }
     const exactRows = rowsForCapture(captures[0]);
-    if (!exactRows.some((row) => row.Source === 'client-cache' && row['Fetch→response ms'] === '—')) {
+    if (!exactRows.some((row) => row.Source === 'client-cache' && row['Fetch→response ms'] === '-')) {
       throw new Error('exact-viewport revisit did not use the traffic module cache');
     }
     for (const capture of captures.slice(1)) {
@@ -446,7 +446,7 @@ async function main() {
     console.table(rows);
     console.log('\nNotes:');
     console.log('  - Render→postRender is the first visible-frame boundary used by Phase 0.');
-    console.log('  - Proxy cache is read from X-Overpass-Cache; “—” means the client cache avoided fetch.');
+    console.log('  - Proxy cache is read from X-Overpass-Cache; “-” means the client cache avoided fetch.');
     console.log('  - response.json includes both body transfer and JSON decoding; the production path does not split them.');
     console.log('  - Last change→fetch is approximately the 320 ms FETCH_DEBOUNCE for the first fetch by construction.');
     console.log('  - Full-pass Last change→fetch also includes the intentionally sequential major pass.');

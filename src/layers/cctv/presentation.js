@@ -210,7 +210,7 @@ export function createPresentation({
         loaded: Math.min(layerState._geoLoadDone, layerState._geoLoadTotal),
         total: layerState._geoLoadTotal,
       },
-      // Ambient card tier telemetry (QA harnesses assert the fetch pacing —
+      // Ambient card tier telemetry (QA harnesses assert the fetch pacing -
       // minFrameFetchSpacingMs reads together with fetchMode: cold-fill bursts
       // legitimately reach ~250 ms, steady state stays >=1000 ms).
       ambientCards: {
@@ -247,7 +247,7 @@ export function createPresentation({
   }
 
   /**
-   * Throttled notifyListeners for transient (mid-drag) calibration patches —
+   * Throttled notifyListeners for transient (mid-drag) calibration patches -
    * the panel re-render is DOM-heavy, so live gizmo drags publish state at
    * ≤10 Hz while the in-world geometry still tracks every processed move.
    */

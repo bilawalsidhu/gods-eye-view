@@ -1,4 +1,4 @@
-// COORDINATE PARSING — what the search box accepts as a coordinate, and what it
+// COORDINATE PARSING - what the search box accepts as a coordinate, and what it
 // refuses. A refusal hands the text to the geocoders; a wrong accept flies the
 // operator somewhere they never asked for and looks like success, so every
 // malformed and ambiguous form below is pinned.

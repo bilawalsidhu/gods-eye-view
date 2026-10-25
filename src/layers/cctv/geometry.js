@@ -35,7 +35,7 @@ export function createGeometry({ state: layerState, services, parts, source }) {
     if (hasShippedFootprint(record)) {
       return record.camera.groundHeights.supports || null;
     }
-    // DEM footprint resolved on demand (activation / calibration commit) —
+    // DEM footprint resolved on demand (activation / calibration commit) -
     // valid in either regime, the DEM is what the globe stacks render anyway.
     const resolved = record?.footprintGround;
     if (resolved && resolved.poseHash === poseHash(footprintPose(record))) {
@@ -91,8 +91,8 @@ export function createGeometry({ state: layerState, services, parts, source }) {
   }
 
   /**
-   * V2 core geometry (design §2a): computes the pitched frustum pyramid — mount
-   * point, far-cap (monitor plane) center, and the 4 far-plane corners — purely
+   * V2 core geometry (design §2a): computes the pitched frustum pyramid - mount
+   * point, far-cap (monitor plane) center, and the 4 far-plane corners - purely
    * from the calibrated pose + a caller-supplied ground altitude. ZERO scene
    * queries: ground sampling happens in the caller (one-shot snap), and the
    * obstruction probe passes its clamp in as `rangeOverrideM`.
@@ -106,8 +106,8 @@ export function createGeometry({ state: layerState, services, parts, source }) {
    *   corners   = (capCenter ∓ halfW toward heading∓90°) ± upOffset
    * The whole rectangle is then lifted rigidly by the smallest amount that
    * puts every support point (a 3×3 grid over the plane) at least 2 m above
-   * the ground measured under it — the ground at the mount where nothing
-   * finer is known — so the plane never clips into the terrain and the
+   * the ground measured under it - the ground at the mount where nothing
+   * finer is known - so the plane never clips into the terrain and the
    * wireframe rays still terminate exactly on its corners.
    *
    * @param {Object} camera - Pose: lat, lon, headingDeg, pitchDeg, fovDeg,
@@ -175,7 +175,7 @@ export function createGeometry({ state: layerState, services, parts, source }) {
     // support point with the largest deficit against the ground measured
     // under it (a 3×3 grid over the plane; see footprint.js). Points without
     // a measurement fall back to the ground at the mount, so with no
-    // footprint data the bottom edge still clears the mount's ground — the
+    // footprint data the bottom edge still clears the mount's ground - the
     // old center-only clamp left the bottom edge tens of metres underground
     // (owner field test 2026-09-13). The rectangle stays rigid and the
     // wireframe rays still terminate exactly on its corners.
@@ -262,8 +262,8 @@ export function createGeometry({ state: layerState, services, parts, source }) {
 
   /**
    * Converts a computeFrustumGeometry result into the Cartesian3 positions the
-   * entities consume. Fresh objects per call (geometry updates are rare —
-   * slider/save/activation — and entities must never share scratch objects).
+   * entities consume. Fresh objects per call (geometry updates are rare -
+   * slider/save/activation - and entities must never share scratch objects).
    * @param {Object} geometry - Result of computeFrustumGeometry.
    * @returns {{ mount: Cesium.Cartesian3, capCenter: Cesium.Cartesian3,
    *   tl: Cesium.Cartesian3, tr: Cesium.Cartesian3, br: Cesium.Cartesian3,
@@ -289,7 +289,7 @@ export function createGeometry({ state: layerState, services, parts, source }) {
 
   /**
    * Unit ECEF direction of the frustum view axis (heading/pitch) at a position.
-   * Used by the plane orientation and the activation obstruction probe — both
+   * Used by the plane orientation and the activation obstruction probe - both
    * need the UNCLAMPED axis, so it comes from the pose, not from clamped points.
    * @param {Object} camera - Camera pose (headingDeg, pitchDeg).
    * @param {Cesium.Cartesian3} atPos - ECEF position defining the local ENU frame.
@@ -327,7 +327,7 @@ export function createGeometry({ state: layerState, services, parts, source }) {
    * Recomputes the pure frustum geometry from the camera pose + the given ground
    * altitude and writes it into the scene: billboard position, the 5 wireframe
    * polylines (4 corner rays + closed far-plane rectangle), and the monitor
-   * plane placement. This is the ONLY place v2 geometry is written — called on
+   * plane placement. This is the ONLY place v2 geometry is written - called on
    * slider input / save / activation / the one-shot ground snap, never per frame.
    * @param {Object} record - Camera record.
    * @param {number} groundAltM - Ground altitude at the mount (metres).
@@ -375,8 +375,8 @@ export function createGeometry({ state: layerState, services, parts, source }) {
     }
     // A live viewshed volume tracks its wireframe: rebuild from the SAME fresh
     // positions (weld invariant). Only records currently showing a volume pay
-    // this (6 triangles, synchronous — trivial even during slider/gizmo drags).
-    // Tint derives from the live active id, not the cached viewshedActiveTint —
+    // this (6 triangles, synchronous - trivial even during slider/gizmo drags).
+    // Tint derives from the live active id, not the cached viewshedActiveTint -
     // during an activation switch this runs BEFORE refreshCoverageStyles, and
     // the cache is stale for exactly that window.
     if (record.viewshedPrimitive) {
@@ -408,7 +408,7 @@ export function createGeometry({ state: layerState, services, parts, source }) {
    *    camera-height, and acceptance gates. Geometry reads only
    *    `cachedGroundFloor`, never a CCTV-owned point sample.
    *
-   * v2 samples ONLY the mount — the far cap hangs in the air off mountAlt. No
+   * v2 samples ONLY the mount - the far cap hangs in the air off mountAlt. No
    * timer, no deadband: this function is called only from the staggered
    * geometry queue (the enable-time drain + update()'s one-shot tiles-ready
    * completion re-enqueue), from explicit pose-edit call sites, and from the
@@ -540,10 +540,10 @@ export function createGeometry({ state: layerState, services, parts, source }) {
 
   /**
    * (Re)builds a record's translucent viewshed volume from its CURRENT
-   * frustumPositions — the same 5 Cartesians the wireframe draws, so the volume
+   * frustumPositions - the same 5 Cartesians the wireframe draws, so the volume
    * is welded to the cone by construction. Called only where the wireframe
    * already rewrites (style refresh on mode/visible-set/active changes,
-   * applyFrustumGeometry on pose edits) — no new update cadence, zero scene
+   * applyFrustumGeometry on pose edits) - no new update cadence, zero scene
    * queries (viewshed design §3b).
    * @param {Object} record - Camera record.
    * @param {boolean} isActive - Active camera gets the brighter fill.
@@ -604,7 +604,7 @@ export function createGeometry({ state: layerState, services, parts, source }) {
    * range, clamp the plane's effective range just short of the first hit so the
    * "big and dramatic" true end cap never clips into downtown buildings.
    *
-   * This is the ONLY raycast in the whole CCTV subsystem — once per activation,
+   * This is the ONLY raycast in the whole CCTV subsystem - once per activation,
    * never per-frame (the zero-raycast invariant applies to steady state). The
    * per-camera range slider overrides the clamp: a user-set rangeScale skips the
    * probe entirely. Probe failure/miss keeps the unclamped range.

@@ -31,7 +31,7 @@ function openAiRateLimiter() {
 
 /**
  * Apply the limiter to a request, writing a 429 when over the cap.
- * When `limiter` is null — the explicit `0` opt-out — this is a no-op
+ * When `limiter` is null - the explicit `0` opt-out - this is a no-op
  * returning `true`, so the handler proceeds unthrottled.
  *
  * @param {((key:string)=>boolean)|null} limiter
@@ -40,7 +40,7 @@ function openAiRateLimiter() {
  * @returns {boolean} True if the request may proceed; false if a 429 was sent.
  */
 function enforceRateLimit(limiter, req, res) {
-  if (!limiter) return true; // explicit 0 opt-out — unthrottled
+  if (!limiter) return true; // explicit 0 opt-out - unthrottled
   if (limiter(clientKey(req))) return true;
   res.statusCode = 429;
   res.setHeader('Content-Type', 'application/json');

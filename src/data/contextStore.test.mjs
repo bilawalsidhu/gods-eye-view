@@ -63,7 +63,7 @@ test('selecting a tracking subject stays off the overlay-click event lane', () =
     assert.deepEqual(
       seen,
       [],
-      'aircraft already publish gev:awareness-subject-* — a second lane would make two surfaces fight over one subject',
+      'aircraft already publish gev:awareness-subject-* - a second lane would make two surfaces fight over one subject',
     );
   });
 });

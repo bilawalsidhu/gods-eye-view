@@ -135,7 +135,7 @@ test('ambiguous titles disambiguate by state, then newest id', () => {
       incident_title: 'Coyote Fire',
     },
   ];
-  // Same-state duplicates are usually reburns of the same name — newest wins.
+  // Same-state duplicates are usually reburns of the same name - newest wins.
   assert.equal(
     resolveInciwebNodeLink(twoSameState, { name: 'Coyote', state: 'US-OR' }),
     'https://inciweb.wildfire.gov/node/328922',

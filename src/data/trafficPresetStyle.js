@@ -1,5 +1,5 @@
 /**
- * @file Preset-aware traffic dot styling — pure lookup tables mapping the
+ * @file Preset-aware traffic dot styling - pure lookup tables mapping the
  * active post-FX style (StyleManager preset name) + congestion bucket to a
  * dot treatment the shaders cannot destroy.
  *
@@ -7,11 +7,11 @@
  * post-FX shaders (unlike the detection/FIRMS canvases composited above
  * them). NVG and FLIR reduce the scene to luminance (hue is discarded), and
  * the shipped bucket palette's Rec.601 luma ordering is free 0.58 / slow
- * 0.72 / jam 0.49 — under NVG a jam renders DIMMER than free flow. CRT
+ * 0.72 / jam 0.49 - under NVG a jam renders DIMMER than free flow. CRT
  * keeps hue but its 5-px pixelation + dithering shred 4–6 px dots.
  *
  * Encoding per profile (owner verdict 2026-07-23 round 2: "just bright
- * dots" — a luminance RAMP failed in the field because dim free-flow dots
+ * dots" - a luminance RAMP failed in the field because dim free-flow dots
  * read as dark holes on NVG-bright roads; classification is the detection
  * brackets' job via `trafficBucketTier`, presence is the dots' job):
  *  - `mono` (surveillance/NVG, thermal/FLIR, noir): every colored dot is a
@@ -20,7 +20,7 @@
  *    jam keeps a size bump so queues read as fat beads.
  *  - `crt` (retro): saturated primaries that survive 10-level posterization
  *    plus an all-bucket size boost to out-shout the pixel grid.
- *  - `normal` (normal/anime/snow/unknown): every lookup returns null/0 —
+ *  - `normal` (normal/anime/snow/unknown): every lookup returns null/0 -
  *    the shipped palette and sizing apply untouched.
  *
  * Sim/uncovered dots (bucket null/'sim') are NEVER restyled under any
@@ -35,10 +35,10 @@
 
 /** @const {Object<string,'mono'|'crt'>} Style name → non-normal profile. */
 const PROFILE_BY_STYLE = {
-  surveillance: 'mono', // NVG — P43 phosphor × luma
-  thermal: 'mono', // FLIR — grayscale/ironbow × luma
+  surveillance: 'mono', // NVG - P43 phosphor × luma
+  thermal: 'mono', // FLIR - grayscale/ironbow × luma
   noir: 'mono', // full desaturation
-  retro: 'crt', // CRT — hue survives, small dots don't
+  retro: 'crt', // CRT - hue survives, small dots don't
 };
 
 /**
@@ -115,7 +115,7 @@ export function presetSizeDelta(styleName, bucket) {
 /**
  * Dark halo for a preset dot, or null for none. Why: NVG auto-gain pushes
  * the whole scene near saturation, so a bright dot has almost no contrast
- * against a bright road — a dark outline restores LOCAL contrast, which
+ * against a bright road - a dark outline restores LOCAL contrast, which
  * every luma-mapping shader preserves. Null under the normal profile and
  * for sim dots (shipped dots never draw outlines).
  * @param {string|null|undefined} styleName - Active style name.
@@ -130,14 +130,14 @@ export function presetDotOutline(styleName, bucket) {
 /**
  * Detection-overlay tier key for a traffic contact's flow bucket. The
  * detection canvas composites ABOVE the post-FX chain, so tier colors are
- * literal screen RGB in every preset — the brackets carry the congestion
+ * literal screen RGB in every preset - the brackets carry the congestion
  * classification the in-scene dots can no longer encode under mono
  * presets. Per-theme colors live in detection.js THEME_MAP `tiers`
  * (veh_jam / veh_slow / veh_free / veh_nodata).
  *
  * Callers pass 'sim' for LIVE-mode roads TomTom has no data for; in
  * keyless mode they must pass null so contacts keep the stock 'vehicle'
- * tier — the keyless experience stays byte-identical.
+ * tier - the keyless experience stays byte-identical.
  *
  * @param {'free'|'slow'|'jam'|'sim'|null|undefined} bucket - Flow bucket.
  * @returns {string|null} Tier key, or null (no override → stock 'vehicle').

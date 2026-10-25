@@ -33,8 +33,8 @@ export function createDirectionsSource({
         throw Object.assign(
           new Error(
             refusal
-              ? `${refusal} — try again in a moment`
-              : msg('Routing is rate limited — try again in a moment'),
+              ? `${refusal} - try again in a moment`
+              : msg('Routing is rate limited - try again in a moment'),
           ),
           { status: 429, refusal },
         );

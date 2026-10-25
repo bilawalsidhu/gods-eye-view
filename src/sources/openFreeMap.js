@@ -224,7 +224,7 @@ function decodeLayers(bytes, z, x, y, layerNames) {
  *
  * `allowedOrigin` is deliberately not set here: `createVectorTileSource`
  * derives it from whichever `tileJsonUrl` is in effect, so a caller that
- * repoints only `tileJsonUrl` gets tiles from that host or a named error —
+ * repoints only `tileJsonUrl` gets tiles from that host or a named error -
  * never a silent fall back to the default host (#933). Passing
  * `allowedOrigin` explicitly still overrides both.
  */

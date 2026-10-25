@@ -1,4 +1,4 @@
-// scripts/qa-floor-verify.mjs — live floor verification at AUS (round 5).
+// scripts/qa-floor-verify.mjs - live floor verification at AUS (round 5).
 // Pins the camera at Austin airport, enables flights, waits ~3 polls, then
 // measures every nearby contact's render height against the ACTUAL rendered
 // mesh (sprite- and model-excluded scene.sampleHeight probes). Caught the mesh-latch
@@ -42,7 +42,7 @@ await page.waitForFunction(() => window.__godsEyeView?.dataManager && window.__g
 await sleep(2000);
 
 // Let the app's boot fly-to fully settle FIRST (it was overriding an early
-// setView, leaving the camera away from Austin — every probe then read
+// setView, leaving the camera away from Austin - every probe then read
 // coarse global tiles at ~25 m and the oracle was garbage).
 await sleep(12000);
 await page.evaluate((site) => { window.__QA_SITE = site; }, SITE);
@@ -82,12 +82,12 @@ const report = await page.evaluate(() => {
   const C = v.camera.positionCartographic.constructor;
   const center = ell.cartographicToCartesian(C.fromDegrees(window.__QA_SITE.lon, window.__QA_SITE.lat, 200));
   const nearby = layer.getNearby(center, 15000, 60);
-  // Exclude EVERY billboard from the probes — sprites are pickable, so an
+  // Exclude EVERY billboard from the probes - sprites are pickable, so an
   // unexcluded probe can return another aircraft's height as "the mesh".
   // Exclude every fleet/tracked 3D Model too: getNearby() also returns contacts
   // whose billboard is hidden because a model owns the visual, and those probes
   // would otherwise land on aircraft geometry. `activeAnimations` +
-  // `minimumPixelSize` are Model-only — the 3D-Tiles tileset has neither, and
+  // `minimumPixelSize` are Model-only - the 3D-Tiles tileset has neither, and
   // excluding IT would leave sampleHeight with no mesh to read at all.
   const excludes = [];
   const walk = (coll) => {
@@ -118,7 +118,7 @@ const report = await page.evaluate(() => {
     });
   }
   // Visibility census (round 6): getNearby only returns contacts a sprite or a
-  // 3D model is actually drawing, so also walk the raw collections — a culled
+  // 3D model is actually drawing, so also walk the raw collections - a culled
   // "invisible plane" shows up here.
   let shown = 0, hidden = 0;
   const censusWalk = (coll) => {
@@ -139,10 +139,10 @@ const report = await page.evaluate(() => {
 });
 console.log(JSON.stringify(report, null, 1));
 
-// verdict — plausible mesh readings only (a wild meshM means the probe ray
+// verdict - plausible mesh readings only (a wild meshM means the probe ray
 // missed the tileset entirely; those rows prove nothing either way)
 // Trust only probes that read a plausible AUS-area surface (~100..250 m
-// ellipsoidal) — anything else hit a coarse tile or nothing (proves nothing).
+// ellipsoidal) - anything else hit a coarse tile or nothing (proves nothing).
 const lows = (report.contacts || []).filter((c) =>
   c.renderAltM < SITE.floorMax + 450 && c.aboveMeshM != null && c.meshM > SITE.floorMin && c.meshM < SITE.floorMax);
 const buried = lows.filter((c) => c.aboveMeshM < -2);
@@ -157,7 +157,7 @@ await browser.close();
 // so a real regression (taxiing contacts rendering under the mesh) stayed
 // invisible to every automated caller. Now it reports like its siblings
 // (qa-height-datum / qa-cctv-v2): 0 = PASS, 1 = FAIL, 2 = could-not-measure.
-// INCONCLUSIVE is deliberately NOT 0 — a run that measured no usable contacts
+// INCONCLUSIVE is deliberately NOT 0 - a run that measured no usable contacts
 // proves nothing, and must not read as a pass. The VERDICT line is unchanged,
 // so anything scraping stdout (the L9 QA matrix) is unaffected.
 process.exit(verdict === 'PASS' ? 0 : (verdict === 'FAIL' ? 1 : 2));

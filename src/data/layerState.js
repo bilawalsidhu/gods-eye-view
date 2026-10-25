@@ -19,7 +19,7 @@ const NEW_SINGLE_CHARACTER_TOKEN_PATTERN = /^[0-9]$/;
  * A tracking ID is a transponder address, not free text: 6 hex digits for an
  * ICAO24, with slack for TIS-B (`~abc123`) and similar prefixed forms. Bounding
  * it at the codec keeps an arbitrarily long string out of durable state, the
- * generated URL, and local storage. Identity is never TRUNCATED to fit — an
+ * generated URL, and local storage. Identity is never TRUNCATED to fit - an
  * out-of-grammar ID is rejected outright, because half an address is a
  * DIFFERENT aircraft, not a shorter name for the same one.
  */
@@ -28,7 +28,7 @@ const TRACKING_ID_GRAMMAR = /^[0-9a-z~_-]{1,16}$/;
  * Ceilings for the untrusted v2 layer fields. The layer ceiling covers the
  * complete reserved one-character space plus every two-character base-36
  * allocation, while the option ceiling covers a dozen short assignments.
- * Reject the WHOLE payload, matching the unknown-token rule — never salvage a
+ * Reject the WHOLE payload, matching the unknown-token rule - never salvage a
  * prefix.
  */
 const MAX_ENABLED_LAYERS_CHARS = 4_096;
@@ -114,8 +114,8 @@ function booleanOption(
  * Usually that is simply the default: the encoder omits default-valued fields to
  * keep the URL short and the decoder fills the default back in. But a DEFAULT CAN
  * MOVE while the schema version does not, and every link already in the wild was
- * authored under the old one. `absentValue` is that frozen historical meaning —
- * what an omitted token meant when links like it were being written — so a
+ * authored under the old one. `absentValue` is that frozen historical meaning -
+ * what an omitted token meant when links like it were being written - so a
  * default flip cannot silently rewrite what an existing link SAYS. A share link
  * is authored state; the only honest reading of `v=2&l=f` is the one its author
  * saw.
@@ -126,7 +126,7 @@ function booleanOption(
  * this function so they cannot disagree about which it is.
  *
  * (This is the same rule `scf` follows in sharelink.js by hand. `models3d` is the
- * first option in THIS codec to need it — flipped to default-ON on 2026-08-22.)
+ * first option in THIS codec to need it - flipped to default-ON on 2026-08-22.)
  */
 function absentTokenValue(spec) {
   return Object.hasOwn(spec, 'absentValue')
@@ -350,20 +350,20 @@ const OPTION_GROUPS = Object.freeze({
   ]),
   flights: Object.freeze([
     // Owner directive 2026-08-22: the fleet's 3D models are DEFAULT-ON in
-    // PROXIMITY mode. Proximity is itself the altitude/count gate — models only
+    // PROXIMITY mode. Proximity is itself the altitude/count gate - models only
     // materialize once the camera is close enough and only for the nearest
-    // contacts in view — so "on" costs nothing at globe scale, and an operator
+    // contacts in view - so "on" costs nothing at globe scale, and an operator
     // who wants every in-view plane still opts into `all` deliberately.
     // This default must stay in lockstep with `_models3dEnabled` in BOTH flight
     // layers, `this._models3dEnabled` in ui.js, and the `active` / `visible`
     // classes in index.html: the fresh-boot path skips restoration entirely (see
-    // `start()` below), so nothing ever pushes this value into the layers — those
+    // `start()` below), so nothing ever pushes this value into the layers - those
     // four initializers ARE the agreement, and they are pinned together in
     // layerState.test.mjs.
     //
     // `absentValue: false` is what keeps the flip out of links already in the
     // wild. Schema v2 shipped with OFF as the omitted default, so `v=2&l=f`
-    // MEANS off — and it has to keep meaning that. Moving the default without
+    // MEANS off - and it has to keep meaning that. Moving the default without
     // this would have silently turned 3D on for every existing v2 link, and
     // `v=2&l=f&lo=f.m.a` (an OFF link that remembered mode All) would have come
     // back as ON+All. The price is that ON is now written explicitly (`f.e.1`)
@@ -965,7 +965,7 @@ export function encodeLayerStateParams(params, state) {
     const ownerOptions = normalized.options[ownerId];
     for (const spec of optionSpecs(ownerId)) {
       // Omit against what an ABSENT token means to a DECODER, not against the
-      // current default — those are the same thing for every option whose
+      // current default - those are the same thing for every option whose
       // default never moved, and deliberately different for one whose did.
       if (ownerOptions[spec.key] === absentTokenValue(spec)) continue;
       encodedOptions.push(
@@ -1024,7 +1024,7 @@ export function decodeLayerStateParams(params) {
   // Fill every token the link did NOT carry with its absent-meaning before
   // normalization, which would otherwise substitute the CURRENT default. For all
   // but one option those are identical and this is a no-op; for `models3d` it is
-  // the whole point — an omitted `e` is a v2 author saying OFF, not a v2 author
+  // the whole point - an omitted `e` is a v2 author saying OFF, not a v2 author
   // saying "whatever the default happens to be today". See `absentTokenValue`.
   for (const ownerId of OPTION_OWNER_IDS) {
     for (const spec of optionSpecs(ownerId)) {

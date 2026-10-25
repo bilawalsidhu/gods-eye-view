@@ -8,7 +8,7 @@ export { makeRateLimiter } from '../../../src/sources/rateLimit.js';
  * integer overrides it; an explicit `0` disables the limiter for deployments
  * that genuinely want no throttle.
  *
- * A value that cannot be read as a number — a typo, a stray unit, a negative —
+ * A value that cannot be read as a number - a typo, a stray unit, a negative -
  * also takes the default rather than disabling the guard. That asymmetry is the
  * point: `GEV_RATELIMIT_OPENAI_PER_MIN=3O` should not quietly hand an exposed
  * server's API key to whoever asks. Removing the throttle stays possible, but
@@ -52,7 +52,7 @@ export function makeCostRateLimiter(envValue, defaultPerMin) {
 }
 
 /**
- * Client key for rate limiting. Uses the real socket peer address only — we do
+ * Client key for rate limiting. Uses the real socket peer address only - we do
  * NOT trust X-Forwarded-For (client-controlled; a rotating value would mint fresh
  * quota and grow the limiter map). This is a localhost dev proxy, so the socket
  * address is the real client.

@@ -3,7 +3,7 @@
  *
  * OpenAI Realtime: the app's own rate table (`src/voice/voiceCost.js`).
  * `gpt-realtime-2.1` has no registry entry, so it resolves to the priciest
- * known table (gpt-realtime-2) — which matches OpenAI's published 2.1 rates
+ * known table (gpt-realtime-2) - which matches OpenAI's published 2.1 rates
  * as read on 2026-09-23 ($4 / $0.40 cached / $24 per 1M text tokens).
  *
  * Gemini Live: https://ai.google.dev/gemini-api/docs/pricing, read 2026-09-23,
@@ -35,7 +35,7 @@ const modalityCount = (details, modality) =>
 
 /**
  * Cost of one Gemini Live `usageMetadata`. Unattributed prompt tokens bill
- * as audio input and unattributed response tokens as audio output — the
+ * as audio input and unattributed response tokens as audio output - the
  * conservative direction for a spend cap.
  */
 export function geminiUsageCostUsd(model, usage) {

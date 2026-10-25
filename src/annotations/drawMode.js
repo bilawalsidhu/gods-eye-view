@@ -16,7 +16,7 @@ import { t, tn } from '../i18n/index.js';
  * no such thing as a vertex at a height here: the height under the click is
  * used for the live preview and is deliberately dropped at finish.
  *
- * No Cesium, no DOM — importable under `node --test`. The Cesium/DOM half is
+ * No Cesium, no DOM - importable under `node --test`. The Cesium/DOM half is
  * `drawTool.js`.
  */
 
@@ -108,7 +108,7 @@ export function removeLastVertex(session) {
 /**
  * Why a session can or cannot become an annotation.
  * - `too-few`: not enough vertices yet.
- * - `degenerate`: enough vertices, but they describe nothing — three collinear
+ * - `degenerate`: enough vertices, but they describe nothing - three collinear
  *   points enclose no area, and a line that doubles back on itself has no
  *   length. Drawing one of those and calling it a mark would put an invisible
  *   entity on the board that the person cannot see, select or explain.
@@ -150,7 +150,7 @@ export function pathLengthM(vertices) {
  * 359.998° of width instead of 0.002°, which is how a 25,000 m² rectangle
  * measured 4,461 km² and reported its centre on the Greenwich meridian.
  *
- * Values may leave the [-180, 180] range on purpose — that is what "continuous"
+ * Values may leave the [-180, 180] range on purpose - that is what "continuous"
  * means. Re-wrap with `wrapLongitude` before handing one back as a coordinate.
  * @param {Array<{lon:number, lat:number}>} vertices
  */
@@ -241,7 +241,7 @@ export function finishSpec(session, { label = '', color = 'primary' } = {}) {
   if (session.shape === 'area') {
     // CLOSED explicitly. A polygon fill closes itself, but the outline beside it
     // is a polyline, and an open ring draws every edge except the one back to
-    // the first vertex — the shape reads as a shape with one side missing.
+    // the first vertex - the shape reads as a shape with one side missing.
     return {
       type: 'area',
       manual: true,
@@ -292,8 +292,8 @@ export function drawHint(session) {
     return tn(need, 'Click {count} more point.', 'Click {count} more points.');
   if (finishReason(session) === 'degenerate') {
     return session.shape === 'area'
-      ? t('Those points are in a line — move one off it to enclose an area.')
-      : t('That line has no length — click somewhere further away.');
+      ? t('Those points are in a line - move one off it to enclose an area.')
+      : t('That line has no length - click somewhere further away.');
   }
   const full =
     n >= MAX_VERTICES

@@ -214,7 +214,7 @@ export function createBundleAssets() {
       validateAssetPath(path);
       const asset = assets.get(path);
       if (!asset || asset.bytes.length > maxBytes)
-        throw new Error('Bundle asset unavailable — reimport the bundle');
+        throw new Error('Bundle asset unavailable - reimport the bundle');
       return { bytes: asset.bytes.slice(), mimeType: asset.mimeType };
     },
   };

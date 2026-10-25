@@ -119,7 +119,7 @@ async function getNeighborLocations(lat, lon) {
       const nlon = coordBlock[0][3];
       if (nlat === undefined || nlon === undefined) continue;
 
-      // Haversine distance — only keep first-order neighbors (within ~15m)
+      // Haversine distance - only keep first-order neighbors (within ~15m)
       const dlat = (nlat - originLat) * Math.PI / 180;
       const dlon = (nlon - originLon) * Math.PI / 180;
       const a = Math.sin(dlat / 2) ** 2

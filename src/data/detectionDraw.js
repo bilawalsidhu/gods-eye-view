@@ -4,7 +4,7 @@
  *
  * Deliberately free of Cesium and DOM dependencies so the label composition,
  * metric formatting, glyph-width estimation, fade ramp, and corner-bracket
- * geometry can be unit-tested in isolation — and reused verbatim by a future
+ * geometry can be unit-tested in isolation - and reused verbatim by a future
  * GPU/MSDF renderer. The Canvas2D overlay (detection.js) imports these and
  * supplies the actual drawing surface.
  */
@@ -44,7 +44,7 @@ export function formatKnots(knots) {
 
 /**
  * Estimates the pixel width of a monospace string without touching the canvas.
- * For a fixed-advance font, width is exactly length × advance — this avoids a
+ * For a fixed-advance font, width is exactly length × advance - this avoids a
  * per-label measureText() call (the old per-frame hot-path stall).
  * @param {string} text - The string to measure.
  * @param {number} charWidth - Per-glyph advance width in pixels.
@@ -92,7 +92,7 @@ export function acquireAlpha(firstSeenMs, nowMs, fadeMs) {
 /**
  * Appends one bracket-style bounding box (four L-shaped corner segments only)
  * to a path-like sink exposing moveTo(x, y) / lineTo(x, y). Designed so many
- * boxes accumulate into a single Path2D for one batched stroke() — replacing
+ * boxes accumulate into a single Path2D for one batched stroke() - replacing
  * the old per-box beginPath/stroke. Geometry matches the prior reticle exactly.
  * @param {{moveTo: Function, lineTo: Function}} sink - Path2D or compatible recorder.
  * @param {number} sx - Screen X centre of the box.
@@ -126,7 +126,7 @@ export function appendCornerBracket(sink, sx, sy, halfW, halfH) {
 }
 
 /**
- * Resolves a detectable object's threat tier — the key into a theme's color
+ * Resolves a detectable object's threat tier - the key into a theme's color
  * ramp (civil/military/sea/space/vehicle). A layer-supplied `tier` wins;
  * otherwise it derives from the coarse `type`. Drives per-tier box/card color.
  * @param {{type?: string, tier?: string}} obj - Detectable object.
@@ -144,7 +144,7 @@ export function resolveTier(obj) {
 /**
  * Computes the geometry of a two-tier label "card": overall width/height plus
  * the text baselines, sized so the second line and its descenders always fit
- * (the clipping bug in the throwaway spike). Pure layout — the renderer draws
+ * (the clipping bug in the throwaway spike). Pure layout - the renderer draws
  * the rounded rect, accent bar, and text from these numbers.
  * @param {string} primary - Bright first line (id/callsign).
  * @param {string} secondary - Dim second line (class · metric); '' collapses to one line.
@@ -175,7 +175,7 @@ export function measureLabelCard(primary, secondary, charWidth) {
 /**
  * Computes the geometry of a SINGLE-LINE track label: callsign (bright) followed
  * on the same baseline by a dim altitude/metric micro-field. This is the
- * persistent label — type is carried by the platform icon, not text — replacing
+ * persistent label - type is carried by the platform icon, not text - replacing
  * the two-line card for the ambient majority of tracks.
  * @param {string} primary - Callsign / id (bright).
  * @param {string} micro - Short metric, e.g. flight level digits or '14kn' ('' = none).
@@ -224,7 +224,7 @@ export function rectIntersectsAny(rect, obstacles, padding = 0) {
 }
 
 /**
- * Linear near/far interpolation matching Cesium's NearFarScalar — maps a camera
+ * Linear near/far interpolation matching Cesium's NearFarScalar - maps a camera
  * distance to a scale, clamped to the near value when closer than `near` and the
  * far value when beyond `far`. Lets the detection reticle track a billboard's
  * on-screen size (which uses the same scaleByDistance curve).

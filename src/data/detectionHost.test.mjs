@@ -577,7 +577,7 @@ test('every style paints its OWN plate token through the production callout path
 test('space-tier callouts take the heavier plate while air contacts keep the light one', () => {
   // Satellites sit over the high-albedo lit Earth disc far more often than
   // aircraft do, so the space tier carries the heavier backing. Losing the
-  // tier split is invisible to the token table — only a frame carrying BOTH
+  // tier split is invisible to the token table - only a frame carrying BOTH
   // tiers at once can show it.
   const env = installEnvironment();
   try {
@@ -700,7 +700,7 @@ test('detection cannot resurrect a private canvas, listener, matrix, resize, cle
   // The three military styles used to carry three copies of these numbers.
   // They now share ONE frozen object, which Cockpit's force-on reuses too, so
   // the pin moved from "three identical literals" to "one preset, referenced
-  // three times" — same guarantee, and the copies can no longer drift.
+  // three times" - same guarantee, and the copies can no longer drift.
   assert.match(
     uiSource,
     /const MILITARY_DETECTION_PRESET = Object\.freeze\(\{\s*mode: 'dense',\s*densityPct: 75,?\s*\}\);/,
@@ -743,7 +743,7 @@ test('the mode banner is absent by default and present behind the flag', () => {
       setMode('DENSE');
       env.advance(250);
       env.postRender.raise();
-      // The overlay is alive either way — brackets still stroke.
+      // The overlay is alive either way - brackets still stroke.
       assert.ok(
         env.detectionCtx.calls.some(([name, path]) => name === 'stroke' && path instanceof MockPath2D),
         'detection still paints its contacts regardless of the debug gate',
@@ -761,7 +761,7 @@ test('the mode banner is absent by default and present behind the flag', () => {
 });
 
 test('detection telemetry stays reachable programmatically with the banner hidden', () => {
-  // Hiding the banner must not remove the numbers — getDetectionDiagnostics()
+  // Hiding the banner must not remove the numbers - getDetectionDiagnostics()
   // is the supported way to read them, and is what the QA harnesses use.
   const env = installEnvironment();
   try {
@@ -884,7 +884,7 @@ test('the backdrop feather reaches the canvas as a lighter plate against sky', (
 
 test('a transit vehicle is a contact: box, route, mode and operator on the shared canvas', () => {
   // The owner's finding was that buses were "green dots moving around
-  // clumsily" — the layer rendered them and the detection overlay ignored
+  // clumsily" - the layer rendered them and the detection overlay ignored
   // them, because transit published no detectable objects at all. This drives
   // the real host with the shape the layer now returns.
   const env = installEnvironment();
@@ -927,8 +927,8 @@ test('a transit vehicle is a contact: box, route, mode and operator on the share
       painted.includes('111'),
       `the route is the bright line; painted ${JSON.stringify(painted)}`,
     );
-    // The host paints a single-line track label — bright id, one dim micro
-    // field — so the mode and what the vehicle is doing share that field.
+    // The host paints a single-line track label - bright id, one dim micro
+    // field - so the mode and what the vehicle is doing share that field.
     assert.ok(
       painted.some((text) => String(text).includes('BUS')),
       `the mode rides along on the micro line; painted ${JSON.stringify(painted)}`,

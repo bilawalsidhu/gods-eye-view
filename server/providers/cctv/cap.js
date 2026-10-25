@@ -20,8 +20,8 @@ export function resolveCatalogCap(raw) {
  *
  * Every pack arrives already ordered by its own priority (nearest-to-anchor
  * first) and already trimmed to its own per-pack cap. When the packs together
- * exceed the catalog cap, the cap is filled ROUND-ROBIN — one camera from
- * each pack per turn, in each pack's own order — so a lowered
+ * exceed the catalog cap, the cap is filled ROUND-ROBIN - one camera from
+ * each pack per turn, in each pack's own order - so a lowered
  * CCTV_MAX_SOURCES thins every region a little instead of deleting whichever
  * pack happened to be appended last. Duplicate ids resolve last-pack-wins so
  * file/env overrides keep replacing live records; the record is then counted

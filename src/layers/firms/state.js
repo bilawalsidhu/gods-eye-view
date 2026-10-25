@@ -27,7 +27,7 @@ export function createFirmsState({ services, config }) {
 
   layerState._loading = false;
 
-  /** True when the proxy answered 503 {error:'no_key'} — FIRMS_MAP_KEY unset. */
+  /** True when the proxy answered 503 {error:'no_key'} - FIRMS_MAP_KEY unset. */
 
   layerState._keyRequired = false;
 
@@ -87,7 +87,7 @@ export function createFirmsState({ services, config }) {
    * Occlusion-test anchors index-aligned with the billboard collection (the
    * collection is cleared and refilled in one ordered pass per rebuild, and
    * nothing else adds to it). Lifted where the render anchor sits at/below
-   * the ellipsoid — see {@link fireCullPosition}.
+   * the ellipsoid - see {@link fireCullPosition}.
    * @type {Array<Cesium.Cartesian3>}
    */
 

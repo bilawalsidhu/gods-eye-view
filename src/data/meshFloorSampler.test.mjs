@@ -1,11 +1,11 @@
-// src/data/meshFloorSampler.test.mjs — the rendered-mesh sampler driven through
+// src/data/meshFloorSampler.test.mjs - the rendered-mesh sampler driven through
 // its REAL validation boundary (2026-08-21).
 //
 // The sampler's acceptance rule was previously covered only through
 // `reportValidatedMeshFloorCell` directly, which proves the gate but not the
 // decision that feeds it. These tests call `sampleMeshFloorCells` with a fake
-// scene whose `sampleHeight` returns exactly what Cesium can return — a number,
-// `undefined`, NaN, or a throw — and assert that a cell latches if and only if
+// scene whose `sampleHeight` returns exactly what Cesium can return - a number,
+// `undefined`, NaN, or a throw - and assert that a cell latches if and only if
 // a REAL DEM prior exists and the sample fits its window.
 //
 // That requirement is the load-bearing one: this round built a tier that kept
@@ -27,7 +27,7 @@ import {
   _clearMeshFloorCellsForTest,
 } from './groundFloor.js';
 
-/** Distinct site per test — terrainHeights' cache is module-global and warm
+/** Distinct site per test - terrainHeights' cache is module-global and warm
  *  entries are permanent, so tests must not share coordinates. */
 let siteLat = 40.0;
 const nextSite = () => ({ lat: +(siteLat += 0.05).toFixed(3), lon: -97.66 });
@@ -78,7 +78,7 @@ test('sampler: a finite sample WITH a fitting DEM prior latches and becomes the 
   reset();
   const cell = nextSite();
   await seedDem(cell, 120.0);
-  const scene = fakeScene(() => 137.0); // +17 m of mesh over bare earth — in window
+  const scene = fakeScene(() => 137.0); // +17 m of mesh over bare earth - in window
   sampleMeshFloorCells(scene, [cell], { viewerLat: cell.lat, viewerLon: cell.lon });
   assert.equal(cachedMeshFloor(cell.lat, cell.lon), 137.0);
   assert.equal(cachedGroundFloor(cell.lat, cell.lon), 137.0, 'and it is what every consumer reads');
@@ -88,7 +88,7 @@ test('sampler: a sample REJECTED against a real prior is stored nowhere', async 
   reset();
   const cell = nextSite();
   await seedDem(cell, 120.0);
-  const scene = fakeScene(() => 400.0); // a tower hit — far outside the +80 m window
+  const scene = fakeScene(() => 400.0); // a tower hit - far outside the +80 m window
   sampleMeshFloorCells(scene, [cell], { viewerLat: cell.lat, viewerLon: cell.lon });
   assert.equal(cachedMeshFloor(cell.lat, cell.lon), null);
   assert.equal(cachedGroundFloor(cell.lat, cell.lon), 120.0, 'the DEM prior still answers');

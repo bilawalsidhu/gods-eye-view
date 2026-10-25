@@ -2,8 +2,8 @@
 // Feed-state honesty for the traffic layer (roadmap L7).
 //
 // A launch-day stranger runs a keyless build. The layer then simulates
-// traffic, and every surface it drives — the toggle chip, the panel meta
-// line, the traffic sync chip — has to say so. The two pure helpers below own
+// traffic, and every surface it drives - the toggle chip, the panel meta
+// line, the traffic sync chip - has to say so. The two pure helpers below own
 // that contract; the layer's getStats() is a thin caller.
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -42,13 +42,13 @@ test('keyless traffic names the mode and the remedy, loading or idle', () => {
   const loading = trafficFeedPresentation({ liveMode: false, fetching: true });
   assert.equal(idle.mode, 'sim');
   assert.equal(loading.mode, 'sim');
-  // Keyless is a designed fallback, not a fault — no error, or every keyless
+  // Keyless is a designed fallback, not a fault - no error, or every keyless
   // build would boot with a red chip.
   assert.equal(idle.error, null);
   assert.equal(loading.error, null);
   // One terse line in both states; the chip's progress text carries "working".
-  assert.equal(idle.loadingLabel, 'SIMULATED — add TomTom key for live');
-  assert.equal(loading.loadingLabel, 'SIMULATED — add TomTom key for live');
+  assert.equal(idle.loadingLabel, 'SIMULATED - add TomTom key for live');
+  assert.equal(loading.loadingLabel, 'SIMULATED - add TomTom key for live');
 });
 
 test('no keyless label ever implies a live feed', () => {
@@ -68,7 +68,7 @@ test('no keyless label ever implies a live feed', () => {
 test('simulating because the status probe failed reads differently from keyless by design', () => {
   const probeDown = trafficFeedPresentation({ statusUnavailable: true });
   assert.equal(probeDown.mode, 'sim');
-  assert.equal(probeDown.loadingLabel, 'SIMULATED — traffic service unreachable');
+  assert.equal(probeDown.loadingLabel, 'SIMULATED - traffic service unreachable');
 });
 
 test('a healthy keyed layer reports live flow with its real coverage', () => {
@@ -88,11 +88,11 @@ test('a mid-session flow outage degrades instead of reporting stale live coverag
   const down = trafficFeedPresentation({
     liveMode: true,
     flowError: 'TomTom daily budget reached',
-    coveragePct: 87, // last-good number — must not be presented as current
+    coveragePct: 87, // last-good number - must not be presented as current
   });
   // error and loadingLabel are ONE string: the manager's error branch renders
   // `error` and drops `loadingLabel`, so the copy has to live in both.
-  assert.equal(down.error, 'SIMULATED — TomTom daily budget reached');
+  assert.equal(down.error, 'SIMULATED - TomTom daily budget reached');
   assert.equal(down.loadingLabel, down.error);
   assert.ok(!down.loadingLabel.includes('87'));
   const busy = trafficFeedPresentation({
@@ -111,7 +111,7 @@ test('the rendered steady-state meta line carries the SIMULATED copy', () => {
       source: 'OpenStreetMap',
       stats: stats(trafficFeedPresentation({ liveMode: false })),
     }),
-    'FALLBACK · OpenStreetMap · SIMULATED — add TomTom key for live',
+    'FALLBACK · OpenStreetMap · SIMULATED - add TomTom key for live',
   );
   assert.equal(
     mgr._buildMetaText({
@@ -121,7 +121,7 @@ test('the rendered steady-state meta line carries the SIMULATED copy', () => {
         flowError: 'TomTom daily budget reached',
       })),
     }),
-    'DEGRADED · OpenStreetMap · SIMULATED — TomTom daily budget reached',
+    'DEGRADED · OpenStreetMap · SIMULATED - TomTom daily budget reached',
   );
 });
 

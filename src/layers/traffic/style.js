@@ -66,7 +66,7 @@ export function createStyle({ state: layerState, services, parts, source }) {
   /**
    * Apply the active preset's dark-halo outline to a colored dot (or clear
    * it back to the shipped no-outline state). NVG's auto-gain saturates the
-   * scene, so brightness alone cannot separate a dot from a bright road —
+   * scene, so brightness alone cannot separate a dot from a bright road -
    * the dark ring restores local contrast through every luma-mapping shader.
    * @param {Cesium.PointPrimitive} point - The dot primitive.
    * @param {'free'|'slow'|'jam'|null} bucket - Flow bucket (null = sim).
@@ -93,7 +93,7 @@ export function createStyle({ state: layerState, services, parts, source }) {
   /**
    * Re-apply dot styling in place after a style/param change: colored dots
    * get the (new) effective bucket color and size; sim (white) dots are
-   * never touched. No refetch, no respawn — heat-lines rebuild for their
+   * never touched. No refetch, no respawn - heat-lines rebuild for their
    * per-preset colors.
    */
 

@@ -40,7 +40,7 @@ const TARGETS = [
 async function render(svg, { size, inset }) {
   const box = Math.round(size * inset);
   // The logo's viewBox is wider than it is tall, so `contain` bounds it by
-  // width and leaves the vertical padding uneven — centring is done by the
+  // width and leaves the vertical padding uneven - centring is done by the
   // composite below rather than by the resize.
   const mark = await sharp(svg, { density: 384 })
     .resize(box, box, {

@@ -3,10 +3,10 @@
  *
  * The credential panel has its own stricter gate (`admitKeySetupRequest` in
  * keySetupCore.mjs): loopback socket + local Host + exact Origin + JSON
- * Content-Type. The four endpoints here — `/api/realtime/token` (mints an
+ * Content-Type. The four endpoints here - `/api/realtime/token` (mints an
  * OpenAI Realtime token = spends money), `/api/openai/hud-summary` (OpenAI
  * spend), `/api/google/nearby-places` (Google spend), and
- * `/api/realtime/debug-log` (appends to a local JSONL) — were previously
+ * `/api/realtime/debug-log` (appends to a local JSONL) - were previously
  * ungated, so a hostile web page open in the same browser could reach them
  * cross-site: a `fetch` carries a foreign `Origin`, and an `<img>`/navigation
  * carries NO `Origin` at all but does carry `Sec-Fetch-Site: cross-site`.
@@ -50,7 +50,7 @@ export function hasProxySignals(headers = {}) {
 /**
  * Compute a request's own authority (an origin string) from its protocol and
  * Host header. Unlike the credential-panel gate's localhost-restricted
- * `localAuthority`, this returns whatever Host the request actually carries —
+ * `localAuthority`, this returns whatever Host the request actually carries -
  * the LAN opt-in serves a non-loopback Host to LAN browsers, and a same-origin
  * fetch from such a page must still match. Malformed/missing input yields null.
  * @param {string} hostHeader e.g. `req.headers.host`
@@ -81,7 +81,7 @@ function requestAuthority(hostHeader, protocol) {
  *     what blocks `<img src=...>` and cross-site navigation, which carry no
  *     Origin but do carry `Sec-Fetch-Site: cross-site`);
  *  3. `Origin` present must exactly equal the request's own authority computed
- *     from protocol + Host — the same exact-origin comparison the credential
+ *     from protocol + Host - the same exact-origin comparison the credential
  *     gate uses (no userinfo, no path/search/hash). The literal string `null`
  *     is an opaque origin (sandboxed iframe / `data:` URL) and is refused;
  *  4. otherwise ok. Non-browser loopback tools and the LAN opt-in (which may

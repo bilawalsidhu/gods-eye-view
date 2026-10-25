@@ -474,8 +474,8 @@ class CockpitCloudEffectsController {
       this.stop();
       return;
     }
-    // Suspended (document hidden): halt every scheduling chain — rAF AND the
-    // reduced-motion timeout chain — without tearing weather state down.
+    // Suspended (document hidden): halt every scheduling chain - rAF AND the
+    // reduced-motion timeout chain - without tearing weather state down.
     // setSuspended(false) restarts exactly one chain. (perf wave 2 fix)
     if (this.suspended) {
       this.frame = null;
@@ -571,7 +571,7 @@ class CockpitCloudEffectsController {
     if (this.suspended) {
       if (this.frame !== null) cancelAnimationFrame(this.frame);
       this.frame = null;
-      // The reduced-motion path schedules via timeout, not rAF — clear it
+      // The reduced-motion path schedules via timeout, not rAF - clear it
       // too, plus the startup refresh timer; refresh() is suspend-guarded.
       if (this.refreshTimer !== null) window.clearTimeout(this.refreshTimer);
       this.refreshTimer = null;

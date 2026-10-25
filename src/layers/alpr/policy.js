@@ -34,10 +34,10 @@ export const PRECISION_CACHE_LIMIT = 20000;
 
 /** Render cap. Kept at or above QUERY_LIMIT on purpose: if it ever sat below
  * it, cameras between the two would be silently dropped while `saturated`
- * stayed false and `count` still reported them — a lie about coverage. */
+ * stayed false and `count` still reported them - a lie about coverage. */
 export const MAX_RENDERED = 1500;
 
-/** Meters — illustrative facing wedge depth, when a camera reports a bearing. */
+/** Meters - illustrative facing wedge depth, when a camera reports a bearing. */
 export const DIRECTION_CONE_M = 90;
 export const DIRECTION_CONE_HALF_ANGLE_DEG = 20;
 

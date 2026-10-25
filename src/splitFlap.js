@@ -1,17 +1,17 @@
 /**
  * Split-flap (departure-board) text animation for the status chips.
  *
- * When a chip's label changes — "LOADING LIVE DATA" → "LOAD COMPLETE",
- * "loading frames" → "camera grid ready" — the characters flip over
+ * When a chip's label changes - "LOADING LIVE DATA" → "LOAD COMPLETE",
+ * "loading frames" → "camera grid ready" - the characters flip over
  * mechanically, left to right, like a Solari board at a ferry terminal.
  *
- * FOUR INVARIANTS HOLD THIS TOGETHER — do not "fix" any of them:
+ * FOUR INVARIANTS HOLD THIS TOGETHER - do not "fix" any of them:
  *
  * 1. DOM TEXT IS THE TRUTH, AND ITS NODE NEVER MOVES. The first call upgrades
  *    a chip label into a permanent two-child shell: a `.gev-flap-text` span
  *    holding one long-lived `Text` node, and an `aria-hidden`
  *    `.gev-flap-cells` sibling. After that the ONLY text operation for the
- *    life of the chip is `node.data = next` — a single `characterData`
+ *    life of the chip is `node.data = next` - a single `characterData`
  *    mutation. Nothing is ever reparented, so the label is never
  *    transiently empty and the `aria-live` region never sees a removal /
  *    reinsertion pair it could announce twice. `element.textContent` is the
@@ -24,23 +24,23 @@
  * 2. NO ANIMATION LOOP, AND EXACTLY ONE TIMER PER CHANGE. The motion is CSS
  *    `animation`/`transition` only, triggered once per text change and
  *    staggered via a per-cell `--gev-flap-delay` custom property. A change
- *    schedules exactly ONE `setTimeout` — the settle that strips the cells.
+ *    schedules exactly ONE `setTimeout` - the settle that strips the cells.
  *    The width ease ends on a `transitionend`/`transitioncancel` listener,
  *    not a second timer. There is zero per-frame JS and zero periodic work;
- *    idle cost is nothing, and nothing here requests a Cesium render — the
+ *    idle cost is nothing, and nothing here requests a Cesium render - the
  *    chips are DOM, outside the panel-stack observers, so the render governor
  *    is untouched.
  *
  * 3. ONLY WHAT WAS VISIBLE FLAPS AWAY. An interrupted cascade (A→B cut short
  *    by C) derives each column's outgoing glyph from what that column is
- *    actually SHOWING at that instant — which for a column whose stagger has
+ *    actually SHOWING at that instant - which for a column whose stagger has
  *    not elapsed yet is still A, not the pending B. Deriving it from the
  *    pending target would flash a glyph that was never on screen.
  *
  * 4. COLUMNS NEVER RENUMBER MID-CASCADE. For the whole cascade the board keeps
  *    one column per index of the LONGER string, each holding its own width.
  *    A column the new string does not reach flaps its old glyph to a BLANK in
- *    place — exactly how a departure board clears a cell — rather than
+ *    place - exactly how a departure board clears a cell - rather than
  *    collapsing to zero width. Collapsing would stack the absolutely-positioned
  *    outgoing glyphs on top of each other and would let a later glyph slide
  *    into an earlier column, which in turn would make invariant 3 lie. The
@@ -51,7 +51,7 @@
  * (`setCockpitRollingValue`, style.css `.cockpit-roll-token`): ~200 ms per
  * character on `cubic-bezier(0.2, 0.75, 0.25, 1)`, reduced-motion collapsing
  * the duration rather than removing the animation. What this adds over the
- * odometer is the CASCADE — the left-to-right sweep that makes a departure
+ * odometer is the CASCADE - the left-to-right sweep that makes a departure
  * board read as a departure board.
  */
 
@@ -67,7 +67,7 @@ export const FLAP_CHAR_MS = 190;
 export const FLAP_STAGGER_MS = 26;
 /**
  * Hard ceiling for a whole cascade. Long labels compress their stagger to
- * fit rather than running on — a chip that flaps for a full second reads as
+ * fit rather than running on - a chip that flaps for a full second reads as
  * a slot machine, not a quiet mechanical settle.
  */
 export const FLAP_MAX_TOTAL_MS = 620;
@@ -76,7 +76,7 @@ const FLAP_SETTLE_SLACK_MS = 60;
 /**
  * Fraction of a character's flip at which the outgoing glyph has rotated
  * away and the incoming one takes over as what the eye reads. MUST track the
- * `gev-flap-out`/`gev-flap-in` keyframe crossover in style.css — it is what
+ * `gev-flap-out`/`gev-flap-in` keyframe crossover in style.css - it is what
  * makes an interrupted cascade pick honest outgoing glyphs.
  */
 export const FLAP_TURN_RATIO = 0.5;
@@ -91,7 +91,7 @@ const SIZING_CLASS = 'gev-flap-sizing';
 
 /**
  * What a reserved-but-empty column shows. A column the new string does not
- * reach is not removed mid-cascade — it flaps to a blank and holds its place,
+ * reach is not removed mid-cascade - it flaps to a blank and holds its place,
  * which is both what a real board does and what keeps column indices stable.
  */
 const BLANK = ' ';
@@ -116,13 +116,13 @@ function nowMs() {
 /**
  * Diff two strings into per-character flap cells with staggered delays.
  *
- * Unchanged characters do not animate — a real split-flap cell that already
+ * Unchanged characters do not animate - a real split-flap cell that already
  * shows the right glyph simply does not move, which is both authentic and
  * free. The stagger is rebased on the FIRST changed column so a label whose
  * head is stable ("LOAD COMPLETE" keeps "LOAD" from "LOADING LIVE DATA")
  * starts flipping immediately instead of idling through untouched columns.
  *
- * Pure — no DOM, no clock. This is the unit-tested core.
+ * Pure - no DOM, no clock. This is the unit-tested core.
  *
  * @param {string} fromText - Glyphs currently on screen.
  * @param {string} toText - Text to settle on.
@@ -221,10 +221,10 @@ function displayedGlyph(cell, turned) {
  * The result is positionally true by construction: it always has exactly one
  * character per column, so index N of the string is always column N of the
  * board. A cleared or not-yet-filled column reads as a blank rather than
- * closing up — otherwise a later glyph would appear to occupy an earlier
+ * closing up - otherwise a later glyph would appear to occupy an earlier
  * column and an interrupt would flap the wrong glyph away.
  *
- * Pure — no DOM.
+ * Pure - no DOM.
  *
  * @param {{cells: Array<object>}} plan - A plan from `planSplitFlap`.
  * @param {number} elapsedMs - Milliseconds since the cascade started.
@@ -400,7 +400,7 @@ function clearFlapTimer(element) {
  * Put the label back in its resting state: real text visible, no cells.
  *
  * The `Text` node is untouched apart from its data, and neither permanent span
- * is removed — only the decorative cells are emptied.
+ * is removed - only the decorative cells are emptied.
  */
 function rest(element, host) {
   element.classList.remove(ACTIVE_CLASS);
@@ -415,12 +415,12 @@ function rest(element, host) {
  * Strip the cells once the cascade lands, then take up any width slack.
  *
  * A shrinking label has been holding every column at full width for the whole
- * cascade (invariant 4), so this is where the board narrows — as one eased
+ * cascade (invariant 4), so this is where the board narrows - as one eased
  * transition, never a single-frame snap.
  */
 function settle(element, expected, easeMs) {
   flapStates.delete(element);
-  // A newer label won the race — leave its cells alone.
+  // A newer label won the race - leave its cells alone.
   if (element.textContent !== expected) return;
   const host = ensureHost(element);
   const cascadeWidth = measureWidth(element);

@@ -1,6 +1,6 @@
 // src/layers/cctv/headingConfidence.test.mjs
 // Bearing-provenance consumers (#639): a pack's headingConfidence:'low'
-// (a hashed synthetic bearing) must present as estimated — unless a human
+// (a hashed synthetic bearing) must present as estimated - unless a human
 // vouched for the pose via manual calibration or a curated catalog entry.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';

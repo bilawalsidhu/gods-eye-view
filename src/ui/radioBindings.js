@@ -482,7 +482,7 @@ export function bindRadioControls() {
       event.preventDefault();
       // Immediate: a plain stopPropagation() still lets every LATER listener on
       // this same document run, so closing the disclosure ALSO dismissed the
-      // first-run launcher — one key, two actions. Matches the cockpit
+      // first-run launcher - one key, two actions. Matches the cockpit
       // disclosure handler directly below.
       event.stopImmediatePropagation();
       const escapedFromDisclosure =

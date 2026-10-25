@@ -41,7 +41,7 @@ export function createCards({ state: layerState, services, parts, source }) {
   }
 
   // ---------------------------------------------------------------------------
-  // Ambient card tier (2026-07-29 design — spec:
+  // Ambient card tier (2026-07-29 design - spec:
   // docs/superpowers/specs/2026-07-29-cctv-ambient-cards-design.md)
   // ---------------------------------------------------------------------------
 
@@ -58,11 +58,11 @@ export function createCards({ state: layerState, services, parts, source }) {
 
   /**
    * Rebuilds the ambient card selection: horizon + in-view projection of the
-   * catalog (pure math — no scene queries), the zoom-budgeted nearest-first
+   * catalog (pure math - no scene queries), the zoom-budgeted nearest-first
    * LOD pick, greedy screen-space declutter, and the eviction-grace pass that
    * keeps budget-edge cards alive across small camera moves (zero-flicker).
    * Runs on camera.moveEnd, enable, activation change, and the one-shot
-   * geometry-drain completion — NEVER per frame. The active camera is excluded
+   * geometry-drain completion - NEVER per frame. The active camera is excluded
    * from the ambient selection/quota. By default its monitor plane is the sole
    * active representation; the optional protected-card path is applied only by
    * `pushAmbientCardEntries`. Camera icons are never touched here (cards
@@ -168,13 +168,13 @@ export function createCards({ state: layerState, services, parts, source }) {
           ...screenById.get(id),
           // Priority carrier, not kilometers: declutter sorts ascending on
           // this field, and the selection's order (distribution + incumbency)
-          // must survive — a periphery cell-winner must not be re-outranked
+          // must survive - a periphery cell-winner must not be re-outranked
           // by central proximity when two anchors contest the min separation.
           distanceKm: index,
         })),
       { limit: cardLimit },
     );
-    // Owner finding 2: grace must never apply to the active camera — drop any
+    // Owner finding 2: grace must never apply to the active camera - drop any
     // lingering grace entry and keep it out of the retained-card baseline.
     if (activeId) {
       layerState._cardIds.delete(activeId);
@@ -191,7 +191,7 @@ export function createCards({ state: layerState, services, parts, source }) {
     layerState._cardGraceState = retention.graceState;
 
     // Bounded thumbnail LRU: live cards (grace included) never lose their
-    // persisted frame — that persistence IS the no-flicker guarantee. The
+    // persisted frame - that persistence IS the no-flicker guarantee. The
     // hover card's slot is protected too while the gesture lasts.
     const keepFrames = new Set(layerState._cardIds);
     if (layerState._hoverCardId) keepFrames.add(layerState._hoverCardId);
@@ -267,7 +267,7 @@ export function createCards({ state: layerState, services, parts, source }) {
    * @param {Object} [options]
    * @param {boolean} [options.userGesture] - Hover fast-track (item B): the
    *   launch bypasses the pacer gate, so its spacing sample would pollute the
-   *   pacing telemetry — skip the min-spacing sample only. The launch still
+   *   pacing telemetry - skip the min-spacing sample only. The launch still
    *   stamps `_cardLastFetchAt`, so the pacer waits a full interval after it.
    */
 
@@ -285,7 +285,7 @@ export function createCards({ state: layerState, services, parts, source }) {
     layerState._cardFetchPendingIds.add(cameraId);
     if (layerState._cardLastFetchAt > 0 && !userGesture) {
       const spacing = now - layerState._cardLastFetchAt;
-      // NOTE: cold-fill bursts legitimately push this to ~250 ms — read it
+      // NOTE: cold-fill bursts legitimately push this to ~250 ms - read it
       // together with the ambientCards.fetchMode telemetry.
       layerState._cardMinFetchSpacingMs =
         layerState._cardMinFetchSpacingMs == null

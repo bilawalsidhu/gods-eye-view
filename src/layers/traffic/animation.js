@@ -93,7 +93,7 @@ export function createAnimation({
 
     // Jam-viz density prototype: jam-road dots spawn as bumper-to-bumper
     // platoons (one shared direction per queue) instead of uniform scatter.
-    // Unreachable in sim mode — `bucket` requires flow.
+    // Unreachable in sim mode - `bucket` requires flow.
     let placements = null;
     if (bucket === 'jam' && parts.style.jamDensityOn()) {
       let totalLen = 0;
@@ -114,7 +114,7 @@ export function createAnimation({
     for (let i = 0; i < count; i++) {
       if (layerState._dots.length >= MAX_DOTS) return;
 
-      // Random start position: pick a random segment and offset within it —
+      // Random start position: pick a random segment and offset within it -
       // unless this is a queued jam dot with a platoon placement.
       const segIdx = placements
         ? placements[i].segIdx
@@ -129,7 +129,7 @@ export function createAnimation({
       const mps = noisedMps * flowSpeed;
 
       // One-way roads flow only their legal direction; two-way alternates
-      // (per platoon in queue mode — a queue moves as one).
+      // (per platoon in queue mode - a queue moves as one).
       const direction = placements
         ? placements[i].direction
         : road.oneway
@@ -169,7 +169,7 @@ export function createAnimation({
         ),
         // Respect the sampled mesh at every viewing distance.
         disableDepthTestDistance: 0,
-        // Preset dark halo (spread only when present — the keyless/normal
+        // Preset dark halo (spread only when present - the keyless/normal
         // path passes the exact shipped option set).
         ...(outlineSpec
           ? { outlineColor, outlineWidth: outlineSpec.width }
@@ -187,7 +187,7 @@ export function createAnimation({
         recycle: false,
         point,
         road,
-        bucket, // flow bucket at spawn (null = sim) — drives preset restyle/pulse
+        bucket, // flow bucket at spawn (null = sim) - drives preset restyle/pulse
         waypoints: road.waypoints,
         segmentDist: road.segmentDist,
         numSegments,
@@ -316,7 +316,7 @@ export function createAnimation({
       dot.point.position = layerState._scratchLerp;
     }
 
-    // Jam heat-lines throb (~1.6 s period) — one shared material uniform for
+    // Jam heat-lines throb (~1.6 s period) - one shared material uniform for
     // the whole jam batch, no geometry rebuild. Null outside live heatline mode.
     if (layerState._heatJamPrim?.appearance) {
       layerState._heatJamPrim.appearance.material.uniforms.color.alpha =

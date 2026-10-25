@@ -9,7 +9,7 @@ import { readShellSource } from '../testSupport/readShellSource.mjs';
 //
 // The cancellation pins matter twice over: checking a boolean AFTER an await
 // only stops the NEXT step, so the awaited operation itself has to be
-// cancellable — an AbortSignal for the data manager, a liveness predicate for
+// cancellable - an AbortSignal for the data manager, a liveness predicate for
 // the visual commit. Several of these assert exactly that plumbing.
 import assert from 'node:assert/strict';
 import test from 'node:test';
@@ -642,7 +642,7 @@ function installSceneRuntime(project = PROJECT_FIXTURE, { storage } = {}) {
  *
  * Models the real abort contract (src/data/manager.js): an aborted transition
  * is rolled back through the module's own disable() and answers false, so an
- * abort leaves NO half-applied layer — which is the whole point of passing the
+ * abort leaves NO half-applied layer - which is the whole point of passing the
  * signal rather than only checking a boolean afterwards.
  */
 function fakeDataManager({ registered = REGISTERED, refuse = () => false } = {}) {
@@ -1043,7 +1043,7 @@ test('a dirty Space Missions state is exited before a recipe applies its layers'
 });
 
 test('Orbital Watch does not compose over a Space Missions replay', async () => {
-  // Orbital Watch declares satellites, which the guard permits — so nothing is
+  // Orbital Watch declares satellites, which the guard permits - so nothing is
   // refused and a refusal-only check would pass while rocket-launches stayed
   // on screen. Playback leaves an isolating mode whether or not it refuses.
   const { director, styleManager, dataManager, restore } = makeDirector({
@@ -1121,7 +1121,7 @@ test('cancellation between two layers ends the reconcile where it stands', async
 
 test('STOP during a suspended visual transition lands no layer changes', async () => {
   // Repro shape from review: applyVisualState suspends (a map-stack switch),
-  // STOP arrives, the visual resolves — and the shot's layer pass still ran.
+  // STOP arrives, the visual resolves - and the shot's layer pass still ran.
   const { director, viewer, styleManager, dataManager, restore } = makeDirector();
   let releaseVisual;
   styleManager.applyVisualState = (visual) => {
@@ -1181,7 +1181,7 @@ test('STOP between two layers lands no further layer changes', async () => {
 test('STOP aborts the layer transition in flight, not merely the next one', async () => {
   // Checking the token AFTER the await is a backstop, not the fix: by then an
   // un-aborted transition has already committed, and the pass returns without
-  // its params — the layer left enabled carrying stale ones. The signal is
+  // its params - the layer left enabled carrying stale ones. The signal is
   // what actually stops the layer that is currently moving.
   const { director, dataManager, restore } = makeDirector({
     project: {
@@ -1260,7 +1260,7 @@ test('applyVisualState gates the map-stack switch on both sides of its await', (
   // Gating only the post-await uniform commit is not enough: the stack switch
   // is ITSELF a mutation. The controller invalidates a switch only when
   // another setStack() arrives, and a winning state that omits `mapStack`
-  // never issues one — every normalized scene shot omits it — so a stale
+  // never issues one - every normalized scene shot omits it - so a stale
   // switch would otherwise stand on the globe.
   const source = readShellSource();
   const method = source.match(/\n {2}async applyVisualState\([\s\S]*?\n {2}\}\n/);
@@ -1283,7 +1283,7 @@ test('applyVisualState gates the map-stack switch on both sides of its await', (
     /await this\._setMapStack\(state\.mapStack[\s\S]*?if \(superseded\(\)\) \{[\s\S]*?await this\._setMapStack\(stackBefore/,
     'a switch superseded mid-flight must be reverted to the stack the winner inherited',
   );
-  // And only what is still ours — a newer switch owns the globe, never revert it.
+  // And only what is still ours - a newer switch owns the globe, never revert it.
   assert.match(block, /getSwitchGeneration/, 'the revert must consult the switch generation');
   assert.match(
     block,

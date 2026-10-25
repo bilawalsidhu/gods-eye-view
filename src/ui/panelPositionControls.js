@@ -30,7 +30,7 @@ export class PanelPositionControls {
       );
       if (hadOldPositions) {
         this._showToast(
-          t('Panel layout updated — positions reset to new defaults'),
+          t('Panel layout updated - positions reset to new defaults'),
         );
       }
     } catch {

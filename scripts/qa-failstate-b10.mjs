@@ -2,7 +2,7 @@
 /**
  * qa-failstate-b10.mjs
  *
- * Targeted proof for Batch 10 — the "silent-failure" theme (finding H3 + H9).
+ * Targeted proof for Batch 10 - the "silent-failure" theme (finding H3 + H9).
  * Drives the REAL app in headless Chromium and asserts that dead/failed feeds
  * are SURFACED to the user instead of a healthy-looking empty state.
  *
@@ -10,20 +10,20 @@
  * upstream failures so the run is deterministic and never depends on live
  * AISStream / CelesTrak availability:
  *
- *   (i)  AIS invalid key   — /api/vessels is answered with
+ *   (i)  AIS invalid key   - /api/vessels is answered with
  *        {rows:[],status:'error',error:'invalid key'}. Assert the layer's
- *        getStats().error is set (feed down) — NOT a clean 'just now · 0'.
+ *        getStats().error is set (feed down) - NOT a clean 'just now · 0'.
  *
- *   (ii) CelesTrak outage  — first serve a good catalog so there's something to
+ *   (ii) CelesTrak outage  - first serve a good catalog so there's something to
  *        preserve, then flip ALL /api/celestrak/* groups to HTTP 503. Toggle
  *        satellites off/on. Assert the catalog is NOT wiped to 0 AND
  *        getStats().error is set.
  *
- *   (iii) DETECT with no data — enable panoptic detection with NO data layers.
+ *   (iii) DETECT with no data - enable panoptic detection with NO data layers.
  *        Assert the shared #world-overlay-canvas is non-empty (mode banner drawn),
  *        so DETECT reads "armed, nothing in view" instead of a blank canvas.
  *        The banner is developer telemetry, hidden from users by default, so this
- *        harness loads the app with ?detectDebug=1 — without it the pixel check
+ *        harness loads the app with ?detectDebug=1 - without it the pixel check
  *        would pass on scanlines alone and no longer assert what it names.
  *        (Absent-by-default is pinned in src/data/detectionHost.test.mjs.)
  *
@@ -47,7 +47,7 @@ const APP_URL = getOpt('--url', 'http://localhost:4300');
 /**
  * Check (iii) asserts the detection MODE BANNER is drawn on a zero-object frame.
  * That banner is developer telemetry and is hidden from users by default, so the
- * harness must ask for it explicitly — otherwise the pixel check silently passes
+ * harness must ask for it explicitly - otherwise the pixel check silently passes
  * on scanlines alone and the assertion name stops meaning anything.
  */
 function withDetectDebug(url) {
@@ -63,7 +63,7 @@ const CHROME_EXECUTABLE_CANDIDATES = [
   // Prefer puppeteer's version-pinned Chrome-for-Testing over the system
   // Chrome: /Applications auto-updates underneath the harnesses, and its
   // software-GL behavior shifts across majors (system Chrome 150 blew the
-  // tile-gated drain budget under SwiftShader on 2026-07-30 — six
+  // tile-gated drain budget under SwiftShader on 2026-07-30 - six
   // false-negative qa-cctv-v2 runs against a healthy build). A deterministic
   // pinned browser beats the newest one for regression harnesses.
   await puppeteer.executablePath().catch(() => null),
@@ -85,7 +85,7 @@ const results = [];
 function record(name, ok, detail) {
   results.push({ name, ok, detail });
   const tag = ok === null ? '\x1b[33mINCONCLUSIVE\x1b[0m' : ok ? '\x1b[32mPASS\x1b[0m' : '\x1b[31mFAIL\x1b[0m';
-  console.log(`  [${tag}] ${name}${detail ? `  — ${detail}` : ''}`);
+  console.log(`  [${tag}] ${name}${detail ? `  - ${detail}` : ''}`);
 }
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -144,7 +144,7 @@ const GOOD_TLE = [
 ].join('\n');
 
 async function main() {
-  console.log('\nSilent-Failure Proof (Batch 10 — H3 + H9)');
+  console.log('\nSilent-Failure Proof (Batch 10 - H3 + H9)');
   console.log(`  App URL : ${APP_URL}`);
   console.log(`  Mode    : ${HEADFUL ? 'headful' : 'headless'}\n`);
 
@@ -199,7 +199,7 @@ async function main() {
         });
         return;
       }
-      // (ii) CelesTrak proxy — /api/celestrak/<group>
+      // (ii) CelesTrak proxy - /api/celestrak/<group>
       if (url.includes('/api/celestrak/')) {
         if (mode.celestrak === 'down'
           || (mode.celestrak === 'partial' && url.includes('/api/celestrak/stations'))) {
@@ -427,7 +427,7 @@ async function main() {
       mode.celestrak = 'down';
       const outageStats = await page.evaluate(async (baseline) => {
         const dm = window.__godsEyeView.dataManager;
-        // Toggle off then on — the re-enable's update() re-fetches (now all 503).
+        // Toggle off then on - the re-enable's update() re-fetches (now all 503).
         await dm.setEnabled('satellites', false);
         await new Promise((r) => setTimeout(r, 200));
         await dm.setEnabled('satellites', true);
@@ -500,7 +500,7 @@ async function main() {
           off.width = w; off.height = h;
           const octx = off.getContext('2d');
           // The detection pass (banner included) paints on the host-owned
-          // blend-isolation surface beneath the shared canvas — composite
+          // blend-isolation surface beneath the shared canvas - composite
           // both so the sample sees whichever surface carries the banner.
           const detSurface = document.getElementById('world-overlay-detection-surface');
           if (detSurface) octx.drawImage(detSurface, 0, 0);

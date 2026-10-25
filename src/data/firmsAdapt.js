@@ -1,6 +1,6 @@
 /**
  * Adapter from /api/firms proxy records (src/data/firmsCsv.js shape) to the
- * internal fire-record shape rendered by firmsHeatmap.js. Pure — no Cesium,
+ * internal fire-record shape rendered by firmsHeatmap.js. Pure - no Cesium,
  * so the mapping is unit-testable. The normalization helpers previously
  * lived module-private in firmsHeatmap.js and moved here with the live-data
  * swap (2026-07-16).
@@ -69,7 +69,7 @@ export function normalizeConfidence(value) {
 
 /**
  * Parse acq_date ("YYYY-MM-DD") + acq_time (unpadded "HHMM", UTC) into epoch
- * ms. Memoized per unique date:time pair — granule timestamps repeat heavily.
+ * ms. Memoized per unique date:time pair - granule timestamps repeat heavily.
  * @param {*} date - acq_date property.
  * @param {*} time - acq_time property.
  * @param {Map<string, number>} [cache] - Per-batch memo cache.

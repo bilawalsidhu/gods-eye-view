@@ -1,7 +1,7 @@
 /**
  * @file Load a JSON file shipped beside the source modules.
  *
- * The browser fetches the file from `url` — a `new URL('./….json',
+ * The browser fetches the file from `url` - a `new URL('./….json',
  * import.meta.url)` written in the calling module, which Vite serves as-is in
  * dev and emits as an asset in the production build. Under Node (node:test)
  * that URL is a `file:` URL, which `fetch` cannot read, so the file is read

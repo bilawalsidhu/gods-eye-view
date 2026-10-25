@@ -3,14 +3,14 @@
 Bundled GeoJSON for international submarine cable systems and landing points,
 from TeleGeography's [Submarine Cable Map](https://www.submarinecablemap.com/).
 
-## ⚠️ License — NOT covered by this project's MIT license
+## License - NOT covered by this project's MIT license
 
 This dataset is licensed by TeleGeography under
 **Creative Commons Attribution-NonCommercial-ShareAlike 3.0 (CC BY-NC-SA 3.0)**.
 It is bundled here for an out-of-the-box experience and is **excluded from the
 MIT license that covers God's Eye View's source code.**
 
-- **Attribution required:** "© TeleGeography — submarinecablemap.com"
+- **Attribution required:** "© TeleGeography - submarinecablemap.com"
 - **NonCommercial:** the data may not be used commercially. If you use this
   project commercially, **remove these files** (`cable-geo.json`,
   `landing-point-geo.json`) or obtain a commercial license from TeleGeography.

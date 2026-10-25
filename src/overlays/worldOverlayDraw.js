@@ -430,7 +430,7 @@ function writePlacement(
   if (corner === 'above' || corner === 'below') {
     placement.leadFromX = anchorX;
     placement.leadFromY = anchorY;
-    // Strictly vertical, always — the shipped leader ran from the anchor's sx to
+    // Strictly vertical, always - the shipped leader ran from the anchor's sx to
     // the card edge at the same sx with no clamp. Clamping the endpoint into the
     // card rect made the stub visibly diagonal whenever a viewport-edge clamp had
     // pushed the card sideways off its anchor, which reads as "the card isn't
@@ -1045,8 +1045,8 @@ export function paintTracked(ctx, entry, placement, alpha = 1) {
  * only lighten: a dark plate composited with `screen` over sunlit imagery
  * resolves to the imagery itself (measured: rgba(2,18,26,0.66) over rgb(230)
  * yields rgb(230,231,232)), which is why ambient callsigns used to dissolve
- * into bright ground while the tracked card — always painted on this same
- * normal-blend canvas — stayed readable in every style.
+ * into bright ground while the tracked card - always painted on this same
+ * normal-blend canvas - stayed readable in every style.
  *
  * Allocation-free by contract: no Path2D, array, or string is constructed here.
  * It is called once per visible callout per frame.
@@ -1066,7 +1066,7 @@ export function paintTracked(ctx, entry, placement, alpha = 1) {
  * @param {number} callout.leadToY Leader end y.
  * @param {string} callout.plate Backing plate fill.
  * @param {number} [callout.plateScale=1] Backdrop feather: 1 over ground, down
- *   to `SKY_PLATE_SCALE` against sky. Multiplies the PLATE only — the accent
+ *   to `SKY_PLATE_SCALE` against sky. Multiplies the PLATE only - the accent
  *   bar, leader and text keep the composed fades, so a feathered callout loses
  *   its box without losing its identity.
  * @param {string} callout.accent Tier colour for the accent bar and leader.

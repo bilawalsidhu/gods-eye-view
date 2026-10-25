@@ -19,7 +19,7 @@ import {
 test('provider requirements name the registry env vars and next step', () => {
   assert.equal(
     keySetupRequirement('cesium-ion'),
-    'Needs CESIUM_ION_TOKEN — add it in Provider Settings',
+    'Needs CESIUM_ION_TOKEN - add it in Provider Settings',
   );
   assert.equal(keySetupRequirement('unknown'), '');
 });
@@ -216,7 +216,7 @@ test('upsert is idempotent for a repeated save', () => {
 test('a real .env.example round-trip: the curated file keeps its shape', () => {
   // A representative slice of the shipped .env.example.
   const example = [
-    '# God\'s Eye View — environment variables',
+    '# God\'s Eye View - environment variables',
     'GOOGLE_MAPS_API_KEY=your_google_maps_api_key_here',
     '',
     '# Optional: OpenAI Realtime voice control. Do not prefix with VITE_.',
@@ -253,7 +253,7 @@ test('the admission gate refuses every non-local shape, one assertion per refusa
   assert.equal(admitKeySetupRequest({ ...local, method: 'GET', origin: undefined, contentType: undefined }).ok, true, 'local GET may omit Origin');
   assert.equal(admitKeySetupRequest({ ...local, remoteAddress: '::ffff:127.0.0.1', hostHeader: '[::1]:4173', origin: 'http://[::1]:4173' }).ok, true, 'IPv6 loopback forms are local');
 
-  // Tunnel/LAN sharing of any kind removes the surface outright — tunnel
+  // Tunnel/LAN sharing of any kind removes the surface outright - tunnel
   // traffic arrives FROM loopback, so no socket check can carry this boundary.
   assert.equal(admitKeySetupRequest({ ...local, env: { PINOKIO_SHARE_CLOUDFLARE: 'true' } }).ok, false, 'sharing disables the surface');
   assert.equal(admitKeySetupRequest({ ...local, env: { PINOKIO_SHARE_LOCAL: '1' } }).ok, false, 'LAN sharing disables the surface');
@@ -385,7 +385,7 @@ test('key guidance can offer another source that works with a key already set', 
   const streetView = { label: 'STREET VIEW', requiresKeyId: 'google-maps' };
   assert.equal(
     keySetupWithAlternatives(keySetupRequirement('mapillary'), [streetView]),
-    'Needs MAPILLARY_CLIENT_TOKEN — add it in Provider Settings, or light STREET VIEW to use your Google Maps key',
+    'Needs MAPILLARY_CLIENT_TOKEN - add it in Provider Settings, or light STREET VIEW to use your Google Maps key',
   );
   assert.equal(
     keySetupWithAlternatives('', [streetView]),

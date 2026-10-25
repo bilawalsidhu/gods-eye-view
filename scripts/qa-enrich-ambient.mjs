@@ -1,12 +1,12 @@
 #!/usr/bin/env node
 /**
- * qa-enrich-ambient.mjs — headless proof for AMBIENT fleet type enrichment
+ * qa-enrich-ambient.mjs - headless proof for AMBIENT fleet type enrichment
  * (fleet-enrichment widening of skylight Task 14).
  *
  * Field data (2026-07-02): OpenSky's live category field is 0/"no info" for
  * ~94% of planes, so ambient classification defaulted nearly the whole fleet
- * to the airliner silhouette. This harness reproduces exactly that case —
- * 12 synthetic planes, ALL category 0 — and proves that the per-poll
+ * to the airliner silhouette. This harness reproduces exactly that case -
+ * 12 synthetic planes, ALL category 0 - and proves that the per-poll
  * on-screen enrichment sweep (`_sweepAmbientEnrichment` in flights.js) gives
  * them real types AMBIENTLY (nothing is ever tracked, 3D stays off), while
  * honoring the politeness bounds.
@@ -33,7 +33,7 @@
  *   E7 bounds    : ≤4 concurrent requests, ≥185 ms between dispatches (≤5/s
  *                  drip), total ≤300 (budget ceiling)
  *   E8 next poll : another poll neither reverts glyphs nor re-requests hexes
- *   E10 exhaust  : the ROLLING ambient budget exhausts — new on-screen planes
+ *   E10 exhaust  : the ROLLING ambient budget exhausts - new on-screen planes
  *                  stop being requested once the bucket is empty (shrunk via
  *                  the __GEV_ENRICH_AMBIENT_QA seam; a real 5-min window can't
  *                  be waited out headlessly)
@@ -81,7 +81,7 @@ const SESSION_CAP = 300;       // ENRICH_AMBIENT_BUDGET_CEIL (rolling-bucket cei
 // effectively-infinite (1 h) so E10 exhausts deterministically (no refill can
 // land mid-phase); E11 then shortens it in-page so refill windows have
 // "passed" and the bucket refills (clamped at ceil). ceil=20 leaves 8 tokens
-// after the 12 baseline planes — E10's batch exhausts those 8 and stalls.
+// after the 12 baseline planes - E10's batch exhausts those 8 and stalls.
 const BUDGET_QA = { ceil: 20, refillTokens: 6, windowMs: 3600000 };
 const RESUME_WINDOW_MS = 1000; // E11 swaps windowMs to this to unlock refills
 
@@ -90,7 +90,7 @@ const CHROME_EXECUTABLE_CANDIDATES = [
   // Prefer puppeteer's version-pinned Chrome-for-Testing over the system
   // Chrome: /Applications auto-updates underneath the harnesses, and its
   // software-GL behavior shifts across majors (system Chrome 150 blew the
-  // tile-gated drain budget under SwiftShader on 2026-07-30 — six
+  // tile-gated drain budget under SwiftShader on 2026-07-30 - six
   // false-negative qa-cctv-v2 runs against a healthy build). A deterministic
   // pinned browser beats the newest one for regression harnesses.
   await puppeteer.executablePath().catch(() => null),
@@ -110,18 +110,18 @@ const results = [];
 function record(name, ok, detail) {
   results.push({ name, ok, detail });
   const tag = ok ? '\x1b[32mPASS\x1b[0m' : '\x1b[31mFAIL\x1b[0m';
-  console.log(`  [${tag}] ${name}${detail ? `  — ${detail}` : ''}`);
+  console.log(`  [${tag}] ${name}${detail ? `  - ${detail}` : ''}`);
 }
 function sleep(ms) { return new Promise((r) => setTimeout(r, ms)); }
 
 // ---------------------------------------------------------------------------
-// Synthetic fleet: one east-west row near Austin, ALL category 0 ("no info" —
+// Synthetic fleet: one east-west row near Austin, ALL category 0 ("no info" -
 // the 94% real-world case). adsbdb type answers cover 8 distinct classes;
 // aa000c answers found:false (negative-cache case → stays airliner).
 // ---------------------------------------------------------------------------
 const ROW_LAT = 30.30;
 const ROW_LON0 = -97.82;
-const ROW_STEP_DEG = 0.012; // ~1.15 km — 12 planes span ~12.7 km, fits a 20 km-up frame
+const ROW_STEP_DEG = 0.012; // ~1.15 km - 12 planes span ~12.7 km, fits a 20 km-up frame
 
 /** hex → adsbdb icao_type (null = adsbdb miss / negative cache). */
 const TYPES = {
@@ -210,7 +210,7 @@ async function main() {
     await page.evaluateOnNewDocument((spec) => {
       window.__ENR = spec;
       window.__ENR.epochMs = Date.now();
-      // Rolling-budget QA seam — must exist BEFORE flights.js initializes so
+      // Rolling-budget QA seam - must exist BEFORE flights.js initializes so
       // the shrunk knobs are read from the very first sweep (see BUDGET_QA).
       window.__GEV_ENRICH_AMBIENT_QA = { ...spec.budgetQa };
       // Request log: starts (hex + performance.now), live/max concurrency,
@@ -277,7 +277,7 @@ async function main() {
               false,                    // on_ground
               s.speedMps, s.course,
               0, null, null, null, false, 0,
-              0,                        // state[17] — category 0 = "no info" (the 94% case)
+              0,                        // state[17] - category 0 = "no info" (the 94% case)
             ];
           });
           return Promise.resolve(jsonResponse({ time: Math.floor(nowSec), states }));
@@ -318,7 +318,7 @@ async function main() {
 
     // ---- Frame the row FIRST (top-down, all 12 on-screen), then prime ------
     // The ambient sweep runs inside update(), so the camera must already be
-    // framing the fleet when the layer polls — otherwise the frustum test
+    // framing the fleet when the layer polls - otherwise the frustum test
     // (correctly) skips off-screen planes.
     const centerLon = ROW_LON0 + ((SPEC.planes.length - 1) / 2) * ROW_STEP_DEG;
     await page.evaluate(({ lat, lon, height }) => {
@@ -352,9 +352,9 @@ async function main() {
     if (primed.count === 0) { finish(); return; }
 
     // ========================================================================
-    // E2 — deterministic pre-enrichment baseline (responses still held)
+    // E2 - deterministic pre-enrichment baseline (responses still held)
     // ========================================================================
-    console.log('\nE2 — pre-enrichment baseline (adsbdb responses held)');
+    console.log('\nE2 - pre-enrichment baseline (adsbdb responses held)');
     const before = await page.evaluate(() => window.__collectBillboards());
     const beforeById = new Map(before.map((b) => [b.id, b]));
     const baselineBad = [];
@@ -388,9 +388,9 @@ async function main() {
     }, { timeout: 10000, polling: 200 }).catch(() => { /* asserted below */ });
 
     // ========================================================================
-    // E3–E6 — requests + ambient glyph/scale swaps (nothing tracked, 3D off)
+    // E3–E6 - requests + ambient glyph/scale swaps (nothing tracked, 3D off)
     // ========================================================================
-    console.log('\nE3–E6 — ambient enrichment results');
+    console.log('\nE3–E6 - ambient enrichment results');
     const log1 = await page.evaluate(() => ({
       starts: window.__ENRICH_LOG.starts.map((s) => ({ hex: s.hex, t: s.t })),
       maxInflight: window.__ENRICH_LOG.maxInflight,
@@ -428,9 +428,9 @@ async function main() {
     console.log('  saved enrich-after-diverse.png (type-diverse row, still untracked)');
 
     // ========================================================================
-    // E7 — politeness bounds (concurrency, drip rate, session cap)
+    // E7 - politeness bounds (concurrency, drip rate, session cap)
     // ========================================================================
-    console.log('\nE7 — client-side bounds');
+    console.log('\nE7 - client-side bounds');
     const gaps = [];
     for (let i = 1; i < log1.starts.length; i++) gaps.push(log1.starts[i].t - log1.starts[i - 1].t);
     const minGap = gaps.length ? Math.min(...gaps) : Infinity;
@@ -450,10 +450,10 @@ async function main() {
       + `maxIn1s=${maxPerSec} total=${log1.starts.length}`);
 
     // ========================================================================
-    // E8 — next poll: klass persists (poll re-derive keeps enriched types) and
+    // E8 - next poll: klass persists (poll re-derive keeps enriched types) and
     //      the session dedupe never re-requests an answered/negative hex
     // ========================================================================
-    console.log('\nE8 — next poll after enrichment');
+    console.log('\nE8 - next poll after enrichment');
     await page.evaluate(async () => {
       const dm = window.__godsEyeView.dataManager;
       const v = window.__godsEyeView.viewer;
@@ -477,24 +477,24 @@ async function main() {
       pollBad.length ? pollBad.join(' ') : `glyphs stable, requests still ${afterPoll.starts}`);
 
     // ========================================================================
-    // E10 — rolling-budget exhaustion (2026-07-03 field bug, red/green): the
+    // E10 - rolling-budget exhaustion (2026-07-03 field bug, red/green): the
     // old ONE-SHOT session cap burned out and never refilled, so every new
     // region after the first polls showed airliner monoculture. With the seam
-    // ceil=20 and 12 tokens spent above, only 8 remain — a batch of 26 fresh
+    // ceil=20 and 12 tokens spent above, only 8 remain - a batch of 26 fresh
     // on-screen planes must stall at exactly 8 new requests, and further polls
     // must enqueue NOTHING while the bucket is empty (windowMs is 1 h here, so
     // no refill can land mid-phase). Pre-fix code fails this phase: there is
     // no rolling bucket to exhaust (the seam is unread and the 300 cap simply
     // admits the whole batch).
     // ========================================================================
-    console.log('\nE10 — rolling budget exhausts (batch of 26 new planes, 8 tokens left)');
+    console.log('\nE10 - rolling budget exhausts (batch of 26 new planes, 8 tokens left)');
     const BATCH_COUNT = 26;
     const batchHexes = Array.from({ length: BATCH_COUNT }, (_, i) => `ab00${(i + 1).toString(16).padStart(2, '0')}`);
     const startsBeforeBatch = await page.evaluate(() => window.__ENRICH_LOG.starts.length);
     await page.evaluate(async ({ hexes, rowLat, rowLon0, stepDeg }) => {
       const dm = window.__godsEyeView.dataManager;
       const v = window.__godsEyeView.viewer;
-      // Two fresh rows just north of the original one — still inside the
+      // Two fresh rows just north of the original one - still inside the
       // top-down 20 km frame, so the sweep's frustum test keeps them.
       // STATIONARY (speed 0): moving planes drift north out of the frustum at
       // run-time-dependent rates, which made this phase timing-sensitive.
@@ -511,7 +511,7 @@ async function main() {
       });
       const fl = dm.layers.get('flights').module;
       await fl.update(v); // sweep enqueues the last 8 tokens
-      await fl.update(v); // bucket empty — must enqueue nothing more
+      await fl.update(v); // bucket empty - must enqueue nothing more
     }, { hexes: batchHexes, rowLat: ROW_LAT, rowLon0: ROW_LON0, stepDeg: ROW_STEP_DEG });
     // Wait for the drip to drain whatever was enqueued, then settle.
     await page.waitForFunction(
@@ -519,7 +519,7 @@ async function main() {
       { timeout: 20000, polling: 100 }, startsBeforeBatch + (BUDGET_QA.ceil - startsBeforeBatch)
     ).catch(() => { /* asserted below */ });
     await sleep(1500); // any illegal post-exhaustion enqueue would dispatch within ~200 ms
-    // One more poll while exhausted — still nothing new.
+    // One more poll while exhausted - still nothing new.
     await page.evaluate(async () => {
       const dm = window.__godsEyeView.dataManager;
       await dm.layers.get('flights').module.update(window.__godsEyeView.viewer);
@@ -535,11 +535,11 @@ async function main() {
       + `${BATCH_COUNT - (BUDGET_QA.ceil - startsBeforeBatch)} planes left waiting) inflight=${exhausted.inflight}`);
 
     // ========================================================================
-    // E11 — refill window passes → enrichment RESUMES. Shorten windowMs so the
+    // E11 - refill window passes → enrichment RESUMES. Shorten windowMs so the
     // time since the bucket's refill anchor now spans whole windows; the next
     // sweep refills (clamped at ceil) and the waiting planes get requested.
     // ========================================================================
-    console.log('\nE11 — refill window passes; ambient enrichment resumes');
+    console.log('\nE11 - refill window passes; ambient enrichment resumes');
     await page.evaluate((winMs) => { window.__GEV_ENRICH_AMBIENT_QA.windowMs = winMs; }, RESUME_WINDOW_MS);
     await sleep(RESUME_WINDOW_MS + 200); // a full (shortened) refill window elapses
     await page.evaluate(async () => {

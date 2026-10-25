@@ -9,7 +9,7 @@ export function createFrameRateMonitor({ viewer, documentRef = document }) {
   readout.className = 'frame-rate-readout';
   readout.hidden = true;
   // i18n-ignore: FPS is a unit code, the same in every language
-  readout.textContent = 'FPS —';
+  readout.textContent = 'FPS -';
   readout.title = t('Rendered globe frames per second · toggle with `');
   host.appendChild(readout);
   let removeFrameListener = null;
@@ -30,7 +30,7 @@ export function createFrameRateMonitor({ viewer, documentRef = document }) {
     frames = 0;
     startedAt = performance.now();
     // i18n-ignore: FPS is a unit code, the same in every language
-    readout.textContent = 'FPS —';
+    readout.textContent = 'FPS -';
     readout.hidden = false;
     removeFrameListener = frameEvent.addEventListener(() => {
       frames++;
@@ -41,7 +41,7 @@ export function createFrameRateMonitor({ viewer, documentRef = document }) {
       readout.textContent =
         // i18n-ignore: FPS is a unit code, the same in every language
         documentRef.hidden || elapsed <= 0
-          ? 'FPS —'
+          ? 'FPS -'
           : `FPS ${Math.round((frames * 1000) / elapsed)}`;
       frames = 0;
       startedAt = now;

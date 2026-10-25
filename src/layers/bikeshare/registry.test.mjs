@@ -1,4 +1,4 @@
-// BIKESHARE REGISTRY — a city entry is only useful if the proxy will serve it.
+// BIKESHARE REGISTRY - a city entry is only useful if the proxy will serve it.
 //
 // A registry entry and the GBFS proxy allowlist are edited in different files,
 // so a city can look correctly registered while every one of its requests is

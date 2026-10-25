@@ -1,23 +1,23 @@
 #!/usr/bin/env node
 /**
- * qa-firms.mjs — headless proof for the LIVE NASA FIRMS fires layer.
+ * qa-firms.mjs - headless proof for the LIVE NASA FIRMS fires layer.
  *
  * Drives the REAL app in headless Chromium against a dev server with a
  * FIRMS key (default :4420). The live section rides the proxy's 30-min disk
  * cache (zero upstream quota risk per run); the degraded states are
  * fabricated with request interception so they're deterministic.
  *
- *   (i)   LIVE — layer loads >1000 detections, no error, label 'LIVE ·',
+ *   (i)   LIVE - layer loads >1000 detections, no error, label 'LIVE ·',
  *         /api/firms/status reports the key + transaction telemetry.
- *   (ii)  CARDS — the shared world-overlay canvas reports painted FIRMS
+ *   (ii)  CARDS - the shared world-overlay canvas reports painted FIRMS
  *         entries and is non-blank at a fire cluster (detections LOD) AND at
  *         global zoom (cell cards); aggregate cells expose no action target.
- *   (iii) KEYLESS — /api/firms intercepted to 503 {error:'no_key'}:
+ *   (iii) KEYLESS - /api/firms intercepted to 503 {error:'no_key'}:
  *         stats.error 'KEY REQUIRED', zero fires, no crash.
- *   (iv)  STALE — /api/firms intercepted to a stale:true payload with
+ *   (iv)  STALE - /api/firms intercepted to a stale:true payload with
  *         fresh-enough detections: stats.stale true, error 'STALE · …',
  *         fires still render (old data beats a wiped map).
- *   (v)   ACTION (synthetic) — one deterministic intercepted detection's
+ *   (v)   ACTION (synthetic) - one deterministic intercepted detection's
  *         accessible card selects exactly that stable fire and transfers the
  *         camera through the shared UI navigation policy.
  *
@@ -52,7 +52,7 @@ const CHROME_EXECUTABLE_CANDIDATES = [
   // Prefer puppeteer's version-pinned Chrome-for-Testing over the system
   // Chrome: /Applications auto-updates underneath the harnesses, and its
   // software-GL behavior shifts across majors (system Chrome 150 blew the
-  // tile-gated drain budget under SwiftShader on 2026-07-30 — six
+  // tile-gated drain budget under SwiftShader on 2026-07-30 - six
   // false-negative qa-cctv-v2 runs against a healthy build). A deterministic
   // pinned browser beats the newest one for regression harnesses.
   await puppeteer.executablePath().catch(() => null),
@@ -72,7 +72,7 @@ const results = [];
 function record(name, ok, detail) {
   results.push({ name, ok, detail });
   const tag = ok === null ? '\x1b[33mINCONCLUSIVE\x1b[0m' : ok ? '\x1b[32mPASS\x1b[0m' : '\x1b[31mFAIL\x1b[0m';
-  console.log(`  [${tag}] ${name}${detail ? `  — ${detail}` : ''}`);
+  console.log(`  [${tag}] ${name}${detail ? `  - ${detail}` : ''}`);
 }
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -176,7 +176,7 @@ async function bootAndEnable(page, { timeoutS = 45 } = {}) {
   }, timeoutS);
 }
 
-/** Teleport the camera (duck-typed cartographic — no Cesium global). */
+/** Teleport the camera (duck-typed cartographic - no Cesium global). */
 async function setView(page, lon, lat, height) {
   await page.evaluate((lo, la, h) => {
     const gev = window.__godsEyeView;
@@ -241,7 +241,7 @@ async function main() {
 
   const status = await fetch(`${APP_URL}/api/firms/status`).then((r) => r.json()).catch(() => null);
   if (!FIXTURES && !status?.hasKey) {
-    console.error('\x1b[31mServer has no FIRMS key — run against the keyed dev server (:4420).\x1b[0m');
+    console.error('\x1b[31mServer has no FIRMS key - run against the keyed dev server (:4420).\x1b[0m');
     process.exitCode = 2;
     return;
   }
@@ -290,7 +290,7 @@ async function main() {
     });
 
     // ── (i) LIVE feed ────────────────────────────────────────────────────────
-    console.log(FIXTURES ? '(i) FIXTURE — loading synthetic fires through the source adapter...' : '(i) LIVE — loading the fires layer through the cached proxy...');
+    console.log(FIXTURES ? '(i) FIXTURE - loading synthetic fires through the source adapter...' : '(i) LIVE - loading the fires layer through the cached proxy...');
     const live = await bootAndEnable(page);
     {
       const ok = live.count > 1000 && !live.error && String(live.loadingLabel || '').startsWith('LIVE');
@@ -302,8 +302,8 @@ async function main() {
       if (!ok) exitCode = 1;
     }
 
-    // ── (ii) CARDS — canvas overlay draws at both LODs ──────────────────────
-    console.log('\n(ii) CARDS — tactical card overlay ink at both LODs...');
+    // ── (ii) CARDS - canvas overlay draws at both LODs ──────────────────────
+    console.log('\n(ii) CARDS - tactical card overlay ink at both LODs...');
     {
       const strongest = await page.evaluate(() => {
         const mod = window.__godsEyeView.dataManager.layers.get('local-firms').module;
@@ -323,7 +323,7 @@ async function main() {
         await page.screenshot({ path: path.join(SHOTS_DIR, 'firms-cards-detections.png') });
 
         // Global LOD band starts at 9,000 km; its labelDistance is 12,000 km
-        // (cards fade to zero beyond it, matching the legacy labels) — so the
+        // (cards fade to zero beyond it, matching the legacy labels) - so the
         // cell-card proof must sit inside that window.
         await setView(page, strongest.longitude, strongest.latitude, 10000000);
         // Do not let the previous detections frame satisfy the ink predicate
@@ -344,7 +344,7 @@ async function main() {
     }
 
     // ── (iii) KEYLESS (intercepted) ──────────────────────────────────────────
-    console.log('\n(iii) KEYLESS — intercepted 503 no_key...');
+    console.log('\n(iii) KEYLESS - intercepted 503 no_key...');
     interceptMode = 'keyless';
 
     const keyless = await bootAndEnable(page, { timeoutS: 20 });
@@ -357,7 +357,7 @@ async function main() {
     }
 
     // ── (iv) STALE (intercepted) ─────────────────────────────────────────────
-    console.log('\n(iv) STALE — intercepted stale:true payload...');
+    console.log('\n(iv) STALE - intercepted stale:true payload...');
     interceptMode = 'stale';
     const stale = await bootAndEnable(page, { timeoutS: 20 });
     {
@@ -371,7 +371,7 @@ async function main() {
     }
 
     // ── (v) ACTION (deterministic intercepted detection) ────────────────────────
-    console.log('\n(v) ACTION — synthetic intercepted fire card through shared camera policy...');
+    console.log('\n(v) ACTION - synthetic intercepted fire card through shared camera policy...');
     await setView(page, -122.9, 61.9, 60000);
     const actionCards = await waitForCardCanvasInk(page);
     const beforeActions = await firmsActionSnapshot(page);

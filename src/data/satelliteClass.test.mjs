@@ -17,7 +17,7 @@ import satellitesLayer, {
 
 /**
  * A real, parseable TLE under an arbitrary 5-digit catalog number, so the dense
- * load exercises the production path. Both fixtures deliberately avoid 25544 —
+ * load exercises the production path. Both fixtures deliberately avoid 25544 -
  * that is the ISS, and the ISS is force-classified as a STATION everywhere.
  * @param {string} satnum Five-digit catalog number.
  * @param {string} name Object name line.
@@ -77,7 +77,7 @@ test('class labels name the type, and the ISS names itself', () => {
 test('the ISS is a STATION whichever group a partial outage ingested it from', () => {
   // CelesTrak lists the ISS in `visual` as well as `stations`, and a rebuild
   // survives a partial group failure. If the stations feed drops, the ISS is
-  // ingested as `visual` — its card must not then read "VISUAL · ISS" beside
+  // ingested as `visual` - its card must not then read "VISUAL · ISS" beside
   // the red station dot.
   assert.equal(satelliteClassLabel('visual', { isIss: true }), 'STATION · ISS');
   assert.equal(satelliteClassLabel('geo', { isIss: true }), 'STATION · ISS');
@@ -182,7 +182,7 @@ test('the tally files the ISS under STATION even when a partial outage moved it'
   assert.equal(legend.some((row) => row.klass === 'station'), true,
     'STATION stays in the legend, matching the card');
 
-  // Bare group tags still work — the descriptor form is additive.
+  // Bare group tags still work - the descriptor form is additive.
   assert.deepEqual({ ...tallySatelliteClasses(['visual', 'visual']) }, { visual: 2 });
   assert.equal(satelliteClassOf('visual', { isIss: true }).klass, 'station',
     'one helper owns the rule for every consumer');
@@ -192,7 +192,7 @@ test('the legend lists present classes in order and omits absent ones', () => {
   const legend = satelliteClassLegend(tallySatelliteClasses(['geo', 'gps-ops', 'stations']));
   assert.deepEqual(legend.map((row) => row.klass), ['station', 'nav', 'geo'],
     'legend follows SATELLITE_CLASS_ORDER, not input order');
-  // COMMS only exists in DENSE mode — the legend must not advertise a class
+  // COMMS only exists in DENSE mode - the legend must not advertise a class
   // that has nothing on screen.
   assert.equal(legend.some((row) => row.klass === 'comms'), false);
 
@@ -212,7 +212,7 @@ test('the DENSE row chip is stateless and declares the params to apply', () => {
   // The chip never carries its own state: it declares the params to apply, so
   // whatever else drives the catalog param (Space Missions capture/restore)
   // stays authoritative. Whether it reads ACTIVE is decided by the dense LOAD,
-  // not the param — see the load-lifecycle tests below.
+  // not the param - see the load-lifecycle tests below.
   try {
     _setDenseCatalogStateForTest({});
     const chip = satellitesLayer.getRowControls().chips.find((entry) => entry.id === 'catalog');
@@ -245,7 +245,7 @@ test('DENSE reports loading, then ACTIVE only once the points exist', async () =
     satellitesLayer.setRowControlsListener(() => refreshes.push(satellitesLayer.getRowControls()));
 
     satellitesLayer.setParams({ catalog: 'dense' });
-    // The param flips synchronously, but the shell has not arrived yet — the
+    // The param flips synchronously, but the shell has not arrived yet - the
     // chip must say BUSY, never ACTIVE.
     const pending = satellitesLayer.getRowControls().chips[0];
     assert.equal(pending.busy, true);
@@ -259,7 +259,7 @@ test('DENSE reports loading, then ACTIVE only once the points exist', async () =
     assert.equal(settled.label, 'DENSE');
     assert.deepEqual(settled.params, { catalog: 'core' }, 'a settled chip toggles back off');
 
-    // The completion pushed a refresh, and the legend gained COMMS with it —
+    // The completion pushed a refresh, and the legend gained COMMS with it -
     // without that push the row would keep the pre-load counts for 5 minutes.
     assert.ok(refreshes.length >= 2, 'load start and load completion each pushed a refresh');
     const legend = satellitesLayer.getRowControls().legend;
@@ -296,7 +296,7 @@ test('a failed DENSE load reverts the mode rather than leaving an active chip', 
     );
     assert.ok(pushes >= 2, 'the failure pushed its own refresh');
 
-    // Retrying against a healthy feed clears the error — it does not latch.
+    // Retrying against a healthy feed clears the error - it does not latch.
     globalThis.fetch = async () => ({ ok: true, text: async () => DENSE_TLE });
     satellitesLayer.setParams(settled.params);
     const recovered = await settleChip();
@@ -352,7 +352,7 @@ test('a 200 that yields no usable satellites is a failure, not a live catalog', 
 test('an explicit return to core clears a failure the user never caused', async () => {
   // Space Missions forces dense; if that load fails it reverts the param to
   // core itself. The mission's restore of an already-core snapshot then changes
-  // nothing — and used to leave DENSE ✕ latched on the user's row.
+  // nothing - and used to leave DENSE ✕ latched on the user's row.
   const originalFetch = globalThis.fetch;
   const warn = console.warn;
   console.warn = () => {};

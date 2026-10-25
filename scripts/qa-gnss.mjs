@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * qa-gnss.mjs — headless proof for the GNSS Integrity layer
+ * qa-gnss.mjs - headless proof for the GNSS Integrity layer
  * (id `gnss-integrity`): low navigation accuracy reported by ADS-B.
  *
  * Drives the REAL app in headless Chromium against a dev server (keyless).
@@ -8,12 +8,12 @@
  * cache, one upstream read per whole-degree anchor); the other sections
  * stub that route in the page so they are deterministic.
  *
- *   (i)   LIVE — over Poland and the southern Baltic the layer settles with no error,
+ *   (i)   LIVE - over Poland and the southern Baltic the layer settles with no error,
  *         one geometry per cell and legend band counts that sum to the cell
  *         count; cells are required only when the returned rows, binned
  *         with the layer's own rules, reach the per-cell minimum (live
  *         traffic varies by hour). Requires a non-stale response no older than 60 s.
- *   (ii)  BANDS (synthetic) — a 10-aircraft cell with 5 degraded is high,
+ *   (ii)  BANDS (synthetic) - a 10-aircraft cell with 5 degraded is high,
  *         a 30-aircraft cell with 2 degraded is medium, a 3-aircraft cell
  *         with 1 degraded is low (first bad discounted), a clean cell at sea
  *         is low, a 2-aircraft cell is withheld; `stale: true` reaches
@@ -22,14 +22,14 @@
  *         machine-readable provenance (GEV classifier, gpsjam bands, window).
  *         PICK verifies actual perimeter and empty-ground clicks under GNSS.
  *         CAMERA/GLOBE verify automatic sampling and the screen-centre anchor.
- *   (iii) FAILURE — the route stubbed to 502: stats.error is set and the
+ *   (iii) FAILURE - the route stubbed to 502: stats.error is set and the
  *         cells already on the globe are kept.
- *   (iv)  DISABLE — owned ground primitives are hidden.
- *   (v)   KEYBOARD — the row's toggle button, focused, turns the layer on
+ *   (iv)  DISABLE - owned ground primitives are hidden.
+ *   (v)   KEYBOARD - the row's toggle button, focused, turns the layer on
  *         with Enter and off with Space, keeps focus and names its state.
- *   (vi)  VIEWPORT — at a 390x844 phone viewport the open row and its legend
+ *   (vi)  VIEWPORT - at a 390x844 phone viewport the open row and its legend
  *         fit the panel width with no horizontal overflow.
- *   (vii) AGE (synthetic) — a fresh page whose stubbed proxy replays the same
+ *   (vii) AGE (synthetic) - a fresh page whose stubbed proxy replays the same
  *         stale snapshot observed 31 minutes ago draws nothing and reports no
  *         error; observed 29 minutes ago it draws its cells. The replay keeps
  *         its observation time instead of restarting the 30-minute window.
@@ -72,7 +72,7 @@ const results = [];
 function record(name, ok, detail) {
   results.push({ name, ok, detail });
   const tag = ok ? '\x1b[32mPASS\x1b[0m' : '\x1b[31mFAIL\x1b[0m';
-  console.log(`  [${tag}] ${name}${detail ? `  — ${detail}` : ''}`);
+  console.log(`  [${tag}] ${name}${detail ? `  - ${detail}` : ''}`);
 }
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -371,7 +371,7 @@ async function main() {
   try {
     // ── (i) LIVE ──────────────────────────────────────────────────────────
     console.log(
-      '(i) LIVE — adsb.lol integrity snapshot over Poland and the southern Baltic...',
+      '(i) LIVE - adsb.lol integrity snapshot over Poland and the southern Baltic...',
     );
     const live = await browser.newPage();
     await live.setViewport({ width: 1440, height: 900 });
@@ -429,7 +429,7 @@ async function main() {
       );
     } else {
       console.log(
-        `  [info] ${liveRows} live rows, no cell reaches the minimum — cell count not asserted`,
+        `  [info] ${liveRows} live rows, no cell reaches the minimum - cell count not asserted`,
       );
     }
     record(
@@ -448,7 +448,7 @@ async function main() {
 
     // ── (ii) BANDS ────────────────────────────────────────────────────────
     console.log(
-      '\n(ii) BANDS — synthetic integrity rows through the real layer...',
+      '\n(ii) BANDS - synthetic integrity rows through the real layer...',
     );
     const page = await browser.newPage();
     await page.setViewport({ width: 1440, height: 900 });
@@ -634,7 +634,7 @@ async function main() {
         false,
       );
     });
-    console.log('\nCAMERA — automatic regional refresh without toggling...');
+    console.log('\nCAMERA - automatic regional refresh without toggling...');
     const beforeMove = await page.evaluate(
       () => window.__gnssQaRequests.length,
     );
@@ -762,7 +762,7 @@ async function main() {
     await sleep(3500);
 
     // ── (iii) FAILURE ─────────────────────────────────────────────────────
-    console.log('\n(iii) FAILURE — /api/gnss-integrity stubbed to 502...');
+    console.log('\n(iii) FAILURE - /api/gnss-integrity stubbed to 502...');
     await page.evaluate(() => {
       window.__gnssQaMode = 'error';
     });
@@ -787,7 +787,7 @@ async function main() {
     await shoot(page, 'disabled');
 
     // ── (v) KEYBOARD ──────────────────────────────────────────────────────
-    console.log('\n(v) KEYBOARD — the row toggle, from the keyboard...');
+    console.log('\n(v) KEYBOARD - the row toggle, from the keyboard...');
     await page.evaluate(() => {
       window.__gnssQaMode = 'fixture';
     });
@@ -811,7 +811,7 @@ async function main() {
 
     // ── (vi) VIEWPORT ─────────────────────────────────────────────────────
     console.log(
-      '\n(vi) VIEWPORT — the open row on a 390x844 phone viewport...',
+      '\n(vi) VIEWPORT - the open row on a 390x844 phone viewport...',
     );
     await page.close();
     // A fresh page: switching an open page to isMobile reloads it, which
@@ -858,7 +858,7 @@ async function main() {
     await phone.close();
 
     console.log(
-      '\nSTARTUP — initial rate limit stays enabled and recovers automatically...',
+      '\nSTARTUP - initial rate limit stays enabled and recovers automatically...',
     );
     const retry = await browser.newPage();
     await retry.setViewport({ width: 1440, height: 900 });
@@ -938,7 +938,7 @@ async function main() {
 
     // ── (vii) AGE ─────────────────────────────────────────────────────────
     console.log(
-      '\n(vii) AGE — a replayed stale snapshot keeps its observation time...',
+      '\n(vii) AGE - a replayed stale snapshot keeps its observation time...',
     );
     const aged = await browser.newPage();
     await aged.setViewport({ width: 1440, height: 900 });

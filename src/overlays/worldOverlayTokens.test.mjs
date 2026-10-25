@@ -5,7 +5,7 @@ import { TRANSIT_TIER_KEYS } from '../data/transitPresetStyle.js';
 
 test('every detection theme carries a distinct bracket colour for every transit mode', () => {
   // The detection canvas composites above the post-FX chain, so these are
-  // literal screen colours in every preset — the mode signal the sprites
+  // literal screen colours in every preset - the mode signal the sprites
   // lose under NVG and FLIR. A missing key would silently fall back to the
   // theme's line colour and every mode would bracket alike.
   for (const [name, theme] of Object.entries(DETECTION_THEME_MAP)) {

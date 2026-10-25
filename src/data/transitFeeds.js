@@ -5,16 +5,16 @@ import { greatCircleKm } from '../geoDistance.js';
  * @description Registry of keyless, openly licensed GTFS-Realtime
  * VehiclePositions feeds the Transit layer can show.
  *
- * Every entry here is a URL the SERVER fetches — the browser only ever asks
+ * Every entry here is a URL the SERVER fetches - the browser only ever asks
  * `/api/transit/vehicles/<id>` for a registered id (see SECURITY.md: proxies
  * never fetch client-supplied URLs). Adding a feed means adding a row here,
  * a DATA_SOURCES.md row with its license, and a credit in dataCredits.js.
  *
  * Admission rules for a feed:
  *  - No key, token, or registration required (identify-yourself headers are
- *    fine — Entur asks for `ET-Client-Name`, OVapi for a User-Agent).
+ *    fine - Entur asks for `ET-Client-Name`, OVapi for a User-Agent).
  *  - An open license that permits display with attribution.
- *  - Real coordinates in VehiclePosition.position — NYCT subway, for example,
+ *  - Real coordinates in VehiclePosition.position - NYCT subway, for example,
  *    publishes stop-relative positions only and is deliberately absent.
  *
  * `defaultEnabled` is separate from being registered. A feed ships switched ON
@@ -38,15 +38,8 @@ export const TRANSIT_MODES = Object.freeze([
   'unknown',
 ]);
 
-/** Per-mode icon used in labels and the selection card. */
-export const TRANSIT_MODE_ICON = Object.freeze({
-  bus: '🚌',
-  tram: '🚊',
-  subway: '🚇',
-  rail: '🚆',
-  ferry: '⛴️',
-  unknown: '🚏',
-});
+// Transit modes carry no glyph: the selection card leads with the route label
+// and says the mode in words, and layer rows use the shared SVG icon set.
 
 /**
  * MBTA route ids are human-readable and mode-typed: rapid-transit lines carry
@@ -203,12 +196,12 @@ function guelphRouteLabel(routeId) {
 /**
  * Hamilton publishes an internal key for every route: not one of HSR's 80 route
  * ids equals the number on the bus, so an untranslated feed reads as
- * "Route 5783" city-wide. Two generations of id are live at once — `5688` and
- * `5780` are both the 2 BARTON — and both are listed, because both arrive.
+ * "Route 5783" city-wide. Two generations of id are live at once - `5688` and
+ * `5780` are both the 2 BARTON - and both are listed, because both arrive.
  *
  * Numbers are unpadded to match the rest of the registry (`routes.txt` says
  * `02`; a rider says 2). The seasonal and event shuttles publish a name rather
- * than a number — `TC230`, `PEACH`, `ROCKTON` — and those are already what a
+ * than a number - `TC230`, `PEACH`, `ROCKTON` - and those are already what a
  * rider would say, so they survive as published. Ids and names are from the
  * City's own published GTFS `routes.txt`, under the same terms as the feed.
  */
@@ -311,7 +304,7 @@ function hamiltonRouteLabel(routeId) {
  * `005` of `routes.txt`.
  *
  * Branches are the exception. YRT suffixes a two-digit branch onto the base
- * route — the scheme Viva's own `60102` follows — so a branch id reaches a
+ * route - the scheme Viva's own `60102` follows - so a branch id reaches a
  * rider as "8301" unless it is translated. Names and colours are from York
  * Region's own published GTFS `routes.txt`; Viva Green (604) and Pink (606)
  * are not in current service and so are absent here too.
@@ -421,7 +414,7 @@ export const TRANSIT_FEED_REGISTRY = Object.freeze([
     license: 'CapMetro Developer Tools license',
     licenseUrl: 'https://www.capmetro.org/developertools',
     attribution:
-      'Capital Metropolitan Transportation Authority — data.texas.gov',
+      'Capital Metropolitan Transportation Authority - data.texas.gov',
     defaultEnabled: true,
     terms: Object.freeze({
       quote:
@@ -440,7 +433,7 @@ export const TRANSIT_FEED_REGISTRY = Object.freeze([
     url: 'https://svc.metrotransit.org/mtgtfs/vehiclepositions.pb',
     license: 'Public Metro Transit vehicle position data',
     licenseUrl: 'https://svc.metrotransit.org/',
-    attribution: 'Metro Transit — Metropolitan Council',
+    attribution: 'Metro Transit - Metropolitan Council',
     defaultEnabled: true,
     terms: Object.freeze({
       quote:
@@ -480,7 +473,7 @@ export const TRANSIT_FEED_REGISTRY = Object.freeze([
     license: 'Free to use per the OVapi README (best effort, no SLA)',
     licenseUrl: 'https://gtfs.ovapi.nl/README',
     attribution:
-      'OVapi / Stichting OpenGeo — Dutch integrated real-time transit data',
+      'OVapi / Stichting OpenGeo - Dutch integrated real-time transit data',
     defaultEnabled: true,
     terms: Object.freeze({
       quote:
@@ -495,19 +488,19 @@ export const TRANSIT_FEED_REGISTRY = Object.freeze([
     operator: 'Entur AS (Norwegian national transit data)',
     region: 'Norway',
     // Circle chosen to hold Oslo, Bergen, Bodø and Tromsø while leaving
-    // Helsinki (≈820 km) out — a national feed must not poll from next door.
+    // Helsinki (≈820 km) out - a national feed must not poll from next door.
     center: Object.freeze({ lat: 64.0, lon: 11.5 }),
     loadRadiusKm: 720,
     url: 'https://api.entur.io/realtime/v1/gtfs-rt/vehicle-positions',
     headers: Object.freeze({ 'ET-Client-Name': 'gods-eye-view-transit' }),
     license: 'Norwegian Licence for Open Government Data (NLOD)',
     licenseUrl: 'https://developer.entur.org/pages-intro-authentication',
-    attribution: 'Entur — data under NLOD',
+    attribution: 'Entur - data under NLOD',
     defaultEnabled: true,
     terms: Object.freeze({
       quote:
         'This API is open under NLOD licence, however, it is required that all consumers identify themselves by using the header ET-Client-Name.',
-      note: 'The header is mandatory — unidentified consumers may be rate-limited or blocked — and the proxy sends it on every request.',
+      note: 'The header is mandatory - unidentified consumers may be rate-limited or blocked - and the proxy sends it on every request.',
     }),
     defaultMode: 'bus',
     routeMode: enturRouteMode,
@@ -522,7 +515,7 @@ export const TRANSIT_FEED_REGISTRY = Object.freeze([
     url: 'https://gtfsrt.api.translink.com.au/api/realtime/seq/VehiclePositions',
     license: 'CC BY 4.0',
     licenseUrl: 'https://translink.com.au/about-translink/open-data',
-    attribution: 'TransLink — Queensland Government (CC BY 4.0)',
+    attribution: 'TransLink - Queensland Government (CC BY 4.0)',
     defaultEnabled: true,
     terms: Object.freeze({
       quote:
@@ -542,7 +535,7 @@ export const TRANSIT_FEED_REGISTRY = Object.freeze([
     license: 'Open Government Licence \u2013 Toronto',
     licenseUrl: 'https://open.toronto.ca/open-data-licence/',
     attribution:
-      'Toronto Transit Commission \u2014 City of Toronto Open Data (Open Government Licence \u2013 Toronto)',
+      'Toronto Transit Commission - City of Toronto Open Data (Open Government Licence \u2013 Toronto)',
     defaultEnabled: true,
     terms: Object.freeze({
       quote:
@@ -570,12 +563,12 @@ export const TRANSIT_FEED_REGISTRY = Object.freeze([
     license: 'City of Mississauga Open Data Terms of Use',
     licenseUrl:
       'http://www5.mississauga.ca/research_catalogue/CityofMississauga_TermsofUse.pdf',
-    attribution: 'MiWay \u2014 City of Mississauga Open Data',
+    attribution: 'MiWay - City of Mississauga Open Data',
     defaultEnabled: true,
     terms: Object.freeze({
       quote:
         'The City of Mississauga (the City) now grants you a world-wide, royalty-free, non-exclusive, revocable licence to use, modify, and distribute the Datasets in all current and future media and formats for any lawful purpose.',
-      note: 'Two conditions shape how this ships. The licence is REVOCABLE, and it asks that anyone who provides access to the data pass on the Terms of Use URL \u2014 so `licenseUrl` points at the terms themselves rather than at a catalogue page, and the attribution popover carries the link. Credit is optional here ("you are not required to credit the City"), and is given anyway as a courtesy, the way the other municipal feeds are.',
+      note: 'Two conditions shape how this ships. The licence is REVOCABLE, and it asks that anyone who provides access to the data pass on the Terms of Use URL - so `licenseUrl` points at the terms themselves rather than at a catalogue page, and the attribution popover carries the link. Credit is optional here ("you are not required to credit the City"), and is given anyway as a courtesy, the way the other municipal feeds are.',
     }),
     defaultMode: 'bus',
   }),
@@ -637,7 +630,7 @@ export const TRANSIT_FEED_REGISTRY = Object.freeze([
     terms: Object.freeze({
       quote:
         'The Information Provider grants you a worldwide, royalty-free, perpetual, non-exclusive licence to use the Information including for commercial purposes subject to the terms below. ... Acknowledge the source of the Information by including any attribution statement specified by the Information Provider(s) and, where possible, provide a link to this licence.',
-      note: 'The endpoint sits on a vendor host, so provenance matters: the City publishes this exact URL on its own open-data developer page, https://explore.guelph.ca/pages/transit-gtfs-data, under an open-data initiative heading (that page is JavaScript-rendered; its readable source is the ArcGIS item JSON behind it). The licence is a verbatim OGL-Canada 2.0 derivative and the attribution wording above is its prescribed fallback, so it is used as written. The transit datasets carry a BLANK licence field in the portal catalogue; the Terms of Use supply it by default ("Except where otherwise noted this is the Open Government Licence"), the same shape of gap the TTC entry records. The Terms also publish a traffic limit \u2014 no concurrent requests, at most 5 per second \u2014 which one poll every 15 s satisfies many times over. Crests and logos are excluded from the grant, so the credit stays text.',
+      note: 'The endpoint sits on a vendor host, so provenance matters: the City publishes this exact URL on its own open-data developer page, https://explore.guelph.ca/pages/transit-gtfs-data, under an open-data initiative heading (that page is JavaScript-rendered; its readable source is the ArcGIS item JSON behind it). The licence is a verbatim OGL-Canada 2.0 derivative and the attribution wording above is its prescribed fallback, so it is used as written. The transit datasets carry a BLANK licence field in the portal catalogue; the Terms of Use supply it by default ("Except where otherwise noted this is the Open Government Licence"), the same shape of gap the TTC entry records. The Terms also publish a traffic limit - no concurrent requests, at most 5 per second - which one poll every 15 s satisfies many times over. Crests and logos are excluded from the grant, so the credit stays text.',
     }),
     defaultMode: 'bus',
     routeLabel: guelphRouteLabel,
@@ -659,7 +652,7 @@ export const TRANSIT_FEED_REGISTRY = Object.freeze([
     terms: Object.freeze({
       quote:
         'The Information Provider, the City of Kingston, grants you a worldwide, royalty-free, perpetual, non-exclusive licence to use the information provided for any purpose, including for commercial purposes, subject to the terms below. ... Acknowledge the source of the information by including any attribution statement specified by the City of Kingston and, where possible, provide a link to this licence.',
-      note: 'The City catalogues this exact URL as an open-data dataset, so provenance is direct rather than inferred. `licenseUrl` is the canonical location of the licence PDF; the address the catalogue prints is a legacy path that currently redirects there, and pinning the redirect target is what survives the next site relaunch \u2014 the Durham entry records what happens when it does not. Names, crests and logos are excluded from the grant, so the credit stays text. Roughly one entity in ten carries no usable position (the position field absent, occasionally a momentary 0,0 GPS dropout); both are discarded before rendering.',
+      note: 'The City catalogues this exact URL as an open-data dataset, so provenance is direct rather than inferred. `licenseUrl` is the canonical location of the licence PDF; the address the catalogue prints is a legacy path that currently redirects there, and pinning the redirect target is what survives the next site relaunch - the Durham entry records what happens when it does not. Names, crests and logos are excluded from the grant, so the credit stays text. Roughly one entity in ten carries no usable position (the position field absent, occasionally a momentary 0,0 GPS dropout); both are discarded before rendering.',
     }),
     defaultMode: 'bus',
   }),
@@ -724,7 +717,7 @@ export const TRANSIT_FEED_REGISTRY = Object.freeze([
     terms: Object.freeze({
       quote:
         'The Corporation of the City of Burlington (the City) now grants you a worldwide, royalty-free, non-exclusive, revocable licence to use, reproduce, modify, and distribute the datasets in all current and future media and formats for any lawful purpose. ... If you distribute or provide access to these datasets to any other person ... you agree to include a copy of, or this Uniform Resource Locator (URL) for, these Terms of Use.',
-      note: 'Same 2011-era municipal template as Mississauga, and the same two consequences: the grant is REVOCABLE, and the terms have to travel with the data, so `licenseUrl` is the Terms document itself rather than a catalogue page and the attribution popover carries the link. Credit is optional here and given anyway. Crests, logos and marks are excluded and the terms forbid implying any association, so the credit stays plain text. The catalogue record for this data leads with a licence link that 404s; the URL above is the live one. Plain http:// has no listener at all \u2014 not a redirect, a hang \u2014 so the https:// URL is mandatory rather than preferred. The feed updates once a minute and answers conditional requests with an ETag.',
+      note: 'Same 2011-era municipal template as Mississauga, and the same two consequences: the grant is REVOCABLE, and the terms have to travel with the data, so `licenseUrl` is the Terms document itself rather than a catalogue page and the attribution popover carries the link. Credit is optional here and given anyway. Crests, logos and marks are excluded and the terms forbid implying any association, so the credit stays plain text. The catalogue record for this data leads with a licence link that 404s; the URL above is the live one. Plain http:// has no listener at all - not a redirect, a hang - so the https:// URL is mandatory rather than preferred. The feed updates once a minute and answers conditional requests with an ETag.',
     }),
     defaultMode: 'bus',
     routeLabel: burlingtonRouteLabel,
@@ -752,7 +745,7 @@ export const TRANSIT_FEED_ID_PATTERN = /^[a-z0-9][a-z0-9-]{1,63}$/;
 
 /**
  * Look up a POLLABLE feed by id. Unknown ids, malformed ids, and feeds that are
- * registered but switched off all return null — this is the only door from a
+ * registered but switched off all return null - this is the only door from a
  * request path to an upstream URL, so a feed the owner has not cleared must not
  * be reachable through it.
  * @param {string} id
@@ -765,7 +758,7 @@ export function getTransitFeed(id) {
 
 /**
  * Look up any registered feed, enabled or not. For credits and documentation
- * only — never for resolving a request into an upstream fetch.
+ * only - never for resolving a request into an upstream fetch.
  * @param {string} id
  * @returns {object|null}
  */
@@ -840,8 +833,8 @@ export function transitModeFor(feed, routeId, vehicleId = null) {
 
 /**
  * Whether the mode came from the route id rather than the feed's default. A
- * default is a guess about a fleet — TransLink's is "bus" while it publishes
- * rail in the same feed — so a consumer judging physical plausibility must
+ * default is a guess about a fleet - TransLink's is "bus" while it publishes
+ * rail in the same feed - so a consumer judging physical plausibility must
  * not hold a defaulted vehicle to a bus's limits.
  * @param {object} feed Registry entry.
  * @param {string|null} routeId
@@ -872,7 +865,7 @@ export function transitRouteLabel(feed, routeId) {
 }
 
 /**
- * Public catalog shape served by `/api/transit/feeds` — everything the browser
+ * Public catalog shape served by `/api/transit/feeds` - everything the browser
  * needs to gate polling and credit the source, and nothing it could misuse.
  * @returns {object[]}
  */

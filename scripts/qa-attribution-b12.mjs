@@ -1,10 +1,10 @@
 /**
- * qa-attribution-b12.mjs — visual + state proof for Batch 12 (data attribution).
+ * qa-attribution-b12.mjs - visual + state proof for Batch 12 (data attribution).
  *
  * Findings H10 + H11 (docs/pre-ship-audit-2026-07-01.md):
- *   H10 — the Google/Cesium credit MUST stay visible in clean-view AND
+ *   H10 - the Google/Cesium credit MUST stay visible in clean-view AND
  *         recording modes (those are the modes used to record demos).
- *   H11 — every data layer's required attribution must surface in the
+ *   H11 - every data layer's required attribution must surface in the
  *         expandable bottom-left "Data attribution" lightbox.
  *
  * This script drives the REAL app headless and proves:
@@ -50,16 +50,16 @@ let passed = 0;
 let failed = 0;
 function check(name, ok, detail) {
   const tag = ok ? '\x1b[32mPASS\x1b[0m' : '\x1b[31mFAIL\x1b[0m';
-  console.log(`  [${tag}] ${name}${detail ? `  — ${detail}` : ''}`);
+  console.log(`  [${tag}] ${name}${detail ? `  - ${detail}` : ''}`);
   if (ok) passed++;
   else failed++;
 }
 
 // Substrings that MUST be present across the registered per-layer credits.
 const REQUIRED_CREDIT_SUBSTRINGS = [
-  'OpenStreetMap contributors', // ODbL — datacenters/dams/roads
-  'adsb.lol',                    // ODbL — military traces
-  'TeleGeography',               // CC BY-NC-SA — cables
+  'OpenStreetMap contributors', // ODbL - datacenters/dams/roads
+  'adsb.lol',                    // ODbL - military traces
+  'TeleGeography',               // CC BY-NC-SA - cables
   'NASA FIRMS',                  // fires
   'CelesTrak',                   // satellites
   'U.S. Geological Survey',      // earthquakes
@@ -126,7 +126,7 @@ async function main() {
   await new Promise((r) => setTimeout(r, 2500));
 
   // ── (i) H11: static credits registered ────────────────────────────
-  console.log('H11 — per-layer credits registered in viewer.creditDisplay');
+  console.log('H11 - per-layer credits registered in viewer.creditDisplay');
   const registeredHtml = await page.evaluate(() => {
     const cd = window.__godsEyeView.viewer.creditDisplay;
     const statics = cd._staticCredits || [];
@@ -143,7 +143,7 @@ async function main() {
   }
 
   // ── (i) H11: credits render in the "Data attribution" lightbox ─────
-  console.log('\nH11 — "Data attribution" lightbox surfaces the credits');
+  console.log('\nH11 - "Data attribution" lightbox surfaces the credits');
   // Force a render frame so the credit display flushes, then open the lightbox.
   const lightboxState = await page.evaluate(async () => {
     const viewer = window.__godsEyeView.viewer;
@@ -164,7 +164,7 @@ async function main() {
     document.querySelector('[data-qa-attribution-stack-probe]')?.remove();
     const stackProbe = document.createElement('div');
     stackProbe.dataset.qaAttributionStackProbe = 'true';
-    stackProbe.textContent = 'QA WORLD LABEL — STACK PROBE';
+    stackProbe.textContent = 'QA WORLD LABEL - STACK PROBE';
     Object.assign(stackProbe.style, {
       position: 'absolute',
       left: `${Math.max(8, (boxRect?.left || 0) - 90)}px`,
@@ -300,7 +300,7 @@ async function main() {
   await page.setViewport({ width: 1440, height: 900, deviceScaleFactor: 1 });
 
   // ── (ii) enable datacenters + cables; credits still present ────────
-  console.log('\nH11 — enabling datacenters + submarine cables');
+  console.log('\nH11 - enabling datacenters + submarine cables');
   const layerIds = await page.evaluate(() => {
     const dm = window.__godsEyeView.dataManager;
     return [...dm.layers.keys()];
@@ -346,7 +346,7 @@ async function main() {
     });
 
   // ── (iii) clean-view: credit line STILL visible ───────────────────
-  console.log('\nH10 — clean-view keeps the credit line visible');
+  console.log('\nH10 - clean-view keeps the credit line visible');
   await page.evaluate(() => document.body.classList.add('ui-clean-view'));
   await new Promise((r) => setTimeout(r, 400));
   const cleanVis = await creditVisibility();
@@ -364,7 +364,7 @@ async function main() {
   await page.evaluate(() => document.body.classList.remove('ui-clean-view'));
 
   // ── (iv) recording-mode: credit line STILL visible ────────────────
-  console.log('\nH10 — recording-mode keeps the credit line visible');
+  console.log('\nH10 - recording-mode keeps the credit line visible');
   await page.evaluate(() => document.body.classList.add('recording-mode'));
   await new Promise((r) => setTimeout(r, 400));
   const recVis = await creditVisibility();

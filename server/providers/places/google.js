@@ -19,7 +19,7 @@ let _googleRateLimiter;
  * Requests/min/IP applied when GEV_RATELIMIT_GOOGLE_PER_MIN is unset. This is
  * the value the Pinokio build already ships (pinokio/_ENVIRONMENT), so the
  * packaged app keeps behaving exactly as it does today and only an
- * unconfigured server changes — from unlimited to what the product already
+ * unconfigured server changes - from unlimited to what the product already
  * runs with. Places calls are user-driven (a search, a nearby lookup, an
  * installation probe) rather than polled, so this sits far above what the app
  * generates and bites only a caller enumerating the endpoint. `.env.example`
@@ -344,7 +344,7 @@ export function googlePlacesContextProxy({
     /**
      * Geocoding belongs on the server, not in the page. Google's Geocoding web
      * service refuses referrer-restricted keys, so calling it from the browser
-     * forces GOOGLE_MAPS_API_KEY — which ships in the bundle by design — to be
+     * forces GOOGLE_MAPS_API_KEY - which ships in the bundle by design - to be
      * left unrestricted (#363). Here the request carries the server key, and
      * the browser key no longer needs the Geocoding API at all.
      *

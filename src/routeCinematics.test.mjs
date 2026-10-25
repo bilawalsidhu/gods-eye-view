@@ -61,7 +61,7 @@ function rollDegOf(eye, direction, up) {
  * A viewer whose camera actually MODELS orientation: setView with a
  * direction/up pair updates heading/pitch/roll the way Cesium's own
  * decomposition does, and setView with an explicit roll writes it back. Without
- * that, a pin can only prove the code called setView — not that the horizon
+ * that, a pin can only prove the code called setView - not that the horizon
  * the user is left holding is level.
  */
 function createTickableViewer({ heightM = 700 } = {}) {
@@ -155,7 +155,7 @@ function record(flight, { maxFrames = 20000 } = {}) {
   const frames = [];
   for (let i = 0; i < maxFrames; i += 1) {
     const frame = advanceRouteFlight(flight, FRAME_S);
-    // Arming frames carry no pose — the dolly is waiting for terrain, and the
+    // Arming frames carry no pose - the dolly is waiting for terrain, and the
     // camera is deliberately untouched.
     if (frame.arming) continue;
     frames.push({
@@ -198,7 +198,7 @@ test('the speed profile eases in and out with no step anywhere', () => {
   const speeds = frames.map((f) => f.speed);
   const cruise = CRUISE_M_S.normal;
 
-  // Starts and ends from rest — no instant velocity step at either end.
+  // Starts and ends from rest - no instant velocity step at either end.
   assert.ok(speeds[0] < cruise * 0.05, `start speed ${speeds[0].toFixed(2)} must be ~0`);
   assert.ok(speeds.at(-1) < cruise * 0.05, `end speed ${speeds.at(-1).toFixed(2)} must be ~0`);
 
@@ -206,7 +206,7 @@ test('the speed profile eases in and out with no step anywhere', () => {
   // no waypoint crossing perturbs it (segment-constant speed is gone).
   assert.ok(maxStep(speeds) < 0.6, `per-frame speed step ${maxStep(speeds).toFixed(3)} m/s too large`);
 
-  // Cruise plateau is exactly flat — waypoints are invisible to the profile.
+  // Cruise plateau is exactly flat - waypoints are invisible to the profile.
   const plateau = frames.filter((f) => f.progress > 0.4 && f.progress < 0.6).map((f) => f.speed);
   assert.ok(plateau.length > 10);
   assert.ok(maxStep(plateau) < 1e-9, 'the cruise plateau must not wobble at waypoints');
@@ -219,7 +219,7 @@ test('the speed profile eases in and out with no step anywhere', () => {
   assert.ok(Math.abs(traveled.at(-1) - flight.totalM) < 1e-6, 'the dolly reaches the final waypoint');
 });
 
-test('easing preserves the shipped pace — mean speed is still the speed word', () => {
+test('easing preserves the shipped pace - mean speed is still the speed word', () => {
   for (const speed of ['slow', 'normal', 'fast']) {
     const flight = flightFrom(TWO_TURN_ROUTE, { speed });
     const expectedS = flight.totalM / CRUISE_M_S[speed];
@@ -265,7 +265,7 @@ test('turns bank into the corner, capped, and roll in and out smoothly', () => {
   assert.ok(Math.abs(banks[0]) < 0.01, 'the dolly starts wings level');
   assert.ok(Math.abs(banks.at(-1)) < 1.5, 'the dolly finishes near wings level');
 
-  // Capped — this is a map, not a flight sim.
+  // Capped - this is a map, not a flight sim.
   const peak = Math.max(...banks.map(Math.abs));
   assert.ok(peak <= ROUTE_CINEMA.maxBankDeg + 1e-9, `bank ${peak.toFixed(2)}° exceeded the cap`);
   assert.ok(peak > 3, `a 90° corner should read as a real bank, got ${peak.toFixed(2)}°`);
@@ -328,7 +328,7 @@ test('altitude breathes around the requested mean and rises into turns', () => {
   );
   assert.ok(max - min > 5, 'the altitude should actually breathe');
   // Vertical rate stays gentle. The peak is the climb INTO a corner (against
-  // 40 m/s of ground speed — a shallow swell); rolling back out sinks far
+  // 40 m/s of ground speed - a shallow swell); rolling back out sinks far
   // slower, because the lift tracks the roll on a deliberately lazy filter.
   const verticalMps = maxStep(heights) / FRAME_S;
   assert.ok(verticalMps < 7, `vertical rate reached ${verticalMps.toFixed(2)} m/s`);
@@ -346,7 +346,7 @@ test('altitude breathes around the requested mean and rises into turns', () => {
 
 test('a rise is cleared BEFORE the camera reaches it, not as it arrives', () => {
   // A 900 m ridge across the middle of the route. Clearance under the camera
-  // alone cannot prove the lookahead read exists — the floor hold adopts a rise
+  // alone cannot prove the lookahead read exists - the floor hold adopts a rise
   // instantly, so reading only the current cell still clears the cell you are
   // standing on. What the lookahead buys is clearing the ridge while you are
   // still SHORT of it, which is what this measures.
@@ -366,7 +366,7 @@ test('a rise is cleared BEFORE the camera reaches it, not as it arrives', () => 
       carto.height - floorAtFrame(frames[i]) >= ROUTE_CINEMA.minClearanceM - 1e-6,
       `eye at ${carto.height.toFixed(1)} m cleared the floor under it by too little`,
     );
-    // Where the camera will BE in ~130 m of travel — half the lookahead at
+    // Where the camera will BE in ~130 m of travel - half the lookahead at
     // "normal", roughly three seconds out. Reading only the current cell still
     // clears the cell you stand on (the floor hold adopts a rise instantly);
     // what the ahead read buys is being high enough BEFORE you get there.
@@ -387,7 +387,7 @@ test('a rise is cleared BEFORE the camera reaches it, not as it arrives', () => 
   assert.equal(routeEyeHeightM(Number.NaN, 0), ROUTE_CINEMA.meanHeightM);
 });
 
-test('a COLD corridor never descends blind — the seed holds until terrain lands', () => {
+test('a COLD corridor never descends blind - the seed holds until terrain lands', () => {
   // The failure this exists for: OSRM route vertices carry height 0, and an
   // unwarmed floor cell reads null. Trusting the vertex put the eye 1.3 km
   // UNDER Albuquerque. Cold is missing data, not flat ground.
@@ -425,7 +425,7 @@ test('a COLD corridor never descends blind — the seed holds until terrain land
   // eased as usual.
   const acquiring = flightFrom(ALBUQUERQUE, { floorFn: () => null, cameraHeightM: 2400 });
   assert.equal(acquiring.floorKnown, false, 'a cold construction has no floor yet');
-  // The warm lands DURING the arm — the ordinary case, and the one where the
+  // The warm lands DURING the arm - the ordinary case, and the one where the
   // floor may be taken whole because nothing has moved yet.
   advanceRouteFlight(acquiring, FRAME_S);
   assert.equal(acquiring.floorM, Number.NaN === acquiring.floorM ? Number.NaN : acquiring.floorM);
@@ -451,7 +451,7 @@ test('a COLD corridor never descends blind — the seed holds until terrain land
 test('a cold route ARMS for terrain rather than racing the warm', () => {
   // The corridor warm is fire-and-forget, so the alternative to waiting is
   // racing it. Losing that race used to put the eye at an altitude derived from
-  // the camera — 774 m underground from a LOW starting camera, which the old
+  // the camera - 774 m underground from a LOW starting camera, which the old
   // pin missed only because it supplied a conveniently safe 2,400 m one.
   const ALBUQUERQUE = [[-106.61, 35.08], [-106.55, 35.08]];
   const REAL_FLOOR_M = 1600;
@@ -463,7 +463,7 @@ test('a cold route ARMS for terrain rather than racing the warm', () => {
   });
   assert.equal(flight.floorKnown, false);
 
-  // While armed the camera is not touched AT ALL — no teleport onto the route,
+  // While armed the camera is not touched AT ALL - no teleport onto the route,
   // no descent, no frame to apply.
   for (let i = 0; i < 20; i += 1) {
     const frame = advanceRouteFlight(flight, FRAME_S);
@@ -488,9 +488,9 @@ test('a cold route ARMS for terrain rather than racing the warm', () => {
   );
 });
 
-test('the rendered mesh answers when the DEM never will — once, and only once', () => {
+test('the rendered mesh answers when the DEM never will - once, and only once', () => {
   // The DEM can stay cold indefinitely (proxy down). Clipping requires terrain
-  // to BE rendered, and what is rendered is what sampleHeight reads — so the
+  // to BE rendered, and what is rendered is what sampleHeight reads - so the
   // mesh probe closes the hole in the case where the hole is visible.
   const ALBUQUERQUE = [[-106.61, 35.08], [-106.55, 35.08]];
   const REAL_FLOOR_M = 1600;
@@ -516,7 +516,7 @@ test('the rendered mesh answers when the DEM never will — once, and only once'
   assert.ok(minHeight >= REAL_FLOOR_M + ROUTE_CINEMA.minClearanceM - 1e-6, `flew at ${minHeight.toFixed(0)} m`);
 
   // ONE-SHOT, for the whole route. The acquisition re-runs every arming frame
-  // to notice the DEM landing — that part is cache reads — but the probe is
+  // to notice the DEM landing - that part is cache reads - but the probe is
   // latched, so a regression to per-frame sampling turns this red.
   assert.equal(probeCalls.length, 1, `the probe fired ${probeCalls.length} times over one route`);
   const totalSampleHeightCalls = probeCalls.reduce((sum, n) => sum + n, 0);
@@ -563,7 +563,7 @@ test('probeMeshFloorM reports COVERAGE, not just a height', () => {
     { heightM: Number.NaN, sampled: 0, requested: 1 }, 'no scene, no reading');
   assert.deepEqual(probeMeshFloorM({ sampleHeight: () => 120 }, []),
     { heightM: Number.NaN, sampled: 0, requested: 0 }, 'no cells, no reading');
-  // Cells whose tiles are not streamed contribute NOTHING — silence must never
+  // Cells whose tiles are not streamed contribute NOTHING - silence must never
   // be mistaken for flat ground, which is why the caller gets a count.
   const partial = probeMeshFloorM(
     { sampleHeight: (c) => (c.longitude > 0 ? 340 : undefined) },
@@ -577,7 +577,7 @@ test('probeMeshFloorM reports COVERAGE, not just a height', () => {
 test('a PARTIALLY warm corridor is unresolved, and probes only the cold cells', () => {
   // One cached cell says nothing about the ground under the other seven.
   // Treating it as an answer let the dolly descend to 460 m over a 1,600 m
-  // rendered surface — the cache read succeeded, so neither the arm nor the
+  // rendered surface - the cache read succeeded, so neither the arm nor the
   // probe ever ran.
   const ALBUQUERQUE = [[-106.61, 35.08], [-106.55, 35.08]];
   const VALLEY_M = 200;
@@ -777,7 +777,7 @@ test('prefers-reduced-motion flattens the roll and the altitude shaping', () => 
 
 test('the reduced-motion PREFERENCE reaches a real flight, not just the flag', () => {
   // Injecting state.reducedMotion proves the shaping honours a boolean. It does
-  // not prove the OS preference is ever read — this drives the public path.
+  // not prove the OS preference is ever read - this drives the public path.
   const priorWindow = globalThis.window;
   const queries = [];
   globalThis.window = {
@@ -922,7 +922,7 @@ test('an interrupt MID-BANK stops the dolly and puts the horizon back level', ()
     Math.abs(viewer.rollDeg()) < 1e-9,
     `the horizon was left tilted at ${viewer.rollDeg().toFixed(3)}° after the cut`,
   );
-  // Levelling preserves where the camera was looking — it is not a re-frame.
+  // Levelling preserves where the camera was looking - it is not a re-frame.
   // Asserted NUMERICALLY, not just by the omitted destination: position,
   // heading and pitch must come out the far side unchanged.
   const levelling = viewer.setViews.at(-1);
@@ -949,7 +949,7 @@ test('an interrupt MID-BANK stops the dolly and puts the horizon back level', ()
 test('a completed dolly lands wings level and releases the slot', () => {
   const viewer = createTickableViewer();
   initCameraVerbs(viewer.viewer, () => null);
-  // A route that is still turning as it ends — the case where a bank would
+  // A route that is still turning as it ends - the case where a bank would
   // otherwise be frozen into the final frame.
   const started = flyRoute([{
     type: 'route',
@@ -983,7 +983,7 @@ test('a completed dolly lands on the last waypoint', () => {
   const flight = flightFrom(STRAIGHT_ROUTE, { speed: 'fast' });
   const frames = record(flight);
   assert.equal(frames.at(-1).progress, 1);
-  // The final frame is applied before the slot is released — the camera lands
+  // The final frame is applied before the slot is released - the camera lands
   // on the route's last waypoint rather than stopping short of it.
   const endpoint = Cesium.Cartesian3.fromDegrees(...STRAIGHT_ROUTE.at(-1), 0);
   const endCarto = Cesium.Cartographic.fromCartesian(frames.at(-1).eye);
@@ -1006,8 +1006,8 @@ test('the 0.5 s duration floor is the one place the speed word is not the mean',
 
 test('a flight can be stopped by its owner, and only while it is still theirs', () => {
   // CLEAR in the Directions row must stop the flight IT started. By then the
-  // camera may belong to someone else — the user grabbed it, voice flew
-  // somewhere, a tracked aircraft took over — and stopping that would be a
+  // camera may belong to someone else - the user grabbed it, voice flew
+  // somewhere, a tracked aircraft took over - and stopping that would be a
   // feature reaching across the app to cancel a stranger's motion.
   const viewer = createTickableViewer();
   initCameraVerbs(viewer.viewer, () => null);

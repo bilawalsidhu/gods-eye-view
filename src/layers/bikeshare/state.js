@@ -106,7 +106,7 @@ export function createState({ services }) {
    * so a retired operator must not mark a layer that other cities are still
    * populating as failed. Entries are dropped when their city leaves range.
    * The layer reports failure only when these cost it everything it had to
-   * draw, and degraded otherwise — see `getStats()` in controls.js.
+   * draw, and degraded otherwise - see `getStats()` in controls.js.
    */
 
   layerState._failedCityIds = new Set();

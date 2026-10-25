@@ -29,7 +29,7 @@ const boxKey = (box) =>
 /**
  * Gate a provider's `requestImage` through the semaphore. Returning
  * `undefined` tells Cesium to retry on a later frame, but under
- * `requestRenderMode` there is no later frame unless something asks — and a
+ * `requestRenderMode` there is no later frame unless something asks - and a
  * deferral must never ask for one itself: the retried tile would defer again
  * and ask again, keeping the scene rendering every frame. So a request that
  * finds our semaphore full asks for nothing (the request holding the slot

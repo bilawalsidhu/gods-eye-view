@@ -1,9 +1,9 @@
-// src/data/geoid.js — bundled EGM96 geoid-undulation lookup.
+// src/data/geoid.js - bundled EGM96 geoid-undulation lookup.
 //
 // h = H + N: the globe (Cesium ellipsoid) needs ELLIPSOIDAL height (h);
 // most real-world elevation sources (barometric altitude, MSL survey data,
 // Caltrans/TfL camera priors) give ORTHOMETRIC height (H, "height above mean
-// sea level"). N is the local geoid undulation — the gap between the WGS84
+// sea level"). N is the local geoid undulation - the gap between the WGS84
 // ellipsoid and the geoid (~mean sea level) surface, ranging roughly
 // -106..+85 m worldwide. See docs/plans/2026-07-05-entity-height-datum-fix.md.
 //
@@ -12,7 +12,7 @@
 // never lands in the eager Vite bundle. Only fall back to vendoring the NGA
 // grid ourselves if the package fails tests, isn't browser-safe, or bloats
 // the eager bundle. `egm96-universal` passed all three checks (see the
-// task report), so this file is a thin wrapper around it — no vendored
+// task report), so this file is a thin wrapper around it - no vendored
 // fallback was needed.
 //
 // egm96-universal's `meanSeaLevel(lat, lon)` already returns exactly N in
@@ -24,7 +24,7 @@ let egm96Module = null;
 let readyPromise = null;
 
 /**
- * Lazily loads the EGM96 grid (dynamic import — code-split by Vite so the
+ * Lazily loads the EGM96 grid (dynamic import - code-split by Vite so the
  * ~2.7 MB grid data stays out of the eager main bundle). Safe to call many
  * times; the underlying import only happens once and subsequent calls
  * resolve immediately from the cached promise.
@@ -50,7 +50,7 @@ export async function ensureGeoidReady() {
 export function geoidHeight(latDeg, lonDeg) {
   if (!egm96Module) {
     throw new Error(
-      'geoid.js: geoidHeight() called before ensureGeoidReady() resolved — ' +
+      'geoid.js: geoidHeight() called before ensureGeoidReady() resolved - ' +
         'await ensureGeoidReady() first.',
     );
   }
@@ -73,14 +73,14 @@ export function orthometricToEllipsoidal(hMslM, latDeg, lonDeg) {
  * READOUT-ONLY inverse of {@link orthometricToEllipsoidal}: H = h - N.
  *
  * Cesium reports camera and entity heights against the WGS84 ELLIPSOID, but a
- * viewer reads "ALT" as height above mean sea level — so over San Francisco
+ * viewer reads "ALT" as height above mean sea level - so over San Francisco
  * (N ≈ -32 m) a camera sitting 17 m above the SFO deck reports a startling
  * -15 m until the undulation is taken back out.
  *
  * Takes N as an argument instead of calling {@link geoidHeight} itself, so it
  * stays a pure function a display surface can call every tick against a cached
  * cell, and so it degrades safely: a non-finite N (grid still loading, or the
- * lazy import failed) returns the UNCORRECTED height rather than NaN — a
+ * lazy import failed) returns the UNCORRECTED height rather than NaN - a
  * readout that is ~30 m off for a beat beats a readout that blanks.
  *
  * This converts the DATUM of a height that is ALREADY ellipsoidal. It must

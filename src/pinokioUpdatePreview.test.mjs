@@ -169,7 +169,7 @@ test('a remote that moves during the update does not change what is applied', as
     fetchRemote: (remote) => {
       git(app.clone, ['fetch', '--quiet', remote]);
       // The remote gains a commit after the one fetch this update makes. Only
-      // a second fetch — which there must not be — could reach it.
+      // a second fetch - which there must not be - could reach it.
       later = app.pushSync('a commit nobody was shown', 'fourth\n');
     },
   });
@@ -207,7 +207,7 @@ test('an upstream that cannot be resolved after fetching stops the update', asyn
   await app.push('second commit', 'second\n');
   const plan = updateFromRemote({
     ...app.io,
-    // The target ref resolves to nothing after the fetch — a tracking ref
+    // The target ref resolves to nothing after the fetch - a tracking ref
     // pruned out from under the run.
     read: (args) =>
       args[0] === 'rev-parse' &&

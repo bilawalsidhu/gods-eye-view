@@ -224,7 +224,7 @@ export function createPlayback({ state: layerState, services, parts, source }) {
   /**
    * Wait for confirmed Radio playback while voice owns a hard mute.
    * A fallback station may replace the first stream during this wait, so the
-   * state subscription—not the first play() promise—is authoritative.
+   * state subscription-not the first play() promise-is authoritative.
    */
 
   function confirmRadioPlayback({

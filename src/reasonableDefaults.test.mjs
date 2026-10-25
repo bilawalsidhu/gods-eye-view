@@ -2,13 +2,13 @@ import { readShellSource } from './testSupport/readShellSource.mjs';
 import { expandApplicationHtml } from '../build/application-html.js';
 // src/reasonableDefaults.test.mjs
 //
-// What the console looks like the FIRST time it opens — before any share link,
+// What the console looks like the FIRST time it opens - before any share link,
 // before any stored state. The "reasonable defaults" batch (owner directive,
 // 2026-08-22) moved three of them together:
 //
 //   1. 3D aircraft models ON, mode `proximity`.
 //      Pinned in `data/layerState.test.mjs`, next to the coordinator that
-//      actually decides fresh-boot layer state — including the early return that
+//      actually decides fresh-boot layer state - including the early return that
 //      makes each layer's own initializer the operative default.
 //   2. Scope feather. Owner: "I like to hide feather" set it to 0% on
 //      2026-08-22; the owner revised that to 8% on 2026-08-23 and locked 11%
@@ -22,10 +22,10 @@ import { expandApplicationHtml } from '../build/application-html.js';
 // Each pin below has the same three parts, because a default is never one
 // literal:
 //
-//   • the first-run VALUE, at every surface that independently decides it — a
+//   • the first-run VALUE, at every surface that independently decides it - a
 //     fresh boot runs no restore, so these literals ARE the startup state and
 //     changing one alone ships a UI that disagrees with its own engine;
-//   • explicit state still WINS over it — a link, or the operator's own hand,
+//   • explicit state still WINS over it - a link, or the operator's own hand,
 //     because "default" means "what you get when you said nothing";
 //   • the surrounding override machinery is INTACT, so a default flip cannot
 //     quietly take a separate landed behaviour with it.
@@ -58,7 +58,7 @@ function uiBlock(start, end) {
   return uiSource.slice(startIndex, endIndex);
 }
 
-/** A ShareLinkManager over a synthetic hash — enough surface for parseInitialHash. */
+/** A ShareLinkManager over a synthetic hash - enough surface for parseInitialHash. */
 function managerForHash(hash) {
   globalThis.window = { location: { hash, href: `http://localhost/${hash}` } };
   globalThis.history = { replaceState(_s, _t, next) { window.location.hash = new URL(next, window.location.href).hash; } };
@@ -75,7 +75,7 @@ function managerForHash(hash) {
 }
 
 // ---------------------------------------------------------------------------
-// 2. Scope feather — a subtle soft edge on a first run
+// 2. Scope feather - a subtle soft edge on a first run
 // ---------------------------------------------------------------------------
 
 test('first run opens with a subtle scope feather, at every surface that decides it', () => {
@@ -84,7 +84,7 @@ test('first run opens with a subtle scope feather, at every surface that decides
   assert.equal(getScopeMaskFeather(), 0.11,
     'and the live module starts there, not merely documents it');
 
-  // The slider and its readout are the same default rendered as markup — a
+  // The slider and its readout are the same default rendered as markup - a
   // fresh boot applies no restore, so a stale value here would show one number
   // over a mask drawn at another.
   assert.match(indexHtml, /id="scope-feather-slider"[^>]*\svalue="11"/,
@@ -107,7 +107,7 @@ test('an explicit feather still wins over the subtle default', () => {
     'an explicit 0 is a choice too, not an absent field');
 
   // A link from before `scf` existed still restores what ITS author saw, which
-  // is the retired 35 — parsing an archive is not the same question as booting
+  // is the retired 35 - parsing an archive is not the same question as booting
   // fresh, and this deliberately did NOT move with either later default.
   assert.equal(managerForHash('#lat=10&lon=20&style=normal').parseInitialHash().scopeFeatherPct, 35,
     'a pre-scf link restores the author\'s view, not the new default');
@@ -116,7 +116,7 @@ test('an explicit feather still wins over the subtle default', () => {
 test('the subtle default did not weaken the feather control, and 0 is still reachable', () => {
   // The cheap way to move a default would be to nerf the control. Prove the
   // slider still spans its full range and the geometry is still DERIVED from
-  // the ratio — a check that would pass vacuously if it only ever saw one value.
+  // the ratio - a check that would pass vacuously if it only ever saw one value.
   assert.match(indexHtml, /id="scope-feather-slider"[^>]*\smin="0"[^>]*\smax="100"/,
     'the slider still offers the whole range');
   const previous = getScopeMaskFeather();
@@ -128,7 +128,7 @@ test('the subtle default did not weaken the feather control, and 0 is still reac
       assert.ok(Math.abs((geo.outerR - geo.innerR) - keyholeR * ratio) < 1e-9,
         `feather ${ratio} must still widen the band to that fraction of the keyhole`);
     }
-    // The new default is a real, narrow band — not the hard crop, and nowhere
+    // The new default is a real, narrow band - not the hard crop, and nowhere
     // near the retired 35 % halo.
     setScopeMaskFeather(SCOPE_FEATHER_RATIO_DEFAULT);
     const soft = scopeMaskGeometry(1200, 900);
@@ -140,16 +140,16 @@ test('the subtle default did not weaken the feather control, and 0 is still reac
     setScopeMaskFeather(0);
     const hard = scopeMaskGeometry(1200, 900);
     assert.equal(hard.outerR, hard.innerR,
-      'an explicit 0 is still the hard crop — the path was not removed with the default');
+      'an explicit 0 is still the hard crop - the path was not removed with the default');
   } finally {
     setScopeMaskFeather(previous);
   }
 });
 
 // ---------------------------------------------------------------------------
-// 2c. Detection Fade — 7% on a first run, at every surface that decides it
+// 2c. Detection Fade - 7% on a first run, at every surface that decides it
 // (owner final lock 2026-08-24; 16% before). Fade is the label/card fading
-// band around the keyhole — a different control from the scope-mask feather.
+// band around the keyhole - a different control from the scope-mask feather.
 test('first run opens at 7% detection fade, at every surface that decides it', () => {
   assert.equal(KEYHOLE_LABEL_FEATHER_RATIO, 0.07,
     'celestialRing.js: the engine fade band opens at 7%');
@@ -163,7 +163,7 @@ test('first run opens at 7% detection fade, at every surface that decides it', (
     'sharelink.js: the generator starts from the same value the overlay draws');
 });
 
-// 2b. Detection OUTSIDE opacity — 1% on a first run
+// 2b. Detection OUTSIDE opacity - 1% on a first run
 // ---------------------------------------------------------------------------
 
 test('first run opens at 1% OUTSIDE opacity, at every surface that decides it', () => {
@@ -183,7 +183,7 @@ test('first run opens at 1% OUTSIDE opacity, at every surface that decides it', 
   assert.match(shareSource, /this\._detectionOutsideOpacityPct = 1;/,
     'sharelink.js: the generator starts from the same value the overlay draws');
 
-  // The bracket floor is calibrated AT the default, so it moves with it — the
+  // The bracket floor is calibrated AT the default, so it moves with it - the
   // approval attaches to the bracket brightness, not to the slider position.
   assert.equal(AIRCRAFT_BRACKET_FLOOR_ANCHOR, KEYHOLE_OUTSIDE_OPACITY_DEFAULT,
     'the AIR bracket floor anchor tracks the default it calibrates against');
@@ -207,7 +207,7 @@ test('an explicit OUTSIDE opacity still wins over the new default', () => {
 });
 
 // ---------------------------------------------------------------------------
-// 3. Detection — on for every style on a first run, Normal included
+// 3. Detection - on for every style on a first run, Normal included
 // ---------------------------------------------------------------------------
 
 test('first run opens with detection on, in every style, using the one tactical preset', () => {
@@ -238,7 +238,7 @@ test('detection-on-by-default is a default, not an operator override', () => {
   // `_detectionUserOverridden` means the OPERATOR hand-edited detection, and it
   // suppresses the military-style auto-enable for the rest of the session.
   // A factory default is not that. If applying the baseline set the flag, a
-  // fresh session would silently lose the style auto-enable behaviour — a
+  // fresh session would silently lose the style auto-enable behaviour - a
   // separate landed feature, taken out by an unrelated change.
   const applyDefaults = uiBlock('  _applyGlobalPostDefaults() {', '\n  }\n');
   assert.match(applyDefaults, /this\._setDetectionMode\(defaults\.detectionMode\)/,
@@ -265,7 +265,7 @@ test('detection-on-by-default is a default, not an operator override', () => {
       `${style} still carries its own preset`);
   }
   assert.doesNotMatch(stylePresets, /\n  normal: \{/,
-    'Normal gained a default, not a style preset — switching to it still touches nothing');
+    'Normal gained a default, not a style preset - switching to it still touches nothing');
 });
 
 test('a share link that carries detection OFF still restores OFF', () => {

@@ -1,7 +1,7 @@
 import { msg } from '../i18n/index.js';
 
 /**
- * Snow Style — White overlay + Desaturation + Falling particles
+ * Snow Style - White overlay + Desaturation + Falling particles
  * Transforms the world into a winter wonderland
  */
 export const snowShader = {

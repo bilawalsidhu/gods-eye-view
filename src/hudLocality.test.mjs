@@ -1,6 +1,6 @@
 // The HUD summary's locality tag. The 2026-08-20 QA hunt caught the HUD calling
-// out landmarks on other continents — NEAR SACRE-COEUR (PARIS) 2470KM while
-// parked over Moscow — because the NEAR bound was 2,500 km. These pin the metro
+// out landmarks on other continents - NEAR SACRE-COEUR (PARIS) 2470KM while
+// parked over Moscow - because the NEAR bound was 2,500 km. These pin the metro
 // bound, both sides of it, and the SECTOR fallback that already worked.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -69,7 +69,7 @@ test('the boundary is pinned on both sides, inclusive at the bound', () => {
 });
 
 test('southern and western hemispheres carry the right suffixes', () => {
-  // Rio and Honolulu — the two the fallback already handled correctly in the field.
+  // Rio and Honolulu - the two the fallback already handled correctly in the field.
   assert.equal(
     composeLocalityTag(null, -22.9068, -43.1729),
     'SECTOR 22.91S 43.17W',
@@ -80,14 +80,14 @@ test('southern and western hemispheres carry the right suffixes', () => {
   );
 });
 
-// The tests above all pass against a hud.js that still computes the tag inline —
+// The tests above all pass against a hud.js that still computes the tag inline -
 // they only exercise the helper. This pins the PRODUCTION wiring: hud.js must
 // import the helper, call it, and no longer carry the old 2,500 km branch.
 // (hud.js itself cannot be imported here: it pulls in the `mgrs` CommonJS package,
 // which Vite resolves but plain Node cannot import by named export.)
 test('hud.js actually composes its summary through this helper', () => {
   const source = readFileSync(new URL('./hud.js', import.meta.url), 'utf8');
-  // Boolean probes, not assert.match on the whole file — a failure here should
+  // Boolean probes, not assert.match on the whole file - a failure here should
   // name the missing wiring, not print all of hud.js.
   const has = (pattern) => pattern.test(source);
   assert.equal(

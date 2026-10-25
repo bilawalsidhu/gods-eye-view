@@ -4,7 +4,7 @@
  *
  * The registry mirrors what the voice card shows: a result replaces the list
  * when the card displays it with numbered rows (see resultDisplay.js, which
- * both the card and this registry read — analyst items included, in the
+ * both the card and this registry read - analyst items included, in the
  * order the model reads them in the tool output).
  *
  * Session-scoped: the voice commands clear it when a session ends.

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * scripts/qa-floorhold-probe-cost.mjs — what does an unrationed adjacent-cell
+ * scripts/qa-floorhold-probe-cost.mjs - what does an unrationed adjacent-cell
  * probe actually cost?
  *
  * The display-floor hold borrows a floor from the eight cells adjacent to a
@@ -10,7 +10,7 @@
  * scheduler was protecting, so the decision to delete it is a number rather
  * than an opinion.
  *
- * A probe is eight synchronous `Map` reads against the shared floor cache — no
+ * A probe is eight synchronous `Map` reads against the shared floor cache - no
  * fetch, no `sampleHeight`, nothing async. Every DEM request is driven by
  * `warmGroundFloor` from the poll loop instead, already bounded there by
  * DISPLAY_CORRIDOR_CELL_BUDGET and the resolver's single-flight chain.
@@ -27,7 +27,7 @@ const THROTTLE_MS = 500; // NEIGHBOR_FLOOR_PROBE_MS
 
 setMeshFloorPreferred(true);
 for (const [label, warm] of [
-  ['all cold (every neighbour a miss — the outage case)', false],
+  ['all cold (every neighbour a miss - the outage case)', false],
   ['all warm (all eight neighbours resolved)', true],
 ]) {
   _clearMeshFloorCellsForTest();

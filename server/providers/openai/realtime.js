@@ -230,7 +230,7 @@ function createRealtimeTokenHandler({
     // resolveVoiceModel is total: an unknown, empty, or hostile value
     // resolves to `standard` instead of reaching OpenAI as a model id, so a
     // bad querystring degrades to a normal session rather than a dead mic.
-    // The env overrides stay authoritative per tier (see .env.example) —
+    // The env overrides stay authoritative per tier (see .env.example) -
     // a wrong upstream model id is then a config fix, not a code change.
     const requestedTier = query.get('tier');
     const tier = resolveVoiceModel(requestedTier).tier;
@@ -320,7 +320,7 @@ function createRealtimeTokenHandler({
       res.statusCode = response.status;
       // Which tier/model this secret was actually minted for. The upstream
       // success body is passed through untouched (the client parses it
-      // verbatim), so these headers are the authoritative echo — including the
+      // verbatim), so these headers are the authoritative echo - including the
       // case where a bogus ?tier= was silently downgraded to standard.
       res.setHeader('X-GEV-Voice-Tier', tier);
       res.setHeader('X-GEV-Voice-Model', model);

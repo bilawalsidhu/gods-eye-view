@@ -94,7 +94,7 @@ function pointSegDist2(px, py, ax, ay, bx, by) {
  */
 export function createFlowSegmentIndex(flowSegments) {
   if (!Array.isArray(flowSegments)) return null;
-  // Local equirectangular projection anchored at the first flow coordinate —
+  // Local equirectangular projection anchored at the first flow coordinate -
   // over a ≤0.05° fetch box the distortion is negligible.
   const anchor = flowSegments.find(
     (f) => Array.isArray(f?.coords) && f.coords.length >= 2,
@@ -123,7 +123,7 @@ export function createFlowSegmentIndex(flowSegments) {
       const segLen = Math.hypot(bx - ax, by - ay);
       if (!(segLen > 0)) continue;
       const bearing = bearingDeg(bx - ax, by - ay);
-      // Subdivide long pairs so every piece is ≤ one cell — midpoint hashing
+      // Subdivide long pairs so every piece is ≤ one cell - midpoint hashing
       // then guarantees a 3×3 cell probe sees everything within 35 m.
       const pieces = Math.max(1, Math.ceil(segLen / CELL_SIZE_M));
       for (let p = 0; p < pieces; p++) {

@@ -6,7 +6,7 @@ const signedNormalizeDeg = (deg) => ((((deg + 180) % 360) + 360) % 360) - 180;
 
 /**
  * Field definitions for the CCTV click-to-edit pose readout. Chips DISPLAY the
- * camera's EFFECTIVE pose (not raw offsets — "HDG 135.0°" instead of the old
+ * camera's EFFECTIVE pose (not raw offsets - "HDG 135.0°" instead of the old
  * "HEADING 0°" nonsense); typed values convert back to calibration offsets
  * against the frozen basePose. ΔN/ΔE stay offset-denominated (absolute lat/lon
  * typing is user-hostile).
@@ -194,7 +194,7 @@ export function _syncCctvCalReadout(enabled, activeCamera) {
     for (const chip of this._cctvCalReadout.querySelectorAll(
       '.cctv-cal-value',
     )) {
-      if (chip.querySelector('input')) continue; // an edit is in flight — don't clobber
+      if (chip.querySelector('input')) continue; // an edit is in flight - don't clobber
       const field = CCTV_CAL_FIELDS[chip.dataset.calField];
       if (!field) continue;
       const value = canCalibrate ? field.get(activeCamera) : null;

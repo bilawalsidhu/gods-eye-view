@@ -24,7 +24,7 @@ export function createFlow({ state: layerState, services, parts, source }) {
    *
    * `fetchFlowForBounds` only rejects when EVERY covering tile failed, so a
    * non-null result here always means "there is no live flow to show right
-   * now" — the dots fall back to simulated white. Mirrors the
+   * now" - the dots fall back to simulated white. Mirrors the
    * `deriveAisFeedError` honesty helper.
    *
    * @param {Error|{name?:string, message?:string}|null|undefined} error - Rejection from the flow fetch.
@@ -69,7 +69,7 @@ export function createFlow({ state: layerState, services, parts, source }) {
           layerState._flowStatusUnavailable = false;
           layerState._flowStatusKnown = true;
           if (layerState._liveMode) {
-            console.log('[Data:Traffic] TomTom key present — live flow mode');
+            console.log('[Data:Traffic] TomTom key present - live flow mode');
             registerDynamicCredit(layerState._viewer, TOMTOM_CREDIT);
           }
         })
@@ -78,12 +78,12 @@ export function createFlow({ state: layerState, services, parts, source }) {
           if (layerState._flowStatusSignal === signal)
             layerState._flowStatusSignal = null;
           // Simulating because we could not ask, which is NOT the same as
-          // "server says no key" — getStats() distinguishes the two.
+          // "server says no key" - getStats() distinguishes the two.
           layerState._liveMode = false;
           layerState._flowStatusUnavailable = true;
           layerState._flowStatusKnown = true;
           console.warn(
-            '[Data:Traffic] TomTom status unreachable — simulated traffic:',
+            '[Data:Traffic] TomTom status unreachable - simulated traffic:',
             e?.message || e,
           );
         });
@@ -97,8 +97,8 @@ export function createFlow({ state: layerState, services, parts, source }) {
    *
    * Reuses the load-generation guard: stale flow responses are discarded, and
    * the shared AbortController lets `cancelActiveFetch()` (next load / disable)
-   * cancel an in-flight flow fetch. Any failure leaves roads unmatched — the
-   * dots then render in today's simulated white, never a phantom color — and is
+   * cancel an in-flight flow fetch. Any failure leaves roads unmatched - the
+   * dots then render in today's simulated white, never a phantom color - and is
    * recorded in `_flowError` so `getStats()` degrades honestly instead of
    * reporting a stale "LIVE · N% cov" over simulated dots.
    *
@@ -110,7 +110,7 @@ export function createFlow({ state: layerState, services, parts, source }) {
 
   async function applyFlowToRoads(roads, clamped, generation, signal) {
     // Claim the work synchronously, before the first await, so `stats.loading`
-    // covers this request from the same tick the caller started it — the
+    // covers this request from the same tick the caller started it - the
     // loading batch must not be able to close underneath an in-flight fetch.
     layerState._flowPending += 1;
     layerState._flowRoads = roads;
@@ -121,7 +121,7 @@ export function createFlow({ state: layerState, services, parts, source }) {
       if (!road.directFlow) road.flow = null;
     }
     try {
-      if (!layerState._flowStatusPromise) return; // status check not started — sim mode
+      if (!layerState._flowStatusPromise) return; // status check not started - sim mode
       await layerState._flowStatusPromise;
       if (!layerState._liveMode || !layerState._enabled) return;
       if (generation !== layerState._loadGeneration || signal?.aborted) return;

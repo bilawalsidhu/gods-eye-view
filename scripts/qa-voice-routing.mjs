@@ -1,18 +1,18 @@
 #!/usr/bin/env node
 /**
- * qa-voice-routing.mjs — voice-surface QA harness (overnight 2026-07-27).
+ * qa-voice-routing.mjs - voice-surface QA harness (overnight 2026-07-27).
  *
  * Two independent layers:
  *
- *  LAYER 1 — ROUTING (costs model turns, budget-capped):
+ *  LAYER 1 - ROUTING (costs model turns, budget-capped):
  *    Sends TEXT turns through a real OpenAI Realtime session minted by the
- *    app's own /api/realtime/token endpoint — so the instructions + tool defs
+ *    app's own /api/realtime/token endpoint - so the instructions + tool defs
  *    under test are the PRODUCTION config, not a copy. Asserts which tool the
  *    model calls for each phrase (plus a few critical-arg spot checks).
  *    Batches phrases per session (fresh-ish context, amortized mints), hard
  *    budget on model turns, JSONL evidence log per run.
  *
- *  LAYER 2 — BEHAVIOR (free, deterministic, no model):
+ *  LAYER 2 - BEHAVIOR (free, deterministic, no model):
  *    Drives window.__gevVoiceCommands.runner(toolName, args) in a headless
  *    page against the dev server and asserts world state via __godsEyeView /
  *    __gevAnnotations (camera altitude bands, annotation counts, route
@@ -83,7 +83,7 @@ let pass = 0,
 const failures = [];
 function report(ok, label, detail) {
   const tag = ok ? '\x1b[32mPASS\x1b[0m' : '\x1b[31mFAIL\x1b[0m';
-  console.log(`  [${tag}] ${label}  — ${detail}`);
+  console.log(`  [${tag}] ${label}  - ${detail}`);
   if (ok) pass += 1;
   else {
     fail += 1;
@@ -91,7 +91,7 @@ function report(ok, label, detail) {
   }
 }
 function skipped(label, detail) {
-  console.log(`  [\x1b[33mSKIP\x1b[0m] ${label}  — ${detail}`);
+  console.log(`  [\x1b[33mSKIP\x1b[0m] ${label}  - ${detail}`);
   skip += 1;
 }
 
@@ -138,7 +138,7 @@ async function inspectPointerCrop(captured, screenPx, viewport) {
 }
 
 // ════════════════════════════════════════════════════════════
-// LAYER 1 — ROUTING
+// LAYER 1 - ROUTING
 // ════════════════════════════════════════════════════════════
 
 // Phrase table + grading live in scripts/voice-bench/ (shared with the
@@ -237,7 +237,7 @@ class RoutingSession {
       }
       this.pending.calls.push({ name: msg.item.name, args: parsed });
       // Feed a neutral tool result (item.create is legal mid-response); the
-      // continuation response is requested ONLY after response.done — sending
+      // continuation response is requested ONLY after response.done - sending
       // response.create while a response is active is an API error (the
       // pilot's failure mode).
       this.send({
@@ -343,7 +343,7 @@ class RoutingSession {
 
 async function runRoutingLayer() {
   console.log(
-    `\nLAYER 1 — routing assertions (budget ${TURN_BUDGET} model turns)`,
+    `\nLAYER 1 - routing assertions (budget ${TURN_BUDGET} model turns)`,
   );
   const logDir = path.join(ROOT, '.gev-logs', 'qa-voice-routing');
   fs.mkdirSync(logDir, { recursive: true });
@@ -414,7 +414,7 @@ async function runRoutingLayer() {
 }
 
 // ════════════════════════════════════════════════════════════
-// LAYER 1b — DEIXIS ROUTING (costs model turns)
+// LAYER 1b - DEIXIS ROUTING (costs model turns)
 // ════════════════════════════════════════════════════════════
 //
 // Point-and-ask phrases against the production instructions and tools. Each
@@ -578,7 +578,7 @@ const DEIXIS_SCENARIOS = [
 
 async function runDeixisRoutingLayer() {
   console.log(
-    `\nLAYER 1b — deixis routing (budget ${TURN_BUDGET} model turns)`,
+    `\nLAYER 1b - deixis routing (budget ${TURN_BUDGET} model turns)`,
   );
   const logDir = path.join(ROOT, '.gev-logs', 'qa-voice-routing');
   fs.mkdirSync(logDir, { recursive: true });
@@ -645,16 +645,16 @@ async function runDeixisRoutingLayer() {
 }
 
 // ════════════════════════════════════════════════════════════
-// LAYER 1c — DEIXIS LIVE (in-app text turns; costs model turns)
+// LAYER 1c - DEIXIS LIVE (in-app text turns; costs model turns)
 // ════════════════════════════════════════════════════════════
 //
 // The whole loop in the real app: a synthetic pointer on the live canvas, a
 // real Realtime session (push-to-talk mode, so the fake microphone stays
 // muted), a typed turn, the model's tool call, the runner's resolution and
-// the tool result — observed through the session's own events.
+// the tool result - observed through the session's own events.
 
 async function runDeixisLiveLayer() {
-  console.log('\nLAYER 1c — deixis live (in-app text turns)');
+  console.log('\nLAYER 1c - deixis live (in-app text turns)');
   const browser = await puppeteer.launch({
     headless: HEADFUL ? false : 'new',
     ...(CHROME_EXECUTABLE ? { executablePath: CHROME_EXECUTABLE } : {}),
@@ -959,7 +959,7 @@ function summarizeSpeech(logDir) {
 }
 
 // ════════════════════════════════════════════════════════════
-// LAYER 2 — BEHAVIOR (runner-driven, no model)
+// LAYER 2 - BEHAVIOR (runner-driven, no model)
 // ════════════════════════════════════════════════════════════
 
 /** An on-screen aircraft whose billboard really answers a pick, or null. */
@@ -1080,7 +1080,7 @@ async function runDeixisBehavior(page, run, settle) {
       result,
     );
 
-  // D1 — an aircraft under the pointer: find one whose billboard really picks.
+  // D1 - an aircraft under the pointer: find one whose billboard really picks.
   const aircraft = await findPickableAircraft(page);
   if (!aircraft) {
     skipped(
@@ -1153,7 +1153,7 @@ async function runDeixisBehavior(page, run, settle) {
     await settle(2500);
   }
 
-  // D2 — bare ground: the chip gives coordinates and "around here" is a radius.
+  // D2 - bare ground: the chip gives coordinates and "around here" is a radius.
   const size = await page.evaluate(() => {
     const canvas = window.__godsEyeView.viewer.scene.canvas;
     return { w: canvas.clientWidth, h: canvas.clientHeight };
@@ -1234,7 +1234,7 @@ async function runDeixisBehavior(page, run, settle) {
     `drawn=${pin?.drawn} failed=${JSON.stringify(pin?.failedLabels)}`,
   );
 
-  // D3 — referents: "track the second one" after a numbered list.
+  // D3 - referents: "track the second one" after a numbered list.
   const framed = await run('frame_overhead', { target: 'flights' });
   await settle(5000);
   const refs = Array.isArray(framed?.referents) ? framed.referents : [];
@@ -1264,7 +1264,7 @@ async function runDeixisBehavior(page, run, settle) {
     );
   }
 
-  // D4 — a stale pointer is never "this".
+  // D4 - a stale pointer is never "this".
   const stale = await page.evaluate(() => {
     const voice = window.__gevVoiceCommands;
     voice.pointer.element.dispatchEvent(new PointerEvent('pointerleave'));
@@ -1287,7 +1287,7 @@ async function runDeixisBehavior(page, run, settle) {
 }
 
 async function runBehaviorLayer() {
-  console.log('\nLAYER 2 — behavior drives (runner(), no model)');
+  console.log('\nLAYER 2 - behavior drives (runner(), no model)');
   try {
     const res = await fetch(APP_URL);
     if (!res.ok) throw new Error(String(res.status));
@@ -1383,7 +1383,7 @@ async function runBehaviorLayer() {
     const settle = (ms) => new Promise((r) => setTimeout(r, ms));
 
     // (1) fly_to_location lands near the target. Annotations follow IMMEDIATELY
-    // while the camera is local — the resolver's proximity gate rejects far
+    // while the camera is local - the resolver's proximity gate rejects far
     // targets BY DESIGN (annotating Austin from over the Alps must fail).
     let r = await run('fly_to_location', { query: 'Austin, Texas' });
     await settle(9000);
@@ -1503,7 +1503,7 @@ async function runBehaviorLayer() {
     }
 
     // (4) frame_overhead frames nearby entities of an ENABLED layer with a
-    // cinematic oblique pull-back (NOT nadir — that is its design). Flights
+    // cinematic oblique pull-back (NOT nadir - that is its design). Flights
     // render one poll interval behind live, so give the layer time to populate.
     await run('set_layer_visibility', { layerId: 'flights', enabled: true });
     await settle(45000);
@@ -1518,7 +1518,7 @@ async function runBehaviorLayer() {
     } else if (r?.ok && (r.count === 0 || r.framedCount === 0)) {
       skipped(
         'behavior: frame_overhead frames flights',
-        'no flights in range right now (empty sky) — framing path OK',
+        'no flights in range right now (empty sky) - framing path OK',
       );
     } else {
       report(
@@ -1830,7 +1830,7 @@ async function runBehaviorLayer() {
 
     // (6b2) proximity-gate NEGATIVE control at a LOCAL far view (Alps swath,
     // ~165 km): annotating Austin from here must be an honest rejection.
-    // NOT run at globe scale — the gate is view-scale-aware by design and a
+    // NOT run at globe scale - the gate is view-scale-aware by design and a
     // global view legitimately allows marking anywhere.
     r = await run('annotate_map', {
       annotations: [
@@ -1844,7 +1844,7 @@ async function runBehaviorLayer() {
       `drawn=${r?.drawn} failed=${r?.failed}`,
     );
 
-    // Camera-verb scenarios: shed the heavy layers first — headless
+    // Camera-verb scenarios: shed the heavy layers first - headless
     // SwiftShader drops to ~1 fps with fires+vessels loaded and every
     // motion assert starves (environment, not product).
     await run('set_layer_visibility', {
@@ -2007,7 +2007,7 @@ async function runBehaviorLayer() {
     await settle(1500);
 
     // (6e4c) explicit navigation while tracking SUPERSEDES the follow camera
-    // (field finding: "flew there but still tracking — couldn't do anything").
+    // (field finding: "flew there but still tracking - couldn't do anything").
     const near2 = await run('analyst_query', {
       layers: ['flights'],
       scope: { kind: 'anywhere' },
@@ -2106,7 +2106,7 @@ async function runBehaviorLayer() {
         .join(',')}`,
     );
 
-    // (9) set_context_mode — happy path and a refusal.
+    // (9) set_context_mode - happy path and a refusal.
     // Contacts is an exclusive mode that tears other layers down, so this runs
     // last and hands the app back to `off` before the screenshot.
     r = await run('set_context_mode', { mode: 'contacts' });
@@ -2139,7 +2139,7 @@ async function runBehaviorLayer() {
       Boolean(window.__godsEyeView?.styleManager?.cockpitView?.active),
     );
     // Either it genuinely entered (an aircraft was tracked) or it refused with
-    // a reason — the one thing it must never do is claim success while inert.
+    // a reason - the one thing it must never do is claim success while inert.
     report(
       (r?.ok === true && cockpitAfter) ||
         (r?.ok !== true && !!r?.error && !cockpitAfter),
@@ -2171,7 +2171,7 @@ async function runBehaviorLayer() {
 
     // (9c-2) With Contacts up, an aircraft radius query must carry the panel's
     // own numbers. Field case: analyst said 8 for a 250 km window the panel had
-    // at 42 — both honest (analyst counts loaded records, the flights layer
+    // at 42 - both honest (analyst counts loaded records, the flights layer
     // reloads by viewport), and the operator saw two answers to one question.
     r = await run('analyst_query', {
       layers: ['flights'],
@@ -2231,7 +2231,7 @@ async function runBehaviorLayer() {
       await settle(600);
     }
 
-    // (9d-3) A non-aircraft layer can never be entered — Cockpit flies aircraft.
+    // (9d-3) A non-aircraft layer can never be entered - Cockpit flies aircraft.
     r = await run('control_cockpit', {
       action: 'enter',
       targetLayer: 'ais-live-vessels',

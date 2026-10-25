@@ -218,10 +218,10 @@ test('non-admin asks never match', async () => {
 });
 
 test('geocoder-confirmed lookup: the named unit that contains the point', async () => {
-  // Atlanta — the geocoder said "state", so the US state wins over the country.
+  // Atlanta - the geocoder said "state", so the US state wins over the country.
   const georgia = await findAdminAreaAt(['Georgia'], 33.749, -84.388, 'state');
   assert.equal(georgia?.id, 'US-GA');
-  // Tbilisi — Georgia the country has no admin-1 unit of that name.
+  // Tbilisi - Georgia the country has no admin-1 unit of that name.
   assert.equal(await findAdminAreaAt(['Georgia'], 41.7, 44.8, 'state'), null);
   const newYork = await findAdminAreaAt(['New York'], 42.9, -75.5, 'state');
   assert.equal(newYork?.id, 'US-NY');

@@ -58,8 +58,8 @@ export function createIngestion({
   /**
    * Commit a status/error transition and buy the one frame it needs.
    *
-   * With the render governor idle — Contacts has released its hold and nothing
-   * else animates — no frame would otherwise arrive to re-read this, so a load
+   * With the render governor idle - Contacts has released its hold and nothing
+   * else animates - no frame would otherwise arrive to re-read this, so a load
    * that fails after the scene went quiet would leave the last healthy readout on
    * screen indefinitely.
    * @param {string} status @param {?string} error
@@ -77,7 +77,7 @@ export function createIngestion({
     const { box, coverage } = parts.viewport.loadArea(layerState.viewer);
     // Guidance, not a fault: the layer chose not to query because the view is
     // unbounded (a global view, or Cockpit looking at the horizon). Keep it out
-    // of `error` — the manager derives refresh failures and the global status
+    // of `error` - the manager derives refresh failures and the global status
     // chip derives LOAD FAILED from that field, and a "zoom in" prompt turned
     // every Cockpit refresh into a reported failure. The row and toast read the
     // prompt from `statusMessage` (installationFeedback) instead.

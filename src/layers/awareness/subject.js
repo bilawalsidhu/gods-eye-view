@@ -62,7 +62,7 @@ export function createSubject({ state: layerState, services, parts, source }) {
         stats: { ...sourceState.stats, source: retainedSource },
       };
     };
-    // Same engine the voice analyst calls — see collectAircraftProximityWindow.
+    // Same engine the voice analyst calls - see collectAircraftProximityWindow.
     const aircraftWindow = parts.queries.collectAircraftProximityWindow(
       position,
       { subject },
@@ -319,7 +319,7 @@ export function createSubject({ state: layerState, services, parts, source }) {
    * Presence comes from the layer's O(1) `hasContact`, never from the rows:
    * `getAllPositions` stops at its cap and the flights layer routinely carries
    * ~11k contacts against a 1,000-row cap, so "not in the rows" is not "gone".
-   * The rows are only consulted for a fresher position — a contact past the cap
+   * The rows are only consulted for a fresher position - a contact past the cap
    * keeps its last known position while still reading as present.
    * @param {{id: string, position: Cesium.Cartesian3}} subject Current subject.
    * @param {Array<{id: string, position: Cesium.Cartesian3}>} rows Live collection rows.
@@ -359,7 +359,7 @@ export function createSubject({ state: layerState, services, parts, source }) {
    * label convention (callsign → registration → icao24), so ask it rather than
    * re-deriving the chain here.
    *
-   * Identity (`subject.id`) is NEVER re-derived — only the rendered string.
+   * Identity (`subject.id`) is NEVER re-derived - only the rendered string.
    * @param {{layerId: string, id: string, label: string}} subject Current subject.
    * @returns {string} The current label, or the cached one when the owning layer
    *   has no tracked subject (e.g. a cross-layer handoff is in flight).
@@ -473,7 +473,7 @@ export function createSubject({ state: layerState, services, parts, source }) {
    * The subject, its cohort results and its navigation history all survive: the
    * Contact panel keeps rendering them behind a CONTACT LOST cue, and PREVIOUS /
    * NEXT stay operable so the operator can step off. Nulling the subject here
-   * instead would take the panel — and those controls — off screen.
+   * instead would take the panel - and those controls - off screen.
    */
 
   function markSubjectEvicted() {

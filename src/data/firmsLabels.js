@@ -23,7 +23,7 @@ export function fireDetectionKey(fire) {
   return `firms:${lat}:${lon}:${acq}:${source}`;
 }
 
-/** Severity accent palette — matches the FIRMS glow-sprite color stops. */
+/** Severity accent palette - matches the FIRMS glow-sprite color stops. */
 const ACCENT_RGB = Object.freeze({
   red: '224, 82, 82',
   orange: '240, 178, 62',

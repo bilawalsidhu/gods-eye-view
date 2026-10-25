@@ -8,7 +8,7 @@ import { showOsmCredit, hideOsmCredit } from '../data/dataCredits.js';
  * live in the 3D scene they track the camera, sit at the right depth, and are
  * occluded by the photoreal buildings the way a real marker would be.
  *
- * IMPORTANT — drawing on Google Photorealistic 3D Tiles:
+ * IMPORTANT - drawing on Google Photorealistic 3D Tiles:
  *   The Cesium globe is hidden, so there is no terrain to clamp to. Ground
  *   geometry (areas, rings, connectors) is draped onto the photoreal tiles with
  *   `classificationType: CESIUM_3D_TILE`; points clamp to the tile
@@ -39,7 +39,7 @@ const PALETTE = {
  * on Cesium's own globe) there are no 3D tiles to classify against, so every
  * area fill, area outline, route and arrow rendered to nothing. The labels
  * showed and the geometry did not, which reads as a broken feature rather than
- * an unsupported surface — and it hit spoken annotations exactly as hard as
+ * an unsupported surface - and it hit spoken annotations exactly as hard as
  * hand-drawn ones.
  *
  * BOTH paints onto terrain AND onto 3D tiles, so one value covers both worlds.
@@ -66,7 +66,7 @@ export function createWorldAnnotationRenderer(viewer) {
   }
 
   // Target-ring radius (meters) scaled to camera height so it reads at any
-  // altitude. Read once per frame for BOTH ellipse axes — camera height is
+  // altitude. Read once per frame for BOTH ellipse axes - camera height is
   // constant within a frame, so semiMajor === semiMinor always holds.
   function ringRadius() {
     const h = viewer.camera.positionCartographic?.height ?? 1000;
@@ -96,7 +96,7 @@ export function createWorldAnnotationRenderer(viewer) {
       anno.footprintKind === 'building'
     ) {
       // Single building → the PRIMARY highlight is an extruded CLASSIFICATION
-      // volume that tints the real photogrammetry mesh (dome, walls, roof —
+      // volume that tints the real photogrammetry mesh (dome, walls, roof -
       // everything inside the column) amber and pulses. A flat footprint
       // extrusion is only 2.5D and misses domes; classification colors the
       // actual tiles. A faint wireframe cage rides on top as a secondary cue.
@@ -109,10 +109,10 @@ export function createWorldAnnotationRenderer(viewer) {
           : 0);
       const baseH = groundH - 3;
       // Tall headroom is free: classification only colors where tiles exist, so
-      // empty air above the roof isn't tinted — this just guarantees we cover
+      // empty air above the roof isn't tinted - this just guarantees we cover
       // under-tagged building heights.
       const topH = groundH + Math.max(18, anno.buildingHeight || 25) + 24;
-      // 1) Classification volume — tints the mesh amber, pulsing.
+      // 1) Classification volume - tints the mesh amber, pulsing.
       entities.push(
         dataSource.entities.add({
           polygon: {
@@ -127,7 +127,7 @@ export function createWorldAnnotationRenderer(viewer) {
           },
         }),
       );
-      // 2) Faint, SIMPLIFIED wireframe cage — secondary, lower opacity. Decimate
+      // 2) Faint, SIMPLIFIED wireframe cage - secondary, lower opacity. Decimate
       // the footprint so the extruded outline draws ~14 clean verticals, not one
       // per (often 100+) ring vertex.
       const cagePositions = Cesium.Cartesian3.fromDegreesArray(
@@ -275,7 +275,7 @@ export function createWorldAnnotationRenderer(viewer) {
         }),
       );
     } else {
-      // pin / highlight / label — a camera-proportional target ring + a marker.
+      // pin / highlight / label - a camera-proportional target ring + a marker.
       if (anno.type !== 'label') {
         // Radius scales with camera height so the ring reads at any altitude.
         // semiMajor === semiMinor is required AND must hold every frame, so both
@@ -401,11 +401,11 @@ export function ensureFlowFabricRegistered() {
  * MaterialProperty for the animated route. Cesium builds the rendered Material once
  * from getType() (our registered GevRouteFlow fabric), then EACH FRAME calls
  * getValue(time, material.uniforms) and uses whatever we write INTO that uniforms
- * object — it ignores the return value. So getValue writes color/time/repeat/duty/
+ * object - it ignores the return value. So getValue writes color/time/repeat/duty/
  * speed straight onto `result` (the live uniforms). Writing the animated `time` here
  * is what actually makes the dashes flow on the GPU. (The prior versions either
  * returned a standalone Material Cesium never rendered, or treated `result` as a
- * Material — both left the real uniforms untouched, so nothing animated.)
+ * Material - both left the real uniforms untouched, so nothing animated.)
  */
 export function FlowMaterialProperty(colorCss) {
   this._color = Cesium.Color.fromCssColorString(colorCss).withAlpha(0.95);
@@ -427,7 +427,7 @@ FlowMaterialProperty.prototype.getType = function getType() {
   return 'GevRouteFlow';
 };
 FlowMaterialProperty.prototype.getValue = function getValue(time, result) {
-  // `result` IS the live uniforms object Cesium renders — write into it directly.
+  // `result` IS the live uniforms object Cesium renders - write into it directly.
   // `time` is read straight from the wall clock so the dashes flow every rendered
   // frame (the scene renders continuously; no requestRenderMode here).
   if (!Cesium.defined(result)) result = {};
@@ -516,7 +516,7 @@ function sampleGroundOutside(scene, ring) {
 /**
  * Inflate a [[lon,lat],...] ring outward from its centroid by `meters`, so an
  * extruded building volume encloses the photogrammetry mesh instead of slicing
- * through its edges. Radial buffer — fine for compact building footprints.
+ * through its edges. Radial buffer - fine for compact building footprints.
  */
 function bufferRing(ring, meters) {
   let clon = 0;

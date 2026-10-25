@@ -7,8 +7,8 @@ import { loadEnv } from 'vite';
  * Read one dotenv key with Vite's parser; no file content is executed.
  *
  * Reports what the FILES say. `loadEnv` lets `process.env` override the parsed
- * files, so an inherited export — an empty one above all, which is how a shell
- * says "unset" to this script's callers — would otherwise mask the value the
+ * files, so an inherited export - an empty one above all, which is how a shell
+ * says "unset" to this script's callers - would otherwise mask the value the
  * user wrote down. The key is hidden for the duration of the read and restored
  * afterwards, leaving the caller's environment untouched.
  */

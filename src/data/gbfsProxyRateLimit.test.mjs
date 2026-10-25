@@ -1,10 +1,10 @@
-// GBFS PROXY — the frequency the allowlist never bounded.
+// GBFS PROXY - the frequency the allowlist never bounded.
 //
 // `/api/gbfs` already says WHERE it may go: an https allowlisted host, a
 // station_information/station_status path, a 12 s timeout, a 5 MB body cap and
 // no redirects. Nothing said HOW OFTEN, so the dev server would relay an
 // unbounded stream of requests at a third-party bikeshare operator on any
-// caller's behalf — one outbound fetch and one timeout timer each.
+// caller's behalf - one outbound fetch and one timeout timer each.
 //
 // These cases drive the real mounted middleware. `fetch` is stubbed per test
 // and restored afterwards, so a case that reaches the network fails loudly,

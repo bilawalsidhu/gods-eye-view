@@ -316,7 +316,9 @@ export class LayerPanel {
       const icon = document.createElement('span');
       icon.className = 'data-icon';
       icon.setAttribute('aria-hidden', 'true');
-      icon.textContent = layer.icon;
+      // iconSvg values are static markup from src/icons.js, never user data.
+      if (layer.iconSvg) icon.innerHTML = layer.iconSvg;
+      else icon.textContent = layer.icon;
       const name = document.createElement('span');
       name.className = 'data-name';
       setRowText(name, panelLabel(layer));
@@ -374,7 +376,7 @@ export class LayerPanel {
 
       // Optional per-layer sub-controls (chips + color legend). The click
       // listener is delegated and attached once here, so it survives
-      // _refreshTogglePanel — which only rewrites the container's contents.
+      // _refreshTogglePanel - which only rewrites the container's contents.
       if (this.hasRowControls(layer.id)) {
         // A layer whose controls settle asynchronously (a chunked catalog load
         // that can also fail) pushes a re-render through this; nothing else
@@ -402,7 +404,7 @@ export class LayerPanel {
           row.appendChild(controls);
           // An ordered list below the chips, for a layer whose row carries a
           // sequence (turn-by-turn directions). Its own delegated listener, its
-          // own container — the chip row stays a chip row.
+          // own container - the chip row stays a chip row.
           const list = document.createElement('ol');
           list.className = 'data-row-list';
           list.hidden = true;
@@ -466,6 +468,7 @@ export class LayerPanel {
         .map((layer) => ({
           id: layer.id,
           icon: layer.icon,
+          iconSvg: layer.iconSvg,
           ...this._rowControlsFor(layer.id),
         })),
     );
@@ -474,7 +477,7 @@ export class LayerPanel {
   /**
    * Write a row's count. Outside English a count phrase ("24 nearby · 2 on
    * screen") gets its own line, or it squeezes a longer translated name to a
-   * word per line. "—" is marked so a wide status chip can replace it
+   * word per line. "-" is marked so a wide status chip can replace it
    * (radio.css).
    */
   _syncCount(row, count, stats) {
@@ -485,14 +488,14 @@ export class LayerPanel {
       typeof stats.countLabel === 'string' &&
       /\d/.test(stats.countLabel);
     row.classList.toggle('data-toggle-row--count-line', phrase);
-    count.classList.toggle('data-count-empty', text === '—');
+    count.classList.toggle('data-count-empty', text === '-');
   }
 
   /** Qualify a loaded count when it does not mean items currently on screen. */
   _layerCountText(stats) {
     if (typeof stats.countLabel === 'string' && stats.countLabel.trim())
       return stats.countLabel;
-    return stats.count ? this._formatCount(stats.count) : '—';
+    return stats.count ? this._formatCount(stats.count) : '-';
   }
 
   /**
@@ -501,8 +504,8 @@ export class LayerPanel {
    * it) so a quiet row stays quiet.
    *
    * Chip BUTTONS are reconciled in place, keyed by chip id, rather than
-   * rebuilt: this runs on every panel refresh — including the one the chip's
-   * own click triggers — and replacing the node would drop keyboard focus
+   * rebuilt: this runs on every panel refresh - including the one the chip's
+   * own click triggers - and replacing the node would drop keyboard focus
    * mid-interaction. Legend entries are rebuilt only when their content changes;
    * the info node is retained across refreshes.
    * @param {HTMLElement|null} container The row's `.data-toggle-controls` node.
@@ -580,8 +583,8 @@ export class LayerPanel {
    * Each entry is a real `<button>` inside a real `<li>`, so Tab reaches it and
    * Enter activates it with no key handling of our own, and the `<ol>` carries
    * the ordering a screen reader announces. Items are reconciled in place,
-   * keyed by id, for the same reason chips are: this runs on every refresh —
-   * including the one a click on the list triggers — and replacing the node
+   * keyed by id, for the same reason chips are: this runs on every refresh -
+   * including the one a click on the list triggers - and replacing the node
    * would drop keyboard focus mid-interaction.
    * @param {HTMLElement|null} container The row's `.data-row-list` node.
    * @param {{ariaLabel?: string, items?: Array<object>}|null} list Descriptor.

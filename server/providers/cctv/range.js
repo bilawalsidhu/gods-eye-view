@@ -1,6 +1,6 @@
 import { CCTV_MEDIA_MAX_BODY_BYTES } from './constants.js';
 
-/** Digits allowed per Range position — bounds parse cost and absurd offsets. */
+/** Digits allowed per Range position - bounds parse cost and absurd offsets. */
 const RANGE_MAX_DIGITS = 16;
 
 /**
@@ -13,8 +13,8 @@ const RANGE_MAX_DIGITS = 16;
  * ceiling still applies to it, but the parts inside are the upstream's to
  * choose and nothing here reads them, and a multipart body sent without a
  * declared length streams through uncapped like any other length-less body.
- * And a value the outbound request refuses to carry — anything with CR or LF
- * in it — made `fetch` throw, and the route recorded that error text, which
+ * And a value the outbound request refuses to carry - anything with CR or LF
+ * in it - made `fetch` throw, and the route recorded that error text, which
  * contains the client's own string, as the camera's health message.
  *
  * Bounding the Range bounds what is ASKED FOR, not what arrives: an upstream
@@ -30,7 +30,7 @@ const RANGE_MAX_DIGITS = 16;
  * `bytes=<first>-` and `bytes=-<suffix>`.
  *
  * Every accepted form is bounded to {@link CCTV_MEDIA_MAX_BODY_BYTES}, the same
- * ceiling the relay applies to a declared response body — including the
+ * ceiling the relay applies to a declared response body - including the
  * open-ended and suffix forms, which otherwise ask an upstream for a whole file
  * of unknown size. A player that wants more than one bound's worth asks for the
  * next range, which is ordinary partial-content behavior.

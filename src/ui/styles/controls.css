@@ -643,7 +643,7 @@ html:not([lang='en']) .pp-slider-row > .pp-slider-mini-label {
   cursor: pointer;
   /* Explicit property list, NOT `transition: all`: `all` animates
      `outline-width` off the `outline: none` base, and Chrome leaves that
-     transition parked at 0px for chips on a wrapped line — the keyboard ring
+     transition parked at 0px for chips on a wrapped line - the keyboard ring
      silently never appeared on rows 2 and 3. A focus indicator should be
      instant anyway. */
   transition:
@@ -665,7 +665,7 @@ html:not([lang='en']) .pp-slider-row > .pp-slider-mini-label {
 }
 
 /* Order matters, and matches `.data-toggle-btn`: hover/focus, then active, then
-   disabled — all at the same specificity, so the later rule wins. Hovering the
+   disabled - all at the same specificity, so the later rule wins. Hovering the
    active chip must not wash the cyan out, and a disabled chip must not light up
    under the cursor. Do not add `:not(...)` here: it would raise specificity and
    let hover beat `.active` again. */
@@ -677,7 +677,7 @@ html:not([lang='en']) .pp-slider-row > .pp-slider-mini-label {
 }
 
 /* The keyboard ring is an `outline`, a property NO other chip-state rule sets,
-   so it survives on the active chip — whose `.active` rule legitimately wins
+   so it survives on the active chip - whose `.active` rule legitimately wins
    the color/border/background/box-shadow it shares with the rule above. Without
    this, tabbing onto the active chip produced no visible change at all. */
 .map-stack-chip:focus-visible {

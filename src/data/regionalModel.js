@@ -115,7 +115,7 @@ export function normalizeRegionalWeather(payload) {
   if (!current || observedNumber(current.temperature_2m) == null) return null;
   const numberOrNull = observedNumber;
   // Open-Meteo reports zone-naive timestamps ("2026-08-17T00:15") that are UTC,
-  // but JS parses zoneless date-times as LOCAL — pin them to UTC explicitly.
+  // but JS parses zoneless date-times as LOCAL - pin them to UTC explicitly.
   const observedRaw =
     typeof current.time === 'string' &&
     !/(?:[zZ]|[+-]\d\d:?\d\d)$/.test(current.time)

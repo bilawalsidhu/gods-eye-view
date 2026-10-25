@@ -21,14 +21,14 @@ function sendJson(res, status, payload) {
   res.end(JSON.stringify(payload));
 }
 
-/** GET /api/mapillary/status — whether a token is configured, never its value. */
+/** GET /api/mapillary/status - whether a token is configured, never its value. */
 function handleStatus(req, res) {
   if (req.method !== 'GET')
     return sendJson(res, 405, { error: 'Method not allowed' });
   sendJson(res, 200, { configured: Boolean(mapillaryToken()) });
 }
 
-/** GET /api/mapillary/tiles/coverage/{z}/{x}/{y} — trimmed protobuf tile. */
+/** GET /api/mapillary/tiles/coverage/{z}/{x}/{y} - trimmed protobuf tile. */
 async function handleTile(req, res, allow) {
   if (req.method !== 'GET')
     return sendJson(res, 405, { error: 'Method not allowed' });

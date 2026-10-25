@@ -15,7 +15,7 @@ const LOCALIZED_CONTEXT_SCOPE = Object.freeze({
   window: ({ label, radiusKm }) =>
     t('{label} · {radius} AIR/SEA WINDOW', {
       label,
-      radius: `${radiusKm === null ? '—' : formatNumber(radiusKm)}\u00a0${getLocale() === 'zh-CN' ? unitLabel('km') : unitLabel('km').toUpperCase()}`,
+      radius: `${radiusKm === null ? '-' : formatNumber(radiusKm)}\u00a0${getLocale() === 'zh-CN' ? unitLabel('km') : unitLabel('km').toUpperCase()}`,
     }),
   installations: ({ scope, coverage }) =>
     t('{scope} · INSTALLATIONS {coverage}', { scope, coverage }),
@@ -53,7 +53,7 @@ export function updateContext(info, heading) {
       LOCALIZED_CONTEXT_SCOPE,
     );
   }
-  // Navigation stays wired in every state — the operator must always be able
+  // Navigation stays wired in every state - the operator must always be able
   // to step off the current contact from the panel that hosts the controls.
   if (this.contextPrevious)
     this.contextPrevious.disabled = !snapshot.navigation?.canPrevious;
@@ -108,7 +108,7 @@ export function updateContext(info, heading) {
       : t('NO AVAILABLE EXAMPLE');
     this.contextNearestLabel.setAttribute(
       'aria-label',
-      closest && closestLabel === '—'
+      closest && closestLabel === '-'
         ? t('{cohort}, Unavailable', {
             cohort: closest.cohort.label,
           })
@@ -119,7 +119,7 @@ export function updateContext(info, heading) {
     const distanceM = closest?.distanceM;
     this.contextDistance.textContent = Number.isFinite(distanceM)
       ? formatCockpitDistance(distanceM)
-      : '—';
+      : '-';
     this.contextDistance.setAttribute(
       'aria-label',
       Number.isFinite(distanceM)
@@ -130,7 +130,7 @@ export function updateContext(info, heading) {
 
   // The arrow and BRG are nose-relative to the tracked aircraft. When the
   // subject is a vessel, an installation, or another aircraft, the rest of
-  // this row is measured from that subject — so the aircraft-frame half is
+  // this row is measured from that subject - so the aircraft-frame half is
   // dashed rather than presented alongside subject-frame distances as if the
   // two shared an origin.
   let relative = null;
@@ -156,7 +156,7 @@ export function updateContext(info, heading) {
     this.contextDirection.classList.toggle('unknown', relative === null);
   }
   if (this.contextBearing) {
-    if (relative === null) this.contextBearing.textContent = t('BRG —');
+    if (relative === null) this.contextBearing.textContent = t('BRG -');
     else if (Math.abs(relative) < 8)
       this.contextBearing.textContent = t('AHEAD');
     else {

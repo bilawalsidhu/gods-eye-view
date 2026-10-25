@@ -1,10 +1,10 @@
 /**
- * qa-cctv-v2.mjs — CCTV v2 subsystem proof harness
+ * qa-cctv-v2.mjs - CCTV v2 subsystem proof harness
  *
  * Replaces qa-cctv-b9.mjs + qa-cctv-drift-b9b.mjs, which proved fixes in
  * systems v2 deleted outright (chunked auto-cal raycast storms, periodic
  * ground re-sync deadband/oscillation). v2 has no per-frame scene queries at
- * all, no auto-calibration, and no periodic re-grounding — so this harness
+ * all, no auto-calibration, and no periodic re-grounding - so this harness
  * asserts the NEW invariants instead of re-proving retired ones:
  *
  *   1. Raycast invariant (design §9.1-amended): scene.pickFromRay fires
@@ -12,7 +12,7 @@
  *      never again in steady state; shared mesh-floor sampling fires at most
  *      once per coarse cell during the staggered geometry-load drain, and
  *      actually COMPLETES once tiles load in photoreal mode (>=1 real sample
- *      — the ceiling alone would pass trivially at Δ=0 if the snap never
+ *      - the ceiling alone would pass trivially at Δ=0 if the snap never
  *      finished). Globe mode instead proves the rendered mount uses a real
  *      terrain height with zero mesh samples. Sampling
  *      stays flat while idle, and stays flat for non-positional pose edits.
@@ -41,7 +41,7 @@
  *      camera-controller inputs restore and parts hide on mode off.
  *
  * SwiftShader caveat (proven in Task 3): under headless software GL, plane
- * image materials do not visually FILL — screenshotting for a pixel-based
+ * image materials do not visually FILL - screenshotting for a pixel-based
  * pass/fail is not viable here. All four assertion groups therefore check
  * entity/counter/localStorage/network STATE (GL-independent), never rendered
  * pixels. Screenshots are still captured for human visual review but do not
@@ -56,7 +56,7 @@
  * namespace object. Separately, this harness DOES import
  * `computeFrustumGeometry` directly from `src/data/cctv.js` (a pure,
  * side-effect-free export with no Cesium/scene dependency) to use as a
- * Node-side ground-truth oracle — see the "safe pose" search below.
+ * Node-side ground-truth oracle - see the "safe pose" search below.
  *
  * Ground-clearance note (2026-09-13): `computeFrustumGeometry` lifts the
  * whole far cap RIGIDLY by the largest clearance deficit over a 3×3 grid of
@@ -107,7 +107,7 @@ const CHROME_EXECUTABLE_CANDIDATES = [
   // Prefer puppeteer's version-pinned Chrome-for-Testing over the system
   // Chrome: /Applications auto-updates underneath the harnesses, and its
   // software-GL behavior shifts across majors (system Chrome 150 blew the
-  // tile-gated drain budget under SwiftShader on 2026-07-30 — six
+  // tile-gated drain budget under SwiftShader on 2026-07-30 - six
   // false-negative qa-cctv-v2 runs against a healthy build). A deterministic
   // pinned browser beats the newest one for regression harnesses.
   await puppeteer.executablePath().catch(() => null),
@@ -136,7 +136,7 @@ function record(name, ok, detail) {
       : ok
         ? '\x1b[32mPASS\x1b[0m'
         : '\x1b[31mFAIL\x1b[0m';
-  console.log(`  [${tag}] ${name}${detail ? `  — ${detail}` : ''}`);
+  console.log(`  [${tag}] ${name}${detail ? `  - ${detail}` : ''}`);
 }
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -265,7 +265,7 @@ function installRenderFramesHelper(page) {
 // it, since functions can't cross the puppeteer boundary): serializes the
 // 5 frustum polylines + plane position/orientation/dimensions for a camera
 // into plain arrays of numbers, using only the camera's own clock time (no
-// Cesium namespace needed — Property.getValue just needs *a* JulianDate,
+// Cesium namespace needed - Property.getValue just needs *a* JulianDate,
 // and the viewer's own clock.currentTime is a valid live instance of one).
 const SERIALIZE_GEOM_SRC = `
   function serializeGeom(camId) {
@@ -297,16 +297,16 @@ const SERIALIZE_GEOM_SRC = `
 
 // In-page helper: bearing (degrees, mount -> cap-center) shift between two
 // serializeGeom() snapshots of the SAME camera. Plain-JS spherical bearing
-// math over ECEF points (no Cesium namespace) — a local east/north basis is
+// math over ECEF points (no Cesium namespace) - a local east/north basis is
 // built from the mount's geocentric "up" via cross products, which is
 // equivalent to a proper ENU bearing at these ranges (hundreds of metres;
 // cctv.js's own math already treats this scale as flat-earth, see
 // projectPoint). Used both to prove a heading patch rotates the geometry AND
-// that reset un-rotates it — comparing BEARING (not absolute cap-center
+// that reset un-rotates it - comparing BEARING (not absolute cap-center
 // position) is deliberate: the far-cap's ALTITUDE can legitimately drift a
 // few metres between two ground-clamp actions because scene.sampleHeight
 // against a still-streaming 3D tileset is not perfectly deterministic call to
-// call (observed while writing this harness — see report), which would give
+// call (observed while writing this harness - see report), which would give
 // a false-negative on an absolute-position epsilon that heading math alone
 // doesn't share.
 const BEARING_SHIFT_SRC = `
@@ -352,7 +352,7 @@ const BEARING_SHIFT_SRC = `
  * Waits for the scene's 3D tileset to report tilesLoaded===true. Cesium
  * flips tilesLoaded back to false whenever a view/pose change causes new
  * tiles to be requested (observed directly while writing this harness: it
- * can go false again even after an earlier wait already saw it true) — so
+ * can go false again even after an earlier wait already saw it true) - so
  * every call site that depends on a REAL ground sample landing (not the
  * B9c guard's pure recompute from the cached real ground) must wait fresh
  * immediately before the action, not rely on an earlier wait.
@@ -372,7 +372,7 @@ function waitForTilesLoaded(page, timeoutMs = 15000) {
           return p.tilesLoaded === true;
         }
       }
-      return true; // no tileset in the scene — nothing to wait for
+      return true; // no tileset in the scene - nothing to wait for
     },
     { timeoutMs },
   );
@@ -499,7 +499,7 @@ async function main() {
     // Install raycast counters BEFORE the layer is enabled (§9.1-amended: the
     // zero-raycast invariant is steady-state-only; the single activation
     // obstruction probe is the one legal pickFromRay). Wrapping happens
-    // in-page against the live scene, counting ALL calls (shared scene) — the
+    // in-page against the live scene, counting ALL calls (shared scene) - the
     // harness only ever asserts DELTAS around CCTV-specific actions, so noise
     // from unrelated subsystems cancels out by construction.
     // -----------------------------------------------------------------------
@@ -527,7 +527,7 @@ async function main() {
     });
     if (!wrapInstalled) {
       console.error(
-        '\x1b[31mCould not wrap scene.pickFromRay/sampleHeight before layer enable — aborting.\x1b[0m',
+        '\x1b[31mCould not wrap scene.pickFromRay/sampleHeight before layer enable - aborting.\x1b[0m',
       );
       process.exit(2);
     }
@@ -547,7 +547,7 @@ async function main() {
     // sampling: <=1 sampleHeight per coarse cell, gated on tiles-ready). The
     // budget scales with catalog size: the queue staggers ~4 records/120ms
     // and the one-shot tiles-ready completion pass can re-enqueue the whole
-    // catalog once — 30s was calibrated for the old 36-camera default and
+    // catalog once - 30s was calibrated for the old 36-camera default and
     // times out spuriously at the 250-camera default (2026-07-04).
     const camCount = await page.evaluate(
       () =>
@@ -555,7 +555,7 @@ async function main() {
           .count,
     );
     // ~800ms per real ground sample measured under SwiftShader (each
-    // scene.sampleHeight forces tile loads at the probe point) — real GPU is
+    // scene.sampleHeight forces tile loads at the probe point) - real GPU is
     // far faster, so this is a headless-CI ceiling, not an app expectation.
     const drainBudgetMs = HEADFUL
       ? Math.max(30000, camCount * 800 + 30000)
@@ -653,7 +653,7 @@ async function main() {
 
     // -----------------------------------------------------------------------
     // Completion FLOOR (locks update()'s one-shot tiles-ready re-enqueue):
-    // the "<=1×N" ceiling above passes trivially at Δ=0 — e.g. if every drain
+    // the "<=1×N" ceiling above passes trivially at Δ=0 - e.g. if every drain
     // pass ran before tiles loaded (fallback height, record left unresolved)
     // and nothing ever completed the snap. Once tilesLoaded has been observed
     // true, at least ONE real scene.sampleHeight must have fired since enable
@@ -738,19 +738,19 @@ async function main() {
         tilesSeenLoaded ? sampleFloorOk : null,
         tilesSeenLoaded
           ? `total real samples since enable=${cFloor.sampleHeight - c0.sampleHeight}`
-          : 'tilesLoaded never observed within 45s — floor not assessable this run',
+          : 'tilesLoaded never observed within 45s - floor not assessable this run',
       );
     }
 
     // Let the completion pass finish before the steady-state window: require
     // the sampleHeight counter quiet for 12s (> the 10s update interval, so
     // the one-shot latch has provably had a tick in which to fire and drain)
-    // — otherwise the idle assertion below could observe the legitimate tail
+    // - otherwise the idle assertion below could observe the legitimate tail
     // of the one-shot pass and misread it as steady-state sampling. The cap
     // scales with N like the drain budget: when the ENABLE-time drain ran
     // before tiles loaded (fallback path, zero real samples), the completion
     // pass re-enqueues the WHOLE catalog and each real sampleHeight costs
-    // ~1s under SwiftShader — at N=250 that tail is ~4 minutes, and the old
+    // ~1s under SwiftShader - at N=250 that tail is ~4 minutes, and the old
     // fixed 60s cap expired mid-pass, bleeding legitimate one-shot samples
     // into the idle window (observed 2026-07-05: idle Δ=12, pose-edit Δ=5).
     let completionPassQuiet = false;
@@ -844,7 +844,7 @@ async function main() {
       ${SERIALIZE_GEOM_SRC}
       const g = serializeGeom(camId);
       const viewer = window.__godsEyeView.viewer;
-      // Overlay unification: the plane label is no longer a native entity —
+      // Overlay unification: the plane label is no longer a native entity -
       // it publishes as a protected host entry under the cctv-projection
       // source. Assert the migrated surface via the host diagnostics.
       const diag = window.__gevWorldOverlay?.getDiagnostics?.();
@@ -875,7 +875,7 @@ async function main() {
     );
 
     // Plane corner positions must coincide with the 4 corner-ray endpoints
-    // (ε < 0.5m) — but ONLY when the frustum doesn't hit the ground clamp
+    // (ε < 0.5m) - but ONLY when the frustum doesn't hit the ground clamp
     // (see the file-header "Ground-clamp caveat"). Austin's fabricated pitch
     // priors clamp routinely at the base pose, so apply a temporary
     // calibration patch (computed against the same computeFrustumGeometry
@@ -897,12 +897,12 @@ async function main() {
       safePatch !== null,
       safePatch
         ? JSON.stringify(safePatch)
-        : 'no legal offset combination cleared the clamp — corner-coincidence check below will run against the (possibly clamped) base pose',
+        : 'no legal offset combination cleared the clamp - corner-coincidence check below will run against the (possibly clamped) base pose',
     );
 
     // updateRecordGeometry's B9c guard now recomputes PURELY from the cached
     // real ground when tilesLoaded flips false at the instant of the patch
-    // (final-review fix — previously it skipped the rewrite entirely, leaving
+    // (final-review fix - previously it skipped the rewrite entirely, leaving
     // the pre-patch polylines/plane dimensions stale), so a pose patch always
     // lands in the entity geometry. Cesium can still re-flip tilesLoaded
     // false on a pose change even after an earlier wait already saw it true
@@ -940,7 +940,7 @@ async function main() {
       patchGeometryApplied,
       patchGeometryApplied
         ? 'plane dimensions changed vs pre-patch'
-        : 'plane dimensions never changed — tiles kept flipping mid-stream; corner-coincidence check below may be running against a stale pose',
+        : 'plane dimensions never changed - tiles kept flipping mid-stream; corner-coincidence check below may be running against a stale pose',
     );
 
     let cornerEps = null;
@@ -966,7 +966,7 @@ async function main() {
         const halfW = plane.dimensions[0] / 2;
         const halfH = plane.dimensions[1] / 2;
         // planeOrientationFor builds the frame as columns [right, up, normal]
-        // — local +X is right, +Y is up (matches Cesium's row/col Matrix3
+        // - local +X is right, +Y is up (matches Cesium's row/col Matrix3
         // constructor call order in cctv.js's planeOrientationFor).
         const corner = (sx, sy) => {
           const local = [sx * halfW, sy * halfH, 0];
@@ -1010,7 +1010,7 @@ async function main() {
       record(
         'plane corners coincide with wireframe corner-ray endpoints (ε < 0.5m)',
         null,
-        'skipped — geometry entities missing',
+        'skipped - geometry entities missing',
       );
     }
 
@@ -1043,7 +1043,7 @@ async function main() {
       geomStable,
       geomStable
         ? 'identical serialization'
-        : 'serialization CHANGED — see harness output above',
+        : 'serialization CHANGED - see harness output above',
     );
     if (!geomStable) {
       console.log('  before:', JSON.stringify(geomBefore30s));
@@ -1085,7 +1085,7 @@ async function main() {
     await sleep(300);
 
     // Save-gated persistence (v3 design §3e): a PATCH edits the live pose
-    // only — the store must stay untouched and the camera must read as
+    // only - the store must stay untouched and the camera must read as
     // dirty/EDITED until the explicit save action below.
     const afterPatch = await page.evaluate((camId) => {
       const raw = localStorage.getItem('godsEyeView.cctv.calibration.v2');
@@ -1102,7 +1102,7 @@ async function main() {
       'patch does NOT write the v2 store (save-gated)',
       afterPatch.stored === false,
       afterPatch.stored
-        ? 'entry written on patch — save-gating broken'
+        ? 'entry written on patch - save-gating broken'
         : 'store untouched',
     );
     record(
@@ -1152,7 +1152,7 @@ async function main() {
 
     // Geometry rotated: cap-center bearing from the mount should have shifted
     // ~30 degrees vs the pre-patch baseline (shared BEARING_SHIFT_SRC helper
-    // — see its header comment for why bearing, not absolute position).
+    // - see its header comment for why bearing, not absolute position).
     const geomAfterCal = await serializeGeom(activeId);
     const bearingShiftDegPatch = await page.evaluate(`(function(before, after){
       ${BEARING_SHIFT_SRC}
@@ -1207,14 +1207,14 @@ async function main() {
     );
 
     // =========================================================================
-    // Group 4: frame-loop health (STATE, not pixels — SwiftShader caveat)
+    // Group 4: frame-loop health (STATE, not pixels - SwiftShader caveat)
     // =========================================================================
     console.log(
       'Checking frame-loop health (placeholder -> frame swap, URL family)...',
     );
     // The plane's material.image is always defined (placeholder canvas from
     // the moment the runtime is created, real frame content painted onto the
-    // same canvas/video reference once the fetch resolves) — assert it's
+    // same canvas/video reference once the fetch resolves) - assert it's
     // never null/undefined once the runtime exists, i.e. there's no gap where
     // the plane shows nothing.
     const materialInfo = await page.evaluate((camId) => {
@@ -1243,7 +1243,7 @@ async function main() {
     // Poll /api/cctv/frame/<id> directly (the same endpoint frameUrlFor
     // targets) to confirm the backend serves SOMETHING for this camera
     // (upstream / streetview / synthetic fallback all count as "the frame
-    // loop is healthy" — a hard 5xx/network failure would not).
+    // loop is healthy" - a hard 5xx/network failure would not).
     const frameFetch = await page.evaluate(async (camId) => {
       const mod = window.__godsEyeView.dataManager.layers.get('cctv').module;
       const cam = mod.getUIState().cameras.find((c) => c.id === camId);
@@ -1659,7 +1659,7 @@ async function main() {
     );
 
     // =========================================================================
-    // Group 6: viewshed mode (v3 design §3b — coverage tri-state + volumes)
+    // Group 6: viewshed mode (v3 design §3b - coverage tri-state + volumes)
     // =========================================================================
     console.log(
       'Checking viewshed mode (coverage tri-state + color-coded volumes)...',
@@ -1717,7 +1717,7 @@ async function main() {
       `${volumesInOnMode} volumes in 'on' mode`,
     );
 
-    // Back to viewshed: volumes must be STABLE while idle (no churn — the
+    // Back to viewshed: volumes must be STABLE while idle (no churn - the
     // rebuild sites are pose edits and style refreshes only). Object identity
     // over 8s proves nothing recreated them.
     await page.evaluate(() => {
@@ -1769,7 +1769,7 @@ async function main() {
     await saveReviewShot(page, viewshedShot, 'visual review only');
 
     // =========================================================================
-    // Group 7: calibration gizmo (v3 design §3c — ADJUST mode + drag)
+    // Group 7: calibration gizmo (v3 design §3c - ADJUST mode + drag)
     // =========================================================================
     console.log('Checking calibration gizmo (ADJUST mode + synthetic drag)...');
     const GIZMO_PARTS = [
@@ -1797,7 +1797,7 @@ async function main() {
       gizmoStates.map((s, i) => `${GIZMO_PARTS[i]}=${s}`).join(' '),
     );
 
-    // Synthetic CDP drag on the EAST arrow — the owner's field-test
+    // Synthetic CDP drag on the EAST arrow - the owner's field-test
     // regression. Sample effective elevation after every mouse move: it must
     // stay frozen until release, with no transient sampleHeight calls.
     const eastDrag = await page.evaluate(() => {
@@ -2020,7 +2020,7 @@ async function main() {
       record(
         'east-arrow drag changes the east offset (live, unsaved)',
         null,
-        `${missDetail} — verify on a current headful GPU surface`,
+        `${missDetail} - verify on a current headful GPU surface`,
       );
       record(
         'east-arrow drag keeps mount elevation frozen until mouse-up',
@@ -2044,7 +2044,7 @@ async function main() {
       );
     } else {
       const unavailable =
-        'no on-screen east-arrow shaft found under this GL stack — verify on real GPU';
+        'no on-screen east-arrow shaft found under this GL stack - verify on real GPU';
       record(
         'east-arrow drag changes the east offset (live, unsaved)',
         null,
@@ -2095,7 +2095,7 @@ async function main() {
     );
 
     // -----------------------------------------------------------------------
-    // Screenshots for human visual review (NOT a pass/fail signal — SwiftShader
+    // Screenshots for human visual review (NOT a pass/fail signal - SwiftShader
     // cannot fill plane image materials under headless software GL).
     // -----------------------------------------------------------------------
     await sleep(1000);

@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 
 const SRC_ROOT = fileURLToPath(new URL('.', import.meta.url));
 
-/** Every browser-built module under src/ — the test files are Node-only. */
+/** Every browser-built module under src/ - the test files are Node-only. */
 function browserModules(directory = SRC_ROOT) {
   const files = [];
   for (const entry of readdirSync(directory, { withFileTypes: true })) {

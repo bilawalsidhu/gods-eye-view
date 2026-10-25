@@ -137,7 +137,7 @@ export function createRendering({
    * the selected one when it falls outside that window.
    *
    * Context navigation walks the FULL nearby cohort, which is not bounded by the
-   * render cap, so selecting item 701+ used to produce no entity at all — the
+   * render cap, so selecting item 701+ used to produce no entity at all - the
    * camera flew, `getById` returned null, and the selection was silently dropped
    * on the floor, leaving the Context subject stale so NEXT offered the same
    * installation forever. One extra entity keeps every cohort item selectable
@@ -317,7 +317,7 @@ export function createRendering({
    * Second paint for floors that missed the bounded pre-render deadline.
    *
    * `resolveGroundFloorCellsBounded` gives up after FLOOR_RESOLVE_DEADLINE_MS so
-   * a cold DEM can never hold the dots hostage — but the resolve keeps running
+   * a cold DEM can never hold the dots hostage - but the resolve keeps running
    * and lands seconds later, and without this the records it covers stay pinned
    * at ellipsoid height 0, sitting visibly under the 3D tiles (owner playtest
    * 2026-08-18: "orange dots at the bottom").
@@ -327,7 +327,7 @@ export function createRendering({
    * was COLD AT PAINT TIME is warm now, not whether this particular batch warmed
    * it. The bounded resolve above is still running against the same cells, so
    * asking "did MY batch warm anything" would answer false exactly when the other
-   * resolve won the race — the common case. Still terminating: a set that is
+   * resolve won the race - the common case. Still terminating: a set that is
    * wholly cold afterwards re-renders zero times and the next camera-driven load
    * retries.
    * @param {Array<object>} records Records just rendered.

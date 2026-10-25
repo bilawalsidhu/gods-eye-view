@@ -20,7 +20,7 @@ import {
 } from './pickRegistry.js';
 
 // ---------------------------------------------------------------------------
-// resolvePickId — canonical String coercion for every layer's pick shape
+// resolvePickId - canonical String coercion for every layer's pick shape
 // ---------------------------------------------------------------------------
 
 test('resolvePickId: string pick id (flights/military/bikeshare/cctv billboards)', () => {
@@ -53,7 +53,7 @@ test('resolvePickId: unresolvable picks → null', () => {
 });
 
 // ---------------------------------------------------------------------------
-// isOwnedByOtherLayer — sibling-only scan over String-coerced ids
+// isOwnedByOtherLayer - sibling-only scan over String-coerced ids
 // ---------------------------------------------------------------------------
 
 test('ownership: sibling layers recognize each other via String-coerced ids', () => {

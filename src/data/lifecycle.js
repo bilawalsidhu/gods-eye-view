@@ -70,7 +70,7 @@ function refreshFailureFromStats(stats, label) {
 }
 
 /**
- * LayerLifecycle — Manages registration, toggling, and update loops
+ * LayerLifecycle - Manages registration, toggling, and update loops
  * for real-time data overlays on the CesiumJS globe.
  * Hosts may inject a visibilityTarget with hidden/visibilityState and event
  * listener methods. Without one, periodic work retains its headless behavior.
@@ -1176,7 +1176,7 @@ export class LayerLifecycle {
       });
     }
     // Effective visibility must follow the NEWEST absolute intent from the
-    // synchronous moment it is requested — the superseded transaction's
+    // synchronous moment it is requested - the superseded transaction's
     // cleanup updates lifecycleState later, and Context capture can run in
     // between. Cleared by this request's own queue turn when it finishes.
     if (entry.visibilityIntentEpoch === intentEpoch) {
@@ -1255,7 +1255,7 @@ export class LayerLifecycle {
         !entry.lifecycleUncertain
       ) {
         // Adoption publishes a successful settled visibility, so it must pass
-        // the same guards a fresh transition would — a guard installed after
+        // the same guards a fresh transition would - a guard installed after
         // the superseded transaction started (e.g. an exclusive Context mode)
         // must be able to veto the adopted state, not just future requests.
         const adoptionBlockReason =
@@ -1309,7 +1309,7 @@ export class LayerLifecycle {
           if (entry.enabled === desiredState) {
             // The guard forbids the very state the superseded transaction's
             // cleanup left behind. Reconcile through the ordinary lifecycle to
-            // the guard-respecting opposite — but the CALLER's request stays
+            // the guard-respecting opposite - but the CALLER's request stays
             // unfulfilled either way. Ordering matters: the compensation
             // registers as the active intent AND takes over the queued-intent
             // record BEFORE the blocked event is announced, so a listener that
@@ -1333,7 +1333,7 @@ export class LayerLifecycle {
               reason: adoptionBlockReason,
             });
             // The callback may have superseded this turn. The newest intent
-            // owns reconciliation now — defer exactly like an obsolete
+            // owns reconciliation now - defer exactly like an obsolete
             // transaction instead of installing an already-doomed compensation.
             if (
               intentEpoch !== entry.visibilityIntentEpoch ||
@@ -1394,7 +1394,7 @@ export class LayerLifecycle {
         return true;
       }
       if (entry.enabled === desiredState && !entry.lifecycleUncertain) {
-        // Idempotent exit — but an aborted predecessor (e.g. a compensation
+        // Idempotent exit - but an aborted predecessor (e.g. a compensation
         // cancelled before its first transition) may have left a stale
         // transitional presentation. State and intent agree here, so settle
         // the presentation rather than orphaning ENABLING/DISABLING forever.
@@ -1445,7 +1445,7 @@ export class LayerLifecycle {
       try {
         return await runIntentTurn();
       } finally {
-        // This turn no longer owns queued-intent effective visibility —
+        // This turn no longer owns queued-intent effective visibility -
         // either it settled, or a newer epoch superseded it (that epoch's
         // own record already replaced this one).
         releaseQueuedIntent();
@@ -1538,7 +1538,7 @@ export class LayerLifecycle {
   /**
    * The layer's effective visibility target: settled state, unless awaited
    * lifecycle work (or a superseded transaction awaiting adoption) is moving
-   * it — an ENABLING layer is effectively ON and a DISABLING layer is
+   * it - an ENABLING layer is effectively ON and a DISABLING layer is
    * effectively OFF, regardless of which side has settled.
    */
   _effectiveEnabled(entry) {
@@ -2147,7 +2147,7 @@ export class LayerLifecycle {
   }
 
   /**
-   * Destroy a single layer — calls its destroy() method if it has one,
+   * Destroy a single layer - calls its destroy() method if it has one,
    * then removes it from the manager. This is the proper cleanup path
    * that was previously missing.
    */

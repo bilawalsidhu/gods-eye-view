@@ -1196,14 +1196,9 @@
   border: 1px solid rgba(98, 181, 255, 0.22);
   border-radius: 5px;
   background: rgba(42, 113, 171, 0.08);
-  /* The saucer is a COLOR-font glyph: `color` and `text-shadow` cannot touch
-     it, so the dim/lit states are carried by `filter` alongside the border and
-     fill. 14px sits inside the 26px chip with breathing room. */
-  font:
-    14px/1 ui-monospace,
-    SFMono-Regular,
-    Menlo,
-    monospace;
+  /* The saucer is an inline SVG, so `color` and the state filters do reach
+     it; dim/lit states stay on `filter`, border and background. */
+  color: rgba(190, 220, 255, 0.9);
   filter: grayscale(0.6) opacity(0.62);
   cursor: pointer;
   transition:

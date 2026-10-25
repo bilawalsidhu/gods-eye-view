@@ -1,4 +1,4 @@
-// OVERPASS PROXY — which upstream answers count as an answer.
+// OVERPASS PROXY - which upstream answers count as an answer.
 //
 // One predicate governs cache reads, writes, and stale fallback. A configured
 // upstream's refusal is never data, and only operator-supplied alternatives

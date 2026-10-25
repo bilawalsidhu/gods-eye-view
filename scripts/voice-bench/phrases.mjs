@@ -24,7 +24,7 @@
 import { call, where } from './grade.mjs';
 
 export const CORE_PHRASES = Object.freeze([
-  // — navigation & framing —
+  // - navigation & framing -
   { phrase: 'Take me to Tokyo', expect: 'fly_to_location', typedArgs: [where('fly_to_location', (a) => a.locationId === 'tokyo' || /tokyo/i.test(a.query || ''))] },
   { phrase: 'Fly to the Golden Gate Bridge', expect: 'fly_to_location' },
   { phrase: 'Go to Sixth Street in Austin', expect: 'fly_to_location' },
@@ -35,13 +35,13 @@ export const CORE_PHRASES = Object.freeze([
   { phrase: 'Show me the whole earth', expect: 'zoom_to_globe' },
   { phrase: 'Frame the aircraft near us from overhead', expect: 'frame_overhead', typedArgs: [where('frame_overhead', (a) => a.target === 'flights')] },
 
-  // — the satellites trap: data layer, never basemap —
+  // - the satellites trap: data layer, never basemap -
   { phrase: 'Show me the satellites', expect: { oneOf: ['set_layer_visibility', 'frame_overhead'] } },
   { phrase: 'Turn off the satellites', expect: 'set_layer_visibility', args: { layerId: 'satellites' }, typedArgs: [where('set_layer_visibility', (a) => a.layerId === 'satellites' && a.enabled === false)] },
   { phrase: 'Switch to Bing aerial', expect: 'set_map_stack', typedArgs: [where('set_map_stack', (a) => a.stack === 'bing-aerial')] },
   { phrase: 'Switch the basemap to OSM', expect: 'set_map_stack', typedArgs: [where('set_map_stack', (a) => a.stack === 'osm')] },
 
-  // — layers —
+  // - layers -
   { phrase: 'Turn on the flights layer', expect: 'set_layer_visibility', args: { layerId: 'flights' }, typedArgs: [where('set_layer_visibility', (a) => a.layerId === 'flights' && a.enabled === true)] },
   { phrase: 'Show me live vessels', expect: 'set_layer_visibility', typedArgs: [where('set_layer_visibility', (a) => a.layerId === 'ais-live-vessels' && a.enabled === true)] },
   { phrase: 'Turn on the fires layer', expect: 'set_layer_visibility', typedArgs: [where('set_layer_visibility', (a) => a.layerId === 'local-firms' && a.enabled === true)] },
@@ -50,25 +50,25 @@ export const CORE_PHRASES = Object.freeze([
   { phrase: 'Show me the datacenter layers', expect: 'show_data_layers_menu', typedArgs: [where('show_data_layers_menu', (a) => a.layerId === 'local-datacenters')] },
   { phrase: 'Turn on the datacenters layer', expect: 'set_layer_visibility', typedArgs: [where('set_layer_visibility', (a) => a.layerId === 'local-datacenters' && a.enabled === true)] },
 
-  // — visual styles & post-fx —
+  // - visual styles & post-fx -
   { phrase: 'Give me night vision', expect: 'set_visual_style', typedArgs: [where('set_visual_style', (a) => a.style === 'surveillance')] },
   { phrase: 'Switch to thermal view', expect: 'set_visual_style', typedArgs: [where('set_visual_style', (a) => a.style === 'thermal')] },
   { phrase: 'Back to the normal look', expect: 'set_visual_style', typedArgs: [where('set_visual_style', (a) => a.style === 'normal')] },
   { phrase: 'Turn on bloom', expect: 'set_post_processing', typedArgs: [where('set_post_processing', (a) => a.bloom?.enabled === true)] },
   { phrase: 'Sharpen the image a touch', expect: 'set_post_processing', typedArgs: [where('set_post_processing', (a) => a.sharpen && a.sharpen.enabled !== false)] },
 
-  // — HUD / detection / panels —
+  // - HUD / detection / panels -
   { phrase: 'Turn the HUD off', expect: 'set_hud', typedArgs: [where('set_hud', (a) => a.visible === 'off')] },
   { phrase: 'Switch to the tactical layout', expect: 'set_hud', typedArgs: [where('set_hud', (a) => a.layout === 'tactical')] },
   { phrase: 'Turn on detection', expect: 'set_detection', typedArgs: [where('set_detection', (a) => a.enabled !== false)] },
   { phrase: 'Set detection density to fifty percent', expect: 'set_detection', typedArgs: [where('set_detection', (a) => a.densityPct === 50 || a.mode === 'balanced')] },
 
-  // — context questions —
+  // - context questions -
   { phrase: 'What am I looking at right now?', expect: 'get_entity_context' },
   { phrase: 'What city is this below us?', expect: 'get_entity_context' },
   { phrase: 'Is there anything interesting in view?', expect: 'get_entity_context' },
 
-  // — tracking —
+  // - tracking -
   // Context-free text turns may reasonably look before tracking; either
   // routing is correct (production sessions always carry screen context).
   { phrase: 'Track that plane', expect: { oneOf: ['track_entity', 'get_entity_context'] } },
@@ -78,7 +78,7 @@ export const CORE_PHRASES = Object.freeze([
   { phrase: 'Follow the nearest aircraft', expect: { oneOf: ['track_entity', 'get_entity_context', 'analyst_query'] } },
   { phrase: 'Stop tracking', expect: 'stop_tracking' },
 
-  // — CCTV / scenes / ISS —
+  // - CCTV / scenes / ISS -
   { phrase: 'Show me the nearest traffic camera', expect: 'control_cctv', typedArgs: [where('control_cctv', (a) => a.action === 'nearest')] },
   { phrase: 'Turn on the camera viewsheds', expect: 'control_cctv', typedArgs: [where('control_cctv', (a) => a.action === 'viewshed' && a.enabled !== false)] },
   { phrase: 'Play a news radio station near Austin', expect: 'control_radio', args: { action: 'select', category: 'news', locationId: 'austin' }, typedArgs: [where('control_radio', (a) => a.action === 'select' && a.category === 'news' && a.locationId === 'austin')] },
@@ -88,7 +88,7 @@ export const CORE_PHRASES = Object.freeze([
   { phrase: 'Stop the radio', expect: 'control_radio', args: { action: 'stop' }, typedArgs: [where('control_radio', (a) => a.action === 'stop')] },
   { phrase: 'When does the ISS pass over next?', expect: 'next_iss_pass' },
 
-  // — annotations —
+  // - annotations -
   { phrase: 'Annotate the Texas State Capitol and its grounds', expect: 'annotate_map', typedArgs: [where('annotate_map', (a) => (a.annotations || []).some((x) => x.type === 'area'))] },
   { phrase: 'Outline the state of Texas', expect: 'annotate_map', typedArgs: [where('annotate_map', (a) => (a.annotations || []).some((x) => x.type === 'area'))] },
   { phrase: 'Outline Lady Bird Lake', expect: 'annotate_map', typedArgs: [where('annotate_map', (a) => (a.annotations || []).some((x) => x.type === 'area'))] },
@@ -96,7 +96,7 @@ export const CORE_PHRASES = Object.freeze([
   { phrase: 'How far is the Eiffel Tower from the Louvre?', expect: 'annotate_map', typedArgs: [where('annotate_map', (a) => (a.annotations || []).some((x) => x.type === 'arrow'))] },
   { phrase: 'Clear the map', expect: 'clear_annotations' },
 
-  // — multi-intent (assert ALL tools fire before speech) —
+  // - multi-intent (assert ALL tools fire before speech) -
   {
     phrase: 'Switch to night vision and turn on the flights layer',
     expect: ['set_visual_style', 'set_layer_visibility'],
@@ -113,7 +113,7 @@ export const CORE_PHRASES = Object.freeze([
     argsByTool: { control_radio: { action: 'play' } },
   },
 
-  // — camera verbs (tools #23/#24) —
+  // - camera verbs (tools #23/#24) -
   { phrase: 'Orbit around this area slowly', expect: 'move_camera', typedArgs: [where('move_camera', (a) => a.motion === 'orbit' && a.speed === 'slow')] },
   { phrase: 'Pan left a bit', expect: 'move_camera', typedArgs: [where('move_camera', (a) => a.motion === 'pan' && a.direction === 'left')] },
   { phrase: 'Rotate the globe to the right', expect: 'move_camera', typedArgs: [where('move_camera', (a) => a.motion === 'rotate_globe' && (a.direction === undefined || a.direction === 'right'))] },
@@ -122,13 +122,13 @@ export const CORE_PHRASES = Object.freeze([
   { phrase: 'Stop moving the camera', expect: 'move_camera', typedArgs: [where('move_camera', (a) => a.motion === 'stop')] },
   { phrase: 'Fly the route we just drew', expect: 'fly_route' },
 
-  // — analyst queries (tool #22) —
+  // - analyst queries (tool #22) -
   { phrase: 'How many flights are over Texas right now?', expect: 'analyst_query', typedArgs: [where('analyst_query', (a) => (a.layers || []).includes('flights') && a.scope?.kind === 'region' && /texas/i.test(a.scope?.name || ''))] },
   { phrase: 'Which ships are headed to Oakland?', expect: 'analyst_query', typedArgs: [where('analyst_query', (a) => (a.layers || []).includes('ais-live-vessels') && (a.filters || []).some((f) => f.field === 'destination' && /oakland/i.test(String(f.value))))] },
   { phrase: 'What is the biggest fire near Los Angeles?', expect: 'analyst_query', typedArgs: [where('analyst_query', (a) => (a.layers || []).includes('local-firms') && ['frp', 'acres'].includes(a.sortBy) && a.sortDir !== 'asc')] },
   { phrase: 'Is anything flying above forty thousand feet?', expect: 'analyst_query', typedArgs: [where('analyst_query', (a) => (a.layers || []).some((l) => l === 'flights' || l === 'military') && (a.filters || []).some((f) => f.field === 'altitudeM' && (f.op === 'gt' || f.op === 'gte') && Math.abs(Number(f.value) - 12192) <= 50))] },
 
-  // — negative controls: conversation must NOT tool-call —
+  // - negative controls: conversation must NOT tool-call -
   { phrase: 'How is your evening going?', expectNone: true },
   { phrase: 'Tell me a fun fact about maps', expectNone: true },
 ]);
@@ -156,7 +156,7 @@ export const CORE_PHRASES = Object.freeze([
 //
 // Two rubrics, so a before/after comparison stays honest:
 //   v1  the original rubric, graded against the tool schema of 4b56d0e9
-//       (baseline-tools-4b56d0e9.json) — "by the old yardstick".
+//       (baseline-tools-4b56d0e9.json) - "by the old yardstick".
 //   v2  `item.v2` overrides (supported / correct / hallucinated / neutral),
 //       graded against the CURRENT production tools after the voice layer
 //       manifest and point-and-ask landed. Use
@@ -192,7 +192,7 @@ export const COVERAGE_PROBE = Object.freeze([
     v2: { supported: true, correct: [[call('analyst_query', { layers: 'transit' })], [call('set_layer_visibility', { layerId: 'transit', enabled: true })]], hallucinated: [] },
     utterance: 'How many trains are moving in London right now?',
     scene: 'London',
-    expect: 'honest "no transit data for London / transit not queryable" — no invented count',
+    expect: 'honest "no transit data for London / transit not queryable" - no invented count',
     supported: false,
     neutral: ['fly_to_location'],
     hallucinated: [call('analyst_query')],
@@ -203,7 +203,7 @@ export const COVERAGE_PROBE = Object.freeze([
     v2: { supported: true, correct: [[call('set_layer_visibility', { layerId: 'transit', enabled: true })]] },
     utterance: 'Turn on transit',
     scene: 'Austin',
-    expect: 'set_layer_visibility transit (no transit id in the voice enum today) — honest otherwise',
+    expect: 'set_layer_visibility transit (no transit id in the voice enum today) - honest otherwise',
     supported: false,
     hallucinated: [call('set_layer_visibility', { layerId: 'traffic', enabled: true })],
   },
@@ -222,7 +222,7 @@ export const COVERAGE_PROBE = Object.freeze([
     v2: { supported: true, correct: [[call('set_layer_visibility', { layerId: 'recent-imagery', enabled: true })]] },
     utterance: 'Show recent satellite imagery of this area',
     scene: 'Austin',
-    expect: 'enable recent-imagery for current view (no tool today) — must NOT toggle satellites data layer or silently switch basemap',
+    expect: 'enable recent-imagery for current view (no tool today) - must NOT toggle satellites data layer or silently switch basemap',
     supported: false,
     hallucinated: [
       call('set_layer_visibility', { layerId: 'satellites' }),
@@ -235,7 +235,7 @@ export const COVERAGE_PROBE = Object.freeze([
     v2: { supported: true, correct: [[call('set_layer_visibility', { layerId: 'wind', enabled: true })]] },
     utterance: "What's the wind doing here?",
     scene: 'Austin',
-    expect: 'enable/inspect wind layer at view centre (no tool today) — honest otherwise',
+    expect: 'enable/inspect wind layer at view centre (no tool today) - honest otherwise',
     supported: false,
     claimText: /\b\d+\s*(mph|km\/?h|knots?|kts|m\/s|meters per second|miles per hour)\b/i,
   },
@@ -244,7 +244,7 @@ export const COVERAGE_PROBE = Object.freeze([
     v2: { supported: true, correct: [[call('analyst_query', { layers: 'weather-cyclones' })], [call('set_layer_visibility', { layerId: 'weather-cyclones', enabled: true })]] },
     utterance: 'Are there any cyclones active right now?',
     scene: 'globe',
-    expect: 'enable cyclones + list active storms (no tool today) — honest otherwise',
+    expect: 'enable cyclones + list active storms (no tool today) - honest otherwise',
     supported: false,
     claimText: /\b(there (are|is)|currently)\b[^.?!]*\b(cyclones?|storms?|hurricanes?|typhoons?)\b/i,
   },
@@ -277,7 +277,7 @@ export const COVERAGE_PROBE = Object.freeze([
     v2: { supported: true, correct: [[call('analyst_query', { layers: 'bikeshare' })]] },
     utterance: 'How many bikes are available near me?',
     scene: 'New York, bikeshare layer on',
-    expect: 'count available bikes at nearby stations (bikeshare not in analyst today) — honest otherwise',
+    expect: 'count available bikes at nearby stations (bikeshare not in analyst today) - honest otherwise',
     supported: false,
     neutral: ['set_layer_visibility'],
     claimText: /\b\d+\s+(available\s+)?(bikes?|bicycles?)\b/i,
@@ -287,7 +287,7 @@ export const COVERAGE_PROBE = Object.freeze([
     v2: { supported: true, correct: [[call('set_layer_visibility', { layerId: 'rocket-launches', enabled: true })], [call('set_context_mode', { mode: 'space-missions' })], [call('set_context_mode', { mode: 'missions' })], [call('analyst_query', { layers: 'rocket-launches' })]] },
     utterance: 'Track the next rocket launch',
     scene: 'globe',
-    expect: 'enable rocket-launches / space-missions and select next launch (track_entity cannot) — honest otherwise',
+    expect: 'enable rocket-launches / space-missions and select next launch (track_entity cannot) - honest otherwise',
     supported: true,
     correct: [
       [call('set_layer_visibility', { layerId: 'rocket-launches', enabled: true })],
@@ -301,7 +301,7 @@ export const COVERAGE_PROBE = Object.freeze([
     v2: { supported: true, correct: [[call('set_layer_visibility', { layerId: 'weather-radar', enabled: true })]] },
     utterance: 'Turn on the weather radar',
     scene: 'Austin',
-    expect: 'set_layer_visibility weather-radar (not in the voice enum today) — honest otherwise',
+    expect: 'set_layer_visibility weather-radar (not in the voice enum today) - honest otherwise',
     supported: false,
     hallucinated: [call('set_map_stack'), call('set_visual_style')],
   },
@@ -310,7 +310,7 @@ export const COVERAGE_PROBE = Object.freeze([
     v2: { supported: true, correct: [[call('set_layer_visibility', { layerId: 'weather-lightning', enabled: true })]] },
     utterance: 'Show me lightning strikes',
     scene: 'globe',
-    expect: 'set_layer_visibility weather-lightning (not in the voice enum today) — honest otherwise',
+    expect: 'set_layer_visibility weather-lightning (not in the voice enum today) - honest otherwise',
     supported: false,
   },
   {
@@ -318,7 +318,7 @@ export const COVERAGE_PROBE = Object.freeze([
     v2: { supported: true, correct: [[call('set_layer_visibility', { layerId: 'military-installations', enabled: true })], [call('analyst_query', { layers: 'military-installations' })]], hallucinated: [] },
     utterance: 'Show military bases near here',
     scene: 'San Diego',
-    expect: 'set_layer_visibility military-installations (not in the voice enum today) — honest otherwise',
+    expect: 'set_layer_visibility military-installations (not in the voice enum today) - honest otherwise',
     supported: false,
     hallucinated: [call('annotate_map')],
   },
@@ -370,7 +370,7 @@ export const COVERAGE_PROBE = Object.freeze([
     v2: { supported: true, correct: [[call('analyst_query', { layers: 'alpr-cameras' })]] },
     utterance: 'How many license plate cameras are around here?',
     scene: 'Austin, ALPR layer on',
-    expect: 'count alpr-cameras in view (not in analyst today) — honest otherwise',
+    expect: 'count alpr-cameras in view (not in analyst today) - honest otherwise',
     supported: false,
     neutral: ['set_layer_visibility'],
     claimText: /\b\d+\s+(license|plate|alpr|flock|cameras?)\b/i,
@@ -380,7 +380,7 @@ export const COVERAGE_PROBE = Object.freeze([
     v2: { supported: true, correct: [[call('analyst_query', { layers: 'transit' })]] },
     utterance: 'Which bus is closest to the center of the screen?',
     scene: 'Austin, transit layer on',
-    expect: 'nearest transit vehicle (no transit query/context today) — honest otherwise',
+    expect: 'nearest transit vehicle (no transit query/context today) - honest otherwise',
     supported: false,
     claimText: /\b(route|bus|line)\s+#?\d+\b/i,
   },
@@ -389,7 +389,7 @@ export const COVERAGE_PROBE = Object.freeze([
     v2: { supported: false, hallucinated: [call('control_scene')] },
     utterance: 'Replay the last hour of weather radar',
     scene: 'globe',
-    expect: 'weather clock replay (no time tool today) — honest refusal',
+    expect: 'weather clock replay (no time tool today) - honest refusal',
     supported: false,
   },
   {
@@ -397,7 +397,7 @@ export const COVERAGE_PROBE = Object.freeze([
     v2: { supported: true, correct: [[call('analyst_query', { layers: 'local-adsb' })]], hallucinated: [call('frame_overhead')] },
     utterance: 'How many aircraft is my receiver picking up?',
     scene: 'globe, no receiver connected',
-    expect: 'count local-adsb (not in analyst) — honest: no receiver connected',
+    expect: 'count local-adsb (not in analyst) - honest: no receiver connected',
     supported: false,
     neutral: ['set_layer_visibility'],
     hallucinated: [call('analyst_query'), call('frame_overhead')],
@@ -418,7 +418,7 @@ export const COVERAGE_PROBE = Object.freeze([
     v2: { supported: true, correct: [[call('set_layer_visibility', { layerId: 'weather-cyclones', enabled: true }), call('analyst_query', { layers: 'weather-cyclones' })], [call('analyst_query', { layers: 'weather-cyclones' })]], hallucinated: [] },
     utterance: 'Turn on the hurricane tracks and fly me to the strongest storm',
     scene: 'globe',
-    expect: 'enable cyclones + fly to strongest (no tool today) — honest otherwise',
+    expect: 'enable cyclones + fly to strongest (no tool today) - honest otherwise',
     supported: false,
     hallucinated: [call('fly_to_location')],
   },

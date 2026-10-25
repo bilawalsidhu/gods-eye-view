@@ -26,7 +26,7 @@ export function createLifecycle({
 
   function clearRuntimeState() {
     parts.geometryQueue.stopGeometryLoadQueue();
-    // Idempotent — also covers a re-init without a prior destroy().
+    // Idempotent - also covers a re-init without a prior destroy().
     parts.cards.teardownAmbientCards();
     parts.projection.clearProjectionOverlay();
     layerState._records = [];
@@ -38,10 +38,10 @@ export function createLifecycle({
     layerState._lastError = null;
     layerState._lastFocusStyleAt = 0;
     layerState._activeFocusStyleCount = 0;
-    // FIX ①/③: the discovered tileset handle is scene-scoped — drop it so a fresh
+    // FIX ①/③: the discovered tileset handle is scene-scoped - drop it so a fresh
     // init re-discovers against the current scene primitives.
     layerState._activeTileset = null;
-    // Task 5: the applied-regime tracker is record-set-scoped — a fresh init
+    // Task 5: the applied-regime tracker is record-set-scoped - a fresh init
     // recomputes it against the then-current scene.
     layerState._lastAppliedRegime = null;
   }
@@ -81,7 +81,7 @@ export function createLifecycle({
         : parts.catalog.seedCatalog();
 
       // Viewshed color identity (design §3a): golden-angle hue over the
-      // id-SORTED catalog index — deterministic across sessions for a stable
+      // id-SORTED catalog index - deterministic across sessions for a stable
       // catalog, maximally separated for neighboring cameras.
       const hueIndexById = new Map(
         catalog
@@ -111,7 +111,7 @@ export function createLifecycle({
       }
 
       // Task 5 (height-datum fix): batch ALL camera coords through the Re:Earth
-      // ellipsoidal ground-prior resolver (network-cached — NOT a scene query;
+      // ellipsoidal ground-prior resolver (network-cached - NOT a scene query;
       // the catalog's orthometric groundElevationM feeds the geoid fallback
       // chain). Bounded wait: a warm proxy cache resolves in milliseconds, so
       // records are normally built WITH their prior (correct first paint in
@@ -133,7 +133,7 @@ export function createLifecycle({
         // batch lands.
         const groundPrior = priors?.[i] || null;
         // Cheap first-pass altitude from the ellipsoidal prior (catalog value
-        // only as the pre-prior fallback) — the staggered geometry queue
+        // only as the pre-prior fallback) - the staggered geometry queue
         // refines with sampled tile heights after enable so the init path
         // never raycasts the scene once per camera.
         const priorGround = Number.isFinite(groundPrior?.ellipsoid)
@@ -169,20 +169,20 @@ export function createLifecycle({
           coverageEntities: [],
           projection: null,
           // Task 5 (height-datum fix): regime-aware ground resolution state.
-          //   groundPrior     — { ellipsoid, source } from the Re:Earth batch
+          //   groundPrior     - { ellipsoid, source } from the Re:Earth batch
           //     (null until a late batch lands). The prior applies in EVERY
           //     regime and is the terrain-globe resolution outright.
-          //   groundResolved  — PER-REGIME one-shot latch (regime key →
+          //   groundResolved  - PER-REGIME one-shot latch (regime key →
           //     boolean): true once this record's resolution completed for that
           //     regime; such records are excluded from the completion pass so
           //     their geometry freezes. Re-armed only on a genuine pose change,
-          //     explicit user select/move, or a surface-regime change — never
+          //     explicit user select/move, or a surface-regime change - never
           //     on the 10s timer.
-          //   groundSamples   — PER-REGIME resolved ground (regime key →
+          //   groundSamples   - PER-REGIME resolved ground (regime key →
           //     metres): the accepted one-shot scene sample in google-3d, the
           //     mirrored prior in terrain-globe. Kept across re-arms as the
           //     "has ever resolved" memory for the B9c mid-stream guard.
-          //   frustumPositions — cached Cartesians for pure recomputes (so
+          //   frustumPositions - cached Cartesians for pure recomputes (so
           //     plane placement never re-derives geometry it already has).
           groundPrior,
           groundResolved: {},
@@ -214,7 +214,7 @@ export function createLifecycle({
       }
 
       // Task 5: if the prior batch lost init's bounded race, apply it post-hoc
-      // when it lands (pure recomputes — applyLateGroundPriors guards against
+      // when it lands (pure recomputes - applyLateGroundPriors guards against
       // a torn-down/re-inited catalog).
       if (!priors) {
         const initRecords = layerState._records.slice();
@@ -289,11 +289,11 @@ export function createLifecycle({
           // remain eligible for true empty-space deselection.
           const pickedId = resolvePickId(picked);
           if (pickedId !== null) return;
-          // Item A (owner round 2): the scene pick found no camera — try the
+          // Item A (owner round 2): the scene pick found no camera - try the
           // painted ambient cards. The cards canvas is pointer-events:none (this
           // handler owns the events), so a click landing on a card's rect selects
           // its camera exactly like a click on the icon. Cesium click positions
-          // and the recorded rects are both CSS px — direct comparison.
+          // and the recorded rects are both CSS px - direct comparison.
           const cardId = layerState._cctvOverlayHost.hitTest(
             click.position.x,
             click.position.y,
@@ -394,7 +394,7 @@ export function createLifecycle({
       services.credits?.hideOsmCredit?.(layerState._viewer, 'cctv');
       layerState._enabled = false;
       unregisterPickOwner('cctv');
-      // ADJUST mode does not survive a layer toggle — predictable re-entry.
+      // ADJUST mode does not survive a layer toggle - predictable re-entry.
       layerState._calibrationMode = false;
       releaseContinuousRender('cctv-adjust');
       layerState._gizmo?.setEnabled(false);
@@ -469,7 +469,7 @@ export function createLifecycle({
       layerState._enabled = false;
       layerState._activeCameraId = null;
       layerState._autoHopSuspended = false;
-      // Clear existing subscribers rather than replacing the Set —
+      // Clear existing subscribers rather than replacing the Set -
       // replacing would silently orphan any unsubscribe() closures
       layerState._listeners.clear();
     },

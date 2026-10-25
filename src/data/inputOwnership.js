@@ -11,15 +11,15 @@
  * So there is one claim, held by at most one owner at a time:
  *
  * - A TOOL that needs the pointer calls `claimPointer('draw')` when it turns on
- *   and gets back a LEASE — an opaque token. It releases with
+ *   and gets back a LEASE - an opaque token. It releases with
  *   `releasePointer(lease)` when it turns off. It does not consult anyone;
  *   holding the claim is what makes it the owner.
- * - An AMBIENT SELECTION HANDLER — anything that picks an entity because the
- *   user clicked — early-returns while `isPointerFree()` is false. It never
+ * - An AMBIENT SELECTION HANDLER - anything that picks an entity because the
+ *   user clicked - early-returns while `isPointerFree()` is false. It never
  *   claims.
  *
  * Claims do not stack and are never stolen: while one owner holds the pointer,
- * a second `claimPointer` returns null rather than displacing it — and so does
+ * a second `claimPointer` returns null rather than displacing it - and so does
  * a second claim under the SAME name, because two live instances of one tool
  * (an old one mid-teardown, its replacement already running) are two owners,
  * not one. The lease is what tells them apart: releasing takes the token that
@@ -39,7 +39,7 @@ let nextLeaseId = 1;
  * Take the pointer for `owner`.
  * @param {string} owner Stable identifier for the claiming tool, e.g. 'draw'.
  * @returns {PointerLease|null} The lease to release with, or null if the
- *   pointer is already held — including by another instance of the same tool.
+ *   pointer is already held - including by another instance of the same tool.
  */
 export function claimPointer(owner) {
   const name = normalizeOwner(owner);

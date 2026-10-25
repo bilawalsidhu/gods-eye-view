@@ -1,19 +1,19 @@
 #!/usr/bin/env node
 /**
- * qa-infra-lod — browser checks for the local-infrastructure LOD declutter.
+ * qa-infra-lod - browser checks for the local-infrastructure LOD declutter.
  *
  * Datacenters and dams use a bounded active-stem set. Cables are loaded for
  * a representative combined view but use their own unchanged renderer.
  *
  * Two jobs:
- *  1. GATE — with datacenters + dams enabled:
+ *  1. GATE - with datacenters + dams enabled:
  *       a. at a full-earth camera, each layer's getLodDiagnostics() reports
  *          computed===true, active<=budgetLimit, budgetLimit===INFRA_LOD_ACTIVE_MIN,
  *          and active<total (the declutter is actually engaged);
  *       b. flying to a city lifts budgetLimit to INFRA_LOD_ACTIVE_MAX and the
  *          active count grows (or pins to the in-view count);
  *       c. the selection does not churn between camera moves.
- *  2. MEASURE — actual postRender frame intervals over a ~10 s driven orbit at
+ *  2. MEASURE - actual postRender frame intervals over a ~10 s driven orbit at
  *     global zoom; --control disables infra. This is not a before/after test.
  *     Report the renderer; software-GL timings are relative-only evidence.
  *
@@ -53,10 +53,10 @@ const results = [];
 function check(name, pass, detail) {
   results.push({ name, pass });
   const tag = pass ? 'PASS' : 'FAIL';
-  console.log(`  [${tag}] ${name}${detail !== undefined ? ` — ${JSON.stringify(detail)}` : ''}`);
+  console.log(`  [${tag}] ${name}${detail !== undefined ? ` - ${JSON.stringify(detail)}` : ''}`);
 }
 function report(name, detail) {
-  console.log(`  [MEAS] ${name} — ${JSON.stringify(detail)}`);
+  console.log(`  [MEAS] ${name} - ${JSON.stringify(detail)}`);
 }
 
 const browser = await puppeteer.launch({
@@ -127,7 +127,7 @@ try {
       while (performance.now() < deadline) {
         // Every id, cables included. The cable layer's enable() only starts
         // `void load()`, and the manager's immediate update() returns early
-        // because `_loading` is already true — so waiting on datacenters and
+        // because `_loading` is already true - so waiting on datacenters and
         // dams alone releases the measurement before ~2,600 cable references
         // exist, and the advertised three-layer frame cost underreports.
         const done = ids.every((id) => {
@@ -175,7 +175,7 @@ try {
       // render nothing, so assert the selection is actually populated.
       check(`${id}: active set is non-empty`, !!d && d.active > 0, d);
       // "declutter engaged" only asserts when the dataset actually exceeds the
-      // cap — a tiny dataset legitimately shows every feature. This fixture is
+      // cap - a tiny dataset legitimately shows every feature. This fixture is
       // a full-earth view of a global dataset an order of magnitude past the
       // global band, so the only correct outcome is a cap-filled set.
       if (d && d.total > d.budgetLimit) {
@@ -331,13 +331,13 @@ try {
     await page.screenshot({ path: shot });
     console.log(`  [SHOT] ${shot}`);
   } catch (e) {
-    console.log(`  [SHOT] skipped — ${e?.message || e}`);
+    console.log(`  [SHOT] skipped - ${e?.message || e}`);
   }
 } finally {
   await browser.close();
 }
 
 const passed = results.filter((r) => r.pass).length;
-console.log(`\nqa-infra-lod: ${passed}/${results.length} passed${CONTROL ? ' (control mode — gates skipped)' : ''}`);
+console.log(`\nqa-infra-lod: ${passed}/${results.length} passed${CONTROL ? ' (control mode - gates skipped)' : ''}`);
 console.log(`RESULT: ${passed} passed, ${results.length - passed} failed, 0 skipped`);
 process.exit(passed === results.length ? 0 : 1);

@@ -1,4 +1,4 @@
-// BIKESHARE PROXY ROUTE — the client's URL against the real mounted middleware.
+// BIKESHARE PROXY ROUTE - the client's URL against the real mounted middleware.
 //
 // The station source and the GBFS proxy are unit-tested apart, each against a
 // stand-in for the other, so a disagreement about the request shape stayed
@@ -54,7 +54,7 @@ const STATION_STATUS = {
  * `server.middlewares.use(route, handler)` is connect: it matches a request
  * whose path starts with the mount route, then strips that prefix from
  * `req.url` before the handler sees it. The handler therefore never reads
- * `/api/gbfs/...`, only the remainder — which is exactly the detail the client
+ * `/api/gbfs/...`, only the remainder - which is exactly the detail the client
  * and the proxy disagreed about. Reproducing the strip here is what makes this
  * a round trip rather than two more isolated stubs.
  *
@@ -335,8 +335,8 @@ test('the mounted route still refuses a host outside the allowlist', async () =>
  *
  * Mounting `gbfsProxy()` directly proves the handler agrees with the client,
  * but not that the application still registers it. These take the plugin out
- * of the real provider list by name, so dropping GBFS from the composition —
- * or from the preview half of it — fails here rather than in a browser.
+ * of the real provider list by name, so dropping GBFS from the composition -
+ * or from the preview half of it - fails here rather than in a browser.
  */
 function composedGbfsPlugin() {
   const plugin = localProviderPlugins().find(

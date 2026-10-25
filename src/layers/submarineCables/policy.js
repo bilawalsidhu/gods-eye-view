@@ -49,7 +49,7 @@ export const CABLE_SWEEP_MOTION_EPSILON_M = 250;
  * no per-label tile depth test), superseding the 2026-08-02 Option-1 native
  * `LabelGraphics` exception. The native path evaluated 2 `CallbackProperty`
  * channels per reference entity per frame (5,258 across the 2,629-reference
- * dataset) and re-batched a 160-label `LabelCollection` on every sweep — the
+ * dataset) and re-batched a 160-label `LabelCollection` on every sweep - the
  * layer alone cost ~9.5 ms/frame during camera motion. The depth cue this
  * trades away (photoreal tiles occluding label TEXT at low, city-level
  * cameras) matches the sibling dams/datacenters sources, which shipped
@@ -73,7 +73,7 @@ export const CABLE_LABEL_DEPTH_DECISION = Object.freeze({
  * unknown must reach the documented BOTH fallback rather than being asserted
  * onto the terrain surface. A stack added to `MAP_STACKS` without being added
  * here therefore degrades to the safe pre-optimization behavior (visible on
- * every surface) instead of vanishing — and the per-stack unit test walks the
+ * every surface) instead of vanishing - and the per-stack unit test walks the
  * real `MAP_STACKS` so the omission is caught loudly.
  */
 

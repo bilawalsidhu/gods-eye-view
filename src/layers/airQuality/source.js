@@ -12,7 +12,7 @@ const OBSERVATIONS_URL = `${COLLECTIONS_ROOT}/aqhi-observations-realtime/items`;
 /** Comfortably above Canada's ~134 stations without inviting a huge page. */
 const STATION_LIMIT = 500;
 const OBSERVATION_LIMIT = 500;
-/** Station geometry is near-static — a few changes a year. Refetch twice a day. */
+/** Station geometry is near-static - a few changes a year. Refetch twice a day. */
 const STATION_TTL_MS = 12 * 60 * 60 * 1000;
 /** A full 500-row GeoJSON page is a few hundred KB; anything past this is not a page. */
 const MAX_RESPONSE_BYTES = 4 * 1024 * 1024;
@@ -21,7 +21,7 @@ const MAX_RESPONSE_BYTES = 4 * 1024 * 1024;
  * Request and validate a complete ECCC AQHI snapshot before it can replace
  * displayed readings. The first registered air-quality provider.
  *
- * Two collections are involved. `aqhi-stations` is the catalog — it supplies
+ * Two collections are involved. `aqhi-stations` is the catalog - it supplies
  * every reading its coordinates and is cached for twelve hours because it
  * barely changes. `aqhi-observations-realtime` is the hourly reading feed,
  * requested with `latest=true` so the response is current values rather than

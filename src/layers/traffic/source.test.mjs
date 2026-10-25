@@ -393,7 +393,7 @@ test('a failed detail pass keeps major roads and exposes separate degraded statu
     assert.equal(state._roadError, null);
     assert.equal(
       state._detailError,
-      'Detailed roads unavailable — OpenFreeMap tiles unavailable',
+      'Detailed roads unavailable - OpenFreeMap tiles unavailable',
     );
     assert.equal(state._roadPartial, true);
     assert.equal(state._fetching, false);
@@ -525,7 +525,7 @@ test('refresh failure removes cached matches and reports simulated flow', async 
   assert.equal(controls.getStats().flowCoveragePct, 0);
   assert.match(
     controls.getStats().loadingLabel,
-    /SIMULATED — TomTom daily budget reached/,
+    /SIMULATED - TomTom daily budget reached/,
   );
   assert.equal(state._flowPending, 0);
 });

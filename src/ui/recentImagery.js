@@ -43,7 +43,7 @@ const LAYER_NOTICES = new Set([
 // imageryBoxTool.js); fixed refusals there are msg() text for translateKnown.
 const TOO_LARGE = /^(Box|View) is ([\d,]+) km wide · limit ([\d,]+) km$/;
 const POLAR = /^Imagery stops at ±([\d.]+)° latitude$/;
-const POINTER_BUSY = /^(.+) is using the pointer — close it first$/;
+const POINTER_BUSY = /^(.+) is using the pointer - close it first$/;
 
 /**
  * The notice line in the UI language: notices and box refusals arrive in
@@ -64,7 +64,7 @@ export function localizeNotice(text) {
     });
   const busy = POINTER_BUSY.exec(text);
   if (busy)
-    return t('{owner} is using the pointer — close it first', {
+    return t('{owner} is using the pointer - close it first', {
       owner: translateKnown(pointerOwnerName(busy[1])),
     });
   const tooLarge = TOO_LARGE.exec(text);
@@ -635,7 +635,7 @@ export function createRecentImageryPanel({
 
   /**
    * Keyboard only: slide the strip until the focused card is in view. Only
-   * `strip.scrollLeft` moves — `scrollIntoView` would also scroll the body.
+   * `strip.scrollLeft` moves - `scrollIntoView` would also scroll the body.
    */
   function scrollFocusedIntoView() {
     const focus = snapshot.candidates[snapshot.focusIndex];

@@ -46,7 +46,7 @@ test('an unnamed feature reads as its class, never as a raw OSM id', () => {
     assert.doesNotMatch(record.name, /\d/, `label must carry no OSM id: ${record.name}`);
     assert.doesNotMatch(record.name, /[()]/, `label must carry no id parenthetical: ${record.name}`);
   }
-  // The id is not lost — attribution and the details panel still resolve it.
+  // The id is not lost - attribution and the details panel still resolve it.
   assert.equal(result.records[0].id, 'osm:way:10981656305');
   assert.deepEqual(result.records[0].sources, [
     { name: 'OpenStreetMap', id: 'way/10981656305', retrievedAt: '2026-08-18T00:00:00.000Z' },
@@ -79,7 +79,7 @@ test('a way with only bounds is kept, at the midpoint of that box', () => {
   // The proxy asks for `out center tags geom` and Overpass honours only the
   // LAST geometry mode, so `center` is never emitted and every way/relation
   // arrives carrying `bounds` instead. Dropping those rendered nodes and
-  // nothing else — an empty screen over mapped installations.
+  // nothing else - an empty screen over mapped installations.
   const result = normalizeMilitaryInstallations({ elements: [
     { type: 'way', id: 92701457, bounds: { minlat: 51.94, minlon: 7.98, maxlat: 51.96, maxlon: 8.02 },
       tags: { military: 'barracks', name: 'Sportschule der Bundeswehr' } },
@@ -91,7 +91,7 @@ test('a way with only bounds is kept, at the midpoint of that box', () => {
   assert.equal(result.records[0].longitude, 8.00);
 });
 
-test('a relation with only bounds is kept — it carries no geometry at all', () => {
+test('a relation with only bounds is kept - it carries no geometry at all', () => {
   const result = normalizeMilitaryInstallations({ elements: [
     { type: 'relation', id: 5, bounds: { minlat: -1, minlon: -2, maxlat: 1, maxlon: 2 },
       tags: { landuse: 'military' } },

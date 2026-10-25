@@ -1,4 +1,4 @@
-// src/scenes/scenePolicy.js — pure decisions for cinematic scene playback.
+// src/scenes/scenePolicy.js - pure decisions for cinematic scene playback.
 //
 // The scene director was written when the app shipped four data layers, and its
 // shot recipes (src/scenes/recipes.js) still declare exactly those four:
@@ -6,7 +6,7 @@
 // sixteen. The original reconcile walked the LIVE registry and forced every
 // layer absent from the shot to off, so a recipe that never had an opinion
 // about CCTV, vessels, fires, radio, cables, dams or datacenters silently tore
-// them down — and nothing puts them back, because playback has no restore pass.
+// them down - and nothing puts them back, because playback has no restore pass.
 //
 // A shot's layer map is an assertion about the layers it NAMES, not a claim of
 // authority over every layer that will ever exist. Recipes already spell out
@@ -21,7 +21,7 @@
 import { contextLayerEnableBlockReason } from '../contextModePolicy.js';
 
 /**
- * Layer params that re-establish a tracked contact — and with it a SECOND
+ * Layer params that re-establish a tracked contact - and with it a SECOND
  * writer on the camera.
  *
  * A capture taken while following a plane snapshots that layer's whole param
@@ -31,8 +31,8 @@ import { contextLayerEnableBlockReason } from '../contextModePolicy.js';
  * both write the frame, which is the documented jitter failure mode.
  *
  * So playback NEVER re-establishes tracking. The keys stay in the stored
- * capture — a project file is a record of what the operator saw, and a future
- * reader may want it — they are simply dropped on the way to the layer.
+ * capture - a project file is a record of what the operator saw, and a future
+ * reader may want it - they are simply dropped on the way to the layer.
  *
  * @constant {ReadonlyArray<string>}
  */
@@ -46,8 +46,8 @@ export const SCENE_TRACKING_PARAM_KEYS = Object.freeze([
  * Selection params that look like the ones above and are deliberately KEPT.
  *
  * `selectedCameraId` (cctv) activates a camera and raises its monitor plane.
- * It never writes viewer.trackedEntity or moves the camera — only the separate
- * `focusSelected` option does that — so it is composition the operator meant
+ * It never writes viewer.trackedEntity or moves the camera - only the separate
+ * `focusSelected` option does that - so it is composition the operator meant
  * to capture, not a second writer on the camera. The vessels layer exposes no
  * getParams() surface at all, so its selection cannot be captured today.
  *
@@ -64,7 +64,7 @@ export const SCENE_KEPT_SELECTION_PARAM_KEYS = Object.freeze([
 
 /**
  * Names belonging to the selection/tracking family, whatever their spelling.
- * Deliberately wider than the three params that exist today — the sweep's job
+ * Deliberately wider than the three params that exist today - the sweep's job
  * is to force a decision about a NEW name, not to recognise the current ones.
  * @constant {RegExp}
  */
@@ -94,7 +94,7 @@ export function stripSceneTrackingParams(params) {
 /**
  * Reserved layer id used ONLY to interrogate a Context mode's enable guard.
  *
- * The probe asks "would this mode refuse a layer it has no opinion about?" —
+ * The probe asks "would this mode refuse a layer it has no opinion about?" -
  * so it must name a layer that can never exist. The double-underscore form is
  * outside the kebab-case convention every real layer id follows, and
  * scenePolicy.test.mjs asserts no registered layer claims it, so the reservation
@@ -110,7 +110,7 @@ export const SCENE_EXCLUSIVITY_PROBE_LAYER_ID = '__scene-exclusivity-probe__';
  * Space Missions is the shipped case: it isolates replay data, so its guard
  * (contextLayerEnableBlockReason) refuses every enable outside its own bundle.
  * A recipe declaring only flights/satellites/earthquakes/traffic would have
- * those enables refused outright — and Orbital Watch, whose satellites the
+ * those enables refused outright - and Orbital Watch, whose satellites the
  * guard does permit, would still play over the mode's rocket-launches replay
  * it never declared. Either way the shot is not the composition it describes.
  *
@@ -137,7 +137,7 @@ export function sceneRequiresContextModeExit(contextMode) {
  * Only layers the shot explicitly declares are touched. Declared layers that
  * are no longer registered (an imported or long-stored project referencing a
  * retired layer) are skipped rather than pushed at the data manager. Camera
- * tracking params are stripped here, on the way out — see
+ * tracking params are stripped here, on the way out - see
  * SCENE_TRACKING_PARAM_KEYS.
  *
  * @param {Object.<string, { enabled: boolean, params?: Object }>} targetStates

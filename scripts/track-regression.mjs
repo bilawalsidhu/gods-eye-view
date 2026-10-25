@@ -24,27 +24,27 @@
  * synthetic planes alive (under MISSING_POLL_LIMIT=3 so they're never pruned).
  *
  * The four invariants, each one assertion block:
- *   1. NO JITTER          — the tracked plane's 3D MODEL position and its
+ *   1. NO JITTER          - the tracked plane's 3D MODEL position and its
  *                           getDetectableObjects() (HUD/detection) position use
  *                           the SAME per-frame value. We sample both over ~30
  *                           frames and assert max|visual-centre−detectable| ≈ 0.
- *   2. NO PULL-OUT        — tracking plane B while tracking A must not fly the
+ *   2. NO PULL-OUT        - tracking plane B while tracking A must not fly the
  *                           camera to a high overview (deselect/switch never
- *                           moves the camera — it stays in the follow band).
- *   3. NO CROSS-LAYER     — tracking military then commercial (and vice versa)
+ *                           moves the camera - it stays in the follow band).
+ *   3. NO CROSS-LAYER     - tracking military then commercial (and vice versa)
  *      ORPHAN               clears the FIRST layer (its getTrackedInfo()===null),
  *                           via the per-layer viewer.trackedEntityChanged listener.
- *   4. INIT CLEAN         — app loads, all 12 layers present, no console errors,
+ *   4. INIT CLEAN         - app loads, all 12 layers present, no console errors,
  *                           [Detection] Initialized + [TrackedReadout] Initialized.
  *
  * Plus two pre-ship-audit (2026-07-01) regressions appended at the end:
- *   H1. CLICK-OWN-PLANE   — the tracked standalone model exposes its pick id,
+ *   H1. CLICK-OWN-PLANE   - the tracked standalone model exposes its pick id,
  *                           and a real mouse click on the tracked plane is a
  *                           NO-OP (no deselect, no camera spike).
- *   M3. AGE-OUT RELEASE   — when the tracked plane's fixes stop arriving
+ *   M3. AGE-OUT RELEASE   - when the tracked plane's fixes stop arriving
  *                           (3 missed polls via the shim), tracking clears and
  *                           the camera is RELEASED IN PLACE: viewer.trackedEntity
- *                           undefined, NO jump (owner decision 2026-07-02 —
+ *                           undefined, NO jump (owner decision 2026-07-02 -
  *                           the old ~80 km overview flyTo is gone).
  *
  * And the landing-ghost polish (2026-07-02): a LOW+SLOW (landed) plane that
@@ -57,18 +57,18 @@
  * grounded planes render FULL-STRENGTH in the airborne tint pipeline
  * (white / amber-military; the day-1 gray mute was killed the same day) at
  * ×0.8 scale and stay detectable; the on_ground flip restyles the SAME
- * billboard in place (landing/takeoff transition — never a removal); a
+ * billboard in place (landing/takeoff transition - never a removal); a
  * grounded plane that then vanishes from the feed still fast-culls after one
  * missed poll (both layers; military keys off adsb.lol's alt_baro === "ground").
  * Ground billboards render depth-test-free (disableDepthTestDistance = ∞) so
  * the photoreal tile skin can't bury them up close; takeoff restores the test.
  *
- * And GROUND 3D (2026-07-03, owner decision LOCKED: "when I have 3D mode —
- * proximity or all — I want that respected regardless of whether a plane is
+ * And GROUND 3D (2026-07-03, owner decision LOCKED: "when I have 3D mode -
+ * proximity or all - I want that respected regardless of whether a plane is
  * on the ground or in the air. No distinction."): a synthetic on_ground plane
  * is model-ELIGIBLE and gets a model under the existing cap (both layers); its
- * model matrix height reads the ONE-SHOT cached ground snap — a stubbed
- * scene.sampleHeight (qa-cctv-drift-b9b style) + the per-layer belly offset —
+ * model matrix height reads the ONE-SHOT cached ground snap - a stubbed
+ * scene.sampleHeight (qa-cctv-drift-b9b style) + the per-layer belly offset -
  * never the buried/floating feed altitude, and never re-samples per frame;
  * the TRACKED grounded plane gets the standalone tracked model too (the
  * owner's "tracked SWA143 at 0 kts showed a 2D billboard" case).
@@ -120,7 +120,7 @@ const CHROME_EXECUTABLE_CANDIDATES = [
   // Prefer puppeteer's version-pinned Chrome-for-Testing over the system
   // Chrome: /Applications auto-updates underneath the harnesses, and its
   // software-GL behavior shifts across majors (system Chrome 150 blew the
-  // tile-gated drain budget under SwiftShader on 2026-07-30 — six
+  // tile-gated drain budget under SwiftShader on 2026-07-30 - six
   // false-negative qa-cctv-v2 runs against a healthy build). A deterministic
   // pinned browser beats the newest one for regression harnesses.
   await puppeteer.executablePath().catch(() => null),
@@ -147,11 +147,11 @@ const results = [];
 function record(name, ok, detail) {
   results.push({ name, ok, detail });
   const tag = ok ? '\x1b[32mPASS\x1b[0m' : '\x1b[31mFAIL\x1b[0m';
-  console.log(`  [${tag}] ${name}${detail ? `  — ${detail}` : ''}`);
+  console.log(`  [${tag}] ${name}${detail ? `  - ${detail}` : ''}`);
 }
 function skip(name, why) {
   results.push({ name, ok: null, detail: why });
-  console.log(`  [\x1b[33mSKIP\x1b[0m] ${name}  — ${why}`);
+  console.log(`  [\x1b[33mSKIP\x1b[0m] ${name}  - ${why}`);
 }
 
 // ---------------------------------------------------------------------------
@@ -250,7 +250,7 @@ async function main() {
       '--disable-renderer-backgrounding',
       // macOS stops frame production for fully-occluded windows, which kills
       // rAF (and thus every rAF-awaiting evaluation) in headful runs whose
-      // window opens behind others — the qa-focus-evidence bringToFront
+      // window opens behind others - the qa-focus-evidence bringToFront
       // lesson, enforced belt-and-braces here.
       '--disable-backgrounding-occluded-windows',
       '--window-size=1280,800',
@@ -433,7 +433,7 @@ async function main() {
             }));
           }
           // EVERY core group serves the same catalog. Dedupe keeps the first
-          // (stations) tag, so the catalog is unchanged — but no group is
+          // (stations) tag, so the catalog is unchanged - but no group is
           // EMPTY, and an empty group counts as failed, which would make an
           // `accepted` refresh (and therefore any release) unreachable here.
           return Promise.resolve(new Response(window.__SYNTH.tle, {
@@ -491,9 +491,9 @@ async function main() {
     const evalPage = (fn, ...args) => page.evaluate(fn, ...args);
 
     // ============================================================
-    // INVARIANT 4: INIT CLEAN  (run first — establishes baseline)
+    // INVARIANT 4: INIT CLEAN  (run first - establishes baseline)
     // ============================================================
-    console.log('Invariant 4 — init clean');
+    console.log('Invariant 4 - init clean');
     // Give the app a moment to finish first-frame init (detection/readout log).
     await page.waitForFunction(
       () => {
@@ -603,7 +603,7 @@ async function main() {
       // Since 2026-08-22 the toggle DEFAULTS ON, so the former "click it if it
       // is dark" arming step would have become a no-op and this check would
       // have quietly degraded into a restatement of the default. Drive a full
-      // round trip instead — OFF, then back ON — so both directions are proven
+      // round trip instead - OFF, then back ON - so both directions are proven
       // through the real control no matter which way the default points.
       const fl = dm.layers.get('flights').module;
       const mil = dm.layers.get('military').module;
@@ -649,15 +649,15 @@ async function main() {
 
     if (!injectionWorked) {
       skip('jitter / pull-out / orphan (need synthetic planes)',
-        'synthetic injection produced 0 planes — see inject failures above');
+        'synthetic injection produced 0 planes - see inject failures above');
       finishAndExit();
       return;
     }
 
     // ============================================================
-    // SHARE LINK V2 — real reload restores the same logical plane.
+    // SHARE LINK V2 - real reload restores the same logical plane.
     // ============================================================
-    console.log('\nShare Link v2 — tracked aircraft survives a full reload');
+    console.log('\nShare Link v2 - tracked aircraft survives a full reload');
     const shareTracked = await evalPage(() => (
       window.__godsEyeView.dataManager.layers
         .get('flights').module.trackById('aaa001', { origin: 'user' })
@@ -665,7 +665,7 @@ async function main() {
     await page.waitForFunction(
       () => {
         const flights = window.__godsEyeView?.dataManager?.layers?.get('flights')?.module;
-        // `lo=` alone is NOT discriminating — the 3D-models option already
+        // `lo=` alone is NOT discriminating - the 3D-models option already
         // put an `lo` field in the hash before any aircraft was selected.
         // Wait for the tracking assignment itself.
         return location.hash.includes('v=2')
@@ -836,7 +836,7 @@ async function main() {
     });
 
     // ============================================================
-    // VOICE ENTITY CONTEXT — a click-selected contact IS "the selected
+    // VOICE ENTITY CONTEXT - a click-selected contact IS "the selected
     // entity". The aircraft layers publish selection on their own awareness
     // lane (the readout card + Contacts subject), and for the whole life of
     // the voice tools they never wrote the SHARED context slot that
@@ -845,7 +845,7 @@ async function main() {
     // answered "there isn't a plane currently selected" (owner field session,
     // 2026-08-21). Drives the real tool runner; costs no model turns.
     // ============================================================
-    console.log('\nVoice entity context — a click-selected contact answers scope:selected');
+    console.log('\nVoice entity context - a click-selected contact answers scope:selected');
     const runnerReady = await evalPage(() => typeof window.__gevVoiceCommands?.runner === 'function');
     if (!runnerReady) {
       skip('voice-context: click-selected aircraft answers scope:selected',
@@ -926,7 +926,7 @@ async function main() {
         JSON.stringify(militarySelected),
       );
 
-      // Deselecting must give the slot back — a subject that outlives its
+      // Deselecting must give the slot back - a subject that outlives its
       // selection is the same bug pointed the other way.
       const deselected = await evalPage(async () => {
         const manager = window.__godsEyeView.dataManager;
@@ -941,10 +941,10 @@ async function main() {
       );
 
       // ============================================================
-      // SATELLITES — same PRD gap as the aircraft layers: a tracked satellite
+      // SATELLITES - same PRD gap as the aircraft layers: a tracked satellite
       // published only its awareness event, so voice could not see it either.
       // ============================================================
-      console.log('\nVoice entity context — a tracked satellite is a selected subject');
+      console.log('\nVoice entity context - a tracked satellite is a selected subject');
       const satelliteContext = await evalPage(async () => {
         const manager = window.__godsEyeView.dataManager;
         await manager.setEnabled('satellites', true);
@@ -966,7 +966,7 @@ async function main() {
           .map((record) => record.id);
         // CATALOG REBUILD. The tracked satellite's catalog entry is replaced
         // wholesale by a TLE refresh, so a surviving subject must re-resolve
-        // against the new satrec — and a subject that did NOT survive must
+        // against the new satrec - and a subject that did NOT survive must
         // release the slot rather than linger frozen at its last position.
         satellites.trackById(25544, { origin: 'user' });
         await new Promise((resolve) => setTimeout(resolve, 500));
@@ -975,7 +975,7 @@ async function main() {
         const afterRebuild = await window.__gevVoiceCommands.runner('get_entity_context', { scope: 'selected' });
 
         // RECLASSIFICATION: the subject vanishes from the catalog while a
-        // DIFFERENT group — one it could have been moved into — failed to
+        // DIFFERENT group - one it could have been moved into - failed to
         // load. Its own group loaded fine, so a group-scoped proof would call
         // this a disappearance. It is not: absence is only proven when every
         // potential carrier loaded.
@@ -992,7 +992,7 @@ async function main() {
         await satellites.update(window.__godsEyeView.viewer);
         await new Promise((resolve) => setTimeout(resolve, 800));
 
-        // Now the subject vanishes from a COMPLETE catalog — proven absence.
+        // Now the subject vanishes from a COMPLETE catalog - proven absence.
         window.__SYNTH.tle = fullTle.split('\n').slice(3).join('\n');
         await satellites.update(window.__godsEyeView.viewer);
         await new Promise((resolve) => setTimeout(resolve, 800));
@@ -1002,7 +1002,7 @@ async function main() {
         // DENSE CARRIER FAILURE. Track a dense-shell satellite, then let the
         // dense load fail on the next rebuild. Settling that failure reverts
         // the catalog mode to 'core', so anything reading the mode AFTER the
-        // await no longer sees that dense was ever a potential carrier — and
+        // await no longer sees that dense was ever a potential carrier - and
         // would delete a subject the dense catalog might have carried.
         satellites.setParams({ catalog: 'dense' });
         for (let i = 0; i < 80; i += 1) {
@@ -1110,10 +1110,10 @@ async function main() {
       // PANEL === SPOKEN. Not the shared helper as a stand-in: the REAL
       // Contacts pipeline (awareness selects a subject, evaluateSubject fills
       // the snapshot, the panel renders it) against the REAL voice tool. A
-      // divergence introduced at the call site itself — not in the helper —
+      // divergence introduced at the call site itself - not in the helper -
       // has to go red here.
       // ============================================================
-      console.log('\nPanel === spoken — one number, through both real call sites');
+      console.log('\nPanel === spoken - one number, through both real call sites');
       const panelVsSpoken = await evalPage(async () => {
         const manager = window.__godsEyeView.dataManager;
         if (!manager.isEnabled('flights')) await manager.setEnabled('flights', true);
@@ -1173,18 +1173,18 @@ async function main() {
       });
 
       // ============================================================
-      // CONTEXT VOCABULARY — state output must speak the words the tools
+      // CONTEXT VOCABULARY - state output must speak the words the tools
       // accept. The Contacts mode's internal id is 'flights' while
       // `set_context_mode` takes 'contacts', and state surfaces reported the
       // internal id: the model read `mode:'flights'`, concluded Contacts was
       // off, and refused to answer from the Contacts window counts carried in
       // the same payload (owner field session, 2026-08-21).
       // ============================================================
-      console.log('\nContext vocabulary — state output speaks the tools\' own words');
+      console.log('\nContext vocabulary - state output speaks the tools\' own words');
       const manualContacts = await evalPage(async () => {
         const button = document.getElementById('global-context-flights-btn');
         if (!button) return { error: 'Contacts control not found' };
-        // The MANUAL path is the one that broke silently — voice never set it.
+        // The MANUAL path is the one that broke silently - voice never set it.
         button.click();
         for (let i = 0; i < 60; i += 1) {
           if (window.__godsEyeView.styleManager.getContextModeState?.().mode) break;
@@ -1248,16 +1248,16 @@ async function main() {
       );
 
       // ============================================================
-      // ANALYST -> TRACK HANDOFF — the tool instructions tell the model to
+      // ANALYST -> TRACK HANDOFF - the tool instructions tell the model to
       // look a contact up with analyst_query and hand that identity to
       // track_entity. The analyst's `id` is a DISPLAY label (callsign, else
       // registration, else hex) and the lookup matched callsigns and hex
       // only, so a callsign-less contact came back as its tail number and
-      // "Nothing matched" — the model then burned the turn on retries (owner
+      // "Nothing matched" - the model then burned the turn on retries (owner
       // field session 2026-08-21, 23:48: three failed track_entity calls
       // before a fallback stuck).
       // ============================================================
-      console.log('\nAnalyst handoff — a looked-up contact can actually be tracked');
+      console.log('\nAnalyst handoff - a looked-up contact can actually be tracked');
       const handoff = await evalPage(async () => {
         const manager = window.__godsEyeView.dataManager;
         // This group owns its precondition: earlier groups toggle Contacts,
@@ -1330,7 +1330,7 @@ async function main() {
 
     // NOTE: we do NOT manually reposition the camera. Tracking sets
     // viewer.trackedEntity + a calibrated viewFrom, so the follow camera lands
-    // in the few-km band (altitude*1.1+2500, clamped 3–30 km) — far below the
+    // in the few-km band (altitude*1.1+2500, clamped 3–30 km) - far below the
     // MODEL_ALT_CEIL_M = 800 km ceiling, so _modelRegimeActive() is true and the
     // standalone tracked model renders. That's the exact path the invariants
     // protect, so we exercise it rather than a synthetic setView.
@@ -1339,7 +1339,7 @@ async function main() {
     // INVARIANT 1: NO JITTER
     //   model visual centre === getDetectableObjects() position, per frame.
     // ============================================================
-    console.log('\nInvariant 1 — no jitter (model visual centre === detectable pos)');
+    console.log('\nInvariant 1 - no jitter (model visual centre === detectable pos)');
 
     // Install a scene-graph model finder in the page FIRST (used by the wait
     // below). The tracked model is a standalone Cesium.Model added to a
@@ -1390,7 +1390,7 @@ async function main() {
         }
         // The tracked model rides AT the display position. While the tracked
         // GLB is still loading, the nearest ready model is some OTHER plane's
-        // fleet model km away — returning it made the model-up waits resolve
+        // fleet model km away - returning it made the model-up waits resolve
         // spuriously and H1 read a neighbor's pick id. Anything beyond 1 km
         // is "tracked model not up yet", not a match.
         return bestD < 1000 * 1000 ? best : null;
@@ -1419,7 +1419,7 @@ async function main() {
 
     let jitterResult;
     if (!modelUp) {
-      // Model didn't come up — still test the underlying invariant: the tracked
+      // Model didn't come up - still test the underlying invariant: the tracked
       // entity's exposed display position (what the model uses) must equal the
       // getDetectableObjects() position. This is the exact shared-source contract.
       jitterResult = await sampleFrames(page, 30, (icao) => {
@@ -1489,7 +1489,7 @@ async function main() {
     // INVARIANT 2: NO PULL-OUT on a track switch
     //   tracking B while tracking A must not fly to ~80 km overview.
     // ============================================================
-    console.log('\nInvariant 2 — no pull-out on track switch');
+    console.log('\nInvariant 2 - no pull-out on track switch');
     // We're currently tracking SYN001. Record camera height, then switch to
     // SYN002 and watch the camera height across frames. A pull-out = the
     // deselect flyTo to an ~80 km overview; it should be skipped on a switch.
@@ -1511,7 +1511,7 @@ async function main() {
       const heights = [];
       const onTick = () => { heights.push(v.camera.positionCartographic.height); };
       const remove = v.scene.postRender.addEventListener(onTick);
-      fl.trackById(icao); // the SWITCH — must NOT trigger the deselect pull-out flyTo
+      fl.trackById(icao); // the SWITCH - must NOT trigger the deselect pull-out flyTo
       await new Promise((res) => {
         let n = 0;
         let settled = false;
@@ -1539,7 +1539,7 @@ async function main() {
     const maxHeight = Math.max(heightBefore, ...switchSamples);
     // The follow camera for these planes sits a few km up (altitude*1.1+2500,
     // clamped 3-30 km). The "pull-out" bug flew to ~80 km. Fail if the camera
-    // ever climbs past 50 km — comfortably above the legit follow band, well
+    // ever climbs past 50 km - comfortably above the legit follow band, well
     // below the 80 km overview.
     const PULLOUT_CEIL_M = 50000;
     record('pull-out: camera stays in follow band on switch (no ~80 km spike)',
@@ -1559,7 +1559,7 @@ async function main() {
     //   track military, then commercial → military.getTrackedInfo()===null,
     //   and the reverse.
     // ============================================================
-    console.log('\nInvariant 3 — no cross-layer orphan');
+    console.log('\nInvariant 3 - no cross-layer orphan');
     const milHex = SYNTH.military[0].hex;
     const comIcao = SYNTH.flights[2].icao;
 
@@ -1609,11 +1609,11 @@ async function main() {
 
     // ============================================================
     // REGRESSION H1 (pre-ship audit 2026-07-01): clicking the very plane
-    // you're tracking (3D on) must be a NO-OP — no deselect, no 80 km
+    // you're tracking (3D on) must be a NO-OP - no deselect, no 80 km
     // pull-out. The tracked standalone model previously carried NO pick id,
     // so scene.pick read the click as empty space → the deselect flyTo.
     // ============================================================
-    console.log('\nRegression H1 — click on the tracked plane is a no-op');
+    console.log('\nRegression H1 - click on the tracked plane is a no-op');
     const h1Icao = SYNTH.flights[0].icao;
     await evalPage((icao) => {
       window.__godsEyeView.dataManager.layers.get('flights').module.trackById(icao);
@@ -1647,7 +1647,7 @@ async function main() {
     // (ii) Synthetic click at the tracked plane's screen position. Search a
     // small grid around the projected display position for a point where
     // scene.pick actually returns the tracked plane (its model's icao pick id
-    // or the tracked entity) so the click is deterministic — a miss would be
+    // or the tracked entity) so the click is deterministic - a miss would be
     // a LEGIT empty-space deselect, not the H1 signature.
     const h1ClickPoint = await evalPage(() => {
       const v = window.__godsEyeView.viewer;
@@ -1730,16 +1730,16 @@ async function main() {
     }
 
     // ============================================================
-    // REGRESSION M3 (rewritten 2026-07-02 — deliberate behavior change):
+    // REGRESSION M3 (rewritten 2026-07-02 - deliberate behavior change):
     // when the TRACKED plane ages out (3 missed polls), tracking must clear
-    // and the camera must be RELEASED IN PLACE — viewer.trackedEntity
+    // and the camera must be RELEASED IN PLACE - viewer.trackedEntity
     // undefined and NO jump (the old contract flew an ~80 km overview; the
     // owner field-ruled that wrong: "it randomly zooms way up and loses my
     // context"). The M3 ordering fix stays: tracking is cleared BEFORE the
     // removal loop deletes the plane's state, so we never sit mid-follow
     // with stale tracking state.
     // ============================================================
-    console.log('\nRegression M3 — tracked plane age-out releases the camera in place');
+    console.log('\nRegression M3 - tracked plane age-out releases the camera in place');
     const m3Icao = SYNTH.flights[0].icao;
     await evalPage((icao) => {
       window.__godsEyeView.dataManager.layers.get('flights').module.trackById(icao);
@@ -1753,7 +1753,7 @@ async function main() {
       // Simulate the age-out via the shim: the plane stops arriving.
       window.__SYNTH.flights = window.__SYNTH.flights.filter((f) => f.icao !== icao);
       // MISSING_POLL_LIMIT = 3 consecutive absent polls → removal + clear.
-      // Capture the camera pose right BEFORE the removing poll — the follow
+      // Capture the camera pose right BEFORE the removing poll - the follow
       // camera drifts with the coasting plane until the instant of release,
       // so this is the "where the user was looking" reference.
       await fl.update(v);
@@ -1781,7 +1781,7 @@ async function main() {
       `viewerTracked=${m3.viewerStillTracking}`);
 
     // The camera must NOT move after the release: no overview flyTo, no
-    // snap — it stays where the follow left it. Sample heights across frames
+    // snap - it stays where the follow left it. Sample heights across frames
     // (any transient flyTo would show up here), then read the settled pose.
     const m3Heights = await page.evaluate(async (frames) => {
       const v = window.__godsEyeView.viewer;
@@ -1829,21 +1829,21 @@ async function main() {
     const m3HorizDeltaM = haversineMeters(
       m3.atAgeOut.latDeg, m3.atAgeOut.lonDeg, m3Final.latDeg, m3Final.lonDeg,
     );
-    record('M3: camera stayed in place after age-out — altitude Δ < 2 km',
+    record('M3: camera stayed in place after age-out - altitude Δ < 2 km',
       m3AltDeltaM < M3_STAY_TOL_M,
       `Δalt=${(m3AltDeltaM / 1000).toFixed(2)} km (tol ${M3_STAY_TOL_M / 1000} km; ageOut=${(m3.atAgeOut.height / 1000).toFixed(1)} km, final=${(m3Final.height / 1000).toFixed(1)} km)`);
-    record('M3: camera stayed in place after age-out — horizontal Δ < 2 km',
+    record('M3: camera stayed in place after age-out - horizontal Δ < 2 km',
       m3HorizDeltaM < M3_STAY_TOL_M,
       `Δhoriz=${(m3HorizDeltaM / 1000).toFixed(2)} km (tol ${M3_STAY_TOL_M / 1000} km)`);
 
     // ============================================================
     // CHANGE 2a (2026-07-02): landing-ghost fast cull. A plane whose last
-    // fix is LOW + SLOW (landed — the feed's ground flag lags the actual
+    // fix is LOW + SLOW (landed - the feed's ground flag lags the actual
     // landing) is removed after ONE missed poll, not the 3-poll grace; a
     // cruise plane that misses a poll keeps the full grace (it absorbs real
-    // feed gaps — owner-confirmed important). Both layers.
+    // feed gaps - owner-confirmed important). Both layers.
     // ============================================================
-    console.log('\nChange 2a — landing-ghost fast cull (1 missed poll; cruise grace intact)');
+    console.log('\nChange 2a - landing-ghost fast cull (1 missed poll; cruise grace intact)');
     const fastCull = await evalPage(async () => {
       const v = window.__godsEyeView.viewer;
       const dm = window.__godsEyeView.dataManager;
@@ -1851,7 +1851,7 @@ async function main() {
       const mil = dm.layers.get('military').module;
       const has = (mod, id) => mod.getAllPositions(2000).some((p) => p.id === id);
 
-      // Landed commercial plane: 120 m baro, 18 m/s (~35 kt) — under both
+      // Landed commercial plane: 120 m baro, 18 m/s (~35 kt) - under both
       // fast-cull gates (LANDED_ALT_MAX_M=150 m, LANDED_SPEED_MAX_MPS=23).
       window.__SYNTH.flights.push({ icao: 'aaa044', callsign: 'SYN044', lon: -97.7420, lat: 30.2660, alt: 120, vel: 18, track: 180 });
       // Landed military plane: 300 ft (~91 m) baro, 20 kt (~10 m/s).
@@ -1893,10 +1893,10 @@ async function main() {
     // ============================================================
     // CHANGE 2b (2026-07-02): honest readout. While the TRACKED plane is in
     // its missed-poll grace (rendered but absent from the latest poll), the
-    // tracked label/readout must carry the "· STALE" cue — and drop it the
+    // tracked label/readout must carry the "· STALE" cue - and drop it the
     // moment the plane reappears in the feed.
     // ============================================================
-    console.log('\nChange 2b — tracked readout STALE cue during missed-poll grace');
+    console.log('\nChange 2b - tracked readout STALE cue during missed-poll grace');
     const staleCheck = await evalPage(async () => {
       const v = window.__godsEyeView.viewer;
       const fl = window.__godsEyeView.dataManager.layers.get('flights').module;
@@ -1913,7 +1913,7 @@ async function main() {
         const t = ent.label.text;
         return typeof t === 'string' ? t : (t.getValue ? String(t.getValue(v.clock.currentTime)) : null);
       };
-      // Track a cruise plane that IS in the feed (aaa003: 8700 m, 250 m/s —
+      // Track a cruise plane that IS in the feed (aaa003: 8700 m, 250 m/s -
       // normal grace, so one missed poll leaves it rendered-but-stale).
       fl.trackById('aaa003');
       await fl.update(v); // plane present → fresh label
@@ -1939,7 +1939,7 @@ async function main() {
     // ============================================================
     // CHANGE 3 (2026-07-03): ground traffic is a FEATURE. Present-but-
     // grounded planes render FULL-STRENGTH in the airborne tint pipeline
-    // (white / amber-military — owner verdict, same-day reversal of the
+    // (white / amber-military - owner verdict, same-day reversal of the
     // day-1 gray 50%-alpha muted style: "just leave them as white … in NYC
     // I can barely see them") at ×0.8 scale; "on the ground" reads from
     // scale + no trail, never from a fade, so the 45%-alpha stale fade
@@ -1948,7 +1948,7 @@ async function main() {
     // that then VANISHES from the feed still fast-culls after ONE missed
     // poll. Military mirror keys off adsb.lol's alt_baro === "ground".
     // ============================================================
-    console.log('\nChange 3 — ground traffic: full-alpha style, in-place transitions, fast cull');
+    console.log('\nChange 3 - ground traffic: full-alpha style, in-place transitions, fast cull');
     const ground = await evalPage(async () => {
       const v = window.__godsEyeView.viewer;
       const dm = window.__godsEyeView.dataManager;
@@ -1975,7 +1975,7 @@ async function main() {
         const c = bb.color;
         return {
           show: bb.show, scale: bb.scale, alpha: c.alpha, red: c.red, green: c.green, blue: c.blue,
-          // Infinity doesn't survive puppeteer's JSON transport — encode it.
+          // Infinity doesn't survive puppeteer's JSON transport - encode it.
           ddtd: bb.disableDepthTestDistance === Number.POSITIVE_INFINITY ? 'inf' : bb.disableDepthTestDistance,
         };
       };
@@ -1989,13 +1989,13 @@ async function main() {
       const milGroundSnap = snap('bbb166');
       const detectable = fl.getDetectableObjects({ maxCount: 1000 }).some((d) => d.id === 'GND066');
 
-      // 2. Takeoff: the flag flips false — same billboard, airborne style.
+      // 2. Takeoff: the flag flips false - same billboard, airborne style.
       const gnd = window.__SYNTH.flights.find((f) => f.icao === 'aaa066');
       gnd.onGround = false; gnd.alt = 900; gnd.vel = 75;
       await fl.update(v);
       const airSnap = snap('aaa066');
 
-      // 3. Landing: the flag flips back true — ground scale again, still in place.
+      // 3. Landing: the flag flips back true - ground scale again, still in place.
       gnd.onGround = true; gnd.alt = 150; gnd.vel = 9;
       await fl.update(v);
       const groundAgainSnap = snap('aaa066');
@@ -2018,8 +2018,8 @@ async function main() {
       };
     });
     const fmtSnap = (s) => (s ? `show=${s.show} scale=${s.scale.toFixed(3)} rgba=(${s.red.toFixed(2)},${s.green.toFixed(2)},${s.blue.toFixed(2)},${s.alpha.toFixed(2)})` : 'missing');
-    // Ground style (owner verdict 2026-07-03): FULL-ALPHA airborne tint —
-    // white in the flights layer, amber (#FFB800) in the military layer —
+    // Ground style (owner verdict 2026-07-03): FULL-ALPHA airborne tint -
+    // white in the flights layer, amber (#FFB800) in the military layer -
     // never the 45%-alpha stale fade, never the retired gray mute. The
     // ground cue is the ×0.8 scale (klass default ⇒ base 1.0).
     const isFullWhite = (s) => !!s && s.show && s.alpha === 1 && s.red === 1 && s.green === 1 && s.blue === 1;
@@ -2027,7 +2027,7 @@ async function main() {
     record('ground: on-ground plane renders full-alpha white at ground scale + detectable (flights)',
       isFullWhite(ground.groundSnap) && Math.abs(ground.groundSnap.scale - 0.8) < 1e-6 && ground.detectable,
       `${fmtSnap(ground.groundSnap)} detectable=${ground.detectable}`);
-    record('ground: military mirror — alt_baro "ground" renders full-alpha amber',
+    record('ground: military mirror - alt_baro "ground" renders full-alpha amber',
       isFullAmber(ground.milGroundSnap),
       fmtSnap(ground.milGroundSnap));
     record('ground: takeoff flip restyles in place (white, full alpha, full scale)',
@@ -2040,12 +2040,12 @@ async function main() {
       ground.droppedGone && !ground.milDroppedGone,
       `flights(landed ghost) gone=${ground.droppedGone} military(born parked) gone=${ground.milDroppedGone} (want true/false)`);
     // Fix 2 (2026-07-03 field test): ground planes VANISHED when zooming into
-    // airports — grounded altitudes sit at/below the photoreal tile skin, so the
+    // airports - grounded altitudes sit at/below the photoreal tile skin, so the
     // depth test buried the billboard up close (log-depth imprecision let it win
     // from orbit). RE-PINNED for round 5 (owner directive 2026-07-06: "I just
     // want the planes and their lines to ALWAYS be visible... evenly
-    // applied"): EVERY billboard — grounded, airborne, before and after a
-    // ground flip — renders with disableDepthTestDistance = +Infinity. The
+    // applied"): EVERY billboard - grounded, airborne, before and after a
+    // ground flip - renders with disableDepthTestDistance = +Infinity. The
     // old grounded-only rule kept leaving classes of contacts buried (Austin
     // QNH-below-field traffic not yet flagged on_ground). Far-side contacts
     // are removed by the fleet tick's horizon occluder, which never depended
@@ -2057,61 +2057,61 @@ async function main() {
       `flights=${ground.groundSnap?.ddtd} mil=${ground.milGroundSnap?.ddtd} takeoff=${ground.airSnap?.ddtd} landing=${ground.groundAgainSnap?.ddtd}`);
 
     // ============================================================
-    // GROUND 3D (2026-07-03, owner decision LOCKED): "when I have 3D mode —
-    // proximity or all — I want that respected regardless of whether a plane
+    // GROUND 3D (2026-07-03, owner decision LOCKED): "when I have 3D mode -
+    // proximity or all - I want that respected regardless of whether a plane
     // is on the ground or in the air. No distinction."
     //  (a) a synthetic on_ground plane is model-ELIGIBLE (not skipped),
     //  (b) it gets a model under the existing cap (both layers),
     //  (c) the model matrix height = stubbed scene.sampleHeight + the layer's
-    //      belly offset — the one-shot cached ground snap — NOT the buried/
+    //      belly offset - the one-shot cached ground snap - NOT the buried/
     //      floating feed altitude (flights alt 150 m / military "ground" → 0 m),
     //  (d) the TRACKED grounded plane gets the standalone tracked model,
     //  (e) the snap is ONE-SHOT cached: sample count stays flat across frames.
-    // Height probe: |modelMatrix translation| − |billboard position| — at one
+    // Height probe: |modelMatrix translation| − |billboard position| - at one
     // lat/lon a geodetic height change moves the point along the ellipsoid
     // normal, whose angle to the radial at Austin's latitude costs < 0.001%.
     //
-    // RETARGETED 2026-08-03 (weld). (c) still pins exactly what it always did —
+    // RETARGETED 2026-08-03 (weld). (c) still pins exactly what it always did -
     // the MODEL rides the sampled skin while the BILLBOARD stays at the reported
-    // altitude — and that split is by design and unchanged. What changed is the
+    // altitude - and that split is by design and unchanged. What changed is the
     // CONSUMER anchor: detection brackets/labels and the tracked card used to
     // follow the billboard, so on a grounded plane they sat ~100 m below the
     // aircraft you can see and rose only as the coarse ground-floor cell warmed
     // ("the buoy"), sometimes never converging. They now follow whatever owns the
     // visual. So do NOT read the non-zero Δ below as "the anchor is the
-    // billboard" — it is the model-vs-billboard split, and the weld group that
+    // billboard" - it is the model-vs-billboard split, and the weld group that
     // follows pins the anchor itself.
     // ============================================================
-    console.log('\nGround 3D — grounded planes are model-eligible + snapped to the sampled skin');
+    console.log('\nGround 3D - grounded planes are model-eligible + snapped to the sampled skin');
     const GROUND3D_STUB_H = 187.5; // stubbed tile-skin height (m, ellipsoid)
     // Expected belly offsets (m): native origin-above-lowest-vertex × MODEL_SCALE
-    // × CLASS_SCALE_3D[klass] — constants match the layers' MODEL_BELLY_OFFSET_NATIVE
+    // × CLASS_SCALE_3D[klass] - constants match the layers' MODEL_BELLY_OFFSET_NATIVE
     // / MODEL_SCALE pairs, which modelScale.test.mjs locks against the GLBs.
     // Class is computed with the REAL classifier on the synthetic feed fields.
     const g3dFlKlass = classifyAircraft({ typeCode: null, category: null });
     const g3dMilKlass = classifyAircraft({ typeCode: 'C130', category: undefined });
     const g3dFlOffset = 6.719 * 1 * (CLASS_SCALE_3D[g3dFlKlass] || 1); // airplane.glb, flights
     // Hangar fleet (2026-08-16): military C130 → turboprop → the real atr72.glb,
-    // whose belly offset is the registry's measured bellyM (meters, scale 1) —
+    // whose belly offset is the registry's measured bellyM (meters, scale 1) -
     // NOT the jet.glb 5.631 × class formula. Pinned by modelScale.test.mjs.
     const g3dMilOffset = CLASS_MODEL_REAL[g3dMilKlass]?.bellyM
       ?? 5.631 * 1 * (CLASS_SCALE_3D[g3dMilKlass] || 1); // jet.glb fallback classes
     // Height-datum fix (Task 6): the flights-layer billboard for a grounded synthetic
     // (no geo_altitude in this stub feed, no warm terrain-height cache in a headless
     // run) now renders at baroM + geoidHeight(lat, lon) rather than the raw baro
-    // value verbatim — pickRenderAltitudeM's documented visual-fallback branch.
+    // value verbatim - pickRenderAltitudeM's documented visual-fallback branch.
     // Height-datum fix (Task 7): militaryFlights.js now runs the pickRenderAltitudeM
     // chain too, but DELIBERATELY passes surfaceM=null for the on-ground billboard
     // (brief item 3, "don't double-correct"): a grounded plane's MODEL already rides
     // groundSnap.js's one-shot tileset sample, and its billboard is depth-test-free,
     // so re-correcting the billboard to the ellipsoidal surface would (a) double-
-    // correct the same grounded plane and (b) — because military ground rows carry
-    // NO baro ("alt_baro":"ground") — jump the billboard 0 -> ~surface between polls,
+    // correct the same grounded plane and (b) - because military ground rows carry
+    // NO baro ("alt_baro":"ground") - jump the billboard 0 -> ~surface between polls,
     // dragging the model's ground-snap input past groundSnap's 50 m move threshold
     // and forcing a re-sample (breaks the ONE-SHOT invariant asserted below).
     // So bbb177 (on-ground, no alt_geom in the stub feed, no numeric alt_baro,
     // surfaceM forced null) makes pickRenderAltitudeM return its null sentinel and
-    // the military layer falls through to its SAME pre-Task-7 default (`altitudeM` —
+    // the military layer falls through to its SAME pre-Task-7 default (`altitudeM` -
     // 0 m for an on-ground record with no sticky prior). Expected value unchanged
     // (0 m), but now the documented Task-7 code path rather than "untouched by Task 7".
     await ensureGeoidReady();
@@ -2140,7 +2140,7 @@ async function main() {
           ? Object.getOwnPropertyDescriptor(gev.tileset, 'tilesLoaded')
           : null;
         try {
-          // 3D models on (QA param) — the owner decision under test.
+          // 3D models on (QA param) - the owner decision under test.
           flights.setParams({ models3d: true });
           military.setParams({ models3d: true });
           // Force the ground snap's tiles-ready gate open (b9b pattern): headless the
@@ -2304,7 +2304,7 @@ async function main() {
       });
 
       // (a)+(b): both grounded planes become models under the cap (the old code
-      // `continue`d past them in the eligibility pre-pass — no model would EVER
+      // `continue`d past them in the eligibility pre-pass - no model would EVER
       // appear). Wait for ready+shown so the handoff assert below is meaningful.
       const g3dModelsUp = await page.waitForFunction(() => {
         const fm = window.__g3dFindModel('aaa077');
@@ -2352,11 +2352,11 @@ async function main() {
           };
         });
         // Expected radial delta = (stub + offset) − billboard's rendered altitude.
-        // Flights billboard altitude is baroM + geoidN (height-datum fix, Task 6 —
+        // Flights billboard altitude is baroM + geoidN (height-datum fix, Task 6 -
         // no geo_altitude/warm terrain-cache in this synthetic run, so the
         // baro-fallback branch of pickRenderAltitudeM applies). Military (Task 7)
         // runs pickRenderAltitudeM too but forces surfaceM=null for on-ground
-        // billboards (don't double-correct the grounded model's tileset snap — see
+        // billboards (don't double-correct the grounded model's tileset snap - see
         // the block above), and this synthetic has no alt_geom/alt_baro, so its
         // billboard stays at the pre-Task-7 "ground" -> 0 m default.
         const flWantDelta = (GROUND3D_STUB_H + g3dFlOffset) - (150 + g3dFlGeoidN);
@@ -2382,7 +2382,7 @@ async function main() {
         // ============================================================
         // WELD (2026-08-03): the detection anchor follows the RENDERED aircraft.
         // With a model owning the visual, getDetectableObjects must return the
-        // model's actual rendered translation, not the billboard position — the
+        // model's actual rendered translation, not the billboard position - the
         // two are ~100 m apart on a grounded plane. Sampled every frame for 20
         // frames because the failure this replaces was TEMPORAL: the bracket used
         // to converge slowly (or never) as the coarse floor cell warmed, so a
@@ -2553,7 +2553,7 @@ async function main() {
 
         // WELD (tracked): the tracked CARD anchors to the model you can see.
         // `gevVisualPosition` is a SEPARATE accessor from `gevDisplayPosition` on
-        // purpose — the latter carries the follow-camera anti-jitter contract and
+        // purpose - the latter carries the follow-camera anti-jitter contract and
         // must keep returning the cached dead-reckoned value the camera settled
         // on. So this asserts both halves: the visual accessor is welded to the
         // rendered model, AND the display accessor still reports the (different)
@@ -2601,8 +2601,8 @@ async function main() {
           record('weld: gevDisplayPosition still reports the dead-reckoned position (anti-jitter intact)',
             !Number.isFinite(displayDelta) || displayDelta > ACCESSOR_SEPARATION_EPSILON_M,
             Number.isFinite(displayDelta)
-              ? `displayΔ=${displayDelta.toFixed(3)} m (must stay > ${ACCESSOR_SEPARATION_EPSILON_M} m — the ground-snap split)`
-              : 'display accessor returned null this frame (DR cache invalid) — separation not evaluated');
+              ? `displayΔ=${displayDelta.toFixed(3)} m (must stay > ${ACCESSOR_SEPARATION_EPSILON_M} m - the ground-snap split)`
+              : 'display accessor returned null this frame (DR cache invalid) - separation not evaluated');
         }
       }
       }
@@ -2685,13 +2685,13 @@ async function main() {
 
     // ============================================================
     // CHANGE 4 (2026-07-03): arrival rotation freshness. Field test: "planes
-    // look weird when you first come to them — rotations are weird". Two
+    // look weird when you first come to them - rotations are weird". Two
     // repaired holes, both layers:
-    //   (a) SETTLE PASS — camera.moveEnd forces a full rotation pass on the
+    //   (a) SETTLE PASS - camera.moveEnd forces a full rotation pass on the
     //       next frame (the pose-signature gate can eat a fly-to's settle:
     //       the final easing frames land inside one 10 m/0.06° quantization
     //       bucket, leaving mid-flight noses for up to ROTATION_REFRESH_MS).
-    //   (b) REVEAL PASS — a billboard flipping INTO view while the camera
+    //   (b) REVEAL PASS - a billboard flipping INTO view while the camera
     //       idles gets its rotation refreshed the same tick (it used to
     //       reappear wearing its stale/creation-north nose for up to 1 s).
     // Staged deterministically: park the camera nadir over the synthetic
@@ -2701,14 +2701,14 @@ async function main() {
     // reveal frames within 500 ms of forcing moveEnd, before the 1 s idle
     // rotation refresh can repair an incorrect first reveal.
     // ============================================================
-    console.log('\nChange 4 — arrival rotation: moveEnd settle pass + horizon-reveal pass');
+    console.log('\nChange 4 - arrival rotation: moveEnd settle pass + horizon-reveal pass');
     const arrival = await evalPage(async () => {
       const v = window.__godsEyeView.viewer;
       const dm = window.__godsEyeView.dataManager;
       const { screenProjectedRotation } = await import(`${window.__gevQaSourceBase || '/src'}/data/iconOrientation.js`);
       const { observeArrivalRotation } = await import(`${window.__gevQaSourceBase || '/src'}/tooling/trackArrivalObservation.mjs`);
       // 3D models OFF for this phase: a model-handed-off billboard is hidden
-      // and skips rotation updates entirely — the probes need live billboards
+      // and skips rotation updates entirely - the probes need live billboards
       // (this is also the app's default state the field report came from).
       dm.layers.get('flights').module.setParams({ models3d: false });
       dm.layers.get('military').module.setParams({ models3d: false });
@@ -2748,10 +2748,10 @@ async function main() {
         v.scene.requestRender();
       });
       // Park the camera straight above the flights cluster (lift a live
-      // billboard's position radially — no Cesium global needed in-page) so
+      // billboard's position radially - no Cesium global needed in-page) so
       // every probe plane projects on-screen, then let rotations settle at
       // the new pose (the setView pose change forces a pass on the next tick).
-      // aaa002 — aaa001 was evicted for good by the M3 age-out phase.
+      // aaa002 - aaa001 was evicted for good by the M3 age-out phase.
       const anchor = findBB('aaa002');
       if (!anchor) return { error: 'anchor aaa002 missing' };
       const p = anchor.position;
@@ -2801,7 +2801,7 @@ async function main() {
     });
     const fmtArr = (a) => (!a ? `no result (${arrival?.error || 'phase error'})` : a.error ? `${a.error}; elapsed=${Number(a.elapsedMs).toFixed(1)} ms`
       : `settle-err=${(a.dMoveEnd * 180 / Math.PI).toFixed(1)}° reveal-err=${(a.dReveal * 180 / Math.PI).toFixed(1)}° shown=${a.shown} flipFrame=${a.flipFrame} settle=${a.moveEndMs.toFixed(1)} ms reveal=${a.revealMs.toFixed(1)} ms total=${a.elapsedMs.toFixed(1)} ms hasModel=${a.hasModel}`);
-    const TAMPER_DEG = 1.5 * 180 / Math.PI; // ≈ 86° — an uncorrected nose stays this far off
+    const TAMPER_DEG = 1.5 * 180 / Math.PI; // ≈ 86° - an uncorrected nose stays this far off
     record(`arrival: moveEnd + first reveal both re-aim before idle refresh, flights (tamper was ${TAMPER_DEG.toFixed(0)}°)`,
       arrivalRotationPassed(arrival.flights), fmtArr(arrival.flights));
     record(`arrival: moveEnd + first reveal both re-aim before idle refresh, military (tamper was ${TAMPER_DEG.toFixed(0)}°)`,
@@ -2812,7 +2812,7 @@ async function main() {
     // the floor of the cell it is DISPLAYED over.
     //
     // `renderAltitudeM` is picked once per poll from the floor of the FIX's
-    // coarse cell, but what renders is the dead-reckoned position — which
+    // coarse cell, but what renders is the dead-reckoned position - which
     // drifts across cells for the whole 30 s segment and, while a ground
     // contact coasts on a stale feed, for hundreds of metres more. On a graded
     // apron (KAUS spans ~119–140 m ellipsoidal) the sprite ends up under the
@@ -2824,7 +2824,7 @@ async function main() {
     // display has drifted onto. A poll-path fix would read the fix cell and
     // find nothing there, so a pass here cannot come from anywhere else.
     // ============================================================
-    console.log('\nDisplay floor — grounded contacts never render below the cell they drifted onto');
+    console.log('\nDisplay floor - grounded contacts never render below the cell they drifted onto');
     const DISPLAY_FLOOR_LIFT_M = 1.5; // GROUND_FLOOR_LIFT_M
     const DF_LAT = 30.2600, DF_LON = -97.7500;
     const DF_SEED_M = 400; // identity-probe floor for the fix cell
@@ -2839,7 +2839,7 @@ async function main() {
       //
       // `__dfSkinM` is the switch, and it is load-bearing rather than tidy. A
       // permanently-missing stub means groundSnap can never resolve, and a
-      // grounded MODEL cannot be placed without a ground height — so every
+      // grounded MODEL cannot be placed without a ground height - so every
       // grounded-model assertion in this group becomes unreachable and reports
       // as a skip about GLB backends instead of as the contract it is. null is
       // the group default (the honest "no tiles here" the earlier scenarios
@@ -2944,7 +2944,7 @@ async function main() {
       // Pass an `icao` to count ONLY that contact's model. Both the fleet loader
       // and the standalone tracked loader stamp `model.id` with the icao (the
       // pick identity click-to-track depends on), and the fleet pass never
-      // models the tracked contact — so an id match for the tracked icao is
+      // models the tracked contact - so an id match for the tracked icao is
       // unambiguously ITS model. Counting every model in the scene instead let
       // an unrelated fleet, military, or control model satisfy "the model owns
       // the visual" while the contact under test never rendered at all.
@@ -2976,7 +2976,7 @@ async function main() {
       // Ellipsoid height of the point a contact's MODEL is actually drawn at.
       // The counters above answer "is a model the visual"; this answers "and is
       // it standing on the ground", which is the half a rendering count cannot
-      // see — a model placed at the raw feed altitude renders exactly as
+      // see - a model placed at the raw feed altitude renders exactly as
       // enthusiastically as one placed on the tile skin, ~240 m underground.
       window.__dfModelHeight = (icao) => {
         let h = null;
@@ -2989,7 +2989,7 @@ async function main() {
             if (p.activeAnimations !== undefined && p.minimumPixelSize !== undefined
               && p.id === icao && p.modelMatrix) {
               const m = p.modelMatrix;
-              // Cesium's default is the IDENTITY matrix — translation (0,0,0),
+              // Cesium's default is the IDENTITY matrix - translation (0,0,0),
               // the Earth's centre, which `Cartographic.fromCartesian` refuses.
               // An admitted-but-never-placed model reads as "no height", which
               // is the truth about it.
@@ -3006,13 +3006,13 @@ async function main() {
         return h;
       };
       // Tracked-contact model regime (2026-08-20). The tracked contact's model
-      // is NOT governed by the DISPLAY-rail 3D toggle — that toggle owns the
+      // is NOT governed by the DISPLAY-rail 3D toggle - that toggle owns the
       // FLEET's draw-call budget. The tracked model is default-on and driven by
       // camera distance, entering below TRACKED_MODEL_ENTER_ALT_M and handing
       // back to the billboard only above TRACKED_MODEL_EXIT_ALT_M (the
       // anti-flap band). The CAMERA is therefore what decides whether a model
       // or a billboard is the visual for a tracked contact, which is exactly
-      // what the display floor stands aside for — so these pins drive the
+      // what the display floor stands aside for - so these pins drive the
       // camera explicitly instead of the toggle.
       //
       // Read the thresholds from the app's own policy module so a later retune
@@ -3055,7 +3055,7 @@ async function main() {
         return window.__dfCamH();
       };
       // Wait for THIS contact's tracked model to actually RENDER (loaded AND
-      // shown) — ownership means drawing, not existing, and it means the model
+      // shown) - ownership means drawing, not existing, and it means the model
       // that carries this icao's pick id, not whichever model happened to be up.
       window.__dfAwaitTrackedModel = async (icao, ms) => {
         const deadline = Date.now() + ms;
@@ -3075,7 +3075,7 @@ async function main() {
     // Identity probe. Seed a contact's FIX cell BEFORE its first fix arrives,
     // then poll: the grounded surfaceM chain reads cachedGroundFloor, so the
     // sprite renders at the seeded floor if and only if the app shares this
-    // module instance. (It must be the FIRST fix — the display runs `now − 30 s`,
+    // module instance. (It must be the FIRST fix - the display runs `now − 30 s`,
     // which for a new contact extrapolates history[0].) This exercises the POLL
     // path only; the clamp under test reads the DISPLAY cell, which stays cold
     // here, so a broken fix cannot fake a pass.
@@ -3118,7 +3118,7 @@ async function main() {
 
     if (!identityOk) {
       skip('display-floor: drift clamp (harness could not seed the shared floor cache)',
-        'the identity probe above failed — assertions would be meaningless');
+        'the identity probe above failed - assertions would be meaningless');
     } else {
       const dfDrift = await evalPage(async (lat, lon) => {
         const v = window.__godsEyeView.viewer;
@@ -3128,7 +3128,7 @@ async function main() {
         const cell = (x) => Number(x.toFixed(3));
         // Fix cell COLD from here on. The contact keeps the seeded render
         // altitude in its history, and its DISPLAYED position sits one render
-        // delay of taxi behind the fix — several cells away.
+        // delay of taxi behind the fix - several cells away.
         gf._clearMeshFloorCellsForTest();
         // Airborne control at the same coordinates, ingested while every cell
         // is cold so its own fix-time clamp finds nothing: it drifts over the
@@ -3198,7 +3198,7 @@ async function main() {
         `fix cell mesh=${dfDrift.fixCellMesh} floor=${dfDrift.fixCellFloor} vs seeded ${Number(dfDrift.seeded).toFixed(1)} m`);
 
       // Grounded-only: an AIRBORNE contact drifting over the same seeded cells
-      // keeps its reported altitude — the fix-time clamp owns airborne heights.
+      // keeps its reported altitude - the fix-time clamp owns airborne heights.
       record('display-floor: an AIRBORNE contact over the same cells is not lifted',
         dfDrift.airborneFound === true && Number.isFinite(dfDrift.airborneH)
           && dfDrift.airborneH < dfDrift.seeded - 10,
@@ -3216,7 +3216,7 @@ async function main() {
         const fl = window.__godsEyeView.dataManager.layers.get('flights').module;
         const gf = window.__dfGf;
         const cell = (x) => Number(x.toFixed(3));
-        gf._clearMeshFloorCellsForTest(); // DEM only — sampleHeight is stubbed off
+        gf._clearMeshFloorCellsForTest(); // DEM only - sampleHeight is stubbed off
         const key = (c) => `${c.lat},${c.lon}`;
         // Control: the same distance from the fix, perpendicular to the track,
         // so it is equally "near the airport" but on no contact's path.
@@ -3224,7 +3224,7 @@ async function main() {
         // ~250 m PAST the fix along the track (090). The display sits behind the
         // fix and is extrapolating toward it, so this ground is only reachable
         // if the corridor follows the direction of travel instead of stopping
-        // at the fix — the coasting-away defect, observable without waiting for
+        // at the fix - the coasting-away defect, observable without waiting for
         // a real coast.
         const aheadCell = {
           lat: cell(lat),
@@ -3232,7 +3232,7 @@ async function main() {
         };
         // Snapshot the whole neighbourhood BEFORE this contact exists. The
         // display cell's identity is only knowable after a second fix has aged
-        // the display head off the fix — and by then the corridor has already
+        // the display head off the fix - and by then the corridor has already
         // run and (correctly) warmed it, so a read at that point can never show
         // it cold. `_clearMeshFloorCellsForTest()` does not help: the DEM half
         // of `cachedGroundFloor` lives in terrainHeights' own cache. So the
@@ -3256,7 +3256,7 @@ async function main() {
         await window.__dfSettle(600);
         // AGE A SECOND FIX before sampling. With a single fix the display has
         // no path to run and renders AT the fix, which would make the whole
-        // scenario vacuous — ordinary fix-cell warming could then satisfy the
+        // scenario vacuous - ordinary fix-cell warming could then satisfy the
         // display-cell assertion below. The second fix (epochs are
         // second-resolution) gives the `now − 30 s` display head a segment to
         // extrapolate back along, putting it ~360 m of taxi behind the fix.
@@ -3318,12 +3318,12 @@ async function main() {
       record('display-floor/corridor: the display cell is not the fix cell, and started cold',
         dfCorridor.sameCellAsFix === false && dfCorridor.startCold?.display == null,
         dfCorridor.error
-          || `display ${JSON.stringify(dfCorridor.displayCell)} vs fix ${JSON.stringify(dfCorridor.fixCell)}, started at ${dfCorridor.startCold?.display} — the fix-cell collection cannot reach the display cell`);
+          || `display ${JSON.stringify(dfCorridor.displayCell)} vs fix ${JSON.stringify(dfCorridor.fixCell)}, started at ${dfCorridor.startCold?.display} - the fix-cell collection cannot reach the display cell`);
 
       record('display-floor/corridor: polling warms the ground the contact is DISPLAYED over',
         Number.isFinite(dfCorridor.displayFloor),
         dfCorridor.error
-          || `display-cell floor = ${dfCorridor.displayFloor} (nothing was pre-seeded — only corridor collection can produce this)`);
+          || `display-cell floor = ${dfCorridor.displayFloor} (nothing was pre-seeded - only corridor collection can produce this)`);
 
       // The beyond-fix probe carries its own arithmetic precondition: a cell
       // that collapsed onto the fix cell would be warmed by the fix batch and
@@ -3333,7 +3333,7 @@ async function main() {
       record('display-floor/corridor: the corridor reaches PAST the fix, along the direction of travel',
         distinctAheadCell && Number.isFinite(dfCorridor.aheadFloor),
         dfCorridor.error
-          || `cell ~250 m beyond the fix (${JSON.stringify(dfCorridor.aheadCell)}, distinct from fix ${JSON.stringify(dfCorridor.fixCell)}: ${distinctAheadCell}) floor = ${dfCorridor.aheadFloor} — a fix-aimed corridor never offers it`);
+          || `cell ~250 m beyond the fix (${JSON.stringify(dfCorridor.aheadCell)}, distinct from fix ${JSON.stringify(dfCorridor.fixCell)}: ${distinctAheadCell}) floor = ${dfCorridor.aheadFloor} - a fix-aimed corridor never offers it`);
 
       record('display-floor/corridor: an off-path control cell stays cold (not ambient warming)',
         dfCorridor.controlFloor == null,
@@ -3411,7 +3411,7 @@ async function main() {
         // groundSnap has never resolved for this contact: there is no evidence
         // of where the ground is, and a depth-tested glTF placed at the feed
         // altitude (baro 0 → ~-27 m at Austin) renders ~240 m INSIDE the mesh.
-        // The only honest answer is not to draw it — which also means the
+        // The only honest answer is not to draw it - which also means the
         // billboard is still the visual and must still be FLOORED.
         await window.__dfSettle(2500);
         const coldModels = window.__dfCountModels('aaa097');
@@ -3427,12 +3427,12 @@ async function main() {
         // resolves, the model is placed on it (plus the class belly offset) and
         // takes the visual; the display clamp must then STAND ASIDE (T7),
         // leaving the ENTITY at its raw dead-reckon while the MODEL carries the
-        // ground truth. Both halves are asserted — a rendering count alone
+        // ground truth. Both halves are asserted - a rendering count alone
         // cannot tell a model standing on the apron from one buried under it.
         //
         // The open skin is HANDED to the retained-model scenario below, which
         // closes it once its own model is up. Every other way out of this block
-        // — an early error return, a throw — has to close it here instead: a
+        // - an early error return, a throw - has to close it here instead: a
         // skin left open lets a live sample latch into the floor cells the
         // planted seeds below are about to own, and the damage would then
         // surface as a failure in an unrelated scenario.
@@ -3442,7 +3442,7 @@ async function main() {
         const modelsIn = await window.__dfAwaitTrackedModel('aaa097', 20000);
         const warmModelH = window.__dfModelHeight('aaa097');
         // Scene-wide count, used only to tell two very different states apart:
-        // NO model rendered at all (this browser has no usable GLB backend — a
+        // NO model rendered at all (this browser has no usable GLB backend - a
         // legitimate skip) versus models rendered but none of them carried
         // aaa097's pick id (a real defect, and the case the old scene-wide
         // probe reported as a pass).
@@ -3453,7 +3453,7 @@ async function main() {
 
         // --- Regime OUT: camera above the exit ceiling ----------------------
         // Climb past the anti-flap band and the model hands the visual back to
-        // the billboard — which MUST be floored, or a tracked grounded contact
+        // the billboard - which MUST be floored, or a tracked grounded contact
         // renders buried at any distance the operator pulls out to. This is the
         // coverage the toggle used to reach; the zoom regime reaches it now.
         const findOwnModel = () => {
@@ -3521,8 +3521,8 @@ async function main() {
       // (2026-08-20), the camera is what picks between the two, so this pin
       // drives both sides of the hysteresis band in one scenario.
       //
-      // The negative half is what a height read alone cannot establish —
-      // groundSnap can land at the same number as the clamp — so it is paired
+      // The negative half is what a height read alone cannot establish -
+      // groundSnap can land at the same number as the clamp - so it is paired
       // with an OWNERSHIP probe rather than inferred from height. The probe is
       // aaa097's OWN model (exact pick id) in the `ready && show` state
       // `_modelOwnsVisual` consults: rendering while zoomed in, not rendering
@@ -3547,7 +3547,7 @@ async function main() {
       // COLD ground, camera IN: the gate. A grounded model with no resolved
       // ground is not drawn at all, and the billboard it did not replace is
       // still floored. Before this pin the same run reported "1 aaa097 model(s)
-      // rendering, entity left at -26.8 m under a 215.1 m floor" as a PASS —
+      // rendering, entity left at -26.8 m under a 215.1 m floor" as a PASS -
       // the model was rendering 242 m under the apron and nothing said so.
       const dfColdFloored = Number.isFinite(dfTracked.coldEntityH)
         && Number.isFinite(dfTracked.coldFloor)
@@ -3556,10 +3556,10 @@ async function main() {
         !dfTracked.error && dfTracked.coldModelsRendering === 0
           && dfTracked.coldModelsShown === 0 && dfColdFloored,
         dfTracked.error
-          || `cold skin: ${dfTracked.coldModelsRendering} aaa097 model(s) rendering / ${dfTracked.coldModelsShown} shown (placed height ${dfTracked.coldModelH == null ? 'none — never placed' : Number(dfTracked.coldModelH).toFixed(1) + ' m'}), billboard at ${Number(dfTracked.coldEntityH).toFixed(1)} m on a ${Number(dfTracked.coldFloor).toFixed(1)} m floor`);
+          || `cold skin: ${dfTracked.coldModelsRendering} aaa097 model(s) rendering / ${dfTracked.coldModelsShown} shown (placed height ${dfTracked.coldModelH == null ? 'none - never placed' : Number(dfTracked.coldModelH).toFixed(1) + ' m'}), billboard at ${Number(dfTracked.coldEntityH).toFixed(1)} m on a ${Number(dfTracked.coldFloor).toFixed(1)} m floor`);
 
       // WARM ground, camera IN: the placement. The model is not merely visible,
-      // it is standing ON the floor — within one class belly offset above it,
+      // it is standing ON the floor - within one class belly offset above it,
       // never under it. MAX_BELLY_M clears the largest offset any class adds
       // (widebody b789, 7.81 m in CLASS_MODEL_REAL); the floor itself is the
       // hard lower bound, and a model placed at the raw feed altitude is ~240 m
@@ -3573,12 +3573,12 @@ async function main() {
         dfTracked.error
           || `warm skin: ${dfTracked.modelsRenderingIn} aaa097 model(s) rendering at ${Number(dfTracked.warmModelH).toFixed(1)} m on a ${Number(dfTracked.seeded).toFixed(1)} m floor (belly headroom ${MAX_BELLY_M} m; raw feed altitude was ${Number(dfTracked.rawH).toFixed(1)} m)`);
 
-      // Skip only when NO model rendered anywhere — that is a browser without a
+      // Skip only when NO model rendered anywhere - that is a browser without a
       // usable GLB backend. Models rendering while none of them is aaa097's is
       // a defect, and falls through to the record below so it reports RED.
       if (!dfTracked.error && !dfTracked.modelsRenderingIn && !dfTracked.anyModelsRenderingIn) {
         skip(dfRegimeName,
-          'no tracked model rendered in this browser — the zoomed-in half has no model to own the visual');
+          'no tracked model rendered in this browser - the zoomed-in half has no model to own the visual');
       } else {
         record(dfRegimeName,
           !dfTracked.error
@@ -3593,7 +3593,7 @@ async function main() {
 
       // The visual/data split is INTENTIONAL: pixels are floored, measurements
       // are not. Pinned so a later "floor everything" pass has to argue with it.
-      // Asserted in BOTH regimes — who owns the visual must never change what a
+      // Asserted in BOTH regimes - who owns the visual must never change what a
       // query, the cockpit altimeter, or a proximity count reports.
       record('display-floor/regime: data APIs report sensor truth in BOTH regimes, floored or not',
         !dfTracked.error
@@ -3601,7 +3601,7 @@ async function main() {
           && Number.isFinite(dfOut.reportedAltM) && Math.abs(dfOut.reportedAltM) < 1
           && Math.abs(dfOut.reportedAltM - dfOut.h) > 100,
         dfTracked.error
-          || `getTrackedInfo().altitudeM = ${dfIn.reportedAltM} zoomed in / ${dfOut.reportedAltM} zoomed out (feed baro), while the floored visual reads ${Number(dfOut.h).toFixed(1)} m — the split is deliberate`);
+          || `getTrackedInfo().altitudeM = ${dfIn.reportedAltM} zoomed in / ${dfOut.reportedAltM} zoomed out (feed baro), while the floored visual reads ${Number(dfOut.h).toFixed(1)} m - the split is deliberate`);
 
       // ---- F4: a RETAINED-but-hidden tracked model must not suppress the floor
       // Climbing past the tracked model's EXIT ceiling leaves `_trackedModel`
@@ -3625,7 +3625,7 @@ async function main() {
         // and there would otherwise hand an open skin to the seeded scenarios
         // that follow; closing an already-closed skin is inert.
         try {
-        // Toggle OFF throughout — the tracked model must not need it.
+        // Toggle OFF throughout - the tracked model must not need it.
         fl.setParams({ models3d: false });
         const toggleOff = fl.getParams().models3d === false;
         if (!fl.trackById('aaa097')) return { error: 'trackById(aaa097) failed' };
@@ -3661,7 +3661,7 @@ async function main() {
         const c = ent ? window.__dfCarto(ent) : null;
         // Plant a floor above wherever it now renders so "floored" is decisive.
         // Mesh cells latch ONE-SHOT, so the earlier scenario's seed would win
-        // this block silently — clear first, then plant.
+        // this block silently - clear first, then plant.
         gf._clearMeshFloorCellsForTest();
         const seeded = (c ? c.h : 0) + 35;
         if (c) {
@@ -3697,7 +3697,7 @@ async function main() {
         // Hand the camera back to the CLOSE follow range before releasing. The
         // LOADING scenario below needs BOTH an active tracked regime and a
         // fleet model for this contact, and the fleet only admits models within
-        // MODEL_PROX_ADD_M of the camera — parking just inside the enter
+        // MODEL_PROX_ADD_M of the camera - parking just inside the enter
         // ceiling satisfies the regime but sits outside that add radius, which
         // silently starved the fleet half into a skip.
         await window.__dfZoomBelow(belowH + 500);
@@ -3721,10 +3721,10 @@ async function main() {
         // The toggle contract after auto-3D (2026-08-20): the DISPLAY-rail "3D"
         // switch owns the FLEET only. The tracked contact's model is default-on
         // and decided purely by camera distance, so with the toggle OFF it is
-        // SHOWN below the enter ceiling and handed back above the exit ceiling —
+        // SHOWN below the enter ceiling and handed back above the exit ceiling -
         // and handed back by HIDING, not destroying, which is the retained state
         // the floor pin below depends on.
-        record('display-floor/regime: the 3D toggle governs the FLEET only — the tracked model follows the zoom',
+        record('display-floor/regime: the 3D toggle governs the FLEET only - the tracked model follows the zoom',
           !dfRetained.error && dfRetained.toggleOff === true
             && dfRetained.modelsRenderingBelow > 0
             && dfRetained.belowH < dfRetained.enter
@@ -3788,7 +3788,7 @@ async function main() {
         }
         // Accessors with SWALLOWING setters, not data properties: the fleet tick
         // assigns `model.show = false` for a not-ready model, and assigning to a
-        // non-writable own property throws in strict mode — which lands inside
+        // non-writable own property throws in strict mode - which lands inside
         // Cesium's render loop and stops rendering for the rest of the run.
         const priorReady = Object.getOwnPropertyDescriptor(fleetModel, 'ready');
         const priorShow = Object.getOwnPropertyDescriptor(fleetModel, 'show');
@@ -3925,7 +3925,7 @@ async function main() {
       // The gate above ("no evidence ⇒ no model") is right for a contact that
       // has NEVER resolved. Applied to one that HAS, it produces a new defect:
       // taxiing past groundSnap's 50 m resample threshold drops the cache, and
-      // if the resample misses — tiles streaming, OSM fallback — the backoff is
+      // if the resample misses - tiles streaming, OSM fallback - the backoff is
       // 2–30 s, so the aircraft pops from 3D back to 2D and back again while it
       // rolls. The last MEASUREMENT is held through that instead, bounded by how
       // far the contact can have moved from where it was taken. Same answer the
@@ -3933,7 +3933,7 @@ async function main() {
       // because a held floor only ever RAISES a sprite while a held snap IS the
       // model's placement.
       //
-      // Driven through the app's OWN handoff and its OWN groundSnap instance —
+      // Driven through the app's OWN handoff and its OWN groundSnap instance -
       // real Cesium primitive, real cache, real backoff. Only the position is
       // supplied by the harness rather than by the poll, which is exactly what a
       // taxi is; waiting out the 30 s render delay for the feed to move the
@@ -3976,7 +3976,7 @@ async function main() {
         const skin = base.h + 60;
 
         // 1. Open a deterministic skin and let the REAL fleet tick admit, place
-        //    and show the model — the arrival path this scenario then interrupts.
+        //    and show the model - the arrival path this scenario then interrupts.
         const baseSampleCount = () => window.__dfSkinSamples.filter((sample) => {
           const dLat = sample.lat - base.lat;
           const dLon = (sample.lon - base.lon) * Math.cos(base.lat * Math.PI / 180);
@@ -3997,7 +3997,7 @@ async function main() {
         const baseSampleHits = baseSampleCount() - baseSamplesBefore;
         const freshH = window.__dfModelHeight(holdIcao);
 
-        // 2. The tiles go away and the contact taxis ~96 m — past the 50 m
+        // 2. The tiles go away and the contact taxis ~96 m - past the 50 m
         //    resample threshold, inside the hold bound. Every resample from here
         //    misses, so this is the whole backoff window in one call.
         window.__dfSkinM = null;
@@ -4005,7 +4005,7 @@ async function main() {
         // What independent evidence says about each spot. A held snap now loses
         // to a MEASURED floor at the contact's current cell that disagrees with
         // it (groundSnap.HELD_SNAP_CONTRADICTION_M), so if this group has
-        // planted a floor at the taxi cell, that is what decides the outcome —
+        // planted a floor at the taxi cell, that is what decides the outcome -
         // and the numbers have to be visible or the failure is unreadable.
         const gfns = window.__dfGf;
         const baseCarto = window.__dfCarto(basePos);
@@ -4097,7 +4097,7 @@ async function main() {
 
 
     // Harness hardening (2026-07-06): the two earlier console-error checks run
-    // BEFORE the ground/ground-3d/arrival groups — an exception thrown in
+    // BEFORE the ground/ground-3d/arrival groups - an exception thrown in
     // those later scenarios (e.g. inside a fleet tick) was invisible and
     // surfaced only as inexplicable downstream assertion failures. Catch-all.
     record('no console errors across the FULL run (late groups included)', consoleErrors.length === 0,

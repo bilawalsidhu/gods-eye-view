@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * qa-label-readability.mjs — before/after evidence capture for ambient label
+ * qa-label-readability.mjs - before/after evidence capture for ambient label
  * legibility over bright ground.
  *
  * Run:
@@ -13,12 +13,12 @@
  * the code under test.
  *
  * Scenes cover the cases the readability spec calls out:
- *   bright-*  — sunlit aerial imagery, one shot per visual style
- *   dark-*    — dark water/terrain, where a plate must NOT turn into a box
- *   sats-*    — space-tier contacts over the lit Earth disc
- *   horizon-* — cockpit pose at the horizon, contacts against SKY, where the
+ *   bright-*  - sunlit aerial imagery, one shot per visual style
+ *   dark-*    - dark water/terrain, where a plate must NOT turn into a box
+ *   sats-*    - space-tier contacts over the lit Earth disc
+ *   horizon-* - cockpit pose at the horizon, contacts against SKY, where the
  *               plate must feather back toward the bare-text look
- *   band-*    — the horizon crossing the middle of the label field, so the
+ *   band-*    - the horizon crossing the middle of the label field, so the
  *               feather can be judged for smoothness rather than popping
  *
  * Each shot also reports a luminance histogram of the label band, so the
@@ -51,7 +51,7 @@ const SETTLE_MIN_MS = 4_000;
  * Scenes are (camera pose × visual style). `field` describes the synthetic
  * contact cloud dropped around the camera target.
  */
-/** Sunlit airport apron — the brightest ground the product routinely flies over. */
+/** Sunlit airport apron - the brightest ground the product routinely flies over. */
 const APRON = { lon: -97.6664, lat: 30.1975, height: 1100, heading: 0.35, pitch: -0.85 };
 
 /**
@@ -71,7 +71,7 @@ const SCENES = [
   {
     id: 'bright-normal',
     style: 'normal',
-    note: 'sunlit apron concrete — the failure case from the field report',
+    note: 'sunlit apron concrete - the failure case from the field report',
     camera: APRON,
     field: { kind: 'air', count: 30, near: 700, far: 2600 },
   },
@@ -99,7 +99,7 @@ const SCENES = [
   {
     id: 'dark-normal',
     style: 'normal',
-    note: 'dark water — a plate here must stay a whisper, not a box',
+    note: 'dark water - a plate here must stay a whisper, not a box',
     camera: { lon: 139.05, lat: 34.45, height: 9000, heading: 0.2, pitch: -0.62 },
     field: { kind: 'air', count: 30, near: 6000, far: 26_000 },
   },
@@ -113,7 +113,7 @@ const SCENES = [
   {
     id: 'horizon-normal',
     style: 'normal',
-    note: 'cockpit at the horizon — the sky backdrop the plate must feather off',
+    note: 'cockpit at the horizon - the sky backdrop the plate must feather off',
     camera: COCKPIT,
     field: SKY_FIELD,
   },
@@ -141,7 +141,7 @@ const SCENES = [
   {
     id: 'band-normal',
     style: 'normal',
-    note: 'horizon crossing the label field — feather smoothness, both sides in one frame',
+    note: 'horizon crossing the label field - feather smoothness, both sides in one frame',
     camera: COCKPIT,
     // Shallower depths keep the low contacts above ground rather than inside it,
     // so the frame carries genuine terrain-backed AND sky-backed labels.
@@ -301,7 +301,7 @@ async function main() {
           rx: camera.right.x, ry: camera.right.y, rz: camera.right.z,
         };
         // A 6x5 jittered lattice over the central 76% of the frame. Deterministic
-        // by construction — no RNG anywhere in the harness.
+        // by construction - no RNG anywhere in the harness.
         const pointAt = (ndcX, ndcY, distance) => {
           const sx = ndcX * halfWidth * distance;
           const sy = ndcY * halfHeight * distance;

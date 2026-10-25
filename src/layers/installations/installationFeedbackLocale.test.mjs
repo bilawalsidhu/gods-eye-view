@@ -74,6 +74,6 @@ test('en: installation feedback keeps its English wording', () => {
       failureReason: 'names_unavailable',
       retryAt: Date.now() + 5000,
     }).statusMessage,
-    'Mapped names temporarily unavailable — retrying in 5s',
+    'Mapped names temporarily unavailable - retrying in 5s',
   );
 });

@@ -264,7 +264,7 @@ test('the Contact panel never hides itself out from under its own NEXT button', 
   );
   // A foreign subject dashes the nose-relative arrow/bearing only.
   assert.match(body, /readout\.aircraftRelative/);
-  assert.match(body, /'BRG —'/);
+  assert.match(body, /'BRG -'/);
   // A culled subject holds last-known content behind the CONTACT LOST cue.
   assert.match(body, /readout\.contactLost/);
   assert.match(body, /CONTACT LOST/);
@@ -275,7 +275,7 @@ test('the Contact panel never hides itself out from under its own NEXT button', 
     'the CONTACT LOST branch is missing',
   );
   // PREVIOUS/NEXT must be written before any early return, so the operator can
-  // always step off the current contact — including a lost one.
+  // always step off the current contact - including a lost one.
   const navIndex = body.indexOf('this.contextNext.disabled');
   const lostIndex = body.indexOf('if (readout.contactLost)');
   assert.ok(
@@ -957,7 +957,7 @@ test('Cockpit panel corridors reserve the owned topline readouts', () => {
     signalLayout,
     /const recBounds = isRenderedOnScreen\(recReadout\)\s*\? recReadout\.getBoundingClientRect\(\)\s*: null;/,
     'HUD Off retires the Intel HUD with visibility/opacity, which leaves the REC ' +
-      'readout a rect — a rect test alone would anchor the strip to an invisible readout',
+      'readout a rect - a rect test alone would anchor the strip to an invisible readout',
   );
   assert.match(
     isRenderedOnScreen.toString(),
@@ -966,7 +966,7 @@ test('Cockpit panel corridors reserve the owned topline readouts', () => {
   assert.match(
     layout,
     /_leftStackHudTransitionHandler = \(event\) => \{[\s\S]*?_scheduleLeftPanelLayout\(\{ reconsiderAutoCollapse: true \}\);[\s\S]*?this\.scheduleCockpitLayout\(\);/,
-    'the strip must remeasure on the same HUD fade the accordion does — the REC ' +
+    'the strip must remeasure on the same HUD fade the accordion does - the REC ' +
       'readout keeps its rect until the transition ends',
   );
   assert.doesNotMatch(
@@ -1196,11 +1196,11 @@ test('cockpit summary presents the focused item as Contact', () => {
   assert.match(match[0], /aria-label="Contact navigation"/);
   assert.match(
     match[0],
-    /aria-label="Previous — prior visited contact in the 250 km window"/,
+    /aria-label="Previous - prior visited contact in the 250 km window"/,
   );
   assert.match(
     match[0],
-    /aria-label="Next — nearest unvisited contact in the 250 km window"/,
+    /aria-label="Next - nearest unvisited contact in the 250 km window"/,
   );
   assert.match(match[0], /aria-label="Collapse Contact panel"/);
   assert.doesNotMatch(match[0], />GLOBAL CONTEXT</);
@@ -1226,7 +1226,7 @@ test('Global Context names its mixed contact cycle without changing the stable m
   assert.match(match[0], /aria-label="CONTACTS"/);
   assert.match(
     match[0],
-    /title="Cycles the nearest contacts of whatever type you select — planes, vessels, installations\. Satellites track independently\."/,
+    /title="Cycles the nearest contacts of whatever type you select - planes, vessels, installations\. Satellites track independently\."/,
   );
   assert.doesNotMatch(match[0], />FLIGHTS</);
 });
@@ -1256,8 +1256,8 @@ test('Global Context uses its dedicated right rail without a duplicate Data Laye
 test('Global Context standby describes both chooser modes', () => {
   const match = html.match(/<div id="context-mode-standby"[\s\S]*?<\/div>/);
   assert.ok(match, 'Global Context standby is missing');
-  assert.match(match[0], /CONTACTS — nearest planes · vessels · sites/);
-  assert.match(match[0], /SPACE MISSIONS — launches &amp; orbital assets/);
+  assert.match(match[0], /CONTACTS - nearest planes · vessels · sites/);
+  assert.match(match[0], /SPACE MISSIONS - launches &amp; orbital assets/);
 });
 
 test('cockpit briefing cycle control keeps its state as the accessible name', () => {
@@ -1286,7 +1286,7 @@ test('cockpit briefing cycle control keeps its state as the accessible name', ()
 
 test('voice Cockpit entry honours a requested contact layer before it enters', () => {
   // Field case (mic test 01:43:23): enter with targetLayer:"military" reported
-  // ok:true on a FLIGHTS subject — the requested layer was read only by
+  // ok:true on a FLIGHTS subject - the requested layer was read only by
   // next/previous, so entry silently used whatever was already tracked.
   const branch = ui.slice(
     ui.indexOf("if (normalized === 'enter') {"),
@@ -1357,7 +1357,7 @@ test('voice Cockpit entry refuses when the entry gate is shut', () => {
 test('cockpit state cannot report entryAllowed while already active', () => {
   // Cockpit takes the entity off viewer.trackedEntity on entry and NEXT puts
   // one back, so this flipped true/false between calls while active stayed
-  // true — read by the voice model as a broken half-entered state.
+  // true - read by the voice model as a broken half-entered state.
   const state = ui.slice(
     ui.indexOf('  getCockpitState() {'),
     ui.indexOf('  _retargetCockpitEntryLayer({'),

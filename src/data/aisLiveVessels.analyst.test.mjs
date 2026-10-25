@@ -51,7 +51,7 @@ test('ais analyst record: empty strings and NaN become null, never undefined', (
 });
 
 test('ais analyst record: output is JSON-safe (no Cesium types leak from the record)', () => {
-  // Real records carry Cesium positions/billboards — the mapper must not copy them.
+  // Real records carry Cesium positions/billboards - the mapper must not copy them.
   const r = mapAnalystRecord({ ...FULL_RECORD, position: { x: 1 }, billboard: {}, normal: {} });
   assert.deepEqual(JSON.parse(JSON.stringify(r)), r);
   assert.equal('position' in r, false);

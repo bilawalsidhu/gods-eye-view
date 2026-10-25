@@ -41,7 +41,7 @@ export async function _runUserFacingContextAction(
  * auto-enable for the rest of the session. Context entry is not that, and
  * conflating them would silently disable a separate landed behavior.
  *
- * Call only for VALIDATED explicit transitions — never for programmatic or
+ * Call only for VALIDATED explicit transitions - never for programmatic or
  * restore-driven ones, which must stay eligible for the shared visual state.
  */
 export function _claimContextVisualAuthority() {
@@ -86,7 +86,7 @@ export async function setContextMode(
   if (!requestIsCurrent()) return cancellationResult();
   try {
     if (!mode || mode === 'off') {
-      // Validated explicit transition — Context owns detection, so take the
+      // Validated explicit transition - Context owns detection, so take the
       // visual lane before a delayed shared restore can reclaim it. Internal
       // Cockpit choreography opts out: it is not an operator Context request.
       if (claimVisualAuthority) this._claimContextVisualAuthority();
@@ -153,7 +153,7 @@ export async function setContextMode(
             // Named in the operator's vocabulary, not the internal id: this
             // string is read by the voice model, which takes 'contacts'.
             error: crossModeSwitchLost
-              ? `Switch to ${contextModeWord(canonical)} did not complete — Context is now off`
+              ? `Switch to ${contextModeWord(canonical)} did not complete - Context is now off`
               : 'Context mode transition did not complete',
             ...(crossModeSwitchLost ? { contextOff: true, priorMode } : {}),
           }),

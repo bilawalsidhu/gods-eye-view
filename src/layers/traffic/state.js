@@ -71,7 +71,7 @@ export function createState({ services }) {
 
   layerState._lastUpdate = null;
 
-  /** @type {number} Monotonic generation counter — incremented on each load to discard stale responses */
+  /** @type {number} Monotonic generation counter - incremented on each load to discard stale responses */
 
   layerState._loadGeneration = 0;
 
@@ -95,7 +95,7 @@ export function createState({ services }) {
 
   layerState._prevPercentageChanged = null;
 
-  /** @type {boolean} Live TomTom flow mode — true iff /api/tomtom/status reports a key */
+  /** @type {boolean} Live TomTom flow mode - true iff /api/tomtom/status reports a key */
 
   layerState._liveMode = false;
 
@@ -110,7 +110,7 @@ export function createState({ services }) {
 
   /**
    * True when `/api/tomtom/status` itself could not be reached, so the layer is
-   * simulating because it could not ask — not because the server said "no key".
+   * simulating because it could not ask - not because the server said "no key".
    * @type {boolean}
    */
 
@@ -121,7 +121,7 @@ export function createState({ services }) {
    * fetch outlive the road load that started it (cached roads settle
    * instantly), so `_fetching` alone under-reports the work in flight: the
    * loading batch would close with LOAD COMPLETE and a failure landing after
-   * it could never be announced. Counted, not boolean — recolor-after-timeout
+   * it could never be announced. Counted, not boolean - recolor-after-timeout
    * means two loads can overlap.
    * @type {number}
    */
@@ -148,9 +148,9 @@ export function createState({ services }) {
   /**
    * Jam-viz prototype mode: 'density' = deep-jam density boost + platoon queues
    * + stop-and-go creep; 'heatline' = congestion corridor polylines; 'both';
-   * 'none' = shipped main behavior. Live mode only — the keyless simulation
+   * 'none' = shipped main behavior. Live mode only - the keyless simulation
    * never has `road.flow`, so every jamViz path is unreachable there.
-   * Default 'density' — owner A/B verdict 2026-07-23 (heatline stays available
+   * Default 'density' - owner A/B verdict 2026-07-23 (heatline stays available
    * via setParams).
    * @type {'none'|'density'|'heatline'|'both'}
    */
@@ -205,7 +205,7 @@ export function createState({ services }) {
 
   /**
    * Effective per-bucket dot colors: preset override when one applies, else
-   * the shipped FLOW_BUCKET_COLORS. Rebuilt on style/param change only —
+   * the shipped FLOW_BUCKET_COLORS. Rebuilt on style/param change only -
    * spawn/recolor/restyle all read from here, no per-dot allocation.
    * @type {{free:Cesium.Color, slow:Cesium.Color, jam:Cesium.Color}}
    */

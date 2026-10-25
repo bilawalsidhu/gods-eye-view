@@ -9,7 +9,7 @@ export function createHover({ state: layerState, services, parts, source }) {
   /**
    * Throttled MOUSE_MOVE hover pass (owner round 2, item B): pointing at a
    * camera icon that has no card summons its card immediately. This is
-   * EVENT-DRIVEN picking on a user gesture, not steady-state work — the
+   * EVENT-DRIVEN picking on a user gesture, not steady-state work - the
    * ≥120 ms throttle caps it at ~8 scene.pick calls/s while the pointer is
    * actually moving (a still pointer costs nothing), so it can never approach
    * per-frame cost. Skipped while the camera is in motion, while ADJUST mode
@@ -37,14 +37,14 @@ export function createHover({ state: layerState, services, parts, source }) {
     }
     const cameraId = parts.selection.extractPickedCameraId(picked);
     if (cameraId && cameraId === layerState._hoverCardId) {
-      // Still on the hovered camera — keep the card alive.
+      // Still on the hovered camera - keep the card alive.
       cancelHoverRelease();
       return;
     }
     const record = cameraId ? layerState._recordById.get(cameraId) : null;
     // Hovering the active camera or a camera that already has a card is a
     // no-op; video feeds stay icon-only until activated (ambient tier is
-    // stills-only — same rule as the LOD selection).
+    // stills-only - same rule as the LOD selection).
     const eligible =
       !!record &&
       cameraId !== layerState._activeCameraId &&
@@ -55,7 +55,7 @@ export function createHover({ state: layerState, services, parts, source }) {
     if (eligible) {
       cancelHoverRelease();
       layerState._hoverCardId = cameraId;
-      // Immediacy: the pinned entry publishes now — chrome may paint before
+      // Immediacy: the pinned entry publishes now - chrome may paint before
       // the first frame arrives (documented exception in cctvCards.js).
       parts.cards.pushAmbientCardEntries();
       hoverFetchCardFrame(record);

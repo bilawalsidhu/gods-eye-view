@@ -720,7 +720,7 @@ html:not([lang='en']) .data-toggle-row--count-line .data-count {
   text-align: left;
 }
 
-/* The "—" placeholder gives way to a wide status chip, so the name keeps the
+/* The "-" placeholder gives way to a wide status chip, so the name keeps the
    room it needs. */
 html:not([lang='en'])
   .data-toggle-right:has(
@@ -919,7 +919,7 @@ html:not([lang='en'])
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  /* The swatch IS the datum — keep it exactly the point color, with only a
+  /* The swatch IS the datum - keep it exactly the point color, with only a
      hairline ring so a near-black class still reads on the panel glass. */
   box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.18);
   flex: none;

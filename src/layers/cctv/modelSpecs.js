@@ -9,20 +9,20 @@
  * model's horizontal FOV replaces the frustum's estimate; a PTZ/varifocal or
  * multi-sensor range is carried as capability metadata beside the estimate,
  * because the lens's current zoom is unknown.
- * Cameras without an identified model are untouched — unknown never implies
+ * Cameras without an identified model are untouched - unknown never implies
  * anything.
  *
  * Spec records are vendored verbatim from the CCTV Camera Database
- * (https://github.com/ch-bas/cctv-camera-database, CC0-1.0) — an open dataset
+ * (https://github.com/ch-bas/cctv-camera-database, CC0-1.0) - an open dataset
  * of 28,000+ camera models transcribed from manufacturer datasheets (84% with
  * FOV, as of v2.26.0). This module vendors the records that the currently integrated public
- * catalogs publish hardware for — King County WA (Cohu, Bosch AUTODOME, Axis
+ * catalogs publish hardware for - King County WA (Cohu, Bosch AUTODOME, Axis
  * Q6135-LE), plus the Bosch AUTODOME and Axis PTZ/multisensor models that
  * appear in Sarasota County FL and Sioux Falls SD open data; packs that
  * publish other hardware models can grow it, or vendor the full extract.
  *
  * Scope guardrail: records describe camera PRODUCTS (optics, resolution,
- * night vision) — never endpoints, stream paths, or access/config data.
+ * night vision) - never endpoints, stream paths, or access/config data.
  */
 
 /** Verbatim records from the dataset's model-enrichment extract (v2.26.0). */
@@ -396,7 +396,7 @@ function brandWords(record) {
 
 /**
  * One entry per record name (model + aliases). `required` is every
- * non-generic word of the name — all must appear in a query, so a generation
+ * non-generic word of the name - all must appear in a query, so a generation
  * or suffix ("Mk II", "7000i" vs "7000") is never dropped. `hasCode` marks
  * names carrying a letter+digit model code; names without one ("3950",
  * "01959-004", "AUTODOME 800 Series") match only when the brand does.
@@ -421,7 +421,7 @@ const NAME_INDEX = RECORDS.flatMap((record) => {
  * A record name matches when every non-generic word of that name appears in
  * the query (case-insensitive, punctuation-trimmed) and every other query word
  * is generic or the record's brand. That lets a VERBOSE registry string
- * resolve — "AXIS Q6155-E PTZ Dome Network Camera" finds the Q6155-E — while
+ * resolve - "AXIS Q6155-E PTZ Dome Network Camera" finds the Q6155-E - while
  * an unrelated code ("Q1615"), a generation suffix ("Mk II") or a longer part
  * number ("F4105-LRE-UNKNOWN") rejects the match. Codec, resolution and
  * product-type words never identify hardware on their own. A name with no
@@ -463,8 +463,8 @@ export function lookupModelSpec(model, manufacturer) {
 
 /**
  * Datasheet horizontal FOV as the range the hardware can cover. Only
- * segments stating a horizontal figure count — vertical and "combined"
- * panoramic figures never do — and parenthesized lens/sensor notes are
+ * segments stating a horizontal figure count - vertical and "combined"
+ * panoramic figures never do - and parenthesized lens/sensor notes are
  * ignored. A zoom ('58.3-2.4 horizontal') and a lens-option list
  * ('108.8 horizontal (2.8mm) / 93.3 horizontal (4mm)') both yield a range.
  * @param {Object} spec - A record from this module.
@@ -488,7 +488,7 @@ export function horizontalFovRangeDeg(spec) {
  * The datasheet horizontal FOV as the camera's CURRENT optical state, which
  * holds only for fixed single-lens hardware stating one figure. PTZ,
  * varifocal and multi-sensor models publish a capability range whose in-use
- * value is unknown — known hardware capability is not known pose state — so
+ * value is unknown - known hardware capability is not known pose state - so
  * they return null and keep their estimated FOV.
  * @param {Object} spec - A record from this module.
  * @returns {number|null} Fixed horizontal FOV in degrees, or null.

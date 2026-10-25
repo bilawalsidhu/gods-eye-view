@@ -25,7 +25,7 @@ the Keychain; on any platform you can pass them as env vars or use a `.env`.
 People who only want to run the app can instead install the repository directly
 through Pinokio; the terminal path above remains the contributor path.
 
-Open `http://localhost:4173`. Before sending a PR run `npm run build`, `npm test`, and `npm run test:track` (dev server must be up) — **all three must stay green.**
+Open `http://localhost:4173`. Before sending a PR run `npm run build`, `npm test`, and `npm run test:track` (dev server must be up) - **all three must stay green.**
 
 ## Checking a built app locally
 
@@ -67,7 +67,7 @@ gate for the feature you changed.
 > checks, the formatting and package-boundary checks, the unit suite and the
 > production build, plus a Windows onboarding job. It runs neither
 > `npm run test:track` nor any `qa-*.mjs` gate except the Street Level fixture
-> gate (`street-level-browser` job) — they need a live dev server and a
+> gate (`street-level-browser` job) - they need a live dev server and a
 > browser. Include the applicable local run in your PR's validation evidence.
 
 ## Share-link layer tokens
@@ -107,11 +107,11 @@ prints anything; never fix that by renaming or deleting PR A's published token.
 
 The highest-leverage places to jump in:
 
-- **🌆 Add a CCTV source pack.** Austin is the reference camera source. Adding another city means a clean public camera catalog with coordinates, attribution, and server-registered frame URLs (the proxy only fetches registered URLs — never client-supplied ones, see [SECURITY.md](SECURITY.md)). City packs are the best first lane.
-- **🛰️ Add or improve a data layer.** Layer factories live in `src/layers/<family>/`, with source, record, controller and renderer owners implementing the layer interface (`init/enable/disable/update/destroy/getStats`, optional `getDetectableObjects`/`getStats`). Use an existing layer as a template.
-- **🎙️ Extend voice control.** Voice arguments are defined in `src/voice/actionSchemas.js`, with server-side descriptions in `server/providers/openai/tools.js` and client-side execution in `src/voice/gevActions.js`. Keep the tool surface tight and the responses honest (confirm only what actually happened).
-- **🎨 Add a visual style.** Styles are GLSL post-process shaders in `src/styles/`.
-- **🐛 Fix bugs / improve the first-run experience.** See [docs/KNOWN-ISSUES.md](docs/KNOWN-ISSUES.md).
+- ** Add a CCTV source pack.** Austin is the reference camera source. Adding another city means a clean public camera catalog with coordinates, attribution, and server-registered frame URLs (the proxy only fetches registered URLs - never client-supplied ones, see [SECURITY.md](SECURITY.md)). City packs are the best first lane.
+- ** Add or improve a data layer.** Layer factories live in `src/layers/<family>/`, with source, record, controller and renderer owners implementing the layer interface (`init/enable/disable/update/destroy/getStats`, optional `getDetectableObjects`/`getStats`). Use an existing layer as a template.
+- ** Extend voice control.** Voice arguments are defined in `src/voice/actionSchemas.js`, with server-side descriptions in `server/providers/openai/tools.js` and client-side execution in `src/voice/gevActions.js`. Keep the tool surface tight and the responses honest (confirm only what actually happened).
+- ** Add a visual style.** Styles are GLSL post-process shaders in `src/styles/`.
+- ** Fix bugs / improve the first-run experience.** See [docs/KNOWN-ISSUES.md](docs/KNOWN-ISSUES.md).
 
 ## Architecture in one minute
 
@@ -119,13 +119,13 @@ The highest-leverage places to jump in:
 - **Assembly lives in `src/app/`; standalone defaults live in `src/standalone/`.** UI controllers live in `src/ui/`, layer factories in `src/layers/`, portable sources in `src/sources/`, and application operations in `src/services/`. Existing `src/data/<layer>.js` entries retain compatibility; new code belongs with its focused owner.
 - Sources acquire records; renderers own Cesium resources. Import `gods-eye-view/layers/<family>/source` when only a source factory is needed. Common voice controls consume the session interface; protocol adapters own connection details.
 - **Secrets stay server-side.** Anything needing a private key goes through a local proxy under `server/providers/`. The browser only ever sees the Google Maps key (which you restrict) and ephemeral tokens.
-- `docs/CURRENT-STATE.md` is the authoritative runtime reference — read it first.
+- `docs/CURRENT-STATE.md` is the authoritative runtime reference - read it first.
 
 ## Coding style
 
 - ES modules, **2-space indent, single quotes, semicolons.**
 - JSDoc on exported/public functions.
-- Match the surrounding code — comment density, naming, and idiom.
+- Match the surrounding code - comment density, naming, and idiom.
 - User-visible text goes through `t()`, `tn()` or `msg()`, or a `data-i18n*` attribute in markup, and `npm run i18n` must pass. See [docs/I18N.md](docs/I18N.md).
 - Prefer small, reviewable commits. Conventional-commit-style prefixes (`feat:`, `fix:`, `perf:`, `docs:`) are appreciated but not required.
 
@@ -150,8 +150,8 @@ ownership and adoption process.
 
 1. Branch off `main`.
 2. Keep `npm run build`, `npm test`, and `npm run test:track` green and avoid new console errors, plus the [feature gate](#feature-regression-gates) for the area you touched.
-3. If you change runtime behavior, update `docs/CURRENT-STATE.md` in the same PR, and add your changelog entry as `changelog.d/<pr-number>-<slug>.md` instead of editing `CHANGELOG.md` — see [changelog.d/README.md](changelog.d/README.md). Distinct filenames don't conflict; a release assembles the directory into `CHANGELOG.md`. A documentation claim that needs a regression test should assert against `docs/CURRENT-STATE.md` or `README.md`, which a PR still edits directly.
-4. If you add or change a data source, update [DATA_SOURCES.md](DATA_SOURCES.md) with its license and attribution. **Don't add data you don't have the right to redistribute** — fetch it at runtime instead.
+3. If you change runtime behavior, update `docs/CURRENT-STATE.md` in the same PR, and add your changelog entry as `changelog.d/<pr-number>-<slug>.md` instead of editing `CHANGELOG.md` - see [changelog.d/README.md](changelog.d/README.md). Distinct filenames don't conflict; a release assembles the directory into `CHANGELOG.md`. A documentation claim that needs a regression test should assert against `docs/CURRENT-STATE.md` or `README.md`, which a PR still edits directly.
+4. If you add or change a data source, update [DATA_SOURCES.md](DATA_SOURCES.md) with its license and attribution. **Don't add data you don't have the right to redistribute** - fetch it at runtime instead.
 5. Describe what you changed and how you verified it (screenshots welcome for anything visual).
 
 ## Maintainers

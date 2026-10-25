@@ -8,6 +8,7 @@ import {
   selectEarthquakeOverlayCohort,
   mapAnalystRecord,
 } from './model.js';
+import { ICONS } from '../../icons.js';
 export * from './model.js';
 export { createUsgsEarthquakeSource } from './source.js';
 
@@ -31,7 +32,8 @@ export function createEarthquakesLayer({ source, overlayHost } = {}) {
   const layer = {
     id: 'earthquakes',
     name: 'Earthquakes (24h)',
-    icon: '🌋',
+    icon: '',
+    iconSvg: ICONS.volcano,
     source: 'USGS',
     updateInterval: 60000,
 
@@ -103,7 +105,7 @@ export function createEarthquakesLayer({ source, overlayHost } = {}) {
               id: `earthquake:${stableId}`,
               position,
               ellipse: {
-                // Static axes — see the module header. A CallbackProperty here
+                // Static axes - see the module header. A CallbackProperty here
                 // re-tessellates the clamped ground geometry every frame.
                 semiMajorAxis: baseRadius,
                 semiMinorAxis: baseRadius,
@@ -184,7 +186,7 @@ export function createEarthquakesLayer({ source, overlayHost } = {}) {
     /**
      * Snapshot the layer's in-memory earthquake records as plain JSON-safe
      * objects for the analyst query engine. On-demand only (called at most
-     * once per spoken query) — zero per-frame cost, no listeners, no caching.
+     * once per spoken query) - zero per-frame cost, no listeners, no caching.
      * Returns [] while the layer is disabled or empty.
      * @param {number} [maxCount=2000] - Maximum records to return (truncation).
      * @returns {Array<Object>} See mapAnalystRecord for the record shape.

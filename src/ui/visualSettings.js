@@ -276,12 +276,12 @@ export class VisualSettings {
     const result = applyContactsDetection({
       active: this._contextMode === 'flights',
       restore: this._contactsDetectionRestore,
-      // A map style picked DURING the session owns detection on the way out —
+      // A map style picked DURING the session owns detection on the way out -
       // its auto-enable preset is younger than the entry snapshot.
       styleOwnsDetection:
         !this._detectionUserOverridden &&
         Boolean(STYLE_PRESET_DEFAULTS[this.activeStyle]?.detection),
-      // The snapshot must cover everything activation mutates — the preset
+      // The snapshot must cover everything activation mutates - the preset
       // writes DENSITY as well as mode, so a mode-only snapshot returned
       // OFF @ 25% as OFF @ 75% and the next manual enable came back Dense.
       getState: () => {
@@ -289,7 +289,7 @@ export class VisualSettings {
         return { mode: state.detectionMode, densityPct: state.densityPct };
       },
       // Owner playtest: the force-on lands on the tactical look the military
-      // styles apply — the SAME preset object — not on whatever profile the
+      // styles apply - the SAME preset object - not on whatever profile the
       // operator last happened to leave detection at.
       applyPreset: () => this._applyDetectionPreset(MILITARY_DETECTION_PRESET),
       // The preset applier IS the state replayer: same density-then-mode order,
@@ -301,7 +301,7 @@ export class VisualSettings {
     // Serialization reads that ownership: while Contacts holds it the link
     // carries the SAVED snapshot, and once released it carries live state. The
     // share cache therefore goes stale on any ownership transition, whether or
-    // not the detection engine itself moved — and it does not always move.
+    // not the detection engine itself moved - and it does not always move.
     // Exiting while a military style owns detection returns changed:false (the
     // style's preset already matches), and returning early there left a copied
     // link claiming the operator's pre-Contacts values while the map showed
@@ -376,7 +376,7 @@ export class VisualSettings {
     this._dataManager?.setLayerParams('flights', { irBoost });
     this._dataManager?.setLayerParams('military', { irBoost });
     // Layers whose in-scene sprites restyle for a sensor preset need the
-    // EFFECTIVE style — a cockpit vision override sets no map style, so the
+    // EFFECTIVE style - a cockpit vision override sets no map style, so the
     // map's own style event never fires for it.
     window.dispatchEvent(
       new CustomEvent('gev:vision-change', {
@@ -388,7 +388,7 @@ export class VisualSettings {
     );
     // Fog blends distant geometry toward an effectively-BLACK color in this
     // app (the Cesium globe is hidden), so beyond ~100 km every 3D aircraft
-    // fogs to a black silhouette — lighting and shaders can't reach past it
+    // fogs to a black silhouette - lighting and shaders can't reach past it
     // (owner cockpit-FLIR field rounds, 2026-08-16). IR sensors see through
     // haze, so the boost styles simply turn fog off; the prior state restores
     // on exit. Transition-guarded so repeated syncs don't clobber the saved value.
@@ -893,7 +893,7 @@ export class VisualSettings {
         celestialRingEnabled: this.celestialRingEnabled,
         scopeEnabled: isScopeMaskEnabled(),
         scopeFeatherPct: Math.round(getScopeMaskFeather() * 100),
-        // null when adaptive — the share layer omits `sce` entirely in that case.
+        // null when adaptive - the share layer omits `sce` entirely in that case.
         scopeTerminusPct:
           getScopeTerminusOverride() == null
             ? null
@@ -1189,8 +1189,8 @@ export class VisualSettings {
       this._celestialBtn.disabled = !styleSupported;
       this._celestialBtn.setAttribute('aria-disabled', String(!styleSupported));
       this._celestialBtn.title = styleSupported
-        ? t('Celestial ring — reveal the full globe')
-        : t('Celestial ring — available in Normal style');
+        ? t('Celestial ring - reveal the full globe')
+        : t('Celestial ring - available in Normal style');
     }
     let cameraFocused = false;
     if (nextEnabled && focus) {
@@ -1362,8 +1362,8 @@ export class VisualSettings {
         // Superseded DURING the switch, which the pre-check above cannot catch
         // and which has already moved the globe. The controller only
         // invalidates a switch when another setStack() arrives, and a winning
-        // state that omits `mapStack` never issues one — every normalized scene
-        // shot omits it — so this stale globe would simply stand. Put back what
+        // state that omits `mapStack` never issues one - every normalized scene
+        // shot omits it - so this stale globe would simply stand. Put back what
         // the winner inherited.
         const genAfter =
           this.mapStackController?.getSwitchGeneration?.() ?? null;

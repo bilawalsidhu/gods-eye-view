@@ -15,19 +15,19 @@ const MILITARY_INSTALLATION_MAX_CACHE = 80;
 const MILITARY_INSTALLATION_MAX_RESPONSE_BYTES = 16 * 1024 * 1024;
 
 /**
- * Upstream element cap. A response that hits it exactly is SATURATED — Overpass
+ * Upstream element cap. A response that hits it exactly is SATURATED - Overpass
  * truncated, so off-viewport features from the snapped bbox may have crowded out
  * in-viewport ones. Callers re-ask for the exact viewport in that case.
  */
 const MILITARY_INSTALLATION_ELEMENT_CAP = 700;
 
 /**
- * Disk-cache TTL for mapped installations (ms) — 30 days.
+ * Disk-cache TTL for mapped installations (ms) - 30 days.
  *
  * Owner playtest 2026-08-18: "search nearby sites" was slow because every look
  * around paid a live Overpass round trip, and the 5-minute in-memory tier died
  * with the dev server. Mapped military features change on a survey timescale,
- * not a session one, so a month-old answer is still the right answer — the same
+ * not a session one, so a month-old answer is still the right answer - the same
  * reasoning the Overpass proxy already applies to admin boundaries.
  */
 const MILITARY_INSTALLATION_DISK_TTL_MS = 30 * 86_400_000;

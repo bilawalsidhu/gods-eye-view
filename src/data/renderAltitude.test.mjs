@@ -1,7 +1,7 @@
 // src/data/renderAltitude.test.mjs
 // docs/plans/2026-07-05-entity-height-datum-fix.md Task 6.
 //
-// Locks pickRenderAltitudeM's priority chain — the SINGLE source of truth for
+// Locks pickRenderAltitudeM's priority chain - the SINGLE source of truth for
 // where a flights-layer aircraft (and its dead-reckoned/tracked-camera
 // derivatives) renders on the ellipsoidal globe:
 //
@@ -12,7 +12,7 @@
 //
 // baro+N is a visual FALLBACK, not geometric truth (OpenSky geo_altitude is
 // the real WGS84 ellipsoidal value; barometric altitude is MSL-referenced
-// and additionally subject to non-standard-pressure QNH error) — no test
+// and additionally subject to non-standard-pressure QNH error) - no test
 // here asserts baro+N is exact, only that it matches the documented formula.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -129,14 +129,14 @@ test('onGround with surfaceM = 0 (sea-level coast) is a legitimate finite value,
   assert.equal(got, 0);
 });
 
-// reuseGroundedSurfaceM — taxiing surface reuse (adversarial-review [medium]).
+// reuseGroundedSurfaceM - taxiing surface reuse (adversarial-review [medium]).
 test('reuseGroundedSurfaceM: a warm current fix is used directly', () => {
   assert.equal(reuseGroundedSurfaceM(1620.4, 1619.8), 1620.4);
 });
 
 test('reuseGroundedSurfaceM: current miss falls back to the previous fix ground', () => {
   // The taxiing case: current-fix cache miss (null), but last poll's fix was
-  // warmed — reuse its ~flat-airport ground instead of the 0 m sentinel.
+  // warmed - reuse its ~flat-airport ground instead of the 0 m sentinel.
   assert.equal(reuseGroundedSurfaceM(null, 1619.8), 1619.8);
 });
 
@@ -162,7 +162,7 @@ test('taxiing aircraft over nonzero terrain resolves every poll after the first 
   let prevFixLat = null;
   const rendered = [];
   for (let poll = 0; poll < 4; poll++) {
-    const lat = 39.85000 + poll * 0.001;  // ~111 m/poll — a fresh key every poll
+    const lat = 39.85000 + poll * 0.001;  // ~111 m/poll - a fresh key every poll
     const cachedCurrent = warm.has(key(lat)) ? warm.get(key(lat)) : null;
     const cachedPrev = prevFixLat != null && warm.has(key(prevFixLat)) ? warm.get(key(prevFixLat)) : null;
     const surfaceM = reuseGroundedSurfaceM(cachedCurrent, cachedPrev);
@@ -182,7 +182,7 @@ test('taxiing aircraft over nonzero terrain resolves every poll after the first 
 });
 
 // ---------------------------------------------------------------------------
-// geoidSurfaceLastResortM — the geoid guess must never outrank what the
+// geoidSurfaceLastResortM - the geoid guess must never outrank what the
 // contact already knows (owner incident 2026-08-21: a Re:Earth outage plus
 // this guess dropped a parked contact through the mesh at a Texas field).
 // ---------------------------------------------------------------------------

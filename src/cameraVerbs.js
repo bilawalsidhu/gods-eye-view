@@ -1,10 +1,10 @@
 /**
- * Camera verbs — the "spy satellite simulator" feel
+ * Camera verbs - the "spy satellite simulator" feel
  * (docs/superpowers/specs/2026-07-23-camera-verbs-fly-route-spec.md).
  *
  * One motion at a time, driven per clock tick. `once` = bounded eased nudge;
  * `continuous` runs until move_camera{stop}, ANY manual camera input on the
- * canvas (pointerdown/wheel/touchstart — the cancelFlight reflex), or a navigation tool
+ * canvas (pointerdown/wheel/touchstart - the cancelFlight reflex), or a navigation tool
  * starts (the shared UI navigation policy releases this owner before the new
  * destination mutates the camera). fly_route is a
  * continuous motion in the same slot: a cinematic dolly along an existing
@@ -31,7 +31,7 @@ import {
 } from './renderGovernor.js';
 
 let _isCockpitActive = null;
-/** °/s by speed word — orbit; pan uses fractions of view height/s. */
+/** °/s by speed word - orbit; pan uses fractions of view height/s. */
 const ORBIT_DEG_S = { slow: 2, normal: 6, fast: 15 };
 const TILT_DEG_S = { slow: 4, normal: 10, fast: 20 };
 const PAN_VIEW_FRACTION_S = { slow: 0.08, normal: 0.2, fast: 0.45 };
@@ -56,18 +56,18 @@ const PITCH_MAX = Cesium.Math.toRadians(-5);
  * a gaze that leads the path. Under prefers-reduced-motion the last three are
  * zeroed and the dolly is a plain eased track along the route.
  * -------------------------------------------------------------------------- */
-/** Mean AGL the dolly rides at — the altitude shaping oscillates AROUND this. */
+/** Mean AGL the dolly rides at - the altitude shaping oscillates AROUND this. */
 const ROUTE_CAMERA_HEIGHT_M = 260;
 /** Locked look-down angle. Decoupled from the lookahead distance so the framing
  *  no longer changes with the speed word (it used to fall out of the geometry:
  *  a 260 m eye aiming at a point 260 m ahead is a hard −45° at the pavement). */
 const ROUTE_PITCH_DEG = -32;
-/** Seconds of travel the gaze leads the camera by (≈260 m at normal — the
- *  shipped constant — but coherent at slow and fast too). */
+/** Seconds of travel the gaze leads the camera by (≈260 m at normal - the
+ *  shipped constant - but coherent at slow and fast too). */
 const ROUTE_LOOKAHEAD_S = 6.5;
 const ROUTE_LOOKAHEAD_MIN_M = 120;
 const ROUTE_LOOKAHEAD_MAX_M = 600;
-/** 1/s — exponential smoothing rate for the dolly's gaze direction. */
+/** 1/s - exponential smoothing rate for the dolly's gaze direction. */
 const ROUTE_DIR_SMOOTH_RATE = 1.6;
 /** Seconds of ease-in (and again ease-out) at the ends of the flight. */
 const ROUTE_RAMP_S = 2.4;
@@ -83,33 +83,33 @@ const ROUTE_BANK_WINDOW_S = 4;
  *  street corner settles near 7.5° and a hairpin saturates the cap, so the cap
  *  stays a limit rather than the everyday value. */
 const ROUTE_BANK_PER_DEG_S = 0.44;
-/** Two cascaded first-order filters — C¹ roll entry/exit, no snap at the edges
+/** Two cascaded first-order filters - C¹ roll entry/exit, no snap at the edges
  *  of the turn pulse. */
 const ROUTE_BANK_LEAD_RATE = 2.2;
 const ROUTE_BANK_SETTLE_RATE = 1.6;
 /** Zero-mean altitude "breathing" over long straights. */
 const ROUTE_BREATH_M = 20;
 const ROUTE_BREATH_WAVELENGTH_M = 2200;
-/** Extra height at full bank — the lookahead rise into a turn. Sized by its
+/** Extra height at full bank - the lookahead rise into a turn. Sized by its
  *  RATE, not its size: the lift has to be delivered inside the few seconds the
  *  camera takes to roll in, so a bigger number reads as a lurch, not a swell. */
 const ROUTE_TURN_LIFT_M = 26;
-/** 1/s — how fast the ALTITUDE follows the roll. Deliberately slower than the
+/** 1/s - how fast the ALTITUDE follows the roll. Deliberately slower than the
  *  roll itself: the wings roll through a corner in a few seconds, but the swell
  *  that lifts the eye over it wants to be a long, shallow arc. */
 const ROUTE_LIFT_TRACK_RATE = 0.5;
-/** 1/s — the altitude shaping is filtered on its way to the camera so rolling
+/** 1/s - the altitude shaping is filtered on its way to the camera so rolling
  *  out of a turn sinks the eye gently instead of dropping it. */
 const ROUTE_ALT_SMOOTH_RATE = 0.9;
 /** Hard clearance above the sampled ground floor; the shaping can never dip
  *  the eye below this, whatever the tuning above says. */
 const ROUTE_MIN_CLEARANCE_M = 90;
-/** 1/s — how fast the SHAPING floor follows the sampled one, in both
+/** 1/s - how fast the SHAPING floor follows the sampled one, in both
  *  directions. The hard clearance clamp reads the raw sample, so this rate is
  *  a comfort setting, not a safety one. */
 const ROUTE_FLOOR_FALL_RATE = 0.9;
 /** Below this |cos| the two chords are antipodal and the cross product's sign
- *  is a floating-point coin toss — an exact U-turn must not flip the bank
+ *  is a floating-point coin toss - an exact U-turn must not flip the bank
  *  direction frame to frame, so the degenerate case is branched explicitly. */
 const ANTIPODAL_EPS = 1e-6;
 /** Metres of corridor warmed when a flight starts, and the rolling window
@@ -132,15 +132,15 @@ const ROUTE_UNKNOWN_FLOOR_CAP_M = 5000;
  *  on sampleHeight calls a whole route may make: the mesh probe is latched to
  *  fire once per flight, so this is a per-route budget, not a per-frame one. */
 const ROUTE_MESH_PROBE_CELLS = 8;
-/** Seconds the dolly ARMS — camera untouched — waiting for real floor data
+/** Seconds the dolly ARMS - camera untouched - waiting for real floor data
  *  before it starts moving. The corridor warm is fire-and-forget, so without
  *  this the first frame RACES it and can render underground. Matches the house
  *  one-shot floor deadline (FLOOR_RESOLVE_DEADLINE_MS), and is the same
  *  arm-then-act shape a chained orbit uses while its flight settles. */
 const ROUTE_ARM_S = 1.2;
-/** m/s — cap on how fast the eye may DESCEND. Climbs are never limited (they
+/** m/s - cap on how fast the eye may DESCEND. Climbs are never limited (they
  *  are the safety direction). Ordinary terrain following runs a few m/s, so
- *  this only bites when a hold is released onto late-arriving floor data — most
+ *  this only bites when a hold is released onto late-arriving floor data - most
  *  visibly when the mesh probe seeded the floor from a downtown ROOFTOP and the
  *  real DEM later corrects it ~90 m downward. Held at the same bound as the
  *  altitude shaping so that correction reads as one more swell rather than as a
@@ -190,12 +190,12 @@ export function routeRampFraction(durationS) {
 }
 
 /**
- * Trapezoid speed profile — smoothstep up, cruise, smoothstep down.
+ * Trapezoid speed profile - smoothstep up, cruise, smoothstep down.
  *
  * Distance is the CLOSED-FORM integral of the speed curve, so position is
  * exact (no per-frame accumulation drift) and speed is continuous everywhere:
  * zero at both ends, and C¹ across the ramp/plateau joins because smoothstep
- * has zero slope at 0 and 1. Waypoints are invisible to it — the profile is a
+ * has zero slope at 0 and 1. Waypoints are invisible to it - the profile is a
  * function of arc length only, so nothing steps as a segment changes.
  * @param {number} u Normalized time, 0..1.
  * @param {number} r Ramp fraction from routeRampFraction().
@@ -205,7 +205,7 @@ export function routeRampFraction(durationS) {
 export function routeSpeedProfile(u, r) {
   const t = Math.min(1, Math.max(0, Number.isFinite(u) ? u : 0));
   if (!(r > 0)) return { distance: t, speed: 1 };
-  const area = 1 - r; // ∫₀¹ v du — both ramps together contribute r
+  const area = 1 - r; // ∫₀¹ v du - both ramps together contribute r
   const rampArea = (p) => r * (p * p * p - (p * p * p * p) / 2);
   const smoothstep = (p) => p * p * (3 - 2 * p);
   if (t <= r) {
@@ -220,7 +220,7 @@ export function routeSpeedProfile(u, r) {
 }
 
 /**
- * Bank angle for a planned turn rate — proportional, capped, honest about zero.
+ * Bank angle for a planned turn rate - proportional, capped, honest about zero.
  * @param {number} turnRateDegS Planned turn rate, °/s (+ = turning right).
  * @param {boolean} [reducedMotion] Flatten the roll entirely.
  * @returns {number} Degrees of roll, + = right wing down.
@@ -277,8 +277,8 @@ export function routeEyeHeightM(floorM, offsetM) {
  *
  * The floor is a staircase: cells are 0.001° (~111 m) and the dolly reads the
  * max of the cell it is over and one ahead, so crossing a boundary can step
- * several metres in one frame. Adopting a rise instantly — which terrain safety
- * seems to argue for — turns every one of those steps into an altitude pop
+ * several metres in one frame. Adopting a rise instantly - which terrain safety
+ * seems to argue for - turns every one of those steps into an altitude pop
  * (measured: 21.7 m/s of vertical rate over otherwise flat downtown). Safety
  * does not actually need it: the hard clamp in advanceRouteFlight is applied
  * against the RAW sample, so the smoothed value only ever shapes the ride.
@@ -331,7 +331,7 @@ const _warmPos = new Cesium.Cartesian3();
 const _warmCarto = new Cesium.Cartographic();
 const _probeCarto = new Cesium.Cartographic();
 
-/** Point at arc length `s` along the polyline (binary search — queries jump
+/** Point at arc length `s` along the polyline (binary search - queries jump
  *  backwards for the inbound chord, so a forward cursor would not do). */
 function arcPoint(state, s, result) {
   const { pts, cumM } = state;
@@ -370,7 +370,7 @@ function horizontalChord(state, sA, sB, up, result) {
  *
  * At exactly 180° the cross product is zero and its sign is decided by
  * floating-point signed zeros, so an out-and-back route would flip the bank
- * direction frame to frame. A U-turn is resolved as a RIGHT turn, always —
+ * direction frame to frame. A U-turn is resolved as a RIGHT turn, always -
  * arbitrary, but deterministic, which is the property that matters.
  * @param {Cesium.Cartesian3} a Unit horizontal direction turned FROM.
  * @param {Cesium.Cartesian3} b Unit horizontal direction turned TO.
@@ -436,7 +436,7 @@ function warmRouteCorridor(state, fromM, spanM) {
   try {
     state.warmFn(cells);
   } catch {
-    return 0; // best effort — a cold cell holds the last known floor
+    return 0; // best effort - a cold cell holds the last known floor
   }
   state.warmedCells += cells.length;
   return cells.length;
@@ -446,7 +446,7 @@ function warmRouteCorridor(state, fromM, spanM) {
  * The floor to hold while the corridor is still cold.
  *
  * Cold is missing data, not flat ground, and the route's own vertices carry
- * height 0 — so the previous fallback flew a Rocky Mountain route at 260 m
+ * height 0 - so the previous fallback flew a Rocky Mountain route at 260 m
  * above the ELLIPSOID. The camera's current position is, by construction,
  * above the ground the user is looking at, so its height minus the cruise AGL
  * is a floor we can defend. It is capped, because at globe scale the camera's
@@ -463,7 +463,7 @@ export function routeColdSeedFloorM(pathHeightM, cameraHeightM) {
 }
 
 /**
- * Adopt the corridor's floor, from the cache or — failing that — from the
+ * Adopt the corridor's floor, from the cache or - failing that - from the
  * rendered mesh directly.
  *
  * Runs at construction and again on every ARMING frame, because the corridor
@@ -475,17 +475,17 @@ export function routeColdSeedFloorM(pathHeightM, cameraHeightM) {
  * A partially warm corridor is NOT resolved. One cached cell says nothing
  * about the ground under the other seven, and treating it as an answer let the
  * dolly descend to 460 m over a 1,600 m surface. Every cell must be accounted
- * for — by the cache, or by a probe that actually reached it.
+ * for - by the cache, or by a probe that actually reached it.
  *
  * The probe is the answer to "what if the DEM never arrives at all", and it
  * closes the hole in the case where the hole is observable: clipping requires
  * terrain to BE rendered, and what is rendered is what sampleHeight reads. It
- * reads the rendered surface at the CURRENT level of detail — rooftops and
- * primitives included — which is a better estimate than nothing but is not a
+ * reads the rendered surface at the CURRENT level of detail - rooftops and
+ * primitives included - which is a better estimate than nothing but is not a
  * guaranteed upper bound. The per-frame raw-sample clamp remains the backstop.
  * @param {Object} state Route flight state.
  * @param {boolean} takeWhole Adopt the value outright (pre-departure) rather
- * than easing onto it — a mid-flight arrival must never snap the eye.
+ * than easing onto it - a mid-flight arrival must never snap the eye.
  * @returns {boolean} Whether the corridor's floor is now RESOLVED.
  */
 function acquireCorridorFloor(state, takeWhole) {
@@ -519,7 +519,7 @@ function acquireCorridorFloor(state, takeWhole) {
     !state.meshProbeSpent &&
     typeof state.probeFn === 'function'
   ) {
-    state.meshProbeSpent = true; // latched whatever it returns — one per flight
+    state.meshProbeSpent = true; // latched whatever it returns - one per flight
     try {
       const probe = state.probeFn(cold) || {};
       if (Number.isFinite(probe.heightM)) {
@@ -536,8 +536,8 @@ function acquireCorridorFloor(state, takeWhole) {
   if (!known.length) return false;
 
   const floor = Math.max(...known);
-  // A partial answer still RAISES the held floor — knowing something is better
-  // than the seed — but it does not resolve the corridor, so the safe hold and
+  // A partial answer still RAISES the held floor - knowing something is better
+  // than the seed - but it does not resolve the corridor, so the safe hold and
   // the arm stay in force.
   state.floorM =
     takeWhole || !Number.isFinite(state.floorM)
@@ -550,7 +550,7 @@ function acquireCorridorFloor(state, takeWhole) {
 
 /**
  * Highest rendered surface across a handful of corridor cells, with the number
- * of cells that actually answered — a cell whose tiles are not streamed yet
+ * of cells that actually answered - a cell whose tiles are not streamed yet
  * contributes nothing, and the caller must not mistake silence for flat ground.
  * @param {Cesium.Scene|undefined} scene The live scene.
  * @param {Array<{lat: number, lon: number}>} cells Cells to probe.
@@ -589,8 +589,8 @@ export function probeMeshFloorM(scene, cells) {
  * @param {number[]} options.cumM Cumulative arc length per vertex.
  * @param {string} [options.speed] slow | normal | fast.
  * @param {Function|null} [options.floorFn] (latDeg, lonDeg) => floor metres.
- * @param {Function|null} [options.warmFn] (cells) => void — corridor floor warm.
- * @param {Function|null} [options.probeFn] (cells) => {heightM, sampled} —
+ * @param {Function|null} [options.warmFn] (cells) => void - corridor floor warm.
+ * @param {Function|null} [options.probeFn] (cells) => {heightM, sampled} -
  * synchronous rendered-mesh probe, fired at most ONCE per flight and only for
  * the cells the cached floor could not answer.
  * @param {number} [options.cameraHeightM] Camera height at start, for the cold seed.
@@ -612,7 +612,7 @@ export function createRouteFlight({
   // The 0.5 s floor keeps a degenerate route from being an instant teleport (it
   // also divides the profile). It is the one case where the speed word is not
   // the mean: routes under 10 m (slow) / 20 m (normal) / 45 m (fast) fly slower
-  // than asked. Those are shorter than the camera is tall — nothing to see.
+  // than asked. Those are shorter than the camera is tall - nothing to see.
   const durationS = Math.max(0.5, totalM / cruiseMps);
   const pathHeightM = Cesium.Cartographic.fromCartesian(
     pts[0],
@@ -640,7 +640,7 @@ export function createRouteFlight({
     coldSeedFloorM: routeColdSeedFloorM(pathHeightM, cameraHeightM),
     // The one altitude we can defend without terrain data: the camera is
     // already there, and the user is already looking at the world from it. It
-    // is a NON-DESCENT guarantee, not a clearance guarantee — nothing can
+    // is a NON-DESCENT guarantee, not a clearance guarantee - nothing can
     // promise clearance over ground that was never measured.
     safeHoldHeightM: Number.isFinite(cameraHeightM)
       ? cameraHeightM
@@ -666,7 +666,7 @@ export function createRouteFlight({
   };
   // Warm the head of the corridor before the first frame renders, then check
   // whether anything is warm ALREADY (contact traffic, or a second run over the
-  // same route) — that flight needs no arming and no hold at all.
+  // same route) - that flight needs no arming and no hold at all.
   warmRouteCorridor(state, 0, ROUTE_WARM_START_M);
   acquireCorridorFloor(state, true);
   return state;
@@ -685,7 +685,7 @@ export function advanceRouteFlight(state, dt) {
   const step = Math.min(0.25, Math.max(0, Number.isFinite(dt) ? dt : 0));
 
   // ARMING. The corridor warm is fire-and-forget, so the alternative to waiting
-  // is racing it — and losing that race means rendering the first frames at an
+  // is racing it - and losing that race means rendering the first frames at an
   // altitude derived from nothing. While armed the camera is not touched at
   // all: no teleport onto the route, no descent. The wait is covered by the
   // model speaking its confirmation, and a warm cache skips it entirely.
@@ -759,7 +759,7 @@ export function advanceRouteFlight(state, dt) {
   );
   // Wings level for takeoff and landing. The speed profile is already a
   // smoothstep envelope that is 1 across the cruise and exactly 0 at both ends,
-  // so reusing it unwinds the roll as the dolly slows — and guarantees the LAST
+  // so reusing it unwinds the roll as the dolly slows - and guarantees the LAST
   // applied frame is level, with no snap to get there.
   const appliedBankDeg = state.bankDeg * profile.speed;
 
@@ -856,7 +856,7 @@ export function advanceRouteFlight(state, dt) {
   }
 
   // Ground floor: the max of here and just ahead, so a rise is cleared BEFORE
-  // the camera reaches it. Both are cached reads — nothing samples the mesh.
+  // the camera reaches it. Both are cached reads - nothing samples the mesh.
   let sampledFloor = Number.NaN;
   if (typeof state.floorFn === 'function') {
     const aheadPos = arcPoint(state, traveled + lookaheadM / 2, _frameAheadPos);
@@ -881,7 +881,7 @@ export function advanceRouteFlight(state, dt) {
     }
   }
   if (!Number.isFinite(sampledFloor)) {
-    // NEVER descend blind. A cold cell is missing data, not flat ground — the
+    // NEVER descend blind. A cold cell is missing data, not flat ground - the
     // route's own vertices carry height 0, so trusting them put the eye 1.3 km
     // UNDER Albuquerque. Hold the last floor we actually knew; before we have
     // ever known one, hold the conservative seed captured at flight start.
@@ -893,7 +893,7 @@ export function advanceRouteFlight(state, dt) {
     // Data arrived AFTER the arm gave up. Easing is the right move now: the
     // camera is already flying, so taking the gap between the safety hold and
     // the ground in one frame would snap. (Pre-departure acquisition takes it
-    // whole — see acquireCorridorFloor — because nothing is moving yet.)
+    // whole - see acquireCorridorFloor - because nothing is moving yet.)
     state.floorM = routeFloorHoldM(state.floorM, sampledFloor, step);
     state.floorKnown = true;
   } else {
@@ -923,8 +923,8 @@ export function advanceRouteFlight(state, dt) {
   );
   // Still no terrain data (the arm timed out, or the warm never landed at all):
   // hold the launch altitude for as long as that lasts. It is not a clearance
-  // guarantee — nothing can promise clearance over ground that was never
-  // measured — but the dolly will not take the camera DOWN into the unknown.
+  // guarantee - nothing can promise clearance over ground that was never
+  // measured - but the dolly will not take the camera DOWN into the unknown.
   if (!state.floorKnown && Number.isFinite(state.safeHoldHeightM)) {
     heightM = Math.max(heightM, state.safeHoldHeightM);
   }
@@ -1020,7 +1020,7 @@ function clearLookAt() {
  * Put the horizon back.
  *
  * The route dolly is the only motion that rolls the camera, and Cesium keeps
- * whatever world-space up vector it was last handed — so releasing a flight
+ * whatever world-space up vector it was last handed - so releasing a flight
  * mid-bank leaves the user holding a tilted horizon until some later motion
  * happens to level it. Heading, pitch and position are preserved; only the
  * roll is taken out.
@@ -1044,7 +1044,7 @@ function levelCameraRoll() {
 /** Stop any active motion. Returns whether one was running. */
 export function interruptCameraMotion(reason = 'interrupt') {
   const wasActive = Boolean(_active);
-  // While an entity is TRACKED, the follow camera owns the reference frame —
+  // While an entity is TRACKED, the follow camera owns the reference frame -
   // resetting the lookAt transform here flings the camera into space (field
   // finding). Leave the transform to the tracker; it re-asserts every frame.
   const tracking = Boolean(_viewer?.trackedEntity);
@@ -1120,7 +1120,7 @@ function onTick() {
         interruptCameraMotion('orbit-arm-timeout');
         return;
       }
-      // pickEllipsoid hits the globe from ANY altitude — target existence
+      // pickEllipsoid hits the globe from ANY altitude - target existence
       // alone is not arrival. Camera flights are scene tweens, and multi-stage
       // flights have GAPS between tweens: require the tween queue quiet for a
       // continuous 0.8 s before capturing the orbit framing at the REAL
@@ -1234,7 +1234,7 @@ function onTick() {
       // The dolly's shaping lives in advanceRouteFlight(); the tick only
       // applies the pose and honours the same completion path as before.
       const frame = advanceRouteFlight(m, dt);
-      // Armed and waiting for floor data — the camera stays exactly where the
+      // Armed and waiting for floor data - the camera stays exactly where the
       // user left it rather than teleporting to an altitude derived from
       // nothing. An interrupt during the arm is still instant.
       if (frame.arming) return;
@@ -1386,8 +1386,8 @@ export function interruptGlobeRotation(reason = 'camera-intent') {
  * installs it, and a call without one, FOR THE SAME VIEWER, never clears an
  * installed getter.
  *
- * A getter closes over the viewer it was built for. When the viewer changes —
- * a new application lifetime — the previous getter is dropped even if this
+ * A getter closes over the viewer it was built for. When the viewer changes -
+ * a new application lifetime - the previous getter is dropped even if this
  * call brings none, so a callback from the old viewer can never answer for the
  * new one.
  */
@@ -1425,7 +1425,7 @@ export function initCameraVerbs(
   for (const rm of _inputRemovers) rm();
   _inputRemovers = [];
   const canvas = viewer.scene.canvas;
-  // ANY manual camera input reclaims control — the cancelFlight reflex.
+  // ANY manual camera input reclaims control - the cancelFlight reflex.
   for (const evt of ['pointerdown', 'touchstart', 'wheel']) {
     const h = () => interruptCameraMotion('manual-input');
     canvas.addEventListener(evt, h, { passive: true });
@@ -1469,7 +1469,7 @@ export function moveCamera(args = {}, runNavigation = null) {
     return {
       ok: false,
       action: 'move_camera',
-      error: `Unknown motion "${args.motion}" — use orbit, pan, tilt, rotate, rotate_globe, or stop.`,
+      error: `Unknown motion "${args.motion}" - use orbit, pan, tilt, rotate, rotate_globe, or stop.`,
     };
   }
   if (
@@ -1502,7 +1502,7 @@ export function moveCamera(args = {}, runNavigation = null) {
     };
   }
   if (motion === 'tilt') {
-    // Honest limits: at the clamp a tilt is a no-op — say so instead of
+    // Honest limits: at the clamp a tilt is a no-op - say so instead of
     // reporting success and letting the model gaslight itself (field test).
     const pitch = _viewer.camera.pitch;
     if (direction === 'up' && pitch >= PITCH_MAX - Cesium.Math.toRadians(0.5)) {
@@ -1510,7 +1510,7 @@ export function moveCamera(args = {}, runNavigation = null) {
         ok: false,
         action: 'move_camera',
         error:
-          'Already at the upper tilt limit (near the horizon) — tilt down, or zoom/pan instead.',
+          'Already at the upper tilt limit (near the horizon) - tilt down, or zoom/pan instead.',
       };
     }
     if (
@@ -1520,7 +1520,7 @@ export function moveCamera(args = {}, runNavigation = null) {
       return {
         ok: false,
         action: 'move_camera',
-        error: 'Already looking straight down — tilt up to raise the horizon.',
+        error: 'Already looking straight down - tilt up to raise the horizon.',
       };
     }
   }
@@ -1539,7 +1539,7 @@ export function moveCamera(args = {}, runNavigation = null) {
     return {
       ok: false,
       action: 'move_camera',
-      error: `Already following ${label} — the follow camera owns the view while tracking. Say "stop tracking" first if you want ${motion === 'rotate_globe' ? 'to rotate the globe' : 'a free orbit'}.`,
+      error: `Already following ${label} - the follow camera owns the view while tracking. Say "stop tracking" first if you want ${motion === 'rotate_globe' ? 'to rotate the globe' : 'a free orbit'}.`,
     };
   }
   let globePose;
@@ -1633,7 +1633,7 @@ export function moveCamera(args = {}, runNavigation = null) {
     }
     if (motion === 'orbit') {
       if (_viewer.scene.tweens.length > 0) {
-        // A camera flight is in progress ("fly to X and orbit it") — ALWAYS arm
+        // A camera flight is in progress ("fly to X and orbit it") - ALWAYS arm
         // and capture at the destination; a target existing right now is
         // meaningless (the globe is always under the crosshair).
         setActiveMotion({
@@ -1656,7 +1656,7 @@ export function moveCamera(args = {}, runNavigation = null) {
       }
       const target = _getTarget?.(_viewer);
       if (!target) {
-        // Mid-flight chain ("fly to X and orbit it"): ARM the orbit — the tick
+        // Mid-flight chain ("fly to X and orbit it"): ARM the orbit - the tick
         // loop keeps trying for a ground target as the flight settles.
         setActiveMotion({
           kind: 'orbit',
@@ -1690,7 +1690,7 @@ export function moveCamera(args = {}, runNavigation = null) {
       state.hprStartHeading = cam.heading;
     }
     setActiveMotion(state);
-    // Verb motion drives the camera per clock tick — hold until interrupted;
+    // Verb motion drives the camera per clock tick - hold until interrupted;
     // interruptCameraMotion is the single release path. (perf wave 2)
     holdContinuousRender('camera-verb');
     return {
@@ -1728,11 +1728,11 @@ export function adjustOrbitRange(factor) {
 
 /**
  * fly_route implementation: dolly along an existing route annotation.
- * @param {Array} annoList  — engine list() output (raw annos incl. `path`)
+ * @param {Array} annoList  - engine list() output (raw annos incl. `path`)
  * @param {Object} args
  * @param {Function|null} floorFn  (latDeg, lonDeg) => cached floor metres.
  * @param {Function|null} runNavigation Validated camera-authority transaction.
- * @param {Function|null} warmFn  (cells) => void — batch-warms the floor cells
+ * @param {Function|null} warmFn  (cells) => void - batch-warms the floor cells
  * along the route corridor. Without it a cold cache has no protection: route
  * vertices carry height 0, so an unwarmed mountain corridor reads as sea level.
  */
@@ -1754,7 +1754,7 @@ export function flyRoute(
       ok: false,
       action: 'fly_route',
       error:
-        'No route is drawn — draw a route first (e.g. "route from A to B"), then fly it.',
+        'No route is drawn - draw a route first (e.g. "route from A to B"), then fly it.',
     };
   }
   let route = routes[routes.length - 1];
@@ -1769,7 +1769,7 @@ export function flyRoute(
       return {
         ok: false,
         action: 'fly_route',
-        error: `No route matches "${args.label}" — say fly the route without a name for the newest one.`,
+        error: `No route matches "${args.label}" - say fly the route without a name for the newest one.`,
       };
     }
     route = byLabel[byLabel.length - 1];

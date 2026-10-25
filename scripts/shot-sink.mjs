@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Minimal screenshot sink: the browser POSTs a data:image/... URL (grabbed from
 // the real-GPU Cesium canvas) and this writes it to qa-shots/height-datum/<name>.
-// Keeps large image payloads OUT of the agent's context — browser → sink → disk.
+// Keeps large image payloads OUT of the agent's context - browser → sink → disk.
 // Usage: node scripts/shot-sink.mjs   (listens on :4399)
 import http from 'node:http';
 import { writeFileSync, mkdirSync } from 'node:fs';

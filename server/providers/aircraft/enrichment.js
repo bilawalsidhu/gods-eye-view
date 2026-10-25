@@ -6,7 +6,7 @@ import { readResponseJsonCapped } from '../common/http.js';
 const ADSBDB_MAX_RESPONSE_BYTES = 1024 * 1024;
 /**
  * adsbdb.com enrichment proxy: callsign → route (airline + origin/destination
- * airports) and hex → aircraft type/registration. Free community API — cached
+ * airports) and hex → aircraft type/registration. Free community API - cached
  * aggressively: successes and 404s are kept per key for 24 hours (TTL_MS) and
  * persisted to disk so restarts don't re-hammer it; other failures are not
  * cached. Adapted from skylight
@@ -63,7 +63,7 @@ export function adsbdbProxy() {
     const a = json?.response?.aircraft;
     if (!a) return null;
     return {
-      typeCode: a.icao_type || null, // ICAO designator, e.g. "B738" — feeds classifyAircraft
+      typeCode: a.icao_type || null, // ICAO designator, e.g. "B738" - feeds classifyAircraft
       typeName:
         a.manufacturer && a.type
           ? `${a.manufacturer} ${a.type}`
@@ -95,12 +95,12 @@ export function adsbdbProxy() {
               );
               const data =
                 kind === 'route' ? parseRoute(payload) : parseAircraft(payload);
-              store[key] = { at: Date.now(), data }; // data may be null — negative cache
+              store[key] = { at: Date.now(), data }; // data may be null - negative cache
               dirty = true;
               return data;
             }
             if (res.status === 404) {
-              store[key] = { at: Date.now(), data: null }; // known-missing — cache the miss
+              store[key] = { at: Date.now(), data: null }; // known-missing - cache the miss
               dirty = true;
             }
             // other statuses: leave uncached so we retry later

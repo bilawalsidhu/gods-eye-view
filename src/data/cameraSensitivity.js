@@ -4,8 +4,8 @@
  *
  * `camera.changed` fires once the view has moved by this fraction, and it is a
  * single number on the camera that every listener in the app shares. Several
- * layers want it finer than the default — traffic, bikeshare and transit all
- * ask for 0.05 so they notice they have entered a coverage area — and each of
+ * layers want it finer than the default - traffic, bikeshare and transit all
+ * ask for 0.05 so they notice they have entered a coverage area - and each of
  * them used to write the number directly and hand back whatever it remembered.
  *
  * That cannot work, because a number is not an owner. Two layers asking for the

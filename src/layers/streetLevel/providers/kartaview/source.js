@@ -45,8 +45,8 @@ export class KartaViewSourceError extends Error {
 }
 
 // Failure texts are English data: the Street Level panel translates them.
-const NO_ANSWER = msg('KartaView did not answer in time — try again');
-const UNREACHABLE = msg('KartaView could not be reached — check the network');
+const NO_ANSWER = msg('KartaView did not answer in time - try again');
+const UNREACHABLE = msg('KartaView could not be reached - check the network');
 const UNREADABLE = msg('KartaView sent an answer that could not be read');
 /** Statuses that mean a photo file is gone, not that storage hiccupped. */
 const GONE_STATUSES = Object.freeze([403, 404, 409, 410]);
@@ -250,7 +250,7 @@ export function createKartaViewSource({
           if (error?.status === 429)
             throw new KartaViewSourceError(
               msg(
-                'KartaView is rate-limiting requests — try again in a moment',
+                'KartaView is rate-limiting requests - try again in a moment',
               ),
               { status: 429, retryAfterSec: error.retryAfterSec },
             );

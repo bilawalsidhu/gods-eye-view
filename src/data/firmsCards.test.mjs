@@ -101,7 +101,7 @@ test('buildCellCard: plural noun, max FRP and newest age, accent passthrough', (
 });
 
 // Owner field finding 2026-07-21: anchors must sit on the DEM once the shared
-// ground floor is warm — and the cached per-fire position must re-anchor when
+// ground floor is warm - and the cached per-fire position must re-anchor when
 // the floor lands AFTER the first (cold, height-0) render. Distinct coords
 // from every other test in this file (module caches persist across tests).
 test('fire anchor: cold floor renders at 0, then re-grounds when the floor warms', () => {

@@ -1261,7 +1261,7 @@ test('unsupported ALPR coverage suppresses the nearby count and names the extrac
     assert.equal(stats.countLabel, '');
     assert.equal(
       stats.loadingLabel,
-      'No ALPR data for this area — US and Canada only',
+      'No ALPR data for this area - US and Canada only',
     );
   } finally {
     h.restore();

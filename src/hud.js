@@ -1,11 +1,11 @@
 import { applicationServices } from './services/application.js';
 /**
  * @module hud
- * @description Intelligence HUD Overlay — NRO/NGA Satellite Aesthetic.
+ * @description Intelligence HUD Overlay - NRO/NGA Satellite Aesthetic.
  *
  * Renders authentic reconnaissance metadata over the Cesium canvas:
  * classification banners, live MGRS/lat-lon coordinates, sensor metrics
- * (GSD, NIIRS, ONA), timestamps, and orbital data — all updating in
+ * (GSD, NIIRS, ONA), timestamps, and orbital data - all updating in
  * real-time at configurable cadences.
  *
  * The HUD auto-activates when a military-style shader (NVG, FLIR, CRT) is
@@ -212,8 +212,8 @@ export class IntelHUD {
     this._firstSummaryKicked = false;
     // ALT readout datum: the camera height Cesium reports is ELLIPSOIDAL, the
     // number a viewer reads is MSL. N comes from the same lazy ~2.7 MB EGM96
-    // chunk the flight layers use — requested on the first telemetry tick of a
-    // VISIBLE HUD, never at construction, so a hidden HUD costs nothing — and
+    // chunk the flight layers use - requested on the first telemetry tick of a
+    // VISIBLE HUD, never at construction, so a hidden HUD costs nothing - and
     // cached per coarse cell. Until it resolves, or if it never does,
     // `ellipsoidalToMslDisplayM` passes the raw height straight through.
     this._geoidRequested = false;
@@ -221,7 +221,7 @@ export class IntelHUD {
     this._geoidCellKey = null;
     this._geoidN = null;
     // Whether the LAST painted tick actually had N. The grid resolves mid-
-    // session, so this flips once — and both altitude readouts have to move
+    // session, so this flips once - and both altitude readouts have to move
     // together when it does (see the repaint in _updateCameraData).
     this._geoidCorrectionApplied = false;
     this._onCameraMoveEnd = () => {
@@ -334,13 +334,13 @@ export class IntelHUD {
    * cadences and are cleaned up in {@link destroy}.
    */
   _startTimers() {
-    // Timestamp — every second
+    // Timestamp - every second
     this._timestampInterval = setInterval(() => {
       const el = document.getElementById('hud-timestamp');
       if (el) el.textContent = this._formatUTC();
     }, 1000);
 
-    // REC blink — every 800ms
+    // REC blink - every 800ms
     this._recBlinkInterval = setInterval(() => {
       this._recBlinkState = !this._recBlinkState;
       const dot = document.getElementById('hud-rec-dot');
@@ -348,7 +348,7 @@ export class IntelHUD {
         dot.style.visibility = this._recBlinkState ? 'visible' : 'hidden';
     }, 800);
 
-    // Camera-derived data — 4 updates/second (250ms)
+    // Camera-derived data - 4 updates/second (250ms)
     this._updateInterval = setInterval(() => {
       if (!this._visible) return;
       this._updateCameraData();
@@ -465,7 +465,7 @@ export class IntelHUD {
       // i18n-ignore: sensor codes
       gsdEl.textContent = `GSD: ${gsd.toFixed(2)}m  NIIRS: ${niirs.toFixed(1)}`;
 
-    // Altitude — reported as height above MEAN SEA LEVEL. `altM` is the raw
+    // Altitude - reported as height above MEAN SEA LEVEL. `altM` is the raw
     // ellipsoidal camera height, which reads far below zero wherever the geoid
     // sits under the ellipsoid: a cockpit parked on the SFO deck (N ≈ -32 m)
     // showed "ALT: -15m", and JFK "ALT: -18m". Subtracting N restores the
@@ -498,7 +498,7 @@ export class IntelHUD {
     if (onaEl) onaEl.textContent = `ONA: ${ona.toFixed(1)}°`;
 
     // `altM` stays the raw ellipsoidal camera height the sensor model reads
-    // (GSD/NIIRS, view band). `altMslM` is the ADDITIVE display datum — the
+    // (GSD/NIIRS, view band). `altMslM` is the ADDITIVE display datum - the
     // only one any readout string should print.
     this._latestMetrics = {
       latDeg,
@@ -519,12 +519,12 @@ export class IntelHUD {
     }
 
     // The EGM96 grid lands mid-session, and the corner readout picks it up on
-    // the very next telemetry tick. The summary line has no such cadence — it
-    // repaints on camera settle or its own 15 s retry — so without this the
+    // the very next telemetry tick. The summary line has no such cadence - it
+    // repaints on camera settle or its own 15 s retry - so without this the
     // corner reads `ALT: 17m` beside a summary still reading `ALT -15M`, for
     // up to fifteen seconds. Repaint the deterministic line in the SAME tick
     // the correction turns on (or off, if a lookup starts failing), and mark
-    // the summary dirty so the AI line refreshes on its normal cadence —
+    // the summary dirty so the AI line refreshes on its normal cadence -
     // exactly what a camera settle already does.
     const geoidCorrectionApplied = Number.isFinite(geoidN);
     if (geoidCorrectionApplied !== this._geoidCorrectionApplied) {
@@ -724,7 +724,7 @@ export class IntelHUD {
     // Rough local timezone from longitude (15 deg per hour)
     const utcOffset = Math.round(m.lonDeg / 15);
     const localTag = `UTC${utcOffset >= 0 ? '+' : ''}${utcOffset}`;
-    // Same MSL datum as the corner ALT readout — the two are on screen
+    // Same MSL datum as the corner ALT readout - the two are on screen
     // together, so they must never disagree. The view band above deliberately
     // keeps the ellipsoidal height: its thresholds were tuned against it.
     const altDisplayM = Number.isFinite(m.altMslM) ? m.altMslM : m.altM;
@@ -805,7 +805,7 @@ export class IntelHUD {
 
     const revision = this._summaryRevision;
     // Every caller invokes this as `void this._updateSummary(...)`, so nothing
-    // owns the returned promise — a rejection escaping from here lands as an
+    // owns the returned promise - a rejection escaping from here lands as an
     // unhandled rejection in the console. Building the context walks the live
     // scene (the view-target pick, the layer roster), so it belongs INSIDE a
     // guard rather than in front of one. A summary we cannot build is a
@@ -1005,7 +1005,7 @@ export class IntelHUD {
   }
 
   /**
-   * @returns {'auto'|'on'|'off'} Current HUD mode — `'auto'` when style-driven
+   * @returns {'auto'|'on'|'off'} Current HUD mode - `'auto'` when style-driven
    *   show/hide is active, otherwise the explicit visibility override.
    */
   getMode() {

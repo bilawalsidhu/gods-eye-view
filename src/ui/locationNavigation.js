@@ -67,7 +67,7 @@ export class LocationNavigation {
       return {
         ok: false,
         orbiting: false,
-        error: 'No active landmark to orbit — fly to a landmark first',
+        error: 'No active landmark to orbit - fly to a landmark first',
       };
     }
     this._toggleOrbit();
@@ -187,7 +187,7 @@ export class LocationNavigation {
   _onCityPillClick(cityId) {
     const { CITY_POIS, flyToPresetLocation } = this.services;
     if (this._expandedCityId === cityId) {
-      // Same city clicked again — toggle collapse
+      // Same city clicked again - toggle collapse
       this._collapsePOIRow();
       return;
     }

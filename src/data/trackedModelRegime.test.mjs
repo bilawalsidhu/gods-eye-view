@@ -5,7 +5,7 @@ import { readLayerSource } from '../testSupport/readLayerSource.mjs';
 //
 // Two things are pinned here, and both are behavioural rather than cosmetic:
 //
-//  1. The POLICY — thresholds and hysteresis — as pure math in
+//  1. The POLICY - thresholds and hysteresis - as pure math in
 //     trackedModelRegime.js. The enter ceiling is the owner's playtested swap
 //     distance, deliberately much NEARER than the fleet ceiling, and the exit
 //     ceiling is deliberately higher than the enter ceiling. A regression that
@@ -13,7 +13,7 @@ import { readLayerSource } from '../testSupport/readLayerSource.mjs';
 //     billboard↔model flapping for a camera orbiting the boundary, which no
 //     unit test would otherwise catch.
 //
-//  2. The WIRING in both flight layers — that the tracked contact takes its
+//  2. The WIRING in both flight layers - that the tracked contact takes its
 //     model with the fleet `models3d` toggle OFF (the whole point of the
 //     feature), that cockpit and TR-3B suppression survived the rewrite, and
 //     that deselecting drops the regime.
@@ -65,22 +65,22 @@ const WELL_INSIDE_M = TRACKED_MODEL_ENTER_ALT_M / 2;
 
 test('the tracked 3D takeover sits at the owner-playtested swap distance', () => {
   // Owner playtest 2026-08-20: an earlier 1_000_000 m ceiling "pops to 3D far
-  // too early" — 2D still reads correctly at ~600_000 m and the swap belongs at
+  // too early" - 2D still reads correctly at ~600_000 m and the swap belongs at
   // ~150_000 m. These are the numbers the operator judged by eye, so they are
   // pinned literally rather than derived from anything.
   assert.equal(TRACKED_MODEL_ENTER_ALT_M, 150_000);
   assert.equal(trackedModelZoomActive(600_000, false), false,
-    'the owner explicitly called 2D correct at ~600 km — it must not model there');
+    'the owner explicitly called 2D correct at ~600 km - it must not model there');
   assert.equal(trackedModelZoomActive(140_000, false), true,
     'inside the ruled swap distance the model owns the visual');
 });
 
-test('the tracked contact swaps NEARER than the fleet — a recorded inversion, not a bug', () => {
+test('the tracked contact swaps NEARER than the fleet - a recorded inversion, not a bug', () => {
   // Consequence of the owner's number, spelled out so it cannot be "tidied
   // away": with the DISPLAY-rail 3D toggle ON, camera altitudes between the
   // tracked ceiling and the fleet ceiling draw surrounding contacts as models
   // while the SELECTED one is still a billboard. The fleet pass skips the
-  // tracked icao, so nothing double-draws — this is purely an ordering
+  // tracked icao, so nothing double-draws - this is purely an ordering
   // difference. Aligning them is a fleet-side decision, out of scope here.
   assert.equal(FLEET_MODEL_ALT_CEIL_M, 800_000,
     'mirror of MODEL_ALT_CEIL_M in both flight layers');
@@ -90,7 +90,7 @@ test('the tracked contact swaps NEARER than the fleet — a recorded inversion, 
     'just inside the fleet ceiling the tracked contact is still 2D');
 });
 
-test('enter and exit thresholds are ASYMMETRIC — the anti-flap band', () => {
+test('enter and exit thresholds are ASYMMETRIC - the anti-flap band', () => {
   assert.equal(TRACKED_MODEL_EXIT_RATIO, 1.15);
   assert.equal(TRACKED_MODEL_EXIT_ALT_M, 172_500);
   assert.equal(TRACKED_MODEL_EXIT_ALT_M, TRACKED_MODEL_ENTER_ALT_M * TRACKED_MODEL_EXIT_RATIO,
@@ -104,12 +104,12 @@ test('the regime enters at the enter ceiling and leaves only past the exit ceili
   assert.equal(trackedModelZoomActive(TRACKED_MODEL_EXIT_ALT_M + 1, false), false);
   assert.equal(trackedModelZoomActive(TRACKED_MODEL_ENTER_ALT_M + 1, false), false);
   assert.equal(trackedModelZoomActive(TRACKED_MODEL_ENTER_ALT_M, false), false,
-    'the ceiling itself is still outside — the regime is strictly below it');
+    'the ceiling itself is still outside - the regime is strictly below it');
   assert.equal(trackedModelZoomActive(TRACKED_MODEL_ENTER_ALT_M - 1, false), true);
 
   // Already inside: the model holds the visual all the way out to the exit ceiling.
   assert.equal(trackedModelZoomActive(TRACKED_MODEL_ENTER_ALT_M + 1, true), true,
-    'crossing back over the ENTER ceiling must not hand back — that is the flap');
+    'crossing back over the ENTER ceiling must not hand back - that is the flap');
   assert.equal(trackedModelZoomActive(TRACKED_MODEL_EXIT_ALT_M - 1, true), true);
   assert.equal(trackedModelZoomActive(TRACKED_MODEL_EXIT_ALT_M, true), false);
   assert.equal(trackedModelZoomActive(TRACKED_MODEL_EXIT_ALT_M + 1, true), false);
@@ -277,8 +277,8 @@ for (const fixture of LAYERS) {
       assert.equal(admitted, loadingModel, 'the production fleet loader admits the resolved primitive');
       assert.equal(loadedCollection.added.length, 1, 'the production loader adds it once');
       assert.equal(loadingModel.ready, false);
-      // Cesium 1.138's Model.update has no `show` guard — PrimitiveCollection
-      // updates every member unconditionally and `_ready` flips in afterRender —
+      // Cesium 1.138's Model.update has no `show` guard - PrimitiveCollection
+      // updates every member unconditionally and `_ready` flips in afterRender -
       // so hiding an admitted primitive costs its load nothing, and it is the
       // only thing that keeps Cesium's default show=true from claiming the
       // visual at the identity matrix before the first tick places it.
@@ -439,7 +439,7 @@ for (const fixture of LAYERS) {
   test(`${fixture.name}: a held snap is dropped when measured ground contradicts it`, () => {
     // Adversarial review 2026-08-23, reproduced verbatim. The drift bound asks
     // "how far has the contact travelled", which is only a PROXY for "does this
-    // value still describe the ground here" — and 202 m of taxi onto a surface
+    // value still describe the ground here" - and 202 m of taxi onto a surface
     // 30 m higher fits inside it. Because a miss PRESERVES the hold, nothing in
     // the retry path corrects that: the model stays buried for as long as the
     // resample keeps missing, which on the OSM fallback is forever.
@@ -475,7 +475,7 @@ for (const fixture of LAYERS) {
     const A_LON = -97.71;
     // ~202 m east at this latitude: past MOVE_INVALIDATE_M (50 m) so the snap is
     // demoted, and INSIDE HELD_SNAP_MAX_DRIFT_M (250 m) so the bound alone does
-    // not catch it — that is the whole point of the repro.
+    // not catch it - that is the whole point of the repro.
     const B_LON = -97.7079;
     const B_GROUND_M = 150;
 
@@ -505,7 +505,7 @@ for (const fixture of LAYERS) {
       assert.ok(Math.abs(placedHeightM() - (sampled + fixture.bellyM)) < 0.001,
         'the model stands on the measured 120 m at A');
 
-      // Something measures B's surface — the mesh-floor cells the billboard
+      // Something measures B's surface - the mesh-floor cells the billboard
       // chain and meshFloorSampler share. This is the fresh evidence.
       reportMeshFloorCell(LAT, B_LON, B_GROUND_M);
 
@@ -518,7 +518,7 @@ for (const fixture of LAYERS) {
         'a held measurement contradicted by measured ground must not place the model');
       assert.equal(model.show, false, 'nothing is drawn 30 m under the apron');
       assert.equal(billboard.show, true, 'the floored 2D billboard is the honest fallback');
-      assert.ok(model.show || billboard.show, 'the release is atomic — never both hidden');
+      assert.ok(model.show || billboard.show, 'the release is atomic - never both hidden');
 
       // "If the contact remains at B, misses can preserve that burial forever."
       // They cannot: the hold is gone, so every later miss re-answers COLD.
@@ -542,8 +542,8 @@ for (const fixture of LAYERS) {
       // The rule is ONE-SIDED, and this is the half that keeps it useful. Roll
       // on to C, where the measured cell reads BELOW the held value, and let the
       // resample miss again. A cell under a real sample is the floor chain's
-      // expected error — cells latch once over ~111 m, borrowed neighbours lean
-      // lowest, the display clamp only ever raises — so it is not evidence of
+      // expected error - cells latch once over ~111 m, borrowed neighbours lean
+      // lowest, the display clamp only ever raises - so it is not evidence of
       // burial and must NOT cost the contact its model. A two-sided rule fails
       // here, and did: on the track-regression rig a planted cell sat 66.7 m
       // below a real sample at the same spot.
@@ -560,7 +560,7 @@ for (const fixture of LAYERS) {
       now += 60_000;
       ownsVisual = fixture.driveFleetModel({ icao24, position: atC, course: 92 });
       assert.equal(ownsVisual, true,
-        'a cell reading BELOW the hold is the floor chain under-reading, not burial — the hold stands');
+        'a cell reading BELOW the hold is the floor chain under-reading, not burial - the hold stands');
       assert.equal(model.show, true, 'the contact keeps its model through a downhill taxi');
       assert.ok(Math.abs(placedHeightM() - (B_GROUND_M + fixture.bellyM)) < 0.001,
         'and it keeps standing on the measurement it actually has');
@@ -721,11 +721,11 @@ for (const fixture of LAYERS) {
     viewer.camera.positionCartographic.height = TRACKED_MODEL_ENTER_ALT_M - 1;
     assert.equal(fixture.regimeActive(), true, '3D at the enter ceiling');
 
-    // Drift back over the ENTER ceiling — must HOLD (this is the flap guard).
+    // Drift back over the ENTER ceiling - must HOLD (this is the flap guard).
     viewer.camera.positionCartographic.height = INSIDE_BAND_M;
     assert.equal(fixture.regimeActive(), true, 'the exit band holds the model');
 
-    // Zoom all the way back out — the billboard returns.
+    // Zoom all the way back out - the billboard returns.
     viewer.camera.positionCartographic.height = TRACKED_MODEL_EXIT_ALT_M + 1;
     assert.equal(fixture.regimeActive(), false, 'past the exit ceiling, 2D returns');
 
@@ -741,7 +741,7 @@ for (const fixture of LAYERS) {
     // the SAME icao (Contacts re-entry, a cross-layer round trip back to this
     // layer) never makes `_trackedIcao` observably change, so the predicate's
     // icao-change guard never fires. The reset therefore has to live in the
-    // PRODUCTION teardown — which is why nothing below touches a test-only
+    // PRODUCTION teardown - which is why nothing below touches a test-only
     // latch reset; the seam re-seeds state but deliberately leaves the latches
     // alone, and `stopTracking()` is the real deselect path.
     clearTr3bRegistry();
@@ -778,7 +778,7 @@ for (const fixture of LAYERS) {
     setTr3b(ICAO, true);
     fixture.seed({ viewer });
     assert.equal(fixture.regimeActive(), false,
-      'there is no TR-3B GLB — the triangle billboard stays the visual all the way in');
+      'there is no TR-3B GLB - the triangle billboard stays the visual all the way in');
 
     setTr3b(ICAO, false);
     fixture.seed({ viewer });
@@ -814,7 +814,7 @@ for (const fixture of LAYERS) {
 // 3. Bounded on-demand loading
 //
 // The tracked regime is default-on and its driver runs every scene.preUpdate.
-// A missing or corrupt GLB — or a dead network — used to leave the driver in a
+// A missing or corrupt GLB - or a dead network - used to leave the driver in a
 // load→reject loop at frame rate for as long as the contact stayed selected,
 // because the catch cleared only the in-flight flag. These pin the bound.
 // ---------------------------------------------------------------------------
@@ -862,7 +862,7 @@ for (const fixture of LAYERS) {
       assert.ok(settled <= 3,
         `a failing asset must give up within 3 attempts per selection, got ${settled}`);
 
-      // Many more frames must produce NO further attempts — this is the loop bound.
+      // Many more frames must produce NO further attempts - this is the loop bound.
       await driveFrames(fixture, 25, clock);
       assert.equal(attempts, settled,
         'once latched, further frames must not re-ask for the same failed asset');
@@ -878,7 +878,7 @@ for (const fixture of LAYERS) {
       assert.equal(warnings.length, 1, 'the give-up is announced once, not per frame');
       assert.ok(warnings[0].includes(requested[0]), `the warning names the asset: ${warnings[0]}`);
 
-      // A NEW selection gets a fresh budget — the latch is per contact.
+      // A NEW selection gets a fresh budget - the latch is per contact.
       fixture.layer.stopTracking();
       fixture.seed({ viewer, icao24: 'def456', modelCollection: collection });
       await driveFrames(fixture, 3, clock);
@@ -953,7 +953,7 @@ test('the tracked regime never consults the fleet models3d toggle', async () => 
       `${name}: the tracked contact's handoff is default-on, not gated on the fleet toggle`);
     assert.match(regime, /trackedModelZoomActive\(/,
       `${name}: the tracked contact uses the shared hysteretic zoom policy`);
-    // The FLEET must still obey the toggle — the budget decision stays the operator's.
+    // The FLEET must still obey the toggle - the budget decision stays the operator's.
     const fleet = /^([ \t]*)function _modelRegimeActive\b[\s\S]*?\n\1\}/m.exec(source)?.[0];
     assert.match(fleet, /if\s*\(\s*!(?:flightState\.)?_models3dEnabled,?\s*\)\s*return\s*false;/,
       `${name}: the fleet regime still obeys the DISPLAY-rail 3D toggle`);

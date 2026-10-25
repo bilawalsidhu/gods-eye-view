@@ -4,7 +4,7 @@
  * @description Session-scoped registry of contacts the operator has converted
  * into a TR-3B (the black-triangle Easter egg).
  *
- * Shared, module-level, cross-layer state — the same pattern as
+ * Shared, module-level, cross-layer state - the same pattern as
  * `militaryRegistry.js`: identity is the ICAO 24-bit address, so a contact
  * stays converted whether the civil `flights` layer or the `military` layer
  * happens to own it, and a layer handoff never loses (or duplicates) the
@@ -12,7 +12,7 @@
  *
  * DELIBERATELY NOT PERSISTED. No localStorage, no share-link param, no schema
  * change: the conversion lives for the page session and dies with a reload.
- * Layer teardown also leaves the set intact ON PURPOSE — the set holds nothing
+ * Layer teardown also leaves the set intact ON PURPOSE - the set holds nothing
  * but hex strings the user personally clicked (bounded by their own clicks),
  * and re-tracking the same aircraft after a layer restart should still show the
  * triangle. Only a reload resets it.
@@ -28,7 +28,7 @@ export const TR3B_TYPE_LABEL = 'TR-3B';
  * The `aircraftClass` a converted contact reports to the analyst engine.
  *
  * Lower-case and hyphen-free to match the `classifyAircraft()` vocabulary
- * (`airliner`, `fastjet`, …) that every other analyst record uses — the engine
+ * (`airliner`, `fastjet`, …) that every other analyst record uses - the engine
  * treats `aircraftClass` as a free-text field, so this is just one more value
  * to filter and group on, never an enum it has to know about. Deliberately the
  * STYLE-INDEPENDENT id, not the `tr3bHot` sprite variant: a query must return
@@ -86,7 +86,7 @@ export function tr3bCount() {
   return _converted.size;
 }
 
-/** Drop every conversion. Test/reset seam — production has no caller. */
+/** Drop every conversion. Test/reset seam - production has no caller. */
 export function clearTr3bRegistry() {
   _converted.clear();
 }

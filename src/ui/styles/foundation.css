@@ -1,5 +1,5 @@
 /* ═══════════════════════════════════════════════
-   GOD'S EYE VIEW — Dark Sci-Fi UI
+   GOD'S EYE VIEW - Dark Sci-Fi UI
    Apple meets Blade Runner
    ═══════════════════════════════════════════════ */
 
@@ -113,7 +113,7 @@ body {
 
 /* Unified world-overlay host: detection uses one host-owned blend surface
    beneath the shared text/card canvas; both share one frame path. The root
-   holds ONLY the card canvas — it is a stacking context (z-index below), and
+   holds ONLY the card canvas - it is a stacking context (z-index below), and
    a canvas that blends against the scene cannot live inside one. */
 #world-overlay-root {
   position: absolute;
@@ -133,7 +133,7 @@ body {
   pointer-events: none;
 }
 
-/* Scope mask — the explicit circular viewport treatment (see
+/* Scope mask - the explicit circular viewport treatment (see
    src/scopeMask.js for the emergent-artifact history). z2 keeps it above
    the WebGL scene but under the z5 detection surface, preserving the old
    compositing order where detection's blend rode the masked scene. */
@@ -143,7 +143,7 @@ body {
   width: 100%;
   height: 100%;
   /* z1 like the celestial ring; the ring is appended LATER so DOM order
-     keeps it ABOVE the mask — matching the old stacking, where the DOM
+     keeps it ABOVE the mask - matching the old stacking, where the DOM
      ring rode above the in-scene scope artifact. Detection (z5) and the
      overlay root (z6) stay above both. */
   z-index: 1;
@@ -151,7 +151,7 @@ body {
 }
 
 /* The detection surface is host-owned but parented into #cesiumContainer
-   (position:absolute, z-index:auto — NOT a stacking context) so its
+   (position:absolute, z-index:auto - NOT a stacking context) so its
    `mix-blend-mode: screen` composites against the WebGL scene. z5 keeps it
    under the z6 root that carries the shared card canvas; do not move this
    surface inside #world-overlay-root, which would isolate the blend. */
@@ -200,7 +200,7 @@ body.cockpit-mode #cockpit-cloud-effects.active {
   position: absolute;
   inset: 0;
   /* Above the z1 scope mask regardless of DOM order (the ring is built by
-     StyleManager before the scope installs) — the ring always rode above
+     StyleManager before the scope installs) - the ring always rode above
      the scope treatment. Detection (z5) and the overlay root (z6) stay on
      top of both. */
   z-index: 2;
@@ -289,7 +289,7 @@ body.cockpit-mode #cockpit-cloud-effects.active {
 }
 
 /* Data-source attribution (Google Maps / 3D Tiles, etc.).
-   Required by the Google Maps Platform Terms of Service — keep it visible.
+   Required by the Google Maps Platform Terms of Service - keep it visible.
    Styled to be unobtrusive but legible against the dark UI. */
 #cesium-credits {
   position: fixed;
@@ -301,7 +301,7 @@ body.cockpit-mode #cockpit-cloud-effects.active {
   left: 36px;
   z-index: 90;
   max-width: 90vw;
-  /* Keep the Google logo + "Data attribution" link on ONE line — they were wrapping to a second
+  /* Keep the Google logo + "Data attribution" link on ONE line - they were wrapping to a second
      row (looked like it was falling over). nowrap + a roomy max-width holds them inline. */
   white-space: nowrap;
   pointer-events: auto;
@@ -367,15 +367,15 @@ body.cockpit-mode #cockpit-cloud-effects.active {
 }
 /* Clean-view / recording: the Google + Cesium attribution MUST stay visible.
    Google Maps Platform ToS and Cesium's terms require the credit whenever the
-   content is displayed — and these are exactly the modes used to record demos
+   content is displayed - and these are exactly the modes used to record demos
    and launch videos, so hiding #cesium-credits here (as it was before) shipped
-   non-compliant footage. The full credit line — Cesium/Ion logo, "Google Maps",
-   and the "Data attribution" link that opens the per-layer license popover —
+   non-compliant footage. The full credit line - Cesium/Ion logo, "Google Maps",
+   and the "Data attribution" link that opens the per-layer license popover -
    stays on screen; it's already styled small and unobtrusive above. The GEV
    chrome (panels/HUD) still fades via its own rules; only the required notice
    is exempt. (Note: Cesium re-applies inline styles on the credit elements each
    frame, so the on-screen credit content is owned by Cesium's update loop, not
-   CSS overrides — we deliberately don't fight it here.) */
+   CSS overrides - we deliberately don't fight it here.) */
 
 #gev-voice-control {
   position: fixed;

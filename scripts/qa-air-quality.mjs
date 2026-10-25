@@ -1,13 +1,13 @@
 /**
- * qa-air-quality.mjs — headless proof for the Air quality layer.
+ * qa-air-quality.mjs - headless proof for the Air quality layer.
  *
  * Checks what unit tests cannot: that the live ECCC feed answers, that readings
  * reach the app in the provider-shaped form other networks will share, and that
  * the Weather readout descriptor carries a legend and an in-view list.
  *
  * AQHI is reported by ECCC as an integer from 1 with "10+" above ten. The API
- * returns the underlying decimal, so a reading arriving as 1.08 — or a station
- * with no reading surfacing as a confident 1 — is a real defect this catches.
+ * returns the underlying decimal, so a reading arriving as 1.08 - or a station
+ * with no reading surfacing as a confident 1 - is a real defect this catches.
  *
  * Run:  node scripts/qa-air-quality.mjs --url http://localhost:4173
  */
@@ -25,7 +25,7 @@ const results = [];
 function record(name, ok, detail) {
   results.push({ name, ok, detail });
   const tag = ok ? '\x1b[32mPASS\x1b[0m' : '\x1b[31mFAIL\x1b[0m';
-  console.log(`  [${tag}] ${name}${detail ? `  — ${detail}` : ''}`);
+  console.log(`  [${tag}] ${name}${detail ? `  - ${detail}` : ''}`);
 }
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -104,7 +104,7 @@ async function main() {
     if (zones.length < 3) exitCode = 1;
 
     // The card's whole point is "highest readings in view", so put the camera
-    // over Canada before asserting on it — the default view is over Austin,
+    // over Canada before asserting on it - the default view is over Austin,
     // where an empty in-view list is correct and proves nothing.
     await page.evaluate(() => {
       const gev = window.__godsEyeView;

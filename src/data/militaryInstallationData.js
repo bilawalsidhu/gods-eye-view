@@ -19,12 +19,12 @@ const CLASS_BY_MILITARY_TAG = {
 
 /**
  * How an UNNAMED feature reads on the map (owner playtest 2026-08-18: the old
- * fallback surfaced "range (10981656305)" — an OSM primary key shown to a human
+ * fallback surfaced "range (10981656305)" - an OSM primary key shown to a human
  * as if it were a place name).
  *
  * Only the classes CLASS_BY_MILITARY_TAG can actually produce need an entry;
  * anything else title-cases its class, which already reads correctly for plain
- * nouns. The OSM id is not lost — it stays on `id` and on `sources[].id`, where
+ * nouns. The OSM id is not lost - it stays on `id` and on `sources[].id`, where
  * attribution and the details panel read it.
  */
 // The labels stay English in data (the server provider and AI tools read the
@@ -66,12 +66,12 @@ function pointFrom(element) {
 
   // Bounds midpoint fallback (field test 2026-08-28, Warendorf: nothing drawn).
   // The proxy asks for `out center tags geom`, but Overpass takes the LAST
-  // geometry mode only — `geom` wins and no `center` is ever emitted. Every
+  // geometry mode only - `geom` wins and no `center` is ever emitted. Every
   // way and relation therefore arrived point-less and was dropped here, so the
   // layer rendered nodes and nothing else (San Diego: 149 of 228 kept, all the
   // ways and relations gone; Warendorf has no nodes at all, hence an empty
   // screen over a mapped Bundeswehr barracks). `bounds` accompanies exactly
-  // those elements — including relations, which carry no `geometry` — so it
+  // those elements - including relations, which carry no `geometry` - so it
   // recovers all of them without touching the query or the footprint path.
   const bounds = element?.bounds;
   // JSON nulls, booleans, and empty strings must not coerce to a false 0,0 site.

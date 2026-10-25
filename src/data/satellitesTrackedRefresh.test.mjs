@@ -193,7 +193,7 @@ test('a tracked docked cluster consolidates its companions onto one card', () =>
   // ISS and everything berthed to it are separate real tracks at one position,
   // so their ambient labels stack underneath the tracked card. Owner ruling:
   // consolidate them as secondary info on that card, and suppress only those
-  // members — never unrelated satellites that merely happen to be nearby.
+  // members - never unrelated satellites that merely happen to be nearby.
   const entity = { gevLabelModel: { title: 'OLD', details: ['? km'] } };
   const point = { position: new Cesium.Cartesian3() };
   const viewer = { camera: null, scene: { frameState: { frameNumber: 1 } } };
@@ -246,7 +246,7 @@ test('a tracked docked cluster consolidates its companions onto one card', () =>
 
   // Scoping is encoded in that string: THREE neighbours were seeded but only two
   // are counted (the named one plus "+1"). The satellite 50 km away is not part
-  // of the cluster and keeps its own identity and label — the owner's explicit
+  // of the cluster and keeps its own identity and label - the owner's explicit
   // constraint that unrelated nearby satellites are never suppressed.
   assert.doesNotMatch(details[2], /UNRELATED/);
   assert.doesNotMatch(details[2], /\+2/);

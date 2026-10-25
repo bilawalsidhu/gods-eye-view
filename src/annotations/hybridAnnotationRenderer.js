@@ -2,7 +2,7 @@ import { createWorldAnnotationRenderer } from './worldAnnotationRenderer.js';
 import { createScreenAnnotationRenderer } from './screenAnnotationRenderer.js';
 
 /**
- * Hybrid annotation renderer (Direction C — the recommended production blend).
+ * Hybrid annotation renderer (Direction C - the recommended production blend).
  *
  * Routes each mark to the renderer that does it best:
  *   - `area` footprints  → WORLD-space, so the outline/fill drapes onto and
@@ -21,7 +21,7 @@ import { createScreenAnnotationRenderer } from './screenAnnotationRenderer.js';
 export function createHybridAnnotationRenderer(viewer) {
   const world = createWorldAnnotationRenderer(viewer);
   const screen = createScreenAnnotationRenderer(viewer);
-  // anno.id -> { worldProxy?, screenProxy? } — proxies own the sub-renderer state.
+  // anno.id -> { worldProxy?, screenProxy? } - proxies own the sub-renderer state.
   const routed = new Map();
 
   function add(anno) {
@@ -29,7 +29,7 @@ export function createHybridAnnotationRenderer(viewer) {
     // Route the entry FIRST, then fill it in. A sub-renderer throw (WebGL loss
     // mid-add) otherwise stranded whatever the earlier sub-renderer had already
     // created: `routed` never learned the id, so remove() was a no-op and the
-    // engine's rollback could not reach the orphan — a re-annotate of the same
+    // engine's rollback could not reach the orphan - a re-annotate of the same
     // geometry then stacked a second mark over it. Registered up front, the
     // partial entry is addressable and remove() cleans exactly what exists.
     routed.set(anno.id, entry);
@@ -153,7 +153,7 @@ export function createHybridAnnotationRenderer(viewer) {
 
 /**
  * A proxy that inherits from `anno` via the prototype chain (so live fields the
- * engine mutates each tick — `alpha`, `bornAt`, `expiring` — are read through),
+ * engine mutates each tick - `alpha`, `bornAt`, `expiring` - are read through),
  * with a few own properties overridden. Sub-renderers store their own state
  * (`_entities`, SVG refs) as own properties on the proxy, isolated per route.
  */

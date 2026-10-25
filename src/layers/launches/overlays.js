@@ -76,7 +76,7 @@ export function createOverlays({ state: layerState, services, parts, source }) {
       .replace(/\s+/g, ' ')
       .trim()
       .split(' | ')[0];
-    const compact = text.split(' — ')[0].trim();
+    const compact = text.split(' - ')[0].trim();
     return compact.length > maxLength
       ? `${compact.slice(0, maxLength - 1).trimEnd()}…`
       : compact;

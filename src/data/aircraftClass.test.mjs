@@ -19,14 +19,14 @@ test('bizjet + uav classes (2026-08-16 Hangar fleet)', () => {
   assert.equal(classifyAircraft({ typeCode: 'C56X' }), 'bizjet');
   assert.equal(classifyAircraft({ typeCode: 'GLF5' }), 'bizjet');
   assert.equal(classifyAircraft({ typeCode: 'CL60' }), 'bizjet');
-  // SF50 Cirrus Vision Jet is a JET — it must NOT fall back to the light/prop class.
+  // SF50 Cirrus Vision Jet is a JET - it must NOT fall back to the light/prop class.
   assert.equal(classifyAircraft({ typeCode: 'SF50' }), 'bizjet');
   assert.equal(classifyAircraft({ typeCode: 'MQ9' }), 'uav');
   assert.equal(classifyAircraft({ typeCode: 'Q4' }), 'uav');
   assert.equal(classifyAircraft({ typeCode: 'TB2' }), 'uav');
 });
 
-test('category fallback (flights layer path — OpenSky extended int)', () => {
+test('category fallback (flights layer path - OpenSky extended int)', () => {
   assert.equal(classifyAircraft({ category: 8 }), 'helicopter');
   assert.equal(classifyAircraft({ category: 6 }), 'widebody');
   assert.equal(classifyAircraft({ category: 7 }), 'fastjet');

@@ -4,7 +4,7 @@ const PHOTON_ENDPOINT = 'https://photon.komoot.io/api/';
 /** Photon is a courtesy service; fail fast rather than hold the search open. */
 const PHOTON_TIMEOUT_MS = 6000;
 
-/** Bounded memo — a search box re-issues the same query on every keystroke. */
+/** Bounded memo - a search box re-issues the same query on every keystroke. */
 const PHOTON_CACHE_MAX = 64;
 
 /**
@@ -39,7 +39,7 @@ const PHOTON_TYPE_TO_GOOGLE = Object.freeze({
  *
  * - Too coarse: a park or lake that arrives without an area type frames at
  *   building range, which is the exact bug `geocodeNavigationMode`'s area types
- *   exist to prevent — searching "Ho Guom" put the camera 26 m over the water.
+ *   exist to prevent - searching "Ho Guom" put the camera 26 m over the water.
  * - Too broad: Photon classifies a town square as `type: 'locality'`, so
  *   deferring to the coarse class frames Times Square as if it were a city.
  *   The explicit `null` below is what stops that.
@@ -69,7 +69,7 @@ const OSM_TAG_TO_GOOGLE = Object.freeze({
 });
 
 /**
- * OSM keys whose features are areas whatever their value — lakes, rivers,
+ * OSM keys whose features are areas whatever their value - lakes, rivers,
  * peaks, woods, protected land. Photon reports every one of these with
  * `type: 'other'`, so the key is the only signal that they are not buildings.
  */
@@ -123,7 +123,7 @@ export function photonExtentToBounds(extent) {
 }
 
 /**
- * Human label for a Photon feature — its name plus the coarsest containing
+ * Human label for a Photon feature - its name plus the coarsest containing
  * places that are not already in the name, mirroring the single-line address
  * Google's `formatted_address` provides.
  * @param {object} properties - Photon feature `properties`.
@@ -182,13 +182,13 @@ export function normalizePhotonFeature(feature) {
  * Photon request URL for one query.
  *
  * `bias` is the SAME `"swLat,swLng|neLat,neLng"` string `viewportBias()` builds
- * for the Google call, so the two paths cannot drift apart — but it is sent as
+ * for the Google call, so the two paths cannot drift apart - but it is sent as
  * Photon's `lat`/`lon` PROXIMITY bias, not as `bbox`.
  *
  * That distinction is the whole correctness of this function. Google's `bounds`
  * prefers results inside the box and still returns ones outside it; Photon's
  * `bbox` is a hard filter. Translating the rectangle literally makes every
- * search for somewhere off-screen return nothing — searching "Ho Guom, Ha Noi"
+ * search for somewhere off-screen return nothing - searching "Ho Guom, Ha Noi"
  * while looking at Austin answers `features: []`. Sent as `lat`/`lon` it finds
  * Hoan Kiem Lake, while "Sixth Street" still resolves to Austin's over Austin
  * and to England's over London. Soft bias is the semantics Google gives, so
@@ -282,7 +282,7 @@ function trimPhotonCache(cache) {
  * A caller that remembers negative results needs both halves. "Photon has no
  * such place" is a verdict and may be cached; "Photon did not reply" is a
  * network blip, and caching THAT keeps the app answering "not found" from
- * memory long after the network came back — a whole session, for a key that
+ * memory long after the network came back - a whole session, for a key that
  * would now resolve. Conflating the two is the defect this app already had to
  * repair once in the Overpass disk cache, where refusals were persisted with
  * normal data TTLs.
@@ -339,7 +339,7 @@ export async function geocodeKeylessWithOutcome(
 
   // Bias decides WHICH match wins, never WHAT counts as a match. Photon scores
   // proximity against the name, so from Austin "Huế" came back as Hutto, Texas
-  // and "Hạ Long" as Long Branch — near misses beating the exact name by
+  // and "Hạ Long" as Long Branch - near misses beating the exact name by
   // distance alone. Measured over twelve Vietnamese place names, three resolved
   // to the wrong continent. So a biased answer is only accepted when it leads
   // with the name asked for; otherwise the same query runs unbiased, which is

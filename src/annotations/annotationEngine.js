@@ -14,12 +14,12 @@ import {
 import { ringCentroid } from './drawMode.js';
 
 // Dev convenience: expose the app's Cesium instance for console/preview probing
-// (single shared module instance — avoids dual-Cesium state bugs when testing).
+// (single shared module instance - avoids dual-Cesium state bugs when testing).
 if (typeof window !== 'undefined' && !window.__CESIUM__)
   window.__CESIUM__ = Cesium;
 
 /**
- * Annotation engine — the voice agent's "whiteboard" over the 3D world.
+ * Annotation engine - the voice agent's "whiteboard" over the 3D world.
  *
  * Responsibilities:
  *   - resolve voice annotation requests (names → world anchors + footprints)
@@ -32,7 +32,7 @@ if (typeof window !== 'undefined' && !window.__CESIUM__)
 
 let _seq = 0;
 const COLORS = new Set(['primary', 'amber', 'cyan', 'green', 'red']);
-// Entity FACTS the voice model may attach to an annotation (annotate_map.entityKind) —
+// Entity FACTS the voice model may attach to an annotation (annotate_map.entityKind) -
 // what kind of thing the target IS, routing the resolver (e.g. point_feature keeps a
 // monument point-first). Unknown values are dropped, never guessed.
 const ENTITY_KINDS = new Set([
@@ -50,7 +50,7 @@ const FADE_MS = 1200;
 const MAX_LIVE_ANNOTATIONS = 120;
 // Deferred-outline retry backoff. A TRANSIENT Overpass failure (slow mirror, network
 // blip) aborts the client fetch, but the /api/overpass proxy keeps the upstream
-// request going and caches the late completion — so a re-run ~8 s later is usually a
+// request going and caches the late completion - so a re-run ~8 s later is usually a
 // warm cache hit, and one more at ~25 s covers a genuinely slow mirror. A DEFINITIVE
 // no-polygon answer is never retried.
 const OUTLINE_RETRY_DELAYS_MS = [8000, 25000];
@@ -59,12 +59,12 @@ const OUTLINE_UPGRADE_CONCURRENCY = 2;
 /**
  * Run a deferred-outline resolver with transient-retry backoff. Tri-state contract
  * (same as resolveAnnotationTarget's resolveOutline):
- *   footprint object — resolved;
- *   null            — DEFINITIVE no-polygon (never retried; the honest point stands);
- *   undefined       — TRANSIENT failure (re-run once per delaysMs entry, then give up);
- *   rate-limit object — OVERPASS THROTTLE (one retry, honoring Retry-After + ladder).
+ *   footprint object - resolved;
+ *   null            - DEFINITIVE no-polygon (never retried; the honest point stands);
+ *   undefined       - TRANSIENT failure (re-run once per delaysMs entry, then give up);
+ *   rate-limit object - OVERPASS THROTTLE (one retry, honoring Retry-After + ladder).
  * `isStale()` is consulted after each backoff wait so a cleared/superseded board stops
- * retrying immediately. A thrown resolver counts as definitive — the pre-retry
+ * retrying immediately. A thrown resolver counts as definitive - the pre-retry
  * catch→point behavior. Exported for tests.
  */
 export async function resolveOutlineWithRetry(
@@ -81,7 +81,7 @@ export async function resolveOutlineWithRetry(
     try {
       fp = await resolveOutline();
     } catch {
-      fp = null; // hard failure — definitive, keep the honest point
+      fp = null; // hard failure - definitive, keep the honest point
     }
     if (isUnavailableCapability(fp)) return fp;
     if (isRateLimitedOutcome(fp)) {
@@ -105,7 +105,7 @@ export async function resolveOutlineWithRetry(
 
 /**
  * Pending-phase dedup key for a NAMED target: lowercased, trimmed, and stripped of
- * trailing comma-separated locality qualifiers — so "California" and "California,
+ * trailing comma-separated locality qualifiers - so "California" and "California,
  * United States" are the same asked-for THING while their outlines resolve. Identity
  * becomes GEOMETRY the moment the outline lands; this key is only the stand-in while
  * geometry is unknown. Exported for tests.
@@ -141,7 +141,7 @@ export function createAnnotationEngine({
   const outlineQueue = [];
   let activeOutlineUpgrades = 0;
   // Deferred-outline lifecycle listeners (the voice layer): notified ONCE per upgrade
-  // task with the FINAL outcome — resolved or failed — so narration that said
+  // task with the FINAL outcome - resolved or failed - so narration that said
   // "tracing the boundary now" can later honestly confirm or correct itself.
   const outlineListeners = new Set();
 
@@ -175,7 +175,7 @@ export function createAnnotationEngine({
   }
 
   // A controller stays abortable (in activeControllers) while its annotate() call OR any
-  // progressive outline-upgrade task it spawned is still running — clear() must be able to
+  // progressive outline-upgrade task it spawned is still running - clear() must be able to
   // abort in-flight Overpass fetches even after the tool result has already returned.
   function retainController(c) {
     c._retain = (c._retain || 0) + 1;
@@ -198,7 +198,7 @@ export function createAnnotationEngine({
    * Undo a renderer add that threw PART-WAY through. The renderers build a mark
    * across two sub-renderers / several DOM inserts, so a throw can leave world
    * geometry or an SVG group behind that the engine's map rollback alone cannot
-   * reach — and the next annotate of the same geometry would then stack a fresh
+   * reach - and the next annotate of the same geometry would then stack a fresh
    * mark over the orphan. remove() tolerates partial and absent state, so this
    * is safe to call unconditionally; it must never mask the original failure.
    * (review round 2)
@@ -237,7 +237,7 @@ export function createAnnotationEngine({
         renderer.sync(annotations);
         syncAnnotationHold();
       }
-      // Stop once the board is STABLE — persistent marks (persist=true is the default)
+      // Stop once the board is STABLE - persistent marks (persist=true is the default)
       // finish fading in after ~260ms and never change again, so without this the loop
       // would spin O(N) every frame forever. ensureTicking() restarts on the next
       // add() or fadeOutAll().
@@ -311,9 +311,9 @@ export function createAnnotationEngine({
           }
           const anno = buildAnnotation(spec, resolved, persist);
           // De-dup: the voice model re-narrates the same places across turns, and
-          // annotations now accumulate by default — so without this, "Presidio" / "Marina"
+          // annotations now accumulate by default - so without this, "Presidio" / "Marina"
           // pile up into duplicate stacked labels. A live mark that is semantically the SAME
-          // (same type+anchor AND equivalent geometry — keyed on GEOMETRY, not label/color, so
+          // (same type+anchor AND equivalent geometry - keyed on GEOMETRY, not label/color, so
           // "Marina" and "Marina District" collapse) is refreshed or replaced in place, never
           // stacked. De-dup runs BEFORE the cap so a re-narration still refreshes when full.
           const dup = findDuplicate(anno);
@@ -333,7 +333,7 @@ export function createAnnotationEngine({
               // unchanged, so no cap concern; no stale copy stacked underneath).
               // A progressive replacement inherits the dup's already-resolved geometry so an
               // outline never visibly vanishes during a recaption; its own upgrade (below)
-              // refreshes it — usually instantly from the footprint cache.
+              // refreshes it - usually instantly from the footprint cache.
               if (anno.pendingOutline && !anno.ring && dup.ring) {
                 anno.ring = dup.ring;
                 anno.polygons = dup.polygons || null;
@@ -350,7 +350,7 @@ export function createAnnotationEngine({
                 renderer.add(anno);
               } catch (swapError) {
                 // Same contract as the fresh path: a renderer/WebGL throw must
-                // not leave a phantom annotation behind — and with it a
+                // not leave a phantom annotation behind - and with it a
                 // PERMANENT 'annotations' hold that defeats the idle governor
                 // until an explicit clear. Roll the map back and re-sync.
                 rollbackRendererState(anno);
@@ -395,7 +395,7 @@ export function createAnnotationEngine({
                   controller,
                 );
               }
-              // Same result builder as the fresh path (full metadata) but the existing id —
+              // Same result builder as the fresh path (full metadata) but the existing id -
               // route fallback / approximate honesty fields survive a re-narration.
               results.push({
                 ...okResult(anno, resolved, dup.id),
@@ -404,7 +404,7 @@ export function createAnnotationEngine({
             }
             continue;
           }
-          // NEW mark — enforce the HARD live cap here, synchronously immediately before the
+          // NEW mark - enforce the HARD live cap here, synchronously immediately before the
           // set (no await in between), so overlapping annotate() calls can't both slip past.
           if (annotations.size >= MAX_LIVE_ANNOTATIONS) {
             capped = true;
@@ -451,7 +451,7 @@ export function createAnnotationEngine({
     }
 
     // A clear/new-topic landed mid-flight: drop everything this call produced and
-    // do not touch the renderer or camera — the board now belongs to a newer call.
+    // do not touch the renderer or camera - the board now belongs to a newer call.
     if (superseded()) {
       return {
         ok: false,
@@ -513,7 +513,7 @@ export function createAnnotationEngine({
       // the route the user asked for (A→B→C must not become A→C), so fail loudly
       // with the specific waypoint(s) so the agent can say what it couldn't find.
       if (failed.length) {
-        // Static message (no raw place text in prose — names live in failedTargets,
+        // Static message (no raw place text in prose - names live in failedTargets,
         // a structured DATA field, to avoid a prompt-injection surface in tool output).
         const err = new Error('could not locate one or more route waypoints');
         err.failedTargets = failed;
@@ -610,11 +610,11 @@ export function createAnnotationEngine({
         spec.intent === 'around_the_thing' ? 'around_the_thing' : 'the_thing',
       entityKind: ENTITY_KINDS.has(spec?.entityKind) ? spec.entityKind : null,
       // The label often carries the ask's true shape when the target omits it
-      // ("target: Texas State Capitol" + "label: Capitol grounds") — a resolver HINT only.
+      // ("target: Texas State Capitol" + "label: Capitol grounds") - a resolver HINT only.
       labelHint: typeof spec?.label === 'string' ? spec.label : null,
       // PROGRESSIVE resolution: anchor now (~100-400 ms Places/Geocode), outline later.
       // Footprint fetches are the slow, flaky leg (Overpass p50 ≈ 1-3 s, p90 ≈ 12 s
-      // timeout — field test 7 logs); deferring them lets the mark appear and the tool
+      // timeout - field test 7 logs); deferring them lets the mark appear and the tool
       // result return while the outline resolves, then upgrades the mark in place.
       deferFootprint: wantFootprint,
       allowDistant,
@@ -628,7 +628,7 @@ export function createAnnotationEngine({
    * recentred anchor) and re-route it through the renderer (a ring moves an area from the
    * screen-space callout to the world-space drape). The mark never disappears here: on a
    * failed / aborted / superseded resolution it simply stays an honest point (marks are
-   * only ever removed by an explicit clear — the no-auto-clear invariant).
+   * only ever removed by an explicit clear - the no-auto-clear invariant).
    */
   function startOutlineUpgrade(anno, resolveOutline, myGen, controller) {
     if (anno._outlineTask) return; // one upgrade per mark at a time
@@ -664,7 +664,7 @@ export function createAnnotationEngine({
     const { anno, resolveOutline, myGen, controller } = task;
     try {
       let fp = null;
-      // Geometry upgrade is best-effort — the point stays on any failure. A TRANSIENT
+      // Geometry upgrade is best-effort - the point stays on any failure. A TRANSIENT
       // failure (slow Overpass mirror) re-runs on a short backoff: the /api/overpass
       // proxy caches the late completion, so the retry is usually a warm cache hit.
       fp = await resolveOutlineWithRetry(resolveOutline, {
@@ -696,11 +696,11 @@ export function createAnnotationEngine({
         // Re-route: ring presence decides world-drape vs screen-space in the renderer.
         renderer.update(anno);
         // GEOMETRY dedup, now that geometry is known: two DIFFERENT targets can resolve
-        // to the SAME polygon ("Marina" / "Marina District") — the identity-is-geometry
+        // to the SAME polygon ("Marina" / "Marina District") - the identity-is-geometry
         // invariant says they are ONE mark. The pending-phase dedup keys on target (it
         // can't see geometry yet), so enforce the invariant here: collapse any other
         // resolved area with the same anchor + ring, keeping THIS mark (latest caption
-        // wins, exactly like the add-time replace path). Not an auto-clear — it removes
+        // wins, exactly like the add-time replace path). Not an auto-clear - it removes
         // a second representation of the same mark, never a distinct one.
         for (const other of annotations.values()) {
           if (
@@ -727,7 +727,7 @@ export function createAnnotationEngine({
       renderer.sync(annotations);
       // Final outcome → the voice layer (place names ride as structured DATA fields).
       // 'failed' covers both the definitive no-polygon and an exhausted transient
-      // retry — either way the mark honestly stays a point.
+      // retry - either way the mark honestly stays a point.
       emitOutlineEvent({
         id: anno.id,
         label: anno.label || null,
@@ -764,14 +764,14 @@ export function createAnnotationEngine({
       outline: Boolean(anno.ring),
       // The anchor is placed and returned fast; the footprint is still being traced and
       // will appear on its own (or the mark honestly stays a point). Lets the voice
-      // layer narrate without waiting out a slow Overpass — and without calling the
+      // layer narrate without waiting out a slow Overpass - and without calling the
       // missing outline a failure.
       ...(anno.pendingOutline ? { outlinePending: true } : {}),
       ...(anno.outlineUnavailable
         ? { outlineUnavailable: true, message: 'Detailed outline unavailable' }
         : {}),
       // approximate=true means the area was SYNTHESIZED (a buffered blob around a label
-      // point), not a real OSM boundary — so the voice layer can be honest.
+      // point), not a real OSM boundary - so the voice layer can be honest.
       ...(anno.synthesized ? { approximate: true } : {}),
       // Route-specific signal so the voice layer can be honest about an OSRM outage:
       // fallback=true means a straight direct line, not a real route.
@@ -787,11 +787,11 @@ export function createAnnotationEngine({
   }
 
   /** A live mark that is the SAME annotation as `anno`, or null. For shapes with real geometry
-   *  (area/arrow/route) identity is GEOMETRY, not label/color — so "Marina" and "Marina District"
+   *  (area/arrow/route) identity is GEOMETRY, not label/color - so "Marina" and "Marina District"
    *  (same polygon) collapse to one mark, while a same-anchor DIFFERENT shape ("the Capitol"
    *  building vs "around the Capitol" buffer) is NOT collapsed; the caller replaces label/color in
    *  place so the latest caption wins. For BARE POINTS (pin/highlight/label) there is no geometry
-   *  to compare, so identity also requires the LABEL to match — otherwise distinct things that a
+   *  to compare, so identity also requires the LABEL to match - otherwise distinct things that a
    *  degenerate geocode stacks on one point (several Capitol monuments) would erase each other. */
   function findDuplicate(anno) {
     if (!anno.anchor) return null;
@@ -801,7 +801,7 @@ export function createAnnotationEngine({
       Math.abs(a.lon - b.lon) < 5e-4 &&
       Math.abs(a.lat - b.lat) < 5e-4;
     // FULL per-vertex geometry comparison (the live cap is only 120 and this runs solely for
-    // candidates that already matched type+label+anchor, so it's cheap) — so two DIFFERENT
+    // candidates that already matched type+label+anchor, so it's cheap) - so two DIFFERENT
     // same-length rings/paths at the same anchor are never falsely merged.
     const ringSame = ringsEqual;
     const pathSame = (a, b) => {
@@ -818,7 +818,7 @@ export function createAnnotationEngine({
       // so the latest caption wins). Resolution is deterministic, so the same place re-resolves
       // to the same centroid; a ~50 m epsilon absorbs any rounding.
       if (!near(ex.anchor, anno.anchor)) continue;
-      // Geometry equivalence per type — distinct shapes at the same anchor are NOT dupes.
+      // Geometry equivalence per type - distinct shapes at the same anchor are NOT dupes.
       if (anno.type === 'area') {
         if (anno.pendingOutline || ex.pendingOutline) {
           // Progressive outline still resolving on one side → geometry is unknowable yet,
@@ -827,7 +827,7 @@ export function createAnnotationEngine({
           // without collapsing different asks at one anchor ("the Capitol" vs "the
           // Capitol grounds" pend ~the same point but are different targets). Same-place
           // DIFFERENT-target asks ("Marina" / "Marina District") are collapsed later by
-          // the post-resolution geometry dedup in startOutlineUpgrade — geometry stays
+          // the post-resolution geometry dedup in startOutlineUpgrade - geometry stays
           // the identity; the target is only the stand-in while geometry is unknown.
           if (!anno.targetKey || !ex.targetKey) continue;
           if (anno.targetKey !== ex.targetKey) continue;
@@ -847,7 +847,7 @@ export function createAnnotationEngine({
       } else {
         // pin / highlight / label = a bare POINT with no distinguishing geometry. Two DIFFERENT
         // labels at the same spot are two different things a degenerate geocode stacked on one
-        // point (e.g. several Texas Capitol monuments all geocoding to the dome centroid) — NOT a
+        // point (e.g. several Texas Capitol monuments all geocoding to the dome centroid) - NOT a
         // duplicate. Only collapse a genuine re-narration of the SAME point (same label); distinct
         // labels stay as separate marks (their callouts de-collide in the renderer).
         const sameLabel =
@@ -942,18 +942,18 @@ export function createAnnotationEngine({
       footprintKind: resolved.footprintKind || null, // 'building' | 'area'
       buildingHeight: resolved.buildingHeight || null, // meters, for extruded volume
       synthesized: Boolean(resolved.synthesized), // approximate buffered area → dashed render
-      // Progressive outline: the anchor is placed, the footprint is still resolving —
+      // Progressive outline: the anchor is placed, the footprint is still resolving -
       // the upgrade task fills ring/kind in place when it lands. Transient render state
       // (not persisted).
       pendingOutline: typeof resolved.resolveOutline === 'function',
       outlineUnavailable: Boolean(resolved.outlineUnavailable),
-      // Which THING + SHAPE was asked for — the dedup identity while geometry is still
+      // Which THING + SHAPE was asked for - the dedup identity while geometry is still
       // pending (see findDuplicate). targetKey is the normalized place name with trailing
       // locality qualifiers stripped ("California, United States" ≡ "California"; null for
       // coord/pixel specs, which never pending-collapse).
       targetKey: normalizeTargetKey(spec?.target),
       intentKey: spec?.intent === 'around_the_thing' ? 'around' : 'thing',
-      // Places viewport (lat/lng box framing the feature) — sizes the flyTo range while
+      // Places viewport (lat/lng box framing the feature) - sizes the flyTo range while
       // no ring exists yet.
       viewport: resolved.viewport || null,
     };
@@ -985,7 +985,7 @@ export function createAnnotationEngine({
 
   /**
    * Camera assist (field test 8): the voice model leaves flyTo false when it believes the
-   * user is already looking at the subject — but after a fly_to elsewhere, a fresh mark can
+   * user is already looking at the subject - but after a fly_to elsewhere, a fresh mark can
    * land entirely OFF-SCREEN and the user sees nothing happen (Lady Bird Lake → SRV statue).
    * When NOTHING this call drew or refreshed is visible, gently frame those marks. Never
    * fires when at least one mark is already in view (don't fight the user's camera), and
@@ -1031,7 +1031,7 @@ export function createAnnotationEngine({
   }
 
   /** Whether a lon/lat point is inside the camera frustum AND on the near side of the
-   *  globe. On any API hiccup, report visible — bad data must never move the camera. */
+   *  globe. On any API hiccup, report visible - bad data must never move the camera. */
   function isPointOnScreen(p) {
     try {
       const camera = viewer.camera;
@@ -1170,7 +1170,7 @@ export function createAnnotationEngine({
     },
 
     /**
-     * Self-running narration "tour" — sequences camera moves and annotations
+     * Self-running narration "tour" - sequences camera moves and annotations
      * with pauses the way the voice agent would, so the whole experience can be
      * watched end-to-end without a mic. `window.__gevAnnotations.tour()`.
      */
@@ -1231,7 +1231,7 @@ export function createAnnotationEngine({
             type: 'area',
             target: 'Presidio of San Francisco',
             // i18n-ignore: dev demo of voice-agent labels (not translated)
-            label: 'The Presidio — a former Army base',
+            label: 'The Presidio - a former Army base',
             color: 'green',
             footprint: true,
           },
@@ -1305,7 +1305,7 @@ function wait(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-/** Exact per-vertex ring equality ([[lon,lat],…], ~1m epsilon) — the geometry-identity test. */
+/** Exact per-vertex ring equality ([[lon,lat],…], ~1m epsilon) - the geometry-identity test. */
 function ringsEqual(a, b) {
   const la = a ? a.length : 0;
   const lb = b ? b.length : 0;
@@ -1379,7 +1379,7 @@ function computeAlpha(anno, now) {
   return Math.max(0, Math.min(fadeIn, out));
 }
 
-/** Whether a mark still has alpha animation ahead — fading in, fading out, or a TTL
+/** Whether a mark still has alpha animation ahead - fading in, fading out, or a TTL
  *  fade not yet finished. A persistent mark past its ~260ms fade-in is stable, so the
  *  tick loop can stop. */
 function pendingAnimation(anno, now) {
@@ -1397,7 +1397,7 @@ function pendingAnimation(anno, now) {
 
 // Region-scale viewports (a mountain range, sea, or desert can span thousands of km)
 // must not launch the assist flight to space: frameAnnotation flies at range × 2.4,
-// so this cap keeps the camera at ≈290 km — the same regional swath scale the
+// so this cap keeps the camera at ≈290 km - the same regional swath scale the
 // fly_to_location natural-region heuristic uses (owner field test 2026-07-23).
 const VIEWPORT_ASSIST_RANGE_CAP_M = 120000;
 
@@ -1582,17 +1582,17 @@ function composeRouteLabel(baseLabel, distM, durS, mode, fallback) {
   if (!dist) return baseLabel;
   const min = Number.isFinite(durS) ? Math.max(1, Math.round(durS / 60)) : null;
   const word = mode === 'car' ? 'drive' : mode === 'bike' ? 'ride' : 'walk';
-  if (mode === 'manual') return baseLabel ? `${baseLabel} — ${dist}` : dist;
+  if (mode === 'manual') return baseLabel ? `${baseLabel} - ${dist}` : dist;
   // Fallback = routing was unavailable, so we drew a straight line: label it as a
   // direct line with no travel time (never claim an "X min walk" we didn't compute).
   let metrics;
   if (fallback) metrics = `${dist} · direct line (no route)`;
   else metrics = min != null ? `${dist} · ${min} min ${word}` : dist;
-  return baseLabel ? `${baseLabel} — ${metrics}` : metrics;
+  return baseLabel ? `${baseLabel} - ${metrics}` : metrics;
 }
 
 function appendDistance(baseLabel, distM) {
   const dist = formatDistance(distM);
   if (!dist) return baseLabel;
-  return baseLabel ? `${baseLabel} — ${dist}` : dist;
+  return baseLabel ? `${baseLabel} - ${dist}` : dist;
 }

@@ -42,7 +42,8 @@ test('the complete Realtime tool payload pins the manifest-generated layer relea
     // Globe rotation adds one motion; visual keyhole fit and explicit
     // reset guidance/defaults update only move_camera and mode descriptions.
     // Restore base descriptions; append only globe-rotation defaults and fit guidance.
-    '967b5a043b812e2f8c1e190fc571cf12b960c9d4486df736902221aab4d99cf6',
+    // Em dashes were removed from all tool descriptions repo-wide (U+2014 ban).
+    'c534269a5a262ec44848e20f7bd61e8d6860ffcc15f8051674498ed7a935518c',
   );
 });
 

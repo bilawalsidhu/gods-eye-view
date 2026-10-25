@@ -41,7 +41,7 @@ export function createIngestion({
       const previousSelection = layerState._selectedFire;
       layerState._selectedFire = null;
       layerState._fires = adaptFirmsRecords(payload?.fires);
-      layerState._cellCacheByGrid.clear(); // aggregation is per-dataset — new fires, new cells
+      layerState._cellCacheByGrid.clear(); // aggregation is per-dataset - new fires, new cells
       layerState._firesByFrp = [...layerState._fires].sort(
         (a, b) => b.frp - a.frp,
       );
@@ -52,7 +52,7 @@ export function createIngestion({
         : Date.now();
       // Settle the previous selection BEFORE the LOD rebuild. renderCurrentLod
       // runs refreshContextRegistrations(), which deletes every context record
-      // not in the new top-N — including the one the store still points at.
+      // not in the new top-N - including the one the store still points at.
       // Clearing after that deletion fails the ownership guard inside
       // clearSelectedEntityContextForLayer and emits nothing at all, so an
       // eviction-aware readout never hears that its subject is gone.
@@ -85,7 +85,7 @@ export function createIngestion({
 
   /**
    * Find the record in the freshly-loaded set matching a previous selection.
-   * Identity is the detection itself (lat/lon/acquisition time) — indices
+   * Identity is the detection itself (lat/lon/acquisition time) - indices
    * are regenerated every fetch, so object/index identity cannot be used.
    * @param {?Object} previous - Previously selected fire record.
    * @returns {?Object} Matching new record.

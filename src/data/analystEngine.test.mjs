@@ -302,7 +302,7 @@ for (const [label, committedScope, scopeSource] of [
   });
 }
 
-test('analyst: attribute filter — above 40,000 ft (~12,192 m)', async () => {
+test('analyst: attribute filter - above 40,000 ft (~12,192 m)', async () => {
   const r = await makeEngine().query({
     layers: ['flights'], scope: { kind: 'anywhere' },
     filters: [{ field: 'altitudeM', op: 'gt', value: 12192 }],
@@ -327,7 +327,7 @@ test('analyst: ships headed to Oakland (destination contains)', async () => {
   assert.deepEqual(r.items.map((i) => i.id), ['EVERGIVEN']);
 });
 
-test('analyst: superlative — biggest fire in view radius', async () => {
+test('analyst: superlative - biggest fire in view radius', async () => {
   const r = await makeEngine().query({
     layers: ['local-firms'], scope: { kind: 'view' }, sortBy: 'frp', limit: 1,
   });

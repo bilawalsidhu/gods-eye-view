@@ -151,7 +151,7 @@ function setCameraTargetFrame(viewer, frame) {
  * the two agree to 0.02 degrees, but from the full-globe view they are tens of
  * degrees apart, because the point under the middle of the screen is most of a
  * hemisphere away. Reading the camera's pitch there made the toggle choose
- * oblique twice in a row — commanded oblique, camera pitch came back near -77,
+ * oblique twice in a row - commanded oblique, camera pitch came back near -77,
  * still "not tilted", tilt again.
  *
  * @param {{pitch: number}|null} frame From {@link readCameraTargetFrame}.
@@ -357,7 +357,7 @@ export function bindCameraOrientationControls({
   // enough: it only fires past `camera.percentageChanged`, so a rotation of a
   // few degrees leaves the needle pointing at the old bearing.
   subscribe(viewer?.scene?.preRender, sync);
-  // The exact tilt state is refreshed once per gesture, not once per frame —
+  // The exact tilt state is refreshed once per gesture, not once per frame -
   // moveEnd fires when the camera stops, which is where the pick is affordable.
   subscribe(viewer?.camera?.moveEnd, refreshTilt);
   subscribe(viewer?.trackedEntityChanged, animator.cancel);

@@ -14,7 +14,7 @@ const clone = (value) => JSON.parse(JSON.stringify(value));
  *
  * Only one change: a property schema with no `type` (and no enum / anyOf /
  * oneOf / $ref / const that would imply one) gets a permissive scalar union.
- * `analyst_query.filters[].value` is `{}` in production — valid JSON Schema,
+ * `analyst_query.filters[].value` is `{}` in production - valid JSON Schema,
  * but chat templates that print `type` for every property (Gemma's among
  * them) crash on it.
  */
@@ -34,7 +34,7 @@ export function normalizeSchemaForChat(schema) {
 
 /**
  * Every schema location normalizeSchemaForChat changes, as
- * `{ tool, path, from, to }` — logged in summary.md so the per-provider
+ * `{ tool, path, from, to }` - logged in summary.md so the per-provider
  * payload difference is explicit rather than implied.
  */
 export function chatNormalizationDiff(realtimeTools) {
@@ -100,7 +100,7 @@ export function toGeminiSchema(schema) {
 /**
  * Realtime tools → Gemini `functionDeclarations`.
  *   mode 'jsonSchema' (default): pass the production schema verbatim through
- *     `parametersJsonSchema` — full JSON Schema, closest to prompt parity.
+ *     `parametersJsonSchema` - full JSON Schema, closest to prompt parity.
  *   mode 'openapi': convert to the OpenAPI-subset `parameters` field.
  * A tool with no properties gets no parameters field in openapi mode (Gemini
  * rejects an empty OBJECT schema there).

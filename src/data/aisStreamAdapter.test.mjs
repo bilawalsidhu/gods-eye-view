@@ -1,5 +1,5 @@
-// AISStream transport adapter. Exercises the REAL adapter — the same code the
-// Vite plugin runs — against mock sockets that reproduce `ws` semantics,
+// AISStream transport adapter. Exercises the REAL adapter - the same code the
+// Vite plugin runs - against mock sockets that reproduce `ws` semantics,
 // including the window between terminate() and its asynchronous close event.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -39,7 +39,7 @@ function fakeClock(startWall = 1_700_000_000_000, startMono = 10_000) {
 /**
  * Mock socket with `ws` semantics. terminate() destroys the connection
  * synchronously (that is the whole reason ws is used) but, like ws, the
- * 'close' event lands on a later turn — the window in which a stale handler
+ * 'close' event lands on a later turn - the window in which a stale handler
  * can still fire.
  */
 function makeMockTransport() {
@@ -118,7 +118,7 @@ function setup(options = {}) {
     ingestEnvelope: (envelope) => {
       ingested.push(envelope);
       if (typeof options.ingestResult === 'function') return options.ingestResult(envelope);
-      // The REAL production predicate, not a stand-in — otherwise these tests
+      // The REAL production predicate, not a stand-in - otherwise these tests
       // would pass against a liveness rule that never ships.
       return isRecognizedAisEnvelope(envelope);
     },
@@ -167,7 +167,7 @@ test('P0: a pre-disposal close event cannot erase the post-disposal socket', asy
   assert.deepEqual(context.adapter.debug().generations, [2],
     'the replacement must NOT reuse generation 1');
 
-  // The pre-disposal socket's close finally lands — the exact adversarial interleaving.
+  // The pre-disposal socket's close finally lands - the exact adversarial interleaving.
   first.flushClose();
 
   const debug = context.adapter.debug();
@@ -222,7 +222,7 @@ test('P0: at most one connection is ever open across a full failure cycle', asyn
     context.adapter.ensure(ENV);
     assert.ok(context.transport.openConnections() <= 1, 'terminate precedes reconnect');
 
-    // The terminated socket's close lands only later — the ownership window.
+    // The terminated socket's close lands only later - the ownership window.
     context.time.advance(BUDGETS.backoffMs[0] + 1);
     context.adapter.ensure(ENV);
     for (const socket of context.transport.created) socket.flushClose();
@@ -232,7 +232,7 @@ test('P0: at most one connection is ever open across a full failure cycle', asyn
 
 // --- FINDING 2 [P1]: liveness credit and orphan frames --------------------
 
-test('an orphan frame is dropped entirely — no ingestion, no liveness', async () => {
+test('an orphan frame is dropped entirely - no ingestion, no liveness', async () => {
   const context = setup();
   const first = await goLive(context);
 
@@ -454,7 +454,7 @@ test('an auth error envelope goes terminal instead of into the fast ladder', asy
   );
 });
 
-test('repeated auth envelopes never accelerate — the 5s-forever loop is closed', async () => {
+test('repeated auth envelopes never accelerate - the 5s-forever loop is closed', async () => {
   const context = setup();
   let connects = 0;
 
@@ -480,7 +480,7 @@ test('an auth envelope followed by a same-tick close is still classified as auth
   // Worst-case ordering: the peer sends the rejection and hangs up in the same
   // breath. If the pipeline suspended mid-frame, the close handler would run
   // first, schedule the 5s transport rung, and the frame would then be dropped
-  // as an orphan — losing the rejection entirely.
+  // as an orphan - losing the rejection entirely.
   const context = setup();
   context.adapter.ensure(ENV);
   const socket = context.transport.created[0];

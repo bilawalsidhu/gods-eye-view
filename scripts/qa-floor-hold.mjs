@@ -1,15 +1,15 @@
 #!/usr/bin/env node
 /**
- * scripts/qa-floor-hold.mjs — a grounded contact holds its floor through a
+ * scripts/qa-floor-hold.mjs - a grounded contact holds its floor through a
  * terrain-proxy outage (owner incident, 2026-08-21).
  *
  * Reproduces the incident end to end against the RENDERED mesh:
  *
  *   phase A  the terrain proxy is healthy. A GROUNDED contact reporting no
- *            altitude at all (the AXEL21 profile — a few knots, alt unknown)
+ *            altitude at all (the AXEL21 profile - a few knots, alt unknown)
  *            settles onto its resolved floor.
- *   phase B  every `/api/terrain/heights` request answers 504 — the same
- *            "[terrain-heights-proxy] refresh incomplete" the server logged —
+ *   phase B  every `/api/terrain/heights` request answers 504 - the same
+ *            "[terrain-heights-proxy] refresh incomplete" the server logged -
  *            and the contact taxis into cells that were never warmed.
  *
  * The contact must stay ON the mesh through phase B. Without the hold it falls
@@ -22,7 +22,7 @@
  * GPU BACKEND MATTERS. `scene.sampleHeight` answers on both backends, but
  * software rasterization streams a coarser LOD. Measured directly, one probe
  * point on the Austin apron read ~20.9 m under swiftshader against ~168.4 m
- * under Metal — a backend comparison at one point, not to be confused with the
+ * under Metal - a backend comparison at one point, not to be confused with the
  * same-backend run-to-run spread (122.1 m vs 20.6 m on a cell centre) that
  * retired the hold chain's unvalidated tier. The
  * default is Metal on macOS and SwiftShader elsewhere; `--angle` overrides it.
@@ -41,7 +41,7 @@ const argv = Object.fromEntries(process.argv.slice(2)
 // Metal is a macOS-only ANGLE backend; defaulting to it off-Mac fails WebGL init.
 const ANGLE = String(argv.angle || (process.platform === 'darwin' ? 'metal' : 'swiftshader'));
 const HEADFUL = !!argv.headful;
-// Austin airport apron by default — the site qa-floor-verify pins, where the
+// Austin airport apron by default - the site qa-floor-verify pins, where the
 // mesh sits ~150 m above the geoid and burial is unmistakable.
 const SITE = {
   lat: Number.isFinite(Number(argv.lat)) ? Number(argv.lat) : 30.1975,
@@ -54,7 +54,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const results = [];
 function record(name, ok, detail) {
   results.push({ name, ok, detail });
-  console.log(`  [${ok ? '\x1b[32mPASS\x1b[0m' : '\x1b[31mFAIL\x1b[0m'}] ${name}${detail ? `  — ${detail}` : ''}`);
+  console.log(`  [${ok ? '\x1b[32mPASS\x1b[0m' : '\x1b[31mFAIL\x1b[0m'}] ${name}${detail ? `  - ${detail}` : ''}`);
 }
 
 fs.mkdirSync(OUT_DIR, { recursive: true });
@@ -162,8 +162,8 @@ const measure = () => page.evaluate(async (icao) => {
   const lon = carto.longitude * 180 / Math.PI;
   // `sampleHeight` runs an offscreen PICK pass, so it needs the scene to be
   // rendering. This app parks its render loop when idle (the wave-2 governor),
-  // and a probe fired against a parked scene — or one whose tiles are still
-  // streaming after a camera move — reads `undefined`. Pump a frame through the
+  // and a probe fired against a parked scene - or one whose tiles are still
+  // streaming after a camera move - reads `undefined`. Pump a frame through the
   // app's own governor hook before each attempt, exactly as the fly_route
   // harness does, and accept the coarse cell centre as a fallback point.
   const pump = () => new Promise((resolve) => {
@@ -193,7 +193,7 @@ const measure = () => page.evaluate(async (icao) => {
 
 /** Bare-earth ground truth, fetched SERVER-SIDE so the page's simulated outage
  *  cannot touch it. The photoreal mesh sits ABOVE bare earth, so this is the
- *  weaker of the two oracles — but the geoid is ~150 m below it, so burial is
+ *  weaker of the two oracles - but the geoid is ~150 m below it, so burial is
  *  still unmistakable. */
 const truth = new Map();
 async function demTruth(lat, lon) {
@@ -229,12 +229,12 @@ async function sample(phase, note) {
   return row;
 }
 
-console.log('\nphase A — terrain healthy, warming cells (3 polls)');
+console.log('\nphase A - terrain healthy, warming cells (3 polls)');
 for (let i = 0; i < 3; i++) { await sleep(32000); await pin(); }
 await sample('A', 'warm');
 fs.writeFileSync(path.join(OUT_DIR, `hold-A-warm-${ANGLE}.png`), await page.screenshot({ type: 'png' }));
 
-console.log('\nphase B — every terrain request answers 504 from here');
+console.log('\nphase B - every terrain request answers 504 from here');
 await page.evaluate(() => { window.__TERRAIN_FAIL = true; });
 for (let i = 1; i <= 4; i++) {
   await page.evaluate(() => { window.__CONTACT.lon += 0.0016; }); // ~150 m east per poll
@@ -259,7 +259,7 @@ if (meshRows.length) {
     `worst clearance ${worst} m across ${meshRows.length} samples`);
 } else {
   record('rendered-mesh oracle available', false,
-    `sampleHeight never answered on ANGLE/${ANGLE} — falling back to the bare-earth DEM`);
+    `sampleHeight never answered on ANGLE/${ANGLE} - falling back to the bare-earth DEM`);
 }
 if (demRows.length) {
   const worst = Math.min(...demRows.map((s) => s.demClearM));

@@ -1,5 +1,5 @@
 /**
- * The reason for «Scene not saved — {reason}» when the project fails
+ * The reason for «Scene not saved - {reason}» when the project fails
  * validation. The validator's text («$.scenes[6].title: expected …») is for
  * the console: known failures get a sentence with 1-based numbers, others a
  * general one (English keeps the raw text). director.js logs the full error.

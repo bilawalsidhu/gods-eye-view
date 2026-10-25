@@ -58,7 +58,7 @@ test('perpendicular decoy at the same location does NOT match', () => {
   const { matches, matchedCount, candidateCount } = matchFlowToRoads([ROAD_NS], [decoy]);
   assert.equal(matches[0], null);
   assert.equal(matchedCount, 0);
-  // The decoy IS within 35 m of at least one sample — it's a candidate, just
+  // The decoy IS within 35 m of at least one sample - it's a candidate, just
   // bearing-rejected. Coverage denominator must reflect that.
   assert.equal(candidateCount, 1);
 });
@@ -98,7 +98,7 @@ test('level is the median across matched samples (thirds at 0.2/0.4/0.9 -> 0.4)'
 });
 
 test('a road with flow on only a short stretch (< half its samples) stays null', () => {
-  // Flow covers only the first ~15% of the road — 1 of 7 samples at best.
+  // Flow covers only the first ~15% of the road - 1 of 7 samples at best.
   const stub = flow(line({ lengthM: 75, bearingDeg: 0, eastM: 2 }), 0.5);
   const { matches, matchedCount, candidateCount } = matchFlowToRoads([ROAD_NS], [stub]);
   assert.equal(matches[0], null);
@@ -117,7 +117,7 @@ test('multiple roads: results stay parallel to the input array', () => {
 });
 
 test('sparse-vertex flow polylines (long coord pairs) still match everywhere', () => {
-  // One 500 m segment as a single coord pair — midpoint hashing alone would
+  // One 500 m segment as a single coord pair - midpoint hashing alone would
   // miss samples near the ends; subdivision must cover them.
   const sparse = flow([
     ROAD_NS.coords[0],

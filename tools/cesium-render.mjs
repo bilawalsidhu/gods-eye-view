@@ -323,7 +323,7 @@ async function main() {
         { timeout: timeoutMs, polling: 500 }
       );
     } catch {
-      console.log(`  Timed out after ${opts.timeout}s — capturing what we have.`);
+      console.log(`  Timed out after ${opts.timeout}s - capturing what we have.`);
     }
 
     // Check for errors

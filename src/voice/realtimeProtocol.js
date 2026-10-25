@@ -206,7 +206,7 @@ export function extractFunctionCalls(event) {
 export function callDedupeKeys(call) {
   // Dedupe ONLY on call/item identity. The same call arrives via both
   // response.function_call_arguments.done and response.output_item.done, so
-  // these keys must collapse that pair — but a name+args key would also
+  // these keys must collapse that pair - but a name+args key would also
   // swallow legitimate repeated commands ("zoom in" twice) and starve the
   // model of a function_call_output for the second call_id, deadlocking it.
   return [

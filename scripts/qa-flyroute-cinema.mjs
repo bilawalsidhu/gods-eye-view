@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * fly_route cinematic evidence — drives the REAL voice runner headlessly and
+ * fly_route cinematic evidence - drives the REAL voice runner headlessly and
  * measures the REAL camera (Cesium heading/pitch/roll + position) every
  * rendered frame, so the proof is the shot the owner will watch, not our own
  * internal numbers.
@@ -45,11 +45,11 @@ const results = [];
 const report = (ok, name, detail = '') => {
   results.push({ ok, name, detail });
   const mark = ok ? '\x1b[32mPASS\x1b[0m' : '\x1b[31mFAIL\x1b[0m';
-  console.log(`  ${mark} ${name}${detail ? ` — ${detail}` : ''}`);
+  console.log(`  ${mark} ${name}${detail ? ` - ${detail}` : ''}`);
 };
 const note = (name, detail) => {
   results.push({ ok: null, name, detail });
-  console.log(`  \x1b[33mNOTE\x1b[0m ${name}${detail ? ` — ${detail}` : ''}`);
+  console.log(`  \x1b[33mNOTE\x1b[0m ${name}${detail ? ` - ${detail}` : ''}`);
 };
 const sleep = (ms) => new Promise((resolve) => { setTimeout(resolve, ms); });
 const wrapDeg = (deg) => ((deg + 540) % 360) - 180;
@@ -150,7 +150,7 @@ function sampleDistanceM(a, b) {
 }
 
 try {
-  console.log(`\nfly_route cinematic evidence — ${APP_URL}`);
+  console.log(`\nfly_route cinematic evidence - ${APP_URL}`);
   await page.goto(APP_URL, { waitUntil: 'domcontentloaded', timeout: 90000 });
   await page.waitForFunction(
     () => window.__godsEyeView?.viewer && window.__gevVoiceCommands?.runner && window.__gevAnnotations,
@@ -177,7 +177,7 @@ try {
   });
   report(Boolean(routeInfo?.waypoints >= 2), 'route drawn on the board',
     `waypoints=${routeInfo?.waypoints} drawn=${drawn?.drawn}`);
-  if (!routeInfo) throw new Error('no route on the board — cannot fly it');
+  if (!routeInfo) throw new Error('no route on the board - cannot fly it');
 
   // ── Run 1: the full cinematic flight ──────────────────────────────────
   await installSampler();
@@ -233,7 +233,7 @@ try {
   // ── Measure the REAL camera ───────────────────────────────────────────
   // Only the dolly's own frames count. The sampler is installed before the
   // flight, so the pre-flight view and the single frame that jumps the camera
-  // onto the route start are dropped — neither is dolly motion.
+  // onto the route start are dropped - neither is dolly motion.
   const flightStartT = trace.marks.find((m) => m.label === 'flight-start')?.t ?? 0;
   const rows = trace.rows.filter((r) => r.t > flightStartT).slice(1);
   const fps = rows.length / Math.max(0.001, (rows.at(-1).t - rows[0].t) / 1000);
@@ -287,7 +287,7 @@ try {
     `peak roll rate ${peakRollRate.toFixed(1)} °/s over ${RATE_WINDOW_MS} ms`);
 
   // Speed: eased at both ends, no step in between. Measured over 400 ms
-  // windows — the per-frame delta is dominated by the pairing jitter between
+  // windows - the per-frame delta is dominated by the pairing jitter between
   // the motion tick's own clock and postRender, not by the dolly.
   const cumulative = [0];
   for (let i = 1; i < rows.length; i += 1) {
@@ -310,7 +310,7 @@ try {
 
   // Ease-out is measured as the SHAPE of the decay, not as a terminal window.
   // The sampler keeps running after the dolly stops, so a trailing average
-  // includes stationary frames — under which a hard stop also reports ~0 m/s
+  // includes stationary frames - under which a hard stop also reports ~0 m/s
   // and passes. How long the speed takes to fall from 90% to 10% of peak is
   // immune to that tail: a ramp spreads it over a second or more, a hard stop
   // collapses it into a single frame.
@@ -327,7 +327,7 @@ try {
   })();
   report(riseMs > 800, 'and eases IN over one too',
     `speed rose 10% → 90% of peak over ${riseMs.toFixed(0)} ms`);
-  report(peakV < 40 * 1.35, 'the easing keeps the shipped pace — the plateau IS the speed word',
+  report(peakV < 40 * 1.35, 'the easing keeps the shipped pace - the plateau IS the speed word',
     `peak ${peakV.toFixed(1)} m/s over a 40 m/s mean (${(flight.distanceM / flight.durationS).toFixed(1)} m/s reported)`);
   // Acceleration, differenced across NON-overlapping speed windows so the
   // 400 ms averaging is not differentiated against itself.
@@ -372,10 +372,10 @@ try {
     report(minAgl >= 90, 'the eye always clears the rendered floor',
       `min AGL ${minAgl.toFixed(1)} m, max ${maxAgl.toFixed(1)} m over ${warm.length} warm samples`);
   } else {
-    note('terrain clearance', `only ${warm.length} warm floor cells under the route — clearance clamp is pinned in npm test`);
+    note('terrain clearance', `only ${warm.length} warm floor cells under the route - clearance clamp is pinned in npm test`);
   }
-  // The floor ACQUISITION — the one frame where a cold-corridor safety seed is
-  // replaced by real terrain — is deliberately a single step, and it lands in
+  // The floor ACQUISITION - the one frame where a cold-corridor safety seed is
+  // replaced by real terrain - is deliberately a single step, and it lands in
   // the same moment the camera teleports onto the route start. It is measured
   // separately from the shaping, which must be a swell for the whole flight.
   const cruiseFrom = rows.findIndex((r) => r.t - rows[0].t > 1500);
@@ -383,7 +383,7 @@ try {
   const cruiseHeights = cruiseRows.map((r) => r.height);
   // Split the two directions: a DESCENT is capped by the dolly (never drop the
   // eye toward ground it is still learning about), while a CLIMB is deliberately
-  // uncapped — rising is the safety direction, and a terrain rise plus the
+  // uncapped - rising is the safety direction, and a terrain rise plus the
   // shaping swell can legitimately exceed the descent cap.
   let peakDescentMps = 0;
   let peakClimbMps = 0;
@@ -404,11 +404,11 @@ try {
     `${cruiseRangeM.toFixed(1)} m of range after a ${acquisitionM.toFixed(0)} m floor acquisition at the start`);
   // Smoothness is measured on the camera's ABSOLUTE vertical motion, because
   // that is what a viewer sees. It is tempting to difference AGL instead, to
-  // separate "our shaping" from "the hill" — but the floor is a ~111 m
+  // separate "our shaping" from "the hill" - but the floor is a ~111 m
   // staircase, so an AGL series steps at every cell boundary even when the eye
   // is gliding. Differencing it measures the quantization, not the ride
   // (measured: 31.6 m/s of "AGL rate" while the eye moved at 8.9 m/s).
-  report(peakDescentMps < 10.5, 'the eye is never DROPPED — descent stays inside its cap',
+  report(peakDescentMps < 10.5, 'the eye is never DROPPED - descent stays inside its cap',
     `peak descent ${peakDescentMps.toFixed(1)} m/s (cap 10 m/s)`);
   report(peakClimbMps < 20, 'and climbs stay a swell rather than a lurch',
     `peak climb ${peakClimbMps.toFixed(1)} m/s against ~40 m/s of ground speed`);
@@ -455,7 +455,7 @@ try {
     const rollBefore = (viewer.camera.roll * 180) / Math.PI;
     window.__gevFlyTrace.marks.push({ label: 'pointerdown', t: performance.now() });
     canvas.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, cancelable: true }));
-    // Same synchronous turn as the pointerdown — no frame has rendered yet.
+    // Same synchronous turn as the pointerdown - no frame has rendered yet.
     const rollAfter = (viewer.camera.roll * 180) / Math.PI;
     if (read) slotAfter = read();
     return { slotBefore, slotAfter, rollBefore, rollAfter };
@@ -464,7 +464,7 @@ try {
   // horizon is level again inside the same synchronous turn as the pointerdown.
   report(
     Math.abs(wrapDeg(cut.rollBefore)) >= 3 && Math.abs(wrapDeg(cut.rollAfter)) < 0.01,
-    'the release levels the horizon synchronously — no tilt left behind',
+    'the release levels the horizon synchronously - no tilt left behind',
     `roll ${wrapDeg(cut.rollBefore).toFixed(2)}° → ${wrapDeg(cut.rollAfter).toFixed(4)}° in the same turn`,
   );
   if (cut.slotBefore && cut.slotBefore !== 'module-unavailable') {
@@ -492,7 +492,7 @@ try {
     movementAfter = Math.max(movementAfter, sampleDistanceM(after[i - 1], after[i]));
   }
   report(movementBefore > 0.5 && movementAfter < 0.5,
-    'the camera freezes on the cut frame — no coast, no snap-back',
+    'the camera freezes on the cut frame - no coast, no snap-back',
     `moved ${movementBefore.toFixed(2)} m/frame before, max ${movementAfter.toFixed(3)} m/frame after (${after.length} frames)`);
 
   fs.writeFileSync(

@@ -2,7 +2,7 @@
 /**
  * Is an adsbdb scheduled route consistent with where the plane actually is and
  * what it is doing? adsbdb returns the scheduled route for a callsign, which
- * is sometimes the wrong leg — reject a route rather than display a wrong one.
+ * is sometimes the wrong leg - reject a route rather than display a wrong one.
  * Adapted from skylight (MIT) web/src/display/renderer.ts routePlausible(),
  * with the vertical-trend check made observer-free (skylight anchors it to a
  * fixed ground station; GEV has no observer, so the check is anchored to the
@@ -53,9 +53,9 @@ const LOCAL_AIRPORT_KM = 150;
 
 /**
  * @param {object} p
- * @param {number} p.latDeg / p.lonDeg — plane's current position
+ * @param {number} p.latDeg / p.lonDeg - plane's current position
  * @param {number|null} [p.altitudeM]
- * @param {number|null} [p.verticalRateMps] — positive = climbing
+ * @param {number|null} [p.verticalRateMps] - positive = climbing
  * @param {{lat:number|null, lon:number|null}|null} [p.origin]
  * @param {{lat:number|null, lon:number|null}|null} [p.destination]
  * @returns {boolean} false ONLY when the route is confidently wrong.
@@ -72,7 +72,7 @@ export function routePlausible({
   if (!isGeoPoint(position)) return true;
   const haveO = isGeoPoint(origin);
   const haveD = isGeoPoint(destination);
-  if (!haveO && !haveD) return true; // no coordinates — cannot judge, do not hide
+  if (!haveO && !haveD) return true; // no coordinates - cannot judge, do not hide
 
   // (a) Geographic consistency: near an endpoint, or roughly on the path.
   const near = (point) => greatCircleKm(position, point) < NEAR_ENDPOINT_KM;
@@ -105,7 +105,7 @@ export function routePlausible({
         (segmentAlongKm >= -CROSS_TRACK_KM &&
           segmentAlongKm <= routeKm + CROSS_TRACK_KM));
   } else if (!geomOk) {
-    geomOk = true; // only one endpoint known and not near — cannot judge, allow
+    geomOk = true; // only one endpoint known and not near - cannot judge, allow
   }
   if (!geomOk) return false;
 
@@ -118,10 +118,10 @@ export function routePlausible({
   ) {
     if (verticalRateMps > 0) {
       if (haveO && greatCircleKm(position, origin) > LOCAL_AIRPORT_KM)
-        return false; // departing — origin should be local
+        return false; // departing - origin should be local
     } else {
       if (haveD && greatCircleKm(position, destination) > LOCAL_AIRPORT_KM)
-        return false; // arriving — destination should be local
+        return false; // arriving - destination should be local
     }
   }
   return true;

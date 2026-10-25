@@ -26,7 +26,7 @@ export function layerFeedState(stats = {}) {
     return 'unavailable';
   }
   if (state.loading) return 'loading';
-  // Guidance states ask the user to act (zoom in, run a search) — normal
+  // Guidance states ask the user to act (zoom in, run a search) - normal
   // operation, not feed faults. One honesty carve-out: layers keep their
   // rendered records through the guidance state, so a genuinely stale cache
   // still reads STALE; a guidance prompt alone never reads DEGRADED.

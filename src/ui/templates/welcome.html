@@ -1,6 +1,6 @@
   <!-- Explicit mission choice on a fresh session. Live feeds are not auto-enabled
        until the visitor asks; shared links skip this surface entirely. It returns
-       every session until "Don't show this again" is ticked — see
+       every session until "Don't show this again" is ticked - see
        src/firstRunExperience.js for the full show policy. -->
   <aside id="first-run-launcher" role="dialog" aria-labelledby="first-run-title" aria-describedby="first-run-description" hidden>
     <div class="first-run-scanline" aria-hidden="true"></div>
@@ -9,10 +9,10 @@
     </header>
     <h2 id="first-run-title" data-i18n>Choose your first view</h2>
     <!-- The card's one persuasive line, owner-authored and VERBATIM (2026-08-23)
-         — including the unspaced em dash. The arc it has to carry: this looks
+         - including the unspaced em dash. The arc it has to carry: this looks
          like something you should not have access to → the sources are all
          public → the data is real. Tile subcopy stays purely functional. -->
-    <p id="first-run-description" data-i18n-runtime>It feels like a forbidden cockpit—then you realize the sources are public and the data is real.</p>
+    <p id="first-run-description" data-i18n-runtime>It feels like a forbidden cockpit - then you realize the sources are public and the data is real.</p>
     <div class="first-run-choices">
       <button type="button" data-first-run-choice="contacts">
         <span class="material-symbols-outlined" aria-hidden="true">radar</span>
@@ -29,7 +29,7 @@
         <!-- Title text is painted from ENVIRONMENTAL_LABEL_CHOICE at init. -->
         <!-- Subcopy names BOTH feeds this tile turns on, because the launcher
              optimizes for the fully configured experience (owner ruling,
-             2026-08-23) — see the mission table in src/firstRunExperience.js. -->
+             2026-08-23) - see the mission table in src/firstRunExperience.js. -->
         <span data-i18n-runtime><strong data-first-run-environmental-title>ENVIRONMENTAL</strong><small>Live earthquakes and active fires, from USGS and NASA</small></span>
         <span class="material-symbols-outlined first-run-arrow" aria-hidden="true">arrow_forward</span>
       </button>

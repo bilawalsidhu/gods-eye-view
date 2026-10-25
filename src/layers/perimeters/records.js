@@ -3,7 +3,7 @@
  * Only a payload that is not a feature collection at all rejects the whole
  * snapshot: a single degenerate incident (ArcGIS emits geometry:null when
  * maxAllowableOffset generalizes a tiny polygon away) must never blank the
- * layer — a failed first update makes the lifecycle disable it entirely.
+ * layer - a failed first update makes the lifecycle disable it entirely.
  */
 
 const finiteOrNull = (value) => (Number.isFinite(value) ? value : null);

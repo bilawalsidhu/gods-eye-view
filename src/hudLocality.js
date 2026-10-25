@@ -1,6 +1,6 @@
 /**
  * @module hudLocality
- * @description The locality half of the HUD summary line — either "NEAR <landmark>"
+ * @description The locality half of the HUD summary line - either "NEAR <landmark>"
  * or the "SECTOR <lat/lon>" fallback.
  *
  * Split out of `hud.js` purely so it is unit-testable: `hud.js` pulls in the `mgrs`
@@ -11,7 +11,7 @@
  * Maximum distance to a curated POI that still reads as "NEAR" it.
  *
  * The 2026-08-20 QA hunt found the HUD announcing NEAR SACRE-COEUR (PARIS) 2470KM
- * while parked over Moscow, and NEAR LINCOLN MEMORIAL 962KM over Chicago — the old
+ * while parked over Moscow, and NEAR LINCOLN MEMORIAL 962KM over Chicago - the old
  * bound was 2,500 km, roughly a continent. The POI catalogue only covers eight
  * cities, so anywhere else on Earth matched whichever landmark happened to be
  * closest and reported an absurd distance as if it were a locality.

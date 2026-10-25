@@ -105,7 +105,7 @@ export function createRendering({
 
   /**
    * Create the billboard primitive for a freshly added vessel record. Map labels
-   * are canvas cards (vesselLabels.js) rebuilt by the declutter pass — no
+   * are canvas cards (vesselLabels.js) rebuilt by the declutter pass - no
    * per-record label primitive exists anymore.
    * @param {Object} record - Normalized vessel record.
    * @param {Cesium.EllipsoidalOccluder|null} occluder - Horizon occluder for initial visibility.
@@ -125,7 +125,7 @@ export function createRendering({
       alignedAxis: Cesium.Cartesian3.ZERO,
       horizontalOrigin: Cesium.HorizontalOrigin.CENTER,
       verticalOrigin: Cesium.VerticalOrigin.CENTER,
-      // Locked height-datum principle #2: contacts are ALWAYS visible —
+      // Locked height-datum principle #2: contacts are ALWAYS visible -
       // depth-test-free sprites; the EllipsoidalOccluder handles the far side.
       // (The tile sea mesh ≠ the geoid exactly, so a depth-tested chevron at
       // the geoid still clips out behind local tide/mesh noise.)
@@ -159,7 +159,7 @@ export function createRendering({
    * Best available real-world direction of travel for a vessel, degrees
    * clockwise from north (true heading preferred, course-over-ground fallback).
    * Screen rotation is computed from this by the shared projected-rotation
-   * pass in updateVisibility — never directly from the compass value.
+   * pass in updateVisibility - never directly from the compass value.
    * @param {Object} record - Vessel record.
    * @returns {number} Course in degrees (0 when unknown).
    */
@@ -216,7 +216,7 @@ export function createRendering({
     if (regularPass) state.lastVisibilityUpdate = now;
     if (focusPass) state.lastFocusUpdate = now;
     if (!state.records.all.length) {
-      // No records — flush any lingering card entries (vanished-feed case).
+      // No records - flush any lingering card entries (vanished-feed case).
       if (regularPass) updateClusteredLabels([]);
       if (focusPass) state.activeFocusCount = 0;
       return;
@@ -346,8 +346,8 @@ export function createRendering({
 
   /**
    * Source selector for the shared world-overlay pipeline: the
-   * grid declutter picks which vessels get cards — one winner per screen-space
-   * grid cell, priority-ranked, capped — and publishes presentation entries to
+   * grid declutter picks which vessels get cards - one winner per screen-space
+   * grid cell, priority-ranked, capped - and publishes presentation entries to
    * the host, which owns projection, final placement, fade and paint. Runs on the
    * throttled visibility pass and forced refreshes, never per frame. The
    * selected vessel always gets its full-detail card, even when horizon-culled

@@ -8,7 +8,7 @@
  *  - Color identity: a stable per-camera hue (golden-angle spaced over the
  *    id-sorted catalog index) and the derived fill/line Cesium colors.
  *  - Volume geometry: a translucent frustum pyramid primitive built FROM the
- *    exact frustumCartesians positions the wireframe uses — welded by
+ *    exact frustumCartesians positions the wireframe uses - welded by
  *    construction, never recomputed independently. 5 vertices, 6 triangles,
  *    synchronous build (trivially small), no picking.
  *
@@ -18,7 +18,7 @@
  */
 import * as Cesium from 'cesium';
 
-/** Golden angle in degrees — maximally spreads consecutive indices around the hue wheel. */
+/** Golden angle in degrees - maximally spreads consecutive indices around the hue wheel. */
 const GOLDEN_ANGLE_DEG = 137.50776405003785;
 
 const FILL_ALPHA_IDLE = 0.12;
@@ -58,7 +58,7 @@ export function viewshedColors(hueDeg) {
 /**
  * Flattens frustumCartesians positions into the raw vertex/index buffers of
  * the frustum volume: vertex order [mount, tl, tr, br, bl]; 4 side faces from
- * the apex + the far cap split into 2 triangles. Pure — this is the ONLY
+ * the apex + the far cap split into 2 triangles. Pure - this is the ONLY
  * geometry definition (weld-by-construction with the wireframe, which draws
  * its rays/cap from the same 5 Cartesians).
  * @param {{mount: Cesium.Cartesian3, tl: Cesium.Cartesian3, tr: Cesium.Cartesian3,
@@ -79,7 +79,7 @@ export function frustumVolumeGeometryData(positions) {
     flat[i * 3 + 1] = p.y;
     flat[i * 3 + 2] = p.z;
   });
-  // apex=0, tl=1, tr=2, br=3, bl=4 — 4 side faces + far cap (2 triangles).
+  // apex=0, tl=1, tr=2, br=3, bl=4 - 4 side faces + far cap (2 triangles).
   const indices = new Uint16Array([
     0, 1, 2, 0, 2, 3, 0, 3, 4, 0, 4, 1, 1, 2, 3, 1, 3, 4,
   ]);
@@ -88,7 +88,7 @@ export function frustumVolumeGeometryData(positions) {
 
 /**
  * Builds the translucent frustum-volume primitive for one camera.
- * Synchronous (6 triangles — cheaper than the async geometry pipeline's
+ * Synchronous (6 triangles - cheaper than the async geometry pipeline's
  * bookkeeping), unlit flat color, both faces visible (the viewer is routinely
  * inside or behind a cone), never pickable (clicks fall through to the
  * billboard/wireframe/plane, whose pick semantics are established).

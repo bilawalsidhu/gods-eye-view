@@ -72,9 +72,9 @@ export function createRendering({
   const { applyAircraftBillboardTreatment, applyAircraftModelTreatment } =
     services.recession;
 
-  /** Depth-test policy for aircraft billboards (mirror of flights.js — see the
+  /** Depth-test policy for aircraft billboards (mirror of flights.js - see the
    *  full rationale there). Round 5 (owner directive 2026-07-06): EVERY contact
-   *  renders depth-test-free at every distance — a uniform always-visible rule;
+   *  renders depth-test-free at every distance - a uniform always-visible rule;
    *  the fleet tick's horizon occluder still removes far-side contacts. */
 
   function _groundDepthDistance() {
@@ -182,7 +182,7 @@ export function createRendering({
 
   /** Sprite kind for one contact's billboard. Identity for every aircraft except
    *  the ones the operator converted into a TR-3B (Easter egg), which draw the
-   *  black-triangle glyph — its thermal-reactive variant while an IR style owns
+   *  black-triangle glyph - its thermal-reactive variant while an IR style owns
    *  the scene. Routing EVERY `aircraftIcon()` call through this is what makes a
    *  conversion survive the poll reconciler and the two-tier raster swap. */
 
@@ -209,8 +209,8 @@ export function createRendering({
   /** The FLEET's 3D-model regime: models3d enabled AND the camera zoomed in past the altitude
    *  ceiling. Since 2026-08-22 the toggle DEFAULTS ON in `proximity`, which is itself the
    *  budget: models only appear below MODEL_ALT_CEIL_M and only for the nearest MODEL_MAX in
-   *  view. The toggle still OWNS the fleet — an operator who wants every in-view plane arms
-   *  `all`, and one who wants none turns 3D off — this predicate is unchanged. The TRACKED
+   *  view. The toggle still OWNS the fleet - an operator who wants every in-view plane arms
+   *  `all`, and one who wants none turns 3D off - this predicate is unchanged. The TRACKED
    *  contact does not route through here: it is one model, it is what the camera is aimed at,
    *  and it takes its own default-on, hysteretic zoom regime
    *  (`_trackedModelRegimeActive`). Mirror of flights.js. */
@@ -222,7 +222,7 @@ export function createRendering({
     return h < MODEL_ALT_CEIL_M;
   }
 
-  /** Active model cap — the eligibility pre-pass AND _ensureModel's admission checks must use the
+  /** Active model cap - the eligibility pre-pass AND _ensureModel's admission checks must use the
    *  SAME value, else 'all' (MODEL_MAX_ALL) marks planes eligible that _ensureModel refuses at the
    *  lower MODEL_MAX, silently degrading 'all' to 'proximity'. */
 
@@ -235,7 +235,7 @@ export function createRendering({
       : mapCap;
   }
 
-  /** Active ADD/KEEP radii (m) — mode-aware ('all' reaches ~to the horizon). Mirror of flights.js. */
+  /** Active ADD/KEEP radii (m) - mode-aware ('all' reaches ~to the horizon). Mirror of flights.js. */
 
   function _modelAddDistM() {
     return flightState._models3dMode === 'all'
@@ -250,7 +250,7 @@ export function createRendering({
   }
 
   /** World model matrix from a position + course heading (pitch/roll 0; ENU frame). Writes into
-   *  `result` and returns it — pass each model's OWN `.modelMatrix` so models never share one mutable
+   *  `result` and returns it - pass each model's OWN `.modelMatrix` so models never share one mutable
    *  matrix object (see flights.js for the full rationale: sharing one scratch stacked every model on
    *  the last-written transform, and the per-frame tracked write made it flicker). */
 
@@ -277,7 +277,7 @@ export function createRendering({
   /** Everything scene.sampleHeight must NOT hit when snapping a grounded model (mirror of
    *  flights.js): the vertical pick ray at a plane's own lat/lon otherwise lands on its
    *  (or a parked neighbor's) billboard/model instead of the tile skin. Exclusion matches
-   *  picked-object IDs — every billboard AND model here carries its icao as `id` — plus
+   *  picked-object IDs - every billboard AND model here carries its icao as `id` - plus
    *  the tracked entity object itself. Built lazily, only when a sample actually fires. */
 
   function _groundSampleExclusions() {
@@ -286,7 +286,7 @@ export function createRendering({
     return out;
   }
 
-  /** Position a 3D MODEL renders at (mirror of flights.js — see the full rationale there).
+  /** Position a 3D MODEL renders at (mirror of flights.js - see the full rationale there).
    *  Grounded planes ride a ONE-SHOT cached scene.sampleHeight of the photoreal tile skin
    *  (groundSnap.js; taxiing >50 m retires it to a bounded last-known) plus the belly
    *  offset so they sit on their
@@ -323,7 +323,7 @@ export function createRendering({
   /** Atomically hand one fleet contact from its billboard to a safely placed,
    * ready 3D model. Missing/loading models and unresolved terrain always leave
    * the billboard owning the visual, so no render frame can hide both.
-   * `beforeShow` runs only on the committing path — the per-tick model treatment
+   * `beforeShow` runs only on the committing path - the per-tick model treatment
    * belongs to a model that is about to draw, not to one still waiting. */
 
   function _driveFleetModelHandoff(icao24, model, bb, pos, course, beforeShow) {
@@ -376,14 +376,14 @@ export function createRendering({
 
   /** `show` is sufficient evidence of a safe placement because only the handoff and
    *  the tracked driver ever set it true, and both do so after committing a matrix;
-   *  everything else — admission, unresolved ground, an unready glTF, the limb cull,
-   *  a regime exit — only ever clears it. Mirror of flights.js. */
+   *  everything else - admission, unresolved ground, an unready glTF, the limb cull,
+   *  a regime exit - only ever clears it. Mirror of flights.js. */
 
   function _modelIsRendering(model) {
     return !!model && model.ready === true && model.show === true;
   }
 
-  /** Spec identity for a LOADED model — mirror of flights.js: URL and scale
+  /** Spec identity for a LOADED model - mirror of flights.js: URL and scale
    *  together (same-URL classes differ by scale). */
 
   const _specKeyFor = (klass) => {
@@ -391,7 +391,7 @@ export function createRendering({
     return `${spec.url}@${spec.scale}`;
   };
 
-  /** Class-change model sync — mirror of flights.js: drop a live model or
+  /** Class-change model sync - mirror of flights.js: drop a live model or
    *  in-flight load whose spec no longer matches the class, re-showing the
    *  fleet billboard FIRST (gap-proof) and covering the tracked standalone. */
 
@@ -444,7 +444,7 @@ export function createRendering({
   /** Lazily create the glTF model for an aircraft (fire-and-forget; billboard shows until ready). */
 
   async function _ensureModel(icao24) {
-    // Never model the TRACKED aircraft — it owns a separate entity billboard, and the fleet
+    // Never model the TRACKED aircraft - it owns a separate entity billboard, and the fleet
     // tick skips it, so a model here would be orphaned + double-rendered.
     if (icao24 === flightState._trackedIcao) return;
     if (
@@ -465,7 +465,7 @@ export function createRendering({
     let model = null;
     // Spec identity captured at load START (mirror of flights.js): a mid-load
     // reclassification makes the post-await admission reject the stale asset.
-    // Boost state likewise — creation options bake it in.
+    // Boost state likewise - creation options bake it in.
     const specKey = _specKeyFor(flightState.records.data.get(icao24)?.klass);
     const loadIrBoost = flightState._irBoost;
     try {
@@ -485,7 +485,7 @@ export function createRendering({
         id: icao24, // so scene.pick returns the icao for click-to-track
       });
     } catch {
-      // asset/decode fail — stay billboard. Only touch this lifecycle's state if still current
+      // asset/decode fail - stay billboard. Only touch this lifecycle's state if still current
       // (a destroy/re-init may have swapped the globals while this load was in flight).
       if (epoch === flightState._modelEpoch) {
         flightState._modelPending.delete(icao24);
@@ -494,7 +494,7 @@ export function createRendering({
       return;
     }
     // A load from a PREVIOUS lifecycle (destroy→init happened mid-load) must NOT mutate the new
-    // epoch's _modelPending/_modelGen or add to the new collection — just drop its model.
+    // epoch's _modelPending/_modelGen or add to the new collection - just drop its model.
     if (epoch !== flightState._modelEpoch) {
       try {
         model.destroy();
@@ -505,7 +505,7 @@ export function createRendering({
     }
     flightState._modelPending.delete(icao24);
     // Post-await admission: reject (and DESTROY the loaded model) if anything changed during the
-    // load — a release bumped the generation (track/untrack/remove), the layer toggled off / was
+    // load - a release bumped the generation (track/untrack/remove), the layer toggled off / was
     // torn down, the aircraft is gone or now tracked, a model already exists, or the cap filled.
     // Recheck the shared Display 3D toggle and altitude ceiling after the async
     // load. Cockpit uses the same OFF / Proximity / All contract as map Display.
@@ -543,7 +543,7 @@ export function createRendering({
     model.show = false;
     flightState._modelCollection.add(model);
     flightState._models.set(icao24, model);
-    flightState._planeModelLoaded = true; // GLB is cached now — the tracked entity's model can fade in its billboard
+    flightState._planeModelLoaded = true; // GLB is cached now - the tracked entity's model can fade in its billboard
   }
 
   /** Remove the 3D model for ONE aircraft (removal / track handoff).
@@ -553,7 +553,7 @@ export function createRendering({
     const m = flightState._models.get(icao24);
     const pending = flightState._modelPending.has(icao24);
     // Only bump the generation when there's something to invalidate (an in-flight load or a
-    // live model) — so removing never-modeled aircraft doesn't grow _modelGen.
+    // live model) - so removing never-modeled aircraft doesn't grow _modelGen.
     if (m || pending) {
       flightState._modelGen.set(
         icao24,
@@ -573,14 +573,14 @@ export function createRendering({
       }
       flightState._models.delete(icao24);
     }
-    // Do NOT clear _modelPending here — the in-flight load's OWN post-await removes it. Keeping
+    // Do NOT clear _modelPending here - the in-flight load's OWN post-await removes it. Keeping
     // it (a) prevents a duplicate load from starting and (b) keeps the bumped gen entry alive so
     // the resolving load's gen-check still rejects it.
     _cleanupModelGen(icao24);
   }
 
   /** Drop an icao's generation entry once nothing references it (no live model, no in-flight
-   *  load) — keeps _modelGen bounded. Shared by _releaseModel + both _ensureModel exit paths. */
+   *  load) - keeps _modelGen bounded. Shared by _releaseModel + both _ensureModel exit paths. */
 
   function _cleanupModelGen(icao24) {
     if (
@@ -703,7 +703,7 @@ export function createRendering({
             }
             return;
           }
-          // Class reclassified OR boost flipped mid-load (no release ran —
+          // Class reclassified OR boost flipped mid-load (no release ran -
           // _trackedModel was still null): drop the stale asset; driver reloads.
           if (
             _specKeyFor(
@@ -723,7 +723,7 @@ export function createRendering({
           // standalone primitive always exposes the tracked aircraft pick id.
           m.id = flightState._trackedIcao;
           m._gevSpecKey = trackedKey; // class-change sync compares against this
-          m.show = false; // admitted, not yet the visual — the driver shows it once placed
+          m.show = false; // admitted, not yet the visual - the driver shows it once placed
           // Seed the world transform before the primitive enters the scene. A model
           // can become ready+shown between render phases; leaving Cesium's identity
           // default here produces a one-frame jump to the Earth's center.
@@ -747,7 +747,7 @@ export function createRendering({
           }
           flightState._trackedModel = m;
           flightState._trackedModelLoading = false;
-          // A good load retires this selection's failure budget — a contact that
+          // A good load retires this selection's failure budget - a contact that
           // recovers after a transient blip is not one attempt from giving up.
           flightState._trackedModelFailIcao = null;
           flightState._trackedModelFailCount = 0;
@@ -756,7 +756,7 @@ export function createRendering({
           flightState._planeModelLoaded = true;
         })
         .catch((err) => {
-          if (gen !== flightState._trackedModelGen) return; // superseded load — not this selection's failure
+          if (gen !== flightState._trackedModelGen) return; // superseded load - not this selection's failure
           flightState._trackedModelLoading = false;
           parts.tracking._noteTrackedModelLoadFailure(trackedSpec.url, err);
         });
@@ -805,7 +805,7 @@ export function createRendering({
    * horizon-culls billboards beyond the limb (no far-side depth with the globe
    * hidden), and refreshes screen-projected icon rotations whenever the camera
    * pose changed (plus a 1s drift catch-up while idle). Driven by
-   * scene.preRender — NOT camera.changed, whose granularity is globally
+   * scene.preRender - NOT camera.changed, whose granularity is globally
    * degraded by other layers mutating camera.percentageChanged.
    * @returns {void}
    */
@@ -821,7 +821,7 @@ export function createRendering({
     const camera = flightState._viewer.camera;
     const nowMs = focusNowMs(Date.now());
 
-    // (The tracked trail head is now the per-frame _trailHeadEntity segment — no 1 Hz
+    // (The tracked trail head is now the per-frame _trailHeadEntity segment - no 1 Hz
     // primitive rebuild here. The body rebuilds only when a real fix arrives.)
 
     if (nowMs - flightState._lastFleetTickMs < FLEET_DR_INTERVAL_MS) return;
@@ -861,7 +861,7 @@ export function createRendering({
     )
       _releaseModels();
 
-    // 3D-model eligibility: by DISTANCE (mode's add/keep band) with ON-SCREEN PRIORITY under the cap —
+    // 3D-model eligibility: by DISTANCE (mode's add/keep band) with ON-SCREEN PRIORITY under the cap -
     // mirror of flights.js. FOUR visible-first passes: (1) KEEP on-screen modeled; (2) ADD on-screen
     // new in add radius; (3) KEEP off-screen modeled; (4) ADD off-screen new with leftover slots. KEEP
     // is split by frustum so an off-screen retained model can't starve an on-screen plane (review finding).
@@ -882,11 +882,11 @@ export function createRendering({
       for (const [icao, bb] of flightState._billboards) {
         if (icao === flightState._trackedIcao) continue;
         // A converted TR-3B renders as a billboard and can never take a model, so
-        // it must not occupy a CAP SLOT either (mirror of flights.js) — excluded
+        // it must not occupy a CAP SLOT either (mirror of flights.js) - excluded
         // at selection time, not just at the handoff below.
         if (isTr3b(icao)) continue;
         // Ground planes compete for model slots like everyone else (owner decision
-        // 2026-07-03, mirror of flights.js — no air/ground distinction; grounded
+        // 2026-07-03, mirror of flights.js - no air/ground distinction; grounded
         // placement is handled by the one-shot ground snap in _modelDisplayPosition).
         const d2 = Cesium.Cartesian3.distanceSquared(camPos, bb.position);
         if (d2 > keepDistSq) continue; // beyond keep radius → never eligible
@@ -925,27 +925,27 @@ export function createRendering({
       if (icao24 === flightState._trackedIcao) continue; // tracked entity owns its own motion
 
       const dr = parts.motion._deadReckon(icao24, flightState._scratchFleetPos);
-      // Gate the write — assigning Billboard.position dirties the whole
+      // Gate the write - assigning Billboard.position dirties the whole
       // collection's vertex buffer, so skip sub-meter moves.
       if (dr && Cesium.Cartesian3.distanceSquared(dr, bb.position) > 1.0) {
         bb.position = dr;
       }
 
       // Round 6: occlusion-test a LIFTED point for contacts at/below the
-      // ellipsoid (mirror of flights.js — sub-ellipsoid points near the limb
+      // ellipsoid (mirror of flights.js - sub-ellipsoid points near the limb
       // read "beyond the horizon" and would hide low contacts awaiting floors).
       const beyondHorizon = !occluder.isPointVisible(
         flightState.records.data.get(icao24)?.cullPosition || bb.position,
       );
       // A billboard flipping INTO view (horizon reveal while the camera idles)
-      // gets its rotation refreshed THIS tick even without a pose change —
+      // gets its rotation refreshed THIS tick even without a pose change -
       // otherwise it reappears wearing its stale (often creation-north) nose for
       // up to ROTATION_REFRESH_MS. (Model-handed-off planes also read show=false
-      // here; harmless — the model branch below `continue`s past the rotation.)
+      // here; harmless - the model branch below `continue`s past the rotation.)
       const revealed = !beyondHorizon && !bb.show;
       if (bb.show === beyondHorizon) bb.show = !beyondHorizon;
       if (beyondHorizon) {
-        // Also hide any 3D model — otherwise a model that crossed the limb would keep
+        // Also hide any 3D model - otherwise a model that crossed the limb would keep
         // rendering through the hidden globe at its last matrix.
         const m = flightState._models.get(icao24);
         if (m && m.show) m.show = false;
@@ -993,7 +993,7 @@ export function createRendering({
         cameraHeightM: camera.positionCartographic?.height,
       });
       flightState._billboardLimbScale.set(bb, treatment.factors.scale);
-      // Two-tier glyph raster — mirror of flights.js: swap 64/192 px rasters on
+      // Two-tier glyph raster - mirror of flights.js: swap 64/192 px rasters on
       // the billboard's ACTUAL on-screen size (post-treatment bb.scale, so
       // focus/limb recession counts) with hysteresis (atlas has no mips).
       if (!flightState._cockpitContactMode || isCockpitNear) {
@@ -1059,7 +1059,7 @@ export function createRendering({
             applyAircraftModelTreatment({
               model,
               // IR boost must survive the per-tick treatment write; boosted
-              // models also skip the recession fade (mirror of flights.js —
+              // models also skip the recession fade (mirror of flights.js -
               // billboards keep their normal fade, hot MODELS stay full-strength).
               baseColor: flightState._irBoost
                 ? Cesium.Color.WHITE

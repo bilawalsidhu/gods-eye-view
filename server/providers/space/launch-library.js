@@ -154,7 +154,7 @@ export function rocketLaunchesProxy() {
           : 502;
         if (!request.shared)
           console.warn(
-            `[launch-library-proxy] refresh failed (HTTP ${status})${stale ? ' — serving stale cache' : ''}`,
+            `[launch-library-proxy] refresh failed (HTTP ${status})${stale ? ' - serving stale cache' : ''}`,
           );
         if (stale) {
           send(res, 200, stale.body, 'STALE-ERROR');

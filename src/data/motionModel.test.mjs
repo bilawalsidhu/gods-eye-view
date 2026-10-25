@@ -70,7 +70,7 @@ test('courseBetweenCartesians: due north ≈ 0°, due east ≈ 90°', () => {
 
 test('courseBetweenCartesians: sub-threshold chord returns null', () => {
   const from = cart(0, 0);
-  const near = cart(5 / 111320, 0); // 5 m — below default 25 m
+  const near = cart(5 / 111320, 0); // 5 m - below default 25 m
   assert.equal(courseBetweenCartesians(from, near), null);
 });
 
@@ -147,7 +147,7 @@ test('turn-rate guard: hover fix-track jitter manufactures NO turn rate; a real 
     time: Cesium.JulianDate.addSeconds(t0, s, new Cesium.JulianDate()),
     track, velocity,
   }));
-  // Hovering heli: 1 m/s drift, reported track flipping ±45° — used to yield ±°/s
+  // Hovering heli: 1 m/s drift, reported track flipping ±45° - used to yield ±°/s
   // that the extrapolation arc integrated into a pirouette. Now 0.
   const hover = mk([[0, 90, 1], [15, 135, 1], [30, 45, 1], [45, 135, 1], [60, 45, 1]]);
   assert.equal(turnRateFromFixHistory(hover), 0);
@@ -228,7 +228,7 @@ test('liftRepeatedGroundFix raises only grounded history and preserves the store
 // --- Forward ground projection (display-floor corridor) --------------------
 // While a grounded contact COASTS past its newest fix, the displayed position
 // travels AWAY from that fix. The corridor needs the ground it is heading FOR
-// — and, because the dead-reckon integrates a constant-rate turn, that ground
+// - and, because the dead-reckon integrates a constant-rate turn, that ground
 // is an ARC whenever the contact is turning. A straight tangent leaves the
 // real path cold.
 
@@ -250,7 +250,7 @@ test('projectGroundArcLatLon curves away from the tangent under a sustained turn
   const arc = projectGroundArcLatLon(30.2, -97.66, 0, 12, 3, 30);
   const tangent = projectGroundArcLatLon(30.2, -97.66, 0, 12, 0, 30);
   // The tangent runs 360 m due north; the quarter-circle ends ~229 m north and
-  // ~229 m east of the start. Hundreds of metres apart — many cells apart.
+  // ~229 m east of the start. Hundreds of metres apart - many cells apart.
   assert.ok(arc.lon > tangent.lon + 0.001, `arc must swing east: ${arc.lon} vs ${tangent.lon}`);
   assert.ok(arc.lat < tangent.lat - 0.001, `arc must fall short north: ${arc.lat} vs ${tangent.lat}`);
 });
@@ -307,7 +307,7 @@ test('corridorPathLatLon samples the ARC, not a chord, for a turning coaster', (
     fixLat: 30.199, fixLon: -97.660, lookaheadSec: 30,
   });
   assert.ok(path.length > 2, 'a turning path needs intermediate samples');
-  // Mid-path must bulge off the straight line joining the ends — that bulge is
+  // Mid-path must bulge off the straight line joining the ends - that bulge is
   // the ground a chord-only corridor would leave cold.
   const a = path[0];
   const z = path[path.length - 1];

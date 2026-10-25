@@ -1,7 +1,7 @@
 # Natural Earth packs
 
 Offline named-region polygons for the voice-annotation resolver
-(`src/data/naturalEarthRegions.js`) — "outline the Alps" resolves to the real
+(`src/data/naturalEarthRegions.js`) - "outline the Alps" resolves to the real
 range geometry with no network dependency.
 
 | File | Source dataset | Features |
@@ -14,13 +14,13 @@ range geometry with no network dependency.
 **Source:** Natural Earth 10m physical vectors, via the canonical
 [nvkelso/natural-earth-vector](https://github.com/nvkelso/natural-earth-vector)
 GitHub repo, commit `ca96624a56bd078437bca8184e78163e5039ad19` (fetched
-2026-07-28T01:36:39Z — exact provenance is in each file's `meta` header).
+2026-07-28T01:36:39Z - exact provenance is in each file's `meta` header).
 
 **License:** public domain (https://www.naturalearthdata.com/about/terms-of-use/).
 No attribution legally required; we credit "Made with Natural Earth" anyway.
 See DATA_SOURCES.md.
 
-**Curation** (script not committed — parameters recorded in `meta.curation`):
+**Curation** (script not committed - parameters recorded in `meta.curation`):
 
 - Named features only; the `Dragons-be-here` joke feature ("Null Island") dropped.
 - Outer rings only (holes are irrelevant at country-scale outline zoom).

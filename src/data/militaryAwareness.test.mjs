@@ -79,7 +79,7 @@ function installAwarenessRuntime({
     uncertain: false,
   }),
   // Per-layer getStats override, keyed by layer id. Whatever a caller puts here
-  // must be a shape the REAL module actually returns — a fixture that invents a
+  // must be a shape the REAL module actually returns - a fixture that invents a
   // status its module never emits guards nothing. See the settled-but-fetching
   // tests below, which use militaryInstallations' genuine first-fetch readout.
   layerStats = {},
@@ -608,7 +608,7 @@ test('pending mapped installations render as unknown instead of a false zero', a
 //
 //   - ais-live-vessels is its REACHABLE producer. enable()/update() both resolve
 //     as soon as the first /api/vessels poll answers, so the manager's
-//     lifecycle settles to `enabled` — but until the server-side socket delivers
+//     lifecycle settles to `enabled` - but until the server-side socket delivers
 //     a position, firstConnectPhase stays 'loading' and the module reports busy,
 //     no lastUpdate, count 0, and an UNDEFINED status, so the status list alone
 //     never catches it either.
@@ -620,7 +620,7 @@ test('pending mapped installations render as unknown instead of a false zero', a
 //     `enabling` the whole way) and across a failing one.
 //
 // The readouts below are taken FROM the real module rather than hand-written. A
-// fixture that invents a shape its module never emits guards nothing — that is
+// fixture that invents a shape its module never emits guards nothing - that is
 // exactly how a hole in this gate survived a passing suite once already.
 
 /** Drive aisLiveVessels into a state and return the readout IT produces. */
@@ -677,7 +677,7 @@ test('the first-connect readout is the real one, and is exactly what the predica
   assert.equal(
     AIS_FIRST_CONNECT_STATS.status,
     undefined,
-    'and no status at all — the status list cannot be what catches this',
+    'and no status at all - the status list cannot be what catches this',
   );
   assert.equal(
     AIS_SETTLED_EMPTY_STATS.loading,
@@ -729,7 +729,7 @@ test('a vessel feed still connecting after the lifecycle settles reads as unknow
     assert.equal(
       vessels?.count,
       null,
-      'a source that has never answered has told us nothing — 0 would be a fabricated all-clear',
+      'a source that has never answered has told us nothing - 0 would be a fabricated all-clear',
     );
     assert.match(vessels?.reason || '', /unavailable/i);
     assert.match(
@@ -1542,7 +1542,7 @@ test('tracked flight cleared during Contacts activation suppresses fallback auto
     runtime.viewer.trackedEntity = undefined;
     // Deliberately untagged: this is the DESELECT case, and an untagged clear
     // must default to deliberate. An eviction (`reason: 'evicted'`) instead
-    // keeps the subject as CONTACT LOST — see the eviction tests below — but
+    // keeps the subject as CONTACT LOST - see the eviction tests below - but
     // must not weaken this one: a real deselect during settlement still has to
     // clear AND suppress the fallback autofocus.
     runtime.dispatch('gev:awareness-subject-cleared', {
@@ -1579,7 +1579,7 @@ test('awareness clears are scoped to the selected source layer', () => {
 });
 
 // ===========================================================================
-// BEGIN Contact-readout presence block — fix/context-panel-next-subjects.
+// BEGIN Contact-readout presence block - fix/context-panel-next-subjects.
 // Integrators: this whole delimited block belongs to the Contact-panel
 // CONTACT LOST work. Keep it intact and keep any concurrent branch's own
 // additions at the END of the file, so the two never collide.
@@ -1724,7 +1724,7 @@ test('presence never comes from the capped position rows', () => {
   }
 });
 
-test('a mapped installation subject is always present — static data is never culled', () => {
+test('a mapped installation subject is always present - static data is never culled', () => {
   const position = Cesium.Cartesian3.fromDegrees(-97.78, 31.13, 0);
   const runtime = installAwarenessRuntime();
   const restores = [];
@@ -1888,7 +1888,7 @@ test('an evicted aircraft becomes CONTACT LOST instead of collapsing the panel',
     const snapshot = militaryAwarenessLayer.getContextSnapshot();
     assert.ok(
       snapshot,
-      'an eviction must not null the snapshot — that hides the panel',
+      'an eviction must not null the snapshot - that hides the panel',
     );
     assert.equal(
       snapshot.subject.id,
@@ -1941,7 +1941,7 @@ test('an evicted vessel becomes CONTACT LOST instead of collapsing the panel', (
     const snapshot = militaryAwarenessLayer.getContextSnapshot();
     assert.ok(
       snapshot,
-      'an eviction must not null the snapshot — that hides the panel',
+      'an eviction must not null the snapshot - that hides the panel',
     );
     assert.equal(snapshot.subject.id, '353136000');
     assert.equal(snapshot.subjectPresent, false);
@@ -2043,8 +2043,8 @@ test('production eviction sites actually tag their clears', () => {
     'aisLiveVessels must mark its aged-out selected vessel as an eviction',
   );
   // Fourth cull site: a FIRMS refresh whose new payload no longer carries the
-  // selected fire. The fire did not get deselected — it left the feed.
-  // The tag alone is not enough — see the behavioral test in
+  // selected fire. The fire did not get deselected - it left the feed.
+  // The tag alone is not enough - see the behavioral test in
   // firmsInteraction.test.mjs. The clear must also run BEFORE renderCurrentLod,
   // whose registration sweep deletes the record the clear needs to see.
   const firmsSource = readLayerSource(
@@ -2083,7 +2083,7 @@ test('production eviction sites actually tag their clears', () => {
 });
 
 // ===========================================================================
-// END Contact-readout presence block — fix/context-panel-next-subjects.
+// END Contact-readout presence block - fix/context-panel-next-subjects.
 // ===========================================================================
 
 test('cockpit blocks only non-aircraft Context camera flights', () => {
@@ -2165,7 +2165,7 @@ test('installation summaries disclose viewport-scoped coverage', () => {
   const retrying = summarizeInstallationViewport([], {
     available: false,
     stats: {
-      statusMessage: 'Overpass temporarily unavailable — retrying in 30s',
+      statusMessage: 'Overpass temporarily unavailable - retrying in 30s',
     },
   });
   assert.equal(
@@ -2175,7 +2175,7 @@ test('installation summaries disclose viewport-scoped coverage', () => {
   );
   assert.equal(
     retrying.reason,
-    'Overpass temporarily unavailable — retrying in 30s',
+    'Overpass temporarily unavailable - retrying in 30s',
   );
 });
 
@@ -3307,7 +3307,7 @@ test('NEXT reaches every layer before repeating any contact', () => {
 
 test('the navigable cohort is generous but finite, and the count stays exact', () => {
   // Caps guard materialization only. A cohort larger than the navigable window
-  // must still report its true size — a capped COUNT would be a lie.
+  // must still report its true size - a capped COUNT would be a lie.
   const items = Array.from({ length: 12000 }, (_, index) => ({
     id: `installation-${index}`,
     distanceM: index,
@@ -3410,7 +3410,7 @@ test('walking a cohort does not rescan the source layer per selection', () => {
 
 test('the contacts window reports exactly the counts the panel renders', () => {
   // Field case: the panel showed 42 while analyst_query reported 8 for the same
-  // 250 km question — the panel counts the awareness cohort, analyst counts
+  // 250 km question - the panel counts the awareness cohort, analyst counts
   // CURRENTLY-LOADED records, and the flights layer reloads by viewport. Both
   // honest. The window block exists so the panel's numbers travel with the
   // answer, so it must be derived from the panel's own snapshot, not recomputed.
@@ -3872,7 +3872,7 @@ test('Contacts refresh cadence is snappy while the camera moves and parked other
 
 test('intermittent pose-bin crossings cannot refresh faster than the motion floor', () => {
   // The adversarial pattern: a SLOW continuous drag. The pose signature is
-  // quantized, so it crosses a bin only every fourth frame — which a per-frame
+  // quantized, so it crosses a bin only every fourth frame - which a per-frame
   // "unchanged means parked" test reads as a motion-end four times a frame-quad,
   // refreshing at nearly display rate.
   let lastRefreshMs = 0;
@@ -3962,7 +3962,7 @@ test('parked Contacts takes no continuous-render hold and requests at most the p
   const position = Cesium.Cartesian3.fromDegrees(-97.74, 30.27, 1000);
   const neighbour = Cesium.Cartesian3.fromDegrees(-97.7, 30.27, 1000);
   const restoreCollections = stubAwarenessCollections({
-    // A real neighbouring contact, so the cohort is genuinely LIVE — an empty
+    // A real neighbouring contact, so the cohort is genuinely LIVE - an empty
     // or failed cohort must not take the hold (see the failed-feed test below).
     flights: [
       { icao24: 'subject-flight', position, distanceM: 0 },
@@ -3983,7 +3983,7 @@ test('parked Contacts takes no continuous-render hold and requests at most the p
       roll: 0,
     };
 
-    // 1. Enabled, nothing selected, camera parked — Contacts must not be a
+    // 1. Enabled, nothing selected, camera parked - Contacts must not be a
     //    reason the whole scene keeps repainting.
     assert.ok(
       !holds().includes('military-awareness'),
@@ -4074,7 +4074,7 @@ test('Contacts needs continuous render only for a live cohort under a moving vie
   );
 });
 
-test('empty and failed cohorts are not "live" — there is no arrow to animate', () => {
+test('empty and failed cohorts are not "live" - there is no arrow to animate', () => {
   const cohorts = (...counts) => ({
     cohorts: counts.map((count) => ({ summary: { count } })),
   });
@@ -4103,7 +4103,7 @@ test('a moving view over failed feeds takes no continuous-render hold', () => {
   let clockMs = 1_700_000_000_000;
   const position = Cesium.Cartesian3.fromDegrees(-97.74, 30.27, 1000);
   // Every dependency reports unavailable, so every cohort summarizes to count
-  // null — the exact state the old Boolean(state.results) gate still held for.
+  // null - the exact state the old Boolean(state.results) gate still held for.
   const restoreCollections = stubAwarenessCollections({});
   _resetRenderGovernorForTest();
   const runtime = installAwarenessRuntime({ isEnabled: () => false });
@@ -4181,7 +4181,7 @@ test('a moving camera refreshes Contacts more than once inside one parked interv
       awarenessSubject('flights', 'subject-flight', position),
     );
 
-    // 720 ms of MOVING frames at ~60 Hz — one parked interval's worth of time.
+    // 720 ms of MOVING frames at ~60 Hz - one parked interval's worth of time.
     refreshes = 0;
     for (let frame = 0; frame < 45; frame += 1) {
       clockMs += 16;

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * qa-vessel-cards.mjs — operator-side visual proof harness for AIS cards in
+ * qa-vessel-cards.mjs - operator-side visual proof harness for AIS cards in
  * the shared world-overlay host.
  *
  * Drives the REAL app in headless Chromium, frames a busy port, waits for the
@@ -181,7 +181,7 @@ const CHROME_EXECUTABLE_CANDIDATES = [
   // Prefer puppeteer's version-pinned Chrome-for-Testing over the system
   // Chrome: /Applications auto-updates underneath the harnesses, and its
   // software-GL behavior shifts across majors (system Chrome 150 blew the
-  // tile-gated drain budget under SwiftShader on 2026-07-30 — six
+  // tile-gated drain budget under SwiftShader on 2026-07-30 - six
   // false-negative qa-cctv-v2 runs against a healthy build). A deterministic
   // pinned browser beats the newest one for regression harnesses.
   await puppeteer.executablePath().catch(() => null),
@@ -200,7 +200,7 @@ function findChromeExecutable() {
 }
 
 async function main() {
-  console.log(`\nAIS Vessel Cards — visual proof harness`);
+  console.log(`\nAIS Vessel Cards - visual proof harness`);
   console.log(`  App URL : ${APP_URL}`);
   console.log(`  Tag     : ${TAG}`);
   console.log(`  Data    : ${DATA_MODE}`);
@@ -394,7 +394,7 @@ async function main() {
       });
       fs.writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
       const tiles = resettled ? 'tiles+vessels settled' : 'TIMEOUT waiting for tiles/vessels (shot anyway)';
-      console.log(`    [\x1b[32mSHOT\x1b[0m] ${Math.round(st.size / 1024)} KB — ${tiles}`);
+      console.log(`    [\x1b[32mSHOT\x1b[0m] ${Math.round(st.size / 1024)} KB - ${tiles}`);
       console.log(`    [RENDERER] ${overlayEvidence.renderer.vendor} / ${overlayEvidence.renderer.renderer}`);
       console.log(`    [GPU] hardware accelerated=${hardwareRenderer}`);
       if (DATA_MODE === 'synthetic') {

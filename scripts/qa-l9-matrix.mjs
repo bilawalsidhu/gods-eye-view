@@ -1,5 +1,5 @@
 /**
- * qa-l9-matrix.mjs — the L9 release-candidate QA matrix, in one command.
+ * qa-l9-matrix.mjs - the L9 release-candidate QA matrix, in one command.
  *
  * L9 = the final live keyed end-to-end QA pass
  * (P1-5) + the browser tracking gate (P1-7) + a re-confirmation of the release
@@ -7,17 +7,17 @@
  *
  * This runner does everything in that matrix that a machine can honestly do:
  *
- *   A · REPO     static gates — unit suite, build, the Node-24 allocation gate,
+ *   A · REPO     static gates - unit suite, build, the Node-24 allocation gate,
  *                secret/private-name scans, LAN-safe defaults, public files.
- *   B · FEED     server-side probes — does each keyed proxy actually return
+ *   B · FEED     server-side probes - does each keyed proxy actually return
  *                live data, and does a MISSING key degrade honestly?
- *   C · APP      one real browser session — layers populate, credits list,
+ *   C · APP      one real browser session - layers populate, credits list,
  *                clean-UI keeps attribution, no key leaks into the client.
  *   D · HARNESS  the existing qa-*.mjs fleet, invoked as subprocesses and
  *                aggregated. This runner never reimplements what they cover.
  *   M · MANUAL   the owner-eyes checks (3 voice mic round trips, the LAN
  *                warning, the live-vessel transfer, …). Always reported as
- *                SKIPPED/OWNER-RUN so the coverage math stays honest — the
+ *                SKIPPED/OWNER-RUN so the coverage math stays honest - the
  *                steps live in the maintainers' release runbook.
  *
  * Honest degradation is the core contract: a check that needs a key THIS run
@@ -70,7 +70,7 @@ const SKIP_IDS = (getOpt('--skip', '') || '').split(',').map((s) => s.trim()).fi
 //     · HTTP 500 or a malformed payload from a
 //       RESPONSIVE app                              → PRODUCT FAIL
 //     · a harness crash                             → HARNESS-CRASH (its own
-//       visible category — never ENV, never PASS)
+//       visible category - never ENV, never PASS)
 //     · a check that could not verify its claim     → that check FAILS or
 //       reports HARNESS-CRASH, never silently passes
 //
@@ -81,7 +81,7 @@ const SKIP_IDS = (getOpt('--skip', '') || '').split(',').map((s) => s.trim()).fi
 const PASS = 'PASS';
 const PASS_SKIPS = 'PASS-WITH-SKIPS'; // green, but the harness left assertions unrun
 const FAIL = 'FAIL';
-const CRASH = 'HARNESS-CRASH';        // the check itself broke — counts against green
+const CRASH = 'HARNESS-CRASH';        // the check itself broke - counts against green
 const SKIP = 'SKIPPED';
 const results = [];
 const C = {
@@ -104,7 +104,7 @@ const SKIP_TAGS = new Set(['OWNER-RUN', 'ENV', 'CHEAP', 'N/A']);
 
 /**
  * Every verdict passes through here before it is recorded. A malformed result
- * — undefined, a non-object, an unknown status, a SKIP with no tag — used to
+ * - undefined, a non-object, an unknown status, a SKIP with no tag - used to
  * render as `SKIPPED[undefined]`, land in no counter, and leave the run green.
  * A runner that cannot classify its own result has verified nothing, so it
  * reports HARNESS-CRASH against itself.
@@ -113,13 +113,13 @@ const SKIP_TAGS = new Set(['OWNER-RUN', 'ENV', 'CHEAP', 'N/A']);
  */
 function normalizeVerdict(res) {
   if (!res || typeof res !== 'object' || Array.isArray(res)) {
-    return crash(`the runner produced a malformed verdict (${res === undefined ? 'undefined' : JSON.stringify(res)?.slice(0, 80)}) — this check verified nothing`);
+    return crash(`the runner produced a malformed verdict (${res === undefined ? 'undefined' : JSON.stringify(res)?.slice(0, 80)}) - this check verified nothing`);
   }
   if (!OUTCOMES.has(res.status)) {
-    return crash(`the runner produced an unknown outcome "${String(res.status)}" — not one of ${[...OUTCOMES].join(' / ')}; this check verified nothing`);
+    return crash(`the runner produced an unknown outcome "${String(res.status)}" - not one of ${[...OUTCOMES].join(' / ')}; this check verified nothing`);
   }
   if (res.status === SKIP && !SKIP_TAGS.has(res.tag)) {
-    return crash(`a SKIPPED verdict carried an invalid tag "${String(res.tag)}" — a skip must name its reason (${[...SKIP_TAGS].join(' / ')}), or it is indistinguishable from a silent pass`);
+    return crash(`a SKIPPED verdict carried an invalid tag "${String(res.tag)}" - a skip must name its reason (${[...SKIP_TAGS].join(' / ')}), or it is indistinguishable from a silent pass`);
   }
   return res;
 }
@@ -129,12 +129,12 @@ const env = {
   // FIRMS/TOMTOM/AIS/OPENAI/OPENSKY →
   //   true    key positively present
   //   false   key positively ABSENT (the endpoint said so in its own words)
-  //   'error' the status endpoint is unhealthy — key state UNKNOWN, and any
+  //   'error' the status endpoint is unhealthy - key state UNKNOWN, and any
   //           check that depends on it FAILS rather than skipping
   //   null    deliberately not probed (--cheap)
   keys: {},
   node24: null,      // { bin, label } for the calibrated allocation runtime
-  reachable: false,  // got ANY HTTP response (even a 500) — vs connection refused
+  reachable: false,  // got ANY HTTP response (even a 500) - vs connection refused
   shellStatus: null, // the app shell's HTTP status, for the ENV-vs-FAIL split
   browserVersion: null,
   boot: null,
@@ -149,16 +149,16 @@ const env = {
 function keyGuard(name, state) {
   if (state === true || state === false) return null;
   if (state === 'error') {
-    return fail(`${name} key state UNKNOWN — its status endpoint errored or returned a malformed payload on a responsive server, so this check cannot say whether the key is merely absent`);
+    return fail(`${name} key state UNKNOWN - its status endpoint errored or returned a malformed payload on a responsive server, so this check cannot say whether the key is merely absent`);
   }
-  return skip(`${name} key presence was not probed (--cheap) — this check cannot pick its keyed/keyless branch`, 'CHEAP');
+  return skip(`${name} key presence was not probed (--cheap) - this check cannot pick its keyed/keyless branch`, 'CHEAP');
 }
 
 /**
  * Required attribution per layer id, checked against the credits actually
  * registered in `viewer.creditDisplay` (source strings live in
  * src/data/dataCredits.js). C12 asserts EVERY enabled layer, and an enabled
- * layer that appears in neither this map nor the exemption list FAILS — an
+ * layer that appears in neither this map nor the exemption list FAILS - an
  * unmapped layer must never pass silently just because nobody added it here.
  */
 const CREDIT_EXPECTATIONS = {
@@ -204,7 +204,7 @@ function requiredCreditFor(layerId) {
  * `>=24.14.0 <25 || >=26 <27`.
  *
  * Checking only the major version passed Node 24.0.0 against a `>=24.14.0`
- * floor — the floor exists because the allocation budgets are calibrated, so
+ * floor - the floor exists because the allocation budgets are calibrated, so
  * "close enough" is exactly the wrong answer for a release gate.
  * @param {string} version e.g. "24.19.0"
  * @param {string} range e.g. ">=24.14.0 <25 || >=26 <27"
@@ -251,7 +251,7 @@ function isCalibratedAllocationRuntime(version) {
  *
  * The same discrimination C11 makes for the bundled layers: "still loading when
  * my budget expired" is not "empty". The discriminator is whether the flow
- * request ever completed — NOT whether the answer was empty — so a result that
+ * request ever completed - NOT whether the answer was empty - so a result that
  * landed and is empty keeps failing. That empty-but-landed shape is the
  * Overpass-outage signature (no road graph to colour: tiles fetched, nothing
  * coloured), and it must stay a FAIL.
@@ -329,7 +329,7 @@ const tail = (s, n = 220) => (s || '').trim().split('\n').slice(-3).join(' | ').
 // Verdict lines are ANCHORED and matched across the WHOLE transcript, not
 // "first hit wins". A parser that accepts the first match will happily read a
 // scoreboard that has trailing garbage on it, or take the first of two
-// contradictory scoreboards — both of which let a broken harness pass.
+// contradictory scoreboards - both of which let a broken harness pass.
 const RESULT_RE = /^[^\S\n]*RESULT:[^\S\n]*(\d+)[^\S\n]+passed,[^\S\n]*(\d+)[^\S\n]+failed(?:,[^\S\n]*(\d+)[^\S\n]+(?:skipped|inconclusive))?[^\S\n]*$/gm;
 const COCKPIT_RE = /^[^\S\n]*RESULT:[^\S\n]*(READY|NOT_READY)[^\S\n]*\((\d+)[^\S\n]+failures\)[^\S\n]*$/gm;
 const FLOOR_RE = /^[^\S\n]*VERDICT:[^\S\n]*(PASS|INCONCLUSIVE|FAIL)[^\S\n]*$/gm;
@@ -364,8 +364,8 @@ function soleVerdict(re, kind, { out, err }) {
     return {
       matches,
       verdict: crash(distinct.size > 1
-        ? `contradictory harness output: ${matches.length} different ${kind} lines — ${rendered}; this check cannot be trusted either way`
-        : `duplicated harness output: the ${kind} line was emitted ${matches.length} times — ${rendered}; it is unclear which run this reports`),
+        ? `contradictory harness output: ${matches.length} different ${kind} lines - ${rendered}; this check cannot be trusted either way`
+        : `duplicated harness output: the ${kind} line was emitted ${matches.length} times - ${rendered}; it is unclear which run this reports`),
     };
   }
   return { matches, verdict: null };
@@ -375,12 +375,12 @@ function soleVerdict(re, kind, { out, err }) {
  * Positively classify a non-parseable harness run. A missing scoreboard is a
  * HARNESS-CRASH by default; it only becomes ENV when the harness itself said,
  * in words, that the server was not there. Exit code 2 is NOT evidence of
- * environment — several harnesses use it for arbitrary top-level exceptions.
+ * environment - several harnesses use it for arbitrary top-level exceptions.
  */
 function classifyNoScoreboard(kind, { code, out, err }) {
   const blob = `${err}\n${out}`;
-  if (HARNESS_ENV_RE.test(blob)) return skip(`harness preflight: target not reachable — ${tail(err) || tail(out)}`, 'ENV');
-  return crash(`no ${kind} line (exit ${code}) — the harness did not complete: ${tail(err) || tail(out)}`);
+  if (HARNESS_ENV_RE.test(blob)) return skip(`harness preflight: target not reachable - ${tail(err) || tail(out)}`, 'ENV');
+  return crash(`no ${kind} line (exit ${code}) - the harness did not complete: ${tail(err) || tail(out)}`);
 }
 
 function readResultLine({ code, out, err, timedOut }) {
@@ -397,9 +397,9 @@ function readResultLine({ code, out, err, timedOut }) {
   // testing anything. It cannot be a pass, and it is not automatically ENV.
   if (Number(p) === 0) return classifyNoScoreboard('asserting RESULT', { code, out, err: `${err}\nharness asserted nothing (${detail})` });
   // Exit 2/3 alongside a clean scoreboard means it broke AFTER reporting
-  // (browser teardown, cleanup) — still not a clean pass.
+  // (browser teardown, cleanup) - still not a clean pass.
   if (code !== 0) return crash(`${detail}, but the harness exited ${code} after reporting: ${tail(err)}`);
-  // Green, but assertions were left unrun — visible, never silently green.
+  // Green, but assertions were left unrun - visible, never silently green.
   if (skipped > 0) return passWithSkips(detail, skipped);
   return pass(detail);
 }
@@ -416,7 +416,7 @@ function readCockpit({ code, out, err, timedOut }) {
   // only the word and ignoring the number it carries is exactly how a broken
   // harness passes a gate.
   if (failures > 0) {
-    return crash(`contradictory harness output: "READY (${failures} failures)" — the verdict and the count disagree, so this check cannot be trusted either way`);
+    return crash(`contradictory harness output: "READY (${failures} failures)" - the verdict and the count disagree, so this check cannot be trusted either way`);
   }
   if (code !== 0) return crash(`READY, but the harness exited ${code} after reporting: ${tail(err)}`);
   return pass('READY, 0 failures');
@@ -440,26 +440,26 @@ function applyKnownConditions(verdict, conditions, transcript) {
 }
 
 function readFloorVerdict({ code, out, err, timedOut }) {
-  // qa-floor-verify.mjs never sets an exit code — stdout is the only truth.
+  // qa-floor-verify.mjs never sets an exit code - stdout is the only truth.
   if (timedOut) return fail('timed out');
   const sole = soleVerdict(FLOOR_RE, 'VERDICT', { out, err });
   if (sole.verdict) return sole.verdict;
   const m = sole.matches[0];
   if (!m) return classifyNoScoreboard('VERDICT', { code, out, err });
-  if (m[1] === 'FAIL') return fail('VERDICT: FAIL — grounded contacts buried below the mesh floor');
+  if (m[1] === 'FAIL') return fail('VERDICT: FAIL - grounded contacts buried below the mesh floor');
   if (m[1] === 'INCONCLUSIVE') {
     // The oracle found nothing to measure. That is a failure of ITS
-    // preconditions — hiding every grounded contact must not silently skip the
+    // preconditions - hiding every grounded contact must not silently skip the
     // regression it exists to catch.
     const counts = /low contacts with plausible mesh readings:\s*(\d+)/.exec(out);
-    return fail(`VERDICT: INCONCLUSIVE — the floor oracle had no candidates to measure (${counts ? `${counts[1]} plausible low contacts` : 'no count reported'}). Preconditions unmet: expected grounded/low traffic at the test airport`);
+    return fail(`VERDICT: INCONCLUSIVE - the floor oracle had no candidates to measure (${counts ? `${counts[1]} plausible low contacts` : 'no count reported'}). Preconditions unmet: expected grounded/low traffic at the test airport`);
   }
   if (code !== 0 && code !== null) return crash(`VERDICT: PASS, but the harness exited ${code} afterwards: ${tail(err)}`);
   return pass('VERDICT: PASS');
 }
 
 /**
- * qa-overlay-baseline's `Summary:` line only proves SAMPLING completed — a
+ * qa-overlay-baseline's `Summary:` line only proves SAMPLING completed - a
  * scene whose layer never activated still reports `1 measured · 0 errors`. The
  * harness's own `--json` carries the proof: `layerActivations[].toggleResult`
  * and `.delta` (entities / primitiveLabels / nonemptyLabelText). Read that.
@@ -474,7 +474,7 @@ function readOverlaySummary(layerId, jsonPath) {
     const [, measured, skipped, errors] = m;
     if (Number(errors) > 0) return fail(`${measured} measured, ${errors} errors`);
     if (Number(measured) === 0) {
-      return fail(`0 measured, ${skipped} skipped — the ${layerId} scene produced nothing to measure, so the layer never activated`);
+      return fail(`0 measured, ${skipped} skipped - the ${layerId} scene produced nothing to measure, so the layer never activated`);
     }
     let run = null;
     try { run = JSON.parse(readFileSync(jsonPath, 'utf8')); } catch (e) {
@@ -483,14 +483,14 @@ function readOverlaySummary(layerId, jsonPath) {
     const act = (run.scenes || [])
       .flatMap((sc) => sc.layerActivations || [])
       .find((a) => a.layerId === layerId);
-    if (!act) return crash(`no activation record for ${layerId} in the harness JSON — the check cannot verify its claim`);
+    if (!act) return crash(`no activation record for ${layerId} in the harness JSON - the check cannot verify its claim`);
     if (act.toggleResult?.error) return fail(`${layerId} failed to activate: ${String(act.toggleResult.error).slice(0, 120)}`);
     if (act.toggleResult?.enabled !== true) return fail(`${layerId} did not report enabled after activation: ${JSON.stringify(act.toggleResult).slice(0, 120)}`);
     const d = act.delta || {};
     const drawn = (d.entities || 0) + (d.primitiveLabels || 0) + (d.primitiveBillboards || 0) + (d.primitivePoints || 0);
     const layerCount = act.state?.stats?.count;
     if (!(drawn > 0)) {
-      return fail(`${layerId} activated but drew nothing (entities=${d.entities ?? 'n/a'} primitiveLabels=${d.primitiveLabels ?? 'n/a'} stats.count=${layerCount ?? 'n/a'}) — an empty overlay is not a baseline`);
+      return fail(`${layerId} activated but drew nothing (entities=${d.entities ?? 'n/a'} primitiveLabels=${d.primitiveLabels ?? 'n/a'} stats.count=${layerCount ?? 'n/a'}) - an empty overlay is not a baseline`);
     }
     if (code !== 0) return crash(`${measured} measured, but the harness exited ${code} after reporting: ${tail(err)}`);
     return pass(`${measured} measured, 0 errors; ${layerId} activated and drew ${drawn} (entities=${d.entities} labels=${d.primitiveLabels} nonemptyLabelText=${d.nonemptyLabelText ?? 'n/a'} stats.count=${layerCount ?? 'n/a'})`);
@@ -512,7 +512,7 @@ function harness({ id, script, args = [], parse = readResultLine, timeoutMs = 90
     const verdict = applyKnownConditions(parse(r), knownConditions, `${r.out}\n${r.err}`);
     // A dev server whose dependency optimizer re-runs mid-test answers 504
     // "Outdated Optimize Dep" and the module never evaluates. Everything
-    // downstream is then measured against a broken module graph — on a cold
+    // downstream is then measured against a broken module graph - on a cold
     // cache this turned the geoid module into five bogus height-datum
     // "failures". That is a positively identified environment condition (an
     // exact Vite marker, not a guess), so it is an ENV skip rather than a false
@@ -521,9 +521,9 @@ function harness({ id, script, args = [], parse = readResultLine, timeoutMs = 90
       && /Outdated Optimize Dep/.test(`${r.out}\n${r.err}`)) {
       verdict.status = SKIP;
       verdict.tag = 'ENV';
-      verdict.detail = `${verdict.detail} — but the dev server re-optimized dependencies mid-run (Vite 504 "Outdated Optimize Dep"), so this ran against a broken module graph. Load the app once to warm the server, then re-run this check.`;
+      verdict.detail = `${verdict.detail} - but the dev server re-optimized dependencies mid-run (Vite 504 "Outdated Optimize Dep"), so this ran against a broken module graph. Load the app once to warm the server, then re-run this check.`;
     }
-    // Keep the full transcript of anything that did not pass — otherwise
+    // Keep the full transcript of anything that did not pass - otherwise
     // diagnosing a harness failure costs a whole second run.
     if (verdict.status !== PASS) {
       try {
@@ -552,20 +552,20 @@ check({
     const range = pkg.engines?.node || '(unset)';
     const satisfied = satisfiesEngines(process.versions.node, range);
     if (satisfied === null) {
-      return crash(`could not evaluate engines range "${range}" against node ${process.versions.node} — this check cannot confirm the runtime is supported`);
+      return crash(`could not evaluate engines range "${range}" against node ${process.versions.node} - this check cannot confirm the runtime is supported`);
     }
     if (satisfied) return pass(`node ${process.versions.node} satisfies "${range}"`);
-    // An off-range runtime is an environment problem, not a product defect —
+    // An off-range runtime is an environment problem, not a product defect -
     // but it silently disables the allocation gate, so say so loudly. A3 then
     // runs that gate under a discovered Node 24.
     return env.node24
       ? skip(`node ${process.versions.node} is OUTSIDE "${range}"; A3 runs the allocation gate under ${env.node24.label}, but prefer running the whole L9 pass on Node 24`, 'ENV')
-      : fail(`node ${process.versions.node} is OUTSIDE "${range}" and no Node 24 runtime was found — the allocation gate cannot run at all`);
+      : fail(`node ${process.versions.node} is OUTSIDE "${range}" and no Node 24 runtime was found - the allocation gate cannot run at all`);
   },
 });
 
 check({
-  id: 'A2', group: 'A', desc: 'npm test — unit suite green',
+  id: 'A2', group: 'A', desc: 'npm test - unit suite green',
   heavy: false,
   run: async () => {
     const r = await sh('npm', ['test'], { timeoutMs: 600000 });
@@ -585,7 +585,7 @@ check({
     // exits 0 when the runtime is not Node 24. A green suite is therefore NOT
     // proof the gate ran. Force it, under Node 24 when one is discoverable.
     //
-    // ALWAYS invoke the Node 24 BINARY directly — never `npm test`. npm
+    // ALWAYS invoke the Node 24 BINARY directly - never `npm test`. npm
     // re-resolves the interpreter from PATH and can land back on the system
     // Node even when THIS process is already 24: running the whole matrix under
     // `mise exec node@24.19.0 --`, the npm shell-out still re-execed system
@@ -599,8 +599,8 @@ check({
       if (!isCalibratedAllocationRuntime(version)) {
         // run-unit-tests.mjs refuses to measure calibrated budgets off Node 24,
         // so a wrong binary means the gate never ran. That is this check failing
-        // to establish its own claim — not evidence about the product.
-        return crash(`the runtime selected for the allocation gate (${label}) reports ${version || 'no parseable version'}, not Node 24 — the gate would refuse or silently skip, so this check verified nothing`);
+        // to establish its own claim - not evidence about the product.
+        return crash(`the runtime selected for the allocation gate (${label}) reports ${version || 'no parseable version'}, not Node 24 - the gate would refuse or silently skip, so this check verified nothing`);
       }
       const r = await sh(bin, [resolve(REPO_ROOT, 'scripts/run-unit-tests.mjs')], {
         timeoutMs: 600000, env: { GEV_REQUIRE_ALLOCATION_GATE: '1' },
@@ -613,12 +613,12 @@ check({
     const [maj] = process.versions.node.split('.').map(Number);
     if (maj === 24) return runGate(process.execPath, 'this runtime');
     if (env.node24) return runGate(env.node24.bin, env.node24.label);
-    return skip(`no Node 24 runtime found (running ${process.versions.node}); the gate SKIPS silently — install Node 24 and re-run`, 'OWNER-RUN');
+    return skip(`no Node 24 runtime found (running ${process.versions.node}); the gate SKIPS silently - install Node 24 and re-run`, 'OWNER-RUN');
   },
 });
 
 check({
-  id: 'A4', group: 'A', desc: 'npm run build — production build clean',
+  id: 'A4', group: 'A', desc: 'npm run build - production build clean',
   run: async () => {
     const r = await sh('npm', ['run', 'build'], { timeoutMs: 900000 });
     return r.code === 0 ? pass('build succeeded') : fail(`build failed: ${tail(r.err) || tail(r.out)}`);
@@ -628,15 +628,15 @@ check({
 check({
   id: 'A5', group: 'A',
   // Named for what it actually does. It is a KNOWN-PREFIX scan, not a general
-  // secret detector — a high-entropy blob with no recognised prefix passes it.
+  // secret detector - a high-entropy blob with no recognised prefix passes it.
   desc: 'No tracked .env, and no known-prefix credential literals (OpenAI/Google/AWS/GitHub/Slack/Stripe/private keys)',
   run: async () => {
     const tracked = await sh('git', ['ls-files'], { timeoutMs: 60000 });
-    // git ls-files exits non-zero only on real failure — a failed enumeration
+    // git ls-files exits non-zero only on real failure - a failed enumeration
     // must not read as "no .env files found".
     if (tracked.code !== 0) return crash(`git ls-files failed (exit ${tracked.code}): ${tail(tracked.err)}`);
     const files = tracked.out.split('\n').filter(Boolean);
-    if (files.length === 0) return crash('git ls-files returned nothing — cannot claim the tree is clean');
+    if (files.length === 0) return crash('git ls-files returned nothing - cannot claim the tree is clean');
     const envFiles = files.filter((f) => /(^|\/)\.env($|\.(?!example))/.test(f));
     if (envFiles.length) return fail(`tracked env file(s): ${envFiles.join(', ')}`);
 
@@ -665,19 +665,19 @@ check({
   run: async () => {
     // The public snapshot must not carry the private scenario vocabulary.
     // Maintainer-internal directories are stripped at curation, so they are
-    // excluded here — this scans what would actually ship.
+    // excluded here - this scans what would actually ship.
     //
     // The release checklist also lists two more terms that are dropped as
     // blockers because both are legitimately present in the shipping tree: one
     // is the name of the auto-detection default view (README, CHANGELOG,
     // src/data/*), the other appears inside the bundled public geodata
     // (datacenter and submarine-cable landing points). Scanning for them
-    // produces only false positives — flagged as a stale checklist item in
+    // produces only false positives - flagged as a stale checklist item in
     // the maintainers' release runbook, not silently honoured.
     //
     // The terms are assembled from fragments so THIS file carries no literal
     // copy of the private vocabulary. Spelling them out here would make the
-    // scanner its own first hit — and this script ships publicly.
+    // scanner its own first hit - and this script ships publicly.
     const terms = [['horm', 'uz'], ['cease', 'fire'], ['gps-', 'jamming']].map(([a, b]) => a + b);
     const grep = await sh('git', ['grep', '-lIiE', terms.join('|'), '--',
       ':!docs/inter' + 'nal/**', ':!.cla' + 'ude/**', ':!.gev-logs/**', ':!CLA' + 'UDE.md', ':!AGENTS.md'], { timeoutMs: 120000 });
@@ -756,15 +756,15 @@ check({
     const reason = r.headers.get('X-OpenSky-Auth-Reason') || '';
     const used = r.headers.get('X-OpenSky-Auth-Mode-Used') || r.headers.get('X-OpenSky-Auth') || '';
     if (!r.ok) return fail(`HTTP ${r.status} from a responsive proxy (auth=${used || 'n/a'} reason=${reason || 'n/a'}): ${r.text.slice(0, 120)}`);
-    if (!used) return fail('proxy answered 200 without the X-OpenSky-Auth headers — cannot verify which auth mode served this');
+    if (!used) return fail('proxy answered 200 without the X-OpenSky-Auth headers - cannot verify which auth mode served this');
     if (/invalid_credentials|rejected/.test(reason)) return fail(`OpenSky rejected the configured credentials (reason=${reason})`);
     if (/missing_.*creds|invalid_or_missing/.test(reason) || used === 'anon') {
-      return skip(`OpenSky served ANONYMOUSLY (auth=${used}, reason=${reason || 'n/a'}) — the keyed claim needs configured credentials`, 'OWNER-RUN');
+      return skip(`OpenSky served ANONYMOUSLY (auth=${used}, reason=${reason || 'n/a'}) - the keyed claim needs configured credentials`, 'OWNER-RUN');
     }
     if (!/^(oauth|basic)$/.test(used)) {
-      // 'cached'/'unknown'/'adsblol-regional' etc. — real, but not proof that
+      // 'cached'/'unknown'/'adsblol-regional' etc. - real, but not proof that
       // credentials are in use right now.
-      return fail(`served by mode "${used}" (reason=${reason || 'n/a'}) — not a live authenticated OpenSky fetch, so this check cannot confirm credentials are in use`);
+      return fail(`served by mode "${used}" (reason=${reason || 'n/a'}) - not a live authenticated OpenSky fetch, so this check cannot confirm credentials are in use`);
     }
     return pass(`authenticated: auth=${used}, reason=${reason || 'n/a'}, cache=${r.headers.get('X-OpenSky-Cache') || 'n/a'}`);
   },
@@ -782,7 +782,7 @@ check({
 });
 
 check({
-  id: 'B5', group: 'B', desc: 'TLEs are FRESH (epoch under 14 days — a stale catalog silently mis-propagates)',
+  id: 'B5', group: 'B', desc: 'TLEs are FRESH (epoch under 14 days - a stale catalog silently mis-propagates)',
   run: async () => {
     const r = await jget('/api/celestrak/stations', { timeoutMs: 40000 });
     if (!r.ok) return fail(`HTTP ${r.status}`);
@@ -817,7 +817,7 @@ check({
   run: async () => {
     const guard = keyGuard('FIRMS', env.keys.FIRMS);
     if (guard) return guard;
-    if (env.keys.FIRMS === true) return skip('server HAS a FIRMS key — the keyless path needs an unkeyed server', 'N/A');
+    if (env.keys.FIRMS === true) return skip('server HAS a FIRMS key - the keyless path needs an unkeyed server', 'N/A');
     const r = await jget('/api/firms');
     return r.status === 503 && r.json?.error === 'no_key'
       ? pass('503 {"error":"no_key"}')
@@ -833,28 +833,28 @@ check({
     const status = r.json?.status;
     if (!r.ok) return fail(`HTTP ${r.status} status=${status}`);
     // Rows alone are NOT liveness. The watchdog keeps serving cached vessels
-    // through stale/reconnecting/down — "the cached vessels on screen are
+    // through stale/reconnecting/down - "the cached vessels on screen are
     // exactly what makes an outage invisible" (src/data/aisLiveVessels.js:183).
     // A live claim therefore needs status === 'live' AND rows.
     // ('open' is the pre-watchdog spelling: still accepted by the client, never
-    // emitted by this server — aisWatchdog.js:72.)
+    // emitted by this server - aisWatchdog.js:72.)
     const healthy = status === 'live' || status === 'open';
     if (healthy && rows > 0) {
       return pass(`${rows} vessels, status=${status}, newest=${r.json?.newestPositionAt || 'n/a'}, silentFor=${r.json?.silentForMs ?? 'n/a'}ms`);
     }
     if (status === 'auth-failed') {
       // A rejected key is terminal and is the product's problem to report.
-      return fail(`AISStream rejected the configured key (status=auth-failed, rows=${rows}) — retry is terminal (retryInSec 0)`);
+      return fail(`AISStream rejected the configured key (status=auth-failed, rows=${rows}) - retry is terminal (retryInSec 0)`);
     }
     if (healthy && rows === 0) {
-      return skip(`status=live but 0 rows — AISStream connects open-but-silent upstream (their #23/#15); recheck when it wakes`, 'ENV');
+      return skip(`status=live but 0 rows - AISStream connects open-but-silent upstream (their #23/#15); recheck when it wakes`, 'ENV');
     }
     if (['stale', 'reconnecting', 'down', 'connecting'].includes(status)) {
-      // Transient/degraded is ENV only because the payload SAYS so — the
+      // Transient/degraded is ENV only because the payload SAYS so - the
       // honesty is the evidence. rows>0 here means cached, not live.
-      return skip(`feed is ${status}${rows > 0 ? ` while still serving ${rows} CACHED rows` : ''} (attempt=${r.json?.reconnectAttempt ?? 'n/a'}, nextAttemptAt=${r.json?.nextAttemptAt ?? 'n/a'}, silentFor=${r.json?.silentForMs ?? 'n/a'}ms) — surfaced honestly, but this is not a live feed`, 'ENV');
+      return skip(`feed is ${status}${rows > 0 ? ` while still serving ${rows} CACHED rows` : ''} (attempt=${r.json?.reconnectAttempt ?? 'n/a'}, nextAttemptAt=${r.json?.nextAttemptAt ?? 'n/a'}, silentFor=${r.json?.silentForMs ?? 'n/a'}ms) - surfaced honestly, but this is not a live feed`, 'ENV');
     }
-    return fail(`unexpected AIS feed status "${status}" with ${rows} rows — not one of live/stale/reconnecting/down/auth-failed/connecting`);
+    return fail(`unexpected AIS feed status "${status}" with ${rows} rows - not one of live/stale/reconnecting/down/auth-failed/connecting`);
   },
 });
 
@@ -866,7 +866,7 @@ check({
     if (env.keys.AIS === true) return skip('server HAS an AISStream key', 'N/A');
     const r = await jget('/api/vessels');
     return r.status === 503 && r.json?.status === 'missing-key' && Array.isArray(r.json?.rows)
-      ? pass(`503 status=missing-key, rows=[] — "${String(r.json?.error).slice(0, 60)}"`)
+      ? pass(`503 status=missing-key, rows=[] - "${String(r.json?.error).slice(0, 60)}"`)
       : fail(`expected 503/missing-key, got ${r.status} ${r.text.slice(0, 120)}`);
   },
 });
@@ -1011,7 +1011,7 @@ check({
   run: async () => {
     const guard = keyGuard('OPENAI', env.keys.OPENAI);
     if (guard) return guard;
-    if (env.keys.OPENAI === true) return skip('server HAS an OpenAI key — the keyless path needs an unkeyed server', 'N/A');
+    if (env.keys.OPENAI === true) return skip('server HAS an OpenAI key - the keyless path needs an unkeyed server', 'N/A');
     const r = await jget('/api/realtime/token', { method: 'POST' });
     return r.status === 503 && /OPENAI_API_KEY is not set/.test(r.text)
       ? pass('503 "OPENAI_API_KEY is not set"')
@@ -1034,7 +1034,7 @@ check({
         continue;
       }
       // An error page is not a payload. Scanning five 500s and finding no key
-      // is trivially true and proves nothing — a broken app must not satisfy a
+      // is trivially true and proves nothing - a broken app must not satisfy a
       // negative assertion. The one documented exception is the keyless
       // 503 {status:'missing-key'} from /api/vessels, which IS its real shape.
       const documentedKeyless = r.status === 503
@@ -1082,15 +1082,15 @@ for (const [id, desc] of BROWSER_CHECKS) check({ id, group: 'C', desc, browser: 
 
 // ─── D · EXISTING HARNESS FLEET ───────────────────────────────────────────
 check({
-  id: 'D1', group: 'D', desc: 'track-regression — the tracking/height-datum invariant gate (P1-7)',
+  id: 'D1', group: 'D', desc: 'track-regression - the tracking/height-datum invariant gate (P1-7)',
   heavy: true, run: harness({ id: 'D1', script: 'track-regression.mjs', args: ['--url', APP_URL], timeoutMs: 1200000 }),
 });
 check({
-  id: 'D2', group: 'D', desc: 'qa-heading-b3 — path-derived display heading',
+  id: 'D2', group: 'D', desc: 'qa-heading-b3 - path-derived display heading',
   heavy: true, run: harness({ id: 'D2', script: 'qa-heading-b3.mjs', args: ['--url', APP_URL], timeoutMs: 900000 }),
 });
 check({
-  id: 'D3', group: 'D', desc: 'qa-sprites-b5 — per-class billboard silhouettes',
+  id: 'D3', group: 'D', desc: 'qa-sprites-b5 - per-class billboard silhouettes',
   heavy: true,
   run: harness({
     id: 'D3',
@@ -1101,24 +1101,24 @@ check({
       // Evidence-gated: only when its console assertion is the failing one AND
       // the transcript actually shows a 503. Explains, never excuses.
       when: /no console errors[\s\S]{0,300}?503/,
-      note: 'not key-tolerant — its "no console errors" assertion counts the honest keyless 503s (e.g. /api/openai/hud-summary) as errors; expected to PASS on the fully keyed server. Still a FAIL here.',
+      note: 'not key-tolerant - its "no console errors" assertion counts the honest keyless 503s (e.g. /api/openai/hud-summary) as errors; expected to PASS on the fully keyed server. Still a FAIL here.',
     }],
   }),
 });
 check({
-  id: 'D4', group: 'D', desc: 'qa-cctv-v2 — camera geometry, projection, ambient cards',
+  id: 'D4', group: 'D', desc: 'qa-cctv-v2 - camera geometry, projection, ambient cards',
   heavy: true, run: harness({ id: 'D4', script: 'qa-cctv-v2.mjs', args: ['--url', APP_URL], timeoutMs: 1500000 }),
 });
 check({
-  id: 'D5', group: 'D', desc: 'qa-failstate-b10 — fabricated upstream failures degrade honestly',
+  id: 'D5', group: 'D', desc: 'qa-failstate-b10 - fabricated upstream failures degrade honestly',
   run: harness({ id: 'D5', script: 'qa-failstate-b10.mjs', args: ['--url', APP_URL], timeoutMs: 900000 }),
 });
 check({
-  id: 'D6', group: 'D', desc: 'qa-attribution-b12 — per-layer credits + clean/recording credit line',
+  id: 'D6', group: 'D', desc: 'qa-attribution-b12 - per-layer credits + clean/recording credit line',
   run: harness({ id: 'D6', script: 'qa-attribution-b12.mjs', args: ['--url', APP_URL], timeoutMs: 600000 }),
 });
 check({
-  id: 'D7', group: 'D', desc: 'qa-cockpit-utility — cockpit display/radio layout readiness',
+  id: 'D7', group: 'D', desc: 'qa-cockpit-utility - cockpit display/radio layout readiness',
   heavy: true, parseNote: 'READY/NOT_READY',
   run: harness({
     id: 'D7',
@@ -1134,11 +1134,11 @@ check({
   }),
 });
 check({
-  id: 'D8', group: 'D', desc: 'qa-radio — worldwide radio browse/play surface',
+  id: 'D8', group: 'D', desc: 'qa-radio - worldwide radio browse/play surface',
   heavy: true, run: harness({ id: 'D8', script: 'qa-radio.mjs', args: ['--url', APP_URL], timeoutMs: 900000 }),
 });
 check({
-  id: 'D9', group: 'D', desc: 'qa-floor-verify — grounded contacts sit ON the rendered mesh floor',
+  id: 'D9', group: 'D', desc: 'qa-floor-verify - grounded contacts sit ON the rendered mesh floor',
   heavy: true,
   run: harness({
     id: 'D9',
@@ -1147,20 +1147,20 @@ check({
     timeoutMs: 600000,
     knownConditions: [{
       when: /VERDICT:\s*FAIL|buried/i,
-      note: 'EXPECTED at main 4f9d99b — the below-mesh fix is not landed, so grounded contacts sit under the floor. Annotated, never green. If fix/below-mesh-contacts has landed, PASS is expected instead and any remaining FAIL (jet-bridge / intra-cell relief residual) is a REAL failure that stays FAIL.',
+      note: 'EXPECTED at main 4f9d99b - the below-mesh fix is not landed, so grounded contacts sit under the floor. Annotated, never green. If fix/below-mesh-contacts has landed, PASS is expected instead and any remaining FAIL (jet-bridge / intra-cell relief residual) is a REAL failure that stays FAIL.',
     }],
   }),
 });
 check({
-  id: 'D10', group: 'D', desc: 'qa-voice-routing (behavior layer) — tool behavior without model turns',
+  id: 'D10', group: 'D', desc: 'qa-voice-routing (behavior layer) - tool behavior without model turns',
   heavy: true, run: harness({ id: 'D10', script: 'qa-voice-routing.mjs', args: ['--layer', 'behavior', '--url', APP_URL], timeoutMs: 1500000 }),
 });
 check({
-  id: 'D11', group: 'D', desc: 'qa-firms — live fire rendering and interaction', needsKey: 'FIRMS', heavy: true,
+  id: 'D11', group: 'D', desc: 'qa-firms - live fire rendering and interaction', needsKey: 'FIRMS', heavy: true,
   run: harness({ id: 'D11', script: 'qa-firms.mjs', args: ['--url', APP_URL], timeoutMs: 900000 }),
 });
 check({
-  id: 'D12', group: 'D', desc: 'qa-overlay-baseline (submarine cables scene) — overlay/label baseline',
+  id: 'D12', group: 'D', desc: 'qa-overlay-baseline (submarine cables scene) - overlay/label baseline',
   heavy: true,
   run: harness({
     id: 'D12',
@@ -1173,12 +1173,12 @@ check({
 
 // ─── M · OWNER-EYES (never automated; steps in the runbook) ───────────────
 const MANUAL = [
-  ['M1', 'Voice mic round trip 1/3 — "when is the next ISS pass?" (next_iss_pass)'],
-  ['M2', 'Voice mic round trip 2/3 — connect/disconnect twice in one tab + keyed set_context_mode and control_cockpit'],
-  ['M3', 'Voice mic round trip 3/3 — adsbdb enrichment readout on a live tracked flight'],
-  ['M4', 'LAN warning path — HOST=0.0.0.0 banner, LAN URL, and a throttled response'],
-  ['M5', 'Live AIS vessel one-click camera transfer — requires status=live, not cached rows (never verified against a live feed)'],
-  ['M6', 'CCTV dense-city interaction — cold fill, hover, select, card removal, monitor plane, coverage, auto-hop suspend'],
+  ['M1', 'Voice mic round trip 1/3 - "when is the next ISS pass?" (next_iss_pass)'],
+  ['M2', 'Voice mic round trip 2/3 - connect/disconnect twice in one tab + keyed set_context_mode and control_cockpit'],
+  ['M3', 'Voice mic round trip 3/3 - adsbdb enrichment readout on a live tracked flight'],
+  ['M4', 'LAN warning path - HOST=0.0.0.0 banner, LAN URL, and a throttled response'],
+  ['M5', 'Live AIS vessel one-click camera transfer - requires status=live, not cached rows (never verified against a live feed)'],
+  ['M6', 'CCTV dense-city interaction - cold fill, hover, select, card removal, monitor plane, coverage, auto-hop suspend'],
   ['M7', 'Grounded + airborne tracked aircraft from 2-3 headings (DISPLAY 3D ON, non-TR-3B subject)'],
   ['M8', 'Voice analyst_query: exact unrounded count + scopeLabel, contactsWindow verbatim, follow-up re-filter'],
   ['M9', 'First-run: the arrival camera feels alive within 30 seconds'],
@@ -1232,10 +1232,10 @@ async function runBrowserGroup(record) {
   page.on('request', (r) => { requestUrls.push(r.url()); });
 
   // A saturated main thread (SwiftShader + ~20k entities) makes every CDP call
-  // wait the full protocolTimeout — 7 minutes per call, and a check that never
+  // wait the full protocolTimeout - 7 minutes per call, and a check that never
   // returns never reports. Every in-page read is therefore bounded.
   //
-  // evalBounded: for POLL loops — null means "nothing this tick, try again".
+  // evalBounded: for POLL loops - null means "nothing this tick, try again".
   const evalBounded = (fn, arg, ms = 8000) => Promise.race([
     page.evaluate(fn, arg).catch(() => null),
     new Promise((r) => setTimeout(() => r(null), ms)),
@@ -1243,7 +1243,7 @@ async function runBrowserGroup(record) {
 
   // mustEval: for one-shot reads a check depends on. A deadline expiry is a
   // positively-identified condition (the page stopped answering), so the check
-  // reports HARNESS-CRASH — it verified nothing. It never degrades to a pass.
+  // reports HARNESS-CRASH - it verified nothing. It never degrades to a pass.
   const UNRESPONSIVE = Symbol('page-unresponsive');
   const mustEval = async (fn, arg = null, ms = 30000) => {
     const outcome = await Promise.race([
@@ -1261,7 +1261,7 @@ async function runBrowserGroup(record) {
       emit(id, res, Date.now() - t0);
       return res;
     } catch (e) {
-      // The probe itself broke — it verified nothing, so it is a crash, not a
+      // The probe itself broke - it verified nothing, so it is a crash, not a
       // product failure.
       emit(id, crash(`probe threw, so this check verified nothing: ${String(e?.message || e).slice(0, 180)}`), Date.now() - t0);
       return null;
@@ -1315,19 +1315,19 @@ async function runBrowserGroup(record) {
   env.boot = { ok: booted, seconds: bootSec, paint };
   const bootDetail = `viewer + dataManager live in ${bootSec.toFixed(1)} s${bootNote ? ` (after ${bootNote})` : ''}; first paint frame=${paint?.frames ?? 'n/a'} canvas=${paint?.w ?? 0}x${paint?.h ?? 0}`;
   emit('C1', (() => {
-    if (!booted) return fail(`app never booted in ${bootSec.toFixed(0)} s — ${bootNote}; if 504, clear node_modules/.vite and restart the dev server`);
+    if (!booted) return fail(`app never booted in ${bootSec.toFixed(0)} s - ${bootNote}; if 504, clear node_modules/.vite and restart the dev server`);
     if (paint?.probeError) return crash(`booted in ${bootSec.toFixed(1)} s but the first-paint probe failed: ${paint.probeError}`);
-    if (!paint?.painted) return fail(`${bootDetail} — the scene never rendered a frame, so "first paint" is unproven`);
-    if (!(paint.w > 0 && paint.h > 0)) return fail(`${bootDetail} — the render canvas has no size`);
+    if (!paint?.painted) return fail(`${bootDetail} - the scene never rendered a frame, so "first paint" is unproven`);
+    if (!(paint.w > 0 && paint.h > 0)) return fail(`${bootDetail} - the render canvas has no size`);
     if (bootSec > BOOT_BUDGET_S) {
-      return fail(`${bootDetail} — over the ${BOOT_BUDGET_S} s budget this check states${bootNote ? ` (${bootNote})` : ''}`);
+      return fail(`${bootDetail} - over the ${BOOT_BUDGET_S} s budget this check states${bootNote ? ` (${bootNote})` : ''}`);
     }
     return pass(bootDetail);
   })(), Date.now() - t0);
 
   if (!booted) {
     for (const [id] of BROWSER_CHECKS.slice(1)) {
-      emit(id, skip('app did not boot — see C1', 'ENV'), 0);
+      emit(id, skip('app did not boot - see C1', 'ENV'), 0);
     }
     await browser.close();
     return;
@@ -1345,7 +1345,7 @@ async function runBrowserGroup(record) {
       const dm = window.__godsEyeView.dataManager;
       if (!dm.layers.has(id)) return { missing: true };
       try {
-        // setEnabled resolves when the whole lifecycle transaction settles —
+        // setEnabled resolves when the whole lifecycle transaction settles -
         // for a viewport-scoped layer over a huge extent that can be minutes.
         // Race it: the layer is still enabling, and the poll loop below is the
         // real observer. Blocking here just burns the CDP protocol timeout.
@@ -1387,7 +1387,7 @@ async function runBrowserGroup(record) {
   // The late checks (C16 reset control, C17 voice surface) make claims about
   // CONTROLS, not about layer load. By the time they run, ~20k entities and the
   // sensor-style post-processing stages have saturated the main thread hard
-  // enough that a trivial read times out — honest as a CRASH, but useless as a
+  // enough that a trivial read times out - honest as a CRASH, but useless as a
   // verdict. Put the stage back down first. Defined here (not inside C16) so it
   // still runs when only one of the late checks is selected.
   let quiesced = false;
@@ -1437,7 +1437,7 @@ async function runBrowserGroup(record) {
     const info = infoR.value;
     const photoreal = info.tilesets.find((t) => /google|tile\.googleapis|photorealistic|3dtiles/i.test(t.url));
     if (!info.tilesets.length) {
-      return fail(`no Cesium3DTileset attached (imagery layers=${info.imagery}, mapStack=${info.mapStack}) — the photorealistic globe is absent`);
+      return fail(`no Cesium3DTileset attached (imagery layers=${info.imagery}, mapStack=${info.mapStack}) - the photorealistic globe is absent`);
     }
     if (!photoreal) {
       return fail(`a 3D tileset is attached but none resolves to Google Photorealistic tiles (urls: ${info.tilesets.map((t) => t.url.slice(0, 60) || '(no url)').join(' | ')}, mapStack=${info.mapStack})`);
@@ -1453,7 +1453,7 @@ async function runBrowserGroup(record) {
     : fail(`${pageErrors.length} uncaught: ${pageErrors.slice(0, 2).join(' | ')}`)));
 
   // Snapshot the voice surface NOW, before the layer probes below saturate the
-  // main thread. C17 reports from this — a real observation, taken at a moment
+  // main thread. C17 reports from this - a real observation, taken at a moment
   // the page can answer. (Under SwiftShader with ~20k entities up, a trivial
   // evaluate can starve for minutes.)
   const voiceSnapshotR = await mustEval(() => {
@@ -1471,7 +1471,7 @@ async function runBrowserGroup(record) {
     if (!(s.count > 0)) return fail(`0 contacts (status=${s.status || ''} error=${s.error || ''})`);
     const src = String(s.source || '');
     return /adsb\.lol/i.test(src)
-      ? skip(`${s.count} contacts but via the adsb.lol FALLBACK (source=${src}) — OpenSky credentials needed for the live claim`, 'OWNER-RUN')
+      ? skip(`${s.count} contacts but via the adsb.lol FALLBACK (source=${src}) - OpenSky credentials needed for the live claim`, 'OWNER-RUN')
       : pass(`${s.count} contacts, source=${src || 'OpenSky'}, stale=${!!s.stale}`);
   });
 
@@ -1491,7 +1491,7 @@ async function runBrowserGroup(record) {
     const r = await settle('cctv', 45);
     // A camera COUNT proves registration, not that the frame loop runs. Poll
     // until ambient cards exist AND frames have actually been fetched, then
-    // assert both — "healthy frame loop" is the claim, so it is the assertion.
+    // assert both - "healthy frame loop" is the claim, so it is the assertion.
     let ui = null;
     for (let i = 0; i < 30; i += 1) {
       // eslint-disable-next-line no-await-in-loop
@@ -1508,9 +1508,9 @@ async function runBrowserGroup(record) {
     if (!(ui.count > 0)) return fail(`0 cameras registered (error=${ui.error || s.error || 'none'})`);
     const cards = ui.ambient?.count || 0;
     const fetches = ui.ambient?.frameFetches || 0;
-    if (cards === 0) return fail(`${ui.count} cameras registered but 0 ambient cards were produced — nothing is rendering`);
+    if (cards === 0) return fail(`${ui.count} cameras registered but 0 ambient cards were produced - nothing is rendering`);
     if (fetches === 0) {
-      return fail(`${ui.count} cameras and ${cards} ambient cards, but frameFetches=0 — the frame loop never ran, so "healthy" is unproven`);
+      return fail(`${ui.count} cameras and ${cards} ambient cards, but frameFetches=0 - the frame loop never ran, so "healthy" is unproven`);
     }
     return pass(`${ui.count} cameras, ${cards} ambient cards, ${fetches} frame fetches (${ui.ambient?.fetchMode}, ${ui.ambient?.fetchesInFlight} in flight), loading=${ui.loading?.active}`);
   });
@@ -1521,7 +1521,7 @@ async function runBrowserGroup(record) {
     const r = await settle('ais-live-vessels', 30);
     const s = r.stats || {};
     // The rendered chip is the honesty claim, so read the chip. An empty layer
-    // that says nothing is exactly the silent-failure this check must catch —
+    // that says nothing is exactly the silent-failure this check must catch -
     // count === 0 is NOT evidence of an honest UNAVAILABLE state.
     const chipR = await mustEval(() => {
       const row = document.querySelector('[data-layer-id="ais-live-vessels"]');
@@ -1534,12 +1534,12 @@ async function runBrowserGroup(record) {
     });
     if (!chipR.ok) return crash(`could not read the vessels layer row: ${chipR.reason}`);
     const chip = chipR.value;
-    if (!chip) return fail('no [data-layer-id="ais-live-vessels"] row in the DOM — cannot read the surfaced feed state');
+    if (!chip) return fail('no [data-layer-id="ais-live-vessels"] row in the DOM - cannot read the surfaced feed state');
 
     if (env.keys.AIS === false) {
       const surfaced = chip.feedState === 'unavailable' && /UNAVAILABLE/i.test(chip.text);
       if (!surfaced) {
-        return fail(`keyless vessels did not SURFACE the unavailable state: chip="${chip.text}" feedState=${chip.feedState} (stats: status=${s.status} error=${s.error}) — a silently empty layer is the failure mode this check exists for`);
+        return fail(`keyless vessels did not SURFACE the unavailable state: chip="${chip.text}" feedState=${chip.feedState} (stats: status=${s.status} error=${s.error}) - a silently empty layer is the failure mode this check exists for`);
       }
       if (s.count > 0) return fail(`chip says UNAVAILABLE but the layer reports ${s.count} vessels`);
       return pass(`keyless and honest: chip="${chip.text}" feedState=unavailable, stats.status=${s.status}, error="${String(s.error || '').slice(0, 40)}", count=0`);
@@ -1554,12 +1554,12 @@ async function runBrowserGroup(record) {
       // UNAVAILABLE (src/data/manager.js:12-19). A live feed with rows reads ON.
       return /^ON$/i.test(chip.text)
         ? pass(`${s.count} vessels live: chip="ON", transport=${transport}, lastMessage=${s.lastMessageAt || 'n/a'}`)
-        : fail(`transport=${transport} with ${s.count} vessels, but the chip reads "${chip.text}" — a live feed must present as ON`);
+        : fail(`transport=${transport} with ${s.count} vessels, but the chip reads "${chip.text}" - a live feed must present as ON`);
     }
     if (transport === 'auth-failed') {
       const surfaced = /UNAVAILABLE/i.test(chip.text) && /key rejected/i.test(String(s.error || ''));
       return surfaced
-        ? fail(`AISStream rejected the key — surfaced correctly (chip="${chip.text}", error="${s.error}", retryInSec=${s.retryInSec}) but a rejected key is a product-blocking failure, not an environment condition`)
+        ? fail(`AISStream rejected the key - surfaced correctly (chip="${chip.text}", error="${s.error}", retryInSec=${s.retryInSec}) but a rejected key is a product-blocking failure, not an environment condition`)
         : fail(`AISStream rejected the key and the UI did not say so: chip="${chip.text}", error="${String(s.error || 'none')}"`);
     }
     if (['stale', 'reconnecting', 'down'].includes(transport)) {
@@ -1567,16 +1567,16 @@ async function runBrowserGroup(record) {
       // no usable rows must read UNAVAILABLE.
       const expected = s.count > 0 ? /STALE|DEGRADED/i : /UNAVAILABLE|DEGRADED/i;
       return expected.test(chip.text)
-        ? skip(`feed is ${transport}${s.count > 0 ? ` with ${s.count} CACHED vessels` : ''} and the UI says so (chip="${chip.text}", error="${String(s.error || '').slice(0, 60)}", retryInSec=${s.retryInSec}) — honest degradation, not a live feed`, 'ENV')
-        : fail(`feed is ${transport} with ${s.count} vessels but the chip reads "${chip.text}" — a degraded feed that presents as healthy is exactly the invisible outage this check exists for`);
+        ? skip(`feed is ${transport}${s.count > 0 ? ` with ${s.count} CACHED vessels` : ''} and the UI says so (chip="${chip.text}", error="${String(s.error || '').slice(0, 60)}", retryInSec=${s.retryInSec}) - honest degradation, not a live feed`, 'ENV')
+        : fail(`feed is ${transport} with ${s.count} vessels but the chip reads "${chip.text}" - a degraded feed that presents as healthy is exactly the invisible outage this check exists for`);
     }
     if (s.count > 0) {
-      return fail(`${s.count} vessels with transport="${transport}" — neither live nor a recognised degraded state, so this cannot be called a live feed (chip="${chip.text}")`);
+      return fail(`${s.count} vessels with transport="${transport}" - neither live nor a recognised degraded state, so this cannot be called a live feed (chip="${chip.text}")`);
     }
     // Keyed but empty: honest only if the UI says so.
     return /UNAVAILABLE|LOADING|DEGRADED|STALE/i.test(chip.text)
-      ? skip(`keyed but 0 vessels and the UI says so (chip="${chip.text}", transport=${transport}, error="${String(s.error || '').slice(0, 60)}") — AISStream connects open-but-silent upstream`, 'ENV')
-      : fail(`keyed, 0 vessels, and the chip claims "${chip.text}" — the layer is empty without surfacing it`);
+      ? skip(`keyed but 0 vessels and the UI says so (chip="${chip.text}", transport=${transport}, error="${String(s.error || '').slice(0, 60)}") - AISStream connects open-but-silent upstream`, 'ENV')
+      : fail(`keyed, 0 vessels, and the chip claims "${chip.text}" - the layer is empty without surfacing it`);
   });
 
   await step('C9', async () => {
@@ -1587,14 +1587,14 @@ async function runBrowserGroup(record) {
     if (env.keys.FIRMS === false) {
       return s.error === 'KEY REQUIRED'
         ? pass('keyless and honest: getStats().error === "KEY REQUIRED"')
-        : fail(`keyless but error=${s.error} count=${s.count} — expected "KEY REQUIRED"`);
+        : fail(`keyless but error=${s.error} count=${s.count} - expected "KEY REQUIRED"`);
     }
     return s.count > 0 ? pass(`${s.count} fires, cells=${s.cells}`) : fail(`keyed but 0 fires (error=${s.error || ''})`);
   });
 
   await step('C10', async () => {
     // Traffic is viewport-scoped: enabling it from a global camera asks for a
-    // planet-sized road graph. Put the camera over a dense city first — that
+    // planet-sized road graph. Put the camera over a dense city first - that
     // is also the only altitude at which "live flow" means anything.
     await evalBounded(async () => {
       const g = window.__godsEyeView;
@@ -1610,7 +1610,7 @@ async function runBrowserGroup(record) {
       const label = String(s.loadingLabel || '');
       return s.mode === 'sim' && /SIMULATED/i.test(label)
         ? pass(`sim mode labelled honestly: "${label.slice(0, 70)}"`)
-        : fail(`mode=${s.mode} label="${label.slice(0, 70)}" — expected sim + a SIMULATED label`);
+        : fail(`mode=${s.mode} label="${label.slice(0, 70)}" - expected sim + a SIMULATED label`);
     }
     const colored = (s.flowBuckets?.free || 0) + (s.flowBuckets?.slow || 0) + (s.flowBuckets?.jam || 0);
     if (s.mode === 'live' && s.tilesFetched > 0 && colored > 0) {
@@ -1627,10 +1627,10 @@ async function runBrowserGroup(record) {
     //     tiles=4 colored=0) and must keep failing.
     // Narrow on purpose: it cannot absorb an empty result that actually landed.
     // (settle() breaks once the road graph answers, so the flow tiles can still
-    // be in flight — that is how a full pass produced tiles=0 on a build whose
+    // be in flight - that is how a full pass produced tiles=0 on a build whose
     // isolated re-run coloured 3,891 dots.)
     if (trafficFlowInconclusive(s)) {
-      return crash(`traffic's flow fetch had not landed when the 45 s budget expired: tiles=0, loading=${!!s.loading}, label="${String(s.loadingLabel || '').slice(0, 40)}", road dots=${s.count ?? 0} — this check could not determine whether live flow renders, so it verified nothing`);
+      return crash(`traffic's flow fetch had not landed when the 45 s budget expired: tiles=0, loading=${!!s.loading}, label="${String(s.loadingLabel || '').slice(0, 40)}", road dots=${s.count ?? 0} - this check could not determine whether live flow renders, so it verified nothing`);
     }
     return fail(`mode=${s.mode} tiles=${s.tilesFetched} coverage=${s.flowCoveragePct} colored=${colored}`);
   });
@@ -1638,7 +1638,7 @@ async function runBrowserGroup(record) {
   await step('C11', async () => {
     // These are GLOBAL datasets and their rendered counts are viewport-scoped.
     // C10 leaves the camera at 2,500 m over Austin, where a worldwide
-    // datacenter/dam set legitimately has nothing in view — inheriting that
+    // datacenter/dam set legitimately has nothing in view - inheriting that
     // camera made this check report an empty layer that was actually fine.
     // Establish the camera this check needs instead of inheriting one.
     await evalBounded(async () => {
@@ -1661,17 +1661,17 @@ async function runBrowserGroup(record) {
       out.push(`${label}=${r.missing ? 'MISSING' : (s.count ?? 0)}`);
       // "Still loading when my budget expired" is not "empty". Under full-run
       // load these can take longer than an isolated run, and calling that a
-      // product failure is a false accusation — say the measurement was
+      // product failure is a false accusation - say the measurement was
       // inconclusive instead.
       if (!r.missing && !(s.count > 0) && (s.loading || s.loadingLabel) && !s.error) stillLoading.push(label);
     }
     if (stillLoading.length) {
-      return crash(`still loading when the ${45}s budget expired: ${stillLoading.join(', ')} [all: ${out.join(', ')}] — this check could not determine whether they render, so it verified nothing`);
+      return crash(`still loading when the ${45}s budget expired: ${stillLoading.join(', ')} [all: ${out.join(', ')}] - this check could not determine whether they render, so it verified nothing`);
     }
     let zero = out.filter((o) => /=0$|MISSING/.test(o));
     if (zero.length) {
       // A bundled layer can read 0 while the heavy layers are live (flights,
-      // CCTV, traffic) — the perf-wave budgets and scope mask legitimately
+      // CCTV, traffic) - the perf-wave budgets and scope mask legitimately
       // suppress work under load. This check claims "bundled layers render",
       // not "they render while everything else is on", and it must not guess
       // between suppression-by-budget and a real render failure. Put the stage
@@ -1692,12 +1692,12 @@ async function runBrowserGroup(record) {
       }
       // Do NOT return here: the installations assertion below is part of this
       // check's claim and must still run.
-      loadNote = ` (under load: ${out.join(', ')}; on a quiet stage: ${retried.join(', ')} — the zero reading was load-related suppression, not a render failure)`;
+      loadNote = ` (under load: ${out.join(', ')}; on a quiet stage: ${retried.join(', ')} - the zero reading was load-related suppression, not a render failure)`;
     }
     zero = [];
 
     // military-installations is named in this check's description, so it is
-    // asserted — not quietly excluded. It is viewport-scoped (≤10° span,
+    // asserted - not quietly excluded. It is viewport-scoped (≤10° span,
     // src/data/militaryInstallations.js MAX_VIEWPORT_DEGREES) and returns 0
     // from a global camera, so fly to a tight box over a known base cluster
     // first, and cross-check the layer against its own API: rows from the API
@@ -1742,30 +1742,30 @@ async function runBrowserGroup(record) {
     if (mi.missing) return fail(`military-installations layer is not registered [bundled: ${out.join(', ')}]`);
     if (ms.count > 0) return pass(`${out.join(', ')}, military-installations=${ms.count} over ${box.name}${loadNote}`);
     if (/zoom-in/.test(String(ms.status || ''))) {
-      return fail(`military-installations refused the ${box.span * 2}° box over ${box.name} as too wide (status=${ms.status}, error="${ms.error}") — the probe camera and the layer's own ≤10° gate disagree`);
+      return fail(`military-installations refused the ${box.span * 2}° box over ${box.name} as too wide (status=${ms.status}, error="${ms.error}") - the probe camera and the layer's own ≤10° gate disagree`);
     }
     if (api.status !== 200) {
       // Distinguish an honest upstream outage from a broken route: the proxy
       // has a documented degraded shape (503 + "temporarily unavailable") for
       // when Overpass is down. That is the app degrading correctly, so it is a
-      // positively identified ENV condition — anything else is a product FAIL.
+      // positively identified ENV condition - anything else is a product FAIL.
       const honestOutage = api.status === 503 && /temporarily unavailable/i.test(String(api.text || ''));
       if (honestOutage) {
-        return skip(`bundled layers OK (${out.join(', ')}); military-installations could not be checked — its upstream is down and the proxy says so honestly (HTTP 503 "${String(api.json?.error || '').slice(0, 60)}")`, 'ENV');
+        return skip(`bundled layers OK (${out.join(', ')}); military-installations could not be checked - its upstream is down and the proxy says so honestly (HTTP 503 "${String(api.json?.error || '').slice(0, 60)}")`, 'ENV');
       }
-      return fail(`military-installations rendered 0 and its API returned HTTP ${api.status} for ${box.name} — a responsive app failing this route is a product failure: ${String(api.text || '').slice(0, 100)}`);
+      return fail(`military-installations rendered 0 and its API returned HTTP ${api.status} for ${box.name} - a responsive app failing this route is a product failure: ${String(api.text || '').slice(0, 100)}`);
     }
     if (apiRows === null) return crash(`could not read a row count from /api/military-installations to cross-check the empty layer: ${String(api.text || '').slice(0, 100)}`);
     if (apiRows > 0) {
       return fail(`/api/military-installations returned ${apiRows} features over ${box.name} but the layer rendered 0 (status=${ms.status}, error=${ms.error || 'none'}) [bundled: ${out.join(', ')}]`);
     }
-    return skip(`bundled layers OK (${out.join(', ')}); military-installations rendered 0 AND its API returned 0 features over ${box.name} — positively an upstream-data condition, not a render failure`, 'ENV');
+    return skip(`bundled layers OK (${out.join(', ')}); military-installations rendered 0 AND its API returned 0 features over ${box.name} - positively an upstream-data condition, not a render failure`, 'ENV');
   });
 
   await step('C12', async () => {
     // This check reads the credits of whatever THIS run switched on. Run
     // standalone (`--only C12`) nothing is on, and it would pass vacuously off
-    // the static credit list — so self-arm a deterministic set first.
+    // the static credit list - so self-arm a deterministic set first.
     const armed = (await evalBounded(() => [...(window.__godsEyeView.dataManager.getEnabledLayerIds?.() || [])], null, 20000)) || [];
     const SELF_ARM = ['flights', 'satellites', 'earthquakes', 'telegeography-submarine-cables'];
     if (armed.length === 0) {
@@ -1775,7 +1775,7 @@ async function runBrowserGroup(record) {
       }
       const nowOn = (await evalBounded(() => [...(window.__godsEyeView.dataManager.getEnabledLayerIds?.() || [])], null, 20000)) || [];
       if (nowOn.length === 0) {
-        return crash('no layers are enabled and self-arming failed — this check has nothing to verify credits against');
+        return crash('no layers are enabled and self-arming failed - this check has nothing to verify credits against');
       }
     }
     const credR = await mustEval(async () => {
@@ -1789,14 +1789,14 @@ async function runBrowserGroup(record) {
       await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
       const listCount = document.querySelector('.cesium-credit-lightbox > ul')?.children?.length || 0;
       viewer.creditDisplay.hideLightbox();
-      // getEnabledLayerIds() returns a Set — spread it or it crosses the CDP
+      // getEnabledLayerIds() returns a Set - spread it or it crosses the CDP
       // bridge as {}.
       return { html, listCount, enabled: [...(dm.getEnabledLayerIds?.() || [])] };
     }, null, 60000);
     if (!credR.ok) return crash(`could not read the credit display: ${credR.reason}`);
     const cred = credR.value;
     // EVERY enabled layer is checked. Filtering to a known subset meant a layer
-    // outside the list — military-installations, which C11 now enables — could
+    // outside the list - military-installations, which C11 now enables - could
     // ship with no attribution while this check claimed full coverage.
     const missing = [];
     const unmapped = [];
@@ -1808,11 +1808,11 @@ async function runBrowserGroup(record) {
       if (!cred.html.some((h) => expectation.regex.test(h))) missing.push(id);
     }
     if (missing.length) {
-      return fail(`enabled layer(s) with NO registered attribution: ${missing.join(', ')} — legal requirement (DATA_SOURCES.md, finding H11); lightbox items=${cred.listCount}`);
+      return fail(`enabled layer(s) with NO registered attribution: ${missing.join(', ')} - legal requirement (DATA_SOURCES.md, finding H11); lightbox items=${cred.listCount}`);
     }
     if (unmapped.length) {
       // Fail closed: an unmapped layer is an unchecked layer.
-      return fail(`enabled layer(s) this check has no attribution expectation for: ${unmapped.join(', ')} — add them to CREDIT_EXPECTATIONS, or to CREDIT_EXEMPT_LAYERS with a reason. Until then their attribution is unverified`);
+      return fail(`enabled layer(s) this check has no attribution expectation for: ${unmapped.join(', ')} - add them to CREDIT_EXPECTATIONS, or to CREDIT_EXEMPT_LAYERS with a reason. Until then their attribution is unverified`);
     }
     if (!(cred.listCount > 0)) return fail(`the attribution lightbox listed 0 items despite ${cred.html.length} registered credits`);
     return pass(`${cred.html.length} credits registered, lightbox lists ${cred.listCount}; all ${cred.enabled.length} enabled layers verified${exempted.length ? ` (${exempted.length} exempt: ${exempted.join(', ')})` : ''}`);
@@ -1822,7 +1822,7 @@ async function runBrowserGroup(record) {
     const stR = await mustEval(async () => {
       const viewer = window.__godsEyeView.viewer;
       window.__godsEyeView.styleManager.setCleanView(true);
-      // Cesium paints the credit line during a render — force frames before
+      // Cesium paints the credit line during a render - force frames before
       // measuring, or a healthy credit reads as 0x0.
       for (let i = 0; i < 4; i += 1) {
         viewer.scene.requestRender();
@@ -1841,7 +1841,7 @@ async function runBrowserGroup(record) {
         text: (el?.textContent || '').trim().slice(0, 80),
         hasLogo: !!el?.querySelector('.cesium-credit-logoContainer, img'),
         // The container itself can measure 0x0 while its positioned children
-        // paint — report the largest child box so the number means something.
+        // paint - report the largest child box so the number means something.
         childBox: [...(el?.querySelectorAll('*') || [])]
           .map((n) => n.getBoundingClientRect())
           .reduce((best, r) => ((r.width * r.height > best.w * best.h) ? { w: r.width, h: r.height } : best), { w: 0, h: 0 }),
@@ -1885,7 +1885,7 @@ async function runBrowserGroup(record) {
   await step('C15', async () => {
     // CRT/NVG/FLIR are DISPLAY LABELS; the real style ids are retro /
     // surveillance / thermal (src/ui/visualPresets.js STYLE_STATUS_LABELS). Passing the
-    // labels made every call a silent no-op that still "passed" — so assert
+    // labels made every call a silent no-op that still "passed" - so assert
     // the returned visual state actually changed to the requested style.
     const wanted = [['retro', 'CRT'], ['surveillance', 'NVG'], ['thermal', 'FLIR'], ['normal', 'Normal']];
     const rR = await mustEval(async (styles) => {
@@ -1912,7 +1912,7 @@ async function runBrowserGroup(record) {
     if (threw.length) return fail(`style application threw for: ${threw.map((s) => `${s.style} (${s.error})`).join('; ')}`);
     const noop = r.seen.filter((s) => s.observed !== s.style);
     if (noop.length) {
-      return fail(`style did not take effect for: ${noop.map((s) => `${s.label}/${s.style} → getVisualState().style=${s.observed}`).join('; ')} — the call was a no-op`);
+      return fail(`style did not take effect for: ${noop.map((s) => `${s.label}/${s.style} → getVisualState().style=${s.observed}`).join('; ')} - the call was a no-op`);
     }
     if (r.seen.length !== wanted.length) return crash(`only ${r.seen.length}/${wanted.length} styles were exercised`);
     return r.drift < 1
@@ -1951,7 +1951,7 @@ async function runBrowserGroup(record) {
     }, null, 60000);
     if (!setupR.ok) return crash(`could not put the camera at city altitude to test the reset: ${setupR.reason}`);
     const before = setupR.value?.altKm;
-    if (!Number.isFinite(before)) return crash('the city-altitude setup returned no altitude — cannot establish a starting point');
+    if (!Number.isFinite(before)) return crash('the city-altitude setup returned no altitude - cannot establish a starting point');
     if (before > 5000) {
       return crash(`the camera is still at ${Math.round(before)} km after the city-altitude setup, so "returns to the global band" cannot be tested from here`);
     }
@@ -1979,10 +1979,10 @@ async function runBrowserGroup(record) {
   await step('C17', async () => {
     await quiesce();
     const v = voiceSnapshot || {};
-    // The snapshot failing means this check learned nothing — not that the
+    // The snapshot failing means this check learned nothing - not that the
     // product is wrong.
     if (v.probeError) return crash(`voice snapshot failed, so nothing was verified: ${v.probeError}`);
-    if (!v.present) return fail('__gevVoiceCommands never initialised — the voice surface did not load');
+    if (!v.present) return fail('__gevVoiceCommands never initialised - the voice surface did not load');
     // Route through keyGuard like every other key consumer: an 'error' state
     // (status endpoint unhealthy) must FAIL, not slip into an owner-run skip.
     const guard = keyGuard('OPENAI', env.keys.OPENAI);
@@ -1990,7 +1990,7 @@ async function runBrowserGroup(record) {
     if (env.keys.OPENAI === true) {
       // Never start a session against a keyed server: that is a real Realtime
       // connection and it costs money. The keyless claim needs a thin server.
-      return skip(`voice surface present (status=${v.status}); the keyless-degradation claim needs an UNKEYED server, and a real mic round trip is owner-run — see runbook M1-M3`, 'OWNER-RUN');
+      return skip(`voice surface present (status=${v.status}); the keyless-degradation claim needs an UNKEYED server, and a real mic round trip is owner-run - see runbook M1-M3`, 'OWNER-RUN');
     }
     if (!v.hasRunner) return fail('voice controller present but exposes no runner');
 
@@ -1999,7 +1999,7 @@ async function runBrowserGroup(record) {
     // (Free: the 503 happens before any session is created.)
     const beforeR = await mustEval(() => document.querySelectorAll('#gev-voice-control').length, null, 45000);
     if (!beforeR.ok) return crash(`could not look for the voice control: ${beforeR.reason}`);
-    if (!beforeR.value) return fail('#gev-voice-control is absent — the voice surface never rendered');
+    if (!beforeR.value) return fail('#gev-voice-control is absent - the voice surface never rendered');
     const surfacedR = await mustEval(async () => {
       const vc = window.__gevVoiceCommands;
       try { await vc.start?.(); } catch { /* the rejection is the point */ }
@@ -2025,12 +2025,12 @@ async function runBrowserGroup(record) {
     const surfaced = surfacedR.value;
     const saysKey = /OPENAI_API_KEY is not set/i.test(`${surfaced.errorDetail || ''} ${surfaced.recentError?.message || ''}`);
     const saysUnavailable = surfaced.dataStatus === 'error' || /ERROR|UNAVAILABLE/i.test(`${surfaced.status || ''} ${surfaced.detail || ''}`);
-    if (!surfaced.appAlive) return fail('the app died when voice was started without a key — a missing optional key must never take the globe down');
+    if (!surfaced.appAlive) return fail('the app died when voice was started without a key - a missing optional key must never take the globe down');
     if (!saysUnavailable) {
-      return fail(`voice start without a key left the UI at status="${surfaced.status}" detail="${surfaced.detail}" (data-status=${surfaced.dataStatus}) — the 503 never surfaced to the user`);
+      return fail(`voice start without a key left the UI at status="${surfaced.status}" detail="${surfaced.detail}" (data-status=${surfaced.dataStatus}) - the 503 never surfaced to the user`);
     }
     if (!saysKey) {
-      return fail(`voice surfaced an error state (${surfaced.status}) but never named the cause: errorDetail="${surfaced.errorDetail}" recentError=${JSON.stringify(surfaced.recentError)} — expected the OPENAI_API_KEY reason`);
+      return fail(`voice surfaced an error state (${surfaced.status}) but never named the cause: errorDetail="${surfaced.errorDetail}" recentError=${JSON.stringify(surfaced.recentError)} - expected the OPENAI_API_KEY reason`);
     }
     return pass(`keyless voice degrades honestly: status="${surfaced.status}", detail="${surfaced.detail}", reason "${surfaced.recentError?.message}"; globe still alive`);
   });
@@ -2041,7 +2041,7 @@ async function runBrowserGroup(record) {
 // ── preflight ─────────────────────────────────────────────────────────────
 async function preflight() {
   // "Reachable" means the target answered AT ALL. An HTTP 500 is a responsive
-  // app returning an error — a PRODUCT failure for B1 to report, never a
+  // app returning an error - a PRODUCT failure for B1 to report, never a
   // reason to skip the matrix as an environment problem. Only a refused/failed
   // connection is ENV.
   try {
@@ -2055,7 +2055,7 @@ async function preflight() {
   }
   if (!env.reachable) return;
 
-  // Key presence is read from the server's own honest self-report — never by
+  // Key presence is read from the server's own honest self-report - never by
   // reading a key value. "Absent" must be POSITIVELY stated by the endpoint in
   // its documented shape; an HTTP error or a malformed payload means the key
   // state is UNKNOWN ('error'), and every check that depends on it FAILS
@@ -2137,13 +2137,13 @@ async function main() {
 
   await preflight();
   if (!env.reachable) {
-    // Positively identified as "nothing is listening" — the only case that
+    // Positively identified as "nothing is listening" - the only case that
     // justifies aborting as an environment problem.
-    console.error(C.r(`\n  Target not reachable at ${APP_URL} (${env.unreachableReason}) — start the keyed dev server first (./scripts/dev-fresh.sh).\n`));
+    console.error(C.r(`\n  Target not reachable at ${APP_URL} (${env.unreachableReason}) - start the keyed dev server first (./scripts/dev-fresh.sh).\n`));
     process.exit(2);
   }
   if (env.shellStatus >= 400) {
-    console.log(C.r(`  shell  : HTTP ${env.shellStatus} — the target is RESPONDING but erroring. Running the matrix anyway; this is a product failure, not an environment one.`));
+    console.log(C.r(`  shell  : HTTP ${env.shellStatus} - the target is RESPONDING but erroring. Running the matrix anyway; this is a product failure, not an environment one.`));
   }
   console.log(`  node   : ${process.versions.node}${env.node24 ? C.d(` (Node 24 available: ${env.node24.label})`) : ''}`);
   console.log(`  keys   : OpenSky ${keyLabel(env.keys.OPENSKY)} · FIRMS ${keyLabel(env.keys.FIRMS)} · TomTom ${keyLabel(env.keys.TOMTOM)} · AISStream ${keyLabel(env.keys.AIS)} · OpenAI ${keyLabel(env.keys.OPENAI)}`);
@@ -2170,17 +2170,17 @@ async function main() {
   const runList = CHECKS.filter(selected);
 
   const runSerial = async (c) => {
-    if (c.manual) { record(c, skip('owner-eyes step — see the maintainers\' release runbook', 'OWNER-RUN'), 0); return; }
+    if (c.manual) { record(c, skip('owner-eyes step - see the maintainers\' release runbook', 'OWNER-RUN'), 0); return; }
     if (CHEAP && (c.heavy || c.costly)) { record(c, skip('heavy/cost-bearing check omitted by --cheap', 'CHEAP'), 0); return; }
     if (c.needsKey && env.keys[c.needsKey] !== true) {
       const state = env.keys[c.needsKey];
       if (state === 'error') {
         // The key-status endpoint is unhealthy on a responsive app. That is a
         // product failure, not a reason to mark the row owner-run.
-        record(c, fail(`${c.needsKey} key state UNKNOWN: its status endpoint returned an error or a malformed payload on a responsive server — cannot claim the key is merely absent`), 0);
+        record(c, fail(`${c.needsKey} key state UNKNOWN: its status endpoint returned an error or a malformed payload on a responsive server - cannot claim the key is merely absent`), 0);
         return;
       }
-      record(c, skip(`server reports no ${c.needsKey} key (${keyLabel(state)}) — run on the fully keyed server`, 'OWNER-RUN'), 0);
+      record(c, skip(`server reports no ${c.needsKey} key (${keyLabel(state)}) - run on the fully keyed server`, 'OWNER-RUN'), 0);
       return;
     }
     const t0 = Date.now();
@@ -2193,7 +2193,7 @@ async function main() {
   };
 
   // A target that dies mid-run (a crashed dev server) otherwise turns every
-  // later check into a bogus product FAIL — empty layers, "no RESULT line".
+  // later check into a bogus product FAIL - empty layers, "no RESULT line".
   // Re-check liveness at each group boundary and degrade honestly instead.
   // Liveness = "something answered", NOT "answered 200". A 500 keeps the run
   // going so the responsible check reports a product FAIL.
@@ -2209,7 +2209,7 @@ async function main() {
   const wrapRun = runSerial;
   const runGuarded = async (c) => {
     if (!targetAlive && c.group !== 'A' && c.group !== 'M') {
-      record(c, skip(`target ${APP_URL} stopped responding mid-run — restart the dev server and re-run this group`, 'ENV'), 0);
+      record(c, skip(`target ${APP_URL} stopped responding mid-run - restart the dev server and re-run this group`, 'ENV'), 0);
       return;
     }
     await wrapRun(c);
@@ -2276,19 +2276,19 @@ async function main() {
   console.log(`  ${'─'.repeat(68)}`);
   console.log(`  ${C.b('TOTAL')}  ${C.g(`${p} PASS`)}  ${ps ? C.m(`${ps} PASS-WITH-SKIPS`) : '0 PASS-WITH-SKIPS'}  ${f ? C.r(`${f} FAIL`) : '0 FAIL'}  ${x ? C.m(`${x} HARNESS-CRASH`) : '0 HARNESS-CRASH'}  ${C.y(`${s} SKIPPED`)}  of ${runList.length} selected   ${C.d(`${mins} min wall clock`)}`);
   const green = f === 0 && x === 0 && ps === 0;
-  console.log(`  ${green ? C.g('GREEN — every selected check either verified its claim or honestly skipped.')
-    : C.r('NOT GREEN — a fully green L9 run requires 0 FAIL, 0 HARNESS-CRASH and 0 PASS-WITH-SKIPS.')}`);
+  console.log(`  ${green ? C.g('GREEN - every selected check either verified its claim or honestly skipped.')
+    : C.r('NOT GREEN - a fully green L9 run requires 0 FAIL, 0 HARNESS-CRASH and 0 PASS-WITH-SKIPS.')}`);
 
   if (f) {
-    console.log(`\n  ${C.r('FAILURES — the product is wrong')}`);
+    console.log(`\n  ${C.r('FAILURES - the product is wrong')}`);
     for (const r of byStatus(FAIL)) console.log(`   ${r.id}  ${r.desc}\n        ${C.d(String(r.detail).slice(0, 300))}`);
   }
   if (x) {
-    console.log(`\n  ${C.m('HARNESS-CRASH — the check itself broke; it verified NOTHING')}`);
+    console.log(`\n  ${C.m('HARNESS-CRASH - the check itself broke; it verified NOTHING')}`);
     for (const r of byStatus(CRASH)) console.log(`   ${r.id}  ${r.desc}\n        ${C.d(String(r.detail).slice(0, 300))}`);
   }
   if (ps) {
-    console.log(`\n  ${C.m('PASS-WITH-SKIPS — green, but assertions were left unrun')}`);
+    console.log(`\n  ${C.m('PASS-WITH-SKIPS - green, but assertions were left unrun')}`);
     for (const r of byStatus(PASS_SKIPS)) console.log(`   ${r.id}  ${r.desc}\n        ${C.d(String(r.detail).slice(0, 300))}`);
   }
   const ownerRun = byStatus(SKIP).filter((r) => r.tag === 'OWNER-RUN');
@@ -2313,7 +2313,7 @@ async function main() {
     console.log(`  JSON: ${resolve(process.cwd(), JSON_OUT)}\n`);
   }
 
-  // A crashed check verified nothing — it must not exit green.
+  // A crashed check verified nothing - it must not exit green.
   process.exit(f > 0 || x > 0 ? 1 : 0);
 }
 

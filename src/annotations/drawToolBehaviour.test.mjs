@@ -1,5 +1,5 @@
 // Behavioural tests for the draw tool: the module is driven against fake DOM
-// and viewer doubles and its OBSERVABLE effects are asserted — which lease it
+// and viewer doubles and its OBSERVABLE effects are asserted - which lease it
 // holds, which viewer input actions it borrowed and gave back, what it leaves
 // behind when destroyed. Nothing here reads the module's source text.
 import { test } from 'node:test';
@@ -171,7 +171,7 @@ function fakeViewer() {
     },
     get: (index) => attached[index],
     add(source) {
-      // Cesium resolves this on a later tick — the whole point of finding 7.
+      // Cesium resolves this on a later tick - the whole point of finding 7.
       const promise = Promise.resolve().then(() => {
         attached.push(source);
         return source;
@@ -290,7 +290,7 @@ test('Draw refuses to start when something else holds the pointer', async () => 
     // Named by its tool, not by the internal owner id.
     assert.equal(
       h.element('draw-hint').textContent,
-      'Directions is using the pointer — close it first.',
+      'Directions is using the pointer - close it first.',
     );
     assert.equal(h.tool.diagnostics().sceneHandler, false, 'no handler was bound');
 
@@ -430,7 +430,7 @@ test('the live preview hangs at the height the click landed on', async () => {
 test('destroy in the same tick as init still removes the preview data source', async () => {
   const h = harness();
   try {
-    // Nothing has been attached yet — dataSources.add() resolves later.
+    // Nothing has been attached yet - dataSources.add() resolves later.
     assert.equal(h.viewer._attached.length, 0, 'the add is still pending');
     await h.tool.destroy();
     await Promise.resolve();

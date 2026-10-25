@@ -2,7 +2,7 @@
 // teardown must be ws.terminate(), never a graceful close().
 //
 // This is the assumption the reverted watchdog got wrong. It is pinned here
-// against a real black-hole peer — a server that completes the websocket
+// against a real black-hole peer - a server that completes the websocket
 // handshake and then never speaks again, which is exactly how AISStream fails
 // (upstream: handshake succeeds, no frames, no error, no close). Everything
 // runs on an ephemeral localhost port; no network access is involved.
@@ -95,7 +95,7 @@ test('ws.terminate() hard-aborts a black-holed socket and frees the connection s
   assert.ok(Date.now() - startedAt < 1_000);
   assert.equal(socket.readyState, WebSocketImpl.CLOSED);
 
-  // The TCP connection is genuinely gone — this is what protects AISStream's
+  // The TCP connection is genuinely gone - this is what protects AISStream's
   // one-connection-per-key limit when the watchdog recycles.
   await new Promise((resolve) => setTimeout(resolve, 100));
   assert.equal(blackHole.liveConnections, 0, 'the socket slot must actually be released');
@@ -123,7 +123,7 @@ test('the built-in WebSocket close() never completes on a black-holed socket', a
   socket.close(1000, 'watchdog recycle');
   assert.equal(socket.readyState, WebSocket.CLOSING);
 
-  assert.equal(await closed, false, 'close() hangs in CLOSING — measured well past 30s by hand');
+  assert.equal(await closed, false, 'close() hangs in CLOSING - measured well past 30s by hand');
   assert.equal(socket.readyState, WebSocket.CLOSING, 'the socket slot is never handed back');
 });
 

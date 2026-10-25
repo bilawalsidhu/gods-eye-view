@@ -311,23 +311,23 @@ const NOTE_PATTERNS = [
       }),
   ],
   [
-    /^(.+) just turned on — still loading, counts will rise$/,
+    /^(.+) just turned on - still loading, counts will rise$/,
     ([, layers]) =>
-      t('{layers} just turned on — still loading, counts will rise', {
+      t('{layers} just turned on - still loading, counts will rise', {
         layers: shownLayerKeys(layers),
       }),
   ],
   [
     // The note ends in a period unless a lower-bound clause follows it.
-    /^Contacts panel snapshot(?: at (\S+))? — the same retained cohort supplies the card, speech, and follow-up memory(\.?)$/,
+    /^Contacts panel snapshot(?: at (\S+))? - the same retained cohort supplies the card, speech, and follow-up memory(\.?)$/,
     ([, time, period]) =>
       (time
         ? t(
-            'Contacts panel snapshot at {time} — the same retained cohort supplies the card, speech, and follow-up memory',
+            'Contacts panel snapshot at {time} - the same retained cohort supplies the card, speech, and follow-up memory',
             { time: shownSnapshotTime(time) },
           )
         : t(
-            'Contacts panel snapshot — the same retained cohort supplies the card, speech, and follow-up memory',
+            'Contacts panel snapshot - the same retained cohort supplies the card, speech, and follow-up memory',
           )) + period,
   ],
   // Transit's empty note when no feed covers the view (transit/queries.js);

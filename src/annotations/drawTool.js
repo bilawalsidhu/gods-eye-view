@@ -23,11 +23,11 @@
  *   handle, so the tool can be turned off or the shell disposed without leaving
  *   anything behind.
  *
- * A vertex carries the height the click landed on — a roof, a hillside — and
+ * A vertex carries the height the click landed on - a roof, a hillside - and
  * that height is what the live preview hangs on, so the rubber band follows the
  * surface under the pointer instead of sinking to sea level. The world renderer
  * drapes finished areas and routes onto the surface, so the height is dropped
- * at finish, deliberately and in one place — see `finishSpec` in drawMode.js.
+ * at finish, deliberately and in one place - see `finishSpec` in drawMode.js.
  */
 import * as Cesium from 'cesium';
 import { createSegmentedControl } from '../ui/segmentedControl.js';
@@ -118,7 +118,7 @@ export function initDrawTool({ viewer, annotations }) {
   const dataSource = new Cesium.CustomDataSource(PREVIEW_DATA_SOURCE_NAME);
   // `add()` resolves on the NEXT tick, so an init-then-immediate-destroy would
   // remove a source that had not been attached yet and leave the attachment to
-  // land afterwards — a preview data source nobody owns. Chain the removal onto
+  // land afterwards - a preview data source nobody owns. Chain the removal onto
   // the attachment instead of racing it.
   let attaching = Promise.resolve(viewer.dataSources.add(dataSource)).catch(
     () => null,
@@ -212,12 +212,12 @@ export function initDrawTool({ viewer, annotations }) {
     if (reason === 'full')
       setHint(
         t(
-          'That shape already has {count} points — finish it or press Backspace.',
+          'That shape already has {count} points - finish it or press Backspace.',
           { count: MAX_VERTICES },
         ),
       );
     else if (reason === 'invalid')
-      setHint(t('That point is off the globe — click on the world.'));
+      setHint(t('That point is off the globe - click on the world.'));
   };
   const onMove = (event) => {
     if (!session || session.shape === 'pin' || destroyed) return;
@@ -293,7 +293,7 @@ export function initDrawTool({ viewer, annotations }) {
   /**
    * Enter is the finish key, but on a focused control Enter means "press this
    * control". Keyboard-focusing Clear and pressing Enter must clear the board,
-   * not finish the shape — so the finish key is only taken from the canvas,
+   * not finish the shape - so the finish key is only taken from the canvas,
    * the page body, or the label field this tool owns.
    */
   const enterBelongsToDrawing = (event) => {
@@ -313,7 +313,7 @@ export function initDrawTool({ viewer, annotations }) {
     // Enter goes to finish() once a shape has been started; finish() owns the
     // decision and says WHY it refused. Swallowing the key on a degenerate
     // shape left the person pressing Enter at a silent panel. A focused button
-    // keeps its own Enter — see enterBelongsToDrawing.
+    // keeps its own Enter - see enterBelongsToDrawing.
     if (event.key === 'Enter') {
       if (session?.vertices?.length && enterBelongsToDrawing(event)) {
         event.preventDefault();
@@ -342,11 +342,11 @@ export function initDrawTool({ viewer, annotations }) {
     if (next) {
       lease = claimPointer(DRAW_POINTER_OWNER);
       if (!lease) {
-        // Somebody else is using the pointer — possibly an older instance of
+        // Somebody else is using the pointer - possibly an older instance of
         // this same tool that has not finished tearing down. Say so instead of
         // half-starting.
         setHint(
-          t('{owner} is using the pointer — close it first.', {
+          t('{owner} is using the pointer - close it first.', {
             owner: translateKnown(pointerOwnerName(pointerOwner())),
           }),
         );
@@ -386,7 +386,7 @@ export function initDrawTool({ viewer, annotations }) {
     // Cesium's Viewer binds BOTH stock click actions on its own handler: the
     // single click picks an entity into `viewer.selectedEntity`, the double
     // click tracks it. Neither goes through a layer, so neither can be fixed by
-    // the shared pointer claim — they have to be borrowed outright for the
+    // the shared pointer claim - they have to be borrowed outright for the
     // session and given back on the way out. Borrowing the single click is what
     // stops a vertex placed on a contact from also selecting it.
     const stock = viewer.screenSpaceEventHandler;
@@ -489,7 +489,7 @@ export function initDrawTool({ viewer, annotations }) {
     cancel,
     clearAll,
     shapes: DRAW_SHAPES,
-    /** What this tool currently holds — for teardown and leak assertions. */
+    /** What this tool currently holds - for teardown and leak assertions. */
     diagnostics() {
       return {
         active,
@@ -542,7 +542,7 @@ export function initDrawTool({ viewer, annotations }) {
         try {
           viewer.dataSources.remove(dataSource, true);
         } catch {
-          /* viewer already disposed — nothing to detach from */
+          /* viewer already disposed - nothing to detach from */
         }
       });
       document.body.classList.remove('gev-drawing');
@@ -559,7 +559,7 @@ export function initDrawTool({ viewer, annotations }) {
   return api;
 }
 
-/** How many draw previews are attached — more than one means a leaked tool. */
+/** How many draw previews are attached - more than one means a leaked tool. */
 function countPreviewDataSources(viewer) {
   const sources = viewer?.dataSources;
   if (!sources) return 0;

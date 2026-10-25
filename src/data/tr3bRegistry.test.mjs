@@ -81,7 +81,7 @@ test('tr3b registry: setTr3b is explicit and idempotent; unusable ids are inert'
 
 test('tr3b sprite variant: unconverted passes the class through, converted picks by style', () => {
   clearTr3bRegistry();
-  // Identity for every ordinary contact — this is what lets the layers route
+  // Identity for every ordinary contact - this is what lets the layers route
   // EVERY aircraftIcon() call through the resolver without behaviour change.
   assert.equal(tr3bIconKind('a1b2c3', 'airliner'), 'airliner');
   assert.equal(tr3bIconKind('a1b2c3', 'helicopter', { hot: true }), 'helicopter');
@@ -230,7 +230,7 @@ test('both flight layers keep a converted contact 2D and visible (render invaria
   for (const name of ['flights.js', 'militaryFlights.js']) {
     const source = readLayerSource(new URL(`./${name}`, import.meta.url));
 
-    // 1. The 3D model handoff is SUPPRESSED for a converted contact — there is
+    // 1. The 3D model handoff is SUPPRESSED for a converted contact - there is
     //    no TR-3B GLB, so the triangle billboard stays the visual.
     assert.match(source, /modelEligible\.has\(icao24\) && !isTr3b\(icao24\)/,
       `${name}: fleet model handoff skips converted contacts`);
@@ -241,7 +241,7 @@ test('both flight layers keep a converted contact 2D and visible (render invaria
     assert.match(source, /if\s*\(\s*!(?:flightState\.)?_trackedIcao\s*\|\|\s*(?:flightState\.)?_cockpitContactMode\s*\|\|\s*isTr3b\(\s*(?:flightState\.)?_trackedIcao,?\s*\),?\s*\)\s*\{/,
       `${name}: the standalone tracked model is suppressed for a converted contact`);
 
-    // 2. The billboard is never hidden by that suppression — it must keep
+    // 2. The billboard is never hidden by that suppression - it must keep
     //    satisfying the getNearby/getDetectableObjects visibility guards, so a
     //    converted contact still works in Contacts and Cockpit.
     assert.match(source, /if\s*\(\s*bb\s*&&\s*id\s*!==\s*(?:flightState\.)?_trackedIcao,?\s*\)\s*bb\.show\s*=\s*true;|if\s*\(\s*modelled\s*&&\s*id\s*!==\s*(?:flightState\.)?_trackedIcao,?\s*\)\s*modelled\.show\s*=\s*true;/,
@@ -269,7 +269,7 @@ test('both flight layers keep a converted contact 2D and visible (render invaria
 test('conversions are session-scoped and no lifecycle path clears them', async () => {
   // PINNED DECISION: the registry holds nothing but hex strings the operator
   // personally clicked, and re-tracking the same aircraft after a layer restart
-  // should still show the triangle. Only a page reload resets it — so no
+  // should still show the triangle. Only a page reload resets it - so no
   // production code may clear the registry.
   for (const name of ['flights.js', 'militaryFlights.js', '../ui/applicationShell.js']) {
     const source = readLayerSource(new URL(`./${name}`, import.meta.url));
@@ -281,7 +281,7 @@ test('conversions are session-scoped and no lifecycle path clears them', async (
     await readFile(new URL('./tr3bRegistry.js', import.meta.url), 'utf8'),
   );
   assert.doesNotMatch(registry, /localStorage|sessionStorage/,
-    'the Easter egg is session-only — never persisted');
+    'the Easter egg is session-only - never persisted');
 
   // Nothing in the registry itself reaches for a layer or a lifecycle hook.
   assert.doesNotMatch(registry, /import\s/, 'the registry depends on nothing');
@@ -389,7 +389,7 @@ test('the analyst engine filters and aggregates a tr3b class without choking', a
   });
   assert.equal(airliners.count, 1, 'the converted contact no longer answers to airliner');
 
-  // A numeric sort/summary still runs over the mixed set — aircraftClass is
+  // A numeric sort/summary still runs over the mixed set - aircraftClass is
   // free text, so there is no enum lookup an unknown value could break.
   const fastest = await engine.query({
     layers: ['flights'], scope: { kind: 'anywhere' }, sortBy: 'speedMps', limit: 5,
@@ -426,7 +426,7 @@ test('a converted contact never consumes a 3D model CAP SLOT', async () => {
 test('cockpit class filter matches a converted contact end to end', async () => {
   // The chain that was dead-ending: a spoken "TR-3B" is normalized by the voice
   // layer, then the cockpit next/previous path matches it against the
-  // aircraftClass on getNearby RECORDS — which used to carry the underlying
+  // aircraftClass on getNearby RECORDS - which used to carry the underlying
   // airframe class, so the filter never matched. Real normalizer + real
   // getNearby record builder + real filter matcher; only the styleManager glue
   // (covered by its own ui tests) is stubbed.
@@ -535,6 +535,6 @@ test('military records and detection cards agree with the conversion', () => {
   const cardAfter = militaryFlightsLayer.getDetectableObjects({ maxCount: 50 })
     .find((o) => o.sourceId === icao24);
   assert.equal(cardAfter.klass, TR3B_TYPE_LABEL,
-    'detectionDraw composes its card line from src.klass — it must read TR-3B');
+    'detectionDraw composes its card line from src.klass - it must read TR-3B');
   clearTr3bRegistry();
 });

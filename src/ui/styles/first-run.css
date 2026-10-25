@@ -9,7 +9,7 @@
   width: min(34rem, calc(100vw - 2rem));
   /* Five tiles do not fit a short landscape phone (667 x 390), where the card
      would otherwise render past BOTH ends of the viewport. Cap it to the
-     viewport and let the mission list scroll inside — the heading, the checkbox
+     viewport and let the mission list scroll inside - the heading, the checkbox
      and the status line must stay reachable at every height. */
   max-height: calc(100vh - 1.5rem);
   max-height: calc(100dvh - 1.5rem);
@@ -41,7 +41,7 @@
 
 /* An AUTHOR `display` on this id beats the UA's `[hidden] { display: none }` in
    the cascade, so the flex above would otherwise leave the card in the
-   accessibility tree from page parse until it is revealed — or, on a share
+   accessibility tree from page parse until it is revealed - or, on a share
    link, until it is removed. Restore the attribute's meaning explicitly. */
 #first-run-launcher[hidden] {
   display: none;
@@ -152,7 +152,7 @@
   transform: translateX(2px);
 }
 
-/* aria-disabled, not :disabled — the JS keeps the buttons focusable while a
+/* aria-disabled, not :disabled - the JS keeps the buttons focusable while a
    mission runs so the keyboard is never dumped out of the launcher mid-flight. */
 .first-run-choices button[aria-disabled='true'] {
   cursor: wait;
@@ -233,7 +233,7 @@
 }
 
 /* The live region carries mission progress and failures, so it owns a full row
-   and reserves its height — otherwise the card resizes as it speaks. */
+   and reserves its height - otherwise the card resizes as it speaks. */
 .first-run-note {
   min-height: 1.1rem;
   margin-top: 0.5rem;
@@ -250,7 +250,7 @@
 /* Every surface that claims the screen hides the launcher. This list is the CSS
    half of the ESC arbitration: src/firstRunExperience.js watches these same
    classes and makes the launcher step aside, so a hidden card is never left
-   holding a keyboard handler. Keep the two lists in step —
+   holding a keyboard handler. Keep the two lists in step -
    EXCLUSIVE_SURFACE_CLASSES pins them together. */
 body.ui-clean-view #first-run-launcher,
 body.recording-mode #first-run-launcher,
@@ -294,7 +294,7 @@ body.scene-playback-mode #first-run-launcher {
   }
 }
 
-/* Short viewports — landscape phones, small laptop windows. The chrome tightens
+/* Short viewports - landscape phones, small laptop windows. The chrome tightens
    so the mission list keeps a usable share of the height. The intro line STAYS:
    it is the only copy that says what this thing is, and with four tiles it
    fits. (It was dropped here while there were five; the tile that went is
@@ -336,7 +336,7 @@ body.scene-playback-mode #first-run-launcher {
 
 /* A soft edge on the list, so a tile cut by the fold reads as "more below"
    rather than as a rendering seam. Gated on `data-scrollable`, which the JS sets
-   only when the list ACTUALLY overflows — a fade on a list that fits would
+   only when the list ACTUALLY overflows - a fade on a list that fits would
    promise content that is not there, which is the opposite of the affordance
    it is meant to be. Decorative only: the list scrolls under it. */
 .first-run-choices[data-scrollable='true'] {
@@ -354,7 +354,7 @@ body.scene-playback-mode #first-run-launcher {
 
 /* Scrolled to the end, there is nothing left to promise, so the fade lifts.
    Browsers without scroll-driven animations keep the static fade, which is
-   still honest — there IS more list, it is just above rather than below. */
+   still honest - there IS more list, it is just above rather than below. */
 @supports (animation-timeline: scroll(self block)) {
   .first-run-choices[data-scrollable='true'] {
     animation: first-run-scroll-fade linear both;

@@ -1,15 +1,15 @@
 import { msg } from '../i18n/index.js';
 
 /**
- * Night Vision / NVG — PVS-14 Image Intensifier Emulation
+ * Night Vision / NVG - PVS-14 Image Intensifier Emulation
  * P43 phosphor green, intensifier tube bloom, circular vignette,
  * scintillation noise, honeycomb pattern, auto-gain, HUD overlay.
  *
  * Exposed uniforms:
- *   gain (0-1)        — intensifier gain (bloom + noise balance)
- *   bloom (0-1)       — bloom/halo intensity around bright sources
- *   scanlineStr (0-1) — scanline intensity (kept for compatibility)
- *   pixelation (1-6)  — intensifier tube resolution pixelation
+ *   gain (0-1)        - intensifier gain (bloom + noise balance)
+ *   bloom (0-1)       - bloom/halo intensity around bright sources
+ *   scanlineStr (0-1) - scanline intensity (kept for compatibility)
+ *   pixelation (1-6)  - intensifier tube resolution pixelation
  */
 export const nightVisionShader = {
   name: 'surveillance',
@@ -188,7 +188,7 @@ export const nightVisionShader = {
       amplified = pow(amplified, mix(1.2, 0.7, gain));
 
       // ── Intensifier tube bloom (THE key NVG visual) ─────
-      // Bloom around bright sources — wider kernel for realistic halos
+      // Bloom around bright sources - wider kernel for realistic halos
       float bloomAccum = 0.0;
       float bloomW = 0.0;
       for (int y = -5; y <= 5; y++) {
@@ -262,7 +262,7 @@ export const nightVisionShader = {
       float ts = renderTimestamp(uv);
       nvgColor += phosphor * ts * 0.6 * intensity;
 
-      // REC indicator — top-right (blinking)
+      // REC indicator - top-right (blinking)
       vec2 recPos = uv - vec2(0.95, 0.94);
       float recDot = smoothstep(0.008, 0.004, length(recPos));
       float blink = step(0.5, fract(time * 0.8));

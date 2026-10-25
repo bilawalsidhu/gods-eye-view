@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * qa-voice-bench.mjs — provider-neutral TEXT-mode voice-routing benchmark.
+ * qa-voice-bench.mjs - provider-neutral TEXT-mode voice-routing benchmark.
  *
  * Every provider gets the same prompt: production's realtimeInstructions()
  * and GEV_REALTIME_TOOLS (the Realtime adapter uses the exact session body the
@@ -179,7 +179,7 @@ function payloadChanges() {
   const chat = chatNormalizationDiff(GEV_REALTIME_TOOLS)
     .map((c) => `\`${c.path}\`: ${JSON.stringify(c.from)} → ${JSON.stringify(c.to)}`);
   return [
-    `openai-realtime: none — the session body is captured from production's token handler (${GEV_REALTIME_TOOLS.length} tools, instructions, tool_choice auto, reasoning low, truncation). Only difference from a mic session: response.create asks for output_modalities ["text"] (as qa-voice-routing does).`,
+    `openai-realtime: none - the session body is captured from production's token handler (${GEV_REALTIME_TOOLS.length} tools, instructions, tool_choice auto, reasoning low, truncation). Only difference from a mic session: response.create asks for output_modalities ["text"] (as qa-voice-routing does).`,
     'gemini-live: same instructions text as systemInstruction; the same tool schemas passed verbatim as functionDeclarations[].parametersJsonSchema (no keyword changes); tool_choice has no Live equivalent (AUTO is the default); responseModalities AUDIO + outputAudioTranscription (TEXT is rejected by the model).',
     `ollama / openai-chat: same instructions as the system message; tools wrapped as {type:"function",function:{name,description,parameters}} with ${chat.length} schema change(s): ${chat.join('; ') || 'none'}. Descriptions, enums and required lists are unchanged; nothing is stringified.`,
   ];
@@ -339,7 +339,7 @@ async function main() {
   let stopReason = null;
   let turnCosts = [];
   outer: for (let rep = START_REP; rep < START_REP + REPS; rep += 1) {
-    console.log(`\n== ${PROVIDER} ${MODEL}${VARIANT ? ` (${VARIANT})` : ''} — rep ${rep}/${REPS}, ${items.length} phrases`);
+    console.log(`\n== ${PROVIDER} ${MODEL}${VARIANT ? ` (${VARIANT})` : ''} - rep ${rep}/${REPS}, ${items.length} phrases`);
     for (const w of items) {
       if (CLOUD) {
         const avg = turnCosts.length ? turnCosts.reduce((a, b) => a + b, 0) / turnCosts.length : 0.1;
@@ -383,7 +383,7 @@ async function main() {
       appendRow(row);
       if (CLOUD) { ledgerAdd(r.costUsd); turnCosts.push(r.costUsd); }
       const verdict = w.suite === 'coverage' ? grade.verdict : (grade.ok ? 'PASS' : 'FAIL');
-      console.log(`  [${verdict}] ${w.text} → ${turn1 ? `${turn1.calls.map((c) => c.name).join(',') || '(none)'} ⇒ ` : ''}${r.calls.map((c) => c.name).join(',') || '(none)'}  tool@${r.tFirstCallMs ?? '—'}ms done@${r.tDoneMs}ms $${r.costUsd.toFixed(4)}${r.errors.length ? ` ERR ${r.errors[0]}` : ''}${r.timeout ? ' TIMEOUT' : ''}`);
+      console.log(`  [${verdict}] ${w.text} → ${turn1 ? `${turn1.calls.map((c) => c.name).join(',') || '(none)'} ⇒ ` : ''}${r.calls.map((c) => c.name).join(',') || '(none)'}  tool@${r.tFirstCallMs ?? '-'}ms done@${r.tDoneMs}ms $${r.costUsd.toFixed(4)}${r.errors.length ? ` ERR ${r.errors[0]}` : ''}${r.timeout ? ' TIMEOUT' : ''}`);
       if (r.errors.some((e) => /HTTP 4\d\d|close 100[78]|invalid|not found|model_not_found|does not exist/i.test(e)) && r.calls.length === 0 && !r.text) {
         const same = readRows().filter((x) => x.type === 'turn' && x.runId === runId).slice(-3);
         if (same.length === 3 && same.every((x) => x.errors?.length && !x.calls.length)) { stopReason = `3 consecutive hard errors: ${r.errors[0]}`; break outer; }

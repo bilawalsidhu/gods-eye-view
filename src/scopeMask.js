@@ -1,37 +1,37 @@
 import { getKeyholeGeometry } from './celestialRing.js';
 
 /**
- * Scope mask — the app's signature circular viewport treatment, made real.
+ * Scope mask - the app's signature circular viewport treatment, made real.
  *
  * History (2026-08-08 owner field test): the scope was never implemented.
  * It emerged from six zero-intensity style PostProcessStages whose stacked
  * "identity" passes progressively smeared the starfield into a circular
- * falloff — every grep for a mask came up empty because none existed. The
+ * falloff - every grep for a mask came up empty because none existed. The
  * owner ruled: draw it explicitly on a canvas, make the edge featherable
  * (like the NVG/FLIR tube masks), and free the six shader passes for real.
  *
  * Implementation: one fixed canvas parented into the viewer container
  * BELOW the detection surface (z-index 2 < 5) so detection's
  * mix-blend-mode still composites over the masked scene, exactly like the
- * old in-scene artifact. The mask is a radial gradient — fully transparent
+ * old in-scene artifact. The mask is a radial gradient - fully transparent
  * inside the shared keyhole circle, feathering to near-opaque page black
- * outside — redrawn only on resize, tuning change, DPR change, or a
+ * outside - redrawn only on resize, tuning change, DPR change, or a
  * QUANTIZED terminus-alpha step (see below). No rAF, no per-frame paint, no
  * render-loop coupling.
  *
  * Altitude-adaptive edge terminus (owner-approved 2026-08-17, band retuned the
  * same day after a field test): the outside fill's terminus alpha is 0.94 only
- * at TRUE full-globe altitude — above 10 Mm, where the relaxed 6% keeps faint
- * stars alive in the corners — and fades QUICKLY to fully opaque black on the
+ * at TRUE full-globe altitude - above 10 Mm, where the relaxed 6% keeps faint
+ * stars alive in the corners - and fades QUICKLY to fully opaque black on the
  * way down, reaching solid black by 7 Mm. Every working altitude below that is
  * opaque, because there the same 6% bleed reads as smeared geometry rather
- * than atmosphere. FEATHER is untouched BY THIS RAMP — only the terminus opacity
+ * than atmosphere. FEATHER is untouched BY THIS RAMP - only the terminus opacity
  * moves here. (The feather's own default later moved 35 → 0 on 2026-08-22; see
  * SCOPE_FEATHER_RATIO_DEFAULT below. The two are independent.)
  *
  * Perf contract for that ramp: the height sample is throttled AND the repaint
  * is gated on a QUANTIZED alpha step, so a full zoom gesture costs a handful
- * of 2D-canvas repaints (~12 across the whole band — the alpha span, not the
+ * of 2D-canvas repaints (~12 across the whole band - the alpha span, not the
  * altitude span, sets that) and a parked camera costs none. Under the idle
  * render governor a parked camera produces no frames at all, so the sampler is
  * literally free at rest. SCOPE OFF costs even less: no sampling, and no
@@ -44,7 +44,7 @@ const SCOPE_OUTSIDE_COLOR = { r: 5, g: 5, b: 8 };
  * Default edge feather as a fraction of the keyhole radius.
  *
  * 0.11 since 2026-08-24 (owner final lock; 0.08 on 08-23, hard-crop 0 on
- * 08-22 — this supersedes both), REVISING the 2026-08-22 ruling that
+ * 08-22 - this supersedes both), REVISING the 2026-08-22 ruling that
  * set it to zero: a subtle soft edge rather than either the hard crop or the
  * retired 35 % halo. The slider is untouched and still spans 0..100; this is
  * only where it STARTS. `setScopeMaskFeather` is unchanged, so any feather a
@@ -52,7 +52,7 @@ const SCOPE_OUTSIDE_COLOR = { r: 5, g: 5, b: 8 };
  * the hard-crop path at 0 is still reachable from the handle.
  *
  * Keep in lockstep with `#scope-feather-slider`'s markup value AND readout in
- * index.html and `_scopeFeatherPct` in sharelink.js — a fresh boot applies no
+ * index.html and `_scopeFeatherPct` in sharelink.js - a fresh boot applies no
  * restore, so those literals ARE the first-run state. NOT the `scf` PARSE
  * fallback, which stays at 35 on purpose: a link predating that field was
  * authored when 35 was what its author saw, and a link from the feather-0 era
@@ -61,24 +61,24 @@ const SCOPE_OUTSIDE_COLOR = { r: 5, g: 5, b: 8 };
  */
 export const SCOPE_FEATHER_RATIO_DEFAULT = 0.11;
 /**
- * Terminus opacity at/above SCOPE_TERMINUS_FAR_M — slightly translucent so
+ * Terminus opacity at/above SCOPE_TERMINUS_FAR_M - slightly translucent so
  * faint stars survive in the corners at globe scale.
  */
 export const SCOPE_OUTSIDE_ALPHA = 0.94;
 /**
  * Lowest SUPPORTED terminus opacity, as a share-link percent. The band exists
- * because anything below the globe-scale terminus is not a scope any more —
- * it is a hole in the mask — so `sce` is clamped to it on the way in AND on
+ * because anything below the globe-scale terminus is not a scope any more -
+ * it is a hole in the mask - so `sce` is clamped to it on the way in AND on
  * the way out rather than round-tripping an unsupported value.
  */
 export const SCOPE_TERMINUS_MIN_PCT = Math.round(SCOPE_OUTSIDE_ALPHA * 100);
 export const SCOPE_TERMINUS_MAX_PCT = 100;
-/** Terminus opacity at/below SCOPE_TERMINUS_NEAR_M — full black, no bleed. */
+/** Terminus opacity at/below SCOPE_TERMINUS_NEAR_M - full black, no bleed. */
 export const SCOPE_TERMINUS_ALPHA_NEAR = 1;
 /**
  * Camera height at/above which the terminus stays at SCOPE_OUTSIDE_ALPHA.
  * Owner retune (2026-08-17 field test): the relaxed 6% corners belong to TRUE
- * full-globe views only — "the moment we go past roughly 10 million m in
+ * full-globe views only - "the moment we go past roughly 10 million m in
  * altitude, looking at the world, it should start quickly fading into black".
  */
 export const SCOPE_TERMINUS_FAR_M = 10_000_000;
@@ -90,8 +90,8 @@ export const SCOPE_TERMINUS_FAR_M = 10_000_000;
 export const SCOPE_TERMINUS_NEAR_M = 7_000_000;
 /**
  * Repaint granularity. The ramp spans 0.06 alpha, so 0.005 steps give ~12
- * repaints across the ENTIRE 3 Mm band — the alpha span sets that count, so
- * widening the altitude band costs nothing — and zero while hovering, since a
+ * repaints across the ENTIRE 3 Mm band - the alpha span sets that count, so
+ * widening the altitude band costs nothing - and zero while hovering, since a
  * still camera never crosses a step.
  */
 export const SCOPE_TERMINUS_QUANTUM = 0.005;
@@ -113,7 +113,7 @@ let _terminusOverride = null;
 let _cameraSampleRemover = null;
 let _cameraMoveEndRemover = null;
 let _lastTerminusSampleMs = -Infinity;
-/** Repaints caused by a terminus step — evidence seam for the perf claim. */
+/** Repaints caused by a terminus step - evidence seam for the perf claim. */
 let _terminusRepaints = 0;
 /** Whether the canvas currently holds ink (drives the disabled-state early-out). */
 let _painted = false;
@@ -123,7 +123,7 @@ let _coalescingPaint = false;
 
 /**
  * Smoothstep ramp from the globe-scale terminus to full black.
- * Pure — unit-tested directly.
+ * Pure - unit-tested directly.
  * @param {number} heightM - Camera height above the ellipsoid, in metres.
  * @returns {number} Terminus alpha in [SCOPE_OUTSIDE_ALPHA, 1].
  */
@@ -162,14 +162,14 @@ export function quantizeScopeTerminusAlpha(alpha) {
 
 /**
  * Clamp a share-link/UI terminus PERCENT into the supported band.
- * Non-numeric input is not a value at all — it means "absent", i.e. adaptive.
- * Pure — unit-tested directly.
+ * Non-numeric input is not a value at all - it means "absent", i.e. adaptive.
+ * Pure - unit-tested directly.
  * @param {*} value
  * @returns {?number} 94..100, or null for adaptive.
  */
 export function clampScopeTerminusPct(value) {
-  // Anything that is not an actual number — null, undefined, '', 'abc', a
-  // boolean — is ABSENT, not zero. (Number(null) === 0 would otherwise pin the
+  // Anything that is not an actual number - null, undefined, '', 'abc', a
+  // boolean - is ABSENT, not zero. (Number(null) === 0 would otherwise pin the
   // floor on every adaptive write.)
   const raw = typeof value === 'string' ? value.trim() : value;
   if (typeof raw !== 'number' && (typeof raw !== 'string' || raw === ''))
@@ -207,7 +207,7 @@ export function updateScopeTerminusForHeight(heightM) {
 /**
  * Run `fn` with paints COALESCED: any draw() it triggers only marks the canvas
  * dirty, and exactly one paint happens at the end. The case that matters is a
- * DPR change landing on the same tick as a terminus step — two full-viewport
+ * DPR change landing on the same tick as a terminus step - two full-viewport
  * repaints where one will do.
  * @param {Function} fn
  * @returns {void}
@@ -287,7 +287,7 @@ export function scopeMaskDevicePixelRatio(
  *
  * The ResizeObserver only fires on CONTENT-BOX changes, so dragging the
  * window between a 1x and a 2x monitor keeps the same CSS size while the
- * backing store stays at the old resolution — a permanently soft/aliased
+ * backing store stays at the old resolution - a permanently soft/aliased
  * scope edge until something else happens to resize. `(resolution: Ndppx)`
  * only matches the CURRENT ratio, so the listener is re-armed after every
  * change (the standard DPR-watch pattern).
@@ -302,7 +302,7 @@ function watchDevicePixelRatio() {
   try {
     query = window.matchMedia(`(resolution: ${dpr}dppx)`);
   } catch {
-    return; // no matchMedia support for resolution queries — resize still covers the common case
+    return; // no matchMedia support for resolution queries - resize still covers the common case
   }
   _dprQuery = query;
   _dprListener = () => {
@@ -334,7 +334,7 @@ function teardownDevicePixelRatioWatch() {
 
 /**
  * Compute the gradient stops for the scope mask.
- * Pure — unit-tested directly.
+ * Pure - unit-tested directly.
  * @param {number} width - Viewport CSS width.
  * @param {number} height - Viewport CSS height.
  * @param {number} featherRatio - Edge feather as a fraction of keyhole radius.
@@ -396,9 +396,9 @@ function draw() {
   const { r, g, b } = SCOPE_OUTSIDE_COLOR;
   if (geo.outerR - geo.innerR < 1) {
     // Zero/near-zero feather: a radial gradient with equal radii is
-    // DEGENERATE in Canvas2D (Chromium paints nothing — browser
+    // DEGENERATE in Canvas2D (Chromium paints nothing - browser
     // finding). Draw the hard crop explicitly: rect minus circle, evenodd.
-    // The hard crop honors the same altitude terminus — a hard edge at city
+    // The hard crop honors the same altitude terminus - a hard edge at city
     // scale must be fully opaque too, not 6% translucent.
     ctx.fillStyle = `rgba(${r},${g},${b},${_terminusAlpha})`;
     ctx.beginPath();
@@ -466,7 +466,7 @@ function watchCameraHeight(viewer) {
   if (preRender?.addEventListener) {
     _cameraSampleRemover = preRender.addEventListener(() => {
       // SCOPE OFF paints nothing, so it samples nothing: no height read, no
-      // throttle bookkeeping, no quantize — the listener is a single compare.
+      // throttle bookkeeping, no quantize - the listener is a single compare.
       // setScopeMaskEnabled(true) re-syncs the alpha it skipped.
       if (!_enabled) return;
       const now =

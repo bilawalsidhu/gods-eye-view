@@ -17,7 +17,7 @@ export function createViewport({
 
   /**
    * Ambient labels are placed via screen-space projection, so they need a
-   * re-declutter after the camera settles — on moveEnd, never per frame.
+   * re-declutter after the camera settles - on moveEnd, never per frame.
    */
 
   function installMoveEndWatcher() {
@@ -107,7 +107,7 @@ export function createViewport({
    */
 
   function viewChangedEnough(viewRect) {
-    if (!viewRect) return false; // sky/horizon — keep the current render
+    if (!viewRect) return false; // sky/horizon - keep the current render
     if (!layerState._lastViewRect) return true; // previous render was global fallback
     const lastWidth = Cesium.Rectangle.computeWidth(layerState._lastViewRect);
     const lastHeight = Cesium.Rectangle.computeHeight(layerState._lastViewRect);
@@ -133,7 +133,7 @@ export function createViewport({
     if (layerState._preRenderRemover || !layerState._viewer) return;
     // The LOD sweep is throttle-gated inside preRender. When the camera
     // settles just inside the throttle window, the final rebuild would wait
-    // for a frame that idle mode never produces — schedule one. (perf wave 2)
+    // for a frame that idle mode never produces - schedule one. (perf wave 2)
     if (!layerState._moveEndSettleRemover) {
       layerState._moveEndSettleRemover =
         layerState._viewer.camera.moveEnd.addEventListener(() => {
@@ -148,13 +148,13 @@ export function createViewport({
       layerState._viewer.scene.preRender.addEventListener(() => {
         // NOTE: `_loading`/empty-data are deliberately NOT part of this guard.
         // A refresh has no timeout, and sprites from the previous payload stay
-        // on screen throughout it — so the horizon pass below must keep running
+        // on screen throughout it - so the horizon pass below must keep running
         // while a fetch is in flight. Only the rebuild is gated on fresh data.
         if (!layerState._enabled) return;
         const now = performance.now();
         if (now - layerState._lastLodCheck < LOD_CHECK_MS) return;
         layerState._lastLodCheck = now;
-        // Idle camera: two scratch compares and out — no view-rect math, no
+        // Idle camera: two scratch compares and out - no view-rect math, no
         // aggregation, no allocation while the user is parked.
         const camera = layerState._viewer.camera;
         if (
@@ -178,8 +178,8 @@ export function createViewport({
         Cesium.Cartesian3.clone(camera.directionWC, layerState._camDir);
         layerState._camSnapValid = true;
         // The camera moved, so the horizon moved. A rebuild culls its own fresh
-        // sprites (renderDetections); an early-out — same LOD band and view
-        // rect, or a refresh in flight — does not, so cull here instead.
+        // sprites (renderDetections); an early-out - same LOD band and view
+        // rect, or a refresh in flight - does not, so cull here instead.
         // Exactly ONE occlusion walk per tick either way, bounded by the
         // idle-gate + LOD_CHECK_MS throttle above: a parked camera costs
         // nothing, a moving one pays one ≤maxDetections show-flip walk at

@@ -5,6 +5,7 @@ import {
   DEFAULT_CAMERA_CALIBRATION,
   CALIBRATION_RANGE_FLOOR_M,
 } from './policy.js';
+import { ICONS } from '../../icons.js';
 
 export function createControls({ state: layerState, services, parts, source }) {
   const { holdContinuousRender, releaseContinuousRender } = services.render;
@@ -15,7 +16,9 @@ export function createControls({ state: layerState, services, parts, source }) {
 
     name: 'CCTV',
 
-    icon: '📹',
+    icon: '',
+
+    iconSvg: ICONS.video,
 
     source: 'CCTV + Street View fallback',
 
@@ -32,7 +35,7 @@ export function createControls({ state: layerState, services, parts, source }) {
      * @param {number} [params.autoHopSec] - Auto-hop interval in seconds.
      * @param {string} [params.selectedCameraId] - Camera ID to activate.
      * @param {Object} [params.calibration] - Calibration config: `patch` edits
-     *   the live pose (save-gated — no persistence), `save` persists the current
+     *   the live pose (save-gated - no persistence), `save` persists the current
      *   calibration as manual, `reset` restores the base prior.
      * @param {boolean} [params.calibrationMode] - Toggle the ADJUST gizmo.
      * @param {boolean} [params.focusSelected] - Fly to the active camera.
@@ -112,7 +115,7 @@ export function createControls({ state: layerState, services, parts, source }) {
             typeof calibrationCfg.patch === 'object'
           ) {
             // Save-gated persistence (design §3e): a patch edits the LIVE pose
-            // only. The store — and the CALIBRATED badge's `calSource` — move
+            // only. The store - and the CALIBRATED badge's `calSource` - move
             // exclusively on the explicit `save` action below. (§9.1 range-slider
             // clamp override + B9b re-ground live inside applyCalibrationPatch.)
             parts.calibration.applyCalibrationPatch(

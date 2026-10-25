@@ -234,7 +234,7 @@ html:not([lang='en']) #global-loading-detail {
   text-align: right;
 }
 
-/* The settled traffic chip carries no progress number — the label's coverage
+/* The settled traffic chip carries no progress number - the label's coverage
    figure is the honest one. Collapse the empty slot so the chip closes up
    instead of trailing a 34px stub and its flex gap. */
 #traffic-sync-progress:empty {
@@ -248,9 +248,9 @@ html:not([lang='en']) #global-loading-detail {
    the cascade lands.
 
    The DOM text is the truth and its node never moves. A chip label is
-   upgraded once into a permanent shell — a .gev-flap-text span holding
+   upgraded once into a permanent shell - a .gev-flap-text span holding
    one long-lived Text node, plus an aria-hidden .gev-flap-cells
-   sibling — and from then on a label change is only `node.data = next`.
+   sibling - and from then on a label change is only `node.data = next`.
    During a cascade the host takes .gev-flap-active, which clips the
    real text out of view and lets the cells stand in for it. The cells
    carry no text at all: both glyphs are generated content (::before =
@@ -262,11 +262,11 @@ html:not([lang='en']) #global-loading-detail {
 
    Motion matches the cockpit odometer roll (.cockpit-roll-token):
    same cubic-bezier, same reduced-motion treatment. Only the
-   left-to-right stagger is new — that cascade is what makes it read
+   left-to-right stagger is new - that cascade is what makes it read
    as a Solari board rather than a counter.
    ------------------------------------------------------------------ */
 /* While the flaps play, the real text is clipped out of view but stays in
-   the DOM and in the accessibility tree — same clipped-but-present treatment
+   the DOM and in the accessibility tree - same clipped-but-present treatment
    as .world-overlay-accessibility. It is never removed or reparented. */
 .gev-flap-host.gev-flap-active > .gev-flap-text {
   position: absolute;
@@ -288,7 +288,7 @@ html:not([lang='en']) #global-loading-detail {
   /* Chip labels carry real spaces; a collapsed space would drop a column. */
   white-space: pre;
 }
-/* The incoming glyph is in flow, so it — not any text node — is what gives
+/* The incoming glyph is in flow, so it - not any text node - is what gives
    the column its natural width. EVERY column has one, including a column the
    new string does not reach: that one carries a blank, so it holds its width
    and its index for the whole cascade instead of collapsing. Collapsing would
@@ -315,7 +315,7 @@ html:not([lang='en']) #global-loading-detail {
     cubic-bezier(0.2, 0.75, 0.25, 1) var(--gev-flap-delay, 0ms) both;
 }
 /* Out of flow, so the outgoing glyph overlays its own column without
-   affecting layout — one per column, each anchored to its own cell box. */
+   affecting layout - one per column, each anchored to its own cell box. */
 .gev-flap-cell.is-flapping::before {
   content: attr(data-flap-prev);
   position: absolute;
@@ -329,7 +329,7 @@ html:not([lang='en']) #global-loading-detail {
    columns the moment the cells go in, so splitFlap.js eases from the previous
    on-screen width to the cascade width at the start. A SHRINKING one holds
    every column for the whole cascade, so its ease runs at SETTLEMENT instead,
-   from the cascade width down to the natural width — one smooth transition
+   from the cascade width down to the natural width - one smooth transition
    after the flaps have landed, rather than columns collapsing underneath
    them. */
 .gev-flap-sizing {
@@ -353,7 +353,7 @@ html:not([lang='en']) #global-loading-detail {
   }
 }
 /* The new leaf waits for the old one to clear, then drops in and settles
-   with a single small overshoot — the mechanical clack. */
+   with a single small overshoot - the mechanical clack. */
 @keyframes gev-flap-in {
   0% {
     transform: rotateX(90deg);

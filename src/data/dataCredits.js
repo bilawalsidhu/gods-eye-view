@@ -5,7 +5,7 @@ import * as Cesium from 'cesium';
  *
  * Legal requirement (see DATA_SOURCES.md, findings H10/H11 in
  * docs/pre-ship-audit-2026-07-01.md): every third-party data layer this app can
- * display carries its own license and required attribution — ODbL (OSM
+ * display carries its own license and required attribution - ODbL (OSM
  * datacenters/dams, adsb.lol, Overpass roads), CC BY-NC-SA (TeleGeography
  * cables), NASA FIRMS, CelesTrak, USGS, City of Austin, Fintraffic (CC BY 4.0),
  * The MIT code license does NOT cover this data.
@@ -15,7 +15,7 @@ import * as Cesium from 'cesium';
  * attribution" lightbox (Cesium's credit popover) rather than cluttering the
  * on-globe line. Always-present is intentional and reversible: the lightbox is
  * the app's canonical attribution surface and DATA_SOURCES.md is the
- * machine-readable index. Strings are copied verbatim from DATA_SOURCES.md — if
+ * machine-readable index. Strings are copied verbatim from DATA_SOURCES.md - if
  * you add a data source, add it there AND here.
  */
 
@@ -103,7 +103,7 @@ export const DATA_CREDITS = [
   {
     key: 'opensky',
     html:
-      'Flights: OpenSky Network — Schäfer et al., ' +
+      'Flights: OpenSky Network - Schäfer et al., ' +
       '“Bringing Up OpenSky”, IPSN 2014 · ' +
       '<a href="https://opensky-network.org" target="_blank" rel="noopener">opensky-network.org</a> ' +
       '(non-commercial)',
@@ -143,7 +143,7 @@ export const DATA_CREDITS = [
     key: 'launch-library-2',
     html:
       'Space mission launch, payload &amp; recovery metadata: ' +
-      '<a href="https://ll.thespacedevs.com/docs/" target="_blank" rel="noopener">Launch Library 2 — The Space Devs</a> ' +
+      '<a href="https://ll.thespacedevs.com/docs/" target="_blank" rel="noopener">Launch Library 2 - The Space Devs</a> ' +
       '(API documentation and rate limits)',
   },
   {
@@ -172,7 +172,7 @@ export const DATA_CREDITS = [
   {
     key: 'eccc-aqhi',
     html:
-      'Air quality (AQHI): Environment and Climate Change Canada — MSC GeoMet ' +
+      'Air quality (AQHI): Environment and Climate Change Canada - MSC GeoMet ' +
       '(<a href="https://eccc-msc.github.io/open-data/" target="_blank" rel="noopener">eccc-msc.github.io/open-data</a>) ' +
       '· <a href="https://eccc-msc.github.io/open-data/licence/readme_en/" target="_blank" rel="noopener">ECCC Data Servers End-use Licence</a>',
   },
@@ -208,7 +208,7 @@ export const DATA_CREDITS = [
   {
     key: 'austin-cctv',
     html:
-      'CCTV cameras &amp; frames: City of Austin, TX — ' +
+      'CCTV cameras &amp; frames: City of Austin, TX - ' +
       '<a href="https://data.austintexas.gov" target="_blank" rel="noopener">data.austintexas.gov</a>',
   },
   {
@@ -219,12 +219,12 @@ export const DATA_CREDITS = [
   },
   {
     key: 'deldot-cctv',
-    html: 'CCTV live video (Delaware): <a href="https://deldot.gov/map/" target="_blank" rel="noopener">DelDOT — Delaware Department of Transportation</a>',
+    html: 'CCTV live video (Delaware): <a href="https://deldot.gov/map/" target="_blank" rel="noopener">DelDOT - Delaware Department of Transportation</a>',
   },
   {
     key: 'caltrans-cctv',
     html:
-      'CCTV cameras &amp; frames (California): Caltrans — ' +
+      'CCTV cameras &amp; frames (California): Caltrans - ' +
       '<a href="https://cwwp2.dot.ca.gov/" target="_blank" rel="noopener">cwwp2.dot.ca.gov</a>',
   },
   {
@@ -291,7 +291,7 @@ export const DATA_CREDITS = [
   {
     key: 'kingcounty-cctv',
     html:
-      'CCTV cameras &amp; frames (King County, WA): King County Road Services — ' +
+      'CCTV cameras &amp; frames (King County, WA): King County Road Services - ' +
       '<a href="https://kingcounty.gov/en/dept/local-services/roads" target="_blank" rel="noopener">kingcounty.gov</a>, ' +
       'per the ' +
       '<a href="https://kingcounty.gov/en/dept/kcit/data-information-services/gis-center/about/terms-conditions-copyrights" target="_blank" rel="noopener">KCGIS Center terms</a>. ' +
@@ -302,7 +302,7 @@ export const DATA_CREDITS = [
     html:
       'Traffic snapshot cameras (Hong Kong): ' +
       '<a href="https://data.gov.hk/en-data/dataset/hk-td-tis_2-traffic-snapshot-images" target="_blank" rel="noopener">Transport Department / DATA.GOV.HK</a> ' +
-      '(<a href="https://data.gov.hk/en/terms-and-conditions" target="_blank" rel="noopener">Terms of Use</a> — attribution required)',
+      '(<a href="https://data.gov.hk/en/terms-and-conditions" target="_blank" rel="noopener">Terms of Use</a> - attribution required)',
   },
   {
     key: 'vegvesen-cctv',
@@ -370,7 +370,7 @@ export const DATA_CREDITS = [
   {
     key: 'jcdecaux-gbfs',
     html:
-      'City bikes (Lillestrøm, Valencia, Seville): Bysykkel Lillestrøm, Valenbisi, Sevici, JCDecaux — ' +
+      'City bikes (Lillestrøm, Valencia, Seville): Bysykkel Lillestrøm, Valenbisi, Sevici, JCDecaux - ' +
       '<a href="https://developer.jcdecaux.com/files/Open-Licence-fr.pdf" target="_blank" rel="noopener">Licence Ouverte</a>',
   },
   {
@@ -378,7 +378,7 @@ export const DATA_CREDITS = [
     // The service asks for its attribution to carry a "fix the map" link, so
     // a reader who spots a wrong turn can go and correct the data it came from.
     html:
-      'Routing (voice routes and Directions): OSRM on the FOSSGIS servers — ' +
+      'Routing (voice routes and Directions): OSRM on the FOSSGIS servers - ' +
       '<a href="https://routing.openstreetmap.de/about.html" target="_blank" rel="noopener">routing.openstreetmap.de</a> · ' +
       '<a href="https://www.openstreetmap.org/fixthemap" target="_blank" rel="noopener">fix the map</a>',
   },
@@ -443,7 +443,7 @@ export const DATA_CREDITS = [
   {
     key: 'firms',
     html:
-      'Active fires: NASA FIRMS — we acknowledge the use of data and/or imagery ' +
+      'Active fires: NASA FIRMS - we acknowledge the use of data and/or imagery ' +
       'from NASA’s Fire Information for Resource Management System ' +
       '(<a href="https://earthdata.nasa.gov/firms" target="_blank" rel="noopener">earthdata.nasa.gov/firms</a>), ' +
       'part of NASA’s Earth Observing System Data and Information System (EOSDIS)',
@@ -470,13 +470,13 @@ export const DATA_CREDITS = [
   {
     key: 'tallinn-cctv',
     html:
-      'CCTV cameras &amp; frames (Tallinn): City of Tallinn — ' +
+      'CCTV cameras &amp; frames (Tallinn): City of Tallinn - ' +
       '<a href="https://ristmikud.tallinn.ee/" target="_blank" rel="noopener">ristmikud.tallinn.ee</a> (courtesy)',
   },
   {
     key: 'tarktee-cctv',
     html:
-      'CCTV cameras &amp; frames (Estonia road weather): Transpordiamet / Tarktee — ' +
+      'CCTV cameras &amp; frames (Estonia road weather): Transpordiamet / Tarktee - ' +
       '<a href="https://tarktee.transpordiamet.ee/" target="_blank" rel="noopener">tarktee.transpordiamet.ee</a> (courtesy)',
   },
   {
@@ -487,20 +487,20 @@ export const DATA_CREDITS = [
     key: 'nsw-cctv',
     html:
       'CCTV cameras &amp; frames (New South Wales): ' +
-      '<a href="https://www.livetraffic.com/" target="_blank" rel="noopener">Live Traffic NSW</a> — Transport for NSW ' +
+      '<a href="https://www.livetraffic.com/" target="_blank" rel="noopener">Live Traffic NSW</a> - Transport for NSW ' +
       '(<a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a>)',
   },
   {
     key: 'telegeography',
     html:
-      'Submarine cables: © TeleGeography — ' +
+      'Submarine cables: © TeleGeography - ' +
       '<a href="https://www.submarinecablemap.com" target="_blank" rel="noopener">submarinecablemap.com</a> ' +
-      '(CC BY-NC-SA 3.0 — NonCommercial)',
+      '(CC BY-NC-SA 3.0 - NonCommercial)',
   },
 ];
 
 /**
- * Conditional credits — registered via `registerDynamicCredit` only when the
+ * Conditional credits - registered via `registerDynamicCredit` only when the
  * corresponding capability actually activates (deliberately NOT part of
  * DATA_CREDITS, which is always-on). TomTom terms require attribution when
  * their flow data is displayed; keyless installs never show it, so the
@@ -515,7 +515,7 @@ export const TOMTOM_CREDIT = {
 };
 
 /** Registered when the first Natural Earth region or state/province outline
- * resolves (public domain — no attribution required; credited as a courtesy). */
+ * resolves (public domain - no attribution required; credited as a courtesy). */
 export const NATURAL_EARTH_CREDIT = {
   key: 'natural-earth',
   html:
@@ -524,7 +524,7 @@ export const NATURAL_EARTH_CREDIT = {
 };
 
 /** Registered when the first bundled US county outline resolves (public
- * domain — credited as a courtesy). */
+ * domain - credited as a courtesy). */
 export const US_CENSUS_CREDIT = {
   key: 'us-census-counties',
   html:
@@ -579,8 +579,8 @@ const _dynamicCreditKeys = new Set();
  * Register a conditional credit at the moment its data source activates.
  * Idempotent per `credit.key`; lands in the same "Data attribution" popover
  * as the static credits (showOnScreen=false).
- * @param {Cesium.Viewer} viewer — the initialized Cesium viewer
- * @param {{ key: string, html: string }} credit — e.g. `TOMTOM_CREDIT`
+ * @param {Cesium.Viewer} viewer - the initialized Cesium viewer
+ * @param {{ key: string, html: string }} credit - e.g. `TOMTOM_CREDIT`
  * @returns {boolean} True when the credit is (now) registered.
  */
 export function registerDynamicCredit(viewer, credit) {
@@ -599,7 +599,7 @@ export function registerDynamicCredit(viewer, credit) {
  * Register every per-layer data credit into the viewer's credit display.
  * Idempotent: safe to call once at init. Credits are static and always
  * present in the "Data attribution" popover.
- * @param {Cesium.Viewer} viewer — the initialized Cesium viewer
+ * @param {Cesium.Viewer} viewer - the initialized Cesium viewer
  */
 export function registerDataCredits(viewer, credits = DATA_CREDITS) {
   const creditDisplay = viewer?.creditDisplay;

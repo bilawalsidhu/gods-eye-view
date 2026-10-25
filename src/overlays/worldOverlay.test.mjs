@@ -486,7 +486,7 @@ test('lifecycle is idempotent and teardown removes listeners, observers, and DOM
   env.cleanup();
 });
 
-/** The shipped stylesheet, read once — fixtures must stack as production does. */
+/** The shipped stylesheet, read once - fixtures must stack as production does. */
 const SHIPPED_CSS = readStylesheet(new URL('../../style.css', import.meta.url));
 
 /**
@@ -526,7 +526,7 @@ function cssDeclarationsFor(css, selector) {
  * The exact predicate the live browser probe used: does this element form a
  * stacking context? A stacking context is an isolated blending group, so any
  * such ancestor makes the browser discard a descendant canvas's
- * `mix-blend-mode: screen` while the CSS string itself stays `'screen'` —
+ * `mix-blend-mode: screen` while the CSS string itself stays `'screen'` -
  * which is why every string-level pin stayed green through the regression.
  */
 function formsStackingContext(declarations = {}) {
@@ -967,7 +967,7 @@ test('the per-domain candidate index stays bounded while identities churn', () =
   }
 
   // `resetFrameDomains` prunes at `live * 4 + 64` and the frame then republishes
-  // the live cohort, so the index can never exceed that plus one cohort — no
+  // the live cohort, so the index can never exceed that plus one cohort - no
   // matter how many distinct identities passed through it.
   const publishedIdentities = COHORT * BATCHES;
   const bound = COHORT * 4 + 64 + COHORT;
@@ -1263,7 +1263,7 @@ function inflatedRect({ left, top, width, height }, padding = 6) {
 
 test('UI exclusions stay per-rect: overlapping chrome never merges into a bounding union', () => {
   // Two overlapping panels. Their transitive bounding UNION would sweep almost
-  // the whole viewport, including a large region neither panel occupies — that
+  // the whole viewport, including a large region neither panel occupies - that
   // union is what produced the moving oversized voids and the size jumps as
   // panels expanded. An entry anchored in that empty region must be unaffected.
   const chrome = {
@@ -1309,7 +1309,7 @@ test('UI exclusions stay per-rect: overlapping chrome never merges into a boundi
   }
   // The two inflated rects overlap, so the old coalescer merged them into one
   // box spanning x -6..246, y -6..266. Inside that union NO placement is clear,
-  // so the card would have fallen back to its colliding default — which is why
+  // so the card would have fallen back to its colliding default - which is why
   // asserting the card sits inside the union keeps this test honest.
   assert.equal(rectsIntersect(painted, { x: -6, y: -6, w: 252, h: 272 }), true,
     'the card sits inside the union the old coalescer would have produced');
@@ -1389,7 +1389,7 @@ test('chrome that fills the viewport suppresses neither cards nor the detection 
 test('a placement is only ever kept under chrome that composites ABOVE the host', () => {
   // The soft-preference fallback is justified by "the chrome paints over the
   // card anyway". That is true of map panels (z90+) and false of #intel-hud,
-  // which the shipped stylesheet puts at z2 — BELOW both host surfaces (z5/z6).
+  // which the shipped stylesheet puts at z2 - BELOW both host surfaces (z5/z6).
   // A card kept under a HUD corner would render ON TOP of its text, breaking the
   // absolute rule that labels never cover the UI. Read from the real stylesheet,
   // so a z-index change in style.css moves this test rather than fooling it.
@@ -1412,7 +1412,7 @@ test('a placement is only ever kept under chrome that composites ABOVE the host'
 
   const viewport = { left: 0, top: 0, width: 400, height: 300 };
   // Above the host: unplaceable is still safe, so the card is kept and the panel
-  // simply covers it — the behaviour that fixed the cockpit blackout.
+  // simply covers it - the behaviour that fixed the cockpit blackout.
   assert.equal(paintedUnder([{ id: 'left-panel-stack', rect: viewport }]), 1,
     'chrome above the host keeps the soft preference');
   // Below the host: no placement may overlap it, so the entry is vetoed instead
@@ -1481,7 +1481,7 @@ test('cockpit keeps its cards and its detection lane, and hides only the tracked
 test('opt-in anchor separation thins a co-located cohort before the arbiter sees it', () => {
   // Rectangle overlap alone is not the shipped CCTV density: the leader gap does
   // not shrink with the card, so stacked thumbnails clear each other's rects at
-  // anchor spacings the shipped anchor-separation pass rejected — about twice the
+  // anchor spacings the shipped anchor-separation pass rejected - about twice the
   // card count down a dense corridor ("card soup").
   //
   // The pass runs at candidate collection, BEFORE selection, which is where the

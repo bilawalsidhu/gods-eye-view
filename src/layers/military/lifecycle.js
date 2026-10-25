@@ -123,7 +123,7 @@ export function createLifecycle({
       );
       // Height-datum fix: warm the geoid grid once per layer-enable. The poll loop
       // only reads geoidHeight() synchronously after this resolves (guarded by
-      // _geoidReady) — never awaited per-aircraft, never blocking a poll tick.
+      // _geoidReady) - never awaited per-aircraft, never blocking a poll tick.
       if (!flightState.records.geoidReady) {
         const lifetime = flightState.lifetime;
         ensureGeoidReady()
@@ -131,7 +131,7 @@ export function createLifecycle({
             if (!lifetime.signal.aborted) flightState.records.geoidReady = true;
           })
           .catch(() => {
-            /* geoid grid failed to load — baro path stays un-geoid-corrected until retried */
+            /* geoid grid failed to load - baro path stays un-geoid-corrected until retried */
           });
       }
       parts.tracking._installClickHandler(viewer);
@@ -154,11 +154,11 @@ export function createLifecycle({
           );
       }
       if (!flightState._moveEndRemove && viewer?.camera) {
-        // Arrival polish (mirror of flights.js — see the comment there): a settled
+        // Arrival polish (mirror of flights.js - see the comment there): a settled
         // camera move forces a full rotation pass on the very next frame, because
         // the pose-signature gate can eat the settle (final easing frames land
         // inside one quantization bucket) and leave stale noses for up to
-        // ROTATION_REFRESH_MS. One extra pass per gesture — nothing per-frame.
+        // ROTATION_REFRESH_MS. One extra pass per gesture - nothing per-frame.
         flightState._moveEndRemove = viewer.camera.moveEnd.addEventListener(
           () => {
             flightState._lastCamPoseSig = '';

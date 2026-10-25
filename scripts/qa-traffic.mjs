@@ -1,24 +1,24 @@
 #!/usr/bin/env node
 /**
- * qa-traffic.mjs — headless proof for the TomTom live-flow traffic layer.
+ * qa-traffic.mjs - headless proof for the TomTom live-flow traffic layer.
  *
  * Drives the REAL app in headless Chromium against a dev server that has a
  * TomTom key (default :4410) and asserts the live-mode contract, then uses
  * request interception to fabricate the keyless state deterministically
  * (no key removal needed, no upstream traffic).
  *
- *   (i)   LIVE mode — stats.mode 'live', dots rendered, colored buckets
+ *   (i)   LIVE mode - stats.mode 'live', dots rendered, colored buckets
  *         non-empty (free+slow+jam > 0), coverage > 0, tiles fetched > 0.
- *   (ii)  C4 oblique bounds — at 2.5 km / -20° pitch the road-fetch box
+ *   (ii)  C4 oblique bounds - at 2.5 km / -20° pitch the road-fetch box
  *         center lands within 12 km of the camera (look-at point), never
  *         the pre-fix horizon-biased midpoint (>25 km).
- *   (iii) Budget honesty — /api/tomtom/status dailyCount grows by no more
+ *   (iii) Budget honesty - /api/tomtom/status dailyCount grows by no more
  *         than the tiles the page actually fetched this run.
- *   (iv)  Uncovered-roads param — 'hide' renders zero sim dots; 'sim'
+ *   (iv)  Uncovered-roads param - 'hide' renders zero sim dots; 'sim'
  *         restores them (Mumbai has partial coverage; Austin may be 100%,
  *         so this asserts on whichever view has sim dots, else records
  *         INCONCLUSIVE rather than a false failure).
- *   (v)   KEYLESS fallback — with /api/tomtom/status intercepted to
+ *   (v)   KEYLESS fallback - with /api/tomtom/status intercepted to
  *         {hasKey:false}: mode 'sim', every dot white (buckets.sim ===
  *         count), and ZERO /api/tomtom/flow requests issued.
  *
@@ -57,7 +57,7 @@ const CHROME_EXECUTABLE_CANDIDATES = [
   // Prefer puppeteer's version-pinned Chrome-for-Testing over the system
   // Chrome: /Applications auto-updates underneath the harnesses, and its
   // software-GL behavior shifts across majors (system Chrome 150 blew the
-  // tile-gated drain budget under SwiftShader on 2026-07-30 — six
+  // tile-gated drain budget under SwiftShader on 2026-07-30 - six
   // false-negative qa-cctv-v2 runs against a healthy build). A deterministic
   // pinned browser beats the newest one for regression harnesses.
   await puppeteer.executablePath().catch(() => null),
@@ -77,7 +77,7 @@ const results = [];
 function record(name, ok, detail) {
   results.push({ name, ok, detail });
   const tag = ok === null ? '\x1b[33mINCONCLUSIVE\x1b[0m' : ok ? '\x1b[32mPASS\x1b[0m' : '\x1b[31mFAIL\x1b[0m';
-  console.log(`  [${tag}] ${name}${detail ? `  — ${detail}` : ''}`);
+  console.log(`  [${tag}] ${name}${detail ? `  - ${detail}` : ''}`);
 }
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -95,7 +95,7 @@ async function settleTraffic(page, view, { minCount = 1, timeoutS = 30 } = {}) {
     const beforeUpdate = mod.getStats().lastUpdate;
     const ell = gev.viewer.scene.globe.ellipsoid;
     const d2r = Math.PI / 180;
-    // The app's intro flyTo animation clobbers a setView issued mid-flight —
+    // The app's intro flyTo animation clobbers a setView issued mid-flight -
     // cancel any active tween before teleporting.
     try { gev.viewer.camera.cancelFlight(); } catch { /* no flight active */ }
     gev.viewer.camera.setView({
@@ -133,7 +133,7 @@ async function main() {
   const statusBefore = FIXTURES ? {hasKey:true,dailyCount:0} : await fetch(`${appUrl.origin}/api/tomtom/status`).then((r) => r.json()).catch(() => null);
   if (FIXTURES) console.log('Source mode: synthetic road/flow tiles and a flat terrain surface; live quota is not qualified.');
   if (!statusBefore?.hasKey) {
-    console.error('\x1b[31mServer has no TomTom key — run against the keyed dev server (:4410).\x1b[0m');
+    console.error('\x1b[31mServer has no TomTom key - run against the keyed dev server (:4410).\x1b[0m');
     process.exitCode = 2;
     return;
   }
@@ -180,10 +180,10 @@ async function main() {
     await sleep(5000);
     await page.keyboard.press('Escape');
 
-    // ── (i) LIVE mode: San Antonio — fast Overpass extract, partial TomTom
+    // ── (i) LIVE mode: San Antonio - fast Overpass extract, partial TomTom
     // coverage (sim dots exist for (iv)). Mumbai proved too Overpass-cold for
     // a deterministic harness; congestion colors assert the same either way.
-    console.log('\n(i) LIVE mode — San Antonio (partial coverage)...');
+    console.log('\n(i) LIVE mode - San Antonio (partial coverage)...');
     let mumbai = await settleTraffic(page, { lon: -98.4936, lat: 29.4241, height: 2800, heading: 23, pitch: -72 }, { minCount: 300, timeoutS: 45 });
     if (!mumbai || mumbai.count === 0) {
       // One retry with a nudged center to defeat the overlap gate (a slow
@@ -205,8 +205,8 @@ async function main() {
       await captureQaScreenshot(page, { path: path.join(SHOTS_DIR, 'traffic-live-flow.png') }, { headful: HEADFUL });
     }
 
-    // ── (iv) uncovered-roads param — hide vs sim ─────────────────────────────
-    console.log('\n(iv) uncoveredRoads param — hide vs sim...');
+    // ── (iv) uncovered-roads param - hide vs sim ─────────────────────────────
+    console.log('\n(iv) uncoveredRoads param - hide vs sim...');
     if ((mumbai.flowBuckets?.sim || 0) > 0) {
       const hid = await page.evaluate(async () => {
         const gev = window.__godsEyeView;
@@ -220,7 +220,7 @@ async function main() {
           destination: ell.cartographicToCartesian({ longitude: -98.51 * d2r, latitude: 29.435 * d2r, height: 2800 }),
           orientation: { heading: 0.4, pitch: -1.25, roll: 0 },
         });
-        // Poll for a NEW render (lastUpdate changes) — the pre-shift stats
+        // Poll for a NEW render (lastUpdate changes) - the pre-shift stats
         // would otherwise satisfy a count>0 check instantly.
         let s = null;
         for (let i = 0; i < 40; i++) {
@@ -238,11 +238,11 @@ async function main() {
       await captureQaScreenshot(page, { path: path.join(SHOTS_DIR, 'traffic-live-hide-mode.png') }, { headful: HEADFUL });
     } else {
       record('PARAM: hide mode renders zero sim (white) dots', null,
-        'view had 100% coverage (no sim dots to hide) — inconclusive here, covered by unit tests');
+        'view had 100% coverage (no sim dots to hide) - inconclusive here, covered by unit tests');
     }
 
     // ── (ii) C4 oblique bounds ───────────────────────────────────────────────
-    console.log('\n(ii) C4 — oblique fetch bounds land at the look-at point...');
+    console.log('\n(ii) C4 - oblique fetch bounds land at the look-at point...');
     const oblique = await settleTraffic(page, { lon: -97.72, lat: 30.245, height: 2500, heading: 315, pitch: -20 }, { minCount: 100 });
     {
       const bounds = oblique?.roadBounds;
@@ -260,7 +260,7 @@ async function main() {
     }
 
     // ── (iii) budget honesty ─────────────────────────────────────────────────
-    console.log('\n(iii) Budget — dailyCount grew by ≤ requests this run...');
+    console.log('\n(iii) Budget - dailyCount grew by ≤ requests this run...');
     {
       const statusAfter = FIXTURES ? statusBefore : await fetch(`${appUrl.origin}/api/tomtom/status`).then((r) => r.json());
       const grew = statusAfter.dailyCount - statusBefore.dailyCount;
@@ -270,8 +270,8 @@ async function main() {
       if (!ok) exitCode = 1;
     }
 
-    // ── (v) KEYLESS fallback (intercepted — server key untouched) ────────────
-    console.log('\n(v) KEYLESS — intercepted status, expect pure simulation...');
+    // ── (v) KEYLESS fallback (intercepted - server key untouched) ────────────
+    console.log('\n(v) KEYLESS - intercepted status, expect pure simulation...');
     // Keyless is an independent fresh-session contract. Close the keyed page
     // so its workers, terrain work and intercepted cache cannot leak into it.
     await page.close();
@@ -296,7 +296,7 @@ async function main() {
     await page.keyboard.press('Escape');
     let simStats = await settleTraffic(page, { lon: -98.4936, lat: 29.4241, height: 3000 }, { minCount: 100, timeoutS: 45 });
     if (!simStats || simStats.count === 0) {
-      // Public Overpass can throttle bursts across harness runs — one retry.
+      // Public Overpass can throttle bursts across harness runs - one retry.
       simStats = await settleTraffic(page, { lon: -98.487, lat: 29.43, height: 3000 }, { minCount: 100, timeoutS: 45 });
     }
     {

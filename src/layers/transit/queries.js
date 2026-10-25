@@ -41,7 +41,7 @@ export function createQueries({ state, parts }) {
    *
    * Selection has to survive ordinary churn. Striding by position in the map
    * meant that one bus leaving at the front renumbered every bus behind it, so
-   * a single removal swapped the whole labelled set for its neighbours —
+   * a single removal swapped the whole labelled set for its neighbours -
    * visible as every callout jumping one vehicle sideways. A hash of the key
    * belongs to the vehicle, not to its place in a list, so a removal anywhere
    * leaves every other vehicle's standing untouched.
@@ -65,8 +65,8 @@ export function createQueries({ state, parts }) {
    *
    * Detection PULLS this on every paint, not only on label solves, so it must
    * not be a fleet scan: the answer is CACHED and rebuilt only when something
-   * that could change it has happened — a poll, a visibility sweep, a
-   * removal, a selection — which the rest of the layer signals by bumping
+   * that could change it has happened - a poll, a visibility sweep, a
+   * removal, a selection - which the rest of the layer signals by bumping
    * `state._detectRevision`. Between those, every paint gets the same array
    * back. Positions inside it are the markers' own Cartesians, which the frame
    * pass writes in place, so they are live without a copy; only the motion
@@ -78,7 +78,7 @@ export function createQueries({ state, parts }) {
    * while the overlay had thousands of slots free. And selection among the
    * visible is by hash, not by position, so the labelled set is stable as
    * vehicles come and go. The selected vehicle is handed over with
-   * `skipLabel` — it has its own fuller card.
+   * `skipLabel` - it has its own fuller card.
    *
    * @param {{maxCount?: number, seed?: number}} [options]
    * @returns {Array<object>}
@@ -141,7 +141,7 @@ export function createQueries({ state, parts }) {
     const contacts = [];
     for (const entry of chosen) {
       // Route and operator text change with the record and the mode, both of
-      // which arrive on polls — the same events that rebuild this list.
+      // which arrive on polls - the same events that rebuild this list.
       if (!entry.labelId || entry.labelRecord !== entry.record) {
         entry.labelId = transitDetectionId(
           entry.record,
@@ -172,7 +172,7 @@ export function createQueries({ state, parts }) {
         ),
         // The bracket carries the mode colour in every preset: the detection
         // canvas sits above the post-FX chain, where the sprites' own colour
-        // is lost under NVG and FLIR. Keyless too — the feeds are keyless.
+        // is lost under NVG and FLIR. Keyless too - the feeds are keyless.
         tier: transitModeTier(entry.mode),
         skipLabel: entry.key === state._selectedKey,
         _entry: entry,

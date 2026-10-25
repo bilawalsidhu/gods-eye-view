@@ -2,8 +2,8 @@
  * @module gtfsRealtime
  * @description Minimal GTFS-Realtime decoder for VehiclePosition feeds.
  *
- * Decodes only what the Transit layer needs from a `FeedMessage` — the header
- * and every entity's `VehiclePosition` — straight from the protobuf wire
+ * Decodes only what the Transit layer needs from a `FeedMessage` - the header
+ * and every entity's `VehiclePosition` - straight from the protobuf wire
  * format with `pbf` (already a dependency via the TomTom flow tiles). No
  * `gtfs-realtime-bindings`, no protobufjs, no generated code: the GTFS-RT
  * schema is stable, and field numbers are the contract.
@@ -25,8 +25,8 @@
  *
  * Decoding is bounded, because a byte cap alone does not bound what a decode
  * COSTS: entities past `GTFS_MAX_ENTITIES` are left unread so pbf skips them
- * whole (the result says it truncated), and every string field — the feed
- * header's version included — is refused past `GTFS_MAX_STRING_CHARS` rather
+ * whole (the result says it truncated), and every string field - the feed
+ * header's version included - is refused past `GTFS_MAX_STRING_CHARS` rather
  * than carried into the snapshot.
  *
  * Pure: safe to import from the browser layer, the Vite proxy, and node:test.
@@ -56,7 +56,7 @@ const OCCUPANCY_STATUS = Object.freeze({
 
 /**
  * Hard ceiling on decoded entities. Every registered feed is a metropolitan or
- * national fleet — the largest observed is a few thousand vehicles — so this is
+ * national fleet - the largest observed is a few thousand vehicles - so this is
  * two orders of magnitude above any honest payload.
  */
 export const GTFS_MAX_ENTITIES = 50_000;
@@ -68,7 +68,7 @@ export const GTFS_INCREMENTALITY_FULL_DATASET = 0;
 /**
  * Read a length-delimited string, refusing one that is implausibly long.
  * An over-long field marks its containing message `oversize`, and the whole
- * record is then dropped — never truncated. Half an id is a different vehicle,
+ * record is then dropped - never truncated. Half an id is a different vehicle,
  * not a shorter name for the same one.
  * @param {object} pbf
  * @param {object} target Message being read, flagged when the field is refused.
@@ -197,7 +197,7 @@ export function normalizeVehicleEntity(entity) {
   const position = vehicle?.position;
   if (!vehicle || !position) return null;
   // Any refused (over-long) string anywhere in this entity makes the whole
-  // record untrustworthy — drop it rather than render a half-identified dot.
+  // record untrustworthy - drop it rather than render a half-identified dot.
   if (
     entity.oversize ||
     vehicle.oversize ||

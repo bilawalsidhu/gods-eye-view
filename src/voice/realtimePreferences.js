@@ -66,7 +66,7 @@ export function readStoredVoiceLimits(storage) {
  * Persist spend thresholds. Never throws.
  *
  * Serialized through `serializeCostLimits` because a DISABLED threshold is
- * Infinity, and `JSON.stringify(Infinity)` is `null` — which reads back as
+ * Infinity, and `JSON.stringify(Infinity)` is `null` - which reads back as
  * "absent" and silently restores the default, re-arming a cap the user turned
  * off. The 'off' sentinel round-trips instead.
  */

@@ -27,7 +27,7 @@ export class MilitaryFlightRecords {
     const prevMeta = this.data.get(icao24);
     // adsb.lol/readsb reports GROUND traffic as alt_baro === "ground" (no
     // separate boolean). Grounded planes fall back to their last known
-    // altitude (field elevation is unknowable here), else 0 m — never the
+    // altitude (field elevation is unknowable here), else 0 m - never the
     // 3 km airborne default (a parked plane must not float).
     const onGround = aircraft.onGround;
     const altitudeFt =
@@ -47,7 +47,7 @@ export class MilitaryFlightRecords {
     const geoAltitudeM = aircraft.ellipsoidAltitudeM;
     const baroAltitudeM = aircraft.baroAltitudeM;
 
-    // geoid undulation N: cached per-aircraft (negligible drift — see
+    // geoid undulation N: cached per-aircraft (negligible drift - see
     // task brief) once the geoid grid has loaded; unavailable pre-load
     // just means the baro fallback branch below adds N=0 for a beat.
     let geoidN = this.geoidNCache.get(icao24);
@@ -56,25 +56,25 @@ export class MilitaryFlightRecords {
       this.geoidNCache.set(icao24, geoidN);
     }
 
-    // GROUND-SNAP INTERPLAY (brief item 3 — "don't double-correct"): a
+    // GROUND-SNAP INTERPLAY (brief item 3 - "don't double-correct"): a
     // grounded plane's MODEL already rides groundSnap.js's one-shot tileset
     // sample (_modelDisplayPosition), which is the visual on the ground, and
     // its billboard is depth-test-free (_groundDepthDistance) so its exact
     // height is cosmetic. Deliberately pass surfaceM=null so
     // pickRenderAltitudeM's on-ground surface branch never fires here:
     //  1. It would be the SECOND correction of the same grounded plane
-    //     (model tileset-snap is the first) — the exact double-correct the
+    //     (model tileset-snap is the first) - the exact double-correct the
     //     brief forbids.
     //  2. Military ground rows carry NO baro ("alt_baro":"ground"), so the
     //     grounded billboard sits at 0 m until a surface value warms; letting
     //     surfaceM then jump it 0 -> ~surface (often ~100 m) BETWEEN polls
     //     drags the model's ground-snap input past groundSnap's 50 m
     //     move-invalidation threshold and forces a re-sample every time the
-    //     cache warms — breaking the ONE-SHOT-per-(camera,regime) invariant
+    //     cache warms - breaking the ONE-SHOT-per-(camera,regime) invariant
     //     the track regression locks (qa: sampleHeight count must stay flat).
     // Grounded planes therefore keep the pre-existing `altitudeM` default
     // (last-known baro / 0). The datum fix (alt_geom -> baro+geoidN) is what
-    // matters for AIRBORNE military planes — the actual "renders at MSL" bug.
+    // matters for AIRBORNE military planes - the actual "renders at MSL" bug.
     const pickedAltM = pickRenderAltitudeM({
       geoAltM: geoAltitudeM,
       baroAltM: baroAltitudeM,
@@ -84,7 +84,7 @@ export class MilitaryFlightRecords {
     });
     // pickRenderAltitudeM returns the sentinel `null` only when NEITHER
     // alt_geom nor alt_baro was ever reported for this aircraft (not even
-    // stickily) — fall back to the SAME existing default policy `altitudeM`
+    // stickily) - fall back to the SAME existing default policy `altitudeM`
     // already uses (which also carries the on-ground 0 m / last-known-baro
     // case), so the two never disagree on the "no data yet" case.
     let renderAltitudeM = pickedAltM != null ? pickedAltM : altitudeM;
@@ -92,11 +92,11 @@ export class MilitaryFlightRecords {
     // AIRBORNE contact near steep terrain can compute a render height
     // BELOW the local surface (no alt_geom; baro+N carries QNH error
     // larger than the height above ground). Floor it at the coarse-grid
-    // ellipsoidal ground (warm-cache read only — the batch warm below
+    // ellipsoidal ground (warm-cache read only - the batch warm below
     // fills cells for later polls). Grounded contacts are deliberately
     // NOT touched: their model rides groundSnap's tileset sample and
     // their billboard is depth-test-free (see the surfaceM:null block
-    // above — same one-shot-invariant reasoning).
+    // above - same one-shot-invariant reasoning).
     if (!onGround && renderAltitudeM < GROUND_FLOOR_WARM_MAX_ALT_M) {
       renderAltitudeM = floorAltitudeM(
         renderAltitudeM,
@@ -104,13 +104,13 @@ export class MilitaryFlightRecords {
       );
       _floorWarmPoints.push({ lat, lon });
     } else if (onGround) {
-      // Grounded contacts: warm the floor cell, and — round 4 — when NO
+      // Grounded contacts: warm the floor cell, and - round 4 - when NO
       // 3D model owns this contact's visual, lift the billboard itself
       // onto the floor (mesh-first): the R20053 heli sat "straight up in
       // the ground" because grounded rows render at the legacy ~0 m.
       // With a model present the billboard stays put (it hides behind
       // the tileset-snapped model, and moving it would drag groundSnap's
-      // input past its move-invalidation threshold — the T7 one-shot
+      // input past its move-invalidation threshold - the T7 one-shot
       // invariant the track regression locks).
       _floorWarmPoints.push({ lat, lon });
       if (!modelOwnsVisual) {
@@ -124,7 +124,7 @@ export class MilitaryFlightRecords {
     // Landing/takeoff transition: the ground flip restyles IN PLACE.
     const groundFlipped =
       !!prevMeta && (prevMeta.onGround === true) !== onGround;
-    // Sticky merge — adsb.lol intermittently drops flight/t/r/ownOp; hold
+    // Sticky merge - adsb.lol intermittently drops flight/t/r/ownOp; hold
     // last-known-good (bounded by the layer's eviction, which deletes the entry).
     const stickyType = stickyText(type, prevMeta?.type);
     const meta = {
@@ -141,7 +141,7 @@ export class MilitaryFlightRecords {
       operator: stickyText(operator, prevMeta?.operator),
       altitudeFt: stickyNumber(altitudeFt, prevMeta?.altitudeFt, null),
       // geoAltitudeM/renderAltitudeM are ADDITIVE fields alongside the
-      // untouched aviation `altitudeFt` — never rename/replace it (labels,
+      // untouched aviation `altitudeFt` - never rename/replace it (labels,
       // the FL readout, and the landed-fast-cull heuristic all still read
       // altitudeFt/baro).
       geoAltitudeM,
@@ -173,7 +173,7 @@ export class MilitaryFlightRecords {
       onGround,
       // Round 7: sticky airborne history (see _likelyLanded).
       wasAirborne: prevMeta?.wasAirborne === true || !onGround,
-      // Raw poll-fix coords (pre-dead-reckon) — the stale-grounded
+      // Raw poll-fix coords (pre-dead-reckon) - the stale-grounded
       // re-floor sweep keys floors off these (mirror of flights.js).
       rawLat: lat,
       rawLon: lon,

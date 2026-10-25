@@ -7,7 +7,7 @@
  * both sides can unit-test against it with node:test.
  *
  * Slippy scheme: standard Web Mercator XYZ, y grows southward
- * (https://wiki.openstreetmap.org/wiki/Slippy_map_tilenames) — the scheme
+ * (https://wiki.openstreetmap.org/wiki/Slippy_map_tilenames) - the scheme
  * TomTom's `traffic/map/4/tile/flow` endpoints use.
  *
  * @module data/tomtomTiles

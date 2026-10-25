@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * qa-overpass-offload.mjs — keyless/keyed source replacement acceptance gate.
+ * qa-overpass-offload.mjs - keyless/keyed source replacement acceptance gate.
  *
  * Run: node scripts/qa-overpass-offload.mjs http://localhost:4173
  *      node scripts/qa-overpass-offload.mjs --url http://localhost:4173
@@ -1445,7 +1445,7 @@ try {
     assert.equal(result.alprLondon.countLabel, '');
     assert.equal(
       result.alprLondon.loadingLabel,
-      'No ALPR data for this area — US and Canada only',
+      'No ALPR data for this area - US and Canada only',
     );
     await page.evaluate(() => {
       if (document.querySelector('#data-panel.collapsed'))

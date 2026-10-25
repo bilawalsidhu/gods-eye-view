@@ -167,7 +167,7 @@ html:not([lang='en']) .cctv-controls .scene-btn {
   --status-badge-background: rgba(0, 212, 255, 0.08);
 }
 
-/* CAL badge states (cctv-v2 §3b, amended by LOCKED §9.2 — panel-only, no
+/* CAL badge states (cctv-v2 §3b, amended by LOCKED §9.2 - panel-only, no
    in-world tint). Three visually distinct states: calibrated / curated /
    raw-prior. */
 #cctv-quality-chip[data-cal-badge='calibrated'] {
@@ -204,7 +204,7 @@ html:not([lang='en']) .cctv-controls .scene-btn {
   min-height: 150px;
   /* .cctv-panel-inner is a scrolling column flex container, so the default
      flex-shrink:1 squeezed this wrap down to its 150px floor while the 16:9
-     image inside is taller — and the wrap is overflow:hidden, which clipped
+     image inside is taller - and the wrap is overflow:hidden, which clipped
      the bottom of the frame right back off. Never shrink the preview. */
   flex-shrink: 0;
 }
@@ -263,7 +263,7 @@ html:not([lang='en']) .cctv-controls .scene-btn {
   /* A fixed 16:9 box with the frame CONTAINED inside it. Providers burn their
      timestamp into a corner (TfL top-left, Austin bottom-left) and the old
      150px-tall box was ~2.2:1, so object-fit: cover ate ~18px off the top and
-     bottom — exactly where those stamps live (owner field test 2026-07-31).
+     bottom - exactly where those stamps live (owner field test 2026-07-31).
      Sources are not all 16:9 either (a TfL frame measures 352x288), so
      `contain` is what actually guarantees nothing is cut; the ratio just keeps
      the panel height stable as you switch cameras. */

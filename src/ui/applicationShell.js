@@ -619,7 +619,7 @@ export class StyleManager extends ShellFacade {
     window.addEventListener('resize', this._windowResizeHandler);
     // The loading-chip ticker is stopped while the tab is hidden (it can do no
     // useful work off-screen and must not hold a 60ms timer there). Resample on
-    // return so the time-driven reducer catches up on real elapsed time — and
+    // return so the time-driven reducer catches up on real elapsed time - and
     // re-arms its own ticker if the batch is still running.
     this._feedback.observeVisibility();
     this._layerBindings.observeCamera();
@@ -839,11 +839,11 @@ export class StyleManager extends ShellFacade {
     if (standbyDescription) {
       standbyDescription.replaceChildren(
         document.createTextNode(
-          t('CONTACTS — nearest planes · vessels · sites'),
+          t('CONTACTS - nearest planes · vessels · sites'),
         ),
         document.createElement('br'),
         document.createTextNode(
-          t('SPACE MISSIONS — launches & orbital assets'),
+          t('SPACE MISSIONS - launches & orbital assets'),
         ),
       );
     }
@@ -935,7 +935,7 @@ export class StyleManager extends ShellFacade {
 
   /**
    * Syncs the map stack chip row and status chip with controller state. The
-   * lit chip always follows `state.activeId`, never the click — a rejected or
+   * lit chip always follows `state.activeId`, never the click - a rejected or
    * superseded switch therefore leaves the genuinely active stack lit.
    * @param {object} state - Map stack controller state.
    * @returns {void}
@@ -1450,7 +1450,7 @@ export class StyleManager extends ShellFacade {
   }
 
   /**
-   * Full control-state snapshot — single source for voice read-back so the
+   * Full control-state snapshot - single source for voice read-back so the
    * agent confirms from the same state it acted on.
    * @returns {object} Current style/stack/HUD/detection/post-processing state.
    */
@@ -1540,7 +1540,7 @@ export class StyleManager extends ShellFacade {
    * @param {object} [options]
    * @param {(() => boolean)|null} [options.isCurrent] Caller liveness predicate.
    *   The map-stack switch is this method's ONLY suspension point, and the
-   *   shader-uniform writes come after it — so a caller superseded while that
+   *   shader-uniform writes come after it - so a caller superseded while that
    *   switch is in flight would otherwise resume and commit the look of a
    *   state the operator has already moved past. Scene playback reproduced
    *   exactly that: a stale shot's uniforms landing on top of the live run.
@@ -1601,11 +1601,11 @@ export class StyleManager extends ShellFacade {
   // ── Shader transitions ────────────────────────
 
   /**
-   * Style animation loop — self-stopping (perf wave 2). Runs only while a
+   * Style animation loop - self-stopping (perf wave 2). Runs only while a
    * crossfade is in flight or an animated (time-uniform) stage is visible,
    * holding continuous scene render for exactly that long. Re-armed by
    * _startTransition and by _setStageIntensity enabling an animated stage.
-   * The traffic sync chip no longer rides this loop — it has its own 500 ms
+   * The traffic sync chip no longer rides this loop - it has its own 500 ms
    * interval (see _startTrafficChipTicker).
    */
   _startAnimationLoop() {
@@ -1733,7 +1733,7 @@ export class StyleManager extends ShellFacade {
   }
 
   /**
-   * Tear down the StyleManager — cancel animation loop, clear intervals,
+   * Tear down the StyleManager - cancel animation loop, clear intervals,
    * and release resources. Call this before discarding the instance to
    * prevent leaked rAF loops and event listeners.
    * @returns {Promise<void>} Resolves after focused-session state restoration.

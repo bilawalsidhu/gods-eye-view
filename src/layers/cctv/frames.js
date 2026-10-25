@@ -46,7 +46,7 @@ export function createFrames({ state: layerState, services, parts, source }) {
    * FNV-1a over the RGB channels of a downsampled frame. Pure (takes the raw
    * pixel buffer, no DOM) so it is unit-testable.
    *
-   * Alpha is skipped deliberately — CCTV stills are opaque, so hashing it would
+   * Alpha is skipped deliberately - CCTV stills are opaque, so hashing it would
    * cost a third more work to mix in a constant.
    *
    * @param {Uint8ClampedArray|number[]} data - RGBA pixels, 4 bytes per pixel.
@@ -71,7 +71,7 @@ export function createFrames({ state: layerState, services, parts, source }) {
    *
    * @param {Object} runtime - Projection runtime holding the decoded `.image`.
    * @returns {number|null} Signature, or null when it cannot be computed (the
-   *   caller then treats the frame as changed — the pre-2026-07-30 behavior).
+   *   caller then treats the frame as changed - the pre-2026-07-30 behavior).
    */
 
   function projectionFrameSignature(runtime) {
@@ -107,7 +107,7 @@ export function createFrames({ state: layerState, services, parts, source }) {
    * offscreen buffer canvases and returns it (H5).
    *
    * Two buffers are required because Cesium's Material image path re-uploads a
-   * canvas texture only when the uniform receives a NEW object reference —
+   * canvas texture only when the uniform receives a NEW object reference -
    * redrawing the same canvas in place is invisible to the GPU. Alternating
    * references forces a texture recreate, which at <=1Hz and 1080p is cheap.
    *
@@ -139,7 +139,7 @@ export function createFrames({ state: layerState, services, parts, source }) {
    * Pushes fresh pixels into the monitor plane material. Called every
    * projection tick.
    *
-   * Video feeds are skipped entirely — their HTMLVideoElement uniform is
+   * Video feeds are skipped entirely - their HTMLVideoElement uniform is
    * updated per-frame by Cesium natively (H5). Image/webcam-frame feeds swap
    * the double-buffer canvas reference, throttled to PROJECTION_TEXTURE_SWAP_MS.
    *
@@ -160,7 +160,7 @@ export function createFrames({ state: layerState, services, parts, source }) {
     if (!planeShowing) return;
 
     // Only swap when the canvas content actually changed since the last swap.
-    // Frames land every ~10 s but this runs at 1 Hz — swapping an UNCHANGED
+    // Frames land every ~10 s but this runs at 1 Hz - swapping an UNCHANGED
     // canvas re-uploads the texture for nothing, and each material image
     // reassignment is a flash opportunity on the live plane (owner field test
     // 2026-07-04: intermittent white flashes on the monitor plane).
@@ -271,7 +271,7 @@ export function createFrames({ state: layerState, services, parts, source }) {
 
   /**
    * Repaints the projection placeholder at most once per PLACEHOLDER_REPAINT_MS.
-   * The projection loop runs at RAF cadence — unthrottled, a pending feed would
+   * The projection loop runs at RAF cadence - unthrottled, a pending feed would
    * re-fill the 1080p canvas (gradient + text) on every single frame.
    * @param {Object} record - Camera record.
    * @param {Object} runtime - Projection runtime.
@@ -342,7 +342,7 @@ export function createFrames({ state: layerState, services, parts, source }) {
       if (runtime.drawnImageStamp !== runtime.imageStamp) {
         // The frame URL carries a 10s cache-buster tick, so a fresh Image
         // DECODES every PROJECTION_ACTIVE_REFRESH_MS whether or not the provider
-        // actually published a new picture — measured 2026-07-30: a London
+        // actually published a new picture - measured 2026-07-30: a London
         // camera republished once in 5 minutes, an Austin one not at all.
         // Redrawing regardless bumped canvasStamp, which forced a buffer swap
         // and a fresh 1920x1080 texture upload; the plane renders its white
@@ -359,7 +359,7 @@ export function createFrames({ state: layerState, services, parts, source }) {
           pixels === null ? null : `${pixels}:${fit.w}x${fit.h}`;
         runtime.drawnImageStamp = runtime.imageStamp;
         if (signature !== null && signature === runtime.lastFrameSignature) {
-          // Identical pixels — leave the canvas, and therefore the bound
+          // Identical pixels - leave the canvas, and therefore the bound
           // texture, completely alone. No canvasStamp bump, no swap, no flash.
           return;
         }

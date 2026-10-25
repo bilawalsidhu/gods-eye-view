@@ -8,7 +8,7 @@ export function createHistory({ state: layerState, services, parts, source }) {
    * A history entry only holds a SNAPSHOT of a contact; the live contact behind
    * it can be evicted from its layer at any time (the cull that drives
    * CONTACT LOST). Focusing an evicted entry fails, so stepping over it is the
-   * only way PREVIOUS/NEXT survives a lost subject — stopping at the first dead
+   * only way PREVIOUS/NEXT survives a lost subject - stopping at the first dead
    * entry strands the operator there for the rest of the session, because the
    * index never advances past it.
    *
@@ -48,7 +48,7 @@ export function createHistory({ state: layerState, services, parts, source }) {
         layerState.navigationIndex = historyIndex;
         return true;
       }
-      // Contact evicted since it entered history — step over it. The scan is
+      // Contact evicted since it entered history - step over it. The scan is
       // strictly monotonic, so this terminates at the end of history.
       cursor = historyIndex;
     }
@@ -172,7 +172,7 @@ export function createHistory({ state: layerState, services, parts, source }) {
       return null;
     // The current sweep already holds this contact's record. Reusing it keeps
     // selection O(1) against the cohort instead of paying a fresh full-layer
-    // proximity scan per selection — the burst cost when NEXT walks a cohort.
+    // proximity scan per selection - the burst cost when NEXT walks a cohort.
     const cohort = layerState.results?.cohorts?.find(
       (item) => item.id === subject.layerId,
     );

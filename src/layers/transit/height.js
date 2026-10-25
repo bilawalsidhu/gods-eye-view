@@ -40,7 +40,7 @@ export function createHeight({ state, services, parts }) {
   /**
    * Whether ground matters at this camera. Above the gate a few metres of
    * terrain are invisible, so the fleet renders on the ellipsoid and nothing
-   * is warmed — a national view must not queue a country's worth of cells.
+   * is warmed - a national view must not queue a country's worth of cells.
    * @returns {boolean}
    */
   function nearGround() {

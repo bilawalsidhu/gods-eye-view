@@ -18,7 +18,7 @@ let arrivalGeneration = 0;
 
 /**
  * Absolute full-earth camera preset for the zoom_to_globe voice tool. The height
- * must stay inside the app's 'global' view-scale band (>12,000 km — classifyViewScale
+ * must stay inside the app's 'global' view-scale band (>12,000 km - classifyViewScale
  * in gevActions.js) so downstream context/screenshot policy treats it as a globe view,
  * and under the fly_to_location rangeM ceiling (20,000 km).
  */
@@ -54,7 +54,7 @@ export function flyToGlobeView(viewer, options = {}) {
     duration: finitePositive(options.duration) || GLOBE_VIEW.durationS,
     endTransform: Cesium.Matrix4.IDENTITY,
     // Cesium's Camera.flyTo reads `complete`/`cancel`. `onComplete`/`onCancel`
-    // are this module's OWN option names and are silently ignored by Cesium —
+    // are this module's OWN option names and are silently ignored by Cesium -
     // spelling them through to flyTo meant the reset never resolved on the
     // flight's own events and every caller fell back to its watchdog timeout.
     complete: options.onComplete,
@@ -107,7 +107,7 @@ export function flyToLandmark(viewer, lat, lon, options = {}) {
     ground = null,
   } = options;
 
-  // Sample terrain height (sync — uses loaded tiles; 0 if globe/terrain not ready)
+  // Sample terrain height (sync - uses loaded tiles; 0 if globe/terrain not ready)
   const targetCartographic = Cesium.Cartographic.fromDegrees(lon, lat);
   const sampledHeight = viewer.scene.globe?.getHeight(targetCartographic);
 
@@ -274,7 +274,7 @@ function poiNameTokens(s) {
  * Find a curated preset POI whose name the query fully names, so a voice "fly to the Texas State
  * Capitol" reuses its hand-tuned camera pose (same framing as the LOCATIONS-panel button) instead
  * of generic geocode framing. Match is order-free word-set CONTAINMENT (the POI name's words must
- * all appear in the query — so "Frost Bank Tower" matches "frost tower bank", and extra words like
+ * all appear in the query - so "Frost Bank Tower" matches "frost tower bank", and extra words like
  * a trailing city are fine), and the POI name must be ≥2 words so a single shared token ("Texas",
  * "Tower") can't grab the wrong landmark. Returns { cityId, index } or null.
  * @param {string} query
@@ -352,7 +352,7 @@ export async function searchAndFlyTo(viewer, query, options = {}) {
 
   const explicitOverview = options.viewMode === 'overview';
 
-  // Frame the geocode viewport for area-like modes — and for an EXPLICIT overview ask
+  // Frame the geocode viewport for area-like modes - and for an EXPLICIT overview ask
   // ("give me an overview of X"), which previously fell through to building range.
   if (
     !requestedRange &&
@@ -360,7 +360,7 @@ export async function searchAndFlyTo(viewer, query, options = {}) {
     (shouldFrameGeocodeViewport(navigationMode) || explicitOverview)
   ) {
     // Natural regions (mountain ranges, deserts, seas) geocode as area-overview with
-    // enormous viewports — fitting the whole box flies the camera to space (owner field
+    // enormous viewports - fitting the whole box flies the camera to space (owner field
     // test 2026-07-23, "Rocky Mountains"). Frame a capped oblique swath over the center
     // instead. Countries/states (region-overview) intentionally keep whole-place framing.
     const swath =
@@ -385,14 +385,14 @@ export async function searchAndFlyTo(viewer, query, options = {}) {
       };
     }
     // An administrative geocode can carry a viewport far larger than the place
-    // anyone means — "Tokyo" is the PREFECTURE, which owns islands ~1,000 km out,
+    // anyone means - "Tokyo" is the PREFECTURE, which owns islands ~1,000 km out,
     // and framing that whole box landed the camera in the open Pacific at 2,885 km.
     // A box that is both bigger than any city and not centred on its own geocoded
-    // location falls back to a metro box on that location. Everything else — every
-    // city, every state, every country, parks and streets — frames untouched.
+    // location falls back to a metro box on that location. Everything else - every
+    // city, every state, every country, parks and streets - frames untouched.
     //
     // EXCEPT when the caller asked for an overview outright ("show me an overview
-    // of Hawaii", voice `viewMode: 'overview'` — gevActions.js). That is an explicit
+    // of Hawaii", voice `viewMode: 'overview'` - gevActions.js). That is an explicit
     // request for the whole administrative area, so the sanity gate stands down:
     // it exists to guess what an ambiguous place name meant, and there is nothing
     // left to guess once the user has said.
@@ -502,7 +502,7 @@ function placesViewportToBounds(vp) {
  * Parks/campuses/lakes and streets are NOT precise POIs: flying to "Zilker Park" at
  * building range lands on a random rooftop, and a `route` result framed at 250 m looks
  * like the camera picked one arbitrary building on the street (field test 8 / rootcause
- * doc §3) — both frame their geocode viewport instead.
+ * doc §3) - both frame their geocode viewport instead.
  */
 export function geocodeNavigationMode(types) {
   const values = new Set(types);
@@ -554,7 +554,7 @@ export const REGION_SWATH_SPAN_KM = 400;
 /** Capped camera range for the representative swath (regional scale, not space). */
 const REGION_SWATH_RANGE_M = 280000;
 
-/** Oblique cinematic tilt for the swath — matches the annotation-assist angle. */
+/** Oblique cinematic tilt for the swath - matches the annotation-assist angle. */
 const REGION_SWATH_PITCH_DEG = -35;
 
 /** Mean km per degree of latitude (WGS84), the basis for every span estimate here. */
@@ -637,12 +637,12 @@ export const PLACE_VIEWPORT_MAX_SPAN_KM = 300;
  *            California 1,398 km box, anchor    56 km off → ratio 0.040
  *
  * 0.15 sits in the 2.2x gap between the two groups. States and provinces keep
- * whole-place framing — "California" must still frame California.
+ * whole-place framing - "California" must still frame California.
  */
 export const PLACE_ANCHOR_OFFSET_RATIO = 0.15;
 
 /**
- * Half-extent of the box synthesized when the gate trips — a 40 x 40 km square,
+ * Half-extent of the box synthesized when the gate trips - a 40 x 40 km square,
  * matching the hand-tuned city pills (Tokyo's own pill is 42 x 34 km). Framing a
  * box rather than picking a range keeps the flight on the same tested code path
  * the pills use, so a gated search and its pill land at the same scale.
@@ -650,7 +650,7 @@ export const PLACE_ANCHOR_OFFSET_RATIO = 0.15;
 const PLACE_FALLBACK_HALF_SPAN_KM = 20;
 
 /**
- * Sanity-gate a geocode viewport before framing it. Pure — exported for unit tests.
+ * Sanity-gate a geocode viewport before framing it. Pure - exported for unit tests.
  *
  * Returns the viewport unchanged unless the box is BOTH bigger than any city AND
  * not actually centred on its own geocoded location; in that case it returns a
@@ -658,8 +658,8 @@ const PLACE_FALLBACK_HALF_SPAN_KM = 20;
  * (a point in the open Pacific).
  *
  * `country` results are deliberately EXEMPT. Several countries have the identical
- * pathology from overseas territories — France 12,262 km / ratio 0.387, Portugal
- * 0.378, Ecuador 0.303, Chile 0.256, Spain 0.216 — but country framing is shipped,
+ * pathology from overseas territories - France 12,262 km / ratio 0.387, Portugal
+ * 0.378, Ecuador 0.303, Chile 0.256, Spain 0.216 - but country framing is shipped,
  * demoed behavior that no one has reviewed a change to, and reframing a country to
  * a 40 km box is a much bigger call than fixing a prefecture. Left as-is on purpose;
  * flagged for the owner rather than changed silently.
@@ -706,7 +706,7 @@ export function placeFramingViewport(
 }
 
 /**
- * Natural-region framing heuristic (owner field test 2026-07-23). Pure — exported
+ * Natural-region framing heuristic (owner field test 2026-07-23). Pure - exported
  * for unit tests. Given geocode {southwest,northeast} bounds, decide whether to
  * frame the full viewport or a capped oblique swath over the feature's center,
  * looking along the feature's long axis.
@@ -776,7 +776,7 @@ function flyToViewportBounds(viewer, viewport, options = {}) {
   // Pad from the SHORT-way-round longitude span. Raw subtraction breaks any box
   // that crosses the antimeridian: Alaska (sw 172.3E, ne -130.0) subtracts to
   // -302, and a 0.4-degree metro box straddling the dateline subtracts to -359.6,
-  // whose 12% padding alone is 43 degrees — that box framed 86.7 degrees of ocean
+  // whose 12% padding alone is 43 degrees - that box framed 86.7 degrees of ocean
   // instead of a city. Cesium's Rectangle does NOT normalize past +/-180, so the
   // padded edges are wrapped here into a proper east<west crossing rectangle.
   const metrics = viewportMetrics(viewport);

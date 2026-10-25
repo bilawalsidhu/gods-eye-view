@@ -1,6 +1,6 @@
 # Translating God's Eye View
 
-Shipped languages: **English** (source and fallback), **Spanish** (`es`), **Russian** (`ru`) and **Simplified Chinese** (`zh-CN`).
+Shipped languages: **English** (source and fallback), **Spanish** (`es`), **French** (`fr`), **Russian** (`ru`) and **Simplified Chinese** (`zh-CN`).
 
 ## How it works
 
@@ -53,7 +53,7 @@ Edit `src/i18n/locales/<code>.json` and run `npm run i18n`. To see your change, 
 
 - Keep every `{placeholder}` name exactly as in the English: do not rename, drop or add one. Its position inside the sentence follows the grammar of your language, e.g. `"{accepted} of {raw} records accepted"` → `"принято записей: {accepted} из {raw}"`.
 - UPPERCASE English stays UPPERCASE. Short labels, chips and HUD readouts should stay short; prefer an abbreviation over a wrapped line.
-- Keep the separators `·`, `—`, `→`, `↗`, `…`.
+- Keep the separators `·`, `-`, `→`, `↗`, `…`.
 - Leave product, provider and data names in their original form: Google Maps, Cesium ion, OpenAI, ChatGPT, NASA FIRMS, USGS, OpenSky, ADS-B, AIS, CCTV, HUD, TomTom, OpenStreetMap, Mapillary, and keyboard keys (Space, Esc, H, 1–9).
 - Units follow the language's convention; see the language notes.
 
@@ -63,4 +63,4 @@ These are contracts, not copy: layer ids and registry keys, status enums and oth
 
 ## Language notes
 
-Each language keeps its glossary, plural forms, units and style in its own file, `docs/translations/<code>.md`: [Spanish](./translations/es.md), [Russian](./translations/ru.md), [Simplified Chinese](./translations/zh-CN.md). Read it before translating, and add a term there when you settle on one.
+Each language keeps its glossary, plural forms, units and style in its own file, `docs/translations/<code>.md`: [Spanish](./translations/es.md), [French](./translations/fr.md), [Russian](./translations/ru.md), [Simplified Chinese](./translations/zh-CN.md). Read it before translating, and add a term there when you settle on one.

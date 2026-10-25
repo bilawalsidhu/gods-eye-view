@@ -12,8 +12,8 @@ import {
  * Construct one layer using the application scene owners and the
  * application's surface services.
  *
- * The floor comes from `surface.groundFloor` — the ONE instance aircraft,
- * trails, fires and camera geometry stand on — and the rendered-mesh sampler
+ * The floor comes from `surface.groundFloor` - the ONE instance aircraft,
+ * trails, fires and camera geometry stand on - and the rendered-mesh sampler
  * from `surface.meshFloor`, so a mesh floor the application resolves for a
  * cell is the floor transit draws on, and a transit-only session warms its
  * own mesh floors. An earlier cut imported the legacy module-level singleton

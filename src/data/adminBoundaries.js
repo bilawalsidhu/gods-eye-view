@@ -1,5 +1,5 @@
 /**
- * Bundled administrative boundaries — countries and states/provinces (Natural
+ * Bundled administrative boundaries - countries and states/provinces (Natural
  * Earth admin-0/admin-1) and US counties (US Census Bureau cartographic boundaries),
  * so "outline Texas", "outline Bavaria" or "outline Travis County" draws the
  * real boundary without a network lookup.
@@ -9,20 +9,20 @@
  * by `scripts/build-admin-packs.mjs` (provenance in each folder's README).
  * Rings are delta-encoded integers; see `decodeRing`.
  *
- * PURE data module — no Cesium, node-testable. Each pack is fetched through
+ * PURE data module - no Cesium, node-testable. Each pack is fetched through
  * `loadBundledJson` on the first lookup that needs it (never at app start),
  * indexed once, and kept; a failed load is retried later rather than cached
  * (`createRetryableLoader`). The county pack is only loaded for asks that
  * name a county (or a county-equivalent city) or that a geocoder typed as one.
  *
  * Two entry points:
- *   - `findAdminArea(query, { near })` — name-only. Resolves asks that are
+ *   - `findAdminArea(query, { near })` - name-only. Resolves asks that are
  *     unambiguous from the words alone ("Texas", "TX", "State of Texas",
  *     "Bavaria", "Travis County, Texas", "Orleans Parish"); duplicates are
  *     settled by a state/country qualifier, then by the camera (`near`).
  *     Country/state homonyms such as Georgia use the qualifier or camera;
  *     city/state homonyms such as New York still defer to the geocoder.
- *   - `findAdminAreaAt(names, lat, lon, scope)` — geocoder-confirmed. The
+ *   - `findAdminAreaAt(names, lat, lon, scope)` - geocoder-confirmed. The
  *     geocoder already typed the place as a country, state or county; the unit must
  *     carry one of the names AND contain the geocoded point.
  */
@@ -79,7 +79,7 @@ export const packLoads = { admin1: 0, counties: 0, countries: 0 };
 const EARTH_RADIUS_KM = 6371;
 const toRad = (d) => (d * Math.PI) / 180;
 
-/** Spherical ring area (km²) — same formula as naturalEarthRegions.js. */
+/** Spherical ring area (km²) - same formula as naturalEarthRegions.js. */
 function ringAreaKm2(ring) {
   const n = ring.length;
   if (n < 3) return 0;
@@ -621,14 +621,14 @@ async function stateCandidates(parsed, { allowAmbiguous = false } = {}) {
     }
   }
   // Every qualifier must place the unit: "Bavaria, Germany", "Washington,
-  // DC" — not "Santa Barbara, California" (a city the pack does not hold).
+  // DC" - not "Santa Barbara, California" (a city the pack does not hold).
   if (parsed.qualifiers.length)
     list = list.filter((i) =>
       parsed.qualifiers.every((q) => qualifierMatches(i.entry, q)),
     );
   if (allowAmbiguous) return list;
-  // A bare name answers alone only for a prominent unit — a US state, a
-  // Canadian province, Bavaria — never a French département, an English
+  // A bare name answers alone only for a prominent unit - a US state, a
+  // Canadian province, Bavaria - never a French département, an English
   // county or a Bahamas district ("Long Island", "Santa Barbara", "Kent" are
   // likelier the places a geocoder knows). It must not also be a country or
   // a large city ("Georgia", "New York"), and a short code must be written
@@ -673,7 +673,7 @@ async function stateCandidates(parsed, { allowAmbiguous = false } = {}) {
  * @param {string} query e.g. "Texas", "TX", "State of Texas", "Bavaria",
  *   "Bavaria, Germany", "Travis County", "Travis County, TX", "Orleans Parish"
  * @param {{near?: {lat:number, lon:number}|null}} [options] the camera's
- *   view centre — the tie-break between same-named units
+ *   view centre - the tie-break between same-named units
  * @returns {Promise<AdminArea|null>}
  *
  * @typedef {{kind:'country'|'state'|'county', name:string, region:string|null,
@@ -724,7 +724,7 @@ export async function findAdminArea(query, { near = null } = {}) {
 /**
  * Geocoder-confirmed lookup: the geocoder typed a country, state or
  * county, so the unit must carry one of `names` AND contain the geocoded
- * point. Ambiguity marks do not apply — the geocoder already chose.
+ * point. Ambiguity marks do not apply - the geocoder already chose.
  *
  * @param {string[]} names  the ask and the geocoder's own name for it
  * @param {number} lat
@@ -765,7 +765,7 @@ export async function findAdminAreaAt(names, lat, lon, scope) {
   }
   // The geocoder's scope says what kind of unit this is; the ask's wording
   // may omit it ("Travis" typed as a county). A US county that matches wins
-  // outright — "New York County" is Manhattan, not the state.
+  // outright - "New York County" is Manhattan, not the state.
   if (scope === 'county' && inUnitedStatesBox(lat, lon)) {
     const counties = [];
     for (const parsed of parsedList)

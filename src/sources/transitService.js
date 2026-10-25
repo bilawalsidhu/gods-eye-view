@@ -2,7 +2,7 @@ import { createTransitHistory } from './transitHistoryStore.js';
 /**
  * GTFS-Realtime transit proxy for the Transit data layer.
  *
- * Only URLs registered in `src/data/transitFeeds.js` are ever fetched — the
+ * Only URLs registered in `src/data/transitFeeds.js` are ever fetched - the
  * browser names a registered id, never a URL. Pure request/cache mechanics
  * live in `src/data/transitProxy.js` so the offline suite covers them.
  */
@@ -34,7 +34,7 @@ import {
  * Fetch a registered feed, resolving each redirect hop BEFORE following it.
  *
  * `redirect: 'follow'` hands the hop to the runtime and only lets us inspect
- * where it landed — by which point a disallowed host has already been
+ * where it landed - by which point a disallowed host has already been
  * contacted and has already answered. Each hop is therefore requested with
  * `redirect: 'manual'` and its `Location` checked against the feed's own https
  * origin first, the rule the CCTV frame proxy applies to camera images.
@@ -89,13 +89,13 @@ export async function fetchTransitFeed(
  *   GET /api/transit/feeds              → public catalog (coverage + credit)
  *   GET /api/transit/vehicles/<feedId>  → decoded snapshot as JSON
  *
- * Only URLs in `src/data/transitFeeds.js` are ever fetched — the browser
+ * Only URLs in `src/data/transitFeeds.js` are ever fetched - the browser
  * names a registered id, never a URL (SECURITY.md). Redirects are resolved hop
  * by hop and must stay on the feed's own https origin. Bytes are capped at
  * TRANSIT_PROXY_MAX_BODY_BYTES and decoded server-side, so the browser never
  * parses protobuf. Per feed: 15 s memory cache, single-flight refresh, and
  * serve-stale-on-failure for up to 10 minutes (the launch-library pattern).
- * No disk cache — transit positions are worthless after a few minutes.
+ * No disk cache - transit positions are worthless after a few minutes.
  *
  * Two backstops sit in front of every upstream request. A fixed-window
  * admission limiter bounds how often this process may ask any one operator,
@@ -338,7 +338,7 @@ export function createTransitService({ fetchImpl = fetch } = {}) {
       const differential = error instanceof TransitFeedShapeError;
       // A shape fault condemns what we already hold. The cached copy was
       // decoded under the assumption this feed is a full snapshot, and that
-      // assumption has just been shown false — leaving it in place would let
+      // assumption has just been shown false - leaving it in place would let
       // the very next request serve it back as a 200.
       if (differential) cache.delete(feed.id);
       if (!request.shared) {
@@ -348,14 +348,14 @@ export function createTransitService({ fetchImpl = fetch } = {}) {
           Date.now(),
         );
         console.warn(
-          `[transit-proxy] ${feed.id} unavailable: ${error?.message || error} — next attempt in ${Math.round(wait / 1000)}s`,
+          `[transit-proxy] ${feed.id} unavailable: ${error?.message || error} - next attempt in ${Math.round(wait / 1000)}s`,
         );
       }
       // A differential feed is a shape fault, not an outage: serving the old
       // snapshot would hide a feed this decoder must not render at all.
       if (state === 'stale' && cached && !differential) {
         // The contact time is the last SUCCESSFUL one. This request failed,
-        // so it does not advance — otherwise a dead feed would look like one
+        // so it does not advance - otherwise a dead feed would look like one
         // answering on time.
         return reply(
           200,

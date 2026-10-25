@@ -36,7 +36,7 @@ export function createSelection({
 
     const lines = [
       stationLabel,
-      t('🚲 {bikes} avail · {docks} docks · {capacity} cap', {
+      t('{bikes} avail · {docks} docks · {capacity} cap', {
         bikes,
         docks,
         capacity,
@@ -45,9 +45,9 @@ export function createSelection({
 
     // Append warnings for stations that are offline or partially non-operational
     const abnormal = [];
-    if (record?.isInstalled === false) abnormal.push(t('⚠️ Not installed'));
-    if (record?.isRenting === false) abnormal.push(t('⚠️ Not renting'));
-    if (record?.isReturning === false) abnormal.push(t('⚠️ Not returning'));
+    if (record?.isInstalled === false) abnormal.push(t('Not installed'));
+    if (record?.isRenting === false) abnormal.push(t('Not renting'));
+    if (record?.isReturning === false) abnormal.push(t('Not returning'));
     if (abnormal.length > 0) {
       lines.push(abnormal.join(' · '));
     }
@@ -150,7 +150,7 @@ export function createSelection({
   /**
    * Install a screen-space click handler for station selection/deselection.
    * Also registers a global keydown listener for Escape-to-deselect.
-   * Idempotent — does nothing if a handler is already installed.
+   * Idempotent - does nothing if a handler is already installed.
    * @param {Cesium.Viewer} viewer - Cesium viewer instance.
    */
 
@@ -166,7 +166,7 @@ export function createSelection({
       const picked = viewer.scene.pick(click.position);
 
       if (picked) {
-        // Clicking selected entity itself — ignore (don't deselect).
+        // Clicking selected entity itself - ignore (don't deselect).
         if (picked.id === layerState._selectedEntity) return;
 
         // Check if the picked primitive or entity id matches a station key
@@ -188,7 +188,7 @@ export function createSelection({
         }
       }
 
-      // Clicked empty space — deselect.
+      // Clicked empty space - deselect.
       if (layerState._selectedKey) _clearSelection();
     }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
 
@@ -196,7 +196,7 @@ export function createSelection({
   }
 
   /**
-   * Global keydown handler — deselects the current station on Escape.
+   * Global keydown handler - deselects the current station on Escape.
    * @param {KeyboardEvent} e - Keyboard event.
    */
 

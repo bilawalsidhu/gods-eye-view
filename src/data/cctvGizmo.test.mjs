@@ -1,11 +1,11 @@
-// src/data/cctvGizmo.test.mjs — pure drag math for the CCTV calibration gizmo
+// src/data/cctvGizmo.test.mjs - pure drag math for the CCTV calibration gizmo
 // (docs/superpowers/specs/2026-07-05-cctv-viewshed-gizmo-design.md §3c).
 //
 // Locks:
 //   - closestParamOnAxis returns the metre-parameter along the AXIS of the
 //     point nearest the mouse ray (the workhorse for arrow/range drags), and
 //     refuses near-parallel configurations instead of exploding;
-//   - rayPlaneIntersect refuses grazing rays (|dir·normal| < 0.08 — spec §5
+//   - rayPlaneIntersect refuses grazing rays (|dir·normal| < 0.08 - spec §5
 //     precision guard) and behind-origin hits;
 //   - ringAngle/signedAngleDelta give quadrant-correct, wrap-safe angles for
 //     the heading/pitch ring drags.

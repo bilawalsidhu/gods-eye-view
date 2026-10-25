@@ -1,6 +1,6 @@
 /**
  * @module cityPois
- * @description The preset cities and their landmarks — plain data with no
+ * @description The preset cities and their landmarks - plain data with no
  * Cesium, so modules that only need the names (voice cards) can import it.
  */
 
@@ -9,10 +9,10 @@
  * Each city has 5 POIs; the first is the default fly-to landmark.
  *
  * Field reference:
- *   alt     — RANGE (distance from target in meters), NOT absolute altitude
- *   heading — optimal camera heading in degrees (0=N, 90=E, 180=S, 270=W)
- *   pitch   — camera tilt in degrees (negative = looking down)
- *   buildingHeight — estimated height of landmark center above ground (meters)
+ *   alt     - RANGE (distance from target in meters), NOT absolute altitude
+ *   heading - optimal camera heading in degrees (0=N, 90=E, 180=S, 270=W)
+ *   pitch   - camera tilt in degrees (negative = looking down)
+ *   buildingHeight - estimated height of landmark center above ground (meters)
  */
 export const CITY_POIS = {
   austin: {

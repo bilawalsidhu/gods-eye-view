@@ -46,7 +46,7 @@ test('the in-memory cache stops growing once it reaches its entry bound', async 
   assert.equal(terrain.cachedEllipsoidalGround(0, lonAt(0)), null);
   assert.equal(terrain.cachedEllipsoidalGround(0, lonAt(1)), null);
 
-  // The four most recent are untouched — a bound, not a flush.
+  // The four most recent are untouched - a bound, not a flush.
   for (let i = 2; i < 6; i += 1) {
     assert.equal(
       terrain.cachedEllipsoidalGround(0, lonAt(i)),

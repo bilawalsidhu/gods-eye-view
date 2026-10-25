@@ -12,7 +12,7 @@ function outlineUnavailableLabel(label) {
 }
 
 /**
- * Screen-space annotation renderer (Direction B — the "whiteboard" aesthetic).
+ * Screen-space annotation renderer (Direction B - the "whiteboard" aesthetic).
  *
  * Same world-anchored data model as the world-space renderer, but drawn as an
  * SVG overlay that is RE-PROJECTED every frame from the world coordinates via
@@ -20,9 +20,9 @@ function outlineUnavailableLabel(label) {
  *
  *   - World-anchored, so marks PERSIST and track as the camera moves/orbits
  *     (unlike a frame-bound pixel overlay that has to clear on camera motion).
- *   - SVG-rendered, so we get the hand-drawn explainer look — sketchy strokes,
+ *   - SVG-rendered, so we get the hand-drawn explainer look - sketchy strokes,
  *     pulsing rings, draw-on outlines, arrows, and glassy callout cards with
- *     leader lines — that native Cesium primitives can't express as nicely.
+ *     leader lines - that native Cesium primitives can't express as nicely.
  *
  * Marks behind the globe horizon are culled with an EllipsoidalOccluder, and
  * anything that projects off-screen / behind the camera is hidden.
@@ -77,17 +77,17 @@ export function createScreenAnnotationRenderer(
   const scratch = new Cesium.Cartesian2();
   const scratchDir = new Cesium.Cartesian3();
   // Per-point ground height cache. Marks must sit on the real surface, not at
-  // sea level — otherwise in elevated cities (Austin ~150 m) they project
+  // sea level - otherwise in elevated cities (Austin ~150 m) they project
   // underground and parallax sinks them at oblique angles. Sampled once the
   // tiles under the point load, then settled (stable, no per-frame jitter).
   const heightCache = new Map();
   const HEIGHT_CACHE_SOFT = 600; // target size; over this we evict keys not used this frame
-  const HEIGHT_CACHE_HARD = 8000; // absolute ceiling (one big ring + others) — never exceeded
+  const HEIGHT_CACHE_HARD = 8000; // absolute ceiling (one big ring + others) - never exceeded
   let projGen = 0; // bumped each projection frame; entries used this frame are "hot"
   function trimHeightCache() {
     if (heightCache.size <= HEIGHT_CACHE_SOFT) return;
     // Evict COLD keys first (not touched this frame), so a single large area/route
-    // — the screen renderer can project a ring up to ~4000 points — cannot churn its
+    // - the screen renderer can project a ring up to ~4000 points - cannot churn its
     // OWN active heights out of cache and force a clampToHeight every frame.
     for (const [k, v] of heightCache) {
       if (heightCache.size <= HEIGHT_CACHE_SOFT) break;
@@ -227,7 +227,7 @@ export function createScreenAnnotationRenderer(
       );
       if (parts.label) group.appendChild(parts.label.node);
     } else {
-      // pin / highlight / label — pulsing target rings + a marker dot + callout
+      // pin / highlight / label - pulsing target rings + a marker dot + callout
       if (anno.type !== 'label') {
         parts.ringOuter = svgEl('circle', {
           class: 'gev-anno-ring gev-pulse',
@@ -284,7 +284,7 @@ export function createScreenAnnotationRenderer(
       requestAnimationFrame(() => group.classList.add('gev-in'));
       // The draw-on effect uses a fixed stroke-dasharray of 1400 (see CSS). Any
       // stroke longer than 1400px (a long arrow/route on a wide window) would keep
-      // a permanent dash gap — the arrowhead detaches from the truncated line (H6).
+      // a permanent dash gap - the arrowhead detaches from the truncated line (H6).
       // Once the dashoffset transition finishes the stroke is meant to be fully
       // drawn, so drop the dasharray entirely then and the stroke reads solid at
       // any length. Guarded on the specific property so an unrelated transition
@@ -302,7 +302,7 @@ export function createScreenAnnotationRenderer(
       }
       projectAll();
     } catch (error) {
-      // Hard, immediate unwind — a mark that never finished has nothing to
+      // Hard, immediate unwind - a mark that never finished has nothing to
       // fade out, and the caller (engine rollback) must find a clean board.
       records.delete(anno.id);
       try {
@@ -389,7 +389,7 @@ export function createScreenAnnotationRenderer(
   // Tracked-entity z-order: the tracked aircraft is a Cesium billboard in the
   // CANVAS, which sits BELOW this SVG overlay (z-90, HTML over canvas). So a screen mark
   // could hide it. After layout, any mark whose ACTUAL projected bounding box (rings,
-  // leader, polygon, route line, callout card — not just the anchor) INTERSECTS the
+  // leader, polygon, route line, callout card - not just the anchor) INTERSECTS the
   // tracked subject's screen FOOTPRINT is faded. The complete card footprint comes
   // from the host's ACTUAL painted rectangle after final layout; the billboard extent
   // is unioned for aircraft/satellites that also own a native tracked graphic.
@@ -431,7 +431,7 @@ export function createScreenAnnotationRenderer(
         )
       : null;
 
-    // Billboard box — centered on the anchor, magnified by scaleByDistance.
+    // Billboard box - centered on the anchor, magnified by scaleByDistance.
     const bb = ent?.billboard;
     if (bb && win && Number.isFinite(win.x) && Number.isFinite(win.y)) {
       const baseW = bb.width?.getValue?.(now) ?? 28;
@@ -629,13 +629,13 @@ export function createScreenAnnotationRenderer(
     }
     if (placed.length > 1) decollideCallouts(placed);
 
-    // Tracked-entity z-order — runs AFTER all geometry + callout de-collision so each
+    // Tracked-entity z-order - runs AFTER all geometry + callout de-collision so each
     // group's bbox reflects its final on-screen extent. Any mark whose bbox INTERSECTS
     // the tracked entity's screen footprint is faded toward FULLY HIDDEN (target 0, not a
     // partial dim) so the tracked plane/ship reads as genuinely ON TOP. The fade is EASED
     // per frame (no abrupt pop as the entity crosses a mark) and reverses smoothly when
-    // it moves off. Every screen mark here is point-like (pins/labels/reticles/arrows) —
-    // the big area/route footprints live in the world layer — so fully hiding an
+    // it moves off. Every screen mark here is point-like (pins/labels/reticles/arrows) -
+    // the big area/route footprints live in the world layer - so fully hiding an
     // overlapped one is safe and not jarring.
     for (const rec of records.values()) {
       const { anno, group } = rec;
@@ -666,9 +666,9 @@ export function createScreenAnnotationRenderer(
       const target = overlapping ? 0 : 1;
       const next = cur + (target - cur) * TRACKED_FADE_EASE;
       rec._trackedFade = Math.abs(next - target) < 0.02 ? target : next;
-      // Only override when faded — otherwise leave the base alpha (set above) intact.
+      // Only override when faded - otherwise leave the base alpha (set above) intact.
       // (The CSS `transition: opacity` was removed from .gev-anno so this per-frame JS ease
-      // is the ONLY easing — previously the two fought and produced an opacity oscillation.)
+      // is the ONLY easing - previously the two fought and produced an opacity oscillation.)
       if (rec._trackedFade !== 1) {
         group.setAttribute(
           'opacity',

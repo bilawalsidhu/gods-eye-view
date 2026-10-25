@@ -2941,7 +2941,7 @@ test('isBenignViewportDeleteError is false for non-error payloads and junk', () 
 });
 
 
-test('hidden document yields no fresh frame — capture must not label a stale canvas Current', async () => {
+test('hidden document yields no fresh frame - capture must not label a stale canvas Current', async () => {
   const originalDocument = globalThis.document;
   let requested = 0;
   const scene = {
@@ -2992,7 +2992,7 @@ test('a tab switch during the bounded render wait invalidates freshness', async 
 });
 
 // ---------------------------------------------------------------------------
-// Voice cost control — persistence.
+// Voice cost control - persistence.
 // The stored tier picks the OpenAI model id for the next session and the stored
 // limits arm the spend cap, so both must survive corruption without either
 // throwing or silently disarming the guard.
@@ -3055,7 +3055,7 @@ test('spend limits round-trip as one object', () => {
 });
 
 test('corrupt stored limits fall back to defaults rather than disarming the cap', () => {
-  // A disarmed cap is the dangerous failure — assert we land on the default,
+  // A disarmed cap is the dangerous failure - assert we land on the default,
   // not on Infinity.
   const limits = readStoredVoiceLimits(
     fakeVoiceStorage({ 'godsEyeView.voiceCost.limits': '{oops' })
@@ -3072,7 +3072,7 @@ test('partially stored limits keep the default for the missing threshold', () =>
 
 test('a disabled threshold survives the storage round-trip', () => {
   // Infinity JSON-serializes to null, which reads back as "absent" and restores
-  // the DEFAULT — silently re-arming a cap the user turned off. The 'off'
+  // the DEFAULT - silently re-arming a cap the user turned off. The 'off'
   // sentinel is what makes disabling persist.
   const storage = fakeVoiceStorage();
   writeStoredVoiceLimits({ warnUsd: 0, capUsd: 0 }, storage);
@@ -3092,7 +3092,7 @@ test('one disabled and one live threshold both round-trip', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Voice cost control — REAL handlers driven by a mocked Realtime event stream.
+// Voice cost control - REAL handlers driven by a mocked Realtime event stream.
 // These exercise updateResponseState / handleRealtimeEvent / stop() rather than
 // the pure module, because the bugs they pin were all in the wiring.
 // ---------------------------------------------------------------------------
@@ -3180,7 +3180,7 @@ test('F1: the cap still fires after a mid-session toggle, at the original rates'
     controller.setVoiceTier(i % 2 === 0 ? 'mini' : 'standard'); // toggle spam
   }
   assert.equal(controller.costTracker.state().capReached, false, '$4 is under the cap');
-  controller.recordUsage(usdUsage(1)); // $5 — crosses
+  controller.recordUsage(usdUsage(1)); // $5 - crosses
   assert.equal(controller.costTracker.state().capReached, true);
   assert.equal(controller.isSessionEnding(), true);
 });
@@ -3270,7 +3270,7 @@ test('F4: a cap between tool events stops every later tool', async () => {
   // The real sequence this guards. Function-call events arrive BEFORE the
   // response.done that carries usage, so tool N runs, the cap then trips, and
   // tool N+1 must not dispatch. extractFunctionCalls yields at most one call
-  // per event, so this across-events path is the only reachable one — the
+  // per event, so this across-events path is the only reachable one - the
   // single pre-loop gate covers it, and there is no per-iteration check.
   const executed = [];
   const { controller } = costControllerHarness({
@@ -3352,7 +3352,7 @@ test('F5: teardown always closes the channel, in one step', () => {
 test('F5: a response in flight at teardown marks the accounting INCOMPLETE', () => {
   // We have no token telemetry for an unfinished response, so we flag the
   // accounting as partial rather than inventing a number for it. Deliberately
-  // not framed as a floor — the estimate can also run high.
+  // not framed as a floor - the estimate can also run high.
   const { controller } = costControllerHarness();
   controller.status = 'listening';
   controller.costTracker = createVoiceCostTracker({
@@ -3403,7 +3403,7 @@ test('F2/F5: no stray message listener survives teardown to double-meter', () =>
 
 test('F3: setVoiceTier does NOT rebuild the tracker while transport is live', () => {
   // 'error' reports !isActive() but can still hold an open channel delivering a
-  // late response.done — rebuilding there sends that usage to a preview tracker.
+  // late response.done - rebuilding there sends that usage to a preview tracker.
   const { controller } = costControllerHarness();
   controller.costTracker = createVoiceCostTracker({
     modelId: 'gpt-realtime-2',
@@ -3475,7 +3475,7 @@ test('F3: an unrecognised session model bills at the most expensive known rates'
  * The Realtime API rejects a second concurrent `response.create`
  * (`conversation_already_has_active_response`) and the rejected turn is lost.
  * Every client trigger goes through the in-flight guard except the typed-command
- * path, which fired straight out — so a typed command landing mid-answer was
+ * path, which fired straight out - so a typed command landing mid-answer was
  * silently dropped instead of answered.
  */
 function textCommandController() {
@@ -3607,7 +3607,7 @@ test('a typed command drops the old response’s queued follow-up confirmation',
   assert.equal(
     controller.pendingResponseInstructions,
     null,
-    'the stale confirmation is dropped — the typed turn is the single answer now',
+    'the stale confirmation is dropped - the typed turn is the single answer now',
   );
 
   controller.updateResponseState({ type: 'response.done', response: { status: 'completed' } });
@@ -3660,7 +3660,7 @@ function observeToolOutputs(controller, record) {
 
 test('a refused superseded call is still answered with a terminal output', async () => {
   // Every function call must be answered. Leaving one unanswered strands a
-  // pending call in the conversation and deadlocks the model — the same hazard
+  // pending call in the conversation and deadlocks the model - the same hazard
   // callDedupeKeys is written to avoid. Refusing is not ignoring.
   const { controller, sent, dispatched } = toolDispatchController();
   const outputs = [];

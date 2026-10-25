@@ -1,17 +1,17 @@
 import { msg } from '../i18n/index.js';
 
 /**
- * FLIR — Forward Looking Infrared
+ * FLIR - Forward Looking Infrared
  * Military-grade thermal imaging with White-Hot/Black-Hot modes,
  * coherent temporal noise, hot-spot bloom, temperature banding,
  * soft IR diffraction, and full HUD overlay rendered in GLSL.
  *
  * Exposed uniforms:
- *   sensitivity (0-1) — contrast/range of temperature mapping
- *   bloom (0-1)       — hot-spot bloom/bleed intensity
- *   mode (0-1)        — 0 = White-Hot, 1 = Black-Hot (step at 0.5)
- *   pixelation (1-6)  — sensor resolution pixelation grid size
- *   palette (0-1)     — 0 = monochrome FLIR, 1 = Ironbow "Predator" color ramp
+ *   sensitivity (0-1) - contrast/range of temperature mapping
+ *   bloom (0-1)       - hot-spot bloom/bleed intensity
+ *   mode (0-1)        - 0 = White-Hot, 1 = Black-Hot (step at 0.5)
+ *   pixelation (1-6)  - sensor resolution pixelation grid size
+ *   palette (0-1)     - 0 = monochrome FLIR, 1 = Ironbow "Predator" color ramp
  */
 export const thermalShader = {
   name: 'thermal',
@@ -322,7 +322,7 @@ export const thermalShader = {
 
       // Composite HUD (rendered in white, slightly transparent)
       float hudBright = mix(1.0, 0.0, isBlackHot); // HUD is white in WHOT, dark in BHOT inverted
-      // Actually, HUD should always be visible — use contrast
+      // Actually, HUD should always be visible - use contrast
       thermalColor += hud * 0.6 * intensity;
 
       // ── Lens shading + vignette ───────────────────

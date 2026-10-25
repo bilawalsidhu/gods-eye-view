@@ -31,7 +31,7 @@ export async function captureViewportImage() {
   if (!fresh) return null;
 
   // Clamp BOTH dimensions by a total-pixel budget so tall portrait windows are
-  // downscaled too (the old width-only clamp let them through — M13).
+  // downscaled too (the old width-only clamp let them through - M13).
   const { width, height } = computeDownscale(
     source.width,
     source.height,
@@ -223,7 +223,7 @@ export function estimateDataUrlBytes(dataUrl) {
 
 /**
  * Ensure the canvas holds a CURRENT frame before capture.
- * @returns {Promise<boolean>} true only when a fresh frame was presented —
+ * @returns {Promise<boolean>} true only when a fresh frame was presented -
  *   false while hidden (render loop suspended; a capture would be stale) or
  *   when the bounded wait timed out. Callers must not label a non-fresh
  *   canvas as current. (perf wave 2)
@@ -231,13 +231,13 @@ export function estimateDataUrlBytes(dataUrl) {
 export async function renderFreshCesiumFrame(viewer) {
   const scene = viewer?.scene;
   if (!scene) return false;
-  // While the document is hidden the render loop is suspended — don't
+  // While the document is hidden the render loop is suspended - don't
   // secretly restart rendering for an optional screenshot, and don't pass
   // the stale preserved frame off as current.
   if (typeof document !== 'undefined' && document.hidden) return false;
   try {
     // Under the idle render governor a bare scene.render() doesn't
-    // necessarily draw — request a frame and await its postRender (bounded),
+    // necessarily draw - request a frame and await its postRender (bounded),
     // which also covers the just-became-visible race.
     const rendered = new Promise((resolve) => {
       const remove = scene.postRender.addEventListener(() => {
@@ -413,7 +413,7 @@ export class RealtimeViewport {
     // Keep at most one viewport screenshot in context. Images are the single
     // most expensive item (re-billed every turn they linger), so we proactively
     // delete the previous one before adding a new one. Text history is left to
-    // the server-side retention_ratio truncation (see /api/realtime/token) —
+    // the server-side retention_ratio truncation (see /api/realtime/token) -
     // deleting old text per-turn busts the prompt cache for little gain.
     if (this.lastViewportItemId) {
       // Tag the delete with our own event_id and remember it. If the item was
@@ -457,7 +457,7 @@ export class RealtimeViewport {
     };
     // Only claim lastViewportItemId once the send actually succeeds. If the image
     // is still too large for the data channel, sendRealtimeEvent returns false
-    // (it no longer throws — M13); we then leave lastViewportItemId pointing at
+    // (it no longer throws - M13); we then leave lastViewportItemId pointing at
     // the item we just deleted as null and fall through so the caller still
     // issues queueResponseCreate WITHOUT the image, instead of stranding the turn.
     const sent = this.sendRealtimeEvent(contextEvent, label);

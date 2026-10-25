@@ -17,7 +17,7 @@ import {
 } from '../server/providers/places/google.js';
 
 // Both limiters are cached at module scope on first use, so the env value that
-// matters is the one in place when a route is first exercised — restoring the
+// matters is the one in place when a route is first exercised - restoring the
 // variable afterwards does not rebuild the limiter. Each route is therefore
 // driven by exactly one test here; a second test wanting a different cap would
 // need its own process, not just a different env value.
@@ -111,7 +111,7 @@ test('a positive fraction keeps the guard rather than flooring to unlimited', ()
 
 test('an unreadable value keeps the guard instead of removing it', () => {
   // `3O` (letter O) and `60/min` are the shapes a hand-edited .env produces.
-  // Reading either as "unlimited" would disarm the spend guard on a typo —
+  // Reading either as "unlimited" would disarm the spend guard on a typo -
   // the opposite of what the operator was reaching for when they typed it.
   for (const typo of ['3O', '60/min', 'thirty', '-5', 'NaN']) {
     assert.equal(

@@ -2,7 +2,7 @@
  * Zoom-driven 2D↔3D policy for the TRACKED contact (both flight layers).
  *
  * The fleet's 3D models stay behind the DISPLAY-rail "3D" toggle (`models3d`)
- * — hundreds of GLBs are a draw-call budget decision the operator owns. Since
+ * - hundreds of GLBs are a draw-call budget decision the operator owns. Since
  * 2026-08-22 that toggle DEFAULTS ON in `proximity` (owner directive), so the
  * fleet is armed on a fresh boot; proximity is itself the budget, admitting only
  * the nearest MODEL_MAX in view below the fleet ceiling. The contact you have
@@ -12,18 +12,18 @@
  * DEFAULT behaviour, driven purely by camera distance and never consulting the
  * toggle at all (owner directive, 2026-08-19).
  *
- * Threshold history — the tracked contact used to inherit the fleet ceiling
+ * Threshold history - the tracked contact used to inherit the fleet ceiling
  * `MODEL_ALT_CEIL_M = 800_000` m, and a first pass raised it to 1_000_000 m to
  * make the airframe arrive sooner. Owner playtest 2026-08-20 rejected that: the
- * model "pops to 3D far too early" — a 26 m airframe held at its minimum pixel
+ * model "pops to 3D far too early" - a 26 m airframe held at its minimum pixel
  * size from ~1 Mm out reads as a floating toy, not an aircraft. The ruling is a
  * MUCH closer swap: 2D is correct at ~600_000 m, and the handoff belongs at
  * ~150_000 m. That is the constant below.
  *
- * NOTE — the tracked contact now enters 3D *later* (nearer) than the FLEET does.
+ * NOTE - the tracked contact now enters 3D *later* (nearer) than the FLEET does.
  * Cruise altitudes between 150_000 m and the fleet's 800_000 m ceiling draw the
  * surrounding contacts as models while the SELECTED one is still a billboard
- * (the fleet pass skips the tracked icao, so nothing double-draws — it is purely
+ * (the fleet pass skips the tracked icao, so nothing double-draws - it is purely
  * an ordering difference). As of the 2026-08-22 default flip this is what an
  * operator sees WITHOUT arming anything, where before it needed the toggle on;
  * the inversion itself is unchanged and is still a consequence of the owner's
@@ -32,7 +32,7 @@
  * a fleet-side decision and is explicitly out of scope here (fleet-wide auto-3D
  * is a separate post-launch change).
  *
- * HYSTERESIS — the enter and exit thresholds are deliberately asymmetric. A
+ * HYSTERESIS - the enter and exit thresholds are deliberately asymmetric. A
  * single threshold makes an orbit AT the boundary flap billboard↔model every
  * time the camera's altitude wobbles across it (the tracked orbit is a real
  * camera motion, not a static pose), which is the same flicker the fleet's
@@ -53,7 +53,7 @@ export const FLEET_MODEL_ALT_CEIL_M = 800_000;
  *  the swap belongs at ~150_000 m. */
 export const TRACKED_MODEL_ENTER_ALT_M = 150_000;
 
-/** Exit is 15% looser than enter — the anti-flap band for a boundary orbit. */
+/** Exit is 15% looser than enter - the anti-flap band for a boundary orbit. */
 export const TRACKED_MODEL_EXIT_RATIO = 1.15;
 
 /** Camera altitude (m) the camera must climb past before the model hands back to the billboard. */

@@ -1,4 +1,4 @@
-// NAMING THE MISSING KEY — a control a provider key holds back must say which
+// NAMING THE MISSING KEY - a control a provider key holds back must say which
 // key, or the operator is left with a dead row and no next step. The three
 // halves are pinned here: the layer declares which key it needs and reports
 // that it is missing, the manager publishes that on the row, and the panel
@@ -154,6 +154,6 @@ test('a key-gated layer with another source ready says how to use it', () => {
   });
   assert.equal(
     text,
-    'Needs MAPILLARY_CLIENT_TOKEN — add it in Provider Settings, or light STREET VIEW to use your Google Maps key',
+    'Needs MAPILLARY_CLIENT_TOKEN - add it in Provider Settings, or light STREET VIEW to use your Google Maps key',
   );
 });

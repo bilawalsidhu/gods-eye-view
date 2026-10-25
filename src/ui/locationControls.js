@@ -153,9 +153,7 @@ export class LocationControls {
       : record;
     const lines = locationMiniStatus(state);
     this.elements.statusCity.textContent =
-      lines.city === LOCATION_MINI_EMPTY.city
-        ? t('📍 Location: --')
-        : lines.city;
+      lines.city === LOCATION_MINI_EMPTY.city ? t('Location: --') : lines.city;
     if (lines.poi === LOCATION_MINI_EMPTY.poi) {
       this.elements.statusPoi.textContent = t('Landmark: --');
     } else if (lines.poi === LOCATION_MINI_SEARCHED_PLACEHOLDER.poi) {

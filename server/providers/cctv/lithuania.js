@@ -76,7 +76,7 @@ export function lithuaniaCameraToSource(row, feature) {
     snapshotUrl: imageUrl,
     sourceKind: 'eismoinfo-public',
     credit:
-      'Via Lietuva / eismoinfo.lt — periodically updated road-camera stills',
+      'Via Lietuva / eismoinfo.lt - periodically updated road-camera stills',
     code: cameraDisplayCode(name.toUpperCase()),
   };
 }

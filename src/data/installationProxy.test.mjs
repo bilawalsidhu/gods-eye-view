@@ -3,8 +3,8 @@
 // trip, and the 5-minute memory tier died with the dev server).
 //
 // The bbox/TTL cases below are pure; the cache-tier cases drive the REAL
-// read/write code against a REAL temp directory — miss, write, restart, disk
-// hit, expiry, serve-stale, and a torn write — so the persistence claims are
+// read/write code against a REAL temp directory - miss, write, restart, disk
+// hit, expiry, serve-stale, and a torn write - so the persistence claims are
 // exercised rather than asserted.
 //
 // Run with: npm test   (node --test)
@@ -136,7 +136,7 @@ test('a pre-fix cache entry derives its missing saturation flag instead of lying
   const dir = tempCacheDir();
   try {
     await fsp.mkdir(dir, { recursive: true });
-    // Written recently, in the OLD shape — the case the 30-day TTL keeps alive.
+    // Written recently, in the OLD shape - the case the 30-day TTL keeps alive.
     const legacyOnDisk = { ...atCap, cachedAt: Date.now() };
     await fsp.writeFile(militaryInstallationDiskPath('legacy', dir), JSON.stringify(legacyOnDisk));
     const read = await readMilitaryInstallationDisk('legacy', TTL_MS, dir);

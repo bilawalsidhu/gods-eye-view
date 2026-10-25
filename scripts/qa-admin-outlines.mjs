@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * qa-admin-outlines.mjs — bundled state/province/county outlines, driven like a
+ * qa-admin-outlines.mjs - bundled state/province/county outlines, driven like a
  * user would drive them.
  *
  * Run: node scripts/qa-admin-outlines.mjs http://localhost:4173 [--headful] [--no-video]
@@ -13,7 +13,7 @@
  *
  * Asserts for every outline: it resolves from the bundled packs (no geocode,
  * boundary or Overpass request), is drawn as a draped outline within the
- * budget, and holds still — no rebuilt primitives and no new entities while
+ * budget, and holds still - no rebuilt primitives and no new entities while
  * the camera is still. The whole journey must log zero console/page errors and
  * send zero requests to any Overpass host or nominatim.openstreetmap.org.
  *

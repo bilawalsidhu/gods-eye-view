@@ -1121,7 +1121,7 @@ function buildSubmarineCablesWorkload(count) {
  *
  * Measured standalone (the submarine-cable precedent) rather than stacked on
  * the Phase-5 host: air-quality stations are sparse and, with the single
- * currently-registered provider, continental — so the question a budget has to
+ * currently-registered provider, continental - so the question a budget has to
  * answer is what its own cohort costs, not what it adds to a worldwide worst
  * case it never shares a viewport with. The entry shape is the same static
  * `ambient-label` the earthquake layer publishes, so the per-candidate ceiling

@@ -23,7 +23,7 @@ export function createRendering({ state }) {
    * entities. Hiding them (`show = false`) is NOT enough: Cesium's
    * DataSourceDisplay still walks every visualizer of a hidden source on
    * every frame, and the thousands of hidden polylines/billboards keep
-   * costing CPU and GC pressure long after the user toggled the layer off —
+   * costing CPU and GC pressure long after the user toggled the layer off -
    * that is the "everything gets sluggish after I turn layers off" report.
    * The fetched JSON stays cached, so the next enable rebuilds without a
    * network round trip or a re-parse.
@@ -85,7 +85,7 @@ export function createRendering({ state }) {
    * per source; a failed shape probe disables the optimization permanently
    * for this session and says so loudly in dev builds.
    * Both sources are probed BEFORE either is committed, so the helper's
-   * "defaults untouched on shape drift" fallback holds across the pair too —
+   * "defaults untouched on shape drift" fallback holds across the pair too -
    * a reference-source failure can never leave the landing source already
    * forced to TRANSLUCENT.
    */
@@ -99,7 +99,7 @@ export function createRendering({ state }) {
         state._markerBlendInvariantWarned = true;
         console.error(
           '[Data:telegeography-submarine-cables] EntityCluster marker-collection ' +
-            'shape changed — single-pass translucent blend skipped; markers fall ' +
+            'shape changed - single-pass translucent blend skipped; markers fall ' +
             "back to Cesium's default two-pass blend.",
         );
       }
@@ -113,7 +113,7 @@ export function createRendering({ state }) {
 
   /**
    * Re-classify every cable ground line for the active surface. One batched
-   * ground-primitive rebuild per stack switch — never per frame.
+   * ground-primitive rebuild per stack switch - never per frame.
    * @param {Cesium.ClassificationType} next
    */
 

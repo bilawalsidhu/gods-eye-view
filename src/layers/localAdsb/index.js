@@ -35,6 +35,7 @@ import {
   LOCAL_ADSB_UAT_RING_COLOR,
 } from './policy.js';
 import { localAdsbStatus } from './status.js';
+import { ICONS } from '../../icons.js';
 
 export { HEARD_BY_RECEIVER } from './policy.js';
 export { localAdsbCardModel, localAdsbReceiverLine } from './card.js';
@@ -678,7 +679,8 @@ export function createLocalAdsbLayer({
   return {
     id: LAYER_ID,
     name: LAYER_NAME,
-    icon: '📡',
+    icon: '',
+    iconSvg: ICONS.antenna,
     source: LAYER_SOURCE,
     updateInterval: 0,
     statsRefreshInterval: LOCAL_ADSB_TICK_MS,

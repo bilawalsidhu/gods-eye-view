@@ -83,7 +83,7 @@ test('feeds in range are nearest-first and honor slack as hysteresis', () => {
   );
   // Mid-Atlantic: nothing.
   assert.deepEqual(transitFeedsInRange(40, -40), []);
-  // Just outside MBTA's 70 km circle (≈ 80 km south) — out without slack, in with 20 km slack.
+  // Just outside MBTA's 70 km circle (≈ 80 km south) - out without slack, in with 20 km slack.
   const farLat = 42.3601 - 80 / 111;
   assert.deepEqual(transitFeedsInRange(farLat, -71.0589), []);
   assert.deepEqual(
@@ -148,7 +148,7 @@ test('the public catalog exposes coverage and credit, never the upstream URL or 
 test('the enabled set is a gate on the registry, not a copy of it', () => {
   // Every registered feed is switched on today. The gate still has to be the
   // thing that decides that, because the moment an operator's terms change the
-  // owner flips one flag and expects the feed to become unreachable — not to
+  // owner flips one flag and expects the feed to become unreachable - not to
   // stay routable because the filter had quietly become a no-op.
   assert.deepEqual(
     TRANSIT_ENABLED_FEEDS.map((feed) => feed.id),
@@ -451,8 +451,8 @@ test('YRT local branches read as the branch letter, not the padded id', () => {
 test('Hamilton route ids are internal keys, read as the number on the bus', () => {
   // Not one of HSR's 80 route ids equals its published short name, so every
   // vehicle reads as "Route 5783" until the table translates it. Hamilton also
-  // carries two generations of id for the same route — `5688` and `5780` are
-  // both the 2 BARTON — so both must land on the same answer.
+  // carries two generations of id for the same route - `5688` and `5780` are
+  // both the 2 BARTON - so both must land on the same answer.
   const hsr = getTransitFeed('hsr-hamilton');
   assert.equal(transitRouteLabel(hsr, '5780'), '2');
   assert.equal(transitRouteLabel(hsr, '5688'), '2', 'the older id agrees');
@@ -467,7 +467,7 @@ test('Hamilton route ids are internal keys, read as the number on the bus', () =
 
 test('Burlington route ids are joined, never prefix-stripped', () => {
   // `351` is route 1 and `3510` is route 10, so no amount of trimming a `35`
-  // prefix works — the table is the only correct answer.
+  // prefix works - the table is the only correct answer.
   const bur = getTransitFeed('burlington-transit');
   assert.equal(transitRouteLabel(bur, '351'), '1');
   assert.equal(transitRouteLabel(bur, '3510'), '10');

@@ -81,11 +81,11 @@ test('cockpit Context scope distinguishes radius-complete feeds from viewport in
 test('cockpit Context scope preserves zero and replaces missing values intentionally', () => {
   assert.equal(
     formatCockpitContextScope('', 0),
-    '— · 0 KM AIR/SEA WINDOW',
+    '- · 0 KM AIR/SEA WINDOW',
   );
   assert.equal(
     formatCockpitContextScope(undefined, Number.NaN, {}),
-    '— · — KM AIR/SEA WINDOW',
+    '- · - KM AIR/SEA WINDOW',
   );
 });
 

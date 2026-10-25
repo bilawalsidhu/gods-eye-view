@@ -52,7 +52,7 @@ test('Realtime schema exposes the authoritative 30-tool inventory', () => {
 test('the counting contract is stated in the Realtime instructions', () => {
   // Owner ruling: "near" has one meaning per state, and every count names its
   // scope. Instruction text is the only place the narration rules can live, so
-  // it is pinned — a silent trim here is a silent behaviour change.
+  // it is pinned - a silent trim here is a silent behaviour change.
   const start = voice.indexOf("'COUNTING CONTRACT");
   assert.ok(start >= 0, 'the counting contract instruction is missing');
   // One instruction per source line; the string carries escaped quotes, so take
@@ -157,7 +157,7 @@ test('the edited existing tools changed exactly as intended', () => {
   );
   assert.deepEqual(panel.parameters.required, ['panelId', 'open']);
 
-  // Edit 2: description only — the view state now reports Context and Cockpit.
+  // Edit 2: description only - the view state now reports Context and Cockpit.
   const viewState = byName.get('get_current_view_state');
   assert.match(viewState.description, /Context, Cockpit/);
   assert.deepEqual(viewState.parameters.properties, {});
@@ -176,7 +176,7 @@ test('no unchanged Realtime tool definition drifts silently', () => {
   // model behavior in production with nothing in review to catch it.
   //
   // If this fails and the change was deliberate, re-derive the digest and say
-  // in the mic-test brief which tools moved — the session cache busts on any
+  // in the mic-test brief which tools moved - the session cache busts on any
   // schema change.
   const TOUCHED = new Set([
     'set_cyber_sonar',
@@ -222,7 +222,7 @@ test('no unchanged Realtime tool definition drifts silently', () => {
   ]);
   assert.equal(
     camera.description,
-    'Direct the camera like a drone operator: orbit the current view target, pan, tilt, or rotate — one bounded nudge (mode=once) or continuous motion until stopped (mode=continuous). Continuous motion also stops on any manual camera input or when a navigation tool runs. Say the RESULTING state when confirming ("Orbiting slowly"). Globe rotation (rotate_globe) spins Earth right continuously by default; explicit direction, mode and speed take precedence. It checks fit and may refuse.',
+    'Direct the camera like a drone operator: orbit the current view target, pan, tilt, or rotate - one bounded nudge (mode=once) or continuous motion until stopped (mode=continuous). Continuous motion also stops on any manual camera input or when a navigation tool runs. Say the RESULTING state when confirming ("Orbiting slowly"). Globe rotation (rotate_globe) spins Earth right continuously by default; explicit direction, mode and speed take precedence. It checks fit and may refuse.',
   );
   assert.equal(
     camera.parameters.properties.direction.description,
@@ -235,7 +235,7 @@ test('no unchanged Realtime tool definition drifts silently', () => {
       (motion) => motion !== 'rotate_globe',
     );
   camera.description =
-    'Direct the camera like a drone operator: orbit the current view target, pan, tilt, or rotate — one bounded nudge (mode=once) or continuous motion until stopped (mode=continuous). Continuous motion also stops on any manual camera input or when a navigation tool runs. Say the RESULTING state when confirming ("Orbiting slowly").';
+    'Direct the camera like a drone operator: orbit the current view target, pan, tilt, or rotate - one bounded nudge (mode=once) or continuous motion until stopped (mode=continuous). Continuous motion also stops on any manual camera input or when a navigation tool runs. Say the RESULTING state when confirming ("Orbiting slowly").';
   camera.parameters.properties.direction.description =
     'Required except for orbit (defaults right/clockwise) and stop.';
   assert.equal(unchanged.length, 14);
@@ -244,7 +244,7 @@ test('no unchanged Realtime tool definition drifts silently', () => {
     .digest('hex')
     .slice(0, 16);
   // Analyst additions and ISS wording correction are explicitly excluded above; all other tool definitions retain their pin.
-  assert.equal(digest, '25d1b902ecaa22fb', 'an unchanged Realtime tool definition drifted');
+  assert.equal(digest, 'b3e4d782add5a5ac', 'an unchanged Realtime tool definition drifted');
 });
 
 test('Radio volume and mission speed share the Sharpen slider visual language', () => {

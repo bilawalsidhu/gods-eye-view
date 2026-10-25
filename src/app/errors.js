@@ -1,7 +1,7 @@
 /**
  * Extract a human-readable error message from any thrown value.
  * Handles Error objects, strings, and plain objects with message/error fields.
- * @param {*} error — caught exception value
+ * @param {*} error - caught exception value
  * @returns {string} best-effort error description
  */
 export function describeError(error) {

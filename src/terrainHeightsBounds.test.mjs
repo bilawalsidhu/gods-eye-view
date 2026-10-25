@@ -1,4 +1,4 @@
-// TERRAIN HEIGHTS — the bounds on a cache keyed by caller-chosen coordinates.
+// TERRAIN HEIGHTS - the bounds on a cache keyed by caller-chosen coordinates.
 //
 // Every distinct 5dp lon/lat is its own cache key, its own permanent line in
 // `.gev-cache/terrain-heights.json`, and its own upstream call. Four things
@@ -112,7 +112,7 @@ async function isolatedCachePath(t) {
 }
 
 test('a coordinate off the globe is not a cache key', () => {
-  // Finite but not on Earth — the old guard accepted every one of these.
+  // Finite but not on Earth - the old guard accepted every one of these.
   for (const raw of [
     '0,91',
     '0,-91',
@@ -177,7 +177,7 @@ test('the point cache stops growing, and an evicted point is simply refetched', 
   await request(route, { url: `/?points=${point(4)}` });
   assert.equal(asked.length, 4, 'a cached point costs nothing');
 
-  // ...and the oldest was evicted, so it costs one refetch — never a wrong
+  // ...and the oldest was evicted, so it costs one refetch - never a wrong
   // answer, because terrain does not move.
   await request(route, { url: `/?points=${point(1)}` });
   assert.equal(asked.length, 5, 'the evicted point was asked for again');

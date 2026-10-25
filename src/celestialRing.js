@@ -9,7 +9,7 @@ export const GLOBE_ENTER_CLEARANCE_PX = 24;
 export const GLOBE_EXIT_CLEARANCE_PX = 12;
 /** Minimum stable length of a celestial direction projected into the camera plane. */
 export const CELESTIAL_PLANE_EPSILON = 0.045;
-/** Responsive radial fade band used by every keyhole-aligned text overlay —
+/** Responsive radial fade band used by every keyhole-aligned text overlay -
  * this is the Detection FADE (label/card fading), NOT the scope-mask feather
  * in scopeMask.js. 0.07 since the 2026-08-24 owner final lock (was 0.16). */
 export const KEYHOLE_LABEL_FEATHER_RATIO = 0.07;
@@ -21,7 +21,7 @@ export const KEYHOLE_LABEL_FEATHER_MAX_RATIO = 0.4;
  * `#detection-opacity-slider`'s markup value AND readout in index.html,
  * `_detectionOutsideOpacityPct` in sharelink.js,
  * `GLOBAL_POST_DEFAULTS.detectionOutsideOpacityPct` in ui.js, and
- * `AIRCRAFT_BRACKET_FLOOR_ANCHOR` in detectionPolicy.js — a fresh boot applies
+ * `AIRCRAFT_BRACKET_FLOOR_ANCHOR` in detectionPolicy.js - a fresh boot applies
  * no restore, so those literals ARE the first-run state. NOT the `ko` PARSE
  * fallback, which stays at 5 on purpose: a link predating that field was
  * authored when 5 was what its author saw. Pinned in reasonableDefaults.test.mjs.
@@ -426,7 +426,7 @@ export class CelestialRing {
     this._ephemerisTimer = setInterval(() => {
       if (!this.enabled) return;
       // Always mark dirty so a long-hidden interval can't serve stale
-      // sun/moon vectors on return — but only request the repaint frame
+      // sun/moon vectors on return - but only request the repaint frame
       // while visible; the visibility-restore request (main.js) picks the
       // dirty flag up immediately. (review finding)
       this._ephemerisDirty = true;
@@ -486,10 +486,10 @@ export class CelestialRing {
     this.enabled = !!enabled;
     if (this.enabled && !wasEnabled) this._ephemerisDirty = true;
     // The ring paints its canvases from postRender, which only fires on
-    // rendered frames — under the idle render governor an enable (or the
+    // rendered frames - under the idle render governor an enable (or the
     // clearing disable) must request its frame or the ring never draws at
     // all. Camera motion covers every later repaint; the 60 s ephemeris
-    // timer requests its own. (perf wave 2 fix — owner playtest finding)
+    // timer requests its own. (perf wave 2 fix - owner playtest finding)
     if (this.enabled !== wasEnabled) governorRequestRender('celestial-ring');
     this._root.classList.toggle('disabled', !this.enabled);
     if (!this.enabled) {

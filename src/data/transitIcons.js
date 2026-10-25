@@ -16,20 +16,20 @@ import {
  * hardcoded fill would fight the tint that tells a person what they are looking
  * at.
  *
- * These are plan views, the way a vehicle reads from a camera above a street —
+ * These are plan views, the way a vehicle reads from a camera above a street -
  * not side elevations. Each mode has a DISTINCT outline so it is recognisable
  * at the ~18 px the fleet renders at, by shape and not only by colour: a bus is
  * short and blunt, a tram is long and slender with articulation joints, a metro
  * car is squared off, a mainline train has a tapered nose, and a ferry is a
  * hull with a bow.
  *
- * Interior detail is drawn with the same dark hairline as the edge — windscreen
- * lines, articulation joints, a deck line — because a solid dark panel would
+ * Interior detail is drawn with the same dark hairline as the edge - windscreen
+ * lines, articulation joints, a deck line - because a solid dark panel would
  * darken the tint and a white-on-white panel would vanish.
  */
 
 const VIEW = 96;
-const C = VIEW / 2; // 48 — glyph centre
+const C = VIEW / 2; // 48 - glyph centre
 
 /** Hairline dark edge, matching the aircraft glyph weight at this box size. */
 const STROKE =
@@ -81,7 +81,7 @@ const BODIES = {
     <path d="M-9,-30 L9,-30" ${DETAIL}/>
     <path d="M-10.5,6 L10.5,6" ${DETAIL}/>`,
 
-  // ── Ferry: a hull. Pointed bow, square stern, superstructure amidships —
+  // ── Ferry: a hull. Pointed bow, square stern, superstructure amidships -
   //    the only glyph in the set that is not a box on rails or rubber.
   ferry: `
     <path d="M0,-44 C6,-38 12,-26 12.5,-14 L12.5,34
@@ -149,7 +149,7 @@ export function haloFrame(haloScreenPx, screenPx = FLEET_SCREEN_PX) {
   return { units, pad, ratio: (VIEW + 2 * pad) / VIEW };
 }
 
-/** Number of raster variants ever built — a bound a test can hold the cache to. */
+/** Number of raster variants ever built - a bound a test can hold the cache to. */
 export function transitIconCacheSize() {
   return _iconCache.size;
 }

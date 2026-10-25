@@ -56,14 +56,14 @@ import {
 
 /**
  * @module detection
- * @description Universal Detection Overlay — renders styled screen-space bounding boxes
+ * @description Universal Detection Overlay - renders styled screen-space bounding boxes
  * over tracked objects (vehicles, flights, satellites) through the shared world-overlay
  * host. Supports five-stop density-derived profiles:
  *
- *   - OFF      — overlay disabled, canvas hidden
- *   - SPARSE   — stable minimum label cohort at 0/25
- *   - BALANCED — stable mixed-layer label cohort at 50
- *   - DENSE    — broad stable mixed-layer label cohort at 75/100
+ *   - OFF      - overlay disabled, canvas hidden
+ *   - SPARSE   - stable minimum label cohort at 0/25
+ *   - BALANCED - stable mixed-layer label cohort at 50
+ *   - DENSE    - broad stable mixed-layer label cohort at 75/100
  *
  * Theming is driven by THEME_MAP presets (retro, surveillance, thermal, default).
  * Density tuning and suspension allow external callers (scene transitions, UI)
@@ -119,20 +119,20 @@ const LAYER_WEIGHTS = Object.freeze({
 const FONT = DETECTION_STYLE.font;
 /** @constant {string} MICRO_FONT - Slightly smaller font for the dim altitude micro-field. */
 const MICRO_FONT = DETECTION_STYLE.microFont;
-/** Billboard scale-by-distance curve (mirrors the flight billboards' NearFarScalar) — grows the AIR reticle with the plane as you zoom in. */
+/** Billboard scale-by-distance curve (mirrors the flight billboards' NearFarScalar) - grows the AIR reticle with the plane as you zoom in. */
 const BILL_NEAR = 1000;
 const BILL_NEAR_SCALE = 3.0;
 const BILL_FAR = 8000000;
 const BILL_FAR_SCALE = 0.5;
 /**
  * Query-string gate for the detection mode banner, mirroring `trafficDebug` in
- * `traffic.js` — the app's existing convention for a developer-only affordance.
+ * `traffic.js` - the app's existing convention for a developer-only affordance.
  *
  * The banner ("DENSE VIS:15 SRC:1036 DENS:100% ELASTIC 0.4ms") is engine
  * telemetry, but it painted for every user: CRT/NVG/FLIR auto-enable detection,
  * so an orange debug readout was the first thing a visitor saw, colliding with
- * the cockpit callsign block. It is kept — the same numbers also ship
- * programmatically via `getDetectionDiagnostics()` — but now defaults OFF and
+ * the cockpit callsign block. It is kept - the same numbers also ship
+ * programmatically via `getDetectionDiagnostics()` - but now defaults OFF and
  * paints only under `?detectDebug=1`.
  *
  * Deliberately NOT also gated on `import.meta.env.DEV`, unlike `trafficDebug`:
@@ -151,7 +151,7 @@ export function detectionDebugRequested(search) {
   }
 }
 
-/** Resolved once per `initDetection` — never re-read per frame. */
+/** Resolved once per `initDetection` - never re-read per frame. */
 let _debugBanner = false;
 
 /** @constant {number} FADE_MS - Duration of the subtle fade-in when detection (re)activates.
@@ -168,7 +168,7 @@ const GLOW_PX = DETECTION_STYLE.glowPx;
  * Detection used to mix this with `Date.now()`, which meant the paint and the
  * "do I need another frame" question could land on different milliseconds inside
  * a single frame and disagree about whether an animation had finished. Every
- * timestamp that feeds a fade — this module's and the label arbiter's — now
+ * timestamp that feeds a fade - this module's and the label arbiter's - now
  * comes from here or from `frame.timestamp`, which is the same clock.
  * @returns {number}
  */
@@ -189,7 +189,7 @@ export function countFadingRenderEntries(renderEntries) {
   return count;
 }
 // ---------------------------------------------------------------------------
-// Module-level state — singleton lifecycle tied to the Cesium viewer
+// Module-level state - singleton lifecycle tied to the Cesium viewer
 // ---------------------------------------------------------------------------
 
 /** @type {Cesium.Viewer|null} */
@@ -230,7 +230,7 @@ let _transitBracketPaths = new Map();
 let _transitBracketAlpha = 1;
 /**
  * Callouts solved by the sensor lane this frame, replayed by the callout lane.
- * The array and its rows are POOLED — `_calloutCount` is the live length — so a
+ * The array and its rows are POOLED - `_calloutCount` is the live length - so a
  * dense field costs no per-frame allocation. Retaining the previous frame's
  * rows is deliberate: `_shouldPaintDetectionLane` can skip the sensor lane
  * under load while the host clears the shared canvas every frame, so replaying
@@ -268,7 +268,7 @@ let _hostLayoutRevision = -1;
 let _suspended = false;
 /** @type {string} Human-readable reason the overlay is suspended */
 let _suspendReason = '';
-/** @type {number} Timestamp (ms) detection last activated — drives the fade-in ramp. */
+/** @type {number} Timestamp (ms) detection last activated - drives the fade-in ramp. */
 let _enableTime = 0;
 /** @type {number} Cached monospace glyph advance width (px); measured once on first draw. */
 let _charWidth = 0;
@@ -308,7 +308,7 @@ export function initDetection(viewer, layers, onModeChange) {
     shouldPaint: _shouldPaintDetectionLane,
   });
   // Registered AFTER the sensor lane so it replays the callouts that lane just
-  // solved. Both sit in the 'detection' lane — the host's bottom slot — so
+  // solved. Both sit in the 'detection' lane - the host's bottom slot - so
   // callouts still paint under every ordinary overlay card and under the
   // tracked readout, exactly where they sat before.
   _calloutLane = registerWorldOverlayPaintLane('detection', _paintCalloutLane, {
@@ -539,15 +539,15 @@ export function getDetectionTuning() {
  * Tell detection that the set of detectable objects may have changed.
  *
  * Detection PULLS its candidates (`getDetectableObjects()`) on each paint, so a
- * layer that swaps its contents does not announce itself — and the label solve
+ * layer that swaps its contents does not announce itself - and the label solve
  * behind those candidates runs on a private 125 ms throttle. Between the two, a
  * layer tick that requested exactly ONE frame in idle mode could be consumed by
  * a paint that declined to re-solve, leaving the departed contact labelled and
  * the arriving one unlabelled with nothing left to ask for another frame.
  *
  * Marking the solve dirty makes that single requested frame do the work it was
- * requested for. It is called from discrete layer events only — a poll tick or a
- * visibility change, seconds apart — never per frame, so it cannot reintroduce a
+ * requested for. It is called from discrete layer events only - a poll tick or a
+ * visibility change, seconds apart - never per frame, so it cannot reintroduce a
  * hot loop. It deliberately does NOT request a render itself: the caller already
  * does that, and detection asking again would double the request.
  *
@@ -635,9 +635,9 @@ function _applySurfaceTheme() {
 }
 
 function _syncSurfaceVisibility() {
-  // Detection does NOT hold continuous render. It repaints on CHANGE — every
+  // Detection does NOT hold continuous render. It repaints on CHANGE - every
   // mode/suspend/tuning transition routes through this chokepoint or through
-  // `_hostLane.requestPaint()`, both of which ask the governor for a frame — and
+  // `_hostLane.requestPaint()`, both of which ask the governor for a frame - and
   // owes itself follow-up frames only while a bounded animation is in flight
   // (see `detectionRenderDemand.js` for why a hold was wrong here, and why
   // removing it is safe).
@@ -722,7 +722,7 @@ function _shouldPaintDetectionLane(frame) {
     _lastCyberSonarPaintAt = Number.NEGATIVE_INFINITY;
   }
   // The skip and the follow-up request come from ONE decision, so the valve
-  // cannot drop a frame without handing its request forward — see
+  // cannot drop a frame without handing its request forward - see
   // `detectionPaintSkipDecision`. (Skipping is a deferral, never a cancellation:
   // without a render hold, the frame this declines may be the only one anybody
   // asked for.)
@@ -783,15 +783,15 @@ function _paintDetectionLane(frame) {
   }
   if (result.didSolve) _publishDiagnostics();
   // Detection holds nothing, so a time-based animation has to ask for its own
-  // next frame. This chain is self-terminating BY CONSTRUCTION — every animation
-  // it covers ends (the enable fade closes, labels finish fading out) — which is
+  // next frame. This chain is self-terminating BY CONSTRUCTION - every animation
+  // it covers ends (the enable fade closes, labels finish fading out) - which is
   // exactly what makes it safe where the old blanket hold was not. On a parked
   // scene with nothing animating it asks for nothing, and the governor stays
   // idle. See `detectionRenderDemand.js`.
   if (
     detectionNeedsFollowUpFrame({
       active: _mode !== MODE_OFF && !_suspended,
-      // The frame's OWN timestamp, not a fresh sample — re-reading the clock here
+      // The frame's OWN timestamp, not a fresh sample - re-reading the clock here
       // is what dropped the terminal frame of a fade (paint at 219 ms, policy at
       // 220 ms, and the settled alpha never painted).
       nowMs,
@@ -835,7 +835,7 @@ function _collectDetectableObjects() {
         }
       }
     } catch {
-      // layer skipped — may not have data or threw an error
+      // layer skipped - may not have data or threw an error
     }
   }
 
@@ -846,8 +846,8 @@ function _collectDetectableObjects() {
  * Draws a CRT-style scanline overlay across the entire canvas.
  *
  * The scroll offset comes from the CLOCK, not from `_frameCount`. Those look
- * identical while the scene is rendering — `SCANLINE_STEP_MS` is one 60 fps
- * frame — but they differ in what they DEMAND. A frame counter only advances if
+ * identical while the scene is rendering - `SCANLINE_STEP_MS` is one 60 fps
+ * frame - but they differ in what they DEMAND. A frame counter only advances if
  * something keeps rendering, so tying decorative texture to it meant detection
  * had to hold the scene in continuous mode forever to keep its own shimmer
  * alive. Off the clock, the pattern scrolls whenever the scene is rendering for
@@ -1134,7 +1134,7 @@ function _paintCalloutLane(frame) {
 /**
  * Scale a callout's plate for what sits behind it. Ground keeps the full
  * per-theme plate; sky feathers down to `SKY_PLATE_SCALE` of it, because the
- * plate's whole job — holding small mono text off busy sunlit imagery — does
+ * plate's whole job - holding small mono text off busy sunlit imagery - does
  * not exist against an empty horizon. See `SKY_PLATE_SCALE` for the taste call.
  * @param {number} skyFactor 0 (ground behind) … 1 (sky behind).
  * @returns {number} Multiplier applied to the plate fill only.
@@ -1196,7 +1196,7 @@ function _materializeCandidate(
     sonarFactor: obj._candidateSonarFactor ?? 1,
     // Costed here rather than in the object sweep: the sweep walks every
     // observation in view, while this runs only for callouts that actually
-    // placed — a budgeted handful per frame.
+    // placed - a budgeted handful per frame.
     plateScale: _plateScaleForBackdrop(
       skyBackdropFactor(cameraPosition, obj.position),
     ),
@@ -1225,7 +1225,7 @@ function _drawOverlay(frame) {
   }
 
   // ONE timestamp per frame, monotonic, shared with the demand policy below and
-  // with every arbiter call in this function — so the frame that paints an
+  // with every arbiter call in this function - so the frame that paints an
   // animation's final state is the same frame that ends its demand.
   const now = Number.isFinite(frame.timestamp) ? frame.timestamp : _nowMs();
   const sonarActive = isCyberSonarActive();
@@ -1252,7 +1252,7 @@ function _drawOverlay(frame) {
     // The frame is already cleared above.
     //
     // Drop the replay buffer with it. Every other exit from this function
-    // rebuilds the buffer, but this one returns early — and because the
+    // rebuilds the buffer, but this one returns early - and because the
     // callout lane repaints the last solve on frames the sensor lane skips,
     // leaving rows here would strand the final callsigns on screen after the
     // last data layer is switched off.
@@ -1285,13 +1285,13 @@ function _drawOverlay(frame) {
       didSolve: false,
     };
     // With nothing detectable there is nothing to place, so the solve is
-    // VACUOUSLY complete — settle it here rather than carrying the dirty flag
+    // VACUOUSLY complete - settle it here rather than carrying the dirty flag
     // out of a branch that can never clear it.
     //
     // This is the one exit that skips the solve block entirely, so leaving the
     // flag set reports "a solve is still owed" on every future frame. Paired
     // with the follow-up request that owed solves now earn, that is a permanent
-    // frame chain on the emptiest possible scene — precisely the hot loop this
+    // frame chain on the emptiest possible scene - precisely the hot loop this
     // whole mechanism exists to remove.
     _lastLabelSolveAt = now;
     _labelSolveDirty = false;
@@ -1566,7 +1566,7 @@ function _drawOverlay(frame) {
   const bracketWidth = _mode === MODE_DENSE ? 1 : 1.25;
   _transitBracketAlpha = fade * bracketPresentationOpacity;
 
-  // Brackets — batched by tier color and linear radial-opacity band.
+  // Brackets - batched by tier color and linear radial-opacity band.
   _ctx.lineWidth = bracketWidth;
   for (const bands of bracketPaths.values()) {
     for (const entry of bands) {
@@ -1651,7 +1651,7 @@ function _drawOverlay(frame) {
   _drawSparseFocusRing(width, height);
   _drawModeBanner(visibleCount, sampledCount);
   // `_labelSolveDirty` surviving a paint means the solve was owed and did not
-  // run — the frame that carried the request cannot be the last one.
+  // run - the frame that carried the request cannot be the last one.
   return {
     didSolve,
     solveMs,

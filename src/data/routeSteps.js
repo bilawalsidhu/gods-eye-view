@@ -13,7 +13,7 @@
  * roundabout turn, exit roundabout, exit rotary, notification, use lane.
  */
 
-/** Cap on steps returned for one route — a 2,500 km drive rarely needs more. */
+/** Cap on steps returned for one route - a 2,500 km drive rarely needs more. */
 export const ROUTE_STEPS_MAX = 200;
 
 const DIRECTION_WORDS = Object.freeze({

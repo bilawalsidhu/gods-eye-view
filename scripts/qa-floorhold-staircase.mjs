@@ -1,14 +1,14 @@
 #!/usr/bin/env node
 /**
- * scripts/qa-floorhold-staircase.mjs — what a grounded contact DOES while its
+ * scripts/qa-floorhold-staircase.mjs - what a grounded contact DOES while its
  * floor data arrives, tick by tick.
  *
  * The unit pins assert the clamp's answer for a given cache state. They cannot
  * see the shape of the transition, which is what an owner actually watches: a
  * contact that reaches the right height by way of a jump into midair and a
  * visible stair-step down is wrong even though every individual answer is
- * defensible. An owner playtest found exactly that — planes floating at
- * terminal gates — and this is the rig that reproduces it.
+ * defensible. An owner playtest found exactly that - planes floating at
+ * terminal gates - and this is the rig that reproduces it.
  *
  * A stationary grounded contact at a cold cell, driven at the 80 ms fleet
  * cadence, with cells warming on a fixed schedule. Reports time-to-surface,
@@ -83,26 +83,26 @@ for (const [name, schedule] of SCENARIOS) {
 console.log(`\nSUMMARY (this tree, post-fix)\n${summary.join('\n')}\n`);
 
 // ---------------------------------------------------------------------------
-// F1 — takeoff roll with the on_ground flag FLAPPING (owner sighting: VIR138M
+// F1 - takeoff roll with the on_ground flag FLAPPING (owner sighting: VIR138M
 // at JFK, 45 kt, "clearly on good ground, then suddenly popped below the
 // ground, then popped back up").
 //
 // Two mechanisms meet here. OpenSky's on_ground flag is not clean through a
 // rotation, and the fix's own height source switches at the same moment: a
 // grounded fix is the resolved surface, an airborne one with baro just
-// appearing is baro + geoid N, which at a sea-level field IS the geoid — below
+// appearing is baro + geoid N, which at a sea-level field IS the geoid - below
 // the ground the contact is still rolling on. Whether that dip is VISIBLE is
 // then entirely down to whether the display clamp still remembers a floor.
 //
 // EVERY tick below is counted, the airborne one included. That tick renders
 // under the runway and always will: the display clamp passes airborne positions
-// through by design — an airborne height is the fix-time clamp's job, and
+// through by design - an airborne height is the fix-time clamp's job, and
 // flooring one would put a rotating aircraft back on the ground. So this rig
 // reports two numbers, not one. The grounded count is what the hold owns and it
 // must be zero. The airborne count is the ACCEPTED transition residual: the
 // flap's own cost at the source, one tick wide, bounded by the field's geoid
 // separation (~4 m here). What the hold changed is what happens AFTER the flap
-// — 12 of 22 grounded ticks buried and not recovering, versus none.
+// - 12 of 22 grounded ticks buried and not recovering, versus none.
 // ---------------------------------------------------------------------------
 const JFK_GROUND = -28.5;   // ~4 m MSL field, geoid N ~ -32.5 m
 const JFK_GEOID = -32.5;

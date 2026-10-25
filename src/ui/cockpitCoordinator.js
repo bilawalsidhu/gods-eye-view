@@ -116,7 +116,7 @@ export class CockpitCoordinator {
     const info = this.cockpitView?.readAircraftInfo?.();
     const active = Boolean(this.cockpitView?.active);
     const gateOpen = Boolean(this.cockpitView?.isEntryAllowed?.());
-    // "Could Cockpit be ENTERED right now" — so it is false while already
+    // "Could Cockpit be ENTERED right now" - so it is false while already
     // inside, unconditionally. Cockpit takes the entity off
     // `viewer.trackedEntity` on entry and NEXT puts one back, which made this
     // flip true/false between calls while `active` stayed true; readers
@@ -199,7 +199,7 @@ export class CockpitCoordinator {
     if (!['flights', 'military'].includes(targetLayer)) {
       return {
         ok: false,
-        error: `Cockpit flies aircraft only — ${targetLayer} contacts cannot be entered`,
+        error: `Cockpit flies aircraft only - ${targetLayer} contacts cannot be entered`,
       };
     }
     const activeLayer =
@@ -216,13 +216,13 @@ export class CockpitCoordinator {
       : false;
     if (moved) return { ok: true, retargeted: true };
     // A filter that matched nothing still enters, as long as the layer is
-    // already right — the operator asked for that layer and is on it.
+    // already right - the operator asked for that layer and is on it.
     if (alreadyOnLayer) return { ok: true, retargeted: false };
     const label = targetLayer === 'military' ? 'military' : 'civilian';
     const filtered = aircraftClass ? `${aircraftClass} ` : '';
     return {
       ok: false,
-      error: `No ${filtered}${label} contact is available to enter — track one first, or say "next ${label}"`,
+      error: `No ${filtered}${label} contact is available to enter - track one first, or say "next ${label}"`,
     };
   }
 
@@ -264,8 +264,8 @@ export class CockpitCoordinator {
           ok: false,
           action: 'control_cockpit',
           error: this._contextModeChanging
-            ? 'Contacts is still starting up — try Cockpit again in a moment'
-            : 'Contacts must be active to enter Cockpit — say "open contacts" first',
+            ? 'Contacts is still starting up - try Cockpit again in a moment'
+            : 'Contacts must be active to enter Cockpit - say "open contacts" first',
           state: this.getCockpitState(),
         };
       }

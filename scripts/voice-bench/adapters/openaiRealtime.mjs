@@ -1,5 +1,5 @@
 /**
- * OpenAI Realtime adapter — text turns over the Realtime WebSocket.
+ * OpenAI Realtime adapter - text turns over the Realtime WebSocket.
  *
  * Each dialogue (one phrase, or a multi-turn dialogue) opens a FRESH session
  * configured with production's exact session body (captured from the token

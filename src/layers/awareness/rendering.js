@@ -227,7 +227,7 @@ export function createRendering({
         ? t('BRG {value}°', {
             value: String(Math.round(bearing)).padStart(3, '0'),
           })
-        : t('BRG —');
+        : t('BRG -');
       const courseText = Number.isFinite(item.track)
         ? ` · ${t('CRS {value}°', {
             value: String(Math.round(item.track)).padStart(3, '0'),
@@ -269,7 +269,7 @@ export function createRendering({
         for (const entity of layerState.visual.entities)
           entity.position.setValue(groundCenter);
         Cesium.Cartesian3.clone(groundCenter, layerState.visual.center);
-        // Content actually changed — buy exactly one frame instead of holding.
+        // Content actually changed - buy exactly one frame instead of holding.
         governorRequestRender('awareness-visual');
       }
       return;

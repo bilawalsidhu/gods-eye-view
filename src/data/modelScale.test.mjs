@@ -7,7 +7,7 @@ import { readLayerSource } from '../testSupport/readLayerSource.mjs';
 // calibration; that factor is now baked into its geometry so future consumers
 // cannot miss it. The original military bug came from copying scale 24 onto the
 // already meter-scale jet, rendering military models ~600–1000 m
-// across — invisible at the ~6 km follow range where minimumPixelSize
+// across - invisible at the ~6 km follow range where minimumPixelSize
 // dominates, but zoom below ~1 km and the camera ends up INSIDE the model.
 //
 // The layer modules pull the full Cesium engine and don't export their
@@ -15,7 +15,7 @@ import { readLayerSource } from '../testSupport/readLayerSource.mjs';
 // are read from source, and each GLB's native bounding radius is computed from
 // its POSITION accessor min/max with the node hierarchy's transforms applied
 // (both legacy GLBs are now transform-applied, but the hierarchy-aware reader
-// guards future asset updates). For jet.glb this yields 29.83 — Cesium's
+// guards future asset updates). For jet.glb this yields 29.83 - Cesium's
 // Model.boundingSphere.radius / scale measured in-app (2026-07-02).
 import { test } from 'node:test';
 import * as Cesium from 'cesium';
@@ -35,7 +35,7 @@ import {
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 
-/** Every class's rendered bounding radius (m) must land in this envelope —
+/** Every class's rendered bounding radius (m) must land in this envelope -
  *  bigger than any clamped-down light aircraft, smaller than the largest real
  *  heavy (A380/An-124 bounding radius ~45 m), nowhere near the 500–1000 m of
  *  the scale-24 jet.glb bug. */
@@ -380,7 +380,7 @@ const LAYERS = [
   {
     name: 'flights',
     source: 'src/data/flights.js',
-    // All classes share one GLB today (see CLASS_MODEL_URL) — assert that, so
+    // All classes share one GLB today (see CLASS_MODEL_URL) - assert that, so
     // a real per-class asset drop-in forces this test to grow with it.
     asset: (() => {
       const urls = new Set(Object.values(CLASS_MODEL_URL));
@@ -420,7 +420,7 @@ for (const layer of measured) {
       assert.ok(
         worldRadius >= WORLD_RADIUS_MIN_M && worldRadius <= WORLD_RADIUS_MAX_M,
         `${klass}: world bounding radius ${worldRadius.toFixed(1)} m outside ` +
-        `[${WORLD_RADIUS_MIN_M}, ${WORLD_RADIUS_MAX_M}] m — MODEL_SCALE is calibrated ` +
+        `[${WORLD_RADIUS_MIN_M}, ${WORLD_RADIUS_MAX_M}] m - MODEL_SCALE is calibrated ` +
         `for a different asset's native scale`,
       );
     }
@@ -438,7 +438,7 @@ for (const layer of measured) {
     assert.ok(
       Math.abs(layer.bellyOffsetNative - layer.originAboveBelly) <= tol,
       `MODEL_BELLY_OFFSET_NATIVE ${layer.bellyOffsetNative} vs measured ` +
-      `${layer.originAboveBelly.toFixed(3)} (tol ${tol.toFixed(3)}) — the constant was ` +
+      `${layer.originAboveBelly.toFixed(3)} (tol ${tol.toFixed(3)}) - the constant was ` +
       'calibrated for a different asset; re-measure the GLB (glTF Y-up AABB, node transforms applied)',
     );
   });
@@ -450,7 +450,7 @@ test('flights and military models render at matching world sizes (cross-layer pa
   assert.ok(
     ratio > 1 / 1.5 && ratio < 1.5,
     `base world radii differ ×${(ratio >= 1 ? ratio : 1 / ratio).toFixed(1)} ` +
-    `(flights ${flights.baseWorldRadius.toFixed(1)} m vs military ${military.baseWorldRadius.toFixed(1)} m) — ` +
+    `(flights ${flights.baseWorldRadius.toFixed(1)} m vs military ${military.baseWorldRadius.toFixed(1)} m) - ` +
     'the layers render side by side, so a class must read the same size in both',
   );
 });
@@ -461,7 +461,7 @@ test('flights and military models render at matching world sizes (cross-layer pa
 // test above does not apply to them; instead each registry entry's radiusM
 // and bellyM must MATCH the shipped GLB (the layers consume these numbers for
 // pixel-cap math and grounded-model lift). Envelope: a real C172 (r≈7.1 m)
-// up to a real 787-9 (r≈44.1 m) — nothing clamped, nothing monstrous.
+// up to a real 787-9 (r≈44.1 m) - nothing clamped, nothing monstrous.
 const REAL_RADIUS_MIN_M = 5;
 const REAL_RADIUS_MAX_M = 60;
 for (const [klass, spec] of Object.entries(CLASS_MODEL_REAL)) {
@@ -472,24 +472,24 @@ for (const [klass, spec] of Object.entries(CLASS_MODEL_REAL)) {
     assert.ok(
       radius >= REAL_RADIUS_MIN_M && radius <= REAL_RADIUS_MAX_M,
       `${klass}: bounding radius ${radius.toFixed(2)} m outside the real-aircraft ` +
-      `envelope [${REAL_RADIUS_MIN_M}, ${REAL_RADIUS_MAX_M}] m — the GLB is not baked to meters`,
+      `envelope [${REAL_RADIUS_MIN_M}, ${REAL_RADIUS_MAX_M}] m - the GLB is not baked to meters`,
     );
     const tol = radius * 0.02;
     assert.ok(
       Math.abs(radius - spec.radiusM) <= tol,
       `${klass}: registry radiusM ${spec.radiusM} vs measured ${radius.toFixed(3)} ` +
-      `(tol ${tol.toFixed(3)}) — re-measure the GLB and update CLASS_MODEL_REAL`,
+      `(tol ${tol.toFixed(3)}) - re-measure the GLB and update CLASS_MODEL_REAL`,
     );
     assert.ok(
       Math.abs(belly - spec.bellyM) <= tol,
       `${klass}: registry bellyM ${spec.bellyM} vs measured ${belly.toFixed(3)} ` +
-      `(tol ${tol.toFixed(3)}) — grounded models would sink or hover; update CLASS_MODEL_REAL`,
+      `(tol ${tol.toFixed(3)}) - grounded models would sink or hover; update CLASS_MODEL_REAL`,
     );
   });
 }
 
 // militaryFlights renders airplane.glb for its heavy classes with duplicated
-// PLANE_* constants — pin them to the measured meter-scale GLB + flights'
+// PLANE_* constants - pin them to the measured meter-scale GLB + flights'
 // calibration so the copies cannot drift.
 test('military layer airplane.glb constants match the measured GLB and flights calibration', () => {
   const src = readLayerSource(path.join(ROOT, 'src/data/militaryFlights.js'));
@@ -526,8 +526,8 @@ test('shared-model visual-centre metadata matches the shipped GLBs', () => {
 // so the anchor decides both whether the trail terminates ON the aeroplane and
 // whether the last stretch of it crosses the airframe. An earlier round put the
 // anchor on the aft-belly AABB CORNER, reasoning that a point aft of every
-// vertex cannot be crossed. True, but a corner is empty space — 4.80 m from any
-// real geometry on airplane.glb, 6.14 m on jet.glb — so the trail ended in mid
+// vertex cannot be crossed. True, but a corner is empty space - 4.80 m from any
+// real geometry on airplane.glb, 6.14 m on jet.glb - so the trail ended in mid
 // air beside the model. The anchor is now a genuine hull point, and these pins
 // re-derive it from the POSITION BUFFERS rather than restating the table.
 test('every approved aircraft model has a trail anchor on its real aft-belly hull', () => {
@@ -553,19 +553,19 @@ test('every approved aircraft model has a trail anchor on its real aft-belly hul
     //    metres out in open air, and this is what said so.
     // Measured bound across the shipped assets is <= 5e-5 native: re-measured
     // from these buffers they span 5.2e-6 (bell206) to 4.1e-5 (atr72), with
-    // airplane.glb at 1.5e-5 and jet.glb at 1.8e-5. None is exactly zero — the
-    // anchor is the nearest point of a triangulated profile, not a vertex — so
+    // airplane.glb at 1.5e-5 and jet.glb at 1.8e-5. None is exactly zero - the
+    // anchor is the nearest point of a triangulated profile, not a vertex - so
     // 1e-4 is met with margin and is still tight enough to catch an anchor that
     // has left the hull; the old 1e-3 was loose enough to be uninformative.
     const offHull = distanceToSurface(actual, verts, tris);
     assert.ok(
       offHull <= 1e-4,
-      `${url}: trail anchor must lie ON the mesh — it is ${offHull.toFixed(4)} m off the ` +
+      `${url}: trail anchor must lie ON the mesh - it is ${offHull.toFixed(4)} m off the ` +
       'nearest triangle, so the trail would end in mid air beside the aircraft',
     );
 
     // 2. AFT of the airframe's middle, or the head segment enters at the tail
-    //    and stops inside the fuselage — the line through the model the review
+    //    and stops inside the fuselage - the line through the model the review
     //    photographed. Every shipped asset clears 80 % of its aft extreme.
     assert.ok(
       actual[0] > centre[0],
@@ -573,14 +573,14 @@ test('every approved aircraft model has a trail anchor on its real aft-belly hul
     );
     assert.ok(
       actual[0] >= max[0] * 0.8,
-      `${url}: trail anchor must sit on the AFT hull — ${actual[0].toFixed(3)} is only ` +
+      `${url}: trail anchor must sit on the AFT hull - ${actual[0].toFixed(3)} is only ` +
       `${(actual[0] / max[0] * 100).toFixed(1)}% of the ${max[0].toFixed(3)} aft extreme`,
     );
 
     // 3. BELOW: nothing of the aircraft hangs lower than the anchor at or
     //    behind its own station, so the trail leaves from underneath rather
     //    than out of the roof. Stated against the station rather than against
-    //    the global minimum on purpose — the global lowest vertex is a wingtip
+    //    the global minimum on purpose - the global lowest vertex is a wingtip
     //    or a gear leg amidships, and demanding the anchor match it is what
     //    drove the previous round off the hull in the first place.
     const profile = centrelineProfile(verts, tris);
@@ -598,7 +598,7 @@ test('every approved aircraft model has a trail anchor on its real aft-belly hul
     assert.equal(actual[2], 0, `${url}: trail anchor must stay on the longitudinal centreline`);
 
     // 5. And the value itself is the closest centreline hull point to the
-    //    aft-belly corner — the construction, re-derived. This is what makes
+    //    aft-belly corner - the construction, re-derived. This is what makes
     //    the table re-measurable rather than re-guessable.
     const corner = [max[0], min[1], 0];
     const nearest = closestProfilePoint(corner, profile, tris, verts);
@@ -613,7 +613,7 @@ test('every approved aircraft model has a trail anchor on its real aft-belly hul
 
 // A PARKED contact is the case this decides. Grounded tracking starts a trail
 // unconditionally, and on a contact that has not moved the last body point sits
-// where the aircraft is — so the head segment ran from inside the model out to
+// where the aircraft is - so the head segment ran from inside the model out to
 // its own aft-belly anchor, straight through half the fuselage. The cut is on
 // the segment's START, not its length (a length test hides trail that is
 // genuinely in open air) and never on its END (clipping at the envelope stops a
@@ -621,8 +621,8 @@ test('every approved aircraft model has a trail anchor on its real aft-belly hul
 //
 // A flat 1-D rig stands in for the world here: the model centre at the origin,
 // the aft-belly anchor at its own measured station, and the last body point
-// swept out along +x. That is exactly the geometry the guard reasons about —
-// two distances from one centre — so the arithmetic under test is the shipped
+// swept out along +x. That is exactly the geometry the guard reasons about -
+// two distances from one centre - so the arithmetic under test is the shipped
 // arithmetic, with no transform chain in the way (that is the pin below).
 const TRAIL_RIG_URLS = new Set([
   ...Object.keys(MODEL_VISUAL_CENTER_NATIVE),
@@ -637,7 +637,7 @@ function trailRigAnchor(url) {
   return { x: native[0] || 0, y: native[1] || 0, z: 0 };
 }
 /** Visible length of the head segment the guard would have drawn, in metres.
- *  Zero means nothing is drawn — which is the answer the whole guard exists for. */
+ *  Zero means nothing is drawn - which is the answer the whole guard exists for. */
 function drawnHeadLength(start, anchor, centre, envelope) {
   const from = trailHeadStart(start, anchor, centre, envelope, { x: 0, y: 0, z: 0 });
   if (!from) return 0;
@@ -648,7 +648,7 @@ test('a stationary contact draws no trail head, and a moving one draws all of it
   for (const url of TRAIL_RIG_URLS) {
     const envelope = nativeBoundingRadius(path.join(ROOT, 'public', url));
     const anchor = trailRigAnchor(url);
-    // Parked: the last body point is where the aircraft is. Nothing at all —
+    // Parked: the last body point is where the aircraft is. Nothing at all -
     // not a short segment, not a degenerate one. Nothing.
     assert.equal(
       trailHeadStart(trailRigCentre, anchor, trailRigCentre, envelope, { x: 0, y: 0, z: 0 }), null,
@@ -662,7 +662,7 @@ test('a stationary contact draws no trail head, and a moving one draws all of it
     assert.equal(drawnHeadLength(trailRigAt(station * 0.5), anchor, trailRigCentre, envelope), 0,
       `${url}: a segment that would run forward of its own anchor draws nothing`);
     // At and past the envelope the segment is real and must be drawn IN FULL so
-    // it reaches the hull — the failure mode clipping introduced. Referentially
+    // it reaches the hull - the failure mode clipping introduced. Referentially
     // the caller's own start point, so a contact that has cleared its own size
     // is bit-for-bit what the containment rule drew.
     const clear = trailRigAt(envelope * 1.01);
@@ -677,7 +677,7 @@ test('a stationary contact draws no trail head, and a moving one draws all of it
   const anchor = trailRigAnchor('/models/airplane.glb');
   for (const [d, why] of [
     [58, 'a fix 58 m aft is well outside the envelope and its segment must be drawn'],
-    [7500, 'a jet covers ~7.5 km between fixes — that trail must never be shortened'],
+    [7500, 'a jet covers ~7.5 km between fixes - that trail must never be shortened'],
     [300, 'even a slow 10 m/s taxi between 30 s fixes still draws its whole trail'],
   ]) {
     const start = trailRigAt(d);
@@ -702,7 +702,7 @@ test('a stationary contact draws no trail head, and a moving one draws all of it
 //
 // So this asks the continuity question directly: sweep the start out through
 // the boundary in small steps and require the VISIBLE LENGTH to move by no more
-// than the step allows. The bound is 3x the step — the drawn length is at worst
+// than the step allows. The bound is 3x the step - the drawn length is at worst
 // the segment's own growth (1:1 with the step) plus the reveal sliding across a
 // shell that is never shorter than the segment it reveals, so 3 is a ceiling
 // with room, and it is nowhere near the 10.33 m the boolean produced.
@@ -718,7 +718,7 @@ test('the trail head grows continuously across the envelope, never in one step',
       assert.ok(
         length - previous <= step * 3 + 1e-9 && previous - length <= step * 3 + 1e-9,
         `${url}: the head jumped ${Math.abs(length - previous).toFixed(3)} m across a ` +
-        `${step.toFixed(3)} m step at ${d.toFixed(3)} m — that is the flash, not motion`,
+        `${step.toFixed(3)} m step at ${d.toFixed(3)} m - that is the flash, not motion`,
       );
       // Never longer than the segment actually being drawn: the guard only ever
       // takes trail away from the START, and only ever from inside the envelope.
@@ -746,7 +746,7 @@ test('the trail head grows continuously across the envelope, never in one step',
     (d) => drawnHeadLength(trailRigAt(d), anchor, trailRigCentre, airliner));
   const spread = Math.max(...flap) - Math.min(...flap);
   assert.ok(spread < 0.1,
-    `an in/out/in flap across the boundary moved the trail ${spread.toFixed(3)} m — ` +
+    `an in/out/in flap across the boundary moved the trail ${spread.toFixed(3)} m - ` +
     'the boolean rule moved the whole segment, and that is what the operator saw');
   assert.ok(Math.min(...flap) > 10,
     'every visit in that flap is a real ~10 m segment: the inside ones are partial, not absent');
@@ -760,14 +760,14 @@ test('the trail head grows continuously across the envelope, never in one step',
 // and multiplied straight by `modelMatrix`, which is half of Cesium's
 // correction (the `fromGltfAsync` defaults also apply Z_UP_TO_X_UP). The
 // aircraft's longitudinal axis is raw glTF X, so the aft offset landed on the
-// RENDERED model's LATERAL axis — a 90-degree error that `modelMatrix`'s
+// RENDERED model's LATERAL axis - a 90-degree error that `modelMatrix`'s
 // heading then rotated into world space, putting the trail out to one side and
 // flipping which side as the course changed.
 //
 // A single-heading harness cannot catch this, which is exactly how it reached
 // the owner: at one heading a wrongly-framed offset can coincidentally point
 // aft. So this sweeps headings and every shipped asset, and asserts the
-// property directly — the anchor lies in the model's longitudinal/vertical
+// property directly - the anchor lies in the model's longitudinal/vertical
 // plane, with NO lateral component.
 //
 // The mock carries a NON-IDENTITY `sceneGraph.components.transform`, because
@@ -775,7 +775,7 @@ test('the trail head grows continuously across the envelope, never in one step',
 // code reads it: Cesium renders `modelMatrix x components.transform x
 // axisCorrection`, and an asset with a baked root transform has to ride all
 // three. A scale and an offset ALONG the model's own axes is the strongest
-// choice the property survives — it changes both numbers the pin asserts
+// choice the property survives - it changes both numbers the pin asserts
 // (identity would leave them at the raw table values, which is the answer a
 // dropped link also gives) while leaving lateral zero, which is the regression.
 const TRAIL_ROOT_SCALE = 2;
@@ -805,7 +805,7 @@ test('the trail anchor rides the rendered longitudinal axis at every heading', (
       const origin = Cesium.Matrix4.getTranslation(modelMatrix, new Cesium.Cartesian3());
       const world = modelAnchorWorld(model, anchor, new Cesium.Cartesian3());
       // Reference axes derived INDEPENDENTLY, from the ENU frame and the same
-      // heading the matrix was built with — deliberately NOT through
+      // heading the matrix was built with - deliberately NOT through
       // modelAnchorWorld. Taking them through the function under test makes the
       // check self-consistent: a wrong transform rotates the anchor and the
       // reference frame together and the lateral component stays zero, which is
@@ -832,11 +832,11 @@ test('the trail anchor rides the rendered longitudinal axis at every heading', (
       // The anchor must lie in the vertical plane through the heading. The
       // regression put the whole longitudinal offset on THIS axis.
       assert.ok(Math.abs(side) < 1e-4,
-        `${where}: the anchor must have NO lateral component (got ${side.toFixed(4)} m) — ` +
+        `${where}: the anchor must have NO lateral component (got ${side.toFixed(4)} m) - ` +
         'a sideways offset is the field regression, and it is invisible at a single heading');
       // SIGNED, not magnitudes. An `abs()` on both sides passes an anchor that
       // landed on the nose instead of the tail, or on the roof instead of the
-      // belly — which are the two directions the table exists to fix. The
+      // belly - which are the two directions the table exists to fix. The
       // expected values carry the root transform, so a dropped `components`
       // link fails here rather than quietly rendering the raw table value.
       const expectedAlong = anchor[0] * TRAIL_ROOT_SCALE + TRAIL_ROOT_OFFSET.lengthwise;
@@ -853,7 +853,7 @@ test('the trail anchor rides the rendered longitudinal axis at every heading', (
 
 // A helicopter is in the sweep above by asset, but the field report also had a
 // hovering H60 whose course is ill-defined. The anchor must not depend on the
-// contact having a meaningful heading — it is a model-space offset, so an
+// contact having a meaningful heading - it is a model-space offset, so an
 // arbitrary heading still puts it aft of the hull.
 test('a hovering rotorcraft anchors aft of its own hull, whatever its heading', () => {
   const position = Cesium.Cartesian3.fromDegrees(-97.7, 30.2, 300);

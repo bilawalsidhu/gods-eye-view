@@ -116,7 +116,7 @@ test('parseCataloniaXml extracts every field from a feature block', () => {
 test('normalizeCataloniaImageUrl rewrites SCT RenderService links to the direct http TransitCamera URL', () => {
   // RenderService always 302s to a hardcoded http:// Location (which
   // fetchWithinHost refuses as a scheme downgrade), and mct.gencat.cat's TLS
-  // setup fails the handshake with Node's fetch regardless — TransitCamera
+  // setup fails the handshake with Node's fetch regardless - TransitCamera
   // over plain http is the only transport that actually works here, so we
   // build that URL from RenderService's sctidcam id instead of registering
   // the redirector.
@@ -219,7 +219,10 @@ test('normalizeCataloniaImageUrl accepts only a bare image filename as the SCT s
 
 test('decodeNumericEntities decodes decimal and hex references and leaves invalid ones as written', () => {
   assert.equal(decodeNumericEntities('Llu&#237;s'), 'Lluís');
-  assert.equal(decodeNumericEntities('Llu&#xED;s &#x1F6A6;'), 'Lluís 🚦');
+  assert.equal(
+    decodeNumericEntities('Llu&#xED;s &#x1F6A6;'),
+    'Lluís \u{1F6A6}',
+  );
   assert.equal(decodeNumericEntities('Llu&#XeD;s'), 'Lluís');
   for (const raw of [
     'a&#99999999999999999999999;b',
@@ -423,7 +426,7 @@ test('the Catalonia catalog fetch refuses redirects and oversized bodies', async
   assert.deepEqual(await loadCataloniaSourcesFromOpenData(), []);
 
   // So is a body with no declared size that only turns out too long while
-  // streaming — a valid feed padded past the cap.
+  // streaming - a valid feed padded past the cap.
   t.mock.restoreAll();
   t.mock.method(console, 'warn', () => {});
   t.mock.method(globalThis, 'fetch', async () => {

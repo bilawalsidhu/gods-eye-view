@@ -1,7 +1,7 @@
 // src/data/aircraftMeta.js
 /**
  * Sticky per-aircraft metadata merge: once a field has resolved for an
- * aircraft, a later snapshot that MISSES the field (empty/null — OpenSky and
+ * aircraft, a later snapshot that MISSES the field (empty/null - OpenSky and
  * adsb.lol both do this intermittently) must not regress it. A later snapshot
  * that CHANGES the field always wins. Pattern from skylight (MIT)
  * server/src/datasource.ts "sticky enrichment".

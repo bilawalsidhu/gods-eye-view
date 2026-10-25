@@ -272,7 +272,7 @@ const CELL_ORIGIN = 8192;
  * Reusable uniform grid over placement rectangles. Buckets and their numeric
  * cell keys survive across solves; the previous contents are invalidated by a
  * generation stamp instead of rebuilding a Map of string-keyed arrays. The
- * duplicate-visit set the original kept is unnecessary — `overlaps` is pure, so
+ * duplicate-visit set the original kept is unnecessary - `overlaps` is pure, so
  * re-testing the same rectangle in a second cell returns the same answer.
  */
 class SpatialHash {
@@ -297,7 +297,7 @@ class SpatialHash {
    * Smi; anything beyond that folds into the edge cells. The clamp is
    * conservative, never lossy: two overlapping rectangles always share at
    * least one unclamped cell, which maps to the same clamped key, so folding
-   * can only add candidate comparisons — `overlaps` still decides — and can
+   * can only add candidate comparisons - `overlaps` still decides - and can
    * never hide a real collision.
    */
   _cellKey(x, y) {
@@ -653,7 +653,7 @@ class SpatialCandidateQueue {
 }
 
 /**
- * First placement in the canonical attempt order — finite rectangles only,
+ * First placement in the canonical attempt order - finite rectangles only,
  * sticky corner first. Equivalent to the head of the filtered/stable-sorted
  * list the original built, without materializing it.
  */
@@ -815,8 +815,8 @@ export class LabelArbiter {
 
   /**
    * Number of live states, for indexed per-frame iteration. Callers must not
-   * receive the pooled backing array — a caller that mutated it would desync
-   * the arbiter permanently — and must not iterate `states` directly either,
+   * receive the pooled backing array - a caller that mutated it would desync
+   * the arbiter permanently - and must not iterate `states` directly either,
    * because a Map iterator allocates a result object per step.
    * @returns {number}
    */
@@ -842,7 +842,7 @@ export class LabelArbiter {
    * stamp maps), exactly as the original `Set`/`Map` did, so two candidate
    * objects sharing one key still get a single attempt and a single slot. The
    * queue spread distances and few-placement masks live in candidate-indexed
-   * pooled storage, so duplicates keep independent spatial state — harmless,
+   * pooled storage, so duplicates keep independent spatial state - harmless,
    * because only the one that wins the key is ever selected, but callers
    * should keep keys unique per solve.
    */

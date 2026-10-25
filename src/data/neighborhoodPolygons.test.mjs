@@ -1,4 +1,4 @@
-// src/data/neighborhoodPolygons.test.mjs — pins the bundled DataSF "Analysis
+// src/data/neighborhoodPolygons.test.mjs - pins the bundled DataSF "Analysis
 // Neighborhoods" dataset (PDDL 1.0, see local_data/neighborhoods/SOURCE.md) and
 // its resolution contract through the source-agnostic loader.
 import { test } from 'node:test';
@@ -74,9 +74,9 @@ test('name specificity: Presidio vs Presidio Heights, Mission vs Outer Mission',
 });
 
 test('points outside covered cities / unmatched names return null', async () => {
-  // Austin, TX — outside every bundled city bbox.
+  // Austin, TX - outside every bundled city bbox.
   assert.equal(await lookupNeighborhoodRing(30.2672, -97.7431, 'Downtown'), null);
-  // Inside SF but a name the dataset does not carry — no point-in-polygon fallback.
+  // Inside SF but a name the dataset does not carry - no point-in-polygon fallback.
   assert.equal(await lookupNeighborhoodRing(37.7793, -122.4193, 'Zilker Park'), null);
 });
 
@@ -88,7 +88,7 @@ test('taxonomy aliases: old names reach the renamed DataSF polygon', async () =>
   // Colloquial "Downtown" (in SF) maps to the same polygon.
   const downtown = await lookupNeighborhoodRing(37.7946, -122.3999, 'Downtown');
   assert.equal(downtown?.name, 'Financial District/South Beach');
-  // "Downtown/Civic Center" deliberately has NO alias — the taxonomy split it,
+  // "Downtown/Civic Center" deliberately has NO alias - the taxonomy split it,
   // and a confident wrong polygon would block the live resolver ladder.
   assert.equal(await lookupNeighborhoodRing(37.7793, -122.4193, 'Downtown/Civic Center'), null);
 });

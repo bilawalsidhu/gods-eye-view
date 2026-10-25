@@ -1,5 +1,5 @@
 /**
- * Idle render governor — the wave-2 flagship of the 2026-08-05 perf
+ * Idle render governor - the wave-2 flagship of the 2026-08-05 perf
  * investigation.
  *
  * The problem: Cesium's default render loop repaints every vsync forever, so
@@ -8,12 +8,12 @@
  * whenever nothing animates per frame, and return to the continuous loop the
  * moment something does.
  *
- * Architecture — a binary mode driven by ref-counted holds:
+ * Architecture - a binary mode driven by ref-counted holds:
  *
  * - **Continuous mode** (`requestRenderMode = false`, today's behavior)
- *   while ANY hold is registered. Every per-frame animator — fleet
+ *   while ANY hold is registered. Every per-frame animator - fleet
  *   interpolation, traffic sim, satellite motion, tracked-entity follow,
- *   style crossfades, CCTV projection — registers a hold for exactly the
+ *   style crossfades, CCTV projection - registers a hold for exactly the
  *   lifetime of its scene-loop listener or animation. While one is active,
  *   behavior is byte-identical to pre-governor main: the locked
  *   interpolation/tracking invariants are preserved by construction.
@@ -23,7 +23,7 @@
  *   mutators (layer poll ticks, slider writes, annotation changes) route
  *   through that.
  *
- * Holds are identity-keyed (a Set of owner ids), NOT a counter — a module
+ * Holds are identity-keyed (a Set of owner ids), NOT a counter - a module
  * that double-holds or double-releases cannot corrupt the mode. Owners are
  * short stable strings ('flights', 'traffic', 'style-anim', …) so the
  * diagnostics read like a story.
@@ -55,7 +55,7 @@ function applyMode() {
 /**
  * Install the governor on the viewer. Idempotent. Before install,
  * hold/release still record into the holds set (and apply at install time);
- * requests are safe no-ops — so modules can call all three unconditionally
+ * requests are safe no-ops - so modules can call all three unconditionally
  * in tests without a viewer.
  * @param {Cesium.Viewer} viewer
  * @returns {void}
@@ -65,7 +65,7 @@ export function installRenderGovernor(viewer) {
     throw new TypeError('installRenderGovernor requires a Cesium viewer');
   _viewer = viewer;
   _installed = true;
-  // Never let Cesium re-render on simulation-time deltas behind our back —
+  // Never let Cesium re-render on simulation-time deltas behind our back -
   // idle means idle. All re-renders are camera/tiles (Cesium-native) or
   // explicit requests.
   viewer.scene.maximumRenderTimeChange = Infinity;
@@ -100,7 +100,7 @@ export function releaseContinuousRender(ownerId) {
 
 /**
  * One-shot render request for a discrete scene mutation (layer tick, slider
- * write, annotation change). Always forwards to scene.requestRender() — in
+ * write, annotation change). Always forwards to scene.requestRender() - in
  * continuous mode that is a harmless flag set (and forwarding closes the
  * request-then-last-release race); only idle-mode requests are recorded in
  * diagnostics. Cheap enough to call unconditionally after any mutation.

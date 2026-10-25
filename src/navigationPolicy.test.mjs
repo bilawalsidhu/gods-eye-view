@@ -108,7 +108,7 @@ function navigator() {
   };
 }
 
-test('a free camera is stamped, released, then flown — in that order', () => {
+test('a free camera is stamped, released, then flown - in that order', () => {
   const s = spy();
   const result = runExplicitNavigation({ cockpitActive: false, noun: 'location', ...s });
   assert.equal(result, 'flew');
@@ -123,7 +123,7 @@ test('the accepted intent hands its stamp to the flight', () => {
 
 test('cockpit refuses without stamping or releasing anything', () => {
   // Releasing under cockpit destroys its hidden aircraft entity and the rig
-  // silently exits on the next update — the refusal must come first.
+  // silently exits on the next update - the refusal must come first.
   for (const noun of ['location', 'camera', 'vessel', 'fire']) {
     const s = spy();
     const result = runExplicitNavigation({ cockpitActive: true, noun, ...s });
@@ -189,7 +189,7 @@ test('disposed deferred work is inert before release', () => {
 });
 
 test('deferred handoff: a superseded request neither flies nor releases', () => {
-  // The newer intent owns the camera now — releasing here would yank it.
+  // The newer intent owns the camera now - releasing here would yank it.
   const s = spy();
   const ok = reassertNavigationHandoff({ generation: 3, currentGeneration: 4, ...s });
   assert.equal(ok, false);
@@ -212,7 +212,7 @@ test('deferred handoff: supersession is checked before cockpit, so it stays sile
 });
 
 // Interleavings: the generation advances on EVERY explicit intent, not just on
-// another search. A search-only token left all of these open — the stale search
+// another search. A search-only token left all of these open - the stale search
 // still held the current token and flew over the newer destination.
 test('interleaving: a canned destination during a search retires the search', () => {
   const nav = navigator();

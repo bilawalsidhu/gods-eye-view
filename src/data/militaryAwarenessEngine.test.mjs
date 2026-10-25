@@ -12,16 +12,16 @@ import {
 test('awareness formatters preserve valid zeroes and replace missing or invalid values', () => {
   assert.equal(formatAwarenessDistance(0), '0 m');
   assert.equal(formatAwarenessDistance(950), '950 m');
-  assert.equal(formatAwarenessDistance(Number.NaN), '—');
-  assert.equal(formatAwarenessDistance(-1), '—');
+  assert.equal(formatAwarenessDistance(Number.NaN), '-');
+  assert.equal(formatAwarenessDistance(-1), '-');
   assert.equal(formatAwarenessLabel(' UAL649 '), 'UAL649');
   assert.equal(formatAwarenessLabel(0), '0');
   assert.equal(formatAwarenessLabel({ callsign: ' UAL649 ', id: 'fallback' }), 'UAL649');
   assert.equal(formatAwarenessLabel({ name: '', label: 'Mapped site' }), 'Mapped site');
   assert.equal(formatAwarenessLabel({ id: 0 }), '0');
-  assert.equal(formatAwarenessLabel(''), '—');
-  assert.equal(formatAwarenessLabel({}), '—');
-  assert.equal(formatAwarenessLabel(undefined), '—');
+  assert.equal(formatAwarenessLabel(''), '-');
+  assert.equal(formatAwarenessLabel({}), '-');
+  assert.equal(formatAwarenessLabel(undefined), '-');
 });
 
 test('awareness cohorts sort nearest-first and do not turn empty data into out of range', () => {

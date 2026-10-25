@@ -103,7 +103,7 @@ const PNG = Buffer.from(
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFBQIAX8jx0gAAAABJRU5ErkJggg==',
   'base64',
 );
-/** Stored (uncompressed) zip — enough for a KMZ fixture. */
+/** Stored (uncompressed) zip - enough for a KMZ fixture. */
 function storedZip(files) {
   const parts = [];
   const central = [];
@@ -191,7 +191,7 @@ page.on('request', (request) => {
 let failures = 0;
 function check(name, passed, detail = '') {
   console.log(
-    `[${passed ? 'PASS' : 'FAIL'}] ${name}${detail ? ` — ${detail}` : ''}`,
+    `[${passed ? 'PASS' : 'FAIL'}] ${name}${detail ? ` - ${detail}` : ''}`,
   );
   if (!passed) failures++;
 }

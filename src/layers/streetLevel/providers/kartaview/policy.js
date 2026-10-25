@@ -50,7 +50,7 @@ export const COVERAGE_TUNING = Object.freeze({
 export const TOO_HIGH_HINT = msg('zoom in to see KartaView coverage');
 export const NO_COVERAGE_HINT = msg('no KartaView photos in view');
 export const RATE_LIMITED_MESSAGE = msg(
-  'KartaView is rate-limiting requests — they resume on their own',
+  'KartaView is rate-limiting requests - they resume on their own',
 );
 
 /**
@@ -135,7 +135,7 @@ export const MASK_KEEP_SHARE = 0.5;
 /** Points along a segment are tested this many mask pixels apart. */
 export const MASK_SAMPLE_PX = 2;
 export const MASK_SLOW_MESSAGE = msg(
-  'KartaView did not filter this area in time — move the map to ask again',
+  'KartaView did not filter this area in time - move the map to ask again',
 );
 export const FILTERED_OUT_MESSAGE = msg(
   'None of KartaView’s photos here pass the imagery filter',

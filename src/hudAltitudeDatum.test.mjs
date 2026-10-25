@@ -1,5 +1,5 @@
 // The HUD's ALT readout datum. Field report (2026-08-22, cockpit parked at
-// SFO): the bottom-right OSD read "ALT: -15M" — and JFK, earlier, "ALT: -18M".
+// SFO): the bottom-right OSD read "ALT: -15M" - and JFK, earlier, "ALT: -18M".
 // Cesium reports the camera's height against the WGS84 ELLIPSOID, and San
 // Francisco's geoid sits ~32 m BELOW it, so a camera 17 m over the SFO deck
 // reads 32 m too low. The number a viewer reads as "ALT" is MSL.
@@ -43,11 +43,11 @@ registerHooks({
 const { IntelHUD } = await import('./hud.js');
 
 const source = readFileSync(new URL('./hud.js', import.meta.url), 'utf8');
-// Boolean probes, not assert.match on the whole file — a failure here should
+// Boolean probes, not assert.match on the whole file - a failure here should
 // name the missing wiring, not print all of hud.js.
 const has = (pattern) => pattern.test(source);
 
-/** SFO runway 28R touchdown area — the field report's coordinates. */
+/** SFO runway 28R touchdown area - the field report's coordinates. */
 const SFO = { latDeg: 37.616, lonDeg: -122.368 };
 /** The ellipsoidal camera height the owner's screenshot reported. */
 const SFO_ELLIPSOIDAL_M = -15;
@@ -105,7 +105,7 @@ test('hud.js corrects the camera height to MSL through the geoid module', () => 
   assert.equal(
     has(/this\._geoidRequested = true;/),
     true,
-    'the ~2.7 MB grid must be requested once, on demand — not at HUD construction',
+    'the ~2.7 MB grid must be requested once, on demand - not at HUD construction',
   );
   assert.equal(
     has(/\.catch\(\(\) => \{\s*\/\* readout falls back to the uncorrected height \*\/\s*\}\)/),
@@ -172,7 +172,7 @@ test('the sensor model keeps the ellipsoidal height it was tuned against', () =>
 //
 // The grid is a lazy ~2.7 MB chunk, so the first telemetry ticks of a session
 // paint UNCORRECTED. The corner readout picks the correction up on the very
-// next tick once it lands; the summary line has no such cadence — it repaints
+// next tick once it lands; the summary line has no such cadence - it repaints
 // on camera settle or its own 15 s retry. That left a window at SFO where the
 // corner read `ALT: 17m` beside a summary still reading `ALT -15M`, for up to
 // fifteen seconds. Both must move in the SAME tick.
@@ -185,7 +185,7 @@ test('a cold tick paints both readouts uncorrected, and resolving flips both in 
     const alt = () => env.elements.get('hud-alt').textContent;
     const summary = () => env.elements.get('hud-summary').textContent;
 
-    // Tick 1 — cold. This is also the tick that requests the grid.
+    // Tick 1 - cold. This is also the tick that requests the grid.
     hud._updateCameraData();
     assert.match(alt(), /^ALT: -15m/, `cold corner readout, got ${alt()}`);
     assert.match(summary(), /\| ALT -15M \|/, `cold summary tag, got ${summary()}`);
@@ -196,7 +196,7 @@ test('a cold tick paints both readouts uncorrected, and resolving flips both in 
     await ensureGeoidReady();
     await Promise.resolve();
 
-    // Tick 2 — resolved. ONE tick has to move both.
+    // Tick 2 - resolved. ONE tick has to move both.
     hud._updateCameraData();
     assert.match(alt(), /^ALT: 17m/, `corrected corner readout, got ${alt()}`);
     assert.match(
@@ -205,7 +205,7 @@ test('a cold tick paints both readouts uncorrected, and resolving flips both in 
       `the summary must repaint in the same tick the corner does, got ${summary()}`,
     );
 
-    // Tick 3 — steady state. The repaint is a transition, not a per-tick cost.
+    // Tick 3 - steady state. The repaint is a transition, not a per-tick cost.
     const summaryRevisionAfterFlip = hud._summaryRevision;
     hud._updateCameraData();
     assert.match(alt(), /^ALT: 17m/);

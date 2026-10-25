@@ -171,7 +171,7 @@ function overpassProxy({ routing = {} } = {}) {
                 contentType: 'application/json',
                 retryAfterMs: 2000,
                 body: JSON.stringify({
-                  error: 'Overpass proxy busy — try again shortly',
+                  error: 'Overpass proxy busy - try again shortly',
                 }),
               };
             _overpassConcurrent++;

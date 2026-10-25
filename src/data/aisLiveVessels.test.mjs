@@ -1,6 +1,6 @@
 // src/data/aisLiveVessels.test.mjs
 // Focused tests for the AIS feed-status derivation helper (Batch 10, finding H3/AIS)
-// and the vessel vertical-datum seam (2026-07-27 datum pass — see
+// and the vessel vertical-datum seam (2026-07-27 datum pass - see
 // docs/superpowers/specs/2026-07-27-vessel-datum-design.md).
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -145,14 +145,14 @@ test("'live' is the healthy status and reads exactly like the older 'open'", () 
 test('a stale feed is surfaced even though cached vessels are still on screen', () => {
   assert.equal(
     deriveAisFeedError({ status: 'stale', silentForMs: 184_000, lastMessageAt: 5 }, 4_812),
-    'feed silent 184s — no AIS data',
+    'feed silent 184s - no AIS data',
   );
 });
 
 test('a stale feed without a silence figure still says the feed is silent', () => {
   assert.equal(
     deriveAisFeedError({ status: 'stale', lastMessageAt: 5 }, 0),
-    'feed silent — no AIS data',
+    'feed silent - no AIS data',
   );
 });
 
@@ -167,14 +167,14 @@ test('reconnecting reports which attempt is in flight, rows or no rows', () => {
 test('DOWN is a visible terminal state, not a silent retry', () => {
   assert.equal(
     deriveAisFeedError({ status: 'down', reconnectAttempt: 5 }, 1_200),
-    'feed down — retrying slowly (attempt 5)',
+    'feed down - retrying slowly (attempt 5)',
   );
 });
 
 test('a rejected API key reads as actionable, not as a countdown', () => {
   assert.equal(
     deriveAisFeedError({ status: 'auth-failed', reconnectAttempt: 3 }, 4_000),
-    'API key rejected — check AISSTREAM_API_KEY',
+    'API key rejected - check AISSTREAM_API_KEY',
   );
 
   const runtime = makeFakeAisRuntime(1_000_000);
@@ -225,7 +225,7 @@ test('a degraded feed keeps its reason through snapshot classification', () => {
     rows: [{ mmsi: 'cached', lat: 29.7, lon: -95.1 }],
   });
   assert.equal(snapshot.acceptedRowCount, 1, 'the cached vessel is still drawable');
-  assert.equal(snapshot.error, 'feed down — retrying slowly (attempt 5)');
+  assert.equal(snapshot.error, 'feed down - retrying slowly (attempt 5)');
 });
 
 function makeFakeAisRuntime(startMs = 1000) {
@@ -826,7 +826,7 @@ test('vessel selection: another vessel replaces selection; same vessel is a no-o
 // Card models are pure: they read a vessel record and return a vesselLabels
 // entry ({position, gapPx, accent, title, details, selected}). Positions pass
 // through untouched (height-datum caveat: vessels anchor at their current
-// rendered positions — no datum work here).
+// rendered positions - no datum work here).
 
 const POS = Cesium.Cartesian3.fromDegrees(4.05, 51.93, 3);
 
@@ -1121,7 +1121,7 @@ test('vessel interaction wire: empty pick deselects and emits gev:entity-selecti
     assert.equal(aisLiveVesselsLayer.getSelectedInfo(), null);
     assert.equal(harness.hud.textContent, 'AIS: --');
     assert.equal(harness.hud.classList.contains('active'), false);
-    // Empty pick is a deliberate deselect — see the note above.
+    // Empty pick is a deliberate deselect - see the note above.
     assert.deepEqual(cleared, [{ layerId: 'ais-live-vessels', reason: 'deliberate' }]);
   } finally {
     harness.cleanup();
@@ -1510,7 +1510,7 @@ test('EGM96 N pins the field finding: Rotterdam sea sits ~45 m ABOVE the ellipso
 
 // One-click transfer (pre-launch defect #4): clicking a vessel gives it the
 // camera, whether the camera was free or tracking something else. The layer
-// only announces the click — the UI owns the flight (src/worldFocus.js).
+// only announces the click - the UI owns the flight (src/worldFocus.js).
 test('vessel interaction wire: selecting a vessel by click requests a camera transfer', () => {
   const harness = installWireHarness({ id: makeRecord() }, { selectedRecord: null });
   const requests = [];
@@ -1545,7 +1545,7 @@ function hostWithCardHit(entryId) {
 }
 
 // Card clicks (P1-3): cards paint on a pointer-events:none canvas, so a click
-// on one picks the TERRAIN behind it — which read as empty space and cleared
+// on one picks the TERRAIN behind it - which read as empty space and cleared
 // the selection. A card hit must behave exactly like a sprite hit.
 test('vessel interaction wire: clicking a card selects and transfers, like the sprite', () => {
   const harness = installWireHarness({ primitive: {}, content: {}, featureId: 0 }, { selectedRecord: null });
@@ -1679,7 +1679,7 @@ test('vessel interaction wire: deselecting never moves the camera', () => {
 });
 
 test('a vessel analyst record carries the MMSI the tracker keys on', () => {
-  // `id` is a DISPLAY label — the vessel name when it has one — while
+  // `id` is a DISPLAY label - the vessel name when it has one - while
   // selection keys on MMSI. The compact voice payload must carry both, or the
   // analyst → track_entity handoff hands over a name and nothing resolvable.
   const named = mapAnalystRecord({

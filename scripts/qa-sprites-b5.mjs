@@ -1,11 +1,11 @@
 #!/usr/bin/env node
 /**
- * qa-sprites-b5.mjs — throwaway QA harness for skylight Tasks 8+9
+ * qa-sprites-b5.mjs - throwaway QA harness for skylight Tasks 8+9
  * (type-aware billboard silhouettes + per-class 2D/3D scale; Batch 5).
  *
  * Injects synthetic STRAIGHT-FLYING aircraft covering ALL 8 classifyAircraft
- * classes — the flights layer via OpenSky extended categories (state[17]),
- * the military layer via adsb.lol type codes — using the same fetch-shim +
+ * classes - the flights layer via OpenSky extended categories (state[17]),
+ * the military layer via adsb.lol type codes - using the same fetch-shim +
  * history-priming pattern as scripts/qa-heading-b3.mjs (positions analytic at
  * serve time so every fix is self-consistent through the render delay).
  *
@@ -23,7 +23,7 @@
  * Visual output (qa-shots/b5/, untracked): top-down 2D spreads of both rows,
  * per-row close-ups, a tracked-cyan tint shot, and 3D cluster shots at two
  * zooms per layer showing per-class model scale differences. The PNGs are the
- * acceptance test — read them.
+ * acceptance test - read them.
  *
  * Run:  node scripts/qa-sprites-b5.mjs --url http://localhost:4300
  * Exits non-zero if any assertion fails. Never commits anything.
@@ -67,7 +67,7 @@ const CHROME_EXECUTABLE_CANDIDATES = [
   // Prefer puppeteer's version-pinned Chrome-for-Testing over the system
   // Chrome: /Applications auto-updates underneath the harnesses, and its
   // software-GL behavior shifts across majors (system Chrome 150 blew the
-  // tile-gated drain budget under SwiftShader on 2026-07-30 — six
+  // tile-gated drain budget under SwiftShader on 2026-07-30 - six
   // false-negative qa-cctv-v2 runs against a healthy build). A deterministic
   // pinned browser beats the newest one for regression harnesses.
   await puppeteer.executablePath().catch(() => null),
@@ -87,7 +87,7 @@ const results = [];
 function record(name, ok, detail) {
   results.push({ name, ok, detail });
   const tag = ok ? '\x1b[32mPASS\x1b[0m' : '\x1b[31mFAIL\x1b[0m';
-  console.log(`  [${tag}] ${name}${detail ? `  — ${detail}` : ''}`);
+  console.log(`  [${tag}] ${name}${detail ? `  - ${detail}` : ''}`);
 }
 function sleep(ms) { return new Promise((r) => setTimeout(r, ms)); }
 
@@ -101,7 +101,7 @@ function sleep(ms) { return new Promise((r) => setTimeout(r, ms)); }
 // two planes fly rotated courses to confirm sprites still follow the path.
 // ---------------------------------------------------------------------------
 const ROW_LON0 = -97.82;
-const ROW_STEP_DEG = 0.012; // ~1.15 km — full military row (8 planes) fits the unobstructed frame center
+const ROW_STEP_DEG = 0.012; // ~1.15 km - full military row (8 planes) fits the unobstructed frame center
 const CLUSTER_LON0 = -97.7431;
 const mDegLon = (m, lat) => m / (111320 * Math.cos((lat * Math.PI) / 180));
 
@@ -109,7 +109,7 @@ const SPRITES = {
   timeOffsetSec: 0,
   // OpenSky extended categories: 2 light, 4 large airliner, 6 heavy/widebody,
   // 7 high-perf fastjet, 8 rotorcraft, 9 glider. (quadjet/turboprop need type
-  // codes, which OpenSky lacks — the military row covers those.)
+  // codes, which OpenSky lacks - the military row covers those.)
   flights: [
     { icao: 'caa001', callsign: 'FL-LGT', lon0: ROW_LON0 + 0 * ROW_STEP_DEG, lat0: 30.32, courseDeg: 0, speedMps: 80, altM: 2500, category: 2 },
     { icao: 'caa002', callsign: 'FL-AIR', lon0: ROW_LON0 + 1 * ROW_STEP_DEG, lat0: 30.32, courseDeg: 0, speedMps: 80, altM: 2600, category: 4 },
@@ -130,12 +130,12 @@ const SPRITES = {
     { hex: 'dda005', flight: 'ML-WID',  t: 'C17',  lon0: ROW_LON0 + 4 * ROW_STEP_DEG, lat0: 30.28, courseDeg: 0, speedMps: 80, altFt: 12000 },
     { hex: 'dda006', flight: 'ML-QUAD', t: 'B744', lon0: ROW_LON0 + 5 * ROW_STEP_DEG, lat0: 30.28, courseDeg: 0, speedMps: 80, altFt: 13000 },
     { hex: 'dda007', flight: 'ML-HEL',  t: 'H60',  lon0: ROW_LON0 + 6 * ROW_STEP_DEG, lat0: 30.28, courseDeg: 0, speedMps: 40, altFt: 3000 },
-    // course 0 like the rest — keeps the row a clean size-comparison line (2D
+    // course 0 like the rest - keeps the row a clean size-comparison line (2D
     // rotation is demoed by caa004 and gated by qa-heading-b3 anyway).
     { hex: 'dda008', flight: 'ML-FJ',   t: 'F16',  lon0: ROW_LON0 + 7 * ROW_STEP_DEG, lat0: 30.28, courseDeg: 0, speedMps: 80, altFt: 15000 },
     // 3D cluster: C17 vs F16 (tracked) vs B744 vs C130. jet.glb is a
     // real-world-scale asset (native bounding radius ~29.8) rendered at
-    // MODEL_SCALE 1, so models are ~22–43 m radius — same 150 m spacing and
+    // MODEL_SCALE 1, so models are ~22–43 m radius - same 150 m spacing and
     // 450–900 m shot ranges as the flights cluster.
     { hex: 'ddb001', flight: '3DMWID', t: 'C17',  lon0: CLUSTER_LON0 - mDegLon(150, 30.05), lat0: 30.05, courseDeg: 0, speedMps: 60, altFt: 12000 },
     { hex: 'ddb002', flight: '3DMFJ',  t: 'F16',  lon0: CLUSTER_LON0, lat0: 30.05, courseDeg: 0, speedMps: 60, altFt: 12000 },
@@ -152,8 +152,8 @@ const expectedMilitary = new Map(SPRITES.military.map((p) => [p.hex, classifyAir
 async function main() {
   console.log(`\nType-aware sprite QA (Batch 5 / skylight Tasks 8+9)`);
   console.log(`  App URL : ${APP_URL}\n`);
-  console.log(`  Expected classes — flights: ${[...expectedFlights.entries()].map(([k, v]) => `${k}:${v}`).join(' ')}`);
-  console.log(`  Expected classes — military: ${[...expectedMilitary.entries()].map(([k, v]) => `${k}:${v}`).join(' ')}\n`);
+  console.log(`  Expected classes - flights: ${[...expectedFlights.entries()].map(([k, v]) => `${k}:${v}`).join(' ')}`);
+  console.log(`  Expected classes - military: ${[...expectedMilitary.entries()].map(([k, v]) => `${k}:${v}`).join(' ')}\n`);
 
   try {
     const res = await fetch(APP_URL, { method: 'GET' });
@@ -244,7 +244,7 @@ async function main() {
               false,                    // on_ground
               s.speedMps, s.course,
               0, null, null, null, false, 0,
-              f.category,               // state[17] — extended emitter category
+              f.category,               // state[17] - extended emitter category
             ];
           });
           return Promise.resolve(jsonResponse({ time: Math.floor(nowSec), states }));
@@ -329,7 +329,7 @@ async function main() {
         const tRel = (Date.now() - S.epochMs) / 1000 - renderDelaySec;
         return S.stateAt(p, tRel);
       };
-      // Canvas coordinates of every synthetic plane at its displayed position —
+      // Canvas coordinates of every synthetic plane at its displayed position -
       // ground truth for identifying which glyph is which in a screenshot.
       window.__planeCanvasCoords = function (layer, renderDelaySec, altOf) {
         const v = window.__godsEyeView.viewer;
@@ -370,9 +370,9 @@ async function main() {
     if (!(primed.fl > 0 && primed.mil > 0)) { finish(); return; }
 
     // ========================================================================
-    // B2 — billboard glyph + scale per class (machine check)
+    // B2 - billboard glyph + scale per class (machine check)
     // ========================================================================
-    console.log('\nB2 — per-class billboard glyph + scale');
+    console.log('\nB2 - per-class billboard glyph + scale');
     const bbs = await page.evaluate(() => window.__collectBillboards());
     const bbById = new Map(bbs.map((b) => [b.id, b]));
     let glyphBad = [];
@@ -417,14 +417,14 @@ async function main() {
     };
     // Zoom the follow-camera to an absolute range from the tracked entity.
     // In tracked mode camera.position lives in the ENTITY's reference frame, so
-    // its magnitude IS the range — fixed zoomIn() amounts compound across phases
+    // its magnitude IS the range - fixed zoomIn() amounts compound across phases
     // (the second tracked plane inherits the previous phase's close-in offset).
     const zoomToRange = async (want) => {
       await page.evaluate((want) => {
         const v = window.__godsEyeView.viewer;
         const p = v.camera.position;
         const d = Math.hypot(p.x, p.y, p.z);
-        if (d > 1e6) return; // not in a tracked reference frame — leave it alone
+        if (d > 1e6) return; // not in a tracked reference frame - leave it alone
         v.camera.zoomIn(d - want);
       }, want);
       await sleep(1500);
@@ -460,9 +460,9 @@ async function main() {
     console.log('  saved b5-2d-tracked-cyan.png (tracked airliner cyan, follow camera)');
 
     // ========================================================================
-    // B3 + 3D screenshots — flights cluster
+    // B3 + 3D screenshots - flights cluster
     // ========================================================================
-    console.log('\n3D — flights cluster (airplane.glb, per-class scale)');
+    console.log('\n3D - flights cluster (airplane.glb, per-class scale)');
     await page.evaluate(() => {
       const dm = window.__godsEyeView.dataManager;
       dm.layers.get('flights').module.setParams({ models3d: true });
@@ -498,16 +498,16 @@ async function main() {
       await sleep(1500);
       await zoomToRange(900);
       await page.screenshot({ path: path.join(SHOT_DIR, 'b5-3d-flights-mid.png') });
-      console.log('  saved b5-3d-flights-mid.png (900 m range — near the min-pixel clamp)');
+      console.log('  saved b5-3d-flights-mid.png (900 m range - near the min-pixel clamp)');
       await zoomToRange(450);
       await page.screenshot({ path: path.join(SHOT_DIR, 'b5-3d-flights-close.png') });
       console.log('  saved b5-3d-flights-close.png (450 m range: widebody left, airliner center, fastjet right)');
     }
 
     // ========================================================================
-    // B3 + 3D screenshots — military cluster
+    // B3 + 3D screenshots - military cluster
     // ========================================================================
-    console.log('\n3D — military cluster (jet.glb, per-class scale)');
+    console.log('\n3D - military cluster (jet.glb, per-class scale)');
     await page.evaluate(() => {
       const dm = window.__godsEyeView.dataManager;
       dm.layers.get('military').module.setParams({ models3d: true });
@@ -542,7 +542,7 @@ async function main() {
       console.log(`  world bounding radii (m): ${milModels.filter((m) => m.scale !== undefined).map((m) => `${m.id ?? 'tracked'}=${m.radius?.toFixed(1)}`).join(' ')}`);
 
       await sleep(1500);
-      // jet.glb at MODEL_SCALE 1 is real-world size — same shot ranges as the
+      // jet.glb at MODEL_SCALE 1 is real-world size - same shot ranges as the
       // flights cluster (close zoom no longer puts the camera inside a model).
       await zoomToRange(900);
       await page.screenshot({ path: path.join(SHOT_DIR, 'b5-3d-military-far.png') });

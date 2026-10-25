@@ -6,6 +6,7 @@ import {
 } from '../sources/infrastructureData.js';
 import { createInfrastructureOverlayEntry } from './infrastructureOverlayEntry.js';
 import { isPointerFree } from './inputOwnership.js';
+import { ICONS } from '../icons.js';
 import {
   selectInfraLod,
   applyInfraEvictionGrace,
@@ -31,7 +32,7 @@ const GROUND_SAMPLE_MAX_ABS_HEIGHT_M = 9000;
 /**
  * Bounded give-up for the self-armed retry. Sampling can be SUPPORTED and still
  * never succeed (no sampleable surface under the feature), in which case each
- * requested frame would arm the next 2 s timer forever — an idle-governor leak
+ * requested frame would arm the next 2 s timer forever - an idle-governor leak
  * dressed up as a retry. After this many consecutive armed retries with no
  * record newly grounded, stop arming; camera motion (a frame we get for free)
  * still retries through the normal preRender walk and re-opens the budget.
@@ -275,7 +276,7 @@ export function createLocalInfrastructureOverlayPublisher({ sourceId, host }) {
  * Reduce a bundled-dataset load failure to one short, honest stats string.
  *
  * These layers ship their data with the build, so a failure means the asset
- * is missing (404 / bad path) or corrupt — never "the network is slow". Both
+ * is missing (404 / bad path) or corrupt - never "the network is slow". Both
  * must reach the user's chip; the raw parser message is console-only because
  * a truncated JSON blob is not a status line.
  *
@@ -304,7 +305,8 @@ export function createLocalGeoJsonLayer(
     url,
     name,
     color,
-    icon = '📍',
+    icon = '',
+    iconSvg = ICONS.pin,
     source = 'Local JSONL',
     osmDerived = false,
     labels = true,
@@ -358,7 +360,7 @@ export function createLocalGeoJsonLayer(
    * now. This bounds geometry refreshes and ground-sample work to the
    * camera-height budget in localGeojsonLod.js. Recomputed only
    * when the camera moves (`_stemGeometryDirty`, raised by moveEnd and by the
-   * motion fallback below). Empty means "not computed yet" — the first
+   * motion fallback below). Empty means "not computed yet" - the first
    * post-enable walk fills it.
    * @type {Set<string>}
    */
@@ -376,7 +378,7 @@ export function createLocalGeoJsonLayer(
    */
   let _lodComputed = false;
   /**
-   * Camera position the last LOD selection ran from — the reference the motion
+   * Camera position the last LOD selection ran from - the reference the motion
    * fallback measures travel against. Preallocated: the walk clones into it,
    * so a moving camera allocates nothing per pass. Only meaningful while
    * `_lodComputed` is true.
@@ -393,13 +395,13 @@ export function createLocalGeoJsonLayer(
   /**
    * Coalesced one-shot: ask the governor for a frame once the retry window
    * has elapsed, so the preRender ground-sample retry actually runs while the
-   * camera is parked. One timer for the whole layer (not per record) — the
+   * camera is parked. One timer for the whole layer (not per record) - the
    * retry pass walks every record anyway. (perf rebase 2026-08-17)
    *
    * Two gates keep this from becoming an idle leak (review round 2):
    *   - CAPABILITY: without `scene.sampleHeightSupported` the sample can never
    *     succeed, so a timer here would re-arm on every requested frame,
-   *     forever. Records simply stay at ellipsoid height — exactly the
+   *     forever. Records simply stay at ellipsoid height - exactly the
    *     pre-perf keyless behavior.
    *   - BUDGET: sampling can be supported and still keep failing (no sampleable
    *     surface yet/ever). Give up after GROUND_SAMPLE_MAX_ARMED_RETRIES
@@ -481,6 +483,7 @@ export function createLocalGeoJsonLayer(
     id,
     name,
     icon,
+    iconSvg,
     source,
     updateInterval: 0,
     statsRefreshInterval: 1000,
@@ -521,7 +524,7 @@ export function createLocalGeoJsonLayer(
     /**
      * Snapshot in-memory infrastructure features as plain JSON-safe objects
      * for the analyst query engine. On-demand only (called at most once per
-     * spoken query) — zero per-frame cost, no listeners, no caching. Returns
+     * spoken query) - zero per-frame cost, no listeners, no caching. Returns
      * [] while the layer is disabled or empty. Disable keeps the loaded
      * stems for reuse; this method still returns [] until the next enable.
      * @param {number} [maxCount=2000] Maximum records to return (truncation).
@@ -580,7 +583,7 @@ export function createLocalGeoJsonLayer(
             // clear its error or retry.
             _error = null;
             let loaded = null;
-            // Whether the scene has actually accepted `loaded` — the two rollback
+            // Whether the scene has actually accepted `loaded` - the two rollback
             // windows (before vs after the add settles) need different cleanup.
             let addedToScene = false;
             try {
@@ -622,7 +625,7 @@ export function createLocalGeoJsonLayer(
               // Cesium's DataSourceCollection.add() returns a promise and only
               // inserts on a later microtask. Without this await, a throw during
               // post-processing would roll back a source the scene had not
-              // accepted yet — and Cesium would then insert the "removed" source
+              // accepted yet - and Cesium would then insert the "removed" source
               // anyway, leaving an orphan the retry would double up on. Awaiting
               // also routes an add() rejection into the error path below instead
               // of leaving it uncaught with healthy-looking stats.
@@ -723,7 +726,7 @@ export function createLocalGeoJsonLayer(
                   color: baseColor,
                   outlineColor: Cesium.Color.BLACK,
                   outlineWidth: 2,
-                  // Never depth-cull the anchor against the photoreal mesh —
+                  // Never depth-cull the anchor against the photoreal mesh -
                   // globe-horizon culling is handled by the pre-render occluder.
                   disableDepthTestDistance: Number.POSITIVE_INFINITY,
                 });
@@ -754,12 +757,12 @@ export function createLocalGeoJsonLayer(
                     : null,
                 });
               }
-              // Setup finished — publish it.
+              // Setup finished - publish it.
               _dataSource = loaded;
               _lastUpdate = Date.now();
             } catch (e) {
               // The dataset ships with the build, so this is a broken install,
-              // not a blip — it has to reach the chip, not just the console.
+              // not a blip - it has to reach the chip, not just the console.
               if (!_destroyed) _error = localDatasetError(e);
               // Roll the partial build back so a later enable() retries from
               // scratch instead of inheriting a half-populated source. Only the
@@ -914,7 +917,7 @@ export function createLocalGeoJsonLayer(
 
           // --- Globe-LOD: recompute the active-stem set on camera moves. ---
           // `_stemGeometryDirty` is set by moveEnd, the first enable, and the
-          // motion fallback above — exactly when the camera-height budget and
+          // motion fallback above - exactly when the camera-height budget and
           // per-record distances can have changed. Without this, all local
           // infrastructure features run stem trig + Cesium property writes on
           // every move; with it, only the ~80 (global) to ~420 (regional)
@@ -963,7 +966,7 @@ export function createLocalGeoJsonLayer(
               record.entity.show = isVisible;
 
             // Records outside the globe-LOD active set carry no visible stem,
-            // so skip every per-frame cost for them — geometry trig, the
+            // so skip every per-frame cost for them - geometry trig, the
             // ground-sample GPU readback, overlay-label candidacy. They rejoin
             // on the next camera move if the budget has room.
             if (!isActive) continue;
@@ -1051,7 +1054,7 @@ export function createLocalGeoJsonLayer(
       }
 
       // Honor a disable() that landed while we were awaiting the fetch/parse:
-      // disable() runs before _dataSource exists, so its release is a no-op —
+      // disable() runs before _dataSource exists, so its release is a no-op -
       // release the finished build here instead of parking it hidden in the
       // scene (the parsed features stay cached for the next enable).
       if (!_enabled) {

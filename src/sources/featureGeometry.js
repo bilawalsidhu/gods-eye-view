@@ -131,7 +131,7 @@ export function stitchRing(ways) {
   const CLOSE_TOL_M = 30; // endpoints within 30 m → a genuinely closed ring
   const closed = components.filter((c) => endpointGapM(c) <= CLOSE_TOL_M);
   if (closed.length) {
-    // Pick by projected AREA, not vertex count — a small, highly-detailed island
+    // Pick by projected AREA, not vertex count - a small, highly-detailed island
     // must not beat the large simple mainland. (For a disjoint multipolygon this
     // returns only the largest closed outer ring; full multi-ring rendering is a
     // renderer change tracked separately.)
@@ -141,7 +141,7 @@ export function stitchRing(ways) {
   // Nothing closes exactly. Bridge a seam ONLY when the gap is BOTH a small
   // fraction of the feature's own span (so half a compound's boundary missing is
   // rejected) AND under a hard absolute ceiling (so a state/country can never get a
-  // kilometres-long chord — the bay blob). A complete relation closes at ~0; a
+  // kilometres-long chord - the bay blob). A complete relation closes at ~0; a
   // genuine seam (e.g. the Presidio's ~few-hundred-m coastline gap) bridges; a
   // truly incomplete relation is rejected → point fallback.
   const largest = largestByArea(components);

@@ -64,18 +64,18 @@ export function createIngestion({
         // CelesTrak outage guard (H3): if EVERY group failed, bail BEFORE clearing.
         // Wiping the collection + catalog here would blank all 838 satellites while
         // the chip still read "just now". Keep the existing (stale) catalog on
-        // screen and surface the outage instead — do NOT stamp _lastUpdate.
+        // screen and surface the outage instead - do NOT stamp _lastUpdate.
         if (results.every((r) => !r.ok)) {
           // English data (stats reach the voice tools); the panel translates it.
           layerState._lastError = msg('CelesTrak unreachable');
           console.warn(
-            '[Data:Satellites] All CelesTrak groups failed — keeping existing catalog, surfacing outage',
+            '[Data:Satellites] All CelesTrak groups failed - keeping existing catalog, surfacing outage',
           );
           // Re-apply dense mode is skipped (no fresh core catalog); tracking untouched.
           return;
         }
 
-        // At least one group loaded — proceed with a fresh rebuild, but keep the
+        // At least one group loaded - proceed with a fresh rebuild, but keep the
         // partial outage visible at the layer control instead of presenting the
         // reduced catalog as a fully healthy refresh.
         // i18n-ignore: English data; the panel shows it through FEED_ERROR_PATTERNS (ui/statusText.js)
@@ -112,7 +112,7 @@ export function createIngestion({
             allEntries.push({ ...e, group: r.tag, stale: r.stale });
         }
 
-        // Deduplicate by NORAD ID — first (most specific) group tag wins
+        // Deduplicate by NORAD ID - first (most specific) group tag wins
         const seen = new Set();
         let coreStale = false;
 
@@ -181,7 +181,7 @@ export function createIngestion({
           `[Data:Satellites] ${layerState._count} satellites active, ISS path shown`,
         );
 
-        // Re-apply dense mode after a full catalog rebuild (fire-and-forget —
+        // Re-apply dense mode after a full catalog rebuild (fire-and-forget -
         // _loadDenseCatalog handles its own errors and token invalidation).
         layerState._denseLoadPromise =
           layerState._params.catalog === 'dense'

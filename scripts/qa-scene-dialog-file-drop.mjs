@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * qa-scene-dialog-file-drop — the SHARE SCENE dialog's file control accepts a
+ * qa-scene-dialog-file-drop - the SHARE SCENE dialog's file control accepts a
  * file dropped from the desktop, proved in a real browser.
  *
  * The dialog draws a translated row over the native file input

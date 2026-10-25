@@ -131,7 +131,7 @@ export function formatCockpitEmergency(emergency, format = ENGLISH_EMERGENCY) {
 /** The English Context scope line; see formatCockpitContextScope. */
 const ENGLISH_CONTEXT_SCOPE = Object.freeze({
   window: ({ label, radiusKm }) =>
-    `${label} · ${radiusKm ?? '—'} KM AIR/SEA WINDOW`,
+    `${label} · ${radiusKm ?? '-'} KM AIR/SEA WINDOW`,
   installations: ({ scope, coverage }) =>
     `${scope} · INSTALLATIONS ${coverage}`,
 });
@@ -154,10 +154,10 @@ export function formatCockpitContextScope(
 ) {
   const normalizedLabel =
     typeof subjectLabel === 'string'
-      ? subjectLabel.trim() || '—'
+      ? subjectLabel.trim() || '-'
       : Number.isFinite(subjectLabel)
         ? String(subjectLabel)
-        : '—';
+        : '-';
   const radiusKm =
     Number.isFinite(radiusM) && radiusM >= 0
       ? Math.round(radiusM / 1000)
@@ -307,7 +307,7 @@ export function relativeBearing(bearing, heading) {
  *
  * Both layers can briefly describe a tracked aircraft during a cross-layer
  * handoff, so the viewer's normalized tracked identity (`gevTrackedId`) is the
- * tie-breaker — the same rule `militaryAwareness.currentTrackedFlightSubject`
+ * tie-breaker - the same rule `militaryAwareness.currentTrackedFlightSubject`
  * uses. Layer precedence remains the fallback when no normalized identity is
  * available, so tracking paths that never stamp one keep working.
  * @param {object} [options] Candidate descriptors and the tracked identity.
@@ -342,7 +342,7 @@ export function resolveTrackedAircraftInfo({
  * Decide how the cockpit Contact panel renders the current context snapshot.
  *
  * The panel hosts its own PREVIOUS/NEXT controls, so its visibility can only
- * depend on whether a snapshot exists — never on which subject that snapshot
+ * depend on whether a snapshot exists - never on which subject that snapshot
  * happens to describe. Anything else strands the operator the moment NEXT
  * lands on a contact that is not the tracked aircraft.
  * @param {object} [options] Resolver inputs.

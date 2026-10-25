@@ -182,12 +182,12 @@ test('cable overlay publisher owns the production show/publish/hide lifecycle', 
 });
 
 test('cable ground lines classify against exactly the active surface on every stack', () => {
-  // Photorealistic tiles render with the globe hidden — 3D-tile pass only.
+  // Photorealistic tiles render with the globe hidden - 3D-tile pass only.
   assert.equal(
     cableClassificationTypeForStack('photoreal'),
     Cesium.ClassificationType.CESIUM_3D_TILE,
   );
-  // Every globe stack renders imagery on the shown globe — terrain pass only.
+  // Every globe stack renders imagery on the shown globe - terrain pass only.
   for (const stackId of ['bing-aerial', 'bing-labels', 'esri-imagery', 'osm']) {
     assert.equal(
       cableClassificationTypeForStack(stackId),
@@ -196,7 +196,7 @@ test('cable ground lines classify against exactly the active surface on every st
     );
   }
   // Unknown stack → BOTH: visible on every surface, the shipped fallback.
-  // A TRUTHY unknown id must reach it too — "not photoreal" is not the same
+  // A TRUTHY unknown id must reach it too - "not photoreal" is not the same
   // claim as "renders on the globe", and asserting TERRAIN for an id this
   // module has never heard of would hide the cables on a future 3D-tile
   // stack instead of degrading to the documented safe behavior.
@@ -338,7 +338,7 @@ test('marker collections blend in a single translucent pass behind a loud shape 
 
   // ATOMICITY: a shape failure on the SECOND collection must not leave the
   // FIRST one already forced. Validation of every field/type completes before
-  // the first assignment, so a failed probe applies nothing at all — that is
+  // the first assignment, so a failed probe applies nothing at all - that is
   // what "leaves Cesium's default blend untouched" has to mean.
   const partial = new Cesium.CustomDataSource('partial-shape');
   partial.clustering._billboardCollection = new Cesium.BillboardCollection();
@@ -417,10 +417,10 @@ test('marker collections blend in a single translucent pass behind a loud shape 
   failEnv.layer.destroy(failEnv.viewer);
 });
 
-test('cable reference sweep gate is dirty-only — no timer path', () => {
+test('cable reference sweep gate is dirty-only - no timer path', () => {
   const gate = createCableReferenceSweepGate();
   assert.equal(gate.shouldRun(), true, 'initial dirtiness covers enable/load');
-  // However many frames render, an un-dirtied gate never runs the sweep —
+  // However many frames render, an un-dirtied gate never runs the sweep -
   // the former 500 ms timer path is gone.
   for (let frame = 0; frame < 200; frame++) {
     assert.equal(gate.shouldRun(), false);
@@ -455,7 +455,7 @@ test('the sweep gate falls back to motion probes for cameras that never emit mov
   );
 
   // PARKED: 100 s of frames on a camera that never moves must cost ZERO
-  // sweeps — the fallback is motion-aware, not a reinstated timer.
+  // sweeps - the fallback is motion-aware, not a reinstated timer.
   assert.equal(
     runFrames(6000),
     0,
@@ -504,7 +504,7 @@ test('the sweep gate falls back to motion probes for cameras that never emit mov
   );
   assert.ok(
     sweepAt - trackingStart >= CABLE_SWEEP_MOTION_PROBE_INTERVAL_MS,
-    'and never sooner — the probe stays bounded to one sample per window',
+    'and never sooner - the probe stays bounded to one sample per window',
   );
 
   // moveEnd still wins immediately: an event-dirtied gate does not wait for
@@ -731,7 +731,7 @@ function makeStubViewer(
   return {
     dataSources: {
       // Mirror Cesium's real DataSourceCollection.add(): the returned promise
-      // resolves — and the collection mutates — on a DEFERRED tick, never in
+      // resolves - and the collection mutates - on a DEFERRED tick, never in
       // the caller's synchronous frame. A remove() issued before the deferred
       // add settles therefore removes NOTHING and the add still materializes
       // afterwards (empirically verified against Cesium). Tests may hold the
@@ -997,7 +997,7 @@ test('an abort landing at the post-cable-GeoJson boundary stops the stale load b
     await env.settle();
     // A already cached the fetched JSON, so load B skips the network and goes
     // straight to its own CABLE build; the only new GeoJson call must be that
-    // one — a landing build here would mean stale A ran on past its check.
+    // one - a landing build here would mean stale A ran on past its check.
     assert.equal(
       env.pendingFetches.length,
       0,
@@ -1081,7 +1081,7 @@ test('a destroy inside the deferred add window leaves zero post-destroy data sou
     env.releaseAll();
     env.holdAdds();
     // Let the load run until all three adds have been CALLED but none has
-    // settled — Cesium mutates the collection on a deferred tick, so this
+    // settled - Cesium mutates the collection on a deferred tick, so this
     // window is real, and a remove() issued inside it removes nothing.
     const deadline = Date.now() + 2_000;
     while (env.addCalls.count < 3 && Date.now() < deadline) {
@@ -1185,7 +1185,7 @@ test('a direct destroy of a published layer clears and hides its host source', a
     );
     env.hostCalls.length = 0;
 
-    // Destroy DIRECTLY — no disable() first. The publisher teardown must
+    // Destroy DIRECTLY - no disable() first. The publisher teardown must
     // still clear the published source and hide it; skipping it would leave
     // a visible overlay source with orphan labels.
     env.layer.destroy(env.viewer);
@@ -1232,7 +1232,7 @@ test("a stale aborted load never clobbers the next load's lifecycle (A/B/C toggl
     assert.equal(
       inFlight,
       2,
-      "only load B's two fetches remain in flight — no duplicate load C",
+      "only load B's two fetches remain in flight - no duplicate load C",
     );
 
     // Releasing everything must produce exactly one set of scene adds.
@@ -1513,7 +1513,7 @@ test('stems never rebuild mid-drag; exactly one rebuild lands on moveEnd', async
 
   // Mid-drag: the camera moves every tick and frames keep rendering, but no
   // moveEnd fires. However long this goes on, the stem constants must never
-  // be redefined — each redefinition rebuilt the whole batched stem
+  // be redefined - each redefinition rebuilt the whole batched stem
   // primitive, and its unready replacement frames were the felt hitch.
   const camera = env.viewer.camera.positionWC;
   for (let tick = 0; tick < 30; tick++) {
@@ -1599,7 +1599,7 @@ test('a tracked camera that never emits moveEnd is swept by the motion fallback'
     'inside the probe window a tracked camera still costs no rebuilds',
   );
 
-  // Past the window the fallback fires — exactly once, not per frame.
+  // Past the window the fallback fires - exactly once, not per frame.
   trackFrames(60, 130);
   assert.equal(
     stemRebuilds,

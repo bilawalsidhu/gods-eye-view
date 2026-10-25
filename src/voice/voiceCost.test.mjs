@@ -171,7 +171,7 @@ test('an aggregate cached_tokens without per-modality detail still earns the cac
 
 test('F2: a partial input detail attributes the unexplained residual to audio', () => {
   // input_tokens says 1000; the details only explain 100. The other 900 are
-  // real and billed upstream — dropping them under-meters, which is the
+  // real and billed upstream - dropping them under-meters, which is the
   // direction that lets a cap be overrun.
   const t = splitUsageTokens({
     input_tokens: 1000,
@@ -193,7 +193,7 @@ test('F2: a partial output detail attributes its residual to audio too', () => {
 test('F2: a fully-explained payload gains no phantom residual', () => {
   const t = splitUsageTokens(FULL_USAGE);
   assert.equal(t.textIn + t.audioIn + t.imageIn + t.textCached + t.audioCached + t.imageCached, 1000);
-  assert.equal(t.audioIn, 500, 'unchanged — nothing was unexplained');
+  assert.equal(t.audioIn, 500, 'unchanged - nothing was unexplained');
 });
 
 test('F2: every billed token is accounted for across partial fixtures', () => {
@@ -367,10 +367,10 @@ test('per-response usage accumulates across the session', () => {
 test('the warning fires exactly once, on the crossing record', () => {
   const tracker = createVoiceCostTracker({ tier: 'standard', limits: { warnUsd: 2, capUsd: 5 } });
   assert.equal(tracker.record(dollarsOfUsage(1)).warnCrossed, false); // $1
-  const crossing = tracker.record(dollarsOfUsage(1)); // $2 — crosses
+  const crossing = tracker.record(dollarsOfUsage(1)); // $2 - crosses
   assert.equal(crossing.warnCrossed, true);
   assert.equal(crossing.level, 'warn');
-  assert.equal(tracker.record(dollarsOfUsage(1)).warnCrossed, false); // $3 — latched
+  assert.equal(tracker.record(dollarsOfUsage(1)).warnCrossed, false); // $3 - latched
 });
 
 test('the cap fires exactly once and latches capReached', () => {
@@ -378,7 +378,7 @@ test('the cap fires exactly once and latches capReached', () => {
   for (let i = 0; i < 4; i += 1) {
     assert.equal(tracker.record(dollarsOfUsage(1)).capCrossed, false);
   }
-  const crossing = tracker.record(dollarsOfUsage(1)); // $5 — crosses
+  const crossing = tracker.record(dollarsOfUsage(1)); // $5 - crosses
   assert.equal(crossing.capCrossed, true);
   assert.equal(crossing.capReached, true);
   assert.equal(crossing.level, 'cap');
@@ -398,7 +398,7 @@ test('one huge response crosses both thresholds on the same record', () => {
   assert.equal(state.level, 'cap');
 });
 
-test('level is monotonic — it never steps back down', () => {
+test('level is monotonic - it never steps back down', () => {
   const tracker = createVoiceCostTracker({ tier: 'standard', limits: { warnUsd: 2, capUsd: 5 } });
   tracker.record(dollarsOfUsage(6));
   assert.equal(tracker.state().level, 'cap');
@@ -453,7 +453,7 @@ test('an unknown tier tracks at standard rates rather than free', () => {
 });
 
 /* -------------------------------------------------------------- *
- * F3 — pricing by the model actually served, not the tier requested
+ * F3 - pricing by the model actually served, not the tier requested
  * -------------------------------------------------------------- */
 
 test('F3: a known model id resolves to its own rate table', () => {
@@ -502,7 +502,7 @@ test('F3: pricing by tier alone would have under-metered an overridden session',
 });
 
 /* -------------------------------------------------------------- *
- * F6 — disabled thresholds must survive serialization
+ * F6 - disabled thresholds must survive serialization
  * -------------------------------------------------------------- */
 
 test('F6: serializeCostLimits encodes a disabled threshold as a sentinel', () => {
@@ -555,8 +555,8 @@ test('markIncomplete flags the accounting as partial, without a direction claim'
 });
 
 test('the incomplete marker never claims the total is a minimum', () => {
-  // The estimate can run HIGH too — residuals and unknown models bill at
-  // worst-case rates, and sub-cent totals round up — so "at least"/floor
+  // The estimate can run HIGH too - residuals and unknown models bill at
+  // worst-case rates, and sub-cent totals round up - so "at least"/floor
   // wording would overpromise. Pinned so the copy cannot regress to '+'.
   const tracker = createVoiceCostTracker({ tier: 'standard' });
   tracker.record(dollarsOfUsage(1));

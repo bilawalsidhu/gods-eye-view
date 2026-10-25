@@ -6,7 +6,7 @@ import { msg } from '../i18n/marker.js';
 
 /** Largest file accepted, in bytes. */
 const MAX_IMPORT_BYTES = 50 * 1024 * 1024;
-/** Largest total a KMZ may inflate to — a zip bomb stops here. */
+/** Largest total a KMZ may inflate to - a zip bomb stops here. */
 const MAX_KMZ_INFLATED_BYTES = 120 * 1024 * 1024;
 /** Most files on the globe at once. */
 export const MAX_IMPORTED_FILES = 12;

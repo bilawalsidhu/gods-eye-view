@@ -401,7 +401,7 @@ test('a sub-renderer throw mid-add leaves state the rollback can still remove', 
   assert.equal(dataSources[0].entities.values.length, 2, 'the world drape is already live');
   assert.equal(annotationGroups(svg).length, 0, 'the half-built screen group detached itself');
 
-  // The engine's rollback path — it must reach the partial state by id.
+  // The engine's rollback path - it must reach the partial state by id.
   renderer.remove(anno);
   assert.equal(dataSources[0].entities.values.length, 0, 'partial world state must be released');
 
@@ -438,12 +438,12 @@ test('a release that throws keeps the mark addressable for a retry cleanup', (t)
   assert.equal(annotationGroups(svg).length, 1);
 
   // The world route releases fine, then the screen release fails part-way
-  // (its fade-out timer throws) — so its SVG group is still in the document.
+  // (its fade-out timer throws) - so its SVG group is still in the document.
   const workingSetTimeout = globalThis.window.setTimeout;
   globalThis.window.setTimeout = () => { throw new Error('teardown scheduling failed'); };
   assert.throws(() => renderer.remove(anno), /teardown scheduling failed/);
   assert.equal(dataSources[0].entities.values.length, 0, 'the world route did release');
-  assert.equal(annotationGroups(svg).length, 1, 'the screen route did NOT — that is the orphan');
+  assert.equal(annotationGroups(svg).length, 1, 'the screen route did NOT - that is the orphan');
 
   // Dropping the routing entry here would make that orphan permanently
   // unreachable. It must still be addressable, so a retry finishes the job.
@@ -452,7 +452,7 @@ test('a release that throws keeps the mark addressable for a retry cleanup', (t)
   assert.equal(annotationGroups(svg).length, 0, 'the retry cleanup must reach the orphan');
   assert.equal(dataSources[0].entities.values.length, 0, 'without double-releasing the world route');
 
-  // Fully released now — a third call is inert.
+  // Fully released now - a third call is inert.
   renderer.remove(anno);
   assert.equal(annotationGroups(svg).length, 0);
   renderer.destroy();

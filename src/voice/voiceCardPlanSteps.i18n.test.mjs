@@ -178,7 +178,7 @@ test('the Contacts note shows the clock; the model note stays ISO', () => {
   const evaluatedAt = new Date();
   evaluatedAt.setUTCHours(14, 32, 5, 0);
   const iso = evaluatedAt.toISOString();
-  const note = `Contacts panel snapshot at ${iso} — the same retained cohort supplies the card, speech, and follow-up memory.`;
+  const note = `Contacts panel snapshot at ${iso} - the same retained cohort supplies the card, speech, and follow-up memory.`;
   const result = {
     ok: true,
     count: 12,

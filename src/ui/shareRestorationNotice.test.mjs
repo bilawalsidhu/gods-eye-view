@@ -21,11 +21,11 @@ test('en: the notices for every policy and outcome', () => {
   );
   assert.equal(
     notice(satellites, 'source-unavailable'),
-    'Shared satellite could not be restored — feed unavailable',
+    'Shared satellite could not be restored - feed unavailable',
   );
   assert.equal(
     notice(flights, 'source-unavailable'),
-    'Shared flight could not be restored — feed unavailable',
+    'Shared flight could not be restored - feed unavailable',
   );
   assert.equal(
     notice(military, 'unavailable'),

@@ -39,7 +39,7 @@ export function orderFragmentNames(names) {
     if (!match) {
       throw new Error(
         `Unexpected file in ${FRAGMENT_DIR}/: ${name}` +
-          ' — expected <pull request>-<slug>.md with a lowercase slug',
+          ' - expected <pull request>-<slug>.md with a lowercase slug',
       );
     }
     const number = Number(match[1]);
@@ -95,7 +95,7 @@ export async function recoverInterruptedBatch(root, io = fs) {
   if (clash.length) {
     throw new Error(
       `Cannot roll back ${FRAGMENT_DIR}/${STAGING_DIR}/: ${clash.join(', ')}` +
-        ` also exist in ${FRAGMENT_DIR}/ — resolve by hand`,
+        ` also exist in ${FRAGMENT_DIR}/ - resolve by hand`,
     );
   }
   for (const name of fragments) {
@@ -133,7 +133,7 @@ export async function assembleFragments(root, mode, io = fs) {
   if (names.includes(STAGING_DIR)) {
     throw new Error(
       `${FRAGMENT_DIR}/${STAGING_DIR}/ holds a batch an interrupted release` +
-        ' left behind — `npm run changelog` finishes or rolls it back',
+        ' left behind - `npm run changelog` finishes or rolls it back',
     );
   }
   const consumed = orderFragmentNames(names);
@@ -163,7 +163,7 @@ export async function assembleFragments(root, mode, io = fs) {
         await recoverInterruptedBatch(root, io);
       } catch {
         throw new Error(
-          `${error.message} — the batch is staged in ${FRAGMENT_DIR}/${STAGING_DIR}/,` +
+          `${error.message} - the batch is staged in ${FRAGMENT_DIR}/${STAGING_DIR}/,` +
             ' and the next `npm run changelog` finishes or rolls it back',
           { cause: error },
         );

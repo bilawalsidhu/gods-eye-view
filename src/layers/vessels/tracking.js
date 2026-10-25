@@ -30,7 +30,7 @@ export function createTracking({
   }
 
   /**
-   * Build a slightly lifted trail vertex for a vessel record — raised
+   * Build a slightly lifted trail vertex for a vessel record - raised
    * TRAIL_HEIGHT_M above the sea surface (geoid, same datum as the anchor)
    * to avoid z-fighting.
    * @param {Object} record - Vessel record with lat/lon.
@@ -50,10 +50,10 @@ export function createTracking({
   /**
    * One-shot datum re-lift when the geoid grid warms mid-session: the first
    * refresh can land before ensureGeoidReady() resolves (anchors at N = 0) and
-   * the next refresh is up to REFRESH_MS out — re-derive every record's
+   * the next refresh is up to REFRESH_MS out - re-derive every record's
    * position in place so chevrons/labels snap to the sea surface as soon as N
-   * is known. (A selected-vessel trail cannot exist that early — selection
-   * needs a rendered pick — so trail vertices are not revisited.)
+   * is known. (A selected-vessel trail cannot exist that early - selection
+   * needs a rendered pick - so trail vertices are not revisited.)
    */
 
   function refloorVesselRecords() {
@@ -105,7 +105,7 @@ export function createTracking({
 
   /**
    * Fire-and-forget backfill from the server-side per-MMSI ring buffer
-   * (PRD F3 — "recent path" since server boot, not voyage history). Older
+   * (PRD F3 - "recent path" since server boot, not voyage history). Older
    * samples are spliced AHEAD of the live accumulation, capped at
    * TRAIL_MAX_POINTS (newest kept). Any failure (404/timeout/malformed)
    * silently keeps the live-only trail.
@@ -124,7 +124,7 @@ export function createTracking({
       const track = await vesselState._source.getTrack?.(reference, { signal });
       samples = track?.records ?? null;
     } catch {
-      return; // silent — keep the live-accumulated trail
+      return; // silent - keep the live-accumulated trail
     }
     if (
       signal.aborted ||
@@ -140,7 +140,7 @@ export function createTracking({
       const lat = Number(sample?.latitude);
       const lon = Number(sample?.longitude);
       if (!Number.isFinite(lat) || !Number.isFinite(lon)) continue;
-      // Per-sample N (≤ TRAIL_MAX_POINTS lookups) — same sea-surface datum as
+      // Per-sample N (≤ TRAIL_MAX_POINTS lookups) - same sea-surface datum as
       // the live vertices so the spliced trail is height-continuous.
       const heightM = components.queries.vesselDatumHeightM(
         currentGeoidN(lat, lon),

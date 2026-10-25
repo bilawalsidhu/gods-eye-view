@@ -533,7 +533,7 @@ test('coverage tiles are kept for a while: panning back asks KartaView nothing',
   // A failed load is not kept.
   const failing = createTileCache({
     load: async () => {
-      throw new Error('KartaView did not answer in time — try again');
+      throw new Error('KartaView did not answer in time - try again');
     },
     size: 2,
     ttlMs: 1000,
@@ -560,7 +560,7 @@ test('a sequence page that failed once is asked again: › then reaches the next
   let fail = true;
   env.source.getSequencePhotos = async (...args) => {
     env.source.calls.pages.push('failing');
-    if (fail) throw new Error('KartaView did not answer in time — try again');
+    if (fail) throw new Error('KartaView did not answer in time - try again');
     return real(...args);
   };
   await env.instance.viewer.open('s-1');
@@ -807,7 +807,7 @@ test('a filter thins the lines to those its PNG mask draws; without one they all
   env.instance.setFilter();
   assert.ok(await until(() => env.instance.coverageStats().count === 2));
   assert.equal(env.tiles.length, 1, 'the segments are kept');
-  // SINCE a day: uploaded since yesterday (UTC) — none here. The lines
+  // SINCE a day: uploaded since yesterday (UTC) - none here. The lines
   // drawn now go while KartaView draws the filtered tile.
   const since = Date.now() - 86_400_000;
   const release = env.holdMasks();

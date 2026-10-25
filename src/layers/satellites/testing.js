@@ -74,7 +74,7 @@ export function createTesting({ state: layerState, services, parts, source }) {
       densePromise || Promise.resolve({ status: 'not-requested' });
   }
 
-  /** The tracked satellite's current ECEF sample — the value the docked-cluster
+  /** The tracked satellite's current ECEF sample - the value the docked-cluster
    *  scan measures against. Exposed so a test can place neighbours around it. */
 
   function _trackedFrameCartesianForTest() {

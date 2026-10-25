@@ -26,7 +26,7 @@ function presentAwarenessCount(summary = {}) {
 
 /** A distance as the panel shows it: 850 m, 4.6 km, 120 km, in the UI language. */
 function presentAwarenessDistance(meters) {
-  if (!Number.isFinite(meters) || meters < 0) return '—';
+  if (!Number.isFinite(meters) || meters < 0) return '-';
   if (meters < 1000) return formatQuantity(Math.round(meters), 'm');
   const digits = meters < 10000 ? 1 : 0;
   return formatQuantity(meters / 1000, 'km', {
@@ -108,7 +108,7 @@ export function createPanel({ state: layerState, services, parts, source }) {
         if (!targetId) {
           return `<li><span class="military-awareness-target unavailable" aria-label="${t('Unavailable')}">${escapeHtml(label)} <span>${presentAwarenessDistance(item.distanceM)}</span></span></li>`;
         }
-        const accessibleLabel = label === '—' ? t('Unavailable') : label;
+        const accessibleLabel = label === '-' ? t('Unavailable') : label;
         return `<li><button type="button" class="military-awareness-target" data-awareness-layer="${escapeHtml(cohort.id)}" data-awareness-id="${escapeHtml(targetId)}" aria-label="${escapeHtml(t('Focus {label}', { label: accessibleLabel }))}">${escapeHtml(label)} <span>${presentAwarenessDistance(item.distanceM)}</span></button>${namedAreasHtml(item.memberNames)}</li>`;
       })
       .join('');
@@ -131,9 +131,9 @@ export function createPanel({ state: layerState, services, parts, source }) {
   function navigationControlsHtml() {
     const canPrevious = layerState.navigationIndex > 0;
     return `<div class="military-awareness-controls" role="group" aria-label="${t('Global Context navigation')}">
-    <button type="button" data-awareness-action="previous" title="${t('Previous — prior visited contact in the 250 km window')}"${canPrevious ? '' : ' disabled'}>${t('PREVIOUS')}</button>
+    <button type="button" data-awareness-action="previous" title="${t('Previous - prior visited contact in the 250 km window')}"${canPrevious ? '' : ' disabled'}>${t('PREVIOUS')}</button>
     <button type="button" data-awareness-action="focus">${t('FOCUS')}</button>
-    <button type="button" data-awareness-action="next" title="${t('Next — nearest unvisited contact in the 250 km window')}"${parts.navigation.canNavigateNext() ? '' : ' disabled'}>${t('NEXT')}</button>
+    <button type="button" data-awareness-action="next" title="${t('Next - nearest unvisited contact in the 250 km window')}"${parts.navigation.canNavigateNext() ? '' : ' disabled'}>${t('NEXT')}</button>
   </div>`;
   }
 

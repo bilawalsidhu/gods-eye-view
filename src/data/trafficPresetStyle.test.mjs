@@ -30,7 +30,7 @@ test('normal-profile styles never restyle: null rgba, zero size delta', () => {
   }
 });
 
-test('sim/uncovered dots (null bucket) are untouched under EVERY style — keyless path stays byte-identical', () => {
+test('sim/uncovered dots (null bucket) are untouched under EVERY style - keyless path stays byte-identical', () => {
   for (const s of [...MONO_STYLES, 'retro', ...NORMAL_STYLES]) {
     assert.equal(presetDotRgba(s, null), null, String(s));
     assert.equal(presetDotRgba(s, undefined), null, String(s));

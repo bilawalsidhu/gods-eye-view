@@ -144,7 +144,7 @@ async function fetchTile(apiKey, session, panoId, z, x, y) {
   const url = `${TILE_API}/streetview/tiles/${z}/${x}/${y}?session=${session}&key=${apiKey}&panoId=${panoId}`;
   const res = await fetch(url, { headers: COMMON_HEADERS });
   if (!res.ok) {
-    // Some edge tiles may be empty — return null
+    // Some edge tiles may be empty - return null
     if (res.status === 404 || res.status === 204) return null;
     const text = await res.text();
     throw new Error(`tile ${z}/${x}/${y} failed (${res.status}): ${text}`);

@@ -38,7 +38,7 @@ export function createRendering({
 
   /**
    * Focus modulation rides the layer's existing animation loop; no additional
-   * scene listener is installed. Only camera-icon alpha changes here — coverage
+   * scene listener is installed. Only camera-icon alpha changes here - coverage
    * geometry and monitor-plane styling retain their established cadence.
    */
 
@@ -136,10 +136,10 @@ export function createRendering({
    * Field-test fix (2026-07-06): horizon-culls camera billboards, mirroring the
    * flights layer's EllipsoidalOccluder pass. With the Cesium globe hidden
    * (Google-3D regime) nothing writes far-side depth, and the billboards are now
-   * always-on-top (`disableDepthTestDistance: INFINITY` — the far-zoom submerge
+   * always-on-top (`disableDepthTestDistance: INFINITY` - the far-zoom submerge
    * fix), so without this pass London's cluster would shine through the planet
    * from a US viewpoint. Pure math over ≤ catalog-size points; runs on
-   * camera.moveEnd + init only (event-driven — no steady-state work).
+   * camera.moveEnd + init only (event-driven - no steady-state work).
    */
 
   function refreshHorizonCulling() {
@@ -218,7 +218,7 @@ export function createRendering({
         record.billboard.color = cameraColorFor(record);
         record.billboard.scale = isActive ? 1.25 : 1.0;
         // disableDepthTestDistance stays POSITIVE_INFINITY for every billboard
-        // (set at creation) — see the field-test far-zoom submerge fix there.
+        // (set at creation) - see the field-test far-zoom submerge fix there.
       }
 
       if (
@@ -249,7 +249,7 @@ export function createRendering({
           ? new Cesium.PolylineDashMaterialProperty({ color })
           : color;
       for (const entity of record.coverageEntities || []) {
-        // The frustum wireframe is part of the projection representation —
+        // The frustum wireframe is part of the projection representation -
         // force it on for the active camera and let it read through geometry
         // via depthFailMaterial (polylines have no disableDepthTestDistance).
         entity.show = !!(

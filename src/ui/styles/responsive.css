@@ -146,7 +146,7 @@
   }
 
   /* Narrow viewports: cap the preview height to keep the panel compact. Cap
-     the IMAGE, not the wrap — the wrap is overflow:hidden, so capping it would
+     the IMAGE, not the wrap - the wrap is overflow:hidden, so capping it would
      re-crop the very timestamp this is protecting. object-fit: contain then
      letterboxes inside the shorter box. */
   #cctv-frame {
@@ -186,7 +186,7 @@
     /* The rail goes edge-to-edge at this width, so its floor is what decides
        whether the required Google/Cesium credit line survives. The credit's
        top edge sits at calc(2vh + 5rem) plus its own 28px, so a flat 100px
-       floor cut into it at EVERY viewport height — the DISPLAY toggles were
+       floor cut into it at EVERY viewport height - the DISPLAY toggles were
        drawn straight over the notice. Track the credit's own anchor instead
        and the 12px of clear air holds regardless of height; the rail already
        scrolls (overflow-y below), so it loses reach, not content. */
@@ -203,8 +203,8 @@
      so inside a scroll container it stops being harmless paint and becomes
      18–20px of scrollable overflow on BOTH axes: a horizontal scrollbar band
      under the expanded panel plus a vertical scrollbar that scrolls nothing
-     but glow. Pin the glow to the panel box here — its blur is ink overflow,
-     which never scrolls — instead of clipping the rail, which would also clip
+     but glow. Pin the glow to the panel box here - its blur is ink overflow,
+     which never scrolls - instead of clipping the rail, which would also clip
      legitimate content such as the Context radio popover. */
   #left-panel-stack .panel-glow,
   #right-context-rail .panel-glow {

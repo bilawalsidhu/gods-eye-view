@@ -185,7 +185,7 @@ export function createRendering({ state, services, parts }) {
   }
 
   /**
-   * Whether either end of the segment being drawn is near the view — the
+   * Whether either end of the segment being drawn is near the view - the
    * test visibility, animation and rotation all share.
    * @param {object} entry
    * @returns {boolean}
@@ -299,7 +299,7 @@ export function createRendering({ state, services, parts }) {
    * Point every glyph along its reported course.
    *
    * Billboards are camera-facing quads, so a course has to be projected into
-   * screen space — which depends on where the camera is, not only on the
+   * screen space - which depends on where the camera is, not only on the
    * vehicle. Doing that for the whole fleet on every frame is exactly the kind
    * of cost that made this layer heavy, and it buys nothing: a bus icon whose
    * rotation is a fifth of a second stale is indistinguishable. So the pass is
@@ -346,7 +346,7 @@ export function createRendering({ state, services, parts }) {
       entry.rotationY = position.y;
       entry.rotationZ = position.z;
       // Exact projection, perspective division included. The shared
-      // camera-basis helper aircraft use is orthographic — fine at altitude,
+      // camera-basis helper aircraft use is orthographic - fine at altitude,
       // and wrong by twenty-odd degrees for a street-level contact away from
       // the centre of an obliquely pitched view, which is most of them.
       entry.marker.rotation = perspectiveProjectedRotation(
@@ -369,7 +369,7 @@ export function createRendering({ state, services, parts }) {
   function syncRenderHold() {
     // Held for motion only. Ground resolution runs on its own timer off the
     // render path, so a fleet waiting for floors is not a fleet worth burning
-    // frames on — it is not moving.
+    // frames on - it is not moving.
     const working = state._enabled && state._moving.size > 0;
     if (working && !state._renderHeld) {
       holdContinuousRender('transit');

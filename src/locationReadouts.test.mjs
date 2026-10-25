@@ -85,7 +85,7 @@ test('any other camera destination clears the search label too', () => {
 test('a deferred lookup that never flies leaves the readout standing', () => {
   // A geocode stamps navigation on the way OUT and resolves later. Clearing at
   // the stamp blanked a still-true readout whenever the lookup failed, was
-  // superseded, or was refused — no camera ever moved. The deferred begin opts
+  // superseded, or was refused - no camera ever moved. The deferred begin opts
   // out; the reassert seam, reached only once the flight is granted, clears.
   const begin = ui.indexOf('  _beginDeferredNavigation(');
   assert.ok(begin > 0, '_beginDeferredNavigation is missing');

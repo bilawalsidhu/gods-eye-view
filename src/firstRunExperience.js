@@ -10,10 +10,10 @@ import { createSurfaceKeyboard } from './ui/surfaceKeyboard.js';
 // operator needs the map explained more than once, so it returns every fresh
 // browser session until they say otherwise:
 //
-//   - a share link never sees it — its author already chose the experience;
+//   - a share link never sees it - its author already chose the experience;
 //   - `?welcome=0` suppresses, `?welcome=1` replays (it outranks BOTH the
 //     session flag and the durable one, so support can always demo it);
-//   - ticking "Don't show this again" writes the DURABLE suppression — that
+//   - ticking "Don't show this again" writes the DURABLE suppression - that
 //     tick is the only thing that stops it coming back;
 //   - any other close (a mission, Explore manually, ESC) writes only the
 //     SESSION flag, so it stays gone for this tab and returns next session.
@@ -57,18 +57,18 @@ export function environmentalLabel(choice = ENVIRONMENTAL_LABEL_CHOICE) {
  * MISSION → APP STATE, AND WHAT IT IS ALLOWED TO PERSIST
  * ─────────────────────────────────────────────────────────────────────────────
  * Owner ruling: picking a mission carries the same weight as clicking the
- * toggles it represents — durable where those clicks are durable — but it must
+ * toggles it represents - durable where those clicks are durable - but it must
  * never write a preference the visitor did not effectively choose by picking it.
  * Layer enablement IS durable in this app (`gev:layer-state:v2`, written by
  * LayerStateCoordinator._commitExplicit only for origin user/voice/tool), so:
  *
  *   TOUCHED, DURABLE      layer enables for the mission's OWN layers, at
- *                         `origin: 'user'` — identical to clicking those rows.
+ *                         `origin: 'user'` - identical to clicking those rows.
  *                         Choosing ENVIRONMENTAL *is* choosing those layers.
  *   TOUCHED, DURABLE      the Context panel reveal, but only for the two
  *                         Context missions, exactly as the visible Contacts /
  *                         Space Missions tabs do it. The globe missions open no
- *                         panel at all — nothing there needs explaining, and a
+ *                         panel at all - nothing there needs explaining, and a
  *                         panel-collapse write is a pref nobody chose.
  *   TOUCHED, SESSION      the camera. Never persisted by anything.
  *   NOT TOUCHED           detection mode + density. The reasonable-defaults
@@ -110,7 +110,7 @@ export const FIRST_RUN_MISSIONS = Object.freeze({
     // for the FULLY CONFIGURED experience (owner ruling, 2026-08-23): the tile
     // promises both, so it turns on both, and the subcopy in index.html says so.
     //
-    // Keyless, FIRMS is honest where it counts — its own layer row reads
+    // Keyless, FIRMS is honest where it counts - its own layer row reads
     // "UNAVAILABLE · NASA FIRMS · LIVE · KEY REQUIRED", and the quakes half of
     // the tile still delivers in full. What is NOT honest is the GLOBAL status
     // chip, which has no key-required terminal state and folds that row into
@@ -126,12 +126,12 @@ export const FIRST_RUN_MISSIONS = Object.freeze({
 });
 
 /*
- * STORAGE ACCESS IS LAZY AND GUARDED — NEVER A DEFAULT PARAMETER.
+ * STORAGE ACCESS IS LAZY AND GUARDED - NEVER A DEFAULT PARAMETER.
  *
  * `globalThis.localStorage` is a GETTER, and in Safari's private mode (and under
  * some enterprise policies) reading it THROWS SecurityError. A default parameter
  * like `storage = globalThis.localStorage` evaluates that getter before the
- * function body starts, so it throws outside every try/catch this module has —
+ * function body starts, so it throws outside every try/catch this module has -
  * the exception escapes, initFirstRunExperience never runs, and the launcher
  * silently never appears. That is the exact opposite of failing open.
  *
@@ -233,7 +233,7 @@ export function shouldShowFirstRun({
 
 /**
  * Write (or clear) the durable "don't show this again" suppression. Storage is
- * best-effort — a blocked store still closes the launcher for this session —
+ * best-effort - a blocked store still closes the launcher for this session -
  * but the outcome is RETURNED, because the checkbox that calls this is showing
  * the visitor a claim about the future and must not keep a tick nothing saved.
  * @param {boolean} suppressed
@@ -281,7 +281,7 @@ export async function runFirstRunChoice(
   }
   // Globe missions: start the pull-out and the layer work together so the
   // camera is already moving while the feeds spin up. The flight is framing,
-  // not the mission — a stalled or superseded flight never fails the tile.
+  // not the mission - a stalled or superseded flight never fails the tile.
   const flight = Promise.resolve()
     .then(() => flyToGlobe())
     .catch(() => null);
@@ -303,7 +303,7 @@ export async function runFirstRunChoice(
 
 /**
  * Body classes that mean "another surface owns the screen". Each of these also
- * hides the launcher in CSS, and the observer below turns that into a yield —
+ * hides the launcher in CSS, and the observer below turns that into a yield -
  * see the ESC ARBITRATION note on initFirstRunExperience.
  */
 export { EXCLUSIVE_SURFACE_CLASSES };
@@ -372,7 +372,7 @@ export function initFirstRunExperience({
   const description = root.querySelector('#first-run-description');
   if (description)
     description.textContent = t(
-      'It feels like a forbidden cockpit—then you realize the sources are public and the data is real.',
+      'It feels like a forbidden cockpit - then you realize the sources are public and the data is real.',
     );
 
   const status = root.querySelector('[data-first-run-status]');
@@ -387,14 +387,14 @@ export function initFirstRunExperience({
    * The attribution lightbox is a full-screen overlay at `z-index: 200` against
    * this card's 175 and announces itself with NO body class, so it left the
    * launcher measurable but buried: ESC dismissed a card the visitor could not
-   * see — and burned the session flag — behind a lightbox that stayed open.
+   * see - and burned the session flag - behind a lightbox that stayed open.
    *
    * Watching one more class would have fixed one more overlay. Hit-testing the
    * card's own centre answers it for ANY overlay, classed or not, shipped or
    * future, which is why this is the general guard and the class list stays the
    * yield mechanism rather than the visibility test.
    *
-   * Inconclusive answers count as UNCOVERED on purpose — no elementFromPoint, a
+   * Inconclusive answers count as UNCOVERED on purpose - no elementFromPoint, a
    * zero-sized box, a centre outside the viewport, a null hit. This guard exists
    * to stop the launcher acting while something is demonstrably on top of it; it
    * must never become the reason ESC quietly stops working.
@@ -416,7 +416,7 @@ export function initFirstRunExperience({
 
   /**
    * Is the launcher REALLY the thing on screen right now? Not "did we add the
-   * class" — the class survives while CSS hides the card behind an exclusive
+   * class" - the class survives while CSS hides the card behind an exclusive
    * surface, and a handler that trusts the class alone consumes keys for an
    * invisible element. getClientRects() is empty under `display: none`, which
    * is exactly how every one of those surfaces hides this card; the hit test
@@ -441,7 +441,7 @@ export function initFirstRunExperience({
     // `transitionend` never fires under prefers-reduced-motion (no transition),
     // so a bounded fallback is what actually removes the node there.
     globalThis.setTimeout?.(remove, 400);
-    // Return the keyboard where it was, not to a node that is being removed —
+    // Return the keyboard where it was, not to a node that is being removed -
     // but never when yielding, because the surface taking over owns focus now.
     keyboard.deactivate({ restoreFocus });
   };
@@ -572,11 +572,11 @@ export function initFirstRunExperience({
   };
 
   /*
-   * ESC ARBITRATION — the launcher never competes for the key.
+   * ESC ARBITRATION - the launcher never competes for the key.
    *
    * Two real defects motivated this. Cockpit registers its capture-phase
    * keydown listener at construction, long before this module runs, and calls
-   * stopImmediatePropagation() — so with both up, ESC exited Cockpit BEHIND the
+   * stopImmediatePropagation() - so with both up, ESC exited Cockpit BEHIND the
    * card. And a Scene starting merely hid the launcher in CSS while its handler
    * stayed armed, so ESC dismissed an invisible launcher (writing the session
    * flag) while the Scene played on.
@@ -591,11 +591,11 @@ export function initFirstRunExperience({
    * Yielding covers the surfaces that TAKE THE SCREEN and say so. Two more kinds
    * of contender exist, and each is answered where it actually lives:
    *
-   *   an overlay that takes the screen SILENTLY — the attribution lightbox sits
+   *   an overlay that takes the screen SILENTLY - the attribution lightbox sits
    *     at z-index 200 with no class to watch. isTopmost() hit-tests the card's
    *     own centre, so an unclassed overlay disarms the handler exactly like a
    *     classed one, with nothing to keep in step;
-   *   a small control that claims only the KEY — a disclosure or popover the
+   *   a small control that claims only the KEY - a disclosure or popover the
    *     launcher is not hiding behind and must not yield to. Whoever handles ESC
    *     first marks it (preventDefault) and stops the rest (stopImmediatePropagation);
    *     the launcher honours the mark. One key, one action, no ordering fight.
@@ -612,16 +612,16 @@ export function initFirstRunExperience({
    * means the launcher never appears in that page load.
    *
    * A "reveal anyway after N seconds" timer was considered and rejected. None of
-   * the four classes is restored at startup — every one is toggled by a live
+   * the four classes is restored at startup - every one is toggled by a live
    * action (cockpit entry, a scene run, the recording toggle, the clean-view
-   * toggle) — so an already-blocked init is an error path, while a genuinely
+   * toggle) - so an already-blocked init is an error path, while a genuinely
    * long recording or clean-view session is completely ordinary. A timer would
    * trade a benign no-show for the launcher punching through a recording in
    * progress, which is the worse of the two failures.
    *
    * And the no-show IS benign: the card stays hidden, the key handler is inert
    * (isTopmost() is false), no session flag is written, and the observer is
-   * still watching — so it appears the moment the class clears, and returns next
+   * still watching - so it appears the moment the class clears, and returns next
    * session regardless. Documented in docs/CURRENT-STATE.md.
    */
   const syncToExclusiveSurfaces = () => {

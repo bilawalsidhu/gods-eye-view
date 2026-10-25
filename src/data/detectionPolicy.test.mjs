@@ -45,7 +45,7 @@ test('strict keyhole fading bypasses the aircraft floor for themed brackets', ()
 test('the bracket floor anchor mirrors the real keyhole default it is calibrated to', () => {
   // detectionPolicy stays Cesium-free, so the anchor is a mirror. If the keyhole
   // default ever moves, this fails rather than silently shifting the shipped
-  // look — the whole point of the anchor is that 0.35 lands AT the default.
+  // look - the whole point of the anchor is that 0.35 lands AT the default.
   assert.equal(AIRCRAFT_BRACKET_FLOOR_ANCHOR, KEYHOLE_OUTSIDE_OPACITY_DEFAULT);
 });
 
@@ -73,7 +73,7 @@ test('the OUTSIDE slider genuinely dims aircraft brackets below the default', ()
   // from the default for AIR.
   assert.equal(aircraftBracketAlphaFloor(0), 0, 'off means off');
   assert.equal(detectionBracketAlpha('AIR', 0, 0), 0);
-  // A third of the default paints a third of the floor — derived from the
+  // A third of the default paints a third of the floor - derived from the
   // constants rather than hardcoded, so moving the default moves this with it.
   const third = AIRCRAFT_BRACKET_FLOOR_ANCHOR / 3;
   assert.ok(
@@ -96,7 +96,7 @@ test('the OUTSIDE slider genuinely dims aircraft brackets below the default', ()
 test('the range around the default is REACHABLE from the handle', () => {
   // The mapping above is continuous from 0, but the operator can only ask for
   // values the slider will stop on. At the shipped step of 5 the whole
-  // sub-default range was one stop wide — 0 or 5, nothing between — so the low
+  // sub-default range was one stop wide - 0 or 5, nothing between - so the low
   // stops were not settings anyone could choose. The control has to be able to
   // express what the policy can render, and the default itself now lives at 1 %.
   assert.match(
@@ -105,7 +105,7 @@ test('the range around the default is REACHABLE from the handle', () => {
     'index.html: the OUTSIDE slider steps by 1 so every integer percent is reachable',
   );
 
-  // Each newly reachable stop is a distinct, ordered picture — otherwise
+  // Each newly reachable stop is a distinct, ordered picture - otherwise
   // widening the control would just add handle positions that paint the same
   // thing.
   const reachable = [1, 2, 3, 4, 5].map((pct) => aircraftBracketAlphaFloor(pct / 100));
@@ -133,7 +133,7 @@ test('the bracket floor is strictly increasing and stops overriding at full opac
     assert.ok(floor > previous, `floor must strictly increase; ${outside} gave ${floor} after ${previous}`);
     previous = floor;
   }
-  // At full opacity the floor equals the label alpha, so the boost is gone —
+  // At full opacity the floor equals the label alpha, so the boost is gone -
   // there is no dead zone at the top of the slider either.
   assert.equal(aircraftBracketAlphaFloor(1), 1);
   assert.equal(detectionBracketAlpha('AIR', 1, 1), 1);

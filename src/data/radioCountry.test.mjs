@@ -43,7 +43,7 @@ test('Radio country normalization resolves common English names/exonyms ICU miss
 
 test('Ambiguous country names still fail closed (no broadened selection)', () => {
   // Two states share the name "Congo" (CD/CG), so a bare mention must not
-  // resolve to either — it stays low-confidence and fails closed.
+  // resolve to either - it stays low-confidence and fails closed.
   for (const input of ['Congo', 'Korea']) {
     assert.equal(normalizeRadioCountryInput(input).valid, false, input);
   }

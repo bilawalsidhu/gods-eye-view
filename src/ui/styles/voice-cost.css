@@ -1,5 +1,5 @@
 /* ------------------------------------------------------------------ *
- * Voice cost control — model-tier toggle + running session estimate.
+ * Voice cost control - model-tier toggle + running session estimate.
  * Appended (not woven into the dock passes above) so the three existing
  * #gev-voice-control cascades stay untouched; these rules only add the
  * new .gev-voice-cost cluster inside the existing .gev-voice-heading row.
@@ -40,7 +40,7 @@
   background: rgba(0, 212, 255, 0.12);
 }
 
-/* MINI engaged — amber, distinct from the cyan default so the cheaper tier
+/* MINI engaged - amber, distinct from the cyan default so the cheaper tier
    is legible at a glance without reading the label. */
 .gev-voice-tier-btn[aria-pressed='true'] {
   color: #ffc46b;
@@ -72,7 +72,7 @@
   max-height: 0.8rem;
 }
 
-/* The dock collapses the kicker/readout when a tray is open — the cost
+/* The dock collapses the kicker/readout when a tray is open - the cost
    cluster follows the same rule so the row never overflows. */
 #command-dock.tray-open .gev-voice-cost {
   display: none;
@@ -120,7 +120,7 @@ html:not([lang='en']) #command-dock .gev-voice-cost-value {
   letter-spacing: 0;
 }
 
-/* Live hints and the tier switch ("СТАНДАРТ — со следующей сессии") run
+/* Live hints and the tier switch ("СТАНДАРТ - со следующей сессии") run
    longer: a second line from the spare space under the readout, with no
    tracking so the tier line does not need a third. */
 html:not([lang='en'])

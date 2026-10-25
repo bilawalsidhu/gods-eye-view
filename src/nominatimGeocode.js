@@ -1,6 +1,6 @@
 /**
  * Map a Nominatim search hit into the result shape the camera framing already
- * reads (types + viewport). Pure — no network.
+ * reads (types + viewport). Pure - no network.
  *
  * Every numeric field arrives as a string from the upstream JSON and may be
  * absent, blank, or nonsense. A coordinate that is not a real coordinate must
@@ -93,7 +93,7 @@ export function typesFromNominatim(hit) {
  * The hit's bounding box as a viewport, or null.
  *
  * Nominatim gives `[south, north, west, east]` as strings. A box with an edge
- * outside the real world, an inverted edge, or a missing value is refused —
+ * outside the real world, an inverted edge, or a missing value is refused -
  * framing a viewport with a longitude of 999 sends the camera to nowhere.
  *
  * @param {object} hit

@@ -18,7 +18,7 @@ import {
 /**
  * Fixes in these tests are AGE_MS old when they arrive, which makes the lag
  * the feed earns equal to the lag a fifteen-second reporter earns on its own
- * — one number, `LAG_MS`, and no slew — so the timelines below are exact.
+ * - one number, `LAG_MS`, and no slew - so the timelines below are exact.
  */
 const AGE_MS = 15_000;
 const LAG_MS = AGE_MS + TRANSIT_POLL_MS + 5_000;
@@ -528,7 +528,7 @@ test('one feed stale beside one fresh reads DEGRADED, not nominal', async (t) =>
 
   const state = app.state();
   // Pretend a second feed is also in range and is being served from the proxy's
-  // stale cache — exactly the mixed case the old `every(stale)` call missed.
+  // stale cache - exactly the mixed case the old `every(stale)` call missed.
   state._activeFeeds.set('ovapi-nl', {
     id: 'ovapi-nl',
     name: 'OVapi',
@@ -1040,8 +1040,8 @@ test('the coverage text ages a quiet feed by the same rule the row state uses', 
 test('a parked fleet that keeps reporting the same position stops asking for frames', async (t) => {
   const app = harness(t);
   // A depot at night: the feed answers on time, every 15 s, with coordinates
-  // that do not change. Each of those is a real observation — the bus is
-  // still there — but there is nothing to draw, and drawing it anyway kept
+  // that do not change. Each of those is a real observation - the bus is
+  // still there - but there is nothing to draw, and drawing it anyway kept
   // the render loop awake all night.
   const parked = () => [
     vehicle('bus-1', 42.36, -71.06, reported()),
@@ -1146,7 +1146,7 @@ test('the last vehicle leaving mid-segment takes the render hold with it', async
   assert.equal(app.state()._moving.has(app.vehicles()[0]), true);
 
   // The feed dies. The sweep removes the last vehicle while it is still
-  // in motion, and the poll that discovers this fails — so no frame follows to
+  // in motion, and the poll that discovers this fails - so no frame follows to
   // notice the fleet is gone. The hold has to be released by the eviction.
   app.silence('mbta');
   app.advance(FEED_EVICT_AFTER_MS + 1_000);
@@ -1234,7 +1234,7 @@ test('a wide oblique view does not hide the fleet that is plainly in it', async 
   // Codex's reproduction: a high oblique camera over Europe sees roughly
   // -78°..88° of longitude. Padding each endpoint on its own wrapped that span
   // into a five-degree slice of the Pacific, so every Dutch vehicle failed the
-  // view gate — hidden, unanimated, and invisible to DETECT — while filling
+  // view gate - hidden, unanimated, and invisible to DETECT - while filling
   // the screen.
   const app = harness(t, {
     at: { lat: 52.09, lon: 5.12 },
@@ -1357,8 +1357,8 @@ test('removing one vehicle does not hand every label to its neighbour', async (t
 
 test('a vehicle inside the view drives out of it instead of vanishing', async (t) => {
   // A fix placing the DESTINATION just past the padded edge used to hide the
-  // marker on the spot — while the vehicle was still drawn well inside the
-  // view — and throw its glide away in the same frame.
+  // marker on the spot - while the vehicle was still drawn well inside the
+  // view - and throw its glide away in the same frame.
   const app = harness(t, {
     view: { west: -71.062, south: 42.3585, east: -71.058, north: 42.3605 },
   });
@@ -1438,12 +1438,12 @@ test('the selected card lands where the vehicle stopped, not short of it', async
   await app.layer.update();
 
   // Codex's sequence: a card refresh 200 ms before the segment completes, then
-  // the settling frame — which falls INSIDE the 250 ms card throttle, so
+  // the settling frame - which falls INSIDE the 250 ms card throttle, so
   // nothing but a forced refresh can close the gap.
   // The segment ends when the clock reaches the second fix, a lag after it.
   const segmentEndsAt = entry.fixes[1].t + LAG_MS;
   app.run(segmentEndsAt - 200 - Date.now());
-  // The settling frame — whichever frame that turns out to be — falls INSIDE
+  // The settling frame - whichever frame that turns out to be - falls INSIDE
   // the card throttle, so only the forced refresh can close the gap.
   let frames = 0;
   while (app.state()._moving.has(entry) && frames < 60) {
@@ -1487,7 +1487,7 @@ test('a parked fleet over unsampled ground off screen stops asking for frames', 
   await app.layer.update();
   app.frame();
 
-  // Eight polls — two minutes — with nothing moving and nothing in view.
+  // Eight polls - two minutes - with nothing moving and nothing in view.
   for (let poll = 0; poll < 8; poll += 1) {
     app.advance(TRANSIT_POLL_MS);
     app.serve('mbta', serve);
@@ -1574,7 +1574,7 @@ test('a feed answering 304 every poll stays healthy instead of ageing out', asyn
   await app.layer.update();
   assert.equal(app.vehicles().length, 1);
 
-  // Twenty-four polls — six minutes — of successful revalidation.
+  // Twenty-four polls - six minutes - of successful revalidation.
   for (let poll = 0; poll < 24; poll += 1) {
     app.advance(16_000);
     app.serve('mbta', () => ({
@@ -1621,8 +1621,8 @@ test('a feed that has genuinely stopped answering still ages out', async (t) => 
 });
 
 test('a vehicle with no surface yet waits instead of floating', async (t) => {
-  // Ellipsoid zero is not street level — in Boston it is about thirty metres
-  // underground — so a marker drawn at +3 m while its sample is pending sits
+  // Ellipsoid zero is not street level - in Boston it is about thirty metres
+  // underground - so a marker drawn at +3 m while its sample is pending sits
   // above its final height and then drops. The owner saw that as floating.
   let allowSamples = false;
   const app = harness(t, {
@@ -1712,8 +1712,8 @@ test('a new vehicle borrows the lowest surface resolved nearby', async (t) => {
 
 test('only the vehicles in view have their ground warmed', async (t) => {
   // Warming is a network round trip through the shared resolver. A parked
-  // metropolitan fleet off screen used to keep a queue — and with it the
-  // render loop — alive indefinitely over an empty view.
+  // metropolitan fleet off screen used to keep a queue - and with it the
+  // render loop - alive indefinitely over an empty view.
   const app = harness(t, { floorAt: () => undefined });
   const warmed = app.ground._warmed;
   const fleet = [vehicle('near', 42.36, -71.06, Date.now() / 1000)];
@@ -1743,9 +1743,9 @@ test('only the vehicles in view have their ground warmed', async (t) => {
 test('a segment climbs from the ground it left to the ground it reaches', async (t) => {
   // Rebuilding both ends of a segment at the destination's altitude lifted the
   // vehicle onto the new height on the FIRST frame: it flew up, then
-  // travelled. With the display running a lag behind, the trap is subtler —
+  // travelled. With the display running a lag behind, the trap is subtler -
   // the floor is asked for the NEWEST fix while an older one is still being
-  // drawn — so each fix carries its own floor.
+  // drawn - so each fix carries its own floor.
   const app = harness(t, { floorAt: (lat) => (lat > 42.3615 ? 100 : 10) });
   const start = Date.now();
   app.serve('mbta', () => ({
@@ -1760,7 +1760,7 @@ test('a segment climbs from the ground it left to the ground it reaches', async 
   const entry = app.vehicles()[0];
   assert.ok(Math.abs(entry.heightM - 11.5) < 1, 'it starts on the low ground');
 
-  // The destination's surface is already known — a hundred metres uphill — so
+  // The destination's surface is already known - a hundred metres uphill - so
   // the poll resolves it immediately, on the fix that stands there.
   app.ground._warm.set(app.ground._key(42.362, -71.06), 100);
   app.advance(TRANSIT_POLL_MS);
@@ -1926,7 +1926,7 @@ test('a vehicle reporting every 30 s moves continuously at its own speed', async
   // Measured on the live MBTA feed: half the fleet updates every thirty
   // seconds while the browser polls every fifteen. Gliding over a fixed poll
   // interval drew that half-minute of travel in fifteen seconds and then left
-  // the fleet perfectly still for the other fifteen — 46 vehicles moving, then
+  // the fleet perfectly still for the other fifteen - 46 vehicles moving, then
   // zero, then 43, then zero. Played back a lag behind, the segment takes the
   // thirty seconds the fixes describe and runs straight into the next one.
   const app = harness(t, { floorAt: () => 5 });
@@ -1986,7 +1986,7 @@ test('a vehicle reporting every 30 s moves continuously at its own speed', async
     const dPlay = playing[i].playT - playing[i - 1].playT;
     const dWall = playing[i].at - playing[i - 1].at;
     // 1x, or the 0.95x it runs at while banking the longer lag it has just
-    // learned it needs — never a freeze, never a rush.
+    // learned it needs - never a freeze, never a rush.
     assert.ok(
       dPlay <= dWall + 1 && dPlay >= 0.95 * dWall - 1,
       `no freeze and no rush (${dPlay} ms of play in ${dWall} ms)`,
@@ -2085,7 +2085,7 @@ test('the selected card anchors to the live marker every frame and republishes t
 
 test('DETECT gets the same candidate list back until something could have changed it', async (t) => {
   // Detection pulls the list on every paint. It used to be a fleet scan with
-  // an allocation and, above the cap, a sort — on the demo path, sixty times
+  // an allocation and, above the cap, a sort - on the demo path, sixty times
   // a second. The list is rebuilt on polls, visibility sweeps, removals and
   // selection, and handed back as-is between them.
   const app = harness(t);
@@ -2181,7 +2181,7 @@ test('under FLIR and NVG every sprite is white-hot with a dark halo, and selecti
     );
     assert.ok(entry.marker.width > plainWidth * 1.2, 'and larger');
   }
-  // Selecting under FLIR grows the sprite and keeps it white — cyan would dim it.
+  // Selecting under FLIR grows the sprite and keeps it white - cyan would dim it.
   app.layer._transitPartsForTest().selection.selectVehicle(bus.key);
   assert.ok(
     Cesium.Color.equals(bus.marker.color, Cesium.Color.WHITE),
@@ -2279,8 +2279,8 @@ test('the floor cycle samples the rendered mesh for the cells it warms, with its
   // A transit-only session never warmed a mesh floor: the layer warmed the
   // DEM and stopped, so under a photogrammetric city it drew on bare earth
   // seventeen metres down. The same cells now go to the application's mesh
-  // sampler after every warm — bounded by the sampler's own per-call cap and
-  // proximity gate — with the layer's billboards excluded so a vertical probe
+  // sampler after every warm - bounded by the sampler's own per-call cap and
+  // proximity gate - with the layer's billboards excluded so a vertical probe
   // cannot land on a bus.
   const app = harness(t, { floorAt: () => 5 });
   app.serve('mbta', () => ({

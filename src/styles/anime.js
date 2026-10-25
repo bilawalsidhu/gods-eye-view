@@ -1,7 +1,7 @@
 import { msg } from '../i18n/index.js';
 
 /**
- * Anime / Studio Ghibli Style — Cel-shading + Saturation boost
+ * Anime / Studio Ghibli Style - Cel-shading + Saturation boost
  * Transforms the world into an animated film look
  */
 export const animeShader = {

@@ -17,7 +17,7 @@ export function createIngestion({ state, parts, source }) {
     // disable/abort followed by a fresh enable starts a NEWER load while this
     // one is still settling. The stale load must bail after every await and
     // must never touch shared lifecycle state or the viewer it no longer
-    // owns — clearing `_loading`/`_abort` for the successor is how duplicate
+    // owns - clearing `_loading`/`_abort` for the successor is how duplicate
     // or post-destroy data sources got added.
     const generation = ++state._loadGeneration;
     const abort = new AbortController();
@@ -90,7 +90,7 @@ export function createIngestion({ state, parts, source }) {
       // afterwards. Await every add to settlement (allSettled so a partial
       // failure cannot leave an unawaited add materializing later), then
       // re-check ownership. Pinned teardown mechanism: disable/destroy never
-      // wait for in-flight adds — the stale generation's own post-await
+      // wait for in-flight adds - the stale generation's own post-await
       // check here guarantees cleanup by removing exactly the sources THIS
       // generation added.
       const addResults = await Promise.allSettled([

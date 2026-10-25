@@ -10,7 +10,7 @@ import {
 } from '../area.js';
 import { LIMIT_SCHEMA, capRows, countNoun } from '../results.js';
 
-const ATTRIBUTION = '© TeleGeography — submarinecablemap.com (CC BY-NC-SA 3.0)';
+const ATTRIBUTION = '© TeleGeography - submarinecablemap.com (CC BY-NC-SA 3.0)';
 
 function cableLines(feature) {
   const geometry = feature?.geometry;

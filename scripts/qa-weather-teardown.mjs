@@ -243,7 +243,7 @@ try {
     );
   results.weatherReady = weatherReady;
   if (!weatherReady)
-    console.log('  !! weather not ready — feature coverage incomplete');
+    console.log('  !! weather not ready - feature coverage incomplete');
   await sleep(2000);
   // exercise: history playback, wind reading, storm selection, product switch
   await a.page.evaluate(() => {

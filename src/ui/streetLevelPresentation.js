@@ -269,7 +269,7 @@ function presentMeta(state) {
 /**
  * The coverage count line. Providers carry their wording as data
  * (coverageLabel noun/action); each combination needs its own literal tn
- * pair so every language gets real plural forms — the noun cannot inflect
+ * pair so every language gets real plural forms - the noun cannot inflect
  * through a placeholder in Russian. New wording: add a pair here and to the
  * catalogs (es.json/ru.json).
  * @param {{count: number, label?: {noun?: string, action?: string}|null}} coverage

@@ -116,7 +116,7 @@ export function createApplicationTools({
   defer(() => destroyScopeMask());
 
   // The follow camera recomputes the tracked target's dead-reckon position
-  // every frame — tracking anything is a per-frame animation. (perf wave 2)
+  // every frame - tracking anything is a per-frame animation. (perf wave 2)
   const removeTrackingListener = viewer.trackedEntityChanged.addEventListener(
     () => {
       if (viewer.trackedEntity) holdContinuousRender('tracked-entity');
@@ -125,7 +125,7 @@ export function createApplicationTools({
   );
 
   // Hidden-state suspension (perf wave 2): when the window/tab is hidden,
-  // stop the default render loop outright — a hidden canvas repaints for
+  // stop the default render loop outright - a hidden canvas repaints for
   // nobody, and browser rAF throttling still lets throttled frames burn
   // GPU. Holder/data state is untouched, so return is seamless: restore
   // the loop, refresh the one DOM surface we gated, render a frame.
@@ -148,7 +148,7 @@ export function createApplicationTools({
     removeTrackingListener();
     releaseContinuousRender('tracked-entity');
   });
-  // Apply the CURRENT state too — bootstrap can complete while the tab is
+  // Apply the CURRENT state too - bootstrap can complete while the tab is
   // already hidden, and waiting for the next transition would leave the
   // loop burning behind a hidden tab. (perf wave 2 fix)
   syncVisibilitySuspension();

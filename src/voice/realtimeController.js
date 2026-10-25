@@ -353,7 +353,7 @@ export class GevRealtimeController extends RealtimeFacade {
     this.clearDisconnectGrace();
     // Guard against the dc.close() below re-entering our own error handlers while
     // we're intentionally tearing down (the close/error listeners bail on this
-    // flag) — H8.
+    // flag) - H8.
     this._connection.beginTeardown();
     this.debugLog('session.stop', {
       removeUi,
@@ -456,13 +456,13 @@ export class GevRealtimeController extends RealtimeFacade {
   /* ---------------- voice cost control ---------------- */
 
   /**
-   * Is this session terminating (spend cap reached)? Latched — never clears
+   * Is this session terminating (spend cap reached)? Latched - never clears
    * until the next start().
    *
    * IN-FLIGHT TOOLS RUN TO COMPLETION, AND ARE NOT ROLLED BACK. A tool already
    * executing when the cap trips may finish its map mutation (a camera flight,
    * a layer toggle, an annotation). That is deliberate: unwinding a partially
-   * applied map change has no safe general implementation — a half-reverted
+   * applied map change has no safe general implementation - a half-reverted
    * camera/layer/annotation state is worse than a completed one, and the tool
    * abort signal is advisory (most actions do not check it). What the latch DOES
    * guarantee is that no NEW tool is dispatched once the cap has tripped.
@@ -472,7 +472,7 @@ export class GevRealtimeController extends RealtimeFacade {
   }
 
   /**
-   * Is the voice session FULLY settled — no live session and no transport left?
+   * Is the voice session FULLY settled - no live session and no transport left?
    *
    * Replacing the cost tracker is only legal here. `!isActive()` alone is not
    * enough: the 'error' status reports inactive while the data/peer connection

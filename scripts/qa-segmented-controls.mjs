@@ -15,7 +15,7 @@ const failures = [];
 page.on('pageerror', (error) => errors.push(error.message));
 const check = (name, passed, detail = '') => {
   console.log(
-    `[${passed ? 'PASS' : 'FAIL'}] ${name}${detail ? ` — ${detail}` : ''}`,
+    `[${passed ? 'PASS' : 'FAIL'}] ${name}${detail ? ` - ${detail}` : ''}`,
   );
   if (!passed) failures.push(name);
 };

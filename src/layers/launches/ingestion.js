@@ -99,7 +99,7 @@ export function createIngestion({
     if (!layerState._dataManager || layerState._satelliteStateBeforeMission)
       return;
     layerState._satelliteStateBeforeMission = {
-      // Effective visibility: a user enable still mid-activation is intent ON —
+      // Effective visibility: a user enable still mid-activation is intent ON -
       // capturing settled false would restore the user's enable away on exit.
       enabled:
         layerState._dataManager.isEffectivelyEnabled?.('satellites') ??

@@ -1,6 +1,6 @@
 // src/data/earthquakes.test.mjs
 // Focused tests for the pure analyst-record mapper (analyst query engine seam).
-// Pure function — no viewer/DOM needed; imported directly.
+// Pure function - no viewer/DOM needed; imported directly.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -168,8 +168,8 @@ test('real earthquake lifecycle publishes host labels while runtime entities car
 // `CallbackProperty`, Cesium re-tessellated all 58 ground primitives on EVERY
 // frame: 32.4 ms/frame and 30 fps for 58 contacts, against 1.4 ms/60 fps with
 // the layer off. Static axes restored 60 fps. Both halves of the fix are
-// pinned — the runtime property shape, and the source-level guards.
-test('quake disc axes are STATIC — a per-frame callback re-tessellates ground geometry', async () => {
+// pinned - the runtime property shape, and the source-level guards.
+test('quake disc axes are STATIC - a per-frame callback re-tessellates ground geometry', async () => {
   const originalFetch = globalThis.fetch;
   const dataSources = [];
   const viewer = {
@@ -203,7 +203,7 @@ test('quake disc axes are STATIC — a per-frame callback re-tessellates ground 
       assert.equal(
         property instanceof Cesium.CallbackProperty,
         false,
-        `${axis} must not be a CallbackProperty — it rebuilds the ground primitive every frame`,
+        `${axis} must not be a CallbackProperty - it rebuilds the ground primitive every frame`,
       );
       assert.equal(property.isConstant, true, `${axis} must be a constant property`);
       // Magnitude 5.5 → 2^5.5 * 1000 m, unchanged by the dropped pulse.
@@ -273,7 +273,7 @@ test('a quake poll still reaches the screen with the render loop idle', async ()
       'the enable frame must be the manager\'s layer-visibility request',
     );
 
-    // A LATER poll must request its own frame too — the enable-time
+    // A LATER poll must request its own frame too - the enable-time
     // 'layer-visibility' request cannot cover refreshes that arrive minutes later.
     const beforeRefresh = renderRequests.length;
     await manager._runPeriodicUpdate('earthquakes', manager.layers.get('earthquakes'));

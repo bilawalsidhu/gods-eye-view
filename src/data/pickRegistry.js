@@ -6,7 +6,7 @@
  * receives every LEFT_CLICK. When the user clicks a military aircraft while
  * a commercial flight is tracked, the commercial handler used to classify
  * the pick as "empty space" and clear tracking (with a camera flight) at the
- * same moment the military handler started tracking — two competing camera
+ * same moment the military handler started tracking - two competing camera
  * commands. Layers now register a predicate so siblings can recognize picks
  * that belong to someone else and leave them alone.
  */

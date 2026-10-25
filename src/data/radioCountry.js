@@ -24,7 +24,7 @@ function countryKey(value) {
   return String(value || '')
     .normalize('NFKC')
     .toLocaleLowerCase('en')
-    .replace(/[‐‑‒–—-]+/g, ' ')
+    .replace(/[\u2010\u2011\u2012\u2013\u2014-]+/g, ' ')
     .replace(/[.’']/g, '')
     .replace(/&/g, ' and ')
     .replace(/\s+/g, ' ')

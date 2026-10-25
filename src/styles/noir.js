@@ -1,7 +1,7 @@
 import { msg } from '../i18n/index.js';
 
 /**
- * Noir Style — Desaturation + High Contrast + Vignette
+ * Noir Style - Desaturation + High Contrast + Vignette
  * Classic film noir / detective movie look
  */
 export const noirShader = {

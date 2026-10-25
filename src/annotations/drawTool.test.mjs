@@ -1,9 +1,9 @@
 // STRUCTURAL contracts only: where files live, which ids the markup carries,
 // what the docs may claim. Things a running test cannot observe.
 //
-// Everything about the tool's BEHAVIOUR — the pointer lease, borrowing and
+// Everything about the tool's BEHAVIOUR - the pointer lease, borrowing and
 // restoring the viewer's own click actions, teardown, the Enter key, preview
-// heights, Clear — is asserted against the running module in
+// heights, Clear - is asserted against the running module in
 // `drawToolBehaviour.test.mjs`, not by reading this file's source.
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -35,7 +35,7 @@ test('the application composition wires the draw tool and owns its teardown', ()
     /import \{ initDrawTool \} from '\.\.\/annotations\/drawTool\.js';/,
   );
   // The tool holds a pointer claim, DOM listeners and a data source, so the
-  // application lifetime disposes it — not whoever last pressed the button.
+  // application lifetime disposes it - not whoever last pressed the button.
   const deferAt = tools.indexOf('defer(() => drawTool?.destroy());');
   assert.ok(deferAt > drawAt, 'the shell must defer the draw tool teardown');
 });
@@ -56,14 +56,14 @@ test('the engine resolves manual geometry before any name resolution', () => {
   );
   assert.match(
     engine,
-    /if \(mode === 'manual'\) return baseLabel \? `\$\{baseLabel\} — \$\{dist\}` : dist;/,
+    /if \(mode === 'manual'\) return baseLabel \? `\$\{baseLabel\} - \$\{dist\}` : dist;/,
     'a drawn line reports length, never a walk time',
   );
 });
 
 test('the Draw control markup carries the ids the tool binds to', () => {
   // The DISPLAY rail is a component template now, assembled into index.html at
-  // build time — the markup is not in index.html any more.
+  // build time - the markup is not in index.html any more.
   const html = read('src/ui/templates/display-controls.html');
   const ids = [
     'draw-toggle',

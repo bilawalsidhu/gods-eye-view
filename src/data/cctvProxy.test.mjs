@@ -98,7 +98,7 @@ test('CCTV upstream frame fetch aborts an undeclared body once it crosses the ca
 
   assert.equal(result?.body?.length ?? null, null, 'a chunked body over the cap is a miss');
   // Four chunks fit, the fifth crosses the cap, and one more sits in the
-  // stream's prefetch queue — nothing past that is ever pulled.
+  // stream's prefetch queue - nothing past that is ever pulled.
   assert.ok(pulled <= 6, `stopped reading at the cap, pulled ${pulled} chunks`);
   assert.equal(cancelled, true, 'the upstream stream is cancelled, not drained');
 });
@@ -114,7 +114,7 @@ test('CCTV upstream frame fetch still returns a chunked body under the cap', asy
   assert.equal(result?.ok, true);
   assert.equal(result?.body?.length, chunkBytes * 3, 'every chunk is reassembled in order');
   assert.ok(CCTV_FRAME_MAX_BODY_BYTES > 0 && CCTV_FRAME_MAX_BODY_BYTES <= CCTV_MEDIA_MAX_BODY_BYTES,
-    'the frame cap must be at or under the media route cap — pinned against the real constant');
+    'the frame cap must be at or under the media route cap - pinned against the real constant');
 });
 
 test('CCTV media upstream fetch aborts when response headers never arrive', async () => {

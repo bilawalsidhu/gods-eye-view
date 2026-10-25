@@ -42,7 +42,7 @@ page.on('pageerror', (error) => errors.push(`pageerror: ${error.message}`));
 let failures = 0;
 function check(name, passed, detail = '') {
   console.log(
-    `[${passed ? 'PASS' : 'FAIL'}] ${name}${detail ? ` — ${detail}` : ''}`,
+    `[${passed ? 'PASS' : 'FAIL'}] ${name}${detail ? ` - ${detail}` : ''}`,
   );
   if (!passed) failures++;
 }
@@ -61,7 +61,7 @@ const CANVAS_CLIP = { x: 340, y: 200, width: 560, height: 380 };
 /**
  * How many amber pixels the clip contains. The drawn area's stroke and fill are
  * the only amber in this scene, so the count going UP after a shape is finished
- * is the shape actually painting — which is what CESIUM_3D_TILE-only
+ * is the shape actually painting - which is what CESIUM_3D_TILE-only
  * classification failed to do on a keyless boot while still reporting a mark on
  * the board. Decoding happens in the page because Node here has no image
  * decoder.
@@ -94,7 +94,7 @@ async function amberPixels() {
 }
 
 /**
- * Press Enter as the person drawing does — with the map focused, not a button.
+ * Press Enter as the person drawing does - with the map focused, not a button.
  * Enter on a focused control means "press this control", so the tool ignores it
  * there; the harness has to move focus the way a user would before using the
  * finish key.
@@ -221,7 +221,7 @@ try {
   );
 
   // The viewer's OWN click actions, captured before the tool ever runs. Both
-  // must be absent while drawing and back — as the SAME functions — after.
+  // must be absent while drawing and back - as the SAME functions - after.
   await page.evaluate(() => {
     const Cesium = window.__CESIUM__;
     const stock = window.__godsEyeView.viewer.screenSpaceEventHandler;
@@ -384,7 +384,7 @@ try {
   await wait(1200);
   const amberAfter = await amberPixels();
   check(
-    'the finished area actually PAINTS — amber pixels appear on this surface',
+    'the finished area actually PAINTS - amber pixels appear on this surface',
     amberAfter - amberBefore > 500,
     `${amberBefore} → ${amberAfter} amber pixels (+${amberAfter - amberBefore})`,
   );
@@ -427,7 +427,7 @@ try {
     Boolean(target),
     target
       ? `${target.layer} at ${target.x},${target.y}`
-      : 'no CCTV camera or bundled site could be reached — the ownership case cannot be proved',
+      : 'no CCTV camera or bundled site could be reached - the ownership case cannot be proved',
   );
   if (target) {
     await clickWorld(target.x, target.y, { settle: 900 });
@@ -473,7 +473,7 @@ try {
     window.__gevAnnotations.count(),
   );
   check(
-    'a reload starts an empty board — marks live for the session, not across reloads',
+    'a reload starts an empty board - marks live for the session, not across reloads',
     beforeReload > 0 && afterReload === 0,
     `${beforeReload} before, ${afterReload} after`,
   );
@@ -527,8 +527,8 @@ try {
   check('a shape can be drawn again after a reload', drewAgain);
 
   // Enter belongs to whatever the keyboard is on. With Clear focused it must
-  // PRESS CLEAR — the shape in progress goes, and so does the mark already on
-  // the board — and it must NOT quietly finish a second shape.
+  // PRESS CLEAR - the shape in progress goes, and so does the mark already on
+  // the board - and it must NOT quietly finish a second shape.
   await clickWorld(430, 300);
   await clickWorld(690, 320);
   await clickWorld(670, 500);

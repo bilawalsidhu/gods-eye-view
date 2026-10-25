@@ -173,7 +173,7 @@ export function createTuning({ state: layerState, services, parts, source }) {
     ) {
       const stationId = frozenStation.id;
       // A failed exact release owns the visible outcome. Do not let the previous
-      // selection—or changed metadata under the same ID—reappear between the
+      // selection-or changed metadata under the same ID-reappear between the
       // frozen preview and the unavailable state.
       layerState._selectedId = null;
       layerState._selectionGeneration += 1;

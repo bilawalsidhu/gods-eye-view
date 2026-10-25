@@ -5,14 +5,14 @@ import {
 } from './voice/cloudVoiceAuth.js';
 
 /**
- * The POWER UP surface — paste a key, get a power.
+ * The POWER UP surface - paste a key, get a power.
  *
  * A small chip sits bottom-right whenever the app is running under the dev
  * server with keys still missing. It opens a dialog rendered ENTIRELY from
  * GET /api/setup/status (the registry lives in src/keySetupCore.mjs and this
  * module never duplicates it): one row per key, what it unlocks, where to get
  * it, and a paste field. SAVE posts to /api/setup/keys, which writes the
- * repo-root .env and restarts the dev server — Vite's client then reloads the
+ * repo-root .env and restarts the dev server - Vite's client then reloads the
  * page itself, and the pasted key is simply *on*. No hand-edited env files.
  *
  * The surface self-destructs where it cannot work: a prod build (no endpoint)
@@ -23,7 +23,7 @@ import {
 import { t, msg, tn, registerUnsavedWork } from './i18n/index.js';
 
 /**
- * Chip label — pure, exported for tests (keySetup.test.mjs pins the English).
+ * Chip label - pure, exported for tests (keySetup.test.mjs pins the English).
  * @param {{total?: number, setCount?: number}|null} status
  * @returns {string}
  */
@@ -39,7 +39,7 @@ export function keySetupChipLabel(status) {
 }
 
 /**
- * Collect a POST body from field descriptors — pure, exported for tests.
+ * Collect a POST body from field descriptors - pure, exported for tests.
  * @param {Array<{envVar: string, value: string}>} fields
  * @returns {Record<string, string>} non-empty trimmed values only
  */
@@ -97,7 +97,7 @@ const SAVE_REFUSALS = Object.freeze({
 });
 
 /**
- * The status line for a refused save — pure, exported for tests. A known
+ * The status line for a refused save - pure, exported for tests. A known
  * `code` reads in the active language; anything else shows the server's text.
  * @param {{code?: string, params?: object, error?: string}} payload
  * @param {number} status HTTP status of the response.
@@ -152,7 +152,7 @@ function oauthCheckError(serverError, fallback) {
 }
 
 /**
- * Status text for a failed OAuth check — pure, exported for tests. A fallback
+ * Status text for a failed OAuth check - pure, exported for tests. A fallback
  * sentence of our own already says what failed and is shown alone; any other
  * reason (server text, network error) gets the «OAuth check failed» wrapper.
  * @param {unknown} error
@@ -196,7 +196,7 @@ export async function waitForChatGptOAuth({
 
 /**
  * After the FIRST Google key lands, the restart's reload should boot the
- * photoreal default — not faithfully restore the auto-selected keyless OSM
+ * photoreal default - not faithfully restore the auto-selected keyless OSM
  * basemap from the URL's live share hash. Strips only `map=osm`: a stack under
  * any other name was chosen or shared on purpose and survives, and so does
  * everything else in the hash (camera, style, layers). Pure, exported for tests.
@@ -215,7 +215,12 @@ export function stripKeylessBasemapFromHash(hash) {
   }
 }
 
-const TIER_DOTS = Object.freeze({ metered: '🔴', paid: '🔴', free: '🟡' });
+/** Visual tier marker, styled as a colored dot via CSS (was an emoji glyph). */
+const TIER_CLASSES = Object.freeze({
+  metered: 'tier-metered',
+  paid: 'tier-paid',
+  free: 'tier-free',
+});
 
 function updateCloudVoiceAuthControl(auth, busy = false) {
   const mode = readStoredCloudVoiceAuthMode();
@@ -254,21 +259,22 @@ function buildRow(documentRef, key) {
   const title = documentRef.createElement('strong');
   title.textContent = key.title; // i18n-ignore: provider product name
   const tier = documentRef.createElement('span');
-  tier.className = 'key-setup-tier';
-  tier.textContent = TIER_DOTS[key.tier] || '';
+  tier.className = `key-setup-tier ${TIER_CLASSES[key.tier] || ''}`.trim();
+  tier.setAttribute('aria-hidden', 'true');
+  tier.textContent = '';
   tier.title =
     key.tier === 'metered'
-      ? t('Metered — a billing-enabled account')
+      ? t('Metered - a billing-enabled account')
       : key.tier === 'paid'
-        ? t('Optional paid token — public access works without one')
-        : t('Free key — register, paste, done');
+        ? t('Optional paid token - public access works without one')
+        : t('Free key - register, paste, done');
   head.append(led, title, tier);
   if (key.clientExposed) {
     const exposed = documentRef.createElement('span');
     exposed.className = 'key-setup-exposed';
     exposed.textContent = t('browser-side');
     exposed.title = t(
-      'This key runs in the browser by design — restrict it at the provider (see SECURITY.md)',
+      'This key runs in the browser by design - restrict it at the provider (see SECURITY.md)',
     );
     head.append(exposed);
   }
@@ -279,7 +285,7 @@ function buildRow(documentRef, key) {
     badge.className = 'key-setup-external';
     badge.textContent = t('configured externally');
     badge.title = t(
-      'Supplied by your environment, Keychain, or launcher — change it where it was set',
+      'Supplied by your environment, Keychain, or launcher - change it where it was set',
     );
     head.append(badge);
   }
@@ -302,14 +308,14 @@ function buildRow(documentRef, key) {
     for (const envVar of key.envVars) {
       const input = documentRef.createElement('input');
       // Passwords-style so a pasted key never shows on a shared or recorded
-      // screen — this app gets screen-recorded a lot.
+      // screen - this app gets screen-recorded a lot.
       input.type = 'password';
       input.autocomplete = 'off';
       input.spellcheck = false;
       input.dataset.envVar = envVar;
       input.setAttribute('aria-label', envVar);
       input.placeholder = key.set
-        ? t('{envVar} saved — paste to replace', { envVar })
+        ? t('{envVar} saved - paste to replace', { envVar })
         : t('paste {envVar}', { envVar });
       fields.append(input);
     }
@@ -584,7 +590,7 @@ export async function initKeySetup({
     }
     await submitUpdates(
       updates,
-      msg('Saved to {store}. Restarting — this page reloads itself.'),
+      msg('Saved to {store}. Restarting - this page reloads itself.'),
     );
   };
 
@@ -707,8 +713,8 @@ export async function initKeySetup({
       return;
     }
     if (!Array.isArray(envVars) || !envVars.length) return;
-    // Removal is destructive and — behind a framing defense that should already
-    // stop it — a clickjack target. A confirm turns a single aligned click into
+    // Removal is destructive and - behind a framing defense that should already
+    // stop it - a clickjack target. A confirm turns a single aligned click into
     // a deliberate two-step the lure cannot pre-satisfy.
     const ok =
       typeof globalThis.confirm !== 'function' ||
@@ -716,7 +722,7 @@ export async function initKeySetup({
     if (!ok) return;
     void submitUpdates(
       Object.fromEntries(envVars.map((name) => [name, null])),
-      msg('Removed from {store}. Restarting — this page reloads itself.'),
+      msg('Removed from {store}. Restarting - this page reloads itself.'),
     );
   });
 

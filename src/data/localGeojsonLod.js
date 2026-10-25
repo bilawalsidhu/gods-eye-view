@@ -6,7 +6,7 @@
  * (`local-datacenters`, `local-dams`, and any future `createLocalGeoJsonLayer`
  * dataset). Cesium-specific projection, occlusion, and stem geometry stay in
  * `localGeojson.js`; this module turns the resulting in-view records into a
- * bounded "active" set — the only records that layer should spend per-frame
+ * bounded "active" set - the only records that layer should spend per-frame
  * stem-geometry and ground-sample work on.
  *
  * The screen-space label overlay is already decluttered
@@ -17,7 +17,7 @@
  * from the number of hidden stems.
  *
  * Sense is INVERTED relative to `cctvLod.js`: a CCTV metro view earns MORE
- * cards, but a zoomed-out infrastructure view must show FEWER stems — that is
+ * cards, but a zoomed-out infrastructure view must show FEWER stems - that is
  * exactly the view where every feature piles onto the screen at once. Zoom in
  * and the in-view count falls naturally, so the budget opens back up.
  *
@@ -34,7 +34,7 @@
  * BUDGET
  * ------------------------------------------------------------------ */
 
-/** Active-stem budget at full-earth / global framing — the hot case. */
+/** Active-stem budget at full-earth / global framing - the hot case. */
 export const INFRA_LOD_ACTIVE_MIN = 80;
 /** Active-stem budget at continental framing. */
 export const INFRA_LOD_ACTIVE_MID = 200;
@@ -48,7 +48,7 @@ export const INFRA_LOD_REGIONAL_HEIGHT_M = 200_000;
 
 /**
  * Bounded active-stem budget for the current camera height. Non-finite input
- * resolves to the GLOBAL band (fewest stems) — the safe default for a value we
+ * resolves to the GLOBAL band (fewest stems) - the safe default for a value we
  * could not read is the cheapest one, not the most expensive.
  *
  * @param {number} cameraHeightM
@@ -71,7 +71,7 @@ export function infraLodBudget(cameraHeightM) {
 
 /**
  * Priority points added for a record that currently holds an active stem, so a
- * non-incumbent displaces it only when meaningfully better — not on sub-pixel
+ * non-incumbent displaces it only when meaningfully better - not on sub-pixel
  * camera jitter. Deliberately smaller than the label-priority "has a name"
  * gap (≥700 in labelPriorityFromProperties), so incumbency reorders WITHIN a
  * tier but never keeps an unnamed stem alive over a fresh named feature.
@@ -139,11 +139,11 @@ function sortableDistance(distanceM) {
  * Select the active-stem set from already projected in-view candidates.
  *
  * A candidate is `{ id, priority, distanceM, inView }`. Only `inView === true`
- * candidates are eligible — the caller runs the (cheap) ellipsoidal-occluder
+ * candidates are eligible - the caller runs the (cheap) ellipsoidal-occluder
  * test for every record and hands the result here; this module then decides
  * which of those get the (expensive) stem geometry + ground-sample work.
  *
- * Ranking: `infraRankScore` descending, then nearer first, then id — a total
+ * Ranking: `infraRankScore` descending, then nearer first, then id - a total
  * order, so an under-budget cut is deterministic. Duplicate ids collapse to
  * their best-scoring representative before the cut.
  *
@@ -212,12 +212,12 @@ export const INFRA_LOD_GRACE_MS = 4_000;
 
 /**
  * Eviction-grace hysteresis for the active-stem set. Ported from
- * cctvLod.applyEvictionGrace — same algorithm, infra-tuned constants.
+ * cctvLod.applyEvictionGrace - same algorithm, infra-tuned constants.
  *
  * Raw per-pass selection has no memory: a stem sitting at the budget edge
  * churns in and out on every small camera move. This planner keeps an
  * already-built stem alive for a short grace window after it falls out of the
- * selection — dropped only once it STAYS unselected for `gracePasses`
+ * selection - dropped only once it STAYS unselected for `gracePasses`
  * consecutive passes or `graceMs` of wall time, whichever comes first. A newly
  * selected record enters immediately; the hard `activeLimit` cap is never
  * exceeded (grace-period stems are evicted first under cap pressure,
@@ -299,7 +299,7 @@ export function applyInfraEvictionGrace({
 /**
  * Probe window for the motion fallback. `localGeojson.js` marks its selection
  * dirty on `moveEnd`, which covers drags, one-shot `setView`, and voice
- * `flyTo` — but a tracked-entity follow camera, a Cockpit view, a route
+ * `flyTo` - but a tracked-entity follow camera, a Cockpit view, a route
  * flight, or a continuous orbit never emits one. Without a fallback the
  * active set stays pinned to the region the camera left: the walk hides those
  * records one by one as they rotate behind the globe and admits nothing newly
@@ -331,7 +331,7 @@ export const INFRA_LOD_MOTION_EPSILON_MIN_M = 250;
 /**
  * Camera travel that counts as material motion at this camera height.
  *
- * An unreadable height resolves to the FLOOR — the most eager epsilon. That is
+ * An unreadable height resolves to the FLOOR - the most eager epsilon. That is
  * the opposite polarity to `infraLodBudget`, deliberately: there, a height we
  * could not read must not buy the most expensive band; here, a missed
  * recompute empties the layer while a surplus one costs a single bounded pass.
@@ -366,7 +366,7 @@ export function infraLodMotionEpsilonM(
  * writes the returned `lastProbeMs` back.
  *
  * Two conditions, both required:
- *   - the probe window has elapsed — the rate limit, so continuous motion
+ *   - the probe window has elapsed - the rate limit, so continuous motion
  *     cannot recompute on every walk;
  *   - the camera has travelled past the height-scaled epsilon SINCE THE LAST
  *     SELECTION, not since the previous walk. A parked camera therefore costs
@@ -384,7 +384,7 @@ export function infraLodMotionEpsilonM(
  * @param {number} [input.nowMs]
  * @param {number} [input.lastProbeMs] When the window last opened, or the last selection ran.
  * @param {number} [input.movedSqM] Squared camera travel (m²) since the last selection.
- * @param {number} [input.cameraHeightM] Current height — a near camera earns a tighter epsilon.
+ * @param {number} [input.cameraHeightM] Current height - a near camera earns a tighter epsilon.
  * @param {number} [input.probeIntervalMs]
  * @param {number} [input.motionEpsilonM] Explicit epsilon (m); overrides the height scale.
  * @returns {{recompute:boolean, lastProbeMs:number}}

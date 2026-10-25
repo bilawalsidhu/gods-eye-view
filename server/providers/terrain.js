@@ -14,9 +14,9 @@ import { admitSameSiteKeyless } from './common/same-site.js';
 /**
  * Re:Earth terrain point-height proxy: batched lon/lat → ellipsoidal height
  * lookups, keyless. Upstream: https://terrain.reearth.land/heights.json
- * (UPSTREAM_CHUNK points per call — sized against measured latency, see
+ * (UPSTREAM_CHUNK points per call - sized against measured latency, see
  * below). Terrain doesn't move, so results are cached to
- * disk with a long TTL (30 days) — mirrors celestrakProxy's memory+disk
+ * disk with a long TTL (30 days) - mirrors celestrakProxy's memory+disk
  * cache and serve-stale shape. Cache entries and stale fallback are keyed per
  * 5dp point, so reordered and partially overlapping batches reuse prior work.
  * Only missing/stale points go upstream; the response is rebuilt in exact
@@ -50,7 +50,7 @@ export function terrainHeightsProxy(options = {}) {
   // Sized against measured upstream latency, not the documented page cap.
   // Re:Earth serves 87-186 ms/point depending on load (observed 2026-09-12,
   // a 2x swing within one hour). 256 points therefore costs 22-48 s and blows
-  // the 30 s attempt timeout whenever the service is slow — the long-standing
+  // the 30 s attempt timeout whenever the service is slow - the long-standing
   // cause of "[terrain-heights-proxy] refresh incomplete" (owner incident
   // 2026-08-21). 64 points costs 5.6-12 s, inside the timeout at both ends of
   // that range.
@@ -60,7 +60,7 @@ export function terrainHeightsProxy(options = {}) {
    * Entry ceiling for the point cache, and with it the file written from it.
    *
    * Every distinct 5dp point is a separate key, so without a ceiling the map
-   * — and the JSON dumped from it verbatim — grow for as long as a caller
+   * - and the JSON dumped from it verbatim - grow for as long as a caller
    * supplies new coordinates. Measured against real use rather than guessed:
    * this checkout's `.gev-cache/terrain-heights.json` held 6,189 entries in
    * 1.0 MB after ordinary sessions, i.e. ~168 bytes/entry. 50,000 entries is
@@ -73,8 +73,8 @@ export function terrainHeightsProxy(options = {}) {
   /**
    * Requests/min/client. Terrain is keyless and free, so this guards the point
    * cache and the upstream community service rather than a bill. Sized from
-   * measurement: across a full `npm run test:track` run — the heaviest
-   * exercise this app has — the route served 10 requests, peaking at 8/min.
+   * measurement: across a full `npm run test:track` run - the heaviest
+   * exercise this app has - the route served 10 requests, peaking at 8/min.
    * 90/min is an order of magnitude above that, and the band `/api/overpass`
    * and `/api/military-installations` already use.
    */
@@ -270,7 +270,7 @@ export function terrainHeightsProxy(options = {}) {
         if (!points) {
           send(400, {
             error:
-              'invalid points parameter — expected "lon,lat;lon,lat;…" with finite numbers',
+              'invalid points parameter - expected "lon,lat;lon,lat;…" with finite numbers',
           });
           return;
         }
@@ -295,7 +295,7 @@ export function terrainHeightsProxy(options = {}) {
         if (outcome.upstreamError) {
           console.warn(
             '[terrain-heights-proxy] refresh incomplete' +
-              ' — serving stale points when available',
+              ' - serving stale points when available',
           );
         } else if (outcome.absentPoints > 0) {
           // Not a refresh failure. The upstream answered every position and
@@ -305,7 +305,7 @@ export function terrainHeightsProxy(options = {}) {
           console.info(
             `[terrain-heights-proxy] ${outcome.absentPoints}` +
               ` of ${outcome.requestedPoints} position(s) had no upstream` +
-              ' height this poll — retrying next cycle',
+              ' height this poll - retrying next cycle',
           );
         }
         send(outcome.status, outcome.body);

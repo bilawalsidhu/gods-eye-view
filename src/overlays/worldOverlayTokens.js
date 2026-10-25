@@ -53,7 +53,7 @@ export const DETECTION_STYLE = Object.freeze({
 });
 
 /**
- * Alpha of the tracked readout card's backing plate — the legibility reference
+ * Alpha of the tracked readout card's backing plate - the legibility reference
  * every other backing is measured against. Derived from
  * `WORLD_OVERLAY_STYLE.background` and asserted against it in unit tests, so a
  * future retune of the card cannot silently desynchronize the ambient family.
@@ -73,7 +73,7 @@ export const CARD_PLATE_ALPHA = 0.82;
  * self-adapting: over night terrain or space a dark plate on a dark scene is
  * nearly invisible, while over bright ground it does the full darkening job.
  * That is the same mechanism the tracked card uses, and the reason it survives
- * every style — see `PLATE_ALPHA_BAND` in the tests.
+ * every style - see `PLATE_ALPHA_BAND` in the tests.
  */
 export const DETECTION_PLATE_BAND = Object.freeze({ min: 0.5, max: 0.62 });
 
@@ -81,8 +81,8 @@ export const DETECTION_PLATE_BAND = Object.freeze({ min: 0.5, max: 0.62 });
  * What survives of a callout plate when SKY, not ground, is behind the label.
  *
  * The plate exists to hold small mono text against sunlit imagery. Against the
- * horizon it has no job to do — there is nothing bright and busy to separate
- * the text from — and at full strength it reads as a row of dark boxes pasted
+ * horizon it has no job to do - there is nothing bright and busy to separate
+ * the text from - and at full strength it reads as a row of dark boxes pasted
  * on an empty sky, which is the one place the pre-plate bare-text look was
  * already better (owner field call, 2026-08-21).
  *

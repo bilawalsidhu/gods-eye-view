@@ -6,23 +6,23 @@ import * as Cesium from 'cesium';
  * bounded and camera-driven; animation lerps precomputed Cartesian waypoints.
  */
 
-/** @const {number} Meters — hide all traffic dots above this camera altitude */
+/** @const {number} Meters - hide all traffic dots above this camera altitude */
 
 export const ACTIVATION_ALTITUDE = 8000;
 
-/** @const {number} Meters — above this altitude, only major roads are fetched */
+/** @const {number} Meters - above this altitude, only major roads are fetched */
 
 export const FAST_FETCH_ALTITUDE = 4500;
 
-/** @const {number} Milliseconds — debounce delay before fetching after camera settles */
+/** @const {number} Milliseconds - debounce delay before fetching after camera settles */
 
 export const FETCH_DEBOUNCE = 320;
 
-/** @const {number} Meters — vertical offset to keep dots above clamped terrain surface */
+/** @const {number} Meters - vertical offset to keep dots above clamped terrain surface */
 
 export const DOT_HEIGHT_OFFSET = 3.0;
 
-/** @const {number} Fraction (0-1) — skip re-fetch when viewport overlap exceeds this */
+/** @const {number} Fraction (0-1) - skip re-fetch when viewport overlap exceeds this */
 
 export const OVERLAP_THRESHOLD = 0.6;
 
@@ -42,12 +42,12 @@ export function roadDotBudget(altitude) {
 
 export const MAX_WAYPOINTS_PER_ROAD = 80;
 
-/** @const {number} Km — minimum viewport center shift before allowing refresh */
+/** @const {number} Km - minimum viewport center shift before allowing refresh */
 
 export const MIN_CENTER_SHIFT_KM = 0.35;
 
 /**
- * @const {number} Km — max great-circle distance the fetch center may sit from
+ * @const {number} Km - max great-circle distance the fetch center may sit from
  * the camera nadir. Traffic only activates below ACTIVATION_ALTITUDE (8 km),
  * so a look-at ground point farther than this is horizon-gazing and gets
  * pulled back toward nadir (C4 oblique-bounds fix).
@@ -80,7 +80,7 @@ export const SPEED_MPS = {
   unclassified: 5,
 };
 
-/** @const {Object<string,number>} Density multiplier — higher values spawn more dots on important roads */
+/** @const {Object<string,number>} Density multiplier - higher values spawn more dots on important roads */
 
 export const DENSITY_MULT = {
   motorway: 3.0,
@@ -117,16 +117,16 @@ export const FLOW_BUCKET_COLORS = {
   jam: Cesium.Color.fromCssColorString('#e05252').withAlpha(0.9),
 };
 
-// ─── Jam-viz prototype (live mode only — see 2026-07-21 design doc) ────────
+// ─── Jam-viz prototype (live mode only - see 2026-07-21 design doc) ────────
 /** @const {number} Max congestion heat-line polylines per render (jam first). */
 
 export const HEAT_LINE_CAP = 400;
 
-/** @const {number} Px — glowing jam corridor line width. */
+/** @const {number} Px - glowing jam corridor line width. */
 
 export const HEAT_LINE_JAM_WIDTH = 9;
 
-/** @const {number} Px — flat slow corridor line width. */
+/** @const {number} Px - flat slow corridor line width. */
 
 export const HEAT_LINE_SLOW_WIDTH = 4;
 
@@ -165,7 +165,7 @@ export const CREEP_STOP_MS = [1500, 5000];
 
 /**
  * @const {number} Minimum base pixel size for COLORED dots while a styled
- * preset is active — residential-road dots spawn at 4 px and vanish into
+ * preset is active - residential-road dots spawn at 4 px and vanish into
  * post-FX pixelation; presence is the dots' whole job there (owner round
  * 2). Sim dots and the normal profile keep SIZE_BY_TYPE untouched.
  */

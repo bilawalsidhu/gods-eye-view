@@ -1,6 +1,6 @@
 // src/layers/cctv/modelSpecs.test.mjs
 // Hardware-model spec enrichment: lookup semantics (case-insensitive, alias
-// matching, unknown → null — never a guess), datasheet-FOV parsing across the
+// matching, unknown → null - never a guess), datasheet-FOV parsing across the
 // real fov_deg string shapes, and the HUD spec-summary line.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -61,7 +61,7 @@ test('verbose registry strings resolve via distinctive-token fallback', () => {
 });
 
 test('token fallback never matches on generic words or wrong models', () => {
-  // Only generic descriptors — no distinctive hardware token — stays null.
+  // Only generic descriptors - no distinctive hardware token - stays null.
   assert.equal(lookupModelSpec('PTZ Dome Camera'), null);
   assert.equal(lookupModelSpec('HD Network Camera'), null);
   assert.equal(lookupModelSpec('Outdoor Dome Camera'), null);
@@ -79,7 +79,7 @@ test('exact match still wins over the token fallback', () => {
   assert.equal(lookupModelSpec('AUTODOME IP 5000i')?.id, 'bosch-ndp-5502-30');
 });
 
-test('lookupModelSpec returns null for unknown or empty input — never guesses', () => {
+test('lookupModelSpec returns null for unknown or empty input - never guesses', () => {
   assert.equal(lookupModelSpec('NOT-A-REAL-MODEL'), null);
   assert.equal(lookupModelSpec(''), null);
   assert.equal(lookupModelSpec(null), null);

@@ -11,6 +11,7 @@ import {
 } from '../../data/contactMatch.js';
 import { LANDED_ALT_MAX_FT, LANDED_SPEED_MAX_MPS } from './policy.js';
 import { emergencyBroadcastPhrase } from '../../data/aircraftEmergency.js';
+import { ICONS } from '../../icons.js';
 
 export function createQueries({
   flightState,
@@ -62,7 +63,7 @@ export function createQueries({
 
   /**
    * True when the aircraft's latest metadata reads "on or about the runway"
-   * (low + slow) — see the landed fast-cull rationale above. Both gates must
+   * (low + slow) - see the landed fast-cull rationale above. Both gates must
    * hold, so a plane missing either datum keeps the normal grace.
    * @param {string} icao24 - ICAO hex identifier of the aircraft
    * @returns {boolean}
@@ -72,7 +73,7 @@ export function createQueries({
     const info = flightState.records.data.get(icao24);
     if (!info) return false;
     // Round 7 (mirror of flights.js): fast cull only for contacts seen
-    // AIRBORNE this session — parked contacts ride the normal grace so feed
+    // AIRBORNE this session - parked contacts ride the normal grace so feed
     // flaps don't churn their identity/floor state.
     if (info.wasAirborne !== true) return false;
     if (info.onGround) return true;
@@ -132,7 +133,7 @@ export function createQueries({
       velocityMps: displayed.speedMps,
       track: displayed.trackDeg,
       // Same field, same name, same null-when-absent rule as the civil
-      // descriptor — the two layers store the record under different keys
+      // descriptor - the two layers store the record under different keys
       // (`verticalRateMps` here, `verticalRate` there), so only the mapping
       // makes `resolveTrackedAircraftInfo` hand back one shape for both.
       verticalRateMps: Number.isFinite(info?.verticalRateMps)
@@ -158,8 +159,8 @@ export function createQueries({
 
   /**
    * Map one military aircraft's internal poll record to a plain JSON-safe
-   * analyst record (analyst query engine seam) — same shape as the flights
-   * layer's mapAnalystRecord, with `military` always true. Pure — no Cesium
+   * analyst record (analyst query engine seam) - same shape as the flights
+   * layer's mapAnalystRecord, with `military` always true. Pure - no Cesium
    * types, no fetches. Missing/unknown fields are null, never NaN/undefined.
    * adsb.lol carries no origin-country field and this layer has no route
    * enrichment, so originCountry/routeOrigin/routeDestination are always null.
@@ -187,7 +188,7 @@ export function createQueries({
       callsign,
       lat: num(info?.rawLat),
       lon: num(info?.rawLon),
-      // altitudeFt is the sticky barometric/MSL aviation field — converted to
+      // altitudeFt is the sticky barometric/MSL aviation field - converted to
       // meters here for shape parity with the flights layer.
       altitudeM: Number.isFinite(info?.altitudeFt)
         ? info.altitudeFt * 0.3048
@@ -227,7 +228,9 @@ export function createQueries({
 
     name: 'Military Flights',
 
-    icon: '🎖️',
+    icon: '',
+
+    iconSvg: ICONS.medal,
 
     source: flightState.feed._lastSource,
 
@@ -248,7 +251,7 @@ export function createQueries({
      * Live layer params.
      * `models3d` toggles 3D glTF jet-model rendering for the FLEET (altitude-gated): when on,
      * surrounding military aircraft become 3D models once the camera is zoomed in past
-     * MODEL_ALT_CEIL_M. The TRACKED contact is NOT gated by this — it takes its 3D model by
+     * MODEL_ALT_CEIL_M. The TRACKED contact is NOT gated by this - it takes its 3D model by
      * camera distance regardless (see `_trackedModelRegimeActive` / trackedModelRegime.js).
      * `models3dMode` is 'proximity' (nearest MODEL_MAX in view) or 'all' (every in-view plane).
      * @param {{models3d?: boolean, models3dMode?: 'proximity'|'all', selectedMilitaryTrackingId?: string|null}} params
@@ -269,7 +272,7 @@ export function createQueries({
           parts.rendering._releaseModels();
           parts.tracking._syncTracked2dRotation();
           // Restore fleet billboards (horizon-cull re-asserts next tick), but NEVER the tracked
-          // plane's own fleet billboard — its tracked entity is the visual (avoids a double-image).
+          // plane's own fleet billboard - its tracked entity is the visual (avoids a double-image).
           if (flightState._billboardCollection)
             for (const [icao, bb] of flightState._billboards) {
               if (icao !== flightState._trackedIcao) bb.show = true;
@@ -294,7 +297,7 @@ export function createQueries({
       ) {
         flightState._irBoost = params.irBoost;
         parts.rendering._reloadModelsForIrBoost();
-        // Sprites don't reload with the models — swap the TR-3B glyph between its
+        // Sprites don't reload with the models - swap the TR-3B glyph between its
         // cold and thermal-reactive variants directly (mirror of flights.js).
         parts.tracking._refreshTr3bForStyle();
       }
@@ -406,7 +409,7 @@ export function createQueries({
               .toLowerCase() || null,
           ),
           track: info?.track ?? null,
-          // Display type — converted too, so a Contacts row can't still name the
+          // Display type - converted too, so a Contacts row can't still name the
           // airframe the triangle replaced (the filter matcher reads this as a
           // fallback candidate as well).
           type: tr3bTypeLabel(icao24, info?.type || null),
@@ -545,8 +548,8 @@ export function createQueries({
       // Registration is searched alongside callsign because it is what the
       // operator SEES: a callsign-less contact reads as its tail number on the
       // card, in the analyst's answer, and in the Contacts list. Matching only
-      // callsigns meant "follow 6606" — and the analyst → track_entity handoff
-      // the tool instructions prescribe — answered "nothing matched" for the
+      // callsigns meant "follow 6606" - and the analyst → track_entity handoff
+      // the tool instructions prescribe - answered "nothing matched" for the
       // very identity the app had just shown (owner field session 2026-08-21,
       // 23:48: three failed track_entity retries before a fallback stuck).
       // Ranking is shared with the flights layer (contactMatch.js) so the two
@@ -572,7 +575,7 @@ export function createQueries({
 
     /**
      * Return id/label/position for up to maxCount currently rendered aircraft.
-     * Cheap snapshot for voice-tool framing — billboard positions only, no
+     * Cheap snapshot for voice-tool framing - billboard positions only, no
      * dead reckoning and no cloning.
      * @param {number} [maxCount=500] - Maximum number of entries to return.
      * @returns {Array<{id: string, label: string, position: Cesium.Cartesian3, latitude: number, longitude: number, altitudeM: number}>}
@@ -581,7 +584,7 @@ export function createQueries({
      * Whether this layer still carries a contact, in O(1).
      *
      * Mirror of `flights.hasContact`: presence consumers must not infer absence
-     * from the capped `getAllPositions` rows. Id matching follows trackById —
+     * from the capped `getAllPositions` rows. Id matching follows trackById -
      * exact key first, then lowercase.
      * A disabled layer keeps its records but hides the collection, so it must
      * decline rather than answer from data the user can no longer see.
@@ -628,7 +631,7 @@ export function createQueries({
         result.push({
           id: icao24, // identity (trackById/Context resolve this)
           // Last surface still reading as the raw hex for a callsign-less
-          // contact — same chain as getNearby/getDetectableObjects/getTrackedSubject.
+          // contact - same chain as getNearby/getDetectableObjects/getTrackedSubject.
           label:
             _toCleanText(info?.callsign) ||
             _toCleanText(info?.registration) ||
@@ -646,7 +649,7 @@ export function createQueries({
     /**
      * Snapshot the layer's in-memory records as plain JSON-safe objects for
      * the analyst query engine. On-demand only (called at most once per
-     * spoken query) — zero per-frame cost, no listeners, no caching. Returns
+     * spoken query) - zero per-frame cost, no listeners, no caching. Returns
      * [] while the layer is disabled or empty.
      * @param {number} [maxCount=2000] - Maximum records to return (truncation).
      * @returns {Array<Object>} See mapAnalystRecord for the record shape.

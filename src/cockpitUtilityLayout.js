@@ -3,7 +3,7 @@
  *
  * The strip is anchored under the REC readout it shares that margin with, and
  * is pulled back up whenever the briefing card below would otherwise be
- * overrun — never above `minTop`, so it can't climb into the topline. The
+ * overrun - never above `minTop`, so it can't climb into the topline. The
  * returned `maxHeight` is measured from that resolved top, so a corridor the
  * strip cannot honour by moving is honoured by shrinking instead.
  *

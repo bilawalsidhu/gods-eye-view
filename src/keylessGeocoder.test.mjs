@@ -1,15 +1,15 @@
-// KEYLESS GEOCODER — the Photon adapter that keeps place search working
+// KEYLESS GEOCODER - the Photon adapter that keeps place search working
 // without a Google key.
 //
 // The whole value of this module is that its output is INDISTINGUISHABLE to
 // everything downstream: `geocodeNavigationMode` and the framing code must keep
 // making the same decisions they make on a Google result. So these tests check
-// the translation, not the network — three things that go wrong silently:
+// the translation, not the network - three things that go wrong silently:
 //
 //   1. Photon's `extent` is [west, north, east, south]. Read as [w,s,e,n] it
 //      yields an inverted-but-plausible box, and the camera frames nonsense.
 //   2. Photon calls a national park `type: 'other'`. Dropped, a park geocodes
-//      as a precise place and the camera lands on a random patch of grass —
+//      as a precise place and the camera lands on a random patch of grass -
 //      the exact bug geocodeNavigationMode's area types exist to prevent.
 //   3. A miss must be `null`, never a throw: both callers read null as
 //      "not found" and a throw would surface as a broken search box.
@@ -63,7 +63,7 @@ test('the extent is read as [west, north, east, south], not as [w,s,e,n]', () =>
   const bounds = photonExtentToBounds(HANOI.properties.extent);
 
   // Hanoi spans roughly 20.56..21.39 N and 105.29..106.02 E. A [w,s,e,n] read
-  // would put north at 21.385 and south at 106.02 — a box that still has four
+  // would put north at 21.385 and south at 106.02 - a box that still has four
   // finite numbers and would frame the camera at nothing.
   assert.equal(bounds.southwest.lat, 20.5645154);
   assert.equal(bounds.northeast.lat, 21.3854176);
@@ -108,7 +108,7 @@ test('area features keep an area type so the camera frames them, not a rooftop',
   }
 });
 
-test('a tag rule wins over the coarse class — a town square is not a city', () => {
+test('a tag rule wins over the coarse class - a town square is not a city', () => {
   // Photon reports Times Square and Quang truong Ba Dinh as place=square with
   // type: 'locality'. Falling through to the coarse class framed a plaza as if
   // it were a whole city.
@@ -146,7 +146,7 @@ test('the Google bias becomes a SOFT proximity bias, never a hard bbox', () => {
 
   // Measured against the live service: Photon's bbox FILTERS, Google's bounds
   // PREFERS. Sending the rectangle as a bbox makes every off-screen search
-  // return features: [] — "Ho Guom, Ha Noi" while looking at Austin finds
+  // return features: [] - "Ho Guom, Ha Noi" while looking at Austin finds
   // nothing at all. This assertion is the guard against that regression.
   assert.equal(url.searchParams.get('bbox'), null, 'a bbox would filter out every off-screen place');
 });
@@ -160,7 +160,7 @@ test('an absent or unparsable bias drops the bias instead of sending a broken on
   }
 });
 
-test('a network failure resolves to null — callers read null as not-found', async () => {
+test('a network failure resolves to null - callers read null as not-found', async () => {
   const rejecting = () => Promise.reject(new Error('offline'));
   assert.equal(await geocodeKeyless('Hanoi', { fetchImpl: rejecting }), null);
 
@@ -238,7 +238,7 @@ function photonPair(nearby, anywhere) {
 test('a biased near-miss is refused, and the unbiased answer is taken instead', async () => {
   // Measured from Austin against the live service: "Huế" scored Hutto, Texas
   // above the city, and "Hạ Long" scored Long Branch. Distance alone must not
-  // outrank the name — three of twelve Vietnamese names crossed a continent.
+  // outrank the name - three of twelve Vietnamese names crossed a continent.
   const fetchImpl = photonPair([HUTTO], [HUE]);
 
   const result = await geocodeKeyless('Huế', { bias: '30.20,-97.80|30.30,-97.70', fetchImpl });
@@ -300,7 +300,7 @@ test('accents and punctuation do not change what a name compares as', () => {
 // A fallback is only worth having where the app actually geocodes, and the app
 // geocodes in more than one place: the LOCATION search box, the Radio layer's
 // "near <place>" lookup, and the annotation resolver. Fixing one and leaving
-// the others is the failure this pins — the first version of this work fixed
+// the others is the failure this pins - the first version of this work fixed
 // the search box alone, so a keyless install still threw on "play radio near
 // Hanoi" while the search box beside it worked.
 //
@@ -335,7 +335,7 @@ test('a missing key is never a thrown error on the client', () => {
 test('the normalized result carries the canonical name its callers need', () => {
   // Two consumers want different halves of one answer: the search box shows
   // `label`, while the annotation resolver matches OSM features on `name`
-  // alone — a canonical name beats a parsed label there, because "Hà Nội,
+  // alone - a canonical name beats a parsed label there, because "Hà Nội,
   // Việt Nam" would let the country token win the footprint scoring.
   const result = normalizePhotonFeature(HANOI);
 
@@ -352,12 +352,12 @@ test('a feature with no name yields an empty string, never undefined', () => {
   assert.equal(typeof result.label, 'string');
 });
 
-test("Photon's own country name stays inside the label — it is not a field", () => {
+test("Photon's own country name stays inside the label - it is not a field", () => {
   // Photon answers in the feature's LANGUAGE: this fixture is the live service's
   // real reply for "Hanoi", and it says "Việt Nam", not "Vietnam". Tokyo answers
   // "日本", Moscow "Россия". Re-exporting that as a `country` field invites a
-  // consumer to match on it, and the one consumer that would — the Radio
-  // layer's `normalizeRadioCountryInput` — fails CLOSED on a name it cannot
+  // consumer to match on it, and the one consumer that would - the Radio
+  // layer's `normalizeRadioCountryInput` - fails CLOSED on a name it cannot
   // map, turning "radio near Ha Long" into an empty station list. The composed
   // label is the only honest use for a localized country name.
   assert.equal(HANOI.properties.country, 'Việt Nam');
@@ -373,7 +373,7 @@ test("Photon's own country name stays inside the label — it is not a field", (
 // has already had to repair once: the Overpass disk cache persisted refusals
 // with normal data TTLs, so an install that hit a bad minute kept serving the
 // refusal for a month. A geocoder that memoises a network blip does the same
-// thing for a session — every later keystroke replays it without asking.
+// thing for a session - every later keystroke replays it without asking.
 
 test('an unanswered request is never memoized, so the next attempt really retries', async () => {
   let attempts = 0;
@@ -421,7 +421,7 @@ test('the outcome reports which of the two a null result was', async () => {
   assert.equal(found.answered, true);
   assert.equal(found.place.name, 'Hà Nội');
 
-  // A memo hit is by definition an answer — only answers are stored.
+  // A memo hit is by definition an answer - only answers are stored.
   assert.deepEqual(
     await geocodeKeylessWithOutcome('outcome probe a', { fetchImpl: failure }),
     { place: null, answered: true },

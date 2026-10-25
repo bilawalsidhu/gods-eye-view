@@ -1,4 +1,4 @@
-// THE LAST-RESORT PLACE SEARCH ROUTE — what it is allowed to send upstream.
+// THE LAST-RESORT PLACE SEARCH ROUTE - what it is allowed to send upstream.
 //
 // The public instance permits one request per second. One request per second
 // and an unbounded queue are incompatible: a burst of searches would keep the

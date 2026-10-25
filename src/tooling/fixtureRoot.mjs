@@ -8,8 +8,8 @@ import path from 'node:path';
  *
  * The system temp directory is reached through a symlink on macOS
  * (`/var` -> `/private/var`, `/tmp` -> `/private/tmp`). A test that gives the
- * logical path to something that reports paths back — a launched process's
- * working directory, a bundler's project root — then compares two spellings of
+ * logical path to something that reports paths back - a launched process's
+ * working directory, a bundler's project root - then compares two spellings of
  * the same directory and fails. Resolving the root once, here, keeps both sides
  * on the physical path.
  *

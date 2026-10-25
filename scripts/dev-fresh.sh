@@ -290,12 +290,12 @@ case "${HOST}" in
     fi
     echo ""
     echo "!! =============================================================="
-    echo "!! WARNING: HOST=${HOST} — network-exposed mode."
+    echo "!! WARNING: HOST=${HOST} - network-exposed mode."
     echo "!! This dev server brokers your configured API keys (OpenAI,"
     echo "!! OpenSky, AISStream, TomTom, FIRMS, LL2, Google) to ANYONE who can"
     echo "!! reach it on the network. Use only on networks you trust."
     echo "!! Consider the opt-in per-IP throttles GEV_RATELIMIT_OPENAI_PER_MIN"
-    echo "!! and GEV_RATELIMIT_GOOGLE_PER_MIN (see .env.example) — and note"
+    echo "!! and GEV_RATELIMIT_GOOGLE_PER_MIN (see .env.example) - and note"
     echo "!! they are NOT billing caps; set provider-side budget alerts too."
     if [[ -n "${LAN_IP}" ]]; then
       echo "!! LAN URL: http://${LAN_IP}:${PORT}/"
@@ -347,8 +347,8 @@ case "${OPENSKY_AUTH_MODE}" in
     echo "OpenSky auth: disabled (anonymous mode)"
     ;;
 esac
-[[ -n "${OPENAI_API_KEY}" ]] && echo "OpenAI key (voice + HUD summary): configured" || echo "OpenAI key (voice + HUD summary): not set — GEV MIC off unless a Codex ChatGPT sign-in is selected in Provider Settings (experimental)"
-[[ -n "${AISSTREAM_API_KEY}" ]] && echo "AISStream key (live vessels): configured" || echo "AISStream key (live vessels): not set — ships layer empty"
+[[ -n "${OPENAI_API_KEY}" ]] && echo "OpenAI key (voice + HUD summary): configured" || echo "OpenAI key (voice + HUD summary): not set - GEV MIC off unless a Codex ChatGPT sign-in is selected in Provider Settings (experimental)"
+[[ -n "${AISSTREAM_API_KEY}" ]] && echo "AISStream key (live vessels): configured" || echo "AISStream key (live vessels): not set - ships layer empty"
 if [[ -n "${GOOGLE_MAPS_API_KEY}" ]]; then
   echo "Startup map: Google Photorealistic 3D Tiles (direct)"
 elif [[ -n "${CESIUM_ION_TOKEN}" ]]; then
@@ -356,10 +356,10 @@ elif [[ -n "${CESIUM_ION_TOKEN}" ]]; then
 else
   echo "Startup map: Esri World Imagery with keyless terrain (OpenStreetMap fallback)"
 fi
-[[ -n "${CESIUM_ION_TOKEN}" ]] && echo "Cesium ion token: configured — Google 3D, Bing, and world-terrain stacks available" || echo "Cesium ion token: not set"
-[[ -n "${TOMTOM_API_KEY}" ]] && echo "TomTom key (live traffic flow): configured" || echo "TomTom key (live traffic flow): not set — simulated traffic"
-[[ -n "${FIRMS_MAP_KEY}" ]] && echo "NASA FIRMS key (live fires): configured" || echo "NASA FIRMS key (live fires): not set — fires layer requires a key"
-[[ -n "${LL2_API_TOKEN}" ]] && echo "Launch Library 2 token: configured" || echo "Launch Library 2 token: not set — using public access"
+[[ -n "${CESIUM_ION_TOKEN}" ]] && echo "Cesium ion token: configured - Google 3D, Bing, and world-terrain stacks available" || echo "Cesium ion token: not set"
+[[ -n "${TOMTOM_API_KEY}" ]] && echo "TomTom key (live traffic flow): configured" || echo "TomTom key (live traffic flow): not set - simulated traffic"
+[[ -n "${FIRMS_MAP_KEY}" ]] && echo "NASA FIRMS key (live fires): configured" || echo "NASA FIRMS key (live fires): not set - fires layer requires a key"
+[[ -n "${LL2_API_TOKEN}" ]] && echo "Launch Library 2 token: configured" || echo "Launch Library 2 token: not set - using public access"
 
 # Build the dev server environment explicitly. A value that resolved to
 # nothing is left UNSET instead of being exported empty: Vite backfills its

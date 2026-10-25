@@ -25,7 +25,7 @@ export function createModel({
 
   /**
    * Map one internal fire record (firmsAdapt.js shape) to a plain JSON-safe
-   * analyst record (analyst query engine seam). Pure — no Cesium types.
+   * analyst record (analyst query engine seam). Pure - no Cesium types.
    * Missing/unknown fields are null, never NaN/undefined. The id reuses the
    * layer's FIRE-##### pick-id convention (index keys pick ids and
    * context-store ids, so the two stay consistent).
@@ -207,12 +207,12 @@ export function createModel({
    * Lazily-cached Cartesian3 anchor at the shared ground floor (DEM/mesh cell
    * + lift) when the floor is warm, else ellipsoid height 0 (owner field
    * finding 2026-07-21: height-0 anchors read as buried under high terrain at
-   * close/oblique zoom). Warm-cache read only — floors are warmed in batch by
+   * close/oblique zoom). Warm-cache read only - floors are warmed in batch by
    * renderDetections for the close band; everything else (cell-band context
    * registrations, detectable objects) just rides whatever is already warm.
    * Fires are static and floor cells latch, so each detection re-allocates at
    * most once per floor state (cold 0 → warm DEM). Rendering stays depth-test
-   * free either way (contacts are ALWAYS visible — never below the surface,
+   * free either way (contacts are ALWAYS visible - never below the surface,
    * slightly above is fine).
    * @param {Object} fire - Detection record.
    * @returns {Cesium.Cartesian3}
@@ -230,7 +230,7 @@ export function createModel({
   /**
    * Occlusion-test anchor for one detection. Returns the render position
    * outright for anchors comfortably above the ellipsoid (the common case) and
-   * a lazily-cached lifted point otherwise — see CULL_LIFT_THRESHOLD_M. This
+   * a lazily-cached lifted point otherwise - see CULL_LIFT_THRESHOLD_M. This
    * NEVER feeds rendering: the datum-correct anchor from {@link firePosition}
    * is what the sprite and the card are drawn at.
    * @param {Object} fire - Detection record.
@@ -267,7 +267,7 @@ export function createModel({
    * Horizon-cull a billboard collection against an ellipsoid occluder.
    *
    * The Cesium globe is hidden in this app (Google 3D Tiles render the planet),
-   * so nothing writes far-side depth — and these sprites are additionally
+   * so nothing writes far-side depth - and these sprites are additionally
    * always-on-top (`disableDepthTestDistance: INFINITY`, so a detection is never
    * swallowed by terrain it sits on). Without an explicit occluder pass, fires on
    * the opposite side of the Earth shine through the planet at tilted mid-altitude
@@ -322,7 +322,7 @@ export function createModel({
   }
 
   /**
-   * Card model for a click-selected fire — the full-detail card, drawn last
+   * Card model for a click-selected fire - the full-detail card, drawn last
    * (on top) and never distance-faded by the overlay.
    * Exported for unit tests.
    * @param {Object} fire - Detection record.
@@ -366,7 +366,7 @@ export function createModel({
   /**
    * Card model for an ambient fire detection, e.g. title "▲ 47 MW", detail
    * "high · 14h · N20". Ages are computed against each detection's acquisition
-   * time — with the live feed everything reads under 24 h (and a stale cache
+   * time - with the live feed everything reads under 24 h (and a stale cache
    * reads truthfully old). Exported for unit tests.
    * @param {{fire: Object, position: Cesium.Cartesian3}} candidate - Label candidate.
    * @param {number} nowMs - Current epoch milliseconds.

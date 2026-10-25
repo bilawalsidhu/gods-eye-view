@@ -51,7 +51,7 @@ export function renderRadioState(state) {
       ? t('DISABLE')
       : t('ENABLE');
   const enableAria = uncertain
-    ? t('Reconcile Radio — lifecycle uncertain')
+    ? t('Reconcile Radio - lifecycle uncertain')
     : enabled
       ? t('Disable Radio')
       : t('Enable Radio');
@@ -301,7 +301,7 @@ export function renderRadioState(state) {
       selected && state.selectedIndex < 0 ? t(' · outside current filter') : '';
     const messages = {
       stopped: enabled
-        ? t('Ready — playback starts only from your action')
+        ? t('Ready - playback starts only from your action')
         : t('Radio off'),
       loading: t('Connecting directly to broadcaster…'),
       buffering: t('Buffering broadcaster stream…'),
@@ -324,7 +324,7 @@ export function renderRadioState(state) {
       : '';
     const unavailable = state.tuningUnavailableStationId
       ? t(
-          'Station unavailable after directory refresh — choose another channel',
+          'Station unavailable after directory refresh - choose another channel',
         )
       : null;
     const lifecycleMessage = transitioning
@@ -333,7 +333,7 @@ export function renderRadioState(state) {
         : t('Radio is disabling…')
       : null;
     const uncertainMessage = uncertain
-      ? t('Radio lifecycle is uncertain — use Enable or Disable to reconcile')
+      ? t('Radio lifecycle is uncertain - use Enable or Disable to reconcile')
       : null;
     // Directory errors are msg() literals from the radio layer's ingestion.
     const directoryError = state.error ? t(state.error) : null;

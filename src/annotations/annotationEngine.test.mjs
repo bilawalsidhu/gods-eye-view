@@ -1,11 +1,11 @@
 import { createStandalonePlaceSearch } from '../standalone/placeSearch.js';
-// Voice-annotation resilience contract tests — pure logic, no network, no browser.
+// Voice-annotation resilience contract tests - pure logic, no network, no browser.
 //
 // Locks the 2026-07-21 field-test fixes:
 //   1. A TRANSIENT (undefined) deferred-outline resolution is retried with backoff
 //      (the /api/overpass proxy caches the late completion, so a retry is nearly
 //      free) instead of silently leaving the mark a point forever. A DEFINITIVE
-//      miss (null) is never retried — honest point beats hammering Overpass.
+//      miss (null) is never retried - honest point beats hammering Overpass.
 //   2. targetKey normalization strips trailing locality qualifiers so "California"
 //      and "California, United States" dedupe while their outlines are pending
 //      (identity is GEOMETRY once resolved; targetKey is only the pending stand-in).
@@ -94,7 +94,7 @@ test('retry: first-try footprint returns immediately, no retry, no waiting', asy
   assert.deepEqual(delays, []);
 });
 
-test('retry: a DEFINITIVE miss (null) is never retried — the honest point stands', async () => {
+test('retry: a DEFINITIVE miss (null) is never retried - the honest point stands', async () => {
   const { resolve, calls } = scriptedResolver([null, FP]);
   const { waitFn, delays } = fakeWait();
   const fp = await resolveOutlineWithRetry(resolve, { delaysMs: [8000, 25000], waitFn });
@@ -125,7 +125,7 @@ test('retry: persistent transients exhaust the backoff schedule and give up as t
   const { resolve, calls } = scriptedResolver([undefined, undefined, undefined, FP]);
   const { waitFn, delays } = fakeWait();
   const fp = await resolveOutlineWithRetry(resolve, { delaysMs: [8000, 25000], waitFn });
-  assert.equal(fp, undefined); // never found within budget — mark honestly stays a point
+  assert.equal(fp, undefined); // never found within budget - mark honestly stays a point
   assert.equal(calls.count, 3); // initial + one per backoff entry
   assert.deepEqual(delays, [8000, 25000]);
 });
@@ -493,7 +493,7 @@ test('outline upgrade updates the rendered element in place without remove/add',
 //
 // The engine holds continuous render for exactly as long as a mark is live
 // (annotations.size > 0). A renderer/WebGL throw that leaves an entry in the
-// map therefore leaks a hold that NOTHING releases short of an explicit clear —
+// map therefore leaks a hold that NOTHING releases short of an explicit clear -
 // the idle governor is defeated for the rest of the session. The fresh path has
 // always guarded this; the duplicate-REPLACEMENT path did the renderer swap
 // outside the guard. (perf rebase 2026-08-17)
@@ -540,8 +540,8 @@ test('duplicate-replacement: a renderer throw leaves no phantom mark and no leak
 
   // Same place, same caption, NEW colour → the duplicate-REPLACEMENT branch,
   // which deletes the dup and inserts the replacement before touching the
-  // renderer. (A bare point dedupes on LABEL — two different captions at one
-  // spot are deliberately two marks — so a recolour is the way into this
+  // renderer. (A bare point dedupes on LABEL - two different captions at one
+  // spot are deliberately two marks - so a recolour is the way into this
   // branch for a point; see findDuplicate.)
   failAddOnce();
   const second = await engine.annotate([
@@ -553,7 +553,7 @@ test('duplicate-replacement: a renderer throw leaves no phantom mark and no leak
   assert.equal(engine.list().length, 0, 'no phantom annotation survives the failed swap');
   assert.ok(
     !getRenderGovernorDiagnostics().holds.includes('annotations'),
-    'the annotations hold must be released — a leak defeats the idle governor permanently',
+    'the annotations hold must be released - a leak defeats the idle governor permanently',
   );
 });
 
@@ -584,8 +584,8 @@ test('fresh path: a renderer throw is rolled back the same way', async (t) => {
 //
 // The harness above throws on the FIRST statement of add(), so a rollback that
 // only deletes the engine's map entry looked complete. The real renderers build
-// a mark in stages — the hybrid adds world geometry before it records the route;
-// the screen renderer inserts its SVG group before its last projection pass — so
+// a mark in stages - the hybrid adds world geometry before it records the route;
+// the screen renderer inserts its SVG group before its last projection pass - so
 // a throw part-way leaves live content the map rollback cannot reach. The next
 // annotate of the same geometry then stacks a fresh mark over that orphan.
 

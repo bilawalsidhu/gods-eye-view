@@ -38,7 +38,7 @@ export const TRAIL_COLOR = '#39ffd5';
 export const TRAIL_HEIGHT_M = 3;
 
 /**
- * Lift (m) above the local sea surface (geoid) for vessel anchors — locked
+ * Lift (m) above the local sea surface (geoid) for vessel anchors - locked
  * height-datum principle #1: never below the visible surface, slightly above
  * is always fine (clears tide/mesh noise in the photoreal sea mesh).
  */

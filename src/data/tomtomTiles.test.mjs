@@ -11,7 +11,7 @@ import {
   isOverBudget,
 } from './tomtomTiles.js';
 
-// Downtown Austin — the verified TomTom fixture tile (z12 x935 y1686).
+// Downtown Austin - the verified TomTom fixture tile (z12 x935 y1686).
 const AUSTIN = { lat: 30.2672, lon: -97.7431 };
 
 // ── Tile coordinate validation ──────────────────────────────

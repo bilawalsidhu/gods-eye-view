@@ -6,16 +6,16 @@ import { setLocale, translateKnown } from './index.js';
 
 const MESSAGES = [
   // kartaview/policy.js
-  'KartaView is rate-limiting requests — they resume on their own',
+  'KartaView is rate-limiting requests - they resume on their own',
   'KartaView’s photos here are archived and cannot be shown',
-  'KartaView did not filter this area in time — move the map to ask again',
+  'KartaView did not filter this area in time - move the map to ask again',
   'None of KartaView’s photos here pass the imagery filter',
   // kartaview/source.js
-  'KartaView did not answer in time — try again',
-  'KartaView could not be reached — check the network',
+  'KartaView did not answer in time - try again',
+  'KartaView could not be reached - check the network',
   'KartaView sent an answer that could not be read',
   'KartaView is rate-limiting requests',
-  'KartaView is rate-limiting requests — try again in a moment',
+  'KartaView is rate-limiting requests - try again in a moment',
   'KartaView sent too much data',
   'KartaView has no such photo',
   // kartaview/viewer.js, index.js

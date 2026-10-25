@@ -117,7 +117,7 @@ export async function settleUserFacingContextAction({
 
 /**
  * Layers whose user-owned enable IS a Context entry. They own the session,
- * so they are never bookkept as layers the user added *during* it — filing
+ * so they are never bookkept as layers the user added *during* it - filing
  * one into `userAdded` makes exit restoration re-enable the mode layer the
  * user just turned off.
  */
@@ -132,7 +132,7 @@ export const CONTEXT_ENTRY_LAYER_IDS = Object.freeze([
  * final state.
  *
  * That second half is load-bearing. Consumers gated on `!_contextModeChanging`
- * — the Contacts detection override among them — deliberately no-op while a
+ * - the Contacts detection override among them - deliberately no-op while a
  * transaction is in flight, so a path that mutates `_contextMode` mid-flight and
  * then merely drops the flag leaves them holding the pre-transaction state
  * forever. (Field case: destroying a Contacts dependency layer exited the
@@ -254,7 +254,7 @@ export function shouldDeferContextEntryDuringClear({ change, clearInFlight }) {
  * Bookkeep a user-owned layer change against the active Context session so
  * exit restoration can honor layers the user added mid-session. Two rules
  * keep restoration exact:
- *  - Context ENTRY layers are never recorded — they own the session and must
+ *  - Context ENTRY layers are never recorded - they own the session and must
  *    not survive their own exit.
  *  - The allowed set is judged against the EFFECTIVE mode (a mode still being
  *    entered counts), because the entry layer's own enable event lands before
@@ -444,7 +444,7 @@ export function cockpitEntryAllowed({
  * `set_context_mode` takes 'contacts'; the mode's internal id is 'flights'.
  * The mapping lives here, beside the rest of the context-mode policy, so the
  * UI's operator-facing text and the voice payload translator cannot drift
- * apart — one saying "flights" while the other says "contacts" is the bug
+ * apart - one saying "flights" while the other says "contacts" is the bug
  * this whole seam exists to prevent.
  */
 export const CONTEXT_MODE_VOICE_NAMES = Object.freeze({

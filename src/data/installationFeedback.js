@@ -30,8 +30,8 @@ export function describeInstallationFeedback(stats = {}, now = Date.now()) {
   if (stats.retryAt > 0) {
     const seconds = Math.max(0, Math.ceil((stats.retryAt - now) / 1000));
     return seconds
-      ? { text: msg('{reason} — retrying in {seconds}s'), reason, seconds }
-      : { text: msg('{reason} — retry pending'), reason };
+      ? { text: msg('{reason} - retrying in {seconds}s'), reason, seconds }
+      : { text: msg('{reason} - retry pending'), reason };
   }
   if (stats.status === 'unavailable') return { text: reason };
   if (stats.status === 'zoom-in')

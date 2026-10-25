@@ -1,5 +1,5 @@
 /**
- * Gemini Live adapter — BidiGenerateContent over WebSocket.
+ * Gemini Live adapter - BidiGenerateContent over WebSocket.
  *
  * Same prompt as production (system instruction = realtimeInstructions(),
  * tools = GEV_REALTIME_TOOLS as functionDeclarations with the production JSON

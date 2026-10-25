@@ -29,7 +29,7 @@ export function createRendering({
    *
    * Why not a CallbackProperty entity (dynamic mode)? Verified in Cesium
    * 1.138 source: the dynamic polyline updater renders through a shared
-   * PolylineCollection and applies only the fill material —
+   * PolylineCollection and applies only the fill material -
    * `depthFailMaterial` is silently dropped, losing the dimmed behind-Earth
    * segment. The Primitive keeps it via depthFailAppearance + the per-instance
    * depthFailColor attribute (same mechanism the entity STATIC batch uses):
@@ -68,7 +68,7 @@ export function createRendering({
       depthFailAppearance: new Cesium.PolylineColorAppearance({
         translucent: true,
       }),
-      asynchronous: false, // build this frame — no async-rebuild blink window
+      asynchronous: false, // build this frame - no async-rebuild blink window
       allowPicking: false, // ring clicks fall through to satellites/deselect
     });
     layerState._viewer.scene.primitives.add(primitive);
@@ -91,19 +91,19 @@ export function createRendering({
    * Sign derivation: a point fixed in inertial space keeps its right ascension
    * α, so its ECEF longitude λ = α − gmst DECREASES by ΔGMST as time advances
    * (it drifts WEST). Cesium.Matrix3.fromRotationZ(θ) rotates +X toward +Y,
-   * i.e. INCREASES longitude by θ — so we rotate the baked points by −ΔGMST.
+   * i.e. INCREASES longitude by θ - so we rotate the baked points by −ΔGMST.
    * Mental check: ISS baked over Austin at t0; 10 min later Austin has rotated
    * east under the (inertial) ring, so the ring must sit further WEST in ECEF.
    *
    * Wraparound: gstime returns radians in [0, 2π), so the raw difference can be
-   * off from the continuous ΔGMST — but only by exact multiples of 2π, which a
+   * off from the continuous ΔGMST - but only by exact multiples of 2π, which a
    * rotation cannot distinguish. Tiny negative deltas right after bake are
    * likewise harmless. No unwrapping needed.
    *
-   * No SGP4 here — the rotation is applied as the ring primitive's modelMatrix
+   * No SGP4 here - the rotation is applied as the ring primitive's modelMatrix
    * (exact compensation; WGS84 is rotationally symmetric about Z, so rotating
    * the baked curve rigidly equals rebaking from rotated points). modelMatrix
-   * updates are synchronous uniforms — no geometry rebuild, no flicker. Post-
+   * updates are synchronous uniforms - no geometry rebuild, no flicker. Post-
    * creation modelMatrix changes are supported for one-instance primitives in
    * 3D mode, which these rings are. In-place mutation is safe: Primitive.update
    * diffs modelMatrix against an internal clone.
@@ -138,7 +138,7 @@ export function createRendering({
 
   /**
    * Propagate all CORE satellite positions and update point primitives.
-   * (~840 sats ≈ 1.6 ms/pass — fine at the 1s/200ms cadence.) Dense extras are
+   * (~840 sats ≈ 1.6 ms/pass - fine at the 1s/200ms cadence.) Dense extras are
    * excluded: they refresh on the round-robin budget in _propagateDenseChunk.
    */
 
@@ -193,7 +193,7 @@ export function createRendering({
 
     if (layerState._params.showPoints) parts.catalog._propagateDenseChunk();
 
-    // Keep the tracked dot on the per-frame epoch shared with label + camera —
+    // Keep the tracked dot on the per-frame epoch shared with label + camera -
     // runs after _propagateAll so the per-frame sample wins over the 200ms one.
     if (layerState._trackedNorad !== null) {
       const pos = parts.tracking._getTrackedFramePosition();

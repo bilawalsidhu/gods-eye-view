@@ -20,7 +20,7 @@ export function describeSceneShare(
         pack.source.adapter === BUNDLE_SOURCE
           ? assets.has(pack.source.path)
             ? msg('Included in bundle')
-            : msg('Missing bundle file — reimport its bundle')
+            : msg('Missing bundle file - reimport its bundle')
           : sources.has(pack.source.adapter)
             ? msg('Source configured; file checked when loaded')
             : msg('Source unavailable'),

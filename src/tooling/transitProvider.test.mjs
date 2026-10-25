@@ -272,7 +272,7 @@ test('a 304 reports that the operator answered, not that the body is new', async
   // The body a revalidated feed keeps serving carries the fetch time of the
   // payload it holds, which stops advancing the moment the operator's file
   // stops changing. That is the right answer for "how old are these positions"
-  // and the wrong one for "when did we last hear from them" — read as the
+  // and the wrong one for "when did we last hear from them" - read as the
   // latter it aged a feed whose every request succeeded into silence.
   t.mock.timers.enable({ apis: ['Date'], now: 1_700_000_000_000 });
   const firstAt = Date.now();
@@ -301,7 +301,7 @@ test('a 304 reports that the operator answered, not that the body is new', async
     'but the operator answered just now',
   );
 
-  // Served from the fresh cache, the contact time is the last real contact —
+  // Served from the fresh cache, the contact time is the last real contact -
   // not the moment this request happened to arrive.
   const third = await call('/vehicles/mbta');
   assert.equal(third.headers.get('X-GEV-Cache'), 'HIT');

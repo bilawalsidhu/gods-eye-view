@@ -1,6 +1,6 @@
 /*
  * Cockpit aircraft metadata itself is resolved by `resolveTrackedAircraftInfo`
- * in `cockpitMath.js` — the landed owner of that rule. It keeps layer
+ * in `cockpitMath.js` - the landed owner of that rule. It keeps layer
  * precedence as the fallback when no normalized `gevTrackedId` is available,
  * so tracking paths that never stamp one keep working; `readAircraftInfo` is
  * pinned to it by `cockpitMarkup.test.mjs`. This module owns only the

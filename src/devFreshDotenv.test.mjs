@@ -34,7 +34,7 @@ test('an inherited export never masks the value written in the file', async () =
     await fs.writeFile(path.join(root, '.env'), 'GEV_INHERIT_PROBE=from-dotenv\n');
 
     // An empty export is how a shell says "unset" to the launcher's `:-`
-    // fallbacks, and Vite's loadEnv otherwise lets process.env win — which is
+    // fallbacks, and Vite's loadEnv otherwise lets process.env win - which is
     // exactly how a configured key went missing.
     process.env.GEV_INHERIT_PROBE = '';
     assert.equal(readDotenvValue('GEV_INHERIT_PROBE', root), 'from-dotenv');
@@ -108,7 +108,7 @@ bashTest('dev-fresh reports the real keyless startup map and fallback', async ()
 
 
 // Stock macOS ships bash 3.2, where expanding an EMPTY array under `set -u`
-// is a fatal "unbound variable" — the `:-` guard on the provenance CSV is what
+// is a fatal "unbound variable" - the `:-` guard on the provenance CSV is what
 // keeps the keyless `dev-fresh.sh` launch alive there. Newer bash never fails
 // this way, so the idiom itself is asserted textually and the block's behavior
 // is exercised for both the keyless and the populated case.

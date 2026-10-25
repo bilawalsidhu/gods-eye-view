@@ -1,4 +1,4 @@
-// «Scene not saved — {reason}» never shows the validator's JSON path: known
+// «Scene not saved - {reason}» never shows the validator's JSON path: known
 // failures read as a sentence, the rest get a general reason.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';

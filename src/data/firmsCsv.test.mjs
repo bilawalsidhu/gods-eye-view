@@ -159,7 +159,7 @@ test('filterTrailing24h: window is [now − 24 h, now + 2 h] inclusive', () => {
 test('filterTrailing24h on the fixture keeps everything for a same-night now', () => {
   const records = parseFirmsCsv(FIXTURE);
   // Fixture is a days=2 pull; all rows are 2026-07-16 (10:06Z–21:27Z), so at
-  // 2026-07-17 02:00Z every detection is 4.5–16 h old — all inside 24 h.
+  // 2026-07-17 02:00Z every detection is 4.5–16 h old - all inside 24 h.
   const kept = filterTrailing24h(records, Date.UTC(2026, 6, 17, 2, 0));
   assert.equal(kept.length, records.length);
 });

@@ -166,7 +166,7 @@ export function summarize(rows) {
 }
 
 const machineBrief = (machine) => {
-  if (!machine) return '—';
+  if (!machine) return '-';
   const load1 = String(machine.loadavg || '').split(' ')[0] || '?';
   const busy = (machine.busyProcesses || []).filter((p) => Number(p.match(/([\d.]+)%cpu/)?.[1]) >= 100)
     .map((p) => p.replace(/ Helper \(GPU\)/, ' GPU').replace(/Google Chrome for Testing/, 'Chrome-for-Testing'));
@@ -174,27 +174,27 @@ const machineBrief = (machine) => {
 };
 const fmtCounts = (block) => (block?.n
   ? `${block.counts.correct} / ${block.counts['honest-refusal']} / ${block.counts['hallucinated-capability']} / ${block.counts['wrong-tool']} (n=${block.n})`
-  : '—');
-const fmtMs = (v) => (v === null || v === undefined ? '—' : v >= 10_000 ? `${(v / 1000).toFixed(1)}s` : `${Math.round(v)}ms`);
-const fmtPct = (v) => (v === null || v === undefined ? '—' : `${v}%`);
+  : '-');
+const fmtMs = (v) => (v === null || v === undefined ? '-' : v >= 10_000 ? `${(v / 1000).toFixed(1)}s` : `${Math.round(v)}ms`);
+const fmtPct = (v) => (v === null || v === undefined ? '-' : `${v}%`);
 
 /** Render summary.md from a summarize() result plus free-form notes. */
 export function renderMarkdown(summary, { title = 'GEV voice-routing benchmark', notes = [], payload = [] } = {}) {
   const out = [`# ${title}`, '', `Generated ${summary.generatedAt}. Cloud spend so far: **$${summary.cloudSpendUsd?.toFixed(2)}**.`, ''];
-  out.push('> **What this measures.** Tool CHOICE for text turns sent over each provider\'s API with production\'s instructions and tools, with stubbed (always-successful) tool results — the same method as `qa-voice-routing.mjs` layer 1. It is **not** end-to-end spoken accuracy (no speech recognition, no audio, no screenshot/scene context) and **not** spoken latency: every latency below is "send text → event", before any audio would be synthesized or played.', '');
+  out.push('> **What this measures.** Tool CHOICE for text turns sent over each provider\'s API with production\'s instructions and tools, with stubbed (always-successful) tool results - the same method as `qa-voice-routing.mjs` layer 1. It is **not** end-to-end spoken accuracy (no speech recognition, no audio, no screenshot/scene context) and **not** spoken latency: every latency below is "send text → event", before any audio would be synthesized or played.', '');
   out.push('## Routing accuracy', '');
   out.push('| model | core tool-name | core full-call (tool + all arg checks) | typed args (n) | harness verdict (legacy) | first call right | false +ve | per-rep harness verdict | dialogue turn-2 full-call | dialogue turn-1 | coverage v1 C / HR / HC / WT | coverage v1 acceptable | coverage v2 C / HR / HC / WT | coverage v2 acceptable | capability tool / full-call |');
   out.push('|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|');
   for (const m of summary.models) {
     const c = m.coverage.counts;
-    out.push(`| ${m.key} | ${fmtPct(m.core.toolAccuracyPct)} | ${fmtPct(m.core.fullCallAccuracyPct)} | ${fmtPct(m.core.typedArgsAccuracyPct)} (${m.core.typedArgsN}) | ${fmtPct(m.core.accuracyPct)} (n=${m.core.n}) | ${fmtPct(m.core.firstCallAccuracyPct)} | ${m.core.falsePositives}/${m.core.negativeTurns} | ${m.core.perRepAccuracyPct.map(fmtPct).join(', ')} | ${fmtPct(m.dialogue.turn2FullPct)} (n=${m.dialogue.n}) | ${fmtPct(m.dialogue.turn1FullPct)} | ${c.correct} / ${c['honest-refusal']} / ${c['hallucinated-capability']} / ${c['wrong-tool']} (n=${m.coverage.n}) | ${fmtPct(m.coverage.acceptablePct)} | ${fmtCounts(m.coverageV2)} | ${fmtPct(m.coverageV2.acceptablePct)} | ${m.capability.n ? `${fmtPct(m.capability.toolPct)} / ${fmtPct(m.capability.fullPct)} (n=${m.capability.n})` : '—'} |`);
+    out.push(`| ${m.key} | ${fmtPct(m.core.toolAccuracyPct)} | ${fmtPct(m.core.fullCallAccuracyPct)} | ${fmtPct(m.core.typedArgsAccuracyPct)} (${m.core.typedArgsN}) | ${fmtPct(m.core.accuracyPct)} (n=${m.core.n}) | ${fmtPct(m.core.firstCallAccuracyPct)} | ${m.core.falsePositives}/${m.core.negativeTurns} | ${m.core.perRepAccuracyPct.map(fmtPct).join(', ')} | ${fmtPct(m.dialogue.turn2FullPct)} (n=${m.dialogue.n}) | ${fmtPct(m.dialogue.turn1FullPct)} | ${c.correct} / ${c['honest-refusal']} / ${c['hallucinated-capability']} / ${c['wrong-tool']} (n=${m.coverage.n}) | ${fmtPct(m.coverage.acceptablePct)} | ${fmtCounts(m.coverageV2)} | ${fmtPct(m.coverageV2.acceptablePct)} | ${m.capability.n ? `${fmtPct(m.capability.toolPct)} / ${fmtPct(m.capability.fullPct)} (n=${m.capability.n})` : '-'} |`);
   }
   out.push('', 'Core tool-name = right tool(s) called. Full-call = right tool(s) AND every argument check (the legacy `args` spot checks plus the benchmark\'s typed checks: exact layer ids, enum values, numeric thresholds, sort direction). Legacy harness verdict = exactly what `qa-voice-routing.mjs` would report. Coverage: C = correct, HR = honest refusal, HC = hallucinated capability, WT = wrong tool; "acceptable" = correct, or an honest refusal where today\'s tools cannot do it.', '');
   out.push('## Latency and cost', '');
   out.push('| model | p50 send → first token (text) | p50 send → tool call (text) | p90 send → tool call (text) | p50 send → turn done (text) | dialogue turn-2 p50 → tool call | session setup p50 | input tok/turn | $ total | $/turn |');
   out.push('|---|---|---|---|---|---|---|---|---|---|');
   for (const m of summary.models) {
-    out.push(`| ${m.key} | ${fmtMs(m.latencyMs.firstTokenP50)} | ${fmtMs(m.latencyMs.toolCallP50)} | ${fmtMs(m.latencyMs.toolCallP90)} | ${fmtMs(m.latencyMs.turnDoneP50)} | ${fmtMs(m.dialogue.turn2ToolCallP50)} | ${fmtMs(m.latencyMs.setupP50)} | ${m.tokens.inputPerTurnMean ?? '—'} | ${m.costUsd?.toFixed(3)} | ${m.costPerTurnUsd ?? '—'} |`);
+    out.push(`| ${m.key} | ${fmtMs(m.latencyMs.firstTokenP50)} | ${fmtMs(m.latencyMs.toolCallP50)} | ${fmtMs(m.latencyMs.toolCallP90)} | ${fmtMs(m.latencyMs.turnDoneP50)} | ${fmtMs(m.dialogue.turn2ToolCallP50)} | ${fmtMs(m.latencyMs.setupP50)} | ${m.tokens.inputPerTurnMean ?? '-'} | ${m.costUsd?.toFixed(3)} | ${m.costPerTurnUsd ?? '-'} |`);
   }
   out.push('', 'Latencies are over single-turn phrases (core + coverage). "Turn done" includes the continuation response after the stubbed tool result. Cloud session setup (WebSocket + session config) is excluded from every latency and shown separately.', '');
   const locals = summary.models.filter((m) => m.local);
@@ -204,7 +204,7 @@ export function renderMarkdown(summary, { title = 'GEV voice-routing benchmark',
     out.push('|---|---|---|---|---|---|---|---|---|---|');
     for (const m of locals) {
       const w = m.warmup || {};
-      out.push(`| ${m.key} | ${fmtMs(w.loadWallMs ?? w.loadMs)} | ${fmtMs(w.coldToolCallMs ?? w.warmupTurnMs)}${w.coldToolCallMs == null ? ' (turn, no tool)' : ''} | ${w.prefillTokS ? Math.round(w.prefillTokS) : '—'} | ${w.promptTokens ?? '—'} | ${fmtMs(m.latencyMs.toolCallP50)} | ${fmtMs(m.latencyMs.toolCallP90)} | ${m.local.prefillTokSP50 ?? '—'} | ${m.local.decodeTokSP50 ?? '—'} / ${m.local.decodeTokSP90 ?? '—'} | ${machineBrief(m.machine)} |`);
+      out.push(`| ${m.key} | ${fmtMs(w.loadWallMs ?? w.loadMs)} | ${fmtMs(w.coldToolCallMs ?? w.warmupTurnMs)}${w.coldToolCallMs == null ? ' (turn, no tool)' : ''} | ${w.prefillTokS ? Math.round(w.prefillTokS) : '-'} | ${w.promptTokens ?? '-'} | ${fmtMs(m.latencyMs.toolCallP50)} | ${fmtMs(m.latencyMs.toolCallP90)} | ${m.local.prefillTokSP50 ?? '-'} | ${m.local.decodeTokSP50 ?? '-'} / ${m.local.decodeTokSP90 ?? '-'} | ${machineBrief(m.machine)} |`);
     }
     out.push('', 'COLD = the first request after the model is loaded (pays the full ~11k-token prompt prefill). WARM = every later turn. "Warm per-turn prefill tok/s" is prompt tokens ÷ prompt-eval time as the runtime reports it: a value in the tens of thousands means the cached prompt prefix was reused and only the new user text was prefilled; a value near the cold rate means the WHOLE prompt was re-prefilled on every turn. A real voice session pays the cold cost once per model load. "Machine at start" = 1-minute load average and processes above 100% CPU when the run began (other GPU/CPU users on the machine inflate local timings).', '');
   }
@@ -220,23 +220,23 @@ export function renderMarkdown(summary, { title = 'GEV voice-routing benchmark',
     if (m.errors || m.timeouts) out.push(`Errors: ${m.errors} turns, timeouts: ${m.timeouts}.`, '');
     if (m.core.failures.length) {
       out.push('Core misses (legacy verdict):', '');
-      for (const f of m.core.failures) out.push(`- "${f.phrase}" (expect ${f.expect}) — failed ${f.fails}/${f.of}; called: ${f.called.join(' ; ')}`);
+      for (const f of m.core.failures) out.push(`- "${f.phrase}" (expect ${f.expect}) - failed ${f.fails}/${f.of}; called: ${f.called.join(' ; ')}`);
       out.push('');
     }
     if (m.capability.failures.length) {
       out.push('Capability misses (full call):', '');
-      for (const f of m.capability.failures) out.push(`- "${f.id}" (expect ${f.expect}) — failed ${f.fails}/${f.of}; called: ${f.called.join(' ; ').slice(0, 400)}`);
+      for (const f of m.capability.failures) out.push(`- "${f.id}" (expect ${f.expect}) - failed ${f.fails}/${f.of}; called: ${f.called.join(' ; ').slice(0, 400)}`);
       out.push('');
     }
     if (m.dialogue.failures.length) {
       out.push('Dialogue misses (turn 2):', '');
-      for (const f of m.dialogue.failures) out.push(`- ${f.id} rep ${f.rep} (expect ${f.expect}) — t1: ${f.turn1} ⇒ t2: ${f.turn2}`);
+      for (const f of m.dialogue.failures) out.push(`- ${f.id} rep ${f.rep} (expect ${f.expect}) - t1: ${f.turn1} ⇒ t2: ${f.turn2}`);
       out.push('');
     }
     const badCov = m.coverage.items.filter((i) => i.verdicts.some((v) => v === 'hallucinated-capability' || v === 'wrong-tool' || (i.supported && v !== 'correct')));
     if (badCov.length) {
       out.push('Coverage misses:', '');
-      for (const i of badCov) out.push(`- "${i.utterance}" (${i.supported ? 'supported' : 'unsupported'}) — ${i.verdicts.join(', ')}`);
+      for (const i of badCov) out.push(`- "${i.utterance}" (${i.supported ? 'supported' : 'unsupported'}) - ${i.verdicts.join(', ')}`);
       out.push('');
     }
   }
@@ -262,9 +262,9 @@ export function renderComparison(before, after, { beforeLabel = 'before', afterL
   for (const a of after.models) {
     const b = before.models.find((x) => x.key === a.key);
     const arrow = (x, y, f) => `${f(x)} → ${f(y)}`;
-    const pctF = (v) => (v === null || v === undefined ? '—' : `${v}%`);
-    const msF = (v) => (v === null || v === undefined ? '—' : `${Math.round(v)}ms`);
-    const num = (v) => (v === null || v === undefined ? '—' : String(v));
+    const pctF = (v) => (v === null || v === undefined ? '-' : `${v}%`);
+    const msF = (v) => (v === null || v === undefined ? '-' : `${Math.round(v)}ms`);
+    const num = (v) => (v === null || v === undefined ? '-' : String(v));
     out.push(`| ${a.key} | ${arrow(b?.core.fullCallAccuracyPct, a.core.fullCallAccuracyPct, pctF)} | ${pctF(b?.coverage.acceptablePct)} → ${pctF(a.coverage.acceptablePct)} / ${pctF(a.coverageV2.acceptablePct)} | ${num(hc(b?.coverage))} → ${num(hc(a.coverage))} / ${num(hc(a.coverageV2))} | ${arrow(b?.dialogue.turn2FullPct, a.dialogue.turn2FullPct, pctF)} | ${pctF(a.capability.fullPct)} | ${arrow(b?.latencyMs.toolCallP50, a.latencyMs.toolCallP50, msF)} | ${arrow(promptTok(b), promptTok(a), num)} |`);
   }
   out.push('');

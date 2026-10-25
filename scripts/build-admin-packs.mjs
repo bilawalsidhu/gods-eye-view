@@ -89,8 +89,8 @@ export const PARAMS = Object.freeze({
     minPartShare: 0.001,
     minHoleKm2: 1,
   },
-  // A bare admin-1 name is marked ambiguous — the resolver then lets a
-  // geocoder decide — when it is also a country, the name of a city of at
+  // A bare admin-1 name is marked ambiguous - the resolver then lets a
+  // geocoder decide - when it is also a country, the name of a city of at
   // least `insideMinPopulation` inside the unit's box ("New York", "Madrid"),
   // or the name of a city of at least `elsewhereMinPopulation` outside it
   // ("Santa Fe", "Victoria"). A unit no larger than `cityStateMaxKm2` whose
@@ -316,7 +316,7 @@ function simplifyUnit(polygons, params) {
 /**
  * Encode a rounded open ring as integers in units of 10^-decimals degrees:
  * the first vertex absolute, every later vertex as a delta from the previous
- * one — [lon0, lat0, dLon1, dLat1, …]. Decoded by `decodeRing` in
+ * one - [lon0, lat0, dLon1, dLat1, …]. Decoded by `decodeRing` in
  * src/data/adminBoundaries.js.
  */
 function encodeRing(ring, decimals) {
@@ -673,7 +673,7 @@ async function buildAdmin1() {
       license:
         'Public domain (https://www.naturalearthdata.com/about/terms-of-use/)',
       schema:
-        'features[]: name, nameEn?, alt?[], postal?, type, rank? (min_label: the zoom at which Natural Earth labels the unit; lower is more prominent), country, iso2, iso (ISO 3166-2), amb?[] (normalized names that are also a country or a city — alone or with the country named), ambAbroad?[] (names shared only with a city in another country — ambiguous alone, settled by naming the country), cityState? (the unit is its own city), label? [lon, lat] label point, d? (decimals when not meta.decimals), polygons[][ring] (first ring outer, rest holes; each ring open and encoded as integers in 10^-d degrees, first vertex absolute then [dLon, dLat] deltas)',
+        'features[]: name, nameEn?, alt?[], postal?, type, rank? (min_label: the zoom at which Natural Earth labels the unit; lower is more prominent), country, iso2, iso (ISO 3166-2), amb?[] (normalized names that are also a country or a city - alone or with the country named), ambAbroad?[] (names shared only with a city in another country - ambiguous alone, settled by naming the country), cityState? (the unit is its own city), label? [lon, lat] label point, d? (decimals when not meta.decimals), polygons[][ring] (first ring outer, rest holes; each ring open and encoded as integers in 10^-d degrees, first vertex absolute then [dLon, dLat] deltas)',
       decimals: params.decimals,
       curation: { ...params, ambiguity },
       script: 'scripts/build-admin-packs.mjs',

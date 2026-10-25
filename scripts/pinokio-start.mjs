@@ -30,8 +30,8 @@ async function start() {
   validatePinokioSharing();
   const port = launchPort(process.env.PORT);
   // Provider Settings routes credential writes to pinokio/ENVIRONMENT (never
-  // .env) when the app runs under this launcher. The marker is set here — after
-  // applyPinokioEnvironment, before Vite snapshots process.env — so the
+  // .env) when the app runs under this launcher. The marker is set here - after
+  // applyPinokioEnvironment, before Vite snapshots process.env - so the
   // dev-server endpoint knows which store this launch owns.
   process.env.GEV_LAUNCHER = 'pinokio';
   console.log('[Pinokio] Local-only launch.');

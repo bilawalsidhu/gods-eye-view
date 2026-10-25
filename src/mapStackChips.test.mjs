@@ -1,7 +1,7 @@
 import { readShellSource } from './testSupport/readShellSource.mjs';
 import { expandApplicationHtml } from '../build/application-html.js';
 import { readStylesheet } from './testSupport/readStylesheet.mjs';
-// MAP STACK chip row — the dropdown's replacement control surface.
+// MAP STACK chip row - the dropdown's replacement control surface.
 //
 // The owner's complaint was two clicks (open panel → open dropdown) to change
 // basemap. These tests pin the three things that make the row a faithful swap:
@@ -21,7 +21,7 @@ import {
   syncMapStackChips,
 } from './mapStackChips.js';
 
-/** Minimal element stand-in — the row only needs create/append/attr/class. */
+/** Minimal element stand-in - the row only needs create/append/attr/class. */
 function makeElement(tagName = 'div') {
   const element = {
     tagName,
@@ -183,7 +183,7 @@ test('re-rendering replaces the previous chips instead of stacking a second row'
   assert.equal(container.children.length, PRESENTED_MAP_STACK_IDS.length);
 });
 
-test('clicking a chip dispatches that stack id — the same selection the dropdown made', () => {
+test('clicking a chip dispatches that stack id - the same selection the dropdown made', () => {
   const container = makeElement();
   const selected = [];
   renderMapStackChips(container, CONTROLLER_STACKS, {
@@ -248,7 +248,7 @@ test('keyless ion stacks stay focusable, aria-disabled, and say why', () => {
           ...stack,
           available: false,
           unavailableReason:
-            'Needs CESIUM_ION_TOKEN — add it in Provider Settings',
+            'Needs CESIUM_ION_TOKEN - add it in Provider Settings',
         }
       : stack,
   );
@@ -268,12 +268,12 @@ test('keyless ion stacks stay focusable, aria-disabled, and say why', () => {
   assert.equal(bingAerial.getAttribute('aria-disabled'), 'true');
   assert.equal(
     bingAerial.getAttribute('aria-label'),
-    'Bing Aerial unavailable: Needs CESIUM_ION_TOKEN — add it in Provider Settings',
+    'Bing Aerial unavailable: Needs CESIUM_ION_TOKEN - add it in Provider Settings',
   );
   assert.ok(bingAerial.classList.contains('unavailable'));
   assert.equal(
     bingAerial.title,
-    'Needs CESIUM_ION_TOKEN — add it in Provider Settings',
+    'Needs CESIUM_ION_TOKEN - add it in Provider Settings',
   );
   assert.equal(chipText(bingAerial), 'Bing Aerial ION');
 
@@ -301,7 +301,7 @@ test('a non-ion stack that fails never claims an ion token is required', () => {
           ...stack,
           available: false,
           unavailableReason:
-            'Needs GOOGLE_MAPS_API_KEY — add it in Provider Settings',
+            'Needs GOOGLE_MAPS_API_KEY - add it in Provider Settings',
         }
       : stack,
   );
@@ -311,7 +311,7 @@ test('a non-ion stack that fails never claims an ion token is required', () => {
   assert.equal(google.getAttribute('aria-disabled'), 'true');
   assert.equal(
     google.getAttribute('aria-label'),
-    'Google 3D unavailable: Needs GOOGLE_MAPS_API_KEY — add it in Provider Settings',
+    'Google 3D unavailable: Needs GOOGLE_MAPS_API_KEY - add it in Provider Settings',
   );
   assert.equal(
     chipText(google),
@@ -320,7 +320,7 @@ test('a non-ion stack that fails never claims an ion token is required', () => {
   );
   assert.equal(
     google.title,
-    'Needs GOOGLE_MAPS_API_KEY — add it in Provider Settings',
+    'Needs GOOGLE_MAPS_API_KEY - add it in Provider Settings',
   );
   assert.equal(
     chipText(container.children[1]),
@@ -367,8 +367,8 @@ test("models carry the stack's own reason and never invent an active chip", () =
     [
       {
         requirement: 'ION',
-        unavailableHint: 'Needs CESIUM_ION_TOKEN — add it in Provider Settings',
-        title: 'Needs CESIUM_ION_TOKEN — add it in Provider Settings',
+        unavailableHint: 'Needs CESIUM_ION_TOKEN - add it in Provider Settings',
+        title: 'Needs CESIUM_ION_TOKEN - add it in Provider Settings',
       },
       {
         requirement: '',
@@ -414,7 +414,7 @@ test('the active cyan survives hover', () => {
 test('the keyboard focus ring survives on the ACTIVE chip', () => {
   // The bug this pins: `.active` legitimately wins the color/border/background/
   // box-shadow it shares with the focus rule, and the base rule sets
-  // `outline: none` — so a focus state built only from those properties is
+  // `outline: none` - so a focus state built only from those properties is
   // INVISIBLE on the active chip. The ring must live on a property no other
   // chip-state rule sets.
   const css = readStylesheet(new URL('../style.css', import.meta.url));
@@ -445,7 +445,7 @@ test('the keyboard focus ring survives on the ACTIVE chip', () => {
     assert.doesNotMatch(
       rule.body,
       /outline/,
-      `"${rule.selector}" must not touch outline — it would erase the focus ring`,
+      `"${rule.selector}" must not touch outline - it would erase the focus ring`,
     );
   }
   for (const selector of [
@@ -459,7 +459,7 @@ test('the keyboard focus ring survives on the ACTIVE chip', () => {
   }
 
   // `transition: all` animates outline-width off the `outline: none` base, and
-  // Chrome parks that transition at 0px for chips on a wrapped line — the ring
+  // Chrome parks that transition at 0px for chips on a wrapped line - the ring
   // never appeared on rows 2 and 3. The base rule must list its properties.
   const base = chipRules.find((rule) =>
     rule.selector.endsWith('.map-stack-chip'),

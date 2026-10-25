@@ -32,7 +32,7 @@ test('server-side Google calls prefer the server-only key', () => {
 });
 
 test('unsplit setups still work: falls back to the browser key', () => {
-  // The whole point of #33 being opt-in — one shared GOOGLE_MAPS_API_KEY must
+  // The whole point of #33 being opt-in - one shared GOOGLE_MAPS_API_KEY must
   // keep serving Places/Street View exactly as before.
   withKeys({ server: undefined, browser: 'browser-key' }, () => {
     assert.equal(googleServerApiKey(), 'browser-key');

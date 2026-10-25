@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * qa-traffic-jamviz-ab.mjs — A/B screenshot capture for the jam-viz
+ * qa-traffic-jamviz-ab.mjs - A/B screenshot capture for the jam-viz
  * congestion prototypes (feat/traffic-jam-viz).
  *
  * For each view, renders the SAME camera framing under each jamViz mode
@@ -10,7 +10,7 @@
  * Shots + per-shot layer stats land in --out (default qa-shots/jamviz).
  *
  * Views: Austin I-35 downtown corridor (owner's requested A/B target) at
- * city scale + low detail, plus Mumbai Western Express Hwy — captured
+ * city scale + low detail, plus Mumbai Western Express Hwy - captured
  * because Austin is off-peak at 22:00 CT while Mumbai is in live morning
  * rush, guaranteeing jam-bucket coverage in the drama shots.
  *
@@ -37,17 +37,17 @@ const OUT_DIR = path.resolve(REPO_ROOT, getOpt('--out', 'qa-shots/jamviz'));
 const VIEWS = [
   {
     id: 'i35-city',
-    label: 'Austin I-35 corridor — city scale',
+    label: 'Austin I-35 corridor - city scale',
     lon: -97.7365, lat: 30.235, height: 3000, heading: 8, pitch: -38,
   },
   {
     id: 'i35-detail',
-    label: 'Austin I-35 at downtown — queue detail',
+    label: 'Austin I-35 at downtown - queue detail',
     lon: -97.735, lat: 30.262, height: 1100, heading: 10, pitch: -45,
   },
   {
     id: 'mumbai-wexp',
-    label: 'Mumbai Western Express Hwy — live morning rush',
+    label: 'Mumbai Western Express Hwy - live morning rush',
     lon: 72.851, lat: 19.115, height: 3200, heading: 0, pitch: -40,
   },
 ];
@@ -58,7 +58,7 @@ const CHROME_EXECUTABLE_CANDIDATES = [
   // Prefer puppeteer's version-pinned Chrome-for-Testing over the system
   // Chrome: /Applications auto-updates underneath the harnesses, and its
   // software-GL behavior shifts across majors (system Chrome 150 blew the
-  // tile-gated drain budget under SwiftShader on 2026-07-30 — six
+  // tile-gated drain budget under SwiftShader on 2026-07-30 - six
   // false-negative qa-cctv-v2 runs against a healthy build). A deterministic
   // pinned browser beats the newest one for regression harnesses.
   await puppeteer.executablePath().catch(() => null),
@@ -111,7 +111,7 @@ function setView(page, v) {
 /**
  * Poll layer stats until a render newer than `sinceLastUpdate` settles.
  * Returns the last sample with `renderSettled` reporting whether the
- * freshness predicate was actually met — on timeout the sample is stale
+ * freshness predicate was actually met - on timeout the sample is stale
  * (possibly still-colored buckets from the previous view), and a caller that
  * cannot tell the difference will pass a capture that never rendered.
  */
@@ -149,7 +149,7 @@ async function main() {
   }
   const status = await fetch(`${APP_URL}/api/tomtom/status`).then((r) => r.json()).catch(() => null);
   if (!status?.hasKey) {
-    console.error('Server has no TomTom key — the A/B needs live flow.');
+    console.error('Server has no TomTom key - the A/B needs live flow.');
     process.exitCode = 2;
     return;
   }
@@ -185,10 +185,10 @@ async function main() {
       console.log(`\n── ${view.label} (${view.id})`);
       for (const mode of MODES) {
         // Apply the mode, then force a re-render AT THE EXACT SAME framing:
-        // hop ~8.6 km east (defeats the overlap/center-shift gate — adjacent
+        // hop ~8.6 km east (defeats the overlap/center-shift gate - adjacent
         // views alone can sit inside it), WAIT for the away render to commit
         // (otherwise its late commit satisfies the freshness poll and the
-        // shot captures the away render), then return — the comeback load
+        // shot captures the away render), then return - the comeback load
         // re-spawns with the new mode active.
         await page.evaluate((m) => {
           window.__godsEyeView.dataManager.layers.get('traffic').module.setParams({ jamViz: m });

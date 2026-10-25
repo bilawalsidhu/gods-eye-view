@@ -16,7 +16,7 @@ import { SCENE_RECIPES } from './recipes.js';
 import { LAYER_STATE_REGISTRY } from '../data/layerState.js';
 
 /**
- * Every key each layer publishes from getParams() — the exact surface
+ * Every key each layer publishes from getParams() - the exact surface
  * _captureLayerStates() snapshots into a shot.
  * @returns {Map<string, string[]>} layer source file → published param keys
  */
@@ -30,7 +30,7 @@ function sweepLayerParamKeys() {
     // body up to its closing brace and read the keys it publishes.
     const body = source.match(/\n\s+getParams\(\)\s*\{[\s\S]*?\n\s+\},/);
     if (!body) continue;
-    // A key always follows `{` or `,` — which matches both the multi-line
+    // A key always follows `{` or `,` - which matches both the multi-line
     // returns and the single-line `return { passive: … }` form, while a
     // ternary's `? x : y` (no brace or comma before the identifier) does not.
     const keys = [...body[0].matchAll(/[{,]\s*([A-Za-z_$][\w$]*)\s*:/g)].map((match) => match[1]);
@@ -56,7 +56,7 @@ test('a shot only reconciles the layers it declares', () => {
 test('undeclared layers are never torn down by a four-layer recipe', () => {
   // Regression: the reconcile used to walk the live registry and force every
   // absent layer off, so a recipe authored against four layers destroyed the
-  // twelve added since — with no restore pass to put them back.
+  // twelve added since - with no restore pass to put them back.
   const plan = sceneLayerPlan(
     { flights: { enabled: true }, satellites: { enabled: false } },
     REGISTERED,
@@ -157,7 +157,7 @@ test('every selection-shaped layer param is classified, whatever its spelling', 
       seen.add(key);
       assert.ok(
         classified.has(key),
-        `${file} publishes selection param "${key}" — strip it (SCENE_TRACKING_PARAM_KEYS) `
+        `${file} publishes selection param "${key}" - strip it (SCENE_TRACKING_PARAM_KEYS) `
         + 'or record why it is safe (SCENE_KEPT_SELECTION_PARAM_KEYS)',
       );
     }
@@ -177,7 +177,7 @@ test('the family pattern catches selection names the old sweep would have missed
   }
 });
 
-test('the exclusivity probe id is reserved — no real layer may claim it', () => {
+test('the exclusivity probe id is reserved - no real layer may claim it', () => {
   // The probe asks a mode "would you refuse a layer you have no opinion
   // about?". If a real layer ever took this id, the probe would be asking
   // about a layer the mode DOES have an opinion on, and an isolating mode

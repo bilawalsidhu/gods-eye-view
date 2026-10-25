@@ -1164,7 +1164,7 @@ test('a busy or timed-out tile keeps its own message; only a body that is not a 
   const items = sequence('s', 3);
   const failures = [
     Object.assign(new Error('Panoramax is busy'), { status: 429 }),
-    Object.assign(new Error('Panoramax did not answer in time — try again'), {
+    Object.assign(new Error('Panoramax did not answer in time - try again'), {
       status: 0,
     }),
   ];

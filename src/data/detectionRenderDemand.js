@@ -1,22 +1,22 @@
 /**
- * Detection's render demand — when the overlay actually needs another frame.
+ * Detection's render demand - when the overlay actually needs another frame.
  *
  * Detection used to take an unconditional continuous-render hold for as long as
  * it was on (`holdContinuousRender('detection')`). That was honest when it was
  * written: the overlay repainted from scratch every frame, so "on" really did
  * mean "per-frame work". It stopped being honest once the world-overlay host
- * became demand-driven — `invalidateHost()` already requests a frame on every
+ * became demand-driven - `invalidateHost()` already requests a frame on every
  * content change, and Cesium's `requestRenderMode` already renders on camera
  * input and tile loads, so a parked scene with detection on was paying 60 fps
  * for pixels that do not change.
  *
  * Nobody noticed because detection was OFF by default. Turning it ON by default
- * (2026-08-22) would have shipped that hot loop to every idle first-run tab —
+ * (2026-08-22) would have shipped that hot loop to every idle first-run tab -
  * defeating the render governor, whose whole reason for existing is the ~60% GPU
  * and ~54% of a core a parked scene used to burn (`src/renderGovernor.js`).
  *
  * So detection no longer holds. It is driven the way the rest of the host is:
- * repaint on CHANGE, and — for work that spans frames — ask for exactly one more
+ * repaint on CHANGE, and - for work that spans frames - ask for exactly one more
  * frame while that work is outstanding. That is the pattern `drawWorldOverlay`
  * already uses for its own fades, and the same shape as the earthquake-disc fix
  * (static geometry, hold removed) that this follows.
@@ -29,22 +29,22 @@
  *
  * Three kinds of outstanding work qualify, and each terminates:
  *
- *   1. the fade-in when detection (re)activates — a bounded window;
- *   2. label fades, IN as well as out — the arbiter drives every one of them to
+ *   1. the fade-in when detection (re)activates - a bounded window;
+ *   2. label fades, IN as well as out - the arbiter drives every one of them to
  *      a settled alpha;
- *   3. a label solve the frame could not run — the throttle defers it by at most
+ *   3. a label solve the frame could not run - the throttle defers it by at most
  *      one interval, a skipped paint by exactly one frame.
  *
  * (2) said "out" only, once. A newly selected label fading IN is `selected`, so
  * counting the fade-OUT tail missed it entirely: on a parked scene a label could
- * be selected and then never painted past its first frame — invisible until some
+ * be selected and then never painted past its first frame - invisible until some
  * unrelated frame happened along. Fade-in and fade-out are the same animation
  * seen from two ends, with the same termination. Both count.
  *
  * ── ONE CLOCK ────────────────────────────────────────────────────────────────
  *
- * The timestamp is the host frame's own `frame.timestamp` — `performance.now()`,
- * sampled ONCE per frame by `drawWorldOverlay` — and the SAME value must reach
+ * The timestamp is the host frame's own `frame.timestamp` - `performance.now()`,
+ * sampled ONCE per frame by `drawWorldOverlay` - and the SAME value must reach
  * both the paint and this policy.
  *
  * Two samples of a clock taken a millisecond apart inside one frame is a real
@@ -65,7 +65,7 @@
 export const DETECTION_ENABLE_FADE_MS = 220;
 
 /**
- * Cadence of the scanline's scroll, in ms per 2px step — one frame at 60 fps.
+ * Cadence of the scanline's scroll, in ms per 2px step - one frame at 60 fps.
  *
  * Derived rather than written as `16`: a rounded 16 ms is 62.5 Hz, which against
  * a real 60 fps frame clock beats slowly and repeats an offset every few frames
@@ -74,7 +74,7 @@ export const DETECTION_ENABLE_FADE_MS = 220;
  */
 export const SCANLINE_STEP_MS = 1000 / 60;
 
-/** Scanline pattern period in px — the offset walks 0, 2, 0, 2, … */
+/** Scanline pattern period in px - the offset walks 0, 2, 0, 2, … */
 export const SCANLINE_PERIOD_PX = 4;
 
 /**
@@ -135,14 +135,14 @@ export const DETECTION_PAINT_SKIP_THRESHOLD_MS = 22;
  * skipped, and if so, what does the skip owe?
  *
  * Extracted as a pure decision because the answer has two halves that MUST stay
- * welded together. Under the old continuous hold a skip cost nothing — the next
- * frame was guaranteed — so the valve could simply return false and forget. With
+ * welded together. Under the old continuous hold a skip cost nothing - the next
+ * frame was guaranteed - so the valve could simply return false and forget. With
  * no hold, the frame it declines may be the only one anybody asked for, and a
  * skip that forgets strands whatever requested it: a reactivation, a new label,
  * a fresh solve. Skipping is a DEFERRAL, never a cancellation.
  *
  * `requestFollowUp` is therefore exactly `skip`, and that equality is the
- * invariant worth pinning — a wrapper cannot skip without re-requesting, because
+ * invariant worth pinning - a wrapper cannot skip without re-requesting, because
  * the same decision produces both.
  *
  * @param {object} input

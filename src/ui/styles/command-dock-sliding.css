@@ -185,7 +185,7 @@
        `#command-dock #control-panel .dock-popover-content { width:
        var(--dock-presets-open) }`, which is 34rem here. Without this override
        the tray renders 544 px wide inside a 480 px viewport and hangs off the
-       left edge — pinned by the 480 px bounds assert in
+       left edge - pinned by the 480 px bounds assert in
        `scripts/qa-map-source-tray.mjs`. */
     width: var(--dock-popover-mobile-width);
     right: calc(
@@ -200,7 +200,7 @@
   /* ── Required-attribution clearance ─────────────────────────────────
      At this width the tray widens to nearly the whole viewport (the rule
      above), and at its stock 0.65rem offset it lands squarely on the
-     Google/Cesium credit line in the bottom-left corner — a notice the
+     Google/Cesium credit line in the bottom-left corner - a notice the
      Maps Platform and Cesium terms require to stay visible in EVERY state.
 
      The transient popover yields, not the permanent notice: the credit
@@ -236,7 +236,7 @@
 
   /* Written with the panel IDs on purpose. The stock two-pinned selector
      carries one ID (#command-dock) against five classes, and the ordinary
-     narrow rule above carries two IDs — so the stock form LOSES here and the
+     narrow rule above carries two IDs - so the stock form LOSES here and the
      top tray drops var(--dock-lower-pinned-height), landing on top of its
      pinned sibling. Naming the panel makes it (2,5,0), ahead of both the
      ordinary (2,1,0) and single-pinned (2,4,0) rules. */
@@ -251,7 +251,7 @@
 }
 
 /* The dock re-anchors from 2vh to a flat 8px at this width (see the
-   max-width:720px block above), while the credit keeps its 2vh base — so the
+   max-width:720px block above), while the credit keeps its 2vh base - so the
    clearance above stops being height-independent and goes negative on tall
    narrow viewports (0 at 1000px high, −4px at 1200px). Carrying the 2vh back
    into the tray's own offset restores the same flat 12px the wider band gets.

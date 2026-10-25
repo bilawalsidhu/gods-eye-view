@@ -219,7 +219,7 @@ const VIEWPORT = { south: 30, west: -98, north: 31, east: -97 };
 test('Context focus past the render cap selects for real instead of flying blind', async () => {
   // Context navigation walks the FULL nearby cohort; only the first 700 records
   // get entities. Focusing item 701+ used to fly the camera, find no entity,
-  // silently drop the selection, and report success — so the Context subject
+  // silently drop the selection, and report success - so the Context subject
   // stayed stale and NEXT offered the same installation forever.
   const elements = Array.from({ length: 760 }, (_, index) => ({
     type: 'node',
@@ -791,7 +791,7 @@ test('zoom-out aborts an active installation request and returns non-loading gui
 // The unavailable-state retry: 'temporarily unavailable' must mean temporarily.
 // Fetches otherwise fire only on enable and on camera moveEnd, so a parked
 // camera whose first request failed stayed unavailable forever while the proxy
-// sat healthy — observed in the field as a layer stuck reporting unavailable
+// sat healthy - observed in the field as a layer stuck reporting unavailable
 // while its own endpoint served hundreds of features. The backoff progression
 // is a pure exported helper so it pins without booting the layer (the full
 // layer needs a Cesium viewer and interaction handlers); the wiring is pinned
@@ -821,7 +821,7 @@ test('the retry is wired to every lifecycle edge, not just declared', () => {
     'a successful load clears the pending retry and resets the backoff');
   assert.match(installationsSource,
     /clearUnavailableRetry\(\);\n\s*setInstallationStatus\('zoom-in'/,
-    'zooming out of range cancels the retry — moveEnd owns re-entry there');
+    'zooming out of range cancels the retry - moveEnd owns re-entry there');
   assert.match(installationsSource, /disable\(\) \{[^]*?clearUnavailableRetry\(\);/,
     'disabling the layer cancels the retry');
   assert.match(installationsSource,

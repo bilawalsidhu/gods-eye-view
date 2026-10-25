@@ -33,7 +33,7 @@ let upstreamMemo = { raw: null, endpoints: [], tag: 'none' };
 /**
  * Short, stable identifier for the configured upstream set. Cached responses
  * carry it so an answer produced by a different instance is not served after
- * the operator repoints `OVERPASS_UPSTREAMS` — the disk cache outlives the
+ * the operator repoints `OVERPASS_UPSTREAMS` - the disk cache outlives the
  * configuration change by 7 days, a month for boundary queries, and forever on
  * the serve-stale path. It is a hash, never the URLs, and it is only ever
  * compared on read: it is not sent to clients and does not appear in errors.
@@ -92,7 +92,7 @@ function readUpstreamMemo() {
 
 /**
  * TTL for FRESH cached Overpass responses (ms). Road geometry is static for
- * months — the original 45 s TTL forced a public-mirror round-trip on nearly
+ * months - the original 45 s TTL forced a public-mirror round-trip on nearly
  * every viewport revisit and left nothing to serve when the mirrors 502
  * (field-test 2026-07-17: all three mirrors down during US morning peak =
  * "traffic takes forever to load"). 24 h in memory; the disk layer below
@@ -100,13 +100,13 @@ function readUpstreamMemo() {
  */
 const OVERPASS_CACHE_MS = 86_400_000;
 
-/** Disk-cache TTL for Overpass responses (ms) — 7 days. */
+/** Disk-cache TTL for Overpass responses (ms) - 7 days. */
 const OVERPASS_DISK_TTL_MS = 7 * 86_400_000;
 
 /**
- * Disk-cache TTL for BOUNDARY-class queries (is_in / admin-relation pivots) — 30
+ * Disk-cache TTL for BOUNDARY-class queries (is_in / admin-relation pivots) - 30
  * days. Admin boundaries change ≈never, and their pivots are the most expensive
- * queries the app issues (multi-MB coastline geometry, 10–25 s on public mirrors —
+ * queries the app issues (multi-MB coastline geometry, 10–25 s on public mirrors -
  * field test 2026-07-23: outline latency + the Sicily miss). Keeping them a month
  * means each boundary is fetched roughly once per machine, ever.
  */
@@ -129,7 +129,7 @@ const OVERPASS_MAX_BODY_BYTES = 24 * 1024;
 /**
  * Hard cap on a single Overpass upstream response we will buffer into memory.
  * 32 MB (was 12 MB): a dense island/state admin boundary at full `out geom`
- * fidelity — Sicilia's Mediterranean coastline — can exceed 12 MB, and clipping
+ * fidelity - Sicilia's Mediterranean coastline - can exceed 12 MB, and clipping
  * it read as a permanent "transient" failure (field test 2026-07-23, Sicily
  * never traced). The buffered payload is SIMPLIFIED server-side before it is
  * cached or sent (simplifyOverpassPayloadBody), so the raised cap does not
@@ -158,10 +158,10 @@ const OVERPASS_MAX_CONCURRENT = 6;
 /** Server-side timeout ceiling (seconds) we allow inside an Overpass QL query. */
 const OVERPASS_MAX_QL_TIMEOUT = 30;
 
-/** Max `around:` radius (m) — every app caller uses <= 1800 m. */
+/** Max `around:` radius (m) - every app caller uses <= 1800 m. */
 const OVERPASS_MAX_AROUND_M = 50000;
 
-/** Max bbox span (degrees) — app bboxes are small viewport tiles. */
+/** Max bbox span (degrees) - app bboxes are small viewport tiles. */
 const OVERPASS_MAX_BBOX_DEG = 12;
 
 /**
@@ -176,7 +176,7 @@ const OVERPASS_SELECTOR_RE = new RegExp(
   `\\b(?:${OVERPASS_ELEMENT_TYPES}|area)\\b`,
 );
 
-/** An element selector bounded BY an area — the country-scan abuse shape. */
+/** An element selector bounded BY an area - the country-scan abuse shape. */
 const OVERPASS_AREA_ELEMENT_RE = new RegExp(
   `\\b(?:${OVERPASS_ELEMENT_TYPES})\\s*\\(\\s*area\\b`,
   'i',

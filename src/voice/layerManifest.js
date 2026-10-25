@@ -4,7 +4,7 @@
  * One plain-data entry per layer declares each voice capability separately:
  * the spoken aliases the action runner accepts, `toggle` (set_layer_visibility),
  * `context` (registers in-view entity context), `track` (track_entity), and
- * `query` — the analyst_query fields with type and unit — or `noQuery`, the
+ * `query` - the analyst_query fields with type and unit - or `noQuery`, the
  * reason it has none. No layer has a voice timeline yet.
  *
  * Both the server tool builder (`actionSchemas.js` → the Realtime tool JSON)

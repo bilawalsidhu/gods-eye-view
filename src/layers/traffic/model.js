@@ -162,7 +162,7 @@ export function createModel({ state: layerState, services, parts, source }) {
     const budgets = new Array(roads.length).fill(0);
     let remaining = Math.max(0, dotCap);
 
-    // Pass 1 — fairness seed: give one dot to every road (highest-demand first)
+    // Pass 1 - fairness seed: give one dot to every road (highest-demand first)
     const firstPassOrder = planned
       .map((count, index) => ({ count, index }))
       .sort((a, b) => b.count - a.count);
@@ -176,7 +176,7 @@ export function createModel({ state: layerState, services, parts, source }) {
 
     if (remaining <= 0) return budgets;
 
-    // Pass 2 — proportional distribution of the remaining budget
+    // Pass 2 - proportional distribution of the remaining budget
     let totalRemainder = 0;
     for (let i = 0; i < planned.length; i++) {
       totalRemainder += Math.max(0, planned[i] - budgets[i]);
@@ -195,7 +195,7 @@ export function createModel({ state: layerState, services, parts, source }) {
       residuals.push({ index: i, residual: ideal - add });
     }
 
-    // Pass 3 — largest-remainder: hand out leftover dots from floor rounding
+    // Pass 3 - largest-remainder: hand out leftover dots from floor rounding
     let leftover = remaining - assigned;
     if (leftover > 0 && residuals.length > 0) {
       residuals.sort((a, b) => b.residual - a.residual);
@@ -244,7 +244,7 @@ export function createModel({ state: layerState, services, parts, source }) {
     roadSource = 'OpenStreetMap',
   } = {}) {
     // `mode` is the CONFIGURED source (live key present vs keyless), not this
-    // instant's health — health rides on `error`. The qa-traffic harness pins
+    // instant's health - health rides on `error`. The qa-traffic harness pins
     // that meaning.
     const mode = liveMode ? 'live' : 'sim';
     if (liveMode && flowError) {
@@ -253,7 +253,7 @@ export function createModel({ state: layerState, services, parts, source }) {
       // has to BE the error text or the steady state reverts to a bare
       // "TomTom daily budget reached" that never says what is on screen.
       // The reason is ours (flow.js marks it) or carries an HTTP code.
-      const degraded = t('SIMULATED — {reason}', {
+      const degraded = t('SIMULATED - {reason}', {
         reason: translateKnown(flowError),
       });
       return { mode, error: degraded, loadingLabel: degraded };
@@ -316,22 +316,22 @@ export function createModel({ state: layerState, services, parts, source }) {
             : t('SIMULATED · Roads: OpenStreetMap · Flow: TomTom (no matches)'),
       };
     }
-    // Keyless simulation — one terse line that names the mode and the remedy
+    // Keyless simulation - one terse line that names the mode and the remedy
     // (owner's copy shape). The chip's own progress text carries "working";
     // this line must never imply a live feed.
     return {
       mode,
       error: null,
       loadingLabel: statusUnavailable
-        ? t('SIMULATED — traffic service unreachable')
-        : t('SIMULATED — add TomTom key for live'),
+        ? t('SIMULATED - traffic service unreachable')
+        : t('SIMULATED - add TomTom key for live'),
     };
   }
 
   /**
    * Apply late-arriving flow data to already-rendered dots without a respawn:
    * color, jam size, and speed update in place; closed roads' dots hide.
-   * Density bunching intentionally waits for the next natural re-render —
+   * Density bunching intentionally waits for the next natural re-render -
    * color and speed are the live signal, dot count is a refinement.
    * @param {string} label - Render log label (for the console trace).
    */
@@ -360,7 +360,7 @@ export function createModel({ state: layerState, services, parts, source }) {
         parts.style.baseDotSize(dot.road?.type, bucket) +
         (bucket === 'jam' ? 1 : 0) +
         parts.style.activeSizeDelta(bucket);
-      // Late flow can move a dot between buckets — keep the preset halo in
+      // Late flow can move a dot between buckets - keep the preset halo in
       // step (no-op writes under the normal profile, whose dots have none).
       if (parts.style.presetProfileActive())
         parts.style.applyOutline(dot.point, bucket);

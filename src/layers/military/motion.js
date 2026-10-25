@@ -72,7 +72,7 @@ export function createMotion({
       flightState._scratchRenderTime,
     );
 
-    // Bracketing pair: interpolate — no extrapolation error, no snap-back.
+    // Bracketing pair: interpolate - no extrapolation error, no snap-back.
     for (let i = history.length - 1; i >= 1; i--) {
       const a = history[i - 1];
       const b = history[i];
@@ -89,7 +89,7 @@ export function createMotion({
         // segment covers real ground (at hover its direction is GPS jitter; on a
         // slow tight turn it STEPS the whole per-segment turn at each boundary),
         // so it is blended against the reported per-fix track by displayed
-        // ground speed — and the track is TIME-INTERPOLATED between the fixes so
+        // ground speed - and the track is TIME-INTERPOLATED between the fixes so
         // a slow turner's nose advances continuously through the segment instead
         // of snapping once per poll. Helicopters always use the reported track
         // (rotorcraft chords are noise-dominated at their typical speeds).
@@ -121,8 +121,8 @@ export function createMotion({
     if (elapsedSec <= 0) {
       // Warm-up: renderTime predates ALL history (freshly seen / just-started-tracking
       // aircraft, before RENDER_DELAY_SEC of history has accumulated, so no bracketing
-      // pair exists yet). Render at the DELAYED renderTime — preserving the behind-real-time
-      // invariant — by extrapolating the OLDEST fix BACKWARD to renderTime. As history
+      // pair exists yet). Render at the DELAYED renderTime - preserving the behind-real-time
+      // invariant - by extrapolating the OLDEST fix BACKWARD to renderTime. As history
       // fills, renderTime advances toward the first fix and the icon glides FORWARD into
       // the bracketing interpolation above with NO freeze and NO backward snap. (Holding
       // the oldest fix froze the icon until enough history accrued, then jumped.)
@@ -163,7 +163,7 @@ export function createMotion({
    * Dead-reckon a fix along its own velocity/track by `dt` seconds, integrating a
    * constant-rate-turn arc when `turnRateDps` is significant (straight line
    * otherwise). Positive `dt` projects FORWARD (after the fix); negative `dt`
-   * projects BACKWARD (before the fix) — used for warm-up, estimating where the
+   * projects BACKWARD (before the fix) - used for warm-up, estimating where the
    * aircraft was before its first observed fix. ENU frame: east = +X, north = +Y,
    * up = +Z; heading 0 deg = north, 90 deg = east (clockwise from north). Sets
    * `_drCourseDeg` to the arc's instantaneous end course on every path.
@@ -183,7 +183,7 @@ export function createMotion({
       flightState._drCourseDeg = heading;
       return Cesium.Cartesian3.clone(fix.position, out);
     }
-    // Constant-rate-turn arc (straight line when turnRateDps ≈ 0) — a plane in a
+    // Constant-rate-turn arc (straight line when turnRateDps ≈ 0) - a plane in a
     // standard-rate turn is ~90° of arc wrong per 30 s if extrapolated straight.
     arcOffsetEnu(speed, heading, turnRateDps, dt, flightState._scratchArc);
     flightState._drCourseDeg = flightState._scratchArc.endCourseDeg;
@@ -203,7 +203,7 @@ export function createMotion({
 
   /**
    * True while the tracked aircraft's delayed display time (now − RENDER_DELAY_SEC)
-   * predates its oldest real fix — _deadReckon is extrapolating backward with no real
+   * predates its oldest real fix - _deadReckon is extrapolating backward with no real
    * history yet behind the displayed icon, so the trail must draw nothing.
    * @returns {boolean}
    */
@@ -306,7 +306,7 @@ export function createMotion({
       // Plausible single-frame motion (m): real velocity × frame Δt, ×4 slack + 25 m base.
       const plausible = speed * dtSec * 4 + 25;
       if (Cesium.Cartesian3.distance(raw, flightState._drPrevRaw) > plausible) {
-        // Discontinuity — re-anchor so the DISPLAYED position stays continuous, then decay.
+        // Discontinuity - re-anchor so the DISPLAYED position stays continuous, then decay.
         Cesium.Cartesian3.subtract(
           flightState._drPrevDisplay,
           raw,
@@ -353,7 +353,7 @@ export function createMotion({
     return display;
   }
 
-  /** The tracked plane's display position WITHOUT recomputing — the value the follow-camera already
+  /** The tracked plane's display position WITHOUT recomputing - the value the follow-camera already
    *  settled on this frame. Mirror of flights.js: getDetectableObjects + the readout run in postRender at
    *  a later frameNumber, so recomputing _trackedDisplayPosition there jitters the label against the
    *  now-stable plane. Null when no valid fix (callers fall back to the billboard position). */
@@ -366,7 +366,7 @@ export function createMotion({
   }
 
   /**
-   * The position the tracked aircraft is VISUALLY at this frame — the translation its 3D
+   * The position the tracked aircraft is VISUALLY at this frame - the translation its 3D
    * model is actually rendering with when the model owns the visual, otherwise the cached
    * dead-reckoned position. Mirror of flights.js; see that copy for the full rationale.
    * Reads the modelMatrix the tracked-model update already wrote this frame: no sampling,
@@ -396,7 +396,7 @@ export function createMotion({
 
   /** The tracked model's rendered bounding radius (m), or 0 when no model of this
    *  contact is drawing. Carries Cesium's effective `computedScale`, which may be
-   *  above `scale` to satisfy minimumPixelSize — the trail head has to be judged
+   *  above `scale` to satisfy minimumPixelSize - the trail head has to be judged
    *  against the size the operator SEES, not the nominal one. */
   /** World-space origin of the tracked model, or null when no model of this
    *  contact is drawing. This is the centre the rendered bounding sphere is
@@ -443,7 +443,7 @@ export function createMotion({
         flightState.records.data.get(flightState._trackedIcao)?.klass,
       );
       // Through the model's OWN render chain (modelVisualAnchor's hand-rolled
-      // half-correction put this offset on the lateral axis — see
+      // half-correction put this offset on the lateral axis - see
       // modelAnchorWorld).
       return modelAnchorWorld(
         flightState._trackedModel,
@@ -455,14 +455,14 @@ export function createMotion({
   }
 
   /** Smoothed world course for the tracked aircraft this frame. Reads the
-   *  frame-cached course (set by _trackedDisplayPosition — the follow-camera's
+   *  frame-cached course (set by _trackedDisplayPosition - the follow-camera's
    *  own computation), NEVER re-runs _deadReckon. Safe to call more than once
    *  per frame: the second call sees dt≈0 and the limiter is a no-op.
    *
    *  The smoothed value lives in the SHARED per-icao _displayCourse entry (see
    *  its declaration): on click the limiter continues from whatever nose the
    *  fleet pass was displaying, and on untrack the fleet pass continues from
-   *  whatever nose this path last wrote — tracked and fleet consumers of the
+   *  whatever nose this path last wrote - tracked and fleet consumers of the
    *  same aircraft can never disagree across the handoff (mirror of flights.js). */
 
   function _trackedDisplayCourse() {
@@ -483,7 +483,7 @@ export function createMotion({
     flightState._trackedCourseMs = nowMs;
     const prev = flightState._displayCourse.get(flightState._trackedIcao);
     // Hover hold: at near-zero displayed speed both the chord and the reported
-    // track are noise — keep the last stable nose direction instead of chasing.
+    // track are noise - keep the last stable nose direction instead of chasing.
     if (cacheValid && flightState._cachedDRHold && prev != null) return prev;
     const cap = courseSlewCapDps(
       cacheValid

@@ -116,7 +116,7 @@ export function createIngestion({ state, services, parts, source }) {
     let removed = 0;
     const deadFeeds = new Set();
     for (const [feedId, status] of state._feedStatus) {
-      // `upstreamAt` — when the OPERATOR last answered — not when this browser
+      // `upstreamAt` - when the OPERATOR last answered - not when this browser
       // last received bytes. The proxy hands back its cached copy every 15 s
       // during an outage, and counting those as updates meant a dead feed never
       // aged at all.
@@ -166,7 +166,7 @@ export function createIngestion({ state, services, parts, source }) {
     );
     // When the operator last ANSWERED, which is a different question. A feed
     // whose file has not changed answers 304, and the proxy rightly keeps
-    // serving the body it already holds — but that body's fetch time stops
+    // serving the body it already holds - but that body's fetch time stops
     // advancing, so reading it as "when did we last hear from them" aged a
     // perfectly healthy feed into DEGRADED at ninety seconds and emptied it at
     // five minutes while every single request was succeeding. The proxy
@@ -304,7 +304,7 @@ export function createIngestion({ state, services, parts, source }) {
           if (!state._limitWarned) {
             state._limitWarned = true;
             console.warn(
-              `[Data:Transit] vehicle cap ${MAX_VEHICLES_TOTAL} reached — extra vehicles are not rendered`,
+              `[Data:Transit] vehicle cap ${MAX_VEHICLES_TOTAL} reached - extra vehicles are not rendered`,
             );
           }
           continue;
@@ -408,7 +408,7 @@ export function createIngestion({ state, services, parts, source }) {
     ) {
       parts.selection.refreshSelectedCard(true);
     }
-    // Records changed hands this poll, so DETECT's list is rebuilt once —
+    // Records changed hands this poll, so DETECT's list is rebuilt once -
     // the visibility sweep below bumps the revision.
     // One floor cycle per poll, on its own timer: warming is a network round
     // trip and must never sit on the render path.
@@ -423,7 +423,7 @@ export function createIngestion({ state, services, parts, source }) {
   /**
    * Poll one feed. A request already in flight is younger than one poll
    * interval, so a second caller (enable() and the manager's first update()
-   * both ask within the same tick) awaits that request instead of aborting it —
+   * both ask within the same tick) awaits that request instead of aborting it -
    * the manager's first update then settles with data on the globe.
    * @param {object} feed Registry entry.
    * @param {number} generation Enable generation the poll belongs to.

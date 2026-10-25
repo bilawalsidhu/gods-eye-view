@@ -7,7 +7,7 @@
  *                :11434/v1). Streams SSE; timing is client-side.
  *   ollama       Ollama's native /api/chat. Same message and tool formats as
  *                Chat Completions, but it can set num_ctx (the OpenAI shim
- *                cannot — the ~15k-token prompt would be silently truncated
+ *                cannot - the ~15k-token prompt would be silently truncated
  *                at a small default context) and turn thinking off, and it
  *                reports server-side prefill/decode/load timings.
  *

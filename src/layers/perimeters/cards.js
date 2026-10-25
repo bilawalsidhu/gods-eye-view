@@ -1,4 +1,4 @@
-/** Card model for one selected fire-perimeter incident. Pure — no Cesium types. */
+/** Card model for one selected fire-perimeter incident. Pure - no Cesium types. */
 import { formatNumber, t, tn } from '../../i18n/index.js';
 
 export const PERIMETER_OVERLAY_SOURCE_ID = 'fire-perimeters';
@@ -148,7 +148,7 @@ function formatAge(deltaMs) {
 
 /**
  * Build the overlay-host entry for one selected incident. The caller supplies
- * `position` (Cartesian) separately — this model stays JSON-safe for tests.
+ * `position` (Cartesian) separately - this model stays JSON-safe for tests.
  * @param {Object} row - Normalized perimeter row (see records.js).
  * @param {number} nowMs - Current epoch milliseconds.
  * @param {{link: ?string}} [extras] - Optional InciWeb page for this incident.
@@ -219,7 +219,7 @@ export function buildIncidentCard(row, nowMs, { link = null } = {}) {
     // `selected` picks the paint lane and collision protection; an explicit
     // paintLane would override it in the host's lane resolver.
     selected: true,
-    // Only a linked card is clickable — the overlay host registers hit
+    // Only a linked card is clickable - the overlay host registers hit
     // rectangles solely for interactive entries.
     interactive: Boolean(link),
     ...(link

@@ -69,7 +69,7 @@ export function validTerrainResult(result) {
 /**
  * A row the upstream DID return for its position, but with no usable height:
  * Re:Earth sporadically answers with a real `elevation` and a null
- * `geoid`/`ellipsoid`. Measured at ~0.16% of points, and transient — the same
+ * `geoid`/`ellipsoid`. Measured at ~0.16% of points, and transient - the same
  * coordinate resolves on a later poll. That is an absent datum, not a failed
  * refresh, so the point is left uncached to be re-asked while the client
  * covers it through its bundled geoid. A null/undefined entry is NOT this

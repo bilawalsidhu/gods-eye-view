@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * qa-alpr-journey.mjs — ALPR cameras on a realistic Austin camera journey.
+ * qa-alpr-journey.mjs - ALPR cameras on a realistic Austin camera journey.
  *
  * Run: node scripts/qa-alpr-journey.mjs http://localhost:4173 [--headful]
  *      [--passes off,on,on] [--out qa-shots/alpr-journey] [--no-assert]
@@ -583,6 +583,6 @@ try {
   await browser.close();
 }
 console.log(
-  `${result.failures.length ? 'FAIL' : 'PASS'} — ${path.join(outDir, 'result.json')}`,
+  `${result.failures.length ? 'FAIL' : 'PASS'} - ${path.join(outDir, 'result.json')}`,
 );
 process.exit(result.failures.length ? 1 : 0);

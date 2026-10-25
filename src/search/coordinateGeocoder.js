@@ -27,7 +27,7 @@ function boundedBox(lat, lon, halfSpan) {
  * It sits ahead of the network geocoders, so a coordinate costs no request and
  * works with no key. Anything that is not exactly a coordinate is passed on
  * untouched, and `answered: true` on a decline means only that this provider
- * had nothing to say — it is not a verdict on the query.
+ * had nothing to say - it is not a verdict on the query.
  */
 export function createCoordinateGeocoder() {
   return {

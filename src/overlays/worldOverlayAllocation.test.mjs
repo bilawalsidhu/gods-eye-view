@@ -268,7 +268,7 @@ const WORKLOADS = [
     // continental, so what matters is its own cohort cost.
     //
     // Re-measured against the current worker: median 3,900 B/frame, max 4,114,
-    // and 85.7 B/candidate at the ceiling — inside the shared 154 B/candidate
+    // and 85.7 B/candidate at the ceiling - inside the shared 154 B/candidate
     // bound, so no per-source exception is taken. The 5,200 frame budget
     // carries 26.4% headroom over the measured maximum.
     name: 'with the air-quality station cohort live',

@@ -54,10 +54,10 @@ Workaround:
   stored, so open the panel from its header control instead.
 
 Related keys (current versions):
-- Panel collapsed state: `godsEyeView.v6.panelCollapsed.<panel-id>` — `'0'` open,
+- Panel collapsed state: `godsEyeView.v6.panelCollapsed.<panel-id>` - `'0'` open,
   `'1'` closed, absent means the panel's own default. A view opened from a share
   link ignores the stored value entirely.
-- Panel positions: `godsEyeView.v8.panelPos.<panel-id>` — the current layout
+- Panel positions: `godsEyeView.v8.panelPos.<panel-id>` - the current layout
   writes none.
 - CCTV calibration: `godsEyeView.cctv.calibration.v2`
 
@@ -159,7 +159,7 @@ Validation target:
 ---
 
 ### Wildfires layer unavailable / static bundled snapshot
-Status: Closed — live FIRMS integration shipped (2026-07-16)
+Status: Closed - live FIRMS integration shipped (2026-07-16)
 
 Context:
 - Wildfires (NASA FIRMS) were removed from runtime in v0.5.3, returned June 2026 as a
@@ -167,12 +167,12 @@ Context:
   converted to **live NASA FIRMS data** on 2026-07-16: the `/api/firms` proxy merges
   three VIIRS NRT sources (trailing 24 h, 30 min cache, serve-stale-on-failure) and the
   bundled snapshot was deleted. Requires a free server-side `FIRMS_MAP_KEY`; without it
-  the layer row reads "Needs FIRMS_MAP_KEY — add it in Provider Settings".
+  the layer row reads "Needs FIRMS_MAP_KEY - add it in Provider Settings".
 
 ---
 
 ### Weather radar held out of the open-source release
-Status: Closed — observed rain radar shipped (September 2026)
+Status: Closed - observed rain radar shipped (September 2026)
 
 Context:
 - Rain radar, Satellite clouds, Lightning density, Wind and Cyclone advisories

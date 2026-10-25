@@ -1,7 +1,7 @@
 import { readLayerSource } from '../testSupport/readLayerSource.mjs';
 // src/data/detectionRenderDemand.test.mjs
 //
-// Detection must not hold the render loop open — and must not drop work on the
+// Detection must not hold the render loop open - and must not drop work on the
 // floor once it stops holding.
 //
 // It used to take an unconditional continuous-render hold for as long as it was
@@ -14,23 +14,23 @@ import { readLayerSource } from '../testSupport/readLayerSource.mjs';
 // coming, so anything could be deferred for free; without it, the frame a piece
 // of work was given may be the ONLY one, and whatever consumes that frame
 // without finishing the work strands it indefinitely. The first cut of this
-// module stranded four different things — a review reproduced all four live on a
-// parked scene — so these pins are organized around that failure mode:
+// module stranded four different things - a review reproduced all four live on a
+// parked scene - so these pins are organized around that failure mode:
 //
-//   1. POLICY — what counts as outstanding work, and that every kind of it can
+//   1. POLICY - what counts as outstanding work, and that every kind of it can
 //      reach a state where it stops asking. A predicate that can stay true
 //      forever is the old hold under another name.
-//   2. ANIMATION accounting — fade-IN counts, not only the fade-out tail. A
+//   2. ANIMATION accounting - fade-IN counts, not only the fade-out tail. A
 //      newly selected label is `selected`, so counting only unselected rows left
 //      it invisible on a parked scene until some unrelated frame arrived.
-//   3. ONE CLOCK — paint and demand read the same per-frame timestamp, so the
+//   3. ONE CLOCK - paint and demand read the same per-frame timestamp, so the
 //      frame that paints an animation's final state is the frame that ends its
 //      demand, and a non-monotonic clock cannot make demand permanent.
-//   4. WIRING — the hold is really gone; a skipped paint re-requests instead of
+//   4. WIRING - the hold is really gone; a skipped paint re-requests instead of
 //      swallowing; a layer whose contents changed dirties the solve.
 //
-// The runtime counterpart — parked scene, detection ON vs OFF, near-zero renders
-// either way, and the overlay still painting — is `scripts/qa-perf.mjs` §1b.
+// The runtime counterpart - parked scene, detection ON vs OFF, near-zero renders
+// either way, and the overlay still painting - is `scripts/qa-perf.mjs` §1b.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
@@ -48,14 +48,14 @@ import {
 } from './detectionRenderDemand.js';
 
 // ---------------------------------------------------------------------------
-// 1. Policy — outstanding work, and that all of it terminates
+// 1. Policy - outstanding work, and that all of it terminates
 // ---------------------------------------------------------------------------
 
 test('a follow-up frame is owed only while work spans frames', () => {
   const base = { active: true, enabledAtMs: 1_000, fadeMs: DETECTION_ENABLE_FADE_MS };
 
   // Enable fade-in: open during the window, closed at and after its end. The
-  // boundary IS the termination condition — at exactly `fadeMs` the fade has
+  // boundary IS the termination condition - at exactly `fadeMs` the fade has
   // landed on its final alpha, and asking for a frame to repaint an unchanged
   // pixel is the off-by-one that never lets the chain stop.
   assert.equal(detectionNeedsFollowUpFrame({ ...base, nowMs: 1_000 }), true);
@@ -75,7 +75,7 @@ test('a follow-up frame is owed only while work spans frames', () => {
   assert.equal(detectionNeedsFollowUpFrame({ ...base, nowMs: 9_999_999, solvePending: false }), false);
 });
 
-test('nothing is owed while detection is off or suspended — that is the whole point', () => {
+test('nothing is owed while detection is off or suspended - that is the whole point', () => {
   for (const extra of [{}, { animatingLabelCount: 5 }, { solvePending: true }]) {
     assert.equal(
       detectionNeedsFollowUpFrame({ active: false, nowMs: 1_000, enabledAtMs: 1_000, ...extra }),
@@ -96,7 +96,7 @@ test('a broken or backward clock terminates demand instead of extending it', () 
   }
   assert.equal(detectionNeedsFollowUpFrame(), false, 'no argument at all is still not an animation');
 
-  // And a timestamp BEHIND the enable stamp — impossible on the monotonic clock
+  // And a timestamp BEHIND the enable stamp - impossible on the monotonic clock
   // this is fed, but the answer must be "stop", not "ask until time catches up",
   // which is what a wall-clock jump used to produce.
   assert.equal(
@@ -111,7 +111,7 @@ test('a broken or backward clock terminates demand instead of extending it', () 
 });
 
 // ---------------------------------------------------------------------------
-// 2. Animation accounting — fade-IN is an animation too
+// 2. Animation accounting - fade-IN is an animation too
 // ---------------------------------------------------------------------------
 
 test('a label fading IN is animating, not just one fading out', () => {
@@ -123,7 +123,7 @@ test('a label fading IN is animating, not just one fading out', () => {
     'a label that has just been selected is still climbing');
   assert.equal(renderEntryIsAnimating({ selected: true, temporalAlpha: 0.5 }), true);
   assert.equal(renderEntryIsAnimating({ selected: true, temporalAlpha: 1 }), false,
-    'a settled label is done — otherwise every visible label would demand frames forever');
+    'a settled label is done - otherwise every visible label would demand frames forever');
 
   // Unselected rows only survive the arbiter's render pass while their exit tail
   // is above zero, so any that reaches here is still moving.
@@ -135,13 +135,13 @@ test('a label fading IN is animating, not just one fading out', () => {
 
   assert.equal(countAnimatingRenderEntries([]), 0);
   assert.equal(countAnimatingRenderEntries([
-    { selected: true, temporalAlpha: 1 },      // settled — no demand
+    { selected: true, temporalAlpha: 1 },      // settled - no demand
     { selected: true, temporalAlpha: 0.4 },    // fading IN
     { selected: false, temporalAlpha: 0.7 },   // fading out
     { selected: true, temporalAlpha: 1 },      // settled
   ]), 2);
 
-  // A screen full of settled labels must demand nothing — this is the property
+  // A screen full of settled labels must demand nothing - this is the property
   // that keeps a parked scene at zero renders.
   const settled = Array.from({ length: 40 }, () => ({ selected: true, temporalAlpha: 1 }));
   assert.equal(countAnimatingRenderEntries(settled), 0);
@@ -151,11 +151,11 @@ test('a label fading IN is animating, not just one fading out', () => {
 // 2b. The relief valve defers, it never cancels
 // ---------------------------------------------------------------------------
 
-test('a skipped paint always hands its frame forward — skip and re-request are one decision', () => {
+test('a skipped paint always hands its frame forward - skip and re-request are one decision', () => {
   // The regression this pins: under the old continuous hold a skipped paint cost
   // nothing, because the next frame was guaranteed. With no hold, the frame the
-  // valve declines may be the ONLY one anybody requested — a reactivation, a new
-  // label, a fresh solve — and swallowing it strands that work indefinitely.
+  // valve declines may be the ONLY one anybody requested - a reactivation, a new
+  // label, a fresh solve - and swallowing it strands that work indefinitely.
   //
   // These drive the REAL decision the production valve calls, not a description
   // of it: the earlier version of this check hand-fed frames to a stub, which is
@@ -169,9 +169,9 @@ test('a skipped paint always hands its frame forward — skip and re-request are
 
   // Every other case paints, and a paint needs no deferral.
   for (const input of [
-    { layoutChanged: true, lastPaintMs: heavy, frameCount: 1 },   // layout moved — never skip
-    { layoutChanged: false, lastPaintMs: heavy, frameCount: 2 },  // even frame — the valve's duty cycle
-    { layoutChanged: false, lastPaintMs: 1, frameCount: 1 },      // cheap paint — no relief needed
+    { layoutChanged: true, lastPaintMs: heavy, frameCount: 1 },   // layout moved - never skip
+    { layoutChanged: false, lastPaintMs: heavy, frameCount: 2 },  // even frame - the valve's duty cycle
+    { layoutChanged: false, lastPaintMs: 1, frameCount: 1 },      // cheap paint - no relief needed
     { layoutChanged: false, lastPaintMs: DETECTION_PAINT_SKIP_THRESHOLD_MS, frameCount: 1 }, // at the threshold, not past it
   ]) {
     assert.deepEqual(detectionPaintSkipDecision(input), { skip: false, requestFollowUp: false },
@@ -196,7 +196,7 @@ test('a skipped paint always hands its frame forward — skip and re-request are
   const first = detectionPaintSkipDecision({ layoutChanged: false, lastPaintMs: heavy, frameCount: 7 });
   const second = detectionPaintSkipDecision({ layoutChanged: false, lastPaintMs: heavy, frameCount: 8 });
   assert.equal(first.skip, true);
-  assert.equal(second.skip, false, 'the very next frame paints — a skip costs one frame, not the work');
+  assert.equal(second.skip, false, 'the very next frame paints - a skip costs one frame, not the work');
 
   assert.deepEqual(detectionPaintSkipDecision(), { skip: false, requestFollowUp: false },
     'no input is not a reason to drop a frame');
@@ -217,20 +217,20 @@ test('the scanline scrolls off the clock, at an exact 60 fps cadence', () => {
   assert.equal(scanlineOffsetPx(SCANLINE_STEP_MS * 2), 0);
   assert.equal(scanlineOffsetPx(SCANLINE_STEP_MS * 3), 2);
 
-  // At an ideal 60 fps the offset alternates on EVERY frame — no repeats.
+  // At an ideal 60 fps the offset alternates on EVERY frame - no repeats.
   const walk = Array.from({ length: 12 }, (_, i) => scanlineOffsetPx(SCANLINE_STEP_MS * i + 0.001));
   for (let i = 1; i < walk.length; i++) {
     assert.notEqual(walk[i], walk[i - 1], `frame ${i} repeated the previous offset`);
   }
 
-  // It stays inside the pattern period for any timestamp — an offset that walked
+  // It stays inside the pattern period for any timestamp - an offset that walked
   // past the period would leave a visible seam at the top of the canvas.
   for (const t of [1, 1_000, 1_700_000_000_000, 1_700_000_000_016]) {
     const offset = scanlineOffsetPx(t);
     assert.ok(offset >= 0 && offset < SCANLINE_PERIOD_PX, `offset ${offset} outside the period at t=${t}`);
   }
 
-  // Two paints inside one step render identically — the animation is a function
+  // Two paints inside one step render identically - the animation is a function
   // of elapsed TIME, so a parked scene rests instead of demanding frames.
   const stepStart = SCANLINE_STEP_MS * 100;
   assert.equal(scanlineOffsetPx(stepStart), scanlineOffsetPx(stepStart + SCANLINE_STEP_MS - 1));
@@ -240,7 +240,7 @@ test('the scanline scrolls off the clock, at an exact 60 fps cadence', () => {
 test('paint and demand share one timestamp, so the terminal frame is painted', async () => {
   // The dropped-frame defect: paint sampled the clock, then demand sampled it
   // again a millisecond later. At age 219 ms the paint drew alpha 0.99545 while
-  // the policy, re-reading at 220 ms, answered "done" — so the frame that would
+  // the policy, re-reading at 220 ms, answered "done" - so the frame that would
   // have painted the settled alpha was never requested and the fade stopped a
   // hair short of finished.
   //
@@ -271,7 +271,7 @@ test('detection holds nothing, and asks for its own frames instead', async () =>
   const source = await readFile(new URL('./detection.js', import.meta.url), 'utf8');
 
   assert.doesNotMatch(source, /holdContinuousRender/,
-    'detection must never take a continuous-render hold — that is the regression');
+    'detection must never take a continuous-render hold - that is the regression');
   assert.doesNotMatch(source, /releaseContinuousRender/,
     'and with no hold there is nothing to release');
 
@@ -284,7 +284,7 @@ test('detection holds nothing, and asks for its own frames instead', async () =>
   const paintLane = /function _paintDetectionLane\([\s\S]*?\n\}/.exec(source)?.[0];
   assert.ok(paintLane, 'detection.js still has a paint lane');
   assert.doesNotMatch(paintLane, /nowMs: Date\.now\(\)/,
-    'demand must not re-sample the clock — that is the dropped terminal frame');
+    'demand must not re-sample the clock - that is the dropped terminal frame');
   assert.match(
     paintLane,
     /const nowMs = Number\.isFinite\(frame\.timestamp\) \? frame\.timestamp : _nowMs\(\)/,
@@ -298,7 +298,7 @@ test('detection holds nothing, and asks for its own frames instead', async () =>
     'demand counts fades in both directions');
   // …and `animatingCount` must really be the BOTH-directions count. Feeding the
   // fade-OUT-only counter into it is exactly the original defect, and it is
-  // invisible to every other assertion here — the field name would still line up
+  // invisible to every other assertion here - the field name would still line up
   // while a fading-in label registered nothing.
   assert.match(source, /const animatingCount = countAnimatingRenderEntries\(renderEntries\);/,
     'the demand count comes from the both-directions counter, not the fade-out tail');
@@ -309,7 +309,7 @@ test('detection holds nothing, and asks for its own frames instead', async () =>
 
   // No exit from the draw pass may report work it cannot finish. The
   // zero-objects exit skips the solve block entirely, so carrying the dirty flag
-  // out of it reports "a solve is still owed" on every future frame — which,
+  // out of it reports "a solve is still owed" on every future frame - which,
   // paired with the follow-up frame an owed solve earns, is a permanent chain on
   // the emptiest possible scene. (Caught by the governor gate at 301 renders/5 s
   // with zero layers; the fix settles the solve there, because with nothing
@@ -319,7 +319,7 @@ test('detection holds nothing, and asks for its own frames instead', async () =>
   assert.match(emptyExit, /_labelSolveDirty = false;/,
     'the zero-objects exit settles the solve instead of carrying it forward');
   assert.match(emptyExit, /solvePending: false/,
-    'and reports no outstanding solve — nothing detectable means nothing to place');
+    'and reports no outstanding solve - nothing detectable means nothing to place');
 
   // No wall clock may drive anything the demand model reasons about.
   const drawOverlay = /function _drawOverlay\([\s\S]*?\n\}/.exec(source)?.[0];
@@ -356,14 +356,14 @@ test('a layer whose detectable set changed dirties the solve', async () => {
   // Detection PULLS candidates per paint but re-solves on a private 125 ms
   // throttle. A poll tick that replaces contact A with contact B requests one
   // frame; without this, that frame could be spent on a paint which declined to
-  // re-solve — leaving A labelled, B unlabelled, and nothing left to ask again.
+  // re-solve - leaving A labelled, B unlabelled, and nothing left to ask again.
   const detection = await readFile(new URL('./detection.js', import.meta.url), 'utf8');
   assert.match(detection, /export function markDetectionSourcesChanged\(/,
     'detection exposes the source-change hook');
   const hook = /export function markDetectionSourcesChanged\([\s\S]*?\n\}/.exec(detection)[0];
   assert.match(hook, /_labelSolveDirty = true;/, 'and it really dirties the solve');
   assert.doesNotMatch(hook, /governorRequestRender/,
-    'the caller already requests the frame — asking twice would double every tick');
+    'the caller already requests the frame - asking twice would double every tick');
   assert.match(hook, /if \(_mode === MODE_OFF\) return;/,
     'and it stays inert while detection is off');
 
@@ -403,7 +403,7 @@ test('a layer whose detectable set changed dirties the solve', async () => {
 
 test('the render-governor gate covers the parked case, with teeth on the painter', async () => {
   // The unit tests above cannot see a duty cycle, and a render count alone
-  // cannot see whether the painter still runs — a disabled painter would score a
+  // cannot see whether the painter still runs - a disabled painter would score a
   // perfect idle. If either half of the runtime gate is dropped, this fails and
   // says so rather than leaving the policy pinned but unobserved.
   const gate = await readFile(new URL('../../scripts/qa-perf.mjs', import.meta.url), 'utf8');
@@ -416,7 +416,7 @@ test('the render-governor gate covers the parked case, with teeth on the painter
     'and the activity check must reach the painter, not just the scene');
   // The idle windows must START at a settled quiet RUN, not a fixed sleep and
   // not one empty second. The harness's own teardown marks the HUD summary
-  // dirty, and the 15 s tick that notices types the new text in — reflowing an
+  // dirty, and the 15 s tick that notices types the new text in - reflowing an
   // occluder ~16 s later, inside the old counted window. The scene is honestly
   // idle for that whole gap, so only a run longer than one refresh period can
   // tell "settled" from "about to be interrupted".
@@ -441,7 +441,7 @@ test('the render-governor gate covers the parked case, with teeth on the painter
 // 5. What keeps aircraft brackets prompt without a detection hold
 // ---------------------------------------------------------------------------
 
-// Detection paints AIR brackets — including the alpha-floored ones — inside
+// Detection paints AIR brackets - including the alpha-floored ones - inside
 // _drawOverlay, from live positions, and does NOT take part in any
 // "objects may have changed" notification. With detection's own render hold
 // gone, the obvious worry is a floored bracket sitting stale on a parked scene
@@ -456,7 +456,7 @@ test('the render-governor gate covers the parked case, with teeth on the painter
 // with no camera input, holds = ["flights"], requestRenderMode = false.)
 //
 // That is a COUPLING, so it deserves a pin. If a later perf pass strips these
-// holds the way it stripped detection's — a reasonable-looking change — bracket
+// holds the way it stripped detection's - a reasonable-looking change - bracket
 // promptness goes with them, silently. This test is where that shows up.
 test('aircraft brackets stay prompt because the aircraft layers hold the render loop', async () => {
   for (const file of ['./flights.js', './militaryFlights.js']) {
@@ -466,7 +466,7 @@ test('aircraft brackets stay prompt because the aircraft layers hold the render 
     assert.match(
       enable,
       /holdContinuousRender\('(flights|military)'\)/,
-      `${file}: enabling the layer must hold continuous render — detection no longer ` +
+      `${file}: enabling the layer must hold continuous render - detection no longer ` +
       'holds one, so this is what keeps its AIR brackets repainting on a parked scene',
     );
     assert.match(

@@ -1,8 +1,8 @@
 /**
  * Retry policy for keyless terrain tiles.
  *
- * Re:Earth serves its quantized-mesh tiles straight to the browser — nothing
- * in this repository proxies them — and its edge answers a zoom-out burst
+ * Re:Earth serves its quantized-mesh tiles straight to the browser - nothing
+ * in this repository proxies them - and its edge answers a zoom-out burst
  * with HTTP 429 for a few dozen tiles at once. Cesium marks each throttled
  * tile FAILED and upsamples the parent mesh, so the terrain stays coarse until
  * the quadtree happens to ask for that tile again.

@@ -3,11 +3,11 @@ import { readCappedResponseText } from '../common/http.js';
 /**
  * Vite plugin: aircraft track-history backfill proxies (PRD WS-F F1/F2).
  *
- * /api/flights/track?icao24=<hex6> — OpenSky GET /tracks/all (experimental;
+ * /api/flights/track?icao24=<hex6> - OpenSky GET /tracks/all (experimental;
  *   own credit bucket, 4 credits per call on the free tier). OAuth via the
  *   shared coalesced token. 60s per-icao cache; 404/429 forwarded so the
  *   client can fall back to its accumulated trail silently.
- * /api/military/track?hex=<hex> — compatibility refusal for the retired,
+ * /api/military/track?hex=<hex> - compatibility refusal for the retired,
  *   undocumented ADSB.lol trace route. The standalone military source uses
  *   locally accumulated trails; provider-supplied history remains optional.
  */

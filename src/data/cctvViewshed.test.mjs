@@ -1,4 +1,4 @@
-// src/data/cctvViewshed.test.mjs — viewshed hue assignment + frustum volume
+// src/data/cctvViewshed.test.mjs - viewshed hue assignment + frustum volume
 // geometry (docs/superpowers/specs/2026-07-05-cctv-viewshed-gizmo-design.md §3a/§3b).
 //
 // Locks:
@@ -9,7 +9,7 @@
 //   - frustumVolumeGeometryData is welded BY CONSTRUCTION to the wireframe:
 //     its 5 vertices are exactly the caller's frustumCartesians positions and
 //     its 18 indices only reference those 5 vertices (4 side faces + 2 cap
-//     triangles) — no independent geometry recompute anywhere.
+//     triangles) - no independent geometry recompute anywhere.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import * as Cesium from 'cesium';
@@ -38,7 +38,7 @@ test('cameraHue: deterministic golden-angle spacing in [0, 360)', () => {
 
 // NB: 20 points on a 360° wheel cap the best-possible min pairwise gap at 18°
 // (pigeonhole), so "≥20°" is unachievable for any assignment. Golden-angle
-// gives 12.4° min over the first 20 (measured) — assert ≥12° so a regression
+// gives 12.4° min over the first 20 (measured) - assert ≥12° so a regression
 // to a worse spacing scheme (e.g. raw id-hash clustering) fails loudly, and
 // separately assert CONSECUTIVE indices (the likeliest co-visible neighbors)
 // stay far apart.

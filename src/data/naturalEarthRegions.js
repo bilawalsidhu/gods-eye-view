@@ -1,15 +1,15 @@
 /**
- * Natural Earth physical-regions lookup — offline polygons for named natural
+ * Natural Earth physical-regions lookup - offline polygons for named natural
  * regions (mountain ranges, deserts, plateaus, peninsulas, islands) and marine
  * areas (seas, gulfs, straits, bays), so voice asks like "outline the Alps"
  * resolve to REAL region geometry instead of failing or matching a tiny meadow.
  *
- * Data: `local_data/natural_earth/{regions,marine}.json` — curated from the
+ * Data: `local_data/natural_earth/{regions,marine}.json` - curated from the
  * Natural Earth 10m physical vectors (public domain; see each file's `meta`
  * header and DATA_SOURCES.md). Curation kept named features only, outer rings
  * only, Douglas-Peucker simplified (~0.01°) with coords rounded to 3 decimals.
  *
- * PURE data module — no Cesium imports, node-testable. The packs are lazy-
+ * PURE data module - no Cesium imports, node-testable. The packs are lazy-
  * loaded on first lookup and cached in module scope (bbox/area computed once
  * at load) through `loadBundledJson`, which works in the browser and under
  * node:test. A failed load is retried on the next lookup rather than cached
@@ -22,7 +22,7 @@ import { EARTH_RADIUS_KM, greatCircleKm } from '../geoDistance.js';
 
 const toRad = (d) => (d * Math.PI) / 180;
 
-/** Spherical-excess ring area (km²) — same family as turf/geojson-area. */
+/** Spherical-excess ring area (km²) - same family as turf/geojson-area. */
 function ringAreaKm2(ring) {
   const n = ring.length;
   if (n < 3) return 0;
@@ -184,7 +184,7 @@ const loadIndex = createRetryableLoader(async () => {
     }
   }
   // duplicate names exist in Natural Earth (e.g. two "Cordillera Oriental",
-  // a sliver + real "Canadian Shield") — prefer the largest-area match
+  // a sliver + real "Canadian Shield") - prefer the largest-area match
   for (const list of index.values()) list.sort((a, b) => b.areaKm2 - a.areaKm2);
   return index;
 });

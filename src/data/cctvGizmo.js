@@ -20,14 +20,14 @@
  *   left/right edge midpoints (plane size).
  *
  * Scene interaction is strictly event-driven (single pick on LEFT_DOWN,
- * throttled hover picks while ADJUST mode is on) — the layer's zero-steady-state-query
+ * throttled hover picks while ADJUST mode is on) - the layer's zero-steady-state-query
  * invariant is untouched.
  */
 import * as Cesium from 'cesium';
 import { isPointerFree } from './inputOwnership.js';
 
 // Grazing guard (spec §5): reject plane intersections when the view ray is
-// nearly parallel to the constraint plane — the hit point races to infinity
+// nearly parallel to the constraint plane - the hit point races to infinity
 // and a 1 px mouse move would slam the value.
 const GRAZING_DOT_MIN = 0.08;
 // Near-parallel guard for ray/axis closest-point (denominator 1 - (d·a)²).
@@ -117,7 +117,7 @@ export function signedAngleDelta(fromRad, toRad) {
 // Gizmo controller
 // ---------------------------------------------------------------------------
 
-/** Entity id prefix for every gizmo part — the layer's pick-owner regex and
+/** Entity id prefix for every gizmo part - the layer's pick-owner regex and
  * click-to-select guard key off this. Gizmo entities NEVER carry a
  * `cctvCameraId` property, so the layer's selection path ignores them. */
 export const GIZMO_ID_PREFIX = 'cctv-gizmo-';
@@ -206,7 +206,7 @@ function ringPositions(center, radius, basisA, basisB) {
 /**
  * Creates the calibration gizmo controller (design §3c). Renders grab-able
  * handles for the ACTIVE camera's 7 calibration DOF and turns pointer drags
- * into calibration patches through a narrow callback interface — the gizmo
+ * into calibration patches through a narrow callback interface - the gizmo
  * never touches layer records/stores directly.
  *
  * @param {Object} deps
@@ -271,7 +271,7 @@ export function createCalibrationGizmo({
           : color.withAlpha(0.9),
         // Standard gizmo convention: parts behind geometry stay clearly
         // visible, just dimmed (a street-level mount buries half the heading
-        // ring in sloped photogrammetry tiles — smoke-tested 2026-07-05).
+        // ring in sloped photogrammetry tiles - smoke-tested 2026-07-05).
         depthFailMaterial: color.withAlpha(0.45),
       },
     });
@@ -444,7 +444,7 @@ export function createCalibrationGizmo({
     hoveredId = nextId;
     // Hover feedback must NEVER touch polyline geometry: a width change makes
     // Cesium rebuild the batched polyline primitive, and until the next render
-    // the part vanishes from the pick buffer — so the very hover that finds a
+    // the part vanishes from the pick buffer - so the very hover that finds a
     // ring makes the following LEFT_DOWN miss it (root-caused via the QA
     // harness's synthetic drag, 2026-07-05). Rings/arrows get cursor feedback
     // only; point handles are PointPrimitives (live-updatable, no rebuild), so
@@ -481,7 +481,7 @@ export function createCalibrationGizmo({
     const state = {
       // The drag is PINNED to this record: patches must never follow a
       // mid-drag active-camera switch (voice select / auto-hop) onto a
-      // different camera — its basePose makes the captured offsets wrong.
+      // different camera - its basePose makes the captured offsets wrong.
       record,
       part,
       startCal,

@@ -364,7 +364,7 @@ test('a stateless candidate keeps no corner, no cooldown, and no fades', () => {
   const entry = rendered.find((item) => item.candidate.key === 'cctv:mover');
   assert.ok(entry, 'the card returns on the next solve rather than waiting out a cooldown');
   assert.equal(entry.temporalAlpha, 1,
-    'it paints at full alpha on arrival — a hard cliff, not a 150 ms ramp');
+    'it paints at full alpha on arrival - a hard cliff, not a 150 ms ramp');
 
   // And it leaves on a cliff too, with no fade-out tail.
   arbiter.solve([], { capacity: 0, now: 1300 });

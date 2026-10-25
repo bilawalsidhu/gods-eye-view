@@ -17,13 +17,13 @@ export function createFlightState({ source, services }) {
    *  vertex-baked to real-world METERS in the airplane.glb axis convention, so
    *  they render at scale 1 with their own measured belly lift and bounding
    *  radius. Every other class keeps the shared-airplane.glb formula
-   *  (MODEL_SCALE × CLASS_SCALE_3D). nativeRadiusM is PER SCALE UNIT — pixel-cap
+   *  (MODEL_SCALE × CLASS_SCALE_3D). nativeRadiusM is PER SCALE UNIT - pixel-cap
    *  math multiplies it by `scale`, so world radius = nativeRadiusM × scale in
    *  both branches. The code-side MIX tint dominates every existing asset so
    *  class silhouettes stay light without modifying third-party GLBs/textures. */
   /*  Specs are static per class, and the detection weld now asks for one per
    *  MODELED contact per frame (up to the fleet cap) on top of the 12 Hz fleet
-   *  pass — so this is memoized, as militaryFlights.js already does. */
+   *  pass - so this is memoized, as militaryFlights.js already does. */
 
   flightState._specCache = new Map();
 
@@ -58,7 +58,7 @@ export function createFlightState({ source, services }) {
   flightState._modelEpoch = 0;
 
   /** DEFAULT-ON in PROXIMITY (owner directive 2026-08-22). A fresh boot never runs
-   *  layer-state restoration, so this initializer — not the codec — is what the app
+   *  layer-state restoration, so this initializer - not the codec - is what the app
    *  actually starts with; it must stay in lockstep with the `models3d` default in
    *  `layerState.js` and `this._models3dEnabled` in ui.js, or the DISPLAY rail would
    *  light a button the layer has not armed. */
@@ -73,7 +73,7 @@ export function createFlightState({ source, services }) {
   // The tracked entity's billboard goes transparent (rather than hidden) once the model takes
   // over, so it keeps supplying a bounding sphere for follow-camera framing. We only drop its
   // alpha after the GLB is preloaded so the model is ready to render the instant the billboard
-  // fades — no gap, no double-image. Preloaded once at init; the instance is retained (not
+  // fades - no gap, no double-image. Preloaded once at init; the instance is retained (not
   // destroyed) purely to keep Cesium's glTF cache warm for fast tracked-model instantiation.
 
   flightState._planeModelLoaded = false;
@@ -142,7 +142,7 @@ export function createFlightState({ source, services }) {
 
   /** @type {Cesium.Model|null} Standalone 3D model for the tracked aircraft. Deliberately NOT a
    *  graphic on _trackedEntity: viewer.trackedEntity derives the follow-camera from the entity's
-   *  bounding sphere, and a model graphic reports PENDING until its glTF loads — which stalls (or, on
+   *  bounding sphere, and a model graphic reports PENDING until its glTF loads - which stalls (or, on
    *  3D-toggle, freezes) the centering. A pure-billboard entity always supplies a ready sphere; the
    *  model rides in _modelCollection and is driven per-frame, fully decoupled from the camera. */
 
@@ -183,7 +183,7 @@ export function createFlightState({ source, services }) {
   flightState._trail = null;
 
   /** @type {Cesium.Entity|null} Cheap 2-point head segment bridging the last fix to the LIVE
-   *  dead-reckoned icon, updated per frame via a CallbackProperty — so the trail head stays
+   *  dead-reckoned icon, updated per frame via a CallbackProperty - so the trail head stays
    *  glued to the 12 Hz icon without rebuilding the 400-point trail primitive every frame. */
 
   flightState._trailHeadEntity = null;
@@ -196,7 +196,7 @@ export function createFlightState({ source, services }) {
 
   flightState._trailPositions = [];
 
-  /** @type {number} Monotonic token — invalidates in-flight backfill responses */
+  /** @type {number} Monotonic token - invalidates in-flight backfill responses */
 
   flightState._trailBackfillToken = 0;
 
@@ -235,7 +235,7 @@ export function createFlightState({ source, services }) {
   flightState._milActiveChangeUnsub = null;
 
   // ---------------------------------------------------------------------------
-  // Scratch (reusable) variables — avoid per-frame heap allocation
+  // Scratch (reusable) variables - avoid per-frame heap allocation
   // ---------------------------------------------------------------------------
 
   flightState._scratchOffset = new Cesium.Cartesian3();
@@ -272,7 +272,7 @@ export function createFlightState({ source, services }) {
 
   flightState._cachedDRFrame = -1;
 
-  /** Course (deg) of the position `_deadReckon` most recently returned — set on
+  /** Course (deg) of the position `_deadReckon` most recently returned - set on
    *  every branch of `_deadReckon`, read IMMEDIATELY by the caller (same
    *  synchronous flow; module-scratch idiom, like the Cartesian scratches). */
 
@@ -280,7 +280,7 @@ export function createFlightState({ source, services }) {
 
   /** Sibling scratches of _drCourseDeg: the displayed ground speed of the motion
    *  `_deadReckon` just returned, and whether that motion is too slow for ANY
-   *  course source to be trusted (hover/GPS drift — consumers HOLD their
+   *  course source to be trusted (hover/GPS drift - consumers HOLD their
    *  previous display course instead of chasing noise). */
 
   flightState._drSpeedMps = null;
@@ -290,7 +290,7 @@ export function createFlightState({ source, services }) {
   /** Sibling scratch: whether the position `_deadReckon` just returned came from
    *  EXTRAPOLATION (coasting past the newest fix, or the pre-history warm-up)
    *  rather than interpolation between two known fixes. The display-floor
-   *  corridor needs it — an interpolating contact is walking TOWARD its newest
+   *  corridor needs it - an interpolating contact is walking TOWARD its newest
    *  fix, a coasting one is walking AWAY from it along its course, and warming
    *  the wrong end leaves a coaster permanently ahead of its floor data. */
 
@@ -306,20 +306,20 @@ export function createFlightState({ source, services }) {
 
   flightState._cachedDRHold = false;
 
-  /** Wall-clock of the tracked course limiter's last advance (dt source only —
+  /** Wall-clock of the tracked course limiter's last advance (dt source only -
    *  the course VALUE lives in the shared per-icao _displayCourse map below). */
 
   flightState._trackedCourseMs = 0;
 
-  /** Per-aircraft smoothed display course — the SINGLE source of truth for the
+  /** Per-aircraft smoothed display course - the SINGLE source of truth for the
    *  nose direction an aircraft displays. The fleet pass reads/writes it at
    *  tick cadence for untracked planes; _trackedDisplayCourse reads/writes the
    *  SAME entry per frame for the tracked plane (the fleet pass skips the
    *  tracked icao, so exactly one writer owns an entry at a time). Sharing the
-   *  entry — including its slew state — is what makes the tracked↔fleet
+   *  entry - including its slew state - is what makes the tracked↔fleet
    *  handoff seamless (2026-07-03 field fix: separate states froze the fleet
    *  entry while tracked, so clicking / un-clicking a 65 kt helicopter FLIPPED
-   *  its nose — "looks like it's going in reverse"). */
+   *  its nose - "looks like it's going in reverse"). */
 
   flightState._displayCourse = new Map();
 
@@ -400,7 +400,7 @@ export function createFlightState({ source, services }) {
    *  the last input position and the effective floor that produced the cached
    *  output (rebuild skip), the last floor that actually RESOLVED for it plus the
    *  tier it came from (the hold, below), whether that floor is a REHYDRATED SEED
-   *  rather than something measured while the contact stood here (`seeded` — it
+   *  rather than something measured while the contact stood here (`seeded` - it
    *  ranks below live evidence), and the value the downward ease is currently
    *  displaying while it approaches a lower floor.
    *  Dropped with the contact, and whenever it stops being a grounded billboard. */
@@ -431,14 +431,14 @@ export function createFlightState({ source, services }) {
 
   /** Boosted models render UNLIT (owner cockpit-FLIR field rounds, 2026-08-16):
    *  the white tint alone is applied to the MATERIAL, so Cesium still
-   *  sun-shades it — near-horizon viewing shows a plane's SIDE, ~90° to a high
+   *  sun-shades it - near-horizon viewing shows a plane's SIDE, ~90° to a high
    *  sun, so it rendered near-BLACK in FLIR/NVG while sun-lit neighbors glowed.
    *  LightingModel.UNLIT emits the flat white directly, orientation be damned.
    *  CRITICAL (field-verified via scene.pick): assigning customShader to an
-   *  already-READY model is a silent no-op — the property sets but the shader
+   *  already-READY model is a silent no-op - the property sets but the shader
    *  program never rebuilds. The boost therefore flips by RELEASE-AND-RELOAD
    *  (see setParams), so every boosted model gets the shader AT CREATION.
-   *  One shared shader instance — stateless, safe across models. */
+   *  One shared shader instance - stateless, safe across models. */
 
   flightState._IR_UNLIT_SHADER = new Cesium.CustomShader({
     lightingModel: Cesium.LightingModel.UNLIT,

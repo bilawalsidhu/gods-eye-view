@@ -18,7 +18,7 @@ export function createRendering({
   source,
 }) {
   /**
-   * At high altitude only major roads render — shared by the render pass and
+   * At high altitude only major roads render - shared by the render pass and
    * the late-flow heat-line rebuild so lines never mark roads without dots.
    * @param {Array} roads    - Parsed road objects.
    * @param {number} altitude - Camera altitude in meters.
@@ -55,8 +55,8 @@ export function createRendering({
 
   /**
    * Rebuild the congestion heat-line underlay (jam-viz heatline prototype):
-   * slow/jam roads drape a corridor line onto the rendered 3D tiles — glowing
-   * pulsing red for jam, faint flat amber for slow — with the dots animating
+   * slow/jam roads drape a corridor line onto the rendered 3D tiles - glowing
+   * pulsing red for jam, faint flat amber for slow - with the dots animating
    * on top. Two batched GroundPolylinePrimitives (one per bucket) so the jam
    * batch pulses through one shared material. Capped at HEAT_LINE_CAP (jam
    * first, longest first); overflow is logged. No-op in sim mode, when the
@@ -79,7 +79,7 @@ export function createRendering({
       );
       if (!layerState._heatSupported)
         console.warn(
-          '[Data:Traffic] GroundPolylinePrimitive unsupported — heat-lines disabled',
+          '[Data:Traffic] GroundPolylinePrimitive unsupported - heat-lines disabled',
         );
     }
     if (!layerState._heatSupported) return;
@@ -112,7 +112,7 @@ export function createRendering({
             }),
         );
 
-    // Mono presets (NVG/FLIR/noir) discard hue — heat-lines re-encode in
+    // Mono presets (NVG/FLIR/noir) discard hue - heat-lines re-encode in
     // luminance like the dots: jam = white glow, slow = faint gray.
     const monoHeat =
       layerState._presetDots === 'on' &&
@@ -192,7 +192,7 @@ export function createRendering({
     // At high altitude, drop minor roads to reduce visual noise
     const filteredRoads = visibleRoadsForAltitude(roads, altitude);
 
-    // Closed roads spawn zero dots (computeDotCount/spawnDotsForRoad) — count
+    // Closed roads spawn zero dots (computeDotCount/spawnDotsForRoad) - count
     // them here so the closure signal is visible in stats even at zero dots.
     layerState._closedRoads = layerState._liveMode
       ? filteredRoads.reduce((n, r) => n + (r.flow?.closure ? 1 : 0), 0)

@@ -60,12 +60,12 @@ export const GEO_PROGRESS_NOTIFY_INTERVAL_MS = 300;
 
 export const GEO_PROGRESS_NOTIFY_BATCH_LIMIT = 10;
 
-// Throttle for placeholder repaints — the projection RAF loop must not
+// Throttle for placeholder repaints - the projection RAF loop must not
 // re-fill a 1080p canvas on every frame while a feed image is still loading.
 
 export const PLACEHOLDER_REPAINT_MS = 750;
 
-// v1 key is retired dead data (owner decision #3, §9.3 — WIPE CLEAN, no
+// v1 key is retired dead data (owner decision #3, §9.3 - WIPE CLEAN, no
 // legacy import): kept here only as a documented constant so nothing ever
 // re-reads it by accident. Exported for the unit suite's "v1 is ignored"
 // assertion; there is NO read path for this key anywhere in the module.
@@ -128,7 +128,7 @@ export const PROBE_MIN_RANGE_M = 12;
 
 export const GROUND_PRIOR_INIT_WAIT_MS = 8000;
 
-/** Default calibration offsets — all zeroed, range scale 1x. */
+/** Default calibration offsets - all zeroed, range scale 1x. */
 
 export const DEFAULT_CAMERA_CALIBRATION = Object.freeze({
   offsetNorthM: 0,
@@ -435,14 +435,14 @@ export const PLANE_OUTLINE_COLOR =
   Cesium.Color.fromCssColorString('#6be8ff').withAlpha(0.55);
 
 /**
- * Card budget while the staggered geometry drain is running — the raised
+ * Card budget while the staggered geometry drain is running - the raised
  * 20/28/40 tiers resume when loading completes (see refreshAmbientCards).
  */
 
 export const CCTV_AMBIENT_CARD_DRAIN_CAP = 16;
 
 // Global static-frame pacing (owner finding 3): the pacer ticks at the burst
-// spacing (250 ms) but cardFetchPolicy gates launches — cold fill (selected
+// spacing (250 ms) but cardFetchPolicy gates launches - cold fill (selected
 // cards still missing their FIRST frame) allows up to 4 in-flight fetches at
 // 250 ms spacing; steady state keeps the salvaged Part C gate of at most one
 // request per second with an in-flight fetch blocking the tick, so slow

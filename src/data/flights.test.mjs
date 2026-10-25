@@ -1,6 +1,6 @@
 // src/data/flights.test.mjs
 // Focused tests for the pure analyst-record mapper (analyst query engine seam).
-// Pure function — no viewer/DOM needed; imported directly.
+// Pure function - no viewer/DOM needed; imported directly.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import * as Cesium from 'cesium';
@@ -731,7 +731,7 @@ function seedLabelContact({
   registration,
   tracked = false,
   // Per-test metadata overrides, spread last so a test can set a field to
-  // `undefined` to model "the feed never sent it" — a default parameter
+  // `undefined` to model "the feed never sent it" - a default parameter
   // could not express that, it would just re-supply the default.
   meta: metaOverrides = {},
 }) {
@@ -779,7 +779,7 @@ function labelsFor({ callsign, registration }) {
     getAllPositions: all?.label,
     getTrackedSubject: subject?.label,
     analyst: mapAnalystRecord(LABEL_ICAO, { callsign, registration }).id,
-    // Identity keys — these must NOT move with the label.
+    // Identity keys - these must NOT move with the label.
     _identity: {
       nearby: nearby?.icao24,
       detected: detected?.sourceId,
@@ -855,7 +855,7 @@ test('the tracked descriptor publishes the reported vertical rate', () => {
 
 test('an unreported vertical rate stays null, never a level-flight zero', () => {
   // Absent is not level. `stickyNumber` seeds this field with null, so a
-  // contact that has never transmitted a rate must not read as 0 m/s — a
+  // contact that has never transmitted a rate must not read as 0 m/s - a
   // phase classifier would call that cruise while the aircraft climbs.
   for (const missing of [undefined, null, Number.NaN]) {
     seedLabelContact({
@@ -997,7 +997,7 @@ test('civil tracked readout: a callsign-less enriched contact reads as its regis
 // `acceptedSnapshotIcaos` is built BEFORE the military-suppression `continue`,
 // so a mil-registry hex is provably present in a healthy snapshot while having
 // no billboard. `trackById` then fails and the share restore reported
-// "could not be restored — feed unavailable" about a feed that was fine.
+// "could not be restored - feed unavailable" about a feed that was fine.
 // This layer still OWNS a contact it is holding on its restore latch, so that
 // contact is exempt from suppression exactly like the tracked one.
 // ---------------------------------------------------------------------------
@@ -1048,14 +1048,14 @@ test('military suppression exempts the contact this layer is still restoring', (
 });
 
 // ---------------------------------------------------------------------------
-// Display-time ground floor (2026-08-19 — qa-floor-verify FAIL at KAUS).
+// Display-time ground floor (2026-08-19 - qa-floor-verify FAIL at KAUS).
 //
 // A grounded contact's renderAltitudeM is chosen ONCE per poll from the floor
 // of the FIX's coarse cell. What actually renders is the dead-reckoned display
 // position, which drifts across cells for the whole 30 s segment and, while a
 // stale ground contact coasts, for up to 300 s / several hundred metres. On a
 // graded apron (KAUS spans ~119–140 m ellipsoidal) the sprite then renders
-// under the mesh it drifted over — measured to −15.5 m. These pin the fix at
+// under the mesh it drifted over - measured to −15.5 m. These pin the fix at
 // the point of DISPLAY: read-only against the shared floor cache, grounded
 // contacts only, never when a 3D model owns the visual (T7 one-shot).
 // ---------------------------------------------------------------------------
@@ -1176,7 +1176,7 @@ test('display floor: a grounded contact that drifted onto a higher cell is lifte
     Math.abs(c.height - (140.2 + GROUND_FLOOR_LIFT_M)) < 0.05,
     `height ${c.height} should be 140.2 + lift`,
   );
-  // Lifted straight up — the drifted lat/lon is preserved exactly.
+  // Lifted straight up - the drifted lat/lon is preserved exactly.
   assert.ok(Math.abs(Cesium.Math.toDegrees(c.latitude) - 30.2004) < 1e-6);
   assert.ok(Math.abs(Cesium.Math.toDegrees(c.longitude) + 97.6604) < 1e-6);
 });
@@ -1195,7 +1195,7 @@ test('display floor: an AIRBORNE contact over the same cell is never lifted', ()
   assert.equal(out, pos, 'airborne display positions pass through untouched');
 });
 
-test('display floor: T7 — a model-owned grounded contact keeps its billboard datum', () => {
+test('display floor: T7 - a model-owned grounded contact keeps its billboard datum', () => {
   _clearDisplayFloorStateForTest();
   _clearMeshFloorCellsForTest();
   setMeshFloorPreferred(true);
@@ -1284,7 +1284,7 @@ test('display floor: jitter across a cell edge does not alternate the floor', ()
     Math.abs(at(30.2006) - settled) < 0.05,
     'held the low cell across the edge',
   );
-  assert.ok(Math.abs(at(30.2004) - settled) < 0.05, 'and back again — no pop');
+  assert.ok(Math.abs(at(30.2004) - settled) < 0.05, 'and back again - no pop');
 });
 
 test('display floor: a real crossing does adopt the next cell', () => {
@@ -1375,7 +1375,7 @@ test('display floor: the cached output is dropped when the floor changes under i
   assert.ok(Math.abs(before - 141.5) < 0.05, `before ${before}`);
   assert.ok(
     Math.abs(after - 176.5) < 0.05,
-    `after ${after} — a stale cache would still read 141.5`,
+    `after ${after} - a stale cache would still read 141.5`,
   );
 });
 
@@ -1384,7 +1384,7 @@ test('display floor: the cached output is dropped when the floor changes under i
 // Owner incident 2026-08-21: four `[terrain-heights-proxy] refresh incomplete`
 // events in a row (Re:Earth timing out), and a parked contact at a Texas field
 // popped BELOW the photoreal mesh for a few seconds. A cold cell used to mean
-// "no clamp", which is only safe if the un-clamped height is a real reading —
+// "no clamp", which is only safe if the un-clamped height is a real reading -
 // and for a grounded contact reporting no altitude it is the geoid, tens of
 // metres under the mesh inland. Owner: "hold the last known altitude until a
 // fresh one comes in. Never render otherwise."
@@ -1405,7 +1405,7 @@ test('display floor: a cold cell HOLDS the last floor that resolved for this con
     Math.abs(_floorCarto(warm).height - (140.2 + GROUND_FLOOR_LIFT_M)) < 0.05,
   );
   // Taxis ~550 m onto a cell nothing has resolved, still at the geoid-ish
-  // height the poll path handed it. Pre-fix this passed straight through —
+  // height the poll path handed it. Pre-fix this passed straight through -
   // buried.
   const cold = _floorGroundedDisplayPositionForTest(
     { onGround: true },
@@ -1416,7 +1416,7 @@ test('display floor: a cold cell HOLDS the last floor that resolved for this con
   const h = _floorCarto(cold).height;
   assert.ok(
     Math.abs(h - (140.2 + GROUND_FLOOR_LIFT_M)) < 0.05,
-    `held ${h} — a cold cell must hold 140.2 + lift, never the 124.7 it arrived with`,
+    `held ${h} - a cold cell must hold 140.2 + lift, never the 124.7 it arrived with`,
   );
 });
 
@@ -1434,7 +1434,7 @@ test('display floor: with NO prior anywhere the contact is left exactly where it
   assert.equal(
     out,
     pos,
-    'nothing measured anywhere ⇒ nothing invented — same object, no clamp',
+    'nothing measured anywhere ⇒ nothing invented - same object, no clamp',
   );
 });
 
@@ -1443,7 +1443,7 @@ test('display floor: a fresh contact on a cold cell adopts a resolved NEIGHBOUR'
   _clearMeshFloorCellsForTest();
   setMeshFloorPreferred(true);
   // Two adjacent cells resolved; the contact stands on the unresolved one
-  // between them. The LOWER neighbour wins — a high reading next to a cold
+  // between them. The LOWER neighbour wins - a high reading next to a cold
   // cell is as likely to be a roof as ground, and only a low one is inert.
   reportMeshFloorCell(30.2014, -97.6604, 141.0);
   reportMeshFloorCell(30.1994, -97.6604, 152.0);
@@ -1456,7 +1456,7 @@ test('display floor: a fresh contact on a cold cell adopts a resolved NEIGHBOUR'
   const h = _floorCarto(out).height;
   assert.ok(
     Math.abs(h - (141.0 + GROUND_FLOOR_LIFT_M)) < 0.05,
-    `neighbour hold ${h} — expected the lower of the two resolved neighbours`,
+    `neighbour hold ${h} - expected the lower of the two resolved neighbours`,
   );
 });
 
@@ -1511,7 +1511,7 @@ test('display floor: a hold released onto a LOWER floor eases down, never snaps'
   );
   assert.ok(
     r.maxStepM <= totalDropM * 0.25,
-    `largest single-tick drop ${r.maxStepM.toFixed(1)} m of ${totalDropM.toFixed(1)} m — a snap is the whole drop at once`,
+    `largest single-tick drop ${r.maxStepM.toFixed(1)} m of ${totalDropM.toFixed(1)} m - a snap is the whole drop at once`,
   );
   assert.ok(
     Math.abs(r.settled - (160.0 + GROUND_FLOOR_LIFT_M)) < 0.05,
@@ -1565,7 +1565,7 @@ test('display floor: a STATIONARY unresolved contact still adopts a floor that a
       'parked-cold',
       ms,
     );
-  assert.equal(at(1000), pos, 'nothing anywhere yet — passes through');
+  assert.equal(at(1000), pos, 'nothing anywhere yet - passes through');
   // The poll's warm batch lands the cells NEXT DOOR (this contact's own cell
   // is still cold, so only the hold chain can see them).
   reportMeshFloorCell(30.2014, -97.6604, 138.0);
@@ -1573,7 +1573,7 @@ test('display floor: a STATIONARY unresolved contact still adopts a floor that a
   const adopted = _floorCarto(at(1600)).height; // past the probe throttle
   assert.ok(
     Math.abs(adopted - (138.0 + GROUND_FLOOR_LIFT_M)) < 0.05,
-    `stationary contact ${adopted} — a memoized unresolved answer would still read 124.7`,
+    `stationary contact ${adopted} - a memoized unresolved answer would still read 124.7`,
   );
 });
 
@@ -1595,7 +1595,7 @@ test('display floor: a stationary contact FOLLOWS the neighbourhood as it fills 
   reportMeshFloorCell(30.2014, -97.6604, 200.0);
   reportMeshFloorCell(30.1994, -97.6604, 240.0);
   assert.ok(Math.abs(at(1000) - (200.0 + GROUND_FLOOR_LIFT_M)) < 0.05);
-  // A third neighbour warms BELOW the pair — the first two were the terminal
+  // A third neighbour warms BELOW the pair - the first two were the terminal
   // side, this is the apron. A borrowed floor is never owned: the contact must
   // follow rather than keep its first answer.
   reportMeshFloorCell(30.2004, -97.6614, 120.0);
@@ -1603,7 +1603,7 @@ test('display floor: a stationary contact FOLLOWS the neighbourhood as it fills 
   for (let ms = 1600; ms <= 6000; ms += 80) h = at(ms);
   assert.ok(
     Math.abs(h - (120.0 + GROUND_FLOOR_LIFT_M)) < 0.05,
-    `followed to ${h} — a borrowed floor must not outlive a better one`,
+    `followed to ${h} - a borrowed floor must not outlive a better one`,
   );
 });
 
@@ -1614,7 +1614,7 @@ test('display floor: an on_ground FLAP mid-takeoff-roll never dips below the run
   // JFK: ~4 m MSL field, geoid N ~ -32.5 m, so the runway is ~-28.5 m
   // ellipsoidal and the geoid is 4 m UNDER it. OpenSky's on_ground flag flaps
   // through a rotation, and at the same moment the fix's height source switches
-  // from the resolved surface to baro + geoid N — which at a sea-level field IS
+  // from the resolved surface to baro + geoid N - which at a sea-level field IS
   // the geoid. Deleting the hold on the airborne poll made that switch visible:
   // the contact came back grounded with no prior, outrunning its own floor
   // cells at 23 m/s, and sat under the runway (owner sighting, VIR138M).
@@ -1674,7 +1674,7 @@ test('display floor: the rehydration seed EXPIRES on its own age, with NO calls 
   // ONE airborne tick parks the seed, and then this contact is not seen again
   // for 198 s: off the poll on a cruise, outside the corridor radius, tab
   // hidden. Nothing runs in between, so the retire path never gets a second
-  // chance to expire it — the age has to be judged where it comes BACK.
+  // chance to expire it - the age has to be judged where it comes BACK.
   // An earlier cut checked expiry only on the retire path and cleared
   // `retiredMs` before validating it, so this reused the 200 m floor.
   _floorGroundedDisplayPositionForTest(
@@ -1695,7 +1695,7 @@ test('display floor: the rehydration seed EXPIRES on its own age, with NO calls 
       200000,
     ),
     back,
-    'an expired seed is gone — no floor is invented from a 198-second-old measurement',
+    'an expired seed is gone - no floor is invented from a 198-second-old measurement',
   );
 });
 
@@ -1777,7 +1777,7 @@ test('display floor: a rehydrated seed ranks BELOW fresh neighbour evidence', ()
     'short-hop',
     2000,
   );
-  // Re-grounds 0.56 km away — INSIDE HELD_FLOOR_MAX_DRIFT_KM, so the drift
+  // Re-grounds 0.56 km away - INSIDE HELD_FLOOR_MAX_DRIFT_KM, so the drift
   // bound does not save us here; the tier order has to. Its own cell is cold,
   // but two adjacent cells have since resolved, and they are 100 m of ground.
   _clearMeshFloorCellsForTest();
@@ -1795,7 +1795,7 @@ test('display floor: a rehydrated seed ranks BELOW fresh neighbour evidence', ()
   ).height;
   assert.ok(
     Math.abs(rendered - (100.0 + GROUND_FLOOR_LIFT_M)) < 0.05,
-    `rendered at ${rendered} — a seed that outranked the neighbourhood read 201.5, 100 m in the air`,
+    `rendered at ${rendered} - a seed that outranked the neighbourhood read 201.5, 100 m in the air`,
   );
 });
 
@@ -1834,7 +1834,7 @@ test('display floor: with nothing fresh to contradict it, the seed still answers
   ).height;
   assert.ok(
     Math.abs(held - (200.0 + GROUND_FLOOR_LIFT_M)) < 0.05,
-    `held ${held} — with no measurement anywhere the seed is the best thing available`,
+    `held ${held} - with no measurement anywhere the seed is the best thing available`,
   );
 });
 
@@ -1876,7 +1876,7 @@ test('display floor: re-measuring its own cell makes a seeded contact authoritat
     'back on its own measured cell',
   );
   // It now taxis 220 m onto a cold cell whose two adjacent cells read 100 m. An
-  // own floor it measured while standing here outranks a borrowed one — the
+  // own floor it measured while standing here outranks a borrowed one - the
   // seed flag has to have been cleared by that reading, or the contact drops
   // 200 m onto someone else's ground.
   reportMeshFloorCell(30.2014, -97.6604, 100.0);
@@ -1892,7 +1892,7 @@ test('display floor: re-measuring its own cell makes a seeded contact authoritat
   ).height;
   assert.ok(
     Math.abs(taxied - (300.0 + GROUND_FLOOR_LIFT_M)) < 0.05,
-    `taxied at ${taxied} — a still-seeded contact would have taken the 100 m neighbours`,
+    `taxied at ${taxied} - a still-seeded contact would have taken the 100 m neighbours`,
   );
 });
 
@@ -1918,7 +1918,7 @@ test('display floor: taking off and landing elsewhere does NOT inherit the old f
     ) < 0.05,
   );
   // 2. it taxis ~330 m onto ground nothing has resolved, so 200 m is now being
-  //    HELD — this is the state that must not survive the trip.
+  //    HELD - this is the state that must not survive the trip.
   const heldAt = Cesium.Cartesian3.fromDegrees(-97.6604, 30.2034, 124.7);
   assert.ok(
     Math.abs(
@@ -1935,7 +1935,7 @@ test('display floor: taking off and landing elsewhere does NOT inherit the old f
     ) < 0.05,
     'the hold is active before takeoff',
   );
-  // 3. airborne — the hold belongs to the grounded-billboard regime, not to the
+  // 3. airborne - the hold belongs to the grounded-billboard regime, not to the
   //    contact, so leaving that regime must retire it.
   _floorGroundedDisplayPositionForTest(
     { onGround: false },
@@ -1957,7 +1957,7 @@ test('display floor: taking off and landing elsewhere does NOT inherit the old f
   ).height;
   assert.ok(
     Math.abs(landed - (100.0 + GROUND_FLOOR_LIFT_M)) < 0.05,
-    `landed at ${landed} — a stale hold would arrive at 201.5 and ease down from it`,
+    `landed at ${landed} - a stale hold would arrive at 201.5 and ease down from it`,
   );
 });
 
@@ -1984,7 +1984,7 @@ test('display floor: a model-owned interval retires the hold too', () => {
     1500,
   );
   // T7: the 3D model takes the visual. Our state is retired (nothing visual is
-  // touched — groundSnap's one-shot input is untouched either way).
+  // touched - groundSnap's one-shot input is untouched either way).
   _floorGroundedDisplayPositionForTest(
     { onGround: true },
     heldAt,
@@ -2006,7 +2006,7 @@ test('display floor: a model-owned interval retires the hold too', () => {
   ).height;
   assert.ok(
     Math.abs(back - (150.0 + GROUND_FLOOR_LIFT_M)) < 0.05,
-    `resumed at ${back} — no ease, because there was no hold to release`,
+    `resumed at ${back} - no ease, because there was no hold to release`,
   );
 });
 
@@ -2056,13 +2056,13 @@ test('display floor: a model handoff back onto a COLD cell takes the neighbourho
   ).height;
   assert.ok(
     Math.abs(back - (150.0 + GROUND_FLOOR_LIFT_M)) < 0.05,
-    `resumed at ${back} — a seed that outranked the neighbourhood would resume at 201.5`,
+    `resumed at ${back} - a seed that outranked the neighbourhood would resume at 201.5`,
   );
 });
 
 // --- F10: no contact waits on another --------------------------------------
-// A probe is eight synchronous Map reads against the shared floor cache — no
-// fetch, no sampleHeight, nothing async — so there is no shared resource to
+// A probe is eight synchronous Map reads against the shared floor cache - no
+// fetch, no sampleHeight, nothing async - so there is no shared resource to
 // ration. An earlier draft added a global per-tick budget with a fairness queue
 // anyway; it protected ~2 ms of cache reads (measured: 200 synchronised
 // all-cold contacts = 2.1 ms, 2.6% of one 80 ms fleet tick) and cost two
@@ -2111,7 +2111,7 @@ test('display floor: a re-probe that finds a LOWER neighbour eases down, never s
   const pos = Cesium.Cartesian3.fromDegrees(-97.6604, 30.2004, 100);
   reportMeshFloorCell(30.2014, -97.6604, 200.0);
   reportMeshFloorCell(30.1994, -97.6604, 240.0); // borrowed floor = the low one, 200 m
-  // A third neighbour warms far below — the apron beside the terminal. The
+  // A third neighbour warms far below - the apron beside the terminal. The
   // borrowed floor recomputes to 120 m. An 80 m drop, and not a step.
   const target = 120.0 + GROUND_FLOOR_LIFT_M;
   const r = _driveEase('relatch', pos, 1000, 80, (i) => {
@@ -2137,7 +2137,7 @@ test('display floor: a SECOND lower re-latch mid-approach retargets without a ju
   reportMeshFloorCell(30.1994, -97.6604, 440.0); // borrowed floor = 400 m
   // Two lower neighbours arrive in sequence, the second while the approach to
   // the first is still running. A from/duration ease re-evaluated against a
-  // moved target jumps by the eased fraction of the change — measured at 100 m
+  // moved target jumps by the eased fraction of the change - measured at 100 m
   // in one tick. An approach from the DISPLAYED value has no such seam.
   const target = 100.0 + GROUND_FLOOR_LIFT_M;
   const r = _driveEase('retarget', pos, 1000, 120, (i) => {
@@ -2147,7 +2147,7 @@ test('display floor: a SECOND lower re-latch mid-approach retargets without a ju
   const totalDropM = r.opened - target;
   assert.ok(
     r.maxStepM <= totalDropM * 0.25,
-    `largest single-tick drop ${r.maxStepM.toFixed(1)} m of ${totalDropM.toFixed(1)} m — the retarget must not be a seam`,
+    `largest single-tick drop ${r.maxStepM.toFixed(1)} m of ${totalDropM.toFixed(1)} m - the retarget must not be a seam`,
   );
   assert.ok(
     Math.abs(r.settled - target) < 0.05,
@@ -2177,7 +2177,7 @@ test('display floor: a DELAYED tick cannot close more of the gap than a prompt o
   const totalDropM = opened - (100.0 + GROUND_FLOOR_LIFT_M);
   // A hidden tab, a long frame, a GC pause: the tick after the drop arrives
   // late. The exponential alone would close 28% at 120 ms and 75% after a
-  // 500 ms stall — the snap this approach exists to prevent, reintroduced by
+  // 500 ms stall - the snap this approach exists to prevent, reintroduced by
   // the schedule rather than by the code.
   let previous = opened;
   let maxStepM = 0;
@@ -2224,7 +2224,7 @@ test('display floor: a floor rising MID-APPROACH is taken whole, on that tick', 
   const risen = at(1000 + 5 * 80);
   assert.ok(
     Math.abs(risen - (500.0 + GROUND_FLOOR_LIFT_M)) < 0.05,
-    `rose to ${risen} — an eased rise is time spent under the mesh`,
+    `rose to ${risen} - an eased rise is time spent under the mesh`,
   );
 });
 
@@ -2273,7 +2273,7 @@ test('display floor: an ordinary cell-to-cell floor DROP keeps its existing timi
   _clearDisplayFloorStateForTest();
   _clearMeshFloorCellsForTest();
   setMeshFloorPreferred(true);
-  // Both cells resolved throughout — no hold is ever in play, so the release
+  // Both cells resolved throughout - no hold is ever in play, so the release
   // ease must stay out of it. Only a RELEASE eases; the everyday path is
   // untouched by this round.
   reportMeshFloorCell(30.2004, -97.6604, 200.0);
@@ -2291,7 +2291,7 @@ test('display floor: an ordinary cell-to-cell floor DROP keeps its existing timi
   assert.ok(Math.abs(at(30.2004, 1000) - (200.0 + GROUND_FLOOR_LIFT_M)) < 0.05);
   assert.ok(
     Math.abs(at(30.2044, 1050) - (160.0 + GROUND_FLOOR_LIFT_M)) < 0.05,
-    'the very next tick is on the new cell — no ease was introduced here',
+    'the very next tick is on the new cell - no ease was introduced here',
   );
 });
 

@@ -718,7 +718,7 @@ test('a lease stays owned until its restoration settles, so a rival cannot read 
   env.controller.destroy();
 });
 
-test('subscribe hears every settled activation — silent switches, fallbacks and recoveries — until unsubscribed or destroyed', async () => {
+test('subscribe hears every settled activation - silent switches, fallbacks and recoveries - until unsubscribed or destroyed', async () => {
   const env = publicFixture();
   const heard = [];
   const off = env.controller.subscribe((state) =>

@@ -5,7 +5,7 @@ import { readResponseJsonCapped } from '../../sources/httpBody.js';
 /**
  * Normalize an incident title for matching: lowercase, collapsed whitespace,
  * a leading year dropped ('2026 Coleman Creek'), a trailing 'Fire' dropped
- * ('Coyote Fire') — InciWeb titles carry both decorations inconsistently and
+ * ('Coyote Fire') - InciWeb titles carry both decorations inconsistently and
  * WFIGS names carry neither.
  */
 function normalizeName(name) {
@@ -38,7 +38,7 @@ export function resolveInciwebNodeLink(publications, { name, state }) {
       normalizeName(row.incident_title) === wanted,
   );
   // The catalog is all-time and nationwide, so the dispatch unit's state
-  // must corroborate every match — a globally unique title is NOT evidence
+  // must corroborate every match - a globally unique title is NOT evidence
   // it's the same fire (live data shows same-name incidents across states).
   const statePrefix =
     typeof state === 'string' && /^US-[A-Za-z]{2}$/.test(state)
@@ -54,7 +54,7 @@ export function resolveInciwebNodeLink(publications, { name, state }) {
     return null;
   }
   if (candidates.length > 1) {
-    // Same-state duplicates are usually reburns of the same name — newest
+    // Same-state duplicates are usually reburns of the same name - newest
     // wins here, and the publication-currency check guards the final link.
     candidates = [
       candidates.reduce((a, b) =>

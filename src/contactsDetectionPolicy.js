@@ -1,19 +1,19 @@
-// src/contactsDetectionPolicy.js — Contacts-scoped detection policy.
+// src/contactsDetectionPolicy.js - Contacts-scoped detection policy.
 //
 // Owner playtest 2026-08-18: "when you click on Contacts, detections should just
 // turn on, and they should stay on in Cockpit or in third-person tracking inside
 // Contacts or inside Cockpit, both… when I leave the Cockpit, detections go off"
-// — that last part being the bug.
+// - that last part being the bug.
 //
 // The scope is CONTACTS, not Cockpit. Three rules follow:
 //
 //  1. ACTIVATING Contacts turns detection on at the tactical preset the military
 //     styles use. The session-wide `_detectionUserOverridden` flag gates the map
 //     STYLE presets only (an explicit Sparse/Off must survive a style switch)
-//     and is deliberately NOT consulted here — Contacts is a mode you enter, not
+//     and is deliberately NOT consulted here - Contacts is a mode you enter, not
 //     a preset that fires behind your back.
 //  2. Detection then STAYS on for the whole Contacts session. Cockpit enter and
-//     exit, and third-person tracking, do not touch it at all — they are moves
+//     exit, and third-person tracking, do not touch it at all - they are moves
 //     WITHIN Contacts, and an earlier build that captured/restored around
 //     cockpit is exactly what turned detections off on cockpit exit.
 //  3. Whatever the operator does next INSIDE the session stands. Detection is
@@ -28,7 +28,7 @@
  * Normalize a detection state snapshot.
  *
  * The snapshot must cover EVERYTHING activation mutates, not just the mode.
- * Activation applies the tactical preset, which writes density as well — so a
+ * Activation applies the tactical preset, which writes density as well - so a
  * mode-only snapshot restored OFF @ 25% as OFF @ 75%, and the operator's next
  * manual enable came back Dense instead of the Sparse they had been using.
  * @param {?{mode?: string, densityPct?: number}} state
@@ -93,8 +93,8 @@ export function contactsDetectionExitPlan(
  *
  * The engine is injected so this is the SAME code the UI runs and the tests
  * exercise, driven against the real `src/data/detection.js` in both. Turning on
- * applies the TACTICAL PRESET the military styles use — owner playtest: "I want
- * that as the default. It should just happen" — rather than restoring whatever
+ * applies the TACTICAL PRESET the military styles use - owner playtest: "I want
+ * that as the default. It should just happen" - rather than restoring whatever
  * profile the operator last left detection at.
  *
  * @param {object} input
@@ -167,7 +167,7 @@ export function shareableDetectionState({ owned, liveMode, liveDensityPct }) {
  * Serialization is ownership-dependent: while Contacts owns detection the link
  * carries the SAVED snapshot, and once ownership is released it carries live
  * state. So the cache goes stale on any ownership transition, whether or not
- * the detection engine itself moved — and it does not always move. Exiting
+ * the detection engine itself moved - and it does not always move. Exiting
  * while a military style owns detection produces `changed: false` (that style's
  * preset already matches what is on screen), which previously returned early
  * and left a copied link advertising the operator's pre-Contacts values while

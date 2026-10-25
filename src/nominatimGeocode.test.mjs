@@ -1,4 +1,4 @@
-// NOMINATIM RESULT MAPPING — what counts as a usable hit.
+// NOMINATIM RESULT MAPPING - what counts as a usable hit.
 //
 // Every numeric field arrives as a string and may be absent or nonsense, and
 // `Number(null)` is 0: a hit with no coordinates read as (0, 0) would fly the

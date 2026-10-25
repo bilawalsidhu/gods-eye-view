@@ -46,11 +46,11 @@ export const EMERGENCY_ICON_COLOR =
 // sticky metadata updating normally. The on-ground flip restyles the existing
 // billboard IN PLACE (landing/takeoff transition, never a removal); ground planes
 // draw no trails. In 3D mode they take model slots like airborne planes (owner
-// decision 2026-07-03 — no air/ground distinction), placed by the one-shot
+// decision 2026-07-03 - no air/ground distinction), placed by the one-shot
 // ground snap (see _modelDisplayPosition).
 //
 // TINT: full-strength amber, same as airborne (owner verdict 2026-07-03 field
-// test: the day-1 slate-gray 50%-alpha muted tint was unreadable — "in NYC I can
+// test: the day-1 slate-gray 50%-alpha muted tint was unreadable - "in NYC I can
 // barely see them"). "On the ground" reads from the ×0.8 scale + missing trail;
 // "feed-dropped, coasting" stays the 45%-alpha stale fade.
 /** Ground billboards render slightly smaller so airport clutter stays visually minor. */
@@ -81,7 +81,7 @@ export const TRACKED_MODEL_MAX_PX = 200;
 
 export const MODEL_NATIVE_RADIUS_M = 29.83;
 
-// jet.glb is transform-applied at real-world scale — native bounding radius
+// jet.glb is transform-applied at real-world scale - native bounding radius
 // 29.83 m at scale 1. ×1 → ~22–43 m aircraft across CLASS_SCALE_3D, matching
 // flights.js world sizes. At the old copied ×24, models rendered
 // 600–1000 m across (invisible at the ~6 km follow range where minimumPixelSize
@@ -90,7 +90,7 @@ export const MODEL_NATIVE_RADIUS_M = 29.83;
 
 export const MODEL_SCALE = 1;
 
-// Per-mode caps + radii — mirror of flights.js. Modes differ by RADIUS (not just cap) so Proximity
+// Per-mode caps + radii - mirror of flights.js. Modes differ by RADIUS (not just cap) so Proximity
 // and All aren't identical when few planes are in range; on-screen planes win the cap (see flights.js).
 
 export const MODEL_MAX = 150;
@@ -137,9 +137,9 @@ export const PLANE_NATIVE_RADIUS_M = 34.41;
 
 export const PLANE_BELLY_OFFSET_NATIVE = 6.719;
 
-// Grounded-model belly offset: jet.glb's centred origin sits 5.631 native units (= meters — this
+// Grounded-model belly offset: jet.glb's centred origin sits 5.631 native units (= meters - this
 // asset is real-world scale) ABOVE its lowest vertex (glTF Y-up scene AABB with node
-// transforms applied — same reader as modelScale.test.mjs, measured 2026-07-03).
+// transforms applied - same reader as modelScale.test.mjs, measured 2026-07-03).
 // × MODEL_SCALE(1) × class multiplier ≈ 4.4–8.6 m of lift, so a ground-snapped model
 // rests its lowest geometry (gear/belly) ON the sampled tile skin instead of sinking to
 // the fuselage-centerline origin. Locked against the GLB by modelScale.test.mjs.
@@ -192,10 +192,10 @@ export const RENDER_DELAY_SEC = 15;
 // 2026-07-02: "phantom" planes lingered ~2 min at airports after touchdown).
 // The feed's ground flag lags the actual landing, so a landed plane's last
 // airborne fixes show it low + slow on the runway; when it then drops out of
-// the poll it has landed, not hit a transient gap — evict after ONE missed
-// poll. Thresholds: below ~500 ft baro (≈150 m MSL — near-sea-level fields
+// the poll it has landed, not hit a transient gap - evict after ONE missed
+// poll. Thresholds: below ~500 ft baro (≈150 m MSL - near-sea-level fields
 // only; a high-elevation airport ghost falls back to the normal grace) AND
-// below ~45 kts ground speed (≈23 m/s — rollout/taxi; nothing in normal
+// below ~45 kts ground speed (≈23 m/s - rollout/taxi; nothing in normal
 // FLIGHT is this slow, so cruise planes always keep the full grace).
 /** @constant {number} Max baro altitude (ft, MSL) for the landed fast cull (~150 m). */
 
@@ -211,7 +211,7 @@ export const LANDED_SPEED_MAX_MPS = 23;
 // ellipsoidal height get the below-ground floor clamp + a coarse floor-cell
 // warm. Terrain outside the extreme Himalaya tops out well under this, so
 // cruise traffic (which can never be below ground) costs zero terrain
-// lookups; low pattern/heli work — the class that actually clips hillsides —
+// lookups; low pattern/heli work - the class that actually clips hillsides -
 // gets the floor.
 /** @constant {number} Max render altitude (m, ellipsoidal) eligible for the ground-floor clamp. */
 
@@ -226,7 +226,7 @@ export const LANDED_SPEED_MAX_MPS = 23;
 // are continuous at the boundary with this formula.
 // ---------------------------------------------------------------------------
 
-/** @constant {number} Fleet dead-reckoning tick interval (ms) — ~12Hz, not per-frame. */
+/** @constant {number} Fleet dead-reckoning tick interval (ms) - ~12Hz, not per-frame. */
 
 export const FLEET_DR_INTERVAL_MS = 80;
 
@@ -234,7 +234,7 @@ export const FLEET_DR_INTERVAL_MS = 80;
 
 export const ROTATION_REFRESH_MS = 1000;
 
-/** Max course slew (deg/s) — well above real turns (≤4°/s), hides fix-boundary
+/** Max course slew (deg/s) - well above real turns (≤4°/s), hides fix-boundary
  *  steps. Scaled down toward COURSE_MIN_DPS at low speed (courseSlewCapDps). */
 
 export const COURSE_MAX_DPS = 60;
@@ -246,13 +246,13 @@ export const COURSE_SLEW_DT_MAX_SEC = 0.25;
 // -- Tracked-display reconciliation (see flights.js for the rationale): absorb a raw
 // position step (warm-up→interpolation handoff, feed glitch, backfill splice) into a
 // correction offset that decays to zero over DR_CORRECTION_MS, so the tracked icon,
-// camera, and trail head never visibly jump — with zero steady-state lag. --
+// camera, and trail head never visibly jump - with zero steady-state lag. --
 
 export const DR_CORRECTION_MS = 900;
 
 /** Bounded on-demand loading for the tracked model (mirror of flights.js). The
  *  tracked regime is DEFAULT-ON and its driver runs every `scene.preUpdate`, so
- *  a missing or corrupt GLB — or a dead network — would otherwise spin
+ *  a missing or corrupt GLB - or a dead network - would otherwise spin
  *  load→reject at frame rate for as long as the contact stays selected.
  *  Failures are counted PER SELECTION: a short backoff absorbs a transient
  *  blip, then the layer stops asking until the operator selects something else.
@@ -264,7 +264,7 @@ export const TRACKED_MODEL_MAX_LOAD_FAILS = 3;
 
 export const TRACKED_MODEL_RETRY_BACKOFF_MS = 1500;
 
-/** Boost flip = BATCHED release through the fleet tick (mirror of flights.js —
+/** Boost flip = BATCHED release through the fleet tick (mirror of flights.js -
  *  destroying the whole fleet synchronously in the style handler stalls the
  *  render thread). Models tagged with their load-time boost state; stale queue
  *  entries skip; in-flight loads invalidated immediately; tracked reloads

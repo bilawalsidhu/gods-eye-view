@@ -98,7 +98,7 @@ export class RealtimeTurns {
     return this.readRadioLayer();
   }
   /**
-   * Inject a background MAP EVENT into the conversation as a system item — e.g. a
+   * Inject a background MAP EVENT into the conversation as a system item - e.g. a
    * deferred annotation outline that resolved or failed after its tool result
    * already returned. Deliberately NO response.create: the model reads it on its
    * next turn and can confirm or correct without talking over the user. The
@@ -154,7 +154,7 @@ export class RealtimeTurns {
    *
    * `cancelRadioHandoff({abortTools:true})` aborts tools already RUNNING, but
    * a function call belonging to the old response can still arrive afterwards
-   * and would be dispatched — a stale `fly_to_location` mutating the map after
+   * and would be dispatched - a stale `fly_to_location` mutating the map after
    * the operator typed "stop". Marking the response superseded refuses those
    * on arrival.
    *
@@ -290,7 +290,7 @@ export class RealtimeTurns {
       }
       // A conversation.item.delete for a stale viewport screenshot can land
       // AFTER the server already truncated that item → an item_not_found error.
-      // That's a benign race from our own housekeeping, not a session failure —
+      // That's a benign race from our own housekeeping, not a session failure -
       // do NOT flip the demo to ERROR (M14). Match either the code or the echoed
       // event_id of a delete we issued.
       if (this.viewport.consumeDeleteError(payload)) {
@@ -378,12 +378,12 @@ export class RealtimeTurns {
 
     // Session-ending latch (spend cap). Function-call events arrive BEFORE the
     // response.done that carries usage, so tools can already be queued when the
-    // cap trips. Refuse to dispatch any NEW tool once the session is ending —
+    // cap trips. Refuse to dispatch any NEW tool once the session is ending -
     // its results could never be sent back anyway (the data channel is closed).
     // Spend-cap gate, at the dispatch site. `extractFunctionCalls` yields AT
     // MOST ONE call per event (one `response.function_call_arguments.done` or
     // one `response.output_item.done`), so this single check covers the whole
-    // batch — there is no reachable mid-batch window, and a per-iteration
+    // batch - there is no reachable mid-batch window, and a per-iteration
     // re-check would be untestable dead code. If the extractor ever returns
     // multiple calls, restore a per-iteration check inside the loop below.
     if (this.isSessionEnding()) {
@@ -414,7 +414,7 @@ export class RealtimeTurns {
     }
 
     // A newer typed command superseded the response these calls belong to.
-    // They are stale intent — dispatching one would let the old turn mutate
+    // They are stale intent - dispatching one would let the old turn mutate
     // the map after the operator asked for something else.
     //
     // Refusing is not the same as ignoring. Every function call MUST be
@@ -422,7 +422,7 @@ export class RealtimeTurns {
     // pending call in the conversation and deadlocks the model (the same
     // hazard `callDedupeKeys` is written to avoid). So each refused call gets
     // a terminal output saying plainly that the turn moved on. No
-    // `response.create` follows — the deferred typed turn is the single answer.
+    // `response.create` follows - the deferred typed turn is the single answer.
     if (
       this.isSupersededResponse(toolResponseId) ||
       (heldForAdmission && arrivalRequest !== this.globeRequest)
@@ -437,7 +437,7 @@ export class RealtimeTurns {
           action: call.name,
           superseded: true,
           error:
-            'Superseded by a newer command from the operator — this call was not run.',
+            'Superseded by a newer command from the operator - this call was not run.',
         });
       }
       this.debugLog('tool.call.skipped_superseded', {
@@ -533,7 +533,7 @@ export class RealtimeTurns {
                 skipped: true,
                 ...(superseded ? { superseded: true } : {}),
                 error: superseded
-                  ? 'Superseded by a newer command from the operator — this call was not run.'
+                  ? 'Superseded by a newer command from the operator - this call was not run.'
                   : 'Not run: the Globe View reset/rotation sequence failed or was cancelled.',
               };
             }
@@ -817,7 +817,7 @@ export class RealtimeTurns {
     }
     if (sentOutput && this.dc?.readyState === 'open') {
       // The viewport-image send is best-effort context. It must never block the
-      // response — a throw here would strand the turn at EXECUTING (M13). Guard
+      // response - a throw here would strand the turn at EXECUTING (M13). Guard
       // it so queueResponseCreate always runs, image or not.
       try {
         await this.sendVisualContextIfUseful(lastResult);
@@ -1179,7 +1179,7 @@ export class RealtimeTurns {
       // final audio packets. Return the UI styling to idle now, but keep the
       // meter on the remote stream until the next user turn or session stop.
       this.setVoiceSpeaker('idle', { keepVisualizerSpeaker: true });
-      // A failed response is otherwise swallowed here — the assistant just goes
+      // A failed response is otherwise swallowed here - the assistant just goes
       // mute with no feedback (H9/H3). Surface the reason so the user knows why.
       if (responseStatus === 'failed') {
         const details = payload.response?.status_details || null;
@@ -1191,7 +1191,7 @@ export class RealtimeTurns {
           code: failErr?.code || null,
           ...this.connectionDiagnostics(),
         });
-        // Don't trap the whole session in 'error' for one bad response — the
+        // Don't trap the whole session in 'error' for one bad response - the
         // connection is still live. Recover to listening so the user can retry
         // (mirrors the transient-blip philosophy, H8).
         if (this.dc?.readyState === 'open') {
@@ -1200,7 +1200,7 @@ export class RealtimeTurns {
       }
       if (!this.radio.pendingRadioPlaybackResult) {
         // A typed command deferred behind this response is the operator's own
-        // turn — answer it before any tool-result follow-up.
+        // turn - answer it before any tool-result follow-up.
         if (this.pendingUserTextResponse) this.requestUserTextResponse();
         else this.flushPendingResponse();
       }

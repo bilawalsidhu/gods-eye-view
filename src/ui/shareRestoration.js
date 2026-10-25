@@ -15,11 +15,11 @@ const SHARE_RESTORE_NOTICES = Object.freeze({
     satellite: msg('Shared satellite follow expired'),
   }),
   'source-unavailable': Object.freeze({
-    flight: msg('Shared flight could not be restored — feed unavailable'),
+    flight: msg('Shared flight could not be restored - feed unavailable'),
     'military flight': msg(
-      'Shared military flight could not be restored — feed unavailable',
+      'Shared military flight could not be restored - feed unavailable',
     ),
-    satellite: msg('Shared satellite could not be restored — feed unavailable'),
+    satellite: msg('Shared satellite could not be restored - feed unavailable'),
   }),
   unavailable: Object.freeze({
     flight: msg('Shared flight is unavailable'),
@@ -45,7 +45,7 @@ export function shareTrackingRestoreNotice(result) {
   return outcome === 'expired'
     ? t('Shared {subject} follow expired', { subject })
     : outcome === 'source-unavailable'
-      ? t('Shared {subject} could not be restored — feed unavailable', {
+      ? t('Shared {subject} could not be restored - feed unavailable', {
           subject,
         })
       : t('Shared {subject} is unavailable', { subject });

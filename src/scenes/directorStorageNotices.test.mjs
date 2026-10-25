@@ -12,10 +12,10 @@ import {
 } from '../../scripts/i18n.mjs';
 
 const NOTICES = [
-  'Scene not saved — browser storage unavailable',
-  'Scene not saved — existing saved project could not be read. Export edits or import a valid file.',
+  'Scene not saved - browser storage unavailable',
+  'Scene not saved - existing saved project could not be read. Export edits or import a valid file.',
   'Saved project could not be read; storage preserved. Import a valid file to resume saving.',
-  'Scene not saved — {reason}',
+  'Scene not saved - {reason}',
   'Stopped',
   'Stopped (Esc)',
   'Stopped by voice',

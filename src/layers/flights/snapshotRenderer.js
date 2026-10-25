@@ -29,7 +29,7 @@ export function createFlightSnapshotRenderer({
     const acceptedSnapshotIcaos = new Set();
     // Field-test round 3 (2026-07-06, Austin fleet-underground): viewer
     // subpoint + collected floor cells for the viewer-proximate low-contact
-    // clamp below — one carto read per poll, one batch warm after the loop.
+    // clamp below - one carto read per poll, one batch warm after the loop.
     const viewerCarto =
       (viewer || flightState._viewer)?.camera?.positionCartographic || null;
     const viewerLatDeg = viewerCarto
@@ -47,7 +47,7 @@ export function createFlightSnapshotRenderer({
       acceptedSnapshotIcaos.add(icao24);
 
       // Known-military aircraft: the dedicated military layer wins
-      // (icon + track + click) while it is enabled — suppress the
+      // (icon + track + click) while it is enabled - suppress the
       // OpenSky duplicate entirely (except a currently tracked one,
       // which hands off on untrack).
       const isMil = isMilitaryIcao(icao24);
@@ -92,7 +92,7 @@ export function createFlightSnapshotRenderer({
       const isTracked = icao24 === flightState._trackedIcao;
 
       // Append to position history stamped with the FEED's fix epoch
-      // (time_position), not client receipt time — OpenSky positions arrive
+      // (time_position), not client receipt time - OpenSky positions arrive
       // 5-15s stale and receipt-time stamping is what caused the
       // back/forward oscillation. Only append when the fix actually
       // advances, so stale repeats don't create zero-dt segments.
@@ -116,13 +116,13 @@ export function createFlightSnapshotRenderer({
         if (history.length > POSITION_HISTORY_LIMIT) {
           history.shift();
         }
-        // Turn rate from the fix-track history — computed once per new fix
+        // Turn rate from the fix-track history - computed once per new fix
         // (≤5 samples), consumed by the extrapolation paths at tick rate.
         meta.turnRateDps = turnRateFromFixHistory(history);
         // Trail accumulation is separate from the 5-fix DR history (PRD F1)
         // so the visible trail keeps growing while tracked. Ground traffic
-        // appends nothing — a touchdown freezes the existing trail.
-        // Round 2 (owner): ground traffic appends too — taxi history stays
+        // appends nothing - a touchdown freezes the existing trail.
+        // Round 2 (owner): ground traffic appends too - taxi history stays
         // live after touchdown (grounded flights positions are already
         // surface-clamped via the surfaceM chain, so the ground leg drapes).
         if (isTracked) tracking._appendTrailFix(position.clone());
@@ -156,9 +156,9 @@ export function createFlightSnapshotRenderer({
         const bb = flightState._billboards.get(icao24);
         // Reclassify if the category resolved/changed (first extended poll);
         // a ground flip (landing/takeoff) re-scales the SAME billboard in
-        // place — the transition is a restyle, never a removal.
+        // place - the transition is a restyle, never a removal.
         // Round 5: depth policy is uniform (always depth-test-free, see
-        // _groundDepthDistance) — nothing to flip on landing/takeoff.
+        // _groundDepthDistance) - nothing to flip on landing/takeoff.
         // Position AND rotation are owned by the fleet pass (_fleetTick);
         // course changes land on the next rotation pass (forced below).
         if (!isTracked) {
@@ -176,7 +176,7 @@ export function createFlightSnapshotRenderer({
           rendering._applyFleetBillboardPresentation(icao24, bb);
         }
         // Poll-path class change (category updates): same model resync rule
-        // as the enrichment path — the class's GLB/scale may have changed.
+        // as the enrichment path - the class's GLB/scale may have changed.
         if (prevMeta?.klass !== meta.klass) rendering._syncModelToClass(icao24);
       } else {
         // Start where the fleet pass will draw it: the fleet renders behind
@@ -210,7 +210,7 @@ export function createFlightSnapshotRenderer({
           sizeInMeters: false,
           scaleByDistance: rendering._normalBillboardScaleByDistance(),
           // Grounded/near-surface planes sit at/below the photoreal tile
-          // surface — render them depth-test-free so they never vanish up
+          // surface - render them depth-test-free so they never vanish up
           // close (_groundDepthDistance).
           disableDepthTestDistance: rendering._groundDepthDistance(),
           id: icao24,
@@ -221,7 +221,7 @@ export function createFlightSnapshotRenderer({
       }
 
       // Takeoff while TRACKED: ground traffic drew no trail, so start one
-      // from the fresh airborne history (touchdown needs no action — the
+      // from the fresh airborne history (touchdown needs no action - the
       // append gate above simply freezes the existing trail).
       if (isTracked && groundFlipped && !meta.onGround)
         tracking._startTrail(icao24);
@@ -237,7 +237,7 @@ export function createFlightSnapshotRenderer({
     // OpenSky routinely drops aircraft for a single poll; immediate removal
     // made planes blink and yanked the camera off actively tracked flights.
     // EXCEPTION: likely-landed planes (last fix low + slow) get only
-    // LANDED_MISSING_POLL_LIMIT — their disappearance means "landed", not a
+    // LANDED_MISSING_POLL_LIMIT - their disappearance means "landed", not a
     // feed gap, and the full grace left phantom planes parked at airports.
     for (const [icao24, bb] of flightState._billboards) {
       if (currentIcaos.has(icao24)) continue;
@@ -250,7 +250,7 @@ export function createFlightSnapshotRenderer({
       if (absence === 'stale') {
         if (icao24 === flightState._trackedIcao && flightState._trackedEntity) {
           // Honest readout: the tracked plane has no faded billboard (its
-          // entity owns the visual), so refresh the label — with icao24 now
+          // entity owns the visual), so refresh the label - with icao24 now
           // in _missingPolls, _trackedLabelText appends the STALE cue so
           // last-known velocity/altitude aren't presented as live.
           tracking._updateTrackedLabelModel(icao24);
@@ -262,7 +262,7 @@ export function createFlightSnapshotRenderer({
       // its state (M3 ordering, keep it): teardown reads the maps this loop
       // is about to delete (billboard restore, DR cache reset), and we must
       // never leave the camera mid-follow with stale tracking state. The
-      // camera is then RELEASED IN PLACE — it stays where the follow left
+      // camera is then RELEASED IN PLACE - it stays where the follow left
       // it, fully free (owner decision 2026-07-02: no overview flyTo).
       if (icao24 === flightState._trackedIcao) {
         tracking._clearTracking(false, { evicted: true });
@@ -279,11 +279,11 @@ export function createFlightSnapshotRenderer({
       flightState._displayFloorState.delete(icao24);
     }
 
-    // Fresh courses arrived — force a rotation pass on the next fleet tick
+    // Fresh courses arrived - force a rotation pass on the next fleet tick
     flightState._lastCamPoseSig = '';
 
     // Ambient type enrichment: give ON-SCREEN planes real types (bounded
-    // sweep — see _sweepAmbientEnrichment; internally fail-silent).
+    // sweep - see _sweepAmbientEnrichment; internally fail-silent).
     enrichment._sweepAmbientEnrichment();
 
     // 2026-08-19: the loop above only ever collects FIX cells, but a grounded
@@ -298,7 +298,7 @@ export function createFlightSnapshotRenderer({
 
     // Field-test round 3: one batch warm of the viewer-proximate low-contact
     // floor cells collected in the loop (fire-and-forget, single-flight;
-    // read synchronously by NEXT poll's clamp — the military-layer pattern).
+    // read synchronously by NEXT poll's clamp - the military-layer pattern).
     warmGroundFloor(floorWarmPoints);
     // Round 4: sample the RENDERED mesh for those same cells (one-shot per
     // cell, budget-capped, viewer-proximate, google-3d regime only). Own
@@ -314,13 +314,13 @@ export function createFlightSnapshotRenderer({
       viewerLon: viewerLonDeg,
     });
 
-    // Round 5: the grounded exact-key warm that used to live here is gone —
+    // Round 5: the grounded exact-key warm that used to live here is gone -
     // see the note where _warmGroundedAircraftSurfaceCache was removed. The
     // viewer-proximate coarse warm + mesh sampler above cover everything
     // whose height is actually visible.
     // Round 6: re-floor STALE grounded contacts. A parked plane whose
     // transponder went quiet stops receiving poll updates, so a floor that
-    // warms AFTER its last fix never applied — it sat frozen at the geoid
+    // warms AFTER its last fix never applied - it sat frozen at the geoid
     // (ATL verify: FFT4347 at −30.7 m, 305 m under the apron, forever).
     // Grounded contacts are static, so lifting the stored fix + billboard
     // in place is safe (the DR extrapolates a zero-velocity fix).

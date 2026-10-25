@@ -1,6 +1,6 @@
 import { createStandalonePlaceSearch } from '../standalone/placeSearch.js';
 import { createPlaceSearch } from '../search/placeSearch.js';
-// Footprint-selection contract tests — pure fixtures, no network, no browser.
+// Footprint-selection contract tests - pure fixtures, no network, no browser.
 //
 // Locks the field-test-7 monument fix (docs/field-test-rootcause-2026-06-30.md §1):
 // a POINT-LIKE target ("Tejano Monument, Austin") must never adopt a nearby
@@ -8,7 +8,7 @@ import { createPlaceSearch } from '../search/placeSearch.js';
 // The fixtures replicate the REAL Overpass candidates captured over the Texas
 // Capitol on 2026-07-01, where "Thompson Austin" (a hotel 680 m away) outscored
 // everything because `nameOverlap * 1000` paid +1000 for the single word
-// "Austin" — the monument itself is an OSM node and never even a candidate.
+// "Austin" - the monument itself is an OSM node and never even a candidate.
 //
 // Run with: npm test   (node --test)
 import { test } from 'node:test';
@@ -49,7 +49,7 @@ const wrongWinners = () => [
   squareWay(ANCHOR, -780, 120, 3772, { building: 'yes', name: 'Austin Police HQ' }),
   squareWay(ANCHOR, -380, -60, 4499, { leisure: 'park', name: 'Black Austin Matters' }),
   squareWay(ANCHOR, -240, -700, 1500, { building: 'yes', amenity: 'library', name: 'Austin Public Library - Austin History Center' }),
-  // The real enclosing grounds polygon — unnamed overlap with the monument query.
+  // The real enclosing grounds polygon - unnamed overlap with the monument query.
   squareWay(ANCHOR, 0, 0, 100_000, { leisure: 'park', name: 'Capitol Square' }),
 ];
 
@@ -70,14 +70,14 @@ test('point mode: an (almost) exactly-named, monument-scale polygon still outlin
 });
 
 test('point mode: an exactly-named but park-sized polygon is rejected (size cap)', () => {
-  // "Pioneer Monument, Golden Gate Park" — the park matches 3/3 of its own name
+  // "Pioneer Monument, Golden Gate Park" - the park matches 3/3 of its own name
   // and contains the anchor, but a 4.1 km² park must not render as a monument.
   const park = squareWay(ANCHOR, 0, 0, 4_100_000, { leisure: 'park', name: 'Golden Gate Park' });
   const fp = selectFootprint([park], ANCHOR.lat, ANCHOR.lon, 'Pioneer Monument, Golden Gate Park', 'point');
   assert.equal(fp, null);
 });
 
-test('loose mode: unchanged — word-overlap scoring still picks the named candidate', () => {
+test('loose mode: unchanged - word-overlap scoring still picks the named candidate', () => {
   // Pins that the fix is SCOPED to point-like targets: generic loose lookups keep
   // the existing scorer (changing it globally would need its own field evidence).
   const fp = selectFootprint(wrongWinners(), ANCHOR.lat, ANCHOR.lon, 'Tejano Monument, Austin', 'loose');
@@ -94,7 +94,7 @@ test('loose mode: a named compound still beats an unnamed containing building (P
   assert.equal(fp.kind, 'area');
 });
 
-test('strict mode: unchanged — named district-sized areas only', () => {
+test('strict mode: unchanged - named district-sized areas only', () => {
   const els = [
     squareWay(ANCHOR, 0, 0, 900, { building: 'yes', name: 'Mission Lofts' }), // building → rejected
     squareWay(ANCHOR, 0, 0, 12_000, { landuse: 'retail', name: 'Mission Market' }), // tiny parcel → rejected
@@ -107,7 +107,7 @@ test('strict mode: unchanged — named district-sized areas only', () => {
 });
 
 test('loose mode: a named water body beats a shore feature named after it (field test 9)', () => {
-  // "Lady Bird Lake" — the anchor sits ON the water. Before natural=water joined the
+  // "Lady Bird Lake" - the anchor sits ON the water. Before natural=water joined the
   // sweep, the lake was never a candidate and a shoreline park NAMED AFTER it won on
   // word overlap, drawing a squiggle on the bank instead of the lake.
   const ANCHOR_ON_WATER = { lat: 30.2565, lon: -97.7365 };
@@ -440,7 +440,7 @@ test('a genuine geocoded feature name still canonicalizes an alternate user name
 // Geocoding API is not enabled (Google answers HTTP 200 with REQUEST_DENIED).
 // Either way the annotation silently failed to place. Both now fall through to
 // Photon. These drive the second case, because it reaches the SAME fallback
-// through a running Google branch — the no-key branch cannot be driven from
+// through a running Google branch - the no-key branch cannot be driven from
 // `node --test`, since the key expression reads `import.meta.env`, which only
 // Vite defines.
 
@@ -470,7 +470,7 @@ test('keyless: a key that geocodes to nothing still anchors the annotation', asy
           state: 'Texas',
           country: 'United States',
           tags: { osm_key: 'natural', osm_value: 'water' },
-          // Photon orders extent [west, north, east, south] — a naive [w,s,e,n]
+          // Photon orders extent [west, north, east, south] - a naive [w,s,e,n]
           // read would invert the box and still look like a valid viewport.
           extent: [-97.8, 30.28, -97.68, 30.24],
         })],
@@ -489,7 +489,7 @@ test('keyless: a key that geocodes to nothing still anchors the annotation', asy
   // The label is shortened the same way a Google `formatted_address` is.
   assert.equal(resolved.label, 'Lady Bird Lake');
   // Photon's extent reaches the framing code in the Places `{low,high}` shape,
-  // right way up — this is what sizes a grounds disc and the flyTo box.
+  // right way up - this is what sizes a grounds disc and the flyTo box.
   assert.deepEqual(resolved.viewport, {
     low: { latitude: 30.24, longitude: -97.8 },
     high: { latitude: 30.28, longitude: -97.68 },
@@ -503,7 +503,7 @@ test('keyless: OSM matching uses the feature\'s canonical name, not the user\'s 
   // The reason `primaryName` is carried out of Photon at all. The ask names a
   // landmark AND its surroundings; the geocoded feature is called just "Tejano
   // Monument". Score the OSM candidates on the raw utterance and the locality
-  // tokens win — this is the Thompson-Austin bug (field test 7) reached through
+  // tokens win - this is the Thompson-Austin bug (field test 7) reached through
   // the keyless path. Score them on the canonical name and the monument wins.
   const decoy = squareWay(ANCHOR, -250, -250, 3000, {
     building: 'yes', tourism: 'hotel', name: 'Texas Capitol Austin Visitor Center',
@@ -539,7 +539,7 @@ test('keyless: OSM matching uses the feature\'s canonical name, not the user\'s 
     footprint: true,
   });
 
-  assert.ok(resolved.ring, 'the monument polygon is monument-scale and exactly named — it must outline');
+  assert.ok(resolved.ring, 'the monument polygon is monument-scale and exactly named - it must outline');
   // The anchor re-centres on the chosen polygon, so its position IS the verdict:
   // the monument sits on the anchor, the decoy 354 m south-west of it.
   assert.ok(
@@ -548,7 +548,7 @@ test('keyless: OSM matching uses the feature\'s canonical name, not the user\'s 
   );
 });
 
-/** Metres between two coordinates — enough precision for a few hundred metres. */
+/** Metres between two coordinates - enough precision for a few hundred metres. */
 function approximateMetres(lat1, lon1, lat2, lon2) {
   const mLat = 111320;
   const dy = (lat1 - lat2) * mLat;
@@ -558,8 +558,8 @@ function approximateMetres(lat1, lon1, lat2, lon2) {
 
 test('keyless: a Photon outage is not remembered as "no such place"', async (t) => {
   // Google answering ZERO_RESULTS is a verdict about GOOGLE. Photon holds
-  // plenty of places Google does not — that asymmetry is why this fallback
-  // exists — so a Google verdict plus a Photon timeout must leave the query
+  // plenty of places Google does not - that asymmetry is why this fallback
+  // exists - so a Google verdict plus a Photon timeout must leave the query
   // open. Caching it would keep an annotation unplaceable for the rest of the
   // session, on a network that has since recovered.
   const photonUp = {
@@ -606,7 +606,7 @@ test('a not-found is remembered only when every source consulted gave a verdict'
     // with a key: Google must have said "no such place", AND Photon must have replied
     [{ googleConsulted: true, googleSaysNoSuchPlace: true, photonAnswered: true }, true],
     [{ googleConsulted: true, googleSaysNoSuchPlace: true, photonAnswered: false }, false],
-    // Google declined (REQUEST_DENIED / OVER_QUERY_LIMIT) — never a verdict
+    // Google declined (REQUEST_DENIED / OVER_QUERY_LIMIT) - never a verdict
     [{ googleConsulted: true, googleSaysNoSuchPlace: false, photonAnswered: true }, false],
     [{ googleConsulted: true, googleSaysNoSuchPlace: false, photonAnswered: false }, false],
   ];

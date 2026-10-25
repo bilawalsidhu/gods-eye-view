@@ -1,6 +1,6 @@
 // src/data/motionModel.js
 /**
- * Pure display-motion math for the aircraft layers. No layer state, no DOM —
+ * Pure display-motion math for the aircraft layers. No layer state, no DOM -
  * importable under `node --test`.
  *
  * Turn-rate estimation + constant-rate-turn arc integration are adapted from
@@ -58,7 +58,7 @@ export function norm180(deg) {
 /**
  * Course over ground (deg from north, clockwise) of the chord from → to,
  * measured in `from`'s local ENU frame. Returns null when the chord is shorter
- * than `minChordM` or the motion is vertical-only (direction unreliable —
+ * than `minChordM` or the motion is vertical-only (direction unreliable -
  * callers fall back to the reported track).
  */
 export function courseBetweenCartesians(from, to, minChordM = 25) {
@@ -78,7 +78,7 @@ export function courseBetweenCartesians(from, to, minChordM = 25) {
   const cLon = Math.cos(carto.longitude);
   const e = -sLon * dx + cLon * dy;
   const n = -sLat * cLon * dx - sLat * sLon * dy + cLat * dz;
-  if (e * e + n * n < 1) return null; // < 1 m horizontal — vertical-only motion
+  if (e * e + n * n < 1) return null; // < 1 m horizontal - vertical-only motion
   return norm360(Math.atan2(e, n) / DEG);
 }
 
@@ -96,18 +96,18 @@ export function courseBetweenCartesians(from, to, minChordM = 25) {
  *  track only (chord weight 0). ≈30 kt. */
 export const COURSE_TRACK_ONLY_MPS = 15.4;
 /** At/above this displayed ground speed the course source is the chord only
- *  (weight 1) — the regime the owner field-approved; behavior unchanged there.
+ *  (weight 1) - the regime the owner field-approved; behavior unchanged there.
  *  ≈50 kt. */
 export const COURSE_CHORD_ONLY_MPS = 25.7;
 /** Below this displayed speed neither chord nor reported track means anything
- *  (hover / GPS drift — a hovering heli's track is velocity-vector noise):
+ *  (hover / GPS drift - a hovering heli's track is velocity-vector noise):
  *  callers HOLD their previous display course. ≈3 kt. */
 export const COURSE_HOLD_SPEED_MPS = 1.5;
 /** Course slew cap at/below the track-only gate. Slow aircraft turn a few °/s;
  *  whipping their nose at the fleet's 60°/s cap reads as a snap. */
 export const COURSE_MIN_DPS = 12;
 /** Below this fix ground speed, fix-track deltas are GPS-vector noise, not a
- *  turn — the turn-rate estimator ignores those intervals (a hovering heli's
+ *  turn - the turn-rate estimator ignores those intervals (a hovering heli's
  *  jitter used to manufacture a fake ±°/s rate that the extrapolation arc then
  *  integrated into a slow pirouette). ≈10 kt. */
 export const TURN_MIN_SPEED_MPS = 5;
@@ -217,7 +217,7 @@ export function limitCourseStep(prevDeg, targetDeg, maxDegPerSec, dtSec) {
  * Below `noiseFloorDps` returns 0 (treat as straight); clamped to ±maxDps
  * (standard-rate turn is 3°/s). dt sanity window matches our 15–30 s poll
  * cadence (2..120 s). When `minSpeedMps` > 0, intervals whose endpoints carry
- * a FINITE speed below it are skipped — at hover/taxi speed the reported track
+ * a FINITE speed below it are skipped - at hover/taxi speed the reported track
  * is GPS-vector noise, not a turn (samples without a speed keep the legacy
  * behavior: no way to tell, so they still count).
  */
@@ -280,13 +280,13 @@ const METRES_PER_DEG = 111320;
  *  (m). Half a coarse floor cell: the corridor's cell walk joins consecutive
  *  samples with a straight chord, and at this spacing the chord's departure
  *  from the arc is centimetres even on a tight taxi turn. A FIXED sample count
- *  cannot promise that — its spacing grows with speed, so a fast contact's
+ *  cannot promise that - its spacing grows with speed, so a fast contact's
  *  chords cut corners off its own path. */
 export const CORRIDOR_SAMPLE_SPACING_M = 55;
 /** @constant {number} Longest arc a single corridor projects (m). The cell
  *  budget truncates at ~12 cells ≈ 1.3 km anyway, so projecting further just
  *  builds samples the walk will discard. Ground past this is picked up on a
- *  later poll as the display advances into it — the same honest truncation the
+ *  later poll as the display advances into it - the same honest truncation the
  *  straight walk makes. */
 export const CORRIDOR_MAX_LENGTH_M = 1300;
 /** Scratch for the shared arc integrator (see arcOffsetEnu). */
@@ -345,7 +345,7 @@ export function projectGroundArcLatLon(
 }
 
 /**
- * The PATH a grounded contact's display is about to walk — the ground its floor
+ * The PATH a grounded contact's display is about to walk - the ground its floor
  * needs to be warm for, as a polyline rather than a single endpoint.
  *
  * Two regimes, matching what the dead-reckon actually does:
@@ -354,7 +354,7 @@ export function projectGroundArcLatLon(
  *  - EXTRAPOLATING (coasting past the newest fix, or the pre-history warm-up):
  *    the display integrates a constant-rate turn away from that fix. A single
  *    projected endpoint would still be joined to the start by a straight chord,
- *    so a sustained turn's arc — where the contact actually goes — would be
+ *    so a sustained turn's arc - where the contact actually goes - would be
  *    left cold. Sampling the arc keeps corridor and display on one path.
  *
  * @param {object} p
@@ -367,7 +367,7 @@ export function projectGroundArcLatLon(
  * @param {number} p.lookaheadSec - How far ahead to project when extrapolating.
  * The sample COUNT derives from the arc's length so spacing stays at
  * CORRIDOR_SAMPLE_SPACING_M whatever the speed, and the arc is truncated at
- * CORRIDOR_MAX_LENGTH_M rather than thinned — the same discipline the straight
+ * CORRIDOR_MAX_LENGTH_M rather than thinned - the same discipline the straight
  * walk uses. A fixed count silently widened its spacing as speed rose, and the
  * chords between widely spaced samples cut corners off the contact's own path,
  * leaving cells it genuinely occupies cold.
@@ -418,7 +418,7 @@ export function corridorPathLatLon({
  * Dead-reckon offset in the local ENU frame: along-track at ground speed,
  * integrating a constant-rate turn when turnRateDps is significant. Writes
  * {east, north, endCourseDeg} into `result` (no allocation) and returns it.
- * Works for negative dt (backward extrapolation — the warm-up path).
+ * Works for negative dt (backward extrapolation - the warm-up path).
  */
 export function arcOffsetEnu(speedMps, trackDeg, turnRateDps, dtSec, result) {
   const tr = trackDeg * DEG;

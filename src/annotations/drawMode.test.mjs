@@ -242,7 +242,7 @@ test('a finished area is a CLOSED ring, so its outline has no missing side', () 
   // an open ring would draw two of the triangle's three sides.
   assert.equal(spec.ring.length - 1, area.vertices.length);
 
-  // A line is NOT closed — it is a path, and joining its ends would invent a
+  // A line is NOT closed - it is a path, and joining its ends would invent a
   // segment the person never drew.
   const line = createDrawSession('line');
   addVertex(line, { lon: 0, lat: 0 });
@@ -260,7 +260,7 @@ test('a finished area is a CLOSED ring, so its outline has no missing side', () 
 });
 
 test('a shape straddling the antimeridian measures what it looks like', () => {
-  // 0.002 degrees square at the equator — about 223 m a side, so ~49,600 m2 —
+  // 0.002 degrees square at the equator - about 223 m a side, so ~49,600 m2 -
   // sitting across 180. Raw longitude arithmetic reads that 0.002-degree width
   // as 359.998 degrees: the area came out in the thousands of square
   // kilometres and the centroid landed on the Greenwich meridian, half a world
@@ -285,7 +285,7 @@ test('a shape straddling the antimeridian measures what it looks like', () => {
   );
   assert.ok(Math.abs(centre.lat) < 0.01, `got lat ${centre.lat}`);
 
-  // Length was already safe — haversine is periodic in the longitude delta —
+  // Length was already safe - haversine is periodic in the longitude delta -
   // and this pins that so a "fix" cannot break it.
   const across = pathLengthM([
     { lon: 179.999, lat: 0 },

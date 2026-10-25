@@ -163,7 +163,7 @@ test('a redirect is judged before it is followed, not after it has been answered
     ok: true,
     url: 'https://data.example.gov/files/b.pb',
   });
-  // Another host is refused even though it is https — this is the hop that used
+  // Another host is refused even though it is https - this is the hop that used
   // to be contacted first and inspected afterwards.
   const offOrigin = transitRedirectDecision(
     feed.url,
@@ -262,7 +262,7 @@ test('a vehicle with no time of its own borrows the feed header time and says so
       ['zero', 1_700_000_450, 'header'],
     ],
   );
-  // With no header either, fetch time is used and is labelled as such — never
+  // With no header either, fetch time is used and is labelled as such - never
   // presented as the vehicle's own report.
   const noHeader = repairVehicleTimestamps([{ id: 'none' }], null, fetchedAtS);
   assert.deepEqual(

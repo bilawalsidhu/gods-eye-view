@@ -61,7 +61,7 @@ export function chooseLiveCities(now = new Date()) {
 }
 
 /**
- * Switch the post-FX style the way a user does — the preset button — and
+ * Switch the post-FX style the way a user does - the preset button - and
  * fall back to the style manager only when the tray is not clickable, saying
  * so. Then set any style parameters through their sliders.
  * @param {import('puppeteer').Page} page

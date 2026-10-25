@@ -374,7 +374,7 @@ async function readCappedResponseBytes(upstream, maxBytes) {
   }
   // No async iterator: stream through a reader so the cap still applies while
   // reading. A body that cannot be streamed at all is refused rather than
-  // buffered uncapped — the helper's whole contract is the cap.
+  // buffered uncapped - the helper's whole contract is the cap.
   const reader =
     typeof upstream.body.getReader === 'function'
       ? upstream.body.getReader()

@@ -660,7 +660,7 @@ test('the click card lists identity, kinematics, freshness and the receiver line
   assert.equal(bare.title, 'ABC123');
   assert.deepEqual(bare.details.slice(0, 4), [
     'ICAO ABC123 · NO CALLSIGN',
-    'ALT — FT · GS — KT · TRK —',
+    'ALT - FT · GS - KT · TRK -',
     'V/S -1,280 FPM',
     'POSITION 0 S AGO · 1 MSG',
   ]);

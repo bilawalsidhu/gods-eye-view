@@ -33,7 +33,7 @@ export function localAdsbClass(record, meta = null) {
  * rules as the public Flights layer: each key is asked for at most once per
  * session, at most four requests are in flight and dispatches are dripped
  * 200 ms apart. Only the selected aircraft (type + route) and aircraft that
- * are about to render as 3D models (type) are ever looked up — never one
+ * are about to render as 3D models (type) are ever looked up - never one
  * request per contact per tick.
  * @param {object} options
  * @param {{getEnrichment?: Function}|null} options.source Flights source.

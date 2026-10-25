@@ -13,11 +13,11 @@ export const BIKESHARE_SELECTED_OVERLAY_SOURCE_OPTIONS = Object.freeze({
 
 const ACTIVATION_ALTITUDE_M = 50000;
 
-/** Hysteresis enter threshold — layer activates when camera drops below this. */
+/** Hysteresis enter threshold - layer activates when camera drops below this. */
 
 export const ACTIVATION_ENTER_ALTITUDE_M = ACTIVATION_ALTITUDE_M - 2000;
 
-/** Hysteresis exit threshold — layer deactivates when camera rises above this. */
+/** Hysteresis exit threshold - layer deactivates when camera rises above this. */
 
 export const ACTIVATION_EXIT_ALTITUDE_M = ACTIVATION_ALTITUDE_M + 2000;
 

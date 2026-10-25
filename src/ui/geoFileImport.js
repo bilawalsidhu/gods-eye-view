@@ -154,7 +154,7 @@ export function initGeoFileImport({
         name.className = 'geo-import-name';
         // textContent, never markup: the name comes from the file system.
         name.textContent = item.name;
-        name.title = `${item.name} — ${item.format.toUpperCase()}, ${tn(
+        name.title = `${item.name} - ${item.format.toUpperCase()}, ${tn(
           item.entityCount,
           '{count} map object',
           '{count} map objects',
@@ -286,7 +286,7 @@ export function initGeoFileImport({
         outcomes.push({
           name: fileName,
           ok: false,
-          error: t('At most {count} files at once — remove one first.', {
+          error: t('At most {count} files at once - remove one first.', {
             count: formatNumber(MAX_IMPORTED_FILES),
           }),
         });

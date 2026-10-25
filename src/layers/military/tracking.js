@@ -107,7 +107,7 @@ export function createTracking({
         operator: parts.queries._toCleanText(info?.operator) || '',
         callsign: described.callsign || '',
         registration: described.registration || '',
-        // Converted contacts report their class as TR-3B — the same override
+        // Converted contacts report their class as TR-3B - the same override
         // the readout and Contacts card show.
         type: tr3bTypeLabel(
           icao24,
@@ -208,7 +208,7 @@ export function createTracking({
    * Build the multi-line presentation text for the protected tracked host card.
    * Lines: callsign, type/registration, operator/altitude.
    * While the plane is in its missed-poll grace (coasting on dead reckoning
-   * with sticky metadata) the first line carries a "· STALE" cue — the fleet's
+   * with sticky metadata) the first line carries a "· STALE" cue - the fleet's
    * 45%-alpha billboard fade doesn't apply to the tracked plane (its entity
    * owns the visual), so without this the readout would present last-known
    * altitude/speed as live.
@@ -226,7 +226,7 @@ export function createTracking({
       (parts.queries._toCleanText(info?.callsign) ||
         parts.queries._toCleanText(info?.registration) ||
         icao24) + stale;
-    // Converted contacts report their class as TR-3B — that override is exactly
+    // Converted contacts report their class as TR-3B - that override is exactly
     // what the Easter egg replaces the real type with.
     const type = tr3bTypeLabel(
       icao24,
@@ -256,7 +256,7 @@ export function createTracking({
       '#ffd166',
     );
     refreshTrackedReadout(flightState._trackedEntity);
-    // The readout and the context slot describe the same contact — refresh them
+    // The readout and the context slot describe the same contact - refresh them
     // together so voice never narrates a fix the card has already replaced.
     refreshTrackedSubjectContext(_contextSubjectMetadata(icao24));
   }
@@ -319,7 +319,7 @@ export function createTracking({
 
   /** Clear every per-SELECTION tracked-model latch: the zoom hysteresis band and
    *  the load-failure bound. Called from each path that changes which contact is
-   *  selected — deselect, re-track, cross-layer handoff, init, destroy.
+   *  selected - deselect, re-track, cross-layer handoff, init, destroy.
    *
    *  This must live in the production lifecycle, not only in the predicate's
    *  icao-change guard: a deselect followed by a same-turn re-track of the SAME
@@ -359,7 +359,7 @@ export function createTracking({
       Date.now() + TRACKED_MODEL_RETRY_BACKOFF_MS;
     if (flightState._trackedModelFailCount >= TRACKED_MODEL_MAX_LOAD_FAILS) {
       console.warn(
-        `[Data:Military] tracked 3D model gave up after ${flightState._trackedModelFailCount} failed loads of ${url} — ` +
+        `[Data:Military] tracked 3D model gave up after ${flightState._trackedModelFailCount} failed loads of ${url} - ` +
           'this contact stays 2D until another is selected',
         err,
       );
@@ -367,15 +367,15 @@ export function createTracking({
   }
 
   /**
-   * The TRACKED aircraft's own model regime — DEFAULT-ON, camera-distance driven
+   * The TRACKED aircraft's own model regime - DEFAULT-ON, camera-distance driven
    * (owner directive 2026-08-19). Mirror of flights.js: this does NOT consult the
    * DISPLAY-rail `models3d` toggle, which keeps owning the FLEET
    * (`_modelRegimeActive`) and its draw-call budget. Thresholds + hysteresis live
-   * in trackedModelRegime.js — enter at TRACKED_MODEL_ENTER_ALT_M (150_000 m, the
+   * in trackedModelRegime.js - enter at TRACKED_MODEL_ENTER_ALT_M (150_000 m, the
    * owner's playtested swap distance, deliberately NEARER than the fleet's 800 km
    * ceiling this used to inherit), hand back only above
    * TRACKED_MODEL_EXIT_ALT_M so a boundary orbit cannot flap billboard↔model.
-   * First-person means your own airframe is not drawn in cockpit — the eye sits
+   * First-person means your own airframe is not drawn in cockpit - the eye sits
    * metres from its origin.
    */
 
@@ -384,7 +384,7 @@ export function createTracking({
       flightState._trackedZoomLatchIcao = flightState._trackedIcao;
       flightState._trackedZoomLatched = false;
     }
-    // A converted TR-3B has no 3D asset — suppressing the regime keeps its
+    // A converted TR-3B has no 3D asset - suppressing the regime keeps its
     // tracked billboard fully opaque (the colour callback reads this too), so
     // the triangle stays the visual all the way in. Mirror of flights.js.
     if (
@@ -426,11 +426,11 @@ export function createTracking({
 
   /**
    * Field-test round 2 (2026-07-06): floors a trail-bound position at the warm
-   * coarse ground cell — a pure LIFT (above-floor positions pass through
+   * coarse ground cell - a pure LIFT (above-floor positions pass through
    * untouched, unknown floors change nothing). Grounded military billboards
    * deliberately render at the pre-datum default height (T7 groundSnap
    * invariant), so every position entering the TRAIL subsystem (seed, append,
-   * per-frame head) goes through this instead — the visible taxi history sits
+   * per-frame head) goes through this instead - the visible taxi history sits
    * on the surface without touching the billboard/model machinery.
    * @param {Cesium.Cartesian3} position - Owned position (mutated/replaced freely).
    * @returns {Cesium.Cartesian3} The same or a lifted position.
@@ -467,7 +467,7 @@ export function createTracking({
   }
 
   /**
-   * Renders the trail BODY — the accumulated fixes EXCLUDING the newest raw one. That
+   * Renders the trail BODY - the accumulated fixes EXCLUDING the newest raw one. That
    * newest fix is at ~now, ~one poll interval AHEAD of the delayed icon (rendered at
    * now − RENDER_DELAY_SEC), so drawing it would push the trail in FRONT of the plane.
    * The cheap per-frame _trailHeadEntity segment bridges the last body point to the
@@ -506,7 +506,7 @@ export function createTracking({
     for (const fix of history) {
       if (Cesium.JulianDate.lessThanOrEquals(fix.time, seedRenderTime)) {
         // Floor grounded-history seeds (round 2): a grounded contact's stored
-        // fixes carry the pre-datum default height — the trail copy sits on
+        // fixes carry the pre-datum default height - the trail copy sits on
         // the surface instead (pure lift; airborne fixes pass through).
         flightState._trailPositions.push(
           _trailFloorPosition(Cesium.Cartesian3.clone(fix.position)),
@@ -534,7 +534,7 @@ export function createTracking({
           positions: new Cesium.CallbackProperty(() => {
             // Need ≥2 accumulated points: the body draws all-but-newest, so the head must
             // start at the last DISPLAYED body point (index n−2). With a single fix that
-            // point would be the sole raw fix — ~now, AHEAD of the delayed icon — so the
+            // point would be the sole raw fix - ~now, AHEAD of the delayed icon - so the
             // segment would draw IN FRONT of the plane. Likewise during warm-up the icon
             // predates all real history, so there is no valid body point behind it.
             if (
@@ -554,11 +554,11 @@ export function createTracking({
                 flightState._trailPositions.length - 2
               ];
             // Floor the head too (round 2): a grounded tracked contact's DR
-            // display height is the pre-datum default — without this the last
+            // display height is the pre-datum default - without this the last
             // segment dives underground while taxiing.
             const end = _trailFloorPosition(Cesium.Cartesian3.clone(head));
             // On a contact that has not moved this segment runs from inside the
-            // model out to its own anchor — a line through the fuselage. The END
+            // model out to its own anchor - a line through the fuselage. The END
             // never gives, so a moving trail still terminates on the tail; the
             // START is what slides, from nothing on a parked contact out to the
             // whole segment once it has cleared its own envelope. Measured against
@@ -630,8 +630,8 @@ export function createTracking({
     // Height-datum fix (Task 7, mirror of flights.js Task 6 _backfillTrail): a
     // readsb trace point's altitude is barometric feet (same datum as the live
     // alt_baro, NOT geometric), so a trail waypoint's render height is the same
-    // documented visual FALLBACK the live path uses — baroM + geoidHeight(lat,lon)
-    // — geometrically approximate, not exact.
+    // documented visual FALLBACK the live path uses - baroM + geoidHeight(lat,lon)
+    // - geometrically approximate, not exact.
     await ensureGeoidReady();
 
     // readsb trace points: [secondsAfterTimestamp, lat, lon, alt_ft|'ground'|null, gs_kt, track, flags, ...]
@@ -648,11 +648,11 @@ export function createTracking({
 
     // Field-test fix (WAKE01 trail-underground, 2026-07-06): resolve the coarse
     // ellipsoidal ground along the trace and clamp every waypoint at it. A
-    // 'ground'/null point sits ON the local surface — the old fixed 50 m
+    // 'ground'/null point sits ON the local surface - the old fixed 50 m
     // sentinel rendered ~1.5 km underground at Kirtland AFB (field ~1590 m
     // ellipsoidal) and dragged the whole pattern-work loop with it.
     // Round-2 fix (owner: "trails suddenly much shorter / not loading"): the
-    // resolve is BOUNDED (≤1.2 s), not a blocking await — a cold Re:Earth
+    // resolve is BOUNDED (≤1.2 s), not a blocking await - a cold Re:Earth
     // lookup across a long path could stall the paint for seconds-to-timeout.
     // Paint with whatever cells are warm; the resolve keeps filling the cache
     // in the background for the next paint/select.
@@ -672,7 +672,7 @@ export function createTracking({
         baroAltitudeM == null ? null : baroAltitudeM + geoidHeight(lat, lon);
       let altM = floorAltitudeM(baroM, cachedGroundFloor(lat, lon));
       // Ground/no-alt point with an unresolved floor: hold the previous
-      // waypoint's altitude (continuity — never a dive to a made-up depth).
+      // waypoint's altitude (continuity - never a dive to a made-up depth).
       // Leading points with nothing to carry keep the old low breadcrumb
       // sentinel (an arbitrary placeholder, never a reported altitude).
       if (altM == null) altM = lastAltM != null ? lastAltM : 50;
@@ -738,7 +738,7 @@ export function createTracking({
   /**
    * Stop tracking the current aircraft and clean up all tracking state.
    * Restores the original billboard, removes the tracked Entity, invalidates
-   * the per-frame DR cache, and RELEASES the camera IN PLACE — no flyTo
+   * the per-frame DR cache, and RELEASES the camera IN PLACE - no flyTo
    * (mirror of flights.js). Deselect used to fly an ~80 km pulled-back
    * overview; the owner field-ruled that wrong (2026-07-02: "it randomly zooms
    * way up and loses my context"). The camera stays at its current
@@ -772,7 +772,7 @@ export function createTracking({
     // Restore the original billboard appearance. The rotation is re-seeded from
     // the tracked entity's last rendered rotation and a rotation pass is forced
     // (_lastCamPoseSig below): the fleet billboard otherwise reappears with the
-    // STALE screen rotation it had when tracking began — up to a full
+    // STALE screen rotation it had when tracking began - up to a full
     // ROTATION_REFRESH_MS of a wrong (possibly reversed) nose on release.
     if (flightState._billboards.has(flightState._trackedIcao)) {
       const bb = flightState._billboards.get(flightState._trackedIcao);
@@ -857,7 +857,7 @@ export function createTracking({
    */
 
   function _trackFlight(icao24, { origin = 'programmatic' } = {}) {
-    _clearTracking(false, { origin }); // switching planes — the new follow-camera takes over
+    _clearTracking(false, { origin }); // switching planes - the new follow-camera takes over
 
     const bb = flightState._billboards.get(icao24);
     const info = flightState.records.data.get(icao24);
@@ -867,7 +867,7 @@ export function createTracking({
     _resetTrackedSelectionState(); // fresh selection: enter at the ENTER ceiling, full load-retry budget
     flightState._cachedDRFrame = -1;
     flightState._lastTrackedRotation = bb.rotation || 0;
-    // Drop any fleet 3D model for this aircraft — the tracked entity now owns its visual (its
+    // Drop any fleet 3D model for this aircraft - the tracked entity now owns its visual (its
     // own billboard + model graphic), and the fleet tick skips the tracked icao, so a leftover
     // fleet model would be orphaned + double-rendered.
     parts.rendering._releaseModel(icao24);
@@ -875,7 +875,7 @@ export function createTracking({
     // Hide the billboard -- the tracked entity replaces it visually
     bb.show = false;
 
-    // Helper: smoothed, per-frame-cached tracked position (see _trackedDisplayPosition —
+    // Helper: smoothed, per-frame-cached tracked position (see _trackedDisplayPosition -
     // one computation shared by the position/rotation/trail-head callbacks, with
     // discontinuity reconciliation). Falls back to the last billboard position when the
     // aircraft has no fix.
@@ -890,7 +890,7 @@ export function createTracking({
 
     // World-space orientation for the 3D model: nose along the course heading (ENU, pitch/roll 0).
     // Create tracked entity: a 2D billboard when zoomed out, a 3D model when zoomed in past the
-    // TRACKED altitude ceiling. That handoff is DEFAULT behaviour — it does NOT wait on the
+    // TRACKED altitude ceiling. That handoff is DEFAULT behaviour - it does NOT wait on the
     // DISPLAY-rail 3D toggle, which arms the FLEET. The plane the user zooms into always
     // resolves into an aircraft.
     //
@@ -901,7 +901,7 @@ export function createTracking({
     // would stall the centering until the model loaded. A shown-but-transparent billboard always
     // supplies a ready sphere, so framing is instant; we only drop its alpha once the model GLB is
     // preloaded (_planeModelLoaded), so there's neither a billboard+model double-image nor a gap.
-    // The tracked entity is a PURE BILLBOARD — no label or model graphic. The tracked plane's 3D
+    // The tracked entity is a PURE BILLBOARD - no label or model graphic. The tracked plane's 3D
     // model is the standalone primitive driven by _updateTrackedModel(); keeping it off the entity is
     // what makes the follow-camera's bounding sphere always ready (see _trackedModel).
     flightState._trackedEntity = flightState._viewer.entities.add({
@@ -936,7 +936,7 @@ export function createTracking({
         sizeInMeters: false,
         scaleByDistance: new Cesium.NearFarScalar(1000, 3.0, 8000000, 0.5),
         alignedAxis: Cesium.Cartesian3.ZERO,
-        // The tracked target must never vanish into tile geometry — tracking a
+        // The tracked target must never vanish into tile geometry - tracking a
         // taxiing plane at street level would otherwise bury the amber icon inside
         // the runway skin exactly like the fleet ground icons (_groundDepthDistance);
         // its shared-host tracked card is top-composited separately.
@@ -974,7 +974,7 @@ export function createTracking({
 
     // A billboard has a ~zero bounding sphere, so Cesium's default follow distance is
     // far too tight (the user had to scroll out to read the plane). Give the entity a
-    // calibrated viewFrom — behind + above, distance scaled to altitude — for a readable
+    // calibrated viewFrom - behind + above, distance scaled to altitude - for a readable
     // initial frame with surrounding context. (ENU: east=+X, north=+Y, up=+Z.)
     const altM = info?.altitudeFt ? info.altitudeFt * 0.3048 : 1500;
     const followRange = Math.min(Math.max(altM * 1.1 + 2500, 3000), 30000);
@@ -984,7 +984,7 @@ export function createTracking({
       followRange * 0.55,
     );
 
-    // Cancel any in-progress camera flight first — otherwise Cesium won't apply the tracked
+    // Cancel any in-progress camera flight first - otherwise Cesium won't apply the tracked
     // entity's viewFrom on the first frame, so voice-initiated tracking (which often fires
     // mid-fly_to_location) would follow the plane WITHOUT centering it like a click does.
     // Cross-module HUD consumers (tracked-target readout) read the camera's settled position, not a
@@ -1008,9 +1008,9 @@ export function createTracking({
       ) || null;
 
     // Track-history trail (PRD F2): seed from local history + async backfill.
-    // Ground traffic draws NO trail — if the plane takes off while tracked, the
+    // Ground traffic draws NO trail - if the plane takes off while tracked, the
     // ground→air transition in update() starts one.
-    // Round 2 (owner): grounded contacts get trails too — a landed-but-taxiing
+    // Round 2 (owner): grounded contacts get trails too - a landed-but-taxiing
     // aircraft's history is retrievable on select. Trail positions are floored
     // at the surface (_trailFloorPosition), so ground legs drape, never dive.
     _startTrail(icao24);
@@ -1088,7 +1088,7 @@ export function createTracking({
         if (picked.id === flightState._trackedEntity) return;
 
         // Clicking the plane we're ALREADY tracking (its standalone 3D model or
-        // any pick carrying its icao) — same no-op as the 2D tracked-entity click
+        // any pick carrying its icao) - same no-op as the 2D tracked-entity click
         // above. H1: the model used to have no pick id, so this fell through to
         // "empty space" and deselected the very plane being tracked.
         if (flightState._trackedIcao) {
@@ -1126,7 +1126,7 @@ export function createTracking({
       }
 
       // A pick that belongs to a sibling layer (commercial flight, satellite,
-      // vessel, station, CCTV camera…) is not "empty space" — leave tracking
+      // vessel, station, CCTV camera…) is not "empty space" - leave tracking
       // alone and let that layer handle it. resolvePickId String()-coerces the
       // heterogeneous pick ids (numeric NORAD ids, AIS record objects) so the
       // registry predicates can recognize them (H2).

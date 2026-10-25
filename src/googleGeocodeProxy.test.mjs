@@ -73,7 +73,7 @@ test('geocoder query and viewport bias are validated before Google is paid', () 
     'north,-97.9|30.4,-97.6',
     '91,-97.9|30.4,-97.6',
     '30.1,-181|30.4,-97.6',
-    // A blank component must not read as 0 — that is the equator, not a corner.
+    // A blank component must not read as 0 - that is the equator, not a corner.
     '30.1,-97.9|30.4,',
     '30.1,|30.4,-97.6',
     '30.1,-97.9| ,-97.6',

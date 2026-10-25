@@ -53,7 +53,7 @@ const CHROME_EXECUTABLE_CANDIDATES = [
   // Prefer puppeteer's version-pinned Chrome-for-Testing over the system
   // Chrome: /Applications auto-updates underneath the harnesses, and its
   // software-GL behavior shifts across majors (system Chrome 150 blew the
-  // tile-gated drain budget under SwiftShader on 2026-07-30 — six
+  // tile-gated drain budget under SwiftShader on 2026-07-30 - six
   // false-negative qa-cctv-v2 runs against a healthy build). A deterministic
   // pinned browser beats the newest one for regression harnesses.
   await puppeteer.executablePath().catch(() => null),
@@ -77,7 +77,7 @@ const results = [];
 function record(name, ok, detail) {
   results.push({ name, ok, detail });
   const tag = ok ? '\x1b[32mPASS\x1b[0m' : '\x1b[31mFAIL\x1b[0m';
-  console.log(`  [${tag}] ${name}${detail ? ` — ${detail}` : ''}`);
+  console.log(`  [${tag}] ${name}${detail ? ` - ${detail}` : ''}`);
 }
 
 function percentile(values, pct) {
@@ -409,7 +409,7 @@ async function main() {
     // Warm-up before steady-state p95: the first solves after field
     // injection run on cold-tier code paths and skew p95 on a fresh server.
     // (perf wave 2 added a 2.5 s sleep for this; main's settle+conclusive
-    // -samples gates supersede it — same fix, deterministic instead of timed.)
+    // -samples gates supersede it - same fix, deterministic instead of timed.)
     await waitForSettledSyntheticField(page);
     await page.evaluate(() => {
       const viewer = window.__godsEyeView.viewer;

@@ -161,7 +161,7 @@ const CITY_ALIASES = new Map([
 ]);
 
 // Basemap stack vocabulary. Switching requires an explicit stack name
-// ("Bing aerial", "road map", "OSM", "Google 3D") — any "satellite(s)"
+// ("Bing aerial", "road map", "OSM", "Google 3D") - any "satellite(s)"
 // phrasing ALWAYS means the satellites DATA LAYER, never a basemap; the
 // session instructions carry the decision table.
 //
@@ -286,19 +286,19 @@ export function createGevActionRunner({
       }
     };
 
-    // Navigation tools interrupt any continuous camera motion (spec §1.1) —
+    // Navigation tools interrupt any continuous camera motion (spec §1.1) -
     // checked FIRST because each handler returns.
     if (name === 'zoom_to_globe') {
       interruptCameraMotion(`nav:${name}`);
     }
-    // Explicit navigation while TRACKING supersedes the follow camera —
+    // Explicit navigation while TRACKING supersedes the follow camera -
     // otherwise the tracker drags the view back and "I flew there but can't
     // do anything" (field finding). track_entity manages its own handoff.
     if (name === 'zoom_to_globe' && viewer.trackedEntity) {
       stopAllTracking(viewer, dataManager);
     }
 
-    // Zoom during an active orbit adjusts the orbit RADIUS (spiral in/out) —
+    // Zoom during an active orbit adjusts the orbit RADIUS (spiral in/out) -
     // a straight camera move would be snapped back by the per-frame lookAt.
     if (name === 'adjust_camera_zoom') {
       interruptGlobeRotation('voice-zoom-intent');
@@ -833,7 +833,7 @@ export function createGevActionRunner({
         const contextRollback = await styleManager.setContextMode(
           priorContextMode,
           {
-            // Undoing this action's own precondition — still choreography.
+            // Undoing this action's own precondition - still choreography.
             claimVisualAuthority: false,
             ...(current()
               ? {
@@ -1142,8 +1142,8 @@ export function createGevActionRunner({
 
     throw new Error(`Unknown GEV tool: ${name}`);
   };
-  // Lifetimes: the runner lives for the page; conversation state — the
-  // analyst's follow-up memory and any write still in flight — lives for one
+  // Lifetimes: the runner lives for the page; conversation state - the
+  // analyst's follow-up memory and any write still in flight - lives for one
   // voice session and is dropped by resetConversation().
   let conversation = 0;
   let disposed = false;
@@ -1298,7 +1298,7 @@ async function annotateMap(annotations, args = {}, reportProgress = () => {}) {
   reportProgress('resolve', firstTarget?.target || firstTarget?.label || '');
   const result = await annotations.annotate(requests, {
     // C1 invariant enforced in CODE (not just the prompt): the VOICE path NEVER clears as
-    // a side effect of drawing — annotations accumulate/persist, and only an explicit
+    // a side effect of drawing - annotations accumulate/persist, and only an explicit
     // clear_annotations tool call wipes the board. (clearPrevious is intentionally ignored
     // here and removed from the annotate_map schema; the console/demo API still has it.)
     clearPrevious: false,
@@ -1331,17 +1331,17 @@ async function annotateMap(annotations, args = {}, reportProgress = () => {}) {
     partial: drewSome && someFailed,
     failedLabels: someFailed ? failedLabels : undefined,
     // A drawn route whose street routing was unavailable is a straight direct line,
-    // not a real walking/driving route — flag it so the voice layer stays honest.
+    // not a real walking/driving route - flag it so the voice layer stays honest.
     routeFallback: (result.results || []).some((r) => r.ok && r.fallback),
     capped: Boolean(result.capped),
     // Progressive outlines: anchors are placed and returned immediately; footprints for
     // these items are still being traced and will appear on their own (or the mark
-    // honestly stays a point). NOT a failure — the voice layer must not report it as one.
+    // honestly stays a point). NOT a failure - the voice layer must not report it as one.
     outlinePending:
       (result.results || []).some((r) => r.ok && r.outlinePending) || undefined,
     items: result.results,
     // Keep `error` populated whenever ANYTHING failed (partial or total) so the
-    // result never reads as a clean success — but keep it STATIC (no raw place text);
+    // result never reads as a clean success - but keep it STATIC (no raw place text);
     // the actual names live only in the structured failedLabels DATA field, so the
     // model-facing prose can't carry injected instructions from a place name.
     error: someFailed ? 'Could not place one or more annotations' : null,
@@ -1410,7 +1410,7 @@ function controlScene(sceneDirector, args = {}) {
       return {
         ok: false,
         action: 'control_scene',
-        error: 'A scene is already running — stop it first',
+        error: 'A scene is already running - stop it first',
       };
     }
     const scene = args.sceneId
@@ -1458,7 +1458,7 @@ export async function controlCctv(dataManager, args = {}, styleManager = null) {
     return {
       ok: false,
       action: 'control_cctv',
-      error: 'CCTV layer is off — enable it first',
+      error: 'CCTV layer is off - enable it first',
     };
   }
 
@@ -1550,7 +1550,7 @@ export async function controlCctv(dataManager, args = {}, styleManager = null) {
   }
   if (action === 'viewshed') {
     // Color-coded coverage volumes; enabled:false drops back to plain
-    // coverage wireframes (not off — "hide coverage" is the coverage action).
+    // coverage wireframes (not off - "hide coverage" is the coverage action).
     const next =
       typeof args.enabled === 'boolean' && !args.enabled ? 'on' : 'viewshed';
     dataManager.setLayerParams(
@@ -2101,16 +2101,16 @@ export function cctvVoiceFocusOutcome(
     return {
       ok: false,
       error: cameraSelected
-        ? 'Camera selected; tracking holds the view — say untrack to fly'
-        : 'Camera active; tracking holds the view — say untrack first',
+        ? 'Camera selected; tracking holds the view - say untrack to fly'
+        : 'Camera active; tracking holds the view - say untrack first',
     };
   }
   if (focusResult === CCTV_FOCUS_RESULT.COCKPIT_ACTIVE) {
     return {
       ok: false,
       error: cameraSelected
-        ? 'Camera selected; in cockpit — exit cockpit to fly to it'
-        : 'In cockpit — exit cockpit to fly to a camera',
+        ? 'Camera selected; in cockpit - exit cockpit to fly to it'
+        : 'In cockpit - exit cockpit to fly to a camera',
     };
   }
   return { ok: false, error: 'No active camera to focus' };
@@ -2119,8 +2119,8 @@ export function cctvVoiceFocusOutcome(
 /**
  * Spoken name for a tracked entity descriptor.
  *
- * Aircraft follow the flight layers' label convention — callsign →
- * registration → icao24 — so the narrated name matches the readout and the
+ * Aircraft follow the flight layers' label convention - callsign →
+ * registration → icao24 - so the narrated name matches the readout and the
  * detection card instead of speaking a raw hex at a contact the UI is calling
  * `N123AB`. Vessels and satellites carry no `registration`, so that link
  * simply falls through to their own name/mmsi/noradId links.
@@ -2593,7 +2593,7 @@ function installViewTargetPrewarm(viewer) {
     timer = window.setTimeout(() => {
       timer = null;
       // Belt and braces. Validating the pick is the fix; this catch exists
-      // because an idle callback is an UNCAUGHT context — nothing above it can
+      // because an idle callback is an UNCAUGHT context - nothing above it can
       // handle a surprise from the scene graph, and a red console error on a
       // plain camera flight is worse than a cold cache. Reported once per
       // viewer so a repeating cause cannot spam the console.
@@ -2725,7 +2725,7 @@ function nextIssPass(viewer, dataManager, args) {
       ok: false,
       action: 'next_iss_pass',
       error:
-        'ISS orbital elements not loaded yet — enable the satellites layer once, then ask again.',
+        'ISS orbital elements not loaded yet - enable the satellites layer once, then ask again.',
     };
   }
   if (result.status === 'none') {
@@ -2866,7 +2866,7 @@ function normalizeCockpitNavigationHints(rawAction) {
  * is the TR-3B Easter egg (`tr3b`): people write and say it hyphenated, so
  * "TR-3B" / "tr 3b" / "tr 3 b" would otherwise reach the analyst as a value no
  * record matches. Collapsing spaces and hyphens and comparing against THAT ONE
- * id keeps this surgical — no general alias table, and no other class id
+ * id keeps this surgical - no general alias table, and no other class id
  * collapses to `tr3b`, so nothing else can be caught by it.
  *
  * App-side only: the voice tool schema and the model instructions are
@@ -3065,8 +3065,8 @@ async function flyToRequestedLocation(
   const query = String(args.query || '').trim();
   if (query) {
     // A query that names a curated preset POI ("the Texas State Capitol", "Golden Gate Bridge")
-    // flies to its hand-tuned camera pose — the same beautiful framing as clicking the LOCATIONS
-    // panel button — instead of generic geocode framing. An explicit rangeM still overrides distance.
+    // flies to its hand-tuned camera pose - the same beautiful framing as clicking the LOCATIONS
+    // panel button - instead of generic geocode framing. An explicit rangeM still overrides distance.
     const poiMatch = findPoiByName(query);
     if (poiMatch) {
       const result = immediate(() =>
@@ -3100,7 +3100,7 @@ async function flyToRequestedLocation(
       signal,
       ...(rangeM ? { range: rangeM } : {}),
       forceClose: args.viewMode === 'close',
-      // 'overview' frames the geocode viewport even for precise-place results —
+      // 'overview' frames the geocode viewport even for precise-place results -
       // previously dropped here, so "overview of Zilker Park" flew to a rooftop.
       viewMode: args.viewMode || null,
       duration: 2.2,
@@ -3386,8 +3386,8 @@ async function getTargetContext(
  *
  * Applies only when the requested radius centre IS the active Contacts
  * subject: that is precisely the case where the operator can see a number on
- * the panel, so the spoken answer must be that number. Everything else — an
- * explicit region, an arbitrary point, a named place — keeps the general
+ * the panel, so the spoken answer must be that number. Everything else - an
+ * explicit region, an arbitrary point, a named place - keeps the general
  * record engine, which is what those questions actually mean.
  * @param {object} args Tool arguments.
  * @param {object} result The general engine's result, reused for scope text.
@@ -3542,7 +3542,7 @@ async function aircraftProximityWindowForQuery(
     scope: `window:${radiusKm}km@${label}`,
     followUp: false,
     feedProvenance,
-    note: `Contacts panel snapshot${snapshot.evaluatedAt ? ` at ${new Date(snapshot.evaluatedAt).toISOString()}` : ''} — the same retained cohort supplies the card, speech, and follow-up memory${complete ? '' : '; the count is a lower bound because at least one layer reached its retained limit'}.`,
+    note: `Contacts panel snapshot${snapshot.evaluatedAt ? ` at ${new Date(snapshot.evaluatedAt).toISOString()}` : ''} - the same retained cohort supplies the card, speech, and follow-up memory${complete ? '' : '; the count is a lower bound because at least one layer reached its retained limit'}.`,
   };
   const answer = {
     ok: true,
@@ -3612,7 +3612,7 @@ const SUBJECT_CENTER_TOLERANCE_KM = 1;
  * that hid at the equator and widened toward it: a degree of longitude is
  * ~111 km at the equator and ~78 km at 45°, so a fixed 0.01° box spans a
  * different real distance at every latitude, and its diagonal admitted centres
- * ~1.5 km away — far enough to be a different place, close enough to slip
+ * ~1.5 km away - far enough to be a different place, close enough to slip
  * through and get answered as the subject's window.
  * @param {{lat: number, lon: number}} center Requested centre.
  * @param {Cesium.Cartesian3} subjectPosition Subject's world position.
@@ -4296,7 +4296,7 @@ function uniqueStrings(values) {
  * Google Places, etc.) before it enters the voice LLM's scene context.
  * Collapses newlines/control chars to single spaces and hard-caps length, so
  * crafted map data can't smuggle multi-line "instructions" into the prompt.
- * Defense-in-depth — these are reference labels, not commands.
+ * Defense-in-depth - these are reference labels, not commands.
  * @param {*} value - Raw label value.
  * @returns {string} Sanitized single-line label (max 120 chars).
  */
@@ -4445,7 +4445,7 @@ function clampNumber(value, min, max, fallback) {
 }
 
 /**
- * Analyst query — spoken questions over data already on the client
+ * Analyst query - spoken questions over data already on the client
  * ("how many flights over Texas?", "biggest fire near LA?", "which ships
  * are headed to Oakland?"). The ENGINE (analystEngine.js) does the query
  * logic; this wiring supplies live providers and compacts the result for
@@ -4536,7 +4536,7 @@ function analystProviders(
     },
     resolveRegionRing,
     /**
-     * The active Contacts subject, when there is one — the centre the operator
+     * The active Contacts subject, when there is one - the centre the operator
      * is reasoning about while Contacts is up. Null whenever Contacts is off,
      * so view-centred behaviour is unchanged outside it.
      * @returns {{lat: number, lon: number, label: string|null}|null} Subject centre.
@@ -4730,19 +4730,19 @@ async function runAnalystQuery(
   }
   const items = result.items.map(compactAnalystItem);
   // Warm-up honesty: a layer enabled seconds ago hasn't finished its first
-  // poll (entity layers render one interval behind live BY DESIGN) — so a low
+  // poll (entity layers render one interval behind live BY DESIGN) - so a low
   // count is "still loading", not fact.
   const warming = (result.coverage?.layersQueried || [])
     .filter((l) => layerIsWarming(_layerEnabledAt, l.layerKey))
     .map((l) => l.layerKey);
   if (warming.length) {
-    const note = `${warming.join(', ')} just turned on — still loading, counts will rise`;
+    const note = `${warming.join(', ')} just turned on - still loading, counts will rise`;
     result.display.caveat = result.display.caveat
       ? `${note}; ${result.display.caveat}`
       : note;
   }
   // A radius/view count over a viewport-loaded layer counts what is LOADED, and
-  // the flights layer reloads as the camera moves — so this number can sit well
+  // the flights layer reloads as the camera moves - so this number can sit well
   // under the Contacts cohort without either being wrong.
   const scopeKind = effectiveAnalystScopeKind(args, result.coverage);
   const viewportScoped = isViewportScopedAnalystResult(args, result.coverage);
@@ -4754,7 +4754,7 @@ async function runAnalystQuery(
   // ENTITY-CENTRED NEARBY: answered by the SAME engine that fills the Contacts
   // panel, so the spoken number and the panel readout for one centre cannot
   // differ. The generic record/scope engine still owns explicit regions and
-  // arbitrary points — only "how many aircraft around <this contact>" is
+  // arbitrary points - only "how many aircraft around <this contact>" is
   // unified, because that is the question the panel is already answering.
   if (entityWindow) {
     return entityWindow;
@@ -4783,7 +4783,7 @@ async function runAnalystQuery(
     windowAircraft !== null
       ? `Contacts is ACTIVE: its window holds ${windowAircraft} aircraft within ` +
         `${contactsWindow.radiusKm} km of ${contactsWindow.centeredOn}, and that is the answer to a bare ` +
-        `"how many aircraft are nearby". This query measured something else — ${result.count} ${result.scopeLabel}. ` +
+        `"how many aircraft are nearby". This query measured something else - ${result.count} ${result.scopeLabel}. ` +
         'Give this one only if the operator asked about that specific area, and name both scopes if you give both.'
       : null;
   return {

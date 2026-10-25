@@ -1,5 +1,5 @@
 // src/data/tapAddress.test.mjs
-// Contract tests for the shared receiver-tap address check. Pure — no server.
+// Contract tests for the shared receiver-tap address check. Pure - no server.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { isLocalIpv4, parseTapAddress, tapUrl } from './tapAddress.js';
@@ -19,7 +19,7 @@ test('parseTapAddress: accepts loopback and every RFC1918 range', () => {
   }
 });
 
-test('parseTapAddress: rejects public addresses — a tap reads your own network', () => {
+test('parseTapAddress: rejects public addresses - a tap reads your own network', () => {
   for (const address of [
     '8.8.8.8:80',
     '1.1.1.1:443',

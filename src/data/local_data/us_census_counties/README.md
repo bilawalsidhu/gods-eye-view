@@ -14,7 +14,7 @@ fetched 2026-09-25. Covers the 50 states, the District of Columbia, Puerto
 Rico and the Island Areas (American Samoa, Guam, the Northern Mariana Islands,
 the US Virgin Islands).
 
-**License:** public domain — a work of the U.S. Government (17 U.S.C. § 105).
+**License:** public domain - a work of the U.S. Government (17 U.S.C. § 105).
 No attribution is required; the app credits the U.S. Census Bureau. See
 DATA_SOURCES.md.
 

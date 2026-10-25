@@ -1383,7 +1383,7 @@ test('real mission build, select, refresh, deselect, disable, and destroy paths 
     // Jitter regression net: live-state propagation advances at most once per
     // frameNumber, and the host getter is a pure read that never advances it.
     // Without both halves, the host label and the native dot can propagate to
-    // different wall-clock instants inside one frame — the documented
+    // different wall-clock instants inside one frame - the documented
     // label-separation jitter class.
     const payloadEntry = selectedPublication[2][2];
     const realDateNow = Date.now;

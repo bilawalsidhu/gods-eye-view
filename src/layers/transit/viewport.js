@@ -50,7 +50,7 @@ export function createViewport({ state, services, parts }) {
 
   /**
    * Refresh the bounds the per-frame pass uses to decide what is worth
-   * animating. Cheap, and only on a settled camera — never per frame.
+   * animating. Cheap, and only on a settled camera - never per frame.
    */
   function refreshViewBounds() {
     const viewer = state._viewer;
@@ -67,7 +67,7 @@ export function createViewport({ state, services, parts }) {
       : null;
     // The sweep itself is deferred: `marker.show` is a dirty flag, and a drag
     // fires this on every frame, so re-deciding visibility inline would put the
-    // whole fleet back into the vertex buffer once a frame — the exact cost
+    // whole fleet back into the vertex buffer once a frame - the exact cost
     // this is meant to remove.
     state._visibilityDirty = true;
     state._cameraRevision++;

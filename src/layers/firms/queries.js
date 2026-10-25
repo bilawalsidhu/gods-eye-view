@@ -48,8 +48,8 @@ export function createQueries({
     requiresKeyId: 'firms',
 
     // Live layer: the manager calls update() every 10 minutes while enabled,
-    // which refetches through the /api/firms proxy (the proxy's 30 min TTL —
-    // not this interval — is what protects the upstream FIRMS quota).
+    // which refetches through the /api/firms proxy (the proxy's 30 min TTL -
+    // not this interval - is what protects the upstream FIRMS quota).
     updateInterval: REFRESH_INTERVAL_MS,
 
     /**
@@ -127,7 +127,7 @@ export function createQueries({
     /**
      * Detection-overlay seam, shaped like the other layers' detectable
      * objects (traffic/flights). NOT yet registered in initDetection's layer
-     * list — wiring fires through the detection/label-arbiter pipeline is a
+     * list - wiring fires through the detection/label-arbiter pipeline is a
      * deliberate post-PR#1 task; when that happens the arbiter replaces this
      * layer's greedy declutter as the SELECTOR and the shared overlay remains
      * the renderer. Walks the FRP-sorted index so the strongest fires come first.
@@ -154,9 +154,9 @@ export function createQueries({
     /**
      * Snapshot the layer's in-memory fire records as plain JSON-safe
      * objects for the analyst query engine. Walks the FRP-sorted index so
-     * truncation keeps the STRONGEST fires (200k+ detections can be live —
+     * truncation keeps the STRONGEST fires (200k+ detections can be live -
      * the cap is load-bearing, not cosmetic). On-demand only (called at
-     * most once per spoken query) — zero per-frame cost, no listeners, no
+     * most once per spoken query) - zero per-frame cost, no listeners, no
      * caching. Returns [] while the layer is disabled or empty.
      * @param {number} [maxCount=2000] - Maximum records to return (truncation).
      * @returns {Array<Object>} See mapAnalystRecord for the record shape.

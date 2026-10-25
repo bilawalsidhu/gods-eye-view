@@ -68,8 +68,8 @@ export const TRANSIT_BACKOFF_LADDER_MS = Object.freeze([
 
 /**
  * Resolve `/vehicles/<feedId>` (the path after the `/api/transit` mount) to a
- * registered feed. Anything else — a different route, an unknown id, path
- * tricks, a query string — resolves to null and the caller 404s.
+ * registered feed. Anything else - a different route, an unknown id, path
+ * tricks, a query string - resolves to null and the caller 404s.
  * @param {string} url Request URL relative to the mount point.
  * @returns {{ route: 'feeds' } | { route: 'vehicles', feed: object } | null}
  */
@@ -143,7 +143,7 @@ export function isAcceptableTransitUpstreamUrl(url) {
  * Checking the FINAL url after `redirect: 'follow'` is too late: by then the
  * disallowed host has already been contacted, has already seen this server's
  * request, and has already answered. So every hop is resolved here first and a
- * hop that leaves the feed's own origin, or drops to plain http, is refused —
+ * hop that leaves the feed's own origin, or drops to plain http, is refused -
  * the same rule the CCTV frame proxy applies to camera images.
  *
  * @param {string} originUrl The registered feed URL (defines the allowed origin).
@@ -197,7 +197,7 @@ export class TransitFeedShapeError extends Error {
 /**
  * Give every vehicle a best-available report time, and say WHERE it came from.
  *
- * A feed that omits `VehiclePosition.timestamp` is not reporting "now" — it is
+ * A feed that omits `VehiclePosition.timestamp` is not reporting "now" - it is
  * reporting nothing, and treating the moment WE fetched as the moment the bus
  * was there is how a five-minute-old fix gets drawn as live. The ladder is
  * explicit instead: the vehicle's own timestamp, else the feed header's

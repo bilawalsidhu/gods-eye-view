@@ -35,7 +35,7 @@ export function createModel({ state: layerState, services, parts, source }) {
    * one. This is safe for requestRenderMode because the cadence is applied inside
    * `scene.preRender`: a faster interval can only ever consume frames the camera
    * movement is ALREADY forcing. A parked scene renders no frames at all, so no
-   * extra refresh happens and no timer is introduced — the render governor and
+   * extra refresh happens and no timer is introduced - the render governor and
    * the idle-leak fix both depend on parked staying quiet.
    * @param {boolean} cameraMoving Whether the camera pose changed since the last frame.
    * @returns {number} Minimum ms between refreshes.
@@ -54,7 +54,7 @@ export function createModel({ state: layerState, services, parts, source }) {
    * frame as "parked" made every crossing look like a motion-end and refreshed at
    * nearly display rate. Motion therefore ends only after the pose has been
    * unchanged for AWARENESS_MOTION_SETTLE_MS, and the motion cadence is a HARD
-   * floor in every state — no bin-crossing pattern, and no motion-end settle, can
+   * floor in every state - no bin-crossing pattern, and no motion-end settle, can
    * refresh faster than AWARENESS_MOTION_REFRESH_MS.
    *
    * @param {object} input
@@ -87,7 +87,7 @@ export function createModel({ state: layerState, services, parts, source }) {
    *
    * Both arrive on the same events: the owning layer calls the same teardown for
    * "the user clicked away" and "this contact aged out of the feed". Only the
-   * origin separates them, and it matters — a deliberate clear takes the Contact
+   * origin separates them, and it matters - a deliberate clear takes the Contact
    * panel down, while an eviction must keep it up in its CONTACT LOST state, or
    * the panel disappears out from under its own PREVIOUS/NEXT controls.
    * @param {{reason?: string}|null} cleared Cleared source detail.
@@ -130,7 +130,7 @@ export function createModel({ state: layerState, services, parts, source }) {
    * (the panel), `analyst_query`'s count of CURRENTLY-LOADED records, and the
    * layer-wide loaded total in the coverage note. After the camera dives to a
    * tracked contact the flights layer reloads by viewport, so the loaded set can
-   * hold a fraction of the cohort — 8 against the panel's 42 in the field. The
+   * hold a fraction of the cohort - 8 against the panel's 42 in the field. The
    * numbers are all correct and the disagreement still reads as chaos.
    *
    * Derived from the same snapshot the panel renders (`cohort.summary.count` via
@@ -221,7 +221,7 @@ export function createModel({ state: layerState, services, parts, source }) {
    *
    * The direction arrows are screen-projected against the camera basis, so they
    * must be redrawn every frame while the view MOVES. Parked, or with no live
-   * cohort to point at — nothing selected, every feed empty, every feed failed —
+   * cohort to point at - nothing selected, every feed empty, every feed failed -
    * there is nothing to animate and Contacts must not be the reason the whole
    * scene keeps repainting.
    * @param {object} [snapshot] Explicit state, for tests.

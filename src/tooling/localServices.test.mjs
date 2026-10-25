@@ -735,8 +735,8 @@ test('OpenAI routes answer generically when the upstream or the request fails', 
   const leak =
     'fixture-upstream-secret req_fixture_1234 org-fixture quota exhausted';
 
-  // `data.error.message` is OpenAI's own wording — request ids, organization
-  // hints, quota phrasing — and was relayed verbatim whenever upstream was not ok.
+  // `data.error.message` is OpenAI's own wording - request ids, organization
+  // hints, quota phrasing - and was relayed verbatim whenever upstream was not ok.
   t.mock.method(globalThis, 'fetch', async () =>
     Response.json({ error: { message: leak } }, { status: 429 }),
   );

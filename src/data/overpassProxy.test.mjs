@@ -2,7 +2,7 @@
 // 2026-07-23): region/state boundary pivots return multi-MB coastline geometry that
 // blew the old 12 MB read cap and 16 s client budget (Sicily never traced). The proxy
 // now simplifies giant `out geom` payloads server-side before caching/serving, and
-// boundary-class queries (is_in / pivot) get a longer disk TTL — boundaries change
+// boundary-class queries (is_in / pivot) get a longer disk TTL - boundaries change
 // ≈never. Pure-function tests, no network.
 //
 // Run with: npm test   (node --test)
@@ -108,7 +108,7 @@ function denseRing(n, { latC = 37.5, lonC = 14.2, radiusDeg = 0.5 } = {}) {
   for (let i = 0; i < n; i++) {
     const a = (i / n) * 2 * Math.PI;
     // Jitter far below the simplification tolerance so the ring is genuinely
-    // redundant — a correct simplifier should collapse most of it.
+    // redundant - a correct simplifier should collapse most of it.
     const jitter = (i % 7) * 0.000004;
     pts.push({
       lat: latC + Math.sin(a) * (radiusDeg + jitter),
@@ -140,7 +140,7 @@ test('simplify: relation member geometries are decimated too', () => {
       id: 2,
       members: [
         { type: 'way', role: 'outer', geometry: ring },
-        { type: 'node', role: 'admin_centre' }, // no geometry — must survive untouched
+        { type: 'node', role: 'admin_centre' }, // no geometry - must survive untouched
       ],
     }],
   });
@@ -165,7 +165,7 @@ test('simplify: geometry stays within tolerance of the original shape', () => {
   const body = JSON.stringify({ elements: [{ type: 'way', id: 4, geometry: ring }] });
   const out = JSON.parse(simplifyOverpassPayloadBody(body, TEST_OPTS));
   const g = out.elements[0].geometry;
-  // Every original vertex must lie near SOME kept vertex — a circle of kept
+  // Every original vertex must lie near SOME kept vertex - a circle of kept
   // points at spacing s has every dropped point within ~s/2 along the arc, and
   // DP guarantees perpendicular deviation ≤ tolerance. Loose sanity bound: no
   // original point farther than 8× tolerance from the nearest kept point pair

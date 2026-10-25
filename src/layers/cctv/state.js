@@ -127,7 +127,7 @@ export function createState({ services }) {
   layerState._mapStackListener = null;
 
   // Field-test fix (2026-07-06): camera.moveEnd handle for the horizon-culling
-  // pass (removed in destroy). Event-driven only — never a per-frame loop, so
+  // pass (removed in destroy). Event-driven only - never a per-frame loop, so
   // the zero-steady-state-work invariant holds.
 
   layerState._horizonCullListener = null;
@@ -197,7 +197,7 @@ export function createState({ services }) {
 
   layerState._hoverLastPickAt = 0;
 
-  // True between camera.moveStart and moveEnd — hover picking pauses while the
+  // True between camera.moveStart and moveEnd - hover picking pauses while the
   // camera is in motion (picks during a flight would fight the reselection).
 
   layerState._cameraMoving = false;

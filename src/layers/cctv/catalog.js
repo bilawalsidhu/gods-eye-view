@@ -13,7 +13,7 @@ import {
  * fills the FOV, and only when none was given: an explicit source/seed
  * `fovDeg` or a curated pose is never overwritten. A PTZ/varifocal range says
  * what the lens CAN do, not where it is zoomed now.
- * Unknown models — the common case — change nothing.
+ * Unknown models - the common case - change nothing.
  * @param {Object} camera - Camera being built (mutated).
  * @param {{model?:string, manufacturer?:string, explicitFov?:boolean}} hardware
  *   - Hardware model/manufacturer from a source or seed, and whether that
@@ -208,7 +208,7 @@ export function createCatalog({ state: layerState, services, parts, source }) {
       ).toLowerCase();
       // CAL badge input (design §3b passthrough): hand-authored file/env source
       // entries may carry poseSource:'curated'. Austin Open Data rows never set
-      // this — they stay RAW PRIOR until a human manually calibrates them.
+      // this - they stay RAW PRIOR until a human manually calibrates them.
       const poseSource =
         source.poseSource === 'curated' ? 'curated' : seed?.poseSource || null;
 

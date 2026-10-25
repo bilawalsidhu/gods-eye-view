@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * qa-context-arrivals.mjs — search arrivals above the surface, and Contacts
+ * qa-context-arrivals.mjs - search arrivals above the surface, and Contacts
  * listing mapped installations around a moving tracked aircraft.
  *
  * Run: node scripts/qa-context-arrivals.mjs http://localhost:4173 [--headful]
@@ -56,9 +56,9 @@ const result = {
 };
 const check = (name, ok, detail = '') => {
   console.log(
-    `[${ok ? 'PASS' : 'FAIL'}] ${name}${detail ? ` — ${detail}` : ''}`,
+    `[${ok ? 'PASS' : 'FAIL'}] ${name}${detail ? ` - ${detail}` : ''}`,
   );
-  if (!ok) result.failures.push(`${name}${detail ? ` — ${detail}` : ''}`);
+  if (!ok) result.failures.push(`${name}${detail ? ` - ${detail}` : ''}`);
 };
 
 const browser = await puppeteer.launch({
@@ -585,6 +585,6 @@ try {
   await browser.close();
 }
 console.log(
-  `${result.failures.length ? 'FAIL' : 'PASS'} — ${path.join(outDir, 'result.json')}`,
+  `${result.failures.length ? 'FAIL' : 'PASS'} - ${path.join(outDir, 'result.json')}`,
 );
 process.exit(result.failures.length ? 1 : 0);

@@ -158,7 +158,7 @@ export function enter() {
   this.cockpitAnchorValid = false;
   this.lastCameraUpdateMs = 0;
   this.active = true;
-  // Cockpit animates the camera from preUpdate every frame — preUpdate only
+  // Cockpit animates the camera from preUpdate every frame - preUpdate only
   // runs on rendered frames, so idle mode would freeze the cockpit solid.
   // (perf wave 2)
   this.services.holdContinuousRender('cockpit');
@@ -166,7 +166,7 @@ export function enter() {
   this.viewer.scene.screenSpaceCameraController.enableInputs = false;
   document.body.classList.add('cockpit-mode');
   // Activation writes entry/quick/map visibility directly, bypassing
-  // syncEntry's change-only cache — invalidate it so the exit-path
+  // syncEntry's change-only cache - invalidate it so the exit-path
   // syncEntry re-applies every write (notably re-hiding mapViewButton).
   this._entryAvailable = undefined;
   if (this.entry) this.entry.hidden = true;

@@ -150,7 +150,7 @@ export function _settleCctvFrame(token, src, ok) {
     );
 
   if (!ok) {
-    // Leave the element untouched — a settled frame stays on screen.
+    // Leave the element untouched - a settled frame stays on screen.
     this._cctvFrame.dataset.error = 'true';
     syncBadge();
     return;

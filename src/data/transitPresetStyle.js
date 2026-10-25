@@ -1,25 +1,25 @@
 /**
- * @file Preset-aware transit sprite styling — pure lookup tables mapping the
+ * @file Preset-aware transit sprite styling - pure lookup tables mapping the
  * active post-FX style to a sprite treatment the shaders cannot destroy, and
  * the detection tier that carries each mode's colour above them.
  *
  * Why: transit sprites are in-scene billboards, so they pass THROUGH the
  * post-FX chain. NVG and FLIR reduce the scene to luminance, and the mode
- * palette's luma is middling — a green bus, a red metro and an amber tram all
+ * palette's luma is middling - a green bus, a red metro and an amber tram all
  * collapse to the same dim grey, on a road NVG's auto-gain has pushed to
  * white. The owner's Boston test: "you can barely see these guys".
  *
  * Encoding per profile, the traffic-dot precedent applied to a glyph:
  *  - `mono` (surveillance/NVG, thermal/FLIR, noir, cockpit nvg/thermal): the
- *    sprite is WHITE — the hottest end of grayscale FLIR and of the Ironbow
- *    ramp, and the brightest phosphor under NVG — at CRT size, with a thin dark
+ *    sprite is WHITE - the hottest end of grayscale FLIR and of the Ironbow
+ *    ramp, and the brightest phosphor under NVG - at CRT size, with a thin dark
  *    halo sized in SCREEN pixels so it keeps local contrast on a bright road
  *    through any luma mapping. Black-hot FLIR inverts it, deliberately: a
  *    black sprite with a light ring is what a hot object looks like there.
  *  - `crt` (retro): saturated per-mode colours that survive posterisation,
  *    a size boost to out-shout the pixel grid, and a thinner halo.
  *  - `normal` (normal/anime/snow/unknown): every lookup returns the shipped
- *    value — mode colour, shipped size, hairline edge only.
+ *    value - mode colour, shipped size, hairline edge only.
  *
  * Brackets are a different matter. The detection canvas composites ABOVE the
  * post-FX chain, so a tier colour is literal screen RGB in every preset: the
@@ -35,18 +35,18 @@
 
 /** @const {Object<string,'mono'|'crt'>} Style name → non-normal profile. */
 const PROFILE_BY_STYLE = Object.freeze({
-  surveillance: 'mono', // NVG — P43 phosphor × luma
-  thermal: 'mono', // FLIR — grayscale/Ironbow × luma
+  surveillance: 'mono', // NVG - P43 phosphor × luma
+  thermal: 'mono', // FLIR - grayscale/Ironbow × luma
   noir: 'mono', // full desaturation
   nvg: 'mono', // cockpit vision names its modes directly
-  retro: 'crt', // CRT — hue survives, small glyphs don't
+  retro: 'crt', // CRT - hue survives, small glyphs don't
 });
 
 /**
  * Per-profile sprite treatment. `rgba` is [r,g,b] 0–255 + alpha 0–1;
  * `scale` multiplies the shipped billboard size; `outlinePx` is the dark
  * halo's width in FINAL SCREEN PIXELS, which is the only unit that means
- * anything for a glyph rendered at eighteen pixels — the shipped 1.5-unit
+ * anything for a glyph rendered at eighteen pixels - the shipped 1.5-unit
  * hairline in a 96-unit box is 0.28 px on screen, and vanishes.
  */
 const SPRITE_STYLE = Object.freeze({

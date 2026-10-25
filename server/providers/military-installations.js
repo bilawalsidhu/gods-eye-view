@@ -69,7 +69,7 @@ function militaryInstallationsProxy() {
       : [];
     const payload = {
       elements,
-      // Honest truncation flag — the client re-asks for its exact viewport so
+      // Honest truncation flag - the client re-asks for its exact viewport so
       // off-view features can never starve in-view ones. The cap travels with
       // the payload so the client never has to hard-code it.
       saturated: elements.length >= MILITARY_INSTALLATION_ELEMENT_CAP,
@@ -110,7 +110,7 @@ function militaryInstallationsProxy() {
       }
       // Query the SNAPPED box, not the raw viewport: neighbouring views then
       // share one cache entry, and an outward snap always covers what was asked.
-      // `exact=1` opts out — the client sends it after a SATURATED snapped
+      // `exact=1` opts out - the client sends it after a SATURATED snapped
       // response, so a truncated tile can never starve the actual viewport. It
       // is keyed separately so exact and snapped answers never collide.
       const exact = url.searchParams.get('exact') === '1';

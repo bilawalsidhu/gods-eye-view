@@ -7,7 +7,8 @@ import { createAirQualityLayer } from '../layers/airQuality/index.js';
 const ticks = ['2026-09-22T01:00:00Z', '2026-09-22T01:05:00Z'];
 const wind = {
   id: 'wind',
-  icon: '🌬',
+  icon: '',
+  iconSvg: '<svg class="wind-glyph" aria-hidden="true"></svg>',
   summary: {
     label: 'Wind motion',
     coverage: 'Global · 1° grid',

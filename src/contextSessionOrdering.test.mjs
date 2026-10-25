@@ -202,8 +202,8 @@ test('Context entry awaits isolation and direct shell routes isolate in the visi
   assert.match(select, /await this\._restoreContextSession\(\{ notificationToken, signal \}\)/);
   assert.doesNotMatch(select, /void this\._clearLayersOutsideContextMode\(mode\)/);
 
-  // The cross-mode teardown restores UNCONDITIONALLY — an aborted caller must
-  // never skip it — and then stops. A cancelled or failed cross-mode switch
+  // The cross-mode teardown restores UNCONDITIONALLY - an aborted caller must
+  // never skip it - and then stops. A cancelled or failed cross-mode switch
   // rests on Context OFF; the honesty lives in the REPORT, not in a racy
   // attempt to put the prior mode back (see the note above
   // _restoreContextSessionAfterLayerSettles).
@@ -258,7 +258,7 @@ test('a lost cross-mode switch says Context is off, and the state agrees', () =>
   );
   assert.match(
     setter,
-    /error: crossModeSwitchLost\s*\? `Switch to \$\{contextModeWord\(canonical\)\} did not complete — Context is now off`/,
+    /error: crossModeSwitchLost\s*\? `Switch to \$\{contextModeWord\(canonical\)\} did not complete - Context is now off`/,
     'a lost switch is reported in plain words, in the vocabulary the reader uses',
   );
   assert.match(setter, /\{ contextOff: true, priorMode \}/, 'and machine-readably');

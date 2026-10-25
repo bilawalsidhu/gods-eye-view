@@ -58,21 +58,21 @@ export function createQueries({
     if (status === 'auth-failed') {
       // Actionable, not a countdown: retrying cannot fix a rejected credential,
       // so the chip asks the operator to do the one thing that can.
-      return t('API key rejected — check AISSTREAM_API_KEY');
+      return t('API key rejected - check AISSTREAM_API_KEY');
     }
     if (status === 'stale') {
       const silentSec = Math.round(Number(payload?.silentForMs) / 1000);
       return Number.isFinite(silentSec) && silentSec > 0
-        ? t('feed silent {seconds}s — no AIS data', { seconds: silentSec })
-        : t('feed silent — no AIS data');
+        ? t('feed silent {seconds}s - no AIS data', { seconds: silentSec })
+        : t('feed silent - no AIS data');
     }
     const attempt = Number(payload?.reconnectAttempt);
     if (Number.isFinite(attempt) && attempt >= 1)
       return status === 'down'
-        ? t('feed down — retrying slowly (attempt {attempt})', { attempt })
+        ? t('feed down - retrying slowly (attempt {attempt})', { attempt })
         : t('reconnecting to feed… (attempt {attempt})', { attempt });
     return status === 'down'
-      ? t('feed down — retrying slowly')
+      ? t('feed down - retrying slowly')
       : t('reconnecting to feed…');
   }
 
@@ -165,7 +165,7 @@ export function createQueries({
 
   /**
    * Map one internal vessel record to a plain JSON-safe analyst record
-   * (analyst query engine seam). Pure — no Cesium types. Missing/unknown
+   * (analyst query engine seam). Pure - no Cesium types. Missing/unknown
    * fields are null, never NaN/undefined. navStatus is always null: the
    * /api/vessels proxy does not surface AIS NavigationalStatus, so it
    * cannot be derived client-side.
@@ -201,7 +201,7 @@ export function createQueries({
   /**
    * Ellipsoidal render height (m) for a sea-surface object: the local geoid
    * undulation N plus a small lift. The sea surface ≈ the geoid, which sits
-   * −106…+85 m off the WGS84 ellipsoid worldwide (Rotterdam ≈ +45 m — at
+   * −106…+85 m off the WGS84 ellipsoid worldwide (Rotterdam ≈ +45 m - at
    * height 0 the tile sea mesh occludes every chevron; Houston ≈ −27 m).
    * Pure seam, exported for unit tests.
    * @param {number|null|undefined} geoidN - Undulation N (m), or null/undefined while the grid is cold.
@@ -399,7 +399,7 @@ export function createQueries({
     /**
      * Snapshot the layer's in-memory vessel records as plain JSON-safe
      * objects for the analyst query engine. On-demand only (called at most
-     * once per spoken query) — zero per-frame cost, no listeners, no caching.
+     * once per spoken query) - zero per-frame cost, no listeners, no caching.
      * Returns [] while the layer is disabled or empty.
      * @param {number} [maxCount=2000] - Maximum records to return (truncation).
      * @returns {Array<Object>} See mapAnalystRecord for the record shape.

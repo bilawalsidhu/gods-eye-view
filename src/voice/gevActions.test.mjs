@@ -24,22 +24,22 @@ import { GEV_REALTIME_TOOLS } from '../../server/providers/openai/tools.js';
 import { presentResult } from './resultDisplay.js';
 import { attachVoiceResult } from './speech.js';
 
-test('every live basemap is reachable by its own id — no enum value without a voice alias', () => {
+test('every live basemap is reachable by its own id - no enum value without a voice alias', () => {
   // B1 regression: a stack added to MAP_STACKS (and the set_map_stack enum)
   // without a matching STACK_ALIASES entry resolves to null and throws
-  // "Unknown map stack" at the controller — a broken voice command for a
+  // "Unknown map stack" at the controller - a broken voice command for a
   // shipped basemap. Every live id must self-resolve.
   for (const stack of MAP_STACKS) {
     assert.equal(
       normalizeStackId(stack.id),
       stack.id,
-      `set_map_stack '${stack.id}' has no self-mapping alias — voice selection would throw`,
+      `set_map_stack '${stack.id}' has no self-mapping alias - voice selection would throw`,
     );
   }
   // The Esri phrasings the voice prompt promises must also resolve.
   assert.equal(normalizeStackId('Esri'), 'esri-imagery');
   assert.equal(normalizeStackId('esri imagery'), 'esri-imagery');
-  // And the voice tool's enum must equal the set of live ids — no drift either way.
+  // And the voice tool's enum must equal the set of live ids - no drift either way.
   const enumIds = GEV_REALTIME_TOOLS.find(tool => tool.name === 'set_map_stack').parameters.properties.stack.enum;
   assert.deepEqual(
     [...enumIds].sort(),
@@ -51,7 +51,7 @@ test('every live basemap is reachable by its own id — no enum value without a 
 test('track_entity narration names aircraft callsign → registration → icao24', () => {
   const found = { callsign: 'SWA696', registration: 'N123AB', icao24: 'ae1fa4' };
   assert.equal(formatTrackedEntityLabel(found, 'q'), 'SWA696');
-  // A callsign-less contact must be spoken as its tail number, not the hex —
+  // A callsign-less contact must be spoken as its tail number, not the hex -
   // otherwise the voice says "ae1fa4" at a plane the UI is labelling N123AB.
   assert.equal(formatTrackedEntityLabel({ ...found, callsign: null }, 'q'), 'N123AB');
   assert.equal(formatTrackedEntityLabel({ ...found, callsign: '  ', registration: ' ' }, 'q'), 'ae1fa4');
@@ -63,7 +63,7 @@ test('track_entity narration names aircraft callsign → registration → icao24
 
 test('track_entity runner narrates a callsign-less aircraft by its registration', async () => {
   globalThis.window = globalThis.window || { clearTimeout, setTimeout, requestIdleCallback: null };
-  // Only the layer lookup is stubbed — the runner reaches the real formatter
+  // Only the layer lookup is stubbed - the runner reaches the real formatter
   // through its real wiring, so a broken hand-off fails this test.
   for (const layerId of ['flights', 'military']) {
     const { viewer, styleManager } = createVoiceNavigationHarness();
@@ -1123,7 +1123,7 @@ test('voice CCTV focus reports tracking ownership separately from no active came
     cctvVoiceFocusOutcome(CCTV_FOCUS_RESULT.TRACKING_HOLDS_VIEW),
     {
       ok: false,
-      error: 'Camera active; tracking holds the view — say untrack first',
+      error: 'Camera active; tracking holds the view - say untrack first',
     },
   );
   assert.deepEqual(
@@ -1141,14 +1141,14 @@ test('voice CCTV focus reports cockpit ownership', () => {
     cctvVoiceFocusOutcome(CCTV_FOCUS_RESULT.COCKPIT_ACTIVE),
     {
       ok: false,
-      error: 'In cockpit — exit cockpit to fly to a camera',
+      error: 'In cockpit - exit cockpit to fly to a camera',
     },
   );
   assert.deepEqual(
     cctvVoiceFocusOutcome(CCTV_FOCUS_RESULT.COCKPIT_ACTIVE, { cameraSelected: true }),
     {
       ok: false,
-      error: 'Camera selected; in cockpit — exit cockpit to fly to it',
+      error: 'Camera selected; in cockpit - exit cockpit to fly to it',
     },
   );
 });
@@ -1207,7 +1207,7 @@ test('control_cockpit resolves spoken TR-3B spellings to the tr3b class id', asy
   });
 
   // Analyst records carry the class as the unpunctuated id `tr3b`, but nobody
-  // says or writes it that way — every hyphenated/spaced spelling has to land on
+  // says or writes it that way - every hyphenated/spaced spelling has to land on
   // the same id or a voice query for TR-3Bs silently matches nothing. Driven
   // through the real runner, so a broken hand-off fails here.
   for (const spoken of ['TR-3B', 'tr-3b', 'tr 3b', 'TR 3 B', 'tr3b']) {
@@ -1216,7 +1216,7 @@ test('control_cockpit resolves spoken TR-3B spellings to the tr3b class id', asy
   }
 
   // Surgical: real class ids still pass through untouched, and an unrelated
-  // hyphenated value is NOT rewritten — only the TR-3B spellings are aliased.
+  // hyphenated value is NOT rewritten - only the TR-3B spellings are aliased.
   for (const passthrough of ['helicopter', 'fastjet', 'widebody', 'e-3b', 'tr-3c']) {
     await runner('control_cockpit', { action: 'next', aircraftClass: passthrough });
     assert.equal(calls.at(-1).aircraftClass, passthrough);
@@ -1728,7 +1728,7 @@ test('voice CCTV select, next, prev, and nearest report tracking-refused flights
     assert.equal(result.ok, false);
     assert.equal(
       result.error,
-      'Camera selected; tracking holds the view — say untrack to fly',
+      'Camera selected; tracking holds the view - say untrack to fly',
     );
   }
 
@@ -2484,7 +2484,7 @@ test('voice Radio Pause while disabled is a truthful playback-only no-op', async
 // `control_cockpit` establishes Contacts as its own PRECONDITION by calling the
 // public setContextMode facade internally. That facade claims the visual
 // restore lane so a genuine operator Context request supersedes a delayed
-// shared style/detection restore — correct for the operator, wrong here: a
+// shared style/detection restore - correct for the operator, wrong here: a
 // cockpit transition is inert by rule, and claiming would cancel a pending
 // shared restore the operator never overrode. These pins must be able to TELL
 // THE TWO APART, which a claim-count-only assertion cannot.
@@ -2649,7 +2649,7 @@ test('a degenerate depth pick does not escape the view-target prewarm', () => {
   // The demo path: a plain camera flight, no scene and no tracking. Over empty
   // sky the depth pick comes back as NaN; converting that used to throw
   // `DeveloperError: normalized result is not a number` from inside
-  // requestIdleCallback, where nothing could catch it — a red console error on
+  // requestIdleCallback, where nothing could catch it - a red console error on
   // first impression.
   const degenerate = new Cesium.Cartesian3(Number.NaN, Number.NaN, Number.NaN);
   withCapturedTimers(({ flush, debugLines }) => {
@@ -2669,14 +2669,14 @@ test('a degenerate depth pick does not escape the view-target prewarm', () => {
     // carrying nonsense forward. Before the fix the NaN Cartesian was truthy
     // and short-circuited every fallback.
     assert.equal(harness.calls.pickEllipsoid, 1, 'a degenerate pick must fall through to the ellipsoid');
-    assert.deepEqual(debugLines, [], 'the guard handles this — the backstop must stay quiet');
+    assert.deepEqual(debugLines, [], 'the guard handles this - the backstop must stay quiet');
   });
 });
 
 test('an unexpected prewarm failure is logged once at debug level, never thrown', () => {
   // Belt and braces: the guard is the fix, but an idle callback is an uncaught
   // context, so a surprise from anywhere in the scene graph must still be
-  // swallowed — and must not spam the console when its cause repeats.
+  // swallowed - and must not spam the console when its cause repeats.
   withCapturedTimers(({ flush, debugLines }) => {
     const harness = createPrewarmHarness({
       positionCartographic: () => { throw new Error('scene graph is mid-teardown'); },
@@ -2701,7 +2701,7 @@ test('an unexpected prewarm failure is logged once at debug level, never thrown'
 test('a lost cross-mode switch reports every mode field in the shared vocabulary', async () => {
   // The primary `mode` was translated first; the failure path also carries
   // `priorMode` and a diagnostic sentence naming the mode. One leaked internal
-  // id is enough to put the model back where it started — reading 'flights'
+  // id is enough to put the model back where it started - reading 'flights'
   // and concluding Contacts is off.
   globalThis.window = globalThis.window || { clearTimeout, setTimeout, requestIdleCallback: null };
   const styleManager = {
@@ -2717,7 +2717,7 @@ test('a lost cross-mode switch reports every mode field in the shared vocabulary
         entering: 'flights',
         contextOff: true,
         priorMode: 'flights',
-        error: 'Switch to contacts did not complete — Context is now off',
+        error: 'Switch to contacts did not complete - Context is now off',
       };
     },
   };
@@ -2769,13 +2769,13 @@ test('an absent secondary mode stays absent instead of claiming to be off', asyn
   assert.equal(
     result.entering,
     null,
-    'nothing is entering — calling that "off" would assert a transition that is not happening',
+    'nothing is entering - calling that "off" would assert a transition that is not happening',
   );
 });
 
 test('a nested Cockpit rollback result is translated too', async () => {
   globalThis.window = globalThis.window || { clearTimeout, setTimeout, requestIdleCallback: null };
-  // The prior mode is Contacts, whose INTERNAL id is 'flights' — the id that
+  // The prior mode is Contacts, whose INTERNAL id is 'flights' - the id that
   // must not reach the model. `active: false` keeps Contacts from reading as
   // ready, so entry runs and the failed Cockpit rolls back to it.
   let contextMode = 'flights';
@@ -2785,7 +2785,7 @@ test('a nested Cockpit rollback result is translated too', async () => {
     getAircraftTrackingTarget: () => null,
     async setContextMode(mode) {
       // Entry to Contacts succeeds; Cockpit then fails and the prior mode is
-      // rolled back — the rollback result is what the model reads.
+      // rolled back - the rollback result is what the model reads.
       contextMode = mode;
       return { ok: true, action: 'set_context_mode', mode, active: true, changing: false };
     },
@@ -3026,7 +3026,7 @@ test('front5: the spoken count and the panel window are ONE number by constructi
     assert.equal(
       spoken.count,
       panel.aircraft,
-      'one engine, two consumers — these can never disagree again',
+      'one engine, two consumers - these can never disagree again',
     );
     assert.equal(spoken.window.flights, panel.flights.length);
     assert.equal(spoken.window.military, panel.military.length);
@@ -3072,7 +3072,7 @@ test('front5: an explicit region still uses the region engine while Contacts is 
  * The centre test decides whether a nearby ask is answered from the Contacts
  * window or as a general query about somewhere else. A lat/lon delta BOX gets
  * that wrong in both directions, so these pins sit exactly where a box and a
- * true distance disagree — anywhere else, both agree and prove nothing.
+ * true distance disagree - anywhere else, both agree and prove nothing.
  * Subject is at (29.9, -97.9); 1 deg lat ~= 111.19 km, 1 deg lon ~= 96.5 km there.
  */
 function subjectWindowHarness() {
@@ -3083,7 +3083,7 @@ function subjectWindowHarness() {
   });
 }
 
-test('front5: the box DIAGONAL is not the subject — 1.32 km away is somewhere else', async () => {
+test('front5: the box DIAGONAL is not the subject - 1.32 km away is somewhere else', async () => {
   // Both deltas are under 0.01, so a box calls this the subject. The real
   // separation is 1.32 km. This is the case the coordinator flagged: a centre
   // far enough to be a different place, slipping through on the diagonal.
@@ -3106,7 +3106,7 @@ test('front5: the box DIAGONAL is not the subject — 1.32 km away is somewhere 
 
 test('front5: 0.99 km due EAST is the subject, though a degree box rejects it', async () => {
   // A degree of longitude is short at this latitude, so 0.0103 deg is only
-  // 0.99 km — inside 1 km — yet over the 0.01 box threshold. A box would send
+  // 0.99 km - inside 1 km - yet over the 0.01 box threshold. A box would send
   // the operator a different, smaller number for a centre that IS the contact.
   globalThis.window = globalThis.window || { clearTimeout, setTimeout, requestIdleCallback: null };
   await withAwareness(subjectWindowHarness(), async (awareness) => {
@@ -3126,7 +3126,7 @@ test('front5: 0.99 km due EAST is the subject, though a degree box rejects it', 
 // geocoded to nothing returned null, which the caller reports as "Could not
 // resolve Radio location". Both now fall through to Photon. These drive the
 // second case, because it reaches the SAME fallback through a running Google
-// branch — the no-key branch cannot be driven here, since the key expression
+// branch - the no-key branch cannot be driven here, since the key expression
 // reads `import.meta.env`, which only Vite defines.
 
 /** Photon's GeoJSON shape, trimmed to the properties the adapter consumes. */
@@ -3215,7 +3215,7 @@ test('voice Radio: a key that geocodes to nothing still places the station, keyl
 
 test('voice Radio: the keyless path applies no country filter the keyed path would not', async (t) => {
   // Photon reports the country in the feature's own language ("Việt Nam"), and
-  // `rankRadioStationsForRequest` fails CLOSED on a country it cannot map —
+  // `rankRadioStationsForRequest` fails CLOSED on a country it cannot map -
   // returning NO stations. Forwarding it would make a keyless install answer
   // "No Radio station matched" for exactly the places it just resolved, while a
   // keyed install placed a station. The label may carry it; the filter may not.

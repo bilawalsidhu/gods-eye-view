@@ -1,5 +1,5 @@
 // Refusals and failures that source modules produce in English reach
-// the page translated — through a placeholder at the point of display, or
+// the page translated - through a placeholder at the point of display, or
 // through a catalog entry when the text is stored as data.
 import assert from 'node:assert/strict';
 import test from 'node:test';
@@ -58,7 +58,7 @@ for (const locale of ['es', 'ru']) {
       });
       assert.doesNotMatch(shown, /route leg too long/);
       const limited = presentRoutingFailure(
-        Object.assign(new Error('rate limited — try again in a moment'), {
+        Object.assign(new Error('rate limited - try again in a moment'), {
           status: 429,
           refusal: 'rate limited',
         }),

@@ -129,12 +129,12 @@ export function _renderCctvState(state) {
   }
 
   if (this._cctvQualityChip) {
-    // CAL badge (cctv-v2 design §3b, amended by LOCKED §9.2 — panel-only,
+    // CAL badge (cctv-v2 design §3b, amended by LOCKED §9.2 - panel-only,
     // no in-world tint): three states driven by cctv.js's deriveCalBadge,
     // no client-side scoring math. Casing is unified via _calBadgeLabel so
     // the chip and the meta line never drift onto different conventions.
     // Save-gated persistence (viewshed design §3e): unsaved live edits show
-    // EDITED on top of whatever the persisted badge state is — SAVE CAL
+    // EDITED on top of whatever the persisted badge state is - SAVE CAL
     // promotes to CALIBRATED, RESET CAL clears.
     const badge = activeCamera?.calBadge || null;
     const dirty = !!activeCamera?.calDirty;
@@ -292,7 +292,7 @@ export function _updateCctvSyncChip(loading, enabled) {
   }
 
   if (this._cctvChipWasBusy && enabled && total > 0) {
-    // Load just completed — flash the final count, then auto-hide.
+    // Load just completed - flash the final count, then auto-hide.
     this._cctvChipWasBusy = false;
     this.actions.setSplitFlapText(this._cctvSyncLabel, t('camera grid ready'));
     this._cctvSyncProgress.textContent = `${total}/${total}`;

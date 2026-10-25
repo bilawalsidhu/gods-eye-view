@@ -261,7 +261,7 @@ export function extractAustinHeading(record) {
   }
 
   // Free-form name/intersection text: only explicit travel forms ("WESTBOUND"/
-  // "WB") count — a bare "West" here is a street name ("5TH ST / WEST AVE"), not
+  // "WB") count - a bare "West" here is a street name ("5TH ST / WEST AVE"), not
   // a facing, and must not promote the camera to a false high-confidence heading.
   const nameProbe = [
     record.camera_name,
@@ -627,14 +627,14 @@ export function normalizeSourceItem(item) {
     ),
     sourceKind: String(item.sourceKind || item.kind || 'configured'),
     // Optional CAL badge input (cctv-v2 design §3b/§9.2, additive-only per the
-    // global constraints — nothing else in this file changes): hand-authored
+    // global constraints - nothing else in this file changes): hand-authored
     // file/env catalog entries may declare poseSource:'curated' so the panel
     // badge can distinguish them from raw automated priors (e.g. Austin Open
     // Data, which never sets this field). Passed through as-is to the client.
     poseSource: item.poseSource === 'curated' ? 'curated' : undefined,
     // Optional hardware-model passthrough (additive, like poseSource): packs
-    // whose catalog publishes the camera's hardware model — King County's
-    // layer carries Manufacturer/Model per camera — pass it through so
+    // whose catalog publishes the camera's hardware model - King County's
+    // layer carries Manufacturer/Model per camera - pass it through so
     // identified-hardware consumers can use it. Absent everywhere else.
     model:
       typeof item.model === 'string' && item.model.trim()

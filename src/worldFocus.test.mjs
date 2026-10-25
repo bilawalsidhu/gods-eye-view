@@ -64,7 +64,7 @@ test('routing hands the request to the UI policy, which owns the flight', () => 
       return 'flew';
     },
   );
-  // The policy runs FIRST — it releases the follow camera before the flight.
+  // The policy runs FIRST - it releases the follow camera before the flight.
   assert.deepEqual(order, ['policy:fire', 'fly:fire']);
   assert.equal(result, 'flew');
 });
@@ -129,7 +129,7 @@ test('the transfer flight supersedes any flight in progress and keeps the operat
   assert.equal(options.easingFunction, Cesium.EasingFunction.CUBIC_IN_OUT);
 });
 
-test('fires frame wider than vessels — a fire is read by its surroundings', () => {
+test('fires frame wider than vessels - a fire is read by its surroundings', () => {
   const camera = stubCamera();
   flyToWorldTarget({ camera }, { kind: 'fire', id: 'fire-1', position: POSITION });
   const { sphere, options } = camera.calls.flights[0];
@@ -144,7 +144,7 @@ test('every framing is a real oblique standoff, not a nadir or an inside-out sph
   assert.deepEqual(kinds.sort(), ['fire', 'vessel']);
   for (const kind of kinds) {
     const framing = WORLD_FOCUS_FRAMING[kind];
-    // Looking DOWN at the target, but obliquely — a nadir drop reads as a map.
+    // Looking DOWN at the target, but obliquely - a nadir drop reads as a map.
     assert.ok(framing.pitchDeg < 0, `${kind}: pitch must look down, got ${framing.pitchDeg}`);
     assert.ok(framing.pitchDeg > -80, `${kind}: pitch must stay oblique, got ${framing.pitchDeg}`);
     // Standing off outside the framed sphere, at a human-readable distance.
@@ -155,7 +155,7 @@ test('every framing is a real oblique standoff, not a nadir or an inside-out sph
     );
     assert.ok(framing.rangeM <= 10000, `${kind}: range must stay close-in, got ${framing.rangeM}`);
   }
-  // Exact shipped values — a silent retune must show up as a failing test.
+  // Exact shipped values - a silent retune must show up as a failing test.
   assert.deepEqual({ ...WORLD_FOCUS_FRAMING.vessel }, { radiusM: 150, rangeM: 1200, pitchDeg: -30 });
   assert.deepEqual({ ...WORLD_FOCUS_FRAMING.fire }, { radiusM: 400, rangeM: 3000, pitchDeg: -35 });
 });

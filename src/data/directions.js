@@ -5,9 +5,9 @@ import { createDirectionsSource } from '../layers/directions/source.js';
  *
  * The layer itself lives in `src/layers/directions/`, which imports nothing
  * but Cesium and the pure step formatter. This module is the one place that
- * names the application's shared services — the render governor, sprite order,
+ * names the application's shared services - the render governor, sprite order,
  * the pick registry, the world overlay, the annotation material, the camera
- * verbs, the shared ground floor and the pointer arbiter — and it re-exports
+ * verbs, the shared ground floor and the pointer arbiter - and it re-exports
  * the layer's pure helpers for the tests and the share-link code.
  */
 

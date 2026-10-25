@@ -4,7 +4,7 @@
  *
  * Pure module (no DOM, no network, no imports) so it can be shared by three
  * callers that cannot share anything else:
- *   1. the browser voice UI (`gevRealtime.js`) — live "~$0.42" readout + caps
+ *   1. the browser voice UI (`gevRealtime.js`) - live "~$0.42" readout + caps
  *   2. the dev-server token endpoint (`vite.config.js` → `/api/realtime/token`)
  *   3. unit tests (`voiceCost.test.mjs`)
  *
@@ -22,7 +22,7 @@
  * ------------------------------------------------------------------ */
 
 /**
- * ⚠️ VERIFY AT RELEASE — MODEL IDS AND PRICES ARE EXTERNAL FACTS THAT DRIFT. ⚠️
+ * VERIFY AT RELEASE - MODEL IDS AND PRICES ARE EXTERNAL FACTS THAT DRIFT.
  *
  * Both model ids and every rate below were read from OpenAI's own model +
  * pricing pages on 2026-08-18:
@@ -34,11 +34,11 @@
  * and a wrong model id fails the session at connect time):
  *   - `standard` MUST stay in sync with OPENAI_REALTIME_MODEL / the
  *     OPENAI_REALTIME_MODEL_DEFAULT constant in vite.config.js.
- *   - `mini` has no in-repo history — it is new here. OpenAI publishes both
+ *   - `mini` has no in-repo history - it is new here. OpenAI publishes both
  *     `gpt-realtime-2.1-mini` (current, used below) and an older
  *     `gpt-realtime-mini`; there is NO `gpt-realtime-2-mini`. If the id ever
  *     moves, override it with OPENAI_REALTIME_MODEL_MINI rather than editing
- *     code — see .env.example.
+ *     code - see .env.example.
  *
  * Rates are USD per 1,000,000 tokens.
  */
@@ -51,7 +51,7 @@ export const VOICE_MODELS = Object.freeze({
     tier: 'standard',
     id: 'gpt-realtime-2',
     label: 'STANDARD', // i18n-ignore: model data; the tier button has its own text
-    /** USD per 1M tokens — gpt-realtime-2. */
+    /** USD per 1M tokens - gpt-realtime-2. */
     rates: Object.freeze({
       textInput: 4,
       textCachedInput: 0.4,
@@ -67,7 +67,7 @@ export const VOICE_MODELS = Object.freeze({
     tier: 'mini',
     id: 'gpt-realtime-2.1-mini',
     label: 'MINI', // i18n-ignore: model data; the tier button has its own text
-    /** USD per 1M tokens — gpt-realtime-2.1-mini (~3.2× cheaper on audio). */
+    /** USD per 1M tokens - gpt-realtime-2.1-mini (~3.2× cheaper on audio). */
     rates: Object.freeze({
       textInput: 0.6,
       textCachedInput: 0.06,
@@ -120,7 +120,7 @@ export function isKnownVoiceTier(tier) {
  * not recognise the model a session is actually running on.
  */
 export function mostExpensiveVoiceModel() {
-  // Rank by audio output — the dominant cost in a speech-to-speech session.
+  // Rank by audio output - the dominant cost in a speech-to-speech session.
   return Object.values(VOICE_MODELS).reduce((worst, entry) =>
     entry.rates.audioOutput > worst.rates.audioOutput ? entry : worst,
   );
@@ -135,7 +135,7 @@ export function mostExpensiveVoiceModel() {
  * set. Pricing by the id the server echoes back closes that gap.
  *
  * An unrecognised id bills at the most expensive known rates rather than
- * guessing cheap — under-metering is what lets a cap be overrun.
+ * guessing cheap - under-metering is what lets a cap be overrun.
  *
  * @param {unknown} modelId
  * @returns {{tier: string, id: string, label: string, rates: object, recognized: boolean}}
@@ -159,7 +159,7 @@ export function resolveVoiceModelById(modelId) {
  * ------------------------------------------------------------------ */
 
 /**
- * ⚠️ VERIFY AT RELEASE — external prices, USD per 1M tokens, same shape as
+ * VERIFY AT RELEASE - external prices, USD per 1M tokens, same shape as
  * the realtime rate tables. Transcription is billed separately from the
  * session's responses and arrives as `usage` on
  * `conversation.item.input_audio_transcription.completed`. An unknown model
@@ -222,11 +222,11 @@ export function estimateTranscriptionCostUsd(usage, modelId) {
  * ------------------------------------------------------------------ */
 
 /**
- * Session spend thresholds, in USD. Deliberately generous — this is a runaway
+ * Session spend thresholds, in USD. Deliberately generous - this is a runaway
  * guard (a hot mic left open, a feedback loop), not a budget.
  *
- * `warnUsd`: soft — one visual cue + one console line, session continues.
- * `capUsd`:  hard — the session is closed through the normal stop path.
+ * `warnUsd`: soft - one visual cue + one console line, session continues.
+ * `capUsd`:  hard - the session is closed through the normal stop path.
  *
  * Either may be null/0/Infinity to disable that threshold.
  */
@@ -239,7 +239,7 @@ export const VOICE_COST_LIMITS = Object.freeze({
  * Serialized sentinel for a disabled threshold.
  *
  * A disabled threshold is Infinity in memory, but `JSON.stringify(Infinity)`
- * is `null`, which reads back as "absent" and silently restores the DEFAULT —
+ * is `null`, which reads back as "absent" and silently restores the DEFAULT -
  * so a deliberately disabled cap would quietly re-arm on the next session.
  * Persist this string instead; `normalizeCostLimits` accepts it on the way in.
  */
@@ -250,7 +250,7 @@ export const VOICE_COST_LIMIT_OFF = 'off';
  *
  * Accepted "disabled" spellings: the `'off'` sentinel, Infinity, and a
  * 0/negative number. Absent/undefined/null and unparseable values fall back to
- * the default — a corrupt entry must never disarm the cap.
+ * the default - a corrupt entry must never disarm the cap.
  */
 export function normalizeCostLimits(limits) {
   const clean = (value, fallback) => {
@@ -306,7 +306,7 @@ const nonNegative = (value) => {
  * The same policy applies to PARTIAL detail objects, which are the subtler
  * case: if `input_tokens` is 1000 but the only detail present is
  * `text_tokens: 100`, the other 900 tokens are real and billed upstream.
- * Counting only the named buckets would silently drop them and UNDER-meter —
+ * Counting only the named buckets would silently drop them and UNDER-meter -
  * exactly the direction that lets a cap be overrun. Any aggregate-minus-details
  * residual is therefore attributed to audio rates.
  *
@@ -343,7 +343,7 @@ export function splitUsageTokens(usage) {
     audioIn = Math.max(0, nonNegative(inDetails.audio_tokens) - audioCached);
     imageIn = Math.max(0, nonNegative(inDetails.image_tokens) - imageCached);
   } else {
-    // No detail — conservative all-audio attribution (see note above).
+    // No detail - conservative all-audio attribution (see note above).
     textIn = 0;
     audioIn = inputTotal;
     imageIn = 0;
@@ -424,13 +424,13 @@ export function formatCostUsd(usd) {
  *
  * Both crossings are independent one-shot latches: each fires on the first
  * `record()` that carries the total at or past its threshold and never again,
- * so one warning line is logged and the cap stop is requested exactly once —
+ * so one warning line is logged and the cap stop is requested exactly once -
  * even though `record()` keeps being called while the session tears down.
  *
  * The model binding is fixed at construction and never changes: a tracker
  * belongs to exactly one session, priced against the model that session is
  * actually running on. Pass `modelId` (the id the server echoed back) when it
- * is known — it outranks `tier`, because an env override can point a tier at a
+ * is known - it outranks `tier`, because an env override can point a tier at a
  * different model. `tier` alone is only used before a session exists.
  *
  * @param {{tier?: string, modelId?: string,
@@ -457,13 +457,13 @@ export function createVoiceCostTracker(options = {}) {
     responses,
     warnUsd: limits.warnUsd,
     capUsd: limits.capUsd,
-    /** 'ok' | 'warn' | 'cap' — monotonic; never steps back down. */
+    /** 'ok' | 'warn' | 'cap' - monotonic; never steps back down. */
     level: capped ? 'cap' : warned ? 'warn' : 'ok',
     /** True only on the single record() that crossed the soft threshold. */
     warnCrossed,
     /** True only on the single record() that crossed the hard cap. */
     capCrossed,
-    /** True once the cap is latched — the session must be stopped. */
+    /** True once the cap is latched - the session must be stopped. */
     capReached: capped,
     /**
      * True when at least one billed response never reported usage (the session
@@ -472,7 +472,7 @@ export function createVoiceCostTracker(options = {}) {
      * Deliberately not called a lower bound: the estimate can also run high
      * (residuals and unknown models bill at worst-case rates, and sub-cent
      * totals round up), so the total is neither a guaranteed floor nor a
-     * guaranteed ceiling — just incomplete. We have no token telemetry for an
+     * guaranteed ceiling - just incomplete. We have no token telemetry for an
      * unfinished response and do not invent one.
      */
     incomplete,
@@ -480,7 +480,7 @@ export function createVoiceCostTracker(options = {}) {
     display: formatCostUsd(totalUsd) + (incomplete ? '*' : ''),
     /** Prose for the tooltip; null when the accounting is complete. */
     note: incomplete
-      ? 'Estimate is incomplete — a response was still in flight when the session ended, so its usage was never reported.'
+      ? 'Estimate is incomplete - a response was still in flight when the session ended, so its usage was never reported.'
       : null,
   });
 

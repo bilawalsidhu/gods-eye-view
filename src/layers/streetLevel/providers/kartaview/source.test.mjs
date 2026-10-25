@@ -163,7 +163,7 @@ test('HTTP errors, network failures and non-JSON become readable errors', async 
   // Not a timeout: no network is said as much, and not asked again at once.
   await assert.rejects(
     offline.getPhoto('1'),
-    /could not be reached — check the network/,
+    /could not be reached - check the network/,
   );
   assert.equal(asked, 1);
   const garbled = createKartaViewSource({
@@ -301,7 +301,7 @@ test('a lookup that times out is asked once more, then reported as no answer in 
   );
   assert.match(
     String(outcome?.error?.message),
-    /did not answer in time — try again/,
+    /did not answer in time - try again/,
   );
   assert.equal(outcome.error.timedOut, true);
   assert.equal(calls, 2);
@@ -560,7 +560,7 @@ test('a chunked answer split mid-character is reassembled in order', async () =>
     lines: [
       {
         track: [{ lat: '1', lng: '2' }],
-        name: 'Strada Memorandumului — Cluj-Napoca 😀',
+        name: 'Strada Memorandumului - Cluj-Napoca \u{1F600}',
       },
     ],
     note: 'ăîşţ'.repeat(200),

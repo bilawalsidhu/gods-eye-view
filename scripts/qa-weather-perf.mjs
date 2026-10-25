@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * qa-weather-perf — matched-route throughput and idle-work measurement for the
+ * qa-weather-perf - matched-route throughput and idle-work measurement for the
  * Weather layers (Wind, Rain radar, Satellite clouds, Lightning density).
  *
  * This is a measurement harness, not a pass/fail gate. It reproduces one fixed
@@ -558,7 +558,7 @@ try {
     '|---|---|---|---|---|---|---|---|---|---|---|---|---|',
     ...results.map(
       (r) =>
-        `| ${r.phase} | ${r.state} | ${r.run} | ${r.window} | ${r.fps}${r.canvasStable ? '' : ' ⚠'} | ${r.p50} | ${r.p95} | ${r.max} | ${r.longTasks} | ${r.longTaskMs} | ${r.mutations} | ${r.heightChanges} | ${r.heightMin ?? '—'}–${r.heightMax ?? '—'} |`,
+        `| ${r.phase} | ${r.state} | ${r.run} | ${r.window} | ${r.fps}${r.canvasStable ? '' : ' ⚠'} | ${r.p50} | ${r.p95} | ${r.max} | ${r.longTasks} | ${r.longTaskMs} | ${r.mutations} | ${r.heightChanges} | ${r.heightMin ?? '-'}–${r.heightMax ?? '-'} |`,
     ),
   ];
   writeFileSync(path.join(outDir, 'summary.md'), lines.join('\n') + '\n');

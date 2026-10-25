@@ -1,5 +1,5 @@
 /**
- * bloom.js — Bloom intensity normalization and version migration.
+ * bloom.js - Bloom intensity normalization and version migration.
  *
  * The bloom slider was rescaled from 0–100 (v1) to 0–200 (v2) to provide
  * finer control. Share links and saved scene projects may carry either scale,
@@ -26,7 +26,7 @@ function clamp(value, min, max) {
 
 /**
  * Clamp a raw bloom value to the valid v2 range [0, 200].
- * @param {number} value — raw intensity (may be out of range or NaN)
+ * @param {number} value - raw intensity (may be out of range or NaN)
  * @returns {number} integer in [0, BLOOM_INTENSITY_MAX]
  */
 export function clampBloomIntensity(value) {
@@ -39,7 +39,7 @@ export function clampBloomIntensity(value) {
  * Convert a v1 (0–100) bloom value to the v2 (0–200) scale.
  * The v1 scale was inverted (100 = no bloom, 0 = max bloom),
  * so this also un-inverts.
- * @param {number} value — legacy v1 intensity
+ * @param {number} value - legacy v1 intensity
  * @returns {number} equivalent v2 intensity
  */
 export function legacyBloomToV2(value) {
@@ -54,8 +54,8 @@ export function legacyBloomToV2(value) {
 /**
  * Decode a bloom intensity from a share link or saved project.
  * Handles both v1 (0–100, inverted) and v2 (0–200) scales.
- * @param {number} value — persisted intensity
- * @param {number} [version=1] — bloom scale version from the saved state
+ * @param {number} value - persisted intensity
+ * @param {number} [version=1] - bloom scale version from the saved state
  * @returns {number} v2-scale intensity in [0, 200]
  */
 export function decodeBloomIntensity(value, version = 1) {
@@ -81,7 +81,7 @@ export function decodeBloomIntensity(value, version = 1) {
 /**
  * Convert a bloom intensity (0–200) to a normalized strength (0.0–1.0)
  * suitable for passing to the CesiumJS bloom post-process stage.
- * @param {number} value — v2-scale intensity
+ * @param {number} value - v2-scale intensity
  * @returns {number} normalized strength in [0, 1]
  */
 export function bloomStrengthFromIntensity(value) {

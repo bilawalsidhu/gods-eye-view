@@ -15,7 +15,7 @@ const css = readStylesheet(path.join(ROOT, 'style.css'));
  * whenever their content is on screen, so this pin FAILS CLOSED: any cascade
  * construct it cannot resolve exactly is an explicit failure naming the
  * construct, never a silent skip. An earlier version modelled `bottom` only and
- * ignored specificity, importance, shorthands and media nesting — four
+ * ignored specificity, importance, shorthands and media nesting - four
  * independent behaviour-breaking mutations passed it.
  */
 
@@ -62,7 +62,7 @@ function splitTopLevel(text, delimiter) {
   return parts;
 }
 
-/** The final compound of a complex selector — the element the rule positions. */
+/** The final compound of a complex selector - the element the rule positions. */
 function lastCompound(part) {
   const masked = maskGroups(part);
   let cut = -1;
@@ -410,7 +410,7 @@ test('the model refuses every cascade construct it cannot resolve', () => {
       if (decl.important && !railMeasurement) complaints.push(`!important on ${decl.prop} of "${part}"`);
       if (decl.prop === 'inset' || decl.prop === 'margin' || decl.prop === 'all'
         || decl.prop.startsWith('inset-') || decl.prop.startsWith('margin-block')) {
-        complaints.push(`shorthand ${decl.prop} on "${part}" — the model reads longhands only`);
+        complaints.push(`shorthand ${decl.prop} on "${part}" - the model reads longhands only`);
       }
       if (decl.prop === 'height' || decl.prop === 'max-height') {
         // A capped height can override `bottom` and invalidate the measured
@@ -474,7 +474,7 @@ test('the inputs behind the measured constants are unchanged', () => {
   for (const prop of ['height', 'min-height', 'max-height', 'line-height', 'padding']) {
     assert.equal(declOf(creditBase, prop), undefined, `#cesium-credits gained ${prop}; re-measure CREDIT_HEIGHT_PX`);
   }
-  // Only `min-height` may floor the dock — that direction only ADDS clearance.
+  // Only `min-height` may floor the dock - that direction only ADDS clearance.
   for (const { rule, part } of ownBoxEntries()) {
     if (part !== '#command-dock') continue;
     for (const decl of rule.decls) {
@@ -575,13 +575,13 @@ test('the full-width context rail clears the required credit at every modelled v
   assert.deepEqual(failures, [], `context rail re-enters the credit band at ${failures.join(', ')}`);
 });
 
-test('the dock anchor changes at 720px — the 2vh cancellation is band-limited', () => {
+test('the dock anchor changes at 720px - the 2vh cancellation is band-limited', () => {
   assert.equal(resolve(['#command-dock'], 'bottom', 800, 'dock').decl.value, '2vh');
   assert.equal(resolve(['#command-dock'], 'bottom', 720, 'dock').decl.value, '8px');
   assert.equal(
     resolve(CREDIT_SELECTORS, 'bottom', 720, 'credit').decl.value,
     'calc(2vh + 5rem)',
-    'the credit keeps its 2vh base below 720px — that asymmetry is the whole hazard',
+    'the credit keeps its 2vh base below 720px - that asymmetry is the whole hazard',
   );
 });
 

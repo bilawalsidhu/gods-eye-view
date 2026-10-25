@@ -33,11 +33,11 @@ export const COLORS = Object.freeze({
 
 /** Shown when Mapillary refuses the server's token (401/403). */
 export const KEY_REJECTED_MESSAGE = msg(
-  'Mapillary rejected MAPILLARY_CLIENT_TOKEN — replace it in Provider Settings',
+  'Mapillary rejected MAPILLARY_CLIENT_TOKEN - replace it in Provider Settings',
 );
 /** Shown while Mapillary rate-limits tile requests (429). */
 export const RATE_LIMITED_MESSAGE = msg(
-  'Coverage requests are being rate-limited — they resume on their own',
+  'Coverage requests are being rate-limited - they resume on their own',
 );
 
 /** Coverage tuning (see LineCoverageTuning in lineCoverage.js). */

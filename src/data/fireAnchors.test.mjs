@@ -1,14 +1,14 @@
-// src/data/fireAnchors.test.mjs — DEM ground anchors for rendered FIRMS
+// src/data/fireAnchors.test.mjs - DEM ground anchors for rendered FIRMS
 // detections (owner field finding 2026-07-21: close-zoom fire dots read as
 // buried under high terrain because anchors sat at ellipsoid height 0).
 //
 // Locks the module's two jobs:
-//   fireAnchorHeight(lat, lon)      — synchronous warm-cache read: shared
+//   fireAnchorHeight(lat, lon)      - synchronous warm-cache read: shared
 //     ground floor + lift, or 0 when the floor isn't warm (the pre-fix anchor).
-//   warmFireAnchorFloors(points)    — batched, sequential (never concurrent)
+//   warmFireAnchorFloors(points)    - batched, sequential (never concurrent)
 //     resolve of the cold floor cells behind a rendered detection set.
 //     Resolves true only when at least one requested point actually gained a
-//     warm floor — a failed resolve reports false so render → warm → re-render
+//     warm floor - a failed resolve reports false so render → warm → re-render
 //     chains terminate instead of looping against a down proxy.
 //
 // `fetch` is injected via `globalThis.fetch` (no real network), same pattern
@@ -67,7 +67,7 @@ test('fireAnchorHeight: unknown floor anchors at 0 (pre-fix behavior preserved)'
 test('fireAnchorHeight: warm shared ground floor anchors at floor + lift', () => {
   _resetFireAnchorsForTest();
   setMeshFloorPreferred(true);
-  // Seed via the mesh-cell path — proves fires read the SAME choke point
+  // Seed via the mesh-cell path - proves fires read the SAME choke point
   // (cachedGroundFloor) every other ground-adjacent consumer uses.
   reportMeshFloorCell(51.301, -122.401, 1400);
   assert.equal(fireAnchorHeight(51.3012, -122.4008), 1400 + FIRE_ANCHOR_LIFT_M);

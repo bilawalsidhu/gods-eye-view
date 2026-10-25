@@ -2,7 +2,7 @@
 
 /**
  * Coerce a GBFS boolean field to a native boolean.
- * GBFS feeds are inconsistent — some use booleans, others use 0/1 or strings.
+ * GBFS feeds are inconsistent - some use booleans, others use 0/1 or strings.
  * @param {*} value - Raw field value from GBFS JSON.
  * @param {boolean} [fallback=true] - Default when value is null/undefined/unrecognized.
  * @returns {boolean}

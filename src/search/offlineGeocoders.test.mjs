@@ -1,4 +1,4 @@
-// OFFLINE GEOCODERS — the two providers that answer with no key and no request,
+// OFFLINE GEOCODERS - the two providers that answer with no key and no request,
 // and their place in the chain. What matters here is that they answer only what
 // they are certain of, hand everything else on, and produce the box shape the
 // camera framing actually reads.
@@ -41,7 +41,7 @@ test('a coordinate answers with the point, a framing box, and no request', async
   assert.equal(place.lng, -79.0384);
   assert.deepEqual(place.types, ['coordinate']);
   assert.equal(place.exact, true, 'nothing nearby may replace a typed point');
-  // The framing code reads southwest/northeast with lat/lng — any other shape
+  // The framing code reads southwest/northeast with lat/lng - any other shape
   // is silently ignored and the place is framed as if it had no box at all.
   assert.ok(place.viewport.southwest.lat < place.lat);
   assert.ok(place.viewport.northeast.lat > place.lat);

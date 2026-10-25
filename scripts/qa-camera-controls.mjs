@@ -46,7 +46,7 @@ page.on('pageerror', (error) => errors.push(error.message));
 let failures = 0;
 const check = (name, ok, detail) => {
   console.log(
-    `[${ok ? 'PASS' : 'FAIL'}] ${name}${detail ? ` — ${JSON.stringify(detail)}` : ''}`,
+    `[${ok ? 'PASS' : 'FAIL'}] ${name}${detail ? ` - ${JSON.stringify(detail)}` : ''}`,
   );
   if (!ok) failures++;
 };

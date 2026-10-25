@@ -9,7 +9,7 @@ changelog.d/<pull request number>-<slug>.md
 
 `723-atc-decision-layer.md`, for example. The slug is lowercase, words separated
 by `-`. Two pull requests never pick the same filename, because the pull request
-number is already unique — which is the point: new `CHANGELOG.md` entries go at
+number is already unique - which is the point: new `CHANGELOG.md` entries go at
 the top of the file, so two pull requests in flight write into the same few lines
 and git has nothing to merge on.
 
@@ -45,8 +45,8 @@ finishes that batch or puts its fragments back first. It never adds an entry
 twice or drops one. `npm run changelog:check` names a staged batch, if one is
 left over, instead of reporting past it.
 
-A documentation claim that needs a regression test — the way
-`src/annotations/drawTool.test.mjs` asserts against `CHANGELOG.md` — should
+A documentation claim that needs a regression test - the way
+`src/annotations/drawTool.test.mjs` asserts against `CHANGELOG.md` - should
 assert against `docs/CURRENT-STATE.md` or `README.md` instead. A pull request
 still edits those directly, so the text is in the file while the change is under
 review; a fragment does not reach `CHANGELOG.md` until release.

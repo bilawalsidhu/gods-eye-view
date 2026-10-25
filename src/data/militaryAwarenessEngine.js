@@ -46,7 +46,7 @@ export function findByDoublingRadius(
 
 /** @param {number} meters @returns {string} */
 export function formatAwarenessDistance(meters) {
-  if (!Number.isFinite(meters) || meters < 0) return '—';
+  if (!Number.isFinite(meters) || meters < 0) return '-';
   return meters < 1000
     ? `${Math.round(meters)} m`
     : `${(meters / 1000).toFixed(meters < 10000 ? 1 : 0)} km`;
@@ -68,17 +68,17 @@ export function formatAwarenessLabel(value) {
       value.mmsi,
     ]) {
       const label = formatAwarenessLabel(candidate);
-      if (label !== '—') return label;
+      if (label !== '-') return label;
     }
-    return '—';
+    return '-';
   }
   if (typeof value === 'string') {
     const text = value.trim();
-    if (!text) return '—';
+    if (!text) return '-';
     return UNNAMED_NAMES.has(text) ? t(text) : text;
   }
   if (Number.isFinite(value)) return String(value);
-  return '—';
+  return '-';
 }
 
 /**

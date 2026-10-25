@@ -110,7 +110,7 @@ export function createNavigation({
       const nearest = nearestCameraIdToViewer();
       if (nearest && nearest !== layerState._activeCameraId) {
         // Use setActiveCamera so the full activation path runs (obstruction
-        // probe, projection runtime, geometry rewrite) — previously bypassed
+        // probe, projection runtime, geometry rewrite) - previously bypassed
         // with a bare assignment
         parts.selection.setActiveCamera(nearest);
         layerState._lastHopAt = nowMs;

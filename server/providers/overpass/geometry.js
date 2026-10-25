@@ -4,7 +4,7 @@ import {
   OVERPASS_SIMPLIFY_TOLERANCE_DEG,
 } from './constants.js';
 
-/** Iterative Douglas-Peucker on [{lat,lon},...] (planar-degree approx — fine at
+/** Iterative Douglas-Peucker on [{lat,lon},...] (planar-degree approx - fine at
  *  the ~44 m tolerance used here). Endpoints always kept. */
 function douglasPeucker(points, toleranceDeg) {
   const n = points.length;
@@ -69,7 +69,7 @@ function simplifyElementGeometry(el, minPoints, toleranceDeg) {
  * Server-side geometry simplification for large Overpass `out geom` payloads.
  * Region/state boundary pivots return multi-MB coastline rings whose fidelity
  * nothing downstream needs (the client re-simplifies for draw); decimating them
- * HERE shrinks the disk cache, the wire, and client parse time — and is what
+ * HERE shrinks the disk cache, the wire, and client parse time - and is what
  * makes the raised read cap safe. Anything unparseable or below the thresholds
  * passes through byte-identical. Exported for tests (opts override thresholds).
  *

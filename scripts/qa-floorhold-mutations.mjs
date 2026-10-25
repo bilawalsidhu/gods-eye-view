@@ -3,8 +3,8 @@
  * Are the floor-hold pins actually load-bearing?
  *
  * A pin that is red only when you delete the whole feature proves very little.
- * This reverts each fix INDIVIDUALLY — the smallest edit that reintroduces the
- * original defect — and requires the floor suites to go red for it. Every entry
+ * This reverts each fix INDIVIDUALLY - the smallest edit that reintroduces the
+ * original defect - and requires the floor suites to go red for it. Every entry
  * names the defect it restores, so the count is reproducible rather than
  * asserted in a commit message.
  *
@@ -32,7 +32,7 @@ const ALT = 'src/data/renderAltitude.js';
 /** @type {Array<{defect: string, edits: Array<{file: string, from: string, to: string}>}>} */
 const MUTATIONS = [
   {
-    defect: 'the display hold is gone — a cold cell clamps nothing (the original bug)',
+    defect: 'the display hold is gone - a cold cell clamps nothing (the original bug)',
     edits: [
       {
         file: FLIGHTS,
@@ -52,7 +52,7 @@ const MUTATIONS = [
     ],
   },
   {
-    defect: 'a borrowed floor is owned forever — no upgrade when a better one warms',
+    defect: 'a borrowed floor is owned forever - no upgrade when a better one warms',
     edits: [
       {
         file: FLIGHTS,
@@ -108,7 +108,7 @@ const MUTATIONS = [
     ],
   },
   {
-    defect: 'rises are eased too — time spent under the mesh',
+    defect: 'rises are eased too - time spent under the mesh',
     edits: [
       {
         file: FLIGHTS,
@@ -118,7 +118,7 @@ const MUTATIONS = [
     ],
   },
   {
-    defect: 'the ease escapes its release scope — every floor drop eased',
+    defect: 'the ease escapes its release scope - every floor drop eased',
     edits: [
       {
         file: FLIGHTS,
@@ -209,7 +209,7 @@ const MUTATIONS = [
     ],
   },
   {
-    defect: 'the rehydration seed never expires — an hour-old floor still answers',
+    defect: 'the rehydration seed never expires - an hour-old floor still answers',
     edits: [
       {
         file: FLIGHTS,
@@ -293,7 +293,7 @@ for (const mut of MUTATIONS) {
     const cur = read(e.file);
     const anchor = new RegExp(e.from.trim().split(/\s+/).map((part) => part.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('\\s*'));
     if (!anchor.test(cur)) {
-      console.log(`  [STALE] ${mut.defect} — anchor not found in ${e.file}`);
+      console.log(`  [STALE] ${mut.defect} - anchor not found in ${e.file}`);
       applied = false;
       break;
     }
@@ -302,10 +302,10 @@ for (const mut of MUTATIONS) {
   if (applied) {
     const r = runTests();
     if (r.failed > 0) {
-      console.log(`  [RED]   ${mut.defect} — ${r.failed} failing`);
+      console.log(`  [RED]   ${mut.defect} - ${r.failed} failing`);
       for (const n of r.names) console.log(`            ↳ ${n}`);
     } else {
-      console.log(`  [GREEN] ${mut.defect} — NOT PINNED`);
+      console.log(`  [GREEN] ${mut.defect} - NOT PINNED`);
       allRed = false;
     }
   } else {

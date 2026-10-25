@@ -71,7 +71,7 @@ test('fragment text is spliced in unchanged, above the existing entries', () => 
   // Wrapped, indented and punctuated the way a real entry is: the continuation
   // indent and the blank line inside the entry are the parts a reflow would eat.
   const entry = [
-    '- A new thing, with `code` and a — dash. The second line is indented the',
+    '- A new thing, with `code` and a - dash. The second line is indented the',
     '  way the surrounding entries wrap, and it keeps its two spaces.',
     '',
     '  A second paragraph, because some entries have one (someone, #9).',

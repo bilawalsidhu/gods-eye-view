@@ -1,11 +1,11 @@
 #!/usr/bin/env node
 /**
- * qa-heading-b3.mjs — throwaway QA harness for skylight Task 4
+ * qa-heading-b3.mjs - throwaway QA harness for skylight Task 4
  * (path-derived, rate-limited display course; Batch 3 overnight run).
  *
  * The permanent track-regression harness flies planes STRAIGHT, so it cannot
  * exercise the new heading behavior. This script injects synthetic TURNING
- * aircraft — the fetch shim computes each plane's position ANALYTICALLY on a
+ * aircraft - the fetch shim computes each plane's position ANALYTICALLY on a
  * constant-rate-turn circle from Date.now() at serve time, so every poll
  * (this script's driver or the layers' own setInterval pollers) serves a fix
  * whose position, track, and timestamp are mutually consistent.
@@ -13,44 +13,44 @@
  * What it checks, on the REAL app (same puppeteer flags as
  * scripts/track-regression.mjs):
  *
- *   LOGIC — track a turning plane in 3D, sample the DISPLAYED course every
+ *   LOGIC - track a turning plane in 3D, sample the DISPLAYED course every
  *   frame for ~40 s. Sampling happens in scene.preRender, which fires AFTER
  *   the layer's _fleetTick/_updateTrackedModel listener (Cesium events fire in
  *   add order and the app registered first), i.e. at the exact wall-clock the
- *   rate limiter advanced — postRender sampling skews apparent rates by the
+ *   rate limiter advanced - postRender sampling skews apparent rates by the
  *   variable render-pass duration (~40% at SwiftShader's ~3 fps). The course
  *   is derived from the tracked standalone Cesium.Model's modelMatrix (the
  *   actually-rendered transform), inverting _modelMatrix: with pitch=roll=0
  *   the matrix is ENU·Rz(−h), so local x in ENU = (cos h, −sin h, 0) →
  *   h = atan2(−x·north, x·east), course = norm360(deg(h) − MODEL_HEADING_OFFSET).
  *   The 15 s fix cadence × 3°/s turn = 45° course step per interpolation
- *   segment, so the 60°/s-limited glide lasts 0.75 s — multiple frames even
+ *   segment, so the 60°/s-limited glide lasts 0.75 s - multiple frames even
  *   under SwiftShader.
  *   Assertions:
  *     A1 rate-limit   : per-frame |Δcourse|/Δt ≤ COURSE_MAX_DPS (60°/s) + 15% tol
- *                       (pairs with |Δ| ≤ 1.5° skipped — noise-dominated rates)
+ *                       (pairs with |Δ| ≤ 1.5° skipped - noise-dominated rates)
  *     A2 no snap      : no single frame carries the whole ~45° segment step:
  *                       fail if |Δ| ≥ 33.75° (0.75×step) in a frame of ≤ 500 ms
  *                       (the limiter needs ≥ 562 ms to emit that legitimately)
  *     A3 spread       : the slew is spread across ≥4 frames (>0.5°) with ≥2
- *                       consecutive — the old snap was ONE spike per poll
+ *                       consecutive - the old snap was ONE spike per poll
  *     A4 turning      : total unwrapped course change ≥ +40° over the window
  *                       (the plane really turns 3°/s ≈ +120°/40 s)
  *     A5 alignment    : sampled course agrees with the analytic arc tangent at
- *                       the DISPLAYED (render-delayed) time within 35° — catches
+ *                       the DISPLAYED (render-delayed) time within 35° - catches
  *                       sign/offset inversion in the whole chain (chord lags the
  *                       tangent by ≤ half a segment ≈ 22.5°)
  *   Both layers: flights (airplane.glb, offset 180°) then military (jet.glb,
  *   normalized nose -X, offset 180°).
  *
- *   VISUAL — with the turning flights plane tracked in 3D, capture screenshots
+ *   VISUAL - with the turning flights plane tracked in 3D, capture screenshots
  *   (two zoom levels × two orbit angles) into qa-shots/b3/ for human review:
  *   the nose must lead the curved trail, never sideways/backwards.
  *
- *   LOW-SPEED (heading-v2, 2026-07-03 field-test regression) — two extra
+ *   LOW-SPEED (heading-v2, 2026-07-03 field-test regression) - two extra
  *   flights-layer scenarios that the fast turning planes cannot catch:
  *
- *   Phase 3 — HOVERING HELICOPTER (klass=helicopter via OpenSky category 8):
+ *   Phase 3 - HOVERING HELICOPTER (klass=helicopter via OpenSky category 8):
  *   position drifts a few metres (smooth pseudo-random GPS walk), reported
  *   track flips ±45° around 90° (the velocity-vector noise a hovering
  *   transponder actually emits), velocity 1 m/s. Assertions:
@@ -60,32 +60,32 @@
  *                     per poll)
  *     H3 no spin    : max unwrapped excursion from the initial course <= 60°
  *
- *   Phase 4 — SLOW PLANE, TIGHT CONTINUOUS TURN (25 kt, 4°/s right, R=184 m):
+ *   Phase 4 - SLOW PLANE, TIGHT CONTINUOUS TURN (25 kt, 4°/s right, R=184 m):
  *   fixes every ~15 s → the chord course used to STEP 60° at each segment
  *   boundary (a 1 s whip at the 60°/s cap, then ~14 s frozen). Assertions:
  *     S1 smooth     : max per-frame course rate (pairs with |Δ|>1.5°) <= 20°/s
- *                     — the real turn is 4°/s; pre-fix bursts hit the 60°/s cap
- *     S2 monotonic  : course tracks the turn direction — total counter-turn
+ *                     - the real turn is 4°/s; pre-fix bursts hit the 60°/s cap
+ *     S2 monotonic  : course tracks the turn direction - total counter-turn
  *                     movement (sum of negative deltas) >= −8°
  *     S3 turning    : total course change >= 0.5 × (4°/s × window)
  *   Screenshots for both into qa-shots/heading-v2/ (heli nose stable between
  *   two shots 8 s apart; slow plane nose tangent to its curved trail).
  *
- *   Phase 5 — TRACKED↔FLEET COURSE HANDOFF (2026-07-03 field report: tracking
- *   a Bell 429 at 65 kt FLIPPED the nose on click/click-away — the fleet pass
+ *   Phase 5 - TRACKED↔FLEET COURSE HANDOFF (2026-07-03 field report: tracking
+ *   a Bell 429 at 65 kt FLIPPED the nose on click/click-away - the fleet pass
  *   and the tracked path kept SEPARATE smoothed-course states, so the fleet's
  *   per-icao entry froze while tracked and snapped on release). A 65 kt
  *   helicopter (category 8, klass=helicopter) orbits at 2°/s; the RENDERED
  *   orientation is sampled continuously across an untrack and a re-track:
- *     C1 (click-away, 3D OFF): the SCREEN rotation actually drawn — the
+ *     C1 (click-away, 3D OFF): the SCREEN rotation actually drawn - the
  *       tracked entity's rotation callback while tracked, the fleet
- *       billboard's rotation after — with the camera static across the
+ *       billboard's rotation after - with the camera static across the
  *       release-in-place, so rotation deltas are course deltas. This is the
  *       exact pixel the owner saw flip; it also catches the stale-rotation
  *       restore (the fleet billboard reappearing with its frozen pre-track
  *       rotation for up to a rotation-refresh).
  *     C2 (click, 3D ON): world course from the model matrix (fleet model →
- *       tracked standalone model, both id=icao) — camera-independent, so the
+ *       tracked standalone model, both id=icao) - camera-independent, so the
  *       re-track camera flight can't contaminate it.
  *   Assertions (each direction): near the click boundary, no consecutive-
  *   sample step exceeds the real turn by > 15°, and no near-boundary rate
@@ -120,7 +120,7 @@ const CHROME_EXECUTABLE_CANDIDATES = [
   // Prefer puppeteer's version-pinned Chrome-for-Testing over the system
   // Chrome: /Applications auto-updates underneath the harnesses, and its
   // software-GL behavior shifts across majors (system Chrome 150 blew the
-  // tile-gated drain budget under SwiftShader on 2026-07-30 — six
+  // tile-gated drain budget under SwiftShader on 2026-07-30 - six
   // false-negative qa-cctv-v2 runs against a healthy build). A deterministic
   // pinned browser beats the newest one for regression harnesses.
   await puppeteer.executablePath().catch(() => null),
@@ -143,7 +143,7 @@ const results = [];
 function record(name, ok, detail) {
   results.push({ name, ok, detail });
   const tag = ok ? '\x1b[32mPASS\x1b[0m' : '\x1b[31mFAIL\x1b[0m';
-  console.log(`  [${tag}] ${name}${detail ? `  — ${detail}` : ''}`);
+  console.log(`  [${tag}] ${name}${detail ? `  - ${detail}` : ''}`);
 }
 
 async function observeTrackedHostPaint(page, timeoutMs = 5000) {
@@ -199,14 +199,14 @@ const norm360 = (d) => ((d % 360) + 360) % 360;
 const norm180 = (d) => { const n = norm360(d); return n > 180 ? n - 360 : n; };
 
 // ---------------------------------------------------------------------------
-// Synthetic TURNING aircraft — constant-rate-turn circles near Austin.
+// Synthetic TURNING aircraft - constant-rate-turn circles near Austin.
 // alphaDeg0 = position angle on the circle at shim-install epoch; the plane
 // sits at center + R·(sin α, cos α) and flies CLOCKWISE (right turn):
 // course(t) = α(t) + 90, turn rate = turnDps (course °/s), speed = R·ω.
 // 3°/s × 15 s driver cadence → ~45° course step per interpolation segment.
 // ---------------------------------------------------------------------------
 const TURN = {
-  timeOffsetSec: 0, // shim knob: serve fixes as of (now + offset) — used to back-date priming fixes
+  timeOffsetSec: 0, // shim knob: serve fixes as of (now + offset) - used to back-date priming fixes
   flights: [
     { icao: 'aaa001', callsign: 'TRN001', cLon: -97.7431, cLat: 30.2672, radiusM: 2673, alphaDeg0: 0, turnDps: 3, altM: 3000 },
     { icao: 'aaa002', callsign: 'TRN002', cLon: -97.7800, cLat: 30.2900, radiusM: 2673, alphaDeg0: 120, turnDps: 3, altM: 3400 },
@@ -225,7 +225,7 @@ const TURN = {
   // (light). Both served by the flights (OpenSky) shim branch.
   hover: { icao: 'aaa010', callsign: 'HOVER1', cLon: -97.7431, cLat: 30.2672, altM: 450, driftAmpM: 4, baseTrack: 90, trackFlipSec: 29, category: 8 },
   slow: { icao: 'aaa011', callsign: 'SLOW25', cLon: -97.7000, cLat: 30.2300, radiusM: 184.2, alphaDeg0: 0, turnDps: 4, altM: 900, category: 2 },
-  // Phase 5 (course-handoff consistency): 65 kt helicopter in a wide orbit —
+  // Phase 5 (course-handoff consistency): 65 kt helicopter in a wide orbit -
   // R=958 m at 2°/s ⇒ ground speed R·ω = 33.4 m/s ≈ 65 kt (the owner's Bell
   // 429 case). Category 8 classifies it klass=helicopter, so its display
   // course is the reported per-fix track (chords are ignored for rotorcraft).
@@ -272,7 +272,7 @@ function analyze(label, samples, plan) {
   }
   const dts = deltas.map((x) => x.dtMs).sort((a, b) => a - b);
   const dtMed = dts[Math.floor(dts.length / 2)] || 0;
-  // Rate check only on pairs with meaningful motion — sub-1.5° deltas divided
+  // Rate check only on pairs with meaningful motion - sub-1.5° deltas divided
   // by small dts are numerically noise, not slew.
   const moving = deltas.filter((x) => Math.abs(x.d) > 1.5);
   const maxRate = moving.length ? Math.max(...moving.map((x) => x.rate)) : 0;
@@ -314,7 +314,7 @@ function courseDeltas(samples) {
   return { valid, deltas };
 }
 
-/** Phase 3 (hovering helicopter): the displayed course must HOLD — chord and
+/** Phase 3 (hovering helicopter): the displayed course must HOLD - chord and
  *  reported track are both noise at hover, so any movement is chasing noise. */
 function analyzeHover(label, samples, { maxTotalAbsDeg = 25, maxExcursionDeg = 60 } = {}) {
   const { valid, deltas } = courseDeltas(samples);
@@ -336,7 +336,7 @@ function analyzeHover(label, samples, { maxTotalAbsDeg = 25, maxExcursionDeg = 6
     maxExcursion <= maxExcursionDeg, `max excursion ${maxExcursion.toFixed(1)}°`);
 }
 
-/** Phase 4 (25 kt tight turn): the course must ADVANCE like the real 4°/s turn —
+/** Phase 4 (25 kt tight turn): the course must ADVANCE like the real 4°/s turn -
  *  smooth (no 60°/s boundary whips), monotonic (no counter-turn reversals). */
 function analyzeSlowTurn(label, samples, {
   maxRateDps = 20,
@@ -381,7 +381,7 @@ function analyzeSlowTurn(label, samples, {
  *  continuous across a click/click-away, modulo the real 2°/s turn. Two
  *  signals, both scored only NEAR the action (−1 s .. +postWindowMs):
  *   - step excess: |Δcourse| of a consecutive-sample pair minus the truth
- *     advance truthDps·dt — a snapped handoff carries the whole frozen-state
+ *     advance truthDps·dt - a snapped handoff carries the whole frozen-state
  *     divergence in one pair;
  *   - course rate: the pre-fix snap-back replayed the divergence at the
  *     60°/s slew cap, so ANY two near-boundary samples catch it even when the
@@ -405,7 +405,7 @@ function analyzeHandoff(label, { samples, actionTMs }, {
   for (let i = 1; i < valid.length; i++) {
     const dtMs = valid[i].tMs - valid[i - 1].tMs;
     if (dtMs < 4 || dtMs > pairDtCeilMs) continue; // stalled / model-swap-gap outliers
-    // (Step excess is truth-compensated, so long low-fps pairs stay valid —
+    // (Step excess is truth-compensated, so long low-fps pairs stay valid -
     // SwiftShader near ground-level 3D tiles can drop under 1 fps.)
     const nearAction = valid[i].tMs >= actionTMs - 1000 && valid[i - 1].tMs <= actionTMs + postWindowMs;
     if (!nearAction) continue;
@@ -413,7 +413,7 @@ function analyzeHandoff(label, { samples, actionTMs }, {
     const d = Math.abs(norm180(valid[i].course - valid[i - 1].course));
     const excess = d - truthDps * (dtMs / 1000);
     if (excess > maxExcess) { maxExcess = excess; maxExcessAtMs = valid[i].tMs - actionTMs; }
-    // Rate metric: dt floored at the display's own refresh quantum — the fleet
+    // Rate metric: dt floored at the display's own refresh quantum - the fleet
     // billboard's rotation advances in ROTATION_REFRESH_MS batches, so a
     // short-dt sample pair spanning one refresh reads a full second of course
     // advance over a fraction of a second. The pre-fix snap (~120° in one
@@ -533,12 +533,12 @@ async function main() {
           T.__hitsGuard = ++window.__TURN_HITS.opensky;
           const row = (id, callsign, s, altM, category) => [
             id, callsign, 'Synthetica',
-            Math.floor(nowSec),        // 3 time_position — the fix epoch the layer stamps history with
+            Math.floor(nowSec),        // 3 time_position - the fix epoch the layer stamps history with
             Math.floor(nowSec),        // 4 last_contact
             s.lon, s.lat, altM,        // 5,6,7
             false,                     // 8 on_ground
             s.speedMps,                // 9 velocity (m/s)
-            s.course,                  // 10 true_track (deg) — honest arc tangent (hover: flipping GPS-vector noise)
+            s.course,                  // 10 true_track (deg) - honest arc tangent (hover: flipping GPS-vector noise)
             0, null, null, null, false, 0,
             category ?? null,          // 17 extended=1 emitter category (8 = rotorcraft → klass helicopter)
           ];
@@ -582,11 +582,11 @@ async function main() {
     // ---- Model finder + course derivation, installed once ------------------
     await page.evaluate(() => {
       // Every sampler in this harness targets a KNOWN aircraft, and both the
-      // fleet models and the tracked standalone model carry id=icao — so the
+      // fleet models and the tracked standalone model carry id=icao - so the
       // finder selects by id when given one. (The old nearest-to-tracked
       // fallback could mis-pick ANOTHER plane's model for a frame whenever
       // the tracked display position read null, which injected a one-frame
-      // ~90° course spike into the sampled series — a measurement flake, not
+      // ~90° course spike into the sampled series - a measurement flake, not
       // a product regression.)
       window.__findTrackedModel = function (icao) {
         const v = window.__godsEyeView.viewer;
@@ -706,7 +706,7 @@ async function main() {
       }
       window.__TURN.timeOffsetSec = 0;
       // Live driver: a fresh fix every 15 s from here on (the layers' own 30 s /
-      // 15 s pollers add consistent extras — the shim serves arc truth at serve
+      // 15 s pollers add consistent extras - the shim serves arc truth at serve
       // time). 15 s × 3°/s = 45° course step per segment boundary.
       window.__TURN_DRIVER = setInterval(() => { fl.update(v); mil.update(v); }, 15000);
       return { fl: fl.getStats().count, mil: mil.getStats().count, hits: window.__TURN_HITS };
@@ -717,9 +717,9 @@ async function main() {
     if (!(primed.fl > 0 && primed.mil > 0)) { finish(); return; }
 
     // ========================================================================
-    // Phase 1 — FLIGHTS layer: track TRN001, sample displayed course 30 s
+    // Phase 1 - FLIGHTS layer: track TRN001, sample displayed course 30 s
     // ========================================================================
-    console.log('\nPhase 1 — flights layer (airplane.glb, heading offset 180°)');
+    console.log('\nPhase 1 - flights layer (airplane.glb, heading offset 180°)');
     await page.evaluate((icao) => {
       window.__godsEyeView.dataManager.layers.get('flights').module.trackById(icao);
     }, TURN.flights[0].icao);
@@ -752,14 +752,14 @@ async function main() {
 
     // Sample in preRender: this listener was added AFTER the layer's _fleetTick
     // (Cesium events fire in add order), so it reads the model matrix at the
-    // same wall-clock instant the rate limiter advanced — no render-pass skew.
+    // same wall-clock instant the rate limiter advanced - no render-pass skew.
     const flSamples = await page.evaluate(
       (icao) => window.__sampleModelCourse(icao, 180, 40000),
       TURN.flights[0].icao,
     );
     analyze('flights', flSamples, {});
 
-    // A5 — absolute alignment vs the analytic arc tangent at the DISPLAYED time
+    // A5 - absolute alignment vs the analytic arc tangent at the DISPLAYED time
     // (render delay 30 s; the chord course lags the tangent by ≤ half a segment).
     {
       const last = [...flSamples].reverse().find((s) => Number.isFinite(s.course));
@@ -803,9 +803,9 @@ async function main() {
     });
 
     // ========================================================================
-    // Phase 2 — MILITARY layer: track TRNMIL1 (flights layer auto-clears)
+    // Phase 2 - MILITARY layer: track TRNMIL1 (flights layer auto-clears)
     // ========================================================================
-    console.log('\nPhase 2 — military layer (jet.glb, heading offset 180°)');
+    console.log('\nPhase 2 - military layer (jet.glb, heading offset 180°)');
     await page.evaluate((hex) => {
       window.__godsEyeView.dataManager.layers.get('military').module.trackById(hex);
     }, TURN.military[0].hex);
@@ -883,8 +883,8 @@ async function main() {
       return up;
     };
 
-    // ---- Phase 3 — hovering helicopter --------------------------------------
-    console.log('\nPhase 3 — hovering helicopter (klass=helicopter, drift ~4 m, track flips ±45°)');
+    // ---- Phase 3 - hovering helicopter --------------------------------------
+    console.log('\nPhase 3 - hovering helicopter (klass=helicopter, drift ~4 m, track flips ±45°)');
     if (await trackFlightsAndWaitModel(TURN.hover.icao, 'hover-heli')) {
       await sleep(1500);
       const heliSamples = await sampleCourse(180, 35000, TURN.hover.icao);
@@ -896,8 +896,8 @@ async function main() {
       }
     }
 
-    // ---- Phase 4 — 25 kt plane in a continuous 4°/s right turn --------------
-    console.log('\nPhase 4 — slow plane in a tight turn (25 kt, 4°/s, R=184 m)');
+    // ---- Phase 4 - 25 kt plane in a continuous 4°/s right turn --------------
+    console.log('\nPhase 4 - slow plane in a tight turn (25 kt, 4°/s, R=184 m)');
     if (await trackFlightsAndWaitModel(TURN.slow.icao, 'slow-turn')) {
       await sleep(1500);
       const slowSamples = await sampleCourse(180, 40000, TURN.slow.icao);
@@ -924,11 +924,11 @@ async function main() {
     }
 
     // ========================================================================
-    // Phase 5 — tracked↔fleet course-handoff consistency (65 kt helicopter).
+    // Phase 5 - tracked↔fleet course-handoff consistency (65 kt helicopter).
     // The tracked standalone model AND the fleet model both carry id=icao, so
     // one finder reads the RENDERED course through the whole transition.
     // ========================================================================
-    console.log('\nPhase 5 — 65 kt helicopter: tracked↔fleet course handoff (click / click-away)');
+    console.log('\nPhase 5 - 65 kt helicopter: tracked↔fleet course handoff (click / click-away)');
     await page.evaluate(() => {
       window.__findModelByIcao = function (icao) {
         const v = window.__godsEyeView.viewer;
@@ -950,7 +950,7 @@ async function main() {
 
     // Activate the heli in the feed now (kept out of phases 1–4), ingest it,
     // and let it fly UNTRACKED for a few seconds so the fleet pass owns its
-    // display-course state first — the exact state the click must hand off.
+    // display-course state first - the exact state the click must hand off.
     // 3D OFF for C1: the billboard is the rendered visual on both sides of
     // the untrack, so the screen rotation IS what the user sees flip (or not).
     await page.evaluate(async () => {
@@ -978,7 +978,7 @@ async function main() {
       console.log('  accumulating tracked time (60 s) so a frozen fleet entry would diverge ~120°...');
       await sleep(60000);
 
-      // C1 — click-away. Sample the rendered SCREEN rotation per preRender:
+      // C1 - click-away. Sample the rendered SCREEN rotation per preRender:
       // tracked entity rotation callback while tracked, fleet billboard
       // rotation after. The release-in-place keeps the camera static, so
       // rotation deltas across the boundary are course deltas.
@@ -1029,7 +1029,7 @@ async function main() {
         postWindowMs: 10000, minSamples: 12, pairDtCeilMs: 8000, rateDtFloorMs: 1000,
       });
 
-      // C2 — click. 3D back ON: the fleet model (camera is already parked a
+      // C2 - click. 3D back ON: the fleet model (camera is already parked a
       // few km out by the release-in-place) then the tracked standalone model
       // both carry id=icao, and the model matrix gives the WORLD course, so
       // the re-track camera flight cannot contaminate the series.

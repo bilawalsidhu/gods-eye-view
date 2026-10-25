@@ -29,7 +29,7 @@ export async function _selectContextMode(
     }
     // A cross-mode switch dismantles the prior mode BEFORE the new one is
     // committed. If the caller aborts in that window the switch never lands,
-    // and the resting state is Context OFF — reported as such by
+    // and the resting state is Context OFF - reported as such by
     // setContextMode rather than dressed up as a clean cancellation. See the
     // note above _restoreContextSessionAfterLayerSettles.
     const crossModeSwitch = Boolean(

@@ -10,7 +10,7 @@ import { localizeNotice } from './recentImagery.js';
 const REFUSALS = [
   'Drag to size the box', // imageryBoxTool.js, click without drag
   'Press on the ground, not the sky', // imageryBoxTool.js
-  'draw is using the pointer — close it first', // imageryBoxTool.js, pointer busy
+  'draw is using the pointer - close it first', // imageryBoxTool.js, pointer busy
   'Point the camera at the ground to use the view', // layers/recentImagery/index.js
   'That point cannot anchor a box', // layers/recentImagery/index.js
   ...[
@@ -30,8 +30,8 @@ const REFUSALS = [
 // shows the tool's name instead, in English too.
 const SHOWN_EN = new Map([
   [
-    'draw is using the pointer — close it first',
-    'Draw is using the pointer — close it first',
+    'draw is using the pointer - close it first',
+    'Draw is using the pointer - close it first',
   ],
 ]);
 
@@ -65,7 +65,7 @@ test('E3/E12: the pointer owner is named by its tool, never by its id', () => {
       setLocale(locale);
       for (const [id, name] of Object.entries(names)) {
         const shown = localizeNotice(
-          `${id} is using the pointer — close it first`,
+          `${id} is using the pointer - close it first`,
         );
         assert.ok(shown.includes(name), `${locale} ${id}: ${shown}`);
         assert.ok(!shown.includes(id), `${locale} ${id} leaked: ${shown}`);
@@ -73,8 +73,8 @@ test('E3/E12: the pointer owner is named by its tool, never by its id', () => {
     }
     setLocale('en');
     assert.equal(
-      localizeNotice('measure is using the pointer — close it first'),
-      'measure is using the pointer — close it first',
+      localizeNotice('measure is using the pointer - close it first'),
+      'measure is using the pointer - close it first',
       'an unregistered owner falls back to its id',
     );
   } finally {
@@ -93,7 +93,7 @@ for (const locale of ['es', 'ru']) {
         /85,05/,
       );
       assert.doesNotMatch(
-        localizeNotice('draw is using the pointer — close it first'),
+        localizeNotice('draw is using the pointer - close it first'),
         /\bdraw\b/,
       );
     } finally {

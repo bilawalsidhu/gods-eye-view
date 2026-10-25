@@ -66,7 +66,7 @@ export function createTracking({ state: layerState, services, parts, source }) {
    * Stop tracking the currently followed satellite.
    * @param {boolean} [skipViewerUntrack=false] - When ANOTHER layer just grabbed
    *   the follow-camera (viewer.trackedEntityChanged), tear down our own state
-   *   but do NOT clear viewer.trackedEntity — the new owner controls it now,
+   *   but do NOT clear viewer.trackedEntity - the new owner controls it now,
    *   and clearing it would yank the camera off their target (mirror of flights).
    */
 
@@ -107,7 +107,7 @@ export function createTracking({ state: layerState, services, parts, source }) {
     layerState._trackedFrameNumber = -1;
     layerState._trackedFrameGeo = null;
 
-    // Remove tracked entity and orbit path (unless ISS — keep its path)
+    // Remove tracked entity and orbit path (unless ISS - keep its path)
     if (layerState._trackedNorad !== ISS_NORAD) {
       parts.rendering._hideOrbitPath(layerState._trackedNorad);
     }
@@ -156,7 +156,7 @@ export function createTracking({ state: layerState, services, parts, source }) {
           ? new Date(layerState._trackedFrameNowForTest())
           : new Date(),
       );
-      if (!pos) return layerState._trackedFrameGeo; // propagation hiccup — keep last good sample
+      if (!pos) return layerState._trackedFrameGeo; // propagation hiccup - keep last good sample
       layerState._trackedFrameGeo = pos;
       Cesium.Cartesian3.fromDegrees(
         pos.longitude,
@@ -174,7 +174,7 @@ export function createTracking({ state: layerState, services, parts, source }) {
           : Date.now(),
       );
       _updateTrackedSatelliteLabelModel();
-      // The card and the context slot describe the same satellite — keep them
+      // The card and the context slot describe the same satellite - keep them
       // together so voice never narrates a fix the card has already replaced.
       _refreshTrackedSubjectContext();
       if (clusterChanged) parts.labels._syncIssOverlay();
@@ -259,14 +259,14 @@ export function createTracking({ state: layerState, services, parts, source }) {
    * A surviving subject is simply re-resolved against it. A subject that is GONE
    * must release the slot: the per-frame refresh cannot do this itself, because
    * `_getTrackedFramePosition` returns early once the satellite has no catalog
-   * entry — so without this the record would linger and voice would narrate a
+   * entry - so without this the record would linger and voice would narrate a
    * satellite the catalog no longer carries, frozen at its last position.
    *
    * Releasing is gated on PROOF. The subject is preserved unless it is absent
    * from a catalog that is both complete (`accepted`, no failed CelesTrak group)
    * and applicable (dense settled, when dense is the requested catalog). A
    * partial refresh, a failed dense load, or an empty catalog is unproven
-   * absence, and unproven absence is not absence — the same honesty rule the
+   * absence, and unproven absence is not absence - the same honesty rule the
    * tracking-restore path already applies.
    * @returns {Promise<void>} Resolves once the applicable catalog has settled.
    */
@@ -301,7 +301,7 @@ export function createTracking({ state: layerState, services, parts, source }) {
         refreshTrackedSubjectContext(metadata);
       } else if (!store.selectedEntityId) {
         // The record was dropped while the subject was briefly unresolvable.
-        // Restore it — but only into an EMPTY slot: a satellite reappearing must
+        // Restore it - but only into an EMPTY slot: a satellite reappearing must
         // never yank the subject away from something the operator selected since.
         selectTrackedSubjectContext(metadata);
       }
@@ -310,18 +310,18 @@ export function createTracking({ state: layerState, services, parts, source }) {
     }
 
     // Absence only counts when EVERY catalog that could carry the subject
-    // actually loaded. Unproven absence is not absence — the same honesty rule
+    // actually loaded. Unproven absence is not absence - the same honesty rule
     // the tracking-restore path applies.
     //
     // Deliberately NOT scoped to the group the subject was last seen in:
     // CelesTrak reclassifies satellites between groups, so a subject missing
     // from its old group may simply have moved to one that failed this refresh.
     // Believing the old group alone would drop it. Any failed or empty group is
-    // therefore a reason to wait — and `accepted` already means every group
+    // therefore a reason to wait - and `accepted` already means every group
     // returned entries.
     if (layerState._catalog.size === 0) return;
     if (layerState._lastTrackingRefreshOutcome?.status !== 'accepted') return;
-    // Dense is a potential carrier too whenever it was REQUESTED — and the
+    // Dense is a potential carrier too whenever it was REQUESTED - and the
     // request is read from `denseSettlement`, captured before the await, not
     // from `_params.catalog` now. A failed dense load reverts the mode to 'core'
     // as part of settling (an ACTIVE chip over an empty sky would be a lie), so
@@ -412,7 +412,7 @@ export function createTracking({ state: layerState, services, parts, source }) {
     layerState._trackedFrameGeo = null;
     parts.labels._syncIssOverlay();
 
-    // Hide the primitive — the tracked ENTITY renders the dot below. The
+    // Hide the primitive - the tracked ENTITY renders the dot below. The
     // entity must own a point graphic so the Viewer's tracking camera can
     // resolve a bounding sphere and engage viewFrom (a label-only entity
     // left the camera stranded; this mirrors the proven flights pattern).
@@ -422,7 +422,7 @@ export function createTracking({ state: layerState, services, parts, source }) {
     parts.rendering._showOrbitPath(noradId, Cesium.Color.YELLOW);
 
     // Tracked entity position propagates per evaluation through the per-frame
-    // cache (WS-D2) — dot, host readout, and camera share one SGP4 epoch per frame.
+    // cache (WS-D2) - dot, host readout, and camera share one SGP4 epoch per frame.
     // Falls back to the point primitive's 1s-throttled position if SGP4 fails.
     const positionProperty = new Cesium.CallbackProperty(() => {
       const pos = _getTrackedFramePosition();
@@ -432,7 +432,7 @@ export function createTracking({ state: layerState, services, parts, source }) {
     const name = sat.name.trim();
 
     // Comfortable tracking landing: ~726 km back for LEO (user-validated
-    // "slightly zoomed out" framing — no stutter, label reads cleanly), scaled
+    // "slightly zoomed out" framing - no stutter, label reads cleanly), scaled
     // up for MEO/GEO so the camera doesn't land on top of a high-orbit dot.
     const initialPos = parts.orbits.propagatePosition(sat.satrec, new Date());
     const viewScale =

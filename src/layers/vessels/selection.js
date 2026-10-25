@@ -48,7 +48,7 @@ export function createSelection({
 
       // An own-layer record without a live map key is a strict no-op (FB-1
       // residual). Trails carry no layer identity and hug their contacts, so any
-      // `gev-trail:*` pick is also a no-op. Every other non-vessel pick — sibling
+      // `gev-trail:*` pick is also a no-op. Every other non-vessel pick - sibling
       // unowned scene picks dismiss the current vessel inspection.
       if (ownRecordPick && (!pickedId || !record)) return;
       if (pickedId && !record && String(pickedId).startsWith('gev-trail:'))
@@ -234,7 +234,7 @@ export function createSelection({
         components.rendering.shipScale(record);
     }
     state.selectedRecord = null;
-    // Drop the full-detail card right away (no-op when the layer is disabled —
+    // Drop the full-detail card right away (no-op when the layer is disabled -
     // disable() clears the entry set itself).
     if (record && state.feed.enabled)
       components.rendering.updateVisibility(true);

@@ -25,11 +25,11 @@ export { CCTV_FRAME_FETCH_TIMEOUT_MS, fetchCctvImageFromUpstream };
  * fallback chain (upstream -> Street View -> synthetic SVG), and health tracking.
  *
  * Endpoints:
- *   GET /api/cctv/sources        — list all registered camera sources
- *   GET /api/cctv/health         — per-camera health/status report
- *   GET /api/cctv/stream/:id     — stream info (feedType, URLs) for a camera
- *   GET /api/cctv/media/:id      — proxy live video media from upstream
- *   GET /api/cctv/frame/:id      — single frame with fallback chain
+ *   GET /api/cctv/sources        - list all registered camera sources
+ *   GET /api/cctv/health         - per-camera health/status report
+ *   GET /api/cctv/stream/:id     - stream info (feedType, URLs) for a camera
+ *   GET /api/cctv/media/:id      - proxy live video media from upstream
+ *   GET /api/cctv/frame/:id      - single frame with fallback chain
  *
  * @returns {import('vite').Plugin}
  */
@@ -83,7 +83,7 @@ export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
 
   /**
    * Fetch a Google Street View static image as a fallback frame. Server-side
-   * call, never reaches the browser — prefers GOOGLE_MAPS_SERVER_API_KEY
+   * call, never reaches the browser - prefers GOOGLE_MAPS_SERVER_API_KEY
    * (#33: a key scoped to Street View Static/Places, restricted by server IP
    * rather than HTTP referrer) and falls back to the browser-exposed
    * GOOGLE_MAPS_API_KEY for setups that haven't split the two yet.
@@ -474,7 +474,7 @@ export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
             // The log line drops the text too, unlike the catch at the bottom
             // of this file: a media-fetch failure names the camera's upstream
             // host, and these lines get pasted into issues. The status codes
-            // below carry the diagnosis — 504 for a timeout, 502 otherwise.
+            // below carry the diagnosis - 504 for a timeout, 502 otherwise.
             console.warn('[CCTV Proxy] media fetch failed');
             setHealth(cameraId, {
               status: 'degraded',
@@ -517,7 +517,7 @@ export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
         const fov = Number(url.searchParams.get('fov') || source?.fovDeg);
         const pitch = Number(url.searchParams.get('pitch') || source?.pitchDeg);
 
-        // Only use server-registered upstream URLs — never accept client-supplied URLs
+        // Only use server-registered upstream URLs - never accept client-supplied URLs
         // (prevents SSRF via ?upstream= query parameter)
         const upstreamCandidate =
           source?.snapshotUrl ||

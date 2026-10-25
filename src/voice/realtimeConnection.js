@@ -77,7 +77,7 @@ export class RealtimeConnection {
     );
     // A new session is a new meter. Re-read tier + limits so a toggle made
     // while the last session ran (or in another tab) takes effect exactly here
-    // — this is what "applies next session" means.
+    // - this is what "applies next session" means.
     this.cost.prepareSession();
     this.syncCostUi();
     this.setStatus('connecting', t('Requesting microphone'));
@@ -105,7 +105,7 @@ export class RealtimeConnection {
       this.cost.bindTranscriptionModel?.(minted.transcribeModel);
       if (!costState.ratesRecognized) {
         console.warn(
-          `[GEV voice] unrecognised Realtime model "${costState.modelId}" — ` +
+          `[GEV voice] unrecognised Realtime model "${costState.modelId}" - ` +
             'billing this session at the most expensive known rates. Update the ' +
             'rate table in src/voice/voiceCost.js.',
         );
@@ -194,7 +194,7 @@ export class RealtimeConnection {
           return this.handleRealtimeEvent(event);
       });
       dataChannel.addEventListener('error', (event) => {
-        // Skip if we're mid-teardown (the close we triggered) — otherwise a real
+        // Skip if we're mid-teardown (the close we triggered) - otherwise a real
         // channel error tears the session down so the mic doesn't stay live (H8).
         if (this._tearingDown || !ownsChannel()) return;
         this.fatalError(
@@ -241,7 +241,7 @@ export class RealtimeConnection {
         connection: this.connectionDiagnostics(),
       });
     } catch (error) {
-      // A superseded attempt should die quietly — its resources are already
+      // A superseded attempt should die quietly - its resources are already
       // released by abandonStart / the newer start(), and surfacing its error
       // would clobber the live session's status (H7).
       if (epoch !== this.startEpoch) {
@@ -255,14 +255,14 @@ export class RealtimeConnection {
   }
 
   // Returns true (and tears down the just-acquired resources) when this start()
-  // attempt has been superseded by a newer start()/stop() — the caller must
+  // attempt has been superseded by a newer start()/stop() - the caller must
   // then `return` immediately without touching shared session state (H7).
   abandonStart(epoch, resources) {
     if (epoch === this.startEpoch) return false;
     // These resources may or may not have been promoted onto `this` yet. If a
     // stop() bumped the epoch it already tore down whatever was promoted; if a
     // *second* start() bumped it, that start owns `this.stream`/`this.pc` now,
-    // so only null the refs that still point at OUR abandoned locals — never the
+    // so only null the refs that still point at OUR abandoned locals - never the
     // successor's. Then release the locals unconditionally (idempotent close).
     if (resources.localStream && this.stream === resources.localStream)
       this.stream = null;
@@ -308,7 +308,7 @@ export class RealtimeConnection {
       return;
     }
     if (state === 'connected' || state === 'completed') {
-      // Recovered before the grace window elapsed — cancel the escalation.
+      // Recovered before the grace window elapsed - cancel the escalation.
       this.clearDisconnectGrace();
     }
   }

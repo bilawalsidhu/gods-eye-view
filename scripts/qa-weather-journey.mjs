@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * qa-weather-journey — drive the Weather layers the way a person would and
+ * qa-weather-journey - drive the Weather layers the way a person would and
  * keep the evidence: numbered screenshots plus per-step layer diagnostics.
  *
  * Starts at the Earth view, opens Data Layers, switches Wind on from its real

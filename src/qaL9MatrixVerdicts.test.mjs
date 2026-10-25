@@ -90,7 +90,7 @@ test('two contradictory scoreboards are a crash, not "first one wins"', () => {
   assert.match(v.detail, /contradictory/i);
 });
 
-test('a duplicated scoreboard is a crash — which run is it reporting?', () => {
+test('a duplicated scoreboard is a crash - which run is it reporting?', () => {
   const v = readResultLine(run({ out: 'RESULT: 8 passed, 0 failed\nRESULT: 8 passed, 0 failed' }));
   assert.equal(v.status, CRASH);
   assert.match(v.detail, /duplicated/i);
@@ -153,7 +153,7 @@ test('a traffic result that landed empty keeps failing', () => {
   assert.equal(trafficFlowInconclusive({ mode: 'live', tilesFetched: 0, loading: false }), false,
     'settled with no fetch attempted is a failure, not a slow measurement');
   assert.equal(trafficFlowInconclusive({ mode: 'live', tilesFetched: 0, loading: true, error: 'flow status unavailable' }), false,
-    'an error is an answer — it must not be softened');
+    'an error is an answer - it must not be softened');
   assert.equal(trafficFlowInconclusive({ mode: 'sim', tilesFetched: 0, loading: true }), false,
     'the keyless branch has its own verdict');
   assert.equal(trafficFlowInconclusive(null), false);
@@ -191,7 +191,7 @@ test('an unknown key state fails; it never becomes an owner-run skip', () => {
 test('a known condition annotates a failure without changing it', () => {
   const conditions = [{ when: /no console errors[\s\S]{0,300}?503/, note: 'not key-tolerant' }];
   const annotated = applyKnownConditions(fail('8 passed, 1 failed'), conditions,
-    '[FAIL] B4: no console errors during QA run — 503 Service Unavailable');
+    '[FAIL] B4: no console errors during QA run - 503 Service Unavailable');
   assert.equal(annotated.status, FAIL, 'the verdict must stay a FAIL');
   assert.equal(annotated.note, 'not key-tolerant');
 });

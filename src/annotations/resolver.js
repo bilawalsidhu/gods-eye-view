@@ -56,7 +56,7 @@ export function createAnnotationResolver({
    *
    * The voice agent points things out by NAME (preferred) or explicit lat/lng.
    * Research takeaway: vision models are unreliable at counting pixels on
-   * photoreal/oblique imagery, so we never ask the model to box pixels — we
+   * photoreal/oblique imagery, so we never ask the model to box pixels - we
    * resolve a place name to a real-world coordinate (and, when useful, a real
    * OSM footprint ring) and anchor the annotation in world space. That makes the
    * annotation persist correctly as the camera moves and occlude naturally.
@@ -79,7 +79,7 @@ export function createAnnotationResolver({
   function cacheRead(cache, key) {
     const entry = cache.get(key);
     if (!entry) return undefined;
-    if (entry.value !== null) return entry.value; // positive — always valid
+    if (entry.value !== null) return entry.value; // positive - always valid
     if (Date.now() - entry.at <= NEG_CACHE_TTL_MS) return null; // negative within TTL
     cache.delete(key); // expired negative → allow a re-fetch
     return undefined;
@@ -92,14 +92,14 @@ export function createAnnotationResolver({
   }
 
   /**
-   * Cache a null (not-found) result — but ONLY when it is DEFINITIVE (the upstream
+   * Cache a null (not-found) result - but ONLY when it is DEFINITIVE (the upstream
    * answered "no such place"), never on an abort or a transient error (network /
    * 429 / 5xx / timeout). Caching those would poison the key; instead we leave it a
    * miss so the next attempt retries. Definitive negatives still carry a TTL.
    */
   function negCache(cache, key, signal, definitive = true) {
-    if (signal?.aborted) return; // superseded — never cache
-    if (!definitive) return; // transient upstream failure — allow a retry
+    if (signal?.aborted) return; // superseded - never cache
+    if (!definitive) return; // transient upstream failure - allow a retry
     cacheWrite(cache, key, null);
   }
 
@@ -113,7 +113,7 @@ export function createAnnotationResolver({
    * @param {number} [opts.longitude]   Explicit longitude.
    * @param {boolean} [opts.footprint]  Try to trace the real OSM outline ring.
    * @param {string} [opts.entityKind]  Voice model's entity FACT ('building'|'compound'|
-   *                                    'district'|'street'|'point_feature') — refines scope
+   *                                    'district'|'street'|'point_feature') - refines scope
    *                                    routing and the point-first contract; never a style choice.
    * @param {boolean} [opts.deferFootprint]  Progressive mode: return the anchor immediately
    *                                    (ring:null) plus a `resolveOutline()` continuation the
@@ -159,7 +159,7 @@ export function createAnnotationResolver({
     // Places Text Search anchors the target. Used downstream to SIZE a fallback grounds
     // disc to the real feature instead of a blind GROUNDS_RADIUS_M constant.
     let placeViewport = null;
-    // Canonical Places display name + `types` of the anchored feature — the Places
+    // Canonical Places display name + `types` of the anchored feature - the Places
     // analogue of geocodePrimary/geocodeTypes: the name feeds OSM matching stripped of
     // locality suffixes; the types classify the entity (point-like vs area-like).
     let placesPrimary = null;
@@ -197,10 +197,10 @@ export function createAnnotationResolver({
       if (query) {
         const center =
           pickWorldFromScreen(viewer, 0.5, 0.5) || viewportProximity(viewer);
-        // Monument / grounds names scatter under Geocoding — try a view-biased Places Text Search FIRST.
+        // Monument / grounds names scatter under Geocoding - try a view-biased Places Text Search FIRST.
         // A hit near the view centre is trusted (skips the proximity gate, like the osm-local snap); on a
         // miss we fall through to geocode + fetchLocalMonument below. The model's entityKind counts too:
-        // a point_feature by fact ("Heroes of the Alamo" — no monument word) deserves the same path.
+        // a point_feature by fact ("Heroes of the Alamo" - no monument word) deserves the same path.
         if (
           center &&
           (isMonumentLikeQuery(query) ||
@@ -248,7 +248,7 @@ export function createAnnotationResolver({
             trace.geocode = `${geocoded.lat.toFixed(5)},${geocoded.lon.toFixed(5)}`;
           }
           // RECOVERY: a plain landmark ("the Capitol") can Geocode to a FAR city (Washington DC) that the
-          // proximity gate would then reject as an honest miss — but the user means the one they're
+          // proximity gate would then reject as an honest miss - but the user means the one they're
           // LOOKING AT. If the geocode missed or landed far from the view centre, try a view-biased
           // Places Text Search; a hit within the trust bound overrides + skips the gate. Local geocodes
           // (neighborhoods, nearby buildings) are NOT far, so they keep the geocode + scope/polygon path.
@@ -319,7 +319,7 @@ export function createAnnotationResolver({
 
     if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
 
-    // Monument/memorial/statue names geocode unreliably — Google scatters them across the city (e.g.
+    // Monument/memorial/statue names geocode unreliably - Google scatters them across the city (e.g.
     // several Texas Capitol monuments landed blocks-to-miles apart, looking "all over the map"). When
     // the target reads like a monument AND the anchor came from a NAME, snap to the actual OSM feature
     // near what the user is LOOKING AT (screen-centre), not the scattered geocode point. A hit becomes
@@ -350,16 +350,16 @@ export function createAnnotationResolver({
     }
 
     // Whether this anchor came from geocoding a NAME (vs. explicit coords / pixel / osm-local). Only
-    // name-geocoded anchors are subject to the proximity gate below — coords/pixels/local are trusted.
+    // name-geocoded anchors are subject to the proximity gate below - coords/pixels/local are trusted.
     const fromGeocode = source === 'geocode';
 
-    // Proximity gate — on the ANCHOR: a NAME that resolved implausibly far from what's currently on
+    // Proximity gate - on the ANCHOR: a NAME that resolved implausibly far from what's currently on
     // screen is almost always a wrong geocoder match (e.g. "Texas Capitol grounds" → a west-Texas
-    // admin region ~250 km away). Reject it — an honest "couldn't find it" beats a misleading
+    // admin region ~250 km away). Reject it - an honest "couldn't find it" beats a misleading
     // blob/point off in another region. Zoom-relative + floored so it only fires on egregious drift:
     // zoomed out, far-but-visible places still pass; zoomed way in, nearby landmarks stay safe.
     // Explicit coords / pixel picks / places / osm-local skip this (fromGeocode === false). The
-    // footprint resolution below re-checks its own recentered centroid against the same bound — a
+    // footprint resolution below re-checks its own recentered centroid against the same bound - a
     // polygon that would drag a good anchor out of plausibility is dropped (the mark stays an
     // honest point) rather than rejecting the whole annotation.
     const vpGate = viewportProximity(viewer);
@@ -386,8 +386,8 @@ export function createAnnotationResolver({
       }
     }
 
-    // OSM name-matching key: the resolved feature's CANONICAL name when we have one — the
-    // geocoder's primary component, else the Places hit's own display name — falling back to
+    // OSM name-matching key: the resolved feature's CANONICAL name when we have one - the
+    // geocoder's primary component, else the Places hit's own display name - falling back to
     // the user's words. Canonical names strip the trailing locality ("Tejano Monument", not
     // "…, Austin"), so incidental city/state tokens can't win the footprint scoring (the
     // Thompson-Austin bug, field test 7). A POI's canonical name can be a bare street number,
@@ -401,7 +401,7 @@ export function createAnnotationResolver({
     // Scope-route on the geocoder's type so we fetch the RIGHT OSM feature at the right size:
     // an admin boundary for a city/state, the enclosing compound for a mall/campus, a single
     // building for a premise. The voice model's entityKind (an entity FACT) refines an
-    // unresolved 'auto' scope only — real geocode types always win.
+    // unresolved 'auto' scope only - real geocode types always win.
     const baseScope = refineScope(scopeFromTypes(geocodeTypes), entityKind);
     // Point-like targets (monuments/statues/memorials/…) resolve POINT-FIRST: only an
     // (almost) exactly-named, monument-scale polygon may replace the point; a nearby polygon
@@ -418,15 +418,15 @@ export function createAnnotationResolver({
 
     /**
      * Resolve the footprint/outline for this (already-gated) anchor. Reads the outer locals
-     * but never mutates them — tri-state result:
+     * but never mutates them - tri-state result:
      *   - a complete outline patch `{ ring, footprintKind, buildingHeight, synthesized,
      *     lat, lon, height }` whose lat/lon is the ring centroid, re-checked against the
      *     proximity gate;
-     *   - `null` — DEFINITIVELY no polygon (keep the honest point; never retry);
-     *   - `undefined` — TRANSIENT upstream failure (timeout / network blip) — a re-run may
+     *   - `null` - DEFINITIVELY no polygon (keep the honest point; never retry);
+     *   - `undefined` - TRANSIENT upstream failure (timeout / network blip) - a re-run may
      *     yet find the outline, and the /api/overpass proxy caches late completions so the
      *     retry is nearly free (progressive callers back off and re-invoke).
-     *   - `{ rateLimited:true, retryAfterMs }` — an HTTP throttle that progressive callers
+     *   - `{ rateLimited:true, retryAfterMs }` - an HTTP throttle that progressive callers
      *     retry only once, no sooner than both Retry-After and their normal ladder allow.
      * The inline path awaits it right here; progressive callers (deferFootprint) invoke it
      * AFTER the anchor mark is drawn and upgrade the mark in place.
@@ -441,11 +441,11 @@ export function createAnnotationResolver({
         scope === 'city';
       const around = intent === 'around_the_thing';
       // FIRST rung: bundled Natural Earth physical region (Alps, Rockies, Sahara,
-      // Gulf of Mexico …) — deterministic, OFFLINE, instant; mirrors the
+      // Gulf of Mexico …) - deterministic, OFFLINE, instant; mirrors the
       // neighborhood-pack rung's philosophy. Two guards: (1) the ASK must NAME a
-      // curated region (exact/alias match, no fuzzy stealing — "Zilker Park"
+      // curated region (exact/alias match, no fuzzy stealing - "Zilker Park"
       // can never land here); (2) the geocoded anchor must fall INSIDE the
-      // matched ring (ray-cast) — disambiguating duplicate upstream names (US
+      // matched ring (ray-cast) - disambiguating duplicate upstream names (US
       // vs Spanish "Sierra Nevada") and blocking a wrong-place geocode from
       // dressing itself in a range-sized ring. Range-scale geometry deliberately
       // BYPASSES the compound/building scope caps and the centroid drift bound
@@ -453,7 +453,7 @@ export function createAnnotationResolver({
       // compound cap is for campuses (the meadow bug,
       // docs/voice-engine-evaluation-2026-07-23.md §3), and a continental ring's
       // centroid legitimately sits far from any anchor. Admin and street scopes
-      // are excluded — "Texas" must keep resolving as an admin boundary.
+      // are excluded - "Texas" must keep resolving as an admin boundary.
       if (!isAdmin && scope !== 'street' && !around) {
         const ne = await lookupNaturalRegionOutline(target, lat, lon).catch(
           () => null,
@@ -487,10 +487,10 @@ export function createAnnotationResolver({
         scope !== 'neighborhood'
       ) {
         // "the area AROUND <landmark>" → a buffered zone on the centroid, not the exact
-        // footprint (research §3d / §8.5). Only for POI/building scopes — a city's or
+        // footprint (research §3d / §8.5). Only for POI/building scopes - a city's or
         // street's "around" is ill-defined, a neighborhood already synthesizes, and a
         // GROUNDS-like ask must not short-circuit here: the model phrases "the Capitol
-        // grounds" as around_the_thing, but the grounds ARE the thing — the real enclosing
+        // grounds" as around_the_thing, but the grounds ARE the thing - the real enclosing
         // polygon (below) beats a 400 m disc (field test 8's "spherical round one").
         const availability = await fetchEnclosingArea(
           lat,
@@ -508,7 +508,7 @@ export function createAnnotationResolver({
       } else if (isAdmin) {
         // A country, state or county the geocoder typed: the bundled unit that carries the
         // name AND contains the geocoded point (offline; the pack's ambiguity
-        // marks don't apply — the geocoder already chose "Georgia" the state).
+        // marks don't apply - the geocoder already chose "Georgia" the state).
         if (scope === 'state' || scope === 'county' || scope === 'country') {
           const admin = await findAdminAreaAt(
             [target, matchName],
@@ -518,11 +518,11 @@ export function createAnnotationResolver({
           ).catch(() => null);
           if (admin) return bundledAdminOutline(viewer, admin);
         }
-        // Pure admin: only an admin boundary is correct — never fall back to a
+        // Pure admin: only an admin boundary is correct - never fall back to a
         // building/landuse (a city is never a single building).
         fp = await fetchAdminArea(lat, lon, matchName, scope, signal);
       } else if (scope === 'neighborhood') {
-        // FIRST: a bundled neighborhood polygon (reliable, deterministic, OFFLINE — no live
+        // FIRST: a bundled neighborhood polygon (reliable, deterministic, OFFLINE - no live
         // Overpass). Covered neighborhoods (e.g. SF: Chinatown/Marina/Mission/Presidio)
         // resolve here instantly to a REAL boundary, sidestepping the slow/flaky live-Overpass
         // path that times out and falls back to points (see docs/field-test-2-analysis.md).
@@ -531,7 +531,7 @@ export function createAnnotationResolver({
         // Else fall through to the OSM admin/place → named-landuse → synthesis ladder. Each
         // returns a footprint, null (definitively no polygon), or undefined (transient
         // upstream failure). Synthesize a blob (the "Mission" problem, research §3b) ONLY
-        // when BOTH sources DEFINITIVELY have no polygon — never on a transient blip.
+        // when BOTH sources DEFINITIVELY have no polygon - never on a transient blip.
         if (!fp) {
           let adminFp = await fetchAdminArea(
             lat,
@@ -563,7 +563,7 @@ export function createAnnotationResolver({
               fp = footFp;
             } else if (footFp === null) {
               // Strict found no district-sized named area. Before drawing a buffered blob, try a
-              // LOOSE footprint — a smaller named leisure/landuse polygon (e.g. Fort Mason, a
+              // LOOSE footprint - a smaller named leisure/landuse polygon (e.g. Fort Mason, a
               // 0.26 km² NPS park that the strict 0.3 km² floor rejects but Google mis-types as a
               // "neighborhood") is a real outline and beats a disc. Name-match scoring keeps it from
               // grabbing a building; the scope cap below rejects anything oversized.
@@ -581,13 +581,13 @@ export function createAnnotationResolver({
                 fp = synthesizeBufferedArea(lat, lon, NEIGHBORHOOD_RADIUS_M);
               else if (looseFp === undefined) fp = undefined; // transient → honest point, retryable
               // a building (wrong feature) → leave fp null (honest point) rather than a
-              // misleading blob — a re-run would only return the same cached building.
+              // misleading blob - a re-run would only return the same cached building.
             } else {
               fp = undefined; // transient strict lookup → honest point, retryable
             }
           } else {
             // adminFp === undefined (transient in the HIGHER-priority admin/place leg): do NOT
-            // fall through to a lower-priority landuse — a real boundary that was momentarily
+            // fall through to a lower-priority landuse - a real boundary that was momentarily
             // unavailable must not be replaced by a lesser polygon. Honest point, retryable.
             fp = undefined;
           }
@@ -600,7 +600,7 @@ export function createAnnotationResolver({
         // compound / building / park / generic POI → the footprint resolver
         // (which classifies building-vs-area and stitches compound multipolygons).
         // Point-like targets use the strict 'point' selection: exact-ish name + monument
-        // scale, else no polygon at all — the honest point beats a locality-word match.
+        // scale, else no polygon at all - the honest point beats a locality-word match.
         // Without a feature-name component, match the original ask and require
         // identity or containment before replacing its geocoded anchor.
         const footprintMode = pointLike
@@ -617,7 +617,7 @@ export function createAnnotationResolver({
           footprintMode,
         );
         // A "grounds/compound/campus" phrase ("Texas Capitol grounds") names an ENCLOSING area. The
-        // primary footprint above returns the BUILDING (the dome) or null — neither is the grounds. The
+        // primary footprint above returns the BUILDING (the dome) or null - neither is the grounds. The
         // real enclosing polygon (e.g. "Capitol Square", leisure=park) IS in OSM but only surfaces via a
         // radius sweep for NAMED non-building polygons, taking the SMALLEST that geometrically contains
         // the point (research docs/compound-containment-research.md §1.4–1.5). So when a grounds-like
@@ -627,7 +627,7 @@ export function createAnnotationResolver({
           const area = await fetchEnclosingArea(lat, lon, signal, matchName);
           if (isUnavailableCapability(area)) return area;
           if (area) {
-            fp = area; // real grounds polygon (synthesized:false) — beats both the dome and a disc
+            fp = area; // real grounds polygon (synthesized:false) - beats both the dome and a disc
             // It's a grounds/compound feature (already capped at SCOPE_AREA_CAP_M2.compound inside
             // fetchEnclosingArea). The geocoder may have typed the POI as `building` (the user pointed
             // at the dome), so validate against the COMPOUND cap below, not the tighter building one.
@@ -636,9 +636,9 @@ export function createAnnotationResolver({
             // OSM definitively has no enclosing polygon → loose dotted-disc footprint (the same
             // approximate-area treatment neighborhoods get), sized from the place viewport when
             // available (Places or geocode), else GROUNDS_RADIUS_M. A grounds ask never keeps the
-            // bare BUILDING either: the dome is the exact feature, not the grounds — and under
+            // bare BUILDING either: the dome is the exact feature, not the grounds - and under
             // progressive dedup an identical building ring would collapse into the building mark
-            // and eat its caption. Never on `area === undefined` (transient — a retry may yet
+            // and eat its caption. Never on `area === undefined` (transient - a retry may yet
             // find the real outline).
             fp = synthesizeBufferedArea(
               lat,
@@ -666,12 +666,12 @@ export function createAnnotationResolver({
         fp = null;
       }
       if (isUnavailableCapability(fp) || isRateLimitedOutcome(fp)) return fp;
-      if (fp === undefined) return undefined; // TRANSIENT — a backoff retry may still find it
+      if (fp === undefined) return undefined; // TRANSIENT - a backoff retry may still find it
       if (!fp || !Array.isArray(fp.ring) || fp.ring.length < 3) return null;
       const centroid = ringCentroid(fp.ring);
       if (!centroid) return null;
       // Same drift bound as the anchor gate: a polygon whose centroid would drag a good
-      // anchor out of plausibility is the wrong feature — drop it, keep the point.
+      // anchor out of plausibility is the wrong feature - drop it, keep the point.
       if (
         fromGeocode &&
         !bypassNearViewGuards &&
@@ -747,8 +747,8 @@ export function createAnnotationResolver({
   };
 
   // Proximity gate tolerances (see the gate in resolveAnnotationTarget). A geocoded anchor more
-  // than VIEWPORT_DRIFT_FACTOR × the on-screen viewport radius away — but never less than
-  // MIN_DRIFT_FLOOR_KM — is treated as a wrong match and rejected. The factor keeps it zoom-aware
+  // than VIEWPORT_DRIFT_FACTOR × the on-screen viewport radius away - but never less than
+  // MIN_DRIFT_FLOOR_KM - is treated as a wrong match and rejected. The factor keeps it zoom-aware
   // (far-but-visible places pass when zoomed out); the floor avoids over-rejecting nearby places
   // when zoomed way in. The area cap alone can't catch this: admin scopes (state/country) are
   // uncapped, so a landmark that mis-geocodes to an admin region traces an uncapped blob.
@@ -756,7 +756,7 @@ export function createAnnotationResolver({
   const MIN_DRIFT_FLOOR_KM = 50;
 
   // A view-biased Places Text Search hit is trusted only when it lands within this many metres of the
-  // view centre — a sanity bound so a stray cross-city Text Search result can't anchor far from what
+  // view centre - a sanity bound so a stray cross-city Text Search result can't anchor far from what
   // the user is looking at (it falls back to the geocode + osm-snap path instead). Generous enough to
   // cover a large compound's monuments seen from an oblique view (Text Search is biased to 6 km here).
   const PLACES_MAX_DISTANCE_M = 8000;
@@ -764,7 +764,7 @@ export function createAnnotationResolver({
   // Synthesis radii (m) per osm-place-resolution-research.md §8.5. Used when OSM has only
   // a label point (most US neighborhoods) or the user asks for the area AROUND a landmark.
   const NEIGHBORHOOD_RADIUS_M = 750; // urban-neighborhood blob (600–900 m band)
-  const AROUND_LANDMARK_RADIUS_M = 400; // "the area around X" — a few blocks (300–500 m)
+  const AROUND_LANDMARK_RADIUS_M = 400; // "the area around X" - a few blocks (300–500 m)
   const GROUNDS_RADIUS_M = 300; // "X grounds/compound/campus" loose disc when OSM has no polygon
   const GROUNDS_RADIUS_MIN_M = 150; // viewport-derived grounds disc is clamped to this band so a tiny
   const GROUNDS_RADIUS_MAX_M = 1200; // place can't shrink to a dot, nor a city-wide viewport balloon
@@ -831,8 +831,8 @@ export function createAnnotationResolver({
   /**
    * Synthesize an approximate circular AREA by buffering a label point. Returns a ring
    * marked `synthesized:true` so the renderers draw it "approximate" (dashed/feathered),
-   * never as an authoritative boundary (research §8.6 invariant 3). Pure local math — no
-   * Overpass call — so it always succeeds and adds no proxy/rate-limit cost.
+   * never as an authoritative boundary (research §8.6 invariant 3). Pure local math - no
+   * Overpass call - so it always succeeds and adds no proxy/rate-limit cost.
    * @param {number} lat
    * @param {number} lon
    * @param {number} radiusM
@@ -987,7 +987,7 @@ export function createAnnotationResolver({
           hit.longitude,
         ),
         viewport: hit.viewport || null,
-        // Entity identity/classification — the proxy already pays for these in its field
+        // Entity identity/classification - the proxy already pays for these in its field
         // mask, so keep them: `primaryType`/`types` classify the feature (point-like
         // monument vs compound) and `id` is a stable identity key for future caching/dedup.
         id: hit.id || null,
@@ -997,7 +997,7 @@ export function createAnnotationResolver({
       cacheWrite(placesCache, cacheKey, place);
       return place;
     } catch {
-      negCache(placesCache, cacheKey, signal, false); // network/abort — transient
+      negCache(placesCache, cacheKey, signal, false); // network/abort - transient
       return null;
     }
   }
@@ -1071,7 +1071,7 @@ export function createAnnotationResolver({
   }
 
   /**
-   * Refine an UNRESOLVED ('auto') scope with the voice model's `entityKind` — the model's
+   * Refine an UNRESOLVED ('auto') scope with the voice model's `entityKind` - the model's
    * statement of what kind of thing the target IS (an entity fact from the conversation,
    * not a render choice). Real geocode types are data and always win; entityKind only
    * fills the gap they leave (Places-sourced anchors never have geocode types, so they
@@ -1095,13 +1095,13 @@ export function createAnnotationResolver({
   /**
    * Resolve an administrative boundary (country/state/county/city/neighborhood).
    * `is_in(point)` returns every admin area containing the point at all levels;
-   * we pick the one whose NAME best matches the query (country-agnostic — no need
+   * we pick the one whose NAME best matches the query (country-agnostic - no need
    * to know each country's admin_level mapping), pivot it to its relation, and
    * simplify the outline so even a state/country draws cleanly.
    */
   async function fetchAdminArea(lat, lon, query, scope, signal) {
     // Scope changes both the name-matching bias and the fallback strategy (only
-    // neighborhood runs the place=/named-landuse fallback), so it must be in the key —
+    // neighborhood runs the place=/named-landuse fallback), so it must be in the key -
     // else a city-scope definitive null would suppress a later neighborhood lookup's
     // fetchPlaceArea recovery at the same rounded point.
     const cacheKey = `admin|${scope}|${lat.toFixed(4)},${lon.toFixed(4)}|${query.toLowerCase()}`;
@@ -1121,10 +1121,10 @@ export function createAnnotationResolver({
     for (const el of candidates) {
       if (el.category !== 'administrative') continue;
       // Match against the FULL name set (incl. official_name) so the query can still hit a
-      // verbose official name — but score COMPLETENESS against the CORE name only. A long
+      // verbose official name - but score COMPLETENESS against the CORE name only. A long
       // official_name ("City and County of San Francisco") otherwise DILUTES the real
       // boundary's completeness and lets a less-specific duplicate ("San Francisco County")
-      // win — which then has no backing relation and collapses the whole resolution to a dot.
+      // win - which then has no backing relation and collapses the whole resolution to a dot.
       const coreWords = normalizedWords(
         [el.names.primary, el.names.english].filter(Boolean).join(' '),
       );
@@ -1136,7 +1136,7 @@ export function createAnnotationResolver({
       const overlap = wordOverlap(queryWords, fullWords);
       if (!overlap) continue;
       const intentCoverage = queryWords.size ? overlap / queryWords.size : 0;
-      // The matched admin area must BE (most of) what the user named — not just share an
+      // The matched admin area must BE (most of) what the user named - not just share an
       // incidental token ("Texas" inside "Texas State Capitol"). Require ≥ half the
       // canonical-name words, so a wrong-scope admin (the state) is rejected and the
       // footprint fallback gets a chance instead.
@@ -1170,7 +1170,7 @@ export function createAnnotationResolver({
     const bestCoverage = scored.length ? scored[0].coverage : 0;
 
     // For a neighborhood, a place= polygon is the correct source. Try it whenever there
-    // is NO admin match OR the admin only PARTIALLY covers the query — a small city can
+    // is NO admin match OR the admin only PARTIALLY covers the query - a small city can
     // satisfy a city-suffixed neighborhood ("Berkeley" for "Downtown Berkeley") at 0.5
     // coverage and slip under the area cap, so never accept such a partial admin
     // without first trying the place= polygon (and a named landuse via the caller).
@@ -1202,7 +1202,7 @@ export function createAnnotationResolver({
     for (const cand of scored.slice(0, 4)) {
       // Client budget must OUTLAST the QL timeout (25 s) + proxy transit: aborting at
       // 16 s turned finishable region pivots (Sicilia's dense coastline) into permanent
-      // "transients" — every retry died the same death (field test 2026-07-23). The
+      // "transients" - every retry died the same death (field test 2026-07-23). The
       // outline is progressive, so a long budget blocks nothing; repeats are disk-cached.
       const relEls = await featureSource.getAreaGeometry(cand.el.id, {
         signal: signal,
@@ -1212,11 +1212,11 @@ export function createAnnotationResolver({
       if (relEls === null) {
         transient = true;
         break;
-      } // network blip — don't definitively fail
+      } // network blip - don't definitively fail
       const relEl = relEls[0];
-      if (!relEl) continue; // no relation backing this area — try the next candidate
+      if (!relEl) continue; // no relation backing this area - try the next candidate
       const coords = relEl.coordinates;
-      if (coords.length < 3) continue; // incomplete geometry — try the next
+      if (coords.length < 3) continue; // incomplete geometry - try the next
 
       let ring = closeRing(coords.map((p) => [p.lon, p.lat]));
       // Simplify: tight for small neighborhoods, looser for states/countries.
@@ -1247,7 +1247,7 @@ export function createAnnotationResolver({
           negCache(footprintCache, cacheKey, signal, true);
           return null;
         }
-        continue; // oversized for this scope — try the next candidate
+        continue; // oversized for this scope - try the next candidate
       }
 
       cacheWrite(footprintCache, cacheKey, fp);
@@ -1257,7 +1257,7 @@ export function createAnnotationResolver({
     if (transient) return undefined; // network blip during a pivot → don't cache, retry
     // For a neighborhood, an admin match may exist (so the early place= fallback above was
     // skipped) yet fail to yield a usable relation. Consult place= BEFORE declaring a
-    // definitive miss, so a null return truly means "no admin AND no place polygon" — the
+    // definitive miss, so a null return truly means "no admin AND no place polygon" - the
     // caller relies on that to gate named-landuse fallback / synthesis.
     if (scope === 'neighborhood') {
       const place = await fetchPlaceArea(lat, lon, query, signal);
@@ -1299,8 +1299,8 @@ export function createAnnotationResolver({
       if (!overlap) continue;
       // The OSM place name is usually just the neighborhood ("Downtown", "Chinatown")
       // while the query carries a city suffix ("Downtown San Francisco"). Match on how
-      // fully the query covers the FEATURE'S name (not the query) — so a one-word place
-      // whose name the query fully contains still wins — then prefer containment.
+      // fully the query covers the FEATURE'S name (not the query) - so a one-word place
+      // whose name the query fully contains still wins - then prefer containment.
       const nameCoverage = nameWords.size ? overlap / nameWords.size : 0;
       if (nameCoverage < 0.6) continue;
       if (approximateAreaM2(coords) > 80_000_000) continue; // a neighborhood isn't a city
@@ -1318,8 +1318,8 @@ export function createAnnotationResolver({
 
   /**
    * Street → best-available AREA, with graceful degradation:
-   *   Tier C — a same-named district / commercial area near the street.
-   *   Tier F — buffer the matching street centerline into a corridor ribbon.
+   *   Tier C - a same-named district / commercial area near the street.
+   *   Tier F - buffer the matching street centerline into a corridor ribbon.
    * Always returns an area (or null), never a building.
    */
   async function fetchStreet(lat, lon, query, signal) {
@@ -1328,7 +1328,7 @@ export function createAnnotationResolver({
     if (cachedFp !== undefined) return cachedFp;
     const queryWords = normalizedWords(query);
 
-    // Tier C — a same-named district / quarter / named commercial area.
+    // Tier C - a same-named district / quarter / named commercial area.
     const areaEls = await featureSource.getStreetAreas(
       { lat, lon },
       { signal: signal },
@@ -1362,7 +1362,7 @@ export function createAnnotationResolver({
       }
     }
 
-    // Tier F — buffer the matching centerline into a corridor ribbon (workhorse).
+    // Tier F - buffer the matching centerline into a corridor ribbon (workhorse).
     const wayEls = await featureSource.getStreetLines(
       { lat, lon },
       { signal: signal },
@@ -1394,7 +1394,7 @@ export function createAnnotationResolver({
       }
     }
     // Definitive only if BOTH tier queries actually returned data; a null from
-    // either is a transient upstream failure we should not cache — and should
+    // either is a transient upstream failure we should not cache - and should
     // report as TRANSIENT (undefined) so the deferred-outline retry re-runs it.
     const definitive = areaEls !== null && wayEls !== null;
     negCache(footprintCache, cacheKey, signal, definitive);
@@ -1415,10 +1415,10 @@ export function createAnnotationResolver({
    * AFTER the lake wins on word overlap instead (field test 9).
    *
    * Selection `mode`:
-   *   'loose'  — default word-overlap scoring (generic POIs/compounds).
-   *   'strict' — named, non-building, district-sized areas only (neighborhood fallback).
-   *   'point'  — point-like targets: (almost) exactly-named, monument-scale polygons only.
-   *   'anchored' — address-only geocodes: require name identity or anchor containment.
+   *   'loose'  - default word-overlap scoring (generic POIs/compounds).
+   *   'strict' - named, non-building, district-sized areas only (neighborhood fallback).
+   *   'point'  - point-like targets: (almost) exactly-named, monument-scale polygons only.
+   *   'anchored' - address-only geocodes: require name identity or anchor containment.
    *
    * @returns {Promise<null | { ring: Array<[number,number]>, kind: 'building'|'area', heightM: number|null }>}
    */
@@ -1431,7 +1431,7 @@ export function createAnnotationResolver({
     mode = 'loose',
   ) {
     // The resolution MODE changes what counts as a match, so it must be part of the
-    // key — otherwise a loose lookup's building could be returned for a strict
+    // key - otherwise a loose lookup's building could be returned for a strict
     // neighborhood (or point-like) lookup at the same rounded coord/name, or vice-versa.
     const cacheKey = `fp|${mode}|${lat.toFixed(5)},${lon.toFixed(5)}|${query.toLowerCase()}`;
     const cachedFp = cacheRead(footprintCache, cacheKey);
@@ -1446,7 +1446,7 @@ export function createAnnotationResolver({
     if (elements === null || signal?.aborted) return undefined;
     const fp = selectFootprint(elements, lat, lon, query, mode);
     if (fp) {
-      cacheWrite(footprintCache, cacheKey, fp); // positive footprint — always cacheable
+      cacheWrite(footprintCache, cacheKey, fp); // positive footprint - always cacheable
       return fp;
     }
     negCache(footprintCache, cacheKey, signal, true); // got a response, no match → definitive
@@ -1455,9 +1455,9 @@ export function createAnnotationResolver({
 
   /**
    * Find the REAL enclosing "grounds / compound / campus" polygon containing a point
-   * — the smallest NAMED, NON-building `leisure` / `landuse` / `boundary` / `amenity`
+   * - the smallest NAMED, NON-building `leisure` / `landuse` / `boundary` / `amenity`
    * / `natural=water` polygon that geometrically CONTAINS it. (Water is in the sweep
-   * because a lake asked for as a compound — "Lady Bird Lake", entityKind:compound —
+   * because a lake asked for as a compound - "Lady Bird Lake", entityKind:compound -
    * anchors IN the water; without the tag it could never match.) This is "one level
    * up" the spatial
    * hierarchy from a building (e.g. the Texas Capitol dome → "Capitol Square",
@@ -1467,22 +1467,22 @@ export function createAnnotationResolver({
    * tiebreak BONUS (never a filter). See docs/compound-containment-research.md §1.4–1.5.
    *
    * Modeled on fetchLocalMonument: a 12 s fail-fast (an enrichment, not worth blocking
-   * narration — and narration no longer waits on it since outlines went progressive, so
+   * narration - and narration no longer waits on it since outlines went progressive, so
    * the budget can absorb a slow Overpass mirror instead of stranding the mark a point),
    * and the result cached by ~1 km coord bucket so a whole grounds batch costs ONE
    * query. Follows the file's tri-state convention:
-   *   - `{ ring, kind:'area', heightM:null }` (synthesized:false — a REAL footprint),
+   *   - `{ ring, kind:'area', heightM:null }` (synthesized:false - a REAL footprint),
    *   - `null` on a DEFINITIVE no-enclosing-polygon (got a response, nothing contained), or
-   *   - `undefined` on a TRANSIENT Overpass failure (timeout / network — a retry may yet find it).
+   *   - `undefined` on a TRANSIENT Overpass failure (timeout / network - a retry may yet find it).
    *
    * @returns {Promise<undefined | null | { ring: Array<[number,number]>, kind: 'area', heightM: null }>}
    */
   async function fetchEnclosingArea(lat, lon, signal, query = '') {
-    const cacheKey = `${lat.toFixed(2)},${lon.toFixed(2)}`; // ~1 km buckets — grounds annotations share one
+    const cacheKey = `${lat.toFixed(2)},${lon.toFixed(2)}`; // ~1 km buckets - grounds annotations share one
     const cached = cacheRead(enclosingAreaCache, cacheKey);
     if (cached !== undefined) return cached;
 
-    // Fail-fast budget: an opportunistic enrichment, not worth blocking on a hung Overpass —
+    // Fail-fast budget: an opportunistic enrichment, not worth blocking on a hung Overpass -
     // but generous enough (12 s ≈ the footprint fetch budget) that an ordinary slow mirror
     // doesn't strand a grounds mark as a point. The feature source returns null on a transient
     // failure (timeout/502).
@@ -1508,7 +1508,7 @@ export function createAnnotationResolver({
       if (areaM2 <= 0) continue;
       if (areaM2 > SCOPE_AREA_CAP_M2.compound) continue; // too big to be "the compound"
       // Name-match is a TIEBREAK BONUS, not a filter: at (near-)equal area, prefer a candidate the
-      // user's words actually name. Smallest-area still dominates — containment + min-area is what
+      // user's words actually name. Smallest-area still dominates - containment + min-area is what
       // makes the Capitol land on "Capitol Square" even though the user said "grounds".
       const nameWords = normalizedWords(
         [
@@ -1549,7 +1549,7 @@ export function createAnnotationResolver({
   }
 
   /** A target that reads like an enclosing GROUNDS / COMPOUND / CAMPUS (e.g. "Texas Capitol grounds")
-   *  rather than a single building — used to synthesize a loose-footprint disc when OSM has no real
+   *  rather than a single building - used to synthesize a loose-footprint disc when OSM has no real
    *  polygon, instead of failing outright. */
   function isGroundsLikeQuery(query) {
     return /\b(grounds|compound|campus|complex|quad|plaza)\b/i.test(
@@ -1561,10 +1561,10 @@ export function createAnnotationResolver({
    * Whether a target is a POINT-LIKE cultural marker (monument/statue/memorial/plaque/…)
    * that must resolve point-first (field test 7 §1). Classification ladder, most
    * authoritative first:
-   *   1. the voice model's explicit `entityKind` (an entity fact — trusted both ways),
+   *   1. the voice model's explicit `entityKind` (an entity fact - trusted both ways),
    *   2. grounds-like wording in the target OR label (area intent) vetoes,
    *   3. the monument wordlist,
-   *   4. the Places `types` of the anchored feature (data — present on places-sourced
+   *   4. the Places `types` of the anchored feature (data - present on places-sourced
    *      anchors; 'monument'/'sculpture' are unambiguous point classes).
    */
   function isPointLikeTarget(target, entityKind, placeTypes, label) {
@@ -1579,9 +1579,9 @@ export function createAnnotationResolver({
   /**
    * Whether an annotation asks for an enclosing GROUNDS / COMPOUND / CAMPUS area. The model
    * often puts the grounds word in the LABEL, not the target ("target: Texas State Capitol,
-   * label: Capitol grounds" — field test 8), so both count; an explicit `entityKind` (entity
+   * label: Capitol grounds" - field test 8), so both count; an explicit `entityKind` (entity
    * fact) is trusted both ways. Grounds-like asks reach the REAL enclosing-polygon sweep even
-   * under `around_the_thing` phrasing — the thing named IS the grounds, so a buffered
+   * under `around_the_thing` phrasing - the thing named IS the grounds, so a buffered
    * around-disc would be the wrong shape. Exported for tests.
    */
   function isGroundsLikeAsk(target, label, entityKind) {
@@ -1600,7 +1600,7 @@ export function createAnnotationResolver({
   const monumentInflight = new Map(); // centerKey → in-flight sweep promise (batch dedup)
 
   async function fetchLocalMonument(lat, lon, query, signal) {
-    const centerKey = `${lat.toFixed(2)},${lon.toFixed(2)}`; // ~1 km buckets — grounds monuments share one
+    const centerKey = `${lat.toFixed(2)},${lon.toFixed(2)}`; // ~1 km buckets - grounds monuments share one
     let features = cacheRead(monumentCache, centerKey);
     if (features === undefined) {
       // One sweep per bucket even under the engine's CONCURRENT batch resolution: every
@@ -1619,7 +1619,7 @@ export function createAnnotationResolver({
               isUnavailableCapability(elements) ||
               isRateLimitedOutcome(elements)
             )
-              return null; // transient — NEVER cached (a poisoned bucket
+              return null; // transient - NEVER cached (a poisoned bucket
             // would silently disable the snap for the whole session, field test 7 §1)
             const feats = [];
             for (const el of elements) {
@@ -1677,7 +1677,7 @@ export function createAnnotationResolver({
 
   /**
    * Pick the best OSM polygon for a query from raw Overpass elements. `mode` selects the
-   * acceptance contract ('loose' | 'strict' | 'point' | 'anchored' — see fetchFootprint). Exported for
+   * acceptance contract ('loose' | 'strict' | 'point' | 'anchored' - see fetchFootprint). Exported for
    * the unit tests, which pin the mode contracts with fixtures captured from live data.
    */
   function selectFootprint(
@@ -1718,10 +1718,10 @@ export function createAnnotationResolver({
       // Admin/neighborhood fallback (requireName): accept only a NAMED, non-building
       // AREA of district size (≥0.3 km², e.g. the Presidio's landuse). A neighborhood
       // is never a single building or a tiny parcel, so a building named "Mission ..."
-      // or a 0.01 km² lot must not stand in for it — better an honest labeled point.
+      // or a 0.01 km² lot must not stand in for it - better an honest labeled point.
       if (requireName && (!named || isBuilding || areaM2 < 300_000)) continue;
       // Point-like contract: a polygon may stand in for a monument/statue/memorial ONLY
-      // when it clearly IS that feature — most of the query names it (intentCoverage) AND
+      // when it clearly IS that feature - most of the query names it (intentCoverage) AND
       // the query accounts for most of ITS name (completeness) AND it is monument-scale.
       // Bare word overlap must not qualify: "Thompson Austin" shares only the locality
       // token with "Tejano Monument, Austin" and outscored everything under loose scoring
@@ -1815,7 +1815,7 @@ export function createAnnotationResolver({
    * The current view as a center + radius (km), feeding the geocode proximity gate: a named place
    * that resolved much farther than this radius from center is rejected as a wrong match.
    *
-   * Center is the CAMERA SUBPOINT (its lon/lat), not the view-rectangle center — the subpoint is
+   * Center is the CAMERA SUBPOINT (its lon/lat), not the view-rectangle center - the subpoint is
    * always available, whereas computeViewRectangle() returns undefined exactly when the user is in
    * the common low/oblique view with the horizon in frame (which is when the bad geocodes bite).
    * Radius is scaled from camera height (a generous proxy for how much ground is on screen), with a
@@ -1853,11 +1853,11 @@ export function createAnnotationResolver({
 
   /**
    * View-biased Places recovery for a NAME whose geocode missed or landed implausibly
-   * far from what the user is looking at — the searchAndFlyTo twin of the recovery
+   * far from what the user is looking at - the searchAndFlyTo twin of the recovery
    * inside resolveAnnotationTarget ("the Capitol" → Washington DC while hovering
    * Austin). When there is no geocode, or it sits more than MIN_DRIFT_FLOOR_KM from
    * the view centre, a Places Text Search biased to the view centre is trusted within
-   * PLACES_MAX_DISTANCE_M. A near geocode returns null untouched — local hits keep the
+   * PLACES_MAX_DISTANCE_M. A near geocode returns null untouched - local hits keep the
    * plain geocode path. Returns the Places hit
    * ({ lat, lon, label, types, viewport, distanceM, … }) or null.
    */
@@ -1890,7 +1890,7 @@ export function createAnnotationResolver({
 
   /**
    * Convert a NORMALIZED screen point (x,y in [0,1] of the current viewport) into
-   * a world lon/lat using the depth-aware pick cascade — the inverse of the
+   * a world lon/lat using the depth-aware pick cascade - the inverse of the
    * project-to-screen used by the renderers. This is the "point at the pixel"
    * fallback: the agent indicates a spot in the viewport screenshot when it can't
    * name the place, and we anchor the mark to the actual world point under it.
@@ -1948,7 +1948,7 @@ export function createAnnotationResolver({
     return {
       lat: Cesium.Math.toDegrees(carto.latitude),
       lon: Cesium.Math.toDegrees(carto.longitude),
-      // The height the pick actually landed on — a roof, a hillside, or 0 on
+      // The height the pick actually landed on - a roof, a hillside, or 0 on
       // the ellipsoid. Callers that only want a coordinate ignore it; the draw
       // tool's live preview needs it, or the rubber band sinks to sea level
       // while the pointer is on a hill.
@@ -1978,7 +1978,7 @@ export function createAnnotationResolver({
         }
       }
     } catch {
-      /* tiles not ready — fall through */
+      /* tiles not ready - fall through */
     }
     const globeHeight = scene.globe?.getHeight?.(
       Cesium.Cartographic.fromDegrees(lon, lat),
@@ -1992,13 +1992,13 @@ export function createAnnotationResolver({
   }
 
   /**
-   * Region ring for ANALYST queries ("how many flights over Texas / the Alps") —
+   * Region ring for ANALYST queries ("how many flights over Texas / the Alps") -
    * a name-only entry point that reuses this module's boundary machinery
    * without the annotation pipeline. Unique Natural Earth names resolve first
    * (offline); duplicate names require a geocoded containment anchor, then
    * geocode + admin boundary for states/countries/counties (Tier A disk-cached
    * Overpass, so repeat asks are instant). Returns null when the name doesn't
-   * resolve to a region-like boundary — the analyst engine reports that
+   * resolve to a region-like boundary - the analyst engine reports that
    * honestly rather than silently scoping to nothing.
    *
    * The geocode + admin-boundary rung is capped at `budgetMs`. Past it the
@@ -2030,7 +2030,7 @@ export function createAnnotationResolver({
     signal?.throwIfAborted();
     if (ne?.candidates === 1 && ne.polygons?.length) {
       // Largest ring carries the query scope; multi-ring regions (Andes) keep
-      // their main cordillera — good enough for containment counting.
+      // their main cordillera - good enough for containment counting.
       const ring = [...ne.polygons].sort((a, b) => b.length - a.length)[0];
       if (ring?.length >= 3)
         return { name: ne.name, ring, source: 'natural-earth' };

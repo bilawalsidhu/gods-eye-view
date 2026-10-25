@@ -11,7 +11,7 @@ const REGIONAL_MAX_RESPONSE_BYTES = 2 * 1024 * 1024;
  * The deadline covers the BODY, not just the headers. `return`ing the reader's
  * promise from inside a try/finally leaves the try block the moment the promise
  * exists, so the abort timer used to be cleared before a single byte of body had
- * arrived — an upstream that answered its headers and then stalled had no
+ * arrived - an upstream that answered its headers and then stalled had no
  * deadline at all. Awaiting inside the try keeps the timer alive until the body
  * is in hand, and the same signal is handed to the reader so an abort stops the
  * read rather than just the connect.

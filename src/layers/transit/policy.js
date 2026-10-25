@@ -4,10 +4,7 @@
  * scene state, no network: everything here is exercised by node:test.
  */
 
-import {
-  TRANSIT_MODE_ICON,
-  transitRouteLabel,
-} from '../../data/transitFeeds.js';
+import { transitRouteLabel } from '../../data/transitFeeds.js';
 import { displayMotion, playbackPosition } from './movement.js';
 
 export const TRANSIT_SELECTED_OVERLAY_SOURCE_ID = 'transit-selected';
@@ -26,7 +23,7 @@ export const TRANSIT_POLL_MS = 15_000;
  * between the two fixes bracketing it (`src/layers/transit/movement.js`).
  * A glide that started from the drawn position at receipt time and spanned the
  * report gap ran every second segment at 1.5x when MBTA vehicles reported
- * every ten seconds against this fifteen-second poll — buses plainly too fast.
+ * every ten seconds against this fifteen-second poll - buses plainly too fast.
  */
 /** Camera altitude (m) above which the layer idles: a national fleet still reads at 3,000 km. */
 export const ACTIVATION_ALTITUDE_M = 3_000_000;
@@ -91,7 +88,7 @@ export const ROTATION_REFRESH_MS = 200;
 /**
  * How often the shown/hidden sweep may run. `billboard.show` is a dirty flag,
  * so doing this on every camera event during a drag would re-upload the whole
- * fleet once a frame — which is the cost it exists to avoid.
+ * fleet once a frame - which is the cost it exists to avoid.
  */
 export const VISIBILITY_REFRESH_MS = 250;
 /**
@@ -105,8 +102,8 @@ const VIEW_MARGIN_RATIO = 0.6;
  * Whether a vehicle is close enough to the camera's look-at area to be worth
  * animating frame by frame.
  *
- * At street level the layer holds an entire metropolitan fleet — five hundred
- * and more vehicles — while the camera can see about fifteen of them. Gliding
+ * At street level the layer holds an entire metropolitan fleet - five hundred
+ * and more vehicles - while the camera can see about fifteen of them. Gliding
  * the other five hundred means writing five hundred billboard positions every
  * frame, which makes Cesium re-upload the whole buffer, for motion nobody can
  * observe. Off-screen vehicles take their newest fix directly instead; they are
@@ -130,14 +127,14 @@ export function withinViewBounds(bounds, at) {
 
 /**
  * Whether a gliding vehicle is near enough the view to be worth animating and
- * showing — judged on where it is NOW as well as where it is going.
+ * showing - judged on where it is NOW as well as where it is going.
  *
  * Testing only the destination hid a bus that was plainly on screen: a fix
  * arrives placing it just past the padded edge, and it disappeared from inside
  * the view instead of driving out of it, its glide thrown away in the same
  * frame. A vehicle counts as near the view while either end of its current
- * glide is inside the bounds, so it leaves the way a person expects — by
- * travelling out — and arrives the same way.
+ * glide is inside the bounds, so it leaves the way a person expects - by
+ * travelling out - and arrives the same way.
  *
  * @param {{south:number,north:number,west:number,east:number}|null} bounds
  * @param {{to:{lat:number,lon:number}, from:{lat:number,lon:number}|null}} entry
@@ -156,8 +153,8 @@ export function vehicleNearView(bounds, entry) {
  * reaches 360° the rectangle is every longitude there is, and wrapping each
  * endpoint on its own would turn that into a narrow band pointing the wrong
  * way. A high oblique view over Europe spans about 166°, pads to well past a
- * full turn, and used to come back as -177.8°..-172.2° — five degrees of the
- * Pacific — which hid an entire national fleet that was plainly on screen. So
+ * full turn, and used to come back as -177.8°..-172.2° - five degrees of the
+ * Pacific - which hid an entire national fleet that was plainly on screen. So
  * a padded span that closes the circle is reported as the whole circle, and
  * only a span that stays under it is wrapped.
  *
@@ -207,7 +204,7 @@ export function transitVehicleKey(feedId, vehicleId) {
 
 /**
  * Where the vehicle is drawn: the display clock's position along its fix
- * history. `now` is accepted for the older callers and ignored — the clock is
+ * history. `now` is accepted for the older callers and ignored - the clock is
  * advanced by the frame pass, and reading it here must not move it.
  * @param {{fixes?:Array, to?:{lat:number,lon:number}}} entry
  * @param {number} [now] Unused.
@@ -224,8 +221,8 @@ export function interpolatedVehiclePosition(entry, now) {
 /**
  * When a fix was REPORTED, in ms, from the best timestamp available.
  *
- * The ordering questions — is this fix newer than the one we drew, how much
- * time passed between them — need an absolute time, not an age. Same ladder as
+ * The ordering questions - is this fix newer than the one we drew, how much
+ * time passed between them - need an absolute time, not an age. Same ladder as
  * the age helper: the vehicle's own stamp, else the snapshot's fetch time.
  *
  * @param {object} record Normalized vehicle record.
@@ -245,7 +242,7 @@ export function vehicleReportTimeMs(record, fetchedAtMs = null) {
  * The proxy already resolves the ladder (the vehicle's own timestamp, else the
  * feed header's, else fetch time) and says which it used. A record that somehow
  * arrives with no usable timestamp at all is aged from the snapshot's fetch
- * time, never from "now" — treating an unstamped fix as fresh is exactly how a
+ * time, never from "now" - treating an unstamped fix as fresh is exactly how a
  * ten-minute-old bus gets drawn as live.
  *
  * @param {object} record Normalized vehicle record.
@@ -278,7 +275,7 @@ export function isStaleVehicleFix(record, nowMs, fetchedAtMs = null) {
  *
  * `every(stale)` was the bug this replaces: with Boston fresh and Helsinki an
  * hour old, "not every feed is stale" read as nominal and the row claimed
- * everything was fine. One stale feed beside a fresh one is DEGRADED — the
+ * everything was fine. One stale feed beside a fresh one is DEGRADED - the
  * view is part live and part not, and the row has to say so.
  *
  * @param {Array<{stale:boolean, error:string|null, retryInSec?:number|null,
@@ -300,7 +297,7 @@ export function aggregateTransitFeedHealth(statuses, nowMs) {
     };
   }
   // Age is measured from when the OPERATOR last answered, never from when this
-  // browser last received bytes — the proxy replays its cached copy on a fixed
+  // browser last received bytes - the proxy replays its cached copy on a fixed
   // cadence during an outage, and that cadence is not freshness.
   const isStale = (status) =>
     status.stale === true ||
@@ -378,12 +375,11 @@ export function buildTransitSelectionCopy(
   entry = null,
   t = englishText,
 ) {
-  const icon = TRANSIT_MODE_ICON[mode] || TRANSIT_MODE_ICON.unknown;
   const routeLabel = record.routeId
     ? t('Route {route}', { route: transitRouteLabel(feed, record.routeId) })
     : t('Vehicle {vehicle}', { vehicle: record.label || record.id });
-  const title = `${icon} ${routeLabel}`;
-  // The mode is said in words on its own line. A glyph and a route id do not
+  const title = routeLabel;
+  // The mode is said in words on its own line. A route id alone does not
   // tell a reader that the dot on Tremont Street is a subway train, and a
   // subway drawn on a street reads as a bug until the card says what it is.
   // An operator's own mode word (feed.modeWords) is a name and stays as is.
@@ -429,7 +425,7 @@ export function buildTransitSelectionCopy(
   if (reportedMotion.length) details.push(reportedMotion.join(' · '));
   if (state.length) details.push(state.join(' · '));
   // Underground services are drawn on the surface directly above themselves.
-  // That is a deliberate choice — a train nobody can see is not worth drawing —
+  // That is a deliberate choice - a train nobody can see is not worth drawing -
   // but it has to be stated, or a metro sitting on a road looks like an error.
   if (UNDERGROUND_MODES.has(mode)) {
     details.push(t('Shown at street level · depth not in the feed'));
@@ -596,7 +592,7 @@ const DETECTION_ID_MAX_CHARS = 14;
  * Cut long route text with an ellipsis, so a reader can see it was cut.
  *
  * `Shuttle-Generic` used to reach the screen as `SHUTTLE-GENERI`, which does
- * not read as an abbreviation — it reads as a typo, or as a route that exists.
+ * not read as an abbreviation - it reads as a typo, or as a route that exists.
  * A trailing ellipsis costs one character and says plainly that there is more.
  *
  * @param {string} text
@@ -624,8 +620,8 @@ export function transitDetectionClass(mode, feed) {
 /**
  * The micro field the detection host actually paints beside the route.
  *
- * The host draws a single-line track label — the bright id and one dim
- * micro-field — so mode and status have to share that field or go unseen. Mode
+ * The host draws a single-line track label - the bright id and one dim
+ * micro-field - so mode and status have to share that field or go unseen. Mode
  * leads because it tells you what you are looking at (and matches the glyph
  * shape), then what the vehicle is doing: a stopped bus reporting 0 km/h is
  * worth saying out loud, it is the most common state in a city at rush hour.
@@ -648,7 +644,7 @@ export function transitDetectionMetric(
 }
 
 /**
- * What the vehicle is doing right now, in as few characters as it takes —
+ * What the vehicle is doing right now, in as few characters as it takes -
  * judged on what the screen is showing, not on what the feed claims.
  *
  * This used to read `current_status` straight out of the newest record, which

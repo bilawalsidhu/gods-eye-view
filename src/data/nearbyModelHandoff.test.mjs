@@ -15,7 +15,7 @@ import militaryFlightsLayer, { _setTrackedMilitaryRefreshStateForTest } from './
 
 const ICAO = 'abc123';
 const OTHER = 'def456';
-/** ~10.6 km from the seeded contact — well inside the query range either way. */
+/** ~10.6 km from the seeded contact - well inside the query range either way. */
 const CENTER = Cesium.Cartesian3.fromDegrees(-97.7, 30.2, 200);
 const RANGE_M = 250_000;
 const MODEL_POSITION = Cesium.Cartesian3.fromDegrees(-97.69, 30.22, 10_900);

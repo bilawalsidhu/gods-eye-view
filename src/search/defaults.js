@@ -9,7 +9,7 @@ import { createPresetGeocoder } from './presetGeocoder.js';
 import { createAlpsGeocoder } from './alpsGeocoder.js';
 
 /**
- * Coordinates, bundled names and the unqualified Alps first — all offline —
+ * Coordinates, bundled names and the unqualified Alps first - all offline -
  * then Google when configured, then keyless Photon, then the local Nominatim
  * route as a last resort. Transport stays local to setup.
  *

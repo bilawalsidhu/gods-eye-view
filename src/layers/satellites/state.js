@@ -28,7 +28,7 @@ export function createState({ services }) {
   // noradId → { primitive, gmstAtBake }
   // primitive is a one-instance Cesium.Primitive holding the ring baked in ECEF
   // at gmstAtBake; the preRender tick re-aligns it to current GMST by updating
-  // its modelMatrix (rigid Z-rotation — no geometry rebuild, WS-D1).
+  // its modelMatrix (rigid Z-rotation - no geometry rebuild, WS-D1).
 
   state._orbitPaths = new Map();
 

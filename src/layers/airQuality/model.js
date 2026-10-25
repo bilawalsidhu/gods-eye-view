@@ -1,14 +1,14 @@
 /**
  * @module layers/airQuality/model
  *
- * Air-quality readings, normalized across networks. Pure — no Cesium, no
+ * Air-quality readings, normalized across networks. Pure - no Cesium, no
  * network.
  *
  * Air-quality indices are not interchangeable numbers. Canada's AQHI runs 1 to
  * 10+ on health risk; the US AQI runs 0 to 500 on concentration breakpoints;
  * Europe's EAQI is a five-step category. A reading is therefore carried as
- * `{ provider, scale, value, band }` — who measured it, which index it is, the
- * value on that index's own terms, and the band it falls in — so a second
+ * `{ provider, scale, value, band }` - who measured it, which index it is, the
+ * value on that index's own terms, and the band it falls in - so a second
  * network can be added without retrofitting a shared numeric meaning that does
  * not exist.
  *
@@ -98,8 +98,8 @@ export function newestObservation(readings) {
  */
 export function readingsAreStale(readings, now = Date.now()) {
   const newest = newestObservation(readings);
-  // No current observation at all — every row was dropped as too old or
-  // unusable — is the stalest a feed can be, not a nominal one.
+  // No current observation at all - every row was dropped as too old or
+  // unusable - is the stalest a feed can be, not a nominal one.
   if (newest === null) return true;
   return now - newest > STALE_AFTER_MS;
 }
@@ -138,7 +138,7 @@ export function airQualityColor(bandId) {
 /**
  * The published AQHI value for a raw ECCC reading: an integer from 1 up.
  *
- * ECCC reports whole numbers with a floor of 1 — there is no "AQHI 0" and no
+ * ECCC reports whole numbers with a floor of 1 - there is no "AQHI 0" and no
  * "AQHI 1.08". A raw value below 1 is a legitimate low reading, not an error,
  * and is published as 1.
  *
@@ -232,7 +232,7 @@ export function normalizeAqhiStations(geojson) {
  *
  * The catalog is the only thing that supplies a reading its coordinates, so an
  * observation without a matching station cannot be placed and is dropped.
- * Readings older than OBSERVATION_MAX_AGE_MS are dropped too — a six-hour-old
+ * Readings older than OBSERVATION_MAX_AGE_MS are dropped too - a six-hour-old
  * air-quality number presented as current is worse than no number.
  *
  * @param {object} geojson - FeatureCollection from `aqhi-observations-realtime`.
@@ -307,7 +307,7 @@ export function createAirQualityOverlayEntry({
     variant: 'label',
     title,
     accent,
-    // Worse air wins the label budget — the reading people need to see first.
+    // Worse air wins the label budget - the reading people need to see first.
     priority: Math.round(Number(value) || 0) * 1000,
     collisionGroup: 'ambient-label',
     paintLane: 'ambient-label',
@@ -372,7 +372,7 @@ export function readingsInView(readings, rect, limit = 5) {
 }
 
 /**
- * Map one reading to a JSON-safe analyst record. Pure — no Cesium types.
+ * Map one reading to a JSON-safe analyst record. Pure - no Cesium types.
  * @param {object|null|undefined} raw
  * @param {number} [index=0]
  * @returns {object}

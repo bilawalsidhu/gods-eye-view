@@ -144,12 +144,12 @@ test('selectCctvLod: no incumbents means plain nearest-first (unchanged behavior
   assert.deepEqual(plain.cardIds, withEmpty.cardIds);
 });
 
-// ─── distributeCctvCards — screen distribution (owner round 2, item C) ──────
+// ─── distributeCctvCards - screen distribution (owner round 2, item C) ──────
 // Grid: 5 cols x 4 rows. At viewW 1000 / viewH 800 each cell is 200x200 px.
 
 test('distributeCctvCards spreads clustered candidates across cells', () => {
   // Four nearest candidates cluster in the top-left cell; a farther one
-  // sits alone bottom-right. Nearest-first would take the whole cluster —
+  // sits alone bottom-right. Nearest-first would take the whole cluster -
   // distribution gives every occupied cell its best first.
   const clustered = Array.from({ length: 4 }, (_, i) => ({
     id: `center-${i}`,
@@ -189,7 +189,7 @@ test('distributeCctvCards: leftover budget falls back to global rank order', () 
 });
 
 test('distributeCctvCards: empty cells are skipped, budget respected', () => {
-  // Everything in ONE cell — the 19 empty cells claim nothing; the single
+  // Everything in ONE cell - the 19 empty cells claim nothing; the single
   // occupied cell fills the whole budget in rank order.
   const oneCell = Array.from({ length: 5 }, (_, i) => ({
     id: `c-${i}`,
@@ -250,7 +250,7 @@ test('distributeCctvCards: malformed rows dropped; offscreen anchors clamp to ed
 
 test('selectCctvLod with viewport dims routes the fill through screen distribution', () => {
   // A cluster larger than the street budget sits mid-screen; a periphery
-  // camera ranks past the budget. Nearest-first drops it — distribution
+  // camera ranks past the budget. Nearest-first drops it - distribution
   // keeps it because its cell is otherwise empty.
   const clustered = Array.from(
     { length: CCTV_AMBIENT_CARD_MIN + 2 },
@@ -529,7 +529,7 @@ test('applyEvictionGrace keeps a fallen-out card and clears grace when it return
   assert.deepEqual(pass1.evictIds, []);
   assert.deepEqual(pass1.graceState.get('cam-b'), { misses: 1, since: 1_000 });
 
-  // Pass 2: cam-b is selected again — card survived, grace entry cleared.
+  // Pass 2: cam-b is selected again - card survived, grace entry cleared.
   const pass2 = applyEvictionGrace({
     selectedIds: ['cam-a', 'cam-b'],
     builtIds: ['cam-a', 'cam-b'],

@@ -69,7 +69,7 @@ export function createSelection({
     // Re-selecting the already-active camera is a no-op: re-running the
     // activation path re-probes and rewrites the plane entity's geometry, and
     // that async primitive rebuild visibly flashes the monitor plane (owner
-    // field test 2026-07-04 — every click ON the plane picks its own camera).
+    // field test 2026-07-04 - every click ON the plane picks its own camera).
     // `activationDone` distinguishes a real activation from the enable()-time
     // default `_activeCameraId` assignment, which never ran this path.
     if (
@@ -83,7 +83,7 @@ export function createSelection({
     }
     layerState._activeCameraId = cameraId;
     layerState._autoHopSuspended = false;
-    // A real activation creates projection work — wake the self-stopping loop.
+    // A real activation creates projection work - wake the self-stopping loop.
     parts.projection.startProjectionLoop();
     if (previousActiveRecord && previousActiveRecord !== record) {
       parts.geometry.clearProbeClampOnDeactivation(
@@ -114,7 +114,7 @@ export function createSelection({
     }
     // §9.1: one obstruction probe per activation, BEFORE the geometry pass so
     // the range clamp lands in the same rewrite. A FIRST-EVER activation (no
-    // real ground sample yet) probes from the catalog-prior altitude — if that
+    // real ground sample yet) probes from the catalog-prior altitude - if that
     // prior is off, the clamp is measured from a shifted origin, but a
     // re-activation after the one-shot snap lands re-probes from real ground,
     // so it self-corrects.
@@ -131,12 +131,12 @@ export function createSelection({
     // FIX B9c: if tiles are ready this real pass applies + re-resolves
     // immediately; if tiles are still streaming, updateRecordGeometry's fallback
     // guard recomputes purely from the cached real ground (the pose + the probe
-    // clamp above still land — no scene queries) and the record stays unresolved
+    // clamp above still land - no scene queries) and the record stays unresolved
     // until update()'s one-shot tiles-ready completion pass re-grounds it.
     parts.ground.rearmGroundResolution(record);
     parts.geometry.updateRecordGeometry(record);
     // Ground under the plane's footprint (DEM, cached proxy) for cameras
-    // without a shipped precompute for this pose — only the camera the user
+    // without a shipped precompute for this pose - only the camera the user
     // is looking at ever asks.
     void parts.ground.resolveFootprintGround(record);
     record.activationDone = true;

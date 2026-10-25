@@ -41,15 +41,15 @@ function sourceFiles(directory = SRC_ROOT) {
 /**
  * Glyph names the sources ask the icon font for.
  *
- * Errs WIDE on purpose. A name the font does not carry costs nothing — Google
- * ignores an unknown `icon_names` entry and still returns 200 — while a glyph
+ * Errs WIDE on purpose. A name the font does not carry costs nothing - Google
+ * ignores an unknown `icon_names` entry and still returns 200 - while a glyph
  * the subset is missing breaks the interface SILENTLY: the ligature never
  * forms, so the element renders the literal word `right_panel_open` instead of
  * falling back to a visible box.
  *
  * A literal to the LEFT of a `?` is the condition being tested, not the text
  * being shown, so it is dropped: `status === 'loading' ? …` must not enrol
- * `loading`. Optional chaining is neutralised first — `payload?.newsStatus`
+ * `loading`. Optional chaining is neutralised first - `payload?.newsStatus`
  * is not a ternary, and splitting on its `?` would keep the condition.
  * @returns {Map<string, string>} glyph -> the first file that names it.
  */
@@ -94,13 +94,13 @@ test('every glyph the sources render is in the icon_names subset', () => {
     missing,
     [],
     'Glyphs named by the sources but absent from the index.html icon_names list. ' +
-      'Add them there — an unlisted glyph renders as its own name on screen: ' +
+      'Add them there - an unlisted glyph renders as its own name on screen: ' +
       missing.join(', '),
   );
 });
 
 test('the unused Material Icons Round family is not loaded', () => {
-  // A second icon font, 173 kB, for a family no source ever uses — and
+  // A second icon font, 173 kB, for a family no source ever uses - and
   // src/cockpitMarkup.test.mjs already asserts the markup must not use it.
   const html = readFileSync(INDEX_HTML, 'utf8');
   assert.doesNotMatch(

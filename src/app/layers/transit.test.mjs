@@ -17,8 +17,8 @@ function fixtureSurface(signal, demM) {
 }
 
 test('transit reads the mesh floor the application resolved, through the application surface', async (t) => {
-  // The floor transit draws on is the ONE the application constructs — the
-  // instance aircraft and camera geometry stand on — not a module-level copy.
+  // The floor transit draws on is the ONE the application constructs - the
+  // instance aircraft and camera geometry stand on - not a module-level copy.
   // An earlier cut imported the legacy singleton and could not see a mesh
   // floor the app had already resolved for a cell; it drew on bare earth.
   const lifetime = new AbortController();
@@ -55,7 +55,7 @@ test('transit reads the mesh floor the application resolved, through the applica
   assert.equal(
     height.requestHeight(lat, lon).height,
     37 + lift,
-    'and so does transit — the same number',
+    'and so does transit - the same number',
   );
 
   // Leaving the photoreal regime drops back to the DEM for everyone at once.

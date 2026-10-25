@@ -106,17 +106,17 @@ async function fetchOpenSkyStates(headers) {
 }
 // --- OpenSky credit governor (field-test fix 2026-07-06) -------------------
 // The global /states/all this proxy fetches costs 4 CREDITS per call against
-// OpenSky's ~4000/day authenticated budget — a day with the app open burned
+// OpenSky's ~4000/day authenticated budget - a day with the app open burned
 // the whole quota in ~8h and the layer then hard-died until the daily reset
 // ("rate limited for 48h" owner report; auth itself was fine). Three levers:
 //  1. Adaptive TTL: OpenSky returns X-Rate-Limit-Remaining on success; as the
 //     budget thins, the proxy stretches its cache TTL so a full day of
 //     continuous use never exhausts it.
-//  2. 429 cooldown: honor X-Rate-Limit-Retry-After-Seconds — no upstream
+//  2. 429 cooldown: honor X-Rate-Limit-Retry-After-Seconds - no upstream
 //     attempts until it passes (bounded 30 s … 30 min).
 //  3. Serve-stale: while rate-limited/cooling, serve the last-good body (200 +
 //     X-OpenSky-Stale) so the layer keeps rendering instead of dying.
-/** @type {number} Current adaptive TTL (ms) — starts at the base cache TTL. */
+/** @type {number} Current adaptive TTL (ms) - starts at the base cache TTL. */
 let _openskyTtlMs = OPENSKY_CACHE_MS;
 /** @type {number} Epoch-ms before which no upstream fetch is attempted. */
 let _openskyCooldownUntil = 0;
@@ -218,7 +218,7 @@ export async function getOpenSkyToken() {
   // Return cached token if still valid (with 60 s safety margin)
   if (_openskyToken && now < _openskyTokenExpiry - 60000) return _openskyToken;
 
-  // Coalesce concurrent refresh requests — if a refresh is already in-flight,
+  // Coalesce concurrent refresh requests - if a refresh is already in-flight,
   // return the same promise instead of issuing a duplicate token request
   if (_openskyTokenPromise) return _openskyTokenPromise;
 
@@ -464,12 +464,12 @@ function openSkySourceIsStale(sourceEpochMs, now = Date.now()) {
  * Vite plugin: OpenSky Network proxy with multi-mode auth and response caching.
  *
  * Supports four auth modes controlled by OPENSKY_AUTH_MODE env:
- *   - 'oauth'  (default) — client_credentials bearer token
- *   - 'basic'  — retired: OpenSky stopped accepting HTTP Basic (username and
+ *   - 'oauth'  (default) - client_credentials bearer token
+ *   - 'basic'  - retired: OpenSky stopped accepting HTTP Basic (username and
  *                password) on 2026-03-18, so this requests anonymously and
  *                warns once
- *   - 'auto'   — try OAuth first, then anon
- *   - 'anon'   — no credentials
+ *   - 'auto'   - try OAuth first, then anon
+ *   - 'anon'   - no credentials
  *
  * Successful responses are cached for OPENSKY_CACHE_MS (~9 s). On
  * upstream failure the proxy serves a stale cached response if available, or
@@ -537,7 +537,7 @@ export function openSkyProxy() {
           return;
         }
         // Cooling down with nothing cached (cold start into a rate limit):
-        // synthesize the 429 locally — hammering upstream mid-cooldown can't
+        // synthesize the 429 locally - hammering upstream mid-cooldown can't
         // succeed and just burns goodwill.
         if (inCooldown) {
           if (
@@ -625,7 +625,7 @@ export function openSkyProxy() {
               reason = 'oauth_ok';
             }
 
-            // Only cache successful responses — error responses (401/403/429/5xx)
+            // Only cache successful responses - error responses (401/403/429/5xx)
             // should not be served from cache on subsequent requests
             if (upstream.ok) {
               _openskyCacheBody = body;
@@ -676,9 +676,9 @@ export function openSkyProxy() {
               ? 'rate_limited'
               : `upstream_http_${upstream.status}`;
           // Credit governor: fetchOpenSkyStates already started the cooldown
-          // from OpenSky's retry-after — no upstream attempts until then.
+          // from OpenSky's retry-after - no upstream attempts until then.
           const cooldownMs = Math.max(0, _openskyCooldownUntil - Date.now());
-          // Serve the last-good body instead of the 429 when we have one —
+          // Serve the last-good body instead of the 429 when we have one -
           // the layer keeps rendering (STALE-cued) instead of dying.
           if (_openskyCacheBody && _openskyCacheStatus === 200) {
             res.writeHead(

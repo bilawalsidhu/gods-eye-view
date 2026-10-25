@@ -589,7 +589,7 @@ export class ShellFacade {
   /**
    * Single write path for style-stage intensity: keeps `enabled` in
    * lockstep so zero-intensity stages cost nothing (safe now that the
-   * scope is explicit — see _initStages). The stage enables on the same
+   * scope is explicit - see _initStages). The stage enables on the same
    * frame the first non-zero intensity lands, so crossfades never pop.
    * @param {Cesium.PostProcessStage} stage - Style post-process stage.
    * @param {number} value - Intensity in [0, 1].
@@ -603,12 +603,12 @@ export class ShellFacade {
    * Re-sync every stage's `enabled` flag from its CURRENT intensity.
    *
    * The cockpit-vision policy helpers (src/cockpitVisionPolicy.js) are pure
-   * intensity math — they write `uniforms.intensity` directly and know
+   * intensity math - they write `uniforms.intensity` directly and know
    * nothing about the enabled/intensity lockstep _setStageIntensity owns.
    * Without this sweep a stage the policy raised to 1 would stay DISABLED
    * and cockpit NVG/FLIR/CRT would render nothing at all. (Inert while the
    * chain is permanently enabled; load-bearing again once the explicit
-   * scope frees the zero-intensity stages — see _initStages.)
+   * scope frees the zero-intensity stages - see _initStages.)
    * @returns {void}
    */
   _syncStagesEnabledFromIntensity() {
@@ -622,7 +622,7 @@ export class ShellFacade {
    *
    * The scope is the CONTACTS SESSION, not Cockpit. Cockpit enter/exit and
    * third-person tracking are moves WITHIN that session and deliberately do not
-   * touch detection — an earlier build hooked this to cockpit enter/exit, which
+   * touch detection - an earlier build hooked this to cockpit enter/exit, which
    * is exactly what turned detections off when the owner left the cockpit.
    *
    * Called from `_syncContextModeButtons`, the single funnel every
@@ -785,7 +785,7 @@ export class ShellFacade {
   /**
    * Apply a detection preset's density and mode through the real UI path.
    *
-   * Deliberately does NOT consult `_detectionUserOverridden` — the CALLER owns
+   * Deliberately does NOT consult `_detectionUserOverridden` - the CALLER owns
    * that decision. The style path checks it (an explicit Sparse/Off must
    * survive a style switch); Cockpit entry does not (owner: detection is on in
    * the cockpit "regardless").
@@ -812,8 +812,8 @@ export class ShellFacade {
    * While Contacts is active it OWNS detection and forces Dense @ 75%. That is
    * a session-scoped override, not something the operator chose: it is undone
    * verbatim on deactivation. Serializing the forced values shipped a link that
-   * pinned Dense @ 75% on the recipient — as a durable preference, with no
-   * Contacts mode present to explain or undo it — even though the author's own
+   * pinned Dense @ 75% on the recipient - as a durable preference, with no
+   * Contacts mode present to explain or undo it - even though the author's own
    * setting was (say) OFF @ 50%. Publish what deactivation would restore.
    *
    * `_contactsDetectionRestore` is exactly that snapshot and is null whenever
@@ -1206,7 +1206,7 @@ export class ShellFacade {
    * Sample the manager's layer set and paint the global loading chip.
    * Driven by manager events AND by a ticker, because the underlying state
    * machine is TIME-driven (reveal delay, long-load threshold, terminal
-   * dwell) — see _armLoadingFeedbackTicker.
+   * dwell) - see _armLoadingFeedbackTicker.
    * @param {number} [now] - performance.now() sample.
    * @returns {void}
    */
@@ -1233,7 +1233,7 @@ export class ShellFacade {
    * Self-stopping 60 ms ticker for the global loading chip.
    *
    * The chip used to ride the style rAF loop, which perf wave 2 made
-   * self-stopping — leaving the chip frozen mid-state whenever no crossfade
+   * self-stopping - leaving the chip frozen mid-state whenever no crossfade
    * or animated shader was running (it would never reveal, never cross the
    * long-load threshold, and never dwell out). Its reducer
    * (src/loadingFeedback.js) is time-driven, so it needs real ticks; it is

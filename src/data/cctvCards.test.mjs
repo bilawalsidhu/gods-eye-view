@@ -129,7 +129,7 @@ test('CCTV card module cannot resurrect a canvas, projection, listener, or priva
   for (const pattern of forbidden) assert.doesNotMatch(source, pattern);
 });
 
-// ─── cardScaleForAltitude — the owner-decided altitude curve (finding 5) ────
+// ─── cardScaleForAltitude - the owner-decided altitude curve (finding 5) ────
 
 test('cardScaleForAltitude: full size and opacity at or below 1,800 m', () => {
   assert.deepEqual(cardScaleForAltitude(0), { scale: 1, alpha: 1 });
@@ -165,7 +165,7 @@ test('cardScaleForAltitude: scale and alpha are monotonic non-increasing', () =>
   }
 });
 
-// ─── cardFetchPolicy — cold-fill burst pacing (finding 3) ───────────────────
+// ─── cardFetchPolicy - cold-fill burst pacing (finding 3) ───────────────────
 
 test('cardFetchPolicy: cold fill bursts up to 4 in flight at 250 ms spacing', () => {
   assert.deepEqual(
@@ -193,7 +193,7 @@ test('cardFetchPolicy: steady state keeps the 1-fetch/s single-flight gate', () 
   assert.equal(cardFetchPolicy({ coldFill: false, inFlight: 0 }).launch, true);
 });
 
-// ─── applyFrameResult — the no-flicker persistence rule ─────────────────────
+// ─── applyFrameResult - the no-flicker persistence rule ─────────────────────
 
 test('applyFrameResult: success replaces the frame and stamps it', () => {
   const slot = createFrameSlot();

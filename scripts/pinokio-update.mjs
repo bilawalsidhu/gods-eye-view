@@ -4,7 +4,7 @@
  *
  * Update is a fixed menu item aimed at people who only want to run the app, and
  * it executes install scripts from whatever the configured remote serves. It
- * cannot ask for confirmation — Pinokio drives it non-interactively — so the
+ * cannot ask for confirmation - Pinokio drives it non-interactively - so the
  * safety it can offer is disclosure: fetch once, print the remote it fetched
  * from plus the incoming commits and their diffstat, and then apply that exact
  * revision. Someone who sees an unfamiliar remote or an unexpected set of
@@ -48,7 +48,7 @@ export function readGit(args, { cwd = ROOT } = {}) {
  * A remote can carry a password or an access token in its userinfo
  * (`https://token@host/org/repo.git`) or in a query parameter
  * (`?access_token=…`). The point of printing the remote is to show WHERE the
- * update comes from, which the host and path already say — so the userinfo is
+ * update comes from, which the host and path already say - so the userinfo is
  * replaced and the query string and fragment are dropped whole, rather than
  * matched against a list of parameter names that would miss the next one.
  *
@@ -120,7 +120,7 @@ export function reportIncomingChanges(io = {}) {
       ? read(['config', '--get', `branch.${branch}.remote`])
       : null;
   if (!upstream || !upstreamRef || !remote) {
-    warn('[update] No upstream branch is configured — cannot preview changes.');
+    warn('[update] No upstream branch is configured - cannot preview changes.');
     warn('[update] Continuing; `git pull --ff-only` will report the problem.');
     return { apply: null, fallback: true };
   }
@@ -129,7 +129,7 @@ export function reportIncomingChanges(io = {}) {
   if (remote === '.') {
     // The upstream is another branch in this same checkout; there is nothing
     // to fetch and no remote URL to disclose.
-    log('[update] Upstream is a local branch — nothing to fetch.');
+    log('[update] Upstream is a local branch - nothing to fetch.');
   } else {
     const url = redactRemoteUrl(read(['remote', 'get-url', remote]));
     log(`[update] Fetching from ${url || remote}`);
@@ -151,7 +151,7 @@ export function reportIncomingChanges(io = {}) {
     return { apply: null, fallback: false, stopped: true };
   }
   if (target === head) {
-    log('[update] Already up to date — reinstalling dependencies only.');
+    log('[update] Already up to date - reinstalling dependencies only.');
     return { apply: null, fallback: false };
   }
 

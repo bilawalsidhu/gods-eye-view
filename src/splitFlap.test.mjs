@@ -14,7 +14,7 @@ import {
 const settledText = (plan) => plan.cells.map((cell) => cell.to).join('');
 const flapping = (plan) => plan.cells.filter((cell) => cell.changed);
 
-test('identical text plans no work at all — the tickers must not restart it', () => {
+test('identical text plans no work at all - the tickers must not restart it', () => {
   const plan = planSplitFlap('LOAD COMPLETE', 'LOAD COMPLETE');
   assert.equal(plan.changedCount, 0);
   assert.equal(plan.cells.length, 0);
@@ -23,7 +23,7 @@ test('identical text plans no work at all — the tickers must not restart it', 
 });
 
 test('a settled cell keeps its glyph and never animates', () => {
-  // "LOAD" survives the transition, so those four cells hold still — the way
+  // "LOAD" survives the transition, so those four cells hold still - the way
   // a real split-flap cell that already shows the right letter does not move.
   const plan = planSplitFlap('LOADING LIVE DATA', 'LOAD COMPLETE');
   const held = plan.cells.slice(0, 4);
@@ -36,13 +36,13 @@ test('a settled cell keeps its glyph and never animates', () => {
   assert.equal(plan.cells[4].delayMs, 0);
 });
 
-test('the concatenated cells are exactly the target string — DOM text stays the truth', () => {
+test('the concatenated cells are exactly the target string - DOM text stays the truth', () => {
   const cases = [
     ['LOADING LIVE DATA', 'LOAD COMPLETE'],
     ['loading frames', 'camera grid ready'],
     ['', 'LOAD FAILED'],
     ['TURNING OFF LIVE DATA', ''],
-    ['LIVE · TomTom flow · 87% cov', 'SIMULATED — add TomTom key for live'],
+    ['LIVE · TomTom flow · 87% cov', 'SIMULATED - add TomTom key for live'],
   ];
   for (const [from, to] of cases) {
     assert.equal(settledText(planSplitFlap(from, to)), to, `${from} -> ${to}`);
@@ -72,7 +72,7 @@ test('every real chip transition finishes well under a second', () => {
     ['TURNING OFF LIVE DATA', 'LIVE DATA OFF'],
     ['loading frames', 'camera grid ready'],
     ['syncing road network', 'LIVE · TomTom flow · 100% cov'],
-    ['SIMULATED — traffic service unreachable', 'LIVE · TomTom flow · 42% cov'],
+    ['SIMULATED - traffic service unreachable', 'LIVE · TomTom flow · 42% cov'],
   ];
   for (const [from, to] of transitions) {
     const plan = planSplitFlap(from, to);
@@ -186,7 +186,7 @@ test('once the cascade is over the board reads the new label', () => {
   const plan = planSplitFlap('LOADING LIVE DATA', 'LOAD COMPLETE');
   const landed = visibleGlyphs(plan, plan.durationMs + 1000);
   // The cleared columns are still ON the board as blanks until settlement
-  // strips them — that is what stops columns renumbering mid-flight.
+  // strips them - that is what stops columns renumbering mid-flight.
   assert.equal(landed.trimEnd(), 'LOAD COMPLETE');
   assert.equal(landed.length, 'LOADING LIVE DATA'.length);
 });
@@ -235,7 +235,7 @@ test('an interrupted cascade never flaps away a glyph that was never on screen',
   });
 
   // And this genuinely differs from the naive "flap away the pending target"
-  // approach — otherwise the pin would pass without the fix.
+  // approach - otherwise the pin would pass without the fix.
   const naive = planSplitFlap(B, C);
   const naiveFrom = naive.cells.map((cell) => cell.from).join('');
   const honestFrom = second.cells.map((cell) => cell.from).join('');

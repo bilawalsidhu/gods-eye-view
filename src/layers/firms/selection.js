@@ -46,7 +46,7 @@ export function createSelection({
         return;
       }
       // A pick that belongs to a sibling layer (e.g. an aircraft) is not
-      // "empty space" — leave the selection alone and let that layer handle it.
+      // "empty space" - leave the selection alone and let that layer handle it.
       if (picked) {
         const pickedId = resolvePickId(picked);
         if (pickedId && isOwnedByOtherLayer(id, pickedId)) return;
@@ -125,7 +125,7 @@ export function createSelection({
       layerState._contextIds.add(fireDetectionKey(fire));
       if (publishSelection) selectEntityContext(fire.contextEntity);
     } catch {
-      // context store unavailable — the selection label still works
+      // context store unavailable - the selection label still works
     }
     components.cards.rebuildAmbientLabels();
   }
@@ -218,7 +218,7 @@ export function createSelection({
       for (const recordId of layerState._contextIds)
         store.entities.delete(recordId);
     } catch {
-      // store unavailable — nothing to clean
+      // store unavailable - nothing to clean
     }
     layerState._contextIds = new Set();
   }

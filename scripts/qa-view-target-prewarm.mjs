@@ -7,7 +7,7 @@
  * pick yields a non-finite / zero-magnitude Cartesian, and
  * `Cartographic.fromCartesian` throws `DeveloperError: normalized result is not
  * a number`. Because the prewarm runs inside `requestIdleCallback`, the throw
- * escapes as an UNCAUGHT page error on a plain camera flight — a red console
+ * escapes as an UNCAUGHT page error on a plain camera flight - a red console
  * error on the demo path, with no scene and no tracking involved.
  *
  * This harness flies the camera the way the demo does and asserts the flight
@@ -75,7 +75,7 @@ await page.evaluateOnNewDocument(() => {
 });
 
 const check = (name, passed, detail) => {
-  console.log(`  [${passed ? 'PASS' : 'FAIL'}] ${name}${detail ? ` — ${detail}` : ''}`);
+  console.log(`  [${passed ? 'PASS' : 'FAIL'}] ${name}${detail ? ` - ${detail}` : ''}`);
   if (!passed) failures.push(name);
 };
 
@@ -106,7 +106,7 @@ try {
   for (const leg of FLIGHT_LEGS) {
     const report = await page.evaluate(async (spec) => {
       const { viewer } = window.__godsEyeView;
-      // No window.Cesium global (qa-cctv-v2 / qa-height-datum precedent) —
+      // No window.Cesium global (qa-cctv-v2 / qa-height-datum precedent) -
       // borrow Cartesian3's statics off a live camera-position instance.
       const Cartesian3 = viewer.camera.position.constructor;
       await new Promise((resolve) => {
@@ -149,8 +149,8 @@ try {
   // Cesium produces those only under conditions this harness cannot schedule
   // reliably, so the precondition is injected directly: replace
   // `scene.pickPosition` with one that returns each degenerate shape in turn.
-  // Everything downstream — the moveEnd prewarm inside requestIdleCallback and
-  // the HUD summary interval — is the real shipped code.
+  // Everything downstream - the moveEnd prewarm inside requestIdleCallback and
+  // the HUD summary interval - is the real shipped code.
   const injection = await page.evaluate(async () => {
     const { viewer, styleManager } = window.__godsEyeView;
     const Cartesian3 = viewer.camera.position.constructor;
@@ -159,7 +159,7 @@ try {
       { name: 'nan', value: new Cartesian3(Number.NaN, Number.NaN, Number.NaN) },
       { name: 'origin', value: new Cartesian3(0, 0, 0) },
       { name: 'infinite', value: new Cartesian3(Number.POSITIVE_INFINITY, 0, 0) },
-      // Converts SILENTLY to a point 6,378 km underground — the quiet failure a
+      // Converts SILENTLY to a point 6,378 km underground - the quiet failure a
       // bare non-zero check lets through, which then reverse-geocodes 0°, 0°.
       { name: 'core-interior', value: new Cartesian3(500, 0, 0) },
       // Finite, but large enough to overflow the geodetic iteration into NaN.
@@ -197,8 +197,8 @@ try {
         await new Promise((resolve) => setTimeout(resolve, 900));
 
         // The HUD summary walks the same view target. Enter through the REAL
-        // boundary the 15 s interval uses — `void this._updateSummary(true)`,
-        // with nobody owning the promise — so a rejection lands in the page's
+        // boundary the 15 s interval uses - `void this._updateSummary(true)`,
+        // with nobody owning the promise - so a rejection lands in the page's
         // unhandledrejection buffer exactly as it would in production.
         void styleManager.hud._updateSummary(true);
         await new Promise((resolve) => setTimeout(resolve, 250));
@@ -233,7 +233,7 @@ try {
 
   // ── Phase 3: the HUD summary's own async boundary ─────────────────────────
   // Phase 2 proves the guard keeps the context healthy. This proves the
-  // boundary holds even when it is NOT — `_updateSummary` awaits the context
+  // boundary holds even when it is NOT - `_updateSummary` awaits the context
   // before its own try, and every caller invokes it as `void`, so any rejection
   // from anywhere in that walk is ownerless. Isolate the boundary by making the
   // context reject, then enter through the interval's exact statement.
@@ -295,7 +295,7 @@ try {
   ];
 
   // Cesium's DeveloperError stringifies as "DeveloperError: DeveloperError",
-  // so the diagnostic text only survives on the caught HUD errors — scan those
+  // so the diagnostic text only survives on the caught HUD errors - scan those
   // too or this check reads clean while the page is throwing.
   const allText = [...pageErrors, ...consoleErrors, ...rejections, ...injection.hudErrors];
   const normalizeErrors = allText
@@ -351,5 +351,5 @@ try {
   await browser.close();
 }
 
-console.log(`\n${failures.length ? `FAIL (${failures.length})` : 'PASS'} — evidence in ${path.relative(repoRoot, shotsDir)}/`);
+console.log(`\n${failures.length ? `FAIL (${failures.length})` : 'PASS'} - evidence in ${path.relative(repoRoot, shotsDir)}/`);
 process.exit(failures.length ? 1 : 0);

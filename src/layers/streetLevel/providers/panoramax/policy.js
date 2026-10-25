@@ -71,7 +71,7 @@ export const SIMPLIFY_TOLERANCE_UNITS = 4;
 export const DECODE_SLICE_MS = 8;
 
 export const RATE_LIMITED_MESSAGE = msg(
-  'Panoramax is busy — coverage resumes on its own',
+  'Panoramax is busy - coverage resumes on its own',
 );
 export const NO_COVERAGE_HINT = msg('no Panoramax photos in view');
 /** Lines in view, all hidden by the imagery filter. */

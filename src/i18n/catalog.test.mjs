@@ -108,7 +108,7 @@ test('unmarkedMarkup finds text and attributes without data-i18n*', () => {
     texts('<span class="material-symbols-outlined">public</span>'),
     [],
   );
-  assert.deepEqual(texts('<!-- Note --><span>— 42 —</span>'), []);
+  assert.deepEqual(texts('<!-- Note --><span>- 42 -</span>'), []);
 });
 
 test('unmarkedScript finds literals that reach the page without t/tn/msg', () => {
@@ -194,8 +194,8 @@ test('unmarkedScript sees status text assigned to layer errors and labels', () =
 test('unmarkedScript sees human-readable status, loadingLabel and statusMessage fields', () => {
   const texts = (js) => unmarkedScript('f.js', js).map((f) => f.text);
   assert.deepEqual(
-    texts("return { status: 'Scene not saved — storage unavailable' };"),
-    ['Scene not saved — storage unavailable'],
+    texts("return { status: 'Scene not saved - storage unavailable' };"),
+    ['Scene not saved - storage unavailable'],
   );
   assert.deepEqual(
     texts("return { status: ok ? 'Ready' : 'Source unavailable' };"),

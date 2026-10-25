@@ -1,5 +1,5 @@
 /**
- * NASA FIRMS area-CSV parsing — pure functions, no Cesium/DOM/network.
+ * NASA FIRMS area-CSV parsing - pure functions, no Cesium/DOM/network.
  *
  * Upstream: https://firms.modaps.eosdis.nasa.gov/api/area/csv/{KEY}/{SOURCE}/world/{days}
  * VIIRS header (confirmed live 2026-07-16):
@@ -11,13 +11,13 @@
  *
  * Quirks this module owns:
  * - `confidence` is CATEGORICAL for VIIRS (`l`/`n`/`h`) and numeric 0-100 for
- *   MODIS — passed through raw.
+ *   MODIS - passed through raw.
  * - Brightness maps from `bright_ti4`/`brightness`; the secondary band maps
  *   from `bright_ti5`/`bright_t31`.
- * - `acq_time` is NOT zero-padded ("45" = 00:45 UTC) — kept as-is in records;
+ * - `acq_time` is NOT zero-padded ("45" = 00:45 UTC) - kept as-is in records;
  *   {@link acquisitionMsUtc} does the padding.
  * - Upstream errors come back as HTML or plain text ("Invalid MAP_KEY"),
- *   never CSV — {@link isLikelyCsv} gates parsing.
+ *   never CSV - {@link isLikelyCsv} gates parsing.
  * - `days=1` means "current UTC day" (nearly empty just after 00:00 UTC), so
  *   callers fetch days=2 and clamp with {@link filterTrailing24h}.
  */
@@ -61,7 +61,7 @@ export function isLikelyCsv(text) {
  * Parse a FIRMS area CSV payload into flat detection records.
  *
  * Tolerates CRLF, trailing newlines, and malformed rows (skipped). A
- * header-only payload parses to `[]`. Non-CSV input (HTML/error text — see
+ * header-only payload parses to `[]`. Non-CSV input (HTML/error text - see
  * {@link isLikelyCsv}) returns `null` so callers can distinguish "no fires"
  * from "upstream failure".
  *
@@ -102,7 +102,7 @@ export function parseFirmsCsv(text) {
     const line = lines[i].trim();
     if (!line) continue;
     const parts = line.split(',');
-    if (parts.length < header.length) continue; // malformed row — skip
+    if (parts.length < header.length) continue; // malformed row - skip
     const lat = Number(parts[iLat]);
     const lon = Number(parts[iLon]);
     // Blank or out-of-range positions are dropped, never read as 0 (see
@@ -121,14 +121,14 @@ export function parseFirmsCsv(text) {
       lat,
       lon,
       frp: finiteOrZero(parts[iFrp]),
-      // Categorical (l/n/h) or numeric — passed through raw; display
+      // Categorical (l/n/h) or numeric - passed through raw; display
       // normalization happens client-side (normalizeConfidence).
       confidence: cell(parts, iConfidence),
       brightness: finiteOrZero(parts[iBrightness]),
       brightnessTi5: finiteOrZero(parts[iBrightnessTi5]),
       daynight: cell(parts, iDaynight),
       acqDate: cell(parts, iAcqDate),
-      acqTime: cell(parts, iAcqTime), // NOT zero-padded — kept verbatim
+      acqTime: cell(parts, iAcqTime), // NOT zero-padded - kept verbatim
       satellite: cell(parts, iSatellite),
       instrument: cell(parts, iInstrument),
     });
@@ -176,7 +176,7 @@ export function acquisitionMsUtc(acqDate, acqTime) {
  * Keep only records acquired within `[nowMs − 24 h, nowMs + 2 h]` (inclusive).
  * The 2 h forward slack absorbs upstream/local clock skew; records with an
  * unparseable acquisition time are dropped. Timestamps are memoized per
- * unique date:time pair — granule timestamps repeat heavily.
+ * unique date:time pair - granule timestamps repeat heavily.
  * @param {Array<{acqDate: string, acqTime: string|number}>} records - Parser records.
  * @param {number} nowMs - Reference epoch milliseconds.
  * @returns {Array<Object>} Filtered records (original objects, order preserved).

@@ -27,12 +27,12 @@ test('plane in London with an SFO→LAX route: implausible', () => {
   }), false);
 });
 
-test('vertical trend: low climbing plane near SFO — origin must be local', () => {
+test('vertical trend: low climbing plane near SFO - origin must be local', () => {
   const nearSfo = { latDeg: 37.7, lonDeg: -122.4, altitudeM: 2500 };
   // JFK→SFO passes geometry (near destination), but a CLIMBING plane here just
-  // departed — origin JFK (far) contradicts it.
+  // departed - origin JFK (far) contradicts it.
   assert.equal(routePlausible({ ...nearSfo, verticalRateMps: 8, origin: JFK, destination: SFO }), false);
-  // The same plane DESCENDING is arriving at SFO — plausible.
+  // The same plane DESCENDING is arriving at SFO - plausible.
   assert.equal(routePlausible({ ...nearSfo, verticalRateMps: -8, origin: JFK, destination: SFO }), true);
 });
 

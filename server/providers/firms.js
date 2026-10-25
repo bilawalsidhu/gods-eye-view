@@ -8,7 +8,7 @@ import { readResponseTextCapped } from './common/http.js';
  * NASA FIRMS live active-fire proxy with a memory + disk cache.
  * Upstream: https://firms.modaps.eosdis.nasa.gov/api/area/csv/{KEY}/{SOURCE}/world/2
  *
- * Merges three VIIRS NRT sources (NOAA-20, NOAA-21, Suomi-NPP — independent
+ * Merges three VIIRS NRT sources (NOAA-20, NOAA-21, Suomi-NPP - independent
  * satellites, no cross-source dedup) plus MODIS_NRT (combined Terra+Aqua,
  * ~1 km, numeric 0-100 confidence), fetched sequentially (quota courtesy)
  * with `days=2` (`days=1` means "current UTC day", nearly empty just after
@@ -85,7 +85,7 @@ export function firmsProxy() {
 
   /**
    * Fetch + parse one FIRMS source. Throws on HTTP error or a non-CSV body
-   * (FIRMS reports errors as HTML/plain text, never CSV). Never log the URL —
+   * (FIRMS reports errors as HTML/plain text, never CSV). Never log the URL -
    * it embeds the MAP_KEY.
    */
   async function fetchSource(key, source) {
@@ -101,7 +101,7 @@ export function firmsProxy() {
   }
 
   /**
-   * Refresh all sources sequentially (quota courtesy — never in parallel).
+   * Refresh all sources sequentially (quota courtesy - never in parallel).
    * Partial success (≥1 source ok) still produces a cacheable entry with the
    * failed sources marked ok:false; total failure throws so the caller can
    * serve stale.
@@ -115,7 +115,7 @@ export function firmsProxy() {
         const records = filterTrailing24h(await fetchSource(key, source), now);
         // NOT fires.push(...records): spread passes each record as an argument,
         // and a world/2 VIIRS pull exceeds V8's argument limit (~125k) at
-        // ~131k records — RangeError, and the whole source is silently dropped.
+        // ~131k records - RangeError, and the whole source is silently dropped.
         for (const record of records) fires.push(record);
         sources.push({ source, count: records.length, ok: true });
       } catch (err) {
@@ -244,7 +244,7 @@ export function firmsProxy() {
             })
             .catch((err) => {
               console.warn(
-                `[firms-proxy] refresh failed (${err?.message || err}) — serving cache if any`,
+                `[firms-proxy] refresh failed (${err?.message || err}) - serving cache if any`,
               );
               return null;
             })
@@ -257,7 +257,7 @@ export function firmsProxy() {
         if (fresh) {
           sendJson(200, buildPayload(fresh, false));
         } else if (entry) {
-          sendJson(200, buildPayload(entry, true)); // upstream down — stale beats empty
+          sendJson(200, buildPayload(entry, true)); // upstream down - stale beats empty
         } else {
           sendJson(502, {
             error: 'firms fetch failed and no cache available',

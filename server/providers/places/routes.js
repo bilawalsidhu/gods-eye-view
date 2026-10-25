@@ -21,7 +21,7 @@ const ROUTE_CACHE_MS = 600000;
  * reroutes of the same A→B, a second browser tab) await the SAME upstream
  * fetch. The FOSSGIS servers ask for no heavy use; the cheapest way to honour
  * that is not to make the call twice. Module-level, because what it is
- * deduplicating is this process's outbound traffic — the endpoint is part of
+ * deduplicating is this process's outbound traffic - the endpoint is part of
  * the key, so two installations pointed at different services never share one.
  * @type {Map<string, Promise<{payload: object|null, error: string|null}>>}
  */
@@ -272,7 +272,7 @@ export function installRouteMiddleware(
         clean.push(`${lon},${lat}`);
         pts.push([lon, lat]);
       }
-      // Reject obviously-abusive spans — a real walking/driving route is local,
+      // Reject obviously-abusive spans - a real walking/driving route is local,
       // so a cross-continent request is either a bug or an attempt to drive
       // heavy upstream OSRM work.
       let totalKm = 0;
@@ -310,7 +310,7 @@ export function installRouteMiddleware(
         return;
       }
       const inflightKey = `${base}|${cacheKey}|${wantSteps ? 's' : 'n'}`;
-      // A stepless request can also ride a stepful call already in flight —
+      // A stepless request can also ride a stepful call already in flight -
       // it just drops the maneuvers on the way out.
       let pending =
         _routeInflight.get(inflightKey) ||
@@ -338,7 +338,7 @@ export function installRouteMiddleware(
       } catch (upstreamError) {
         if (upstreamError instanceof RouteBusyError) {
           return rateLimited(
-            'routing busy — too many routes at once',
+            'routing busy - too many routes at once',
             Math.ceil(upstreamError.retryAfterMs / 1000),
           );
         }

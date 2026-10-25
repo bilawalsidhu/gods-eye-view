@@ -5,7 +5,7 @@ import {
 } from './renderGovernor.js';
 
 /**
- * OrbitController — smooth orbit around a target point.
+ * OrbitController - smooth orbit around a target point.
  * Uses scene.preRender for frame-rate-independent 60fps updates.
  * Toggle with O key; auto-stops on POI/city change.
  */
@@ -37,7 +37,7 @@ export class OrbitController {
     this.pitch = options.pitch || this.pitch;
     this.speed = Cesium.Math.toRadians(options.speed || 6);
     this.active = true;
-    // Orbit mutates the camera from preRender — without a hold the loop
+    // Orbit mutates the camera from preRender - without a hold the loop
     // starves after its first idle frame. (perf wave 2)
     holdContinuousRender('camera-orbit');
 

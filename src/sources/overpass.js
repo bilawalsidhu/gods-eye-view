@@ -1,6 +1,6 @@
 /**
  * Single-pass lexer: blank out quoted literals (→ empty quotes) and strip line
- * and block comments — recognizing each in one walk so a comment marker INSIDE a
+ * and block comments - recognizing each in one walk so a comment marker INSIDE a
  * quoted string is treated as string content, not a comment (and vice versa).
  * Chained regex replaces get the ordering wrong (a quoted slash-slash would hide
  * the rest of the line), which is exactly the bypass this avoids.

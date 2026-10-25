@@ -30,7 +30,7 @@ export function normalizeLayerLoading(layer = {}) {
   const stoppingInstallations =
     ['military-installations', 'alpr-cameras'].includes(layer.id) && disabling;
   // Guidance statuses ask the user to act (zoom in, run a search). They are
-  // normal operation, never a batch failure — mirrors layerFeedState's carve-out
+  // normal operation, never a batch failure - mirrors layerFeedState's carve-out
   // so a prompt stored alongside the status cannot turn the chip red.
   const guidance = GUIDANCE_STATUSES.includes(status);
   const error = stoppingInstallations
@@ -263,7 +263,7 @@ export function reduceTrafficSyncFeedback(
     confirmationUntil: visible ? confirmationUntil : 0,
     label: visible ? label : '',
     // The settled flash carries NO progress number. A settled chip is 100% by
-    // definition — the value never varied — and printing it beside a label
+    // definition - the value never varied - and printing it beside a label
     // that already ends in a real measurement produced the self-contradicting
     // "LIVE · TomTom flow · 0% cov  100%". Coverage is the honest number, so
     // it is the only one left standing; the progress slot belongs to work in
@@ -416,7 +416,7 @@ export function presentLoadingFeedback(state, summary, nowMs) {
   // participant's failure or pretending that a scheduled retry is fetching.
   if (site && !summary.active.length && !otherFailure) {
     const message = installationFeedback(site.installationRetry);
-    const [label, detail] = message.split(' — ');
+    const [label, detail] = message.split(' - ');
     return { state: 'retry', label: label.toUpperCase(), detail: detail || '' };
   }
   if (!state?.visible) return null;

@@ -10,11 +10,11 @@ import {
   setTimeOffsetMs,
 } from '../../data/contactPlayback.js';
 const MODE_MAX_SPEED_MPS = Object.freeze({
-  bus: 36, // ~130 km/h — a coach on a motorway
-  tram: 28, // ~100 km/h — interurban light rail
+  bus: 36, // ~130 km/h - a coach on a motorway
+  tram: 28, // ~100 km/h - interurban light rail
   subway: 42, // ~150 km/h
-  rail: 111, // ~400 km/h — high-speed services exist on some feeds
-  ferry: 25, // ~90 km/h — fast catamarans
+  rail: 111, // ~400 km/h - high-speed services exist on some feeds
+  ferry: 25, // ~90 km/h - fast catamarans
   unknown: 56, // ~200 km/h
 });
 
@@ -57,7 +57,7 @@ const COURSE_STEP_MAX_S = 0.25;
  *
  * "En route" means the last two fixes are in different places, which is a fact
  * about the past. A bus that reported movement and then went quiet for three
- * minutes is not en route — we simply do not know what it is doing, and saying
+ * minutes is not en route - we simply do not know what it is doing, and saying
  * otherwise is the same overreach as reading STOPPED off a stale status. Ninety
  * seconds matches the threshold at which a whole feed reads as gone quiet.
  */
@@ -256,7 +256,7 @@ function displayCourse(entry, nowMs) {
 }
 
 /**
- * Evaluate the display course and write it back — the ONE writer both the
+ * Evaluate the display course and write it back - the ONE writer both the
  * poll and the rotation pass go through, so the limiter sees every look.
  * @param {object} entry
  * @param {number} nowMs

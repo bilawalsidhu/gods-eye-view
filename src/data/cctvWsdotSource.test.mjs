@@ -63,7 +63,7 @@ function cp1252Response(payload) {
   const bytes = new Uint8Array(text.length);
   for (let i = 0; i < text.length; i += 1) {
     const code = text.charCodeAt(i);
-    // U+2013 EN DASH is 0x96 in Windows-1252 — the byte the live feed ships.
+    // U+2013 EN DASH is 0x96 in Windows-1252 - the byte the live feed ships.
     bytes[i] = code === 0x2013 ? 0x96 : code;
   }
   return new Response(bytes, {

@@ -76,7 +76,7 @@ const results = [];
 function check(name, ok, detail = '') {
   results.push({ name, ok });
   const label = ok ? '\x1b[32mPASS\x1b[0m' : '\x1b[31mFAIL\x1b[0m';
-  console.log(`  [${label}] ${name}${detail ? ` — ${detail}` : ''}`);
+  console.log(`  [${label}] ${name}${detail ? ` - ${detail}` : ''}`);
 }
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -2339,8 +2339,8 @@ async function main() {
           && (step.creditsTop === null || step.dataBottom <= step.creditsTop)
           && (step.passableTop === null || step.dataBottom <= step.passableTop + 0.5)
         )),
-        // The strip is solved from ITS margin — under the REC readout, clamped
-        // clear of the briefing card, never above the viewport ceiling — and
+        // The strip is solved from ITS margin - under the REC readout, clamped
+        // clear of the briefing card, never above the viewport ceiling - and
         // never from whatever corridor the accordion happened to commit.
         rightStripClearAcrossHudCycle: layoutSteps.every((step) => {
           const anchored = Math.max(step.minTop, step.recBottom + 12);
@@ -3788,7 +3788,7 @@ async function main() {
     );
     check(
       'ambient Radio globe labels use compact frequency-first text',
-      markerTarget?.singletonTexts?.includes('100.3 FM — The River')
+      markerTarget?.singletonTexts?.includes('100.3 FM - The River')
         && markerTarget.singletonTexts.every((text) => text.length <= 30),
       JSON.stringify(markerTarget?.singletonTexts),
     );
@@ -4203,7 +4203,7 @@ async function main() {
         // billboard keep this green after the point anchor regressed.
         //
         // `selectedBillboardPickable` is reported for diagnostics but NOT
-        // asserted: measured here it is false — the selection bracket renders
+        // asserted: measured here it is false - the selection bracket renders
         // (selectedBracketVisible) without being pickable at the point anchor,
         // so requiring it would pin a behavior the app does not have.
         && highGlobalSelectedText.selectedPointPickable

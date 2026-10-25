@@ -161,7 +161,7 @@ export function createProjection({
    * <img> or <video> element depending on the feed type.
    *
    * The plane is the only projection representation (v2): the frustum's far cap,
-   * perpendicular to the view axis (§2b — never billboarded; a wall primitive
+   * perpendicular to the view axis (§2b - never billboarded; a wall primitive
    * can't pitch, the plane can). It is textured with the live frame: video
    * element direct, canvas double-buffer otherwise.
    *
@@ -352,7 +352,7 @@ export function createProjection({
     if (layerState._projectionRaf) return;
     if (!parts.model.projectionLoopIsNeeded()) return;
     // The armed projection loop uploads video textures / runs focus fades per
-    // frame — the scene must render continuously while it runs. Released when
+    // frame - the scene must render continuously while it runs. Released when
     // the tick self-stops. (perf wave 2)
     holdContinuousRender('cctv-projection');
 

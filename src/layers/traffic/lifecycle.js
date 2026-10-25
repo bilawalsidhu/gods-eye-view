@@ -17,7 +17,7 @@ export function createLifecycle({
   const methods = {
     /**
      * One-time initialisation. Creates the PointPrimitiveCollection and adds it
-     * to the scene (hidden). The collection is never removed and re-added — only
+     * to the scene (hidden). The collection is never removed and re-added - only
      * toggled via `.show` to avoid destroy-on-remove errors.
      *
      * @param {Cesium.Viewer} viewer - The Cesium viewer instance.
@@ -27,7 +27,7 @@ export function createLifecycle({
       layerState._pointCollection = new Cesium.PointPrimitiveCollection({
         blendOption: Cesium.BlendOption.TRANSLUCENT,
       });
-      // Add permanently — toggle with .show to avoid destroy-on-remove errors
+      // Add permanently - toggle with .show to avoid destroy-on-remove errors
       viewer.scene.primitives.add(layerState._pointCollection);
       layerState._pointCollection.show = false;
       layerState._dots = [];
@@ -111,7 +111,7 @@ export function createLifecycle({
 
       // Boot-order guard (field-test round 1: layer sat empty until the user
       // moved): when the persisted layer state re-enables traffic during the
-      // intro flyTo, the initial check bails at high altitude — and a camera
+      // intro flyTo, the initial check bails at high altitude - and a camera
       // that then parks never re-fires camera.changed. Retry cheaply until the
       // first load commits, then self-clear. Also acts as a safety kick if a
       // failed first fetch left the viewport unloaded while parked.
@@ -156,7 +156,7 @@ export function createLifecycle({
       parts.animation.clearDots();
       layerState._lastBounds = null;
       layerState._lastViewCenter = null;
-      // A stale outage from the last session would misreport a fresh enable —
+      // A stale outage from the last session would misreport a fresh enable -
       // the next load re-derives feed health from real evidence.
       layerState._flowError = null;
 

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { installationFeedback } from './installationFeedback.js';
 
 test('retry copy follows the real deadline and does not promise an overdue timer fired', () => {
-  assert.equal(installationFeedback({ retryAt: 31000 }, 1000), 'Overpass temporarily unavailable — retrying in 30s');
+  assert.equal(installationFeedback({ retryAt: 31000 }, 1000), 'Overpass temporarily unavailable - retrying in 30s');
   assert.match(installationFeedback({ retryAt: 31000 }, 32000), /retry pending$/);
   assert.match(installationFeedback({ retryAt: 241000 }, 1000), /240s$/);
 });

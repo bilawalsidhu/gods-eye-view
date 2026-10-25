@@ -1188,7 +1188,7 @@ body.cockpit-mode #view-switcher button {
   color: #d5a863;
   font-weight: 600;
 }
-/* The held values are last-known, not current — dim them to match the cue. */
+/* The held values are last-known, not current - dim them to match the cue. */
 .cockpit-context-window[data-state='lost']
   :is(.cockpit-context-cohorts, .cockpit-context-nearest) {
   opacity: 0.55;

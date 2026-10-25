@@ -71,7 +71,7 @@ export function createLifecycle({
             layerState._enabled,
             layerState._params.showPoints,
           );
-      // Orbit ring primitives + persistent ISS host label — show them
+      // Orbit ring primitives + persistent ISS host label - show them
       for (const path of layerState._orbitPaths.values())
         path.primitive.show = parts.controls.satelliteVisualsVisible(
           layerState._enabled,

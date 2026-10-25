@@ -6,7 +6,7 @@ function textTag(value) {
 }
 
 function numTag(value) {
-  // `Number('')` and `Number('   ')` are 0, not NaN — a blank or whitespace-only
+  // `Number('')` and `Number('   ')` are 0, not NaN - a blank or whitespace-only
   // tag value must read as missing, never as a due-north bearing.
   if (value == null) return null;
   const trimmed = String(value).trim();

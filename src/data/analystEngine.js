@@ -1,12 +1,12 @@
 /**
- * Analyst query engine — answers spoken questions over data ALREADY sitting
+ * Analyst query engine - answers spoken questions over data ALREADY sitting
  * client-side in the layers ("how many flights over Texas?", "biggest fire
  * near LA?", "which ships are headed to Oakland?").
  *
  * Design (owner-ratified, docs/voice-engine-evaluation-2026-07-23.md §5.3):
  *  - ENGINE (this module) is pure query logic over plain record arrays; it
  *    renders nothing. SURFACES (voice narration, panels, detection brackets)
- *    consume the returned result set — the engine/surface seam is the
+ *    consume the returned result set - the engine/surface seam is the
  *    `items` array with stable {layerKey, id} identities.
  *  - v1 scope is CLIENT-SIDE DATA ONLY. The one enrichment path (flight
  *    routes) reads the already-cached adsbdb results surfaced by the layer
@@ -16,7 +16,7 @@
  *    those is closest?") via `followUp: true`. Held per engine instance,
  *    cleared by `reset()` (layer toggles should reset via the caller).
  *
- * Providers (injected — keeps the engine pure and node-testable):
+ * Providers (injected - keeps the engine pure and node-testable):
  *   getRecords(layerKey) → Array<record>            (layer accessor snapshot)
  *   resolveRegionRing(name, signal?) → Promise<{ring, name}|{error:'region-timeout'}|null>
  *   getViewContext() → {lat, lon, viewRadiusKm, bounds?}  (camera-derived)
@@ -711,7 +711,7 @@ export function createAnalystEngine(providers) {
             })
             .join(
               ', ',
-            )} — queryable layers: ${Object.keys(ANALYST_LAYERS).join(', ')}.`,
+            )} - queryable layers: ${Object.keys(ANALYST_LAYERS).join(', ')}.`,
           {
             allowed: Object.keys(ANALYST_LAYERS),
             coverage: { layersQueried: [], scope: 'unsupported-layer' },
@@ -800,7 +800,7 @@ export function createAnalystEngine(providers) {
         if (statuses.includes('loading'))
           return refusal(
             'NOT_READY',
-            `${names} still loading or off — no records yet.`,
+            `${names} still loading or off - no records yet.`,
             detail,
           );
         return refusal(
@@ -845,7 +845,7 @@ export function createAnalystEngine(providers) {
         return {
           ok: false,
           code: 'region-timeout',
-          error: `Looking up the boundary for "${scope.name}" is taking too long — ask again in a moment.`,
+          error: `Looking up the boundary for "${scope.name}" is taking too long - ask again in a moment.`,
           coverage: { layersQueried, scope: `region:${scope.name}:timeout` },
         };
       }
@@ -853,7 +853,7 @@ export function createAnalystEngine(providers) {
         return {
           ok: false,
           code: 'REGION_UNRESOLVED',
-          error: `I couldn't resolve a boundary for "${scope.name}" — try a state, country, or a named natural region.`,
+          error: `I couldn't resolve a boundary for "${scope.name}" - try a state, country, or a named natural region.`,
           coverage: { layersQueried, scope: `region:${scope.name}:unresolved` },
         };
       }
@@ -866,7 +866,7 @@ export function createAnalystEngine(providers) {
       // An explicit center always wins. Otherwise, when Contacts is active its
       // SUBJECT is the centre the operator is actually reasoning about: the
       // panel counts a contact-centred window, so centring the radius on the
-      // camera made the two disagree — a parked, high-altitude camera answered
+      // camera made the two disagree - a parked, high-altitude camera answered
       // "46 within 250 km" while the panel showed a far larger contact-centred
       // count. Same question, two numbers.
       const explicitCenter = scope.center || null;
@@ -876,7 +876,7 @@ export function createAnalystEngine(providers) {
       const view = providers.getViewContext();
       // Only a subject that actually SUPPLIED the centre may name it. A
       // subject present but without usable coordinates silently fell back to
-      // the camera while the label still read "within 250 km of <contact>" —
+      // the camera while the label still read "within 250 km of <contact>" -
       // a count centred on one place, reported as centred on another, with
       // nothing in the payload to show which.
       const subjectCenter =

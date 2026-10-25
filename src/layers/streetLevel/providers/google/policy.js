@@ -21,7 +21,7 @@ export const GOOGLE_CREDIT_HTML =
 
 /** Shown when Google refuses the key (gm_authFailure). */
 export const KEY_REJECTED_MESSAGE = msg(
-  'Google refused GOOGLE_MAPS_API_KEY for Street View — check that the Maps JavaScript API is enabled for it and this site is an allowed referrer',
+  'Google refused GOOGLE_MAPS_API_KEY for Street View - check that the Maps JavaScript API is enabled for it and this site is an allowed referrer',
 );
 
 /** Past these, a nearest lookup, an open or a details lookup has failed. */
@@ -32,7 +32,7 @@ export const DETAILS_TIMEOUT_MS = 10_000;
 export const DETAILS_RETRY_COOLDOWN_MS = 5_000;
 
 export const NO_ANSWER_MESSAGE = msg(
-  'Street View did not answer — check the network, and that the Maps JavaScript API is enabled for GOOGLE_MAPS_API_KEY',
+  'Street View did not answer - check the network, and that the Maps JavaScript API is enabled for GOOGLE_MAPS_API_KEY',
 );
 
 export const GROUND_CLICK_HINT = msg('click a street to open Street View');

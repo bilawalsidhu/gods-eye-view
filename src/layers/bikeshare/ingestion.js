@@ -122,7 +122,7 @@ export function createIngestion({
 
   /**
    * Load real-time station status for a city (bike/dock counts, operational flags).
-   * Unlike station info, status is NOT served from cache — it is always re-fetched
+   * Unlike station info, status is NOT served from cache - it is always re-fetched
    * to keep availability data current. Concurrent requests are deduplicated.
    * @param {string} cityId - City identifier.
    * @param {number} generation - Proximity generation to detect stale requests.
@@ -164,7 +164,7 @@ export function createIngestion({
   }
   const methods = {
     /**
-     * Periodic update tick — re-fetches station status for all active cities
+     * Periodic update tick - re-fetches station status for all active cities
      * and refreshes point colors/sizes. Called by the layer manager at
      * STATUS_POLL_MS intervals.
      * @returns {Promise<void>}

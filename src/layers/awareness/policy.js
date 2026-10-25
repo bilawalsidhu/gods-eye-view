@@ -11,7 +11,7 @@ export const AWARENESS_REFRESH_MS = 750;
 
 /** @constant {number} Refresh cadence while the camera pose is CHANGING.
  *  Owner playtest 2026-08-18: the Contacts direction arrows and card readouts
- *  "feel sluggish when you look around" — at the parked 750 ms cadence the
+ *  "feel sluggish when you look around" - at the parked 750 ms cadence the
  *  arrows lag the view by up to three quarters of a second. */
 
 export const AWARENESS_MOTION_REFRESH_MS = 175;
@@ -55,7 +55,7 @@ export const SOURCE_LABEL = {
 
 /**
  * Whether a refresh tick could confirm the subject in its source collection.
- * UNCHECKED means the tick did not look — it must never change the verdict.
+ * UNCHECKED means the tick did not look - it must never change the verdict.
  */
 
 export const SUBJECT_PRESENCE = Object.freeze({

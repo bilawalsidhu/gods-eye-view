@@ -14,7 +14,7 @@
  *   1. J2000 RA/Dec (bytes 76-90), V magnitude (103-107) and B−V (110-114).
  *   2. The 14 records without a J2000 position (novae and other objects later
  *      found not to be stars) are dropped.
- *   3. RA/Dec rounded to 3 decimals of a degree (3.6″ — a fraction of a pixel
+ *   3. RA/Dec rounded to 3 decimals of a degree (3.6″ - a fraction of a pixel
  *      at any field of view the globe uses), magnitudes to 2.
  *   4. Missing B−V is stored as null; the renderer gives it a neutral colour.
  *   5. Records keep catalogue (HR) order for a stable diff.

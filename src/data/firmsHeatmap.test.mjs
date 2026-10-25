@@ -1,6 +1,6 @@
 // src/data/firmsHeatmap.test.mjs
 // Focused tests for the pure analyst-record mapper (analyst query engine seam).
-// Pure function — no viewer/DOM needed; imported directly.
+// Pure function - no viewer/DOM needed; imported directly.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { mapAnalystRecord } from './firmsHeatmap.js';

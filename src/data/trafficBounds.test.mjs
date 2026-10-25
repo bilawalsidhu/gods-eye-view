@@ -7,7 +7,7 @@ import {
   clampBoundsAroundCenter,
 } from './trafficBounds.js';
 
-// Downtown Austin — matches the TomTom fixture tile neighbourhood.
+// Downtown Austin - matches the TomTom fixture tile neighbourhood.
 const NADIR = { lat: 30.2672, lon: -97.7431 };
 
 test('greatCircleKm sanity: Austin -> ~5 km north', () => {

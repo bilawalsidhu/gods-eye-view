@@ -1,16 +1,16 @@
 #!/usr/bin/env node
 /**
- * qa-cables-overlay — submarine-cable label path measurement + contract gate.
+ * qa-cables-overlay - submarine-cable label path measurement + contract gate.
  *
  * Two jobs:
  *  1. MEASURE (both builds, `--legacy` on the pre-migration build): with the
  *     cables layer ON at a fixed mid-Atlantic camera, capture
  *       a. per-frame `scene.render` cost over a ~10 s driven-orbit window
- *          (mean / p50 / p95 / max — relative numbers, SwiftShader surface),
+ *          (mean / p50 / p95 / max - relative numbers, SwiftShader surface),
  *       b. toggle-ON → first-labels-visible latency,
  *       c. entity / native-label / host-entry counts,
  *       d. parked-idle postRender fires over 5 s (render-governor honesty).
- *  2. GATE (unified build only): assert the migration contract —
+ *  2. GATE (unified build only): assert the migration contract -
  *       zero native `LabelGraphics` on cable reference entities, host entries
  *       present for the source, idle stays near-zero, and a clean OFF→ON cycle
  *       (no orphan host entries after disable).
@@ -33,10 +33,10 @@ const results = [];
 function check(name, pass, detail) {
   results.push({ name, pass });
   const tag = pass ? 'PASS' : 'FAIL';
-  console.log(`  [${tag}] ${name}${detail !== undefined ? ` — ${JSON.stringify(detail)}` : ''}`);
+  console.log(`  [${tag}] ${name}${detail !== undefined ? ` - ${JSON.stringify(detail)}` : ''}`);
 }
 function report(name, detail) {
-  console.log(`  [MEAS] ${name} — ${JSON.stringify(detail)}`);
+  console.log(`  [MEAS] ${name} - ${JSON.stringify(detail)}`);
 }
 
 const browser = await puppeteer.launch({
@@ -151,7 +151,7 @@ try {
     const t0 = performance.now();
     const tick = () => {
       // Slow orbit: every frame is a camera change, so Cesium renders every
-      // rAF — the honest "user is interacting" cost of the layer.
+      // rAF - the honest "user is interacting" cost of the layer.
       v.camera.rotateRight(0.0004);
       if (performance.now() - t0 < 10_000) requestAnimationFrame(tick);
       else {
@@ -196,7 +196,7 @@ try {
     // The cables source never republishes an unchanged cohort (unit pin), and
     // since the 2026-08-18 host fix the occluder observer is scoped (body
     // childList filtered to inventory chrome; attribute observation
-    // element-only) and the right-rail allocator writes-if-changed — so a
+    // element-only) and the right-rail allocator writes-if-changed - so a
     // parked camera measures 0 postRender fires / 5 s with cables ON, equal
     // to the empty-scene control (pre-fix: ~56-61). The headroom below covers
     // an occasional genuine chrome transition (loading-chip flip + its 100 ms

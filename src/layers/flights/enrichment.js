@@ -36,7 +36,7 @@ export function createEnrichment({
       flightState._enrichQueue.length
     ) {
       // Drip: at most one dispatch per ENRICH_DISPATCH_GAP_MS. When the gap
-      // hasn't elapsed yet, park a single wake-up timer and stop — completions
+      // hasn't elapsed yet, park a single wake-up timer and stop - completions
       // and enqueues in the meantime re-enter here harmlessly.
       const wait =
         ENRICH_DISPATCH_GAP_MS -
@@ -96,7 +96,7 @@ export function createEnrichment({
             const bb = flightState._billboards.get(icao24);
             if (bb)
               parts.rendering._applyFleetBillboardPresentation(icao24, bb);
-            // Hangar fleet: the class's GLB/scale may have changed — resync the
+            // Hangar fleet: the class's GLB/scale may have changed - resync the
             // live model, any in-flight load, and the tracked standalone model.
             parts.rendering._syncModelToClass(icao24);
           }
@@ -126,12 +126,12 @@ export function createEnrichment({
           parts.tracking._updateTrackedLabelModel(icao24);
       },
       true,
-    ); // route lookups only fire for the TRACKED plane — front of the queue
+    ); // route lookups only fire for the TRACKED plane - front of the queue
   }
 
   /** QA seam: headless harnesses (scripts/qa-enrich-ambient.mjs) shrink the
    *  bucket knobs via window.__GEV_ENRICH_AMBIENT_QA = {ceil, refillTokens,
-   *  windowMs} — they cannot wait out a real 5-minute window. Read lazily each
+   *  windowMs} - they cannot wait out a real 5-minute window. Read lazily each
    *  refill so a pre-boot override (or a mid-run windowMs swap) applies.
    *  Production never sets this; the constants above are the defaults. */
 
@@ -214,7 +214,7 @@ export function createEnrichment({
           Cesium.Cartesian3.distanceSquared(camPos, bb.position),
         ]);
       }
-      cand.sort((a, b) => a[1] - b[1]); // nearest first — what the user is looking at resolves first
+      cand.sort((a, b) => a[1] - b[1]); // nearest first - what the user is looking at resolves first
       const n = Math.min(
         cand.length,
         ENRICH_AMBIENT_PER_SWEEP,
@@ -225,7 +225,7 @@ export function createEnrichment({
         _requestTypeEnrichment(cand[i][0]); // non-priority: fills the back of the queue
       }
     } catch {
-      /* ambient enrichment is best-effort — never disturb the poll loop */
+      /* ambient enrichment is best-effort - never disturb the poll loop */
     }
   }
   return {
