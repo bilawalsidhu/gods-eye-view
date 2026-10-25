@@ -1,0 +1,61 @@
+/* Replay: a right-rail readout built from the weather rail's timeline and
+   chips. Only the panel frame is declared here. */
+.replay-panel-inner {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 0;
+  max-height: 100%;
+  box-sizing: border-box;
+  padding: 14px;
+  border: 1px solid var(--glass-border);
+  border-radius: var(--panel-radius);
+  background: var(--glass-bg);
+  backdrop-filter: blur(24px) saturate(1.4);
+  -webkit-backdrop-filter: blur(24px) saturate(1.4);
+  box-shadow:
+    0 8px 32px rgba(0, 0, 0, 0.5),
+    0 0 0 1px rgba(255, 255, 255, 0.03) inset,
+    0 1px 0 rgba(255, 255, 255, 0.06) inset;
+}
+#replay-panel .panel-glow {
+  position: absolute;
+  inset: -18px;
+  background: radial-gradient(
+    ellipse at center,
+    rgba(0, 212, 255, 0.16) 0%,
+    transparent 65%
+  );
+  filter: blur(16px);
+  opacity: 0.25;
+  pointer-events: none;
+}
+#replay-panel-count {
+  color: var(--text-secondary);
+  font: 9px var(--font-mono);
+  letter-spacing: 1px;
+  white-space: nowrap;
+}
+#replay-panel-body {
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(0, 212, 255, 0.46) transparent;
+}
+#replay-panel.collapsed #replay-panel-body,
+#replay-panel.collapsed #replay-panel-count,
+#replay-panel[hidden] {
+  display: none !important;
+}
+.replay-readout {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.replay-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}

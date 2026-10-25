@@ -3015,5 +3015,15 @@
   "Layers": "Слои",
   "Search": "Поиск",
   "More": "Ещё",
-  "Panels": "Панели"
+  "Panels": "Панели",
+  "REPLAY": "ПОВТОР",
+  "Replay recorded history": "Воспроизвести записанную историю",
+  "Playback speed": "Скорость воспроизведения",
+  "Show or hide this layer": "Показать или скрыть этот слой",
+  "Recorded history available": "Записанная история доступна",
+  "No recording": "Нет записи",
+  "Replay state": "Состояние повтора",
+  "Replay failed": "Повтор не удался",
+  "AIR": "ВОЗД",
+  "SEA": "МОРЕ"
 }

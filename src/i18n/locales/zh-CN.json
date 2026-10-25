@@ -2814,5 +2814,15 @@
   "Layers": "图层",
   "Search": "搜索",
   "More": "更多",
-  "Panels": "面板"
+  "Panels": "面板",
+  "REPLAY": "回放",
+  "Replay recorded history": "回放已录制的历史",
+  "Playback speed": "播放速度",
+  "Show or hide this layer": "显示或隐藏此图层",
+  "Recorded history available": "有可用的录制历史",
+  "No recording": "无录制",
+  "Replay state": "回放状态",
+  "Replay failed": "回放失败",
+  "AIR": "空中",
+  "SEA": "海上"
 }

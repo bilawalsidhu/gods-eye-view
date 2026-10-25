@@ -2948,5 +2948,15 @@
   "Layers": "Capas",
   "Search": "Buscar",
   "More": "Más",
-  "Panels": "Paneles"
+  "Panels": "Paneles",
+  "REPLAY": "REPETICIÓN",
+  "Replay recorded history": "Reproducir el historial grabado",
+  "Playback speed": "Velocidad de reproducción",
+  "Show or hide this layer": "Mostrar u ocultar esta capa",
+  "Recorded history available": "Historial grabado disponible",
+  "No recording": "Sin grabación",
+  "Replay state": "Estado de la repetición",
+  "Replay failed": "Falló la repetición",
+  "AIR": "AIRE",
+  "SEA": "MAR"
 }
