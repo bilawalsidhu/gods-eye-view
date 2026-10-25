@@ -3,9 +3,12 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { createPresentation } from '../layers/cctv/presentation.js';
 import { createCctvSource } from '../layers/cctv/source.js';
+import { createCards } from '../layers/cctv/cards.js';
 
 const catalog = JSON.parse(
-  readFileSync(new URL('../../config/cctv_sources.argentina.json', import.meta.url)),
+  readFileSync(
+    new URL('../../config/cctv_sources.argentina.json', import.meta.url),
+  ),
 );
 const sourceFor = (feedType) =>
   catalog.find((entry) => entry.feedType === feedType);
@@ -120,4 +123,27 @@ test('a learned location-only camera remains selectable but has no frame or medi
     /Location-only camera frames are not available/,
   );
   assert.equal(requests, 0);
+});
+
+test('protected active card skips location-only cameras', () => {
+  const id = 'ar-bayo-copitos';
+  const entries = [];
+  const record = {
+    camera: { id, name: 'Argentina snapshot', feedType: 'none' },
+    position: { x: 1, y: 2, z: 3 },
+  };
+  const state = {
+    _recordById: new Map([[id, record]]),
+    _cardIds: new Set(),
+    _hoverCardId: null,
+    _activeCameraCardEnabled: true,
+    _activeCameraId: id,
+    _cctvOverlayHost: {
+      setEntries: (_sourceId, items) => entries.push(...items),
+    },
+  };
+  const cards = createCards({ state, services: {}, parts: {}, source: null });
+  cards.pushAmbientCardEntries();
+  cards.fetchCardFrame(record, {}, 1000);
+  assert.equal(entries.length, 0);
 });
