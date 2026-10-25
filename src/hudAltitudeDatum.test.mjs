@@ -16,6 +16,9 @@
 // globals exist: Cesium's widget bundle probes for a real `document` at module
 // scope and a partial stub sends it down the browser path. Hence hook →
 // import → install DOM, in that order.
+//
+// The same hook is why the live AI-summary test lives here too: this is the
+// one file that can construct a real IntelHUD.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -63,6 +66,7 @@ function installHudEnvironment() {
       .map((id) => [id, { textContent: '' }]),
   );
   const previousDocument = globalThis.document;
+  const cameraListeners = {};
   globalThis.document = {
     getElementById: (id) => elements.get(id) ?? null,
     querySelectorAll: () => [],
@@ -78,12 +82,24 @@ function installHudEnvironment() {
         height: SFO_ELLIPSOIDAL_M,
       },
       computeViewRectangle: () => undefined,
-      moveEnd: { addEventListener() {}, removeEventListener() {} },
+      moveStart: {
+        addEventListener(listener) {
+          cameraListeners.moveStart = listener;
+        },
+        removeEventListener() {},
+      },
+      moveEnd: {
+        addEventListener(listener) {
+          cameraListeners.moveEnd = listener;
+        },
+        removeEventListener() {},
+      },
     },
   };
   return {
     elements,
     viewer,
+    cameraListeners,
     restore() {
       if (previousDocument === undefined) delete globalThis.document;
       else globalThis.document = previousDocument;
@@ -245,6 +261,125 @@ test('the corrected readouts are the MSL datum, not a coincidence of the SFO sig
     assert.match(env.elements.get('hud-summary').textContent, /\| ALT 54M \|/);
   } finally {
     hud?.destroy();
+    env.restore();
+  }
+});
+
+test('a summary asked for one view is dropped once the camera moves', async () => {
+  const env = installHudEnvironment();
+  const previousWindow = globalThis.window;
+  globalThis.window = globalThis;
+  const pending = [];
+  const summaryService = {
+    summarize: (context) =>
+      new Promise((resolve) => {
+        pending.push({
+          context,
+          reply: (summary) =>
+            resolve({ ok: true, status: 200, data: { summary, error: null } }),
+        });
+      }),
+  };
+  let hud;
+  try {
+    hud = new IntelHUD(env.viewer, { summaryService });
+    let place = 'Yellowstone';
+    hud._summaryContext = async () => ({ place });
+    const summary = () => env.elements.get('hud-summary').textContent;
+    const settle = () => new Promise((resolve) => setImmediate(resolve));
+    hud._updateCameraData();
+
+    // The periodic tick's call (force=false): it asks only for a dirty
+    // summary. Asked over Yellowstone; the camera leaves before the reply
+    // lands.
+    const first = hud._updateSummary(false);
+    await settle();
+    assert.equal(pending.length, 1);
+    env.cameraListeners.moveStart();
+    pending[0].reply('Canyon Junction Wyoming');
+    await first;
+    assert.doesNotMatch(
+      summary(),
+      /Canyon Junction/,
+      'a reply for the old view is dropped',
+    );
+
+    // The next tick, with the camera still moving (a follow camera or an
+    // orbit emits no moveEnd), asks about where it is now and paints it.
+    place = 'Atlantic';
+    const moving = hud._updateSummary(false);
+    await settle();
+    assert.equal(pending.length, 2, 'the move marked the summary dirty');
+    assert.deepEqual(pending[1].context, { place: 'Atlantic' });
+    pending[1].reply('North Atlantic Ocean');
+    await moving;
+    assert.equal(summary(), 'North Atlantic Ocean');
+  } finally {
+    for (const request of pending) request.reply('');
+    hud?.destroy();
+    if (previousWindow === undefined) delete globalThis.window;
+    else globalThis.window = previousWindow;
+    env.restore();
+  }
+});
+
+test('a request the camera leaves paints nothing: aborted, failed, or its context build throws', async () => {
+  const env = installHudEnvironment();
+  const previousWindow = globalThis.window;
+  globalThis.window = globalThis;
+  const pending = [];
+  // Like fetch: an abort rejects with an AbortError, unless `ignoreAbort`.
+  let ignoreAbort = false;
+  const summaryService = {
+    summarize: (context, { signal }) =>
+      new Promise((resolve, reject) => {
+        pending.push({ signal, reject });
+        if (!ignoreAbort)
+          signal.addEventListener('abort', () =>
+            reject(Object.assign(new Error('aborted'), { name: 'AbortError' })),
+          );
+      }),
+  };
+  let hud;
+  try {
+    hud = new IntelHUD(env.viewer, { summaryService });
+    hud._summaryContext = async () => ({ place: 'Yellowstone' });
+    const element = env.elements.get('hud-summary');
+    const settle = () => new Promise((resolve) => setImmediate(resolve));
+    hud._updateCameraData();
+
+    // The move aborts the request in flight, and the abort paints nothing.
+    let update = hud._updateSummary(false, true);
+    await settle();
+    element.textContent = 'shown before the move';
+    env.cameraListeners.moveStart();
+    assert.equal(pending[0].signal.aborted, true, 'the request is aborted');
+    await update;
+    assert.equal(element.textContent, 'shown before the move');
+
+    // A request that fails after the move (an error, the 5 s timeout) does
+    // not paint the old view's fallback line either.
+    ignoreAbort = true;
+    update = hud._updateSummary(false, true);
+    await settle();
+    element.textContent = 'shown before the move';
+    env.cameraListeners.moveStart();
+    pending[1].reject(new Error('network'));
+    await update;
+    assert.equal(element.textContent, 'shown before the move');
+
+    // Nor does a context build that throws once the camera has moved.
+    hud._summaryContext = async () => {
+      env.cameraListeners.moveStart();
+      throw new Error('view target unavailable');
+    };
+    element.textContent = 'shown before the move';
+    await hud._updateSummary(false, true);
+    assert.equal(element.textContent, 'shown before the move');
+  } finally {
+    hud?.destroy();
+    if (previousWindow === undefined) delete globalThis.window;
+    else globalThis.window = previousWindow;
     env.restore();
   }
 });
