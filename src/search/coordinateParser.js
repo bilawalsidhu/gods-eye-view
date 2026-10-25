@@ -63,17 +63,21 @@ function splitComponents(query) {
   const words = text.split(/\s+/);
   // Each component has at most a number, a degree sign and one hemisphere.
   if (words.length > 6) return null;
-  // Prefer a suffix letter on the first number when a space could also put
-  // that letter before the second number (`40 N 74`). Keep every character:
-  // extracting tokens would turn `1e3` or `1.2.3` into invented coordinates.
+  // Keep every character: extracting tokens would turn `1e3` or `1.2.3`
+  // into invented coordinates. A lone letter between numbers can name either
+  // component; require an unambiguous split rather than guessing its owner.
+  let result = null;
   for (let boundary = words.length - 1; boundary > 0; boundary -= 1) {
     const parts = [
       words.slice(0, boundary).join(' '),
       words.slice(boundary).join(' '),
     ];
-    if (parts.every((part) => readComponent(part))) return parts;
+    if (parts.every((part) => readComponent(part))) {
+      if (result) return null;
+      result = parts;
+    }
   }
-  return null;
+  return result;
 }
 
 /** Present a parsed pair the way a coordinate is normally written. */

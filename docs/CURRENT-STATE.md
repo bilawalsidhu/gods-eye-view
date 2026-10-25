@@ -767,8 +767,9 @@ Microphone, radio handoff, tool schemas and default model behavior are preserved
 
 Coordinate search accepts whitespace-separated decimal degrees with prefix or
 suffix hemisphere letters, including `40.7128 N 74.0060 W`. Components require
-an actual separator; malformed numeric fragments and scientific notation fall
-through to geocoders instead of becoming exact coordinate results.
+an actual separator and an unambiguous hemisphere assignment; malformed numeric
+fragments and scientific notation fall through to geocoders instead of becoming
+exact coordinate results.
 
 Geospatial lookups are composed through `src/search`: forward/reverse geocoding,
 text/nearby search and routing use configurable providers/endpoints. Annotation,
