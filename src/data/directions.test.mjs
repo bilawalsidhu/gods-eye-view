@@ -846,9 +846,13 @@ test('route numbers follow the page language and never break from their unit', (
   t.after(() => setLocale('en'));
   assert.equal(routeDistanceText(8.4), '8\u00a0m');
   assert.equal(routeDistanceText(236), '240\u00a0m');
+  assert.equal(routeDistanceText(994), '990\u00a0m');
+  assert.equal(routeDistanceText(996), '1.0\u00a0km');
   assert.equal(routeDistanceText(1500), '1.5\u00a0km');
   assert.equal(routeDistanceText(2_345_000), '2345\u00a0km');
   assert.equal(routeDurationText(39), '39\u00a0s');
+  assert.equal(routeDurationText(59.4), '59\u00a0s');
+  assert.equal(routeDurationText(59.6), '1\u00a0min');
   assert.equal(routeDurationText(3900), '1\u00a0h\u00a05\u00a0min');
   assert.equal(routeDurationText(7200), '2\u00a0h');
   assert.equal(routeDistanceText(-1), '');

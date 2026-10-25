@@ -112,7 +112,8 @@ export const FLIGHT_PROGRESS_MS = 250;
 export function routeDistanceText(meters) {
   if (!Number.isFinite(meters) || meters < 0) return '';
   if (meters < 100) return formatQuantity(Math.round(meters), 'm');
-  if (meters < 1000) return formatQuantity(Math.round(meters / 10) * 10, 'm');
+  const tens = Math.round(meters / 10) * 10;
+  if (tens < 1000) return formatQuantity(tens, 'm');
   const km = meters / 1000;
   return km < 10
     ? formatQuantity(km, 'km', {
@@ -130,7 +131,8 @@ export function routeDistanceText(meters) {
  */
 export function routeDurationText(seconds) {
   if (!Number.isFinite(seconds) || seconds < 0) return '';
-  if (seconds < 60) return formatQuantity(Math.round(seconds), 's');
+  const wholeSeconds = Math.round(seconds);
+  if (wholeSeconds < 60) return formatQuantity(wholeSeconds, 's');
   const minutes = Math.round(seconds / 60);
   if (minutes < 60) return formatQuantity(minutes, 'min');
   const hours = formatQuantity(Math.floor(minutes / 60), 'h');
