@@ -11,7 +11,7 @@ const sourceFor = (feedType) =>
   catalog.find((entry) => entry.feedType === feedType);
 
 function publicCamera(feedType) {
-  const origin = sourceFor(feedType);
+  const origin = sourceFor(feedType === 'none' ? 'image' : feedType);
   const camera = {
     ...origin,
     feedType,
