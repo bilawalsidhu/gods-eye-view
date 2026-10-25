@@ -98,6 +98,16 @@ export const KEY_SETUP_KEYS = Object.freeze([
     tier: 'free',
   }),
   Object.freeze({
+    id: 'open-charge-map',
+    title: 'OPEN CHARGE MAP', // i18n-ignore: provider product name
+    unlocks: msg(
+      'EV charger connectors, power and reported status (keyless shows OpenStreetMap stations only)',
+    ),
+    getUrl: 'https://openchargemap.org/profile/applications',
+    envVars: Object.freeze(['OPEN_CHARGE_MAP_API_KEY']),
+    tier: 'free',
+  }),
+  Object.freeze({
     id: 'cesium-ion',
     title: 'CESIUM ION', // i18n-ignore: provider product name
     unlocks: msg('Bing imagery map stacks + world terrain'),

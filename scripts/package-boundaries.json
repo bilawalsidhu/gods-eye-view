@@ -2574,7 +2574,13 @@
       "src/voice/geminiSession.js",
       "src/voice/geminiAudio.js",
       "src/voice/geminiCaptureWorklet.js",
-      "src/ui/statusBadge.js"
+      "src/ui/statusBadge.js",
+      "src/layers/evCharging/index.js",
+      "src/layers/evCharging/records.js",
+      "src/layers/evCharging/source.js",
+      "src/layers/evCharging/merge.js",
+      "src/layers/evCharging/openChargeMap.js",
+      "src/app/layers/evCharging.js"
     ],
     "external": [
       "hls.js",
@@ -3143,7 +3149,14 @@
       "src/layers/airQuality/source.js",
       "src/ui/statusText.js",
       "src/ui/layerNames.js",
-      "src/layers/streetLevel/providers/mapillary/policy.js"
+      "src/layers/streetLevel/providers/mapillary/policy.js",
+      "src/ui/cockpitPresentation.js",
+      "src/layers/evCharging/index.js",
+      "src/layers/evCharging/records.js",
+      "src/layers/evCharging/source.js",
+      "src/layers/evCharging/merge.js",
+      "src/layers/evCharging/openChargeMap.js",
+      "src/app/layers/evCharging.js"
     ],
     "external": [
       "hls.js",
@@ -4041,6 +4054,51 @@
       "src/i18n/marker.js"
     ],
     "external": []
+  },
+  "ev-charging": {
+    "exports": ["./layers/ev-charging"],
+    "modules": [
+      "src/layers/evCharging/index.js",
+      "src/layers/evCharging/records.js",
+      "src/layers/evCharging/source.js",
+      "src/layers/evCharging/merge.js",
+      "src/layers/evCharging/openChargeMap.js",
+      "src/data/tomtomTiles.js",
+      "src/sources/openFreeMap.js",
+      "src/sources/vectorTiles.js",
+      "src/sources/phaseTiming.js",
+      "src/sources/httpBody.js",
+      "src/sources/militaryTileGeometry.js",
+      "src/data/installationNames.js",
+      "src/i18n/marker.js",
+      "src/data/inputOwnership.js",
+      "src/ui/cockpitPresentation.js",
+      "src/ui/unitLabels.js",
+      "src/i18n/index.js",
+      "src/i18n/locale.js",
+      "src/i18n/locales/es.json",
+      "src/i18n/locales/ru.json",
+      "src/i18n/locales/zh-CN.json"
+    ],
+    "external": ["cesium", "@mapbox/vector-tile", "pbf"]
+  },
+  "ev-charging-source": {
+    "exports": ["./layers/ev-charging/source"],
+    "modules": [
+      "src/layers/evCharging/records.js",
+      "src/layers/evCharging/source.js",
+      "src/layers/evCharging/merge.js",
+      "src/layers/evCharging/openChargeMap.js",
+      "src/data/tomtomTiles.js",
+      "src/sources/openFreeMap.js",
+      "src/sources/vectorTiles.js",
+      "src/sources/phaseTiming.js",
+      "src/sources/httpBody.js",
+      "src/sources/militaryTileGeometry.js",
+      "src/data/installationNames.js",
+      "src/i18n/marker.js"
+    ],
+    "external": ["@mapbox/vector-tile", "pbf"]
   },
   "agent-world-packet": {
     "exports": ["./agent/world-packet"],
