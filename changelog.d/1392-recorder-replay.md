@@ -2,4 +2,5 @@
   vessel positions to a SQLite file and serves them from `/api/history/*` on
   this machine only. A REPLAY panel on the right rail plays the recording back
   on the globe with the weather timeline's slider, and the MCP server gains
-  `history_window`, `history_track` and `replay_to`. See `docs/RECORDER.md`.
+  `history_window`, `history_track` and `replay_to`. See `docs/RECORDER.md`
+  (stuart170180, #1392).
