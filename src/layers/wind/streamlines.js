@@ -11,11 +11,11 @@ const DEGREE_METERS = 111320;
 const GOLDEN_ANGLE = 137.50776405003785;
 
 /** One bounded midpoint step. The integration interval is field time, not playback time. */
-function advance(field, point, seconds, scratch) {
-  sampleWind(field, point[0], point[1], scratch);
+function advance(field, point, seconds, scratch, minSpeed, sample) {
+  sample(field, point[0], point[1], scratch);
   if (
     !Number.isFinite(scratch.u + scratch.v) ||
-    Math.hypot(scratch.u, scratch.v) < 0.15
+    Math.hypot(scratch.u, scratch.v) < minSpeed
   )
     return null;
   const lonRate = scratch.u / metersPerDegreeLon(point[1]);
@@ -29,7 +29,7 @@ function advance(field, point, seconds, scratch) {
     );
   const midLat = point[1] + latRate * dt * 0.5;
   if (Math.abs(midLat) > 88.5) return null;
-  sampleWind(field, point[0] + lonRate * dt * 0.5, midLat, scratch);
+  sample(field, point[0] + lonRate * dt * 0.5, midLat, scratch);
   if (!Number.isFinite(scratch.u + scratch.v)) return null;
   const lon = normalizeLongitude(
     point[0] + (scratch.u * dt) / metersPerDegreeLon(midLat),
@@ -44,10 +44,22 @@ function advance(field, point, seconds, scratch) {
  * Bake geographic streamlines once from an immutable forecast snapshot.
  * Equal-area seeds avoid polar overpopulation. Increasing path position always
  * follows the wind; paths stop at the map seam, poles, calm or missing samples.
+ * `minSpeed` (m/s) is calm, and `maxStepSeconds` bounds one step's field time:
+ * slow flows such as ocean currents need longer steps to draw visible paths.
+ * `sample(field, lon, lat, result)` writes `u` and `v` (NaN for no value);
+ * a masked field passes one that blends only valid corners, so paths reach
+ * its edge instead of stopping a cell short.
  */
 export function bakeWindStreamlines(
   field,
-  { count = WIND_PATH_LIMIT, steps = WIND_PATH_STEPS, stepSeconds = 1800 } = {},
+  {
+    count = WIND_PATH_LIMIT,
+    steps = WIND_PATH_STEPS,
+    stepSeconds = 1800,
+    minSpeed = 0.15,
+    maxStepSeconds = 3600,
+    sample = sampleWind,
+  } = {},
 ) {
   if (
     !field ||
@@ -68,7 +80,7 @@ export function bakeWindStreamlines(
     Math.max(1, Math.floor(Number.isFinite(steps) ? steps : WIND_PATH_STEPS)),
   );
   const interval = Math.min(
-    3600,
+    maxStepSeconds,
     Math.max(1, Number.isFinite(stepSeconds) ? stepSeconds : 1800),
   );
   const paths = [];
@@ -82,9 +94,9 @@ export function bakeWindStreamlines(
         180) /
       Math.PI;
     const center = [lon, lat];
-    sampleWind(field, lon, lat, scratch);
+    sample(field, lon, lat, scratch);
     const speed = Math.hypot(scratch.u, scratch.v);
-    if (!Number.isFinite(speed) || speed < 0.15) continue;
+    if (!Number.isFinite(speed) || speed < minSpeed) continue;
     const backward = [];
     const forward = [];
     for (const [direction, points] of [
@@ -93,7 +105,14 @@ export function bakeWindStreamlines(
     ]) {
       let point = center;
       for (let step = 0; step < halfSteps; step++) {
-        point = advance(field, point, direction * interval, scratch);
+        point = advance(
+          field,
+          point,
+          direction * interval,
+          scratch,
+          minSpeed,
+          sample,
+        );
         if (!point) break;
         points.push(point);
       }
