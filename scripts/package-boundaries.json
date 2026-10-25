@@ -2570,6 +2570,10 @@
       "src/voice/geminiSession.js",
       "src/voice/geminiAudio.js",
       "src/voice/geminiCaptureWorklet.js",
+      "src/layers/airQuality/providers.js",
+      "src/layers/airQuality/southAfrica.js",
+      "src/layers/airQuality/interpretation.js",
+      "src/layers/airQuality/openAq.js",
       "src/ui/statusBadge.js"
     ],
     "external": [
@@ -3138,7 +3142,14 @@
       "src/layers/airQuality/source.js",
       "src/ui/statusText.js",
       "src/ui/layerNames.js",
-      "src/layers/streetLevel/providers/mapillary/policy.js"
+      "src/layers/streetLevel/providers/mapillary/policy.js",
+      "src/layers/airQuality/providers.js",
+      "src/layers/airQuality/southAfrica.js",
+      "src/layers/airQuality/interpretation.js",
+      "src/layers/airQuality/openAq.js",
+      "src/ui/keyGuidance.js",
+      "src/keySetupCore.mjs",
+      "src/localRequestGate.mjs"
     ],
     "external": [
       "hls.js",
@@ -3576,7 +3587,11 @@
       "src/layers/submarineCables/bundledSource.js",
       "src/layers/gnss/source.js",
       "src/layers/airQuality/model.js",
-      "src/layers/airQuality/source.js"
+      "src/layers/airQuality/source.js",
+      "src/layers/airQuality/providers.js",
+      "src/layers/airQuality/southAfrica.js",
+      "src/layers/airQuality/interpretation.js",
+      "src/layers/airQuality/openAq.js"
     ],
     "external": []
   },
@@ -4023,7 +4038,14 @@
       "src/i18n/locales/ru.json",
       "src/i18n/locales/zh-CN.json",
       "src/ui/statusText.js",
-      "src/ui/layerNames.js"
+      "src/ui/layerNames.js",
+      "src/layers/airQuality/providers.js",
+      "src/layers/airQuality/southAfrica.js",
+      "src/layers/airQuality/interpretation.js",
+      "src/layers/airQuality/openAq.js",
+      "src/ui/keyGuidance.js",
+      "src/keySetupCore.mjs",
+      "src/localRequestGate.mjs"
     ],
     "external": ["cesium"]
   },
@@ -4033,7 +4055,11 @@
       "src/layers/airQuality/model.js",
       "src/layers/airQuality/source.js",
       "src/sources/httpBody.js",
-      "src/i18n/marker.js"
+      "src/i18n/marker.js",
+      "src/layers/airQuality/providers.js",
+      "src/layers/airQuality/southAfrica.js",
+      "src/layers/airQuality/interpretation.js",
+      "src/layers/airQuality/openAq.js"
     ],
     "external": []
   },
