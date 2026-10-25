@@ -54,6 +54,11 @@ export function createReplayController({
     lastNotify = Date.now();
     for (const listener of listeners) listener(state());
   };
+  // Clicking a replayed contact follows it; its trail keeps drawing.
+  const onSelect = (entity) => {
+    if (active && String(entity?.id).startsWith('replay:'))
+      viewer.trackedEntity = entity;
+  };
   const onTick = () => {
     if (!active) return;
     const end = Date.parse(ticks.at(-1));
@@ -158,6 +163,7 @@ export function createReplayController({
           animate: c.shouldAnimate,
         };
         viewer.clock.onTick.addEventListener(onTick);
+        viewer.selectedEntityChanged.addEventListener(onSelect);
       }
       if (source) viewer.dataSources.remove(source, true);
       source = buildEntities(points);
@@ -184,6 +190,9 @@ export function createReplayController({
     if (!active) return;
     active = false;
     viewer.clock.onTick.removeEventListener(onTick);
+    viewer.selectedEntityChanged.removeEventListener(onSelect);
+    if (String(viewer.trackedEntity?.id).startsWith('replay:'))
+      viewer.trackedEntity = undefined;
     if (source) viewer.dataSources.remove(source, true);
     source = null;
     if (savedClock) {
