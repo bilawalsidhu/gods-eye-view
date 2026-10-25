@@ -53,7 +53,11 @@ export function createAirTemperatureRendering({
       return;
     }
     try {
-      const raster = createTemperatureRaster(snapshot);
+      // Half-degree pixels: the bilinear field reads as a gradient up close.
+      const raster = createTemperatureRaster(snapshot, {
+        width: 720,
+        height: 360,
+      });
       if (!raster) throw new Error('Temperature field unavailable');
       const texture = document.createElement('canvas');
       texture.width = raster.width;

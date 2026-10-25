@@ -1,7 +1,11 @@
 {
   "ocean-temperature-source": {
     "exports": ["./layers/ocean-temperature/source"],
-    "modules": ["src/layers/oceanTemperature/source.js", "src/maps/gibs.js"],
+    "modules": [
+      "src/layers/oceanTemperature/source.js",
+      "src/maps/gibs.js",
+      "src/maps/gibsSmoothing.js"
+    ],
     "external": []
   },
   "infrastructure": {
@@ -1745,6 +1749,7 @@
     "exports": ["./layers/recent-imagery"],
     "modules": [
       "src/maps/gibs.js",
+      "src/maps/gibsSmoothing.js",
       "src/i18n/marker.js",
       "src/layers/recentImagery/index.js",
       "src/layers/recentImagery/source.js",
@@ -1964,14 +1969,23 @@
   "temperature-layer": {
     "exports": ["./layers/temperature"],
     "modules": [
-      "src/i18n/locales/zh-CN.json",
-      "src/i18n/index.js",
-      "src/i18n/locales/ru.json",
+      "src/i18n/locales/ar.json",
+      "src/i18n/locales/de.json",
       "src/i18n/locales/es.json",
+      "src/i18n/locales/fr.json",
+      "src/i18n/locales/it.json",
+      "src/i18n/locales/ja.json",
+      "src/i18n/locales/pt.json",
+      "src/i18n/locales/ru.json",
+      "src/i18n/locales/uk.json",
+      "src/i18n/locales/zh-CN.json",
+      "src/i18n/locales/zh-Hant.json",
+      "src/i18n/index.js",
       "src/i18n/locale.js",
       "src/i18n/marker.js",
       "src/layers/temperature/labels.js",
       "src/maps/gibs.js",
+      "src/maps/gibsSmoothing.js",
       "src/layers/temperature/controls.js",
       "src/layers/temperature/dates.js",
       "src/layers/temperature/index.js",
@@ -2589,6 +2603,7 @@
       "src/data/distanceFormat.js",
       "src/layers/temperature/labels.js",
       "src/maps/gibs.js",
+      "src/maps/gibsSmoothing.js",
       "src/layers/oceanTemperature/index.js",
       "src/layers/oceanTemperature/source.js",
       "src/layers/oceanTemperature/rendering.js",
@@ -3891,6 +3906,7 @@
       "src/data/distanceFormat.js",
       "src/layers/temperature/labels.js",
       "src/maps/gibs.js",
+      "src/maps/gibsSmoothing.js",
       "src/layers/oceanTemperature/index.js",
       "src/layers/oceanTemperature/source.js",
       "src/layers/oceanTemperature/rendering.js",
@@ -4941,6 +4957,7 @@
     "exports": ["./layers/recent-imagery/source"],
     "modules": [
       "src/maps/gibs.js",
+      "src/maps/gibsSmoothing.js",
       "src/layers/recentImagery/source.js",
       "src/layers/recentImagery/catalog.js",
       "src/layers/recentImagery/model.js"
@@ -5127,6 +5144,7 @@
     "modules": [
       "src/i18n/marker.js",
       "src/maps/gibs.js",
+      "src/maps/gibsSmoothing.js",
       "src/layers/temperature/dates.js",
       "src/layers/temperature/policy.js",
       "src/layers/temperature/source.js"
@@ -5795,6 +5813,7 @@
     "modules": [
       "src/sources/adsbFields.js",
       "src/maps/gibs.js",
+      "src/maps/gibsSmoothing.js",
       "src/tools/services.js",
       "src/layers/bikeshare/registry.js",
       "src/layers/bikeshare/source.js",
