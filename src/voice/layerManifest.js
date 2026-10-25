@@ -331,6 +331,12 @@ const layers = [
     },
   },
   {
+    id: 'parking',
+    aliases: ['car parks', 'parking garages', 'parking lots'],
+    context: true,
+    noQuery: 'parking-site records are not loaded for queries',
+  },
+  {
     id: 'radio',
     aliases: ['internet radio', 'radio stations'],
     context: false,
@@ -511,6 +517,7 @@ const SELF_EVIDENT_IDS = new Set([
   'radio',
   'wind',
   'directions',
+  'parking',
 ]);
 
 /**

@@ -2814,5 +2814,45 @@
   "Layers": "图层",
   "Search": "搜索",
   "More": "更多",
-  "Panels": "面板"
+  "Panels": "面板",
+  "Parking": "停车场",
+  "30% or more free": "空闲 30% 及以上",
+  "10–30% free": "空闲 10–30%",
+  "Under 10% free": "空闲不足 10%",
+  "No live count": "无实时数据",
+  "UNDERGROUND GARAGE": "地下停车库",
+  "MULTI-STOREY CAR PARK": "多层停车楼",
+  "SURFACE CAR PARK": "露天停车场",
+  "PARKING": "停车",
+  "{free} FREE OF {capacity}": "空闲 {free} / {capacity}",
+  "{free} FREE": "空闲 {free}",
+  "LIVE · UPDATED {age}": "实时 · 更新于 {age}",
+  "{count} SPACES · NO LIVE COUNT": {
+    "other": "{count} 个车位 · 无实时数据"
+  },
+  "NO LIVE COUNT": "无实时数据",
+  "{count} DISABLED SPACES": {
+    "other": "{count} 个无障碍车位"
+  },
+  "{count} CHARGING SPACES": {
+    "other": "{count} 个充电车位"
+  },
+  "Parking site": "停车场",
+  "Parking source unavailable": "停车场数据源不可用",
+  "parking|SHOW NEAREST": "显示最近",
+  "Stop following the current object before navigating to a parking site": "请先停止跟踪当前目标，再前往停车场",
+  "Move to the nearest loaded parking site and show its details": "前往最近已加载的停车场并显示详情",
+  "OPERATOR PAGE": "运营方页面",
+  "Open the selected site's page from its operator": "打开所选停车场的运营方页面",
+  "Select a parking site that publishes a page": "请选择发布了页面的停车场",
+  "Car parks and garages published by ParkAPI, mostly in Baden-Württemberg. Colour is the share of spaces free where the operator reports a live count; grey sites publish only their capacity. Kerbside street parking is not shown.": "ParkAPI 发布的停车场和停车楼，主要位于巴登-符腾堡州。运营方提供实时数据时，颜色表示空闲车位比例；灰色点只公布容量。不显示路边停车。",
+  "{count} sites · {live} live": {
+    "other": "{count} 个停车场 · {live} 个实时"
+  },
+  "{count} sites": {
+    "other": "{count} 个停车场"
+  },
+  "loading parking sites": "正在加载停车场",
+  "Zoom in to load parking sites": "放大以加载停车场",
+  "No ParkAPI coverage in this view": "ParkAPI 未覆盖此视图"
 }

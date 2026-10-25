@@ -2574,7 +2574,11 @@
       "src/voice/geminiSession.js",
       "src/voice/geminiAudio.js",
       "src/voice/geminiCaptureWorklet.js",
-      "src/ui/statusBadge.js"
+      "src/ui/statusBadge.js",
+      "src/layers/parking/index.js",
+      "src/layers/parking/records.js",
+      "src/layers/parking/source.js",
+      "src/app/layers/parking.js"
     ],
     "external": [
       "hls.js",
@@ -3143,7 +3147,12 @@
       "src/layers/airQuality/source.js",
       "src/ui/statusText.js",
       "src/ui/layerNames.js",
-      "src/layers/streetLevel/providers/mapillary/policy.js"
+      "src/layers/streetLevel/providers/mapillary/policy.js",
+      "src/ui/cockpitPresentation.js",
+      "src/layers/parking/index.js",
+      "src/layers/parking/records.js",
+      "src/layers/parking/source.js",
+      "src/app/layers/parking.js"
     ],
     "external": [
       "hls.js",
@@ -4037,6 +4046,35 @@
     "modules": [
       "src/layers/airQuality/model.js",
       "src/layers/airQuality/source.js",
+      "src/sources/httpBody.js",
+      "src/i18n/marker.js"
+    ],
+    "external": []
+  },
+  "parking": {
+    "exports": ["./layers/parking"],
+    "modules": [
+      "src/layers/parking/index.js",
+      "src/layers/parking/records.js",
+      "src/layers/parking/source.js",
+      "src/sources/httpBody.js",
+      "src/i18n/marker.js",
+      "src/data/inputOwnership.js",
+      "src/ui/cockpitPresentation.js",
+      "src/ui/unitLabels.js",
+      "src/i18n/index.js",
+      "src/i18n/locale.js",
+      "src/i18n/locales/es.json",
+      "src/i18n/locales/ru.json",
+      "src/i18n/locales/zh-CN.json"
+    ],
+    "external": ["cesium"]
+  },
+  "parking-source": {
+    "exports": ["./layers/parking/source"],
+    "modules": [
+      "src/layers/parking/records.js",
+      "src/layers/parking/source.js",
       "src/sources/httpBody.js",
       "src/i18n/marker.js"
     ],

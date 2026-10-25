@@ -2948,5 +2948,55 @@
   "Layers": "Capas",
   "Search": "Buscar",
   "More": "Más",
-  "Panels": "Paneles"
+  "Panels": "Paneles",
+  "Parking": "Aparcamiento",
+  "30% or more free": "30 % o más libre",
+  "10–30% free": "10–30 % libre",
+  "Under 10% free": "Menos del 10 % libre",
+  "No live count": "Sin recuento en directo",
+  "UNDERGROUND GARAGE": "APARCAMIENTO SUBTERRÁNEO",
+  "MULTI-STOREY CAR PARK": "APARCAMIENTO DE VARIAS PLANTAS",
+  "SURFACE CAR PARK": "APARCAMIENTO EN SUPERFICIE",
+  "PARKING": "APARCAMIENTO",
+  "{free} FREE OF {capacity}": "{free} LIBRES DE {capacity}",
+  "{free} FREE": "{free} LIBRES",
+  "LIVE · UPDATED {age}": "EN DIRECTO · ACTUALIZADO {age}",
+  "{count} SPACES · NO LIVE COUNT": {
+    "one": "{count} PLAZA · SIN RECUENTO EN DIRECTO",
+    "many": "{count} DE PLAZAS · SIN RECUENTO EN DIRECTO",
+    "other": "{count} PLAZAS · SIN RECUENTO EN DIRECTO"
+  },
+  "NO LIVE COUNT": "SIN RECUENTO EN DIRECTO",
+  "{count} DISABLED SPACES": {
+    "one": "{count} PLAZA PARA MOVILIDAD REDUCIDA",
+    "many": "{count} DE PLAZAS PARA MOVILIDAD REDUCIDA",
+    "other": "{count} PLAZAS PARA MOVILIDAD REDUCIDA"
+  },
+  "{count} CHARGING SPACES": {
+    "one": "{count} PLAZA CON CARGA",
+    "many": "{count} DE PLAZAS CON CARGA",
+    "other": "{count} PLAZAS CON CARGA"
+  },
+  "Parking site": "Aparcamiento",
+  "Parking source unavailable": "Fuente de aparcamientos no disponible",
+  "parking|SHOW NEAREST": "MOSTRAR EL MÁS CERCANO",
+  "Stop following the current object before navigating to a parking site": "Deja de seguir el objeto actual antes de ir a un aparcamiento",
+  "Move to the nearest loaded parking site and show its details": "Ir al aparcamiento cargado más cercano y mostrar sus detalles",
+  "OPERATOR PAGE": "PÁGINA DEL OPERADOR",
+  "Open the selected site's page from its operator": "Abrir la página del operador del aparcamiento seleccionado",
+  "Select a parking site that publishes a page": "Selecciona un aparcamiento que publique una página",
+  "Car parks and garages published by ParkAPI, mostly in Baden-Württemberg. Colour is the share of spaces free where the operator reports a live count; grey sites publish only their capacity. Kerbside street parking is not shown.": "Aparcamientos publicados por ParkAPI, sobre todo en Baden-Württemberg. El color indica la proporción de plazas libres cuando el operador publica un recuento en directo; los puntos grises solo publican su capacidad. No se muestra el aparcamiento en la calle.",
+  "{count} sites · {live} live": {
+    "one": "{count} aparcamiento · {live} en directo",
+    "many": "{count} de aparcamientos · {live} en directo",
+    "other": "{count} aparcamientos · {live} en directo"
+  },
+  "{count} sites": {
+    "one": "{count} aparcamiento",
+    "many": "{count} de aparcamientos",
+    "other": "{count} aparcamientos"
+  },
+  "loading parking sites": "cargando aparcamientos",
+  "Zoom in to load parking sites": "Acércate para cargar los aparcamientos",
+  "No ParkAPI coverage in this view": "ParkAPI no cubre esta vista"
 }

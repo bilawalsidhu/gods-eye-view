@@ -3720,6 +3720,7 @@ its criteria cannot be silently ignored.
 | Military Flights 🎖️    | adsb.lol /v2/mil                                                                                                                                                                                | `src/data/militaryFlights.js`                         | `/api/military`                                       | 15s                                                                               |
 | Live AIS Vessels 🚢    | AISStream websocket                                                                                                                                                                             | `src/data/aisLiveVessels.js`                          | `/api/vessels`                                          | 60s (+800ms visibility pass)                                                      |
 | Mapped Installations ⌖ | OpenFreeMap military areas; optional configured Overpass names and Google Places search | `src/data/militaryInstallations.js` | OpenFreeMap tiles, `/api/military-installations`, `/api/google/text-search` | viewport-driven; transient errors back off, missing capability switches to tiles |
+| Parking 🅿️ (`parking`) | MobiData BW ParkAPI v3 parking sites (dl-de/by-2-0; keyless) | `src/layers/parking/` via `src/app/layers/parking.js` | browser-direct `api.mobidata-bw.de/park-api` | viewport-driven + 5 min poll; ≤ 0.4° view, ≤ 500 sites, 60 s read reuse |
 | Earthquakes            | USGS                                                                                                                                                                                            | `src/data/earthquakes.js`                             | —                                                        | 60s                                                                               |
 | Air quality            | ECCC MSC GeoMet OGC API (AQHI, Canada only)                                                                                                                                                      | `src/layers/airQuality/`                              | —                                                        | 20 min readings, 12 h station catalog                                             |
 | Satellites             | CelesTrak                                                                                                                                                                                       | `src/data/satellites.js`                              | `/api/celestrak`                                         | 120s                                                                              |
@@ -3762,6 +3763,31 @@ MLAT-positioned GPS loss, derived-field exclusions and the NIC 0 exception.
 `scripts/qa-gnss.mjs` covers live freshness, bands, built primitives, camera/globe
 anchors, recovery, keyboard and mobile states; emergency repainting is covered
 by `scripts/qa-emergency-squawk.mjs`. Both accept `--timeout-ms` for slow boot.
+
+Parking (Infrastructure group, share token `5`) shows car parks, garages and parking
+grounds from MobiData BW's public ParkAPI v3, read browser-direct: one
+`/v3/parking-sites` request per view with `purpose=CAR`, `not_type=ON_STREET`
+(kerbside segments) and `limit=500`, for a box around the ground at the screen
+centre sized by the camera range. A view more than 0.4° across asks to zoom in
+before any request. Boxes snap outward to a 0.02° grid and a read is reused for
+60 s; the layer polls every five minutes. A read that matched more sites than it
+returned keeps them and says coverage is limited. Coverage is mostly
+Baden-Württemberg; elsewhere a read is empty and the row says `No ParkAPI
+coverage in this view`. A free count is live only when ParkAPI sets
+`has_realtime_data` (it marks readings older than 30 minutes for pull sources,
+24 hours for push sources, as outdated); occupancy is read against
+`realtime_capacity` when published, else `capacity`. Points are green at 30% or
+more free, amber at 10–30%, red under 10% and grey without a live count, sized
+by capacity and white when selected. A click or **SHOW NEAREST** opens a card
+with the name, type, free/total or capacity, the reading's age, disabled and
+charging space counts, operator, address and the dl-de/by-2-0 credit with the
+source's contributor from `/v3/sources` when it names one; a poll that keeps the
+site refreshes the card, and one that drops it closes the card. **OPERATOR
+PAGE** opens the selected site's `public_url` (http(s) only) in a new tab.
+`getStats().observedAt` is the newest operator reading among the sites shown.
+Failures read `ParkAPI HTTP <status>`, `ParkAPI rate limited`, `ParkAPI network
+error` (also a 15 s timeout) or `Malformed ParkAPI response`; sites already shown
+stay up as stale.
 
 
 Fire Perimeters uses capped, timed server reads with stale-on-error caching and a per-client limit. Unchanged snapshots retain geometry; link checks cancel on disable or selection change, and the row legend shows reported containment.
