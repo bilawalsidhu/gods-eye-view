@@ -1,0 +1,57 @@
+{
+  "schemaVersion": 1,
+  "region": "Cape Town",
+  "bbox": [
+    18.3,
+    -34.36,
+    18.99,
+    -33.47
+  ],
+  "cutoffV": 110000,
+  "sourceUrl": "https://download.geofabrik.de/africa/south-africa-261022.osm.pbf",
+  "sourceTimestamp": "2026-10-22T20:21:33Z",
+  "sourceBytes": 423011337,
+  "sourceMd5": "d652fc8aa7414b6f49836388343d691b",
+  "sourceSha256": "3340305cae2462c59bd2fef456b8a4b7cde5921346f5cb6fe3b47c33d4b36c43",
+  "attribution": "© OpenStreetMap contributors",
+  "license": "ODbL-1.0",
+  "licenseUrl": "https://www.openstreetmap.org/copyright",
+  "clipPolicy": "Clip lines and substation representative points to the bounding box; it is not a municipal boundary.",
+  "simplification": {
+    "crs": "EPSG:32734",
+    "toleranceM": 5
+  },
+  "counts": {
+    "line_below": 258,
+    "line_known": 367,
+    "line_malformed": 2,
+    "line_unknown": 119,
+    "substation_below": 71,
+    "substation_known": 57,
+    "substation_unknown": 418
+  },
+  "features": 842,
+  "lineKm": 1011.149,
+  "lineVertices": 1762,
+  "overlappingSubstations": [
+    {
+      "id": "node/4460375484",
+      "areas": [
+        "way/426020152"
+      ]
+    }
+  ],
+  "substationRelationsOutsidePilot": [
+    11739485,
+    17287657,
+    18523304
+  ],
+  "packBytes": 251785,
+  "packGzip9Bytes": 32347,
+  "packSha256": "20e6beacdb0828129680ca1b42da0589ac81d84d1f0013a069959909ce16cc33",
+  "dependencies": {
+    "osmium": "4.3.2",
+    "shapely": "2.2.0",
+    "pyproj": "3.8.0"
+  }
+}

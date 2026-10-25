@@ -298,6 +298,34 @@ function satelliteFilterOption() {
 }
 
 const OPTION_GROUPS = Object.freeze({
+  transmission: Object.freeze([
+    booleanOption('showUnknown', 'u', false),
+    enumOption(
+      'voltage',
+      'v',
+      'all',
+      [
+        'all',
+        '110000',
+        '132000',
+        '150000',
+        '220000',
+        '400000',
+        '500000',
+        '765000',
+      ],
+      {
+        all: 'a',
+        110000: '110',
+        132000: '132',
+        150000: '150',
+        220000: '220',
+        400000: '400',
+        500000: '500',
+        765000: '765',
+      },
+    ),
+  ]),
   traffic: Object.freeze([
     enumOption('roadMode', 'r', null, ['tomtom', 'osm', 'hybrid'], {
       tomtom: 't',
@@ -679,6 +707,12 @@ export const LAYER_STATE_REGISTRY = Object.freeze([
     optionOwner: 'traffic',
   }),
   Object.freeze({ id: 'transit', token: 'j', disposition: 'enabled-only' }),
+  Object.freeze({
+    id: 'transmission',
+    token: '5',
+    disposition: 'enabled+options',
+    optionOwner: 'transmission',
+  }),
   Object.freeze({
     id: 'weather-cyclones',
     token: 'y',

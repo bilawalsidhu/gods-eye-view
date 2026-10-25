@@ -2574,7 +2574,15 @@
       "src/voice/geminiSession.js",
       "src/voice/geminiAudio.js",
       "src/voice/geminiCaptureWorklet.js",
-      "src/ui/statusBadge.js"
+      "src/ui/statusBadge.js",
+      "src/app/layers/transmission.js",
+      "src/layers/transmission/cards.js",
+      "src/layers/transmission/index.js",
+      "src/layers/transmission/rendering.js",
+      "src/layers/transmission/model.js",
+      "src/layers/transmission/source.js",
+      "src/data/local_data/transmission/cape-town.geojson",
+      "src/data/local_data/transmission/source.json"
     ],
     "external": [
       "hls.js",
@@ -3143,7 +3151,12 @@
       "src/layers/airQuality/source.js",
       "src/ui/statusText.js",
       "src/ui/layerNames.js",
-      "src/layers/streetLevel/providers/mapillary/policy.js"
+      "src/layers/streetLevel/providers/mapillary/policy.js",
+      "src/app/layers/transmission.js",
+      "src/layers/transmission/cards.js",
+      "src/layers/transmission/index.js",
+      "src/layers/transmission/rendering.js",
+      "src/layers/transmission/model.js"
     ],
     "external": [
       "hls.js",

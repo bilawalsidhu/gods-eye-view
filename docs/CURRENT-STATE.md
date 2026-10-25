@@ -103,6 +103,38 @@ provider registration rejects compositions that cannot fit rather than truncatin
 identities. A malformed or duplicate entry invalidates the complete custom-switch
 field. Existing whole-link size limits still apply.
 
+## Cape Town transmission pilot
+
+The default-off Transmission Infrastructure layer (`transmission`) adds a dated
+OpenStreetMap snapshot for the rectangle 18.30–18.99° E, 34.36–33.47° S. It is a
+pilot coverage box, not a municipal boundary. The lazy bundled source contains
+367 line records and 57 substations with at least one tagged voltage ≥110 kV.
+An optional, default-off Voltage unknown chip shows 418 untagged substation
+records with neutral hollow markers and a separate count; these are not
+confirmed transmission sites. A known-voltage filter applies only to tagged
+records. Selection shows all tagged voltages, operator, OSM identity/link,
+snapshot date, representative-point status and any mapped node/area overlap.
+
+Lines are clipped to coverage and simplified at 5 m in EPSG:32734. The source
+snapshot is 2026-10-22, generated reproducibly from the pinned Geofabrik PBF by
+`scripts/transmission/extract.py`; no runtime Overpass request or scheduled refresh
+is used. The row reports outside coverage and omitted detail. Rendering is capped
+at 600 source records in the view rectangle, prioritizing known-voltage records;
+above 1,800 km camera height only the coverage boundary remains. One selected
+card uses the shared overlay host. Disabling releases geometry, input/camera
+listeners, selection and shared OSM credit ownership; the small parsed snapshot
+is cached until destruction. Share token `5` carries voltage and unknown-display
+options. The feature is geographic context and makes no connectivity, outage,
+or damage inference.
+
+Validation: `src/layers/transmission/transmission.test.mjs`, Python extraction
+fixtures, and `scripts/qa-transmission.mjs` cover the real pack, filters, share
+restoration, cancellation, cleanup, source selection and coexistence with a
+synthetic earthquake fixture. The browser gate records load time, JS heap and
+driven frame intervals, plus regional and selected close-view screenshots.
+See `scripts/transmission/README.md` for reproduction and fixture limitations,
+and [validation evidence](transmission-pilot-validation.md) for screenshots and local measurements.
+
 ## God's Eye View in conversations — October 2, 2026
 
 Tool answers that can be shown in God's Eye View include a view: camera, layers,
