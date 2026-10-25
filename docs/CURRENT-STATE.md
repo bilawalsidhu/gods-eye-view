@@ -1698,6 +1698,12 @@ The TomTom `/api/tomtom/*` routes run the shared same-site admission gate before
 status, cache or upstream work, refusing cross-site browser requests while
 preserving same-origin app requests and non-browser local callers. The browser
 layers and their rendering remain in their existing modules.
+Past the daily tile budget, or while TomTom fails, the proxy answers with its
+last copy of a tile (`x-tomtom-cache: STALE-BUDGET` / `STALE-ERROR`) however old
+it is, and every tile carries `x-tomtom-fetched-at`, the time TomTom produced
+it. The flow source keeps that mark with each decoded tile, so
+`get_traffic_flow` returns `stale` and `oldest_tile_at` and says when traffic
+may be out of date instead of presenting cached tiles as live.
 GBFS null or empty availability counts retain an unknown value through station
 parsing and rendering; they use the neutral station color rather than reporting
 an empty dock. Explicit zero and caller-supplied numeric fallbacks remain valid.
