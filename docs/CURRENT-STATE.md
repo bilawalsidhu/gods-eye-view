@@ -1301,6 +1301,8 @@ Stopping the controller revokes animation before asynchronous UI teardown; final
 destruction removes its stages and restores the borrowed bloom configuration.
 Snow's sideways sway stays within a fixed range at any session age; Wind scales
 its amplitude.
+Sharpen runs only when enabled with intensity above 0.001. At slider zero its
+stage is disabled; raising the slider resumes it when sharpen is enabled.
 
 ## Display control ownership
 
