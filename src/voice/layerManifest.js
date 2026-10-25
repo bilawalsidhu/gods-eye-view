@@ -44,12 +44,6 @@ const AIRCRAFT_FIELDS = {
 
 const layers = [
   {
-    id: 'gdacs-alerts',
-    aliases: ['gdacs', 'gdacs alerts', 'disaster alerts', 'disasters'],
-    context: true,
-    noQuery: 'GDACS event centroids; no countable analyst records',
-  },
-  {
     id: 'gnss-integrity',
     aliases: [
       'gnss integrity',
@@ -416,6 +410,7 @@ const layers = [
 export const VOICE_OFF_LAYERS = Object.freeze({
   'bhote-koshi-2026': 'scene-driven event layer (control_scene)',
   'bhote-koshi-locator': 'scene-driven event layer (control_scene)',
+  'gdacs-alerts': 'Realtime prompt budget is full (pointAndAsk.test.mjs)',
 });
 
 const TYPE_NAMES = Object.freeze({

@@ -112,3 +112,12 @@ test('spoken aliases resolve to real layers, keep every legacy phrase and never 
       claimed.set(alias, entry.id);
     }
 });
+
+test('GDACS disaster alerts stay voice-off while the Realtime prompt budget is full', () => {
+  assert.ok(Object.hasOwn(VOICE_OFF_LAYERS, 'gdacs-alerts'));
+  assert.ok(catalogIds.includes('gdacs-alerts'));
+  assert.ok(!VOICE_TOGGLE_LAYER_IDS.includes('gdacs-alerts'));
+  assert.ok(!VOICE_CONTEXT_LAYER_IDS.includes('gdacs-alerts'));
+  assert.ok(!voiceLayerAliasMap().has('disaster alerts'));
+  assert.ok(!JSON.stringify(GEV_REALTIME_TOOLS).includes('gdacs'));
+});

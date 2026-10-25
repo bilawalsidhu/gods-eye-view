@@ -1053,7 +1053,6 @@ test('the voice TOOL SCHEMA matches the pinned contract — the mission mapping 
   // framing/default guidance updates only move_camera and mode descriptions.
   // Radio markup and the complete production-request comparison pin locality.
   // Restore the base camera/Globe View wording with the globe-rotation append.
-  // GDACS disaster alerts extend the manifest.
   assert.equal(block.length, 30878, 'serialized tool schema length drifted');
   assert.equal(
     crypto.createHash('sha256').update(block).digest('hex'),
