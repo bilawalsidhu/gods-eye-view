@@ -179,9 +179,11 @@ export class IntelHUD {
       summaryPolicy = {},
       basemapContext = {},
       summaryService = applicationServices.summary,
+      wikipediaService = applicationServices.wikipedia,
     } = {},
   ) {
     this.summaryService = summaryService;
+    this.wikipediaService = wikipediaService;
     this.summaryPolicy = summaryPolicy;
     this.basemapContext = basemapContext;
     this.placeSearch = placeSearch;
@@ -204,6 +206,7 @@ export class IntelHUD {
     this._summaryRequest = null;
     this._lastSummarySignature = '';
     this._summaryRevision = 0;
+    this._summaryUnconfigured = false;
     // One-shot guards so the very first summary lands immediately instead of
     // waiting for the 15s interval tick: B) swap the "Awaiting telemetry..."
     // placeholder for the deterministic line as soon as metrics exist, then
@@ -869,6 +872,7 @@ export class IntelHUD {
       const data = response.data;
       if (revision !== this._summaryRevision) return;
       if (isHudSummaryUnconfigured(response.status, data)) {
+        this._summaryUnconfigured = true;
         this._setSummaryText(fallbackText, animate);
         return;
       }
@@ -920,6 +924,38 @@ export class IntelHUD {
       this.placeSearch,
       this.basemapContext,
     );
+    let wikipediaArticles = [];
+    if (
+      !this._summaryUnconfigured &&
+      this._latestMetrics &&
+      this.wikipediaService?.fetchNearby
+    ) {
+      let timeoutSignal;
+      let timeoutId;
+      if (typeof AbortSignal?.timeout === 'function') {
+        timeoutSignal = AbortSignal.timeout(3000);
+      } else {
+        const timeoutController = new AbortController();
+        timeoutId = setTimeout(() => timeoutController.abort(), 3000);
+        timeoutSignal = timeoutController.signal;
+      }
+      try {
+        const hits = await this.wikipediaService.fetchNearby({
+          latitude: this._latestMetrics.latDeg,
+          longitude: this._latestMetrics.lonDeg,
+          radius: 10000,
+          limit: 3,
+          signal: timeoutSignal,
+        });
+        if (Array.isArray(hits)) {
+          wikipediaArticles = hits.map((entry) => entry.title).filter(Boolean);
+        }
+      } catch {
+        // Non-fatal fallback (timeout, network, or geosearch unavailable)
+      } finally {
+        if (timeoutId) clearTimeout(timeoutId);
+      }
+    }
     const enabledLayers =
       this._dataManager
         ?.getAll?.()
@@ -929,6 +965,7 @@ export class IntelHUD {
       placeLabels: labels.placeLabels,
       streetLabels: labels.streetLabels,
       nearbyPlaceLabels: labels.nearbyPlaceLabels,
+      wikipediaArticles,
       enabledLayerLabels: enabledLayers,
       ...hudSummaryLayerContext(this._dataManager?.getAll?.() || []),
     };
