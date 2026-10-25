@@ -4147,6 +4147,10 @@ and as the last line of the list, because the arrival step is among the ones
 dropped. A route of exactly 200 is complete, and a roundabout exit after the
 200th keeps folding into it.
 
+Directions ramp and exit text uses “on the left/right” only for a bare side;
+slight and sharp modifiers read as “slightly/sharply left/right”. Lane instructions
+name the left or right lane. The localized page and proxy English stay in sync.
+
 Route duration labels select their unit after rounding seconds, switching to
 minutes at 59.5 seconds; a 59.6-second leg displays as `1 min`, rather than `60 s`.
 

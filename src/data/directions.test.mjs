@@ -876,3 +876,46 @@ test('route numbers follow the page language and never break from their unit', (
   const list = directionsStepList({ route });
   assert.equal(list.items[1].lead, '240\u00a0м');
 });
+
+test('ramp and lane wording stays localized after choosing the maneuver form', (t) => {
+  t.after(() => setLocale('en'));
+  const cases = [
+    [
+      'ru',
+      'Въезжайте по съезду плавно налево на I-95',
+      'Сверните на съезд резко направо',
+      'Займите левую полосу',
+    ],
+    [
+      'es',
+      'Toma la rampa ligeramente a la izquierda hacia I-95',
+      'Toma la salida bruscamente a la derecha',
+      'Toma el carril izquierdo',
+    ],
+    [
+      'zh-CN',
+      '向左前方驶入匝道，进入 I-95',
+      '从出口向右后方驶出',
+      '使用左转车道',
+    ],
+  ];
+  for (const [locale, ramp, exit, lane] of cases) {
+    setLocale(locale);
+    assert.equal(
+      directionsInstruction({
+        type: 'on ramp',
+        modifier: 'slight left',
+        name: 'I-95',
+      }),
+      ramp,
+    );
+    assert.equal(
+      directionsInstruction({ type: 'off ramp', modifier: 'sharp right' }),
+      exit,
+    );
+    assert.equal(
+      directionsInstruction({ type: 'use lane', modifier: 'sharp left' }),
+      lane,
+    );
+  }
+});
