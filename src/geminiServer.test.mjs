@@ -991,7 +991,7 @@ test('real Vite dev and preview reject hostile hosts before the Gemini middlewar
         for (const host of ['attacker.example:4173', 'arbitrary.local:4173']) {
           const response = await request(host);
           assert.equal(response.status, 403);
-          assert.match(response.body, /This host is not allowed/);
+          assert.match(response.body, /This host.*is not allowed/);
         }
         assert.equal(credentialReads, 0);
         const sameSite = await request('gev.local:4173', {
