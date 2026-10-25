@@ -131,7 +131,11 @@ function boundedResultJson(
     if (json.length <= maxChars) return json;
   }
   const sheddable = Object.keys(bounded)
-    .filter((key) => !essentialKeys.includes(key) && !(analystItems && (key === 'items' || key === 'itemsOmitted')))
+    .filter(
+      (key) =>
+        !essentialKeys.includes(key) &&
+        !(analystItems && (key === 'items' || key === 'itemsOmitted')),
+    )
     .map((key) => ({ key, size: (JSON.stringify(bounded[key]) ?? '').length }))
     .sort((a, b) => b.size - a.size);
 
@@ -144,7 +148,11 @@ function boundedResultJson(
   if (analystItems) {
     // Drop the tail, not individual fields or prefixes of canonical IDs.
     // A result may contain more entries than the five numbered referents.
-    for (let retained = Math.min(5, analystItems.length); retained >= 0; retained--) {
+    for (
+      let retained = Math.min(5, analystItems.length);
+      retained >= 0;
+      retained--
+    ) {
       const candidate = { ...bounded, items: analystItems.slice(0, retained) };
       if (retained < analystItems.length)
         candidate.itemsOmitted = analystItems.length - retained;
