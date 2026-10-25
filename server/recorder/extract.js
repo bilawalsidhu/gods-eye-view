@@ -1,8 +1,16 @@
 const num = (v) => (typeof v === 'number' && Number.isFinite(v) ? v : null);
 
-function point(layer, id, lat, lon, alt, heading, speed, ts) {
+/** A callsign or ship name worth searching by, or ''. */
+function cleanName(value) {
+  const s = typeof value === 'string' ? value.trim().slice(0, 64) : '';
+  return /^MMSI \d+$/.test(s) ? '' : s;
+}
+
+function point(layer, id, lat, lon, alt, heading, speed, ts, name) {
   if (!id || num(lat) === null || num(lon) === null) return null;
+  const label = cleanName(name);
   return {
+    ...(label ? { name: label } : {}),
     id: String(id),
     layer,
     lat,
@@ -28,6 +36,7 @@ export function aircraftPoints(body, nowSec) {
       s[10],
       s[9],
       num(s[3]) ?? nowSec,
+      s[1],
     );
     if (p) out.push(p);
   }
@@ -51,6 +60,7 @@ export function militaryPoints(body, nowSec) {
       a?.track,
       speed,
       nowSec,
+      a?.flight || a?.r,
     );
     if (p) out.push(p);
   }
@@ -70,6 +80,7 @@ export function vesselPoints(rows, nowSec) {
       r?.heading ?? r?.course,
       r?.speed,
       nowSec,
+      r?.name,
     );
     if (p) out.push(p);
   }
@@ -88,7 +99,17 @@ export function localReceiverPoints(body, nowSec) {
     const alt = num(r.altitudeFt) === null ? null : r.altitudeFt * 0.3048;
     const speed =
       num(r.groundSpeedKt) === null ? null : r.groundSpeedKt * 0.514444;
-    const p = point('local', r.icao, r.lat, r.lon, alt, r.trackDeg, speed, ts);
+    const p = point(
+      'local',
+      r.icao,
+      r.lat,
+      r.lon,
+      alt,
+      r.trackDeg,
+      speed,
+      ts,
+      r.callsign,
+    );
     if (p) out.push(p);
   }
   return out;

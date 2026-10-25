@@ -5,6 +5,9 @@ import { openHistoryStore } from './store.js';
 const FLUSH_MS = 5000;
 const PURGE_MS = 60 * 60 * 1000;
 const MAX_BUFFER = 200000;
+const MAX_NAMES = 300000;
+// A name is saved again this often, so the contact stays findable while seen.
+const NAME_REFRESH_SEC = 3600;
 
 /**
  * Buffers thinned positions and writes them in batches.
@@ -25,6 +28,9 @@ export function createRecorder({
   const wanted = layers ? new Set(layers) : null;
   let buffer = [];
   let eventBuffer = [];
+  let nameBuffer = [];
+  /** layer:id -> { name, saved } for names already queued or written. */
+  const names = new Map();
   const tracker = createFenceTracker();
   const loaded = store.listFences();
   if (Array.isArray(loaded)) tracker.setFences(loaded);
@@ -52,6 +58,37 @@ export function createRecorder({
       throw error;
     }
   }
+  async function flushNames() {
+    if (!nameBuffer.length) return;
+    const batch = nameBuffer;
+    nameBuffer = [];
+    try {
+      await store.upsertContacts(batch);
+    } catch (error) {
+      nameBuffer = batch.concat(nameBuffer).slice(-MAX_BUFFER);
+      throw error;
+    }
+  }
+  /** Remembers a callsign or ship name the first time, when it changes, and hourly. */
+  function noteName(point) {
+    const key = `${point.layer}:${point.id}`;
+    const known = names.get(key);
+    if (
+      known &&
+      known.name === point.name &&
+      point.ts - known.saved < NAME_REFRESH_SEC
+    )
+      return;
+    names.delete(key);
+    names.set(key, { name: point.name, saved: point.ts });
+    if (names.size > MAX_NAMES) names.delete(names.keys().next().value);
+    nameBuffer.push({
+      layer: point.layer,
+      id: point.id,
+      name: point.name,
+      ts: point.ts,
+    });
+  }
   async function purge() {
     if (retentionSec > 0)
       await store.purgeBefore(Math.floor(now() / 1000) - retentionSec);
@@ -67,6 +104,7 @@ export function createRecorder({
     setInterval(() => {
       quiet(flush());
       quiet(flushEvents());
+      quiet(flushNames());
       quiet(enforceCap());
     }, FLUSH_MS),
     setInterval(() => quiet(purge()), PURGE_MS),
@@ -79,6 +117,7 @@ export function createRecorder({
     /** Accepts one point: { id, layer, lat, lon, alt, heading, speed, ts }. */
     ingest(point) {
       if (wanted && !wanted.has(point.layer)) return;
+      if (point.name) noteName(point);
       eventBuffer.push(...tracker.check(point));
       if (keep(point)) buffer.push(point);
     },
@@ -100,13 +139,13 @@ export function createRecorder({
       for (const p of points) this.ingest(p);
     },
     async flush() {
-      await Promise.all([flush(), flushEvents()]);
+      await Promise.all([flush(), flushEvents(), flushNames()]);
     },
     enforceCap,
     async close() {
       for (const t of timers) clearInterval(t);
       try {
-        await Promise.all([flush(), flushEvents()]);
+        await Promise.all([flush(), flushEvents(), flushNames()]);
       } finally {
         await store.close();
       }

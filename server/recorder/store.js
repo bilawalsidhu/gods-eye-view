@@ -36,7 +36,11 @@ export function openHistoryStore(file) {
       ts INTEGER NOT NULL, fence_id INTEGER NOT NULL, id TEXT NOT NULL,
       layer TEXT NOT NULL, kind TEXT NOT NULL, lat REAL, lon REAL);
     CREATE INDEX IF NOT EXISTS fence_events_ts ON fence_events(ts);
-    CREATE TABLE IF NOT EXISTS pins(id TEXT PRIMARY KEY, created_ts INTEGER NOT NULL);`);
+    CREATE TABLE IF NOT EXISTS pins(id TEXT PRIMARY KEY, created_ts INTEGER NOT NULL);
+    CREATE TABLE IF NOT EXISTS contacts(
+      layer TEXT NOT NULL, id TEXT NOT NULL, name TEXT NOT NULL,
+      last_seen INTEGER NOT NULL, PRIMARY KEY(layer, id));
+    CREATE INDEX IF NOT EXISTS contacts_name ON contacts(name);`);
   const insert = db.prepare(
     `INSERT INTO positions(${COLUMNS}) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
   );
@@ -61,6 +65,47 @@ export function openHistoryStore(file) {
         db.exec('ROLLBACK');
         throw error;
       }
+    },
+    /** Callsigns and ship names, so a contact can be found by what it is called. */
+    upsertContacts(contacts) {
+      const stmt = db.prepare(
+        `INSERT INTO contacts(layer, id, name, last_seen) VALUES (?, ?, ?, ?)
+         ON CONFLICT(layer, id) DO UPDATE SET name = excluded.name, last_seen = excluded.last_seen`,
+      );
+      db.exec('BEGIN');
+      try {
+        for (const c of contacts) stmt.run(c.layer, c.id, c.name, c.ts);
+        db.exec('COMMIT');
+      } catch (error) {
+        db.exec('ROLLBACK');
+        throw error;
+      }
+    },
+    /** Contacts whose id or name contains `query`: exact, then prefix, then newest. */
+    findContacts(query, limit = 20) {
+      const term = String(query ?? '')
+        .trim()
+        .toLowerCase()
+        .slice(0, 64);
+      if (!term) return [];
+      const escaped = term.replace(/[!%_]/g, (c) => `!${c}`);
+      return db
+        .prepare(
+          `SELECT layer, id, name, last_seen FROM contacts
+           WHERE lower(id) LIKE ? ESCAPE '!' OR lower(name) LIKE ? ESCAPE '!'
+           ORDER BY (lower(id) = ? OR lower(name) = ?) DESC,
+                    (lower(id) LIKE ? ESCAPE '!' OR lower(name) LIKE ? ESCAPE '!') DESC,
+                    last_seen DESC LIMIT ?`,
+        )
+        .all(
+          `%${escaped}%`,
+          `%${escaped}%`,
+          term,
+          term,
+          `${escaped}%`,
+          `${escaped}%`,
+          limit,
+        );
     },
     /** Number of saved positions per layer. */
     layerCounts() {
@@ -192,6 +237,9 @@ export function openHistoryStore(file) {
     },
     purgeBefore(ts) {
       db.prepare('DELETE FROM fence_events WHERE ts < ?').run(ts);
+      db.prepare(
+        'DELETE FROM contacts WHERE last_seen < ? AND id NOT IN (SELECT id FROM pins)',
+      ).run(ts);
       return Number(
         db
           .prepare(

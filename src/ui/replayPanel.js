@@ -81,7 +81,7 @@ export function createReplayPanel({ container, controller } = {}) {
   const findRow = document.createElement('div');
   findRow.className = 'replay-chips';
   const ident = makeInput(findRow, 'text', t('Identifier'));
-  ident.placeholder = t('Callsign, hex or MMSI');
+  ident.placeholder = t('Callsign, ship name, hex or MMSI');
   const find = makeChip(
     findRow,
     t('FIND'),
@@ -342,7 +342,7 @@ export function createReplayPanel({ container, controller } = {}) {
     // The first and last fixes are coloured dots on the globe, so the words
     // carry the same colours instead of a map label.
     const trackKey = tr
-      ? `${tr.id}|${tr.count}|${tr.first.ts}|${tr.last.ts}|${tr.gaps.length}`
+      ? `${tr.id}|${tr.name}|${tr.count}|${tr.first.ts}|${tr.last.ts}|${tr.gaps.length}`
       : '';
     if (trackLine.dataset.key !== trackKey) {
       trackLine.dataset.key = trackKey;
@@ -355,7 +355,7 @@ export function createReplayPanel({ container, controller } = {}) {
       trackLine.replaceChildren(
         ...(tr
           ? [
-              `${tr.id} · ${t('{count} points', { count: tr.count })} · `,
+              `${tr.name && tr.name !== tr.id ? `${tr.name} (${tr.id})` : tr.id} · ${t('{count} points', { count: tr.count })} · `,
               part(`● ${t('first')} ${stamp(tr.first)}`, 'replay-track-first'),
               ' · ',
               part(`● ${t('last')} ${stamp(tr.last)}`, 'replay-track-last'),

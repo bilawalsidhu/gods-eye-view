@@ -299,12 +299,29 @@ export function createReplayController({
     viewer.scene.requestRender?.();
   }
 
+  /** Finds a contact by callsign, ship name, hex code or MMSI. */
+  async function lookUp(text) {
+    try {
+      const { matches } = await getJson(
+        `/api/history/search?q=${encodeURIComponent(text)}`,
+      );
+      return matches;
+    } catch {
+      return [];
+    }
+  }
+
   async function findTrack(rawId) {
-    const id = String(rawId ?? '').trim();
+    const typed = String(rawId ?? '').trim();
     track = null;
     trackPoints = [];
     hint = '';
-    if (id) {
+    if (typed) {
+      // The best match is first: exact, then a prefix, then the newest. With no
+      // name on record the text is tried as an id as it stands.
+      const matches = await lookUp(typed);
+      const id = matches[0]?.id ?? typed;
+      const name = matches[0]?.name ?? '';
       try {
         const to = Math.floor(Date.now() / 1000) + 60;
         const data = await getJson(
@@ -314,11 +331,14 @@ export function createReplayController({
           trackPoints = data.points;
           track = {
             id,
+            name,
             count: data.count,
             first: data.first,
             last: data.last,
             gaps: data.gaps,
           };
+          if (matches.length > 1)
+            hint = msg('Several matches, showing the best one');
         } else hint = msg('No recorded track for that identifier');
       } catch {
         hint = msg('Search failed');

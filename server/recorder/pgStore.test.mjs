@@ -63,7 +63,7 @@ test('postgres store matches the SQLite store', { skip: !url }, async () => {
   const admin = new pg.Client({ connectionString: url });
   await admin.connect();
   await admin.query(
-    'DROP TABLE IF EXISTS positions, fences, fence_events, pins CASCADE',
+    'DROP TABLE IF EXISTS positions, fences, fence_events, pins, contacts CASCADE',
   );
   await admin.end();
 
@@ -75,7 +75,7 @@ test('postgres store matches the SQLite store', { skip: !url }, async () => {
     now: () => 1000 * 1000,
   });
   rec.ingestMany([
-    pt({ id: 'a', ts: 100 }),
+    pt({ id: 'a', ts: 100, name: 'UAL123' }),
     pt({ id: 'a', ts: 200, lat: 11 }),
     pt({ id: 'a', ts: 900, lat: 12 }),
     pt({ id: 'm', layer: 'mil', ts: 150, lat: 50, lon: 50, alt: null }),
@@ -85,6 +85,11 @@ test('postgres store matches the SQLite store', { skip: !url }, async () => {
   const range = await store.range();
   assert.deepEqual({ ...range }, { from_ts: 100, to_ts: 900, count: 4 });
   assert.equal((await store.track('a', 0, 500)).length, 2);
+  assert.deepEqual(
+    (await store.findContacts('ual1')).map((c) => c.id),
+    ['a'],
+  );
+  assert.deepEqual(await store.findContacts('100%'), []);
   assert.deepEqual(
     (
       await store.window({

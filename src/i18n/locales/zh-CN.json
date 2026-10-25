@@ -2844,7 +2844,7 @@
   "JUMP": "跳转",
   "Replay from this UTC time": "从此 UTC 时间开始回放",
   "Identifier": "标识符",
-  "Callsign, hex or MMSI": "呼号、十六进制码或 MMSI",
+  "Callsign, ship name, hex or MMSI": "呼号、船名、十六进制码或 MMSI",
   "FIND": "查找",
   "Show the recorded path of a contact": "显示目标的记录路径",
   "Clear the path": "清除路径",
@@ -2871,5 +2871,6 @@
   "Settles near {size} at this rate": "按此速度将稳定在约 {size}",
   "Full in about {time} at this rate": "按此速度约 {time} 后写满",
   "Nearly full. The oldest positions are being dropped.": "即将写满，正在删除最旧的位置记录。",
-  "Disk nearly full. Lower retention or set a size cap.": "磁盘即将写满。请缩短保留时间或设置大小上限。"
+  "Disk nearly full. Lower retention or set a size cap.": "磁盘即将写满。请缩短保留时间或设置大小上限。",
+  "Several matches, showing the best one": "有多个匹配，显示最佳项"
 }

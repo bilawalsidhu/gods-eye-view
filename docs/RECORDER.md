@@ -128,10 +128,16 @@ across the gap.
 Pick a UTC date and time and press JUMP to replay from that moment (the window
 length still comes from 1h, 6h or 24h). REGION lets you drag a box on the
 globe so only contacts inside it are replayed; press it again to clear. Type a
-callsign, hex code or MMSI into the search box and press FIND to draw that
+callsign, ship name, satellite name, hex code or MMSI (part of one is enough,
+upper or lower case) into the search box and press FIND to draw that
 contact's whole recorded path in gold, with FIRST and LAST markers and any gap
 of more than five minutes as a red dashed line; the summary line gives its
-point count, first and last times and gap count.
+name, point count, first and last times and gap count. When several contacts
+match, the best one is shown (an exact match, then one that starts with what you
+typed, then the most recently seen). Names are saved as they arrive: the
+callsign from OpenSky, adsb.lol and your own receivers, the name from AIS, and
+the satellite name from its orbital elements. A contact with no name can still
+be found by its hex code or MMSI.
 
 PIN (shown after a search) keeps that contact's history past the retention
 period and the size cap, until you press it again. Pins are also available at
@@ -180,6 +186,8 @@ other web pages from editing them.
 - `GET /api/history/events?since&fence&limit` — enter and exit events, newest first.
 - `GET /api/history/at?to=<epoch s>&bbox&layers` — last position of each
   contact within 10 minutes before `to`.
+- `GET /api/history/search?q=` — contacts whose id, callsign or name contains
+  `q`, best match first (up to 20).
 
 The MCP server adds `history_window`, `history_track` and `replay_to`, which
 call these routes. Code lives in `server/recorder/`, `src/replay/` and

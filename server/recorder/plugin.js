@@ -257,6 +257,10 @@ export function recorderPlugin(env = process.env) {
           );
           return sendJson(res, removed ? 200 : 404, { removed });
         }
+        if (url.pathname === '/search')
+          return sendJson(res, 200, {
+            matches: await recorder.store.findContacts(q.get('q') || ''),
+          });
         if (url.pathname === '/pins') {
           if (req.method === 'POST')
             return readJson(req, res, async (body) => {

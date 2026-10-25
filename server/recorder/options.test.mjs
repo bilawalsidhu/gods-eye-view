@@ -204,3 +204,39 @@ test('the store counts positions per layer', async () => {
   ]);
   assert.deepEqual(store.layerCounts(), { air: 2, sat: 1 });
 });
+
+test('contacts are found by callsign, ship name or id, best match first', async () => {
+  const { openHistoryStore } = await import('./store.js');
+  const { aircraftPoints, vesselPoints } = await import('./extract.js');
+  const store = openHistoryStore(':memory:');
+  const rec = createRecorder({ store, layers: null });
+  rec.ingestMany(
+    aircraftPoints(
+      {
+        states: [
+          ['a1b2c3', 'UAL123  ', 'US', 5, 0, 8.5, 47.5, 100, false, 200, 270, 0, null, 120],
+          ['d4e5f6', 'UAL1234 ', 'US', 5, 0, 9.5, 47.5, 100, false, 200, 270, 0, null, 120],
+        ],
+      },
+      5,
+    ),
+  );
+  rec.ingestMany(
+    vesselPoints(
+      [
+        { mmsi: '366123456', name: 'Ever Given', lat: 1, lon: 2, speed: 3, course: 4 },
+        { mmsi: '999', name: 'MMSI 999', lat: 1, lon: 2, speed: 3, course: 4 },
+      ],
+      5,
+    ),
+  );
+  await rec.flush();
+  const first = (q) => store.findContacts(q).map((c) => c.id);
+  assert.deepEqual(first('ual123'), ['a1b2c3', 'd4e5f6'], 'exact name before a longer one');
+  assert.deepEqual(first('ever'), ['366123456']);
+  assert.deepEqual(first('A1B2'), ['a1b2c3'], 'ids are searchable too');
+  assert.deepEqual(first('999'), [], 'a placeholder name is not saved');
+  assert.deepEqual(first('100%'), [], 'wildcards are plain text');
+  assert.deepEqual(first(''), []);
+  await rec.close();
+});

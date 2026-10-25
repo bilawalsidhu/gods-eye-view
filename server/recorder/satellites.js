@@ -56,7 +56,7 @@ export function createSatelliteSource({
       const seen = new Set();
       const out = [];
       for (const sats of byGroup.values())
-        for (const { id, satrec } of sats) {
+        for (const { id, name, satrec } of sats) {
           if (seen.has(id) || out.length >= maxObjects) continue;
           seen.add(id);
           const state = propagate(satrec, date);
@@ -68,6 +68,7 @@ export function createSatelliteSource({
           if (![lat, lon, geo.height].every(Number.isFinite)) continue;
           out.push({
             id,
+            name,
             layer: 'sat',
             lat,
             lon,

@@ -3045,7 +3045,7 @@
   "JUMP": "ПЕРЕЙТИ",
   "Replay from this UTC time": "Воспроизвести с этого времени UTC",
   "Identifier": "Идентификатор",
-  "Callsign, hex or MMSI": "Позывной, hex или MMSI",
+  "Callsign, ship name, hex or MMSI": "Позывной, название судна, hex или MMSI",
   "FIND": "НАЙТИ",
   "Show the recorded path of a contact": "Показать записанный путь объекта",
   "Clear the path": "Убрать путь",
@@ -3072,5 +3072,6 @@
   "Settles near {size} at this rate": "Стабилизируется около {size} при таком темпе",
   "Full in about {time} at this rate": "Заполнится примерно через {time} при таком темпе",
   "Nearly full. The oldest positions are being dropped.": "Почти заполнено. Самые старые позиции удаляются.",
-  "Disk nearly full. Lower retention or set a size cap.": "Диск почти заполнен. Сократите срок хранения или задайте лимит размера."
+  "Disk nearly full. Lower retention or set a size cap.": "Диск почти заполнен. Сократите срок хранения или задайте лимит размера.",
+  "Several matches, showing the best one": "Несколько совпадений, показано лучшее"
 }

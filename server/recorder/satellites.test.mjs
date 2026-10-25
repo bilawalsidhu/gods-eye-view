@@ -54,3 +54,9 @@ test('an Alpha-5 catalogue number is named by its NORAD number', () => {
   assert.equal(src.learn('visual', alpha), 1);
   assert.equal(src.points(EPOCH)[0].id, 'SAT-100057');
 });
+
+test('satellite points carry the name for search', () => {
+  const src = createSatelliteSource({ groups: ['stations'] });
+  src.learn('stations', TLE);
+  assert.equal(src.points(EPOCH)[0].name, 'ISS (ZARYA)');
+});

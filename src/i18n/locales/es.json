@@ -2978,7 +2978,7 @@
   "JUMP": "IR",
   "Replay from this UTC time": "Reproducir desde esta hora UTC",
   "Identifier": "Identificador",
-  "Callsign, hex or MMSI": "Indicativo, hex o MMSI",
+  "Callsign, ship name, hex or MMSI": "Indicativo, nombre del barco, hex o MMSI",
   "FIND": "BUSCAR",
   "Show the recorded path of a contact": "Mostrar la ruta grabada de un contacto",
   "Clear the path": "Borrar la ruta",
@@ -3005,5 +3005,6 @@
   "Settles near {size} at this rate": "Se estabiliza cerca de {size} a este ritmo",
   "Full in about {time} at this rate": "Se llena en unos {time} a este ritmo",
   "Nearly full. The oldest positions are being dropped.": "Casi lleno. Se están eliminando las posiciones más antiguas.",
-  "Disk nearly full. Lower retention or set a size cap.": "Disco casi lleno. Reduce la retención o fija un límite de tamaño."
+  "Disk nearly full. Lower retention or set a size cap.": "Disco casi lleno. Reduce la retención o fija un límite de tamaño.",
+  "Several matches, showing the best one": "Varias coincidencias, se muestra la mejor"
 }

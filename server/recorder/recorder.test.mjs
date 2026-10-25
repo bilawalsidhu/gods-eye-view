@@ -34,6 +34,7 @@ test('extractors read each feed shape and skip rows without a position', () => {
     ['abc123', 'X', 'c', 5, 0, 8.5, 47.5, 100, false, 200, 270, 0, null, 120],
   ];
   assert.deepEqual(aircraftPoints({ states }, 1)[0], {
+    name: 'X',
     id: 'abc123',
     layer: 'air',
     lat: 47.5,

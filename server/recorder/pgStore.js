@@ -50,7 +50,10 @@ export function createPgStore(url, { loadPg = () => import('pg') } = {}) {
         lat DOUBLE PRECISION, lon DOUBLE PRECISION);
       CREATE INDEX IF NOT EXISTS fence_events_ts ON fence_events(ts);
       CREATE TABLE IF NOT EXISTS pins(
-        id TEXT PRIMARY KEY, created_ts BIGINT NOT NULL);`);
+        id TEXT PRIMARY KEY, created_ts BIGINT NOT NULL);
+      CREATE TABLE IF NOT EXISTS contacts(
+        layer TEXT NOT NULL, id TEXT NOT NULL, name TEXT NOT NULL,
+        last_seen BIGINT NOT NULL, PRIMARY KEY(layer, id));`);
     try {
       await pool.query('CREATE EXTENSION IF NOT EXISTS postgis');
       await pool.query(`ALTER TABLE positions ADD COLUMN IF NOT EXISTS geom
@@ -134,6 +137,39 @@ export function createPgStore(url, { loadPg = () => import('pg') } = {}) {
         ],
         points,
       ),
+    async upsertContacts(contacts) {
+      for (let i = 0; i < contacts.length; i += CHUNK) {
+        const part = contacts.slice(i, i + CHUNK);
+        await query(
+          `INSERT INTO contacts(layer, id, name, last_seen)
+           SELECT * FROM unnest($1::text[], $2::text[], $3::text[], $4::bigint[])
+           ON CONFLICT(layer, id) DO UPDATE
+             SET name = excluded.name, last_seen = excluded.last_seen`,
+          [
+            part.map((c) => c.layer),
+            part.map((c) => c.id),
+            part.map((c) => c.name),
+            part.map((c) => c.ts),
+          ],
+        );
+      }
+    },
+    findContacts(text, limit = 20) {
+      const term = String(text ?? '')
+        .trim()
+        .toLowerCase()
+        .slice(0, 64);
+      if (!term) return [];
+      const escaped = term.replace(/[!%_]/g, (c) => `!${c}`);
+      return rows(
+        `SELECT layer, id, name, last_seen FROM contacts
+         WHERE lower(id) LIKE $1 ESCAPE '!' OR lower(name) LIKE $1 ESCAPE '!'
+         ORDER BY (lower(id) = $2 OR lower(name) = $2) DESC,
+                  (lower(id) LIKE $3 ESCAPE '!' OR lower(name) LIKE $3 ESCAPE '!') DESC,
+                  last_seen DESC LIMIT $4`,
+        [`%${escaped}%`, term, `${escaped}%`, limit],
+      );
+    },
     async layerCounts() {
       return Object.fromEntries(
         (
@@ -265,6 +301,10 @@ export function createPgStore(url, { loadPg = () => import('pg') } = {}) {
     },
     async purgeBefore(ts) {
       await query('DELETE FROM fence_events WHERE ts < $1', [ts]);
+      await query(
+        'DELETE FROM contacts WHERE last_seen < $1 AND id NOT IN (SELECT id FROM pins)',
+        [ts],
+      );
       return (
         await query(
           'DELETE FROM positions WHERE ts < $1 AND id NOT IN (SELECT id FROM pins)',
