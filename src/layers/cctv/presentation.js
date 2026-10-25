@@ -114,6 +114,7 @@ export function createPresentation({
       activeId || parts.selection.getActiveRecord()?.camera.id || null;
     const camera = record.camera;
     const embedded = camera.feedType === 'embed';
+    const noFeed = camera.feedType === 'none';
     const health = layerState._healthById.get(camera.id) || null;
     const isActive = camera.id === resolvedActiveId;
     const refreshMs = isActive
@@ -160,7 +161,11 @@ export function createPresentation({
         health?.sourceKind ||
         camera.sourceKind ||
         (camera.feedConfigured ? 'configured' : 'seed'),
-      sourceStatus: embedded ? 'external' : health?.status || 'unknown',
+      sourceStatus: embedded
+        ? 'external'
+        : noFeed
+          ? 'no public feed'
+          : health?.status || 'unknown',
       sourceMessage: health?.message || '',
       sourceLabel: health?.label || camera.provider || '',
       credit: camera.credit || '',
@@ -191,8 +196,10 @@ export function createPresentation({
       calBadge: parts.calibration.deriveCalBadge(camera),
       poseSource: camera.poseSource || null,
       basePose: camera.basePose ? { ...camera.basePose } : null,
-      frameUrl: embedded ? null : parts.frames.frameUrlFor(camera, refreshMs),
-      mediaUrl: embedded ? null : parts.frames.mediaUrlFor(camera),
+      noFeed,
+      frameUrl:
+        embedded || noFeed ? null : parts.frames.frameUrlFor(camera, refreshMs),
+      mediaUrl: embedded || noFeed ? null : parts.frames.mediaUrlFor(camera),
     };
   }
 

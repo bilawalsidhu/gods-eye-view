@@ -177,6 +177,13 @@ export function _syncCctvSourceBadge(activeCamera, enabled) {
     this._cctvSourceBadge.dataset.frameState = 'external';
     return;
   }
+  if (activeCamera.noFeed || activeCamera.feedType === 'none') {
+    updateStatusBadge(this._cctvSourceBadge, {
+      label: cctvSourceStatusLabel('no public feed'),
+    });
+    this._cctvSourceBadge.dataset.frameState = 'no-feed';
+    return;
+  }
   const hasDisplayedFrame =
     this._cctvFrameWrap?.classList.contains('has-frame');
   if (this._cctvFrame?.dataset.loading === 'true' && !hasDisplayedFrame) {

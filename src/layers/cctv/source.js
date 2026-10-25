@@ -14,7 +14,7 @@ function safeNumber(value, fallback = NaN) {
   return Number.isFinite(n) ? n : fallback;
 }
 function frameUrlFor(camera, refreshMs = ACTIVE_FRAME_REFRESH_MS) {
-  if (camera.feedType === 'embed') return null;
+  if (camera.feedType === 'embed' || camera.feedType === 'none') return null;
   const cadenceMs = Math.max(
     1000,
     safeNumber(refreshMs, ACTIVE_FRAME_REFRESH_MS),
@@ -33,7 +33,7 @@ function frameUrlFor(camera, refreshMs = ACTIVE_FRAME_REFRESH_MS) {
   return `${FRAME_ENDPOINT}/${encodeURIComponent(camera.id)}?${params.toString()}`;
 }
 function mediaUrlFor(camera) {
-  if (camera.feedType === 'embed') return null;
+  if (camera.feedType === 'embed' || camera.feedType === 'none') return null;
   return `${MEDIA_ENDPOINT}/${encodeURIComponent(camera.id)}?ts=${Math.floor(Date.now() / 15000)}`;
 }
 /** Supply catalog/health records and the existing registered camera URL families. */
@@ -64,6 +64,8 @@ export function createCctvSource({
       signal?.throwIfAborted();
       if (camera.feedType === 'embed')
         throw new Error('Embedded camera frames are not available');
+      if (camera.feedType === 'none')
+        throw new Error('Location-only camera frames are not available');
       const response = await fetchImpl(frameUrlFor(camera), {
         cache: 'no-store',
         signal,
