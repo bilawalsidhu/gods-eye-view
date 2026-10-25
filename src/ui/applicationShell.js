@@ -16,6 +16,8 @@ import { CockpitCoordinator } from './cockpitCoordinator.js';
 import { ContextControls } from './context.js';
 import { CctvControls } from './cctv.js';
 import { RadioControls } from './radio.js';
+import { createAudioVisualizer } from './audioVisualizer.js';
+import { createRadioAudioSource } from './radioAudioSource.js';
 import { LocalSdrControls } from './localSdrControls.js';
 import { LocationNavigation } from './locationNavigation.js';
 import { bindClearLayersControl } from './layers.js';
@@ -833,6 +835,12 @@ export class StyleManager extends ShellFacade {
   _initRadioPanel() {
     const { radioLayer } = this.services;
     this._radioControls?.destroy();
+    this._audioVisualizer?.destroy();
+    this._audioVisualizer = createAudioVisualizer({
+      source: createRadioAudioSource(radioLayer),
+      host: document.getElementById('hud-audio-viz-slot'),
+      isActive: () => Boolean(this.hud?.visible),
+    });
     this._radioControls = new RadioControls({
       elements: {
         _cockpitDisplayPanel: this._cockpitDisplayPanel,
@@ -1549,6 +1557,7 @@ export class StyleManager extends ShellFacade {
     this._clearLayersControl?.destroy();
     this._cctvControls?.destroy();
     this._radioControls?.destroy();
+    this._audioVisualizer?.destroy();
     this._localSdrControls?.destroy();
     this._cockpitCoordinator.stop();
     this._visualSettings.stop();

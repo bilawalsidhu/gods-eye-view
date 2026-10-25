@@ -39,8 +39,9 @@ test('catalogs construct distinct layers and classification from their supplied 
     signal: b.signal,
     surface: fixtureSurface(b.signal),
   });
-  assert.equal(first.layers.length, 30);
+  assert.equal(first.layers.length, 31);
   assert.ok(first.get('local-adsb'), 'Local ADS-B is registered');
+  assert.ok(first.get('dispatch'), 'Seattle 911 dispatch is registered');
   assert.deepEqual(
     first.metadata.find(({ id }) => id === 'local-adsb'),
     { id: 'local-adsb', disposition: 'local-only' },

@@ -256,9 +256,21 @@ export const DATA_CREDITS = [
     html: 'Metro stations: <a href="https://www.wikidata.org/" target="_blank" rel="noopener">Wikidata</a> (CC0) via the Wikidata Query Service',
   },
   {
+    key: 'seattle-fire-911',
+    html: 'Seattle Fire 911 calls: <a href="https://data.seattle.gov/Public-Safety/Seattle-Real-Time-Fire-911-Calls/kzjm-xkqj" target="_blank" rel="noopener">City of Seattle open data</a> (public domain)',
+  },
+  {
+    key: 'everett-police-calls',
+    html: 'Everett Police calls: <a href="https://data.everettwa.gov/Safe-Community/Police-Incidents/f6vp-3svh" target="_blank" rel="noopener">City of Everett open data</a> (public domain)',
+  },
+  {
+    key: 'kcso-offense-reports',
+    html: 'King County Sheriff offense reports and reporting areas: <a href="https://data.kingcounty.gov/terms" target="_blank" rel="noopener">King County open data</a>',
+  },
+  {
     key: 'wikidata-dossier',
     html:
-      'Aircraft and space dossiers: <a href="https://www.wikidata.org/" target="_blank" rel="noopener">Wikidata</a> (CC0), ' +
+      'Aircraft, space and radio dossiers: <a href="https://www.wikidata.org/" target="_blank" rel="noopener">Wikidata</a> (CC0), ' +
       'resolved via English Wikipedia search; photos from ' +
       '<a href="https://commons.wikimedia.org/" target="_blank" rel="noopener">Wikimedia Commons</a> (licence per file)',
   },

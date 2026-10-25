@@ -579,6 +579,13 @@ body {
   animation: gev-dossier-photo 420ms ease-out both;
 }
 
+.gev-dossier__photo.is-logo img {
+  box-sizing: border-box;
+  padding: 6px;
+  object-fit: contain;
+  background: rgb(232 240 244 / 88%);
+}
+
 .gev-dossier__credit {
   overflow: hidden;
   margin-top: 2px;

@@ -69,6 +69,7 @@ export const playPreparedRadioForVoice = layer.playPreparedRadioForVoice;
 export const stopRadioPlayback = layer.stopRadioPlayback;
 export const toggleRadioPlayback = layer.toggleRadioPlayback;
 export const pauseRadioPlayback = layer.pauseRadioPlayback;
+export const getRadioAnalyser = layer.getRadioAnalyser;
 export const setRadioVolume = layer.setRadioVolume;
 export const setRadioParams = layer.setRadioParams;
 export const getRadioParams = layer.getRadioParams;

@@ -8,6 +8,7 @@ import {
   RADIO_OVERLAY_SOURCE_ID,
   RADIO_OVERLAY_COHORT_LIMIT,
   RADIO_OVERLAY_SOURCE_OPTIONS,
+  RADIO_STATION_EVENT,
   DEFAULT_RADIO_FILTER,
 } from './policy.js';
 
@@ -31,6 +32,35 @@ export function createRendering({
     );
   }
 
+  /**
+   * Tell the Wikidata dossier which station is presented (selected or tuning
+   * preview); `{id: null}` when none. Repeats for the same id are skipped.
+   */
+  function announceSelectedStation(station) {
+    const id = station?.id ?? null;
+    if (id === layerState._announcedStationId) return;
+    layerState._announcedStationId = id;
+    if (typeof window === 'undefined' || !window.dispatchEvent) return;
+    window.dispatchEvent(
+      new CustomEvent(RADIO_STATION_EVENT, {
+        detail: station
+          ? {
+              id,
+              name: station.name,
+              country: station.country,
+              countryCode: station.countryCode,
+              state: station.state,
+              lat: station.lat,
+              lon: station.lon,
+              accent: parts.model.radioCategoryColor(
+                parts.model.radioStationCategoryId(station),
+              ),
+            }
+          : { id: null },
+      }),
+    );
+  }
+
   function updateSelectionEntity() {
     if (layerState._selectedEntity && layerState._viewer)
       layerState._viewer.entities.remove(layerState._selectedEntity);
@@ -41,9 +71,11 @@ export function createRendering({
       !layerState._viewer ||
       !station
     ) {
+      announceSelectedStation(null);
       scheduleRadioOverlayPublish();
       return;
     }
+    announceSelectedStation(station);
     const selectionColor = parts.model.radioCategoryColor(
       parts.model.radioStationCategoryId(station),
     );
@@ -401,6 +433,7 @@ export function createRendering({
   return {
     markerPosition,
     updateSelectionEntity,
+    announceSelectedStation,
     clusterPointCollection,
     publishRadioOverlayEntries,
     scheduleRadioOverlayPublish,

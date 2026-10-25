@@ -1,24 +1,32 @@
 /**
  * Wikidata dossier: a vertical column of facts that types out beside a
- * selected aircraft, satellite or rocket launch and follows it on screen.
+ * selected aircraft, satellite, rocket launch or radio station and follows it
+ * on screen.
  *
  * Aircraft and satellites arrive on the tracking layers' selection lane
  * (`gev:awareness-subject-selected`); their lookup key (aircraft type, NORAD
  * id) is read from the shared context record, which the layer refreshes as
  * enrichment lands, and must settle before Wikidata is asked. Launches arrive
- * on `gev:launch-mission-selected` and sit at their pad. Like the selection
+ * on `gev:launch-mission-selected` and sit at their pad; radio stations arrive
+ * on `gev:radio-station-selected` and sit at the station, looked up once the
+ * tuned station has settled. Like the selection
  * reticle it is a DOM surface positioned on `postRender`, so it never keeps
  * the render loop busy on its own.
  */
 import * as Cesium from 'cesium';
 import { getSelectedEntityContext } from '../data/contextStore.js';
 import { createAircraftWikidataSource } from '../sources/aircraftWikidata.js';
+import { createRadioWikidataSource } from '../sources/radioWikidata.js';
 import { createSpaceWikidataSource } from '../sources/spaceWikidata.js';
 import { isLockTargetEnabled } from './selectionReticle.js';
 
 export const WIKIDATA_DOSSIER_ROOT_ID = 'wikidata-dossier-root';
 export const LAUNCH_MISSION_EVENT = 'gev:launch-mission-selected';
+export const RADIO_STATION_EVENT = 'gev:radio-station-selected';
 const LAUNCH_LAYER = 'rocket-launches';
+const RADIO_LAYER = 'radio';
+/** Subjects pinned to a fixed place rather than a moving context record. */
+const FIXED_KINDS = new Set(['launch', 'radio']);
 const ACTIVE_CLASS = 'is-active';
 const FLIP_CLASS = 'is-left';
 /** How long the type must stay unchanged before it is looked up. */
@@ -97,6 +105,7 @@ function recordQuery(kind, record) {
  * @param {object} [options.cesium]
  * @param {{lookup: Function}} [options.aircraftSource]
  * @param {{lookupSatellite: Function, lookupLaunch: Function}} [options.spaceSource]
+ * @param {{lookupStation: Function}} [options.radioSource]
  * @param {() => object|null} [options.getContext]
  * @param {Document} [options.doc]
  * @param {Window} [options.win]
@@ -108,6 +117,7 @@ export function installWikidataDossier(
     cesium = Cesium,
     aircraftSource = null,
     spaceSource = null,
+    radioSource = null,
     getContext = () => getSelectedEntityContext(),
     doc = globalThis.document,
     win = globalThis.window,
@@ -117,10 +127,15 @@ export function installWikidataDossier(
   if (!scene?.postRender || !doc) return () => {};
   let aircraft = aircraftSource;
   let space = spaceSource;
+  let radio = radioSource;
   const fetchDossier = (subjectKind, request, signal) => {
     if (subjectKind === 'aircraft') {
       aircraft ||= createAircraftWikidataSource();
       return aircraft.lookup(request.key, { signal });
+    }
+    if (subjectKind === 'radio') {
+      radio ||= createRadioWikidataSource();
+      return radio.lookupStation(request.station, { signal });
     }
     space ||= createSpaceWikidataSource();
     return subjectKind === 'satellite'
@@ -199,6 +214,7 @@ export function installWikidataDossier(
     credit.textContent = `Photo: Wikimedia Commons · ${image.file}`;
     credit.title = image.file;
     if (photo.src !== image.url) photo.src = image.url;
+    figure.classList.toggle('is-logo', Boolean(image.logo));
     figure.hidden = false;
   }
 
@@ -328,7 +344,7 @@ export function installWikidataDossier(
   }
 
   function subjectPosition(record) {
-    if (subject.kind === 'launch') return subject.position;
+    if (FIXED_KINDS.has(subject.kind)) return subject.position;
     const tracked = viewer.trackedEntity;
     const trackedPosition = tracked?.position?.getValue?.(
       viewer.clock?.currentTime,
@@ -379,7 +395,7 @@ export function installWikidataDossier(
   function place() {
     if (!subject) return;
     let record = null;
-    if (subject.kind !== 'launch') {
+    if (!FIXED_KINDS.has(subject.kind)) {
       record = subjectRecord();
       if (!record) return clear();
       watchKey(record);
@@ -485,6 +501,45 @@ export function installWikidataDossier(
     scene.requestRender?.();
   }
 
+  function onRadioSelected(event) {
+    const detail = event?.detail || {};
+    if (detail.id == null) {
+      if (subject?.kind === 'radio') clear();
+      return;
+    }
+    const id = String(detail.id);
+    if (subject?.kind === 'radio' && subject.id === id) return;
+    const lat = Number(detail.lat);
+    const lon = Number(detail.lon);
+    const name = String(detail.name || '').trim();
+    if (!name || !Number.isFinite(lat) || !Number.isFinite(lon)) return clear();
+    clear();
+    subject = {
+      kind: 'radio',
+      layerId: RADIO_LAYER,
+      id,
+      position: cesium.Cartesian3.fromDegrees(lon, lat, 0),
+      height: 0,
+      key: null,
+      pendingKey: id,
+    };
+    setAccent(detail.accent);
+    const station = {
+      name,
+      countryCode: String(detail.countryCode || ''),
+      lat,
+      lon,
+    };
+    // Tuning previews sweep through stations; only look up where it rests.
+    typeTimer = win?.setTimeout?.(() => {
+      typeTimer = null;
+      if (subject?.kind !== 'radio' || subject.id !== id) return;
+      subject.key = id;
+      lookup({ key: id, query: name, station });
+      scene.requestRender?.();
+    }, TYPE_SETTLE_MS);
+  }
+
   function onCleared(event) {
     const detail = event?.detail || {};
     if (!subject || detail.layerId !== subject.layerId) return;
@@ -503,6 +558,7 @@ export function installWikidataDossier(
     ['gev:awareness-subject-cleared', onCleared],
     ['gev:entity-selected', onEntitySelected],
     [LAUNCH_MISSION_EVENT, onLaunchSelected],
+    [RADIO_STATION_EVENT, onRadioSelected],
   ];
   for (const [name, fn] of listeners) win?.addEventListener?.(name, fn);
 

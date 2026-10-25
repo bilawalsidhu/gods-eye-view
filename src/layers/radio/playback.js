@@ -11,7 +11,12 @@ export function createPlayback({ state: layerState, services, parts, source }) {
     );
   }
 
-  function installAudio({ replace = false } = {}) {
+  /**
+   * Create the shared audio element. `cors` requests the stream with CORS so
+   * Web Audio can read it for visualizers; broadcasters without CORS headers
+   * fail that request and are replayed without it (audible, not readable).
+   */
+  function installAudio({ replace = false, cors = false } = {}) {
     if (layerState._audio && !replace) return;
     if (typeof Audio === 'undefined') return;
     const previousAudio = layerState._audio;
@@ -34,7 +39,9 @@ export function createPlayback({ state: layerState, services, parts, source }) {
       }
     }
     const audio = new Audio();
+    if (cors) audio.crossOrigin = 'anonymous';
     layerState._audio = audio;
+    layerState._audioCors = Boolean(cors);
     audio.preload = 'none';
     audio.volume = layerState._voiceDucked ? 0 : layerState._userVolume;
     audio.addEventListener('playing', () => {
@@ -73,6 +80,7 @@ export function createPlayback({ state: layerState, services, parts, source }) {
         return;
       const failedId = layerState._audioStationId;
       const attempt = layerState._activePlaybackAttempt;
+      if (retryWithoutCors(attempt)) return;
       if (tryRadioFallback(failedId, attempt?.origin, attempt?.id)) return;
       layerState._audioState = 'error';
       layerState._audioError =
@@ -123,6 +131,63 @@ export function createPlayback({ state: layerState, services, parts, source }) {
     return true;
   }
 
+  /**
+   * Replay a station whose CORS request failed as a plain media request. A
+   * failure here may also be an offline stream, so the station is only
+   * remembered as CORS-less once the plain replay plays.
+   * @returns {Promise<boolean>|null} The replay, or null when not applicable.
+   */
+  function retryWithoutCors(attempt) {
+    if (attempt?.corsRetry) return attempt.corsRetry;
+    if (!attempt?.cors || layerState._activePlaybackAttempt !== attempt)
+      return null;
+    attempt.corsRetry = playSelectedRadio({
+      origin: attempt.origin,
+      attemptId: attempt.id,
+      cors: false,
+    });
+    return attempt.corsRetry;
+  }
+
+  /**
+   * Analyser for the playing stream, for visualizers; null when the stream
+   * could not be read with CORS or Web Audio is unavailable. The element is
+   * routed through Web Audio on first request and stays audible through it.
+   * @returns {AnalyserNode|null}
+   */
+  function getRadioAnalyser() {
+    const audio = layerState._audio;
+    if (!audio || !layerState._audioCors || !layerState._audioStationId)
+      return null;
+    const AudioContextClass =
+      globalThis.AudioContext || globalThis.webkitAudioContext;
+    if (typeof AudioContextClass !== 'function') return null;
+    try {
+      if (!layerState._analyserContext) {
+        const context = new AudioContextClass();
+        const analyser = context.createAnalyser();
+        analyser.fftSize = 2048;
+        analyser.smoothingTimeConstant = 0.8;
+        analyser.connect(context.destination);
+        layerState._analyserContext = context;
+        layerState._analyser = analyser;
+      }
+      if (layerState._analyserElement !== audio) {
+        layerState._analyserSource?.disconnect();
+        const source =
+          layerState._analyserContext.createMediaElementSource(audio);
+        source.connect(layerState._analyser);
+        layerState._analyserSource = source;
+        layerState._analyserElement = audio;
+      }
+      if (layerState._analyserContext.state === 'suspended')
+        layerState._analyserContext.resume().catch(() => {});
+      return layerState._analyser;
+    } catch {
+      return null;
+    }
+  }
+
   function recordDirectoryClick(id) {
     Promise.resolve()
       .then(() => source.recordClick(id))
@@ -134,6 +199,7 @@ export function createPlayback({ state: layerState, services, parts, source }) {
   async function playSelectedRadio({
     origin = 'programmatic',
     attemptId = null,
+    cors = null,
   } = {}) {
     const station = parts.queries.selectedStation();
     if (!parts.interaction.radioPresentationAllowed() || !station?.streamUrl)
@@ -142,7 +208,8 @@ export function createPlayback({ state: layerState, services, parts, source }) {
     // A media event carries no reliable attempt identity. Give every explicit
     // play/resume/replacement its own element so queued events from the retired
     // attempt remain bound to the discarded element and cannot mutate this one.
-    installAudio({ replace: true });
+    const useCors = cors ?? !layerState._streamsWithoutCors.has(station.id);
+    installAudio({ replace: true, cors: useCors });
     if (!layerState._audio) return false;
 
     const generation = ++layerState._playGeneration;
@@ -154,7 +221,9 @@ export function createPlayback({ state: layerState, services, parts, source }) {
       stationId: station.id,
       streamUrl: station.streamUrl,
       generation,
+      cors: useCors,
     };
+    const attempt = layerState._activePlaybackAttempt;
     if (layerState._playFallbackId) {
       layerState._playFallbackOrigin = origin;
       layerState._playFallbackAttemptId = ownedAttemptId;
@@ -181,6 +250,7 @@ export function createPlayback({ state: layerState, services, parts, source }) {
       )
         return false;
       layerState._audioState = 'playing';
+      if (cors === false) layerState._streamsWithoutCors.add(station.id);
       if (layerState._tuningAwaitingStationId === station.id)
         parts.tuningNoise.clearRadioTuningNoise({ emit: false });
       layerState._playFallbackId = null;
@@ -193,6 +263,10 @@ export function createPlayback({ state: layerState, services, parts, source }) {
         parts.presentation.emitPlaybackControl('play', origin, ownedAttemptId);
       return true;
     } catch (error) {
+      if (error?.name !== 'NotAllowedError') {
+        const replay = retryWithoutCors(attempt);
+        if (replay) return replay;
+      }
       if (
         generation !== layerState._playGeneration ||
         layerState._activePlaybackAttempt?.id !== ownedAttemptId
@@ -371,6 +445,8 @@ export function createPlayback({ state: layerState, services, parts, source }) {
     audioEventBelongsToActiveAttempt,
     installAudio,
     tryRadioFallback,
+    retryWithoutCors,
+    getRadioAnalyser,
     recordDirectoryClick,
     playSelectedRadio,
     confirmRadioPlayback,

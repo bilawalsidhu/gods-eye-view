@@ -270,6 +270,165 @@
   letter-spacing: 1.5px;
 }
 
+/* Audio spectrum visualizer (src/ui/audioVisualizer.js). Its width matches the
+   expanded Context panel. It stays above the viewport midpoint so the right
+   rail treats .hud-top-right as an obstacle and moves below it. */
+.hud-audio-viz {
+  --viz-edge: color-mix(in srgb, var(--hud-color) 55%, transparent);
+  position: relative;
+  box-sizing: border-box;
+  width: 330px; /* #global-context-panel expanded width */
+  margin: 6px 0 0 auto;
+  padding: 5px 7px 6px 8px;
+  text-align: left;
+  border: 1px solid var(--hud-border);
+  border-right: 2px solid var(--viz-edge);
+  background:
+    linear-gradient(180deg, rgba(0, 20, 26, 0.5), rgba(0, 0, 0, 0.42)),
+    repeating-linear-gradient(
+      0deg,
+      transparent 0 2px,
+      rgba(255, 255, 255, 0.025) 2px 3px
+    );
+  clip-path: polygon(
+    0 0,
+    calc(100% - 10px) 0,
+    100% 10px,
+    100% 100%,
+    10px 100%,
+    0 calc(100% - 10px)
+  );
+  animation: hud-audio-viz-in 0.35s ease-out;
+}
+
+.hud-audio-viz[hidden] {
+  display: none;
+}
+
+.hud-audio-viz::before,
+.hud-audio-viz::after {
+  content: '';
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  border-color: var(--secondary-accent);
+  border-style: solid;
+  opacity: 0.8;
+}
+
+.hud-audio-viz::before {
+  top: 0;
+  left: 0;
+  border-width: 1px 0 0 1px;
+}
+
+.hud-audio-viz::after {
+  right: 0;
+  bottom: 0;
+  border-width: 0 1px 1px 0;
+}
+
+#intel-hud .hud-audio-viz__head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 9px;
+  letter-spacing: 1.6px;
+  line-height: 1.3;
+}
+
+#intel-hud .hud-audio-viz__tag {
+  flex: none;
+  opacity: 0.7;
+}
+
+#intel-hud .hud-audio-viz__tag::before {
+  content: '◢ ';
+  color: var(--secondary-accent);
+}
+
+#intel-hud .hud-audio-viz__label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  opacity: 0.8;
+}
+
+#intel-hud .hud-audio-viz__status {
+  flex: none;
+  color: var(--secondary-accent);
+  font-weight: 700;
+}
+
+#intel-hud .hud-audio-viz[data-mode='live'] .hud-audio-viz__status::before {
+  content: '● ';
+  animation: hud-audio-viz-blink 1.2s steps(2, start) infinite;
+}
+
+#intel-hud .hud-audio-viz__level {
+  flex: none;
+  min-width: 52px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  opacity: 0.8;
+}
+
+.hud-audio-viz__frame {
+  position: relative;
+  margin-top: 3px;
+  border-top: 1px solid var(--hud-border);
+  border-bottom: 1px solid var(--hud-border);
+}
+
+.hud-audio-viz__canvas {
+  display: block;
+  width: 312px;
+  height: 64px;
+}
+
+#intel-hud .hud-audio-viz__notice {
+  display: none;
+  position: absolute;
+  inset: 0;
+  align-items: center;
+  justify-content: center;
+  font-size: 9px;
+  letter-spacing: 1.4px;
+  opacity: 0.75;
+}
+
+#intel-hud .hud-audio-viz[data-mode='opaque'] .hud-audio-viz__notice {
+  display: flex;
+}
+
+@media (max-height: 560px) {
+  .hud-audio-viz {
+    display: none;
+  }
+}
+
+@keyframes hud-audio-viz-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+}
+
+@keyframes hud-audio-viz-blink {
+  to {
+    visibility: hidden;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hud-audio-viz,
+  #intel-hud .hud-audio-viz[data-mode='live'] .hud-audio-viz__status::before {
+    animation: none;
+  }
+}
+
 /* Edge annotations (vertical text) */
 .hud-edge {
   position: absolute;

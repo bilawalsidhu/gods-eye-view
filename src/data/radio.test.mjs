@@ -620,6 +620,118 @@ test('late media errors after replacement or Pause cannot mutate the active stat
   }
 });
 
+test('streams play with CORS for visualizers and replay without it when refused', async () => {
+  const originalAudio = globalThis.Audio;
+  const originalFetch = globalThis.fetch;
+  const originalContext = globalThis.AudioContext;
+  const audioInstances = [];
+  const corsless = 'https://plain.example.com/live.mp3';
+  globalThis.Audio = class FakeAudio {
+    constructor() {
+      this.volume = 0.8;
+      this.src = '';
+      this.crossOrigin = null;
+      this.listeners = new Map();
+      audioInstances.push(this);
+    }
+    addEventListener(type, listener) { this.listeners.set(type, listener); }
+    pause() {}
+    play() {
+      if (this.crossOrigin && this.src === corsless) {
+        const error = new Error('CORS');
+        error.name = 'NotSupportedError';
+        return Promise.reject(error);
+      }
+      return Promise.resolve();
+    }
+    removeAttribute(name) { if (name === 'src') this.src = ''; }
+    load() {}
+  };
+  const routed = [];
+  globalThis.AudioContext = class FakeAudioContext {
+    constructor() { this.state = 'running'; this.destination = {}; }
+    createAnalyser() { return { connect() {} }; }
+    createMediaElementSource(element) {
+      routed.push(element);
+      return { connect() {}, disconnect() {} };
+    }
+  };
+  const row = (n, streamUrl) => ({
+    id: `00000000-0000-4000-8000-00000000000${n}`,
+    name: `Station ${n}`,
+    lat: 30,
+    lon: -97,
+    streamUrl,
+    homepage: null,
+    tags: ['news'],
+    languages: ['English'],
+    state: 'Texas',
+    country: 'United States',
+    countryCode: 'US',
+    metadataTrust: 'untrusted-community',
+    codec: 'MP3',
+    bitrate: 128,
+  });
+  const stationRows = [row(1, 'https://cors.example.com/live.mp3'), row(2, corsless)];
+  globalThis.fetch = async (url) => String(url).startsWith('/api/radio/click/')
+    ? { ok: true }
+    : {
+      ok: true,
+      json: async () => ({
+        stations: stationRows,
+        updatedAt: new Date().toISOString(),
+        stale: false,
+        degraded: false,
+        acceptedGeneration: 1,
+        catalogInstance: 'cors-instance',
+      }),
+    };
+  const viewer = {
+    camera: { positionWC: { x: 7_000_000, y: 0, z: 0 } },
+    scene: { canvas: { disableRootEvents: true, onwheel: null, addEventListener() {}, removeEventListener() {} } },
+    dataSources: { add() {}, remove() {} },
+    entities: { add(entity) { return entity; }, remove() {} },
+  };
+  radioLayer.destroy();
+  try {
+    radioLayer.init(viewer);
+    radioLayer.enable();
+    await radioLayer.update();
+    radioLayer.setLifecyclePresentation({ lifecycleState: 'enabled', enabled: true });
+
+    radioLayer.selectStation(stationRows[0].id, { autoplay: false, focus: false });
+    assert.equal(await radioLayer.play({ origin: 'user' }), true);
+    assert.equal(audioInstances.at(-1).crossOrigin, 'anonymous');
+    assert.equal(radioLayer.getUIState().audioReadable, true);
+    assert.ok(radioLayer.getAnalyser());
+    assert.deepEqual(routed, [audioInstances.at(-1)]);
+
+    radioLayer.selectStation(stationRows[1].id, { autoplay: false, focus: false });
+    const before = audioInstances.length;
+    assert.equal(await radioLayer.play({ origin: 'user' }), true);
+    const tried = audioInstances.slice(before);
+    assert.deepEqual(tried.map((a) => a.crossOrigin), ['anonymous', null]);
+    assert.ok(tried.every((a) => a.src === corsless || a.src === ''));
+    const state = radioLayer.getUIState();
+    assert.equal(state.audioState, 'playing');
+    assert.equal(state.playingStationId, stationRows[1].id);
+    assert.equal(state.audioReadable, false);
+    assert.equal(radioLayer.getAnalyser(), null);
+
+    const again = audioInstances.length;
+    assert.equal(await radioLayer.play({ origin: 'user' }), true);
+    assert.equal(audioInstances.length, again + 1, 'remembered station skips the CORS attempt');
+    assert.equal(audioInstances.at(-1).crossOrigin, null);
+  } finally {
+    radioLayer.destroy();
+    globalThis.fetch = originalFetch;
+    if (originalAudio === undefined) delete globalThis.Audio;
+    else globalThis.Audio = originalAudio;
+    if (originalContext === undefined) delete globalThis.AudioContext;
+    else globalThis.AudioContext = originalContext;
+  }
+});
+
 test('unusable directory responses preserve warm client state atomically', async () => {
   const originalFetch = globalThis.fetch;
   const now = new Date().toISOString();
@@ -918,7 +1030,8 @@ test('failed exact tuner release cannot consume a stale playback fallback', asyn
     assert.equal(radioLayer.commitTuningStation(stationRows[0].id, { origin: 'user' }).ok, true);
     await new Promise((resolve) => setTimeout(resolve));
     const state = radioLayer.getUIState();
-    assert.deepEqual(playUrls, [stationRows[0].streamUrl]);
+    // One CORS request, then one plain replay; never the stale fallback.
+    assert.deepEqual(playUrls, [stationRows[0].streamUrl, stationRows[0].streamUrl]);
     assert.equal(state.selected?.id, stationRows[0].id);
     assert.equal(state.audioState, 'error');
     assert.equal(state.tuningStatic, true);

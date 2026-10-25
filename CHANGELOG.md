@@ -2,6 +2,28 @@
 
 ## [Unreleased]
 
+- New **Emergency Services** layer under Events (below Fire Perimeters)
+  combines three public open-data feeds: Seattle Fire Department 911
+  dispatches (City of Seattle, public domain; last 6 hours, about 5 minutes
+  behind), Everett Police calls for service (City of Everett, public domain;
+  last 2 days, posted daily) and King County Sheriff offense reports (King
+  County open data; last 3 days, about a day behind, placed at their
+  reporting-area centre and marked approximate). Calls are coloured by
+  category (fire categories, Police, Sheriff report), fade across their feed's
+  window, and show agency, type, address, age and number when clicked; the
+  row lists per-agency counts and a legend. Each feed refreshes on its own
+  interval and keeps its last good calls if it fails. The layer is
+  local-only: it is not saved in share links.
+- Radio streams are now requested with CORS so the browser can analyse the
+  audio for a visualizer (`getRadioAnalyser()`, `audioReadable` in the Radio
+  UI state). Stations that refuse CORS replay directly without it and stay
+  audible but are not analysed. Audio is still never proxied.
+- The HUD shows an audio spectrum visualizer below REC in the upper-right
+  corner while a radio station plays: segmented log-frequency bars with peak
+  holds, a waveform trace, a sweep, frequency ticks and an RMS level in a compact panel, in the
+  HUD and secondary accent colors. Stations that block CORS show
+  "SPECTRUM UNAVAILABLE". The visualizer is source-agnostic, so other audio
+  sources can use it.
 - Clicking an aircraft (Live Flights or Military) now types out a Wikidata
   dossier for its type beside it, edged in the target label's color with the
   label's white title and gray detail text. It shows the
@@ -35,6 +57,18 @@
   - When Wikidata has the named mission, a Mission section follows the Rocket
     section. A mission is matched only when its name and launch year agree,
     so generic names such as "Starlink Group 10-12" are not misattributed.
+
+- Radio stations get the same Wikidata dossier. When the presented station
+  rests for a moment (a click or the end of a tuning sweep), the dossier types
+  out at the station in its category color. It shows the station's type,
+  format, genre, call sign, frequency, power, licence city, base, country,
+  owner, parent, operator, language, launch and closure dates, slogan, website
+  and logo, where Wikidata has them. US and Canadian stations are matched by
+  call sign first. Other stations are matched by name within the station's
+  country, retrying shorter names ("SomaFM Groove Salad" → "SomaFM"). A match
+  must be within 1,500 km of the marker, and a former name alone (Absolute
+  Radio was once "Virgin Radio") never claims a station. Streams with no
+  Wikidata item show "No match".
 
 - Wikidata metro stations are now part of **Transit** instead of a separate
   Metro toggle: turning Transit on shows both live vehicles and metro stations,

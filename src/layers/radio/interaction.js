@@ -108,6 +108,7 @@ export function createInteraction({
       if (layerState._selectedEntity && layerState._viewer)
         layerState._viewer.entities.remove(layerState._selectedEntity);
       layerState._selectedEntity = null;
+      parts.rendering.announceSelectedStation?.(null);
     }
   }
 

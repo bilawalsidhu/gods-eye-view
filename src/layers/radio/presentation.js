@@ -35,6 +35,9 @@ export function createPresentation({
       audioState: layerState._audioState,
       audioError: layerState._audioError,
       playingStationId: layerState._audioStationId,
+      audioReadable: Boolean(
+        layerState._audioCors && layerState._audioStationId,
+      ),
       volume: layerState._userVolume,
       effectiveVolume:
         layerState._audio?.volume ??

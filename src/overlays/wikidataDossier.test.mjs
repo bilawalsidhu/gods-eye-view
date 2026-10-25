@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   LAUNCH_MISSION_EVENT,
+  RADIO_STATION_EVENT,
   WIKIDATA_DOSSIER_ROOT_ID,
   dossierContent,
   installWikidataDossier,
@@ -209,10 +210,27 @@ function setup(options = {}) {
       });
     },
   };
+  const radioLookups = [];
+  const radioSource = {
+    lookupStation: (station, { signal }) => {
+      radioLookups.push({ station, signal });
+      return Promise.resolve({
+        id: 'Q761627',
+        title: 'KEXP',
+        image: {
+          file: 'KEXP logo.svg',
+          url: 'https://commons.wikimedia.org/wiki/Special:FilePath/KEXP%20logo.svg?width=320',
+          logo: true,
+        },
+        lines: [{ label: 'Frequency', value: '90.3 MHz' }],
+      });
+    },
+  };
   const uninstall = installWikidataDossier(viewer, {
     cesium,
     aircraftSource: source,
     spaceSource,
+    radioSource,
     getContext: () => record,
     doc: host.doc,
     win: host.win,
@@ -233,6 +251,7 @@ function setup(options = {}) {
     root,
     lookups,
     spaceLookups,
+    radioLookups,
     select,
     uninstall,
     setRecord: (next) => (record = next),
@@ -456,6 +475,51 @@ test('unsafe label colors are ignored', async () => {
     accent: 'red; background: url(x)',
   });
   await flush();
+  assert.equal(t.root.style['--dossier-color'], undefined);
+  t.uninstall();
+});
+
+test('a settled radio station shows its dossier at the station', async () => {
+  const t = setup();
+  let projected = null;
+  t.viewer.scene.cartesianToCanvasCoordinates = (position) => {
+    projected = position;
+    return { x: 300, y: 200 };
+  };
+  const station = (id, name) => ({
+    id,
+    name,
+    countryCode: 'US',
+    lat: 47.62,
+    lon: -122.35,
+    accent: '#ff7ab6',
+  });
+  t.win.dispatch(RADIO_STATION_EVENT, station('s-1', 'KUOW'));
+  t.win.dispatch(RADIO_STATION_EVENT, station('s-2', 'KEXP 90.3 FM'));
+  t.viewer.render();
+  assert.ok(!t.root.classList.contains('is-active'));
+  assert.equal(t.radioLookups.length, 0);
+  t.win.runTimeouts();
+  await flush();
+  assert.deepEqual(
+    t.radioLookups.map((l) => l.station),
+    [{ name: 'KEXP 90.3 FM', countryCode: 'US', lat: 47.62, lon: -122.35 }],
+  );
+  t.viewer.render();
+  assert.ok(t.root.classList.contains('is-active'));
+  assert.equal(t.root.style['--dossier-color'], '#ff7ab6');
+  assert.deepEqual(
+    { x: projected.x, y: projected.y },
+    { x: -122.35, y: 47.62 },
+  );
+  assert.match(allText(t.root), /KEXP/);
+  assert.match(allText(t.root), /90\.3 MHz/);
+  const figure = t.root.children[0].children.find((c) => c.tag === 'figure');
+  assert.ok(figure.classList.contains('is-logo'));
+  t.win.dispatch(RADIO_STATION_EVENT, station('s-2', 'KEXP 90.3 FM'));
+  assert.equal(t.radioLookups.length, 1);
+  t.win.dispatch(RADIO_STATION_EVENT, { id: null });
+  assert.ok(!t.root.classList.contains('is-active'));
   assert.equal(t.root.style['--dossier-color'], undefined);
   t.uninstall();
 });

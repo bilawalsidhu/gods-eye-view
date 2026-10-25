@@ -282,6 +282,11 @@ export const UNIT = {
   Q11574: { to: 'min', factor: 1 / 60 }, // second
   Q174728: { to: 'm', factor: 0.01 }, // centimetre
   Q174789: { to: 'm', factor: 0.001 }, // millimetre
+  Q732707: { to: 'kHz', factor: 1000 }, // megahertz
+  Q2143992: { to: 'kHz', factor: 1 }, // kilohertz
+  Q39369: { to: 'kHz', factor: 0.001 }, // hertz
+  Q25236: { to: 'kW', factor: 0.001 }, // watt
+  Q6982035: { to: 'kW', factor: 1000 }, // megawatt
 };
 
 const ROLE_QUALIFIERS = ['P3831', 'P1013'];

@@ -105,6 +105,7 @@ export function createRadioLayer({ services, source }) {
       stopRadioPlayback: parts.playback.stopRadioPlayback,
       toggleRadioPlayback: parts.playback.toggleRadioPlayback,
       pauseRadioPlayback: parts.playback.pauseRadioPlayback,
+      getRadioAnalyser: parts.playback.getRadioAnalyser,
       setRadioVolume: parts.volume.setRadioVolume,
       setRadioParams: parts.selection.setRadioParams,
       getRadioParams: parts.selection.getRadioParams,

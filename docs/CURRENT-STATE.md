@@ -58,11 +58,12 @@ the clips in `LOCK_SOUND_FILES` (`public/sounds/hud-lock.wav`, Kenney CC0, and
 event; `none` is silent. The clip is restarted on a quick retarget, any other
 clip is stopped, and autoplay refusals or a missing file are ignored.
 
-## Wikidata dossier (aircraft and Space Missions)
+## Wikidata dossier (aircraft, Space Missions and radio)
 
 `installWikidataDossier` (`src/overlays/wikidataDossier.js`, installed in
 `createApplicationScene`) shows a vertical column of facts about a clicked
-aircraft's type, a tracked satellite, or a selected launch beside it, typed out character by character in
+aircraft's type, a tracked satellite, a selected launch or the presented radio
+station beside it, typed out character by character in
 the subject's label color (instantly under reduced motion). The color is the
 tracked entity's `gevLabelModel.accent` (flights `#39d0ff`, military `#ffd166`,
 satellites `#ffd84d`) or the launch event's `accent` (`LAUNCH_MARKER_ACCENT`,
@@ -187,6 +188,54 @@ the panel sits at the pad. The launch model's `rocket` is LL2's
 Each section starts with a `{section}` line (a full-width heading in the
 panel). The Source line lists every QID used. Results are cached per NORAD id,
 rocket phrase and mission name/year (96 entries each, same TTLs).
+
+### Radio
+
+The radio layer's `announceSelectedStation` (`src/layers/radio/rendering.js`,
+called from `updateSelectionEntity`) dispatches `RADIO_STATION_EVENT`
+(`gev:radio-station-selected`, `src/layers/radio/policy.js`) whenever the
+presented station changes, including tuning previews. The detail is `{id, name,
+country, countryCode, state, lat, lon, accent}`, where `accent` is the
+station's category color, or `{id: null}` when nothing is presented, the layer
+is hidden or it is disabled. Announcements are deduplicated by station id. The
+panel sits at the station marker and waits 700 ms before looking up, so a
+tuning sweep doesn't query every station it passes. Logos (`P154`) are
+preferred over `P18` images and are shown contained on a light plate
+(`.gev-dossier__photo.is-logo`).
+
+`createRadioWikidataSource` (`src/sources/radioWikidata.js`) resolves a Radio
+Browser station (`lookupStation({name, countryCode, lat, lon})`) in this order:
+
+1. US/CA/unknown country only: a call sign in the name (`K`/`W` + 2–3 letters
+   or `CF`/`CH`/`CI`/`CJ`/`CK` + 2, case-sensitive) is searched as
+   `haswbstatement:P2317=<sign>-FM|<sign>|<sign>-AM`.
+2. The name is cleaned of bracketed asides, slogans after `-`/`|`,
+   bitrates, codecs and frequencies (`radioSearchPhrase`). Then the phrase,
+   its first two words and its distinctive first word are searched in turn,
+   restricted to radio station / community radio / internet radio / radio
+   channel (`P31`) and to the station's country (`P17`, the country QID found
+   by `haswbstatement:P297=<ISO>` and cached).
+3. The full phrase is searched without the country filter.
+
+`radioNameScore` scores each candidate. Every distinctive word (not radio, FM,
+AM, the, station, HD, online) of the candidate's English name must appear in
+the phrase. An exact label scores 3. A label covering at least half of the
+phrase's distinctive words, or leading it, scores 2. An alias covering all of
+them scores 1, because aliases are often former names. The best candidate
+wins, ties going to search rank. Items with coordinates (`P625`) must lie
+within 1,500 km of the marker. Phrases with no distinctive word are not looked
+up.
+
+Lines:
+
+- Type, Format (`P415`), Genre, Call sign (`P2317`)
+- Frequency (`P2144`, MHz at or above 30 MHz, else kHz) and Power (`P2109`)
+- Licensed to (`P1408`), Based in (`P159`/`P131`), Country, Owner, Parent
+  (`P749`), Operator, Language (`P407`/`P2936`)
+- On air since (`P571`), Closed (`P576`)
+- Slogan (`P6251`, English first), Website (host only)
+
+Results are cached per cleaned phrase, call sign and country (96 entries, same TTLs).
 
 ## Metro stations from Wikidata
 
@@ -3706,6 +3755,71 @@ Each explicit Radio play attempt owns one active audio element; replacement
 retires the prior element, making its queued callbacks inert. Pause retires the
 current stream and fallback attempt, so delayed callbacks from a replaced or
 paused stream cannot change current state or start another station.
+Streams are first requested with `crossOrigin = 'anonymous'` so Web Audio can
+read them for a visualizer. If that attempt fails for any reason other than
+blocked autoplay (`NotAllowedError`), the same station is replayed once on a
+fresh element without CORS: it stays audible but cannot be analysed. A station
+is remembered in `_streamsWithoutCors` only after the plain replay plays, so an
+offline stream still falls through to the normal fallback station. Audio is
+never proxied. `getRadioAnalyser()` (`src/data/radio.js`, layer
+`getAnalyser`) lazily creates one `AudioContext` and `AnalyserNode`
+(fftSize 2048), routes the current CORS element through it and returns the
+node, or `null` when the stream is not CORS-readable or Web Audio is
+unavailable. `getUIState().audioReadable` reports the same readiness.
+
+The HUD audio visualizer (`createAudioVisualizer`, `src/ui/audioVisualizer.js`)
+mounts in `#hud-audio-viz-slot` below REC in the HUD's upper-right corner and is
+created by the application shell with the Radio panel. It is source-agnostic:
+a source provides `subscribe(listener) -> unsubscribe`, delivering `{mode,
+label, notice}` with mode `hidden`, `acquiring`, `live` or `opaque`, and
+`getAnalyser()`. `createRadioAudioSource` (`src/ui/radioAudioSource.js`) maps
+Radio UI state: loading is `acquiring`, a CORS-readable playing stream is
+`live`, and a playing stream without CORS is `opaque` (a flat line and
+"SPECTRUM UNAVAILABLE · STREAM BLOCKS CORS"). The canvas draws 48 log-spaced
+bands (40 Hz–16 kHz) as segmented bars with decaying peak caps, a waveform,
+in-canvas frequency ticks and a sweep, with the label, status and RMS dBFS in
+its header. The panel matches the 330 px Context panel width and is about
+92 px tall. It stays above the viewport midpoint, so the right rail treats
+`.hud-top-right` as an obstacle and moves below it; it is hidden below 560 px
+viewport height, using `--hud-color` and `--secondary-accent`.
+Its animation frame loop runs only while the source is shown, and drawing is
+skipped while the HUD is hidden, so the analyser is never requested then. The
+panel follows HUD visibility and layouts (hidden in Minimal).
+
+The **Emergency Services** layer (`dispatch`) sits in the Events group below
+Fire Perimeters. It is registered local-only (`LOCAL_ONLY_LAYER_METADATA`),
+so it has no share-link token and is not restored from links. Its source
+(`createEmergencyServicesSource`, `src/layers/dispatch/source.js`) combines
+three Socrata feeds fetched browser-direct (CORS `*`, no key; at most 2 MiB
+and a 15 s timeout per request), each with its own look-back window and
+refresh interval:
+
+- Seattle Fire 911 dispatches (`data.seattle.gov` `kzjm-xkqj`, public
+  domain): last 6 hours, refetched every 2 minutes.
+- Everett Police calls for service (`data.everettwa.gov` `f6vp-3svh`, public
+  domain, addresses generalized to the 100 block by the city): last 48 hours,
+  refetched every 15 minutes. The city posts calls daily, so the newest is
+  usually several hours old; rows stamped in the future are dropped.
+- King County Sheriff offense reports (`data.kingcounty.gov` `4kmt-kfqf`,
+  King County open-data terms): last 72 hours, refetched every 30 minutes.
+  Only supervisor-approved reports are published, about a day late. Reports
+  have no coordinates, so each case is placed at its reporting area's label
+  point (`wab8-9yes`, fetched once) and spread on a small spiral when cases
+  share an area; the row marks them approximate. Offense rows of one case
+  merge into one entry.
+
+The layer polls the source every 2 minutes from enable; a feed is refetched
+only when its interval has passed, and a failed feed keeps its last good calls
+while the row error names it ("Everett Police unavailable"). The snapshot
+rejects only when no feed has ever loaded. Rows are validated (id, type,
+Pacific-local timestamp converted to UTC, finite coordinates; test calls and
+duplicates dropped) and drawn as points coloured by category (fire, medical,
+alarm, vehicle, rescue, hazard, police, sheriff report, other). Calls fade
+across their feed's window, calls under 30 minutes old glow, and labels show
+call types within 9 km of the camera. Clicking a call selects it; the row
+then shows agency, type, address, age and incident/event/case number, and
+otherwise per-agency counts with their windows plus a category legend. The
+feeds are text-only; there is no dispatch audio.
 Pause and Stop settle attempt ownership and authoritative audio state before
 synchronous playback-control observers run, so reentrant voice cleanup cannot
 overwrite a released stream with a stale paused state. Layer

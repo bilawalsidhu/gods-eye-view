@@ -110,6 +110,8 @@ export function createControls({ state: layerState, services, parts, source }) {
 
     stopPlayback: parts.playback.stopRadioPlayback,
 
+    getAnalyser: parts.playback.getRadioAnalyser,
+
     setVolume: parts.volume.setRadioVolume,
 
     setVoiceDucked: parts.volume.setRadioVoiceDucking,

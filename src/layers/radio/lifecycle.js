@@ -59,6 +59,7 @@ export function createLifecycle({
       if (layerState._selectedEntity && layerState._viewer)
         layerState._viewer.entities.remove(layerState._selectedEntity);
       layerState._selectedEntity = null;
+      parts.rendering.announceSelectedStation?.(null);
       if (layerState._overlayPublishTimer)
         clearTimeout(layerState._overlayPublishTimer);
       layerState._overlayPublishTimer = null;

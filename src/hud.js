@@ -211,6 +211,7 @@ export class IntelHUD {
         <div class="hud-content" style="text-align:right">
           <div class="hud-rec"><span id="hud-rec-dot">●</span> REC  <span id="hud-timestamp">2026-01-01 00:00:00Z</span></div>
           <div class="hud-orbital">ORB: ${this._orbitNum}  PASS: DESC-${this._passNum}</div>
+          <div id="hud-audio-viz-slot"></div>
         </div>
         <div class="hud-bracket">┐</div>
       </div>

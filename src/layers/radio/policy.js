@@ -29,6 +29,9 @@ export const RADIO_UUID_RE =
 
 export const RADIO_OVERLAY_SOURCE_ID = 'radio';
 
+/** Window event announcing the presented station to the Wikidata dossier. */
+export const RADIO_STATION_EVENT = 'gev:radio-station-selected';
+
 export const RADIO_OVERLAY_COHORT_LIMIT = 64;
 
 export const RADIO_SINGLETON_GLOBAL_LIMIT = 16;

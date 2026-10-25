@@ -10,6 +10,7 @@ import { createApplicationMilitary } from './layers/militaryFlights.js';
 import { createApplicationVessels } from './layers/aisLiveVessels.js';
 import { createApplicationCctv } from './layers/cctv.js';
 import { createApplicationRadio } from './layers/radio.js';
+import { createApplicationDispatch } from './layers/dispatch.js';
 import { createApplicationTraffic } from './layers/traffic.js';
 import { createApplicationBikeshare } from './layers/bikeshare.js';
 import { createApplicationDirections } from './layers/directions.js';
@@ -48,6 +49,7 @@ const SOURCE_METHODS = Object.freeze({
   ],
   bikeshare: ['getStations'],
   metro: ['getCitiesInView', 'fetchStations', 'peekStations'],
+  dispatch: ['getSnapshot'],
   installations: ['getMappedSites', 'searchNearby'],
   satellites: ['readGroup'],
   launches: ['getLaunches', 'getActiveTle'],
@@ -71,6 +73,7 @@ const SOURCE_METHODS = Object.freeze({
 export const LOCAL_ONLY_LAYER_METADATA = Object.freeze([
   Object.freeze({ id: 'local-adsb', disposition: 'local-only' }),
   Object.freeze({ id: 'wsdot-cameras', disposition: 'local-only' }),
+  Object.freeze({ id: 'dispatch', disposition: 'local-only' }),
 ]);
 
 /** Serialization metadata for every layer the application catalog constructs. */
@@ -155,6 +158,7 @@ export function createApplicationCatalog({
         createApplicationFirePerimeters({
           source: sources['fire-perimeters'],
         }),
+        createApplicationDispatch({ source: sources.dispatch }),
         createApplicationAlpr({ surface, source: sources.alpr }),
         createApplicationWsdotCameras({ source: sources.wsdotCameras }),
         satellites,

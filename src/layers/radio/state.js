@@ -46,6 +46,9 @@ export function createState({ services }) {
 
   layerState._selectedEntity = null;
 
+  /** Station id last announced to the Wikidata dossier. */
+  layerState._announcedStationId = null;
+
   layerState._selectionGeneration = 0;
 
   layerState._selectionTimer = null;
@@ -63,6 +66,19 @@ export function createState({ services }) {
   layerState._audioState = 'stopped';
 
   layerState._audioError = null;
+
+  layerState._audioCors = false;
+
+  /** Stations that only played once requested without CORS. */
+  layerState._streamsWithoutCors = new Set();
+
+  layerState._analyserContext = null;
+
+  layerState._analyser = null;
+
+  layerState._analyserSource = null;
+
+  layerState._analyserElement = null;
 
   layerState._userVolume = DEFAULT_RADIO_VOLUME;
 
