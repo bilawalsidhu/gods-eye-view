@@ -224,6 +224,13 @@ export class IntelHUD {
     // session, so this flips once — and both altitude readouts have to move
     // together when it does (see the repaint in _updateCameraData).
     this._geoidCorrectionApplied = false;
+    // A summary built for one view must not land on the next: a reply in
+    // flight when the camera starts moving is dropped (the revision moves).
+    // Requests during motion still go out on the normal cadence, so a
+    // follow camera or a continuous orbit keeps naming where it is.
+    this._onCameraMoveStart = () => {
+      this._summaryRevision++;
+    };
     this._onCameraMoveEnd = () => {
       this._markSummaryDirty();
       // The 250 ms telemetry timer and 15 s semantic-summary timer must not
@@ -249,6 +256,7 @@ export class IntelHUD {
     this._passNum = 100 + Math.floor(Math.random() * 200);
 
     this._buildDOM();
+    this.viewer.camera.moveStart.addEventListener(this._onCameraMoveStart);
     this.viewer.camera.moveEnd.addEventListener(this._onCameraMoveEnd);
     this._startTimers();
   }
@@ -1044,6 +1052,7 @@ export class IntelHUD {
     clearInterval(this._timestampInterval);
     clearInterval(this._summaryInterval);
     clearInterval(this._summaryTypingInterval);
+    this.viewer.camera.moveStart.removeEventListener(this._onCameraMoveStart);
     this.viewer.camera.moveEnd.removeEventListener(this._onCameraMoveEnd);
     this._dataManagerUnsubscribe?.();
     this._summaryRequest?.abort();

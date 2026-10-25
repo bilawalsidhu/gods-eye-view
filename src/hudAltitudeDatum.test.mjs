@@ -16,6 +16,9 @@
 // globals exist: Cesium's widget bundle probes for a real `document` at module
 // scope and a partial stub sends it down the browser path. Hence hook →
 // import → install DOM, in that order.
+//
+// The same hook is why the live AI-summary test lives here too: this is the
+// one file that can construct a real IntelHUD.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -63,6 +66,7 @@ function installHudEnvironment() {
       .map((id) => [id, { textContent: '' }]),
   );
   const previousDocument = globalThis.document;
+  const cameraListeners = {};
   globalThis.document = {
     getElementById: (id) => elements.get(id) ?? null,
     querySelectorAll: () => [],
@@ -78,12 +82,24 @@ function installHudEnvironment() {
         height: SFO_ELLIPSOIDAL_M,
       },
       computeViewRectangle: () => undefined,
-      moveEnd: { addEventListener() {}, removeEventListener() {} },
+      moveStart: {
+        addEventListener(listener) {
+          cameraListeners.moveStart = listener;
+        },
+        removeEventListener() {},
+      },
+      moveEnd: {
+        addEventListener(listener) {
+          cameraListeners.moveEnd = listener;
+        },
+        removeEventListener() {},
+      },
     },
   };
   return {
     elements,
     viewer,
+    cameraListeners,
     restore() {
       if (previousDocument === undefined) delete globalThis.document;
       else globalThis.document = previousDocument;
@@ -245,6 +261,62 @@ test('the corrected readouts are the MSL datum, not a coincidence of the SFO sig
     assert.match(env.elements.get('hud-summary').textContent, /\| ALT 54M \|/);
   } finally {
     hud?.destroy();
+    env.restore();
+  }
+});
+
+test('a summary asked for one view is dropped once the camera moves', async () => {
+  const env = installHudEnvironment();
+  const previousWindow = globalThis.window;
+  globalThis.window = globalThis;
+  const pending = [];
+  const summaryService = {
+    summarize: (context) =>
+      new Promise((resolve) => {
+        pending.push({
+          context,
+          reply: (summary) =>
+            resolve({ ok: true, status: 200, data: { summary, error: null } }),
+        });
+      }),
+  };
+  let hud;
+  try {
+    hud = new IntelHUD(env.viewer, { summaryService });
+    let place = 'Yellowstone';
+    hud._summaryContext = async () => ({ place });
+    const summary = () => env.elements.get('hud-summary').textContent;
+    const settle = () => new Promise((resolve) => setImmediate(resolve));
+    hud._updateCameraData();
+
+    // Asked over Yellowstone; the camera leaves before the reply lands.
+    const first = hud._updateSummary(false, true);
+    await settle();
+    assert.equal(pending.length, 1);
+    env.cameraListeners.moveStart();
+    pending[0].reply('Canyon Junction Wyoming');
+    await first;
+    assert.doesNotMatch(
+      summary(),
+      /Canyon Junction/,
+      'a reply for the old view is dropped',
+    );
+
+    // A camera that keeps moving (a follow camera, an orbit) still asks on
+    // the normal cadence, and a reply that lands while it moves is painted.
+    place = 'Atlantic';
+    const moving = hud._updateSummary(false, true);
+    await settle();
+    assert.equal(pending.length, 2, 'requests continue while moving');
+    assert.deepEqual(pending[1].context, { place: 'Atlantic' });
+    pending[1].reply('North Atlantic Ocean');
+    await moving;
+    assert.equal(summary(), 'North Atlantic Ocean');
+  } finally {
+    for (const request of pending) request.reply('');
+    hud?.destroy();
+    if (previousWindow === undefined) delete globalThis.window;
+    else globalThis.window = previousWindow;
     env.restore();
   }
 });

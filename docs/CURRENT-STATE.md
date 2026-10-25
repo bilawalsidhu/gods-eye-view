@@ -5078,6 +5078,7 @@ and unreachable upstream (502/504) separately from road geometry.
 - HUD `SUMMARY` readout requests a five-word intelligence-style summary from `/api/openai/hud-summary` (model `OPENAI_HUD_SUMMARY_MODEL`, default `gpt-5-nano`, minimal reasoning).
 - Input is the live basemap label context (place/street/nearby-place labels + enabled layers) — the model is instructed not to infer from coordinates.
 - Output is sanitized to exactly five words; falls back to the deterministic telemetry summary on error/timeout (5s abort); typewriter animation on update.
+- A reply still in flight when the camera starts moving is dropped (`moveStart` bumps the summary revision, as `moveEnd` does), so a summary asked for before a flight never paints over the next view. Requests during motion continue on the 15 s cadence, so a follow camera or continuous orbit keeps naming where it is.
 
 ### Place-search providers
 
