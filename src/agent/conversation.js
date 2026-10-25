@@ -124,8 +124,14 @@ function boundedResultJson(
     bounded.action === 'analyst_query' && Array.isArray(bounded.items)
       ? bounded.items
       : null;
+  if (analystItems?.length > 5) {
+    bounded.items = analystItems.slice(0, 5);
+    bounded.itemsOmitted = analystItems.length - 5;
+    json = JSON.stringify(bounded);
+    if (json.length <= maxChars) return json;
+  }
   const sheddable = Object.keys(bounded)
-    .filter((key) => !essentialKeys.includes(key) && !(analystItems && key === 'items'))
+    .filter((key) => !essentialKeys.includes(key) && !(analystItems && (key === 'items' || key === 'itemsOmitted')))
     .map((key) => ({ key, size: (JSON.stringify(bounded[key]) ?? '').length }))
     .sort((a, b) => b.size - a.size);
 
