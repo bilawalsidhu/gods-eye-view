@@ -1089,5 +1089,8 @@
   "scripts/qa-status-badges.mjs",
   "src/dockerTrustedPeers.test.mjs",
   "src/cameraGlobeRotation.test.mjs",
-  "src/voice/globeResetConfirmation.test.mjs"
+  "src/voice/globeResetConfirmation.test.mjs",
+  "scripts/build-atc-frequencies.mjs",
+  "src/data/ourAirportsAtc.js",
+  "src/data/ourAirportsAtc.test.mjs"
 ]
