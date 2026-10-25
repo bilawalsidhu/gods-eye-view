@@ -1,5 +1,6 @@
 import * as Cesium from 'cesium';
-import { gibsTileTemplate } from '../../maps/gibs.js';
+import { gibsTileTemplate, gibsTileUrl } from '../../maps/gibs.js';
+import { smoothGibsProvider } from '../../maps/gibsSmoothing.js';
 import {
   CROSSFADE_SHARE,
   GIBS_LAYER,
@@ -7,6 +8,7 @@ import {
   MAX_ALPHA,
   MIN_ALPHA,
   PRELOAD_TIMEOUT_MS,
+  SOURCE_GRID,
 } from './policy.js';
 
 /** @param {number} value Unit interval. @returns {number} Eased value, flat at both ends. */
@@ -154,22 +156,32 @@ export function createFilmstrip({ state: layerState, services }) {
       dates,
       position: 0,
       layers: dates.map((date) => {
-        const imagery = collection.addImageryProvider(
-          new Cesium.UrlTemplateImageryProvider({
-            url: gibsTileTemplate({
-              layer: GIBS_LAYER,
-              date,
-              maxLevel: GIBS_MAX_LEVEL,
-              sharded: true,
-            }),
-            subdomains: ['a', 'b', 'c'],
-            minimumLevel: 0,
-            maximumLevel: GIBS_MAX_LEVEL,
-            tilingScheme: new Cesium.WebMercatorTilingScheme(),
-            credit: 'NASA GIBS',
-            hasAlphaChannel: true,
+        const provider = new Cesium.UrlTemplateImageryProvider({
+          url: gibsTileTemplate({
+            layer: GIBS_LAYER,
+            date,
+            maxLevel: GIBS_MAX_LEVEL,
+            sharded: true,
           }),
-        );
+          subdomains: ['a', 'b', 'c'],
+          minimumLevel: 0,
+          maximumLevel: GIBS_MAX_LEVEL,
+          tilingScheme: new Cesium.WebMercatorTilingScheme(),
+          credit: 'NASA GIBS',
+          hasAlphaChannel: true,
+        });
+        // Smooth the 0.05° cells and the stair-stepped coastline GIBS draws.
+        smoothGibsProvider(provider, {
+          Resource: Cesium.Resource,
+          document: globalThis.document,
+          cellDegrees: SOURCE_GRID.degrees,
+          tileUrl: (z, x, y) =>
+            gibsTileUrl(
+              { layer: GIBS_LAYER, date, maxLevel: GIBS_MAX_LEVEL },
+              { z, x, y },
+            ),
+        });
+        const imagery = collection.addImageryProvider(provider);
         imagery.alpha = 0;
         return imagery;
       }),

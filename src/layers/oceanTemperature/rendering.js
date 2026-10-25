@@ -4,12 +4,18 @@ import { NO_IMAGERY_HOST } from '../weather/imageryHost.js';
 import { buildTileUrl } from './source.js';
 import { gibsTileTemplate } from '../../maps/gibs.js';
 import { msg } from '../../i18n/index.js';
+import { smoothGibsProvider } from '../../maps/gibsSmoothing.js';
 
 const TILE_RETRIES = 2;
 
-export function createOceanProvider(cesium, product, date) {
+export function createOceanProvider(
+  cesium,
+  product,
+  date,
+  document = globalThis.document,
+) {
   const maxLevel = Number(product.matrixSet.match(/Level(\d+)$/)[1]);
-  return new cesium.UrlTemplateImageryProvider({
+  const provider = new cesium.UrlTemplateImageryProvider({
     url: gibsTileTemplate({ layer: product.layer, date, maxLevel }),
     tilingScheme: new cesium.WebMercatorTilingScheme(),
     maximumLevel: maxLevel,
@@ -19,6 +25,13 @@ export function createOceanProvider(cesium, product, date) {
       'JPL MUR MEaSUREs / NASA JPL PO.DAAC · NASA GIBS',
     ),
     enablePickFeatures: false,
+  });
+  // MUR25 is a 0.25° grid that GIBS draws as hard squares.
+  return smoothGibsProvider(provider, {
+    Resource: cesium.Resource,
+    document,
+    cellDegrees: 0.25,
+    tileUrl: (z, x, y) => buildTileUrl({ ...product, date, z, x, y }),
   });
 }
 
@@ -60,7 +73,12 @@ export function createOceanRendering({
     }
     const current = generation;
     try {
-      const provider = createOceanProvider(cesium, field.product, field.date);
+      const provider = createOceanProvider(
+        cesium,
+        field.product,
+        field.date,
+        document,
+      );
       if (host.kind === 'globe') {
         imagery = host.collection.addImageryProvider(provider);
         imagery.alpha = 0.6;
