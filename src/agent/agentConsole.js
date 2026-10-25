@@ -98,7 +98,7 @@ function providerOptionLabel(provider) {
 
 /**
  * Option label for a model: its identity, then the two facts that decide
- * whether it is a good choice here — what it costs and whether it can see.
+ * whether it is a good choice here - what it costs and whether it can see.
  *
  * @param {{label: string, costPerCommandUsd?: number|null, supportsVision?: boolean}} model
  * @returns {string}
@@ -525,7 +525,7 @@ function mountAgentConsole({
   // Escape and Tab come from the shared surface keyboard, the same owner key
   // setup and the first-run launcher use. A non-modal dialog does not dismiss
   // itself, and its own keydown listener would miss Escape whenever focus is
-  // outside it — which is exactly the state a disabled input leaves it in.
+  // outside it - which is exactly the state a disabled input leaves it in.
   // Four exclusive surfaces hide this console with `display: none` while it is
   // still open, and the handler is capture-phase: without the visibility check
   // it would swallow the Escape that stops a recording. Same test key setup

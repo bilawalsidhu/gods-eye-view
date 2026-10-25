@@ -70,7 +70,7 @@ function checker() {
     check(label, condition, detail = '') {
       if (!condition) failures.push(label);
       console.log(
-        `  [${condition ? 'PASS' : 'FAIL'}] ${label}${detail ? ` — ${detail}` : ''}`,
+        `  [${condition ? 'PASS' : 'FAIL'}] ${label}${detail ? ` - ${detail}` : ''}`,
       );
     },
   };

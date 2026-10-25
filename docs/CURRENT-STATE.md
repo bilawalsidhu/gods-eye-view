@@ -92,7 +92,7 @@ The custom switch field is bounded to 256 characters;
 provider registration rejects compositions that cannot fit rather than truncating
 identities. A malformed or duplicate entry invalidates the complete custom-switch
 field. Existing whole-link size limits still apply.
-## ChatGPT plan usage in GEV COMMAND — October 23, 2026
+## ChatGPT plan usage in GEV COMMAND - October 23, 2026
 
 The `chatgpt` provider adds the official Sign in with ChatGPT open-source flow
 inside the existing GEV COMMAND console. It is a follow-on to darrendignam's
@@ -141,7 +141,7 @@ languages and two viewport sizes. A real eligible-account sign-in, refresh,
 revocation and model tool round trip remain required before release; fixtures
 are not evidence of account entitlement or live service availability.
 
-## GEV COMMAND — the typed agent — October 8, 2026
+## GEV COMMAND - the typed agent - October 8, 2026
 
 A second transport for the agent voice already drives. The **GEV COMMAND** chip
 above POWER UP opens a non-modal dialog that takes typed commands and runs the
@@ -209,8 +209,8 @@ header forgets it, detected from `pointerdown` because the drag's
 screen is clamped on open, and a shrinking viewport re-clamps without
 overwriting the saved preference. The default placement clears the left rail
 above and the map attribution below, which is a licence condition rather than a
-layout preference. It is not a rail panel, so `PanelPositionControls` — which
-owns lifting a panel out of a rail and docking it back — does not apply.
+layout preference. It is not a rail panel, so `PanelPositionControls` - which
+owns lifting a panel out of a rail and docking it back - does not apply.
 Gate: `node scripts/qa-agent-console.mjs --url http://localhost:4173`
 (`--offline` checks the chrome and endpoints without a configured provider).
 OpenRouter joins the Provider Settings registry, so its key is pasteable in

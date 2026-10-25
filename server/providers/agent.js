@@ -11,9 +11,9 @@ import {
  * Vite plugin: the typed agent relay.
  *
  * Endpoints:
- *   GET  /api/agent/config  — providers, defaults and prefix size
- *   GET  /api/agent/models  — capability-gated model list for one provider
- *   POST /api/agent/command — one model turn, tool calls validated before return
+ *   GET  /api/agent/config  - providers, defaults and prefix size
+ *   GET  /api/agent/models  - capability-gated model list for one provider
+ *   POST /api/agent/command - one model turn, tool calls validated before return
  *
  * All three refuse cross-site browser requests, like the other cost-bearing
  * endpoints (see server/providers/common/same-site.js and SECURITY.md), and

@@ -129,7 +129,7 @@ export function hardenCredentialFile(
       if (platform === 'darwin') {
         // `-N` (strip the ACL) is Apple-only. Spawn /bin/chmod by absolute
         // path, never by name: a Nix/Homebrew coreutils profile puts GNU chmod
-        // first on PATH, and GNU chmod rejects `-N` — which was treated as a
+        // first on PATH, and GNU chmod rejects `-N` - which was treated as a
         // hardening failure and refused every save on such machines.
         const aclRemoval = spawn('/bin/chmod', ['-N', filepath], {
           stdio: 'ignore',

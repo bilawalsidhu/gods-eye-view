@@ -24,7 +24,7 @@ const DEFAULT_CACHE_DISCOUNT = 0.1;
  * Estimate what one typed command costs, in USD.
  *
  * Models the loop this app actually runs: a fixed prefix resent on every round
- * trip, billed at the cached rate once warm. Approximate by construction — the
+ * trip, billed at the cached rate once warm. Approximate by construction - the
  * prefix size is a character heuristic and cache behaviour varies by provider.
  *
  * @param {{pricing: {promptPerMTok: number, completionPerMTok: number}|null}} model

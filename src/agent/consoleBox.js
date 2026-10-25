@@ -5,7 +5,7 @@ import { RESIZE_DIRECTIONS, resizeBox } from './boxResize.js';
  * Position and size for the typed console's window.
  *
  * The console is a dialog rather than a rail panel, so it cannot use
- * `PanelPositionControls` — that owns lifting a panel OUT of a rail and
+ * `PanelPositionControls` - that owns lifting a panel OUT of a rail and
  * docking it back, which this has no rail to return to. The geometry lives in
  * `./boxResize.js` and the `.agent-resize-edge` / `.agent-resize-grip`
  * handles are styled by `agent-console.css`, because the app's own floating
@@ -42,7 +42,7 @@ const DEFAULT_LEFT_PX = 14;
  * Space left below the window on first open.
  *
  * The bottom-left corner carries the map attribution, which is a licence
- * condition rather than decoration — covering it is not a layout choice we get
+ * condition rather than decoration - covering it is not a layout choice we get
  * to make. This clears the credit line and the console's own chip beneath it.
  * It is only the first impression: the window is draggable, and wherever the
  * operator puts it is remembered instead.

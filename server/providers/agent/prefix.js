@@ -10,7 +10,7 @@ import { toChatCompletionTools } from './toolSchema.js';
  * size decides which models can hold the request at all and dominates the
  * per-command cost. It is DERIVED from the actual instruction string and the
  * actual schemas rather than written down, because a hard-coded figure stops
- * being true the first time somebody edits a directive or adds a tool — and
+ * being true the first time somebody edits a directive or adds a tool - and
  * it stops being true silently, which is the whole failure mode the truncation
  * warning exists to catch.
  *

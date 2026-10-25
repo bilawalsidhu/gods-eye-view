@@ -6,7 +6,7 @@ import { normalizeResponseReasoning } from './responseReasoning.js';
  * The browser owns the transcript and resends it, which keeps the server
  * stateless like every other proxy in this project. That makes this module the
  * one both sides need: the browser trims history to fit the request body, and
- * the server treats whatever arrives as untrusted — an over-long transcript is
+ * the server treats whatever arrives as untrusted - an over-long transcript is
  * a cost problem, an unknown role is an upstream 400, and a `tool` message
  * whose originating `assistant` call was trimmed away is a hard API error
  * rather than a degraded answer.

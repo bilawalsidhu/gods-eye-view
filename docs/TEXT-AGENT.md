@@ -1,8 +1,8 @@
-# GEV COMMAND — the typed agent
+# GEV COMMAND - the typed agent
 
 GEV COMMAND is a second transport for the agent voice already drives. It takes
 typed commands, runs the same 30 app actions through the same action runner,
-and reaches any OpenAI-compatible `/v1/chat/completions` endpoint — OpenAI,
+and reaches any OpenAI-compatible `/v1/chat/completions` endpoint - OpenAI,
 OpenRouter, or a local Ollama. The optional [ChatGPT plan provider](CHATGPT-COMMAND.md)
 uses its own OAuth authorization and the public Responses API.
 
@@ -17,7 +17,7 @@ its WebRTC protocol with native speech-to-speech plus tool calling.
 
 Typing removes all three at once: the same agent, the same tools, roughly two
 orders of magnitude cheaper, and reachable by back ends that will never
-implement Realtime — including a model on the operator's own GPU.
+implement Realtime - including a model on the operator's own GPU.
 
 | | Per typed command |
 |---|---|
@@ -33,14 +33,14 @@ prefix (see [Cost](#cost)).
 
 The **GEV COMMAND** chip sits in the bottom-left corner, below the map
 attribution. It opens a non-modal dialog, so the globe stays interactive while
-a command runs — the point of typing one is watching it happen. Escape or the ×
+a command runs - the point of typing one is watching it happen. Escape or the ×
 closes it.
 
 The window is **draggable by its header and resizable from every edge**, and
 remembers where it was left. Double-press the header to forget that and return
 it to its default placement, the same gesture the app's other floating panels
 use to snap back. On first open it sits on the left, clear of the rail above it
-and the map attribution below it — the credit line is a licence condition, not
+and the map attribution below it - the credit line is a licence condition, not
 decoration, so the default placement never covers it.
 
 Pick a provider and a model, type a command, press SEND:
@@ -90,7 +90,7 @@ docker exec gev-ollama ollama pull qwen3:4b
 
 `OLLAMA_CONTEXT_LENGTH` is not optional. The stock runtime window is 4096
 tokens, and this app's prompt prefix is around 12,000, resent on every round
-trip — see [Two silent failures](#two-silent-failures).
+trip - see [Two silent failures](#two-silent-failures).
 
 The model picker lists only models that can actually do the job: Ollama reports
 tool support and context length through its native `/api/show`, so a model
@@ -125,15 +125,15 @@ server/providers/agent/
 Credentials stay server-side; the browser executes the tools because they drive
 its own viewer. That splits one logical turn into a loop: the console asks the
 server, runs whatever tool calls come back through
-`voiceCommands.runner` — the same runner voice and the view installer use — and
+`voiceCommands.runner` - the same runner voice and the view installer use - and
 asks again, until the model answers with prose.
 
 Endpoints, all gated against cross-site browser requests and sharing one
 per-IP throttle:
 
-- `GET /api/agent/config` — providers, defaults, tool count, prefix size
-- `GET /api/agent/models` — the capability-gated listing for one provider
-- `POST /api/agent/command` — one model turn, tool calls validated before return
+- `GET /api/agent/config` - providers, defaults, tool count, prefix size
+- `GET /api/agent/models` - the capability-gated listing for one provider
+- `POST /api/agent/command` - one model turn, tool calls validated before return
 
 ### The server decides what runs
 
@@ -150,7 +150,7 @@ message arriving from the client is discarded.
 ### Malformed tool calls are corrected server-side
 
 Ollama's compatible endpoint does not accept `tool_choice`, so a bad tool call
-cannot be prevented — only caught and handed back. A rejected call is answered
+cannot be prevented - only caught and handed back. A rejected call is answered
 with its own validation error so the model can restate it, twice, before the
 turn gives up and says so. None of that reaches the browser.
 
@@ -207,7 +207,7 @@ implying a command is free. Ollama is free.
 | Request body | 512 KB | The console trims its own history well inside this, so reaching it means one exchange is enormous. |
 | Client history budget | 448 KB | Below the server cap, so a long session trims itself instead of failing every command at once. |
 | History messages | 40 | A trim never splits an assistant tool call from its results. |
-| Tool result | 6,000 chars | Bounded by shedding the largest non-essential fields, so the result is always valid JSON — never a prefix cut mid-object. |
+| Tool result | 6,000 chars | Bounded by shedding the largest non-essential fields, so the result is always valid JSON - never a prefix cut mid-object. |
 | Tool rounds | 8 | A runaway guard, not a limit on multi-tool turns. |
 | Completion wait | 120 s hosted, 300 s local | A local daemon pays for a cold model load before its first token. |
 

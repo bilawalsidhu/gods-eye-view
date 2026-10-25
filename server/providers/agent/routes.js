@@ -139,7 +139,7 @@ function resolveRequestProvider(requestedId, res, env, req, chatgpt) {
 }
 
 /**
- * GET /api/agent/config — providers, defaults and prefix size for the console.
+ * GET /api/agent/config - providers, defaults and prefix size for the console.
  *
  * @param {{env?: Record<string,string|undefined>,
  *   limiter?: () => ((key: string) => boolean)|null}} [options]
@@ -180,7 +180,7 @@ function createAgentConfigHandler({
 }
 
 /**
- * GET /api/agent/models — the capability-gated listing for one provider.
+ * GET /api/agent/models - the capability-gated listing for one provider.
  *
  * @param {{env?: Record<string,string|undefined>, fetchImpl?: Function,
  *   limiter?: () => ((key: string) => boolean)|null}} [options]
@@ -314,7 +314,7 @@ function messageWithPairingIds(message, prepared) {
 }
 
 /**
- * POST /api/agent/command — one model turn, tool calls validated before return.
+ * POST /api/agent/command - one model turn, tool calls validated before return.
  *
  * @param {{env?: Record<string,string|undefined>, fetchImpl?: Function,
  *   limiter?: () => ((key: string) => boolean)|null,

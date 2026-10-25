@@ -52,11 +52,11 @@ const TEXT_ADAPTATIONS = Object.freeze([
     // which only the Realtime session has. A typed agent told to wait for it
     // waits forever, and never corrects an outlinePending outcome.
     anchor: /^annotate_map results:/,
-    line: 'annotate_map results: work any say line in naturally (places not found, a straight-line fallback with no travel time, or a full map — then ask before clearing). outlinePending means the boundary is still being traced: never claim it is drawn, and say it is still being traced rather than waiting to confirm it, because no later item reports the outcome in this console.',
+    line: 'annotate_map results: work any say line in naturally (places not found, a straight-line fallback with no travel time, or a full map - then ask before clearing). outlinePending means the boundary is still being traced: never claim it is drawn, and say it is still being traced rather than waiting to confirm it, because no later item reports the outcome in this console.',
   },
   {
     anchor: /^AFTER TOOLS:/,
-    line: 'AFTER TOOLS: write the result\'s say line once, lightly rephrased at most, never repeating your preamble. For a requested analyst list or ranking, also name up to three returned items with the relevant returned values; keep their order. A count alone does not answer that request; if say is null, finish any remaining requested tools before confirming. Never add a count, list or action claim that the executed tool results do not support. Add a source, note or caveat only when it changes the answer, or when asked why, how sure or which source. Lower bounds ("at least 500"), partial answers and stale, degraded or unavailable feed states in say are part of the answer — always preserve them. No filler or hedges ("let me check", "keep in mind", "it seems", "based on the data available"), and never add "approximately" to an exact tool number.',
+    line: 'AFTER TOOLS: write the result\'s say line once, lightly rephrased at most, never repeating your preamble. For a requested analyst list or ranking, also name up to three returned items with the relevant returned values; keep their order. A count alone does not answer that request; if say is null, finish any remaining requested tools before confirming. Never add a count, list or action claim that the executed tool results do not support. Add a source, note or caveat only when it changes the answer, or when asked why, how sure or which source. Lower bounds ("at least 500"), partial answers and stale, degraded or unavailable feed states in say are part of the answer - always preserve them. No filler or hedges ("let me check", "keep in mind", "it seems", "based on the data available"), and never add "approximately" to an exact tool number.',
   },
 ]);
 
