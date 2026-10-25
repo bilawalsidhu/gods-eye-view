@@ -1,5 +1,5 @@
 // The DATA LAYERS row shows the English status texts that GNSS, Transit,
-// CelesTrak and AQHI produce in the UI language.
+// CelesTrak, AQHI and NWPS river gauges produce in the UI language.
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { setLocale } from '../i18n/index.js';
@@ -70,6 +70,27 @@ const cases = [
       lastUpdate: now,
     },
     'request timed out',
+  ],
+  [
+    'river-gauges',
+    {
+      count: 0,
+      error: 'NWPS network error',
+      source: 'NOAA NWPS · OBSERVED',
+      lastUpdate: now,
+    },
+    'network error',
+  ],
+  [
+    'river-gauges',
+    {
+      count: 12,
+      stale: true,
+      loadingLabel: 'Some regions not refreshed',
+      source: 'NOAA NWPS · OBSERVED',
+      lastUpdate: now,
+    },
+    'OBSERVED',
   ],
 ];
 

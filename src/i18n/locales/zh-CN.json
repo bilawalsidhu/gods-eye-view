@@ -2814,5 +2814,57 @@
   "Layers": "图层",
   "Search": "搜索",
   "More": "更多",
-  "Panels": "面板"
+  "Panels": "面板",
+  "action {stage}": "警戒 {stage}",
+  "minor {stage}": "轻度 {stage}",
+  "moderate {stage}": "中度 {stage}",
+  "major {stage}": "严重 {stage}",
+  "Stage {value}": "水位 {value}",
+  "Flow {value}": "流量 {value}",
+  "Flood stages ({unit}): {stages}": "洪水水位（{unit}）：{stages}",
+  "RIVER GAUGE · NWS {lid}": "河流水文站 · NWS {lid}",
+  "{reading} · observed {age}": "{reading} · 观测于{age}",
+  "No current reading": "暂无当前读数",
+  "Forecast {reading} · {category} · {when}": "预报 {reading} · {category} · {when}",
+  "Loading flood stages…": "正在加载洪水水位…",
+  "Flood stages unavailable": "洪水水位不可用",
+  "Out of service": "停止服务",
+  "No flood stages defined": "未定义洪水水位",
+  "Recent crest {stage} on {date}": "近期洪峰 {stage}（{date}）",
+  "Highest crest {stage} on {date}": "最高洪峰 {stage}（{date}）",
+  "USGS site {id}": "USGS 站点 {id}",
+  "NWPS gauge page ↗ · click card to open": "NWPS 水文站页面 ↗ · 点击卡片打开",
+  "Open {name} on the NWPS gauge page": "在 NWPS 水文站页面打开 {name}",
+  "NOAA NWPS · OBSERVED": "NOAA NWPS · 观测",
+  "River gauge source unavailable": "河流水文站数据源不可用",
+  "SHOW MOST SEVERE": "显示最严重",
+  "Stop following the current object before navigating to a gauge": "请先停止跟踪当前目标，再前往水文站",
+  "Move to the most severe flooding gauge and show its details": "前往洪水最严重的水文站并显示详情",
+  "Colour shows the NWS flood category of the latest reading. Categories come from NOAA; they are not flood warnings. Click a gauge for its flood stages and crests.": "颜色表示最新读数的 NWS 洪水等级。等级来自 NOAA，并非洪水警报。点击水文站可查看其洪水水位和洪峰。",
+  "{count} major": {
+    "other": "{count} 个严重洪水"
+  },
+  "{count} moderate": {
+    "other": "{count} 个中度洪水"
+  },
+  "{count} minor": {
+    "other": "{count} 个轻度洪水"
+  },
+  "{count} at action": {
+    "other": "{count} 个达到警戒水位"
+  },
+  "{count} gauges": {
+    "other": "{count} 个水文站"
+  },
+  "none in flood": "无洪水",
+  "building the national gauge snapshot": "正在生成全国水文站快照",
+  "Some regions not refreshed": "部分区域未刷新",
+  "Major flooding": "严重洪水",
+  "Moderate flooding": "中度洪水",
+  "Minor flooding": "轻度洪水",
+  "Near flood stage (action)": "接近洪水水位（警戒）",
+  "Below low-water threshold": "低于枯水阈值",
+  "Below flood stage": "低于洪水水位",
+  "Reading not current": "读数非最新",
+  "River Flood Gauges": "河流洪水水文站"
 }

@@ -41,3 +41,9 @@
   2026-09-25. Each record names its XYZ tile and expected traffic eligibility.
   Modified, test-only OpenStreetMap data; same ODbL attribution and database
   share-alike terms as the OpenFreeMap fixtures above.
+- `nwps-gauge-aait2.json` — the NOAA NWPS gauge record for AAIT2 (Williamson
+  Creek at Manchaca Road, Austin, TX) from
+  `https://api.water.noaa.gov/nwps/v1/gauges/AAIT2`, retrieved 2026-10-24,
+  with the `images`, `hydronotes`, `datums`, `inundation` and low-water impact
+  fields removed. Used by the NWPS proxy's detail-trim tests; never loaded at
+  runtime. NWS data, U.S. public domain (https://www.weather.gov/disclaimer).

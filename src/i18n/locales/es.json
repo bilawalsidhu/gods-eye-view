@@ -2948,5 +2948,67 @@
   "Layers": "Capas",
   "Search": "Buscar",
   "More": "Más",
-  "Panels": "Paneles"
+  "Panels": "Paneles",
+  "action {stage}": "acción {stage}",
+  "minor {stage}": "menor {stage}",
+  "moderate {stage}": "moderada {stage}",
+  "major {stage}": "mayor {stage}",
+  "Stage {value}": "Nivel {value}",
+  "Flow {value}": "Caudal {value}",
+  "Flood stages ({unit}): {stages}": "Niveles de inundación ({unit}): {stages}",
+  "RIVER GAUGE · NWS {lid}": "ESTACIÓN FLUVIAL · NWS {lid}",
+  "{reading} · observed {age}": "{reading} · medido {age}",
+  "No current reading": "Sin lectura actual",
+  "Forecast {reading} · {category} · {when}": "Pronóstico {reading} · {category} · {when}",
+  "Loading flood stages…": "Cargando niveles de inundación…",
+  "Flood stages unavailable": "Niveles de inundación no disponibles",
+  "Out of service": "Fuera de servicio",
+  "No flood stages defined": "Sin niveles de inundación definidos",
+  "Recent crest {stage} on {date}": "Cresta reciente de {stage} el {date}",
+  "Highest crest {stage} on {date}": "Cresta máxima de {stage} el {date}",
+  "USGS site {id}": "Estación USGS {id}",
+  "NWPS gauge page ↗ · click card to open": "Página de la estación en NWPS ↗ · haz clic en la tarjeta para abrirla",
+  "Open {name} on the NWPS gauge page": "Abrir {name} en la página de la estación en NWPS",
+  "NOAA NWPS · OBSERVED": "NOAA NWPS · OBSERVADO",
+  "River gauge source unavailable": "Fuente de estaciones fluviales no disponible",
+  "SHOW MOST SEVERE": "MOSTRAR LA MÁS GRAVE",
+  "Stop following the current object before navigating to a gauge": "Deja de seguir el objeto actual antes de ir a una estación",
+  "Move to the most severe flooding gauge and show its details": "Ir a la estación con la inundación más grave y mostrar sus detalles",
+  "Colour shows the NWS flood category of the latest reading. Categories come from NOAA; they are not flood warnings. Click a gauge for its flood stages and crests.": "El color muestra la categoría de inundación del NWS de la última lectura. Las categorías proceden de la NOAA; no son avisos de inundación. Haz clic en una estación para ver sus niveles de inundación y sus crestas.",
+  "{count} major": {
+    "one": "{count} con inundación mayor",
+    "many": "{count} con inundación mayor",
+    "other": "{count} con inundación mayor"
+  },
+  "{count} moderate": {
+    "one": "{count} con inundación moderada",
+    "many": "{count} con inundación moderada",
+    "other": "{count} con inundación moderada"
+  },
+  "{count} minor": {
+    "one": "{count} con inundación menor",
+    "many": "{count} con inundación menor",
+    "other": "{count} con inundación menor"
+  },
+  "{count} at action": {
+    "one": "{count} en nivel de acción",
+    "many": "{count} en nivel de acción",
+    "other": "{count} en nivel de acción"
+  },
+  "{count} gauges": {
+    "one": "{count} estación",
+    "many": "{count} estaciones",
+    "other": "{count} estaciones"
+  },
+  "none in flood": "ninguna en inundación",
+  "building the national gauge snapshot": "generando la instantánea nacional de estaciones",
+  "Some regions not refreshed": "Algunas regiones sin actualizar",
+  "Major flooding": "Inundación mayor",
+  "Moderate flooding": "Inundación moderada",
+  "Minor flooding": "Inundación menor",
+  "Near flood stage (action)": "Cerca del nivel de inundación (acción)",
+  "Below low-water threshold": "Por debajo del umbral de aguas bajas",
+  "Below flood stage": "Por debajo del nivel de inundación",
+  "Reading not current": "Lectura no actual",
+  "River Flood Gauges": "Estaciones de crecidas fluviales"
 }

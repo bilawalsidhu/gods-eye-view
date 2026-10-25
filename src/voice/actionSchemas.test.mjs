@@ -42,7 +42,8 @@ test('the complete Realtime tool payload pins the manifest-generated layer relea
     // Globe rotation adds one motion; visual keyhole fit and explicit
     // reset guidance/defaults update only move_camera and mode descriptions.
     // Restore base descriptions; append only globe-rotation defaults and fit guidance.
-    '967b5a043b812e2f8c1e190fc571cf12b960c9d4486df736902221aab4d99cf6',
+    // River flood gauges (NOAA NWPS) extend the manifest.
+    '78dffdea228025848864bfa450f320f7e8a4deb84577ed26c7815f13bac6122e',
   );
 });
 
