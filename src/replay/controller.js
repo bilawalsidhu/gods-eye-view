@@ -1,4 +1,6 @@
 import * as Cesium from 'cesium';
+import { msg } from '../i18n/index.js';
+import { initImageryBoxTool } from '../ui/imageryBoxTool.js';
 import { buildTicks, groupTracks, replayWindow, tickIndexAt } from './model.js';
 
 const LIVE_LAYERS = ['flights', 'military', 'ais-live-vessels'];
@@ -40,6 +42,12 @@ export function createReplayController({
   let status = null;
   let contacts = 0;
   let events = [];
+  let fences = [];
+  let drawing = false;
+  let hint = '';
+  let boxTool = null;
+  const fenceSource = new Cesium.CustomDataSource('replay-fences');
+  viewer.dataSources.add(fenceSource);
   const layers = new Set(['air', 'mil', 'vessel', 'local']);
 
   const state = () => ({
@@ -53,6 +61,9 @@ export function createReplayController({
     range,
     status,
     events,
+    fences,
+    drawing,
+    hint,
     contacts,
     windowHours,
     windows: WINDOW_HOURS,
@@ -90,13 +101,96 @@ export function createReplayController({
       status = await getJson('/api/history/status');
       rawRange = status;
       events = (await getJson('/api/history/events?limit=5')).events;
+      fences = (await getJson('/api/history/fences')).fences;
+      drawFences();
       range = replayWindow(rawRange, windowHours);
     } catch {
       status = rawRange = range = null;
       events = [];
+      fences = [];
+      drawFences();
     }
     notify();
     return range;
+  }
+
+  /** Show each watched area as an outlined box on the map. */
+  function drawFences() {
+    fenceSource.entities.removeAll();
+    const color = Cesium.Color.fromCssColorString('#8be9ff');
+    for (const f of fences) {
+      const west = f.west;
+      const east = f.west <= f.east ? f.east : f.east + 360;
+      const corners = Cesium.Cartesian3.fromDegreesArray([
+        west,
+        f.south,
+        east,
+        f.south,
+        east,
+        f.north,
+        west,
+        f.north,
+        west,
+        f.south,
+      ]);
+      // A ground-draped rectangle cannot draw an outline, so the edge is its
+      // own dashed polyline, as in the imagery box tool.
+      fenceSource.entities.add({
+        id: `replay-fence:${f.id}`,
+        name: f.name,
+        rectangle: {
+          coordinates: Cesium.Rectangle.fromDegrees(
+            west,
+            f.south,
+            east,
+            f.north,
+          ),
+          material: color.withAlpha(0.18),
+          classificationType: Cesium.ClassificationType.BOTH,
+        },
+      });
+      fenceSource.entities.add({
+        id: `replay-fence-edge:${f.id}`,
+        name: f.name,
+        polyline: {
+          positions: corners,
+          width: 2,
+          clampToGround: true,
+          classificationType: Cesium.ClassificationType.BOTH,
+          material: new Cesium.PolylineDashMaterialProperty({
+            color: color.withAlpha(0.95),
+            dashLength: 12,
+          }),
+        },
+      });
+    }
+    viewer.scene.requestRender?.();
+  }
+
+  async function sendJson(path, init) {
+    const response = await fetchImpl(path, {
+      ...init,
+      headers: { 'Content-Type': 'application/json' },
+    });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    return response.json();
+  }
+
+  async function addFence(box) {
+    try {
+      await sendJson('/api/history/fences', {
+        method: 'POST',
+        body: JSON.stringify({
+          name: `Area ${fences.reduce((m, f) => Math.max(m, f.id), 0) + 1}`,
+          ...box,
+          layers: [],
+        }),
+      });
+      hint = '';
+    } catch {
+      hint = msg('Could not save the area');
+    }
+    await refreshRange();
   }
 
   function buildEntities(points) {
@@ -236,6 +330,11 @@ export function createReplayController({
     notify();
   }
 
+  // Keep alerts and fences fresh while the page is open.
+  const poll = setInterval(() => {
+    if (!destroyed && !loading) refreshRange();
+  }, 15000);
+
   return {
     state,
     subscribe(listener) {
@@ -268,6 +367,33 @@ export function createReplayController({
       if (active) await enter();
       else notify();
     },
+    /** Draw a box on the globe to watch; a second call cancels. */
+    watch() {
+      boxTool ??= initImageryBoxTool({
+        viewer,
+        onBox: (box) => addFence(box),
+        onCancel: (_reason, message) => {
+          hint = message || '';
+          notify();
+        },
+        onActive: (on) => {
+          drawing = on;
+          if (on) hint = '';
+          notify();
+        },
+      });
+      if (!boxTool) return;
+      if (boxTool.isActive()) boxTool.cancel('toggle');
+      else boxTool.start();
+    },
+    async removeFence(id) {
+      try {
+        await sendJson(`/api/history/fences/${id}`, { method: 'DELETE' });
+      } catch {
+        hint = msg('Could not remove the area');
+      }
+      await refreshRange();
+    },
     setSpeed(value) {
       if (!SPEEDS.includes(value)) return;
       speed = value;
@@ -282,6 +408,9 @@ export function createReplayController({
     },
     async destroy() {
       destroyed = true;
+      clearInterval(poll);
+      await boxTool?.destroy();
+      viewer.dataSources.remove(fenceSource, true);
       await exit();
       listeners.clear();
     },

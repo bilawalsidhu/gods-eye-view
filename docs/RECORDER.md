@@ -47,7 +47,7 @@ are the best candidate for long recordings.
 A fence is a named box that logs an event when a recorded contact enters or
 leaves it. Only positions newer than the fence count, so a new fence does not
 report everything already inside. Fences and events live in the same database,
-and the panel lists the newest events. Manage them through the MCP tools
+and the panel lists the newest events. Press WATCH in the panel and drag a box on the globe to add one (Esc cancels); each fence shows as a dashed box on the map and in a list where ✕ removes it. You can also manage them through the MCP tools
 `geofence_add`, `geofence_list`, `geofence_events` and `geofence_remove`, or the
 routes below. Changing fences needs a JSON request from this origin, which stops
 other web pages from editing them.

@@ -1,4 +1,4 @@
-import { msg, t } from '../i18n/index.js';
+import { msg, t, translateKnown } from '../i18n/index.js';
 import { createRailTimeline, utcClock } from './railTimeline.js';
 
 const LAYER_LABELS = [
@@ -45,6 +45,9 @@ export function createReplayPanel({ container, controller } = {}) {
   const fit = makeChip(chips, t('FIT'), t('Fly to the replayed contacts'), () =>
     controller.fit(),
   );
+  const watch = makeChip(chips, t('WATCH'), t('Draw an area to watch'), () =>
+    controller.watch(),
+  );
   const speedChips = controller
     .state()
     .speeds.map((value) => [
@@ -69,11 +72,13 @@ export function createReplayPanel({ container, controller } = {}) {
       controller.toggleLayer(id),
     ),
   ]);
+  const fenceList = document.createElement('div');
+  fenceList.className = 'replay-fences';
   const alerts = document.createElement('div');
   alerts.className = 'replay-alerts';
   const timelineHost = document.createElement('div');
   timelineHost.className = 'weather-timeline-block';
-  root.append(status, chips, layerRow, alerts, timelineHost);
+  root.append(status, chips, layerRow, fenceList, alerts, timelineHost);
   container.appendChild(root);
 
   const timeline = createRailTimeline({
@@ -90,18 +95,15 @@ export function createReplayPanel({ container, controller } = {}) {
 
   const render = (state) => {
     const ready = state.active && state.ticks.length > 1;
-    if (panel)
-      set(
-        panel,
-        'hidden',
-        !state.range && !state.active && !state.events.length,
-      );
+    if (panel) set(panel, 'hidden', !state.status && !state.active);
     if (count)
       set(count, 'textContent', state.active ? t('REPLAY') : t('LIVE'));
     set(
       status,
       'textContent',
       (state.error ? t('Replay failed') : '') ||
+        (state.drawing ? t('Drag a box on the globe') : '') ||
+        (state.hint ? translateKnown(state.hint) : '') ||
         (state.loading
           ? t('Loading')
           : state.active
@@ -139,6 +141,30 @@ export function createReplayPanel({ container, controller } = {}) {
         fence: e.fence || '',
       }),
     );
+    set(
+      watch,
+      'className',
+      `data-toggle-chip${state.drawing ? ' active' : ''}`,
+    );
+    const fenceKey = state.fences.map((f) => `${f.id}:${f.name}`).join('|');
+    if (fenceList.dataset.shown !== fenceKey) {
+      fenceList.dataset.shown = fenceKey;
+      fenceList.replaceChildren(
+        ...state.fences.map((f) => {
+          const row = document.createElement('div');
+          row.className = 'replay-fence';
+          const name = document.createElement('span');
+          name.textContent = f.name;
+          const remove = makeChip(row, '✕', t('Stop watching this area'), () =>
+            controller.removeFence(f.id),
+          );
+          remove.className = 'data-toggle-chip replay-fence-remove';
+          row.prepend(name);
+          return row;
+        }),
+      );
+    }
+    set(fenceList, 'hidden', !state.fences.length);
     const shown = lines.join('\n');
     if (alerts.dataset.shown !== shown) {
       alerts.dataset.shown = shown;

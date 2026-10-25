@@ -2829,5 +2829,11 @@
   "{count} contacts": "{count} 个目标",
   "{count} positions recorded · kept {days} days": "已录制 {count} 个位置 · 保留 {days} 天",
   "{contact} entered {fence}": "{contact} 进入 {fence}",
-  "{contact} left {fence}": "{contact} 离开 {fence}"
+  "{contact} left {fence}": "{contact} 离开 {fence}",
+  "Could not remove the area": "无法移除该区域",
+  "Could not save the area": "无法保存该区域",
+  "Drag a box on the globe": "在地球上拖出一个方框",
+  "Draw an area to watch": "绘制要监视的区域",
+  "Stop watching this area": "停止监视此区域",
+  "WATCH": "监视"
 }

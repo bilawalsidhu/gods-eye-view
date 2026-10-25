@@ -2963,5 +2963,11 @@
   "{count} contacts": "{count} contactos",
   "{count} positions recorded · kept {days} days": "{count} posiciones grabadas · se conservan {days} días",
   "{contact} entered {fence}": "{contact} entró en {fence}",
-  "{contact} left {fence}": "{contact} salió de {fence}"
+  "{contact} left {fence}": "{contact} salió de {fence}",
+  "Could not remove the area": "No se pudo quitar el área",
+  "Could not save the area": "No se pudo guardar el área",
+  "Drag a box on the globe": "Arrastra un recuadro sobre el globo",
+  "Draw an area to watch": "Dibuja un área para vigilar",
+  "Stop watching this area": "Dejar de vigilar esta área",
+  "WATCH": "VIGILAR"
 }

@@ -67,3 +67,24 @@
   flex-wrap: wrap;
   gap: 6px;
 }
+
+.replay-fences {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font: 9px var(--font-mono);
+  letter-spacing: 0.5px;
+  color: var(--text-secondary);
+}
+.replay-fences[hidden] {
+  display: none;
+}
+.replay-fence {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+.replay-fence-remove {
+  padding: 0 6px;
+}

@@ -3030,5 +3030,11 @@
   "{count} contacts": "Объектов: {count}",
   "{count} positions recorded · kept {days} days": "Записано позиций: {count} · хранятся дней: {days}",
   "{contact} entered {fence}": "{contact} вошёл в {fence}",
-  "{contact} left {fence}": "{contact} покинул {fence}"
+  "{contact} left {fence}": "{contact} покинул {fence}",
+  "Could not remove the area": "Не удалось удалить зону",
+  "Could not save the area": "Не удалось сохранить зону",
+  "Drag a box on the globe": "Выделите рамку на глобусе",
+  "Draw an area to watch": "Нарисуйте зону наблюдения",
+  "Stop watching this area": "Прекратить наблюдение за зоной",
+  "WATCH": "СЛЕДИТЬ"
 }
