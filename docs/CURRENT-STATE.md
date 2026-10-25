@@ -4662,7 +4662,7 @@ current route throughout enabling, enabled, disabling, and uncertain lifecycle
 renders. Both routes preserve Radio power, playback, station, filter, and volume
 state.
 
-Bundled datasets live in `src/data/local_data/` with per-folder provenance READMEs; they are lazily loaded via `src/data/localGeojson.js` (Vite `?url` assets) when toggled on.
+Bundled datasets live in `src/data/local_data/` with per-folder provenance READMEs; they are lazily loaded via `src/data/localGeojsonCore.js` (Vite `?url` assets) when toggled on.
 
 A bundled dataset that fails to load is a broken install, not a blip, so it is
 never swallowed: `localGeojson.js` guards `response.ok`, reports `error` +
