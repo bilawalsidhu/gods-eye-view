@@ -25,6 +25,7 @@ import { bindCameraOrientationControls } from './cameraOrientationControls.js';
 import { createMapSourceControls } from './mapSource.js';
 import { STYLES } from './effects.js';
 import { isHudLayout } from '../hudLayouts.js';
+import { ProviderHealthPanel } from './providerHealthPanel.js';
 import {
   getCyberSonarControlState,
   setCyberSonarControls,
@@ -102,6 +103,7 @@ export class StyleManager extends ShellFacade {
       syncShareState: () => this._syncShareState(),
     });
     Object.assign(this, readShellElements());
+    this._providerHealthPanel = new ProviderHealthPanel();
     this._panelChrome = new PanelChrome({
       elements: {
         _contextRadioDetailsBtn: this._contextRadioDetailsBtn,
@@ -717,6 +719,11 @@ export class StyleManager extends ShellFacade {
    */
   _initUI() {
     this._displayBindings._initUI();
+  }
+
+  attachDataManager(dataManager) {
+    this._layerBindings.attachDataManager(dataManager);
+    this._providerHealthPanel.connect(dataManager);
   }
 
   /**
@@ -1790,6 +1797,7 @@ export class StyleManager extends ShellFacade {
     this._cockpitCoordinator.destroy();
     this._contextControls.disconnect();
     this._layerBindings.disconnect();
+    this._providerHealthPanel.destroy();
 
     if (this._windowResizeHandler) {
       window.removeEventListener('resize', this._windowResizeHandler);
