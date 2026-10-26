@@ -224,6 +224,24 @@ test('sharpen uses the existing uniform scale and keeps values while disabled', 
   f.effects.destroy();
 });
 
+test('sharpen at 0 runs no pass, and comes back with the slider', () => {
+  const f = fixture();
+  f.effects.initPostProcess(0.49);
+  f.effects.setSharpenEnabled(true);
+  assert.equal(f.effects.sharpenStage.enabled, true);
+  f.effects.applySharpenIntensity(0);
+  assert.equal(
+    f.effects.sharpenStage.enabled,
+    false,
+    'no residual sharpen at 0',
+  );
+  f.effects.setSharpenEnabled(true);
+  assert.equal(f.effects.sharpenStage.enabled, false, 'on at 0 is still off');
+  f.effects.applySharpenIntensity(0.2);
+  assert.equal(f.effects.sharpenStage.enabled, true);
+  f.effects.destroy();
+});
+
 test('stop revokes pending work immediately but retains stages until final destruction', () => {
   const f = fixture();
   f.effects.initStyles();

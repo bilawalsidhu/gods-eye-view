@@ -206,12 +206,27 @@ export function photonSearchUrl(
   url.searchParams.set('limit', String(limit));
 
   const corners = String(bias ?? '').split('|');
-  if (corners.length === 2) {
-    const [swLat, swLng] = corners[0].split(',').map(Number);
-    const [neLat, neLng] = corners[1].split(',').map(Number);
-    if ([swLat, swLng, neLat, neLng].every(Number.isFinite)) {
+  const tokens = corners.flatMap((corner) => corner.split(','));
+  if (
+    corners.length === 2 &&
+    corners.every((corner) => corner.split(',').length === 2) &&
+    tokens.every((token) => token.trim() !== '')
+  ) {
+    const [swLat, swLng, neLat, neLng] = tokens.map(Number);
+    if (
+      [swLat, swLng, neLat, neLng].every(Number.isFinite) &&
+      Math.abs(swLat) <= 90 &&
+      Math.abs(neLat) <= 90 &&
+      swLat <= neLat &&
+      Math.abs(swLng) <= 180 &&
+      Math.abs(neLng) <= 180
+    ) {
+      const midpoint = (swLng + neLng + (swLng > neLng ? 360 : 0)) / 2;
       url.searchParams.set('lat', String((swLat + neLat) / 2));
-      url.searchParams.set('lon', String((swLng + neLng) / 2));
+      url.searchParams.set(
+        'lon',
+        String(midpoint > 180 ? midpoint - 360 : midpoint),
+      );
     }
   }
   return url.toString();
