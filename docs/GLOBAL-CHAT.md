@@ -39,8 +39,11 @@ certificate when testing locally.
 
 ## Limits and privacy
 
-- A room is limited to 12 participants because every browser forms a direct
-  peer connection to each other participant.
+- The signaling service does not impose a participant-count limit. This does
+  not make the peer mesh practically unlimited: each browser creates a direct
+  connection to every other participant, so CPU, memory and network use grow
+  roughly with the square of the room size. Large rooms may become unusable;
+  use a scalable relay/SFU architecture rather than this mesh for large groups.
 - Nicknames are saved only in the user's browser. There are no accounts,
   reservations or verified identities; another participant can choose the
   same nickname.

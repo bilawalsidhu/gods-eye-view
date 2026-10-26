@@ -3,11 +3,7 @@ import { createServer } from 'node:http';
 import { once } from 'node:events';
 import { test } from 'node:test';
 import WebSocket from 'ws';
-import {
-  CHAT_SIGNAL_PATH,
-  installChatSignaling,
-  MAX_CHAT_PARTICIPANTS,
-} from './signaling.js';
+import { CHAT_SIGNAL_PATH, installChatSignaling } from './signaling.js';
 import { startChatSignalingServer } from './start.js';
 
 const ORIGIN = 'http://localhost:4173';
@@ -126,8 +122,8 @@ test('joined peers see names and WebRTC signaling is forwarded only to its targe
   });
 });
 
-test('signaling rejects invalid names, payloads, and full rooms', async (t) => {
-  const fixture = await createFixture({ maxParticipants: 2 });
+test('signaling rejects invalid names and payloads', async (t) => {
+  const fixture = await createFixture();
   t.after(() => fixture.close());
   const first = fixture.connect();
   await once(first, 'open');
@@ -139,41 +135,44 @@ test('signaling rejects invalid names, payloads, and full rooms', async (t) => {
 
   const host = fixture.connect();
   const hostWelcome = await join(host, 'FirstUser');
-  const second = fixture.connect();
-  await join(second, 'SecondUser');
-  const third = fixture.connect();
-  await once(third, 'open');
-  const thirdClosed = once(third, 'close');
-  third.send(JSON.stringify({ type: 'join', name: 'ThirdUser' }));
-  assert.equal((await nextMessage(third)).code, 'ROOM_FULL');
-  await thirdClosed;
-
-  const secondClosed = once(second, 'close');
-  second.send(
+  assert.equal(hostWelcome.type, 'welcome');
+  const peerJoined = nextMessage(host);
+  const peer = fixture.connect();
+  const peerWelcome = await join(peer, 'SecondUser');
+  assert.deepEqual(await peerJoined, {
+    type: 'peer-joined',
+    peer: { id: peerWelcome.peerId, name: 'SecondUser' },
+  });
+  const hostClosed = once(host, 'close');
+  host.send(
     JSON.stringify({
       type: 'signal',
       signalType: 'offer',
-      to: hostWelcome.peerId,
+      to: peerWelcome.peerId,
       payload: { sdp: 'missing type' },
     }),
   );
-  assert.equal((await nextMessage(second)).code, 'INVALID_SIGNAL');
-  await secondClosed;
+  assert.equal((await nextMessage(host)).code, 'INVALID_SIGNAL');
+  await hostClosed;
 });
 
-test('room capacity is bounded to a small peer mesh', () => {
-  assert.equal(MAX_CHAT_PARTICIPANTS, 12);
+test('room accepts more than twelve participants', async (t) => {
+  const fixture = await createFixture();
+  t.after(() => fixture.close());
+  let welcome;
+  for (let index = 0; index < 13; index += 1) {
+    const socket = fixture.connect();
+    welcome = await join(socket, `Peer${String(index).padStart(2, '0')}`);
+    assert.equal(welcome.type, 'welcome');
+  }
+  assert.equal(welcome.peers.length, 12);
+  assert.equal(fixture.signaling.participantCount, 13);
+});
+
+test('signaling requires a configured origin', () => {
   assert.throws(
     () => installChatSignaling(createServer(), { allowedOrigins: [] }),
     /allowed chat origin/,
-  );
-  assert.throws(
-    () =>
-      installChatSignaling(createServer(), {
-        allowedOrigins: ['https://app.example'],
-        maxParticipants: MAX_CHAT_PARTICIPANTS + 1,
-      }),
-    /capacity/,
   );
 });
 

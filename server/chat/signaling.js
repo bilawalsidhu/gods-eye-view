@@ -2,7 +2,6 @@ import { randomUUID } from 'node:crypto';
 import { WebSocketServer, WebSocket } from 'ws';
 
 export const CHAT_SIGNAL_PATH = '/chat/signal';
-export const MAX_CHAT_PARTICIPANTS = 12;
 export const MAX_CHAT_SIGNAL_BYTES = 16_384;
 export const MAX_CHAT_NAME_LENGTH = 24;
 const JOIN_TIMEOUT_MS = 5_000;
@@ -49,7 +48,8 @@ function responseAndDestroy(socket, status, message) {
 }
 
 /**
- * Attach a bounded WebSocket signaling room to an HTTP(S) server.
+ * Attach a WebSocket signaling room with bounded signaling payloads and
+ * pending handshakes to an HTTP(S) server.
  *
  * Chat text never passes through this server; it only forwards WebRTC
  * descriptions and ICE candidates between peers.
@@ -59,7 +59,6 @@ export function installChatSignaling(
   {
     allowedOrigins = [],
     iceServers = [{ urls: 'stun:stun.l.google.com:19302' }],
-    maxParticipants = MAX_CHAT_PARTICIPANTS,
     now = Date.now,
     randomId = randomUUID,
   } = {},
@@ -74,21 +73,13 @@ export function installChatSignaling(
   if (origins.has(null)) {
     throw new TypeError('Chat origins must be exact HTTP(S) origins');
   }
-  if (
-    !Number.isInteger(maxParticipants) ||
-    maxParticipants < 2 ||
-    maxParticipants > MAX_CHAT_PARTICIPANTS
-  ) {
-    throw new TypeError(
-      `Chat room capacity must be between 2 and ${MAX_CHAT_PARTICIPANTS}`,
-    );
-  }
   const wss = new WebSocketServer({
     noServer: true,
     maxPayload: MAX_CHAT_SIGNAL_BYTES,
     perMessageDeflate: false,
   });
   const peers = new Map();
+  let pendingConnections = 0;
 
   const broadcast = (payload, except) => {
     for (const [socket] of peers) {
@@ -123,11 +114,18 @@ export function installChatSignaling(
   };
 
   wss.on('connection', (socket) => {
-    if (wss.clients.size > maxParticipants + MAX_PENDING_CONNECTIONS) {
+    if (pendingConnections >= MAX_PENDING_CONNECTIONS) {
       socket.close(1013, 'too many pending connections');
       return;
     }
     let joined = false;
+    let pending = true;
+    pendingConnections += 1;
+    const releasePending = () => {
+      if (!pending) return;
+      pending = false;
+      pendingConnections -= 1;
+    };
     let signalWindowStarted = now();
     let signalCount = 0;
     const joinTimer = setTimeout(() => {
@@ -153,10 +151,8 @@ export function installChatSignaling(
         if (message.type !== 'join' || !validName(message.name)) {
           return reject(socket, 'INVALID_NAME', 'Choose a valid nickname');
         }
-        if (peers.size >= maxParticipants) {
-          return reject(socket, 'ROOM_FULL', 'The chat room is full');
-        }
         joined = true;
+        releasePending();
         clearTimeout(joinTimer);
         const peer = { id: randomId(), name: message.name };
         peers.set(socket, peer);
@@ -224,10 +220,12 @@ export function installChatSignaling(
 
     socket.on('close', () => {
       clearTimeout(joinTimer);
+      releasePending();
       removePeer(socket);
     });
     socket.on('error', () => {
       clearTimeout(joinTimer);
+      releasePending();
       removePeer(socket);
     });
   });
