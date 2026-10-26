@@ -207,8 +207,7 @@ jobs:
             --tmpfs /tmp \
             --tmpfs /app/node_modules/.vite:uid=1000,gid=1000 \
             --tmpfs /app/node_modules/.vite-temp:uid=1000,gid=1000 \
-            --tmpfs /app/.gev-logs:uid=1000,gid=1000 \
-            -v gev-ci-cache:/app/.gev-cache \
+            -v gev-ci-data:/data \
             -p 127.0.0.1:4173:4173 "$IMAGE"
           for attempt in $(seq 1 60); do
             health="$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' gev)"
@@ -240,10 +239,28 @@ jobs:
           test "$(docker exec gev id -u)" = 1000
           if docker exec gev touch /app/src/probe 2>/dev/null; then echo 'code is writable'; exit 1; fi
           if docker exec gev touch /probe 2>/dev/null; then echo 'root filesystem is writable'; exit 1; fi
-          docker exec gev touch /app/.gev-cache/probe
+          docker exec gev touch /data/probe
           if docker exec gev sh -c 'command -v git || command -v npm || command -v apt-get'; then echo 'unexpected tooling in the image'; exit 1; fi
           leftovers="$(docker run --rm --entrypoint sh "$IMAGE" -c "find / -xdev \\( -name '.env' -o -name '.env.*' \\) -not -path '*/node_modules/*' -not -name '.env.example'")"
           test -z "$leftovers" || { echo "env files in image: $leftovers"; exit 1; }
+
+      - name: Save a key through Provider Settings and keep it
+        run: |
+          # From inside the container the request comes from 127.0.0.1, which
+          # Provider Settings always admits.
+          docker exec gev node -e "
+            fetch('http://127.0.0.1:4173/api/setup/keys', {
+              method: 'POST',
+              headers: { origin: 'http://127.0.0.1:4173', 'content-type': 'application/json' },
+              body: JSON.stringify({ OPENAI_API_KEY: 'sk-ci-smoke-test-value' }),
+            }).then(async (r) => { console.log(r.status, await r.text()); process.exit(r.status === 200 ? 0 : 1); });
+          "
+          test "$(docker exec gev stat -c %a /data/.env)" = 600
+          docker exec gev grep -q '^OPENAI_API_KEY=' /data/.env
+          if docker exec gev test -e /app/.env; then echo 'key was written beside the code'; exit 1; fi
+          # The key outlives the container: a new one on the same volume sees it.
+          docker rm -f gev
+          docker run --rm -v gev-ci-data:/data --entrypoint grep "$IMAGE" -q '^OPENAI_API_KEY=' /data/.env
 
       - name: Scan for vulnerabilities (informational)
         # Reports only: base-image CVEs are outside a pull request's control,
@@ -286,4 +303,4 @@ jobs:
         if: always()
         run: |
           docker rm -f gev || true
-          docker volume rm gev-ci-cache || true
+          docker volume rm gev-ci-data || true

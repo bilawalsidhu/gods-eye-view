@@ -6296,8 +6296,10 @@ both architectures in `ci.yml` without pushing; the scan never fails the build.
 
 The Dockerfile has two targets. `dev` (what `compose.yaml` builds) keeps git and
 the bind-mounted checkout. `runtime` (the default, and what is published) runs as
-`1000:1000` with root-owned, read-only code, no git, npm or apt, and writable
-paths only at `/app/.gev-cache`, `/app/.gev-logs`, `/app/node_modules/.vite` and
-`/app/node_modules/.vite-temp`. Provider Settings writes `/app/.env` by
-temp-file-and-rename inside `/app`, so it cannot save keys in this image; keys
-come from `--env-file`.
+`1000:1000` with root-owned, read-only code and no git, npm or apt. Setting
+`GEV_DATA_DIR` (the image sets `/data`, a declared volume) moves what the app
+writes: the `.env` that Provider Settings saves (temp file and rename stay in
+that directory, and Vite loads it from there), `.gev-cache` and `.gev-logs`.
+Unset, those stay in the repository root, so native, Pinokio and compose runs
+are unchanged. The Docker launcher checks that directory for writability. Only
+`node_modules/.vite` and `node_modules/.vite-temp` are otherwise writable.

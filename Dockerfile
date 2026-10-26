@@ -57,8 +57,9 @@ CMD ["node", "scripts/docker-start.mjs"]
 # ---------------------------------------------------------------------------
 # Hardened image, published to GHCR. Everything under /app belongs to root and
 # the runtime user (1000) cannot change it; that user owns only the few paths
-# the app writes. Run it with the flags in the README (read-only root, no
-# capabilities, --init); nothing here depends on them, they are defence in depth.
+# the app writes (see /data below). Run it with the flags in the README
+# (read-only root, no capabilities, --init); nothing here depends on them, they
+# are defence in depth.
 
 FROM ${NODE_IMAGE} AS deps
 ENV PUPPETEER_SKIP_DOWNLOAD=1
@@ -78,11 +79,16 @@ COPY --chmod=u=rwX,go=rX . .
 RUN rm -rf /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/corepack \
       /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/corepack \
       /root/.npm /var/lib/apt/lists/* /usr/bin/apt /usr/bin/apt-* \
- # The only writable paths: Vite's dependency cache (and its config temp
- # dir), the disk caches, and the voice debug log. Mount volumes or tmpfs on
- # them when the root filesystem is read-only.
- && mkdir -p node_modules/.vite node_modules/.vite-temp .gev-cache .gev-logs \
- && chown 1000:1000 node_modules/.vite node_modules/.vite-temp .gev-cache .gev-logs
+ # Writable: Vite's dependency cache and its config temp dir (mount tmpfs
+ # on these when the root filesystem is read-only), and /data.
+ && mkdir -p node_modules/.vite node_modules/.vite-temp /data \
+ && chown 1000:1000 node_modules/.vite node_modules/.vite-temp /data
+
+# Everything the app keeps lives in /data: the .env that Provider Settings
+# saves, .gev-cache and .gev-logs. Mount one volume here. The saved .env is
+# replaced by temp-file-and-rename, which is why it cannot sit in /app.
+ENV GEV_DATA_DIR=/data
+VOLUME ["/data"]
 
 ENV PUPPETEER_SKIP_DOWNLOAD=1
 ENV HOST=0.0.0.0

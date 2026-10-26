@@ -176,17 +176,18 @@ docker run -d --name gods-eye-view \
   --tmpfs /tmp \
   --tmpfs /app/node_modules/.vite:uid=1000,gid=1000 \
   --tmpfs /app/node_modules/.vite-temp:uid=1000,gid=1000 \
-  --tmpfs /app/.gev-logs:uid=1000,gid=1000 \
-  -v gev-cache:/app/.gev-cache \
+  -v gev-data:/data \
   -p 127.0.0.1:4173:4173 \
   --env-file .env \
   --restart unless-stopped \
   ghcr.io/bilawalsidhu/gods-eye-view:latest
 ```
 
-Open **`http://localhost:4173`**. Drop `--env-file .env` to start keyless (it fails if the file is missing). The port is published to `127.0.0.1` only, like the other paths; widening it is the [Sharing an instance](#-sharing-an-instance) opt-in.
+Open **`http://localhost:4173`**. Start keyless by dropping `--env-file .env` (`docker run` fails if the file is missing) and add keys from **POWER UP** afterwards. The port is published to `127.0.0.1` only, like the other paths; widening it is the [Sharing an instance](#-sharing-an-instance) opt-in.
 
-The image is hardened, and the flags above hold it to that: it runs as the unprivileged user `1000:1000`, the app's code is read-only even to that user, and it contains no `git`, `npm` or package manager. Only four paths are writable: `/app/.gev-cache` (the `gev-cache` volume keeps downloaded map and satellite data across restarts), Vite's dependency cache and temp directory, and `.gev-logs`. `--init` reaps stray processes and forwards signals so `docker stop` is quick.
+The image is hardened, and the flags above hold it to that: it runs as the unprivileged user `1000:1000`, the app's code is read-only even to that user, and it contains no `git`, `npm` or package manager. `--init` reaps stray processes and forwards signals so `docker stop` is quick.
+
+Everything the app keeps lives in one volume, `/data`: the `.env` that **SAVE KEYS** writes, downloaded map and satellite data (`.gev-cache`), and `.gev-logs`. Vite's dependency cache is the only other writable path, and it can be a tmpfs as above.
 
 Or as a `compose.yaml` (this is separate from the repo's own, which builds from source):
 
@@ -210,18 +211,17 @@ services:
       - /tmp
       - /app/node_modules/.vite:uid=1000,gid=1000
       - /app/node_modules/.vite-temp:uid=1000,gid=1000
-      - /app/.gev-logs:uid=1000,gid=1000
     volumes:
-      - gev-cache:/app/.gev-cache
+      - gev-data:/data
     restart: unless-stopped
 
 volumes:
-  gev-cache:
+  gev-data:
 ```
 
 The image has its own health check (an HTTP request to the app root every 30 seconds), so `docker ps` shows `healthy` once it is up.
 
-**Put your keys in a `.env` file on the host, not in Provider Settings.** The code directory is read-only, so **SAVE KEYS** answers an error and `/app/.env` is never written (the start log also warns that `/app` is not writable; for this image that is intended). Pass keys with `--env-file` / `env_file` as above; the image reads them from the environment on every start. If you want Provider Settings to keep working, use the from-source path below, where `.env` lives in your clone.
+**Keys.** Provider Settings works in this image: keys you save land in `/data/.env`, so they survive `docker rm`, `docker pull` and recreating the container as long as you keep the `gev-data` volume. `--env-file` / `env_file` still works too, and a key supplied that way is shown as configured outside Provider Settings and stays read-only there, as everywhere else. Delete the volume (`docker volume rm gev-data`) to forget everything. If you bind-mount a host folder on `/data` instead of a named volume, make it writable by uid 1000 (`chown 1000:1000`).
 
 Each release is signed with [cosign](https://github.com/sigstore/cosign) (keyless) and carries build provenance and an SBOM. Check one with `gh attestation verify oci://ghcr.io/bilawalsidhu/gods-eye-view:1.2.3 --repo bilawalsidhu/gods-eye-view`.
 

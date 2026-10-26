@@ -1,4 +1,5 @@
 import { defaultSourceRoot } from '../common/source-root.js';
+import { dataDir } from '../common/data-dir.js';
 import path from 'node:path';
 import { readRequestBody } from '../common/request.js';
 import { promises as fsp } from 'node:fs';
@@ -76,7 +77,7 @@ function createDebugLogHandler({
   sourceRoot = defaultSourceRoot,
   includeContent = process.env.GEV_VOICE_LOG_CONTENT === '1',
 } = {}) {
-  const logDir = path.join(sourceRoot, '.gev-logs');
+  const logDir = path.join(dataDir(sourceRoot), '.gev-logs');
   const logFile = path.join(logDir, 'realtime-conversations.jsonl');
   const allow = makeRateLimiter({
     windowMs: 60_000,

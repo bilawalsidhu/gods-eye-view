@@ -1,5 +1,6 @@
 import path from 'node:path';
 import { promises as fsp } from 'node:fs';
+import { dataDir } from './common/data-dir.js';
 
 import {
   fetchTerrainChunkWithRetry,
@@ -45,7 +46,7 @@ export function terrainHeightsProxy(options = {}) {
   } = options;
   const TTL_MS = 30 * 24 * 3600_000;
   const CACHE_PATH =
-    cachePath || path.join(process.cwd(), '.gev-cache', 'terrain-heights.json');
+    cachePath || path.join(dataDir(), '.gev-cache', 'terrain-heights.json');
   const CACHE_DIR = path.dirname(CACHE_PATH);
   // Sized against measured upstream latency, not the documented page cap.
   // Re:Earth serves 87-186 ms/point depending on load (observed 2026-09-12,
