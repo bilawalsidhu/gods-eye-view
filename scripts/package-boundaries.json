@@ -3887,6 +3887,34 @@
     ],
     "external": []
   },
+  "share-view-codec": {
+    "exports": ["./share/view-codec"],
+    "modules": [
+      "src/share/viewCodec.js",
+      "src/share/follow.js",
+      "src/share/wire.js",
+      "src/ui/visualPresets.js",
+      "src/bloom.js",
+      "src/styles/anime.js",
+      "src/styles/noir.js",
+      "src/styles/retro.js",
+      "src/styles/snow.js",
+      "src/styles/surveillance.js",
+      "src/styles/thermal.js",
+      "src/view/index.js",
+      "src/data/layerState.js",
+      "src/data/layerStateTokenReservations.json",
+      "src/data/idSwitches.js",
+      "src/data/detectionPolicy.js",
+      "src/scopeMaskPolicy.js",
+      "src/i18n/index.js",
+      "src/i18n/locale.js",
+      "src/i18n/locales/es.json",
+      "src/i18n/locales/ru.json",
+      "src/i18n/locales/zh-CN.json"
+    ],
+    "external": []
+  },
   "ghostmaps": {
     "exports": ["./layers/ghostmaps"],
     "modules": [

@@ -9,7 +9,8 @@ style, data layers and panel layout. There are two forms.
 - **Short form** — `<app>/share/<code>`, where `<app>` is wherever the app is
   served (an origin's root, or a base path) and `<code>` is encoded and
   decoded by `src/share/viewCodec.js`, which is pure (no DOM, no Cesium) and
-  needs no server. The share button makes this form. The same code opens on
+  needs no server. Hosts import it as `@gods-eye-view/core/share/view-codec`
+  (a server can read a code to describe the view in a link preview). The share button makes this form. The same code opens on
   any copy of the app. `src/share/shareLinkPath.js` reads and builds the
   address, and `src/share/legacyShareState.js` converts between the long
   form's parsed state and the code's state.
