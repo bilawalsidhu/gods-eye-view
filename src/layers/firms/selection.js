@@ -194,6 +194,7 @@ export function createSelection({
       layerName: name,
       source: components.model.fireSource(fire),
       dataSource: layerState._dataSource,
+      // i18n-ignore: English entity label; the voice card translates it (shownEntityLabel)
       label: components.model.detectionLabel(fire),
       latitude: fire.lat,
       longitude: fire.lon,

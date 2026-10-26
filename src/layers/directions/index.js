@@ -112,7 +112,8 @@ export const FLIGHT_PROGRESS_MS = 250;
 export function routeDistanceText(meters) {
   if (!Number.isFinite(meters) || meters < 0) return '';
   if (meters < 100) return formatQuantity(Math.round(meters), 'm');
-  if (meters < 1000) return formatQuantity(Math.round(meters / 10) * 10, 'm');
+  const tens = Math.round(meters / 10) * 10;
+  if (tens < 1000) return formatQuantity(tens, 'm');
   const km = meters / 1000;
   return km < 10
     ? formatQuantity(km, 'km', {
@@ -130,7 +131,8 @@ export function routeDistanceText(meters) {
  */
 export function routeDurationText(seconds) {
   if (!Number.isFinite(seconds) || seconds < 0) return '';
-  if (seconds < 60) return formatQuantity(Math.round(seconds), 's');
+  const wholeSeconds = Math.round(seconds);
+  if (wholeSeconds < 60) return formatQuantity(wholeSeconds, 's');
   const minutes = Math.round(seconds / 60);
   if (minutes < 60) return formatQuantity(minutes, 'min');
   const hours = formatQuantity(Math.floor(minutes / 60), 'h');
@@ -306,16 +308,24 @@ export function directionsInstruction(step) {
         ? t('Merge onto {road}', values)
         : t('Merge', { context: 'maneuver' });
     case 'on ramp':
-      if (direction)
+      if (modifier === 'left' || modifier === 'right')
         return road
           ? t('Take the ramp on the {direction} onto {road}', values)
           : t('Take the ramp on the {direction}', values);
+      if (direction && modifier !== 'straight')
+        return road
+          ? t('Take the ramp {direction} onto {road}', values)
+          : t('Take the ramp {direction}', values);
       return road ? t('Take the ramp onto {road}', values) : t('Take the ramp');
     case 'off ramp':
-      if (direction)
+      if (modifier === 'left' || modifier === 'right')
         return road
           ? t('Take the exit on the {direction} onto {road}', values)
           : t('Take the exit on the {direction}', values);
+      if (direction && modifier !== 'straight')
+        return road
+          ? t('Take the exit {direction} onto {road}', values)
+          : t('Take the exit {direction}', values);
       return road ? t('Take the exit onto {road}', values) : t('Take the exit');
     case 'roundabout':
     case 'rotary':
@@ -344,9 +354,14 @@ export function directionsInstruction(step) {
       return road
         ? t('Exit the roundabout onto {road}', values)
         : t('Exit the roundabout');
-    case 'use lane':
-      if (direction) {
-        const lane = { road, direction: laneWord(modifier) };
+    case 'use lane': {
+      const side = modifier.includes('left')
+        ? 'left'
+        : modifier.includes('right')
+          ? 'right'
+          : '';
+      if (side) {
+        const lane = { road, direction: laneWord(side) };
         return road
           ? t('Use the {direction} lane onto {road}', lane)
           : t('Use the {direction} lane', lane);
@@ -354,6 +369,7 @@ export function directionsInstruction(step) {
       return road
         ? t('Continue onto {road}', values)
         : t('Continue', { context: 'maneuver' });
+    }
     default:
       return road
         ? t('Continue onto {road}', values)
