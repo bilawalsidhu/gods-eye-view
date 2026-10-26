@@ -1,5 +1,9 @@
 # God's Eye View Current State
 
+Docker Compose mounts the checkout with the shared SELinux `:z` label so
+containers can read it on enforcing SELinux hosts. The separate image-owned
+`node_modules` volume and loopback-only port publishing remain unchanged.
+
 The HUD's LAT/LON degrees-minutes-seconds readout rounds the coordinate once, to
 hundredths of a second, and then splits it. A value within 0.005" of the next
 whole minute carries into the minutes and degrees, so `-122.35` reads
@@ -6234,3 +6238,12 @@ when their footprints touch or contain one another, never across a seam toleranc
 - `scripts/qa-form-fields.mjs` exercises native selections, number validity,
   calibration commit/cancel and stale-camera/disposal guards against an installed
   controller with fixture ports, plus default/Cyber and narrow translated layouts.
+
+## Docker health reporting
+
+The Docker image probes its local HTTP root with Node every 30 seconds, using
+the launcher's parsed `PORT` (default 4173). A successful HTTP response marks
+the container healthy. Checks time out after 10 seconds, with a 30-second
+startup grace period and three consecutive failures before reporting unhealthy.
+This reports app HTTP availability, not individual provider health, and does not
+configure automatic restarts.
