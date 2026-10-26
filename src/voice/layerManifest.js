@@ -58,6 +58,18 @@ const layers = [
     noQuery: 'navigation-integrity cells; no countable analyst records',
   },
   {
+    id: 'wildlife',
+    aliases: [
+      'animal tracks',
+      'animals',
+      'tagged animals',
+      'bird tracks',
+      'movebank',
+    ],
+    context: false,
+    noQuery: 'animal fixes are not loaded for queries',
+  },
+  {
     id: 'flights',
     track: true,
     aliases: ['planes', 'aircraft', 'air traffic'],
@@ -511,6 +523,7 @@ const SELF_EVIDENT_IDS = new Set([
   'radio',
   'wind',
   'directions',
+  'wildlife',
 ]);
 
 /**
