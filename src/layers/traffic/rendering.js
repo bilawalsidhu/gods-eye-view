@@ -217,7 +217,9 @@ export function createRendering({
           position: entry.contact.position,
           id: `CCTV-VEH-${entry.entity.id}`,
           type: 'VEH',
-          sourceId,
+          // Each ephemeral contact needs its own detection cohort identity.
+          // The camera/producer source remains in provenance below.
+          sourceId: `cctv-contact:${entry.entity.id}`,
           observed: true,
           freshness,
           observedAt: entry.observedAt,
