@@ -525,6 +525,8 @@
   "Resetting cockpit to full globe view": "Сброс кабины к виду всего глобуса",
   "Location not found": "Место не найдено",
   "Search failed": "Не удалось выполнить поиск",
+  "Check the spelling and press Enter to search again.": "Проверьте написание и нажмите Enter, чтобы повторить поиск.",
+  "Press Enter to try again.": "Нажмите Enter, чтобы попробовать снова.",
   "MAP": "КАРТА",
   "panel": "панель",
   "Expand {name}": "Развернуть {name}",

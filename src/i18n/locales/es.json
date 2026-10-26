@@ -305,6 +305,8 @@
   "Copy failed": "No se pudo copiar",
   "Location not found": "Ubicación no encontrada",
   "Search failed": "No se pudo completar la búsqueda",
+  "Check the spelling and press Enter to search again.": "Revisa la ortografía y pulsa Intro para buscar de nuevo.",
+  "Press Enter to try again.": "Pulsa Intro para intentarlo de nuevo.",
   "Fly to a POI first": "Ve primero a un punto de interés",
   "Clearing selected data layers": "Limpiando las capas de datos seleccionadas",
   "Selected data layers could not be cleared": "No se pudieron limpiar las capas de datos seleccionadas",

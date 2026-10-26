@@ -5268,6 +5268,14 @@ cancels the previous lookup; disposing its controls cancels the active lookup. P
 candidates, and an unbiased retry for name mismatches. Invalid or wrapped bounds returned by providers
 are omitted rather than framing the wrong part of the globe.
 
+A location search that finds nothing, or fails, leaves the field open with the
+query still in it, focused and selected, so it can be corrected and resubmitted
+without reopening search. The miss is shown under the field as a persistent
+`role="alert"` message ("Location not found." or "Search failed." with what to
+do next) referenced by the input's `aria-describedby`, with `aria-invalid` set;
+it is not a toast. Typing, a new search, or closing the emptied field clears it.
+A search that arrives still clears and closes the field.
+
 For request viewport bias, Photon unwraps antimeridian-crossing longitude bounds
 before computing their midpoint, then wraps that midpoint back into ±180 degrees.
 Malformed viewport bounds add no proximity bias. Nominatim omits a crossing

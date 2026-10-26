@@ -180,6 +180,7 @@ export function readShellElements(document = globalThis.document) {
     _cctvSyncProgress: document.getElementById('cctv-sync-progress'),
     _toast: document.getElementById('toast'),
     _locationSearch: document.getElementById('location-search'),
+    _locationSearchError: document.getElementById('location-search-error'),
     _searchToggle: document.getElementById('search-toggle'),
     _locationPills: document.getElementById('location-pills'),
     _poiRow: document.getElementById('poi-row'),

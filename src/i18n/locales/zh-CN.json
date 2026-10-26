@@ -1814,6 +1814,8 @@
   "ORBIT": "环绕",
   "Location not found": "未找到位置",
   "Search failed": "搜索失败",
+  "Check the spelling and press Enter to search again.": "请检查拼写，然后按 Enter 重新搜索。",
+  "Press Enter to try again.": "按 Enter 重试。",
   "Detailed outline unavailable": "无法获取详细轮廓",
   "Fly to a POI first": "请先飞往一个 POI",
   "Reset to full globe view": "重置为完整地球视图",

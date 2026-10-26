@@ -336,6 +336,7 @@ export class StyleManager extends ShellFacade {
         _poiRow: this._poiRow,
         _locationBarDivider: this._locationBarDivider,
         _locationSearch: this._locationSearch,
+        _locationSearchError: this._locationSearchError,
         _searchToggle: this._searchToggle,
         _resetGlobeBtn: this._resetGlobeBtn,
         _cockpitResetGlobeBtn: this._cockpitResetGlobeBtn,
