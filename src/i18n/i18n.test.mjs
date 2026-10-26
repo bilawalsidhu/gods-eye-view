@@ -62,7 +62,7 @@ test('resolveLocale: ?lang= wins, then the stored choice, then browser languages
     resolveLocale({
       location: { search: '?lang=xx' },
       storage: memoryStorage(),
-      languages: ['de-DE', 'ru-RU'],
+      languages: ['fr-FR', 'ru-RU'],
     }),
     'ru',
   );
@@ -70,7 +70,7 @@ test('resolveLocale: ?lang= wins, then the stored choice, then browser languages
     resolveLocale({
       location: { search: '' },
       storage: memoryStorage(),
-      languages: ['de'],
+      languages: ['fr'],
     }),
     'en',
   );
