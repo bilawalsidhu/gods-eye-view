@@ -50,6 +50,23 @@ test('requests refused for the same token renew it once', async () => {
   assert.equal(calls.length, 2);
 });
 
+test('a refused token response releases its unread body before returning', async () => {
+  for (const status of [404, 429, 500]) {
+    let cancelled = false;
+    const response = new Response(
+      new ReadableStream({
+        cancel() {
+          cancelled = true;
+        },
+      }),
+      { status },
+    );
+    const tokens = createGoogleTokenSource({ fetchImpl: async () => response });
+    assert.equal(await tokens.token(), null);
+    assert.equal(cancelled, true, `HTTP ${status} body released`);
+  }
+});
+
 test('a server that does not offer tokens yields none', async () => {
   for (const answer of [
     new Response('Not found', { status: 404 }),

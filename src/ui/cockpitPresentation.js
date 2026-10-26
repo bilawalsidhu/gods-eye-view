@@ -1,5 +1,5 @@
 /** Pure formatting and fixed presentation constants used by Cockpit components. */
-import { formatNumber, t, msg } from '../i18n/index.js';
+import { formatNumber, getLocale, t, msg } from '../i18n/index.js';
 import { formatQuantity } from './unitLabels.js';
 
 export const COCKPIT_HEADING_SLEW_DPS = 28;
@@ -145,17 +145,20 @@ export function formatCockpitCoordinate(value, positive, negative) {
  */
 export function formatCockpitDistance(distanceM) {
   const digits = distanceM < 10000 ? 1 : 0;
-  return formatQuantity(distanceM / 1000, 'km', {
+  const distance = formatQuantity(distanceM / 1000, 'km', {
     minimumFractionDigits: digits,
     maximumFractionDigits: digits,
-  }).toUpperCase();
+  });
+  return getLocale() === 'zh-CN' ? distance : distance.toUpperCase();
 }
 
 export function formatCockpitWindDirection(value) {
   if (!Number.isFinite(value)) return t('DIR UNKNOWN');
   const labels = Object.keys(COMPASS_POINT_LABELS);
   const normalized = ((value % 360) + 360) % 360;
-  return `${compassPointLabel(labels[Math.round(normalized / 45) % labels.length])} · ${Math.round(normalized)}°`;
+  // 359.5° and above is north. Modulo keeps that from printing 360°.
+  const degrees = Math.round(normalized) % 360;
+  return `${compassPointLabel(labels[Math.round(normalized / 45) % labels.length])} · ${degrees}°`;
 }
 
 // Digit grouping and decimal marks (`26,175`, `26 175`, `26.175`) take a

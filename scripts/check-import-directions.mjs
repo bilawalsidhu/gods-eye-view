@@ -24,11 +24,10 @@ const renderer = (file) =>
   /^src\/layers\/[^/]+\/(?:index|rendering|snapshotRenderer|overlay|presentation|cards|controls)\.js$/.test(
     file,
   );
-// Two compatibility composition entries intentionally select standalone defaults.
+// One compatibility composition entry intentionally selects standalone defaults.
 const compatibilityEdge = (from, to) =>
-  (from === 'server/providers/local.js' &&
-    to === 'server/standalone/key-setup.js') ||
-  (from === 'src/ui.js' && to === 'src/standalone/catalog.js');
+  from === 'server/providers/local.js' &&
+  to === 'server/standalone/key-setup.js';
 const portableExport = (key) =>
   key.startsWith('./sources/') ||
   /\/source$/.test(key) ||
@@ -153,14 +152,6 @@ export function checkImportDirections(root) {
         report(
           file,
           'Actions must consume feed state without the manager facade',
-        );
-      if (
-        file === 'src/app/constructCatalog.js' &&
-        to === 'src/data/localGeojson.js'
-      )
-        report(
-          file,
-          'Catalog must use the services owner without compatibility layer construction',
         );
     }
     return record;

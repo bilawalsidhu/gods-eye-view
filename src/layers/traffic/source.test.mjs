@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { readFileSync } from 'node:fs';
+import { getEventListeners } from 'node:events';
+import { createFlowTileSource } from './flowSource.js';
 import { tilesForBounds, tileToBBox } from '../../data/tomtomTiles.js';
 import { decodeFlowTile } from './flowDecode.js';
 import { decodeOpenFreeMapTile } from '../../sources/openFreeMap.js';
@@ -866,4 +868,155 @@ test('traffic separates API and public tile transports, including the default ti
   }
   assert.ok(publicUrls.length >= 4);
   assert.ok(apiUrls.length >= 4);
+});
+
+test('flow detail reports stale proxy tiles and the oldest tile time, also from its cache', async () => {
+  const fetchedAt = Date.UTC(2026, 9, 16, 8);
+  const reply = (status, at) => async () =>
+    new Response(fixture, {
+      headers: { 'x-tomtom-cache': status, 'x-tomtom-fetched-at': String(at) },
+    });
+  const stale = createTrafficSource({
+    fetchImpl: reply('STALE-BUDGET', fetchedAt),
+  });
+  const first = await stale.fetchFlowDetail(bounds);
+  assert.ok(first.segments.length > 0);
+  assert.equal(first.stale, true);
+  assert.equal(first.oldestTileAt, fetchedAt);
+  // The decoded tile is served from cache now, and keeps its mark.
+  const again = await stale.fetchFlowDetail(bounds);
+  assert.equal(stale.getFlowSessionStats().tilesFetched, 1);
+  assert.equal(again.stale, true);
+  assert.equal(again.oldestTileAt, fetchedAt);
+
+  const fresh = createTrafficSource({ fetchImpl: reply('MISS', fetchedAt) });
+  const live = await fresh.fetchFlowDetail(bounds);
+  assert.equal(live.stale, false);
+  assert.equal(live.oldestTileAt, fetchedAt);
+
+  const unmarked = createTrafficSource({
+    fetchImpl: async () => new Response(fixture),
+  });
+  const plain = await unmarked.fetchFlowDetail(bounds);
+  assert.equal(plain.stale, false);
+  assert.equal(plain.oldestTileAt, null);
+});
+
+// Capture constructor-owned Maps only while constructing the source, so tests
+// can assert retained metadata without adding a diagnostic API to production.
+function flowSourceWithMaps(fetchImpl) {
+  const maps = [];
+  const NativeMap = globalThis.Map;
+  let source;
+  try {
+    globalThis.Map = class extends NativeMap {
+      constructor(...args) {
+        super(...args);
+        maps.push(this);
+      }
+    };
+    source = createFlowTileSource({ fetchImpl });
+  } finally {
+    globalThis.Map = NativeMap;
+  }
+  return { source, pending: maps[0] };
+}
+
+test('flow freshness is released after body failures, size rejection, decode and reset', async () => {
+  for (const failure of ['body', 'size', 'decode']) {
+    let requestSignal;
+    let fail = true;
+    const { source, pending } = flowSourceWithMaps(async (url, { signal }) => {
+      requestSignal = signal;
+      return {
+        ok: true,
+        headers: new Headers({
+          'x-tomtom-cache': fail ? 'STALE-ERROR' : 'MISS',
+          'x-tomtom-fetched-at': fail ? '1000' : '2000',
+          ...(fail && failure === 'size'
+            ? { 'content-length': '99999999' }
+            : {}),
+        }),
+        async arrayBuffer() {
+          if (fail && failure === 'body') throw new Error('body disconnected');
+          return fail && failure === 'decode' ? new Uint8Array([255]) : fixture;
+        },
+      };
+    });
+    await assert.rejects(source.fetchFlowDetail(bounds));
+    assert.equal(pending.size, 0, `${failure} leaves no pending metadata`);
+    assert.equal(getEventListeners(requestSignal, 'abort').length, 0);
+    assert.equal(source.getFlowSessionStats().cacheEntries, 0);
+    fail = false;
+    const fresh = await source.fetchFlowDetail(bounds);
+    assert.equal(fresh.stale, false);
+    assert.equal(fresh.oldestTileAt, 2000);
+    assert.equal(pending.size, 0, 'successful decode releases metadata');
+    assert.equal(getEventListeners(requestSignal, 'abort').length, 0);
+    source.resetFlowTileCache();
+    assert.equal(pending.size, 0);
+  }
+});
+
+test('flow reset and late cancelled headers cannot retain or replace newer freshness', async () => {
+  let resolveOld;
+  let oldSignal;
+  let calls = 0;
+  const { source, pending } = flowSourceWithMaps((url, { signal }) => {
+    if (++calls === 1) {
+      oldSignal = signal;
+      return new Promise((resolve) => {
+        resolveOld = resolve;
+      });
+    }
+    return Promise.resolve(
+      new Response(fixture, {
+        headers: { 'x-tomtom-cache': 'MISS', 'x-tomtom-fetched-at': '2000' },
+      }),
+    );
+  });
+  const old = source.fetchFlowDetail(bounds);
+  const rejected = assert.rejects(old, { name: 'AbortError' });
+  while (!resolveOld) await new Promise((resolve) => setImmediate(resolve));
+  source.resetFlowTileCache();
+  const fresh = await source.fetchFlowDetail(bounds);
+  resolveOld(
+    new Response(fixture, {
+      headers: {
+        'x-tomtom-cache': 'STALE-ERROR',
+        'x-tomtom-fetched-at': '1000',
+      },
+    }),
+  );
+  await rejected;
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(pending.size, 0);
+  assert.equal(getEventListeners(oldSignal, 'abort').length, 0);
+  assert.equal(fresh.stale, false);
+  assert.equal(fresh.oldestTileAt, 2000);
+  assert.equal((await source.fetchFlowDetail(bounds)).oldestTileAt, 2000);
+});
+
+test('cancelling a flow body releases its freshness before a new request', async () => {
+  const controller = new AbortController();
+  let requestSignal;
+  const { source, pending } = flowSourceWithMaps(async (url, { signal }) => {
+    requestSignal = signal;
+    return {
+      ok: true,
+      headers: new Headers({ 'x-tomtom-cache': 'STALE-ERROR' }),
+      async arrayBuffer() {
+        assert.equal(pending.size, 1);
+        controller.abort();
+        return fixture;
+      },
+    };
+  });
+  await assert.rejects(
+    source.fetchFlowDetail(bounds, { signal: controller.signal }),
+    { name: 'AbortError' },
+  );
+  assert.equal(pending.size, 0);
+  assert.equal(getEventListeners(requestSignal, 'abort').length, 0);
+  assert.equal(source.getFlowSessionStats().cacheEntries, 0);
 });

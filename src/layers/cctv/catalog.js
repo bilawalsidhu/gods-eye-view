@@ -1,4 +1,4 @@
-import { CAMERA_SEEDS, SOURCE_ENDPOINT } from './policy.js';
+import { CAMERA_SEEDS } from './policy.js';
 import {
   lookupModelSpec,
   horizontalFovRangeDeg,

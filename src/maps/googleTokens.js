@@ -39,7 +39,10 @@ export function createGoogleTokenSource({
         cache: 'no-store',
       });
       if (response.status === 204) return null;
-      if (!response.ok) return null;
+      if (!response.ok) {
+        await response.body?.cancel();
+        return null;
+      }
       return parseToken(await response.json(), now());
     } catch {
       return null;
