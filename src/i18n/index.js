@@ -17,10 +17,11 @@ import {
   writeStoredLocale,
 } from './locale.js';
 import es from './locales/es.json' with { type: 'json' };
+import fr from './locales/fr.json' with { type: 'json' };
 import ru from './locales/ru.json' with { type: 'json' };
 import zhCN from './locales/zh-CN.json' with { type: 'json' };
 
-const CATALOGS = Object.freeze({ es, ru, 'zh-CN': zhCN });
+const CATALOGS = Object.freeze({ es, fr, ru, 'zh-CN': zhCN });
 
 let currentLocale = DEFAULT_LOCALE;
 
