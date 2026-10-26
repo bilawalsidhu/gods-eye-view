@@ -194,6 +194,7 @@
   "src/ui/visualInput.js",
   "src/ui/visualInput.test.mjs",
   "scripts/qa-visual-input.mjs",
+  "scripts/qa-scope-hud.mjs",
   "scripts/qa-segmented-controls.mjs",
   "src/ui/displayControls.js",
   "src/ui/segmentedControl.test.mjs",

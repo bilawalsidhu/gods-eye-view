@@ -805,7 +805,8 @@
       "src/ui/keyGuidance.js",
       "src/ui/layerNames.js",
       "src/ui/statusText.js",
-      "src/ui/statusBadge.js"
+      "src/ui/statusBadge.js",
+      "src/scopeMaskPolicy.js"
     ],
     "external": ["cesium"]
   },
@@ -2574,7 +2575,8 @@
       "src/voice/geminiAudio.js",
       "src/voice/geminiCaptureWorklet.js",
       "src/ui/statusBadge.js",
-      "src/sceneCommandRelease.js"
+      "src/sceneCommandRelease.js",
+      "src/scopeMaskPolicy.js"
     ],
     "external": [
       "hls.js",
@@ -3295,7 +3297,9 @@
       "src/i18n/locale.js",
       "src/i18n/locales/es.json",
       "src/i18n/locales/ru.json",
-      "src/i18n/locales/zh-CN.json"
+      "src/i18n/locales/zh-CN.json",
+      "src/scopeMaskPolicy.js",
+      "src/ui/displayControls.js"
     ],
     "external": ["cesium"]
   },
