@@ -306,7 +306,7 @@ catalog construction owns each instance.
 Wind animates one forecast without advancing forecast time. Separate Weather
 observation layers provide radar and satellite history; none claims measured cloud volume.
 Weather imagery releases its camera move listener on disable and registers it once on re-enable. Disabling also clears active imagery work.
-A globe weather frame with loaded tiles and no pending requests rechecks staging
+A staged weather frame with loaded tiles and no pending requests rechecks
 readiness on a single 150 ms wake timer instead of requesting every render.
 The existing readiness conditions and two settled frames still govern promotion;
 completion, cancellation, replacement and teardown clear the wake timer.
