@@ -113,6 +113,37 @@ provider registration rejects compositions that cannot fit rather than truncatin
 identities. A malformed or duplicate entry invalidates the complete custom-switch
 field. Existing whole-link size limits still apply.
 
+## Offshore Oil & Gas Platforms — October 26, 2026
+
+A default-off Infrastructure layer (`offshore-platforms`, share token `5`) serves
+1,542 BSEE inventory records from the 2026-10-01 release covering U.S. Gulf federal
+waters. Known removals and mobile production units are excluded. No recorded
+removal is not evidence of active production. Surface structures, subsea codes
+and unknown types have distinct legend entries; unmatched types remain unknown.
+The panel and selection card state coverage/date and status limitations. The
+selected card opens BSEE's source; Data attribution includes source terms.
+
+`src/layers/offshorePlatforms/` owns portable records/source, lifecycle,
+presentation and rendering. `src/app/layers/offshorePlatforms.js` supplies shared
+selection, overlay, input and render services; `src/standalone/layerSources.js`
+chooses the bundled provider. Public factory/source exports are available under
+`gods-eye-view/layers/offshore-platforms` and `/source`. No import-time fetch runs.
+The datacenter/dam factory still returns exactly its original two layers.
+
+The existing infrastructure LOD policy bounds materialized native point entities
+at 80 / 200 / 420 by camera height, after horizon and viewport filtering. Shared
+ambient overlays publish at most 80 labels with a 40-card paint budget, plus one
+selected card. Camera changes invalidate selection; the layer installs no polling
+or animation timer. Disable aborts loading and releases entities, handlers,
+selection records and overlays, retaining only the parsed inventory. Destroy
+also clears that cache; late asynchronous completions are discarded.
+
+Reproducible acquisition, source IDs, release/retrieval dates, checksums and the
+explicit NAD27→WGS84 grid operation are documented in
+`src/data/local_data/offshore-platforms/README.md`. No live drilling, contracts,
+commercial API, AIS inference, 3D rig models or additional regions are included.
+Focused browser gate: `node scripts/qa-offshore-platforms.mjs --url http://localhost:4173`.
+
 ## God's Eye View in conversations — October 2, 2026
 
 Tool answers that can be shown in God's Eye View include a view: camera, layers,

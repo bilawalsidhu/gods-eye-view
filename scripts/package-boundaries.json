@@ -2354,6 +2354,12 @@
       "src/layers/perimeters/cards.js",
       "src/layers/perimeters/inciweb.js",
       "src/app/layers/gnss.js",
+      "src/app/layers/offshorePlatforms.js",
+      "src/layers/offshorePlatforms/index.js",
+      "src/layers/offshorePlatforms/source.js",
+      "src/layers/offshorePlatforms/records.js",
+      "src/layers/offshorePlatforms/rendering.js",
+      "src/layers/offshorePlatforms/presentation.js",
       "src/layers/gnss/index.js",
       "src/layers/gnss/source.js",
       "src/layers/gnss/records.js",
@@ -2989,6 +2995,12 @@
       "src/layers/perimeters/cards.js",
       "src/layers/perimeters/inciweb.js",
       "src/app/layers/gnss.js",
+      "src/app/layers/offshorePlatforms.js",
+      "src/layers/offshorePlatforms/index.js",
+      "src/layers/offshorePlatforms/source.js",
+      "src/layers/offshorePlatforms/records.js",
+      "src/layers/offshorePlatforms/rendering.js",
+      "src/layers/offshorePlatforms/presentation.js",
       "src/layers/gnss/index.js",
       "src/layers/gnss/source.js",
       "src/layers/gnss/records.js",
@@ -4056,5 +4068,32 @@
       "src/i18n/marker.js"
     ],
     "external": ["cesium"]
+  },
+  "offshore-platforms": {
+    "exports": ["./layers/offshore-platforms"],
+    "modules": [
+      "src/layers/offshorePlatforms/index.js",
+      "src/layers/offshorePlatforms/source.js",
+      "src/layers/offshorePlatforms/records.js",
+      "src/layers/offshorePlatforms/rendering.js",
+      "src/layers/offshorePlatforms/presentation.js",
+      "src/data/localGeojsonLod.js",
+      "src/data/infrastructureOverlayEntry.js",
+      "src/i18n/index.js",
+      "src/i18n/locale.js",
+      "src/i18n/locales/es.json",
+      "src/i18n/locales/ru.json",
+      "src/i18n/locales/zh-CN.json",
+      "src/i18n/marker.js"
+    ],
+    "external": ["cesium"]
+  },
+  "offshore-platforms-source": {
+    "exports": ["./layers/offshore-platforms/source"],
+    "modules": [
+      "src/layers/offshorePlatforms/source.js",
+      "src/layers/offshorePlatforms/records.js"
+    ],
+    "external": []
   }
 }

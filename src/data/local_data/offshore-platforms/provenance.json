@@ -1,0 +1,40 @@
+{
+  "releaseDate": "2026-10-01",
+  "retrievedDate": "2026-10-26",
+  "coverage": "BSEE U.S. Gulf federal waters; not a global inventory",
+  "sourceUrl": "https://www.data.bsee.gov/Main/Mapping.aspx",
+  "structuresUrl": "https://www.data.bsee.gov/Main/Platform.aspx",
+  "licenseUrl": "https://www.data.bsee.gov/Mapping/Files/platform_meta.html",
+  "inputCrs": "EPSG:4267",
+  "outputCrs": "EPSG:4326",
+  "operation": "EPSG:15851",
+  "operationAccuracyMeters": 5,
+  "counts": {
+    "included": 1542,
+    "mobileProductionExcluded": 2,
+    "removedExcluded": 5773,
+    "shapeRows": 7317,
+    "structureRows": 7092,
+    "unmatchedIncluded": 232
+  },
+  "inputs": [
+    {
+      "url": "https://www.data.bsee.gov/Mapping/Files/platform.zip",
+      "sha256": "24f3feeeda2727fd6d91b256225ffc3f6754b1ab95479f1a0af79710f825503c"
+    },
+    {
+      "url": "https://www.data.bsee.gov/Platform/Files/platstrufixed.zip",
+      "sha256": "2a44a5afbd7a29acf7fc233c74d86e4b1457facf6d07ddb4ec88353e8f9089d1"
+    },
+    {
+      "url": "https://cdn.proj.org/us_noaa_conus.tif",
+      "sha256": "44611d823c48e5347500ee6afe40ff33d2b88cf817bf59f705ed4a4c3bd687d7"
+    }
+  ],
+  "tools": {
+    "pyshp": "2.3.1",
+    "pyproj": "3.7.2",
+    "proj": "9.5.1"
+  },
+  "outputSha256": "5eb51f360566f4aa82c84ed4962fc7d0debf4eac0ef2c2bcd6d145285885e3ef"
+}

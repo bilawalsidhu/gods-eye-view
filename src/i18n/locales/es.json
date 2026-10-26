@@ -2952,5 +2952,19 @@
   "Layers": "Capas",
   "Search": "Buscar",
   "More": "Más",
-  "Panels": "Paneles"
+  "Panels": "Paneles",
+  "Offshore inventory could not be loaded": "No se pudo cargar el inventario marítimo",
+  "U.S. Gulf federal waters": "Aguas federales del golfo de EE. UU.",
+  "Inventory snapshot {date}": "Inventario del {date}",
+  "Dated inventory; not live": "Inventario fechado; no en tiempo real",
+  "No removal date recorded; production status unknown": "Sin fecha de retirada registrada; estado de producción desconocido",
+  "Surface structure": "Estructura de superficie",
+  "Subsea structure": "Estructura submarina",
+  "Structure type unknown": "Tipo de estructura desconocido",
+  "BSEE complex {complex}, structure {structure}": "Complejo BSEE {complex}, estructura {structure}",
+  "Installed: {date}": "Instalada: {date}",
+  "U.S. Gulf federal waters · snapshot {date}": "Aguas federales del golfo de EE. UU. · inventario del {date}",
+  "BSEE inventory · open source": "Inventario BSEE · abrir fuente",
+  "Open BSEE platform inventory source": "Abrir la fuente del inventario de plataformas BSEE",
+  "Offshore Oil & Gas Platforms": "Plataformas marítimas de petróleo y gas"
 }

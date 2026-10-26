@@ -99,6 +99,10 @@ export const NYC_DOT_DISCLAIMER =
   'The public is advised to observe posted signage for compliance with applicable laws and regulations.';
 
 export const DATA_CREDITS = [
+  {
+    key: 'bsee-platforms',
+    html: 'Offshore platforms: <a href="https://www.data.bsee.gov/Main/Mapping.aspx" target="_blank" rel="noopener">BSEE</a>, Office of Technical Data Management · U.S. Gulf federal waters · 2026-10-01 snapshot · U.S. Government data. <a href="https://www.data.bsee.gov/Mapping/Files/platform_meta.html" target="_blank" rel="noopener">Terms</a>: not for navigation or legal use; errors and omissions may exist.',
+  },
   // ── Live sources ────────────────────────────────────────────────
   {
     key: 'opensky',

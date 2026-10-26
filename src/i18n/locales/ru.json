@@ -3019,5 +3019,19 @@
   "Layers": "Слои",
   "Search": "Поиск",
   "More": "Ещё",
-  "Panels": "Панели"
+  "Panels": "Панели",
+  "Offshore inventory could not be loaded": "Не удалось загрузить реестр морских платформ",
+  "U.S. Gulf federal waters": "Федеральные воды США в Мексиканском заливе",
+  "Inventory snapshot {date}": "Снимок реестра: {date}",
+  "Dated inventory; not live": "Датированный реестр; не в реальном времени",
+  "No removal date recorded; production status unknown": "Дата демонтажа не указана; статус добычи неизвестен",
+  "Surface structure": "Надводное сооружение",
+  "Subsea structure": "Подводное сооружение",
+  "Structure type unknown": "Тип сооружения неизвестен",
+  "BSEE complex {complex}, structure {structure}": "Комплекс BSEE {complex}, сооружение {structure}",
+  "Installed: {date}": "Установлено: {date}",
+  "U.S. Gulf federal waters · snapshot {date}": "Федеральные воды США в заливе · снимок {date}",
+  "BSEE inventory · open source": "Реестр BSEE · открыть источник",
+  "Open BSEE platform inventory source": "Открыть источник реестра платформ BSEE",
+  "Offshore Oil & Gas Platforms": "Морские нефтегазовые платформы"
 }

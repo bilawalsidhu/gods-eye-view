@@ -36,6 +36,9 @@ remain subject to their own licenses and terms. Notably:
     remove these files or obtain a commercial license from TeleGeography.
   - Datacenters and Dams (OpenStreetMap / Open Infrastructure Map extracts):
     Open Database License (ODbL) 1.0 — attribution + share-alike on the data.
+  - BSEE offshore platform inventory (src/data/local_data/offshore-platforms/):
+    U.S. Government-developed data with no proprietary rights attached.
+    Not for legal or navigational use; see the dataset README and metadata.
   - NASA FIRMS active-fire snapshot: CC0 / U.S. public domain (citation
     requested).
   - Bhote Koshi event imagery and derived river centerline
