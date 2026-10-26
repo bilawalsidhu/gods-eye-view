@@ -99,6 +99,22 @@ test('Nepal locator token is valid in v2 share links', () => {
   assert.equal(parsed.layerStateInvalid, false);
 });
 
+test('scope feather above 100% survives share parsing and serialization', () => {
+  const manager = makeManager('#v=2&lat=10&lon=20&sc=0&scf=200');
+  const parsed = manager.parseInitialHash();
+  assert.equal(parsed.scopeEnabled, false);
+  assert.equal(parsed.scopeFeatherPct, 200);
+  assert.equal(makeManager('#lat=10&lon=20&scf=175').parseInitialHash().scopeFeatherPct, 175);
+  assert.equal(makeManager('#lat=10&lon=20&scf=999').parseInitialHash().scopeFeatherPct, 200);
+  manager.onToggleChange(false, true, { scopeEnabled: false, scopeFeatherPct: 200 });
+  const params = manager._buildHashParams();
+  assert.equal(params.get('sc'), '0');
+  assert.equal(params.get('scf'), '200');
+  manager.onToggleChange(false, true, { scopeFeatherPct: 999 });
+  assert.equal(manager._buildHashParams().get('scf'), '200');
+  clearTimeout(manager._debounceTimer);
+});
+
 test('share-link serialization emits the current celestial state', () => {
   const manager = makeManager();
   manager.onToggleChange(false, false, { celestialRingEnabled: false });
@@ -498,8 +514,8 @@ test('every explicit visual UI gesture claims restore authority before it mutate
     ['cycleDetection: () => {', 'toggleCctv: () =>', 'cycleDetectionMode()', 'detection hotkey'],
     ['toggleBloom:', 'setBloomIntensity:', 'this._setBloomEnabled(', 'toggleBloom control'],
     ['setBloomIntensity:', 'toggleSharpen:', 'this._setBloomIntensity(', 'setBloomIntensity control'],
-    ['toggleSharpen:', 'toggleScope:', 'this._setSharpenEnabled(', 'toggleSharpen control'],
-    ['toggleScope:', 'setScopeFeather:', 'setScopeMaskEnabled(', 'toggleScope control'],
+    ['toggleSharpen:', 'setScopeEnabled:', 'this._setSharpenEnabled(', 'toggleSharpen control'],
+    ['setScopeEnabled:', 'setScopeFeather:', 'setScopeMaskEnabled(', 'setScopeEnabled control'],
     ['setScopeFeather:', 'setSharpenIntensity:', 'setScopeMaskFeather(', 'setScopeFeather control'],
     ['setSharpenIntensity:', 'setHudLayout:', 'this._applySharpenIntensity(', 'setSharpenIntensity control'],
     ['setHudLayout:', 'toggleCleanView:', 'this._setHudVariant(', 'setHudLayout control'],

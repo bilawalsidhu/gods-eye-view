@@ -1,3 +1,5 @@
+import { clampScopeFeatherPct } from '../scopeMaskPolicy.js';
+import { syncScopeControls } from './scopeControls.js';
 import { createFrameRateMonitor } from './frameRateMonitor.js';
 import { bindApplicationShortcuts } from './visualInput.js';
 import { bindDisplayControls } from './displayControls.js';
@@ -92,6 +94,11 @@ export class DisplayBindings {
       },
     });
 
+    syncScopeControls(
+      this._scopeBtn,
+      this._scopeFeatherSlider,
+      isScopeMaskEnabled(),
+    );
     this._displayControls?.destroy();
     this._displayControls = bindDisplayControls({
       elements: {
@@ -100,7 +107,7 @@ export class DisplayBindings {
         bloomSlider: this._bloomSlider,
         sharpenButton: this._sharpenBtn,
         sharpenSlider: this._sharpenSlider,
-        scopeButton: this._scopeBtn,
+        scopeToggle: this._scopeBtn,
         scopeFeatherSlider: this._scopeFeatherSlider,
         hudLayout: this._hudLayoutSelect,
         hudButton: this._hudBtn,
@@ -134,17 +141,15 @@ export class DisplayBindings {
           this.shareLinkManager?.claimRestoreLane?.('visual');
           this._setSharpenEnabled(!this.sharpenEnabled);
         },
-        toggleScope: () => {
+        setScopeEnabled: (enabled) => {
           this.shareLinkManager?.claimRestoreLane?.('visual');
-          const next = !isScopeMaskEnabled();
-          setScopeMaskEnabled(next);
-          this._scopeBtn.classList.toggle('active', next);
-          this._scopeBtn.setAttribute('aria-pressed', String(next));
+          setScopeMaskEnabled(enabled);
+          syncScopeControls(this._scopeBtn, this._scopeFeatherSlider, enabled);
           this._syncShareState();
         },
         setScopeFeather: (value) => {
           this.shareLinkManager?.claimRestoreLane?.('visual');
-          const pct = Math.max(0, Math.min(100, value || 0));
+          const pct = clampScopeFeatherPct(value);
           if (this._scopeFeatherValue)
             this._scopeFeatherValue.textContent = `${pct}%`;
           setScopeMaskFeather(pct / 100);

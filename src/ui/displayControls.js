@@ -18,7 +18,6 @@ export function bindDisplayControls({ elements, actions }) {
   for (const [name, action] of [
     ['bloomButton', 'toggleBloom'],
     ['sharpenButton', 'toggleSharpen'],
-    ['scopeButton', 'toggleScope'],
     ['cleanViewButton', 'toggleCleanView'],
     ['cleanViewExitButton', 'exitCleanView'],
     ['celestialButton', 'toggleCelestial'],
@@ -34,6 +33,7 @@ export function bindDisplayControls({ elements, actions }) {
     ['scopeFeatherSlider', 'setScopeFeather'],
   ])
     listen(elements[name], 'input', action, integer);
+  listen(elements.scopeToggle, 'change', 'setScopeEnabled', (el) => el.checked);
   listen(elements.densitySlider, 'input', 'setDensity', (el) => el.value);
   listen(elements.hudLayout, 'change', 'setHudLayout', (el) => el.value);
   for (const [name, action] of [

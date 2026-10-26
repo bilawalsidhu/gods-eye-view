@@ -70,7 +70,7 @@ export class AircraftDisplay {
     // a screen reader without this. It matters more now that the button ships
     // ACTIVE from markup (default-on, 2026-08-22): the very first thing assistive
     // tech reported was an unpressed-looking control over an armed layer.
-    // Mirrors #scope-toggle, which has always carried aria-pressed.
+    // Keep the pressed state explicit, matching the other toggle buttons.
     this._models3dBtn?.setAttribute(
       'aria-pressed',
       String(this._models3dEnabled),

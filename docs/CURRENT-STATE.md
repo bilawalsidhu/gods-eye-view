@@ -196,6 +196,32 @@ Regression coverage lives in `src/tools/area.test.mjs`,
 `src/tools/queries/environment.test.mjs` and
 `src/layers/perimeters/cards.test.mjs`.
 
+## Scope controls and HUD text readability
+
+Display uses a native, visibly checked Scope checkbox. Turning it off disables
+its feather slider while retaining the value. Scope enabled state and feather
+are independent of Tactical, Operator, Minimal and Cyber layout changes. Share
+links (`sc`/`scf`) and scene visual state restore both choices, including feather
+above 100%. The supported feather range is 0–200% of the keyhole radius: 0% is a
+hard edge and 200% extends the gradient to the center while keeping its midpoint
+on the same keyhole edge. First run opens with Scope ON and feather 100%; links
+predating `scf` retain their historical 35% parse fallback.
+
+When Scope is OFF, Tactical, Operator and Minimal add small black backplates
+at 70% opacity behind telemetry, vertical metadata, multiline AIS and scene
+chrome. They have rounded corners, no halo and no overlap between adjacent lines.
+Text keeps its original color, glow and opacity in both Scope states. The engine
+publishes the OFF state as `data-scope-mask="off"` on the document root, so direct
+setters, share links and scene restoration drive the same treatment. Scope ON
+uses the original HUD layout, Operator frames and scene chrome, with no added
+backplates. The OFF-only Minimal coordinate offset clears map attribution.
+Cyber retains its existing skin.
+
+`node scripts/qa-scope-hud.mjs` exercises native checkbox click and Space,
+feather range and keyboard boundaries, all four layout transitions, share/scene
+restore, original Scope ON styling, OFF-only backing coverage and non-overlapping
+geometry, multiline AIS, summary clipping and narrow viewport containment. Optional `QA_SCREENSHOT_DIR` saves mode screenshots.
+
 ## Cyber HUD — September 30, 2026
 
 Display > HUD > Layout includes Cyber, also available through the HUD voice
@@ -5545,10 +5571,11 @@ the `_detectionUserOverridden` / explicit-intent flags that would suppress a
 separate landed behaviour. Pinned in `src/reasonableDefaults.test.mjs` (feather,
 detection, OUTSIDE opacity) and `src/data/layerState.test.mjs` (3D).
 
-**The 2026-08-24 defaults** (superseding the interim 08-23 values of 8%/3%):
+**Current defaults** (scope feather revised to 100% on 2026-10-25;
+detection and outside opacity retain the 2026-08-24 defaults):
 the first-run look is Detection DENSE
-`75%`, ELASTIC allocation, Fade `7%`, OUTSIDE opacity `1%`, scope feather `11%`,
-and 3D fleet mode PROXIMITY, with `AIRCRAFT_BRACKET_FLOOR_ANCHOR` at `0.01` so
+`75%`, ELASTIC allocation, Fade `7%`, OUTSIDE opacity `1%`, Scope ON with feather
+`100%`, and 3D fleet mode PROXIMITY, with `AIRCRAFT_BRACKET_FLOOR_ANCHOR` at `0.01` so
 brackets keep their approved brightness exactly at the new OUTSIDE default. Two
 terms that must never be conflated: scope FEATHER softens the black scope-mask
 edge; detection FADE is the label/card fading band around the keyhole. The
@@ -5618,11 +5645,12 @@ easier to meet (detection is now on more often), but does not create it.
   calibrated so `AIRCRAFT_BRACKET_ALPHA_FLOOR` (0.35) lands exactly at the
   default, and the mapping follows bracket brightness rather than slider
   position. The `ko` PARSE fallback stays at `5`.
-- **Scope feather: `11%`** — a soft scope-mask edge (moved `0% → 8% → 11%`; `0%` hard crop for one day,
-  `35%` before that). `SCOPE_FEATHER_RATIO_DEFAULT` in `src/scopeMask.js`,
+- **Scope: `ON`, feather: `100%`** — a broad, soft scope-mask edge (revised on
+  2026-10-25 from the prior `11%`; earlier defaults were `0%`, `8%` and `35%`).
+  `SCOPE_FEATHER_RATIO_DEFAULT` in `src/scopeMask.js`,
   mirrored by `#scope-feather-slider`'s markup value AND readout and
-  `_scopeFeatherPct` in `sharelink.js`. The slider is untouched and still spans
-  0–100, and an explicit `0` is still the hard-crop path — pinned, so moving the
+  `_scopeFeatherPct` in `sharelink.js`. The slider spans
+  0–200, and an explicit `0` is still the hard-crop path — pinned, so moving the
   default cannot quietly delete it. The `scf` PARSE fallback deliberately stays
   at `35`: a link predating `scf` was authored when 35 was what its author saw,
   and restoring the author's view is what a share link is for.
