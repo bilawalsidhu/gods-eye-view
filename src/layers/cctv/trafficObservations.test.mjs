@@ -224,6 +224,59 @@ test('camera status respects the source freshness budget for mixed-age evidence'
   );
 });
 
+test('far-future CCTV records stay stale while valid sibling cameras remain visible', () => {
+  const future = NOW + 365 * 24 * 60 * 60 * 1000;
+  const valid = record({ id: 'cam-2:current', cameraId: 'cam-2' });
+  const suspect = [
+    record({ observedAt: future }),
+    record({ windowStart: future, windowEnd: future }),
+    record({ windowEnd: future }),
+  ];
+  for (const farFuture of suspect) {
+    const data = snapshot({
+      records: [farFuture, valid],
+      state: 'partial',
+      partial: true,
+      staleCount: 1,
+      staleAfterMs: 600_000,
+    });
+    const stale = summarizeCameraTrafficObservation(data, 'cam-1', {
+      now: NOW,
+    });
+    assert.equal(stale.state, 'stale');
+    assert.equal(stale.statusLabel, 'TRAFFIC OBS · STALE');
+    assert.equal(
+      summarizeCameraTrafficObservation(data, 'cam-2', { now: NOW }).state,
+      'partial',
+      'another camera remains valid despite one suspicious clock',
+    );
+  }
+
+  const near = record({
+    observedAt: NOW + 60_000,
+    windowStart: NOW,
+    windowEnd: NOW + 60_000,
+  });
+  const beyond = record({
+    observedAt: NOW + 60_001,
+    windowStart: NOW,
+    windowEnd: NOW + 60_001,
+  });
+  assert.equal(
+    summarizeCameraTrafficObservation(snapshot({ records: [near] }), 'cam-1', {
+      now: NOW,
+    }).state,
+    'fresh',
+    'bounded provider clock skew remains valid',
+  );
+  assert.equal(
+    summarizeCameraTrafficObservation(snapshot({ records: [beyond] }), 'cam-1', {
+      now: NOW,
+    }).state,
+    'stale',
+  );
+});
+
 test('age and class-mix helpers stay compact', () => {
   assert.equal(formatObservedTrafficAge(32_000), '32s ago');
   assert.equal(formatObservedTrafficAge(150_000), '3m ago');
