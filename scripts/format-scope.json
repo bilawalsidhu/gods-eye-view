@@ -43,6 +43,7 @@
   "src/data/inputOwnership.test.mjs",
   "docs/CODE-BOUNDARIES.md",
   "src/main.js",
+  "src/windowsLauncher.test.mjs",
   "docs/APPLICATION.md",
   "scripts/qa-application.mjs",
   "scripts/qa-voice-auth.mjs",
