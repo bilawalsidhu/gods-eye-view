@@ -1,6 +1,6 @@
 /**
- * Phone shell for narrow viewports (≤720px). The globe stays full screen and a
- * bottom tab bar opens one sheet at a time; each sheet shows existing panels,
+ * Phone shell for narrow or short viewports. The globe stays full screen and
+ * a bottom tab bar opens one sheet at a time; each sheet shows existing panels,
  * which stay where they are in the rails and dock while CSS presents them
  * (styles/mobile-shell.css). Desktop never sees the class or the sheet state.
  *
@@ -17,6 +17,7 @@ import {
   prefersCollapsed as prefersStateCollapsed,
   readPanelState,
 } from './rail/panelState.js';
+import { MOBILE_SHELL_MEDIA_QUERY } from './panelRailGeometry.js';
 
 import {
   MOBILE_SHELL_CLASS,
@@ -31,7 +32,7 @@ export {
   sheetForPanelId,
 } from './mobileSheets.js';
 
-export const MOBILE_SHELL_MEDIA_QUERY = '(max-width: 720px)';
+export { MOBILE_SHELL_MEDIA_QUERY } from './panelRailGeometry.js';
 export const MOBILE_TABS = Object.freeze([
   Object.freeze({ sheet: 'layers', label: msg('Layers'), icon: 'layers' }),
   Object.freeze({ sheet: 'cameras', label: msg('Cameras'), icon: 'videocam' }),
