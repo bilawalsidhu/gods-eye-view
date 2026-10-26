@@ -9,6 +9,7 @@ export const OBSERVED_TRAFFIC_GEOMETRY_TYPES = Object.freeze([
 ]);
 
 export const DEFAULT_OBSERVED_TRAFFIC_STALE_AFTER_MS = 5 * 60 * 1000;
+const MAX_FUTURE_OBSERVATION_SKEW_MS = 60 * 1000;
 
 function safeString(value, maxLength = 160) {
   const text = String(value ?? '').trim();
@@ -245,8 +246,13 @@ export function normalizeObservedTrafficSnapshot(
     .filter(Boolean);
   const dropped = rawRecords.length - records.length;
   const staleLimit = Math.max(0, Number(staleAfterMs) || 0);
+  const futureLimit = now + MAX_FUTURE_OBSERVATION_SKEW_MS;
   const staleCount = records.filter(
-    (record) => now - (record.windowEnd ?? record.observedAt) > staleLimit,
+    (record) =>
+      now - (record.windowEnd ?? record.observedAt) > staleLimit ||
+      record.observedAt > futureLimit ||
+      (record.windowStart ?? -Infinity) > futureLimit ||
+      (record.windowEnd ?? -Infinity) > futureLimit,
   ).length;
   const latestObservedAt = records.reduce(
     (latest, record) => Math.max(latest, record.observedAt),

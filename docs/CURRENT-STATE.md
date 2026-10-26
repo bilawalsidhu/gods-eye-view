@@ -19,7 +19,10 @@ siblings are dropped while valid records survive and mark the snapshot partial.
 
 Snapshot state is explicitly `unconfigured`, `empty`, `fresh`, `partial`,
 `stale` or `error`. Stale evidence is retained as stale rather than silently
-becoming current. Provider error text is not surfaced; cancellation propagates.
+becoming current. Observed or window timestamps more than 60 seconds in the
+future are also stale, allowing bounded provider clock skew without presenting
+future measurements as current. Suspect records remain inspectable; provider
+error text is not surfaced and cancellation propagates.
 The Traffic stats expose observed-source state under `observedTraffic`, so an
 observed-source outage does not turn otherwise healthy Street Traffic into a
 degraded TomTom/road-source state. No observed source is configured by default,

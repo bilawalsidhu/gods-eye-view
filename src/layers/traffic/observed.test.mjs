@@ -96,6 +96,53 @@ test('fresh and stale observations remain distinct', () => {
   assert.equal(stale.records.length, 1, 'stale evidence is retained, not relabeled fresh');
 });
 
+test('future-dated evidence is stale but retained alongside valid records', () => {
+  const future = NOW + 365 * 24 * 60 * 60 * 1000;
+  const snapshot = normalizeObservedTrafficSnapshot(
+    {
+      records: [
+        validRecord(),
+        validRecord({ id: 'future-observation', observedAt: future }),
+        validRecord({ id: 'future-window', windowEnd: future }),
+      ],
+    },
+    { now: NOW },
+  );
+  assert.equal(snapshot.state, 'partial');
+  assert.equal(snapshot.staleCount, 2);
+  assert.equal(snapshot.accepted, 3, 'suspect evidence stays inspectable');
+  assert.equal(snapshot.dropped, 0);
+
+  const near = normalizeObservedTrafficSnapshot(
+    {
+      records: [
+        validRecord({
+          observedAt: NOW + 60_000,
+          windowStart: NOW,
+          windowEnd: NOW + 60_000,
+        }),
+      ],
+    },
+    { now: NOW },
+  );
+  assert.equal(near.state, 'fresh', 'bounded provider clock skew is accepted');
+
+  const beyond = normalizeObservedTrafficSnapshot(
+    {
+      records: [
+        validRecord({
+          observedAt: NOW + 60_001,
+          windowStart: NOW,
+          windowEnd: NOW + 60_001,
+        }),
+      ],
+    },
+    { now: NOW },
+  );
+  assert.equal(beyond.state, 'stale');
+  assert.equal(beyond.staleCount, 1);
+});
+
 test('a malformed records container is an error, not an empty success', () => {
   const snapshot = normalizeObservedTrafficSnapshot(
     { source: 'fixture', records: { not: 'an-array' } },
