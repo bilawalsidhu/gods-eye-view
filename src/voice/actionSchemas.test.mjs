@@ -42,7 +42,8 @@ test('the complete Realtime tool payload pins the manifest-generated layer relea
     // Globe rotation adds one motion; visual keyhole fit and explicit
     // reset guidance/defaults update only move_camera and mode descriptions.
     // Restore base descriptions; append only globe-rotation defaults and fit guidance.
-    '967b5a043b812e2f8c1e190fc571cf12b960c9d4486df736902221aab4d99cf6',
+    // The aurora forecast adds weather-aurora and its alias hint.
+    'c97d24527a2910b8cc055f0d9513d00aea4d16a77bb20981cc961be250e40dae',
   );
 });
 
