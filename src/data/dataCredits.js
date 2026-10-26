@@ -322,6 +322,23 @@ export const DATA_CREDITS = [
       NYC_DOT_DISCLAIMER,
   },
   {
+    key: 'ne511-cctv',
+    html:
+      // Opt-in: NDOT's Highway Camera Policy limits the cameras and their
+      // images to transportation purposes unless otherwise approved.
+      'Traffic cameras (Nebraska, when enabled): ' +
+      '<a href="https://www.511.nebraska.gov/" target="_blank" rel="noopener">Nebraska 511 — Nebraska Department of Transportation</a>, per the ' +
+      '<a href="https://dot.nebraska.gov/policies-and-disclaimers/" target="_blank" rel="noopener">NDOT Policies and Disclaimers</a> · ' +
+      'road-aligned headings derived from © OpenStreetMap contributors (ODbL)',
+  },
+  {
+    key: 'ne511-signs',
+    html:
+      'Message signs (Nebraska, when enabled): ' +
+      '<a href="https://www.511.nebraska.gov/" target="_blank" rel="noopener">Nebraska 511 — Nebraska Department of Transportation</a>, per the ' +
+      '<a href="https://dot.nebraska.gov/policies-and-disclaimers/" target="_blank" rel="noopener">NDOT Policies and Disclaimers</a>',
+  },
+  {
     key: 'toronto-cctv',
     html:
       'Traffic cameras (Toronto): contains information licensed under the ' +

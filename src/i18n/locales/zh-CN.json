@@ -2818,5 +2818,17 @@
   "Layers": "图层",
   "Search": "搜索",
   "More": "更多",
-  "Panels": "面板"
+  "Panels": "面板",
+  "READ NEAREST": "读取最近",
+  "Fly to the nearest sign and read its board": "飞到最近的情报板并读取内容",
+  "No signs are currently posting": "目前没有情报板显示信息",
+  "Message boards": "情报板",
+  "Live message boards, each facing the traffic it addresses. Zoom in to read the face; a multi-page board cycles.": "实时情报板，每块都朝向其提示的车流。放大即可读取板面；多页情报板会轮换显示。",
+  "Message sign": "情报板",
+  "No message-sign packs enabled; see .env.example to enable one": "未启用任何情报板数据包；请参阅 .env.example 进行启用",
+  "Message signs timed out": "情报板请求超时",
+  "Message signs temporarily unavailable": "情报板暂时不可用",
+  "Message signs returned an incomplete response": "情报板返回的响应不完整",
+  "Message signs": "情报板",
+  "Message Signs": "情报板"
 }

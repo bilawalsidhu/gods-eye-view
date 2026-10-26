@@ -3019,5 +3019,17 @@
   "Layers": "Слои",
   "Search": "Поиск",
   "More": "Ещё",
-  "Panels": "Панели"
+  "Panels": "Панели",
+  "READ NEAREST": "ПРОЧИТАТЬ БЛИЖАЙШЕЕ",
+  "Fly to the nearest sign and read its board": "Перелететь к ближайшему табло и прочитать его",
+  "No signs are currently posting": "Сейчас ни одно табло не показывает сообщений",
+  "Message boards": "Информационные табло",
+  "Live message boards, each facing the traffic it addresses. Zoom in to read the face; a multi-page board cycles.": "Информационные табло в реальном времени, каждое обращено к потоку, для которого предназначено. Приблизьтесь, чтобы прочитать надпись; многостраничное табло листает страницы.",
+  "Message sign": "Информационное табло",
+  "No message-sign packs enabled; see .env.example to enable one": "Не включён ни один источник информационных табло; чтобы включить, см. .env.example",
+  "Message signs timed out": "Информационные табло не ответили вовремя",
+  "Message signs temporarily unavailable": "Информационные табло временно недоступны",
+  "Message signs returned an incomplete response": "Информационные табло вернули неполный ответ",
+  "Message signs": "Информационные табло",
+  "Message Signs": "Информационные табло"
 }

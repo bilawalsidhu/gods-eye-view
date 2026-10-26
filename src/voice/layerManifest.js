@@ -311,6 +311,21 @@ const layers = [
     noQuery: 'use control_cctv',
   },
   {
+    // Voice reads a selected or pointed-at board through get_entity_context;
+    // the layer itself is toggled from the panel.
+    id: 'message-signs',
+    aliases: [
+      'message signs',
+      'highway signs',
+      'road signs',
+      'electronic signs',
+      'variable message signs',
+    ],
+    toggle: false,
+    context: true,
+    noQuery: 'sign text is read through get_entity_context',
+  },
+  {
     id: 'alpr-cameras',
     aliases: [
       'flock cameras',
