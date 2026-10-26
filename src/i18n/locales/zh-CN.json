@@ -4326,5 +4326,20 @@
   "JTWC warning ↗": "JTWC 警报 ↗",
   "Active cyclone advisories and warnings": "生效的气旋公告和警报",
   "Select a storm on the map, or choose a storm in the list to select it and move the camera. Click empty map space to clear the selection. NOAA NHC/CPHC advisories and JTWC warnings. The NHC cone describes forecast center-track uncertainty, not storm size or the full hazard area. The JTWC 34-knot wind danger area is where 34-knot winds may reach, widened by forecast track error; it is not a cone. Forecast point labels are source lead hours, not times computed from advisory issuance. Geometry follows the surface; height is not weather altitude. Consult the official advisory or the regional warning centre.": "在地图上选择风暴，或在列表中选择风暴以选中它并移动镜头。点击地图空白处可取消选择。NOAA NHC/CPHC 公告和 JTWC 警报。NHC 的预报不确定范围表示中心预报路径的不确定性，而不是风暴大小或整个危险区域。JTWC 的 34 节风危险区是 34 节风可能到达的范围，并按路径预报误差加宽；它不是预报不确定范围。预报点标签是数据源的预报时效（小时），不是根据发布时间计算的时刻。几何形状贴合地表；高度不是气象高度。请以官方公告或区域警报中心为准。",
-  "{name} · {classification} · Warning {number} · issued {time}": "{name} · {classification} · 第 {number} 号警报 · 发布于 {time}"
+  "{name} · {classification} · Warning {number} · issued {time}": "{name} · {classification} · 第 {number} 号警报 · 发布于 {time}",
+  "Tilt up toward the horizon": "向地平线方向抬高视角",
+  "Tilt down toward top-down view": "向俯视视角压低",
+  "Top-down view": "俯视视角",
+  "Look left": "向左看",
+  "Look right": "向右看",
+  "Look up": "向上看",
+  "Look down": "向下看",
+  "Map navigation": "地图导航",
+  "Tilt": "倾斜",
+  "Tilt: top-down (bottom) to near horizon (top)": "倾斜：俯视（底部）至接近地平线（顶部）",
+  "Map heading. Drag to rotate, arrow keys turn, Home for north": "地图朝向。拖动以旋转，方向键转向，Home 键朝北",
+  "North, 0 degrees": "北，0 度",
+  "Look around": "环顾四周",
+  "{heading} degrees from north": "偏北 {heading} 度",
+  "{tilt} degrees from top-down": "偏离俯视 {tilt} 度"
 }
