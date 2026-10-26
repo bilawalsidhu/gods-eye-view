@@ -250,6 +250,30 @@ export class LayerStateCoordinator {
       this._revokePendingTrackingWatch('owner-layer-disabled');
     }
     if (!isExplicitLayerStateOrigin(change.origin)) return;
+    if (change.type === 'selection-cleared') {
+      // Only layers a newer request turned back on survive Clear All. Any
+      // other saved layer would reappear from the share link or a reload.
+      const stillEnabled = new Set(change.enabledLayerIds || []);
+      const dropped = this._durableState.enabledLayerIds.filter(
+        (id) => !stillEnabled.has(id),
+      );
+      if (dropped.length === 0) return;
+      for (const layerId of dropped) {
+        this._restoreControllers
+          .get(layerId)
+          ?.abort('superseded-by-explicit-visibility');
+      }
+      if (dropped.some((id) => SHARE_TRACKING_RESTORE_POLICIES[id])) {
+        this._revokePendingTrackingWatch('superseded-by-explicit-visibility');
+      }
+      this._commitExplicit({
+        ...this._durableState,
+        enabledLayerIds: this._durableState.enabledLayerIds.filter((id) =>
+          stillEnabled.has(id),
+        ),
+      });
+      return;
+    }
     if (change.type === 'visibility') {
       this._restoreControllers
         .get(change.layerId)
