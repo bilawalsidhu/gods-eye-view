@@ -22,6 +22,7 @@ qa-artifacts/
 .claude/
 .DS_Store
 .gstack/
+.worktrees/
 3d-models/
 pinokio/ENVIRONMENT
 pinokio/.installed

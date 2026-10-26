@@ -164,3 +164,39 @@ test('satellite pass prediction methods report no-tle on cold catalog and coerce
     { status: 'no-tle' },
   );
 });
+
+test('satellite group URL override fetches upstream directly', async () => {
+  const urls = [];
+  const source = createSatelliteSource({
+    fetchImpl: async (url) => {
+      urls.push(String(url));
+      return {
+        ok: true,
+        status: 200,
+        text: async () => 'TLE',
+        headers: new Headers(),
+      };
+    },
+    groupUrl: (group) =>
+      `https://celestrak.org/NORAD/elements/gp.php?GROUP=${group}&FORMAT=tle`,
+  });
+  const result = await source.readGroup('stations');
+  assert.equal(result.ok, true);
+  assert.equal(result.text, 'TLE');
+  assert.match(urls[0], /^https:\/\/celestrak\.org\//);
+});
+
+test('satellite direct failure resolves honestly without throwing', async () => {
+  const source = createSatelliteSource({
+    fetchImpl: async () => ({
+      ok: false,
+      status: 503,
+      text: async () => '',
+      headers: new Headers(),
+    }),
+    groupUrl: () => 'https://celestrak.org/x',
+  });
+  const result = await source.readGroup('stations');
+  assert.equal(result.ok, false);
+  assert.equal(result.status, 503);
+});

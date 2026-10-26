@@ -9,6 +9,11 @@ import { createStandaloneTools } from './tools.js';
 import { resolveLocale, applyDocumentLanguage } from '../i18n/locale.js';
 import { applyDocumentTranslations, setLocale } from '../i18n/index.js';
 import { createGoogleTokenSource } from '../maps/googleTokens.js';
+import { shouldUseDirect } from '../mobile/sourcePolicy.js';
+import {
+  createApplicationKeyReader,
+  resolveSceneKeys,
+} from '../mobile/vaultKeys.js';
 
 // The existing controls and layer catalog contain page-scoped state.
 let constructed = false;
@@ -49,18 +54,30 @@ export function createStandaloneApplication({
         resolveApiKey: () => googleApiKey,
         signal: context.signal,
       });
+      // On-device without a backend, map keys come from the vault rather
+      // than the build, so photorealistic 3D needs no baked keys. The
+      // resolver is fail-closed: without stored tokens the build values
+      // (usually empty on mobile) stand and the keyless globe boots.
+      const sceneKeys = await resolveSceneKeys({
+        getVaultKey: createApplicationKeyReader(),
+        googleApiKey,
+        cesiumToken,
+        direct: shouldUseDirect(),
+      });
       const scene = await createStandaloneScene({
         ...context,
-        googleApiKey,
+        googleApiKey: sceneKeys.googleApiKey,
         // Without a key, Google 3D can still load with tokens from the
         // app's server when it offers them.
-        googleTokens: googleApiKey ? null : createGoogleTokenSource(),
-        cesiumToken,
+        googleTokens: sceneKeys.googleApiKey ? null : createGoogleTokenSource(),
+        cesiumToken: sceneKeys.cesiumToken,
         loaderStatus,
       });
       catalog = createStandaloneCatalog({
         sources,
         streetLevelProviders,
+        getKey: createApplicationKeyReader(),
+        mapillaryToken: sceneKeys.mapillaryToken,
         nepalBoundaryResolver: (signal) =>
           scene.operations.annotationResolver.resolveRegionRingForQuery(
             'Nepal',

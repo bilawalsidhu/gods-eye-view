@@ -263,6 +263,9 @@ export function createFrames({ state: layerState, services, parts, source }) {
     runtime.lastImageRefreshAt = now;
 
     const frameUrl = frameUrlFor(record.camera, refreshMs);
+    // A source without a frame URL (no upstream configured) paints the
+    // placeholder path instead of throwing on `.includes`.
+    if (!frameUrl) return;
     const sep = frameUrl.includes('?') ? '&' : '?';
     runtime.imageLoading = true;
     runtime.imageReady = false;

@@ -5,6 +5,9 @@ import { createRasterTileProvider } from './rasterTiles.js';
 import { createWeatherShell } from './shellRendering.js';
 import { msg } from '../../i18n/index.js';
 import { readResponseBytesCapped } from '../../sources/httpBody.js';
+import { shouldUseDirect } from '../../mobile/sourcePolicy.js';
+import { createDeviceFetch } from '../../mobile/deviceFetch.js';
+import { createNoaaTilesDirectSource } from '../../mobile/adapters/noaaTilesDirect.js';
 import {
   acquireInfraredMosaic,
   processInfraredImage,
@@ -16,6 +19,61 @@ const MAX_MOSAICS = 6;
 const MAX_PREFETCH_TILES = 8;
 // How often a staged frame waiting out its quiet interval rechecks readiness.
 export const READY_WAKE_MS = 150;
+
+/** Tile imagery through the on-device NOAA adapter instead of `/api` URLs.
+ * Surface mirrors `createRasterTileProvider` so Cesium scheduling is unchanged;
+ * bytes decode through the rendering `decodeImage` seam. */
+function createDirectTileProvider({
+  cesium,
+  tiles,
+  product,
+  time,
+  size,
+  rectangle,
+  maximumLevel,
+  credit,
+  decodeImage,
+}) {
+  const tilingScheme = new cesium.GeographicTilingScheme({ rectangle });
+  /**
+   * Fetch one tile's PNG bytes through the direct adapter and decode them.
+   * @param {number} x Tile X.
+   * @param {number} y Tile Y.
+   * @param {number} level Zoom level.
+   * @returns {Promise<*>} Decoded image for Cesium upload.
+   */
+  async function requestImage(x, y, level) {
+    const bytes = await tiles.getTile(product, time, level, x, y, {
+      size: String(size),
+    });
+    return decodeImage(bytes);
+  }
+  return {
+    tilingScheme,
+    rectangle,
+    tileWidth: size,
+    tileHeight: size,
+    minimumLevel: 0,
+    maximumLevel,
+    ready: true,
+    tileDiscardPolicy: undefined,
+    credit,
+    errorEvent: new cesium.Event(),
+    hasAlphaChannel: true,
+    getTileCredits: () => undefined,
+    pickFeatures: () => undefined,
+    requestImage,
+  };
+}
+
+/**
+ * Decode PNG tile bytes without a host decoder (browser Web API only).
+ * @param {Uint8Array} bytes PNG bytes.
+ * @returns {Promise<ImageBitmap>}
+ */
+function decodePngBytes(bytes) {
+  return createImageBitmap(new Blob([bytes], { type: 'image/png' }));
+}
 
 /** Globe imagery: own at most a displayed and a staging frame. Use native Cesium
  * tile scheduling, projection and texture disposal; the application clock is never touched. */
@@ -29,6 +87,7 @@ function createGlobeRendering({
   fetchImpl,
   decodeImage,
   createCanvas,
+  tilesSource = null,
 }) {
   let current = null;
   let incoming = null;
@@ -39,6 +98,22 @@ function createGlobeRendering({
   const mosaics = new Map();
   let prefetchJob = null;
   let prefetchedKey = null;
+  let directCache = null;
+  /**
+   * Resolve the direct tile source: explicit override wins, otherwise the
+   * on-device NOAA adapter when the source policy selects direct. Null keeps
+   * the legacy `/api` tile-URL path byte-identical.
+   * @returns {{ getTile: Function }|null}
+   */
+  function directTiles() {
+    if (tilesSource) return tilesSource;
+    if (!shouldUseDirect()) return null;
+    if (!directCache)
+      directCache = createNoaaTilesDirectSource({
+        fetchImpl: createDeviceFetch(),
+      });
+    return directCache;
+  }
 
   function profile(product) {
     return {
@@ -68,6 +143,7 @@ function createGlobeRendering({
       mode,
       createCanvas,
       fetchImpl,
+      imageSource: directTiles(),
       decodeImage,
       now,
       onFetched,
@@ -81,7 +157,11 @@ function createGlobeRendering({
     return { ...result, cached: false };
   }
 
-  function prefetchTiles(snapshot, time) {
+  /**
+   * Tiles intersecting the current viewport, as `{ z, x, y }` coords.
+   * URL expansion (web) and adapter fetches (direct) share this enumeration.
+   */
+  function enumeratePrefetchTiles(snapshot, time) {
     const { west, south, east, north } = snapshot.bounds;
     const bounds = cesium.Rectangle.fromDegrees(west, south, east, north);
     const view = viewer.camera?.computeViewRectangle?.(
@@ -92,10 +172,7 @@ function createGlobeRendering({
       : bounds;
     if (!coverage) return [];
     const scheme = new cesium.GeographicTilingScheme();
-    const template = weatherTileUrl(snapshot.product, time, {
-      size: profile(snapshot.product).tileSize,
-    });
-    const urls = [];
+    const coords = [];
     for (let z = 0; z <= 1; z++) {
       for (let y = 0; y < scheme.getNumberOfYTilesAtLevel(z); y++) {
         for (let x = 0; x < scheme.getNumberOfXTilesAtLevel(z); x++) {
@@ -106,14 +183,21 @@ function createGlobeRendering({
             )
           )
             continue;
-          urls.push(
-            template.replace('{z}', z).replace('{x}', x).replace('{y}', y),
-          );
-          if (urls.length === MAX_PREFETCH_TILES) return urls;
+          coords.push({ z, x, y });
+          if (coords.length === MAX_PREFETCH_TILES) return coords;
         }
       }
     }
-    return urls;
+    return coords;
+  }
+
+  function prefetchTiles(snapshot, time) {
+    const template = weatherTileUrl(snapshot.product, time, {
+      size: profile(snapshot.product).tileSize,
+    });
+    return enumeratePrefetchTiles(snapshot, time).map(({ z, x, y }) =>
+      template.replace('{z}', z).replace('{x}', x).replace('{y}', y),
+    );
   }
 
   function remove(frame) {
@@ -191,8 +275,14 @@ function createGlobeRendering({
         )
           return false;
         const global = snapshot.product === 'clouds';
-        const urls = global ? [] : prefetchTiles(snapshot, time);
-        const key = global ? `${time}|${infrared}` : urls.join('|');
+        const tiles = global ? null : directTiles();
+        const coords = global ? [] : enumeratePrefetchTiles(snapshot, time);
+        const urls = tiles ? [] : prefetchTiles(snapshot, time);
+        const key = global
+          ? `${time}|${infrared}`
+          : tiles
+            ? coords.map(({ z, x, y }) => `${z}/${x}/${y}`).join('|')
+            : urls.join('|');
         if (prefetchJob?.key === key || prefetchedKey === key) return false;
         cancelPrefetch();
         job = { key, controller: new AbortController() };
@@ -200,6 +290,15 @@ function createGlobeRendering({
         const { signal } = job.controller;
         job.timeout = setTimeout(() => job.controller.abort(), timeoutMs);
         if (global) await mosaic(time, infrared, signal);
+        else if (tiles)
+          await Promise.all(
+            coords.map(({ z, x, y }) =>
+              tiles.getTile(snapshot.product, time, z, x, y, {
+                size: String(profile(snapshot.product).tileSize),
+                signal,
+              }),
+            ),
+          );
         else
           await Promise.all(
             urls.map(async (url) => {
@@ -350,6 +449,7 @@ function createGlobeRendering({
               : 'NOAA nowCOAST · NESDIS GOES / global satellite partners',
           false,
         );
+        const direct = global ? null : directTiles();
         const provider = global
           ? createRasterTileProvider({
               cesium,
@@ -361,18 +461,30 @@ function createGlobeRendering({
               credit,
               createCanvas,
             })
-          : new cesium.UrlTemplateImageryProvider({
-              url: weatherTileUrl(snapshot.product, time, {
+          : direct
+            ? createDirectTileProvider({
+                cesium,
+                tiles: direct,
+                product: snapshot.product,
+                time,
                 size: nextProfile.tileSize,
-              }),
-              tilingScheme,
-              rectangle,
-              tileWidth: nextProfile.tileSize,
-              tileHeight: nextProfile.tileSize,
-              maximumLevel: nextProfile.maximumLevel,
-              enablePickFeatures: false,
-              credit,
-            });
+                rectangle,
+                maximumLevel: nextProfile.maximumLevel,
+                credit,
+                decodeImage: decodeImage ?? decodePngBytes,
+              })
+            : new cesium.UrlTemplateImageryProvider({
+                url: weatherTileUrl(snapshot.product, time, {
+                  size: nextProfile.tileSize,
+                }),
+                tilingScheme,
+                rectangle,
+                tileWidth: nextProfile.tileSize,
+                tileHeight: nextProfile.tileSize,
+                maximumLevel: nextProfile.maximumLevel,
+                enablePickFeatures: false,
+                credit,
+              });
         const requestImage = provider.requestImage.bind(provider);
         provider.requestImage = (x, y, level, request) => {
           if (frame.closed) return undefined;
@@ -555,6 +667,7 @@ export function createWeatherRendering({
   decodeImage,
   createCanvas = () => document.createElement('canvas'),
   createShell = createWeatherShell,
+  tilesSource = null,
 }) {
   const shared = {
     viewer,
@@ -566,6 +679,7 @@ export function createWeatherRendering({
     fetchImpl,
     decodeImage,
     createCanvas,
+    tilesSource,
   };
   const globe = createGlobeRendering(shared);
   let shell = null;

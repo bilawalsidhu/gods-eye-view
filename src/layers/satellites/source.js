@@ -11,12 +11,13 @@ const GROUPS = new Set([
 /** Read catalog text from the existing group endpoint using a supplied transport. */
 export function createSatelliteSource({
   fetchImpl = (...args) => globalThis.fetch(...args),
+  groupUrl = (group) => `/api/celestrak/${group}`,
 } = {}) {
   return {
     async readGroup(group, { signal } = {}) {
       if (!GROUPS.has(group)) throw new TypeError('Unknown satellite group');
       signal?.throwIfAborted();
-      const response = await fetchImpl(`/api/celestrak/${group}`, { signal });
+      const response = await fetchImpl(await groupUrl(group), { signal });
       const text = response.ok ? await response.text() : '';
       signal?.throwIfAborted();
       // The proxy serves its last copy, marked STALE-ERROR, when CelesTrak

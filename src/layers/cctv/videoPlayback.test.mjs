@@ -128,3 +128,10 @@ test('finite video feeds retain looping while live HLS does not loop', async () 
     }
   }
 });
+
+test('null media URL fails honestly instead of throwing inside playback', () => {
+  assert.throws(
+    () => attachCctvVideo(video(), null, 'hls', {}),
+    /no media URL/,
+  );
+});

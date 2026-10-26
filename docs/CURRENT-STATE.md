@@ -113,6 +113,45 @@ provider registration rejects compositions that cannot fit rather than truncatin
 identities. A malformed or duplicate entry invalidates the complete custom-switch
 field. Existing whole-link size limits still apply.
 
+## Android shell (Capacitor) — October 2026
+ 
+An experimental Android shell wraps the web build via Capacitor (app ID
+`ai.halfpixel.gev`, `capacitor.config.ts`, native project in `android/`).
+The mobile web seam is `src/mobile/`: `runtimeConfig.js` resolves the
+backend base (`GEV_API_BASE`, `http(s)://host` only, fail-closed to
+same-origin), `keyStore.js` persists it through an injected
+Preferences-shaped store (real Capacitor Preferences on-device,
+`localStorage` mirror elsewhere), and `webglSupport.js` probes WebGL2 with
+a keyless-2D fallback message. Provider Settings exposes the override as a
+Backend URL row on the Capacitor branch. Keys are bring-your-own and live in
+an on-device Keystore-backed vault (`@aparajita/capacitor-secure-storage`
+plugin seam, `src/mobile/secureStorage.js`); the vault ciphertext persists
+across app restarts and never leaves the device.
+`scripts/mobile/build-apk.sh` produces `app-debug.apk` and
+`scripts/mobile/smoke-check.mjs` gates the static surface plus the APK with
+`--require-apk`; `android-37` is installed locally and the APK assembles.
+The manifest carries no orientation or aspect locks and the launcher activity
+resizes in place on unfold; the Pixel Fold device matrix is verified on
+Pixel 9 Pro Fold and Pixel 10 Pro Fold (Android 17): cover display portrait,
+inner display landscape, and unfold transition mid-session with layers on — the
+camera (3D tiles + globe) survives the resize. The WebGL2 fallback is probed and
+tested but not yet wired into boot. Full details in `docs/MOBILE.md`.
+ 
+On-device heavy adapters (`src/mobile/adapters/`): `transitDirect.js`
+(GTFS-RT protobuf via `pbf`), `windDirect.js` (GFS GRIB2 via `eccodes-wasm`),
+`cctvDirect.js` (TxDOT decode, same-host image guard, in-memory HLS leases
+with 15 s abandoned expiry, synthetic SVG fallback; StreetView omitted),
+`overpassDirect.js` (client-side QL sanitize with `around` bound parity to
+the server, limiter, simplification; mirrors required, none baked in), and
+`noaaTilesDirect.js` (capabilities parsing with XML hardening, tile bounds,
+PNG validation). All ports are Web-API-only (`src/` never imports `server/`)
+with canonical pointers to the server implementations. `heavyLayerSources.js`
+adapts them to the legacy layer shapes and `createStandaloneLayerSources`
+selects direct only when `shouldUseDirect()` holds; web defaults are
+unchanged. Fixture coverage lives in `src/mobile/adapters/heavy.test.mjs`.
+Real-device proof: live feeds and Fold survival verified; HLS playback and
+GRIB-in-WebView remain open; see the Plan 2 checklist in `docs/MOBILE.md`.
+
 ## God's Eye View in conversations — October 2, 2026
 
 Tool answers that can be shown in God's Eye View include a view: camera, layers,

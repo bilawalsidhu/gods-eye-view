@@ -36,6 +36,7 @@ export function attachCctvVideo(
   } = {},
 ) {
   // Preserve replay for existing finite video feeds; live HLS must not loop.
+  if (!url) throw new Error('Camera has no media URL');
   video.loop = feedType !== 'hls';
   let disposed = false;
   let hls = null;
