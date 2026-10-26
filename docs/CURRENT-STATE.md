@@ -308,7 +308,7 @@ observation layers provide radar and satellite history; none claims measured clo
 Weather imagery releases its camera move listener on disable and registers it once on re-enable. Disabling also clears active imagery work.
 A globe weather frame with loaded tiles and no pending requests rechecks staging
 readiness on a single 150 ms wake timer instead of requesting every render.
-The existing quiet interval and two settled frames still govern promotion;
+The existing readiness conditions and two settled frames still govern promotion;
 completion, cancellation, replacement and teardown clear the wake timer.
 Weather imagery drapes onto the globe basemap. On photorealistic 3D Tiles each
 observed product is instead a raised, translucent shell: one rectangle over the
