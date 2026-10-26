@@ -6,6 +6,7 @@
   "scripts/qa-form-fields.mjs",
   "scripts/package-boundaries.json",
   "scripts/format.mjs",
+  "scripts/qa-layer-visibility.mjs",
   "scripts/next-layer-state-token.mjs",
   "scripts/check-layer-state-tokens.mjs",
   "scripts/qa-layer-token-twochar.mjs",
@@ -193,6 +194,7 @@
   "src/ui/visualInput.js",
   "src/ui/visualInput.test.mjs",
   "scripts/qa-visual-input.mjs",
+  "scripts/qa-scope-hud.mjs",
   "scripts/qa-segmented-controls.mjs",
   "src/ui/displayControls.js",
   "src/ui/segmentedControl.test.mjs",
@@ -517,7 +519,6 @@
   "src/layers/bikeshare/selection.js",
   "src/data/traffic.js",
   "src/data/bikeshare.js",
-  "src/data/flowTiles.js",
   "src/layers/traffic/source.test.mjs",
   "src/layers/bikeshare/source.test.mjs",
   "src/layers/bikeshare/proxyRoute.test.mjs",
@@ -650,7 +651,6 @@
   "src/agent/worldPacket.test.mjs",
   "src/voice/layerSummary.js",
   "build/application-html.js",
-  "src/app/sourceSlot.js",
   "src/app/sources.js",
   "src/ui/composition.js",
   "src/services/application.js",
@@ -1088,5 +1088,6 @@
   "scripts/qa-status-badges.mjs",
   "src/dockerTrustedPeers.test.mjs",
   "src/cameraGlobeRotation.test.mjs",
-  "src/voice/globeResetConfirmation.test.mjs"
+  "src/voice/globeResetConfirmation.test.mjs",
+  "src/hudDms.test.mjs"
 ]

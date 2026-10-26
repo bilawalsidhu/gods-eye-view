@@ -81,6 +81,24 @@ test('nearby labels rank landmarks, deduplicate names/addresses and bound the pr
   assert.deepEqual(projectNearbyPlaces({}, 0, 0), []);
 });
 
+test('nearby place distances take the short way round 180°', () => {
+  const at = (name, longitude) => ({
+    id: name,
+    displayName: { text: name },
+    location: { latitude: -16.8, longitude },
+    types: ['point_of_interest'],
+  });
+  // From Taveuni at 179.98: 2 km east across 180°, 4 km west on this side.
+  const result = projectNearbyPlaces(
+    { places: [at('West', 179.942), at('East', -179.999)] },
+    -16.8,
+    179.98,
+  );
+  const byName = Object.fromEntries(result.map((p) => [p.name, p.distanceM]));
+  assert.ok(byName.East > 1500 && byName.East < 2500, String(byName.East));
+  assert.ok(byName.West > 3500 && byName.West < 4500, String(byName.West));
+});
+
 test('text search preserves bounds, rejects malformed bounds and tolerates absent locations', () => {
   const viewport = {
     low: { latitude: 1, longitude: 2 },

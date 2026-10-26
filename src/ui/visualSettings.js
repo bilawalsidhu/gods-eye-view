@@ -1,3 +1,5 @@
+import { clampScopeFeatherPct } from '../scopeMaskPolicy.js';
+import { syncScopeControls } from './displayControls.js';
 import { STYLE_STATUS_LABELS } from './visualPresets.js';
 import { syncSegmentedControl } from './segmentedControl.js';
 import { t } from '../i18n/index.js';
@@ -136,11 +138,10 @@ export class VisualSettings {
     }
     if (typeof scopeEnabled === 'boolean') {
       setScopeMaskEnabled(scopeEnabled);
-      this._scopeBtn?.classList.toggle('active', scopeEnabled);
-      this._scopeBtn?.setAttribute('aria-pressed', String(scopeEnabled));
+      syncScopeControls(this._scopeBtn, this._scopeFeatherSlider, scopeEnabled);
     }
     if (typeof scopeFeatherPct === 'number' && this._scopeFeatherSlider) {
-      const pct = Math.max(0, Math.min(100, Math.round(scopeFeatherPct)));
+      const pct = clampScopeFeatherPct(scopeFeatherPct);
       this._scopeFeatherSlider.value = String(pct);
       if (this._scopeFeatherValue)
         this._scopeFeatherValue.textContent = `${pct}%`;
@@ -1302,11 +1303,14 @@ export class VisualSettings {
     const scopeState = state.scope || {};
     if (typeof scopeState.enabled === 'boolean') {
       setScopeMaskEnabled(scopeState.enabled);
-      this._scopeBtn?.classList.toggle('active', scopeState.enabled);
-      this._scopeBtn?.setAttribute('aria-pressed', String(scopeState.enabled));
+      syncScopeControls(
+        this._scopeBtn,
+        this._scopeFeatherSlider,
+        scopeState.enabled,
+      );
     }
     if (typeof scopeState.featherPct === 'number' && this._scopeFeatherSlider) {
-      const pct = Math.max(0, Math.min(100, Math.round(scopeState.featherPct)));
+      const pct = clampScopeFeatherPct(scopeState.featherPct);
       this._scopeFeatherSlider.value = String(pct);
       if (this._scopeFeatherValue)
         this._scopeFeatherValue.textContent = `${pct}%`;
