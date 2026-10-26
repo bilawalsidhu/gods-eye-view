@@ -1,6 +1,10 @@
 services:
   gods-eye-view:
-    build: .
+    build:
+      context: .
+      # The hardened `runtime` target is the published image; compose wants git
+      # for the tests and the bind-mounted checkout.
+      target: dev
     # Everything the app writes (.env with your keys, .gev-cache, .gev-logs)
     # lands in the bind-mounted repo, so run as you, not root. UID/GID are
     # unset on Docker Desktop, where the 1000 fallback is ignored anyway.

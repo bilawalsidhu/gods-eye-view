@@ -170,14 +170,23 @@ Every release is published to the GitHub Container Registry as one multi-arch im
 
 ```bash
 docker run -d --name gods-eye-view \
+  --init --read-only --cap-drop ALL \
+  --security-opt no-new-privileges:true \
+  --pids-limit 256 --user 1000:1000 \
+  --tmpfs /tmp \
+  --tmpfs /app/node_modules/.vite:uid=1000,gid=1000 \
+  --tmpfs /app/node_modules/.vite-temp:uid=1000,gid=1000 \
+  --tmpfs /app/.gev-logs:uid=1000,gid=1000 \
+  -v gev-cache:/app/.gev-cache \
   -p 127.0.0.1:4173:4173 \
   --env-file .env \
-  -v gev-cache:/app/.gev-cache \
   --restart unless-stopped \
   ghcr.io/bilawalsidhu/gods-eye-view:latest
 ```
 
-Open **`http://localhost:4173`**. Drop `--env-file .env` to start keyless, and add keys later. The port is published to `127.0.0.1` only, like the other paths; widening it is the [Sharing an instance](#-sharing-an-instance) opt-in. The `gev-cache` volume keeps downloaded map and satellite data across restarts.
+Open **`http://localhost:4173`**. Drop `--env-file .env` to start keyless (it fails if the file is missing). The port is published to `127.0.0.1` only, like the other paths; widening it is the [Sharing an instance](#-sharing-an-instance) opt-in.
+
+The image is hardened, and the flags above hold it to that: it runs as the unprivileged user `1000:1000`, the app's code is read-only even to that user, and it contains no `git`, `npm` or package manager. Only four paths are writable: `/app/.gev-cache` (the `gev-cache` volume keeps downloaded map and satellite data across restarts), Vite's dependency cache and temp directory, and `.gev-logs`. `--init` reaps stray processes and forwards signals so `docker stop` is quick.
 
 Or as a `compose.yaml` (this is separate from the repo's own, which builds from source):
 
@@ -185,11 +194,23 @@ Or as a `compose.yaml` (this is separate from the repo's own, which builds from 
 services:
   gods-eye-view:
     image: ghcr.io/bilawalsidhu/gods-eye-view:latest
+    init: true
+    read_only: true
+    user: "1000:1000"
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 256
     ports:
       - "127.0.0.1:4173:4173"
     env_file:
       - path: .env
         required: false
+    tmpfs:
+      - /tmp
+      - /app/node_modules/.vite:uid=1000,gid=1000
+      - /app/node_modules/.vite-temp:uid=1000,gid=1000
+      - /app/.gev-logs:uid=1000,gid=1000
     volumes:
       - gev-cache:/app/.gev-cache
     restart: unless-stopped
@@ -200,7 +221,9 @@ volumes:
 
 The image has its own health check (an HTTP request to the app root every 30 seconds), so `docker ps` shows `healthy` once it is up.
 
-**Keep your keys outside the container.** Keys saved from Provider Settings are written to `/app/.env` inside the container, which is thrown away when the container is removed (`docker rm`, `docker compose down`, or a `docker pull` followed by recreating it). Put your keys in a `.env` file on the host and pass it with `--env-file` / `env_file` as above; the image reads them from the environment on every start. Only the cache is persisted by the volume. If you want Provider Settings to keep working across recreates, use the from-source path below, where `.env` lives in your clone.
+**Put your keys in a `.env` file on the host, not in Provider Settings.** The code directory is read-only, so **SAVE KEYS** answers an error and `/app/.env` is never written (the start log also warns that `/app` is not writable; for this image that is intended). Pass keys with `--env-file` / `env_file` as above; the image reads them from the environment on every start. If you want Provider Settings to keep working, use the from-source path below, where `.env` lives in your clone.
+
+Each release is signed with [cosign](https://github.com/sigstore/cosign) (keyless) and carries build provenance and an SBOM. Check one with `gh attestation verify oci://ghcr.io/bilawalsidhu/gods-eye-view:1.2.3 --repo bilawalsidhu/gods-eye-view`.
 
 Pin a version tag for reproducible installs (`ghcr.io/bilawalsidhu/gods-eye-view:1.2.3`, or `:1.2` for patch updates only). To update, `docker pull` the image and recreate the container (`docker compose pull && docker compose up -d`).
 

@@ -170,6 +170,7 @@ jobs:
             esbuild: linux-arm64
     env:
       IMAGE: gev-ci:${{ matrix.esbuild }}
+      TRIVY_IMAGE: aquasec/trivy:0.76.1@sha256:790fd66d1697395d8693d1acaa1ea702406a20f109b6fc7bac8db623eca6c06c
     steps:
       - name: Check out source
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
@@ -187,6 +188,7 @@ jobs:
         with:
           context: .
           platforms: ${{ matrix.platform }}
+          target: runtime
           load: true
           push: false
           tags: ${{ env.IMAGE }}
@@ -196,7 +198,18 @@ jobs:
       - name: Start the image and wait until it is healthy
         run: |
           echo "BUILD_SECONDS=$(( $(date +%s) - BUILD_START ))" >> "$GITHUB_ENV"
-          docker run -d --name gev -p 127.0.0.1:4173:4173 "$IMAGE"
+          # The same flags the README tells users to run with, so this proves
+          # the hardened image works under them: read-only root, no
+          # capabilities, writable volumes/tmpfs only where the app writes.
+          docker run -d --name gev --init --read-only \
+            --cap-drop ALL --security-opt no-new-privileges:true \
+            --pids-limit 256 --user 1000:1000 \
+            --tmpfs /tmp \
+            --tmpfs /app/node_modules/.vite:uid=1000,gid=1000 \
+            --tmpfs /app/node_modules/.vite-temp:uid=1000,gid=1000 \
+            --tmpfs /app/.gev-logs:uid=1000,gid=1000 \
+            -v gev-ci-cache:/app/.gev-cache \
+            -p 127.0.0.1:4173:4173 "$IMAGE"
           for attempt in $(seq 1 60); do
             health="$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' gev)"
             running="$(docker inspect --format '{{.State.Running}}' gev)"
@@ -222,6 +235,37 @@ jobs:
           echo "ESBUILD_DIRS=$found" >> "$GITHUB_ENV"
           test "$found" = '${{ matrix.esbuild }}'
 
+      - name: Check the hardening
+        run: |
+          test "$(docker exec gev id -u)" = 1000
+          if docker exec gev touch /app/src/probe 2>/dev/null; then echo 'code is writable'; exit 1; fi
+          if docker exec gev touch /probe 2>/dev/null; then echo 'root filesystem is writable'; exit 1; fi
+          docker exec gev touch /app/.gev-cache/probe
+          if docker exec gev sh -c 'command -v git || command -v npm || command -v apt-get'; then echo 'unexpected tooling in the image'; exit 1; fi
+          leftovers="$(docker run --rm --entrypoint sh "$IMAGE" -c "find / -xdev \\( -name '.env' -o -name '.env.*' \\) -not -path '*/node_modules/*' -not -name '.env.example'")"
+          test -z "$leftovers" || { echo "env files in image: $leftovers"; exit 1; }
+
+      - name: Scan for vulnerabilities (informational)
+        # Reports only: base-image CVEs are outside a pull request's control,
+        # so this never fails the build. Trivy runs from a digest-pinned
+        # container against a saved tarball, with no Docker socket access.
+        continue-on-error: true
+        run: |
+          docker save "$IMAGE" -o "${RUNNER_TEMP}/image.tar"
+          mkdir -p "${RUNNER_TEMP}/trivy-cache"
+          docker run --rm \
+            -v "${RUNNER_TEMP}:/work" -v "${RUNNER_TEMP}/trivy-cache:/root/.cache/trivy" \
+            "$TRIVY_IMAGE" image --quiet --scanners vuln --input /work/image.tar \
+            --format json --output /work/trivy.json
+          count() { jq "[.Results[]?.Vulnerabilities[]? | select(.Severity == \"$1\")] | length" "${RUNNER_TEMP}/trivy.json"; }
+          {
+            echo '### Vulnerability scan (informational, not blocking)'
+            echo
+            echo '| Platform | Critical | High | Medium | Low |'
+            echo '| --- | --- | --- | --- | --- |'
+            echo "| ${{ matrix.platform }} | $(count CRITICAL) | $(count HIGH) | $(count MEDIUM) | $(count LOW) |"
+          } >> "$GITHUB_STEP_SUMMARY"
+
       - name: Container log
         if: failure()
         run: docker logs gev || true
@@ -240,4 +284,6 @@ jobs:
 
       - name: Remove container
         if: always()
-        run: docker rm -f gev || true
+        run: |
+          docker rm -f gev || true
+          docker volume rm gev-ci-cache || true

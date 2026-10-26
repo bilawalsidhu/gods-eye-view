@@ -6289,9 +6289,15 @@ Releases publish a multi-arch image (`linux/amd64`, `linux/arm64`) to
 architecture is built on a native runner, so `npm ci` fetches that
 architecture's esbuild and sharp binaries, and a merge job tags the combined
 manifest (`X.Y.Z`, `X.Y`, the commit SHA, and `latest` for stable releases only).
-The release notes gain a "Container image" section with the digest. Pull
-requests build and smoke-test the image on both architectures in `ci.yml`
-without pushing. Keys saved through Provider Settings live in the container's
-`/app/.env`, so the README tells prebuilt-image users to pass keys with
-`--env-file`; `/app/.gev-cache` is created in the image so a named volume stays
-writable by the `node` user.
+The manifest carries build provenance, an SBOM and a keyless cosign signature,
+and the release notes gain a "Container image" section with the digest and an
+informational Trivy count. Pull requests build, smoke-test and scan the image on
+both architectures in `ci.yml` without pushing; the scan never fails the build.
+
+The Dockerfile has two targets. `dev` (what `compose.yaml` builds) keeps git and
+the bind-mounted checkout. `runtime` (the default, and what is published) runs as
+`1000:1000` with root-owned, read-only code, no git, npm or apt, and writable
+paths only at `/app/.gev-cache`, `/app/.gev-logs`, `/app/node_modules/.vite` and
+`/app/node_modules/.vite-temp`. Provider Settings writes `/app/.env` by
+temp-file-and-rename inside `/app`, so it cannot save keys in this image; keys
+come from `--env-file`.
