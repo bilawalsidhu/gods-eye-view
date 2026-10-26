@@ -20,6 +20,7 @@ import {
   LAYER_STATE_TOKEN_ALPHABET,
   REGISTRY_BY_ID,
   SHARE_TRACKING_RESTORE_POLICIES,
+  TRACKING_ID_GRAMMAR,
   normalizeLayerState,
   optionSpecs,
 } from '../data/layerState.js';
@@ -63,7 +64,6 @@ const MAX_UNSIGNED_SETTING = 1e6;
 const SCOPE_TERMINUS_MIN_PCT = 94;
 const SCOPE_TERMINUS_MAX_PCT = 100;
 const NAME_GRAMMAR = /^[A-Za-z0-9_-]{1,32}$/;
-const ENTITY_ID_GRAMMAR = /^[0-9a-z~_-]{1,16}$/;
 const MAX_OPTION_VALUE_CHARS = 256;
 
 const freezeAll = (rows) =>
@@ -436,8 +436,11 @@ const finite = (value) =>
       Number.isFinite(Number(value));
 const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
 
+// `+ 0` turns -0 into 0, which is what the decoder produces.
 function intOr(value, fallback, min, max) {
-  return finite(value) ? clamp(Math.round(Number(value)), min, max) : fallback;
+  return finite(value)
+    ? clamp(Math.round(Number(value)), min, max) + 0
+    : fallback;
 }
 
 function wrapAngle(value, fallback = 0) {
@@ -449,18 +452,17 @@ function latitudeOr(value, fallback) {
   if (!finite(value)) return fallback;
   return (
     Math.round(clamp(Number(value), -90, 90) * COORDINATE_SCALE) /
-    COORDINATE_SCALE
+      COORDINATE_SCALE +
+    0
   );
 }
 
 function longitudeOr(value, fallback) {
   if (!finite(value)) return fallback;
-  let lon = Math.round(Number(value) * COORDINATE_SCALE) / COORDINATE_SCALE;
-  if (lon < -180 || lon > 180) {
-    lon = ((((lon + 180) % 360) + 360) % 360) - 180;
-    lon = Math.round(lon * COORDINATE_SCALE) / COORDINATE_SCALE;
-  }
-  return lon;
+  let lon = Number(value);
+  // Wrap before scaling, so a huge finite input cannot overflow to NaN.
+  if (lon < -180 || lon > 180) lon = ((((lon + 180) % 360) + 360) % 360) - 180;
+  return Math.round(lon * COORDINATE_SCALE) / COORDINATE_SCALE + 0;
 }
 
 function epochMsOr(value) {
@@ -485,7 +487,7 @@ function normalizeEntityId(entry, value) {
       : typeof value === 'string'
         ? value.trim().toLowerCase()
         : null;
-  if (raw === null || !ENTITY_ID_GRAMMAR.test(raw)) return null;
+  if (raw === null || !TRACKING_ID_GRAMMAR.test(raw)) return null;
   if (entry.kind === 'satellite' && !/^[1-9]\d{0,14}$/.test(raw)) return null;
   return raw;
 }
@@ -973,10 +975,23 @@ const LAST_KNOWN_WIRE_TYPES = new Map(
 );
 
 const unz = unzigzag;
+const CLOSED_ENUMS = new Set(['detectionMode', 'detectionAllocation']);
 
 function readEnum(entry, field, unknown) {
   if (!entry) return undefined;
-  if (entry.len) return asciiText(entry.len.rest());
+  if (entry.len) {
+    const text = asciiText(entry.len.rest());
+    // Detection settings are closed sets the app interprets; an unknown name
+    // must not reach the long form's lenient migration (which turns it ON).
+    if (
+      CLOSED_ENUMS.has(field.key) &&
+      !SHARE_VIEW_ENUMS[field.enum].includes(text)
+    ) {
+      unknown.code(`enum:${field.key}`, text);
+      return undefined;
+    }
+    return text;
+  }
   const name = SHARE_VIEW_ENUMS[field.enum][entry.varint];
   if (name === undefined) unknown.code(`enum:${field.key}`, entry.varint);
   return name;
@@ -1012,9 +1027,13 @@ function decodeLayers(bitsReader, optionsReader, unknown) {
     const slot = `${layerNumber}.${Math.floor(key / 2)}`;
     if (seen.has(slot)) throw new ShareWireError('duplicate-entry', slot);
     seen.add(slot);
-    const ownerId = REGISTRY_BY_TOKEN.get(
-      layerTokenFromNumber(layerNumber),
-    )?.optionOwner;
+    // Options are filed under their owner layer only (never a mirror such as
+    // `military`), so each option has exactly one spelling.
+    const layerEntry = REGISTRY_BY_TOKEN.get(layerTokenFromNumber(layerNumber));
+    const ownerId =
+      layerEntry?.optionOwner === layerEntry?.id
+        ? layerEntry?.optionOwner
+        : null;
     const optionToken = LAYER_STATE_TOKEN_ALPHABET[Math.floor(key / 2)];
     const spec = ownerId
       ? optionSpecs(ownerId).find(
@@ -1064,8 +1083,10 @@ function decodePanels(reader, unknown) {
   const specs = [];
   for (const panel of SHARE_VIEW_PANELS) {
     const entry = entries.get(panel.number);
-    if (entry && entry.collapsed !== 3 && entry.pinned !== 3) {
-      if (entry.collapsed === 0) continue;
+    if (entry) {
+      // 0 is "no opinion"; 3 is a value from a newer format, also ignored.
+      if (entry.collapsed === 0 || entry.collapsed === 3 || entry.pinned === 3)
+        continue;
       specs.push({
         id: panel.id,
         collapsed: entry.collapsed === 2,
@@ -1088,11 +1109,12 @@ function decodeStyleParams(reader, style, unknown) {
   const values = {};
   const seen = new Set();
   while (!reader.done) {
-    const token = LAYER_STATE_TOKEN_ALPHABET[reader.varint()];
+    const index = reader.varint();
+    const token = LAYER_STATE_TOKEN_ALPHABET[index];
     const scaled = reader.varint();
-    if (seen.has(token))
+    if (seen.has(index))
       throw new ShareWireError('duplicate-entry', 'style parameter');
-    seen.add(token);
+    seen.add(index);
     const spec = registry.find((candidate) => candidate.token === token);
     if (!spec) {
       unknown.code('style-param', `${style}.${token ?? '?'}`);

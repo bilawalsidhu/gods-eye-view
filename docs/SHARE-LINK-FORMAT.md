@@ -97,8 +97,9 @@ Flag bits (field 9): 0 `bloom` (default off), 1 `sharpen` (off), 2
 Angles: heading and roll are normalized into [0, 360) — the long form can
 write `roll=360` for a camera at 359.6°, which the compact form stores as 0 —
 and written as the nearer signed turn, so 350° costs one byte (−10).
-Out-of-range input is clamped (latitude, pitch) or wrapped (longitude), never
-rejected.
+When a state is encoded, out-of-range input is clamped (latitude, pitch) or
+wrapped (longitude). A payload that stores a latitude or longitude beyond
+±90/±180 cannot come from the encoder and is rejected.
 
 ### Layers (fields 10 and 11)
 
@@ -127,8 +128,10 @@ options, and the converter moves it back for the long form.
 
 Each entry is one varint: `panel number × 16 + collapsed × 4 + pinned`, where
 collapsed and pinned are 0 (no value), 1 (false) or 2 (true). Only panels that
-differ from the frozen default layout are written; a panel with no entry takes
-its default. Collapsed 0 means the link has no opinion about that panel.
+differ from the frozen default layout are written, plus a collapsed-0 entry
+for each panel the state has no opinion about (an older long-form link that
+predates the panel); a panel with no entry takes its default. Values of 3 are
+reserved: a decoder ignores that entry, as for collapsed 0.
 
 | #   | Panel                  | Long-form token | Default             |
 | --- | ---------------------- | --------------- | ------------------- |
@@ -186,15 +189,19 @@ view as a place at its camera and reports `fallback`.
 Rejected (the whole link): input over 2048 characters, bad base64url
 (padding, foreign characters, impossible length, stray bits), an unknown
 version byte, a truncated value, a varint over 8 bytes or above 2⁵³ − 1, an
-overlong varint, a LEN longer than what remains, a reserved wire type, field
+overlong varint, a LEN longer than what remains (at any level, including
+inside a thing sub-message on a place view), a reserved wire type, field
 number 0, a known field with the wrong wire type or repeated, a duplicate
 panel/option/style entry, non-ASCII text, and a latitude or longitude beyond
 ±90/±180.
 
 Tolerated and reported in `unknownFields`: unknown fields at any level
 (skipped by wire type), unknown enum codes and names (the default is used),
-unknown flag bits, layers and panels, and layer options the layer-state codec
-rejects. A created-at time in the future is dropped, as the long form's `at`
+unknown flag bits, layers, panel values and style parameters, and layer
+options the layer-state codec rejects or that are filed under a layer other
+than their owner. Detection mode and allocation names outside their lists
+fall back to the default rather than reaching the long form's lenient
+migration. A created-at time in the future is dropped, as the long form's `at`
 is.
 
 ## Changing the format

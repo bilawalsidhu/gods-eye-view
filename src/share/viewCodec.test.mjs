@@ -979,3 +979,81 @@ test('size: following an aircraft', () => {
   });
   assert.equal(hash.length, 76);
 });
+
+/* ---------------- review regressions ---------------- */
+
+test('unknown detection names fall back to their defaults and are reported', () => {
+  const writer = new WireWriter();
+  writer.bytes.push(1);
+  writer.textField(20, 'FUTURE').textField(22, 'GREEDY');
+  const result = decodeOk(hashOf(writer.finish()));
+  assert.equal(result.state.detectionMode, 'OFF');
+  assert.equal(result.state.detectionAllocation, 'ELASTIC');
+  assert.deepEqual(result.unknownFields, [
+    { scope: 'enum:detectionMode', code: 'FUTURE' },
+    { scope: 'enum:detectionAllocation', code: 'GREEDY' },
+  ]);
+});
+
+test('extreme and negative-zero numbers normalize to values the decoder returns', () => {
+  assert.ok(Number.isFinite(normalizeShareViewState({ lon: 1e305 }).lon));
+  assertRoundTrip({ lon: 1e305, lat: -1e305 });
+  for (const state of [
+    { lat: -0.00001 },
+    { lon: -0.00001 },
+    { alt: -0.2 },
+    { pitch: -0.2 },
+  ]) {
+    assertRoundTrip(state);
+    for (const value of Object.values(normalizeShareViewState(state)))
+      assert.equal(Object.is(value, -0), false);
+  }
+});
+
+test('future panel values and style tokens are skipped, not applied', () => {
+  const panels = new WireWriter();
+  panels.bytes.push(1);
+  panels.bytesField(
+    12,
+    new WireWriter()
+      .varint(3 * 16 + 3 * 4)
+      .varint(0 * 16 + 2 * 4 + 3)
+      .finish(),
+  );
+  const panelResult = decodeOk(hashOf(panels.finish()));
+  const ids = panelResult.state.panelState.specs.map((spec) => spec.id);
+  assert.equal(ids.includes('cctv-panel'), false);
+  assert.equal(ids.includes('control-panel'), false);
+  assert.equal(panelResult.unknownFields.length, 2);
+
+  const style = new WireWriter();
+  style.bytes.push(1);
+  style.uintField(14, 3); // thermal
+  style.bytesField(
+    27,
+    new WireWriter().varint(36).varint(5).varint(37).varint(6).finish(),
+  );
+  const styleResult = decodeOk(hashOf(style.finish()));
+  assert.equal(styleResult.state.styleParams, null);
+  assert.equal(styleResult.unknownFields.length, 2);
+});
+
+test('a layer option filed under a mirror layer is ignored', () => {
+  const writer = new WireWriter();
+  writer.bytes.push(1);
+  const military = layerTokenNumber('m');
+  writer.bytesField(10, [0, 0, 0b01000000]); // m = 22
+  writer.bytesField(
+    11,
+    new WireWriter()
+      .varint(military)
+      .varint(layerTokenNumber('m') * 2) // option `m` (models3dMode) as integer
+      .varint(0)
+      .finish(),
+  );
+  const result = decodeOk(hashOf(writer.finish()));
+  assert.deepEqual(result.state.layerState.enabledLayerIds, ['military']);
+  assert.deepEqual(result.unknownFields, [
+    { scope: 'layer-option', code: `${military}.${layerTokenNumber('m')}` },
+  ]);
+});
