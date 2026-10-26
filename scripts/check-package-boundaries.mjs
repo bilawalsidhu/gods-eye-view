@@ -3,6 +3,15 @@ import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { build, normalizePath } from 'vite';
 
+/**
+ * Operator-supplied layers are discovered by `import.meta.glob` and are
+ * gitignored by design, so they can never appear in a package manifest. A
+ * deployment that has any would otherwise fail this gate for doing exactly
+ * what `docs/USER-LAYERS.md` tells it to do.
+ */
+const USER_LAYER_PATTERN = /[/\\]src[/\\]userLayers[/\\][^/\\]+\.layer\.js$/;
+const isUserLayer = (id) => USER_LAYER_PATTERN.test(String(id || ''));
+
 /** Build each browser or Node export group and reject imports outside its declared ownership. */
 export async function checkPackageBoundaries(root) {
   root = await realpath(root);
@@ -102,7 +111,7 @@ export async function checkPackageBoundaries(root) {
         {
           name: 'check-package-ownership',
           moduleParsed(info) {
-            if (!allowed.has(info.id)) {
+            if (!allowed.has(info.id) && !isUserLayer(info.id)) {
               throw new Error(
                 `Package boundary ${name} imports an unowned module: ${path.relative(root, info.id)}`,
               );
