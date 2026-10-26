@@ -9,7 +9,10 @@ not make an analysis-specific image request or send analyzed pixels to another
 service. A bounded 160×90 local frame-difference pass runs at most once per
 second, producing only coarse moving, vehicle-shaped candidates. Stationary
 vehicles are outside this v0 detector, and the coarse vehicle labels are
-geometry heuristics rather than semantic classification.
+geometry heuristics rather than semantic classification. A local
+unchanged-surroundings contrast check suppresses clearly vacated motion
+footprints in synthetic frames; ambiguous or overlapping changes can still be
+wrong. It does not establish real vehicle counts, direction or identity.
 
 Each candidate uses the bottom-centre of its frame box as an approximate tyre /
 road contact. That pixel is cast through the calibrated CCTV heading, pitch and

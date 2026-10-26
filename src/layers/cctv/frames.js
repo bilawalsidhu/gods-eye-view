@@ -160,7 +160,54 @@ export function detectMotionVehicleCandidates(
     });
   }
 
+  // Two-frame differences contain arrival AND departure footprints. Compare
+  // the changed pixels to an unchanged local perimeter in each frame and drop
+  // only footprints that have clearly lost foreground contrast.
+  function localForegroundContrast(frame, candidate) {
+    let objectLuma = 0;
+    let objectPixels = 0;
+    let surroundLuma = 0;
+    let surroundPixels = 0;
+    const minX = Math.max(0, candidate.x - 2);
+    const maxX = Math.min(w - 1, candidate.x + candidate.width + 1);
+    const minY = Math.max(0, candidate.y - 2);
+    const maxY = Math.min(h - 1, candidate.y + candidate.height + 1);
+    for (let y = minY; y <= maxY; y++) {
+      for (let x = minX; x <= maxX; x++) {
+        const pixel = y * w + x;
+        const inside =
+          x >= candidate.x &&
+          x < candidate.x + candidate.width &&
+          y >= candidate.y &&
+          y < candidate.y + candidate.height;
+        if (inside && mask[pixel]) {
+          objectLuma += pixelLuma(frame, pixel * 4);
+          objectPixels++;
+        } else if (!inside && !raw[pixel]) {
+          surroundLuma += pixelLuma(frame, pixel * 4);
+          surroundPixels++;
+        }
+      }
+    }
+    if (objectPixels < minPixels || surroundPixels < 4) return null;
+    return Math.abs(
+      objectLuma / objectPixels - surroundLuma / surroundPixels,
+    );
+  }
+
   return candidates
+    .filter((candidate) => {
+      const before = localForegroundContrast(previous, candidate);
+      const after = localForegroundContrast(current, candidate);
+      // No reliable unchanged surrounding pixels: retain the original coarse
+      // motion-only result rather than asserting an object identity.
+      if (before === null || after === null) return true;
+      return !(
+        before >= threshold &&
+        after < before * 0.4 &&
+        before - after >= threshold
+      );
+    })
     .sort((a, b) => b.confidence * b.pixels - a.confidence * a.pixels)
     .slice(0, maxCandidates);
 }

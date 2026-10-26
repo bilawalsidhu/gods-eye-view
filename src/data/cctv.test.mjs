@@ -1838,6 +1838,68 @@ test('detectMotionVehicleCandidates emits nothing for unchanged frames', () => {
   );
 });
 
+// Synthetic grayscale-only 160x90 footprint fixture; no live CCTV feed.
+function motionFootprintFrame(background, positions, intensity) {
+  const width = 160;
+  const height = 90;
+  const frame = new Uint8ClampedArray(width * height * 4);
+  for (let i = 0; i < width * height; i++) {
+    const offset = i * 4;
+    frame[offset] = background;
+    frame[offset + 1] = background;
+    frame[offset + 2] = background;
+    frame[offset + 3] = 255;
+  }
+  for (const x of positions) {
+    for (let y = 60; y < 66; y++) {
+      for (let dx = 0; dx < 12; dx++) {
+        const offset = (y * width + x + dx) * 4;
+        frame[offset] = intensity;
+        frame[offset + 1] = intensity;
+        frame[offset + 2] = intensity;
+      }
+    }
+  }
+  return frame;
+}
+
+test('motion candidates reject clearly vacated light/dark footprints', () => {
+  for (const { background, foreground } of [
+    { background: 30, foreground: 235 },
+    { background: 220, foreground: 0 },
+  ]) {
+    const previous = motionFootprintFrame(background, [20], foreground);
+    const current = motionFootprintFrame(background, [50], foreground);
+    const candidates = detectMotionVehicleCandidates(
+      previous,
+      current,
+      160,
+      90,
+      { maxCandidates: 1 },
+    );
+    assert.deepEqual(
+      candidates.map(({ x, y, width, height }) => ({
+        x,
+        y,
+        width,
+        height,
+      })),
+      [{ x: 50, y: 60, width: 12, height: 6 }],
+    );
+  }
+});
+
+test('motion candidates keep independent arrivals but not departed contacts', () => {
+  const empty = motionFootprintFrame(30, [], 235);
+  const two = motionFootprintFrame(30, [20, 50], 235);
+  assert.deepEqual(
+    detectMotionVehicleCandidates(empty, two, 160, 90).map(({ x }) => x),
+    [20, 50],
+  );
+  assert.deepEqual(detectMotionVehicleCandidates(two, empty, 160, 90), []);
+  assert.deepEqual(detectMotionVehicleCandidates(two, two, 160, 90), []);
+});
+
 test('a saved rangeScale keeps its effective range when the catalog range floor drops', () => {
   const saved = {
     offsetNorthM: 0,
