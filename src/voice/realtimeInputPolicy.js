@@ -192,11 +192,19 @@ export function resolveVoicePresentationState({
   if (sessionState === 'error') return 'error';
   if (sessionState === 'idle') return 'idle';
   if (sessionState === 'connecting') return 'connecting';
-  if (interrupted) return 'interrupted';
+  // Unknown/closed session states cannot prove a live voice interaction.
+  if (
+    sessionState !== 'ready' &&
+    sessionState !== 'listening' &&
+    sessionState !== 'executing'
+  ) {
+    return 'idle';
+  }
+  if (interrupted === true) return 'interrupted';
   if (speaker === 'user') return 'listening';
-  if (actionActive || sessionState === 'executing') return 'executing';
-  if (outputAudible) return 'speaking';
-  if (responseActive) return 'working';
+  if (actionActive === true || sessionState === 'executing') return 'executing';
+  if (outputAudible === true) return 'speaking';
+  if (responseActive === true) return 'working';
   return 'ready';
 }
 

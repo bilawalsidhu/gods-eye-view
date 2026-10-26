@@ -130,3 +130,52 @@ test('session terminal states remain authoritative', () => {
     'idle',
   );
 });
+
+test('unknown sessions cannot imply an active HUD state', () => {
+  for (const sessionState of [
+    null,
+    undefined,
+    'closed',
+    'Idle',
+    'speaking',
+    {},
+  ]) {
+    assert.equal(
+      resolveVoicePresentationState({
+        sessionState,
+        speaker: 'ai',
+        responseActive: true,
+        actionActive: true,
+        outputAudible: true,
+        interrupted: true,
+      }),
+      'idle',
+      `unrecognized state ${String(sessionState)} must fail closed`,
+    );
+  }
+  assert.equal(resolveVoicePresentationState({ sessionState: 'ready' }), 'ready');
+});
+
+test('only Boolean true may signal ongoing voice activity', () => {
+  const input = { sessionState: 'listening', speaker: 'ai' };
+  for (const flag of [
+    'interrupted',
+    'actionActive',
+    'outputAudible',
+    'responseActive',
+  ]) {
+    assert.equal(
+      resolveVoicePresentationState({ ...input, [flag]: 'false' }),
+      'ready',
+      `${flag} string must not imply activity`,
+    );
+  }
+  assert.equal(
+    resolveVoicePresentationState({ ...input, outputAudible: true }),
+    'speaking',
+  );
+  assert.equal(
+    resolveVoicePresentationState({ ...input, responseActive: true }),
+    'working',
+  );
+});
