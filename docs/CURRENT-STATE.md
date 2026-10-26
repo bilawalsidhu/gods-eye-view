@@ -21,9 +21,14 @@ Presentation states remain explicit:
 - no observed source configured → no observation row/card details
 - configured source but no matching camera evidence → `UNKNOWN`
 - fresh evidence → `MEASURED`
-- partial snapshot → `PARTIAL`
+- partial snapshot with a current camera record → `PARTIAL`
 - expired or error-backed last evidence → `STALE`
 - source error with no retained camera evidence → `UNAVAILABLE`
+
+The snapshot carries its configured source freshness window to CCTV. In a
+partially stale snapshot, an expired camera record shows `STALE` while a
+current camera record remains `PARTIAL`; the camera view does not independently
+assume a fixed five-minute freshness window.
 
 Camera health, source state and calibration remain visually primary. This slice
 adds no CV runtime, raw-video transport, identity/person/plate fields or

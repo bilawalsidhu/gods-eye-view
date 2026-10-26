@@ -128,7 +128,7 @@ export function summarizeCameraTrafficObservation(
   cameraId,
   {
     now = Date.now(),
-    staleAfterMs = DEFAULT_STALE_AFTER_MS,
+    staleAfterMs = snapshot?.staleAfterMs ?? DEFAULT_STALE_AFTER_MS,
     recordIndex = null,
   } = {},
 ) {

@@ -265,6 +265,7 @@ export function normalizeObservedTrafficSnapshot(
     configured: true,
     source: safeString(value.source, 160),
     fetchedAt,
+    staleAfterMs: staleLimit,
     records,
     received: rawRecords.length,
     accepted: records.length,

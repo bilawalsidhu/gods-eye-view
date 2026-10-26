@@ -77,6 +77,7 @@ test('fresh and stale observations remain distinct', () => {
   );
   assert.equal(fresh.state, 'fresh');
   assert.equal(fresh.stale, false);
+  assert.equal(fresh.staleAfterMs, 120_000);
 
   const stale = normalizeObservedTrafficSnapshot(
     {
@@ -93,6 +94,7 @@ test('fresh and stale observations remain distinct', () => {
   assert.equal(stale.state, 'stale');
   assert.equal(stale.stale, true);
   assert.equal(stale.staleCount, 1);
+  assert.equal(stale.staleAfterMs, 120_000);
   assert.equal(stale.records.length, 1, 'stale evidence is retained, not relabeled fresh');
 });
 

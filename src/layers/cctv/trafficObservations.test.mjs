@@ -174,6 +174,56 @@ test('partial snapshot is visible without overriding the measurement', () => {
   assert.equal(summary.statusLabel, 'TRAFFIC OBS · PARTIAL');
 });
 
+test('camera status respects the source freshness budget for mixed-age evidence', () => {
+  const old = record({
+    id: 'cam-1:old',
+    observedAt: NOW - 180_000,
+    windowStart: NOW - 240_000,
+    windowEnd: NOW - 180_000,
+  });
+  const current = record({
+    id: 'cam-2:current',
+    cameraId: 'cam-2',
+    observedAt: NOW - 20_000,
+    windowStart: NOW - 60_000,
+    windowEnd: NOW - 10_000,
+  });
+  const shortBudget = snapshot({
+    records: [old, current],
+    staleAfterMs: 60_000,
+    staleCount: 1,
+    partial: true,
+    state: 'partial',
+  });
+  const stale = summarizeCameraTrafficObservation(shortBudget, 'cam-1', {
+    now: NOW,
+  });
+  const fresh = summarizeCameraTrafficObservation(shortBudget, 'cam-2', {
+    now: NOW,
+  });
+  assert.equal(stale.state, 'stale');
+  assert.equal(stale.statusLabel, 'TRAFFIC OBS · STALE');
+  assert.equal(
+    fresh.state,
+    'partial',
+    'other-camera staleness does not expire this record',
+  );
+
+  const longBudget = snapshot({ records: [old], staleAfterMs: 600_000 });
+  assert.equal(
+    summarizeCameraTrafficObservation(longBudget, 'cam-1', { now: NOW }).state,
+    'fresh',
+  );
+  assert.equal(
+    summarizeCameraTrafficObservation(longBudget, 'cam-1', {
+      now: NOW,
+      staleAfterMs: 60_000,
+    }).state,
+    'stale',
+    'explicit presenter override wins over a snapshot budget',
+  );
+});
+
 test('age and class-mix helpers stay compact', () => {
   assert.equal(formatObservedTrafficAge(32_000), '32s ago');
   assert.equal(formatObservedTrafficAge(150_000), '3m ago');
