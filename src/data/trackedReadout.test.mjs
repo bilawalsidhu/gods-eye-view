@@ -119,6 +119,24 @@ test('tracked entry factory pins the production protected-lane policy', () => {
   assert.equal(entry.paintLane, 'tracked');
   assert.equal(entry.collisionGroup, 'ambient-card');
   assert.equal(entry.edgeFade, 'keyhole');
+  // A card with nothing to activate must keep letting clicks reach the globe.
+  assert.equal(entry.interactive, false);
+});
+
+test('a tracked card is clickable only when its layer opts in', () => {
+  const build = (model) =>
+    createTrackedOverlayEntry({
+      gevTrackedId: 'world-news:place',
+      gevDisplayPosition: () => ({ x: 1, y: 2, z: 3 }),
+      gevLabelModel: { title: 'Headline', details: [], ...model },
+    });
+  // Only an interactive entry registers a hit rect in the overlay, which is
+  // what lets the World News card open its headline at the publisher.
+  assert.equal(build({ interactive: true }).interactive, true);
+  // Every other layer, and any truthy-but-not-true value, stays pass-through.
+  assert.equal(build({}).interactive, false);
+  assert.equal(build({ interactive: 'yes' }).interactive, false);
+  assert.equal(build({ interactive: 1 }).interactive, false);
 });
 
 test('selected camera readout carries tactical animation and fixed badge clearance', () => {

@@ -108,6 +108,9 @@
     "./server/providers/firms": {
       "node": "./server/providers/firms.js"
     },
+    "./server/providers/world-news": {
+      "node": "./server/providers/world-news.js"
+    },
     "./server/providers/gbfs": {
       "node": "./server/providers/gbfs.js"
     },
@@ -169,6 +172,7 @@
     "./layers/perimeters": "./src/layers/perimeters/index.js",
     "./layers/gnss": "./src/layers/gnss/index.js",
     "./layers/ghostmaps": "./src/layers/ghostMaps/index.js",
+    "./layers/world-news": "./src/layers/worldNews/index.js",
     "./sources/firms-csv": "./src/data/firmsCsv.js",
     "./layers/firms": "./src/layers/firms/index.js",
     "./layers/satellites": "./src/layers/satellites/index.js",

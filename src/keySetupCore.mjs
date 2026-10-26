@@ -98,6 +98,14 @@ export const KEY_SETUP_KEYS = Object.freeze([
     tier: 'free',
   }),
   Object.freeze({
+    id: 'world-news',
+    title: 'WORLD NEWS API', // i18n-ignore: provider product name
+    unlocks: msg('Place-tagged headlines pinned on the globe'),
+    getUrl: 'https://worldnewsapi.com/console/',
+    envVars: Object.freeze(['WORLD_NEWS_API_KEY']),
+    tier: 'free',
+  }),
+  Object.freeze({
     id: 'cesium-ion',
     title: 'CESIUM ION', // i18n-ignore: provider product name
     unlocks: msg('Bing imagery map stacks + world terrain'),

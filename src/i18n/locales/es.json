@@ -2994,5 +2994,148 @@
   "Your choice applies now, but could not be saved.": "Tu elección se aplica ahora, pero no se pudo guardar.",
   "Voice replies appear here.": "Las respuestas de voz aparecen aquí.",
   "Preview is off.": "La vista previa está desactivada.",
-  "Automatic stop is unavailable for this voice connection.": "La parada automática no está disponible para esta conexión de voz."
+  "Automatic stop is unavailable for this voice connection.": "La parada automática no está disponible para esta conexión de voz.",
+  "Place-tagged headlines pinned on the globe": "Titulares etiquetados por lugar, fijados en el globo",
+  "LOCAL DAILY CAP REACHED": "LÍMITE DIARIO LOCAL ALCANZADO",
+  "PROVIDER QUOTA EXHAUSTED · resets 00:00 UTC": "CUOTA DEL PROVEEDOR AGOTADA · se restablece a las 00:00 UTC",
+  "RATE LIMITED": "LÍMITE DE FRECUENCIA",
+  "INVALID KEY": "CLAVE NO VÁLIDA",
+  "UPSTREAM UNAVAILABLE": "PROVEEDOR NO DISPONIBLE",
+  "VIEW FETCHES SPENT · resets hourly": "CONSULTAS DE VISTA AGOTADAS · se restablecen cada hora",
+  "VIEW FETCHING OFF": "CONSULTA DE VISTA DESACTIVADA",
+  "Negative tone": "Tono negativo",
+  "Neutral tone": "Tono neutro",
+  "Positive tone": "Tono positivo",
+  "Pins sit at the place named in the headline, not where the article was published. Tone is the provider's sentiment score for the article text.": "Los marcadores están en el lugar que nombra el titular, no donde se publicó el artículo. El tono es la puntuación de sentimiento del proveedor para el texto del artículo.",
+  "whole earth": "toda la Tierra",
+  "within {radius} km of {lat}, {lon}": "a menos de {radius} km de {lat}, {lon}",
+  "{count} latest headlines place-tagged": {
+    "one": "{count} titular reciente etiquetado por lugar",
+    "many": "{count} de titulares recientes etiquetados por lugar",
+    "other": "{count} titulares recientes etiquetados por lugar"
+  },
+  "{count} headlines {region} place-tagged": {
+    "one": "{count} titular {region} etiquetado por lugar",
+    "many": "{count} de titulares {region} etiquetados por lugar",
+    "other": "{count} titulares {region} etiquetados por lugar"
+  },
+  "World News unavailable": "World News no disponible",
+  "LOCAL DAILY CAP REACHED {spent}/{limit} points": "LÍMITE DIARIO LOCAL ALCANZADO {spent}/{limit} puntos",
+  "provider quota still has {left}": "a la cuota del proveedor aún le quedan {left}",
+  "raise {setting}": "aumenta {setting}",
+  "1 request ≈ {cost} points of today's budget ({spent}/{limit} used)": {
+    "one": "1 solicitud ≈ {cost} punto del presupuesto de hoy ({spent}/{limit} usados)",
+    "many": "1 solicitud ≈ {cost} de puntos del presupuesto de hoy ({spent}/{limit} usados)",
+    "other": "1 solicitud ≈ {cost} puntos del presupuesto de hoy ({spent}/{limit} usados)"
+  },
+  "1 request ≈ {cost} points (estimate) of today's budget ({spent}/{limit} used)": {
+    "one": "1 solicitud ≈ {cost} punto (estimación) del presupuesto de hoy ({spent}/{limit} usados)",
+    "many": "1 solicitud ≈ {cost} de puntos (estimación) del presupuesto de hoy ({spent}/{limit} usados)",
+    "other": "1 solicitud ≈ {cost} puntos (estimación) del presupuesto de hoy ({spent}/{limit} usados)"
+  },
+  "Add a World News API key to load headlines": "Añade una clave de World News API para cargar titulares",
+  "A view is a single page — fetch the worldwide feed to page further": "Una vista es una sola página — consulta la fuente mundial para ver más páginas",
+  "No extra pages left this hour": "No quedan páginas adicionales esta hora",
+  "Fetch one more page of headlines ({count} left this hour)": {
+    "one": "Cargar una página más de titulares (queda {count} esta hora)",
+    "many": "Cargar una página más de titulares (quedan {count} de páginas esta hora)",
+    "other": "Cargar una página más de titulares (quedan {count} esta hora)"
+  },
+  "Add a World News API key to fetch headlines": "Añade una clave de World News API para consultar titulares",
+  "Zoom in to a city first — a news circle is capped at {radius} km across the ground, and this view is wider": "Acércate primero a una ciudad — un círculo de noticias tiene como máximo {radius} km sobre el terreno y esta vista es más amplia",
+  "Fetch the headlines {region} ({count} left this hour)": {
+    "one": "Consultar los titulares {region} (queda {count} esta hora)",
+    "many": "Consultar los titulares {region} (quedan {count} de consultas esta hora)",
+    "other": "Consultar los titulares {region} (quedan {count} esta hora)"
+  },
+  "Fetch the headlines {region}": "Consultar los titulares {region}",
+  "Add the latest worldwide headlines to the map": "Añadir al mapa los titulares mundiales más recientes",
+  "No headline pins to clear": "No hay marcadores de titulares que quitar",
+  "Remove all {count} headline pins from the map. The layer is live, so the next refresh adds the headlines {region} again.": {
+    "one": "Quitar {count} marcador de titular del mapa. La capa está en vivo, así que la próxima actualización volverá a añadir los titulares {region}.",
+    "many": "Quitar los {count} de marcadores de titulares del mapa. La capa está en vivo, así que la próxima actualización volverá a añadir los titulares {region}.",
+    "other": "Quitar los {count} marcadores de titulares del mapa. La capa está en vivo, así que la próxima actualización volverá a añadir los titulares {region}."
+  },
+  "Remove all {count} headline pins from the map. The layer is live, so the next refresh adds the worldwide feed again.": {
+    "one": "Quitar {count} marcador de titular del mapa. La capa está en vivo, así que la próxima actualización volverá a añadir la fuente mundial.",
+    "many": "Quitar los {count} de marcadores de titulares del mapa. La capa está en vivo, así que la próxima actualización volverá a añadir la fuente mundial.",
+    "other": "Quitar los {count} marcadores de titulares del mapa. La capa está en vivo, así que la próxima actualización volverá a añadir la fuente mundial."
+  },
+  "OPEN ARTICLE": "ABRIR ARTÍCULO",
+  "Open this headline at {domain} in a new tab": "Abrir este titular en {domain} en una pestaña nueva",
+  "Open this headline at its publisher in a new tab": "Abrir este titular en su medio en una pestaña nueva",
+  "Select a headline pin to open its article": "Selecciona un marcador de titular para abrir su artículo",
+  "LOAD MORE": "CARGAR MÁS",
+  "NEWS IN VIEW": "NOTICIAS A LA VISTA",
+  "GLOBAL FEED": "FUENTE MUNDIAL",
+  "CLEAR PINS": "QUITAR MARCADORES",
+  "PREV STORY": "NOTICIA ANT.",
+  "Show the previous of {count} stories at {place}": {
+    "one": "Mostrar la noticia anterior de {count} en {place}",
+    "many": "Mostrar la noticia anterior de {count} de noticias en {place}",
+    "other": "Mostrar la noticia anterior de {count} en {place}"
+  },
+  "NEXT STORY": "NOTICIA SIG.",
+  "Show the next of {count} stories at {place}": {
+    "one": "Mostrar la noticia siguiente de {count} en {place}",
+    "many": "Mostrar la noticia siguiente de {count} de noticias en {place}",
+    "other": "Mostrar la noticia siguiente de {count} en {place}"
+  },
+  "No tone score": "Sin puntuación de tono",
+  "cached {age}": "en caché hace {age}",
+  "{rows} of {count} latest headlines place-tagged": {
+    "one": "{rows} de {count} titular reciente etiquetados por lugar",
+    "many": "{rows} de {count} de titulares recientes etiquetados por lugar",
+    "other": "{rows} de {count} titulares recientes etiquetados por lugar"
+  },
+  "updated {ago}": "actualizado {ago}",
+  "{count} pinned": {
+    "one": "{count} fijado",
+    "many": "{count} de fijados",
+    "other": "{count} fijados"
+  },
+  "No place-tagged headlines {region}": "No hay titulares etiquetados por lugar {region}",
+  "No place-tagged headlines in the latest batch": "No hay titulares etiquetados por lugar en el último lote",
+  "TONE NEGATIVE": "TONO NEGATIVO",
+  "TONE NEUTRAL": "TONO NEUTRO",
+  "TONE POSITIVE": "TONO POSITIVO",
+  "TONE UNKNOWN": "TONO DESCONOCIDO",
+  "unknown source": "fuente desconocida",
+  "{domain} (+{count} outlets)": {
+    "one": "{domain} (+{count} medio)",
+    "many": "{domain} (+{count} de medios)",
+    "other": "{domain} (+{count} medios)"
+  },
+  "Unnamed place": "Lugar sin nombre",
+  "{source} · {age} ago": "{source} · hace {age}",
+  "{place} · {index}/{count} stories here · click the pin for the next": {
+    "one": "{place} · {index}/{count} noticia aquí · haz clic en el marcador para la siguiente",
+    "many": "{place} · {index}/{count} de noticias aquí · haz clic en el marcador para la siguiente",
+    "other": "{place} · {index}/{count} noticias aquí · haz clic en el marcador para la siguiente"
+  },
+  "Click this card to open · {source}": "Haz clic en esta tarjeta para abrir · {source}",
+  "Source: {source}": "Fuente: {source}",
+  "Headline place": "Lugar del titular",
+  "World News key rejected": "Clave de World News rechazada",
+  "World News quota exhausted": "Cuota de World News agotada",
+  "daily news budget exhausted": "presupuesto diario de noticias agotado",
+  "World News rate-limited": "World News limitó la frecuencia",
+  "extra pages exhausted": "páginas adicionales agotadas",
+  "this view is not a valid news circle": "esta vista no es un círculo de noticias válido",
+  "view fetching is off on this server": "la consulta de vista está desactivada en este servidor",
+  "view fetches exhausted this hour": "consultas de vista agotadas esta hora",
+  "Malformed news snapshot": "Instantánea de noticias con formato incorrecto",
+  "World News": "Noticias mundiales",
+  "World News HTTP {status}": "World News respondió HTTP {status}",
+  "from {count} views": {
+    "one": "de {count} vista",
+    "many": "de {count} de vistas",
+    "other": "de {count} vistas"
+  },
+  "from the worldwide feed and {count} views": {
+    "one": "de la fuente mundial y {count} vista",
+    "many": "de la fuente mundial y {count} de vistas",
+    "other": "de la fuente mundial y {count} vistas"
+  },
+  "{tone} ({score})": "{tone} ({score})"
 }

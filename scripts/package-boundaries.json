@@ -2594,7 +2594,17 @@
       "src/voice/geminiCaptureWorklet.js",
       "src/ui/statusBadge.js",
       "src/sceneCommandRelease.js",
-      "src/scopeMaskPolicy.js"
+      "src/scopeMaskPolicy.js",
+      "src/app/layers/worldNews.js",
+      "src/data/worldNewsRegion.js",
+      "src/data/worldNewsArticles.js",
+      "src/layers/worldNews/index.js",
+      "src/layers/worldNews/model.js",
+      "src/layers/worldNews/policy.js",
+      "src/layers/worldNews/presentation.js",
+      "src/layers/worldNews/records.js",
+      "src/layers/worldNews/source.js",
+      "src/layers/worldNews/viewport.js"
     ],
     "external": [
       "hls.js",
@@ -3171,7 +3181,17 @@
       "src/layers/streetLevel/providers/mapillary/policy.js",
       "src/data/geoImportImages.js",
       "src/data/geoImportPins.js",
-      "src/data/geoFileImport.js"
+      "src/data/geoFileImport.js",
+      "src/app/layers/worldNews.js",
+      "src/data/worldNewsRegion.js",
+      "src/data/worldNewsArticles.js",
+      "src/layers/worldNews/index.js",
+      "src/layers/worldNews/model.js",
+      "src/layers/worldNews/policy.js",
+      "src/layers/worldNews/presentation.js",
+      "src/layers/worldNews/records.js",
+      "src/layers/worldNews/source.js",
+      "src/layers/worldNews/viewport.js"
     ],
     "external": [
       "hls.js",
@@ -4116,5 +4136,50 @@
       "src/i18n/marker.js"
     ],
     "external": ["cesium"]
+  },
+  "world-news": {
+    "exports": ["./layers/world-news"],
+    "modules": [
+      "src/layers/worldNews/index.js",
+      "src/layers/worldNews/model.js",
+      "src/layers/worldNews/policy.js",
+      "src/layers/worldNews/presentation.js",
+      "src/layers/worldNews/records.js",
+      "src/layers/worldNews/source.js",
+      "src/layers/worldNews/viewport.js",
+      "src/data/worldNewsRegion.js",
+      "src/data/worldNewsArticles.js",
+      "src/data/trafficBounds.js",
+      "src/data/inputOwnership.js",
+      "src/ui/layerNames.js",
+      "src/ui/statusText.js",
+      "src/i18n/marker.js",
+      "src/geoDistance.js",
+      "src/i18n/locale.js",
+      "src/i18n/locales/es.json",
+      "src/i18n/locales/ru.json",
+      "src/i18n/locales/zh-CN.json",
+      "src/i18n/index.js"
+    ],
+    "external": ["cesium"]
+  },
+  "world-news-provider": {
+    "runtime": "node",
+    "exports": ["./server/providers/world-news"],
+    "modules": [
+      "server/providers/world-news.js",
+      "server/providers/world-news/client.js",
+      "server/providers/common/http.js",
+      "server/providers/common/query.js",
+      "server/providers/common/rate-limit.js",
+      "src/sources/rateLimit.js",
+      "src/sources/httpBody.js",
+      "src/data/tomtomTiles.js",
+      "src/data/worldNewsArticles.js",
+      "src/data/worldNewsRegion.js",
+      "src/geoDistance.js",
+      "src/i18n/marker.js"
+    ],
+    "external": []
   }
 }

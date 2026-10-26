@@ -3063,5 +3063,164 @@
   "Your choice applies now, but could not be saved.": "Ваш выбор применён, но сохранить его не удалось.",
   "Voice replies appear here.": "Здесь появляются голосовые ответы.",
   "Preview is off.": "Предпросмотр отключён.",
-  "Automatic stop is unavailable for this voice connection.": "Автоматическая остановка недоступна для этого голосового подключения."
+  "Automatic stop is unavailable for this voice connection.": "Автоматическая остановка недоступна для этого голосового подключения.",
+  "Place-tagged headlines pinned on the globe": "Заголовки с привязкой к месту, отмеченные на глобусе",
+  "LOCAL DAILY CAP REACHED": "ДОСТИГНУТ ЛОКАЛЬНЫЙ СУТОЧНЫЙ ЛИМИТ",
+  "PROVIDER QUOTA EXHAUSTED · resets 00:00 UTC": "КВОТА ПРОВАЙДЕРА ИСЧЕРПАНА · сброс в 00:00 UTC",
+  "RATE LIMITED": "ЧАСТОТА ОГРАНИЧЕНА",
+  "INVALID KEY": "НЕВЕРНЫЙ КЛЮЧ",
+  "UPSTREAM UNAVAILABLE": "ПРОВАЙДЕР НЕДОСТУПЕН",
+  "VIEW FETCHES SPENT · resets hourly": "ЗАПРОСЫ ПО ВИДУ ИСЧЕРПАНЫ · сброс каждый час",
+  "VIEW FETCHING OFF": "ЗАПРОСЫ ПО ВИДУ ОТКЛЮЧЕНЫ",
+  "Negative tone": "Негативный тон",
+  "Neutral tone": "Нейтральный тон",
+  "Positive tone": "Позитивный тон",
+  "Pins sit at the place named in the headline, not where the article was published. Tone is the provider's sentiment score for the article text.": "Метки стоят в месте, названном в заголовке, а не там, где опубликована статья. Тон — оценка тональности текста статьи от провайдера.",
+  "whole earth": "вся Земля",
+  "within {radius} km of {lat}, {lon}": "в радиусе {radius} км от {lat}, {lon}",
+  "{count} latest headlines place-tagged": {
+    "one": "{count} свежий заголовок с привязкой к месту",
+    "few": "{count} свежих заголовка с привязкой к месту",
+    "many": "{count} свежих заголовков с привязкой к месту",
+    "other": "{count} свежего заголовка с привязкой к месту"
+  },
+  "{count} headlines {region} place-tagged": {
+    "one": "{count} заголовок {region} с привязкой к месту",
+    "few": "{count} заголовка {region} с привязкой к месту",
+    "many": "{count} заголовков {region} с привязкой к месту",
+    "other": "{count} заголовка {region} с привязкой к месту"
+  },
+  "World News unavailable": "World News недоступен",
+  "LOCAL DAILY CAP REACHED {spent}/{limit} points": "ДОСТИГНУТ ЛОКАЛЬНЫЙ СУТОЧНЫЙ ЛИМИТ {spent}/{limit} баллов",
+  "provider quota still has {left}": "в квоте провайдера ещё осталось {left}",
+  "raise {setting}": "увеличьте {setting}",
+  "1 request ≈ {cost} points of today's budget ({spent}/{limit} used)": {
+    "one": "1 запрос ≈ {cost} балл сегодняшнего бюджета (израсходовано {spent}/{limit})",
+    "few": "1 запрос ≈ {cost} балла сегодняшнего бюджета (израсходовано {spent}/{limit})",
+    "many": "1 запрос ≈ {cost} баллов сегодняшнего бюджета (израсходовано {spent}/{limit})",
+    "other": "1 запрос ≈ {cost} балла сегодняшнего бюджета (израсходовано {spent}/{limit})"
+  },
+  "1 request ≈ {cost} points (estimate) of today's budget ({spent}/{limit} used)": {
+    "one": "1 запрос ≈ {cost} балл (оценка) сегодняшнего бюджета (израсходовано {spent}/{limit})",
+    "few": "1 запрос ≈ {cost} балла (оценка) сегодняшнего бюджета (израсходовано {spent}/{limit})",
+    "many": "1 запрос ≈ {cost} баллов (оценка) сегодняшнего бюджета (израсходовано {spent}/{limit})",
+    "other": "1 запрос ≈ {cost} балла (оценка) сегодняшнего бюджета (израсходовано {spent}/{limit})"
+  },
+  "Add a World News API key to load headlines": "Добавьте ключ World News API, чтобы загружать заголовки",
+  "A view is a single page — fetch the worldwide feed to page further": "Вид занимает одну страницу — чтобы листать дальше, запросите мировой поток",
+  "No extra pages left this hour": "Дополнительных страниц в этот час не осталось",
+  "Fetch one more page of headlines ({count} left this hour)": {
+    "one": "Загрузить ещё одну страницу заголовков (в этот час осталась {count})",
+    "few": "Загрузить ещё одну страницу заголовков (в этот час осталось {count})",
+    "many": "Загрузить ещё одну страницу заголовков (в этот час осталось {count})",
+    "other": "Загрузить ещё одну страницу заголовков (в этот час осталось {count})"
+  },
+  "Add a World News API key to fetch headlines": "Добавьте ключ World News API, чтобы запрашивать заголовки",
+  "Zoom in to a city first — a news circle is capped at {radius} km across the ground, and this view is wider": "Сначала приблизьтесь к городу — круг новостей ограничен {radius} км по земле, а этот вид шире",
+  "Fetch the headlines {region} ({count} left this hour)": {
+    "one": "Запросить заголовки {region} (в этот час остался {count} запрос)",
+    "few": "Запросить заголовки {region} (в этот час осталось {count} запроса)",
+    "many": "Запросить заголовки {region} (в этот час осталось {count} запросов)",
+    "other": "Запросить заголовки {region} (в этот час осталось {count} запроса)"
+  },
+  "Fetch the headlines {region}": "Запросить заголовки {region}",
+  "Add the latest worldwide headlines to the map": "Добавить на карту свежие мировые заголовки",
+  "No headline pins to clear": "Нет меток заголовков для удаления",
+  "Remove all {count} headline pins from the map. The layer is live, so the next refresh adds the headlines {region} again.": {
+    "one": "Убрать с карты {count} метку заголовка. Слой работает в реальном времени, поэтому при следующем обновлении заголовки {region} появятся снова.",
+    "few": "Убрать с карты все {count} метки заголовков. Слой работает в реальном времени, поэтому при следующем обновлении заголовки {region} появятся снова.",
+    "many": "Убрать с карты все {count} меток заголовков. Слой работает в реальном времени, поэтому при следующем обновлении заголовки {region} появятся снова.",
+    "other": "Убрать с карты все {count} метки заголовков. Слой работает в реальном времени, поэтому при следующем обновлении заголовки {region} появятся снова."
+  },
+  "Remove all {count} headline pins from the map. The layer is live, so the next refresh adds the worldwide feed again.": {
+    "one": "Убрать с карты {count} метку заголовка. Слой работает в реальном времени, поэтому при следующем обновлении мировой поток появится снова.",
+    "few": "Убрать с карты все {count} метки заголовков. Слой работает в реальном времени, поэтому при следующем обновлении мировой поток появится снова.",
+    "many": "Убрать с карты все {count} меток заголовков. Слой работает в реальном времени, поэтому при следующем обновлении мировой поток появится снова.",
+    "other": "Убрать с карты все {count} метки заголовков. Слой работает в реальном времени, поэтому при следующем обновлении мировой поток появится снова."
+  },
+  "OPEN ARTICLE": "ОТКРЫТЬ СТАТЬЮ",
+  "Open this headline at {domain} in a new tab": "Открыть этот заголовок на {domain} в новой вкладке",
+  "Open this headline at its publisher in a new tab": "Открыть этот заголовок у издателя в новой вкладке",
+  "Select a headline pin to open its article": "Выберите метку заголовка, чтобы открыть статью",
+  "LOAD MORE": "ЗАГРУЗИТЬ ЕЩЁ",
+  "NEWS IN VIEW": "НОВОСТИ В КАДРЕ",
+  "GLOBAL FEED": "МИРОВОЙ ПОТОК",
+  "CLEAR PINS": "УБРАТЬ МЕТКИ",
+  "PREV STORY": "ПРЕД. НОВОСТЬ",
+  "Show the previous of {count} stories at {place}": {
+    "one": "Показать предыдущую из {count} новости в месте {place}",
+    "few": "Показать предыдущую из {count} новостей в месте {place}",
+    "many": "Показать предыдущую из {count} новостей в месте {place}",
+    "other": "Показать предыдущую из {count} новости в месте {place}"
+  },
+  "NEXT STORY": "СЛЕД. НОВОСТЬ",
+  "Show the next of {count} stories at {place}": {
+    "one": "Показать следующую из {count} новости в месте {place}",
+    "few": "Показать следующую из {count} новостей в месте {place}",
+    "many": "Показать следующую из {count} новостей в месте {place}",
+    "other": "Показать следующую из {count} новости в месте {place}"
+  },
+  "No tone score": "Без оценки тона",
+  "cached {age}": "кэш {age}",
+  "{rows} of {count} latest headlines place-tagged": {
+    "one": "С привязкой к месту: {rows} из {count} свежего заголовка",
+    "few": "С привязкой к месту: {rows} из {count} свежих заголовков",
+    "many": "С привязкой к месту: {rows} из {count} свежих заголовков",
+    "other": "С привязкой к месту: {rows} из {count} свежего заголовка"
+  },
+  "updated {ago}": "обновлено {ago}",
+  "{count} pinned": {
+    "one": "{count} на карте",
+    "few": "{count} на карте",
+    "many": "{count} на карте",
+    "other": "{count} на карте"
+  },
+  "No place-tagged headlines {region}": "Нет заголовков с привязкой к месту {region}",
+  "No place-tagged headlines in the latest batch": "В последней партии нет заголовков с привязкой к месту",
+  "TONE NEGATIVE": "ТОН НЕГАТИВНЫЙ",
+  "TONE NEUTRAL": "ТОН НЕЙТРАЛЬНЫЙ",
+  "TONE POSITIVE": "ТОН ПОЗИТИВНЫЙ",
+  "TONE UNKNOWN": "ТОН НЕИЗВЕСТЕН",
+  "unknown source": "неизвестный источник",
+  "{domain} (+{count} outlets)": {
+    "one": "{domain} (+{count} издание)",
+    "few": "{domain} (+{count} издания)",
+    "many": "{domain} (+{count} изданий)",
+    "other": "{domain} (+{count} издания)"
+  },
+  "Unnamed place": "Место без названия",
+  "{source} · {age} ago": "{source} · {age} назад",
+  "{place} · {index}/{count} stories here · click the pin for the next": {
+    "one": "{place} · {index}/{count} новость здесь · нажмите на метку, чтобы перейти к следующей",
+    "few": "{place} · {index}/{count} новости здесь · нажмите на метку, чтобы перейти к следующей",
+    "many": "{place} · {index}/{count} новостей здесь · нажмите на метку, чтобы перейти к следующей",
+    "other": "{place} · {index}/{count} новости здесь · нажмите на метку, чтобы перейти к следующей"
+  },
+  "Click this card to open · {source}": "Нажмите на карточку, чтобы открыть · {source}",
+  "Source: {source}": "Источник: {source}",
+  "Headline place": "Место из заголовка",
+  "World News key rejected": "Ключ World News отклонён",
+  "World News quota exhausted": "Квота World News исчерпана",
+  "daily news budget exhausted": "суточный бюджет новостей исчерпан",
+  "World News rate-limited": "World News ограничил частоту запросов",
+  "extra pages exhausted": "дополнительные страницы исчерпаны",
+  "this view is not a valid news circle": "этот вид не подходит для круга новостей",
+  "view fetching is off on this server": "запросы по виду отключены на этом сервере",
+  "view fetches exhausted this hour": "запросы по виду в этот час исчерпаны",
+  "Malformed news snapshot": "Некорректный снимок новостей",
+  "World News": "Мировые новости",
+  "World News HTTP {status}": "World News ответил HTTP {status}",
+  "from {count} views": {
+    "one": "из {count} вида",
+    "few": "из {count} видов",
+    "many": "из {count} видов",
+    "other": "из {count} вида"
+  },
+  "from the worldwide feed and {count} views": {
+    "one": "из мирового потока и {count} вида",
+    "few": "из мирового потока и {count} видов",
+    "many": "из мирового потока и {count} видов",
+    "other": "из мирового потока и {count} вида"
+  },
+  "{tone} ({score})": "{tone} ({score})"
 }

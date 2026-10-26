@@ -154,6 +154,18 @@ this entry independently and rejects Node imports.
 The browser's direct geocoding, annotation rendering and full Overpass query
 service remain in their existing modules.
 
+## World News provider
+
+`gods-eye-view/server/providers/world-news` is a Node-only entry for the World
+News API headline middleware. `server/providers/world-news/client.js` owns the
+fixed upstream URL, header authentication, the capped JSON read and quota-header
+parsing; the plugin owns its memory/disk cache, retention purge, budget file,
+admission and blocked states. `src/data/worldNewsArticles.js` is its owned pure
+normalizer (the FIRMS CSV precedent): it strips article bodies, bylines and
+person/organization entities, and images unless `WORLD_NEWS_THUMBNAILS` keeps the
+publisher's image URL, before anything is cached or served.
+Importing the entry does not start acquisition; the key is read per request.
+
 ## Satellite and launch providers
 
 `gods-eye-view/server/providers/space` is a Node-only entry for the CelesTrak

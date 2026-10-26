@@ -419,11 +419,15 @@ const layers = [
 
 /**
  * Catalog layers deliberately outside voice, with the reason. The Bhote Koshi
- * pair belong to a scripted scene and are driven by `control_scene`.
+ * pair belong to a scripted scene and are driven by `control_scene`. World
+ * News would need at least a toggle entry (two enum values, 26 characters),
+ * and the Realtime prompt already sits at its 52,000-character cap
+ * (pointAndAsk.test.mjs); a manifest entry brings it back once there is room.
  */
 export const VOICE_OFF_LAYERS = Object.freeze({
   'bhote-koshi-2026': 'scene-driven event layer (control_scene)',
   'bhote-koshi-locator': 'scene-driven event layer (control_scene)',
+  'world-news': 'Realtime prompt budget is full (52,000-character cap)',
 });
 
 const TYPE_NAMES = Object.freeze({
