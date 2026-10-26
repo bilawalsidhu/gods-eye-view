@@ -124,13 +124,14 @@ export function normalizeActionEpisode(value) {
     Array.isArray(value.actions) && value.actions.length <= 32
       ? value.actions.map(normalizeActionEpisodeStep)
       : [];
-  const startedAt = Number(value.startedAt);
-  const completedAt = Number(value.completedAt);
+  const { startedAt, completedAt } = value;
   if (
     !contextFingerprint ||
     actions.length === 0 ||
     actions.length > 32 ||
     actions.some((action) => !action) ||
+    typeof startedAt !== 'number' ||
+    typeof completedAt !== 'number' ||
     !Number.isFinite(startedAt) ||
     !Number.isFinite(completedAt) ||
     startedAt < 0 ||

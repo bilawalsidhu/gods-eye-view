@@ -336,3 +336,26 @@ test('unsafe minimum occurrence settings are rejected explicitly', () => {
     );
   }
 });
+
+test('timestamps require finite numbers before replay candidate counting', () => {
+  // A missing time previously became epoch zero, inflating independent runs.
+  for (const field of ['startedAt', 'completedAt']) {
+    for (const value of [
+      null, undefined, '', '100', true, false, {}, [], NaN, Infinity,
+    ]) {
+      assert.equal(normalizeActionEpisode(episode({ [field]: value })), null);
+    }
+  }
+  assert.deepEqual(
+    normalizeActionEpisode(episode({ startedAt: 0, completedAt: 0 })),
+    episode({ startedAt: 0, completedAt: 0 }),
+  );
+  assert.deepEqual(
+    detectReflexCandidates([
+      episode({ startedAt: null }),
+      episode(),
+      episode({ startedAt: 300, completedAt: 400 }),
+    ]),
+    [],
+  );
+});
