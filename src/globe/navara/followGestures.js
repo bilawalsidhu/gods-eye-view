@@ -5,8 +5,8 @@
 // (ScreenSpaceCameraController rotate3D and zoom3D):
 // - left drag: heading turns by rate × dx / width × 2π and the camera rises
 //   by rate × −dy / height × π, rate = 1.77 (Cesium's maximum rotate rate,
-//   which a tracked camera beyond a few metres always reaches); each move
-//   counts at most a tenth of the canvas (maximumMovementRatio); a drag
+//   which a tracked camera beyond a few metres always reaches); the signed
+//   window ratio uses Cesium's maximumMovementRatio cap; a drag
 //   right turns the heading clockwise;
 // - right drag: a dolly by dy / height (down closes in);
 // - wheel: one notch (deltaY 100) is 20 % of the range.
@@ -46,7 +46,7 @@ export function navaraFollowGestures(
         return;
       }
       orbit(
-        ROTATE_RATE * Math.min(dx / width, MAX_MOVEMENT_RATIO) * 2 * Math.PI,
+        -ROTATE_RATE * Math.min(-dx / width, MAX_MOVEMENT_RATIO) * 2 * Math.PI,
         ROTATE_RATE * Math.min(-dy / height, MAX_MOVEMENT_RATIO) * Math.PI,
       );
     };

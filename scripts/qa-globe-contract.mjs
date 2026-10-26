@@ -824,6 +824,113 @@ async function runNavara(page, url, consoleErrors) {
       },
     );
 
+    // Display meshes must keep GPU picking after their original becomes depth-only.
+    await check(
+      'navara: display-model GPU picks and hidden/deleted rejection (20 clicks)',
+      async () => {
+        engine.camera.setView({
+          destination: cartesian3.fromDegrees(20, 10, 1e6),
+          orientation: { heading: 0, pitch: -Math.PI / 2, roll: 0 },
+        });
+        await settle(3);
+        const set = engine.movers.createSet({
+          id: 'model-latency',
+          kind: 'model',
+          capacity: 1,
+          pickable: true,
+          model: {
+            url: '/models/airplane.glb',
+            minimumPixelSize: 80,
+            colorBlend: { mode: 'replace', amount: 1 },
+          },
+        });
+        const position = cartesian3.fromDegrees(20, 10, 20000);
+        set.set(0, { position, pickId: 'target' });
+        set.setCount(1);
+        set.commit();
+        const loading = performance.now();
+        while (!set.ready() && performance.now() - loading < 30000) {
+          await sleep(50);
+          await settle(1);
+        }
+        ensure(set.ready(), 'model did not load');
+        await settle(20);
+        const before = engine.picker.clickStats();
+        const latencies = [];
+        let wrong = 0;
+        let pending = null;
+        let visibleStats;
+        const remove = engine.input.on('click', (event) => pending?.(event), {
+          pick: true,
+        });
+        try {
+          const screen = engine.projector.worldToWindow(position);
+          for (let index = 0; index < 20; index++) {
+            const started = performance.now();
+            const payload = await new Promise((resolve) => {
+              pending = resolve;
+              pointer.click(screen.x, screen.y);
+            });
+            latencies.push(performance.now() - started);
+            if (payload.picked?.id !== 'target') wrong++;
+            await sleep(100);
+          }
+          visibleStats = engine.picker.clickStats();
+          set.set(0, { show: false });
+          set.commit();
+          await settle(3);
+          const hidden = await new Promise((resolve) => {
+            pending = resolve;
+            pointer.click(screen.x, screen.y);
+          });
+          ensure(
+            hidden.picked?.id !== 'target',
+            'hidden model remained pickable',
+          );
+          set.destroy();
+          await settle(3);
+          const deleted = await new Promise((resolve) => {
+            pending = resolve;
+            pointer.click(screen.x, screen.y);
+          });
+          ensure(
+            deleted.picked?.id !== 'target',
+            'deleted model remained pickable',
+          );
+        } finally {
+          remove();
+          set.destroy();
+        }
+        const after = visibleStats;
+        const rejectedStats = engine.picker.clickStats();
+        latencies.sort((a, b) => a - b);
+        const at = (q) =>
+          latencies[
+            Math.min(latencies.length - 1, Math.ceil(q * latencies.length) - 1)
+          ];
+        const detail = {
+          p50: Math.round(at(0.5) * 10) / 10,
+          p95: Math.round(at(0.95) * 10) / 10,
+          max: Math.round(latencies.at(-1) * 10) / 10,
+          gpu: after.gpu - before.gpu,
+          timeout: after.timeout - before.timeout,
+          stale: after.stale - before.stale,
+          wrong,
+          hiddenAndDeletedRejected: true,
+          rejectionGpu: rejectedStats.gpu - after.gpu,
+          rejectionStale: rejectedStats.stale - after.stale,
+        };
+        window.__qaModelClickLatency = detail;
+        ensure(
+          wrong === 0 &&
+            detail.gpu >= 20 &&
+            detail.timeout === 0 &&
+            detail.stale === 0,
+          `model clicks: ${JSON.stringify(detail)}`,
+        );
+      },
+    );
+
     // Whether Navara draws what the engine projects: points along the
     // engine's pick rays project through Navara's drawn three camera to the
     // same window position (within 0.5 px).
@@ -1391,6 +1498,13 @@ async function runNavara(page, url, consoleErrors) {
     console.log(
       `[qa-globe-contract] navara click → pick payload (ms): ${JSON.stringify(clickLatency)}`,
     );
+  const modelClickLatency = await page.evaluate(
+    () => window.__qaModelClickLatency ?? null,
+  );
+  if (modelClickLatency)
+    console.log(
+      `[qa-globe-contract] navara model click → pick payload (ms): ${JSON.stringify(modelClickLatency)}`,
+    );
   report.extra.push(await navaraLifecycleCheck(page, consoleErrors));
   return report;
 }
@@ -1491,6 +1605,8 @@ let browser;
 let exitCode = 1;
 try {
   browser = await puppeteer.launch({
+    // One RPC runs the complete suite; per-check/frame timeouts remain below.
+    protocolTimeout: 600000,
     headless: 'new',
     executablePath,
     args: [

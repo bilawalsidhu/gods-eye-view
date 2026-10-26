@@ -37,7 +37,10 @@
  * default style (no post stages on) and without its 60 fps cap for the
  * measurement; Navara with --navara-look (pass minimal for the gate).
  *
- * --scenario=w1-fleet (phase 3 Task 10b) measures the flights layer whole
+ * --scenario=w1-fleet (T16) defaults to flights + military together (10000 +
+ * 1000 source rows, 25 shared contacts suppressed in flights). --layer=flights
+ * measures flights alone; --layer=satellites measures dense (6839), informative.
+ * It measures the layers whole
  * instead: ?qaFeed=flights:synthetic:--count (10000), the layer on with its
  * defaults (3D models in proximity), at each --scene; frame times over 10 s
  * after the fleet has loaded and a 3 s warm-up, the engine rendering
@@ -101,13 +104,17 @@ if (!['flight', 'movers', 'w1-fleet'].includes(scenario)) {
   );
   process.exit(2);
 }
-const FLEET_LAYER = argument('layer') ?? 'flights';
+const FLEET_LAYER = argument('layer') ?? 'w1';
 // The QA feed of the measured layer (src/app/layers/qaSources.js): vessels
 // are the 12 000-row fixture (asked for by view, as the layer asks).
 const fleetFeed = (layerId, count) =>
-  layerId === 'ais-live-vessels'
-    ? 'vessels:fixture'
-    : `${layerId}:synthetic:${count}`;
+  layerId === 'w1'
+    ? `flights:synthetic:${count},military:synthetic:1000`
+    : layerId === 'satellites'
+      ? 'satellites:fixture'
+      : layerId === 'ais-live-vessels'
+        ? 'vessels:fixture'
+        : `${layerId}:synthetic:${count}`;
 const MOVER_COUNT = Number(
   argument('count') ?? (FLEET_LAYER === 'military' ? 1000 : 10000),
 );
@@ -373,14 +380,17 @@ async function runFleet({
   hold,
   layerId,
   modelsOff,
+  count,
 }) {
   const { engine, dataManager, viewer, layers } = window.__godsEyeView;
+  const layerIds = layerId === 'w1' ? ['military', 'flights'] : [layerId];
+  console.log(`[bench-stage] ${layerId}: reset`);
   const geo = await import('/src/geo/index.js');
   const targetFrameRate = viewer?.targetFrameRate;
   if (viewer) viewer.targetFrameRate = undefined;
   const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
   for (const [id] of dataManager?.layers ?? [])
-    if (id !== layerId && dataManager.isEnabled?.(id))
+    if (!layerIds.includes(id) && dataManager.isEnabled?.(id))
       await dataManager.setEnabled(id, false);
   const rad = geo.math.toRadians;
   engine.camera.setView({
@@ -390,7 +400,8 @@ async function runFleet({
   // The fleet tick's CPU time: the layer's preRender listener (installed on
   // enable, so the layer is re-enabled under the wrapper), timed when it
   // does work (the 12 Hz pass; other frames return at once).
-  if (dataManager.isEnabled?.(layerId)) await layers.disable(layerId);
+  for (const id of layerIds)
+    if (dataManager.isEnabled?.(id)) await layers.disable(id);
   window.__gevFleetTicks = null;
   const timed = (event) => {
     const add = event.addEventListener.bind(event);
@@ -424,10 +435,24 @@ async function runFleet({
     timed(engine.frames.preRender),
     ...(viewer?.scene?.preRender ? [timed(viewer.scene.preRender)] : []),
   ];
-  await layers.enable(layerId);
+  for (const id of layerIds) {
+    console.log(`[bench-stage] enable ${id}`);
+    await layers.enable(id);
+  }
+  if (layerId === 'satellites')
+    dataManager.setLayerParams(layerId, { catalog: 'dense', showPoints: true });
   for (const restore of untime) restore();
-  if (modelsOff) dataManager.setLayerParams(layerId, { models3d: false });
-  const flights = dataManager.layers.get(layerId).module;
+  if (modelsOff)
+    for (const id of layerIds)
+      dataManager.setLayerParams(id, { models3d: false });
+  const flights = dataManager.layers.get(layerIds.at(-1)).module;
+  const populations = () =>
+    Object.fromEntries(
+      layerIds.map((id) => [
+        id,
+        dataManager.layers.get(id).module.getStats().count,
+      ]),
+    );
   const waitStart = performance.now();
   while (
     flights.getAllPositions(1).length === 0 &&
@@ -457,6 +482,7 @@ async function runFleet({
     if (frameStart !== null) works.push([now, now - frameStart]);
     frameStart = null;
   });
+  console.log(`[bench-stage] ${layerId}: populated, warming`);
   engine.render.setContinuous(true);
   const stop = () => {
     engine.render.setContinuous(false);
@@ -480,8 +506,52 @@ async function runFleet({
         .filter(([time]) => time >= from && time <= to)
         .map(([, work]) => work),
       fleetTicksMs: [...(window.__gevFleetTicks ?? [])],
-      objects: flights.getAllPositions(1_000_000).length,
+      objects: layerIds.reduce(
+        (sum, id) =>
+          sum + (dataManager.layers.get(id).module.getStats().count ?? 0),
+        0,
+      ),
+      populations: populations(),
+      canvas: {
+        width: engine.host.canvas.width,
+        height: engine.host.canvas.height,
+        cssWidth: engine.host.canvas.clientWidth,
+        cssHeight: engine.host.canvas.clientHeight,
+        dpr: window.devicePixelRatio,
+      },
+      moverSets: engine.movers
+        .list()
+        .map(({ kind, count, capacity }) => ({ kind, count, capacity })),
+      models: Object.fromEntries(
+        layerIds
+          .filter((id) => ['flights', 'military'].includes(id))
+          .map((id) => {
+            const params = dataManager.layers.get(id).module.getParams();
+            const rows = layers.drawn(id) ?? [];
+            return [
+              id,
+              {
+                enabled: params.models3d,
+                mode: params.models3dMode,
+                created: rows.filter((row) => row.model).length,
+                shownReady: rows.filter(
+                  (row) => row.model?.show && row.model?.ready,
+                ).length,
+              },
+            ];
+          }),
+      ),
     };
+    if (
+      layerId === 'w1' &&
+      (result.populations.flights !== count - 25 ||
+        result.populations.military !== 1000)
+    )
+      throw new Error(
+        `Expected ${count} source flights (25 shared military suppressed) +1000 military: ${JSON.stringify(result.populations)}`,
+      );
+    if (layerId === 'satellites' && result.objects !== 6839)
+      throw new Error(`Expected 6839 satellites, got ${result.objects}`);
     if (layerId === 'ais-live-vessels' && result.objects !== 12000)
       throw new Error(
         `Vessel population changed during measurement: ${result.objects}`,
@@ -676,6 +746,9 @@ async function runOnce(browser, baseUrl, engine) {
   const page = await context.newPage();
   await page.setViewport({ width: 1280, height: 800 });
   const errors = [];
+  page.on('console', (message) => {
+    if (message.text().startsWith('[bench-stage]')) console.log(message.text());
+  });
   page.on('pageerror', (error) =>
     errors.push(redact(error.message).slice(0, 200)),
   );
@@ -694,7 +767,10 @@ async function runOnce(browser, baseUrl, engine) {
     if (scenario === 'w1-fleet')
       params.set('qaFeed', fleetFeed(FLEET_LAYER, MOVER_COUNT));
     const query = params.size ? `?${params}` : '';
-    await page.goto(`${baseUrl}${query}`, { waitUntil: 'domcontentloaded' });
+    await page.goto(`${baseUrl}${query}`, {
+      waitUntil: 'domcontentloaded',
+      timeout: BOOT_TIMEOUT_MS,
+    });
     await page.waitForFunction(() => Boolean(window.__qaInitialView?.done), {
       timeout: BOOT_TIMEOUT_MS,
       polling: 250,
@@ -739,6 +815,7 @@ async function runOnce(browser, baseUrl, engine) {
                 hold: HEAP_SECONDS > 0,
                 layerId: FLEET_LAYER,
                 modelsOff: MODELS_OFF,
+                count: MOVER_COUNT,
               });
         let heap = null;
         if (HEAP_SECONDS > 0) {
@@ -756,6 +833,24 @@ async function runOnce(browser, baseUrl, engine) {
           .slice(1)
           .map((time, index) => time - measured.times[index])
           .sort((a, b) => a - b);
+        // Diagnostics are derived after the window; no extra per-frame work.
+        const longFrameSamples = measured.times
+          .slice(1)
+          .flatMap((time, index) => {
+            const interval = time - measured.times[index];
+            if (interval <= 33.4) return [];
+            const aligned = measured.works?.length === measured.times.length;
+            return [
+              {
+                atMs: round(time - measured.times[0], 1),
+                intervalMs: round(interval, 2),
+                workMs: aligned ? round(measured.works[index + 1], 2) : null,
+                previousWorkMs: aligned
+                  ? round(measured.works[index], 2)
+                  : null,
+              },
+            ];
+          });
         scenes[name] = {
           frames: measured.times.length,
           fps: round((measured.times.length / measured.wallMs) * 1000),
@@ -763,6 +858,7 @@ async function runOnce(browser, baseUrl, engine) {
           p95: round(quantile(deltas, 0.95), 2),
           max: round(deltas.at(-1), 1),
           longFrames33: deltas.filter((delta) => delta > 33.4).length,
+          longFrameSamples,
           ...(measured.works?.length
             ? {
                 workP95: round(
@@ -795,7 +891,13 @@ async function runOnce(browser, baseUrl, engine) {
               }
             : {}),
           ...(measured.objects !== undefined
-            ? { objects: measured.objects }
+            ? {
+                objects: measured.objects,
+                populations: measured.populations,
+                models: measured.models,
+                canvas: measured.canvas,
+                moverSets: measured.moverSets,
+              }
             : {}),
           ...(heap
             ? {
@@ -858,6 +960,7 @@ const server = argument('base-url')
   : await startServer(serverKind);
 const baseUrl = server.url.endsWith('/') ? server.url : `${server.url}/`;
 const browser = await puppeteer.launch({
+  protocolTimeout: 300000,
   headless: true,
   executablePath,
   args: [
@@ -942,7 +1045,8 @@ try {
   if (
     (scenario === 'movers' || scenario === 'w1-fleet') &&
     report.engines.cesium &&
-    report.engines.navara
+    report.engines.navara &&
+    FLEET_LAYER !== 'satellites'
   ) {
     // The layer gate (plan amendment to the phase-0/S5 gate, T13):
     // uncapped, the WORK p95 (preRender → postRender) ratio Navara/Cesium

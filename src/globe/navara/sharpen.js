@@ -86,8 +86,8 @@ class UnsharpMaskEffect extends Effect {
 /** config.gevSharpen: { amount } (Cesium's `amount` uniform). */
 export class SharpenEffectDesc extends EffectDesc {
   static key = SHARPEN_EFFECT_KEY;
-  static insertAfter = ['gevOverlay', 'toneMapping'];
-  static insertBefore = ['smaa', 'fxaa', 'final'];
+  static insertAfter = ['toneMapping'];
+  static insertBefore = ['smaa', 'fxaa', 'gevOverlay', 'final'];
 
   constructor(view, ctx, config) {
     super(view, ctx, config);

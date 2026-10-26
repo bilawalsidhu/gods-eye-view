@@ -1,4 +1,4 @@
-import * as Cesium from 'cesium';
+import { modelAxis } from './render/cesiumConstants.js';
 import * as geo from '../geo/index.js';
 /**
  * Model-space visual centres measured from the shipped GLBs' scene-space AABBs.
@@ -78,8 +78,8 @@ export const MODEL_TRAIL_ANCHOR_NATIVE = Object.freeze({
  *  trail anchor has to ride the same chain or it lands on a different axis than
  *  the aircraft it is supposed to be attached to. */
 const AXIS_CORRECTION = geo.matrix4.multiplyTransformation(
-  Cesium.Axis.Y_UP_TO_Z_UP,
-  Cesium.Axis.Z_UP_TO_X_UP,
+  modelAxis.Y_UP_TO_Z_UP,
+  modelAxis.Z_UP_TO_X_UP,
   geo.matrix4.create(),
 );
 const _anchorScratch = geo.cartesian3.create();

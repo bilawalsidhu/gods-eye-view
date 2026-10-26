@@ -293,3 +293,59 @@ test('trails are engine lines in the trail pick namespace; the head follows each
   renderer.destroy();
   engine.destroy();
 });
+
+test('unchanged sprite style does not upload or request another frame', async () => {
+  const { engine, renderer } = await setup();
+  const sprite = renderer.fleet.add({
+    id: 'same',
+    position: geo.cartesian3.fromDegrees(0, 0, 1000),
+    image: aircraftIcon('light'),
+  });
+  await Promise.resolve();
+  const [listed] = setsOf(engine, 'flights-sprites');
+  const part = engine.fake.moverSet(listed.id);
+  const before = part.commits;
+  const color = sprite.color;
+  for (let n = 0; n < 1000; n++) {
+    sprite.show = true;
+    sprite.rotation = 0;
+    sprite.scale = 1;
+    sprite.width = 20;
+    sprite.color = WHITE;
+  }
+  await Promise.resolve();
+  assert.equal(part.commits, before);
+  assert.equal(sprite.color, color);
+  renderer.destroy();
+  engine.destroy();
+});
+
+test('reused sprite field records are copied, including a mutated color getter', async () => {
+  const { engine, renderer } = await setup();
+  const a = renderer.fleet.add({
+    id: 'a',
+    position: geo.cartesian3.fromDegrees(0, 0, 1000),
+    image: aircraftIcon('light'),
+  });
+  const b = renderer.fleet.add({
+    id: 'b',
+    position: a.position,
+    image: aircraftIcon('light'),
+  });
+  await Promise.resolve();
+  const [listed] = setsOf(engine, 'flights-sprites');
+  const { store } = engine.fake.moverSet(listed.id);
+  const position = geo.cartesian3.create(7, 8, 9);
+  a.position = position;
+  position.x = 20;
+  b.position = position;
+  a.color.alpha = 0.25;
+  a.color = a.color;
+  b.color = WHITE.withAlpha(0.75);
+  await Promise.resolve();
+  assert.deepEqual([...store.positions.subarray(0, 6)], [7, 8, 9, 20, 8, 9]);
+  assert.equal(store.colors[3], 0.25);
+  assert.equal(store.colors[7], 0.75);
+  renderer.destroy();
+  engine.destroy();
+});

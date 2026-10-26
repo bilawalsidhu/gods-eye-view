@@ -49,7 +49,7 @@ export function resolveNavaraLook(search = '') {
 }
 
 // postprocessing's ToneMappingMode.ACES_FILMIC (Navara's default is AGX, 7).
-const ACES_FILMIC = 6;
+export const ACES_FILMIC = 6;
 
 // Camera heights (m) where the cinematic look switches the globe to
 // atmosphere lighting (night side and terminator) and back. The gap keeps a

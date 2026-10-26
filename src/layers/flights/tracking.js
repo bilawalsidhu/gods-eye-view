@@ -1048,7 +1048,11 @@ export function createTracking({
     } else if (flightState._renderer.fleet.visible()) {
       // Fire-and-forget refresh; only while the layer is actually enabled.
       // The query reads the renderer's camera (no viewer argument needed).
-      void flightsLayer.update(null);
+      void flightsLayer.update(null).catch((error) => {
+        // This refresh has no lifecycle-manager caller. Disabling flights
+        // cancels it locally; retain visibility of unexpected failures.
+        if (error?.name !== 'AbortError') console.error(error);
+      });
     }
   }
 

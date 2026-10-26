@@ -86,3 +86,51 @@ test('local-adsb:fixture answers as the local receivers do (1090 MHz and UAT)', 
   assert.ok(state.records.some((record) => record.band === '978'));
   assert.ok(state.records.some((record) => record.band === '1090'));
 });
+
+test('flight fixture enrichment returns a not-found reply without regenerating the fleet', async () => {
+  let clockReads = 0;
+  const { flights } = createQaSources(
+    parseQaFeed('?qaFeed=flights:synthetic:10000'),
+    {
+      now: () => {
+        clockReads++;
+        return Date.UTC(2026, 9, 16, 12);
+      },
+    },
+  );
+  for (const kind of ['type', 'route']) {
+    const reply = await flights.getEnrichment({ kind, id: 'a00001' });
+    assert.equal(reply.found, false);
+    assert.deepEqual(Object.keys(reply), ['found']);
+  }
+  assert.equal(clockReads, 0);
+});
+
+test('flight fixture track reads do not regenerate a snapshot', async () => {
+  let clockReads = 0;
+  const { flights } = createQaSources(
+    parseQaFeed('?qaFeed=flights:synthetic:10000'),
+    {
+      now: () => {
+        clockReads++;
+        return Date.UTC(2026, 9, 16, 12);
+      },
+    },
+  );
+  assert.deepEqual(await flights.getTrack('a00001'), {
+    records: [],
+    complete: false,
+  });
+  assert.equal(clockReads, 0);
+});
+
+test('vessel fixture answers a relative track URL and retains its full snapshot', async () => {
+  const { vessels } = createQaSources(parseQaFeed('?qaFeed=vessels:fixture'), {
+    now: () => Date.UTC(2026, 9, 16, 12),
+  });
+  assert.deepEqual(await vessels.getTrack('990000001'), {
+    records: [],
+    complete: false,
+  });
+  assert.equal((await vessels.getSnapshot({})).records.length, 12000);
+});

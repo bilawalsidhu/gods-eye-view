@@ -234,7 +234,7 @@ async function main() {
       '--no-sandbox',
       '--disable-setuid-sandbox',
       '--use-gl=angle',
-      '--use-angle=swiftshader',
+      `--use-angle=${process.env.QA_ANGLE || 'swiftshader'}`,
       '--disable-dev-shm-usage',
       '--disable-web-security',
       '--disable-background-timer-throttling',

@@ -655,9 +655,9 @@ async function prepareMission(page) {
   });
   if (!selected) return 'Mission roster did not expose a selectable mission';
   try {
-    await page.waitForFunction(() => String(window.__godsEyeView.viewer?.selectedEntity?.id || '').startsWith('rocket-launch:'), { timeout: 10_000 });
+    await page.waitForFunction(() => Boolean(window.__godsEyeView.layers.drawn('rocket-launches')?.selected), { timeout: 10_000 });
   } catch {
-    return 'Mission selection did not reach the Cesium selected entity';
+    return 'Mission selection did not reach the layer probe';
   }
   await sleep(2_000);
   return null;
@@ -897,7 +897,7 @@ async function main() {
     executablePath: CHROME_EXECUTABLE,
     headless: HEADFUL ? false : 'new',
     args: [
-      ...(HARDWARE_GPU ? [] : ['--enable-unsafe-swiftshader', '--use-gl=swiftshader']),
+      ...(process.env.QA_ANGLE ? ['--use-gl=angle', `--use-angle=${process.env.QA_ANGLE}`] : HARDWARE_GPU ? [] : ['--enable-unsafe-swiftshader', '--use-gl=swiftshader']),
       '--no-sandbox',
       '--disable-setuid-sandbox',
       '--disable-dev-shm-usage',
@@ -950,9 +950,11 @@ async function main() {
         webglRenderer: browserContext.webglRenderer,
       },
       viewport: { ...VIEWPORT, dpr: browserContext.dpr },
-      gpuMode: HARDWARE_GPU ? 'hardware' : 'swiftshader',
+      gpuMode: process.env.QA_ANGLE || (HARDWARE_GPU ? 'hardware' : 'swiftshader'),
       chromeExecutable: CHROME_EXECUTABLE,
-      chromeArgs: HARDWARE_GPU
+      chromeArgs: process.env.QA_ANGLE
+        ? ['--use-gl=angle', `--use-angle=${process.env.QA_ANGLE}`, '--no-sandbox']
+        : HARDWARE_GPU
         ? ['--no-sandbox']
         : ['--enable-unsafe-swiftshader', '--use-gl=swiftshader', '--no-sandbox'],
       sampleMs: SAMPLE_MS,

@@ -57,6 +57,13 @@ const fieldsNoPick = {
   show: undefined,
 };
 const scratchColor = new Float64Array(4);
+// Sprite setters write synchronously into the mover store; reuse their
+// field records rather than allocating one per contact and assignment.
+const spritePositionField = { position: null };
+const spriteShowField = { show: true };
+const spriteRotationField = { rotation: 0 };
+const spriteScaleField = { scale: 1 };
+const spriteColorField = { color: scratchColor };
 function writeFields(set, index, fields) {
   const scratch = fieldsNoPick;
   for (const key in fields) scratch[key] = fields[key];
@@ -371,7 +378,8 @@ export function createAircraftNavaraRenderer({
 
     set position(value) {
       geo.cartesian3.clone(value, this._position);
-      this.write({ position: this._position });
+      spritePositionField.position = this._position;
+      this.write(spritePositionField);
     }
 
     get show() {
@@ -379,8 +387,11 @@ export function createAircraftNavaraRenderer({
     }
 
     set show(value) {
-      this._show = value !== false;
-      this.write({ show: this._show });
+      const next = value !== false;
+      if (next === this._show) return;
+      this._show = next;
+      spriteShowField.show = next;
+      this.write(spriteShowField);
     }
 
     get rotation() {
@@ -388,8 +399,10 @@ export function createAircraftNavaraRenderer({
     }
 
     set rotation(value) {
+      if (value === this._rotation) return;
       this._rotation = value;
-      this.write({ rotation: value });
+      spriteRotationField.rotation = value;
+      this.write(spriteRotationField);
     }
 
     get scale() {
@@ -397,8 +410,10 @@ export function createAircraftNavaraRenderer({
     }
 
     set scale(value) {
+      if (value === this._scale) return;
       this._scale = value;
-      this.write({ scale: this.drawnScale() });
+      spriteScaleField.scale = this.drawnScale();
+      this.write(spriteScaleField);
     }
 
     get width() {
@@ -406,8 +421,10 @@ export function createAircraftNavaraRenderer({
     }
 
     set width(value) {
+      if (value === this._width) return;
       this._width = value;
-      this.write({ scale: this.drawnScale() });
+      spriteScaleField.scale = this.drawnScale();
+      this.write(spriteScaleField);
     }
 
     get height() {
@@ -423,8 +440,17 @@ export function createAircraftNavaraRenderer({
     }
 
     set color(value) {
+      if (
+        value !== this._color &&
+        (value?.red ?? 1) === this._color.red &&
+        (value?.green ?? 1) === this._color.green &&
+        (value?.blue ?? 1) === this._color.blue &&
+        (value?.alpha ?? 1) === this._color.alpha
+      )
+        return;
       this._color = new StoredColor(value);
-      this.write({ color: rgbaOf(this._color) });
+      rgbaOf(this._color);
+      this.write(spriteColorField);
     }
 
     get image() {

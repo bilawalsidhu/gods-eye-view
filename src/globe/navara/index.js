@@ -18,6 +18,7 @@ import { createNavaraLines } from './lines/index.js';
 import { createNavaraOverlay } from './overlay.js';
 import {
   NAVARA_CONTEXT_ATTRIBUTES,
+  ACES_FILMIC,
   navaraScenePlan,
   navaraViewOptions,
   resolveNavaraLook,
@@ -120,14 +121,20 @@ export async function createNavaraGlobe({
     );
     // The look's shadowed sun leaked a light per frame (internals.js).
     keepCascadedLightIds(view);
-    // Sprites, points and lines, drawn after tone mapping (overlay.js).
+    // Screen overlays and model display colour after tone mapping (overlay.js).
     overlay = createNavaraOverlay(view);
     engine = createNavaraEngine(view, {
       hooks: navaraHooks(view),
       container,
       ...(appClock ? { appClock } : {}),
       sharpen: createNavaraSharpen(view),
-      movers: createNavaraMovers(view, { overlay }),
+      movers: createNavaraMovers(view, {
+        overlay,
+        // Model colour follows the display-space stage, after the look's ACES.
+        aces: plan.effects.some(
+          ({ toneMapping }) => toneMapping?.mode === ACES_FILMIC,
+        ),
+      }),
       lines: createNavaraLines(view, { overlay }),
     });
     const camera = engine.camera;

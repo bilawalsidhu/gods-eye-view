@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 // Phase-3 mission acceptance: actual LL2 parsing, UI selection and replay frames.
+import { watchW1Page } from './qa-browserEvidence.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import puppeteer from 'puppeteer';
@@ -16,6 +17,7 @@ if (
   throw new Error('Supply an unreserved --base-url');
 const out = arg('out') ?? `qa-artifacts/t15/${kind}.json`;
 const report = { engine: kind, checks: [], snapshots: {} };
+report.expectedPreviewErrors = [];
 const check = (name, ok, detail) => {
   report.checks.push({ name, ok: Boolean(ok), detail });
   console.log(
@@ -26,19 +28,18 @@ const browser = await puppeteer.launch({
   headless: true,
   args: ['--use-angle=metal'],
 });
+const errors = (report.browserErrors = []);
+const observePage = (page, name) =>
+  watchW1Page(page, report, {
+    name,
+    preview: process.argv.includes('--preview'),
+    baseUrl: base,
+  });
 try {
   fs.mkdirSync(path.dirname(out), { recursive: true });
   const page = await browser.newPage();
   await page.setViewport({ width: 1280, height: 800 });
-  const errors = [];
-  page.on('pageerror', (e) => errors.push(e.message));
-  page.on('console', (m) => {
-    if (m.type() === 'error' && m.text().includes('Rendering has stopped')) {
-      const error = m.text().replace(/https?:[^ )]+/g, '[URL]');
-      errors.push(error);
-      console.log(error.slice(0, 1200));
-    }
-  });
+  observePage(page, 'main');
   await page.evaluateOnNewDocument(() =>
     localStorage.setItem('gev:first-run-mission:v1', 'suppressed'),
   );
@@ -53,7 +54,7 @@ try {
     () => window.__godsEyeView.styleManager.initialRestorePromise,
   );
   await new Promise((r) => setTimeout(r, 6000));
-  await page.evaluate(async (epoch) => {
+  const clockIdentity = await page.evaluate(async (epoch) => {
     const { appClock } = await import('/src/time/clock.js');
     appClock.freeze(epoch);
     const { engine, layers, dataManager, styleManager } = window.__godsEyeView;
@@ -62,7 +63,15 @@ try {
     for (const [id] of dataManager.layers)
       if (dataManager.isEnabled(id)) await layers.disable(id);
     await layers.enable('rocket-launches');
+    return { moduleMs: appClock.now(), engineMs: engine.clock.now() };
   }, LAUNCH_FIXTURE_EPOCH);
+  report.clockIdentity = clockIdentity;
+  check(
+    'QA imports share the running engine clock',
+    clockIdentity.moduleMs === LAUNCH_FIXTURE_EPOCH &&
+      clockIdentity.engineMs === LAUNCH_FIXTURE_EPOCH,
+    clockIdentity,
+  );
   await page.waitForFunction(
     () =>
       window.__godsEyeView.dataManager.layers
@@ -398,6 +407,7 @@ try {
     const context = await browser.createBrowserContext();
     try {
       const shared = await context.newPage();
+      observePage(shared, `share-${opened}`);
       await shared.setViewport({ width: 1280, height: 800 });
       await shared.evaluateOnNewDocument(() =>
         localStorage.setItem('gev:first-run-mission:v1', 'suppressed'),
@@ -474,10 +484,55 @@ try {
   report.idle = await page.evaluate(async () => {
     const { layers, engine, getRenderGovernorDiagnostics } =
       window.__godsEyeView;
+    // As in the engine shell, "settled" requires tile readiness and a still
+    // camera. Do not wait for zero frames: that is the measured assertion.
+    const started = performance.now();
+    let stableSince = null,
+      previous = null,
+      ready = false;
+    let tilesReady = false,
+      cameraDeltaM = null;
+    while (performance.now() - started < 90000) {
+      const pose = engine.camera.pose();
+      const current = [
+        pose.position.x,
+        pose.position.y,
+        pose.position.z,
+        pose.heading,
+        pose.pitch,
+        pose.roll,
+      ];
+      cameraDeltaM = previous
+        ? Math.hypot(...current.slice(0, 3).map((v, i) => v - previous[i]))
+        : null;
+      const still =
+        previous &&
+        cameraDeltaM < 0.01 &&
+        current.slice(3).every((v, i) => Math.abs(v - previous[i + 3]) < 1e-6);
+      tilesReady = engine.surface.tilesLoaded();
+      if (!tilesReady || !still) stableSince = null;
+      else if (stableSince === null) stableSince = performance.now();
+      else if (performance.now() - stableSince >= 1500) {
+        ready = true;
+        break;
+      }
+      previous = current;
+      await new Promise((resolve) => setTimeout(resolve, 250));
+    }
+    const settling = {
+      ready,
+      elapsedMs: performance.now() - started,
+      tilesReady,
+      cameraDeltaM,
+    };
+    const tilesReadyBefore = engine.surface.tilesLoaded();
     const before = layers.framesDrawn();
     await new Promise((r) => setTimeout(r, 2000));
     return {
       frames: layers.framesDrawn() - before,
+      settling,
+      tilesReadyBefore,
+      tilesReadyAfter: engine.surface.tilesLoaded(),
       governor: getRenderGovernorDiagnostics(),
       continuous: engine.render.isContinuous(),
     };
@@ -489,8 +544,8 @@ try {
   );
   check(
     'settled disabled view draws zero frames in two seconds',
-    report.idle.frames === 0,
-    report.idle.frames,
+    report.idle.settling.ready && report.idle.frames === 0,
+    report.idle,
   );
   await page.evaluate(async () => {
     const { layers, dataManager } = window.__godsEyeView;
@@ -562,12 +617,12 @@ try {
     report.destroy.movers === 0 && report.destroy.lines === 0,
     report.destroy,
   );
+} finally {
+  await browser.close();
   check('no runtime errors', errors.length === 0, {
     count: errors.length,
     messages: errors.map((e) => e.replace(/https?:[^ ]+/g, '[URL]')),
   });
-} finally {
-  await browser.close();
   fs.mkdirSync(path.dirname(out), { recursive: true });
   fs.writeFileSync(out, JSON.stringify(report, null, 2));
 }

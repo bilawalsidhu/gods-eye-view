@@ -223,7 +223,10 @@ async function runEngine(browser, engine) {
   return result;
 }
 
-const browser = await puppeteer.launch({ headless: true });
+const browser = await puppeteer.launch({
+  headless: true,
+  args: ['--use-angle=metal'],
+});
 let failures = 0;
 const fail = (message) => {
   failures++;

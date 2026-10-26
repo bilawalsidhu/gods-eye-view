@@ -23,9 +23,10 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import puppeteer from 'puppeteer';
+import { redact, isExpectedPreviewSetupError } from './qa-browserEvidence.mjs';
 import sharp from 'sharp';
 import { frozenClockScript } from '../src/tooling/w1Baseline.js';
-import { W1_FROZEN_MS } from '../src/bench/w1Feeds.js';
+import { W1_FROZEN_MS, syntheticLocalReceivers } from '../src/bench/w1Feeds.js';
 
 const repoRoot = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -76,7 +77,18 @@ const POSES = {
 // Military's aircraft in the flights near view are on the ground, which
 // stay glyphs until the ground is sampled: its near pose is 100 km over JFK,
 // where its airborne fleet are models.
-const LAYER_NEAR = { military: [-73.78, 40.64, 100_000, 0, -90] };
+// The sparse local fixture needs a wider near view for at least three models.
+const LAYER_NEAR = {
+  military: [-73.78, 40.64, 100_000, 0, -90],
+  'local-adsb': [-73.78, 40.64, 60_000, 0, -90],
+};
+// UAT rings are a separate graphic. Their contrast must not count as model area.
+const localUatIds =
+  layer === 'local-adsb'
+    ? syntheticLocalReceivers()
+        .records.filter((row) => row.band === '978')
+        .map((row) => row.icao)
+    : [];
 if (LAYER_NEAR[layer]) POSES.near = LAYER_NEAR[layer];
 // --near=lon,lat,height,heading,pitch: another near pose.
 if (argument('near')) POSES.near = argument('near').split(',').map(Number);
@@ -97,13 +109,31 @@ async function capture(browser, engineKind) {
   const page = await context.newPage();
   await page.setViewport({ width: WIDTH, height: HEIGHT });
   const errors = [];
-  page.on('pageerror', (error) => errors.push(error.message));
+  const expectedPreviewErrors = [];
+  page.on('pageerror', (error) => errors.push(redact(error.message)));
   page.on('console', (message) => {
-    if (message.type() === 'error') errors.push(message.text().slice(0, 200));
+    if (
+      isExpectedPreviewSetupError(message, {
+        preview: process.argv.includes('--preview'),
+        baseUrl,
+      })
+    ) {
+      expectedPreviewErrors.push('/api/setup/status: 404');
+      return;
+    }
+    if (message.type() === 'error')
+      errors.push(redact(message.text()).slice(0, 200));
   });
   // The same instant on both engines: the synthetic fleet is where its
   // feed put it, not where 30 s of dead reckoning took it.
   await page.evaluateOnNewDocument(frozenClockScript(W1_FROZEN_MS + 5000));
+  if (layer === 'local-adsb')
+    await page.evaluateOnNewDocument(() => {
+      // Its independent eligibility cadence needs a deterministic tick after
+      // each camera move; the shared aircraft layers reset on moveEnd.
+      window.__qaLocalPixelNow = Date.now();
+      Date.now = () => window.__qaLocalPixelNow;
+    });
   await page.evaluateOnNewDocument(() => {
     try {
       localStorage.setItem('gev:first-run-mission:v1', 'suppressed');
@@ -131,7 +161,13 @@ async function capture(browser, engineKind) {
     async (models3d, layerId) => {
       const { layers, dataManager, styleManager } = window.__godsEyeView;
       await layers.enable(layerId);
-      dataManager.setLayerParams?.(layerId, { models3d: models3d === 'on' });
+      // Local ADS-B inherits the DISPLAY preference from Flights.
+      const displayLayer = layerId === 'local-adsb' ? 'flights' : layerId;
+      dataManager.setLayerParams?.(displayLayer, {
+        models3d: models3d === 'on',
+      });
+      if (layerId === 'local-adsb' && !Array.isArray(layers.drawn(layerId)))
+        throw new Error('Local ADS-B drawn-state probe is unavailable');
       // What draws over or onto the glyphs on one engine only: the scope
       // mask and Cesium's sharpen/bloom post stages; the detection callouts
       // (both engines) would cover glyph centres.
@@ -157,10 +193,11 @@ async function capture(browser, engineKind) {
   const shots = {};
   for (const [pose, camera] of Object.entries(POSES)) {
     const known = await page.evaluate(
-      async ([lon, lat, height, heading, pitch], layerId) => {
+      async ([lon, lat, height, heading, pitch], layerId, uatIds) => {
         const geo = await import('/src/geo/index.js');
         const { engine, layers } = window.__godsEyeView;
         const rad = geo.math.toRadians;
+        if (layerId === 'local-adsb') window.__qaLocalPixelNow += 100;
         engine.camera.setView({
           destination: geo.cartesian3.fromDegrees(lon, lat, height),
           orientation: { heading: rad(heading), pitch: rad(pitch), roll: 0 },
@@ -242,7 +279,7 @@ async function capture(browser, engineKind) {
             .map(({ id, screen }) => ({ id, screen })),
           // Every modelled object's screen point (the model gate).
           modelPoints: inFrame
-            .filter(({ id }) => modelled.includes(id))
+            .filter(({ id }) => modelled.includes(id) && !uatIds.includes(id))
             .map(({ id, screen }) => ({ id, screen })),
           // The glyphs' drawn alpha (focus and limb fades).
           alphas: Object.fromEntries(
@@ -259,6 +296,7 @@ async function capture(browser, engineKind) {
       },
       camera,
       layer,
+      localUatIds,
     );
     const png = await page.screenshot({ type: 'png' });
     // The same view without the layer (the model gate's background): the
@@ -288,7 +326,7 @@ async function capture(browser, engineKind) {
     };
   }
   await context.close();
-  return { shots, errors };
+  return { shots, errors, expectedPreviewErrors };
 }
 
 async function pixelsOf(png) {
@@ -347,7 +385,16 @@ try {
   const navara = await capturedOn('navara');
   fs.mkdirSync(outDir, { recursive: true });
   fs.mkdirSync(shotDir, { recursive: true });
-  report = { feed, models, tolerance, poses: {} };
+  report = {
+    expectedPreviewErrors: {
+      cesium: cesium.expectedPreviewErrors,
+      navara: navara.expectedPreviewErrors,
+    },
+    feed,
+    models,
+    tolerance,
+    poses: {},
+  };
   for (const pose of Object.keys(POSES)) {
     const left = cesium.shots[pose];
     const right = navara.shots[pose];
@@ -428,22 +475,11 @@ try {
       `${left.inFrame} / ${right.inFrame}`,
     );
     const worstScreen = Math.max(0, ...rows.map((row) => row.screenDelta));
-    // At 15,000 km the engines' cameras differ by 2.27 px vertically: Cesium
-    // takes a set view's "up" from the ellipsoid's gradient at the camera
-    // (Ellipsoid.geodeticSurfaceNormal of a point 15,000 km up), 0.117° off
-    // the geodetic normal of the point below, which Navara's camera uses
-    // (measured from 5,000 km up; at 1,500 km both are 0.615 px off);
-    // f·tan(0.117°) = 2.267 px. A camera difference, not the layer's.
-    if (pose === 'global')
-      console.log(
-        `  [INFO] ${pose}: known objects' screen points differ by ${worstScreen.toFixed(2)} px (camera)`,
-      );
-    else
-      check(
-        `${pose}: known objects at the same screen points (≤ 2 px)`,
-        worstScreen <= 2,
-        `worst ${worstScreen.toFixed(2)} px`,
-      );
+    check(
+      `${pose}: known objects at the same screen points (≤ 2 px)`,
+      worstScreen <= 2,
+      `worst ${worstScreen.toFixed(2)} px`,
+    );
     // Screen rotations of every glyph shown on both (the layer computes them
     // from each engine's camera basis): within 0.5°.
     let worstRotation = 0;
@@ -497,12 +533,16 @@ try {
       const median = deltas.length ? deltas[Math.floor(deltas.length / 2)] : 0;
       const exact = deltas.filter((delta) => delta <= tolerance).length;
       const summary = `${exact}/${opaque.length} opaque glyphs within ${tolerance}, median ${median}, worst ${deltas.at(-1) ?? 0}; ${rows.length - opaque.length} translucent`;
-      // At the global pose a tinted glyph is a few pixels across and the
-      // engines' cameras differ by 2.27 px (see above): which pixels its
-      // fill covers depends on that sub-pixel phase, so its colour is
-      // reported, not compared (a white glyph's brightest pixel still is).
-      if (pose === 'global' && FILL)
-        console.log(`  [INFO] ${pose}: glyph fill colours — ${summary}`);
+      if (layer === 'local-adsb' && models === 'off' && pose === 'city')
+        check(
+          'city: local palette has opaque glyph samples',
+          opaque.length > 0,
+          summary,
+        );
+      if (layer === 'local-adsb' && opaque.length === 0)
+        console.log(
+          `  [INFO] ${pose}: no opaque local glyph fill to compare (hidden or modelled)`,
+        );
       else
         check(
           `${pose}: glyph fill colours within ${tolerance} per channel (median), every one within ${tolerance + 2}`,
@@ -513,11 +553,30 @@ try {
     }
   }
   if (models === 'on') {
+    if (layer === 'local-adsb') {
+      report.modelSample =
+        'Non-UAT aircraft isolate model photometry from the UAT ring.';
+      console.log(`  [INFO] ${report.modelSample}`);
+    }
     // The 3D models at the near pose: the pixels each covers (the shot
-    // against the same view with the layer off, |Δ luminance| > 25 within
+    // against the same view with the layer off, max |Δ RGB| > 25 within
     // 26 px of its point) and their luminance, per object modelled on both.
     const left = cesium.shots.near;
     const right = navara.shots.near;
+    for (const [kind, shot] of [
+      ['cesium', left],
+      ['navara', right],
+    ]) {
+      fs.writeFileSync(path.join(outDir, `near-${kind}.png`), shot.png);
+      fs.writeFileSync(
+        path.join(outDir, `near-${kind}-background.png`),
+        shot.background,
+      );
+    }
+    report.modelPoints = {
+      cesium: left.modelPoints,
+      navara: right.modelPoints,
+    };
     const footprints = async (shot) => {
       const a = await pixelsOf(shot.png);
       const b = await pixelsOf(shot.background);
@@ -532,7 +591,13 @@ try {
           for (let x = Math.round(screen.x) - 26; x < screen.x + 26; x++) {
             if (x < 0 || y < 0 || x >= WIDTH || y >= HEIGHT) continue;
             const i = (y * a.width + x) * a.channels;
-            if (Math.abs(luma(a, i) - luma(b, i)) > 25) {
+            // Equal-luminance magenta and imagery still differ in colour.
+            const delta = Math.max(
+              Math.abs(a.data[i] - b.data[i]),
+              Math.abs(a.data[i + 1] - b.data[i + 1]),
+              Math.abs(a.data[i + 2] - b.data[i + 2]),
+            );
+            if (delta > 25) {
               pixels++;
               sum += luma(a, i);
               lumas.push(luma(a, i));
@@ -567,6 +632,12 @@ try {
       .map((id) => right.computedScales[id] / left.computedScales[id])
       .filter(Number.isFinite);
     const models3d = {
+      footprintMask: 'max RGB channel delta >25/255',
+      perObject: ids.map((id) => ({
+        id,
+        cesium: fl.get(id),
+        navara: fr.get(id),
+      })),
       objects: ids.length,
       computedScaleRatio: {
         median: median(sizeRatios),

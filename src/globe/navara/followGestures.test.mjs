@@ -52,14 +52,22 @@ test('drag turns and right drag dollies as Cesium tracked camera; wheel scales; 
   win.dispatchEvent(event('pointerup', { button: 0 }));
   assert.ok(calls[0][2] < 0, 'pitch down');
   assert.ok(Math.abs(calls[0][2] + (1.77 * 40 * Math.PI) / 800) < 1e-12);
-  // Per move at most a tenth of the canvas counts (maximumMovementRatio).
+  // Cesium rotate3D caps (startX - endX) / width, before the sign
+  // reversal into heading. Large right and left drags are asymmetric.
   calls.length = 0;
   canvas.dispatchEvent(
     event('pointerdown', { button: 0, clientX: 0, clientY: 0 }),
   );
   win.dispatchEvent(event('pointermove', { clientX: 640, clientY: 0 }));
   win.dispatchEvent(event('pointerup', { button: 0 }));
-  assert.ok(Math.abs(calls[0][1] - 1.77 * 0.1 * 2 * Math.PI) < 1e-12);
+  assert.ok(Math.abs(calls[0][1] - 1.77 * 0.5 * 2 * Math.PI) < 1e-12);
+  calls.length = 0;
+  canvas.dispatchEvent(
+    event('pointerdown', { button: 0, clientX: 640, clientY: 0 }),
+  );
+  win.dispatchEvent(event('pointermove', { clientX: 0, clientY: 0 }));
+  win.dispatchEvent(event('pointerup', { button: 0 }));
+  assert.ok(Math.abs(calls[0][1] + 1.77 * 0.1 * 2 * Math.PI) < 1e-12);
   // A right drag down: a dolly by the window ratio (Cesium zoom3D).
   calls.length = 0;
   const context = event('contextmenu');

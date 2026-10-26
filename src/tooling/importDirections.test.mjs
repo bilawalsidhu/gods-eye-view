@@ -83,6 +83,36 @@ for (const [name, files, pattern] of [
     /reaches browser globals/,
   ],
   [
+    'W1 shared focusDeemphasis keeps native imports in render',
+    { 'src/data/focusDeemphasis.js': "import 'cesium';" },
+    /cesium only in the layer's render/,
+  ],
+  [
+    'W1 shared trailRenderer keeps native imports in render',
+    { 'src/data/trailRenderer.js': "import 'cesium';" },
+    /cesium only in the layer's render/,
+  ],
+  [
+    'W1 shared contactTrailRenderer keeps native imports in render',
+    { 'src/data/contactTrailRenderer.js': "import 'cesium';" },
+    /cesium only in the layer's render/,
+  ],
+  [
+    'W1 shared iconOrientation keeps native imports in render',
+    { 'src/data/iconOrientation.js': "import 'cesium';" },
+    /cesium only in the layer's render/,
+  ],
+  [
+    'W1 shared modelVisualAnchor keeps native imports in render',
+    { 'src/data/modelVisualAnchor.js': "import 'cesium';" },
+    /cesium only in the layer's render/,
+  ],
+  [
+    'W1 shared trackingClickGesture keeps native imports in render',
+    { 'src/data/trackingClickGesture.js': "import 'cesium';" },
+    /cesium only in the layer's render/,
+  ],
+  [
     'geo module imports cesium',
     { 'src/geo/demo.js': "import 'cesium';" },
     /src\/geo\/demo\.js: geo reaches platform\/rendering dependency: cesium/,

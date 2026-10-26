@@ -24,6 +24,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import puppeteer from 'puppeteer';
 import sharp from 'sharp';
+import { redact, isExpectedPreviewSetupError } from './qa-browserEvidence.mjs';
 import { frozenClockScript } from '../src/tooling/w1Baseline.js';
 import { W1_FROZEN_MS } from '../src/bench/w1Feeds.js';
 
@@ -40,8 +41,10 @@ if (!baseUrl) {
   console.error('--base-url=URL is required');
   process.exit(2);
 }
-if ([4185, 4186, 4187, 4188, 4189].includes(Number(new URL(baseUrl).port))) {
-  console.error('ports 4185-4189 are reserved');
+if (
+  [4173, 4185, 4186, 4187, 4188, 4189].includes(Number(new URL(baseUrl).port))
+) {
+  console.error('ports 4173/4185-4189 are reserved');
   process.exit(2);
 }
 const outDir = path.resolve(
@@ -51,9 +54,7 @@ const outDir = path.resolve(
 const shotDir = path.resolve(repoRoot, 'qa-artifacts/vessels-engines');
 const tolerance = Number(argument('tolerance') ?? 3);
 const POSES = {
-  // Equatorial global view isolates layer parity from the known high-latitude
-  // nadir camera mismatch (original 30° pose: card anchors differ by 2.47 px).
-  global: [-40, 0, 15_000_000, 0, -90],
+  global: [-40, 30, 15_000_000, 0, -90],
   city: [-73.78, 40.64, 60_000, 0, -90],
   orbit: [-73.78, 40.64, 1_500_000, 0, -90],
   // The fixture's vessels off JFK, 20 km up: chevrons and cards.
@@ -80,9 +81,20 @@ async function capture(engineKind, reference = null) {
     const page = await browser.newPage();
     await page.setViewport({ width: WIDTH, height: HEIGHT });
     const errors = [];
-    page.on('pageerror', (error) => errors.push(error.message));
+    const expectedPreviewErrors = [];
+    page.on('pageerror', (error) => errors.push(redact(error.message)));
     page.on('console', (message) => {
-      if (message.type() === 'error') errors.push(message.text().slice(0, 200));
+      if (
+        isExpectedPreviewSetupError(message, {
+          preview: process.argv.includes('--preview'),
+          baseUrl,
+        })
+      ) {
+        expectedPreviewErrors.push('/api/setup/status: 404');
+        return;
+      }
+      if (message.type() === 'error')
+        errors.push(redact(message.text()).slice(0, 200));
     });
     await page.evaluateOnNewDocument(frozenClockScript(W1_FROZEN_MS + 5000));
     await page.evaluateOnNewDocument(() => {
@@ -227,7 +239,7 @@ async function capture(engineKind, reference = null) {
       first = false;
       shots[pose] = { ...read, png: await page.screenshot({ type: 'png' }) };
     }
-    return { shots, errors };
+    return { shots, errors, expectedPreviewErrors };
   } finally {
     await browser.close();
   }
@@ -270,7 +282,14 @@ const cesium = await capture('cesium');
 const navara = await capture('navara', cesium.shots);
 fs.mkdirSync(outDir, { recursive: true });
 fs.mkdirSync(shotDir, { recursive: true });
-const report = { tolerance, poses: {} };
+const report = {
+  tolerance,
+  poses: {},
+  expectedPreviewErrors: {
+    cesium: cesium.expectedPreviewErrors,
+    navara: navara.expectedPreviewErrors,
+  },
+};
 for (const pose of Object.keys(POSES)) {
   const left = cesium.shots[pose];
   const right = navara.shots[pose];
@@ -379,8 +398,7 @@ for (const pose of Object.keys(POSES)) {
       worstAlpha < 1e-6,
     `${compared} chevrons, worst ${((worstRotation * 180) / Math.PI).toFixed(3)}°, scale Δ ${worstScale}, alpha Δ ${worstAlpha}`,
   );
-  // Fill colours at the known vessels (not at the global pose: a chevron
-  // there is a few pixels across and the cameras differ by 2.27 px).
+  // Fill colours at the same known vessels at every pose.
   const a = await pixelsOf(left.png);
   const b = await pixelsOf(right.png);
   const colours = pairs.map(([l, r]) => {
@@ -402,16 +420,11 @@ for (const pose of Object.keys(POSES)) {
     row.cesium.every((value, c) => Math.abs(value - row.fill[c]) <= 3),
   );
   const worstColour = Math.max(0, ...solid.map((row) => row.delta));
-  if (pose === 'global')
-    console.log(
-      `  [INFO] ${pose}: chevron fill colours — worst ${worstColour} over ${solid.length}`,
-    );
-  else
-    check(
-      `${pose}: chevron fill colours within ${tolerance} per channel`,
-      solid.length > 0 && worstColour <= tolerance,
-      `${solid.length}/${colours.length} solid samples, worst ${worstColour}`,
-    );
+  check(
+    `${pose}: chevron fill colours within ${tolerance} per channel`,
+    solid.length > 0 && worstColour <= tolerance,
+    `${solid.length}/${colours.length} solid samples, worst ${worstColour}`,
+  );
   // Cards: the same vessels carded, anchors at the same screen points.
   const leftCards = new Map(left.cards.map((card) => [card.id, card]));
   const rightCards = new Map(right.cards.map((card) => [card.id, card]));

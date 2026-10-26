@@ -1,4 +1,5 @@
-import * as Cesium from 'cesium';
+import { worldToWindowCoordinates } from './render/cesiumProjection.js';
+import * as geo from '../geo/index.js';
 import { engineFromViewer } from '../globe/cesium/engineFromViewer.js';
 
 // A window position through the engine's projector when `scene` has a
@@ -9,7 +10,7 @@ function worldToWindow(scene, position, result) {
   const projector = engineFromViewer(scene)?.projector;
   return projector
     ? projector.worldToWindow(position, result)
-    : Cesium.SceneTransforms.worldToWindowCoordinates(scene, position, result);
+    : worldToWindowCoordinates(scene, position, result);
 }
 
 /**
@@ -42,7 +43,7 @@ export const DEFAULT_FOCUS_DEEMPHASIS_PARAMS = Object.freeze({
 let _params = { ...DEFAULT_FOCUS_DEEMPHASIS_PARAMS };
 let _focusTarget = null;
 const _spriteStates = new WeakMap();
-const _scratchScreen = new Cesium.Cartesian2();
+const _scratchScreen = geo.cartesian2.create();
 const _advanceResult = {
   factor: 1,
   changed: false,
@@ -240,10 +241,7 @@ export function publishFocusTargetFromCachedPosition({
       bottom: screen.y + halfHeight + padding,
     },
     paddingPx: padding,
-    cameraDistance: Cesium.Cartesian3.distance(
-      camera.positionWC,
-      displayPosition,
-    ),
+    cameraDistance: geo.cartesian3.distance(camera.positionWC, displayPosition),
     frameNumber: scene.frameState?.frameNumber ?? -1,
   };
   if (appeared) {
@@ -491,7 +489,7 @@ export function advanceProjectedSpriteFocus(
     position && scene ? worldToWindow(scene, position, _scratchScreen) : null;
   const cameraDistance =
     position && camera?.positionWC
-      ? Cesium.Cartesian3.distance(camera.positionWC, position)
+      ? geo.cartesian3.distance(camera.positionWC, position)
       : Number.NaN;
   return advanceSpriteFocus(sprite, {
     screenPosition: screen,

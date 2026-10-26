@@ -7,7 +7,7 @@
  * on Navara writes comparable JSON; --compare diffs two runs.
  *
  *   node scripts/qa-w1-layers.mjs --base-url=http://localhost:PORT/
- *     --layer=flights --engine=cesium|navara [--feed=flights:synthetic:10000]
+ *     --layer=flights --engine=cesium|navara|both [--feed=flights:synthetic:10000]
  *     [--out=qa-artifacts/w1-layers/<layer>-<engine>.json]
  *   node scripts/qa-w1-layers.mjs --compare=A.json,B.json
  *
@@ -26,10 +26,13 @@
  * The server is the caller's (never ports 4185-4189). Browsers are always
  * headless. Exits 1 on a failed check.
  */
+import { watchW1Page } from './qa-browserEvidence.mjs';
 import fs from 'node:fs';
+import { spawnSync } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import puppeteer from 'puppeteer';
+import { W1_FROZEN_MS } from '../src/bench/w1Feeds.js';
 
 const repoRoot = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -40,7 +43,7 @@ const argument = (name) =>
     .find((value) => value.startsWith(`--${name}=`))
     ?.slice(name.length + 3);
 
-const RESERVED_PORTS = new Set([4185, 4186, 4187, 4188, 4189]);
+const RESERVED_PORTS = new Set([4173, 4185, 4186, 4187, 4188, 4189]);
 const POSES = {
   global: [-40, 30, 15_000_000, 0, -90],
   city: [-73.78, 40.64, 60_000, 0, -90],
@@ -71,6 +74,22 @@ function compare(files) {
     JSON.parse(fs.readFileSync(path.resolve(repoRoot, file), 'utf8')),
   );
   const differences = [];
+  for (const report of [a, b]) {
+    if (report.results?.some(({ pass }) => !pass))
+      differences.push(`${report.engine}: acceptance contains failed checks`);
+    if (report.browserErrors?.length)
+      differences.push(
+        `${report.engine}: ${report.browserErrors.length} recorded browser errors`,
+      );
+  }
+  if (
+    !a.geometryClock ||
+    !b.geometryClock ||
+    a.geometryClock.epochMs !== b.geometryClock.epochMs ||
+    a.geometryClock.engineMs !== a.geometryClock.epochMs ||
+    b.geometryClock.engineMs !== b.geometryClock.epochMs
+  )
+    differences.push('geometry clocks do not share a fixed fixture epoch');
   for (const pose of Object.keys(a.view ?? {})) {
     const left = a.view[pose];
     const right = b.view?.[pose];
@@ -93,28 +112,15 @@ function compare(files) {
         Math.abs(known.screen.x - other.screen.x),
         Math.abs(known.screen.y - other.screen.y),
       );
-      // At 15,000 km the engines' cameras differ by 2.27 px vertically:
-      // Cesium's set-view "up" is the ellipsoid gradient at the camera, 0.117°
-      // off the geodetic normal below that Navara uses (qa-flights-engines
-      // explains it): a camera difference, reported apart.
-      if (d > SCREEN_TOLERANCE_PX && pose === 'global')
-        console.log(
-          `[w1-layers] INFO ${pose} ${known.id}: ${d.toFixed(2)} px apart (camera)`,
-        );
-      else if (d > SCREEN_TOLERANCE_PX)
+      if (d > SCREEN_TOLERANCE_PX)
         differences.push(`${pose} ${known.id}: ${d.toFixed(2)} px apart`);
     }
   }
   const qa = a.sections?.[5]?.queries;
   const qb = b.sections?.[5]?.queries;
-  // The queries are compared for the same object: the object a run
-  // selects for them is the clearest on screen after the follows before
-  // it, which may differ between engines (the follow camera's settle).
-  if (qa && qb && qa.tracked !== qb.tracked)
-    console.log(
-      `[w1-layers] INFO 5 queries: different objects (${qa.tracked}, ${qb.tracked}); not compared`,
-    );
-  else if (qa && qb && JSON.stringify(qa) !== JSON.stringify(qb))
+  // Query probes choose the same fixture id on both engines. A changed
+  // target is a difference too, not a reason to skip this comparison.
+  if (qa && qb && JSON.stringify(qa) !== JSON.stringify(qb))
     differences.push(
       `5 queries: ${JSON.stringify(qa)} vs ${JSON.stringify(qb)}`,
     );
@@ -164,9 +170,51 @@ if (!baseUrl || !layer) {
   process.exit(2);
 }
 if (RESERVED_PORTS.has(Number(new URL(baseUrl).port))) {
-  console.error('ports 4185-4189 are reserved');
+  console.error('ports 4173 and 4185-4189 are reserved');
   process.exit(2);
 }
+// Run the same acceptance suites sequentially; satellites and missions have
+// their own selection/replay semantics rather than aircraft-shaped queries.
+if (
+  engineKind === 'both' ||
+  ['satellites', 'rocket-launches'].includes(layer)
+) {
+  let failed = false;
+  for (const engine of engineKind === 'both'
+    ? ['cesium', 'navara']
+    : [engineKind]) {
+    const script =
+      layer === 'satellites'
+        ? 'qa-satellites.mjs'
+        : layer === 'rocket-launches'
+          ? 'qa-launches.mjs'
+          : 'qa-w1-layers.mjs';
+    const output =
+      (engineKind === 'both'
+        ? argument('out')?.replace(/\.json$/, `-${engine}.json`)
+        : argument('out')) ?? `qa-artifacts/w1-layers/${layer}-${engine}.json`;
+    const args = process.argv
+      .slice(2)
+      .filter(
+        (value) =>
+          !value.startsWith('--engine=') && !value.startsWith('--out='),
+      );
+    const result = spawnSync(
+      process.execPath,
+      [
+        path.join(repoRoot, 'scripts', script),
+        ...args,
+        `--engine=${engine}`,
+        `--out=${output}`,
+      ],
+      { stdio: 'inherit' },
+    );
+    if (result.status !== 0) failed = true;
+  }
+  process.exit(failed ? 1 : 0);
+}
+if (!['cesium', 'navara'].includes(engineKind))
+  throw new Error('Unknown engine');
 const feed = argument('feed') ?? DEFAULT_FEEDS[layer] ?? null;
 const outFile =
   argument('out') ?? `qa-artifacts/w1-layers/${layer}-${engineKind}.json`;
@@ -179,19 +227,24 @@ const check = (name, pass, detail) => {
   );
 };
 const report = { layer, engine: engineKind, feed, view: {}, sections: {} };
+report.expectedPreviewErrors = [];
+report.failedResponses = [];
+report.browserErrors = [];
 
 const browser = await puppeteer.launch({
   headless: true,
   args: ['--use-angle=metal'],
 });
+const observePage = (page, name) =>
+  watchW1Page(page, report, {
+    name,
+    preview: process.argv.includes('--preview'),
+    baseUrl,
+  });
 try {
   const page = await browser.newPage();
   await page.setViewport({ width: 1280, height: 800 });
-  const consoleErrors = [];
-  page.on('console', (message) => {
-    if (message.type() === 'error') consoleErrors.push(message.text());
-  });
-  page.on('pageerror', (error) => consoleErrors.push(error.message));
+  observePage(page, 'main');
   await page.evaluateOnNewDocument(() => {
     try {
       localStorage.setItem('gev:first-run-mission:v1', 'suppressed');
@@ -214,7 +267,7 @@ try {
   );
   if (!available) {
     report.skipped = `no ${layer} layer on ${engineKind}`;
-    console.log(`[w1-layers] SKIP ${report.skipped}`);
+    check('required W1 layer is available', false, report.skipped);
   } else {
     // Vessels are asked for by view: both engines start the layer from the
     // same (global) view, not their own boot views (Cesium boots at 600 m
@@ -235,9 +288,31 @@ try {
           await new Promise((resolve) => requestAnimationFrame(resolve));
         }
       }, POSES.global);
-    await page.evaluate((id) => window.__godsEyeView.layers.enable(id), layer);
+    // Compare geometry at one fixture epoch, rather than different amounts
+    // of live dead reckoning in sequential browsers. Wall time and a fresh
+    // layer are restored before the real-input/follow/voice scenarios.
+    if (feed)
+      report.geometryClock = await page.evaluate(
+        async (id, epochMs) => {
+          const { layers, engine } = window.__godsEyeView;
+          const { appClock } = await import('/src/time/clock.js');
+          await layers.disable(id);
+          window.__w1PoseWallNow = Date.now;
+          Date.now = () => epochMs;
+          appClock.freeze(epochMs);
+          await layers.enable(id);
+          return { epochMs, engineMs: engine.clock.now() };
+        },
+        layer,
+        W1_FROZEN_MS + 5000,
+      );
+    else
+      await page.evaluate(
+        (id) => window.__godsEyeView.layers.enable(id),
+        layer,
+      );
     // 1. view: objects per pose, screen points of 5 known objects.
-    let known = null;
+    let queryId = null;
     for (const [pose, camera] of Object.entries(POSES)) {
       const read = await page.evaluate(
         async ([lon, lat, height, heading, pitch], id) => {
@@ -278,18 +353,28 @@ try {
               screen.x <= width &&
               screen.y <= h,
           );
-          return { total: objects.length, inView };
+          return {
+            total: objects.length,
+            inView,
+            objects,
+            camera: engine.camera.pose(),
+            epochMs: engine.clock.frameTime(),
+          };
         },
         camera,
         layer,
       );
-      known ??= read.inView
+      const known = read.inView
         .map(({ id }) => id)
         .sort()
         .slice(0, KNOWN_OBJECTS);
+      queryId ??= known[0] ?? null;
       report.view[pose] = {
         total: read.total,
         onScreen: read.inView.length,
+        objects: read.objects,
+        camera: read.camera,
+        epochMs: read.epochMs,
         known: known.map((id) => ({
           id,
           screen: read.inView.find((row) => row.id === id)?.screen ?? null,
@@ -301,6 +386,17 @@ try {
         `${read.inView.length}/${read.total} on screen`,
       );
     }
+    if (feed)
+      await page.evaluate(async (id) => {
+        const { layers, engine } = window.__godsEyeView;
+        const { appClock } = await import('/src/time/clock.js');
+        Date.now = window.__w1PoseWallNow;
+        delete window.__w1PoseWallNow;
+        appClock.reset();
+        await layers.disable(id);
+        await layers.enable(id);
+        engine.render.request('qa-w1-live-clock');
+      }, layer);
     // 2. click (layers with a tracked selection): a click on an object
     // selects it (and the camera follows), a click on empty space and Escape
     // release it — through the engine's input, as a user clicks.
@@ -435,7 +531,7 @@ try {
         // 3 focus, 4 tracking, 5 the layer's queries, 6 share link: on the
         // clearest object, selected again by a click.
         targets = await pickTargets();
-        const id = targets.target.id;
+        let id = targets.target.id;
         await clickAt(targets.target.screen);
         await waitFor((value) => value === id);
         await new Promise((resolve) => setTimeout(resolve, 1500));
@@ -455,6 +551,7 @@ try {
               owner: target.ownerLayer,
               id: target.id,
               width: right - left,
+              cameraDistance: target.cameraDistance,
               fromCentre: Math.hypot(
                 (left + right) / 2 - width / 2,
                 (top + bottom) / 2 - height / 2,
@@ -487,20 +584,52 @@ try {
           await new Promise((resolve) => setTimeout(resolve, 80));
         }
         await new Promise((resolve) => setTimeout(resolve, 2500));
-        const range = await page.evaluate(async (layerId) => {
+        const wheelRanges = await page.evaluate(async (layerId) => {
           const geo = await import('/src/geo/index.js');
           const { engine, dataManager } = window.__godsEyeView;
           const module = dataManager.layers.get(layerId).module;
-          const target = module.getTrackedSubject?.()?.position;
-          return target
-            ? geo.cartesian3.distance(engine.camera.livePosition, target)
-            : null;
+          const follow = engine.camera.following();
+          // The label port reads the settled cache on Navara; Cesium's
+          // target port already reads its entity's same cached display value.
+          const followed = follow?.label?.position?.() ?? follow?.target?.();
+          const subject = module.getTrackedSubject?.()?.position;
+          const camera = engine.camera.livePosition;
+          return {
+            followed: followed
+              ? geo.cartesian3.distance(camera, followed)
+              : null,
+            querySubject: subject
+              ? geo.cartesian3.distance(camera, subject)
+              : null,
+          };
         }, layer);
+        const wheelFocus = await focusAt();
+        const range = wheelRanges.followed;
+        report.sections[4].querySubjectRangeAfterWheelM =
+          wheelRanges.querySubject;
+        // Focus is published while motion resolves, before this frame's
+        // follow-camera step. Keep its distance as diagnostic, not the oracle.
+        report.sections[4].preFollowFocusRangeAfterWheelM =
+          wheelFocus?.cameraDistance;
         report.sections[4].rangeAfterWheelM = range;
         check(
           '4 tracking: wheeled in, the camera keeps ≥ 149 m',
           Number.isFinite(range) && range >= 149,
           `${range?.toFixed(1)} m`,
+        );
+        // Query and share parity use the same known fixture id on both
+        // engines, independently of which contact the real click chose.
+        id = queryId ?? id;
+        await page.evaluate(
+          async ([layerId, objectId]) => {
+            const module =
+              window.__godsEyeView.dataManager.layers.get(layerId).module;
+            // Share state intentionally ignores transient programmatic follows.
+            // This fixed fixture selection represents explicit user intent.
+            await module.trackById(objectId, { origin: 'user' });
+            await new Promise((resolve) => setTimeout(resolve, 1500));
+          },
+          [layer, id],
         );
         // 5. the layer's queries (the voice tools' data), for --compare.
         report.sections[5] = {
@@ -516,6 +645,7 @@ try {
                 : [];
               return {
                 tracked: tracked?.icao24 ?? null,
+                found: module.findByQuery(objectId)?.icao24 ?? null,
                 all: module.getAllPositions(1_000_000).length,
                 nearby: nearby.map((row) => row.id).sort(),
                 detectable: module.getDetectableObjects({ maxCount: 50 })
@@ -529,6 +659,7 @@ try {
         check(
           '5 queries: tracked info and contacts answer',
           report.sections[5].queries.tracked === id &&
+            report.sections[5].queries.found === id &&
             report.sections[5].queries.hasContact === true,
           JSON.stringify(report.sections[5].queries),
         );
@@ -543,6 +674,7 @@ try {
         ]) {
           const sharedContext = await browser.createBrowserContext();
           const shared = await sharedContext.newPage();
+          observePage(shared, `share-${opened}`);
           await shared.setViewport({ width: 1280, height: 800 });
           const sharedUrl = new URL(page.url());
           sharedUrl.searchParams.set('engine', opened);
@@ -1105,6 +1237,7 @@ try {
         ]) {
           const sharedContext = await browser.createBrowserContext();
           const shared = await sharedContext.newPage();
+          observePage(shared, `share-${opened}`);
           await shared.setViewport({ width: 1280, height: 800 });
           const sharedUrl = new URL(page.url());
           sharedUrl.searchParams.set('engine', opened);
@@ -1281,16 +1414,14 @@ try {
       }
       return { baseline, after: layers.movers().length };
     }, layer);
-    report.sections[9] = { ...leftover, consoleErrors: consoleErrors.length };
+    report.sections[9] = {
+      ...leftover,
+      consoleErrors: report.browserErrors.length,
+    };
     check(
       '9 on/off ×10 leaves no mover sets',
       leftover.after <= leftover.baseline,
       JSON.stringify(leftover),
-    );
-    check(
-      '9 no console errors',
-      consoleErrors.length === 0,
-      consoleErrors.slice(0, 3).join(' | ') || '0',
     );
     // 5. voice: the runner's answers (window.__gevVoiceCommands.runner), kept
     // in the JSON for --compare; the per-layer queries (track_entity,
@@ -1319,7 +1450,17 @@ try {
         }),
         viewState: await ask('get_current_view_state', {}),
         frameOverhead: await ask('frame_overhead', { target: id }),
-        cockpit: await ask('control_cockpit', { action: 'enter' }),
+        // The W1 capability assertion is Navara's refusal. Native Cockpit
+        // establishes Contacts (including AIS and W2 layers), outside this
+        // single-layer fixture; its positive behavior has its own QA suite.
+        cockpit:
+          window.__godsEyeView.engine.kind === 'navara'
+            ? await ask('control_cockpit', { action: 'enter' })
+            : {
+                applicable: false,
+                reason:
+                  'Native Cockpit entry is outside this W1 capability-refusal probe',
+              },
       };
     }, layer);
     // Kept beside the layer's queries (5), which --compare reads.
@@ -1346,6 +1487,16 @@ try {
           JSON.stringify(voice.cockpit),
         );
     }
+    if (layer === 'local-adsb') {
+      report.sections[3] = {
+        applicable: false,
+        reason: 'Legacy local selection publishes no follow/focus target',
+      };
+      report.sections[6] = {
+        applicable: false,
+        reason: 'Legacy local selection is not serialized in share links',
+      };
+    }
     for (const [number, name] of Object.entries(TODO_SECTIONS)) {
       if (report.sections[number]) continue;
       report.sections[number] = 'TODO';
@@ -1357,8 +1508,18 @@ try {
 } finally {
   await browser.close();
 }
+// Check after every action and browser teardown, so late resource errors
+// cannot arrive after a successful console verdict.
+if (report.sections[9])
+  report.sections[9].consoleErrors = report.browserErrors.length;
+check(
+  '9 no console errors',
+  report.browserErrors.length === 0,
+  report.browserErrors.slice(0, 3).join(' | ') || '0',
+);
 const file = path.resolve(repoRoot, outFile);
 fs.mkdirSync(path.dirname(file), { recursive: true });
+report.results = results;
 fs.writeFileSync(file, JSON.stringify(report, null, 2));
 const failed = results.filter(({ pass }) => !pass).length;
 console.log(

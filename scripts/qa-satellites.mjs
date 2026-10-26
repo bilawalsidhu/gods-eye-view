@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 // Phase 3 T14: one deterministic satellite catalog on both engines.
+import { watchW1Page } from './qa-browserEvidence.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import puppeteer from 'puppeteer';
@@ -16,6 +17,7 @@ if (
 const engine = argument('engine') ?? 'cesium';
 const out = argument('out') ?? `qa-artifacts/t14/satellites-${engine}.json`;
 const report = { engine, checks: [], snapshots: {} };
+report.expectedPreviewErrors = [];
 const check = (name, ok, detail) => {
   report.checks.push({ name, ok: Boolean(ok), detail });
   console.log(
@@ -26,11 +28,17 @@ const browser = await puppeteer.launch({
   headless: true,
   args: ['--use-angle=metal'],
 });
+const errors = (report.browserErrors = []);
+const observePage = (page, name) =>
+  watchW1Page(page, report, {
+    name,
+    preview: process.argv.includes('--preview'),
+    baseUrl: base,
+  });
 try {
   const page = await browser.newPage();
   await page.setViewport({ width: 1280, height: 800 });
-  const errors = [];
-  page.on('pageerror', (e) => errors.push(e.message));
+  observePage(page, 'main');
   await page.evaluateOnNewDocument(() =>
     localStorage.setItem('gev:first-run-mission:v1', 'suppressed'),
   );
@@ -50,13 +58,21 @@ try {
     { timeout: 180000 },
   );
   await new Promise((r) => setTimeout(r, 6000));
-  await page.evaluate(async (epoch) => {
+  const clockIdentity = await page.evaluate(async (epoch) => {
     const { appClock } = await import('/src/time/clock.js');
     appClock.freeze(epoch);
     const { engine, styleManager } = window.__godsEyeView;
     styleManager.orbitController.stop();
     engine.camera.cancelFlight();
+    return { moduleMs: appClock.now(), engineMs: engine.clock.now() };
   }, SATELLITE_FIXTURE_EPOCH);
+  report.clockIdentity = clockIdentity;
+  check(
+    'QA imports share the running engine clock',
+    clockIdentity.moduleMs === SATELLITE_FIXTURE_EPOCH &&
+      clockIdentity.engineMs === SATELLITE_FIXTURE_EPOCH,
+    clockIdentity,
+  );
   await page.evaluate(async () => {
     const { layers, engine, dataManager } = window.__godsEyeView;
     for (const [id] of dataManager.layers)
@@ -593,6 +609,7 @@ try {
     const context = await browser.createBrowserContext();
     try {
       const shared = await context.newPage();
+      observePage(shared, `share-${opened}`);
       await shared.setViewport({ width: 1280, height: 800 });
       await shared.evaluateOnNewDocument(() =>
         localStorage.setItem('gev:first-run-mission:v1', 'suppressed'),
@@ -729,14 +746,14 @@ try {
     report.destroy.movers === 0 && report.destroy.lines === 0,
     report.destroy,
   );
-  check('no page errors', errors.length === 0, {
-    count: errors.length,
-    messages: errors.map((e) => e.replace(/https?:\/\/[^ ]+/g, '[URL]')),
-  });
   fs.mkdirSync(path.dirname(out), { recursive: true });
   await page.screenshot({ path: out.replace(/\.json$/, '.png') });
 } finally {
   await browser.close();
+  check('no runtime errors', errors.length === 0, {
+    count: errors.length,
+    messages: errors.map((e) => e.replace(/https?:\/\/[^ ]+/g, '[URL]')),
+  });
   fs.mkdirSync(path.dirname(out), { recursive: true });
   fs.writeFileSync(out, JSON.stringify(report, null, 2));
 }

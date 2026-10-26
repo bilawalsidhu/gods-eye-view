@@ -19,7 +19,10 @@ import {
   photoImages,
   THUMB_HOST,
 } from '../../scripts/fixtures/street-level/mapillaryGraph.mjs';
-import { redact } from '../../scripts/qa-browserEvidence.mjs';
+import {
+  redact,
+  isExpectedPreviewSetupError,
+} from '../../scripts/qa-browserEvidence.mjs';
 
 // The press helpers wait for paint; Node has no frames, so a tick stands in.
 globalThis.requestAnimationFrame ??= (callback) =>
@@ -638,4 +641,42 @@ test('CI runs the gates hermetically against a production build, strict, with ev
     /QA_FAIL_ON_RETRY: '1'/,
     'a missed header press fails CI now that the rail settles',
   );
+});
+
+test('preview setup API 404 is expected only with explicit preview mode', () => {
+  const message = {
+    type: () => 'error',
+    text: () =>
+      'Failed to load resource: the server responded with a status of 404 (Not Found)',
+    location: () => ({ url: 'http://127.0.0.1:4195/api/setup/status' }),
+  };
+  const options = { preview: true, baseUrl: 'http://127.0.0.1:4195/' };
+  assert.equal(isExpectedPreviewSetupError(message, options), true);
+  assert.equal(
+    isExpectedPreviewSetupError(message, { ...options, preview: false }),
+    false,
+  );
+});
+
+test('preview mode never waives other errors, origins, paths or missing locations', () => {
+  const options = { preview: true, baseUrl: 'http://127.0.0.1:4195/' };
+  for (const [text, url] of [
+    ['Failed to load resource: 404', 'http://127.0.0.1:4195/api/flights'],
+    ['Failed to load resource: 404', 'https://example.com/api/setup/status'],
+    ['Failed to load resource: 500', 'http://127.0.0.1:4195/api/setup/status'],
+    ['Unhandled TypeError: 404', 'http://127.0.0.1:4195/api/setup/status'],
+    ['Failed to load resource: 404', undefined],
+  ]) {
+    assert.equal(
+      isExpectedPreviewSetupError(
+        {
+          type: () => 'error',
+          text: () => text,
+          location: () => ({ url }),
+        },
+        options,
+      ),
+      false,
+    );
+  }
 });

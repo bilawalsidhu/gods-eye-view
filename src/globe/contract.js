@@ -282,11 +282,9 @@
  *   - Cesium's viewer.clock: the app never animates it (shouldAnimate false,
  *     its time frozen at boot); Cesium's sun and lighting and every entity
  *     property read at viewer.clock.currentTime stay on that time;
- *   - launches: the replay timeline (replay.js, Date.now/performance.now),
- *     the mission orbit's GMST frame (orbitRendering.js new Date()), launch
- *     pad and panel throttles (phase 3 Task 15a);
  *   - wall-clock throttles and feed receipt stamps everywhere (they measure
  *     real elapsed time, not scene time).
+ *   Launch replay, satellite propagation and orbit GMST now use this clock.
  * @property {() => number} now The current app time.
  * @property {() => number} frameTime The app time latched at the start of the
  *   engine's current frame: every reader in one frame gets the same value; it
@@ -374,8 +372,8 @@
  *   straight segments.
  * @property {Matrix4} [modelMatrix] Applied to the positions (an orbit ring
  *   turned by GMST).
- * @property {any} [pickId] What a Cesium pick of the line returns (Navara
- *   lines are not pickable yet).
+ * @property {any} [pickId] What a pick of the line returns (Navara uses
+ *   CPU segment picks; lines do not participate in its GPU pass).
  *
  * @typedef {object} Line
  * @property {(positions: Cartesian3[] | Float64Array) => void} setPositions
