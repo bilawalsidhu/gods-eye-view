@@ -81,8 +81,6 @@ moves it. Do not label all ingestion modules platform-independent by filename.
 | --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
 | `src/data/manager.js`                               | Lifecycle/panel compatibility and existing tests; normal assembly constructs lifecycle and presentation separately |
 | `src/data/<layer>.js`                               | Legacy default instances; new assembly calls layer factories with supplied sources                                 |
-| `src/data/localGeojson.js`                          | Infrastructure compatibility factories; catalog imports services from `src/app/localGeojsonServices.js` directly   |
-| `src/app/sourceSlot.js`                             | Re-export for direct callers/tests; portable slot ownership is `src/sources/sourceSlot.js`                         |
 | `src/app/sources.js`, `src/services/application.js` | Existing default/override API; current application construction supplies its own instances                         |
 | `server/providers/local.js`                         | Existing Node composition barrel and provider helper re-exports                                                    |
 

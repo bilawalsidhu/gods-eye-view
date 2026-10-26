@@ -208,9 +208,10 @@ export function formatMeasure(session) {
   if (!session) return '';
   if (session.shape === 'line') {
     const m = pathLengthM(session.vertices);
-    return m >= 1000
-      ? `${(m / 1000).toFixed(m >= 10000 ? 0 : 1)} km`
-      : `${Math.round(m)} m`;
+    // Round before the kilometre cut. 999.6 m was printed as "1000 m".
+    const whole = Math.round(m);
+    if (whole < 1000) return `${whole} m`;
+    return `${(m / 1000).toFixed(m >= 10000 ? 0 : 1)} km`;
   }
   if (session.shape === 'area') {
     const m2 = ringAreaM2(session.vertices);
