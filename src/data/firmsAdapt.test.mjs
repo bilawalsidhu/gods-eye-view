@@ -63,15 +63,9 @@ test('unpadded acq_time parses in the adapter path ("45" = 00:45Z)', () => {
 
 test('parseAcquisitionMs: memo cache is honored, invalid input → 0', () => {
   const cache = new Map();
-  assert.equal(
-    parseAcquisitionMs('2026-07-16', '1006', cache),
-    Date.UTC(2026, 6, 16, 10, 6),
-  );
+  assert.equal(parseAcquisitionMs('2026-07-16', '1006', cache), Date.UTC(2026, 6, 16, 10, 6));
   assert.equal(cache.size, 1);
-  assert.equal(
-    parseAcquisitionMs('2026-07-16', '1006', cache),
-    Date.UTC(2026, 6, 16, 10, 6),
-  );
+  assert.equal(parseAcquisitionMs('2026-07-16', '1006', cache), Date.UTC(2026, 6, 16, 10, 6));
   assert.equal(parseAcquisitionMs(undefined, '1006', cache), 0);
 });
 
@@ -96,6 +90,51 @@ test('impossible acquisition dates stay untimed instead of rolling forward', () 
   assert.equal(leap.acqMs, Date.UTC(2024, 1, 29, 0, 45));
 });
 
+
+test('FIRMS rejects missing, malformed and out-of-range acquisition fields without losing detections', () => {
+  const invalid = [
+    ['2026-02-29', '1200'],
+    ['2026-00-01', '1200'],
+    ['2026-01-00', '1200'],
+    ['2026-01-32', '1200'],
+    ['2026-07-16junk', '1200'],
+    ['2026-07-16', null],
+    ['2026-07-16', undefined],
+    ['2026-07-16', ''],
+    ['2026-07-16', '24:00'],
+    ['2026-07-16', '2360'],
+    ['2026-07-16', '-1'],
+    [null, '1200'],
+  ];
+  const cache = new Map();
+  for (const [date, time] of invalid) {
+    assert.equal(parseAcquisitionMs(date, time, cache), 0, `${date}:${time}`);
+    const [fire] = adaptFirmsRecords([
+      proxyRecord({ acqDate: date, acqTime: time }),
+    ]);
+    assert.equal(fire.acqMs, 0, `${date}:${time}`);
+    assert.equal(fire.index, 0); // Untimed observations remain selectable.
+  }
+  assert.equal(parseAcquisitionMs('2026-02-29', '1200', cache), 0);
+  assert.ok(cache.has('2026-02-29:1200'));
+});
+
+test('FIRMS preserves leap day, midnight, the last minute and UTC day boundaries', () => {
+  for (const [date, time, expected] of [
+    ['2024-02-29', '2359', Date.UTC(2024, 1, 29, 23, 59)],
+    ['2026-02-28', '2359', Date.UTC(2026, 1, 28, 23, 59)],
+    ['2026-03-01', '0', Date.UTC(2026, 2, 1)],
+    ['2026-12-31', '2359', Date.UTC(2026, 11, 31, 23, 59)],
+    ['2027-01-01', '0000', Date.UTC(2027, 0, 1)],
+  ]) {
+    assert.equal(parseAcquisitionMs(date, time), expected, `${date}:${time}`);
+    const [fire] = adaptFirmsRecords([
+      proxyRecord({ acqDate: date, acqTime: time }),
+    ]);
+    assert.equal(fire.acqMs, expected);
+  }
+});
+
 test('daynight "D" → night false', () => {
   const [fire] = adaptFirmsRecords([proxyRecord({ daynight: 'D' })]);
   assert.equal(fire.night, false);
@@ -116,16 +155,11 @@ test('records with non-finite lat/lon are skipped; index stays sequential', () =
     proxyRecord({ lat: 40.1 }),
   ]);
   assert.equal(fires.length, 2);
-  assert.deepEqual(
-    fires.map((f) => f.index),
-    [0, 1],
-  );
+  assert.deepEqual(fires.map((f) => f.index), [0, 1]);
 });
 
 test('non-finite frp/brightness → 0; empty input → []', () => {
-  const [fire] = adaptFirmsRecords([
-    proxyRecord({ frp: 'n/a', brightness: undefined }),
-  ]);
+  const [fire] = adaptFirmsRecords([proxyRecord({ frp: 'n/a', brightness: undefined })]);
   assert.equal(fire.frp, 0);
   assert.equal(fire.brightness, 0);
   assert.deepEqual(adaptFirmsRecords([]), []);

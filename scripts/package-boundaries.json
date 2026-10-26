@@ -169,7 +169,9 @@
       "server/providers/common/http.js",
       "src/sources/httpBody.js",
       "src/i18n/marker.js",
-      "src/data/firmsCsv.js"
+      "src/data/firmsCsv.js",
+      "server/providers/conae-goes.js",
+      "server/providers/conae-goes/parse.js"
     ],
     "external": []
   },

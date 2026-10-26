@@ -1,5 +1,5 @@
 import * as Cesium from 'cesium';
-import { formatNumber, t } from '../../i18n/index.js';
+import { formatNumber, t, tn } from '../../i18n/index.js';
 import {
   satelliteShortName,
   fireDetectionKey,
@@ -32,7 +32,7 @@ export function createModel({
    * @param {Object|null|undefined} fire - Internal fire record.
    * @returns {{id: string, lat: number|null, lon: number|null, frp: number|null,
    *   confidence: number|null, satellite: string|null, sensor: string|null,
-   *   acqTime: number|null}}
+   *   acqTime: number|null, source: string}}
    */
 
   function mapAnalystRecord(fire) {
@@ -48,7 +48,8 @@ export function createModel({
       frp: num(fire?.frp),
       confidence: num(fire?.confidence), // normalized 0..1 (firmsAdapt.normalizeConfidence)
       satellite: text(fire?.satellite) || text(fire?.sensor),
-      sensor: text(fire?.sensor), // VIIRS or MODIS
+      sensor: text(fire?.sensor), // VIIRS, MODIS or GOES
+      source: fireSource(fire),
       acqTime:
         Number.isFinite(fire?.acqMs) && fire.acqMs > 0 ? fire.acqMs : null, // epoch ms; 0 = unparseable → null
     };
@@ -332,9 +333,11 @@ export function createModel({
 
   function buildSelectedFireCard(fire, nowMs) {
     const meta = [
-      t('{value} conf', {
-        value: confidenceLabel(confidenceBucket(fire.confidence)),
-      }),
+      Number.isFinite(fire.confidence)
+        ? t('{value} conf', {
+            value: confidenceLabel(confidenceBucket(fire.confidence)),
+          })
+        : t('confidence not published'),
     ];
     if (fire.acqMs > 0) {
       const age = formatAgeLabel(nowMs - fire.acqMs);
@@ -352,11 +355,17 @@ export function createModel({
       cullPosition: fireCullPosition(fire),
       gapPx: frpPixelSize(fire.frp),
       accent: accentForSeverity(detectionColorStop(fire).name),
-      title: t('FIRE · {frp} MW', { frp: formatFrpLabel(fire.frp) }),
+      title:
+        fire.provider === 'conae-goes'
+          ? t('THERMAL DETECTION · {frp}', { frp: frpLabel(fire.frp) })
+          : t('FIRE · {frp}', { frp: frpLabel(fire.frp) }),
       details: [
         meta.join(' · '),
         formatLatLonLabel(fire.lat, fire.lon) +
           (fire.night ? ` · ${t('NIGHT')}` : ''),
+        ...(fire.provider === 'conae-goes'
+          ? [t('CONAE GOES · thermal anomaly, not a confirmed wildfire')]
+          : []),
       ],
       selected: true,
       priority: Number.MAX_SAFE_INTEGER,
@@ -375,13 +384,18 @@ export function createModel({
 
   function buildFireCard(candidate, nowMs) {
     const fire = candidate.fire;
-    const meta = [confidenceLabel(confidenceBucket(fire.confidence))];
+    const meta = [
+      Number.isFinite(fire.confidence)
+        ? confidenceLabel(confidenceBucket(fire.confidence))
+        : t('confidence n/a'),
+    ];
     if (fire.acqMs > 0) {
       const age = formatAgeLabel(nowMs - fire.acqMs);
       if (age) meta.push(age);
     }
     const sat = satelliteShortName(fire.satellite) || fire.sensor;
     if (sat) meta.push(sat);
+    if (fire.provider === 'conae-goes') meta.push('CONAE');
     return {
       id: `fire:${fireDetectionKey(fire)}`,
       actionable: true,
@@ -389,7 +403,7 @@ export function createModel({
       cullPosition: candidate.cullPosition || candidate.position,
       gapPx: frpPixelSize(fire.frp),
       accent: accentForSeverity(detectionColorStop(fire).name),
-      title: t('▲ {frp} MW', { frp: formatFrpLabel(fire.frp) }),
+      title: t('▲ {frp}', { frp: frpLabel(fire.frp) }),
       details: [meta.join(' · ')],
       selected: false,
       priority: Number(fire.frp) || 0,
@@ -407,8 +421,16 @@ export function createModel({
 
   function buildCellCard(candidate, nowMs) {
     const cell = candidate.cell;
-    const noun = cell.count === 1 ? t('FIRE') : t('FIRES');
-    const parts = [t('max {value} MW', { value: formatFrpLabel(cell.maxFrp) })];
+    const title = cell.hasConae
+      ? tn(cell.count, '{count} DETECTION', '{count} DETECTIONS', {
+          count: formatNumber(cell.count),
+        })
+      : `${formatNumber(cell.count)} ${cell.count === 1 ? t('FIRE') : t('FIRES')}`;
+    const parts = [
+      Number.isFinite(cell.maxFrp)
+        ? t('max {value} MW', { value: formatFrpLabel(cell.maxFrp) })
+        : t('FRP n/a'),
+    ];
     if (cell.newestAcqMs > 0) {
       const age = formatAgeLabel(nowMs - cell.newestAcqMs);
       if (age) parts.push(t('new {value}', { value: age }));
@@ -419,7 +441,7 @@ export function createModel({
       cullPosition: candidate.cullPosition || candidate.position,
       gapPx: 10,
       accent: candidate.accent || accentForSeverity('yellow'),
-      title: `${cell.count} ${noun}`,
+      title,
       details: [parts.join(' · ')],
       selected: false,
       priority: Number(cell.maxFrp) || 0,
@@ -484,6 +506,25 @@ export function createModel({
     return formatFrpMw(frp);
   }
 
+  function frpLabel(frp) {
+    return Number.isFinite(frp)
+      ? t('{value} MW', { value: formatFrpLabel(frp) })
+      : t('FRP n/a');
+  }
+
+  function fireSource(fire) {
+    return fire?.provider === 'conae-goes' ? 'CONAE GOES' : 'NASA FIRMS';
+  }
+
+  function detectionLabel(fire) {
+    const frp = Number.isFinite(fire.frp)
+      ? t('FRP {value}', { value: frpLabel(fire.frp) })
+      : frpLabel(fire.frp);
+    return fire.provider === 'conae-goes'
+      ? t('Thermal detection · {frp}', { frp })
+      : t('Fire · {frp}', { frp });
+  }
+
   /** formatFrp for a card, with the locale's decimal separator ("4,9"). */
 
   function formatFrpLabel(frp) {
@@ -546,6 +587,8 @@ export function createModel({
         return t('nominal', { context: 'fire confidence' });
       case 'low':
         return t('low', { context: 'fire confidence' });
+      case 'not published':
+        return t('confidence not published');
       default:
         return bucket;
     }
@@ -565,12 +608,15 @@ export function createModel({
   /** Normalized 0..1 confidence → low/nominal/high display bucket. */
 
   function confidenceBucket(confidence) {
+    if (!Number.isFinite(confidence)) return 'not published';
     if (confidence >= 0.75) return 'high';
     if (confidence >= 0.45) return 'nominal';
     return 'low';
   }
   return {
     mapAnalystRecord,
+    fireSource,
+    detectionLabel,
     paddedDegreeBounds,
     boundsContainPoint,
     cellIntersectsBounds,

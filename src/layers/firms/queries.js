@@ -18,8 +18,7 @@ export function createQueries({
       if (!fire) return null;
       return {
         id: fireDetectionKey(fire),
-        // i18n-ignore: English entity label; the voice card translates it (shownEntityLabel)
-        label: `Fire · FRP ${components.model.formatFrp(fire.frp)} MW`,
+        label: components.model.detectionLabel(fire),
         latitude: fire.lat,
         longitude: fire.lon,
         frp: fire.frp,
@@ -28,7 +27,10 @@ export function createQueries({
           : null,
         observedAt:
           Number.isFinite(fire.acqMs) && fire.acqMs > 0 ? fire.acqMs : null,
-        source: fire.sensor || fire.satellite || null,
+        source:
+          fire.provider === 'conae-goes'
+            ? 'CONAE GOES'
+            : fire.sensor || fire.satellite || null,
       };
     },
 
@@ -86,6 +88,7 @@ export function createQueries({
       return {
         count: layerState._count,
         cells: layerState._cellCount,
+        sources: layerState._sources,
         lastUpdate: layerState._lastUpdate,
         loading: layerState._loading,
         stale: layerState._stale,
@@ -117,8 +120,7 @@ export function createQueries({
         latitude: strongest.lat,
         longitude: strongest.lon,
         frp: strongest.frp,
-        // i18n-ignore: English entity label; the voice card translates it (shownEntityLabel)
-        label: `Fire · FRP ${components.model.formatFrp(strongest.frp)} MW`,
+        label: components.model.detectionLabel(strongest),
       };
     },
 

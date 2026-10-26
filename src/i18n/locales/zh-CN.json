@@ -693,9 +693,7 @@
   "{value} conf": "置信度 {value}",
   "{value} ago": "{value}前",
   "sensor n/a": "传感器 n/a",
-  "FIRE · {frp} MW": "火点 · {frp} MW",
   "NIGHT": "夜间",
-  "▲ {frp} MW": "▲ {frp} MW",
   "FIRE": "火点",
   "FIRES": "火点",
   "max {value} MW": "最大 {value} MW",
@@ -714,7 +712,6 @@
   "age|<1h": "不到 1 小时",
   "age|{count}h": "{count} 小时",
   "age|{count}d": "{count} 天",
-  "Fire · FRP {frp} MW": "火点 · FRP {frp} MW",
   "STALE · cached {age}": "过期 · {age}前缓存",
   "refreshing...": "刷新中…",
   "loading...": "加载中…",
@@ -2818,5 +2815,21 @@
   "Layers": "图层",
   "Search": "搜索",
   "More": "更多",
-  "Panels": "面板"
+  "Panels": "面板",
+  "confidence not published": "置信度未公布",
+  "THERMAL DETECTION · {frp}": "热异常探测 · {frp}",
+  "FIRE · {frp}": "火点 · {frp}",
+  "CONAE GOES · thermal anomaly, not a confirmed wildfire": "CONAE GOES · 热异常，非已确认的野火",
+  "confidence n/a": "置信度不可用",
+  "▲ {frp}": "▲ {frp}",
+  "{count} DETECTIONS": {
+    "other": "{count} 次探测"
+  },
+  "FRP n/a": "FRP 不可用",
+  "{value} MW": "{value} MW",
+  "FRP {value}": "FRP {value}",
+  "Thermal detection · {frp}": "热异常探测 · {frp}",
+  "Fire · {frp}": "火点 · {frp}",
+  "THERMAL DETECTION": "热异常探测",
+  "PARTIAL · {sources} unavailable": "部分可用 · {sources} 不可用"
 }

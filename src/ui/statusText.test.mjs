@@ -37,7 +37,7 @@ test('en: status lines and errors show as they came', () => {
   }
 });
 
-for (const locale of ['es', 'ru']) {
+for (const locale of ['es', 'ru', 'zh-CN']) {
   test(`${locale}: a lone feed problem translates like a joined one`, () => {
     inLocale(locale, () => {
       const lone = translateFeedError('feed 1090 unreachable');
@@ -62,7 +62,7 @@ for (const locale of ['es', 'ru']) {
     inLocale(locale, () => {
       const shown = translateStatusLine('TTC 0 · GO Transit 4 (95s old)');
       assert.doesNotMatch(shown, /\bold\b/, shown);
-      assert.ok(shown.startsWith('TTC 0 · GO Transit 4 '), shown);
+      assert.match(shown, /^TTC 0 · GO Transit 4(?: \(|（)/);
       assert.ok(shown.includes('95'), shown);
     });
   });

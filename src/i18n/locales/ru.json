@@ -131,9 +131,7 @@
   "{value} conf": "увер.: {value}",
   "{value} ago": "{value} назад",
   "sensor n/a": "сенсор н/д",
-  "FIRE · {frp} MW": "ПОЖАР · {frp} МВт",
   "NIGHT": "НОЧЬ",
-  "▲ {frp} MW": "▲ {frp} МВт",
   "FIRE": "ПОЖАР",
   "FIRES": "ПОЖ.",
   "max {value} MW": "макс. {value} МВт",
@@ -1244,7 +1242,6 @@
   "Routing timed out": "Истекло время построения маршрута",
   "Routing unavailable — no response from the routing service": "Построение маршрута недоступно — сервис маршрутизации не отвечает",
   "Routing unavailable": "Построение маршрута недоступно",
-  "Fire · FRP {frp} MW": "Пожар · FRP {frp} МВт",
   "Not contained or unknown": "Не локализован или неизвестно",
   "Under 50% contained": "Локализован менее чем на 50%",
   "50–99% contained": "Локализован на 50–99%",
@@ -3019,5 +3016,24 @@
   "Layers": "Слои",
   "Search": "Поиск",
   "More": "Ещё",
-  "Panels": "Панели"
+  "Panels": "Панели",
+  "THERMAL DETECTION · {frp}": "ТЕПЛОВАЯ АНОМАЛИЯ · {frp}",
+  "{value} MW": "{value} МВт",
+  "confidence n/a": "достоверность н/д",
+  "▲ {frp}": "▲ {frp}",
+  "Thermal detection · {frp}": "Тепловая аномалия · {frp}",
+  "PARTIAL · {sources} unavailable": "ЧАСТИЧНО · {sources} недоступен",
+  "FIRE · {frp}": "ПОЖАР · {frp}",
+  "CONAE GOES · thermal anomaly, not a confirmed wildfire": "CONAE GOES · тепловая аномалия, лесной пожар не подтверждён",
+  "Fire · {frp}": "Пожар · {frp}",
+  "FRP {value}": "FRP {value}",
+  "{count} DETECTIONS": {
+    "one": "{count} ОБНАРУЖЕНИЕ",
+    "few": "{count} ОБНАРУЖЕНИЯ",
+    "many": "{count} ОБНАРУЖЕНИЙ",
+    "other": "{count} ОБНАРУЖЕНИЯ"
+  },
+  "confidence not published": "достоверность не опубликована",
+  "THERMAL DETECTION": "ТЕПЛОВАЯ АНОМАЛИЯ",
+  "FRP n/a": "FRP н/д"
 }
