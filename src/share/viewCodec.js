@@ -1,11 +1,12 @@
 /**
  * Compact share-view codec, format version 1.
  *
- * A shared view travels in the URL hash as `#s=<base64url>`: one version byte
- * followed by protobuf-style tag-length-value fields. Settings equal to their
- * default are omitted, and the decoder fills them back in from the same
- * defaults table the encoder reads. Older decoders skip fields they do not
- * know, so new fields never break old links or old apps.
+ * A shared view travels as a short code in a link's path, `/share/<code>`. The
+ * code is base64url text for one version byte, protobuf-style tag-length-value
+ * fields and a one-byte CRC-8 check. Settings equal to their default are
+ * omitted, and the decoder fills them back in from the same defaults table the
+ * encoder reads. Older decoders skip fields they do not know, so new fields
+ * never break old links or old apps.
  *
  * The rules that keep links valid forever (field numbers, codes and defaults
  * are permanent) are in docs/SHARE-LINK-FORMAT.md. Read them before changing
@@ -31,6 +32,11 @@ import {
 import { clampScopeFeatherPct } from '../scopeMaskPolicy.js';
 import { VIEW_STYLES } from '../view/index.js';
 import {
+  SHARE_VIEW_ENTITY_KINDS,
+  SHARE_VIEW_FOLLOW_OFFSET_DEFAULT,
+  followCameraFor,
+} from './follow.js';
+import {
   MAX_ZIGZAG_MAGNITUDE,
   ShareWireError,
   WIRE_LEN,
@@ -40,15 +46,22 @@ import {
   asciiText,
   decodeBase64Url,
   asciiBytes,
+  crc8,
   encodeBase64Url,
   unzigzag,
   zigzag,
 } from './wire.js';
 
+export {
+  SHARE_VIEW_ENTITY_KINDS,
+  SHARE_VIEW_FOLLOW_OFFSET_DEFAULT,
+  followCameraFor,
+  followOffsetFromEnu,
+  followOffsetToEnu,
+} from './follow.js';
+
 /** First payload byte. Bump only for a change older decoders must refuse. */
 export const SHARE_VIEW_FORMAT_VERSION = 1;
-/** Hash parameter that carries the payload: `#s=<base64url>`. */
-export const SHARE_VIEW_HASH_PARAM = 's';
 /** Input bound, checked before any decoding work (1536 payload bytes). */
 export const MAX_SHARE_VIEW_CHARS = 2048;
 
@@ -97,42 +110,6 @@ export const SHARE_VIEW_ENUMS = Object.freeze({
   detectionAllocation: Object.freeze(['ELASTIC', 'WEIGHTED']),
 });
 
-/**
- * Things a view can follow. `code` is permanent; 0 is never assigned. `idForm`
- * picks the compact numeric spelling (a 24-bit ICAO address or a decimal
- * number); any other identifier travels as text. `tracking` names the
- * layer-state slot that holds the same selection in the long form.
- */
-export const SHARE_VIEW_ENTITY_KINDS = freezeAll([
-  {
-    code: 1,
-    kind: 'aircraft',
-    layerId: 'flights',
-    idForm: 'hex24',
-    tracking: 'flights',
-  },
-  {
-    code: 2,
-    kind: 'military_aircraft',
-    layerId: 'military',
-    idForm: 'hex24',
-    tracking: 'military',
-  },
-  {
-    code: 3,
-    kind: 'vessel',
-    layerId: 'ais-live-vessels',
-    idForm: 'decimal',
-    tracking: null,
-  },
-  {
-    code: 4,
-    kind: 'satellite',
-    layerId: 'satellites',
-    idForm: 'decimal',
-    tracking: 'satellites',
-  },
-]);
 const ENTITY_BY_KIND = new Map(SHARE_VIEW_ENTITY_KINDS.map((e) => [e.kind, e]));
 const ENTITY_BY_CODE = new Map(SHARE_VIEW_ENTITY_KINDS.map((e) => [e.code, e]));
 
@@ -386,30 +363,21 @@ export const SHARE_VIEW_FIELDS = freezeAll([
 const FIELD_BY_KEY = new Map(SHARE_VIEW_FIELDS.map((f) => [f.key, f]));
 const fieldNumber = (key) => FIELD_BY_KEY.get(key).number;
 
-/** Fields inside the thing message (top-level field 13). Permanent. */
-export const SHARE_VIEW_THING_FIELDS = Object.freeze({
-  entityKind: 1, // uint, SHARE_VIEW_ENTITY_KINDS code
-  entityId: 2, // uint in the kind's idForm, or LEN text
-  offset: 3, // LEN message, SHARE_VIEW_OFFSET_FIELDS
-  lastKnown: 4, // LEN message, SHARE_VIEW_LAST_KNOWN_FIELDS
-});
 /**
- * Camera offset from the followed entity. An absent range is 0; an absent
- * heading or pitch equals the camera's own (fields 5 and 6), which is what a
- * follow view usually has.
+ * Fields inside the thing message (top-level field 13). Permanent. Fields 1–4
+ * are the entity ids, one per SHARE_VIEW_ENTITY_KINDS code; exactly one is
+ * present. The follow offset and the last-known fix are flat fields here, not
+ * sub-messages, to save their tag and length bytes.
  */
-export const SHARE_VIEW_OFFSET_FIELDS = Object.freeze({
-  range: 1, // uint metres
-  heading: 2, // angle
-  pitch: 3, // sint whole degrees
-});
-/** Entity's last-known fix at share time. Absent fields are 0 / unknown. */
-export const SHARE_VIEW_LAST_KNOWN_FIELDS = Object.freeze({
-  lat: 1, // sint, degrees × 1e4 MINUS the camera's lat field
-  lon: 2, // sint, same, against the camera's lon field
-  alt: 3, // sint metres
-  ageS: 4, // sint, seconds BEFORE the created-at time (field 8)
-  observedAt: 5, // epoch, used when the view has no created-at time
+export const SHARE_VIEW_THING_FIELDS = Object.freeze({
+  range: 5, // uint metres from the entity to the camera
+  heading: 6, // angle, the camera's heading while following
+  pitch: 7, // sint whole degrees, the camera's pitch while following
+  lat: 8, // coord, the entity's last-known latitude
+  lon: 9, // coord, its last-known longitude
+  alt: 10, // sint metres, its last-known altitude
+  ageS: 11, // sint, seconds the fix predates the created-at time (field 8)
+  observedAt: 12, // epoch, when the fix was taken; only without a created-at
 });
 
 /** The complete default state: what an empty payload decodes to. */
@@ -526,29 +494,52 @@ function normalizePanelState(panelState) {
   return specs.length ? { specs } : null;
 }
 
-function normalizeView(view, camera) {
+function normalizeFollowOffset(offset) {
+  const d = SHARE_VIEW_FOLLOW_OFFSET_DEFAULT;
+  const source = offset && typeof offset === 'object' ? offset : {};
+  return {
+    range: intOr(source.range, d.range, 1, MAX_FOLLOW_RANGE_M),
+    heading: wrapAngle(source.heading, d.heading),
+    pitch: intOr(source.pitch, d.pitch, -90, 90),
+  };
+}
+
+function normalizeLastKnown(fix) {
+  if (!fix || typeof fix !== 'object') return null;
+  if (!finite(fix.lat) || !finite(fix.lon)) return null;
+  return {
+    lat: latitudeOr(fix.lat, 0),
+    lon: longitudeOr(fix.lon, 0),
+    alt: intOr(fix.alt, 0, -MAX_ALTITUDE_M, MAX_ALTITUDE_M),
+    observedAtMs: epochMsOr(fix.observedAtMs),
+  };
+}
+
+function thingView(kind, id, offset = null, lastKnown = null) {
+  return {
+    kind: 'thing',
+    entity: { kind, id },
+    offset: normalizeFollowOffset(offset),
+    lastKnown: normalizeLastKnown(lastKnown),
+  };
+}
+
+function normalizeView(view) {
   if (view?.kind !== 'thing') return { kind: 'place' };
   const entry = ENTITY_BY_KIND.get(view.entity?.kind);
   const id = entry ? normalizeEntityId(entry, view.entity?.id) : null;
   if (!id) return { kind: 'place' };
-  const offset =
-    view.offset && typeof view.offset === 'object'
-      ? {
-          range: intOr(view.offset.range, 0, 0, MAX_FOLLOW_RANGE_M),
-          heading: wrapAngle(view.offset.heading),
-          pitch: intOr(view.offset.pitch, 0, -90, 90),
-        }
-      : null;
-  const lastKnown =
-    view.lastKnown && typeof view.lastKnown === 'object'
-      ? {
-          lat: latitudeOr(view.lastKnown.lat, camera.lat),
-          lon: longitudeOr(view.lastKnown.lon, camera.lon),
-          alt: intOr(view.lastKnown.alt, 0, -MAX_ALTITUDE_M, MAX_ALTITUDE_M),
-          observedAtMs: epochMsOr(view.lastKnown.observedAtMs),
-        }
-      : null;
-  return { kind: 'thing', entity: { kind: entry.kind, id }, offset, lastKnown };
+  return thingView(entry.kind, id, view.offset, view.lastKnown);
+}
+
+/** The camera fields of `state`, at the format's precision. */
+function setCamera(state, camera) {
+  state.lat = latitudeOr(camera.lat, 0);
+  state.lon = longitudeOr(camera.lon, 0);
+  state.alt = intOr(camera.alt, 0, -MAX_ALTITUDE_M, MAX_ALTITUDE_M);
+  state.heading = wrapAngle(camera.heading, 0);
+  state.pitch = intOr(camera.pitch, 0, -90, 90);
+  state.roll = wrapAngle(camera.roll, 0);
 }
 
 /**
@@ -565,13 +556,7 @@ function liftTrackedEntity(layerState, view) {
     const options = layerState.options[policy.optionOwner];
     const id = normalizeEntityId(entry, options[policy.optionKey]);
     options[policy.optionKey] = null;
-    if (id && lifted.kind === 'place')
-      lifted = {
-        kind: 'thing',
-        entity: { kind: entry.kind, id },
-        offset: null,
-        lastKnown: null,
-      };
+    if (id && lifted.kind === 'place') lifted = thingView(entry.kind, id);
   }
   return lifted;
 }
@@ -579,7 +564,9 @@ function liftTrackedEntity(layerState, view) {
 /**
  * The canonical form of a share-view state. Missing or invalid fields take
  * their defaults, numbers take the format's precision, and a long-form
- * tracking selection becomes a thing view. `decodeShareView` returns this
+ * tracking selection becomes a thing view. A thing view with a last-known fix
+ * takes its camera from the fix and the follow offset, and a thing view's
+ * layer is always on. `decodeShareView` returns this
  * form, and `encodeShareView(state)` decodes back to `normalizeShareViewState(state)`.
  */
 export function normalizeShareViewState(input = {}) {
@@ -657,8 +644,23 @@ export function normalizeShareViewState(input = {}) {
     : null;
   state.panelState = normalizePanelState(source.panelState);
   state.sharedAtMs = epochMsOr(source.sharedAtMs);
-  let view = normalizeView(source.view, state);
+  let view = normalizeView(source.view);
   if (state.layerState) view = liftTrackedEntity(state.layerState, view);
+  if (view.kind === 'thing') {
+    // A fix without its own time is as of the link's creation.
+    if (view.lastKnown?.observedAtMs === null && state.sharedAtMs !== null)
+      view.lastKnown.observedAtMs = state.sharedAtMs;
+    // A thing view's camera is where following it puts the camera, and its
+    // layer is on: neither is stored separately.
+    if (view.lastKnown)
+      setCamera(state, followCameraFor(view.lastKnown, view.offset));
+    const { layerId } = ENTITY_BY_KIND.get(view.entity.kind);
+    if (state.layerState && !state.layerState.enabledLayerIds.includes(layerId))
+      state.layerState = normalizeLayerState({
+        ...state.layerState,
+        enabledLayerIds: [...state.layerState.enabledLayerIds, layerId],
+      });
+  }
   return { view, ...state };
 }
 
@@ -695,7 +697,7 @@ const charNumber = (char) => LAYER_STATE_TOKEN_ALPHABET.indexOf(char);
 const CANONICAL_INTEGER = /^(0|-?[1-9]\d{0,14})$/;
 
 function writeEntityId(writer, entry, id) {
-  const field = SHARE_VIEW_THING_FIELDS.entityId;
+  const field = entry.code;
   if (entry.idForm === 'hex24' && /^[0-9a-f]{6}$/.test(id))
     return writer.uintField(field, Number.parseInt(id, 16));
   if (entry.idForm === 'decimal' && /^[1-9]\d{0,14}$/.test(id))
@@ -713,9 +715,10 @@ function writeEnum(writer, field, value) {
   else writer.textField(field.number, value);
 }
 
-function encodeLayers(writer, layerState) {
+function encodeLayers(writer, layerState, impliedLayerId) {
   const bitset = [];
   for (const id of layerState.enabledLayerIds) {
+    if (id === impliedLayerId) continue;
     const number = layerTokenNumber(REGISTRY_BY_ID.get(id).token);
     const byte = Math.floor(number / 8);
     while (bitset.length <= byte) bitset.push(0);
@@ -779,55 +782,67 @@ function encodeStyleParams(writer, style, values) {
   writer.bytesField(fieldNumber('styleParams'), blob.finish());
 }
 
+const CAMERA_KEYS = new Set(['lat', 'lon', 'alt', 'heading', 'pitch', 'roll']);
 const coordinateInt = (degrees) => Math.round(degrees * COORDINATE_SCALE);
 const signedAngle = (degrees) => (degrees > 180 ? degrees - 360 : degrees);
 const epochSeconds = (ms) => ms / 1000 - SHARE_VIEW_EPOCH_S;
 
 function encodeThing(writer, view, state) {
   const entry = ENTITY_BY_KIND.get(view.entity.kind);
+  const f = SHARE_VIEW_THING_FIELDS;
+  const d = SHARE_VIEW_FOLLOW_OFFSET_DEFAULT;
   const thing = new WireWriter();
-  thing.uintField(SHARE_VIEW_THING_FIELDS.entityKind, entry.code);
   writeEntityId(thing, entry, view.entity.id);
-  if (view.offset) {
-    const offset = new WireWriter();
-    const { range, heading, pitch } = view.offset;
-    if (range) offset.uintField(SHARE_VIEW_OFFSET_FIELDS.range, range);
-    if (heading !== state.heading)
-      offset.sintField(SHARE_VIEW_OFFSET_FIELDS.heading, signedAngle(heading));
-    if (pitch !== state.pitch)
-      offset.sintField(SHARE_VIEW_OFFSET_FIELDS.pitch, pitch);
-    thing.bytesField(SHARE_VIEW_THING_FIELDS.offset, offset.finish());
-  }
-  if (view.lastKnown) {
-    const known = new WireWriter();
-    const f = SHARE_VIEW_LAST_KNOWN_FIELDS;
-    const dLat = coordinateInt(view.lastKnown.lat) - coordinateInt(state.lat);
-    const dLon = coordinateInt(view.lastKnown.lon) - coordinateInt(state.lon);
-    if (dLat) known.sintField(f.lat, dLat);
-    if (dLon) known.sintField(f.lon, dLon);
-    if (view.lastKnown.alt) known.sintField(f.alt, view.lastKnown.alt);
-    const observed = view.lastKnown.observedAtMs;
-    if (observed !== null && state.sharedAtMs !== null)
-      known.sintField(f.ageS, (state.sharedAtMs - observed) / 1000);
-    else if (observed !== null)
-      known.sintField(f.observedAt, epochSeconds(observed));
-    thing.bytesField(SHARE_VIEW_THING_FIELDS.lastKnown, known.finish());
+  const { range, heading, pitch } = view.offset;
+  if (range !== d.range) thing.uintField(f.range, range);
+  if (heading !== d.heading) thing.sintField(f.heading, signedAngle(heading));
+  if (pitch !== d.pitch) thing.sintField(f.pitch, pitch);
+  const fix = view.lastKnown;
+  if (fix) {
+    // Both coordinates are always written: their presence marks the fix.
+    thing.sintField(f.lat, coordinateInt(fix.lat));
+    thing.sintField(f.lon, coordinateInt(fix.lon));
+    if (fix.alt) thing.sintField(f.alt, fix.alt);
+    const observed = fix.observedAtMs;
+    // An absent age is 0: a fix taken as the link is made costs nothing.
+    if (observed !== null && state.sharedAtMs !== null) {
+      if (observed !== state.sharedAtMs)
+        thing.sintField(f.ageS, (state.sharedAtMs - observed) / 1000);
+    } else if (observed !== null)
+      thing.sintField(f.observedAt, epochSeconds(observed));
   }
   writer.bytesField(fieldNumber('thing'), thing.finish());
 }
 
+/** The base64url text for `bytes` followed by their CRC-8. */
+function sealPayload(bytes) {
+  const sealed = new Uint8Array(bytes.length + 1);
+  sealed.set(bytes);
+  sealed[bytes.length] = crc8(bytes);
+  return encodeBase64Url(sealed);
+}
+
 /**
- * Encode a share-view state as the hash body `s=<base64url>` (no `#`).
- * The state is normalized first; omitted or default fields cost nothing.
+ * Encode a share-view state as its share code: base64url text, the `<code>`
+ * in `/share/<code>`. The state is normalized first; omitted or default
+ * fields cost nothing.
  */
 export function encodeShareView(input) {
   const state = normalizeShareViewState(input);
+  const thing = state.view.kind === 'thing' ? state.view : null;
+  // A thing view with a fix derives its camera from it (followCameraFor).
+  const cameraDerived = Boolean(thing?.lastKnown);
+  const impliedLayerId = thing
+    ? ENTITY_BY_KIND.get(thing.entity.kind).layerId
+    : null;
   const writer = new WireWriter();
   writer.bytes.push(SHARE_VIEW_FORMAT_VERSION);
   for (const field of SHARE_VIEW_FIELDS) {
+    if (cameraDerived && CAMERA_KEYS.has(field.key)) continue;
     switch (field.key) {
       case 'view':
-        if (state.view.kind !== field.default)
+        // Absent means `thing` when field 13 is present, else `place`.
+        if (state.view.kind !== (thing ? 'thing' : 'place'))
           writeEnum(writer, field, state.view.kind);
         break;
       case 'lat':
@@ -852,7 +867,8 @@ export function encodeShareView(input) {
         break;
       }
       case 'layerState':
-        if (state.layerState) encodeLayers(writer, state.layerState);
+        if (state.layerState)
+          encodeLayers(writer, state.layerState, impliedLayerId);
         break;
       case 'layerOptions':
         break; // written together with layerState
@@ -860,7 +876,7 @@ export function encodeShareView(input) {
         if (state.panelState) encodePanels(writer, state.panelState);
         break;
       case 'thing':
-        if (state.view.kind === 'thing') encodeThing(writer, state.view, state);
+        if (thing) encodeThing(writer, thing, state);
         break;
       case 'styleParams':
         if (state.styleParams)
@@ -874,33 +890,12 @@ export function encodeShareView(input) {
         else writer.uintField(field.number, state[field.key]);
     }
   }
-  return `${SHARE_VIEW_HASH_PARAM}=${encodeBase64Url(writer.finish())}`;
+  return sealPayload(writer.finish());
 }
 
 /* ------------------------------------------------------------------ */
 /* Decoder.                                                            */
 /* ------------------------------------------------------------------ */
-
-/**
- * The payload text when `hash` is a compact share link (`#s=…`, `s=…`), else
- * null. Use it to choose between this decoder and the long-form parser.
- */
-export function shareViewPayload(hash) {
-  if (typeof hash !== 'string') return null;
-  const body = hash.startsWith('#') ? hash.slice(1) : hash;
-  if (
-    !body.startsWith(`${SHARE_VIEW_HASH_PARAM}=`) &&
-    !body.includes(`&${SHARE_VIEW_HASH_PARAM}=`)
-  )
-    return null;
-  const values = new URLSearchParams(body).getAll(SHARE_VIEW_HASH_PARAM);
-  return values.length === 1 ? values[0] : null;
-}
-
-/** Whether a URL hash carries a compact share view. */
-export function isShareViewHash(hash) {
-  return shareViewPayload(hash) !== null;
-}
 
 /** Collects every field, code or entry a v1 decoder did not understand. */
 class UnknownLog {
@@ -960,19 +955,10 @@ const TOP_LEVEL_WIRE_TYPES = new Map(
     WIRE_TYPES_BY_TYPE[f.type],
   ]),
 );
-const uintOnly = [WIRE_VARINT];
 const THING_WIRE_TYPES = new Map([
-  [SHARE_VIEW_THING_FIELDS.entityKind, uintOnly],
-  [SHARE_VIEW_THING_FIELDS.entityId, [WIRE_VARINT, WIRE_LEN]],
-  [SHARE_VIEW_THING_FIELDS.offset, [WIRE_LEN]],
-  [SHARE_VIEW_THING_FIELDS.lastKnown, [WIRE_LEN]],
+  ...SHARE_VIEW_ENTITY_KINDS.map((e) => [e.code, [WIRE_VARINT, WIRE_LEN]]),
+  ...Object.values(SHARE_VIEW_THING_FIELDS).map((n) => [n, [WIRE_VARINT]]),
 ]);
-const OFFSET_WIRE_TYPES = new Map(
-  Object.values(SHARE_VIEW_OFFSET_FIELDS).map((n) => [n, uintOnly]),
-);
-const LAST_KNOWN_WIRE_TYPES = new Map(
-  Object.values(SHARE_VIEW_LAST_KNOWN_FIELDS).map((n) => [n, uintOnly]),
-);
 
 const unz = unzigzag;
 const CLOSED_ENUMS = new Set(['detectionMode', 'detectionAllocation']);
@@ -1135,94 +1121,75 @@ function decodeEntityId(entry, value) {
   return normalizeEntityId(entry, String(value.varint));
 }
 
-function decodeThing(reader, raw, createdAtS, unknown) {
+function decodeThing(reader, createdAtS, unknown) {
+  const unknownBefore = unknown.entries.length;
   const fields = readMessage(reader, THING_WIRE_TYPES, 'thing', unknown);
   const F = SHARE_VIEW_THING_FIELDS;
-  const kindCode = fields.get(F.entityKind)?.varint;
-  const entry = ENTITY_BY_CODE.get(kindCode);
-  let offset = null;
+  const d = SHARE_VIEW_FOLLOW_OFFSET_DEFAULT;
+  const signed = (n) => unz(fields.get(n)?.varint ?? 0);
+  const offset = {
+    range: fields.get(F.range)?.varint ?? d.range,
+    heading: fields.has(F.heading) ? signed(F.heading) : d.heading,
+    pitch: fields.has(F.pitch) ? signed(F.pitch) : d.pitch,
+  };
   let lastKnown = null;
-  if (fields.has(F.offset)) {
-    const o = readMessage(
-      fields.get(F.offset).len,
-      OFFSET_WIRE_TYPES,
-      'thing.offset',
-      unknown,
-    );
-    const O = SHARE_VIEW_OFFSET_FIELDS;
-    offset = {
-      range: o.get(O.range)?.varint ?? 0,
-      heading: o.has(O.heading)
-        ? unz(o.get(O.heading).varint)
-        : (raw.heading ?? FIELD_BY_KEY.get('heading').default),
-      pitch: o.has(O.pitch)
-        ? unz(o.get(O.pitch).varint)
-        : (raw.pitch ?? FIELD_BY_KEY.get('pitch').default),
-    };
-  }
-  if (fields.has(F.lastKnown)) {
-    const k = readMessage(
-      fields.get(F.lastKnown).len,
-      LAST_KNOWN_WIRE_TYPES,
-      'thing.lastKnown',
-      unknown,
-    );
-    const K = SHARE_VIEW_LAST_KNOWN_FIELDS;
-    const signed = (n) => unz(k.get(n)?.varint ?? 0);
+  if (fields.has(F.lat) || fields.has(F.lon)) {
     let observedAtMs = null;
-    if (k.has(K.observedAt))
-      observedAtMs = (SHARE_VIEW_EPOCH_S + signed(K.observedAt)) * 1000;
-    else if (k.has(K.ageS) && createdAtS !== null)
-      observedAtMs = (createdAtS - signed(K.ageS)) * 1000;
+    if (fields.has(F.observedAt))
+      observedAtMs = (SHARE_VIEW_EPOCH_S + signed(F.observedAt)) * 1000;
+    else if (createdAtS !== null)
+      observedAtMs = (createdAtS - signed(F.ageS)) * 1000;
     lastKnown = {
-      lat: (coordinateInt(raw.lat) + signed(K.lat)) / COORDINATE_SCALE,
-      lon: (coordinateInt(raw.lon) + signed(K.lon)) / COORDINATE_SCALE,
-      alt: signed(K.alt),
+      lat: signed(F.lat) / COORDINATE_SCALE,
+      lon: signed(F.lon) / COORDINATE_SCALE,
+      alt: signed(F.alt),
       observedAtMs,
     };
+    if (Math.abs(lastKnown.lat) > 90 || Math.abs(lastKnown.lon) > 180)
+      throw new ShareWireError('out-of-range', 'thing fix');
   }
+  // The camera this view falls back to, whatever happens to the entity.
+  const camera = lastKnown
+    ? followCameraFor(lastKnown, normalizeFollowOffset(offset))
+    : null;
+  const present = SHARE_VIEW_ENTITY_KINDS.filter((e) => fields.has(e.code));
+  if (present.length > 1)
+    throw new ShareWireError('duplicate-field', 'thing entity id');
+  const entry = present[0];
   if (!entry) {
-    if (kindCode !== undefined) unknown.code('entity-kind', kindCode);
+    // A newer app's entity kind uses a thing field this decoder skipped.
+    const newerKind = unknown.entries.length > unknownBefore;
     return {
-      fallback:
-        kindCode === undefined ? 'missing-entity-kind' : 'unknown-entity-kind',
+      camera,
+      fallback: newerKind ? 'unknown-entity-kind' : 'missing-entity-kind',
     };
   }
-  const idValue = fields.get(F.entityId);
-  const id = idValue ? decodeEntityId(entry, idValue) : null;
-  if (!id) return { fallback: 'invalid-entity-id' };
-  return {
-    view: {
-      kind: 'thing',
-      entity: { kind: entry.kind, id },
-      offset,
-      lastKnown,
-    },
-  };
+  const id = decodeEntityId(entry, fields.get(entry.code));
+  if (!id) return { camera, fallback: 'invalid-entity-id' };
+  return { camera, view: thingView(entry.kind, id, offset, lastKnown) };
 }
 
 /**
- * Decode a compact share view. Accepts `#s=…`, `s=…` or the bare payload.
+ * Decode a share code (the `<code>` in `/share/<code>`).
  *
  * Returns `{ ok: true, state, unknownFields?, fallback? }` with a normalized
- * state, or `{ ok: false, reason }`. It never throws. `unknownFields` lists
- * what a newer encoder wrote that this decoder skipped; `fallback` says why a
- * view that asked to follow something opens as a place at its stored camera
- * instead. A created-at time in the future (after `nowMs`) is dropped.
+ * state, or `{ ok: false, reason }`. It never throws. A code whose check byte
+ * does not match is rejected (`checksum`), so a mistyped code never opens a
+ * different view. `unknownFields` lists what a newer encoder wrote that this
+ * decoder skipped; `fallback` says why a view that asked to follow something
+ * opens as a place at its camera instead. A created-at time in the future
+ * (after `nowMs`) is dropped.
  */
-export function decodeShareView(input, { nowMs = Date.now() } = {}) {
+export function decodeShareView(code, { nowMs = Date.now() } = {}) {
   try {
-    if (typeof input !== 'string') return { ok: false, reason: 'not-a-string' };
-    if (input.length > MAX_SHARE_VIEW_CHARS + 3)
+    if (typeof code !== 'string') return { ok: false, reason: 'not-a-string' };
+    if (code.length > MAX_SHARE_VIEW_CHARS)
       return { ok: false, reason: 'too-long' };
-    const payload =
-      input.startsWith('#') || input.startsWith(`${SHARE_VIEW_HASH_PARAM}=`)
-        ? shareViewPayload(input)
-        : input;
-    if (payload === null) return { ok: false, reason: 'not-a-share-view' };
-    if (payload.length > MAX_SHARE_VIEW_CHARS)
-      return { ok: false, reason: 'too-long' };
-    const bytes = decodeBase64Url(payload);
+    const sealed = decodeBase64Url(code);
+    if (sealed.length < 2) return { ok: false, reason: 'truncated' };
+    const bytes = sealed.subarray(0, sealed.length - 1);
+    if (crc8(bytes) !== sealed[sealed.length - 1])
+      return { ok: false, reason: 'checksum' };
     if (bytes[0] !== SHARE_VIEW_FORMAT_VERSION)
       return { ok: false, reason: 'unsupported-version' };
     const unknown = new UnknownLog();
@@ -1301,15 +1268,19 @@ export function decodeShareView(input, { nowMs = Date.now() } = {}) {
       );
 
     let fallback;
+    const thing = get('thing')
+      ? decodeThing(get('thing').len, createdAtS, unknown)
+      : null;
+    // A thing with a last-known fix carries the view's camera.
+    if (thing?.camera) Object.assign(raw, thing.camera);
     const viewEntry = get('view');
     const viewKind = viewEntry
       ? viewEntry.len
         ? asciiText(viewEntry.len.rest())
         : (SHARE_VIEW_ENUMS.viewKind[viewEntry.varint] ?? viewEntry.varint)
-      : 'place';
-    const thing = get('thing')
-      ? decodeThing(get('thing').len, raw, createdAtS, unknown)
-      : null;
+      : thing
+        ? 'thing'
+        : 'place';
     if (viewKind === 'thing') {
       if (thing?.view) raw.view = thing.view;
       else fallback = thing?.fallback ?? 'missing-thing';

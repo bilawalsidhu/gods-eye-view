@@ -35,6 +35,10 @@ import * as Cesium from 'cesium';
 import { aircraftTrackingTarget } from '../cockpitTracking.js';
 
 import { ShellFeedback } from './shellFeedback.js';
+import {
+  applyShareFollowOffset,
+  readShareFollowSubject,
+} from './shareFollow.js';
 
 import { runCctvLayerEnableTransition } from '../cctvFocusPolicy.js';
 
@@ -74,7 +78,13 @@ export class StyleManager extends ShellFacade {
    */
   constructor(
     viewer,
-    { mapStackController = null, placeSearch, services, requestServices } = {},
+    {
+      mapStackController = null,
+      placeSearch,
+      services,
+      requestServices,
+      initialShareCode = null,
+    } = {},
   ) {
     super();
     const {
@@ -165,6 +175,8 @@ export class StyleManager extends ShellFacade {
         this._showGlobalStatusNotice(message, options),
       feedback: this._feedback,
       updateFeedback: () => this._updateGlobalLoadingFeedback(),
+      applyFollowOffset: (entity, offset) =>
+        applyShareFollowOffset(viewer, entity, offset),
     });
 
     this._visualSettings = new VisualSettings({
@@ -430,7 +442,12 @@ export class StyleManager extends ShellFacade {
       isNavigationCurrent: (generation) =>
         generation === this._navigationGeneration,
       cancelOwnedNavigation: () => this.viewer.camera.cancelFlight(),
+      // A host may open a share code without a `/share/<code>` address.
+      initialShareCode,
     });
+    this.shareLinkManager.setFollowSubjectProvider(({ nowMs }) =>
+      readShareFollowSubject({ viewer: this.viewer, nowMs }),
+    );
     this.shareLinkManager.setPanelStateProvider(() =>
       this._buildSharePanelState(),
     );
@@ -1663,8 +1680,13 @@ export class StyleManager extends ShellFacade {
       const share = this.services.shareLink;
       let result;
       if (typeof share === 'function') {
-        const href = this.shareLinkManager.buildLink();
-        result = href ? await share(href).catch(() => false) : false;
+        // A host's hook may return a plain value or throw; both are answers.
+        result = await Promise.resolve()
+          .then(() => {
+            const href = this.shareLinkManager.buildLink();
+            return href ? share(href) : false;
+          })
+          .catch(() => false);
       } else {
         result = (await this.shareLinkManager.copyLink()) ? 'copied' : false;
       }

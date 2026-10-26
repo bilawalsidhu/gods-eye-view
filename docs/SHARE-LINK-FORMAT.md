@@ -4,31 +4,58 @@ A share link restores a view: where the camera is, what it follows, the visual
 style, data layers and panel layout. There are two forms.
 
 - **Long form** — `#v=2&lat=30.2672&lon=-97.7431&…`. Parsed by
-  `src/sharelink.js`. Links already in the wild keep working; the long form is
-  never removed.
-- **Compact form** — `#s=<base64url>`. Encoded and decoded by
-  `src/share/viewCodec.js`, which is pure (no DOM, no Cesium) and needs no
-  server. `src/share/legacyShareState.js` converts between the long form's
-  parsed state and the compact form's state.
+  `src/sharelink.js`. The address bar follows the live view in this form, and
+  links already in the wild keep working; the long form is never removed.
+- **Short form** — `<app>/share/<code>`, where `<app>` is wherever the app is
+  served (an origin's root, or a base path) and `<code>` is encoded and
+  decoded by `src/share/viewCodec.js`, which is pure (no DOM, no Cesium) and
+  needs no server. The share button makes this form. The same code opens on
+  any copy of the app. `src/share/shareLinkPath.js` reads and builds the
+  address, and `src/share/legacyShareState.js` converts between the long
+  form's parsed state and the code's state.
 
 The same view in both forms (a real session's link):
 
-| Form    | Characters |
-| ------- | ---------- |
-| Long    | 302        |
-| Compact | 50         |
+| Form  | Characters        |
+| ----- | ----------------- |
+| Long  | 302 (the hash)    |
+| Short | 50 (the `<code>`) |
 
-A camera-only place view is 25 characters (32 with its created-at time), and
-following an aircraft with offset and last-known fix is 76.
+For example, a camera-only place view is a 24-character code (31 with its
+created-at time).
+Following an aircraft is 42–50: 42 when the link is made from the app's own
+follow camera with the fix taken as the link is made, 44 with a fix four
+seconds older, and 50 after orbiting to another heading and pitch.
+
+## Opening a short link
+
+At start-up the app reads `<code>` from an address whose path ends in
+`share/<code>` (a host can pass the code instead, as `initialShareCode` to
+`createApplicationControls`). A code that decodes runs the same restore as a
+long link; once the app next writes the address, `/share/<code>` is replaced
+by the app's own address and the long form, without a new history entry, so
+a reload follows the live view. A code that is rejected restores nothing: the
+app starts as usual and says the link can't be opened.
+
+A thing view turns on its entity's layer and follows the entity by id, using
+the same restore as a long link's followed flight or satellite (and its
+expiry windows); a vessel is selected once the vessel feed has it. Opening is
+best effort: until the entity is found, and if it is not found in time, the
+camera is where the link was made, looking at the entity's last-known fix,
+and the app says that the entity isn't reporting and when the fix was taken.
+The share button makes a thing view while the camera follows an aircraft,
+military aircraft or satellite. A selected vessel is not followed (the camera
+stays where the user puts it), so a link made then is a place view; vessel
+thing views open, but the app does not make them yet.
 
 ## Payload
 
-The hash is `s=` followed by unpadded base64url (`A–Z a–z 0–9 - _`). The
-decoded bytes are:
+The code is unpadded base64url (`A–Z a–z 0–9 - _`). The decoded bytes are:
 
 1. one **version byte**, currently `1`;
 2. a sequence of **fields**, each a varint tag `field_number << 3 | wire_type`
-   followed by its value.
+   followed by its value;
+3. one **check byte**: the CRC-8 of everything before it.
 
 | Wire type | Value                                                       |
 | --------- | ----------------------------------------------------------- |
@@ -42,13 +69,26 @@ ASCII. Fields are written in ascending order; the decoder accepts any order.
 
 A field whose value equals its default is **omitted**. The decoder fills every
 omitted field from the same defaults table the encoder reads, so an empty
-payload (`s=AQ`) is the all-default view.
+payload (code `AQc`: the version byte and its check byte) is the all-default
+view.
+
+### Check byte
+
+The check byte is CRC-8 with polynomial x⁸ + x² + x + 1 (`0x07`), initial
+value 0, no reflection and no final XOR (CRC-8/SMBUS; the check value of the
+ASCII digits `123456789` is `0xF4`). A decoder that computes a different value
+rejects the code (`checksum`) before reading any field, so a mistyped code
+never opens a different view. A degree-8 CRC catches every error burst of up
+to 8 bits; one base64url character is 6 bits, so **every single-character
+typo is rejected** (a test tries every substitution at every position). Two
+swapped neighbours, a dropped or an extra character are caught with a
+probability of about 255 in 256 (many of them already fail as base64url).
 
 ## Field registry (top level)
 
 | #   | State key                    | Type  | Default     | Encoding                                                |
 | --- | ---------------------------- | ----- | ----------- | ------------------------------------------------------- |
-| 1   | `view.kind`                  | enum  | `place`     | 0 place, 1 thing                                        |
+| 1   | `view.kind`                  | enum  | see below   | 0 place, 1 thing                                        |
 | 2   | `lat`                        | coord | 0           | zigzag of degrees × 10⁴                                 |
 | 3   | `lon`                        | coord | 0           | zigzag of degrees × 10⁴                                 |
 | 4   | `alt`                        | sint  | 800         | whole metres                                            |
@@ -75,6 +115,9 @@ payload (`s=AQ`) is the all-default view.
 | 25  | `scopeFeatherPct`            | uint  | 100         | 0–200                                                   |
 | 26  | `scopeTerminusPct`           | uint  | none        | 94–100; absent is the adaptive terminus                 |
 | 27  | `styleParams`                | LEN   | none        | packed `(token, value × 100)` pairs                     |
+
+Field 1 absent means `thing` when field 13 is present and `place` otherwise,
+so v1 never writes it; a later view kind writes its code.
 
 Enum codes are the list position (0, 1, 2…). A name not in the list is written
 as LEN text in the same field, so the app can add a style or map before this
@@ -112,6 +155,10 @@ layers need no change here.
 Field 10 is a bitset: bit _n_ of byte ⌊n/8⌋ (least significant first) is set
 when layer _n_ is on. Present-but-empty means "every layer off"; an absent
 field leaves the recipient's layers alone (the long form's `l=` versus no `l`).
+A thing view's entity layer is always on, so its bit is not written: in a
+thing view, present-but-empty means "only the entity's layer", and an absent
+field opens with only the entity's layer on (the app writes the field
+whenever it has a layer set).
 
 Field 11 repeats `(layer number, option key, value)` for each option that
 differs from its frozen absent meaning (`SHARE_VIEW_LAYER_OPTION_ABSENT`). The
@@ -154,46 +201,73 @@ long form's `sp` tokens (`SHARE_VIEW_STYLE_PARAMS`).
 
 ## View kinds
 
-Every view carries a camera (fields 2–7). It is where a place view opens and
-where any other view falls back to.
+A **place** view (field 13 absent) opens at its camera, fields 2–7.
 
-A **thing** view (field 1 = 1) also carries field 13, a sub-message:
+A **thing** view (field 13 present) follows an entity. Field 13 is a
+sub-message:
 
-| #   | Field       | Encoding                                                    |
-| --- | ----------- | ----------------------------------------------------------- |
-| 1   | entity kind | 1 aircraft, 2 military aircraft, 3 vessel, 4 satellite      |
-| 2   | entity id   | varint in the kind's numeric form, or LEN text              |
-| 3   | offset      | sub-message: 1 range (m), 2 heading (angle), 3 pitch (sint) |
-| 4   | last known  | sub-message: 1 lat, 2 lon, 3 alt, 4 age, 5 observed-at      |
+| #   | Field       | Encoding                                                 | Default |
+| --- | ----------- | -------------------------------------------------------- | ------- |
+| 1   | aircraft    | entity id: varint (24-bit ICAO address) or LEN text      |         |
+| 2   | military    | entity id: varint (24-bit ICAO address) or LEN text      |         |
+| 3   | vessel      | entity id: varint (MMSI) or LEN text                     |         |
+| 4   | satellite   | entity id: varint (NORAD catalog number) or LEN text     |         |
+| 5   | range       | uint metres from the entity to the camera                | 2000    |
+| 6   | heading     | angle, the camera's heading while following              | 0       |
+| 7   | pitch       | sint whole degrees, the camera's pitch while following   | −35     |
+| 8   | fix lat     | coord, the entity's last-known latitude                  | none    |
+| 9   | fix lon     | coord, its last-known longitude                          | none    |
+| 10  | fix alt     | sint metres                                              | 0       |
+| 11  | fix age     | sint seconds the fix predates the created-at time        | 0       |
+| 12  | observed-at | epoch, when the fix was taken; only without a created-at | none    |
 
-Entity ids are the ones the layers look up: an aircraft's ICAO 24-bit address
-(six hex digits, stored as a number; other forms such as TIS-B `~abc123` as
-text), a vessel's MMSI and a satellite's NORAD catalog number (decimal numbers;
-an MMSI with a leading zero stays text). Ids are lowercase and match
-`[0-9a-z~_-]{1,16}`.
+The entity kind is the field that carries the id (its code in
+`SHARE_VIEW_ENTITY_KINDS`), so it costs nothing; exactly one of fields 1–4 is
+present (two is malformed). Entity ids are the ones the layers look up: an
+aircraft's ICAO 24-bit address (six hex digits, stored as a number; other
+forms such as TIS-B `~abc123` as text), a vessel's MMSI and a satellite's
+NORAD catalog number (decimal numbers; an MMSI with a leading zero stays
+text). Ids are lowercase and match `[0-9a-z~_-]{1,16}`.
 
-The offset's absent range is 0, and an absent heading or pitch equals the
-camera's. The last-known fix is the entity's position when the link was made:
-lat and lon are stored as the difference from the camera's (in 10⁻⁴ degree),
-altitude in metres, and the time either as seconds before the created-at time
-(field 4) or, when the view has none, as an epoch time (field 5).
+Fields 5–7 are the follow offset: the camera looks along (heading, pitch) at
+the entity from `range` metres away, heading clockwise from north, in the
+entity's local east-north-up frame. The defaults match the app's own follow
+camera, which looks north at about −35°, so only its range is written.
 
-A decoder that meets a view kind or entity kind it does not know opens the
-view as a place at its camera and reports `fallback`.
+Fields 8–12 are the last-known fix, the entity's position when the link was
+made. Fields 8 and 9 are both written whenever there is a fix; their presence
+marks it. Its time is the created-at time (field 8 at the top level) minus
+field 11, or field 12 when the view has no created-at time.
+
+**The camera of a thing view with a fix is derived, not stored**: fields 2–7
+are not written, and the camera is where following the fix from the offset
+puts it (`followCameraFor` in `src/share/follow.js`): the camera sits
+`−r·cos p·sin h`, `−r·cos p·cos h` and `−r·sin p` metres east, north and up
+of the fix (heading h, pitch p, range r), on a sphere of radius 6 371 000 m,
+and looks back at the fix (its heading and pitch are those of that direction
+at the camera, roll 0; at follow distances they equal h and p). A
+decoder ignores fields 2–7 when the fix is present. A thing view without a
+fix (one converted from a long link, which records neither offset nor fix)
+writes its camera in fields 2–7 like a place view.
+
+A decoder that meets a view kind or an entity kind it does not know (an id in
+a thing field it skips) opens the view as a place at its camera — the derived
+one when there is a fix — and reports `fallback`.
 
 ## Decoding rules
 
-`decodeShareView(hash)` never throws. It returns
+`decodeShareView(code)` takes the bare code and never throws. It returns
 `{ ok: true, state, unknownFields?, fallback? }` or `{ ok: false, reason }`.
 
 Rejected (the whole link): input over 2048 characters, bad base64url
-(padding, foreign characters, impossible length, stray bits), an unknown
-version byte, a truncated value, a varint over 8 bytes or above 2⁵³ − 1, an
+(padding, foreign characters, impossible length, stray bits), fewer than two
+bytes, a check byte that does not match (`checksum`), an unknown version byte,
+a truncated value, a varint over 8 bytes or above 2⁵³ − 1, an
 overlong varint, a LEN longer than what remains (at any level, including
-inside a thing sub-message on a place view), a reserved wire type, field
-number 0, a known field with the wrong wire type or repeated, a duplicate
-panel/option/style entry, non-ASCII text, and a latitude or longitude beyond
-±90/±180.
+inside the thing sub-message), a reserved wire type, field number 0, a known
+field with the wrong wire type or repeated, two entity ids in one thing, a
+duplicate panel/option/style entry, non-ASCII text, and a latitude or
+longitude (camera or fix) beyond ±90/±180.
 
 Tolerated and reported in `unknownFields`: unknown fields at any level
 (skipped by wire type), unknown enum codes and names (the default is used),
@@ -201,8 +275,10 @@ unknown flag bits, layers, panel values and style parameters, and layer
 options the layer-state codec rejects or that are filed under a layer other
 than their owner. Detection mode and allocation names outside their lists
 fall back to the default rather than reaching the long form's lenient
-migration. A created-at time in the future is dropped, as the long form's `at`
-is.
+migration. The map stack and HUD variant are open: a name outside their lists
+that matches `[A-Za-z0-9_-]{1,32}` is kept as written (the app decides what
+it means) and is not reported; only a name outside that grammar is. A
+created-at time in the future is dropped, as the long form's `at` is.
 
 ## Changing the format
 
@@ -223,14 +299,19 @@ the app that can open it.
    (28 onwards; fields 1–15 have one-byte tags and are all taken). A new
    boolean takes the next flag bit instead, which costs nothing when it is at
    its default.
-6. **New view kinds and entity kinds** get the next code. A thing that needs
-   more than a kind and an id (for example a CCTV camera, a radio station or a
-   transit vehicle) adds fields to the thing sub-message; older apps skip
-   them and fall back to the camera.
+6. **New view kinds and entity kinds** get the next code. A new entity kind's
+   id takes the next free thing field (13 onwards), so older apps skip it and
+   fall back to the camera. A thing that needs more than an id (for example a
+   CCTV camera, a radio station or a transit vehicle) adds further thing
+   fields the same way.
 7. **A new layer option** needs an entry in `SHARE_VIEW_LAYER_OPTION_ABSENT`
    (a test fails until it has one).
 8. **Bump the version byte only** for a change older decoders must refuse.
-   Decoders reject any version they do not know.
+   Decoders reject any version they do not know. The trailing CRC-8 check
+   byte belongs to every version.
+9. **Derivations are frozen too.** `followCameraFor` and the follow-offset
+   defaults are part of the format: changing them moves the camera of every
+   thing link already shared.
 
 Add a test for every change: a round trip, and a payload written with the new
 field that the previous decoder still reads.

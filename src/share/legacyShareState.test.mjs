@@ -86,7 +86,7 @@ test('the HAL example survives the round trip and shrinks to 50 characters', () 
   const { parsed, state, encoded } = assertLegacyRoundTrip(HAL_EXAMPLE_HASH);
   assert.equal(HAL_EXAMPLE_HASH.length, 302);
   assert.equal(encoded.length, 50);
-  assert.equal(encoded, 's=ARCg-SQYrah3ILAJKB4wO0gGUgQAhAAQYgE0oAEDqAFLyAEL');
+  assert.equal(encoded, 'ARCg-SQYrah3ILAJKB4wO0gGUgQAhAAQYgE0oAEDqAFLyAELAg');
   assert.equal(parsed.roll, 360);
   assert.equal(state.roll, 0);
   assert.deepEqual(state.layerState.enabledLayerIds, [
@@ -169,16 +169,27 @@ test('thing views the long form cannot express convert without one', () => {
     view: { kind: 'thing', entity: { kind: 'vessel', id: '366999712' } },
   });
   assert.deepEqual(vessel.layerState, layerState);
-  // A followed aircraft whose layer is off cannot be selected in the long form.
-  const hidden = toLegacyShareState({
-    layerState: createDefaultLayerState(),
-    view: { kind: 'thing', entity: { kind: 'aircraft', id: 'a1b2c3' } },
+});
+
+test('a thing view turns its layer on, with or without a layer set', () => {
+  for (const layerState of [createDefaultLayerState(), null]) {
+    const legacy = toLegacyShareState({
+      layerState,
+      view: { kind: 'thing', entity: { kind: 'aircraft', id: 'a1b2c3' } },
+    });
+    assert.deepEqual(legacy.layerState.enabledLayerIds, ['flights']);
+    assert.equal(
+      legacy.layerState.options.flights.selectedFlightsTrackingId,
+      'a1b2c3',
+    );
+    assert.equal(legacy.layerStateInvalid, false);
+  }
+  const vessel = toLegacyShareState({
+    view: { kind: 'thing', entity: { kind: 'vessel', id: '366999712' } },
   });
-  assert.equal(
-    hidden.layerState.options.flights.selectedFlightsTrackingId,
-    null,
-  );
-  assert.equal(hidden.layerStateInvalid, false);
+  assert.deepEqual(vessel.layerState.enabledLayerIds, ['ais-live-vessels']);
+  // A place view without a layer set leaves the recipient's layers alone.
+  assert.equal(toLegacyShareState({ lat: 1, lon: 2 }).layerState, null);
 });
 
 /** A long-form link written by the real generator from random live state. */
@@ -277,4 +288,16 @@ test('the converter ignores non-objects and restore bookkeeping', () => {
   const state = fromLegacyShareState(parsed);
   assert.equal(Object.hasOwn(state, 'restoreAuthority'), false);
   assert.equal(Object.hasOwn(state, 'layerStateInvalid'), false);
+});
+
+test('the converter knows every key of the long form’s parsed state', () => {
+  // A key the converter does not list would silently drop out of share codes.
+  globalThis.window = { location: { hash: '', href: 'http://localhost/' } };
+  const manager = new ShareLinkManager(stubViewer({}));
+  const parsed = manager._parseShareHash('v=2&lat=1&lon=2');
+  assert.deepEqual(
+    Object.keys(parsed).sort(),
+    [...LEGACY_SHARE_STATE_KEYS].sort(),
+  );
+  manager.destroy();
 });

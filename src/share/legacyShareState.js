@@ -10,6 +10,7 @@
 
 import {
   SHARE_TRACKING_RESTORE_POLICIES,
+  createDefaultLayerState,
   normalizeLayerState,
 } from '../data/layerState.js';
 import {
@@ -68,19 +69,25 @@ export function fromLegacyShareState(parsed) {
 
 /**
  * The parsed long-form state for a compact share-view state, ready for
- * `ShareLinkManager.applyState`. A followed aircraft, military aircraft or
- * satellite goes back into its layer's tracking selection when that layer is
- * in the view's layer set. The long form cannot express the rest of a thing
- * view (a vessel, the follow offset, the last-known fix); callers that need
- * them read `state.view` directly.
+ * `ShareLinkManager.applyState`. A thing view's layer is on (in a fresh layer
+ * set when the view has none), and a followed aircraft, military aircraft or
+ * satellite goes back into its layer's tracking selection. The long form
+ * cannot express the rest of a thing view (a vessel, the follow offset, the
+ * last-known fix); callers that need them read `state.view` directly.
  */
 export function toLegacyShareState(input) {
   const state = normalizeShareViewState(input);
-  let layerState = state.layerState;
   const entry =
     state.view.kind === 'thing'
       ? SHARE_VIEW_ENTITY_KINDS.find((e) => e.kind === state.view.entity.kind)
       : null;
+  let layerState =
+    entry && !state.layerState
+      ? normalizeLayerState({
+          ...createDefaultLayerState(),
+          enabledLayerIds: [entry.layerId],
+        })
+      : state.layerState;
   const policy = entry?.tracking
     ? SHARE_TRACKING_RESTORE_POLICIES[entry.tracking]
     : null;

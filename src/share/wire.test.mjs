@@ -8,6 +8,7 @@ import {
   WIRE_VARINT,
   WireReader,
   WireWriter,
+  crc8,
   decodeBase64Url,
   encodeBase64Url,
   unzigzag,
@@ -163,4 +164,25 @@ test('skip steps over each wire type and stops at a truncated value', () => {
     reasonOf(() => shortReader.skip(shortReader.tag().wireType)),
     'truncated',
   );
+});
+
+test('crc8 is CRC-8/SMBUS and catches every burst of up to 8 bits', () => {
+  // The catalogued check value for the ASCII digits 1–9.
+  assert.equal(crc8(new TextEncoder().encode('123456789')), 0xf4);
+  assert.equal(crc8([]), 0);
+  const bytes = [1, 0x10, 0x82, 0x40, 0x7f, 0xff, 0x00, 0x33];
+  const sum = crc8(bytes);
+  for (let bit = 0; bit + 8 <= bytes.length * 8; bit += 1) {
+    for (let pattern = 1; pattern < 256; pattern += 1) {
+      // Flip a burst starting at `bit` (its first bit always set).
+      if (!(pattern & 1)) continue;
+      const flipped = [...bytes];
+      for (let k = 0; k < 8; k += 1) {
+        if (!(pattern & (1 << k))) continue;
+        const at = bit + k;
+        flipped[at >> 3] ^= 0x80 >> (at & 7);
+      }
+      assert.notEqual(crc8(flipped), sum, `burst ${pattern} at bit ${bit}`);
+    }
+  }
 });

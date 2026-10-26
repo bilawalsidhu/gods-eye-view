@@ -29,6 +29,7 @@ import {
   WIRE_FIXED32,
   WIRE_FIXED64,
   WireWriter,
+  crc8,
   decodeBase64Url,
   encodeBase64Url,
 } from './wire.js';
@@ -39,13 +40,16 @@ import {
   SHARE_VIEW_EPOCH_S,
   SHARE_VIEW_FIELDS,
   SHARE_VIEW_FLAGS,
+  SHARE_VIEW_FOLLOW_OFFSET_DEFAULT,
   SHARE_VIEW_LAYER_OPTION_ABSENT,
   SHARE_VIEW_PANELS,
   SHARE_VIEW_STYLE_PARAMS,
   createDefaultShareViewState,
   decodeShareView,
   encodeShareView,
-  isShareViewHash,
+  followCameraFor,
+  followOffsetFromEnu,
+  followOffsetToEnu,
   layerTokenFromNumber,
   layerTokenNumber,
   normalizeShareViewState,
@@ -53,8 +57,10 @@ import {
 
 const NOW_MS = Date.UTC(2026, 9, 26, 12, 0, 0);
 const decode = (hash) => decodeShareView(hash, { nowMs: NOW_MS });
-const payloadBytes = (hash) => decodeBase64Url(hash.slice(2));
-const hashOf = (bytes) => `s=${encodeBase64Url(bytes)}`;
+/** The payload bytes of a code, without its check byte. */
+const payloadBytes = (code) => decodeBase64Url(code).slice(0, -1);
+/** The code for payload bytes: base64url of the bytes and their CRC-8. */
+const hashOf = (bytes) => encodeBase64Url([...bytes, crc8(bytes)]);
 
 /** Decode and require success, returning the result. */
 function decodeOk(hash) {
@@ -167,9 +173,9 @@ function randomState(random) {
   return state;
 }
 
-test('an all-default view is the version byte alone', () => {
+test('an all-default view is the version byte and its check byte', () => {
   const hash = encodeShareView(createDefaultShareViewState());
-  assert.equal(hash, 's=AQ');
+  assert.equal(hash, 'AQc');
   assert.deepEqual(decodeOk(hash).state, normalizeShareViewState({}));
   assert.deepEqual(normalizeShareViewState({}), createDefaultShareViewState());
 });
@@ -315,14 +321,22 @@ test('every registered field round-trips at once', () => {
     },
     sharedAtMs: NOW_MS,
   };
-  const normalized = normalizeShareViewState(state);
-  for (const key of Object.keys(state))
-    assert.notDeepEqual(
-      normalized[key],
-      createDefaultShareViewState()[key] ?? undefined,
-      key,
-    );
-  assertRoundTrip(state);
+  // A thing view derives its camera (roll 0), so the camera fields are
+  // checked on the same state as a place view.
+  const place = { ...state };
+  delete place.view;
+  for (const subject of [state, place]) {
+    const normalized = normalizeShareViewState(subject);
+    for (const key of Object.keys(subject)) {
+      if (subject === state && key === 'roll') continue;
+      assert.notDeepEqual(
+        normalized[key],
+        createDefaultShareViewState()[key] ?? undefined,
+        key,
+      );
+    }
+    assertRoundTrip(subject);
+  }
 });
 
 test('generated states round-trip exactly and encode canonically', () => {
@@ -586,9 +600,12 @@ test('a place view opens at its camera; a thing view also names what to follow',
     assert.deepEqual(state.view, {
       kind: 'thing',
       entity: { kind: entry.kind, id },
-      offset: null,
+      offset: { ...SHARE_VIEW_FOLLOW_OFFSET_DEFAULT },
       lastKnown: null,
     });
+    // Without a last-known fix the view keeps its stored camera.
+    assert.equal(state.lat, 1);
+    assert.equal(state.lon, 2);
   }
 });
 
@@ -667,7 +684,7 @@ test('tracking selections in layer options become a thing view', () => {
   assert.deepEqual(state.view, {
     kind: 'thing',
     entity: { kind: 'military_aircraft', id: 'ae1234' },
-    offset: null,
+    offset: { ...SHARE_VIEW_FOLLOW_OFFSET_DEFAULT },
     lastKnown: null,
   });
   assert.equal(
@@ -692,16 +709,11 @@ test('a created-at time in the future is dropped, like the long form’s `at`', 
     );
 });
 
-test('hash forms: `#s=`, `s=` and the bare payload decode the same', () => {
-  const hash = encodeShareView({ lat: 51.5, lon: -0.12 });
-  const payload = hash.slice(2);
-  for (const form of [hash, `#${hash}`, payload, `#${hash}&lang=fr`])
-    assert.deepEqual(decodeOk(form).state, decodeOk(hash).state, form);
-  assert.equal(isShareViewHash(`#${hash}`), true);
-  assert.equal(isShareViewHash('#v=2&lat=1&lon=2'), false);
-  assert.equal(isShareViewHash('#lat=1&lon=2&s=AQ'), true);
-  assert.equal(decode('#v=2&lat=1&lon=2').reason, 'not-a-share-view');
-  assert.equal(decode(`#${hash}&s=AQ`).reason, 'not-a-share-view');
+test('a code is the bare base64url payload; URL forms are not codes', () => {
+  const code = encodeShareView({ lat: 51.5, lon: -0.12 });
+  assert.match(code, /^[A-Za-z0-9_-]+$/);
+  for (const form of [`#${code}`, `s=${code}`, `/share/${code}`])
+    assert.equal(decode(form).ok, false, form);
 });
 
 /* ---------------- forward compatibility ---------------- */
@@ -745,13 +757,11 @@ test('unknown top-level fields of every wire type are skipped and reported', () 
 
 test('unknown fields inside a thing view, codes and bits are skipped too', () => {
   const thing = new WireWriter();
-  thing.uintField(1, 1).uintField(2, 0xa1b2c3);
-  const offset = new WireWriter().uintField(1, 900).uintField(7, 1);
-  thing.bytesField(3, offset.finish());
-  thing.textField(9, 'cockpit'); // a future thing field
+  thing.uintField(1, 0xa1b2c3).uintField(5, 900);
+  thing.textField(20, 'cockpit'); // a future thing field
   const writer = new WireWriter();
   writer.bytes.push(1);
-  writer.uintField(1, 1).sintField(2, 100000).uintField(9, 0b100001); // flag bit 5 unknown
+  writer.sintField(2, 100000).uintField(9, 0b100001); // flag bit 5 unknown
   writer.bytesField(
     10,
     [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
@@ -763,12 +773,13 @@ test('unknown fields inside a thing view, codes and bits are skipped too', () =>
   assert.deepEqual(result.state.view, {
     kind: 'thing',
     entity: { kind: 'aircraft', id: 'a1b2c3' },
-    offset: { range: 900, heading: 0, pitch: -35 },
+    offset: { ...SHARE_VIEW_FOLLOW_OFFSET_DEFAULT, range: 900 },
     lastKnown: null,
   });
   assert.equal(result.state.bloom, true);
   assert.equal(result.state.style, 'normal');
-  assert.deepEqual(result.state.layerState.enabledLayerIds, []);
+  // The followed entity's layer is implied.
+  assert.deepEqual(result.state.layerState.enabledLayerIds, ['flights']);
   assert.deepEqual(
     result.unknownFields.map((u) => [u.scope, u.field ?? u.code]),
     [
@@ -776,13 +787,12 @@ test('unknown fields inside a thing view, codes and bits are skipped too', () =>
       ['flags', 32],
       ['layer', 160],
       ['panel', 11],
-      ['thing', 9],
-      ['thing.offset', 7],
+      ['thing', 20],
     ],
   );
 });
 
-test('an unknown view kind or entity kind falls back to the stored camera', () => {
+test('an unknown view kind falls back to the stored camera', () => {
   const camera = {
     lat: 35.6762,
     lon: 139.6503,
@@ -801,34 +811,47 @@ test('an unknown view kind or entity kind falls back to the stored camera', () =
   assert.deepEqual(kindResult.state, expected);
   assert.equal(kindResult.fallback, 'unknown-view-kind');
 
-  const futureEntity = new WireWriter();
-  futureEntity.bytes.push(...base);
-  futureEntity.uintField(1, 1);
-  futureEntity.bytesField(
-    13,
-    new WireWriter().uintField(1, 12).textField(2, 'cam-77').finish(),
-  );
-  const entityResult = decodeOk(hashOf(futureEntity.finish()));
-  assert.deepEqual(entityResult.state, expected);
-  assert.equal(entityResult.fallback, 'unknown-entity-kind');
-  assert.deepEqual(entityResult.unknownFields, [
-    { scope: 'entity-kind', code: 12 },
-  ]);
-
   const missing = new WireWriter();
   missing.bytes.push(...base);
   missing.uintField(1, 1);
   assert.equal(decodeOk(hashOf(missing.finish())).fallback, 'missing-thing');
+});
 
-  const badId = new WireWriter();
-  badId.bytes.push(...base);
-  badId
-    .uintField(1, 1)
-    .bytesField(
-      13,
-      new WireWriter().uintField(1, 1).uintField(2, 0x1000000).finish(),
-    );
-  assert.equal(decodeOk(hashOf(badId.finish())).fallback, 'invalid-entity-id');
+test('an unknown or invalid entity falls back to the camera its fix implies', () => {
+  const fix = { lat: 35.6762, lon: 139.6503, alt: 900, observedAtMs: null };
+  const offset = { range: 3000, heading: 90, pitch: -40 };
+  const thingOf = (write) => {
+    const thing = new WireWriter();
+    write(thing);
+    thing
+      .uintField(5, offset.range)
+      .sintField(6, offset.heading)
+      .sintField(7, offset.pitch)
+      .sintField(8, Math.round(fix.lat * 1e4))
+      .sintField(9, Math.round(fix.lon * 1e4))
+      .sintField(10, fix.alt);
+    const writer = new WireWriter();
+    writer.bytes.push(1);
+    writer.bytesField(13, thing.finish());
+    return decodeOk(hashOf(writer.finish()));
+  };
+  const expected = normalizeShareViewState(followCameraFor(fix, offset));
+
+  // A newer app's entity kind: its id field is unknown here.
+  const future = thingOf((thing) => thing.textField(30, 'cam-77'));
+  assert.equal(future.fallback, 'unknown-entity-kind');
+  assert.deepEqual(future.state, expected);
+  assert.deepEqual(future.unknownFields, [
+    { scope: 'thing', field: 30, wireType: 2 },
+  ]);
+
+  const none = thingOf(() => {});
+  assert.equal(none.fallback, 'missing-entity-kind');
+  assert.deepEqual(none.state, expected);
+
+  const badId = thingOf((thing) => thing.uintField(1, 0x1000000));
+  assert.equal(badId.fallback, 'invalid-entity-id');
+  assert.deepEqual(badId.state, expected);
 });
 
 test('enum names outside the code tables travel as text', () => {
@@ -866,14 +889,17 @@ test('malformed input is rejected with a reason, never thrown', () => {
   );
   const cases = {
     'not-a-string': [null, undefined, 42, {}],
-    'too-long': [
-      'A'.repeat(MAX_SHARE_VIEW_CHARS + 1),
-      `s=${'A'.repeat(MAX_SHARE_VIEW_CHARS + 1)}`,
+    'too-long': ['A'.repeat(MAX_SHARE_VIEW_CHARS + 1)],
+    'bad-base64': ['AQ==', 'A*Q', 'AQAAA', 's=AQc', '#AQc'],
+    empty: [''],
+    // A lone byte has no room for a check byte.
+    truncated: ['AQ'],
+    checksum: [
+      encodeBase64Url([1, crc8([1]) ^ 1]),
+      encodeBase64Url([...good, (crc8(good) + 1) % 256]),
     ],
-    'bad-base64': ['s=AQ==', 's=A*Q', 'AQAAA'],
-    empty: ['s=', '#s='],
     'unsupported-version': [hashOf([0]), hashOf([2, 8, 1])],
-    truncated: [
+    'truncated ': [
       hashOf(good.slice(0, good.length - 1)),
       hashOf([1, 0x10]), // field 2 varint with no value
       hashOf([1, 0x52, 0x7f, 1]), // field 10 claims 127 bytes
@@ -898,7 +924,8 @@ test('malformed input is rejected with a reason, never thrown', () => {
       hashOf([1, ...new WireWriter().bytesField(14, [0xc3, 0xa9]).finish()]),
     ],
   };
-  for (const [reason, inputs] of Object.entries(cases)) {
+  for (const [label, inputs] of Object.entries(cases)) {
+    const reason = label.trim();
     for (const input of inputs) {
       const result = decodeShareView(input, { nowMs: NOW_MS });
       assert.deepEqual(
@@ -941,7 +968,7 @@ test('size: a camera-only place view', () => {
     heading: 120,
     pitch: -25,
   });
-  assert.equal(hash.length, 25);
+  assert.equal(hash.length, 24);
   const copied = assertRoundTrip({
     lat: 48.8584,
     lon: 2.2945,
@@ -950,34 +977,151 @@ test('size: a camera-only place view', () => {
     pitch: -25,
     sharedAtMs: NOW_MS,
   });
-  assert.equal(copied.length, 32);
+  assert.equal(copied.length, 31);
 });
 
 test('size: following an aircraft', () => {
   const layerState = createDefaultLayerState();
   layerState.enabledLayerIds = ['flights'];
   layerState.options.flights.models3d = true;
-  const hash = assertRoundTrip({
-    view: {
-      kind: 'thing',
-      entity: { kind: 'aircraft', id: 'a1b2c3' },
-      offset: { range: 1500, heading: 30, pitch: -20 },
-      lastKnown: {
-        lat: 37.6213,
-        lon: -122.379,
-        alt: 3200,
-        observedAtMs: NOW_MS - 4000,
-      },
+  const view = (offset) => ({
+    kind: 'thing',
+    entity: { kind: 'aircraft', id: 'a1b2c3' },
+    offset,
+    lastKnown: {
+      lat: 37.6213,
+      lon: -122.379,
+      alt: 3200,
+      observedAtMs: NOW_MS - 4000,
     },
-    lat: 37.6102,
-    lon: -122.3901,
-    alt: 3900,
-    heading: 30,
-    pitch: -20,
+  });
+  // The app's own follow camera looks north at −35°; only the range is new.
+  const followed = assertRoundTrip({
+    view: view({ range: 5800, heading: 0, pitch: -35 }),
     layerState,
     sharedAtMs: NOW_MS,
   });
-  assert.equal(hash.length, 76);
+  assert.equal(followed.length, 44);
+  // Made by the share button: the fix is as of the link, so it has no age.
+  const fresh = view({ range: 5800, heading: 0, pitch: -35 });
+  fresh.lastKnown.observedAtMs = NOW_MS;
+  assert.equal(
+    assertRoundTrip({ view: fresh, layerState, sharedAtMs: NOW_MS }).length,
+    42,
+  );
+  // After orbiting the aircraft, heading and pitch are written too.
+  const orbited = assertRoundTrip({
+    view: view({ range: 1500, heading: 30, pitch: -20 }),
+    layerState,
+    sharedAtMs: NOW_MS,
+  });
+  assert.equal(orbited.length, 50);
+  // No camera is stored: it is where following the fix puts it.
+  const { state } = decodeOk(orbited);
+  assert.deepEqual(
+    {
+      lat: state.lat,
+      lon: state.lon,
+      alt: state.alt,
+      heading: state.heading,
+      pitch: state.pitch,
+    },
+    { lat: 37.6103, lon: -122.387, alt: 3713, heading: 30, pitch: -20 },
+  );
+});
+
+test('the follow offset converts to and from east/north/up metres', () => {
+  for (const offset of [
+    { range: 5800, heading: 0, pitch: -35 },
+    { range: 1500, heading: 30, pitch: -20 },
+    { range: 750000, heading: 225, pitch: -60 },
+    { range: 300, heading: 359, pitch: 10 },
+  ])
+    assert.deepEqual(followOffsetFromEnu(followOffsetToEnu(offset)), offset);
+  const { east, north, up } = followOffsetToEnu({
+    range: 1000,
+    heading: 90,
+    pitch: -30,
+  });
+  // Looking east and down: the camera is west of the entity and above it.
+  assert.ok(east < -800 && Math.abs(north) < 1e-9 && Math.abs(up - 500) < 1e-9);
+  assert.equal(followOffsetFromEnu({ east: 0, north: 0, up: 0 }), null);
+});
+
+test('the derived camera looks at the fix from the offset, even from orbit', () => {
+  const R = 6_371_000;
+  const ecef = ({ lat, lon, alt }) => {
+    const r = R + alt;
+    const c = Math.cos((lat * Math.PI) / 180);
+    return [
+      r * c * Math.cos((lon * Math.PI) / 180),
+      r * c * Math.sin((lon * Math.PI) / 180),
+      r * Math.sin((lat * Math.PI) / 180),
+    ];
+  };
+  for (const [fix, offset] of [
+    // A satellite followed from the app's own distance.
+    [
+      { lat: 51.6, lon: -0.1, alt: 420_000 },
+      { range: 750_000, heading: 225, pitch: -35 },
+    ],
+    // Near a pole, and across the antimeridian.
+    [
+      { lat: 89.9, lon: 179.95, alt: 10_000 },
+      { range: 20_000, heading: 90, pitch: -20 },
+    ],
+    [
+      { lat: 37.6213, lon: -122.379, alt: 3200 },
+      { range: 5800, heading: 0, pitch: -35 },
+    ],
+  ]) {
+    const camera = followCameraFor(fix, offset);
+    const [a, b] = [ecef(camera), ecef(fix)];
+    const distance = Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
+    assert.ok(Math.abs(distance - offset.range) < 1e-3 * offset.range);
+    assert.ok(Math.abs(camera.lon) <= 180 && Math.abs(camera.lat) <= 90);
+    // Short ranges look along the offset itself.
+    if (offset.range < 10_000) {
+      assert.ok(Math.abs(camera.heading - offset.heading) < 0.1);
+      assert.ok(Math.abs(camera.pitch - offset.pitch) < 0.1);
+    }
+  }
+});
+
+test('a fix without its own time is as of the link', () => {
+  const view = {
+    kind: 'thing',
+    entity: { kind: 'satellite', id: '25544' },
+    lastKnown: { lat: 1, lon: 2, alt: 420000 },
+  };
+  const state = normalizeShareViewState({ view, sharedAtMs: NOW_MS });
+  assert.equal(state.view.lastKnown.observedAtMs, NOW_MS);
+  assertRoundTrip({ view, sharedAtMs: NOW_MS });
+  // With no created-at time either, the fix has no time.
+  assert.equal(
+    decodeOk(encodeShareView({ view })).state.view.lastKnown.observedAtMs,
+    null,
+  );
+});
+
+test('the check byte rejects every single-character typo', () => {
+  const ALPHABET =
+    'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
+  const random = rng(0xc0de);
+  let typos = 0;
+  for (let i = 0; i < 40; i += 1) {
+    const code = encodeShareView(randomState(random));
+    for (let at = 0; at < code.length; at += 1) {
+      for (const char of ALPHABET) {
+        if (char === code[at]) continue;
+        const typo = code.slice(0, at) + char + code.slice(at + 1);
+        const result = decode(typo);
+        assert.equal(result.ok, false, `${code} → ${typo}`);
+        typos += 1;
+      }
+    }
+  }
+  assert.ok(typos > 50_000);
 });
 
 /* ---------------- review regressions ---------------- */

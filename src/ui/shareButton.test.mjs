@@ -4,6 +4,13 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { StyleManager } from './applicationShell.js';
 import { ShareLinkManager } from '../sharelink.js';
+import { parseSharePath } from '../share/shareLinkPath.js';
+import { decodeShareView } from '../share/viewCodec.js';
+
+/** The decoded view of a `/share/<code>` link. */
+const sharedState = (href) =>
+  decodeShareView(parseSharePath(new URL(href).pathname).code).state;
+const SHARE_LINK = /^https:\/\/gev\.example\/share\/[A-Za-z0-9_-]+$/;
 
 function makeManager(href, { positioned = true } = {}) {
   globalThis.window = { location: { href, hash: new URL(href).hash } };
@@ -45,12 +52,16 @@ function shell({ manager, services = {} }) {
   return { toasts, click: () => click() };
 }
 
-test('buildLink stamps the creation time and drops the sender ?lang', () => {
+test('buildLink is a /share link stamped with its creation time, without ?lang', () => {
   const manager = makeManager('https://gev.example/?lang=ru#v=2&lat=10&lon=20');
-  const link = new URL(manager.buildLink({ nowMs: 5_000_000 }));
-  assert.equal(link.origin, 'https://gev.example');
+  const href = manager.buildLink({ nowMs: 5_000_000 });
+  assert.match(href, SHARE_LINK);
+  const link = new URL(href);
   assert.equal(link.searchParams.get('lang'), null);
-  assert.equal(new URLSearchParams(link.hash.slice(1)).get('at'), '5000');
+  assert.equal(link.hash, '');
+  assert.equal(sharedState(href).sharedAtMs, 5_000_000);
+  // The camera is the live one, not the address bar's.
+  assert.equal(sharedState(href).lat, 0);
   assert.equal(
     makeManager('https://gev.example/', { positioned: false }).buildLink(),
     null,
@@ -76,7 +87,7 @@ test('without a host hook the button copies the link', async () => {
     manager: makeManager('https://gev.example/#v=2'),
   });
   await click();
-  assert.match(copied, /^https:\/\/gev\.example\/#/);
+  assert.match(copied, SHARE_LINK);
   assert.deepEqual(toasts, ['Link copied!']);
 
   installClipboard(async () => {
@@ -101,7 +112,7 @@ test('a host hook receives the link and its result picks the toast', async () =>
   });
   for (let i = 0; i < 4; i++) await click();
   assert.equal(shared.length, 4);
-  assert.match(shared[0], /^https:\/\/gev\.example\/#/);
+  assert.match(shared[0], SHARE_LINK);
   // 'cancelled' (the user closed the sheet) shows nothing.
   assert.deepEqual(toasts, ['Link shared', 'Link copied!', 'Copy failed']);
 });
@@ -127,4 +138,23 @@ test('a failing host hook, or no camera position, reports a failure', async () =
   await unpositioned.click();
   assert.equal(called, false);
   assert.deepEqual(unpositioned.toasts, ['Copy failed']);
+});
+
+test('a host hook that answers without a promise, or throws, still gets a toast', async () => {
+  for (const [shareLink, toast] of [
+    [() => 'shared', 'Link shared'],
+    [
+      () => {
+        throw new Error('no sheet');
+      },
+      'Copy failed',
+    ],
+  ]) {
+    const { toasts, click } = shell({
+      manager: makeManager('https://gev.example/#v=2'),
+      services: { shareLink },
+    });
+    await click();
+    assert.deepEqual(toasts, [toast]);
+  }
 });
