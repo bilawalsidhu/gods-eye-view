@@ -15,8 +15,11 @@ const ISO_UTC = /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(?:\.\d{1,3})?Z$/;
 const RECEIPT_VERSION = 1;
 
 function identifier(value) {
-  return typeof value === 'string' && value.length <= 128 &&
-    IDENTIFIER.test(value) ? value : null;
+  return typeof value === 'string' &&
+    value.length <= 128 &&
+    IDENTIFIER.test(value)
+    ? value
+    : null;
 }
 
 function utcMs(value) {
@@ -52,15 +55,25 @@ function sourcePolicy(trustedSources, sourceId) {
   const allowed = Array.isArray(policy.allowedDeterminations)
     ? policy.allowedDeterminations
     : [];
-  if (!allowed.length || allowed.some((mode) => !DIRECT.has(mode)))
-    return null;
+  if (!allowed.length || allowed.some((mode) => !DIRECT.has(mode))) return null;
   return { maxAgeMs: policy.maxAgeMs, allowed: [...new Set(allowed)].sort() };
 }
 
 function canonicalEvidence(record) {
-  if (!record || typeof record !== 'object' || Array.isArray(record)) return null;
-  const { id, segmentId, sourceId, sourceRevision, claim, determination,
-    observedAt, receivedAt, validUntil = null, scenarioId = null } = record;
+  if (!record || typeof record !== 'object' || Array.isArray(record))
+    return null;
+  const {
+    id,
+    segmentId,
+    sourceId,
+    sourceRevision,
+    claim,
+    determination,
+    observedAt,
+    receivedAt,
+    validUntil = null,
+    scenarioId = null,
+  } = record;
   return {
     id: identifier(id),
     segmentId: identifier(segmentId),
@@ -70,19 +83,38 @@ function canonicalEvidence(record) {
     determination: DIRECT.has(determination) ? determination : null,
     observedAt: typeof observedAt === 'string' ? observedAt : null,
     receivedAt: typeof receivedAt === 'string' ? receivedAt : null,
-    validUntil: validUntil === null ? null :
-      typeof validUntil === 'string' ? validUntil : 'invalid',
+    validUntil:
+      validUntil === null
+        ? null
+        : typeof validUntil === 'string'
+          ? validUntil
+          : 'invalid',
     scenarioId: scenarioId === null ? null : identifier(scenarioId),
     // A non-null unrecognized scenario is invalid, not the factual branch.
     invalidScenario: scenarioId !== null && !identifier(scenarioId),
   };
 }
 
-function stableSnapshot({ routeId, routeRevision, accessRevision, policyRevision,
-  mapping, assessment, observations, trustedSources }) {
-  const sourceIds = trustedSources && typeof trustedSources === 'object' &&
-    !Array.isArray(trustedSources) ? Object.keys(trustedSources).sort() : [];
-  const policies = sourceIds.map((id) => [id, sourcePolicy(trustedSources, id)]);
+function stableSnapshot({
+  routeId,
+  routeRevision,
+  accessRevision,
+  policyRevision,
+  mapping,
+  assessment,
+  observations,
+  trustedSources,
+}) {
+  const sourceIds =
+    trustedSources &&
+    typeof trustedSources === 'object' &&
+    !Array.isArray(trustedSources)
+      ? Object.keys(trustedSources).sort()
+      : [];
+  const policies = sourceIds.map((id) => [
+    id,
+    sourcePolicy(trustedSources, id),
+  ]);
   const records = Array.isArray(observations)
     ? observations.map(canonicalEvidence)
     : null;
@@ -104,7 +136,10 @@ function stableSnapshot({ routeId, routeRevision, accessRevision, policyRevision
       segmentIds: uniqueSortedIds(assessment?.segmentIds),
     },
     policies,
-    records: records?.sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b))) ?? null,
+    records:
+      records?.sort((a, b) =>
+        JSON.stringify(a).localeCompare(JSON.stringify(b)),
+      ) ?? null,
   });
 }
 
@@ -127,31 +162,62 @@ function fnv1a64(value) {
  * not data or policies supplied by external feed records.
  */
 export function createDisasterEvidenceReceipt(options = {}) {
-  const input = options && typeof options === 'object' && !Array.isArray(options)
-    ? options : {};
-  const { routeId, routeRevision, accessRevision, policyRevision, mapping,
-    assessment, observations, trustedSources, asOfMs } = input;
+  const input =
+    options && typeof options === 'object' && !Array.isArray(options)
+      ? options
+      : {};
+  const {
+    routeId,
+    routeRevision,
+    accessRevision,
+    policyRevision,
+    mapping,
+    assessment,
+    observations,
+    trustedSources,
+    asOfMs,
+  } = input;
   const reasonSet = new Set();
   const reasons = (reason) => reasonSet.add(reason);
-  const validClock = Number.isSafeInteger(asOfMs) && asOfMs >= 0 &&
+  const validClock =
+    Number.isSafeInteger(asOfMs) &&
+    asOfMs >= 0 &&
     Number.isFinite(new Date(asOfMs).getTime());
   if (!validClock) reasons('assessment-clock-invalid');
   const segments = uniqueSortedIds(mapping?.segmentIds);
   const assessedSegments = uniqueSortedIds(assessment?.segmentIds);
-  const ids = [routeId, routeRevision, accessRevision, policyRevision,
-    mapping?.revision, mapping?.routeId, assessment?.routeId];
-  if (ids.some((id) => !identifier(id)) || mapping?.routeId !== routeId ||
-      assessment?.routeId !== routeId) reasons('identity-or-revision-invalid');
+  const ids = [
+    routeId,
+    routeRevision,
+    accessRevision,
+    policyRevision,
+    mapping?.revision,
+    mapping?.routeId,
+    assessment?.routeId,
+  ];
+  if (
+    ids.some((id) => !identifier(id)) ||
+    mapping?.routeId !== routeId ||
+    assessment?.routeId !== routeId
+  )
+    reasons('identity-or-revision-invalid');
   if (!mapping || mapping.complete !== true || !segments)
     reasons('route-coverage-unverified');
-  if (!segments || !assessedSegments ||
-      JSON.stringify(segments) !== JSON.stringify(assessedSegments))
+  if (
+    !segments ||
+    !assessedSegments ||
+    JSON.stringify(segments) !== JSON.stringify(assessedSegments)
+  )
     reasons('assessment-segments-mismatch');
   if (!SUPPORT.has(assessment?.support)) reasons('assessment-status-invalid');
   if (!Array.isArray(observations) || observations.length > 256)
     reasons('evidence-collection-invalid');
-  if (!trustedSources || typeof trustedSources !== 'object' ||
-      Array.isArray(trustedSources)) reasons('source-policies-missing');
+  if (
+    !trustedSources ||
+    typeof trustedSources !== 'object' ||
+    Array.isArray(trustedSources)
+  )
+    reasons('source-policies-missing');
 
   const refs = [];
   const seen = new Map();
@@ -159,9 +225,16 @@ export function createDisasterEvidenceReceipt(options = {}) {
   if (Array.isArray(observations) && observations.length <= 256) {
     for (const raw of observations) {
       const record = canonicalEvidence(raw);
-      if (!record || !record.id || !record.segmentId || !record.sourceId ||
-          !record.sourceRevision || !record.claim || !record.determination ||
-          record.invalidScenario) {
+      if (
+        !record ||
+        !record.id ||
+        !record.segmentId ||
+        !record.sourceId ||
+        !record.sourceRevision ||
+        !record.claim ||
+        !record.determination ||
+        record.invalidScenario
+      ) {
         reasons('evidence-record-invalid');
         continue;
       }
@@ -186,27 +259,37 @@ export function createDisasterEvidenceReceipt(options = {}) {
       }
       const observed = utcMs(record.observedAt);
       const received = utcMs(record.receivedAt);
-      const until = record.validUntil === null ? null : utcMs(record.validUntil);
-      if (observed === null || received === null ||
-          observed > received || !validClock || received > asOfMs ||
-          (record.validUntil !== null && (until === null || until <= observed))) {
+      const until =
+        record.validUntil === null ? null : utcMs(record.validUntil);
+      if (
+        observed === null ||
+        received === null ||
+        observed > received ||
+        !validClock ||
+        received > asOfMs ||
+        (record.validUntil !== null && (until === null || until <= observed))
+      ) {
         reasons('evidence-time-invalid');
         continue;
       }
-      if (asOfMs - observed > policy.maxAgeMs ||
-          (until !== null && asOfMs >= until)) {
+      if (
+        asOfMs - observed > policy.maxAgeMs ||
+        (until !== null && asOfMs >= until)
+      ) {
         reasons('evidence-expired');
         continue;
       }
       bySegment.get(record.segmentId).add(record.claim);
-      refs.push(Object.freeze({
-        id: record.id,
-        segmentId: record.segmentId,
-        sourceId: record.sourceId,
-        sourceRevision: record.sourceRevision,
-        observedAt: record.observedAt,
-        claim: record.claim,
-      }));
+      refs.push(
+        Object.freeze({
+          id: record.id,
+          segmentId: record.segmentId,
+          sourceId: record.sourceId,
+          sourceRevision: record.sourceRevision,
+          observedAt: record.observedAt,
+          claim: record.claim,
+        }),
+      );
     }
   }
 
@@ -217,19 +300,26 @@ export function createDisasterEvidenceReceipt(options = {}) {
     if (values.size !== 1) continue;
     claims.add([...values][0]);
   }
-  const basis = reasonSet.size ? 'unknown'
-    : claims.has('blocked') ? 'unsupported'
-      : claims.has('degraded') ? 'degraded'
-        : claims.size === 1 && claims.has('open') ? 'supported' : 'unknown';
+  const basis = reasonSet.size
+    ? 'unknown'
+    : claims.has('blocked')
+      ? 'unsupported'
+      : claims.has('degraded')
+        ? 'degraded'
+        : claims.size === 1 && claims.has('open')
+          ? 'supported'
+          : 'unknown';
   // This is a consistency guard, not a second route evaluator. It cannot
   // change an upstream 'unknown' assessment into 'supported'.
-  const support = !reasonSet.size && assessment?.support === basis
-    ? basis : 'unknown';
+  const support =
+    !reasonSet.size && assessment?.support === basis ? basis : 'unknown';
   if (!reasonSet.size && assessment?.support !== basis)
     reasons('assessment-evidence-mismatch');
 
   const snapshot = stableSnapshot(input);
-  const evidenceRefs = Object.freeze(refs.sort((a, b) => a.id.localeCompare(b.id)));
+  const evidenceRefs = Object.freeze(
+    refs.sort((a, b) => a.id.localeCompare(b.id)),
+  );
   return Object.freeze({
     schemaVersion: RECEIPT_VERSION,
     routeId: identifier(routeId),
@@ -252,19 +342,25 @@ export function createDisasterEvidenceReceipt(options = {}) {
  * authenticity are the responsibility of the trusted host, not this helper.
  */
 export function isDisasterEvidenceReceiptCurrent(receipt, options = {}) {
-  if (!receipt || receipt.schemaVersion !== RECEIPT_VERSION ||
-      typeof receipt.assessedAt !== 'string') return false;
+  if (
+    !receipt ||
+    receipt.schemaVersion !== RECEIPT_VERSION ||
+    typeof receipt.assessedAt !== 'string'
+  )
+    return false;
   const issued = utcMs(receipt.assessedAt);
   const now = options?.asOfMs;
   if (issued === null || !Number.isSafeInteger(now) || now < issued)
     return false;
   const current = createDisasterEvidenceReceipt(options);
-  return current.fingerprint === receipt.fingerprint &&
+  return (
+    current.fingerprint === receipt.fingerprint &&
     current.routeId === receipt.routeId &&
     current.routeRevision === receipt.routeRevision &&
     current.accessRevision === receipt.accessRevision &&
     current.mappingRevision === receipt.mappingRevision &&
     current.policyRevision === receipt.policyRevision &&
     current.support === receipt.support &&
-    JSON.stringify(current.reasonCodes) === JSON.stringify(receipt.reasonCodes);
+    JSON.stringify(current.reasonCodes) === JSON.stringify(receipt.reasonCodes)
+  );
 }
