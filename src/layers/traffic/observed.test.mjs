@@ -327,3 +327,43 @@ test('intersection geometry accepts one point and invalid windows fail closed', 
     null,
   );
 });
+
+test('reset retires a pending observed refresh instead of resurrecting disabled evidence', async () => {
+  let resolvePending;
+  const observedSource = {
+    request() {
+      return new Promise((resolve) => {
+        resolvePending = resolve;
+      });
+    },
+  };
+  const state = {
+    _observedTrafficSnapshot: emptyObservedTrafficSnapshot(),
+    _observedTrafficLoading: false,
+    _observedTrafficGeneration: 0,
+  };
+  const observed = createObservedTraffic({ state, observedSource });
+  const pending = observed.methods.refreshObservedTraffic({}, { now: NOW });
+  assert.equal(state._observedTrafficLoading, true);
+
+  observed.resetObservedTraffic();
+  assert.deepEqual(
+    observed.methods.getObservedTrafficSnapshot(),
+    emptyObservedTrafficSnapshot(),
+  );
+  assert.equal(state._observedTrafficLoading, false);
+
+  resolvePending(
+    normalizeObservedTrafficSnapshot(
+      { source: 'old fixture', records: [validRecord()] },
+      { now: NOW },
+    ),
+  );
+  await pending;
+  assert.deepEqual(
+    observed.methods.getObservedTrafficSnapshot(),
+    emptyObservedTrafficSnapshot(),
+    'late producer completion cannot restore retired observations',
+  );
+  assert.equal(state._observedTrafficLoading, false);
+});
