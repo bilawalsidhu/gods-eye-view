@@ -92,6 +92,10 @@ export function initGlobalChatPanel({
 } = {}) {
   const root = documentRef?.getElementById('global-chat');
   if (!root) return () => {};
+  const cornerActions = documentRef.getElementById('corner-actions');
+  if (!cornerActions)
+    throw new Error('Global chat is missing its corner actions container.');
+  cornerActions.prepend(root);
   let storageRef = storage;
   if (!storageRef) {
     try {

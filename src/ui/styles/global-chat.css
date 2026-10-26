@@ -1,9 +1,6 @@
 .global-chat {
-  position: fixed;
-  right: 18px;
-  bottom: 18px;
-  z-index: 120;
-  width: min(370px, calc(100vw - 24px));
+  position: relative;
+  flex: 0 0 auto;
   color: #dbeafe;
   font: 12px/1.45 'JetBrains Mono', monospace;
 }
@@ -21,7 +18,7 @@
   min-height: 40px;
   align-items: center;
   gap: 9px;
-  margin-left: auto;
+  margin: 0;
   padding: 0 14px;
   border-radius: 5px;
   color: #dbeafe;
@@ -68,11 +65,14 @@
 }
 
 .global-chat-panel {
+  position: absolute;
+  inset-inline-end: 0;
+  inset-block-end: calc(100% + 9px);
   display: flex;
   height: min(560px, calc(100dvh - 96px));
+  width: min(370px, calc(100vw - 24px));
   flex-direction: column;
   overflow: hidden;
-  margin-bottom: 9px;
   border-radius: 6px;
 }
 
@@ -260,12 +260,6 @@
 }
 
 @media (max-width: 520px) {
-  .global-chat {
-    right: 12px;
-    bottom: calc(12px + env(safe-area-inset-bottom));
-    width: min(370px, calc(100vw - 24px));
-  }
-
   .global-chat-panel {
     height: min(520px, calc(100dvh - 88px - env(safe-area-inset-bottom)));
   }
