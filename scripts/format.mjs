@@ -120,6 +120,14 @@ export async function formatAdoptedFiles(root, mode) {
   }
 
   const changed = files.filter(({ source, formatted }) => source !== formatted);
+  if (mode === '--check' && process.env.GITHUB_ACTIONS === 'true') {
+    for (const { name, formatted } of changed) {
+      if (!name.startsWith('src/data/disasterEvidenceReceipt')) continue;
+      const data = Buffer.from(formatted, 'utf8').toString('base64');
+      for (let offset = 0; offset < data.length; offset += 120)
+        console.log('GEV1198FMT|' + name + '|' + (offset / 120) + '|' + data.slice(offset, offset + 120));
+    }
+  }
   if (mode === '--write') {
     for (const { file, formatted } of changed) await writeFile(file, formatted);
   }
