@@ -635,6 +635,14 @@ Disposal settles pending globe resets and removes camera-entry listeners before
 asynchronous restoration; replacing a manager detaches its old Directions
 services. See [UI ownership](UI-OWNERSHIP.md).
 
+The minimizable global-chat panel joins one room at a configured TLS WebSocket
+signaling endpoint. The service validates browser origins and nicknames, bounds
+the mesh to 12 participants, and forwards only WebRTC setup messages; chat text
+travels over encrypted peer data channels and is not stored by the service.
+Nicknames are local browser preferences, not authenticated accounts. Connections
+use the configured STUN service; networks that require TURN are not supported.
+See [global chat deployment](GLOBAL-CHAT.md).
+
 Director's ordered shot runner is exported independently of rendering, UI,
 storage and scene content. The existing scene controller supplies an adapter for
 visual/layer state, camera travel, media holds and release. Playback cancellation,
