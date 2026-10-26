@@ -6281,3 +6281,17 @@ the container healthy. Checks time out after 10 seconds, with a 30-second
 startup grace period and three consecutive failures before reporting unhealthy.
 This reports app HTTP availability, not individual provider health, and does not
 configure automatic restarts.
+
+## Docker image distribution
+
+Releases publish a multi-arch image (`linux/amd64`, `linux/arm64`) to
+`ghcr.io/<owner>/<repo>` from `.github/workflows/docker-release.yml`. Each
+architecture is built on a native runner, so `npm ci` fetches that
+architecture's esbuild and sharp binaries, and a merge job tags the combined
+manifest (`X.Y.Z`, `X.Y`, the commit SHA, and `latest` for stable releases only).
+The release notes gain a "Container image" section with the digest. Pull
+requests build and smoke-test the image on both architectures in `ci.yml`
+without pushing. Keys saved through Provider Settings live in the container's
+`/app/.env`, so the README tells prebuilt-image users to pass keys with
+`--env-file`; `/app/.gev-cache` is created in the image so a named volume stays
+writable by the `node` user.

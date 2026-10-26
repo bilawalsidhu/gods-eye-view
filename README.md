@@ -157,7 +157,54 @@ configured keys straight from the Keychain. It starts keyless too.
 
 ### Path 3 — Docker
 
-No Node install needed; the container publishes the same dev server.
+No Node install needed; the container publishes the same dev server. Pull the prebuilt image, or build it from a clone.
+
+#### Prebuilt image
+
+Every release is published to the GitHub Container Registry as one multi-arch image, so Docker picks the right build for your machine:
+
+| Platform | Runs on |
+| --- | --- |
+| `linux/amd64` | Intel/AMD PCs and servers; Windows via Docker Desktop with WSL2 |
+| `linux/arm64` | Apple Silicon Macs (native under Docker Desktop, no Rosetta), Raspberry Pi 4/5 on a 64-bit OS, AWS Graviton |
+
+```bash
+docker run -d --name gods-eye-view \
+  -p 127.0.0.1:4173:4173 \
+  --env-file .env \
+  -v gev-cache:/app/.gev-cache \
+  --restart unless-stopped \
+  ghcr.io/bilawalsidhu/gods-eye-view:latest
+```
+
+Open **`http://localhost:4173`**. Drop `--env-file .env` to start keyless, and add keys later. The port is published to `127.0.0.1` only, like the other paths; widening it is the [Sharing an instance](#-sharing-an-instance) opt-in. The `gev-cache` volume keeps downloaded map and satellite data across restarts.
+
+Or as a `compose.yaml` (this is separate from the repo's own, which builds from source):
+
+```yaml
+services:
+  gods-eye-view:
+    image: ghcr.io/bilawalsidhu/gods-eye-view:latest
+    ports:
+      - "127.0.0.1:4173:4173"
+    env_file:
+      - path: .env
+        required: false
+    volumes:
+      - gev-cache:/app/.gev-cache
+    restart: unless-stopped
+
+volumes:
+  gev-cache:
+```
+
+The image has its own health check (an HTTP request to the app root every 30 seconds), so `docker ps` shows `healthy` once it is up.
+
+**Keep your keys outside the container.** Keys saved from Provider Settings are written to `/app/.env` inside the container, which is thrown away when the container is removed (`docker rm`, `docker compose down`, or a `docker pull` followed by recreating it). Put your keys in a `.env` file on the host and pass it with `--env-file` / `env_file` as above; the image reads them from the environment on every start. Only the cache is persisted by the volume. If you want Provider Settings to keep working across recreates, use the from-source path below, where `.env` lives in your clone.
+
+Pin a version tag for reproducible installs (`ghcr.io/bilawalsidhu/gods-eye-view:1.2.3`, or `:1.2` for patch updates only). To update, `docker pull` the image and recreate the container (`docker compose pull && docker compose up -d`).
+
+#### From source
 
 ```bash
 git clone https://github.com/bilawalsidhu/gods-eye-view.git
