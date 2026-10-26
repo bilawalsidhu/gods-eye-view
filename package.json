@@ -42,6 +42,7 @@
     "changelog:check": "node scripts/assemble-changelog.mjs --check",
     "dev": "vite",
     "dev:secure": "./scripts/dev-secure.sh",
+    "chat:server": "node --env-file-if-exists=.env.chat server/chat/start.js",
     "opensky:import": "./scripts/opensky-import-client.sh",
     "build": "vite build",
     "build:panel": "node scripts/build-panel.mjs",
@@ -66,15 +67,15 @@
     "mapillary-js": "^4.1.2",
     "mgrs": "^2.1.0",
     "pbf": "^5.1.2",
-    "satellite.js": "^6.0.2"
+    "satellite.js": "^6.0.2",
+    "ws": "^8.22.0"
   },
   "devDependencies": {
     "prettier": "3.9.6",
     "puppeteer": "^25.10.0",
     "sharp": "^0.35.4",
     "vite": "^6.0.0",
-    "vite-plugin-cesium": "^1.2.23",
-    "ws": "^8.21.0"
+    "vite-plugin-cesium": "^1.2.23"
   },
   "exports": {
     "./infrastructure": "./src/data/infrastructure.js",

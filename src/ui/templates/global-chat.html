@@ -1,0 +1,45 @@
+  <aside id="global-chat" class="global-chat is-minimized" aria-label="Global chat" data-i18n-aria-label>
+    <button id="global-chat-toggle" class="global-chat-toggle" type="button"
+      aria-controls="global-chat-panel" aria-expanded="false"
+      aria-label="Open global chat" data-i18n-aria-label>
+      <span class="global-chat-toggle-dot" aria-hidden="true"></span>
+      <span data-i18n>GLOBAL CHAT</span>
+      <span id="global-chat-count" class="global-chat-count" aria-live="polite">0</span>
+    </button>
+    <section id="global-chat-panel" class="global-chat-panel" aria-labelledby="global-chat-title" hidden>
+      <header class="global-chat-header">
+        <h2 id="global-chat-title" data-i18n>GLOBAL CHAT</h2>
+        <span id="global-chat-presence" class="global-chat-presence" role="status" aria-live="polite" data-i18n>Disconnected</span>
+        <button id="global-chat-minimize" type="button" class="global-chat-minimize"
+          aria-label="Minimize global chat" title="Minimize global chat"
+          data-i18n-aria-label data-i18n-title>−</button>
+      </header>
+      <div class="global-chat-body">
+        <p class="global-chat-notice" data-i18n>
+          Chat normally travels directly over encrypted WebRTC. The signaling host sees connection metadata; peers and identities are not verified.
+        </p>
+        <form id="global-chat-connect-form" class="global-chat-connect-form">
+          <label for="global-chat-server" data-i18n>Signaling server URL</label>
+          <input id="global-chat-server" name="server" type="url" inputmode="url"
+            placeholder="wss://chat.example.com/chat/signal" autocomplete="url" required
+            translate="no" />
+          <label for="global-chat-nickname" data-i18n>Nickname</label>
+          <input id="global-chat-nickname" name="nickname" type="text" minlength="2"
+            maxlength="24" autocomplete="nickname" placeholder="Choose a nickname"
+            data-i18n-placeholder required />
+          <button id="global-chat-connect" type="submit" data-i18n>Connect</button>
+          <button id="global-chat-disconnect" type="button" data-i18n hidden>Disconnect</button>
+        </form>
+        <div id="global-chat-error" class="global-chat-error" role="alert" hidden></div>
+        <ol id="global-chat-messages" class="global-chat-messages"
+          aria-label="Chat messages" data-i18n-aria-label aria-live="polite"></ol>
+        <form id="global-chat-send-form" class="global-chat-send-form" hidden>
+          <input id="global-chat-message" name="message" type="text" maxlength="500"
+            list="global-chat-mentions" placeholder="Type a message..." autocomplete="off"
+            aria-label="Type a message" data-i18n-placeholder data-i18n-aria-label disabled />
+          <datalist id="global-chat-mentions"></datalist>
+          <button type="submit" data-i18n disabled>Send</button>
+        </form>
+      </div>
+    </section>
+  </aside>

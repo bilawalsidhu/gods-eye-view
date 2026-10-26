@@ -143,6 +143,11 @@ npm run dev
 Open **`http://localhost:4173`**. Choose **Live Contacts**, **Space Missions**,
 **Environmental**, or **Explore Manually** from the first-run panel.
 
+**Global chat:** The minimizable chat panel connects to a shared WebRTC room.
+It needs a separately hosted TLS signaling server; each participant enters the
+same `wss://` URL. See [self-hosting global chat](docs/GLOBAL-CHAT.md) for
+setup, limits and privacy details.
+
 <details>
 <summary>Startup performance</summary>
 

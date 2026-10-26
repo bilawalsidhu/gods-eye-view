@@ -3,11 +3,12 @@ dist
 # Credential files. `.env` alone is not enough: Vite's loadEnv (see
 # server/standalone/vite.config.js) and scripts/setup-doctor.mjs both read the
 # full dotenv ladder — .env, .env.local, .env.<mode> and .env.<mode>.local —
-# so a key placed in any of them is live for the app. Only .env was ignored,
-# leaving the other three committable. .env.example is the tracked template.
+# so a key placed in any of them is live for the app. `.env.chat` is separate
+# so the signaling process does not inherit app provider keys.
 .env
 .env.*
 !.env.example
+!.env.chat.example
 *.log
 screenshots/
 qa-shots/

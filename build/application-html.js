@@ -9,6 +9,7 @@ export const APPLICATION_TEMPLATES = Object.freeze([
   'context',
   'welcome',
   'provider-settings',
+  'global-chat',
   'hud-loading',
 ]);
 const allowed = new Set(APPLICATION_TEMPLATES);

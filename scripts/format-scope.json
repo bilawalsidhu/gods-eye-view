@@ -1088,5 +1088,7 @@
   "src/dockerTrustedPeers.test.mjs",
   "src/cameraGlobeRotation.test.mjs",
   "src/voice/globeResetConfirmation.test.mjs",
-  "src/hudDms.test.mjs"
+  "src/hudDms.test.mjs",
+  "server/chat/signaling.test.mjs",
+  "src/chat/peerChat.test.mjs"
 ]
