@@ -404,6 +404,12 @@ test('a shared vessel is selected once the vessel feed has it', async (t) => {
 test('the share button links to /share/<code>, following the followed entity', (t) => {
   installPage(t, 'https://gev.example/?lang=ru#v=2&lat=1&lon=2');
   const manager = new ShareLinkManager(fakeViewer());
+  // A fresh session's look, as the app reports it at start-up.
+  manager.onToggleChange(false, true, {
+    hudVisible: true,
+    detectionMode: 'DENSE',
+    detectionDensity: 75,
+  });
   // No entity: a place view at the live camera.
   const place = manager.buildLink({ nowMs: NOW_MS });
   assert.match(place, /^https:\/\/gev\.example\/share\/[A-Za-z0-9_-]+$/);

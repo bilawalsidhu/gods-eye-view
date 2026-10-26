@@ -32,6 +32,11 @@ import {
 import { clampScopeFeatherPct } from '../scopeMaskPolicy.js';
 import { VIEW_STYLES } from '../view/index.js';
 import {
+  GLOBAL_POST_DEFAULTS,
+  STYLE_PRESET_DEFAULTS,
+  STYLES,
+} from '../ui/visualPresets.js';
+import {
   SHARE_VIEW_ENTITY_KINDS,
   SHARE_VIEW_FOLLOW_OFFSET_DEFAULT,
   followCameraFor,
@@ -223,15 +228,22 @@ export const SHARE_VIEW_STYLE_PARAMS = Object.freeze({
 });
 
 /**
+ * The default of a setting a style applies when it is selected: the value
+ * comes from SHARE_VIEW_STYLE_DEFAULTS for the view's style, so a view that
+ * keeps its style's look costs nothing for it.
+ */
+export const BY_STYLE = 'by-style';
+
+/**
  * Booleans share one varint (field 9). Bit `bit` is set when the value
  * DIFFERS from `default`, so an absent field means "all defaults" and a bit
  * an older decoder does not know is harmless. Bits are permanent.
  */
 export const SHARE_VIEW_FLAGS = freezeAll([
-  { bit: 0, key: 'bloom', default: false },
-  { bit: 1, key: 'sharpen', default: false },
-  { bit: 2, key: 'hudVisible', default: false },
-  { bit: 3, key: 'celestialRing', default: false },
+  { bit: 0, key: 'bloom', default: BY_STYLE },
+  { bit: 1, key: 'sharpen', default: BY_STYLE },
+  { bit: 2, key: 'hudVisible', default: BY_STYLE },
+  { bit: 3, key: 'celestialRing', default: BY_STYLE },
   { bit: 4, key: 'scopeEnabled', default: true },
 ]);
 
@@ -334,31 +346,36 @@ export const SHARE_VIEW_FIELDS = freezeAll([
     key: 'hudVariant',
     type: 'enum',
     enum: 'hudVariant',
-    default: 'tactical',
+    default: BY_STYLE,
   },
-  { number: 17, key: 'bloomIntensity', type: 'uint', default: 0 },
+  { number: 17, key: 'bloomIntensity', type: 'uint', default: BY_STYLE },
   { number: 18, key: 'bloomVersion', type: 'uint', default: 2 },
-  { number: 19, key: 'sharpenIntensity', type: 'uint', default: 49 },
+  { number: 19, key: 'sharpenIntensity', type: 'uint', default: BY_STYLE },
   {
     number: 20,
     key: 'detectionMode',
     type: 'enum',
     enum: 'detectionMode',
-    default: 'OFF',
+    default: BY_STYLE,
   },
-  { number: 21, key: 'detectionDensity', type: 'uint', default: 50 },
+  { number: 21, key: 'detectionDensity', type: 'uint', default: BY_STYLE },
   {
     number: 22,
     key: 'detectionAllocation',
     type: 'enum',
     enum: 'detectionAllocation',
-    default: 'ELASTIC',
+    default: BY_STYLE,
   },
-  { number: 23, key: 'detectionFadePct', type: 'uint', default: 7 },
-  { number: 24, key: 'detectionOutsideOpacityPct', type: 'uint', default: 1 },
+  { number: 23, key: 'detectionFadePct', type: 'uint', default: BY_STYLE },
+  {
+    number: 24,
+    key: 'detectionOutsideOpacityPct',
+    type: 'uint',
+    default: BY_STYLE,
+  },
   { number: 25, key: 'scopeFeatherPct', type: 'uint', default: 100 },
   { number: 26, key: 'scopeTerminusPct', type: 'uint', default: null },
-  { number: 27, key: 'styleParams', type: 'bytes', default: null },
+  { number: 27, key: 'styleParams', type: 'bytes', default: BY_STYLE },
 ]);
 const FIELD_BY_KEY = new Map(SHARE_VIEW_FIELDS.map((f) => [f.key, f]));
 const fieldNumber = (key) => FIELD_BY_KEY.get(key).number;
@@ -380,15 +397,28 @@ export const SHARE_VIEW_THING_FIELDS = Object.freeze({
   observedAt: 12, // epoch, when the fix was taken; only without a created-at
 });
 
-/** The complete default state: what an empty payload decodes to. */
-export function createDefaultShareViewState() {
+/** The default of a field or flag for a view in `style`. */
+function defaultOf(entry, style) {
+  if (entry.default !== BY_STYLE) return entry.default;
+  const defaults =
+    SHARE_VIEW_STYLE_DEFAULTS[style] ?? SHARE_VIEW_STYLE_DEFAULTS.normal;
+  return defaults[entry.key];
+}
+
+/**
+ * The complete default state for a view in `style` (Normal when omitted):
+ * what a payload with only that style decodes to.
+ */
+export function createDefaultShareViewState(requested = 'normal') {
+  const style = VIEW_STYLES.includes(requested) ? requested : 'normal';
   const state = { view: { kind: 'place' } };
   for (const field of SHARE_VIEW_FIELDS) {
     if (field.key === 'view' || field.key === 'flags') continue;
     if (field.key === 'thing' || field.key === 'layerOptions') continue;
-    state[field.key] = field.default;
+    state[field.key] =
+      field.key === 'style' ? style : structuredClone(defaultOf(field, style));
   }
-  for (const flag of SHARE_VIEW_FLAGS) state[flag.key] = flag.default;
+  for (const flag of SHARE_VIEW_FLAGS) state[flag.key] = defaultOf(flag, style);
   return state;
 }
 
@@ -472,6 +502,60 @@ function normalizeStyleParams(style, values) {
   }
   return Object.keys(out).length ? out : null;
 }
+
+/**
+ * What each style leaves the shareable settings at when it is selected in a
+ * fresh session: the app's first-load baseline (GLOBAL_POST_DEFAULTS), with
+ * the style's own preset (STYLE_PRESET_DEFAULTS) on top, and its shader
+ * parameters at their defaults (the preset's, else the shader's). Read from
+ * the tables the app applies, so a fresh view in any style encodes as its
+ * camera and style alone.
+ *
+ * These are format v1's frozen meanings. If the app's tables move, the test
+ * that pins this table fails: freeze the old values here then, rather than
+ * letting old links change meaning.
+ */
+export const SHARE_VIEW_STYLE_DEFAULTS = Object.freeze(
+  Object.fromEntries(
+    VIEW_STYLES.map((style) => {
+      const g = GLOBAL_POST_DEFAULTS;
+      const preset = STYLE_PRESET_DEFAULTS[style] ?? {};
+      const detection = migrateDetectionState(
+        preset.detection?.mode?.toUpperCase?.() ?? g.detectionMode,
+        preset.detection?.densityPct ?? g.detectionDensity,
+        g.detectionDensity,
+      );
+      const params = {};
+      for (const spec of SHARE_VIEW_STYLE_PARAMS[style] ?? []) {
+        const value =
+          preset.styleParams?.[style]?.[spec.key] ??
+          STYLES[style]?.uniforms?.[spec.key]?.default;
+        if (finite(value)) params[spec.key] = value;
+      }
+      return [
+        style,
+        Object.freeze({
+          bloom: preset.bloom?.enabled ?? g.bloom.enabled,
+          bloomIntensity: preset.bloom?.intensity ?? g.bloom.intensity,
+          sharpen: preset.sharpen?.enabled ?? g.sharpen.enabled,
+          sharpenIntensity: preset.sharpen?.intensity ?? g.sharpen.intensity,
+          hudVariant: preset.hudVariant ?? g.hudVariant,
+          hudVisible: preset.hudVisible ?? g.hudVisible,
+          detectionMode: detection.enabled ? detection.profile : 'OFF',
+          detectionDensity: detection.densityPct,
+          detectionAllocation: normalizeAllocationStrategy(
+            g.detectionAllocation,
+          ),
+          detectionFadePct: g.detectionFadePct,
+          detectionOutsideOpacityPct: g.detectionOutsideOpacityPct,
+          // Leaving Normal switches the ring off (VisualSettings.setStyle).
+          celestialRing: style === 'normal' ? g.celestialRing : false,
+          styleParams: Object.freeze(normalizeStyleParams(style, params)),
+        }),
+      ];
+    }),
+  ),
+);
 
 function normalizePanelState(panelState) {
   if (!panelState || !Array.isArray(panelState.specs)) return null;
@@ -571,7 +655,9 @@ function liftTrackedEntity(layerState, view) {
  */
 export function normalizeShareViewState(input = {}) {
   const source = input && typeof input === 'object' ? input : {};
-  const d = createDefaultShareViewState();
+  const style = VIEW_STYLES.includes(source.style) ? source.style : 'normal';
+  // Style-applied settings default to what this style applies.
+  const d = createDefaultShareViewState(style);
   const state = {};
   state.lat = latitudeOr(source.lat, d.lat);
   state.lon = longitudeOr(source.lon, d.lon);
@@ -579,11 +665,15 @@ export function normalizeShareViewState(input = {}) {
   state.heading = wrapAngle(source.heading, d.heading);
   state.pitch = intOr(source.pitch, d.pitch, -90, 90);
   state.roll = wrapAngle(source.roll, d.roll);
-  state.style = VIEW_STYLES.includes(source.style) ? source.style : d.style;
-  state.styleParams = normalizeStyleParams(state.style, source.styleParams);
+  state.style = style;
+  // The style's own parameters, with any valid ones the source sets on top.
+  state.styleParams = normalizeStyleParams(style, {
+    ...d.styleParams,
+    ...normalizeStyleParams(style, source.styleParams),
+  });
   for (const flag of SHARE_VIEW_FLAGS)
     state[flag.key] =
-      typeof source[flag.key] === 'boolean' ? source[flag.key] : flag.default;
+      typeof source[flag.key] === 'boolean' ? source[flag.key] : d[flag.key];
   state.bloomIntensity = intOr(
     source.bloomIntensity,
     d.bloomIntensity,
@@ -616,6 +706,7 @@ export function normalizeShareViewState(input = {}) {
   state.detectionDensity = detection.densityPct;
   state.detectionAllocation = normalizeAllocationStrategy(
     source.detectionAllocation,
+    d.detectionAllocation,
   );
   state.detectionFadePct = intOr(
     source.detectionFadePct,
@@ -772,14 +863,18 @@ function encodePanels(writer, panelState) {
 }
 
 function encodeStyleParams(writer, style, values) {
+  const defaults = SHARE_VIEW_STYLE_DEFAULTS[style].styleParams ?? {};
   const blob = new WireWriter();
   for (const spec of SHARE_VIEW_STYLE_PARAMS[style]) {
+    // Only the parameters that differ from the style's own.
     if (!Object.hasOwn(values, spec.key)) continue;
+    if (values[spec.key] === defaults[spec.key]) continue;
     blob
       .varint(charNumber(spec.token))
       .varint(Math.round(values[spec.key] * 100));
   }
-  writer.bytesField(fieldNumber('styleParams'), blob.finish());
+  if (blob.bytes.length)
+    writer.bytesField(fieldNumber('styleParams'), blob.finish());
 }
 
 const CAMERA_KEYS = new Set(['lat', 'lon', 'alt', 'heading', 'pitch', 'roll']);
@@ -862,7 +957,8 @@ export function encodeShareView(input) {
       case 'flags': {
         let bits = 0;
         for (const flag of SHARE_VIEW_FLAGS)
-          if (state[flag.key] !== flag.default) bits += 2 ** flag.bit;
+          if (state[flag.key] !== defaultOf(flag, state.style))
+            bits += 2 ** flag.bit;
         if (bits) writer.uintField(field.number, bits);
         break;
       }
@@ -883,7 +979,7 @@ export function encodeShareView(input) {
           encodeStyleParams(writer, state.style, state.styleParams);
         break;
       default:
-        if (state[field.key] === field.default) break;
+        if (state[field.key] === defaultOf(field, state.style)) break;
         if (field.type === 'enum') writeEnum(writer, field, state[field.key]);
         else if (field.type === 'sint')
           writer.sintField(field.number, state[field.key]);
@@ -1237,7 +1333,8 @@ export function decodeShareView(code, { nowMs = Date.now() } = {}) {
     const flags = get('flags')?.varint ?? 0;
     for (const flag of SHARE_VIEW_FLAGS)
       raw[flag.key] =
-        (Math.floor(flags / 2 ** flag.bit) % 2 === 1) !== flag.default;
+        (Math.floor(flags / 2 ** flag.bit) % 2 === 1) !==
+        defaultOf(flag, raw.style ?? 'normal');
     const knownBits = 2 ** SHARE_VIEW_FLAGS.length - 1;
     if (flags > knownBits)
       unknown.code('flags', flags - (flags % (knownBits + 1)));

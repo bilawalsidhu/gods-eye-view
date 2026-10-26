@@ -19,13 +19,15 @@ The same view in both forms (a real session's link):
 | Form  | Characters        |
 | ----- | ----------------- |
 | Long  | 302 (the hash)    |
-| Short | 50 (the `<code>`) |
+| Short | 39 (the `<code>`) |
 
 For example, a camera-only place view is a 24-character code (31 with its
 created-at time).
 Following an aircraft is 42–50: 42 when the link is made from the app's own
 follow camera with the fix taken as the link is made, 44 with a fix four
-seconds older, and 50 after orbiting to another heading and pitch.
+seconds older, and 50 after orbiting to another heading and pitch. A view in
+any other style that keeps the style's own look adds only the style (two
+bytes): the 42-character followed aircraft in Noir is 44.
 
 ## Opening a short link
 
@@ -68,7 +70,8 @@ Signed values are zigzag varints (0, −1, 1, −2 → 0, 1, 2, 3). Text is prin
 ASCII. Fields are written in ascending order; the decoder accepts any order.
 
 A field whose value equals its default is **omitted**. The decoder fills every
-omitted field from the same defaults table the encoder reads, so an empty
+omitted field from the same defaults table the encoder reads (for a
+style-dependent field, the decoded style's defaults), so an empty
 payload (code `AQc`: the version byte and its check byte) is the all-default
 view.
 
@@ -103,28 +106,67 @@ probability of about 255 in 256 (many of them already fail as base64url).
 | 13  | thing                        | LEN   | none        | sub-message, see thing views                            |
 | 14  | `style`                      | enum  | `normal`    | normal, retro, surveillance, thermal, anime, noir, snow |
 | 15  | `mapStack`                   | enum  | `photoreal` | photoreal, bing-aerial, bing-labels, esri-imagery, osm  |
-| 16  | `hudVariant`                 | enum  | `tactical`  | tactical, operator, minimal, cyber                      |
-| 17  | `bloomIntensity`             | uint  | 0           |                                                         |
+| 16  | `hudVariant`                 | enum  | style       | tactical, operator, minimal, cyber                      |
+| 17  | `bloomIntensity`             | uint  | style       |                                                         |
 | 18  | `bloomVersion`               | uint  | 2           |                                                         |
-| 19  | `sharpenIntensity`           | uint  | 49          |                                                         |
-| 20  | `detectionMode`              | enum  | `OFF`       | OFF, SPARSE, BALANCED, DENSE                            |
-| 21  | `detectionDensity`           | uint  | 50          | one of 0, 25, 50, 75, 100                               |
-| 22  | `detectionAllocation`        | enum  | `ELASTIC`   | ELASTIC, WEIGHTED                                       |
-| 23  | `detectionFadePct`           | uint  | 7           | 0–40                                                    |
-| 24  | `detectionOutsideOpacityPct` | uint  | 1           | 0–100                                                   |
+| 19  | `sharpenIntensity`           | uint  | style       |                                                         |
+| 20  | `detectionMode`              | enum  | style       | OFF, SPARSE, BALANCED, DENSE                            |
+| 21  | `detectionDensity`           | uint  | style       | one of 0, 25, 50, 75, 100                               |
+| 22  | `detectionAllocation`        | enum  | style       | ELASTIC, WEIGHTED                                       |
+| 23  | `detectionFadePct`           | uint  | style       | 0–40                                                    |
+| 24  | `detectionOutsideOpacityPct` | uint  | style       | 0–100                                                   |
 | 25  | `scopeFeatherPct`            | uint  | 100         | 0–200                                                   |
 | 26  | `scopeTerminusPct`           | uint  | none        | 94–100; absent is the adaptive terminus                 |
-| 27  | `styleParams`                | LEN   | none        | packed `(token, value × 100)` pairs                     |
+| 27  | `styleParams`                | LEN   | style       | packed `(token, value × 100)` pairs                     |
 
 Field 1 absent means `thing` when field 13 is present and `place` otherwise,
 so v1 never writes it; a later view kind writes its code.
 
 Enum codes are the list position (0, 1, 2…). A name not in the list is written
 as LEN text in the same field, so the app can add a style or map before this
-table learns its code.
+table learns its code. A new style's settings are encoded against its own
+defaults, while a decoder that does not know the style uses Normal's; adding a
+style also extends the pinned style-defaults table.
 
-Flag bits (field 9): 0 `bloom` (default off), 1 `sharpen` (off), 2
-`hudVisible` (off), 3 `celestialRing` (off), 4 `scopeEnabled` (on).
+Flag bits (field 9): 0 `bloom`, 1 `sharpen`, 2 `hudVisible`, 3
+`celestialRing` (each defaulting by style), 4 `scopeEnabled` (default on).
+
+### Style defaults
+
+A default marked **style** is what the view's style applies when it is
+selected in a fresh session (`SHARE_VIEW_STYLE_DEFAULTS`): the app's
+first-load baseline (`GLOBAL_POST_DEFAULTS` in `src/ui/visualPresets.js`),
+with the style's preset on top (`STYLE_PRESET_DEFAULTS`), and the style's
+shader parameters at the preset's values, else the shader's own. The encoder
+compares against the defaults of the view's style, and the decoder fills
+omitted settings from the defaults of the style it decoded (an unknown style
+uses Normal's). So a view that keeps its style's look costs its camera and
+style alone. (A recipient-side preference the app remembers, such as the
+detection allocation, is not a style default: a sender who changed it pays
+for it.) In v1:
+
+| Setting                   | Every style   |
+| ------------------------- | ------------- |
+| bloom, intensity          | off, 0        |
+| sharpen, intensity        | on, 49        |
+| HUD visible, variant      | on, tactical  |
+| detection mode, density   | DENSE, 75     |
+| allocation, fade, outside | ELASTIC, 7, 1 |
+| celestial ring            | off           |
+
+| Style        | Shader parameters (field 27 defaults)                           |
+| ------------ | --------------------------------------------------------------- |
+| normal       | none                                                            |
+| retro        | pixelation 1, distortion 0, instability 0.42                    |
+| surveillance | gain 0.18, bloom 0.22, scanlineStr 0.96, pixelation 1           |
+| thermal      | sensitivity 0.85, bloom 0.2, mode 0.33, pixelation 1, palette 0 |
+| anime        | saturation 1, edgeThick 0.5                                     |
+| noir         | contrastAmt 1.2, grainAmt 0.5, vignetteAmt 0.5                  |
+| snow         | density 0.6, wind 0.5                                           |
+
+These are frozen like every other default: the codec reads them from the
+app's tables today, and a test pins them, so if a table moves the old values
+are frozen in the codec rather than changing what shared links mean.
 
 ### Precision
 
@@ -196,8 +238,11 @@ reserved: a decoder ignores that entry, as for collapsed 0.
 
 ### Style parameters (field 27)
 
-Pairs of varints `(token index, value × 100)` for the active style, using the
-long form's `sp` tokens (`SHARE_VIEW_STYLE_PARAMS`).
+Pairs of varints `(token index, value × 100)` for the parameters of the
+view's style that differ from its defaults, using the long form's `sp` tokens
+(`SHARE_VIEW_STYLE_PARAMS`). The decoded state always lists every parameter
+of the style: the stored ones over the style's defaults. A long link without
+`sp` converts to the style's defaults.
 
 ## View kinds
 
@@ -291,7 +336,9 @@ the app that can open it.
    field.
 3. **Defaults are frozen meanings.** A default is what an omitted field meant
    when links were written. If the app's default moves, leave the table alone:
-   the encoder will start writing the new value explicitly. The same applies
+   the encoder will start writing the new value explicitly. Style defaults
+   are read from the app's style tables; when those move, freeze the old
+   values in the codec (see Style defaults). The same applies
    to `SHARE_VIEW_LAYER_OPTION_ABSENT` and the panel defaults.
 4. **Codes are append-only.** Enum lists, entity kinds, flag bits, panel
    numbers and style parameter tokens only grow.

@@ -16,6 +16,7 @@ import {
   decodeShareView,
   encodeShareView,
 } from './viewCodec.js';
+import { SHARE_VIEW_STYLE_DEFAULTS } from './viewCodec.js';
 import {
   LEGACY_SHARE_STATE_KEYS,
   fromLegacyShareState,
@@ -60,6 +61,10 @@ function parseLegacy(hash) {
 function comparable(parsed) {
   const out = {};
   for (const key of LEGACY_SHARE_STATE_KEYS) out[key] = parsed[key];
+  // A long link without `sp` leaves the style's parameters as they are; the
+  // compact form says what they are, the style's own unless changed.
+  const ownParams = SHARE_VIEW_STYLE_DEFAULTS[out.style].styleParams;
+  out.styleParams = ownParams ? { ...ownParams, ...out.styleParams } : null;
   for (const key of ['heading', 'roll'])
     out[key] = ((out[key] % 360) + 360) % 360;
   return out;
@@ -82,11 +87,11 @@ function assertLegacyRoundTrip(hash) {
   return { parsed, state, encoded };
 }
 
-test('the HAL example survives the round trip and shrinks to 50 characters', () => {
+test('the HAL example survives the round trip and shrinks to 39 characters', () => {
   const { parsed, state, encoded } = assertLegacyRoundTrip(HAL_EXAMPLE_HASH);
   assert.equal(HAL_EXAMPLE_HASH.length, 302);
-  assert.equal(encoded.length, 50);
-  assert.equal(encoded, 'ARCg-SQYrah3ILAJKB4wO0gGUgQAhAAQYgE0oAEDqAFLyAELAg');
+  assert.equal(encoded.length, 39);
+  assert.equal(encoded, 'ARCg-SQYrah3ILAJKB4wO1IEAIQAEGIBNMgBC1o');
   assert.equal(parsed.roll, 360);
   assert.equal(state.roll, 0);
   assert.deepEqual(state.layerState.enabledLayerIds, [

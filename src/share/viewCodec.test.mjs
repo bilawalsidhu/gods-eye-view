@@ -39,8 +39,10 @@ import {
   SHARE_VIEW_ENUMS,
   SHARE_VIEW_EPOCH_S,
   SHARE_VIEW_FIELDS,
+  BY_STYLE,
   SHARE_VIEW_FLAGS,
   SHARE_VIEW_FOLLOW_OFFSET_DEFAULT,
+  SHARE_VIEW_STYLE_DEFAULTS,
   SHARE_VIEW_LAYER_OPTION_ABSENT,
   SHARE_VIEW_PANELS,
   SHARE_VIEW_STYLE_PARAMS,
@@ -196,8 +198,8 @@ test('each setting costs bytes only when it differs from its default', () => {
     bloomIntensity: 1,
     bloomVersion: 1,
     sharpenIntensity: 50,
-    detectionMode: 'DENSE',
-    detectionDensity: 75,
+    detectionMode: 'SPARSE',
+    detectionDensity: 100,
     detectionAllocation: 'WEIGHTED',
     detectionFadePct: 8,
     detectionOutsideOpacityPct: 2,
@@ -220,19 +222,57 @@ test('each setting costs bytes only when it differs from its default', () => {
   }
   for (const flag of SHARE_VIEW_FLAGS) {
     assert.equal(
-      payloadBytes(encodeShareView({ [flag.key]: flag.default })).length,
+      payloadBytes(encodeShareView({ [flag.key]: defaults[flag.key] })).length,
       base,
     );
     assert.equal(
-      payloadBytes(assertRoundTrip({ [flag.key]: !flag.default })).length,
+      payloadBytes(assertRoundTrip({ [flag.key]: !defaults[flag.key] })).length,
       base + 2,
     );
   }
   // All five booleans flipped still cost one field.
   const flipped = Object.fromEntries(
-    SHARE_VIEW_FLAGS.map((f) => [f.key, !f.default]),
+    SHARE_VIEW_FLAGS.map((f) => [f.key, !defaults[f.key]]),
   );
   assert.equal(payloadBytes(assertRoundTrip(flipped)).length, base + 2);
+});
+
+test('a view just switched to any style costs its camera and style only', () => {
+  const camera = { lat: 48.8584, lon: 2.2945, alt: 1200, heading: 120 };
+  const cameraOnly = payloadBytes(encodeShareView(camera)).length;
+  for (const style of VIEW_STYLES) {
+    // What the app holds right after selecting the style in a fresh session.
+    const fresh = { ...camera, ...SHARE_VIEW_STYLE_DEFAULTS[style], style };
+    const bytes = payloadBytes(assertRoundTrip(fresh)).length;
+    assert.equal(bytes, cameraOnly + (style === 'normal' ? 0 : 2), style);
+    // Changes on top of the style's look still travel and round-trip.
+    const params = SHARE_VIEW_STYLE_PARAMS[style];
+    const changed = {
+      ...fresh,
+      sharpen: false,
+      detectionMode: 'OFF',
+      detectionFadePct: 16,
+      ...(params
+        ? {
+            styleParams: {
+              ...fresh.styleParams,
+              [params[0].key]: params[0].min,
+            },
+          }
+        : {}),
+    };
+    assert.ok(payloadBytes(assertRoundTrip(changed)).length > bytes, style);
+  }
+});
+
+test('invalid style parameters keep the style’s own value', () => {
+  for (const bad of [undefined, NaN, 'x', null])
+    assertRoundTrip({ style: 'noir', styleParams: { contrastAmt: bad } });
+  assert.equal(
+    normalizeShareViewState({ style: 'noir', styleParams: { grainAmt: NaN } })
+      .styleParams.grainAmt,
+    0.5,
+  );
 });
 
 test('every registered field round-trips at once', () => {
@@ -295,14 +335,14 @@ test('every registered field round-trips at once', () => {
       palette: 0.25,
     },
     bloom: true,
-    sharpen: true,
+    sharpen: false,
     bloomIntensity: 84,
     bloomVersion: 1,
     sharpenIntensity: 65,
     hudVariant: 'operator',
-    hudVisible: true,
+    hudVisible: false,
     detectionMode: 'SPARSE',
-    detectionDensity: 25,
+    detectionDensity: 100,
     detectionAllocation: 'WEIGHTED',
     detectionFadePct: 16,
     detectionOutsideOpacityPct: 5,
@@ -438,30 +478,79 @@ test('the field registry is well formed and permanent', () => {
       [13, 'thing', null],
       [14, 'style', 'normal'],
       [15, 'mapStack', 'photoreal'],
-      [16, 'hudVariant', 'tactical'],
-      [17, 'bloomIntensity', 0],
+      [16, 'hudVariant', BY_STYLE],
+      [17, 'bloomIntensity', BY_STYLE],
       [18, 'bloomVersion', 2],
-      [19, 'sharpenIntensity', 49],
-      [20, 'detectionMode', 'OFF'],
-      [21, 'detectionDensity', 50],
-      [22, 'detectionAllocation', 'ELASTIC'],
-      [23, 'detectionFadePct', 7],
-      [24, 'detectionOutsideOpacityPct', 1],
+      [19, 'sharpenIntensity', BY_STYLE],
+      [20, 'detectionMode', BY_STYLE],
+      [21, 'detectionDensity', BY_STYLE],
+      [22, 'detectionAllocation', BY_STYLE],
+      [23, 'detectionFadePct', BY_STYLE],
+      [24, 'detectionOutsideOpacityPct', BY_STYLE],
       [25, 'scopeFeatherPct', 100],
       [26, 'scopeTerminusPct', null],
-      [27, 'styleParams', null],
+      [27, 'styleParams', BY_STYLE],
     ],
   );
   assert.deepEqual(
     SHARE_VIEW_FLAGS.map((f) => [f.bit, f.key, f.default]),
     [
-      [0, 'bloom', false],
-      [1, 'sharpen', false],
-      [2, 'hudVisible', false],
-      [3, 'celestialRing', false],
+      [0, 'bloom', BY_STYLE],
+      [1, 'sharpen', BY_STYLE],
+      [2, 'hudVisible', BY_STYLE],
+      [3, 'celestialRing', BY_STYLE],
       [4, 'scopeEnabled', true],
     ],
   );
+  // The style-applied defaults are frozen meanings too. If the app's style
+  // tables move and this fails, freeze these values in the codec instead of
+  // updating the snapshot: links already shared depend on them.
+  const common = {
+    bloom: false,
+    bloomIntensity: 0,
+    sharpen: true,
+    sharpenIntensity: 49,
+    hudVariant: 'tactical',
+    hudVisible: true,
+    detectionMode: 'DENSE',
+    detectionDensity: 75,
+    detectionAllocation: 'ELASTIC',
+    detectionFadePct: 7,
+    detectionOutsideOpacityPct: 1,
+    celestialRing: false,
+  };
+  assert.deepEqual(JSON.parse(JSON.stringify(SHARE_VIEW_STYLE_DEFAULTS)), {
+    normal: { ...common, styleParams: null },
+    retro: {
+      ...common,
+      styleParams: { pixelation: 1, distortion: 0, instability: 0.42 },
+    },
+    surveillance: {
+      ...common,
+      styleParams: {
+        gain: 0.18,
+        bloom: 0.22,
+        scanlineStr: 0.96,
+        pixelation: 1,
+      },
+    },
+    thermal: {
+      ...common,
+      styleParams: {
+        sensitivity: 0.85,
+        bloom: 0.2,
+        mode: 0.33,
+        pixelation: 1,
+        palette: 0,
+      },
+    },
+    anime: { ...common, styleParams: { saturation: 1, edgeThick: 0.5 } },
+    noir: {
+      ...common,
+      styleParams: { contrastAmt: 1.2, grainAmt: 0.5, vignetteAmt: 0.5 },
+    },
+    snow: { ...common, styleParams: { density: 0.6, wind: 0.5 } },
+  });
   assert.deepEqual(
     SHARE_VIEW_ENTITY_KINDS.map((e) => [e.code, e.kind]),
     [
@@ -1009,6 +1098,17 @@ test('size: following an aircraft', () => {
     assertRoundTrip({ view: fresh, layerState, sharedAtMs: NOW_MS }).length,
     42,
   );
+  // In Noir with Noir's own look, only the style is added.
+  assert.equal(
+    assertRoundTrip({
+      ...SHARE_VIEW_STYLE_DEFAULTS.noir,
+      style: 'noir',
+      view: fresh,
+      layerState,
+      sharedAtMs: NOW_MS,
+    }).length,
+    44,
+  );
   // After orbiting the aircraft, heading and pitch are written too.
   const orbited = assertRoundTrip({
     view: view({ range: 1500, heading: 30, pitch: -20 }),
@@ -1131,7 +1231,7 @@ test('unknown detection names fall back to their defaults and are reported', () 
   writer.bytes.push(1);
   writer.textField(20, 'FUTURE').textField(22, 'GREEDY');
   const result = decodeOk(hashOf(writer.finish()));
-  assert.equal(result.state.detectionMode, 'OFF');
+  assert.equal(result.state.detectionMode, 'DENSE');
   assert.equal(result.state.detectionAllocation, 'ELASTIC');
   assert.deepEqual(result.unknownFields, [
     { scope: 'enum:detectionMode', code: 'FUTURE' },
@@ -1178,7 +1278,11 @@ test('future panel values and style tokens are skipped, not applied', () => {
     new WireWriter().varint(36).varint(5).varint(37).varint(6).finish(),
   );
   const styleResult = decodeOk(hashOf(style.finish()));
-  assert.equal(styleResult.state.styleParams, null);
+  // Unknown tokens change nothing: the style keeps its own parameters.
+  assert.deepEqual(
+    styleResult.state.styleParams,
+    SHARE_VIEW_STYLE_DEFAULTS.thermal.styleParams,
+  );
   assert.equal(styleResult.unknownFields.length, 2);
 });
 
