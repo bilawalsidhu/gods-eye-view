@@ -352,7 +352,9 @@ test('timestamps require finite numbers before replay candidate counting', () =>
       NaN,
       Infinity,
     ]) {
-      assert.equal(normalizeActionEpisode(episode({ [field]: value })), null);
+      const receipt = episode();
+      receipt[field] = value;
+      assert.equal(normalizeActionEpisode(receipt), null);
     }
   }
   assert.deepEqual(
