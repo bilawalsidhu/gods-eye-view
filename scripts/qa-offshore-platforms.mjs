@@ -169,6 +169,34 @@ try {
       null,
   );
   await page.screenshot({ path: path.join(shots, 'platform-selection.png') });
+  const cardRect = await page.evaluate(async () => {
+    const { getOverlayPaintRect } =
+      await import('/src/overlays/worldOverlay.js');
+    const entity = window.__godsEyeView.viewer.selectedEntity;
+    const id = entity.__offshoreRecord.id;
+    const rect = getOverlayPaintRect('offshore-platforms-selection', id);
+    window.__offshoreOpened = [];
+    window.open = (url) => window.__offshoreOpened.push(url);
+    return {
+      x: rect.x + rect.w / 2,
+      y: rect.y + rect.h / 2,
+      duplicate: !!getOverlayPaintRect('offshore-platforms', id),
+    };
+  });
+  check(
+    'selected record has one card, without an ambient duplicate',
+    !cardRect.duplicate,
+  );
+  await page.mouse.click(cardRect.x, cardRect.y);
+  check(
+    'painted source action opens the BSEE catalog',
+    await page.evaluate(
+      () =>
+        window.__offshoreOpened[0] ===
+        'https://www.data.bsee.gov/Main/Mapping.aspx',
+    ),
+  );
+
   await wait(2500);
   const stability = await page.evaluate(async () => {
     const { viewer, dataManager } = window.__godsEyeView;

@@ -38,6 +38,7 @@ export async function createOffshoreRenderer(
   let budgetLimit = 0;
   let selected = null;
   let handler;
+  let pressedCard = null;
   const removers = [];
   const requestRender = () =>
     services.governorRequestRender(`offshore-platforms`);
@@ -45,8 +46,12 @@ export async function createOffshoreRenderer(
   function showSelection(entity) {
     if (selected === entity) return;
     selected = entity?.__offshoreRecord ? entity : null;
+    dirty = true;
     overlayHost.clearSource(selectionSource);
-    if (!selected) return;
+    if (!selected) {
+      requestRender();
+      return;
+    }
     const record = selected.__offshoreRecord;
     overlayHost.setEntries(
       selectionSource,
@@ -201,8 +206,27 @@ export async function createOffshoreRenderer(
   }
   try {
     handler = new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas);
+    // Cesium's own click selection can clear the selected overlay before this
+    // layer receives LEFT_CLICK. Capture the painted action on the same press.
     handler.setInputAction(({ position }) => {
+      pressedCard = services.isPointerFree()
+        ? overlayHost.hitTest(position.x, position.y, {
+            sourceId: selectionSource,
+          })
+        : null;
+    }, Cesium.ScreenSpaceEventType.LEFT_DOWN);
+    handler.setInputAction(({ position }) => {
+      const pressed = pressedCard;
+      pressedCard = null;
       if (!services.isPointerFree()) return;
+      const card =
+        overlayHost.hitTest(position.x, position.y, {
+          sourceId: selectionSource,
+        }) || pressed;
+      if (card) {
+        card.entry.activate?.();
+        return;
+      }
       const entity = viewer.scene.pick(position)?.id;
       if (entity?.__offshoreRecord && ds.entities.contains(entity)) {
         viewer.selectedEntity = entity;

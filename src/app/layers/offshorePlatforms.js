@@ -1,5 +1,6 @@
 import { createOffshorePlatformsLayer } from '../../layers/offshorePlatforms/index.js';
 import { localGeoJsonServices } from '../localGeojsonServices.js';
+import { hitTestWorldOverlay } from '../../overlays/worldOverlay.js';
 import { isPointerFree } from '../../data/inputOwnership.js';
 
 export function createApplicationOffshorePlatforms(options) {
@@ -7,6 +8,10 @@ export function createApplicationOffshorePlatforms(options) {
     ...options,
     services: {
       ...localGeoJsonServices,
+      overlayHost: {
+        ...localGeoJsonServices.overlayHost,
+        hitTest: hitTestWorldOverlay,
+      },
       isPointerFree,
       openSource: (url) => window.open(url, '_blank', 'noopener,noreferrer'),
       onSelectionChanged(callback) {
