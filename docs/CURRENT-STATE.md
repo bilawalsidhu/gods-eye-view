@@ -635,6 +635,12 @@ Disposal settles pending globe resets and removes camera-entry listeners before
 asynchronous restoration; replacing a manager detaches its old Directions
 services. See [UI ownership](UI-OWNERSHIP.md).
 
+The focused globe canvas accepts WASD panning and arrow-key orbit. Standard
+Xbox gamepads use the left stick or D-pad to pan, the right stick to orbit, and
+LT/RT to zoom. Keyboard controls do not intercept input from editable fields;
+gamepad polling pauses while the page is hidden, and control listeners and
+timers are removed when the application controls are disposed.
+
 Director's ordered shot runner is exported independently of rendering, UI,
 storage and scene content. The existing scene controller supplies an adapter for
 visual/layer state, camera travel, media holds and release. Playback cancellation,

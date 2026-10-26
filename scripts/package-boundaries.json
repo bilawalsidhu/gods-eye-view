@@ -1751,6 +1751,7 @@
       "src/app/constructCatalog.js",
       "src/app/sourceComposition.js",
       "src/app/controls.js",
+      "src/ui/gamepadCameraControls.js",
       "src/app/data.js",
       "src/app/errors.js",
       "src/app/layerPresentation.js",

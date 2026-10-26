@@ -287,6 +287,8 @@
   "scripts/qa-scene-controls.mjs",
   "scripts/qa-action-buttons.mjs",
   "src/ui/applicationShell.js",
+  "src/ui/gamepadCameraControls.js",
+  "src/ui/gamepadCameraControls.test.mjs",
   "src/ui/panelLayoutController.js",
   "src/ui/panelPositionControls.js",
   "src/ui/panelPositionControls.test.mjs",

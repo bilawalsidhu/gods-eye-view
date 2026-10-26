@@ -2,6 +2,7 @@ import { catalogControlServices } from './catalog.js';
 import { StyleManager } from '../ui/composition.js';
 import { flyToAustin } from '../camera.js';
 import { initCockpitCloudEffects } from '../cockpitCloudEffects.js';
+import { installGamepadCameraControls } from '../ui/gamepadCameraControls.js';
 import { t } from '../i18n/index.js';
 
 /** Construct the existing controls and camera presentation. */
@@ -31,6 +32,7 @@ export function createApplicationControls({
   defer(() => styleManager.orbitController.stop());
   defer(() => styleManager.hud.destroy());
   defer(() => styleManager.dispose());
+  defer(installGamepadCameraControls(viewer));
   // The previous multi-canvas weather compositor remains disabled. Cockpit
   // clouds use a separate, capped low-resolution GPU pass that never attaches
   // Cesium fog or post-process stages and is fully stopped in map mode.
