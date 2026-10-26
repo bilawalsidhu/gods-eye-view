@@ -241,7 +241,7 @@ jobs:
           if docker exec gev touch /probe 2>/dev/null; then echo 'root filesystem is writable'; exit 1; fi
           docker exec gev touch /data/probe
           if docker exec gev sh -c 'command -v git || command -v npm || command -v apt-get'; then echo 'unexpected tooling in the image'; exit 1; fi
-          leftovers="$(docker run --rm --entrypoint sh "$IMAGE" -c "find / -xdev \\( -name '.env' -o -name '.env.*' \\) -not -path '*/node_modules/*' -not -name '.env.example'")"
+          leftovers="$(docker run --rm --entrypoint sh "$IMAGE" -c "find / -xdev \\( -name '.env' -o -name '.env.*' \\) -not -path '*/node_modules/*' -not -name '.env.example' 2>/dev/null || true")"
           test -z "$leftovers" || { echo "env files in image: $leftovers"; exit 1; }
 
       - name: Save a key through Provider Settings and keep it
