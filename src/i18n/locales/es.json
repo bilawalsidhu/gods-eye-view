@@ -2952,5 +2952,10 @@
   "Layers": "Capas",
   "Search": "Buscar",
   "More": "Más",
-  "Panels": "Paneles"
+  "Panels": "Paneles",
+  "NOAA SWPC solar wind": "viento solar NOAA SWPC",
+  "extrapolated": "extrapolado",
+  "Solar wind feed unavailable": "Datos de viento solar no disponibles",
+  "Field lines not re-traced · previous lines kept": "Líneas de campo sin recalcular · se mantienen las anteriores",
+  "Magnetosphere": "Magnetosfera"
 }

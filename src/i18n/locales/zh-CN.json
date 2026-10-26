@@ -2818,5 +2818,10 @@
   "Layers": "图层",
   "Search": "搜索",
   "More": "更多",
-  "Panels": "面板"
+  "Panels": "面板",
+  "NOAA SWPC solar wind": "NOAA SWPC 太阳风",
+  "extrapolated": "外推",
+  "Solar wind feed unavailable": "太阳风数据源不可用",
+  "Field lines not re-traced · previous lines kept": "磁力线未重新追踪 · 保留先前的磁力线",
+  "Magnetosphere": "磁层"
 }

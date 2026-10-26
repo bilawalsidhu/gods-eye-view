@@ -42,7 +42,8 @@ test('the complete Realtime tool payload pins the manifest-generated layer relea
     // Globe rotation adds one motion; visual keyhole fit and explicit
     // reset guidance/defaults update only move_camera and mode descriptions.
     // Restore base descriptions; append only globe-rotation defaults and fit guidance.
-    '967b5a043b812e2f8c1e190fc571cf12b960c9d4486df736902221aab4d99cf6',
+    // The magnetosphere adds its toggle enum value and alias hint.
+    'e2260f734dc8763891c9a5d7063df6e506dffdee83b8f13fbba5f2b3128f0c03',
   );
 });
 

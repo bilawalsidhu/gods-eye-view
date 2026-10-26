@@ -269,6 +269,12 @@ const layers = [
     },
   },
   {
+    id: 'magnetosphere',
+    aliases: ['magnetic field', 'field lines', 'magnetopause'],
+    context: false,
+    noQuery: 'field-line model; no countable records',
+  },
+  {
     id: 'traffic',
     aliases: ['street traffic', 'road traffic', 'congestion'],
     context: false,

@@ -3019,5 +3019,10 @@
   "Layers": "Слои",
   "Search": "Поиск",
   "More": "Ещё",
-  "Panels": "Панели"
+  "Panels": "Панели",
+  "NOAA SWPC solar wind": "солнечный ветер NOAA SWPC",
+  "extrapolated": "экстраполяция",
+  "Solar wind feed unavailable": "Данные о солнечном ветре недоступны",
+  "Field lines not re-traced · previous lines kept": "Силовые линии не пересчитаны · оставлены прежние",
+  "Magnetosphere": "Магнитосфера"
 }
