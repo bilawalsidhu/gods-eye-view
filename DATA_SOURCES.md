@@ -36,6 +36,7 @@ How to read this:
 | **Esri World Imagery** (ArcGIS Online tile service)                   | The keyless satellite basemap — the default landing when no Google/ion credential is configured, and the "Esri Satellite" map stack | [Esri Master Agreement](https://www.esri.com/en-us/legal/terms/full-master-agreement): the public World Imagery service is usable in public-facing apps with attribution; no key is required for this classic endpoint, but Esri governs and can change access — an app at scale should review current ArcGIS Location Platform terms                 | "Powered by Esri — Source: Esri, Maxar, Earthstar Geographics, and the GIS User Community" (provider carries the service's own credit line) |
 | **USGS**                                                              | Earthquakes                                                                                                                         | U.S. public domain                                                                                                                                                                                                                                                                                                                                    | "Data courtesy of the U.S. Geological Survey"                                                                                               |
 | **Environment and Climate Change Canada** (MSC GeoMet OGC API) | Air quality (AQHI) — Canadian station observations | [ECCC Data Servers End-use Licence](https://eccc-msc.github.io/open-data/licence/readme_en/) (open, attribution required, no endorsement implied) | "Contains information licensed under the Environment and Climate Change Canada Data Servers End-use Licence" |
+| **UT Center for Space Research GRACE/GRACE-FO RL06.3 mascons** (`download.csr.utexas.edu/outgoing/grace/RL0603_mascons/`) | Mass Change (GRACE) layer: monthly mass change at the surface (groundwater, ice, large lakes) as cm of equivalent water, and CSR's 0.25° land mask for the land-only view. Keyless; the server checks once a day and keeps a one-degree reduction on disk, never the source files | No licence is published; CSR asks users to acknowledge the source and cite the two references below. GRACE (NASA/DLR) and GRACE-FO (NASA/GFZ) are public missions. Fetched at runtime only: nothing from CSR is committed | "UT Center for Space Research GRACE/GRACE-FO RL06.3 mascons", with the citations below ([notes](#gravity)) |
 | **NASA GIBS** (WMTS tiles + Worldview Snapshots) and **NASA CMR** (granule catalog) | Recent Imagery layer: HLS S30/L30 (Sentinel-2, Landsat 8/9) and VIIRS true-colour tiles draped on the map, per-day thumbnails and PNG exports; the HLS granule catalog (dates, cloud, footprints) for a selected box | U.S. public domain (NASA data); keyless, browser-direct (CORS `*`); no bulk use — one 30-day catalog query per box, tiles bounded to the box, six tile requests in flight | "We acknowledge the use of imagery provided by services from NASA's Global Imagery Browse Services (GIBS), part of NASA's Earth Science Data and Information System (ESDIS)." — [gibs.earthdata.nasa.gov](https://gibs.earthdata.nasa.gov), [HLS](https://lpdaac.usgs.gov/products/hlss30v002/) |
 | **NIFC WFIGS** (Wildland Fire Interagency Geospatial Services, ArcGIS feature service) | Fire Perimeters layer: current interagency wildfire incident perimeters, containment, and incident facts | U.S. public domain (interagency wildland-fire data published through the [NIFC Open Data portal](https://data-nifc.opendata.arcgis.com/)); fetched keyless through `/api/fire-perimeters` (5-minute server cache) with `exceededTransferLimit` paging | "Wildfire perimeters: National Interagency Fire Center (WFIGS)" |
 | **InciWeb** (inciweb.wildfire.gov)                                    | Per-incident "InciWeb ↗" card links to official incident pages (narratives, evacuation/closure notices) | U.S. government public incident information. Links are matched best-effort by incident name and state, with incident page origin and update times checked on selection. Same-origin `/api/fire-perimeters/inciweb` routes cache the catalog for 1 hour and publication metadata for 30 minutes; linked pages remain InciWeb content | "Incident information: InciWeb (inciweb.wildfire.gov)" |
@@ -118,6 +119,28 @@ The optional Local ADS-B layer and the broadcast-FM receiver use radio you recei
 - **Google Maps Platform.** You supply your own API key and are bound by [Google's ToS](https://cloud.google.com/maps-platform/terms). Google Maps Content (tiles, geocodes, places) **may not be cached, stored, rehosted, or committed** — this app only ever uses it live, which is the compliant pattern. The "Google" attribution is displayed on the globe and must stay visible. Restrict your key (see [SECURITY.md](SECURITY.md)).
 - **OpenSky Network.** Its license is **non-commercial**, and operational use of the REST API in a live product can require a prior written agreement with OpenSky — even for non-profit/government use. If you deploy this commercially, contact OpenSky for your own terms. The flights layer is a toggle and runs anonymously by default.
 - **adsb.lol flight fallback.** When OpenSky is unavailable and no last-good OpenSky response exists, the server requests a cached, capped 250 nm adsb.lol point snapshot around the current camera subpoint. This is regional observed context, not worldwide completeness; provenance is exposed in the Flights stats/context row. Military ICAOs remain reconciled through the existing dedicated military registry rather than duplicated.
+<a id="gravity"></a>
+
+- **Mass change (CSR GRACE/GRACE-FO mascons).** Keyless. CSR publishes the
+  whole RL06.3 record as one NetCDF file (about 115 MB, refreshed about monthly,
+  five weeks behind). `/api/gravity` downloads it at most once a day with a
+  conditional request, reduces the 0.25° grid to one-degree means (the mascons
+  are about 1° and the missions resolve about 300 km, so nothing real is lost)
+  and stores int16 half-centimetres; the source file is deleted after
+  conversion. CSR's static 0.25° land mask is fetched once the same way and
+  packed for the land-only view. Values are liquid-water-equivalent thickness
+  in cm relative to the 2004.000-2009.999 mean, with CSR's all-corrections
+  product (GIA, degree-1, C20/C30 replaced). Solutions are not calendar months
+  (a few overlap), so each is keyed by its first day. CSR's requested
+  acknowledgement: data downloaded from [www2.csr.utexas.edu/grace](https://www2.csr.utexas.edu/grace/),
+  citing Save, H., S. Bettadpur, and B.D. Tapley (2016), High resolution CSR
+  GRACE RL05 mascons, _J. Geophys. Res. Solid Earth_, 121,
+  [doi:10.1002/2016JB013007](https://doi.org/10.1002/2016JB013007), and Save,
+  Himanshu, 2020, "CSR GRACE and GRACE-FO RL06 Mascon Solutions v02",
+  [doi:10.15781/cgq9-nh24](https://doi.org/10.15781/cgq9-nh24). Reading the
+  NetCDF (HDF5) file uses [h5wasm](https://github.com/usnistgov/h5wasm),
+  NIST-developed software, loaded on the server only while converting.
+
 <a id="gnss-integrity"></a>
 
 - **GNSS integrity (adsb.lol).** A separate keyless point request samples a 250 nm

@@ -405,6 +405,10 @@ export const DATA_CREDITS = [
     html: 'Observed weather: <a href="https://nowcoast.noaa.gov/" target="_blank" rel="noopener">NOAA nowCOAST</a> · NWS/OAR MRMS radar; NESDIS GOES and global satellite partners. <a href="https://oceanservice.noaa.gov/disclaimer.html" target="_blank" rel="noopener">Source disclaimer</a>.',
   },
   {
+    key: 'gravity',
+    html: 'Mass change: <a href="https://www2.csr.utexas.edu/grace/RL06_mascons.html" target="_blank" rel="noopener">UT Center for Space Research</a> GRACE/GRACE-FO RL06.3 mascons (Save, 2020, doi:10.15781/cgq9-nh24; Save, Bettadpur and Tapley, 2016, doi:10.1002/2016JB013007) · GRACE: NASA/DLR; GRACE-FO: NASA/GFZ.',
+  },
+  {
     key: 'weather-cyclones',
     html: 'Cyclone advisories: <a href="https://www.nhc.noaa.gov/" target="_blank" rel="noopener">NOAA/NWS NHC / CPHC</a> · Atlantic and eastern/central North Pacific. Forecast center uncertainty, not storm size.',
   },

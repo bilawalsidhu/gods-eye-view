@@ -58,6 +58,18 @@ const layers = [
     noQuery: 'navigation-integrity cells; no countable analyst records',
   },
   {
+    id: 'gravity',
+    aliases: [
+      'gravity',
+      'grace',
+      'mass change',
+      'groundwater change',
+      'ice mass change',
+    ],
+    context: false,
+    noQuery: 'monthly gridded field; no countable records',
+  },
+  {
     id: 'flights',
     track: true,
     aliases: ['planes', 'aircraft', 'air traffic'],
