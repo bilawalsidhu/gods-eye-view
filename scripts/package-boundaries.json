@@ -3915,6 +3915,11 @@
     ],
     "external": []
   },
+  "share-link-path": {
+    "exports": ["./share/link-path"],
+    "modules": ["src/share/shareLinkPath.js"],
+    "external": []
+  },
   "ghostmaps": {
     "exports": ["./layers/ghostmaps"],
     "modules": [

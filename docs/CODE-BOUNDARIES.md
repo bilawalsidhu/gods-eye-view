@@ -601,6 +601,7 @@ state subscriptions retain their existing event contract.
 - `share/view-codec` is the share-link codec (`decodeShareView`,
   `encodeShareView`). It is pure (no DOM, no Cesium), so a host's server can
   read a `/share/<code>` link, for example to describe it in link previews.
+  `share/link-path` reads and builds the `/share/<code>` address itself.
 - `ui/visual-settings` owns style preferences, detection overrides, display inputs
   and IR cleanup. Its engine services and panel operations are explicit.
 - `ui/panel-chrome` owns disclosure, docking, collapse preferences and temporary
