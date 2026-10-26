@@ -306,6 +306,10 @@ catalog construction owns each instance.
 Wind animates one forecast without advancing forecast time. Separate Weather
 observation layers provide radar and satellite history; none claims measured cloud volume.
 Weather imagery releases its camera move listener on disable and registers it once on re-enable. Disabling also clears active imagery work.
+A staged weather frame with loaded tiles and no pending requests rechecks
+readiness on a single 150 ms wake timer instead of requesting every render.
+The existing readiness conditions and two settled frames still govern promotion;
+completion, cancellation, replacement and teardown clear the wake timer.
 Weather imagery drapes onto the globe basemap. On photorealistic 3D Tiles each
 observed product is instead a raised, translucent shell: one rectangle over the
 product bounds at a fixed height (global infrared 5.5 km, regional infrared
@@ -5391,11 +5395,21 @@ pins and share links already supply complete boxes.
 
 ## Auth + Launch
 
+Vite's development filesystem deny list excludes local `.gev-logs/` and
+`.gev-cache/` contents and the package checkout's root `dist/`, while allowing
+dependency `dist/` assets. Checkout glob characters are escaped. This does not
+apply to `public/` assets or built-preview serving.
+
+
 - Recommended launcher: `./scripts/dev-fresh.sh` (also: `dev-secure.sh` for stricter bindings, `dev-cctv.sh` for CCTV source-pack tuning)
 - A successful Pinokio install writes the owner-only `pinokio/.installed`
   marker. The nested launcher menu resolves that marker from its own directory:
   an absent marker exposes Install, a present marker exposes Start, and a
-  running server with a captured ready URL exposes Open God's Eye View.
+  running server with a captured ready URL exposes Open God's Eye View. That
+  default item uses Pinokio's `popout` option to open the system browser; the
+  Server item retains the launcher console. The app's framing headers stay
+  unchanged. This does not assume all Pinokio desktop versions enforce those
+  headers in their embedded view.
 - Build gate: `npm run build`
 - Network access: local-only by default (`HOST=localhost` in dev-fresh.sh); LAN is an explicit opt-in via `HOST=0.0.0.0` (launcher prints a key-exposure warning + LAN URL; see SECURITY.md)
 - OpenSky default mode: OAuth (`OPENSKY_AUTH_MODE=oauth`; `anon` works without credentials)

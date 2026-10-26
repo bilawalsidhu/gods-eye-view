@@ -14,6 +14,8 @@ const GLOBAL_TILE_MAXIMUM_LEVEL = 3;
 // Six decoded 2048×1024 canvases (8 MiB each) bound the cache below 50 MiB.
 const MAX_MOSAICS = 6;
 const MAX_PREFETCH_TILES = 8;
+// How often a staged frame waiting out its quiet interval rechecks readiness.
+export const READY_WAKE_MS = 150;
 
 /** Globe imagery: own at most a displayed and a staging frame. Use native Cesium
  * tile scheduling, projection and texture disposal; the application clock is never touched. */
@@ -126,6 +128,7 @@ function createGlobeRendering({
     frame.offRender?.();
     frame.offCamera?.();
     clearTimeout(frame.timeout);
+    clearTimeout(frame.wake);
     for (const request of frame.requests) request.cancel?.();
     frame.requests.clear();
     frame.retries.clear();
@@ -277,6 +280,8 @@ function createGlobeRendering({
         frame.offCamera?.();
         frame.offCamera = null;
         clearTimeout(frame.timeout);
+        clearTimeout(frame.wake);
+        frame.wake = null;
         frame.offAbort?.();
         if (ok) {
           lastError = null;
@@ -450,8 +455,20 @@ function createGlobeRendering({
             if (++settled >= 2) finish(true);
             else viewer.scene.requestRender();
           } else settled = 0;
-          if (incoming === frame && frame.pending === 0 && frame.loaded > 0)
-            viewer.scene.requestRender();
+          // Waiting out the quiet interval needs another readiness check
+          // later, not a render every frame: wake on a timer so the render
+          // governor's frame cap still holds while a frame is staged.
+          if (
+            incoming === frame &&
+            frame.pending === 0 &&
+            frame.loaded > 0 &&
+            !frame.wake
+          )
+            frame.wake = setTimeout(() => {
+              frame.wake = null;
+              if (!frame.closed && incoming === frame)
+                viewer.scene.requestRender();
+            }, READY_WAKE_MS);
         });
         viewer.scene.requestRender();
         onChange();
