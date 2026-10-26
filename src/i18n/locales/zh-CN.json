@@ -2818,5 +2818,29 @@
   "Layers": "图层",
   "Search": "搜索",
   "More": "更多",
-  "Panels": "面板"
+  "Panels": "面板",
+  "S2 GhostMaps": "S2 GhostMaps",
+  "Intel Picture": "情报态势图",
+  "Kinetic 30d": "近 30 天军事行动",
+  "Border Crisis": "边境危机",
+  "Iran Picture": "伊朗态势图",
+  "Iran Kinetic": "伊朗军事行动",
+  "Yemen FLOT": "也门前线",
+  "Latest Drop": "最新发布",
+  "GhostMaps file could not be read": "无法读取 GhostMaps 文件",
+  "GhostMaps catalog unavailable": "GhostMaps 目录不可用",
+  "Malformed GhostMaps catalog": "GhostMaps 目录格式无效",
+  "{count} source links ↗ · click card to open the first": {
+    "other": "{count} 个来源链接 ↗ · 点击卡片打开第一个"
+  },
+  "S2 · {name}": "S2 · {name}",
+  "Report": "报告",
+  "Open the source for {title}": "打开 {title} 的来源",
+  "LIVE · GitHub {commit} · {message} · checked every {seconds}s": "实时 · GitHub {commit} · {message} · 每 {seconds} 秒检查一次",
+  "GitHub {commit} · {message} · reconnecting for live updates": "GitHub {commit} · {message} · 正在重新连接以获取实时更新",
+  "Connecting to the S2 GhostMaps repository…": "正在连接 S2 GhostMaps 仓库…",
+  "{count} placemarks": {
+    "other": "{count} 个地标"
+  },
+  "S2 Underground publishes these KMZ products to GitHub. New uploads are detected within seconds and replace the previous edition automatically. Click a marker for its report.": "S2 Underground 在 GitHub 发布这些 KMZ 产品。新上传的内容会在数秒内被检测到，并自动替换旧版本。点击标记查看报告。"
 }

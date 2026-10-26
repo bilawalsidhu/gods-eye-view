@@ -42,7 +42,9 @@ test('the complete Realtime tool payload pins the manifest-generated layer relea
     // Globe rotation adds one motion; visual keyhole fit and explicit
     // reset guidance/defaults update only move_camera and mode descriptions.
     // Restore base descriptions; append only globe-rotation defaults and fit guidance.
-    '967b5a043b812e2f8c1e190fc571cf12b960c9d4486df736902221aab4d99cf6',
+    // S2 GhostMaps adds its layer id to the generated layer enums.
+    // Compact alias separators preserve the existing prompt budget.
+    '0128b5e28a8baf0d6466bfdbc6e7a80fd4bb32d0d22ccadfade2af641714f12a',
   );
 });
 
