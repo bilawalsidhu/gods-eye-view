@@ -1,4 +1,5 @@
 const DEFAULT_STALE_AFTER_MS = 5 * 60 * 1000;
+const MAX_FUTURE_OBSERVATION_SKEW_MS = 60 * 1000;
 
 function finiteTime(value) {
   if (Number.isFinite(value)) return Number(value);
@@ -148,8 +149,16 @@ export function summarizeCameraTrafficObservation(
 
   const ageMs = Math.max(0, Number(now) - observedAt);
   const staleLimit = Math.max(0, Number(staleAfterMs) || 0);
+  // A bad provider clock cannot make an observed camera contact look current.
+  const futureLimit = Number(now) + MAX_FUTURE_OBSERVATION_SKEW_MS;
+  const futureDated =
+    (finiteTime(record.observedAt) ?? -Infinity) > futureLimit ||
+    (finiteTime(record.windowStart) ?? -Infinity) > futureLimit ||
+    (finiteTime(record.windowEnd) ?? -Infinity) > futureLimit;
   const stale =
-    Boolean(snapshot.error || snapshot.state === 'stale') || ageMs > staleLimit;
+    Boolean(snapshot.error || snapshot.state === 'stale') ||
+    futureDated ||
+    ageMs > staleLimit;
   const partial = Boolean(snapshot.partial);
   const state = stale ? 'stale' : partial ? 'partial' : 'fresh';
   const rate = finiteNonNegative(record?.flow?.vehiclesPerMin);
