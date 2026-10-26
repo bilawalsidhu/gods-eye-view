@@ -14,6 +14,7 @@ import trafficLayer, {
   trafficFeedPresentation,
 } from './traffic.js';
 import { DataLayerManager, layerFeedState } from './manager.js';
+import { createRendering } from '../layers/traffic/rendering.js';
 
 /**
  * The app's live markers. Case-SENSITIVE on purpose: uppercase LIVE/GPS is
@@ -210,4 +211,88 @@ test('traffic can be destroyed before its first enable and destroyed repeatedly'
   assert.doesNotThrow(() => traffic.destroy(viewer));
   assert.doesNotThrow(() => traffic.destroy(viewer));
   assert.equal(traffic.getStats().count, 0);
+});
+
+test('CCTV transient contacts retain separate overlay identities and producer provenance', () => {
+  const state = {
+    _enabled: true,
+    _externalVehicleObservations: new Map(),
+    _externalObservationSequence: 0,
+    _externalObservationRevision: 0,
+    _externalObservationTimer: null,
+    _viewer: {
+      entities: {
+        add: (definition) => ({
+          id: definition.id,
+          label: { text: definition.label.text },
+        }),
+        remove: () => true,
+      },
+      scene: { requestRender() {} },
+    },
+  };
+  const renderer = createRendering({
+    state,
+    services: {},
+    parts: {},
+    source: {},
+  });
+  const contact = (x, cameraId) => ({
+    cameraId,
+    position: { x, y: 0, z: 0 },
+  });
+  try {
+    assert.equal(
+      renderer.replaceExternalVehicleObservations('cctv:camera-a', [
+        contact(1, 'camera-a'),
+        contact(2, 'camera-a'),
+      ]),
+      2,
+    );
+    assert.equal(
+      renderer.replaceExternalVehicleObservations('cctv:camera-b', [
+        contact(3, 'camera-b'),
+      ]),
+      1,
+    );
+    const first = renderer.getExternalVehicleDetectableObjects();
+    assert.equal(first.length, 3);
+    assert.equal(
+      new Set(first.map((item) => item.sourceId)).size,
+      3,
+      'the detection overlay must not collapse contacts from one camera',
+    );
+    assert.deepEqual(
+      first.map((item) => item.provenance.sourceId).sort(),
+      ['cctv:camera-a', 'cctv:camera-a', 'cctv:camera-b'],
+    );
+    assert.ok(
+      first.every(
+        (item) =>
+          item.sourceId !== item.provenance.sourceId &&
+          item.provenance.cameraId === item.provenance.sourceId.slice(5) &&
+          item.authority === 'observation-only' &&
+          item.observed === true,
+      ),
+    );
+    // Replacing a frame must not create a stable cross-frame vehicle identity.
+    assert.equal(
+      renderer.replaceExternalVehicleObservations('cctv:camera-a', [
+        contact(4, 'camera-a'),
+      ]),
+      1,
+    );
+    const second = renderer.getExternalVehicleDetectableObjects();
+    assert.equal(second.length, 2);
+    assert.equal(new Set(second.map((item) => item.sourceId)).size, 2);
+    assert.ok(
+      second
+        .filter((item) => item.provenance.sourceId === 'cctv:camera-a')
+        .every((item) => !first.some((prev) => prev.sourceId === item.sourceId)),
+    );
+    assert.equal(renderer.clearExternalVehicleObservations('cctv:camera-a'), 1);
+    assert.equal(renderer.getExternalVehicleDetectableObjects().length, 1);
+  } finally {
+    renderer.clearExternalVehicleObservations();
+  }
 });
