@@ -30,6 +30,10 @@ RUN npm ci
 # needs to write its dep-optimizer cache, so open up those two directories
 # rather than chowning a few hundred MB to a UID we cannot know at build time.
 RUN mkdir -p node_modules/.vite && chmod 777 node_modules node_modules/.vite
+# A named volume on /app/.gev-cache (see the README's prebuilt image) inherits
+# the owner of this directory; without it Docker creates the mount point as
+# root and the `node` user could not write the cache.
+RUN mkdir -p .gev-cache
 
 COPY --chown=node:node . .
 
