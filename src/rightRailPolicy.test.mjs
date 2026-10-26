@@ -9,7 +9,7 @@ test('desktop side rails hide collapsed panels in every HUD layout, never on pho
   const left = readFileSync(new URL('./ui/leftPanelRail.js', import.meta.url), 'utf8');
   const css = readStylesheet(new URL('../style.css', import.meta.url));
   for (const ui of [right, left]) {
-    assert.match(ui, /const isMobile = windowRef\.matchMedia\('\(max-width: 720px\)'\)\.matches/);
+    assert.match(ui, /const isMobile = windowRef\.matchMedia\(MOBILE_SHELL_MEDIA_QUERY\)\.matches/);
     assert.match(ui, /if \(exclusive && panel\.classList\.contains\('collapsed'\)\)\s*panel\.setAttribute\('aria-hidden', 'true'\)/);
     assert.doesNotMatch(ui, /hud\.variant === 'cyber'/);
   }

@@ -1,6 +1,6 @@
 /**
- * Phone shell for narrow viewports (≤720px). The globe stays full screen and a
- * bottom tab bar opens one sheet at a time; each sheet shows existing panels,
+ * Phone shell for narrow or short viewports. The globe stays full screen and
+ * a bottom tab bar opens one sheet at a time; each sheet shows existing panels,
  * which stay where they are in the rails while CSS presents them
  * (styles/mobile-shell.css). The command dock is the desktop one, above the
  * tab bar; while a keyboard is on screen the shell reports the height it
@@ -20,6 +20,7 @@ import {
   prefersCollapsed as prefersStateCollapsed,
   readPanelState,
 } from './rail/panelState.js';
+import { MOBILE_SHELL_MEDIA_QUERY } from './panelRailGeometry.js';
 
 import {
   MOBILE_SHELL_CLASS,
@@ -35,7 +36,7 @@ export {
   sheetForPanelId,
 } from './mobileSheets.js';
 
-export const MOBILE_SHELL_MEDIA_QUERY = '(max-width: 720px)';
+export { MOBILE_SHELL_MEDIA_QUERY } from './panelRailGeometry.js';
 /** On the page root while a phone keyboard covers part of the screen. */
 export const KEYBOARD_OPEN_CLASS = 'mobile-keyboard-open';
 export const MOBILE_TABS = Object.freeze([
