@@ -1,5 +1,15 @@
 # God's Eye View Current State
 
+## Draft-only saved-location records (not a mounted feature)
+
+The existing fork experiment for typed `fly_to_location` saved records rejects
+non-number or non-finite coordinates/ranges instead of coercing missing values
+to real positions. Loaded, persisted, edited and removed lists keep one row
+per id, taking the first valid row in newest-first order and retaining at most
+24. This helper remains unmounted: no Saved Places UI, location inference or
+new navigation action is enabled. Original request: #335 (gek0kuj0); Windows
+review: quanticsoul4772 on origin draft #833.
+
 ## Cyber HUD — September 23, 2026
 
 Display > HUD > Layout includes Cyber, also available through the HUD voice

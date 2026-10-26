@@ -1,5 +1,11 @@
 # Changelog
 
+- Draft #833: saved-location record validation now requires finite numeric
+  coordinates and optional ranges; stored duplicates keep the first valid
+  (newest-first) id across loading, persistence and edits. This is an unmounted
+  helper, not a released Saved Places UI. Preserves original #335 request by
+  gek0kuj0 and reviewer findings from quanticsoul4772.
+
 - Public Overpass instances are no longer used by default. Street Traffic
   roads come from TomTom flow tiles, OpenFreeMap vector tiles, or both, chosen
   on the layer row (TomTom / OSM / Hybrid) or with `?trafficRoads=`. With a

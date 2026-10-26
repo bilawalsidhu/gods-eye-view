@@ -11,8 +11,7 @@ function storageOrNull(injected) {
 }
 
 function finite(value) {
-  const number = Number(value);
-  return Number.isFinite(number) ? number : null;
+  return typeof value === 'number' && Number.isFinite(value) ? value : null;
 }
 
 function boundedText(value, maxLength) {
@@ -104,6 +103,20 @@ export function createSavedLocation(
   });
 }
 
+/** Preserve first-valid (newest-first) rows; persisted ids are unique. */
+function normalizedUniqueSavedLocations(locations, skipId = null) {
+  const unique = [];
+  const seen = new Set();
+  for (const raw of Array.isArray(locations) ? locations : []) {
+    const item = normalizeSavedLocation(raw);
+    if (!item || item.id === skipId || seen.has(item.id)) continue;
+    seen.add(item.id);
+    unique.push(item);
+    if (unique.length === MAX_SAVED_LOCATIONS) break;
+  }
+  return unique;
+}
+
 export function loadSavedLocations(storage) {
   const store = storageOrNull(storage);
   try {
@@ -111,10 +124,7 @@ export function loadSavedLocations(storage) {
     if (!raw) return [];
     const parsed = JSON.parse(raw);
     if (!Array.isArray(parsed)) return [];
-    return parsed
-      .map(normalizeSavedLocation)
-      .filter(Boolean)
-      .slice(0, MAX_SAVED_LOCATIONS);
+    return normalizedUniqueSavedLocations(parsed);
   } catch {
     return [];
   }
@@ -123,10 +133,7 @@ export function loadSavedLocations(storage) {
 export function persistSavedLocations(locations, storage) {
   const store = storageOrNull(storage);
   if (typeof store?.setItem !== 'function') return false;
-  const normalized = (Array.isArray(locations) ? locations : [])
-    .map(normalizeSavedLocation)
-    .filter(Boolean)
-    .slice(0, MAX_SAVED_LOCATIONS);
+  const normalized = normalizedUniqueSavedLocations(locations);
   try {
     store.setItem(SAVED_LOCATIONS_STORAGE_KEY, JSON.stringify(normalized));
     return true;
@@ -137,11 +144,8 @@ export function persistSavedLocations(locations, storage) {
 
 export function upsertSavedLocation(locations, value) {
   const next = normalizeSavedLocation(value);
-  const current = Array.isArray(locations)
-    ? locations.map(normalizeSavedLocation).filter(Boolean)
-    : [];
-  if (!next) return current.slice(0, MAX_SAVED_LOCATIONS);
-  return [next, ...current.filter((item) => item.id !== next.id)].slice(
+  if (!next) return normalizedUniqueSavedLocations(locations);
+  return [next, ...normalizedUniqueSavedLocations(locations, next.id)].slice(
     0,
     MAX_SAVED_LOCATIONS,
   );
@@ -149,8 +153,5 @@ export function upsertSavedLocation(locations, value) {
 
 export function removeSavedLocation(locations, id) {
   const target = String(id || '');
-  return (Array.isArray(locations) ? locations : [])
-    .map(normalizeSavedLocation)
-    .filter((item) => item && item.id !== target)
-    .slice(0, MAX_SAVED_LOCATIONS);
+  return normalizedUniqueSavedLocations(locations, target);
 }
