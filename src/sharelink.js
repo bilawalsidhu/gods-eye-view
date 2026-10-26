@@ -559,17 +559,27 @@ export class ShareLinkManager {
     this._scheduleUpdate();
   }
 
+  /**
+   * The share link for the current state, stamped with its creation time, or null
+   * before the camera has a position.
+   */
+  buildLink({ nowMs = Date.now() } = {}) {
+    const params = this._buildHashParams();
+    if (!params) return null;
+    params.set(SHARE_CREATED_AT_PARAM, String(Math.floor(nowMs / 1000)));
+    const url = new URL(window.location.href);
+    // ?lang is the sender's language override; the recipient keeps their own.
+    url.searchParams.delete('lang');
+    url.hash = params.toString();
+    return url.href;
+  }
+
   /** Copy a current-state snapshot with a copy-time timestamp. Returns true on success. */
   async copyLink({ nowMs = Date.now() } = {}) {
-    const params = this._buildHashParams();
-    if (!params) return false;
-    params.set(SHARE_CREATED_AT_PARAM, String(Math.floor(nowMs / 1000)));
-    const copiedUrl = new URL(window.location.href);
-    // ?lang is the sender's language override; the recipient keeps their own.
-    copiedUrl.searchParams.delete('lang');
-    copiedUrl.hash = params.toString();
+    const href = this.buildLink({ nowMs });
+    if (!href) return false;
     try {
-      await navigator.clipboard.writeText(copiedUrl.href);
+      await navigator.clipboard.writeText(href);
       return true;
     } catch {
       return false;
