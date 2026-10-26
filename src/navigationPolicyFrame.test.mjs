@@ -73,6 +73,17 @@ function trackableKinds() {
   return TRACKABLE_FAMILIES.map(({ kind }) => kind);
 }
 
+// The shell's camera layers pass the noun paired with each layer id in
+// CAMERA_LAYERS (`['weather-cyclones', 'cyclone']`) in layerBindings.js.
+function cameraLayerNouns() {
+  const source = readFileSync(join(SRC, 'ui/layerBindings.js'), 'utf8');
+  const block = source.match(/const CAMERA_LAYERS = Object\.freeze\(\[([\s\S]*?)\]\);/);
+  assert.ok(block, 'CAMERA_LAYERS is still in layerBindings.js');
+  return [...block[1].matchAll(/\[\s*'[^']+'\s*,\s*'([^']+)'\s*\]/g)].map(
+    (m) => m[1],
+  );
+}
+
 // Non-literal arguments: what each one can be. A wrapper's own `noun` (or all
 // its arguments) passes on; its default is a NOUN_LITERAL. Anything else is a
 // new dynamic noun: list its values here.
@@ -88,7 +99,7 @@ const DYNAMIC_NOUNS = new Map([
 ]);
 
 function collectNouns() {
-  const nouns = new Set();
+  const nouns = new Set(cameraLayerNouns());
   const unknown = [];
   for (const file of sourceFiles(SRC)) {
     const text = readFileSync(file, 'utf8');
@@ -121,6 +132,7 @@ test('every noun the callers pass has its own Cockpit refusal', () => {
     'route',
     'weather',
     'cyclone',
+    'disaster alert',
     'vessel',
     'fire',
     'frame',

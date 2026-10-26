@@ -2818,5 +2818,29 @@
   "Layers": "图层",
   "Search": "搜索",
   "More": "更多",
-  "Panels": "面板"
+  "Panels": "面板",
+  "Exit cockpit to fly to a disaster alert": "请先退出座舱，再飞往灾害警报",
+  "GDACS alerts are automatic estimates of likely humanitarian impact. They do not replace official information or warnings from local or national disaster management authorities.": "GDACS 警报是对可能人道主义影响的自动估计，不能取代地方或国家灾害管理部门发布的官方信息或预警。",
+  "Automatic impact estimates, not official warnings": "自动影响估计，并非官方预警",
+  "{from} to {to}": "{from} 至 {to}",
+  "{level} alert": "{level}警报",
+  "Episode no longer marked current by GDACS": "GDACS 已不再将此阶段标为当前事件",
+  "No data this refresh: {types}": "本次刷新无数据：{types}",
+  "Some feeds are cached copies": "部分数据源为缓存副本",
+  "Last refresh failed: {error}": "上次刷新失败：{error}",
+  "{count} events": {
+    "other": "{count} 个事件"
+  },
+  "No GDACS events on the map": "地图上没有 GDACS 事件",
+  "GDACS alerts unavailable": "GDACS 警报不可用",
+  "Loading GDACS alerts…": "正在加载 GDACS 警报…",
+  "GDACS report ↗": "GDACS 报告 ↗",
+  "Open the GDACS report for {name} in a new tab": "在新标签页中打开 {name} 的 GDACS 报告",
+  "GDACS events, most severe first": "GDACS 事件，按严重程度从高到低排列",
+  "Floods, volcanoes and droughts from the GDACS map feeds. Earthquakes, wildfires and tropical cyclones have their own layers. Select an event on the map, or choose one in the list to select it and move the camera. Click empty map space to clear the selection. Points mark the event centre GDACS publishes, not the affected area.": "来自 GDACS 地图数据源的洪水、火山和干旱事件。地震、野火和热带气旋有各自的图层。在地图上点选事件，或在列表中点选事件，即可选中并移动相机。点击空白地图区域可清除选择。圆点标注的是 GDACS 发布的事件中心，不代表受影响区域。",
+  "Flood": "洪水",
+  "Volcano": "火山",
+  "Drought": "干旱",
+  "Orange": "橙色",
+  "Disaster Alerts": "灾害警报"
 }
