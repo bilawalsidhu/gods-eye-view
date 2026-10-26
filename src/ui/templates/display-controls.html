@@ -106,19 +106,15 @@
       </div>
     </div>
     <div class="pp-toggle-group">
-      <button class="pp-toggle-btn active" id="scope-toggle" title="Scope — the circular viewport mask" aria-pressed="true" data-i18n-title>
+      <label class="pp-toggle-btn pp-scope-toggle" title="Scope — the circular viewport mask" data-i18n-title>
         <span class="pp-icon material-symbols-outlined" aria-hidden="true">adjust</span>
         <span class="pp-label" data-i18n>Scope</span>
-      </button>
+        <input type="checkbox" id="scope-toggle" checked />
+      </label>
       <div class="pp-slider-row visible" id="scope-slider-row">
         <span class="pp-slider-mini-label" data-i18n>Feather</span>
-        <!-- Feather starts at an 11% soft scope-mask edge (owner final lock
-             2026-08-24, superseding the 08-22 hard-crop and 08-23 8% rulings);
-             mirrors SCOPE_FEATHER_RATIO_DEFAULT in src/scopeMask.js. Feather
-             softens the black mask edge; label fading is the separate Fade
-             slider. -->
-        <input type="range" class="gev-quantitative-slider pp-slider" id="scope-feather-slider" min="0" max="100" value="11" aria-label="Scope edge feather" title="Scope edge feather as a percentage of the keyhole radius" data-i18n-aria-label data-i18n-title />
-        <span class="pp-slider-value" id="scope-feather-value">11%</span>
+        <input type="range" class="gev-quantitative-slider pp-slider" id="scope-feather-slider" min="0" max="200" value="100" aria-label="Scope edge feather" title="Scope edge feather as a percentage of the keyhole radius" data-i18n-aria-label data-i18n-title />
+        <span class="pp-slider-value" id="scope-feather-value">100%</span>
       </div>
     </div>
     <div class="pp-toggle-group">

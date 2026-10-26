@@ -226,3 +226,44 @@ The protocol follows OpenAI's documentation reviewed on 2026-10-23:
 [models and inference](https://developers.openai.com/siwc/token-sharing-open-source/models-and-inference),
 [preview restrictions](https://developers.openai.com/siwc/token-sharing-open-source/preview-limitations),
 and [function namespaces](https://developers.openai.com/api/docs/guides/function-calling).
+
+## Voice panel integration (2026-10-26)
+
+Integration branch: `integration/check-1299-1331-20261026`, starting at
+`ded9dc656eac6e3216d5bcb49b75d56ee397eb0c` and merging upstream main
+`fefd5cdcf14b80cfb8ac3c7c60f9a489aa2b3c8e`, including #1299. The existing
+#976 dependency and its commits remain in the ancestry. Voice panel owners,
+action implementations, schemas and preference semantics from main are retained.
+
+A scripted model reproduced a typed-console failure: it could narrate success
+before a panel tool ran, and could claim success in another inference round after
+the tool returned unavailable, invalid or cancelled. COMMAND now suppresses that
+pre-execution narration and ends the request locally on a panel/timeout refusal.
+It records complete tool results, skips remaining sibling calls, and permits a
+fresh explicit command. A literal unnamed `settings` target asks which panel was
+intended. Ordinary natural-language clarification remains the model's job under
+the shared manual; fixture routing does not certify a real model's interpretation.
+
+`src/agent/voicePanelIntegration.test.mjs` uses the shipped agent loop and shared
+runner with actual voice control/card/preference owners and a minimal DOM:
+
+- Open/close Voice Preview, Voice Settings and the Provider Settings dispatch;
+  direct Cockpit exit/reveal, with the voice connection idle throughout.
+- Exact timeout values 0/1/7/60, invalid values, browser-storage readback, Preview
+  disabled, and independent agent provider choice/history/reset.
+- Unavailable hosts, disposed panels, manual presentation changes during pending
+  Cockpit exit, keyboard tab selection/Escape/focus restoration and STOP before
+  reveal/sibling effects. A panel cancellation does not undo an exited Cockpit.
+- A deliberately false model confirmation cannot turn a refused tool into an
+  announced success or a retry. The actual provider dialog lifecycle still needs
+  the browser gate; the unit fixture supplies its open/close button callbacks.
+
+Browser probe: `node scripts/qa-agent-voice-panel.mjs`. It composes the shipped
+console, voice panel, provider dialog and runner, with synthetic provider status
+and scripted inference at 1440x1000 and 800x800. Chromium could not start in this
+execution environment: `process_singleton_posix.cc`, `socket() failed: Operation
+not permitted`. No page loaded, so this is **blocked**, not a browser pass.
+Keyboard/focus assertions in the minimal DOM are not graphical evidence. The
+probe is committed for rerun in an environment that permits Chromium. Live
+ChatGPT/OAuth, actual microphone, audio, physical devices and native Windows
+remain outside this validation.

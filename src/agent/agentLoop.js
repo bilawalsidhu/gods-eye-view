@@ -105,6 +105,33 @@ function cameraRefusalReply(name, args, result) {
   return 'The requested globe rotation did not start. Check the camera tool result. No further actions were run for this request.';
 }
 
+// Panel operations can be unavailable or lose ownership during a Cockpit exit.
+// Keep refusals local, just like camera refusals, so another model round cannot
+// turn them into a success claim or retry after a newer manual choice.
+function isPanelCommand(name, args) {
+  return (
+    name === 'set_panel_open' ||
+    name === 'set_voice_inactivity_timeout' ||
+    (name === 'control_cockpit' && Boolean(args?.voicePanel))
+  );
+}
+function panelRefusalReply(name, args, result) {
+  if (!isPanelCommand(name, args) || (result?.ok === true && !result.cancelled))
+    return null;
+  if (
+    name === 'set_panel_open' &&
+    (args?.panelId || args?.panel) === 'settings'
+  )
+    return 'Voice settings or Provider settings?';
+  const prefix = result?.cockpitExited ? 'Cockpit exited. ' : '';
+  return (
+    prefix +
+    (name === 'set_voice_inactivity_timeout'
+      ? 'Voice inactivity was not changed. The control is unavailable or the requested value is invalid; use a whole number from 0 to 60 minutes.'
+      : 'The requested panel was not changed. Its controls are unavailable in this view, or a newer choice cancelled the operation.')
+  );
+}
+
 /**
  * Result recorded for a call that cancellation reached before it started.
  *
@@ -258,12 +285,14 @@ function createAgentSession({
           usage = addUsage(usage, data.usage);
           const toolCalls = Array.isArray(data.toolCalls) ? data.toolCalls : [];
           if (!toolCalls.length) controller.signal.throwIfAborted();
-          const cameraCalls = toolCalls.some((call) =>
-            ['move_camera', 'zoom_to_globe'].includes(call.name),
+          const guardedCalls = toolCalls.some(
+            (call) =>
+              ['move_camera', 'zoom_to_globe'].includes(call.name) ||
+              isPanelCommand(call.name, call.args),
           );
-          // Camera narration before execution may claim a move that is refused.
+          // Narration before execution may claim an action that is refused.
           messages.push(
-            cameraCalls ? { ...data.message, content: '' } : data.message,
+            guardedCalls ? { ...data.message, content: '' } : data.message,
           );
           for (const warning of Array.isArray(data.warnings)
             ? data.warnings
@@ -285,7 +314,7 @@ function createAgentSession({
           // is not silent while several tools run.
           if (
             data.message?.content &&
-            !cameraCalls &&
+            !guardedCalls &&
             !controller.signal.aborted
           ) {
             onEvent({
@@ -294,7 +323,7 @@ function createAgentSession({
             });
           }
 
-          let cameraReply = null;
+          let refusalReply = null;
           for (const [index, call] of toolCalls.entries()) {
             // Checked at the top of every iteration, so this covers both the
             // first dispatch and the gap after each action's await: an abort
@@ -321,13 +350,13 @@ function createAgentSession({
               name: call.name,
               args: call.args,
             });
-            const result = cameraReply
+            const result = refusalReply
               ? {
                   ok: false,
                   action: call.name,
                   skipped: true,
                   error:
-                    'Not run: the camera request was refused or its reset failed.',
+                    'Not run: a camera or panel request was refused or cancelled.',
                 }
               : await runActionSafely(
                   runAction,
@@ -335,7 +364,9 @@ function createAgentSession({
                   call.args,
                   controller.signal,
                 );
-            cameraReply ||= cameraRefusalReply(call.name, call.args, result);
+            refusalReply ||=
+              cameraRefusalReply(call.name, call.args, result) ||
+              panelRefusalReply(call.name, call.args, result);
             onEvent({
               type: AGENT_EVENTS.TOOL_RESULT,
               name: call.name,
@@ -344,12 +375,12 @@ function createAgentSession({
             messages.push(toolResultMessage(call.id, result));
           }
           controller.signal.throwIfAborted();
-          if (cameraReply) {
-            const message = { role: 'assistant', content: cameraReply };
+          if (refusalReply) {
+            const message = { role: 'assistant', content: refusalReply };
             messages.push(message);
             onEvent({ type: AGENT_EVENTS.MESSAGE, message });
             onEvent({ type: AGENT_EVENTS.DONE, rounds: round + 1 });
-            return { ok: false, content: cameraReply, rounds: round + 1 };
+            return { ok: false, content: refusalReply, rounds: round + 1 };
           }
         }
 

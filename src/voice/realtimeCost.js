@@ -46,6 +46,17 @@ export class RealtimeCost {
    */
   syncCostUi() {
     const state = this.costTracker.state();
+    const syncWarning = () => {
+      const warning = this.ui?.costWarning;
+      const value = this.ui?.costValue;
+      if (!warning || !value) return;
+      warning.hidden = !['warn', 'cap', 'unknown'].includes(
+        value.dataset.level,
+      );
+      warning.textContent = warning.hidden ? '' : value.textContent;
+      warning.title = value.title;
+      warning.dataset.level = value.dataset.level;
+    };
     const pendingTier = resolveVoiceModel(this.voiceTier).tier;
     const isMini = pendingTier === 'mini';
     if (this.ui?.tierButton) {
@@ -91,6 +102,7 @@ export class RealtimeCost {
                 'Usage is incomplete because a response was still in flight when the session ended.',
               )
             : '');
+        syncWarning();
         return;
       }
       this.ui.costValue.hidden = false;
@@ -114,6 +126,7 @@ export class RealtimeCost {
               'Estimate is incomplete — a response was still in flight when the session ended, so its usage was never reported.',
             )
           : '');
+      syncWarning();
     }
   }
 

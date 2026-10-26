@@ -152,7 +152,7 @@ export function localAdsbCardModel(
       t('ALT {altitude} FT · GS {speed} KT · TRK {track}', {
         altitude: grouped(altitude),
         speed: speed === null ? DASH : speed,
-        track: track === null ? DASH : `${track}°`,
+        track: track === null ? DASH : `${track % 360}°`,
       }),
       vertical === null
         ? t('V/S {rate}', { rate: DASH })

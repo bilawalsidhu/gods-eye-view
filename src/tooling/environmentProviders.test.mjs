@@ -158,6 +158,7 @@ test('terrain middleware migrates valid legacy disk points without fabricating o
 test('traffic middleware preserves keyless mode, caching, stale budget fallback and UTC rollover', async (t) => {
   isolate(t, { TOMTOM_API_KEY: '', TOMTOM_DAILY_TILE_BUDGET: '1' });
   let now = Date.UTC(2026, 8, 12, 12);
+  const fetchedAt = String(now);
   t.mock.method(Date, 'now', () => now);
   let calls = 0;
   t.mock.method(globalThis, 'fetch', async (raw) => {
@@ -182,10 +183,10 @@ test('traffic middleware preserves keyless mode, caching, stale budget fallback 
   assert.equal(json(await request('/status')).dailyCount, 1);
   assert.equal(calls, 1);
   now += 120001;
-  assert.equal(
-    (await request('/flow/8/1/1.pbf')).headers['x-tomtom-cache'],
-    'STALE-BUDGET',
-  );
+  const staleTile = await request('/flow/8/1/1.pbf');
+  assert.equal(staleTile.headers['x-tomtom-cache'], 'STALE-BUDGET');
+  // The stale copy still says when TomTom produced it.
+  assert.equal(staleTile.headers['x-tomtom-fetched-at'], fetchedAt);
   assert.equal((await request('/flow/8/2/1.pbf')).status, 429);
   assert.equal(calls, 1);
   now += 86400000;

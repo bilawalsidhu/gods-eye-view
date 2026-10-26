@@ -5,6 +5,7 @@ import {
   normalizeAllocationStrategy,
 } from './data/detectionPolicy.js';
 import { clampScopeTerminusPct } from './scopeMask.js';
+import { clampScopeFeatherPct } from './scopeMaskPolicy.js';
 import {
   decodeLayerStateParams,
   encodeLayerStateParams,
@@ -112,10 +113,7 @@ export class ShareLinkManager {
     this._detectionOutsideOpacityPct = 1;
     this._celestialRingEnabled = false;
     this._scopeEnabled = true;
-    // Feather opens on a soft 11% scope-mask edge (owner final lock 2026-08-24,
-    // superseding the 08-22 hard-crop and 08-23 8% rulings) — mirrors
-    // SCOPE_FEATHER_RATIO_DEFAULT in scopeMask.js and the slider's markup value.
-    this._scopeFeatherPct = 11;
+    this._scopeFeatherPct = 100;
     // null = the altitude-adaptive terminus (the default). A number pins the
     // outside-fill opacity as a percent, 94..100. (`sce`, 2026-08-17)
     this._scopeTerminusPct = null;
@@ -124,6 +122,13 @@ export class ShareLinkManager {
     this._panelStateProvider = null;
     this._styleParamStateProvider = null;
     this._initialRestorePending = false;
+    // Each incoming share (start-up or a later hash navigation) gets a token;
+    // only the newest one may release URL-write suppression.
+    this._restoreToken = 0;
+    // The hash this page last read or wrote. A location change back to it is
+    // the app's own state, never an incoming share.
+    this._knownHash = null;
+    this._unwatchNavigation = null;
     this._restoreAuthority = {
       visual: 0,
       map: 0,
@@ -154,6 +159,15 @@ export class ShareLinkManager {
    */
   parseInitialHash() {
     const hash = window.location.hash.slice(1);
+    this._knownHash = hash;
+    const state = this._parseShareHash(hash);
+    if (!state) return null;
+    this._beginIncomingRestore(state);
+    return state;
+  }
+
+  /** Parse one hash without side effects. Returns null unless it is a share. */
+  _parseShareHash(hash) {
     if (!hash) return null;
 
     const params = new URLSearchParams(hash);
@@ -227,10 +241,7 @@ export class ShareLinkManager {
       // (`_scopeFeatherPct` in the constructor tracks the default: that one
       // mirrors live state for the link this session generates, so it must match
       // the mask, not the archive.)
-      scopeFeatherPct: Math.max(
-        0,
-        Math.min(100, Math.round(parseOr(params.get('scf'), 35))),
-      ),
+      scopeFeatherPct: clampScopeFeatherPct(parseOr(params.get('scf'), 35)),
       // Absent (or non-numeric) `sce` = adaptive (null), the default behavior;
       // a value pins the terminus opacity percent, clamped into the SUPPORTED
       // 94..100 band. `sce=0` used to survive as a sub-94 terminus — a hole in
@@ -247,15 +258,55 @@ export class ShareLinkManager {
       panelState: decodePanelStateParams(params),
       sharedAtMs: decodeShareCreatedAtMs(params),
     };
+    return state;
+  }
+
+  /** Reserve restore lanes and hold URL writes for one incoming share. */
+  _beginIncomingRestore(state) {
     state.restoreAuthority = {
       visual: this._restoreAuthority.visual,
       map: this._restoreAuthority.map,
       panels: new Map(this._restoreAuthority.panels),
     };
-
-    // Hold URL writes until the complete incoming state has been restored.
+    state.restoreToken = ++this._restoreToken;
+    // Hold URL writes until the complete incoming state has been restored. A
+    // debounced write of the previous view must not land over the new link.
     this._initialRestorePending = true;
-    return state;
+    clearTimeout(this._debounceTimer);
+    this._debounceTimer = null;
+  }
+
+  /**
+   * Restore a share link opened in this tab after start-up: a pasted address,
+   * a followed link, or Back/Forward. The app's own replaceState writes never
+   * fire these events, and a hash equal to the last one read or written is
+   * ignored anyway, so only a genuinely different incoming share restores.
+   */
+  watchNavigation(onNavigate) {
+    this._unwatchNavigation?.();
+    if (this._destroyed || typeof onNavigate !== 'function') return;
+    const target = globalThis.window;
+    if (typeof target?.addEventListener !== 'function') return;
+    const handler = () => this._handleLocationChange(onNavigate);
+    target.addEventListener('hashchange', handler);
+    target.addEventListener('popstate', handler);
+    this._unwatchNavigation = () => {
+      target.removeEventListener('hashchange', handler);
+      target.removeEventListener('popstate', handler);
+      this._unwatchNavigation = null;
+    };
+  }
+
+  _handleLocationChange(onNavigate) {
+    if (this._destroyed) return;
+    const hash = window.location.hash.slice(1);
+    // Back/Forward fires both popstate and hashchange for one entry.
+    if (hash === this._knownHash) return;
+    this._knownHash = hash;
+    const state = this._parseShareHash(hash);
+    if (!state) return;
+    this._beginIncomingRestore(state);
+    onNavigate(state);
   }
 
   /**
@@ -379,9 +430,13 @@ export class ShareLinkManager {
     };
   }
 
-  /** Release initial hash suppression only after every restore owner settles. */
-  completeInitialRestore() {
+  /**
+   * Release hash suppression only after every restore owner settles. A token
+   * from a superseded share restore leaves the newer one holding the URL.
+   */
+  completeInitialRestore(restoreToken = this._restoreToken) {
     if (!this._initialRestorePending) return;
+    if (restoreToken !== this._restoreToken) return;
     this._initialRestorePending = false;
     this._scheduleUpdate();
   }
@@ -494,10 +549,7 @@ export class ShareLinkManager {
     if (typeof extras.scopeEnabled === 'boolean')
       this._scopeEnabled = extras.scopeEnabled;
     if (typeof extras.scopeFeatherPct === 'number') {
-      this._scopeFeatherPct = Math.max(
-        0,
-        Math.min(100, Math.round(extras.scopeFeatherPct)),
-      );
+      this._scopeFeatherPct = clampScopeFeatherPct(extras.scopeFeatherPct);
     }
     if (extras.scopeTerminusPct === null) this._scopeTerminusPct = null;
     else if (typeof extras.scopeTerminusPct === 'number') {
@@ -536,11 +588,9 @@ export class ShareLinkManager {
     if (!params) return;
     // The hash belongs to this page's address, not the document base the
     // app may load under.
-    history.replaceState(
-      null,
-      '',
-      new URL(`#${params.toString()}`, window.location.href).href,
-    );
+    const url = new URL(`#${params.toString()}`, window.location.href);
+    this._knownHash = url.hash.slice(1);
+    history.replaceState(null, '', url.href);
   }
 
   /** Build a deterministic snapshot without mutating history. */
@@ -623,6 +673,7 @@ export class ShareLinkManager {
     this._debounceTimer = null;
     this._removeCameraChanged?.();
     this._removeCameraChanged = null;
+    this._unwatchNavigation?.();
     this._layerStateProvider = null;
     this._panelStateProvider = null;
     this._styleParamStateProvider = null;

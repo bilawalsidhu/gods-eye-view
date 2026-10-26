@@ -1,5 +1,6 @@
 import { readRealtimeSource } from './testSupport/readRealtimeSource.mjs';
 import { GEV_REALTIME_TOOLS } from '../server/providers/openai/tools.js';
+import { realtimeInstructions } from '../server/providers/openai/instructions.js';
 import { readShellSource } from './testSupport/readShellSource.mjs';
 import { expandApplicationHtml } from '../build/application-html.js';
 import { readLayerSource } from './testSupport/readLayerSource.mjs';
@@ -25,13 +26,14 @@ const css = readStylesheet(new URL('../style.css', import.meta.url));
 
 function realtimeTools() { return GEV_REALTIME_TOOLS; }
 
-test('Realtime schema exposes the authoritative 30-tool inventory', () => {
+test('Realtime schema exposes the authoritative 31-tool inventory', () => {
   const tools = realtimeTools();
-  assert.equal(tools.length, 30);
+  assert.equal(tools.length, 31);
   const names = tools.map((tool) => tool.name);
-  assert.equal(new Set(names).size, 30, 'tool names are unique');
+  assert.equal(new Set(names).size, 31, 'tool names are unique');
   assert.ok(names.includes('set_context_mode'));
   assert.ok(names.includes('control_cockpit'));
+  assert.ok(names.includes('set_voice_inactivity_timeout'));
   assert.ok(names.includes('select_nearest_aircraft'));
   assert.ok(names.includes('control_radio'));
   assert.ok(names.includes('next_satellite_pass'));
@@ -77,13 +79,12 @@ test('the counting contract is stated in the Realtime instructions', () => {
 });
 
 test('Context panel opening stays distinct from Contacts activation', () => {
-  const start = voice.indexOf("'For requests to open, show, reveal, or focus a menu/panel");
-  assert.ok(start >= 0, 'panel-routing instruction is missing');
-  const text = voice.slice(start, voice.indexOf('\n', start));
-  assert.match(text, /"Open Context" means only set_panel_open/);
-  assert.match(text, /does not activate a Context sub-mode/);
-  assert.match(text, /"Open Contacts" means set_context_mode\{mode:"contacts"\}/);
-  assert.match(text, /expands the parent Context panel before activating Contacts/);
+  const text = realtimeInstructions().split('\n').find(line => line.startsWith('Panels:'));
+  assert.ok(text, 'panel-routing instruction is missing');
+  assert.match(text, /"Open Context" is only set_panel_open\{panelId:"global-context-panel",open:true\}/);
+  assert.match(text, /opening Context or selecting\/viewing an aircraft never enters them/);
+  assert.match(text, /"Open Contacts" is set_context_mode contacts/);
+  assert.match(text, /expands Context itself/);
 });
 
 test('nearest-aircraft selection stays out of Contacts and Cockpit', () => {
@@ -99,14 +100,14 @@ test('nearest-aircraft selection stays out of Contacts and Cockpit', () => {
   assert.match(text, /nearest airborne result/);
   assert.match(text, /healthy fallback feed is valid data/i);
   assert.match(text, /Do not also call fly_to_location, set_layer_visibility, analyst_query, track_entity/);
-  assert.match(text, /SELECT\/FIND never implies Contacts or Cockpit/);
+  const routing = realtimeInstructions().split('\n').find(line => line.startsWith('Panels:'));
+  assert.match(routing, /Contacts, Space Missions and Cockpit need explicit naming/);
   assert.match(text, /set_context_mode, or control_cockpit/);
 
   const byName = new Map(realtimeTools().map((tool) => [tool.name, tool]));
-  assert.match(byName.get('set_context_mode').description, /explicitly requests/);
-  assert.match(byName.get('set_context_mode').description, /selecting an aircraft does not imply Context/i);
-  assert.match(byName.get('control_cockpit').description, /explicitly requests Cockpit/);
-  assert.match(byName.get('control_cockpit').description, /must not enter Cockpit/);
+  assert.match(byName.get('set_context_mode').description, /only when explicitly requested/);
+  assert.match(routing, /selecting\/viewing an aircraft never enters them/);
+  assert.match(byName.get('control_cockpit').description, /Explicit Cockpit requests only/);
   assert.equal(
     byName.get('fly_to_location').parameters.properties.waitForArrival.type,
     'boolean',
@@ -117,7 +118,6 @@ test('nearest-aircraft selection stays out of Contacts and Cockpit', () => {
   assert.match(nearest.description, /Atomically/);
   assert.match(nearest.description, /exclude on-ground records/);
   assert.match(nearest.description, /fallback feeds remain usable/);
-  assert.match(nearest.description, /does not open Contacts or Cockpit/);
 });
 
 test('the two Context/Cockpit tools pin their enums and required arguments', () => {
@@ -153,7 +153,7 @@ test('the edited existing tools changed exactly as intended', () => {
   const panel = byName.get('set_panel_open');
   assert.deepEqual(
     panel.parameters.properties.panelId.enum,
-    ['data-panel', 'location-bar', 'control-panel', 'cctv-panel', 'radio-panel', 'scene-panel', 'pp-toggles', 'global-context-panel', 'weather-panel', 'recent-imagery-panel'],
+    ['data-panel', 'location-bar', 'control-panel', 'cctv-panel', 'radio-panel', 'scene-panel', 'pp-toggles', 'global-context-panel', 'weather-panel', 'recent-imagery-panel', 'voice-settings', 'voice-preview', 'provider-settings'],
   );
   assert.deepEqual(panel.parameters.required, ['panelId', 'open']);
 
@@ -183,6 +183,7 @@ test('no unchanged Realtime tool definition drifts silently', () => {
     'set_context_mode',
     'control_cockpit',
     'set_panel_open',
+    'set_voice_inactivity_timeout',
     'get_current_view_state',
     'fly_to_location',
     'select_nearest_aircraft',

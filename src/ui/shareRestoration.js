@@ -80,6 +80,10 @@ export class ShareRestoration {
     this._initialShareRestoreTimeout = null;
     this._layerStateCoordinator = null;
     this._layerStateRestorePromise = null;
+    // Bumped by every share opened after start-up; an older restore that
+    // settles later must neither apply follow-up work nor release URL writes.
+    this._shareRestoreGeneration = 0;
+    this._navigatedShareRestoreActive = false;
   }
   attachLinks(shareLinkManager) {
     this.shareLinkManager = shareLinkManager;
@@ -108,42 +112,12 @@ export class ShareRestoration {
         const applyCamera =
           Number.isInteger(generation) &&
           this.navigation._reassertNavigationHandoff(generation);
-        void (async () => {
-          try {
-            const share = await this.shareLinkManager.applyState(savedState, {
-              applyCamera,
-              navigationToken: generation,
-            });
-            const layers = await (this._layerStateRestorePromise ||
-              Promise.resolve([]));
-            const tracking =
-              share.camera === 'applied'
-                ? await this._layerStateCoordinator?.restoreShareTrackingSelection?.()
-                : {
-                    status: 'superseded',
-                    cleared:
-                      this._layerStateCoordinator?.cancelPendingShareTracking?.(
-                        'shared-camera-superseded',
-                        { clearSelection: true },
-                      ) === true,
-                  };
-            this.shareLinkManager.completeInitialRestore();
-            this._settleInitialShareRestore({
-              status: 'settled',
-              share,
-              layers,
-              tracking,
-            });
-          } catch (error) {
-            this.shareLinkManager.completeInitialRestore();
-            this._settleInitialShareRestore({
-              status: 'failed',
-              error: String(error?.message || error),
-              share: null,
-              layers: [],
-            });
-          }
-        })();
+        void this._runShareRestore(savedState, {
+          applyCamera,
+          navigationToken: generation,
+          layersPromise: this._layerStateRestorePromise,
+          settle: (result) => this._settleInitialShareRestore(result),
+        });
       }, 1500);
     } else {
       this.syncShareState();
@@ -155,7 +129,8 @@ export class ShareRestoration {
       if (
         this._disposed ||
         !this._hasShareState ||
-        !this._resolveInitialShareRestore
+        (!this._resolveInitialShareRestore &&
+          !this._navigatedShareRestoreActive)
       )
         return;
       stampInitialShareGesture((options) =>
@@ -176,6 +151,122 @@ export class ShareRestoration {
         passive: true,
       },
     );
+    // A different share opened in this tab later (pasted address, link,
+    // Back/Forward) runs the same restore as start-up.
+    this.shareLinkManager?.watchNavigation?.((state) =>
+      this._restoreNavigatedShare(state),
+    );
+  }
+
+  /**
+   * Apply one incoming share: camera, visual, map and panels, then layers and
+   * any shared Follow. Only the newest share may finish: a superseded run
+   * stops before follow-up work and leaves URL writes suppressed for the
+   * newer one.
+   */
+  async _runShareRestore(
+    state,
+    { applyCamera, navigationToken, layersPromise, settle },
+  ) {
+    const generation = this._shareRestoreGeneration;
+    const current = () =>
+      !this._disposed && generation === this._shareRestoreGeneration;
+    try {
+      const share = await this.shareLinkManager.applyState(state, {
+        applyCamera,
+        navigationToken,
+      });
+      const layers = await (layersPromise || Promise.resolve([]));
+      if (!current()) return;
+      const tracking =
+        share.camera === 'applied'
+          ? await this._layerStateCoordinator?.restoreShareTrackingSelection?.()
+          : {
+              status: 'superseded',
+              cleared:
+                this._layerStateCoordinator?.cancelPendingShareTracking?.(
+                  'shared-camera-superseded',
+                  { clearSelection: true },
+                ) === true,
+            };
+      if (!current()) return;
+      this.shareLinkManager.completeInitialRestore(state.restoreToken);
+      settle({ status: 'settled', share, layers, tracking });
+    } catch (error) {
+      if (!current()) return;
+      this.shareLinkManager.completeInitialRestore(state.restoreToken);
+      settle({
+        status: 'failed',
+        error: String(error?.message || error),
+        share: null,
+        layers: [],
+      });
+    }
+  }
+
+  /** Restore a share opened in this tab after start-up, superseding any other. */
+  _restoreNavigatedShare(state) {
+    if (this._disposed || !state) return;
+    this._shareRestoreGeneration += 1;
+    const settle = (result) => {
+      this._navigatedShareRestoreActive = false;
+      window.dispatchEvent(
+        new CustomEvent('gev:share-navigation-restore-settled', {
+          detail: result,
+        }),
+      );
+    };
+    try {
+      return this._beginNavigatedShareRestore(state, settle);
+    } catch (error) {
+      // Never leave the address bar frozen on a restore that did not start.
+      this.shareLinkManager.completeInitialRestore(state.restoreToken);
+      settle({
+        status: 'failed',
+        error: String(error?.message || error),
+        share: null,
+        layers: [],
+      });
+    }
+  }
+
+  _beginNavigatedShareRestore(state, settle) {
+    // A start-up restore still waiting for its delayed flight never runs.
+    clearTimeout(this._initialShareRestoreTimeout);
+    this._initialShareRestoreTimeout = null;
+    this._settleInitialShareRestore({
+      status: 'superseded',
+      share: null,
+      layers: [],
+    });
+    this._initialShareState = state;
+    this._initialShareSelectionSuperseded = false;
+    this._hasShareState = true;
+    this._navigatedShareRestoreActive = true;
+    // A new deferred navigation generation retires any older share flight.
+    const navigationToken = this.navigation._beginDeferredNavigation(
+      'shared view',
+      { cancelPendingSelection: false },
+    );
+    // Releasing the previous Follow is part of the passive share restore and
+    // must not be saved as the recipient's own layer preference.
+    const applyCamera =
+      Number.isInteger(navigationToken) &&
+      this.navigation._reassertNavigationHandoff(navigationToken, {
+        trackingOrigin: 'programmatic',
+      });
+    const layersPromise = this._layerStateCoordinator
+      ? this._layerStateCoordinator.applyShareLayerState({
+          shareLayerState: state.layerState || null,
+          shareCreatedAtMs: state.sharedAtMs ?? null,
+        })
+      : null;
+    return this._runShareRestore(state, {
+      applyCamera,
+      navigationToken,
+      layersPromise,
+      settle,
+    });
   }
   connect(dataManager) {
     this._dataManager = dataManager;
