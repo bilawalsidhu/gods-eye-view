@@ -78,6 +78,26 @@ test('instructions read like a navigator, one sentence per OSRM maneuver', () =>
     'Take the ramp on the left',
   );
   assert.equal(
+    instructionFor({ type: 'on ramp', modifier: 'slight left', name: 'I-95' }),
+    'Take the ramp slightly left onto I-95',
+  );
+  assert.equal(
+    instructionFor({ type: 'off ramp', modifier: 'sharp right', ref: 'I-280' }),
+    'Take the exit sharply right onto I-280',
+  );
+  assert.equal(
+    instructionFor({ type: 'on ramp', modifier: 'straight', name: 'US 101' }),
+    'Take the ramp onto US 101',
+  );
+  assert.equal(
+    instructionFor({ type: 'use lane', modifier: 'slight left' }),
+    'Use the left lane',
+  );
+  assert.equal(
+    instructionFor({ type: 'use lane', modifier: 'right', name: 'Main St' }),
+    'Use the right lane onto Main St',
+  );
+  assert.equal(
     instructionFor({
       type: 'merge',
       modifier: 'slight left',

@@ -204,10 +204,14 @@ export const getWind = defineTool({
     const speed = windSpeed(vector.u, vector.v);
     const from = windFrom(vector.u, vector.v);
     const kph = speed * 3.6;
+    // When the model upstream fails, the proxy keeps serving the last run it
+    // has, however old, marked stale.
+    const stale = snapshot.stale === true;
     return {
       summary:
         `Wind at ${point.label}: ${kph.toFixed(0)} km/h` +
-        (from === 'Calm' ? ', calm.' : ` from the ${from}.`),
+        (from === 'Calm' ? ', calm' : ` from the ${from}`) +
+        (stale ? ' (forecast may be stale).' : '.'),
       data: {
         view: suggestView(services, {
           point,
@@ -224,6 +228,7 @@ export const getWind = defineTool({
         level: snapshot.level ?? '10 m above ground',
         model,
         cycle: snapshot.cycle ?? null,
+        stale,
       },
     };
   },

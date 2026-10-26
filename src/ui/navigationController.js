@@ -14,6 +14,7 @@ export class NavigationController {
     tracking,
     searchInput,
     interruptCameraMotion,
+    interruptGlobeRotation = () => {},
     isCockpitActive,
     clearLocation,
     cancelShareSelection,
@@ -27,6 +28,7 @@ export class NavigationController {
       tracking,
       searchInput,
       interruptCameraMotion,
+      interruptGlobeRotation,
       isCockpitActive,
       clearLocation,
       cancelShareSelection,
@@ -46,6 +48,7 @@ export class NavigationController {
     cancelPendingSelection = true,
     clearSearchedLocation = true,
   } = {}) {
+    this.interruptGlobeRotation('navigation-intent');
     cancelCameraArrival(this.viewer);
     this.cancelOrientation();
     const { flightsLayer, militaryFlightsLayer, satellitesLayer } =

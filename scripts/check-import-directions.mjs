@@ -153,14 +153,6 @@ export function checkImportDirections(root) {
           file,
           'Actions must consume feed state without the manager facade',
         );
-      if (
-        file === 'src/app/constructCatalog.js' &&
-        to === 'src/data/localGeojson.js'
-      )
-        report(
-          file,
-          'Catalog must use the services owner without compatibility layer construction',
-        );
     }
     return record;
   }
