@@ -150,6 +150,8 @@ export function createLifecycle({
       layerState._retryTimer = null;
       layerState._retryDelayMs = 1500;
       parts.ingestion.cancelActiveFetch();
+      // Retire observed evidence and invalidate pending optional-source reads.
+      parts.observed.resetObservedTraffic();
       layerState._loadGeneration++;
       layerState._fetching = false;
       layerState._flowPending = 0;
