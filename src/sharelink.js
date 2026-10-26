@@ -11,12 +11,30 @@ import {
   encodeLayerStateParams,
 } from './data/layerState.js';
 import { STYLE_URL_NAMES } from './view/index.js';
+import {
+  SHARE_VIEW_PANELS,
+  SHARE_VIEW_STYLE_PARAMS,
+  decodeShareView,
+  encodeShareView,
+} from './share/viewCodec.js';
+import {
+  fromLegacyShareState,
+  toLegacyShareState,
+} from './share/legacyShareState.js';
+import {
+  appRootUrl,
+  parseSharePath,
+  shareLinkUrl,
+} from './share/shareLinkPath.js';
 
 /**
  * Share Links — URL Hash State Management
  *
- * Encodes camera position + style into the URL hash so links can be shared.
- * Format: #lat=37.77&lon=-122.42&alt=800&heading=0&pitch=-35&style=nvg&bloom=1&bi=84&bv=2&sharpen=0&si=65&hud=tactical&hv=1&dm=BALANCED&dd=50&da=elastic&kf=16&ko=0&cr=0&map=photoreal
+ * The address bar follows the live view in the long hash form:
+ * #lat=37.77&lon=-122.42&alt=800&heading=0&pitch=-35&style=nvg&bloom=1&bi=84&bv=2&sharpen=0&si=65&hud=tactical&hv=1&dm=BALANCED&dd=50&da=elastic&kf=16&ko=0&cr=0&map=photoreal
+ *
+ * A shared link is the short form, `<app>/share/<code>`, with the code from
+ * src/share/viewCodec.js (docs/SHARE-LINK-FORMAT.md). Both forms open here.
  */
 
 const DEBOUNCE_MS = 500;
@@ -29,20 +47,9 @@ const SHARE_UI_STATE_PARAM = 'ui';
 const SHARE_STYLE_PARAMS_PARAM = 'sp';
 const SHARE_CREATED_AT_PARAM = 'at';
 
-const SHARE_PANEL_STATE_REGISTRY = Object.freeze([
-  { id: 'control-panel', token: 'c', pinnable: true },
-  { id: 'location-bar', token: 'l', pinnable: true },
-  { id: 'data-panel', token: 'd', pinnable: false },
-  { id: 'cctv-panel', token: 'v', pinnable: false },
-  { id: 'recent-imagery-panel', token: 'i', pinnable: false },
-  { id: 'street-level-panel', token: 't', pinnable: false },
-  { id: 'radio-panel', token: 'r', pinnable: false },
-  { id: 'scene-panel', token: 's', pinnable: false },
-  { id: 'global-context-panel', token: 'g', pinnable: false },
-  { id: 'pp-toggles', token: 'p', pinnable: false },
-  { id: 'param-slider-panel', token: 'm', pinnable: false },
-]);
-
+// The panel and visual-preset parameter tables are the share format's own
+// (src/share/viewCodec.js); the long form spells their entries by token.
+const SHARE_PANEL_STATE_REGISTRY = SHARE_VIEW_PANELS;
 const SHARE_PANEL_STATE_BY_TOKEN = Object.freeze(
   new Map(SHARE_PANEL_STATE_REGISTRY.map((entry) => [entry.token, entry])),
 );
@@ -51,46 +58,25 @@ const URL_TO_STYLE = Object.fromEntries(
   Object.entries(STYLE_TO_URL).map(([k, v]) => [v, k]),
 );
 
-const SHARE_STYLE_PARAM_REGISTRY = Object.freeze({
-  retro: Object.freeze([
-    { key: 'pixelation', token: 'p', min: 1, max: 10 },
-    { key: 'distortion', token: 'd', min: 0, max: 1 },
-    { key: 'instability', token: 'i', min: 0, max: 1 },
-  ]),
-  surveillance: Object.freeze([
-    { key: 'gain', token: 'g', min: 0, max: 1 },
-    { key: 'bloom', token: 'b', min: 0, max: 1 },
-    { key: 'scanlineStr', token: 's', min: 0, max: 1 },
-    { key: 'pixelation', token: 'p', min: 1, max: 6 },
-  ]),
-  thermal: Object.freeze([
-    { key: 'sensitivity', token: 's', min: 0, max: 1 },
-    { key: 'bloom', token: 'b', min: 0, max: 1 },
-    { key: 'mode', token: 'm', min: 0, max: 1 },
-    { key: 'pixelation', token: 'p', min: 1, max: 6 },
-    { key: 'palette', token: 'a', min: 0, max: 1 },
-  ]),
-  anime: Object.freeze([
-    { key: 'saturation', token: 's', min: 0, max: 2 },
-    { key: 'edgeThick', token: 'e', min: 0, max: 1 },
-  ]),
-  noir: Object.freeze([
-    { key: 'contrastAmt', token: 'c', min: 0, max: 2 },
-    { key: 'grainAmt', token: 'g', min: 0, max: 1 },
-    { key: 'vignetteAmt', token: 'v', min: 0, max: 1 },
-  ]),
-  snow: Object.freeze([
-    { key: 'density', token: 'd', min: 0, max: 1 },
-    { key: 'wind', token: 'w', min: 0, max: 1 },
-  ]),
-});
+const SHARE_STYLE_PARAM_REGISTRY = SHARE_VIEW_STYLE_PARAMS;
 
 export class ShareLinkManager {
   constructor(
     viewer,
-    { onRestore, isNavigationCurrent, cancelOwnedNavigation } = {},
+    {
+      onRestore,
+      isNavigationCurrent,
+      cancelOwnedNavigation,
+      initialShareCode = null,
+    } = {},
   ) {
     this.viewer = viewer;
+    // A host may hand over the share code to open instead of the address.
+    this._initialShareCode =
+      typeof initialShareCode === 'string' ? initialShareCode : null;
+    // Why the share code this page opened with was refused, if it was.
+    this.rejectedShareCode = null;
+    this._followSubjectProvider = null;
     this._onRestore = onRestore; // callback: ({ style, bloom, sharpen }) => void
     this._debounceTimer = null;
     this._currentStyle = 'normal';
@@ -155,14 +141,39 @@ export class ShareLinkManager {
   }
 
   /**
-   * Parse URL hash on page load. Returns parsed state or null.
+   * Parse the share this page opened with: the host's `initialShareCode`, a
+   * `/share/<code>` address, or a long-form hash. Returns the parsed state, or
+   * null for none. A share code that cannot be opened is recorded in
+   * `rejectedShareCode` and restores nothing.
    */
   parseInitialHash() {
     const hash = window.location.hash.slice(1);
     this._knownHash = hash;
-    const state = this._parseShareHash(hash);
+    const code =
+      this._initialShareCode ??
+      parseSharePath(window.location.pathname)?.code ??
+      null;
+    this._initialShareCode = null;
+    const state =
+      code === null ? this._parseShareHash(hash) : this._parseShareCode(code);
     if (!state) return null;
     this._beginIncomingRestore(state);
+    return state;
+  }
+
+  /**
+   * The restore state for a share code, in the long form's parsed shape plus
+   * `shareView` (what the view follows, with its offset and last-known fix),
+   * or null when the code is refused.
+   */
+  _parseShareCode(code) {
+    const result = decodeShareView(code);
+    if (!result.ok) {
+      this.rejectedShareCode = result.reason;
+      return null;
+    }
+    const state = toLegacyShareState(result.state);
+    state.shareView = result.state.view;
     return state;
   }
 
@@ -459,6 +470,16 @@ export class ShareLinkManager {
     this._layerStateProvider = typeof provider === 'function' ? provider : null;
   }
 
+  /**
+   * Install the source of the entity the camera follows, used for share links:
+   * `({ nowMs }) => ({ kind, id, offset, lastKnown }) | null`, in the share
+   * format's terms (src/share/follow.js), with the fix as of `nowMs`.
+   */
+  setFollowSubjectProvider(provider) {
+    this._followSubjectProvider =
+      typeof provider === 'function' ? provider : null;
+  }
+
   /** Install the finalized panel-state source used by URL generation. */
   setPanelStateProvider(provider) {
     this._panelStateProvider = typeof provider === 'function' ? provider : null;
@@ -559,17 +580,41 @@ export class ShareLinkManager {
     this._scheduleUpdate();
   }
 
+  /**
+   * The share link for the current state, `<app>/share/<code>`, stamped with
+   * its creation time, or null before the camera has a position. While the
+   * camera follows an entity, the link follows it too.
+   */
+  buildLink({ nowMs = Date.now() } = {}) {
+    const params = this._buildHashParams();
+    if (!params) return null;
+    // The long form is the one description of the live state; the code is
+    // that state in the share format.
+    const state = fromLegacyShareState(this._parseShareHash(params.toString()));
+    state.sharedAtMs = Math.floor(nowMs / 1000) * 1000;
+    let subject = null;
+    try {
+      subject = this._followSubjectProvider?.({ nowMs }) ?? null;
+    } catch {
+      subject = null;
+    }
+    if (subject) {
+      state.view = {
+        kind: 'thing',
+        entity: { kind: subject.kind, id: subject.id },
+        offset: subject.offset ?? null,
+        lastKnown: subject.lastKnown ?? null,
+      };
+    }
+    return shareLinkUrl(encodeShareView(state), window.location.href);
+  }
+
   /** Copy a current-state snapshot with a copy-time timestamp. Returns true on success. */
   async copyLink({ nowMs = Date.now() } = {}) {
-    const params = this._buildHashParams();
-    if (!params) return false;
-    params.set(SHARE_CREATED_AT_PARAM, String(Math.floor(nowMs / 1000)));
-    const copiedUrl = new URL(window.location.href);
-    // ?lang is the sender's language override; the recipient keeps their own.
-    copiedUrl.searchParams.delete('lang');
-    copiedUrl.hash = params.toString();
     try {
-      await navigator.clipboard.writeText(copiedUrl.href);
+      const href = this.buildLink({ nowMs });
+      if (!href) return false;
+      await navigator.clipboard.writeText(href);
       return true;
     } catch {
       return false;
@@ -587,8 +632,13 @@ export class ShareLinkManager {
     const params = this._buildHashParams();
     if (!params) return;
     // The hash belongs to this page's address, not the document base the
-    // app may load under.
-    const url = new URL(`#${params.toString()}`, window.location.href);
+    // app may load under. A `/share/<code>` address gives way to the app's
+    // own address, so a reload follows the live view; replacing it adds no
+    // history entry.
+    const url = parseSharePath(new URL(window.location.href).pathname)
+      ? appRootUrl(window.location.href)
+      : new URL(window.location.href);
+    url.hash = params.toString();
     this._knownHash = url.hash.slice(1);
     history.replaceState(null, '', url.href);
   }
@@ -649,8 +699,8 @@ export class ShareLinkManager {
       this._styleParamStateProvider?.(this._currentStyle),
     );
 
-    // Copy-time metadata is intentionally absent here. `copyLink()` adds a
-    // fresh timestamp to its ephemeral URL without aging the live address.
+    // Creation-time metadata is intentionally absent here. `buildLink()`
+    // stamps its own link without aging the live address.
     params.delete(SHARE_CREATED_AT_PARAM);
     return params;
   }
@@ -677,6 +727,7 @@ export class ShareLinkManager {
     this._layerStateProvider = null;
     this._panelStateProvider = null;
     this._styleParamStateProvider = null;
+    this._followSubjectProvider = null;
     this._onRestore = null;
   }
 }

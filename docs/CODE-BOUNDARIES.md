@@ -598,6 +598,10 @@ state subscriptions retain their existing event contract.
   tracking handoff. It reads Cockpit admission and uses supplied tracking operations.
 - `ui/share-restoration` owns the initial restore transaction, layer coordinator,
   status notices and gesture/timer cleanup.
+- `share/view-codec` is the share-link codec (`decodeShareView`,
+  `encodeShareView`). It is pure (no DOM, no Cesium), so a host's server can
+  read a `/share/<code>` link, for example to describe it in link previews.
+  `share/link-path` reads and builds the `/share/<code>` address itself.
 - `ui/visual-settings` owns style preferences, detection overrides, display inputs
   and IR cleanup. Its engine services and panel operations are explicit.
 - `ui/panel-chrome` owns disclosure, docking, collapse preferences and temporary

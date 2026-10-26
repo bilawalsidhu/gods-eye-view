@@ -4,7 +4,11 @@ import { flyToAustin } from '../camera.js';
 import { initCockpitCloudEffects } from '../cockpitCloudEffects.js';
 import { t } from '../i18n/index.js';
 
-/** Construct the existing controls and camera presentation. */
+/**
+ * Construct the existing controls and camera presentation. `initialShareCode`
+ * opens a share code (the `<code>` of `/share/<code>`) at start-up, for a host
+ * whose address does not carry one.
+ */
 export function createApplicationControls({
   scene: { viewer, mapStackController, operations },
   loaderStatus,
@@ -13,6 +17,7 @@ export function createApplicationControls({
   catalog,
   placeSearch,
   defer,
+  initialShareCode = null,
 }) {
   // Initialize the style manager (post-processing, HUD, locations, share links)
   const styleManager = new Controls(viewer, {
@@ -27,6 +32,8 @@ export function createApplicationControls({
     requestServices: operations.requests,
     mapStackController,
     placeSearch,
+    // A share code to open at start-up instead of the page's address.
+    initialShareCode,
   });
   defer(() => styleManager.orbitController.stop());
   defer(() => styleManager.hud.destroy());

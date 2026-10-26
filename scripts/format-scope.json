@@ -1109,5 +1109,13 @@
   "src/voice/panel/inactivity.test.mjs",
   "src/voice/panel/actionObserver.test.mjs",
   "src/voice/panel/testDom.mjs",
-  "src/voice/realtimeCostPanel.test.mjs"
+  "src/voice/realtimeCostPanel.test.mjs",
+  "docs/SHARE-LINK-FORMAT.md",
+  "src/share/wire.test.mjs",
+  "src/share/viewCodec.test.mjs",
+  "src/share/legacyShareState.test.mjs",
+  "src/testSupport/shareViewFixtures.mjs",
+  "src/ui/shareLinks.test.mjs",
+  "src/ui/shareButton.test.mjs",
+  "src/share/shareLinkPath.test.mjs"
 ]
