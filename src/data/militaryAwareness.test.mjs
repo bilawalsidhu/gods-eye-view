@@ -42,7 +42,10 @@ import {
   formatAwarenessLabel,
   getAwarenessNavigationTargets,
 } from './militaryAwarenessEngine.js';
-import { formatAwarenessCount } from '../layers/awareness/panel.js';
+import {
+  formatAwarenessCount,
+  presentAwarenessDistance,
+} from '../layers/awareness/panel.js';
 import { NAVIGATION_AUTHORITY_EVENT } from '../navigationPolicy.js';
 
 const militaryAwarenessSource = readLayerSource(
@@ -67,6 +70,12 @@ test('Contacts labels a capped cohort as a lower bound', () => {
     '19,999',
   );
   assert.equal(formatAwarenessCount({ count: null }), '?');
+});
+
+test('Contacts moves a distance that rounds to 1,000 m into kilometres', () => {
+  assert.equal(presentAwarenessDistance(999.4), '999\u00a0m');
+  assert.equal(presentAwarenessDistance(999.6), '1.0\u00a0km');
+  assert.equal(presentAwarenessDistance(4600), '4.6\u00a0km');
 });
 
 function installAwarenessRuntime({

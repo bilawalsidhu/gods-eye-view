@@ -617,7 +617,7 @@ export const LAYER_STATE_REGISTRY = Object.freeze([
   }),
   Object.freeze({
     id: 'local-airports',
-    token: '5',
+    token: '6',
     disposition: 'enabled-only',
   }),
   Object.freeze({ id: 'local-dams', token: 'q', disposition: 'enabled-only' }),
@@ -658,6 +658,11 @@ export const LAYER_STATE_REGISTRY = Object.freeze([
   Object.freeze({
     id: 'rocket-launches',
     token: 'x',
+    disposition: 'enabled-only',
+  }),
+  Object.freeze({
+    id: 's2-ghostmaps',
+    token: '5',
     disposition: 'enabled-only',
   }),
   Object.freeze({

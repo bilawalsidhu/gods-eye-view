@@ -7,4 +7,4 @@
   Avinor's planned 2029 opening. `scripts/build-airports-norway.py` rebuilds
   the file from Geofabrik's current Norway extract and records its name.
   Voice and the analyst know the layer as `local-airports`; its share-link
-  token is `5` (trygvehhh, #955).
+  token is `6` (trygvehhh, #955).
