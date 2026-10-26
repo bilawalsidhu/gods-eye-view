@@ -1081,6 +1081,7 @@
   "scripts/qa-anime-sky.mjs",
   "scripts/qa-sky-model-lighting.mjs",
   "server/providers/overpass/requestAdmission.test.mjs",
+  "src/tooling/trackArrivalObservation.mjs",
   "src/tooling/trackArrivalObservation.test.mjs",
   "src/ui/styles/status-badge.css",
   "src/ui/statusBadge.test.mjs",
@@ -1089,5 +1090,6 @@
   "src/dockerTrustedPeers.test.mjs",
   "src/cameraGlobeRotation.test.mjs",
   "src/voice/globeResetConfirmation.test.mjs",
-  "src/hudDms.test.mjs"
+  "src/hudDms.test.mjs",
+  "server/providers/common/rateLimitKeys.test.mjs"
 ]
