@@ -1089,5 +1089,7 @@
   "src/dockerTrustedPeers.test.mjs",
   "src/cameraGlobeRotation.test.mjs",
   "src/voice/globeResetConfirmation.test.mjs",
-  "src/hudDms.test.mjs"
+  "src/hudDms.test.mjs",
+  "scripts/qa-offshore-platforms.mjs",
+  "src/layers/offshorePlatforms/offshorePlatforms.test.mjs"
 ]

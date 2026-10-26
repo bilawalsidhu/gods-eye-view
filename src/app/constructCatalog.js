@@ -168,7 +168,9 @@ export function createApplicationCatalog({
         }),
         createCyclonesLayer({ feed: sources.cyclones }),
         ...createInfrastructureLayers(localGeoJsonServices),
-        createApplicationOffshorePlatforms({source: sources['offshore-platforms']}),
+        createApplicationOffshorePlatforms({
+          source: sources['offshore-platforms'],
+        }),
         createApplicationCables({ source: sources.cables }),
         createApplicationFirms({
           surface,
