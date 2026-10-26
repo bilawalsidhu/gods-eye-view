@@ -26,6 +26,7 @@ import { createApplicationFirms } from './layers/firms.js';
 import { createApplicationEarthquakes } from './layers/earthquakes.js';
 import { createApplicationAirQuality } from './layers/airQuality.js';
 import { createApplicationFirePerimeters } from './layers/perimeters.js';
+import { createApplicationOffshorePlatforms } from './layers/offshorePlatforms.js';
 import { createApplicationGnssIntegrity } from './layers/gnss.js';
 import { createApplicationCables } from './layers/submarineCables.js';
 import { createApplicationStreetLevel } from './layers/streetLevel.js';
@@ -167,6 +168,7 @@ export function createApplicationCatalog({
         }),
         createCyclonesLayer({ feed: sources.cyclones }),
         ...createInfrastructureLayers(localGeoJsonServices),
+        createApplicationOffshorePlatforms({source: sources['offshore-platforms']}),
         createApplicationCables({ source: sources.cables }),
         createApplicationFirms({
           surface,

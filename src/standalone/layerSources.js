@@ -1,3 +1,4 @@
+import { createOffshoreInventorySource } from '../layers/offshorePlatforms/source.js';
 import { createDirectionsSource } from '../layers/directions/source.js';
 import { createRecentImagerySource } from '../layers/recentImagery/source.js';
 import { createOpenFreeMapSource } from '../sources/openFreeMap.js';
@@ -30,6 +31,7 @@ export function createStandaloneLayerSources(overrides = {}) {
   const mapTiles = createOpenFreeMapSource();
   const defaults = {
     ...createReferenceSources(),
+    'offshore-platforms': createOffshoreInventorySource({url: new URL('../data/local_data/offshore-platforms/platforms.json', import.meta.url).href}),
     directions: createDirectionsSource(),
     'recent-imagery': createRecentImagerySource(),
     flights: createFlightSource(),

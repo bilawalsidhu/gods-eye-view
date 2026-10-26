@@ -2818,5 +2818,19 @@
   "Layers": "图层",
   "Search": "搜索",
   "More": "更多",
-  "Panels": "面板"
+  "Panels": "面板",
+  "Offshore inventory could not be loaded": "无法加载海上设施清单",
+  "U.S. Gulf federal waters": "美国墨西哥湾联邦水域",
+  "Inventory snapshot {date}": "清单快照：{date}",
+  "Dated inventory; not live": "有日期的清单，非实时数据",
+  "No removal date recorded; production status unknown": "未记录拆除日期；生产状态未知",
+  "Surface structure": "水面设施",
+  "Subsea structure": "水下设施",
+  "Structure type unknown": "设施类型未知",
+  "BSEE complex {complex}, structure {structure}": "BSEE 综合体 {complex}，设施 {structure}",
+  "Installed: {date}": "安装日期：{date}",
+  "U.S. Gulf federal waters · snapshot {date}": "美国墨西哥湾联邦水域 · 快照 {date}",
+  "BSEE inventory · open source": "BSEE 清单 · 打开来源",
+  "Open BSEE platform inventory source": "打开 BSEE 平台清单来源",
+  "Offshore Oil & Gas Platforms": "海上油气平台"
 }

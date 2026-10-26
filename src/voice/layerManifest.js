@@ -374,6 +374,12 @@ const layers = [
     },
   },
   {
+    id: 'offshore-platforms',
+    aliases: ['offshore platforms'],
+    context: true,
+    noQuery: 'use selected context',
+  },
+  {
     id: 'local-dams',
     aliases: ['dams'],
     context: true,

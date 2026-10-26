@@ -12,6 +12,7 @@
   ["flights", "f"],
   ["gnss-integrity", "3"],
   ["local-dams", "q"],
+  ["offshore-platforms", "5"],
   ["local-datacenters", "d"],
   ["local-firms", "w"],
   ["military", "m"],
