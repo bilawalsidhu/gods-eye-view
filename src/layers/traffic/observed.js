@@ -3,6 +3,7 @@ const MAX_RECORDS = 5000;
 const MAX_GEOMETRY_POINTS = 256;
 const MAX_COUNT_KEYS = 64;
 const MAX_MOVEMENTS = 32;
+const MAX_FUTURE_OBSERVATION_SKEW_MS = 60 * 1000;
 
 export const OBSERVED_TRAFFIC_GEOMETRY_TYPES = Object.freeze([
   ...GEOMETRY_TYPES,
@@ -245,8 +246,14 @@ export function normalizeObservedTrafficSnapshot(
     .filter(Boolean);
   const dropped = rawRecords.length - records.length;
   const staleLimit = Math.max(0, Number(staleAfterMs) || 0);
+  // A future observation/window beyond bounded clock skew is not fresh evidence.
+  const futureLimit = now + MAX_FUTURE_OBSERVATION_SKEW_MS;
   const staleCount = records.filter(
-    (record) => now - (record.windowEnd ?? record.observedAt) > staleLimit,
+    (record) =>
+      now - (record.windowEnd ?? record.observedAt) > staleLimit ||
+      record.observedAt > futureLimit ||
+      (record.windowStart ?? -Infinity) > futureLimit ||
+      (record.windowEnd ?? -Infinity) > futureLimit,
   ).length;
   const latestObservedAt = records.reduce(
     (latest, record) => Math.max(latest, record.observedAt),
