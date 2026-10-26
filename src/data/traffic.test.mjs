@@ -8,11 +8,14 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import trafficLayer, {
+  configureObservedTrafficSource,
   deriveTrafficFlowError,
   getObservedTrafficSnapshot,
+  refreshObservedTraffic,
   trafficFeedPresentation,
 } from './traffic.js';
 import { DataLayerManager, layerFeedState } from './manager.js';
+import { createObservedTrafficSource } from '../layers/traffic/observed.js';
 
 /**
  * The app's live markers. Case-SENSITIVE on purpose: uppercase LIVE/GPS is
@@ -188,4 +191,45 @@ test('zero matched dots never claims live coverage', () => {
   assert.match(feed.loadingLabel, /^SIMULATED/);
   assert.match(feed.loadingLabel, /TomTom \(no matches\)/);
   assert.ok(!LIVE_CLAIM.test(feed.loadingLabel));
+});
+
+test('optional observed-source disposal and traffic disable never retain observed evidence', async () => {
+  const now = Date.parse('2026-09-29T02:30:00Z');
+  const viewer = { camera: { changed: { removeEventListener() {} } } };
+  const source = createObservedTrafficSource({
+    label: 'synthetic QA source',
+    read() {
+      return {
+        records: [
+          {
+            id: 'synthetic:1',
+            sourceId: 'synthetic-fixture',
+            observedAt: now - 1000,
+            geometry: { type: 'intersection', coordinates: [0, 0] },
+            flow: { vehiclesPerMin: 1 },
+          },
+        ],
+      };
+    },
+  });
+  const dispose = configureObservedTrafficSource(source);
+  try {
+    const fresh = await refreshObservedTraffic({}, { now });
+    assert.equal(fresh.state, 'fresh');
+    assert.equal(fresh.accepted, 1);
+    assert.equal(getObservedTrafficSnapshot().state, 'fresh');
+
+    trafficLayer.disable(viewer);
+    assert.equal(getObservedTrafficSnapshot().state, 'unconfigured');
+    assert.equal(trafficLayer.getStats().observedTraffic.count, 0);
+  } finally {
+    dispose();
+    trafficLayer.disable(viewer);
+  }
+
+  const absent = await refreshObservedTraffic({}, { now });
+  assert.equal(absent.state, 'unconfigured');
+  assert.deepEqual(absent.records, []);
+  assert.equal(getObservedTrafficSnapshot().state, 'unconfigured');
+  assert.equal(trafficLayer.getStats().observedTraffic.error, null);
 });
