@@ -85,6 +85,7 @@ test('the telemetry tick paints the carried value into both readouts', () => {
         height: 1500,
       },
       computeViewRectangle: () => undefined,
+      moveStart: { addEventListener() {}, removeEventListener() {} },
       moveEnd: { addEventListener() {}, removeEventListener() {} },
     },
   };
