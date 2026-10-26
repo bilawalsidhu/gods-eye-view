@@ -205,8 +205,10 @@ historical missing-`scf` fallback remains 35%; explicit 0% keeps the hard edge.
 
 With Scope OFF, Tactical, Operator and Minimal add text-sized black backplates
 at 70% opacity behind telemetry, vertical metadata and scene chrome. Original
-text color, glow and opacity are preserved. Scope ON retains the original HUD
-presentation; Cyber retains its existing skin.
+HUD text color, glow and opacity are preserved. Scope OFF brightens the tagline
+and Active Style label with the shared secondary text color. The title plate
+covers the eye and title without moving the title or tagline. Scope ON retains
+the original HUD presentation; Cyber retains its existing skin.
 
 `node scripts/qa-scope-hud.mjs` checks native input, range, layout persistence,
 restoration and both Scope presentations. `QA_SCREENSHOT_DIR` saves screenshots.

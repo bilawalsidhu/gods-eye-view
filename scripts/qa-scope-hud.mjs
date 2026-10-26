@@ -120,6 +120,94 @@ async function settleTextBackings(enabled) {
     .catch(() => null);
 }
 
+const readSceneChrome = () =>
+  page.evaluate(() => {
+    const title = document.querySelector('#title-bar h1');
+    const eye = title.querySelector('.title-logo');
+    const subtitle = document.querySelector('#title-bar .subtitle');
+    const label = document.querySelector('#style-indicator .indicator-label');
+    const rect = (el, text = false) => {
+      if (!el.getClientRects().length) return null;
+      const range = document.createRange();
+      range.selectNodeContents(el);
+      const box = text
+        ? range.getBoundingClientRect()
+        : el.getBoundingClientRect();
+      return {
+        left: box.left,
+        top: box.top,
+        right: box.right,
+        bottom: box.bottom,
+      };
+    };
+    const titleBox = rect(title);
+    const eyeBox = rect(eye);
+    const backing = getComputedStyle(title, '::before');
+    const plate = {
+      left: titleBox.left + parseFloat(backing.left),
+      top: titleBox.top + parseFloat(backing.top),
+      right: titleBox.right - parseFloat(backing.right),
+      bottom: titleBox.bottom - parseFloat(backing.bottom),
+    };
+    const contains = (box) =>
+      Object.entries(box).every(([side, value]) =>
+        ['left', 'top'].includes(side)
+          ? plate[side] <= value + 0.5
+          : plate[side] >= value - 0.5,
+      );
+    const probe = document.createElement('span');
+    document.body.appendChild(probe);
+    probe.style.color = 'var(--text-dim)';
+    const dim = getComputedStyle(probe).color;
+    probe.style.color = 'var(--text-secondary)';
+    const secondary = getComputedStyle(probe).color;
+    probe.remove();
+    return {
+      positions: {
+        title: titleBox,
+        eye: eyeBox,
+        text: rect(title.querySelector('[translate="no"]'), true),
+        subtitle: rect(subtitle, true),
+      },
+      titleUnbacked: backing.backgroundColor === 'rgba(0, 0, 0, 0)',
+      titleCovered:
+        backing.position === 'absolute' &&
+        backing.backgroundColor === 'rgba(0, 0, 0, 0.7)' &&
+        contains(titleBox) &&
+        contains(eyeBox),
+      leftAligned:
+        !rect(subtitle) || Math.abs(plate.left - rect(subtitle).left) <= 0.5,
+      colors: [getComputedStyle(subtitle).color, getComputedStyle(label).color],
+      dim,
+      secondary,
+    };
+  });
+
+function checkSceneChrome(name, before, after) {
+  const stable = Object.keys(before.positions).every((key) => {
+    const a = before.positions[key];
+    const b = after.positions[key];
+    return a && b
+      ? Object.keys(a).every((side) => Math.abs(a[side] - b[side]) <= 0.5)
+      : a === b;
+  });
+  check(`${name}: title, eye and subtitle stay in place across Scope`, stable, {
+    before,
+    after,
+  });
+  check(
+    `${name}: OFF title plate covers the eye and aligns with the subtitle`,
+    before.titleUnbacked && after.titleCovered && after.leftAligned,
+    after,
+  );
+  check(
+    `${name}: secondary labels brighten only with Scope OFF`,
+    before.colors.every((color) => color === before.dim) &&
+      after.colors.every((color) => color === after.secondary),
+    { before: before.colors, after: after.colors },
+  );
+}
+
 async function openApplication(url) {
   await page.goto(url.href, { waitUntil: 'domcontentloaded' });
   await page.waitForFunction(
@@ -316,6 +404,7 @@ try {
     );
     await settleTextBackings(true);
     const originalGlyphs = await readHudGlyphs();
+    const originalChrome = await readSceneChrome();
     const original = await page.evaluate(() => {
       const hud = document.getElementById('intel-hud');
       const wrappers = [...hud.querySelectorAll('.hud-readout')];
@@ -388,6 +477,7 @@ try {
     );
     await settleTextBackings(false);
     const backedGlyphs = await readHudGlyphs();
+    checkSceneChrome(layout, originalChrome, await readSceneChrome());
     check(
       `${layout}: Scope OFF adds backing without changing glyph styles`,
       JSON.stringify(backedGlyphs) === JSON.stringify(originalGlyphs),
@@ -566,6 +656,23 @@ try {
       }),
   );
   check('narrow HUD text backings stay within the viewport', narrow);
+  for (const layout of ['minimal', 'operator', 'tactical']) {
+    await page.select('#hud-layout-select', layout);
+    await page.evaluate(() =>
+      window.__godsEyeView.styleManager.applyVisualState({
+        scope: { enabled: true },
+      }),
+    );
+    await settleTextBackings(true);
+    const before = await readSceneChrome();
+    await page.evaluate(() =>
+      window.__godsEyeView.styleManager.applyVisualState({
+        scope: { enabled: false },
+      }),
+    );
+    await settleTextBackings(false);
+    checkSceneChrome(`narrow ${layout}`, before, await readSceneChrome());
+  }
   check('runtime has no uncaught browser errors', errors.length === 0, errors);
 } finally {
   await browser.close();

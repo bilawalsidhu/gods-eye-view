@@ -465,12 +465,20 @@
   text-overflow: ellipsis;
 }
 
-/* The title's inline text box needs a little vertical room around its glyphs. */
 :root[data-scope-mask='off']:not([data-ui-theme='cyber'])
   #title-bar
-  h1
-  > .scene-text-holdout {
-  padding-block: 0.12em;
+  h1::before {
+  content: '';
+  position: absolute;
+  inset: -0.12em -6px;
+  z-index: -1;
+  border-radius: 2px;
+  background: rgba(0, 0, 0, 0.7);
+}
+
+:root[data-scope-mask='off']:not([data-ui-theme='cyber'])
+  :is(#title-bar .subtitle, #style-indicator .indicator-label) {
+  color: var(--text-secondary);
 }
 
 :root[data-scope-mask='off']:not([data-ui-theme='cyber']) #title-bar .subtitle {
