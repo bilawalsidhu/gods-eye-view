@@ -88,8 +88,12 @@ export function createQaSources(entries, { now = () => Date.now() } = {}) {
     if (layer === 'flights')
       sources.flights = createFlightSource({
         now,
-        fetchImpl: async () =>
-          json(syntheticFlights({ nowMs: now(), count: count ?? 8000 })),
+        fetchImpl: async (url) => {
+          const request = String(url);
+          if (request.includes('/api/adsbdb/')) return json({ found: false });
+          if (request.includes('/api/flights/track')) return json({ path: [] });
+          return json(syntheticFlights({ nowMs: now(), count: count ?? 8000 }));
+        },
       });
     if (layer === 'military')
       sources.military = createMilitarySource({
@@ -107,6 +111,8 @@ export function createQaSources(entries, { now = () => Date.now() } = {}) {
     if (layer === 'vessels')
       sources.vessels = createVesselSource({
         fetchImpl: async (url) => {
+          if (String(url).includes('/api/vessels/track'))
+            return json({ samples: [] });
           const params = new URL(url).searchParams;
           const area = params.has('lat')
             ? {

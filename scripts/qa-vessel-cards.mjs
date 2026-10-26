@@ -73,6 +73,40 @@ export function parseDataMode(args = []) {
   return mode;
 }
 
+/** A synthetic card capture owns its source instead of competing with qaFeed. */
+export function vesselCardCaptureUrl(pageUrl, dataMode) {
+  const url = new URL(pageUrl);
+  if (dataMode === 'synthetic') url.searchParams.delete('qaFeed');
+  return url.href;
+}
+
+/** Install before navigation; every asynchronous refresh keeps the same rows. */
+export function installSyntheticVesselFeed(rows) {
+  const realFetch = window.fetch.bind(window);
+  window.fetch = (input, init) => {
+    const url = new URL(
+      typeof input === 'string' ? input : (input.url ?? input),
+      location.href,
+    );
+    if (url.origin === location.origin && url.pathname === '/api/vessels') {
+      const nowMs = Date.now();
+      return Promise.resolve(
+        new Response(
+          JSON.stringify({
+            rows: rows.map((row) => ({
+              ...row,
+              last_position_epoch: nowMs / 1000,
+            })),
+            newestPositionAt: nowMs,
+          }),
+          { status: 200, headers: { 'content-type': 'application/json' } },
+        ),
+      );
+    }
+    return realFetch(input, init);
+  };
+}
+
 /** Build a screenshot name whose data provenance cannot collide with another mode. */
 export function vesselCardScreenshotFilename({ dataMode, tag, portKey }) {
   const provenanceSlug = DATA_PROVENANCE_SLUGS[dataMode];
@@ -262,22 +296,25 @@ async function main() {
       }));
       console.log(`  ▸ ${key} → ${outPath}`);
 
+      const syntheticRows = DATA_MODE === 'synthetic' ? syntheticVesselRows(key, port) : [];
+      const captureUrl = vesselCardCaptureUrl(PAGE_URL, DATA_MODE);
       const page = await browser.newPage();
       await page.setViewport({ width: 1600, height: 900 });
       await page.evaluateOnNewDocument(() => {
         // This harness inspects cards, so keep first-run chrome out of the view.
         localStorage.setItem('gev:first-run-mission:v1', 'suppressed');
       });
+      if (DATA_MODE === 'synthetic')
+        await page.evaluateOnNewDocument(installSyntheticVesselFeed, syntheticRows);
       page.on('pageerror', (err) => console.error(`    [page-error] ${err.message}`));
 
-      await page.goto(PAGE_URL, { waitUntil: 'domcontentloaded', timeout: 60000 });
+      await page.goto(captureUrl, { waitUntil: 'domcontentloaded', timeout: 60000 });
       if (ENGINE)
         await page.waitForFunction(() => !!window.__godsEyeView?.layers, { timeout: 180000 });
       else
         await page.waitForFunction(() => !!window.__godsEyeView?.viewer, { timeout: 60000 });
 
       // Frame the port (kill the intro flight first) and enable the layer.
-      const syntheticRows = DATA_MODE === 'synthetic' ? syntheticVesselRows(key, port) : [];
       const dataEvidence = await page.evaluate(async ({ p, dataMode, fixtureRows, engineNeutral }) => {
         const gev = window.__godsEyeView;
         if (engineNeutral) {
@@ -431,7 +468,7 @@ async function main() {
           hardwareAccelerated: hardwareRenderer,
           passed: capturePassed,
         },
-        appUrl: APP_URL,
+        appUrl: captureUrl,
         capturedAt: new Date().toISOString(),
       });
       fs.writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);

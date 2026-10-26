@@ -26,6 +26,12 @@ export function aircraftQaDrawn(state) {
       width: sprite.width,
       show: sprite.show,
       rotation: sprite.rotation,
+      trackedRotation:
+        id === state._trackedIcao
+          ? (state._trackedEntity?.rotation ??
+            state._lastTrackedRotation ??
+            null)
+          : null,
       alpha: sprite.color?.alpha ?? null,
       position: sprite.position
         ? {
@@ -43,6 +49,7 @@ export function aircraftQaDrawn(state) {
             ready: model.ready,
             // Where it is drawn: its transform's translation.
             position: translationOf(model.modelMatrix),
+            matrix: model.modelMatrix ? Array.from(model.modelMatrix) : null,
           }
         : null,
     });
@@ -56,6 +63,7 @@ export function aircraftQaDrawn(state) {
         scale: tracked.scale,
         show: tracked.show,
         ready: tracked.ready,
+        matrix: tracked.modelMatrix ? Array.from(tracked.modelMatrix) : null,
       },
     });
   return out;

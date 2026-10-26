@@ -213,7 +213,8 @@ async function readCameraGround(page, camId) {
  * @returns {Promise<number|null>} ellipsoid height in metres, or null on failure.
  */
 async function fetchReearthEllipsoid(lat, lon) {
-  const url = `${APP_URL}/api/terrain/heights?points=${encodeURIComponent(`${lon.toFixed(5)},${lat.toFixed(5)}`)}`;
+  const url = new URL('/api/terrain/heights', APP_URL);
+  url.searchParams.set('points', `${lon.toFixed(5)},${lat.toFixed(5)}`);
   try {
     const res = await fetch(url, { signal: AbortSignal.timeout(30000) });
     if (!res.ok) return null;
@@ -253,7 +254,7 @@ async function main() {
       '--no-sandbox',
       '--disable-setuid-sandbox',
       '--use-gl=angle',
-      '--use-angle=swiftshader',
+      `--use-angle=${process.env.QA_ANGLE || 'swiftshader'}`,
       '--disable-dev-shm-usage',
       '--disable-web-security',
       '--disable-background-timer-throttling',
@@ -279,7 +280,7 @@ async function main() {
     console.log('Loading app...');
     await page.goto(APP_URL, { waitUntil: 'domcontentloaded', timeout: 60000 });
     await page.waitForFunction(
-      () => window.__godsEyeView && window.__godsEyeView.viewer && window.__godsEyeView.dataManager,
+      () => window.__godsEyeView?.layers && window.__godsEyeView.dataManager,
       { timeout: 60000 }
     );
     await sleep(4000);
@@ -287,6 +288,10 @@ async function main() {
     // =========================================================================
     // Group 1: CCTV ground correctness
     // =========================================================================
+    const hasCctv = await page.evaluate(() => window.__godsEyeView.layers.available('cctv'));
+    let allCameras = [], londonCams = [], austinCams = [];
+    if (!hasCctv) console.log('  [SKIP] CCTV ground/regime groups are outside the Navara W1 catalog');
+    if (hasCctv) {
     console.log('Enabling CCTV layer (full city-packs catalog)...');
     await page.evaluate(async () => {
       const dm = window.__godsEyeView.dataManager;
@@ -337,7 +342,7 @@ async function main() {
     // `nearbyPlace` string (NOT a stable "San Francisco" literal), so SF-area
     // Caltrans cameras are identified by proximity to the SF anchor instead
     // (same anchor vite.config.js's CALTRANS_ANCHORS uses for prioritization).
-    const allCameras = await page.evaluate(() => window.__godsEyeView.dataManager.layers.get('cctv').module.getUIState().cameras);
+    allCameras = await page.evaluate(() => window.__godsEyeView.dataManager.layers.get('cctv').module.getUIState().cameras);
     console.log(`Camera catalog: ${allCameras.length} total.`);
 
     const SF_ANCHOR = { lat: 37.7793, lon: -122.4193 };
@@ -349,8 +354,8 @@ async function main() {
       return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
     };
 
-    const londonCams = allCameras.filter((c) => c.city === 'London').slice(0, 5);
-    const austinCams = allCameras.filter((c) => c.city === 'Austin').slice(0, 5);
+    londonCams = allCameras.filter((c) => c.city === 'London').slice(0, 5);
+    austinCams = allCameras.filter((c) => c.city === 'Austin').slice(0, 5);
     const sfCams = allCameras
       .filter((c) => c.provider === 'Caltrans' && haversineKm(c.lat, c.lon, SF_ANCHOR.lat, SF_ANCHOR.lon) < 60)
       .slice(0, 3);
@@ -456,6 +461,8 @@ async function main() {
       record('Austin active camera google-3d ground ∈ [110,135]m', null, 'no Austin camera available to test');
     }
 
+    }
+
     // =========================================================================
     // Group 2: Aircraft render altitude
     // =========================================================================
@@ -511,7 +518,7 @@ async function main() {
       // returns everything currently shown regardless of viewer position.
       const nearbyList = await page.evaluate(() => {
         const mod = window.__godsEyeView.dataManager.layers.get('flights').module;
-        const center = window.__godsEyeView.viewer.camera.position;
+        const center = window.__godsEyeView.engine.camera.livePosition;
         return mod.getNearby(center, Number.MAX_VALUE, 200).map((a) => ({ icao24: a.icao24, altitudeM: a.altitudeM }));
       });
       const baroById = new Map(nearbyList.map((a) => [a.icao24, a.altitudeM]));
@@ -626,6 +633,7 @@ async function main() {
     // =========================================================================
     // Group 3: Regime C re-resolve
     // =========================================================================
+    if (hasCctv) {
     console.log('Switching map stack to keyless OSM (regime C)...');
     // Grab a London camera's ground BEFORE the switch (still whatever regime
     // we were in — Google-3D, given the app's default).
@@ -692,6 +700,8 @@ async function main() {
       }
     } else {
       record('CCTV grounds re-resolved for regime C', null, 'no test camera available');
+    }
+
     }
 
     // -----------------------------------------------------------------------

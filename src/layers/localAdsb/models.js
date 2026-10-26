@@ -178,6 +178,7 @@ export function createLocalAdsbModels({
   }
 
   return {
+    ...(import.meta.env?.DEV ? { qaModels: () => models } : {}),
     /** Ids whose model admission is current; the layer enriches these. */
     get eligible() {
       return eligible;

@@ -22,6 +22,7 @@ import {
 } from './card.js';
 import { createLocalAdsbEnrichment, localAdsbClass } from './enrichment.js';
 import { createLocalAdsbModels } from './models.js';
+import { localAdsbQaDrawn } from './qaDrawn.js';
 import { LocalAdsbMotion } from './motion.js';
 import {
   ENTITY_PREFIX,
@@ -713,6 +714,18 @@ export function createLocalAdsbLayer({
       renderer = null;
       void receiver.destroy?.();
     },
+
+    ...(import.meta.env?.DEV
+      ? {
+          qaDrawn() {
+            return localAdsbQaDrawn(markers, models?.qaModels?.(), {
+              enabled,
+              cameraPosition: renderer?.view.camera?.positionWC,
+              isVisible: markerVisible,
+            });
+          },
+        }
+      : {}),
 
     getStats() {
       const current = receiver.getState();

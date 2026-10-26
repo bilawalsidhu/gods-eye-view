@@ -179,7 +179,7 @@ async function main() {
       '--no-sandbox',
       '--disable-setuid-sandbox',
       '--use-gl=angle',
-      '--use-angle=swiftshader',
+      `--use-angle=${process.env.QA_ANGLE || 'swiftshader'}`,
       '--disable-dev-shm-usage',
       '--disable-web-security',
       '--disable-background-timer-throttling',
@@ -206,6 +206,7 @@ async function main() {
 
     // ---- Straight-flight fetch shim (installed before any app code runs) ----
     await page.evaluateOnNewDocument((spec) => {
+      localStorage.setItem('gev:first-run-mission:v1', 'suppressed');
       window.__SPR = spec;
       window.__SPR.epochMs = Date.now();
       window.__SPR_HITS = { opensky: 0, mil: 0 };
@@ -284,6 +285,9 @@ async function main() {
       () => window.__godsEyeView && window.__godsEyeView.engine && window.__godsEyeView.dataManager && window.__godsEyeView.layers,
       { timeout: 60000, polling: 200 }
     );
+    await page.evaluate(() => window.__godsEyeView.styleManager.initialRestorePromise);
+    await page.waitForFunction(() => document.getElementById('loading-screen')?.classList.contains('hidden'), { timeout: 180000 });
+    await page.evaluate(() => window.__godsEyeView.styleManager.orbitController.stop());
     console.log('  App globals ready.');
 
     // ---- In-page probes: billboard walk, model walk, tracked-model finder ---
@@ -292,7 +296,7 @@ async function main() {
       window.__collectBillboards = function () {
         const v = window.__godsEyeView.viewer;
         if (!v)
-          return (window.__godsEyeView.layers.drawn('flights') ?? [])
+          return ['flights', 'military'].flatMap((id) => window.__godsEyeView.layers.drawn(id) ?? [])
             .filter((row) => !row.trackedModel)
             .map(({ id, image, scale, show }) => ({ id, image, scale, show }));
         const out = [];
@@ -315,7 +319,7 @@ async function main() {
       window.__collectModels = function () {
         const v = window.__godsEyeView.viewer;
         if (!v)
-          return (window.__godsEyeView.layers.drawn('flights') ?? [])
+          return ['flights', 'military'].flatMap((id) => window.__godsEyeView.layers.drawn(id) ?? [])
             .filter((row) => row.model && (row.trackedModel || !row.tracked))
             .map(({ id, model }) => ({ id, ...model, radius: null }));
         const out = [];
@@ -396,16 +400,16 @@ async function main() {
     let scaleBad = [];
     for (const [id, klass] of expectedFlights) {
       const bb = bbById.get(id);
-      const wantImg = aircraftIcon(klass);
+      const wantImg = [aircraftIcon(klass), aircraftIcon(klass, 192)];
       const wantScale = CLASS_SCALE_2D[klass] || 1;
-      if (!bb || bb.image !== wantImg) glyphBad.push(`${id}(${klass})${bb ? ':wrong-image' : ':missing'}`);
+      if (!bb || !wantImg.includes(bb.image)) glyphBad.push(`${id}(${klass})${bb ? ':wrong-image' : ':missing'}`);
       if (bb && Math.abs(bb.scale - wantScale) > 1e-9) scaleBad.push(`${id}: ${bb.scale} != ${wantScale}`);
     }
     for (const [id, klass] of hasMilitary ? expectedMilitary : []) {
       const bb = bbById.get(id);
-      const wantImg = aircraftIcon(klass);
+      const wantImg = [aircraftIcon(klass), aircraftIcon(klass, 192)];
       const wantScale = MIL_BILLBOARD_SCALE * (CLASS_SCALE_2D[klass] || 1);
-      if (!bb || bb.image !== wantImg) glyphBad.push(`${id}(${klass})${bb ? ':wrong-image' : ':missing'}`);
+      if (!bb || !wantImg.includes(bb.image)) glyphBad.push(`${id}(${klass})${bb ? ':wrong-image' : ':missing'}`);
       if (bb && Math.abs(bb.scale - wantScale) > 1e-9) scaleBad.push(`${id}: ${bb.scale} != ${wantScale}`);
     }
     record('B2a: every synthetic billboard has its class glyph (data-URI match)',

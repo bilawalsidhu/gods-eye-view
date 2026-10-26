@@ -99,6 +99,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import puppeteer from 'puppeteer';
+import { installNavaraHeadingProbe } from './qa-heading-navara.mjs';
 
 // ---------------------------------------------------------------------------
 // Args (same shape as track-regression.mjs)
@@ -110,7 +111,13 @@ const getOpt = (name, dflt) => {
   return i >= 0 && argv[i + 1] ? argv[i + 1] : dflt;
 };
 
-const APP_URL = getOpt('--url', 'http://localhost:4173');
+const appUrl = new URL(getOpt('--url', 'http://localhost:4173'));
+const requestedEngine = argv.find((value) => value.startsWith('--engine='))?.slice(9) || getOpt('--engine');
+if (requestedEngine) {
+  if (!['cesium', 'navara'].includes(requestedEngine)) throw new Error('Unknown engine');
+  appUrl.searchParams.set('engine', requestedEngine);
+}
+const APP_URL = appUrl.href;
 const HEADFUL = getFlag('--headful');
 const SHOT_DIR = path.resolve('qa-shots/b3');
 const SHOT_DIR_V2 = path.resolve('qa-shots/heading-v2');
@@ -148,7 +155,7 @@ function record(name, ok, detail) {
 
 async function observeTrackedHostPaint(page, timeoutMs = 5000) {
   return page.evaluate((boundedTimeoutMs) => new Promise((resolve) => {
-    const viewer = window.__godsEyeView?.viewer;
+    const viewer = (window.__headingView ?? window.__godsEyeView?.viewer);
     const scene = viewer?.scene;
     const history = [];
     const startedAt = performance.now();
@@ -453,7 +460,7 @@ async function main() {
     args: [
       '--no-sandbox',
       '--disable-setuid-sandbox',
-      ...(HEADFUL ? [] : ['--use-gl=angle', '--use-angle=swiftshader']),
+      ...(HEADFUL ? [] : ['--use-gl=angle', `--use-angle=${process.env.QA_ANGLE || 'swiftshader'}`]),
       '--disable-dev-shm-usage',
       '--disable-web-security',
       '--disable-background-timer-throttling',
@@ -480,6 +487,7 @@ async function main() {
 
     // ---- Turning-plane fetch shim (installed before any app code runs) ------
     await page.evaluateOnNewDocument((turn) => {
+      localStorage.setItem('gev:first-run-mission:v1', 'suppressed');
       window.__TURN = turn;
       window.__TURN.epochMs = Date.now(); // arc phase zero = shim install time
       window.__TURN_HITS = { opensky: 0, mil: 0 };
@@ -574,9 +582,12 @@ async function main() {
     console.log('Loading app...');
     await page.goto(APP_URL, { waitUntil: 'domcontentloaded', timeout: 60000 });
     await page.waitForFunction(
-      () => window.__godsEyeView && window.__godsEyeView.viewer && window.__godsEyeView.dataManager,
+      () => window.__godsEyeView?.layers && window.__godsEyeView.dataManager,
       { timeout: 60000, polling: 200 }
     );
+    await page.evaluate(() => window.__godsEyeView.styleManager.initialRestorePromise);
+    await page.waitForFunction(() => document.getElementById('loading-screen')?.classList.contains('hidden'), { timeout: 180000 });
+    await page.evaluate(() => window.__godsEyeView.styleManager.orbitController.stop());
     console.log('  App globals ready.');
 
     // ---- Model finder + course derivation, installed once ------------------
@@ -589,7 +600,7 @@ async function main() {
       // ~90° course spike into the sampled series — a measurement flake, not
       // a product regression.)
       window.__findTrackedModel = function (icao) {
-        const v = window.__godsEyeView.viewer;
+        const v = (window.__headingView ?? window.__godsEyeView.viewer);
         const out = [];
         const walk = (coll) => {
           const n = coll.length;
@@ -625,7 +636,7 @@ async function main() {
       // Invert _modelMatrix (pitch=roll=0): local x in ENU = (cos h, −sin h, 0)
       // → h = atan2(−x·north, x·east); world course = h − headingOffsetDeg.
       window.__courseFromModelMatrix = function (mm, headingOffsetDeg) {
-        const v = window.__godsEyeView.viewer;
+        const v = (window.__headingView ?? window.__godsEyeView.viewer);
         const C3 = v.camera.position.constructor;
         const Carto = v.camera.positionCartographic.constructor;
         const carto = Carto.fromCartesian(new C3(mm[12], mm[13], mm[14]));
@@ -646,7 +657,7 @@ async function main() {
       // preUpdate/preRender listeners and reads the rendered model matrix, but
       // does not depend on ambient render-loop scheduling for sample count.
       window.__sampleModelCourse = async function (icao, headingOffsetDeg, windowMs, stepMs = 100) {
-        const v = window.__godsEyeView.viewer;
+        const v = (window.__headingView ?? window.__godsEyeView.viewer);
         const tileset = window.__godsEyeView.tileset;
         const out = [];
         const start = performance.now();
@@ -685,13 +696,15 @@ async function main() {
       };
     });
 
+    await installNavaraHeadingProbe(page);
+
     // ---- Enable layers with fixes back-dated 32 s, then prime forward ------
     // First update() fires inside setEnabled, so the FIRST fix must already be
     // the oldest (history appends only monotonically-newer fix times).
     console.log('Priming turning history through the render delay (30 s / 15 s)...');
     const primed = await page.evaluate(async () => {
       const dm = window.__godsEyeView.dataManager;
-      const v = window.__godsEyeView.viewer;
+      const v = (window.__headingView ?? window.__godsEyeView.viewer);
       window.__TURN.timeOffsetSec = -32;
       await dm.setEnabled('flights', true);
       await dm.setEnabled('military', true);
@@ -726,7 +739,10 @@ async function main() {
 
     const flModelUp = await page.waitForFunction((icao) => {
       const m = window.__findTrackedModel(icao);
-      return !!(m && m.ready && m.show);
+      const app = window.__godsEyeView;
+      const selected = app.dataManager.layers.get('flights').module.getTrackedInfo();
+      const following = app.engine.kind === 'navara' ? app.engine.camera.following() : app.viewer.trackedEntity;
+      return !!(m && m.ready && m.show && selected?.icao24 === icao && following);
     }, { timeout: 40000, polling: 250 }, TURN.flights[0].icao).then(() => true).catch(() => false);
     record('flights: tracked 3D model rendered (ready+shown)', flModelUp, flModelUp ? 'model up' : 'model never became ready');
     if (!flModelUp) { finish(); return; }
@@ -783,14 +799,14 @@ async function main() {
     await sleep(800);
     const shots = [
       ['flights-far-orbitA.png', async () => { /* default follow framing */ }],
-      ['flights-far-orbitB.png', () => page.evaluate(() => { window.__godsEyeView.viewer.camera.rotateRight(1.9); })],
+      ['flights-far-orbitB.png', () => page.evaluate(() => { (window.__headingView ?? window.__godsEyeView.viewer).camera.rotateRight(1.9); })],
       ['flights-near-orbitA.png', () => page.evaluate(() => {
-        const cam = window.__godsEyeView.viewer.camera;
+        const cam = (window.__headingView ?? window.__godsEyeView.viewer).camera;
         // Synthetic cruise frame settles ~5.6 km out; leave ~430 m so model,
         // readout anchor, tracking line, and trail can be judged close-up.
         cam.rotateRight(-1.9); cam.zoomIn(5200);
       })],
-      ['flights-near-orbitB.png', () => page.evaluate(() => { window.__godsEyeView.viewer.camera.rotateLeft(1.2); })],
+      ['flights-near-orbitB.png', () => page.evaluate(() => { (window.__headingView ?? window.__godsEyeView.viewer).camera.rotateLeft(1.2); })],
     ];
     for (const [name, move] of shots) {
       try { await move(); } catch (e) { console.log(`    (camera move for ${name} failed: ${e.message})`); }
@@ -812,7 +828,10 @@ async function main() {
 
     const milModelUp = await page.waitForFunction((hex) => {
       const m = window.__findTrackedModel(hex);
-      return !!(m && m.ready && m.show);
+      const app = window.__godsEyeView;
+      const selected = app.dataManager.layers.get('military').module.getTrackedInfo();
+      const following = app.engine.kind === 'navara' ? app.engine.camera.following() : app.viewer.trackedEntity;
+      return !!(m && m.ready && m.show && selected?.icao24 === hex && following);
     }, { timeout: 40000, polling: 250 }, TURN.military[0].hex).then(() => true).catch(() => false);
     record('military: tracked 3D model rendered (ready+shown)', milModelUp, milModelUp ? 'model up' : 'model never became ready');
     if (milModelUp) {
@@ -841,14 +860,14 @@ async function main() {
       await sleep(800);
       for (const [name, move] of [
         ['military-orbitA.png', async () => { }],
-        ['military-orbitB.png', () => page.evaluate(() => { window.__godsEyeView.viewer.camera.rotateRight(1.6); })],
+        ['military-orbitB.png', () => page.evaluate(() => { (window.__headingView ?? window.__godsEyeView.viewer).camera.rotateRight(1.6); })],
         ['military-near-orbitA.png', () => page.evaluate(() => {
-          const cam = window.__godsEyeView.viewer.camera;
+          const cam = (window.__headingView ?? window.__godsEyeView.viewer).camera;
           // 12,000 ft synthetic frame settles ~6.3 km out; leave ~630 m.
           cam.rotateLeft(1.6); cam.zoomIn(5700);
         })],
         ['military-near-orbitB.png', () => page.evaluate(() => {
-          window.__godsEyeView.viewer.camera.rotateRight(1.2);
+          (window.__headingView ?? window.__godsEyeView.viewer).camera.rotateRight(1.2);
         })],
       ]) {
         try { await move(); } catch (e) { console.log(`    (camera move for ${name} failed: ${e.message})`); }
@@ -877,7 +896,10 @@ async function main() {
       }, icao);
       const up = await page.waitForFunction((id) => {
         const m = window.__findTrackedModel(id);
-        return !!(m && m.ready && m.show);
+        const app = window.__godsEyeView;
+        const selected = app.dataManager.layers.get('flights').module.getTrackedInfo();
+        const following = app.engine.kind === 'navara' ? app.engine.camera.following() : app.viewer.trackedEntity;
+        return !!(m && m.ready && m.show && selected?.icao24 === id && following);
       }, { timeout: 40000, polling: 250 }, icao).then(() => true).catch(() => false);
       record(`${label}: tracked 3D model rendered (ready+shown)`, up, up ? 'model up' : 'model never became ready');
       return up;
@@ -914,7 +936,7 @@ async function main() {
       });
       for (const [name, move] of [
         ['slowturn-far.png', async () => { /* default follow framing */ }],
-        ['slowturn-near.png', () => page.evaluate(() => { window.__godsEyeView.viewer.camera.zoomIn(2500); })],
+        ['slowturn-near.png', () => page.evaluate(() => { (window.__headingView ?? window.__godsEyeView.viewer).camera.zoomIn(2500); })],
       ]) {
         try { await move(); } catch (e) { console.log(`    (camera move for ${name} failed: ${e.message})`); }
         await sleep(1200);
@@ -930,8 +952,9 @@ async function main() {
     // ========================================================================
     console.log('\nPhase 5 — 65 kt helicopter: tracked↔fleet course handoff (click / click-away)');
     await page.evaluate(() => {
+      if (window.__headingView) { window.__findModelByIcao = window.__findTrackedModel; return; }
       window.__findModelByIcao = function (icao) {
-        const v = window.__godsEyeView.viewer;
+        const v = (window.__headingView ?? window.__godsEyeView.viewer);
         const out = [];
         const walk = (coll) => {
           const n = coll.length;
@@ -957,7 +980,7 @@ async function main() {
       window.__TURN.heli65.active = true;
       const fl = window.__godsEyeView.dataManager.layers.get('flights').module;
       fl.setParams({ models3d: false });
-      await fl.update(window.__godsEyeView.viewer); // ingest the first heli fix
+      await fl.update((window.__headingView ?? window.__godsEyeView.viewer)); // ingest the first heli fix
     });
     await sleep(4000); // several fleet ticks establish the heli's fleet course
     await page.evaluate((icao) => {
@@ -966,7 +989,7 @@ async function main() {
     const heliTracked = await page.waitForFunction((icao) => {
       const fl = window.__godsEyeView.dataManager.layers.get('flights').module;
       const ti = fl.getTrackedInfo();
-      return !!(ti && ti.icao24 === icao && window.__godsEyeView.viewer.trackedEntity);
+      return !!(ti && ti.icao24 === icao && (window.__headingView ?? window.__godsEyeView.viewer).trackedEntity);
     }, { timeout: 15000, polling: 250 }, TURN.heli65.icao).then(() => true).catch(() => false);
     record('heli65: tracking engaged (2D billboard mode)', heliTracked,
       heliTracked ? 'tracked' : 'tracking never engaged');
@@ -983,9 +1006,10 @@ async function main() {
       // rotation after. The release-in-place keeps the camera static, so
       // rotation deltas across the boundary are course deltas.
       const c1 = await page.evaluate(async ({ icao, actionAtMs, windowMs }) => {
-        const v = window.__godsEyeView.viewer;
+        const v = (window.__headingView ?? window.__godsEyeView.viewer);
         const fl = window.__godsEyeView.dataManager.layers.get('flights').module;
         const findFleetBillboard = (id) => {
+          if (window.__headingView) return window.__godsEyeView.layers.drawn('flights').find((row) => row.id === id && row.show);
           const out = [];
           const walk = (coll) => {
             const n = coll.length;
@@ -1037,7 +1061,16 @@ async function main() {
         window.__godsEyeView.dataManager.layers.get('flights').module.setParams({ models3d: true });
       });
       const fleetModelUp = await page.evaluate(async (icao) => {
-        const v = window.__godsEyeView.viewer;
+        if (window.__headingView) {
+          const deadline = performance.now() + 40000;
+          while (performance.now() < deadline) {
+            if (window.__findModelByIcao(icao)) return true;
+            window.__godsEyeView.engine.render.request('heading-probe');
+            await new Promise((resolve) => setTimeout(resolve, 100));
+          }
+          return false;
+        }
+        const v = (window.__headingView ?? window.__godsEyeView.viewer);
         const tileset = window.__godsEyeView.tileset;
         const priorDefaultLoop = v.useDefaultRenderLoop;
         const priorTilesetShow = tileset?.show;
@@ -1061,7 +1094,7 @@ async function main() {
         record('heli65 C2 (click): fleet model rendered before re-track', false, 'fleet model never became ready');
       } else {
         const c2 = await page.evaluate(async ({ icao, offsetDeg, actionAtMs, windowMs }) => {
-          const v = window.__godsEyeView.viewer;
+          const v = (window.__headingView ?? window.__godsEyeView.viewer);
           const fl = window.__godsEyeView.dataManager.layers.get('flights').module;
           const out = [];
           const start = performance.now();

@@ -1,44 +1,26 @@
 // gev's screen overlays on Navara: sprites, points and lines (engine.movers
-// and engine.lines) drawn into the frame after Navara's tone mapping and
-// before its anti-aliasing (SMAA/FXAA) and the gev sharpening, so their
+// and engine.lines) drawn into the frame after Navara's tone mapping,
+// anti-aliasing (SMAA/FXAA) and the gev sharpening, so their
 // colours are the colours asked for (as Cesium draws billboards and
 // polylines), not tone-mapped or graded with the look. A public Navara
 // EffectDesc whose pass renders one three scene over the input buffer; the
 // post-processing chain has no depth buffer, so each overlay material tests
 // the scene depth from Navara's MRT pass itself (overlayDepth.js). The
-// pass costs nothing while the scene is empty. Models stay in Navara's
-// scene, lit and graded like the 3D tiles.
+// pass costs nothing while no geometry is visible. Models retain scene
+// depth; their lit display colour is resolved here so HDR effects and MSAA
+// cannot spread a tint into neighbouring pixels.
 
 import { EffectDesc, Pass as NavaraPass } from '@navaramap/three';
-import { Pass } from 'postprocessing';
+import { GevOverlayPass } from './overlayPass.js';
 import { RGBADepthPacking, Scene } from 'three';
 
 export const OVERLAY_EFFECT_KEY = 'gevOverlay';
 
-class GevOverlayPass extends Pass {
-  constructor(scene, camera, overlay) {
-    super('GevOverlayPass', scene, camera);
-    this.needsSwap = false;
-    this.overlay = overlay;
-  }
-
-  render(renderer, inputBuffer) {
-    if (!this.scene.children.length) return;
-    const resolution = this.overlay.uniforms.uGevResolution.value;
-    resolution[0] = inputBuffer?.width ?? 0;
-    resolution[1] = inputBuffer?.height ?? 0;
-    const autoClear = renderer.autoClear;
-    renderer.autoClear = false;
-    renderer.setRenderTarget(this.renderToScreen ? null : inputBuffer);
-    renderer.render(this.scene, this.camera);
-    renderer.autoClear = autoClear;
-  }
-}
-
 class GevOverlayEffectDesc extends EffectDesc {
   static key = OVERLAY_EFFECT_KEY;
-  static insertAfter = ['toneMapping'];
-  static insertBefore = ['gevSharpen', 'smaa', 'fxaa', 'final'];
+  // Navara takes the first existing anchor, so the latest pass comes first.
+  static insertAfter = ['fxaa', 'smaa', 'gevSharpen', 'toneMapping'];
+  static insertBefore = ['final'];
 
   constructor(view, ctx, config) {
     super(view, ctx, config);
@@ -77,11 +59,14 @@ export function createNavaraOverlay(view) {
   view.registerEffect(OVERLAY_EFFECT_KEY, GevOverlayEffectDesc);
   const scene = new Scene();
   const frameHooks = new Map();
+  const lights = new Map();
   let ctx = null;
   const pendingPicks = new Map();
   const overlay = {
     scene,
+    modelTints: new Set(),
     uniforms: {
+      uGevModelExposure: { value: 1 },
       tGevSceneDepth: { value: null },
       uGevResolution: { value: [0, 0] },
     },
@@ -91,7 +76,42 @@ export function createNavaraOverlay(view) {
         ctx.registerPickableMesh(key, wrapper);
       pendingPicks.clear();
     },
+    hasDrawables() {
+      for (const child of scene.children)
+        if (
+          !child.isLight &&
+          child.visible &&
+          (child.count === undefined || child.count > 0)
+        )
+          return true;
+      return false;
+    },
     beforeFrame(time) {
+      overlay.uniforms.uGevModelExposure.value = view.toneMappingExposure ?? 1;
+      // Public descriptor lights are copied, never reparented from Navara.
+      if (overlay.modelTints.size && ctx) {
+        for (const light of ctx.scenes.light.children) {
+          if (!light.isLight) continue;
+          let copy = lights.get(light);
+          if (!copy) {
+            copy = light.clone(false);
+            copy.castShadow = false;
+            copy.matrixAutoUpdate = false;
+            lights.set(light, copy);
+            scene.add(copy);
+          }
+          copy.color.copy(light.color);
+          copy.intensity = light.intensity;
+          copy.matrix.copy(light.matrixWorld);
+          copy.sh?.copy(light.sh);
+          copy.groundColor?.copy(light.groundColor);
+          if (copy.target && light.target) {
+            copy.target.matrixAutoUpdate = false;
+            copy.target.matrix.copy(light.target.matrixWorld);
+            copy.target.updateMatrixWorld(true);
+          }
+        }
+      }
       for (const hook of frameHooks.values()) hook(time);
     },
     get ctx() {
@@ -107,10 +127,12 @@ export function createNavaraOverlay(view) {
     uniforms: overlay.uniforms,
     add(object, onFrame) {
       scene.add(object);
+      if (object.userData.gevModelTint) overlay.modelTints.add(object);
       if (onFrame) frameHooks.set(object, onFrame);
     },
     remove(object) {
       scene.remove(object);
+      overlay.modelTints.delete(object);
       frameHooks.delete(object);
     },
     registerPickable(key, wrapper) {
@@ -127,6 +149,9 @@ export function createNavaraOverlay(view) {
     destroy() {
       handle.delete();
       scene.clear();
+      overlay.modelTints.clear();
+      for (const light of lights.values()) light.dispose?.();
+      lights.clear();
       frameHooks.clear();
     },
   };

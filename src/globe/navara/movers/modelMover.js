@@ -18,14 +18,12 @@ import {
   Vector3,
 } from 'three';
 import { footprintPerDepth, originFor } from './pack.js';
+import { createModelTint } from './modelTint.js';
 
 /**
- * Ambient light on the tinted surface, as an emissive share of it: Cesium
- * lights models with image-based lighting besides the sun, so a tinted
- * aircraft reads near-white at any sun angle; Navara's sky light alone left
- * them grey-brown at dawn. 0.5 matched Cesium's model luminance at the near
- * pose (qa-flights-engines --models=on: median 190 vs 193 on Cesium; 139
- * without it).
+ * Ambient share of the base surface: Cesium supplies image-based lighting
+ * besides the sun. Navara's sky light alone left it grey-brown at dawn.
+ * The instance colour is applied after lighting, independently of this share.
  */
 export const MODEL_AMBIENT = 0.5;
 
@@ -47,13 +45,12 @@ const scratchTranslation = new Vector3();
 const scratchScale = new Vector3();
 
 /**
- * Mixes the instance colour, decoded from sRGB (as Cesium takes colours;
- * the material works in linear), into the material's colour by uGevBlend (the
- * set's colorBlend, as Cesium's colorBlendAmount); the instance alpha is the
- * model's opacity (Cesium: a model colour's alpha makes it translucent; the
- * aircraft fade with distance through it), not a blend weight.
+ * Cesium's ModelFS applies modelColorStage after lightingStage in sRGB.
+ * Mix the lit output in that space, then return to linear for Navara's look.
+ * Alpha remains opacity before alpha testing, independently of the mix.
  */
-function blendInstanceColor(material, uniforms) {
+function blendInstanceColor(material, uniforms, displayTint) {
+  const alpha = 'diffuseColor.a *= vGevColor.a;';
   material.onBeforeCompile = (shader) => {
     Object.assign(shader.uniforms, uniforms);
     shader.vertexShader = shader.vertexShader
@@ -68,29 +65,36 @@ function blendInstanceColor(material, uniforms) {
     shader.fragmentShader = shader.fragmentShader
       .replace(
         'void main() {',
-        'uniform float uGevBlend;\nuniform float uGevAmbient;\nvarying vec4 vGevColor;\nvoid main() {',
+        `uniform float uGevBlend;\nuniform float uGevAmbient;\nvarying vec4 vGevColor;\nvoid main() {`,
       )
       .replace(
         '#include <emissivemap_fragment>',
         '#include <emissivemap_fragment>\ntotalEmissiveRadiance += diffuseColor.rgb * uGevAmbient;',
       )
+      .replace('#include <map_fragment>', `#include <map_fragment>\n${alpha}`)
       .replace(
-        '#include <map_fragment>',
-        '#include <map_fragment>\ndiffuseColor.rgb = mix(diffuseColor.rgb, sRGBTransferEOTF(vGevColor).rgb, uGevBlend);\ndiffuseColor.a *= vGevColor.a;',
+        '#include <opaque_fragment>',
+        `#include <opaque_fragment>\nif (!${displayTint} && uGevBlend > 0.0) {\nvec3 gevLitSrgb = sRGBTransferOETF(vec4(gl_FragColor.rgb, 1.0)).rgb;\nvec3 gevMixedColor = sRGBTransferEOTF(vec4(clamp(mix(gevLitSrgb, vGevColor.rgb, uGevBlend), 0.0, 1.0), 1.0)).rgb;\ngl_FragColor.rgb = gevMixedColor;\n}`,
       );
   };
-  material.customProgramCacheKey = () => 'gev-mover-model-blend';
+  material.customProgramCacheKey = () =>
+    `gev-mover-model-display-color-${displayTint ? 'overlay' : 'linear'}`;
 }
 
 /**
  * @param {object} options normalized model set options
  * @param {object} store the set's mover store
- * @param {{ load: (url: string) => Promise<{ scene: object }>, onLoad?: () => void }} ports
+ * @param {{ load: (url: string) => Promise<{ scene: object }>, onLoad?: () => void, overlay?: object }} ports
  */
-export function createModelMover(options, store, { load, onLoad = () => {} }) {
+export function createModelMover(
+  options,
+  store,
+  { load, onLoad = () => {}, overlay = null },
+) {
   const { capacity, model } = options;
   const uniforms = {
     uGevAmbient: { value: MODEL_AMBIENT },
+    uGevModelExposure: overlay?.uniforms.uGevModelExposure ?? { value: 1 },
     uGevBlend: {
       value: model.colorBlend
         ? model.colorBlend.mode === 'replace'
@@ -109,6 +113,13 @@ export function createModelMover(options, store, { load, onLoad = () => {} }) {
   let disposed = false;
   const colorAttributes = [];
   const materials = [];
+  // GLTFLoader returns a fresh asset per load. Cloned materials still share
+  // its textures; Material.dispose() does not release their GPU allocations.
+  const textures = new Set();
+  const disposeTextures = () => {
+    for (const texture of textures) texture.dispose();
+    textures.clear();
+  };
   // Each instance's drawn diameter (px) at its last write (CPU picks).
   const drawnPx = new Float32Array(capacity);
   // Translucent only while an instance is faded (opaque models keep the
@@ -175,18 +186,41 @@ export function createModelMover(options, store, { load, onLoad = () => {} }) {
           index * 4,
         );
     }
-    for (const { mesh } of parts) {
+    for (const { mesh, tint } of parts) {
+      if (tint) {
+        tint.count = store.count;
+        tint.visible = store.count > 0;
+      }
       mesh.count = store.count;
+      mesh.visible = store.count > 0;
       mesh.instanceMatrix.needsUpdate = true;
     }
     for (const attribute of colorAttributes) attribute.needsUpdate = true;
     syncTransparency();
   };
 
-  const group = { meshes: [], ready: null };
-  group.ready = load(model.url).then((gltf) => {
-    if (disposed) return;
+  const group = { meshes: [], pickMeshes: [], ready: null };
+  const asset = load(model.url).catch(() => {
+    // A missing asset keeps the layer's glyph fallback. Do not leak the
+    // rejected loader promise (or its URL) through descriptor creation.
+    if (!disposed) console.warn('[globe] Model asset unavailable');
+    return null;
+  });
+  group.ready = asset.then((gltf) => {
+    if (!gltf) return;
     const root = gltf.scene;
+    root.traverse((child) => {
+      for (const material of Array.isArray(child.material)
+        ? child.material
+        : [child.material])
+        if (material)
+          for (const value of Object.values(material))
+            if (value?.isTexture) textures.add(value);
+    });
+    if (disposed) {
+      disposeTextures();
+      return;
+    }
     root.updateMatrixWorld(true);
     const sphere = new Box3()
       .setFromObject(root)
@@ -201,8 +235,7 @@ export function createModelMover(options, store, { load, onLoad = () => {} }) {
           color: material.color,
         });
       else material = material.clone();
-      blendInstanceColor(material, uniforms);
-      materials.push(material);
+      blendInstanceColor(material, uniforms, Boolean(overlay));
       const geometry = child.geometry.clone();
       const color = new InstancedBufferAttribute(
         new Float32Array(capacity * 4).fill(1),
@@ -216,21 +249,37 @@ export function createModelMover(options, store, { load, onLoad = () => {} }) {
       mesh.frustumCulled = false;
       mesh.renderOrder = options.order;
       mesh.count = 0;
-      parts.push({ mesh, local: child.matrixWorld.clone() });
+      mesh.visible = false;
+      const tint = overlay
+        ? createModelTint(mesh, uniforms, overlay.uniforms)
+        : null;
+      if (tint) {
+        // Still present in the scene depth and GPU pick registry. Only colour
+        // moves to the display pass, where it is toned before raster resolve.
+        material.colorWrite = false;
+        overlay.add(tint);
+      }
+      materials.push(material);
+      if (tint) materials.push(tint.material);
+      parts.push({ mesh, tint, local: child.matrixWorld.clone() });
       group.meshes.push(mesh);
+      group.pickMeshes.push(tint ?? mesh);
     });
     loaded = true;
     if (origin)
-      for (const { mesh } of parts)
+      for (const { mesh, tint } of parts) {
         mesh.position.set(origin.x, origin.y, origin.z);
+        tint?.position.copy(mesh.position);
+      }
     write(0, store.count);
     onLoad(group.meshes);
   });
 
   const placeAt = (next) => {
     origin = { x: next.x, y: next.y, z: next.z };
-    for (const { mesh } of parts) {
+    for (const { mesh, tint } of parts) {
       mesh.position.set(origin.x, origin.y, origin.z);
+      tint?.position.copy(mesh.position);
       mesh.updateMatrix();
       mesh.updateMatrixWorld(true);
     }
@@ -258,7 +307,15 @@ export function createModelMover(options, store, { load, onLoad = () => {} }) {
           z: store.positions[2],
         });
       if (range) write(range.from, Math.min(range.to, store.count));
-      for (const { mesh } of parts) mesh.count = store.count;
+      for (const { mesh, tint } of parts) {
+        if (tint) {
+          tint.count = store.count;
+          tint.visible = store.count > 0;
+        }
+        mesh.count = store.count;
+        // Retained empty banks must also skip three's material/uniform work.
+        mesh.visible = store.count > 0;
+      }
     },
     /** Each drawn frame: pixel limits need every instance rewritten. */
     update({
@@ -278,12 +335,19 @@ export function createModelMover(options, store, { load, onLoad = () => {} }) {
       return true;
     },
     dispose() {
+      if (disposed) return;
       disposed = true;
-      for (const { mesh } of parts) {
+      for (const { mesh, tint } of parts) {
+        if (tint) {
+          overlay.remove(tint);
+          tint.material.dispose();
+          tint.dispose();
+        }
         mesh.geometry.dispose();
         mesh.material.dispose();
         mesh.dispose?.();
       }
+      disposeTextures();
     },
   };
 }

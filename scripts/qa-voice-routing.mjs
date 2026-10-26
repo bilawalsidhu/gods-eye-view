@@ -1305,7 +1305,8 @@ async function runBehaviorLayer() {
     args: [
       '--no-sandbox',
       '--disable-setuid-sandbox',
-      ...(HEADFUL ? [] : ['--use-gl=angle', '--use-angle=swiftshader']),
+      ...(HEADFUL ? [] : ['--use-gl=angle', `--use-angle=${process.env.QA_ANGLE || 'swiftshader'}`]),
+      '--mute-audio',
       '--disable-dev-shm-usage',
       '--disable-web-security',
       '--disable-background-timer-throttling',

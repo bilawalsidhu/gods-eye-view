@@ -7,6 +7,7 @@ import {
   Mesh,
   MeshStandardMaterial,
   Vector3,
+  Texture,
 } from 'three';
 import { createMoverStore, normalizeMoverSetOptions } from '../../movers.js';
 import { createModelMover, modelPixelDistance } from './modelMover.js';
@@ -91,7 +92,7 @@ test('a far model keeps its minimum pixel size', async () => {
   assert.equal(mover.pickRadiusPx(1), null);
 });
 
-test("the instance colour (sRGB, decoded) tints by the set's blend amount; its alpha is opacity, as Cesium's model colour", async () => {
+test("the instance colour mixes after lighting in sRGB, as Cesium's model colour", async () => {
   const store = createMoverStore(options);
   const mover = createModelMover(options, store, {
     load: async () => fakeGltf(),
@@ -108,14 +109,22 @@ test("the instance colour (sRGB, decoded) tints by the set's blend amount; its a
     uniforms: {},
     vertexShader: 'void main() {\n#include <begin_vertex>\n}',
     fragmentShader:
-      'void main() {\n#include <map_fragment>\n#include <emissivemap_fragment>\n}',
+      'void main() {\n#include <map_fragment>\n#include <emissivemap_fragment>\n#include <opaque_fragment>\n}',
   };
   mesh.material.onBeforeCompile(shader);
+  assert.match(shader.fragmentShader, /diffuseColor\.a \*= vGevColor\.a;/);
+  // Cesium ModelFS runs modelColorStage after lightingStage, in sRGB.
+  assert.match(shader.fragmentShader, /vec3 gevLitSrgb = sRGBTransferOETF/);
   assert.match(
     shader.fragmentShader,
-    /diffuseColor\.rgb = mix\(diffuseColor\.rgb, sRGBTransferEOTF\(vGevColor\)\.rgb, uGevBlend\);\s*diffuseColor\.a \*= vGevColor\.a;/,
+    /mix\(gevLitSrgb, vGevColor\.rgb, uGevBlend\)/,
   );
-  // Ambient light on the tinted surface (Cesium's image-based lighting).
+  assert.ok(
+    shader.fragmentShader.indexOf('vec3 gevLitSrgb') >
+      shader.fragmentShader.indexOf('#include <opaque_fragment>'),
+  );
+  assert.doesNotMatch(shader.fragmentShader, /diffuseColor\.rgb = mix/);
+  // Ambient light belongs to the original surface before the colour mix.
   assert.match(
     shader.fragmentShader,
     /totalEmissiveRadiance \+= diffuseColor\.rgb \* uGevAmbient;/,
@@ -133,4 +142,184 @@ test("the minimum pixel size is taken at Cesium's distance: view depth less the 
   assert.equal(modelPixelDistance(4000, 0, -3000, ahead, 30), 2970);
   assert.equal(modelPixelDistance(0, 0, -10, ahead, 30), 0);
   assert.equal(modelPixelDistance(4000, 0, -3000, null, 0), 5000);
+});
+
+test('disposing a model releases shared textures once, as well as each instanced mesh', async () => {
+  const gltf = fakeGltf();
+  const texture = new Texture();
+  gltf.scene.children[0].material.map = texture;
+  const second = gltf.scene.children[0].clone();
+  gltf.scene.add(second);
+  let released = 0;
+  texture.addEventListener('dispose', () => released++);
+  const mover = createModelMover(options, createMoverStore(options), {
+    load: async () => gltf,
+  });
+  await mover.group.ready;
+  let geometries = 0,
+    materials = 0;
+  for (const mesh of mover.group.meshes) {
+    mesh.geometry.addEventListener('dispose', () => geometries++);
+    mesh.material.addEventListener('dispose', () => materials++);
+  }
+  assert.equal(released, 0, 'textures remain live while the model draws');
+  mover.dispose();
+  mover.dispose();
+  assert.equal(released, 1);
+  assert.equal(geometries, 2);
+  assert.equal(materials, 2);
+});
+
+test('a model removed before its load completes releases the arriving textures', async () => {
+  let finish;
+  const gltf = fakeGltf();
+  const texture = new Texture();
+  gltf.scene.children[0].material.map = texture;
+  let released = 0,
+    loaded = 0;
+  texture.addEventListener('dispose', () => released++);
+  const mover = createModelMover(options, createMoverStore(options), {
+    load: () =>
+      new Promise((resolve) => {
+        finish = resolve;
+      }),
+    onLoad: () => loaded++,
+  });
+  mover.dispose();
+  finish(gltf);
+  await mover.group.ready;
+  assert.equal(released, 1);
+  assert.equal(loaded, 0);
+  assert.equal(mover.ready(), false);
+  assert.equal(mover.group.meshes.length, 0);
+});
+
+test('a failed model load stays not-ready without an unhandled rejection or leaking the URL', async (t) => {
+  const warnings = [];
+  t.mock.method(console, 'warn', (message) => warnings.push(message));
+  const mover = createModelMover(options, createMoverStore(options), {
+    load: async () => {
+      throw new Error('unavailable asset URL');
+    },
+  });
+  await mover.group.ready;
+  assert.equal(mover.ready(), false);
+  assert.equal(mover.group.meshes.length, 0);
+  assert.deepEqual(warnings, ['[globe] Model asset unavailable']);
+  mover.dispose();
+});
+
+test('an empty retained model bank leaves the render traversal and restores its cached instances', async () => {
+  const store = createMoverStore(options);
+  const mover = createModelMover(options, store, {
+    load: async () => fakeGltf(),
+  });
+  await mover.group.ready;
+  const [mesh] = mover.group.meshes;
+  assert.equal(mesh.visible, false, 'loaded before its first instance');
+  store.set(0, { position: { x: 6378137, y: 0, z: 0 } });
+  store.setCount(1);
+  mover.commit(store.dirty());
+  store.clean();
+  assert.equal(mesh.visible, true);
+  const before = mesh.instanceMatrix.array.slice();
+  store.setCount(0);
+  mover.commit(store.dirty());
+  store.clean();
+  assert.equal(mesh.visible, false);
+  assert.equal(mover.ready(), true, 'the asset remains cached');
+  store.setCount(1);
+  mover.commit(store.dirty());
+  assert.equal(mesh.visible, true);
+  assert.deepEqual(mesh.instanceMatrix.array, before);
+  mover.dispose();
+});
+
+test('display tint shares transforms, preserves fade opacity and leaves no overlay resource after destruction', async () => {
+  const children = new Set();
+  const overlay = {
+    uniforms: {
+      tGevSceneDepth: { value: null },
+      uGevResolution: { value: [1280, 800] },
+    },
+    add: (mesh) => children.add(mesh),
+    remove: (mesh) => children.delete(mesh),
+  };
+  const store = createMoverStore(options);
+  const mover = createModelMover(options, store, {
+    load: async () => fakeGltf(),
+    overlay,
+  });
+  store.set(0, {
+    position: { x: 6378137, y: 0, z: 0 },
+    color: [1, 0.2, 0.6, 0.4],
+  });
+  store.setCount(1);
+  mover.commit(store.dirty());
+  await mover.group.ready;
+  const [base] = mover.group.meshes;
+  const [tint] = children;
+  assert.equal(tint.geometry, base.geometry);
+  assert.equal(tint.instanceMatrix, base.instanceMatrix);
+  assert.deepEqual(tint.position, base.position);
+  assert.equal(tint.count, 1);
+  assert.equal(tint.material.toneMapped, false);
+  assert.equal(tint.material.depthWrite, false);
+  const shader = {
+    uniforms: {},
+    vertexShader: 'void main() {\n#include <begin_vertex>\n}',
+    fragmentShader:
+      'void main() {\n#include <logdepthbuf_fragment>\n#include <opaque_fragment>\n}',
+  };
+  tint.material.onBeforeCompile(shader);
+  assert.equal(shader.uniforms.tGevSceneDepth, overlay.uniforms.tGevSceneDepth);
+  assert.match(shader.fragmentShader, /if \(gevOverlayHidden\(\)\) discard/);
+  assert.match(
+    shader.fragmentShader,
+    /mix\(gevLitSrgb, vGevColor.rgb, uGevBlend\)/,
+  );
+  assert.equal(base.material.colorWrite, false);
+  assert.equal(
+    mover.group.pickMeshes[0],
+    tint,
+    'GPU picking keeps its color-writing material',
+  );
+  store.setCount(0);
+  mover.commit(store.dirty());
+  assert.equal(tint.count, 0);
+  assert.equal(tint.visible, false);
+  let disposed = 0;
+  tint.material.addEventListener('dispose', () => disposed++);
+  mover.dispose();
+  mover.dispose();
+  assert.equal(disposed, 1);
+  assert.equal(children.size, 0);
+});
+
+test('the display pass preserves unlit model colour without a lighting tone curve', async () => {
+  const children = new Set();
+  const overlay = {
+    uniforms: {},
+    add: (mesh) => children.add(mesh),
+    remove: (mesh) => children.delete(mesh),
+  };
+  const spec = { ...options, model: { ...options.model, unlit: true } };
+  const mover = createModelMover(spec, createMoverStore(spec), {
+    load: async () => fakeGltf(),
+    overlay,
+  });
+  await mover.group.ready;
+  const [mesh] = children;
+  assert.equal(mesh.material.isMeshBasicMaterial, true);
+  const shader = {
+    uniforms: {},
+    vertexShader: 'void main() {\n#include <begin_vertex>\n}',
+    fragmentShader: 'void main() {\n#include <opaque_fragment>\n}',
+  };
+  mesh.material.onBeforeCompile(shader);
+  assert.doesNotMatch(
+    shader.fragmentShader,
+    /gevModelAces\(gl_FragColor.rgb\)/,
+  );
+  mover.dispose();
 });

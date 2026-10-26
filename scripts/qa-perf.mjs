@@ -102,6 +102,7 @@ const browser = await puppeteer.launch({
   headless: 'new',
   protocolTimeout: 300_000,
   args: [
+    ...(process.env.QA_ANGLE ? [`--use-angle=${process.env.QA_ANGLE}`] : []),
     '--no-sandbox',
     '--disable-setuid-sandbox',
     '--window-size=1440,900',

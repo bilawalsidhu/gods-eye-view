@@ -43,7 +43,21 @@ const RENDERED_LAYER_DIRS = [
   'src/layers/aircraft/',
   'src/layers/shared/',
 ];
+const W1_SHARED_FILES = new Set(
+  [
+    'trackedCamera',
+    'trailRenderer',
+    'contactTrailRenderer',
+    'focusDeemphasis',
+    'spriteOrder',
+    'iconOrientation',
+    'modelVisualAnchor',
+    'trackingClickGesture',
+  ].map((name) => `src/data/${name}.js`),
+);
 const renderedLayer = (file) =>
+  W1_SHARED_FILES.has(file) ||
+  file.startsWith('src/data/render/') ||
   file === 'src/celestialRing.js' ||
   file.startsWith('src/celestialRing/') ||
   RENDERED_LAYER_DIRS.some((dir) => file.startsWith(dir));

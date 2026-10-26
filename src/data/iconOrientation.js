@@ -21,7 +21,10 @@
  * keeps rotation continuous through tracked orbits; field evidence, not an
  * unverified math swap, decides whether exact projection becomes preferred.
  */
-import * as Cesium from 'cesium';
+import {
+  worldToWindowCoordinates,
+  horizonOccluder,
+} from './render/cesiumProjection.js';
 import * as geo from '../geo/index.js';
 import { engineFromViewer } from '../globe/cesium/engineFromViewer.js';
 
@@ -31,7 +34,7 @@ function worldToWindow(scene, position, result) {
   const projector = engineFromViewer(scene)?.projector;
   return projector
     ? projector.worldToWindow(position, result)
-    : Cesium.SceneTransforms.worldToWindowCoordinates(scene, position, result);
+    : worldToWindowCoordinates(scene, position, result);
 }
 
 /** Meters used to give the course vector a stable projection magnitude. */
@@ -125,11 +128,6 @@ export function stabilizeScreenRotation(
   );
   return Math.abs(delta) < Math.max(0, deadbandRad) ? previous : next;
 }
-
-const _occluder = new Cesium.EllipsoidalOccluder(
-  Cesium.Ellipsoid.WGS84,
-  new Cesium.Cartesian3(),
-);
 
 /**
  * Half-width of the crossfade band centred on the ellipsoid silhouette, in
@@ -256,10 +254,7 @@ export function skyBackdropFactor(
  * @param {Cesium.Camera} camera - The scene camera.
  * @returns {Cesium.EllipsoidalOccluder}
  */
-export function horizonOccluder(camera) {
-  _occluder.cameraPosition = camera.positionWC;
-  return _occluder;
-}
+export { horizonOccluder };
 
 /**
  * Cheap camera pose signature for "did the camera move" gating of rotation
