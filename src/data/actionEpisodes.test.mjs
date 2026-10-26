@@ -341,7 +341,16 @@ test('timestamps require finite numbers before replay candidate counting', () =>
   // A missing time previously became epoch zero, inflating independent runs.
   for (const field of ['startedAt', 'completedAt']) {
     for (const value of [
-      null, undefined, '', '100', true, false, {}, [], NaN, Infinity,
+      null,
+      undefined,
+      '',
+      '100',
+      true,
+      false,
+      {},
+      [],
+      NaN,
+      Infinity,
     ]) {
       assert.equal(normalizeActionEpisode(episode({ [field]: value })), null);
     }
