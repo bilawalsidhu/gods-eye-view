@@ -183,6 +183,38 @@ try {
       return manager.bloomEnabled !== before;
     }),
   );
+  const sliders = await page.evaluate(() => {
+    const ordinary = [
+      ...document.querySelectorAll('input[type="range"]'),
+    ].filter(
+      (input) => !input.matches('#radio-tuner-slider, .bhote-event-range'),
+    );
+    return {
+      count: ordinary.length,
+      shared: ordinary.every((input) =>
+        input.classList.contains('gev-quantitative-slider'),
+      ),
+      surface: ordinary.every((input) => {
+        const style = getComputedStyle(input);
+        return (
+          style.height === '18px' &&
+          style.appearance === 'none' &&
+          style.padding === '0px' &&
+          style.borderWidth === '0px' &&
+          (!input.disabled ||
+            (style.opacity === '0.42' && style.cursor === 'not-allowed'))
+        );
+      }),
+      tunerSeparate: !document
+        .getElementById('radio-tuner-slider')
+        .classList.contains('gev-quantitative-slider'),
+    };
+  });
+  check(
+    'ordinary sliders share one native surface',
+    sliders.count > 10 && sliders.shared && sliders.surface,
+  );
+  check('radio tuning keeps its specialized control', sliders.tunerSeparate);
   fs.mkdirSync('qa-shots/visual-input', { recursive: true });
   await page.screenshot({ path: 'qa-shots/visual-input/desktop.png' });
   await page.setViewport({ width: 620, height: 900 });

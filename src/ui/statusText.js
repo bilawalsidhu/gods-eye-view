@@ -218,7 +218,7 @@ function statusPatternText(piece) {
 }
 
 /** One piece of a status line in the UI language, or as it came. */
-export function translateStatusPiece(piece) {
+function translateStatusPiece(piece) {
   const known = translateKnown(piece);
   if (known !== piece) return known;
   return statusPatternText(piece) ?? piece;

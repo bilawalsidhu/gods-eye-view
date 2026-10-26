@@ -7,7 +7,7 @@
  * Phrases that add length without adding an answer. Tool numbers are spoken
  * verbatim, so approximations are hedges too.
  */
-export const HEDGE_PHRASES = Object.freeze([
+const HEDGE_PHRASES = Object.freeze([
   'keep in mind',
   "it's worth noting",
   'it is worth noting',

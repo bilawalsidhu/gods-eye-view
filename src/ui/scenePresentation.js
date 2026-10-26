@@ -1,5 +1,6 @@
 /** Scene panel elements and text-only project presentation. */
 import { formatNumber, msg, t } from '../i18n/index.js';
+import { createActionButton } from './actionButton.js';
 
 // Labels for what a shot stores; anything else shows as stored. Style names
 // match STYLE_STATUS_LABELS in visualPresets.js, which this package cannot
@@ -121,13 +122,18 @@ export function renderSceneShots(
     });
     const actions = document.createElement('div');
     actions.className = 'scene-shot-actions';
-    const loadButton = document.createElement('button');
-    loadButton.className = 'scene-shot-btn';
-    loadButton.textContent = t('LOAD');
+    const loadButton = createActionButton({
+      label: t('LOAD'),
+      className: 'scene-shot-btn',
+      size: 'compact',
+    });
     listen(loadButton, 'click', () => load(scene.id, shot.id));
-    const deleteButton = document.createElement('button');
-    deleteButton.className = 'scene-shot-btn scene-shot-danger';
-    deleteButton.textContent = t('DEL');
+    const deleteButton = createActionButton({
+      label: t('DEL'),
+      className: 'scene-shot-btn scene-shot-danger',
+      size: 'compact',
+      variant: 'danger',
+    });
     listen(deleteButton, 'click', () => remove(scene.id, shot.id));
     actions.appendChild(loadButton);
     actions.appendChild(deleteButton);

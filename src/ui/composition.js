@@ -9,7 +9,10 @@ import {
   flyToPOI,
   searchAndFlyTo,
 } from '../locations.js';
-import { interruptCameraMotion } from '../cameraVerbs.js';
+import {
+  interruptCameraMotion,
+  interruptGlobeRotation,
+} from '../cameraVerbs.js';
 import { IntelHUD } from '../hud.js';
 import { ShareLinkManager } from '../sharelink.js';
 import { OrbitController } from '../orbit.js';
@@ -73,6 +76,7 @@ export class StyleManager extends ApplicationShell {
         flyToPOI,
         searchAndFlyTo,
         interruptCameraMotion,
+        interruptGlobeRotation,
         IntelHUD,
         ShareLinkManager,
         OrbitController,
