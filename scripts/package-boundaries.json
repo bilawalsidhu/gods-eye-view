@@ -463,11 +463,7 @@
       "src/styles/anime.js",
       "src/styles/noir.js",
       "src/styles/snow.js",
-      "src/i18n/index.js",
-      "src/i18n/locale.js",
-      "src/i18n/locales/es.json",
-      "src/i18n/locales/ru.json",
-      "src/i18n/locales/zh-CN.json"
+      "src/i18n/marker.js"
     ],
     "external": ["cesium"]
   },
@@ -3330,6 +3326,7 @@
       "src/ui/visualPresets.js",
       "src/ui/visualSettings.js",
       "src/ui/segmentedControl.js",
+      "src/i18n/marker.js",
       "src/i18n/index.js",
       "src/i18n/locale.js",
       "src/i18n/locales/es.json",
@@ -3907,11 +3904,7 @@
       "src/data/idSwitches.js",
       "src/data/detectionPolicy.js",
       "src/scopeMaskPolicy.js",
-      "src/i18n/index.js",
-      "src/i18n/locale.js",
-      "src/i18n/locales/es.json",
-      "src/i18n/locales/ru.json",
-      "src/i18n/locales/zh-CN.json"
+      "src/i18n/marker.js"
     ],
     "external": []
   },
