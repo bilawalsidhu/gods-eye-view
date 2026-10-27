@@ -24,7 +24,7 @@ const ROAD_TYPES = Object.freeze({
  * OpenMapTiles folds private access into `no`. Tunnels cannot be placed on
  * the surface above them; ramps/bridges remain valid only on a motor road.
  */
-export function isDrivableOpenMapRoad(properties = {}) {
+function isDrivableOpenMapRoad(properties = {}) {
   return (
     Object.hasOwn(ROAD_TYPES, properties.class) &&
     !properties.subclass &&

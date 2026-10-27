@@ -90,15 +90,23 @@ export function terrainHeightsProxy(options = {}) {
 
   /**
    * Drop the oldest entries until the map is back inside its ceiling.
-   * Oldest-first by fetch time, the same shape `trackBackfillProxies` uses.
-   * Terrain does not move, so evicting an old point costs one refetch, never
-   * a wrong answer.
+   * The map is kept in fetch-time order (sorted once on load, and the resolver
+   * re-inserts every point it refetches), so the oldest are at the front and
+   * no write sorts the map. Terrain does not move, so evicting an old point
+   * costs one refetch, never a wrong answer.
    */
   function evictOverflow() {
-    if (mem.size <= CACHE_MAX_ENTRIES) return;
+    for (const key of mem.keys()) {
+      if (mem.size <= CACHE_MAX_ENTRIES) return;
+      mem.delete(key);
+    }
+  }
+
+  /** Put the map in fetch-time order; a file is not guaranteed to be. */
+  function orderByAge() {
     const byAge = [...mem.entries()].sort((a, b) => a[1].at - b[1].at);
-    for (let i = 0; i < byAge.length && mem.size > CACHE_MAX_ENTRIES; i += 1)
-      mem.delete(byAge[i][0]);
+    mem.clear();
+    for (const [key, entry] of byAge) mem.set(key, entry);
   }
   /** @type {Map<string, Promise<Array<object>>>} single-flight per missing-point subset. */
   const inflight = new Map();
@@ -165,6 +173,7 @@ export function terrainHeightsProxy(options = {}) {
         }
         diskDirty = mem.size > 0;
       }
+      orderByAge();
       evictOverflow();
     } catch {
       /* no disk cache yet */

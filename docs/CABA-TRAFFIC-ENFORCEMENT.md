@@ -49,7 +49,7 @@ selection and context records on disable/destroy. Reload the app to request a
 new inventory; toggles do not poll the publisher. Destruction aborts acquisition
 and discards late results.
 
-Layer ID: `caba-traffic-enforcement`. Provisional share token: `5`; rerun the
+Layer ID: `caba-traffic-enforcement`. Provisional share token: `6`; rerun the
 allocator against merge-time main before merging. Voice supports visibility and
 entity context; aggregate analyst queries are not exposed for this inventory.
 
@@ -61,7 +61,7 @@ Use the Node version required by CONTRIBUTING.md. Run:
 npm run format
 npm run format:check
 npm run check:boundaries
-npm run layer-token:check -- --base-ref origin/main
+npm run layer-token:check -- --base-ref upstream/main
 node --test src/layers/trafficEnforcement/*.test.mjs server/providers/cabaTraffic.test.mjs src/data/infrastructure.test.mjs
 npm test
 npm run build
@@ -94,3 +94,64 @@ The catalogue includes both GNSS and CABA after synchronization with upstream
 that combined state. The Unicode validator timing fixture is materialized before
 timing, so V8's lazy repeated-string allocation is excluded while the existing
 200 ms validation bound stays unchanged.
+
+### Token reconciliation with main, 2026-10-26
+
+Synchronized #1143 with upstream main
+`15de9d738c4a85be1a96726c6114181caef87eeb` (including #1297, #1418 and
+#1419). Removed only CABA's obsolete unpublished registry entry and reservation,
+then ran `npm run layer-token:next -- caba-traffic-enforcement`: the official
+allocator returned `6`. CABA now uses `6` in the registry and ledger. S2
+GhostMaps retains its published `5`; every other published reservation is
+unchanged. The official checker reports **32 published, 1 new** against that
+main revision. The registry has 33 shareable layers; the application catalog
+has 34 including local-only ADS-B.
+
+PR #1415's provisional assignments are not published reservations in this base.
+Its branch and reservations were not changed. If another PR publishes `6`
+before CABA merges, rerun the documented official allocation procedure against
+fresh main; do not preemptively skip free tokens or renumber published layers.
+Old links produced by #1143's unpublished `5` allocation must be regenerated:
+`5` unambiguously belongs to published S2 GhostMaps, with no CABA compatibility
+alias that could misinterpret legitimate GhostMaps links.
+
+The navigation regressions exercise the production long-hash parser and
+`/share/<code>` parser/codec through `ShareLinkManager`, then restore actual
+layer lifecycle state through `LayerStateCoordinator` and `DataLayerManager`
+using fixture modules. Each format restores both layers, CABA alone, S2 alone
+and neither in succession; CABA alone disables S2 and S2 alone disables CABA.
+The short-code regression also pins `ARCfnioY_6RHUgEgRw`, independently generated
+with the published main codec/ledger, to preserve the existing S2 bitmap index.
+This validates parsing and lifecycle restoration, not rendered map imagery.
+
+Voice schema hashes and catalog/allocation fixtures were reconciled with both
+layers present. The generated CABA capability contract adds exactly 160
+characters to main's 52,000-character Realtime prompt budget; the budget test
+accounts explicitly for that addition without changing tool arguments or
+removing existing guidance.
+
+Validation on Node 24.22.1:
+
+- `npm test`: full ordinary unit plan 8,813 passed, 0 failed, 2 platform
+  skips (Docker Compose CLI unavailable and native Windows DACL validation);
+  all 15 isolated allocation probes passed on the calibrated Node 24 runtime.
+- `npm run layer-token:check -- --base-ref upstream/main`: passed; all other
+  reservation rows also compared equal to main after excluding CABA.
+- Focused layer-state/ledger, voice-schema and first-run tests: 135 passed.
+- Share codecs, legacy conversion, path, navigation, language, celestial,
+  restoration notices and share-tool tests: 120 passed, including the fixed
+  published S2 short code.
+- `npm run i18n`: Spanish, Russian and Simplified Chinese complete, 2,730
+  messages per catalog. Catalog integration tests passed after conflict
+  resolution and updated application-layer counts.
+- `npm run format:check`, `npm run check:boundaries`, `npm run doctor`,
+  `npm run changelog:check` and `npm run build`: passed. Build retains its
+  existing large-chunk advisory.
+- `node scripts/qa-caba-traffic.mjs` and `npm run test:track -- --url
+  http://127.0.0.1:4184`: attempted, but Chromium 152.0.7977.75 aborted at
+  startup with `chrome/browser/process_singleton_posix.cc:297: socket()
+  failed: Operation not permitted (1)`, despite the gates' no-sandbox flags.
+  The tracking attempt used a reachable dev server in the same process
+  environment. Neither gate reached a page or produced visual evidence.
+  Browser-rendered restoration, live-source UI, screenshots and recording
+  therefore remain unverified; no browser assertion was relaxed.

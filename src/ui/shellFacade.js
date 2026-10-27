@@ -550,7 +550,7 @@ export class ShellFacade {
   }
 
   /** Settle only the search generation that still owns the shared input UI. */
-  _settleLocationSearchUi(generation) {
+  _settleLocationSearchUi(generation, options) {
     return this._navigation._settleLocationSearchUi(...arguments);
   }
 
