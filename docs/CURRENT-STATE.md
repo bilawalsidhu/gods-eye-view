@@ -2235,6 +2235,19 @@ fetching, trailing-24-hour filtering and partial-success caching are unchanged.
 > always exits non-zero, `1` meaning the control is healthy and `2` meaning it
 > is not. Plus the unit pins above.
 
+> **2026-10-26 — ambient frame rate:** while the only continuous-render
+> holds belong to slow live feeds (`AMBIENT_OWNERS` in
+> `src/renderGovernor.js`: flights, military, AIS vessels, satellites,
+> launches, traffic, transit, military awareness, wind) and the camera has
+> been still for 500 ms, the governor sets `viewer.targetFrameRate` to 30;
+> any other hold or any camera motion restores the viewer's own rate, and
+> uninstall gives it back. Camera motion is read from the pose after each
+> rendered frame, since a camera nudged a few millimetres a frame never
+> raises `moveEnd`. Wind's GPU flow now holds `'wind'` while it actually
+> animates instead of pumping `requestRender` from its own 30 Hz loop.
+> `scripts/qa-perf.mjs` step 4 checks the 30 fps parked rate and step 4b the
+> full rate while the camera moves.
+
 > **2026-10-24 — a turned-off layer's memory is released:** Cesium 1.138
 > keeps the draw commands past each frame's count in the opaque and other
 > per-pass arrays (`View.frustumCommandsList`) and in the offscreen pick view,

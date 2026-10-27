@@ -34,6 +34,7 @@ import { createInfrastructureLayers } from '../data/infrastructure.js';
 import { localGeoJsonServices } from './localGeojsonServices.js';
 import { createBhoteKoshiEventLayer } from '../data/bhoteKoshiEvent.js';
 import { createBhoteKoshiLocatorLayer } from '../data/bhoteKoshiLocator.js';
+import * as render from '../renderGovernor.js';
 
 /**
  * Hardware-local layers are registered like any other but never enter share
@@ -151,7 +152,7 @@ export function createApplicationCatalog({
           vessels,
           installations,
         }),
-        createWindLayer({ feed: sources.wind, clock: weatherClock }),
+        createWindLayer({ feed: sources.wind, clock: weatherClock, render }),
         createWeatherLayer({
           feed: sources.weather,
           id: 'weather-radar',
