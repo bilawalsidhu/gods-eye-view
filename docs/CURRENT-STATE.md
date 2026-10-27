@@ -14,7 +14,11 @@ road-segment records because their windows may overlap or describe different
 movements. A fresh record can show a compact measured rate, class mix,
 quality, observation age and provenance. Ambient world thumbnail cards receive at most
 two terse detail lines; the main CCTV panel gets a secondary `TRAFFIC OBS`
-row below the existing camera/source metadata.
+row below the existing camera/source metadata. Equal-time records for the
+same camera are selected by code-unit record ID, not viewer locale, so the
+shown rate remains deterministic across language and record arrival order.
+Equal-count class labels use the same code-unit ordering; none of this
+establishes additional measured traffic evidence.
 
 Presentation states remain explicit:
 

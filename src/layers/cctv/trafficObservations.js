@@ -22,6 +22,11 @@ function labelKey(value) {
     .toLowerCase();
 }
 
+/** Locale-independent ordering for stable observed evidence identities. */
+function stableTextOrder(left, right) {
+  return left < right ? -1 : left > right ? 1 : 0;
+}
+
 function formatNumber(value) {
   if (!Number.isFinite(value)) return null;
   return Number.isInteger(value) ? String(value) : value.toFixed(1);
@@ -41,7 +46,7 @@ export function observedTrafficClassMix(counts, { limit = 3 } = {}) {
   const entries = Object.entries(counts)
     .map(([key, raw]) => [labelKey(key), finiteNonNegative(raw)])
     .filter(([key, value]) => key && value !== null && value > 0)
-    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+    .sort((a, b) => b[1] - a[1] || stableTextOrder(a[0], b[0]));
   const total = entries.reduce((sum, [, value]) => sum + value, 0);
   if (!(total > 0)) return null;
   return entries
@@ -76,7 +81,10 @@ export function indexCameraTrafficObservations(snapshot) {
       !current ||
       nextTime > currentTime ||
       (nextTime === currentTime &&
-        String(record?.id || '').localeCompare(String(current?.id || '')) < 0)
+        stableTextOrder(
+          String(record?.id || ''),
+          String(current?.id || ''),
+        ) < 0)
     )
       index.set(cameraId, record);
   }

@@ -277,6 +277,35 @@ test('far-future CCTV records stay stale while valid sibling cameras remain visi
   );
 });
 
+test('equal-time CCTV records choose the same rate across locale-sensitive IDs and arrival order', () => {
+  const z = record({
+    id: 'z',
+    windowEnd: NOW - 5_000,
+    flow: { vehiclesPerMin: 11, counts: { car: 11 } },
+  });
+  const aRing = record({
+    id: 'å',
+    windowEnd: NOW - 5_000,
+    flow: { vehiclesPerMin: 70, counts: { car: 70 } },
+  });
+  for (const records of [[z, aRing], [aRing, z]]) {
+    const data = snapshot({ records });
+    const index = indexCameraTrafficObservations(data);
+    assert.equal(index.get('cam-1').id, 'z');
+    const summary = summarizeCameraTrafficObservation(data, 'cam-1', {
+      now: NOW,
+      recordIndex: index,
+    });
+    assert.equal(summary.recordId, 'z');
+    assert.equal(summary.primary, '11 veh/min');
+  }
+});
+
+test('equal-count CCTV class labels use deterministic code-unit order', () => {
+  assert.equal(observedTrafficClassMix({ å: 5, z: 5 }), '50% z · 50% å');
+  assert.equal(observedTrafficClassMix({ z: 5, å: 5 }), '50% z · 50% å');
+});
+
 test('age and class-mix helpers stay compact', () => {
   assert.equal(formatObservedTrafficAge(32_000), '32s ago');
   assert.equal(formatObservedTrafficAge(150_000), '3m ago');
